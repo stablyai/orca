@@ -273,24 +273,18 @@ const waitForText = (page, needle) =>
 
 describeRender('a bot’s home chat in a real browser', () => {
   it('draws the bot’s header and its sheet, and saves a setting through the phone route', async () => {
-    const { page, errors } = await openBotHome(['bots.mobile.v1'])
+    const { page, errors } = await openBotHome(['bots.mobile.v1'], { 'bots.chatTree': CHAT_TREE })
     // A working worker makes the header say so.
     await waitForText(page, 'Working')
     expect(await bodyText(page)).toContain('Atlas')
 
     await openMobileBotSheet(page, BOT.name)
-    await waitForText(page, 'Started by your chat')
-    let text = await bodyText(page)
-    // Section labels draw uppercase.
-    expect(text).toContain('Workers · 1 running')
-    expect(text).toContain('fix-flaky-login-test')
-    expect(text).toContain('Run · ')
-    expect(text).toContain('Failed')
+    await waitForText(page, 'Home Chat')
     await captureBotView(page, 'mobile-activity-light')
 
     await page.click('[data-testid="bot-sheet-tab-automations"]')
     await waitForText(page, 'Hourly at :05')
-    text = await bodyText(page)
+    let text = await bodyText(page)
     expect(text).toContain('Morning digest')
     expect(text).toContain('Run now')
     expect(text).toContain('Won’t run: needs the Slack connector')
@@ -350,8 +344,6 @@ describeRender('a bot’s home chat in a real browser', () => {
     await openMobileBotSheet(page, BOT.name)
     await waitForText(page, 'Home Chat')
     let text = await bodyText(page)
-    // The tree replaces the old lists.
-    expect(text).not.toContain('Workers · 1 running')
     // Home pinned, then the chat waiting on the owner, then the one replying, then the rest.
     const order = [
       'Home Chat',

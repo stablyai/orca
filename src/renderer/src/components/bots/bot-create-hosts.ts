@@ -10,16 +10,16 @@ import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import { BOTS_CREATE_RUNTIME_CAPABILITY } from '../../../../shared/bot-runtime-capabilities'
 import {
-  getLocalExecutionHostLabel,
   LOCAL_EXECUTION_HOST_ID,
   toRuntimeExecutionHostId,
   type ExecutionHostId
 } from '../../../../shared/execution-host/execution-host'
+import { buildExecutionHostRegistry } from '../../../../shared/execution-host/execution-host-registry'
+import { getHostDisplayLabelOverrides } from '../../../../shared/execution-host/host-setting-overrides'
 import type { OrcaAccountServerStatus } from '../../../../shared/orca-account-server-sign-in'
 import { lastVerifiedRuntimeStatus } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
 
-/** `offline`: not connected. `no-bots`: its Orca can't make bots. */
-export type BotCreateHostBlock = 'offline' | 'no-bots'
+export type BotCreateHostBlock = 'offline' | 'no-bots' | 'needs-server'
 
 export type BotCreateHost = {
   hostId: ExecutionHostId
@@ -36,18 +36,27 @@ export type BotCreateHost = {
 
 export type BotCreateHostsInput = Pick<
   AppState,
-  'runtimeEnvironments' | 'runtimeStatusByEnvironmentId'
->
+  'runtimeEnvironments' | 'runtimeStatusByEnvironmentId' | 'sshTargetLabels'
+> & {
+  settings?: Pick<NonNullable<AppState['settings']>, 'hostSettingOverrides'> | null
+}
 
-/**
- * This app's own computer, then each paired server: offered once it is connected and makes bots
- * for other devices. Raw SSH targets stay off; an SSH host set up as an Orca server is a paired server.
- */
+/** Configured computers, with creation available locally and on bot-capable paired servers. */
 export function botCreateHosts(input: BotCreateHostsInput): BotCreateHost[] {
+  const registry = buildExecutionHostRegistry({
+    repos: [],
+    settings: null,
+    hostSource: 'configured-only',
+    sshTargetLabels: input.sshTargetLabels,
+    runtimeEnvironments: input.runtimeEnvironments,
+    hostLabelOverrides: getHostDisplayLabelOverrides(input.settings)
+  })
+  const labels = new Map(registry.map((host) => [host.id, host.label]))
   const runtimes = (input.runtimeEnvironments ?? []).map((environment): BotCreateHost => {
+    const hostId = toRuntimeExecutionHostId(environment.id)
     const base = {
-      hostId: toRuntimeExecutionHostId(environment.id),
-      label: environment.name,
+      hostId,
+      label: labels.get(hostId) ?? environment.name,
       environmentId: environment.id
     }
     const entry = input.runtimeStatusByEnvironmentId?.get(environment.id)
@@ -66,13 +75,21 @@ export function botCreateHosts(input: BotCreateHostsInput): BotCreateHost[] {
     }
     return { ...base, platform, windows }
   })
+  const sshOnly = registry
+    .filter((host) => host.kind === 'ssh' && !host.mergedIntoHostId)
+    .map((host): BotCreateHost => ({
+      hostId: host.id,
+      label: host.label,
+      blocked: 'needs-server'
+    }))
   return [
     {
       hostId: LOCAL_EXECUTION_HOST_ID,
-      label: getLocalExecutionHostLabel(),
+      label: registry[0].label,
       platform: getRendererAppPlatform()
     },
-    ...runtimes
+    ...runtimes,
+    ...sshOnly
   ]
 }
 
@@ -89,6 +106,15 @@ export function botCreateHostBlockedHint(
     return updatable
       ? t('bots.new.hostUpdate', 'Update Orca on {{host}}', { host: host.label })
       : t('bots.new.hostNoBots', 'Orca on {{host}} can’t run bots yet', { host: host.label })
+  }
+  if (host.blocked === 'needs-server') {
+    return t(
+      'bots.new.hostNeedsServerHint',
+      'Set up an Orca server on {{host}} in Settings → Remote Orca Servers to run bots.',
+      {
+        host: host.label
+      }
+    )
   }
   return null
 }
@@ -155,6 +181,8 @@ export function useBotCreateHost(
 ): BotCreateHostChoice {
   const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
   const runtimeStatusByEnvironmentId = useAppStore((s) => s.runtimeStatusByEnvironmentId)
+  const sshTargetLabels = useAppStore((s) => s.sshTargetLabels)
+  const settings = useAppStore((s) => s.settings?.hostSettingOverrides)
   const ownEmail = useAppStore((s) =>
     s.orcaProfileAuthStatus?.state === 'connected'
       ? s.orcaProfileAuthStatus.cloud?.email
@@ -162,14 +190,22 @@ export function useBotCreateHost(
   )
   const onlyKey = only?.join('\n')
   const hosts = useMemo(() => {
-    const all = botCreateHosts({ runtimeEnvironments, runtimeStatusByEnvironmentId })
+    const all = botCreateHosts({
+      runtimeEnvironments,
+      runtimeStatusByEnvironmentId,
+      sshTargetLabels,
+      settings: { hostSettingOverrides: settings }
+    })
     const allowed = onlyKey?.split('\n')
-    return allowed ? all.filter((host) => allowed.includes(host.hostId)) : all
-  }, [runtimeEnvironments, runtimeStatusByEnvironmentId, onlyKey])
+    return allowed
+      ? all.filter((host) => host.blocked !== 'needs-server' && allowed.includes(host.hostId))
+      : all
+  }, [runtimeEnvironments, runtimeStatusByEnvironmentId, sshTargetLabels, settings, onlyKey])
   const [hostId, setHostId] = useState<ExecutionHostId>(initialHostId)
   const [listing, setListing] = useState(false)
   // A server unpaired while the dialog is open leaves the first listed computer picked.
-  const host = hosts.find((entry) => entry.hostId === hostId) ?? hosts[0]
+  const host =
+    hosts.find((entry) => entry.hostId === hostId && entry.blocked !== 'needs-server') ?? hosts[0]
   const asked = hosts
     .filter((entry) => !entry.blocked && (listing || entry.hostId === host.hostId))
     .flatMap((entry) => (entry.environmentId ? [entry.environmentId] : []))

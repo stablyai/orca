@@ -8,7 +8,8 @@ export function BotItemClampedText({
   text,
   clampClassName,
   fade = false,
-  className
+  className,
+  render
 }: {
   text: string
   /** The cut's max height. */
@@ -16,6 +17,8 @@ export function BotItemClampedText({
   /** Fade the last lines out once cut. */
   fade?: boolean
   className?: string
+  /** Draws the text in place of the item's Markdown (a question's heading). */
+  render?: (text: string) => React.ReactNode
 }): React.JSX.Element {
   const t = useTranslate()
   const [open, setOpen] = useState(false)
@@ -55,7 +58,7 @@ export function BotItemClampedText({
               )
         }
       >
-        <BotItemMarkdown text={text} />
+        {render ? render(text) : <BotItemMarkdown text={text} />}
       </div>
       {clamped || open ? (
         <button

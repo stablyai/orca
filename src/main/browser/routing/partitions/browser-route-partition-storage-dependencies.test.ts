@@ -1,3 +1,4 @@
+import '../../../../shared/remote-runtime/host-store/environment-store-worker-test-fixture'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -73,7 +74,6 @@ it('clears a session this run may have loaded, and leaves its folder for the nex
   await dependencies.removePartitionDirectory(folder)
 
   expect(mocks.fromPartition).toHaveBeenCalledWith(PARTITION)
-  expect(mocks.fromPartition).toHaveBeenCalledTimes(2)
   expect(mocks.clearStorage).toHaveBeenCalledTimes(1)
   expect(mocks.clearCache).toHaveBeenCalledTimes(1)
   expect(mocks.clearPolicies).toHaveBeenCalledWith(

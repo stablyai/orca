@@ -4576,7 +4576,6 @@
             "27a74f91f0": "现在没有任何运行",
             "298f4be7f2": "CPU",
             "2aa2de6cb9": "名称",
-            "1fedf94eae": "组合 CPU 负载，高于 100% 的值意味着多个核心同时工作",
             "e7cf14ec78": "终端会话不可用，该列表可能已过时",
             "93b0de3c21": "重新启动",
             "f85af9cda6": "资源快照和终端会话不可用",
@@ -4967,8 +4966,6 @@
                 "copy": {
                   "terminalSessionCount_one": "{{count}} 个终端会话",
                   "terminalSessionCount_other": "{{count}} 个终端会话",
-                  "memoryUnavailable": "内存信息不可用",
-                  "tooltipSummary": "资源管理器 - {{memory}} - {{sessions}}",
                   "spaceScanReady": "空间扫描已就绪",
                   "sessionsGroupedByWorkspace": "终端会话按工作区分组",
                   "noTerminalSessions": "暂无终端会话",
@@ -6351,7 +6348,6 @@
           "e029a2d775": "状态",
           "c2c7a45cda": "没有任何",
           "hosts": "主机",
-          "showSection": "显示",
           "allHostsDetail": "显示所有主机",
           "configuredSshHost": "已配置 SSH",
           "projectSshHost": "项目 SSH",
@@ -6364,7 +6360,6 @@
           "automation": "自动化",
           "folderPathIdentity": "分支 / 文件夹路径",
           "cli": "Orca CLI",
-          "workspaceOptions": "工作区选项",
           "optionsActiveFilters_other": "工作区选项（{{count}} 个筛选条件已启用）",
           "optionsFilterCount_other": "工作区选项（{{count}} 个筛选条件）"
         },
@@ -19611,6 +19606,7 @@
         "providerUnavailable": "{{agent}} 因服务繁忙而无法回复。请选择其他模型，或稍等片刻后重新发送。",
         "providerSafetyStopped": "{{agent}} 在安全检查后停止了此次回复。请检查您的请求后重新发送。",
         "providerResponseFailed": "{{agent}} 未能完成此回复。打开详情了解更多信息。",
+        "providerResponseFailedQuoted": "{{agent}} 未能完成此回复：{{detail}}",
         "selectedModel": "所选模型",
         "forkOriginalMissing": "{{agent}} 在原始聊天中找不到此回复，请打开原始聊天并从那里创建分支",
         "forkOriginalUnavailable": "{{agent}} 无法在原始聊天中从此回复创建分支，请打开原始聊天并从那里创建分支",
@@ -20195,7 +20191,6 @@
         "backToMain": "返回主智能体",
         "mainAgent": "主智能体",
         "promptFromMain": "来自主智能体的提示词",
-        "clickToOpen": "点击打开",
         "backTo": "返回 {{value0}}",
         "path": "子智能体路径",
         "stateHeading": {
@@ -24387,7 +24382,7 @@
   },
   "keybindings": {
     "title": {
-      "worktreePalette": "切换工作树",
+      "worktreePalette": "全局搜索",
       "worktreeNavigateUp": "上一个工作树",
       "worktreeNavigateDown": "下一个工作树",
       "workspaceCreate": "创建工作树",
@@ -24501,6 +24496,9 @@
       "45347db2a3": "标签页导航",
       "aab2837fa5": "快捷命令",
       "3492a954c8": "终端窗格"
+    },
+    "searchKeyword": {
+      "worktreePaletteFormerTitle": "切换工作树"
     }
   },
   "gpuFallback": {
@@ -25525,8 +25523,7 @@
     },
     "upcoming": {
       "tidyNightAfter": "每晚 {{from}} 之后，或这台电脑唤醒后",
-      "tidyWeekAfter": "每周一次，{{from}} 之后，或这台电脑唤醒后",
-      "lookDueNow": "现在到期 · {{every}}"
+      "tidyWeekAfter": "每周一次，{{from}} 之后，或这台电脑唤醒后"
     },
     "palette": {
       "placeholder": "搜索机器人、聊天、终端、工作区、任务、设置和操作...",

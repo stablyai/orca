@@ -18,6 +18,7 @@ import { NativeChatWaitEndedRow, NativeChatWaitRow } from '../../automation-run/
 import { NativeChatAutomationSavedRow } from '../../automation-run/NativeChatAutomationSavedRow'
 import { NativeChatBotItemNoteRow } from '../../bot-items/NativeChatBotItemNoteRow'
 import { NativeChatAutomationRunRow } from '../../automation-run/NativeChatAutomationRunRow'
+import { mergedRunFailures } from '../../../../../../shared/native-chat/transcript/events/native-chat-event-plan'
 import { NativeChatNoticeRow } from '../notices/NativeChatNoticeRow'
 import { NativeChatBotCreatedRow, NativeChatTookOverRow } from '../../NativeChatBotCreatedRow'
 import { nativeChatNoticeBlock } from '../../../../../../shared/native-chat/transcript/notices/native-chat-notice'
@@ -157,6 +158,7 @@ export const MessageRow = memo(function MessageRow(
           text={notStarted.text}
           timestamp={message.timestamp}
           error={notStarted.error}
+          earlierFailures={mergedRunFailures(message)}
           resend={notStarted.sentAgain ? 'sent' : 'offer'}
           onRefolded={returnToView}
         />
@@ -173,6 +175,7 @@ export const MessageRow = memo(function MessageRow(
           state={message.queued ? 'queued' : 'ran'}
           text={markdown}
           timestamp={message.timestamp}
+          earlierFailures={mergedRunFailures(message)}
           onRefolded={returnToView}
         />
       </div>

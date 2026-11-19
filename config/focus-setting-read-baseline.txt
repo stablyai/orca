@@ -3,11 +3,8 @@
 # This is a RATCHET: counts may only go DOWN. Only creation flows with no source row may read
 # the default host, through defaultCreationHost. Everything else routes by the owner.
 # Prune after removing reads: pnpm check:focus-read-ratchet --prune
-2 src/renderer/src/App.tsx
 3 src/renderer/src/app-shell/ActiveWorkspaceSyncGate.tsx # existing watch selector now visible through useCallback; includes its import-path occurrence
 2 src/renderer/src/app-shell/use-app-shell-services.ts
-3 src/renderer/src/attention/unread/unread-badge-count-selector.ts
-1 src/renderer/src/attention/unread/useUnreadDockBadge.ts
 1 src/renderer/src/component-fixtures/component-fixture-explorer.tsx # dev-only fixture page seeds default settings
 1 src/renderer/src/components/activity/ActivityPrototypePage.tsx
 1 src/renderer/src/components/activity/sidebar/SidebarAgentsList.tsx
@@ -305,7 +302,6 @@
 2 src/renderer/src/store/slices/settings/settings-owner-hydration-publication.ts
 1 src/renderer/src/store/slices/settings/worktree-visibility-owner-settings.ts
 3 src/renderer/src/store/slices/settings/worktree-visibility-settings-write.ts
-2 src/renderer/src/store/slices/workspace-attention/workspace-unread-characterization-fixture.ts
 5 src/renderer/src/store/slices/worktrees/create-worktree-slice.ts
 1 src/renderer/src/store/slices/worktrees/create/create-worktree.ts
 1 src/renderer/src/store/slices/worktrees/create/created-worktree-state-merge.ts

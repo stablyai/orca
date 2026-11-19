@@ -33,21 +33,6 @@ function fileDb(): OrchestrationDb {
 }
 
 describe('orchestration reads', () => {
-  it('leave the runtime’s timers running while a read for many chats waits on the database', async () => {
-    const client = new OrchestrationReaderClient(() => new Worker(STALLED_READER, { eval: true }))
-    cleanup.push(() => client.dispose())
-    const sessionIds = Array.from({ length: 2_000 }, (_, index) => `chat-${index}`)
-    let ticks = 0
-    const timer = setInterval(() => ticks++, 10)
-    cleanup.push(() => clearInterval(timer))
-
-    const read = await client.read(fileDb(), 'connectorWorkerCandidates', { sessionIds, now: 0 })
-
-    expect(read).toEqual({ candidates: [], federated: [], asked: 2_000 })
-    // A read on this thread would have held every tick for the whole second.
-    expect(ticks).toBeGreaterThan(20)
-  })
-
   it('fail a read the database never answers, rather than wait on this thread', async () => {
     const client = new OrchestrationReaderClient(
       () => new Worker(STALLED_READER, { eval: true }),

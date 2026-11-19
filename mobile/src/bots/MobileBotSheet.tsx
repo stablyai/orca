@@ -107,7 +107,7 @@ export function MobileBotSheet(props: {
           bot={bot}
           hostKey={props.hostKey}
           activity={null}
-          tree={{ kind: 'none' }}
+          tree={{ kind: 'loading' }}
           treeActions={props.treeActions}
           upNextActions={upNext}
           loading={props.routeBot.activityLoading}
