@@ -54,7 +54,7 @@ it.each([
           userId: 'user-1',
           email: null,
           teamId: null,
-          expiresAtMs: Date.now() + 60 * 60 * 1000,
+          expiresAtMs: null,
           oidcClientId: null
         }
       }
