@@ -35,8 +35,15 @@ function textItem(text: string, revision = 1, sequence = 0): AgentJournalRenderI
 
 async function blockedSubscriber(
   sessionId = SESSION,
-  readLiveText?: () => readonly AgentJournalRenderItem[],
-  whileOpening?: (publish: (index: number, characters?: number) => void) => void
+  {
+    readLiveText,
+    whileOpening,
+    subscribers = new AgentSessionSubscribers(readLiveText ? { readLiveText } : {})
+  }: {
+    readLiveText?: () => readonly AgentJournalRenderItem[]
+    whileOpening?: (publish: (index: number, characters?: number) => void) => void
+    subscribers?: AgentSessionSubscribers
+  } = {}
 ) {
   const journal = await journals.open({
     identity: {
@@ -48,7 +55,6 @@ async function blockedSubscriber(
     },
     stateDirectory: join(fixture.root, sessionId)
   })
-  const subscribers = new AgentSessionSubscribers(readLiveText ? { readLiveText } : {})
   const ends: unknown[] = []
   const transport = Promise.withResolvers<void>()
   let blocked = false
@@ -118,37 +124,37 @@ it('releases waiting live text when the subscriber closes during a stalled deliv
 })
 
 it('ends only the stream whose own live text outgrows its cap', async () => {
-  const large = await blockedSubscriber('large-session')
-  const small = await blockedSubscriber('small-session')
+  const subscribers = new AgentSessionSubscribers()
+  const large = await blockedSubscriber('large-session', { subscribers })
+  const small = await blockedSubscriber('small-session', { subscribers })
   try {
     // 3M characters each: the delivering snapshot plus a waiting one pass 8 MiB at two bytes each.
     large.publish(0, 3_000_000)
     small.publish(0)
     await Promise.resolve()
+    expect(large.ends).toEqual([])
+
     large.publish(1, 3_000_000)
     small.publish(1)
-    expect(large.ends).toHaveLength(1)
-    expect(small.ends).toHaveLength(0)
+    expect(large.ends).toEqual([expect.objectContaining({ name: 'SubscriberLiveTextCapReached' })])
+    expect(small.ends).toEqual([])
+    small.release()
+    await vi.waitFor(() =>
+      expect(small.events.at(-1)).toMatchObject({
+        type: 'batch',
+        batch: { items: [{ revision: 2 }] }
+      })
+    )
   } finally {
     large.release()
     small.release()
-  }
-})
-
-it('ends a stream whose one live text alone outgrows its cap', async () => {
-  const pane = await blockedSubscriber()
-  try {
-    // 5M characters at two bytes each, with nothing else in flight.
-    pane.publish(0, 5_000_000)
-    expect(pane.ends).toHaveLength(1)
-  } finally {
-    pane.release()
+    small.close()
   }
 })
 
 it('ends a stream whose opening would send live text past its cap', async () => {
   const text = textItem('x'.repeat(5_000_000))
-  const pane = await blockedSubscriber('opening-session', () => [text])
+  const pane = await blockedSubscriber('opening-session', { readLiveText: () => [text] })
   try {
     await vi.waitFor(() => expect(pane.ends).toHaveLength(1))
   } finally {
@@ -159,11 +165,10 @@ it('ends a stream whose opening would send live text past its cap', async () => 
 it('counts live text an opening sends once, not again for the copy waiting behind it', async () => {
   // 3M characters each: the opening's text plus the waiting copy would pass 8 MiB together.
   const text = textItem('x'.repeat(3_000_000))
-  const pane = await blockedSubscriber(
-    'adopting-session',
-    () => [text],
-    (publish) => publish(0, 3_000_000)
-  )
+  const pane = await blockedSubscriber('adopting-session', {
+    readLiveText: () => [text],
+    whileOpening: (publish) => publish(0, 3_000_000)
+  })
   try {
     await vi.waitFor(() =>
       expect(pane.events).toContainEqual(
