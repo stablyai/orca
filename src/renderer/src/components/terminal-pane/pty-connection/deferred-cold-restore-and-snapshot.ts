@@ -117,6 +117,13 @@ export function bindDeferredColdRestoreAndSnapshot(session: ConnectPanePtySessio
     options: FreshSpawnOptions = {},
     automatic?: boolean
   ): Promise<string | null> => {
+    console.warn('[mail-wake-diag]', 'spawn', {
+      paneKey: session.cacheKey,
+      startup: Boolean(startup),
+      cancelled: startup?.resumeSource?.cancelled ?? null,
+      sleeping: startup?.sleepingRecordEntry?.record.origin ?? null,
+      live: startup?.useLiveEntry ?? null
+    })
     if (startup?.resumeSource?.cancelled) {
       return Promise.resolve(null)
     }

@@ -69,6 +69,11 @@ export function installHibernatedPaneWake(session: ConnectPanePtySession): void 
     const wake: () => Promise<string | null> = target.wake ?? session.wakeHibernatedAgentPane
     void wake()
       .then((spawnedPtyId) => {
+        console.warn('[mail-wake-diag]', 'spawned', {
+          paneKey: session.cacheKey,
+          spawnedPtyId,
+          ownWake: Boolean(target.wake)
+        })
         if (!spawnedPtyId) {
           // On transient spawn failure, re-arm the exact retained record so later mobile wakes can retry after full ownership validation.
           session.hibernatedWakeTarget = target
@@ -92,6 +97,20 @@ export function wakeHibernatedPaneIfArmed(
   if (paneKey && paneKey !== session.cacheKey) {
     return null
   }
+  console.warn('[mail-wake-diag]', 'binding', {
+    paneKey,
+    inFlight: session.hibernatedWakeInFlightClaimKey,
+    target: session.hibernatedWakeTarget?.ptyId ?? null,
+    targetHasWake: Boolean(session.hibernatedWakeTarget?.wake),
+    pending: session.pendingHibernatedWakeTarget?.ptyId ?? null,
+    connected: session.transport.isConnected(),
+    ptyId: session.transport.getPtyId(),
+    hasWakeFn: Boolean(session.wakeHibernatedAgentPane),
+    registered: session.deps.paneTransportsRef.current.get(session.pane.id) === session.transport,
+    disposed: session.disposed,
+    visible: session.deps.isVisibleRef.current,
+    record: session.getSleepingRecordForPane(useAppStore.getState())?.record.origin ?? null
+  })
   if (session.hibernatedWakeInFlightClaimKey) {
     if (claimedProviderSessions?.has(session.hibernatedWakeInFlightClaimKey)) {
       return null

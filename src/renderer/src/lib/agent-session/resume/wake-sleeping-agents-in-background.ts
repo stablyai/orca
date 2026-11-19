@@ -187,11 +187,17 @@ export function wakeSleepingAgentsForWorktreeInBackground(
     })
   )
   if (paneKey) {
+    console.warn('[mail-wake-diag]', 'event', {
+      paneKey,
+      records: sleptRecords.length,
+      woken: [...wokenClaimKeys]
+    })
     // A mounted pane resumed itself on the event; mounting is only for a tab that isn't mounted yet.
     if (wokenClaimKeys.size > 0) {
       return
     }
     const tabId = sleptRecords[0] && getSleepingRecordTabId(sleptRecords[0])
+    console.warn('[mail-wake-diag]', 'mount', { paneKey, tabId })
     if (tabId) {
       dispatchBackgroundMount(worktreeId, [tabId], paneKey)
     }
@@ -251,6 +257,12 @@ async function wakeSleepingPaneInBackground(
     return true
   }
   const record = useAppStore.getState().sleepingAgentSessionsByPaneKey[paneKey]
+  console.warn('[mail-wake-diag]', 'request', {
+    paneKey,
+    prepareOnly,
+    origin: record?.origin,
+    state: record?.state
+  })
   if (
     !record ||
     record.worktreeId !== worktreeId ||
