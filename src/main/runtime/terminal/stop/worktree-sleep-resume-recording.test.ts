@@ -249,8 +249,10 @@ describe('a hookless resumed Codex across wakes and shell-confirmed command fini
     ['quit with a stop-like exit status', ['exit146'], false],
     ['quit, then sleep while its exit proof still runs', ['quit-then-sleep'], false],
     ['quit where the host gives no shell proof (remote, Windows)', ['unproven'], false],
-    ['quit of an agent no Orca launch held (typed at the prompt)', ['typed'], false]
+    ['quit of an agent no Orca launch held (typed at the prompt)', ['typed'], false],
+    ['quit of a typed agent on Windows, whose host gives no shell proof', ['typed-windows'], false]
   ] as const)('%s', async (_, finishes, keepsRecovery) => {
+    const platform = process.platform
     vi.useFakeTimers({ toFake: ['Date'] })
     vi.setSystemTime(1_000)
     const tick = () => vi.setSystemTime(Date.now() + 1_000)
@@ -346,6 +348,12 @@ describe('a hookless resumed Codex across wakes and shell-confirmed command fini
         tick()
         if (status === 'unmarked') {
           await server.reconcilePaneProcessExit(PANE_KEY)
+        } else if (status === 'typed-windows') {
+          Object.defineProperty(process, 'platform', { value: 'win32' })
+          shellAlone = null
+          server.retireProcessAuthority(PANE_KEY, { confirmedExit: true, launchRetired: true })
+          await new Promise((resolve) => setImmediate(resolve))
+          Object.defineProperty(process, 'platform', { value: platform })
         } else if (status === 'typed') {
           // The runtime's notice for a mark that finds no launch held.
           server.retireProcessAuthority(PANE_KEY, { confirmedExit: true, launchRetired: true })

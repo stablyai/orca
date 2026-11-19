@@ -1,4 +1,5 @@
 import type { ClaudePermissionHolds } from './claude-permission-hook-hold'
+import { isLocalHookConnectionId } from '../../../shared/agent-hook-listener/transport/wsl-hook-relay-contract'
 import { clearAllListenerCaches } from '../../../shared/agent-hook-listener/listener-state'
 import { normalizeHookPayload } from '../../../shared/agent-hook-listener/normalization/normalize-hook-payload'
 import { parseFormEncodedBody } from '../../../shared/agent-hook-listener/request-body'
@@ -160,11 +161,10 @@ export class AgentHookServer extends AgentHookServerLifecycle {
       return
     }
     const identity = this.paneAgentIdentity(resolved)
-    // Main ends no agent at a launchless mark; only a host that can prove the shell alone (local
-    // POSIX) may, so SSH, WSL and Windows panes aren't armed here.
+    // Main retired a local pane's record when its shell came back; a POSIX host now proves that,
+    // and Windows and WSL, which give no proof, let the mark stand. SSH retires it in the window.
     const unseen =
-      row?.connectionId === null &&
-      process.platform !== 'win32' &&
+      isLocalHookConnectionId(row?.connectionId) &&
       identity?.ended === false &&
       identity.processTopology !== 'shared' &&
       !this.hasVerifiableAgentProcess(resolved)
