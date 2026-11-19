@@ -1,8 +1,9 @@
 import { expect, it, vi } from 'vitest'
 import { forgetLegacyPtyRoot, readLegacyPtyRootProcessId } from './legacy-pty-root-process'
 
+const startTime = vi.hoisted((): { value: number | null } => ({ value: 1_000 }))
 vi.mock('../../agent-session/ownership/agent-session-process-identity-probe', () => ({
-  readProcessStartTimeMs: async () => 1_000
+  readProcessStartTimeMs: async () => startTime.value
 }))
 
 const daemon = (sessions: number, incarnationId: string | undefined = 'incarnation-1') => {
@@ -25,20 +26,23 @@ const daemon = (sessions: number, incarnationId: string | undefined = 'incarnati
 }
 
 it.each([
-  [300, 'incarnation-1'],
-  [3_000, 'incarnation-1'],
-  [300, undefined],
-  [3_000, undefined]
+  [300, 'incarnation-1', 1_000],
+  [3_000, 'incarnation-1', 1_000],
+  [300, undefined, 1_000],
+  [3_000, undefined, 1_000],
+  [300, 'incarnation-1', null],
+  [3_000, 'incarnation-1', null]
 ])(
-  'an older daemon lists its sessions once per held terminal, not once per retry (%i held, incarnation %s)',
-  async (held, incarnationId) => {
+  'an older daemon lists its sessions once per held terminal, not once per retry (%i held, incarnation %s, start time %s)',
+  async (held, incarnationId, startedAtMs) => {
+    startTime.value = startedAtMs
     const controller = daemon(held, incarnationId)
     for (let wave = 0; wave < 12; wave++) {
       for (let index = 0; index < held; index++) {
         await expect(
           readLegacyPtyRootProcessId(
             controller,
-            `pty-${held}-${incarnationId}-${index}`,
+            `pty-${held}-${incarnationId}-${startedAtMs}-${index}`,
             incarnationId
           )
         ).resolves.toBe(42)

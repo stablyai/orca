@@ -142,9 +142,9 @@ async function inspectLaunchedAgentForeground(
           if (observation.foregroundKind === 'shell') {
             return 'shell'
           }
-          // The foreground job's leader and its start time tell a returning agent from a new one.
+          // The agent's own process and its start time tell a returning agent from a new one; a wrapper leading the job would not.
           const identify = async (found: TuiAgent): Promise<'agent'> => {
-            const pid = observation.foregroundPgid
+            const pid = observation.agentPid
             const startedAtMs = !host.remote && pid ? await readProcessStartTimeMs(pid) : null
             if (pid && startedAtMs !== null) {
               onAgent?.(found, { pid, startedAtMs })

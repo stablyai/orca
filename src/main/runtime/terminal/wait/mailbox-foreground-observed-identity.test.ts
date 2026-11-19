@@ -2,7 +2,7 @@ import { expect, it } from 'vitest'
 import { readMailboxForeground } from './launched-agent-foreground'
 
 it.skipIf(process.platform === 'win32')(
-  "names an observed foreground agent by its job leader's process and start time",
+  'names an observed foreground agent by its own process, not the wrapper leading its job',
   async () => {
     const controller = {
       getForegroundProcess: async () => 'codex',
@@ -20,7 +20,9 @@ it.skipIf(process.platform === 'win32')(
           source: 'pty-master' as const,
           foregroundKind: 'non-shell' as const,
           processName: 'codex',
-          foregroundPgid: process.pid
+          // A wrapper leads the job; the agent is its child.
+          foregroundPgid: process.ppid,
+          agentPid: process.pid
         }
       })
     }

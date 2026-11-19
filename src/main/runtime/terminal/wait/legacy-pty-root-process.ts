@@ -4,7 +4,7 @@ import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execu
 
 const rootByPtyId = new Map<
   string,
-  { incarnationId: string | undefined; pid: number; startedAtMs: number }
+  { incarnationId: string | undefined; pid: number; startedAtMs: number | null }
 >()
 
 /** A local terminal's root process, or 'replaced' when the PTY is no longer the expected incarnation.
@@ -41,9 +41,13 @@ export async function readLegacyPtyRootProcessId(
     return null
   }
   // Why not only with an incarnation: older daemons report none, and the root's start time already fences a replacement.
-  const startedAtMs = remember ? await readProcessStartTimeMs(pid) : null
-  if (startedAtMs !== null) {
-    rootByPtyId.set(ptyId, { incarnationId: expectedIncarnationId, pid, startedAtMs })
+  // Why also an unreadable start time: a reused PID reads as a real start time, which no longer matches.
+  if (remember) {
+    rootByPtyId.set(ptyId, {
+      incarnationId: expectedIncarnationId,
+      pid,
+      startedAtMs: await readProcessStartTimeMs(pid)
+    })
   }
   return pid
 }

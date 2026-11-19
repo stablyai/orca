@@ -15,6 +15,8 @@ export type TerminalForegroundSample =
       processName: string | null
       tty?: string
       foregroundPgid?: number
+      /** The recognized agent's own process, which a wrapper leading the job does not stand in for. */
+      agentPid?: number
     }
   | {
       verdict: 'unverifiable'
@@ -66,6 +68,7 @@ export function isTerminalForegroundObservation(
     'processName' in value &&
     (value.processName === null || text(value.processName)) &&
     (!('tty' in value) || text(value.tty)) &&
-    (!('foregroundPgid' in value) || (integer(value.foregroundPgid) && value.foregroundPgid > 0))
+    (!('foregroundPgid' in value) || (integer(value.foregroundPgid) && value.foregroundPgid > 0)) &&
+    (!('agentPid' in value) || (integer(value.agentPid) && value.agentPid > 0))
   )
 }

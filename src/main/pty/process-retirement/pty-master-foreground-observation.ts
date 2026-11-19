@@ -102,7 +102,8 @@ export function resolvePtyForegroundMembers(
         ? resolveOuterWrapperForegroundProcess(selected.recognized, selected.candidate, candidates)
         : foreground.some((row) => recognizeAgentProcessFromCommandLine(row.command))
           ? null
-          : name(ordinary) || null
+          : name(ordinary) || null,
+    ...(selected ? { agentPid: selected.candidate.pid } : {})
   }
 }
 
