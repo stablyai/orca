@@ -110,7 +110,9 @@ async function snapshotGitCommon(
       statInPlaceLeaves,
       onDirGateMiss
     )
-    unsettledQuietTicks.set(entryPath, entry === previousEntry ? quietTicks + 1 : 0)
+    // Full scans rebuild the snapshot, so quiet means the entry directory itself didn't change.
+    const quiet = previousEntry !== undefined && entry.dirSignature === previousEntry.dirSignature
+    unsettledQuietTicks.set(entryPath, quiet ? quietTicks + 1 : 0)
     entries.set(entryPath, entry)
   })
   for (const entryPath of unsettledQuietTicks.keys()) {
