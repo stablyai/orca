@@ -27,18 +27,18 @@ function estimateTitle(title: string): number {
 
 /**
  * Once every closed tab is an icon, the open tab is the only one left that can shrink, so any shortfall
- * comes out of its title alone. Hold the strip's padding and a readable title for it, beyond its
- * estimate. While closed tabs still show titles they shrink with it, and the estimate is enough.
+ * comes out of its title alone. Hold a readable title for it, beyond its estimate. The strip's padding
+ * is counted by each branch, not here. While closed tabs still show titles they shrink with it, and
+ * the estimate is enough.
  */
 function openTitleReserve(
   item: TopActivityItem | undefined,
-  stripPadding: number,
   titleWidth: (item: TopActivityItem) => number
-) {
+): number {
   if (!item?.labeledTab) {
     return 0
   }
-  return stripPadding + Math.max(0, LABELED_TAB_MIN_TITLE_WIDTH - titleWidth(item))
+  return Math.max(0, LABELED_TAB_MIN_TITLE_WIDTH - titleWidth(item))
 }
 
 export type TopActivityBarLayout<T> = {
@@ -84,22 +84,22 @@ export function getTopActivityBarLayout<T extends TopActivityItem>(
     return { visibleItems: [...items], overflowItems: [], compactIds }
   }
   const activeItem = items.find((item) => item.id === activeId)
-  const reserve = openTitleReserve(activeItem, stripPadding, titleWidth)
+  const reserve = openTitleReserve(activeItem, titleWidth)
   for (const item of items) {
     if (item.labeledTab && item.id !== activeId) {
       compactIds.add(item.id)
       totalWidth += buttonWidth(item, true) - buttonWidth(item, false)
     }
   }
-  if (compactIds.size > 0 && totalWidth + reserve + moreWidth <= availableWidth) {
+  if (compactIds.size > 0 && stripPadding + totalWidth + reserve + moreWidth <= availableWidth) {
     return { visibleItems: [...items], overflowItems: [], compactIds }
   }
 
-  // Hold room for More and the open tab before filling the rest in order, so pinning a titled open
-  // tab can't push the bar past its width, or squeeze its title to nothing.
+  // Hold the strip's padding, room for More and the open tab before filling the rest in order, so
+  // pinning a titled open tab can't push the bar past its width, or squeeze its title to nothing.
   const fittedWidth = (item: T): number => buttonWidth(item, compactIds.has(item.id))
   const visibleIds = new Set<ActiveRightSidebarTab>()
-  let used = TOP_ACTIVITY_MORE_BUTTON_WIDTH
+  let used = stripPadding + TOP_ACTIVITY_MORE_BUTTON_WIDTH
   if (activeItem) {
     visibleIds.add(activeItem.id)
     used += fittedWidth(activeItem) + reserve

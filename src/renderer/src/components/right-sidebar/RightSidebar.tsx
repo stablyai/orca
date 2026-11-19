@@ -16,7 +16,7 @@ import { SortableActivityButton } from './activity-bar/sortable-activity-button'
 import {
   activityOrderForPage,
   arrangeActivityItems,
-  moveActivityInShownList,
+  moveStripActivity,
   reorderActivityOrders
 } from './activity-bar/activity-bar-arrangement'
 import { getActiveChecksStatus } from './checks-panel/status/active-checks-status'
@@ -304,9 +304,11 @@ function RightSidebarInner(): React.JSX.Element {
         if (!over || active.id === over.id) {
           return
         }
-        // Reorder within every shown tab, so tabs under More keep their saved places.
-        const next = moveActivityInShownList(
+        // The strip's sortable tabs reorder among their strip slots; tabs under More follow in order.
+        const strip = activityBarPosition === 'top' ? topActivityLayout.visibleItems : visibleItems
+        const next = moveStripActivity(
           visibleItems.map((item) => item.id),
+          new Set(strip.map((item) => item.id)),
           String(active.id),
           String(over.id)
         )

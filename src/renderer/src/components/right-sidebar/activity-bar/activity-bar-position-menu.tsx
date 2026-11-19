@@ -13,7 +13,7 @@ import {
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'
 import type { ActivityBarItem } from './activity-bar-buttons'
-import { moveActivityInShownList, reorderActivityOrders } from './activity-bar-arrangement'
+import { moveStripActivity, reorderActivityOrders } from './activity-bar-arrangement'
 import { scheduleActivityBarFocusHandoff } from './activity-bar-focus-handoff'
 import { usePluginPanelsStore } from '@/store/plugins/catalog/plugin-contribution-catalog'
 
@@ -109,8 +109,9 @@ export function ActivityBarPositionMenu({
     if (!itemId || index === -1 || !neighbour) {
       return
     }
-    const ids = moveActivityInShownList(
+    const ids = moveStripActivity(
       shown.map((item) => item.id),
+      new Set(strip.map((item) => item.id)),
       itemId,
       neighbour.id
     )

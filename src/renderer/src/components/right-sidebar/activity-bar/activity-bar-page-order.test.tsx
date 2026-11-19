@@ -269,3 +269,31 @@ it('offers no Move items for a tab under More in the top layout', async () => {
   expect(screen.queryByRole('menuitem', { name: 'Move left' })).toBeNull()
   expect(screen.queryByRole('menuitem', { name: 'Move right' })).toBeNull()
 })
+
+it('moves a strip tab past a pinned active tab without pushing the pinned tab under More', () => {
+  const a = builtIn('explorer', 'Explorer')
+  const b = builtIn('checks', 'Checks')
+  const c = builtIn('source-control', 'Source Control')
+  const d = builtIn('ports', 'Ports')
+  const e = builtIn('vault', 'Agents')
+  const f = builtIn('workspaces', 'Worktrees')
+  render(
+    bar({
+      isBotPage: false,
+      visibleItems: [a, b, f],
+      overflowItems: [c, d, e],
+      effectiveTab: 'workspaces',
+      arrangementItems: [a, b, c, d, e, f]
+    })
+  )
+  openMenuOn('Checks')
+  fireEvent.click(screen.getByRole('menuitem', { name: 'Move right' }))
+  expect(useAppStore.getState().activityBarOrder).toEqual([
+    'explorer',
+    'workspaces',
+    'checks',
+    'source-control',
+    'ports',
+    'vault'
+  ])
+})

@@ -68,21 +68,24 @@ export function activityOrderForPage(
 }
 
 /**
- * Moves `fromId` into `toId`'s slot within the full list of shown tabs, so tabs under More keep
- * their places. Returns null when either id is missing or nothing moves.
+ * Reorders the strip's tabs among their own strip slots, then lists the tabs under More after them in
+ * their current order. A pinned active tab therefore can't push a strip tab under More. Returns null
+ * when either id is not in the strip or nothing moves.
  */
-export function moveActivityInShownList(
+export function moveStripActivity(
   shownIds: readonly string[],
+  stripIds: ReadonlySet<string>,
   fromId: string,
   toId: string
 ): string[] | null {
-  const from = shownIds.indexOf(fromId)
-  const to = shownIds.indexOf(toId)
+  const strip = shownIds.filter((id) => stripIds.has(id))
+  const from = strip.indexOf(fromId)
+  const to = strip.indexOf(toId)
   if (from === -1 || to === -1 || from === to) {
     return null
   }
-  const next = [...shownIds]
-  next.splice(from, 1)
-  next.splice(to, 0, fromId)
-  return next
+  const reordered = [...strip]
+  reordered.splice(from, 1)
+  reordered.splice(to, 0, fromId)
+  return [...reordered, ...shownIds.filter((id) => !stripIds.has(id))]
 }
