@@ -52,7 +52,11 @@ export async function connectIpcPty(
   context.setCallbacks(options.callbacks)
   ensurePtyDispatcher()
 
-  if (context.isDestroyed()) {
+  if (
+    context.isDestroyed() ||
+    (options.isAccountRestartCurrent && !options.isAccountRestartCurrent()) ||
+    (shouldContinue && !shouldContinue())
+  ) {
     return
   }
   if (options.sessionId && options.expectedIncarnationId) {
@@ -60,9 +64,21 @@ export async function connectIpcPty(
   }
   if (
     options.sessionId &&
-    (!shouldContinue || shouldContinue()) &&
+    (!accountRestart || options.expectedIncarnationId) &&
     hasPreHandlerPtyExit(options.sessionId, options.expectedIncarnationId)
   ) {
+    const result = { id: options.sessionId, incarnationId: options.expectedIncarnationId }
+    if (
+      accountRestart &&
+      ((shouldContinue && !shouldContinue(result)) ||
+        (options.verifyAccountRestartResult &&
+          !(await options.verifyAccountRestartResult(result))) ||
+        context.isDestroyed() ||
+        (options.isAccountRestartCurrent && !options.isAccountRestartCurrent()) ||
+        (shouldContinue && !shouldContinue(result)))
+    ) {
+      return
+    }
     context.bind(options.sessionId)
     handlers.registerData(options.sessionId)
     if (context.isDestroyed()) {

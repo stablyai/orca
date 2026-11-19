@@ -617,10 +617,13 @@ export function createRemoteRuntimePtyTransport(
     pendingClaimInput = []
     pendingClaimQueryReplyCount = 0
     const boundHandle = multiplexedStreamHandle
-    if (stream.acknowledgesInput() && boundHandle) {
-      inputJournal.send(stream, heldInputEndpoint(boundHandle), queued)
-    } else {
-      for (const segment of queued) {
+    for (const segment of queued) {
+      if (!canSendAccountInput(segment.queryReply ? 'query-reply' : 'driving')) {
+        continue
+      }
+      if (stream.acknowledgesInput() && boundHandle) {
+        inputJournal.send(stream, heldInputEndpoint(boundHandle), [segment])
+      } else {
         stream.sendInput(segment.text)
       }
     }
@@ -3570,7 +3573,7 @@ export function createRemoteRuntimePtyTransport(
       return true
     }
     const pending = inputBatcher.takePending()
-    if (pending && !sendUnacknowledgedInput(pending)) {
+    if (pending && canSendAccountInput() && !sendUnacknowledgedInput(pending)) {
       return false
     }
     return sendUnacknowledgedInput(data, true)
