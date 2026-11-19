@@ -5,17 +5,18 @@ import type { RpcRequest } from '../../core'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import { DESKTOP_RPC_CALLER, LOCAL_CLI_RPC_CALLER } from '../../callers/rpc-caller-identity'
 import { setBrowserProfileSiteList } from '../../../../browser/sessions/site-list/browser-session-site-list'
+import { browserSessionRegistry } from '../../../../browser/sessions/profiles/browser-session-registry'
 import { BROWSER_CORE_METHODS } from './browser-core'
 import { REPO_METHODS } from '../projects/repo'
 
 const LOCKED = { ok: false, error: { code: 'browser_profile_site_list_locked' } }
 
-function setup(repoProfileId: string | null = 'work') {
+function setup(repoProfileId: string | null = 'work', scope?: string) {
   const runtime = {
     getRuntimeId: () => 'test-runtime',
     showManagedWorktree: vi.fn(async () => ({ id: 'r1::/w', repoId: 'r1' })),
     showRepo: vi.fn(async () => ({ id: 'r1', browserProfileId: repoProfileId })),
-    requireStore: () => ({ getSettings: () => ({}) }),
+    requireStore: () => ({ getSettings: () => ({ browserProfileScope: scope }) }),
     browserTabCurrent: vi.fn(async () => ({ tab: { profileId: 'work' } })),
     browserOpenUrlOnClient: vi.fn(async () => ({ browserPageId: 'p2' })),
     browserTabCreate: vi.fn(async (_params: unknown) => ({ browserPageId: 'p1' })),
@@ -35,6 +36,7 @@ function setup(repoProfileId: string | null = 'work') {
 }
 
 afterEach(() => {
+  vi.restoreAllMocks()
   setBrowserProfileSiteList('work', [])
   setBrowserProfileSiteList('default', [])
 })
@@ -119,5 +121,20 @@ describe('agents and a browser profile with a site list', () => {
     setBrowserProfileSiteList('work', [])
     expect(await call('repo.update', update)).toMatchObject({ ok: true })
     expect(runtime.updateRepo).toHaveBeenCalledTimes(2)
+  })
+
+  it('judges a repo with no pick by its managed profile, not Default', async () => {
+    const owned = (id: string) =>
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the gate reads only id and owner.
+      ({ id, owner: { kind: 'repo', id: 'r1' } }) as never
+    vi.spyOn(browserSessionRegistry, 'listProfiles').mockReturnValue([owned('managed')])
+    const { call } = setup(null, 'repo')
+    const update = { repo: 'id:r1', updates: { browserProfileId: 'other' } }
+    setBrowserProfileSiteList('default', ['example.com'])
+    expect(await call('repo.update', update)).toMatchObject({ ok: true })
+    setBrowserProfileSiteList('default', [])
+    setBrowserProfileSiteList('managed', ['example.com'])
+    expect(await call('repo.update', update)).toMatchObject(LOCKED)
+    setBrowserProfileSiteList('managed', [])
   })
 })

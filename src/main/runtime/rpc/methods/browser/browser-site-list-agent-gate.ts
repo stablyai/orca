@@ -13,6 +13,7 @@ import {
   getManagedBrowserProfileOwner,
   isManagedBrowserProfileOf
 } from '../../../../../shared/browser/profiles/browser-profile-scope'
+import { getRepoIdFromWorktreeId } from '../../../../../shared/worktree/id'
 import type { Repo } from '../../../../../shared/repository/repo-types'
 
 const DEFAULT_PROFILE_ID = 'default'
@@ -100,8 +101,30 @@ export async function assertAgentMayChangeRepoBrowserProfile(
   if (!isAgentRpcCaller(context.caller) || !('browserProfileId' in updates)) {
     return
   }
-  const current = (await context.runtime.showRepo(repo)).browserProfileId
-  assertAgentMayMoveBrowsingOut(current, updates.browserProfileId)
+  const current = await context.runtime.showRepo(repo)
+  for (const from of currentRepoProfileIds(context, current)) {
+    assertAgentMayMoveBrowsingOut(from, updates.browserProfileId)
+  }
+}
+
+/** Where the repo's new tabs go now: its pick, else the managed profiles of its workspaces (none made yet means nothing to protect), else Default. */
+function currentRepoProfileIds(context: GateContext, repo: Repo): string[] {
+  if (repo.browserProfileId) {
+    return [repo.browserProfileId]
+  }
+  const scope = context.runtime.requireStore().getSettings().browserProfileScope
+  if (scope !== 'repo' && scope !== 'worktree') {
+    return [DEFAULT_PROFILE_ID]
+  }
+  return browserSessionRegistry
+    .listProfiles()
+    .filter(
+      (profile) =>
+        profile.owner?.kind === scope &&
+        (scope === 'repo' ? profile.owner.id : getRepoIdFromWorktreeId(profile.owner.id)) ===
+          repo.id
+    )
+    .map((profile) => profile.id)
 }
 
 export async function createBrowserTabForCaller(
