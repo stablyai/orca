@@ -1,4 +1,5 @@
 import { runProcess } from '@orca/process-host'
+import type { ChildProcess } from 'node:child_process'
 import type { ProcessSpec } from '@orca/process-host/process-spec'
 import { resolveSelectedLocalCommand } from '../../../ipc/command-path/command-path-resolver'
 import type { WslProcessGroupTermination } from './wsl-process-group-termination'
@@ -40,6 +41,11 @@ export async function execFileCaptureToTermination(
       options.onChildTerminated?.()
     }
   }
+  // A worker loss during a stop could otherwise force the guest group twice, each a wsl.exe launch.
+  let guestForce: Promise<boolean> | undefined
+  const barrier = termination
+    ? { ...termination, force: (child: ChildProcess) => (guestForce ??= termination.force(child)) }
+    : true
   const pending = runProcess({
     program,
     args,
@@ -50,7 +56,7 @@ export async function execFileCaptureToTermination(
     captureStdoutAsBytes: captureBytes,
     captureStderrAsBytes: captureBytes,
     signal: options.signal,
-    terminationBarrier: termination ?? true,
+    terminationBarrier: barrier,
     onChildTerminated: reportTerminated,
     ...(options.spawnOnWorkerThread === false
       ? {}

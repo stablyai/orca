@@ -19,7 +19,7 @@ export type WorkerThreadChildRequest =
   // Drops a spawn still queued behind other launches; ignored once the process exists.
   | { type: 'cancel-spawn'; id: number }
   // The reader stopped; the worker drains the pipes itself instead of forwarding them.
-  | { type: 'discard-output'; id: number }
+  | { type: 'discard-output'; id: number; stream?: 'stdout' | 'stderr' }
 
 /** Node's errno fields survive the hop so callers can classify spawn failures (spawn ENOENT). */
 export type WorkerThreadChildErrorPayload = {

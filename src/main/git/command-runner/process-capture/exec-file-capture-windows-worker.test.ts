@@ -200,6 +200,21 @@ describe('Windows process creation off the calling loop', () => {
     )
   })
 
+  it("keeps a termination-barrier capture's output past maxBuffer on the worker, and its exit status", async () => {
+    const send = vi.fn(() => true)
+    const child = new WorkerThreadChildProcess(1, send)
+    worker.spawn.mockReturnValue(child)
+    const pending = execFileCaptureToTermination('git', ['diff', '--stat'], { maxBuffer: 4 })
+    await vi.waitFor(() => expect(worker.spawn).toHaveBeenCalled())
+    child.receive({ type: 'spawn', id: 1, pid: 4242 })
+    child.receive({ type: 'stdout', id: 1, chunk: new TextEncoder().encode('more than four') })
+    expect(send).toHaveBeenCalledWith({ type: 'discard-output', id: 1, stream: 'stdout' })
+    expect(treeKills.args).toEqual([])
+    child.receive({ type: 'exit', id: 1, code: 0, signal: null })
+    child.receive({ type: 'close', id: 1, code: 0, signal: null })
+    await expect(pending).rejects.toMatchObject({ code: 0, outputTruncated: true, killed: false })
+  })
+
   it('ends the whole Git tree when output passes maxBuffer', async () => {
     const child = new WorkerThreadChildProcess(1, () => true)
     worker.spawn.mockReturnValue(child)

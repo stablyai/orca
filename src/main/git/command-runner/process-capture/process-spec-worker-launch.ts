@@ -1,5 +1,9 @@
 import type { ChildProcess } from 'node:child_process'
-import type { LaunchedProcess, ProcessSpec } from '@orca/process-host/process-spec'
+import {
+  DEFAULT_MAX_OUTPUT_BYTES,
+  type LaunchedProcess,
+  type ProcessSpec
+} from '@orca/process-host/process-spec'
 import { windowsTreeKillFor } from '@orca/process-host/windows-tree-kill'
 import { recordSubprocessSpawn } from '../../../diagnostics/main-thread-churn-probe'
 import {
@@ -37,6 +41,19 @@ export function launchProcessSpecOnWindowsWorker(
     env: spec.env ?? process.env
   })
   recordSubprocessSpawn(spec.program, args, performance.now() - startedAt)
+  // runProcess keeps the head of each stream; past the cap, the rest stays on the worker.
+  const cap = spec.maxOutputBytes ?? DEFAULT_MAX_OUTPUT_BYTES
+  for (const stream of ['stdout', 'stderr'] as const) {
+    let received = 0
+    const onData = (chunk: Buffer): void => {
+      received += chunk.byteLength
+      if (received > cap) {
+        child[stream].off('data', onData)
+        child.discardOutput(stream)
+      }
+    }
+    child[stream].on('data', onData)
+  }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the stand-in carries the piped surface runProcess and its tree kill read: pid, exitCode, signalCode, kill, stdio streams, and spawn/error/exit/close events.
   const launched = child as unknown as ChildProcess
   child.on('error', (error) => {
