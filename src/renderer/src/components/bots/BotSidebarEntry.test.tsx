@@ -377,7 +377,7 @@ describe('BotSidebarEntry', () => {
     expect(lines()).toEqual([])
   })
 
-  it('switches chats from their sidebar rows and folds only from the chevron', () => {
+  it('switches chats from their sidebar rows, flashing the front one, and folds only from the chevron', () => {
     seed({ 'front-work': 'working', 'background-work': 'working' })
     const workspace = folderWorkspaceKey(home.id)
     const groupId = 'group-1'
@@ -424,6 +424,14 @@ describe('BotSidebarEntry', () => {
     }
     openBotSession.mockClear()
     vi.stubGlobal('api', { ui: { set: vi.fn().mockResolvedValue(undefined) } })
+    // The chats' panes on the right, as their overlays mount them.
+    const [frontPane, backgroundPane] = tabs.map(({ id }) => {
+      const pane = document.createElement('div')
+      pane.setAttribute('data-structured-agent-session-overlay-tab-id', id)
+      document.body.append(pane)
+      return pane
+    })
+    const flashed = (pane: HTMLElement): boolean => pane.classList.contains('pane-focus-rim-flash')
     try {
       renderEntry()
       const front = screen.getByRole('button', { name: /^front · Side chat/ })
@@ -436,9 +444,13 @@ describe('BotSidebarEntry', () => {
       fireEvent.click(front, { detail: 1 })
       expect(front.getAttribute('aria-expanded')).toBe(frontFold)
       expect(openBotSession).toHaveBeenCalledExactlyOnceWith(bot(), 'front')
+      // The press on the chat already in front also flashes its pane, as other jumps to an open pane do.
+      expect(flashed(frontPane)).toBe(true)
+      frontPane.classList.remove('pane-focus-rim-flash')
       fireEvent.click(front, { detail: 2 })
       fireEvent.keyDown(front, { key: 'Enter', repeat: true })
       expect(openBotSession).toHaveBeenCalledOnce()
+      expect(flashed(frontPane)).toBe(false)
 
       const backgroundFold = background.getAttribute('aria-expanded')
       fireEvent.click(background, { detail: 1 })
@@ -448,7 +460,10 @@ describe('BotSidebarEntry', () => {
       // Only the chevron shows its workers.
       fireEvent.click(screen.getByRole('button', { name: 'Unfold background' }))
       expect(background.getAttribute('aria-expanded')).toBe('true')
+      expect(flashed(backgroundPane)).toBe(false)
     } finally {
+      frontPane.remove()
+      backgroundPane.remove()
       vi.unstubAllGlobals()
     }
   })
