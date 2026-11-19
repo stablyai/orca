@@ -5,6 +5,7 @@ import {
   type OrchestrationCrewSnapshot
 } from '../../../../shared/orchestration/orchestration-crew'
 
+import type { CrewInvalidation } from './crew-changes'
 import { CrewReadModel } from './crew-read-model'
 import { fixture } from './crew-read-model.test-fixture'
 import { subscribeCrew } from './crew-stream'
@@ -62,5 +63,26 @@ it('invalidates the current coordinator alias using returned persisted routing e
     )
   } finally {
     stream.stop()
+  }
+})
+
+it('names the rebound run mailbox and stays silent when the coordinator is already bound', () => {
+  const f = fixture()
+  const bind = (handle: string) =>
+    f.db.bindRun({
+      runId: f.run.id,
+      coordinatorHandle: handle,
+      coordinatorPaneKey: f.handles.get(handle)!
+    })
+  bind('term_helper')
+  const notices: CrewInvalidation[] = []
+  const stop = f.db.crewChanges.subscribe((facets) => notices.push(facets))
+  try {
+    bind('term_helper')
+    expect(notices).toEqual([])
+    bind('term_coord')
+    expect(notices.at(-1)?.trafficAddresses).toEqual(new Set([`run:${f.run.id}`]))
+  } finally {
+    stop()
   }
 })
