@@ -191,6 +191,11 @@ export async function isCommandOnLocalPath(
 
 const DIRECT_DETECTION_COMMAND_LIMIT = 4
 
+// Real Windows hosts get native separators (and keep UNC roots);
+// synthetic win32 lookups on POSIX hosts keep POSIX joins.
+const joinCandidatePath = (isWin: boolean, dir: string, name: string): string =>
+  (isWin ? path.join : path.posix.join)(dir, name)
+
 /** Bounded, lazy PATH detection; listings eliminate repeated probes for absence-heavy inventories. */
 export async function findCommandsOnLocalPath(
   commands: readonly string[],
@@ -214,8 +219,6 @@ export async function findCommandsOnLocalPath(
 
   const env = options.env ?? process.env
   const isAbsolute = isWin ? path.win32.isAbsolute : path.posix.isAbsolute
-  // Native Windows joining preserves UNC roots; POSIX hosts retain synthetic lookups.
-  const joinPath = isWin ? path.join : path.posix.join
   const pathDirs = (readEnvCaseInsensitive(env, 'PATH') ?? '')
     .split(isWin ? ';' : ':')
     // The install-dir fallback also searches trimmed PATH entries.
@@ -249,7 +252,7 @@ export async function findCommandsOnLocalPath(
             continue
           }
           // POSIX stat must decide volume case sensitivity, even for a folded-name match.
-          const candidate = joinPath(dir, isWin ? (listed ?? wanted) : wanted)
+          const candidate = joinCandidatePath(isWin, dir, isWin ? (listed ?? wanted) : wanted)
           const candidateKey = isWin ? candidate.toLowerCase() : candidate
           if (seenCandidates.has(candidateKey)) {
             continue
@@ -323,8 +326,7 @@ async function findLocalCommandPaths(
   const seen = new Set<string>()
   for (const dir of searchDirs) {
     for (const ext of extensions) {
-      // Windows accepts forward slashes; POSIX joins keep synthetic Windows lookups testable everywhere.
-      const candidate = path.posix.join(dir, command) + ext
+      const candidate = joinCandidatePath(isWin, dir, command) + ext
       // Preserve the prior where/which absolute-resolution filter.
       const candidateKey = isWin ? candidate.toLowerCase() : candidate
       if (!isAbsolute(candidate) || seen.has(candidateKey)) {
