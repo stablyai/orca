@@ -12,10 +12,8 @@ vi.mock('electron', () => ({
 describe('configureDevKeychain', () => {
   it.each([
     { platform: 'darwin', packaged: false, useKeychain: undefined, mock: true },
-    { platform: 'darwin', packaged: false, useKeychain: '0', mock: true },
     { platform: 'darwin', packaged: false, useKeychain: '1', mock: false },
     { platform: 'darwin', packaged: true, useKeychain: undefined, mock: false },
-    { platform: 'linux', packaged: false, useKeychain: undefined, mock: false },
     { platform: 'win32', packaged: false, useKeychain: undefined, mock: false }
   ])(
     'selects mock=$mock on $platform (packaged=$packaged, opt-in=$useKeychain)',

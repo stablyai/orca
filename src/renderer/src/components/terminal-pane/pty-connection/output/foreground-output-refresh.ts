@@ -104,13 +104,13 @@ export function bindForegroundOutputRefresh(session: ConnectPanePtySession): voi
     session.hiddenOutputRestoreDisclosedGap = null
     session.modelRestoreSubscribedPtyId = ptyId
     // Only streams through local main have markers; remote-runtime transports are unaffected.
-    if (!ptyId || isRemoteRuntimePtyId(ptyId)) {
-      return
+    if (ptyId && !isRemoteRuntimePtyId(ptyId)) {
+      session.unregisterModelRestoreNeeded = registerPtyModelRestoreNeededHandler(
+        ptyId,
+        handleModelRestoreNeededMarker,
+        () => session.agentCompletionCoordinator.observeOutputActivity()
+      )
     }
-    session.unregisterModelRestoreNeeded = registerPtyModelRestoreNeededHandler(
-      ptyId,
-      handleModelRestoreNeededMarker
-    )
   }
 
   session.handleRemoteOutputPauseChanged = (paused, supported, dropsReported): void => {

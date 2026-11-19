@@ -15,7 +15,6 @@ import StatusIndicator from './StatusIndicator'
 import { useWorktreeActivityStatus } from '../activity/use-worktree-activity-status'
 import { laneStatusWithLineage } from './worktree-card-lineage-lane-status'
 import { useShallow } from 'zustand/react/shallow'
-import { useAppStore } from '@/store/index'
 import {
   selectEphemeralVmWorkspaceRuntime,
   selectEphemeralVmWorkspaceWaking
@@ -30,6 +29,7 @@ import {
   WorkspaceReviewChecksIndicator,
   workspaceReviewChecksLabel
 } from '../../workspace-status/presentation/WorkspaceReviewChecksIndicator'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 type WorktreeCardStatusSlotProps = {
   worktreeId: string
@@ -153,7 +153,7 @@ export function WorktreeCardStatusSlot({
   const liveStatus = laneStatusWithLineage(useWorktreeActivityStatus(worktreeId), lineageStatus)
   const status = statusOverride ?? liveStatus
   // One subscription per card: rows mount by the hundreds, and every listener runs on each store write.
-  const { isSleeping, vmRuntime, vmWaking } = useAppStore(
+  const { isSleeping, vmRuntime, vmWaking } = useAppStoreWithChannels(
     useShallow((state) => ({
       isSleeping: selectIsSleepingWorktree(state, worktreeId),
       vmRuntime: selectEphemeralVmWorkspaceRuntime(state, worktreeId),
