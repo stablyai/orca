@@ -33,6 +33,7 @@ import type { MobileNativeChatPendingMessage } from './transcript/sending/mobile
 import type { useMobileNativeChatSession } from './conversation/use-mobile-native-chat-session'
 import type { MobileNativeChatSessionOptionPickersProps } from './input/session-options/MobileNativeChatSessionOptionPickers'
 import type { MobileStructuredMcpPanel } from './mcp/use-mobile-structured-mcp-panel'
+import type { MobileStructuredAccountUsage } from './usage/use-mobile-structured-account-usage'
 import type { MobileNativeChatVisualSource } from './visual/mobile-native-chat-visual-read'
 import type { NativeChatContextUsageSummary } from '../../../../src/shared/native-chat/native-chat-context-usage-summary'
 import type { useMobileStructuredSessionCommands } from './composer/commands/use-mobile-structured-session-commands'
@@ -107,6 +108,7 @@ export type MobileNativeChatController = {
   nativeChatInterruptedContinue: MobileStructuredInterruptedContinue | null
   nativeChatThreadGoal: MobileStructuredThreadGoal | null
   nativeChatMcpPanel: MobileStructuredMcpPanel | null
+  nativeChatAccountUsage: MobileStructuredAccountUsage | null
   nativeChatRewind: AgentSessionRewindSurface | undefined
   nativeChatFilePaths: string[]
   loadNativeChatFiles: (query: string) => void
