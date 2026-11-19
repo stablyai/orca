@@ -3,7 +3,6 @@ import {
   resolveUnifiedTabLabel
 } from '../../../../../../shared/workspace-layout/tab-groups/tab-title-resolution'
 import { getEditorDisplayLabel } from '@/components/editor/panel/header/editor-labels'
-import { buildPaletteTabDocument } from '../../../../../../shared/palette-match/tab-document'
 import {
   getPaletteWorktreeIdentity,
   isPaletteCurrentWorktree,
@@ -14,13 +13,8 @@ import {
   resolveWorktreeBranchLabel,
   resolveWorktreeDisplayName
 } from '../../display/worktree-default-display-name'
+import { collectAgentMetadataFromIndex } from './workspace-tab-agent-metadata'
 import {
-  buildAgentMetadataTabIndex,
-  collectAgentMetadataFromIndex,
-  type AgentMetadataTabIndex
-} from './workspace-tab-agent-metadata'
-import {
-  findAmbiguousWorktreeIds,
   findDuplicateIds,
   getUnifiedTabPaletteExecutionHostId,
   hasOpenFileExecutionHostEvidence,
@@ -37,58 +31,13 @@ import type {
   SearchableWorkspaceTab,
   WorkspaceTabContentType
 } from './workspace-tab-search-types'
-import type { OpenFile } from '@/store/slices/editor/types/open-file'
-import type { PaletteTabDocumentInput } from '../../../../../../shared/palette-match/tab-document'
-import type { PaletteDocument } from '../../../../../../shared/palette-match/palette-document'
+import {
+  createWorkspaceTabBuildScope,
+  type WorkspaceTabBuildScope,
+  type WorkspaceTabPaletteBuildContext
+} from './workspace-tab-palette-build-scope'
 import type { TerminalTab } from '../../../../../../shared/workspace-layout/terminal-tab-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
-
-export type WorkspaceTabPaletteBuildContext = {
-  agentIndex: AgentMetadataTabIndex
-  document: (identity: string, input: PaletteTabDocumentInput) => PaletteDocument
-}
-
-/** Inputs every workspace's entries share; built once per pass. */
-export type WorkspaceTabBuildScope = {
-  openFilesById: Map<string, OpenFile[]>
-  agentIndex: AgentMetadataTabIndex
-  documentFor: (identity: string, input: PaletteTabDocumentInput) => PaletteDocument
-  ambiguousWorktreeIds: ReadonlySet<string>
-}
-
-export function createWorkspaceTabBuildScope(
-  {
-    worktrees,
-    ownershipWorktrees,
-    openFiles,
-    agentStatusByPaneKey,
-    sleepingAgentSessionsByPaneKey
-  }: BuildSearchableWorkspaceTabsOptions,
-  context?: WorkspaceTabPaletteBuildContext
-): WorkspaceTabBuildScope {
-  const openFilesById = new Map<string, OpenFile[]>()
-  for (const file of openFiles) {
-    const bucket = openFilesById.get(file.id)
-    if (bucket) {
-      bucket.push(file)
-    } else {
-      openFilesById.set(file.id, [file])
-    }
-  }
-  return {
-    openFilesById,
-    agentIndex:
-      context?.agentIndex ??
-      buildAgentMetadataTabIndex({
-        agentStatusByPaneKey,
-        sleepingAgentSessionsByPaneKey
-      }),
-    documentFor:
-      context?.document ??
-      ((_identity: string, input: PaletteTabDocumentInput) => buildPaletteTabDocument(input)),
-    ambiguousWorktreeIds: findAmbiguousWorktreeIds(ownershipWorktrees ?? worktrees)
-  }
-}
 
 /** One workspace's entries in tab order; `seenTabIdentities` drops a tab an earlier entry already listed. */
 export function buildWorktreeTabEntries(

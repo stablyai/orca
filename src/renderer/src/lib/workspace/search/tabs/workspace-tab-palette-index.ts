@@ -7,12 +7,13 @@ import {
   type PaletteTabDocumentInput
 } from '../../../../../../shared/palette-match/tab-document'
 import type { PaletteDocument } from '../../../../../../shared/palette-match/palette-document'
+import { buildWorktreeTabEntries } from './workspace-tab-palette-entry-builder'
 import {
-  buildWorktreeTabEntries,
   createWorkspaceTabBuildScope,
   type WorkspaceTabBuildScope
-} from './workspace-tab-palette-entry-builder'
+} from './workspace-tab-palette-build-scope'
 import { createWorkspaceTabAgentIndex } from './workspace-tab-agent-index'
+import { workspaceScopedChanges } from './workspace-tab-palette-change-scope'
 import { getUnifiedTabPaletteExecutionHostId } from '../../ownership/unified-tab-host-ownership'
 import { resolveOpenTabOccupantAgent } from '../../../agent-session/tab-identity/open-tab-occupant-agent'
 import type {
@@ -45,60 +46,6 @@ function sameEntry(a: SearchableWorkspaceTab, b: SearchableWorkspaceTab): boolea
       { ...b, agentMetadata: null, secondarySearchTexts: null, typeSearchAliases: null }
     )
   )
-}
-
-// Records keyed by workspace id; a change to one workspace's value rebuilds only its entries.
-const WORKSPACE_KEYED_INPUTS = [
-  'unifiedTabsByWorktree',
-  'tabsByWorktree',
-  'groupsByWorktree',
-  'activeGroupIdByWorktree',
-  'activeTabIdByWorktree',
-  'activeFileIdByWorktree',
-  'activeTabTypeByWorktree'
-] as const
-
-function stableEntryInputs({
-  agentStatusByPaneKey: _agentStatusByPaneKey,
-  sleepingAgentSessionsByPaneKey: _sleepingAgentSessionsByPaneKey,
-  terminalLayoutsByTabId: _terminalLayoutsByTabId,
-  paneForegroundAgentByPaneKey: _paneForegroundAgentByPaneKey,
-  unifiedTabsByWorktree: _unifiedTabsByWorktree,
-  tabsByWorktree: _tabsByWorktree,
-  groupsByWorktree: _groupsByWorktree,
-  activeGroupIdByWorktree: _activeGroupIdByWorktree,
-  activeTabIdByWorktree: _activeTabIdByWorktree,
-  activeFileIdByWorktree: _activeFileIdByWorktree,
-  activeTabTypeByWorktree: _activeTabTypeByWorktree,
-  ...inputs
-}: BuildSearchableWorkspaceTabsOptions) {
-  return inputs
-}
-
-/** Workspace ids whose keyed inputs changed; a record compare costs one identity check per workspace. */
-function changedWorkspaceIds(
-  previous: BuildSearchableWorkspaceTabsOptions,
-  options: BuildSearchableWorkspaceTabsOptions
-): Set<string> {
-  const changed = new Set<string>()
-  for (const field of WORKSPACE_KEYED_INPUTS) {
-    const before: Record<string, unknown> = previous[field]
-    const after: Record<string, unknown> = options[field]
-    if (before === after) {
-      continue
-    }
-    for (const id in after) {
-      if (after[id] !== before[id]) {
-        changed.add(id)
-      }
-    }
-    for (const id in before) {
-      if (!(id in after)) {
-        changed.add(id)
-      }
-    }
-  }
-  return changed
 }
 
 type PaletteDocumentCache = Map<
@@ -218,12 +165,7 @@ export function createWorkspaceTabPaletteIndex() {
         }
       }
     }
-    const workspaceScoped =
-      previous &&
-      Object.keys(options).length === Object.keys(previous).length &&
-      shallow(stableEntryInputs(previous), stableEntryInputs(options))
-    const changedWorkspaces =
-      workspaceScoped && previous ? changedWorkspaceIds(previous, options) : null
+    const changedWorkspaces = previous ? workspaceScopedChanges(previous, options) : null
     previous = options
     if (scope && changedWorkspaces && addressed && dirtyTabs !== null) {
       let next = entries
