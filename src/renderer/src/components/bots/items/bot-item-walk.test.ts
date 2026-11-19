@@ -44,10 +44,15 @@ it('stops at both ends without wrapping, and a list of one has nowhere to go', (
   expect(botItemWalkStep(one, 'missing', 1)).toBeNull()
 })
 
-it('adds a read Closed page once per uid, and ends the walk where the host runs out', () => {
+it('deduplicates and caps Closed pages, and ends the walk where the host runs out', () => {
   const walk = { uids: ['a', 'd'], total: 5 }
   const paged = botItemWalkExtend(walk, [item('d'), item('e')], false)
   expect(paged).toEqual({ uids: ['a', 'd', 'e'], total: 5 })
+  expect(botItemWalkExtend(paged, [item('e')], false)).toBe(paged)
+  expect(botItemWalkExtend(paged, [item('f'), item('g'), item('h')], false)).toEqual({
+    uids: ['a', 'd', 'e', 'f', 'g'],
+    total: 5
+  })
   expect(botItemWalkExtend(paged, [item('f')], true)).toEqual({
     uids: ['a', 'd', 'e', 'f'],
     total: 4
@@ -68,13 +73,4 @@ it('returns Back to the item’s row, else the nearest listed one after it, then
   expect(botItemWalkReturnRow(walk, 'd', ['a', 'b'])).toBe('b')
   expect(botItemWalkReturnRow(null, 'z', ['a', 'x'])).toBe('x')
   expect(botItemWalkReturnRow(walk, 'b', [])).toBeNull()
-})
-
-it('takes no more from a page than the members still unloaded since open', () => {
-  const walk = { uids: ['a', 'c1'], total: 3 }
-  expect(botItemWalkExtend(walk, [item('c2'), item('c3'), item('c4')], false)).toEqual({
-    uids: ['a', 'c1', 'c2'],
-    total: 3
-  })
-  expect(botItemWalkExtend(walk, [item('c1')], false)).toBe(walk)
 })
