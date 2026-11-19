@@ -9,6 +9,7 @@ import {
 import { acpPermissionPresentation } from '../requests/acp-timeline-requests'
 import type { ModelInfo, ToolCallUpdate } from '../generated/acp-protocol.generated'
 import { pendingAcpResolution, type AcpDialect, type AcpRequestPresentation } from './acp-dialect'
+import { acpReplyNoticeFailure } from './acp-reply-notice-failure'
 
 // The server's question forms open with only a count; each field's title is the real question.
 const QUESTION_FORM_MESSAGE = /^The agent has (?:a question|\d+ questions)\.$/
@@ -146,6 +147,9 @@ function promptErrorDetail(error: AcpAgentError): string | undefined {
 // agy 1.5+ retries an empty model reply until it gets output, sending this text each time.
 const RETRY_NOTICE = /^\s*\u26a0 (Model produced invalid output\.)\s*$/
 
+// agy ends a turn whose request outlived its OAuth token with this one-line notice.
+const UNAUTHENTICATED_NOTICE = /^\s*\u26a0 UNAUTHENTICATED \(code 401\): [^\n]*\s*$/
+
 const EFFORT_LEVELS = ['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'] as const
 
 // Model options list families; availableModels lists each level as "<family>-<level>".
@@ -195,6 +199,8 @@ export const ANTIGRAVITY_ACP_DIALECT: AcpDialect = {
     warnedApproval(method, params),
   normalizeToolUpdate,
   promptErrorDetail,
+  // Not marked signed out: agy may already hold a refreshed token for the next prompt.
+  notification: (method, params) => acpReplyNoticeFailure(method, params, UNAUTHENTICATED_NOTICE),
   providerRetry: (text) => RETRY_NOTICE.exec(text)?.[1],
   // Avoid using the full command line as the tool name.
   toolName: (update) => (update.kind === 'execute' ? 'execute' : undefined),
