@@ -1,6 +1,9 @@
 import { join } from 'node:path'
 import { readFetchResponseTextWithinLimit } from '../../shared/network/fetch-response-body'
-import { readNodeFileSyncWithinLimit } from '../../shared/file-content/node-bounded-file-reader'
+import {
+  readNodeFileSyncWithinLimit,
+  readNodeFileWithinLimit
+} from '../../shared/file-content/node-bounded-file-reader'
 import { getVersionChannel, MAIN_RELEASE_REPO } from '../../shared/updater/release-channel'
 import { writePluginFileAtomically } from '../plugins/installation/plugin-atomic-file-write'
 
@@ -86,6 +89,33 @@ export function readCachedReleaseAssetPolicy<P extends { revision: number }>(
   }
 }
 
+/** The same, read without blocking, for work that runs off the startup path. */
+export async function readCachedReleaseAssetPolicyAsync<P extends { revision: number }>(
+  spec: ReleaseAssetPolicySpec<P>,
+  userDataPath: string,
+  appVersion: string
+): Promise<P | null> {
+  const channel = releaseAssetPolicyChannelForAppVersion(appVersion)
+  if (!channel) {
+    return null
+  }
+  try {
+    const { buffer } = await readNodeFileWithinLimit(
+      join(userDataPath, releaseAssetPolicyCacheFileName(spec, channel)),
+      spec.maxBytes,
+      { regularFileOnly: true }
+    )
+    const parsed = spec.parse(buffer.toString('utf8'))
+    return parsed.ok ? parsed.policy : null
+  } catch {
+    return null
+  }
+}
+
+function newerPolicy<P extends { revision: number }>(left: P | null, right: P | null): P | null {
+  return left && (!right || left.revision >= right.revision) ? left : right
+}
+
 export type ReleaseAssetPolicyLiveUpdateDeps<P> = {
   userDataPath: string
   appVersion: string
@@ -107,6 +137,8 @@ export class ReleaseAssetPolicyLiveUpdater<P extends { revision: number }> {
   // The newest policy this process has known, so a cache write that failed can't let an older
   // download win later.
   private newest: P | null = null
+  // One refresh at a time, so the cache is never published out of order.
+  private refreshing: Promise<void> = Promise.resolve()
 
   constructor(
     private readonly spec: ReleaseAssetPolicySpec<P>,
@@ -143,7 +175,26 @@ export class ReleaseAssetPolicyLiveUpdater<P extends { revision: number }> {
     return this.fetched
   }
 
-  async refresh(): Promise<void> {
+  /** The newest policy known, downloaded this run or cached, even after a failed download. */
+  async newestKnown(): Promise<P | null> {
+    return newerPolicy(
+      await readCachedReleaseAssetPolicyAsync(
+        this.spec,
+        this.deps.userDataPath,
+        this.deps.appVersion
+      ),
+      this.newest
+    )
+  }
+
+  /** Waits for any refresh already running, then downloads again. */
+  refresh(): Promise<void> {
+    const run = this.refreshing.then(() => this.refreshNow())
+    this.refreshing = run.catch(() => {})
+    return run
+  }
+
+  private async refreshNow(): Promise<void> {
     const channel = this.channel
     if (!channel) {
       return
@@ -165,8 +216,7 @@ export class ReleaseAssetPolicyLiveUpdater<P extends { revision: number }> {
       this.deps.userDataPath,
       this.deps.appVersion
     )
-    const known =
-      cached && (!this.newest || cached.revision >= this.newest.revision) ? cached : this.newest
+    const known = newerPolicy(cached, this.newest)
     const stale = known !== null && parsed.policy.revision <= known.revision
     const policy = stale ? known : parsed.policy
     this.newest = policy
