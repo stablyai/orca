@@ -272,7 +272,9 @@ export abstract class OrcaRuntimeWithHeadlessGapReseed extends OrcaRuntimeWithCr
       if (typeof snapshot.kittyKeyboardFlags === 'number') {
         await state.emulator.applyKittyKeyboardFlags(snapshot.kittyKeyboardFlags)
       }
-      await state.emulator.write(`${snapshot.pendingEscapeTailAnsi ?? ''}${after}`)
+      // A half-drawn frame stays one until its end arrives, so observers wait for it.
+      const frameOpen = snapshot.synchronizedOutput ? '\x1b[?2026h' : ''
+      await state.emulator.write(`${frameOpen}${snapshot.pendingEscapeTailAnsi ?? ''}${after}`)
       if (after === '') {
         // Live ownership saw every byte after the snapshot; with none, the provider's view is current.
         state.ownership.seedOwner(snapshot.terminalOwner, {

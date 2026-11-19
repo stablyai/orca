@@ -79,7 +79,8 @@ export abstract class DaemonPtyBufferSnapshots extends DaemonPtySessionControl {
       ...(snapshot.pendingEscapeTailAnsi
         ? { pendingEscapeTailAnsi: snapshot.pendingEscapeTailAnsi }
         : {}),
-      ...(snapshot.terminalOwner ? { terminalOwner: snapshot.terminalOwner } : {})
+      ...(snapshot.terminalOwner ? { terminalOwner: snapshot.terminalOwner } : {}),
+      ...(snapshot.modes.synchronizedOutput ? { synchronizedOutput: true } : {})
     }
   }
 

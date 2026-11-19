@@ -41,6 +41,8 @@ export type PtyProviderBufferSnapshot = {
   kittyKeyboardFlags?: number
   /** Ordered ownership evidence proven at this snapshot's `seq`. */
   terminalOwner?: TerminalOwner
+  /** The snapshot's screen is part of a synchronized-output frame still being drawn. */
+  synchronizedOutput?: boolean
 }
 
 export type PtySpawnOptions = {

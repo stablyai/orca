@@ -2,6 +2,11 @@ import { assert, describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import { HeadlessEmulator } from '../../../daemon/emulation/headless-emulator'
 import type { PtyProviderBufferSnapshot } from '../../../providers/pty/provider-contract'
+import type { RuntimeTerminalRead } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
+import {
+  clearNativeWindowsConptyPty,
+  markNativeWindowsConptyPty
+} from './terminal-model-query-authority'
 
 const grid = { cols: 80, rows: 24 }
 const partial = 'prompt\r\n> \x1b[?'
@@ -290,6 +295,84 @@ it('cancels a recovery capture the provider never answers before freeing its slo
   } finally {
     vi.useRealTimers()
     await runtime.onPtyExit('pty-hung', 0)
+  }
+})
+
+it("reads a rebuilt ConPTY terminal's history from the provider, which kept it", async () => {
+  const lines = Array.from({ length: 200 }, (_, index) => `line ${index + 1}`)
+  const runtime = createRuntime()
+  runtime.setPtyController({
+    write: () => true,
+    kill: () => true,
+    getForegroundProcess: async () => null,
+    getSize: () => grid,
+    serializeProviderBuffer: async (_ptyId, opts) => ({
+      data: opts?.scrollbackRows ? lines.join('\r\n') : '\x1b[H\x1b[2Jline 200',
+      ...grid,
+      seq: 16,
+      source: 'headless'
+    })
+  })
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: OrcaRuntimeService inherits these protected methods with exactly these signatures.
+  const reads = runtime as unknown as {
+    serializeHeadlessTerminalBuffer(ptyId: string): Promise<{ data: string } | null>
+    withVisibleSnapshotFallback(
+      ptyId: string,
+      read: RuntimeTerminalRead,
+      opts: { limit?: number }
+    ): Promise<RuntimeTerminalRead>
+  }
+  markNativeWindowsConptyPty('pty-win')
+  try {
+    anchorStream(runtime, 'pty-win')
+    runtime.onPtyData('pty-win', 'stale\r\n', 1)
+    runtime.notePtyDataGap('pty-win', 9)
+    await vi.waitFor(async () => assert(await reads.serializeHeadlessTerminalBuffer('pty-win')))
+    const read = await reads.withVisibleSnapshotFallback(
+      'pty-win',
+      { handle: 'term', status: 'running', tail: ['line 200'], truncated: false, nextCursor: null },
+      { limit: 120 }
+    )
+    expect(read.tail).toEqual(lines.slice(-120))
+  } finally {
+    clearNativeWindowsConptyPty('pty-win')
+    await runtime.onPtyExit('pty-win', 0)
+  }
+})
+
+it('keeps a synchronized-output frame open across a rebuild until the frame ends', async () => {
+  const runtime = createRuntime()
+  runtime.setPtyController({
+    write: () => true,
+    kill: () => true,
+    getForegroundProcess: async () => null,
+    getSize: () => grid,
+    serializeProviderBuffer: async () => ({
+      data: '\x1b[H\x1b[2Jhalf a frame',
+      ...grid,
+      seq: 16,
+      source: 'headless',
+      synchronizedOutput: true
+    })
+  })
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: OrcaRuntimeService inherits this protected method with exactly this signature.
+  const models = runtime as unknown as {
+    readWholeScreenModel(ptyId: string): { emulator: { isSynchronizedOutput: boolean } } | null
+  }
+  try {
+    anchorStream(runtime, 'pty-sync')
+    runtime.onPtyData('pty-sync', 'stale\r\n', 1)
+    runtime.notePtyDataGap('pty-sync', 9)
+    const model = await vi.waitFor(() => {
+      const rebuilt = models.readWholeScreenModel('pty-sync')
+      assert(rebuilt)
+      return rebuilt
+    })
+    expect(model.emulator.isSynchronizedOutput).toBe(true)
+    runtime.onPtyData('pty-sync', ' drawn\x1b[?2026l', 2)
+    await vi.waitFor(() => expect(model.emulator.isSynchronizedOutput).toBe(false))
+  } finally {
+    await runtime.onPtyExit('pty-sync', 0)
   }
 })
 

@@ -209,11 +209,15 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
       terminalReadLimit(limit, DEFAULT_TERMINAL_READ_LIMIT) +
       (this.getTerminalSize(ptyId)?.rows ?? 0)
     const state = this.readWholeScreenModel(ptyId)
-    if (!state) {
-      return this.readProviderTerminalTailLines(ptyId, rowLimit, {
+    // A model rebuilt screen-only after dropped output has no history; the provider kept it.
+    if (!state || (state.historyFromProvider && !providerSnapshot.visibleScreenOnly)) {
+      const provider = await this.readProviderTerminalTailLines(ptyId, rowLimit, {
         timeoutMs: VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS,
         ...providerSnapshot
       })
+      if (!state || provider.lines.length > 0) {
+        return provider
+      }
     }
     const generation = this.getPtyLifecycleGeneration(ptyId)
     await state.writeChain
