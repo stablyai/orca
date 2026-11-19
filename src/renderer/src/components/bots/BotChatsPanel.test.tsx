@@ -121,12 +121,8 @@ function frontTab(chatId: string): void {
   })
 }
 
-function renderPanel(): void {
-  render(
-    <TooltipProvider>
-      <BotChatsPanel />
-    </TooltipProvider>
-  )
+function renderPanel(): ReturnType<typeof render> {
+  return render(<BotChatsPanel />, { wrapper: TooltipProvider })
 }
 
 beforeEach(() => {
@@ -197,19 +193,22 @@ describe('the Chats tab', () => {
     expect(useAppStore.getState().rightSidebarTab).toBe('bot-activity')
   })
 
-  it('says it is loading until the first read lands', () => {
-    showTree({ state: 'loading' })
-    renderPanel()
-    expect(screen.getByText('Loading chats…')).toBeTruthy()
-  })
-
-  it('offers a retry when the read failed', () => {
+  it('shows loading, offers retry on failure and renders the chat once retry succeeds', () => {
     const retry = vi.fn()
+    showTree({ state: 'loading' })
+    const view = renderPanel()
+    expect(screen.getByText('Loading chats…')).toBeTruthy()
+
     showTree({ state: 'failed', retry })
-    renderPanel()
+    view.rerender(<BotChatsPanel />)
     expect(screen.getByText(/Couldn't read this bot's chats/)).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
     expect(retry).toHaveBeenCalledTimes(1)
+
+    showTree({ chats: [rollout] })
+    view.rerender(<BotChatsPanel />)
+    expect(screen.getByRole('button', { name: /^Connector fix rollout · Side chat/ })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull()
   })
 
   it('sends an older host to Activity, where its work still shows', () => {

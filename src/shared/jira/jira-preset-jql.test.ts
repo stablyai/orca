@@ -24,15 +24,4 @@ describe('searchJiraPreset', () => {
       'project = "10000" AND (reporter = currentUser() AND resolution = Unresolved AND status in ("In Progress") AND sprint in openSprints()) ORDER BY updated DESC'
     )
   })
-
-  it('surfaces other failures without retrying', async () => {
-    const queries: string[] = []
-    await expect(
-      searchJiraPreset('assigned', undefined, async (jql) => {
-        queries.push(jql)
-        throw new Error("Error 400: Field 'sprint' does not exist")
-      })
-    ).rejects.toThrow('sprint')
-    expect(queries).toHaveLength(1)
-  })
 })

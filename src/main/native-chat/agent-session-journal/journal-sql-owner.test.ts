@@ -71,34 +71,6 @@ async function writeMessages(
   return { ...committed.publication, cursor: committed.cursor }
 }
 
-it('uses the common writer transport and returns committed domain bodies in order', async () => {
-  const { owner, filename } = await fixture()
-  const probe = new Database(filename)
-  const outcomes = await Promise.all(
-    ['first', 'last'].map((text) =>
-      writeMessages(owner, {
-        target: { sessionId: 'session', epoch: 'epoch' },
-        steps: [message(text)],
-        savedAt: 100
-      })
-    )
-  )
-  expect(outcomes.map((commit) => commit.cursor)).toEqual([
-    { epoch: 'epoch', sequence: 2 },
-    { epoch: 'epoch', sequence: 3 }
-  ])
-  expect(outcomes.map((commit) => commit.items[0]?.body)).toEqual([
-    { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'first' }] },
-    { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'last' }] }
-  ])
-  expect(
-    probe
-      .prepare("SELECT name FROM sqlite_master WHERE name IN ('journal_rows','journal_outcomes')")
-      .all()
-  ).toEqual([])
-  probe.close()
-})
-
 it.each([false, true])('cancels reader requests on requested close (ready: %s)', async (ready) => {
   const { filename } = await fixture()
   const slot = new ReaderSlot(filename, filename, journalSqlReaderPath())
@@ -160,7 +132,11 @@ it('correlates interleaved replies and resumes current bodies after writer closu
       status: 'fulfilled',
       value: {
         cursor: { epoch: 'epoch', sequence: 2 },
-        items: [{ body: { blocks: [{ text: 'first' }] } }]
+        items: [
+          {
+            body: { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'first' }] }
+          }
+        ]
       }
     },
     {
@@ -174,11 +150,23 @@ it('correlates interleaved replies and resumes current bodies after writer closu
       status: 'fulfilled',
       value: {
         cursor: { epoch: 'epoch', sequence: 3 },
-        items: [{ body: { blocks: [{ text: 'last' }] } }]
+        items: [
+          { body: { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'last' }] } }
+        ]
       }
     },
     { status: 'rejected', reason: expect.any(Error) }
   ])
+  const probe = new Database(filename)
+  try {
+    expect(
+      probe
+        .prepare("SELECT name FROM sqlite_master WHERE name IN ('journal_rows','journal_outcomes')")
+        .all()
+    ).toEqual([])
+  } finally {
+    probe.close()
+  }
   const pool = new JournalSqlReaderPool(filename, filename, journalSqlReaderPath())
   readers.push(pool)
   const request = {

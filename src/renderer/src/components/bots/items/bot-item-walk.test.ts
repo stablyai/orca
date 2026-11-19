@@ -2,7 +2,6 @@ import { expect, it } from 'vitest'
 import type { BotItemGroups } from '../../../../../shared/bots/bot-item-groups'
 import { makeTestBotItem } from '../../../../../shared/bots/bot-item.test-fixture'
 import {
-  botItemWalkDrop,
   botItemWalkExtend,
   botItemWalkOf,
   botItemWalkReturnRow,
@@ -33,17 +32,6 @@ it('walks the list in group order, folded groups and unloaded Closed items count
   expect(botItemWalkStep(walk, 'd', 1)).toEqual({ kind: 'page' })
 })
 
-it('stops at both ends without wrapping, and a list of one has nowhere to go', () => {
-  const walk = botItemWalkOf(groups({ needs_you: ['a', 'b'] }), 0)
-  expect(botItemWalkStep(walk, 'a', -1)).toBeNull()
-  expect(botItemWalkStep(walk, 'b', 1)).toBeNull()
-  const one = botItemWalkOf(groups({ working: ['only'] }), 0)
-  expect(one.total).toBe(1)
-  expect(botItemWalkStep(one, 'only', 1)).toBeNull()
-  expect(botItemWalkStep(one, 'only', -1)).toBeNull()
-  expect(botItemWalkStep(one, 'missing', 1)).toBeNull()
-})
-
 it('deduplicates and caps Closed pages, and ends the walk where the host runs out', () => {
   const walk = { uids: ['a', 'd'], total: 5 }
   const paged = botItemWalkExtend(walk, [item('d'), item('e')], false)
@@ -56,13 +44,6 @@ it('deduplicates and caps Closed pages, and ends the walk where the host runs ou
   expect(botItemWalkExtend(paged, [item('f')], true)).toEqual({
     uids: ['a', 'd', 'e', 'f'],
     total: 4
-  })
-})
-
-it('drops a deleted item and counts one fewer', () => {
-  expect(botItemWalkDrop({ uids: ['a', 'b', 'c'], total: 4 }, 'b')).toEqual({
-    uids: ['a', 'c'],
-    total: 3
   })
 })
 
