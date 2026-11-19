@@ -58,30 +58,43 @@ const TableListRow = z.object({ wr: z.number(), strict: z.number() })
 const IndexListRow = z.object({ name: z.string(), unique: z.number() })
 const IndexColumnRow = z.object({ name: z.string().nullable() })
 
-/** The character that closes each SQL quote: literals, quoted names, and SQLite's [bracketed] names. */
-const CLOSING_QUOTE: Readonly<Record<string, string>> = { "'": "'", '"': '"', '`': '`', '[': ']' }
+/** The text that closes each SQL quote or comment opener. */
+const SQL_CLOSERS: Readonly<Record<string, string>> = {
+  "'": "'",
+  '"': '"',
+  '`': '`',
+  '[': ']',
+  '--': '\n',
+  '/*': '*/'
+}
 
-/** Collapse whitespace outside SQL string literals and quoted names; literal text stays as written. */
-export function normalizeSql(sql: string): string {
-  let out = ''
-  let quote: string | null = null
-  for (const char of sql) {
-    if (quote) {
-      out += char
-      quote = char === quote ? null : quote
-    } else if (CLOSING_QUOTE[char]) {
-      out += char
-      quote = CLOSING_QUOTE[char]
-    } else if (/\s/.test(char)) {
-      out += out.endsWith(' ') ? '' : ' '
-    } else {
-      out += char
+/** Whether each character of `sql` is code, as opposed to a literal, quoted name or comment. */
+function sqlCodeMask(sql: string): boolean[] {
+  const code = Array.from({ length: sql.length }, () => true)
+  for (let i = 0; i < sql.length; i++) {
+    const opener = SQL_CLOSERS[sql.slice(i, i + 2)] ? sql.slice(i, i + 2) : sql[i]
+    const closer = SQL_CLOSERS[opener]
+    if (closer) {
+      const found = sql.indexOf(closer, i + opener.length)
+      const end = found === -1 ? sql.length : found + closer.length
+      code.fill(false, i, end)
+      i = end - 1
     }
+  }
+  return code
+}
+
+/** Collapse whitespace in SQL code; literals, quoted names and comments stay as written. */
+export function normalizeSql(sql: string): string {
+  const code = sqlCodeMask(sql)
+  let out = ''
+  for (let i = 0; i < sql.length; i++) {
+    out += code[i] && /\s/.test(sql[i]) ? (out.endsWith(' ') ? '' : ' ') : sql[i]
   }
   return out.trim()
 }
 
-/** Every CHECK (...) clause in a CREATE TABLE; parentheses inside literals don't count. */
+/** Every CHECK (...) clause in a CREATE TABLE; parentheses inside literals and comments don't count. */
 export function tableCheckClauses(sql: string): string[] {
   return parenthesizedClauses(sql, /\bCHECK\s*\(/gi)
     .map(([, clause]) => clause)
@@ -119,18 +132,16 @@ function parenthesizedClauses(
   expressionOnly = false
 ): [string, string][] {
   const clauses: [string, string][] = []
+  const code = sqlCodeMask(sql)
   for (let match = pattern.exec(sql); match; match = pattern.exec(sql)) {
+    if (!code[match.index]) {
+      continue
+    }
     let depth = 1
-    let quote: string | null = null
     let end = match.index + match[0].length
     for (; end < sql.length && depth > 0; end++) {
-      const char = sql[end]
-      if (quote) {
-        quote = char === quote ? null : quote
-      } else if (CLOSING_QUOTE[char]) {
-        quote = CLOSING_QUOTE[char]
-      } else {
-        depth += char === '(' ? 1 : char === ')' ? -1 : 0
+      if (code[end]) {
+        depth += sql[end] === '(' ? 1 : sql[end] === ')' ? -1 : 0
       }
     }
     const start = expressionOnly ? match.index + match[0].length - 1 : match.index
