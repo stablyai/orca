@@ -46,10 +46,7 @@ function installProvider(
     },
     listProcesses: async () => {
       inventories += 1
-      if (
-        behavior.failInventoryAfter !== undefined &&
-        inventories > behavior.failInventoryAfter
-      ) {
+      if (behavior.failInventoryAfter !== undefined && inventories > behavior.failInventoryAfter) {
         throw new Error('inventory deadline')
       }
       return [...live].map((id) => ({ id, cwd: '/', title: 'claude' }))
