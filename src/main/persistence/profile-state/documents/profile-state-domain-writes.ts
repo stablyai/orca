@@ -23,14 +23,13 @@ import {
 } from '../automation-runs/profile-state-automation-runs-writer'
 import {
   deleteProfileStateDomainParts,
-  readSplitDomainWriteState
+  readSplitDomainWriteState,
+  writeProfileStateDomainParts
 } from '../document-parts/profile-state-document-parts-storage'
-import {
-  writePartsPatch,
-  writeWholeSplitDomain,
-  type CommittedSplitDomains,
-  type PreparedPartsPatch,
-  type ProfileStateDomainPatching
+import type { CommittedPartsTree } from '../document-parts/profile-state-parts-tree-storage'
+import type {
+  PreparedPartsPatch,
+  ProfileStateDomainPatching
 } from './profile-state-split-domain-writes'
 import { isProfileStateSplitDomain } from '../document-parts/profile-state-document-parts'
 import {
@@ -119,7 +118,8 @@ export function writeProfileStateDomains(
     rejectPatch()
   }
 
-  const committed: CommittedSplitDomains = new Map()
+  // Split session domains as stored once this commits, for the writer's next patch.
+  const committed = new Map<string, CommittedPartsTree>()
   const result = withProfileStateWriteTransaction(db, () => {
     committed.clear()
     const actualRevision = readProfileStateRevision(db)
@@ -241,7 +241,7 @@ export function writeProfileStateDomains(
 
     const nextRevision = actualRevision + 1
     for (const patch of partsUpdates) {
-      writePartsPatch(db, patch, nextRevision, committed)
+      committed.set(patch.domain, patching!.writePatch(db, patch, nextRevision))
     }
     for (const mutation of updates) {
       if (mutation.automationRuns) {
@@ -260,21 +260,32 @@ export function writeProfileStateDomains(
           throw new Error(`Profile state domain update timestamp is invalid: ${mutation.domain}`)
         }
         const splitState = splitStates.get(mutation.domain)
-        const payload = mutation.payload
-        if (
-          splitState?.kind === 'parts' &&
-          writeWholeSplitDomain(
-            db,
-            { ...mutation, payload },
-            {
+        const { payload } = mutation
+        const writeParts = (legacyRevision: number, diffExisting: boolean): boolean => {
+          const written = writeProfileStateDomainParts(db, {
+            domain: mutation.domain,
+            payload,
+            value: mutation.splitDomainValue,
+            payloadHash: mutation.payloadHash!,
+            domainVersion: mutation.domainVersion,
+            revision: nextRevision,
+            updatedAt,
+            legacyRevision,
+            diffExisting
+          })
+          const kept =
+            written &&
+            patching?.keepWritten(mutation.domain, written, {
+              contentHash: mutation.payloadHash!,
               revision: nextRevision,
-              updatedAt,
-              legacyRevision: splitState.legacyRevision,
-              diffExisting: true
-            },
-            committed
-          )
-        ) {
+              legacyRevision
+            })
+          if (kept) {
+            committed.set(mutation.domain, kept)
+          }
+          return written !== undefined
+        }
+        if (splitState?.kind === 'parts' && writeParts(splitState.legacyRevision, true)) {
           continue
         }
         db.prepare(
@@ -297,17 +308,7 @@ export function writeProfileStateDomains(
         )
         if (isProfileStateSplitDomain(mutation.domain)) {
           // The legacy row now matches; later writes touch only the parts that change.
-          writeWholeSplitDomain(
-            db,
-            { ...mutation, payload },
-            {
-              revision: nextRevision,
-              updatedAt,
-              legacyRevision: nextRevision,
-              diffExisting: false
-            },
-            committed
-          )
+          writeParts(nextRevision, false)
         }
       }
     }

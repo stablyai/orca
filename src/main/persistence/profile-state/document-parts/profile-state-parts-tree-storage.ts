@@ -6,10 +6,7 @@ import {
   isRecord,
   ProfileStateDocumentCorruptionError
 } from '../documents/profile-state-document-validation'
-import {
-  emitProfileStateDomainPayload,
-  type ProfileStateDocumentPart
-} from './profile-state-document-parts'
+import { emitProfileStateDomainPayload } from './profile-state-document-parts'
 import {
   partsLeaf,
   partsTreeFromStoredParts,
@@ -17,10 +14,10 @@ import {
   type PartsNode
 } from './profile-state-parts-tree'
 import {
-  writeProfileStatePartRows,
-  type PartsMetaWrite,
-  type StoredPartRow
-} from './profile-state-part-rows'
+  writeProfileStateDomainParts,
+  type StoredPartRow,
+  type StoredProfileStateDomainParts
+} from './profile-state-document-parts-storage'
 
 /** A split domain as the writer last committed it: the tree to patch and the rows it is stored as. */
 export type CommittedPartsTree = {
@@ -53,12 +50,12 @@ export function hashPartsTree(root: PartsNode): string {
 /** The tree for parts this writer just stored whole, so the next patch needs no read. */
 export function partsTreeFromWrittenParts(
   domain: string,
-  written: { parts: readonly ProfileStateDocumentPart[]; hashes: readonly string[] }
+  written: StoredProfileStateDomainParts
 ): PartsNode {
   return partsTreeFromStoredParts(
-    written.parts.map((part, index) => ({
+    written.parts.map((part) => ({
       path: parsePath(part.key, domain),
-      leaf: partsLeaf(part.payload, written.hashes[index])
+      leaf: partsLeaf(part.payload, part.hash)
     }))
   )
 }
@@ -116,13 +113,30 @@ export function writeCommittedPartsTree(
   domain: string,
   previous: CommittedPartsTree,
   root: PartsNode,
-  meta: PartsMetaWrite
+  meta: {
+    domainVersion: number
+    revision: number
+    updatedAt: number
+    contentHash: string
+    legacyRevision: number
+  }
 ): CommittedPartsTree {
-  const parts = [...partsTreeParts(root)]
-  const rows = writeProfileStatePartRows(db, domain, parts, previous.rows, meta)
+  const written = writeProfileStateDomainParts(db, {
+    domain,
+    payloadHash: meta.contentHash,
+    domainVersion: meta.domainVersion,
+    revision: meta.revision,
+    updatedAt: meta.updatedAt,
+    legacyRevision: meta.legacyRevision,
+    hashedParts: [...partsTreeParts(root)],
+    storedRows: previous.rows
+  })
+  if (!written) {
+    throw new Error(`Profile state parts are not writable: ${domain}`)
+  }
   return {
     root,
-    rows,
+    rows: written.rows,
     contentHash: meta.contentHash,
     revision: meta.revision,
     legacyRevision: meta.legacyRevision

@@ -17,9 +17,11 @@ import {
   prepareProfileStateDomainMutation,
   type PreparedProfileStateMutation
 } from './profile-state-domain-write-validation'
-import type {
-  PreparedPartsPatch,
-  ProfileStateDomainPatching
+import {
+  keepWrittenSessionParts,
+  writePartsPatch,
+  type PreparedPartsPatch,
+  type ProfileStateDomainPatching
 } from './profile-state-split-domain-writes'
 
 // The writer's own copy of each patched domain as last committed, so the next patch skips
@@ -98,6 +100,8 @@ export function preparePatchedProfileStateDomain(
 /** Patch support for the writer worker; main never applies patches. */
 export const profileStateWriterPatching: ProfileStateDomainPatching = {
   prepare: preparePatchedProfileStateDomain,
+  writePatch: writePartsPatch,
+  keepWritten: keepWrittenSessionParts,
   remember: rememberCommittedPartsTrees
 }
 

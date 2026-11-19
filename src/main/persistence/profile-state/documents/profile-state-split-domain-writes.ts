@@ -1,5 +1,5 @@
 import type Database from '../../../sqlite/sync-database'
-import { writeProfileStateDomainParts } from '../document-parts/profile-state-document-parts-storage'
+import type { StoredProfileStateDomainParts } from '../document-parts/profile-state-document-parts-storage'
 import {
   partsTreeFromWrittenParts,
   writeCommittedPartsTree,
@@ -25,54 +25,40 @@ export type ProfileStateDomainPatching = {
     db: Database.Database,
     patch: PreparedProfileStateDomainPatch
   ) => PreparedProfileStateMutation | PreparedPartsPatch
+  writePatch: (
+    db: Database.Database,
+    patch: PreparedPartsPatch,
+    revision: number
+  ) => CommittedPartsTree
+  /** The tree for a session domain just written whole, so the next patch needs no read. */
+  keepWritten: (
+    domain: string,
+    written: StoredProfileStateDomainParts,
+    stored: { contentHash: string; revision: number; legacyRevision: number }
+  ) => CommittedPartsTree | undefined
   remember: (db: Database.Database, trees: ReadonlyMap<string, CommittedPartsTree>) => void
 }
-
-/** Split session domains as stored once the transaction commits, for the writer's next patch. */
-export type CommittedSplitDomains = Map<string, CommittedPartsTree>
 
 export function writePartsPatch(
   db: Database.Database,
   patch: PreparedPartsPatch,
-  revision: number,
-  committed: CommittedSplitDomains
-): void {
-  committed.set(
-    patch.domain,
-    writeCommittedPartsTree(db, patch.domain, patch.previous, patch.previous.root, {
-      domainVersion: patch.domainVersion,
-      revision,
-      updatedAt: Date.now(),
-      contentHash: patch.contentHash,
-      legacyRevision: patch.previous.legacyRevision
-    })
-  )
+  revision: number
+): CommittedPartsTree {
+  return writeCommittedPartsTree(db, patch.domain, patch.previous, patch.previous.root, {
+    domainVersion: patch.domainVersion,
+    revision,
+    updatedAt: Date.now(),
+    contentHash: patch.contentHash,
+    legacyRevision: patch.previous.legacyRevision
+  })
 }
 
-/** Stores a whole split domain as parts; false when it can't be split and needs a legacy row. */
-export function writeWholeSplitDomain(
-  db: Database.Database,
-  mutation: PreparedProfileStateMutation & { payload: string },
-  write: { revision: number; updatedAt: number; legacyRevision: number; diffExisting: boolean },
-  committed: CommittedSplitDomains
-): boolean {
-  const written = writeProfileStateDomainParts(db, {
-    domain: mutation.domain,
-    payload: mutation.payload,
-    value: mutation.splitDomainValue,
-    payloadHash: mutation.payloadHash!,
-    domainVersion: mutation.domainVersion,
-    ...write
-  })
-  // Session domains are patched next, so keep what was just written instead of reading it back.
-  if (written && isWorkspaceSessionDomain(mutation.domain)) {
-    committed.set(mutation.domain, {
-      root: partsTreeFromWrittenParts(mutation.domain, written),
-      rows: written.rows,
-      contentHash: mutation.payloadHash!,
-      revision: write.revision,
-      legacyRevision: write.legacyRevision
-    })
-  }
-  return written !== undefined
+export function keepWrittenSessionParts(
+  domain: string,
+  written: StoredProfileStateDomainParts,
+  stored: { contentHash: string; revision: number; legacyRevision: number }
+): CommittedPartsTree | undefined {
+  return isWorkspaceSessionDomain(domain)
+    ? { root: partsTreeFromWrittenParts(domain, written), rows: written.rows, ...stored }
+    : undefined
 }

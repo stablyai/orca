@@ -81,7 +81,7 @@ function measureBindPatch(workspaces: number, payload: string) {
       ]
     })
     vi.restoreAllMocks()
-    const { n: partWrites } = db.prepare('SELECT n FROM part_writes').get() as { n: number }
+    const [partWrites] = Object.values(db.prepare('SELECT n FROM part_writes').get() ?? {})
     return { changed: result.changed, partWrites, partReads, serializedChars }
   } finally {
     db.close()
