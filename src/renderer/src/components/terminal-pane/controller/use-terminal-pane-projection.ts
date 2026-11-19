@@ -1,3 +1,4 @@
+import { useCallback } from 'react'
 import { resolveTerminalPaneAppearance } from '../appearance/resolve-terminal-pane-appearance'
 import { useSshReconnectErrorOwnership } from '../errors/use-ssh-reconnect-error-ownership'
 import { useTerminalPaneChatProjection } from '../chat/use-terminal-pane-chat-projection'
@@ -15,6 +16,7 @@ export function useTerminalPaneProjection(controller: TerminalPaneMobileControll
     contextMenu,
     contextMenuLeafId,
     effectiveChatViewMode,
+    effectiveMapViewMode,
     getContextMenuLeafId,
     getNativeChatLeafIds,
     getTabWideAgentHintLeafId,
@@ -24,6 +26,7 @@ export function useTerminalPaneProjection(controller: TerminalPaneMobileControll
     isVisible,
     terminalManager,
     toggleNativeChatForLeaf,
+    setTabViewMode,
     paneTitles,
     paneTransportsRef,
     resolveTitleAgentForLeaf,
@@ -116,6 +119,14 @@ export function useTerminalPaneProjection(controller: TerminalPaneMobileControll
     activePane,
     managedPanes
   })
+  // The map is a rendering of the same session chat shows, so it gates on the same leaf rule.
+  const contextMenuCanShowAgentMap = contextMenuCanToggleChat
+  const contextMenuIsMapView = effectiveMapViewMode
+  const handleContextMenuToggleAgentMap = useCallback(() => {
+    // Map is its own view; toggling it off returns to the raw terminal. The chat toggle
+    // separately takes a map-mode tab into the chat transcript.
+    setTabViewMode(tabId, effectiveMapViewMode ? 'terminal' : 'map')
+  }, [effectiveMapViewMode, setTabViewMode, tabId])
   return {
     effectiveAppearance,
     terminalBackground,
@@ -146,7 +157,10 @@ export function useTerminalPaneProjection(controller: TerminalPaneMobileControll
     activePaneCanResumeInChat,
     contextMenuCanToggleChat,
     contextMenuIsChatView,
-    handleContextMenuToggleNativeChat
+    handleContextMenuToggleNativeChat,
+    contextMenuCanShowAgentMap,
+    contextMenuIsMapView,
+    handleContextMenuToggleAgentMap
   }
 }
 

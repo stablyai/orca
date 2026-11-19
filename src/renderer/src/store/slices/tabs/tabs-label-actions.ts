@@ -21,10 +21,7 @@ import { endsPreviewHere, promotePreviewTabsThroughLayoutOwner } from './preview
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/workspace-layout/layout-owner-switch'
 // oxfmt-ignore
 import { replaceRecordEntries, replaceTabBuckets } from '../../record-transitions/keyed-record-transitions'
-
-function oppositeViewMode(mode: 'terminal' | 'chat'): 'terminal' | 'chat' {
-  return mode === 'chat' ? 'terminal' : 'chat'
-}
+import type { TerminalViewMode } from '../../../../../shared/terminal-view-mode.ts'
 
 export function createTabsLabelActions(
   set: TabsSliceSet,
@@ -40,7 +37,7 @@ export function createTabsLabelActions(
   | 'pinTab'
   | 'unpinTab'
 > {
-  function setTabViewModeHere(tabId: string, mode: 'terminal' | 'chat'): void {
+  function setTabViewModeHere(tabId: string, mode: TerminalViewMode): void {
     set((state) => {
       const tabPatch = patchTab(state.unifiedTabsByWorktree, tabId, { viewMode: mode })
       const rowPatch = patchTerminalTabRow(state.tabsByWorktree, tabId, { viewMode: mode })
@@ -64,7 +61,7 @@ export function createTabsLabelActions(
     )
   }
 
-  /** `to`: the mode main switched to, which a frame may already show. */
+  /** `to`: the mode main switched to, which a frame may already show. The toggle is binary. */
   function toggleTabViewModeHere(tabId: string, to?: 'terminal' | 'chat'): void {
     let toggled: {
       from: 'terminal' | 'chat'
@@ -77,12 +74,9 @@ export function createTabsLabelActions(
         return state
       }
       // Why: viewMode defaults to 'terminal' for legacy/missing, so the first toggle flips to 'chat'.
-      const fromMode: 'terminal' | 'chat' = to
-        ? oppositeViewMode(to)
-        : found.tab.viewMode === 'chat'
-          ? 'chat'
-          : 'terminal'
-      const nextMode = oppositeViewMode(fromMode)
+      const shownMode: 'terminal' | 'chat' = found.tab.viewMode === 'chat' ? 'chat' : 'terminal'
+      const fromMode: 'terminal' | 'chat' = to ? (to === 'chat' ? 'terminal' : 'chat') : shownMode
+      const nextMode = fromMode === 'chat' ? 'terminal' : 'chat'
       const agent = launchAgentOf(state, found.worktreeId, found.tab.entityId)
       toggled = { from: fromMode, to: nextMode, agent }
       return {
@@ -103,12 +97,12 @@ export function createTabsLabelActions(
   }
 
   /** Tab-bar id → the mode last sent to main and not yet answered: a toggle flips from that. */
-  const viewModeSent = new Map<string, { mode: 'terminal' | 'chat' }>()
+  const viewModeSent = new Map<string, { mode: TerminalViewMode }>()
 
   /** `shown`: the switch's own effects once main's frame draws it. */
   function sendViewMode(
     tabId: string,
-    mode: 'terminal' | 'chat',
+    mode: TerminalViewMode,
     local: () => void,
     shown?: () => void
   ): boolean {
@@ -145,8 +139,11 @@ export function createTabsLabelActions(
   function sendViewModeToggle(tabId: string): boolean {
     const found = findTabAndWorktree(get().unifiedTabsByWorktree, tabId)
     const shown = found?.tab.viewMode
-    const from = viewModeSent.get(tabId)?.mode ?? (shown === 'chat' ? 'chat' : 'terminal')
-    const to = oppositeViewMode(from)
+    // The chat toggle is binary: anything that isn't 'chat' flips to 'chat', so a tab in
+    // the map view toggles into the chat transcript, not back to the raw terminal.
+    const rawFrom = viewModeSent.get(tabId)?.mode ?? (shown === 'chat' ? 'chat' : 'terminal')
+    const from: 'terminal' | 'chat' = rawFrom === 'chat' ? 'chat' : 'terminal'
+    const to = from === 'chat' ? 'terminal' : 'chat'
     return sendViewMode(
       tabId,
       to,

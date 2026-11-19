@@ -11,6 +11,7 @@ import type { RuntimeTerminalCreate } from '../../../../../shared/terminal/runti
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import type { SessionOptionValue } from '../../../../../shared/native-chat/input/native-chat-session-options'
 import type { RuntimeCapability } from '../../../../../shared/remote-runtime/protocol/protocol-version'
+import type { TerminalViewMode } from '../../../../../shared/terminal-view-mode'
 
 /** `mirroredTabId`: this client's id for a created tab, when the host named it. */
 export type WebRuntimeTerminalCreateOutcome =
@@ -53,7 +54,7 @@ export type CreateWebRuntimeSessionTerminalArgs = {
     > & { agentPrompt?: string }
   >
   providerSession?: AgentProviderSessionMetadata
-  viewMode?: 'terminal' | 'chat'
+  viewMode?: TerminalViewMode
   activate?: boolean
   selectWorktree?: boolean
 }
