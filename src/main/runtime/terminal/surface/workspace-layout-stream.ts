@@ -1,7 +1,8 @@
-// Reproject changed Store partitions only while subscribed; overlay live titles without reloading.
+// Reproject changed Store partitions only while subscribed; overlay live titles without reloading, rechecking only the workspaces that show a changed pane.
 // Main-owned layouts emit one records frame per operation, coalescing unscoped writes per task; window-owned layouts emit whole workspaces.
 
 import { randomUUID } from 'node:crypto'
+import { ReverseIndexedMap } from '../../../../shared/collections/reverse-indexed-map'
 import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import type { LoadedWorkspaceLayout } from '../../../../shared/workspace-layout/persistence/workspace-layout-load-types'
@@ -27,6 +28,7 @@ import {
 import {
   WorkspaceLayoutProjection,
   type DirtyPartitions,
+  type ProjectedLayout,
   type ProjectionStore
 } from './workspace-layout-projection'
 
@@ -36,7 +38,8 @@ type LayoutListener = (event: WorkspaceLayoutStreamEvent) => void
 export type LayoutOperationCommit = { hostIds: readonly ExecutionHostId[] | null }
 
 type Shown = {
-  json: string
+  /** The projection this was laid over; a workspace whose projection and panes are unchanged needs no recheck. */
+  projected: ProjectedLayout
   liveTitles: string
   layout: PublishedWorkspaceLayout
   /** Null sends a whole layout; otherwise index records lazily on the next diff. */
@@ -51,6 +54,16 @@ export type WorkspaceLayoutReads = Pick<
 type StreamStore = ProjectionStore &
   Pick<RuntimeStore, 'onWorkspaceSessionWritten' | 'onWorkspaceSessionOperationEnded'>
 
+/** Each pane's terminal and pane key: the refs a live title or start fact changes under. A shared value only rechecks one more workspace. */
+function liveRefsOf({ layout }: ProjectedLayout): string[] {
+  return layout.tabs.flatMap((tab) =>
+    (tab.terminal?.panes ?? []).flatMap((pane) => [
+      `${tab.entityId}:${pane.leafId}`,
+      ...(pane.ptyId ? [pane.ptyId] : [])
+    ])
+  )
+}
+
 function addDirty(dirty: DirtyPartitions | null, hostId: ExecutionHostId | null): DirtyPartitions {
   if (hostId === null || dirty === 'all') {
     return 'all'
@@ -62,12 +75,18 @@ export class WorkspaceLayoutStream {
   private readonly listeners = new Set<LayoutListener>()
   private readonly commitListeners = new Set<(commit: LayoutOperationCommit) => void>()
   private readonly projection: WorkspaceLayoutProjection
-  private shown = new Map<string, Shown>()
+  private readonly shown = new ReverseIndexedMap<string, Shown, string>(
+    (shown) => liveRefsOf(shown.projected),
+    (previous, next) => previous.projected.json === next.projected.json
+  )
   private stopWatching: (() => void) | null = null
   private projecting = false
   private dirty = false
   private touched: DirtyPartitions | null = null
-  private liveTitlesDirty = false
+  /** Terminals and pane keys whose live title or start facts changed since the last flush. */
+  private liveRefs = new Set<string>()
+  /** After a failed flush, recheck every workspace once: its changed refs were dropped. */
+  private recheckAll = false
   private flushQueued = false
   private failureLogged = false
   /** Never reset: replies can retain positions across resubscriptions. */
@@ -95,7 +114,7 @@ export class WorkspaceLayoutStream {
     if (!this.projecting) {
       this.projecting = true
       this.projection.clear()
-      this.shown = new Map()
+      this.shown.clear()
       this.dirty = true
     }
     // Flush pending changes before adding the subscriber so its snapshot is current.
@@ -114,7 +133,8 @@ export class WorkspaceLayoutStream {
         this.projecting = false
         // A flush already queued finds nothing to project.
         this.dirty = false
-        this.liveTitlesDirty = false
+        this.liveRefs.clear()
+        this.recheckAll = false
         this.shown.clear()
         this.watch()
       }
@@ -140,11 +160,12 @@ export class WorkspaceLayoutStream {
     return loaded
   }
 
-  markLiveTitlesDirty(): void {
+  /** `ref` is the terminal whose title changed or the pane key whose start facts did. */
+  markLiveTitlesDirty(ref: string): void {
     if (!this.projecting) {
       return
     }
-    this.liveTitlesDirty = true
+    this.liveRefs.add(ref)
     this.schedule()
   }
 
@@ -198,17 +219,18 @@ export class WorkspaceLayoutStream {
   }
 
   private flush(): void {
-    const { dirty, touched } = this
+    const { dirty, touched, liveRefs } = this
     this.touched = null
-    if (dirty || this.liveTitlesDirty) {
+    if (dirty || liveRefs.size > 0) {
       this.dirty = false
-      this.liveTitlesDirty = false
+      this.liveRefs = new Set()
       // A failed projection is logged once; it never reaches the write that notified it.
       try {
-        this.reconcile(dirty)
+        this.reconcile(dirty, liveRefs)
       } catch (error) {
         // A partial cache update requires reprojection of every partition on the next write.
         this.projection.forgetPartitions()
+        this.recheckAll = true
         this.logFailure('projection', error)
       }
     }
@@ -239,42 +261,77 @@ export class WorkspaceLayoutStream {
     )
   }
 
-  private reconcile(reproject: boolean): void {
+  private reconcile(reproject: boolean, liveRefs: ReadonlySet<string>): void {
     const next = reproject ? this.projection.project() : this.projection.published
+    const recheckAll = this.recheckAll
+    this.recheckAll = false
+    const observe = workspaceLayoutFrameObserver()
+    const before = observe ? new Map(this.shown) : null
+    const titled = new Set<string>()
+    for (const ref of liveRefs) {
+      for (const key of this.shown.keysFor(ref)) {
+        titled.add(key)
+      }
+    }
     const removed: string[] = []
-    for (const key of this.shown.keys()) {
-      if (!next.has(key)) {
-        removed.push(key)
-      }
-    }
-    const before = this.shown
-    const shown = new Map<string, Shown>()
-    const changed: string[] = []
-    for (const [key, { layout, json }] of next) {
-      const titles = this.liveTitlesOf(layout)
+    const changed = new Map<string, { previous: Shown | undefined; current: Shown }>()
+    const reprojected: [string, Shown][] = []
+    const recheck = (key: string, projected: ProjectedLayout): void => {
+      const titles = this.liveTitlesOf(projected.layout)
       // Switch point: a pane's start facts are live state, laid over as its title is.
-      const starts = ORCA_LAYOUT_OWNER_IS_MAIN ? paneStartFactsOf(layout, this.deps) : null
+      const starts = ORCA_LAYOUT_OWNER_IS_MAIN ? paneStartFactsOf(projected.layout, this.deps) : null
       const liveTitles = JSON.stringify(starts ? [titles, starts] : titles)
-      const previous = before.get(key)
-      if (previous?.json === json && previous.liveTitles === liveTitles) {
-        shown.set(key, previous)
-        continue
+      const previous = this.shown.get(key)
+      if (previous?.projected.json === projected.json && previous.liveTitles === liveTitles) {
+        if (previous.projected !== projected) {
+          reprojected.push([key, { ...previous, projected }])
+        }
+        return
       }
-      const shownLayout = withLiveTitles(layout, titles)
+      const shownLayout = withLiveTitles(projected.layout, titles)
       const laid = starts ? withPaneStartFacts(shownLayout, starts) : shownLayout
-      shown.set(key, { json, liveTitles, layout: laid })
-      changed.push(key)
+      changed.set(key, { previous, current: { projected, liveTitles, layout: laid } })
     }
-    this.shown = shown
+    if (reproject || recheckAll) {
+      for (const key of this.shown.keys()) {
+        if (!next.has(key)) {
+          removed.push(key)
+        }
+      }
+      for (const [key, projected] of next) {
+        if (recheckAll || titled.has(key) || this.shown.get(key)?.projected !== projected) {
+          recheck(key, projected)
+        }
+      }
+    } else {
+      // Without a write the projection is unchanged: only workspaces showing a changed pane can differ.
+      for (const key of titled) {
+        const projected = next.get(key)
+        if (projected) {
+          recheck(key, projected)
+        }
+      }
+    }
+    for (const key of removed) {
+      this.shown.delete(key)
+    }
+    for (const [key, shown] of reprojected) {
+      this.shown.set(key, shown)
+    }
+    for (const [key, { current }] of changed) {
+      this.shown.set(key, current)
+    }
     // Switch point: a window-owned build sends each workspace whole, one frame each.
     if (!ORCA_LAYOUT_OWNER_IS_MAIN || !this.epoch) {
       this.deliverEach([
         ...removed.map((key): WorkspaceLayoutEvent => ({ type: 'removed', key })),
-        ...changed.map((key): WorkspaceLayoutEvent => ({
-          type: 'workspace',
-          key,
-          layout: shown.get(key)!.layout
-        }))
+        ...[...changed].map(
+          ([key, { current }]): WorkspaceLayoutEvent => ({
+            type: 'workspace',
+            key,
+            layout: current.layout
+          })
+        )
       ])
       return
     }
@@ -286,9 +343,7 @@ export class WorkspaceLayoutStream {
       key,
       change: 'removed'
     }))
-    for (const key of changed) {
-      const previous = before.get(key)
-      const current = shown.get(key)!
+    for (const [key, { previous, current }] of changed) {
       const change = previous
         ? diffPublishedLayouts(key, recordsOf(previous), recordsOf(current), current.layout)
         : { key, change: 'layout' as const, layout: current.layout }
@@ -301,9 +356,9 @@ export class WorkspaceLayoutStream {
     }
     const frame = { type: 'records' as const, epoch: this.epoch, seq: ++this.seq, workspaces }
     this.deliver(frame)
-    workspaceLayoutFrameObserver()?.({
+    observe?.({
       frame,
-      before: new Map([...before].map(([key, { layout }]) => [key, layout])),
+      before: new Map([...(before ?? [])].map(([key, { layout }]) => [key, layout])),
       fresh: () => this.freshLayouts(),
       titlesOnly: !reproject
     })
