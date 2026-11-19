@@ -90,7 +90,15 @@ function setupsFor(agent: FixtureAgent, state: FixtureState) {
   return SETUPS.get(`${agent}:${state}`)!
 }
 
-function Composer({ agent, setup }: { agent: FixtureAgent; setup: NativeChatHostSetup }) {
+function Composer({
+  agent,
+  setup,
+  sessionError = null
+}: {
+  agent: FixtureAgent
+  setup: NativeChatHostSetup
+  sessionError?: string | null
+}) {
   const { label, account } = AGENTS[agent]
   return (
     <NativeChatComposerNotices
@@ -105,7 +113,7 @@ function Composer({ agent, setup }: { agent: FixtureAgent; setup: NativeChatHost
           retry: () => {}
         },
         agentLabel: label,
-        sessionError: null,
+        sessionError,
         composerError: null,
         setup
       })}
@@ -261,4 +269,35 @@ export const transcriptRowStartFailureBoth = defineFixture({
 export const transcriptRowResolved = defineFixture({
   width: 520,
   render: () => <StartFailureRows setup="resolved" />
+})
+
+const UNRELATED_ERROR = "Your draft couldn't be saved. Copy it before closing this chat."
+
+/** The composer's Sign in beside an unrelated error: signing in must not read over that error. */
+function WithSessionError() {
+  return (
+    <div className="native-chat-appearance space-y-5 p-3">
+      {(['signedOut', 'signedIn'] as const).map((state) => (
+        <section key={state} className="space-y-2">
+          <h3 className="text-2xs font-semibold tracking-wide text-muted-foreground uppercase">
+            {`Claude · ${state} · with an unrelated error`}
+          </h3>
+          <Composer
+            agent="claude"
+            setup={setupsFor('claude', state).alone}
+            sessionError={UNRELATED_ERROR}
+          />
+        </section>
+      ))}
+    </div>
+  )
+}
+
+export const withSessionError360 = defineFixture({
+  width: 360,
+  render: () => <WithSessionError />
+})
+export const withSessionError520 = defineFixture({
+  width: 520,
+  render: () => <WithSessionError />
 })
