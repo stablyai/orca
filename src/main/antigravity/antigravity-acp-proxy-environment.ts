@@ -30,30 +30,19 @@ export async function prepareAntigravityAcpProxyEnvironment(
     if (!system) {
       return
     }
-    // The system has a proxy policy we cannot mirror (wildcard exclusions, PAC): import nothing,
-    // but keep the private harness WebSocket off whatever proxy the child inherits (#44498).
-    if (system.kind === 'unrepresentable') {
-      const loopback = appendBypass(existingBypass, LOOPBACK)
-      prepared.NO_PROXY = loopback
-      prepared.no_proxy = loopback
-      Object.assign(env, prepared)
-      return
-    }
-    for (const [scheme, value] of Object.entries(system.proxies)) {
-      prepared[`${scheme}_proxy`] = value
-      // Retain an uppercase value that another consumer already selects.
-      if (!effective[`${scheme.toUpperCase()}_PROXY`]) {
-        prepared[`${scheme.toUpperCase()}_PROXY`] = value
+    if (system.kind === 'environment') {
+      for (const [scheme, value] of Object.entries(system.proxies)) {
+        prepared[`${scheme}_proxy`] = value
+        // Retain an uppercase value that another consumer already selects.
+        if (!effective[`${scheme.toUpperCase()}_PROXY`]) {
+          prepared[`${scheme.toUpperCase()}_PROXY`] = value
+        }
       }
+      bypass = system.bypass
     }
-    bypass = system.bypass
+    // For `unrepresentable` (PAC-only), Python never evaluates PAC, so falling through sets
+    // loopback-only NO_PROXY without turning off any Python-supported system proxy (#44498).
   } else if (![...proxies.keys()].some((scheme) => scheme !== 'no')) {
-    // Caller manages routing with a no_proxy-only mapping; imports stay untouched, but loopback
-    // still must not follow whatever proxy the child inherits from the system policy.
-    const loopback = appendBypass(existingBypass, LOOPBACK)
-    prepared.NO_PROXY = loopback
-    prepared.no_proxy = loopback
-    Object.assign(env, prepared)
     return
   }
   const additions = [...bypass, ...LOOPBACK]

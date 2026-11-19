@@ -1,12 +1,14 @@
 import { isIP } from 'node:net'
 import { runProcess } from '@orca/process-host'
 
-/** Environment-importable system proxies, or the fact that the system has a proxy policy we cannot mirror. */
+/** Environment-importable system proxies, or a PAC-only policy with no static proxy endpoints. */
 export type PythonSystemProxyRead =
   | {
       kind: 'environment'
       proxies: Readonly<Record<string, string>>
       bypass: readonly string[]
+      /** Set when PAC or non-exact ExceptionsList entries could only be mapped lossily. */
+      lossy?: true
     }
   | { kind: 'unrepresentable' }
 
@@ -89,33 +91,12 @@ export function parseSystemProxy(output: string): PythonSystemProxyRead | null {
   if (!opened || depth !== 0) {
     return null
   }
-  // Python ignores PAC; an environment mapping cannot preserve arbitrary PAC policies,
-  // but the launch still needs loopback bypassed away from whatever policy is active.
-  if (
-    Number(fields.get('ProxyAutoConfigEnable') ?? 0) !== 0 ||
-    Number(fields.get('ProxyAutoDiscoveryEnable') ?? 0) !== 0
-  ) {
-    return { kind: 'unrepresentable' }
-  }
   if (fields.has('ExceptionsList') && fields.get('ExceptionsList') !== '<array> {') {
     return null
   }
-  const bypass: string[] = []
-  let exclusionsUnrepresentable = false
-  for (const entry of exceptions) {
-    if (['localhost', '127.0.0.1', '::1', '[::1]'].includes(entry.toLowerCase())) {
-      continue
-    }
-    if (isIP(entry)) {
-      bypass.push(entry)
-    } else if (entry === '*.local') {
-      bypass.push('.local')
-    } else if (!isPrivateIpv4Prefix(entry)) {
-      // NO_PROXY widens domain wildcards to their apex and exact hostnames to suffixes, so an
-      // environment mapping would route differently; the caller keeps loopback direct instead.
-      exclusionsUnrepresentable = true
-    }
-  }
+  const hasPac =
+    Number(fields.get('ProxyAutoConfigEnable') ?? 0) !== 0 ||
+    Number(fields.get('ProxyAutoDiscoveryEnable') ?? 0) !== 0
   const proxies: Record<string, string> = {}
   for (const [scheme, key] of [
     ['http', 'HTTP'],
@@ -139,11 +120,36 @@ export function parseSystemProxy(output: string): PythonSystemProxyRead | null {
     // CPython's _scproxy uses http:// even for the SOCKS dictionary entry.
     proxies[scheme] = `http://${host}${port === undefined ? '' : `:${port}`}`
   }
-  // Private/link-local ranges and exclude-simple are omitted; no exact NO_PROXY equivalent exists.
-  if (exclusionsUnrepresentable && Object.keys(proxies).length > 0) {
-    return { kind: 'unrepresentable' }
+  if (!Object.keys(proxies).length) {
+    // Python ignores PAC; without static proxy endpoints, only loopback needs bypassing.
+    return hasPac ? { kind: 'unrepresentable' } : null
   }
-  return Object.keys(proxies).length ? { kind: 'environment', proxies, bypass } : null
+  const bypass: string[] = []
+  let lossy = hasPac
+  for (const entry of exceptions) {
+    if (['localhost', '127.0.0.1', '::1', '[::1]'].includes(entry.toLowerCase())) {
+      continue
+    }
+    if (isIP(entry)) {
+      bypass.push(entry)
+    } else if (entry === '*.local') {
+      bypass.push('.local')
+    } else if (isPrivateIpv4Prefix(entry)) {
+      // Private/link-local ranges and exclude-simple have no exact NO_PROXY equivalent; omit as before.
+    } else {
+      // Still import static proxies instead of emitting loopback-only NO_PROXY, which would make
+      // Python's urllib skip macOS sysconf completely and send external traffic direct (#44498).
+      // Lossy mapping: widen leading domain wildcards `*.x` to `.x` (which also matches the apex
+      // `x` in NO_PROXY), and drop other non-exact forms (exact hostnames, mid-string wildcards,
+      // non-private CIDRs) rather than widening them to arbitrary domain suffixes.
+      lossy = true
+      const wildcard = /^\*\.([A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*)$/.exec(entry)
+      if (wildcard) {
+        bypass.push(`.${wildcard[1]}`)
+      }
+    }
+  }
+  return { kind: 'environment', proxies, bypass, ...(lossy ? { lossy: true as const } : {}) }
 }
 
 function isPrivateIpv4Prefix(value: string): boolean {
