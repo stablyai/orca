@@ -25,7 +25,7 @@ describe('showSlackMentionTokens', () => {
     expect(shown('ask <@W1|Ann Lee>, <@U9> and <@U9|@sam>')).toBe(
       'ask [@Ann Lee], @user and [@sam]'
     )
-    expect(shown('in <#C1|general> or <#C2>')).toBe('in [#general] or #channel')
+    expect(shown('in <#C1|general> or <#G2>')).toBe('in [#general] or #channel')
     expect(shown('hey <!subteam^S1|eng-team> and <!here>, <!channel> <!everyone>')).toBe(
       'hey [@eng-team] and [@here], [@channel] [@everyone]'
     )

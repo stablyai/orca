@@ -6,7 +6,7 @@ type MarkdownNode = { type: string; value?: string; url?: string; children?: Mar
 
 // Mentions, channels, user groups and broadcasts; other `<…>` text stays as written.
 const MENTION_TOKEN =
-  /<((?:@[UW][A-Z0-9]+|#C[A-Z0-9]+|!subteam\^[A-Z0-9]+|!(?:here|channel|everyone))(?:\|[^<>]*)?)>/g
+  /<((?:@[UW][A-Z0-9]+|#[CG][A-Z0-9]+|!subteam\^[A-Z0-9]+|!(?:here|channel|everyone))(?:\|[^<>]*)?)>/g
 // `<@U…|a@b.com>`: markdown links the email, leaving `<@U…|` and `>` around it.
 const OPEN_MENTION = /<@[UW][A-Z0-9]+\|[^<>]*$/
 const BLOCK_PARENTS = new Set(['root', 'blockquote', 'listItem', 'footnoteDefinition'])
