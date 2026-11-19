@@ -3,7 +3,8 @@ import { encrypt } from '../../../../../shared/remote-runtime/e2ee/node/e2ee-cry
 import type { MobileE2EEDesktopOutboundOwner } from './mobile-e2ee-desktop-outbound-owner'
 import {
   isMobileE2EEBinaryPayloadWithinLimit,
-  isMobileE2EETextPayloadWithinLimit
+  isMobileE2EETextPayloadWithinLimit,
+  mobileE2EEReplyMethod
 } from './mobile-e2ee-outbound-admission'
 import type { RpcBinarySender } from '../../transports/rpc-binary-sender'
 
@@ -11,9 +12,12 @@ import type { RpcBinarySender } from '../../transports/rpc-binary-sender'
 export function createLegacyReplySenders(args: {
   ws: WebSocket
   outbound: MobileE2EEDesktopOutboundOwner
+  /** The request these replies answer; its method names an overflow in telemetry. */
+  request: string
   getSharedKey: () => Uint8Array | null
-  onOversize: () => void
+  onOversize: (method: string) => void
 }): { text: (response: string) => void; binary: RpcBinarySender } {
+  const method = mobileE2EEReplyMethod(args.request)
   return {
     // Why: streaming emits can outlive destroy(), so late replies must not encrypt with a cleared key.
     text: (response) => {
@@ -22,10 +26,10 @@ export function createLegacyReplySenders(args: {
         return
       }
       if (!isMobileE2EETextPayloadWithinLimit(response)) {
-        args.onOversize()
+        args.onOversize(method)
         return
       }
-      args.outbound.enqueueLegacyText(encrypt(response, sharedKey))
+      args.outbound.enqueueLegacyText(encrypt(response, sharedKey), method)
     },
     binary: (response, options) => {
       const sharedKey = args.getSharedKey()
@@ -33,10 +37,10 @@ export function createLegacyReplySenders(args: {
         return false
       }
       if (!isMobileE2EEBinaryPayloadWithinLimit(response)) {
-        args.onOversize()
+        args.onOversize(method)
         return false
       }
-      return args.outbound.enqueueLegacyBinary(response, sharedKey, options)
+      return args.outbound.enqueueLegacyBinary(response, sharedKey, method, options)
     }
   }
 }
