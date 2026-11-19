@@ -104,7 +104,7 @@ export function BrowserProfileSiteList({
             )}
           </p>
         </div>
-        <Select value={profileId} onValueChange={setProfileId}>
+        <Select value={profileId} onValueChange={setProfileId} disabled={saving}>
           <SelectTrigger size="sm" className="max-w-48">
             <SelectValue />
           </SelectTrigger>
