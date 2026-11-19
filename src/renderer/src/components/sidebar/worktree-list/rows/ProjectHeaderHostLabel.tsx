@@ -21,8 +21,8 @@ export function ProjectHeaderHostLabel({
     return <WslHostMark distro={wslDistro} withTooltip={false} />
   }
   return (
-    <span className="flex min-w-0 max-w-1/2 shrink-0 items-center gap-1 text-xs font-normal leading-4 text-muted-foreground">
-      <HostRowIcon hostId={context.hostId} className="size-3.5 shrink-0" />
+    <span className="flex min-w-0 max-w-1/2 shrink-0 items-center gap-1 rounded-md border border-border bg-muted/50 px-1.5 py-0.5 text-[11px] font-medium leading-3 text-muted-foreground">
+      <HostRowIcon hostId={context.hostId} className="size-3 shrink-0" />
       <span className="truncate">{context.label}</span>
     </span>
   )
