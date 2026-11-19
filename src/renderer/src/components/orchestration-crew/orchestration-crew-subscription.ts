@@ -5,8 +5,10 @@ import {
 } from '@/runtime/rpc/subscriptions/runtime-crew-subscribe'
 import {
   CrewFrame,
+  crewSummary,
   emptyCrew,
-  type OrchestrationCrewSnapshot
+  type OrchestrationCrewSnapshot,
+  type OrchestrationCrewSummary
 } from '../../../../shared/orchestration/orchestration-crew'
 import { runtimeHostStatusBlockedReason } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
 import { RUNTIME_COMPAT_BLOCK_CODE } from '@/runtime/rpc/compatibility/runtime-protocol-compat'
@@ -14,34 +16,81 @@ import type { CrewFollowSource } from './orchestration-crew-follow'
 
 export const UNKNOWN_CREW = emptyCrew('unknown')
 
+/** The counts a closed strip shows, and the rows once something asks for them. */
+export type CrewState = {
+  summary: OrchestrationCrewSummary
+  /** Null until rows are wanted and arrive; a host that predates summaries always sends them. */
+  rows: OrchestrationCrewSnapshot | null
+}
+export const UNKNOWN_CREW_STATE: CrewState = Object.freeze({
+  summary: Object.freeze({ status: 'unknown', agents: 0, needsYou: 0 }),
+  rows: null
+})
+
 export class CrewSubscription {
-  snapshot = UNKNOWN_CREW
+  snapshot: CrewState = UNKNOWN_CREW_STATE
   readonly listeners = new Set<() => void>()
   state: 'idle' | 'running' | 'waiting' | 'parked' = 'idle'
   private pending: OrchestrationCrewSnapshot | undefined
   private stop: (() => void) | undefined
   private started = false
+  /** Readers that need rows (an open list or `@` menu); otherwise the host sends counts alone. */
+  private rowReaders = 0
+  private runningView: 'summary' | 'rows' | undefined
 
   constructor(
     readonly source: CrewFollowSource,
     readonly party: string
   ) {}
 
-  private publish(snapshot: OrchestrationCrewSnapshot): void {
-    if (JSON.stringify(this.snapshot) === JSON.stringify(snapshot)) {
+  // The host sends a frame only when its content changed, so every frame publishes.
+  private publish(snapshot: CrewState): void {
+    if (snapshot === this.snapshot) {
       return
     }
     this.snapshot = snapshot
     this.listeners.forEach((listener) => listener())
   }
 
+  private view(): 'summary' | 'rows' {
+    return this.rowReaders > 0 ? 'rows' : 'summary'
+  }
+
   retire(): void {
     const stop = this.stop
     this.stop = undefined
     this.pending = undefined
+    this.runningView = undefined
     this.state = 'parked'
     stop?.()
-    this.publish(UNKNOWN_CREW)
+    this.publish(UNKNOWN_CREW_STATE)
+  }
+
+  /** Ask for rows while the caller needs them; the stream switches views, keeping what it shows. */
+  wantRows = (): (() => void) => {
+    this.rowReaders++
+    this.switchView()
+    let released = false
+    return () => {
+      if (released) {
+        return
+      }
+      released = true
+      this.rowReaders--
+      this.switchView()
+    }
+  }
+
+  private switchView(): void {
+    if (this.state !== 'running' || this.runningView === this.view()) {
+      return
+    }
+    const stop = this.stop
+    this.stop = undefined
+    this.pending = undefined
+    this.state = 'idle'
+    stop?.()
+    this.start()
   }
 
   wake(): void {
@@ -68,6 +117,8 @@ export class CrewSubscription {
     }
     this.started = true
     this.state = 'running'
+    const view = this.view()
+    this.runningView = view
     let alive = true
     let unsubscribe: (() => void) | undefined
     const stop = (): void => {
@@ -118,7 +169,12 @@ export class CrewSubscription {
         return
       }
       const frame = parsed.data
-      if (frame.type === 'begin') {
+      if (frame.type === 'summary') {
+        this.pending = undefined
+        this.source.completed()
+        const { type: _type, ...summary } = frame
+        this.publish({ summary, rows: null })
+      } else if (frame.type === 'begin') {
         this.pending = emptyCrew(frame.status)
       } else if (frame.type === 'rows') {
         this.pending?.sections[frame.section].push(...frame.rows)
@@ -126,7 +182,7 @@ export class CrewSubscription {
         const complete = this.pending
         this.pending = undefined
         this.source.completed()
-        this.publish(complete)
+        this.publish({ summary: crewSummary(complete), rows: complete })
       } else if (frame.type === 'end') {
         fail()
       }
@@ -134,7 +190,7 @@ export class CrewSubscription {
     let request: Promise<{ unsubscribe: () => void }>
     if (!initial && this.source.target.kind === 'environment' && source.retry) {
       const attempt = createRuntimeCrewSubscriptionAttempt(
-        { ...source.retry, params: { party: this.party } },
+        { ...source.retry, params: { party: this.party, view } },
         {
           onResponse: (response) => (response.ok ? onEvent(response.result) : fail(response.error)),
           onError: fail,
@@ -147,7 +203,7 @@ export class CrewSubscription {
       request = subscribeRuntimeRpc(
         this.source.target,
         'orchestration.crewSubscribe',
-        { party: this.party },
+        { party: this.party, view },
         { onEvent, onError: fail, onClose: () => fail() }
       )
     }
@@ -177,5 +233,5 @@ export class CrewSubscription {
       }
     }
   }
-  read = (): OrchestrationCrewSnapshot => this.snapshot
+  read = (): CrewState => this.snapshot
 }
