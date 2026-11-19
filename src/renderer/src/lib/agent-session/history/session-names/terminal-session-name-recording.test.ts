@@ -1,11 +1,11 @@
 // @vitest-environment happy-dom
 import { beforeEach, describe, expect, it } from 'vitest'
 import {
-  LOCAL_TAB_NAME_WRITE_GRACE_MS,
-  reconcileTerminalSessionNames,
   recordTerminalTabRename,
   resetTerminalSessionNameRecordingForTest
 } from './terminal-session-name-recording'
+import { reconcileTerminalSessionNames } from './terminal-session-name-pass'
+import { LOCAL_TAB_NAME_WRITE_GRACE_MS } from './terminal-session-name-state'
 import {
   getSavedTerminalSessionName,
   getTerminalSessionNameEntry,
@@ -388,6 +388,114 @@ describe('terminal session name recording', () => {
         { now: now + 500 }
       )
       expect(saved('s1')).toBeNull()
+    })
+
+    it('a rename made while the host was unknown names that session once the host resolves late', () => {
+      const now = 1_000_000
+      seed('s1', 'Old', 'tab-b')
+      const state = makeTerminalNamesState([
+        { id: 'tab-a', sessionId: 's1' },
+        { id: 'tab-b', customTitle: 'Old' }
+      ])
+      recordTerminalTabRename(
+        { ...state, activeWorktreeId: null, getKnownWorktreeById: () => undefined },
+        'tab-a',
+        'Mine',
+        { now }
+      )
+      pass(
+        [
+          { id: 'tab-a', sessionId: 's1', customTitle: 'Mine' },
+          { id: 'tab-b', customTitle: 'Old' }
+        ],
+        now + LOCAL_TAB_NAME_WRITE_GRACE_MS * 3
+      )
+      expect(saved('s1')).toBe('Mine')
+      expect(owner('s1')).toBe('tab-a')
+    })
+
+    it("never moves a host-unknown rename's say to a different session", () => {
+      const now = 1_000_000
+      seed('s2', 'Theirs', 'tab-b')
+      const state = makeTerminalNamesState([{ id: 'tab-a', sessionId: 's1' }])
+      recordTerminalTabRename(
+        { ...state, activeWorktreeId: null, getKnownWorktreeById: () => undefined },
+        'tab-a',
+        'Mine',
+        { now }
+      )
+      pass(
+        [
+          { id: 'tab-a', sessionId: 's2', customTitle: 'Mine' },
+          { id: 'tab-b', customTitle: 'Theirs' }
+        ],
+        now + 10
+      )
+      expect(saved('s2')).toBe('Theirs')
+    })
+
+    it('a later rename in another tab is not undone by an earlier one still in its window', () => {
+      const now = 1_000_000
+      const both = [
+        { id: 'tab-a', sessionId: 's1', customTitle: 'Alpha' },
+        { id: 'tab-b', sessionId: 's1', customTitle: 'Beta' }
+      ]
+      recordTerminalTabRename(
+        makeTerminalNamesState([both[0], { id: 'tab-b', sessionId: 's1' }]),
+        'tab-a',
+        'Alpha',
+        { now }
+      )
+      recordTerminalTabRename(makeTerminalNamesState(both), 'tab-b', 'Beta', { now: now + 1 })
+      expect(owner('s1')).toBe('tab-b')
+      pass(both, now + 2)
+      expect(saved('s1')).toBe('Beta')
+      expect(owner('s1')).toBe('tab-b')
+    })
+
+    it('a clear made elsewhere during the window is applied after the tab closed', () => {
+      const now = 1_000_000
+      recordTerminalTabRename(
+        makeTerminalNamesState([{ id: 'tab-1', sessionId: 's1', customTitle: 'Draft' }]),
+        'tab-1',
+        'Mine',
+        { now }
+      )
+      expect(saved('s1')).toBe('Mine')
+      // A phone clears the name inside the window; the pass holds back, then the tab closes.
+      const held = pass([{ id: 'tab-1', sessionId: 's1' }], now + 10)
+      expect(held.recheckAt).toBe(now + LOCAL_TAB_NAME_WRITE_GRACE_MS)
+      expect(saved('s1')).toBe('Mine')
+      pass([], now + LOCAL_TAB_NAME_WRITE_GRACE_MS)
+      expect(saved('s1')).toBeNull()
+    })
+
+    it('keeps the rename when what showed after it is also what it replaced', () => {
+      const now = 1_000_000
+      // Named from an unnamed tab: an unnamed tab afterwards may be the old state echoing back.
+      recordTerminalTabRename(
+        makeTerminalNamesState([{ id: 'tab-1', sessionId: 's1' }]),
+        'tab-1',
+        'Mine',
+        { now }
+      )
+      pass([{ id: 'tab-1', sessionId: 's1' }], now + 10)
+      pass([], now + LOCAL_TAB_NAME_WRITE_GRACE_MS)
+      expect(saved('s1')).toBe('Mine')
+    })
+
+    it("a stale echo of the name this client's rename replaced is not applied after close", () => {
+      const now = 1_000_000
+      seed('s1', 'Old', 'tab-1')
+      recordTerminalTabRename(
+        makeTerminalNamesState([{ id: 'tab-1', sessionId: 's1', customTitle: 'Old' }]),
+        'tab-1',
+        'New',
+        { now }
+      )
+      pass([{ id: 'tab-1', sessionId: 's1', customTitle: 'Old' }], now + 10)
+      pass([], now + LOCAL_TAB_NAME_WRITE_GRACE_MS)
+      expect(saved('s1')).toBe('New')
     })
 
     it('keeps the saved name when naming a resumed tab failed', () => {

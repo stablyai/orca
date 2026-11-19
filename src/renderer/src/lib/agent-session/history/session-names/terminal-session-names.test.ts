@@ -133,6 +133,21 @@ describe('terminal session names', () => {
     expect(stored()[key]).toMatchObject({ title: 'Theirs', tabId: 'tab-b' })
   })
 
+  it('does not bring back a cleared name when storage refused the clear', () => {
+    save('s1', 'Cleared later', 'tab-1')
+    const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementationOnce(() => {
+      throw new Error('QuotaExceededError')
+    })
+    forgetTerminalSessionNames([
+      { key: terminalSessionNameKey('local', 's1'), ownerTabId: 'tab-1' }
+    ])
+    setItem.mockRestore()
+    // The next write lands, and carries the refused clear with it.
+    save('s2', 'Other', 'tab-2')
+    expect(stored()[terminalSessionNameKey('local', 's1')]).toBeUndefined()
+    expect(getSavedTerminalSessionName('local', 'claude', 's1')).toBeNull()
+  })
+
   it("refreshes and notifies on another window's storage event", () => {
     const listener = vi.fn()
     const unsubscribe = subscribeTerminalSessionNames(listener)

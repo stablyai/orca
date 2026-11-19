@@ -10,11 +10,11 @@ import {
   unsettledTerminalTabsClosed
 } from './terminal-session-name-sync'
 import {
-  LOCAL_TAB_NAME_WRITE_GRACE_MS,
-  reconcileTerminalSessionNames,
   recordTerminalTabRename,
   resetTerminalSessionNameRecordingForTest
 } from './terminal-session-name-recording'
+import { reconcileTerminalSessionNames } from './terminal-session-name-pass'
+import { LOCAL_TAB_NAME_WRITE_GRACE_MS } from './terminal-session-name-state'
 import {
   getSavedTerminalSessionName,
   resetTerminalSessionNamesForTest
@@ -180,14 +180,14 @@ describe('terminal session name sync', () => {
     reconcileTerminalSessionNames(settled, 10_000_000_000_000)
     const none = makeTerminalNamesState([])
     // A bulk close of tabs a pass already saw, and of named tabs with no agent, needs nothing.
-    expect(unsettledTerminalTabsClosed(none, settled)).toBe(false)
+    expect(unsettledTerminalTabsClosed(none, settled).size).toBe(0)
     // A name that arrived after the pass does.
-    expect(unsettledTerminalTabsClosed(none, withTabTitle(settled, { customTitle: 'B' }))).toBe(
-      true
-    )
+    expect(
+      unsettledTerminalTabsClosed(none, withTabTitle(settled, { customTitle: 'B' })).size
+    ).toBeGreaterThan(0)
     // So does a new session started in a tab the pass saw.
     const switched = makeTerminalNamesState([{ id: 'tab-1', sessionId: 's9', customTitle: 'A' }])
-    expect(unsettledTerminalTabsClosed(none, switched)).toBe(true)
+    expect(unsettledTerminalTabsClosed(none, switched)).toEqual(new Set(['tab-1']))
   })
 
   it('keeps a name re-applied from another client after a local clear when the tab closes mid-wait', () => {
@@ -204,6 +204,31 @@ describe('terminal session name sync', () => {
     sync.set(makeTerminalNamesState([{ id: 'tab-1', sessionId: 's1', customTitle: 'A' }]))
     sync.set(makeTerminalNamesState([]))
     expect(getSavedTerminalSessionName('local', 'claude', 's1')).toBe('A')
+    sync.stop()
+  })
+
+  it("settling closing tabs leaves a surviving tab's pending rename for the waiting pass", () => {
+    const sync = harness(
+      makeTerminalNamesState([
+        { id: 'tab-a', sessionId: 's1', customTitle: 'Build' },
+        { id: 'tab-b', sessionId: 's1', customTitle: 'Build' },
+        { id: 'tab-c', sessionId: 's3' }
+      ])
+    )
+    sync.flush()
+    expect(getSavedTerminalSessionName('local', 'claude', 's1')).toBe('Build')
+    // tab-b is renamed and tab-c gets a name, then tab-a (the owner) and tab-c close.
+    sync.set(
+      makeTerminalNamesState([
+        { id: 'tab-a', sessionId: 's1', customTitle: 'Build' },
+        { id: 'tab-b', sessionId: 's1', customTitle: 'Review' },
+        { id: 'tab-c', sessionId: 's3', customTitle: 'Notes' }
+      ])
+    )
+    sync.set(makeTerminalNamesState([{ id: 'tab-b', sessionId: 's1', customTitle: 'Review' }]))
+    expect(getSavedTerminalSessionName('local', 'claude', 's3')).toBe('Notes')
+    sync.flush()
+    expect(getSavedTerminalSessionName('local', 'claude', 's1')).toBe('Review')
     sync.stop()
   })
 

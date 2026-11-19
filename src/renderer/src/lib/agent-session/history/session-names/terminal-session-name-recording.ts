@@ -1,92 +1,23 @@
-import {
-  isAiVaultAgent,
-  type AiVaultAgent
-} from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
+import { isAiVaultAgent } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
 import type { AppState } from '@/store/types'
 import { getTerminalTabOwnerWorktreeId } from '@/store/terminals/ownership/terminal-tab-owner-index'
-import { getKnownExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
-import {
-  collectAgentPaneConversations,
-  type AgentPaneConversation
-} from '../../identity/pane-agent-conversations'
+import { collectAgentPaneConversations } from '../../identity/pane-agent-conversations'
 import {
   forgetTerminalSessionNames,
-  getTerminalSessionNameEntry,
   hasTerminalSessionNames,
   normalizeTerminalSessionName,
-  saveTerminalSessionName,
-  terminalSessionNameKey,
-  terminalSessionNamesOwnedBy,
-  type TerminalSessionNameForget
+  saveTerminalSessionName
 } from './terminal-session-names'
-
-/** While this client's own rename echoes back through main or a paired host, the tab may still
- *  show its old name; passes leave that tab's entries alone for this long. */
-export const LOCAL_TAB_NAME_WRITE_GRACE_MS = 30_000
-
-type Binding = AgentPaneConversation<AiVaultAgent> & { key: string }
-
-type LocalNameWrite = {
-  at: number
-  name: string
-  /** The session a user rename named; only it may take the name once the rename shows. */
-  sessionId: string | null
-}
-
-const localNameWriteByTabId = new Map<string, LocalNameWrite>()
-// The name a tab showed before renames made here while no session was known (a resumed tab still
-// starting). Kept until the tab's session is known or the tab closes, however long that takes.
-const renamedFromByTabId = new Map<string, string>()
-// What the last pass saw on each bound tab, so a pass can tell a rename made while bound.
-let lastSeenByTabId = new Map<string, { key: string; name: string }>()
-
-function bindingOf(
-  state: AppState,
-  conversation: AgentPaneConversation<AiVaultAgent> | undefined
-): Binding | 'host-unknown' | null {
-  if (!conversation?.providerSession.id) {
-    return null
-  }
-  // Why: the conversation's host falls back to local for unknown worktrees; a name saved under
-  // the wrong host would show on another host's row.
-  if (
-    getKnownExecutionHostIdForWorktree(state, conversation.worktreeId) !==
-    conversation.executionHostId
-  ) {
-    return 'host-unknown'
-  }
-  return {
-    ...conversation,
-    key: terminalSessionNameKey(conversation.executionHostId, conversation.providerSession.id)
-  }
-}
-
-function tabIsOpen(state: AppState, tabId: string): boolean {
-  return getTerminalTabOwnerWorktreeId(state.tabsByWorktree, tabId) !== null
-}
-
-/** Names a clear of `tabId` forgets: what it owns, plus its session's name left by a closed tab
- *  when the tab was showing that name (a resumed tab cleared before a pass adopted it). */
-function namesClearedBy(
-  state: AppState,
-  tabId: string,
-  binding: Binding | null,
-  shownNames: readonly string[]
-): TerminalSessionNameForget[] {
-  const names = terminalSessionNamesOwnedBy(tabId)
-  if (binding) {
-    const entry = getTerminalSessionNameEntry(binding.executionHostId, binding.providerSession.id)
-    if (
-      entry &&
-      entry.tabId !== tabId &&
-      shownNames.some((shown) => shown !== '' && shown === entry.title) &&
-      !tabIsOpen(state, entry.tabId)
-    ) {
-      names.push({ key: binding.key, ownerTabId: entry.tabId })
-    }
-  }
-  return names
-}
+import {
+  bindingOf,
+  deferredByTabId,
+  lastSeenByTabId,
+  localNameWriteByTabId,
+  namesClearedBy,
+  pendingHostRenameByTabId,
+  renamedFromByTabId,
+  resetTerminalSessionNameStateForTest
+} from './terminal-session-name-state'
 
 /** A rename through the store: the user's act, so it names the focused pane's session now (a
  *  close right after must not lose it) and may take the name from another tab. */
@@ -104,8 +35,13 @@ export function recordTerminalTabRename(
     state.tabsByWorktree[worktreeId]?.find((tab) => tab.id === tabId)?.customTitle
   )
   const name = normalizeTerminalSessionName(title)
-  const write: LocalNameWrite = { at: options.now ?? Date.now(), name, sessionId: null }
-  localNameWriteByTabId.set(tabId, write)
+  localNameWriteByTabId.set(tabId, {
+    at: options.now ?? Date.now(),
+    name,
+    replacedName: previousName
+  })
+  deferredByTabId.delete(tabId)
+  pendingHostRenameByTabId.delete(tabId)
   if (!name && !hasTerminalSessionNames()) {
     return
   }
@@ -119,13 +55,13 @@ export function recordTerminalTabRename(
   if (!conversation?.providerSession.id && hasTerminalSessionNames()) {
     renamedFromByTabId.set(tabId, shownFirst)
   }
-  // Only a person's rename may later name a session whose host was not known yet; a name a tab was
-  // created with, or a session bound after the rename, keeps the normal rules.
-  if (name && options.interactive !== false) {
-    write.sessionId = conversation?.providerSession.id || null
-  }
   const resolved = bindingOf(state, conversation)
   const binding = resolved === 'host-unknown' ? null : resolved
+  // Only a person's rename may later name a session whose host was not known yet; a name a tab was
+  // created with, or a session bound after the rename, keeps the normal rules.
+  if (resolved === 'host-unknown' && name && options.interactive !== false && conversation) {
+    pendingHostRenameByTabId.set(tabId, { sessionId: conversation.providerSession.id, name })
+  }
   if (!name) {
     forgetTerminalSessionNames(namesClearedBy(state, tabId, binding, [shownFirst, previousName]))
     return
@@ -159,130 +95,6 @@ export function terminalTabNameUnsettled(
   return seen?.key !== binding.key || seen.name !== normalizeTerminalSessionName(tab.customTitle)
 }
 
-export type TerminalSessionNamePassResult = {
-  /** Some tab's host was not known yet; owner changes should trigger another pass. */
-  hostSkipped: boolean
-  /** When a write held back by the grace window becomes due, if any. */
-  recheckAt: number | null
-}
-
-function tabsNamed(state: AppState): boolean {
-  for (const tabs of Object.values(state.tabsByWorktree)) {
-    if (tabs.some((tab) => normalizeTerminalSessionName(tab.customTitle))) {
-      return true
-    }
-  }
-  return false
-}
-
-/** Names that reach tabs without a rename here: a session id reported after the rename, and
- *  renames or clears from main, a phone or another client. */
-export function reconcileTerminalSessionNames(
-  state: AppState,
-  now = Date.now()
-): TerminalSessionNamePassResult {
-  const result: TerminalSessionNamePassResult = {
-    hostSkipped: false,
-    recheckAt: null
-  }
-  for (const [tabId, write] of localNameWriteByTabId) {
-    if (now - write.at >= LOCAL_TAB_NAME_WRITE_GRACE_MS) {
-      localNameWriteByTabId.delete(tabId)
-    }
-  }
-  for (const tabId of renamedFromByTabId.keys()) {
-    if (!tabIsOpen(state, tabId)) {
-      renamedFromByTabId.delete(tabId)
-    }
-  }
-  if (!hasTerminalSessionNames() && !tabsNamed(state)) {
-    // Nothing is named, so nothing seen before still matters; a stale view would make a name
-    // that arrives later look settled to the close-time check.
-    lastSeenByTabId = new Map()
-    return result
-  }
-  const tabsById = new Map<string, AppState['tabsByWorktree'][string][number]>()
-  for (const tabs of Object.values(state.tabsByWorktree)) {
-    for (const tab of tabs) {
-      tabsById.set(tab.id, tab)
-    }
-  }
-  const seen = new Map<string, { key: string; name: string }>()
-  for (const conversation of collectAgentPaneConversations(state, isAiVaultAgent)) {
-    const tab = tabsById.get(conversation.tabId)
-    const binding = bindingOf(state, conversation)
-    if (!tab || binding === null) {
-      continue
-    }
-    if (binding === 'host-unknown') {
-      result.hostSkipped = true
-      continue
-    }
-    const entry = getTerminalSessionNameEntry(binding.executionHostId, binding.providerSession.id)
-    const name = normalizeTerminalSessionName(tab.customTitle)
-    const previous = lastSeenByTabId.get(tab.id)
-    seen.set(tab.id, { key: binding.key, name })
-    const owned = entry?.tabId === tab.id
-    const write = localNameWriteByTabId.get(tab.id)
-    if (write && write.name !== name) {
-      // This client's rename has not echoed back yet; the rename already recorded the truth, and
-      // the old name still showing must neither be saved again nor read as a clear.
-      const due = write.at + LOCAL_TAB_NAME_WRITE_GRACE_MS
-      result.recheckAt = Math.min(result.recheckAt ?? due, due)
-      continue
-    }
-    // The session is known now; what the tab showed before renames made while starting decides
-    // below whether it takes the session's saved name.
-    const renamedFrom = renamedFromByTabId.get(tab.id)
-    renamedFromByTabId.delete(tab.id)
-    // The rename shows, for the session the user renamed: it names that session even when its host
-    // was not known at rename time. Grace runs its full window: a paired host's optimistic local
-    // name shows at once, and a snapshot built before the host applied it may still arrive.
-    if (write?.sessionId === binding.providerSession.id) {
-      saveTerminalSessionName({
-        executionHostId: binding.executionHostId,
-        sessionId: binding.providerSession.id,
-        agent: binding.agent,
-        tabId: tab.id,
-        title: name
-      })
-      continue
-    }
-    const renamedWhileBound =
-      previous !== undefined && previous.key === binding.key && previous.name !== name
-    // Why not any named tab: a session resumed by hand inside a tab already named something else
-    // must keep its own name. Only a tab showing that name (a resume we named), renamed while
-    // running the session, or renamed here from that name takes it from a closed owner.
-    const closedOwner = entry !== undefined && !owned && !tabsById.has(entry.tabId)
-    const renamedFromSavedName = renamedFrom !== undefined && renamedFrom === entry?.title
-    if (name) {
-      if (
-        !entry ||
-        (owned && entry.title !== name) ||
-        (closedOwner && (entry.title === name || renamedWhileBound || renamedFromSavedName))
-      ) {
-        saveTerminalSessionName({
-          executionHostId: binding.executionHostId,
-          sessionId: binding.providerSession.id,
-          agent: binding.agent,
-          tabId: tab.id,
-          title: name
-        })
-      }
-    } else if (owned || (closedOwner && (renamedWhileBound || renamedFromSavedName))) {
-      const shownBeforeClear = [
-        renamedFromSavedName ? renamedFrom : '',
-        renamedWhileBound ? previous.name : ''
-      ]
-      forgetTerminalSessionNames(namesClearedBy(state, tab.id, binding, shownBeforeClear))
-    }
-  }
-  lastSeenByTabId = seen
-  return result
-}
-
 export function resetTerminalSessionNameRecordingForTest(): void {
-  localNameWriteByTabId.clear()
-  renamedFromByTabId.clear()
-  lastSeenByTabId = new Map()
+  resetTerminalSessionNameStateForTest()
 }

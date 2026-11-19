@@ -103,8 +103,45 @@ function readStored(): Entries {
   return next
 }
 
+type Mutation =
+  | { key: string; entry: TerminalSessionNameEntry }
+  | { key: string; forgetOwnedBy: string }
+
+// Changes storage refused (quota, a disabled store). Each write re-applies them to what it reads,
+// so a refused clear is not undone by the next successful write; dropped once one lands.
+let unsaved: Mutation[] = []
+
+function applyMutations(current: Entries, mutations: readonly Mutation[]): boolean {
+  let changed = false
+  for (const mutation of mutations) {
+    if ('entry' in mutation) {
+      const stored = current.get(mutation.key)
+      if (
+        stored?.title !== mutation.entry.title ||
+        stored.tabId !== mutation.entry.tabId ||
+        stored.agent !== mutation.entry.agent
+      ) {
+        current.set(mutation.key, mutation.entry)
+        changed = true
+      }
+    } else if (current.get(mutation.key)?.tabId === mutation.forgetOwnedBy) {
+      // Only while the expected tab still owns it: another window may have moved the name since.
+      current.delete(mutation.key)
+      changed = true
+    }
+  }
+  return changed
+}
+
+/** What storage holds, with this window's refused changes still applied over it. */
+function readCurrent(): Entries {
+  const current = readStored()
+  applyMutations(current, unsaved)
+  return current
+}
+
 function loaded(): Entries {
-  entries ??= readStored()
+  entries ??= readCurrent()
   return entries
 }
 
@@ -114,10 +151,10 @@ function notify(): void {
   }
 }
 
-/** Re-read before writing so another window's saves and forgets are kept; apply only this change. */
-function commit(change: (current: Entries) => boolean): void {
-  const current = readStored()
-  if (!change(current)) {
+/** Re-read before writing so another window's saves and forgets are kept; apply only these changes. */
+function commit(mutations: readonly Mutation[]): void {
+  const current = readCurrent()
+  if (!applyMutations(current, mutations)) {
     entries = current
     return
   }
@@ -133,8 +170,10 @@ function commit(change: (current: Entries) => boolean): void {
       TERMINAL_SESSION_NAMES_STORAGE_KEY,
       JSON.stringify(Object.fromEntries(current))
     )
+    unsaved = []
   } catch {
-    // Quota or a disabled store: the change lives in memory only until the next write re-reads.
+    // Quota or a disabled store: keep the changes for the next write to try again.
+    unsaved = [...unsaved, ...mutations].slice(-TERMINAL_SESSION_NAMES_MAX_ENTRIES)
   }
   notify()
 }
@@ -172,19 +211,7 @@ export function saveTerminalSessionName(args: {
   if (existing?.title === title && existing.tabId === args.tabId && existing.agent === args.agent) {
     return
   }
-  commit((current) => {
-    const stored = current.get(key)
-    if (stored?.title === title && stored.tabId === args.tabId && stored.agent === args.agent) {
-      return false
-    }
-    current.set(key, {
-      title,
-      agent: args.agent,
-      tabId: args.tabId,
-      savedAt: Date.now()
-    })
-    return true
-  })
+  commit([{ key, entry: { title, agent: args.agent, tabId: args.tabId, savedAt: Date.now() } }])
 }
 
 export type TerminalSessionNameForget = { key: string; ownerTabId: string }
@@ -195,15 +222,7 @@ export function forgetTerminalSessionNames(names: Iterable<TerminalSessionNameFo
   if (wanted.length === 0) {
     return
   }
-  commit((current) => {
-    let changed = false
-    for (const { key, ownerTabId } of wanted) {
-      if (current.get(key)?.tabId === ownerTabId) {
-        changed = current.delete(key) || changed
-      }
-    }
-    return changed
-  })
+  commit(wanted.map(({ key, ownerTabId }) => ({ key, forgetOwnedBy: ownerTabId })))
 }
 
 /** Every name this tab owns. */
@@ -225,7 +244,7 @@ function onStorage(event: StorageEvent): void {
   if (event.key !== null && event.key !== TERMINAL_SESSION_NAMES_STORAGE_KEY) {
     return
   }
-  entries = readStored()
+  entries = readCurrent()
   notify()
 }
 
@@ -234,7 +253,7 @@ export function subscribeTerminalSessionNames(listener: () => void): () => void 
   if (listeners.size === 1 && typeof window !== 'undefined') {
     window.addEventListener('storage', onStorage)
     // Another window may have written before anything here listened.
-    entries = readStored()
+    entries = readCurrent()
   }
   return () => {
     listeners.delete(listener)
@@ -246,5 +265,6 @@ export function subscribeTerminalSessionNames(listener: () => void): () => void 
 
 export function resetTerminalSessionNamesForTest(): void {
   entries = null
+  unsaved = []
   listeners.clear()
 }

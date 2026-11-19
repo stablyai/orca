@@ -4,10 +4,8 @@ import {
   ownerInputsChanged,
   relevantRecordEqual
 } from '../title-sync/ai-vault-tab-title-sync-inputs'
-import {
-  reconcileTerminalSessionNames,
-  terminalTabNameUnsettled
-} from './terminal-session-name-recording'
+import { reconcileTerminalSessionNames } from './terminal-session-name-pass'
+import { terminalTabNameUnsettled } from './terminal-session-name-recording'
 
 type SyncDependencies = {
   getState: () => AppState
@@ -48,17 +46,23 @@ export function terminalTabNamesChanged(current: AppState, previous: AppState): 
   return false
 }
 
-/** A tab in `previous` that is gone from `current` has a name the last pass has not settled. */
-export function unsettledTerminalTabsClosed(current: AppState, previous: AppState): boolean {
+/** Tabs in `previous` gone from `current` whose session name the last pass has not settled. */
+export function unsettledTerminalTabsClosed(current: AppState, previous: AppState): Set<string> {
   const open = new Set<string>()
   for (const tabs of Object.values(current.tabsByWorktree)) {
     for (const tab of tabs) {
       open.add(tab.id)
     }
   }
-  return Object.entries(previous.tabsByWorktree).some(([worktreeId, tabs]) =>
-    tabs.some((tab) => !open.has(tab.id) && terminalTabNameUnsettled(previous, worktreeId, tab))
-  )
+  const unsettled = new Set<string>()
+  for (const [worktreeId, tabs] of Object.entries(previous.tabsByWorktree)) {
+    for (const tab of tabs) {
+      if (!open.has(tab.id) && terminalTabNameUnsettled(previous, worktreeId, tab)) {
+        unsettled.add(tab.id)
+      }
+    }
+  }
+  return unsettled
 }
 
 const sessionIdOf = (entry: { providerSession?: { id?: string } }) => entry.providerSession?.id
@@ -143,11 +147,14 @@ export function startTerminalSessionNameSync(dependencies: SyncDependencies): ()
 
   const unsubscribe = dependencies.subscribe((state, previous) => {
     const tabNamesChanged = terminalTabNamesChanged(state, previous)
-    if (tabNamesChanged && cancelScheduled && unsettledTerminalTabsClosed(state, previous)) {
+    const closing =
+      tabNamesChanged && cancelScheduled ? unsettledTerminalTabsClosed(state, previous) : null
+    if (closing && closing.size > 0) {
       // A waiting pass never sees tabs that close before it runs, so a name that just arrived
-      // from another client would be lost; settle names from the state the tabs closed in.
+      // from another client would be lost; settle those tabs from the state they closed in, and
+      // leave every other tab for the waiting pass.
       try {
-        reconcileTerminalSessionNames(previous, now())
+        reconcileTerminalSessionNames(previous, now(), { onlyTabIds: closing })
       } catch (error) {
         // This runs inside the store update that closed the tab; it must never break the close.
         console.warn('[terminal-session-names] could not settle names on tab close:', error)
