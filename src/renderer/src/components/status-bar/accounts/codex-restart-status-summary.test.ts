@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   summarizeCodexRestartStatus,
+  selectCodexRestartStatus,
   type CodexRestartStatusSummaryInput
 } from './codex-restart-status-summary'
 import type { CodexAccountRestart } from '@/store/terminals/terminal-contracts'
@@ -102,5 +103,43 @@ describe('Codex restart attention population', () => {
     const result = summarizeCodexRestartStatus(state)
     expect(result.attentionCount).toBe(1)
     expect(result.stalePtyIds).toEqual([])
+  })
+  it('keeps a hidden phase publication stable and updates failure, host and pane changes', () => {
+    let state = population()
+    const key = `tab:${leaf}`
+    state.pendingPaneAccountRestarts[key] = { ...failure(), phase: 'accepted' }
+    const accepted = selectCodexRestartStatus(state)
+    expect(accepted.attentionCount).toBe(0)
+    for (const phase of ['claimed', 'preparing', 'dispatched'] as const) {
+      state = {
+        ...state,
+        pendingPaneAccountRestarts: { [key]: { ...failure(), phase } }
+      }
+      expect(selectCodexRestartStatus(state)).toBe(accepted)
+    }
+    state = { ...state, pendingPaneAccountRestarts: { [key]: failure() } }
+    expect(selectCodexRestartStatus(state).attentionCount).toBe(1)
+    state = {
+      ...state,
+      worktreesByRepo: { repo: [{ id: 'wt', repoId: 'repo', hostId: 'runtime:other' }] }
+    }
+    expect(selectCodexRestartStatus(state).attentionCount).toBe(0)
+    state = { ...state, worktreesByRepo: {} }
+    expect(selectCodexRestartStatus(state).attentionCount).toBe(1)
+    state = {
+      ...state,
+      terminalLayoutsByTabId: {
+        tab: { ...state.terminalLayoutsByTabId.tab, ptyIdsByLeafId: { [leaf]: 'successor' } }
+      }
+    }
+    expect(selectCodexRestartStatus(state).attentionCount).toBe(0)
+    state = {
+      ...state,
+      pendingPaneAccountRestarts: {},
+      codexRestartNoticeByPtyId: { successor: awaiting }
+    }
+    expect(selectCodexRestartStatus(state).stalePtyIds).toEqual([])
+    state = { ...state, ptyIdsByTabId: { tab: ['successor'] } }
+    expect(selectCodexRestartStatus(state).stalePtyIds).toEqual(['successor'])
   })
 })
