@@ -1,4 +1,12 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
@@ -21,12 +29,16 @@ function write(path: string, contents: string): string {
   return path
 }
 
-it('deletes a rollout from ~/.codex but never from the Codex import folder', async () => {
+function isolateHomes(): void {
   root = mkdtempSync(join(tmpdir(), 'orca-codex-import-'))
   vi.stubEnv('HOME', join(root, 'user'))
   vi.stubEnv('USERPROFILE', join(root, 'user'))
   vi.stubEnv('CODEX_HOME', '')
   vi.stubEnv('ORCA_USER_DATA_PATH', join(root, 'user-data'))
+}
+
+it('deletes a rollout from ~/.codex but never from the Codex import folder', async () => {
+  isolateHomes()
   const system = join(root, 'user', '.codex')
   const importFolder = join(root, 'import')
   const target = write(join(system, ...DATED, NAME), 'system copy\n')
@@ -45,3 +57,26 @@ it('deletes a rollout from ~/.codex but never from the Codex import folder', asy
   expect([target, archived].filter((path) => existsSync(path))).toEqual([])
   expect(readFileSync(imported, 'utf8')).toBe('import copy\n')
 })
+
+// Creating symlinks on Windows needs Developer Mode or admin rights.
+it.skipIf(process.platform === 'win32')(
+  'leaves the import folder alone when a ~/.codex folder links into it',
+  async () => {
+    isolateHomes()
+    const system = join(root, 'user', '.codex')
+    const importFolder = join(root, 'import')
+    const imported = write(join(importFolder, ...DATED, NAME), 'import copy\n')
+    mkdirSync(join(system, 'thread-writer-locks'), { recursive: true })
+    symlinkSync(join(importFolder, 'sessions'), join(system, 'sessions'))
+    const settings = { codexSessionSourceHome: { host: importFolder } }
+
+    const result = await deleteCodexRolloutsPermanently(
+      [{ agent: 'codex', filePath: join(system, ...DATED, NAME) }],
+      async () => true,
+      () => listHostCodexRolloutHomes(settings)
+    )
+
+    expect(result).toEqual({ deleted: 0, failed: 0, freedBytes: 0 })
+    expect(readFileSync(imported, 'utf8')).toBe('import copy\n')
+  }
+)

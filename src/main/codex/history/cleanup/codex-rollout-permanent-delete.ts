@@ -14,12 +14,17 @@ type DeleteResult = { deleted: number; failed: number; freedBytes: number }
 
 type RolloutName = { path: string; root: string }
 
+/** Orca's homes to delete in, and roots (the user's import folder) no deletion may reach. */
+export type RolloutHomes = { homes: readonly string[]; protectedRoots: readonly string[] }
+
 const UUID_PATTERN = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g
 
 /** One name as found: what it reads (a link's target), and enough to tell if it changed. */
 type NameState = {
   name: RolloutName
   path: string
+  /** The real folder the name sits in. */
+  realFolder: string
   isHardLink: boolean
   /** dev:ino of the file it reads; null for a dangling link. */
   content: string | null
@@ -88,6 +93,7 @@ async function readName(name: RolloutName): Promise<NameState | null> {
   return {
     name,
     path: name.path,
+    realFolder,
     isHardLink: entry.isFile(),
     // Some filesystems report inode 0 for every file: those names are checked one by one.
     content: target
@@ -117,6 +123,43 @@ async function readNames(names: readonly RolloutName[]): Promise<NameState[]> {
     }
   }
   return states
+}
+
+/** Null when absent; a folder that can't be resolved for another reason throws. */
+async function realpathUnlessAbsent(path: string): Promise<string | null> {
+  try {
+    return await realpath(path)
+  } catch (error) {
+    if (isDefinitiveAbsence(error)) {
+      return null
+    }
+    throw error
+  }
+}
+
+/**
+ * Where the protected roots really are, since a linked folder can put a home's names inside one.
+ * A root inside a home Orca deletes from is that home's data, so it isn't protected.
+ */
+async function resolveProtectedRoots({ homes, protectedRoots }: RolloutHomes): Promise<string[]> {
+  if (protectedRoots.length === 0) {
+    return []
+  }
+  const realHomes = (await Promise.all(homes.map(realpathUnlessAbsent))).filter(
+    (home) => home !== null
+  )
+  const resolved: string[] = []
+  for (const root of protectedRoots) {
+    const realRoot = await realpathUnlessAbsent(root)
+    if (realRoot && !realHomes.some((home) => isPathInsideOrEqual(home, realRoot))) {
+      resolved.push(realRoot)
+    }
+  }
+  return resolved
+}
+
+function isProtected(realFolder: string, protectedRoots: readonly string[]): boolean {
+  return protectedRoots.some((root) => isPathInsideOrEqual(root, realFolder))
 }
 
 async function removeName(path: string): Promise<boolean> {
@@ -183,9 +226,16 @@ async function isOpenInCodex(homes: readonly string[], stem: string): Promise<bo
   return !keepsLocks
 }
 
+async function removeCopyMarker(path: string, protectedRoots: readonly string[]): Promise<void> {
+  const realFolder = await realpathUnlessAbsent(dirname(path))
+  if (realFolder && !isProtected(realFolder, protectedRoots)) {
+    await rm(path, { force: true })
+  }
+}
+
 async function deleteRollout(
   target: RolloutTarget,
-  listHomes: () => Promise<readonly string[]>,
+  listHomes: () => Promise<RolloutHomes>,
   shouldDelete: (target: RolloutTarget) => Promise<boolean>,
   result: DeleteResult,
   deletedPaths: string[]
@@ -193,7 +243,9 @@ async function deleteRollout(
   const release = await holdCodexRolloutForDeletion(target.filePath)
   try {
     // Listed under the hold: an account added since the sweep began may already hold a link.
-    const homes = await listHomes()
+    const listed = await listHomes()
+    const { homes } = listed
+    const protectedRoots = await resolveProtectedRoots(listed)
     const stem = rolloutStem(homes, target.filePath)
     if (!stem) {
       result.failed += 1
@@ -204,6 +256,10 @@ async function deleteRollout(
       return
     }
     const found = await readNames(names)
+    // A name reached into the import folder keeps every name: no partial delete, and not a failure.
+    if (found.some((state) => isProtected(state.realFolder, protectedRoots))) {
+      return
+    }
     // Every name, every extension: a chat resumed or still written anywhere keeps them all.
     const checked = new Set<string>()
     for (const state of found) {
@@ -237,7 +293,11 @@ async function deleteRollout(
           continue
         }
         // Checked once more right before its own unlink: a resume opens or writes one name.
-        if (state.version !== versions.get(name.path) || (await isOpenInCodex(homes, stem))) {
+        if (
+          state.version !== versions.get(name.path) ||
+          isProtected(state.realFolder, protectedRoots) ||
+          (await isOpenInCodex(homes, stem))
+        ) {
           return
         }
         if (await removeName(state.path)) {
@@ -250,9 +310,10 @@ async function deleteRollout(
     }
     result.deleted += 1
     // A name another process links meanwhile is a fresh candidate for the next sweep's full checks.
-    await rm(join(resolveOrcaManagedCodexHomePath(), '.orca-session-copies', `${stem}.json`), {
-      force: true
-    }).catch(() => undefined)
+    await removeCopyMarker(
+      join(resolveOrcaManagedCodexHomePath(), '.orca-session-copies', `${stem}.json`),
+      protectedRoots
+    ).catch(() => undefined)
   } catch (error) {
     console.warn('[workspace-cleanup] Failed to delete Codex rollout:', target.filePath, error)
     result.failed += 1
@@ -268,7 +329,7 @@ async function deleteRollout(
 export async function deleteCodexRolloutsPermanently(
   targets: readonly RolloutTarget[],
   shouldDelete: (target: RolloutTarget) => Promise<boolean>,
-  listHomes: () => Promise<readonly string[]>
+  listHomes: () => Promise<RolloutHomes>
 ): Promise<DeleteResult> {
   const result: DeleteResult = { deleted: 0, failed: 0, freedBytes: 0 }
   const deletedPaths: string[] = []
