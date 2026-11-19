@@ -16,7 +16,15 @@ import {
   runLocalAutomationCommand
 } from './external-manager-local-command'
 
-const OPENCLAW_CMD = 'C:\\Users\\ada\\AppData\\Roaming\\npm\\openclaw.cmd'
+const OPENCLAW_CMD =
+  process.platform === 'win32'
+    ? 'C:\\Users\\ada\\AppData\\Roaming\\npm\\openclaw.cmd'
+    : '/home/ada/.nvm/versions/node/v22.14.0/bin/openclaw'
+const OPENCLAW_DIR =
+  process.platform === 'win32'
+    ? 'C:\\Users\\ada\\AppData\\Roaming\\npm'
+    : '/home/ada/.nvm/versions/node/v22.14.0/bin'
+const PATH_DELIMITER = process.platform === 'win32' ? ';' : ':'
 
 function exited(overrides: Partial<ProcessResult> = {}): ProcessResult {
   return { code: 0, signal: null, stdout: '', stderr: '', timedOut: false, ...overrides }
@@ -56,12 +64,39 @@ describe('runLocalAutomationCommand', () => {
 
     await runLocalAutomationCommand('openclaw', ['cron', 'list'])
 
+    const spec = mocks.runProcess.mock.calls[0]?.[0]
+    expect(spec.program).toBe(OPENCLAW_CMD)
+    expect(spec.program).not.toBe('openclaw')
+    expect(spec.args).toEqual(['cron', 'list'])
+    expect(spec.timeoutMs).toBe(30_000)
+  })
+
+  it('puts the resolved command directory first on the child PATH', async () => {
+    mocks.resolveCliCommandAsync.mockResolvedValue(OPENCLAW_CMD)
+    mocks.runProcess.mockResolvedValue(exited())
+
+    await runLocalAutomationCommand('openclaw', ['cron'])
+
+    const spec = mocks.runProcess.mock.calls[0]?.[0]
+    const pathKey = Object.keys(spec.env ?? {}).find((key) => key.toLowerCase() === 'path')
+    expect(pathKey).toBeDefined()
+    const childPathEntries = String(spec.env[pathKey as string]).split(PATH_DELIMITER)
+    expect(childPathEntries[0]).toBe(OPENCLAW_DIR)
+    expect(childPathEntries.filter((entry) => entry === OPENCLAW_DIR)).toHaveLength(1)
+  })
+
+  it('passes no env override when resolution leaves the command unchanged', async () => {
+    mocks.resolveCliCommandAsync.mockResolvedValue('openclaw')
+    mocks.runProcess.mockResolvedValue(exited())
+
+    await runLocalAutomationCommand('openclaw', ['cron'])
+
     expect(mocks.runProcess).toHaveBeenCalledWith({
-      program: OPENCLAW_CMD,
-      args: ['cron', 'list'],
+      program: 'openclaw',
+      args: ['cron'],
       timeoutMs: 30_000
     })
-    expect(mocks.runProcess.mock.calls[0]?.[0].program).not.toBe('openclaw')
+    expect(mocks.runProcess.mock.calls[0]?.[0]).not.toHaveProperty('env')
   })
 
   it('keeps the timeout message', async () => {

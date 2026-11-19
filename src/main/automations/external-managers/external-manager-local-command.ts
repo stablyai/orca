@@ -1,7 +1,26 @@
+import { delimiter, dirname } from 'node:path'
 import { runProcess } from '@orca/process-host'
 import { resolveCliCommandAsync } from '../../../shared/shell/command-resolution/node-cli-command-async-resolution'
+import { resolvePathEnvKey } from '../../pty/environment/windows-path-segment-merge'
 
 const LOCAL_AUTOMATION_COMMAND_TIMEOUT_MS = 30_000
+
+// Why: CLIs resolved outside the inherited PATH (nvm-style) need their dir for shebang and .cmd interpreter lookup.
+function withProgramDirectoryOnPath(program: string): NodeJS.ProcessEnv {
+  const env = { ...process.env }
+  const pathKey = resolvePathEnvKey(env, process.platform)
+  const pathDelimiter = process.platform === 'win32' ? ';' : delimiter
+  const programDirectory = dirname(program)
+  const isProgramDirectory = (entry: string): boolean =>
+    process.platform === 'win32'
+      ? entry.toLowerCase() === programDirectory.toLowerCase()
+      : entry === programDirectory
+  const inheritedEntries = (env[pathKey] ?? '')
+    .split(pathDelimiter)
+    .filter((entry) => entry.length > 0 && !isProgramDirectory(entry))
+  env[pathKey] = [programDirectory, ...inheritedEntries].join(pathDelimiter)
+  return env
+}
 
 async function runLocalProviderCommand(
   command: string,
@@ -10,7 +29,13 @@ async function runLocalProviderCommand(
 ): Promise<void> {
   // Unresolved names come back unchanged, so a missing CLI still fails as a spawn error.
   const program = await resolveCliCommandAsync(command)
-  const result = await runProcess({ program, args, timeoutMs: options.timeoutMs })
+  const result = await runProcess({
+    program,
+    args,
+    timeoutMs: options.timeoutMs,
+    // Unchanged resolution keeps the inherited env so existing behavior is preserved.
+    ...(program === command ? {} : { env: withProgramDirectoryOnPath(program) })
+  })
   if (result.timedOut) {
     throw new Error(options.timeoutMessage)
   }
