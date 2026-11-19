@@ -6,6 +6,14 @@ export type SkillProvider = 'codex' | 'claude' | 'agent-skills'
 
 export type SkillSourceKind = 'home' | 'repo' | 'bundled' | 'plugin'
 
+export type DiscoveredSkillPlacement = {
+  id: string
+  rootPath: string
+  directoryPath: string
+  skillFilePath: string
+  updatedAt: number | null
+}
+
 export type DiscoveredSkill = {
   id: string
   name: string
@@ -20,6 +28,8 @@ export type DiscoveredSkill = {
   rootPath: string
   /** Retain co-owning roots during canonical-path dedup or symlinked skills lose agents. */
   rootPaths?: string[]
+  /** Concrete copies represented by one identical Claude default skill. */
+  placements?: DiscoveredSkillPlacement[]
   directoryPath: string
   skillFilePath: string
   installed: boolean

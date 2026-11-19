@@ -39,13 +39,15 @@ export type SkillDeleteFlow = {
 function toRequest(skills: readonly DiscoveredSkill[]): SkillDeleteRequest {
   return {
     operationId: createBrowserUuid(),
-    skills: skills.map((skill) => ({
-      id: skill.id,
-      directoryPath: skill.directoryPath,
-      skillFilePath: skill.skillFilePath,
-      name: skill.name,
-      updatedAt: skill.updatedAt
-    }))
+    skills: skills.flatMap((skill) =>
+      (skill.placements?.length ? skill.placements : [skill]).map((placement) => ({
+        id: placement.id,
+        directoryPath: placement.directoryPath,
+        skillFilePath: placement.skillFilePath,
+        name: skill.name,
+        updatedAt: placement.updatedAt
+      }))
+    )
   }
 }
 

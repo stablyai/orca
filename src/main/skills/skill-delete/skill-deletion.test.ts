@@ -14,11 +14,13 @@ import {
   writeSkillInstallReceipt
 } from '../transaction-state/skill-install-provenance'
 import { skillDeleteJournalPath } from './skill-delete-recovery'
+import { discoverSkills } from '../discovery/skill-native-discovery'
 
 const roots: string[] = []
 
 afterEach(async () => {
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
+  vi.unstubAllEnvs()
   vi.restoreAllMocks()
 })
 
@@ -74,6 +76,50 @@ async function exists(path: string): Promise<boolean> {
 }
 
 describe('deleteSkills', () => {
+  it('deletes every identical Claude default copy so the skill stays absent after rescan', async () => {
+    const home = await mkdtemp(join(tmpdir(), 'orca-skill-delete-service-'))
+    roots.push(home)
+    vi.stubEnv('HERMES_HOME', '')
+    vi.stubEnv('LOCALAPPDATA', '')
+    vi.stubEnv('CLAUDE_CONFIG_DIR', '')
+    vi.stubEnv('GROK_HOME', '')
+    const markdown = '---\nname: pdf\ndescription: default\n---\n\n# PDF\n'
+    const files = ['account-one', 'account-two'].map((account) =>
+      join(home, '.claude', 'skills', account, 'pdf', 'SKILL.md')
+    )
+    for (const file of files) {
+      await mkdir(join(file, '..'), { recursive: true })
+      await writeFile(file, markdown)
+    }
+
+    const discoveryArgs = {
+      homeDir: home,
+      cwd: home,
+      repos: [],
+      includeCwd: false,
+      refresh: true,
+      sourceKinds: ['home' as const]
+    }
+    const before = await discoverSkills(discoveryArgs)
+    expect(before.skills).toHaveLength(1)
+    expect(before.skills[0].placements).toHaveLength(2)
+    const deleteRequest: SkillDeleteRequest = {
+      operationId: 'delete-default-copies',
+      skills: before.skills[0].placements!.map((placement) => ({
+        id: placement.id,
+        directoryPath: placement.directoryPath,
+        skillFilePath: placement.skillFilePath,
+        name: before.skills[0].name,
+        updatedAt: placement.updatedAt
+      }))
+    }
+
+    const result = await run(home, join(home, 'state'), deleteRequest)
+    expect(result.skills.map((skill) => skill.status)).toEqual(['deleted', 'deleted'])
+    const after = await discoverSkills({ ...discoveryArgs, refresh: false })
+    expect(after.skills).toEqual([])
+  })
+
   it('removes every placement and leaves no staged residue', async () => {
     const { home, stateDirectory, canonicalDirectory, file } = await fixture()
     const aliasDirectory = join(home, '.claude', 'skills', 'demo')

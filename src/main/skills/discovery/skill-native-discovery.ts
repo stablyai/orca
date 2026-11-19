@@ -42,12 +42,10 @@ import {
 } from './skill-scan-coalescer'
 import type { SkillProviderRootOverrides } from '../providers/skill-provider-destinations'
 import { skillDirectoryMaxDepth } from '../../../shared/skills/discovery/skill-discovery-depth'
-import { withoutBundledSkillCompatibilityCopies } from './bundled-skill-discovery-name'
+import { finalizeBundledSkillDiscoveries } from './bundled-skill-discovery-name'
+import { mergeIdenticalClaudeDefaultCopies } from './claude-default-skill-copies'
 import { readSkillSummary } from './skill-discovery-summary'
-import {
-  bundledSkillNames,
-  requestedBundledSkillName
-} from '../../../shared/skills/bundled/bundled-skill-names'
+import { bundledSkillNames } from '../../../shared/skills/bundled/bundled-skill-names'
 
 // Share fixed home-root scans across workspace panes to bound repeated filesystem walks.
 export const SKILL_ROOT_SCAN_TTL_MS = 10_000
@@ -315,10 +313,10 @@ export async function discoverSkills(args: {
     }
   }
   const skills = sortDiscoveredSkills(
-    (await withoutBundledSkillCompatibilityCopies(Array.from(seen.values()))).map((skill) => ({
-      ...skill,
-      name: requestedBundledSkillName(skill.name, args.names)
-    }))
+    await finalizeBundledSkillDiscoveries(
+      await mergeIdenticalClaudeDefaultCopies(Array.from(seen.values())),
+      args.names
+    )
   )
   // Log filesystem work only, using hashed root ids rather than private labels/paths.
   const walked = roots.filter((_, index) => !scans[index].cached).map((root) => root.id)
