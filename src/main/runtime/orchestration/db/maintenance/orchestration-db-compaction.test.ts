@@ -134,12 +134,11 @@ describe('compactOrchestrationDb', () => {
     expect(inspect(file)).toEqual({ autoVacuum: 0, integrity: 'ok' })
   })
 
-  it('stops trying after two stopped attempts until the live data shrinks', async () => {
+  it('stops trying after one stopped attempt until the live data shrinks', async () => {
     const file = legacyDatabase()
     await compactOrchestrationDb(file, { budgetMs: 0 })
-    await compactOrchestrationDb(file, { budgetMs: 0 })
 
-    expect(await compactOrchestrationDb(file)).toEqual({ kind: 'deferred', timeouts: 2 })
+    expect(await compactOrchestrationDb(file)).toEqual({ kind: 'deferred', timeouts: 1 })
     expect(inspect(file).autoVacuum).toBe(0)
   })
 

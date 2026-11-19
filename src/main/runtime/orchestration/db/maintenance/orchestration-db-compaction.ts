@@ -12,8 +12,8 @@ const MIN_FREE_FRACTION = 0.25
 const MAX_LIVE_BYTES = 128 * MIB
 const QUIT_BUDGET_MS = 2_000
 const EXIT_GRACE_MS = 500
-// Two stopped attempts mean this disk can't finish in time; wait until the live data shrinks this much.
-const MAX_TIMEOUTS = 2
+// Quit pays the wait once: a stopped attempt waits until the live data shrinks this much.
+const MAX_TIMEOUTS = 1
 const RETRY_LIVE_FRACTION = 0.75
 
 /** Orchestration state another agent or process may still act on; compaction waits for a quit with none. */
