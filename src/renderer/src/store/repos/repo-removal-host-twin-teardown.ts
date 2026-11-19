@@ -1,4 +1,12 @@
 import type { AppState } from '../types'
+import type { CodexAccountRestart } from '../terminals/terminal-contracts'
+import {
+  codexAccountRestartToken,
+  codexRestartTabIndex,
+  isCodexAccountRestart,
+  isCurrentCodexAccountRestart
+} from '../terminals/codex-account-restart-continuation'
+import { getTerminalNoticeLifetime } from '@/components/terminal-pane/provider-notices/terminal-notice-lifetime'
 import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { EditorBufferKeepRequest } from '../slices/editor/buffers/editor-buffer-kept'
 import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
@@ -15,6 +23,98 @@ import {
   type RemovedHostTwinState
 } from './repo-removal-host-twin-attribution'
 
+type MixedAccountRestart = Pick<
+  CodexAccountRestart,
+  | 'requestId'
+  | 'attemptId'
+  | 'executorId'
+  | 'worktreeId'
+  | 'tabId'
+  | 'tabCreatedAt'
+  | 'leafId'
+  | 'hostId'
+  | 'hostEpoch'
+  | 'environmentId'
+  | 'pairingRevision'
+  | 'runtimeId'
+  | 'oldPtyId'
+  | 'oldIncarnationId'
+  | 'resultPtyId'
+  | 'resultIncarnationId'
+>
+
+function captureMixedAccountRestarts(
+  state: AppState,
+  hostId: ExecutionHostId,
+  removed: RemovedHostTwinState
+): ReadonlyMap<string, MixedAccountRestart> {
+  const candidates = Object.entries(state.pendingPaneAccountRestarts).filter(
+    ([key, r]) =>
+      isCodexAccountRestart(r) &&
+      r.hostId === hostId &&
+      r.leafId &&
+      codexAccountRestartToken(r).key === key &&
+      removed.mixedTabPtyIds.has(r.oldPtyId)
+  )
+  const captured = new Map<string, MixedAccountRestart>()
+  const tabs = candidates.length ? codexRestartTabIndex(state) : undefined
+  for (const [key, r] of candidates) {
+    if (
+      !isCodexAccountRestart(r) ||
+      !r.leafId ||
+      !isCurrentCodexAccountRestart(state, r, tabs) ||
+      state.terminalLayoutsByTabId[r.tabId]?.ptyIdsByLeafId?.[r.leafId] !== r.oldPtyId
+    ) {
+      continue
+    }
+    captured.set(key, {
+      requestId: r.requestId,
+      attemptId: r.attemptId,
+      executorId: r.executorId,
+      worktreeId: r.worktreeId,
+      tabId: r.tabId,
+      tabCreatedAt: r.tabCreatedAt,
+      leafId: r.leafId,
+      hostId: r.hostId,
+      hostEpoch: r.hostEpoch,
+      environmentId: r.environmentId,
+      pairingRevision: r.pairingRevision,
+      runtimeId: r.runtimeId,
+      oldPtyId: r.oldPtyId,
+      oldIncarnationId: getTerminalNoticeLifetime(r.oldPtyId)?.incarnationId ?? r.oldIncarnationId,
+      resultPtyId: r.resultPtyId,
+      resultIncarnationId: r.resultIncarnationId
+    })
+  }
+  return captured
+}
+
+function matchesCapturedAccountRestart(
+  state: AppState,
+  r: CodexAccountRestart,
+  captured: MixedAccountRestart | undefined,
+  tabs: ReturnType<typeof codexRestartTabIndex> | undefined
+): boolean {
+  if (
+    !captured ||
+    !r.leafId ||
+    !(Object.keys(captured) as (keyof MixedAccountRestart)[]).every(
+      (key) => key === 'oldIncarnationId' || r[key] === captured[key]
+    ) ||
+    (r.oldIncarnationId && r.oldIncarnationId !== captured.oldIncarnationId) ||
+    !isCurrentCodexAccountRestart(state, r, tabs)
+  ) {
+    return false
+  }
+  const bound = state.terminalLayoutsByTabId[r.tabId]?.ptyIdsByLeafId?.[r.leafId]
+  return (
+    !bound ||
+    (bound === captured.oldPtyId &&
+      (!getTerminalNoticeLifetime(bound)?.incarnationId ||
+        getTerminalNoticeLifetime(bound)?.incarnationId === captured.oldIncarnationId))
+  )
+}
+
 export type RemovedHostTwins = {
   /** Twin ids with the hosts that still publish them. */
   twinHostIds: Map<string, ExecutionHostId[]>
@@ -24,6 +124,7 @@ export type RemovedHostTwins = {
     /** This host's own twin ids with their survivors. */
     twinHostIds: ReadonlyMap<string, readonly ExecutionHostId[]>
     removed: RemovedHostTwinState
+    accountRestarts?: ReadonlyMap<string, MixedAccountRestart>
   }[]
 }
 
@@ -41,11 +142,20 @@ export function collectRemovedHostTwins(
   ]
   return {
     twinHostIds: new Map(scopes.flatMap(([, twins]) => [...twins])),
-    byHost: scopes.map(([attributedHostId, twins]) => ({
-      hostId: attributedHostId,
-      twinHostIds: twins,
-      removed: collectRemovedHostTwinState(state, new Set(twins.keys()), attributedHostId, twins)
-    }))
+    byHost: scopes.map(([attributedHostId, twins]) => {
+      const removed = collectRemovedHostTwinState(
+        state,
+        new Set(twins.keys()),
+        attributedHostId,
+        twins
+      )
+      return {
+        hostId: attributedHostId,
+        twinHostIds: twins,
+        removed,
+        accountRestarts: captureMixedAccountRestarts(state, attributedHostId, removed)
+      }
+    })
   }
 }
 
@@ -66,6 +176,7 @@ export function closeRemovedHostTwinState(
   for (const hostId of new Set([...twins.byHost, ...preCall.byHost].map((entry) => entry.hostId))) {
     const current = twins.byHost.find((entry) => entry.hostId === hostId)
     const removed = current?.removed
+    const captured = preCall.byHost.find((entry) => entry.hostId === hostId)?.accountRestarts
     // Why this host's ids only: another attributed host's survivor may be this host.
     const hostTwinIds = current?.twinHostIds ?? new Map<string, readonly ExecutionHostId[]>()
     // Why: a host frame during the call can drop a tab without closeTab's agent and cache cleanup.
@@ -121,31 +232,37 @@ export function closeRemovedHostTwinState(
     }
     // Why: a parked or restored pane has no exit callback left to clear these; shared PTYs are not in the plans' lists.
     const beforeRestarts = get().pendingPaneAccountRestarts
-    set((state) => ({
-      ...removeWorkspaceUnreadState(
-        state,
-        [
-          ...new Set([
-            ...hostTwinIds.keys(),
-            ...preCall.byHost
-              .filter((entry) => entry.hostId === hostId)
-              .flatMap((entry) => [...entry.twinHostIds.keys()])
-          ])
-        ].map((id) => ({ id, hostId }))
-      ),
-      suppressedPtyExitIds: omitRecordKeys(state.suppressedPtyExitIds, retiredPtyIds),
-      pendingPaneAccountRestarts: Object.fromEntries(
-        Object.entries(state.pendingPaneAccountRestarts).filter(([key, request]) =>
-          typeof request === 'string'
-            ? !retiredPtyIds.has(key)
-            : !(
-                request.hostId === hostId &&
-                (terminalTabIds.has(request.tabId) || retiredPtyIds.has(request.oldPtyId))
-              )
-        )
-      ),
-      codexRestartNoticeByPtyId: omitRecordKeys(state.codexRestartNoticeByPtyId, retiredPtyIds)
-    }))
+    set((state) => {
+      const tabs = captured?.size ? codexRestartTabIndex(state) : undefined
+      return {
+        ...removeWorkspaceUnreadState(
+          state,
+          [
+            ...new Set([
+              ...hostTwinIds.keys(),
+              ...preCall.byHost
+                .filter((entry) => entry.hostId === hostId)
+                .flatMap((entry) => [...entry.twinHostIds.keys()])
+            ])
+          ].map((id) => ({ id, hostId }))
+        ),
+        suppressedPtyExitIds: omitRecordKeys(state.suppressedPtyExitIds, retiredPtyIds),
+        pendingPaneAccountRestarts: Object.fromEntries(
+          Object.entries(state.pendingPaneAccountRestarts).filter(([key, request]) =>
+            typeof request === 'string'
+              ? !retiredPtyIds.has(key)
+              : !(
+                  request.hostId === hostId &&
+                  (terminalTabIds.has(request.tabId) ||
+                    retiredPtyIds.has(request.oldPtyId) ||
+                    (isCodexAccountRestart(request) &&
+                      matchesCapturedAccountRestart(state, request, captured?.get(key), tabs)))
+                )
+          )
+        ),
+        codexRestartNoticeByPtyId: omitRecordKeys(state.codexRestartNoticeByPtyId, retiredPtyIds)
+      }
+    })
     releaseRetiredAccountRestartSlots(beforeRestarts, get().pendingPaneAccountRestarts)
     // Why: a pending chat's tab can already be gone, so its launch is cancelled through the registry.
     cancelStructuredLaunchesForWorktrees(

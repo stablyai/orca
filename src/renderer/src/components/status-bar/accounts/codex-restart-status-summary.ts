@@ -92,6 +92,11 @@ function projectCodexRestartStatus(
   // Currency stays live at each queued scope; phases reuse the global topology, not owner answers.
   const currentRequests = requests.filter((r) => isCurrentCodexAccountRestart(state, r, tabs))
   const coveredPtyIds = coveredCodexRestartPtyIds(currentRequests)
+  for (const ptyId of coveredPtyIds) {
+    if (!panes.has(ptyId)) {
+      coveredPtyIds.delete(ptyId)
+    }
+  }
   const failures = currentRequests.filter((r) => ['failed', 'unresolved'].includes(r.phase))
   const stalePtyIds =
     sameTopology &&
