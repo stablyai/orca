@@ -17,6 +17,7 @@ import {
   QueuedMessageUpdateParams,
   QueuedMessageEditHoldParams
 } from '../../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-queued-edit-params'
+import { typedByOf } from '../../../callers/rpc-caller-typed-by'
 import { readsQueuedImageCards } from '../attachments/structured-agent-session-queued-image-capability'
 
 export const STRUCTURED_AGENT_SESSION_QUEUED_METHODS = [
@@ -24,11 +25,18 @@ export const STRUCTURED_AGENT_SESSION_QUEUED_METHODS = [
     name: 'agentSession.queuedMessageUpdate',
     permission: 'workspace',
     params: QueuedMessageUpdateParams,
-    handler: async (params, ctx) =>
-      requireSessionHost(ctx, params.envelope.sessionId).queuedMessageUpdate(callerFor(ctx), {
-        ...params,
-        queuedImageCards: readsQueuedImageCards(ctx)
-      })
+    handler: async (params, ctx) => {
+      // A changed card is the editor's words now: it posts as whoever typed the edit.
+      const typedBy = typedByOf(ctx)
+      return requireSessionHost(ctx, params.envelope.sessionId).queuedMessageUpdate(
+        callerFor(ctx),
+        {
+          ...params,
+          ...(typedBy ? { typedBy } : {}),
+          queuedImageCards: readsQueuedImageCards(ctx)
+        }
+      )
+    }
   }),
   defineMethod({
     name: 'agentSession.queuedMessageEditHold',

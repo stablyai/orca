@@ -2,14 +2,17 @@ import type { PreloadApi } from '../../../../../preload/api-types'
 import { legacyBaseRefSearchResult } from '../../../../../shared/worktree/base-refs/base-ref-search-result'
 import type { CloneTargetCheck } from '../../../../../shared/git/clone/clone-target-check'
 import type { Repo } from '../../../../../shared/repository/repo-types'
-import { getDefaultCreateProjectParent } from '@/components/sidebar/project-admission/create/create-project-defaults'
+import { getRuntimeDefaultCreateProjectParent } from '@/components/sidebar/project-admission/create/runtime-create-project-parent'
 import {
   callRuntimeResult,
   callRuntimeResultWithOwner,
   withRuntimeRepoMutationOwner,
   withRuntimeRepoOwner
 } from '../../runtime/client/web-runtime-calls'
-import { invalidateRuntimeWorktreeCaches } from '../../runtime/client/web-runtime-session'
+import {
+  invalidateRuntimeWorktreeCaches,
+  requireActiveEnvironment
+} from '../../runtime/client/web-runtime-session'
 import { noopUnsubscribe } from '../web-storage'
 
 export function createReposApi(): NonNullable<Partial<PreloadApi>['repos']> {
@@ -71,12 +74,8 @@ export function createReposApi(): NonNullable<Partial<PreloadApi>['repos']> {
     },
     isGitAvailable: async () =>
       (await callRuntimeResult<{ available: boolean }>('repo.gitAvailable')).available,
-    getDefaultCreateProjectParent: async () => {
-      const result = await callRuntimeResult<{ resolvedPath: string }>('files.browseServerDir', {
-        path: '~'
-      })
-      return getDefaultCreateProjectParent(result.resolvedPath)
-    },
+    getDefaultCreateProjectParent: async () =>
+      getRuntimeDefaultCreateProjectParent(requireActiveEnvironment().id, 15_000),
     onCloneProgress: () => noopUnsubscribe,
     getBaseRefDefault: async ({ repoId }) =>
       callRuntimeResult('repo.baseRefDefault', { repo: repoId }),

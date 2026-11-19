@@ -57,7 +57,9 @@ function sameContext(a: MarkdownBlockContext, b: MarkdownBlockContext): boolean 
       (directive, index) =>
         directive.file === b.directives[index]?.file &&
         directive.title === b.directives[index]?.title
-    )
+    ) &&
+    a.cards.length === b.cards.length &&
+    a.cards.every((card, index) => JSON.stringify(card) === JSON.stringify(b.cards[index]))
   )
 }
 

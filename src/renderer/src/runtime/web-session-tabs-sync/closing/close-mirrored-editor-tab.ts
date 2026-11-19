@@ -15,7 +15,9 @@ export type MirroredEditorCloseState = WorktreeOperationRouteState & {
 export function notifyHostOfMirroredEditorClose(
   state: MirroredEditorCloseState,
   worktreeId: string | null | undefined,
-  fileId: string
+  fileId: string,
+  /** Limits the close to this one view of the file. */
+  tabId?: string
 ): boolean {
   if (!worktreeId) {
     return false
@@ -39,7 +41,10 @@ export function notifyHostOfMirroredEditorClose(
   }
   // A mirrored unified tab carries the host's tab id as `id` and the local file id as `entityId`; the host close RPC resolves by id.
   const unifiedTabs = (state.unifiedTabsByWorktree[worktreeId] ?? []).filter(
-    (tab) => tab.contentType === 'editor' && tab.entityId === fileId
+    (tab) =>
+      tab.contentType === 'editor' &&
+      tab.entityId === fileId &&
+      (tabId === undefined || tab.id === tabId)
   )
   if (unifiedTabs.length === 0) {
     return false

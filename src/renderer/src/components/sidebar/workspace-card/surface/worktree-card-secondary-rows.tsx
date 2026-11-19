@@ -1,6 +1,6 @@
 import React from 'react'
 
-import { LinearAgentSkillSetupPrompt } from '../../LinearAgentSkillSetupPrompt'
+import { LinearAgentSkillSetupPrompt } from '../../../skills/setup/LinearAgentSkillSetupPrompt'
 import WorktreeCardAgents from '../activity/WorktreeCardAgents'
 import {
   WorktreeCardDeleteFailed,

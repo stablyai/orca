@@ -21,6 +21,7 @@ import { settleStructuredMailAttempt } from '../structured-mail/structured-mail-
 
 import type {
   StructuredMailboxPointerHost,
+  StructuredMailReportItem,
   StructuredPointerSendOutcome
 } from './structured-mailbox-pointer-host-contract'
 
@@ -28,6 +29,10 @@ import type { StructuredSendAnswer as StructuredMailSendState } from '../../../.
 
 import type { StructuredMailSendRow } from '../../db/messages/structured-mail-send-store'
 
+import {
+  orchestrationMailNotice,
+  readAgentMessageSource
+} from '../../../../../shared/agent-session/journal/agent-session-message-source'
 import type { AgentJournalMessageItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 
 type Mail = {
@@ -47,7 +52,13 @@ type Mail = {
 }
 
 /** dispatch:d1 behind one chat session at a time: idle sends start a turn, busy ones wait as cards. */
-function harness(options: { busy?: boolean; senderNames?: RuntimeOrchestrationSenderNames } = {}) {
+function harness(
+  options: {
+    busy?: boolean
+    senderNames?: RuntimeOrchestrationSenderNames
+    reportItem?: StructuredMailReportItem
+  } = {}
+) {
   const mailbox = 'dispatch:d1'
   const mail = new Map<string, Mail>()
   const records = new Map<string, StructuredMailSendRow>()
@@ -188,6 +199,7 @@ function harness(options: { busy?: boolean; senderNames?: RuntimeOrchestrationSe
       mailboxEnded: () => ended,
       unresolvedCustody: () => 'unverifiable',
       getCliCommand: () => 'orca-dev',
+      reportItem: options.reportItem,
       senderSnapshot: () => ({ name: 'Coordinator', agent: null }),
       senderSnapshotReader: options.senderNames
         ? () => options.senderNames!.snapshotReader()
@@ -295,6 +307,43 @@ describe('structured mailbox delivery: each message whole', () => {
   })
 })
 
+describe("structured mailbox delivery: a finished item worker's report", () => {
+  const item = {
+    number: 34,
+    title: 'Paste images',
+    status: 'working' as const,
+    doneMeans: 'Image paste merged'
+  }
+
+  it('ends the chat message with the item line, outside the recorded content', async () => {
+    const h = harness({ reportItem: async () => item })
+    h.receive('m1')
+    await h.deliver()
+    const body = vi.mocked(h.host.send).mock.calls[0]![0].body
+    expect(h.sent[0]!.text.split('\n').at(-2)).toBe(
+      '[This worker was started for item 34, "Paste images" (In progress). Done means: Image paste merged. If this result changes the item, update it with orca-dev bot item <cancel|comment|done|set> 34.]'
+    )
+    const mail = orchestrationMailNotice(readAgentMessageSource(body.from))
+    const range = mail?.messages[0]?.content?.body
+    expect(range && h.sent[0]!.text.slice(...range)).toBe('body of m1')
+    await vi.waitFor(() => expect(h.mail.get('m1')?.read).toBe(1))
+  })
+
+  it('delivers and settles the report as before when the item read fails', async () => {
+    const h = harness({
+      reportItem: async () => {
+        throw new Error('items DB worker gone')
+      }
+    })
+    h.receive('m1')
+    await h.deliver()
+    expect(h.sent).toHaveLength(1)
+    expect(h.sent[0]!.text).not.toContain('This worker was started for item')
+    await vi.waitFor(() => expect(h.mail.get('m1')?.read).toBe(1))
+    expect(h.records.size).toBe(0)
+  })
+})
+
 describe('structured mailbox delivery across a real database close and reopen', () => {
   it('keeps a real lifecycle correction unread when the earlier accepted body lacks that correction', () => {
     const directory = mkdtempSync(join(tmpdir(), 'orca-mail-correction-'))
@@ -329,7 +378,8 @@ describe('structured mailbox delivery across a real database close and reopen', 
         dispatchId: null,
         message,
         cliCommand: 'orca-dev',
-        senderSnapshot: () => ({ name: null, agent: null })
+        senderSnapshot: () => ({ name: null, agent: null }),
+        followUp: undefined
       }).body
       settleStructuredMailAttempt(
         db,

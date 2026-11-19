@@ -16,7 +16,7 @@ import { runCoordinatorKey } from '../../addressing/orchestration-caller-identit
 import { exposeUtcTimestamp } from '../../db/utc-timestamp'
 
 /** What a sender is now: its recorded name, never an agent-painted title, and its agent. */
-export type SenderSnapshot = { name: string | null; agent: AgentType | null }
+export type SenderSnapshot = { name: string | null; agent: AgentType | null; bot?: boolean }
 
 export function observeSenderSnapshot(
   party: AgentMessageSender['party'],
@@ -26,7 +26,8 @@ export function observeSenderSnapshot(
   const observation = observeOrchestrationSender(party, sources, reportedDispatchId)
   return {
     name: orchestrationSenderName(party, sources, reportedDispatchId, observation),
-    agent: orchestrationSenderAgent(sources, observation)
+    agent: orchestrationSenderAgent(sources, observation),
+    ...(observation.chat?.bot ? { bot: true } : {})
   }
 }
 
@@ -53,7 +54,8 @@ export function agentMessageSender(
     // A coordinator's terminal can later host another agent; only its session identifies it.
     party: address.startsWith('run:') ? { ...party, terminalHandle: null } : party,
     name: agentMessageSenderName(snapshot.name ?? peerLabel),
-    ...(snapshot.agent ? { agent: snapshot.agent } : {})
+    ...(snapshot.agent ? { agent: snapshot.agent } : {}),
+    ...(snapshot.bot ? { bot: true } : {})
   }
 }
 

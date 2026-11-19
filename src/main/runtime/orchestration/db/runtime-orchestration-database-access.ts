@@ -35,7 +35,8 @@ export abstract class RuntimeOrchestrationDatabaseAccess extends OrcaRuntimeWith
         (dispatchId) => isReleasedChatReadable(db, dispatchId),
         {
           isLiveHandle: (handle) => this.isLiveOrchestrationHandle(handle),
-          isLivePane: (paneKey) => this.hasLiveTerminalForPaneKey(paneKey)
+          isLivePane: (paneKey) => this.hasLiveTerminalForPaneKey(paneKey),
+          waitedMailboxes: () => this.messageWaiters.map.keys()
         }
       )
       this.orchestrationDbMaintenance.start()
@@ -76,7 +77,7 @@ export abstract class RuntimeOrchestrationDatabaseAccess extends OrcaRuntimeWith
   /** Whether anyone can still read this mailbox: a waiter, an open terminal or a reachable chat. */
   private isLiveOrchestrationHandle(handle: string): boolean {
     return (
-      (this.messageWaiters.get(handle)?.size ?? 0) > 0 ||
+      this.messageWaiters.has(handle) ||
       this.orchestrationMailboxDeliveryTarget.reachesOpenTerminal(handle) ||
       structuredMailboxCustody(handle, this._orchestrationDb) !== 'elsewhere'
     )

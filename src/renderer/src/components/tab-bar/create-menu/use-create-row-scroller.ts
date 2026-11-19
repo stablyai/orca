@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { motionSafeScrollBehavior } from '@/hooks/usePrefersReducedMotion'
+import { motionSafeScrollBehavior } from '@/hooks/theme/usePrefersReducedMotion'
 import { bindTabStripContentResizeObservers } from '../strip/tab-strip-content-resize-observers'
 import {
   EMPTY_TAB_STRIP_OVERFLOW_STATE,

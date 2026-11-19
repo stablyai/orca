@@ -1,6 +1,6 @@
 import { createElement } from 'react'
 import { Globe, Terminal as TerminalIcon } from 'lucide-react'
-import { FileTypeIcon } from '@/components/FileTypeIcon'
+import { FileTypeIcon } from '@/components/icons/FileTypeIcon'
 import { AgentIcon } from '@/components/agent/icons/AgentIcon'
 import type { TabDragItemData } from './tab-drag-data'
 

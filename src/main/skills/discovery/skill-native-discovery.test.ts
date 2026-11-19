@@ -3,6 +3,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { clearSkillRootScanCache, discoverSkills } from './skill-native-discovery'
+import { isNativeChatSkillForAgent } from '../../../shared/native-chat/input/commands/native-chat-skill-visibility'
+import type { AgentType } from '../../../shared/agent-status/contracts/agent-status-types'
 import '../../../shared/agent-launch/catalog/tui-agent-config'
 
 import type * as SkillRootFileWalk from './skill-root-file-walk'
@@ -32,6 +34,8 @@ beforeEach(() => {
   // HERMES_HOME can escape the fixture; isolate it from developer installs.
   vi.stubEnv('HERMES_HOME', '')
   vi.stubEnv('LOCALAPPDATA', '')
+  vi.stubEnv('CLAUDE_CONFIG_DIR', '')
+  vi.stubEnv('GROK_HOME', '')
   vi.spyOn(console, 'info').mockImplementation(() => undefined)
 })
 
@@ -165,6 +169,61 @@ describe('skill discovery', () => {
 
     expect(result.skills.map((skill) => skill.name)).not.toContain('ce-plan')
     expect(result.sources.some((source) => source.id.startsWith('claude-plugin'))).toBe(false)
+  })
+
+  it('lists for each chat agent the skills its CLI loads', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-skills-'))
+    const home = join(root, 'home')
+    const repo = join(root, 'repo')
+    const folders: [string, string][] = [
+      [join(home, '.cursor', 'skills'), 'cursor-home'],
+      [join(home, '.cursor', 'skills-cursor'), 'cursor-builtin'],
+      [join(home, '.copilot', 'skills'), 'copilot-home'],
+      [join(home, '.agents', 'skills'), 'agents-home'],
+      [join(home, '.claude', 'skills'), 'claude-home'],
+      [join(home, '.codex', 'skills'), 'codex-home'],
+      [join(home, '.grok', 'skills'), 'grok-home'],
+      [join(repo, '.cursor', 'skills'), 'cursor-project'],
+      [join(repo, '.github', 'skills'), 'github-project'],
+      [join(repo, '.claude', 'skills'), 'claude-project'],
+      [join(repo, '.agents', 'skills'), 'agents-project'],
+      [join(repo, '.codex', 'skills'), 'codex-project'],
+      [join(home, '.codex', 'skills', '.system'), 'codex-bundled'],
+      [join(home, '.pi', 'agent', 'skills'), 'pi-only']
+    ]
+    for (const [folder, name] of folders) {
+      await mkdir(join(folder, name), { recursive: true })
+      await writeFile(join(folder, name, 'SKILL.md'), `---\nname: ${name}\n---\n`)
+    }
+
+    const result = await discoverSkills({ homeDir: home, cwd: repo, repos: [] })
+    const visibleTo = (agent: AgentType) =>
+      result.skills
+        .filter((skill) => isNativeChatSkillForAgent(agent, skill, result))
+        .map((skill) => skill.name)
+        .sort()
+
+    // Each list is what that CLI loaded from these folders (cursor-agent 2026.11.17,
+    // Copilot 1.0.109).
+    expect(visibleTo('cursor')).toEqual([
+      'agents-home',
+      'agents-project',
+      'claude-home',
+      'claude-project',
+      'codex-home',
+      'codex-project',
+      'cursor-builtin',
+      'cursor-home',
+      'cursor-project',
+      'grok-home'
+    ])
+    expect(visibleTo('copilot')).toEqual([
+      'agents-home',
+      'agents-project',
+      'claude-project',
+      'copilot-home',
+      'github-project'
+    ])
   })
 
   it('records every contributing root when symlinked roots dedup to one skill', async () => {

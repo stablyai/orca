@@ -136,7 +136,7 @@ export async function resolveStructuredAgentSessionAdoptionForCreate(input: {
   try {
     const source = input.resolveTranscriptSource?.()
     const transcriptPath = source?.kind === 'matched' ? source.transcriptPath : undefined
-    const candidates = input.transcriptImport.accountHomeCandidates(input)
+    const candidates = await input.transcriptImport.accountHomeCandidates(input)
     // Resolve each account store once so lookup, hook path and re-admission agree despite environment changes.
     const stores = new Map<AgentSessionAccountHome, string | null>()
     const storeOf = (accountHome: AgentSessionAccountHome): string | null => {

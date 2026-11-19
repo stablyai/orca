@@ -653,6 +653,13 @@ int main(int argc, char *argv[]) {
             return EXIT_USAGE;
         }
     }
+    // A host passes its own nonblocking sockets; the gate, status and CLI stdio expect blocking ones.
+    for (int fd = 1; fd <= INPUT_FD; fd++) {
+        int flags = fcntl(fd, F_GETFL);
+        if (flags < 0 || ((flags & O_NONBLOCK) && fcntl(fd, F_SETFL, flags & ~O_NONBLOCK) != 0)) {
+            return EXIT_BOOTSTRAP;
+        }
+    }
 
     struct watcher watcher = {
         .stdin_end_grace_ms = stdin_end_grace_ms,

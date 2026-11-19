@@ -1,4 +1,8 @@
-import { recordDraft, tabBucketDraft, type RecordDraft } from '@/store/keyed-record-transitions'
+import {
+  recordDraft,
+  tabBucketDraft,
+  type RecordDraft
+} from '@/store/record-transitions/keyed-record-transitions'
 import type { WebSessionTabsBatchContext, WebSessionTabsSyncState } from '../state'
 
 const SEAM_PRESENTATION_FIELDS = [

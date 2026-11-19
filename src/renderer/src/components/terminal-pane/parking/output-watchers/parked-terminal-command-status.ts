@@ -3,14 +3,14 @@ import type { AgentStatusEntry } from '../../../../../../shared/agent-status/con
 import { resolvePaneAgentOwner } from '../../../../../../shared/agent-status/identity/pane-agent-owner'
 import { parseAppSshPtyId } from '../../../../../../shared/remote-runtime/ssh/ssh-pty-id'
 import { isShellProcess } from '../../../../../../shared/agent-status/process/shell-process-detection'
-import { dispatchTerminalCommandFinishedEvent } from '@/hooks/terminal-command-finished-event'
+import { dispatchTerminalCommandFinishedEvent } from '@/lib/terminal/output/terminal-command-finished-event'
 import { resolveLiveAgentStatusConnectionRouting } from '@/lib/agent-status/ownership/agent-status-connection-ownership'
 import { getConnectionIdFromState } from '@/lib/workspace/ownership/connection-owner-resolution'
 import {
   rendererAgentStatusObservations,
   hostOwnsCommandCodeStatus
 } from '@/lib/agent-status/evidence/renderer-agent-status-observations'
-import { isRetainedProgramResult } from '@/lib/program-status/row'
+import { isRetainedProgramResult } from '../../../../../../shared/program-status/program-status-row'
 import { useAppStore } from '@/store/index'
 import {
   cancelCommandCodeDoneSettle,

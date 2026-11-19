@@ -97,6 +97,16 @@
       "confirm": "Filtreleri ayarla ve göster",
       "cancel": "Filtreleri koru"
     },
+    "revealCurrent": {
+      "label": "Geçerli olanı göster",
+      "noWorkspace": "Açık bir şey yok",
+      "fullPageView": "Bu sayfanın kenar çubuğunda satırı yok",
+      "archived": "Arşivlenmiş çalışma alanları kenar çubuğunda listelenmez",
+      "botsOff": "Botlar kapalı, bu yüzden bu bot listelenmiyor",
+      "botHidden": "Bu bot duraklatıldı ve Bot seçenekleriyle gizlendi",
+      "renameBotPage": "Bir botun veya grubun sayfası bir worktree değildir. Yeniden adlandırmak için satırının menüsündeki Yeniden Adlandır’ı kullanın.",
+      "renameUnlisted": "Bu çalışma alanı şu anda kenar çubuğunda listelenmiyor, bu yüzden orada yeniden adlandırılamaz."
+    },
     "startupWorktreeRefresh": {
       "loading": "Çalışma alanları bulunuyor…"
     },
@@ -167,7 +177,8 @@
         "installLockWait_one": "Bu dağıtımdaki başka bir Orca kurulumunun bitmesi bekleniyor. Bitmezse Orca yaklaşık {{count}} dakika içinde devralır.",
         "installLockWait_other": "Bu dağıtımdaki başka bir Orca kurulumunun bitmesi bekleniyor. Bitmezse Orca yaklaşık {{count}} dakika içinde devralır.",
         "installLockWaitGivesUp_one": "Bu dağıtımdaki başka bir Orca kurulumunun bitmesi bekleniyor. Bitmezse Orca yaklaşık {{count}} dakika içinde beklemeyi bırakır.",
-        "installLockWaitGivesUp_other": "Bu dağıtımdaki başka bir Orca kurulumunun bitmesi bekleniyor. Bitmezse Orca yaklaşık {{count}} dakika içinde beklemeyi bırakır."
+        "installLockWaitGivesUp_other": "Bu dağıtımdaki başka bir Orca kurulumunun bitmesi bekleniyor. Bitmezse Orca yaklaşık {{count}} dakika içinde beklemeyi bırakır.",
+        "installLockWaitHolderGone": "Bu dağıtımdaki diğer Orca kurulumu durdu. Orca birkaç saniye içinde devralır."
       }
     },
     "agentSummary": {
@@ -1169,6 +1180,13 @@
       "ee1d96f74a": "Gecikmeyi bir kez atla",
       "1b4d825e0e": "Güncelleme gecikmesi",
       "description": "Orca bir sürümü sunmadan önce yayınlanmasının üzerinden bu kadar gün geçmesini bekler."
+    },
+    "bots": {
+      "tidyUp": {
+        "everyNightLine": "Her gece 03.00'ten sonra veya bu bilgisayar uyandığında",
+        "everyWeekLine": "Haftada bir, 03.00'ten sonra veya bu bilgisayar uyandığında",
+        "everyDescriptionAwake": "Bilgisayar o saatte uykudaysa, uyandığında çalışır. Yalnızca yeni sohbet olan gecelerin ardından. Her düzenleme, kısa bir sohbet gibi {{agent}} planını kullanır."
+      }
     }
   },
   "menu": {
@@ -2103,6 +2121,10 @@
         "mergeRequest": "Merge request",
         "linkedIssue": "Bağlı sorun",
         "listeningPort": "Dinlenen port"
+      },
+      "projectHostSetupOptions": {
+        "hostLocalGitProject": "Bu projenin eşleşen bir Git uzak deposu yok",
+        "hostLocalFolderProject": "Klasör projeleri diğer sunuculara bağlanamaz"
       }
     },
     "hooks": {
@@ -5694,8 +5716,6 @@
         "SkillInstallManagementDialog": {
           "8095927ff3": "Kapat",
           "64c71cf7b9": "Orca bu makineye henüz hiç beceri yüklemedi.",
-          "0900db719a": "- bağlantı kesildi",
-          "176fef9516": "· SSH",
           "6cb1fbe039": "Bu bilgisayar",
           "3677ae58e7": "Orca'nın bir bağlantıdan yüklediği beceriler. Yeniden yükleyin, önceki bir sürüme dönün veya kaldırın.",
           "44d118a8f7": "Orca tarafından yüklendi",
@@ -5729,8 +5749,6 @@
           "a4dfd33095": "Tek çalışma alanı",
           "c779621aa0": "Genel beceriler",
           "63cc9e31fe": "Hedef",
-          "85d85880df": "· SSH",
-          "71eefd7660": "- bağlantı kesildi",
           "0785d0a503": "- güncelleme gerekli",
           "8562dd1e6e": "Bu bilgisayar",
           "b8a0b706ad": "Makine"
@@ -6348,11 +6366,10 @@
           "removeDescriptionSsh": "Bu işlem yalnızca {{name}} öğesini Orca'dan kaldırır. Dosyaları {{host}} üzerinde kalır, geri almak için o SSH sunucusunu yeniden ekleyin.",
           "removeDescriptionLocal": "Bu işlem yalnızca {{name}} öğesini Orca'dan kaldırır. Hâlâ diskinizde bulunur.",
           "removeDescriptionVmRecipe": "Bu işlem {{name}} öğesini Orca'dan kaldırır. Ortamın ve dosyalarının kalıcı olarak silinip silinmeyeceğini VM tarifi belirler.",
+          "linkedWorkspaceWarning_one": "Bu projedeki {{count}} çalışma alanı da Orca'dan kaldırılacak.",
+          "linkedWorkspaceWarning_other": "Bu projedeki {{count}} çalışma alanı da Orca'dan kaldırılacak.",
           "openTerminalWarning_one": "Bu projedeki {{count}} açık terminal kapatılacak.",
           "openTerminalWarning_other": "Bu projedeki {{count}} açık terminal kapatılacak."
-        },
-        "ScrollToCurrentWorkspaceToolbarButton": {
-          "23989bb663": "Etkin çalışma alanını göster"
         },
         "SetupGuideSidebarEntry": {
           "b0a7bfc34c": "Kenar çubuğundan gizle",
@@ -8926,7 +8943,7 @@
           "112f3b934f": "Kaynak Kontrolü AI"
         },
         "RuntimeAccessGrantList": {
-          "sshAccessCaveat": "Buradan erişimi iptal etmek, bu bilgisayara SSH erişimi olan birinin yeniden eşleştirme yapmasını engellemez. Bağlantısını kesmek için SSH erişimini kaldırın.",
+          "sshAccessCaveat": "Bir bağlantıyı iptal etmek, açtığı terminallerde oluşturulan bağlantıları da iptal eder. Bu bilgisayarda SSH ya da bir bağlantı üzerinden terminali olan herkes yine yeniden eşleştirme yapabilir.",
           "6f6d5188ed": "{{value0}} öğesini iptal et",
           "434e4a6af6": "Geçerli bağlantı",
           "df142657a5": "Henüz kullanılmadı",
@@ -13700,10 +13717,8 @@
             "f61af83316": "Yeni Klasör",
             "37c875d827": "Yeni Dosya",
             "b3e288bf41": "'{{value0}}' indirilemedi.",
-            "f729bcd97d": "'{{value0}}' klasörü indirilemedi.",
             "1a3df04ae1": "Aç",
             "bce4d4e44f": "'{{value0}}' indirildi",
-            "a4029c996b": "'{{value0}}' klasörü indirildi",
             "e26010014a": ".gitignore tarafından yok sayılıyor",
             "a06551beee": "Enter",
             "66a29dde82": "Göreli Yolu Kopyala",
@@ -19476,6 +19491,7 @@
         "historyUnreadable": "Orca bu sohbetin kayıtlı geçmişini okuyamadı.",
         "historyUnusable": "Bu sohbet yüklenemiyor.",
         "historyUnavailable": "Orca şu anda bu sohbetin geçmişini açamadı.",
+        "savedInOtherFolder": "Bu konuşma başka bir klasöre kaydedildi.",
         "savedByNewerOrca": "Sohbetler daha yeni bir Orca sürümüyle kaydedildi.",
         "updateOrcaToKeepUsing": "Kullanmaya devam etmek için Orca'yı güncelleyin.",
         "chatSavedByNewerOrca": "Bu sohbet daha yeni bir Orca sürümüyle kaydedilmiş.",
@@ -19667,6 +19683,7 @@
         "availableAfterSessionStarts": "Oturum başladıktan sonra kullanılabilir.",
         "optionUpdateFailed": "Seçenek güncellenemedi",
         "optionValue": {
+          "none": "Yok",
           "fast": "Hızlı",
           "minimal": "Minimal",
           "low": "Düşük",
@@ -19997,7 +20014,7 @@
       "rewind": {
         "unsupported": "Bu sohbette önceki bir mesaja dönülemiyor.",
         "historyNotPaginated": "Bu eski Codex sohbetinde önceki bir mesaja dönülemiyor. Buraya geri dön özelliğini kullanmak için yeni bir sohbet başlatın.",
-        "busy": "Ajan boşta olduğunda ve sohbette sizden yanıt bekleyen bir işlem kalmadığında kullanılabilir.",
+        "busy": "Sohbet boştayken kullanılabilir",
         "staleEpoch": "Sohbet değişti. Son mesajları inceleyip yeniden deneyin.",
         "invalidTarget": "Sohbette bu mesaja dönülemiyor. Hiçbir şey değiştirilmedi.",
         "historyLimit": "Bu sohbet geri dönülemeyecek kadar uzun. Hiçbir şey değiştirilmedi.",
@@ -20781,7 +20798,11 @@
         "turnDiffsTitle": "Tur farkları",
         "turnDiffsCopy": "Her turun değiştirdiği dosyaları satır sayılarıyla yanıtın altında gösterir.",
         "turnDiffsSearchChangedFiles": "değişen dosyalar",
-        "turnDiffsSearchEdits": "düzenlemeler"
+        "turnDiffsSearchEdits": "düzenlemeler",
+        "promptSuggestionsTitle": "Önerilen istemler",
+        "promptSuggestionsCopy": "Claude yanıt verdikten sonra, bir sonraki mesajınız için tahmini boş mesaj kutusunda görünür. Kullanmak için Tab tuşuna basın. Her tahmin, Claude kullanımınıza sayılan ek bir istektir.",
+        "promptSuggestionsSearchNext": "sonraki istem",
+        "promptSuggestionsSearchGhost": "hayalet metin"
       },
       "voice": {
         "dictationLanguage": {
@@ -22325,9 +22346,7 @@
     "updateFailed": "Proje alanı güncellenemedi"
   },
   "mediaPreview": {
-    "unavailable": "Bu medya dosyası oynatılamıyor. Dosya kullanılamıyor olabilir veya desteklenmeyen bir codec kullanıyor olabilir.",
-    "openFailed": "Bu dosya varsayılan uygulamada açılamadı.",
-    "openDefault": "Varsayılan uygulamada aç"
+    "unavailable": "Bu medya dosyası oynatılamıyor. Dosya kullanılamıyor olabilir veya desteklenmeyen bir codec kullanıyor olabilir."
   },
   "workspace": {
     "branchChoice": {
@@ -22798,6 +22817,7 @@
     "controlledByHost": "{{host}} tarafından kontrol ediliyor"
   },
   "nativeChat": {
+    "linkedMessageMissing": "Bu mesaj bulunamadı.",
     "math": {
       "scrollDisplayEquation": "Denklemi kaydır"
     }
@@ -23791,12 +23811,48 @@
     "terminalStopped": "WSL dağıtımı {{distro}} durdurulduğu için Orca bu terminali başlatmadı. Dağıtımı başlatıp yeniden deneyin.",
     "terminalUnverifiable": "Orca, WSL dağıtımı {{distro}} öğesinin çalışıp çalışmadığını denetleyemediği için bu terminali başlatmadı. Dağıtımı başlatıp yeniden deneyin."
   },
+  "bots": {
+    "activity": {
+      "title": "Etkinlik"
+    },
+    "connectors": {
+      "tab": "Bağlayıcılar"
+    },
+    "files": {
+      "tab": "Dosyalar"
+    },
+    "upcoming": {
+      "tidyNightAfter": "Her gece {{from}} sonrasında veya bu bilgisayar uyandığında",
+      "tidyWeekAfter": "Haftada bir, {{from}} sonrasında veya bu bilgisayar uyandığında",
+      "lookDueNow": "Şimdi zamanı · {{every}}"
+    },
+    "palette": {
+      "placeholder": "Botlarda, sohbetlerde, terminallerde, çalışma alanlarında, görevlerde, ayarlarda ve işlemlerde ara...",
+      "description": "Botlarda, sohbetlerde, terminallerde, çalışma alanlarında, görevlerde, ayarlarda ve işlemlerde ara",
+      "scopedPlaceholder": "Botlarda ara...",
+      "scopedLabel": "Botlarda ara",
+      "scopeHint": "Yalnızca botları göstermek için @ yazın",
+      "chip": "Botlar",
+      "chipLabel": "Botlar, her şeyi göster",
+      "searchEverything": "Her yerde \"{{text}}\" ara",
+      "searchBotsFor": "Botlarda \"{{text}}\" ara",
+      "noMatch": "\"{{text}}\" ile eşleşen bot yok",
+      "noBotsYet": "Henüz bot yok",
+      "filtersPaused": "Filtreler botlara değil çalışma alanlarına uygulanır",
+      "showEverything": "Her şeyi göster",
+      "footerBots": "Botlar",
+      "matchesPurpose": "Amacıyla eşleşiyor.",
+      "scopedStatus_one": "Yalnızca botlar gösteriliyor. {{count}} sonuç bulundu.",
+      "scopedStatus_other": "Yalnızca botlar gösteriliyor. {{count}} sonuç bulundu.",
+      "sidebarSearchLabel": "Botlarda, çalışma alanlarında ve tarayıcı sekmelerinde ara",
+      "section": "Botlar"
+    },
+    "templates": {
+      "browse": "Şablonlara göz at"
+    }
+  },
   "agentPicker": {
     "catalogUnsupportedLaunch": "{{agent}} modelleri bu sunucuda kullanılamıyor. Geçerli seçimleriniz uygulanmaya devam eder.",
-    "catalogFailed": "{{agent}} modelleri yüklenemedi. Yeniden denemek için ajan seçiciyi kapatıp açın.",
-    "catalogSignIn": "Modelleri yüklemek için {{agent}} oturumu açın, ardından ajan seçiciyi yeniden açın.",
-    "catalogInstall": "Modelleri yüklemek için bu sunucuya {{agent}} yükleyin, ardından ajan seçiciyi yeniden açın.",
-    "catalogUnresolved": "{{agent}} modelleri yüklenmedi. Yeniden denemek için ajan seçiciyi kapatıp açın.",
     "catalogEmpty": "{{agent}} için kullanılabilir model yok.",
     "setByArguments": "Argümanlarınızla ayarlandı",
     "searchModels": "Modelleri ara",
@@ -23815,6 +23871,7 @@
     "promptPlaceholderFilesOnly": "İstem ekleyin (isteğe bağlı): dosyalar için @",
     "workspaceStartupFailed": "{{agent}} başlatılamadı. Bu kurulumdaki Argümanlar'ı kontrol edip tekrar deneyin.",
     "sameAsTextDefault": "Varsayılanla aynı · {{value0}}",
+    "effortDefault": "Varsayılan",
     "chatChoicesNote": "CLI bayrağı olmayan {{agent}} modeli veya çaba seçimleri sohbetlere uygulanır.",
     "composedChoicesNote": "{{agent}} için çaba ve hız seçimleri model argümanına dahil edilir."
   },

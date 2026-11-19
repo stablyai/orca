@@ -1,24 +1,38 @@
 // Launch reads use receipts and member sizes; full hashing belongs to installation.
 
 import { lstatSync, readFileSync, readdirSync, realpathSync, statSync } from 'node:fs'
-import { readdir, rm, writeFile } from 'node:fs/promises'
+import { lstat, readdir, rm, writeFile } from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
 import { z } from 'zod'
 import { isDefinitiveAbsence } from '../../shared/errors/definitive-filesystem-absence'
 import type { ProviderProcessExit } from '../provider-process/managed-provider-process'
+
+export type ManagedRuntimeMember = { path: string; sha256: string; bytes: number }
 
 export type ManagedRuntimePin = {
   version: string
   url: string
   archiveSha256: string
   archiveBytes: number
-  members: readonly { path: string; sha256: string; bytes: number }[]
-}
+} & (
+  | {
+      /** `file`: the download is the single member itself, not a zip. */
+      format?: 'zip' | 'file'
+      members: readonly ManagedRuntimeMember[]
+    }
+  | {
+      /** Only the archive's hash is published; it vouches for every file, and these must be executable. */
+      format: 'tar.gz'
+      executables: readonly string[]
+    }
+)
 
 export type ManagedRuntime = {
   label: string
   root(dataDirectory: string): string
   pin(): ManagedRuntimePin | null
+  /** Runtimes that follow a published latest release look it up here; pin() answers from it. */
+  refreshPin?(signal?: AbortSignal): Promise<void>
   /** Validate startup without user credentials before publishing/reusing this pinned copy. */
   validate?(folder: string, pin: ManagedRuntimePin, signal: AbortSignal): Promise<void>
 }
@@ -103,7 +117,8 @@ export function copyBesidePinnedMembers(
 ): string | null {
   try {
     const real = realpathSync(command)
-    const whole = (pin?.members ?? []).every((member) => {
+    const members = pin && 'members' in pin ? pin.members : []
+    const whole = members.every((member) => {
       const file = statSync(join(dirname(real), basename(member.path)))
       return file.isFile() && (process.platform === 'win32' || (file.mode & 0o111) !== 0)
     })
@@ -123,17 +138,36 @@ export async function writeRuntimeReleaseReceipt(
     version: pin.version,
     platform: process.platform,
     arch: process.arch,
-    members: pin.members.map(({ path, bytes }) => ({ path, bytes }))
+    members: await receiptMembers(folder, pin)
   }
   await writeFile(join(folder, RUNTIME_RELEASE_RECEIPT), JSON.stringify(receipt), { flag: 'wx' })
 }
 
+// An archive without published member hashes records the sizes its executables extracted to.
+async function receiptMembers(
+  folder: string,
+  pin: ManagedRuntimePin
+): Promise<{ path: string; bytes: number }[]> {
+  if ('members' in pin) {
+    return pin.members.map(({ path, bytes }) => ({ path, bytes }))
+  }
+  return Promise.all(
+    pin.executables.map(async (path) => ({
+      path,
+      bytes: (await lstat(join(folder, ...path.split('/')))).size
+    }))
+  )
+}
+
 /** Exclusive writer only: keep must match launch resolution so reclamation cannot remove a running release. */
-export async function reclaimRuntimeReleases(root: string, keep: string | null): Promise<string[]> {
+export async function reclaimRuntimeReleases(
+  root: string,
+  keep: readonly string[]
+): Promise<string[]> {
   const names = await readdir(root).catch((error: NodeJS.ErrnoException) =>
     error.code === 'ENOENT' ? [] : Promise.reject(error)
   )
-  const stale = names.filter((name) => name !== keep)
+  const stale = names.filter((name) => !keep.includes(name))
   const results = await Promise.allSettled(
     stale.map((name) => rm(join(root, name), { recursive: true, force: true }))
   )

@@ -22,6 +22,7 @@ function createPiRpcAdapter(context: StructuredAgentAdapterContext): StructuredA
         structuredAgentLaunchSources(context),
         piRpcLaunchPart({
           logger: deps.logger,
+          dataDirectory: deps.stateDirectory,
           managedExtensionsEnabled: deps.piManagedExtensionsEnabled
         })
       ),

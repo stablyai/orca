@@ -1,11 +1,13 @@
 import { agentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
+import { botAgentNeedsManagedRuntime } from '../../../../shared/bots/bot-agent-runtime'
 import { applyStructuredCodexWorkspaceTrust } from '../../../agent-launch/trust/agent-workspace-trust-spawn'
 import { ACP_LAUNCH_SPECS } from '../../../acp/launch/acp-launch-registry'
 import type { AcpLaunchSpec } from '../../../acp/launch/acp-launch-contract'
 import { acpStructuredAgentDefinition } from '../../../acp/session/acp-structured-agent-definitions'
 import {
   resolveAcpLaunchCommand,
-  selectAcpHostAccountHome
+  selectAcpHostAccountHome,
+  selectAcpHostAccountHomeForCatalog
 } from '../../../acp/launch/acp-launch-command'
 import { CODEX_STRUCTURED_AGENT } from '../../../codex/structured/launch/codex-structured-agent-definition'
 import { CLAUDE_STRUCTURED_AGENT } from '../../../claude/structured/claude-structured-agent-definition'
@@ -27,6 +29,7 @@ import {
 } from '../model-catalog/structured-agent-model-catalog-discovery'
 import { resolveStructuredAgentCommand } from '../../../native-chat/agent-launch/structured-agent-command-resolution'
 import { getProfileUserDataPath } from '../../../orca-profiles/profile-storage-paths'
+import { managedAgentCli } from '../../../managed-agent-cli/managed-agent-cli-registry'
 import type {
   StructuredAgentAccountHomeRequest,
   StructuredAgentChatProgram,
@@ -66,7 +69,9 @@ function cliChatProgram(agent: 'claude' | 'codex'): StructuredAgentChatProgram {
       const pathEnv = env.PATH ?? env.Path ?? null
       const options = { pathEnv, ...(homePath ? { homePath } : {}) }
       return { ...resolveStructuredAgentCommand(agent, commandSettings, options), env }
-    }
+    },
+    // Hosts without the user's own install can install Orca's copy.
+    installable: () => managedAgentCli(agent).available()
   }
 }
 
@@ -87,25 +92,31 @@ function acpMetadata(spec: AcpLaunchSpec): StructuredAgentRuntimeMetadata {
               })
               return { ...invocation, env }
             },
-            minimumVersions
+            minimumVersions,
+            ...(spec.versionArgs ? { versionArgs: spec.versionArgs } : {})
           }
         }
       : {}),
-    // New chats prefer a compatible host program, which their account home then pins; reads such
-    // as Orca's own sign-in keep the agent's account.
+    // New chats and their model catalog prefer a compatible host program, which a chat's account
+    // home then pins; reads such as Orca's own sign-in keep the agent's account.
     resolveAccountHome: async (
-      { launchEnv, purpose, permissionMode },
+      { launchEnv, purpose, permissionMode, bot },
       { stateDirectory, hostLaunchEnvironment, hostSettings }
     ) => {
       // A host program without the chat's permission mode never takes it; `own` sets none.
       const host =
         spec.hostBackend &&
-        purpose === 'launch' &&
+        (purpose === 'launch' || purpose === 'catalog') &&
+        !(bot && botAgentNeedsManagedRuntime(spec.agent)) &&
         (permissionMode === undefined ||
           permissionMode === 'own' ||
           spec.hostBackend.spec.permissionModeConfig?.values[permissionMode] !== undefined)
           ? await hostLaunchEnvironment(spec.agent)
-              .then((env) => selectAcpHostAccountHome(spec, env, stateDirectory, hostSettings()))
+              .then((env) =>
+                (purpose === 'catalog'
+                  ? selectAcpHostAccountHomeForCatalog
+                  : selectAcpHostAccountHome)(spec, env, stateDirectory, hostSettings())
+              )
               .catch(() => null)
           : null
       return host ?? spec.account.resolve({ launchEnv, stateDirectory })
@@ -173,7 +184,7 @@ export const STRUCTURED_AGENT_RUNTIME_CATALOG: readonly StructuredAgentRuntimeCa
           await resolveStructuredClaudeAccountHomePath({
             launchEnv,
             wslDistro: location?.wslDistro ?? null,
-            ...(purpose !== 'read' ? { purpose: 'identity' } : {}),
+            ...(purpose === 'launch' || purpose === 'identity' ? { purpose: 'identity' } : {}),
             getClaudeConfigDirectory: services.getClaudeConfigDirectory
           })
         )
@@ -196,4 +207,20 @@ export function structuredAgentRuntimeMetadata(
   return (
     STRUCTURED_AGENT_RUNTIME_METADATA.find(({ definition }) => definition.agent === agent) ?? null
   )
+}
+
+/** The seed options `agent` still registers: a key it stopped offering would refuse the create. */
+export function supportedStructuredSeedOptions(
+  agent: string,
+  options: Readonly<Record<string, string>> | undefined
+): Record<string, string> {
+  const definition = structuredAgentRuntimeMetadata(agent)?.definition
+  return Object.fromEntries(
+    Object.entries(options ?? {}).filter(([key]) => definition?.restingOptions.acceptsKey(key))
+  )
+}
+
+/** Whether this host has Orca's managed runtime for `agent`, as its agent list publishes it. */
+export function hostHasManagedRuntime(agent: string): boolean {
+  return structuredAgentRuntimeMetadata(agent)?.definition.managedRuntime?.() === true
 }

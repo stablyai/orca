@@ -1,4 +1,5 @@
 import type { ProfileStateDomainReplacement } from '../../loading-store/profile-writing/profile-state-authority'
+import type { ProfileStateDomainPatch } from '../documents/profile-state-domain-patches'
 import { ProfileStateWriterConnection } from './profile-state-writer-connection'
 import './profile-state-writer-worker-path'
 import './profile-state-writer-errors'
@@ -20,10 +21,15 @@ export class ProfileStateWriteWorkerClient extends ProfileStateWriterConnection 
     )
   }
 
-  writeSerializedDomains(replacements: readonly ProfileStateDomainReplacement[]): Promise<number> {
-    return this.dispatch({ command: 'write-domains', replacements }).then(
-      (response) => response.revision
-    )
+  writeSerializedDomains(
+    replacements: readonly ProfileStateDomainReplacement[],
+    patches?: readonly ProfileStateDomainPatch[]
+  ): Promise<number> {
+    return this.dispatch({
+      command: 'write-domains',
+      replacements,
+      ...(patches?.length ? { patches } : {})
+    }).then((response) => response.revision)
   }
 
   writeSerializedAutomationRuns(
