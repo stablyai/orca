@@ -45,7 +45,15 @@ function isAttachingTmuxClient(row: ProcessTableRow): boolean {
     }
     index += valueAt !== -1 && valueAt === flags.length - 1 ? 2 : 1
   }
-  return args[index] === undefined || isAttachingTmuxCommand(args[index])
+  const command = args[index]
+  if (command === undefined) {
+    return true
+  }
+  // `new-session -d` only creates a session; reading any d flag after it as detached errs safe.
+  return (
+    isAttachingTmuxCommand(command) &&
+    !(command.startsWith('n') && args.slice(index + 1).some((arg) => /^-[^-]*d/.test(arg)))
+  )
 }
 
 export async function readPaneTmuxHost(
