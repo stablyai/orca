@@ -41,6 +41,17 @@ export type ProfileStateParsedSnapshot = {
   state: Record<string, unknown>
 }
 
+/** Splices validated domain fragments into one document and imports it atomically. */
+export function importProfileStateFragments(
+  db: Database.Database,
+  fragments: readonly { domain: string; payload: string | null }[],
+  options: ImportProfileStateOptions = {}
+): number {
+  const present = fragments.filter(({ payload }) => payload !== null)
+  const rawJson = `{${present.map(({ domain, payload }) => `${JSON.stringify(domain)}:${payload}`).join(',')}}`
+  return importProfileStateJson(db, rawJson, options)
+}
+
 /** Atomically import a complete domain set. */
 export function importProfileStateJson(
   db: Database.Database,

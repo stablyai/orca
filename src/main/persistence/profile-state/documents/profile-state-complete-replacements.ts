@@ -1,25 +1,21 @@
 import type { ProfileStateDomainReplacement } from '../../loading-store/profile-writing/profile-state-authority'
 import type { openProfileStateDatabase } from '../database/profile-state-database'
-import { importProfileStateJson } from './profile-state-documents'
-import { prepareProfileStateDomainMutation } from './profile-state-domain-write-validation'
+import { parseProfileStateRoot } from './profile-state-document-validation'
 
-/** Seeds an empty database from whole fragments; returns the new revision. */
-export function importCompleteDocument(
-  db: ReturnType<typeof openProfileStateDatabase>['db'],
-  replacements: readonly ProfileStateDomainReplacement[],
-  expectedRevision: number | undefined
-): number {
-  // Validate fragments independently so splicing cannot conceal malformed JSON.
-  for (const replacement of replacements) {
-    prepareProfileStateDomainMutation(replacement)
+/** One whole-document payload as per-domain replacements. */
+export function splitProfileStatePayload(payload: Buffer): ProfileStateDomainReplacement[] {
+  const serialized = payload.toString('utf8')
+  if (!Buffer.from(serialized, 'utf8').equals(payload)) {
+    throw new Error('Profile state payload is not valid UTF-8')
   }
-  const rawJson = `{${replacements
-    .filter(({ payload }) => payload !== null)
-    .map(({ domain, payload }) => `${JSON.stringify(domain)}:${payload}`)
-    .join(',')}}`
-  return importProfileStateJson(db, rawJson, { expectedRevision })
+  return Object.entries(parseProfileStateRoot(serialized)).map(([domain, value]) => {
+    const domainPayload = JSON.stringify(value)
+    if (domainPayload === undefined) {
+      throw new Error(`Profile state domain payload is not serializable: ${domain}`)
+    }
+    return { domain, payload: domainPayload }
+  })
 }
-
 export function buildCompleteDocumentReplacements(
   db: ReturnType<typeof openProfileStateDatabase>['db'],
   replacements: readonly ProfileStateDomainReplacement[],

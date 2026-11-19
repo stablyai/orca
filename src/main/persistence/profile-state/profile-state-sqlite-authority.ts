@@ -6,6 +6,7 @@ import type {
   ProfileStateMaintenance
 } from '../loading-store/profile-writing/profile-state-authority'
 import {
+  importProfileStateFragments,
   readAcceptedProfileStateParsedSnapshot,
   readProfileStateParsedSnapshot,
   readProfileStateSnapshot
@@ -19,11 +20,11 @@ import {
   writeProfileStateDomains,
   type ProfileStateDomainTransaction
 } from './documents/profile-state-domain-writes'
-import { validateProfileStateDomainTransaction } from './documents/profile-state-domain-write-validation'
 import {
-  parseProfileStateRoot,
-  ProfileStateRevisionConflictError
-} from './documents/profile-state-document-validation'
+  prepareProfileStateDomainMutation,
+  validateProfileStateDomainTransaction
+} from './documents/profile-state-domain-write-validation'
+import { ProfileStateRevisionConflictError } from './documents/profile-state-document-validation'
 import { assertProfileStateRevisionOnDisk } from './database/profile-state-revision-readmission'
 import {
   quarantineProfileStateDatabase,
@@ -32,7 +33,7 @@ import {
 import { writeProfileStateAuthorityJsonExport } from './legacy-json/profile-state-authority-exports'
 import {
   buildCompleteDocumentReplacements,
-  importCompleteDocument
+  splitProfileStatePayload
 } from './documents/profile-state-complete-replacements'
 import { ProfileStateBackupRotation } from './backup/profile-state-backup-rotation'
 import { ensureProfileStateAuthorityMarker } from './database/profile-state-authority-marker'
@@ -178,20 +179,7 @@ export class ProfileStateSqliteAuthority implements ProfileStateAuthority {
 
   writeSerializedState(payload: Buffer): void {
     this.assertActive()
-    const serialized = payload.toString('utf8')
-    if (!Buffer.from(serialized, 'utf8').equals(payload)) {
-      throw new Error('Profile state payload is not valid UTF-8')
-    }
-    const parsed = parseProfileStateRoot(serialized)
-    this.writeCompleteSerializedDomains(
-      Object.entries(parsed).map(([domain, value]) => {
-        const payload = JSON.stringify(value)
-        if (payload === undefined) {
-          throw new Error(`Profile state domain payload is not serializable: ${domain}`)
-        }
-        return { domain, payload }
-      })
-    )
+    this.writeCompleteSerializedDomains(splitProfileStatePayload(payload))
   }
 
   writeCompleteSerializedDomains(
@@ -214,7 +202,13 @@ export class ProfileStateSqliteAuthority implements ProfileStateAuthority {
     const complete = buildCompleteDocumentReplacements(opened.db, replacements, patches)
     // Patches need the stored copy, so they never take the empty-database import.
     if (patches.length === 0 && (currentRevision === 0 || complete.length === 0)) {
-      this.observedRevision = importCompleteDocument(opened.db, replacements, this.observedRevision)
+      // Validate fragments independently so splicing cannot conceal malformed JSON.
+      for (const replacement of replacements) {
+        prepareProfileStateDomainMutation(replacement)
+      }
+      this.observedRevision = importProfileStateFragments(opened.db, replacements, {
+        expectedRevision: this.observedRevision
+      })
       return
     }
     this.observedRevision = writeProfileStateDomains(opened.db, {
