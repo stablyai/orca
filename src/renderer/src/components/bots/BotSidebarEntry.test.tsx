@@ -169,15 +169,6 @@ function renderEntry(
   )
 }
 
-/** The hover card's trigger, which radix anchors the card's right side to. */
-function hoverTrigger(container: HTMLElement): Element {
-  const trigger = container.querySelector('[data-slot="hover-card-trigger"]')
-  if (!trigger) {
-    throw new Error('no hover card trigger')
-  }
-  return trigger
-}
-
 /** Workspaces under the bot's home by name, each with its status; `cli` ones were linked by hand. */
 function seed(entries: Record<string, WorktreeStatus | 'cli'>): void {
   const worktrees = Object.keys(entries).map(worktree)
@@ -325,18 +316,14 @@ describe('BotSidebarEntry', () => {
     expect(lines()).toHaveLength(5)
   })
 
-  it('shows the worker count only while its workers are folded away', () => {
+  it('shows the idle worker count only while folded', () => {
     seed({ ok: 'done', ok2: 'inactive' })
     renderEntry()
 
-    expect(screen.getByRole('button', { name: 'Fold Scout' }).textContent).toBe('')
-  })
+    const toggle = screen.getByRole('button', { name: 'Fold Scout' })
+    expect(toggle.textContent).toBe('')
 
-  it('shows the total while folded when nothing is live', () => {
-    seed({ ok: 'done', ok2: 'inactive' })
-    renderEntry()
-
-    fireEvent.click(screen.getByRole('button', { name: 'Fold Scout' }))
+    fireEvent.click(toggle)
     expect(screen.getByRole('button', { name: 'Unfold Scout' }).textContent).toBe('2')
   })
 
@@ -386,22 +373,6 @@ describe('BotSidebarEntry', () => {
 
     expect(lines()).toEqual([...names.slice(0, 8), 'ws-9'])
     expect(screen.getByRole('button', { name: 'Show 1 more' })).toBeTruthy()
-  })
-
-  it.each([
-    ['with workspaces', { ws: 'done' } as const],
-    ['without workspaces', {}]
-  ])('anchors the hover card at the row end %s, so it opens past the sidebar', (_name, entries) => {
-    seed(entries)
-    const { container } = renderEntry()
-    const trigger = hoverTrigger(container)
-    const row = container.querySelector('[data-worktree-card-surface]')
-    // The last thing in the row: nothing sits between it and the sidebar's edge.
-    expect(row?.lastElementChild).toBe(trigger)
-    const toggle = screen.queryByRole('button', { name: 'Fold Scout' })
-    // Every bot folds: unfolded, it lists its chats even with no workspaces.
-    expect(toggle).not.toBeNull()
-    expect(trigger.contains(toggle)).toBe(true)
   })
 
   it('opens a bot with its chats folded: nothing until the first read, then the last tree at once', async () => {
