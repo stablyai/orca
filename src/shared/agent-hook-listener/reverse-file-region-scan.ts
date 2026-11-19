@@ -55,14 +55,10 @@ export function scanFileRegionsBackward<T>(
 /** The async twin, for callers on the event loop: same regions, same budget, same visit order. */
 export async function scanFileRegionsBackwardAsync<T>(
   filePath: string,
-  /** `floor`: an earlier scan already searched the whole lines before this byte; stop there, but
-   *  finish a line that crosses it. */
-  limits: { chunkBytes: number; maxScanBytes: number; floor?: number },
+  limits: { chunkBytes: number; maxScanBytes: number },
   visit: (region: Buffer, regionPosition: number) => T | undefined,
   /** Checked before each read; a superseded scan stops instead of reading on. */
-  keepReading: () => boolean = () => true,
-  /** A scan that couldn't open or read the file, as opposed to one that found nothing. */
-  onError?: () => void
+  keepReading: () => boolean = () => true
 ): Promise<T | undefined> {
   let handle: Awaited<ReturnType<typeof open>> | undefined
   try {
@@ -71,14 +67,7 @@ export async function scanFileRegionsBackwardAsync<T>(
     const carryChunks: Buffer[] = []
     let bytesRead = 0
     let scanEnd = size
-    const floor = limits.floor ?? 0
-    const carriedLineEnd = () => carryChunks.reduce((end, chunk) => end + chunk.length, scanEnd)
-    while (
-      scanEnd > 0 &&
-      (scanEnd > floor || carriedLineEnd() > floor) &&
-      bytesRead < limits.maxScanBytes &&
-      keepReading()
-    ) {
+    while (scanEnd > 0 && bytesRead < limits.maxScanBytes && keepReading()) {
       const chunkSize = Math.min(scanEnd, limits.chunkBytes, limits.maxScanBytes - bytesRead)
       const position = scanEnd - chunkSize
       const buffer = Buffer.alloc(chunkSize)
@@ -95,9 +84,8 @@ export async function scanFileRegionsBackwardAsync<T>(
         }
         filled += read
       }
+      // Short reads mean the file shrank; earlier block positions no longer align.
       if (filled < chunkSize) {
-        // The file shrank mid-scan: report it so a retry reads in full rather than trusting its size.
-        onError?.()
         return undefined
       }
       bytesRead += filled
@@ -112,7 +100,6 @@ export async function scanFileRegionsBackwardAsync<T>(
     }
     return undefined
   } catch {
-    onError?.()
     return undefined
   } finally {
     await handle?.close().catch(() => {})

@@ -137,11 +137,11 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHook
           return
         }
         await this.checkHookOwner(source, aliasedBody)
-        // Why: rollout reads stay off the main thread; a slow open on Windows froze the window (#43539).
-        const prefetch =
-          source === 'codex'
-            ? await this.codexRolloutPrefetcher.prefetch(this.state, aliasedBody)
-            : undefined
+        // Why: rollout and transcript reads stay off the main thread; a slow open froze Windows (#43539).
+        const prefetch = await this.hookPrefetchQueue.prefetch(aliasedBody, () =>
+          this.prefetchHookReads(source, aliasedBody, isStatusCurrent)
+        )
+        const { rollout, stopReply } = prefetch.value
         let toolCallOwner: NormalizedLocalHook['event'] = null
         try {
           if (!isStatusCurrent()) {
@@ -149,11 +149,12 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHook
             res.end()
             return
           }
-          toolCallOwner = withPrefetchedRolloutReads(prefetch?.reads, () =>
-            this.ingestLocalHook(source, aliasedBody)
+          toolCallOwner = withPrefetchedRolloutReads(rollout, () =>
+            this.ingestLocalHook(source, aliasedBody, stopReply)
           )
         } finally {
-          prefetch?.release()
+          rollout?.batch.release()
+          prefetch.release()
         }
         await this.respondToHook(req, res, source, aliasedBody, toolCallOwner)
       } catch (error) {

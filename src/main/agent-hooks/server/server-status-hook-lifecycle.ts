@@ -52,6 +52,13 @@ export abstract class AgentHookServerStatusHookLifecycle extends AgentHookServer
     }
   }
 
+  protected clearAllAssistantMessageRetries(): void {
+    for (const timer of this.assistantMessageRetryTimers.values()) {
+      clearTimeout(timer)
+    }
+    this.assistantMessageRetryTimers.clear()
+  }
+
   protected initializeStatusHookOwner(): Promise<void> {
     this.statusHookInitialization ??= this.loadStatusHookOwner().finally(() => {
       this.statusHookInitialization = null

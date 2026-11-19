@@ -6,9 +6,9 @@ import { agentProviderSessionsEqual } from '../../../shared/agent-session/lifecy
 import { pickParsedAgentStatusPayload } from '../../../shared/agent-status/contracts/agent-status-types'
 import type { EnrichedAgentHookEventPayload } from './server-types'
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
-import { AgentHookServerIngestNormalization } from './server-ingest-normalization'
+import { AgentHookServerIngestSpool } from './server-ingest-spool'
 
-export abstract class AgentHookServerIngestLaunch extends AgentHookServerIngestNormalization {
+export abstract class AgentHookServerIngestLaunch extends AgentHookServerIngestSpool {
   /** Seed resume identity before the first hook; Codex SessionStart waits for the first turn (#10923). */
   recordLaunchResumeIdentity(event: LaunchResumeIdentityEvent): void {
     const paneKey = this.resolvePaneKeyAlias(event.paneKey.trim())

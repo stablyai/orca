@@ -6,10 +6,10 @@ import type {
   AgentHookAuthorityEvidence,
   EnrichedAgentHookEventPayload
 } from './server-types'
-import { AgentHookServerStopTranscriptReply } from './server-stop-transcript-reply'
+import { AgentHookServerStatusRetries } from './server-status-retries'
 import { authorityCommitmentsMatch } from './server-persistence-validation'
 
-export abstract class AgentHookServerAuthorityEvidence extends AgentHookServerStopTranscriptReply {
+export abstract class AgentHookServerAuthorityEvidence extends AgentHookServerStatusRetries {
   attestCompatibilityAuthority(candidate: {
     paneKey: string
     launchTokenHash: string

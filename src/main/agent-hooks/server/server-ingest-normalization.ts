@@ -5,38 +5,33 @@ import {
 import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { AgentHookAttributionDiagnostics } from '../../../shared/agent-hook-listener/state/agent-hook-attribution-diagnostics'
 import {
-  buildSpoolHookBody,
-  type SpoolRecord
-} from '../../../shared/agent-hook-listener/transport/agent-hook-spool'
-import {
   checkHookOwnerPresence,
   restateHookRoot
 } from '../../../shared/agent-hook-listener/presence/agent-hook-owner-presence'
 import { normalizeHookPayload } from '../../../shared/agent-hook-listener/normalization/normalize-hook-payload'
-import { withStopTranscriptReadsSkipped } from '../../../shared/agent-hook-listener/transcript-lines'
 import {
-  isAgentHookSource,
-  type AgentHookSource
-} from '../../../shared/agent-hook-listener/transport/agent-hook-relay'
+  type PrefetchedStopReply,
+  withPrefetchedStopReply
+} from '../../../shared/agent-hook-listener/transcript-lines'
+import type { AgentHookSource } from '../../../shared/agent-hook-listener/transport/agent-hook-relay'
 import {
   bindOpenCodeTuiSession,
   isOpenCodeSharedServerPost
 } from '../../../shared/agent-hook-listener/opencode-session-registry'
-import type { EnrichedAgentHookEventPayload, NormalizedLocalHook } from './server-types'
+import type {
+  EnrichedAgentHookEventPayload,
+  NormalizedLocalHook,
+  PrefetchedHookReads
+} from './server-types'
 import { AgentHookServerTmuxStatus } from './server-tmux-status'
 import { getClaudeObservedConfigDirs } from '../../claude-accounts/profiles/routing/claude-profile-installed-router'
 
-import {
-  type PrefetchedRolloutReads,
-  withPrefetchedRolloutReads
-} from '../../../shared/agent-hook-listener/providers/codex/codex-rollout-prefetch-scope'
-import {
-  CodexHookRolloutPrefetcher,
-  prefetchCodexHookRolloutReadsWithin
-} from '../../../shared/agent-hook-listener/providers/codex/codex-hook-rollout-prefetch'
+import { prefetchCodexHookRolloutReadsWithin } from '../../../shared/agent-hook-listener/providers/codex/codex-hook-rollout-prefetch'
+import { HookPrefetchQueue } from '../../../shared/agent-hook-listener/hook-prefetch-queue'
+import { prefetchStopReply } from './stop-reply-prefetch'
 
 export abstract class AgentHookServerIngestNormalization extends AgentHookServerTmuxStatus {
-  protected readonly codexRolloutPrefetcher = new CodexHookRolloutPrefetcher()
+  protected readonly hookPrefetchQueue = new HookPrefetchQueue()
 
   protected readonly attributionDiagnostics = new AgentHookAttributionDiagnostics()
   /** Panes whose owner an undecided hook challenged: until that hook is admitted or refused, the
@@ -125,18 +120,34 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
     }
   }
 
-  /** Never scans a transcript on the event loop: a skipped Stop-text read comes back as a path. */
+  /** Reads off the event loop what this hook's normalize would: Codex rollouts, or a textless Stop's reply. */
+  protected async prefetchHookReads(
+    source: AgentHookSource,
+    body: unknown,
+    keepReading: () => boolean,
+    isReplay = false
+  ): Promise<PrefetchedHookReads> {
+    if (source === 'codex') {
+      return { rollout: await prefetchCodexHookRolloutReadsWithin(this.state, body) }
+    }
+    // A replayed transcript has long since flushed; one read is enough.
+    return {
+      stopReply: await prefetchStopReply(source, body, keepReading, isReplay ? 1 : undefined)
+    }
+  }
+
+  /** Never scans a transcript on the event loop: a textless Stop takes the reply prefetched for it. */
   protected normalizeLocalHookPayload(
     source: AgentHookSource,
     body: unknown,
-    isReplay = false
+    isReplay = false,
+    stopReply: PrefetchedStopReply = {}
   ): NormalizedLocalHook {
-    const { value, skipped } = withStopTranscriptReadsSkipped(() =>
+    const value = withPrefetchedStopReply(stopReply, () =>
       this.normalizeLocalHookPayloadNow(source, body, isReplay)
     )
     retainTmuxHookWriterTopology(value.event, body)
-    const stopTranscriptPath = skipped.at(-1)
-    return stopTranscriptPath ? { ...value, stopTranscriptPath } : value
+    return value
   }
 
   private normalizeLocalHookPayloadNow(
@@ -201,9 +212,10 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
   /** Normalizes and applies one local hook; returns the row that owns its tool call, if any. */
   protected ingestLocalHook(
     source: AgentHookSource,
-    aliasedBody: unknown
+    aliasedBody: unknown,
+    stopReply?: PrefetchedStopReply
   ): NormalizedLocalHook['event'] {
-    const normalized = this.normalizeLocalHookPayload(source, aliasedBody)
+    const normalized = this.normalizeLocalHookPayload(source, aliasedBody, false, stopReply)
     if (source === 'muse' && !normalized.event) {
       this.rearmIgnoredMuseHook(aliasedBody)
     }
@@ -242,83 +254,17 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
       }
       this.recordCurrentAuthorityObservation(event)
       toolCallOwner = event
-      const enriched = this.applyLocalHookAndReply(source, aliasedBody, event, normalized)
+      const rowBefore = this.state.lastStatusByPaneKey.get(event.paneKey)
+      const enriched = this.applyObservedLocalHook(event, normalized.onAccepted)
+      // A refused hook must not retry onto the row it lost to; a prefetched reply already retried.
+      if (enriched && enriched !== rowBefore && !stopReply) {
+        this.scheduleAssistantMessageRetry(source, aliasedBody, enriched)
+      }
       if (enriched) {
         this.checkAgentPresenceAfterHook(event, enriched)
         this.scheduleTranscriptPoll(source, aliasedBody, enriched)
       }
     }
     return toolCallOwner
-  }
-
-  // Spool records are durable replay evidence, not a live observation.
-  protected ingestSpoolRecord(record: SpoolRecord, answerBy?: number): Promise<void> | void {
-    if (!isAgentHookSource(record.source)) {
-      return
-    }
-    const token = this.token
-    const statusHookGeneration = this.statusHookGeneration
-    const apply = (reads?: PrefetchedRolloutReads) => {
-      try {
-        if (
-          !this.statusHooksEnabled ||
-          this.token !== token ||
-          this.statusHookGeneration !== statusHookGeneration
-        ) {
-          throw new Error('Status hook spool replay interrupted')
-        }
-        withPrefetchedRolloutReads(reads, () => this.applySpoolHook(record, body))
-      } finally {
-        reads?.batch.release()
-      }
-    }
-    const body = this.normalizeHookBodyPaneKeyAlias(buildSpoolHookBody(record))
-    const pending = this.checkHookOwner(record.source, body, answerBy)
-    if (record.source === 'codex') {
-      // Replayed Codex hooks read live rollouts too; keep those opens off the main thread (#43539).
-      return Promise.resolve(pending)
-        .then(() => prefetchCodexHookRolloutReadsWithin(this.state, body))
-        .then(apply)
-    }
-    return pending ? pending.then(() => apply()) : apply()
-  }
-
-  private applySpoolHook(record: SpoolRecord, body: unknown): void {
-    if (!isAgentHookSource(record.source)) {
-      return
-    }
-    const normalized = this.normalizeLocalHookPayload(record.source, body, true)
-    if (!normalized.event) {
-      return
-    }
-    const exit = this.agentExitedAtByPaneKey.get(this.resolvePaneKeyAlias(normalized.event.paneKey))
-    // Whole-second spool timestamps prove pre-exit ownership only with a full second of separation.
-    if (exit && record.receivedAt + 1000 <= exit.at) {
-      return
-    }
-    const replay = { ...normalized.event, isReplay: true as const }
-    const statusDisposition = this.getAgentStatusDisposition(replay.paneKey, {
-      source: record.source,
-      hookEventName: replay.hookEventName,
-      isReplay: true,
-      hasExplicitPrompt: replay.hasExplicitPrompt,
-      launchToken: replay.launchToken
-    })
-    if (statusDisposition === 'suppress') {
-      return
-    }
-    const event = statusDisposition === 'restart' ? { ...replay, launchToken: undefined } : replay
-    if (statusDisposition === 'restart') {
-      this.observations.rebind(event.paneKey)
-    }
-    this.recordCurrentAuthorityObservation(event)
-    const enriched = this.applyReplayedHookAndReply(event, normalized, record.receivedAt)
-    // Replay defers children whose rollout path is unresolved; only the poll finds and reads them.
-    if (enriched && record.source === 'codex') {
-      this.requestReplayTranscriptPoll(body, enriched)
-    }
-    if (event.payload.state !== 'done') {
-      this.withdrawReplayObservation(this.resolvePaneKeyAlias(event.paneKey))
-    }
   }
 }

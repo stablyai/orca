@@ -36,31 +36,28 @@ export function extractUserPromptTextFromLine(line: string): string | undefined 
   return undefined
 }
 
-let skippedStopTranscripts: string[] | null = null
+/** A textless Stop's reply, read off the event loop before normalize; no `text` when none was found. */
+export type PrefetchedStopReply = { readonly transcriptPath?: string; readonly text?: string }
 
-/**
- * Runs one synchronous normalize with the Stop-text transcript fallback skipped and returns the
- * transcripts it skipped, so a host on the event loop can read them asynchronously afterwards.
- */
-export function withStopTranscriptReadsSkipped<T>(normalize: () => T): {
-  value: T
-  skipped: readonly string[]
-} {
-  const outer = skippedStopTranscripts
-  const skipped: string[] = []
-  skippedStopTranscripts = skipped
+let prefetchedStopReply: PrefetchedStopReply | undefined
+
+/** Runs one normalize on the event loop: its Stop-text fallback takes `reply` and never reads a transcript. */
+export function withPrefetchedStopReply<T>(reply: PrefetchedStopReply, normalize: () => T): T {
+  const outer = prefetchedStopReply
+  prefetchedStopReply = reply
   try {
-    return { value: normalize(), skipped }
+    return normalize()
   } finally {
-    skippedStopTranscripts = outer
+    prefetchedStopReply = outer
   }
 }
 
-/** Stop-text fallback when the hook carries none; skipped inside withStopTranscriptReadsSkipped. */
+/** Stop-text fallback when the hook carries none; inside withPrefetchedStopReply it takes the prefetched reply. */
 export function readLastAssistantFromTranscript(transcriptPath: unknown): string | undefined {
-  if (skippedStopTranscripts && typeof transcriptPath === 'string' && transcriptPath.length > 0) {
-    skippedStopTranscripts.push(transcriptPath)
-    return undefined
+  if (prefetchedStopReply) {
+    return transcriptPath === prefetchedStopReply.transcriptPath
+      ? prefetchedStopReply.text
+      : undefined
   }
   return readLastAssistantFromTranscriptInline(transcriptPath)
 }

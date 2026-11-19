@@ -10,6 +10,8 @@ import type { AgentKind } from '../../../shared/telemetry/schemas/telemetry-prop
 import type { LegacyPaneKeyAliasEntry } from '../../../shared/orca-profiles/persisted-state-types'
 import type { CodexRemoteRosterAuthority } from '../../../shared/agent-hook-listener/providers/codex/codex-state'
 import type { AgentHookSource } from '../../../shared/agent-hook-listener/transport/agent-hook-relay'
+import type { PrefetchedRolloutReads } from '../../../shared/agent-hook-listener/providers/codex/codex-rollout-prefetch-scope'
+import type { PrefetchedStopReply } from '../../../shared/agent-hook-listener/transcript-lines'
 
 export type HookServerStartOptions = {
   env?: string
@@ -181,8 +183,12 @@ export type AgentPromptSentDedupeEntry = {
 export type NormalizedLocalHook = {
   event: AgentHookEventPayload | null
   onAccepted?: () => void
-  /** A Stop without its text whose transcript normalize skipped; read it off the event loop. */
-  stopTranscriptPath?: string
+}
+
+/** What a hook's normalize reads, read off the event loop before it runs. */
+export type PrefetchedHookReads = {
+  rollout?: PrefetchedRolloutReads
+  stopReply?: PrefetchedStopReply
 }
 
 export type ServerStatusLineListener = ((event: ClaudeStatusLineRateLimits) => void) | null
