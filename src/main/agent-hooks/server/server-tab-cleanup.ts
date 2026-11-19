@@ -32,7 +32,7 @@ export abstract class AgentHookServerTabCleanup extends AgentHookServerCleanup {
       return
     }
     const identity = this.paneAgentIdentity(paneKey)
-    const shared = identity?.processTopology === 'shared'
+    const shared = identity?.executionHost === 'shared'
     // A command mark can come from a shell nested in a live agent; one with no process to probe
     // ends only on the host's word that the pane's shell is alone.
     const verifiable = this.hasVerifiableAgentProcess(paneKey)
@@ -104,7 +104,7 @@ export abstract class AgentHookServerTabCleanup extends AgentHookServerCleanup {
     // An ended agent needs no proof.
     const confirmedExit =
       identity?.ended === false &&
-      identity.processTopology !== 'shared' &&
+      identity.executionHost !== 'shared' &&
       agent &&
       (await this.terminalPaneLifecycle?.confirmProcessExit?.(resolved, agent))
     if (this.state.lastStatusByPaneKey.get(resolved) !== row) {

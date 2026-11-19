@@ -52,7 +52,7 @@ export function installMainWindowAgentStatusListeners(options: MainWindowAgentSt
     }
     const launchConfig = state.runtime?.getLaunchStatementForPaneKey(paneKey, payload.agentType)
     // A tmux host's conversation reaches the window as shared so it leaves no resume checkpoint.
-    const shared = cliWriterTopology(row) === 'shared' ? { sharedHost: true as const } : {}
+    const shared = cliWriterTopology(row) === 'shared' ? { executionHost: 'shared' as const } : {}
     if (providerSessionOnly) {
       // An ended agent's retained identity is no conversation for the window to checkpoint.
       if (agentPresence?.ended) {

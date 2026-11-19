@@ -23,7 +23,7 @@ import type { WorkspaceSessionState } from '../../../../shared/workspace-session
 /** The part of a pane's previous status the next one may inherit its provider session from. */
 export type PreviousHookStatus = Pick<
   ResumeRecordStatus,
-  'agentType' | 'state' | 'providerSession' | 'sharedHost'
+  'agentType' | 'state' | 'providerSession' | 'executionHost'
 >
 
 /** Main's word on a pane's launch as `agent`: its note, null for none, undefined when main can't tell. */
@@ -83,7 +83,9 @@ export function resumeStatusFromHookRow(
     interrupted: row.interrupted,
     ...(row.mainAgent ? { mainAgent: row.mainAgent } : {}),
     // A status that reuses the pane's session keeps that session's tmux host.
-    ...(row.sharedHost || (reused && previous.sharedHost) ? { sharedHost: true as const } : {}),
+    ...(row.executionHost === 'shared' || (reused && previous.executionHost === 'shared')
+      ? { executionHost: 'shared' as const }
+      : {}),
     ...(row.worktreeId ? { worktreeId: row.worktreeId } : {})
   }
 }

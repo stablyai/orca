@@ -142,7 +142,7 @@ export abstract class AgentHookServerCleanup extends AgentHookServerPaneSleep {
         // outlives the command that finished at the pane's shell.
         (options?.confirmedExit &&
         (!previous?.agentPresence?.process || previous.connectionId !== null) &&
-        identityOf()?.processTopology !== 'shared'
+        identityOf()?.executionHost !== 'shared'
           ? previous
             ? endedPresenceOf(previous)
             : { agent: identityOf()?.status.agentType ?? 'unknown', ended: true }

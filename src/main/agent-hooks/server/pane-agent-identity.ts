@@ -10,7 +10,7 @@ export type PaneAgentIdentity = {
   /** Positive local process observation; shell foreground does not end a stopped job. */
   suspended?: true
   /** Shared servers survive the pane; their conversation must not be launched again on wake. */
-  processTopology?: 'pane-owned' | 'shared' | 'unverifiable'
+  executionHost?: 'pane-owned' | 'shared' | 'unverifiable'
 }
 
 /** The one rule for which agent conversation a pane holds: its hook row in any at-rest shape,

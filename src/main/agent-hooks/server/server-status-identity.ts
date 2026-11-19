@@ -71,7 +71,7 @@ export function toAgentStatusIpcPayload(
     ...(entry.turnStartedAt !== undefined ? { turnStartedAt: entry.turnStartedAt } : {}),
     ...pickHostTurnEnd(entry),
     ...(entry.providerSession ? { providerSession: entry.providerSession } : {}),
-    ...(cliWriterTopology(entry) === 'shared' ? { sharedHost: true as const } : {}),
+    ...(cliWriterTopology(entry) === 'shared' ? { executionHost: 'shared' as const } : {}),
     ...(entry.providerSessionOnly ? { providerSessionOnly: true } : {}),
     ...(entry.promptInteractionKey ? { promptInteractionKey: entry.promptInteractionKey } : {}),
     ...(entry.restoredUnconfirmed ? { restoredUnconfirmed: true } : {}),

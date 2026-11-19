@@ -29,7 +29,7 @@ export type ResumeRecordStatus = Pick<
   | 'terminalTitle'
   | 'lastAssistantMessage'
   | 'terminalResumeEligible'
-  | 'sharedHost'
+  | 'executionHost'
   | 'interrupted'
   | 'mainAgent'
   | 'worktreeId'
@@ -58,7 +58,7 @@ export function resumeRecordFromStatus(args: {
   const agent = args.entry.agentType
   if (
     args.entry.terminalResumeEligible === false ||
-    args.entry.sharedHost ||
+    args.entry.executionHost === 'shared' ||
     !isResumableTuiAgent(agent) ||
     !args.entry.providerSession
   ) {

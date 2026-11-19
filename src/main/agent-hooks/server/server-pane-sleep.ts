@@ -36,7 +36,7 @@ export abstract class AgentHookServerPaneSleep extends AgentHookServerAuthorityF
       | EnrichedAgentHookEventPayload
       | undefined
     // Only a live or tmux row can be shared; a saved record never is, so a plain spawn reads none.
-    if (this.paneAgentIdentity(resolved, null)?.processTopology === 'shared') {
+    if (this.paneAgentIdentity(resolved, null)?.executionHost === 'shared') {
       this.dropStatusEntry(resolved, { preserveResumeIdentity: false })
       this.emitPaneStatusCleared({ paneKey: resolved })
       return
@@ -127,7 +127,7 @@ export abstract class AgentHookServerPaneSleep extends AgentHookServerAuthorityF
     }
     // Keep shared ownership through provider cleanup, so later exit reconciliation cannot recover
     // the stale saved record as a pane-owned agent and falsely interrupt its surviving process.
-    if (identity.processTopology === 'shared') {
+    if (identity.executionHost === 'shared') {
       return true
     }
     const {

@@ -30,7 +30,7 @@ it('tells the window that a tmux-hosted conversation is shared, so it writes no 
   })
   expect(send).toHaveBeenCalledWith(
     'agentStatus:set',
-    expect.objectContaining({ paneKey: 'tab-1:pane-1', sharedHost: true })
+    expect.objectContaining({ paneKey: 'tab-1:pane-1', executionHost: 'shared' })
   )
 })
 

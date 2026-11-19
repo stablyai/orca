@@ -82,7 +82,7 @@ export async function captureWorktreeSleepResumeRecords(args: {
           })
       if (
         identity?.ended ||
-        identity?.processTopology === 'shared' ||
+        identity?.executionHost === 'shared' ||
         (presence === 'exited' && !identity?.status.paneSleep)
       ) {
         retiredPaneKeys.push(paneKey)

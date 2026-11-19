@@ -5,7 +5,7 @@ import { applyProviderSessionOnlyUpdate } from './agent-status-partial-updates'
 it.each([
   ['a pane-owned conversation leaves a checkpoint', false, true],
   ['a tmux-hosted conversation leaves none', true, false]
-])('identity-only status of %s', (_, sharedHost, recorded) => {
+])('identity-only status of %s', (_, shared, recorded) => {
   const store = createTestStore()
   const paneKey = 'tab-1:11111111-1111-4111-8111-111111111111'
   applyProviderSessionOnlyUpdate({
@@ -23,7 +23,7 @@ it.each([
       receivedAt: 200,
       stateStartedAt: 150,
       providerSessionOnly: true,
-      ...(sharedHost ? { sharedHost: true as const } : {})
+      ...(shared ? { executionHost: 'shared' as const } : {})
     },
     paneKey,
     routing: { tabId: 'tab-1', worktreeId: 'wt-1', connectionId: null }

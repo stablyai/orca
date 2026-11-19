@@ -99,7 +99,7 @@ describe('restoring a pane its host recorded an agent in', () => {
         identity: {
           status: codexRow(),
           ended: ownership === 'ended',
-          processTopology: ownership === 'shared' ? 'shared' : 'pane-owned'
+          executionHost: ownership === 'shared' ? 'shared' : 'pane-owned'
         }
       })
       await restore(runtime)

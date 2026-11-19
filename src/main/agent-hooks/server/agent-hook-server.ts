@@ -119,7 +119,7 @@ export class AgentHookServer extends AgentHookServerLifecycle {
     const identity = this.paneAgentIdentity(resolved)
     return (
       identity?.ended === false &&
-      identity.processTopology !== 'shared' &&
+      identity.executionHost !== 'shared' &&
       !this.hasVerifiableAgentProcess(resolved)
     )
   }

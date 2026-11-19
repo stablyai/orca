@@ -51,7 +51,7 @@ export function applyProviderSessionOnlyUpdate(args: {
   const { store, batch, data, paneKey, routing } = args
   const agent = RESUMABLE_TUI_AGENTS.find((candidate) => candidate === data.agentType)
   // A tmux host's conversation outlives the pane, so its identity leaves no pane checkpoint.
-  if (!data.providerSession || !agent || data.sharedHost) {
+  if (!data.providerSession || !agent || data.executionHost === 'shared') {
     return 'dropped'
   }
   const update: AgentProviderSessionUpdate = {

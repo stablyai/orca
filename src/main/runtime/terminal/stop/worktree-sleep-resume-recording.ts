@@ -277,7 +277,7 @@ export abstract class OrcaRuntimeWithWorktreeSleepResumeRecording extends OrcaRu
         paneKey,
         session.sleepingAgentSessionsByPaneKey?.[paneKey]
       )
-      if (!identity || identity.ended || identity.processTopology === 'shared') {
+      if (!identity || identity.ended || identity.executionHost === 'shared') {
         return []
       }
       const status = resumeStatusFromHookRow(
