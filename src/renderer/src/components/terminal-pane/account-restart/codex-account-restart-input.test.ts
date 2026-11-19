@@ -124,10 +124,11 @@ it.each(['notice before typing', 'notice before flush'] as const)(
   async (when) => {
     installIpcPtyWindow(window, {})
     const spawn = Promise.withResolvers<{ id: string; incarnationId: string; isReattach: true }>()
-    vi.mocked(window.api.pty.spawn).mockReturnValue(spawn.promise as never)
+    vi.mocked(window.api.pty.spawn).mockReturnValue(spawn.promise)
     if (when === 'notice before flush') {
       useAppStore.setState({ codexRestartNoticeByPtyId: {} })
     }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these options read only the supplied pane, startup and input callbacks.
     const options = buildPaneTransportOptions({
       deps: {
         tabId: 'tab',
