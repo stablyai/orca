@@ -192,7 +192,7 @@ export function useAiVaultSessionRefresh(
         refreshIdRef.current === refreshId &&
         scanKey === currentScanScopeKey() &&
         associationCurrent()
-      // Why: the finished list may wait for typing to pause; the outstanding flag clears in the commit that shows it.
+      // Why: the finished list may wait for typing to pause; loading and the outstanding flag clear in the commit that shows it.
       let published = false
       try {
         const previous = conditionalSnapshotRef.current
@@ -218,6 +218,7 @@ export function useAiVaultSessionRefresh(
             return
           }
           applyListed(list, true)
+          setLoading(false)
           // A queued foreground request keeps the flag until its own list lands.
           if (!(pendingRefreshRef.current && pendingForegroundRef.current)) {
             setRefreshing(false)
@@ -237,7 +238,9 @@ export function useAiVaultSessionRefresh(
       } finally {
         refreshInFlightRef.current = false
         if (mountedRef.current && refreshIdRef.current === refreshId) {
-          setLoading(false)
+          if (!published) {
+            setLoading(false)
+          }
           // A queued foreground request is still outstanding until its own refresh settles.
           const queuedForeground = pendingRefreshRef.current && pendingForegroundRef.current
           if (queuedForeground || !published) {
