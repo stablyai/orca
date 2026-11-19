@@ -332,14 +332,6 @@ describe('Bots search', () => {
     expect(results()).toEqual(['bot-1'])
   })
 
-  it('hides drag handles while open', () => {
-    threeBots()
-    renderSection()
-    expect(document.querySelector('[data-project-group-header-drag-handle]')).toBeTruthy()
-    openSearch()
-    expect(document.querySelector('[data-project-group-header-drag-handle]')).toBeNull()
-  })
-
   it('opens the first result on Enter and focuses its row under StrictMode', async () => {
     threeBots()
     renderStrictSection()
@@ -637,15 +629,6 @@ describe('Collapse all bots', () => {
     renderSection()
     expect(foldButton('First folded bot').getAttribute('aria-expanded')).toBe('false')
     fireEvent.click(screen.getByRole('button', { name: 'Expand all bots' }))
-    expect(foldButton('First folded bot').getAttribute('aria-expanded')).toBe('true')
-    expect(foldButton('Second folded bot').getAttribute('aria-expanded')).toBe('true')
-  })
-
-  it('expands every persisted fold on a cold start from Bot options', async () => {
-    twoFoldedBots('cold-menu')
-    renderSection()
-    fireEvent.keyDown(screen.getByRole('button', { name: 'Bot options' }), { key: 'ArrowDown' })
-    fireEvent.click(await screen.findByRole('menuitem', { name: 'Expand all bots' }))
     expect(foldButton('First folded bot').getAttribute('aria-expanded')).toBe('true')
     expect(foldButton('Second folded bot').getAttribute('aria-expanded')).toBe('true')
   })

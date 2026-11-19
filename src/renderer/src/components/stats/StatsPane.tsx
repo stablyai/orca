@@ -15,6 +15,8 @@ import {
   type StatsHost
 } from './StatsHostScope'
 import { usageHostKey } from '../../store/slices/usage/usage-host'
+import type { StatsHostUsageSupport } from '../../store/slices/process-stats/stats'
+import { ClaudeUsageLoadingState } from './ClaudeUsageLoadingState'
 import { Button } from '../ui/button'
 import {
   DropdownMenu,
@@ -119,12 +121,12 @@ const LOCAL_STATS_HOST: StatsHost = { target: { kind: 'local' }, name: null }
 export function StatsPane({ host = LOCAL_STATS_HOST }: { host?: StatsHost }): React.JSX.Element {
   return (
     <StatsHostScope host={host}>
-      {(usageUnsupported, contactGeneration) => (
+      {(usageSupport, view) => (
         <StatsPaneContent
           key={usageHostKey(host.target)}
           hostName={host.name}
-          usageUnsupported={usageUnsupported}
-          contactGeneration={contactGeneration}
+          usageSupport={usageSupport}
+          view={view}
         />
       )}
     </StatsHostScope>
@@ -133,13 +135,13 @@ export function StatsPane({ host = LOCAL_STATS_HOST }: { host?: StatsHost }): Re
 
 function StatsPaneContent({
   hostName,
-  usageUnsupported,
-  contactGeneration
+  usageSupport,
+  view
 }: {
   hostName: string | null
-  usageUnsupported: boolean
-  /** Bumps when a remote host's contact returns, so its reads start again. */
-  contactGeneration: number
+  usageSupport: StatsHostUsageSupport
+  /** The store's view of this host; a new one (contact returned) reads it again. */
+  view: number
 }): React.JSX.Element {
   const t = useTranslate()
   const intlLocale = useIntlLocale()
@@ -160,7 +162,7 @@ function StatsPaneContent({
 
   useEffect(() => {
     void fetchStatsSummary()
-  }, [contactGeneration, fetchStatsSummary])
+  }, [view, fetchStatsSummary])
 
   return (
     <div className="space-y-5">
@@ -249,8 +251,11 @@ function StatsPaneContent({
         </div>
 
         {/* Mount only the active panel to avoid hidden layout/focus churn jittering the scroll-tracked settings page. */}
-        <div key={contactGeneration}>
-          {usageUnsupported && hostName ? (
+        <div key={view}>
+          {usageSupport === 'checking' ? (
+            // Panes would start reads before the host says whether it can answer them.
+            <ClaudeUsageLoadingState title={activeUsageOption.label} />
+          ) : usageSupport === 'unsupported' && hostName ? (
             <StatsHostTooOldNotice name={hostName} />
           ) : activeUsageTab === 'overview' ? (
             <UsageOverviewPane />

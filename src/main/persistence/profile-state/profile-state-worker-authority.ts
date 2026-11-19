@@ -101,9 +101,9 @@ export class ProfileStateWorkerAuthority implements AsyncProfileStateAuthority {
   }
 
   writeCompleteSerializedDomains(
-    replacements: readonly ProfileStateDomainReplacement[]
+    ...args: Parameters<AsyncProfileStateAuthority['writeCompleteSerializedDomains']>
   ): Promise<void> {
-    return this.run((writer) => writer.writeCompleteSerializedDomains(replacements)).then(() => {})
+    return this.run((writer) => writer.writeCompleteSerializedDomains(...args)).then(() => {})
   }
 
   writeSerializedState(payload: Buffer): Promise<void> {

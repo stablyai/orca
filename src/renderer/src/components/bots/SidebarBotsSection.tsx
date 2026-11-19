@@ -227,9 +227,7 @@ export function SidebarBotsSection({ onOpenBot }: { onOpenBot: () => void }): Re
                 onToggle={search.toggleOpen}
               />
             ) : null}
-            {hasEntries ? (
-              <BotSidebarOptionsMenu collapseAll={searchOpen ? null : collapseAll} />
-            ) : null}
+            {hasEntries ? <BotSidebarOptionsMenu /> : null}
             <DropdownMenu open={newMenuOpen} onOpenChange={setNewMenuOpen}>
               <Tooltip>
                 <TooltipTrigger asChild>

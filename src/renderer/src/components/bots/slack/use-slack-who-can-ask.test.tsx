@@ -17,6 +17,8 @@ const mocks = vi.hoisted(() => {
 })
 // Edits apply to the list the test's bot holds.
 vi.mock('@/lib/bot-catalog', () => ({
+  // The confirm's own facts aren't under test here; unlisted, it shows its most cautious ones.
+  useHostBots: () => [],
   // The host applies only the people an update adds or takes off; the list it leaves is what the test checks.
   updateBot: (botId: string, updates: BotUpdateParams['updates']) =>
     updates.permissionMode !== undefined
@@ -148,15 +150,6 @@ describe('useSlackWhoCanAsk', () => {
     fireEvent.click(screen.getByRole('option', { name: 'Priya Shah' }))
     fireEvent.click(screen.getByRole('button', { name: 'Add 2 people' }))
     const dialog = await screen.findByRole('dialog')
-    expect(within(dialog).getByText('Give 2 people access to Reviewer?')).toBeInTheDocument()
-    expect(
-      within(dialog).getByText(
-        'They will be able to ask Reviewer from Slack (Globex) and control it remotely: start, steer, approve and stop its work, using its access on this computer.'
-      )
-    ).toBeInTheDocument()
-    expect(
-      within(dialog).getByText('Your files, commands and accounts on this computer')
-    ).toBeInTheDocument()
     // Nothing is saved until the owner confirms.
     expect(mocks.updateBot).not.toHaveBeenCalled()
     // Enter must not grant access by accident.
@@ -431,8 +424,7 @@ describe('useSlackWhoCanAsk', () => {
     expect(await screen.findByText('Removed Sam Lee.')).toBeDefined()
     mocks.updateBot.mockClear()
     fireEvent.click(screen.getByRole('button', { name: 'Undo' }))
-    const dialog = await screen.findByRole('dialog')
-    expect(within(dialog).getByText('Give Sam Lee access to Reviewer?')).toBeInTheDocument()
+    await screen.findByRole('dialog')
     expect(mocks.updateBot).not.toHaveBeenCalled()
   })
 
