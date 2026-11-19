@@ -1,15 +1,42 @@
+import { statSync } from 'node:fs'
 import { delimiter, join, win32 } from 'node:path'
-import { existsSync } from 'node:fs'
+
+/** Windows env key casing varies; a blank value is absent, not a search root. */
+function readEnv(env: NodeJS.ProcessEnv, ...names: string[]): string | undefined {
+  const wanted = new Set(names.map((name) => name.toLowerCase()))
+  for (const [key, value] of Object.entries(env)) {
+    if (wanted.has(key.toLowerCase()) && typeof value === 'string' && value.trim()) {
+      return value.trim()
+    }
+  }
+  return undefined
+}
 
 /** Absolute path because service-launched Electron can omit System32 from PATH. */
 export function getSystem32ExePath(exe: string, env: NodeJS.ProcessEnv = process.env): string {
-  const systemRoot = env.SystemRoot?.trim()
+  const systemRoot = readEnv(env, 'SystemRoot', 'windir')
   const root = systemRoot && /^[a-z]:[\\/]/i.test(systemRoot) ? systemRoot : 'C:\\Windows'
   return win32.join(root, 'System32', exe)
 }
 
 export function getRegExePath(env: NodeJS.ProcessEnv = process.env): string {
   return getSystem32ExePath('reg.exe', env)
+}
+
+function isExecutableFile(candidate: string): boolean {
+  try {
+    return statSync(candidate, { throwIfNoEntry: false })?.isFile() ?? false
+  } catch {
+    // Unreadable or malformed PATH entries must not abort resolution.
+    return false
+  }
+}
+
+function unquote(segment: string): string {
+  const value = segment.trim()
+  return value.length >= 2 && value.startsWith('"') && value.endsWith('"')
+    ? value.slice(1, -1)
+    : value
 }
 
 export function resolveWindowsCommand(
@@ -19,19 +46,23 @@ export function resolveWindowsCommand(
   if (process.platform !== 'win32') {
     return command
   }
-  if (/[\\/]/.test(command) || /\.[a-z0-9]+$/i.test(command)) {
+  if (/[\\/]/.test(command)) {
     return command
   }
 
-  const pathEnv = env.PATH ?? env.Path
+  const pathEnv = readEnv(env, 'PATH')
   if (!pathEnv) {
     return command
   }
 
-  for (const directory of pathEnv.split(delimiter).filter(Boolean)) {
+  for (const segment of pathEnv.split(delimiter)) {
+    const directory = unquote(segment)
+    if (!directory) {
+      continue
+    }
     for (const name of [`${command}.cmd`, `${command}.exe`, `${command}.bat`, command]) {
       const candidate = join(directory, name)
-      if (existsSync(candidate)) {
+      if (isExecutableFile(candidate)) {
         return candidate
       }
     }
