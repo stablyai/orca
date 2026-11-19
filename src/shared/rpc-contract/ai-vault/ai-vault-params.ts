@@ -66,6 +66,7 @@ const AiVaultRowResumeParams = z
     historyCatalog: z.boolean().optional(),
     planToken: z.string().uuid().optional(),
     commitToken: z.string().uuid().optional(),
+    commitTimestamp: z.number().int().positive().optional(),
     resumeAccountId: z.string().min(1).max(512).nullable().optional(),
     exactVersion: z.boolean().optional(),
     workspaceId: z.string().min(1).max(8192).optional()

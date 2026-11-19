@@ -101,6 +101,7 @@ export abstract class RateLimitServiceState {
     configDir: string | null
     home: string | undefined
     provenance: string
+    accountId: string | undefined
   } | null = null
   /** Where the applied host-runtime Claude/Codex readings were taken. */
   protected usageReadingAccounts: Partial<

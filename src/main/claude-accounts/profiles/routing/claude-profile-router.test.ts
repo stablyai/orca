@@ -175,7 +175,9 @@ describe('ClaudeProfileRouter', () => {
       provenance: 'system'
     })
     expect(f.router.preparation().envPatch).not.toHaveProperty('CLAUDE_CONFIG_DIR')
-    expect(f.router.terminalEnv()).toEqual({ ORCA_CLAUDE_PROFILE_POINTER: f.router.pointerPath })
+    expect(f.router.terminalEnv()).toMatchObject({
+      ORCA_CLAUDE_PROFILE_POINTER: f.router.pointerPath
+    })
     expect(f.router.routedHome()).toBeNull()
     expect(f.router.routedHome('identity')).toBeNull()
     await expect(claudeRoutedHomeAsync(f.router)).resolves.toBeNull()

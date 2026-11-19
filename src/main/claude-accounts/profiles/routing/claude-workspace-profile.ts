@@ -13,6 +13,10 @@ import type { ClaudeRuntimeAuthPreparation } from '../../runtime-auth/runtime-au
 import type { ClaudeAccountFolder } from '../../runtime-auth-service'
 import type { ClaudeProfileRouter } from './claude-profile-router'
 import {
+  CLAUDE_USAGE_ACCOUNT_ID_ENV,
+  claudeSystemDefaultUsageAccountId
+} from '../../../../shared/agent-accounts/claude/claude-system-default-usage-account'
+import {
   CLAUDE_PROFILE_POINTER_ENV,
   CLAUDE_INJECTED_CONFIG_DIR_ENV
 } from '../../../../shared/agent-accounts/claude/claude-profile-routing'
@@ -56,9 +60,13 @@ export class ClaudeWorkspaceProfiles {
       if (target.runtime === 'wsl' && (!distro || !guestHome)) {
         throw new Error('The WSL system-default Claude home is unavailable.')
       }
+      if (!distro && prepare) {
+        await this.router.environmentReady
+      }
       const configDir = guestHome
         ? posix.join(guestHome, '.claude')
         : this.router.systemDefaultHome()
+      const login = !distro ? this.router.systemDefaultLogin() : null
       return {
         configDir: distro ? toWindowsWslPath(configDir, distro) : configDir,
         runtime: distro ? 'wsl' : 'host',
@@ -66,6 +74,14 @@ export class ClaudeWorkspaceProfiles {
         wslLinuxConfigDir: distro ? configDir : null,
         envPatch: {
           CLAUDE_CONFIG_DIR: configDir,
+          ...(distro
+            ? {}
+            : {
+                [CLAUDE_USAGE_ACCOUNT_ID_ENV]: claudeSystemDefaultUsageAccountId(
+                  login?.email,
+                  login?.organizationUuid
+                )
+              }),
           [CLAUDE_PROFILE_POINTER_ENV]: '',
           [CLAUDE_INJECTED_CONFIG_DIR_ENV]: configDir
         },
@@ -111,6 +127,7 @@ export class ClaudeWorkspaceProfiles {
       envPatch: {
         [CLAUDE_PROFILE_POINTER_ENV]: '',
         CLAUDE_CONFIG_DIR: folder.configDir,
+        ...(!isWsl ? { [CLAUDE_USAGE_ACCOUNT_ID_ENV]: id } : {}),
         [CLAUDE_INJECTED_CONFIG_DIR_ENV]: folder.configDir
       },
       provenance: `profile:${id}${isWsl ? `:wsl:${target.wslDistro}` : ''}`,

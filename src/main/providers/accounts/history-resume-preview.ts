@@ -44,17 +44,22 @@ export async function previewHistoryResume(
         .toReversed()
         .sort((a, b) => b.openedAt - a.openedAt)[0]
   const sessionId = last?.sessionId ?? args.sessionId
-  const source = await verifiedWorkspaceConversation({
-    provider: args.agent,
-    filePath: last?.filePath ?? args.filePath,
-    sessionId,
-    roots: await deps.roots(args.agent)
-  }).catch((error) => {
-    if (last && !args.exactVersion) {
-      return requested
-    }
-    throw error
-  })
+  const source =
+    !last ||
+    historyTranscriptKey(last.provider, last.filePath) ===
+      historyTranscriptKey(args.agent, requested.filePath)
+      ? requested
+      : await verifiedWorkspaceConversation({
+          provider: args.agent,
+          filePath: last.filePath,
+          sessionId,
+          roots: await deps.roots(args.agent)
+        }).catch((error) => {
+          if (!args.exactVersion) {
+            return requested
+          }
+          throw error
+        })
   const sourceSessionId = source === requested ? args.sessionId : sessionId
   const { accounts, workspaceAccountId } = deps.accounts(args.agent, args.workspaceId)
   const lastAccountId = source === requested ? recorded?.accountId : last?.accountId

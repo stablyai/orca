@@ -16,6 +16,7 @@ export type ClaudeStatusLineWindow = {
 export type ClaudeStatusLineRateLimits = {
   /** CLAUDE_CONFIG_DIR of the reporting session; null for system-default sessions. */
   configDir: string | null
+  accountId?: string | null
   fiveHour: ClaudeStatusLineWindow | null
   sevenDay: ClaudeStatusLineWindow | null
 }
@@ -24,23 +25,26 @@ function finiteNumber(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null
+}
+
 function parseWindow(value: unknown): ClaudeStatusLineWindow | null {
-  if (typeof value !== 'object' || value === null) {
+  if (!isRecord(value)) {
     return null
   }
-  const raw = value as { used_percentage?: unknown; utilization?: unknown; resets_at?: unknown }
-  const usedPercentage = finiteNumber(raw.used_percentage)
+  const usedPercentage = finiteNumber(value.used_percentage)
   // Accept OAuth-shaped utilization (0–100) so schema renames degrade without losing the feed.
-  const utilization = usedPercentage === undefined ? finiteNumber(raw.utilization) : undefined
+  const utilization = usedPercentage === undefined ? finiteNumber(value.utilization) : undefined
   if (usedPercentage === undefined && utilization === undefined) {
     return null
   }
   // Accept ISO/string reset values on schema drift instead of dropping parseable timestamps.
   const resetsAt =
-    typeof raw.resets_at === 'number' && Number.isFinite(raw.resets_at)
-      ? raw.resets_at
-      : typeof raw.resets_at === 'string' && raw.resets_at.trim()
-        ? raw.resets_at
+    typeof value.resets_at === 'number' && Number.isFinite(value.resets_at)
+      ? value.resets_at
+      : typeof value.resets_at === 'string' && value.resets_at.trim()
+        ? value.resets_at
         : undefined
   return {
     ...(usedPercentage !== undefined ? { used_percentage: usedPercentage } : {}),
@@ -51,31 +55,31 @@ function parseWindow(value: unknown): ClaudeStatusLineWindow | null {
 
 /** Parse managed statusline form data; null means no usable rate-limit windows. */
 export function parseClaudeStatusLineBody(body: unknown): ClaudeStatusLineRateLimits | null {
-  if (typeof body !== 'object' || body === null) {
+  if (!isRecord(body)) {
     return null
   }
-  const fields = body as { payload?: unknown; configDir?: unknown }
-  if (typeof fields.payload !== 'string' || !fields.payload) {
+  if (typeof body.payload !== 'string' || !body.payload) {
     return null
   }
   let payload: unknown
   try {
-    payload = JSON.parse(fields.payload)
+    payload = JSON.parse(body.payload)
   } catch {
     return null
   }
-  if (typeof payload !== 'object' || payload === null) {
+  if (!isRecord(payload)) {
     return null
   }
-  const rateLimits = (payload as { rate_limits?: unknown }).rate_limits
-  if (typeof rateLimits !== 'object' || rateLimits === null) {
+  const rateLimits = payload.rate_limits
+  if (!isRecord(rateLimits)) {
     return null
   }
-  const fiveHour = parseWindow((rateLimits as { five_hour?: unknown }).five_hour)
-  const sevenDay = parseWindow((rateLimits as { seven_day?: unknown }).seven_day)
+  const fiveHour = parseWindow(rateLimits.five_hour)
+  const sevenDay = parseWindow(rateLimits.seven_day)
   if (!fiveHour && !sevenDay) {
     return null
   }
-  const configDir = typeof fields.configDir === 'string' ? fields.configDir.trim() : ''
-  return { configDir: configDir || null, fiveHour, sevenDay }
+  const configDir = typeof body.configDir === 'string' ? body.configDir.trim() : ''
+  const accountId = typeof body.accountId === 'string' ? body.accountId.trim() : ''
+  return { configDir: configDir || null, accountId: accountId || null, fiveHour, sevenDay }
 }

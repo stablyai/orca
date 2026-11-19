@@ -33,8 +33,15 @@ export function spawnColdRestoreWithAccount(
       return null
     }
     session.applyColdRestoreAgentResumeStartup(prepared)
-    const ptyId = await session.startFreshSpawn(prepared, options)
-    if (ptyId) {
+    let resumeUnavailable = false
+    const ptyId = await session.startFreshSpawn(prepared, {
+      ...options,
+      onAgentResumeUnavailable: () => {
+        resumeUnavailable = true
+        options.onAgentResumeUnavailable?.()
+      }
+    })
+    if (ptyId && !resumeUnavailable) {
       await prepared.commitAccount?.()
     }
     return ptyId

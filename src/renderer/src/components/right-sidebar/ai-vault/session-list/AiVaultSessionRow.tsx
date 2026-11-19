@@ -198,9 +198,7 @@ export function VaultSessionRow({
           return
         }
         if (onPick) {
-          if (!resumeDisabled) {
-            onPick()
-          }
+          onPick()
         } else {
           onToggleDetails()
         }

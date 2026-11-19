@@ -251,8 +251,8 @@ export function useCodexSwitcherController(
     : displayedAccountId === WORKSPACE_SYSTEM_DEFAULT_ACCOUNT_ID
       ? [
           t('auto.components.status.bar.StatusBar.c676918adc', 'System default'),
-          accountState.systemDefault?.email,
-          accountState.systemDefault?.workspaceLabel
+          codexTarget.runtime === 'wsl' ? undefined : accountState.systemDefault?.email,
+          codexTarget.runtime === 'wsl' ? undefined : accountState.systemDefault?.workspaceLabel
         ]
           .filter(Boolean)
           .join(' \u00b7 ')

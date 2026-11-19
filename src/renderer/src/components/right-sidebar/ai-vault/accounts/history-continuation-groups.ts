@@ -58,11 +58,16 @@ export function groupHistoryContinuations(
           sessionId: version.sessionId,
           filePath: version.filePath,
           codexHome: session.agent === 'codex' ? version.home : null,
-          accountHome: {
-            variable:
-              session.agent === 'codex' ? ('CODEX_HOME' as const) : ('CLAUDE_CONFIG_DIR' as const),
-            path: version.home
-          },
+          accountHome:
+            version.accountId === null
+              ? null
+              : {
+                  variable:
+                    session.agent === 'codex'
+                      ? ('CODEX_HOME' as const)
+                      : ('CLAUDE_CONFIG_DIR' as const),
+                  path: version.home
+                },
           continuationVersions: versions,
           resumeCommand: ''
         }

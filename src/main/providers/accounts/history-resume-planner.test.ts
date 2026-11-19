@@ -13,6 +13,8 @@ let planner: HistoryResumePlanner
 let plannerDeps: HistoryResumePlannerDeps
 let args: AiVaultPrepareSessionResumeArgs
 let workspaceAccountId: string | undefined
+let personalLabel = 'Personal'
+let personalIdentity = 'personal-login-1'
 let workAvailable = true
 let original: string
 let failIndex = false
@@ -29,6 +31,8 @@ beforeEach(async () => {
   await writeFile(join(target, 'auth.json'), 'work-login')
   ledger = new HistoryContinuationLedger(join(root, 'ledger.json'))
   workspaceAccountId = undefined
+  personalLabel = 'Personal'
+  personalIdentity = 'personal-login-1'
   workAvailable = true
   failIndex = false
   plannerDeps = {
@@ -37,7 +41,7 @@ beforeEach(async () => {
     workspacePath: () => workspace,
     accounts: () => ({
       accounts: [
-        { id: null, label: 'Personal', available: true },
+        { id: null, label: personalLabel, identity: personalIdentity, available: true },
         { id: 'work', label: 'Work', available: workAvailable }
       ],
       workspaceAccountId
@@ -204,4 +208,33 @@ it('recovers an unacknowledged open after a host restart and accepts the commit 
   await planner.prepare({ ...args, workspaceId: undefined, commitToken: opened.resumeReceipt })
   await planner.prepare({ ...args, workspaceId: undefined, commitToken: opened.resumeReceipt })
   expect((await planner.prepare({ ...args, preview: true })).resumePlan?.lastAccountId).toBe('work')
+})
+
+it('persists the successful open timestamp across host restart and commit retry', async () => {
+  const opened = await open('work')
+  const committedAt = Date.now() + 100
+  planner = new HistoryResumePlanner(plannerDeps)
+  await planner.prepare({
+    ...args,
+    workspaceId: undefined,
+    commitToken: opened.resumeReceipt,
+    commitTimestamp: committedAt
+  })
+  await planner.prepare({
+    ...args,
+    workspaceId: undefined,
+    commitToken: opened.resumeReceipt,
+    commitTimestamp: committedAt + 1_000
+  })
+  expect(
+    (await ledger.list()).find((entry) => entry.sessionId === opened.substituteSessionId)?.openedAt
+  ).toBe(committedAt)
+})
+
+it('rejects a changed System default identity after the account choice was prepared', async () => {
+  const opened = await open(null)
+  personalIdentity = 'personal-login-2'
+  await expect(
+    planner.accountForReceipt(opened.resumeReceipt!, 'codex', args.workspaceId)
+  ).rejects.toThrow('account changed')
 })

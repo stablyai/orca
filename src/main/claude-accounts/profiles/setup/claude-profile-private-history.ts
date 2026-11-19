@@ -10,6 +10,7 @@ import {
 } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import { randomUUID } from 'node:crypto'
+import { isDefinitiveAbsence } from '../../../../shared/errors/definitive-filesystem-absence'
 import { removeDirectoryLink } from '../../../filesystem/merged-directory-link'
 import { CLAUDE_PROFILE_HISTORY_DIRS } from './claude-profile-history'
 import {
@@ -41,7 +42,15 @@ export async function isolateClaudeProfileHistory(
     if (!entry) {
       continue
     }
-    const sharedEntry = await lstat(shared).catch(() => null)
+    let sharedEntry
+    try {
+      sharedEntry = await lstat(shared)
+    } catch (error) {
+      if (!isDefinitiveAbsence(error)) {
+        throw error
+      }
+      sharedEntry = null
+    }
     const recorded =
       name === 'history.jsonl'
         ? await readFile(join(home, 'history.jsonl.orca-profile-link'), 'utf8').catch((error) => {

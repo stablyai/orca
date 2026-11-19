@@ -49,6 +49,8 @@ export function configureLocalPtyProvider(args: {
     baseEnv,
     ctx
   ) => {
+    delete baseEnv.ORCA_CODEX_LAUNCH_ERROR
+    delete baseEnv.ORCA_CLAUDE_LAUNCH_ERROR
     await prepareAntigravityAccountForLaunch({
       launchAgent: ctx?.launchAgent,
       command: ctx?.command,
@@ -64,8 +66,10 @@ export function configureLocalPtyProvider(args: {
       ctx?.launchAgent === 'claude'
         ? await historyLaunchAccount(baseEnv, 'claude', ctx.worktreeId)
         : null
+    const explicitClaudeHome =
+      Boolean(baseEnv.CLAUDE_CONFIG_DIR) && baseEnv.ORCA_CLAUDE_PROFILE_POINTER === ''
     const workspaceClaude =
-      !pinnedClaude && (!ctx?.launchAgent || ctx.launchAgent === 'claude')
+      !pinnedClaude && !explicitClaudeHome && (!ctx?.launchAgent || ctx.launchAgent === 'claude')
         ? await prepareWorkspaceShellAccount('claude', baseEnv, !ctx?.launchAgent, async () =>
             getClaudeWorkspaceProfiles()?.resolve(ctx?.worktreeId, codexSelectionTarget, true)
           )
@@ -93,6 +97,11 @@ export function configureLocalPtyProvider(args: {
           )) ?? null)
     )
     const skipCodexHomeEnv = ctx?.isWsl === true && !selectedCodexHomePath
+    const unavailableWorkspaceAccount =
+      baseEnv.ORCA_CODEX_LAUNCH_ERROR ?? baseEnv.ORCA_CLAUDE_LAUNCH_ERROR
+    if (unavailableWorkspaceAccount) {
+      throw new Error(unavailableWorkspaceAccount)
+    }
     const ptySettings = getSettings?.()
     await inheritOmpLaunchEnvironment(baseEnv, {
       shellPath: ctx?.shellPath,

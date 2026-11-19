@@ -21,6 +21,7 @@ export type AiVaultPrepareSessionResumeArgs = Pick<
     planToken?: string
     resumeAccountId?: string | null
     commitToken?: string
+    commitTimestamp?: number
     exactVersion?: boolean
   }
 

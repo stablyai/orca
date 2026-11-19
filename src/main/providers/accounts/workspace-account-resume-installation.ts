@@ -43,10 +43,9 @@ export function installProviderWorkspaceSessionResume(
         accounts: (provider, workspaceId) => {
           const settings = store.getSettings()
           const roster = rosters[provider]()
-          const email =
-            provider === 'codex'
-              ? rosters.codex().systemDefault?.email
-              : rosters.claude().systemDefaultEmail
+          const codexDefault = provider === 'codex' ? rosters.codex().systemDefault : undefined
+          const claudeDefault = provider === 'claude' ? rosters.claude() : undefined
+          const email = codexDefault?.email ?? claudeDefault?.systemDefaultEmail
           return {
             workspaceAccountId: effectiveWorkspaceAccountId(
               provider === 'codex'
@@ -61,6 +60,18 @@ export function installProviderWorkspaceSessionResume(
               {
                 id: null,
                 label: email ? `System default · ${email}` : 'System default',
+                identity:
+                  provider === 'codex'
+                    ? JSON.stringify([
+                        codexDefault?.hasAuth ?? false,
+                        codexDefault?.authKind ?? 'none',
+                        codexDefault?.email ?? null,
+                        codexDefault?.providerAccountId ?? null
+                      ])
+                    : JSON.stringify([
+                        claudeDefault?.systemDefaultEmail ?? null,
+                        claudeDefault?.systemDefaultOrganizationUuid ?? null
+                      ]),
                 available: true
               },
               ...roster.accounts.map((account) => {

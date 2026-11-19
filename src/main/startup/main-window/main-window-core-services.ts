@@ -133,7 +133,8 @@ async function installMainWindowCoreServices(
     store,
     runtime,
     prepareCodexRuntimeHomeForLaunch,
-    (target, workspaceId) => claudeRuntimeAuth.prepareForClaudeLaunch(target, workspaceId),
+    (target, workspaceId, launchEnv) =>
+      claudeRuntimeAuth.prepareForClaudeLaunch(target, workspaceId, launchEnv),
     {
       prepareCodexSessionResume: prepareCodexSessionResumeForLaunch,
       deferSshInitialization: true,

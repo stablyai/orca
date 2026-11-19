@@ -31,22 +31,37 @@ export async function forkHistoryConversation(input: {
         'Claude could not create a continuation. The original conversation was preserved.'
       )
     }
-    await copyProfileHistory(
-      input.sourceHome,
-      input.targetHome,
-      [
-        {
-          source: join(relative(input.sourceHome, dirname(input.filePath)), input.sessionId),
-          destination: join('projects', bucket, copy.sessionId)
-        },
-        {
-          source: join('file-history', input.sessionId),
-          destination: join('file-history', copy.sessionId)
-        }
-      ],
-      undefined,
-      { skipExisting: true }
-    )
+    try {
+      await copyProfileHistory(
+        input.sourceHome,
+        input.targetHome,
+        [
+          {
+            source: join(relative(input.sourceHome, dirname(input.filePath)), input.sessionId),
+            destination: join('projects', bucket, copy.sessionId)
+          },
+          {
+            source: join('file-history', input.sessionId),
+            destination: join('file-history', copy.sessionId)
+          }
+        ],
+        undefined,
+        { skipExisting: true }
+      )
+    } catch (error) {
+      await Promise.all([
+        rm(copy.filePath, { force: true }),
+        rm(join(input.targetHome, 'projects', bucket, copy.sessionId), {
+          recursive: true,
+          force: true
+        }),
+        rm(join(input.targetHome, 'file-history', copy.sessionId), {
+          recursive: true,
+          force: true
+        })
+      ])
+      throw error
+    }
     return { sessionId: copy.sessionId, filePath: copy.filePath }
   }
   const sessionId = randomUUID()

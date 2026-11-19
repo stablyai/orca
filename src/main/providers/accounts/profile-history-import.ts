@@ -11,7 +11,10 @@ export async function copyProfileHistory(
   onFile?: (file: string) => void,
   options: { skipExisting?: boolean } = {}
 ): Promise<void> {
-  if (parseWslUncPath(sourceHome) || parseWslUncPath(destinationHome)) {
+  if (
+    process.platform === 'win32' &&
+    (parseWslUncPath(sourceHome) || parseWslUncPath(destinationHome))
+  ) {
     throw new Error('WSL history import is not supported yet. Import credentials only.')
   }
   const source = await realpath(resolve(sourceHome))

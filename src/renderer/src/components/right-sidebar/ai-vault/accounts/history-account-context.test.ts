@@ -65,3 +65,28 @@ it('recognizes a Claude account in a custom home without guessing from the selec
     )
   ).toMatchObject({ sourceId: undefined, lastAccountId: undefined })
 })
+
+it('labels a removed last-used account as unavailable', () => {
+  const session = {
+    ...aiVaultSearchHitToSession(searchHit(), 'local'),
+    agent: 'codex' as const,
+    filePath: '/personal/session.jsonl'
+  }
+  const catalog: HistoryAccountCatalog = {
+    claude: { accounts: [], activeAccountId: null },
+    codex: { accounts: [], activeAccountId: null },
+    continuations: [
+      {
+        provider: 'codex',
+        sessionId: session.sessionId,
+        filePath: session.filePath,
+        home: '/personal',
+        rootSessionId: session.sessionId,
+        accountId: 'removed-account',
+        openedAt: 1
+      }
+    ],
+    settings: { historyResumeAccountsSupported: true }
+  }
+  expect(historyAccountInfo(session, catalog)?.lastAccountLabel).toContain('unavailable')
+})

@@ -47,7 +47,7 @@ export function resolveAiVaultSessionLaunchTarget(args: {
   targetWorktreeId?: string
   targetState: AiVaultSessionResumeTargetState
 }): AiVaultSessionLaunchTarget {
-  const targetWorktreeId = args.targetWorktreeId ?? args.activeWorktreeId
+  const targetWorktreeId = args.targetWorktreeId || args.activeWorktreeId
   if (
     !targetWorktreeId ||
     !isKnownAiVaultResumeWorkspaceTarget(args.targetState, targetWorktreeId)

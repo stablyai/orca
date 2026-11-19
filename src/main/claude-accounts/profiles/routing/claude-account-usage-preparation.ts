@@ -1,6 +1,21 @@
 import { isSameClaudeLogin } from '../../sign-in/claude-account-folder'
 import type { ClaudeProfileRouter } from './claude-profile-router'
 import type { ClaudeRuntimeAuthPreparation } from '../../runtime-auth/runtime-auth-types'
+import type { ClaudeFolderLogin } from '../../sign-in/claude-account-folder'
+import { claudeSystemDefaultUsageAccountId } from '../../../../shared/agent-accounts/claude/claude-system-default-usage-account'
+
+export function claudeWorkspaceUsageAccountId(
+  profileAccountId: string | undefined,
+  systemDefaultLogin: ClaudeFolderLogin | null
+): string {
+  return (
+    profileAccountId ??
+    claudeSystemDefaultUsageAccountId(
+      systemDefaultLogin?.email,
+      systemDefaultLogin?.organizationUuid
+    )
+  )
+}
 
 /** Usage reads use the same login route as account launches. */
 export function claudeAccountUsagePreparation(

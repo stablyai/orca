@@ -3,6 +3,7 @@ import { groupHistoryContinuations } from './history-continuation-groups'
 import { searchHit } from '../../../../../../shared/ai-vault/search/ai-vault-search-test-fixture'
 import { aiVaultSearchHitToSession } from '../search/ai-vault-search-session'
 import type { HistoryAccountCatalogs } from './history-account-context'
+import { historyAccountInfo } from './history-account-context'
 
 it('groups explicit lineage across accounts while preserving unrelated titles and hosts', () => {
   const session = aiVaultSearchHitToSession(searchHit(), 'local')
@@ -62,4 +63,13 @@ it('groups explicit lineage across accounts while preserving unrelated titles an
     'continued',
     'original'
   ])
+  const systemDefault = groupHistoryContinuations(
+    [
+      { ...session, agent: 'codex', sessionId: 'original', filePath: '/personal/original.jsonl' },
+      { ...session, agent: 'codex', sessionId: 'continued', filePath: '/work/continued.jsonl' }
+    ],
+    catalogs,
+    (entry) => historyAccountInfo(entry, catalogs.local)?.sourceId === null
+  )
+  expect(systemDefault.map((entry) => entry.sessionId)).toEqual(['original'])
 })

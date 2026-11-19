@@ -97,7 +97,12 @@ export function historyAccountInfo(
         ? last.displayName
           ? `${last.displayName} · ${last.email}`
           : last.email
-        : undefined
+        : lastAccountId !== undefined
+          ? translate(
+              'historyResume.lastUnavailable',
+              'The account last used is unavailable. Choose another account or sign in again in Settings.'
+            )
+          : undefined
   return {
     lastAccountId,
     lastAccountLabel,

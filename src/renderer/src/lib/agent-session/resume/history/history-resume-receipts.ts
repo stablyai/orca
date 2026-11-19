@@ -7,6 +7,8 @@ import { useAppStore } from '@/store/index'
 import type { AppState } from '@/store/types'
 import { translate } from '@/i18n/i18n'
 
+const commitTimestamps = new WeakMap<object, number>()
+
 export async function waitForHistoryTerminalOpen(tabId: string): Promise<void> {
   await new Promise<void>((resolve, reject) => {
     let appeared = false
@@ -56,6 +58,8 @@ export async function commitHistorySessionResume(
   if (!session.resumeReceipt) {
     return
   }
+  const commitTimestamp = commitTimestamps.get(session) ?? Date.now()
+  commitTimestamps.set(session, commitTimestamp)
   try {
     await window.api.aiVault.prepareSessionResume({
       agent: session.agent,
@@ -63,7 +67,8 @@ export async function commitHistorySessionResume(
       filePath: session.filePath,
       codexHome: session.codexHome,
       executionHostId: session.executionHostId,
-      commitToken: session.resumeReceipt
+      commitToken: session.resumeReceipt,
+      commitTimestamp
     })
     window.dispatchEvent(new Event('orca-history-continuations-changed'))
   } catch (error) {

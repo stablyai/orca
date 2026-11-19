@@ -135,8 +135,6 @@ export function resolveWindowsShellLaunchArgs(
     const shellArgStartupCommand = getCmdShellArgStartupCommand(startupCommand)
     const startupCommands = [
       CMD_UTF8_SETUP_COMMAND,
-      'if defined ORCA_CODEX_LAUNCH_ERROR doskey codex=echo Workspace Codex account unavailable. Choose an account and open a new terminal.',
-      'if defined ORCA_CLAUDE_LAUNCH_ERROR doskey claude=echo Workspace Claude account unavailable. Choose an account and open a new terminal.',
       ...(codexLaunchPreflightCommand ? [CMD_CODEX_LAUNCH_PREFLIGHT] : []),
       ...(shellArgStartupCommand ? [shellArgStartupCommand] : [])
     ]

@@ -18,6 +18,10 @@ import {
 import { ClaudeObservedConfigDirs } from './profiles/routing/claude-observed-config-dirs'
 import type { ClaudeAccountSelectionTarget } from './selection/runtime-selection'
 import type { ClaudeRuntimeAuthPreparation } from './runtime-auth/runtime-auth-types'
+import {
+  CLAUDE_USAGE_ACCOUNT_ID_ENV,
+  claudeSystemDefaultUsageAccountId
+} from '../../shared/agent-accounts/claude/claude-system-default-usage-account'
 
 /** `readPath` exposes a guest configDir to the host through UNC on WSL. */
 export type ClaudeAccountFolder = { configDir: string; readPath: string }
@@ -64,10 +68,19 @@ export class ClaudeRuntimeAuthService {
       if (target?.runtime === 'wsl') {
         throw new Error('Continue this History session on its native host.')
       }
+      if (!pinned.accountId) {
+        await this.router.environmentReady
+      }
       return {
         configDir: pinned.home,
         envPatch: {
           CLAUDE_CONFIG_DIR: pinned.home,
+          [CLAUDE_USAGE_ACCOUNT_ID_ENV]:
+            pinned.accountId ??
+            claudeSystemDefaultUsageAccountId(
+              this.router.systemDefaultLogin()?.email,
+              this.router.systemDefaultLogin()?.organizationUuid
+            ),
           ORCA_CLAUDE_PROFILE_POINTER: '',
           ORCA_CLAUDE_INJECTED_CONFIG_DIR: pinned.home
         },

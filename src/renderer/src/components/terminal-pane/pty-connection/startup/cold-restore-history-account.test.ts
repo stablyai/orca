@@ -140,3 +140,13 @@ it('does not record an account when terminal creation fails', async () => {
   expect(await spawnColdRestoreWithAccount(pane, prepare(), {})).toBeNull()
   expect(commitHistorySessionResume).not.toHaveBeenCalled()
 })
+
+it('does not record the chosen account when the terminal opens without the saved conversation', async () => {
+  const pane = session()
+  vi.mocked(pane.startFreshSpawn).mockImplementation(async (_startup, options) => {
+    options?.onAgentResumeUnavailable?.()
+    return 'pty-chosen'
+  })
+  expect(await spawnColdRestoreWithAccount(pane, prepare(), {})).toBe('pty-chosen')
+  expect(commitHistorySessionResume).not.toHaveBeenCalled()
+})

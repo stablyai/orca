@@ -193,11 +193,19 @@ async function workspaceResumeRequest(
   if (!target) {
     return args
   }
-  const snapshot = await callRuntimeRpc<{
+  let snapshot: {
     settings: {
       historyResumeAccountsSupported?: boolean
     }
-  }>(target, 'settings.get', undefined).catch(() => null)
+  }
+  try {
+    snapshot = await callRuntimeRpc(target, 'settings.get', undefined)
+  } catch (error) {
+    if (!isMissingSettingsCapability(error)) {
+      throw error
+    }
+    return args
+  }
   return snapshot?.settings.historyResumeAccountsSupported === true
     ? {
         ...args,
@@ -205,6 +213,16 @@ async function workspaceResumeRequest(
         preview: true
       }
     : args
+}
+
+function isMissingSettingsCapability(error: unknown): boolean {
+  if (!(error instanceof Error)) {
+    return false
+  }
+  return (
+    (error instanceof RuntimeRpcCallError && error.code === 'method_not_found') ||
+    /(?:method_not_found|Unknown method).*settings\.get/i.test(error.message)
+  )
 }
 
 async function executeHistoryResumeRequest(

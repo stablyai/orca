@@ -19,7 +19,13 @@ export class HistoryResumePlanner {
   private readonly plans = new Map<string, Pending>()
   private readonly receipts = new Map<
     string,
-    { entries: HistoryContinuation[]; expires: number; workspaceId?: string }
+    {
+      entries: HistoryContinuation[]
+      expires: number
+      workspaceId?: string
+      confirmedAccountLabel?: string
+      confirmedAccountIdentity?: string
+    }
   >()
   constructor(private readonly deps: HistoryResumePlannerDeps) {}
 
@@ -41,6 +47,24 @@ export class HistoryResumePlanner {
       )
     }
     if (
+      retained &&
+      (retained.entry.preparedAt ?? retained.entry.openedAt) + 1_800_000 <= Date.now()
+    ) {
+      throw new Error('The History account choice expired. Resume again from History.')
+    }
+    const confirmedLabel = retained?.entry.confirmedAccountLabel ?? receipt?.confirmedAccountLabel
+    const confirmedIdentity =
+      retained?.entry.confirmedAccountIdentity ?? receipt?.confirmedAccountIdentity
+    const currentAccount = this.deps
+      .accounts(provider, workspaceId ?? '')
+      .accounts.find((account) => account.id === entry.accountId)
+    if (
+      (confirmedLabel !== undefined && currentAccount?.label !== confirmedLabel) ||
+      (confirmedIdentity !== undefined && currentAccount?.identity !== confirmedIdentity)
+    ) {
+      throw new Error('The chosen account changed. Resume again from History to confirm it.')
+    }
+    if (
       !this.deps
         .accounts(provider, workspaceId ?? '')
         .accounts.some((account) => account.id === entry.accountId && account.available)
@@ -50,6 +74,16 @@ export class HistoryResumePlanner {
       )
     }
     const home = await realpath(await this.deps.prepareAccount(provider, entry.accountId))
+    const confirmedAgain = this.deps
+      .accounts(provider, workspaceId ?? '')
+      .accounts.find((account) => account.id === entry.accountId)
+    if (
+      !confirmedAgain?.available ||
+      (confirmedLabel !== undefined && confirmedAgain.label !== confirmedLabel) ||
+      (confirmedIdentity !== undefined && confirmedAgain.identity !== confirmedIdentity)
+    ) {
+      throw new Error('The chosen account changed. Resume again from History to confirm it.')
+    }
     if (normalizeRuntimePathForComparison(home) !== normalizeRuntimePathForComparison(entry.home)) {
       throw new Error('The chosen History account home changed. Resume again from History.')
     }
@@ -70,17 +104,35 @@ export class HistoryResumePlanner {
               entry.provider === retained.entry.provider &&
               entry.filePath === retained.entry.filePath
           )
-          if (current && current.openedAt >= retained.entry.openedAt) {
+          if (
+            retained.entry.committedAt !== undefined &&
+            current &&
+            current.openedAt >= retained.entry.committedAt
+          ) {
             return { useRealCodexHome: false }
           }
-          if (retained.entry.openedAt + 1_800_000 > Date.now()) {
-            await this.deps.ledger.record(retained.entry)
+          const preparedAt = retained.entry.preparedAt ?? retained.entry.openedAt
+          if (preparedAt + 1_800_000 > Date.now()) {
+            const openedAt = await this.deps.ledger.launchReceipts.setCommitTimestamp(
+              args.commitToken,
+              args.commitTimestamp ?? Date.now()
+            )
+            if (!openedAt) {
+              throw new Error('The resume receipt expired. Refresh History.')
+            }
+            await this.deps.ledger.record({ ...retained.entry, openedAt })
             return { useRealCodexHome: false }
           }
         }
         throw new Error('The resume receipt expired. Refresh History.')
       }
-      const openedAt = Date.now()
+      const openedAt =
+        (await this.deps.ledger.launchReceipts.setCommitTimestamp(
+          args.commitToken,
+          args.commitTimestamp ?? Date.now()
+        )) ??
+        args.commitTimestamp ??
+        Date.now()
       for (const entry of receipt.entries) {
         await this.deps.ledger.record({ ...entry, openedAt: entry.openedAt ? openedAt : 0 })
       }
@@ -111,13 +163,12 @@ export class HistoryResumePlanner {
       throw new Error('Choose an account before continuing.')
     }
     const current = this.deps.accounts(args.agent, args.workspaceId)
-    if (!current.accounts.some((account) => account.id === selectedId && account.available)) {
+    const selected = current.accounts.find((account) => account.id === selectedId)
+    if (!selected?.available) {
       throw new Error('This account is unavailable. Sign in or choose another account.')
     }
-    if (
-      current.accounts.find((account) => account.id === selectedId)?.label !==
-      pending.plan.accounts.find((account) => account.id === selectedId)?.label
-    ) {
+    const previewed = pending.plan.accounts.find((account) => account.id === selectedId)
+    if (selected.label !== previewed?.label || selected.identity !== previewed?.identity) {
       throw new Error('The account changed while choosing. Try Resume again.')
     }
     if (pending.preparing) {
@@ -154,7 +205,8 @@ export class HistoryResumePlanner {
       }
 
       const receipt = randomUUID()
-      const openedAt = Date.now()
+      const confirmedAccountLabel = selected.label
+      const confirmedAccountIdentity = selected.identity
       const parent: HistoryContinuation = {
         provider: args.agent,
         sessionId: pending.sessionId,
@@ -173,18 +225,26 @@ export class HistoryResumePlanner {
         rootTranscriptKey: pending.rootTranscriptKey,
         ...(different ? { parentSessionId: pending.sessionId } : {}),
         accountId: selectedId,
-        openedAt
+        openedAt: 1
       }
       const stagedReceipt = {
         workspaceId: args.workspaceId,
         entries: different ? [parent, entry] : [entry],
-        expires: openedAt + 1_800_000
+        expires: Date.now() + 1_800_000,
+        confirmedAccountLabel,
+        confirmedAccountIdentity
       }
       if (different) {
         await this.deps.ledger.record(parent)
         await this.deps.ledger.record({ ...entry, accountId: undefined, openedAt: 0 })
       }
-      await this.deps.ledger.launchReceipts.save(receipt, args.workspaceId, entry)
+      await this.deps.ledger.launchReceipts.save(
+        receipt,
+        args.workspaceId,
+        entry,
+        confirmedAccountLabel,
+        confirmedAccountIdentity
+      )
       this.plans.delete(args.planToken)
       this.receipts.set(receipt, stagedReceipt)
       return {

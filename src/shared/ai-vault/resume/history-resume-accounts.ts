@@ -1,6 +1,7 @@
 export type HistoryResumeAccount = {
   id: string | null
   label: string
+  identity?: string
   available: boolean
 }
 
