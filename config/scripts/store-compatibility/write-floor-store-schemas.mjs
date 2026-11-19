@@ -20,6 +20,12 @@ const positionalOutput = join(
   'fixtures',
   `${tag.slice(1)}-positional-insert-tables.json`
 )
+const vocabularyOutput = join(
+  repo,
+  moduleDir,
+  'fixtures',
+  `${tag.slice(1)}-journal-storage-vocabulary.json`
+)
 const checkout = mkdtempSync(join(tmpdir(), 'store-floor-'))
 // Only pnpm needs a shell on Windows (pnpm.cmd); its arguments hold no paths, so paths with spaces stay intact.
 const run = (command, args, cwd = repo, env = process.env) =>
@@ -56,7 +62,8 @@ run('git', ['worktree', 'add', '--detach', checkout, tag])
 try {
   for (const file of [
     'store-schema-snapshot.test-fixture.ts',
-    'floor-checked-stores.test-fixture.ts'
+    'floor-checked-stores.test-fixture.ts',
+    'journal-storage-vocabulary.test-fixture.ts'
   ]) {
     cpSync(join(repo, moduleDir, file), join(checkout, moduleDir, file))
   }
@@ -69,9 +76,11 @@ try {
       "import { join } from 'node:path'",
       "import { it } from 'vitest'",
       "import { formatFloorStoreSchemas } from './floor-checked-stores.test-fixture'",
+      "import { journalStorageVocabulary } from './journal-storage-vocabulary.test-fixture'",
       "it('writes the floor store schemas', () => {",
       "  const dir = mkdtempSync(join(tmpdir(), 'store-floor-schemas-'))",
       `  writeFileSync(${JSON.stringify(output)}, formatFloorStoreSchemas(dir))`,
+      `  writeFileSync(${JSON.stringify(vocabularyOutput)}, JSON.stringify(journalStorageVocabulary(), null, 2) + '\\n')`,
       '})',
       ''
     ].join('\n')
@@ -84,7 +93,7 @@ try {
     checkout
   )
   console.log(
-    `Wrote ${output} and ${positionalOutput}. Point STORE_FLOOR at them and update its release, commit and versions.`
+    `Wrote ${output}, ${positionalOutput} and ${vocabularyOutput}. Point STORE_FLOOR at them, update its release, commit and versions, and re-review fixtures/reviewed-journal-vocabulary.json.`
   )
 } finally {
   run('git', ['worktree', 'remove', '--force', checkout])

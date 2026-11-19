@@ -1,6 +1,8 @@
+import journalStorageVocabulary from './1.4.263-journal-storage-vocabulary.json'
 import positionalInsertTables from './1.4.263-positional-insert-tables.json'
 import floorSchemas from './1.4.263-store-schemas.json'
 import reviewedFloorTableTriggers from './reviewed-floor-table-triggers.json'
+import reviewedJournalVocabulary from './reviewed-journal-vocabulary.json'
 
 /** The oldest release whose stores this build must keep writable (see docs/agents-md-refs/store-compatibility.md); raise it only at a release. */
 export const STORE_FLOOR = {
@@ -11,5 +13,7 @@ export const STORE_FLOOR = {
   agentSessionJournalSchemaVersion: 4,
   schemas: floorSchemas,
   positionalInsertTables,
-  reviewedFloorTableTriggers
+  reviewedFloorTableTriggers,
+  journalStorageVocabulary,
+  reviewedJournalVocabulary
 } as const
