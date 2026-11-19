@@ -81,14 +81,6 @@ export function useMobileNativeChatSessionLane({
     sessionId: structured ? null : sessionId,
     transcriptPath: structured ? null : (resolution?.transcriptPath ?? null)
   })
-  const claudeSessionStatus = useMobileClaudeSessionStatus({
-    client,
-    agent,
-    sessionId,
-    transcriptPath: resolution?.transcriptPath ?? undefined,
-    refreshKey: `${bridgeSession.messages.length}:${bridgeSession.messages.at(-1)?.id ?? ''}`,
-    enabled: enabled && !structured && agent === 'claude'
-  })
   const structuredSession = useMobileStructuredAgentSession({
     itemLink,
     client,
@@ -131,6 +123,14 @@ export function useMobileNativeChatSessionLane({
     connected: connState === 'connected',
     sessionId: structured ? sessionId : null,
     onAnswerError: onSendError
+  })
+  const claudeSessionStatus = useMobileClaudeSessionStatus({
+    client,
+    agent,
+    sessionId,
+    transcriptPath: resolution?.transcriptPath ?? undefined,
+    refreshKey: `${bridgeSession.messages.length}:${bridgeSession.messages.at(-1)?.id ?? ''}`,
+    enabled: enabled && !structured && agent === 'claude'
   })
   return {
     structuredSession,
