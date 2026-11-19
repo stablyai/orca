@@ -120,7 +120,7 @@ export async function projectWorkerListFleet(
     observeSession: withSleptAgentWorkers(
       createSessionWorkerLivenessReader(db, statuses),
       statuses,
-      (paneKey) => runtime.sleptAgentHandleForPane(paneKey) !== null
+      (paneKey) => runtime.sleptAgentHandleForPane(paneKey)
     )
   })
   const federated = options.includeRemote

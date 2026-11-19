@@ -28,15 +28,31 @@ export type SessionWorkerSubject = {
 export function withSleptAgentWorkers(
   observe: (worker: SessionWorkerSubject) => FleetSessionObservation | undefined,
   statuses: readonly FleetAgentStatusEvidence[],
-  isSleptAgentPane: (paneKey: string) => boolean
+  sleptAgentHandle: (paneKey: string) => string | null
 ): (worker: SessionWorkerSubject) => FleetSessionObservation | undefined {
+  let byPane: Map<string, FleetAgentStatusEvidence> | null = null
   return (worker) => {
     const observed = observe(worker)
     const paneKey = worker.resource?.paneKey
-    if (observed || !paneKey || !isSleptAgentPane(paneKey)) {
+    // Only the worker's own handle: another conversation slept in its old pane is not this worker.
+    if (
+      observed ||
+      !paneKey ||
+      !worker.agentTerminalHandle ||
+      sleptAgentHandle(paneKey) !== worker.agentTerminalHandle
+    ) {
       return observed
     }
-    const activity = statuses.find((status) => status.activity.paneKey === paneKey)
+    if (!byPane) {
+      byPane = new Map()
+      for (const status of statuses) {
+        const key = status.activity.paneKey
+        if (key && !byPane.has(key)) {
+          byPane.set(key, status)
+        }
+      }
+    }
+    const activity = byPane.get(paneKey)
     return activity ? { status: 'live', activity } : { status: 'live' }
   }
 }

@@ -12,8 +12,21 @@ import type {
 
 /** An Agent-slept pane keeps its handle while it has no process, so its resume answers to the same name. */
 export abstract class OrcaRuntimeWithSleptLeafHandles extends OrcaRuntimeWithAdmitWindowPublisher {
-  /** Handles of Agent-slept panes and the process each named, kept so the woken process takes the same name. */
-  protected readonly sleptLeafHandles = new Map<string, string>()
+  /** Per slept leaf, its handle and the process it named; kept across graph reloads so the pane keeps its name. */
+  protected readonly sleptLeafHandles = new Map<string, { handle: string; ptyId: string }>()
+
+  /** Graph sync rebinds handles; waits on a woken slept pane re-check here. */
+  protected onSleptLeafGraphSynced(): void {}
+
+  /** Closed panes take their slept names with them. */
+  protected pruneSleptLeafHandles(): void {
+    for (const leafKey of this.sleptLeafHandles.keys()) {
+      if (!this.leaves.has(leafKey)) {
+        this.sleptLeafHandles.delete(leafKey)
+      }
+    }
+    this.onSleptLeafGraphSynced()
+  }
 
   /** Main's hook row names the exact process Agent Sleep stopped in this pane. */
   protected isAgentSleepStop(paneKey: string, ptyId: string): boolean {
@@ -69,7 +82,7 @@ export abstract class OrcaRuntimeWithSleptLeafHandles extends OrcaRuntimeWithAdm
       this.terminalIdentity.removeIncarnation(sleptPtyId)
     }
     this.terminalIdentity.setHandle(handle, { ...record, ptyId: null, ptyGeneration })
-    this.sleptLeafHandles.set(handle, sleptPtyId)
+    this.sleptLeafHandles.set(leafKey, { handle, ptyId: sleptPtyId })
     return true
   }
 
@@ -96,7 +109,7 @@ export abstract class OrcaRuntimeWithSleptLeafHandles extends OrcaRuntimeWithAdm
     if (handle && this.handles.get(handle)?.ptyId === leaf.ptyId) {
       const slept =
         leaf.ptyId === null
-          ? this.sleptLeafHandles.has(handle)
+          ? this.sleptLeafHandles.get(leafKey)?.handle === handle
           : this.ptysById.get(leaf.ptyId)?.connected !== true &&
             this.isAgentSleepStop(paneKey, leaf.ptyId)
       if (slept) {
@@ -119,7 +132,8 @@ export abstract class OrcaRuntimeWithSleptLeafHandles extends OrcaRuntimeWithAdm
     if (currentPtyId && this.ptysById.get(currentPtyId)?.connected === true) {
       return null
     }
-    if (current && this.sleptLeafHandles.has(current)) {
+    const parked = this.sleptLeafHandles.get(leafKey)?.handle
+    if (current && current === parked) {
       return current
     }
     const sleptPtyId = this.agentSleepStopPtyId(paneKey)
@@ -130,8 +144,12 @@ export abstract class OrcaRuntimeWithSleptLeafHandles extends OrcaRuntimeWithAdm
     ) {
       return null
     }
-    const kept = this._orchestrationDb?.getLatestDispatchForTerminal('', paneKey)?.assignee_handle
-    const handle = kept && !this.handles.has(kept) ? kept : `term_${randomUUID()}`
+    const dispatched = this._orchestrationDb?.getLatestDispatchForTerminal(
+      '',
+      paneKey
+    )?.assignee_handle
+    const handle =
+      [dispatched, parked].find((kept) => kept && !this.handles.has(kept)) ?? `term_${randomUUID()}`
     this.terminalIdentity.addSynthetic(handle)
     this.terminalIdentity.setHandle(handle, {
       handle,
@@ -144,7 +162,7 @@ export abstract class OrcaRuntimeWithSleptLeafHandles extends OrcaRuntimeWithAdm
       ptyGeneration: leaf.ptyGeneration
     })
     this.terminalIdentity.bindLeaf(leafKey, handle)
-    this.sleptLeafHandles.set(handle, sleptPtyId)
+    this.sleptLeafHandles.set(leafKey, { handle, ptyId: sleptPtyId })
     return handle
   }
 
@@ -168,7 +186,8 @@ export abstract class OrcaRuntimeWithSleptLeafHandles extends OrcaRuntimeWithAdm
     if (!record || !leaf || this.sleptLeafHandle(leaf) !== handle) {
       return null
     }
-    const ptyId = record.ptyId ?? this.sleptLeafHandles.get(handle)
+    const ptyId =
+      record.ptyId ?? this.sleptLeafHandles.get(this.getLeafKey(record.tabId, record.leafId))?.ptyId
     return { pty: (ptyId && this.ptysById.get(ptyId)) || null, leaf }
   }
 }

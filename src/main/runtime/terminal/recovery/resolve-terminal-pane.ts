@@ -257,17 +257,18 @@ export abstract class OrcaRuntimeWithResolveTerminalPane extends OrcaRuntimeWith
       // `screen` asks for a rendered grid; there is none, and the journal is the whole record.
       return { ...structured, source: opts.screen ? 'screen-unavailable' : 'stream' }
     }
-    // Switch point: a saved pane main holds with no terminal yet starts first (once, shared).
-    const starting = ORCA_LAYOUT_OWNER_IS_MAIN ? this.startRestoredHandlePane(handle) : null
-    if (starting) {
-      const target = await starting
-      return { ...(await this.readTerminal(target, opts, providerSnapshot)), handle }
-    }
+    // A slept agent reads as idle, without waking.
     const slept = this.sleptAgentHandle(handle)
     if (slept) {
       return readSleptAgentTerminal(handle, slept, opts, (pty) =>
         this.readPtyTerminal(handle, pty, opts)
       )
+    }
+    // Switch point: a saved pane main holds with no terminal yet starts first (once, shared).
+    const starting = ORCA_LAYOUT_OWNER_IS_MAIN ? this.startRestoredHandlePane(handle) : null
+    if (starting) {
+      const target = await starting
+      return { ...(await this.readTerminal(target, opts, providerSnapshot)), handle }
     }
     const pty = this.getLivePtyForHandle(handle)
     if (pty) {

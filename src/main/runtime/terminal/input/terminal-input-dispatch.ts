@@ -139,6 +139,10 @@ export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntim
     action: { text?: string; enter?: boolean; interrupt?: boolean },
     options: RuntimeTerminalWriteOptions
   ): Promise<RuntimeTerminalSend> {
+    // An idle agent ignores a bare interrupt; a slept one is not woken for it.
+    if (!action.text && !action.enter && this.sleptAgentHandle(handle)) {
+      return { handle, accepted: true, bytesWritten: 0 }
+    }
     // A slept agent wakes first; with the switch, a saved pane main holds with no terminal starts first (once, shared).
     const starting = this.startRestoredHandlePane(handle, { signal: options.signal })
     if (starting) {

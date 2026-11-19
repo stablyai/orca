@@ -1,6 +1,7 @@
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import { OrcaRuntimeWithMailDeliveryRefusal } from './mail-delivery-refusal-runtime'
 import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
+import type { TerminalWaiter } from './terminal-waiter'
 import {
   buildPtyTerminalWaitBlockedResult,
   buildPtyTerminalWaitExitError,
@@ -28,8 +29,14 @@ import { terminalMailHoldVerdict } from './terminal-mail-hold-verdict'
 import { receiptMailboxOwnershipHold } from '../../orchestration/mailbox/delivery-hold/receipt-mailbox-ownership'
 
 export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithMailDeliveryRefusal {
+  /** Agent Sleep stopped the process, not the agent: its exit wait follows the woken process. */
+  protected abstract carrySleptAgentExitWait(waiter: TerminalWaiter): boolean
+
   protected resolvePtyExitWaiters(pty: RuntimePtyWorktreeRecord, ptyId: string): void {
     for (const waiter of this.terminalWaiters.forPty(ptyId)) {
+      if (waiter.condition === 'exit' && this.carrySleptAgentExitWait(waiter)) {
+        continue
+      }
       if (waiter.condition === 'exit') {
         this.terminalWaiters.resolve(waiter, buildPtyTerminalWaitResult(waiter.handle, 'exit', pty))
       } else {

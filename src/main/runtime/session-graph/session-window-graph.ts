@@ -226,6 +226,7 @@ export abstract class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithSlep
     }
 
     this.terminalIdentity.replaceLeaves(nextLeaves)
+    this.pruneSleptLeafHandles()
     this.rebuildLeafPtyIndex()
     this.followExportedPaneKeys()
     this.reconcilePtyIncarnationHandles()

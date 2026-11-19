@@ -120,7 +120,11 @@ async function openWorkerTerminal(
 ): Promise<string | null> {
   // Agent Sleep stopped the worker's process, not its conversation: the follow-up wakes it in place.
   const slept = runtime.sleptAgentHandleForPane(resource.pane_key)
-  if (slept) {
+  if (
+    slept &&
+    (slept === resource.terminal_handle ||
+      slept === db.getDispatchContextById(resource.owner_dispatch_id)?.assignee_handle)
+  ) {
     return slept
   }
   const inspected = await inspectWorkerTerminal(runtime, db, resource.owner_dispatch_id)

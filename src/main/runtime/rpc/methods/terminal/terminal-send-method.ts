@@ -99,7 +99,7 @@ export const TERMINAL_SEND_METHODS = [
           return replayObservation
         }
         // A slept agent resumes in place first, so every check below reads its woken process.
-        if (params.inputKind !== 'query-reply') {
+        if (params.inputKind !== 'query-reply' && (params.text || params.enter)) {
           await runtime.wakeSleptAgentHandle(params.terminal, { signal })
         }
         // Reject stale handles before evaluating driver/lock state on the wrong PTY (#7718).

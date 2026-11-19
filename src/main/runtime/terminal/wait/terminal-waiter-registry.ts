@@ -19,6 +19,17 @@ export class RuntimeTerminalWaiterRegistry {
     this.byPtyId.set(waiter.ptyId, waiters)
   }
 
+  /** Re-files a wait under another terminal, keeping its deadline and abort. */
+  move(waiter: TerminalWaiter, ptyId: string): void {
+    const waiters = this.byPtyId.get(waiter.ptyId)
+    waiters?.delete(waiter)
+    if (waiters?.size === 0) {
+      this.byPtyId.delete(waiter.ptyId)
+    }
+    waiter.ptyId = ptyId
+    this.add(waiter)
+  }
+
   resolve(waiter: TerminalWaiter, result: RuntimeTerminalWait): void {
     this.remove(waiter)
     waiter.resolve(result)

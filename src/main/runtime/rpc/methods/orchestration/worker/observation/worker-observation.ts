@@ -46,12 +46,15 @@ export async function inspectWorkerTerminal(
   if (session) {
     return session
   }
-  // Agent Sleep stopped the process, not the worker: same pane and conversation, idle until input wakes it.
+  // Agent Sleep stopped the process, not the worker: same pane, handle and conversation, idle until input wakes it.
+  const resource = db.getWorkerTerminalResourceByOwner(dispatchId)
   const sleptHandle = runtime.sleptAgentHandleForPane(
-    db.getWorkerTerminalResourceByOwner(dispatchId)?.pane_key ??
-      db.getDispatchContextById(dispatchId)?.assignee_pane_key
+    resource?.pane_key ?? db.getDispatchContextById(dispatchId)?.assignee_pane_key
   )
-  if (sleptHandle) {
+  if (
+    sleptHandle &&
+    (sleptHandle === terminalHandle || sleptHandle === resource?.terminal_handle)
+  ) {
     const terminal = await runtime.showTerminal(sleptHandle).catch(() => null)
     return { terminal, exact: true, status: 'live', agentWait: null, terminalHandle: sleptHandle }
   }
@@ -236,7 +239,7 @@ export function projectFleetWorkerPage(
     observeSession: withSleptAgentWorkers(
       createSessionWorkerLivenessReader(db, statuses),
       statuses,
-      (paneKey) => runtime.sleptAgentHandleForPane(paneKey) !== null
+      (paneKey) => runtime.sleptAgentHandleForPane(paneKey)
     )
   })
 }
