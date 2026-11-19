@@ -29385,6 +29385,7 @@
     "tryAgain": "Try again",
     "update": "Update",
     "versions": "{{installed}} → {{latest}}",
+    "modelRequires": "Requires {{product}} {{version}}",
     "claudeProduct": "Claude Code",
     "codexProduct": "Codex CLI",
     "commandCopied": "Command copied",
