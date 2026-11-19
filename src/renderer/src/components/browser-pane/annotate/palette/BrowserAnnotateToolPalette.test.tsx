@@ -49,6 +49,7 @@ function Harness(props: {
           <BrowserAnnotateToolPalette
             boundsRef={boundsRef}
             pageId={null}
+            ownerPageId="sample-page"
             activeTool={props.activeTool}
             onSelectTool={props.onSelectTool ?? vi.fn()}
             onDone={props.onDone ?? vi.fn()}

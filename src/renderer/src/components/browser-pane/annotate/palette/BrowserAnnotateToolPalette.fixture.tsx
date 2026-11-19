@@ -45,6 +45,7 @@ function PalettePage({
       <BrowserAnnotateToolPalette
         boundsRef={boundsRef}
         pageId={null}
+        ownerPageId="sample-page"
         activeTool={tool}
         onSelectTool={setTool}
         onDone={noop}

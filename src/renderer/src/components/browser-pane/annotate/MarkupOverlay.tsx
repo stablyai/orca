@@ -27,6 +27,8 @@ export type MarkupOverlayProps = {
   initialShapes?: readonly MarkupShape[]
   /** Latest strokes, so leaving Draw can offer Undo. */
   onShapesChange?: (shapes: readonly MarkupShape[]) => void
+  /** The page this drawing belongs to, for Esc ownership. */
+  ownerPageId?: string
 }
 
 export function MarkupOverlay({
@@ -38,12 +40,13 @@ export function MarkupOverlay({
   paletteSlot,
   paletteDensity = 'full',
   initialShapes,
-  onShapesChange
+  onShapesChange,
+  ownerPageId
 }: MarkupOverlayProps): React.JSX.Element {
   const t = useTranslate()
   const baseImgRef = useRef<HTMLImageElement | null>(null)
   const [baseLoaded, setBaseLoaded] = useState(false)
-  const editor = useMarkupEditor(busy, onCancel, initialShapes)
+  const editor = useMarkupEditor(busy, onCancel, initialShapes, ownerPageId)
   useEffect(() => {
     onShapesChange?.(editor.shapes)
   }, [editor.shapes, onShapesChange])

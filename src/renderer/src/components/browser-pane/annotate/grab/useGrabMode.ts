@@ -12,6 +12,7 @@ import { isEditableKeyboardTarget } from '../../host-guest/input/browser-keyboar
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
 import { useGuestEscape } from '../../host-guest/input/use-guest-escape'
 import { interceptAnnotateEscape } from '../palette/annotate-escape-interceptor'
+import { keyEventBelongsToOtherAnnotatePage } from '../palette/annotate-esc-ownership'
 
 export type GrabModeState = 'idle' | 'armed' | 'awaiting' | 'confirming' | 'error'
 
@@ -234,6 +235,14 @@ export function useGrabMode(browserPageId: string): GrabModeHook {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent): void => {
       if (e.key === 'Escape' && state !== 'idle') {
+        // IME composition ends on Esc; another page's pane or palette has its own owner.
+        if (
+          e.isComposing ||
+          e.keyCode === 229 ||
+          keyEventBelongsToOtherAnnotatePage(e.target, browserPageId)
+        ) {
+          return
+        }
         const element =
           e.target && typeof e.target === 'object' && 'closest' in e.target
             ? (e.target as { closest: (selector: string) => unknown })

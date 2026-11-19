@@ -192,6 +192,7 @@ export function BrowserGuestAnnotateOverlays({
           boundsRef={containerRef}
           // Only browser pages mirror Alt from a focused page; the preview's guest forwards no keys.
           pageId={showPaletteKeyHints ? toolSwitch.toolTargetId : null}
+          ownerPageId={toolSwitch.toolTargetId}
           activeTool={activeTool}
           onSelectTool={toolSwitch.selectTool}
           onDone={toolSwitch.exit}
@@ -262,6 +263,7 @@ export function BrowserGuestAnnotateOverlays({
               onCancel={toolSwitch.exit}
               controlsContainer={markupControlsContainer}
               paletteSlot={drawSlot}
+              ownerPageId={toolSwitch.toolTargetId}
               paletteDensity={drawDensity}
               initialShapes={toolSwitch.restoredShapes}
               onShapesChange={toolSwitch.reportShapes}

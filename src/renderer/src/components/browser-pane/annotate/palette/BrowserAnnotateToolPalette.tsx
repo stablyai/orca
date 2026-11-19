@@ -38,6 +38,7 @@ const FIT_LEVEL_WRAP = 3
 export function BrowserAnnotateToolPalette({
   boundsRef,
   pageId,
+  ownerPageId,
   activeTool,
   onSelectTool,
   onDone,
@@ -58,6 +59,8 @@ export function BrowserAnnotateToolPalette({
   boundsRef: RefObject<HTMLElement | null>
   /** The page whose forwarded Alt key fades the palette; null where the page forwards no keys. */
   pageId: string | null
+  /** The page this palette belongs to; key and Esc owners use it to ignore other panes' palettes. */
+  ownerPageId: string
   activeTool: BrowserAnnotateTool
   onSelectTool: (tool: BrowserAnnotateTool) => void
   onDone: () => void
@@ -187,7 +190,7 @@ export function BrowserAnnotateToolPalette({
       <div
         ref={paletteRef}
         data-browser-annotate-palette
-        data-browser-annotate-page={pageId ?? undefined}
+        data-browser-annotate-page={ownerPageId}
         role="group"
         aria-label={t('browser.annotatePalette.label', 'Annotate tools')}
         className={cn(

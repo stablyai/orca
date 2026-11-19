@@ -32,7 +32,9 @@ export function useMarkupEditor(
   busy: boolean,
   onCancel: () => void,
   /** Strokes of a reopened drawing (Undo after a discard). */
-  initialShapes?: readonly MarkupShape[]
+  initialShapes?: readonly MarkupShape[],
+  /** The page this drawing belongs to, for Esc ownership. */
+  ownerPageId?: string
 ) {
   const rootRef = useRef<HTMLDivElement | null>(null)
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
@@ -138,7 +140,7 @@ export function useMarkupEditor(
     return ctx ? textInkBox(ctx, shape) : null
   }, [])
 
-  useMarkupKeyboardShortcuts({ pendingText, setPendingText, undo, redo, onCancel })
+  useMarkupKeyboardShortcuts({ pendingText, setPendingText, undo, redo, onCancel, ownerPageId })
 
   const pointerHandlers = useMarkupPointerHandlers({
     busy,

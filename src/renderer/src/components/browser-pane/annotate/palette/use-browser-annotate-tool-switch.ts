@@ -277,7 +277,7 @@ export function useBrowserAnnotateToolSwitch({
         !event.isComposing &&
         event.keyCode !== 229 &&
         event.target instanceof Element &&
-        event.target.closest('[data-browser-annotate-palette]')
+        event.target.closest(`[data-browser-annotate-page="${CSS.escape(toolTargetId)}"]`)
       ) {
         event.preventDefault()
         exit()
@@ -286,7 +286,7 @@ export function useBrowserAnnotateToolSwitch({
     // Focus sits on the palette's Draw button meanwhile (it takes focus on tool change), so the app router sees Esc.
     addAppKeyListener('keydown', onKeyDown)
     return () => removeAppKeyListener('keydown', onKeyDown)
-  }, [drawStarting, exit])
+  }, [drawStarting, exit, toolTargetId])
 
   return {
     activeTool,
