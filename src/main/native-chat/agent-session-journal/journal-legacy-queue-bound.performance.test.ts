@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { afterEach, expect, it } from 'vitest'
+import { afterEach, expect, it, vi } from 'vitest'
 import type Database from '../../sqlite/sync-database'
 import type { SqliteBindings } from '../../sqlite/sqlite-statement'
 import { openJournalDatabase } from './database/journal-database'
@@ -15,6 +15,7 @@ import { JournalLegacyRetentionError } from './journal-legacy-retention-error'
 
 const cleanup: (() => void)[] = []
 afterEach(() => {
+  vi.restoreAllMocks()
   for (const close of cleanup.splice(0).toReversed()) {
     close()
   }
@@ -58,9 +59,12 @@ function longQueue(source: Database.Database, sessionId: string, recorded: boole
 
 /** Counts the queued rows any statement reading queued text hands to JS. */
 function countQueuedRowsRead(source: Database.Database): { rows: number; sorted: string[] } {
-  const counted = { rows: 0, sorted: [] as string[] }
+  // One count at a time: an earlier wrapper would count, and call, itself.
+  vi.restoreAllMocks()
+  const sorted: string[] = []
+  const counted = { rows: 0, sorted }
   const prepare = source.prepare.bind(source)
-  source.prepare = ((sql: string) => {
+  vi.spyOn(source, 'prepare').mockImplementation((sql: string) => {
     const statement = prepare(sql)
     if (!/FROM queued_messages/.test(sql) || /COUNT\(\*\)|SELECT 1 |^EXPLAIN/.test(sql)) {
       return statement
@@ -96,7 +100,7 @@ function countQueuedRowsRead(source: Database.Database): { rows: number; sorted:
       }
     }
     return statement
-  }) as typeof source.prepare
+  })
   return counted
 }
 
@@ -133,7 +137,7 @@ it('keeps the original for a chat with 100k waiting messages without reading the
       )
     )
     expect(error).toBeInstanceOf(JournalLegacyRetentionError)
-    expect((error as JournalLegacyRetentionError).reason).toBe('source-oversize')
+    expect(error).toMatchObject({ reason: 'source-oversize' })
     expect(counted.rows).toBe(0)
     expect(counted.sorted).toEqual([])
     // 100k rows of 512 characters would be about 60 MiB of text before any serialization.
