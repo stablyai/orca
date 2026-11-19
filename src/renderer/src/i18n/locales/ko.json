@@ -4105,7 +4105,6 @@
             "codexSignInSuccess": "Codex에 로그인했습니다",
             "codexSignInError": "Codex 로그인에 실패했습니다. 다시 시도해 주세요.",
             "cursorUsageMenu": "Cursor 사용량",
-            "hiddenUsageProviders": "그 외: {{value0}}",
             "zcodeUsageMenu": "ZCode 사용",
             "rateLimitResetsAvailable_other": "속도 제한 재설정 {{count}}회 사용 가능",
             "staleCodexSessions_other": "Codex 세션 {{count}}개가 아직 이전 계정을 사용하고 있습니다."

@@ -1154,9 +1154,7 @@ body[data-modal-overlay-open]
   mask-image: linear-gradient(to right, transparent, #000 1.5rem, #000 100%);
 }
 
-/* Why: the status bar's usage cluster reuses the end fade so a clipped cluster never cuts a glyph. */
-.terminal-tab-strip--fade-end:not(.terminal-tab-strip--fade-start),
-.status-bar-usage-cluster[data-overflowing='true'] {
+.terminal-tab-strip--fade-end:not(.terminal-tab-strip--fade-start) {
   -webkit-mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 1.5rem), transparent);
   mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 1.5rem), transparent);
 }

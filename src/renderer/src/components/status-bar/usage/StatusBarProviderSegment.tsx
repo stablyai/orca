@@ -18,7 +18,6 @@ import { formatCreditCount } from '../../../../../shared/agent-usage/display/cre
 import { ProviderIcon } from './provider-usage-panel'
 import { USAGE_WARNING_PERCENT } from './usage-health-tone'
 import { UsageBar } from './usage-meter'
-import { getProviderDisplayName } from '../../../../../shared/agent-usage/display/usage-provider-windows'
 import { getOwnerNotSetUpLabelParts } from '../../../../../shared/agent-usage/status-copy/owner-not-set-up-copy'
 import {
   getProviderUsageErrorMessage,
@@ -26,7 +25,7 @@ import {
   isClaudeUsageWaitingForClaude
 } from '../../../../../shared/agent-usage/status-copy/usage-error-copy'
 import { getTightestUsageSection, getUsageHeadlineSection } from './usage-headline-sections'
-import { formatBareUsagePercentage, formatUsagePercentageLabel } from './usage-percentage-label'
+import { formatBareUsagePercentage } from './usage-percentage-label'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, useIntlLocale, type Translate } from '@/i18n/use-translate'
 import { getStatusBarUsageSections } from '../composition/status-bar-usage-sections'
@@ -102,54 +101,6 @@ function OwnerNotSetUpLabel({
         </span>
       ) : null}
       {after}
-    </span>
-  )
-}
-
-/**
- * A provider at 80%+ used keeps its chip when the status bar runs out of room, whatever % display
- * the user chose. Why 80: the status bar's original threshold; it drives collapsing, not color.
- */
-export function isUsageUrgent(p: ProviderRateLimits): boolean {
-  const tightest = getTightestUsageSection(p, undefined, 'all')
-  return tightest !== null && clampUsedPercent(tightest.window.usedPercent) >= USAGE_WARNING_PERCENT
-}
-
-/** Remain measurable at collapsing densities before hidden chips need the overflow count. */
-export function UsageOverflowChip({
-  hidden,
-  providerCount,
-  display
-}: {
-  hidden: readonly ProviderRateLimits[]
-  providerCount: number
-  display: UsagePercentageDisplay
-}): React.JSX.Element {
-  const t = useTranslate()
-  const names = hidden
-    .map((p) => {
-      const tightest = getTightestUsageSection(p, t, 'all')
-      const name = getProviderDisplayName(p.provider)
-      return tightest
-        ? `${name} ${formatUsagePercentageLabel(tightest.window.usedPercent, display, t)}`
-        : name
-    })
-    .join(', ')
-  return (
-    <span
-      data-usage-more
-      data-usage-collapsed={hidden.length === 0}
-      aria-hidden={hidden.length === 0}
-      title={t('auto.components.status.bar.StatusBar.hiddenUsageProviders', 'Also: {{value0}}', {
-        value0: names
-      })}
-      className="inline-grid h-4 items-center justify-items-center rounded-full border border-border px-1.5 text-[11px] font-medium tabular-nums text-foreground data-[usage-collapsed=true]:invisible data-[usage-collapsed=true]:absolute"
-    >
-      {/* Why: count changes must not invalidate density measurements and restart probing. */}
-      <span aria-hidden="true" className="invisible col-start-1 row-start-1">
-        +{providerCount}
-      </span>
-      <span className="col-start-1 row-start-1">+{Math.max(1, hidden.length)}</span>
     </span>
   )
 }

@@ -4708,7 +4708,6 @@
             "codexSignInSuccess": "Bei Codex angemeldet",
             "codexSignInError": "Anmeldung bei Codex fehlgeschlagen. Bitte erneut versuchen.",
             "cursorUsageMenu": "Cursor-Nutzung",
-            "hiddenUsageProviders": "Außerdem: {{value0}}",
             "zcodeUsageMenu": "ZCode-Nutzung",
             "rateLimitResetsAvailable_one": "{{count}} Ratenlimit-Zurücksetzung verfügbar",
             "rateLimitResetsAvailable_other": "{{count}} Ratenlimit-Zurücksetzungen verfügbar",

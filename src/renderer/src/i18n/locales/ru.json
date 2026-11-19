@@ -4832,7 +4832,6 @@
             "codexSignInSuccess": "Вход в Codex выполнен",
             "codexSignInError": "Не удалось войти в Codex. Повторите попытку.",
             "cursorUsageMenu": "Использование Cursor",
-            "hiddenUsageProviders": "Также: {{value0}}",
             "zcodeUsageMenu": "Использование ZCode",
             "rateLimitResetsAvailable_one": "Доступен {{count}} сброс лимита",
             "rateLimitResetsAvailable_few": "Доступны {{count}} сброса лимита",

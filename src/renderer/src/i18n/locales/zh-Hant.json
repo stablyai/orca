@@ -4617,7 +4617,6 @@
             "codexSignInSuccess": "已登入 Codex",
             "codexSignInError": "Codex 登入失敗。請再試一次。",
             "cursorUsageMenu": "Cursor 用量",
-            "hiddenUsageProviders": "另有：{{value0}}",
             "zcodeUsageMenu": "ZCode 用量",
             "rateLimitResetsAvailable_other": "可重設速率限制 {{count}} 次",
             "staleCodexSessions_other": "{{count}} 個 Codex 工作階段仍在使用舊帳戶。"
