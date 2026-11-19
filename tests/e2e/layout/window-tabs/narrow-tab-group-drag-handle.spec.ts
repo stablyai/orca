@@ -83,11 +83,12 @@ async function tabThroughStrip(
   groupId: string
 ): Promise<{ label: string; fullyVisible: boolean }[]> {
   const tab = page.locator(`[data-tab-group-strip-id="${groupId}"] [data-tab-id]`).first()
-  // A strip whose controls all hid beside an icon-only tab has nothing to land on: report none.
+  // A strip whose controls all hid (or parked invisible) beside an icon-only tab has nothing to land on: report none.
   const hasStripControl = await page.evaluate(
     (id) =>
       [...document.querySelectorAll<HTMLElement>(`[data-tab-group-strip-id="${id}"] button`)].some(
-        (button) => !button.closest('[data-tab-id]') && button.offsetParent !== null
+        (button) =>
+          !button.closest('[data-tab-id]') && button.checkVisibility({ visibilityProperty: true })
       ),
     groupId
   )
