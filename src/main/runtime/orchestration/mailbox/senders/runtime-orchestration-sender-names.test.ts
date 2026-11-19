@@ -336,7 +336,7 @@ it("names this Orca's own mail about a server's Dispatch by its task and agent",
       }
     ]
   }).senders[0]
-  expect(sender).toMatchObject({ name: 'Verify on Windows · Claude', agent: 'claude' })
+  expect(sender).toMatchObject({ name: 'Verify on Windows', agent: 'claude' })
 })
 
 it("names a worker's mail by its task and agent once its terminal tab is gone", () => {
@@ -378,7 +378,7 @@ it("names a worker's mail by its task and agent once its terminal tab is gone", 
     senderSnapshot: (party, reported, recorded) => names().snapshotOf(party, reported, recorded),
     batch: [status]
   }).senders[0]
-  expect(sender).toMatchObject({ name: 'Fix the login page · Codex', agent: 'codex' })
+  expect(sender).toMatchObject({ name: 'Fix the login page', agent: 'codex' })
   expect(sender).not.toHaveProperty('host')
   const next = db.createStartingWorkerDispatch({
     creator: { kind: 'system' },
@@ -401,7 +401,7 @@ it("names a worker's mail by its task and agent once its terminal tab is gone", 
     started.dispatch.id,
     null
   )
-  expect(crewName).toBe('Fix the login page · Codex')
+  expect(crewName).toBe('Fix the login page')
 })
 
 it("names a legacy paired server's relayed mail by its task, agent and server", () => {
@@ -446,5 +446,5 @@ it("names a legacy paired server's relayed mail by its task, agent and server", 
     senderSnapshot: (party, reported, recorded) => names().snapshotOf(party, reported, recorded),
     batch: [message]
   }).senders[0]
-  expect(sender).toMatchObject({ name: 'Port the build · Codex', agent: 'codex', host: 'winbox' })
+  expect(sender).toMatchObject({ name: 'Port the build', agent: 'codex', host: 'winbox' })
 })

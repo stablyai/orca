@@ -57,11 +57,13 @@ export function workerIdentity(db: OrchestrationDb, dispatchId: string): WorkerI
   }
 }
 
-/** A worker's name once its chat or terminal is gone: "Fix login · Codex". */
+/** A worker's name once its chat or terminal is gone: its task ("Fix login"); every surface naming it
+ *  shows the agent's icon, so the agent word stands in only when the task has no title. */
 export function workerIdentityName(
   identity: Pick<WorkerIdentity, 'title' | 'agent'>
 ): string | null {
-  const agent =
-    identity.agent && identity.agent !== 'unknown' ? formatAgentTypeLabel(identity.agent) : null
-  return identity.title && agent ? `${identity.title} · ${agent}` : identity.title || agent
+  return (
+    identity.title ||
+    (identity.agent && identity.agent !== 'unknown' ? formatAgentTypeLabel(identity.agent) : null)
+  )
 }

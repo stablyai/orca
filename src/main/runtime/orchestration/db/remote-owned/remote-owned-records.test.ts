@@ -437,7 +437,7 @@ describe('remote-owned records on the coordinating Orca', () => {
           observeSenderSnapshot(party, sources, reported, recorded)
       }).senders[0]
 
-      expect(sender).toMatchObject({ name: 'do task_t · Claude', agent: 'claude', host: 'devB' })
+      expect(sender).toMatchObject({ name: 'do task_t', agent: 'claude', host: 'devB' })
     })
   })
 })
