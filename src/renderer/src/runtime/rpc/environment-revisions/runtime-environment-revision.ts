@@ -124,10 +124,6 @@ export function isRuntimeEnvironmentContinuationPending(
   )
 }
 
-export function hasPendingRuntimeEnvironmentContinuation(environmentId: string): boolean {
-  return pendingContinuationByEnvironmentId.has(environmentId)
-}
-
 export function captureRuntimeEnvironmentRequestRevision(
   environmentId: string,
   expectedRevision?: number

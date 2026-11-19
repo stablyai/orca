@@ -1,4 +1,4 @@
-import { useContext, useState } from 'react'
+import { useState } from 'react'
 import { Text, View } from 'react-native'
 import { AGENT_CHAT_PERMISSION_MODES } from '../../../src/shared/agent-launch/permissions/agent-chat-permission-mode'
 import { agentChatPermissionModes } from '../../../src/shared/agent-launch/permissions/agent-chat-permission-support'
@@ -37,7 +37,6 @@ import {
 } from './bot-access-request-copy'
 import type { BotAccessRequests } from './use-bot-access-requests'
 import type { RouteBot } from './use-route-bot'
-import { WorkspaceServerContext } from '../worktree/execution-hosts/workspace-server-context'
 import { readConnectionStatusProbe } from '../transport/connection/runtime-status-probe'
 import { useBackClaim } from '../navigation/use-back-claim'
 import { ListRow } from '../components/list/ListGroup'
@@ -118,9 +117,8 @@ export function MobileBotSettingsTab(props: {
 }) {
   const t = useMobileTranslation()
   const { bot, applyBot } = props.routeBot
-  const server = useContext(WorkspaceServerContext)
   const status = props.client ? readConnectionStatusProbe(props.client) : undefined
-  const accessBot = { ...bot, accessHost: phoneAccessHost(server, status) }
+  const accessBot = { ...bot, accessHost: phoneAccessHost(status) }
   const [saving, setSaving] = useState(false)
   const [removing, setRemoving] = useState<BotMember | null>(null)
   const [granting, setGranting] = useState<ConnectorAccessRequest | null>(null)

@@ -39,11 +39,12 @@ export function botHostMachineName(
     !environment ||
     isRuntimeHostContactRevoked(entry) ||
     (entry?.snapshot &&
-      entry.snapshot.pairingRevision !== (environment.pairingRevision ?? environment.createdAt))
+      (entry.snapshot.verification !== 'verified' ||
+        entry.snapshot.pairingRevision !== (environment.pairingRevision ?? environment.createdAt)))
   ) {
     return null
   }
-  return normalizeMachineName(pairedStatus(hostId, state)?.machineName) || null
+  return normalizeMachineName(entry?.status?.machineName) || null
 }
 
 /** The host's own status: this app's runtime asked now, a paired server's as last verified. */

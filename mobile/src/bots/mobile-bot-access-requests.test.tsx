@@ -138,15 +138,13 @@ describe('access requests in the bot sheet', () => {
     expect(decide).toHaveBeenCalledExactlyOnceWith(request, 'granted')
   })
 
-  it('names the paired server in the access warning and grant confirmation', () => {
+  it('keeps an unverified route name out of the warning and grant confirmation', () => {
     const root = renderTab(
       { requests: [request], deciding: false, decide: vi.fn(async () => {}) },
       { serverName: 'Atlas Server' }
     ).root
-    expect(texts(root).some((text) => text.includes('Atlas Server'))).toBe(true)
-    press(root, 'Review Dana Kim')
-    const confirm = root.findByProps({ confirmLabel: 'Give access' })
-    expect(confirm.props.message).toContain('Atlas Server')
+    expectNamedWarningAndConsent(root, 'the computer this agent runs on')
+    expect(texts(root).some((text) => text.includes('Atlas Server'))).toBe(false)
   })
 
   it.each(['status pending', 'hardware probe timed out'])(

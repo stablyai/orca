@@ -31,13 +31,10 @@ export type PhoneAccessBot = {
   google?: boolean
 }
 
-export function phoneAccessHost(
-  server: { name?: string | null } | undefined,
-  status: HostStatusReply | undefined
-): BotAccessHost {
+export function phoneAccessHost(status: HostStatusReply | undefined): BotAccessHost {
   return {
     kind: 'unknown',
-    name: normalizeMachineName(status?.machineName) || normalizeMachineName(server?.name) || null
+    name: normalizeMachineName(status?.machineName) || null
   }
 }
 

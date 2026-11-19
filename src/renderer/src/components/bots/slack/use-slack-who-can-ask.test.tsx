@@ -31,12 +31,7 @@ vi.mock('@/lib/bot-catalog', () => ({
 vi.mock('@/store', () => {
   const state = {
     setContextualToursBlockingSurfaceVisible: vi.fn(),
-    settings: {
-      hostSettingOverrides: {
-        'runtime:server-1': { displayLabel: 'Atlas Server' },
-        'runtime:server-2': { displayLabel: 'server-2' }
-      }
-    }
+    settings: null
   }
   return {
     useAppStore: Object.assign(
@@ -46,12 +41,9 @@ vi.mock('@/store', () => {
   }
 })
 
-import { stampBotHost } from '@/lib/bot-catalog-snapshot'
-import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { ConfirmationDialogProvider } from '@/components/dismiss/confirmation/confirmation-dialog'
 import { botMembersFullError } from '../../../../../shared/bots/bot-member-capacity'
 import { BotWhoCanAskList } from '../BotWhoCanAskList'
-import { BotWhoCanAskInsetList } from '../BotWhoCanAskInsetList'
 import { useSlackWhoCanAsk } from './use-slack-who-can-ask'
 
 function BotWhoCanAsk({ bot }: { bot: Bot }): React.JSX.Element {
@@ -452,26 +444,5 @@ describe('useSlackWhoCanAsk', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'Nobody was added: Jane Doe would go past the 200 people a bot can have.'
     )
-  })
-})
-
-describe('BotWhoCanAskInsetList', () => {
-  function renderInset(hostId: ExecutionHostId): void {
-    mocks.members = []
-    const insetBot = stampBotHost(hostId, bot({ members: [] }))
-    function Inset(): React.JSX.Element {
-      return <BotWhoCanAskInsetList bot={insetBot} service={useSlackWhoCanAsk(insetBot)} />
-    }
-    renderList(<Inset />)
-  }
-
-  it('keeps a configured server name that matches its host ID', () => {
-    renderInset('runtime:server-2')
-    expect(screen.getByText(/server-2/, { selector: 'p' })).toBeVisible()
-  })
-
-  it('names the paired server exposed by giving access', () => {
-    renderInset('runtime:server-1')
-    expect(screen.getByText(/Atlas Server/, { selector: 'p' })).toBeVisible()
   })
 })

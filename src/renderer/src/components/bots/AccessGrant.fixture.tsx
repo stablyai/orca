@@ -4,8 +4,8 @@ import { ConfirmationDialogProvider } from '../dismiss/confirmation/confirmation
 import { Button } from '../ui/button'
 import { useAppStore } from '@/store'
 import { publishBots, setBotHostListing, stampBotHost } from '@/lib/bot-catalog-snapshot'
-import { getDefaultSettings } from '../../../../shared/orca-profiles/constants'
-import { RUNTIME_PROTOCOL_VERSION } from '../../../../shared/remote-runtime/protocol/protocol-version'
+import { publicRuntimeEnvironment } from '@/runtime/rpc/testing/paired-runtime-environment-test-fixture'
+import { createCompatibleRuntimeStatusResponse } from '@/runtime/rpc/testing/runtime-compatibility-test-fixture'
 import { BotWhoCanAskInsetList } from './BotWhoCanAskInsetList'
 import type { BotWhoCanAskService } from './BotWhoCanAskList'
 import { useConfirmBotAccess } from './bot-access-confirm'
@@ -51,19 +51,31 @@ const service: BotWhoCanAskService = {
 function setup(): void {
   setBotHostListing({ hosts: [{ hostId: HOST, state: 'live' }], updateNeeded: [] })
   publishBots([remote], undefined, HOST)
-  useAppStore.setState((state) => ({
-    settings: {
-      ...(state.settings ?? getDefaultSettings('/home/fixture')),
-      hostSettingOverrides: { [HOST]: { displayLabel: 'Atlas Server' } }
-    }
-  }))
+  const status = {
+    ...createCompatibleRuntimeStatusResponse('access-example').result,
+    machineName: 'Atlas Server'
+  }
+  useAppStore
+    .getState()
+    .setRuntimeEnvironments([
+      publicRuntimeEnvironment({ id: 'access-example', name: 'Orca Server', pairingRevision: 1 })
+    ])
+  useAppStore.getState().applyRuntimeHostStatusSnapshot({
+    environmentId: 'access-example',
+    pairingRevision: 1,
+    sequence: 1,
+    checkedAt: 1,
+    verification: 'verified',
+    transport: 'ready',
+    status
+  })
   window.api.runtimeEnvironments.call = async ({ method }) => ({
     id: 'access-example',
     ok: true,
     _meta: { runtimeId: 'access-example' },
     result:
       method === 'status.get'
-        ? { runtimeId: 'access-example', runtimeProtocolVersion: RUNTIME_PROTOCOL_VERSION }
+        ? status
         : method === 'orcaAccount.status'
           ? {
               state: 'signed-in',

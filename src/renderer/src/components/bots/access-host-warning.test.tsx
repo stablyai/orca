@@ -111,9 +111,7 @@ beforeEach(() => {
   vi.stubGlobal('__ORCA_WEB_CLIENT__', true)
   useAppStore.setState({
     settings: {
-      ...getDefaultSettings('/fixture'),
-      machineName: 'Old Machine',
-      hostSettingOverrides: { local: { displayLabel: 'Old Machine' } }
+      ...getDefaultSettings('/fixture')
     }
   })
   setBotHostListing({
@@ -142,7 +140,9 @@ describe('paired access host identity', () => {
   it('uses neutral wording before the current pairing identifies its machine', async () => {
     show()
     await expectWarningAndConsent('the computer this agent runs on')
-    expect(screen.queryByText(/Old Machine/)).toBeNull()
+    receive({ ...status(1, 'Unverified Server'), verification: 'checking' })
+    await expectWarningAndConsent('the computer this agent runs on')
+    expect(screen.queryByText(/Unverified Server/)).toBeNull()
   })
   it('follows a replacement pairing without retaining local machine preferences', async () => {
     receive(status(1, 'Atlas Server'))
@@ -170,7 +170,7 @@ describe('paired access host identity', () => {
     await expectWarningAndConsent('Boreal Server')
     expect(screen.queryByText(/Atlas Server/)).toBeNull()
   })
-  it('drops a retired WSL peer alias before naming its replacement', async () => {
+  it('drops the retired peer’s machine name before naming its replacement', async () => {
     const deployment = {
       kind: 'wsl',
       distro: 'Ubuntu',
@@ -178,43 +178,14 @@ describe('paired access host identity', () => {
       remotePort: 6768
     } as const
     act(() => pair(1, { orcadDeployment: deployment, hostKeyFingerprint: 'key-atlas' }))
-    useAppStore.setState((state) => ({
-      settings: {
-        ...state.settings!,
-        hostSettingOverrides: { 'runtime:access-host': { displayLabel: 'Atlas Alias' } }
-      }
-    }))
     receive(status(1, 'Atlas Server'))
     show(remote)
-    await expectWarningAndConsent('Atlas Alias')
+    await expectWarningAndConsent('Atlas Server')
     act(() => pair(2, { orcadDeployment: deployment, hostKeyFingerprint: 'key-boreal' }))
     await expectWarningAndConsent('the computer this agent runs on')
     receive(status(2, 'Boreal Server'))
     receive({ ...status(1, 'Atlas Server'), sequence: 99 })
     await expectWarningAndConsent('Boreal Server')
-    expect(screen.queryByText(/Atlas Alias/)).toBeNull()
-  })
-  it('keeps an alias across a proven same-host pairing rotation', async () => {
-    const deployment = {
-      sshTargetId: 'atlas',
-      sshTargetGeneration: 1,
-      localPort: 46768,
-      remotePort: 6768
-    }
-    act(() => pair(1, { orcadDeployment: deployment, hostKeyFingerprint: 'key-atlas' }))
-    useAppStore.setState((state) => ({
-      settings: {
-        ...state.settings!,
-        hostSettingOverrides: { 'runtime:access-host': { displayLabel: 'Atlas Alias' } }
-      }
-    }))
-    receive(status(1, 'Atlas Server'))
-    show(remote)
-    await expectWarningAndConsent('Atlas Alias')
-    act(() => pair(2, { orcadDeployment: deployment }))
-    await expectWarningAndConsent('the computer this agent runs on')
-    act(() => pair(2, { orcadDeployment: deployment, hostKeyFingerprint: 'key-atlas' }))
-    receive(status(2, 'Atlas Server'))
-    await expectWarningAndConsent('Atlas Alias')
+    expect(screen.queryByText(/Atlas Server/)).toBeNull()
   })
 })

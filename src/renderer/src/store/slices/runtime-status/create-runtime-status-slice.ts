@@ -5,11 +5,6 @@ import type {
   RuntimeStatusStoreState
 } from './runtime-status-types'
 import { replaceMapEntries } from '@/store/record-transitions/keyed-record-transitions'
-import {
-  clearHostSettingOverride,
-  getHostSettingOverride
-} from '../../../../../shared/execution-host/host-setting-overrides'
-import { toRuntimeExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 
 import { lastVerifiedRuntimeStatus } from '../../../../../shared/remote-runtime/host-status/runtime-host-status'
 import { runtimeEnvironmentStatusesEqual } from './runtime-environment-status-equality'
@@ -79,20 +74,6 @@ export const createRuntimeStatusSlice: (
     const removedIds = get()
       .runtimeEnvironments.map((environment) => environment.id)
       .filter((id) => !nextIds.has(id))
-    const retiredEnvironmentIds = [...new Set([...removedIds, ...peerReplacement.retired])]
-    const previousOverrides = get().settings?.hostSettingOverrides
-    let hostSettingOverrides = previousOverrides
-    for (const id of retiredEnvironmentIds) {
-      const hostId = toRuntimeExecutionHostId(id)
-      if (getHostSettingOverride({ hostSettingOverrides }, hostId, 'displayLabel')) {
-        hostSettingOverrides = clearHostSettingOverride(
-          { hostSettingOverrides },
-          hostId,
-          'displayLabel'
-        )
-      }
-    }
-    const aliasesChanged = hostSettingOverrides !== previousOverrides
     set((s) => {
       const keep = new Set(environments.map((environment) => environment.id))
       const removedStatusIds = new Set<string>()
@@ -135,8 +116,7 @@ export const createRuntimeStatusSlice: (
         s.runtimeEnvironmentCatalogHydrated &&
         s.runtimeEnvironmentCatalogSettled &&
         !statusesChanged &&
-        !removedChanged &&
-        !aliasesChanged
+        !removedChanged
       ) {
         return s
       }
@@ -144,9 +124,6 @@ export const createRuntimeStatusSlice: (
         runtimeEnvironments: catalogUnchanged ? s.runtimeEnvironments : reconciled,
         runtimeEnvironmentCatalogHydrated: true,
         runtimeEnvironmentCatalogSettled: true,
-        ...(aliasesChanged && s.settings
-          ? { settings: { ...s.settings, hostSettingOverrides } }
-          : {}),
         ...(statusesChanged
           ? {
               runtimeStatusByEnvironmentId: replaceMapEntries(
@@ -158,9 +135,6 @@ export const createRuntimeStatusSlice: (
         ...(removedChanged ? { removedRuntimeEnvironmentIds: nextRemoved } : {})
       }
     })
-    if (aliasesChanged) {
-      void get().updateSettings?.({ hostSettingOverrides })
-    }
     // Prune removed environments’ agent/command caches; partial test stores may omit these slices.
     get().retainRuntimeDetectedAgents?.(environments.map((environment) => environment.id))
     get().retainRuntimeTerminalQuickCommands?.(environments.map((environment) => environment.id))
@@ -172,6 +146,7 @@ export const createRuntimeStatusSlice: (
       get().markEnvironmentSshStateStale?.(id)
     }
     // Why: a same-id re-pair to another peer retires it as surely as a removal.
+    const retiredEnvironmentIds = [...new Set([...removedIds, ...peerReplacement.retired])]
     if (retiredEnvironmentIds.length > 0) {
       evictInstalledAgentSkillDiscoveryForRuntimeEnvironments(retiredEnvironmentIds)
       get().purgeStaleRuntimeHostState?.(retiredEnvironmentIds)
