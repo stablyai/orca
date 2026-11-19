@@ -24,7 +24,8 @@ import {
   getResourceMemoryMetricCopy
 } from './popover/resource-memory-metric-copy'
 import { formatMemory } from './popover/resource-usage-metrics'
-import { readAgentPaneKeys, splitResourceUsageByOwner } from './popover/resource-owner-split'
+import { readAgentPaneKeys, splitSnapshotByOwner } from './popover/resource-owner-split'
+import { formatOwnerSplitLine } from './popover/resource-owner-labels'
 import {
   findAmbiguousWorktreeIds,
   findDuplicateIds
@@ -151,13 +152,14 @@ export function useResourceUsageDerivedModel({
     ]
   )
 
+  // Why: keyed to the 2 s snapshot and daemon inventory only, not titles or bindings; agent status is
+  // read here rather than subscribed because it churns many times a second.
   const ownerSplit = useMemo(
     () =>
-      open && resourceSnapshot
-        ? // Why: read agent status per 2s snapshot instead of subscribing; status churns many times a second.
-          splitResourceUsageByOwner(resourceSnapshot, unifiedRepos, readAgentPaneKeys())
+      resourceSnapshot
+        ? splitSnapshotByOwner(resourceSnapshot, sessions, readAgentPaneKeys())
         : null,
-    [open, resourceSnapshot, unifiedRepos]
+    [resourceSnapshot, sessions]
   )
 
   // Why: orphan detection needs daemon inventory; keep it open-only so the closed badge never triggers a background global session scan.
@@ -200,16 +202,8 @@ export function useResourceUsageDerivedModel({
   const sessionsOnlyError = sessionsError && memorySnapshotError === null
   const resourceManagerTooltipLines = getResourceManagerTooltipLines(
     {
-      memoryLabel: resourceSnapshot
-        ? [
-            `${memBadgeLabel} · ${memoryMetricCopy.summaryLabel}`,
-            commitBadgeLabel && commitMetricCopy
-              ? `${commitBadgeLabel} ${commitMetricCopy.summaryLabel}`
-              : null
-          ]
-            .filter(Boolean)
-            .join(' · ')
-        : memBadgeLabel,
+      // Why: the badge shows no total; its tooltip names each owner so a screenshot can't misread it.
+      memoryLabel: ownerSplit ? formatOwnerSplitLine(ownerSplit, t) : memBadgeLabel,
       sessionCount: triggerSessionCount,
       spaceScanReady
     },
@@ -230,7 +224,6 @@ export function useResourceUsageDerivedModel({
     triggerSessionCount,
     memoryMetricCopy,
     commitMetricCopy,
-    memBadgeLabel,
     commitToneClass,
     commitBadgeLabel,
     daemonUnreachable,

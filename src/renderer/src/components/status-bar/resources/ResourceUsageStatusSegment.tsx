@@ -55,7 +55,6 @@ export function ResourceUsageStatusSegment({
     memoryMetricCopy,
     commitMetricCopy,
     ownerSplit,
-    memBadgeLabel,
     commitToneClass,
     commitBadgeLabel,
     daemonUnreachable,
@@ -91,7 +90,6 @@ export function ResourceUsageStatusSegment({
           spaceScanReady,
           iconOnly,
           commitToneClass,
-          memBadgeLabel,
           triggerSessionCount,
           orphanCount,
           resourceManagerTooltipLines

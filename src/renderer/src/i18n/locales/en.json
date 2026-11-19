@@ -25710,10 +25710,11 @@
       "orca": "Orca",
       "agents": "Agents",
       "yourProcesses": "Your processes",
-      "otherApps": "Other apps",
-      "freeOfTotal": "{{free}} free of {{total}}",
-      "free": "Free",
-      "description": "Orca is the app. Agents and Your processes are terminals you run in Orca. Other apps is everything else on this machine."
+      "otherApps": "Other apps and system",
+      "description": "Orca is the app. Agents and Your processes are terminals you run in Orca. Other apps and system is everything else on this machine.",
+      "privateBytes": "Committed by Orca and terminals",
+      "availableOfTotal": "{{available}} available of {{total}}",
+      "available": "Available"
     }
   },
   "browserExtensions": {

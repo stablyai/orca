@@ -12,7 +12,7 @@ const fixtureOwnerSplit = {
   agents: { cpu: 49.6, memory: 6023725056 },
   yourProcesses: { cpu: 8.9, memory: 2029359923 },
   otherApps: 14388140032,
-  free: 10951022182,
+  available: 10951022182,
   hostTotal: 34359738368
 }
 
@@ -46,7 +46,7 @@ export const ownerBreakdown = defineFixture({
     }),
   interact: async (frame) => {
     const trigger = frame.querySelector<HTMLElement>('[tabindex="0"]')
-    trigger?.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, pointerType: 'mouse' }))
+    trigger?.focus()
     await new Promise((resolve) => setTimeout(resolve, 1200))
   }
 })

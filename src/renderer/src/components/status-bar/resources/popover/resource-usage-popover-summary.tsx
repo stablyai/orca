@@ -2,6 +2,7 @@ import React from 'react'
 import { AlertTriangle, MemoryStick, RotateCw, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card'
 import { cn } from '@/lib/class-names'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
@@ -12,6 +13,7 @@ import type {
 } from './resource-memory-metric-copy'
 import { formatCpu, formatMemory } from './resource-usage-metrics'
 import type { ResourceOwnerSplit } from './resource-owner-split'
+import { resourceOwnerLabels, type ResourceOwnerKey } from './resource-owner-labels'
 
 export function renderResourceUsagePopoverHeader(
   {
@@ -136,12 +138,10 @@ const OWNER_SWATCH_CLS = {
   agents: 'bg-chart-5 dark:bg-chart-2',
   yourProcesses: 'bg-foreground/45',
   otherApps: 'bg-foreground/15',
-  free: 'bg-foreground/[0.06] ring-1 ring-inset ring-foreground/20'
+  available: 'bg-foreground/[0.06] ring-1 ring-inset ring-foreground/20'
 } as const
 
-type OwnerKey = keyof typeof OWNER_SWATCH_CLS
-
-function OwnerSwatch({ owner }: { owner: OwnerKey }): React.JSX.Element {
+function OwnerSwatch({ owner }: { owner: keyof typeof OWNER_SWATCH_CLS }): React.JSX.Element {
   return (
     <span
       className={cn('inline-block size-2 shrink-0 rounded-[2px]', OWNER_SWATCH_CLS[owner])}
@@ -150,12 +150,22 @@ function OwnerSwatch({ owner }: { owner: OwnerKey }): React.JSX.Element {
   )
 }
 
-function ownerLabels(t: Translate): Record<Exclude<OwnerKey, 'free'>, string> {
+/** Bar widths in percent of this machine's memory. Summed per-process bytes can count shared
+ *  pages twice, so owners shrink to fit the used part and available keeps its true share. */
+function barWidths(split: ResourceOwnerSplit): Record<ResourceOwnerKey, number> {
+  const total = split.hostTotal
+  if (total <= 0) {
+    return { orca: 0, agents: 0, yourProcesses: 0, otherApps: 0 }
+  }
+  const used = Math.max(0, total - split.available)
+  const owned = split.orca.memory + split.agents.memory + split.yourProcesses.memory
+  const scale = owned > used && owned > 0 ? used / owned : 1
+  const pct = (bytes: number): number => (bytes / total) * 100
   return {
-    orca: t('resourceManager.owner.orca', 'Orca'),
-    agents: t('resourceManager.owner.agents', 'Agents'),
-    yourProcesses: t('resourceManager.owner.yourProcesses', 'Your processes'),
-    otherApps: t('resourceManager.owner.otherApps', 'Other apps')
+    orca: pct(split.orca.memory * scale),
+    agents: pct(split.agents.memory * scale),
+    yourProcesses: pct(split.yourProcesses.memory * scale),
+    otherApps: pct(Math.min(split.otherApps, Math.max(0, used - owned * scale)))
   }
 }
 
@@ -177,24 +187,15 @@ export function renderResourceUsageSummary(
   },
   t: Translate = translate
 ): React.JSX.Element {
-  const labels = ownerLabels(t)
+  const labels = resourceOwnerLabels(t)
   const owners = ['orca', 'agents', 'yourProcesses'] as const
-  const memoryOf = (owner: Exclude<OwnerKey, 'free'>): number =>
-    owner === 'otherApps' ? ownerSplit.otherApps : ownerSplit[owner].memory
-  const barSegments = [...owners, 'otherApps' as const]
-  // Why: summed per-process bytes can double-count shared pages, so scale to whichever is larger.
-  const barTotal = Math.max(
-    ownerSplit.hostTotal,
-    barSegments.reduce((sum, owner) => sum + memoryOf(owner), 0) + ownerSplit.free
-  )
-  const freeLabel = t('resourceManager.owner.freeOfTotal', '{{free}} free of {{total}}', {
-    free: formatMemory(ownerSplit.free),
-    total: formatMemory(ownerSplit.hostTotal)
-  })
+  const widths = barWidths(ownerSplit)
+  const privateLabel = t('resourceManager.owner.privateBytes', 'Committed by Orca and terminals')
+  const showCommit = commitBadgeLabel !== null && commitMetricCopy !== null
   return (
     <div className="shrink-0 border-b border-border px-3 pt-2 pb-1.5 text-xs tabular-nums">
-      <Tooltip>
-        <TooltipTrigger asChild>
+      <HoverCard openDelay={300} closeDelay={100}>
+        <HoverCardTrigger asChild>
           <div
             tabIndex={0}
             className="cursor-default rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -207,7 +208,7 @@ export function renderResourceUsageSummary(
                   </span>
                   <span className="text-muted-foreground">{labels[owner]}</span>
                   <span className="font-medium text-foreground">
-                    {formatMemory(memoryOf(owner))}
+                    {formatMemory(ownerSplit[owner].memory)}
                   </span>
                 </span>
               ))}
@@ -216,18 +217,15 @@ export function renderResourceUsageSummary(
               className="mt-1.5 flex h-1.5 overflow-hidden rounded-full bg-foreground/[0.06]"
               aria-hidden
             >
-              {barSegments.map((owner) => (
+              {([...owners, 'otherApps'] as const).map((owner) => (
                 <span
                   key={owner}
-                  className={cn(
-                    'h-full shadow-[inset_1px_0_0_var(--popover)] first:shadow-none',
-                    OWNER_SWATCH_CLS[owner]
-                  )}
-                  style={{ width: `${(memoryOf(owner) / barTotal) * 100}%` }}
+                  className={cn('h-full', OWNER_SWATCH_CLS[owner])}
+                  style={{ width: `${widths[owner]}%` }}
                 />
               ))}
             </div>
-            <div className="mt-1 flex flex-wrap items-baseline gap-x-3 text-[11px] text-muted-foreground">
+            <div className="mt-1 flex flex-wrap items-baseline gap-x-3 text-2xs text-muted-foreground">
               <span className="inline-flex items-baseline gap-1.5 whitespace-nowrap">
                 <span className="self-center">
                   <OwnerSwatch owner="otherApps" />
@@ -236,10 +234,22 @@ export function renderResourceUsageSummary(
               </span>
               <span className="inline-flex items-baseline gap-1.5 whitespace-nowrap">
                 <span className="self-center">
-                  <OwnerSwatch owner="free" />
+                  <OwnerSwatch owner="available" />
                 </span>
-                {freeLabel}
+                {t(
+                  'resourceManager.owner.availableOfTotal',
+                  '{{available}} available of {{total}}',
+                  {
+                    available: formatMemory(ownerSplit.available),
+                    total: formatMemory(ownerSplit.hostTotal)
+                  }
+                )}
               </span>
+              {showCommit && commitToneClass && (
+                <span className={cn('whitespace-nowrap', commitToneClass)}>
+                  {privateLabel} {commitBadgeLabel}
+                </span>
+              )}
               {orphanCount > 0 && (
                 <span className="ml-auto shrink-0 text-status-warning-text" aria-live="polite">
                   {t(
@@ -251,9 +261,9 @@ export function renderResourceUsageSummary(
               )}
             </div>
           </div>
-        </TooltipTrigger>
-        <TooltipContent variant="tab-preview" side="bottom" sideOffset={6} className="w-auto">
-          <table className="text-xs tabular-nums">
+        </HoverCardTrigger>
+        <HoverCardContent variant="workspace-details" side="bottom" className="w-auto">
+          <table className="tabular-nums">
             <thead>
               <tr className="text-muted-foreground">
                 <th />
@@ -273,7 +283,7 @@ export function renderResourceUsageSummary(
                     </span>
                   </td>
                   <td className="pl-4 text-right">{formatCpu(ownerSplit[owner].cpu)}</td>
-                  <td className="pl-4 text-right">{formatMemory(memoryOf(owner))}</td>
+                  <td className="pl-4 text-right">{formatMemory(ownerSplit[owner].memory)}</td>
                 </tr>
               ))}
               <tr>
@@ -289,18 +299,16 @@ export function renderResourceUsageSummary(
               <tr>
                 <td className="whitespace-nowrap">
                   <span className="inline-flex items-center gap-1.5">
-                    <OwnerSwatch owner="free" />
-                    {t('resourceManager.owner.free', 'Free')}
+                    <OwnerSwatch owner="available" />
+                    {t('resourceManager.owner.available', 'Available')}
                   </span>
                 </td>
                 <td />
-                <td className="pl-4 text-right">{formatMemory(ownerSplit.free)}</td>
+                <td className="pl-4 text-right">{formatMemory(ownerSplit.available)}</td>
               </tr>
-              {commitBadgeLabel && commitMetricCopy && (
+              {showCommit && (
                 <tr>
-                  <td className="whitespace-nowrap pt-1 text-muted-foreground">
-                    {commitMetricCopy.summaryLabel}
-                  </td>
+                  <td className="whitespace-nowrap pt-1 text-muted-foreground">{privateLabel}</td>
                   <td />
                   <td className={cn('pl-4 pt-1 text-right', commitToneClass)}>
                     {commitBadgeLabel}
@@ -309,8 +317,8 @@ export function renderResourceUsageSummary(
               )}
             </tbody>
           </table>
-        </TooltipContent>
-      </Tooltip>
+        </HoverCardContent>
+      </HoverCard>
       <details className="mt-1.5 text-muted-foreground">
         <summary className="cursor-pointer rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
           {t('resourceManager.metricDetails', 'Metric details')}
@@ -319,7 +327,7 @@ export function renderResourceUsageSummary(
           <p>
             {t(
               'resourceManager.owner.description',
-              'Orca is the app. Agents and Your processes are terminals you run in Orca. Other apps is everything else on this machine.'
+              'Orca is the app. Agents and Your processes are terminals you run in Orca. Other apps and system is everything else on this machine.'
             )}
           </p>
           <p>
@@ -329,7 +337,7 @@ export function renderResourceUsageSummary(
             )}
           </p>
           <p>{memoryMetricCopy.description}</p>
-          {commitBadgeLabel && commitMetricCopy ? <p>{commitMetricCopy.description}</p> : null}
+          {commitMetricCopy && showCommit ? <p>{commitMetricCopy.description}</p> : null}
         </div>
       </details>
     </div>
