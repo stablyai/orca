@@ -168,7 +168,7 @@ export class E2EEChannel {
       outbound: this.outbound,
       request: plaintext,
       getSharedKey: () => this.sharedKey,
-      onOversize: (method) => this.closeForOutboundBudget({ emitter: 'size', top_method: method })
+      onOversize: (close) => this.closeForOutboundBudget(close)
     })
     this.messageHandler?.(plaintext, reply.text, reply.binary)
   }

@@ -44,7 +44,7 @@ export class MobileE2EEDesktopOutboundOwner {
 
   sendLegacyFrame(frame: string): boolean {
     if (this.socketMemory?.canSend(frame.length) !== true || this.ws.readyState !== this.ws.OPEN) {
-      this.overflow(this.socketMemory ? 'bufferedBytes' : 'socketSources')
+      this.overflow(this.socketMemory ? 'bufferedBytes' : 'socketSources', 'control')
       return false
     }
     this.ws.send(frame)
@@ -70,12 +70,8 @@ export class MobileE2EEDesktopOutboundOwner {
     if (options?.dropWhenBacklogged && !queue.isIdle(bytes.byteLength + 40)) {
       return 'backlogged'
     }
-    return this.enqueue(
-      queue,
-      Buffer.from(encryptBytes(bytes, sharedKey)),
-      bytes.byteLength,
-      method
-    )
+    const sealed = Buffer.from(encryptBytes(bytes, sharedKey))
+    return this.enqueue(queue, sealed, sealed.byteLength, method)
   }
 
   enqueueV2(
@@ -85,7 +81,7 @@ export class MobileE2EEDesktopOutboundOwner {
     options?: RpcBinarySendOptions
   ): boolean | 'backlogged' {
     if (!isMobileE2EEOutboundItemWithinLimit(plain)) {
-      this.onClose({ emitter: 'size', top_method: method })
+      this.onClose({ emitter: 'size', cap: 'maxFrameBytes', top_method: method })
       return false
     }
     const item = compressMobileE2EEV2Item(plain, this.clientCapabilities.current, options)
@@ -120,14 +116,16 @@ export class MobileE2EEDesktopOutboundOwner {
     return queue.enqueue(frame)
   }
 
-  private overflow(cap: MobileE2EEOutboundCap): void {
+  /** `method` names a frame that never reached the queue; otherwise the backlog's largest. */
+  private overflow(cap: MobileE2EEOutboundCap, method?: string): void {
     let top: [string, number] | undefined
     for (const entry of this.backlogBytes) {
       if (!top || entry[1] > top[1]) {
         top = entry
       }
     }
-    this.onClose({ emitter: 'queue', cap, ...(top ? { top_method: top[0] } : {}) })
+    const topMethod = method ?? top?.[0]
+    this.onClose({ emitter: 'queue', cap, ...(topMethod ? { top_method: topMethod } : {}) })
   }
 
   private legacy(): WsOutboundBackpressureQueue<string | Buffer> | null {

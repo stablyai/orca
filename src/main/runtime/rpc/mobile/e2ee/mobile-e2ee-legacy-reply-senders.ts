@@ -4,7 +4,8 @@ import type { MobileE2EEDesktopOutboundOwner } from './mobile-e2ee-desktop-outbo
 import {
   isMobileE2EEBinaryPayloadWithinLimit,
   isMobileE2EETextPayloadWithinLimit,
-  mobileE2EEReplyMethod
+  mobileE2EEReplyMethod,
+  type MobileE2EEOutboundBudgetClose
 } from './mobile-e2ee-outbound-admission'
 import type { RpcBinarySender } from '../../transports/rpc-binary-sender'
 
@@ -15,7 +16,7 @@ export function createLegacyReplySenders(args: {
   /** The request these replies answer; its method names an overflow in telemetry. */
   request: string
   getSharedKey: () => Uint8Array | null
-  onOversize: (method: string) => void
+  onOversize: (close: MobileE2EEOutboundBudgetClose) => void
 }): { text: (response: string) => void; binary: RpcBinarySender } {
   const method = mobileE2EEReplyMethod(args.request)
   return {
@@ -26,7 +27,7 @@ export function createLegacyReplySenders(args: {
         return
       }
       if (!isMobileE2EETextPayloadWithinLimit(response)) {
-        args.onOversize(method)
+        args.onOversize({ emitter: 'size', cap: 'maxFrameBytes', top_method: method })
         return
       }
       args.outbound.enqueueLegacyText(encrypt(response, sharedKey), method)
@@ -37,7 +38,7 @@ export function createLegacyReplySenders(args: {
         return false
       }
       if (!isMobileE2EEBinaryPayloadWithinLimit(response)) {
-        args.onOversize(method)
+        args.onOversize({ emitter: 'size', cap: 'maxFrameBytes', top_method: method })
         return false
       }
       return args.outbound.enqueueLegacyBinary(response, sharedKey, method, options)
