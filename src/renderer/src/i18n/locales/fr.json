@@ -21314,6 +21314,7 @@
       "description": "Retrouvez n’importe quelle conversation passée par son contenu, puis reprenez là où l’agent s’est arrêté.",
       "cta": "Activer la recherche de sessions"
     },
+    "eyebrowTip": "Conseil",
     "orcaCli": {
       "title": "Laissez les agents piloter Orca avec Orca CLI",
       "description": "Permettez aux agents de coordonner les worktrees enfants et de communiquer entre worktrees.",

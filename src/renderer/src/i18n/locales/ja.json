@@ -22346,6 +22346,7 @@
       "description": "過去の会話を内容から見つけて、Agent が中断したところから再開できます。",
       "cta": "セッション検索を有効にする"
     },
+    "eyebrowTip": "ヒント",
     "orcaCli": {
       "title": "Orca CLI で Agent に Orca を操作させる",
       "description": "Agent が子ワークツリーを連携させ、ワークツリー間で通信できるようにします。",

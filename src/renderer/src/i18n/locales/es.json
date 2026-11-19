@@ -21334,6 +21334,7 @@
       "demoTabTitle": "Pie del checkout",
       "demoReply": "Añadí logos de pago al pie del checkout."
     },
+    "eyebrowTip": "Consejo",
     "orcaCli": {
       "title": "Deja que los agentes controlen Orca con Orca CLI",
       "description": "Permite que los agentes coordinen worktrees secundarios y se comuniquen entre worktrees.",

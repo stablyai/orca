@@ -22767,6 +22767,7 @@
       "description": "根据对话内容找到任何历史会话，再从智能体上次停下的地方继续",
       "cta": "开启会话搜索"
     },
+    "eyebrowTip": "提示",
     "orcaCli": {
       "title": "让智能体通过 Orca CLI 操控 Orca",
       "description": "让智能体协调子工作树，并在工作树之间通信",

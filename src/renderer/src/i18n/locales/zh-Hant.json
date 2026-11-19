@@ -20872,6 +20872,7 @@
       "description": "根據對話內容找出任何過往對話，再從代理程式上次停下的地方繼續。",
       "cta": "開啟工作階段搜尋"
     },
+    "eyebrowTip": "提示",
     "orcaCli": {
       "title": "讓代理程式透過 Orca CLI 操控 Orca",
       "description": "讓代理程式協調子工作樹，並在工作樹之間通訊。",
