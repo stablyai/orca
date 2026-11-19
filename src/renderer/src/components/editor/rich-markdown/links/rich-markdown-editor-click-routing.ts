@@ -5,7 +5,11 @@ import {
   showLocalPathOpenBlockedToast
 } from '@/lib/files/os-open/local-path-open-guard'
 import { getLinkSourceLocalOpenOwner } from '@/lib/links/ownership/link-source-local-open-owner'
-import { openMarkdownExternalUrl } from '../../markdown/link-routing/markdown-external-url-open'
+import {
+  openMarkdownExternalUrl,
+  resolveMarkdownHttpLinkDestination
+} from '../../markdown/link-routing/markdown-external-url-open'
+import { resolveModifierRouting } from '@/lib/browser/navigation/http-link-modifier-routing'
 import {
   absolutePathToFileUri as toFileUrlForOsEscape,
   resolveMarkdownLinkTarget
@@ -118,7 +122,12 @@ export function handleRichMarkdownEditorClick({
         runtimeEnvironmentId,
         sourceOwner,
         worktreeId,
-        worktreeRoot
+        worktreeRoot,
+        shiftInverted: resolveModifierRouting(
+          true,
+          useAppStore.getState().settings?.openLinksInApp === true,
+          useAppStore.getState().settings?.openLinksInAppModifierInverts === true
+        ).wantsOrca
       })
       return true
     }
@@ -128,7 +137,10 @@ export function handleRichMarkdownEditorClick({
         state: useAppStore.getState(),
         worktreeId,
         sourceOwner,
-        destination: 'orca'
+        destination: resolveMarkdownHttpLinkDestination(
+          useAppStore.getState().settings,
+          event.shiftKey
+        )
       })
       return true
     }
@@ -205,7 +217,8 @@ function openShiftModifiedMarkdownLink({
   worktreeRoot,
   runtimeEnvironmentId,
   sourceOwner,
-  worktreeId
+  worktreeId,
+  shiftInverted
 }: {
   activateMarkdownLink: ActivateMarkdownLink
   href: string
@@ -214,6 +227,8 @@ function openShiftModifiedMarkdownLink({
   runtimeEnvironmentId?: string | null
   sourceOwner: HttpLinkSourceOwner
   worktreeId: string
+  /** True when the Shift-inverts option routes this click into Orca instead of the system browser. */
+  shiftInverted: boolean
 }): void {
   if (sourceOwner.kind === 'unknown') {
     return
@@ -227,7 +242,7 @@ function openShiftModifiedMarkdownLink({
       state: useAppStore.getState(),
       worktreeId,
       sourceOwner,
-      destination: 'system'
+      destination: shiftInverted ? 'orca' : 'system'
     })
     return
   }
