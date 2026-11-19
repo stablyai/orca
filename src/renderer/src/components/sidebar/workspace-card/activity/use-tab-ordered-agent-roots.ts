@@ -7,7 +7,16 @@ const NO_TABS: Tab[] = []
 const NO_GROUPS: TabGroup[] = []
 const NO_ORDER: string[] = []
 
-/** A card's root agent keys in tab strip order, so dragging or pinning a tab moves its agents. */
+/**
+ * Orders a workspace card's root agent keys by where their tabs sit in the workspace's tab
+ * strips, so dragging or pinning a tab moves its agent rows. The hook subscribes to the
+ * workspace's tabs, tab groups, layout and the agent status projection.
+ *
+ * @param worktreeId The workspace whose tab strips set the order.
+ * @param roots Root agent keys in projection order. Keys in one tab keep this order. Keys whose
+ *   tab is not visible go last, also in this order.
+ * @returns `roots` itself when the tab order moves no key.
+ */
 export function useTabOrderedAgentRoots(
   worktreeId: string,
   roots: readonly string[]
