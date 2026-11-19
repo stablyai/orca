@@ -36,7 +36,7 @@ function observePublication() {
     writable: true,
     value(this: Promise<unknown>, ...args: Parameters<typeof promiseThen>) {
       registrations.set(this, (registrations.get(this) ?? 0) + 1)
-      return Reflect.apply(promiseThen, this, args)
+      return promiseThen.call(this, ...args)
     }
   })
   Object.defineProperty(Promise.prototype, 'catch', {
@@ -45,7 +45,7 @@ function observePublication() {
     value(this: Promise<unknown>, ...args: Parameters<typeof promiseCatch>) {
       // oxlint-disable-next-line typescript/no-this-alias -- Retain the observed drain identity for handler counts.
       flight = this
-      return Reflect.apply(promiseCatch, this, args)
+      return promiseCatch.call(this, ...args)
     }
   })
   return {
