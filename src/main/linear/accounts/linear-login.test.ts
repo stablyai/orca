@@ -1,10 +1,13 @@
 import { existsSync, mkdtempSync, rmSync } from 'node:fs'
+import * as realFsPromises from 'node:fs/promises'
 import * as realOs from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 let tempHome = ''
 const created: unknown[] = []
+// A module mock reaches production's named fs imports under every test runtime; a namespace spy doesn't.
+let deniedReadPath: string | null = null
 
 async function load() {
   vi.resetModules()
@@ -16,6 +19,13 @@ async function load() {
     describeProtectionGap: () => null
   })
   vi.doMock('os', () => ({ ...realOs, homedir: () => tempHome }))
+  vi.doMock('node:fs/promises', () => {
+    const readFile = (...args: Parameters<typeof realFsPromises.readFile>) =>
+      deniedReadPath !== null && String(args[0]) === deniedReadPath
+        ? Promise.reject(Object.assign(new Error('credential read denied'), { code: 'EACCES' }))
+        : realFsPromises.readFile(...args)
+    return { ...realFsPromises, default: { ...realFsPromises, readFile }, readFile }
+  })
   vi.doMock('../requests/linear-sdk', () => ({
     createLinearClient: (options: unknown) => {
       created.push(options)
@@ -48,6 +58,7 @@ const linked = {
 beforeEach(() => {
   tempHome = mkdtempSync(join(realOs.tmpdir(), 'orca-linear-login-'))
   created.length = 0
+  deniedReadPath = null
   vi.spyOn(Date, 'now').mockReturnValue(NOW)
 })
 afterEach(() => {
@@ -160,18 +171,10 @@ describe('Refreshing the login', () => {
   it('rejects a refresh when its guarded persistence read fails, preserving the saved login', async () => {
     const { store, refresh, paths } = await load()
     await store.keepConnectedLinearLogin(login(NOW + HOUR / 2), linked)
-    const fs = await import('node:fs/promises')
     await store.readWorkspaceLogin('org-acme')
-    const loginPath = paths.getWorkspaceLoginPath('org-acme')
-    const passThrough = fs.readFile.bind(fs)
     const request = vi.fn(async () => {
       // Only the guarded read of this login fails; other reads in the refresh pass through.
-      vi.spyOn(fs, 'readFile').mockImplementation(async (file, options) => {
-        if (String(file) === loginPath) {
-          throw Object.assign(new Error('credential read denied'), { code: 'EACCES' })
-        }
-        return passThrough(file, options)
-      })
+      deniedReadPath = paths.getWorkspaceLoginPath('org-acme')
       return new Response(
         JSON.stringify({
           access_token: 'lin_oauth_access_2',
