@@ -126,7 +126,7 @@ describe('remote browser authoritative page state', () => {
       pending = result.current.runRemoteNavigation('browser.reload')
     })
     expect(currentPage().loading).toBe(true)
-    act(() => result.current.prepareCertificateProceed())
+    act(() => result.current.abandonRemoteNavigation())
     expect(currentPage().loading).toBe(false)
     await act(async () => {
       reload.reject(new Error('connection lost before reaching host'))
