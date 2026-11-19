@@ -57,13 +57,26 @@ function longQueue(source: Database.Database, sessionId: string, recorded: boole
 }
 
 /** Counts the queued rows any statement reading queued text hands to JS. */
-function countQueuedRowsRead(source: Database.Database): { rows: number } {
-  const counted = { rows: 0 }
+function countQueuedRowsRead(source: Database.Database): { rows: number; sorted: string[] } {
+  const counted = { rows: 0, sorted: [] as string[] }
   const prepare = source.prepare.bind(source)
   source.prepare = ((sql: string) => {
     const statement = prepare(sql)
-    if (!/FROM queued_messages/.test(sql) || /COUNT\(\*\)|SELECT 1 /.test(sql)) {
+    if (!/FROM queued_messages/.test(sql) || /COUNT\(\*\)|SELECT 1 |^EXPLAIN/.test(sql)) {
       return statement
+    }
+    // SQLite sorting a whole queue into a temp B-tree reads every row before the first one is
+    // handed over, however few reach JS.
+    const plan = prepare(`EXPLAIN QUERY PLAN ${sql}`)
+      .all(
+        ...sql
+          .split('?')
+          .slice(1)
+          .map(() => null)
+      )
+      .map((step) => String(step.detail))
+    if (plan.some((detail) => detail.includes('TEMP B-TREE'))) {
+      counted.sorted.push(sql)
     }
     const { get, all, iterate } = statement
     statement.get = (...args: SqliteBindings) => {
@@ -124,6 +137,7 @@ it('keeps the original for a chat with 100k waiting messages without reading the
     // Kept as an original, a queue is measured before any row is read. Compared card by card, it
     // streams, and the first message this store lacks ends the comparison.
     expect(counted.rows).toBeLessThanOrEqual(chat === 'deleted-here' ? 0 : 1)
+    expect(counted.sorted).toEqual([])
     // 100k rows of 512 characters would be about 60 MiB of text before any serialization.
     expect(process.memoryUsage().heapUsed - heapBefore).toBeLessThan(16 * 1024 * 1024)
   }

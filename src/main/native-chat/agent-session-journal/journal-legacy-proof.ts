@@ -179,6 +179,8 @@ function savedCursor(
     retiring !== null &&
     'phase' in retiring &&
     retiring.phase === 'retiring' &&
+    'layout' in retiring &&
+    retiring.layout === LEGACY_PROOF_LAYOUT &&
     'proof' in retiring &&
     retiring.proof === observation.proof &&
     'store' in retiring &&

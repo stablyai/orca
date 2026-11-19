@@ -33,13 +33,20 @@ export type LegacySourceRefusal = {
   reason: LegacySourceRefusalReason
 }
 
+/** The proof's page layout; progress saved under another is walked again from the start. */
+export const LEGACY_PROOF_LAYOUT = 1
+/** The proof's last phases, the reconcile's copies, start at this table (after content and claims). */
+export const LEGACY_PROOF_COPIES_TABLE = 7
+
 /**
  * The commit that makes every converted row durable before the original is unlinked. It names
- * the original it retires; nothing reads it to decide anything.
+ * the original it retires; a later launch whose deletion of the same original didn't go through
+ * resumes at the copies when the layout matches.
  */
 export type LegacySourceRetiring = {
   version: 2
   phase: 'retiring'
+  layout: typeof LEGACY_PROOF_LAYOUT
   proof: string
   store: string
 }
@@ -48,11 +55,6 @@ export type LegacySourceRetiring = {
  * How far the proof of this original into this store got, so a later launch resumes there instead
  * of walking every chat again. Not durable: a lost write only repeats work.
  */
-/** The proof's page layout; progress saved under another is walked again from the start. */
-export const LEGACY_PROOF_LAYOUT = 1
-/** The proof's last phases, the reconcile's copies, start at this table (after content and claims). */
-export const LEGACY_PROOF_COPIES_TABLE = 7
-
 export type LegacySourceProving = {
   version: 2
   phase: 'proving'

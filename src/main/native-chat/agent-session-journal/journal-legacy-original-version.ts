@@ -33,7 +33,8 @@ export function queueHeld(
     WHERE session_id=? AND epoch=? AND message_id=?`)
   // Settled rows are never read: only waiting text can differ (the content scan refuses rows it
   // can't read).
-  for (const row of source.prepare(UNSETTLED_QUEUE_SQL).iterate(sessionId)) {
+  // Unordered, so the first waiting row is read without SQLite sorting the whole queue first.
+  for (const row of source.prepare(UNSETTLED_QUEUE_ANY_ORDER_SQL).iterate(sessionId)) {
     const queued = readStoredQueuedMessageRow(row)
     if (!queued || !isUnsettledQueuedMessage(queued)) {
       return false
@@ -136,6 +137,8 @@ export function originalVersion(
  */
 const LEGACY_QUEUE_MAX_ROWS = 2048
 const LEGACY_QUEUE_MAX_BYTES = 2 * 1024 * 1024
+const UNSETTLED_QUEUE_ANY_ORDER_SQL = `SELECT * FROM queued_messages
+  WHERE session_id=? AND state IN ('waiting','returned')`
 const UNSETTLED_QUEUE_SQL = `SELECT * FROM queued_messages
   WHERE session_id=? AND state IN ('waiting','returned') ORDER BY position, message_id`
 const QUEUED_TEXT_COLUMNS = [
