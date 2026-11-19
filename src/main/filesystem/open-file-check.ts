@@ -60,7 +60,10 @@ async function openOnMacBatch(targets: Target[]): Promise<Set<string> | null> {
   const found = new Set(
     targets.filter((target) => inodes.has(target.ino)).map((target) => target.path)
   )
-  if (result.code === 1 && result.stdout.trim() === '' && result.stderr.trim() === '') {
+  if (result.code === 1 && result.stderr.trim() !== '') {
+    return null
+  }
+  if (result.code === 1 && result.stdout.trim() === '') {
     return found
   }
   // An answer that names none of the files is unknown.

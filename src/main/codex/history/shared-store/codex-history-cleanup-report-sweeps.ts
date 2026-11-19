@@ -43,8 +43,12 @@ export async function recordReportSweep(sweep: ReportSweep): Promise<void> {
     const swept = await readSwept(sweep.markerPath)
     const home = normalizeRuntimePathForComparison(sweep.accountHome)
     const homes = swept.get(sweep.revision) ?? []
-    swept.set(sweep.revision, homes.includes(home) ? homes : [...homes, home])
-    const kept = [...swept.entries()].sort(([a], [b]) => b - a).slice(0, KEPT_REVISIONS)
+    swept.delete(sweep.revision)
+    // The revision in force stays even when older than the rest (0 while no policy is known).
+    const kept = new Map(
+      [...swept.entries()].sort(([a], [b]) => b - a).slice(0, KEPT_REVISIONS - 1)
+    )
+    kept.set(sweep.revision, homes.includes(home) ? homes : [...homes, home])
     await writePluginFileAtomically(
       sweep.markerPath,
       `${JSON.stringify(Object.fromEntries(kept))}\n`

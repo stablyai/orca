@@ -45,6 +45,7 @@ type ReadyRollout = {
   path: string
   stats: BigIntStats
   facts: FileFacts
+  store: FileFacts
   sha256: string
   transientFailures: number
 }
@@ -242,6 +243,7 @@ export async function cleanUpCodexHistoryLeftBehind(args: {
             path: rollout.path,
             stats: file.stats,
             facts: file.facts,
+            store: check.store,
             sha256: check.sha256,
             transientFailures: check.transientFailures ?? 0
           })
@@ -267,9 +269,15 @@ export async function cleanUpCodexHistoryLeftBehind(args: {
         tally.skipped.rehash_mismatch += 1
         return true
       }
-      // Unchanged since the check: a writer that appended and closed meanwhile shows here.
+      // Both copies unchanged since the check: a writer that appended and closed meanwhile, or a
+      // store copy deleted since, shows here.
       const now = await currentLeftBehindFile(home, rollout.path)
-      if (!now || !sameFacts(rollout.facts, now.facts) || now.stats.nlink > 1n) {
+      if (
+        !now ||
+        !sameFacts(rollout.facts, now.facts) ||
+        now.stats.nlink > 1n ||
+        !sameFacts(rollout.store, await storeFileFacts(args.storeHome, rollout.store.path))
+      ) {
         tally.skipped.changed += 1
         return true
       }

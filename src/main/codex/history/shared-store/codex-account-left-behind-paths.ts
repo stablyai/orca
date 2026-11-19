@@ -82,6 +82,10 @@ export async function currentLeftBehindFile(
 }
 
 export async function removeEmptyFolders(folder: string, shouldStop: () => boolean): Promise<void> {
+  // Never through a link that replaced a folder since it was listed.
+  if (!(await lstatIfPresent(folder).catch(() => null))?.isDirectory()) {
+    return
+  }
   let entries
   try {
     entries = await readdir(folder, { withFileTypes: true })

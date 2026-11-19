@@ -51,10 +51,18 @@ async function checkContent(
   let sha256: string
   let storeSha256: string
   try {
-    ;[sha256, storeSha256] = await Promise.all([
+    // Both settle before the sweep moves on, so a failed pair's other read can't overlap the next.
+    const [ownCopy, storeCopy] = await Promise.allSettled([
       contentSha256(fromManifestPath(accountHome, rollout.path), budget),
       contentSha256(fromManifestPath(storeHome, store.path), budget)
     ])
+    const failed = [ownCopy, storeCopy].flatMap((hashed) =>
+      hashed.status === 'rejected' ? [hashed.reason] : []
+    )
+    if (ownCopy.status === 'rejected' || storeCopy.status === 'rejected') {
+      throw failed.find((reason) => reason instanceof CleanupBudgetExceeded) ?? failed[0]
+    }
+    ;[sha256, storeSha256] = [ownCopy.value, storeCopy.value]
   } catch (error) {
     if (error instanceof CleanupBudgetExceeded) {
       throw error
@@ -175,6 +183,9 @@ export async function checkCodexHistoryLeftBehind(args: {
   for (const rollout of [...unchecked.slice(offset), ...unchecked.slice(0, offset)]) {
     if (args.shouldStop()) {
       finished = false
+      break
+    }
+    if (args.budget?.pastDeadline()) {
       break
     }
     // Only a copy that can be checked takes any budget.

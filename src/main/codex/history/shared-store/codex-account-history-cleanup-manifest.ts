@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import type { BigIntStats } from 'node:fs'
-import { readFile, readdir, unlink, writeFile } from 'node:fs/promises'
+import { readFile, unlink, writeFile } from 'node:fs/promises'
 import { join, relative } from 'node:path'
 import { isDefinitiveAbsence } from '../../../../shared/errors/definitive-filesystem-absence'
 import { renameFileWithWindowsRetryAsync } from '../../../../shared/file-write/windows-retry-file-operations'
@@ -9,6 +9,7 @@ import { MERGE_PENDING_SUFFIX, lstatIfPresent } from '../../../filesystem/merged
 import { listRolloutTwinPairs, rolloutTwinPath } from '../rollouts/codex-rollout-compressed-twin'
 import { parseCodexRolloutThreadId } from '../rollouts/codex-rollout-thread-id'
 import { MANIFEST_VERSION, isCurrentManifest } from './codex-account-history-cleanup-manifest-shape'
+import { readEntries, regularFiles } from './codex-account-history-folder-listing'
 
 /**
  * In each account home: the old data sharing left behind, for a later release to delete once the
@@ -76,31 +77,6 @@ export function factsOf(root: string, path: string, stats: BigIntStats): FileFac
     path: toManifestPath(root, path),
     bytes: Number(stats.size),
     mtimeMs: Number(stats.mtimeNs / 1_000_000n)
-  }
-}
-
-async function readEntries(path: string) {
-  try {
-    return await readdir(path, { withFileTypes: true })
-  } catch (error) {
-    if (isDefinitiveAbsence(error)) {
-      return []
-    }
-    throw error
-  }
-}
-
-async function* regularFiles(folder: string): AsyncGenerator<{ path: string; stats: BigIntStats }> {
-  for (const entry of await readEntries(folder)) {
-    const path = join(folder, entry.name)
-    if (entry.isDirectory()) {
-      yield* regularFiles(path)
-    } else if (entry.isFile()) {
-      const stats = await lstatIfPresent(path)
-      if (stats?.isFile()) {
-        yield { path, stats }
-      }
-    }
   }
 }
 
@@ -219,7 +195,7 @@ async function leftBehindRollouts(
   }
   const rollouts: LeftBehindRollout[] = []
   for (const source of sources) {
-    for await (const file of regularFiles(source.root)) {
+    for await (const file of regularFiles(source.root, shouldStop)) {
       if (shouldStop()) {
         return null
       }
@@ -250,7 +226,7 @@ async function leftBehindRollouts(
       })
     }
   }
-  return rollouts
+  return shouldStop() ? null : rollouts
 }
 
 async function databasesLeftBehind(
