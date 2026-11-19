@@ -12,10 +12,11 @@ const { recordDurableCrashBreadcrumbMock } = vi.hoisted(() => ({
 vi.mock('../../crash-reporting/breadcrumbs/durable-crash-breadcrumb', () => ({
   recordDurableCrashBreadcrumb: recordDurableCrashBreadcrumbMock
 }))
+vi.mock('./fatal-exception-quit', () => ({ quitAfterFatalException: vi.fn() }))
 
 import {
   installStdioWriteErrorSink,
-  installUncaughtPipeErrorGuard
+  installUncaughtExceptionQuitGuard
 } from './main-process-error-guards'
 
 describe('installStdioWriteErrorSink', () => {
@@ -105,7 +106,7 @@ function fire(error: Error): void {
   listener(error, 'uncaughtException')
 }
 
-describe('installUncaughtPipeErrorGuard', () => {
+describe('installUncaughtExceptionQuitGuard', () => {
   afterEach(() => {
     for (const listener of process.listeners('uncaughtException')) {
       if (!originalListeners.includes(listener)) {
@@ -115,13 +116,15 @@ describe('installUncaughtPipeErrorGuard', () => {
     recordDurableCrashBreadcrumbMock.mockReset()
   })
 
-  it('crashes with a recorded breadcrumb instead of leaving the error to the modal handler', () => {
-    const crash = vi.fn()
-    installUncaughtPipeErrorGuard(crash)
+  it('records the error once and quits once instead of leaving it to the modal handler', () => {
+    const quit = vi.fn()
+    installUncaughtExceptionQuitGuard(quit)
 
     fire(new TypeError('boom'))
+    fire(new TypeError('during teardown'))
 
-    expect(crash).toHaveBeenCalled()
+    expect(quit).toHaveBeenCalledTimes(1)
+    expect(recordDurableCrashBreadcrumbMock).toHaveBeenCalledTimes(1)
     expect(recordDurableCrashBreadcrumbMock).toHaveBeenCalledWith(
       'main_uncaught_exception',
       expect.objectContaining({ errorName: 'TypeError', errorMessage: 'boom' }),
@@ -131,18 +134,18 @@ describe('installUncaughtPipeErrorGuard', () => {
   })
 
   it('keeps running after a broken pipe or a dead local PTY', () => {
-    const crash = vi.fn()
-    installUncaughtPipeErrorGuard(crash)
+    const quit = vi.fn()
+    installUncaughtExceptionQuitGuard(quit)
 
     fire(Object.assign(new Error('write EPIPE'), { code: 'EPIPE' }))
     fire(new Error('Pty process exited'))
 
-    expect(crash).not.toHaveBeenCalled()
+    expect(quit).not.toHaveBeenCalled()
   })
 
-  it('still crashes when inspecting the error throws', () => {
-    const crash = vi.fn()
-    installUncaughtPipeErrorGuard(crash)
+  it('still quits when inspecting the error throws', () => {
+    const quit = vi.fn()
+    installUncaughtExceptionQuitGuard(quit)
     const hostile = Object.defineProperty(new Error('real fault'), 'name', {
       get() {
         throw new Error('name getter failed')
@@ -151,6 +154,6 @@ describe('installUncaughtPipeErrorGuard', () => {
 
     fire(hostile)
 
-    expect(crash).toHaveBeenCalled()
+    expect(quit).toHaveBeenCalled()
   })
 })

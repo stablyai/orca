@@ -1,6 +1,7 @@
 import { recordDurableCrashBreadcrumb } from '../../crash-reporting/breadcrumbs/durable-crash-breadcrumb'
 import { removeBootstrapFatalExitGuard } from './bootstrap-fatal-exit-guard'
 import { isNativePtyException } from '../../daemon/pty-subprocess/daemon-native-pty-exception'
+import { quitAfterFatalException } from './fatal-exception-quit'
 
 type FatalMainProcessErrorKind = 'main_uncaught_exception' | 'main_unhandled_rejection'
 
@@ -131,16 +132,6 @@ export function installStdioWriteErrorSink(
   }
 }
 
-// Electron's default handler shows a modal that blocks main until someone clicks OK; crash with a dump instead.
-function crashMainProcess(): void {
-  try {
-    process.crash()
-  } catch {
-    // Unreachable unless the native crash is unavailable; never fall through to the modal.
-  }
-  process.exit(70)
-}
-
 // A hostile error (e.g. a throwing getter) must still reach the fatal path, not escape it.
 function isBenignNativePtyFault(error: unknown): boolean {
   try {
@@ -150,21 +141,25 @@ function isBenignNativePtyFault(error: unknown): boolean {
   }
 }
 
-export function installUncaughtPipeErrorGuard(crash: () => void = crashMainProcess): void {
-  let crashing = false
+// Stays installed for good: Electron's default handler shows a modal that blocks main until someone clicks OK.
+export function installUncaughtExceptionQuitGuard(
+  quit: () => void = quitAfterFatalException
+): void {
+  let quitting = false
   process.on('uncaughtException', (error: unknown): void => {
     const errorCode = readErrorProperty(error, 'code')
     // A local PTY that died under us is not a main-process fault (same rule as the daemon and orcad).
     if (errorCode === 'EIO' || errorCode === 'EPIPE' || isBenignNativePtyFault(error)) {
       return
     }
-    // A fault while recording must not recurse into a second record.
-    if (!crashing) {
-      crashing = true
-      // #9441: persist evidence before the process dies.
-      recordFatalMainProcessError('main_uncaught_exception', error)
+    // Faults during teardown (or while recording) are expected once main is broken; quit once.
+    if (quitting) {
+      return
     }
-    crash()
+    quitting = true
+    // #9441: persist evidence before the process exits.
+    recordFatalMainProcessError('main_uncaught_exception', error)
+    quit()
   })
   removeBootstrapFatalExitGuard()
 }
