@@ -27,7 +27,7 @@ function startFailureRow(id: string, sequence: number): AgentJournalRenderItem {
     revision: 1,
     sequence,
     observedAt: sequence,
-    body: { kind: 'status', text: "Claude couldn't start.", tone: 'error', failure },
+    body: { kind: 'status', text: "Claude couldn't start.", tone: 'error' },
     turnScope: { kind: 'thread' }
   }
 }
