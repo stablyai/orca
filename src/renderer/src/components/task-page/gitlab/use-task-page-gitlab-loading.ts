@@ -91,10 +91,15 @@ export function useTaskPageGitLabLoading<Model extends GitLabLoadingInput>(model
     gitlabMRInvolvement,
     selectedReposKey
   )
-  // A nonce bump is the user's Refresh or Retry; filter, view and repo changes stay passive.
+  // Filter chips also bump the nonce; only a bump with the same query is Refresh.
   const lastRefreshRef = useRef({ nonce: gitlabRefreshNonce, query: '' })
   // Fetch issues and MRs separately so a failure stays scoped to its tab.
   useEffect(() => {
+    // Consumed before any early return, so a Refresh that loads nothing here is never replayed later.
+    const query = `${gitlabView}:${activeGitlabFilter ?? ''}:${gitlabMRInvolvement ?? ''}`
+    const userRefresh =
+      gitlabRefreshNonce !== lastRefreshRef.current.nonce && query === lastRefreshRef.current.query
+    lastRefreshRef.current = { nonce: gitlabRefreshNonce, query }
     if (taskSource !== 'gitlab') {
       return
     }
@@ -180,11 +185,6 @@ export function useTaskPageGitLabLoading<Model extends GitLabLoadingInput>(model
                 }
               })
           }
-    // Filter chips also bump the nonce; only a bump with the same query is Refresh or Retry.
-    const query = `${gitlabView}:${activeIssueFilter ?? ''}:${activeMRFilter ?? ''}:${gitlabMRInvolvement ?? ''}`
-    const userRefresh =
-      gitlabRefreshNonce !== lastRefreshRef.current.nonce && query === lastRefreshRef.current.query
-    lastRefreshRef.current = { nonce: gitlabRefreshNonce, query }
     recheckUnreachableTaskSourceHosts(userRefresh ? { force: true } : undefined)
     const isOnUnreachableHost = (repo: Repo): boolean => {
       const hostId = getTaskPageRepoSourceContext(repo, 'gitlab')?.hostId
