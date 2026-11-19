@@ -315,7 +315,6 @@
 1 src/renderer/src/components/right-sidebar/activity-bar/use-right-sidebar-activity-items.ts
 3 src/renderer/src/components/right-sidebar/activity-bar/use-right-sidebar-tab-routing.ts
 1 src/renderer/src/components/right-sidebar/ai-vault/panel/AiVaultPanel.tsx
-2 src/renderer/src/components/right-sidebar/ai-vault/scanning/AiVaultScanProgressStrip.tsx
 1 src/renderer/src/components/right-sidebar/ai-vault/scanning/ai-vault-association-observation.ts
 8 src/renderer/src/components/right-sidebar/ai-vault/scanning/ai-vault-session-refresh.ts
 1 src/renderer/src/components/right-sidebar/ai-vault/search/AiVaultPanelSearch.tsx
