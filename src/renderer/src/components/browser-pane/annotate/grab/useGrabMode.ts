@@ -240,7 +240,8 @@ export function useGrabMode(browserPageId: string): GrabModeHook {
         if (
           isEditableKeyboardTarget(e.target) ||
           element?.closest(
-            '[data-slot="select-trigger"], [data-slot="select-content"], [data-slot="annotation-edit"], [data-slot="dialog-content"]'
+            // An open menu or popover (the palette's Send menu, Draw's style popover) closes first.
+            '[data-slot="select-trigger"], [data-slot="select-content"], [data-slot="annotation-edit"], [data-slot="dialog-content"], [data-slot="dropdown-menu-content"], [data-slot="popover-content"]'
           )
         ) {
           return
