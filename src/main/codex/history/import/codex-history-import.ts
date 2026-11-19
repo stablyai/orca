@@ -185,8 +185,8 @@ export async function importCodexHistory(args: CodexHistoryImportArgs): Promise<
           identity,
           handled: known?.handled ?? [],
           folders: {},
-          // After a damaged ledger, passes only record what this folder holds until one finishes.
-          ...(known?.seeding || (ledger.recovered && !known) ? { seeding: true } : {})
+          // After a damaged ledger, passes only record what a new or replaced folder holds until one finishes.
+          ...(known?.seeding || ledger.recovered ? { seeding: true } : {})
         }
   ledger.sources[sourceKey] = source
   const seedOnly = source.seeding === true

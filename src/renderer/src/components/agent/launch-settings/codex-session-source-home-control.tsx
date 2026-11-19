@@ -15,69 +15,23 @@ export type AgentSessionSourceHomeControl = {
 
 type UpdateSettings = (updates: Partial<GlobalSettings>) => void | Promise<void>
 
-/** Match launch-time case-insensitive distro keys so edits cannot hide an active override or create duplicate keys. */
-function findWslSourceHomeKey(
-  wsl: Record<string, string> | undefined,
-  distro: string
-): string | undefined {
-  const normalized = distro.trim().toLowerCase()
-  return Object.keys(wsl ?? {}).find((key) => key.trim().toLowerCase() === normalized)
-}
-
 export function buildCodexSessionSourceHomeControl(
   settings: Pick<GlobalSettings, 'codexSessionSourceHome' | 'localWindowsRuntimeDefault'>,
   updateSettings: UpdateSettings
-): AgentSessionSourceHomeControl {
+): AgentSessionSourceHomeControl | undefined {
   const runtimeScope = normalizeGlobalWindowsRuntimeDefault(settings.localWindowsRuntimeDefault)
-  const sourceHome = settings.codexSessionSourceHome
-  // Without a selected WSL distro, use host history control instead of a null distro key.
-  const wslDistro = runtimeScope.kind === 'wsl' ? runtimeScope.distro?.trim() : undefined
-  if (wslDistro) {
-    const existingKey = findWslSourceHomeKey(sourceHome?.wsl, wslDistro)
-    return {
-      runtimeLabel: `${wslDistro}: ~/.codex`,
-      value: (existingKey ? sourceHome?.wsl?.[existingKey] : undefined) ?? '',
-      onSave: (value: string) =>
-        saveCodexSessionSourceHome(settings, updateSettings, {
-          runtime: 'wsl',
-          distro: existingKey ?? wslDistro,
-          value
-        })
-    }
+  // Only the host ~/.codex receives imports, so a WSL distro's Codex wouldn't list them.
+  if (runtimeScope.kind === 'wsl' && runtimeScope.distro?.trim()) {
+    return undefined
   }
   return {
     runtimeLabel: '~/.codex',
-    value: sourceHome?.host ?? '',
-    onSave: (value: string) =>
-      saveCodexSessionSourceHome(settings, updateSettings, { runtime: 'host', value })
-  }
-}
-
-function saveCodexSessionSourceHome(
-  settings: Pick<GlobalSettings, 'codexSessionSourceHome'>,
-  updateSettings: UpdateSettings,
-  args: { runtime: 'host'; value: string } | { runtime: 'wsl'; distro: string; value: string }
-): void {
-  const current = settings.codexSessionSourceHome ?? {}
-  const trimmed = args.value.trim()
-  if (args.runtime === 'host') {
-    updateSettings({ codexSessionSourceHome: { ...current, host: trimmed || undefined } })
-    return
-  }
-  const nextWsl = { ...current.wsl }
-  // Reuse case-insensitive stored keys to avoid stale differently-cased duplicates.
-  const targetKey = findWslSourceHomeKey(nextWsl, args.distro) ?? args.distro
-  if (trimmed) {
-    nextWsl[targetKey] = trimmed
-  } else {
-    delete nextWsl[targetKey]
-  }
-  updateSettings({
-    codexSessionSourceHome: {
-      ...current,
-      wsl: Object.keys(nextWsl).length > 0 ? nextWsl : undefined
+    value: settings.codexSessionSourceHome?.host ?? '',
+    onSave: (value: string) => {
+      const host = value.trim() || undefined
+      updateSettings({ codexSessionSourceHome: { ...settings.codexSessionSourceHome, host } })
     }
-  })
+  }
 }
 
 export function AgentSessionSourceHomeInput({
