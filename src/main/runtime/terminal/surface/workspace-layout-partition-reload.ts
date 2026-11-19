@@ -40,7 +40,7 @@ export type PartitionLoad = {
   refs?: PartitionRefs
 }
 
-function hasEntries(record: object | undefined): boolean {
+function hasEntries(record: Readonly<Record<string, unknown>> | undefined): boolean {
   return record !== undefined && Object.keys(record).length > 0
 }
 
@@ -99,9 +99,7 @@ export function reloadWorkspaces(
   if (!tied) {
     return null
   }
-  if (tied.size === 0) {
-    return { load: previous, keys: [] }
-  }
+  // With no workspace tied, the empty slice still refreshes partition-wide view selections.
   if (tied.size > 1) {
     // Tied workspaces load in partition order, which a write may have changed (a frozen workspace is re-added last).
     refs.rank = new Map(workspaceKeys(session).map((key, rank) => [key, rank]))

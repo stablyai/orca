@@ -37,6 +37,7 @@ import {
 import type { NativeLocalWorktreeMetadataScanExpectation } from '../../tracking-repos/local-worktree-metadata-scan-expectation'
 
 import { type WriteSchedulingOperations, scheduleSave } from '../profile-writing/write-scheduling'
+import type { WrittenWorkspaceScope } from './workspace-session-write-listeners'
 import {
   preserveMissingWorkspaceSessionTerminalBindings,
   sshTargetIdForWorkspaceSessionHost
@@ -261,7 +262,8 @@ export function partitionHasOtherRepoWorktreeTabs(
 export function setHostWorkspaceSession(
   owner: SessionHostPartitionOperations,
   hostId: ExecutionHostId,
-  session: WorkspaceSessionState
+  session: WorkspaceSessionState,
+  written?: WrittenWorkspaceScope
 ): void {
   const persisted =
     owner[sessionHostPartitionOperationsContext].runtime.state.workspaceSessionsByHostId?.[hostId]
@@ -289,14 +291,13 @@ export function setHostWorkspaceSession(
       executionHostId: hostId
     }
   )
+  const scrollbackKept = pruneLocalTerminalScrollbackBuffers(
+    session,
+    owner[sessionHostPartitionOperationsContext].runtime.state.repos
+  )
   // Strip redundant globals on every write so stale snapshots cannot reinject local-owned data.
   const pruned = withoutRedundantGlobalFields(
-    pruneWorkspaceSessionBrowserHistory(
-      pruneLocalTerminalScrollbackBuffers(
-        session,
-        owner[sessionHostPartitionOperationsContext].runtime.state.repos
-      )
-    ),
+    pruneWorkspaceSessionBrowserHistory(scrollbackKept),
     owner[sessionHostPartitionOperationsContext].runtime.state.workspaceSession
   )
   owner[sessionHostPartitionOperationsContext].runtime.state.workspaceSessionsByHostId = {
@@ -306,7 +307,9 @@ export function setHostWorkspaceSession(
   scheduleSave(
     owner[sessionHostPartitionOperationsContext].scheduling,
     ['workspaceSessionsByHostId'],
-    hostId
+    hostId,
+    // A prune can strip scrollback from workspaces the caller never named.
+    scrollbackKept === session ? written : undefined
   )
 }
 

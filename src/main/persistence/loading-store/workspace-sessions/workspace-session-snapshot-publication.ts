@@ -33,22 +33,29 @@ import { preserveMissingWorkspaceSessionTerminalBindings } from './workspace-ses
 import type { SessionSnapshotOperations } from './session-snapshot-operations'
 import { getSessionSnapshotOperationsContext } from './session-snapshot-operations-context'
 import { scheduleSave } from '../profile-writing/write-scheduling'
+import type { WrittenWorkspaceScope } from './workspace-session-write-listeners'
 import { orderTerminalRowsByTabGroups } from '../../../../shared/workspace-layout/terminal-topology/terminal-row-order'
 
 export function setLocalWorkspaceSession(
   owner: SessionSnapshotOperations,
   session: PersistedState['workspaceSession'],
-  deferSnapshotFiles = false
+  deferSnapshotFiles = false,
+  written?: WrittenWorkspaceScope
 ): void {
   const context = getSessionSnapshotOperationsContext(owner)
   const prior = context.runtime.state.workspaceSession
+  // A prune can strip scrollback from workspaces the caller never named.
+  let pruned = false
+  const pruneScrollback = (next: WorkspaceSessionState): WorkspaceSessionState => {
+    const kept = pruneLocalTerminalScrollbackBuffers(next, context.runtime.state.repos)
+    pruned ||= kept !== next
+    return kept
+  }
   session = keepWslMoveFrozenSessionsForStore(session, prior)
   // Quit staging bypasses caller guards; preserve runtime fields at the shared write boundary.
   session = dropClosedTerminalTabs(preserveRuntimeAuthoredWorkspaceSessionFields(session, prior))
   session = sanitizeWorkspaceSessionTerminalRetirements(session, prior)
-  session = pruneWorkspaceSessionBrowserHistory(
-    pruneLocalTerminalScrollbackBuffers(session, context.runtime.state.repos)
-  )
+  session = pruneWorkspaceSessionBrowserHistory(pruneScrollback(session))
 
   // Recover bindings from stale pre-spawn snapshots without reviving proven closes.
   const normalized = normalizeWorkspaceSessionPaneIdentities(session, prior?.terminalLayoutsByTabId)
@@ -101,7 +108,7 @@ export function setLocalWorkspaceSession(
     context.runtime.state.sshRemotePtyLeases = remappedLeases.leases
   }
   session = preserveMissingWorkspaceSessionTerminalBindings(session, prior, context.bindingRecovery)
-  session = pruneLocalTerminalScrollbackBuffers(session, context.runtime.state.repos)
+  session = pruneScrollback(session)
   if (!deferSnapshotFiles) {
     const migratedScrollback = migrateWorkspaceSessionTerminalScrollbackSnapshots(
       session,
@@ -136,7 +143,9 @@ export function setLocalWorkspaceSession(
     scheduleSave(
       context.scheduling,
       remappedLeases.changed ? ['workspaceSession', 'sshRemotePtyLeases'] : ['workspaceSession'],
-      LOCAL_EXECUTION_HOST_ID
+      LOCAL_EXECUTION_HOST_ID,
+      // Renormalized pane ids can belong to any workspace.
+      normalized.changed || remappedLeases.changed || pruned ? undefined : written
     )
   }
 }

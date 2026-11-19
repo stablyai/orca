@@ -81,11 +81,8 @@ class ProjectedPartition {
 
   /** Republish only the reloaded workspaces; the rest keep their projected objects. */
   reloaded(load: PartitionLoad, keys: readonly string[]): ProjectedPartition {
-    if (keys.length === 0) {
-      return this
-    }
-    if (!this.published) {
-      return new ProjectedPartition(this.hostId, load)
+    if (!this.published || keys.length === 0) {
+      return new ProjectedPartition(this.hostId, load, this.published)
     }
     const published = new Map(this.published)
     for (const key of keys) {
@@ -124,19 +121,44 @@ export class WorkspaceLayoutProjection {
     this.stale = 'all'
   }
 
-  /** `workspaces` absent: any workspace of the partition may have changed. */
-  invalidate(hostId: ExecutionHostId | null, workspaces?: ReadonlySet<string>): void {
+  /** `workspaces` absent: any workspace of the partition may have changed. `refs`: share refs naming more written workspaces. */
+  invalidate(
+    hostId: ExecutionHostId | null,
+    workspaces?: ReadonlySet<string>,
+    refs?: ReadonlySet<string>
+  ): void {
     if (hostId === null || this.stale === 'all') {
       this.stale = 'all'
       return
     }
     const pending = this.stale.get(hostId)
+    const written = workspaces && this.withHolders(hostId, workspaces, refs)
     // Window-owned builds always reload whole partitions.
-    if (!workspaces || !ORCA_LAYOUT_OWNER_IS_MAIN || pending === 'whole') {
+    if (!written || !ORCA_LAYOUT_OWNER_IS_MAIN || pending === 'whole') {
       this.stale.set(hostId, 'whole')
     } else {
-      this.stale.set(hostId, new Set([...(pending ?? []), ...workspaces]))
+      this.stale.set(hostId, new Set([...(pending ?? []), ...written]))
     }
+  }
+
+  /** Add the workspaces holding each ref as of the last load, which any later change to them reported; null when that load kept no refs. */
+  private withHolders(
+    hostId: ExecutionHostId,
+    workspaces: ReadonlySet<string>,
+    refs: ReadonlySet<string> | undefined
+  ): ReadonlySet<string> | null {
+    if (!refs?.size) {
+      return workspaces
+    }
+    const byKey = this.partitions.get(hostId)?.load?.refs?.byKey
+    if (!byKey) {
+      return null
+    }
+    const written = new Set(workspaces)
+    for (const ref of refs) {
+      byKey.keysFor(ref).forEach((key) => written.add(key))
+    }
+    return written
   }
 
   /** Cache only for readers that invalidate on every write; null without a Store. */

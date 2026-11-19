@@ -156,8 +156,8 @@ export class WorkspaceLayoutStream {
     const wanted = this.listeners.size > 0 || this.commitListeners.size > 0
     if (wanted && !this.stopWatching) {
       const store = this.deps.store()
-      const stopWrites = store?.onWorkspaceSessionWritten?.((hostId, workspaces) =>
-        this.markDirty(hostId, workspaces)
+      const stopWrites = store?.onWorkspaceSessionWritten?.((hostId, workspaces, refs) =>
+        this.markDirty(hostId, workspaces, refs)
       )
       // Switch point: a window-owned build publishes when the writes' task ends, as before.
       const stopOperations = ORCA_LAYOUT_OWNER_IS_MAIN
@@ -189,8 +189,12 @@ export class WorkspaceLayoutStream {
     }
   }
 
-  private markDirty(hostId: ExecutionHostId | null, workspaces?: ReadonlySet<string>): void {
-    this.projection.invalidate(hostId, workspaces)
+  private markDirty(
+    hostId: ExecutionHostId | null,
+    workspaces?: ReadonlySet<string>,
+    refs?: ReadonlySet<string>
+  ): void {
+    this.projection.invalidate(hostId, workspaces, refs)
     this.dirty ||= this.projecting
     if (this.commitListeners.size > 0) {
       this.touched = addDirty(this.touched, hostId)

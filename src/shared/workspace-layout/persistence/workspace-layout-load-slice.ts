@@ -30,6 +30,10 @@ export function workspaceMembership(session: WorkspaceSessionState, key: string)
 
 export type StoredShareRefs = { refs: Set<string>; worktreeId: string }
 
+export const rowShareRef = (rowId: string): string => `row:${rowId}`
+const leafShareRef = (leafId: string): string => `leaf:${leafId}`
+export const worktreeShareRef = (worktreeId: string): string => `worktree:${worktreeId}`
+
 /**
  * Refs the Loader's cross-workspace passes compare: rows (terminal homes), pane ids (reminting), terminals
  * (duplicate unbinding) and the resolved worktree id (closed tabs). Null for a row saved before pane
@@ -40,18 +44,18 @@ export function storedShareRefs(
   key: string
 ): StoredShareRefs | null {
   const worktreeId = resolveWorktreeId({ session, key })
-  const refs = new Set([`worktree:${worktreeId}`])
+  const refs = new Set([worktreeShareRef(worktreeId)])
   for (const row of session.tabsByWorktree?.[key] ?? []) {
     const layout = session.terminalLayoutsByTabId?.[row.id]
     if (!layout) {
       return null
     }
-    refs.add(`row:${row.id}`)
+    refs.add(rowShareRef(row.id))
     if (row.ptyId) {
       refs.add(`pty:${row.ptyId}`)
     }
     for (const leafId of collectLayoutLeafIdsInOrder(layout.root ?? null)) {
-      refs.add(`leaf:${leafId}`)
+      refs.add(leafShareRef(leafId))
     }
     for (const ptyId of Object.values(layout.ptyIdsByLeafId ?? {})) {
       if (ptyId) {
@@ -65,11 +69,9 @@ export function storedShareRefs(
 /** A loaded workspace's pane ids, minted ones included: a later workspace's repeat of one is reminted. */
 export function loadedShareRefs(workspace: WorkspaceLayout): string[] {
   return [
-    `worktree:${workspace.worktreeId}`,
+    worktreeShareRef(workspace.worktreeId),
     ...workspace.tabs.flatMap((tab) =>
-      tab.kind === 'terminal'
-        ? collectLayoutLeafIdsInOrder(tab.panes.root).map((leafId) => `leaf:${leafId}`)
-        : []
+      tab.kind === 'terminal' ? collectLayoutLeafIdsInOrder(tab.panes.root).map(leafShareRef) : []
     )
   ]
 }

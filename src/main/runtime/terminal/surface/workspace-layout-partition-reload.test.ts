@@ -106,6 +106,15 @@ describe('reloadWorkspaces', () => {
     expect(paneOf(reloaded!.load.loaded, A)).toEqual({ leafId: leaf(1), ptyId: undefined })
   })
 
+  it('refreshes partition-wide selections when a write names no workspace', () => {
+    const before = session({ a: [leaf(1)], b: [leaf(2)] })
+    const { previous, reloaded } = reload(before, { ...before, activeWorktreeId: B }, [])
+
+    expect(reloaded?.keys).toEqual([])
+    expect(reloaded!.load.loaded.desktopView.activeWorktreeId).toBe(B)
+    expect(reloaded!.load.loaded.layout.workspaces[A]).toBe(previous.loaded.layout.workspaces[A])
+  })
+
   it('leaves a new workspace to a whole load', () => {
     const before = session({ a: [leaf(1)], b: [leaf(2)] })
     const after = addWorkspace(session({ a: [leaf(1)], b: [leaf(2)] }), 'repo-1::/new', [

@@ -74,34 +74,63 @@ function fleetSession(workspaces: number, started?: number) {
   return session
 }
 
+type WriteListener = (
+  hostId: ExecutionHostId | null,
+  keys?: ReadonlySet<string>,
+  refs?: ReadonlySet<string>
+) => void
+
+function watchedFleet(workspaces: number) {
+  let session = fleetSession(workspaces)
+  const written = new Set<WriteListener>()
+  const stream = new WorkspaceLayoutStream({
+    store: () => ({
+      getWorkspaceSession: () => session,
+      getWorkspaceSessionHostIds: () => [LOCAL_EXECUTION_HOST_ID],
+      onWorkspaceSessionWritten: (listener) => {
+        written.add(listener)
+        return () => written.delete(listener)
+      }
+    }),
+    homeHostId: () => LOCAL_EXECUTION_HOST_ID,
+    liveTitle: () => null
+  })
+  const reader = collectLayoutEvents()
+  reader.seed(stream.subscribe(reader.listener).snapshot)
+  work.loads = 0
+  work.publishes = 0
+  return {
+    reader,
+    write: (keys: string[], refs: string[] = []) => {
+      session = fleetSession(workspaces, 7)
+      written.forEach((listener) => listener(LOCAL_EXECUTION_HOST_ID, new Set(keys), new Set(refs)))
+      stream.settledSeq()
+    }
+  }
+}
+
 it.each([200, 2_000])(
   'reloads and republishes one workspace for a write that reports it at %i workspaces',
   (workspaces) => {
-    let session = fleetSession(workspaces)
-    const written = new Set<(hostId: ExecutionHostId | null, keys?: ReadonlySet<string>) => void>()
-    const stream = new WorkspaceLayoutStream({
-      store: () => ({
-        getWorkspaceSession: () => session,
-        getWorkspaceSessionHostIds: () => [LOCAL_EXECUTION_HOST_ID],
-        onWorkspaceSessionWritten: (listener) => {
-          written.add(listener)
-          return () => written.delete(listener)
-        }
-      }),
-      homeHostId: () => LOCAL_EXECUTION_HOST_ID,
-      liveTitle: () => null
-    })
-    const reader = collectLayoutEvents()
-    reader.seed(stream.subscribe(reader.listener).snapshot)
-    work.loads = 0
-    work.publishes = 0
+    const fleet = watchedFleet(workspaces)
 
-    session = fleetSession(workspaces, 7)
-    written.forEach((listener) => listener(LOCAL_EXECUTION_HOST_ID, new Set([keyOf(7)])))
-    stream.settledSeq()
+    fleet.write([keyOf(7)])
 
     expect(work.loads).toBe(1)
     expect(work.publishes).toBe(1)
-    expect(reader.events.map((event) => event.key)).toEqual([keyOf(7)])
+    expect(fleet.reader.events.map((event) => event.key)).toEqual([keyOf(7)])
+  }
+)
+
+it.each([200, 2_000])(
+  'reloads and republishes one workspace for a write that names it only by its row at %i workspaces',
+  (workspaces) => {
+    const fleet = watchedFleet(workspaces)
+
+    fleet.write([], ['row:tab-7'])
+
+    expect(work.loads).toBe(1)
+    expect(work.publishes).toBe(1)
+    expect(fleet.reader.events.map((event) => event.key)).toEqual([keyOf(7)])
   }
 )
