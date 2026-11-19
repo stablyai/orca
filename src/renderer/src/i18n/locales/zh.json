@@ -19246,6 +19246,46 @@
       },
       "NewWorkspaceComposerFooter": {
         "create": "创建"
+      },
+      "NativeChatResumeToast": {
+        "resumingOn_other": "正在恢复 {{machine}} 上的 {{count}} 个聊天…",
+        "resuming_other": "正在恢复 {{count}} 个聊天…",
+        "resumedOn_other": "已恢复 {{machine}} 上的 {{count}} 个聊天。",
+        "resumedUpdate_other": "更新后已恢复 {{count}} 个聊天。",
+        "resumedRestart_other": "重启后已恢复 {{count}} 个聊天。",
+        "partial_other": "已恢复 {{total}} 个聊天中的 {{resumed}} 个。{{count}} 个需要你处理。",
+        "stoppedOn_other": "{{machine}} 上有 {{count}} 个聊天已停止。",
+        "stoppedUpdate_other": "Orca 更新时有 {{count}} 个聊天已停止。",
+        "stoppedRestart_other": "Orca 关闭时有 {{count}} 个聊天已停止。",
+        "promptsNotResent": "恢复不会重新发送你的提示。",
+        "promptsNotSent": "你的提示没有被重新发送。",
+        "resume": "恢复",
+        "details": "详情",
+        "close": "关闭",
+        "listLabel": "聊天",
+        "untitled": "无标题聊天",
+        "willAsk": "Orca 会请求聊天继续。排队中的消息可能会被发送。",
+        "asked": "Orca 已请求聊天继续。排队中的消息可能会被发送。",
+        "resumedAutomatically": "已自动恢复。",
+        "changeInSettings": "在设置中更改",
+        "dismissAll": "全部忽略",
+        "open": "打开",
+        "dismiss": "忽略",
+        "retry": "重试",
+        "stateResumed": "已恢复",
+        "stateNeedsYou": "需要你处理",
+        "stateResuming": "正在恢复",
+        "stateStopped": "已停止"
+      },
+      "NativeChatResumeFailureGuidance": {
+        "fallbackShort": "无法恢复。",
+        "unconfirmedShort": "无法确认已继续。",
+        "supersededShort": "重启后有新的工作。",
+        "conflictShort": "已在其他窗口或终端中打开。",
+        "ownershipUnknownShort": "尚未准备好恢复。",
+        "notAttachedShort": "未重新连接。",
+        "dispatchRejectedShort": "智能体拒绝继续。",
+        "unsupportedShort": "Orca 无法恢复此聊天。"
       }
     },
     "i18n": {

@@ -69,11 +69,15 @@ export function resumeToastView(
             : 'stopped'
     return failure ? { candidate, state, failure } : { candidate, state }
   })
-  const shown = new Set(rows.map((row) => row.candidate.sessionId))
-  for (const sessionId of refusedWithoutRecord(run)) {
-    const entry = run?.entries.find((item) => item.candidate.sessionId === sessionId)
-    if (entry && !shown.has(sessionId)) {
-      rows.push({ candidate: entry.candidate, state: 'needs-you', openOnly: true })
+  // One pass over the run, so a large settled run stays linear.
+  const refused = refusedWithoutRecord(run)
+  if (refused.size > 0) {
+    const shown = new Set(rows.map((row) => row.candidate.sessionId))
+    for (const { candidate } of run?.entries ?? []) {
+      if (refused.has(candidate.sessionId) && !shown.has(candidate.sessionId)) {
+        shown.add(candidate.sessionId)
+        rows.push({ candidate, state: 'needs-you', openOnly: true })
+      }
     }
   }
   rows.sort((a, b) => ORDER[a.state] - ORDER[b.state])
@@ -102,14 +106,18 @@ export function resumeToastView(
 }
 
 /** A settled run's refusals; the run view drops those the host filed no failure for. */
-function refusedWithoutRecord(run: ResumeRun | null): string[] {
+function refusedWithoutRecord(run: ResumeRun | null): ReadonlySet<string> {
   if (!run || run.inFlight) {
-    return []
+    return NO_REFUSALS
   }
-  return (run.continued ?? [])
-    .filter((entry) => entry.outcome === 'refused')
-    .map((entry) => entry.sessionId)
+  return new Set(
+    (run.continued ?? [])
+      .filter((entry) => entry.outcome === 'refused')
+      .map((entry) => entry.sessionId)
+  )
 }
+
+const NO_REFUSALS: ReadonlySet<string> = new Set()
 
 function notIn(candidates: readonly ResumeCandidate[]) {
   const ids = new Set(candidates.map((candidate) => candidate.sessionId))

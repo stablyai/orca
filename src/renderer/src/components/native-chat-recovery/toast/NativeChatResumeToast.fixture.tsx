@@ -160,10 +160,23 @@ export const remoteServer = defineFixture({
   )
 })
 
+type FixtureLanguage =
+  | 'en'
+  | 'de'
+  | 'ru'
+  | 'es'
+  | 'fr'
+  | 'ja'
+  | 'ko'
+  | 'pt'
+  | 'tr'
+  | 'zh'
+  | 'zh-Hant'
+
 /** The toaster's narrowest width, min(26rem, 100vw - 2rem) in a 360 px window, in a long locale. */
 const NARROWEST = 328
 
-function twelveOneNeedsYouIn(language: 'en' | 'de' | 'ru', width = NARROWEST) {
+function twelveOneNeedsYouIn(language: FixtureLanguage, width = NARROWEST) {
   return defineFixture({
     width,
     render: () => (
@@ -207,7 +220,7 @@ export const offerManualDetails416 = defineFixture({
   )
 })
 
-function offerManualDetailsIn(language: 'de' | 'ru') {
+function offerManualDetailsIn(language: FixtureLanguage) {
   return defineFixture({
     width: TOAST_WIDTH,
     render: () => (
@@ -228,3 +241,21 @@ function offerManualDetailsIn(language: 'de' | 'ru') {
 
 export const offerManualDetailsGerman416 = offerManualDetailsIn('de')
 export const offerManualDetailsRussian416 = offerManualDetailsIn('ru')
+
+// Every bundled locale at the real toast width, for fit and copy review.
+export const twelveOneNeedsYouSpanish416 = twelveOneNeedsYouIn('es', TOAST_WIDTH)
+export const twelveOneNeedsYouFrench416 = twelveOneNeedsYouIn('fr', TOAST_WIDTH)
+export const twelveOneNeedsYouJapanese416 = twelveOneNeedsYouIn('ja', TOAST_WIDTH)
+export const twelveOneNeedsYouKorean416 = twelveOneNeedsYouIn('ko', TOAST_WIDTH)
+export const twelveOneNeedsYouPortuguese416 = twelveOneNeedsYouIn('pt', TOAST_WIDTH)
+export const twelveOneNeedsYouTurkish416 = twelveOneNeedsYouIn('tr', TOAST_WIDTH)
+export const twelveOneNeedsYouChinese416 = twelveOneNeedsYouIn('zh', TOAST_WIDTH)
+export const twelveOneNeedsYouChineseTraditional416 = twelveOneNeedsYouIn('zh-Hant', TOAST_WIDTH)
+export const offerManualDetailsSpanish416 = offerManualDetailsIn('es')
+export const offerManualDetailsFrench416 = offerManualDetailsIn('fr')
+export const offerManualDetailsJapanese416 = offerManualDetailsIn('ja')
+export const offerManualDetailsKorean416 = offerManualDetailsIn('ko')
+export const offerManualDetailsPortuguese416 = offerManualDetailsIn('pt')
+export const offerManualDetailsTurkish416 = offerManualDetailsIn('tr')
+export const offerManualDetailsChinese416 = offerManualDetailsIn('zh')
+export const offerManualDetailsChineseTraditional416 = offerManualDetailsIn('zh-Hant')

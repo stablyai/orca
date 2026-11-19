@@ -18921,7 +18921,7 @@
         "stoppedUpdate_other": "{{count}} Chats beim Orca-Update angehalten.",
         "stoppedRestart_one": "{{count}} Chat beim Beenden von Orca angehalten.",
         "stoppedRestart_other": "{{count}} Chats beim Beenden von Orca angehalten.",
-        "promptsNotResent": "Beim Fortsetzen werden deine Prompts nicht erneut gesendet.",
+        "promptsNotResent": "Deine Prompts werden nicht erneut gesendet.",
         "promptsNotSent": "Deine Prompts wurden nicht erneut gesendet.",
         "resume": "Fortsetzen",
         "details": "Details",

@@ -19146,6 +19146,46 @@
       },
       "NewWorkspaceComposerFooter": {
         "create": "作成"
+      },
+      "NativeChatResumeToast": {
+        "resumingOn_other": "{{machine}} で {{count}} 件のチャットを再開しています…",
+        "resuming_other": "{{count}} 件のチャットを再開しています…",
+        "resumedOn_other": "{{machine}} で {{count}} 件のチャットを再開しました。",
+        "resumedUpdate_other": "アップデート後に {{count}} 件のチャットを再開しました。",
+        "resumedRestart_other": "再起動後に {{count}} 件のチャットを再開しました。",
+        "partial_other": "{{total}} 件中 {{resumed}} 件を再開しました。{{count}} 件は対応が必要です。",
+        "stoppedOn_other": "{{machine}} で {{count}} 件のチャットが停止しました。",
+        "stoppedUpdate_other": "アップデートで {{count}} 件のチャットが停止しました。",
+        "stoppedRestart_other": "Orca の終了で {{count}} 件のチャットが停止しました。",
+        "promptsNotResent": "再開してもプロンプトは再送信されません。",
+        "promptsNotSent": "プロンプトは再送信されていません。",
+        "resume": "再開",
+        "details": "詳細",
+        "close": "閉じる",
+        "listLabel": "チャット",
+        "untitled": "無題のチャット",
+        "willAsk": "Orca が続行を依頼します。待機中のメッセージは送信される場合があります。",
+        "asked": "Orca が続行を依頼しました。待機中のメッセージは送信される場合があります。",
+        "resumedAutomatically": "自動で再開しました。",
+        "changeInSettings": "設定で変更",
+        "dismissAll": "すべて破棄",
+        "open": "開く",
+        "dismiss": "破棄",
+        "retry": "再試行",
+        "stateResumed": "再開済み",
+        "stateNeedsYou": "対応が必要",
+        "stateResuming": "再開中",
+        "stateStopped": "停止"
+      },
+      "NativeChatResumeFailureGuidance": {
+        "fallbackShort": "再開できませんでした。",
+        "unconfirmedShort": "続行を確認できませんでした。",
+        "supersededShort": "再起動後に新しい作業が届きました。",
+        "conflictShort": "別のウィンドウまたはターミナルで開いています。",
+        "ownershipUnknownShort": "まだ再開の準備ができていません。",
+        "notAttachedShort": "再接続できませんでした。",
+        "dispatchRejectedShort": "Agent が続行を拒否しました。",
+        "unsupportedShort": "Orca はこのチャットを再開できません。"
       }
     },
     "i18n": {
