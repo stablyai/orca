@@ -3,6 +3,7 @@ import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'
+import { useAppStoreWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { signInToClaudeAccount } from '@/lib/provider-accounts/claude-account-sign-in'
 import { getRendererAppPlatform } from '@/app-shell/platform/renderer-app-platform'
 import { readAgentInventoryForTarget } from '@/lib/agent-session/launch/inventory/agent-detection-target-inventory'
@@ -191,10 +192,10 @@ function useNativeChatSignIn(
     input.failure,
     input.startFailures.filter((fact) => isNativeChatSignInFailureKind(fact.kind)).length
   )
-  const shell = useAppStore((s) => {
+  const shell = useAppStoreWithHostStatuses((s, statuses) => {
     const status =
       input.target.kind === 'environment'
-        ? lastVerifiedRuntimeStatus(s.runtimeStatusByEnvironmentId.get(input.target.environmentId))
+        ? lastVerifiedRuntimeStatus(statuses.get(input.target.environmentId))
         : null
     const platform = input.target.kind === 'local' ? getRendererAppPlatform() : status?.hostPlatform
     if (!platform) {
@@ -239,8 +240,8 @@ function useNativeChatInstall(
   const environmentId = input.target.kind === 'environment' ? input.target.environmentId : null
   const command = agentSessionInstallCommand(
     input.agent,
-    useAppStore((s) =>
-      environmentId ? runtimeHostPlatform(s, environmentId) : getRendererAppPlatform()
+    useAppStoreWithHostStatuses((_s, statuses) =>
+      environmentId ? runtimeHostPlatform(statuses, environmentId) : getRendererAppPlatform()
     )
   )
   const [opened, setOpened] = useState(false)

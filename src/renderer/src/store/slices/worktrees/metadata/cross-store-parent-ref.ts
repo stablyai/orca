@@ -9,6 +9,7 @@ import { assertCrossStoreLineageSupported } from '../../../../../../shared/remot
 import { callRuntimeRpc } from '../../../../runtime/rpc/calls/runtime-rpc-call'
 import { getRuntimeEnvironmentDisplayName } from '../../../repos/owner-routing'
 import { selectLineageStoreInstallationId } from './cross-store-lineage-parents'
+import type { RuntimeStatuses } from '../../runtime-status/views/runtime-status-owner'
 import { lineageStoreKeyOfTarget } from './cross-store-lineage-state'
 
 /** Whether a parent lives in another Orca store than the child, so the link needs a cross-store ref. */
@@ -25,6 +26,7 @@ export function isCrossStoreParent(child: Worktree, parent: Worktree): boolean {
  */
 export async function buildCrossStoreParentRef(
   state: AppState,
+  statuses: RuntimeStatuses,
   childTarget: RuntimeClientTarget,
   parent: Worktree
 ): Promise<CrossStoreParentRef> {
@@ -39,7 +41,10 @@ export async function buildCrossStoreParentRef(
   if (parentStore === undefined || parentStore === lineageStoreKeyOfTarget(childTarget)) {
     throw new Error('That parent is on the same machine. Choose it as a parent there instead.')
   }
-  const ref = crossStoreParentRefOfRow(selectLineageStoreInstallationId(state, parentStore), parent)
+  const ref = crossStoreParentRefOfRow(
+    selectLineageStoreInstallationId(state, statuses, parentStore),
+    parent
+  )
   if (!ref) {
     throw new Error(
       "Couldn't confirm the parent's machine. Refresh the workspace list and try again."

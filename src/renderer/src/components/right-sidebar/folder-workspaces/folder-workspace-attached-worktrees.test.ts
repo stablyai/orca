@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { useAppStore } from '@/store'
+import { readRuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import { selectSidebarChildrenByParentIdentity } from '@/store/slices/worktrees/metadata/cross-store-lineage-parents'
 import { getFolderWorkspaceHostIdentity } from '../../../../../shared/folder-workspaces/folder-workspace-worktree'
 import type { FolderWorkspace } from '../../../../../shared/folder-workspaces/folder-workspace-types'
@@ -75,13 +76,16 @@ function sidebarChildrenOf(
   workspaceLineageByChildKey: Record<string, WorkspaceLineage>,
   worktrees: Worktree[]
 ) {
-  return selectSidebarChildrenByParentIdentity({
-    ...useAppStore.getState(),
-    folderWorkspaces: [makeFolder()],
-    workspaceLineageByChildKey,
-    worktreeLineageById: {},
-    worktreesByRepo: { 'repo-1': worktrees }
-  })
+  return selectSidebarChildrenByParentIdentity(
+    {
+      ...useAppStore.getState(),
+      folderWorkspaces: [makeFolder()],
+      workspaceLineageByChildKey,
+      worktreeLineageById: {},
+      worktreesByRepo: { 'repo-1': worktrees }
+    },
+    readRuntimeStatuses()
+  )
 }
 
 describe('getAttachedWorktreesForFolderWorkspace', () => {
@@ -144,13 +148,16 @@ it('lists Source Control owners by when each was attached, nested children inclu
     folderWorkspaces: [makeFolder()],
     workspaceLineageByChildKey,
     worktreeLineageById,
-    childrenByParentIdentity: selectSidebarChildrenByParentIdentity({
-      ...useAppStore.getState(),
-      folderWorkspaces: [makeFolder()],
-      workspaceLineageByChildKey,
-      worktreeLineageById,
-      worktreesByRepo: { 'repo-1': [late, early, nested] }
-    })
+    childrenByParentIdentity: selectSidebarChildrenByParentIdentity(
+      {
+        ...useAppStore.getState(),
+        folderWorkspaces: [makeFolder()],
+        workspaceLineageByChildKey,
+        worktreeLineageById,
+        worktreesByRepo: { 'repo-1': [late, early, nested] }
+      },
+      readRuntimeStatuses()
+    )
   })
 
   expect(result.owners.map((owner) => [owner.worktree.instanceId, owner.attachedAt])).toEqual([

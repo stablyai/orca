@@ -1,9 +1,14 @@
 import { useAppStore } from '@/store/index'
 import type { AppState } from '@/store/types'
+import {
+  readRuntimeStatuses,
+  subscribeRuntimeStatuses,
+  type RuntimeStatuses
+} from '@/store/slices/runtime-status/views/runtime-status-owner'
 import { runtimeEnvironmentContinuityStamp } from '../../rpc/environment-revisions/runtime-environment-revision'
 
-function contactMarks(state: AppState, environmentId: string): string {
-  const entry = state.runtimeStatusByEnvironmentId.get(environmentId)
+function contactMarks(statuses: RuntimeStatuses, environmentId: string): string {
+  const entry = statuses.get(environmentId)
   return entry
     ? JSON.stringify([
         entry.hostContactEpoch ?? 0,
@@ -28,25 +33,30 @@ export function subscribeRuntimeHostContactRegained(
   environmentId: string,
   listener: () => void
 ): () => void {
-  let lastMarks = contactMarks(useAppStore.getState(), environmentId)
+  let lastMarks = contactMarks(readRuntimeStatuses(), environmentId)
   let lastWslReady = wslHostReady(useAppStore.getState(), environmentId)
-  return useAppStore.subscribe((state, previousState) => {
-    const wslChanged = state.wslHostStatuses !== previousState.wslHostStatuses
-    if (
-      !wslChanged &&
-      state.runtimeStatusByEnvironmentId === previousState.runtimeStatusByEnvironmentId &&
-      state.runtimeEnvironments === previousState.runtimeEnvironments
-    ) {
-      return
-    }
+  const check = (state: AppState): void => {
     const wslReady = wslHostReady(state, environmentId)
     const becameReady = wslReady && !lastWslReady
     lastWslReady = wslReady
-    const marks = contactMarks(state, environmentId)
+    const marks = contactMarks(readRuntimeStatuses(), environmentId)
     if (marks === lastMarks && !becameReady) {
       return
     }
     lastMarks = marks
     listener()
+  }
+  const unsubscribeState = useAppStore.subscribe((state, previousState) => {
+    if (
+      state.wslHostStatuses !== previousState.wslHostStatuses ||
+      state.runtimeEnvironments !== previousState.runtimeEnvironments
+    ) {
+      check(state)
+    }
   })
+  const unsubscribeStatuses = subscribeRuntimeStatuses(() => check(useAppStore.getState()))
+  return () => {
+    unsubscribeState()
+    unsubscribeStatuses()
+  }
 }

@@ -1,4 +1,5 @@
 import { useAppStateValue } from '@/store/retained-views/app-state-view'
+import { useAppStateValueWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { AgentCliUpdateButton } from '@/components/agent-cli-update/AgentCliUpdateButton'
 
 import { AgentLaunchChoiceEditor } from '@/components/agent/launch-settings/AgentLaunchChoiceEditor'
@@ -49,6 +50,7 @@ import {
   readChatProgram,
   resolveChatProgramContext
 } from '@/lib/agent-session/launch/inventory/host-chat-program'
+import { selectAgentLaunchRouteView } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
 import { readNativeDetectedAgents } from '@/store/slices/agent-inventory/local-detected-agent-store-state'
 import {
   useDetectedAgents,
@@ -120,11 +122,11 @@ export function AgentLaunchSettingsCatalog({
   useChatProgramFacts(workspace, detectionTarget.kind !== 'ssh')
   const chosen = settings.defaultTuiAgent
   // The saved default reads as available where it opens as a chat without its CLI.
-  const defaultOpensAsChat = useAppStateValue((state) =>
-    chosen && chosen !== 'blank' && detectionTarget.kind !== 'ssh'
-      ? agentChoiceOpensAsChat(state, chosen, workspace, detected)
-      : false
-  )
+  const defaultOpensAsChat = useAppStateValueWithHostStatuses((appState, statuses) => {
+    const state = selectAgentLaunchRouteView(appState, statuses)
+    const opensAsChat = chosen && chosen !== 'blank' && detectionTarget.kind !== 'ssh'
+    return opensAsChat ? agentChoiceOpensAsChat(state, chosen, workspace, detected) : false
+  })
   // The chat-or-CLI choice is this computer's, so a paired host's page doesn't offer it.
   const chatAgents = local
     ? recomputeOn([hostAgentsVersion], () => chatProviderAgents(LOCAL_EXECUTION_HOST_ID, undefined))
@@ -133,13 +135,14 @@ export function AgentLaunchSettingsCatalog({
     managedRuntimeChatAgents(LOCAL_EXECUTION_HOST_ID, undefined)
   )
   // Agents whose chat program is here without their CLI, like a downloaded chat runtime, are installed for chat.
-  const chatOnlyKey = useAppStateValue((state) => {
+  const chatOnlyKey = useAppStateValueWithHostStatuses((appState, statuses) => {
     if (detectionTarget.kind === 'ssh') {
       return ''
     }
+    const state = selectAgentLaunchRouteView(appState, statuses)
     const context = resolveChatProgramContext(state, workspace)
     const selectedDetected = detectionTarget.kind === 'runtime' ? detected : installedHere
-    return chatProviderAgents(context.executionHostId, state.runtimeStatusByEnvironmentId)
+    return chatProviderAgents(context.executionHostId, statuses)
       .filter(
         (agent) =>
           !selectedDetected?.includes(agent) &&

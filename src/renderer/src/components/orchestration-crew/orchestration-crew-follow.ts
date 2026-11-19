@@ -1,4 +1,7 @@
-import { useAppStore } from '@/store'
+import {
+  readRuntimeStatuses,
+  subscribeRuntimeStatuses
+} from '@/store/slices/runtime-status/views/runtime-status-owner'
 import {
   getRuntimeEnvironmentRevision,
   onRuntimeEnvironmentRevisionsChanged,
@@ -25,7 +28,7 @@ function selectSource(target: RuntimeClientTarget): SourceSelection {
   if (target.kind === 'local') {
     return { identity: 'local', wake: 'local', initial: true }
   }
-  const entry = useAppStore.getState().runtimeStatusByEnvironmentId.get(target.environmentId)
+  const entry = readRuntimeStatuses().get(target.environmentId)
   const revision = getRuntimeEnvironmentRevision(target.environmentId)
   const contact = runtimeHostContactForEntry(entry)
   const status = lastRuntimeHostAnswer(contact)
@@ -105,7 +108,7 @@ export class CrewFollowSource {
         }
       })
       const revisions = onRuntimeEnvironmentRevisionsChanged(changed)
-      const store = useAppStore.subscribe(() => this.update())
+      const store = subscribeRuntimeStatuses(() => this.update())
       const gone = (): void => {
         this.retiredIdentity = this.current.identity
         this.block(false)

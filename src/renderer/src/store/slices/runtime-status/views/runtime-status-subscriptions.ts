@@ -3,10 +3,11 @@ import { runtimeHostConnectionStateForEntry } from '@/runtime/hosts/connections/
 import type { RuntimeHostConnectionState } from '../../../../../../shared/remote-runtime/host-status/runtime-host-connection-state'
 import { createPairedRuntimeParkingEnvironmentIdsSelector } from '@/components/terminal-pane/parking/retention/paired-runtime-parking-capabilities'
 
+export type RuntimeStatuses = ReadonlyMap<string, RuntimeEnvironmentStatus>
 type RuntimeStatusState = {
-  runtimeStatusByEnvironmentId: ReadonlyMap<string, RuntimeEnvironmentStatus>
+  runtimeStatusByEnvironmentId: RuntimeStatuses
 }
-type RuntimeStatusStore = {
+export type RuntimeStatusStore = {
   getState: () => RuntimeStatusState
   subscribe: (listener: () => void) => () => void
 }
@@ -23,28 +24,30 @@ export function createRuntimeStatusSubscriptions(store: RuntimeStatusStore) {
   const parkingListeners = new Set<Listener>()
   let selectParking = createPairedRuntimeParkingEnvironmentIdsSelector()
   let parkingSnapshot: ReadonlySet<string> | null = null
-  let previousStatuses: RuntimeStatusState['runtimeStatusByEnvironmentId'] | null = null
+  let previousStatuses: RuntimeStatuses | null = null
   let unsubscribeStore: (() => void) | null = null
+
+  function readStatuses(): RuntimeStatuses {
+    return store.getState().runtimeStatusByEnvironmentId
+  }
 
   function getConnectionSnapshot(environmentId: string | null): RuntimeHostConnectionState {
     return runtimeHostConnectionStateForEntry(
-      environmentId === null
-        ? undefined
-        : store.getState().runtimeStatusByEnvironmentId.get(environmentId)
+      environmentId === null ? undefined : readStatuses().get(environmentId)
     )
   }
 
   function getParkingSnapshot(): ReadonlySet<string> {
-    return selectParking(store.getState().runtimeStatusByEnvironmentId)
+    return selectParking(readStatuses())
   }
 
   function ensureSubscription(): void {
     if (unsubscribeStore) {
       return
     }
-    previousStatuses = store.getState().runtimeStatusByEnvironmentId
+    previousStatuses = readStatuses()
     unsubscribeStore = store.subscribe(() => {
-      const statuses = store.getState().runtimeStatusByEnvironmentId
+      const statuses = readStatuses()
       const previous = previousStatuses
       if (statuses === previous) {
         return
@@ -188,6 +191,7 @@ export function createRuntimeStatusSubscriptions(store: RuntimeStatusStore) {
   }
 
   return {
+    readStatuses,
     getConnectionSnapshot,
     subscribeConnection,
     getParkingSnapshot,
@@ -195,4 +199,26 @@ export function createRuntimeStatusSubscriptions(store: RuntimeStatusStore) {
     subscribeEntry,
     subscribeStatuses
   }
+}
+
+export type RuntimeStatusSubscriptions = ReturnType<typeof createRuntimeStatusSubscriptions>
+
+const subscriptionsByStore = new WeakMap<object, RuntimeStatusSubscriptions>()
+
+// Why getState: the bound hook and a slice's inner api are distinct objects sharing one getState.
+function ownerKey(store: RuntimeStatusStore): object {
+  return typeof store.getState === 'function' ? store.getState : store
+}
+
+/** The one host status owner per store, so every reader shares its baselines and listeners. */
+export function runtimeStatusSubscriptionsFor(
+  store: RuntimeStatusStore
+): RuntimeStatusSubscriptions {
+  const key = ownerKey(store)
+  let subscriptions = subscriptionsByStore.get(key)
+  if (!subscriptions) {
+    subscriptions = createRuntimeStatusSubscriptions(store)
+    subscriptionsByStore.set(key, subscriptions)
+  }
+  return subscriptions
 }

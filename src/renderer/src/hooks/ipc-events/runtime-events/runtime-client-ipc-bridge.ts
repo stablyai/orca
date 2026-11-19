@@ -28,6 +28,10 @@ import {
 } from '../../../../../shared/execution-host/execution-host'
 import type { RuntimeClientEvent } from '../../../../../shared/remote-runtime/session-graph/runtime-client-events'
 import { navigationTargetsClients } from '../../../../../shared/remote-runtime/session-graph/runtime-navigation'
+import {
+  readRuntimeStatuses,
+  subscribeRuntimeStatuses
+} from '@/store/slices/runtime-status/views/runtime-status-owner'
 import { useAppStore } from '../../../store/index'
 import { invalidateRemoteWorktreeLineage } from '../../../store/slices/worktrees/metadata/worktree-lineage-readiness'
 import {
@@ -41,11 +45,15 @@ import {
   createRuntimeEnvironmentStoreSyncSubscriber,
   getReachableRuntimeEnvironmentIds,
   getRuntimeClientEventEnvironmentIds,
-  invalidateRuntimeClientEventReplay
+  invalidateRuntimeClientEventReplay,
+  pickRuntimeEnvironmentSyncState
 } from './runtime-environment-subscription-selection'
 import type { WorktreeEventRuntime } from '../workspace-catalog/worktree-event-runtime'
 import { noteOrchestrationSessionWorkersChanged } from '@/lib/orchestration-session-workers'
 import { readPublishedSortOrders } from '../../../store/slices/worktrees/listing/worktree-sort-order-patch'
+
+const readSyncState = () =>
+  pickRuntimeEnvironmentSyncState(useAppStore.getState(), readRuntimeStatuses())
 
 export function registerRuntimeClientIpcBridge(
   unsubs: (() => void)[],
@@ -212,7 +220,7 @@ export function registerRuntimeClientIpcBridge(
     unsubs.push(stopCatalogChanged)
   }
   const runtimeClientEventsSync = createRuntimeClientEventsSync({
-    getDesiredEnvironmentIds: () => getRuntimeClientEventEnvironmentIds(useAppStore.getState()),
+    getDesiredEnvironmentIds: () => getRuntimeClientEventEnvironmentIds(readSyncState()),
     getSubscriptionKey: (environmentId) => buildRuntimeClientEventEnvironmentKey([environmentId]),
     subscribe: (environmentId, onEvent, onError, isCurrent, onClose) => {
       const sshGeneration = getEnvironmentSshStateGeneration(environmentId)
@@ -238,10 +246,9 @@ export function registerRuntimeClientIpcBridge(
           invalidateRuntimeClientEventReplay({
             getSshStateReference: () => useAppStore.getState().sshStateByEnvironment,
             refreshRuntimeStatus: () => {
-              const state = useAppStore.getState()
-              const snapshot = state.runtimeStatusByEnvironmentId.get(environmentId)?.snapshot
+              const snapshot = readRuntimeStatuses().get(environmentId)?.snapshot
               if (!snapshot || snapshot.transport === 'unknown') {
-                void state.refreshRuntimeEnvironmentStatus(environmentId)
+                void useAppStore.getState().refreshRuntimeEnvironmentStatus(environmentId)
               }
             },
             requestProjectRefresh: () => {
@@ -264,7 +271,7 @@ export function registerRuntimeClientIpcBridge(
   })
 
   // Seed connected-runtime discovery or existing remote projects stay hidden until Add Project.
-  const initialRuntimeEnvironmentState = useAppStore.getState()
+  const initialRuntimeEnvironmentState = readSyncState()
   const runtimeClientEventEnvironmentIds = getRuntimeClientEventEnvironmentIds(
     initialRuntimeEnvironmentState
   )
@@ -289,9 +296,19 @@ export function registerRuntimeClientIpcBridge(
     },
     sync: runtimeClientEventsSync.sync
   })
-  const unsubscribeRuntimeEnvironmentStore = useAppStore.subscribe(
-    handleRuntimeEnvironmentStoreWrite
-  )
+  // Host statuses come from their owner, so both sources feed one diff against the last seen inputs.
+  let previousSyncState = initialRuntimeEnvironmentState
+  const handleRuntimeEnvironmentInputs = (): void => {
+    const previous = previousSyncState
+    previousSyncState = readSyncState()
+    handleRuntimeEnvironmentStoreWrite(previousSyncState, previous)
+  }
+  const unsubscribeAppStore = useAppStore.subscribe(handleRuntimeEnvironmentInputs)
+  const unsubscribeStatuses = subscribeRuntimeStatuses(handleRuntimeEnvironmentInputs)
+  const unsubscribeRuntimeEnvironmentStore = (): void => {
+    unsubscribeAppStore()
+    unsubscribeStatuses()
+  }
   // Subscribe before streams start; replay invalidation can synchronously publish SSH buckets needing exactly one replacement subscription.
   runtimeClientEventsSync.sync()
   unsubs.push(runtimeClientEventsSync.stop)

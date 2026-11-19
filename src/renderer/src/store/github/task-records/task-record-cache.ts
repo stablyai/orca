@@ -2,6 +2,7 @@ import type { GitHubWorkItem } from '../../../../../shared/github/work-items/wor
 import type { GitHubAssignableUser } from '../../../../../shared/github/pull-requests/pull-request-types'
 import type { Repo } from '../../../../../shared/repository/repo-types'
 import type { AppState } from '../../types'
+import { runtimeStatusSubscriptionsFor } from '../../slices/runtime-status/views/runtime-status-subscriptions'
 import type { StoreApi } from 'zustand'
 import { githubTaskIdentity } from '@/lib/work-items/github/github-task-target'
 import { getWorkItemRepo } from '@/lib/work-items/work-item-repo-row'
@@ -228,10 +229,16 @@ export class GitHubTaskRecordCache extends TaskRecordReads {
 
 export function createGitHubTaskRecordCache(store: StoreApi<AppState>) {
   const cache = new GitHubTaskRecordCache(store)
+  let stopStatuses: (() => void) | null = null
   store.subscribe((state, previous) => {
+    // Joined on the first write: the store has no state while its slices are created.
+    const firstWrite = stopStatuses === null
+    stopStatuses ??= runtimeStatusSubscriptionsFor(store).subscribeStatuses(() =>
+      cache.syncBindings(store.getState().repos ?? [])
+    )
     if (
+      firstWrite ||
       state.repos !== previous.repos ||
-      state.runtimeStatusByEnvironmentId !== previous.runtimeStatusByEnvironmentId ||
       state.runtimeEnvironments !== previous.runtimeEnvironments ||
       state.sshConnectionStates !== previous.sshConnectionStates ||
       state.sshStateByEnvironment !== previous.sshStateByEnvironment

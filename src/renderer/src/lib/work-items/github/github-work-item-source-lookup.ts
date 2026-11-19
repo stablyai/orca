@@ -88,7 +88,8 @@ export async function lookupGitHubWorkItemForSource(
     args.type === 'pr'
       ? (args.checkContract ??
         capturePRCheckContract(
-          (await import('@/store/index')).useAppStore.getState,
+          (await import('@/store/slices/runtime-status/views/runtime-status-owner'))
+            .readRuntimeStatuses,
           target,
           args.sourceContext
         ))
@@ -136,7 +137,8 @@ export async function lookupGitHubWorkItemByOwnerRepoForSource(
     args.type === 'pr'
       ? (args.checkContract ??
         capturePRCheckContract(
-          (await import('@/store/index')).useAppStore.getState,
+          (await import('@/store/slices/runtime-status/views/runtime-status-owner'))
+            .readRuntimeStatuses,
           target,
           args.sourceContext
         ))
@@ -224,7 +226,8 @@ export async function lookupGitHubWorkItemDetailsForSource(
   const contract =
     args.type === 'pr'
       ? capturePRCheckContract(
-          (await import('@/store/index')).useAppStore.getState,
+          (await import('@/store/slices/runtime-status/views/runtime-status-owner'))
+            .readRuntimeStatuses,
           args.target ?? getGitHubSourceRuntimeTarget(sourceContext),
           sourceContext
         )
