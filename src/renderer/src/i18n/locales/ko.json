@@ -23534,8 +23534,7 @@
     },
     "upcoming": {
       "tidyNightAfter": "매일 밤 {{from}} 이후, 또는 이 컴퓨터가 깨어난 후",
-      "tidyWeekAfter": "일주일에 한 번 {{from}} 이후, 또는 이 컴퓨터가 깨어난 후",
-      "lookDueNow": "지금 실행 예정 · {{every}}"
+      "tidyWeekAfter": "일주일에 한 번 {{from}} 이후, 또는 이 컴퓨터가 깨어난 후"
     },
     "palette": {
       "placeholder": "봇, 채팅, 터미널, 워크스페이스, 작업, 설정 및 동작 검색...",

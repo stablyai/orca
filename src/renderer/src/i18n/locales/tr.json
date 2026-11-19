@@ -23811,8 +23811,7 @@
     },
     "upcoming": {
       "tidyNightAfter": "Her gece {{from}} sonrasında veya bu bilgisayar uyandığında",
-      "tidyWeekAfter": "Haftada bir, {{from}} sonrasında veya bu bilgisayar uyandığında",
-      "lookDueNow": "Şimdi zamanı · {{every}}"
+      "tidyWeekAfter": "Haftada bir, {{from}} sonrasında veya bu bilgisayar uyandığında"
     },
     "palette": {
       "placeholder": "Botlarda, sohbetlerde, terminallerde, çalışma alanlarında, görevlerde, ayarlarda ve işlemlerde ara...",

@@ -25521,8 +25521,7 @@
     },
     "upcoming": {
       "tidyNightAfter": "每晚 {{from}} 之后，或这台电脑唤醒后",
-      "tidyWeekAfter": "每周一次，{{from}} 之后，或这台电脑唤醒后",
-      "lookDueNow": "现在到期 · {{every}}"
+      "tidyWeekAfter": "每周一次，{{from}} 之后，或这台电脑唤醒后"
     },
     "palette": {
       "placeholder": "搜索机器人、聊天、终端、工作区、任务、设置和操作...",

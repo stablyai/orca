@@ -23332,8 +23332,7 @@
     },
     "upcoming": {
       "tidyNightAfter": "每晚 {{from}} 之後，或這台電腦喚醒後",
-      "tidyWeekAfter": "每週一次，{{from}} 之後，或這台電腦喚醒後",
-      "lookDueNow": "現在到期 · {{every}}"
+      "tidyWeekAfter": "每週一次，{{from}} 之後，或這台電腦喚醒後"
     },
     "palette": {
       "placeholder": "搜尋機器人、聊天、終端機、工作區、任務、設定和操作...",

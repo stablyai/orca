@@ -25152,8 +25152,7 @@
     },
     "upcoming": {
       "tidyNightAfter": "毎晩{{from}}以降、またはこのコンピューターのスリープ解除後",
-      "tidyWeekAfter": "週に1回{{from}}以降、またはこのコンピューターのスリープ解除後",
-      "lookDueNow": "今すぐ実行予定 · {{every}}"
+      "tidyWeekAfter": "週に1回{{from}}以降、またはこのコンピューターのスリープ解除後"
     },
     "palette": {
       "placeholder": "ボット、チャット、ターミナル、ワークスペース、タスク、設定、操作を検索します…",

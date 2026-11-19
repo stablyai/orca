@@ -180,7 +180,7 @@ export function BotSidebarEntry({
   )
 }
 
-/** An unfolded bot's chats with their workspaces; with no chats, or on a host without that read, its workspaces flat.
+/** An unfolded bot's chats with their workspaces; with no chats read, its workspaces flat.
  *  Nothing until the first read lands, so the workers never flash unfolded before their folded chats. */
 function BotSidebarList({
   bot,
