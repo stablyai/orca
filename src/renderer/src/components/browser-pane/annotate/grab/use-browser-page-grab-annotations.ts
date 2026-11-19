@@ -234,6 +234,7 @@ export function useBrowserPageGrabAnnotations({
       copyGrabScreenshot,
       grab,
       grabIntent,
+      mountedRef,
       recordFeatureInteraction,
       showGrabScreenshotToast,
       showGrabToast

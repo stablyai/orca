@@ -172,6 +172,7 @@ export function useBrowserPageKeyboardShortcuts({
     return () => removeAppKeyListener('keydown', handleKeyDown)
   }, [
     annotateModeIsOn,
+    browserTabId,
     grabIsInteractive,
     handleAnnotateToolKey,
     handleGrabActionShortcut,
