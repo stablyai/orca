@@ -19491,8 +19491,6 @@
       "splitDown": "아래로 분할",
       "currentSideChat": {
         "open": "새 사이드 채팅",
-        "inherit": "이 채팅과 같은 권한",
-        "readOnly": "읽기 전용",
         "pane": "사이드 채팅을 별도 창에 모으기",
         "mark": "btw"
       }

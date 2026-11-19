@@ -22,7 +22,7 @@ export const ForkSource = z.union([
     .object({
       sessionId: SessionId,
       current: z.literal(true),
-      permission: z.enum(['inherit', 'read-only'])
+      permission: z.literal('inherit')
     })
     .strict()
 ])

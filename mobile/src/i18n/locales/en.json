@@ -3130,7 +3130,6 @@
     },
     "currentSideChat": {
       "open": "New side chat",
-      "readOnly": "New read-only side chat",
       "mark": "btw"
     }
   },

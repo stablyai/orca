@@ -2806,7 +2806,6 @@
     },
     "currentSideChat": {
       "open": "새 사이드 채팅",
-      "readOnly": "새 사이드 채팅 · 읽기 전용",
       "mark": "btw"
     }
   },

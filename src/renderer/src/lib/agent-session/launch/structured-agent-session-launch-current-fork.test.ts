@@ -47,7 +47,7 @@ it('coalesces concurrent re-delivery of one current-fork action while preserving
   const forkFrom: StructuredAgentSessionForkSource = {
     sessionId: 'source',
     current: true,
-    permission: 'read-only'
+    permission: 'inherit'
   }
   const firstReply = Promise.withResolvers<{ sessionId: string; fence: number }>()
   const intent = {

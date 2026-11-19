@@ -175,7 +175,7 @@ function validForkSource(value: unknown): value is StructuredAgentSessionForkSou
     (('current' in value &&
       value.current === true &&
       'permission' in value &&
-      (value.permission === 'inherit' || value.permission === 'read-only') &&
+      value.permission === 'inherit' &&
       !('throughItemId' in value)) ||
       ('throughItemId' in value &&
         typeof value.throughItemId === 'string' &&

@@ -20697,8 +20697,6 @@
       },
       "currentSideChat": {
         "open": "新建侧聊",
-        "inherit": "沿用此会话的权限",
-        "readOnly": "只读",
         "pane": "将侧聊集中到独立分栏",
         "mark": "btw"
       }

@@ -2806,7 +2806,6 @@
     },
     "currentSideChat": {
       "open": "新增側聊",
-      "readOnly": "新增唯讀側聊",
       "mark": "btw"
     }
   },

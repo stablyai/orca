@@ -1,5 +1,4 @@
 import { copyStructuredAgentSessionCurrentContext } from './structured-agent-session-current-copy'
-import { agentChatPermissionModes } from '../../../../shared/agent-launch/permissions/agent-chat-permission-support'
 import { activeProviderContext } from '../../../../shared/agent-session/conversation-context/agent-session-provider-context'
 import { agentSessionExecutionLocationsEqual } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode-option-id'
@@ -13,7 +12,7 @@ import type { AgentSessionAttachParams } from './structured-agent-session-attach
 export async function prepareStructuredAgentSessionCurrentFork(input: {
   host: StructuredAgentSessionHost
   callerKey?: string
-  forkFrom: { sessionId: string; current: true; permission: 'inherit' | 'read-only' }
+  forkFrom: { sessionId: string; current: true; permission: 'inherit' }
   agent: AgentSessionAttachParams['agent']
   location: AgentSessionAttachParams['location']
   envelope: { sessionId: string; clientOperationId: string }
@@ -37,14 +36,6 @@ export async function prepareStructuredAgentSessionCurrentFork(input: {
       { reason: 'hostUnsupported' },
       'This host cannot open a side chat from the current context.'
     )
-  }
-  if (
-    forkFrom.permission === 'read-only' &&
-    !agentChatPermissionModes(input.agent)?.modes.includes('read-only')
-  ) {
-    throw agentSessionRefusalError('agent_session_operation_invalid', {
-      reason: 'requestMalformed'
-    })
   }
   if (!input.callerKey) {
     throw agentSessionRefusalError('agent_session_operation_invalid', {
@@ -120,9 +111,6 @@ export async function prepareStructuredAgentSessionCurrentFork(input: {
       ...source.options,
       ...(source.permissionMode
         ? { [AGENT_CHAT_PERMISSION_MODE_OPTION_ID]: source.permissionMode }
-        : {}),
-      ...(forkFrom.permission === 'read-only'
-        ? { [AGENT_CHAT_PERMISSION_MODE_OPTION_ID]: 'read-only' }
         : {})
     },
     ...(source.launchArgs ? { launchArgs: source.launchArgs } : {}),

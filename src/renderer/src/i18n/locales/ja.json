@@ -20631,8 +20631,6 @@
       },
       "currentSideChat": {
         "open": "新しいサイドチャット",
-        "inherit": "このチャットと同じ権限",
-        "readOnly": "読み取り専用",
         "pane": "サイドチャットを専用ペインにまとめる",
         "mark": "btw"
       }

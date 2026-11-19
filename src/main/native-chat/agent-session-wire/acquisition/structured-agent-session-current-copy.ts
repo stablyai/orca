@@ -22,7 +22,7 @@ export async function copyStructuredAgentSessionCurrentContext(input: {
   store: AgentSessionRecordStore
   callerKey: string
   envelope: { sessionId: string; clientOperationId: string }
-  permission: 'inherit' | 'read-only'
+  permission: 'inherit'
   source: StructuredAgentSessionConversationCopyInput
   copy: NonNullable<StructuredAgentSessionAdapter['copyConversation']>
 }) {

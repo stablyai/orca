@@ -20273,8 +20273,6 @@
       "splitDown": "Diviser vers le bas",
       "currentSideChat": {
         "open": "Nouveau chat parallèle",
-        "inherit": "Mêmes autorisations que ce chat",
-        "readOnly": "Lecture seule",
         "pane": "Regrouper les chats parallèles dans un volet séparé",
         "mark": "btw"
       }

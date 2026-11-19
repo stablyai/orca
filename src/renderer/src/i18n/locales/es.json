@@ -20002,8 +20002,6 @@
       "splitDown": "Dividir hacia abajo",
       "currentSideChat": {
         "open": "Nuevo chat paralelo",
-        "inherit": "Mismos permisos que este chat",
-        "readOnly": "Solo lectura",
         "pane": "Agrupar chats paralelos en un panel separado",
         "mark": "btw"
       }

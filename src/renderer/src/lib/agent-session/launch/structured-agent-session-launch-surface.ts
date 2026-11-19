@@ -45,6 +45,7 @@ type LaunchSurface = {
   executionHostId: ExecutionHostId
   agent: TuiAgent
   surfaceAddress?: StructuredLaunchSurfaceAddress
+  params?: { forkFrom?: { current?: true } }
 }
 
 export function findStructuredLaunchTab(args: {
@@ -100,7 +101,7 @@ function trackSlotAddresses(): void {
     let hasHiddenSlot = false
     for (const record of readStructuredAgentLaunchRecords()) {
       const address = record.surfaceAddress
-      if (!address || record.executionHostId !== 'local') {
+      if (!address || (record.executionHostId !== 'local' && !record.forkFrom?.current)) {
         continue
       }
       const tabId = structuredAgentSessionTabId(record.sessionId)
@@ -135,7 +136,7 @@ function trackSlotAddresses(): void {
 
 export function reserveStructuredLaunchSlot(launch: LaunchSurface): void {
   const address = launch.surfaceAddress
-  if (!address || launch.executionHostId !== 'local') {
+  if (!address || (launch.executionHostId !== 'local' && !launch.params?.forkFrom?.current)) {
     return
   }
   trackSlotAddresses()

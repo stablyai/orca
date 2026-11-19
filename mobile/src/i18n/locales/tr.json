@@ -2810,7 +2810,6 @@
     },
     "currentSideChat": {
       "open": "Yeni yan sohbet",
-      "readOnly": "Yeni salt okunur yan sohbet",
       "mark": "btw"
     }
   },

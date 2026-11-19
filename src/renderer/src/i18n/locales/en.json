@@ -22476,8 +22476,6 @@
       },
       "currentSideChat": {
         "open": "New side chat",
-        "inherit": "Same permissions as this chat",
-        "readOnly": "Read-only",
         "pane": "Group side chats in a separate pane",
         "mark": "btw"
       }

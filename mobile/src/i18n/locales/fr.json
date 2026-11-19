@@ -2880,7 +2880,6 @@
     },
     "currentSideChat": {
       "open": "Nouveau chat parallèle",
-      "readOnly": "Nouveau chat parallèle · Lecture seule",
       "mark": "btw"
     }
   },

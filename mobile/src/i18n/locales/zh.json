@@ -3344,7 +3344,6 @@
     },
     "currentSideChat": {
       "open": "新建侧聊",
-      "readOnly": "新建只读侧聊",
       "mark": "btw"
     }
   },

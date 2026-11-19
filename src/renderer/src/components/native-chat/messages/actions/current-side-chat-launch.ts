@@ -29,14 +29,10 @@ export function isCurrentSideChat(tab: Tab): boolean {
   )
 }
 
-function prepareSideChatPane(worktreeId: string, sourceTabId: string) {
+function findSideChatGroup(worktreeId: string) {
   const state = useAppStore.getState()
   const groups = state.groupsByWorktree[worktreeId] ?? []
   const tabs = state.unifiedTabsByWorktree[worktreeId] ?? []
-  const source = groups.find((group) => group.tabOrder.includes(sourceTabId))
-  if (!source) {
-    return undefined
-  }
   const sideIds = new Set(tabs.filter(isCurrentSideChat).map((tab) => tab.id))
   const pendingGroups = new Set<string>()
   for (const record of readStructuredAgentLaunchRecords()) {
@@ -51,12 +47,22 @@ function prepareSideChatPane(worktreeId: string, sourceTabId: string) {
       }
     }
   }
-  const existing = groups.find((group) =>
+  return groups.find((group) =>
     group.tabOrder.length
       ? group.tabOrder.every((id) => sideIds.has(id))
       : pendingGroups.has(group.id)
   )
+}
+
+function prepareSideChatPane(worktreeId: string, sourceTabId: string) {
+  const state = useAppStore.getState()
+  const groups = state.groupsByWorktree[worktreeId] ?? []
+  const source = groups.find((group) => group.tabOrder.includes(sourceTabId))
+  if (!source) {
+    return undefined
+  }
   const rect = getTabGroupPanelRect(source.id, worktreeId)
+  const existing = findSideChatGroup(worktreeId)
   const groupId =
     existing?.id ??
     state.createEmptySplitGroup(
@@ -87,17 +93,12 @@ export function groupCurrentSideChats(worktreeId: string): void {
   }
   const state = useAppStore.getState()
   const tabs = state.unifiedTabsByWorktree[worktreeId] ?? []
-  const sideTabs = tabs.filter(isCurrentSideChat)
-  const groups = state.groupsByWorktree[worktreeId] ?? []
-  const sideIds = new Set(sideTabs.map((tab) => tab.id))
-  const existing = groups.find(
-    (group) => group.tabOrder.length > 0 && group.tabOrder.every((id) => sideIds.has(id))
-  )
+  const existing = findSideChatGroup(worktreeId)
   if (existing) {
     moveSideChatsInto(worktreeId, existing.id)
     return
   }
-  const source = sideTabs[0]
+  const source = tabs.find(isCurrentSideChat)
   if (!source) {
     return
   }
@@ -132,17 +133,13 @@ export function groupCurrentSideChats(worktreeId: string): void {
 
 const pending = new Map<string, Promise<void>>()
 
-export function openCurrentSideChat(
-  worktreeId: string,
-  tabId: string,
-  permission: 'inherit' | 'read-only'
-): Promise<void> {
-  const key = JSON.stringify([worktreeId, tabId, permission])
+export function openCurrentSideChat(worktreeId: string, tabId: string): Promise<void> {
+  const key = JSON.stringify([worktreeId, tabId])
   const existing = pending.get(key)
   if (existing) {
     return existing
   }
-  const opening = open(worktreeId, tabId, permission).finally(() => {
+  const opening = open(worktreeId, tabId).finally(() => {
     if (pending.get(key) === opening) {
       pending.delete(key)
     }
@@ -151,11 +148,7 @@ export function openCurrentSideChat(
   return opening
 }
 
-async function open(
-  worktreeId: string,
-  tabId: string,
-  permission: 'inherit' | 'read-only'
-): Promise<void> {
+async function open(worktreeId: string, tabId: string): Promise<void> {
   const state = useAppStore.getState()
   const tab = state.unifiedTabsByWorktree[worktreeId]?.find((entry) => entry.id === tabId)
   if (
@@ -182,7 +175,7 @@ async function open(
       agent: tab.agentSessionAgent,
       worktreeId,
       target,
-      forkFrom: { sessionId: tab.entityId, current: true, permission },
+      forkFrom: { sessionId: tab.entityId, current: true, permission: 'inherit' },
       forkRequiresInheritedOriginal: false,
       beforeCreate: () => {
         const next = useAppStore.getState()
@@ -201,8 +194,8 @@ async function open(
         const child = useAppStore
           .getState()
           .unifiedTabsByWorktree[worktreeId]?.find((tab) => tab.id === id)
-        if (child) {
-          moveSideChatsInto(worktreeId, child.groupId)
+        if (child?.groupId === destination.groupId) {
+          moveSideChatsInto(worktreeId, destination.groupId)
         }
       })
     }

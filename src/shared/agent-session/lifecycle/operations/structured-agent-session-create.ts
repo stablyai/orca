@@ -20,7 +20,7 @@ export type StructuredAgentSessionResumeSource = {
 /** The source chat and the response whose turn the fork copies through. */
 export type StructuredAgentSessionForkSource =
   | { sessionId: string; throughItemId: string; current?: never; permission?: never }
-  | { sessionId: string; current: true; permission: 'inherit' | 'read-only'; throughItemId?: never }
+  | { sessionId: string; current: true; permission: 'inherit'; throughItemId?: never }
 
 export type StructuredAgentSessionCreateParams = {
   envelope: AgentSessionMutationEnvelope

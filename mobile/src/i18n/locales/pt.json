@@ -3285,7 +3285,6 @@
     },
     "currentSideChat": {
       "open": "Novo chat paralelo",
-      "readOnly": "Novo chat paralelo somente leitura",
       "mark": "btw"
     }
   },

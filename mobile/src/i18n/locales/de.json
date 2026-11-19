@@ -2810,7 +2810,6 @@
     },
     "currentSideChat": {
       "open": "Neuer Nebenchat",
-      "readOnly": "Neuer schreibgeschützter Nebenchat",
       "mark": "btw"
     }
   },
