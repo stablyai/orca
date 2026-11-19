@@ -2,7 +2,7 @@
 
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { OnboardingFeatureSetupDeps } from '@/components/onboarding/onboarding-feature-setup'
-import type { editor, languages } from 'monaco-editor'
+import type { CancellationToken, editor, languages, Position, Uri } from 'monaco-editor'
 import type { MonacoE2EProbe } from './components/editor/monaco/monaco-e2e-probe'
 import type { TerminalWorktreeParkingDebugVerdict } from './components/terminal-pane/parking/instrumentation/terminal-parking-e2e-overrides'
 import type { TerminalPtyPreSpawnE2EBarrier } from './components/terminal-pane/pty-transport/ipc/terminal-pty-pre-spawn-e2e-barrier'
@@ -21,6 +21,22 @@ declare module 'monaco-editor/esm/vs/basic-languages/markdown/markdown.js' {
 declare module 'monaco-editor/esm/vs/basic-languages/cpp/cpp.js' {
   export const conf: languages.LanguageConfiguration
   export const language: languages.IMonarchLanguage
+}
+
+// Orca wraps the TypeScript definition provider to follow imports; declare only that surface.
+declare module 'monaco-editor/esm/vs/language/typescript/languageFeatures.js' {
+  type WorkerAccessor = (...uris: Uri[]) => Promise<unknown>
+  export class LibFiles {
+    constructor(worker: WorkerAccessor)
+  }
+  export class DefinitionAdapter {
+    constructor(libFiles: LibFiles, worker: WorkerAccessor)
+    provideDefinition(
+      model: editor.ITextModel,
+      position: Position,
+      token: CancellationToken
+    ): Promise<languages.Location[] | undefined>
+  }
 }
 
 // Monaco contributions lack public types; declare only Orca’s paste-override surface.
