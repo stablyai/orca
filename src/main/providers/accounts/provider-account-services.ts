@@ -26,6 +26,7 @@ import {
 import { createAccountRuntimeTargetSettingsSync } from '../../rate-limits/service/account-runtime-target-sync'
 import { normalizeCodexRuntimeSelection } from '../../codex-accounts/account-management/runtime-selection'
 import { normalizeClaudeRuntimeSelection } from '../../claude-accounts/selection/runtime-selection'
+import { WORKSPACE_SYSTEM_DEFAULT_ACCOUNT_ID } from '../../../shared/agent-accounts/workspace-account-binding'
 import type { ClaudeStatusLineRateLimits } from '../../../shared/agent-usage/rate-limits/claude-statusline-rate-limits'
 
 export type ProviderAccountServices = {
@@ -181,24 +182,35 @@ export function createProviderAccountServices(
   rateLimits.setNetworkProxySettingsResolver(() => store.getSettings())
   rateLimits.setInactiveClaudeAccountsResolver(() => {
     const settings = store.getSettings()
-    const activeIds = new Set(
-      [
-        normalizeClaudeRuntimeSelection(settings).host,
-        ...Object.values(normalizeClaudeRuntimeSelection(settings).wsl)
-      ].filter(Boolean)
-    )
-    return settings.claudeManagedAccounts
-      .filter(
-        (account) =>
-          !activeIds.has(account.id) ||
-          Object.values(settings.claudeWorkspaceAccounts ?? {}).includes(account.id)
+    const selection = normalizeClaudeRuntimeSelection(settings)
+    const activeIds = new Set([selection.host, ...Object.values(selection.wsl)].filter(Boolean))
+    const previewSystemDefault =
+      selection.host !== null &&
+      Object.values(settings.claudeWorkspaceAccounts ?? {}).includes(
+        WORKSPACE_SYSTEM_DEFAULT_ACCOUNT_ID
       )
-      .map((account) => ({
-        id: account.id,
-        managedAuthRuntime: account.managedAuthRuntime,
-        wslDistro: account.wslDistro,
-        wslLinuxAuthPath: account.wslLinuxAuthPath
-      }))
+    const login = previewSystemDefault ? claudeRuntimeAuth.router.systemDefaultLogin(5_000) : null
+    return [
+      ...(previewSystemDefault
+        ? [
+            {
+              id: `system-default:host:${JSON.stringify([login?.email ?? null, login?.organizationUuid ?? null])}`
+            }
+          ]
+        : []),
+      ...settings.claudeManagedAccounts
+        .filter(
+          (account) =>
+            !activeIds.has(account.id) ||
+            Object.values(settings.claudeWorkspaceAccounts ?? {}).includes(account.id)
+        )
+        .map((account) => ({
+          id: account.id,
+          managedAuthRuntime: account.managedAuthRuntime,
+          wslDistro: account.wslDistro,
+          wslLinuxAuthPath: account.wslLinuxAuthPath
+        }))
+    ]
   })
   rateLimits.setInactiveCodexAccountsResolver(() => {
     const settings = store.getSettings()

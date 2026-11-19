@@ -2,6 +2,7 @@ import type {
   ProviderRateLimits,
   RateLimitState
 } from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
+import { WORKSPACE_SYSTEM_DEFAULT_ACCOUNT_ID } from '../../../../../shared/agent-accounts/workspace-account-binding'
 
 export function workspaceAccountUsage(
   state: RateLimitState,
@@ -15,14 +16,26 @@ export function workspaceAccountUsage(
   if (primary?.usageMetadata?.unverifiableOwner) {
     return { ...primary, session: null, weekly: null, fableWeekly: null, extraUsage: null }
   }
+  const systemDefault = accountId === WORKSPACE_SYSTEM_DEFAULT_ACCOUNT_ID
   const cached = (
     provider === 'codex' ? state.inactiveCodexAccounts : state.inactiveClaudeAccounts
-  ).find((entry) => entry.accountId === accountId)
-  const reading =
-    primary?.usageMetadata?.readingAccount?.accountId === accountId ? primary : cached?.rateLimits
+  ).find((entry) =>
+    systemDefault
+      ? (provider === 'codex' ? state.codexTarget : state.claudeTarget).runtime === 'host' &&
+        entry.accountId.startsWith('system-default:host:')
+      : entry.accountId === accountId
+  )
+  const reading = (
+    systemDefault
+      ? primary && !primary.usageMetadata?.readingAccount?.accountId
+      : primary?.usageMetadata?.readingAccount?.accountId === accountId
+  )
+    ? primary
+    : cached?.rateLimits
   const matching = reading?.usageMetadata?.readingAccount?.accountId
   const usage: ProviderRateLimits =
-    reading && matching === accountId
+    reading &&
+    (systemDefault ? !matching || matching === cached?.accountId : matching === accountId)
       ? reading
       : {
           provider,

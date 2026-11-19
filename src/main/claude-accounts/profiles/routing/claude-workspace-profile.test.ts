@@ -10,6 +10,7 @@ import {
 } from './claude-profile-installed-router'
 import { claudeStateFile } from '../../sign-in/claude-account-folder'
 import { prepareClaudeLaunchAccount } from '../../../claude/structured/launch/claude-launch-account'
+import { rememberWslHome, clearWslHomeCache } from '../../../wsl/discovery/wsl-home-cache'
 
 vi.mock('../../../codex-cli/command', () => ({ resolveClaudeCommand: () => '/unused' }))
 let root: string
@@ -55,6 +56,7 @@ beforeEach(() => {
   installClaudeWorkspaceProfiles(profiles)
 })
 afterEach(() => {
+  clearWslHomeCache()
   installClaudeProfileRouter(undefined)
   rmSync(root, { recursive: true, force: true })
 })
@@ -95,6 +97,35 @@ it('leaves another runtime to its own account lane instead of using the host bin
   await expect(
     profiles.resolve('folder:client', { runtime: 'wsl', wslDistro: 'Ubuntu' }, true)
   ).resolves.toBeNull()
+})
+
+it('pins a system-default workspace to the real home while the host uses a managed profile', async () => {
+  settings.claudeWorkspaceAccounts = { 'folder:client': 'system-default' }
+  const prepared = await profiles.resolve('folder:client', { runtime: 'host' }, true)
+  expect(prepared?.configDir).toBe(join(root, 'user', '.claude'))
+  const env = { CLAUDE_CONFIG_DIR: router.accountHome('personal') }
+  expect(
+    await prepareClaudeLaunchAccount(router, env, router.accountHome('personal'), 'folder:client')
+  ).toEqual({
+    route: 'system',
+    home: join(root, 'user', '.claude'),
+    configDir: join(root, 'user', '.claude')
+  })
+  expect(env.CLAUDE_CONFIG_DIR).toBe(join(root, 'user', '.claude'))
+  expect(settings.activeClaudeManagedAccountId).toBe('personal')
+})
+
+it('resolves a WSL system-default workspace to its guest home without using a host path', async () => {
+  settings.claudeWorkspaceAccounts = { 'folder:client': 'system-default' }
+  rememberWslHome('Ubuntu', '\\\\wsl.localhost\\Ubuntu\\home\\dev')
+  const prepared = await profiles.resolve(
+    'folder:client',
+    { runtime: 'wsl', wslDistro: 'Ubuntu' },
+    false
+  )
+  expect(prepared?.wslLinuxConfigDir).toBe('/home/dev/.claude')
+  expect(prepared?.envPatch.CLAUDE_CONFIG_DIR).toBe('/home/dev/.claude')
+  expect(prepared?.envPatch.ORCA_CLAUDE_PROFILE_POINTER).toBe('')
 })
 
 it('names a signed-out workspace profile for identity but refuses to launch it', async () => {
