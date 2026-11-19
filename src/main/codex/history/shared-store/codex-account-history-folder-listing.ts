@@ -21,7 +21,8 @@ export async function* regularFiles(
   folder: string,
   shouldStop: () => boolean = () => false
 ): AsyncGenerator<{ path: string; stats: BigIntStats }> {
-  if (shouldStop()) {
+  // A folder swapped for a link since it was listed would lead the walk outside `folder`.
+  if (shouldStop() || !(await lstatIfPresent(folder))?.isDirectory()) {
     return
   }
   for (const entry of await readEntries(folder)) {
