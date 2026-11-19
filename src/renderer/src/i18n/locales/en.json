@@ -26296,6 +26296,7 @@
   "agentPicker": {
     "catalogUnsupportedLaunch": "{{agent}} models are unavailable on this host. Your current choices still apply.",
     "catalogLoadFailed": "Could not load {{agent}} models.",
+    "catalogLoading": "Loading models…",
     "catalogSignInToLoad": "Sign in to {{agent}} to load its models.",
     "catalogInstallToLoad": "Install {{agent}} on this host to load its models.",
     "catalogNotLoaded": "{{agent}} models have not loaded.",
@@ -26866,6 +26867,8 @@
       "pictureUpload": "Your image",
       "runsOn": "Runs on <host/> with <agent/>",
       "runsOnAs": "Runs on <host/>, as <account/>, with <agent/>",
+      "agentsLoading": "Loading agents…",
+      "noChatAgents": "No chat agents available on this computer.",
       "change": "Change",
       "computer": "Computer",
       "computerHint": "Where the bot runs.",
@@ -28104,10 +28107,11 @@
       }
     },
     "import": {
-      "nudgeOne": "We found a bot in {{app}}. Bring it over?",
-      "nudgeMany": "We found {{count}} bots in {{app}}. Bring one over?",
+      "nudgeOne": "We found a bot in {{app}}.",
+      "nudgeMany": "We found {{count}} bots in {{app}}.",
       "nudgeActionOne": "Bring it over",
       "nudgeActionMany": "Bring one over",
+      "nudgeDismiss": "Don't show again",
       "updateDraft": "Bring over anything new from {{name}} in {{app}}.",
       "title": "Import from another app",
       "description": "Your new bot reads the old one and sets itself up.",
@@ -28314,10 +28318,10 @@
       "category": {
         "coding": "Coding",
         "releases": "Releases & CI",
-        "support": "Support & feedback",
+        "support": "Support & triage",
         "planning": "Planning & docs",
         "ops": "Ops",
-        "personal": "Personal follow-ups"
+        "personal": "Personal assistant"
       },
       "paletteLine": "Bot template"
     },

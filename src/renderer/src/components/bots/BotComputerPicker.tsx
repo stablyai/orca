@@ -57,9 +57,11 @@ function rowContent(row: BotCreateHostRow, t: Translate): React.ReactNode {
 }
 
 export function BotComputerPicker({
-  hostChoice
+  hostChoice,
+  inline
 }: {
   hostChoice: BotCreateHostChoice
+  inline?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
   const { host, hosts } = hostChoice
@@ -70,11 +72,13 @@ export function BotComputerPicker({
   const [reconnecting, setReconnecting] = useState<ReadonlySet<string>>(new Set())
   const refreshUpdates = useAppStore((s) => s.refreshRemoteServerUpdates)
   const { setListing } = hostChoice
-  // Mounted while Change is open, so accounts are read before the list opens and nothing pops in.
   useEffect(() => {
+    if (inline) {
+      return undefined
+    }
     setListing(true)
     return () => setListing(false)
-  }, [setListing])
+  }, [inline, setListing])
   const needsUpdateCheck = hosts.some(
     (entry) =>
       entry.blocked === 'no-bots' &&
@@ -124,7 +128,7 @@ export function BotComputerPicker({
       label: rowHost.label,
       content: rowContent(row, t),
       triggerContent: (
-        <span className="flex min-w-0 items-center gap-2">
+        <span className={cn('flex min-w-0 items-center', inline ? 'gap-1.5' : 'gap-2')}>
           <HostRowIcon hostId={rowHost.hostId} />
           <span className="min-w-0 truncate">{rowHost.label}</span>
         </span>
@@ -163,19 +167,24 @@ export function BotComputerPicker({
           hostChoice.setHostId(picked.hostId)
         }
       }}
-      onOpenChange={(open) =>
+      onOpenChange={(open) => {
+        if (inline) {
+          setListing(open)
+        }
         setReadyAtOpen(
           open
             ? new Set(hosts.filter((entry) => !entry.blocked).map((entry) => entry.hostId))
             : null
         )
-      }
+      }}
       options={options}
+      ariaLabel={inline ? host.label : undefined}
       searchFrom={SEARCH_FROM_ROWS}
       searchPlaceholder={t('bots.new.searchComputers', 'Search computers…')}
       reserveCheck
       size="sm"
-      className="w-full"
+      className={inline ? 'max-w-[42%]' : undefined}
+      inline={inline}
     />
   )
 }

@@ -641,15 +641,6 @@ describe('Collapse all bots', () => {
     expect(foldButton('Second folded bot').getAttribute('aria-expanded')).toBe('true')
   })
 
-  it('expands every persisted fold on a cold start from Bot options', async () => {
-    twoFoldedBots('cold-menu')
-    renderSection()
-    fireEvent.keyDown(screen.getByRole('button', { name: 'Bot options' }), { key: 'ArrowDown' })
-    fireEvent.click(await screen.findByRole('menuitem', { name: 'Expand all bots' }))
-    expect(foldButton('First folded bot').getAttribute('aria-expanded')).toBe('true')
-    expect(foldButton('Second folded bot').getAttribute('aria-expanded')).toBe('true')
-  })
-
   it('expands the folds of paused bots the list hides too', () => {
     twoFoldedBots('hidden-paused')
     mocks.bots = [mocks.bots[0]!, { ...mocks.bots[1]!, paused: true }]

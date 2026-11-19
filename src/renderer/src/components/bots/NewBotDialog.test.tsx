@@ -272,16 +272,24 @@ describe('NewBotDialog picture intake', () => {
 })
 
 describe('NewBotDialog agent', () => {
+  it('does not create a bot when the selected computer has no chat agent', () => {
+    mocks.agentChoices.mockReturnValue([])
+    renderDialog()
+
+    const form = screen.getByLabelText('Name').closest('form')
+    if (!form) {
+      throw new Error('Expected the bot creation form')
+    }
+    fireEvent.submit(form)
+
+    expect(mocks.createBot).not.toHaveBeenCalled()
+  })
+
   it('starts on the first agent this computer has when Claude Code is not one', async () => {
     mocks.agentChoices.mockReturnValue(['grok', 'omp'])
     mocks.createBot.mockResolvedValue(created)
     const { submit } = renderDialog()
 
-    const change = screen.getByRole('button', { name: /Change$/ })
-    expect(change.textContent).toContain('Grok')
-    fireEvent.click(change)
-    expect(screen.getByRole('button', { name: 'Agent grok' })).toBeTruthy()
-    expect(screen.getByText('Where the bot runs.')).toBeTruthy()
     await submit()
     expect(mocks.createBot.mock.calls[0]?.[1]).toMatchObject({ agent: 'grok' })
     expect(mocks.createBot.mock.calls[0]?.[1]).not.toHaveProperty('launch')
@@ -292,9 +300,7 @@ describe('NewBotDialog agent', () => {
     mocks.createBot.mockResolvedValue(created)
     const { submit } = renderDialog()
 
-    fireEvent.click(screen.getByRole('button', { name: /Change$/ }))
     fireEvent.click(screen.getByRole('button', { name: 'Agent claude' }))
-    expect(screen.getByText(/Runs on/).textContent).toContain('high')
     await submit()
     expect(mocks.createBot.mock.calls[0]?.[1]).toMatchObject({
       agent: 'claude',
