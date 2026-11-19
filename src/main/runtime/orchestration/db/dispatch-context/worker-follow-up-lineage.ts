@@ -169,16 +169,7 @@ function recordedLaunchConfigOf(
   session: ExactWorkerProviderSession,
   connectionId: string | null
 ): SleepingAgentLaunchConfig | undefined {
-  const row: unknown = db.db
-    .prepare('SELECT resume_session FROM worker_terminal_resources WHERE id = ?')
-    .get(resourceId)
-  const stored =
-    typeof row === 'object' &&
-    row &&
-    'resume_session' in row &&
-    typeof row.resume_session === 'string'
-      ? readWorkerResumeSession({ resume_session: row.resume_session })
-      : null
+  const stored = readWorkerResumeSession(db.getWorkerTerminalResource(resourceId))
   return stored &&
     stored.agent === session.agent &&
     stored.captureHostId === getConnectionExecutionHostId(connectionId) &&
