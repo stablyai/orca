@@ -23,13 +23,11 @@ const PACKAGED_LINUX_LAUNCHER_DIRECTORIES = ['/opt/Orca', '/opt/orca-ide', '/opt
 
 const MAC_APP_LAUNCHER_RE = /^(.*?\.app)[/\\]Contents[/\\]Resources[/\\]bin[/\\][^/\\]+$/
 
-export type OtherMacAppBundle = { path: string; isOrca: boolean }
-
-/** The other .app bundle that owns `target`, when `target` exists and is not in the bundle of `launcherPath`. */
+/** The other Orca .app bundle that owns `target`, when `target` exists and is not in the bundle of `launcherPath`. */
 export async function otherMacAppBundle(
   target: string | null,
   launcherPath: string
-): Promise<OtherMacAppBundle | null> {
+): Promise<string | null> {
   const other = target?.match(MAC_APP_LAUNCHER_RE)?.[1]
   if (!target || !other) {
     return null
@@ -46,7 +44,7 @@ export async function otherMacAppBundle(
     }
     // Users can rename or move Orca.app, so the bundle identifier decides, not the name.
     const bundleId = readBundleIdentifierFromInfoPlist(join(other, 'Contents', 'Info.plist'))
-    return { path: other, isOrca: bundleId !== null && isOrcaPreferencesDomain(bundleId) }
+    return bundleId !== null && isOrcaPreferencesDomain(bundleId) ? other : null
   } catch {
     return null
   }
@@ -132,13 +130,11 @@ export class CliCommandInspection extends CliInstallLocation {
         currentTarget: resolvedCurrentTarget,
         detail: isInstalled
           ? `Registered at ${commandPath}.`
-          : otherApp?.isOrca
-            ? `${commandPath} belongs to another Orca app (${otherApp.path}). Register replaces it. To switch back, register the CLI again in that app.`
-            : otherApp
-              ? `${commandPath} belongs to another app (${otherApp.path}). Register replaces it.`
-              : isManagedStaleTarget
-                ? `${commandPath} points to an older Orca launcher.`
-                : `${commandPath} points to a non-Orca launcher.`
+          : isManagedStaleTarget && otherApp
+            ? `${commandPath} belongs to another Orca app (${otherApp}). Register replaces it. To switch back, register the CLI again in that app.`
+            : isManagedStaleTarget
+              ? `${commandPath} points to an older Orca launcher.`
+              : `${commandPath} points to a non-Orca launcher.`
       })
     } catch (error) {
       if (isMissingError(error)) {

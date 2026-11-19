@@ -100,17 +100,13 @@ describe('CLI link owned by another Orca app', () => {
     await mkdir(join(root, 'bin'), { recursive: true })
     await writeFile(plainFile, '', 'utf8')
 
-    expect(await otherMacAppBundle(other.launcher, ours.launcher)).toEqual({
-      path: otherApp,
-      isOrca: true
-    })
+    expect(await otherMacAppBundle(other.launcher, ours.launcher)).toBe(otherApp)
     // The bundle identifier decides, not the bundle name.
     const renamedApp = join(root, 'Renamed.app')
     const renamed = await writeLauncher(renamedApp)
-    expect(await otherMacAppBundle(renamed.launcher, ours.launcher)).toEqual({
-      path: renamedApp,
-      isOrca: true
-    })
+    expect(await otherMacAppBundle(renamed.launcher, ours.launcher)).toBe(renamedApp)
+    const tool = await writeLauncher(join(root, 'Tool.app'), 'com.example.tool')
+    expect(await otherMacAppBundle(tool.launcher, ours.launcher)).toBeNull()
     expect(await otherMacAppBundle(ours.launcher, ours.launcher)).toBeNull()
     expect(await otherMacAppBundle(plainFile, ours.launcher)).toBeNull()
     expect(
@@ -273,23 +269,20 @@ describe('CLI link owned by another Orca app', () => {
   )
 
   it.skipIf(process.platform === 'win32')(
-    'uses neutral text for a non-Orca bundle whose launcher is named orca',
+    'keeps the older-launcher text and adds no notice for a non-Orca bundle whose launcher is named orca',
     async () => {
       const root = await tempRoot()
-      const toolApp = join(root, 'Tool.app')
-      const tool = await writeLauncher(toolApp, 'com.example.tool')
+      const tool = await writeLauncher(join(root, 'Tool.app'), 'com.example.tool')
       const ours = await writeLauncher(join(root, 'Orca Beta.app'))
       const { installer, commandPath } = await installerLinkedTo(root, tool.launcher, ours)
 
       const before = await installer.getStatus()
       expect(before.state).toBe('stale')
-      expect(before.detail).toBe(
-        `${commandPath} belongs to another app (${toolApp}). Register replaces it.`
-      )
+      expect(before.detail).toBe(`${commandPath} points to an older Orca launcher.`)
 
       const after = await installer.install()
       expect(after.state).toBe('installed')
-      expect(after.detail).toBe(`Replaced the ${commandPath} link to ${toolApp}.`)
+      expect(after.detail).toBe(`Registered at ${commandPath}.`)
     }
   )
 

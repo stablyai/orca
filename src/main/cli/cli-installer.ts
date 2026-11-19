@@ -164,9 +164,7 @@ export class CliInstaller extends CliPathRegistration {
     return replacedApp && finalStatus.state === 'installed'
       ? {
           ...finalStatus,
-          detail: replacedApp.isOrca
-            ? `Replaced the ${status.commandPath} link to ${replacedApp.path}. To switch back, register the CLI again in that app.`
-            : `Replaced the ${status.commandPath} link to ${replacedApp.path}.`
+          detail: `Replaced the ${status.commandPath} link to ${replacedApp}. To switch back, register the CLI again in that app.`
         }
       : finalStatus
   }
