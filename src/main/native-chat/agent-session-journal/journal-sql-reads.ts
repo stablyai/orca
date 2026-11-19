@@ -1,3 +1,4 @@
+import type { NativeChatTaskList } from '../../../shared/native-chat/input/task-lists/native-chat-task-list'
 import type { JournalRequestMark } from './journal-request-failure'
 import type { JournalMailAttempt, JournalMailObservation } from './journal-mail-observation'
 import type { JournalRewindCut, JournalRewindSelection } from './journal-domain-rewind-cut'
@@ -53,6 +54,8 @@ export type JournalSqlReads = AgentSessionJournalReads & {
   /** The rows and sends that place these anchors' turns, never the whole conversation. */
   operationWindow(anchors: JournalOperationWindowAnchors): Promise<JournalOperationWindow>
   promptItem(end: 'first' | 'last'): Promise<AgentJournalRenderItem | null>
+  /** The plan the newest turn's agent last wrote, or null. */
+  latestTaskList(): Promise<NativeChatTaskList | null>
   runMentions(
     runId: string
   ): Promise<{ items: AgentJournalRenderItem[]; sent: AgentJournalRenderItem[] }>
@@ -148,6 +151,7 @@ export function journalSqlReads(
     automationResultNotes: async () => (await read({ kind: 'automation-result-notes' })).snapshot,
     operationWindow: async (anchors) => (await read({ kind: 'operation-window', anchors })).window,
     promptItem: async (end) => (await read({ kind: 'prompt-item', end })).item,
+    latestTaskList: async () => (await read({ kind: 'latest-task-list' })).list,
     runMentions: async (runId) => {
       const { items, sent } = await read({ kind: 'run-mentions', runId })
       return { items, sent }

@@ -110,3 +110,24 @@ export function capUtf8(text: string, maxBytes: number): string {
   }
   return bytes.subarray(0, end).toString('utf8')
 }
+
+export const ANSWER_CUT_NOTE = '_… cut short here. The full answer is in Orca._'
+
+/**
+ * An answer within the cloud's byte limit that says so when it was cut: ended at a line break where
+ * one is near, an open code block closed, then the note. A reader otherwise takes the cut for the end.
+ */
+export function capAnswer(text: string, maxBytes: number): string {
+  if (Buffer.byteLength(text) <= maxBytes) {
+    return text
+  }
+  const closing = '\n```'
+  const tail = `\n\n${ANSWER_CUT_NOTE}`
+  const room = maxBytes - Buffer.byteLength(tail) - Buffer.byteLength(closing)
+  const cut = capUtf8(text, room)
+  const lineEnd = cut.lastIndexOf('\n')
+  // A break in the last tenth loses little; any earlier, the words up to the limit are worth more.
+  const kept = (lineEnd > cut.length * 0.9 ? cut.slice(0, lineEnd) : cut).trimEnd()
+  const fences = kept.split('\n').filter((line) => /^ {0,3}(```|~~~)/.test(line)).length
+  return `${kept}${fences % 2 === 1 ? closing : ''}${tail}`
+}
