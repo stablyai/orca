@@ -7,11 +7,15 @@ import {
   consumeCodexRateLimitResetCredit,
   fetchCodexRateLimits
 } from '../providers/codex/codex-fetcher'
+import { fetchGrokRateLimits } from '../providers/grok/grok-fetcher'
+import { prepareOllamaResultPromise } from '../../ollama/ollama-usage-cycle-preparation'
 import {
   deferred,
+  errorProvider,
   flushMicrotasks,
   mockFreshBackgroundProviderFetches,
   okProvider,
+  unavailableProvider,
   resetRateLimitProviderMocks
 } from './rate-limit-service-test-harness'
 
@@ -47,6 +51,10 @@ vi.mock('../providers/muse/muse-usage-fetcher', () => ({
   fetchMuseRateLimits: vi.fn()
 }))
 
+vi.mock('../../ollama/ollama-usage-cycle-preparation', () => ({
+  prepareOllamaResultPromise: vi.fn()
+}))
+
 vi.mock('../providers/antigravity/antigravity-usage-fetcher', () => ({
   fetchAntigravityRateLimits: vi.fn()
 }))
@@ -78,8 +86,108 @@ vi.mock('../../minimax/minimax-cookie-store', () => ({
 describe('RateLimitService', () => {
   beforeEach(() => {
     resetRateLimitProviderMocks()
+    vi.mocked(prepareOllamaResultPromise).mockResolvedValue({
+      status: 'fulfilled',
+      value: unavailableProvider('ollama')
+    })
     vi.mocked(fetchActiveClaudeRateLimits).mockResolvedValue(okProvider('claude', 0, 1_000))
     vi.mocked(fetchCodexRateLimits).mockResolvedValue(okProvider('codex', 0, 1_000))
+  })
+
+  it('keeps modern Ollama usage after a transient failure', async () => {
+    const service = new RateLimitService()
+    const ollama: ProviderRateLimits = {
+      provider: 'ollama',
+      session: null,
+      weekly: null,
+      extraUsage: {
+        unit: 'currency',
+        balance: 4,
+        currencyCode: 'USD',
+        spent: 1,
+        spendLimit: 5,
+        spentPercent: 20,
+        enabled: true,
+        disabledReason: null,
+        resetsAt: 4_000_000_060_000
+      },
+      ollamaUsageTotals: {
+        spentUsd: 1,
+        requestCount: 2,
+        inputTokens: 300,
+        cachedInputTokens: 100,
+        outputTokens: 50,
+        purchasedBalanceUsd: 0
+      },
+      updatedAt: 4_000_000_000_000,
+      error: null,
+      status: 'ok'
+    }
+    vi.mocked(prepareOllamaResultPromise)
+      .mockResolvedValueOnce({ status: 'fulfilled', value: ollama })
+      .mockResolvedValueOnce({
+        status: 'fulfilled',
+        value: errorProvider('ollama', 'temporary error')
+      })
+
+    await service.refresh()
+    await service.refresh()
+
+    expect(service.getState().ollama).toMatchObject({
+      status: 'error',
+      error: 'temporary error',
+      extraUsage: { balance: 4 },
+      ollamaUsageTotals: ollama.ollamaUsageTotals
+    })
+  })
+
+  it('drains Ollama refreshes queued during a full refresh', async () => {
+    const service = new RateLimitService()
+    const firstOllamaCycle = deferred<Awaited<ReturnType<typeof prepareOllamaResultPromise>>>()
+    const secondOllamaCycle = deferred<Awaited<ReturnType<typeof prepareOllamaResultPromise>>>()
+    const firstCycleStarted = deferred<void>()
+    const secondCycleStarted = deferred<void>()
+    const result = { status: 'fulfilled' as const, value: unavailableProvider('ollama') }
+    vi.mocked(prepareOllamaResultPromise)
+      .mockImplementationOnce(() => {
+        firstCycleStarted.resolve()
+        return firstOllamaCycle.promise
+      })
+      .mockImplementationOnce(() => {
+        secondCycleStarted.resolve()
+        return secondOllamaCycle.promise
+      })
+      .mockResolvedValue(result)
+
+    const fullRefresh = service.refresh()
+    await firstCycleStarted.promise
+    const ollamaRefreshDuringFullCycle = service.refreshOllama()
+    firstOllamaCycle.resolve(result)
+
+    await secondCycleStarted.promise
+    const ollamaRefreshDuringQueuedCycle = service.refreshOllama()
+    secondOllamaCycle.resolve(result)
+
+    await Promise.all([fullRefresh, ollamaRefreshDuringFullCycle, ollamaRefreshDuringQueuedCycle])
+
+    expect(prepareOllamaResultPromise).toHaveBeenCalledTimes(3)
+  })
+
+  it('runs a queued Codex refresh before a Grok-only drain becomes idle', async () => {
+    const service = new RateLimitService()
+    const grok = deferred<ProviderRateLimits>()
+    vi.mocked(fetchGrokRateLimits).mockReturnValueOnce(grok.promise)
+    vi.mocked(fetchCodexRateLimits).mockResolvedValueOnce(okProvider('codex', 42))
+
+    const grokRefresh = service.refreshGrok()
+    await flushMicrotasks(2)
+    const codexRefresh = service.refreshForCodexAccountChange()
+
+    grok.resolve(okProvider('grok', 70))
+    await Promise.all([grokRefresh, codexRefresh])
+
+    expect(fetchCodexRateLimits).toHaveBeenCalledTimes(1)
+    expect(service.getState().codex?.session?.usedPercent).toBe(42)
   })
 
   it('reads the account picked by a second switch made during a refresh', async () => {

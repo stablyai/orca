@@ -47,6 +47,18 @@ export function OllamaCloudAccountsSection({
   const credentialEditable = !webClient && access === 'ready'
   const accessNotice = usageCredentialAccessNotice(host, access)
   const unreadableNotice = usageCredentialUnreadableNotice(host, status?.apiKeyUnreadable)
+  const localUnreadableNotice =
+    hostLabel === null && status?.apiKeyUnreadable
+      ? status.apiKeyUnreadable === 'sealed-elsewhere'
+        ? translate(
+            'auto.components.settings.OllamaCloudAccountsSection.keySealedElsewhere',
+            'This key was saved by another Orca app on this computer. Forget it here, then save it again in this app.'
+          )
+        : translate(
+            'auto.components.settings.OllamaCloudAccountsSection.keyUnreadable',
+            'Orca cannot read the saved key. Forget it and save it again.'
+          )
+      : null
   const keyEditable =
     credentialEditable && !usageCredentialSealedElsewhere(host, status?.apiKeyUnreadable)
   const detailsUnavailable = webClient || status?.detailsUnavailable === true
@@ -229,6 +241,9 @@ export function OllamaCloudAccountsSection({
         {unreadableNotice ? (
           <p className="text-xs text-muted-foreground">{unreadableNotice}</p>
         ) : null}
+        {localUnreadableNotice ? (
+          <p className="text-xs text-muted-foreground">{localUnreadableNotice}</p>
+        ) : null}
         <div className="flex gap-2">
           <Input
             id="ollama-cloud-api-key"
@@ -335,8 +350,14 @@ export function OllamaCloudAccountsSection({
                   '30-day tokens: {{value0}} in · {{value1}} cached · {{value2}} out',
                   {
                     value0: totals.inputTokens.toLocaleString(getIntlLocale()),
-                    value1: (totals.cachedInputTokens ?? 0).toLocaleString(getIntlLocale()),
-                    value2: (totals.outputTokens ?? 0).toLocaleString(getIntlLocale())
+                    value1:
+                      totals.cachedInputTokens != null
+                        ? totals.cachedInputTokens.toLocaleString(getIntlLocale())
+                        : '—',
+                    value2:
+                      totals.outputTokens != null
+                        ? totals.outputTokens.toLocaleString(getIntlLocale())
+                        : '—'
                   }
                 )}
               </p>

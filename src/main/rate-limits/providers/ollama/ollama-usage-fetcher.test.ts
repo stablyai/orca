@@ -43,18 +43,8 @@ describe('parseOllamaBalanceResponse', () => {
     })
     expect(parsed.weekly?.usedPercent).toBe(60)
     expect(parsed.weekly?.windowMinutes).toBe(10080)
-    const balance = parsed.extraUsage
-    expect(balance?.unit === 'currency' ? balance : null).toEqual({
-      unit: 'currency',
-      balance: 25,
-      currencyCode: 'USD',
-      spent: null,
-      spendLimit: null,
-      spentPercent: null,
-      enabled: true,
-      disabledReason: null,
-      resetsAt: null
-    })
+    expect(parsed.purchasedBalanceUsd).toBe(25)
+    expect(parsed.extraUsage?.balance).toBeNull()
   })
 
   it('returns nulls for malformed or missing payloads', () => {
@@ -113,6 +103,24 @@ describe('parseOllamaUsageResponse', () => {
       inputTokens: 106000,
       cachedInputTokens: 46000,
       outputTokens: 13600,
+      purchasedBalanceUsd: null
+    })
+  })
+
+  it('keeps request and token totals when the optional spend total is missing', () => {
+    expect(
+      parseOllamaUsageResponse({
+        totals: {
+          request_count: 15,
+          input_tokens: 106000
+        }
+      })
+    ).toEqual({
+      spentUsd: null,
+      requestCount: 15,
+      inputTokens: 106000,
+      cachedInputTokens: null,
+      outputTokens: null,
       purchasedBalanceUsd: null
     })
   })

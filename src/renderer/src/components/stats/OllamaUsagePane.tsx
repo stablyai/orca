@@ -156,6 +156,12 @@ export function OllamaUsagePane(): React.JSX.Element {
         />
       </div>
 
+      {ollama?.status === 'error' && ollama.error ? (
+        <p className="px-1 text-xs text-destructive" role="alert">
+          {ollama.error}
+        </p>
+      ) : null}
+
       {/* Legacy plans answer session/weekly remaining percents; modern plans report
           windowless USD balances, so these rows only appear when the API sent them. */}
       {(ollama?.session || ollama?.weekly) && (
@@ -186,9 +192,18 @@ export function OllamaUsagePane(): React.JSX.Element {
             '30-day tokens: {{value0}} in · {{value1}} cached · {{value2}} out across {{value3}} requests',
             {
               value0: totals.inputTokens.toLocaleString(getIntlLocale()),
-              value1: (totals.cachedInputTokens ?? 0).toLocaleString(getIntlLocale()),
-              value2: (totals.outputTokens ?? 0).toLocaleString(getIntlLocale()),
-              value3: (totals.requestCount ?? 0).toLocaleString(getIntlLocale())
+              value1:
+                totals.cachedInputTokens != null
+                  ? totals.cachedInputTokens.toLocaleString(getIntlLocale())
+                  : '—',
+              value2:
+                totals.outputTokens != null
+                  ? totals.outputTokens.toLocaleString(getIntlLocale())
+                  : '—',
+              value3:
+                totals.requestCount != null
+                  ? totals.requestCount.toLocaleString(getIntlLocale())
+                  : '—'
             }
           )}
         </p>

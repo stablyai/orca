@@ -23,7 +23,7 @@ const LegacyLimitSchema = z.object({
 const UsageResponseSchema = z.object({
   totals: z.object({
     request_count: z.number(),
-    usage_usd: z.number(),
+    usage_usd: z.number().nullish(),
     input_tokens: z.number().nullish(),
     cached_input_tokens: z.number().nullish(),
     output_tokens: z.number().nullish()
@@ -113,7 +113,7 @@ export function parseOllamaBalanceResponse(payload: unknown): OllamaBalanceWindo
     purchasedBalanceUsd,
     extraUsage: {
       unit: 'currency',
-      balance: purchased.balance_usd,
+      balance: null,
       currencyCode: 'USD',
       spent: null,
       spendLimit: null,
@@ -138,7 +138,7 @@ export function parseOllamaUsageResponse(payload: unknown): OllamaUsageTotals {
     }
   }
   return {
-    spentUsd: parsed.data.totals.usage_usd,
+    spentUsd: parsed.data.totals.usage_usd ?? null,
     requestCount: parsed.data.totals.request_count,
     inputTokens: parsed.data.totals.input_tokens ?? null,
     cachedInputTokens: parsed.data.totals.cached_input_tokens ?? null,

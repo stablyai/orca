@@ -33,6 +33,38 @@ import { UsageBar, UsageDisplayToggle, UsageValue } from './usage-meter'
 
 type ProviderId = ProviderRateLimits['provider']
 
+function getOllamaUsageSummary(
+  p: ProviderRateLimits,
+  t: Translate,
+  intlLocale: string
+): string | null {
+  if (p.provider !== 'ollama') {
+    return null
+  }
+  const spend = p.ollamaUsageTotals?.spentUsd
+  if (spend != null) {
+    return t(
+      'auto.components.status.bar.UsageRosterPanel.ollamaSpend',
+      '${{value0}} spent (30d)',
+      { value0: spend.toFixed(2) }
+    )
+  }
+  const requestCount = p.ollamaUsageTotals?.requestCount
+  if (requestCount != null) {
+    return t(
+      'auto.components.status.bar.UsageRosterPanel.ollamaRequests',
+      '{{value0}} requests (30d)',
+      { value0: requestCount.toLocaleString(intlLocale) }
+    )
+  }
+  const balance = p.extraUsage?.unit === 'currency' ? p.extraUsage.balance : null
+  return balance != null
+    ? t('auto.components.status.bar.UsageRosterPanel.ollamaBalance', '${{value0}} left', {
+        value0: balance.toFixed(2)
+      })
+    : null
+}
+
 function DetailMetric({
   section,
   label,
@@ -118,12 +150,17 @@ function RowUsageSummary({
   const t = useTranslate()
   const intlLocale = useIntlLocale()
   const headline = getUsageHeadlineSection(p, t)
+  const ollamaUsageSummary = getOllamaUsageSummary(p, t, intlLocale)
   if (!headline) {
     // Why: a Fable/MCP-only reading is still a reading; show it where the value goes, at any level.
     const only = getTopScopedSection(p, t)
     return (
       <span className="ml-auto flex shrink-0 items-center gap-2">
-        {only ? (
+        {ollamaUsageSummary ? (
+          <span className="text-[11px] tabular-nums text-muted-foreground">
+            {ollamaUsageSummary}
+          </span>
+        ) : only ? (
           <span
             data-usage-scoped-only
             title={scopedUsageTitle(p, only, display, t)}
@@ -194,11 +231,12 @@ export function UsageRow({
   const t = useTranslate()
   const intlLocale = useIntlLocale()
   const sections = usedSections(p, t)
-  const hasUsage = sections.length > 0
+  const ollamaUsageSummary = getOllamaUsageSummary(p, t, intlLocale)
+  const hasUsage = sections.length > 0 || ollamaUsageSummary !== null
   const name = getProviderDisplayName(p.provider)
   const plan = formatPlanLabel(p.planType)
   // Why: Detailed lists every window below, so a top-right summary would repeat one of them.
-  const showDetails = hasUsage && mode === 'verbose'
+  const showDetails = sections.length > 0 && mode === 'verbose'
   const soonestReset = showDetails ? soonestResetLabel(sections, now, intlLocale, t) : null
 
   return (
