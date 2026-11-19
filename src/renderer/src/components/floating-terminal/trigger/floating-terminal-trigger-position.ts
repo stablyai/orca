@@ -117,10 +117,9 @@ export function keepFloatingTerminalTriggerClear(
       break
     }
     const below = covered.bottom + KEEP_CLEAR_GAP
-    top =
-      below + TRIGGER_SIZE <= covered.paneBottom - DRAG_MARGIN
-        ? below
-        : covered.top - KEEP_CLEAR_GAP - TRIGGER_SIZE
+    // The pane may run past the window, which the button must stay inside too.
+    const floor = Math.min(covered.paneBottom, getViewport().height) - DRAG_MARGIN
+    top = below + TRIGGER_SIZE <= floor ? below : covered.top - KEEP_CLEAR_GAP - TRIGGER_SIZE
   }
   return top === position.top
     ? position

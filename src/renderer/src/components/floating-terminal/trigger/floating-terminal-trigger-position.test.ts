@@ -32,3 +32,12 @@ it('keeps moving until the button clears every box, not just the first it covere
     top: 288
   })
 })
+
+it('puts the button above a box when the room below is past the bottom of the window', () => {
+  // The pane runs below the window, 800px tall here.
+  const box = { left: 300, top: 400, right: 700, bottom: 760, paneBottom: 900 }
+  expect(keepFloatingTerminalTriggerClear({ left: 640, top: 600 }, [box])).toEqual({
+    left: 640,
+    top: 356
+  })
+})
