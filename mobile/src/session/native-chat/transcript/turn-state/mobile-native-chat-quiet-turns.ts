@@ -3,9 +3,10 @@ import type { NativeChatTurnStatus } from '../../../../../../src/shared/native-c
 import { nativeChatQuietTurns } from '../../../../../../src/shared/native-chat/transcript/turns/native-chat-quiet-turns'
 import { nativeChatEventPlan } from '../../../../../../src/shared/native-chat/transcript/events/native-chat-event-plan'
 
-/** What the phone leaves out, as on desktop: the rows and the bar of a quiet turn (a turn with a diff
- *  stays), gone at once when it settles, and rows merged into a later row about the same Dispatch or run (`shown` carries the
- *  merges). The phone reads no worker list, so only rows that name their Dispatch or run merge. */
+/** What the phone leaves out, as on desktop: the rows and the bar of a quiet turn (one with a diff
+ *  or a PR stays), gone at once when it settles, and rows merged into a later row about the same
+ *  Dispatch or run (`shown` carries the merges). The phone reads no worker list, so only rows that
+ *  name their Dispatch or run merge. */
 export function mobileNativeChatQuietTurns(
   rows: readonly NativeChatMessage[],
   turnKeys: readonly (string | undefined)[],

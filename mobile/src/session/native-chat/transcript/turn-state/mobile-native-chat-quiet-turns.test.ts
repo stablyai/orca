@@ -52,4 +52,31 @@ describe('a quiet turn on the phone', () => {
     expect([...quiet.ids]).toEqual(['a1'])
     expect([...quiet.turns]).toEqual(['w1'])
   })
+
+  it('keeps the bar and rows of a turn that opened a PR, whatever its clipped output says', () => {
+    const create: NativeChatMessage = {
+      ...at('t1', 'assistant', ''),
+      blocks: [
+        {
+          type: 'tool-call',
+          name: 'Bash',
+          input: { command: 'gh pr create --fill' },
+          state: 'completed'
+        }
+      ]
+    }
+    const rows = [
+      at('w1', 'user', 'repro found', { from: WORKER }),
+      create,
+      at('a1', 'assistant', 'NO_REPLY')
+    ]
+    const quiet = mobileNativeChatQuietTurns(
+      rows,
+      ['w1', 'w1', 'w1'],
+      { w1: { startedAt: 0, thinking: false, workedSeconds: 9 } },
+      new Map()
+    )
+    expect([...quiet.ids]).toEqual([])
+    expect([...quiet.turns]).toEqual([])
+  })
 })

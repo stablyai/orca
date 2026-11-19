@@ -1,5 +1,6 @@
 import { isQuietBotResult, quietBotResultText } from '../../../bot-quiet-result'
 import { isNativeChatOrcaCard } from '../../native-chat-orca-card'
+import { nativeChatRowRunsPullRequestCreate } from '../../tools/native-chat-opened-pull-requests'
 import type { NativeChatMessage } from '../../native-chat-types'
 import { deriveNativeChatRowContent } from '../row-content/native-chat-row-content'
 import type { NativeChatTurnStatus } from './native-chat-turn-status'
@@ -28,21 +29,19 @@ function staysInQuietTurn(message: NativeChatMessage): boolean {
   )
 }
 
-/** Settled cleanly: a failed or interrupted turn keeps its bar, which says so. */
+/** Settled cleanly: a failed, interrupted or unconfirmed turn keeps its bar. */
 function settledQuietly(status: NativeChatTurnStatus | undefined): boolean {
-  if (status?.workedSeconds == null) {
-    return false
-  }
   return (
-    status.verdict === undefined || status.verdict === 'success' || status.verdict === 'unconfirmed'
+    status?.workedSeconds != null && (status.verdict === undefined || status.verdict === 'success')
   )
 }
 
 /** Settled turns that ended with only the quiet marker and that no person typed into. Their rows,
  *  "Worked for" bar and "Nothing to report" don't draw; what opened them (mail, an automation run)
- *  and the cards Orca drew during them (item changes, started workers) still do. `keepsTurn` keeps a
- *  turn that left something else to show, such as a diff or an opened PR. A failed or interrupted
- *  turn, and one holding someone's message (typed, steered in, or a connector delivery), draw. */
+ *  and the cards Orca drew during them (item changes, started workers) still do. A turn that ran a
+ *  PR create command draws, as does one `keepsTurn` keeps for what else it left, such as a diff. A
+ *  failed, interrupted or unconfirmed turn, and one holding someone's message (typed, steered in, or a connector
+ *  delivery), draw. */
 export function nativeChatQuietTurns(
   rows: readonly NativeChatMessage[],
   turnKeys: readonly (string | undefined)[],
@@ -50,6 +49,7 @@ export function nativeChatQuietTurns(
   keepsTurn: (turnKey: string) => boolean
 ): { rows: ReadonlySet<number>; turns: ReadonlySet<string> } {
   const asked = new Set<string>()
+  const openedPullRequest = new Set<string>()
   const lastWords = new Map<string, string>()
   rows.forEach((message, index) => {
     const key = turnKeys[index]
@@ -58,6 +58,9 @@ export function nativeChatQuietTurns(
     }
     if (message.role === 'user' && !opensWithoutAsking(message)) {
       asked.add(key)
+    }
+    if (nativeChatRowRunsPullRequestCreate(message)) {
+      openedPullRequest.add(key)
     }
     if (message.role === 'assistant') {
       const words = deriveNativeChatRowContent(message.blocks).markdown
@@ -70,6 +73,7 @@ export function nativeChatQuietTurns(
     [...lastWords].flatMap(([key, words]) =>
       settledQuietly(completedByTurn[key]) &&
       !asked.has(key) &&
+      !openedPullRequest.has(key) &&
       isQuietBotResult(words) &&
       quietBotResultText(words) === '' &&
       !keepsTurn(key)

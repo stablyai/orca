@@ -133,7 +133,29 @@ describe('nativeChatQuietTurns', () => {
     expect(quietOf(rows, 'w1', settled(['w1']), true)).toEqual({ hidden: [], turns: [] })
   })
 
-  it.each(['failure', 'cancellation', 'superseded', 'interruption'] as const)(
+  it.each(['gh pr create --fill', 'git push && glab mr create --fill'])(
+    'keeps a quiet turn that ran `%s`',
+    (command) => {
+      const rows = [
+        row('w1', 'user', 'repro found', { from: WORKER }),
+        {
+          ...row('t1', 'assistant', ''),
+          blocks: [
+            {
+              type: 'tool-call' as const,
+              name: 'Bash',
+              input: { command },
+              state: 'failed' as const
+            }
+          ]
+        },
+        row('a1', 'assistant', 'NO_REPLY')
+      ]
+      expect(quietOf(rows, 'w1')).toEqual({ hidden: [], turns: [] })
+    }
+  )
+
+  it.each(['failure', 'cancellation', 'superseded', 'interruption', 'unconfirmed'] as const)(
     'keeps a quiet turn that ended in %s',
     (verdict) => {
       const rows = [
