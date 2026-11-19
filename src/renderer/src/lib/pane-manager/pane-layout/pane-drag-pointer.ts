@@ -81,6 +81,7 @@ export function beginPaneDragFromPointerDown(
 
   const endDragVisuals = (commitDrop: boolean): void => {
     dragging = false
+    document.body.classList.remove('is-pane-drag-grabbing')
     callbacks.getRoot().classList.remove('is-pane-dragging')
     callbacks.getPanes().get(paneId)?.container.classList.remove('is-drag-source')
     try {
@@ -139,6 +140,7 @@ export function beginPaneDragFromPointerDown(
       addAppKeyListener('keydown', onKeyDown, { first: true })
       state.dragSourcePaneId = paneId
       callbacks.getRoot().classList.add('is-pane-dragging')
+      document.body.classList.add('is-pane-drag-grabbing')
       callbacks.onDragActiveChange?.(true)
       callbacks.getPanes().get(paneId)?.container.classList.add('is-drag-source')
       showDropOverlay(state)

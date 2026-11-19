@@ -161,6 +161,20 @@
   opacity: 1;
 }
 
+/* A faint grip on the hovered pane says it can be picked up; full strength on the strip itself. */
+.has-multiple-panes .pane:hover > .pane-drag-handle {
+  opacity: 0.45;
+}
+
+.has-multiple-panes .pane:hover > .pane-drag-handle:hover {
+  opacity: 1;
+}
+
+body.is-pane-drag-grabbing,
+body.is-pane-drag-grabbing * {
+  cursor: grabbing !important;
+}
+
 /* An open orchestration panel (z 15) would otherwise hide this pane's drag strip. */
 .pane:has(> [data-orchestration-crew] > aside) .pane-drag-handle {
   z-index: 16;
@@ -245,6 +259,24 @@
   border-radius: 0;
 }
 
+/* Names what the drop makes, hanging below the strip at the exact gap so no tab label is covered. */
+.pane-drop-overlay[data-pane-drop-overlay-kind='insertion'][data-pill-label]::after {
+  content: attr(data-pill-label);
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 16px;
+  white-space: nowrap;
+  color: var(--color-white);
+  background: var(--chart-4);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.25);
+}
+
 .tab-drop-overlay__label {
   font-size: 11px;
   color: var(--primary-foreground);
@@ -299,36 +331,36 @@
   user-select: none;
 }
 
-.pane-title-drag-handle {
-  position: absolute;
-  top: 0;
-  left: 50%;
-  width: 32px;
-  height: var(--orca-pane-title-height);
-  z-index: 2;
+.pane-title-grab-zone {
+  flex: 1 1 auto;
+  align-self: stretch;
+  min-width: 24px;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: grab;
-  opacity: 0;
-  background: color-mix(in srgb, var(--orca-pane-title-fg) 36%, transparent);
-  transform: translateX(-50%);
-  transition: opacity 150ms ease;
 }
 
-.pane-title-drag-handle::after {
+.pane-title-grab-zone::after {
   content: '...';
   font-size: 10px;
   line-height: 1;
   letter-spacing: 0;
   color: var(--orca-pane-title-button-hover-fg);
+  opacity: 0;
+  transition: opacity 150ms ease;
 }
 
-.pane-title-drag-handle:hover {
+.pane-title-bar:hover .pane-title-grab-zone::after,
+.pane-title-bar[data-pane-hovered] .pane-title-grab-zone::after {
+  opacity: 0.45;
+}
+
+.pane-title-bar .pane-title-grab-zone:hover::after {
   opacity: 1;
 }
 
-.pane-title-drag-handle:active {
+.pane-title-grab-zone:active {
   cursor: grabbing;
 }
 
@@ -380,12 +412,6 @@
 
 .pane-title-text:has(~ .pane-title-recent-images) {
   flex: 1 0 min(50%, calc(var(--spacing) * 32));
-}
-
-.pane-title-drag-handle:has(+ .pane-title-recent-images) {
-  position: static;
-  flex-shrink: 0;
-  transform: none;
 }
 
 .pane-title-bar[data-chromeless] {

@@ -2,7 +2,7 @@ import { TerminalPaneRecentImages } from './TerminalRecentImages'
 import { useAppStore } from '@/store'
 import type { PaneTitleOverlayRect } from './pane-title-overlay-rects'
 import { ImeInput } from '@/lib/text-input/ime/ime-text-field'
-import type { CSSProperties, RefObject } from 'react'
+import { useEffect, useRef, type CSSProperties, type RefObject } from 'react'
 import { MessageSquarePlus, SquareSplitVertical, SquareTerminal, X } from 'lucide-react'
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager-types'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
@@ -109,6 +109,33 @@ export default function TerminalPaneHeaderOverlay({
     'auto.components.terminal.pane.TerminalContextMenu.20e565d865',
     'Split Terminal Right'
   )
+  const dragToNewTabLabel = t(
+    'components.terminalPane.paneDragHandle.tooltip',
+    'Drag to move to a new tab'
+  )
+  const layerRef = useRef<HTMLDivElement>(null)
+  // Headers sit outside their panes' DOM, so hovering a pane marks its header for the faint grip.
+  useEffect(() => {
+    if (paneCount < 2) {
+      return
+    }
+    const cleanups = panes.map((pane) => {
+      const mark = (hovered: boolean) => (): void => {
+        layerRef.current
+          ?.querySelector(`[data-pane-header-leaf="${CSS.escape(pane.leafId)}"]`)
+          ?.toggleAttribute('data-pane-hovered', hovered)
+      }
+      const enter = mark(true)
+      const leave = mark(false)
+      pane.container.addEventListener('pointerenter', enter)
+      pane.container.addEventListener('pointerleave', leave)
+      return () => {
+        pane.container.removeEventListener('pointerenter', enter)
+        pane.container.removeEventListener('pointerleave', leave)
+      }
+    })
+    return () => cleanups.forEach((cleanup) => cleanup())
+  }, [paneCount, panes])
 
   const renderPaneHeader = (
     pane: ManagedPane,
@@ -134,6 +161,7 @@ export default function TerminalPaneHeaderOverlay({
         destination={{ pane, tabId, worktreeId, cwd, managerRef, paneTransportsRef }}
         className="pane-title-bar"
         data-terminal-tab-id={tabId}
+        data-pane-header-leaf={pane.leafId}
         data-pane-prevent-terminal-focus=""
         {...(isActivePane ? { 'data-active-pane': '' } : {})}
         {...(isChromeless ? { 'data-chromeless': '' } : {})}
@@ -195,15 +223,17 @@ export default function TerminalPaneHeaderOverlay({
                   {title}
                 </button>
               ) : null}
-              {paneCount > 1 && !isChromeless && (
+              {paneCount > 1 && !isChromeless ? (
+                // The empty bar between the title and its buttons picks the pane up; the title renames.
                 <div
-                  className="pane-title-drag-handle"
+                  className="pane-title-grab-zone"
+                  title={dragToNewTabLabel}
                   aria-hidden="true"
                   onPointerDown={(event) => {
                     onBeginPaneDrag(pane.id, event.currentTarget, event.nativeEvent)
                   }}
                 />
-              )}
+              ) : null}
               {showAlwaysOnHeaders && !(isActivePane && canShowTerminal) && chips}
             </div>
             <div className="pane-title-actions flex shrink-0 items-center">
@@ -341,6 +371,7 @@ export default function TerminalPaneHeaderOverlay({
 
   return (
     <div
+      ref={layerRef}
       className="pane-title-overlay-layer"
       data-pane-title-surface={titleUsesLightSurface ? 'light' : 'dark'}
       style={{

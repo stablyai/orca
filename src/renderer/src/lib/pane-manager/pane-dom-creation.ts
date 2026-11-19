@@ -1,3 +1,4 @@
+import { translate } from '@/i18n/i18n'
 import { SearchAddon } from '@xterm/addon-search'
 import { SerializeAddon } from '@xterm/addon-serialize'
 import { Unicode11Addon } from '@xterm/addon-unicode11'
@@ -77,6 +78,10 @@ export function createPaneDOM(
 
   const dragHandle = document.createElement('div')
   dragHandle.className = 'pane-drag-handle'
+  dragHandle.title = translate(
+    'components.terminalPane.paneDragHandle.tooltip',
+    'Drag to move to a new tab'
+  )
   container.appendChild(dragHandle)
   const paneDragCleanup = attachPaneDrag(dragHandle, id, dragState, dragCallbacks)
 

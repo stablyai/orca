@@ -9,6 +9,7 @@ import type {
   PaneStyleOptions
 } from '../pane-manager-types'
 import { detachPaneFromTree, insertPaneNextTo } from './pane-tree-ops'
+import { translate } from '@/i18n/i18n'
 import { findPaneChildren } from './pane-tree-equalization'
 
 export type DragReorderState = {
@@ -157,6 +158,8 @@ export function showDropOverlay(state: DragReorderState): void {
   if (!state.dropOverlay) {
     const overlay = document.createElement('div')
     overlay.className = 'pane-drop-overlay'
+    // Shown only at a tab-strip insertion point, where the drop makes a new tab.
+    overlay.dataset.pillLabel = translate('components.terminalPane.paneDrop.newTabPill', 'New tab')
     document.body.appendChild(overlay)
     state.dropOverlay = overlay
   }
