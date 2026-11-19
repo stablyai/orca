@@ -40,7 +40,7 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
 
   protected async captureProviderTerminalBuffer(
     ptyId: string,
-    opts: { scrollbackRows?: number; signal?: AbortSignal },
+    opts: { scrollbackRows?: number; signal?: AbortSignal; recovery?: true },
     generation: number
   ): Promise<PtyProviderBufferSnapshot | null> {
     const liveModeTracker = new TerminalKittyKeyboardModeTracker()

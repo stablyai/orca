@@ -324,7 +324,7 @@ export function getSizeFromRuntimeController(ptyId: string) {
 
 export async function serializeProviderBufferFromRuntimeController(
   ptyId: string,
-  opts?: { scrollbackRows?: number; signal?: AbortSignal }
+  opts?: { scrollbackRows?: number; signal?: AbortSignal; recovery?: true }
 ) {
   try {
     // Unmounted restored daemon PTYs still need provider snapshots for phone navigation.

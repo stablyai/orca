@@ -39,7 +39,7 @@ type RebuildResult = 'rebuilt' | 'failed' | 'behind'
 export abstract class OrcaRuntimeWithHeadlessGapReseed extends OrcaRuntimeWithCreatePtyHeadlessTerminalState {
   protected abstract captureProviderTerminalBuffer(
     ptyId: string,
-    opts: { scrollbackRows?: number; signal?: AbortSignal },
+    opts: { scrollbackRows?: number; signal?: AbortSignal; recovery?: true },
     generation: number
   ): Promise<PtyProviderBufferSnapshot | null>
 
@@ -199,7 +199,7 @@ export abstract class OrcaRuntimeWithHeadlessGapReseed extends OrcaRuntimeWithCr
     const capture = new AbortController()
     const pending = this.captureProviderTerminalBuffer(
       ptyId,
-      { scrollbackRows: 0, signal: capture.signal },
+      { scrollbackRows: 0, signal: capture.signal, recovery: true },
       this.getPtyLifecycleGeneration(ptyId)
     )
     const snapshot = await Promise.race([

@@ -166,7 +166,7 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
 
   async getBufferSnapshot(
     id: string,
-    opts?: { scrollbackRows?: number; signal?: AbortSignal }
+    opts?: { scrollbackRows?: number; signal?: AbortSignal; recovery?: true }
   ): Promise<PtyProviderBufferSnapshot | null> {
     return (await this.providerFor(id).getBufferSnapshot?.(id, opts)) ?? null
   }
