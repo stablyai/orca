@@ -173,4 +173,29 @@ describe('AndroidEmulatorBackend', () => {
 
     expect(forwards).toEqual(before)
   })
+
+  it('does not issue adb shutdown if the deadline expires while resolving the serial', async () => {
+    const android = backend(runner)
+    let finish!: (serial: string) => void
+    vi.spyOn(android, 'resolveDeviceId').mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve
+        })
+    )
+    let expired = false
+    const stopping = android.stopHelperForDevice('emulator-5554', {
+      shutdownDevice: true,
+      assertShutdownAllowed: () => {
+        if (expired) {
+          throw new Error('deadline expired')
+        }
+      }
+    })
+    await vi.waitFor(() => expect(finish).toBeDefined())
+    expired = true
+    finish('emulator-5554')
+    await expect(stopping).rejects.toThrow('deadline expired')
+    expect(runner).not.toHaveBeenCalledWith(SDK.adb, expect.arrayContaining(['kill']))
+  })
 })

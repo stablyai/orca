@@ -6,6 +6,7 @@ export type EmulatorSessionState = {
   streamUrl: string
   axUrl?: string
   pid?: number
+  instanceId?: string
   managed: boolean
   initialized: boolean
   backend: EmulatorBackendKind

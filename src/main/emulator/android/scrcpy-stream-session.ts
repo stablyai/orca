@@ -42,6 +42,7 @@ export type ScrcpyStreamOptions = {
   localJarPath: string
   localPort?: number
   maxSize?: number
+  assertOpen?: () => void
 }
 
 export type ScrcpyControlTarget = {
@@ -64,6 +65,7 @@ export class ScrcpyStreamSession implements ScrcpyControlTarget {
   private currentVideoSize: H264PictureSize | null = null
   private headerStripped = false
   private closed = false
+  private forwardReady = false
   private readonly ready: Promise<void>
   private resolveReady: (() => void) | null = null
   private rejectReady: ((error: Error) => void) | null = null
@@ -90,9 +92,11 @@ export class ScrcpyStreamSession implements ScrcpyControlTarget {
     const session = new ScrcpyStreamSession(options, callbacks, scid, port)
     try {
       await session.deploy()
+      options.assertOpen?.()
       session.spawnServer()
       session.connectSockets()
       await session.ready
+      options.assertOpen?.()
     } catch (error) {
       session.close()
       throw error
@@ -102,10 +106,12 @@ export class ScrcpyStreamSession implements ScrcpyControlTarget {
 
   private async deploy(): Promise<void> {
     const { runner, sdk, serial, localJarPath } = this.options
+    this.options.assertOpen?.()
     ensureAdbOk(
       await runner(sdk.adb, pushScrcpyServerArgs(serial, localJarPath, SCRCPY_DEVICE_JAR_PATH)),
       'scrcpy server push'
     )
+    this.options.assertOpen?.()
     const forward = ensureAdbOk(
       await runner(sdk.adb, scrcpyForwardArgs(serial, this.port, this.scid)),
       'scrcpy port forward'
@@ -118,6 +124,7 @@ export class ScrcpyStreamSession implements ScrcpyControlTarget {
       this.port = allocated
       emulatorProbe('scrcpy.forward.port', { serial, port: this.port })
     }
+    this.forwardReady = true
   }
 
   private spawnServer(): void {
@@ -151,7 +158,7 @@ export class ScrcpyStreamSession implements ScrcpyControlTarget {
 
   // adb can accept TCP before scrcpy is ready; require its dummy byte before connecting control.
   private openVideoSocket(attempt: number): void {
-    if (this.closed) {
+    if (this.closed || !this.isStartAllowed()) {
       return
     }
     const socket = connect(this.port, '127.0.0.1')
@@ -171,6 +178,10 @@ export class ScrcpyStreamSession implements ScrcpyControlTarget {
       setTimeout(() => this.openVideoSocket(attempt + 1), 100)
     }
     socket.once('data', (chunk: Buffer) => {
+      if (!this.isStartAllowed()) {
+        socket.destroy()
+        return
+      }
       if (settled) {
         return
       }
@@ -190,7 +201,7 @@ export class ScrcpyStreamSession implements ScrcpyControlTarget {
   }
 
   private openControlSocket(): void {
-    if (this.closed) {
+    if (this.closed || !this.isStartAllowed()) {
       return
     }
     const socket = connect(this.port, '127.0.0.1')
@@ -281,6 +292,16 @@ export class ScrcpyStreamSession implements ScrcpyControlTarget {
     return true
   }
 
+  private isStartAllowed(): boolean {
+    try {
+      this.options.assertOpen?.()
+      return true
+    } catch (error) {
+      this.fail(error instanceof Error ? error.message : String(error))
+      return false
+    }
+  }
+
   private fail(message: string): void {
     if (this.closed) {
       return
@@ -302,9 +323,11 @@ export class ScrcpyStreamSession implements ScrcpyControlTarget {
     this.videoSocket?.destroy()
     this.controlSocket?.destroy()
     this.server?.kill()
-    void this.options
-      .runner(this.options.sdk.adb, scrcpyRemoveForwardArgs(this.options.serial, this.port))
-      .catch(() => {})
+    if (this.forwardReady) {
+      void this.options
+        .runner(this.options.sdk.adb, scrcpyRemoveForwardArgs(this.options.serial, this.port))
+        .catch(() => {})
+    }
     this.callbacks.onClose()
   }
 }

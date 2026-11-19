@@ -22,21 +22,53 @@ export class EmulatorSessionRegistry {
     worktreeId: string,
     info: EmulatorSessionInfo,
     options: { managed?: boolean; backend?: EmulatorBackendKind } = {}
-  ): void {
+  ): string[] {
     const key = info.deviceUdid
-    this.sessions.set(key, {
+    const previous = this.sessions.get(key)
+    const replaced =
+      previous &&
+      (previous.pid !== info.helperPid ||
+        previous.streamUrl !== info.streamUrl ||
+        previous.wsUrl !== info.wsUrl ||
+        ((info.backend ?? options.backend ?? 'ios') === 'android' &&
+          (!previous.instanceId || !info.instanceId || previous.instanceId !== info.instanceId)))
+    const affected = replaced
+      ? [...this.activeByWorktree].filter(([, activeKey]) => activeKey === key).map(([id]) => id)
+      : []
+    const next: EmulatorSessionState = {
       deviceUdid: info.deviceUdid,
       wsUrl: info.wsUrl,
       streamUrl: info.streamUrl,
       axUrl: info.axUrl,
       pid: info.helperPid,
+      instanceId: info.instanceId,
       managed: options.managed === true,
       initialized: true,
       // Preserve iOS defaults for callers predating multiple backends.
       backend: info.backend ?? options.backend ?? 'ios',
       streamCodec: info.streamCodec ?? 'mjpeg'
-    })
+    }
+    if (
+      !previous ||
+      replaced ||
+      previous.managed !== next.managed ||
+      previous.backend !== next.backend ||
+      previous.streamCodec !== next.streamCodec ||
+      previous.axUrl !== next.axUrl
+    ) {
+      this.sessions.set(key, next)
+    }
     this.activeByWorktree.set(worktreeId, key)
+    return affected
+  }
+
+  restoreIfUnchanged(worktreeId: string, session: EmulatorSessionState): void {
+    if (
+      !this.activeByWorktree.has(worktreeId) &&
+      this.sessions.get(session.deviceUdid) === session
+    ) {
+      this.activeByWorktree.set(worktreeId, session.deviceUdid)
+    }
   }
 
   unregisterWorktree(worktreeId: string): void {
@@ -63,6 +95,11 @@ export class EmulatorSessionRegistry {
     return this.sessions.get(key)
   }
 
+  sessionInfoOrTarget(key: string): EmulatorSessionInfo {
+    const session = this.sessions.get(key)
+    return session ? toSessionInfo(session) : { deviceUdid: key, streamUrl: '', wsUrl: '' }
+  }
+
   getIosVideoStreamUrl(key: string): string | null {
     const session = this.sessions.get(key)
     return session?.backend === 'ios'
@@ -74,6 +111,18 @@ export class EmulatorSessionRegistry {
     return toSessionInfo(session)
   }
 
+  generationForDevice(deviceUdid: string): object | undefined {
+    return this.sessions.get(deviceUdid)
+  }
+
+  isCurrentOwner(worktreeId: string, deviceUdid: string, generation: object | undefined): boolean {
+    return (
+      !!generation &&
+      this.activeByWorktree.get(worktreeId) === deviceUdid &&
+      this.sessions.get(deviceUdid) === generation
+    )
+  }
+
   hasActiveWorktreeForSession(key: string): boolean {
     return [...this.activeByWorktree.values()].some((activeKey) => activeKey === key)
   }
@@ -81,9 +130,10 @@ export class EmulatorSessionRegistry {
   /** One row per worktree's live session; a shared device appears once per worktree. */
   async listLiveActive(
     worktreeId: string | undefined,
-    backendForKind: CensusBackendForKind
+    backendForKind: CensusBackendForKind,
+    cleanup?: (kind: EmulatorBackendKind, session: EmulatorSessionState) => void
   ): Promise<EmulatorActiveSession[]> {
-    await this.pruneGoneManagedSessions(backendForKind)
+    await this.pruneGoneManagedSessions(backendForKind, cleanup)
     const rows: EmulatorActiveSession[] = []
     for (const [activeWorktreeId, key] of this.activeByWorktree) {
       const session = this.sessions.get(key)
@@ -102,6 +152,12 @@ export class EmulatorSessionRegistry {
     return [...this.sessions.values()]
   }
 
+  clearIfUnchanged(key: string, session: EmulatorSessionState | undefined): void {
+    if (session && this.sessions.get(key) === session) {
+      this.clearSessionAndWorktrees(key)
+    }
+  }
+
   clearSessionAndWorktrees(key: string): void {
     this.sessions.delete(key)
     for (const [worktreeId, activeKey] of this.activeByWorktree.entries()) {
@@ -112,7 +168,10 @@ export class EmulatorSessionRegistry {
   }
 
   /** Drop managed records whose device stopped outside Orca; true while any managed device still runs. */
-  async pruneGoneManagedSessions(backendForKind: CensusBackendForKind): Promise<boolean> {
+  async pruneGoneManagedSessions(
+    backendForKind: CensusBackendForKind,
+    cleanup?: (kind: EmulatorBackendKind, session: EmulatorSessionState) => void
+  ): Promise<boolean> {
     const managed = this.listSessions().filter((session) => session.managed)
     let live = false
     for (const kind of new Set(managed.map((session) => session.backend))) {
@@ -126,8 +185,20 @@ export class EmulatorSessionRegistry {
         if (running === null || replaced || running.includes(session.deviceUdid)) {
           live = live || this.sessions.has(session.deviceUdid)
         } else {
-          this.clearSessionAndWorktrees(session.deviceUdid)
-          void backend?.stopHelperForDevice(session.deviceUdid).catch(() => {})
+          const info = toSessionInfo(session)
+          if (cleanup) {
+            cleanup(kind, session)
+            live = true
+          } else {
+            this.clearSessionAndWorktrees(session.deviceUdid)
+            void backend
+              ?.stopHelperForDevice(session.deviceUdid, {
+                helperPid: info.helperPid,
+                instanceId: info.instanceId,
+                requireInstanceId: kind === 'android'
+              })
+              .catch(() => {})
+          }
         }
       }
     }
@@ -147,6 +218,7 @@ function toSessionInfo(session: EmulatorSessionState): EmulatorSessionInfo {
     streamUrl: session.streamUrl,
     axUrl: session.axUrl,
     helperPid: session.pid,
+    ...(session.instanceId ? { instanceId: session.instanceId } : {}),
     streamCodec: session.streamCodec,
     backend: session.backend
   }

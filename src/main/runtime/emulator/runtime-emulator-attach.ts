@@ -51,6 +51,7 @@ export class RuntimeEmulatorAttach {
       this.pendingByWorkspace.set(params.worktree, ticket)
     }
     const assertCurrent = () => {
+      bridge.assertEmulatorOpen()
       if (ticket && this.pendingByWorkspace.get(params.worktree) !== ticket) {
         throw new EmulatorError(
           'emulator_attach_superseded',
@@ -77,6 +78,7 @@ export class RuntimeEmulatorAttach {
       }
     }
     try {
+      assertCurrent()
       const worktreeId = params.worktree
         ? await this.host.resolveEmulatorWorkspaceId(params.worktree)
         : undefined
@@ -137,7 +139,7 @@ export class RuntimeEmulatorAttach {
           this.notify(worktreeId, reusable, params.focus)
           return { attached: true, info: reusable }
         }
-        await bridge.stopActiveForSwitch(worktreeId)
+        await bridge.stopActiveForSwitch(worktreeId, assertCurrent)
         assertCurrent()
       }
       const lease = await bridge.acquireHelperForDevice(device)
@@ -152,6 +154,13 @@ export class RuntimeEmulatorAttach {
           throw new EmulatorError('emulator_no_active', emulatorFailureText('workspaceChanged'))
         }
         assertCurrent()
+        if (!(await bridge.isOwnedSessionReusable(info))) {
+          throw new EmulatorError(
+            'emulator_attach_superseded',
+            'The emulator changed before attachment completed.'
+          )
+        }
+        assertCurrent()
       } catch (error) {
         await lease.release({ cleanupIfUnused: true }).catch(() => {})
         if (error instanceof Error && error.message === 'selector_not_found') {
@@ -159,15 +168,38 @@ export class RuntimeEmulatorAttach {
         }
         throw error
       }
-      if (worktreeId) {
-        bridge.registerActiveEmulator(worktreeId, info, { managed: true })
+      const affected = worktreeId
+        ? bridge.registerActiveEmulator(worktreeId, info, { managed: true })
+        : []
+      const generation = bridge.emulatorGeneration(info.deviceUdid)
+      for (const owner of affected ?? []) {
+        if (
+          owner !== worktreeId &&
+          bridge.isCurrentEmulatorOwner(owner, info.deviceUdid, generation)
+        ) {
+          this.notify(owner, info)
+        }
       }
       await lease.release()
       assertCurrent()
+      if (!(await bridge.isOwnedSessionReusable(info))) {
+        throw new EmulatorError(
+          'emulator_attach_superseded',
+          'The emulator changed before attachment completed.'
+        )
+      }
+      assertCurrent()
       remember()
       if (worktreeId) {
+        if (!bridge.isCurrentEmulatorOwner(worktreeId, info.deviceUdid, generation)) {
+          throw new EmulatorError(
+            'emulator_attach_superseded',
+            'The emulator changed before attachment completed.'
+          )
+        }
         this.notify(worktreeId, info, params.focus)
       }
+      assertCurrent()
       return { attached: true, info }
     } finally {
       if (ticket && this.pendingByWorkspace.get(params.worktree) === ticket) {

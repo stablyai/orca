@@ -40,6 +40,7 @@ export function registerOrcaRuntimeEmulatorFolderWorkspaceTests(): void {
         | ((lease: { info: EmulatorSessionInfo; release: typeof release }) => void)
         | undefined
       const bridge = {
+        assertEmulatorOpen: vi.fn(),
         acquireHelperForDevice: vi.fn(
           () =>
             new Promise<{ info: EmulatorSessionInfo; release: typeof release }>((resolve) => {
