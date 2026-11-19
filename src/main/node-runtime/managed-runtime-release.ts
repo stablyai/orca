@@ -1,7 +1,8 @@
 // Launch reads use receipts and member sizes; full hashing belongs to installation.
 
+import { randomUUID } from 'node:crypto'
 import { lstatSync, readFileSync, readdirSync, realpathSync, statSync } from 'node:fs'
-import { lstat, readdir, rm, writeFile } from 'node:fs/promises'
+import { lstat, readdir, realpath, rename, rm, symlink, writeFile } from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
 import { z } from 'zod'
 import { isDefinitiveAbsence } from '../../shared/errors/definitive-filesystem-absence'
@@ -88,6 +89,12 @@ export type InstalledRuntimeRelease = {
   current: boolean
 }
 
+/** A release launches use and, when the release link follows it, the link terminals put on PATH. */
+export type ReportedRuntimeRelease = { folder: string; link: string | null }
+
+/** Follows the release launches resolve to; release reads skip dot names. */
+export const RUNTIME_RELEASE_LINK = '.current'
+
 type ReleaseRead = { releaseId: string } | 'broken' | 'unreadable'
 
 export type InstalledRuntimeReleases = {
@@ -123,6 +130,36 @@ export function resolveInstalledRuntimeRelease(
       : null,
     broken: reads.filter(({ read }) => read === 'broken').map(({ name }) => name),
     unreadable: reads.some(({ read }) => read === 'unreadable')
+  }
+}
+
+/** The release link when it follows `folder`; a shell holding it outlives the release it started with. */
+export async function runtimeReleaseLink(root: string, folder: string): Promise<string | null> {
+  const link = join(root, RUNTIME_RELEASE_LINK)
+  const [linked, real] = await Promise.all([
+    realpath(link).catch(() => null),
+    realpath(folder).catch(() => null)
+  ])
+  return linked !== null && linked === real ? link : null
+}
+
+/** Exclusive writer only: point the release link at `folder`, replacing it in one rename where the OS allows. */
+export async function linkRuntimeRelease(root: string, folder: string): Promise<void> {
+  if (await runtimeReleaseLink(root, folder)) {
+    return
+  }
+  const link = join(root, RUNTIME_RELEASE_LINK)
+  // A junction needs no privilege on Windows, unlike a symlink.
+  const staged = join(root, `.link-${randomUUID()}`)
+  await symlink(folder, staged, process.platform === 'win32' ? 'junction' : 'dir')
+  try {
+    // Windows can't rename over an existing junction, so it is replaced in two steps.
+    await rename(staged, link).catch(async () => {
+      await rm(link, { force: true })
+      await rename(staged, link)
+    })
+  } finally {
+    await rm(staged, { force: true })
   }
 }
 

@@ -84,7 +84,7 @@ it('installs only when asked, with progress, cancel, retry, and a status read fr
     source: 'managed',
     operation: null
   })
-  expect(await readdir(root)).toEqual(['1.0'])
+  expect((await readdir(root)).sort()).toEqual(['.current', '1.0'])
 
   await rm(join(root, '1.0', RUNTIME_RELEASE_RECEIPT))
   expect(await installation.status()).toMatchObject({ damaged: true })
@@ -115,7 +115,7 @@ it('repairs a damaged copy when Install is clicked again', async () => {
   const repaired = await installation.status()
   expect(repaired).toMatchObject({ installedVersion: '1.0', installedCurrent: true })
   expect(repaired.damaged).toBeUndefined()
-  expect(await readdir(root)).toEqual(['1.0'])
+  expect((await readdir(root)).sort()).toEqual(['.current', '1.0'])
 })
 
 it.each([
@@ -222,12 +222,14 @@ it('updates only an installed copy that is behind, keeping the release running c
     installedCurrent: true,
     updatesAutomatically: true
   })
-  expect((await readdir(root)).sort()).toEqual(['1.0', '2.0'])
+  expect((await readdir(root)).sort()).toEqual(['.current', '1.0', '2.0'])
 
   version = '3.0'
   await installation.updateIfBehind()
   await settled()
-  expect((await readdir(root)).sort()).toEqual(['2.0', '3.0'])
+  expect((await readdir(root)).sort()).toEqual(['.current', '2.0', '3.0'])
+  // A shell opened before both updates still reaches the newest release.
+  expect(await readFile(join(root, '.current', 'agent'), 'utf8')).toBe('binary 3.0')
 })
 
 it.each([

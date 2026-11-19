@@ -1,27 +1,50 @@
 import { existsSync } from 'node:fs'
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, it, vi } from 'vitest'
 import { acpLaunchSpecFor } from '../../../../acp/launch/acp-launch-registry'
 import type * as LaunchSpecs from '../../../../acp/launch/acp-launch-registry'
 import { writeRuntimeReleaseReceipt } from '../../../../node-runtime/managed-runtime-release'
+import { _setGuestWindowsDriveMountsForTests } from '../../../../wsl/filesystem/wsl-guest-windows-drive-path'
 import type { RpcContext } from '../../core'
 import { MANAGED_RUNTIME_INSTALL_METHODS } from './managed-runtime-install'
 
-const host = vi.hoisted(() => ({ dataDirectory: '' }))
+const host = vi.hoisted(() => ({ dataDirectory: '', path: '', offline: false }))
 vi.mock('../../../../orca-profiles/profile-storage-paths', () => ({
   getProfileUserDataPath: () => host.dataDirectory
 }))
 vi.mock('../../../agent-session/launch/structured-agent-launch-support', () => ({
-  resolveHostStructuredAgentLaunchEnvironment: async () => ({ PATH: '' }),
+  resolveHostStructuredAgentLaunchEnvironment: async () => ({
+    PATH: host.path,
+    HOME: host.dataDirectory
+  }),
   structuredAgentHostAlternativeReady: async () => false
 }))
+// Search only the PATH the lookup is given, never this machine's own install folders.
+vi.mock(
+  '../../../../../shared/shell/command-resolution/node-cli-command-async-resolution',
+  async () => {
+    const fs = await import('node:fs')
+    const path = await import('node:path')
+    return {
+      resolveCliCommandAsync: async (name: string, { pathEnv }: { pathEnv?: string | null }) =>
+        (pathEnv ?? '')
+          .split(':')
+          .filter(Boolean)
+          .map((dir) => path.join(dir, name))
+          .find((file) => fs.existsSync(file)) ?? name
+    }
+  }
+)
 // The download never answers until its cancel.
 vi.mock('../../../../network/http-client', () => ({
   getMainHttpClient: () => ({
     fetch: (_url: string, { signal }: RequestInit) =>
       new Promise((_resolve, reject) => {
+        if (host.offline) {
+          reject(new Error('offline'))
+        }
         signal?.throwIfAborted()
         signal?.addEventListener('abort', () => reject(signal.reason))
       })
@@ -151,4 +174,32 @@ it('removes the files only once every chat and unclosed child that may run them 
   expect(existsSync(join(host.dataDirectory, 'rt'))).toBe(false)
   transport.abort()
   await rm(host.dataDirectory, { recursive: true, force: true })
+})
+
+it("does not take a Windows-drive copy under a custom WSL automount root for the user's own install", async () => {
+  host.dataDirectory = await mkdtemp(join(tmpdir(), 'orca-runtime-wsl-rpc-'))
+  const drive = join(host.dataDirectory, 'win', 'c')
+  const shims = join(drive, 'Users', 'me', 'AppData', 'Roaming', 'npm')
+  await mkdir(shims, { recursive: true })
+  await writeFile(join(shims, 'claude'), '#!/bin/sh\n')
+  await chmod(join(shims, 'claude'), 0o755)
+  host.path = shims
+  host.offline = true
+  _setGuestWindowsDriveMountsForTests([drive])
+  try {
+    const frames: unknown[] = []
+    const transport = new AbortController()
+    await subscribeMethod.handler(
+      { agent: 'claude' },
+      { ...ctx, signal: transport.signal },
+      (frame) => frames.push(frame)
+    )
+    transport.abort()
+    expect(frames[0]).toMatchObject({ source: null })
+  } finally {
+    _setGuestWindowsDriveMountsForTests(null)
+    host.path = ''
+    host.offline = false
+    await rm(host.dataDirectory, { recursive: true, force: true })
+  }
 })

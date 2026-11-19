@@ -3,6 +3,7 @@
 
 import { randomUUID } from 'node:crypto'
 import { rm } from 'node:fs/promises'
+import { join } from 'node:path'
 import type {
   ManagedRuntimeInstallState,
   ManagedRuntimeOperation
@@ -10,9 +11,13 @@ import type {
 import type { MainHttpClient } from '../network/http-client'
 import { RevisionedState } from '../runtime/events/revisioned-state'
 import {
+  linkRuntimeRelease,
   reclaimRuntimeReleases,
   resolveInstalledRuntimeRelease,
-  type ManagedRuntime
+  RUNTIME_RELEASE_LINK,
+  runtimeReleaseLink,
+  type ManagedRuntime,
+  type ReportedRuntimeRelease
 } from './managed-runtime-release'
 import { installFailureText, installRuntimeRelease } from './managed-runtime-release-install'
 
@@ -23,7 +28,7 @@ export type ManagedRuntimeInstallationDeps = {
   dataDirectory: string
   findExternal: () => Promise<boolean>
   /** Told the release launches resolve to each time this reads the disk; null when none is whole. */
-  onRelease?: (folder: string | null) => void
+  onRelease?: (release: ReportedRuntimeRelease | null) => void
   /** Reject unless no host workload uses this runtime. */
   fence: (work: () => Promise<void>) => Promise<void>
   fetcher?: MainHttpClient['fetch']
@@ -88,7 +93,7 @@ export class ManagedRuntimeInstallation {
     const pin = this.runtime.pin()
     const { release, broken, unreadable } = resolveInstalledRuntimeRelease(this.root, pin)
     if (!unreadable) {
-      this.deps.onRelease?.(release?.folder ?? null)
+      await this.report(release?.folder ?? null)
     }
     // Unreadable is not absent; preserve clients’ last known installation state.
     if (unreadable && !release?.current) {
@@ -244,6 +249,7 @@ export class ManagedRuntimeInstallation {
           run.committed = true
         }
       })
+      await this.link(join(this.root, pin.version))
       if (this.runtime.refreshPin) {
         await this.reclaimOlderThan(pin.version, previous)
       }
@@ -279,20 +285,38 @@ export class ManagedRuntimeInstallation {
 
   private async reclaim(): Promise<void> {
     const { release, unreadable } = resolveInstalledRuntimeRelease(this.root, this.runtime.pin())
-    if (!unreadable) {
-      this.deps.onRelease?.(release?.folder ?? null)
-    }
     if (unreadable) {
       // Unknown active release means no release is provably stale.
       console.warn(`[managed-runtime] ${this.agent} releases unreadable; not reclaiming this run`)
       return
     }
+    // Launches find the release now; terminals get the link once it follows the release.
+    this.deps.onRelease?.(release && { folder: release.folder, link: null })
+    if (release) {
+      await this.link(release.folder)
+    }
+    await this.report(release?.folder ?? null)
     await this.reclaimOlderThan(release?.version ?? null, null)
+  }
+
+  private async report(folder: string | null): Promise<void> {
+    if (this.deps.onRelease) {
+      this.deps.onRelease(
+        folder === null ? null : { folder, link: await runtimeReleaseLink(this.root, folder) }
+      )
+    }
+  }
+
+  /** Terminals reach releases through the link; without it they keep the versioned folder. */
+  private async link(folder: string): Promise<void> {
+    await linkRuntimeRelease(this.root, folder).catch((error: unknown) => {
+      console.warn(`[managed-runtime] ${this.agent} release link not updated:`, error)
+    })
   }
 
   /** Keep the release launches resolve to and the one running chats may still use. */
   private async reclaimOlderThan(current: string | null, previous: string | null): Promise<void> {
-    const keep = [current, previous].filter((version) => version !== null)
+    const keep = [current, previous, RUNTIME_RELEASE_LINK].filter((name) => name !== null)
     const failed = await reclaimRuntimeReleases(this.root, keep).catch((error: unknown) => [
       String(error)
     ])

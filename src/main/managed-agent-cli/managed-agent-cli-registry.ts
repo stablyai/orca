@@ -1,7 +1,10 @@
 // Orca's own copies of agent CLIs, for hosts without the user's own; the user's install always wins.
 
 import { delimiter, dirname } from 'node:path'
-import type { ManagedAgentCli } from '../node-runtime/managed-runtime-release'
+import type {
+  ManagedAgentCli,
+  ReportedRuntimeRelease
+} from '../node-runtime/managed-runtime-release'
 import {
   CLAUDE_MANAGED_RUNTIME,
   claudeManagedExecutable,
@@ -91,25 +94,28 @@ export function managedAgentCli(agent: ManagedAgentCliId): ManagedAgentCli {
   return MANAGED_AGENT_CLIS[agent]
 }
 
-const installedFolders = new Map<ManagedAgentCliId, string>()
+const installedReleases = new Map<ManagedAgentCliId, ReportedRuntimeRelease>()
 
 /** The installation reports each release it reads from disk, so lookups here never touch the disk. */
-export function rememberManagedAgentRelease(agent: ManagedAgentCliId, folder: string | null): void {
-  if (folder) {
-    installedFolders.set(agent, folder)
+export function rememberManagedAgentRelease(
+  agent: ManagedAgentCliId,
+  release: ReportedRuntimeRelease | null
+): void {
+  if (release) {
+    installedReleases.set(agent, release)
   } else {
-    installedFolders.delete(agent)
+    installedReleases.delete(agent)
   }
 }
 
 /** Orca's installed copy of `agent` on this host, used only when the user has none of their own. */
 export function managedAgentCommand(agent: ManagedAgentCliId): string | null {
-  const folder = installedFolders.get(agent)
-  if (!folder) {
+  const release = installedReleases.get(agent)
+  if (!release) {
     return null
   }
   managedUseListener?.(agent)
-  return MANAGED_AGENT_CLIS[agent].executable(folder)
+  return MANAGED_AGENT_CLIS[agent].executable(release.folder)
 }
 
 let managedUseListener: ((agent: ManagedAgentCliId) => void) | null = null
@@ -127,7 +133,9 @@ export function appendManagedAgentDirsToChildPath(
   delete env.ORCA_MANAGED_AGENT_PATH
   // Opening a terminal isn't use of an agent, so this reads the folders without the use hook.
   const folders = MANAGED_AGENT_CLI_IDS.flatMap((agent) => {
-    const folder = installedFolders.get(agent)
+    const release = installedReleases.get(agent)
+    // A shell outlives updates, so it gets the link that follows the newest release.
+    const folder = release && (release.link ?? release.folder)
     return folder ? [dirname(MANAGED_AGENT_CLIS[agent].executable(folder))] : []
   })
   if (folders.length === 0) {

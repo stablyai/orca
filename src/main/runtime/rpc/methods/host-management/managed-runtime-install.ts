@@ -30,10 +30,13 @@ import {
 } from '../../../../managed-agent-cli/managed-agent-cli-registry'
 import { resolveCliCommandAsync } from '../../../../../shared/shell/command-resolution/node-cli-command-async-resolution'
 import { hasExplicitTuiLaunchCommand } from '../../../../../shared/agent-launch/startup/tui-agent-launch-command-override'
+import {
+  readGuestWindowsDriveMountsAsync,
+  withoutWindowsDriveMountDirs
+} from '../../../../wsl/filesystem/wsl-guest-windows-drive-path'
 import { bindStructuredAgentSessionStream } from '../structured-sessions/subscriptions/structured-agent-session-status-stream'
 
 const installations = new Map<string, ManagedRuntimeInstallation>()
-const WINDOWS_DRIVE_MOUNT = /^\/mnt\/[a-z]\//i
 
 function installationFor(agent: string, runtime: OrcaRuntimeService): ManagedRuntimeInstallation {
   const existing = installations.get(agent)
@@ -111,21 +114,23 @@ function agentCliInstallation(
     const homePath = env.HOME ?? env.USERPROFILE
     const path = env.PATH ?? env.Path ?? null
     const dirs = spec?.installDirectories({ env, homePath: homePath ?? homedir() }) ?? []
+    const searchPath =
+      (dirs.length > 0 ? [path, ...dirs].filter(Boolean).join(delimiter) : path) ??
+      process.env.PATH ??
+      ''
     const resolved = await resolveCliCommandAsync(spec?.command ?? agent, {
-      pathEnv: dirs.length > 0 ? [path, ...dirs].filter(Boolean).join(delimiter) : path,
+      // A WSL host can't run a Windows-drive copy, so launches never find one and neither does this.
+      pathEnv: withoutWindowsDriveMountDirs(searchPath, await readGuestWindowsDriveMountsAsync()),
       ...(homePath ? { homePath } : {})
     })
-    // A WSL host can't run a Windows-drive copy, so it isn't the user's own install there.
     return (
-      isAbsolute(resolved) &&
-      !WINDOWS_DRIVE_MOUNT.test(resolved) &&
-      !isPathInsideOrEqual(managedRuntime.root(dataDirectory), resolved)
+      isAbsolute(resolved) && !isPathInsideOrEqual(managedRuntime.root(dataDirectory), resolved)
     )
   }
   return new ManagedRuntimeInstallation(agent, managedRuntime, {
     dataDirectory,
     findExternal,
-    onRelease: (folder) => rememberManagedAgentRelease(agent, folder),
+    onRelease: (release) => rememberManagedAgentRelease(agent, release),
     // No launch gate tracks these processes; stopping the agent's chats first is the closest fence.
     fence: (work) => stopStructuredAgentChats(agent, managedRuntime.label).then(work)
   })

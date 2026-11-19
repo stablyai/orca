@@ -1,5 +1,6 @@
 // WSL-host orcad must ignore Windows CLI shims; identify mounts by type because the automount root is configurable.
 import { existsSync, readFileSync } from 'node:fs'
+import { access, readFile } from 'node:fs/promises'
 import { isAbsolute } from 'node:path'
 import { resolveCliCommand } from '../../../shared/shell/command-resolution/node-cli-command-resolution'
 
@@ -16,15 +17,20 @@ const WINDOWS_COPY_VERDICT_LIMIT = 32
 type WindowsCopyVerdict = { windowsOnly: boolean; checkedAt: number }
 let windowsCopyVerdicts = new WeakMap<typeof resolveCliCommand, Map<string, WindowsCopyVerdict>>()
 
+const WSL_INTEROP_FILE = '/proc/sys/fs/binfmt_misc/WSLInterop'
+
+const hasWslEnv = (env: NodeJS.ProcessEnv): boolean =>
+  Boolean(env.WSL_DISTRO_NAME?.trim() || env.WSL_INTEROP?.trim())
+
 export function isWslGuestProcess(
   env: NodeJS.ProcessEnv = process.env,
   platform: NodeJS.Platform = process.platform,
-  interopRegistered: () => boolean = () => existsSync('/proc/sys/fs/binfmt_misc/WSLInterop')
+  interopRegistered: () => boolean = () => existsSync(WSL_INTEROP_FILE)
 ): boolean {
   if (platform !== 'linux') {
     return false
   }
-  return Boolean(env.WSL_DISTRO_NAME?.trim() || env.WSL_INTEROP?.trim()) || interopRegistered()
+  return hasWslEnv(env) || interopRegistered()
 }
 
 export function isWslHostOrcadProcess(
@@ -83,6 +89,27 @@ export function readGuestWindowsDriveMounts(): readonly string[] {
   }
   cachedGuestMounts = mounts
   return mounts
+}
+
+/** readGuestWindowsDriveMounts for callers that must not block the event loop; both fill one cache. */
+export async function readGuestWindowsDriveMountsAsync(): Promise<readonly string[]> {
+  if (cachedGuestMounts) {
+    return cachedGuestMounts
+  }
+  const { env, platform } = process
+  const guest =
+    platform === 'linux' &&
+    env[ORCAD_WSL_HOST_ENV] === '1' &&
+    (hasWslEnv(env) ||
+      (await access(WSL_INTEROP_FILE).then(
+        () => true,
+        () => false
+      )))
+  const mounts = guest
+    ? parseWindowsDriveMountPoints(await readFile('/proc/mounts', 'utf8').catch(() => ''))
+    : []
+  cachedGuestMounts ??= mounts
+  return cachedGuestMounts
 }
 
 /** Stand in for /proc/mounts so call-site tests can model a Windows drive; null re-reads. */
