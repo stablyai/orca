@@ -3708,7 +3708,8 @@
         "waitingForSignIn": "Waiting for sign-in…",
         "tools_one": "{{count}} tool",
         "tools_other": "{{count}} tools",
-        "off": "Off"
+        "off": "Off",
+        "notStarted": "Not started"
       },
       "title": "MCP servers",
       "notRunning": "MCP servers connect when you send your next message.",
