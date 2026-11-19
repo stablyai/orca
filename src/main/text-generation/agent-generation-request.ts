@@ -116,6 +116,9 @@ export async function runGenerationRequest(input: {
     const retry = copilotUnavailableModelRetryPlan(plan, result.failureOutput)
     if (retry) {
       result = await execute(retry)
+      if (result.success) {
+        result = { ...result, modelFellBack: true }
+      }
     }
   }
   // Custom raw models can omit the opening think tag; built-in replies may mention it literally. PR JSON strips only after parsing fails.

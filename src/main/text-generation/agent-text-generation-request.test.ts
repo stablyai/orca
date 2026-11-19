@@ -1,11 +1,23 @@
 import { existsSync } from 'node:fs'
+import type * as FsPromises from 'node:fs/promises'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SourceControlAgentSpawnInput } from './source-control-text-generation-types'
 
-const mocks = vi.hoisted(() => ({ prepare: vi.fn() }))
+const mocks = vi.hoisted(() => ({
+  prepare: vi.fn(),
+  mkdtemp: vi.fn(),
+  realMkdtemp: undefined as undefined | ((prefix: string) => Promise<string>)
+}))
 vi.mock('./commit-message-agent-environment', () => ({
   prepareLocalCommitMessageAgentEnv: mocks.prepare
 }))
+// The folder step is wrapped so a test can stop the request while it is still being made.
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof FsPromises>()
+  mocks.realMkdtemp = actual.mkdtemp
+  mocks.mkdtemp.mockImplementation((prefix: string) => actual.mkdtemp(prefix))
+  return { ...actual, mkdtemp: mocks.mkdtemp }
+})
 
 import { spawnSourceControlAgent } from './source-control-agent-launch'
 import { generateAgentText } from './agent-text-generation-request'
@@ -67,6 +79,51 @@ describe('generateAgentText', () => {
 
     expect(result).toMatchObject({ success: false, error: expect.stringContaining('claude') })
     expect(mocks.prepare).not.toHaveBeenCalled()
+  })
+
+  it('does not start the agent when the stop comes while the folder is being made', async () => {
+    const controller = new AbortController()
+    mocks.mkdtemp.mockImplementationOnce(async (prefix: string) => {
+      controller.abort()
+      return mocks.realMkdtemp!(prefix)
+    })
+    const agent = fakeAgent(ANSWER)
+    const result = await generateAgentText(
+      host,
+      { agent: 'claude', model: 'haiku', prompt: 'Hi' },
+      controller.signal,
+      agent.spawnAgent
+    )
+
+    expect(result).toEqual({ success: false, error: 'Text generation canceled.', canceled: true })
+    expect(agent.calls).toHaveLength(0)
+  })
+
+  it('reports no model after Copilot falls back to its default model', async () => {
+    const calls: SourceControlAgentSpawnInput[] = []
+    const spawnAgent: typeof spawnSourceControlAgent = (input) => {
+      calls.push(input)
+      const rejected = input.args.includes('--model')
+      const script = rejected
+        ? 'process.stderr.write(\'Error: Model "gpt-5.4" from --model flag is not available.\\n\');process.exit(1)'
+        : ANSWER
+      return spawnSourceControlAgent({ ...input, binary: process.execPath, args: ['-e', script] })
+    }
+    const result = await generateAgentText(
+      host,
+      { agent: 'copilot', model: 'gpt-5.4', prompt: 'Say hi' },
+      undefined,
+      spawnAgent
+    )
+
+    expect(result).toMatchObject({
+      success: true,
+      text: 'Hello there',
+      agent: 'copilot',
+      model: null
+    })
+    expect(calls).toHaveLength(2)
+    expect(calls[1].args).not.toContain('--model')
   })
 
   it('stops the agent and removes its folder when the timeout passes', async () => {
