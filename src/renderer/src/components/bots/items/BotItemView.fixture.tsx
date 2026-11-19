@@ -164,14 +164,8 @@ export const snoozeMenu = defineFixture({
   }
 })
 
-const answering = makeTestBotItem(37, {
-  title: 'Pick the share defaults',
-  status: 'needs_you',
-  question: {
-    eventId: 'e37',
-    text: 'Three choices before building: expiry, resharing, guest history'
-  }
-})
+// No open question: its card would take the comment box's place.
+const answering = makeTestBotItem(37, { title: 'Pick the share defaults' })
 const answeringView = {
   ...snoozedView,
   item: answering,
