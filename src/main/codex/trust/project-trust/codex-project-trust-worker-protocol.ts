@@ -8,6 +8,7 @@ export type CodexProjectTrustWorkerRequest =
     }
   | { id: number; kind: 'listOwnedConfigs'; projectPath: string; ledgerPath: string }
   | { id: number; kind: 'removeOwned'; configPath: string; projectPath: string; ledgerPath: string }
+  | { id: number; kind: 'removeAntigravityOwned'; workspacePath: string; ledgerPath: string }
 
 export type CodexProjectTrustWorkerFailure = { name: string; message: string; code?: string }
 

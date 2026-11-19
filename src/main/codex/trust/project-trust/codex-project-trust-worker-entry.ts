@@ -5,6 +5,7 @@ import {
   listCodexProjectTrustOwnedConfigs,
   removeOrcaCreatedProjectTrust
 } from './codex-project-trust-transaction'
+import { removeOrcaCreatedAntigravityTrust } from '../../../agent-launch/trust/antigravity-workspace-trust-ownership'
 import type {
   CodexProjectTrustWorkerFailure,
   CodexProjectTrustWorkerRequest,
@@ -33,6 +34,9 @@ export function handleCodexProjectTrustRequest(
         }
       case 'removeOwned':
         removeOrcaCreatedProjectTrust(request.configPath, request.projectPath, request.ledgerPath)
+        return { id: request.id, ok: true }
+      case 'removeAntigravityOwned':
+        removeOrcaCreatedAntigravityTrust(request.ledgerPath, request.workspacePath)
         return { id: request.id, ok: true }
     }
   } catch (error) {
