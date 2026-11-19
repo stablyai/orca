@@ -113,7 +113,9 @@ export function NativeChatNoticeRow({
   const orcaStopView = useNativeChatOrcaStopView()
 
   if (block.presentation === PULL_REQUEST_EVENT_PRESENTATION) {
-    return <NativeChatPullRequestEventLine block={block} messageId={messageId} />
+    return (
+      <NativeChatPullRequestEventLine block={block} messageId={messageId} timestamp={timestamp} />
+    )
   }
   const look = nativeChatNoticeLook(block)
   if (look.kind === 'forked-from') {
