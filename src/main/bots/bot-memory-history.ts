@@ -75,10 +75,10 @@ export function botMemoryHistoryFiles(
       try {
         return await readFile(path(botId), 'utf8')
       } catch (error) {
-        if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-          return null
+        if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) {
+          throw error
         }
-        throw error
+        return null
       }
     },
     write: async (botId, text) => {
@@ -290,9 +290,11 @@ export function createBotMemoryHistory(
           loaded?.()
         },
         (error: unknown) => {
-          undoneLoads.delete(botId)
-          // Answers as for no history until a list reads it, so an unreadable file isn't reread each ask.
-          undoneRows.set(botId, new Set())
+          // Answers as for no history until a list reads it, so an unreadable file isn't reread each ask;
+          // a removal or a newer answer since wins.
+          if (undoneLoads.delete(botId) && !undoneRows.has(botId)) {
+            undoneRows.set(botId, undoTargets(pending.get(botId)?.unwritten ?? []))
+          }
           console.warn('[bots] memory history not read', error)
         }
       )

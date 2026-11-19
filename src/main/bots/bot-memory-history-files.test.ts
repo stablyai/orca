@@ -1,19 +1,14 @@
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import type * as FsPromises from 'node:fs/promises'
+import { readFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { botMemoryHistoryFiles, createBotMemoryHistory } from './bot-memory-history'
 
-const readFailure = vi.hoisted(() => ({ code: null as string | null }))
-
 vi.mock('node:fs/promises', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('node:fs/promises')>()
-  const readFile = (async (...args: Parameters<typeof actual.readFile>) => {
-    if (readFailure.code) {
-      throw Object.assign(new Error(readFailure.code), { code: readFailure.code })
-    }
-    return actual.readFile(...args)
-  }) as typeof actual.readFile
+  const actual = await importOriginal<typeof FsPromises>()
+  const readFile = vi.fn(actual.readFile)
   return { ...actual, default: { ...actual, readFile }, readFile }
 })
 
@@ -33,7 +28,6 @@ describe('memory history on disk', () => {
     folder = mkdtempSync(join(tmpdir(), 'memory-history-'))
   })
   afterEach(() => {
-    readFailure.code = null
     rmSync(folder, { recursive: true, force: true })
   })
 
@@ -43,7 +37,9 @@ describe('memory history on disk', () => {
   ])('keeps earlier history when the next change meets %s', async (_, onDisk, code) => {
     const file = join(folder, 'bot-1.json')
     writeFileSync(file, onDisk)
-    readFailure.code = code
+    if (code) {
+      vi.mocked(readFile).mockRejectedValueOnce(Object.assign(new Error(code), { code }))
+    }
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const history = createBotMemoryHistory(
       botMemoryHistoryFiles(() => folder),
