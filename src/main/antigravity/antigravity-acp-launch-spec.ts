@@ -46,14 +46,15 @@ import {
   isAntigravityHostAccountHome
 } from './antigravity-host-acp'
 
-// Chats and terminals share agy's conversation store when a chat runs the host's `agy acp`.
-// agy parses Go flags, so a single dash and `--flag=value` spell the same options.
+// Chats and terminals share agy's conversation store when a chat runs the host's `agy acp`. A bare
+// `-c` is not refused: managed chats live elsewhere, so it would block agy for every Chat user.
 const ANTIGRAVITY_SESSION_HISTORY: StructuredAgentSessionHistory = {
   rowAgents: ['antigravity'],
   rowSessionId: (link) => link.handle.nativeId,
+  // agy parses Go flags, so a single dash and `--flag=value` spell the same option.
   parseResumeArgs: (args) =>
     resumeInvocationFromOptions(args, {
-      targetless: ['-c', '--continue', '-continue'],
+      targetless: [],
       markers: ['--conversation', '-conversation']
     })
 }

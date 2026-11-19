@@ -88,6 +88,6 @@ it('recognizes agy terminal resumes of a conversation', () => {
   const parse = ANTIGRAVITY_LAUNCH_SPEC.sessionHistory.parseResumeArgs
   expect(parse(['--conversation', CONVERSATION])).toEqual({ target: CONVERSATION })
   expect(parse([`--conversation=${CONVERSATION}`])).toEqual({ target: CONVERSATION })
-  expect(parse(['-c'])).toEqual({ target: null })
+  expect(parse(['-c'])).toBeNull()
   expect(parse(['-i', 'hello'])).toBeNull()
 })

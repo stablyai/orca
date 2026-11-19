@@ -1,18 +1,17 @@
 import { stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
-import { join } from 'node:path'
-import { isLegacyAgentSessionAccountHome } from '../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
+import { basename, dirname, join } from 'node:path'
 import {
-  absoluteConversationStore,
+  directoryTranscriptImport,
   type StructuredAgentTranscriptImport
 } from '../native-chat/conversation-adoption/structured-agent-cli-conversations'
-import { admitTranscriptPath } from '../native-chat/transcript-discovery/transcript-path-admission'
-import { antigravityHostAccountHome, isAntigravityHostAccountHome } from './antigravity-host-acp'
+import { isAntigravityHostAccountHome } from './antigravity-host-acp'
 
 /** agy keeps terminal conversations here; the host's `agy acp` reads and writes the same store. */
 const AGY_CONVERSATION_FOLDER = 'antigravity-cli'
-// The full transcript keeps every step; agy may compact the other.
-const TRANSCRIPT_FILES = ['transcript_full.jsonl', 'transcript.jsonl'] as const
+// agy may compact transcript.jsonl; the full transcript keeps every step.
+const FULL_TRANSCRIPT = 'transcript_full.jsonl'
+const COMPACT_TRANSCRIPT = 'transcript.jsonl'
 const CONVERSATION_ID = /^[A-Za-z0-9][A-Za-z0-9-]{0,127}$/
 
 async function isFile(path: string): Promise<boolean> {
@@ -30,33 +29,45 @@ async function isFile(path: string): Promise<boolean> {
   }
 }
 
-// Only the host's own agy can open a terminal conversation: Orca's managed Antigravity server keeps
-// a separate home, so an adopted chat pins agy's account home, which runs the host's `agy acp`.
-// When that agy is missing, too old or signed out, the chat's start says so like any host chat.
-export const ANTIGRAVITY_TRANSCRIPT_IMPORT: StructuredAgentTranscriptImport = {
-  readableContext: { kind: 'file' },
-  conversationStore: ({ accountHome }) =>
-    isLegacyAgentSessionAccountHome(accountHome) && isAntigravityHostAccountHome(accountHome)
-      ? absoluteConversationStore(join(accountHome.path, AGY_CONVERSATION_FOLDER))
-      : null,
-  admitTranscriptPath: async ({ store, transcriptPath }) =>
-    (await admitTranscriptPath(store, transcriptPath))?.path ?? null,
-  accountHomeCandidates: ({ selectedAccountHome }) => [
-    isAntigravityHostAccountHome(selectedAccountHome)
-      ? selectedAccountHome
-      : antigravityHostAccountHome(homedir())
+function isAgyHome(path: string): boolean {
+  return isAntigravityHostAccountHome({ variable: 'GEMINI_HOME', path })
+}
+
+const directories = directoryTranscriptImport({
+  // Orca's managed Antigravity server keeps a separate home that never holds these conversations.
+  conversationStore: ({ accountHomePath }) =>
+    isAgyHome(accountHomePath) ? join(accountHomePath, AGY_CONVERSATION_FOLDER) : null,
+  // Only the host's own agy can open them, so an adopted chat pins agy's home and runs `agy acp`;
+  // a missing, outdated or signed-out agy then fails the chat's start like any host chat.
+  accountHomeCandidates: ({ selectedAccountHomePath }) => [
+    isAgyHome(selectedAccountHomePath) ? selectedAccountHomePath : join(homedir(), '.gemini')
   ],
   findTranscript: async ({ providerSessionId, store }) => {
     if (!CONVERSATION_ID.test(providerSessionId)) {
       return null
     }
     const logs = join(store, 'brain', providerSessionId, '.system_generated', 'logs')
-    for (const name of TRANSCRIPT_FILES) {
-      const path = join(logs, name)
-      if (await isFile(path)) {
-        return path
+    for (const name of [FULL_TRANSCRIPT, COMPACT_TRANSCRIPT]) {
+      if (await isFile(join(logs, name))) {
+        return join(logs, name)
       }
     }
     return null
+  }
+})
+
+export const ANTIGRAVITY_TRANSCRIPT_IMPORT: StructuredAgentTranscriptImport = {
+  ...directories,
+  // A hook may name the compact transcript; import the full one beside it when it exists.
+  admitTranscriptPath: async (input) => {
+    const admitted = await directories.admitTranscriptPath(input)
+    if (!admitted || basename(admitted) !== COMPACT_TRANSCRIPT) {
+      return admitted
+    }
+    const full = join(dirname(admitted), FULL_TRANSCRIPT)
+    return (await isFile(full))
+      ? ((await directories.admitTranscriptPath({ store: input.store, transcriptPath: full })) ??
+          admitted)
+      : admitted
   }
 }

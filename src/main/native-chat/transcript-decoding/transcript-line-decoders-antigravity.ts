@@ -14,7 +14,7 @@ export function decodeAntigravityTranscriptLine(
   if (!record) {
     return null
   }
-  // transcript_full.jsonl writes numbers as strings.
+  // Some agy builds write the step index as a string.
   const step = typeof record.step_index === 'number' ? String(record.step_index) : record.step_index
   if (typeof step !== 'string' || !/^\d+$/.test(step)) {
     return null
