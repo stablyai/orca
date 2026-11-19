@@ -42,11 +42,13 @@ export class HistoryLaunchReceipts {
   ): Promise<void> {
     const operation = this.queue.then(async () => {
       const now = Date.now()
-      const rows = Object.fromEntries(
-        Object.entries(await this.read()).filter(
-          ([, row]) => (row.entry.preparedAt ?? row.entry.openedAt) + 1_800_000 > now
+      const rows = schema.parse(
+        Object.fromEntries(
+          Object.entries(await this.read()).filter(
+            ([, row]) => (row.entry.preparedAt ?? row.entry.openedAt) + 1_800_000 > now
+          )
         )
-      ) as z.infer<typeof schema>
+      )
       rows[key(token)] = {
         workspaceId,
         entry: pin.parse({

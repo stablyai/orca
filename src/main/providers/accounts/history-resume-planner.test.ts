@@ -212,7 +212,7 @@ it('recovers an unacknowledged open after a host restart and accepts the commit 
 
 it('persists the successful open timestamp across host restart and commit retry', async () => {
   const opened = await open('work')
-  const committedAt = Date.now() + 100
+  const committedAt = 1_900_000_000_000
   planner = new HistoryResumePlanner(plannerDeps)
   await planner.prepare({
     ...args,
