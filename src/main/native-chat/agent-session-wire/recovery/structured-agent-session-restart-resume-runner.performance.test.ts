@@ -1,7 +1,8 @@
 import type * as Os from 'node:os'
 import { expect, it, vi } from 'vitest'
 
-// A many-core host: the cap, not the core count, must bound a restart burst.
+// Perf contract (#43707): after an update, every chat continued at once and ownership reads timed out together
+// (#42760). On a many-core host the cap, not the core count, must bound a restart burst.
 vi.mock('node:os', async (importOriginal) => ({
   ...(await importOriginal<typeof Os>()),
   availableParallelism: () => 32
