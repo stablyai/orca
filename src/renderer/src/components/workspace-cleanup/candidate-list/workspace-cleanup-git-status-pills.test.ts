@@ -1,0 +1,17 @@
+import { describe, expect, it } from 'vitest'
+import { countWholeGitStatusPills } from './workspace-cleanup-git-status-pills'
+
+describe('countWholeGitStatusPills', () => {
+  it('shows every pill when they all fit', () => {
+    expect(countWholeGitStatusPills([50, 50, 50], 200, 28, 6)).toBe(3)
+  })
+
+  it('keeps the leading pills whole and collapses the rest when they do not all fit', () => {
+    expect(countWholeGitStatusPills([60, 60, 60], 140, 28, 6)).toBe(1)
+    expect(countWholeGitStatusPills([60, 60, 60], 180, 28, 6)).toBe(2)
+  })
+
+  it('keeps the blocking first pill even when it cannot fit beside the +N chip', () => {
+    expect(countWholeGitStatusPills([200, 60], 150, 28, 6)).toBe(1)
+  })
+})
