@@ -34,10 +34,10 @@ export type StructuredAgentSessionRestartResume = {
   listFailures: (
     audience?: StructuredAgentSessionRestartAudience
   ) => Promise<StructuredAgentSessionResumeFailure[]>
-  /** Record the offers a crash left in these chats, read from what this start's settlement wrote. */
+  /** Record the offers a crash left in these chats, read from what settlement wrote since each
+   *  chat's crashed run started (`settledSince`). */
   adoptCrashCuts: (
-    cuts: readonly { sessionId: string; crashedRuntime: string }[],
-    settledSince: number
+    cuts: readonly { sessionId: string; crashedRuntime: string; settledSince: number }[]
   ) => Promise<number>
   /** Ends this launch's automatic turn: offers recorded by then that still wait are left to a person. */
   passOverAutomatic: (recordedBy: number) => Promise<void>

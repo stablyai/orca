@@ -21,8 +21,7 @@ export type StructuredAgentSessionRestartWitnesses = {
   record: () => Promise<void>
   /** After a crash: open each chat the dead run held (which settles it) and record what it cut. */
   recordCrashCuts: (
-    cuts: readonly { sessionId: string; crashedRuntime: string }[],
-    settledSince: number
+    cuts: readonly { sessionId: string; crashedRuntime: string; settledSince: number }[]
   ) => Promise<number>
   /** Ends a launch's automatic turn; what still waits is left to a person from then on. */
   passOverAutomatic: (recordedBy: number) => Promise<void>
@@ -70,10 +69,15 @@ export function createStructuredAgentSessionRestartWitnesses(deps: {
       }
     }
   }
-  const crashCutOf = async (
-    { sessionId, crashedRuntime }: { sessionId: string; crashedRuntime: string },
+  const crashCutOf = async ({
+    sessionId,
+    crashedRuntime,
+    settledSince
+  }: {
+    sessionId: string
+    crashedRuntime: string
     settledSince: number
-  ): Promise<AgentSessionResumeMarker | null> => {
+  }): Promise<AgentSessionResumeMarker | null> => {
     const readable = (await deps.open(sessionId)).readable
     const journal = deps.sessions.get(sessionId)?.journal
     const record = deps.getRecord(sessionId)
@@ -124,12 +128,12 @@ export function createStructuredAgentSessionRestartWitnesses(deps: {
         await deps.capsule?.record([...confirmed.values()], deps.now())
       })
     },
-    recordCrashCuts: async (cuts, settledSince) => {
+    recordCrashCuts: async (cuts) => {
       const markers: AgentSessionResumeMarker[] = []
       for (const cut of cuts) {
         // A chat that cannot be read keeps no offer; the startup Dispatch pass still reports its
         // worker, since the crashed run held it.
-        const marker = await crashCutOf(cut, settledSince).catch(() => null)
+        const marker = await crashCutOf(cut).catch(() => null)
         if (marker) {
           markers.push(marker)
         }

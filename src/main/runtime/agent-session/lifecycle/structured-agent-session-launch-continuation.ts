@@ -3,7 +3,7 @@
 
 import type { StructuredAgentSessionRestartResume } from '../../../native-chat/agent-session-wire/recovery/structured-agent-session-restart-resume-contract'
 import type { StructuredAgentSessionResumeCandidate } from '../../../native-chat/agent-session-wire/recovery/structured-agent-session-restart-resume-set'
-import { previousAgentSessionRuntimeStartedAt } from '../records/agent-session-runtime-end-record'
+import { otherAgentSessionRuntimeStarts } from '../records/agent-session-runtime-end-record'
 import { agentSessionRuntimeIncarnation } from '../records/agent-session-runtime-attribution'
 import type { AgentSessionRecordStore } from '../records/agent-session-record-store'
 import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-host'
@@ -34,8 +34,8 @@ export type StructuredAgentSessionLaunchContinuationDeps = {
   store: Pick<AgentSessionRecordStore, 'listHeldSessionIds' | 'replacedRuntime'>
   /** When this process started: what settlement wrote since then is this start's reading of the crash. */
   startedAt: number
-  /** When the run that just ended started; unknown when no earlier run left a record. */
-  previousRunStartedAt: () => Promise<number | undefined>
+  /** When each earlier runtime started, by runtime id; the newest is the run that just ended. */
+  runtimeStarts: () => Promise<ReadonlyMap<string, number>>
   resumeWorkOnRestart: () => boolean
 }
 
@@ -46,26 +46,38 @@ export async function continueStructuredAgentSessionsAtLaunch(
   const heldByLastRun = deps.store
     .listHeldSessionIds()
     .filter((sessionId) => deps.store.replacedRuntime(sessionId)?.runtime !== undefined)
-  // Each chat's own owner says whether its run crashed, so a crash that cut a start short is still read.
+  const starts = await deps.runtimeStarts()
+  const offers = async () => [
+    ...(await deps.restartResume.list()),
+    ...(await deps.restartResume.listFailures())
+  ]
+  const offered = new Set((await offers()).map((offer) => offer.sessionId))
+  // Each chat's own owner says how its run ended. A crash, or a quit killed before it recorded its
+  // offers (the chat is still held and has none), is read from what settlement wrote since that
+  // run started. Settlement takes no hold, so after a start killed mid-adoption the next one reads
+  // the same settlement again and records the same offer.
   const cuts = heldByLastRun.flatMap((sessionId) => {
     const replaced = deps.store.replacedRuntime(sessionId)
-    return replaced?.runtimeEnd === 'crash' && replaced.runtime
-      ? [{ sessionId, crashedRuntime: replaced.runtime }]
+    return replaced?.runtime && (replaced.runtimeEnd === 'crash' || !offered.has(sessionId))
+      ? [
+          {
+            sessionId,
+            crashedRuntime: replaced.runtime,
+            settledSince: starts.get(replaced.runtime) ?? deps.startedAt
+          }
+        ]
       : []
   })
   // Recorded whatever the setting: with it off, the person still gets the offer.
   if (cuts.length > 0) {
-    await deps.restartResume.adoptCrashCuts(cuts, deps.startedAt)
+    await deps.restartResume.adoptCrashCuts(cuts)
   }
   const recordedBy = Date.now()
   const cutByLastRun = async (continued: ReadonlySet<string> = new Set()) => {
-    const since = await deps.previousRunStartedAt()
-    const offers = [
-      ...(await deps.restartResume.list()),
-      ...(await deps.restartResume.listFailures())
-    ]
+    const known = [...starts.values()]
+    const since = known.length > 0 ? Math.max(...known) : undefined
     // A crash offer is recorded by this start, so it is always newer than the run it read.
-    const recorded = offers.flatMap((offer) =>
+    const recorded = (await offers()).flatMap((offer) =>
       since === undefined || offer.recordedAt < since ? [] : [offer.sessionId]
     )
     return new Set([...heldByLastRun, ...recorded].filter((sessionId) => !continued.has(sessionId)))
@@ -102,8 +114,8 @@ export function structuredAgentSessionLaunchContinuationDeps(
         restartResume: host.restartResume,
         store: host.deps.store,
         startedAt: Math.trunc(performance.timeOrigin),
-        previousRunStartedAt: () =>
-          previousAgentSessionRuntimeStartedAt(
+        runtimeStarts: () =>
+          otherAgentSessionRuntimeStarts(
             host.deps.journalDatabase.stateDirectory,
             agentSessionRuntimeIncarnation()
           ),
@@ -118,6 +130,9 @@ export class StructuredAgentSessionLaunchContinuationOnce {
   private readonly settled = Promise.withResolvers<StructuredAgentSessionLaunchContinuation>()
   private readonly reserved = Promise.withResolvers<StructuredAgentSessionResumeCandidate[]>()
   private answered = false
+  private readonly retried = new Set<(settled: StructuredAgentSessionLaunchContinuation) => void>()
+  private resolvedEmpty = false
+  private retriedOutcome: StructuredAgentSessionLaunchContinuation | undefined
 
   get done(): Promise<StructuredAgentSessionLaunchContinuation> {
     return this.settled.promise
@@ -127,6 +142,15 @@ export class StructuredAgentSessionLaunchContinuationOnce {
    *  Empty once a client was given the outcome: a reloaded or later window does not replay the run. */
   get taken(): Promise<StructuredAgentSessionResumeCandidate[]> {
     return this.answered ? Promise.resolve([]) : this.reserved.promise
+  }
+
+  /** A restoration retried after a failure settles waiters too late (they went on with nothing);
+   *  its own outcome goes to these listeners instead. */
+  onRetried(listener: (settled: StructuredAgentSessionLaunchContinuation) => void): void {
+    this.retried.add(listener)
+    if (this.retriedOutcome) {
+      listener(this.retriedOutcome)
+    }
   }
 
   /** A client has been given the settled outcome. */
@@ -139,6 +163,7 @@ export class StructuredAgentSessionLaunchContinuationOnce {
   start(deps?: StructuredAgentSessionLaunchContinuationDeps): void {
     const nothing = { continued: new Set<string>(), cutByLastRun: new Set<string>() }
     if (!deps) {
+      this.resolvedEmpty = !this.started
       this.reserved.resolve([])
       this.settled.resolve(nothing)
       return
@@ -156,6 +181,10 @@ export class StructuredAgentSessionLaunchContinuationOnce {
         // Setting off or a failure before reserving took nothing.
         this.reserved.resolve([])
         this.settled.resolve(settled)
+        if (this.resolvedEmpty) {
+          this.retriedOutcome = settled
+          this.retried.forEach((listener) => listener(settled))
+        }
       })
   }
 }

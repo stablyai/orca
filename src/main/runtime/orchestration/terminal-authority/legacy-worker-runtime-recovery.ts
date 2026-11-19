@@ -50,10 +50,25 @@ export abstract class LegacyWorkerRuntimeRecovery extends RuntimeWorkspaceSessio
   /** Once per start, after restored terminal authority: tell coordinators about workers that
    *  stopped while Orca was down, or that this start did not continue. */
   reportWorkerStopsAcrossRestartOnce(): Promise<void> {
-    this.restartWorkerStopReport ??= (async () => {
+    if (this.restartWorkerStopReport === null) {
+      // A restoration retried after a failure passes over what it continued and left, again.
+      this.structuredAgentSessionLaunchContinuation.onRetried(
+        (settled) => void this.reportWorkerStopsAcrossRestart(Promise.resolve(settled))
+      )
+    }
+    this.restartWorkerStopReport ??= this.reportWorkerStopsAcrossRestart(
+      this.structuredAgentSessionLaunchContinuation.done
+    )
+    return this.restartWorkerStopReport
+  }
+
+  private async reportWorkerStopsAcrossRestart(
+    launch: Promise<{ cutByLastRun: ReadonlySet<string> }>
+  ): Promise<void> {
+    try {
       // Continued chats are working again, and replayed hooks have been probed once.
       const [{ cutByLastRun }] = await Promise.all([
-        this.structuredAgentSessionLaunchContinuation.done,
+        launch,
         agentHookServer.whenRestoredOwnersChecked()
       ])
       const db = this.getExistingOrchestrationDb()
@@ -74,10 +89,9 @@ export abstract class LegacyWorkerRuntimeRecovery extends RuntimeWorkspaceSessio
             }
           : null
       })
-    })().catch((error: unknown) => {
+    } catch (error: unknown) {
       console.warn('[orchestration] reporting workers stopped across a restart failed', error)
-    })
-    return this.restartWorkerStopReport
+    }
   }
 
   async reconcileLegacyWorkerTerminals(

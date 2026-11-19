@@ -24,6 +24,8 @@ const ENDS = {
   // An older run's crash, whose own start died before it read the cut.
   'chat-crashed-earlier': { runtime: 'runtime-earlier', end: 'crash' },
   'chat-quit': { runtime: 'runtime-quit', end: 'quit' },
+  // A quit killed mid-teardown, before it recorded this chat's offer.
+  'chat-quit-killed': { runtime: 'runtime-quit', end: 'quit' },
   // Held by the run that just ended, then continued by this start.
   continued: { runtime: 'runtime-quit', end: 'quit' },
   // Released before the run ended: no owner to name.
@@ -51,7 +53,7 @@ function launch(resumeWorkOnRestart: boolean) {
       calls.push('pass over')
     }),
     cutOf: vi.fn(async () => null),
-    // The run that just ended started at 3: only what it recorded is its cut.
+    // The newest run started at 3: only what it recorded is its cut.
     list: vi.fn(async () => [offer('chat-quit', 4), offer('chat-quit-before', 2)]),
     listFailures: vi.fn(async () => [])
   }
@@ -70,7 +72,12 @@ function launch(resumeWorkOnRestart: boolean) {
       }
     },
     startedAt: 5,
-    previousRunStartedAt: async () => 3,
+    runtimeStarts: async () =>
+      new Map([
+        ['runtime-earlier', 1],
+        ['runtime-quit', 2],
+        ['runtime-crashed', 3]
+      ]),
     resumeWorkOnRestart: () => resumeWorkOnRestart
   }
   return { result: continueStructuredAgentSessionsAtLaunch(deps), restartResume, calls, deps }
@@ -83,15 +90,15 @@ describe('continuing interrupted chats at launch', () => {
     expect(settled.continued).toEqual(new Set(['continued']))
     // Held by the run that just ended (a cut may have left no offer), or with an offer it recorded.
     expect(settled.cutByLastRun).toEqual(
-      new Set(['chat-crashed', 'chat-crashed-earlier', 'chat-quit'])
+      new Set(['chat-crashed', 'chat-crashed-earlier', 'chat-quit', 'chat-quit-killed'])
     )
-    expect(restartResume.adoptCrashCuts).toHaveBeenCalledWith(
-      [
-        { sessionId: 'chat-crashed', crashedRuntime: 'runtime-crashed' },
-        { sessionId: 'chat-crashed-earlier', crashedRuntime: 'runtime-earlier' }
-      ],
-      5
-    )
+    // Each read from its own run's start, so a start killed mid-adoption is read again whole.
+    expect(restartResume.adoptCrashCuts).toHaveBeenCalledWith([
+      { sessionId: 'chat-crashed', crashedRuntime: 'runtime-crashed', settledSince: 3 },
+      { sessionId: 'chat-crashed-earlier', crashedRuntime: 'runtime-earlier', settledSince: 1 },
+      { sessionId: 'chat-quit-killed', crashedRuntime: 'runtime-quit', settledSince: 2 },
+      { sessionId: 'continued', crashedRuntime: 'runtime-quit', settledSince: 2 }
+    ])
     expect(restartResume.continueAfterRestart).toHaveBeenCalledWith(
       undefined,
       STRUCTURED_AGENT_SESSION_LAUNCH_CONTINUATION_OWNER,
@@ -144,5 +151,14 @@ describe('continuing interrupted chats at launch', () => {
     once.start(deps)
     once.start(deps)
     await vi.waitFor(() => expect(restartResume.continueAfterRestart).toHaveBeenCalledTimes(2))
+  })
+
+  it('gives a retried restoration its own outcome, since waiters went on with nothing', async () => {
+    const once = new StructuredAgentSessionLaunchContinuationOnce()
+    const retried = Promise.withResolvers<ReadonlySet<string>>()
+    once.onRetried((settled) => retried.resolve(settled.continued))
+    once.start(undefined)
+    once.start(launch(true).deps)
+    expect(await retried.promise).toEqual(new Set(['continued']))
   })
 })
