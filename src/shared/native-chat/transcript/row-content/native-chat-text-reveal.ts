@@ -24,6 +24,39 @@ export type NativeChatTextRevealFrames = {
   cancel: (frame: number) => void
 }
 
+/** Each reveal step parses and draws the reply again, so the reveal steps at most 30 times a second. */
+const REVEAL_STEP_MS = 1000 / 30
+/** Half a 60 Hz frame, so a step lands on every second frame there and every fourth at 120 Hz. */
+const FRAME_SLACK_MS = 8
+/** The animation frame each pending step is waiting on. */
+const waitingSteps = new Map<number, number>()
+
+/** The reveal's frame clock: the first animation frame at least one step after the request. */
+export const NATIVE_CHAT_REVEAL_STEP_FRAMES: NativeChatTextRevealFrames = {
+  now: () => performance.now(),
+  request: (step) => {
+    const due = performance.now() + REVEAL_STEP_MS - FRAME_SLACK_MS
+    const wait = (frameStart: number): void => {
+      if (frameStart < due) {
+        waitingSteps.set(id, requestAnimationFrame(wait))
+        return
+      }
+      waitingSteps.delete(id)
+      step()
+    }
+    const id = requestAnimationFrame(wait)
+    waitingSteps.set(id, id)
+    return id
+  },
+  cancel: (id) => {
+    const frame = waitingSteps.get(id)
+    if (frame !== undefined) {
+      cancelAnimationFrame(frame)
+      waitingSteps.delete(id)
+    }
+  }
+}
+
 function endsWord(char: string): boolean {
   return /\s/.test(char) || isSpacelessScriptChar(char)
 }
