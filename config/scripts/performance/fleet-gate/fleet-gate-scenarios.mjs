@@ -423,6 +423,11 @@ function cardBlocker(page) {
 async function switchWorkspaces({ page, windowMs }) {
   let pair = await uncoveredCardPair(page)
   if (pair.length < 2) {
+    // A notice can appear between setup and here (some show after a delay): close it once more, then look again.
+    await dismissOverlays(page)
+    pair = await uncoveredCardPair(page)
+  }
+  if (pair.length < 2) {
     const why = await cardBlocker(page)
     return { note: `no two clickable cards: ${why}`, undriven: `no two clickable cards (${why})` }
   }
