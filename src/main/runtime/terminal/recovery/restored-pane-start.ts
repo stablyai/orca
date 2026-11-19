@@ -15,7 +15,6 @@ export type RestoredPaneStartPlan = {
 /** Who asked, which the start keeps: an automatic probe is refused for a slept worktree. */
 export type RestoredPaneTrigger = {
   automatic?: boolean
-  retryMailWake?: { id: string; ptyId: string; incarnationId: string }
   /** A user's own tab open or Start; without it a stopped WSL distro holds the start. */
   wslUserAct?: true
   targetsHost?: boolean
@@ -26,7 +25,6 @@ export type RestoredPaneStartPorts = {
   /** The pane's stored terminal, or null for a pane main no longer holds. */
   boundPtyId: (pane: RestoredPane) => string | null | undefined
   isLive: (ptyId: string) => boolean
-  retryMailWake?: (pane: RestoredPane, trigger: RestoredPaneTrigger) => Promise<boolean>
   /** Shows the pane starting, before any await, so no view starts it too. */
   starting?: (pane: RestoredPane) => void
   /** Shows a start that failed, with its reason; the pane keeps what it restores from. */
@@ -68,29 +66,19 @@ export class RestoredPaneStarter {
       this.started.delete(key)
       return Promise.resolve(null)
     }
-    if (this.isOwnLive(pane, bound) && !trigger.retryMailWake) {
+    if (this.isOwnLive(pane, bound)) {
       this.started.delete(key)
       return Promise.resolve({ id: bound })
     }
     const started = this.started.get(key)
     // Why: until the started terminal's binding is written, the stored layout still names the old one.
-    if (started && this.ports.isLive(started.id) && !trigger.retryMailWake) {
+    if (started && this.ports.isLive(started.id)) {
       return Promise.resolve(started)
     }
     this.started.delete(key)
-    if (!trigger.retryMailWake) {
-      this.ports.starting?.(pane)
-    }
+    this.ports.starting?.(pane)
     const start = Promise.resolve()
-      .then(async () => {
-        if (trigger.retryMailWake && !(await this.ports.retryMailWake?.(pane, trigger))) {
-          return null
-        }
-        if (trigger.retryMailWake) {
-          this.ports.starting?.(pane)
-        }
-        return this.ports.start(pane, restoredPaneStartPlan(pane, bound), trigger)
-      })
+      .then(() => this.ports.start(pane, restoredPaneStartPlan(pane, bound), trigger))
       .then((pty) => {
         if (pty) {
           this.started.set(key, pty)
@@ -99,7 +87,7 @@ export class RestoredPaneStarter {
       })
       .catch((error: unknown) => {
         const winner = this.ports.boundPtyId(pane)
-        if (this.isOwnLive(pane, winner) && !trigger.retryMailWake) {
+        if (this.isOwnLive(pane, winner)) {
           return { id: winner }
         }
         this.ports.failed?.(pane, error)

@@ -46,10 +46,6 @@ export abstract class OrcaRuntimeWithMailDeliveryRefusal extends OrcaRuntimeWith
     )
   }
 
-  protected mailWakeShellOccupied(ptyId: string): boolean {
-    return !this.readWholeScreenModel(ptyId) || this.ptyDeliveryHold(ptyId) !== null
-  }
-
   /** An unsent draft would be submitted with the injected text; the cap bounds an abandoned or misread one.
    *  Typed text only: an agent's dim prompt suggestion is not the user's draft (#38015). */
   protected ptyDeliveryHold(
