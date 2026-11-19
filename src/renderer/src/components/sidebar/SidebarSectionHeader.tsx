@@ -64,7 +64,7 @@ export function SidebarSectionHeader({
           !isDragging &&
           'rounded-md outline-1 outline-offset-1 outline-worktree-sidebar-ring'
       )}
-      style={transform ? { transform: CSS.Translate.toString({ ...transform, x: 0 }) } : undefined}
+      style={isDragging ? { transform: CSS.Translate.toString(transform) } : undefined}
     >
       <div
         className={cn(

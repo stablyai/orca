@@ -5,7 +5,8 @@ import {
   TouchSensor,
   pointerWithin,
   useSensor,
-  useSensors
+  useSensors,
+  type Modifier
 } from '@dnd-kit/core'
 import { useAppStore } from '@/store/index'
 import { TooltipProvider } from '@/components/ui/tooltip'
@@ -67,6 +68,20 @@ const AgentDashboardSidebarHost = lazyWithRetry(
 
 const MIN_WIDTH = 220
 const MAX_WIDTH = 500
+const sidebarSectionDragModifiers: Modifier[] = [
+  ({ draggingNodeRect, scrollableAncestorRects: [viewport], transform }) => ({
+    ...transform,
+    x: 0,
+    // Translated headers contribute to scrollHeight, so cap movement at the viewport edges.
+    y:
+      draggingNodeRect && viewport
+        ? Math.max(
+            viewport.top - draggingNodeRect.top,
+            Math.min(transform.y, viewport.bottom - draggingNodeRect.bottom)
+          )
+        : transform.y
+  })
+]
 // Why: start on the divider pixel so pointing at the visible seam resizes instead of scrolling the list.
 export const WORKTREE_SIDEBAR_RESIZE_HANDLE_CLASS_NAME =
   'peer absolute -right-[9px] top-0 z-20 h-full w-[9px] cursor-col-resize'
@@ -284,6 +299,7 @@ function Sidebar({
                 <SidebarNav />
                 <DndContext
                   sensors={sidebarSectionDragSensors}
+                  modifiers={sidebarSectionDragModifiers}
                   collisionDetection={pointerWithin}
                   onDragEnd={({ active, over }) => {
                     if (botsShown && over && active.id !== over.id) {
