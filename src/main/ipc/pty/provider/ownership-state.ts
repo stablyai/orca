@@ -8,6 +8,12 @@ import {
 // Later write/resize/kill requests carry only PTY ID; preserve its execution host for routing.
 export const ptyOwnership = new Map<string, ExecutionHostId>()
 export const ptyIncarnationById = new Map<string, string>()
+/** Exit proofs' root process for a live PTY incarnation whose host published no PID; null when
+ *  its inventory had none. Teardown drops it with the PTY. */
+export const ptyFallbackRootPidById = new Map<
+  string,
+  { incarnationId: string; rootPid: number | null }
+>()
 
 export function isCurrentPtyExit(payload: { id: string; incarnationId?: string }): boolean {
   const current = ptyIncarnationById.get(payload.id)
