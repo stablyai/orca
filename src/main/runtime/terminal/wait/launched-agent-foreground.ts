@@ -142,8 +142,18 @@ async function inspectLaunchedAgentForeground(
           if (observation.foregroundKind === 'shell') {
             return 'shell'
           }
-          if (recognizeForeground(observation.processName)) {
+          // The foreground job's leader and its start time tell a returning agent from a new one.
+          const identify = async (found: TuiAgent): Promise<'agent'> => {
+            const pid = observation.foregroundPgid
+            const startedAtMs = !host.remote && pid ? await readProcessStartTimeMs(pid) : null
+            if (pid && startedAtMs !== null) {
+              onAgent?.(found, { pid, startedAtMs })
+            }
             return 'agent'
+          }
+          const named = recognizeForeground(observation.processName)
+          if (named) {
+            return identify(named)
           }
           if (
             !agent &&
@@ -154,9 +164,10 @@ async function inspectLaunchedAgentForeground(
             return 'non-shell'
           }
           // Native version names and interpreter wrappers need the host's fresh executable read.
-          return recognizeForeground((await controller.confirmForegroundProcess?.(ptyId)) ?? null)
-            ? 'agent'
-            : 'non-shell'
+          const confirmed = recognizeForeground(
+            (await controller.confirmForegroundProcess?.(ptyId)) ?? null
+          )
+          return confirmed ? identify(confirmed) : 'non-shell'
         }
         // Local launch policy admits non-shell user wrappers independently of mail's identity proof.
         if (!host.remote) {

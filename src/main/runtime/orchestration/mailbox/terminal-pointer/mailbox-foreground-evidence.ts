@@ -110,12 +110,13 @@ export class MailboxForegroundEvidence {
       observation.contradiction++
     } else if (foreground === 'agent' && admitted) {
       const known = observation.agentProcess
-      // Why: a same-kind agent started in place of the suspended one is not the agent the held mail awaits.
+      // Why: a same-kind agent started in place of the suspended one is not the agent the held mail awaits;
+      // once the agent's process is known, a probe that cannot name it proves nothing.
       if (
         observation.held &&
         known &&
-        proof.process &&
-        (known.pid !== proof.process.pid ||
+        (!proof.process ||
+          known.pid !== proof.process.pid ||
           Math.abs(known.startedAtMs - proof.process.startedAtMs) > PROCESS_START_TIME_TOLERANCE_MS)
       ) {
         return false
