@@ -56,21 +56,6 @@ describe('bot items store', () => {
     expect(store.needsYou()).toEqual([])
   })
 
-  it("records the owner's comment on an open question as its answer, and only then", () => {
-    const store = open()
-    const { uid } = store.add(input(), owner)
-    store.ownerComment(uid, 'Before any question.', ownerActor)
-    store.set(uid, { status: 'needs_you', comment: 'Ship behind a flag?' }, owner)
-    const asked = store.get(uid)?.questionEvent
-
-    store.ownerComment(uid, 'Yes, behind a flag.', ownerActor)
-
-    const events = store.events(uid, 0, 50)
-    const comments = events.filter((event) => event.kind === 'commented')
-    expect(comments.map((event) => event.data.answers)).toEqual([undefined, undefined, `e${asked}`])
-    expect(events.at(-1)?.data).toEqual({ from: 'needs_you', to: 'working', cause: 'answer' })
-  })
-
   it("records no answer to the owner's own Needs you note", () => {
     const store = open()
     const { uid } = store.add(input(), owner)
@@ -282,6 +267,7 @@ describe('bot items store', () => {
     const planned = store.add(input({ title: 'Planned' }), owner).uid
     const bots = store.add(input({ title: 'Bot comment' }), owner).uid
     store.set(asking, { status: 'needs_you', comment: 'Ship behind a flag?' }, owner)
+    const questionEvent = store.get(asking)?.questionEvent
     store.set(bots, { status: 'needs_you', comment: 'Which copy?' }, owner)
 
     store.ownerComment(asking, 'Yes, behind a flag.', { kind: 'owner' })
@@ -292,6 +278,16 @@ describe('bot items store', () => {
     expect(store.get(asking)?.questionEvent).toBeNull()
     expect(store.get(planned)?.status).toBe('planned')
     expect(store.get(bots)?.status).toBe('needs_you')
+    expect(
+      store
+        .events(asking, 0, 50)
+        .slice(-2)
+        .map((event) => event.data)
+    ).toEqual([
+      { text: 'Yes, behind a flag.', answers: `e${questionEvent}` },
+      { from: 'needs_you', to: 'working', cause: 'answer' }
+    ])
+    expect(store.events(planned, 0, 50).at(-1)?.data).toEqual({ text: 'Use the short link.' })
     const answer = store.owedMail(0).mails.find((mail) => mail.changes[0]?.item.uid === asking)
     expect(answer?.changes.map(({ event }) => [event.kind, event.data.to ?? null])).toEqual([
       ['commented', null],

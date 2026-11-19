@@ -37,6 +37,18 @@ vi.mock('./bot-avatar-uploads', () => ({ readBotAvatarUploads: async () => new M
 
 const { useRouteBot } = await import('./use-route-bot')
 
+const LISTED: HostBotsRead = {
+  kind: 'bots',
+  bots: [],
+  hideBotCreated: true,
+  view: DEFAULT_BOT_SIDEBAR_VIEW,
+  enabled: true,
+  takesCreate: true,
+  takesTemplates: true,
+  waits: {},
+  needsYou: {}
+}
+
 const BOT: PhoneBot = {
   id: 'atlas',
   name: 'Atlas',
@@ -66,6 +78,7 @@ const client: RpcClient = {
 
 let tree: ReactTestRenderer | null = null
 let shown: { reads: number; itemReads: number } | null = null
+let activityError: string | null | undefined
 
 function mount(hostKey: string, routeClient: RpcClient = client): void {
   function Route(): null {
@@ -77,6 +90,7 @@ function mount(hostKey: string, routeClient: RpcClient = client): void {
       hostKey
     })
     shown = route ? { reads: route.reads, itemReads: route.itemReads } : null
+    activityError = route?.activityError
     return null
   }
   act(() => {
@@ -105,17 +119,7 @@ describe('useRouteBot', () => {
   })
 
   it("re-reads the bot on each of its pane's phase changes, but re-reads its items only on an items or workers notice", async () => {
-    reads.answer = {
-      kind: 'bots',
-      bots: [BOT],
-      hideBotCreated: true,
-      view: DEFAULT_BOT_SIDEBAR_VIEW,
-      enabled: true,
-      takesCreate: true,
-      takesTemplates: true,
-      waits: {},
-      needsYou: {}
-    }
+    reads.answer = { ...LISTED, bots: [BOT] }
     let emit: (payload: unknown) => void = () => {}
     const streaming: RpcClient = {
       ...client,
@@ -148,5 +152,22 @@ describe('useRouteBot', () => {
       await vi.advanceTimersByTimeAsync(0)
     })
     expect(shown).toEqual({ reads: 5, itemReads: 4 })
+  })
+
+  it("keeps the host's reason when it refuses the bot's Activity", async () => {
+    reads.answer = { ...LISTED, bots: [BOT] }
+    const refusing: RpcClient = {
+      ...client,
+      sendRequest: async () => ({
+        id: 'a',
+        ok: false,
+        error: { code: 'runtime_error', message: 'Activity is still loading on the desktop.' }
+      })
+    }
+    mount('host-refuses\nlocal', refusing)
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0)
+    })
+    expect(activityError).toBe('Activity is still loading on the desktop.')
   })
 })

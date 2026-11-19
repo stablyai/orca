@@ -21,6 +21,7 @@ import { botItemGroupName } from '../../../../src/shared/bots/bot-item-status-na
 import {
   MobileLoadErrorState,
   MobileNoMatchState,
+  MobileOfflineState,
   MobileStateView
 } from '../../components/feedback/MobileStateView'
 import { FilterChip } from '../../components/nav-bar/FilterChip'
@@ -52,6 +53,7 @@ export function MobileBotItemsTab({
   seenEventId,
   now,
   online,
+  hostName,
   selected,
   onSelected,
   onOpen,
@@ -73,6 +75,7 @@ export function MobileBotItemsTab({
   seenEventId: string
   now: number
   online: boolean
+  hostName: string
   /** Checked rows; empty when not selecting. */
   selected: ReadonlySet<string>
   onSelected: (next: ReadonlySet<string>) => void
@@ -89,6 +92,7 @@ export function MobileBotItemsTab({
   useMobileColorScheme()
   const t = useMobileTranslation()
   const { read } = items
+  const failed = items.error !== null
   const all = useMemo(() => mergeBotItemsByUid(read?.items ?? [], items.items), [read, items.items])
   const shown = useMemo(() => filterBotItems(all, filter), [all, filter])
   const groups = useMemo(
@@ -124,9 +128,11 @@ export function MobileBotItemsTab({
       <>
         {chip}
         {asksOnly}
-        {items.failed ? (
+        {!online ? (
+          <MobileOfflineState hostName={hostName} />
+        ) : failed ? (
           <MobileLoadErrorState
-            error={null}
+            error={items.error}
             title={t('bots.items.readFailedTitle', 'Couldn’t load items')}
             onRetry={items.retry}
           />
@@ -186,7 +192,7 @@ export function MobileBotItemsTab({
       />
     )
   } else {
-    const disabled = items.failed || !online
+    const disabled = failed || !online
     const row = (item: BotItem, id: BotItemGroupId) => (
       <MobileBotItemRow
         key={item.uid}
@@ -223,7 +229,7 @@ export function MobileBotItemsTab({
           seenEventId={seenEventId}
           renderItem={(item) => row(item, id)}
           onCancelAll={
-            id === 'stale' && groups.stale.length > 0 && !items.failed && online
+            id === 'stale' && groups.stale.length > 0 && !failed && online
               ? () => setSheet({ kind: 'stale', items: groups.stale, reason: staleReason })
               : null
           }
@@ -234,8 +240,8 @@ export function MobileBotItemsTab({
   return (
     <>
       {chip}
-      {items.failed ? <ReadFailed onRetry={items.retry} /> : null}
-      <View style={items.failed ? styles.dimmed : undefined}>{body}</View>
+      {failed ? <ReadFailed onRetry={items.retry} /> : null}
+      <View style={failed ? styles.dimmed : undefined}>{body}</View>
       {after}
     </>
   )

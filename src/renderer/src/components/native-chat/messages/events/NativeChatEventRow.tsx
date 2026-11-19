@@ -1,4 +1,4 @@
-import { useContext, useId, useLayoutEffect, useRef, useState } from 'react'
+import { useContext, useId, useLayoutEffect, useRef, useState, type Ref } from 'react'
 import { ChevronRight, X } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
@@ -126,7 +126,9 @@ export function NativeChatEventRow({
   details,
   disclosureKey,
   defaultOpen = false,
+  open: openProp,
   onOpenChange,
+  buttonRef,
   clampDetails = true,
   className
 }: {
@@ -142,7 +144,10 @@ export function NativeChatEventRow({
   /** Where the transcript remembers whether this row's details are open. */
   disclosureKey?: string
   defaultOpen?: boolean
+  /** Given by a row that keeps its open state itself; it changes through `onOpenChange`. */
+  open?: boolean
   onOpenChange?: (open: boolean) => void
+  buttonRef?: Ref<HTMLButtonElement>
   /** Reports cut at about four lines; a short list of links shows whole. */
   clampDetails?: boolean
   className?: string
@@ -152,7 +157,7 @@ export function NativeChatEventRow({
   const time = useNativeChatMessageTimeLabel(timestamp)
   const detailsId = useId()
   const toggles = details !== undefined && details !== null && details !== false
-  const open = disclosure.open
+  const open = openProp ?? disclosure.open
   // Find searches drawn text: while it has a query, folded details are drawn so it can reach them.
   const shown = open || findActive
   return (
@@ -161,12 +166,15 @@ export function NativeChatEventRow({
         {toggles ? (
           <button
             type="button"
+            ref={buttonRef}
             aria-expanded={shown}
             aria-controls={shown ? detailsId : undefined}
             aria-label={[label, time].filter(Boolean).join(', ') || undefined}
             className="absolute -inset-x-1 -inset-y-0.5 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             onClick={() => {
-              disclosure.setOpen(!open)
+              if (openProp === undefined) {
+                disclosure.setOpen(!open)
+              }
               onOpenChange?.(!open)
             }}
           />

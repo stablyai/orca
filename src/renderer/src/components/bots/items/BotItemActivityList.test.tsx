@@ -5,6 +5,9 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { BotItemEvent } from '../../../../../shared/bots/bot-items'
 import { makeTestBotItem } from '../../../../../shared/bots/bot-item.test-fixture'
 import { fixtureCos as BOT } from '../../../component-fixtures/fixture-bot-panel'
+import { NativeChatFileLinkExistenceContext } from '../../native-chat/links/actions/native-chat-file-link-existence'
+import { NativeChatLinkClickContext } from '../../native-chat/links/actions/native-chat-link-click-context'
+import type { CommentMarkdownLinkClickHandler } from '@/components/comment-markdown/comment-markdown-element-renderers'
 import { BotItemActivityList } from './BotItemActivityList'
 
 const ASKER = { kind: 'bot', botId: 'bot-a', chatId: 'chat-home' } as const
@@ -27,14 +30,29 @@ beforeEach(() => {
 
 afterEach(cleanup)
 
-function show(events: BotItemEvent[]): void {
-  render(<BotItemActivityList bot={BOT} item={makeTestBotItem(6)} events={events} />)
-}
-
-it("leads a recorded answer's quote to its question, and the question's Answered back", () => {
-  show([
+it("opens an answer's file link and navigates between its answer and question", () => {
+  const path = '/Users/x/orca-lanes/lead/report.md'
+  const opened = vi.fn<CommentMarkdownLinkClickHandler>((event) => event.preventDefault())
+  const existence = {
+    watch: () => ({
+      subscribe: () => () => {},
+      getSnapshot: () => fileSnapshot
+    }),
+    recheck: () => {}
+  }
+  const fileSnapshot = {
+    check: (link: { pathText: string }) => link.pathText === path,
+    peek: () => false
+  }
+  const events: BotItemEvent[] = [
     ...ASKED,
-    { id: 'e4', kind: 'commented', actor: OWNER, data: { text: 'Retry.', answers: 'e2' }, at: 250 },
+    {
+      id: 'e4',
+      kind: 'commented',
+      actor: OWNER,
+      data: { text: `Retry with ${path} as input.`, answers: 'e2' },
+      at: 250
+    },
     {
       id: 'e5',
       kind: 'status',
@@ -42,7 +60,19 @@ it("leads a recorded answer's quote to its question, and the question's Answered
       data: { from: 'needs_you', to: 'working', cause: 'answer' },
       at: 250
     }
-  ])
+  ]
+  render(
+    <NativeChatFileLinkExistenceContext value={existence}>
+      <NativeChatLinkClickContext value={opened}>
+        <BotItemActivityList bot={BOT} item={makeTestBotItem(6)} events={events} />
+      </NativeChatLinkClickContext>
+    </NativeChatFileLinkExistenceContext>
+  )
+  fireEvent.click(screen.getByRole('link', { name: path }))
+  expect(opened).toHaveBeenCalledExactlyOnceWith(
+    expect.anything(),
+    '#orca-native-chat-file=%2FUsers%2Fx%2Forca-lanes%2Flead%2Freport.md'
+  )
 
   fireEvent.click(screen.getByRole('button', { name: /^Replying to: Retry it here\?/ }))
   expect(document.activeElement?.getAttribute('data-bot-item-comment-id')).toBe('e2')

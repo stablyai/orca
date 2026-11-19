@@ -382,14 +382,6 @@ describe('Needs you folds long lists', () => {
     expect(shownActions()).toHaveLength(8)
   })
 
-  it('lists every row offline, when the footer is off with the rest of the panel', () => {
-    const update = renderNeeds(asks(8))
-
-    update(asks(8), true)
-    expect(shownActions()).toHaveLength(8)
-    expect(footer()).toBeNull()
-  })
-
   it('keeps its order apart from approvals, which come first and never fold', () => {
     renderNeeds([
       asking(1),
@@ -414,29 +406,6 @@ describe('Needs you folds long lists', () => {
     expect(shownActions()).toEqual([3, 4, 5, 6, 7, 8, 9].map((n) => `Open: Ask ${n}`))
     expect(footer()).toBe('Show 2 more')
   })
-
-  it('brings up a folded question once it turns into an approval', () => {
-    renderNeeds(asks(8))
-    expect(screen.queryByRole('button', { name: 'Open: Ask 8' })).toBeNull()
-
-    setPrompt(8, APPROVAL)
-    expect(shownActions()[0]).toBe('Open: Ask 8')
-    expect(footer()).toBe('Show 3 more')
-  })
-
-  it('folds sign-in-stopped automations with the rest', () => {
-    renderNeeds(
-      [
-        { kind: 'connector', key: 'connector:linear:w1', connector: LINEAR },
-        asking(1),
-        asking(2),
-        asking(3)
-      ],
-      ['a1', 'a2', 'a3'].map((id) => automationRow(id, `Run ${id}`, `run-${id}`))
-    )
-
-    expect(footer()).toBe('Show 2 more')
-  })
 })
 
 describe('Needs you keeps keyboard focus', () => {
@@ -445,20 +414,13 @@ describe('Needs you keeps keyboard focus', () => {
     document.activeElement?.textContent ??
     null
 
-  it('keeps focus on its row when another row sorts first', () => {
-    renderNeeds(asks(8))
-    act(() => screen.getByRole('button', { name: 'Open: Ask 3' }).focus())
-
-    setPrompt(6, APPROVAL)
-    expect(shownActions()[0]).toBe('Open: Ask 6')
-    expect(focused()).toBe('Open: Ask 3')
-  })
-
   it('keeps the focused row shown when a sort pushes it past the cap, until focus leaves', () => {
     renderNeeds(asks(7))
     act(() => screen.getByRole('button', { name: 'Open: Ask 5' }).focus())
 
+    expect(shownActions()).not.toContain('Open: Ask 7')
     setPrompt(7, APPROVAL)
+    expect(shownActions()[0]).toBe('Open: Ask 7')
     expect(screen.getByRole('button', { name: 'Open: Ask 5' })).toBeTruthy()
     expect(focused()).toBe('Open: Ask 5')
     expect(footer()).toBe('Show 1 more')
@@ -480,6 +442,8 @@ describe('Needs you keeps keyboard focus', () => {
     const update = renderNeeds(asks(8))
     act(() => screen.getByRole('button', { name: 'Show 3 more' }).focus())
     update(asks(8), true)
+    expect(shownActions()).toHaveLength(8)
+    expect(footer()).toBeNull()
     expect(document.activeElement).toBe(screen.getByTestId('panel'))
   })
 

@@ -3,6 +3,7 @@ import { z } from 'zod'
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { createJournalReducerState, type JournalReducerState } from '../projection/journal-reducer'
 import { JournalDerivedTurnScope } from '../projection/journal-derived-turn-scope'
+import { getJournalInputOrder } from '../input-order/journal-input-order-registry'
 import {
   outcomeFormat1StoredScalars,
   outcomeFormat1StrictScalars
@@ -145,10 +146,12 @@ function collectionTargets(state: JournalReducerState): Map<string, Target> {
         set: (entry) => {
           const value = item.parse(entry)
           items.set(value.itemId, value)
+          getJournalInputOrder(state)?.noteItem(state, value.itemId)
         },
         remove: (key) => {
           if (isString(key)) {
             items.delete(key)
+            getJournalInputOrder(state)?.noteItem(state, key)
           }
         }
       }

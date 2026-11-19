@@ -361,10 +361,7 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeBotConstructionHoo
     ...this.tuiIdleEvidenceSource,
     intervalMs: TUI_IDLE_POLL_INTERVAL_MS,
     getForegroundProcess: (ptyId) => this.ptyController?.getForegroundProcess(ptyId) ?? null,
-    hasCommandPainted: (ptyId) => {
-      const pty = this.ptysById.get(ptyId)
-      return pty === undefined || hasTerminalCommandPainted(pty)
-    },
+    hasCommandPainted: (ptyId) => hasTerminalCommandPainted(this.ptysById.get(ptyId) ?? {}),
     // Runtime emulator reads avoid a provider round trip on every poll.
     readVisibleScreen: (ptyId) =>
       this.headlessTerminals.has(ptyId)
@@ -372,7 +369,9 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeBotConstructionHoo
             (screen) => screen?.lines.join('\n') ?? null
           )
         : null,
-    resolve: (waiter, result) => this.terminalWaiters.resolve(waiter, result)
+    resolve: (waiter, result) => this.terminalWaiters.resolve(waiter, result),
+    requestReattachedRepaint: (ptyId) => this.requestReattachedRepaint(ptyId),
+    confirmRestTitle: (ptyId, agent) => this.confirmReattachedRestTitle(ptyId, agent)
   })
 
   protected readonly terminalWait = new RuntimeTerminalWaitController(

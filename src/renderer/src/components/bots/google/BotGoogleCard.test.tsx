@@ -24,7 +24,7 @@ const bot: Pick<Bot, 'id' | 'name' | 'members' | 'hostId'> = {
   members: []
 }
 
-function turnOn(target: Pick<Bot, 'id' | 'name' | 'members' | 'hostId'>): Promise<boolean> {
+function mountTurnOn() {
   const { result } = renderHook(() => useTurnOnBotGoogle(), {
     wrapper: ({ children }) => (
       <ConfirmationDialogContext.Provider value={mocks.confirm}>
@@ -32,7 +32,7 @@ function turnOn(target: Pick<Bot, 'id' | 'name' | 'members' | 'hostId'>): Promis
       </ConfirmationDialogContext.Provider>
     )
   })
-  return result.current(target)
+  return result.current
 }
 
 beforeEach(() => {
@@ -78,15 +78,22 @@ describe('the Google row in a bot’s connectors', () => {
 })
 
 describe('turning Google on for a bot', () => {
-  it('needs no confirm when only the owner can ask', async () => {
+  it('reports a refused write and lets the owner retry without confirmation', async () => {
+    const turnOn = mountTurnOn()
+    mocks.setBotGoogle.mockRejectedValueOnce(new Error('no account'))
+    await expect(turnOn(bot)).resolves.toBe(false)
     await expect(turnOn(bot)).resolves.toBe(true)
     expect(mocks.confirm).not.toHaveBeenCalled()
-    expect(mocks.setBotGoogle).toHaveBeenCalledWith(expect.objectContaining({ id: 'b1' }), true)
+    expect(mocks.setBotGoogle.mock.calls).toEqual([
+      [expect.objectContaining({ id: 'b1' }), true],
+      [expect.objectContaining({ id: 'b1' }), true]
+    ])
   })
 
   it('names who else can then use the owner’s Google, and stays off when declined', async () => {
     mocks.confirm.mockResolvedValue(false)
     const shared = { ...bot, members: [{ id: 'U1', name: 'Bob', source: 'slack' }] }
+    const turnOn = mountTurnOn()
     await expect(turnOn(shared)).resolves.toBe(false)
     expect(mocks.confirm).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -95,10 +102,5 @@ describe('turning Google on for a bot', () => {
       })
     )
     expect(mocks.setBotGoogle).not.toHaveBeenCalled()
-  })
-
-  it('reports failure when the host refuses', async () => {
-    mocks.setBotGoogle.mockRejectedValue(new Error('no account'))
-    await expect(turnOn(bot)).resolves.toBe(false)
   })
 })

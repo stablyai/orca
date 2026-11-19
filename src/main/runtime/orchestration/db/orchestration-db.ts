@@ -47,17 +47,19 @@ class OrchestrationDbCore {
   /** Told when a paired server's answer for these Dispatches' workers changed; no row was written. */
   federatedWorkersListener: ((dispatchIds: readonly string[]) => void) | undefined
   private closed = false
+  private readonly closeListeners = new Set<() => void>()
   private changedDispatchIds: Set<string> | null = null
   /** The user's auto-close switch; this runtime's choice also governs the remote workers it coordinates. */
   workerAutoReleaseEnabled: (() => boolean) | undefined
 
   constructor(dbPath: (string & {}) | ':memory:') {
     this.db = new Database(dbPath)
+    // First, so opening beside another connection's checkpoint waits rather than failing.
+    this.db.pragma('busy_timeout = 5000')
     // Before WAL and any table, so a new file returns free pages in bounded steps; an existing one needs a VACUUM.
     this.db.pragma('auto_vacuum = INCREMENTAL')
     this.db.pragma('journal_mode = WAL')
     this.db.pragma('synchronous = NORMAL')
-    this.db.pragma('busy_timeout = 5000')
     // Truncate the WAL back to 8 MiB after a checkpoint, as the other app databases do; otherwise it stays at its high-water size.
     this.db.pragma('journal_size_limit = 8388608')
     // Savepoint journals otherwise need a temp file; a full or unwritable temp dir then aborts the whole transaction (#38123).
@@ -172,8 +174,18 @@ class OrchestrationDbCore {
     })
   }
 
+  /** Runs once, just before the connection closes; returns its removal. */
+  onClose(listener: () => void): () => void {
+    this.closeListeners.add(listener)
+    return () => this.closeListeners.delete(listener)
+  }
+
   close(): void {
     this.closed = true
+    for (const listener of this.closeListeners) {
+      listener()
+    }
+    this.closeListeners.clear()
     this.db.close()
   }
 }

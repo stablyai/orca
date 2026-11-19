@@ -1,3 +1,4 @@
+import { legacyProofReply } from './journal-legacy-proof-reply'
 import { JournalForkPreparation } from './journal-fork-preparation'
 import { parentPort, workerData } from 'node:worker_threads'
 import { existsSync } from 'node:fs'
@@ -169,6 +170,9 @@ port.on('message', ({ id, operation }: JournalSqlReaderRequest) => {
         break
       case 'database':
         reply({ type: 'database', id, result: readJournalSqlDatabase(db, operation.operation) })
+        break
+      case 'legacy-proof':
+        reply(legacyProofReply(openOriginal, db, id, operation.cursor))
         break
       case 'conversion-prepare': {
         // Each frozen-source read is its own short statement; no snapshot spans the restore.

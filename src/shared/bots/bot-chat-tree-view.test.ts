@@ -54,18 +54,16 @@ describe('chatsTabWorkers', () => {
     finishedTotal: 7
   })
 
-  it('shows five, waiting on the owner first, then running, then finished, and counts the rest', () => {
+  it('shows waiting workers first and requests more finished workers only for a larger page', () => {
     const { workers, more, read } = chatsTabWorkers(busy, 5)
     expect(workers.map((w) => w.key)).toEqual(['r2', 'r1', 'f1', 'f2', 'f3'])
     expect(more).toBe(4)
     expect(read).toBe(false)
-  })
 
-  it('asks the host for more finished workers when the loaded ones fall short of the cap', () => {
-    const { workers, more, read } = chatsTabWorkers(busy, 13)
-    expect(workers).toHaveLength(6)
-    expect(more).toBe(3)
-    expect(read).toBe(true)
+    const expanded = chatsTabWorkers(busy, 13)
+    expect(expanded.workers.map((w) => w.key)).toEqual(['r2', 'r1', 'f1', 'f2', 'f3', 'f4'])
+    expect(expanded.more).toBe(3)
+    expect(expanded.read).toBe(true)
   })
 })
 

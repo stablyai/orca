@@ -102,7 +102,7 @@ export function BotSidebarRow({
             WORKTREE_CARD_SURFACE_CLASS_NAME,
             // A two-line workspace card's padding, so bots sit as tight as Projects' rows.
             // A size container: the fold strip slims down in a narrow sidebar.
-            'group/bot-row @container/bot-row flex items-center pt-1.25 pb-1.5 pl-1.5',
+            'group/bot-row @container/bot-row flex items-center pt-1.25 pb-1.25 pl-1.25',
             !isActive && 'worktree-sidebar-card-hover',
             dimmed && 'opacity-60'
           )}
