@@ -1,9 +1,13 @@
+import { resolveRemoteFailureExternalUrl } from '../../../../../shared/browser/navigation/browser-url'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useAppStore } from '@/store/index'
 import '../../../../../shared/remote-runtime/protocol/protocol-version'
-import { BROWSER_CERTIFICATE_TRUST_RUNTIME_CAPABILITY } from '../../../../../shared/browser/runtime/browser-runtime-capabilities'
+import {
+  BROWSER_CERTIFICATE_TRUST_RUNTIME_CAPABILITY,
+  BROWSER_TAB_HISTORY_STATE_RUNTIME_CAPABILITY
+} from '../../../../../shared/browser/runtime/browser-runtime-capabilities'
 import type { BrowserPage as BrowserPageState } from '../../../../../shared/browser/workspaces/browser-workspace-types'
-import { runtimeEnvironmentSupportsCapability } from '@/runtime/rpc/compatibility/runtime-capability-proof'
+import { useRuntimeEnvironmentCapability } from '@/runtime/rpc/compatibility/use-runtime-environment-capability'
 import '@/lib/browser/documents/file-preview'
 import { convertBrowserPageToWorkspaceDoc } from '@/lib/browser/documents/file-preview-page-conversion'
 import { openWorkspaceBrowserTab } from '@/lib/browser/workspace/workspace-browser-tab-open'
@@ -90,34 +94,18 @@ export function RemoteBrowserPagePane({
     (s) => s.remoteBrowserPageHandlesByPageId[browserTab.id] ?? null
   )
   const stagedPage = remotePageHandle?.staged === true
+  // Older hosts publish canGoBack/canGoForward as always false; keep both arrows enabled for them.
+  const historyStateKnown = useRuntimeEnvironmentCapability(
+    runtimeEnvironmentId,
+    BROWSER_TAB_HISTORY_STATE_RUNTIME_CAPABILITY
+  )
+  const history = historyStateKnown ? browserTab : { canGoBack: true, canGoForward: true }
 
   // Why: runtimes predating browser.certificate-trust.v1 can't honor a proceed request, so hide "Proceed Anyway" until support is advertised.
-  const [remoteCertificateTrustSupported, setRemoteCertificateTrustSupported] = useState(false)
-  const certificateChallengeId = certificateFailure?.challengeId ?? null
-  useEffect(() => {
-    if (!remotePageHandle?.environmentId || !certificateChallengeId) {
-      setRemoteCertificateTrustSupported(false)
-      return
-    }
-    let cancelled = false
-    void runtimeEnvironmentSupportsCapability(
-      remotePageHandle?.environmentId,
-      BROWSER_CERTIFICATE_TRUST_RUNTIME_CAPABILITY
-    )
-      .then((supported) => {
-        if (!cancelled) {
-          setRemoteCertificateTrustSupported(supported)
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setRemoteCertificateTrustSupported(false)
-        }
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [remotePageHandle?.environmentId, certificateChallengeId])
+  const remoteCertificateTrustSupported = useRuntimeEnvironmentCapability(
+    certificateFailure?.challengeId ? remotePageHandle?.environmentId : null,
+    BROWSER_CERTIFICATE_TRUST_RUNTIME_CAPABILITY
+  )
 
   const {
     enqueueRemoteInput,
@@ -253,7 +241,8 @@ export function RemoteBrowserPagePane({
     handleRemotePointerDown,
     handleRemotePointerUp,
     handleRemoteScreenshotKeyDown,
-    handleRemoteScreenshotPaste
+    handleRemoteScreenshotPaste,
+    runRemoteEditCommand
   } = useRemoteBrowserPageInput({
     busy,
     imageRef,
@@ -339,34 +328,41 @@ export function RemoteBrowserPagePane({
       {contextMenu ? (
         <RemoteBrowserPageContextMenu
           contextMenu={contextMenu}
-          onDismiss={() => setContextMenu(null)}
-          onOpenLinkInOrcaBrowser={() => {
-            const linkUrl = contextMenu.linkUrl!
+          onDismiss={() => {
             setContextMenu(null)
-            const sourceUnifiedTab = resolveBrowserSourceUnifiedTab(
-              useAppStore.getState(),
-              browserTab.id,
-              worktreeId
-            )
-            void openWorkspaceBrowserTab({
-              workspaceId: worktreeId,
-              url: linkUrl,
-              ...(sourceUnifiedTab ? { afterTabId: sourceUnifiedTab.id } : {}),
-              focusOnCreate: false,
-              selectWorktree: false,
-              intent: { kind: 'url' },
-              expectedRuntimeEnvironmentId: runtimeEnvironmentId,
-              placementPreference: 'server'
-            }).catch((error) => {
-              setPaneNotice({
-                kind: 'direct',
-                text: error instanceof Error ? error.message : String(error)
-              })
-            })
+            // Keys reach the page only through the frame, so edits like Select All need it focused again.
+            imageRef.current?.focus()
           }}
-          onNavigate={(method) => {
-            void runRemoteNavigation(method)
-            setContextMenu(null)
+          history={history}
+          actions={{
+            edit: runRemoteEditCommand,
+            openInNewTab: (url, activate) => {
+              const sourceUnifiedTab = resolveBrowserSourceUnifiedTab(
+                useAppStore.getState(),
+                browserTab.id,
+                worktreeId
+              )
+              void openWorkspaceBrowserTab({
+                workspaceId: worktreeId,
+                url,
+                ...(sourceUnifiedTab ? { afterTabId: sourceUnifiedTab.id } : {}),
+                focusOnCreate: activate,
+                selectWorktree: false,
+                intent: { kind: 'url' },
+                expectedRuntimeEnvironmentId: runtimeEnvironmentId,
+                placementPreference: 'server'
+              }).catch((error) => {
+                setPaneNotice({
+                  kind: 'direct',
+                  text: error instanceof Error ? error.message : String(error)
+                })
+              })
+            },
+            // The server's loopback address would open this machine's, not the page's.
+            externalUrl: resolveRemoteFailureExternalUrl,
+            goBack: () => void runRemoteNavigation('browser.back'),
+            goForward: () => void runRemoteNavigation('browser.forward'),
+            reload: () => void runRemoteNavigation('browser.reload')
           }}
         />
       ) : null}
@@ -387,6 +383,7 @@ export function RemoteBrowserPagePane({
         markup={markup}
         frameUrl={frameUrl}
         isActive={isActive}
+        history={history}
         onBack={() => void runRemoteNavigation('browser.back')}
         onForward={() => void runRemoteNavigation('browser.forward')}
         onReload={() => void runRemoteNavigation('browser.reload')}

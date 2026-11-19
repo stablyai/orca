@@ -40,7 +40,7 @@ import {
   isDirectSshFileContext
 } from '@/runtime/runtime-direct-ssh-file-read'
 import { isTauriNativeHost } from '@/web/tauri-native-bridge'
-import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
+import { useConfirmationDialog } from '@/components/dismiss/confirmation/confirmation-dialog-context'
 import { formatClipboardFilePath } from '@/lib/clipboard/clipboard-file-path'
 import { getOpenFileRevealOwner } from '@/lib/files/os-open/reveal-in-file-manager'
 import { subscribeDocPreviewExternalLinkConfirmation } from './doc-preview-external-link-confirmation'

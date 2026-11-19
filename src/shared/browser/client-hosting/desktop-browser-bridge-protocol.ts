@@ -1,5 +1,9 @@
 /** An opted-in desktop serves a managed SSH host’s CLI browser requests. Both peers must advertise desktopBridge.v1; unsupported peers refuse with unavailable instead of hanging. */
 import { z } from 'zod'
+import {
+  BROWSER_CLIENT_AUTOMATION_RESULT_CHUNK_MAX_BYTES,
+  BROWSER_CLIENT_AUTOMATION_STAGED_RESULT_MAX_BYTES
+} from './browser-client-automation-protocol'
 
 export const DESKTOP_BROWSER_BRIDGE_RUNTIME_CAPABILITY = 'browser.desktopBridge.v1'
 /** Send cancel only when negotiated: older desktops drop the whole attachment on unknown event types. */
@@ -9,6 +13,8 @@ export const DESKTOP_BROWSER_BRIDGE_EXPECT_URL_CAPABILITY = 'browser.desktopBrid
 /** Older desktops drop the whole attachment on a method they don't allow, so tab annotations need this. */
 export const DESKTOP_BROWSER_BRIDGE_TAB_ANNOTATIONS_CAPABILITY =
   'browser.desktopBridge.tab-annotations.v1'
+/** Same reason: pdf, network log, device/media/offline/geolocation emulation and page storage need this. */
+export const DESKTOP_BROWSER_BRIDGE_PAGE_TOOLS_CAPABILITY = 'browser.desktopBridge.page-tools.v1'
 
 export const DESKTOP_BROWSER_BRIDGE_UNAVAILABLE_CODE = 'desktop_browser_bridge_unavailable'
 export const DESKTOP_BROWSER_BRIDGE_NOT_FORWARDED_CODE = 'desktop_browser_bridge_not_forwarded'
@@ -24,6 +30,29 @@ export const DESKTOP_BROWSER_BRIDGE_ROUTING_OPT_OUT_LABEL =
   'Hosts browsing from this device instead'
 
 export const DESKTOP_BROWSER_BRIDGE_UNAVAILABLE_MESSAGE = `No Orca desktop is sharing its browser with this host. On your desktop, open this host's SSH settings and turn on "${DESKTOP_BROWSER_BRIDGE_SETTING_LABEL}", make sure ${DESKTOP_BROWSER_BRIDGE_ROUTING_SETTING_LABEL} is "SSH host" and this host isn't listed under "${DESKTOP_BROWSER_BRIDGE_ROUTING_OPT_OUT_LABEL}", and keep the host connected. The desktop needs an Orca version that supports it.`
+
+const PAGE_TOOLS_METHODS = [
+  'browser.pdf',
+  'browser.network',
+  'browser.setDevice',
+  'browser.setMedia',
+  'browser.setOffline',
+  'browser.geolocation',
+  'browser.storage.local.get',
+  'browser.storage.local.set',
+  'browser.storage.local.clear',
+  'browser.storage.session.get',
+  'browser.storage.session.set',
+  'browser.storage.session.clear'
+] as const
+
+/** Methods an older desktop refuses, mapped to the capability a desktop declares when it serves them. */
+export const DESKTOP_BROWSER_BRIDGE_METHOD_CAPABILITIES: ReadonlyMap<string, string> = new Map([
+  ['browser.tabAnnotations', DESKTOP_BROWSER_BRIDGE_TAB_ANNOTATIONS_CAPABILITY],
+  ...PAGE_TOOLS_METHODS.map(
+    (method) => [method, DESKTOP_BROWSER_BRIDGE_PAGE_TOOLS_CAPABILITY] as const
+  )
+])
 
 /** Unlike the pre-1.4.225 arbitrary CLI relay, allow browser commands only: no desktop files, clipboard, cookies/headers, raw agent-browser, profile/identity changes or certificate bypass. */
 export const DESKTOP_BROWSER_BRIDGE_METHODS: ReadonlySet<string> = new Set([
@@ -70,7 +99,8 @@ export const DESKTOP_BROWSER_BRIDGE_METHODS: ReadonlySet<string> = new Set([
   'browser.mouseWheel',
   'browser.viewport',
   'browser.dialogAccept',
-  'browser.dialogDismiss'
+  'browser.dialogDismiss',
+  ...PAGE_TOOLS_METHODS
 ])
 
 /** Main asks the renderer, which owns the workspace-to-host map, what a host may reach. */
@@ -110,6 +140,8 @@ export const DesktopBrowserBridgeRequest = z.object({
   /** The workspace orcad resolved the caller's selector to; absent when it named none. */
   // Why longer than an identity: a worktree id embeds the repository's absolute path.
   workspaceId: z.string().min(1).max(MAX_WORKSPACE_ID_LENGTH).optional(),
+  /** orcad accepts desktopBrowserBridge.resultChunk; older ones omit it and older desktops ignore it. */
+  stagedResults: z.literal(true).optional(),
   params: z
     .record(z.string(), z.unknown())
     .refine(
@@ -138,7 +170,14 @@ export const DesktopBrowserBridgeResultParams = z.discriminatedUnion('ok', [
     attachmentId: Identity,
     requestId: Identity,
     ok: z.literal(true),
-    result: z.unknown()
+    result: z.unknown(),
+    /** The value went ahead in resultChunk calls; result is null. */
+    stagedResultBytes: z
+      .number()
+      .int()
+      .positive()
+      .max(BROWSER_CLIENT_AUTOMATION_STAGED_RESULT_MAX_BYTES)
+      .optional()
   }),
   z.object({
     attachmentId: Identity,
@@ -148,6 +187,21 @@ export const DesktopBrowserBridgeResultParams = z.discriminatedUnion('ok', [
   })
 ])
 export type DesktopBrowserBridgeResultParams = z.infer<typeof DesktopBrowserBridgeResultParams>
+
+/** One piece of a result too large for a single frame, sent in order before the result. */
+export const DesktopBrowserBridgeResultChunkParams = z.object({
+  attachmentId: Identity,
+  requestId: Identity,
+  offset: z.number().int().nonnegative().max(BROWSER_CLIENT_AUTOMATION_STAGED_RESULT_MAX_BYTES),
+  contentBase64: z
+    .string()
+    .min(1)
+    .max(Math.ceil(BROWSER_CLIENT_AUTOMATION_RESULT_CHUNK_MAX_BYTES / 3) * 4)
+    .regex(/^[A-Za-z0-9+/]*={0,2}$/)
+})
+export type DesktopBrowserBridgeResultChunkParams = z.infer<
+  typeof DesktopBrowserBridgeResultChunkParams
+>
 
 // Routed tabs can still display local files; those remain off-limits to hosts.
 // Allow chrome-error: so hosts can navigate away from failed loads.

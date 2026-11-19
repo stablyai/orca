@@ -18,6 +18,10 @@ import { compareNativeChatTranscriptMessages } from '../../native-chat/transcrip
 import type { NativeChatMessage } from '../../native-chat/native-chat-types'
 import { dispatchWasWithdrawn } from '../requests/structured-agent-session-dispatch-rejection'
 import { projectStructuredItemsToNativeChat } from './structured-agent-session-projection'
+import {
+  automationResultMarks,
+  withAutomationResultMarks
+} from '../../bots/bot-automation-result-marks'
 import { isActionableStructuredAgentSessionPrompt } from './structured-agent-session-live-turn'
 import {
   agentSessionContextSequenceFor,
@@ -28,7 +32,8 @@ import {
 export type StructuredAgentSessionOptimisticMessage = {
   clientMessageId: string
   body: AgentJournalMessageItem
-  queuedAt: number
+  /** Null when this client did not make the send and nothing dates it. */
+  queuedAt: number | null
   phase?: 'sending' | 'recorded' | 'unconfirmed'
   recordedCursor?: AgentJournalCursor
   /** In-memory placement captured at Send, independent of any acknowledgement. */
@@ -158,6 +163,7 @@ export function projectStructuredAgentSessionMessageRows(
       submission
     ])
   )
+  const marks = automationResultMarks(visibleItems)
   const delivered: NativeChatMessage[] = []
   const held: NativeChatMessage[] = []
   const shownStopped = new Set<string>()
@@ -180,7 +186,7 @@ export function projectStructuredAgentSessionMessageRows(
     ) {
       held.push({ ...message, queued: true })
     } else if (!placement || !stoppedBeforeStart.has(message.id)) {
-      delivered.push(message)
+      delivered.push(withAutomationResultMarks(message, marks))
     } else {
       const { opensTurn, position } = placement(message.id)
       moved ||= position !== undefined
@@ -244,7 +250,9 @@ export function projectStructuredAgentSessionMessageRows(
           timestamp: entry.queuedAt,
           blocks: entry.body.blocks,
           ...(entry.afterSequence !== undefined
-            ? { journalPosition: { sequence: entry.afterSequence + 0.5, index: entry.queuedAt } }
+            ? {
+                journalPosition: { sequence: entry.afterSequence + 0.5, index: entry.queuedAt ?? 0 }
+              }
             : {}),
           ...(entry.sentWhileStopping ? { sentWhileStopping: true as const } : {})
         }

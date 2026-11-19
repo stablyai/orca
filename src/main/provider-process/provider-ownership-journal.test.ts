@@ -144,3 +144,32 @@ it('removes a partial unpublished record on each failed write and allows a later
   await published.remove()
   expect(await readdir(directory)).toEqual([])
 })
+
+it('retries unverifiable launch reads but still refuses a definite parent mismatch', async () => {
+  root = await mkdtemp(join(tmpdir(), 'orca-provider-proof-retry-'))
+  const directory = join(root, 'provider-processes')
+  state.failWrite = false
+  const row = (pid: number, ppid: number): ProviderProcessRow => ({
+    pid,
+    ppid,
+    pgid: pid,
+    startedAt: '1234',
+    startResolution: 'clock-tick'
+  })
+  let failedLeaderReads = 0
+  state.read = async (pid) => {
+    if (pid === 900001 && failedLeaderReads < 2) {
+      failedLeaderReads++
+      return 'unverifiable'
+    }
+    return row(pid, pid === 900002 ? 900001 : process.pid)
+  }
+  const published = await publishProviderOwnership(directory, 'test-boot', 900001, 900002)
+  expect(published.identity.leader).toEqual(row(900001, process.pid))
+  await published.remove()
+
+  state.read = async (pid) => row(pid, pid === 900002 ? 900001 : 1)
+  await expect(publishProviderOwnership(directory, 'test-boot', 900001, 900002)).rejects.toThrow(
+    `leader ppid 1 != ${process.pid}`
+  )
+})

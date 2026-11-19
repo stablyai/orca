@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { Check, CircleAlert, Download, Mic } from 'lucide-react'
 import { Trans } from 'react-i18next'
-import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
+import { ShortcutKeyCombo } from '@/components/ui/ShortcutKeyCombo'
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'

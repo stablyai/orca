@@ -159,16 +159,17 @@ export function useStructuredAgentSessionOptions(args: StructuredAgentSessionOpt
     },
     [launch?.explicitOptions, launchSeedOptions, optionStateRef, optionView, setStructuredOption]
   )
+  const { demandModelCatalog } = hostCatalog
   const optionSurface = useMemo<SessionOptionsSurface>(
     () => ({
       getSnapshot: () => optionSnapshot,
-      demandModelCatalog: hostCatalog.demandModelCatalog,
+      demandModelCatalog,
       admits: writer.admits,
       setOption,
       invokeAction: async () => ({ snapshot: optionSnapshot }),
       subscribe: () => () => {}
     }),
-    [setOption, optionSnapshot, hostCatalog.demandModelCatalog, writer]
+    [setOption, optionSnapshot, demandModelCatalog, writer]
   )
 
   return {

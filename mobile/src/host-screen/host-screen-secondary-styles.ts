@@ -46,6 +46,7 @@ export const hostScreenSecondaryStyles = themedStyleSheet(() => ({
     color: colors.textMuted,
     marginLeft: 6
   },
+  // Muted and plain, like the header's count: a fact about the section, not an action.
   sectionPendingSpinner: {
     marginLeft: spacing.sm
   },
@@ -76,12 +77,6 @@ export const hostScreenSecondaryStyles = themedStyleSheet(() => ({
   },
   optionSegmented: {
     marginBottom: spacing.md
-  },
-  // Over the sheet header's empty leading side, centred in its 52pt row.
-  optionPageBack: {
-    position: 'absolute',
-    top: 8,
-    left: spacing.xs
   },
   filterRepoDot: {
     width: 8,

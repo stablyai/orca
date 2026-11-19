@@ -7,6 +7,10 @@
 //   POST /__admin/verify  { relayHostId, kind, tokenHash }  read-only: is this phone credential valid
 //                         here? (devices paired or rotated on the edge are not in Postgres)
 //   POST /__admin/drain   { relayHostId }  sends the host's live control back to the director
+// Erasure index (user-hosts.ts; one object per user, so their jti is enforced by that object):
+//   POST /__admin/list-hosts        { userId }               -> { relayHostIds }
+//   POST /__admin/index-host        { userId, relayHostId }  the backfill: adds one host
+//   POST /__admin/erase-user-index  { userId }               after each listed host is erased
 // Replay: a token with a `jti` (16-128 chars) is single use, enforced by the target host's object
 // (admin-jti.ts; a repeat is 409 `replay`). Transitional: a token without one is still accepted
 // (metric `admin_no_jti`) until the director sends it everywhere; ADMIN_REQUIRE_JTI=1 then makes
@@ -23,7 +27,11 @@ import type { AdminReplayGuard } from './admin-jti'
 
 export const ADMIN_AUDIENCE = 'orca-relay-edge-admin'
 export const ADMIN_PURPOSE = 'edge-admin'
-export type AdminOp = 'assign' | 'export' | 'erase' | 'drain' | 'verify'
+export type AdminOp = 'assign' | 'export' | 'erase' | 'drain' | 'verify' | UserIndexAdminOp
+export type UserIndexAdminOp = 'list-hosts' | 'index-host' | 'erase-user-index'
+export const USER_INDEX_ADMIN_OPS: readonly string[] = ['list-hosts', 'index-host', 'erase-user-index'] satisfies UserIndexAdminOp[]
+// Ops the erasure job's key may sign (besides the director's): erase and reading/erasing the index.
+const ERASER_OPS: readonly AdminOp[] = ['erase', 'list-hosts', 'erase-user-index']
 
 const HOST_ID = /^[A-Za-z0-9_-]{16}$/
 const ADMIN_BODY_MAX = 256 * 1024
@@ -81,6 +89,8 @@ export type VerifyResult =
   | { outcome: 'not_here' }
 
 export const EraseBodySchema = z.object({ userId: z.string().min(1), relayHostId: z.string().regex(HOST_ID) }).strict()
+export const UserBodySchema = z.object({ userId: z.string().min(1).max(256) }).strict()
+export const IndexHostBodySchema = z.object({ userId: z.string().min(1).max(256), relayHostId: z.string().regex(HOST_ID) }).strict()
 
 async function sha256B64url(bytes: ArrayBuffer): Promise<string> {
   const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))
@@ -111,9 +121,10 @@ export async function verifyAdminRequest(env: Env, request: Request, op: AdminOp
   if (!(declared >= 0 && declared <= ADMIN_BODY_MAX)) { return null }
   const raw = await request.arrayBuffer()
   if (raw.byteLength > ADMIN_BODY_MAX) { return null }
-  // The director signs every op; the erasure job, with its own key and issuer, only `erase`.
+  // The director signs every op; the erasure job, with its own key and issuer, only `erase` and
+  // the index reads and erase (ERASER_OPS).
   const signers = signingKeys(env.ADMIN_SIGNING_KEY, env.ADMIN_SIGNING_KEY_NEXT).map((key) => ({ key, issuer: adminIssuer }))
-  if (op === 'erase' && env.ERASE_ISSUER) {
+  if (ERASER_OPS.includes(op) && env.ERASE_ISSUER) {
     const issuer = env.ERASE_ISSUER
     signers.push(...signingKeys(env.ERASE_SIGNING_KEY, env.ERASE_SIGNING_KEY_NEXT).map((key) => ({ key, issuer })))
   }

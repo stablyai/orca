@@ -50,7 +50,7 @@ function approval(
   }
 }
 
-const bash = { title: 'Allow Bash?', detail: command, reason }
+const bash = { title: 'Allow Bash?', tool: 'Bash', detail: command, reason }
 const github = worker('github-install-dialog')
 const docs = worker('docs-copy-pass')
 // Far enough out that the countdown line always renders.
@@ -141,7 +141,11 @@ export const answered = defineFixture({
         }),
         closed('i', { by: 'unknown', decision: null, reason: null, reasonDelivered: false })
       ].map((entry) => (
-        <NativeChatWorkerApprovalReceipt key={entry.approval.approvalId} entry={entry} />
+        <NativeChatWorkerApprovalReceipt
+          key={entry.approval.approvalId}
+          entry={entry}
+          target={target}
+        />
       ))}
     </div>
   )
@@ -201,7 +205,7 @@ function pane(
           {
             key: allowed.approval.approvalId,
             at: Date.parse(allowed.at),
-            node: <NativeChatWorkerApprovalReceipt entry={allowed} />
+            node: <NativeChatWorkerApprovalReceipt entry={allowed} target={target} />
           }
         ]}
       />
@@ -238,15 +242,6 @@ export const openWithOwnPrompt = defineFixture({
 export const twoOpenWithOwnPromptShort = defineFixture({
   width: 760,
   render: () => pane([openBash, openDocs], true, 'h-[520px]')
-})
-
-// The click's outcome where the card was, for the moment before it moves into the transcript.
-export const settling = defineFixture({
-  width: 760,
-  render: () =>
-    pane([
-      closed('settled', { by: 'person', decision: 'allow', reason: null, reasonDelivered: false })
-    ])
 })
 
 export const receiptInPlace = defineFixture({ width: 760, render: () => pane([]) })

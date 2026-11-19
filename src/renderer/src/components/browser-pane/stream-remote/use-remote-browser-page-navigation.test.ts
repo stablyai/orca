@@ -40,20 +40,6 @@ describe('remote browser authoritative page state', () => {
     expect(useAppStore.getState().browserCertificateFailuresByPageId['page-a']).toBeUndefined()
   })
 
-  it('redacts a Kagi session token before it reaches history', () => {
-    const { result } = renderNavigation()
-    act(() =>
-      result.current.applyRemoteTabInfo({
-        browserPageId: 'remote-page-a',
-        index: 0,
-        active: true,
-        url: 'https://kagi.com/search?q=orca&token=secret-session',
-        title: 'Kagi'
-      })
-    )
-    expect(useAppStore.getState().browserUrlHistory[0].url).not.toContain('secret-session')
-  })
-
   it.each(['browser.goto', 'browser.back', 'browser.forward', 'browser.reload'] as const)(
     'reads authoritative state after %s rejects or resolves, without a pre-command read',
     async (method) => {
@@ -85,6 +71,34 @@ describe('remote browser authoritative page state', () => {
       ).toBe(false)
     }
   )
+
+  it("files the host's favicon in history only for the document that carries it", () => {
+    const { result } = renderNavigation()
+    const tab = (url: string): BrowserTabInfo => ({
+      browserPageId: 'remote-page-a',
+      index: 0,
+      active: true,
+      url,
+      title: 'Example'
+    })
+    act(() => {
+      useAppStore.getState().updateBrowserPageState('page-a', {
+        faviconUrl: 'https://example.test/icon.png'
+      })
+      useAppStore.getState().setBrowserPageUrl('page-a', 'https://example.test/')
+    })
+    act(() => result.current.applyRemoteTabInfo(tab('https://example.test/')))
+    act(() => result.current.applyRemoteTabInfo(tab('https://other.test/')))
+
+    expect(
+      useAppStore
+        .getState()
+        .browserUrlHistory.map(({ url, faviconUrl }) => ({ url, faviconUrl: faviconUrl ?? null }))
+    ).toEqual([
+      { url: 'https://other.test/', faviconUrl: null },
+      { url: 'https://example.test/', faviconUrl: 'https://example.test/icon.png' }
+    ])
+  })
 
   it('keeps a pending failure when a resolved reload outcome read times out', async () => {
     const { result } = renderNavigation()

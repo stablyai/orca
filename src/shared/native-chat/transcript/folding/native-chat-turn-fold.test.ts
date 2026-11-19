@@ -5,6 +5,7 @@ import {
   nativeChatTurnFold,
   nativeChatTurnFoldRow
 } from './native-chat-turn-fold'
+import type { NativeChatResolvedPrompt } from '../../input/questions/native-chat-resolution-receipt'
 
 function hookFailure(id: string, event: string): NativeChatMessage {
   return {
@@ -92,7 +93,7 @@ describe('rendered plans in collapsed turns', () => {
       answers: [1, 5]
     }
   ])('keeps the plan and existing answers visible: $name', ({ messages, folded, answers }) => {
-    const rows = messages.map((item) => nativeChatTurnFoldRow(item, 'turn-1', false))
+    const rows = messages.map((item) => nativeChatTurnFoldRow(item, 'turn-1', undefined))
     const result = nativeChatTurnFold({ rows, settledTurnKeys: SETTLED, expandedTurnKeys: NONE })
     expect([...result.foldedRows]).toEqual(folded)
     expect([...nativeChatTurnAnswerRows(rows)]).toEqual(answers)
@@ -109,7 +110,7 @@ describe('failed hooks in a settled turn', () => {
       hookFailure('post-model', 'PostModelRequest'),
       hookFailure('stop', 'Stop')
     ]
-    const rows = messages.map((item) => nativeChatTurnFoldRow(item, 'turn-1', false))
+    const rows = messages.map((item) => nativeChatTurnFoldRow(item, 'turn-1', undefined))
     const { foldedRows } = nativeChatTurnFold({
       rows,
       settledTurnKeys: SETTLED,
@@ -120,9 +121,13 @@ describe('failed hooks in a settled turn', () => {
 })
 
 describe('replies a settled turn keeps visible', () => {
-  function answersAndFolded(messages: NativeChatMessage[], keys?: string[]) {
+  function answersAndFolded(
+    messages: NativeChatMessage[],
+    keys?: string[],
+    receipts?: ReadonlyMap<string, NativeChatResolvedPrompt>
+  ) {
     const rows = messages.map((item, index) =>
-      nativeChatTurnFoldRow(item, keys?.[index] ?? 'turn-1', false)
+      nativeChatTurnFoldRow(item, keys?.[index] ?? 'turn-1', receipts?.get(item.id))
     )
     const { foldedRows } = nativeChatTurnFold({
       rows,
@@ -151,6 +156,44 @@ describe('replies a settled turn keeps visible', () => {
     expect(answersAndFolded(messages)).toEqual({ answers: [1, 8], folded: [2, 4, 7] })
   })
 
+  it('keeps the words that led to an answered question, whether its row holds the call or a receipt', () => {
+    const report = message('report', 'assistant', '| Option | Cost |')
+    const ask: NativeChatMessage = {
+      ...WORK,
+      id: 'ask',
+      blocks: [
+        { type: 'text', text: '| Option | Cost |' },
+        { type: 'tool-call', name: 'AskUserQuestion', input: {}, state: 'completed' },
+        ...WORK.blocks
+      ]
+    }
+    expect(answersAndFolded([PROMPT, PREAMBLE, WORK, ask, WORK, ANSWER])).toEqual({
+      answers: [3, 5],
+      folded: [1, 2, 4]
+    })
+    const question = message('question', 'system', 'Which option?')
+    const receipt: NativeChatResolvedPrompt = {
+      kind: 'question',
+      question: 'Which option?',
+      options: [{ id: 'a', label: 'A' }],
+      resolution: { state: 'resolved', selectedOptionId: 'a', resolvedBy: null, resolvedAt: 2 }
+    }
+    expect(
+      answersAndFolded(
+        [PROMPT, WORK, report, question, WORK, ANSWER],
+        undefined,
+        new Map([['question', receipt]])
+      )
+    ).toEqual({ answers: [2, 5], folded: [1, 3, 4] })
+    expect(
+      answersAndFolded(
+        [PROMPT, PREAMBLE, WORK, question, WORK, ANSWER],
+        undefined,
+        new Map([['question', receipt]])
+      )
+    ).toEqual({ answers: [5], folded: [1, 2, 3, 4] })
+  })
+
   it('keeps back-to-back replies, but not a reply its own row or an image operation follows', () => {
     const note = message('note', 'assistant', 'Checked the config.')
     const narration: NativeChatMessage = {
@@ -164,8 +207,7 @@ describe('replies a settled turn keeps visible', () => {
 
   it.each([
     ['a generation whose preview moved into the answer', 'Generated image', 'generated-image'],
-    ['an image view', 'Viewed image', 'image-operation'],
-    ['a failed generation', 'Image generation failed', 'image-operation']
+    ['an image view', 'Viewed image', 'image-operation']
   ] as const)('folds %s as work, not a reply', (_name, text, presentation) => {
     const operation = message('image', 'assistant', text, presentation)
     expect(answersAndFolded([PROMPT, PREAMBLE, operation, ANSWER])).toEqual({

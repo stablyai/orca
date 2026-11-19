@@ -49,13 +49,11 @@ export class RuntimeRepositorySparsePresets {
 
   async remove(repoSelector: string, presetId: string): Promise<void> {
     const store = this.deps.getStore()
-    if (!store?.getSparsePresets || !store.removeSparsePreset) {
+    if (!store?.removeSparsePreset) {
       throw new Error('runtime_unavailable')
     }
     const repo = await this.deps.resolveRepo(repoSelector)
     assertWslMoveRepoWritable(store, repo)
-    if (store.getSparsePresets(repo.id).some((preset) => preset.id === presetId)) {
-      store.removeSparsePreset(repo.id, presetId)
-    }
+    store.removeSparsePreset(repo.id, presetId)
   }
 }

@@ -2,7 +2,8 @@ import type { AgentGroupSummary } from '@/store/slices/agent-status/projection/a
 import { formatAgentTypeLabel } from '../../../../../../shared/agent-status/presentation/agent-type-label'
 import React, { useCallback, useRef } from 'react'
 import { ChevronDown } from 'lucide-react'
-import { AgentStateDot } from '@/components/AgentStateDot'
+import { AgentStateDot } from '@/components/agent/status/AgentStateDot'
+import { IconStack } from '@/components/IconStack'
 import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/rows/dashboard-agent-row'
 import { AgentTypeIcon } from '@/components/agent/icons/agent-type-icon'
 import { cn } from '@/lib/class-names'
@@ -204,16 +205,12 @@ export function CompactAgentSummaryButton({
                 >
                   <AgentStateDot state={group.state} size="sm" tooltipSide="right" />
                   {/* Overlap identities only within the same status cluster to save width. */}
-                  <span className="inline-flex shrink-0 items-center -space-x-0.5 pl-0.5">
-                    {iconAgents.map((agent) => (
-                      <span
-                        key={agent.paneKey}
-                        className="inline-flex size-4 items-center justify-center rounded-full border border-worktree-sidebar-border/70 bg-worktree-sidebar"
-                      >
-                        <AgentTypeIcon agentType={agent.agentType} size={13} />
-                      </span>
-                    ))}
-                  </span>
+                  <IconStack
+                    items={iconAgents.map((agent) => ({
+                      key: agent.paneKey,
+                      icon: <AgentTypeIcon agentType={agent.agentType} size={13} />
+                    }))}
+                  />
                   {hiddenIconCount > 0 && (
                     <span className="shrink-0 text-[10px] tabular-nums text-muted-foreground/70">
                       +{hiddenIconCount}

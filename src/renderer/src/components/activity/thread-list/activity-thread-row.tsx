@@ -9,7 +9,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import '../../sidebar/workspace-card/activity/worktree-card-empty-inputs'
 import { FilledBellIcon } from '../../sidebar/workspace-card/identity/worktree-card-glyphs'
-import CommentMarkdown from '../../sidebar/CommentMarkdown'
+import CommentMarkdown from '../../comment-markdown/CommentMarkdown'
 import { EventTime, ThreadAgentStateIndicator } from './activity-thread-controls'
 import { ActivityThreadHoverCard } from '../thread-preview/activity-thread-hover-card'
 import { activityThreadRowCopy } from '../threads/activity-thread-presentation'
@@ -145,6 +145,7 @@ export const ActivityThreadRow = React.memo(function ActivityThreadRow({
               showMarkdownStatus ? (
                 <CommentMarkdown
                   content={statusLine}
+                  singleTildeStrikethrough={false}
                   className={cn(
                     'min-w-0 break-words text-[13px] leading-5 text-foreground/80',
                     compactMode ? 'line-clamp-2' : 'line-clamp-3',

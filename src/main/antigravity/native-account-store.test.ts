@@ -263,7 +263,7 @@ describe('protected Antigravity account snapshots', () => {
     await service.selectAccount(id)
     h.setNative(refreshedWithoutIdToken(2))
     await service.prepareForLaunch()
-    const restarted = new AntigravityAccountService(store, h.backend)
+    const restarted = new AntigravityAccountService(store, h.backend, Date.now, h.lookupIdentity)
     h.setNative(refreshedWithoutIdToken(3))
     expect(await restarted.listAccounts()).toMatchObject({
       activeAccountId: id,
@@ -274,6 +274,49 @@ describe('protected Antigravity account snapshots', () => {
     expect(store.read().accounts[0].credentials).toBe(refreshedWithoutIdToken(3))
     h.setNative(refreshedWithoutIdToken(4, 'refresh-other-grant'))
     await expect(restarted.prepareForLaunch()).rejects.toThrow('native Antigravity account changed')
+    expect(h.backend.write).not.toHaveBeenCalled()
+  })
+
+  it('removes the selected account after agy signs in to another one, unblocking launches', async () => {
+    const h = harness()
+    const id = (await h.service.addCurrentAccount()).activeAccountId!
+    await h.service.selectAccount(id)
+    await expect(h.service.removeAccount(id)).rejects.toThrow('Switch agy to another account')
+    h.setNative(credential('b'))
+    await expect(h.service.prepareForLaunch()).rejects.toThrow('native Antigravity account changed')
+    expect(await h.service.removeAccount(id)).toMatchObject({
+      accounts: [],
+      activeAccountId: null,
+      selectedAccountId: null,
+      currentAccount: { subject: 'b' }
+    })
+    await h.service.prepareForLaunch()
+    expect(h.getNative()).toBe(credential('b'))
+  })
+
+  it('follows a rewritten login with a new grant when Google names the same account', async () => {
+    const h = harness()
+    const store = createEncryptedAntigravityAccountStore(join(dir, 'vault'))
+    const service = new AntigravityAccountService(store, h.backend, Date.now, h.lookupIdentity)
+    const id = (await service.addCurrentAccount()).activeAccountId!
+    await service.selectAccount(id)
+    h.lookupIdentity.mockResolvedValue({
+      issuer: 'https://accounts.google.com',
+      subject: 'a',
+      email: 'a@example.invalid'
+    })
+    h.setNative(refreshedWithoutIdToken(5, 'refresh-rotated'))
+    await service.prepareForLaunch()
+    expect(store.read().accounts[0].credentials).toBe(refreshedWithoutIdToken(5, 'refresh-rotated'))
+    await service.prepareForLaunch()
+    expect(h.lookupIdentity).toHaveBeenCalledTimes(1)
+    h.lookupIdentity.mockResolvedValue({
+      issuer: 'https://accounts.google.com',
+      subject: 'someone-else',
+      email: null
+    })
+    h.setNative(refreshedWithoutIdToken(6, 'refresh-other-grant'))
+    await expect(service.prepareForLaunch()).rejects.toThrow('native Antigravity account changed')
     expect(h.backend.write).not.toHaveBeenCalled()
   })
 

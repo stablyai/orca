@@ -102,7 +102,7 @@ index eebfda3b3df9b4c8cefcc6a64692053ed5eaeefa..75e34767bd1e12802b72371fddb5fc90
          this._updateRectangle(vertices, offset, currentFg, currentBg, currentStartX, terminal.cols, y);
        }
 diff --git a/src/TextureAtlas.ts b/src/TextureAtlas.ts
-index eff0d0e1c36906b1f14b85fb8db7907bf685c8a7..1fb0b7a971e33e1dbd2dcf9841645ca464617af2 100644
+index eff0d0e1c36906b1f14b85fb8db7907bf685c8a7..493e2185fbcad504a057685045b06bdc3f0eec1b 100644
 --- a/src/TextureAtlas.ts
 +++ b/src/TextureAtlas.ts
 @@ -3,6 +3,7 @@
@@ -226,10 +226,12 @@ index eff0d0e1c36906b1f14b85fb8db7907bf685c8a7..1fb0b7a971e33e1dbd2dcf9841645ca4
    private _drawToCache(codeOrChars: number | string, bg: number, fg: number, ext: number, restrictToCellHeight: boolean, domContainer: HTMLElement | undefined): IRasterizedGlyph {
      const chars = typeof codeOrChars === 'number' ? String.fromCharCode(codeOrChars) : codeOrChars;
  
-@@ -539,6 +577,7 @@ export class TextureAtlas implements ITextureAtlas {
+@@ -538,7 +576,8 @@ export class TextureAtlas implements ITextureAtlas {
+     const fontWeight = bold ? this._config.fontWeightBold : this._config.fontWeight;
      const fontStyle = italic ? 'italic' : '';
      this._tmpCtx.font =
-       `${fontStyle} ${fontWeight} ${this._config.fontSize * this._config.devicePixelRatio}px ${this._config.fontFamily}`;
+-      `${fontStyle} ${fontWeight} ${this._config.fontSize * this._config.devicePixelRatio}px ${this._config.fontFamily}`;
++      `${fontStyle} ${fontWeight} ${this._config.fontSize * this._config.devicePixelRatio}px ${this._config.fontFamily}`.trim();
 +    this._probeRasterizationFontWeight(fontWeight);
      this._tmpCtx.textBaseline = TEXT_BASELINE;
  

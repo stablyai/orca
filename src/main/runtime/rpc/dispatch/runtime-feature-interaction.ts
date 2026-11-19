@@ -36,6 +36,10 @@ export function getRuntimeFeatureInteractionId(
   ) {
     return 'computer-use'
   }
+  // A read-only location lookup (opening a chat, resolving a chat's workspace) is not orchestration use.
+  if (method === 'orchestration.partyLocation') {
+    return null
+  }
   return method.startsWith('orchestration.') ? 'agent-orchestration' : null
 }
 

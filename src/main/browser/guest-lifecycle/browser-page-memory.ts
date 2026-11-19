@@ -21,6 +21,7 @@ export {
   startBrowserPageAttach,
   hasPendingBrowserPageAttach
 } from './browser-page-attach'
+import { noteBrowserPageClosed } from './browser-page-partition-presence'
 
 export function bindBrowserPageMemoryInvalidation(
   pageId: string,
@@ -258,6 +259,7 @@ export function closeBrowserMemoryPage(pageId: string): void {
   forgetBrowserPageAttach(page)
   page.history = null
   pages.delete(pageId)
+  noteBrowserPageClosed(page.partition)
   for (const retired of page.retired.values()) {
     if (!retired.guest.isDestroyed()) {
       retired.guest.close({ waitForBeforeUnload: false })
@@ -292,7 +294,7 @@ export async function waitForBrowserPageReady(
       'browser_navigation_failed',
       'The browser page could not be restored. Try reloading it.'
     )
-  } else if (guest.isLoading()) {
+  } else if (guest.isLoadingMainFrame()) {
     await waitForBrowserGuestLoad(guest)
   }
 }

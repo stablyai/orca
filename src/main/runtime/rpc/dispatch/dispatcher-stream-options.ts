@@ -72,6 +72,7 @@ export function rpcContextFromTransport(
     caller: resolveRpcCallerIdentity(options),
     plugin: options?.plugin,
     clientKind: options?.clientKind,
+    callerScope: options?.callerScope,
     clientCapabilities: options?.clientCapabilities,
     capabilitySource: options?.capabilitySource,
     updateClientCapabilities: options?.updateClientCapabilities,

@@ -15,7 +15,10 @@ import { tabGroupBodyAnchorName } from './retained-pane/tab-group-body-anchor'
 import { registerTabGroupBody } from './retained-pane/tab-group-body-geometry'
 import { observeTabGroupBodyGridSize } from '@/runtime/sync-runtime-graph/graph-sync-scheduler'
 import { useTranslate } from '@/i18n/use-translate'
-import type { TabGroup } from '../../../../shared/workspace-layout/tab-groups/tab-types'
+import {
+  toVisibleTabType,
+  type TabGroup
+} from '../../../../shared/workspace-layout/tab-groups/tab-types'
 import { isStructuredTab } from '../../../../shared/agent-session/view/structured-agent-session-tab'
 import type { ClientHostedBrowserRow } from '../../../../shared/browser/client-hosting/client-hosted-browser-rows'
 import { useClientHostedBrowserRows } from '@/runtime/browser/client-hosting/client-hosted-browser-row-state'
@@ -23,6 +26,8 @@ import { resolveClientHostedBrowserRowStripGroupId } from '../tab-bar/browser-ta
 import { useEditorGroupFileDropOwner } from '../editor/file-drop/use-editor-group-file-drop-owner'
 import { cn } from '@/lib/class-names'
 import { UNFOCUSED_SPLIT_GROUP_OPACITY } from './panel/split-group-dim'
+import { useBotForWorkspace } from '../bots/bot-workspace'
+import { BotPausedBanner } from '../bots/BotPausedBanner'
 import { useWindowBackdropActive } from '@/app-shell/appearance/window-backdrop'
 import { EditorRevealFlash } from './editor-reveal/EditorRevealFlash'
 import { SplitPaneLanding } from './landing/SplitPaneLanding'
@@ -78,6 +83,8 @@ export default function TabGroupPanel({
   const sidebarOpen = useAppStore((state) => state.sidebarOpen)
   const reserveRightTitlebarSpace = reserveClosedExplorerToggleSpace && !rightSidebarOpen
   const model = useTabGroupWorkspaceModel({ groupId, worktreeId })
+  // A bot's page chrome sits in the top-right strip, the one that spacing flag marks, so splits show it once.
+  const bot = useBotForWorkspace(reserveClosedExplorerToggleSpace ? worktreeId : null)
   const quickCommandsSlotRef = useRef<HTMLDivElement>(null)
   const {
     activeTab,
@@ -143,7 +150,7 @@ export default function TabGroupPanel({
       activeTabId={
         activeTab?.contentType === 'terminal'
           ? activeTab.entityId
-          : activeTab?.contentType === 'agent-session'
+          : activeTab && toVisibleTabType(activeTab.contentType) === 'agent-session'
             ? activeTab.id
             : null
       }
@@ -154,7 +161,11 @@ export default function TabGroupPanel({
       onActivate={commands.activateTerminal}
       onClose={(terminalId) => {
         const item = resolveGroupTabFromVisibleId(model.groupTabs, terminalId)
-        if (item?.contentType === 'terminal' || item?.contentType === 'agent-session') {
+        if (
+          item?.contentType === 'terminal' ||
+          item?.contentType === 'agent-session' ||
+          item?.contentType === 'room'
+        ) {
           commands.closeItem(item.id)
           return
         }
@@ -195,26 +206,11 @@ export default function TabGroupPanel({
       groupActiveTabId={activeTab?.id ?? null}
       agentSessionTabs={agentSessionItems}
       activeFileId={
-        activeTab?.contentType === 'terminal' ||
-        activeTab?.contentType === 'agent-session' ||
-        activeTab?.contentType === 'browser' ||
-        activeTab?.contentType === 'simulator'
-          ? null
-          : activeTab?.id
+        activeTab && toVisibleTabType(activeTab.contentType) !== 'editor' ? null : activeTab?.id
       }
       activeBrowserTabId={activeTab?.contentType === 'browser' ? activeTab.entityId : null}
       activeSimulatorTabId={activeTab?.contentType === 'simulator' ? activeTab.id : null}
-      activeTabType={
-        activeTab?.contentType === 'terminal'
-          ? 'terminal'
-          : activeTab?.contentType === 'agent-session'
-            ? 'agent-session'
-            : activeTab?.contentType === 'browser'
-              ? 'browser'
-              : activeTab?.contentType === 'simulator'
-                ? 'simulator'
-                : 'editor'
-      }
+      activeTabType={activeTab ? toVisibleTabType(activeTab.contentType) : 'editor'}
       onActivateFile={commands.activateEditor}
       onCloseFile={commands.closeItem}
       onActivateBrowserTab={commands.activateBrowser}
@@ -318,8 +314,12 @@ export default function TabGroupPanel({
                 style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
               >
                 {/* Why: drop an action whole (and from Tab order) once it can't fit beside the tab floor and "+", never leave a clipped focus target.
-                    163 = 40 tab + 36 "+" + 8 padding + 47 widest collapsed quick-command trigger + 2 gap + 28 pane actions + 2 sub-pixel slack; 114 = 40 + 36 + 8 + 28 + 2. */}
-                <div ref={quickCommandsSlotRef} className="contents @max-[163px]/tab-strip:hidden">
+                    163 = 40 tab + 36 "+" + 8 padding + 47 widest collapsed quick-command trigger + 2 gap + 28 pane actions + 2 sub-pixel slack; 114 = 40 + 36 + 8 + 28 + 2.
+                    Narrow strips park it invisible at the pane's top-right edge instead of display:none, so the shortcut menu still has an anchor rect. */}
+                <div
+                  ref={quickCommandsSlotRef}
+                  className="contents @max-[163px]/tab-strip:invisible @max-[163px]/tab-strip:absolute @max-[163px]/tab-strip:end-0 @max-[163px]/tab-strip:top-0 @max-[163px]/tab-strip:block"
+                >
                   <TabBarQuickCommandsButton
                     worktreeId={worktreeId}
                     groupId={groupId}
@@ -355,6 +355,7 @@ export default function TabGroupPanel({
         </div>
       )}
 
+      {bot?.paused ? <BotPausedBanner bot={bot} /> : null}
       <div
         ref={setBodyRef}
         data-tab-group-body-id={groupId}
@@ -378,32 +379,28 @@ export default function TabGroupPanel({
             data-active-content-type={activeTab?.contentType}
           />
         ) : null}
-        {activeTab &&
-          activeTab.contentType !== 'terminal' &&
-          activeTab.contentType !== 'agent-session' &&
-          activeTab.contentType !== 'browser' &&
-          activeTab.contentType !== 'simulator' && (
-            // Why: a capture-phase owner, so Monaco never sees the drop and the file opens as a tab here.
-            <div ref={attachEditorFileDropOwner} className="absolute inset-0 flex min-h-0 min-w-0">
-              {/* Why: split groups render editor content in a plain relative pane body, not the legacy Terminal.tsx flex column. */}
-              <Suspense
-                fallback={
-                  <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
-                    {t('auto.components.tab.group.TabGroupPanel.814fb04c43', 'Loading editor...')}
-                  </div>
-                }
-              >
-                <EditorPanel
-                  activeFileId={activeTab.entityId}
-                  activeViewStateId={activeTab.id}
-                  isVisible={isVisible}
-                  isCmdSaveOwner={isFocused}
-                  markdownAnnotationsEnabled={markdownAnnotationsEnabled}
-                />
-              </Suspense>
-              <EditorRevealFlash viewStateId={activeTab.id} />
-            </div>
-          )}
+        {activeTab && toVisibleTabType(activeTab.contentType) === 'editor' && (
+          // Why: a capture-phase owner, so Monaco never sees the drop and the file opens as a tab here.
+          <div ref={attachEditorFileDropOwner} className="absolute inset-0 flex min-h-0 min-w-0">
+            {/* Why: split groups render editor content in a plain relative pane body, not the legacy Terminal.tsx flex column. */}
+            <Suspense
+              fallback={
+                <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
+                  {t('auto.components.tab.group.TabGroupPanel.814fb04c43', 'Loading editor...')}
+                </div>
+              }
+            >
+              <EditorPanel
+                activeFileId={activeTab.entityId}
+                activeViewStateId={activeTab.id}
+                isVisible={isVisible}
+                isCmdSaveOwner={isFocused}
+                markdownAnnotationsEnabled={markdownAnnotationsEnabled}
+              />
+            </Suspense>
+            <EditorRevealFlash viewStateId={activeTab.id} />
+          </div>
+        )}
 
         {showsSplitLanding ? (
           <SplitPaneLanding

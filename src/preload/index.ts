@@ -45,6 +45,7 @@ import { cliApi } from './api/cli-install/cli-bridge'
 import { orcaUninstallApi } from './api/orca-uninstall/orca-uninstall-bridge'
 import { codexConfigSyncApi } from './api/agent-accounts/codex-config-sync-bridge'
 import { preflightApi } from './api/preflight/preflight-bridge'
+import { backgroundWorkerApi } from './api/diagnostics/background-worker-bridge'
 import { notificationsApi } from './api/notifications/notifications-bridge'
 import { onboardingApi } from './api/onboarding/onboarding-bridge'
 import { dashboardApi } from './api/window-ui/dashboard-bridge'
@@ -53,6 +54,9 @@ import { macosTccPromptsApi } from './api/desktop-permissions/macos-tcc-prompts-
 import { developerPermissionsApi } from './api/desktop-permissions/developer-permissions-bridge'
 import { computerUsePermissionsApi } from './api/desktop-permissions/computer-use-permissions-bridge'
 import { shellApi } from './api/terminal/shell-bridge'
+import { botChangesApi } from './api/bot-changes-bridge'
+import { googleSetupApi } from './api/google-setup-bridge'
+import { slackHandOffApi } from './api/slack-hand-off-bridge'
 import { skillsApi } from './api/skills/skills-bridge'
 import { petApi } from './api/pets/pet-bridge'
 import { appIconApi } from './api/window-ui/app-icon-bridge'
@@ -155,6 +159,7 @@ const api = {
   orcaUninstall: orcaUninstallApi,
   codexConfigSync: codexConfigSyncApi,
   preflight: preflightApi,
+  backgroundWorker: backgroundWorkerApi,
   notifications: notificationsApi,
   onboarding: onboardingApi,
   dashboard: dashboardApi,
@@ -163,6 +168,9 @@ const api = {
   developerPermissions: developerPermissionsApi,
   computerUsePermissions: computerUsePermissionsApi,
   shell: shellApi,
+  botChanges: botChangesApi,
+  googleSetup: googleSetupApi,
+  slackHandOff: slackHandOffApi,
   skills: skillsApi,
   pet: petApi,
   appIcon: appIconApi,

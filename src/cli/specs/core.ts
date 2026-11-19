@@ -110,10 +110,11 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['worktree', 'ps'],
     summary: 'Show a compact orchestration summary across worktrees',
-    usage: 'orca worktree ps [--limit <n>] [--agent-wait] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'limit', 'agent-wait'],
+    usage: 'orca worktree ps [--since <age>] [--limit <n>] [--agent-wait] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'since', 'limit', 'agent-wait'],
     notes: [
       ...WORKTREE_LISTING_SCOPE_NOTES,
+      'Each workspace shows its project, the bot it is under (if any), its PR and issue, and each open agent with what it was last asked and last said. An idle agent is open at its prompt; `--terminal` messages it. "open, no handle yet" is a live agent with no handle; `orca terminal list --worktree <id>` gives its terminal one. --since 7d (or 30m, 12h, 2w) lists only workspaces active in that time, most recent first.',
       'JSON omits agentWait by default; pass --agent-wait to add the `terminal show` wait verdict to each terminal-backed agent row on the returned page.'
     ]
   },

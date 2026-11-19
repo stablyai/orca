@@ -6,6 +6,7 @@ import {
   type ExecutionHostId
 } from '../../../../../shared/execution-host/execution-host'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
+import type { Bot } from '../../../../../shared/bot-types'
 
 // Why: lucide-react@0.577's LucideProps omits className despite documenting it,
 // so allow the call-site className through the intersection.
@@ -49,7 +50,9 @@ const SETTINGS_NAV_TARGETS = [
   'artifacts',
   'session-history',
   'share-skills',
+  'shared-links',
   'automations',
+  'bots',
   'orca-account',
   'linear',
   'setup-guide',
@@ -88,6 +91,7 @@ export type SettingsNavigationTarget = {
   hostId?: ExecutionHostId
   /** Host to select in the page-level Host picker; the project-host `hostId` does not move it. */
   hostScope?: RuntimeClientTarget
+  /** With pane `bots`, the bot whose page opens. */
   sectionId?: string
   intent?: (typeof SETTINGS_NAV_INTENTS)[number]
 }
@@ -131,6 +135,8 @@ export type SettingsNavSection = {
   group: string
   badge?: string
   installStatus?: SettingsNavInstallStatus
+  /** A bot's page: its nav row shows the bot's avatar in place of the icon. */
+  bot?: Pick<Bot, 'id' | 'name' | 'avatar' | 'hostId'>
 }
 
 export type SettingsNavGroup = {

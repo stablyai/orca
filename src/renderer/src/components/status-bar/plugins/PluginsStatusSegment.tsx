@@ -1,6 +1,6 @@
 import { Blocks } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
+import { ShortcutKeyCombo } from '@/components/ui/ShortcutKeyCombo'
 import { useShortcutKeyComboDetails } from '@/lib/keyboard/useShortcutLabel'
 import { togglePluginsSettings } from '@/components/settings/navigation/open-plugins-settings'
 import { useTranslate } from '@/i18n/use-translate'
