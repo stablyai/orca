@@ -45,3 +45,22 @@ it('carries Default to a capable creation host', async () => {
     startupOmitEffort: true
   })
 })
+
+it('keeps admitted Default when a repeated capability probe would fail', async () => {
+  let worktreeReads = 0
+  mocks.supports.mockImplementation(async (_host: string, capability: string) => {
+    if (capability === 'worktree.create-agent-options.v1') {
+      if (++worktreeReads > 1) {
+        throw new Error('offline')
+      }
+    }
+    return true
+  })
+  await createWorktreeOnRuntimeHost('host', request, { name: 'task' }, {})
+  expect(mocks.call.mock.calls[0]?.[2]).toMatchObject({
+    repo: 'repo',
+    name: 'task',
+    startupAgent: 'claude',
+    startupOmitEffort: true
+  })
+})

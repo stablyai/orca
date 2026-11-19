@@ -232,7 +232,12 @@ export function applyAgentPickerEdit(
     patch,
     sourceEdit: true,
     ...(patch.permissionMode !== undefined
-      ? { permissionRanges: agentPickerArgumentPermission(entry, draft)?.ranges }
+      ? {
+          permissionRanges: agentPickerArgumentPermission(
+            entry,
+            clearedEffort === null ? draft : { ...draft, arguments: clearedEffort }
+          )?.ranges
+        }
       : {})
   })
   if ([...keys].some((key) => analysis.opaqueKeys.has(key))) {

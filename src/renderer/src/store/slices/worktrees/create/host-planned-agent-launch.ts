@@ -39,20 +39,17 @@ export async function createWorktreeOnRuntimeHost(
       { timeoutMs: 10 * 60_000 }
     )
   const creationLaunch = request.options?.creationAgentLaunch
+  const supportsCreation = creationLaunch
+    ? await hostSupportsCapability(environmentId, WORKTREE_CREATE_AGENT_OPTIONS_RUNTIME_CAPABILITY)
+    : false
   if (
     creationLaunch?.inputs?.omitEffort &&
-    (!(await hostSupportsCapability(environmentId, AGENT_LAUNCH_OMIT_EFFORT_RUNTIME_CAPABILITY)) ||
-      !(await hostSupportsCapability(
-        environmentId,
-        WORKTREE_CREATE_AGENT_OPTIONS_RUNTIME_CAPABILITY
-      )))
+    (!supportsCreation ||
+      !(await hostSupportsCapability(environmentId, AGENT_LAUNCH_OMIT_EFFORT_RUNTIME_CAPABILITY)))
   ) {
     throw new Error('This host cannot launch with Default effort. Update the host, then try again.')
   }
-  if (
-    creationLaunch &&
-    (await hostSupportsCapability(environmentId, WORKTREE_CREATE_AGENT_OPTIONS_RUNTIME_CAPABILITY))
-  ) {
+  if (creationLaunch && supportsCreation) {
     try {
       return await call(undefined, creationLaunch)
     } catch (error) {
