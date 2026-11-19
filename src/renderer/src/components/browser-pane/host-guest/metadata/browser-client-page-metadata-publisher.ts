@@ -26,6 +26,8 @@ export function createBrowserClientPageMetadataPublisher(options: {
   browserPageId: string
   placement: RuntimeBrowserClientPlacement
   nextRevision: () => number
+  /** The page's icon when the publisher starts, since a retained guest sends no new icon event. */
+  faviconUrl: string | null
   publish: BrowserClientPageMetadataPublish
   onUnpublished?: (detail: BrowserClientPageMetadataUnpublished) => void
 }): {
@@ -38,8 +40,7 @@ export function createBrowserClientPageMetadataPublisher(options: {
   let inFlight = false
   let pending: PublishedMetadata | null = null
   let last: BrowserClientPageMetadataSnapshot | null = null
-  // Unknown until this pane sees an icon event; omitting it keeps the runtime's icon.
-  let faviconUrl: string | null | undefined
+  let faviconUrl = remoteTabFaviconUrl(options.faviconUrl)
 
   const settle = (): void => {
     inFlight = false
@@ -99,7 +100,7 @@ export function createBrowserClientPageMetadataPublisher(options: {
       return
     }
     last = snapshot
-    const fullSnapshot = { ...snapshot, ...(faviconUrl === undefined ? {} : { faviconUrl }) }
+    const fullSnapshot = { ...snapshot, faviconUrl }
     if (inFlight) {
       pending = fullSnapshot
       return
@@ -112,7 +113,7 @@ export function createBrowserClientPageMetadataPublisher(options: {
     publishFavicon: (next) => {
       // The runtime rejects an over-long icon, which would drop the whole update with it.
       const safe = remoteTabFaviconUrl(next)
-      const arrivedOrCleared = (safe === null) !== (faviconUrl == null)
+      const arrivedOrCleared = (safe === null) !== (faviconUrl === null)
       faviconUrl = safe
       // Animated icons swap many times a second, so a swap rides the next metadata publish.
       if (arrivedOrCleared && last) {

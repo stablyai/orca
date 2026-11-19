@@ -53,7 +53,7 @@ describe('browser.clientHost.pageMetadata RPC', () => {
       faviconUrl: icon
     })
     expect(projectedIcon()).toBe(icon)
-    // A remounted pane has seen no icon event yet and leaves the field out.
+    // An older desktop leaves the field out.
     await dispatchMetadata(harness.dispatcher, metadata(harness.placement, 2))
     expect(projectedIcon()).toBe(icon)
     await dispatchMetadata(harness.dispatcher, {

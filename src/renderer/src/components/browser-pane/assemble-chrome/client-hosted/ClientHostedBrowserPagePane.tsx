@@ -192,13 +192,9 @@ export function ClientHostedBrowserPagePane(props: Props) {
     const publisher = startBrowserClientPageMetadataPublisher({
       browserPageId: browserTab.id,
       environmentId: runtimeEnvironmentId,
-      placement: {
-        kind: 'client',
-        browserHostClientId,
-        browserHostGeneration,
-        pageHostGeneration
-      },
-      nextRevision: attachment.nextMetadataRevision
+      placement: { kind: 'client', browserHostClientId, browserHostGeneration, pageHostGeneration },
+      nextRevision: attachment.nextMetadataRevision,
+      faviconUrl: readCurrentPage()?.faviconUrl ?? null
     })
     webviewRef.current = webview
     setAttachmentError(null)
