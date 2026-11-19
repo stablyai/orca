@@ -118,7 +118,7 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEven
       getLivenessVerdict: (ptyId) => this.getPtyLivenessVerdict(ptyId),
       getSummary
     })
-    const { mirroredWorktreeIdByTabId, connectedPtyEvidence } =
+    const { mirroredWorktreeIdByTabId, connectedPtyEvidence, savedAgentRecords } =
       applyRuntimeWorktreePsSessionActivity({
         store: this.store,
         summaries,
@@ -132,7 +132,7 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEven
     const rowSources = collectRuntimeWorktreeAgentSources({
       mirroredWorktreeIdByTabId,
       connectedPtyEvidence,
-      hookSnapshots: this.getAgentStatusSnapshotFn?.() ?? [],
+      hookSnapshots: this.paneAgentStatuses(undefined, savedAgentRecords),
       readStructuredSummary: getStructuredAgentSessionHost()?.readStatusSummary
     })
     attachRuntimeWorktreeAgentRows({

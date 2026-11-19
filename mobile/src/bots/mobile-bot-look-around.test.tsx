@@ -65,8 +65,12 @@ import { MobileBotUpNext, type UpNextActions } from './MobileBotUpNext'
 import { useBotUpNext } from './use-bot-up-next'
 import type { RouteBot } from './use-route-bot'
 
-// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mocked operations never touch the client.
-const client = {} as RpcClient
+// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mocked operations never touch the client; Settings reads its state.
+const client = {
+  getState: () => 'connected',
+  onStateChange: () => () => {},
+  getLastConnectedAt: () => 1
+} as unknown as RpcClient
 
 const bot: RouteBot['bot'] = {
   id: 'bot-1',
@@ -145,6 +149,8 @@ function settings(lookNow = vi.fn()) {
       routeBot,
       client,
       showToast: () => {},
+      online: true,
+      hostName: 'Studio Mac',
       accessRequests: null,
       lookAround: { onLookNow: lookNow, busy: false }
     })
@@ -158,10 +164,14 @@ describe('Look around in the phone’s bot Settings', () => {
       accessibilityLabel: 'Weekdays only'
     })
     await act(async () => weekdays?.props.onValueChange(false))
-    expect(mocks.update).toHaveBeenCalledExactlyOnceWith(client, {
-      botId: 'bot-1',
-      updates: { lookAround: { weekdaysOnly: false } }
-    })
+    expect(mocks.update).toHaveBeenCalledExactlyOnceWith(
+      client,
+      {
+        botId: 'bot-1',
+        updates: { lookAround: { weekdaysOnly: false } }
+      },
+      { failWhenDisconnected: true }
+    )
   })
 
   it('picks How often on its own page, then returns to Settings', async () => {
@@ -169,10 +179,14 @@ describe('Look around in the phone’s bot Settings', () => {
     press(root, 'How often, Every 4 hours, 8 AM to 8 PM')
     expect(texts(root)).toContain('Each morning at 8 AM')
     await act(async () => press(root, 'Each morning at 8 AM'))
-    expect(mocks.update).toHaveBeenCalledExactlyOnceWith(client, {
-      botId: 'bot-1',
-      updates: { lookAround: { every: 'mornings' } }
-    })
+    expect(mocks.update).toHaveBeenCalledExactlyOnceWith(
+      client,
+      {
+        botId: 'bot-1',
+        updates: { lookAround: { every: 'mornings' } }
+      },
+      { failWhenDisconnected: true }
+    )
     expect(texts(root)).toContain('Last looked')
   })
 
@@ -182,10 +196,14 @@ describe('Look around in the phone’s bot Settings', () => {
     const [field] = root.findAllByProps({ returnKeyType: 'done' })
     act(() => field?.props.onChangeText('  CI on main '))
     await act(async () => press(root, 'Save'))
-    expect(mocks.update).toHaveBeenCalledExactlyOnceWith(client, {
-      botId: 'bot-1',
-      updates: { lookAround: { focus: 'CI on main' } }
-    })
+    expect(mocks.update).toHaveBeenCalledExactlyOnceWith(
+      client,
+      {
+        botId: 'bot-1',
+        updates: { lookAround: { focus: 'CI on main' } }
+      },
+      { failWhenDisconnected: true }
+    )
   })
 
   it('asks the host to look now', () => {
@@ -200,6 +218,8 @@ describe('Look around in the phone’s bot Settings', () => {
         routeBot,
         client,
         showToast: () => {},
+        online: true,
+        hostName: 'Studio Mac',
         accessRequests: null,
         lookAround: null
       })
@@ -288,7 +308,8 @@ describe('useBotUpNext', () => {
       showing: props.showing ?? false,
       showToast: () => {},
       onStart: props.onStart,
-      refresh: props.refresh
+      refresh: props.refresh,
+      online: true
     })
     return null
   }
@@ -300,10 +321,11 @@ describe('useBotUpNext', () => {
     const out: Hook[] = []
     render(createElement(Probe, { onStart, refresh, out }))
     await act(async () => out[0]?.start?.('s1'))
-    expect(mocks.start).toHaveBeenCalledWith(client, {
-      botId: 'bot-1',
-      suggestionId: 's1'
-    })
+    expect(mocks.start).toHaveBeenCalledWith(
+      client,
+      { botId: 'bot-1', suggestionId: 's1' },
+      { failWhenDisconnected: true }
+    )
     expect(onStart).toHaveBeenCalledWith('Review PR #12')
     expect(refresh).toHaveBeenCalled()
   })

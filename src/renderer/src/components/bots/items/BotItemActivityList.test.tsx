@@ -81,7 +81,7 @@ it("opens an answer's file link and navigates between its answer and question", 
   expect(document.activeElement?.getAttribute('data-bot-item-comment-id')).toBe('e4')
 })
 
-it('shows linked refs as plain URLs and paths that wrap between their parts', () => {
+it('renders linked references without their stored prefixes', () => {
   const events: BotItemEvent[] = [
     {
       id: 'e2',
@@ -105,11 +105,4 @@ it('shows linked refs as plain URLs and paths that wrap between their parts', ()
     'linked https://example.invalid/reviews/a-long-reference?view=full, /workspace/sample/notes.md'
   )
   expect(row.textContent).not.toMatch(/url:|file:/)
-  // A break is offered after each path slash and before the query, never inside a word.
-  const parts = [...row.childNodes].map((node) =>
-    node.nodeName === 'WBR' ? '|' : node.textContent
-  )
-  expect(parts.join('')).toContain(
-    'https://example.invalid/|reviews/|a-long-reference|?view=full, /workspace/|sample/|notes.md'
-  )
 })

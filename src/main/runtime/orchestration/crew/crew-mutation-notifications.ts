@@ -48,7 +48,6 @@ const mutations = [
   'reconcileFederatedWorkerStart',
   'reconcileMissingWorkerTerminal',
   'promoteReadyTasks',
-  'bindRun',
   'createRun',
   'createQuestion',
   'answerQuestion',
@@ -65,7 +64,6 @@ const mutations = [
   'settleWorkerStop',
   'settleDeadWorkerTerminalReleases',
   'markWorkerStopUnknown',
-  'unbindOtherRunsForCoordinator',
   'recordAttemptObservation',
   'resetAll',
   'resetTasks',
@@ -86,6 +84,48 @@ const trafficMutations: ReadonlySet<keyof OrchestrationDb> = new Set([
   'resolveGate',
   'timeoutGate'
 ])
+
+type MailboxScope = (args: unknown[], result: unknown) => string[] | undefined
+
+const idOf = (value: unknown): string | undefined =>
+  typeof value === 'object' && value !== null && 'id' in value && typeof value.id === 'string'
+    ? value.id
+    : undefined
+const createdRun: MailboxScope = (_args, result) => {
+  const id = idOf(result)
+  return id ? [`run:${id}`] : undefined
+}
+const createdDispatch: MailboxScope = (_args, result) => {
+  const id = idOf(result)
+  return id ? [`dispatch:${id}`] : undefined
+}
+const namedDispatch: MailboxScope = ([id]) =>
+  typeof id === 'string' ? [`dispatch:${id}`] : undefined
+
+/** The mailboxes whose owner a mutation can change, named by the mutation itself; progress records
+ *  touch none. Mutations without an entry leave their scope unknown, which consumers treat as all. */
+const mailboxScopes: Partial<Record<(typeof mutations)[number], MailboxScope>> = {
+  createRun: createdRun,
+  createDispatchContext: createdDispatch,
+  markWorkerDispatchReady: namedDispatch,
+  completeDispatch: namedDispatch,
+  failDispatch: namedDispatch,
+  abandonWorkerDispatch: namedDispatch,
+  failWorkerStart: namedDispatch,
+  transitionLifecycle: ([params]) => {
+    if (typeof params !== 'object' || params === null) {
+      return undefined
+    }
+    const id = 'id' in params ? params.id : undefined
+    const entity = 'entity' in params ? params.entity : undefined
+    // A worker row is keyed by its dispatch id; a task's mailboxes are unknown here.
+    return typeof id === 'string' && (entity === 'dispatch' || entity === 'worker')
+      ? [`dispatch:${id}`]
+      : undefined
+  },
+  recordWorkerStage: () => [],
+  recordAttemptObservation: () => []
+}
 
 /** Wake after the synchronous outer mutation; nested writes coalesce and rolled-back reads compare equal. */
 export function attachCrewMutationNotifications(ctor: { prototype: CrewMutationPrototype }): void {
@@ -185,10 +225,15 @@ export function attachCrewMutationNotifications(ctor: { prototype: CrewMutationP
         ) {
           return result
         }
+        const mailboxes = mailboxScopes[name]?.(args, result)
+        const notify = (change: CrewInvalidation) =>
+          this.crewChanges.notify(
+            mailboxes ? Object.assign(change, { trafficAddresses: new Set(mailboxes) }) : change
+          )
         const runParties = name === 'createRun' ? runCoordinatorParties(args[0]) : null
         if (scoped && written) {
           written.dispatchIds.add(scoped)
-          this.crewChanges.notify(
+          notify(
             scopedCrewChange([progressMutations.has(name) ? 'assignments' : 'topology'], {
               dispatchIds: written.dispatchIds
             })
@@ -196,7 +241,7 @@ export function attachCrewMutationNotifications(ctor: { prototype: CrewMutationP
         } else if (noticed && written) {
           // Nothing noticed: the call wrote no row a crew shows.
           if (written.dispatchIds.size > 0) {
-            this.crewChanges.notify(
+            notify(
               scopedCrewChange(['topology'], {
                 dispatchIds: written.dispatchIds,
                 ...(written.created.size > 0
@@ -206,14 +251,12 @@ export function attachCrewMutationNotifications(ctor: { prototype: CrewMutationP
             )
           }
         } else if (runParties) {
-          this.crewChanges.notify(scopedCrewChange(['topology'], { parties: runParties }))
+          notify(scopedCrewChange(['topology'], { parties: runParties }))
         } else if (name === 'closeQuestionsForDispatch' && dispatchOf(args[0])) {
           // One Dispatch's questions and helper mail: the crews showing that Dispatch read them.
-          this.crewChanges.notify(
-            scopedCrewChange(['traffic'], { dispatchIds: new Set([dispatchOf(args[0])!]) })
-          )
+          notify(scopedCrewChange(['traffic'], { dispatchIds: new Set([dispatchOf(args[0])!]) }))
         } else {
-          this.crewChanges.notify(new Set([trafficMutations.has(name) ? 'traffic' : 'topology']))
+          notify(new Set([trafficMutations.has(name) ? 'traffic' : 'topology']))
         }
         return result
       }

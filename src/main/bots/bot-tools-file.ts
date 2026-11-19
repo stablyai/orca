@@ -278,7 +278,7 @@ export function botOwnTool(server: BotToolServer, folder: string): BotOwnTool {
   }
 }
 
-/** A Claude or Codex session in a bot's home folder gets that bot's own tools; any other session none.
+/** Any agent's session in a bot's home folder gets that bot's own tools and token; any other session none.
  *  `launched` comes from the same read as the tools, so a write during launch can't look applied. */
 export async function botSessionToolServers(
   bots: readonly Pick<Bot, 'id' | 'folderWorkspaceId'>[],
@@ -289,8 +289,7 @@ export async function botSessionToolServers(
   const bot = bots.find(
     (entry) => folderWorkspaceKey(entry.folderWorkspaceId) === record.location.workspaceId
   )
-  const agent = record.provider
-  if (!bot || (agent !== 'codex' && agent !== 'claude')) {
+  if (!bot) {
     return { tools: BotLaunchTools.none, launched: null }
   }
   // Read before the file: a write in between makes this launch look stale, never current.
@@ -299,7 +298,7 @@ export async function botSessionToolServers(
   return {
     tools: await BotLaunchTools.for(
       relay,
-      { botId: bot.id, folder: launchDirectory, agent },
+      { botId: bot.id, folder: launchDirectory, agent: record.provider },
       snapshot.servers
     ),
     launched: {

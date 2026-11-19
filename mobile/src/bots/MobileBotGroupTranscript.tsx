@@ -2,16 +2,21 @@ import { useCallback, type ReactNode } from 'react'
 import { ScrollView, View, type ScrollViewInstance } from 'react-native'
 import { useMobileNativeChatTailFollow } from '../session/native-chat/transcript/viewport/use-mobile-native-chat-tail-follow'
 import { MobileNativeChatFloatingControls } from '../session/native-chat/lower-region/MobileNativeChatFloatingControls'
+import { MobileNativeChatEmptyStateView } from '../session/native-chat/transcript/viewport/MobileNativeChatEmptyStateView'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import type { BotGroupTranscript } from '../../../src/shared/bots/bot-group-transcript'
 import { groupStyles as styles } from './mobile-bot-group-styles'
 export function MobileBotGroupTranscript({
   groupId,
-  hasItems,
+  data,
   children
 }: {
   groupId: string
-  hasItems: boolean
+  data: BotGroupTranscript | null
   children: ReactNode
 }) {
+  const t = useMobileTranslation()
+  const hasItems = Boolean(data?.messages.length)
   const tail = useMobileNativeChatTailFollow({ scopeKey: groupId, hasItems })
   const attach = tail.listProps.ref
   const ref = useCallback(
@@ -26,6 +31,20 @@ export function MobileBotGroupTranscript({
       ),
     [attach]
   )
+  // A loaded room with no messages yet: its name over desktop's prompt, as an empty chat shows.
+  if (data?.messages.length === 0) {
+    return (
+      <MobileNativeChatEmptyStateView
+        copy={{
+          title: data.group.name,
+          subtitle: t(
+            'bots.groups.startAConversationWithThisGroupMentionBots',
+            'Start a conversation with this group. Mention bots with @Name or @everyone.'
+          )
+        }}
+      />
+    )
+  }
   return (
     <View style={styles.grow}>
       <ScrollView

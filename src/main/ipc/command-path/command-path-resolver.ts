@@ -33,11 +33,15 @@ function readEnvCaseInsensitive(env: NodeJS.ProcessEnv, key: string): string | u
   return undefined
 }
 
+// Windows installers often quote PATH entries; cmd strips only double quotes, so match the terminal.
+const stripWindowsPathQuotes = (entry: string): string => entry.replace(/^"(.*)"$/, '$1')
+
 function getWindowsPathSearchExtensions(env: NodeJS.ProcessEnv, command: string): string[] {
   const pathext = readEnvCaseInsensitive(env, 'PATHEXT') ?? '.EXE;.CMD;.BAT;.COM'
   const extensions = pathext.split(';').filter((ext) => ext.length > 0)
-  // Explicit extensions also permit exact-name matches alongside PATHEXT variants.
-  if (command.includes('.')) {
+  // Like libuv, only a dot in the basename permits an exact-name match, so a dotted parent
+  // (`node_modules\.bin\prettier`) cannot select the extensionless POSIX shim.
+  if (path.win32.basename(command).includes('.')) {
     extensions.unshift('')
   }
   return extensions
@@ -66,7 +70,9 @@ function selectionScope(options: ResolveCommandOptions): string {
   const isWin = platform === 'win32'
   const pathValue = readEnvCaseInsensitive(env, 'PATH') ?? ''
   const pathApi = isWin ? path.win32 : path.posix
-  const needsCwd = pathValue.split(isWin ? ';' : ':').some((dir) => !pathApi.isAbsolute(dir))
+  const needsCwd = pathValue
+    .split(isWin ? ';' : ':')
+    .some((dir) => !pathApi.isAbsolute(isWin ? stripWindowsPathQuotes(dir) : dir))
   return JSON.stringify([
     platform,
     pathValue,
@@ -214,6 +220,7 @@ export async function findCommandsOnLocalPath(
     .split(isWin ? ';' : ':')
     // The install-dir fallback also searches trimmed PATH entries.
     .flatMap((dir) => [dir, dir.trim()])
+    .map((dir) => (isWin ? stripWindowsPathQuotes(dir) : dir))
   const cwd = options.cwd ?? process.cwd()
   const searchDirs = [...new Set((isWin ? [cwd, ...pathDirs] : pathDirs).filter(isAbsolute))]
   const extensions = new Map(
@@ -305,10 +312,9 @@ async function findLocalCommandPaths(
   const isWin = platform === 'win32'
   // Use the requested platform's absolute-path rules, not the test host's.
   const isAbsolute = isWin ? path.win32.isAbsolute : path.posix.isAbsolute
-  const delimiter = isWin ? ';' : ':'
-
   const hasPathSeparator = command.includes('/') || (isWin && command.includes('\\'))
-  const pathDirs = (readEnvCaseInsensitive(env, 'PATH') ?? '').split(delimiter)
+  const rawPathDirs = (readEnvCaseInsensitive(env, 'PATH') ?? '').split(isWin ? ';' : ':')
+  const pathDirs = isWin ? rawPathDirs.map(stripWindowsPathQuotes) : rawPathDirs
   // Separators bypass PATH; Windows searches cwd first.
   const searchDirs = hasPathSeparator ? [''] : isWin ? [cwd, ...pathDirs] : pathDirs
   const extensions = isWin ? getWindowsPathSearchExtensions(env, command) : ['']

@@ -179,15 +179,21 @@ export abstract class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends O
     }
   }
 
-  protected retirePtyAgentLaunchAuthority(ptyId: string): void {
+  /** `confirmedExit`: a command mark finished the launched command (whether its agent quit or
+   *  stopped is the host's proof to tell); undefined when the PTY exited. */
+  protected retirePtyAgentLaunchAuthority(ptyId: string, confirmedExit?: boolean): void {
+    const finishedBefore = this.ptysById.get(ptyId)?.launchEvidence?.kind === 'gone'
     const pty = this.retireHeldLaunch(ptyId)
-    if (!pty) {
-      return
-    }
     const receipt = this.restoredOrchestrationAuthorityByPtyId.get(ptyId)
-    if (!pty.launchToken && !receipt && !pty.launchAgent && !pty.launchCommandAgent) {
+    const launch = pty && (pty.launchToken || pty.launchAgent || pty.launchCommandAgent)
+    // A restored receipt whose launch already finished retires nothing; an agent typed since is
+    // the launchless mark's to prove.
+    if (!pty || (!launch && (!receipt || finishedBefore))) {
+      this.restoredOrchestrationAuthorityByPtyId.delete(ptyId)
+      this.noticeLaunchlessCommandMark(ptyId, confirmedExit)
       return
     }
+    const exited = confirmedExit === true && Boolean(launch || receipt)
     // Why: collect before the delete below, which drops the restored-authority receipt a
     // receipt-only pane's key comes from.
     const paneKeys = this.collectPaneKeysForPty(ptyId)
@@ -198,7 +204,7 @@ export abstract class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends O
     pty.launchAgent = null
     pty.launchCommandAgent = null
     for (const paneKey of paneKeys) {
-      this.retireAgentHookCompatibilityAuthorityFn?.(paneKey)
+      this.retireAgentHookCompatibilityAuthorityFn?.(paneKey, { confirmedExit: exited })
     }
     if (changed) {
       void this.refreshAgentSenderAssociations().catch(console.warn)
