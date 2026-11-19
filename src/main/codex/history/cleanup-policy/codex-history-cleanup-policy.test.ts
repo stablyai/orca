@@ -53,6 +53,9 @@ describe('effectiveCodexHistoryCleanupMode', () => {
     const older = parsed('{"version":1,"revision":2,"kinds":{"rollouts":{"mode":"report"}}}')
     expect(mode({ fetched: { policy, downloaded: older, at: NOW } })).toBe('report')
     expect(mode({ fetched: null, newestKnown: policy })).toBe('report')
+    // A newer revision known elsewhere (the cache) outranks this download, even one that reports.
+    const newer = parsed('{"version":1,"revision":4,"kinds":{"rollouts":{"mode":"report"}}}')
+    expect(mode({ newestKnown: newer })).toBe('report')
     // A failed download keeps a cached kill switch.
     const killed = parsed('{"version":1,"revision":9,"kinds":{"rollouts":{"mode":"off"}}}')
     expect(mode({ fetched: null, newestKnown: killed })).toBe('off')

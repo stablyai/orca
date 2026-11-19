@@ -52,20 +52,30 @@ export class CleanupBudgetExceeded extends Error {}
 /**
  * One sweep's work in either mode, content check included: files examined, bytes read, and time.
  * A read that would not fit what is left ends the work; one that overruns while reading is
- * abandoned.
+ * abandoned. `limitTo` holds back a share of every limit, so a later phase still has some.
  */
 export class CleanupBudget {
   private files = 0
   private bytes = 0
-  private readonly deadline = Date.now() + BUDGET_MS
+  private readonly startedAt = Date.now()
+  private share = 1
   // Copies one read of which exceeds the whole byte budget: never checked, so never deleted.
   private readonly oversizedPaths = new Set<string>()
   /** Whether the budget ended the sweep's work early. */
   ranOut = false
 
+  /** Limits the work from now on to `share` of each limit (1 lifts it). */
+  limitTo(share: number): void {
+    this.share = share
+  }
+
+  private get maxBytes(): number {
+    return BUDGET_READ_BYTES * this.share
+  }
+
   /** Before examining `count` more files; false once any limit is reached. */
   startFiles(count = 1): boolean {
-    if (this.files + count > BUDGET_FILES || this.pastDeadline()) {
+    if (this.files + count > Math.floor(BUDGET_FILES * this.share) || this.pastDeadline()) {
       this.ranOut = true
       return false
     }
@@ -75,7 +85,7 @@ export class CleanupBudget {
 
   /** True, and counted once per copy, when one read of `bytes` alone exceeds the whole budget. */
   skipOversized(path: string, bytes: number): boolean {
-    const oversized = bytes > BUDGET_READ_BYTES
+    const oversized = bytes > this.maxBytes
     if (oversized) {
       this.oversizedPaths.add(path)
     }
@@ -88,7 +98,7 @@ export class CleanupBudget {
 
   /** Whether reading `bytes` more fits what is left. */
   fits(bytes: number): boolean {
-    const fits = this.bytes + bytes <= BUDGET_READ_BYTES && !this.pastDeadline()
+    const fits = this.bytes + bytes <= this.maxBytes && !this.pastDeadline()
     this.ranOut ||= !fits
     return fits
   }
@@ -96,7 +106,7 @@ export class CleanupBudget {
   /** Charges bytes as they are read; throws once the bytes or the time run out. */
   read(bytes: number): void {
     this.bytes += bytes
-    if (this.bytes > BUDGET_READ_BYTES) {
+    if (this.bytes > this.maxBytes) {
       this.ranOut = true
       throw new CleanupBudgetExceeded('cleanup budget reached')
     }
@@ -110,7 +120,7 @@ export class CleanupBudget {
   }
 
   pastDeadline(): boolean {
-    const past = Date.now() >= this.deadline
+    const past = Date.now() >= this.startedAt + BUDGET_MS * this.share
     this.ranOut ||= past
     return past
   }

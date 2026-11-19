@@ -111,8 +111,8 @@ export function codexHistoryCleanupBucket(installId: string): number {
 
 /**
  * This install's mode for `kind`. `off` holds from the newest policy known, so a failed download
- * or cache write never undoes a kill switch. `enforce` comes only from a download that is itself
- * the policy in force (not one the cache outranked), fetched within the day, and its own rule.
+ * or cache write never undoes a kill switch. `enforce` comes only from a download of the newest
+ * revision known, fetched within the day, and only by its own rule.
  */
 export function effectiveCodexHistoryCleanupMode(args: {
   kind: CodexHistoryCleanupKind
@@ -127,13 +127,8 @@ export function effectiveCodexHistoryCleanupMode(args: {
   platform: NodeJS.Platform
   installId: string | undefined
 }): CodexHistoryCleanupMode {
-  const fetchedPolicy = args.fetched?.policy ?? null
-  const known =
-    fetchedPolicy && (!args.newestKnown || fetchedPolicy.revision >= args.newestKnown.revision)
-      ? fetchedPolicy
-      : args.newestKnown
-  const authority = authoritativeDownload(args.fetched)
-  const rule = authority?.kinds[args.kind]
+  const known = newestCodexHistoryCleanupPolicy(args.fetched, args.newestKnown)
+  const rule = authoritativeDownload(args.fetched, known)?.kinds[args.kind]
   if (known?.kinds[args.kind]?.mode === 'off' || rule?.mode === 'off') {
     return 'off'
   }
@@ -149,11 +144,21 @@ export function effectiveCodexHistoryCleanupMode(args: {
     : 'report'
 }
 
-/** The download itself, when it is the policy in force; null when none or the cache outranked it. */
-export function authoritativeDownload(
-  fetched: { policy: CodexHistoryCleanupPolicy; downloaded: CodexHistoryCleanupPolicy } | null
+/** The newest policy known: the one in force after the last download, or `newestKnown`. */
+export function newestCodexHistoryCleanupPolicy(
+  fetched: { policy: CodexHistoryCleanupPolicy } | null,
+  newestKnown: CodexHistoryCleanupPolicy | null
 ): CodexHistoryCleanupPolicy | null {
-  return fetched && fetched.downloaded.revision >= fetched.policy.revision
-    ? fetched.downloaded
-    : null
+  const fetchedPolicy = fetched?.policy ?? null
+  return fetchedPolicy && (!newestKnown || fetchedPolicy.revision >= newestKnown.revision)
+    ? fetchedPolicy
+    : newestKnown
+}
+
+/** The download itself, when it is the newest revision known; null otherwise. */
+export function authoritativeDownload(
+  fetched: { downloaded: CodexHistoryCleanupPolicy } | null,
+  known: CodexHistoryCleanupPolicy | null
+): CodexHistoryCleanupPolicy | null {
+  return fetched && fetched.downloaded.revision === known?.revision ? fetched.downloaded : null
 }

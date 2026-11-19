@@ -7,6 +7,7 @@ import {
 import {
   CODEX_HISTORY_CLEANUP_POLICY_MAX_BYTES,
   authoritativeDownload,
+  newestCodexHistoryCleanupPolicy,
   codexHistoryCleanupThresholds,
   effectiveCodexHistoryCleanupMode,
   parseCodexHistoryCleanupPolicy,
@@ -42,6 +43,8 @@ let updater: ReleaseAssetPolicyLiveUpdater<CodexHistoryCleanupPolicy> | null = n
 let readInstallId: () => string | undefined = () => undefined
 let refreshing: Promise<void> | null = null
 let refreshFailedAt: number | null = null
+// The launch download, which a sweep waits for rather than downloading again beside it.
+let starting: Promise<void> | null = null
 // The newest policy known as of the last sweep's start: only its `off` counts.
 let newestKnown: CodexHistoryCleanupPolicy | null = null
 
@@ -72,12 +75,18 @@ export function startCodexHistoryCleanupPolicyLiveUpdates(
     fetch: (url, init) => getMainHttpClient().fetch(url, init)
   })
   const started = updater
-  void started.start()
+  starting = started.start()
+  void starting.catch(() => {})
   environment.onWillQuit(() => started.stop())
 }
 
 /** Downloads the policy (at most once per few minutes) and decides this sweep's modes from it. */
 export async function codexHistoryCleanupSweepPolicy(): Promise<CodexHistoryCleanupSweepPolicy> {
+  if (starting) {
+    await starting.catch(() => {})
+    starting = null
+    refreshFailedAt = updater?.lastFetched() ? null : Date.now()
+  }
   const fetchedAt = updater?.lastFetched()?.at
   const now = Date.now()
   if (
@@ -93,7 +102,8 @@ export async function codexHistoryCleanupSweepPolicy(): Promise<CodexHistoryClea
   }
   newestKnown = (await updater?.newestKnown()) ?? null
   const fetched = updater?.lastFetched() ?? null
-  const policy = authoritativeDownload(fetched) ?? newestKnown
+  const known = newestCodexHistoryCleanupPolicy(fetched, newestKnown)
+  const policy = authoritativeDownload(fetched, known) ?? known
   const thresholds = codexHistoryCleanupThresholds(policy)
   return {
     revision: policy?.revision ?? 0,

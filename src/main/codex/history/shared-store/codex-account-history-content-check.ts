@@ -85,10 +85,7 @@ const SAVE_INTERVAL_MS = 30_000
 /** A check report mode keeps in memory, for the rollout as it was when checked. */
 export type UnsavedContentCheck = { facts: FileFacts; check: ContentCheck }
 
-/**
- * Report mode's view of a home, kept in memory for the life of the process so successive sweeps
- * add up, and never written: the inventory as last walked, and the checks made since.
- */
+/** Report mode's view of a home for one sweep, never written: its inventory and its checks. */
 export type ReportModeMemory = {
   rollouts: LeftBehindRollout[] | null
   checks: Map<string, UnsavedContentCheck>

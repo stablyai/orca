@@ -1,5 +1,4 @@
 import { join } from 'node:path'
-import { normalizeRuntimePathForComparison } from '../../../../shared/file-access/cross-platform-path'
 import { reportCodexHistoryCleanupOnce } from '../../../telemetry/codex-history-cleanup-telemetry'
 import { getOrcaUserDataPath } from '../../configuration/homes/codex-home-paths'
 import { codexHistoryCleanupSweepPolicy } from '../cleanup-policy/codex-history-cleanup-policy-live-update'
@@ -10,17 +9,8 @@ import {
 } from './codex-account-history-content-check'
 import { CleanupBudget, describeCleanupSweep } from './codex-history-cleanup-sweep-tally'
 
-const reportModeMemory = new Map<string, ReportModeMemory>()
-
-function reportModeMemoryFor(accountHome: string): ReportModeMemory {
-  const key = normalizeRuntimePathForComparison(accountHome)
-  let memory = reportModeMemory.get(key)
-  if (!memory) {
-    memory = { rollouts: null, checks: new Map() }
-    reportModeMemory.set(key, memory)
-  }
-  return memory
-}
+// The content check may spend this share of each limit, so a sweep it cuts short still tallies.
+const CONTENT_CHECK_SHARE = 0.7
 
 /** Checks what the home left behind, then deletes (or reports) what the finished check proved. */
 export async function checkThenCleanUpCodexHistory(args: {
@@ -44,23 +34,20 @@ export async function checkThenCleanUpCodexHistory(args: {
   const shouldStop = (): boolean => (stopped ||= args.shouldStop())
   // One budget for the whole sweep: what it leaves undone waits for the next run's sweep.
   const budget = new CleanupBudget()
-  // Report mode keeps its inventory and checks to itself, so it never changes what a later enforce
-  // deletes; kept for the process, so a large home's sweeps still add up to a full tally.
-  const report = modes.rollouts === 'enforce' ? undefined : reportModeMemoryFor(args.accountHome)
-  // The content check proves only rollouts.
+  // Report mode keeps this sweep's inventory and checks to itself, so it never changes what a later
+  // enforce deletes.
+  const report: ReportModeMemory | undefined =
+    modes.rollouts === 'enforce' ? undefined : { rollouts: null, checks: new Map() }
+  // The content check proves only rollouts. One it cuts short still leads to a tally of what it
+  // did check, marked truncated (`budgetHit`); the rest is owed to a later run.
+  budget.limitTo(CONTENT_CHECK_SHARE)
   if (
     modes.rollouts !== 'off' &&
     !(await checkCodexHistoryLeftBehind({ ...args, shouldStop, budget, report }))
   ) {
     return false
   }
-  // Checks still owed make any tally partial: the sweep stops there, its progress saved.
-  if (budget.ranOut) {
-    console.info(
-      `[codex-account-history] Cleanup of ${args.accountHome}: budget reached while checking`
-    )
-    return true
-  }
+  budget.limitTo(1)
   const result = await cleanUpCodexHistoryLeftBehind({
     ...args,
     shouldStop,
