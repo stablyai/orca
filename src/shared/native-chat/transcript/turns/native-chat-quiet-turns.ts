@@ -2,24 +2,53 @@ import { isQuietBotResult, quietBotResultText } from '../../../bot-quiet-result'
 import { isNativeChatOrcaCard } from '../../native-chat-orca-card'
 import type { NativeChatMessage } from '../../native-chat-types'
 import { deriveNativeChatRowContent } from '../row-content/native-chat-row-content'
-import { nativeChatActingTurnKeys } from './native-chat-acting-turns'
+import type { NativeChatTurnStatus } from './native-chat-turn-status'
 
 function fromOtherAgent(message: NativeChatMessage): boolean {
   return message.role === 'user' && message.from !== undefined
 }
 
-/** Settled turns no person asked for (a hidden card answer, or another agent's message such as a
- *  worker's update) that ended with only the quiet marker and did nothing others see. Their rows
- *  and their "Worked for" bar don't draw; Orca's cards and the other agent's message still do.
- *  `keepsTurn` keeps a turn that left something else to show, such as a diff. A turn that also
- *  holds someone's message (steered in, or a connector delivery joining it) always draws. */
+/** A row that opened the turn for the agent rather than a person typing to it: a hidden card answer,
+ *  Orca's own notice, another agent's message (item, worker or chat mail) or an automation's run. */
+function opensWithoutAsking(message: NativeChatMessage): boolean {
+  return (
+    message.orcaNotice === 'card-answer' ||
+    message.orcaNotice === 'bot-created' ||
+    message.automationRun !== undefined ||
+    fromOtherAgent(message)
+  )
+}
+
+/** A row a quiet turn still draws: Orca's cards, another agent's message and the automation run. */
+function staysInQuietTurn(message: NativeChatMessage): boolean {
+  return (
+    (isNativeChatOrcaCard(message) && message.orcaNotice !== 'card-answer') ||
+    message.automationRun !== undefined ||
+    fromOtherAgent(message)
+  )
+}
+
+/** Settled cleanly: a failed or interrupted turn keeps its bar, which says so. */
+function settledQuietly(status: NativeChatTurnStatus | undefined): boolean {
+  if (status?.workedSeconds == null) {
+    return false
+  }
+  return (
+    status.verdict === undefined || status.verdict === 'success' || status.verdict === 'unconfirmed'
+  )
+}
+
+/** Settled turns that ended with only the quiet marker and that no person typed into. Their rows,
+ *  "Worked for" bar and "Nothing to report" don't draw; what opened them (mail, an automation run)
+ *  and the cards Orca drew during them (item changes, started workers) still do. `keepsTurn` keeps a
+ *  turn that left something else to show, such as a diff or an opened PR. A failed or interrupted
+ *  turn, and one holding someone's message (typed, steered in, or a connector delivery), draw. */
 export function nativeChatQuietTurns(
   rows: readonly NativeChatMessage[],
   turnKeys: readonly (string | undefined)[],
-  settledTurnKeys: ReadonlySet<string>,
+  completedByTurn: Readonly<Record<string, NativeChatTurnStatus>>,
   keepsTurn: (turnKey: string) => boolean
 ): { rows: ReadonlySet<number>; turns: ReadonlySet<string> } {
-  const opened = new Set<string>()
   const asked = new Set<string>()
   const lastWords = new Map<string, string>()
   rows.forEach((message, index) => {
@@ -27,9 +56,7 @@ export function nativeChatQuietTurns(
     if (key === undefined) {
       return
     }
-    if (message.orcaNotice === 'card-answer' || fromOtherAgent(message)) {
-      opened.add(key)
-    } else if (message.role === 'user') {
+    if (message.role === 'user' && !opensWithoutAsking(message)) {
       asked.add(key)
     }
     if (message.role === 'assistant') {
@@ -39,28 +66,21 @@ export function nativeChatQuietTurns(
       }
     }
   })
-  const acting = nativeChatActingTurnKeys(rows, turnKeys)
   const turns = new Set(
-    [...opened].filter((key) => {
-      const words = lastWords.get(key)
-      return (
-        settledTurnKeys.has(key) &&
-        !asked.has(key) &&
-        !acting.has(key) &&
-        words !== undefined &&
-        isQuietBotResult(words) &&
-        quietBotResultText(words) === '' &&
-        !keepsTurn(key)
-      )
-    })
+    [...lastWords].flatMap(([key, words]) =>
+      settledQuietly(completedByTurn[key]) &&
+      !asked.has(key) &&
+      isQuietBotResult(words) &&
+      quietBotResultText(words) === '' &&
+      !keepsTurn(key)
+        ? [key]
+        : []
+    )
   )
   const hidden = new Set<number>()
   rows.forEach((message, index) => {
     const key = turnKeys[index]
-    const shown =
-      (isNativeChatOrcaCard(message) && message.orcaNotice !== 'card-answer') ||
-      fromOtherAgent(message)
-    if (key !== undefined && turns.has(key) && !shown) {
+    if (key !== undefined && turns.has(key) && !staysInQuietTurn(message)) {
       hidden.add(index)
     }
   })
