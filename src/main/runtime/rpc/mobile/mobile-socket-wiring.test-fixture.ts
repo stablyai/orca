@@ -1,6 +1,6 @@
 import nacl from 'tweetnacl'
 import type { WebSocket } from 'ws'
-import { expect, vi } from 'vitest'
+import { expect, vi, type Mock } from 'vitest'
 import type { DeviceRegistry } from '../server/pairing/device-registry'
 import { SimulatedMobileE2EEV2Peer } from '../../mobile-cloud-relay/testing/simulated-mobile-e2ee-v2-peer'
 import { generateKeyPair } from '../../../../shared/remote-runtime/e2ee/node/e2ee-crypto'
@@ -17,14 +17,17 @@ class FakeSocket {
   readyState = this.OPEN
   bufferedAmount = 0
   readonly sent: (string | Buffer)[] = []
-  readonly send = vi.fn((data: string | Buffer) => this.sent.push(data))
-  readonly close = vi.fn()
+  readonly send: Mock<(data: string | Buffer) => number> = vi.fn((data: string | Buffer) =>
+    this.sent.push(data)
+  )
+  readonly close: Mock<(code?: number, reason?: string) => void> = vi.fn()
 }
 
 class FakeTransport implements MobileSocketTransport {
   private messageHandler: Parameters<MobileSocketTransport['onMessage']>[0] | null = null
-  readonly setClientId = vi.fn()
-  readonly terminateClientConnections = vi.fn(() => 0)
+  readonly setClientId: Mock<MobileSocketTransport['setClientId']> = vi.fn()
+  readonly terminateClientConnections: Mock<MobileSocketTransport['terminateClientConnections']> =
+    vi.fn(() => 0)
   onMessage(handler: Parameters<MobileSocketTransport['onMessage']>[0]): void {
     this.messageHandler = handler
   }
