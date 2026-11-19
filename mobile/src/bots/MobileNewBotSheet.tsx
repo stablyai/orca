@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { ChevronRight, Shuffle } from 'lucide-react-native'
 import { BottomDrawer } from '../components/bottom-drawer/BottomDrawer'
+import { BottomDrawerModalHost } from '../components/bottom-drawer/bottom-drawer-modal-host'
 import { TextField } from '../components/composer-input/TextField'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { triggerError } from '../platform/haptics/haptics'
@@ -149,7 +150,8 @@ function NewBotForm(props: NewBotSheetProps) {
   }
 
   return (
-    <>
+    // iOS cannot present over a closing sibling Modal; the form and its pickers share one.
+    <BottomDrawerModalHost>
       <MobileBotTemplatesSheet
         visible={props.visible && picking === 'template'}
         botNames={picking === 'template' && computer ? props.botNamesOn(computer.id) : []}
@@ -280,7 +282,7 @@ function NewBotForm(props: NewBotSheetProps) {
           </Pressable>
         </View>
       </BottomDrawer>
-    </>
+    </BottomDrawerModalHost>
   )
 }
 
