@@ -190,6 +190,10 @@ export function wakeSleepingAgentsForWorktreeInBackground(
     })
   )
   if (paneKey) {
+    // A mounted pane resumed itself on the event; mounting is only for a tab that isn't mounted yet.
+    if (wokenClaimKeys.size > 0) {
+      return
+    }
     const tabId = sleptRecords[0] && getSleepingRecordTabId(sleptRecords[0])
     if (tabId) {
       dispatchBackgroundMount(worktreeId, [tabId], paneKey)
