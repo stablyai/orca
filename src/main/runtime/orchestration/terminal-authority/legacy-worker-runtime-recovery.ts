@@ -13,6 +13,7 @@ import {
   reportDismissedCutWorkers,
   reportWorkerStopsAcrossRestart
 } from '../workers/turn-stops/restart-worker-stop-report'
+import type { TerminalWorkerTurnStops } from '../workers/turn-stops/terminal-worker-turn-stops'
 import { agentHookServer } from '../../../agent-hooks/server/agent-hook-server'
 
 export abstract class LegacyWorkerRuntimeRecovery extends RuntimeWorkspaceSessionFlush {
@@ -46,7 +47,10 @@ export abstract class LegacyWorkerRuntimeRecovery extends RuntimeWorkspaceSessio
     )
   }
 
-  protected abstract reportRestingPane: (paneKey: string) => Promise<void>
+  protected abstract readonly terminalWorkerTurnStops: Pick<
+    TerminalWorkerTurnStops,
+    'reportRestingPane'
+  >
 
   private restartWorkerStopReport: Promise<void> | null = null
   private readonly dismissalWatched = new WeakSet<object>()
@@ -97,7 +101,7 @@ export abstract class LegacyWorkerRuntimeRecovery extends RuntimeWorkspaceSessio
       await reportWorkerStopsAcrossRestart({
         db,
         reportDeps: this.workerTurnStopReportDeps,
-        reportRestingPane: (paneKey) => this.reportRestingPane(paneKey),
+        reportRestingPane: (paneKey) => this.terminalWorkerTurnStops.reportRestingPane(paneKey),
         chats: host
           ? {
               cutByLastRun,
