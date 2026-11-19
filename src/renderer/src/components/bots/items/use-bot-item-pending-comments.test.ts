@@ -26,7 +26,7 @@ function mount(uid: string, bot = BOT) {
   })
 }
 
-it('shows a sent comment until the read has its event, and keeps a refused one for Retry', async () => {
+it('shows a sent comment until its event arrives and keeps a refused comment for Retry after reopening', async () => {
   let answer: (value: unknown) => void = () => {}
   sent.mockReturnValueOnce(new Promise((resolve) => (answer = resolve)))
   const view = mount('uid-6')
@@ -41,25 +41,16 @@ it('shows a sent comment until the read has its event, and keeps a refused one f
 
   sent.mockRejectedValueOnce(new Error('offline'))
   await act(async () => view.result.current.send('Again', [], 'e9'))
-  const [refused] = view.result.current.shown
+  view.unmount()
+
+  const reopened = mount('uid-6')
+  const [refused] = reopened.result.current.shown
   expect(refused?.failed).toBe(true)
 
   sent.mockResolvedValueOnce({ eventId: 'e10' })
-  await act(async () => view.result.current.retry(refused!.event.id))
+  await act(async () => reopened.result.current.retry(refused!.event.id))
   expect(sent).toHaveBeenLastCalledWith(BOT, 'uid-6', 'Again', [], undefined)
-  expect(view.result.current.shown[0]?.failed).toBe(false)
-})
-
-it('keeps a refused comment when the item is left and opened again', async () => {
-  sent.mockRejectedValueOnce(new Error('offline'))
-  const first = mount('uid-7')
-  await act(async () => first.result.current.send('Keep me', [], 'e1'))
-  first.unmount()
-
-  const again = mount('uid-7')
-  expect(again.result.current.shown.map((entry) => [entry.event.data.text, entry.failed])).toEqual([
-    ['Keep me', true]
-  ])
+  expect(reopened.result.current.shown[0]?.failed).toBe(false)
 })
 
 it('drops a failed comment the host stored anyway, so Retry cannot store it twice', async () => {
