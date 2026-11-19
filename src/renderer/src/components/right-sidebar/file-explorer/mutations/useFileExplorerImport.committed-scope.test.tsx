@@ -54,7 +54,7 @@ it('keeps native drops on committed scope when a new scope render suspends', asy
   })
 
   function Probe({ scope, suspend = false }: { scope: string; suspend?: boolean }) {
-    const ownerRef = useFileExplorerImport({
+    const { fileDropOwnerRef } = useFileExplorerImport({
       worktreeId: 'wt',
       worktreePath: '/repo',
       displayRootPath: scope,
@@ -66,7 +66,7 @@ it('keeps native drops on committed scope when a new scope render suspends', asy
       throw suspended
     }
     return (
-      <div ref={ownerRef}>
+      <div ref={fileDropOwnerRef}>
         <span data-testid="row" data-file-explorer-drop-dir="/repo/app">
           {scope}
         </span>
@@ -139,7 +139,7 @@ it('pastes copied files and clipboard images into the target folder without inte
     })
 
   function Probe() {
-    const ownerRef = useFileExplorerImport({
+    const { fileDropOwnerRef } = useFileExplorerImport({
       worktreeId: 'wt',
       worktreePath: '/repo',
       displayRootPath: '/repo',
@@ -148,7 +148,7 @@ it('pastes copied files and clipboard images into the target folder without inte
       setSelectedPath: selected
     })
     return (
-      <div ref={ownerRef}>
+      <div ref={fileDropOwnerRef}>
         <button
           data-testid="folder"
           data-file-explorer-drop-dir="/repo/app"

@@ -16390,6 +16390,9 @@
             "createInProgress": "Create PR in progress...",
             "workspaceHostUnresolved": "The workspace host is unresolved. Refresh the workspace and retry.",
             "branchDiscoveryFailed": "Branch discovery failed."
+          },
+          "FileExplorerPaste": {
+            "paste": "Paste"
           }
         }
       },

@@ -16,7 +16,7 @@ import {
   describeSharedDropSkipReason
 } from '@/lib/files/drop/drop-skip-reason-copy'
 import { prepareOsFileDropPaths } from '@/lib/files/drop/os-file-drop-preparation'
-import { textOnlyLabelsCopiedFiles } from '../../../../../../shared/native-chat/input/composer/native-chat-clipboard-event'
+import { readClipboardImportPaths } from './file-explorer-clipboard-import'
 import type { FileExplorerOperationOwner } from '../tree/file-explorer-types'
 import {
   captureFileExplorerOperationGuard,
@@ -55,6 +55,11 @@ type FileExplorerPasteOptions = {
   ) => Promise<void>
 }
 
+type FileExplorerImportController = {
+  fileDropOwnerRef: (root: HTMLElement | null) => void
+  pasteToDirectory: (directory?: string | null) => void
+}
+
 function readDropDir(root: HTMLElement | null, target: EventTarget | null): string | null {
   const row =
     target instanceof Element ? target.closest(`[${FILE_EXPLORER_DROP_DIR_ATTRIBUTE}]`) : null
@@ -69,30 +74,6 @@ function readPasteDir(root: HTMLElement | null, target: EventTarget | null): str
     : null
 }
 
-async function readClipboardImportPaths(): Promise<string[]> {
-  let text = ''
-  try {
-    text = await window.api.ui.readClipboardText()
-  } catch {
-    // Image-only clipboards may not have readable text.
-  }
-  const paths = await window.api.ui.readClipboardFilePaths().catch(() => [])
-  if (text) {
-    return paths.length > 0 && textOnlyLabelsCopiedFiles(text, paths) ? paths : []
-  }
-
-  const hasImage = await window.api.ui.clipboardHasImage().catch(() => false)
-  if (paths.length > 0 && !hasImage) {
-    return paths
-  }
-  if (!hasImage) {
-    return []
-  }
-
-  const imagePath = await window.api.ui.saveClipboardImageAsTempFile()
-  return imagePath ? [imagePath] : []
-}
-
 export function useFileExplorerImport({
   worktreeId,
   worktreePath,
@@ -101,7 +82,7 @@ export function useFileExplorerImport({
   clearNativeDragState,
   setSelectedPath,
   operationOwner
-}: UseFileExplorerImportParams): (root: HTMLElement | null) => void {
+}: UseFileExplorerImportParams): FileExplorerImportController {
   const t = useTranslate()
   const rootRef = useRef<HTMLElement | null>(null)
   const [sequence] = useState(createOsFileDropSequence)
@@ -190,19 +171,14 @@ export function useFileExplorerImport({
     }
   }, [displayRootPath, importPreparedPaths, operationOwner, worktreeId, worktreePath])
 
-  const handlePaste = useCallback((event: ClipboardEvent): void => {
-    if (event.defaultPrevented || isEditableTarget(event.target)) {
-      return
-    }
+  const pasteToDirectory = useCallback((directory?: string | null): void => {
     const root = rootRef.current
     const options = pasteOptionsRef.current
     if (!root || !options.worktreeId || !options.worktreePath || !options.displayRootPath) {
       return
     }
-    event.preventDefault()
-    event.stopPropagation()
 
-    const destinationDir = readPasteDir(root, event.target) ?? options.displayRootPath
+    const destinationDir = directory ?? options.displayRootPath
     if (getRelativePathInsideRoot(destinationDir, options.displayRootPath) === null) {
       return
     }
@@ -254,6 +230,23 @@ export function useFileExplorerImport({
       }
     })()
   }, [])
+
+  const handlePaste = useCallback(
+    (event: ClipboardEvent): void => {
+      if (event.defaultPrevented || isEditableTarget(event.target)) {
+        return
+      }
+      const root = rootRef.current
+      const options = pasteOptionsRef.current
+      if (!root || !options.worktreeId || !options.worktreePath || !options.displayRootPath) {
+        return
+      }
+      event.preventDefault()
+      event.stopPropagation()
+      pasteToDirectory(readPasteDir(root, event.target) ?? options.displayRootPath)
+    },
+    [pasteToDirectory]
+  )
 
   const resolveDropDir = (event: DragEvent): string | null => {
     // Hidden/search files views have no worktreePath.
@@ -311,7 +304,7 @@ export function useFileExplorerImport({
   })
 
   const pasteRootRef = useRef<HTMLElement | null>(null)
-  return useCallback(
+  const fileDropOwnerRef = useCallback(
     (root: HTMLElement | null) => {
       pasteRootRef.current?.removeEventListener('paste', handlePaste, true)
       pasteRootRef.current = root
@@ -320,4 +313,6 @@ export function useFileExplorerImport({
     },
     [handlePaste, osFileDropOwnerRef]
   )
+
+  return { fileDropOwnerRef, pasteToDirectory }
 }

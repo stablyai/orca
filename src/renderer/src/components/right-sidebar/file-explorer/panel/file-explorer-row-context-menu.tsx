@@ -1,6 +1,7 @@
 import { preventSecondaryMenuSelection } from '@/components/ui/prevent-secondary-menu-selection'
 import React, { useCallback } from 'react'
 import {
+  ClipboardPaste,
   Copy,
   Download,
   ExternalLink,
@@ -74,7 +75,9 @@ type FileExplorerRowContextMenuProps = Pick<
   | 'onRequestDelete'
   | 'onCollapseFolderSubtree'
   | 'onFindInFolder'
->
+> & {
+  onPasteToDirectory: (directory?: string | null) => void
+}
 
 export function FileExplorerRowContextMenu({
   node,
@@ -97,7 +100,8 @@ export function FileExplorerRowContextMenu({
   onOpenInTerminal,
   onRequestDelete,
   onCollapseFolderSubtree,
-  onFindInFolder
+  onFindInFolder,
+  onPasteToDirectory
 }: FileExplorerRowContextMenuProps): React.JSX.Element {
   const t = useTranslate()
   const openMarkdownPreview = useAppStore((s) => s.openMarkdownPreview)
@@ -147,6 +151,14 @@ export function FileExplorerRowContextMenu({
       onPointerUpCapture={preventSecondaryMenuSelection}
       onCloseAutoFocus={(e) => e.preventDefault()}
     >
+      <ContextMenuItem
+        disabled={writesBlocked}
+        onSelect={() => onPasteToDirectory(node.isDirectory ? node.path : targetDir)}
+      >
+        <ClipboardPaste />
+        {t('auto.components.right.sidebar.FileExplorerPaste.paste', 'Paste')}
+      </ContextMenuItem>
+      <ContextMenuSeparator />
       <ContextMenuItem
         disabled={writesBlocked}
         onSelect={() => onStartNew('file', targetDir, targetDepth)}

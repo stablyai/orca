@@ -357,6 +357,7 @@ function FileExplorerFiles(): React.JSX.Element {
         worktreePath={displayRootPath ?? worktreePath}
         displayDepth={displayDepth}
         onStartNew={inlineInputState.startNew}
+        onPaste={() => paneState.pasteToDirectory(displayRootPath)}
       />
     </>
   )
