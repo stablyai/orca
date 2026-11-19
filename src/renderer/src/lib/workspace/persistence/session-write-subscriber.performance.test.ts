@@ -11,6 +11,7 @@ import { patchWorkspaceSessionByHost, type SessionApi } from './workspace-sessio
 // identities, so the write deep-compared the whole fleet against what main held. Counts deep compares.
 
 const DEBOUNCE_MS = 150
+const OVER_CAP_TAB_IDS = new Set(['tab-0-b', 'tab-1-b'])
 
 beforeEach(() => {
   vi.useFakeTimers()
@@ -52,8 +53,12 @@ async function deepComparesForOneTitleChange(size: number): Promise<number> {
       store.getState().createTab(worktree.id, undefined, undefined, { id: `tab-${index}-a` })
       store.getState().createTab(worktree.id, undefined, undefined, { id: `tab-${index}-b` })
     }
-    // Saved scrollback on every tab: a live local tab's copy is stripped on save, a dormant one's kept.
+    // Saved scrollback on every tab: a live local tab's copy is stripped on save, a dormant one's kept,
+    // and two dormant tabs hold more than the session cap in both scrollback homes, so they are capped.
     const { tabsByWorktree, terminalLayoutsByTabId } = store.getState()
+    const overCap = 'x'.repeat(600 * 1024)
+    const scrollbackOf = (tabId: string) =>
+      OVER_CAP_TAB_IDS.has(tabId) ? overCap : `scrollback of ${tabId}`
     store.setState({
       tabsByWorktree: Object.fromEntries(
         Object.entries(tabsByWorktree).map(([worktreeId, tabs]) => [
@@ -64,8 +69,11 @@ async function deepComparesForOneTitleChange(size: number): Promise<number> {
       terminalLayoutsByTabId: Object.fromEntries(
         Object.entries(terminalLayoutsByTabId).map(([tabId, layout]) => [
           tabId,
-          { ...layout, buffersByLeafId: { 'leaf-1': `scrollback of ${tabId}` } }
+          { ...layout, buffersByLeafId: { 'leaf-1': scrollbackOf(tabId) } }
         ])
+      ),
+      localOnlyScrollbackByTabId: Object.fromEntries(
+        [...OVER_CAP_TAB_IDS].map((tabId) => [tabId, { 'leaf-2': overCap }])
       ),
       workspaceSessionReady: true,
       hydrationSucceeded: true
