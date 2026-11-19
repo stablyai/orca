@@ -7,7 +7,6 @@ const NONE: readonly FloatingTerminalTriggerKeepClearRect[] = []
 const elements = new Set<HTMLElement>()
 const listeners = new Set<() => void>()
 let rects = NONE
-let observer: ResizeObserver | null = null
 
 function measure(): void {
   const next: FloatingTerminalTriggerKeepClearRect[] = []
@@ -46,29 +45,36 @@ function layoutParentOf(element: HTMLElement): HTMLElement | null {
 }
 
 function keepClearOf(element: HTMLElement): () => void {
-  if (!observer) {
-    observer = new ResizeObserver(measure)
+  if (elements.size === 0) {
     window.addEventListener('resize', measure)
   }
   elements.add(element)
-  observer.observe(element)
-  // The parent resizes when the page moves the element without resizing it, e.g. a taller pane.
-  const parent = layoutParentOf(element)
-  if (parent) {
-    observer.observe(parent)
+  // The element also moves without resizing when a box above it in its column grows, e.g. Activity
+  // filling in, so the column and every box in it are watched, including boxes added later.
+  const column = layoutParentOf(element)
+  const resized = new ResizeObserver(measure)
+  const watch = (): void => {
+    resized.disconnect()
+    resized.observe(element)
+    for (const box of column ? [column, ...column.children] : []) {
+      resized.observe(box)
+    }
+  }
+  watch()
+  const added = new MutationObserver(() => {
+    watch()
+    measure()
+  })
+  if (column) {
+    added.observe(column, { childList: true })
   }
   measure()
   return () => {
+    resized.disconnect()
+    added.disconnect()
     elements.delete(element)
-    if (elements.size === 0 && observer) {
-      observer.disconnect()
-      observer = null
+    if (elements.size === 0) {
       window.removeEventListener('resize', measure)
-    } else if (observer) {
-      observer.unobserve(element)
-      if (parent && ![...elements].some((other) => layoutParentOf(other) === parent)) {
-        observer.unobserve(parent)
-      }
     }
     measure()
   }
