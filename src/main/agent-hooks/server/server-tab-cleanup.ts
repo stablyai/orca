@@ -18,7 +18,8 @@ import { agentProviderSessionsEqual } from '../../../shared/agent-session/lifecy
 
 export abstract class AgentHookServerTabCleanup extends AgentHookServerCleanup {
   abstract checkAgentPresence(paneKey: string): Promise<AgentProcessVerdict | null>
-  private readonly unprovenExits = new UnprovenAgentExits((paneKey) =>
+  protected abstract noticeLaunchlessCommandMark(resolvedPaneKey: string): void
+  protected readonly unprovenExits = new UnprovenAgentExits((paneKey) =>
     this.confirmCommandFinishedExit(paneKey)
   )
 
@@ -27,17 +28,16 @@ export abstract class AgentHookServerTabCleanup extends AgentHookServerCleanup {
     options?: Pick<EndedProcessReconciliationOptions, 'confirmedExit'> & { launchRetired?: true }
   ): void {
     const resolved = this.resolvePaneKeyAlias(paneKey)
+    if (options?.launchRetired) {
+      this.noticeLaunchlessCommandMark(resolved)
+      return
+    }
     const identity = this.paneAgentIdentity(paneKey)
     const shared = identity?.processTopology === 'shared'
     // A command mark can come from a shell nested in a live agent; one with no process to probe
     // ends only on the host's word that the pane's shell is alone.
     const verifiable = this.hasVerifiableAgentProcess(paneKey)
     const unprovable = identity?.ended === false && !shared && !verifiable
-    if (options?.launchRetired) {
-      // An agent typed at the prompt holds no launch; its quit is proved the same way.
-      this.unprovenExits.onCommandFinished(resolved, unprovable)
-      return
-    }
     // A mark's exit status can't tell a quit from a stop (Ctrl-Z). A local process answers through
     // its presence probe, a stopped one included; a remote one can't be probed, so its mark stands.
     const awaitsHost = options?.confirmedExit === true && !verifiable

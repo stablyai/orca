@@ -1,4 +1,4 @@
-type UnprovenExit = { proving: boolean; again: boolean }
+type UnprovenExit = { proving: boolean; again: boolean; proof?: Promise<void> }
 
 /** Panes whose process-less agent may have ended unseen: its launch retired on a job stop, or on
  *  a command mark the shell-alone proof refused (a shell nested in the live agent). Each later
@@ -20,6 +20,10 @@ export class UnprovenAgentExits {
     if (proveNow) {
       this.onCommandFinished(paneKey)
     }
+  }
+
+  has(paneKey: string): boolean {
+    return this.panes.has(paneKey)
   }
 
   forget(paneKey: string): void {
@@ -48,7 +52,7 @@ export class UnprovenAgentExits {
     }
     entry.proving = true
     entry.again = false
-    void this.prove(paneKey)
+    entry.proof = this.prove(paneKey)
       .catch(() => false)
       .then((settled) => {
         if (this.panes.get(paneKey) !== entry) {
@@ -61,5 +65,13 @@ export class UnprovenAgentExits {
           this.onCommandFinished(paneKey)
         }
       })
+  }
+
+  /** Resolves once no proof for the pane is running, a queued re-proof included, so a sleep
+   *  capture reads the quit it is still proving. */
+  async settled(paneKey: string): Promise<void> {
+    for (let entry = this.panes.get(paneKey); entry?.proving; entry = this.panes.get(paneKey)) {
+      await entry.proof
+    }
   }
 }

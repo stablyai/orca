@@ -245,6 +245,7 @@ describe('a hookless resumed Codex across wakes and shell-confirmed command fini
     ['suspended, resumed (fg), then quit', ['148', 'fg', '0'], false],
     // A stop-like status is no proof: an agent that exits 146 for real is gone at that mark.
     ['quit with a stop-like exit status', ['exit146'], false],
+    ['quit, then sleep while its exit proof still runs', ['quit-then-sleep'], false],
     ['quit where the host gives no shell proof (remote, Windows)', ['unproven'], false],
     ['quit of an agent no Orca launch held (typed at the prompt)', ['typed'], false]
   ] as const)('%s', async (_, finishes, keepsRecovery) => {
@@ -254,6 +255,7 @@ describe('a hookless resumed Codex across wakes and shell-confirmed command fini
     // The host's word on the pane's shell: alone unless a nested shell marked a command.
     let shellAlone: boolean | null = true
     let stopped = false
+    let proofGate: Promise<void> = Promise.resolve()
     const fixture = makeRuntimeStoreWithWorkspaceSession(
       makeWorkspaceSessionWithHeadlessTerminal({
         sleepingAgentSessionsByPaneKey: { [PANE_KEY]: SLEPT }
@@ -272,7 +274,10 @@ describe('a hookless resumed Codex across wakes and shell-confirmed command fini
       isPlaced: () => true,
       readSavedRecord: (paneKey) => fixture.getSession().sleepingAgentSessionsByPaneKey?.[paneKey],
       confirmProcessExit: async () => true,
-      confirmShellAlone: async () => shellAlone,
+      confirmShellAlone: async () => {
+        await proofGate
+        return shellAlone
+      },
       retireSavedRecord: (paneKey, at) => runtime.retireExitedPaneResume(paneKey, at)
     })
     const clears: AgentStatusClearIpcPayload[] = []
@@ -343,6 +348,18 @@ describe('a hookless resumed Codex across wakes and shell-confirmed command fini
           // The runtime's notice for a mark that finds no launch held.
           server.retireProcessAuthority(PANE_KEY, { confirmedExit: true, launchRetired: true })
           await new Promise((resolve) => setImmediate(resolve))
+        } else if (status === 'quit-then-sleep') {
+          let release = (): void => {}
+          proofGate = new Promise((resolve) => {
+            release = resolve
+          })
+          shellAlone = true
+          runtime.onPtyData('pty-3', '\x1b]133;C\x07\x1b]133;D;0\x07', Date.now())
+          // The sleep starts before the process table answers; it must read the quit it proves.
+          const slept = sleep()
+          await new Promise((resolve) => setImmediate(resolve))
+          release()
+          expect(await slept).toBeUndefined()
         } else if (status === 'fg') {
           stopped = false
         } else if (status === 'listing') {

@@ -165,6 +165,10 @@ export function deriveCliWriterTopology<T extends AgentHookEventPayload>(
   ) {
     return row
   }
+  // A tmux host outlives an unverified writer too; only an unverified pane-owned claim is dropped.
+  if (binding[OPEN_CODE_WRITER_TOPOLOGY] === 'shared') {
+    return row
+  }
   return { ...row, providerSession: { ...binding } }
 }
 

@@ -107,6 +107,8 @@ export class AgentHookServer extends AgentHookServerLifecycle {
     paneKey: string,
     exitedSince: number
   ): Promise<AgentProcessVerdict | null> {
+    // A quit whose shell-alone proof is still running must be read as that proof decides.
+    await this.unprovenExits.settled(this.resolvePaneKeyAlias(paneKey))
     const verdict = await this.checkAgentPresence(paneKey)
     // A replaced owner's probe result counts only if its exit was retained.
     if (verdict !== null && verdict !== 'exited') {
@@ -121,6 +123,21 @@ export class AgentHookServer extends AgentHookServerLifecycle {
       this.agentExitedAtByPaneKey.get(this.resolvePaneKeyAlias(paneKey)) ??
       this.agentExitedAtByPaneKey.get(paneKey)
     return exit !== undefined && exit.at >= exitedSince ? 'exited' : null
+  }
+
+  /** A prompt's mark with no launch held: an agent typed there, or one an earlier mark left
+   *  unproven, may have ended. Only a hook row or a tracked pane can hold one, so the mark of a
+   *  plain shell, which lands on every prompt, skips the saved-record read. */
+  protected noticeLaunchlessCommandMark(resolved: string): void {
+    if (!this.unprovenExits.has(resolved) && !this.state.lastStatusByPaneKey.has(resolved)) {
+      return
+    }
+    const identity = this.paneAgentIdentity(resolved)
+    const unseen =
+      identity?.ended === false &&
+      identity.processTopology !== 'shared' &&
+      !this.hasVerifiableAgentProcess(resolved)
+    this.unprovenExits.onCommandFinished(resolved, unseen)
   }
 
   checkAgentPresence(paneKey: string): Promise<AgentProcessVerdict | null> {
