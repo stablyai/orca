@@ -43,7 +43,12 @@ export async function copyConversationIntoStore(
   const staged = stagedImportPath(copy.targetDir, args.runId)
   const recordPath = stagingRecordPath(args.ledgerPath)
   // Recorded first, so a quit mid-copy leaves nothing the next import can't find.
-  await recordStagedImport(recordPath, staged)
+  if (!(await recordStagedImport(recordPath, staged))) {
+    console.warn(
+      '[codex-history-import] Not importing more this pass: earlier staged copies could not be removed'
+    )
+    return 'failed'
+  }
   try {
     if ((await stageImportRollout(copy.from, staged)) === 'source-changed') {
       return 'refused'

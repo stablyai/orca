@@ -5,7 +5,7 @@ import { lstatIfPresent } from '../../../filesystem/merged-directory-link'
 import { removeStagedCopy } from '../rollouts/codex-rollout-staged-copy'
 
 const STAGED_IMPORT = /^\.orca-import-[^-]+-.+\.tmp$/
-// Staged copies that couldn't be removed accumulate here only while removals keep failing.
+// Staged copies accumulate here only while removals keep failing; at this many, staging stops.
 const MAX_RECORDED = 32
 
 /** Names staged copies not yet known to be gone, so one a quit or failed removal left is removed. */
@@ -33,14 +33,17 @@ async function writeRecord(recordPath: string, staged: string[]): Promise<void> 
   await writeFile(recordPath, `${staged.join('\n')}\n`)
 }
 
-/** Records a copy about to be staged, before any of it exists. */
-export async function recordStagedImport(recordPath: string, staged: string): Promise<void> {
-  const recorded = [...(await readRecord(recordPath)), staged]
-  const dropped = recorded.splice(0, Math.max(0, recorded.length - MAX_RECORDED))
-  if (dropped.length > 0) {
-    console.warn('[codex-history-import] Forgetting staged copies that never went:', dropped)
+/**
+ * Records a copy about to be staged, before any of it exists. False when the record is full of
+ * copies that couldn't be removed: nothing more is staged until an import start removes them.
+ */
+export async function recordStagedImport(recordPath: string, staged: string): Promise<boolean> {
+  const recorded = await readRecord(recordPath)
+  if (recorded.length >= MAX_RECORDED) {
+    return false
   }
-  await writeRecord(recordPath, recorded)
+  await writeRecord(recordPath, [...recorded, staged])
+  return true
 }
 
 /** Forgets a staged copy once it is gone; one still there stays recorded for the next import. */
