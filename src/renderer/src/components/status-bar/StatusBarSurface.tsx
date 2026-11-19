@@ -9,6 +9,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { useTranslate } from '@/i18n/use-translate'
+import { cn } from '@/lib/class-names'
 import { UsageRosterPanel } from './usage/UsageRosterPanel'
 import {
   STATUS_BAR_CONTEXT_MENU_EXEMPT_PROPS,
@@ -143,8 +144,13 @@ export function StatusBarSurface({
     >
       {/* Why fixed priority instead of density levels: choosing a layout from the bar's own measured
           widths fed back into the next measurement and could loop (React #185). Usage gives way
-          first; everything it clips stays one click away in its popover. */}
-      <div className="flex min-w-0 flex-1 items-center overflow-clip [overflow-clip-margin:3px]">
+          first but keeps enough width to stay clickable; its popover holds everything it clips. */}
+      <div
+        className={cn(
+          'flex flex-1 items-center overflow-clip [overflow-clip-margin:3px]',
+          hasVisibleUsageMeters ? 'min-w-16' : 'min-w-0'
+        )}
+      >
         <div className="flex shrink-0 items-center gap-3">
           {isEmptyUsageState ? (
             showEmptyUsageCta ? (
@@ -286,12 +292,13 @@ export function StatusBarSurface({
         </div>
       </div>
 
-      {/* Why: attention segments never give way to usage; wider than the bar on their own, they scroll. The max width leaves the bar gap that still follows the emptied usage area. */}
+      {/* Why: attention segments shrink only after usage reaches its minimum, then scroll instead of
+          compressing; the row's padding keeps edge badges and focus rings inside the scroll box. */}
       <div
         ref={attachSidewaysWheel}
-        className="flex min-w-0 max-w-[calc(100%-1rem)] shrink-0 items-center self-stretch overflow-x-auto scrollbar-none"
+        className="-mx-1 flex min-w-0 items-center self-stretch overflow-x-auto scrollbar-none"
       >
-        <div className="flex w-max items-center gap-3">
+        <div className="flex w-max items-center gap-3 px-1">
           {!isPairedWebClientWindow() ? (
             <>
               <PluginsStatusSegment />
