@@ -126,6 +126,18 @@ const unifiedDialogSizeClass: Record<UnifiedDialogSize, string> = {
     'flex h-[min(28rem,calc(100dvh-3rem))] flex-col sm:max-w-[680px] data-[state=open]:[--tw-enter-scale:1]! data-[state=closed]:[--tw-exit-scale:1]!'
 }
 
+/** Override Radix's initial Cancel focus so Enter confirms a destructive action. */
+export function focusDialogConfirmButton(
+  event: Event,
+  confirmButton: HTMLButtonElement | null
+): void {
+  if (!confirmButton) {
+    return
+  }
+  event.preventDefault()
+  confirmButton.focus()
+}
+
 function DialogContent({
   className,
   children,
