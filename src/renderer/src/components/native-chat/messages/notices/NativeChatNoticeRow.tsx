@@ -59,6 +59,7 @@ import {
 import { structuredAgentSessionHostPlace } from '../../pane/ownership/use-structured-agent-session-host-label'
 import { sayAgentSessionFailureTranslated } from './agent-session-failure-words-text'
 import { NativeChatTranscriptSignInNotice } from '../../host-access/NativeChatSignInRow'
+import { nativeChatSignInHostWords } from '../../host-access/native-chat-sign-in-notice'
 
 const HOST_STATUS_WORDS: Record<AgentSessionHostStatusPresentation, () => string> = {
   'history-repaired': () =>
@@ -363,14 +364,28 @@ export function NativeChatNoticeRow({
     </div>
   )
   if (!named && failure?.kind === 'notSignedIn') {
-    // The fact names the failure, so an older host's longer sentence still reads as the short one.
+    // The fact names the failure, so an older host's longer sentence still reads as the short one;
+    // words beyond the standard sentence stay under Details.
+    const hostWords = nativeChatSignInHostWords(block.text, failure, agentName)
+    const signInDetail =
+      hostWords && detail && !hostWords.includes(detail.trim())
+        ? `${hostWords}\n\n${detail}`
+        : (hostWords ?? detail)
     return (
       <NativeChatTranscriptSignInNotice
         agentName={agentName}
         account={failure.account}
         rowId={messageId}
         fallback={row}
-        details={details}
+        details={
+          block.providerFrame || signInDetail ? (
+            <ProviderFrameRow
+              block={block}
+              detail={signInDetail}
+              summary={t('components.native-chat.notices.details', 'Details')}
+            />
+          ) : null
+        }
       />
     )
   }

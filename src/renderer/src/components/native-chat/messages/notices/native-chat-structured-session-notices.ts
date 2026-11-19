@@ -1,5 +1,6 @@
 import {
   nativeChatNotSignedInSentence,
+  nativeChatSignInHostWords,
   nativeChatSignInNoticeView
 } from '../../host-access/native-chat-sign-in-notice'
 import { sayAgentSessionFailureTranslated } from './agent-session-failure-words-text'
@@ -80,6 +81,15 @@ function nativeChatLaunchNotice(
     t
   )
   if (signIn) {
+    // The host words the failure, with any provider diagnostic; keep what the short line leaves out.
+    const signInDetails = nativeChatSignInHostWords(
+      failure?.causeText,
+      {
+        kind: 'notSignedIn',
+        ...(details && 'account' in details && details.account ? { account: details.account } : {})
+      },
+      agentLabel
+    )
     return {
       key: 'launch',
       kind: 'error',
@@ -87,7 +97,8 @@ function nativeChatLaunchNotice(
         agentLabel ?? sayAgentSessionFailureTranslated('theAgent'),
         t
       ),
-      signIn
+      signIn,
+      ...(signInDetails ? { signInDetails } : {})
     }
   }
   const cause = failure

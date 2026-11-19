@@ -3,6 +3,8 @@ import type { Translate } from '@/i18n/use-translate'
 import { openAntigravitySignInSettings } from '@/components/provider-accounts/open-antigravity-sign-in-settings'
 import { agentSessionSetupFor } from '../../../../../shared/agent-session/lifecycle/launch/agent-session-setup-commands'
 import type { AgentSessionAccountKind } from '../../../../../shared/agent-session/failures/agent-session-availability'
+import type { AgentSessionFailureFact } from '../../../../../shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureSentence } from '../../../../../shared/agent-session/failures/agent-session-failure-words'
 import type { NativeChatHostSetup, NativeChatSignIn } from './native-chat-host-setup'
 
 export type NativeChatSignInButton = {
@@ -24,6 +26,26 @@ export function nativeChatNotSignedInSentence(agentName: string, t: Translate = 
   return t('components.native-chat.signInNotice.notSignedIn', "{{agent}} isn't signed in.", {
     agent: agentName
   })
+}
+
+/** The host's words for a not-signed-in failure when they say more than its standard sentence
+ *  (a provider's diagnostic, an older host's advice): kept behind Details, never dropped. */
+export function nativeChatSignInHostWords(
+  text: string | undefined,
+  fact: AgentSessionFailureFact,
+  agentName: string | undefined
+): string | undefined {
+  const words = text?.trim()
+  if (!words) {
+    return undefined
+  }
+  const context = agentName ? { agentName } : {}
+  const standard = (['row', 'rejection'] as const).flatMap((surface) =>
+    [context, { ...context, messageSubmitted: false }, { ...context, retryControl: true }].map(
+      (wording) => agentSessionFailureSentence(fact, surface, wording)
+    )
+  )
+  return standard.includes(words) ? undefined : words
 }
 
 /** The one-line sign-in notice, or null where this chat has no Sign in, so the notice keeps the sentence that says how. */
