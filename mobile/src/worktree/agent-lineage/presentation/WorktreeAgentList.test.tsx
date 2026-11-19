@@ -22,17 +22,19 @@ vi.mock('../../../components/icons/MobileAgentIcon', () => ({ MobileAgentIcon: (
 import { WorktreeAgentList } from './WorktreeAgentList'
 
 const NOW = 1_700_000_000_000
+const DAY_MS = 86_400_000
 
+// An idle child is a working row whose status went stale with no live terminal, as the card decays it.
 function agent(
   paneKey: string,
   parentPaneKey: string | null,
-  state: 'working' | 'idle',
+  status: 'working' | 'idle',
   unread = false
 ): RuntimeWorktreeAgentRow {
   return {
     paneKey,
     parentPaneKey,
-    state,
+    state: 'working',
     agentType: 'claude',
     prompt: '',
     taskTitle: null,
@@ -41,9 +43,9 @@ function agent(
     toolName: null,
     toolInput: null,
     interrupted: false,
-    stateStartedAt: NOW,
-    updatedAt: NOW,
-    activity: { listed: true, status: state, unread, clearable: false, sortAt: NOW, title: paneKey }
+    stateStartedAt: status === 'idle' ? NOW - DAY_MS : NOW,
+    updatedAt: status === 'idle' ? NOW - DAY_MS : NOW,
+    activity: { listed: true, status, unread, clearable: false, sortAt: NOW, title: paneKey }
   }
 }
 
@@ -76,11 +78,11 @@ describe('collapsed agent groups', () => {
     })
     const idleGroup = renderer!.root.find(
       (node) =>
-        node.type === 'Pressable' &&
+        String(node.type) === 'Pressable' &&
         String(node.props.accessibilityLabel).startsWith('Show 2 idle child agents')
     )
     expect(idleGroup.props.accessibilityLabel).toContain('Unread')
-    expect(idleGroup.findAll((node) => node.type === 'Bell')).toHaveLength(1)
+    expect(idleGroup.findAll((node) => String(node.type) === 'Bell')).toHaveLength(1)
     toggleDisclosure('parent:root')
   })
 })
