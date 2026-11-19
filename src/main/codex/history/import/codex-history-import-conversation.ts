@@ -14,8 +14,9 @@ import {
   stagingRecordPath
 } from './codex-history-import-staging-record'
 
-// The store's disk is full or read-only: every further copy would fail the same way.
-const STORE_REFUSES_WRITES = new Set(['ENOSPC', 'EDQUOT', 'EROFS', 'EFBIG'])
+// The store's disk is full or read-only: every further copy would fail the same way. A file too
+// big for it (EFBIG) is that file's problem, so it falls to the per-file check below.
+const STORE_REFUSES_WRITES = new Set(['ENOSPC', 'EDQUOT', 'EROFS'])
 
 export type ConversationCopy = {
   from: string
