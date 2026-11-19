@@ -59,13 +59,20 @@ it('deletes a rollout from ~/.codex but never from the Codex import folder', asy
 })
 
 // Creating symlinks on Windows needs Developer Mode or admin rights.
-it.skipIf(process.platform === 'win32')(
-  'leaves the import folder alone when a ~/.codex folder links into it',
-  async () => {
+it.skipIf(process.platform === 'win32').each([
+  { place: 'beside ~/.codex', importParts: ['import'] },
+  { place: 'inside ~/.codex', importParts: ['user', '.codex', 'import'] }
+])(
+  'deletes Orca copies but not names a ~/.codex folder links into the import folder $place',
+  async ({ importParts }) => {
     isolateHomes()
     const system = join(root, 'user', '.codex')
-    const importFolder = join(root, 'import')
+    const importFolder = join(root, ...importParts)
     const imported = write(join(importFolder, ...DATED, NAME), 'import copy\n')
+    const managed = write(
+      join(root, 'user-data', 'codex-runtime-home', 'home', ...DATED, NAME),
+      'managed copy\n'
+    )
     mkdirSync(join(system, 'thread-writer-locks'), { recursive: true })
     symlinkSync(join(importFolder, 'sessions'), join(system, 'sessions'))
     const settings = { codexSessionSourceHome: { host: importFolder } }
@@ -76,7 +83,8 @@ it.skipIf(process.platform === 'win32')(
       () => listHostCodexRolloutHomes(settings)
     )
 
-    expect(result).toEqual({ deleted: 0, failed: 0, freedBytes: 0 })
+    expect(result).toEqual({ deleted: 1, failed: 0, freedBytes: 13 })
+    expect(existsSync(managed)).toBe(false)
     expect(readFileSync(imported, 'utf8')).toBe('import copy\n')
   }
 )
