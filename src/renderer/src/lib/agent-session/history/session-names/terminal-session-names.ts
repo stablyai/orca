@@ -18,6 +18,8 @@ export type TerminalSessionNameEntry = {
   /** The tab whose name this is; only that tab's clear forgets it. */
   tabId: string
   savedAt: number
+  /** Last time a tab took this name; eviction keeps recently used names. Older entries omit it. */
+  usedAt?: number
 }
 
 type Entries = Map<string, TerminalSessionNameEntry>
@@ -69,7 +71,10 @@ function validEntry(key: string, record: unknown): TerminalSessionNameEntry | nu
     title,
     agent: record.agent,
     tabId: record.tabId,
-    savedAt: record.savedAt
+    savedAt: record.savedAt,
+    ...(typeof record.usedAt === 'number' && Number.isFinite(record.usedAt)
+      ? { usedAt: record.usedAt }
+      : {})
   }
 }
 
@@ -163,7 +168,8 @@ function commit(mutations: readonly Mutation[]): void {
     return
   }
   if (current.size > TERMINAL_SESSION_NAMES_MAX_ENTRIES) {
-    const oldestFirst = [...current.entries()].sort((a, b) => a[1].savedAt - b[1].savedAt)
+    const lastUsed = (entry: TerminalSessionNameEntry) => entry.usedAt ?? entry.savedAt
+    const oldestFirst = [...current.entries()].sort((a, b) => lastUsed(a[1]) - lastUsed(b[1]))
     for (const [key] of oldestFirst.slice(0, current.size - TERMINAL_SESSION_NAMES_MAX_ENTRIES)) {
       current.delete(key)
     }
@@ -216,8 +222,9 @@ export function saveTerminalSessionName(args: {
     return
   }
   // Handing the same name to another tab is not a newer name: keep when it was named.
-  const savedAt = existing?.title === title ? existing.savedAt : Date.now()
-  commit([{ key, entry: { title, agent: args.agent, tabId: args.tabId, savedAt } }])
+  const now = Date.now()
+  const savedAt = existing?.title === title ? existing.savedAt : now
+  commit([{ key, entry: { title, agent: args.agent, tabId: args.tabId, savedAt, usedAt: now } }])
 }
 
 export type TerminalSessionNameForget = { key: string; ownerTabId: string }

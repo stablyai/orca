@@ -174,9 +174,28 @@ describe('terminal session names', () => {
     save('s1', 'Fix auth bug', 'closed-tab')
     const first = getTerminalSessionNameEntry('local', 's1')
     save('s1', 'Fix auth bug', 'tab-new')
-    expect(getTerminalSessionNameEntry('local', 's1')).toEqual({ ...first, tabId: 'tab-new' })
+    expect(getTerminalSessionNameEntry('local', 's1')).toMatchObject({
+      title: 'Fix auth bug',
+      tabId: 'tab-new',
+      savedAt: first?.savedAt
+    })
     save('s1', 'Renamed', 'tab-new')
     expect(getTerminalSessionNameEntry('local', 's1')?.savedAt).toBeGreaterThan(first?.savedAt ?? 0)
+  })
+
+  it('evicts the least recently used names, counting a tab taking a name as use', () => {
+    let now = 1_000
+    vi.spyOn(Date, 'now').mockImplementation(() => now++)
+    save('kept', 'Resumed often', 'tab-old')
+    for (let index = 0; index < TERMINAL_SESSION_NAMES_MAX_ENTRIES - 1; index++) {
+      save(`filler-${index}`, `Name ${index}`)
+    }
+    // A resumed tab takes the old name, then more names arrive past the limit.
+    save('kept', 'Resumed often', 'tab-new')
+    save('newest', 'Newest')
+    const keys = Object.keys(stored())
+    expect(keys).toContain(terminalSessionNameKey('local', 'kept'))
+    expect(keys).not.toContain(terminalSessionNameKey('local', 'filler-0'))
   })
 
   it("refreshes and notifies on another window's storage event", () => {
