@@ -14,12 +14,9 @@ export function noteArmsHibernatedPaneWake(record: SleepingAgentSessionRecord): 
   )
 }
 
-/** A pane's own Agent Sleep record, or its mail wake's: a targeted wake resumes it. Workspace Sleep waits for its tab. */
+/** A pane's own Agent Sleep record: a targeted wake resumes it. Workspace Sleep waits for its tab. */
 export function resumesSleptAgentRecord(record: SleepingAgentSessionRecord): boolean {
-  return (
-    !isWorkspaceSleepRecord(record) &&
-    (record.origin === 'worktree-sleep' || record.mailWake !== undefined)
-  )
+  return record.origin === 'worktree-sleep' && !isWorkspaceSleepRecord(record)
 }
 
 export function installHibernatedPaneWake(session: ConnectPanePtySession): void {

@@ -1,15 +1,11 @@
 import { sessionCrewChanges, type CrewInvalidation } from '../../crew/crew-changes'
-import { replaceMailWakeRecord } from '../../../session-lifecycle/projection/retained-mail-wake-attempt'
+import { MailWakeAttempts } from './mail-wake-attempts'
 import { SleepingMailRecordIndex } from './sleeping-mail-record-index'
-import {
-  mailWakeObligation,
-  withoutMailWake
-} from '../../../../../shared/agent-session/lifecycle/mail-wake-obligation'
+import { mailWakeObligation, type SleptMailRecord } from './mail-wake-obligation'
 import { queueTerminalWorkspaceCommand } from '../../../workspaces/lifecycle/workspace-lifecycle-commands'
 import { MailWakeInvocations } from './mail-wake-invocations'
 import { RuntimeMailWakeAdmission } from './runtime-mail-wake-admission'
 import { SleptMailboxWake } from './slept-mailbox-wake'
-import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 
 export abstract class RuntimeSleptMailboxWakes extends RuntimeMailWakeAdmission {
   protected readonly mailWakeInvocations = new MailWakeInvocations()
@@ -25,7 +21,8 @@ export abstract class RuntimeSleptMailboxWakes extends RuntimeMailWakeAdmission 
         throw new Error('Open the workspace to resume the agent')
       }
     },
-    // TEMPORARY: window-owned Agent sleep needs a connected client; host-only wake is tracked in STA-15080.
+    // TODO(STA-15080): the window resumes the pane until main owns pane layout (phase F); then main
+    // ensures the agent runs and delivers, as host-owned wakes do. Desktop-owned resume has precedent.
     wake: async (record) => {
       const stop = new AbortController()
       const confirmed = this.mailWakeInvocations.wait(record, stop.signal)
@@ -39,22 +36,27 @@ export abstract class RuntimeSleptMailboxWakes extends RuntimeMailWakeAdmission 
               !current ||
               !this.hasSleepingMailForPane(record.paneKey) ||
               mailWakeObligation(current) === 'manual' ||
-              (current.mailWake?.capturedAt ?? current.capturedAt) !==
-                (record.mailWake?.capturedAt ?? record.capturedAt)
+              current.capturedAt !== record.capturedAt
             ) {
               return false
             }
             // A wake already attempted for this mail is not started again automatically.
-            if (current.mailWake) {
+            if (current.mailWake || this.getPtyRecordForPaneKey(current.paneKey)?.connected) {
               return false
             }
-            if (this.getPtyRecordForPaneKey(current.paneKey)?.connected) {
+            const claimed = this.mailWakeAttempts.claim(current)
+            if (!claimed) {
               return false
             }
-            return (
-              (await this.notifier?.resumeSleepingAgents?.(current.worktreeId, current.paneKey)) ===
-              true
-            )
+            const resumed =
+              (await Promise.resolve(
+                this.notifier?.resumeSleepingAgents?.(current.worktreeId, current.paneKey)
+              ).catch(() => false)) === true
+            if (!resumed) {
+              // Nothing was launched, so a later edge may wake this pane again.
+              this.settleMailWakeAttempt(claimed)
+            }
+            return resumed
           }
         })
         if (!accepted) {
@@ -73,18 +75,24 @@ export abstract class RuntimeSleptMailboxWakes extends RuntimeMailWakeAdmission 
   private watchingSleepingMail = false
   private readonly sleepingRecordIndex = new SleepingMailRecordIndex()
   private readonly sleepingRecords = this.sleepingRecordIndex.records
-  private readonly custodyRecords = this.sleepingRecordIndex.custody
+  private readonly mailWakeAttempts = new MailWakeAttempts({
+    db: () => this._orchestrationDb,
+    pty: (paneKey) => this.getPtyRecordForPaneKey(paneKey)
+  })
+
+  protected settleMailWakeAttempt(record: SleptMailRecord): void {
+    if (this.mailWakeAttempts.settle(record)) {
+      this.mailWakeInvocations.retain(this.mailWakeAttempts.launchTokens())
+      this.publishSleepingMail()
+    }
+  }
 
   private refreshSleepingRecords(host: string): Set<string> {
-    const changed = this.sleepingRecordIndex.refresh(
+    return this.sleepingRecordIndex.refresh(
       host,
       this.store?.getWorkspaceSession?.(host)?.sleepingAgentSessionsByPaneKey ?? {},
       (pane) => this.sleptMailboxWake.refreshPane(pane)
     )
-    if (changed.size) {
-      this.mailWakeInvocations.retain(this.sleepingRecordIndex.launchTokens())
-    }
-    return changed
   }
 
   protected watchSleepingMail(): void {
@@ -128,8 +136,9 @@ export abstract class RuntimeSleptMailboxWakes extends RuntimeMailWakeAdmission 
   }
 
   private watchMailWakeInvocations(paneKey?: string): void {
-    const record = paneKey ? this.custodyRecords.get(paneKey) : undefined
-    for (const current of paneKey ? (record ? [record] : []) : this.custodyRecords.values()) {
+    const record = paneKey ? this.mailWakeAttempts.get(paneKey) : undefined
+    for (const claimed of paneKey ? (record ? [record] : []) : this.mailWakeAttempts.records()) {
+      const current = this.mailWakeAttempts.stampLaunch(claimed)
       const attempt = current.mailWake?.attempt
       if (!attempt) {
         continue
@@ -154,35 +163,13 @@ export abstract class RuntimeSleptMailboxWakes extends RuntimeMailWakeAdmission 
         )
       ) {
         this.sleptMailboxWake.confirmed(current)
-        void this.editMailWakeRecord(current, withoutMailWake(current)).catch((error: unknown) =>
-          console.warn('[orchestration] could not settle resumed mail custody', error)
-        )
+        this.settleMailWakeAttempt(current)
       }
     }
   }
 
-  protected async editMailWakeRecord(
-    record: SleepingAgentSessionRecord,
-    next: SleepingAgentSessionRecord
-  ): Promise<boolean> {
-    let changed = false
-    await this.commitWorkspaceSessionEdit(
-      this.getWorkspaceSessionHostIdForWorktree(record.worktreeId),
-      (session) => {
-        const edited = replaceMailWakeRecord(session, record, next)
-        changed = edited !== null
-        return edited
-      }
-    )
-    if (changed && record.mailWake && !next.mailWake) {
-      this.settledMailWakeIds.add(record.mailWake.id)
-      this.publishSleepingMail()
-    }
-    return changed
-  }
-
-  protected sleepingMailRecord(paneKey: string): SleepingAgentSessionRecord | null {
-    return this.sleepingRecords.get(paneKey) ?? null
+  protected sleepingMailRecord(paneKey: string): SleptMailRecord | null {
+    return this.mailWakeAttempts.get(paneKey) ?? this.sleepingRecords.get(paneKey) ?? null
   }
 
   protected hasSleepingMailForPane(paneKey: string): boolean {
@@ -191,7 +178,7 @@ export abstract class RuntimeSleptMailboxWakes extends RuntimeMailWakeAdmission 
 
   protected requestSleptMailboxWake(mailbox: string, reservedTypes?: ReadonlySet<string>): void {
     this.watchSleepingMail()
-    if (this.sleepingRecords.size || this.sleptMailboxWake.hasTrackedMail) {
+    if (this.owesAnySleepingMail()) {
       this.sleptMailboxWake.request(mailbox, reservedTypes)
     }
   }
@@ -205,10 +192,21 @@ export abstract class RuntimeSleptMailboxWakes extends RuntimeMailWakeAdmission 
     this.publishSleepingMail()
   }
 
-  private readonly settledMailWakeIds = new Set<string>()
   private sleepingMailPublicationDirty = false
   private sleepingMailPublicationQueued = false
   private sleepingMailPublication = ''
+
+  private owesAnySleepingMail(): boolean {
+    return (
+      this.sleepingRecords.size > 0 ||
+      this.mailWakeAttempts.size > 0 ||
+      this.sleptMailboxWake.hasTrackedMail
+    )
+  }
+
+  private sleepingMailPanes(): Set<string> {
+    return new Set([...this.sleepingRecords.keys(), ...this.mailWakeAttempts.panes()])
+  }
 
   /** Any crew change re-derives what the few sleeping panes are owed; publications coalesce. */
   protected publishSleepingMail(): void {
@@ -217,31 +215,31 @@ export abstract class RuntimeSleptMailboxWakes extends RuntimeMailWakeAdmission 
       return
     }
     this.sleepingMailPublicationQueued = true
-    queueMicrotask(async () => {
+    queueMicrotask(() => {
       try {
         if (!this._orchestrationDb) {
           return
         }
-        if (this.sleepingRecords.size || this.sleptMailboxWake.hasTrackedMail) {
-          this.sleptMailboxWake.reconcile(this.sleepingRecords.keys())
+        this.mailWakeAttempts.load()
+        this.mailWakeInvocations.retain(this.mailWakeAttempts.launchTokens())
+        if (this.owesAnySleepingMail()) {
+          this.sleptMailboxWake.reconcile(this.sleepingMailPanes())
         }
-        for (const [pane, record] of Array.from(this.custodyRecords)) {
-          if (!this.sleptMailboxWake.owesPane(pane)) {
-            await this.editMailWakeRecord(record, withoutMailWake(record))
+        for (const record of this.mailWakeAttempts.records()) {
+          if (!this.sleptMailboxWake.owesPane(record.paneKey)) {
+            this.settleMailWakeAttempt(record)
           }
         }
-        for (const pane of this.sleepingRecords.keys()) {
+        for (const pane of this.sleepingMailPanes()) {
           for (const mailbox of this.sleptMailboxWake.mailboxesForPane(pane)) {
             this.sleptMailboxWake.request(mailbox)
           }
         }
-        const settledIds = [...this.settledMailWakeIds]
-        this.settledMailWakeIds.clear()
         const ids = this.sleptMailboxWake.heldWorktrees()
         const key = JSON.stringify(ids)
-        if (key !== this.sleepingMailPublication || settledIds.length) {
+        if (key !== this.sleepingMailPublication) {
           this.sleepingMailPublication = key
-          this.notifier?.sleepingMailChanged?.(ids, ...(settledIds.length ? [settledIds] : []))
+          this.notifier?.sleepingMailChanged?.(ids)
         }
       } catch {
         /* The runtime can close its database before a queued publication. */

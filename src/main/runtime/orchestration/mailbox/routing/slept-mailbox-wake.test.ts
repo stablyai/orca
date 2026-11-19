@@ -1,7 +1,6 @@
 import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import type { WorkspaceSessionState } from '../../../../../shared/workspace-session/workspace-session-state-types'
 import { ORCHESTRATION_REPLY_METHOD } from '../../../rpc/methods/orchestration/messaging/reply-method'
-import { restoreUndispatchedMailWake } from '../../../session-lifecycle/projection/retained-mail-wake-attempt'
 import { OrcaRuntimeService } from '../../../orca-runtime'
 import {
   partialRuntimeStore,
@@ -13,6 +12,7 @@ import { sendDeliveryHoldWarning } from '../../../rpc/methods/orchestration/mess
 import { expect, it, vi } from 'vitest'
 import { OrchestrationDb } from '../../db/orchestration-db'
 import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
+import type { SleptMailRecord } from './mail-wake-obligation'
 import { SleptMailboxWake } from './slept-mailbox-wake'
 
 const paneKey = 'tab:11111111-1111-4111-8111-111111111111'
@@ -57,7 +57,7 @@ it('wakes only the automatic sleeper owed deliverable mail, coalesces it, and re
       coordinatorPaneKey: paneKey
     })
     const mailbox = `run:${run.id}`
-    let sleeping: SleepingAgentSessionRecord | null = record
+    let sleeping: SleptMailRecord | null = record
     let releaseSleep: () => void = () => {}
     let sleep = new Promise<void>((resolve) => {
       releaseSleep = resolve
@@ -232,15 +232,9 @@ it('suppresses a definitively confirmed late wake only for its obligation and re
     })
     delivery.request(mailbox)
     await settled()
-    const retained: SleepingAgentSessionRecord = {
-      ...record,
-      origin: 'quit',
-      restoreOnTabOpenOnly: true,
-      capturedAt: 200,
-      mailWake: { id: 'obligation', capturedAt: 1, startedAt: 100 }
-    }
+    const retained: SleptMailRecord = { ...record, mailWake: { id: 'obligation', startedAt: 100 } }
     sleeping = retained
-    delivery.confirmed({ ...retained, mailWake: { ...retained.mailWake!, capturedAt: 2 } })
+    delivery.confirmed({ ...retained, capturedAt: 2 })
     expect(delivery.failedToWake(retained)).toBe(true)
     delivery.confirmed(retained)
     delivery.request(mailbox)
@@ -285,67 +279,56 @@ it('suppresses a definitively confirmed late wake only for its obligation and re
   }
 })
 
-it('holds unknown dispatch custody but retries a positively undispatched wake on the record availability edge', async () => {
-  const db = new OrchestrationDb(':memory:')
-  const retained: SleepingAgentSessionRecord = {
-    ...record,
-    worktreeId: 'repo::/workspace',
-    mailWake: { id: 'not-dispatched', capturedAt: 1, startedAt: 100 }
-  }
-  let session: WorkspaceSessionState = {
-    ...getDefaultWorkspaceSession(),
-    sleepingAgentSessionsByPaneKey: { [paneKey]: retained }
-  }
-  let written: (host: ExecutionHostId | null) => void = () => {}
-  const runtime = new OrcaRuntimeService(
-    partialRuntimeStore({
-      getWorkspaceSession: () => session,
-      getWorkspaceSessionHostIds: () => ['local'],
-      onWorkspaceSessionWritten: (listener) => {
-        written = listener
-        return () => {}
-      }
-    })
-  )
-  const resume = vi.fn(
-    async (_workspace: string, _pane?: string, prepare?: boolean) => prepare === true
-  )
-  const notifier = mailNotifier(resume)
-  try {
-    const run = db.createRun({
-      objective: 'refused launch',
-      coordinatorHandle: 'term_old',
-      coordinatorPaneKey: paneKey
-    })
-    const mailbox = `run:${run.id}`
-    db.insertMessage({ runId: run.id, from: 'worker', to: mailbox, subject: 'done' })
-    runtime.setOrchestrationDb(db)
-    runtime.setNotifier(notifier)
-    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
-    await settled()
-    expect(await runtime.readSleepingMailHold(mailbox)).toMatchObject({
-      resuming: false,
-      openTab: false,
-      liveShell: false
-    })
-    runtime.retrySleptMailboxWakes()
-    await settled()
-    expect(resume.mock.calls.filter((call) => call[2] !== true)).toHaveLength(0)
-    await restoreUndispatchedMailWake(async (edit) => {
-      const next = edit(session)
-      if (next) {
-        session = next
-        written('local')
-      }
-    }, retained)
-    await settled()
-    expect(resume.mock.calls.filter((call) => call[2] !== true)).toEqual([
-      ['repo::/workspace', 'tab:11111111-1111-4111-8111-111111111111']
-    ])
-    expect(session.sleepingAgentSessionsByPaneKey?.[paneKey]?.mailWake).toBeUndefined()
-  } finally {
-    runtime.setNotifier(null)
-    db.close()
+it('holds a launched wake across a restart but wakes again for a claim that never launched', async () => {
+  for (const launched of [true, false]) {
+    const db = new OrchestrationDb(':memory:')
+    const slept = { ...record, worktreeId: 'repo::/workspace' }
+    db.claimMailWake(slept, 'claim', 100)
+    if (launched) {
+      db.recordMailWakeLaunch(paneKey, 'claim', {
+        ptyId: 'pty-old',
+        incarnationId: 'incarnation',
+        launchToken: 'token'
+      })
+    }
+    const session: WorkspaceSessionState = {
+      ...getDefaultWorkspaceSession(),
+      sleepingAgentSessionsByPaneKey: { [paneKey]: slept }
+    }
+    const runtime = new OrcaRuntimeService(
+      partialRuntimeStore({
+        getWorkspaceSession: () => session,
+        getWorkspaceSessionHostIds: () => ['local'],
+        onWorkspaceSessionWritten: () => () => {}
+      })
+    )
+    const resume = vi.fn(
+      async (_workspace: string, _pane?: string, prepare?: boolean) => prepare === true
+    )
+    try {
+      const run = db.createRun({
+        objective: 'restart',
+        coordinatorHandle: 'term_old',
+        coordinatorPaneKey: paneKey
+      })
+      db.insertMessage({ runId: run.id, from: 'worker', to: `run:${run.id}`, subject: 'done' })
+      runtime.setOrchestrationDb(db)
+      runtime.setNotifier(mailNotifier(resume))
+      runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+      runtime.retrySleptMailboxWakes()
+      await settled()
+      await settled()
+      expect(resume.mock.calls.filter((call) => call[2] !== true)).toEqual(
+        launched ? [] : [['repo::/workspace', paneKey]]
+      )
+      // The refused relaunch leaves no claim behind, so a later edge can try again.
+      expect(db.listMailWakeAttempts().map((attempt) => attempt.mailWake?.id)).toEqual(
+        launched ? ['claim'] : []
+      )
+    } finally {
+      runtime.setNotifier(null)
+      db.close()
+    }
   }
 })
 
@@ -354,14 +337,15 @@ it('clears the original workspace hold and custody when another terminal replies
   let session: WorkspaceSessionState = {
     ...getDefaultWorkspaceSession(),
     sleepingAgentSessionsByPaneKey: {
-      [paneKey]: {
-        ...record,
-        origin: 'quit',
-        restoreOnTabOpenOnly: true,
-        mailWake: { id: 'reply-custody', capturedAt: 1, startedAt: 100 }
-      }
+      [paneKey]: { ...record, origin: 'quit', restoreOnTabOpenOnly: true }
     }
   }
+  db.claimMailWake(record, 'reply-custody', 100)
+  db.recordMailWakeLaunch(paneKey, 'reply-custody', {
+    ptyId: 'pty-old',
+    incarnationId: 'incarnation',
+    launchToken: 'token'
+  })
   let written: (host: ExecutionHostId | null) => void = () => {}
   const runtime = new OrcaRuntimeService(
     partialRuntimeStore({
@@ -434,8 +418,8 @@ it('clears the original workspace hold and custody when another terminal replies
     await settled()
     expect(db.getMessageById(original.id)?.read).toBe(1)
     expect(await runtime.readSleepingMailHold(mailbox)).toBeNull()
-    expect(session.sleepingAgentSessionsByPaneKey?.[paneKey]?.mailWake).toBeUndefined()
-    expect(bell).toHaveBeenLastCalledWith([], ['reply-custody'])
+    expect(db.listMailWakeAttempts()).toEqual([])
+    expect(bell).toHaveBeenLastCalledWith([])
   } finally {
     runtime.setNotifier(null)
     db.close()

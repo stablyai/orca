@@ -1,4 +1,4 @@
-import { installPaneResumeRecord, currentMailWakeStartup } from './startup/pane-resume-record'
+import { paneResumeRecord } from './startup/pane-resume-record'
 import { useAppStore } from '@/store/index'
 import type { PtyReplayDataMeta } from '../pty-transport/pty-transport-types'
 import { INITIAL_MODE_2031_REPLY_SCAN_STATE } from '../../../../../shared/terminal/protocol/queries/terminal-color-scheme-protocol'
@@ -6,6 +6,8 @@ import { waitForTerminalOutputParsed } from '@/lib/pane-manager/terminal-output/
 import { executeTerminalStartupCommandPaste } from '../input/paste/terminal-startup-command-paste'
 import { resolveTerminalPasteRuntime } from '../input/paste/terminal-paste-runtime'
 import { CLIENT_PLATFORM } from '@/lib/workspace/creation/new-workspace'
+import { recordPaneWakeThroughLayoutOwner } from '@/store/terminals/sleep/terminal-sleep-layout-owner'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/workspace-layout/layout-owner-switch'
 
 import { shouldKeepHiddenStartupRendererQueriesLive } from './output/hidden-startup-renderer-query'
 import { createForegroundImmediateBudget } from './output/foreground-output-budgets'
@@ -52,7 +54,51 @@ export function bindDeferredColdRestoreAndSnapshot(session: ConnectPanePtySessio
     }
     return true
   }
-  installPaneResumeRecord(session)
+  session.keepResumeRecordAfterColdRestoreSpawn = (
+    startup: ColdRestoreAgentResumeStartup | null
+  ): void => {
+    if (!startup || startup.resumeSource?.cancelled) {
+      return
+    }
+    const state = useAppStore.getState()
+    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+      if (!startup.useLiveEntry && startup.sleepingRecordEntry) {
+        recordPaneWakeThroughLayoutOwner(state, session.deps.worktreeId, session.cacheKey)
+        session.clearSleepingRecordProviderDuplicates(state, startup.sleepingRecordEntry)
+      }
+      return
+    }
+    const captured = startup.sleepingRecordEntry
+    if (captured && state.sleepingAgentSessionsByPaneKey[captured.paneKey] !== captured.record) {
+      return
+    }
+    if (!captured && startup.useLiveEntry) {
+      const expected = startup.resumeSource?.expectedStatus
+      const current = state.agentStatusByPaneKey.get(session.cacheKey)
+      if (
+        !expected ||
+        current?.updatedAt !== expected.receivedAt ||
+        current.stateStartedAt !== expected.stateStartedAt
+      ) {
+        return
+      }
+    }
+    // Spawn proves a PTY exists, not that the agent has replaced its resume identity.
+    const record = paneResumeRecord(session, startup)
+    if (record) {
+      state.rememberSleepingAgentSession(
+        record,
+        captured && captured.paneKey === session.cacheKey ? captured.record : undefined
+      )
+    }
+    if (!startup.useLiveEntry && startup.sleepingRecordEntry) {
+      session.clearSleepingRecordProviderDuplicates(
+        useAppStore.getState(),
+        startup.sleepingRecordEntry,
+        session.cacheKey
+      )
+    }
+  }
   session.mergeStartupEnvWithPaneIdentity = (
     env: Record<string, string> | undefined
   ): Record<string, string> | undefined =>
@@ -71,12 +117,6 @@ export function bindDeferredColdRestoreAndSnapshot(session: ConnectPanePtySessio
     options: FreshSpawnOptions = {},
     automatic?: boolean
   ): Promise<string | null> => {
-    if (startup) {
-      startup = currentMailWakeStartup(
-        startup,
-        useAppStore.getState().sleepingAgentSessionsByPaneKey
-      )
-    }
     if (startup?.resumeSource?.cancelled) {
       return Promise.resolve(null)
     }

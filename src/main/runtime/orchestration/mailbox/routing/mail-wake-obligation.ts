@@ -1,10 +1,20 @@
-import type { SleepingAgentSessionRecord } from './agent-session-resume'
-import { agentProviderSessionsEqual } from './resume/agent-provider-session-equality'
-import type { AgentStatusIpcPayload } from '../../agent-status/contracts/agent-status-ipc-payload'
-import { isWorkspaceSleepRecord } from '../../workspace/lifecycle/workspace-sleep'
+import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
+import { agentProviderSessionsEqual } from '../../../../../shared/agent-session/lifecycle/resume/agent-provider-session-equality'
+import type { AgentStatusIpcPayload } from '../../../../../shared/agent-status/contracts/agent-status-ipc-payload'
+import { isWorkspaceSleepRecord } from '../../../../../shared/workspace/lifecycle/workspace-sleep'
+
+/** A mail wake main started for a slept pane: kept in the orchestration database, never on the sleep record. */
+export type MailWakeCustody = {
+  id: string
+  startedAt: number
+  attempt?: { ptyId: string; incarnationId: string; launchToken: string; startedAt: number }
+}
+
+/** The slept agent a wake resumes, with main's attempt when one was started. */
+export type SleptMailRecord = SleepingAgentSessionRecord & { mailWake?: MailWakeCustody }
 
 /** Custody is independent of whether its pane currently owns a shell. */
-export function mailWakeObligation(record: SleepingAgentSessionRecord | null | undefined) {
+export function mailWakeObligation(record: SleptMailRecord | null | undefined) {
   if (!record) {
     return null
   }
@@ -18,7 +28,7 @@ export function mailWakeObligation(record: SleepingAgentSessionRecord | null | u
 }
 
 export function confirmsMailWake(
-  record: SleepingAgentSessionRecord,
+  record: SleptMailRecord,
   row: AgentStatusIpcPayload,
   currentPtyId: string | null | undefined
 ): boolean {
@@ -41,16 +51,7 @@ export function confirmsMailWake(
   )
 }
 
-export function withoutMailWake(record: SleepingAgentSessionRecord): SleepingAgentSessionRecord {
+export function withoutMailWake(record: SleptMailRecord): SleepingAgentSessionRecord {
   const { mailWake: _settled, ...rest } = record
   return rest
-}
-
-export function undispatchedMailWakeRecord(
-  record: SleepingAgentSessionRecord
-): SleepingAgentSessionRecord | null {
-  if (mailWakeObligation(record) !== 'retained' || !record.mailWake || record.mailWake.attempt) {
-    return null
-  }
-  return withoutMailWake(record)
 }

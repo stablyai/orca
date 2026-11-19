@@ -1,7 +1,6 @@
-import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { agentProviderSessionsEqual } from '../../../../../shared/agent-session/lifecycle/resume/agent-provider-session-equality'
 import type { AgentStatusIpcPayload } from '../../../../../shared/agent-status/contracts/agent-status-ipc-payload'
-import { confirmsMailWake } from '../../../../../shared/agent-session/lifecycle/mail-wake-obligation'
+import { confirmsMailWake, type SleptMailRecord } from './mail-wake-obligation'
 import {
   failOnLaunchedAgentExit,
   LaunchedAgentExitedError,
@@ -17,11 +16,11 @@ type Invocation = {
 export class MailWakeInvocations {
   private readonly invocations = new Map<string, Invocation>()
   private readonly waiters = new Set<{
-    record: SleepingAgentSessionRecord
+    record: SleptMailRecord
     finish: (value: boolean) => void
   }>()
 
-  watch(record: SleepingAgentSessionRecord, runtime: LaunchedAgentExitRuntime): void {
+  watch(record: SleptMailRecord, runtime: LaunchedAgentExitRuntime): void {
     const attempt = record.mailWake?.attempt
     if (!attempt || this.invocations.has(attempt.launchToken)) {
       return
@@ -46,7 +45,7 @@ export class MailWakeInvocations {
   }
 
   observe(
-    record: SleepingAgentSessionRecord,
+    record: SleptMailRecord,
     rows: readonly AgentStatusIpcPayload[],
     ptyId: string | null | undefined
   ): boolean {
@@ -63,23 +62,23 @@ export class MailWakeInvocations {
     return true
   }
 
-  ended(record: SleepingAgentSessionRecord): boolean {
+  ended(record: SleptMailRecord): boolean {
     return this.invocations.get(record.mailWake?.attempt?.launchToken ?? '')?.ended === true
   }
 
-  private sameObligation(a: SleepingAgentSessionRecord, b: SleepingAgentSessionRecord): boolean {
+  private sameObligation(a: SleptMailRecord, b: SleptMailRecord): boolean {
     return (
       a.paneKey === b.paneKey &&
       a.worktreeId === b.worktreeId &&
       a.agent === b.agent &&
       (a.connectionId ?? null) === (b.connectionId ?? null) &&
       agentProviderSessionsEqual(a.agent, a.providerSession, b.providerSession) &&
-      (a.mailWake?.capturedAt ?? a.capturedAt) === (b.mailWake?.capturedAt ?? b.capturedAt) &&
+      a.capturedAt === b.capturedAt &&
       (!a.mailWake || a.mailWake.id === b.mailWake?.id)
     )
   }
 
-  wait(record: SleepingAgentSessionRecord, signal: AbortSignal): Promise<boolean> {
+  wait(record: SleptMailRecord, signal: AbortSignal): Promise<boolean> {
     return new Promise((resolve) => {
       const finish = (value: boolean) => {
         signal.removeEventListener('abort', cancel)

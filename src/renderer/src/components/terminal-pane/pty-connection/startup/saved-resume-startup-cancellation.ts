@@ -96,10 +96,7 @@ export function installSavedResumeStartupCancellation(session: ConnectPanePtySes
     if (!captured) {
       return
     }
-    const current = useAppStore.getState().sleepingAgentSessionsByPaneKey[captured.paneKey]
-    if (current?.mailWake) {
-      return
-    }
+    const current = state.sleepingAgentSessionsByPaneKey[captured.paneKey]
     if (result.agentResumeRefused === 'unverifiable') {
       if (!current) {
         state.rememberSleepingAgentSession(captured)
