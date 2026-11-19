@@ -50,15 +50,15 @@ const remoteRow: Repo = { ...localRow, executionHostId: REMOTE_HOST }
 const remotePtyId = toRemoteRuntimePtyId('handle-1', 'env-b')
 
 const ptyKill = vi.fn()
-let onRepoRemoved: (() => void) | null = null
+let onRepoRemoved: (() => void | Promise<void>) | null = null
 
-function answerLikeRuntimeHost(args: RuntimeEnvironmentCallRequest): unknown {
+async function answerLikeRuntimeHost(args: RuntimeEnvironmentCallRequest): Promise<unknown> {
   const compatible = createCompatibleRuntimeStatusResponseIfNeeded(args)
   if (compatible) {
     return compatible
   }
   if (args.method === 'repo.rm') {
-    onRepoRemoved?.()
+    await onRepoRemoved?.()
   }
   return { id: args.method, ok: true, result: {}, _meta: { runtimeId: 'runtime-remote' } }
 }
@@ -77,7 +77,7 @@ beforeEach(() => {
         remove: vi.fn(),
         removeForHost: vi.fn(async ({ hostId }: { hostId: string }) => {
           if (hostId === LOCAL_HOST) {
-            onRepoRemoved?.()
+            await onRepoRemoved?.()
           }
         })
       },
@@ -263,6 +263,85 @@ describe('removing a remote project keeps its local twin', () => {
         expect(state.codexRestartNoticeByPtyId).toEqual({ 'pty-local': notices['pty-local'] })
         expect(ptyKill).not.toHaveBeenCalled()
       }
+    }
+  )
+  it.each([LOCAL_HOST, REMOTE_HOST] as const)(
+    'retires the captured %s intent after its binding exits during removal',
+    async (hostId) => {
+      const store = seedTwins()
+      const tab = store.getState().tabsByWorktree[WORKTREE_ID][0]
+      const leaf = '00000000-0000-4000-8000-000000000011'
+      const survivor = '00000000-0000-4000-8000-000000000012'
+      const oldPtyId = hostId === LOCAL_HOST ? 'pty-local' : remotePtyId
+      const otherPtyId = hostId === LOCAL_HOST ? remotePtyId : 'pty-local'
+      const key = `${tab.id}:${leaf}`
+      const request: CodexAccountRestart = {
+        agent: 'codex',
+        requestId: 'removed-request',
+        attemptId: 'removed-attempt',
+        executorId: 'removed-executor',
+        worktreeId: WORKTREE_ID,
+        tabId: tab.id,
+        tabCreatedAt: tab.createdAt,
+        leafId: leaf,
+        oldPtyId,
+        hostId,
+        environmentId: hostId === LOCAL_HOST ? null : 'env-b',
+        phase: 'claimed',
+        startup: null,
+        startupInput: null
+      }
+      store.setState((state) => ({
+        activeWorktreeId: WORKTREE_ID,
+        activeWorkspaceExecutionHostId: hostId,
+        tabsByWorktree: { [WORKTREE_ID]: [tab] },
+        unifiedTabsByWorktree: {
+          [WORKTREE_ID]: state.unifiedTabsByWorktree[WORKTREE_ID].filter(
+            (row) => row.id !== 'tab-remote'
+          )
+        },
+        ptyIdsByTabId: { [tab.id]: [oldPtyId, otherPtyId] },
+        terminalLayoutsByTabId: {
+          [tab.id]: {
+            root: {
+              type: 'split',
+              direction: 'horizontal',
+              first: { type: 'leaf', leafId: leaf },
+              second: { type: 'leaf', leafId: survivor }
+            },
+            activeLeafId: leaf,
+            expandedLeafId: null,
+            ptyIdsByLeafId: { [leaf]: oldPtyId, [survivor]: otherPtyId }
+          }
+        },
+        pendingPaneAccountRestarts: { [key]: request }
+      }))
+      let resume!: () => void
+      let entered!: () => void
+      const held = new Promise<void>((resolve) => {
+        resume = resolve
+      })
+      const started = new Promise<void>((resolve) => {
+        entered = resolve
+      })
+      onRepoRemoved = async () => {
+        entered()
+        await held
+      }
+      const removal = store.getState().removeProject(PROJECT_ID, { hostId })
+      await started
+      const layout = store.getState().terminalLayoutsByTabId[tab.id]
+      store
+        .getState()
+        .setTabLayout(tab.id, { ...layout, ptyIdsByLeafId: { [survivor]: otherPtyId } })
+      store.getState().clearTabPtyId(tab.id, oldPtyId)
+      expect(store.getState().pendingPaneAccountRestarts[key]).toBe(request)
+      expect(store.getState().terminalLayoutsByTabId[tab.id].ptyIdsByLeafId?.[leaf]).toBeUndefined()
+      resume()
+      await removal
+      expect(store.getState().pendingPaneAccountRestarts[key]).toBeUndefined()
+      expect(store.getState().ptyIdsByTabId[tab.id]).toEqual([otherPtyId])
+      expect(ptyKill).not.toHaveBeenCalled()
     }
   )
 })
