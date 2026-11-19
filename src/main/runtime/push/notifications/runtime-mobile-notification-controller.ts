@@ -190,7 +190,11 @@ export class RuntimeMobileNotificationController {
   }
 
   dismiss(notificationId: string): void {
-    if (this.replay.retainedNotification(notificationId)) {
+    const retained = this.replay.retainedNotification(notificationId)
+    if (retained?.type === 'notification') {
+      this.replay.acknowledge(retained)
+      this.dispatch({ type: 'dismiss', notificationId })
+      this.attentionChanged?.(notificationId, null)
       return
     }
     // Reads rebuild ids for alerts that never went out (chat panes, silenced workers); each would cost a silent push.
@@ -248,6 +252,9 @@ export class RuntimeMobileNotificationController {
 
   reconcileMailboxAttention(id: string, event: MobileNotificationDispatchEvent | null): void {
     const previous = this.replay.retainedNotification(id)
+    if (this.replay.acknowledged(id, event)) {
+      return
+    }
     if (!event) {
       if (previous) {
         this.dispatch({ type: 'dismiss', notificationId: id })

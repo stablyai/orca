@@ -221,9 +221,6 @@ it.each([2, 20])(
       for (let i = 0; i < 300; i++) {
         runtime.dispatchMobileNotification({ type: 'dismiss', notificationId: `filler-${i}` })
       }
-      if (notices[0]?.notificationId) {
-        runtime.dismissMobileNotification(notices[0].notificationId)
-      }
       runtime.retireNotificationAttention({
         reads: [],
         worktree: {

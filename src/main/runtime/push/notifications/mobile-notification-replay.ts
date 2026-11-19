@@ -14,6 +14,7 @@ const DEFAULT_CAPACITY = 256
 export class MobileNotificationReplayBuffer {
   private readonly capacity: number
   private readonly retained = new Map<string, ReplayableMobileNotification>()
+  private readonly acknowledgedNotices = new Map<string, string>()
   private seq = 0
   private readonly buffer: ReplayableMobileNotification[] = []
   // Persisted client watermarks can exceed a restarted counter; an epoch invalidates that stale position.
@@ -76,7 +77,25 @@ export class MobileNotificationReplayBuffer {
     return this.retained.get(id)
   }
 
+  /** The user saw this mail notice: stop replaying it, while its mail stays pending. */
+  acknowledge(notice: ReplayableMobileNotification & { type: 'notification' }): void {
+    this.acknowledgedNotices.set(notice.notificationId ?? '', noticeContent(notice))
+  }
+
+  /** Whether a reconciled notice is the one already dismissed; a changed or cleared notice forgets it. */
+  acknowledged(id: string, notice: { title: string; body?: string } | null): boolean {
+    const same = notice !== null && this.acknowledgedNotices.get(id) === noticeContent(notice)
+    if (!same) {
+      this.acknowledgedNotices.delete(id)
+    }
+    return same
+  }
+
   get size(): number {
     return this.buffer.length
   }
+}
+
+function noticeContent(notice: { title: string; body?: string }): string {
+  return JSON.stringify([notice.title, notice.body ?? ''])
 }
