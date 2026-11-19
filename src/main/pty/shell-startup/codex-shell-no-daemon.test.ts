@@ -182,7 +182,7 @@ function run(
     SSH_TTY: undefined,
     [REMOTE_VIEWER_CLIPBOARD_ENV]: undefined,
     KITTY_WINDOW_ID: undefined,
-    ORCA_CODEX_KITTY_GRAPHICS: undefined,
+    ORCA_IMAGE_PROTOCOL: undefined,
     ...env
   })
 }
@@ -231,11 +231,11 @@ describe.concurrent('Codex terminal image compatibility', () => {
               : shell === 'fish'
                 ? 'set -e KITTY_WINDOW_ID'
                 : 'unset KITTY_WINDOW_ID',
-            set('ORCA_CODEX_KITTY_GRAPHICS', '0'),
+            set('ORCA_IMAGE_PROTOCOL', 'off'),
             'codex disabled'
           ].join('\n'),
           sandbox,
-          { FAKE_CODEX_READ_IMAGE_ENV: '1', ORCA_CODEX_KITTY_GRAPHICS: '1' }
+          { FAKE_CODEX_READ_IMAGE_ENV: '1', ORCA_IMAGE_PROTOCOL: 'kitty' }
         )
 
         expect(result.status, result.stderr).toBe(0)

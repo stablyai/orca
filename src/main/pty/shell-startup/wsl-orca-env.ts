@@ -17,7 +17,6 @@ import { SETUP_RUNNER_PATH_ENV_KEYS } from '../../workspace-hooks/setup-hook-env
 import { getShellReadyWrapperRoot } from '../../providers/local-pty/local-pty-shell-ready-wrapper-root'
 import {
   CODEX_KITTY_WINDOW_ID,
-  ORCA_CODEX_KITTY_GRAPHICS_ENV,
   ORCA_IMAGE_PROTOCOL_ENV
 } from '../../../shared/terminal/images/terminal-image-protocol'
 import {
@@ -127,7 +126,6 @@ export function addOrcaWslInteropEnv(env: Record<string, string>): void {
     `ORCA_OMP_STATUS_EXTENSION/${env.ORCA_OMP_STATUS_EXTENSION?.startsWith('/') ? 'u' : 'p'}`,
     ...(env.ORCA_PI_SOURCE_AGENT_DIR?.startsWith('/') ? ['ORCA_PI_SOURCE_AGENT_DIR/u'] : []),
     `${ORCA_IMAGE_PROTOCOL_ENV}/u`,
-    `${ORCA_CODEX_KITTY_GRAPHICS_ENV}/u`,
     ...(env.KITTY_WINDOW_ID === CODEX_KITTY_WINDOW_ID ? ['KITTY_WINDOW_ID/u'] : []),
     'CLAUDE_CODE_FORCE_TERMINAL_IMAGES/u',
     ...(env.ORCA_CLAUDE_AGENT_VIEW_PLUGIN_DIR?.startsWith('/')

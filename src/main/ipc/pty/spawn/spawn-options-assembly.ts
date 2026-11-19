@@ -29,11 +29,7 @@ import {
   stripInheritedAgentSessionEnv
 } from '../../../../shared/agent-launch/startup/parent-agent-session-env'
 import { shouldSeedPreAttachPtySize } from '../delivery/attached-pty-size'
-import {
-  CODEX_KITTY_WINDOW_ID,
-  ORCA_CODEX_KITTY_GRAPHICS_ENV
-} from '../../../../shared/terminal/images/terminal-image-protocol'
-import { resolveTerminalInlineImagesEnabled } from '../../../../shared/terminal/images/terminal-inline-images-settings'
+import { applyTerminalImageEnvironment } from './terminal-image-environment'
 
 type TrustInput = Parameters<typeof applyAgentWorkspaceTrustToSpawn>[0]
 
@@ -156,20 +152,14 @@ export async function assemblePtySpawnLaunchOptions(input: PtySpawnLaunchOptions
       : {})
   })
   const settings = input.getSettings?.()
-  const viewerSupportsImages = openCodeLaunch.env?.[ORCA_CODEX_KITTY_GRAPHICS_ENV]
-  const codexKittyGraphics =
-    !input.envToDelete.includes('KITTY_WINDOW_ID') &&
-    !input.envToDelete.includes(ORCA_CODEX_KITTY_GRAPHICS_ENV) &&
-    (viewerSupportsImages === undefined ? !input.headlessHost : viewerSupportsImages === '1') &&
-    resolveTerminalInlineImagesEnabled(settings?.terminalInlineImages)
-  const env: Record<string, string> = {
-    ...openCodeLaunch.env,
-    [ORCA_CODEX_KITTY_GRAPHICS_ENV]: codexKittyGraphics ? '1' : '0'
-  }
-  // Managed launches can bypass the shell function (e.g. cmd.exe or an absolute executable).
-  if (launchAgent === 'codex' && codexKittyGraphics) {
-    env.KITTY_WINDOW_ID ??= process.env.KITTY_WINDOW_ID ?? CODEX_KITTY_WINDOW_ID
-  }
+  const env = { ...openCodeLaunch.env }
+  applyTerminalImageEnvironment(
+    env,
+    input.envToDelete,
+    launchAgent,
+    settings?.terminalInlineImages,
+    input.headlessHost
+  )
   const pluginDir = !connectionId ? env.ORCA_CLAUDE_AGENT_VIEW_PLUGIN_DIR : undefined
   const launchCommand =
     pluginDir && openCodeLaunch.command
