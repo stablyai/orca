@@ -9,7 +9,7 @@ type DeviceActivity = {
   open: number
 }
 
-export const CLIENT_ACTIVITY_WINDOW_MS = 10 * 60_000
+const CLIENT_ACTIVITY_WINDOW_MS = 10 * 60_000
 
 /** Who connected, without credentials: a phone's clientId can be its bearer token, so it is never logged. */
 function describeDevice(socket: ConnectionSocket): string {
@@ -85,4 +85,9 @@ export function logClientConnection(
   socket: ConnectionSocket
 ): void {
   runtimeClientConnectionLog.record(event, socket)
+}
+
+/** Writes the open window so a stopping host's log still shows who was attached last. */
+export function flushClientConnectionLog(): void {
+  runtimeClientConnectionLog.flushWindow()
 }
