@@ -9,7 +9,10 @@ import {
   useNativeChatCrewState
 } from './use-native-chat-crew'
 
-const rpc = vi.hoisted(() => ({ live: 0, calls: [] as { method: string; params: unknown }[] }))
+const rpc = vi.hoisted(() => {
+  const calls: { method: string; params: unknown }[] = []
+  return { live: 0, calls }
+})
 
 vi.mock('@/runtime/rpc/subscriptions/runtime-rpc-subscribe', () => ({
   subscribeRuntimeRpc: async (_target: unknown, method: string, params: unknown) => {

@@ -29,6 +29,11 @@ export const UNKNOWN_CREW_STATE: CrewState = Object.freeze({
 })
 
 type CrewSection = keyof OrchestrationCrewSnapshot['sections']
+const CREW_SECTIONS = [
+  'managedBy',
+  'managing',
+  'talkingWith'
+] as const satisfies readonly CrewSection[]
 
 /** The shown rows with a delta applied; unchanged rows keep their identity. Null when a row is missing. */
 function applyCrewDelta(
@@ -43,7 +48,7 @@ function applyCrewDelta(
     return null
   }
   const next = emptyCrew(delta.status)
-  for (const section of Object.keys(next.sections) as CrewSection[]) {
+  for (const section of CREW_SECTIONS) {
     const held = new Map(base.sections[section].map((row) => [row.partyKey, row]))
     for (const partyKey of delta.order[section]) {
       const row = delta.changed.get(`${section}\0${partyKey}`) ?? held.get(partyKey)

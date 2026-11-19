@@ -52,7 +52,7 @@ export function NativeChatCrewSubagentRow(props: {
             now={now}
             icon={<Bot aria-hidden="true" className="size-3.5 shrink-0 text-muted-foreground" />}
             badge={
-              <Badge variant="referenceLabel" className="mx-1.5 h-4 rounded align-[1px]">
+              <Badge variant="referenceLabel" className="mx-1.5 align-[1px]">
                 {t('components.native-chat.backgroundTasks.subagentBadge', 'Subagent')}
               </Badge>
             }

@@ -21,6 +21,7 @@ function status(
   dispatchId?: string
 ): FleetAgentStatusEvidence {
   const terminal = { terminalHandle: handle, paneKey, processIncarnation: `process:${handle}` }
+  // ast-grep-ignore: test-no-wall-clock -- evidence must be fresh by the read model's own clock
   const now = Date.now()
   return {
     binding: dispatchId

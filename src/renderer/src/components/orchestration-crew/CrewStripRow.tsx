@@ -116,7 +116,7 @@ export const CrewStripRow = memo(function CrewStripRow({
               <CrewAgentIcons look={look} hostLabel={row.hostLabel} />
               <span className="max-w-[45%] shrink-0 truncate font-medium">{row.label}</span>
               {badge ? (
-                <Badge variant="referenceLabel" className="h-4 shrink-0 rounded">
+                <Badge variant="referenceLabel" className="shrink-0">
                   {badge}
                 </Badge>
               ) : null}

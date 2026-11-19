@@ -1,3 +1,4 @@
+import { isDeepStrictEqual } from 'node:util'
 import { createCrewRecipientInputs } from './crew-recipient-inputs'
 import { captureCrewIdentityInputs } from './crew-identity-inputs'
 import type { FleetDurableWorker } from '../../../../shared/orchestration/fleet/orchestration-fleet-projection'
@@ -255,12 +256,9 @@ export function patchCrewAssignmentStages(
 }
 
 function sameExceptStage(a: CrewAssignmentRow, b: CrewAssignmentRow): boolean {
-  for (const key of Object.keys(a) as (keyof CrewAssignmentRow)[]) {
-    if (key !== 'stage' && a[key] !== b[key]) {
-      return false
-    }
-  }
-  return true
+  const { stage: _aStage, ...aRest } = a
+  const { stage: _bStage, ...bRest } = b
+  return isDeepStrictEqual(aRest, bRest)
 }
 
 export type CrewHostDerivation = ReturnType<typeof createCrewHostDerivation>
