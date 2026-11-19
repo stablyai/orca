@@ -186,7 +186,7 @@ export class StateSerializationSecretHandlingOperations {
         const { patch, candidate } = this.sessionSaveBaseline.capture(
           domain,
           stateToSave[domain],
-          sessionSaves
+          sessionSaves ?? 'whole'
         )
         sessionCandidates.push(candidate)
         if (patch) {
