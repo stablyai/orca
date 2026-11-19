@@ -101,6 +101,8 @@ export class AcpTimelineTranslator {
     return turn ? this.endTurn(turn, { stopReason, at }) : []
   }
 
+  isSyntheticBackgroundTask = (taskId: string): boolean => this.ownership.tools.backgrounds(taskId)
+
   agentTurnCalls = (): 'none' | 'running' | null => this.agentTurns.calls(this.activeTurn)
 
   promptResult(

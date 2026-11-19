@@ -240,9 +240,10 @@ export class AcpStructuredLane {
   }
 
   private publishChildWork(event: ProviderTimelineEvent): void {
-    const observedAt = this.deps.now?.() ?? Date.now()
-    const stops = this.deps.childStops?.()
-    const evidence = acpBackgroundTaskChildWork(event, observedAt, stops?.backgroundTasks === true)
+    const at = this.deps.now?.() ?? Date.now()
+    const stoppable = this.deps.childStops?.().backgroundTasks === true
+    const synthetic = this.translator.isSyntheticBackgroundTask
+    const evidence = acpBackgroundTaskChildWork(event, at, stoppable, synthetic)
     if (evidence.length > 0) {
       this.publishEvidence(evidence)
     }

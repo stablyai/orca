@@ -1,7 +1,8 @@
 import type { ProviderTimelineEvent } from '../../native-chat/agent-session-timeline/provider-timeline-event'
 import type { AcpTimelineTranslator } from '../timeline/acp-timeline-translator'
 
-const QUIET_MS = 10_000
+// Models may pause this long between frames mid-reply.
+const QUIET_MS = 20_000
 // Running calls may be slow commands; past this they continue as background tasks.
 const CALL_QUIET_MS = 120_000
 

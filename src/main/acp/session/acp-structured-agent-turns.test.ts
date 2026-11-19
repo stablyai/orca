@@ -7,6 +7,11 @@ import {
 } from '../../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
 import { ANTIGRAVITY_ACP_DIALECT } from '../acp-dialects/antigravity-dialect'
 import type { AcpLaunchSpec } from '../launch/acp-launch-contract'
+import type { AgentChildWorkEvidence } from '../../../shared/agent-status/child-work/agent-status-child-work-evidence'
+import { structuredAgentSessionCommandTurn } from '../../../shared/agent-session/view/structured-agent-session-command-turn-identity'
+import { agentJournalTurnBody } from '../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
+import { StructuredAgentRegistry } from '../../native-chat/agent-session-wire/providers/structured-agent-registry'
+import { acpStructuredAgentDefinition } from './acp-structured-agent-definitions'
 import {
   GROK,
   openAcpAdapterRig,
@@ -30,10 +35,36 @@ const chunk = (text: string) =>
 
 async function open(spec: AcpLaunchSpec = WAKING) {
   const clock = { now: 5_000 }
-  const rig = await openAcpAdapterRig({ spec, deps: { now: () => clock.now } })
+  const evidence: AgentChildWorkEvidence[] = []
+  const journal = { refusing: false }
+  const rig = await openAcpAdapterRig({
+    spec,
+    deps: { now: () => clock.now, onChildWorkEvidence: (_id, more) => evidence.push(...more) }
+  })
+  // Lets a test hold the journal backed up.
+  const sink = rig.rig.eventSink
+  rig.rig.eventSink = new Proxy(sink, {
+    get: (target, key) =>
+      key === 'tryAppendTransition' && target.tryAppendTransition
+        ? (transition: Parameters<NonNullable<typeof sink.tryAppendTransition>>[0]) =>
+            journal.refusing
+              ? { accepted: false, reason: 'backpressure' }
+              : target.tryAppendTransition?.(transition)
+        : Reflect.get(target, key)
+  })
   await rig.acquire()
-  return { rig, clock }
+  return { rig, clock, evidence, journal }
 }
+
+const toolCall = (toolCallId: string, status: string) =>
+  update({
+    sessionUpdate: 'tool_call',
+    toolCallId,
+    title: 'npm run dev',
+    kind: 'execute',
+    status,
+    rawInput: { CommandLine: 'npm run dev' }
+  })
 
 async function turns(rig: AcpAdapterRig) {
   return (await rig.rig.rows()).flatMap((row) => {
@@ -47,12 +78,12 @@ async function agentTurns(rig: AcpAdapterRig) {
 }
 
 describe('Antigravity unprompted turns', () => {
-  it('ends after 10s of quiet, or 120s while a call runs', async () => {
+  it('ends after 20s of quiet, or 120s while a call runs', async () => {
     const { rig } = await open()
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
     rig.child().agent.notify('session/update', chunk('done'))
     await rig.settle()
-    vi.advanceTimersByTime(9_999)
+    vi.advanceTimersByTime(19_999)
     expect(await agentTurns(rig)).toMatchObject([{ state: 'running' }])
     vi.advanceTimersByTime(1)
     expect(await agentTurns(rig)).toMatchObject([{ state: 'completed' }])
@@ -180,6 +211,97 @@ describe('Antigravity unprompted turns', () => {
     expect(
       rows.flatMap((row) => (row.body.kind === 'message' ? row.body.blocks : []))
     ).not.toContainEqual(expect.objectContaining({ type: 'background-task' }))
+  })
+
+  it('keeps a call still running at end_turn out of live child work', async () => {
+    const { rig, evidence } = await open()
+    await sendHello(rig, 'send-1')
+    const prompt = await rig.frame('session/prompt')
+    rig.child().agent.notify('session/update', toolCall('call-3', 'in_progress'))
+    await rig.settle()
+    rig.child().agent.reply(prompt, { stopReason: 'end_turn' })
+    await waitFor(async () => expect(await turns(rig)).toMatchObject([{ state: 'completed' }]))
+    const rows = await rig.rig.rows()
+    expect(
+      rows.flatMap((row) => (row.body.kind === 'message' ? row.body.blocks : []))
+    ).toContainEqual(expect.objectContaining({ type: 'background-task', state: 'working' }))
+    expect(evidence.filter((edge) => edge.type === 'live')).toEqual([])
+  })
+
+  it('lets a send after Stop open agent turns again', async () => {
+    const { rig } = await open()
+    const { agent } = rig.child()
+    agent.notify('session/update', chunk('working on it'))
+    await waitFor(async () => expect(await agentTurns(rig)).toHaveLength(1))
+    await rig.adapter.cancelTurn({ sessionId: SESSION, fence: 1 })
+    await sendHello(rig, 'send-1')
+    agent.reply(await rig.frame('session/prompt'), { stopReason: 'end_turn' })
+    await waitFor(async () =>
+      expect((await turns(rig)).at(-1)).toMatchObject({ state: 'completed' })
+    )
+    agent.notify('session/update', chunk('a later report'))
+    await waitFor(async () =>
+      expect(await agentTurns(rig)).toMatchObject([{ state: 'interrupted' }, { state: 'running' }])
+    )
+  })
+
+  it('compacts after the agent turn ends even while the journal is backed up', async () => {
+    const { rig, journal } = await open()
+    new StructuredAgentRegistry([
+      { definition: acpStructuredAgentDefinition(WAKING), adapter: rig.adapter }
+    ])
+    rig.child().agent.notify('session/update', chunk('done'))
+    await waitFor(async () => expect(await agentTurns(rig)).toHaveLength(1))
+    const turn = structuredAgentSessionCommandTurn('compact-1')
+    const running = agentJournalTurnBody({
+      turnId: turn.turnId,
+      state: 'running',
+      startedAt: 4_000
+    })
+    await rig.rig.journal.appendItem(turn.identity, running, {
+      fence: 1,
+      turnScope: { kind: 'thread' }
+    })
+    journal.refusing = true
+    const compacting = rig.adapter.compact({
+      sessionId: SESSION,
+      fence: 1,
+      command: { clientMessageId: 'compact-1', ...turn, running }
+    })
+    await rig.settle()
+    journal.refusing = false
+    await expect(compacting).resolves.toEqual({ state: 'accepted', providerIdentity: null })
+    expect(await agentTurns(rig)).toMatchObject([{ state: 'completed' }])
+  })
+
+  it('opens no turn for a late update to a call from an older turn', async () => {
+    const { rig } = await open()
+    const { agent } = rig.child()
+    for (const [send, events] of [
+      [
+        'send-1',
+        [
+          toolCall('call-4', 'in_progress'),
+          update({ sessionUpdate: 'tool_call_update', toolCallId: 'call-4', status: 'completed' })
+        ]
+      ],
+      ['send-2', [chunk('second')]]
+    ] as const) {
+      await sendHello(rig, send)
+      const prompt = await rig.frame('session/prompt', send === 'send-1' ? 0 : 1)
+      for (const event of events) {
+        agent.notify('session/update', event)
+      }
+      await rig.settle()
+      agent.reply(prompt, { stopReason: 'end_turn' })
+      await rig.settle()
+    }
+    agent.notify(
+      'session/update',
+      update({ sessionUpdate: 'tool_call_update', toolCallId: 'call-4', status: 'completed' })
+    )
+    await rig.settle()
+    expect(await agentTurns(rig)).toEqual([])
   })
 
   it.each([

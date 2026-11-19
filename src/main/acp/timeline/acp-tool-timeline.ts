@@ -81,7 +81,10 @@ export class AcpToolTimeline {
   private readonly tools = new Map<string, ToolSnapshot>()
   // Closing updates may omit fields; only their running journal copies are previews.
   private readonly whole = new Map<string, { input?: unknown; output?: string }>()
-  private readonly backgrounded = new BoundedMap<string, true>({ maxEntries: 128 })
+  // Kept after the task settles: its row is still Orca's inference, and settled reports latch.
+  private readonly backgrounded = new BoundedMap<string, AcpBackgroundTaskUpdate | true>({
+    maxEntries: 128
+  })
   // Ownership remembers only the latest ended turn; late updates may name older calls.
   private readonly endedCalls = new BoundedMap<string, true>({ maxEntries: 512 })
 
@@ -123,6 +126,11 @@ export class AcpToolTimeline {
     return { events, tasks }
   }
 
+  /** Orca inferred this task from a call still running at its turn's end. */
+  backgrounds(toolCallId: string): boolean {
+    return this.backgrounded.has(toolCallId)
+  }
+
   /** The call belongs to a turn that already ended. */
   ended(toolCallId: string): boolean {
     return (
@@ -138,23 +146,25 @@ export class AcpToolTimeline {
     dialect: AcpDialect,
     at: number
   ): AcpBackgroundTaskUpdate | undefined {
-    if (!this.backgrounded.has(raw.toolCallId)) {
-      return undefined
+    const held = this.backgrounded.get(raw.toolCallId)
+    if (held !== true) {
+      return held
     }
     const update = dialect.normalizeToolUpdate?.(raw) ?? raw
     if (update.status !== 'completed' && update.status !== 'failed') {
       return { taskId: update.toolCallId, state: 'working' }
     }
-    this.backgrounded.delete(update.toolCallId)
     const exitCode = rawExitCodeSchema.safeParse(update.rawOutput).data?.exitCode
     const failed = update.status === 'failed' || (exitCode !== undefined && exitCode !== 0)
     const report = outputText(update)?.trim().slice(-BACKGROUND_REPORT_MAX_CHARS)
-    return {
+    const settled: AcpBackgroundTaskUpdate = {
       taskId: update.toolCallId,
       state: failed ? 'blocked' : 'done',
       settledAt: at,
       ...(report ? (failed ? { error: report } : { summary: report }) : {})
     }
+    this.backgrounded.set(update.toolCallId, settled)
+    return settled
   }
 
   join(toolCallId: string): ProviderTimelineJoin {
