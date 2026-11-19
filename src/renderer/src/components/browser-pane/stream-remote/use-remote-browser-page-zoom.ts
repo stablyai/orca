@@ -4,7 +4,10 @@ import { useRuntimeEnvironmentCapability } from '@/runtime/rpc/compatibility/use
 import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
 import { BROWSER_PAGE_ZOOM_RUNTIME_CAPABILITY } from '../../../../../shared/browser/runtime/browser-runtime-capabilities'
 import type { BrowserPageZoomDirection } from '../../../../../shared/browser/site-settings/browser-page-zoom'
-import type { BrowserPageSiteDisplay } from '../../../../../shared/browser/site-settings/browser-site-display'
+import {
+  browserSiteDisplayKey,
+  type BrowserPageSiteDisplay
+} from '../../../../../shared/browser/site-settings/browser-site-display'
 import type { BrowserPageFeedbackBadgeHandle } from '../assemble-chrome/feedback/browser-page-feedback-badge'
 import { addBrowserPageZoomEventListener } from '../host-guest/viewport/browser-page-zoom'
 import { useBrowserPageZoomFeedback } from '../host-guest/viewport/use-browser-page-zoom-feedback'
@@ -31,7 +34,9 @@ export function remoteBrowserWheelZoomDirection(
 /** Zoom belongs to the page's site in the host's browser profile, so the host steps it and says the new level. */
 export function useRemoteBrowserPageZoom({
   browserPageId,
+  pageUrl,
   runtimeEnvironmentId,
+  onZoomChanged,
   lifecycle,
   runtimeTarget,
   runtimeWorktree,
@@ -40,7 +45,10 @@ export function useRemoteBrowserPageZoom({
   setPaneNotice
 }: {
   browserPageId: string
+  pageUrl: string
   runtimeEnvironmentId: string
+  /** The host applies each site's saved zoom on navigation too, so this also runs when the site changes. */
+  onZoomChanged: () => void
   lifecycle: RemoteBrowserStreamLifecycle
   runtimeTarget: () => RemoteBrowserRuntimeTarget | null
   runtimeWorktree: string
@@ -49,7 +57,7 @@ export function useRemoteBrowserPageZoom({
   setPaneNotice: (notice: RemoteBrowserPaneNotice | null) => void
 }): {
   /** Null on hosts without browser.zoom, whose panes keep scrolling and Orca's own zoom. */
-  requestZoom: ((direction: BrowserPageZoomDirection) => void) | null
+  requestZoom: ((direction: BrowserPageZoomDirection, gesture?: 'key' | 'wheel') => void) | null
   feedbackBadgeRef: RefObject<BrowserPageFeedbackBadgeHandle | null>
 } {
   const supported = useRuntimeEnvironmentCapability(
@@ -57,20 +65,24 @@ export function useRemoteBrowserPageZoom({
     BROWSER_PAGE_ZOOM_RUNTIME_CAPABILITY
   )
   const { feedbackBadgeRef, showBrowserZoomFeedback } = useBrowserPageZoomFeedback()
-  // A pinch sends wheel events faster than a round trip, so keep one step in flight and the latest queued.
+  // A pinch sends wheel events faster than a round trip, so one waiting wheel step stands for the rest;
+  // each key press is its own step, as in a local pane.
   const inFlightRef = useRef(false)
-  const queuedRef = useRef<BrowserPageZoomDirection | null>(null)
+  const queuedRef = useRef<BrowserPageZoomDirection[]>([])
 
   const requestZoom = useCallback(
-    function zoom(direction: BrowserPageZoomDirection): void {
+    function zoom(direction: BrowserPageZoomDirection, gesture: 'key' | 'wheel' = 'key'): void {
       if (inFlightRef.current) {
-        queuedRef.current = direction
+        if (gesture === 'key' || queuedRef.current.length === 0) {
+          queuedRef.current.push(direction)
+        }
         return
       }
       const target = runtimeTarget()
       const pageId = lifecycle.tokens.remotePage
       const token = pageId ? createRemoteOperationToken(pageId) : null
       if (!target || !pageId || !token) {
+        queuedRef.current = []
         return
       }
       inFlightRef.current = true
@@ -83,6 +95,7 @@ export function useRemoteBrowserPageZoom({
         .then((display) => {
           if (isCurrentRemoteOperationToken(token) && display?.site) {
             showBrowserZoomFeedback(display.zoomLevel)
+            onZoomChanged()
           }
         })
         .catch((error: unknown) => {
@@ -95,23 +108,33 @@ export function useRemoteBrowserPageZoom({
         })
         .finally(() => {
           inFlightRef.current = false
-          const queued = queuedRef.current
-          queuedRef.current = null
-          if (queued) {
-            zoom(queued)
+          // A pane that lost its page or stream drops the rest, or it would zoom whatever it shows next.
+          const queued = isCurrentRemoteOperationToken(token)
+            ? queuedRef.current.shift()
+            : undefined
+          if (!queued) {
+            queuedRef.current = []
+            return
           }
+          zoom(queued)
         })
     },
     [
       createRemoteOperationToken,
       isCurrentRemoteOperationToken,
       lifecycle,
+      onZoomChanged,
       runtimeTarget,
       runtimeWorktree,
       setPaneNotice,
       showBrowserZoomFeedback
     ]
   )
+
+  const site = browserSiteDisplayKey(pageUrl)
+  useEffect(() => {
+    onZoomChanged()
+  }, [onZoomChanged, site])
 
   useEffect(() => {
     if (!supported) {

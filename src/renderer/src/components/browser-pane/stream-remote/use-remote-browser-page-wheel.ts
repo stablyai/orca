@@ -54,7 +54,7 @@ export function useRemoteBrowserPageWheel({
   remoteWheelFrameRef: React.MutableRefObject<number | null>
   remoteWheelInFlightRef: React.MutableRefObject<boolean>
   /** Null when the host can't zoom, so zoom gestures scroll as they always did there. */
-  requestZoom: ((direction: BrowserPageZoomDirection) => void) | null
+  requestZoom: ((direction: BrowserPageZoomDirection, gesture?: 'key' | 'wheel') => void) | null
 }): void {
   const schedulePendingRemoteWheel = useCallback((): void => {
     if (remoteWheelFrameRef.current !== null || remoteWheelInFlightRef.current) {
@@ -128,7 +128,7 @@ export function useRemoteBrowserPageWheel({
       const zoomDirection = requestZoom ? remoteBrowserWheelZoomDirection(event) : null
       if (requestZoom && zoomDirection) {
         event.preventDefault()
-        requestZoom(zoomDirection)
+        requestZoom(zoomDirection, 'wheel')
         return
       }
       if (busy) {
