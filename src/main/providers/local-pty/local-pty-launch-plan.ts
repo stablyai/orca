@@ -200,7 +200,7 @@ export function createLocalPtyLaunchPlan(
   const cwd = args.cwd || defaultCwd
   // Validate effective cwd: omitted cwd resolves to a safe default.
   if (args.command && startupAgentRecognition) {
-    assertSafeAgentStartupCwd(cwd, args.command)
+    assertSafeAgentStartupCwd(cwd, args.command, args.workspaceRoot)
   }
   const wslInfo = process.platform === 'win32' ? parseWslPath(cwd) : null
   const worktreeWslContext =

@@ -28,6 +28,8 @@ export type CreateOrAttachOptions = {
   terminalShellArgs?: string[]
   terminalWindowsWslDistro?: string | null
   terminalWindowsPowerShellImplementation?: 'auto' | 'powershell.exe' | 'pwsh.exe'
+  /** Main-resolved workspace root: the only filesystem root an agent may start in. */
+  workspaceRoot?: string
   shellReadySupported?: boolean
   shellReadyTimeoutMs?: number
   historySeedChunks?: readonly string[]

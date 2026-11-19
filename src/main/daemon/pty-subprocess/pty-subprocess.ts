@@ -33,6 +33,8 @@ export type PtySubprocessOptions = {
   terminalShellArgs?: string[]
   terminalWindowsWslDistro?: string | null
   terminalWindowsPowerShellImplementation?: 'auto' | 'powershell.exe' | 'pwsh.exe'
+  /** Main-resolved workspace root: the only filesystem root an agent may start in. */
+  workspaceRoot?: string
   onCreationDisposition?: (disposition: PtyCreationDisposition) => void
   assertCreateAllowed?: () => void
   isCanceled?: () => boolean

@@ -1,5 +1,6 @@
 import { homedir } from 'node:os'
 
+import { normalizeRuntimePathForComparison } from '../../../shared/file-access/cross-platform-path'
 import { isRootLikePath } from './path-safety'
 
 function homeDrivePath(env: NodeJS.ProcessEnv): string | null {
@@ -31,8 +32,20 @@ export function resolveSafePtyDefaultCwd(env: NodeJS.ProcessEnv = process.env): 
   return selected
 }
 
-export function assertSafeAgentStartupCwd(cwd: string | undefined, command: string): void {
-  if (isSafeImplicitPtyCwd(cwd)) {
+function isWorkspaceRootCwd(cwd: string, workspacePath: string | null | undefined): boolean {
+  return Boolean(
+    workspacePath?.trim() &&
+    normalizeRuntimePathForComparison(cwd) === normalizeRuntimePathForComparison(workspacePath)
+  )
+}
+
+export function assertSafeAgentStartupCwd(
+  cwd: string | undefined,
+  command: string,
+  workspacePath?: string | null
+): void {
+  // A root the user added as the workspace is a chosen cwd, not a fallback.
+  if (isSafeImplicitPtyCwd(cwd) || (cwd && isWorkspaceRootCwd(cwd, workspacePath))) {
     return
   }
   throw new Error(
