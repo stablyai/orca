@@ -22,6 +22,7 @@ import type { RuntimeDeviceGrant } from '../../callers/rpc-method-permission'
 import { validGrants } from './device-registry-row-validation'
 import {
   expiredPairingOffers,
+  isPendingPairingOffer,
   pendingPairingOffers,
   reusablePairingOffer,
   withoutExpiredUnboundOffers
@@ -50,19 +51,20 @@ export class DeviceRegistry extends DeviceRegistrySightings {
     grants: readonly RuntimeDeviceGrant[] = [],
     options: PendingOfferOptions = {}
   ): TokenDeviceEntry {
-    return this.createAndPersistDevice(this.devices, name, scope, pairingReach, grants, options)
+    return this.createAndPersistDevice(name, scope, pairingReach, grants, options)
   }
 
   private createAndPersistDevice(
-    existingDevices: DeviceEntry[],
     name: string,
     scope: DeviceScope,
     pairingReach: RuntimePairingReach,
     grants: readonly RuntimeDeviceGrant[],
-    options: PendingOfferOptions
+    options: PendingOfferOptions,
+    retain: (devices: DeviceEntry[]) => DeviceEntry[] = (devices) => devices
   ): TokenDeviceEntry {
+    // The creator check refreshes from disk: read rows only after it, or stale ones save back.
     const entry = mintTokenDevice(name, scope, pairingReach, grants, this.withLiveCreator(options))
-    const nextDevices = [...existingDevices, entry]
+    const nextDevices = [...retain(this.devices), entry]
     // Credentials become valid only after durable persistence.
     this.devices = this.save(nextDevices)
     return entry
@@ -101,7 +103,6 @@ export class DeviceRegistry extends DeviceRegistrySightings {
     return this.addDevice(name, scope, pairingReach, grants, options)
   }
 
-  /** A creator already revoked would leave the new offer unusable: attribute only an authorized one. */
   private withLiveCreator(options: PendingOfferOptions): PendingOfferOptions {
     const { createdByDeviceId, ...rest } = options
     return createdByDeviceId === undefined ||
@@ -127,9 +128,9 @@ export class DeviceRegistry extends DeviceRegistrySightings {
     options: PendingOfferOptions = {}
   ): TokenDeviceEntry {
     // Authentication marks seen before child sync, so pending runtime offers cannot have children.
-    const pending = new Set<DeviceEntry>(this.listPendingDevices(scope))
-    const retained = this.devices.filter((d) => !pending.has(d))
-    return this.createAndPersistDevice(retained, name, scope, pairingReach, grants, options)
+    const withoutPending = (devices: DeviceEntry[]): DeviceEntry[] =>
+      devices.filter((d) => !isPendingPairingOffer(d, scope, this.seenDeviceIds))
+    return this.createAndPersistDevice(name, scope, pairingReach, grants, options, withoutPending)
   }
 
   listDelegatedMobileDevices(parentDeviceId: string): DeviceEntry[] {
