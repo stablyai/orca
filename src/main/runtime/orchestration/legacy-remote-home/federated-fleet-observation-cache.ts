@@ -159,6 +159,14 @@ function read(
   const deadline = setTimeout(() => {
     lane.overdue = true
     rememberUnanswered(db, cache, lane, [...ids])
+    // Ids queued behind it would wait on the same stuck server; settle them as an overdue lane does.
+    const unasked = [...lane.queued.keys()].filter((id) => !cache.entries.has(id))
+    if (unasked.length > 0) {
+      rememberUnanswered(db, cache, lane, unasked)
+    }
+    lane.queued = new Map()
+    lane.queuedDone?.resolve()
+    lane.queuedDone = null
     release()
     pump(runtime, db, cache)
   }, FLEET_HOST_TIMEOUT_MS)
