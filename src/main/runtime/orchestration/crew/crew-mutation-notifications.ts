@@ -1,5 +1,14 @@
 import { scopedCrewChange, type CrewInvalidation } from './crew-changes'
 import type { OrchestrationDb } from '../db/orchestration-db'
+import {
+  collectDispatchWrites,
+  createdDispatchParties,
+  dispatchMutations,
+  dispatchOf,
+  noticedMutations,
+  progressMutations,
+  runCoordinatorParties
+} from './crew-mutation-scopes'
 
 type CrewMutationPrototype = Partial<OrchestrationDb>
 type CrewMutationInvocation = (this: OrchestrationDb, ...args: unknown[]) => unknown
@@ -78,68 +87,6 @@ const trafficMutations: ReadonlySet<keyof OrchestrationDb> = new Set([
   'timeoutGate'
 ])
 
-const dispatchOf = (value: unknown): string | undefined =>
-  typeof value === 'string'
-    ? value
-    : typeof value === 'object' &&
-        value !== null &&
-        'dispatchId' in value &&
-        typeof value.dispatchId === 'string'
-      ? value.dispatchId
-      : undefined
-
-/** Progress writes change one shown row's stage or liveness, never who a crew shows: patched, not rebuilt. */
-const progressMutations: ReadonlySet<keyof OrchestrationDb> = new Set([
-  'recordWorkerStage',
-  'markWorkerDispatchReady',
-  'recordAttemptObservation'
-])
-
-/** Lifecycle writes about one existing Dispatch (or one remote attachment, keyed by it). */
-const dispatchMutations: ReadonlySet<keyof OrchestrationDb> = new Set([
-  'reconcileFederatedWorkerStart',
-  'reconcileMissingWorkerTerminal',
-  'failWorkerStart',
-  'markWorkerStartUnknown',
-  'beginWorkerStop',
-  'settleWorkerStop',
-  'markWorkerStopUnknown',
-  'abandonWorkerDispatch',
-  'completeDispatch',
-  'failDispatch',
-  'markRemoteAttachmentReady',
-  'recordRemoteAttachmentStage',
-  'updateRemoteAttachmentSetupEvidence',
-  'failRemoteAttachment',
-  'beginRemoteAttachmentStop',
-  'settleRemoteAttachmentStop',
-  'markRemoteAttachmentStopUnknown',
-  'requestRemoteAttachmentTerminalRelease',
-  'settleRemoteAttachmentInRelayTransaction'
-])
-
-/** Collects every Dispatch the call wrote, by the worker status notice; null once one was created or removed. */
-function collectDispatchWrites<T>(db: OrchestrationDb, run: () => T): [T, Set<string> | null] {
-  let written: Set<string> | null = new Set()
-  const previous = db.crewDispatchNotice
-  db.crewDispatchNotice = (id, change) => {
-    previous?.(id, change)
-    if (!written) {
-      return
-    }
-    if (change !== 'written' || !id) {
-      written = null
-    } else {
-      written.add(id)
-    }
-  }
-  try {
-    return [run(), written]
-  } finally {
-    db.crewDispatchNotice = previous
-  }
-}
-
 /** Wake after the synchronous outer mutation; nested writes coalesce and rolled-back reads compare equal. */
 export function attachCrewMutationNotifications(ctor: { prototype: CrewMutationPrototype }): void {
   const prototype = ctor.prototype
@@ -215,9 +162,11 @@ export function attachCrewMutationNotifications(ctor: { prototype: CrewMutationP
       value(this: OrchestrationDb, ...args: unknown[]) {
         const scoped =
           (progressMutations.has(name) || dispatchMutations.has(name)) && dispatchOf(args[0])
-        const [result, written] = scoped
-          ? collectDispatchWrites(this, () => original.apply(this, args))
-          : [original.apply(this, args), null]
+        const noticed = noticedMutations.has(name)
+        const [result, written] =
+          scoped || noticed
+            ? collectDispatchWrites(this, () => original.apply(this, args), !noticed)
+            : [original.apply(this, args), null]
         if (
           typeof result === 'object' &&
           result !== null &&
@@ -236,12 +185,32 @@ export function attachCrewMutationNotifications(ctor: { prototype: CrewMutationP
         ) {
           return result
         }
+        const runParties = name === 'createRun' ? runCoordinatorParties(args[0]) : null
         if (scoped && written) {
-          written.add(scoped)
+          written.dispatchIds.add(scoped)
           this.crewChanges.notify(
             scopedCrewChange([progressMutations.has(name) ? 'assignments' : 'topology'], {
-              dispatchIds: written
+              dispatchIds: written.dispatchIds
             })
+          )
+        } else if (noticed && written) {
+          // Nothing noticed: the call wrote no row a crew shows.
+          if (written.dispatchIds.size > 0) {
+            this.crewChanges.notify(
+              scopedCrewChange(['topology'], {
+                dispatchIds: written.dispatchIds,
+                ...(written.created.size > 0
+                  ? { parties: createdDispatchParties(this, written.created) }
+                  : {})
+              })
+            )
+          }
+        } else if (runParties) {
+          this.crewChanges.notify(scopedCrewChange(['topology'], { parties: runParties }))
+        } else if (name === 'closeQuestionsForDispatch' && dispatchOf(args[0])) {
+          // One Dispatch's questions and helper mail: the crews showing that Dispatch read them.
+          this.crewChanges.notify(
+            scopedCrewChange(['traffic'], { dispatchIds: new Set([dispatchOf(args[0])!]) })
           )
         } else {
           this.crewChanges.notify(new Set([trafficMutations.has(name) ? 'traffic' : 'topology']))
