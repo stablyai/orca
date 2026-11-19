@@ -2,6 +2,7 @@ import { Download, Loader2 } from 'lucide-react'
 import { CommandGroup, CommandItem, CommandSeparator } from '@/components/ui/command'
 import { useTranslate } from '@/i18n/use-translate'
 import { agentCliProductName } from '@/components/agent-cli-update/agent-cli-product-name'
+import { AgentCliUpdateFailedChip } from '@/components/agent-cli-update/AgentCliUpdateFailedChip'
 import type { SessionOptionsCliUpdate } from '../../../../../../../shared/native-chat/input/native-chat-session-options'
 
 /** Only for the user's own CLI behind its latest release; Orca's own copy updates by itself. */
@@ -37,9 +38,7 @@ export function NativeChatModelCliUpdateRow({
                 <Loader2 className="size-3.5 animate-spin" />
               </>
             ) : update.phase === 'failed' ? (
-              <span className="text-destructive">
-                {t('agentCliUpdate.failed', 'Update failed')}
-              </span>
+              <AgentCliUpdateFailedChip onOpen={update.openFailure} />
             ) : (
               <Download className="size-3.5" />
             )}

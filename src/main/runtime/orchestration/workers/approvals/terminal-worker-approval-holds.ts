@@ -81,6 +81,7 @@ export class TerminalWorkerApprovalHolds implements ClaudePermissionHolds {
       dispatch: worker.dispatch,
       summary: {
         title: `Allow ${event.payload.toolName ?? 'this tool call'}?`,
+        ...(event.payload.toolName ? { tool: event.payload.toolName } : {}),
         detail: event.payload.toolInput ?? null,
         reason: null
       },

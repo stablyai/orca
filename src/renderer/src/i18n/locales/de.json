@@ -19208,7 +19208,6 @@
         "sendAgainToTryOnceMore": "Die Nachricht erneut senden, um es noch einmal zu versuchen.",
         "couldNotStart": "{{agent}} konnte nicht gestartet werden.",
         "couldNotRestart": "{{agent}} konnte nicht neu gestartet werden.",
-        "cliTooOld": "{{agent}} {{installedVersion}} ist zu alt für Chats. Auf {{minimumVersion}} oder neuer aktualisieren.",
         "startTimedOut": "{{agent}} hat zu lange zum Starten gebraucht (keine Antwort auf {{method}} nach {{seconds}}s).",
         "startTimedOutKeepsHappening": "Wenn dies wiederholt auftritt, ist der Computer, auf dem dieser Chat läuft, möglicherweise überlastet.",
         "notSignedIn": "{{agent}} ist nicht angemeldet.",

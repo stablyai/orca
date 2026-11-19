@@ -483,25 +483,43 @@ describe('Home bots while a computer is down or still loading', () => {
     expect(result.unavailable).toEqual([])
   })
 
-  it('lists in Runs on a computer offline with nothing kept, and one still connecting', () => {
+  it('lists Runs on placeholders for offline, connecting, and unreadable computers', () => {
     const hosts = [
       { id: 'studio', name: 'Studio Mac' },
       { id: 'air', name: 'MacBook Air' },
-      { id: 'mini', name: 'Mac mini' }
+      { id: 'mini', name: 'Mac mini' },
+      { id: 'laptop', name: 'Laptop' },
+      { id: 'box', name: 'Build box' }
     ]
     const result = homeBotRows(
       input({
         hosts,
-        hostStates: { studio: 'connected', air: 'disconnected', mini: 'connecting' },
-        freshHosts: new Set(['studio']),
-        hydrated: new Set(['studio', 'air', 'mini']),
-        botsByHost: { studio: on(computer('studio', 'local', listed('studio', []))) }
+        hostStates: {
+          studio: 'connected',
+          air: 'disconnected',
+          mini: 'connecting',
+          laptop: 'connected',
+          box: 'disconnected'
+        },
+        freshHosts: new Set(['studio', 'laptop']),
+        hydrated: new Set(['studio', 'air', 'mini', 'box']),
+        botsByHost: {
+          studio: on(computer('studio', 'local', listed('studio', []))),
+          laptop: on(computer('laptop', 'local', { kind: 'unreadable' }))
+        },
+        kept: { box: { answers: [], groups: [], lastActivity: {} } }
       })
     )
     expect(runsOn(result)).toEqual([
       ['Studio Mac', undefined],
       ['MacBook Air', 'Offline'],
-      ['Mac mini', 'Checking…']
+      ['Mac mini', 'Checking…'],
+      ['Laptop', 'Checking…'],
+      ['Build box', 'Offline']
+    ])
+    expect(result.unavailable.map((entry) => [entry.label, entry.reason])).toEqual([
+      ['MacBook Air', 'unreachable'],
+      ['Build box', 'unreachable']
     ])
   })
 
@@ -527,37 +545,6 @@ describe('Home bots while a computer is down or still loading', () => {
     )
     expect(result.rows.map((row) => [row.title, row.activityAt])).toEqual([['Nightly CI', 123]])
     expect(result.activityByHost.get('studio')).toEqual({ [ciKey]: 123 })
-  })
-
-  it('lists in Runs on a computer whose first read failed, and one whose kept copy is empty', () => {
-    const loading = homeBotRows(
-      input({
-        hydrated: new Set(['studio']),
-        botsByHost: {
-          studio: on(computer('studio', 'local', listed('studio', []))),
-          air: on(computer('air', 'local', { kind: 'unreadable' }))
-        }
-      })
-    )
-    expect(runsOn(loading)).toEqual([
-      ['Studio Mac', undefined],
-      ['MacBook Air', 'Checking…']
-    ])
-    const emptied = homeBotRows(
-      input({
-        hostStates: { studio: 'connected', air: 'disconnected' },
-        freshHosts: new Set(['studio']),
-        botsByHost: { studio: on(computer('studio', 'local', listed('studio', []))) },
-        kept: { air: { answers: [], groups: [], lastActivity: {} } }
-      })
-    )
-    expect(runsOn(emptied)).toEqual([
-      ['Studio Mac', undefined],
-      ['MacBook Air', 'Offline']
-    ])
-    expect(emptied.unavailable.map((entry) => [entry.label, entry.reason])).toEqual([
-      ['MacBook Air', 'unreachable']
-    ])
   })
 })
 
