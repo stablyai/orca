@@ -302,6 +302,7 @@ export abstract class OrcaRuntimeWithResolveTerminalPane extends OrcaRuntimeWith
     const visibleState = await this.readVisibleTerminalState(ptyId)
     const projection =
       visibleState ??
+      (await this.readRecoveringVisibleScreen(ptyId)) ??
       (await this.readProviderTerminalTailLines(ptyId, opts.limit, { visibleScreenOnly: true }))
     if (projection.lines.length === 0) {
       return { ...read, source: 'screen-unavailable' }

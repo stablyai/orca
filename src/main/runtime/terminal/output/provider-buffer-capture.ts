@@ -210,6 +210,22 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
         : read
   }
 
+  /** Main's answer while a gap rebuild runs: the live model's screen. A daemon capture would queue behind recovery's. */
+  protected async readRecoveringVisibleScreen(
+    ptyId: string
+  ): Promise<RuntimeTerminalProjection | null> {
+    const state = this.headlessTerminals.get(ptyId)
+    if (!state?.gapReseed) {
+      return null
+    }
+    const generation = this.getPtyLifecycleGeneration(ptyId)
+    await state.writeChain
+    return this.headlessTerminals.get(ptyId) === state &&
+      this.getPtyLifecycleGeneration(ptyId) === generation
+      ? projectTerminalVisibleLines(state.emulator)
+      : { lines: [] }
+  }
+
   private async readRenderedTerminalTailLines(
     ptyId: string,
     limit: number | undefined,
