@@ -5,6 +5,25 @@ import { markdownWordTokens } from './comment-markdown-word-fade'
 type FadeArrival = { end: number; at: number }
 type FadeWindow = { text: string; arrivals: FadeArrival[] }
 
+/** Reading the selection flushes layout, so one listener tracks whether any range is selected and
+ *  word groups only look closer while one is. */
+let documentHasRange = false
+let rangeWatchers = 0
+function readDocumentRange(): void {
+  documentHasRange = document.getSelection()?.isCollapsed === false
+}
+function watchDocumentRange(): () => void {
+  if (rangeWatchers++ === 0) {
+    readDocumentRange()
+    document.addEventListener('selectionchange', readDocumentRange)
+  }
+  return () => {
+    if (--rangeWatchers === 0) {
+      document.removeEventListener('selectionchange', readDocumentRange)
+    }
+  }
+}
+
 /** One clock per text node; settled words become one plain text prefix. */
 export const CommentMarkdownWords = memo(function CommentMarkdownWords({
   node,
@@ -20,6 +39,8 @@ export const CommentMarkdownWords = memo(function CommentMarkdownWords({
   const groupRef = useRef<HTMLSpanElement>(null)
   const fadeWindow = useRef(initial)
   const [settled, setSettled] = useState(0)
+  // Before the fade effect, so the shared listener sees each selection change first.
+  useLayoutEffect(() => (wordGroup ? watchDocumentRange() : undefined), [wordGroup])
   useLayoutEffect(() => {
     if (!wordGroup) {
       return
@@ -36,6 +57,9 @@ export const CommentMarkdownWords = memo(function CommentMarkdownWords({
     }
     let timer = 0
     const selected = (): boolean => {
+      if (!documentHasRange) {
+        return false
+      }
       const selection = document.getSelection()
       const group = groupRef.current
       return Boolean(
