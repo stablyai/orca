@@ -23,13 +23,13 @@ vi.mock('lucide-react-native', () => ({
   ArrowUpRight: 'ArrowUpRight',
   CalendarClock: 'CalendarClock',
   Check: 'Check',
-  ChevronDown: 'ChevronDown',
-  ChevronUp: 'ChevronUp',
+  ChevronRight: 'ChevronRight',
   Hourglass: 'Hourglass',
   Play: 'Play',
   Webhook: 'Webhook',
   Zap: 'Zap',
-  Clock: 'Clock'
+  Clock: 'Clock',
+  X: 'X'
 }))
 vi.mock('../../../components/markdown/MobileMarkdown', () => ({ MobileMarkdown: 'MobileMarkdown' }))
 vi.mock('../../../components/code-presentation/MobileSourceCopyButton', () => ({
@@ -120,7 +120,7 @@ describe('mobile automation run row', () => {
   const markdown = (root: ReactTestRenderer): unknown[] =>
     root.root.findAll((node) => String(node.type) === 'MobileMarkdown').map((n) => n.props.content)
 
-  it('folds long instructions to four lines, then Show all opens them whole', () => {
+  it('expands long instructions and opens only a secure event source', () => {
     const row = openRow()
     const clamped = row.root.findAll(
       (node) => String(node.type) === 'Text' && node.props.numberOfLines === 4
@@ -138,10 +138,7 @@ describe('mobile automation run row', () => {
     })
     expect(markdown(row)).toEqual([PROMPT])
     expect(texts(row)).toContain('Show less')
-  })
 
-  it("opens the event's https source, and offers nothing for any other link", () => {
-    const row = openRow()
     act(() => {
       pressable(row, (node) => node.props.accessibilityRole === 'link')
     })

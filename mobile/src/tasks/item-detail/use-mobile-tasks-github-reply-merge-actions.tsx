@@ -44,6 +44,7 @@ export function useMobileTasksGithubReplyMergeActions<
   const {
     claimPublication,
     client,
+    detailPayload,
     itemReplyDrafts,
     captureTaskListRefresh,
     setActionItem,
@@ -199,7 +200,12 @@ export function useMobileTasksGithubReplyMergeActions<
                     repo: `id:${item.source.repoId}`,
                     prNumber: item.source.number,
                     prRepo: requireGitHubTaskTarget(item.source).repository,
-                    method
+                    method,
+                    expectedHeadSha:
+                      (detailPayload?.provider === 'github' &&
+                      detailPayload.targetKey === githubTaskKey(item.source)
+                        ? detailPayload.headSha
+                        : undefined) ?? item.source.headSha
                   },
                   { timeoutMs: 60_000 }
                 )
@@ -233,7 +239,7 @@ export function useMobileTasksGithubReplyMergeActions<
         finish()
       }
     },
-    [claimPublication, client, captureTaskListRefresh, tryBeginMutation]
+    [claimPublication, client, captureTaskListRefresh, detailPayload, tryBeginMutation]
   )
 
   const setLinearStatus = useCallback(

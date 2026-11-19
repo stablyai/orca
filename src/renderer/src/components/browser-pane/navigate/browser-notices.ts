@@ -5,6 +5,7 @@ import type {
 } from '../../../../../shared/browser/guest-lifecycle/browser-guest-events'
 import type { BrowserLoadError } from '../../../../../shared/browser/workspaces/browser-workspace-types'
 import { isChromiumCertificateErrorCode } from '../../../../../shared/browser/certificate-trust/browser-certificate-errors'
+import { browserCertificateFailureReason } from '../../../../../shared/browser/certificate-trust/browser-certificate-failure-match'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import { BROWSER_GUEST_RECOVERY_ERROR_CODE } from '../host-guest/recovery/browser-page-guest-recovery'
@@ -129,21 +130,22 @@ export function formatLoadFailureDescription(
   }
   if (isChromiumCertificateErrorCode(loadError.code)) {
     const host = failure.host ?? 'this address'
-    if (loadError.code === -200) {
+    const reason = browserCertificateFailureReason(loadError.code)
+    if (reason === 'name-mismatch') {
       return t(
         'browser.loadFailure.certificateNameMismatch',
         "The certificate doesn't match {{value0}}.",
         { value0: host }
       )
     }
-    if (loadError.code === -201) {
+    if (reason === 'date-invalid') {
       return t(
         'browser.loadFailure.certificateDateInvalid',
         "The certificate for {{value0}} isn't valid at the current date and time.",
         { value0: host }
       )
     }
-    if (loadError.code === -202) {
+    if (reason === 'authority-invalid') {
       return t(
         'browser.loadFailure.certificateAuthorityInvalid',
         "Orca doesn't trust the authority that issued the certificate for {{value0}}.",

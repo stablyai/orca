@@ -10,6 +10,10 @@ export function botSidebarHasChildren(key: string): boolean {
   return !!row?.available && (row.workspaces || row.chats)
 }
 
+export function hasBotSidebarChildPresence(key: string): boolean {
+  return rows.has(key)
+}
+
 function publish(): void {
   snapshot = (key) => botSidebarHasChildren(key)
   for (const listener of listeners) {

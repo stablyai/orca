@@ -1,6 +1,6 @@
 import * as fs from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import { expect, it, onTestFinished, vi } from 'vitest'
 import { z } from 'zod'
 import fixture from '../acp/fixtures/antigravity-v1.4.1-options.json'
@@ -61,8 +61,21 @@ it('limits a folder workspace to its own rules and skips I/O without the adverti
   const { root, repo, read } = await workspace()
   await fs.writeFile(join(root, 'AGENTS.md'), 'OUTSIDE')
   await fs.writeFile(join(repo, 'GEMINI.md'), 'FOLDER')
-  expect(await read()).toContain('FOLDER')
-  expect(await read()).not.toContain('OUTSIDE')
+  const stat = vi.mocked(fs.stat)
+  const actualStat = stat.getMockImplementation()!
+  // Model a folder outside Git even when the system temp directory has a Git ancestor.
+  stat.mockImplementation(async (...args) => {
+    if (basename(String(args[0])) === '.git') {
+      throw new Error('No repository marker')
+    }
+    return actualStat(...args)
+  })
+  onTestFinished(() => {
+    stat.mockImplementation(actualStat)
+  })
+  const append = await read()
+  expect(append).toContain('FOLDER')
+  expect(append).not.toContain('OUTSIDE')
   vi.clearAllMocks()
   expect(await read(repo, { ...fixture.initialize, agentCapabilities: {} })).toBe('')
   expect(fs.stat).not.toHaveBeenCalled()

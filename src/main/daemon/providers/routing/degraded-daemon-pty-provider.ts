@@ -178,6 +178,10 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
     await this.providerFor(id).reportFocusLost?.(id)
   }
 
+  async requestRepaint(id: string): Promise<void> {
+    await this.providerFor(id).requestRepaint?.(id)
+  }
+
   async closeStartupQueryAuthority(id: string): Promise<number> {
     return (await this.providerFor(id).closeStartupQueryAuthority?.(id)) ?? 0
   }

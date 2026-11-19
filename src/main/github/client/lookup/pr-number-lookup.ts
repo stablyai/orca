@@ -119,10 +119,11 @@ export async function getPRByNumber(
         known.stack.baseRefName === stack.baseRefName
           ? { ...known.stack, ...stack }
           : stack
-      const hydrated = await hydratePullRequestLookupData(
+      return await hydratePullRequestLookupData(
         ownerRepo,
         {
           ...prData,
+          ...(compatibleStack ? { stack: compatibleStack } : {}),
           ...(sameIdentity && known.headDefaultBranchName
             ? { headDefaultBranchName: known.headDefaultBranchName }
             : {})
@@ -131,7 +132,6 @@ export async function getPRByNumber(
         executionScope,
         reads
       )
-      return { ...hydrated, ...(compatibleStack ? { stack: compatibleStack } : {}) }
     }
     noteRepositoryRateLimitSpend(ownerRepo, 'graphql', 1, ghOptions)
     const { stdout } = await ghExecFileAsync(

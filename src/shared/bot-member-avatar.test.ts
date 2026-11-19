@@ -5,15 +5,12 @@ import { ConnectorBotSlackMembersResponse } from './connector-bot-slack-contract
 const SLACK_PHOTO = 'https://avatars.slack-edge.com/sam_72.png'
 
 describe('a bot member’s picture', () => {
-  it('keeps a picture from a host the avatar cache serves', () => {
+  it('keeps trusted member pictures and drops unsupported ones without losing the person', () => {
     expect(BotMemberSchema.parse({ id: 'U1', name: 'Sam', avatarUrl: SLACK_PHOTO })).toEqual({
       id: 'U1',
       name: 'Sam',
       avatarUrl: SLACK_PHOTO
     })
-  })
-
-  it('drops any other picture, keeping the person', () => {
     for (const avatarUrl of [
       'https://example.com/a.png',
       'http://avatars.slack-edge.com/a.png',

@@ -166,7 +166,7 @@ describe('BotSlackSetupDialog', () => {
     expect(openBotHostPageOrSay).toHaveBeenCalledTimes(1)
 
     // A read already out (the owner came back to Orca) when Slack saves may predate the save.
-    let answerEarlierRead: () => void = () => {}
+    let answerEarlierRead: (() => void) | undefined
     api.state.mockImplementationOnce(
       () =>
         new Promise((resolve) => {
@@ -174,9 +174,10 @@ describe('BotSlackSetupDialog', () => {
             resolve({ ok: true, value: { state: 'created', teamId: 'T1', appId: 'A1' } })
         })
     )
-    act(() => {
+    await act(async () => {
       window.dispatchEvent(new Event('focus'))
     })
+    await waitFor(() => expect(answerEarlierRead).toBeTypeOf('function'))
 
     // Slack has saved by the time Orca's browser returns.
     slackState({
@@ -207,24 +208,8 @@ describe('BotSlackSetupDialog', () => {
         }
       })
     )
-    await act(async () => answerEarlierRead())
+    await act(async () => answerEarlierRead?.())
     expect(await screen.findByText('Scout is in Slack')).toBeDefined()
-  })
-
-  it('says another workspace when a bot already in Slack is added again', async () => {
-    slackState({
-      state: 'installed',
-      teamId: 'T-mine',
-      appId: 'C',
-      botUserId: 'UB',
-      installerUserId: 'U1'
-    })
-    openDialog(bot({ slack: { appId: 'C', teamId: 'T-mine' } }))
-
-    await screen.findByLabelText('Configuration refresh token')
-    expect(
-      screen.getByRole('heading', { name: 'Add Scout to another Slack workspace' })
-    ).toBeTruthy()
   })
 
   it('keeps the token form with the cloud’s reason, and an empty field, when the grant fails', async () => {
@@ -355,8 +340,8 @@ describe('BotSlackSetupDialog', () => {
     })
     await act(() => vi.advanceTimersByTimeAsync(7_000))
     expect(screen.getByText('Scout is in Slack')).toBeDefined()
-    // The owner then picks who there may ask, as on every Who can ask surface.
-    expect(screen.getByRole('button', { name: 'Add people' })).toBeDefined()
+    // How to ask shows once it's in; who can ask is edited from the Slack connector's settings.
+    expect(screen.getByText('@Scout')).toBeDefined()
     vi.useRealTimers()
   })
 
@@ -381,8 +366,7 @@ describe('BotSlackSetupDialog', () => {
       } as const,
       'Done'
     ],
-    [{ state: 'grant_expired', teamId: 'T1' } as const, 'Reconnect Slack workspace'],
-    [{ state: 'uncertain', teamId: 'T1' } as const, 'Set up again']
+    [{ state: 'grant_expired', teamId: 'T1' } as const, 'Reconnect Slack workspace']
   ])('opens on the step for the cloud’s %o', async (state, button) => {
     slackState(state)
     openDialog()

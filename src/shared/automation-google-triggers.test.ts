@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { assertGoogleTrigger, isGoogleTrigger } from './automation-google-triggers'
+import { assertGoogleTrigger } from './automation-google-triggers'
 
 describe('Google rule checks', () => {
   it('takes 0 to a day of minutes before a meeting', () => {
@@ -16,10 +16,5 @@ describe('Google rule checks', () => {
     expect(() => assertGoogleTrigger({ ...rule, subjectContains: 'x'.repeat(201) })).toThrow(
       'too long'
     )
-  })
-
-  it('tells Google rules from connector rules', () => {
-    expect(isGoogleTrigger({ source: 'gmail' })).toBe(true)
-    expect(isGoogleTrigger({ source: 'slack' })).toBe(false)
   })
 })

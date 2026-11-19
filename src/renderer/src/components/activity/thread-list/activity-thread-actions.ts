@@ -56,7 +56,7 @@ export function createActivityThreadActions({
   getMarkAllReadThreads: () => AgentPaneThread[]
   acknowledgeAgents: (paneKeys: string[], reads?: undefined, intent?: 'explicit') => void
   unacknowledgeAgents: (paneKeys: string[]) => void
-  setSelectedPaneKey: (paneKey: string | null) => void
+  setSelectedPaneKey?: (paneKey: string | null) => void
 }): {
   markThreadRead: (thread: AgentPaneThread) => void
   markThreadUnread: (thread: AgentPaneThread) => void
@@ -128,7 +128,7 @@ export function createActivityThreadActions({
   }
 
   const selectThread = (thread: AgentPaneThread): void => {
-    setSelectedPaneKey(thread.paneKey)
+    setSelectedPaneKey?.(thread.paneKey)
     activateThreadTarget(thread)
   }
 

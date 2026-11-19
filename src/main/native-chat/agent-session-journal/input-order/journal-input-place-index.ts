@@ -257,6 +257,21 @@ export class JournalInputPlaceIndex {
     return ids
   }
 
+  /** Ids in index order, read lazily so a caller can stop at its first match. */
+  *orderedIds(): Generator<string> {
+    const stack: Node[] = []
+    let node = this.all
+    while (node || stack.length > 0) {
+      while (node) {
+        stack.push(node)
+        node = node.left
+      }
+      const next = stack.pop()!
+      yield next.entry.id
+      node = next.right
+    }
+  }
+
   firstPosition(): number {
     let node = this.all
     while (node?.left) {

@@ -154,7 +154,7 @@ function writeOrcaCloudSession(
   if (refusal) {
     throw new OrcaCloudSessionStorageRefusedError(refusal)
   }
-  if (secrets.isEncryptionAvailable()) {
+  if (secrets.isEncryptionAvailable() && secrets.describeSealing?.().kind !== 'none') {
     const encrypted: PersistedEncryptedSession = {
       version: 1,
       format: sealedSessionFormat(secrets),
@@ -178,7 +178,8 @@ function writeOrcaCloudSession(
     return 'dev-plaintext'
   }
 
-  // Production refresh tokens must not fall back to plaintext; retain them in memory until restart.
+  // A new sign-in or rotation supersedes the old disk session, even when the new tokens stay in memory.
+  rmSync(getOrcaCloudSessionPath(profileId, userDataPath), { force: true })
   rememberMemorySession(cacheKey, { session, persistence: 'memory-only' })
   return 'memory-only'
 }
