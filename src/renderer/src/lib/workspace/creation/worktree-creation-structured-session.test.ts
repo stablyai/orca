@@ -52,9 +52,11 @@ const mocks = vi.hoisted(() => {
     >(async () => {}),
     beginStructuredAgentSessionProvisionalLaunch: vi.fn<
       (args: BeginArgs) => {
-        sessionId: string
-        tab: { id: string }
-        settlement: Promise<{ kind: 'structured'; sessionId: string }>
+        sessionId: string | null
+        tab: { id: string } | null
+        settlement: Promise<
+          { kind: 'structured'; sessionId: string } | { kind: 'cancelled'; sessionId: null }
+        >
         cancel: () => void
       } | null
     >(),
@@ -216,9 +218,9 @@ describe('launchStructuredWorktreeSession', () => {
       return {
         sessionId: null,
         tab: null,
-        settlement: Promise.resolve({ kind: 'cancelled', sessionId: null }),
+        settlement: Promise.resolve({ kind: 'cancelled' as const, sessionId: null }),
         cancel: vi.fn()
-      } as never
+      }
     })
 
     const result = await launchStructuredWorktreeSession({
