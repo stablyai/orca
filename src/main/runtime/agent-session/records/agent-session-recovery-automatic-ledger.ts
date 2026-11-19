@@ -1,6 +1,6 @@
-// What Orca continued on its own, kept beside the offers and written under the capsule's lock. A
-// ledger, not journal counts: a continuation's send looks like a person's, and a run can die
-// before its note.
+// What Orca continued on its own, and which cuts a person dismissed, kept beside the offers and
+// written under the capsule's lock. A ledger, not journal counts: a continuation's send looks like
+// a person's, and a run can die before its note.
 
 import { dirname, join } from 'node:path'
 import { z } from 'zod'
@@ -15,15 +15,17 @@ export const AUTOMATIC_CONTINUATION_LIMIT = 3
 export const AUTOMATIC_CONTINUATION_WINDOW_MS = 5 * 60_000
 /** Long enough to remember a cut across a crash loop; a day-old cut is no longer automatic anyway. */
 const TAKEN_RETENTION_MS = 24 * 60 * 60_000
+const DISMISSED_LIMIT = 500
 
 const ledgerSchema = z.object({
   taken: z.record(z.string(), z.array(z.object({ at: z.number(), work: z.string() }))),
-  passed: z.array(z.string())
+  passed: z.array(z.string()),
+  dismissed: z.array(z.string()).default([])
 })
 
 export type AutomaticRestartLedger = z.infer<typeof ledgerSchema>
 
-const EMPTY: AutomaticRestartLedger = { taken: {}, passed: [] }
+const EMPTY: AutomaticRestartLedger = { taken: {}, passed: [], dismissed: [] }
 
 function offerKey(marker: AgentSessionResumeMarker): string {
   return `${marker.sessionId}:${marker.teardownId}:${marker.recordedAt}`
@@ -91,6 +93,28 @@ export function recordAutomaticContinuations(
     taken[marker.sessionId] = [...(taken[marker.sessionId] ?? []), { at: now, work: cutOf(marker) }]
   }
   return { ...ledger, taken }
+}
+
+/** A crash cut is read again while its chat stays held, giving the same offer; a dismissed one stays gone. */
+export function dismissedOffer(
+  ledger: AutomaticRestartLedger,
+  marker: AgentSessionResumeMarker
+): boolean {
+  return ledger.dismissed.includes(offerKey(marker))
+}
+
+/** Call under the capsule's lock. */
+export async function recordDismissedOffers(
+  capsulePath: string,
+  markers: readonly AgentSessionResumeMarker[]
+): Promise<void> {
+  const ledger = await readAutomaticRestartLedger(capsulePath)
+  const keys = markers.map(offerKey)
+  const kept = ledger.dismissed.filter((key) => !keys.includes(key))
+  await writeAutomaticRestartLedger(capsulePath, {
+    ...ledger,
+    dismissed: [...kept, ...keys].slice(-DISMISSED_LIMIT)
+  })
 }
 
 /** Offers still waiting when a launch ends were this launch's to continue; later launches leave them to a person. */

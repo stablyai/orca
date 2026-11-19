@@ -14,7 +14,9 @@ import {
 } from './agent-session-recovery-capsule-entries'
 import {
   automaticallyContinuable,
+  dismissedOffer,
   passOverAutomaticOffers,
+  recordDismissedOffers,
   readAutomaticRestartLedger,
   recordAutomaticContinuations,
   writeAutomaticRestartLedger
@@ -59,8 +61,12 @@ export class AgentSessionRecoveryCapsule {
       const bySession = new Map(entries.map((entry) => [entry.marker.sessionId, entry]))
       const failedBySession = new Map(failed.map((failure) => [failure.marker.sessionId, failure]))
       const dismissedAt = state.dismissedAt
+      const ledger = await readAutomaticRestartLedger(this.filePath)
       for (const marker of markers) {
-        if (dismissedAt !== undefined && marker.recordedAt <= dismissedAt) {
+        if (
+          (dismissedAt !== undefined && marker.recordedAt <= dismissedAt) ||
+          dismissedOffer(ledger, marker)
+        ) {
           continue
         }
         const existing = bySession.get(marker.sessionId)
@@ -220,7 +226,7 @@ export class AgentSessionRecoveryCapsule {
     })
   }
 
-  /** Dismiss selected/all records without fencing later teardown offers; clearAll provides that fence. */
+  /** Dismiss selected/all records; the same cut read again stays dismissed, a later cut is offered. */
   dismiss(
     sessionIds: readonly string[] | 'all',
     now: number,
@@ -231,12 +237,12 @@ export class AgentSessionRecoveryCapsule {
       const named = sessionIds === 'all' ? null : new Set(sessionIds)
       const state = await this.readState()
       const { entries, failed } = normalizeState(state, now)
-      const dismissed = new Set(
-        [...entries, ...failed]
-          .filter(({ marker }) => (named?.has(marker.sessionId) ?? true) && !keep(marker))
-          .map((record) => record.marker.sessionId)
-      )
+      const dismissedMarkers = [...entries, ...failed]
+        .filter(({ marker }) => (named?.has(marker.sessionId) ?? true) && !keep(marker))
+        .map((record) => record.marker)
+      const dismissed = new Set(dismissedMarkers.map((marker) => marker.sessionId))
       if (dismissed.size > 0) {
+        await recordDismissedOffers(this.filePath, dismissedMarkers)
         await this.publish(
           {
             entries: entries.filter((entry) => !dismissed.has(entry.marker.sessionId)),

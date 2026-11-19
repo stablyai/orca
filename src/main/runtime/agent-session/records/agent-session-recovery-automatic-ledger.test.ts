@@ -85,3 +85,15 @@ it('leaves an offer a quit records during the automatic turn to the next launch'
   await capsule.passOverAutomatic(NOW, NOW + 2)
   expect(await capsule.beginResume(undefined, 'next launch', NOW + MINUTE, true)).toHaveLength(1)
 })
+
+it('keeps a dismissed crash cut dismissed when a later launch reads it again, and offers a new cut', async () => {
+  const cut = (turn: string, at: number) =>
+    marker({ work: { kind: 'turn', id: turn }, teardownId: 'crash:runtime-1', recordedAt: at })
+  await capsule.record([cut('turn-1', NOW)], NOW)
+  await capsule.dismiss([cut('turn-1', NOW).sessionId], NOW + MINUTE)
+  // The chat is still held by the crashed run, so the next launch derives the same offer.
+  await capsule.record([cut('turn-1', NOW)], NOW + 2 * MINUTE)
+  expect(await capsule.list(NOW + 2 * MINUTE)).toEqual([])
+  await capsule.record([cut('turn-2', NOW + 3 * MINUTE)], NOW + 3 * MINUTE)
+  expect(await capsule.list(NOW + 3 * MINUTE)).toHaveLength(1)
+})

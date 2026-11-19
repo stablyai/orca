@@ -3,7 +3,7 @@
 
 import type { StructuredAgentSessionRestartResume } from '../../../native-chat/agent-session-wire/recovery/structured-agent-session-restart-resume-contract'
 import type { StructuredAgentSessionResumeCandidate } from '../../../native-chat/agent-session-wire/recovery/structured-agent-session-restart-resume-set'
-import { otherAgentSessionRuntimeStarts } from '../records/agent-session-runtime-end-record'
+import { previousAgentSessionRuntimeStartedAt } from '../records/agent-session-runtime-end-record'
 import { agentSessionRuntimeIncarnation } from '../records/agent-session-runtime-attribution'
 import type { AgentSessionRecordStore } from '../records/agent-session-record-store'
 import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-host'
@@ -34,8 +34,8 @@ export type StructuredAgentSessionLaunchContinuationDeps = {
   store: Pick<AgentSessionRecordStore, 'listHeldSessionIds' | 'replacedRuntime'>
   /** When this process started: what settlement wrote since then is this start's reading of the crash. */
   startedAt: number
-  /** When each earlier runtime started, by runtime id; the newest is the run that just ended. */
-  runtimeStarts: () => Promise<ReadonlyMap<string, number>>
+  /** When the run that just ended started; unknown when no earlier run left a record. */
+  previousRunStartedAt: () => Promise<number | undefined>
   resumeWorkOnRestart: () => boolean
 }
 
@@ -46,36 +46,26 @@ export async function continueStructuredAgentSessionsAtLaunch(
   const heldByLastRun = deps.store
     .listHeldSessionIds()
     .filter((sessionId) => deps.store.replacedRuntime(sessionId)?.runtime !== undefined)
-  const starts = await deps.runtimeStarts()
   const offers = async () => [
     ...(await deps.restartResume.list()),
     ...(await deps.restartResume.listFailures())
   ]
   const offered = new Set((await offers()).map((offer) => offer.sessionId))
-  // Each chat's own owner says how its run ended. A crash, or a quit killed before it recorded its
-  // offers (the chat is still held and has none), is read from what settlement wrote since that
-  // run started. Settlement takes no hold, so after a start killed mid-adoption the next one reads
-  // the same settlement again and records the same offer.
+  // Each chat's own owner says how its run ended: a crash, or a quit killed before it recorded its
+  // offers (the chat is still held and has none). Recorded whatever the setting: with it off, the
+  // person still gets the offer.
   const cuts = heldByLastRun.flatMap((sessionId) => {
     const replaced = deps.store.replacedRuntime(sessionId)
     return replaced?.runtime && (replaced.runtimeEnd === 'crash' || !offered.has(sessionId))
-      ? [
-          {
-            sessionId,
-            crashedRuntime: replaced.runtime,
-            settledSince: starts.get(replaced.runtime) ?? deps.startedAt
-          }
-        ]
+      ? [{ sessionId, crashedRuntime: replaced.runtime }]
       : []
   })
-  // Recorded whatever the setting: with it off, the person still gets the offer.
   if (cuts.length > 0) {
-    await deps.restartResume.adoptCrashCuts(cuts)
+    await deps.restartResume.adoptCrashCuts(cuts, deps.startedAt)
   }
   const recordedBy = Date.now()
   const cutByLastRun = async (continued: ReadonlySet<string> = new Set()) => {
-    const known = [...starts.values()]
-    const since = known.length > 0 ? Math.max(...known) : undefined
+    const since = await deps.previousRunStartedAt()
     // A crash offer is recorded by this start, so it is always newer than the run it read.
     const recorded = (await offers()).flatMap((offer) =>
       since === undefined || offer.recordedAt < since ? [] : [offer.sessionId]
@@ -114,8 +104,8 @@ export function structuredAgentSessionLaunchContinuationDeps(
         restartResume: host.restartResume,
         store: host.deps.store,
         startedAt: Math.trunc(performance.timeOrigin),
-        runtimeStarts: () =>
-          otherAgentSessionRuntimeStarts(
+        previousRunStartedAt: () =>
+          previousAgentSessionRuntimeStartedAt(
             host.deps.journalDatabase.stateDirectory,
             agentSessionRuntimeIncarnation()
           ),

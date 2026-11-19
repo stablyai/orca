@@ -148,15 +148,15 @@ function readRecordedEnd(path: string, runtime: string): AgentSessionOrcaStopCau
   }
 }
 
-/** When each other runtime with a record started: a run's own start bounds what its settlement wrote. */
-export async function otherAgentSessionRuntimeStarts(
+/** When the newest other runtime started: what it recorded is what the run that just ended cut. */
+export async function previousAgentSessionRuntimeStartedAt(
   stateDirectory: string,
   runtime: string
-): Promise<ReadonlyMap<string, number>> {
+): Promise<number | undefined> {
   const directory = join(stateDirectory, RUNTIMES_DIRECTORY)
   const names = await readdir(directory).catch(() => [])
   const starts = await Promise.all(
-    names.map(async (name): Promise<[string, number] | undefined> => {
+    names.map(async (name) => {
       const other = RECORD_FILE.exec(name)?.[1]
       if (!other || other === runtime) {
         return undefined
@@ -166,14 +166,14 @@ export async function otherAgentSessionRuntimeStarts(
           join(directory, name),
           MAX_RUNTIME_RECORD_BYTES
         )
-        const startedAt = parseRecord(buffer.toString('utf8'), other)?.startedAt
-        return startedAt === undefined ? undefined : [other, startedAt]
+        return parseRecord(buffer.toString('utf8'), other)?.startedAt
       } catch {
         return undefined
       }
     })
   )
-  return new Map(starts.filter((entry) => entry !== undefined))
+  const known = starts.filter((startedAt) => startedAt !== undefined)
+  return known.length > 0 ? Math.max(...known) : undefined
 }
 
 /** Missing/unreadable runtime records give no cause; null means the directory itself could not be listed. */

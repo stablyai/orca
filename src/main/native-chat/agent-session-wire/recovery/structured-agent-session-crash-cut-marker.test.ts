@@ -80,6 +80,11 @@ describe('crash cut resume marker', () => {
     })
   })
 
+  it('names a quit killed before it recorded the offer as a quit', () => {
+    const quitCut = { ...crashCut(), body: orcaStopRowBody(undefined, 'quit') }
+    expect(derive([interrupted(), quitCut])?.trigger).toBe('quit')
+  })
+
   it('offers a finished turn whose background work the crash cut', () => {
     expect(derive([turnItem('turn-1', 'completed'), backgroundTask()])?.activity).toEqual({
       state: 'done',

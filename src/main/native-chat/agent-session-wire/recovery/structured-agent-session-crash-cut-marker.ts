@@ -123,7 +123,11 @@ export function crashCutResumeMarker(input: {
     work: { kind: 'turn', id: turn.turnId },
     latestUserItemId: turn.userItemId ?? null,
     recordedAt: Math.max(...settled.map((item) => item.recoveredAt ?? 0)),
-    trigger: 'crash',
+    // Settlement stamps the cut with how its run ended: a quit killed mid-teardown reads as a quit.
+    trigger:
+      settled.flatMap(
+        (item) => (inTurn(item, turnItem.itemId) && orcaStopCauseOfRow(item)) || []
+      )[0] ?? 'crash',
     teardownId: crashCutTeardownId(input.crashedRuntime),
     journalCursor: cursor,
     ...(input.record.providerContextBoundary

@@ -53,7 +53,7 @@ function launch(resumeWorkOnRestart: boolean) {
       calls.push('pass over')
     }),
     cutOf: vi.fn(async () => null),
-    // The newest run started at 3: only what it recorded is its cut.
+    // The run that just ended started at 3: only what it recorded is its cut.
     list: vi.fn(async () => [offer('chat-quit', 4), offer('chat-quit-before', 2)]),
     listFailures: vi.fn(async () => [])
   }
@@ -72,12 +72,7 @@ function launch(resumeWorkOnRestart: boolean) {
       }
     },
     startedAt: 5,
-    runtimeStarts: async () =>
-      new Map([
-        ['runtime-earlier', 1],
-        ['runtime-quit', 2],
-        ['runtime-crashed', 3]
-      ]),
+    previousRunStartedAt: async () => 3,
     resumeWorkOnRestart: () => resumeWorkOnRestart
   }
   return { result: continueStructuredAgentSessionsAtLaunch(deps), restartResume, calls, deps }
@@ -92,13 +87,16 @@ describe('continuing interrupted chats at launch', () => {
     expect(settled.cutByLastRun).toEqual(
       new Set(['chat-crashed', 'chat-crashed-earlier', 'chat-quit', 'chat-quit-killed'])
     )
-    // Each read from its own run's start, so a start killed mid-adoption is read again whole.
-    expect(restartResume.adoptCrashCuts).toHaveBeenCalledWith([
-      { sessionId: 'chat-crashed', crashedRuntime: 'runtime-crashed', settledSince: 3 },
-      { sessionId: 'chat-crashed-earlier', crashedRuntime: 'runtime-earlier', settledSince: 1 },
-      { sessionId: 'chat-quit-killed', crashedRuntime: 'runtime-quit', settledSince: 2 },
-      { sessionId: 'continued', crashedRuntime: 'runtime-quit', settledSince: 2 }
-    ])
+    // A quit killed mid-teardown, held with no offer, is read like a crash.
+    expect(restartResume.adoptCrashCuts).toHaveBeenCalledWith(
+      [
+        { sessionId: 'chat-crashed', crashedRuntime: 'runtime-crashed' },
+        { sessionId: 'chat-crashed-earlier', crashedRuntime: 'runtime-earlier' },
+        { sessionId: 'chat-quit-killed', crashedRuntime: 'runtime-quit' },
+        { sessionId: 'continued', crashedRuntime: 'runtime-quit' }
+      ],
+      5
+    )
     expect(restartResume.continueAfterRestart).toHaveBeenCalledWith(
       undefined,
       STRUCTURED_AGENT_SESSION_LAUNCH_CONTINUATION_OWNER,
