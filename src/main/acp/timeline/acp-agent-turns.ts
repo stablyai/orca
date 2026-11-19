@@ -45,6 +45,11 @@ export class AcpAgentTurns {
     return open !== undefined && open === active ? open : undefined
   }
 
+  /** A new send supersedes the Stop grace. */
+  resume(): void {
+    this.stoppedAt = Number.NEGATIVE_INFINITY
+  }
+
   /** Null when no agent turn is active. */
   calls(active: string | undefined): 'none' | 'running' | null {
     if (this.open === undefined || this.open !== active) {

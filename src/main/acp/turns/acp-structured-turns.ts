@@ -96,7 +96,7 @@ export class AcpStructuredTurns {
   interruptForPermissionTransition(): void {
     if (this.active) {
       this.cancelForSteer()
-    } else if (this.deps.lane.openTurnId !== null && !this.deps.lane.agentTurn.endIfIdle()) {
+    } else if (this.deps.lane.openTurnId !== null && !this.deps.lane.agentTurn.endUnasked()) {
       this.deps.withdrawRequests()
       void this.deps.connection.cancel().catch(() => undefined)
       this.deps.lane.agentTurn.end('cancelled')

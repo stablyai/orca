@@ -130,6 +130,30 @@ describe('Antigravity unprompted turns', () => {
     expect(await agentTurns(rig)).toHaveLength(1)
   })
 
+  it('mints again once the Stop grace passes', async () => {
+    const { rig, clock } = await open()
+    const { agent } = rig.child()
+    agent.notify('session/update', chunk('working on it'))
+    await waitFor(async () => expect(await agentTurns(rig)).toHaveLength(1))
+    await rig.adapter.cancelTurn({ sessionId: SESSION, fence: 1 })
+    clock.now += 5_000
+    agent.notify('session/update', chunk('a new report'))
+    await waitFor(async () =>
+      expect(await agentTurns(rig)).toMatchObject([{ state: 'interrupted' }, { state: 'running' }])
+    )
+  })
+
+  it('ends an agent turn for a permission change without cancelling the agent', async () => {
+    const { rig } = await open()
+    rig.child().agent.notify('session/update', chunk('done'))
+    await waitFor(async () => expect(await agentTurns(rig)).toHaveLength(1))
+    await expect(
+      rig.adapter.settlePermissionTransition({ sessionId: SESSION, fence: 1, mode: 'full-access' })
+    ).resolves.toBe(true)
+    expect(rig.sent('session/cancel')).toHaveLength(0)
+    expect(await agentTurns(rig)).toMatchObject([{ state: 'completed' }])
+  })
+
   it('leaves a call stopped by the person failed even when the agent answers end_turn', async () => {
     const { rig } = await open()
     await sendHello(rig, 'send-1')

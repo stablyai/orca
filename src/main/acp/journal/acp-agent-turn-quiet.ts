@@ -53,9 +53,10 @@ export class AcpAgentTurnQuiet {
     return events.length > 0
   }
 
-  /** Finished work needs no cancel; returns whether that ended the agent turn. */
-  endIfIdle(): boolean {
-    return this.lane.translator.agentTurnCalls() === 'none' && !this.asking && this.end()
+  /** Unprompted work asking nothing ends without a cancel; its running calls continue as
+   *  background tasks. Returns whether that ended the agent turn. */
+  endUnasked(): boolean {
+    return !this.asking && this.end()
   }
 
   dispose(): void {
