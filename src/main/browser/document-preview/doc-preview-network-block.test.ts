@@ -6,18 +6,16 @@ type BeforeRequest = (
 ) => void
 
 const previewSession = vi.hoisted(() => {
-  const listeners = new Map<string, unknown>()
-  const record =
-    (event: string) =>
-    (...args: unknown[]): void => {
-      listeners.set(event, args.at(-1))
-    }
+  const state: { beforeRequest: BeforeRequest | null } = { beforeRequest: null }
   return {
-    listeners,
+    state,
     protocol: { isProtocolHandled: () => false, handle: () => {} },
     webRequest: {
-      onBeforeRequest: record('onBeforeRequest'),
-      onBeforeSendHeaders: record('onBeforeSendHeaders')
+      // Electron's setter takes (listener) or (filter, listener); keep the latest listener.
+      onBeforeRequest: (...args: [BeforeRequest | null] | [unknown, BeforeRequest | null]) => {
+        state.beforeRequest = args.length === 1 ? args[0] : args[1]
+      },
+      onBeforeSendHeaders: () => {}
     },
     on: () => {},
     removeListener: () => {},
@@ -67,7 +65,10 @@ vi.mock('../guest-lifecycle/manager/browser-manager', async () => {
 })
 
 function decide(url: string): { cancel?: boolean } {
-  const listener = previewSession.listeners.get('onBeforeRequest') as BeforeRequest
+  const listener = previewSession.state.beforeRequest
+  if (!listener) {
+    throw new Error('no onBeforeRequest listener is installed')
+  }
   let response: { cancel?: boolean } = {}
   listener({ url }, (answer) => {
     response = answer
