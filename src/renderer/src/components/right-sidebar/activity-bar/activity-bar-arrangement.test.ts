@@ -3,6 +3,7 @@ import {
   activityOrderForPage,
   arrangeActivityItems,
   mergeActivityOrder,
+  moveActivityInShownList,
   reorderActivityOrders
 } from './activity-bar-arrangement'
 import { getDefaultRightSidebarActivityItems } from './right-sidebar-default-activity-items'
@@ -202,5 +203,23 @@ describe('activity bar arrangement', () => {
       'source-control',
       'plugin:test/panel'
     ])
+  })
+  it('drags a strip tab inside the full shown list so tabs under More keep their places', () => {
+    const shown = ['explorer', 'checks', 'source-control', 'ports', 'vault', 'plugin:test/panel']
+    // Drag Checks over Explorer, with nothing saved: the strip shows only Explorer and Checks.
+    const dragged = moveActivityInShownList(shown, 'checks', 'explorer')
+    expect(dragged).toEqual([
+      'checks',
+      'explorer',
+      'source-control',
+      'ports',
+      'vault',
+      'plugin:test/panel'
+    ])
+    expect(reorderActivityOrders({ order: [], botOrder: [] }, false, dragged ?? []).order).toEqual(
+      dragged
+    )
+    expect(moveActivityInShownList(shown, 'explorer', 'explorer')).toBeNull()
+    expect(moveActivityInShownList(shown, 'missing', 'explorer')).toBeNull()
   })
 })

@@ -13,7 +13,7 @@ import {
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'
 import type { ActivityBarItem } from './activity-bar-buttons'
-import { reorderActivityOrders } from './activity-bar-arrangement'
+import { moveActivityInShownList, reorderActivityOrders } from './activity-bar-arrangement'
 import { scheduleActivityBarFocusHandoff } from './activity-bar-focus-handoff'
 import { usePluginPanelsStore } from '@/store/plugins/catalog/plugin-contribution-catalog'
 
@@ -95,19 +95,28 @@ export function ActivityBarPositionMenu({
   const setOrder = useAppStore((s) => s.setActivityBarOrder)
   const setBotOrder = useAppStore((s) => s.setActivityBarBotOrder)
   const shown = items.filter((item) => !item.pluginKey || !hidden.includes(item.id))
-  const visible = stripItemIds ? shown.filter((item) => stripItemIds.has(item.id)) : shown
-  const index = visible.findIndex((item) => item.id === itemId)
+  // Top layout: a Move only steps between strip tabs; the tab itself is moved within every shown tab.
+  const strip = stripItemIds ? shown.filter((item) => stripItemIds.has(item.id)) : shown
+  const index = strip.findIndex((item) => item.id === itemId)
   const shownIndex = shown.findIndex((item) => item.id === itemId)
+  // A tab under More has no strip neighbour to move past, so its Move items are not offered.
+  const showMoves = !stripItemIds || index !== -1
   const selected = items.find((item) => item.id === itemId)
   const activeTab = useAppStore((s) => s.rightSidebarEffectiveTab)
   const selectTab = useAppStore((s) => s.setRightSidebarTab)
   const move = (offset: number): void => {
-    const ids = visible.map((item) => item.id)
-    const target = index + offset
-    if (index === -1 || target < 0 || target >= ids.length) {
+    const neighbour = strip[index + offset]
+    if (!itemId || index === -1 || !neighbour) {
       return
     }
-    ;[ids[index], ids[target]] = [ids[target], ids[index]]
+    const ids = moveActivityInShownList(
+      shown.map((item) => item.id),
+      itemId,
+      neighbour.id
+    )
+    if (!ids) {
+      return
+    }
     const next = reorderActivityOrders({ order, botOrder }, isBotPage, ids)
     if (isBotPage) {
       setBotOrder(next.botOrder)
@@ -116,24 +125,29 @@ export function ActivityBarPositionMenu({
     }
   }
   const [disabling, setDisabling] = useState(false)
+  const canHide = Boolean(selected?.pluginKey && !hidden.includes(selected.id))
   return (
     <ContextMenuContent data-activity-bar-menu="">
-      {selected && (
+      {selected && (showMoves || canHide) && (
         <>
-          <ContextMenuItem disabled={index <= 0} onSelect={() => move(-1)}>
-            {currentPosition === 'top'
-              ? t('activityBar.moveLeft', 'Move left')
-              : t('activityBar.moveUp', 'Move up')}
-          </ContextMenuItem>
-          <ContextMenuItem
-            disabled={index === -1 || index === visible.length - 1}
-            onSelect={() => move(1)}
-          >
-            {currentPosition === 'top'
-              ? t('activityBar.moveRight', 'Move right')
-              : t('activityBar.moveDown', 'Move down')}
-          </ContextMenuItem>
-          {selected.pluginKey && !hidden.includes(selected.id) && (
+          {showMoves && (
+            <>
+              <ContextMenuItem disabled={index <= 0} onSelect={() => move(-1)}>
+                {currentPosition === 'top'
+                  ? t('activityBar.moveLeft', 'Move left')
+                  : t('activityBar.moveUp', 'Move up')}
+              </ContextMenuItem>
+              <ContextMenuItem
+                disabled={index === -1 || index === strip.length - 1}
+                onSelect={() => move(1)}
+              >
+                {currentPosition === 'top'
+                  ? t('activityBar.moveRight', 'Move right')
+                  : t('activityBar.moveDown', 'Move down')}
+              </ContextMenuItem>
+            </>
+          )}
+          {selected && canHide && (
             <ContextMenuItem
               onSelect={() => {
                 const neighbour = shown[shownIndex + 1] ?? shown[shownIndex - 1]

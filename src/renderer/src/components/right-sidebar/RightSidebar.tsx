@@ -7,7 +7,7 @@ import { useSidebarResize } from '@/hooks/useSidebarResize'
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
 import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu'
 import { DndContext, PointerSensor, useSensor, useSensors, closestCenter } from '@dnd-kit/core'
-import { SortableContext, arrayMove, verticalListSortingStrategy } from '@dnd-kit/sortable'
+import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { getTopActivityBarLayout } from './activity-bar/activity-bar-overflow'
 import { measureTabTitle } from './right-sidebar-tab-title-width'
 import { TopActivityOverflowMenu } from './activity-bar/activity-bar-buttons'
@@ -15,6 +15,7 @@ import { SortableActivityButton } from './activity-bar/sortable-activity-button'
 import {
   activityOrderForPage,
   arrangeActivityItems,
+  moveActivityInShownList,
   reorderActivityOrders
 } from './activity-bar/activity-bar-arrangement'
 import { getActiveChecksStatus } from './checks-panel/status/active-checks-status'
@@ -279,22 +280,18 @@ function RightSidebarInner(): React.JSX.Element {
         if (!over || active.id === over.id) {
           return
         }
-        // The top strip's sortable list holds only the tabs shown in the strip; More tabs keep their slots.
-        const sortable =
-          activityBarPosition === 'top' ? topActivityLayout.visibleItems : visibleItems
-        const ids: string[] = sortable.map((item) => item.id)
-        const from = ids.indexOf(String(active.id))
-        const to = ids.indexOf(String(over.id))
-        if (from !== -1 && to !== -1) {
-          const next = reorderActivityOrders(
-            { order, botOrder },
-            isBotPage,
-            arrayMove(ids, from, to)
-          )
+        // Reorder within every shown tab, so tabs under More keep their saved places.
+        const next = moveActivityInShownList(
+          visibleItems.map((item) => item.id),
+          String(active.id),
+          String(over.id)
+        )
+        if (next) {
+          const orders = reorderActivityOrders({ order, botOrder }, isBotPage, next)
           if (isBotPage) {
-            setBotOrder(next.botOrder)
+            setBotOrder(orders.botOrder)
           } else {
-            setOrder(next.order)
+            setOrder(orders.order)
           }
         }
       }}
