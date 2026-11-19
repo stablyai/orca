@@ -1,6 +1,6 @@
 import { useRef } from 'react'
 import { Pressable, Text, View } from 'react-native'
-import { FileText, Globe, SquareTerminal } from 'lucide-react-native'
+import { FileText, Globe, SquareTerminal, UserRound } from 'lucide-react-native'
 import type { TuiAgent } from '../../../../src/shared/agent-launch/catalog/tui-agent'
 import {
   ActionSheetContent,
@@ -22,6 +22,10 @@ import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import type { MobileNewTabAgentOption } from '../agent-launch/mobile-new-tab-agent-options'
 import type { NewTabAgentSurfaceChoice } from '../agent-launch/use-mobile-new-tab-agent-options'
 import { MobileSegmentedControl } from '../../components/controls/MobileSegmentedControl'
+import {
+  WINDOWS_GIT_BASH_SHELL,
+  type BuiltInWindowsTerminalShell
+} from '../../../../src/shared/shell/launch/windows-terminal-shell'
 
 const AGENT_GRID_COLUMNS = 3
 
@@ -33,14 +37,39 @@ type Props = {
   surfaceChoice: NewTabAgentSurfaceChoice | null
   /** Loading, none, other-server or error; shown instead of the agent grid. */
   agentStatusRow: ActionSheetAction | null
+  /** Rows that lead the agents, such as a bot's own new chat. */
+  leadingAgentActions: ActionSheetAction[]
   canCreateBrowser: boolean
+  /** The profile a new browser tab opens in; null hides the row (one profile, or an older host). */
+  browserProfileLabel: string | null
   canCreateMarkdownNote: boolean
   onClose: () => void
   onCreateAgent: (agent: TuiAgent, nativeChatDefault: boolean | undefined) => void
-  onCreateTerminal: () => void
+  /** Desktop's Windows shell entries the host would start, its default first; empty keeps one Terminal row. */
+  terminalShells: readonly BuiltInWindowsTerminalShell[]
+  onCreateTerminal: (shell?: BuiltInWindowsTerminalShell) => void
   /** Runs after the sheet has gone, so it may open another modal. */
   onCreateBrowser: () => void
+  /** Runs after the sheet has gone, so it may open the picker. */
+  onChooseBrowserProfile: () => void
   onCreateMarkdownNote: () => void
+}
+
+// Desktop's names for its Windows shell menu entries.
+function windowsShellLabel(
+  shell: BuiltInWindowsTerminalShell,
+  t: ReturnType<typeof useMobileTranslation>
+): string {
+  switch (shell) {
+    case 'powershell.exe':
+      return t('session.sheets.shellPowerShell', 'PowerShell')
+    case 'cmd.exe':
+      return t('session.sheets.shellCmd', 'CMD Prompt')
+    case WINDOWS_GIT_BASH_SHELL:
+      return t('session.sheets.shellGitBash', 'Git Bash')
+    case 'wsl.exe':
+      return t('session.sheets.shellWsl', 'WSL')
+  }
 }
 
 export function MobileNewTabSheet({
@@ -49,12 +78,16 @@ export function MobileNewTabSheet({
   agentOptions,
   surfaceChoice,
   agentStatusRow,
+  leadingAgentActions,
   canCreateBrowser,
+  browserProfileLabel,
   canCreateMarkdownNote,
   onClose,
   onCreateAgent,
+  terminalShells,
   onCreateTerminal,
   onCreateBrowser,
+  onChooseBrowserProfile,
   onCreateMarkdownNote
 }: Props) {
   useMobileColorScheme()
@@ -97,9 +130,10 @@ export function MobileNewTabSheet({
         {...(workspaceName ? { subtitle: workspaceName } : {})}
         onClose={onClose}
       />
-      {showAgentGrid || agentStatusRow ? (
+      {showAgentGrid || agentStatusRow || leadingAgentActions.length > 0 ? (
         <SectionHeader title={t('session.sheets.agents', 'Agents')} first />
       ) : null}
+      {leadingAgentActions.length > 0 ? <ActionSheetContent actions={leadingAgentActions} /> : null}
       {agentStatusRow ? <ActionSheetContent actions={[agentStatusRow]} /> : null}
       {showAgentGrid && surfaceChoice ? (
         <MobileSegmentedControl
@@ -153,12 +187,25 @@ export function MobileNewTabSheet({
         </View>
       ) : null}
       <ListGroup separatorInset={LIST_LEADING_INSET} style={styles.actions}>
-        <ListRow
-          key="terminal"
-          title={t('session.sheets.terminal', 'Terminal')}
-          leading={<SquareTerminal size={16} color={iconColor} />}
-          onPress={() => closeAndRun(onCreateTerminal)}
-        />
+        {terminalShells.length > 0 ? (
+          terminalShells.map((shell) => (
+            <ListRow
+              key={shell}
+              title={t('session.sheets.terminalWithShell', 'Terminal: {{shell}}', {
+                shell: windowsShellLabel(shell, t)
+              })}
+              leading={<SquareTerminal size={16} color={iconColor} />}
+              onPress={() => closeAndRun(() => onCreateTerminal(shell))}
+            />
+          ))
+        ) : (
+          <ListRow
+            key="terminal"
+            title={t('session.sheets.terminal', 'Terminal')}
+            leading={<SquareTerminal size={16} color={iconColor} />}
+            onPress={() => closeAndRun(() => onCreateTerminal())}
+          />
+        )}
         {canCreateBrowser ? (
           <ListRow
             key="browser"
@@ -166,6 +213,16 @@ export function MobileNewTabSheet({
             leading={<Globe size={16} color={iconColor} />}
             navigates
             onPress={() => closeThen(onCreateBrowser)}
+          />
+        ) : null}
+        {canCreateBrowser && browserProfileLabel !== null ? (
+          <ListRow
+            key="browserProfile"
+            title={t('session.browserProfile.title', 'Profile')}
+            leading={<UserRound size={16} color={iconColor} />}
+            value={browserProfileLabel}
+            navigates
+            onPress={() => closeThen(onChooseBrowserProfile)}
           />
         ) : null}
         {canCreateMarkdownNote ? (

@@ -1,6 +1,7 @@
 import type { AgentSessionAccountKind } from '../../../shared/agent-session/failures/agent-session-availability'
 import type { AgentSessionContextUsage } from '../../../shared/agent-session/conversation-context/agent-session-context-usage'
 import type { AgentSessionUsageLimit } from '../../../shared/agent-session/failures/agent-session-usage-limit'
+import type { AgentSessionInteractionMode } from '../../../shared/agent-session/options/permissions/agent-session-interaction-mode'
 import type {
   AgentJournalThreadGoal,
   AgentJournalToolCallItem
@@ -224,10 +225,14 @@ export type AcpDialect = {
   withheldCommands?: readonly string[]
   /** Which sign-in a not-signed-in chat needs; absent is the agent's usual one. */
   signInAccount?: AgentSessionAccountKind
+  /** A session row's own description when the row is one of the agent's skills; null for a command. */
+  skillDescription?(command: AvailableCommand): string | null
   /** Which session rows are the agent's own built-ins, as this process's initialize response proves. */
   builtinCommands?(initialized: InitializeResponse): (command: AvailableCommand) => boolean
   /** This agent's fast parameter, mapped to Orca's fast mode toggle. */
   fastConfigId?: string
+  /** This agent's mode values, mapped to Orca's Build/Plan interaction mode. */
+  interactionModes?: Readonly<Record<AgentSessionInteractionMode, string>>
 }
 
 export type AcpChildStops = { subagents: boolean; backgroundTasks: boolean }

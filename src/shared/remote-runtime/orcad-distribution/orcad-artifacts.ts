@@ -254,6 +254,8 @@ export const ORCAD_ARTIFACTS: readonly OrcadArtifact[] = [
   { filename: 'journal-sql-reader-entry.js' },
   // Terminal agent identity SQL runs in this worker thread, off the hook server's loop.
   { filename: 'agent-identity-worker-entry.js' },
+  // Bot stores' SQL (items) runs in this worker thread, off the event loop.
+  { filename: 'bots-db-worker-entry.js' },
   { filename: ORCAD_PORT_SCAN_COMMAND_WORKER_ENTRY },
   // Forked so transcript parsing stays off the server's event loop.
   { filename: ORCAD_SESSION_SCANNER_SERVICE_ENTRY },
@@ -264,8 +266,12 @@ export const ORCAD_ARTIFACTS: readonly OrcadArtifact[] = [
   { filename: 'claude-profile-setup-worker-entry.js' },
   // Claude fork and rewind copy a transcript in a worker thread, off the event loop.
   { filename: 'claude-conversation-fork-worker-entry.js' },
+  // Stats & Usage scans this host's agent transcripts in a worker thread, off the event loop.
+  { filename: 'usage-scan-worker-entry.js' },
   // Dictation loads the recognizer named by orca serve (#31174).
   { filename: 'stt-worker.js' },
+  // Reads a Drive PDF's text off the event loop for `orca drive read`.
+  { filename: 'google-pdf-text-worker-entry.js' },
   // The forked computer sidecar finds platform runtimes beside itself (#31777).
   { filename: ORCAD_COMPUTER_SIDECAR_ENTRY },
   ...ORCAD_COMPUTER_USE_RUNTIME_ARTIFACTS.map((filename) => ({ filename })),
