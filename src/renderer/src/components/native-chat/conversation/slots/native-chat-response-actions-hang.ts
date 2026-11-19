@@ -1,5 +1,6 @@
 // Response controls sit on the left. They may hang into the gap above the person's own bubble, where
-// nothing else on the left starts; elsewhere, the transcript's last row included, they keep their height.
+// nothing else on the left starts, and, while hover-only, above an agent's card opening the next turn;
+// elsewhere, the transcript's last row included, they keep their height.
 
 import {
   type NativeChatRowTypography,
@@ -11,18 +12,27 @@ import type {
   NativeChatTranscriptSlot
 } from './native-chat-transcript-slots'
 
-/** The person's own right-aligned bubble, with nothing of the row drawn on the left above it. */
-function slotOpensWithPersonBubble(slot: NativeChatTranscriptSlot): boolean {
-  return (
-    slot.kind === 'message' &&
-    slot.drawsMessage &&
-    slot.receipt === undefined &&
-    slot.statusAbove !== true &&
-    slot.message.role === 'user' &&
-    // Agent-authored input draws a left-aligned sender card instead of a bubble.
-    slot.message.from === undefined &&
-    !slot.message.blocks.some((block) => block.type === 'text' && block.providerFrame)
-  )
+/** A user-role row opening its turn, with nothing of the row drawn above it: the person's own
+ *  right-aligned bubble, or an agent's left-aligned message card (`from`). */
+function slotOpeningRow(slot: NativeChatTranscriptSlot): 'person' | 'agent' | null {
+  if (
+    slot.kind !== 'message' ||
+    !slot.drawsMessage ||
+    slot.receipt !== undefined ||
+    slot.statusAbove === true ||
+    slot.message.role !== 'user' ||
+    slot.message.blocks.some((block) => block.type === 'text' && block.providerFrame)
+  ) {
+    return null
+  }
+  return slot.message.from === undefined ? 'person' : 'agent'
+}
+
+/** Whether controls may hang above `next`: always above the person's bubble; above an agent's card
+ *  only while hover-only (any but the latest response), so shown ones never sit flush on it. */
+function controlsMayHangAbove(next: NativeChatTranscriptSlot, controlsShown: boolean): boolean {
+  const opening = slotOpeningRow(next)
+  return opening === 'person' || (opening === 'agent' && !controlsShown)
 }
 
 /** The list moves an unjournaled, unsent message below the transcript and its tail row. */
@@ -81,7 +91,7 @@ export function markNativeChatResponseActionsHang(
       !slotDrawsAfterMessage(slot) &&
       // The last row never hangs, so the gap to the composer is the same whatever the turn ends on.
       next !== undefined &&
-      slotOpensWithPersonBubble(next)
+      controlsMayHangAbove(next, slot.latestResponse === true)
     ) {
       slot.actionsHang = true
     } else if (slotHoldsControls(slot, typography)) {
