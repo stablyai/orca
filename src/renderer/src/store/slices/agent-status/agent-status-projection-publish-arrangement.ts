@@ -4,7 +4,7 @@ import {
 } from '@/components/native-chat/pane/routing/native-chat-leaf-routing'
 import type { AppState } from '../../types'
 import { compareWorktreeAgentRows } from '@/components/sidebar/workspace-card/activity/worktree-agent-row-order'
-import { structuralValuesEqualIgnoringUndefined as equal } from '../../../../../shared/structural-value-equality'
+import { structuralValuesEqualIgnoringUndefined as equal } from '../../../../../shared/collections/structural-value-equality'
 import { applyAgentRowLineage } from '@/components/dashboard/rows/agent-row-lineage'
 import type { AgentStatusProjectionState } from './agent-status-projection-state'
 import type { ProjectionTopology } from './agent-status-projection-topology'
