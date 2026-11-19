@@ -22,7 +22,7 @@ State is detected from the terminal's OSC title sequence and agent hooks, which 
 
 ## Agent dashboard
 
-Turn on **Settings → Experimental → Agent Dashboard**. Orca adds an **Agent Dashboard** entry in the left sidebar: a kanban of agents across worktrees.
+Turn on **Settings → Experimental → Agent Dashboard**. Orca adds an **Agent Dashboard** entry in the left sidebar: a kanban of agents across worktrees, plus a **Fleet** view that groups agent teams by project.
 
 You can assign a keyboard shortcut to **Toggle Agent Dashboard** under [Settings → Shortcuts](/docs/settings#shortcuts). It has no default binding, and works while a terminal, editor, or browser tab has focus.
 
@@ -55,6 +55,20 @@ The board toolbar includes:
 - **Needs You** cards tint amber (and can show the pending question summary); **Done** cards tint green; other states stay neutral so tint means “look here”
 - Click a card to open/focus that agent’s live terminal
 - Nested Codex/Claude subagents can appear as expandable children under the parent row
+
+### Board and Fleet views
+
+The toolbar switches between **Board** (the columns above) and **Fleet**. Search, filters, and **Show idle agents** apply to both. The in-window dashboard remembers the view you chose and the projects you collapsed across restarts; the pop-out remembers them until Orca quits.
+
+**Fleet** shows which agent started which, and where each one runs:
+
+- **Summary** — counts of agents, projects, teams, and each state
+- **Projects** — one collapsible section per repository or folder workspace on each host, with the board's host badge for SSH workspaces and Remote Orca Servers
+- **Teams** — an agent that dispatched other agents heads a team, drawn as an org chart down to every worker it started, including workers of workers. A team stays under its lead agent's project even when some workers run elsewhere. A team too wide for the window switches to an indented list, and a team with no agent working or waiting starts collapsed to one row.
+- **Agents** — each node shows the state glyph, agent, title, last message or pending question, and where it runs: the worktree (branch icon) or folder, `project / worktree` when it runs in another project, and a host badge when its host differs from the project's. In-process subagents are listed under the node.
+- **Independent agents** — agents outside any team, listed at the end of their project
+- A collapsed project or team that holds an agent waiting on you keeps the amber **Needs You** tint on its header
+- Click a node to open/focus that agent's live terminal, as on the board
 
 Worktree cards still inline agent rows with the same glyphs when the experimental board is off. If you don't see status indicators, the agent CLI in that session isn't one Orca recognizes — start it through the agent combobox rather than typing the binary by hand.
 
