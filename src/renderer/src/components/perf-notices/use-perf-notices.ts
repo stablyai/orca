@@ -97,7 +97,8 @@ function startPerfNoticeLoop(): () => void {
     try {
       const now = Date.now()
       const notice = await nextNotice(now, blocked, tracking)
-      if (notice && !blocked()) {
+      // Why: during the read, another window may have shown a toast, or the user turned this one off.
+      if (notice && !blocked() && mayShow(notice.id, Date.now())) {
         showPerfNotice(notice, now)
       }
     } catch {
