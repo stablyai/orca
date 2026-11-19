@@ -11,7 +11,7 @@ function runMetricsOver(term: Terminal): Record<string, unknown>[] {
     postToHost: (message) => notifications.push(message)
   })
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: xterm supplies the public buffer members read by the metrics scan.
-  scope.term = term as typeof scope.term
+  scope.term = term as unknown as typeof scope.term
   emitKeyboardAvoidanceMetrics(scope)
   return notifications
 }
