@@ -47,9 +47,10 @@ export class BrowserCertificateRequestGuard {
 
   constructor(private readonly dependencies: RequestGuardDependencies) {
     onProxySessionReadinessChanged((proxySession) => {
-      const session = proxySession as Session
-      if (this.guardedSessions.has(session)) {
-        this.refresh(session)
+      for (const session of this.guardedSessions.keys()) {
+        if (session === proxySession) {
+          this.refresh(session)
+        }
       }
     })
   }
