@@ -101,7 +101,7 @@ function activeScan(): AiVaultScanProgress {
   return {
     scanId: 'scan-1',
     stage: 'reading',
-    startedAt: Date.now(),
+    startedAt: 1_700_000_000_000,
     settledAt: null,
     agents: [{ agent: 'codex', files: 10, databases: 0, walking: false }],
     read: { done: 3, total: 10 }
