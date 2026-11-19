@@ -1,6 +1,7 @@
 import { computeAgentSessionPayloadFingerprint } from '../../../../../../shared/agent-session/lifecycle/operations/agent-session-mutation-envelope'
 import type { AgentSessionMutationEnvelope } from '../../../../../../shared/agent-session/agent-session-wire'
 import type {
+  StructuredAgentSessionForkSource,
   StructuredAgentSessionResumeSource,
   StructuredAgentSessionFirstMessage
 } from '../../../../../../shared/agent-session/lifecycle/operations/structured-agent-session-create'
@@ -10,7 +11,7 @@ export function structuredAgentSessionCreateIntentFingerprint(params: {
   envelope: AgentSessionMutationEnvelope
   worktree: string
   agent: string
-  forkFrom?: { sessionId: string; throughItemId: string }
+  forkFrom?: StructuredAgentSessionForkSource
   resumeFrom?: StructuredAgentSessionResumeSource
   tabId?: string
   firstMessage?: StructuredAgentSessionFirstMessage

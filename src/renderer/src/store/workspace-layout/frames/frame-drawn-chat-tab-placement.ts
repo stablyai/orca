@@ -1,5 +1,6 @@
 // Hold provisional chats in server-drawn groups until publication; send placement in server IDs so created tabs retain their intended position (L270).
 
+import { newGroupSplitOf } from '@/runtime/workspace-layout/commands/layout-owner-new-group-split'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { StructuredAgentSessionCreateParams } from '../../../../../shared/agent-session/lifecycle/operations/structured-agent-session-create'
 import { AGENT_SESSION_CREATE_TAB_PLACEMENT_RUNTIME_CAPABILITY } from '../../../../../shared/agent-session/lifecycle/operations/agent-session-create-capabilities'
@@ -105,5 +106,25 @@ export function withFrameDrawnChatTabPlacement(intent: {
         structuredAgentSessionTabId(intent.sessionId)
       ) ?? addressTabPlacement(environmentId, intent.worktreeId, intent.surfaceAddress))
     : undefined
-  return tabPlacement ? { ...intent.params, tabPlacement } : intent.params
+  const split =
+    intent.params.forkFrom?.current && tabPlacement?.groupId
+      ? newGroupSplitOf(
+          useAppStore.getState(),
+          intent.worktreeId,
+          tabPlacement.groupId,
+          structuredAgentSessionTabId(intent.sessionId)
+        )
+      : null
+  return tabPlacement
+    ? {
+        ...intent.params,
+        tabPlacement: {
+          ...tabPlacement,
+          ...split,
+          ...(intent.params.forkFrom?.current && intent.surfaceAddress?.precedingTabIds.length === 0
+            ? { index: 0 }
+            : {})
+        }
+      }
+    : intent.params
 }

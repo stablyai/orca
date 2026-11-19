@@ -2810,6 +2810,10 @@
     },
     "browserProfile": {
       "default": "Standard"
+    },
+    "currentSideChat": {
+      "open": "Neuer Nebenchat",
+      "mark": "btw"
     }
   },
   "settings": {

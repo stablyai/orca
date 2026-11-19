@@ -5,7 +5,10 @@ import type { ExecutionHostId } from '../../../../shared/execution-host/executio
 import { applyLayoutCommand } from '../../../../shared/workspace-layout/workspace-layout-commands'
 import { loadWorkspaceLayout } from '../../../../shared/workspace-layout/persistence/workspace-layout-load'
 import { nameBasedLoadContext } from '../../../../shared/workspace-layout/persistence/workspace-layout-minted-ids'
-import type { CommandOf } from '../../../../shared/workspace-layout/workspace-layout-command-types'
+import type {
+  CommandOf,
+  NewGroupSplit
+} from '../../../../shared/workspace-layout/workspace-layout-command-types'
 import type { WorkspaceLayout } from '../../../../shared/workspace-layout/workspace-layout-model'
 import { saveWorkspaceLayout } from '../../../../shared/workspace-layout/persistence/workspace-layout-save'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
@@ -16,7 +19,12 @@ import { isReopenedChatTabId } from '../../../../shared/agent-session/view/struc
 import { resolveChatTabActivation } from './agent-session-tab-identity'
 
 /** Placement in the creating client's host-owned group/tab ids. */
-export type ChatTabPlacement = { groupId?: string; afterTabId?: string }
+export type ChatTabPlacement = {
+  groupId?: string
+  afterTabId?: string
+  index?: number
+  split?: NewGroupSplit
+}
 
 /** Saved layouts and window-owned publications resolve the same captured source placement. */
 export function resolveChatTabPlacement(
@@ -49,14 +57,20 @@ export function resolveChatTabPlacement(
     ? groups.find((group) => group.tabOrder.includes(after))?.id
     : undefined
   // Prefer an existing client group, then the anchor's, then the active group; otherwise open creates one.
-  const groupId = holds(placement?.groupId)
-    ? placement?.groupId
-    : (anchorGroupId ?? (holds(activeGroupId) ? activeGroupId : undefined))
+  const groupId =
+    placement?.split || holds(placement?.groupId)
+      ? placement?.groupId
+      : (anchorGroupId ?? (holds(activeGroupId) ? activeGroupId : undefined))
   const afterTabId =
     after && groups.some((group) => group.id === groupId && group.tabOrder.includes(after))
       ? after
       : undefined
-  return { groupId, afterTabId }
+  return {
+    groupId,
+    afterTabId,
+    index: placement?.index,
+    ...(placement?.split ? { split: placement.split } : {})
+  }
 }
 
 export type ChatTabChange =
@@ -74,7 +88,7 @@ export function chatTabLayoutCommand(
   worktreeId: string,
   change: ChatTabChange
 ): ChatTabLayoutCommand | null {
-  const { groupId, afterTabId } = resolveChatTabPlacement(
+  const { groupId, afterTabId, index, split } = resolveChatTabPlacement(
     workspace?.groups ?? [],
     activeGroupId,
     'open' in change ? change.open.placement : undefined,
@@ -107,7 +121,9 @@ export function chatTabLayoutCommand(
     agent,
     tabId: openedTabId,
     ...(groupId ? { groupId } : {}),
-    ...(afterTabId ? { afterTabId } : {})
+    ...(afterTabId ? { afterTabId } : {}),
+    ...(split ? { split } : {}),
+    ...(index !== undefined && !afterTabId ? { index } : {})
   }
 }
 

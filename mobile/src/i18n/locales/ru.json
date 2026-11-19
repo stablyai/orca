@@ -2950,6 +2950,10 @@
     },
     "browserProfile": {
       "default": "По умолчанию"
+    },
+    "currentSideChat": {
+      "open": "Новый параллельный чат",
+      "mark": "btw"
     }
   },
   "settings": {

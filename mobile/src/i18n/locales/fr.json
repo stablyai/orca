@@ -2882,6 +2882,10 @@
     },
     "browserProfile": {
       "default": "Par défaut"
+    },
+    "currentSideChat": {
+      "open": "Nouveau chat parallèle",
+      "mark": "btw"
     }
   },
   "settings": {

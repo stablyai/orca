@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs'
+import { access } from 'node:fs/promises'
 import { isAbsolute, posix } from 'node:path'
 import {
   isWslUncPath,
@@ -80,10 +80,12 @@ export type HostReadableTranscriptPathDeps = {
 // Probe asynchronously: unreachable WSL 9P shares can stall the main thread.
 async function pathExistsAsync(path: string, signal?: AbortSignal): Promise<boolean> {
   signal?.throwIfAborted()
-  if (!isWslUncPath(path)) {
-    return existsSync(path)
-  }
   try {
+    if (!isWslUncPath(path)) {
+      await access(path)
+      signal?.throwIfAborted()
+      return true
+    }
     return await wslGatedAccess(path, 'exact', signal)
   } catch (error) {
     if (error instanceof WslTranscriptFsError) {

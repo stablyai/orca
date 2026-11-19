@@ -237,7 +237,10 @@ export function MobileSessionTabBar({
               ) : null}
               <Text style={styles.title} numberOfLines={1}>
                 {active && isForkedChatTab(active.tab) ? (
-                  <MobileForkMarkedName name={active.title} />
+                  <MobileForkMarkedName
+                    name={active.title}
+                    sideChat={active.tab.type === 'agent-session' && active.tab.sideChat}
+                  />
                 ) : (
                   (active?.title ?? countLabel)
                 )}

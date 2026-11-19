@@ -150,13 +150,17 @@ export function readStructuredAgentLaunchRecords(): readonly StructuredAgentLaun
   return [...records.values()]
 }
 
-/** Each worktree's live local launch slots (target group and tab) as one comparable string, read in
+/** Each worktree's live launch slots (target group and tab) as one comparable string, read in
  *  one pass, so a cached tab session can tell whether a worktree's slots changed. */
 export function structuredLaunchSlotSignatures(): Map<string, string> {
   const slotsByWorktree = new Map<string, string[]>()
   for (const record of readStructuredAgentLaunchRecords()) {
     const worktreeId = record.surfaceAddress?.worktreeId
-    if (record.executionHostId !== 'local' || record.lifecycle === 'failed' || !worktreeId) {
+    if (
+      (record.executionHostId !== 'local' && !record.forkFrom?.current) ||
+      record.lifecycle === 'failed' ||
+      !worktreeId
+    ) {
       continue
     }
     const slots = slotsByWorktree.get(worktreeId) ?? []
@@ -173,7 +177,7 @@ export function structuredLaunchSlotSignatures(): Map<string, string> {
 export function structuredLaunchSlotIds(worktreeId: string, groupId?: string): Set<string> {
   return new Set(
     readStructuredAgentLaunchRecords().flatMap((record) =>
-      record.executionHostId === 'local' &&
+      (record.executionHostId === 'local' || record.forkFrom?.current) &&
       record.lifecycle !== 'failed' &&
       record.surfaceAddress?.worktreeId === worktreeId &&
       (!groupId || record.surfaceAddress.targetGroupId === groupId)

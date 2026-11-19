@@ -3151,6 +3151,10 @@
       "default": "Default",
       "workspaceDefault": "Workspace default"
     },
+    "currentSideChat": {
+      "open": "New side chat",
+      "mark": "btw"
+    },
     "orcaCommands": {
       "desktopOnly": "Available in the desktop app"
     }

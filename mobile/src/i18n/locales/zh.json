@@ -3346,6 +3346,10 @@
     "browserProfile": {
       "title": "配置文件",
       "default": "默认"
+    },
+    "currentSideChat": {
+      "open": "新建侧聊",
+      "mark": "btw"
     }
   },
   "settings": {

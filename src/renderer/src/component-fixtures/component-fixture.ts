@@ -5,8 +5,8 @@ export type ComponentFixture = {
   render: () => ReactNode
   /** Merged into the default-seeded app store before the first render. */
   store?: Partial<AppState>
-  /** Runs after the store and `window.api` bridge exist, before render (e.g. stub an api call). */
-  setup?: () => void
+  /** Runs before render; return cleanup to restore temporary bridge overrides on unmount. */
+  setup?: () => unknown
   /** Runs after first paint, e.g. click a trigger so an open popover is captured. */
   interact?: (frame: HTMLElement) => void | Promise<void>
   /** Frame width in CSS pixels; height always hugs the content. */

@@ -2809,6 +2809,10 @@
     "browserProfile": {
       "title": "プロファイル",
       "default": "デフォルト"
+    },
+    "currentSideChat": {
+      "open": "新しいサイドチャット",
+      "mark": "btw"
     }
   },
   "settings": {

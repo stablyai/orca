@@ -125,9 +125,21 @@ export function renderTabBarSurface(
       segments
     })
 
+  const sideChatOnly = itemProjection.sideChatOnly && clientHostedBrowserRows.length === 0
   const hasTabs = orderedItems.length + clientHostedBrowserRows.length > 0
   return (
-    <div ref={surfaceRef} className="flex items-stretch h-full overflow-hidden flex-1 min-w-0">
+    <div
+      ref={surfaceRef}
+      data-side-chat-only={sideChatOnly || undefined}
+      className="group/side-chat-pane flex items-stretch h-full overflow-hidden flex-1 min-w-0"
+    >
+      {sideChatOnly ? (
+        <span className="flex shrink-0 items-center border-r border-border/70 px-1.5">
+          <span className="rounded-sm border border-border bg-muted px-1 text-3xs font-medium text-muted-foreground">
+            {t('components.native-chat.currentSideChat.mark', 'btw')}
+          </span>
+        </span>
+      ) : null}
       {tabStripOverflowState.hasOverflow ? (
         <Tooltip>
           <TooltipTrigger asChild>

@@ -21275,7 +21275,9 @@
         "retryChats": "Retry",
         "permissionAppliesNextMessage": "{{saved}} applies to your next message; running {{active}}",
         "modelAndEffortValue": "{{model}} · {{effort}}",
-        "modelAndEffort": "Model and effort"
+        "modelAndEffort": "Model and effort",
+        "permissionReadOnly": "Read-only",
+        "permissionReadOnlyDescription": "Uses the agent’s read-only sandbox without approval escalation"
       },
       "tool": {
         "exitCode": "exit {{value0}}",
@@ -21504,8 +21506,6 @@
       "scrollMessageToTop": "Scroll this message to top",
       "loadingEarlier": "Loading…",
       "loadEarlier": "Load earlier messages",
-      "loadEarlierFailed": "Couldn't load earlier messages.",
-      "loadEarlierRetry": "Retry",
       "loadingEarlierMessages": "Loading earlier messages…",
       "railLabel": "Your messages",
       "railImageMessage": "Image attachment",
@@ -22489,6 +22489,13 @@
         "fromVia": "From {{name}} via {{computer}}",
         "fromViaPhone": "From {{name}}, typed on {{phone}} via {{computer}}"
       },
+      "currentSideChat": {
+        "open": "New side chat",
+        "pane": "Group side chats in a separate pane",
+        "mark": "btw"
+      },
+      "loadEarlierFailed": "Couldn't load earlier messages.",
+      "loadEarlierRetry": "Retry",
       "eventRow": {
         "showLess": "Show less",
         "showMore": "Show more"

@@ -2808,6 +2808,10 @@
     },
     "browserProfile": {
       "default": "기본"
+    },
+    "currentSideChat": {
+      "open": "새 사이드 채팅",
+      "mark": "btw"
     }
   },
   "settings": {

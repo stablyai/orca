@@ -2803,6 +2803,10 @@
     },
     "browserProfile": {
       "default": "預設"
+    },
+    "currentSideChat": {
+      "open": "新增側聊",
+      "mark": "btw"
     }
   },
   "settings": {

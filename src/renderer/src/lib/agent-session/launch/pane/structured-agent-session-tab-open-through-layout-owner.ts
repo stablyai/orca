@@ -17,6 +17,7 @@ export type AgentSessionTabOpen = {
   agent: TuiAgent
   targetGroupId?: string
   afterTabId?: string
+  index?: number
   activate: boolean
   /** Today's draw, for a twin main may route to a paired server. */
   drawHere: () => Tab
@@ -49,7 +50,14 @@ export function openAgentSessionTabThroughLayoutOwner(
   const sent = openContentTabThroughLayoutOwner(state, {
     worktreeId,
     entityId: sessionId,
-    command: { type: 'openAgentSessionTab', tabId, sessionId, agent: open.agent, ...placement },
+    command: {
+      type: 'openAgentSessionTab',
+      tabId,
+      sessionId,
+      agent: open.agent,
+      ...placement,
+      ...(open.index !== undefined ? { index: open.index } : {})
+    },
     facts: { label },
     shown: (shownId) => {
       if (!open.activate) {

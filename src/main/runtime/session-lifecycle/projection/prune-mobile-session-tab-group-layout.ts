@@ -1,3 +1,4 @@
+import { structuredConversationIsSideChat } from '../../session-tabs/chat/structured-conversation-side-chat'
 import { rendererStatusReplica } from '../../session-graph/renderer-status-replica'
 import { selectFreshAgentRowForMobileTab } from '../../workspaces/process-listing/runtime-hook-agent-row-selection'
 import { OrcaRuntimeWithSavedConversationTitlePublication } from '../../session-tabs/chat/saved-conversation-title-publication'
@@ -85,7 +86,8 @@ export abstract class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends Or
     snapshot = titleStructuredConversationTabs(
       snapshot,
       (sessionId) => this.structuredConversationTabName(snapshot.worktree, sessionId),
-      structuredConversationForked
+      structuredConversationForked,
+      structuredConversationIsSideChat
     )
     return projectRuntimeMobileSessionTabs(snapshot, this.getMobileSessionProjectionHost())
   }

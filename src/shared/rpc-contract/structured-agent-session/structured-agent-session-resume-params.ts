@@ -16,9 +16,16 @@ export const ResumeSource = z
   .strict()
 
 /** Native-history fork: the host resolves the provider cut from the source chat's own transcript. */
-export const ForkSource = z
-  .object({ sessionId: SessionId, throughItemId: Identifier('Invalid fork item id') })
-  .strict()
+export const ForkSource = z.union([
+  z.object({ sessionId: SessionId, throughItemId: Identifier('Invalid fork item id') }).strict(),
+  z
+    .object({
+      sessionId: SessionId,
+      current: z.literal(true),
+      permission: z.literal('inherit')
+    })
+    .strict()
+])
 
 /** A chat starts fresh, resumes a provider conversation, or forks a native chat. */
 export const SOURCE_FIELDS = {

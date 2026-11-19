@@ -29,7 +29,11 @@ export function resolveStructuredChatTabName(
   return {
     owner,
     sessionId: tab.entityId,
-    savedName: tab.customLabel?.trim() || (isAgentSessionConversationName(name) ? name : null)
+    savedName: tab.customLabel?.trim() || (isAgentSessionConversationName(name) ? name : null),
+    ...(target &&
+    getStructuredAgentSessionStatusFeed(target).getNamingSnapshot().get(tab.entityId)?.sideChat
+      ? { sideChat: true as const }
+      : {})
   }
 }
 
@@ -37,6 +41,7 @@ export type StructuredChatTabName = Readonly<{
   owner: ExecutionHostId | null
   sessionId: string
   savedName: string | null
+  sideChat?: true
 }>
 export type StructuredChatTabNames = ReadonlyMap<Tab, StructuredChatTabName>
 

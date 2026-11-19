@@ -36,6 +36,7 @@ const registeredAgentSchema = z.object({
     contextUsage: capabilityFlag,
     imagePrompts: capabilityFlag,
     // An unknown fork level reads as absent: the host never forks for this client.
+    currentFork: z.literal(true).optional().catch(undefined),
     fork: z.enum(['checkpoint', 'tip']).optional().catch(undefined),
     // Holding a follow-up until the turn ends never interrupts one the client cannot reason about.
     steering: openEnum(['inject', 'queue'] as const, 'queue')

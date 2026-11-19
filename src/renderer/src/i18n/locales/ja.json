@@ -19844,7 +19844,9 @@
         "sessionAttachmentsStarting": "{{agent}} のチャットを起動中です。開くまで待ってから、ファイルを再度添付してください。",
         "sessionAttachmentsFailed": "{{agent}} チャットを開けませんでした。チャットで [再試行] を使用して、ファイルを再度添付してください。",
         "moreControls": "その他のチャット操作",
-        "exitPlanMode": "プランモードを終了"
+        "exitPlanMode": "プランモードを終了",
+        "permissionReadOnly": "読み取り専用",
+        "permissionReadOnlyDescription": "権限昇格を許可せず Agent の読み取り専用サンドボックスを使用"
       },
       "tool": {
         "result": "結果",
@@ -20640,6 +20642,11 @@
         "questionNotSentDetail": "質問はこのチャットに残っています。再試行するには、もう一度 /btw を送信してください。",
         "questionUnconfirmed": "{{agent}} のサイドチャットに質問が届いたか確認できませんでした",
         "questionUnconfirmedDetail": "もう一度質問する前に、サイドチャットを確認してください。質問はこのチャットに残っています。"
+      },
+      "currentSideChat": {
+        "open": "新しいサイドチャット",
+        "pane": "サイドチャットを専用ペインにまとめる",
+        "mark": "btw"
       }
     },
     "tab": {

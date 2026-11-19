@@ -124,6 +124,9 @@ export function loadHostStructuredAgents(
     runtimeId === null ? {} : { expectedEnvironmentRuntimeId: runtimeId }
   )
     .then((result) => {
+      if (inflight.get(key) !== read) {
+        return
+      }
       const agents = decodeAgentSessionAgentsResult(result)
       if (!agents) {
         throw new Error('Invalid registered-agent response')
@@ -133,12 +136,17 @@ export function loadHostStructuredAgents(
       publish()
     })
     .catch((error: unknown) => {
+      if (inflight.get(key) !== read) {
+        return
+      }
       console.warn('[native-chat] could not read the host structured agents', error)
       failed.add(key)
       publish()
     })
     .finally(() => {
-      inflight.delete(key)
+      if (inflight.get(key) === read) {
+        inflight.delete(key)
+      }
     })
   inflight.set(key, read)
   return read

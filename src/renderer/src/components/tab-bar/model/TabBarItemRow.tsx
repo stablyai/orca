@@ -193,6 +193,7 @@ function TabBarItemRow({
         // A tab the user named does not show the generated name, so neither does its failure.
         namingFailure={item.data.customLabel ? null : namingFailure}
         fork={fork}
+        sideChat={chatNaming.sideChat}
         closable={!isBotChat}
         canContinueInTerminal={bot === null}
         identityIcon={

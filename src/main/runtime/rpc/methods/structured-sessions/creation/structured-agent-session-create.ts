@@ -23,6 +23,7 @@ import {
 import type { StructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/host/structured-agent-session-host'
 import type { StructuredAgentSessionCaller } from '../../../../../native-chat/agent-session-wire/host/structured-agent-session-host-types'
 import type {
+  StructuredAgentSessionForkSource,
   StructuredAgentSessionResumeSource,
   StructuredAgentSessionFirstMessage
 } from '../../../../../../shared/agent-session/lifecycle/operations/structured-agent-session-create'
@@ -63,7 +64,7 @@ export async function prepareStructuredAgentSessionCreateForWorktree(args: {
   worktree: string
   agent: StructuredAgentId
   caller: StructuredAgentSessionCaller
-  forkFrom?: { sessionId: string; throughItemId: string }
+  forkFrom?: StructuredAgentSessionForkSource
   resumeFrom?: StructuredAgentSessionResumeSource
   structuredAgentCliSourceEvidence?: StructuredAgentCliSourceEvidence
   /** Explicit picks override seed keys at rest; acquired in-process launches replace the seed. */

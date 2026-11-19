@@ -82,7 +82,10 @@ function resetStructuredLaunchCallers(
   state: StructuredLaunchState,
   retainedOpening: boolean
 ): void {
-  const requestId = retainedOpening ? state.callers.attempt.requestId : undefined
+  const requestId =
+    retainedOpening || state.intent.params.forkFrom?.current
+      ? state.callers.attempt.requestId
+      : undefined
   state.callers = createStructuredLaunchCallerGroup({ kind: 'retry', requestId })
   state.callers.onSettled = () => maybeCleanupLaunchState(state)
 }

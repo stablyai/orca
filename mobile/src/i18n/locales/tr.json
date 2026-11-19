@@ -2810,6 +2810,10 @@
     },
     "browserProfile": {
       "default": "Varsayılan"
+    },
+    "currentSideChat": {
+      "open": "Yeni yan sohbet",
+      "mark": "btw"
     }
   },
   "settings": {

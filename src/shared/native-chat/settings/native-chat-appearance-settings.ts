@@ -22,6 +22,7 @@ export type NativeChatGlobalSettings = {
   agentDefaultSurface?: AgentDefaultSurface
   nativeChatAppearance?: NativeChatAppearanceSettings
   /** Off keeps chats unnamed without running a naming agent. Absent means on. */
+  nativeChatSideChatPane?: boolean
   nativeChatAutoName?: boolean
   /** Explicit per-agent overrides of the default surface. */
   nativeChatProviders?: NativeChatProviderChoices

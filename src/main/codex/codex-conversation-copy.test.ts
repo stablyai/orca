@@ -16,7 +16,12 @@ import type { CodexAppServerRpc } from './app-server/codex-app-server-session'
 const state = vi.hoisted(() => {
   const session: {
     run?: (body: (rpc: CodexAppServerRpc) => Promise<unknown>) => Promise<unknown>
-    transport?: 'native' | 'unsupported-read'
+    transport?:
+      | 'native'
+      | 'unsupported-read'
+      | 'unsupported-fork'
+      | 'unsupported-goal'
+      | 'disabled-goal'
   } = {}
   return {
     home: '',
@@ -58,7 +63,13 @@ vi.mock('./app-server/codex-app-server-session', async (importOriginal) => {
             if (message.method === 'initialize') {
               experimental = message.params.capabilities?.experimentalApi === true
             }
-            const error = message.method === 'thread/read' && process.argv[1] === 'unsupported-read'
+            const error = message.method === 'thread/fork' && process.argv[1] === 'unsupported-fork'
+              ? { code: -32601, message: 'thread/fork is not supported yet' }
+              : message.method === 'thread/goal/clear' && process.argv[1] === 'unsupported-goal'
+                ? { code: -32601, message: 'thread/goal/clear is not supported yet' }
+                : message.method === 'thread/goal/clear' && process.argv[1] === 'disabled-goal'
+                  ? { code: -32600, message: 'goals feature is disabled' }
+                  : message.method === 'thread/read' && process.argv[1] === 'unsupported-read'
               ? { code: -32601, message: 'thread/read is not supported yet' }
               : message.method === 'thread/turns/list' && !experimental
                 ? { code: -32600, message: 'thread/turns/list requires experimentalApi capability' }
@@ -113,7 +124,14 @@ function copy(
   selected = `${SOURCE}:a1`,
   settled = true,
   turnId?: string,
-  options: { signal?: AbortSignal; selectedItemId?: string; model?: string } = {}
+  options: {
+    signal?: AbortSignal
+    selectedItemId?: string
+    model?: string
+    current?: true
+    copiedSessionId?: string
+    onCopyConfirmed?: (sessionId: string) => Promise<void>
+  } = {}
 ) {
   return copyCodexConversation(
     {
@@ -133,8 +151,11 @@ function copy(
       },
       providerSessionId: SOURCE,
       signal: options.signal,
+      copiedSessionId: options.copiedSessionId,
+      onCopyConfirmed: options.onCopyConfirmed,
       title: 'Source fork',
       accountHome: { variable: 'CODEX_HOME', path: root },
+      ...(options.current ? { current: true as const } : {}),
       checkpoint: {
         selectedItemId:
           options.selectedItemId ??
@@ -251,3 +272,127 @@ it.each([
     expect(fork?.modelProvider).toBe(provider)
   }
 )
+
+it.each(['native', 'unsupported-goal', 'disabled-goal'] as const)(
+  'copies the current running conversation through the %s transport',
+  async (transport) => {
+    state.session.transport = transport
+    state.paths.set('current-child', join(root, 'sessions', 'current-child.jsonl'))
+    state.request.mockImplementation(async (method, params) => {
+      if (method === 'thread/read') {
+        return { thread: { id: SOURCE, historyMode: 'paginated', model: 'active-model' } }
+      }
+      if (method === 'thread/fork') {
+        expect(params).toEqual({
+          threadId: SOURCE,
+          excludeTurns: true,
+          cwd: root,
+          model: 'active-model'
+        })
+        return { thread: { id: 'current-child' } }
+      }
+      if (method === 'thread/goal/clear') {
+        expect(params).toEqual({ threadId: 'current-child', origin: 'user' })
+        return {}
+      }
+      throw new Error('A current-context fork must not choose a completed turn')
+    })
+    expect(await copy(undefined, false, 'running-turn', { current: true })).toEqual({
+      sessionId: 'current-child',
+      filePath: join(root, 'sessions', 'current-child.jsonl')
+    })
+    if (transport === 'native') {
+      expect(state.request).toHaveBeenCalledWith('thread/goal/clear', {
+        threadId: 'current-child',
+        origin: 'user'
+      })
+    }
+  }
+)
+
+it.each(['unsupported-read', 'unsupported-fork'] as const)(
+  'definitively refuses a current copy when %s is missing from the real transport',
+  async (transport) => {
+    state.session.transport = transport
+    state.request.mockResolvedValue({ thread: { id: SOURCE } })
+    await expect(copy(undefined, false, undefined, { current: true })).rejects.toMatchObject({
+      refusal: {
+        code: 'structured_agent_session_unsupported',
+        createAttemptRefusedBeforeCommit: true
+      }
+    })
+  }
+)
+
+it.each(['missing-rollout', 'clear-failed', 'archive-unconfirmed'])(
+  'keeps the confirmed child recoverable after %s',
+  async (failure) => {
+    state.request.mockImplementation(async (method) => {
+      if (method === 'thread/read') {
+        return { thread: { id: SOURCE } }
+      }
+      if (method === 'thread/fork') {
+        return { thread: { id: CHILD } }
+      }
+      if (method === 'thread/goal/clear' && failure !== 'missing-rollout') {
+        throw new Error('clear failed')
+      }
+      if (method === 'thread/archive' && failure === 'archive-unconfirmed') {
+        throw new Error('archive reply lost')
+      }
+      return {}
+    })
+    await expect(copy(undefined, false, undefined, { current: true })).rejects.toThrow(CHILD)
+    expect(state.request).toHaveBeenCalledWith(
+      'thread/archive',
+      { threadId: CHILD },
+      { timeoutMs: 5000 }
+    )
+    expect(state.request.mock.calls.filter(([method]) => method === 'thread/fork')).toEqual([
+      ['thread/fork', { threadId: SOURCE, excludeTurns: true, cwd: root }]
+    ])
+  }
+)
+
+it('reopens a receipt-confirmed copy without reading or forking the source again', async () => {
+  state.paths.set(CHILD, join(root, 'sessions', 'child.jsonl'))
+  state.request.mockImplementation(async (method, params) => {
+    if (method !== 'thread/goal/clear') {
+      throw new Error('must not create another snapshot')
+    }
+    expect(params).toEqual({ threadId: CHILD, origin: 'user' })
+    return {}
+  })
+  await expect(
+    copy(undefined, false, undefined, { current: true, copiedSessionId: CHILD })
+  ).resolves.toEqual({
+    sessionId: CHILD,
+    filePath: join(root, 'sessions', 'child.jsonl')
+  })
+  expect(state.request).toHaveBeenCalledWith('thread/goal/clear', {
+    threadId: CHILD,
+    origin: 'user'
+  })
+})
+
+it('confirms the native child before optional copy preparation can fail', async () => {
+  const confirmed: string[] = []
+  state.request.mockImplementation(async (method) => {
+    if (method === 'thread/read') {
+      return { thread: { id: SOURCE } }
+    }
+    if (method === 'thread/fork') {
+      return { thread: { id: CHILD } }
+    }
+    throw new Error('goal clear failed')
+  })
+  await expect(
+    copy(undefined, false, undefined, {
+      current: true,
+      onCopyConfirmed: async (sessionId) => {
+        confirmed.push(sessionId)
+      }
+    })
+  ).rejects.toThrow('Retry will reopen this saved copy.')
+  expect(confirmed).toEqual([CHILD])
+})

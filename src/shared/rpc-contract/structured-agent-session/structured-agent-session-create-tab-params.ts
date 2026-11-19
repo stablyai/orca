@@ -1,3 +1,4 @@
+import { NewGroupSplit } from '../workspace-layout/workspace-layout-terminal-tab-params'
 import * as z from 'zod'
 import { isAgentSessionSurfaceTabId } from '../../agent-session/view/agent-session-surface-tab-id'
 import { Identifier } from './structured-agent-session-identifiers'
@@ -10,7 +11,9 @@ export const CREATE_TAB_FIELDS = {
   tabPlacement: z
     .object({
       groupId: Identifier('Invalid group id').optional(),
-      afterTabId: Identifier('Invalid tab id').optional()
+      afterTabId: Identifier('Invalid tab id').optional(),
+      index: z.number().int().nonnegative().optional(),
+      split: NewGroupSplit.optional()
     })
     .strict()
     .optional()
