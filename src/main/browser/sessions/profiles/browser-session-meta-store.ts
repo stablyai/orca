@@ -27,7 +27,8 @@ export type BrowserSessionMeta = {
 
 export const BROWSER_SESSION_META_FILE_NAME = 'browser-session-meta.json'
 
-function parseEnabledExtensionIds(value: unknown): Record<string, string[]> {
+// Shared by the extension id lists and the site lists: both are profile id -> string[].
+function parseIdListsByProfileId(value: unknown): Record<string, string[]> {
   const result: Record<string, string[]> = {}
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return result
@@ -42,7 +43,7 @@ function parseEnabledExtensionIds(value: unknown): Record<string, string[]> {
 
 function parseAllowedHosts(value: unknown): Record<string, string[]> {
   const result: Record<string, string[]> = {}
-  for (const [profileId, entries] of Object.entries(parseEnabledExtensionIds(value))) {
+  for (const [profileId, entries] of Object.entries(parseIdListsByProfileId(value))) {
     const valid = new Set<string>()
     for (const entry of entries) {
       const normalized = normalizeBrowserSiteListEntry(entry)
@@ -117,8 +118,8 @@ function parseBrowserSessionMeta(data: unknown, defaultPartition: string): Brows
     pendingCookieDbPath: legacyPendingCookieDbPath,
     pendingCookieImports,
     profiles: Array.isArray(record.profiles) ? record.profiles : [],
-    enabledExtensionIdsByProfileId: parseEnabledExtensionIds(record.enabledExtensionIdsByProfileId),
-    pinnedExtensionIdsByProfileId: parseEnabledExtensionIds(record.pinnedExtensionIdsByProfileId),
+    enabledExtensionIdsByProfileId: parseIdListsByProfileId(record.enabledExtensionIdsByProfileId),
+    pinnedExtensionIdsByProfileId: parseIdListsByProfileId(record.pinnedExtensionIdsByProfileId),
     allowedHostsByProfileId: parseAllowedHosts(record.allowedHostsByProfileId)
   }
 }
