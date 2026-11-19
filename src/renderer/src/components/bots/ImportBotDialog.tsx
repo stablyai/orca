@@ -153,6 +153,7 @@ export function ImportBotDialog({
         name: trimmedName,
         ...agentSetup.setup,
         avatar: picture.avatar,
+        avatarColor: picture.avatarColor,
         importFrom
       })
       const bot = await picture.saveUpload(made)

@@ -183,6 +183,7 @@ export function NewBotDialog({
           : { name: trimmedName }),
         ...agentSetup.setup,
         avatar: picture.avatar,
+        avatarColor: picture.avatarColor,
         ...(takingOver ? { takingOver } : {})
       })
       bot = await picture.saveUpload(bot)
@@ -273,6 +274,8 @@ export function NewBotDialog({
               custom={picture.custom}
               onChange={picture.onChange}
               onUpload={picture.onUpload}
+              color={picture.color}
+              onColorChange={picture.onColorChange}
               uploadLink
             />
             <div className="space-y-1">

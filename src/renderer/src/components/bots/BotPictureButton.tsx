@@ -57,6 +57,8 @@ export function BotPictureButton({
             onChange={picture.pick}
             onUpload={picture.upload}
             onUndo={picture.undo}
+            color={picture.color}
+            onColorChange={picture.pickColor}
           />
           {bot.slack ? (
             <p className="text-center text-xs text-muted-foreground">

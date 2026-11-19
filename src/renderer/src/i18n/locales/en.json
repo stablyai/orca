@@ -26861,6 +26861,8 @@
       "nextPicture": "Next picture",
       "pictureMascot": "Mascot {{n}} of {{total}}",
       "pictureUpload": "Your image",
+      "pictureColor": "Background color",
+      "pictureColorCustom": "Custom color",
       "runsOn": "Runs on <host/> with <agent/>",
       "runsOnAs": "Runs on <host/>, as <account/>, with <agent/>",
       "change": "Change",

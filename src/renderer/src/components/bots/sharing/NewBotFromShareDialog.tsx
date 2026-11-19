@@ -183,7 +183,7 @@ export function NewBotFromShareDialog({
         name: trimmedName,
         ...setup,
         ...(permission === 'chats' ? {} : { permissionMode: permission }),
-        ...(keepsShared ? {} : { avatar: picture.avatar }),
+        ...(keepsShared ? {} : { avatar: picture.avatar, avatarColor: picture.avatarColor }),
         fromShare: { reviewId, toolIds }
       })
       bot = keepsShared ? bot : await picture.saveUpload(bot)
@@ -231,6 +231,8 @@ export function NewBotFromShareDialog({
             custom={picture.custom}
             onChange={picture.onChange}
             onUpload={picture.onUpload}
+            color={picture.color}
+            onColorChange={picture.onColorChange}
           />
           <div>
             <Label htmlFor={nameId} className="sr-only">

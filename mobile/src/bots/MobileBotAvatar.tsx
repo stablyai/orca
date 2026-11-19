@@ -4,6 +4,7 @@ import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { colors } from '../theme/mobile-theme'
 import type { MobileBotAvatarSource } from './host-bot-row-facts'
 import { mobileBotMascotAsset } from './mobile-bot-mascot-assets'
+import { DEFAULT_BOT_AVATAR_COLOR } from '../../../src/shared/bots/bot-avatar-color'
 
 /** The bot's picture as the desktop sidebar draws it: a mascot, its upload, or its emoji or initial. */
 export function MobileBotAvatar({
@@ -27,7 +28,14 @@ export function MobileBotAvatar({
   return (
     <Image
       source={avatar.kind === 'mascot' ? mobileBotMascotAsset(avatar.id) : { uri: avatar.uri }}
-      style={[styles.tile, frame]}
+      style={[
+        styles.tile,
+        frame,
+        // The mascot pictures are transparent; their tile color goes behind.
+        avatar.kind === 'mascot' && {
+          backgroundColor: avatar.color ?? DEFAULT_BOT_AVATAR_COLOR
+        }
+      ]}
       accessibilityIgnoresInvertColors
     />
   )
