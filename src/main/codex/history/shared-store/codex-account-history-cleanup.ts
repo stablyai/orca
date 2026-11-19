@@ -31,9 +31,7 @@ import {
 } from './codex-account-left-behind-paths'
 
 // Bounds one run's hashing and open-file check; the rest go on later runs.
-const MAX_HASHED_PER_RUN = 500
-const ROLLOUT_BATCH = 100
-const MAX_ROLLOUT_BATCHES_PER_RUN = 40
+const MAX_ROLLOUTS_PER_RUN = 500
 export type CodexHistoryCleanupResult = { deletedFiles: number; freedBytes: number }
 
 /**
@@ -75,106 +73,77 @@ export async function cleanUpCodexHistoryLeftBehind(args: {
       : null
   }
 
-  // Each proof is the file itself and its store copy, so no pass can void it meanwhile. Batches
-  // keep a stopped run's deletes, and its open-file check small; the check comes before any hash,
-  // so one that can't tell costs no hashing.
-  const candidates: { path: string; sha256: string; facts: FileFacts }[] = []
-  for (const rollout of manifest.rollouts) {
-    const check = rollout.check
-    if (
-      check?.sameContent &&
-      rollout.storePath === check.store.path &&
+  // Each proof is the file itself and its store copy, so no pass can void it meanwhile. One
+  // open-file check per run covers both the rollouts and the databases, and comes before any hash,
+  // so one that can't tell costs no hashing. A random start keeps copies left open from holding
+  // back the rest run after run.
+  const proven = manifest.rollouts.filter(
+    (rollout) =>
+      rollout.check?.sameContent &&
+      rollout.storePath === rollout.check.store.path &&
       isLeftBehindPath(rollout.path, 'rollout')
-    ) {
-      candidates.push({ path: rollout.path, sha256: check.sha256, facts: rollout })
-    }
-  }
-  let openCheckFailed = false
-  let hashed = 0
-  // Copies left open don't use up the hashing budget, so they can't hold back the ones after them.
-  for (
-    let start = 0;
-    start < candidates.length && start < MAX_ROLLOUT_BATCHES_PER_RUN * ROLLOUT_BATCH;
-    start += ROLLOUT_BATCH
-  ) {
-    if (args.shouldStop() || openCheckFailed || hashed >= MAX_HASHED_PER_RUN) {
+  )
+  const offset = Math.floor(Math.random() * proven.length)
+  const ready: { path: string; stats: BigIntStats; facts: FileFacts; sha256: string }[] = []
+  for (const rollout of [...proven.slice(offset), ...proven.slice(0, offset)]) {
+    if (args.shouldStop() || ready.length >= MAX_ROLLOUTS_PER_RUN) {
       break
     }
-    const ready: { path: string; stats: BigIntStats; facts: FileFacts; sha256: string }[] = []
-    for (const candidate of candidates.slice(start, start + ROLLOUT_BATCH)) {
-      try {
-        const file = await currentFile(candidate.path)
-        const rollout = manifest.rollouts.find((entry) => entry.path === candidate.path)
-        if (
-          file &&
-          rollout?.check &&
-          sameFacts(candidate.facts, file.facts) &&
-          sameFacts(
-            rollout.check.store,
-            await storeFileFacts(args.storeHome, rollout.check.store.path)
-          )
-        ) {
-          ready.push({ ...candidate, stats: file.stats, facts: file.facts })
-        }
-      } catch {
-        // Left for a later run: the manifest still lists it.
+    try {
+      const check = rollout.check!
+      const file = await currentFile(rollout.path)
+      if (
+        file &&
+        sameFacts(rollout, file.facts) &&
+        sameFacts(check.store, await storeFileFacts(args.storeHome, check.store.path))
+      ) {
+        ready.push({
+          path: rollout.path,
+          stats: file.stats,
+          facts: file.facts,
+          sha256: check.sha256
+        })
       }
+    } catch {
+      // Left for a later run: the manifest still lists it.
     }
-    if (ready.length === 0) {
+  }
+  // Asked before taking the lock, which a starting pass waits only seconds for. A Codex still
+  // holding one open would lose its later writes.
+  const readyDatabases = hasProvenShared(manifest, args.now)
+    ? await databasesReadyToDelete(manifest.databases)
+    : []
+  const targets = [...ready, ...readyDatabases].map((file) => fromManifestPath(home, file.path))
+  const open =
+    targets.length === 0 || args.shouldStop()
+      ? null
+      : await openFilesOnce(home, targets, args.shouldStop)
+  for (const rollout of open ? ready : []) {
+    if (args.shouldStop()) {
+      break
+    }
+    if (open!.has(fromManifestPath(home, rollout.path))) {
       continue
     }
-    const open = await openFilesOnce(
-      home,
-      ready.map((rollout) => fromManifestPath(home, rollout.path)),
-      args.shouldStop
-    )
-    if (!open) {
-      openCheckFailed = true
-      break
-    }
-    for (const rollout of ready) {
-      if (args.shouldStop()) {
-        break
-      }
-      if (open.has(fromManifestPath(home, rollout.path))) {
+    try {
+      // Size and a millisecond mtime can miss a same-size rewrite of the copy being deleted.
+      if ((await contentSha256(fromManifestPath(home, rollout.path))) !== rollout.sha256) {
+        voided.add(rollout.path)
         continue
       }
-      try {
-        hashed += 1
-        // Size and a millisecond mtime can miss a same-size rewrite of the copy being deleted.
-        if ((await contentSha256(fromManifestPath(home, rollout.path))) !== rollout.sha256) {
-          voided.add(rollout.path)
-          continue
-        }
-        // Unchanged since the check: a writer that appended and closed meanwhile shows here.
-        const now = await currentFile(rollout.path)
-        if (now && sameFacts(rollout.facts, now.facts)) {
-          await remove(rollout.path, rollout.stats).catch((error: unknown) => {
-            if (!isTransientDeleteError(error)) {
-              voided.add(rollout.path)
-            }
-          })
-        }
-      } catch {
-        // Left for a later run.
+      // Unchanged since the check: a writer that appended and closed meanwhile shows here.
+      const now = await currentFile(rollout.path)
+      if (now && sameFacts(rollout.facts, now.facts)) {
+        await remove(rollout.path, rollout.stats).catch((error: unknown) => {
+          if (!isTransientDeleteError(error)) {
+            voided.add(rollout.path)
+          }
+        })
       }
+    } catch {
+      // Left for a later run.
     }
   }
-
-  // Asked once, only for files otherwise ready to go, and before taking the lock, which a starting
-  // pass waits only seconds for. A Codex still holding one open would lose its later writes.
-  const readyDatabases =
-    hasProvenShared(manifest, args.now) && !openCheckFailed
-      ? await databasesReadyToDelete(manifest.databases)
-      : []
-  const open =
-    readyDatabases.length === 0 || args.shouldStop()
-      ? null
-      : await openFilesOnce(
-          home,
-          readyDatabases.map((database) => fromManifestPath(home, database.path)),
-          args.shouldStop
-        )
   // The databases' proof is the sharing streak, so they go under the manifest's lock, which every
   // pass that changes the streak (or unshares and moves the databases aside) takes too.
   await updateManifest(home, async (current) => {
