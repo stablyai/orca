@@ -5761,7 +5761,7 @@
           "updateAction_other": "Обновить {{count}} навыка"
         },
         "SkillUpdateRow": {
-          "replaceWithOrca": "Заменить копией из Orca (с резервной копией)"
+          "replaceWithOrca": "Заменить копией из этой версии Orca (с резервной копией)"
         },
         "SkillFreshnessStatusPill": {
           "updateAvailable": "Доступно обновление",
