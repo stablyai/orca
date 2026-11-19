@@ -3,7 +3,7 @@ import { splitWorktreeIdForFilesystem } from '../../shared/worktree/id'
 import type { SessionMemory } from '../../shared/diagnostics/process-stats-types'
 import type { Store } from '../persistence/loading-store/store'
 import { parseWorkspaceKey } from '../../shared/workspace/identity/workspace-scope'
-import { folderWorkspaceToWorktree } from '../../shared/folder-workspaces/folder-workspace-worktree'
+import { folderWorkspaceRepoId } from '../../shared/folder-workspaces/folder-workspace-worktree'
 
 export type MemorySnapshotStore = Pick<Store, 'getRepo' | 'getWorktreeMeta'> &
   Partial<Pick<Store, 'getFolderWorkspace'>> & {
@@ -79,13 +79,13 @@ export function resolveWorktreeMemoryNames(
   const folder =
     scope?.type === 'folder' ? store.getFolderWorkspace!(scope.folderWorkspaceId) : null
   if (folder) {
-    const worktree = folderWorkspaceToWorktree(folder)
+    // Why: names only; building the full worktree record would normalize every attachment per sample.
     // SAFETY: Missing optional capabilities keep the original direct-call failure.
     const group = store.getProjectGroups!().find((item) => item.id === folder.projectGroupId)
     return {
-      worktreeName: worktree.displayName,
-      repoId: worktree.repoId,
-      repoName: group?.name?.trim() || worktree.displayName
+      worktreeName: folder.name,
+      repoId: folderWorkspaceRepoId(folder.projectGroupId),
+      repoName: group?.name?.trim() || folder.name
     }
   }
   const parsed = splitWorktreeIdForFilesystem(worktreeId)
