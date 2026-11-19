@@ -2,7 +2,11 @@ import { BrowserWindow, ipcMain } from 'electron'
 import type { MemorySnapshot } from '../../shared/diagnostics/process-stats-types'
 import type { Store } from '../persistence/loading-store/store'
 import { collectMemorySnapshot } from '../memory/collector'
-import { countHiddenBrowserPages, readPerfNoticeSignals } from '../perf-notices/perf-notice-signals'
+import {
+  countHiddenBrowserPages,
+  readAvailableMemoryFraction,
+  readPerfNoticeSignals
+} from '../perf-notices/perf-notice-signals'
 
 import {
   assertResourceViewVisible,
@@ -24,6 +28,7 @@ export function registerMemoryHandlers(store: Store): void {
   ipcMain.handle('memory:countHiddenBrowserPages', (_event, hiddenForMs: unknown) =>
     countHiddenBrowserPages(typeof hiddenForMs === 'number' ? hiddenForMs : 0)
   )
+  ipcMain.handle('memory:readAvailableMemoryFraction', () => readAvailableMemoryFraction())
   ipcMain.handle('memory:resourceWindowVisible', (event) =>
     isResourceWindowVisible(BrowserWindow.fromWebContents(event.sender))
   )

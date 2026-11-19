@@ -9,6 +9,8 @@ import { recordPerfNoticeShown, snoozePerfNotice } from './perf-notice-ledger'
 export type PerfNotice =
   | { id: 'hidden-browser-tabs'; count: number; hours: number }
   | { id: 'disk-almost-full'; freeLabel: string }
+  | { id: 'memory-low' }
+  | { id: 'idle-agents'; count: number }
 
 type Copy = { title: string; description: string; action: string; run: () => void }
 
@@ -19,8 +21,40 @@ export function memorySaverHours(): number {
   )
 }
 
+function turnOnAgentSleep(): void {
+  void useAppStore.getState().updateSettings({ experimentalAgentHibernation: true })
+}
+
+function agentSleepAction(): string {
+  return translate('perfNotices.turnOnAgentSleep', 'Turn on Agent Sleep')
+}
+
 function copyFor(notice: PerfNotice): Copy {
   switch (notice.id) {
+    case 'memory-low':
+      return {
+        title: translate('perfNotices.memoryLow.title', 'Memory is low'),
+        description: translate(
+          'perfNotices.memoryLow.description',
+          'Agent Sleep frees memory from idle agents and resumes them when you return.'
+        ),
+        action: agentSleepAction(),
+        run: turnOnAgentSleep
+      }
+    case 'idle-agents':
+      return {
+        title: translate(
+          'perfNotices.idleAgents.title',
+          '{{count}} agents have been idle for 2 hours',
+          { count: notice.count }
+        ),
+        description: translate(
+          'perfNotices.idleAgents.description',
+          'Agent Sleep frees their memory and resumes them when you return.'
+        ),
+        action: agentSleepAction(),
+        run: turnOnAgentSleep
+      }
     case 'hidden-browser-tabs':
       return {
         title: translate(

@@ -236,6 +236,28 @@ export const getNotificationsPaneSearchEntries = createLocalizedCatalog(() => [
     ]
   },
   {
+    title: translate('settings.notifications.perfNotices.memoryLow.label', 'Low memory'),
+    description: translate(
+      'settings.notifications.perfNotices.memoryLow.description',
+      'Suggest Agent Sleep when memory is low and agents are idle.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('settings.notifications.perfNotices.search.memory', 'memory'),
+      ...translateSearchKeyword('settings.notifications.perfNotices.search.sleep', 'sleep')
+    ]
+  },
+  {
+    title: translate('settings.notifications.perfNotices.idleAgents.label', 'Idle agents'),
+    description: translate(
+      'settings.notifications.perfNotices.idleAgents.description',
+      'Suggest Agent Sleep when several agents have been idle for hours.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('settings.notifications.perfNotices.search.idle', 'idle'),
+      ...translateSearchKeyword('settings.notifications.perfNotices.search.sleep', 'sleep')
+    ]
+  },
+  {
     title: translate(
       'auto.components.settings.notifications.search.55ecae5b7e',
       'Send test notification'

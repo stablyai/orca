@@ -11,15 +11,23 @@ import {
   isPerfNoticeOff,
   type PerfNoticeId
 } from '../../../../shared/perf-notices/perf-notice-settings'
+import { previewAgentSleepCandidates } from '@/lib/agent-session/hibernation/agent-hibernation-coordinator'
+import { getEffectiveAgentHibernationIdleMs } from '@/lib/agent-session/hibernation/agent-hibernation-planner'
 import { canShowPerfNotice } from './perf-notice-ledger'
-import { HIDDEN_TAB_MIN, isDiskAlmostFull } from './perf-notice-rules'
+import {
+  HIDDEN_TAB_MIN,
+  IDLE_AGENT_MIN,
+  IDLE_AGENT_MS,
+  LOW_MEMORY_FRACTION,
+  isDiskAlmostFull
+} from './perf-notice-rules'
 import { memorySaverHours, showPerfNotice, type PerfNotice } from './perf-notice-toast'
 
 const MINUTE = 60_000
 const HOUR = 60 * MINUTE
 const READ_INTERVAL_MS = 5 * MINUTE
 const QUIET_RETRY_MS = 15_000
-const HIDDEN_TABS_RECHECK_MS = 10 * MINUTE
+const RECHECK_MS = 10 * MINUTE
 const TYPING_QUIET_MS = 5_000
 
 function mayShow(id: PerfNoticeId, now: number): boolean {
@@ -29,10 +37,55 @@ function mayShow(id: PerfNoticeId, now: number): boolean {
 /** Why the loop must hold off; rechecked after every await before anything shows. */
 type Gate = () => boolean
 
+type Tracking = { hiddenTabsCheckedAt: number; agentSleepCheckedAt: number }
+
+/** Only while Agent Sleep is off: low memory with an agent it would free, or many long-idle agents. */
+async function agentSleepNotice(
+  now: number,
+  blocked: Gate,
+  tracking: Tracking
+): Promise<PerfNotice | null> {
+  const settings = useAppStore.getState().settings
+  const lowMemoryAllowed = mayShow('memory-low', now)
+  const idleAllowed = mayShow('idle-agents', now)
+  if (
+    !settings ||
+    settings.experimentalAgentHibernation === true ||
+    (!lowMemoryAllowed && !idleAllowed) ||
+    now - tracking.agentSleepCheckedAt < RECHECK_MS
+  ) {
+    return null
+  }
+  tracking.agentSleepCheckedAt = now
+  if (lowMemoryAllowed) {
+    const available = await window.api.memory.readAvailableMemoryFraction()
+    if (blocked()) {
+      return null
+    }
+    if (available !== null && available < LOW_MEMORY_FRACTION) {
+      const idleMs = getEffectiveAgentHibernationIdleMs(settings.agentHibernationIdleMs)
+      const sleepable = await previewAgentSleepCandidates(idleMs)
+      if (blocked()) {
+        return null
+      }
+      if (sleepable.length > 0) {
+        return { id: 'memory-low' }
+      }
+    }
+  }
+  if (!idleAllowed) {
+    return null
+  }
+  const idle = await previewAgentSleepCandidates(IDLE_AGENT_MS)
+  return blocked() || idle.length < IDLE_AGENT_MIN
+    ? null
+    : { id: 'idle-agents', count: idle.length }
+}
+
 async function nextNotice(
   now: number,
   blocked: Gate,
-  tracking: { hiddenTabsCheckedAt: number }
+  tracking: Tracking
 ): Promise<PerfNotice | null> {
   // Why: a notice that can't show (off, snoozed, capped) never pays for its reading.
   if (mayShow('disk-almost-full', now)) {
@@ -44,9 +97,13 @@ async function nextNotice(
       return { id: 'disk-almost-full', freeLabel: formatMemory(signals.disk.freeBytes) }
     }
   }
+  const agentNotice = await agentSleepNotice(now, blocked, tracking)
+  if (agentNotice || blocked()) {
+    return agentNotice
+  }
   if (
     useAppStore.getState().settings?.browserGuestWorktreeRetentionBudget !== false ||
-    now - tracking.hiddenTabsCheckedAt < HIDDEN_TABS_RECHECK_MS ||
+    now - tracking.hiddenTabsCheckedAt < RECHECK_MS ||
     !mayShow('hidden-browser-tabs', now)
   ) {
     return null
@@ -60,7 +117,7 @@ async function nextNotice(
 /** One read at a time, only while this window is focused and the user is present (shared presence
  *  tracker); input or focus restarts it after the user comes back. */
 function startPerfNoticeLoop(): () => void {
-  const tracking = { hiddenTabsCheckedAt: 0 }
+  const tracking: Tracking = { hiddenTabsCheckedAt: 0, agentSleepCheckedAt: 0 }
   let timer: ReturnType<typeof setTimeout> | null = null
   let reading = false
   let disposed = false
@@ -128,7 +185,7 @@ function startPerfNoticeLoop(): () => void {
   }
 }
 
-/** Disk and hidden-tab toasts for this machine. */
+/** Disk, memory, idle-agent and hidden-tab toasts for this machine. */
 export function usePerfNotices(): void {
   // Why: a paired web client's disk and tabs live on the host, not on this machine.
   useEffect(() => (isPairedWebClientWindow() ? undefined : startPerfNoticeLoop()), [])

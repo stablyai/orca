@@ -1,6 +1,7 @@
 import { statfs } from 'node:fs/promises'
 import type { PerfNoticeSignals } from '../../shared/diagnostics/perf-notice-signals'
 import { getBrowserPageIdleDiscard } from '../browser/guest-lifecycle/browser-page-idle-discard'
+import { collectHostMemory } from '../memory/host-memory'
 
 const DISK_READ_INTERVAL_MS = 10 * 60_000
 
@@ -30,4 +31,10 @@ export function countHiddenBrowserPages(hiddenForMs: number): number {
   return Number.isFinite(hiddenForMs) && hiddenForMs > 0
     ? getBrowserPageIdleDiscard().countHiddenLoadedPages(hiddenForMs)
     : 0
+}
+
+/** Asked only while Agent Sleep is off, the one case the low-memory notice can show. */
+export async function readAvailableMemoryFraction(): Promise<number | null> {
+  const host = await collectHostMemory()
+  return host.totalMemory > 0 ? host.availableMemory / host.totalMemory : null
 }
