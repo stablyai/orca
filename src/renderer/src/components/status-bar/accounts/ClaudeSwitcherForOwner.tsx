@@ -210,9 +210,6 @@ export function ClaudeSwitcherForOwner({
   }
 
   const handleSelectRuntime = async (group: ClaudeStatusSwitchGroup): Promise<void> => {
-    if (hasActiveRuntimeEnvironment) {
-      return
-    }
     const currentKey = getClaudeStatusRuntimeKey(
       normalizeClaudeStatusRuntimeTarget(accountState, toCodexStatusRuntimeTarget(claudeTarget))
     )
