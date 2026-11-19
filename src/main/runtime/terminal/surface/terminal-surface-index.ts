@@ -58,7 +58,6 @@ export class TerminalSurfaceIndex {
   private currentJson = ''
   /** The loaded partitions `current` was projected from: the projection's own cached objects. */
   private projectedFrom: (LoadedWorkspaceLayout | null)[] = []
-  private projectedHostIds: readonly ExecutionHostId[] = []
   private projectedHomes = ''
   private projectedTitles: boolean | null = null
   /** Workspace key → its home partition, as of the last projection. */
@@ -135,7 +134,6 @@ export class TerminalSurfaceIndex {
     }
     this.projectedTitles = titles
     this.projectedFrom = loaded
-    this.projectedHostIds = hostIds
     this.projectedHomes = homes
     this.projectedWorkspaces = projectedWorkspacesByWorktree(loaded, hostIds, this.routes)
     const next = this.project(hostIds, loaded)

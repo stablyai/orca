@@ -1,4 +1,4 @@
-// Perf contract (STA-16230): merging held phone rows looked up each workspace by scanning every workspace, O(n²) per merge.
+// Perf contract (#44753, STA-16230): merging held phone rows looked up each workspace by scanning every workspace, O(n²) per merge.
 
 import { expect, it } from 'vitest'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
