@@ -10,6 +10,13 @@ vi.mock('@/lib/agent-session/history/session-names/terminal-session-name-recordi
 import { useAppStore } from '../index'
 import { withTerminalSessionNameRecording } from './create-terminal-slice'
 import type { AppState } from '../types'
+import type { TerminalSlice } from './terminal-state'
+
+type RenameAction = Pick<TerminalSlice, 'setTabCustomTitle'>
+
+function renameAction(run: RenameAction['setTabCustomTitle']): RenameAction {
+  return { setTabCustomTitle: run }
+}
 
 function tab(customTitle: string | null) {
   return {
@@ -34,7 +41,9 @@ describe('tab rename records the session name', () => {
     const before: AppState = { ...useAppStore.getState(), tabsByWorktree: { 'wt-1': [tab('Old')] } }
     record.mockImplementation(() => calls.push('record'))
     const actions = withTerminalSessionNameRecording(
-      { setTabCustomTitle: () => calls.push('rename') },
+      renameAction(() => {
+        calls.push('rename')
+      }),
       () => before
     )
     actions.setTabCustomTitle('tab-1', 'Fix auth bug')
@@ -43,8 +52,9 @@ describe('tab rename records the session name', () => {
   })
 
   it('passes whether a person renamed the tab', () => {
-    const actions = withTerminalSessionNameRecording({ setTabCustomTitle: () => {} }, () =>
-      useAppStore.getState()
+    const actions = withTerminalSessionNameRecording(
+      renameAction(() => {}),
+      () => useAppStore.getState()
     )
     actions.setTabCustomTitle('tab-1', 'Worker 3', { recordInteraction: false })
     expect(record).toHaveBeenCalledWith(expect.anything(), 'tab-1', 'Worker 3', {
@@ -58,7 +68,7 @@ describe('tab rename records the session name', () => {
     })
     const rename = vi.fn()
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    withTerminalSessionNameRecording({ setTabCustomTitle: rename }, () =>
+    withTerminalSessionNameRecording(renameAction(rename), () =>
       useAppStore.getState()
     ).setTabCustomTitle('tab-1', 'Fix auth bug')
     expect(rename).toHaveBeenCalledWith('tab-1', 'Fix auth bug', undefined)

@@ -143,7 +143,12 @@ export function startTerminalSessionNameSync(dependencies: SyncDependencies): ()
     if (tabNamesChanged && cancelScheduled && terminalTabsClosed(state, previous)) {
       // A waiting pass never sees tabs that close before it runs, so a name that just arrived
       // from another client would be lost; settle names from the state the tabs closed in.
-      reconcileTerminalSessionNames(previous, now())
+      try {
+        reconcileTerminalSessionNames(previous, now())
+      } catch (error) {
+        // This runs inside the store update that closed the tab; it must never break the close.
+        console.warn('[terminal-session-names] could not settle names on tab close:', error)
+      }
     }
     if (
       tabNamesChanged ||

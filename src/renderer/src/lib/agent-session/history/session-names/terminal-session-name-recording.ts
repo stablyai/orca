@@ -172,6 +172,11 @@ export function reconcileTerminalSessionNames(
       localNameWriteByTabId.delete(tabId)
     }
   }
+  for (const tabId of renamedFromByTabId.keys()) {
+    if (!tabIsOpen(state, tabId)) {
+      renamedFromByTabId.delete(tabId)
+    }
+  }
   if (!hasTerminalSessionNames() && !tabsNamed(state)) {
     return result
   }
@@ -179,11 +184,6 @@ export function reconcileTerminalSessionNames(
   for (const tabs of Object.values(state.tabsByWorktree)) {
     for (const tab of tabs) {
       tabsById.set(tab.id, tab)
-    }
-  }
-  for (const tabId of renamedFromByTabId.keys()) {
-    if (!tabsById.has(tabId)) {
-      renamedFromByTabId.delete(tabId)
     }
   }
   const seen = new Map<string, { key: string; name: string }>()

@@ -328,6 +328,19 @@ describe('terminal session name recording', () => {
       expect(saved('s1')).toBe('Auth, part two')
     })
 
+    it('a resumed tab cleared while starting forgets the name even if its session reports late', () => {
+      const now = 1_000_000
+      seed('s1', 'Fix auth bug', 'closed-tab')
+      recordTerminalTabRename(
+        makeTerminalNamesState([{ id: 'tab-new', customTitle: 'Fix auth bug' }]),
+        'tab-new',
+        null,
+        { now }
+      )
+      pass([{ id: 'tab-new', sessionId: 's1' }], now + LOCAL_TAB_NAME_WRITE_GRACE_MS * 2)
+      expect(saved('s1')).toBeNull()
+    })
+
     it('keeps the saved name when naming a resumed tab failed', () => {
       seed('s1', 'Fix auth bug', 'closed-tab')
       // The host ignored the name, so the resumed tab stays unnamed.
