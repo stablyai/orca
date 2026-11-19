@@ -18,5 +18,5 @@ export const TextGenerate = z.object({
 export type TextGenerateRequest = z.infer<typeof TextGenerate>
 
 export type TextGenerateResult =
-  | { success: true; text: string; agent: string; model: string | null; elapsedMs: number }
+  | { success: true; text: string; agent: string; model: string; elapsedMs: number }
   | { success: false; error: string; canceled?: boolean; timedOut?: boolean }

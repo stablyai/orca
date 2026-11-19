@@ -42,6 +42,8 @@ export async function runGenerationRequest(input: {
   operation: TextGenerationOperation
   spawnAgent: SpawnSourceControlAgent
   shouldExecute?: () => boolean
+  /** Local agent deadline; the source-control default when absent. */
+  timeoutMs?: number
 }): Promise<InternalTextGenerationResult> {
   const params = {
     ...input.params,
@@ -88,7 +90,8 @@ export async function runGenerationRequest(input: {
             target: input.target,
             operation: input.operation,
             spawnAgent: input.spawnAgent,
-            shouldExecute: input.shouldExecute
+            shouldExecute: input.shouldExecute,
+            timeoutMs: input.timeoutMs
           })
   let result = await runClaudeGenerationAttempts({
     agentId: input.params.agentId,
@@ -128,9 +131,6 @@ export async function runGenerationRequest(input: {
     const retry = copilotUnavailableModelRetryPlan(plan, result.failureOutput)
     if (retry) {
       result = await execute(retry)
-      if (result.success) {
-        result = { ...result, modelFellBack: true }
-      }
     }
   }
   // Custom raw models can omit the opening think tag; built-in replies may mention it literally. PR JSON strips only after parsing fails.

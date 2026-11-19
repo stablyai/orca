@@ -72,7 +72,7 @@ export type CommitMessageGenerationTarget =
     }
 
 export type InternalTextGenerationResult =
-  | { success: true; rawOutput: string; agentLabel?: string; modelFellBack?: true }
+  | { success: true; rawOutput: string; agentLabel?: string }
   | ({
       success: false
       canceled?: boolean

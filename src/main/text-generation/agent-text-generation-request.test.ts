@@ -21,6 +21,7 @@ vi.mock('node:fs/promises', async (importOriginal) => {
 
 import { spawnSourceControlAgent } from './execution/source-control-agent-launch'
 import { generateAgentText } from './agent-text-generation-request'
+import { cleanAgentAnswer } from './failures/source-control-agent-failure'
 
 const host = { getAgentEnvironment: () => undefined }
 
@@ -99,32 +100,25 @@ describe('generateAgentText', () => {
     expect(agent.calls).toHaveLength(0)
   })
 
-  it('reports no model after Copilot falls back to its default model', async () => {
-    const calls: SourceControlAgentSpawnInput[] = []
-    const spawnAgent: typeof spawnSourceControlAgent = (input) => {
-      calls.push(input)
-      const rejected = input.args.includes('--model')
-      const script = rejected
-        ? 'process.stderr.write(\'Error: Model "gpt-5.4" from --model flag is not available.\\n\');process.exit(1)'
-        : ANSWER
-      return spawnSourceControlAgent({ ...input, binary: process.execPath, args: ['-e', script] })
-    }
-    const result = await generateAgentText(
-      host,
-      { agent: 'copilot', model: 'gpt-5.4', prompt: 'Say hi' },
-      undefined,
-      spawnAgent
-    )
+  it.each(['codex', 'copilot'])(
+    'refuses %s, which cannot answer without tools, before preparing an account',
+    async (agent) => {
+      const agentRun = fakeAgent(ANSWER)
+      const result = await generateAgentText(
+        host,
+        { agent, prompt: 'Hi' },
+        undefined,
+        agentRun.spawnAgent
+      )
 
-    expect(result).toMatchObject({
-      success: true,
-      text: 'Hello there',
-      agent: 'copilot',
-      model: null
-    })
-    expect(calls).toHaveLength(2)
-    expect(calls[1].args).not.toContain('--model')
-  })
+      expect(result).toMatchObject({
+        success: false,
+        error: expect.stringContaining('Only claude can')
+      })
+      expect(mocks.prepare).not.toHaveBeenCalled()
+      expect(agentRun.calls).toHaveLength(0)
+    }
+  )
 
   it('stops the agent and removes its folder when the timeout passes', async () => {
     const agent = fakeAgent(HANG)
@@ -137,5 +131,10 @@ describe('generateAgentText', () => {
 
     expect(result).toEqual({ success: false, error: 'Text generation timed out.', timedOut: true })
     expect(existsSync(agent.calls[0].cwd ?? '')).toBe(false)
+  })
+
+  it('keeps a JSON-shaped free-text answer whole', async () => {
+    const answer = '{"text":"hello","language":"en"}'
+    expect(cleanAgentAnswer(answer, 'agent-text')).toBe(answer)
   })
 })

@@ -47,7 +47,10 @@ const OPERATIONS_WITHOUT_STDOUT_DETAIL: ReadonlySet<TextGenerationOperation> = n
 /** The agent's answer without CLI framing; dictated and free text keep the lines and markers Git text drops. */
 export function cleanAgentAnswer(raw: string, operation: TextGenerationOperation): string {
   const prose = operation === 'dictation-cleanup' || operation === 'agent-text'
-  return cleanGeneratedText(raw, prose ? 'prose' : 'git')
+  // A free-text answer is the user's words or the model's words: a JSON object with a `text` key is an answer, not an envelope.
+  return cleanGeneratedText(raw, prose ? 'prose' : 'git', {
+    unwrapJcodeEnvelope: operation !== 'agent-text'
+  })
 }
 
 type AgentCliFailureOptions = {
