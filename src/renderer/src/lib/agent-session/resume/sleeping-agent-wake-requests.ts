@@ -54,6 +54,12 @@ export function rememberMailWakeLaunchToken(
   }
 }
 
+export function forgetMailWakeLaunchToken(paneKey: string, launchToken: string): void {
+  if (mailWakeLaunchTokens.get(paneKey) === launchToken) {
+    mailWakeLaunchTokens.delete(paneKey)
+  }
+}
+
 export function takeMailWakeLaunchToken(paneKey: string): string | undefined {
   const launchToken = mailWakeLaunchTokens.get(paneKey)
   mailWakeLaunchTokens.delete(paneKey)
