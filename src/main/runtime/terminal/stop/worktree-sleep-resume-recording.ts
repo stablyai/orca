@@ -46,22 +46,28 @@ export abstract class OrcaRuntimeWithWorktreeSleepResumeRecording extends OrcaRu
     )
   }
 
-  /** A confirmed quit retires its saved recovery, which the next coalesced save persists. */
-  retireExitedPaneResume(paneKey: string, exitedAt: number): void {
+  /** A confirmed quit retires its saved recovery, which the next coalesced save persists; answers
+   *  the record saved when it quit, read through the same host route. */
+  retireExitedPaneResume(
+    paneKey: string,
+    exitedAt: number
+  ): SleepingAgentSessionRecord | undefined {
+    this.previousHookStatusByPaneKey.delete(paneKey)
     const worktreeId = this.getTerminalWorktreeIdForPaneKey(paneKey)
     if (!worktreeId) {
-      return
+      return undefined
     }
+    const hostId = this.getWorkspaceSessionHostIdForWorktree(worktreeId)
     this.inResumeRecordOrder(async () => {
       this.store?.retireSleepingAgentSession?.(
         paneKey,
         (saved) => saved.updatedAt <= exitedAt,
-        this.getWorkspaceSessionHostIdForWorktree(worktreeId)
+        hostId
       )
     }).catch((error) =>
       console.warn('[runtime] could not retire an exited agent resume record', error)
     )
-    this.previousHookStatusByPaneKey.delete(paneKey)
+    return this.store?.getWorkspaceSession?.(hostId)?.sleepingAgentSessionsByPaneKey?.[paneKey]
   }
 
   /** Forgets a pane's saved resume the host refused because a chat is its conversation's home,
@@ -167,6 +173,11 @@ export abstract class OrcaRuntimeWithWorktreeSleepResumeRecording extends OrcaRu
   /** Main's word on the Orca launch running in this pane now; the one check every saved note passes. */
   getLaunchStatementForPaneKey: PaneLaunchConfigOf = (paneKey, agent) =>
     launchStatement(this.getPtyRecordForPaneKey(paneKey), agent)
+
+  /** The same word for a pane whose PTY the caller already resolved. */
+  getLaunchStatementForPty(ptyId: string, agent: string | null | undefined) {
+    return launchStatement(this.ptysById.get(ptyId), agent)
+  }
 
   // Main records accepted status for its panes even without windows, preserving window resume rules; serialize writes so statuses read prior records.
   recordHookStatusResume(row: AgentStatusIpcPayload): void {

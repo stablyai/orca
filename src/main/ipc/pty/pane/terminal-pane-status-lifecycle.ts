@@ -24,17 +24,19 @@ export function bindTerminalPaneStatusLifecycle(
   agentHookServer.setTerminalPaneLifecycle({
     retireSavedRecord: (paneKey, exitedAt) => runtime?.retireExitedPaneResume(paneKey, exitedAt),
     confirmProcessExit: async (paneKey, agent) => {
+      if (!runtime) {
+        return false
+      }
       try {
-        const launch = runtime?.getLaunchStatementForPaneKey(paneKey, agent)
+        const launchOf = () => {
+          const { ptyId } = resolvePanePty(runtime, paneKey)
+          return ptyId ? runtime.getLaunchStatementForPty(ptyId, agent) : null
+        }
+        const launch = launchOf()
         // A finished command already retired a gone launch; an unknown one (reattach) needs the proof.
         return (
           launch !== null &&
-          (await paneShellAlone(
-            runtime,
-            paneKey,
-            agent,
-            () => runtime?.getLaunchStatementForPaneKey(paneKey, agent) === launch
-          )) === true
+          (await paneShellAlone(runtime, paneKey, agent, () => launchOf() === launch)) === true
         )
       } catch {
         return false

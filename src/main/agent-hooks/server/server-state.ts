@@ -51,7 +51,8 @@ import type { SleepingAgentSessionRecord } from '../../../shared/agent-session/l
 
 export abstract class AgentHookServerState extends AgentHookServerStateContract {
   protected terminalPaneLifecycle: {
-    retireSavedRecord?(paneKey: string, exitedAt: number): void
+    /** Answers the record that was saved when the agent quit. */
+    retireSavedRecord?(paneKey: string, exitedAt: number): SleepingAgentSessionRecord | undefined
     readSavedRecord?(paneKey: string): SleepingAgentSessionRecord | undefined
     confirmProcessExit?(paneKey: string, agent: string): Promise<boolean>
     /** The host's word that the pane's shell holds its PTY alone, whatever launch it ran; null
@@ -132,8 +133,7 @@ export abstract class AgentHookServerState extends AgentHookServerStateContract 
     exitedAt: number
   ): void {
     for (const key of paneKeys) {
-      const saved = this.terminalPaneLifecycle?.readSavedRecord?.(key)
-      this.terminalPaneLifecycle?.retireSavedRecord?.(key, exitedAt)
+      const saved = this.terminalPaneLifecycle?.retireSavedRecord?.(key, exitedAt)
       const agent = status?.agentType ?? saved?.agent
       const providerSession = status?.providerSession ?? saved?.providerSession
       if (agent && providerSession) {

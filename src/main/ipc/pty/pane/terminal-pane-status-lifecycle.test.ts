@@ -122,7 +122,7 @@ it.each([
     const runtime = {
       resolveTerminalPane: () => ({ ptyId: 'pty-1', incarnationId: 'birth-1' }),
       terminalRunFacts: { readLastInputAt: () => null },
-      getLaunchStatementForPaneKey: () => currentLaunch
+      getLaunchStatementForPty: () => currentLaunch
     } as unknown as OrcaRuntimeService
     bindTerminalPaneStatusLifecycle(runtime, undefined)
     const lifecycle = setTerminalPaneLifecycle.mock.lastCall![0]

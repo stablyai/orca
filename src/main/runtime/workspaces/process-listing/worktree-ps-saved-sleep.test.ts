@@ -55,7 +55,9 @@ it.each(['claude', 'codex'] as const)(
     server.setTerminalPaneLifecycle({
       readSavedRecord: (paneKey) => session.sleepingAgentSessionsByPaneKey?.[paneKey],
       retireSavedRecord: (paneKey) => {
+        const saved = session.sleepingAgentSessionsByPaneKey?.[paneKey]
         delete session.sleepingAgentSessionsByPaneKey?.[paneKey]
+        return saved
       },
       ownsProcess: () => true,
       isStopping: () => false,
