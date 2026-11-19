@@ -11,6 +11,7 @@ import {
   type LegacyClaim,
   type LegacySessionHold
 } from './journal-legacy-content-proof'
+import { LEGACY_PROOF_COPIES_TABLE } from './journal-legacy-retirement-state'
 import { assertLegacyStoreReady, readLegacyCopiesProofPage } from './journal-legacy-proof-copies'
 import type Database from '../../sqlite/sync-database'
 import type { SqliteRow } from '../../sqlite/sqlite-statement'
@@ -39,7 +40,10 @@ const PROFILE_COLUMNS = new Map(
   JOURNAL_DOMAIN_PROFILE_TABLES.map(({ name, columns }) => [name, new Set<unknown>(columns)])
 )
 const RECOVERY_TABLES = ['journal_repairs', 'journal_imports', 'journal_set_aside']
-const COPIES = CONTENT_TABLES.length + 2
+const COPIES = LEGACY_PROOF_COPIES_TABLE
+if (COPIES !== CONTENT_TABLES.length + 2) {
+  throw new Error('legacy proof copies follow the content tables and the claims')
+}
 /** `check`: the first page this launch reads, resumed past the start, checks compares due again. */
 export type LegacyProofCursor = {
   table: number

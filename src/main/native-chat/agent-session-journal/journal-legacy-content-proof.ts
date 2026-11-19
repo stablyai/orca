@@ -5,7 +5,6 @@ import {
   journalLegacyChatRevisionKey
 } from './database/journal-legacy-source'
 import {
-  assertLegacyQueueBounded,
   hasTable,
   originalVersion,
   personEditsDiffer,
@@ -48,10 +47,6 @@ export function legacySessionHold(
   hasQueue: boolean
 ): LegacySessionHold {
   assertLegacyChatSettled(store, sessionId)
-  // Measured in SQL before any queued row is read: an outsized queue keeps the original.
-  if (hasQueue) {
-    assertLegacyQueueBounded(source, sessionId, 0)
-  }
   const recorded =
     hasTable(source, 'agent_session_records') &&
     !!source.prepare('SELECT 1 FROM agent_session_records WHERE session_id=?').get(sessionId)

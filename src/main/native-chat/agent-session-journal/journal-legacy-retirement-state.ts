@@ -48,9 +48,15 @@ export type LegacySourceRetiring = {
  * How far the proof of this original into this store got, so a later launch resumes there instead
  * of walking every chat again. Not durable: a lost write only repeats work.
  */
+/** The proof's page layout; progress saved under another is walked again from the start. */
+export const LEGACY_PROOF_LAYOUT = 1
+/** The proof's last phases, the reconcile's copies, start at this table (after content and claims). */
+export const LEGACY_PROOF_COPIES_TABLE = 7
+
 export type LegacySourceProving = {
   version: 2
   phase: 'proving'
+  layout: typeof LEGACY_PROOF_LAYOUT
   proof: string
   store: string
   cursor: { table: number; after: string | null; epoch?: string }
@@ -74,6 +80,8 @@ export function decodeLegacySourceProving(value: string | null): LegacySourcePro
     typeof data.proof !== 'string' ||
     !('store' in data) ||
     typeof data.store !== 'string' ||
+    !('layout' in data) ||
+    data.layout !== LEGACY_PROOF_LAYOUT ||
     !('cursor' in data) ||
     !data.cursor ||
     typeof data.cursor !== 'object'
@@ -96,6 +104,7 @@ export function decodeLegacySourceProving(value: string | null): LegacySourcePro
   return {
     version: 2,
     phase: 'proving',
+    layout: LEGACY_PROOF_LAYOUT,
     proof: data.proof,
     store: data.store,
     cursor: { table, after, ...(epoch === undefined ? {} : { epoch }) }

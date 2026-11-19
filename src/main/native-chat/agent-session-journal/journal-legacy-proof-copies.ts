@@ -40,6 +40,7 @@ export function assertLegacyStoreReady(
   tables: boolean
 ): void {
   assertNoLegacyComparesDue(source, store)
+  assertNoLegacyFailures(source, store)
   for (const { name, columns } of tables ? JOURNAL_DOMAIN_PROFILE_TABLES : []) {
     const present = new Set(
       store
@@ -53,6 +54,22 @@ export function assertLegacyStoreReady(
   }
 }
 
+/** A chat the original holds that the reconcile recorded as failed, wherever the walk is. */
+function assertNoLegacyFailures(source: Database.Database, store: Database.Database): void {
+  const prefix = journalLegacyFailureKey('')
+  const held = heldBySource(source)
+  for (const row of store
+    .prepare('SELECT key FROM agent_session_store_meta WHERE key>? AND key<?')
+    .iterate(prefix, prefixEnd(prefix))) {
+    if (held.get(String(row.key).slice(prefix.length))?.held) {
+      throw new JournalLegacyRetentionError(
+        'an older Orca chat could not be kept in this store',
+        'source-failed'
+      )
+    }
+  }
+}
+
 /**
  * Before walking any chat: a compare or copy still due for a chat the original holds would refuse
  * the walk once it reached that chat. One for a chat the original no longer holds settles nothing.
@@ -62,9 +79,7 @@ export function assertNoLegacyComparesDue(
   store: Database.Database
 ): void {
   const due = store.prepare('SELECT key FROM agent_session_store_meta WHERE key>? AND key<?')
-  const held = source.prepare(`SELECT EXISTS(SELECT 1 FROM journal_sessions WHERE session_id=?1)
-    ${hasRecords(source) ? 'OR EXISTS(SELECT 1 FROM agent_session_records WHERE session_id=?1)' : ''}
-    AS held`)
+  const held = heldBySource(source)
   for (const prefix of [JOURNAL_LEGACY_COMPARE, JOURNAL_LEGACY_COPY_DUE]) {
     for (const row of due.iterate(prefix, prefixEnd(prefix))) {
       if (held.get(String(row.key).slice(prefix.length))?.held) {
@@ -72,6 +87,13 @@ export function assertNoLegacyComparesDue(
       }
     }
   }
+}
+
+/** Whether the original holds a chat, with history or only a record. */
+function heldBySource(source: Database.Database) {
+  return source.prepare(`SELECT EXISTS(SELECT 1 FROM journal_sessions WHERE session_id=?1)
+    ${hasRecords(source) ? 'OR EXISTS(SELECT 1 FROM agent_session_records WHERE session_id=?1)' : ''}
+    AS held`)
 }
 
 function hasRecords(source: Database.Database): boolean {

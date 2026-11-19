@@ -158,7 +158,7 @@ const QUEUED_TEXT_COLUMNS = [
  * The chat's waiting text, measured in SQL with no row read into JS, and over at most one row past
  * the limit however long the queue is.
  */
-export function assertLegacyQueueBounded(
+function assertLegacyQueueBounded(
   source: Database.Database,
   sessionId: string,
   recordBytes: number,
@@ -172,9 +172,9 @@ export function assertLegacyQueueBounded(
   }
   const measured = source
     .prepare(
-      `SELECT COUNT(*) AS rows, COALESCE(SUM(${QUEUED_TEXT_COLUMNS.map(
-        (column) => `COALESCE(length(CAST(${column} AS BLOB)),0)`
-      ).join('+')}),0) AS bytes FROM (SELECT * FROM queued_messages
+      `SELECT COUNT(*) AS rows, COALESCE(SUM(${queuedTextColumns(source)
+        .map((column) => `COALESCE(length(CAST(${column} AS BLOB)),0)`)
+        .join('+')}),0) AS bytes FROM (SELECT * FROM queued_messages
         WHERE session_id=? AND state IN ('waiting','returned') LIMIT ?)`
     )
     .get(sessionId, LEGACY_QUEUE_MAX_ROWS + 1)
@@ -184,6 +184,17 @@ export function assertLegacyQueueBounded(
   ) {
     throw oversizedQueue()
   }
+}
+
+/** Journals from before some columns were added lack them; a missing column holds nothing. */
+function queuedTextColumns(source: Database.Database): string[] {
+  const present = new Set(
+    source
+      .prepare('PRAGMA table_info(queued_messages)')
+      .all()
+      .map((column) => String(column.name))
+  )
+  return QUEUED_TEXT_COLUMNS.filter((column) => present.has(column))
 }
 
 function queuedRowBytes(row: Record<string, unknown>): number {

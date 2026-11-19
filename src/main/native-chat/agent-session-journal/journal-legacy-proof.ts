@@ -6,6 +6,8 @@ import {
 import {
   decodeLegacySourceProving,
   decodeLegacySourceRefusal,
+  LEGACY_PROOF_COPIES_TABLE,
+  LEGACY_PROOF_LAYOUT,
   LEGACY_SOURCE_REFUSAL_POLICY,
   type LegacySourceProving,
   type LegacySourceRefusal
@@ -50,19 +52,21 @@ export class JournalLegacyProof {
   }
 
   /**
-   * Picks up where an earlier launch's proof of this same original into this same store stopped.
-   * Pages already proven stay proven: the original is unchanged and a store only keeps what it
-   * converted. Compares due are the one thing that can appear since, so they are checked again.
+   * Picks up where an earlier launch's proof of this same original into this same store stopped,
+   * or, after a deletion that didn't go through, at the copies it ends with. Pages already proven
+   * stay proven: the original is unchanged, the store keeps what it converted and kept, and a
+   * person's own edits here since supersede what it showed. What an older-Orca pass can add
+   * since (compares due, failures) is checked again first, and copies are walked from the start.
    */
   resume(saved: string | null, observation: LegacyProofObservation): void {
-    const proving = decodeLegacySourceProving(saved)
     const fresh =
       this.frontier.pages === 0 &&
       !this.frontier.page &&
       this.frontier.cursor?.table === 0 &&
       this.frontier.cursor.after === null
-    if (fresh && proving?.proof === observation.proof && proving.store === observation.store) {
-      this.frontier = createLegacyProofFrontier({ ...proving.cursor, check: true })
+    const at = fresh ? savedCursor(saved, observation) : null
+    if (at) {
+      this.frontier = createLegacyProofFrontier({ ...at, check: true })
     }
   }
 
@@ -120,6 +124,7 @@ export class JournalLegacyProof {
     const proving: LegacySourceProving = {
       version: 2,
       phase: 'proving',
+      layout: LEGACY_PROOF_LAYOUT,
       proof: observation.proof,
       store: observation.store,
       cursor
@@ -146,4 +151,37 @@ export class JournalLegacyProof {
     }
     this.refusalSaved = true
   }
+}
+
+/** Where a saved proof of this original into this store resumes; null starts from the beginning. */
+function savedCursor(
+  saved: string | null,
+  observation: LegacyProofObservation
+): LegacyProofCursor | null {
+  const proving = decodeLegacySourceProving(saved)
+  if (proving) {
+    if (proving.proof !== observation.proof || proving.store !== observation.store) {
+      return null
+    }
+    // Copies the reconcile keeps can sort anywhere, so their pages are always walked whole.
+    return proving.cursor.table >= LEGACY_PROOF_COPIES_TABLE
+      ? { table: LEGACY_PROOF_COPIES_TABLE, after: null }
+      : proving.cursor
+  }
+  let retiring: unknown
+  try {
+    retiring = saved ? JSON.parse(saved) : null
+  } catch {
+    return null
+  }
+  const proven =
+    typeof retiring === 'object' &&
+    retiring !== null &&
+    'phase' in retiring &&
+    retiring.phase === 'retiring' &&
+    'proof' in retiring &&
+    retiring.proof === observation.proof &&
+    'store' in retiring &&
+    retiring.store === observation.store
+  return proven ? { table: LEGACY_PROOF_COPIES_TABLE, after: null } : null
 }

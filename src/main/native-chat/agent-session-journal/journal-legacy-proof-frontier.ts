@@ -77,19 +77,16 @@ export async function completeJournalLegacyProof(
       : page.sessions
     while (frontier.session < chats.length) {
       await admit()
-      // Each chat's conversion check is paced like a page read, not only the reads.
-      const started = performance.now()
       const source = chats[frontier.session]!
       // A chat deleted here, or one that never held anything, is not converted back.
       if (!source.convert) {
         frontier.session++
         continue
       }
-      let converted: string | null = null
       if (!frontier.pending) {
         frontier.pending = true
         try {
-          converted = await conversions.ensure(source.sessionId, false)
+          await conversions.ensure(source.sessionId, false)
         } catch (error) {
           // The next attempt reads this page again from its start (a copies page shrinks as copies
           // convert), so a failure recorded since is seen, and converts the chat again.
@@ -113,11 +110,10 @@ export async function completeJournalLegacyProof(
           throw error
         }
       }
-      // A conversion that returned its epoch is committed; only an unknown one is read back.
-      let state =
-        converted === null
-          ? await readers.importState(source.sessionId)
-          : { state: 'ready' as const, epoch: converted }
+      // Read back from the store, not a cached epoch: the chat may have been deleted since. Each
+      // request is paced like a page read; time spent waiting on a conversion is not.
+      const started = performance.now()
+      let state = await readers.importState(source.sessionId)
       if (state.state !== 'ready' && source.empty) {
         const epoch = await writer.maintain({
           kind: 'import-finish',
@@ -145,9 +141,9 @@ export async function completeJournalLegacyProof(
       if (state.state !== 'ready') {
         throw new Error('legacy proof awaits committed conversion')
       }
+      await rest(started)
       frontier.session++
       frontier.pending = false
-      await rest(started)
     }
     frontier.cursor = page.next
     frontier.page = undefined
