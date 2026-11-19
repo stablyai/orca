@@ -6,21 +6,17 @@ import {
 import { usePrefersReducedMotion } from '@/hooks/theme/usePrefersReducedMotion'
 import { NativeChatReplyRevealsContext } from './native-chat-reply-reveals'
 import {
+  NATIVE_CHAT_REVEAL_STEP_FRAMES,
   nativeChatTextAppended,
   playNativeChatTextReveal,
   receiveNativeChatText,
   startNativeChatTextReveal,
-  type NativeChatTextReveal,
-  type NativeChatTextRevealFrames
+  type NativeChatTextReveal
 } from '../../../../../shared/native-chat/transcript/row-content/native-chat-text-reveal'
 
 const WORD_FADE_MS = 300
 
-const FRAMES: NativeChatTextRevealFrames = {
-  now: () => performance.now(),
-  request: (step) => requestAnimationFrame(step),
-  cancel: (frame) => cancelAnimationFrame(frame)
-}
+const FRAMES = NATIVE_CHAT_REVEAL_STEP_FRAMES
 
 export type NativeChatPacedText = {
   text: string
