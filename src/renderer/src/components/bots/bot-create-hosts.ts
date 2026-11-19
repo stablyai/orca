@@ -6,6 +6,7 @@ import { botHostTarget } from '@/lib/bot-hosts'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { runtimeHostConnectionStateForEntry } from '@/runtime/hosts/connections/runtime-host-connection-state'
 import { getRendererAppPlatform } from '@/app-shell/platform/renderer-app-platform'
+import { useRuntimeStatusByEnvironmentId } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import { BOTS_CREATE_RUNTIME_CAPABILITY } from '../../../../shared/bot-runtime-capabilities'
@@ -180,7 +181,7 @@ export function useBotCreateHost(
   initialHostId: ExecutionHostId = LOCAL_EXECUTION_HOST_ID
 ): BotCreateHostChoice {
   const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
-  const runtimeStatusByEnvironmentId = useAppStore((s) => s.runtimeStatusByEnvironmentId)
+  const runtimeStatusByEnvironmentId = useRuntimeStatusByEnvironmentId()
   const sshTargetLabels = useAppStore((s) => s.sshTargetLabels)
   const settings = useAppStore((s) => s.settings?.hostSettingOverrides)
   const ownEmail = useAppStore((s) =>
