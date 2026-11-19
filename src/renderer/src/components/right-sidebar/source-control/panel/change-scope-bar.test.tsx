@@ -164,11 +164,10 @@ describe('SourceControlChangeScopeBar menu', () => {
     expect(screen.queryByRole('button', { name: 'Show all changes' })).toBeNull()
   })
 
-  it('shows Couldn’t load commits with a Retry that refetches', async () => {
-    const calls = renderBar({ history: { status: 'error', error: 'offline' } })
+  it('retries a failed refresh even when cached history remains available', async () => {
+    const calls = renderBar({ history: { status: 'error', error: 'offline', result: PAGE } })
     openMenu()
-    expect(await screen.findByText("Couldn't load commits.")).toBeTruthy()
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Retry' }))
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Retry' }))
     expect(calls.refreshGitHistory).toHaveBeenCalledWith({ wakeWslDistro: true })
   })
 })
