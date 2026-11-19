@@ -2787,6 +2787,14 @@
     "unhide": "Show All",
     "zoom": "Zoom"
   },
+  "perfNotices": {
+    "idleAgents": {
+      "chats_one": "{{count}} chat has been idle for 2 hours",
+      "chats_other": "{{count}} chats have been idle for 2 hours",
+      "terminal_one": "{{count}} terminal agent has been idle for 2 hours",
+      "terminal_other": "{{count}} terminal agents have been idle for 2 hours"
+    }
+  },
   "pet": {
     "defaultLabels": {
       "bundle": "Pet bundle",

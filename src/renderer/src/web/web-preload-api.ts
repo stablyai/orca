@@ -116,6 +116,8 @@ function createWebPreloadApi(): Omit<Partial<PreloadApi>, 'settings' | 'plugins'
     },
     memory: {
       getSnapshot: () => Promise.resolve(createEmptyMemorySnapshot()),
+      // The web client reads no local host, so it has nothing to warn about.
+      readPerfNoticeSignals: () => Promise.resolve(null),
       // Browser pages have no native-window veto; document visibility owns admission.
       resourceWindowVisible: () => Promise.resolve(true),
       onResourceWindowVisibility: () => () => {}

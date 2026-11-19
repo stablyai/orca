@@ -1,6 +1,7 @@
 import { runProcess } from '@orca/process-host'
 import { readFile } from 'node:fs/promises'
 import os from 'node:os'
+import { readElectronSystemMemoryInfo } from '../crash-reporting/memory/system-memory-details'
 import path from 'node:path'
 import type {
   HostAvailableMemorySource,
@@ -119,6 +120,30 @@ async function readLinuxAvailableMemory(): Promise<number | null> {
     // Non-procfs Linux hosts use Node's memory value.
   }
   linuxAvailabilitySupported = false
+  return null
+}
+
+/** Available memory without spawning: Windows and Linux only, since macOS exposes no usable value in-process. */
+export async function readInProcessAvailableMemory(): Promise<{
+  totalMemory: number
+  availableMemory: number
+} | null> {
+  const totalMemory = nonNegativeNumber(os.totalmem())
+  if (totalMemory === 0) {
+    return null
+  }
+  if (process.platform === 'win32') {
+    const freeKib = nonNegativeNumber(readElectronSystemMemoryInfo()?.free)
+    return freeKib > 0
+      ? { totalMemory, availableMemory: Math.min(totalMemory, freeKib * KIB) }
+      : null
+  }
+  if (process.platform === 'linux' && linuxAvailabilitySupported) {
+    const available = await readLinuxAvailableMemory()
+    return available === null
+      ? null
+      : { totalMemory, availableMemory: Math.min(totalMemory, available) }
+  }
   return null
 }
 

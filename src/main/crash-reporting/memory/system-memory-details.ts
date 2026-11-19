@@ -32,7 +32,7 @@ export type SystemMemoryPressureSignal =
   | 'mem-available'
   | 'none'
 
-function readElectronSystemMemoryInfo(): SystemMemoryInfoLike | null {
+export function readElectronSystemMemoryInfo(): SystemMemoryInfoLike | null {
   const read = (process as NodeJS.Process & { getSystemMemoryInfo?: () => SystemMemoryInfoLike })
     .getSystemMemoryInfo
   if (typeof read !== 'function') {

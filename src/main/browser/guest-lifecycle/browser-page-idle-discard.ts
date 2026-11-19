@@ -218,6 +218,22 @@ export function createBrowserPageIdleDiscard(sources: {
       deadlines.delete(pageId)
       schedule()
     },
+    /** Pages still loaded after being hidden at least this long. */
+    countHiddenLoadedPages(hiddenForMs: number): number {
+      const cutoff = sources.now() - hiddenForMs
+      let count = 0
+      for (const episode of pages.values()) {
+        if (
+          episode.visible === false &&
+          !episode.consumed &&
+          episode.hiddenAt !== null &&
+          episode.hiddenAt <= cutoff
+        ) {
+          count += 1
+        }
+      }
+      return count
+    },
     /** Live setting changes move every waiting deadline at once; already freed pages stay freed. */
     configure(next: BrowserMemorySaverPolicy): void {
       policy = next

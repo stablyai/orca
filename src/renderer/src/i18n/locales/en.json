@@ -29350,5 +29350,37 @@
     "title": "Some background work paused after crashing repeatedly",
     "description": "Claude chat recovery is off until you retry. Copy, rewind and Space scans resume when you start them again.",
     "retry": "Retry"
+  },
+  "perfNotices": {
+    "openResources": "Open Resources",
+    "memoryLow": {
+      "title": "Memory is low",
+      "agentSleep": "Agent Sleep frees memory from idle agents. They resume when you open them.",
+      "turnOnAgentSleep": "Turn on Agent Sleep",
+      "agents": "Terminal agents are using most of it. Resources shows what each one uses.",
+      "yourTerminals": "Your terminals are using most of it. Resources shows what each one uses."
+    },
+    "idleAgents": {
+      "autoStop": "Their agents are still using memory. Auto-stop pauses idle chats, and they pick up again when you send a message.",
+      "turnOnAutoStop": "Turn on auto-stop",
+      "chats_one": "{{count}} chat has been idle for 2 hours",
+      "chats_other": "{{count}} chats have been idle for 2 hours",
+      "mixed": "{{terminal}} terminal agents and {{chats}} chats have been idle for 2 hours",
+      "terminal_one": "{{count}} terminal agent has been idle for 2 hours",
+      "terminal_other": "{{count}} terminal agents have been idle for 2 hours",
+      "terminalDescription": "{{agents}} are still using memory. End the ones you're done with in Resources."
+    },
+    "hiddenTabs": {
+      "title": "{{count}} hidden browser tabs are still loaded",
+      "description": "Memory Saver frees tabs you haven't viewed in 4 hours. They reload when you open them.",
+      "turnOnMemorySaver": "Turn on Memory Saver"
+    },
+    "disk": {
+      "title": "Your disk is almost full",
+      "description": "{{free}} left. Clean up workspaces you no longer need to free space.",
+      "cleanUp": "Clean up workspaces"
+    },
+    "dontShowAgain": "Don't show again",
+    "notNow": "Not now"
   }
 }
