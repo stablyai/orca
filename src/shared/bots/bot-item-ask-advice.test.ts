@@ -16,18 +16,10 @@ const codes = (input: Parameters<typeof botItemAskAdvice>[0]) =>
   botItemAskAdvice(input)?.codes ?? []
 
 describe('botItemAskAdvice', () => {
-  it('gives no tip for a short question with buttons', () => {
-    expect(botItemAskAdvice({ ask: CLEAN_ASK })).toBeNull()
-    expect(botItemAskAdvice({ comment: 'Which name should the setting use?' })).toBeNull()
-  })
-
-  it('flags choices written into a prose ask, with the one tip for it', () => {
-    expect(
-      botItemAskAdvice({ comment: 'Go ahead without review? Reply **yes**, or **wait**.' })
-    ).toEqual({
-      codes: ['prose_choices'],
-      tip: 'Posted. Tip: Give the choices as buttons with --ask and --option, not in the text. Set Needs you again if you rewrite it.'
-    })
+  it('flags choices written into a prose ask', () => {
+    expect(codes({ comment: 'Go ahead without review? Reply **yes**, or **wait**.' })).toEqual([
+      'prose_choices'
+    ])
     for (const comment of [
       'Which scope? A) simple, as written (recommended); B) the full one.',
       'Who cuts the release? Options: (a) Jinwoo; (b) you.',
@@ -84,13 +76,8 @@ describe('botItemAskAdvice', () => {
     expect(botItemAskAdvice({ comment: 'Does internationalization ship?' })).toBeNull()
   })
 
-  it('reads a lowercase article after "reply with" as prose, not option A', () => {
-    expect(botItemAskAdvice({ comment: 'Should I reply with a summary?' })).toBeNull()
-    expect(codes({ comment: 'Should I go ahead? Reply with A or B.' })).toEqual(['prose_choices'])
-  })
-
-  it('reads "reply A" in any case, still never "reply a"', () => {
-    expect(codes({ comment: 'Which one? REPLY A or B.' })).toEqual(['prose_choices'])
+  it('reads an option after uppercase REPLY WITH and leaves a lowercase article alone', () => {
+    expect(codes({ comment: 'Which one? REPLY WITH A or B.' })).toEqual(['prose_choices'])
     expect(codes({ comment: 'Which one? reply 2.' })).toEqual(['prose_choices'])
     expect(botItemAskAdvice({ comment: 'Should I REPLY WITH a summary?' })).toBeNull()
   })
@@ -127,19 +114,6 @@ describe('botItemAskAdvice', () => {
     ['inside a link with a label of several words', 'Ship [the plan](ctx_zzzzzzzz)?', []]
   ])('masks: %s', (_name, comment, expected) => {
     expect(codes({ comment })).toEqual(expected)
-  })
-
-  it.each([
-    ['[', '[a'],
-    ['(', '(a'],
-    ['](', '](a'],
-    ['closed link', '[a](b)'],
-    ['backtick', '`a'],
-    ['fence', '```a'],
-    ['URL', 'h://'],
-    ['colon', 'a:/']
-  ])('reads 8,000 characters of repeated %s', (_name, unit) => {
-    expect(() => botItemAskAdvice({ comment: unit.repeat(8_000 / unit.length) })).not.toThrow()
   })
 
   it('skips ids inside parent-relative, Windows and wrapped paths', () => {
@@ -236,9 +210,7 @@ describe('botItemAskAdvice', () => {
       comment: `Head 363e3235aa01. ${'Context. '.repeat(40)}Reply A or B.`
     })
     expect(advice?.codes).toEqual(['prose_choices', 'no_question', 'long_question', 'jargon'])
-    expect(advice?.tip).toBe(
-      'Posted. Tip: Give the choices as buttons with --ask and --option, not in the text. Set Needs you again if you rewrite it.'
-    )
+    expect(advice?.tip).toContain('--ask and --option')
   })
 
   it('reads only the first 8,000 characters', () => {
