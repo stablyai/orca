@@ -114,8 +114,10 @@ function matchesCapturedAccountRestart(
     r.pairingRevision !== captured.pairingRevision ||
     r.runtimeId !== captured.runtimeId ||
     r.oldPtyId !== captured.oldPtyId ||
-    r.resultPtyId !== captured.resultPtyId ||
-    r.resultIncarnationId !== captured.resultIncarnationId ||
+    // Why: a reply published during the await is the same attempt; only an unbound leaf qualifies below.
+    (captured.resultPtyId !== undefined &&
+      (r.resultPtyId !== captured.resultPtyId ||
+        r.resultIncarnationId !== captured.resultIncarnationId)) ||
     (r.oldIncarnationId && r.oldIncarnationId !== captured.oldIncarnationId) ||
     !isCurrentCodexAccountRestart(state, r, tabs)
   ) {
