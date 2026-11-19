@@ -32,7 +32,10 @@ const workspaceId = 'folder:home-1'
 
 const tree = vi.hoisted((): { current: BotChatTree | null } => ({ current: null }))
 const opened = vi.hoisted(() => vi.fn())
-vi.mock('./use-bot-chat-tree', () => ({ useBotChatTree: () => tree.current }))
+vi.mock('./use-bot-chat-tree', () => ({
+  useBotChatTree: () => tree.current,
+  useBotOwnChatTree: () => tree.current
+}))
 vi.mock('./bot-workspace', () => ({ useBotForWorkspace: () => bot }))
 const host = vi.hoisted(() => ({ offline: false }))
 vi.mock('@/lib/bot-host-views', () => ({ useBotHostOffline: () => host.offline }))

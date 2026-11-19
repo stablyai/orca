@@ -238,3 +238,54 @@ describe('async question send ownership', () => {
     expect(blue().getAttribute('aria-pressed')).toBe('true')
   })
 })
+
+describe('async question older than the loaded messages', () => {
+  it('shows the question the host waits on, Skips it by its row, and drops it once the person replies', () => {
+    const save = vi.fn(() => Promise.resolve())
+    const notice: NativeChatMessage = {
+      id: 'notice',
+      role: 'user',
+      from: { kind: 'agent', senders: [], orchestration: null },
+      timestamp: 4,
+      source: 'transcript',
+      blocks: [{ type: 'text', text: 'Update from worker' }]
+    }
+    const render = (messages: NativeChatMessage[]) =>
+      act(() =>
+        root.render(
+          <NativeChatStructuredAsyncQuestion
+            paneKey="scope"
+            sourceKey="host/epoch"
+            sourceScope="host/epoch"
+            session={{ messages, readPhase: 'ready' }}
+            skip={{
+              skippedThrough: undefined,
+              awaiting: { itemId: 'old-ask', text: 'File the follow-up?' },
+              save
+            }}
+            send={vi.fn(() => true)}
+          />
+        )
+      )
+    render([notice])
+    expect(container.textContent).toContain('File the follow-up?')
+    const skip = [...container.querySelectorAll('button')].find(
+      (node) => node.textContent === 'Skip'
+    )!
+    act(() => skip.click())
+    expect(save).toHaveBeenCalledWith('old-ask')
+
+    nativeChatPromptDismissals.clearForTests()
+    render([
+      notice,
+      {
+        id: 'reply',
+        role: 'user',
+        timestamp: 5,
+        source: 'transcript',
+        blocks: [{ type: 'text', text: 'No' }]
+      }
+    ])
+    expect(container.textContent).not.toContain('File the follow-up?')
+  })
+})

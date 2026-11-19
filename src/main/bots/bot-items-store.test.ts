@@ -54,6 +54,33 @@ describe('bot items store', () => {
     expect(store.viewRows([uid]).questions[uid]).toBeUndefined()
   })
 
+  it("records the owner's comment on an open question as its answer, and only then", () => {
+    const store = open()
+    const { uid } = store.add(input(), owner)
+    store.ownerComment(uid, 'Before any question.', ownerActor)
+    store.set(uid, { status: 'needs_you', comment: 'Ship behind a flag?' }, owner)
+    const asked = store.get(uid)?.questionEvent
+
+    store.ownerComment(uid, 'Yes, behind a flag.', ownerActor)
+
+    const events = store.events(uid, 0, 50)
+    const comments = events.filter((event) => event.kind === 'commented')
+    expect(comments.map((event) => event.data.answers)).toEqual([undefined, undefined, `e${asked}`])
+    expect(events.at(-1)?.data).toEqual({ from: 'needs_you', to: 'working', cause: 'answer' })
+  })
+
+  it("records no answer to the owner's own Needs you note", () => {
+    const store = open()
+    const { uid } = store.add(input(), owner)
+    store.ownerStatus({ uids: [uid], to: 'needs_you', comment: 'Waiting on legal.' }, ownerActor)
+
+    store.ownerComment(uid, 'Legal said yes.', ownerActor)
+
+    const events = store.events(uid, 0, 50)
+    expect(events.at(-2)?.data).toEqual({ text: 'Legal said yes.' })
+    expect(events.at(-1)?.data).toEqual({ from: 'needs_you', to: 'working' })
+  })
+
   it("marks the newest event anyone but the owner made, so the owner's own changes stay seen", () => {
     const store = open()
     const { uid } = store.add(input(), owner)
@@ -65,6 +92,22 @@ describe('bot items store', () => {
 
     const { eventId } = store.comment(uid, 'Switched to outline.', owner)
     expect(store.viewRows([uid]).othersLast[uid]).toBe(eventId)
+  })
+
+  it('returns the comment a request id already made: no second comment, no second mail', () => {
+    const store = open()
+    const { uid } = store.add(input(), owner)
+    const sentOnce = store.owedMail(0).mails.length
+    const first = store.ownerComment(uid, 'Go with A', { kind: 'owner' }, [], 1, 'req-1')
+
+    expect(store.ownerComment(uid, 'Go with A', { kind: 'owner' }, [], 2, 'req-1')).toEqual(first)
+    const comments = store.events(uid, 0, 50).filter((event) => event.kind === 'commented')
+    expect(comments.map((event) => event.id)).toEqual([first.eventId])
+    expect(store.owedMail(0).mails).toHaveLength(sentOnce + 1)
+    // Without an id, as an older client sends it, each send is its own comment.
+    store.ownerComment(uid, 'Go with A', { kind: 'owner' })
+    store.ownerComment(uid, 'Go with A', { kind: 'owner' })
+    expect(store.events(uid, 0, 50).filter((event) => event.kind === 'commented')).toHaveLength(3)
   })
 
   it('pages Activity back from the newest event, oldest first in each page', () => {
@@ -160,6 +203,22 @@ describe('bot items store', () => {
       limit: 10
     })
     expect(page.items.map((item) => item.title)).toEqual(['Share dialog'])
+  })
+
+  it("lists and counts only the named chats' items", () => {
+    const store = open()
+    store.add(input({ title: 'Home' }), owner)
+    store.add(input({ title: 'Side', chatId: 'chat-side' }), otherChat)
+    store.add(input({ title: 'Room', chatId: 'chat-room' }), otherChat)
+
+    const page = store.list({
+      botId: 'bot-a',
+      statuses: ['planned'],
+      chatIds: ['chat-side', 'chat-room'],
+      limit: 10
+    })
+    expect(page.items.map((item) => item.title).toSorted()).toEqual(['Room', 'Side'])
+    expect(page.counts).toEqual({ planned: 2 })
   })
 
   it('reopens its own closed item, with field changes only alongside the reopen, and mails no one', () => {

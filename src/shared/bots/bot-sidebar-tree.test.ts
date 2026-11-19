@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { BotChatTreeChat, BotChatTreeWorker } from './bot-chat-tree'
+import { botOwnChatTree, type BotChatTreeChat, type BotChatTreeWorker } from './bot-chat-tree'
 import { buildBotSidebarTree } from './bot-sidebar-tree'
 
 const chat = (chatId: string, extra: Partial<BotChatTreeChat> = {}): BotChatTreeChat => ({
@@ -147,5 +147,29 @@ describe('buildBotSidebarTree', () => {
       workspaceChats: { w1: 'run', w2: 'run', w3: 'run' }
     })
     expect(tree.stray.map((line) => line.id)).toEqual(['w2', 'w1'])
+  })
+
+  it("lists a group room's workers under Home Chat, never the room session itself", () => {
+    const room = 'bot-group-member-1'
+    const own = botOwnChatTree({
+      chats: [
+        chat('home', { origin: 'home' }),
+        chat(room, { running: [runningIn('ws1', 'needs-you')], runningTotal: 1 })
+      ],
+      workspaceChats: { ws1: room }
+    })
+    const tree = build(own.chats, [{ id: 'ws1' }], {
+      workspaceChats: own.workspaceChats,
+      folds: { home: 'open' }
+    })
+
+    expect(tree.chats.map((view) => view.chat.chatId)).toEqual(['home'])
+    expect(tree.chats[0]?.lines.map((line) => line.id)).toEqual(['ws1'])
+    expect(own.chats[0]?.running.map((worker) => worker.state)).toEqual(['needs-you'])
+  })
+
+  it('keeps a room session listed when there is no Home Chat to take its workers', () => {
+    const tree = { chats: [chat('bot-group-member-1')], workspaceChats: {} }
+    expect(botOwnChatTree(tree)).toBe(tree)
   })
 })

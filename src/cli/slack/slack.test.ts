@@ -554,7 +554,9 @@ describe('orca slack', () => {
           { ref: 'slack:T1:C1', label: '#general' }
         ]
       })
-    ).toBe('slack:T1:user:U0BOB  Bob (Bob Lee) @bob · mention with <@U0BOB>\nslack:T1:C1  #general')
+    ).toBe(
+      'slack:T1:user:U0BOB  Bob (Bob Lee) @bob · mention with <@U0BOB>, post to it to DM them\nslack:T1:C1  #general'
+    )
   })
   it("prints what each searched message says, quoted as someone else's words", () => {
     const printed = formatActionResult('find', {
