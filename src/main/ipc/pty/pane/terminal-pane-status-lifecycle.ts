@@ -32,12 +32,10 @@ export function bindTerminalPaneStatusLifecycle(
           const { ptyId } = resolvePanePty(runtime, paneKey)
           return ptyId ? runtime.getLaunchStatementForPty(ptyId, agent) : null
         }
+        // A typed agent holds no launch, and a shell without command marks (cmd.exe) says nothing
+        // when it quits, so the proof stands on its own; a launch replaced meanwhile voids it.
         const launch = launchOf()
-        // A finished command already retired a gone launch; an unknown one (reattach) needs the proof.
-        return (
-          launch !== null &&
-          (await paneShellAlone(runtime, paneKey, agent, () => launchOf() === launch)) === true
-        )
+        return (await paneShellAlone(runtime, paneKey, agent, () => launchOf() === launch)) === true
       } catch {
         return false
       }

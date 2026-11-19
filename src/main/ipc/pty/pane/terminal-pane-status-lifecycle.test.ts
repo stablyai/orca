@@ -52,14 +52,14 @@ it.each([
     false
   ],
   [
-    'intervening command retired the launch',
+    'a typed agent with no launch held, its shell alone',
     'darwin',
     true,
     'zsh',
     undefined,
     'gone',
     false,
-    false
+    true
   ],
   ['successor launch during inspection', 'darwin', true, 'zsh', undefined, 'held', true, false],
   [
