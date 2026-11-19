@@ -220,7 +220,7 @@ export async function assemblePtySpawnLaunchOptions(input: PtySpawnLaunchOptions
     cwd: input.cwd,
     store: input.store,
     isFreshLaunch: !input.preAdoptedStablePane && launchCommand !== undefined,
-    settings,
+    settings: input.getSettings?.(),
     env,
     claudeAuth: input.claudeAuth,
     wslDistro: input.expectedWslDistro,
