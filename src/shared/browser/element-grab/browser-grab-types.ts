@@ -163,6 +163,66 @@ export type BrowserGrabRejectReason =
 
 export type BrowserSetGrabModeResult = { ok: true } | { ok: false; reason: BrowserGrabRejectReason }
 
+/**
+ * Where Orca's annotate palette and its hint cover a page, in Orca's pixels relative to the page frame's top-left,
+ * with the frame's size so the page can convert to its own (zoomed) pixels. The picker keeps its label clear of it.
+ */
+export type BrowserGrabLabelAvoidArea = {
+  x: number
+  y: number
+  width: number
+  height: number
+  frameWidth: number
+  frameHeight: number
+}
+
+export type BrowserSetGrabLabelAvoidAreaArgs = {
+  browserPageId: string
+  area: BrowserGrabLabelAvoidArea | null
+}
+
+const GRAB_LABEL_AVOID_MAX_PX = 100_000
+
+/** Validates a renderer-sent area: finite, bounded numbers and a non-empty frame, or null. Undefined means invalid. */
+export function parseGrabLabelAvoidArea(
+  value: unknown
+): BrowserGrabLabelAvoidArea | null | undefined {
+  if (value === null) {
+    return null
+  }
+  if (typeof value !== 'object') {
+    return undefined
+  }
+  const record: Record<string, unknown> = { ...value }
+  const read = (key: keyof BrowserGrabLabelAvoidArea): number | undefined => {
+    const n = record[key]
+    return typeof n === 'number' && Number.isFinite(n) && Math.abs(n) <= GRAB_LABEL_AVOID_MAX_PX
+      ? n
+      : undefined
+  }
+  const x = read('x')
+  const y = read('y')
+  const width = read('width')
+  const height = read('height')
+  const frameWidth = read('frameWidth')
+  const frameHeight = read('frameHeight')
+  if (
+    x === undefined ||
+    y === undefined ||
+    width === undefined ||
+    height === undefined ||
+    frameWidth === undefined ||
+    frameHeight === undefined ||
+    width < 0 ||
+    height < 0 ||
+    frameWidth <= 0 ||
+    frameHeight <= 0
+  ) {
+    return undefined
+  }
+  return { x, y, width, height, frameWidth, frameHeight }
+}
+
 export type BrowserAwaitGrabSelectionArgs = {
   browserPageId: string
   opId: string

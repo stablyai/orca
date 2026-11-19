@@ -9,11 +9,13 @@ import type {
   BrowserAwaitGrabSelectionArgs,
   BrowserGrabResult,
   BrowserCancelGrabArgs,
+  BrowserSetGrabLabelAvoidAreaArgs,
   BrowserCaptureSelectionScreenshotArgs,
   BrowserCaptureSelectionScreenshotResult,
   BrowserExtractHoverArgs,
   BrowserExtractHoverResult
 } from '../../../shared/browser/element-grab/browser-grab-types'
+import { parseGrabLabelAvoidArea } from '../../../shared/browser/element-grab/browser-grab-types'
 
 const grabModeIntentByPageId = new Map<string, { generation: number; enabled: boolean }>()
 const grabModeOperationByPageId = new Map<string, Promise<void>>()
@@ -66,6 +68,7 @@ export function registerBrowserGrabHandlers(): void {
   ipcMain.removeHandler('browser:setGrabMode')
   ipcMain.removeHandler('browser:awaitGrabSelection')
   ipcMain.removeHandler('browser:cancelGrab')
+  ipcMain.removeHandler('browser:setGrabLabelAvoidArea')
   ipcMain.removeHandler('browser:captureSelectionScreenshot')
   ipcMain.removeHandler('browser:extractHoverPayload')
 
@@ -128,6 +131,26 @@ export function registerBrowserGrabHandlers(): void {
       }
       // awaitGrabSelection cancels previous grabs; an extra active-op guard would race rearming.
       return browserManager.awaitGrabSelection(args.browserPageId, args.opId, guest)
+    }
+  )
+
+  ipcMain.handle(
+    'browser:setGrabLabelAvoidArea',
+    (event, args: BrowserSetGrabLabelAvoidAreaArgs): boolean => {
+      if (!isTrustedBrowserRenderer(event.sender) || typeof args?.browserPageId !== 'string') {
+        return false
+      }
+      const area = parseGrabLabelAvoidArea(args.area)
+      if (area === undefined) {
+        return false
+      }
+      const guest = browserManager.getAuthorizedGuest(args.browserPageId, event.sender.id)
+      // A closing palette may outlive its page; its footprint is still forgotten.
+      if (!guest && area !== null) {
+        return false
+      }
+      browserManager.setGrabLabelAvoidArea(args.browserPageId, area, guest)
+      return guest !== null
     }
   )
 

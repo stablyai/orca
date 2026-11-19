@@ -17,6 +17,7 @@ import { setAnnotatePaletteRatio, useAnnotatePaletteRatio } from './annotate-pal
 import { PaletteGrabActions, PaletteGrip } from './palette-controls'
 import { usePaletteTopOffset } from './use-palette-top-offset'
 import { useHoldAltSeeThrough } from './use-hold-alt-see-through'
+import { useGrabLabelAvoidArea } from './use-grab-label-avoid-area'
 import { focusAnnotateButtonNear, isEditableFocus, useToolLabelsFit } from './palette-focus-and-fit'
 
 type ToolOption = {
@@ -53,7 +54,8 @@ export function BrowserAnnotateToolPalette({
   onGrabCopy,
   onGrabScreenshot,
   onDrawSlotChange,
-  onDrawDensityChange
+  onDrawDensityChange,
+  labelAvoidFrameRef
 }: {
   /** The page area the palette floats over and may not leave. */
   boundsRef: RefObject<HTMLElement | null>
@@ -82,11 +84,14 @@ export function BrowserAnnotateToolPalette({
   onDrawSlotChange: (slot: HTMLElement | null) => void
   /** Narrow palette: Draw keeps Pen and the selected tool and a short Copy, before anything wraps. */
   onDrawDensityChange: (density: MarkupPaletteDensity) => void
+  /** The page frame; while picking, the palette tells that page where it sits so hover labels avoid it. */
+  labelAvoidFrameRef?: RefObject<HTMLElement | null>
 }): React.JSX.Element {
   const t = useTranslate()
   const paletteRef = useRef<HTMLDivElement>(null)
   const toolRefs = useRef(new Map<BrowserAnnotateTool, HTMLButtonElement>())
   const labelProbeRef = useRef<HTMLSpanElement>(null)
+  const hintRef = useRef<HTMLDivElement>(null)
   // Why state: the hooks below must re-run once the page area is attached, which can be after this mounts.
   const [bounds, setBounds] = useState<HTMLElement | null>(null)
   useLayoutEffect(() => {
@@ -146,6 +151,14 @@ export function BrowserAnnotateToolPalette({
   const wrapActions = fitLevel >= FIT_LEVEL_WRAP
   const showHint = Boolean(hint) && fitLevel === 0 && !dragging && left !== null
   const hasActions = activeTool !== 'annotate' || annotateActions !== null
+  useGrabLabelAvoidArea({
+    pageId: ownerPageId,
+    frameRef: labelAvoidFrameRef,
+    paletteRef,
+    hintRef,
+    enabled: activeTool !== 'draw' && !dragging && left !== null,
+    layoutKey: `${left}|${top}|${fitLevel}|${showHint ? hint : ''}|${activeTool}|${annotateActions ? 1 : 0}`
+  })
 
   // Entry and tool changes focus the active tool, so A/G/D never type into the page and keep reaching the app
   // (Draw has no page picker to forward keys from). A comment draft being typed keeps its focus.
@@ -334,6 +347,7 @@ export function BrowserAnnotateToolPalette({
       </div>
       {showHint ? (
         <div
+          ref={hintRef}
           className={cn(
             'pointer-events-none absolute z-40 max-w-[calc(100%-16px)] truncate rounded-md border border-border bg-popover/95 px-2 py-0.5 text-2xs backdrop-blur',
             'transition-opacity duration-100',

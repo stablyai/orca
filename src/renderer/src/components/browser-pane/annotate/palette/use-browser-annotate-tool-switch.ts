@@ -67,7 +67,8 @@ export function useBrowserAnnotateToolSwitch({
   markup,
   canPickElements,
   toolTargetId,
-  documentKey
+  documentKey,
+  documentReady = true
 }: {
   grab: GrabModeHook
   grabIntent: GrabIntent
@@ -82,11 +83,32 @@ export function useBrowserAnnotateToolSwitch({
   toolTargetId: string
   /** Changes when the page's document changes (navigation, preview reload); a pending Draw for the old one is dropped. */
   documentKey: string
+  /** False while the document is (re)loading; each fall starts a new document generation, even at the same key. */
+  documentReady?: boolean
 }): BrowserAnnotateToolSwitch {
+  // Why a generation and not just the key: A → B → A, or a reload of the same URL, brings the key back while the
+  // document under it is new. Every key change or loss of readiness starts a new generation, so state held for an
+  // older document (pending Draw, held pick, Undo) never matches again.
+  const documentBase = `${toolTargetId}\n${documentKey}`
+  const usable = documentReady && canPickElements
+  const [documentGeneration, setDocumentGeneration] = useState({
+    base: documentBase,
+    ready: usable,
+    generation: 0
+  })
+  let generation = documentGeneration.generation
+  if (documentGeneration.base !== documentBase || documentGeneration.ready !== usable) {
+    const newDocument = documentGeneration.base !== documentBase || !usable
+    generation += newDocument ? 1 : 0
+    setDocumentGeneration({ base: documentBase, ready: usable, generation })
+  }
   // Why: between stopping the picker and Draw's capture starting, neither is on; keep the palette on Draw meanwhile.
-  // Keyed by page: a page change (preview grant swap, navigation to another tab) drops a pending Draw by itself.
-  const drawOwner = `${toolTargetId}\n${documentKey}`
+  const drawOwner = `${documentBase}\n${generation}`
   const [drawStartingFor, setDrawStartingFor] = useState<string | null>(null)
+  // A pending Draw for an older document is dropped outright, so it can't come back if the owner string recurs.
+  if (drawStartingFor !== null && drawStartingFor !== drawOwner) {
+    setDrawStartingFor(null)
+  }
   const drawStarting = canPickElements && drawStartingFor === drawOwner
   // A new editor per drawing session, so a reopened drawing never inherits another session's strokes.
   const [drawSession, setDrawSession] = useState(0)
@@ -100,9 +122,14 @@ export function useBrowserAnnotateToolSwitch({
   const transitionRef = useRef(0)
   const shapesRef = useRef<readonly MarkupShape[]>([])
   const markupActiveRef = useRef(markup.isActive)
+  // Live owner and capability, read when the overlay teardown resolves, a few frames after Draw was asked for.
+  const liveOwnerRef = useRef(drawOwner)
+  const canPickRef = useRef(canPickElements)
   useLayoutEffect(() => {
     markupActiveRef.current = markup.isActive
-  }, [markup.isActive])
+    liveOwnerRef.current = drawOwner
+    canPickRef.current = canPickElements
+  }, [canPickElements, drawOwner, markup.isActive])
   const [restoredShapes, setRestoredShapes] = useState<readonly MarkupShape[] | undefined>()
   const undoToastRef = useRef<string | number | null>(null)
   // The discarded drawing while its Undo is on offer: entering Draw again in that window restores it.
@@ -190,7 +217,8 @@ export function useBrowserAnnotateToolSwitch({
         reopenDrawing(discarded.saved, discarded.shapes)
         return
       }
-      setDrawStartingFor(drawOwner)
+      const owner = drawOwner
+      setDrawStartingFor(owner)
       cancelPendingBrowserCapture()
       // Why a second, awaited disable: with the pick already cancelled it awaits the overlay teardown script, which
       // the page runs after the cancelled pick's own teardown, so the frozen screenshot carries no highlight.
@@ -201,7 +229,12 @@ export function useBrowserAnnotateToolSwitch({
           () => false
         )
         .then((tornDown) => {
-          if (transitionRef.current !== transition) {
+          // Anything since (another tool, exit, a new document, the page becoming unusable) supersedes this start.
+          if (
+            transitionRef.current !== transition ||
+            liveOwnerRef.current !== owner ||
+            !canPickRef.current
+          ) {
             return
           }
           setDrawStartingFor(null)

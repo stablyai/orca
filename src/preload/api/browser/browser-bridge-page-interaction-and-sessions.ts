@@ -138,6 +138,17 @@ export const browserPageInteractionAndSessionsApi = {
     ipcRenderer.invoke('browser:awaitGrabSelection', args),
   cancelGrab: (args: { browserPageId: string }): Promise<boolean> =>
     ipcRenderer.invoke('browser:cancelGrab', args),
+  setGrabLabelAvoidArea: (args: {
+    browserPageId: string
+    area: {
+      x: number
+      y: number
+      width: number
+      height: number
+      frameWidth: number
+      frameHeight: number
+    } | null
+  }): Promise<boolean> => ipcRenderer.invoke('browser:setGrabLabelAvoidArea', args),
   captureSelectionScreenshot: (args: {
     browserPageId: string
     rect: { x: number; y: number; width: number; height: number }

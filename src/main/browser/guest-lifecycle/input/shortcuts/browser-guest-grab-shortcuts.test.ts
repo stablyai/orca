@@ -95,6 +95,14 @@ describe('grab shortcut forwarding from a focused page', () => {
     })
   })
 
+  it('does not mirror Alt down when no pick is running', () => {
+    const { press, send } = setup(false)
+
+    press({ key: 'Alt', code: 'AltLeft', alt: true })
+
+    expect(send).not.toHaveBeenCalled()
+  })
+
   it('leaves tool keys to the page with a modifier held or when no pick is running', () => {
     const withModifier = setup(true)
     expect(withModifier.press({ key: 'g', code: 'KeyG', meta: true })).toBe(false)
@@ -119,8 +127,9 @@ describe('grab shortcut forwarding from a focused page', () => {
     })
   })
 
-  it('releases Alt that went down while the app had focus and came up in the page', () => {
-    const { press, send } = setup(true)
+  it('releases Alt that went down while the app had focus and came up in the page after the pick settled', () => {
+    // Down in the app (the page never saw it), the pick then settles, then Alt comes up in the page.
+    const { press, send } = setup(false)
 
     press({ type: 'keyUp', key: 'Alt', code: 'AltLeft' })
 

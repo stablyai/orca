@@ -2,7 +2,8 @@ import { runInNewContext } from 'node:vm'
 import { afterEach, describe, expect, it } from 'vitest'
 import { BROWSER_GRAB_SELECTED_ATTRIBUTE } from '../../../shared/browser/annotations/browser-annotation-viewport-bridge'
 import { buildGuestOverlayScript } from './grab-guest-script'
-import { GRAB_LABEL_RESERVED_TOP_PX } from './grab-guest-overlay-script'
+import { buildGrabLabelAvoidScript } from './grab-guest-overlay-script'
+import type { BrowserGrabLabelAvoidArea } from '../../../shared/browser/element-grab/browser-grab-types'
 
 type Rect = { x: number; y: number; width: number; height: number }
 
@@ -15,7 +16,8 @@ afterEach(async () => {
 async function armGuest(
   previousMarker?: string,
   inShadowRoot = false,
-  initialRect: Rect = { x: 40, y: 300, width: 120, height: 30 }
+  initialRect: Rect = { x: 40, y: 300, width: 120, height: 30 },
+  labelAvoidArea?: BrowserGrabLabelAvoidArea
 ) {
   const { Window } = await import('happy-dom')
   const window = new Window()
@@ -96,6 +98,9 @@ async function armGuest(
     }
   }
   expect(runInNewContext(buildGuestOverlayScript('arm'), context)).toBe(true)
+  if (labelAvoidArea) {
+    expect(runInNewContext(buildGrabLabelAvoidScript(labelAvoidArea), context)).toBe(true)
+  }
   const grab: {
     host: { dispatchEvent: (event: unknown) => void }
     freezeHighlight: (selectionId: string) => void
@@ -124,16 +129,18 @@ async function armGuest(
     new window.MouseEvent('mousemove', { clientX: initialRect.x + 10, clientY: initialRect.y + 10 })
   )
   flushFrames()
-  const hoverLabelTop = Number.parseFloat(
-    shadowRoots
-      .at(-1)
-      ?.firstElementChild?.children[1]?.getAttribute('style')
-      ?.match(/top:\s*([\d.-]+)px/)?.[1] ?? 'NaN'
+  const hoverLabelStyle =
+    shadowRoots.at(-1)?.firstElementChild?.children[1]?.getAttribute('style') ?? ''
+  const hoverLabelTop = Number.parseFloat(hoverLabelStyle.match(/top:\s*([\d.-]+)px/)?.[1] ?? 'NaN')
+  const hoverLabelLeft = Number.parseFloat(
+    hoverLabelStyle.match(/left:\s*([\d.-]+)px/)?.[1] ?? 'NaN'
   )
   grab.freezeHighlight('selection-1')
 
   return {
     hoverLabelTop,
+    hoverLabelLeft,
+    viewport: { width: window.innerWidth, height: window.innerHeight },
     window,
     scroller,
     target,
@@ -201,10 +208,77 @@ describe('grab overlay after the click', () => {
     expect(guest.target.getAttribute(BROWSER_GRAB_SELECTED_ATTRIBUTE)).toBe('page-updated')
   })
 
-  it('keeps the hover label out of the band the annotate palette covers', async () => {
-    // An element hugging the top of the page: the label must not sit under the palette.
+  // The label is ~28px tall; the picker assumes 160px wide when the page can't measure it (as here).
+  const LABEL = { width: 160, height: 28 }
+  const overlaps = (
+    label: { left: number; top: number },
+    area: { left: number; top: number; right: number; bottom: number }
+  ): boolean =>
+    label.left < area.right &&
+    label.left + LABEL.width > area.left &&
+    label.top < area.bottom &&
+    label.top + LABEL.height > area.top
+
+  it('puts the hover label below the element when nothing covers that spot', async () => {
     const guest = await armGuest(undefined, false, { x: 40, y: 4, width: 120, height: 30 })
 
-    expect(guest.hoverLabelTop).toBe(GRAB_LABEL_RESERVED_TOP_PX)
+    expect(guest.hoverLabelTop).toBe(40)
+    expect(guest.hoverLabelLeft).toBe(40)
+  })
+
+  it('keeps the hover label clear of the palette and its hint wherever the palette sits', async () => {
+    // The palette dragged right over a top-hugging element, its hint below it: 300–600 × 8–72.
+    const { width, height } = await armGuest().then((guest) => guest.viewport)
+    const area = { x: 300, y: 8, width: 300, height: 64, frameWidth: width, frameHeight: height }
+    const guest = await armGuest(undefined, false, { x: 350, y: 4, width: 120, height: 30 }, area)
+
+    const label = { left: guest.hoverLabelLeft, top: guest.hoverLabelTop }
+    expect(overlaps(label, { left: 300, top: 8, right: 600, bottom: 72 })).toBe(false)
+    expect(label.top).toBeGreaterThanOrEqual(0)
+    expect(label.top + LABEL.height).toBeLessThanOrEqual(height)
+  })
+
+  it('converts the palette into a zoomed page’s pixels', async () => {
+    // Page zoom 200%: the frame is half the page's CSS width and height in Orca's pixels.
+    const { width, height } = await armGuest().then((guest) => guest.viewport)
+    const area = {
+      x: 150,
+      y: 4,
+      width: 150,
+      height: 32,
+      frameWidth: width / 2,
+      frameHeight: height / 2
+    }
+    const guest = await armGuest(undefined, false, { x: 350, y: 4, width: 120, height: 30 }, area)
+
+    const label = { left: guest.hoverLabelLeft, top: guest.hoverLabelTop }
+    expect(overlaps(label, { left: 300, top: 8, right: 600, bottom: 72 })).toBe(false)
+  })
+
+  it('moves the label under a wrapped palette when there is no room beside it', async () => {
+    // A two-row palette spanning the page width at the top: the label goes just under it.
+    const { width, height } = await armGuest().then((guest) => guest.viewport)
+    const area = {
+      x: 8,
+      y: 8,
+      width: width - 16,
+      height: 110,
+      frameWidth: width,
+      frameHeight: height
+    }
+    const guest = await armGuest(undefined, false, { x: 40, y: 20, width: 120, height: 30 }, area)
+
+    expect(guest.hoverLabelTop).toBeGreaterThanOrEqual(118)
+    expect(
+      overlaps(
+        { left: guest.hoverLabelLeft, top: guest.hoverLabelTop },
+        {
+          left: 8,
+          top: 8,
+          right: width - 8,
+          bottom: 118
+        }
+      )
+    ).toBe(false)
   })
 })

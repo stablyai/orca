@@ -83,11 +83,12 @@ export function usePaletteHorizontalDrag({
   const [dragging, setDragging] = useState(false)
   const [snapping, setSnapping] = useState(false)
   const snapTimerRef = useRef<number | undefined>(undefined)
-  const endDragRef = useRef<((commit: boolean) => void) | null>(null)
-  const layoutRef = useRef<Layout | null>(null)
-  useLayoutEffect(() => {
-    layoutRef.current = layout
-  }, [layout])
+  // The drag in progress and the widths its clamp was computed for.
+  const dragRef = useRef<{
+    end: (commit: boolean) => void
+    boundsWidth: number
+    paletteWidth: number
+  } | null>(null)
 
   useLayoutEffect(() => {
     const palette = paletteRef.current
@@ -100,12 +101,14 @@ export function usePaletteHorizontalDrag({
       // A hidden pane measures zero; keep the last layout so the saved position isn't recomputed from nothing.
       if (boundsWidth === 0) {
         // Hidden mid-drag: end it so the pages get pointer input back.
-        endDragRef.current?.(false)
+        dragRef.current?.end(false)
         return
       }
-      // The drag's clamp was computed for the old width; give up the drag rather than move out of bounds.
-      if (endDragRef.current && boundsWidth !== layoutRef.current?.boundsWidth) {
-        endDragRef.current(false)
+      // The drag's clamp was computed for the old widths (a resize, or a tool switch or capability change that
+      // reshaped the palette); give up the drag rather than move out of bounds or past where it can travel.
+      const drag = dragRef.current
+      if (drag && (boundsWidth !== drag.boundsWidth || paletteWidth !== drag.paletteWidth)) {
+        drag.end(false)
       }
       setLayout((prev) => {
         // Bounds resize or a new saved ratio: re-derive from the ratio. Content-only width change: keep the edge.
@@ -142,7 +145,7 @@ export function usePaletteHorizontalDrag({
   // Unmount mid-drag (Done, Esc, navigation) must still give pointer input back to the page.
   useEffect(
     () => () => {
-      endDragRef.current?.(false)
+      dragRef.current?.end(false)
       window.clearTimeout(snapTimerRef.current)
     },
     []
@@ -180,7 +183,7 @@ export function usePaletteHorizontalDrag({
     gripProps: {
       onPointerDown: (event) => {
         const palette = paletteRef.current
-        if (event.button !== 0 || !layout || !canMove || !palette || endDragRef.current) {
+        if (event.button !== 0 || !layout || !canMove || !palette || dragRef.current) {
           return
         }
         event.preventDefault()
@@ -238,7 +241,7 @@ export function usePaletteHorizontalDrag({
           window.removeEventListener('blur', onCancel)
           removeAppKeyListener('keydown', onKeyDown)
           releasePassthrough()
-          endDragRef.current = null
+          dragRef.current = null
           if (!commit) {
             palette.style.left = `${startLeft}px`
             setDragging(false)
@@ -256,7 +259,7 @@ export function usePaletteHorizontalDrag({
         grip.addEventListener('lostpointercapture', onCancel)
         window.addEventListener('blur', onCancel)
         addAppKeyListener('keydown', onKeyDown, { first: true })
-        endDragRef.current = endDrag
+        dragRef.current = { end: endDrag, boundsWidth, paletteWidth }
       },
       onDoubleClick: () => commitRatio(0.5, true),
       onKeyDown: (event) => {

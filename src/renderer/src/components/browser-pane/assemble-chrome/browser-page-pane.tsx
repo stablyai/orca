@@ -267,9 +267,11 @@ export function BrowserPagePane({
     startGrabIntent: grabAnnotations.startGrabIntent,
     cancelPendingBrowserCapture: grabAnnotations.cancelPendingBrowserCapture,
     markup,
-    canPickElements: !isBlankTab,
+    canPickElements: !isBlankTab && !browserTab.loadError,
     toolTargetId: browserTab.id,
-    documentKey: browserTab.url
+    documentKey: browserTab.url,
+    // A load (including a reload of the same URL) means a new document under the tools.
+    documentReady: !browserTab.loading
   })
   useBrowserPageKeyboardShortcuts({
     browserTabId: browserTab.id,

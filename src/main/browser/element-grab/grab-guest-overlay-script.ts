@@ -1,11 +1,16 @@
 import { BROWSER_GRAB_SELECTED_ATTRIBUTE } from '../../../shared/browser/annotations/browser-annotation-viewport-bridge'
 
-/**
- * Page band the annotate palette can cover while picking: 8px + find bar (34px) + 8px when it moves below the find
- * bar, then the 38px palette and an 8px gap. Why a fixed band: the guest has no channel for the palette's live
- * position, and the palette only ever sits in this band at the top of the page.
- */
-export const GRAB_LABEL_RESERVED_TOP_PX = 96
+import type { BrowserGrabLabelAvoidArea } from '../../../shared/browser/element-grab/browser-grab-types'
+
+/** Tells an armed picker where Orca's annotate palette (and its hint) cover the page; null when nothing does. */
+export function buildGrabLabelAvoidScript(area: BrowserGrabLabelAvoidArea | null): string {
+  // Only validated numbers reach here (see parseGrabLabelAvoidArea); JSON keeps them inert.
+  return `(function() {
+  var grab = window.__orcaGrab;
+  if (grab && typeof grab.setLabelAvoidArea === 'function') grab.setLabelAvoidArea(${JSON.stringify(area)});
+  return true;
+})()`
+}
 
 export const GRAB_GUEST_OVERLAY_SCRIPT = `  var host = document.createElement('div');
   host.id = '__orca-grab-host';
@@ -43,6 +48,55 @@ export const GRAB_GUEST_OVERLAY_SCRIPT = `  var host = document.createElement('d
   overlay.appendChild(hoverLabel);
 
   var currentEl = null;
+  // Where Orca's annotate palette covers the page, in the page frame's pixels (see setLabelAvoidArea).
+  var labelAvoidArea = null;
+  var LABEL_SPACE = 28;
+
+  function labelAvoidRect() {
+    var area = labelAvoidArea;
+    if (!area) return null;
+    // Orca measures in its own pixels; the page's differ by its zoom (and any device emulation scale).
+    var sx = window.innerWidth / area.frameWidth;
+    var sy = window.innerHeight / area.frameHeight;
+    return {
+      left: area.x * sx - 4,
+      top: area.y * sy - 4,
+      right: (area.x + area.width) * sx + 4,
+      bottom: (area.y + area.height) * sy + 4
+    };
+  }
+
+  function labelFits(left, top, width, avoid) {
+    if (top < 0 || top + LABEL_SPACE > window.innerHeight) return false;
+    return !avoid || left >= avoid.right || left + width <= avoid.left || top >= avoid.bottom || top + LABEL_SPACE <= avoid.top;
+  }
+
+  // Below the element, else above it, else beside the palette, else just under it: never under the palette.
+  function placeLabel(rect) {
+    var width = hoverLabel.offsetWidth || 160;
+    var left = Math.max(4, rect.x);
+    var below = rect.bottom + 6;
+    var above = rect.top - LABEL_SPACE;
+    var avoid = labelAvoidRect();
+    var tops = [below, above];
+    for (var i = 0; i < tops.length; i++) {
+      if (labelFits(left, tops[i], width, avoid)) return { left: left, top: tops[i] };
+    }
+    var fallbackTop = below + LABEL_SPACE > window.innerHeight ? above : below;
+    fallbackTop = Math.min(Math.max(0, fallbackTop), window.innerHeight - LABEL_SPACE);
+    if (avoid) {
+      var besideLefts = [avoid.right, avoid.left - width];
+      for (var j = 0; j < besideLefts.length; j++) {
+        var besideLeft = besideLefts[j];
+        if (besideLeft >= 4 && besideLeft + width <= window.innerWidth - 4 && labelFits(besideLeft, fallbackTop, width, avoid)) {
+          return { left: besideLeft, top: fallbackTop };
+        }
+      }
+      var under = Math.min(avoid.bottom, window.innerHeight - LABEL_SPACE);
+      if (labelFits(left, under, width, avoid)) return { left: left, top: under };
+    }
+    return { left: left, top: fallbackTop };
+  }
 
   function updateHighlight(el) {
     if (!el || el === document.documentElement || el === document.body) {
@@ -70,18 +124,11 @@ export const GRAB_GUEST_OVERLAY_SCRIPT = `  var host = document.createElement('d
     if (text) parts.push('"' + text + '"');
     parts.push(w + 'x' + h);
     hoverLabel.textContent = parts.join('  ');
-
-    var labelY = rect.bottom + 6;
-    if (labelY + 28 > window.innerHeight) {
-      labelY = rect.top - 28;
-    }
-    // Orca's annotate palette floats over the top of the page while picking; keep the label out from under it.
-    if (labelY < ${GRAB_LABEL_RESERVED_TOP_PX}) {
-      labelY = Math.min(Math.max(rect.bottom + 6, ${GRAB_LABEL_RESERVED_TOP_PX}), window.innerHeight - 28);
-    }
-    hoverLabel.style.left = Math.max(4, rect.x) + 'px';
-    hoverLabel.style.top = labelY + 'px';
+    // Shown before placing, so its width is measurable.
     hoverLabel.style.display = 'block';
+    var place = placeLabel(rect);
+    hoverLabel.style.left = place.left + 'px';
+    hoverLabel.style.top = place.top + 'px';
   }
 
   function onPointerMove(e) {
@@ -181,6 +228,11 @@ export const GRAB_GUEST_OVERLAY_SCRIPT = `  var host = document.createElement('d
     host: host,
     extractPayload: extractPayload,
     getCurrentElement: function() { return currentEl; },
+    // Orca's palette moved, resized or closed: re-place the label for the hovered element.
+    setLabelAvoidArea: function(area) {
+      labelAvoidArea = area;
+      if (currentEl && selectedEl === null) updateHighlight(currentEl);
+    },
     // Release pointer events while preserving the selection outline for the copy menu.
     freezeHighlight: function(selectionId) {
       stopPointerInput();

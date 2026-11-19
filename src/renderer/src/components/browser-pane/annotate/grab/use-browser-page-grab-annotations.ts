@@ -52,9 +52,12 @@ export function useBrowserPageGrabAnnotations({
   const pendingAnnotationPayloadRef = useRef<BrowserGrabPayload | null>(null)
   const grabSessionRef = useRef(0)
   const grabIdle = grab.state === 'idle'
+  const { claimGrabToast, copyGrabScreenshot } = useGrabScreenshotCopy()
   useLayoutEffect(() => {
     grabSessionRef.current += 1
-  }, [grabIdle, grabIntent, toolTargetId])
+    // A screenshot copy still writing to the clipboard belongs to the session it started in; its toast is stale now.
+    claimGrabToast()
+  }, [claimGrabToast, grabIdle, grabIntent, toolTargetId])
   // Every way out of picking (Done, Esc, the toolbar, navigation) ends here: an unsaved comment card can't outlive it.
   if (grab.state === 'idle' && pendingAnnotationPayload !== null) {
     setPendingAnnotationPayload(null)
@@ -79,7 +82,6 @@ export function useBrowserPageGrabAnnotations({
   const addBrowserPageAnnotation = useAppStore((s) => s.addBrowserPageAnnotation)
 
   useEffect(() => () => clearTimeout(grabToastTimerRef.current), [])
-  const { claimGrabToast, copyGrabScreenshot } = useGrabScreenshotCopy()
 
   const dismissGrabToast = useCallback(() => {
     claimGrabToast()
@@ -193,6 +195,12 @@ export function useBrowserPageGrabAnnotations({
       if (nextIntent === 'annotate') {
         recordFeatureInteraction('browser-annotations')
       }
+      if (grabIntent !== nextIntent) {
+        // The last tool's feedback (and the rearm its timer would do) must not land on the new tool's pick.
+        claimGrabToast()
+        clearTimeout(grabToastTimerRef.current)
+        setGrabToast(null)
+      }
       if (grab.state === 'confirming' && grabIntent !== nextIntent) {
         // Why rearm: the intent effect would otherwise treat the held pick as a new one under the new intent
         // (copy it, or open a comment card for it). Rearm drops the pick and keeps picking.
@@ -210,7 +218,7 @@ export function useBrowserPageGrabAnnotations({
         grab.toggle()
       }
     },
-    [grab, grabIntent, recordFeatureInteraction]
+    [claimGrabToast, grab, grabIntent, recordFeatureInteraction]
   )
 
   // C / S copy the hovered element without clicking: extract via IPC while armed/awaiting, else use the captured payload.

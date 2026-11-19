@@ -196,6 +196,7 @@ export function BrowserGuestAnnotateOverlays({
           // Only browser pages mirror Alt from a focused page; the preview's guest forwards no keys.
           pageId={showPaletteKeyHints ? toolSwitch.toolTargetId : null}
           ownerPageId={toolSwitch.toolTargetId}
+          labelAvoidFrameRef={webviewRef}
           activeTool={activeTool}
           onSelectTool={toolSwitch.selectTool}
           onDone={toolSwitch.exit}

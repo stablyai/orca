@@ -29,6 +29,14 @@ const pickedElement: BrowserGrabPayload = { ...makeAnnotation(PAGE_ID).payload, 
 
 let resolvePick: ((payload: BrowserGrabPayload) => void) | null = null
 const writeClipboardText = vi.fn(async () => {})
+// Image writes are held so a test decides when the clipboard finishes.
+let finishImageWrite: (() => void) | null = null
+const writeClipboardImage = vi.fn(
+  () =>
+    new Promise<void>((resolve) => {
+      finishImageWrite = resolve
+    })
+)
 type SetGrabModeArgs = { browserPageId: string; enabled: boolean }
 type SetGrabModeResult = { ok: true } | { ok: false; reason: 'injection-failed' }
 // Arming resolves at once; a disable can be held open so a test controls when the page acknowledges teardown.
@@ -44,6 +52,7 @@ const setGrabMode = vi.fn((args: SetGrabModeArgs): Promise<SetGrabModeResult> =>
 
 beforeEach(() => {
   resolvePick = null
+  finishImageWrite = null
   heldDisable = null
   holdDisables = false
   writeClipboardText.mockClear()
@@ -64,7 +73,7 @@ beforeEach(() => {
             })
         )
       },
-      ui: { writeClipboardText }
+      ui: { writeClipboardText, writeClipboardImage }
     }
   })
 })
@@ -84,30 +93,57 @@ function makeMarkup(): MarkupModeController {
   }
 }
 
+type PageProps = { documentKey: string; documentReady: boolean; canPickElements: boolean }
+const FIRST_PAGE: PageProps = {
+  documentKey: 'http://acme.test/',
+  documentReady: true,
+  canPickElements: true
+}
+
 function renderBrowserTools(markup: MarkupModeController) {
-  return renderHook(() => {
-    const grab = useGrabMode(PAGE_ID)
-    const grabAnnotations = useBrowserPageGrabAnnotations({
-      browserTabId: PAGE_ID,
-      isActive: true,
-      grab,
-      containerRef: CONTAINER_REF,
-      webviewRef: WEBVIEW_REF,
-      setBrowserOverlayViewport: noopSetViewport,
-      browserAnnotationsLength: 0
-    })
-    const tools = useBrowserAnnotateToolSwitch({
-      grab,
-      grabIntent: grabAnnotations.grabIntent,
-      startGrabIntent: grabAnnotations.startGrabIntent,
-      cancelPendingBrowserCapture: grabAnnotations.cancelPendingBrowserCapture,
-      markup,
-      canPickElements: true,
-      toolTargetId: PAGE_ID,
-      documentKey: 'http://acme.test/'
-    })
-    return { grab, grabAnnotations, tools }
-  })
+  return renderHook(
+    ({ documentKey, documentReady, canPickElements }: PageProps) => {
+      const grab = useGrabMode(PAGE_ID)
+      const grabAnnotations = useBrowserPageGrabAnnotations({
+        browserTabId: PAGE_ID,
+        isActive: true,
+        grab,
+        containerRef: CONTAINER_REF,
+        webviewRef: WEBVIEW_REF,
+        setBrowserOverlayViewport: noopSetViewport,
+        browserAnnotationsLength: 0
+      })
+      const tools = useBrowserAnnotateToolSwitch({
+        grab,
+        grabIntent: grabAnnotations.grabIntent,
+        startGrabIntent: grabAnnotations.startGrabIntent,
+        cancelPendingBrowserCapture: grabAnnotations.cancelPendingBrowserCapture,
+        markup,
+        canPickElements,
+        toolTargetId: PAGE_ID,
+        documentKey,
+        documentReady
+      })
+      return { grab, grabAnnotations, tools }
+    },
+    { initialProps: FIRST_PAGE }
+  )
+}
+
+/** Starts Draw from a live Grab pick and leaves its overlay teardown waiting on the page. */
+async function startDrawWithTeardownHeld(
+  result: ReturnType<typeof renderBrowserTools>['result']
+): Promise<(value: SetGrabModeResult) => void> {
+  act(() => result.current.grabAnnotations.startGrabIntent('copy'))
+  await waitFor(() => expect(result.current.grab.state).toBe('awaiting'))
+  holdDisables = true
+  act(() => result.current.tools.selectTool('draw'))
+  await waitFor(() => expect(heldDisable).not.toBeNull())
+  const release = heldDisable
+  if (!release) {
+    throw new Error('teardown was not requested')
+  }
+  return release
 }
 
 async function pickElement(): Promise<void> {
@@ -211,6 +247,150 @@ describe('switching annotate tools', () => {
     expect(result.current.tools.activeTool).toBe('copy')
   })
 
+  it.each([
+    ['an awaiting Grab pick', 'copy', false],
+    ['a confirming Annotate card', 'annotate', true]
+  ] as const)(
+    'from %s, Draw cancels the pick, then awaits teardown, then captures',
+    async (_label, intent, pick) => {
+      const markup = makeMarkup()
+      const cancelGrab = vi.mocked(window.api.browser.cancelGrab)
+      const { result } = renderBrowserTools(markup)
+      act(() => result.current.grabAnnotations.startGrabIntent(intent))
+      if (pick) {
+        await pickElement()
+        await waitFor(() => expect(result.current.grab.state).toBe('confirming'))
+      } else {
+        await waitFor(() => expect(result.current.grab.state).toBe('awaiting'))
+      }
+      setGrabMode.mockClear()
+      cancelGrab.mockClear()
+      holdDisables = true
+
+      act(() => result.current.tools.selectTool('draw'))
+      await waitFor(() => expect(heldDisable).not.toBeNull())
+      // The disable that Draw awaits is the last page call before capture.
+      const disableCalls = setGrabMode.mock.calls.filter(([args]) => !args.enabled)
+      expect(disableCalls.length).toBeGreaterThan(0)
+      expect(result.current.grab.state).toBe('idle')
+      expect(markup.start).not.toHaveBeenCalled()
+
+      await act(async () => heldDisable?.({ ok: true }))
+      expect(markup.start).toHaveBeenCalledTimes(1)
+      expect(
+        Math.max(...setGrabMode.mock.invocationCallOrder, ...cancelGrab.mock.invocationCallOrder)
+      ).toBeLessThan(vi.mocked(markup.start).mock.invocationCallOrder[0])
+    }
+  )
+
+  it('drops a pending Draw when the page leaves and comes back to the same address (A → B → A)', async () => {
+    const markup = makeMarkup()
+    const { result, rerender } = renderBrowserTools(markup)
+    const release = await startDrawWithTeardownHeld(result)
+
+    rerender({ ...FIRST_PAGE, documentKey: 'http://acme.test/other' })
+    rerender(FIRST_PAGE)
+    expect(result.current.tools.activeTool).toBeNull()
+    await act(async () => release({ ok: true }))
+
+    expect(markup.start).not.toHaveBeenCalled()
+    expect(result.current.tools.activeTool).toBeNull()
+  })
+
+  it('drops a pending Draw when the same address reloads before teardown finishes', async () => {
+    const markup = makeMarkup()
+    const { result, rerender } = renderBrowserTools(markup)
+    const release = await startDrawWithTeardownHeld(result)
+
+    rerender({ ...FIRST_PAGE, documentReady: false })
+    rerender(FIRST_PAGE)
+    await act(async () => release({ ok: true }))
+
+    expect(markup.start).not.toHaveBeenCalled()
+    expect(result.current.tools.activeTool).toBeNull()
+  })
+
+  it('drops a pending Draw when the page stops being drawable, and does not come back on Draw later', async () => {
+    const markup = makeMarkup()
+    const { result, rerender } = renderBrowserTools(markup)
+    const release = await startDrawWithTeardownHeld(result)
+
+    rerender({ ...FIRST_PAGE, canPickElements: false })
+    expect(result.current.tools.activeTool).toBeNull()
+    rerender(FIRST_PAGE)
+    await act(async () => release({ ok: true }))
+
+    expect(markup.start).not.toHaveBeenCalled()
+    // Not stuck showing Draw for a start that will never finish.
+    expect(result.current.tools.activeTool).toBeNull()
+  })
+
+  it('withdraws the Undo offer when the page reloads', () => {
+    const saved: MarkupResumeSnapshot = {
+      baseImage: { dataUrl: 'data:image/png;base64,AA', width: 800, height: 600 },
+      context: {
+        source: { kind: 'image', element: document.createElement('img') },
+        cssWidth: 800,
+        cssHeight: 600,
+        outputScale: 1
+      }
+    }
+    const markup: MarkupModeController = {
+      ...makeMarkup(),
+      state: 'drawing',
+      isActive: true,
+      snapshot: vi.fn(() => saved)
+    }
+    markup.cancel = vi.fn(() => {
+      markup.isActive = false
+      markup.state = 'idle'
+    })
+    const { result, rerender } = renderBrowserTools(markup)
+    const stroke: MarkupShape = {
+      id: 'stroke-1',
+      color: '#ef4444',
+      kind: 'rect',
+      from: { x: 10, y: 10 },
+      to: { x: 60, y: 40 },
+      width: 4
+    }
+    act(() => result.current.tools.reportShapes([stroke]))
+    act(() => result.current.tools.exit())
+    rerender(FIRST_PAGE)
+    expect(toastMock).toHaveBeenCalled()
+    toastMock.dismiss.mockClear()
+
+    rerender({ ...FIRST_PAGE, documentReady: false })
+
+    expect(toastMock.dismiss).toHaveBeenCalledWith('toast-1')
+  })
+
+  it('a screenshot copy that finishes after switching to Annotate shows no Grab feedback there', async () => {
+    const { result } = renderBrowserTools(makeMarkup())
+    act(() => result.current.grabAnnotations.startGrabIntent('copy'))
+    await pickElement()
+    await waitFor(() => expect(result.current.grab.state).toBe('confirming'))
+    // The palette's Screenshot acts on the pick it holds.
+    act(() =>
+      result.current.grabAnnotations.handleGrabCopyScreenshot({
+        ...pickedElement,
+        screenshot: {
+          mimeType: 'image/png',
+          dataUrl: 'data:image/png;base64,AA',
+          width: 4,
+          height: 4
+        }
+      })
+    )
+    expect(writeClipboardImage).toHaveBeenCalledTimes(1)
+
+    act(() => result.current.tools.selectTool('annotate'))
+    expect(result.current.grabAnnotations.grabToast).toBeNull()
+    await act(async () => finishImageWrite?.())
+
+    expect(result.current.grabAnnotations.grabToast).toBeNull()
+  })
+
   it('a Grab chord during an annotate pick drops the pick instead of copying it', async () => {
     const { result } = renderBrowserTools(makeMarkup())
     act(() => result.current.grabAnnotations.startGrabIntent('annotate'))
@@ -276,7 +456,7 @@ describe('switching annotate tools', () => {
     act(() => result.current.tools.exit())
     expect(markup.cancel).toHaveBeenCalledTimes(1)
     // The pane re-renders with Draw closed before anyone can click Undo.
-    rerender()
+    rerender(FIRST_PAGE)
     const options: unknown = toastMock.mock.calls.at(-1)?.[1]
     const undo =
       typeof options === 'object' && options !== null && 'action' in options ? options.action : null
@@ -383,7 +563,7 @@ describe('switching annotate tools', () => {
       ])
     )
     act(() => result.current.tools.exit())
-    rerender()
+    rerender(FIRST_PAGE)
     const options: unknown = toastMock.mock.calls.at(-1)?.[1]
     const undo =
       typeof options === 'object' && options !== null && 'action' in options ? options.action : null
@@ -397,13 +577,13 @@ describe('switching annotate tools', () => {
         undo.onClick()
       }
     })
-    rerender()
+    rerender(FIRST_PAGE)
     expect(markup.resume).toHaveBeenCalledTimes(1)
 
     // The user clears the restored strokes and leaves; nothing is left to undo.
     act(() => result.current.tools.reportShapes([]))
     act(() => result.current.tools.exit())
-    rerender()
+    rerender(FIRST_PAGE)
 
     // Draw again: a fresh capture, never the old drawing a second time.
     await act(async () => result.current.tools.selectTool('draw'))

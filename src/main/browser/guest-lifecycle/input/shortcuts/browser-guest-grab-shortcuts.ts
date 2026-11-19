@@ -17,7 +17,6 @@ export function setupGrabShortcutForwarding(args: {
   getKeybindings?: () => KeybindingOverrides | undefined
 }): () => void {
   const { browserTabId, guest, resolveRenderer, hasActiveGrabOp, getKeybindings } = args
-  let altDownMirrored = false
   const handler = (event: Electron.Event, input: Electron.Input): void => {
     // Agent-injected keys must not trigger Orca actions (#20595).
     if (isAgentInjectingInput(guest)) {
@@ -26,14 +25,10 @@ export function setupGrabShortcutForwarding(args: {
     // Alt alone, held over the page while picking, fades the palette so what's under it can be picked. The page
     // still receives Alt; only its up/down edges are mirrored.
     if (input.key === 'Alt' && !input.isAutoRepeat) {
-      // A pick can end while Alt is held, so the key-up of a mirrored key-down is always sent; a key-up during a
-      // pick is sent too, since Alt may have gone down while the app (not the page) had focus.
-      const shouldMirror =
-        input.type === 'keyDown'
-          ? hasActiveGrabOp(browserTabId)
-          : altDownMirrored || hasActiveGrabOp(browserTabId)
+      // Key-up is always sent: Alt can go down in the app or during a pick that has since ended, and a release the
+      // renderer never hears leaves the palette faded. A renderer that isn't fading ignores it.
+      const shouldMirror = input.type === 'keyUp' || hasActiveGrabOp(browserTabId)
       if (shouldMirror) {
-        altDownMirrored = input.type === 'keyDown'
         resolveRenderer(browserTabId)?.send('browser:grabActionShortcut', {
           browserPageId: browserTabId,
           key: input.type === 'keyDown' ? 'alt-down' : 'alt-up'

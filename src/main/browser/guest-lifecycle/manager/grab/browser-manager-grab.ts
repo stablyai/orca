@@ -1,5 +1,6 @@
 import { webContents } from 'electron'
 import { buildGuestOverlayScript } from '../../../element-grab/grab-guest-script'
+import { buildGrabLabelAvoidScript } from '../../../element-grab/grab-guest-overlay-script'
 import { clampGrabPayload } from '../../../element-grab/browser-grab-payload'
 import { captureSelectionScreenshot as captureGrabSelectionScreenshot } from '../../../element-grab/browser-grab-screenshot'
 import {
@@ -11,7 +12,8 @@ import type {
   BrowserGrabResult,
   BrowserGrabRect,
   BrowserGrabPayload,
-  BrowserGrabScreenshot
+  BrowserGrabScreenshot,
+  BrowserGrabLabelAvoidArea
 } from '../../../../../shared/browser/element-grab/browser-grab-types'
 import { BrowserManagerViewport } from '../viewport/browser-manager-viewport'
 
@@ -31,7 +33,36 @@ function runOverlayScript(guest: Electron.WebContents, mode: 'arm' | 'teardown')
   })
 }
 
+// Fire-and-forget: a page that is gone or mid-navigation simply has no picker to tell.
+function sendLabelAvoidArea(
+  guest: Electron.WebContents,
+  area: BrowserGrabLabelAvoidArea | null
+): void {
+  if (guest.isDestroyed()) {
+    return
+  }
+  guest.executeJavaScript(buildGrabLabelAvoidScript(area)).catch(() => {})
+}
+
 export abstract class BrowserManagerGrab extends BrowserManagerViewport {
+  /** The annotate palette's footprint per page, re-sent to each newly armed picker. */
+  private readonly grabLabelAvoidAreaByTabId = new Map<string, BrowserGrabLabelAvoidArea>()
+
+  setGrabLabelAvoidArea(
+    browserTabId: string,
+    area: BrowserGrabLabelAvoidArea | null,
+    guest: Electron.WebContents | null
+  ): void {
+    if (area) {
+      this.grabLabelAvoidAreaByTabId.set(browserTabId, area)
+    } else {
+      this.grabLabelAvoidAreaByTabId.delete(browserTabId)
+    }
+    if (guest) {
+      sendLabelAvoidArea(guest, area)
+    }
+  }
+
   /** Authorize tools for browsing and document guests; documents stay outside browsing maps. */
   getAuthorizedGuest(
     browserTabId: string,
@@ -68,15 +99,19 @@ export abstract class BrowserManagerGrab extends BrowserManagerViewport {
     guest: Electron.WebContents
   ): Promise<boolean> {
     if (!enabled) {
-      const hadActiveGrabOp = this.hasActiveGrabOp(browserTabId)
       this.cancelGrabOp(browserTabId, 'user')
-      if (hadActiveGrabOp) {
-        return true
-      }
+      // Why always await a teardown, also right after cancelling a running pick: the page runs scripts in order, so
+      // this settles only once the cancelled pick's own teardown has run too. Draw captures the page after this
+      // resolves and must never freeze the picker's highlight into the screenshot.
       return runOverlayScript(guest, 'teardown')
     }
     // Arm eagerly so hover feedback appears before selection starts.
-    return runOverlayScript(guest, 'arm')
+    const armed = await runOverlayScript(guest, 'arm')
+    const area = this.grabLabelAvoidAreaByTabId.get(browserTabId)
+    if (armed && area) {
+      sendLabelAvoidArea(guest, area)
+    }
+    return armed
   }
 
   awaitGrabSelection(
