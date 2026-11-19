@@ -120,4 +120,41 @@ describe('createIpcPtyTransport against a relay-recycled PTY id', () => {
     expect(result).toMatchObject({ id: RECYCLED_PTY_ID, exitedBeforeAttach: true })
     expect(paneExit).toHaveBeenCalledWith(3)
   })
+
+  it.each([false, true])(
+    'fences a buffered original-reattach exit by its known incarnation (matching=%s)',
+    async (matching) => {
+      const { createIpcPtyTransport } = await import('./pty-transport')
+      const { bufferPreHandlerPtyExit } = await import('../delivery/pty-pre-handler-buffer')
+      bufferPreHandlerPtyExit(
+        RECYCLED_PTY_ID,
+        7,
+        matching ? FRESH_INCARNATION_ID : PRIOR_INCARNATION_ID
+      )
+      vi.mocked(window.api.pty.spawn).mockResolvedValue({
+        id: RECYCLED_PTY_ID,
+        incarnationId: FRESH_INCARNATION_ID
+      })
+      const exit = vi.fn()
+      const transport = createIpcPtyTransport({})
+      try {
+        const result = await transport.connect({
+          url: '',
+          sessionId: RECYCLED_PTY_ID,
+          attachOnlyView: true,
+          expectedIncarnationId: FRESH_INCARNATION_ID,
+          callbacks: { onExit: exit }
+        })
+        if (matching) {
+          expect(result).toMatchObject({ id: RECYCLED_PTY_ID, exitedBeforeAttach: true })
+          expect(exit).toHaveBeenCalledWith(7)
+        } else {
+          expect(result).toBe(RECYCLED_PTY_ID)
+          expect(exit).not.toHaveBeenCalled()
+        }
+      } finally {
+        transport.disconnect()
+      }
+    }
+  )
 })

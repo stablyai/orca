@@ -289,13 +289,15 @@ it('cannot start or clear output after a successor replaces the waiting view', a
 
 it('retains a disposed create result and retries by attaching that exact incarnation', async () => {
   const { session, connect } = await deferredSession()
+  let continued: boolean | undefined
   connect.mockImplementation(async (options) => {
-    expect(options.onAccountRestartDispatch()).toBe(true)
+    options.onAccountRestartDispatch()
     session.disposed = true
-    expect(options.shouldContinue({ id: 'committed', incarnationId: 'inc-committed' })).toBe(false)
+    continued = options.shouldContinue({ id: 'committed', incarnationId: 'inc-committed' })
     return undefined
   })
   await session.resumeDeferredSpawn()
+  expect(continued).toBe(false)
   const unresolved = useAppStore.getState().pendingPaneAccountRestarts[key]
   if (typeof unresolved !== 'object') {
     throw new Error('disposed create result was lost')
@@ -502,9 +504,25 @@ it.each(['connected', 'disconnected', 'removed during read'] as const)(
     try {
       await session.resumeDeferredSpawn()
       expect(connect).not.toHaveBeenCalled()
-      expect(selectCodexStaleSessionCount(useAppStore.getState())).toBe(
-        control === 'connected' ? 0 : 1
-      )
+      expect(selectCodexStaleSessionCount(useAppStore.getState())).toBe(1)
+      for (let attempt = 0; attempt < 2; attempt++) {
+        const failed = useAppStore.getState().pendingPaneAccountRestarts[key]
+        if (typeof failed !== 'object' || failed.phase !== 'failed') {
+          throw new Error('original pane lost its failed restart')
+        }
+        await retryCodexAccountRestarts([failed])
+        const next = useAppStore.getState().claimCodexAccountRestart(key)
+        if (!next) {
+          throw new Error('retry was not claimable')
+        }
+        session.deps.accountRestartToken = codexAccountRestartToken(next)
+        await routeCodexAccountRestartWake(session)
+        const after = useAppStore.getState().pendingPaneAccountRestarts[key]
+        expect(typeof after === 'object' && after.phase).toBe('failed')
+        expect(typeof after === 'object' && after.notDispatched).toBe(true)
+        expect(connect).not.toHaveBeenCalled()
+        expect(selectCodexStaleSessionCount(useAppStore.getState())).toBe(1)
+      }
       expect(
         useAppStore.getState().terminalLayoutsByTabId.foreign.ptyIdsByLeafId?.[foreignLeaf]
       ).toBe('foreign-pty')

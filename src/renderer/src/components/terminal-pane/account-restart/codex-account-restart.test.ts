@@ -327,7 +327,11 @@ describe('Codex account continuation', () => {
       }
       let removedCommitHadRequest: boolean | undefined
       const unsubscribe = useAppStore.subscribe((state, previous) => {
-        if (state.terminalLayoutsByTabId !== previous.terminalLayoutsByTabId) {
+        if (
+          removedCommitHadRequest === undefined &&
+          state.terminalLayoutsByTabId !== previous.terminalLayoutsByTabId &&
+          !state.terminalLayoutsByTabId.tab?.ptyIdsByLeafId?.[leaf]
+        ) {
           removedCommitHadRequest = key in state.pendingPaneAccountRestarts
         }
       })
