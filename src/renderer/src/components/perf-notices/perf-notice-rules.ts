@@ -1,5 +1,6 @@
 import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { PerfNoticeSignals } from '../../../../shared/diagnostics/perf-notice-signals'
+import type { MemorySnapshot } from '../../../../shared/diagnostics/process-stats-types'
 import { getPtyExecutionHost } from '../../../../shared/terminal/pty/lifecycle/terminal-execution-host'
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { formatAgentTypeLabel } from '../../../../shared/agent-status/presentation/agent-type-label'
@@ -63,25 +64,58 @@ export function idleAgentCandidates(
   return candidates
 }
 
-/** A terminal agent's pane still holds a PTY on this machine (the row is dropped when its command finishes). */
-function hasLocalPty(state: AppState, entry: AgentStatusEntry): boolean {
+/** Terminal agents need proof their process is alive; chats are proven from the store alone. */
+export function hasTerminalCandidates(candidates: readonly AgentStatusEntry[]): boolean {
+  return candidates.some((entry) => !entry.structuredHostOwned)
+}
+
+/** PTYs with a running process on this machine, from one memory snapshot. */
+export type LiveLocalTerminals = { sessionIds: ReadonlySet<string>; paneKeys: ReadonlySet<string> }
+
+export function liveLocalTerminals(snapshot: MemorySnapshot): LiveLocalTerminals {
+  const sessionIds = new Set<string>()
+  const paneKeys = new Set<string>()
+  for (const worktree of snapshot.worktrees) {
+    for (const session of worktree.sessions) {
+      sessionIds.add(session.sessionId)
+      if (session.paneKey) {
+        paneKeys.add(session.paneKey)
+      }
+    }
+  }
+  return { sessionIds, paneKeys }
+}
+
+/** A restored pane keeps its PTY id and finished row after its process is gone, so liveness comes from the snapshot. */
+function hasLiveLocalPty(
+  state: AppState,
+  entry: AgentStatusEntry,
+  live: LiveLocalTerminals
+): boolean {
+  if (entry.connectionId != null) {
+    return false
+  }
+  if (live.paneKeys.has(entry.paneKey)) {
+    return true
+  }
   const pane = parsePaneKey(entry.paneKey)
   const ptyId = pane && state.terminalLayoutsByTabId[pane.tabId]?.ptyIdsByLeafId?.[pane.leafId]
-  return !!ptyId && getPtyExecutionHost(ptyId) === null && entry.connectionId == null
+  return !!ptyId && getPtyExecutionHost(ptyId) === null && live.sessionIds.has(ptyId)
 }
 
 /**
- * Agents still holding memory on this machine, proven from the store alone so a check starts no IPC.
- * A terminal agent counts while its pane holds a local PTY in a local workspace; a chat counts while
- * the host runs its agent, its workspace is local, and auto-stop is off.
+ * Agents still holding memory on this machine. A terminal agent counts while its PTY appears in the
+ * local memory snapshot and its workspace is local; a chat counts while the host runs its agent, its
+ * workspace is local, and auto-stop is off.
  */
 export function countIdleAgents(
   state: AppState,
-  candidates: readonly AgentStatusEntry[]
+  candidates: readonly AgentStatusEntry[],
+  live: LiveLocalTerminals | null
 ): IdleAgents {
   const chatsNeverStop = nativeChatIdleStopMinutes(state.settings) === 0
   const counted = candidates.filter((entry) =>
-    entry.structuredHostOwned ? chatsNeverStop : hasLocalPty(state, entry)
+    entry.structuredHostOwned ? chatsNeverStop : !!live && hasLiveLocalPty(state, entry, live)
   )
   // Why: one catalog walk per check, never one per agent.
   const localWorktrees = counted.length > 0 ? collectLocalWorktreeIds(state) : null

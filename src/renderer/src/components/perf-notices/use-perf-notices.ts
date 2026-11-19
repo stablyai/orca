@@ -15,10 +15,12 @@ import { canShowPerfNotice } from './perf-notice-ledger'
 import {
   availableFraction,
   countIdleAgents,
+  hasTerminalCandidates,
   HIDDEN_TAB_MIN,
   IDLE_AGENT_MIN,
   idleAgentCandidates,
   isDiskAlmostFull,
+  liveLocalTerminals,
   LOW_MEMORY_FRACTION,
   PERF_NOTICE_OFFERS_AGENT_SLEEP,
   TERMINAL_SHARE_MIN,
@@ -31,7 +33,7 @@ const HOUR = 60 * MINUTE
 const LOW_MEMORY_HOLD_MS = 2 * MINUTE
 // Why: each owner check takes a full process snapshot, so a failed one waits hours, not minutes.
 const OWNER_SHARE_RECHECK_MS = 6 * HOUR
-// Why: proving idle agents walks the workspace catalog, so a check without a toast waits an hour.
+// Why: proving idle terminal agents takes a process snapshot, so a check without a toast waits an hour.
 const IDLE_AGENT_RECHECK_MS = HOUR
 const HIDDEN_TABS_RECHECK_MS = 10 * MINUTE
 const AGENT_SLEEP_IDLE_MS = 30 * MINUTE
@@ -89,7 +91,11 @@ async function memoryLowNotice(
   if (
     PERF_NOTICE_OFFERS_AGENT_SLEEP &&
     !state.settings?.experimentalAgentHibernation &&
-    countIdleAgents(state, idleAgentCandidates(state, now, AGENT_SLEEP_IDLE_MS)).terminal > 0
+    countIdleAgents(
+      state,
+      idleAgentCandidates(state, now, AGENT_SLEEP_IDLE_MS),
+      liveLocalTerminals(snapshot)
+    ).terminal > 0
   ) {
     return { id: 'memory-low', variant: 'agent-sleep' }
   }
@@ -104,14 +110,29 @@ async function memoryLowNotice(
   }
 }
 
-function idleAgentsNotice(now: number, tracking: Tracking): PerfNotice | null {
-  const state = useAppStore.getState()
-  const candidates = idleAgentCandidates(state, now)
+async function idleAgentsNotice(
+  now: number,
+  blocked: Gate,
+  activeUntil: ActiveUntil,
+  tracking: Tracking
+): Promise<PerfNotice | null> {
+  const candidates = idleAgentCandidates(useAppStore.getState(), now)
   if (candidates.length < IDLE_AGENT_MIN) {
     return null
   }
   tracking.idleCheckedAt = now
-  const idle = countIdleAgents(state, candidates)
+  // Why: only terminal agents need the snapshot's proof that their process is alive.
+  const live = hasTerminalCandidates(candidates)
+    ? liveLocalTerminals(
+        await window.api.memory.getSnapshot({ whileFocused: true, activeUntil: activeUntil() })
+      )
+    : null
+  if (blocked()) {
+    return null
+  }
+  // Why: agents may have started working during the snapshot; only rows still idle count.
+  const state = useAppStore.getState()
+  const idle = countIdleAgents(state, idleAgentCandidates(state, Date.now()), live)
   if (idle.terminal + idle.chats < IDLE_AGENT_MIN) {
     return null
   }
@@ -148,8 +169,11 @@ async function evaluate(
     tracking.lowSince = null
   } else {
     tracking.lowSince ??= now
+    // Why: while the low reading is held, nothing else may spend the daily cap before memory-low can.
+    if (now - tracking.lowSince < LOW_MEMORY_HOLD_MS) {
+      return CADENCE.low
+    }
     if (
-      now - tracking.lowSince >= LOW_MEMORY_HOLD_MS &&
       now - tracking.ownerShareCheckedAt >= OWNER_SHARE_RECHECK_MS &&
       canShowPerfNotice('memory-low', now)
     ) {
@@ -166,7 +190,7 @@ async function evaluate(
     now - tracking.idleCheckedAt >= IDLE_AGENT_RECHECK_MS &&
     canShowPerfNotice('idle-agents', now)
   ) {
-    notice = idleAgentsNotice(now, tracking)
+    notice = await idleAgentsNotice(now, blocked, activeUntil, tracking)
   }
   if (blocked()) {
     return CADENCE.tight
