@@ -31,6 +31,7 @@ export abstract class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeW
       return fresh
     }
     const gaps = this.ptyGapCounts.get(ptyId)
+    const generation = this.getPtyLifecycleGeneration(ptyId)
     const visibleState = await this.readVisibleTerminalState(ptyId)
     const model = this.headlessTerminals.get(ptyId)
     if (!knownAlternateScreen && !visibleState?.isAlternateScreen) {
@@ -49,10 +50,11 @@ export abstract class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeW
       isStale: () =>
         rendererToken !== undefined
           ? this.rendererScreenToken(ptyId) !== rendererToken
-          : // A model screen: a gap or a replaced model since the read makes it older than the terminal.
+          : // A model or provider screen: a gap, a replaced model or a new lifecycle since the read makes it older.
             this.headlessTerminals.get(ptyId) !== model ||
             model?.gapReseed !== undefined ||
-            this.ptyGapCounts.get(ptyId) !== gaps
+            this.ptyGapCounts.get(ptyId) !== gaps ||
+            this.getPtyLifecycleGeneration(ptyId) !== generation
     }
   }
 
