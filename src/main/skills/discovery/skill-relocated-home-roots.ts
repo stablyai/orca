@@ -1,5 +1,9 @@
 import { realpath } from 'node:fs/promises'
+import { withTimeoutResult } from '../../../shared/concurrency/promise-timeout-fallback'
 import type { SkillScanRoot } from './skill-discovery-sources'
+
+// A home on an unresponsive mount must not hold up every other root; unanswered pairs stay apart.
+const SAME_FOLDER_CHECK_TIMEOUT_MS = 1_000
 
 /** A relocated home that links back to the default one (a managed Claude account's `skills`) is
  *  one folder: scan it once, for the owner and the agents that borrow it. */
@@ -17,7 +21,14 @@ export async function withoutLinkedDefaultHomes(
       const relocated = roots.find(
         (root) => root.readers === 'owner' && root.owner === fallback.owner
       )
-      if (relocated && (await real(relocated.path)) === (await real(fallback.path))) {
+      if (!relocated) {
+        return
+      }
+      const paths = await withTimeoutResult(
+        Promise.all([real(relocated.path), real(fallback.path)]),
+        SAME_FOLDER_CHECK_TIMEOUT_MS
+      )
+      if (paths.ok && paths.value[0] === paths.value[1]) {
         linked.add(fallback).add(relocated)
       }
     })
