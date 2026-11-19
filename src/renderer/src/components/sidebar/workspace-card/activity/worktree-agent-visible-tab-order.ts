@@ -34,7 +34,6 @@ function rankVisibleTabs({ tabs, groups, layout, legacyOrder }: WorktreeTabStrip
     const groupTabs = tabs.filter((tab) => tab.groupId === id)
     const terminalIds = new Set(groupTabs.map((tab) => tab.entityId))
     for (const ref of getGroupVisibleTabOrder(group, groupTabs, terminalIds, NO_IDS, NO_IDS)) {
-      // Agent rows carry the terminal's entity id, but an agent-session tab's own id.
       if (ref.type === 'terminal') {
         add(ref.id)
       } else if (ref.type === 'agent-session' && ref.tabId) {
@@ -53,6 +52,9 @@ function rankVisibleTabs({ tabs, groups, layout, legacyOrder }: WorktreeTabStrip
  * Orders items by where their tab sits in the workspace's tab strips: split groups in layout
  * order, then each group's visible tab order. Items in one tab, and items with no visible tab
  * (which go last), keep their incoming order. Returns `items` itself when nothing moves.
+ *
+ * @param tabIdOf The id that matches an item to its tab: a terminal tab's entity id, or an
+ *   agent-session tab's own id. `undefined` puts the item last.
  */
 export function orderByVisibleTabs<T>(
   items: readonly T[],

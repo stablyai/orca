@@ -10,7 +10,6 @@ import { worktreeRow } from './worktree-row-locators'
 
 const SORTABLE_TAB = '[data-testid="sortable-tab"]'
 
-// The first tab's agent starts first, so start-time order and tab order agree until a tab moves.
 async function seedTwoTabAgents(page: Page, mode: 'full' | 'compact'): Promise<Locator> {
   await waitForSessionReady(page)
   const worktreeId = await waitForActiveWorktree(page)
@@ -48,6 +47,7 @@ async function seedTwoTabAgents(page: Page, mode: 'full' | 'compact'): Promise<L
         throw new Error('Expected a single-pane terminal')
       }
       const { title, agentType } = agents[index]!
+      // Alpha starts first, so start-time order and tab order agree until a tab moves.
       const startedAt = now - (2 - index) * 1000
       state.setTabCustomTitle(tab.id, title)
       state.setAgentStatus(

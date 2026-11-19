@@ -3,6 +3,7 @@ import { useAppStateValue } from '@/store/retained-views/app-state-view'
 import type { Tab, TabGroup } from '../../../../../../shared/workspace-layout/tab-groups/tab-types'
 import { orderByVisibleTabs } from './worktree-agent-visible-tab-order'
 
+// Selectors return these shared empties: a fresh [] reads as a change on every store update.
 const NO_TABS: Tab[] = []
 const NO_GROUPS: TabGroup[] = []
 const NO_ORDER: string[] = []
