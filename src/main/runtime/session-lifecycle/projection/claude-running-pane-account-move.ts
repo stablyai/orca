@@ -87,11 +87,13 @@ export abstract class OrcaRuntimeWithClaudeRunningPaneAccountMove extends OrcaRu
     const settings = this.store?.getSettings()
     const fromAccountId = claudeLaunchAccountId(change.before.state, change.before.accountId)
     const toAccountId = claudeLaunchAccountId(change.after.state, change.after.accountId)
-    // Why: a WSL lane keeps its own pointer, and nobody here can answer Ask, as on a phone.
+    // The switching client's choice wins: this host's own setting is one no paired desktop edits.
+    const policy = change.runningSessions ?? settings?.claudeAccountSwitchRunningSessions ?? 'ask'
+    // Why: a WSL lane keeps its own pointer.
     if (
       normalizeCodexAccountSelectionTarget(change.target).runtime !== 'host' ||
       fromAccountId === toAccountId ||
-      settings?.claudeAccountSwitchRunningSessions === 'keep'
+      policy === 'keep'
     ) {
       return undefined
     }
@@ -127,6 +129,11 @@ export abstract class OrcaRuntimeWithClaudeRunningPaneAccountMove extends OrcaRu
         (holders.get(pane.session.id) ?? 0) > 1 ||
         !this.terminalViewSubscribers.everyRemoteViewFollowsHostRespawn(pane.pty.ptyId)
       ) {
+        notMoved += 1
+        continue
+      }
+      // Nobody here can answer Ask, and a restart stops a turn mid-work: only an explicit choice does that.
+      if (policy !== 'restart') {
         notMoved += 1
         continue
       }

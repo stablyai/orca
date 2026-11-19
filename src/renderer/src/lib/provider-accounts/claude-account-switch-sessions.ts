@@ -135,7 +135,7 @@ export async function handleRunningClaudeSessionsAfterSwitch(args: {
   })) {
     store.consumePendingPaneAccountRestart(ptyId)
   }
-  if (readPolicy() === 'keep') {
+  if (readClaudeRunningSessionsPolicy() === 'keep') {
     return 'show-confirmation'
   }
   let uncheckedCount = 0
@@ -168,7 +168,7 @@ export async function handleRunningClaudeSessionsAfterSwitch(args: {
     return 'handled'
   }
   // Why re-read: the setting may change while the scan runs.
-  const policy = readPolicy(args.madeElsewhere)
+  const policy = readClaudeRunningSessionsPolicy(args.madeElsewhere)
   if (policy === 'keep') {
     return 'show-confirmation'
   }
@@ -227,7 +227,9 @@ export async function handleRunningClaudeSessionsAfterSwitch(args: {
   return 'handled'
 }
 
-function readPolicy(madeElsewhere?: true): ClaudeAccountSwitchRunningSessions {
+export function readClaudeRunningSessionsPolicy(
+  madeElsewhere?: true
+): ClaudeAccountSwitchRunningSessions {
   const policy = useAppStore.getState().settings?.claudeAccountSwitchRunningSessions ?? 'ask'
   // Why: no one at the phone sees a dialog here.
   return policy === 'ask' && madeElsewhere ? 'restart' : policy

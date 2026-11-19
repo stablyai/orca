@@ -158,7 +158,8 @@ const ACCOUNT_METHOD_DEFINITIONS = [
     params: SelectClaudeAccountParams,
     handler: async (params, { runtime }) =>
       runtime.selectClaudeAccount(params.accountId, {
-        movesRunningSessions: params.movesRunningSessions
+        movesRunningSessions: params.movesRunningSessions,
+        runningSessions: params.runningSessions
       })
   }),
   defineMethod({

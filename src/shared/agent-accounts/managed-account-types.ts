@@ -1,4 +1,5 @@
 import type { CodexAccountSelectionTarget } from './codex/codex-selection-lane'
+import type { ClaudeAccountSwitchRunningSessions } from './claude/claude-account-switch-settings'
 
 export type ManagedDataAccountProvider = 'opencode' | 'devin'
 
@@ -139,6 +140,8 @@ export type ClaudeAccountSelectionChange = {
   target: CodexAccountSelectionTarget
   before: { state: ClaudeRateLimitAccountsState; accountId: string | null }
   after: { state: ClaudeRateLimitAccountsState; accountId: string | null }
+  /** The switching client's own choice for running sessions; absent, the host's setting decides. */
+  runningSessions?: ClaudeAccountSwitchRunningSessions
 }
 
 /** What a server did with its running Claude terminals when its account switched. */
