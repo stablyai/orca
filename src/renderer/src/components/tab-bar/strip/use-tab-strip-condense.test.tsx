@@ -28,11 +28,19 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-function Strip({ renaming }: { renaming: boolean }): React.JSX.Element {
-  const { plan, setSurface } = useTabStripCondense({
-    ids: IDS,
+function Strip({
+  renaming = false,
+  ids = IDS,
+  frozen = false
+}: {
+  renaming?: boolean
+  ids?: readonly string[]
+  frozen?: boolean
+}): React.JSX.Element {
+  const { plan, hiddenIds, setSurface } = useTabStripCondense({
+    ids,
     activeId: 'c',
-    frozen: false,
+    frozen,
     hasOverflow: false
   })
   return (
@@ -44,6 +52,7 @@ function Strip({ renaming }: { renaming: boolean }): React.JSX.Element {
         setSurface(node)
       }}
       data-plan={plan.mode}
+      data-hidden={[...hiddenIds].join(',')}
     >
       {renaming ? <input data-tab-rename-input="true" /> : null}
     </div>
@@ -63,5 +72,15 @@ describe('useTabStripCondense', () => {
 
     rerender(<Strip renaming={false} />)
     await waitFor(() => expect(surface.getAttribute('data-plan')).toBe('condensed'))
+  })
+
+  it('hides a tab that replaces a hidden one while the plan is frozen', () => {
+    width = 263
+    const { container, rerender } = render(<Strip />)
+    const surface = container.firstElementChild!
+    expect(surface.getAttribute('data-hidden')).toBe('a,f')
+
+    rerender(<Strip frozen ids={['a', 'b', 'c', 'd', 'e', 'g']} />)
+    expect(surface.getAttribute('data-hidden')).toBe('a,g')
   })
 })

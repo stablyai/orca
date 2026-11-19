@@ -79,6 +79,10 @@ function watchRenameEnd(surface: HTMLElement, replanRef: { current: () => void }
   renameWatchers.set(surface, observer)
 }
 
+function sameIds(a: readonly string[], b: readonly string[]): boolean {
+  return a.length === b.length && a.every((id, index) => id === b[index])
+}
+
 /** Drop ids that no longer exist; ids the plan has never seen stay hidden until the next plan. */
 function reconcilePlan(plan: TabStripPlan, ids: readonly string[]): TabStripPlan {
   if (plan.mode === 'titled') {
@@ -88,7 +92,7 @@ function reconcilePlan(plan: TabStripPlan, ids: readonly string[]): TabStripPlan
   const known = new Set([plan.activeId, ...plan.iconIds, ...plan.hiddenIds])
   const iconIds = plan.iconIds.filter((id) => present.has(id))
   const hiddenIds = ids.filter((id) => plan.hiddenIds.includes(id) || !known.has(id))
-  if (iconIds.length === plan.iconIds.length && hiddenIds.length === plan.hiddenIds.length) {
+  if (sameIds(iconIds, plan.iconIds) && sameIds(hiddenIds, plan.hiddenIds)) {
     return plan
   }
   return { ...plan, iconIds, hiddenIds }
@@ -110,6 +114,8 @@ export function useTabStripCondense({
   const [surface, setSurface] = useState<HTMLDivElement | null>(null)
   const [plan, setPlan] = useState<TabStripPlan>(TITLED_TAB_STRIP_PLAN)
   const [heldWidths, setHeldWidths] = useState<ReadonlyMap<string, number> | null>(null)
+  // The icon slots captured with the held widths: a re-plan during the hold must not retitle them.
+  const [heldIconIds, setHeldIconIds] = useState<ReadonlySet<string>>(NO_HIDDEN)
   const planRef = useRef(plan)
   const windowStartRef = useRef<number | null>(null)
   const inputsRef = useRef({ ids, activeId, frozen, heldWidths })
@@ -186,7 +192,12 @@ export function useTabStripCondense({
 
   // Chrome-style close: keep widths while the pointer stays, so the next × lands under it.
   const pointerInsideRef = useRef(false)
-  const snapshotRef = useRef<{ widths: Map<string, number>; ids: string; at: number } | null>(null)
+  const snapshotRef = useRef<{
+    widths: Map<string, number>
+    iconIds: ReadonlySet<string>
+    ids: string
+    at: number
+  } | null>(null)
   const previousRef = useRef({ idsKey, ids, activeId })
   useLayoutEffect(() => {
     const previous = previousRef.current
@@ -214,11 +225,12 @@ export function useTabStripCondense({
     const held = new Map([...snapshot.widths].filter(([id]) => present.has(id)))
     const activeHeld = activeId === null ? undefined : held.get(activeId)
     // An icon that just became active needs its title, so the strip reflows instead.
-    setHeldWidths(
+    const keep =
       held.size === ids.length && activeHeld !== undefined && activeHeld > TAB_ICON_ONLY_WIDTH_PX
-        ? held
-        : null
+    setHeldIconIds(
+      keep ? new Set([...snapshot.iconIds].filter((id) => present.has(id))) : NO_HIDDEN
     )
+    setHeldWidths(keep ? held : null)
   }, [idsKey, ids, activeId])
 
   const [renameOverflow, setRenameOverflow] = useState(false)
@@ -237,10 +249,12 @@ export function useTabStripCondense({
     }
     return {
       condensed: effectivePlan.mode === 'condensed',
-      iconIds: new Set(effectivePlan.mode === 'condensed' ? effectivePlan.iconIds : []),
+      iconIds: heldWidths
+        ? heldIconIds
+        : new Set(effectivePlan.mode === 'condensed' ? effectivePlan.iconIds : []),
       heldWidths
     }
-  }, [effectivePlan, heldWidths])
+  }, [effectivePlan, heldWidths, heldIconIds])
 
   const stripPointerHandlers = useMemo(
     () => ({
@@ -256,6 +270,7 @@ export function useTabStripCondense({
         }
         snapshotRef.current = {
           widths: measureSlotWidths(surface),
+          iconIds: new Set(planRef.current.mode === 'condensed' ? planRef.current.iconIds : []),
           ids: currentIds.join('\u0000'),
           at: performance.now()
         }
