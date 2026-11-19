@@ -81,6 +81,8 @@ export function ImportBotHero({
                 onUpload={picture.onUpload}
                 color={picture.color}
                 onColorChange={picture.onColorChange}
+                outfit={picture.outfit}
+                onOutfitChange={picture.onOutfitChange}
               />
             </PopoverContent>
           </Popover>

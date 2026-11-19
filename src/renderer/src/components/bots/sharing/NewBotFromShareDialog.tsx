@@ -2,7 +2,10 @@
 // permission (Ask, picked for bots made from a link) and the review's tool ticks. Create writes the
 // reviewed version whole, or nothing.
 import { useBotHostHas } from '@/lib/bot-host-status'
-import { BOTS_AVATAR_COLOR_RUNTIME_CAPABILITY } from '../../../../../shared/bot-runtime-capabilities'
+import {
+  BOTS_AVATAR_COLOR_RUNTIME_CAPABILITY,
+  BOTS_AVATAR_OUTFIT_RUNTIME_CAPABILITY
+} from '../../../../../shared/bot-runtime-capabilities'
 import { ownBotHost } from '@/lib/bot-hosts'
 import { useId, useRef, useState } from 'react'
 import { Check, ShieldCheck } from 'lucide-react'
@@ -157,7 +160,10 @@ export function NewBotFromShareDialog({
   const sharedMascot =
     review.bot.avatar && 'mascot' in review.bot.avatar ? review.bot.avatar.mascot : undefined
   const picture = useNewBotPicture(
-    useBotHostHas(hostId, BOTS_AVATAR_COLOR_RUNTIME_CAPABILITY),
+    {
+      colors: useBotHostHas(hostId, BOTS_AVATAR_COLOR_RUNTIME_CAPABILITY),
+      outfits: useBotHostHas(hostId, BOTS_AVATAR_OUTFIT_RUNTIME_CAPABILITY)
+    },
     sharedMascot,
     sharedPng
   )
@@ -189,7 +195,13 @@ export function NewBotFromShareDialog({
         name: trimmedName,
         ...setup,
         ...(permission === 'chats' ? {} : { permissionMode: permission }),
-        ...(keepsShared ? {} : { avatar: picture.avatar, avatarColor: picture.avatarColor }),
+        ...(keepsShared
+          ? {}
+          : {
+              avatar: picture.avatar,
+              avatarColor: picture.avatarColor,
+              avatarOutfit: picture.avatarOutfit
+            }),
         fromShare: { reviewId, toolIds }
       })
       bot = keepsShared ? bot : await picture.saveUpload(bot)
@@ -239,6 +251,8 @@ export function NewBotFromShareDialog({
             onUpload={picture.onUpload}
             color={picture.color}
             onColorChange={picture.onColorChange}
+            outfit={picture.outfit}
+            onOutfitChange={picture.onOutfitChange}
           />
           <div>
             <Label htmlFor={nameId} className="sr-only">

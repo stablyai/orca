@@ -70,9 +70,10 @@ export const BotGroupTurn = memo(function BotGroupTurn({
       id: turn.botId,
       name: turn.botName,
       avatar: turn.avatar,
-      avatarColor: turn.avatarColor
+      avatarColor: turn.avatarColor,
+      avatarOutfit: turn.avatarOutfit
     }),
-    [hostId, turn.botId, turn.botName, turn.avatar, turn.avatarColor]
+    [hostId, turn.botId, turn.botName, turn.avatar, turn.avatarColor, turn.avatarOutfit]
   )
   const src = useBotAvatarSrc(bot)
   const submissions = session?.submissions ?? noItems

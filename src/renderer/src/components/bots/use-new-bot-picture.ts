@@ -7,7 +7,8 @@ import { uploadBotAvatar } from '@/lib/bot-catalog'
 import { PICKABLE_BOT_MASCOT_IDS, isBotMascotId, mascotAvatar } from '../../../../shared/bot-avatar'
 import type { Bot } from '../../../../shared/bot-types'
 import { botErrorMessage } from './bot-presentation'
-import { botMascotSrc } from './bot-mascot-color'
+import { botMascotSrc } from './bot-mascot-look'
+import type { BotAvatarOutfit } from '../../../../shared/bots/bot-avatar-outfit'
 import { pictureMascotIndex, type BotPictureCustom, type BotPictureValue } from './BotPicturePicker'
 
 // Opens on a random mascot, or the one a proposal chose, so no bot is created without a picture.
@@ -32,12 +33,18 @@ export type NewBotPicture = {
   color: string | null
   /** Absent when the host can't store a color. */
   onColorChange?: (color: string | null) => void
+  /** What the mascot wears; null is nothing. */
+  outfit: BotAvatarOutfit | null
+  /** Absent when the host can't store an outfit. */
+  onOutfitChange?: (outfit: BotAvatarOutfit | null) => void
   /** The picture shown, as an image URL. */
   src: string
   /** createBot's `avatar`: the mascot shown, or the one before an upload, which the bot keeps if the upload is refused. */
   avatar: string
   /** createBot's `avatarColor`: set only when a mascot is shown on another color. */
   avatarColor: string | undefined
+  /** createBot's `avatarOutfit`: set only when a mascot is shown wearing one. */
+  avatarOutfit: BotAvatarOutfit | undefined
   /** The upload shown, as base64 PNG; null when a mascot is. */
   shownUpload: string | null
   /** Saves an upload to the bot just made; the bot as it is afterwards. */
@@ -45,10 +52,10 @@ export type NewBotPicture = {
   reset: () => void
 }
 
-/** `initialUpload` (base64 PNG) opens on that picture, placed first, as a shared bot's own; `colors` is
- *  whether the host stores a tile color. */
+/** `initialUpload` (base64 PNG) opens on that picture, placed first, as a shared bot's own; `host` says
+ *  whether the host stores a tile color and an outfit. */
 export function useNewBotPicture(
-  colors: boolean,
+  host: { colors: boolean; outfits: boolean },
   mascot?: string,
   initialUpload?: string
 ): NewBotPicture {
@@ -57,7 +64,9 @@ export function useNewBotPicture(
     initialUpload ? { kind: 'custom' } : firstMascot(mascot)
   )
   const [picked, setColor] = useState<string | null>(null)
-  const color = colors ? picked : null
+  const color = host.colors ? picked : null
+  const [pickedOutfit, setOutfit] = useState<BotAvatarOutfit | null>(null)
+  const outfit = host.outfits ? pickedOutfit : null
   const [upload, setUpload] = useState<NewBotUpload | null>(() =>
     initialUpload ? { png: initialUpload, after: -1 } : null
   )
@@ -70,7 +79,7 @@ export function useNewBotPicture(
   const showingUpload = value.kind === 'custom' && upload !== null
   const mascotId =
     PICKABLE_BOT_MASCOT_IDS[pictureMascotIndex(value, custom)] ?? PICKABLE_BOT_MASCOT_IDS[0]
-  const mascotSrc = botMascotSrc(mascotId, color) ?? ''
+  const mascotSrc = botMascotSrc(mascotId, color, outfit) ?? ''
   return {
     value,
     custom,
@@ -80,10 +89,13 @@ export function useNewBotPicture(
       setValue({ kind: 'custom' })
     },
     color,
-    onColorChange: colors ? setColor : undefined,
+    onColorChange: host.colors ? setColor : undefined,
+    outfit,
+    onOutfitChange: host.outfits ? setOutfit : undefined,
     src: showingUpload && custom ? custom.src : mascotSrc,
     avatar: mascotAvatar(mascotId),
     avatarColor: showingUpload || !color ? undefined : color,
+    avatarOutfit: showingUpload || !outfit ? undefined : outfit,
     shownUpload: showingUpload ? upload.png : null,
     saveUpload: async (bot) =>
       showingUpload
@@ -95,6 +107,7 @@ export function useNewBotPicture(
         : bot,
     reset: () => {
       setColor(null)
+      setOutfit(null)
       setValue(initialUpload ? { kind: 'custom' } : firstMascot(mascot))
       setUpload(initialUpload ? { png: initialUpload, after: -1 } : null)
     }

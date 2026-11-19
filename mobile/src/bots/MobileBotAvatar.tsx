@@ -4,6 +4,7 @@ import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { colors } from '../theme/mobile-theme'
 import type { MobileBotAvatarSource } from './host-bot-row-facts'
 import { mobileBotMascotAsset, mobileBotMascotRimAsset } from './mobile-bot-mascot-assets'
+import { mobileBotOutfitAsset, mobileBotOutfitReplacesPicture } from './mobile-bot-outfit-assets'
 import {
   DEFAULT_BOT_AVATAR_COLOR,
   isDarkBotAvatarColor
@@ -37,7 +38,8 @@ export function MobileBotAvatar({
       />
     )
   }
-  // The mascot pictures are transparent: their tile color goes behind, and on a dark one the light rim.
+  // The mascot pictures are transparent: their tile color goes behind, on a dark one the light rim, and
+  // any outfit on top.
   const color = avatar.color ?? DEFAULT_BOT_AVATAR_COLOR
   // A bundled picture keeps its own pixel size unless told otherwise.
   const layer = { width: size, height: size }
@@ -50,11 +52,20 @@ export function MobileBotAvatar({
           accessibilityIgnoresInvertColors
         />
       ) : null}
-      <Image
-        source={mobileBotMascotAsset(avatar.id)}
-        style={[StyleSheet.absoluteFill, layer]}
-        accessibilityIgnoresInvertColors
-      />
+      {avatar.outfit && mobileBotOutfitReplacesPicture(avatar.outfit) ? null : (
+        <Image
+          source={mobileBotMascotAsset(avatar.id)}
+          style={[StyleSheet.absoluteFill, layer]}
+          accessibilityIgnoresInvertColors
+        />
+      )}
+      {avatar.outfit ? (
+        <Image
+          source={mobileBotOutfitAsset(avatar.outfit, avatar.id)}
+          style={[StyleSheet.absoluteFill, layer]}
+          accessibilityIgnoresInvertColors
+        />
+      ) : null}
     </View>
   )
 }

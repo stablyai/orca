@@ -15,6 +15,9 @@ import {
 } from '../../../../../shared/bot-avatar'
 import type { Bot } from '../../../../../shared/bot-types'
 import type { BotUpdateParams } from '../../../../../shared/rpc-contract/bots-params'
+import type { BotAvatarOutfit } from '../../../../../shared/bots/bot-avatar-outfit'
+
+type BotLookUpdate = Pick<BotUpdateParams['updates'], 'avatarColor' | 'avatarOutfit'>
 import { useSaveOnClose } from './use-save-on-close'
 
 export const BOT_PICTURE_SAVE_DELAY_MS = 500
@@ -88,6 +91,9 @@ export function useBotPictureSetting(
   /** The mascot's tile color shown; null is its own sky blue. */
   color: string | null
   pickColor: (color: string | null) => void
+  /** What the mascot wears shown; null is nothing. */
+  outfit: BotAvatarOutfit | null
+  pickOutfit: (outfit: BotAvatarOutfit | null) => void
 } {
   const t = useTranslate()
   const [kept, setKeptState] = useState(() => keptFrom(bot.avatar, 0, -1))
@@ -263,29 +269,34 @@ export function useBotPictureSetting(
     })
   }
 
-  // The color saves on its own, the latest pick after a pause; until it lands it is shown as picked.
-  const [pickedColor, setPickedColor] = useState<{ color: string | null } | null>(null)
-  const colorTimer = useRef<{ timer: ReturnType<typeof setTimeout>; save: () => void } | null>(null)
-  const saveColor = (color: string | null): void => {
-    colorTimer.current = null
-    void update({ avatarColor: color }).finally(() =>
-      setPickedColor((picked) => (picked?.color === color ? null : picked))
-    )
-  }
-  const pickColor = (color: string | null): void => {
-    setPickedColor({ color })
-    if (colorTimer.current) {
-      clearTimeout(colorTimer.current.timer)
+  // The tile color and outfit save on their own, the latest picks after a pause; until they land they show as picked.
+  const [pickedLook, setPickedLook] = useState<BotLookUpdate | null>(null)
+  const lookTimer = useRef<{
+    timer: ReturnType<typeof setTimeout>
+    save: () => void
+    look: BotLookUpdate
+  } | null>(null)
+  const pickLook = (change: BotLookUpdate): void => {
+    const look = { ...lookTimer.current?.look, ...change }
+    setPickedLook((picked) => ({ ...picked, ...change }))
+    if (lookTimer.current) {
+      clearTimeout(lookTimer.current.timer)
     }
-    const save = (): void => saveColor(color)
-    colorTimer.current = { timer: setTimeout(save, BOT_PICTURE_SAVE_DELAY_MS), save }
+    const save = (): void => {
+      lookTimer.current = null
+      void update(look).finally(() =>
+        // Shown as saved once it lands, unless something newer was picked meanwhile.
+        setPickedLook((picked) => (lookTimer.current ? picked : null))
+      )
+    }
+    lookTimer.current = { timer: setTimeout(save, BOT_PICTURE_SAVE_DELAY_MS), save, look }
   }
 
   useSaveOnClose(() => {
     commit()
-    if (colorTimer.current) {
-      clearTimeout(colorTimer.current.timer)
-      colorTimer.current.save()
+    if (lookTimer.current) {
+      clearTimeout(lookTimer.current.timer)
+      lookTimer.current.save()
     }
   })
 
@@ -323,7 +334,15 @@ export function useBotPictureSetting(
     pick,
     upload,
     undo,
-    color: pickedColor ? pickedColor.color : (bot.avatarColor ?? null),
-    pickColor
+    color:
+      pickedLook && 'avatarColor' in pickedLook
+        ? (pickedLook.avatarColor ?? null)
+        : (bot.avatarColor ?? null),
+    pickColor: (color) => pickLook({ avatarColor: color }),
+    outfit:
+      pickedLook && 'avatarOutfit' in pickedLook
+        ? (pickedLook.avatarOutfit ?? null)
+        : (bot.avatarOutfit ?? null),
+    pickOutfit: (outfit) => pickLook({ avatarOutfit: outfit })
   }
 }

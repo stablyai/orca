@@ -132,6 +132,8 @@ function Settings(): React.JSX.Element {
               onUndo={picture.undo}
               color={picture.color}
               onColorChange={picture.pickColor}
+              outfit={picture.outfit}
+              onOutfitChange={picture.pickOutfit}
             />
             <p className="text-center text-xs text-muted-foreground">
               Changes your bot&apos;s picture in Slack too.
@@ -170,6 +172,19 @@ export const newColor = defineFixture({
   interact: async () => {
     document
       .querySelector<HTMLButtonElement>('[role="dialog"] button[aria-label="Graphite"]')
+      ?.click()
+    await settle(600)
+  }
+})
+
+export const newOutfit = defineFixture({
+  width: 560,
+  setup: stubUpload,
+  render: () => <NewBot />,
+  interact: async () => {
+    document.querySelector<HTMLButtonElement>('[role="dialog"] button[aria-label="Pink"]')?.click()
+    document
+      .querySelector<HTMLButtonElement>('[role="dialog"] button[aria-label="Detective"]')
       ?.click()
     await settle(600)
   }

@@ -31,6 +31,7 @@ import { useBotAgentSetup } from './use-bot-agent-setup'
 import { proposalCreateParams, type BotProposal } from '../../../../shared/bots/bot-proposal'
 import {
   BOTS_AVATAR_COLOR_RUNTIME_CAPABILITY,
+  BOTS_AVATAR_OUTFIT_RUNTIME_CAPABILITY,
   BOTS_TEMPLATES_RUNTIME_CAPABILITY
 } from '../../../../shared/bot-runtime-capabilities'
 import { useBotHostHas } from '@/lib/bot-host-status'
@@ -133,7 +134,10 @@ export function NewBotDialog({
   const canCreate = !creating && !blocked && choices.length > 0
   const createdBot = useRef(false)
   const picture = useNewBotPicture(
-    useBotHostHas(hostId, BOTS_AVATAR_COLOR_RUNTIME_CAPABILITY),
+    {
+      colors: useBotHostHas(hostId, BOTS_AVATAR_COLOR_RUNTIME_CAPABILITY),
+      outfits: useBotHostHas(hostId, BOTS_AVATAR_OUTFIT_RUNTIME_CAPABILITY)
+    },
     proposal?.mascot
   )
   // From Bot templates itself (Blank bot), the row would only lead back to it.
@@ -191,6 +195,7 @@ export function NewBotDialog({
         ...agentSetup.setup,
         avatar: picture.avatar,
         avatarColor: picture.avatarColor,
+        avatarOutfit: picture.avatarOutfit,
         ...(takingOver ? { takingOver } : {})
       })
       bot = await picture.saveUpload(bot)
@@ -280,6 +285,8 @@ export function NewBotDialog({
               onUpload={picture.onUpload}
               color={picture.color}
               onColorChange={picture.onColorChange}
+              outfit={picture.outfit}
+              onOutfitChange={picture.onOutfitChange}
               uploadLink
             />
             <div className="space-y-1">

@@ -1,6 +1,9 @@
 // A bot's picture, edited where it shows: a click opens the picture picker in a popover.
 import { useBotHostHas } from '@/lib/bot-host-status'
-import { BOTS_AVATAR_COLOR_RUNTIME_CAPABILITY } from '../../../../shared/bot-runtime-capabilities'
+import {
+  BOTS_AVATAR_COLOR_RUNTIME_CAPABILITY,
+  BOTS_AVATAR_OUTFIT_RUNTIME_CAPABILITY
+} from '../../../../shared/bot-runtime-capabilities'
 import { Pencil } from 'lucide-react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { useTranslate } from '@/i18n/use-translate'
@@ -27,6 +30,7 @@ export function BotPictureButton({
 }): React.JSX.Element {
   const t = useTranslate()
   const colors = useBotHostHas(bot.hostId, BOTS_AVATAR_COLOR_RUNTIME_CAPABILITY)
+  const outfits = useBotHostHas(bot.hostId, BOTS_AVATAR_OUTFIT_RUNTIME_CAPABILITY)
   return (
     <Popover>
       <PopoverTrigger asChild>
@@ -63,6 +67,8 @@ export function BotPictureButton({
             onUndo={picture.undo}
             color={picture.color}
             onColorChange={colors ? picture.pickColor : undefined}
+            outfit={picture.outfit}
+            onOutfitChange={outfits ? picture.pickOutfit : undefined}
           />
           {bot.slack ? (
             <p className="text-center text-xs text-muted-foreground">
