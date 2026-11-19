@@ -270,6 +270,9 @@ export function closeRemovedHostTwinState(
                   (terminalTabIds.has(request.tabId) ||
                     retiredPtyIds.has(request.oldPtyId) ||
                     (isCodexAccountRestart(request) &&
+                      request.resultPtyId !== undefined &&
+                      retiredPtyIds.has(request.resultPtyId)) ||
+                    (isCodexAccountRestart(request) &&
                       matchesCapturedAccountRestart(state, request, captured?.get(key), tabs)))
                 )
           )
