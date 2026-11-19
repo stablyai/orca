@@ -22,6 +22,7 @@ import { reconcileSettledWorkerDispatches } from './worker-dispatch/worker-dispa
 import { refreshOutstandingDeliveryTrigger } from './schema/migrate-v41'
 import { RUN_PANE_KEY_MATCH_SUFFIX_SQL } from './pane-key-match'
 import { installWorkerTerminalPriorOwnerIndex } from './worker-terminal/worker-terminal-prior-owner-index'
+import { UNRELEASED_MINTED_WORKER_TERMINAL_SQL } from './worker-terminal/worker-terminal-release'
 
 class OrchestrationDbCore {
   readonly crewChanges = new CrewChanges()
@@ -84,6 +85,8 @@ class OrchestrationDbCore {
       CREATE INDEX IF NOT EXISTS idx_question_threads_run ON question_threads(run_id);
       CREATE INDEX IF NOT EXISTS idx_worker_terminal_resources_origin
         ON worker_terminal_resources(origin_dispatch_id);
+      CREATE INDEX IF NOT EXISTS idx_worker_terminal_resources_unreleased_minted
+        ON worker_terminal_resources(owner_dispatch_id) WHERE ${UNRELEASED_MINTED_WORKER_TERMINAL_SQL};
       CREATE INDEX IF NOT EXISTS idx_attempt_observation_facts_task
         ON attempt_observation_facts(task_id);
       CREATE INDEX IF NOT EXISTS idx_message_dispatch_provenance_dispatch

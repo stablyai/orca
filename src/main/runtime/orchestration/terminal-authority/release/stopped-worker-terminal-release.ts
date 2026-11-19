@@ -8,9 +8,8 @@ import { archiveWorkerOutputBeforeStop } from '../../../rpc/methods/orchestratio
 import type { OrchestrationDb } from '../../db/orchestration-db'
 import { setImmediate as yieldToEventLoop } from 'node:timers/promises'
 
-const PAGE_ROWS = 50
-// Rows examined between yields, qualifying or not, so a long history never holds main for long.
-const ROWS_PER_SLICE = 1000
+// Rows handled between yields, so a long backlog never holds main for long.
+const ROWS_PER_SLICE = 500
 
 const activeSweeps = new WeakMap<WorkerTerminalReleaseRuntime, Promise<void>>()
 
@@ -58,28 +57,50 @@ async function releaseExitedWorkerTerminals(
   // Every row is listed before any host is: a process alive when its row was read is in the listing.
   // Yields while listing are fine: the fence keeps out rows written since, and hosts are listed after.
   const candidates: { resource: WorkerTerminalResourceRow; processIncarnation: string }[] = []
-  for (let after = 0, examined = 0; ;) {
-    const page = db.listSettledWorkerTerminalsStillOwned(after, PAGE_ROWS, fence)
+  for (let after = 0; ;) {
+    const page = db.listSettledWorkerTerminalsStillOwned(after, ROWS_PER_SLICE, fence)
     for (const resource of page) {
       after = resource.row_id
-      // A legacy runtime:pty:generation fence never appears in a list, so absence proves nothing.
       const processIncarnation = resource.process_incarnation
-      if (resource.eligible && processIncarnation && isMintedPtyIncarnation(processIncarnation)) {
+      if (processIncarnation && isMintedPtyIncarnation(processIncarnation)) {
         candidates.push({ resource, processIncarnation })
       }
     }
-    if (page.length < PAGE_ROWS) {
+    if (page.length < ROWS_PER_SLICE) {
       break
     }
-    examined += page.length
-    if (examined % ROWS_PER_SLICE === 0) {
-      await yieldToEventLoop()
-      if (stopped()) {
-        return 0
-      }
+    await yieldToEventLoop()
+    if (stopped()) {
+      return 0
     }
   }
   const inventories = new Map<string, Promise<WorkerTerminalProcessIndex | null>>()
+  let released = 0
+  for (let start = 0; start < candidates.length; start += ROWS_PER_SLICE) {
+    if (start > 0) {
+      await yieldToEventLoop()
+    }
+    if (stopped()) {
+      return released
+    }
+    released += await releaseExitedSlice(
+      runtime,
+      db,
+      candidates.slice(start, start + ROWS_PER_SLICE),
+      inventories,
+      stopped
+    )
+  }
+  return released
+}
+
+async function releaseExitedSlice(
+  runtime: WorkerTerminalReleaseRuntime,
+  db: OrchestrationDb,
+  candidates: { resource: WorkerTerminalResourceRow; processIncarnation: string }[],
+  inventories: Map<string, Promise<WorkerTerminalProcessIndex | null>>,
+  stopped: () => boolean
+): Promise<number> {
   const exited: {
     requestingDispatchId: string
     resourceId: string
@@ -123,7 +144,7 @@ async function releaseExitedWorkerTerminals(
       attachedAt: release.attachedAt
     })
   }
-  // One write, so Crew readers wake once per sweep; it re-checks owner, incarnation and archive.
+  // One write per slice, so Crew readers wake once per slice; it re-checks owner, incarnation and archive.
   return db.settleDeadWorkerTerminalReleases(exited)
 }
 
