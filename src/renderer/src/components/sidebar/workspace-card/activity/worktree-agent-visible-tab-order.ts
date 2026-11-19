@@ -55,6 +55,24 @@ function rankVisibleTabs({ tabs, groups, layout, legacyOrder }: WorktreeTabLayou
  *
  * @param tabIdOf The id that matches an item to its tab: a terminal tab's entity id, or an
  *   agent-session tab's own id. `undefined` puts the item last.
+ *
+ * @example
+ * const agents = [
+ *   { name: 'a1', terminalId: 'terminal-a' },
+ *   { name: 'none' }, // no tab: goes last
+ *   { name: 'b1', terminalId: 'terminal-b' },
+ *   { name: 'b2', terminalId: 'terminal-b' } // shares b1's tab: stays after b1
+ * ]
+ * orderByVisibleTabs(agents, (agent) => agent.terminalId, {
+ *   tabs: [
+ *     { id: 'tab-a', entityId: 'terminal-a', contentType: 'terminal', groupId: 'g', ... },
+ *     { id: 'tab-b', entityId: 'terminal-b', contentType: 'terminal', groupId: 'g', ... }
+ *   ],
+ *   groups: [{ id: 'g', tabOrder: ['tab-b', 'tab-a'], ... }],
+ *   layout: { type: 'leaf', groupId: 'g' },
+ *   legacyOrder: []
+ * })
+ * // → b1, b2, a1, none
  */
 export function orderByVisibleTabs<T>(
   items: readonly T[],
