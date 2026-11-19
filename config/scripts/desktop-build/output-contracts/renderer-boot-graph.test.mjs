@@ -1,40 +1,36 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
-import { findNodeOnlyBootPayloads } from './renderer-boot-graph.mjs'
+import { expect, it } from 'vitest'
+import { verifyRendererBootGraph } from './renderer-boot-graph.mjs'
 
-let rendererDir
+it('fails renderer verification when a preloaded chunk bundles Node lru-cache', () => {
+  const root = mkdtempSync(join(tmpdir(), 'orca-renderer-boot-graph-'))
+  try {
+    const i18nDir = join(root, 'src', 'renderer', 'src', 'i18n')
+    mkdirSync(join(i18nDir, 'locales'), { recursive: true })
+    writeFileSync(
+      join(i18nDir, 'locales', 'en.json'),
+      '{"route":"This fixture message is only needed on a deferred route."}'
+    )
+    writeFileSync(join(i18nDir, 'en-runtime-required.json'), '{}')
 
-afterEach(() => {
-  if (rendererDir) {
-    rmSync(rendererDir, { recursive: true, force: true })
-    rendererDir = undefined
+    const rendererDir = join(root, 'out', 'renderer')
+    const assetsDir = join(rendererDir, 'assets')
+    mkdirSync(assetsDir, { recursive: true })
+    writeFileSync(
+      join(rendererDir, 'index.html'),
+      '<script type="module" src="./assets/entry.js"></script>\n' +
+        '<link rel="modulepreload" href="./assets/dependency.js">'
+    )
+    writeFileSync(join(assetsDir, 'entry.js'), 'import "./dependency.js";')
+    const dependency = join(assetsDir, 'dependency.js')
+    writeFileSync(dependency, 'export const LigaturesAddon = class {};')
+    expect(verifyRendererBootGraph(root)).toBe(0)
+
+    writeFileSync(dependency, 'const metrics = diagnostics.channel("lru-cache:metrics");')
+    expect(verifyRendererBootGraph(root)).toBe(1)
+  } finally {
+    rmSync(root, { recursive: true, force: true })
   }
-})
-
-function createRendererFixture(bootScriptCode) {
-  const dir = mkdtempSync(join(tmpdir(), 'orca-renderer-boot-graph-'))
-  rendererDir = dir
-  mkdirSync(join(dir, 'assets'), { recursive: true })
-  writeFileSync(
-    join(dir, 'index.html'),
-    '<!doctype html><html><head><script type="module" src="./assets/boot.js"></script></head><body></body></html>'
-  )
-  writeFileSync(join(dir, 'assets', 'boot.js'), bootScriptCode)
-  return dir
-}
-
-describe('findNodeOnlyBootPayloads', () => {
-  it('flags boot chunks containing Node-only lru-cache diagnostics_channel metrics', () => {
-    const dir = createRendererFixture('const ch = channel("lru-cache:metrics");')
-    expect(findNodeOnlyBootPayloads(dir)).toEqual([
-      { label: 'lru-cache (node:diagnostics_channel)', chunk: 'boot.js' }
-    ])
-  })
-
-  it('passes when boot chunks use the browser-safe bundle', () => {
-    const dir = createRendererFixture('export const LigaturesAddon = class {};')
-    expect(findNodeOnlyBootPayloads(dir)).toEqual([])
-  })
 })
