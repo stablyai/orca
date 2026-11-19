@@ -28,9 +28,8 @@ export function useBotLookSave(
     }
     const save = (): void => {
       timer.current = null
-      const saved = saves.current.then(() => update(look))
-      saves.current = saved.catch(() => undefined)
-      void saved.finally(() => {
+      saves.current = saves.current.then(() => update(look)).catch(() => undefined)
+      void saves.current.then(() => {
         // Shown as saved once it lands, unless something newer was picked meanwhile.
         if (latestPick.current === thisPick) {
           setPicked(null)
