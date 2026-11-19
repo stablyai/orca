@@ -10,7 +10,10 @@ import '../../db/dispatch-row-writer'
 import '../../db/attempt-outcome-projection'
 import { createRootDispatch } from '../../db/root-dispatch-test-fixture'
 import { TerminalWorkerTurnStops } from './terminal-worker-turn-stops'
-import { reportWorkerStopsAcrossRestart } from './restart-worker-stop-report'
+import {
+  reportDismissedCutWorkers,
+  reportWorkerStopsAcrossRestart
+} from './restart-worker-stop-report'
 import { chatWorkerDispatches } from './chat-worker-error-escalation'
 import { reportWorkerTurnStop } from './worker-turn-stop-report'
 import type { StructuredAgentSessionRestartResume } from '../../../../native-chat/agent-session-wire/recovery/structured-agent-session-restart-resume-contract'
@@ -161,6 +164,22 @@ describe('worker stops across a restart', () => {
       'Worker is waiting on a prompt',
       'Worker is waiting on a prompt'
     ])
+  })
+
+  it('tells the coordinator once when a person dismisses a cut worker, also after a startup report of that cut', async () => {
+    const ctx = setup(formatOrcaSessionAddress(CHAT_SESSION))
+    const dismiss = () =>
+      reportDismissedCutWorkers(
+        { db: ctx.db, reportDeps: ctx.reportDeps, lastOutput: () => 'Running the migration.' },
+        [{ sessionId: CHAT_SESSION, cut: { cause: 'crash', turnId: 'turn-1' } }]
+      )
+    dismiss()
+    dismiss()
+    const reports = ctx.mail()
+    expect(reports.map((report) => report.subject)).toEqual(['Worker exited without reporting'])
+    expect(reports[0]?.body).toContain('its restart offer was dismissed')
+    await chatPass(ctx, { cause: 'crash', turnId: 'turn-1' })
+    expect(ctx.mail()).toHaveLength(1)
   })
 
   it('leaves a Dispatch whose brief has not reached its worker yet', async () => {

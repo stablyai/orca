@@ -47,6 +47,7 @@ import {
 } from './structured-agent-session-restart-action-result'
 import { structuredAgentSessionConversationFence } from '../host/structured-agent-session-provider-child'
 import type { StructuredAgentSessionHostDeps } from '../host/structured-agent-session-host-types'
+import { createRestartOfferDismissals } from './structured-agent-session-restart-dismissals'
 
 type LiveSession = StructuredAgentSessionRestartOfferSession
 
@@ -292,6 +293,8 @@ export function createStructuredAgentSessionRestartResume(
     }
   }
 
+  const dismissals = createRestartOfferDismissals({ list, listFailures, cutOf: witnesses.cutOf })
+
   return {
     adoptCrashCuts: witnesses.recordCrashCuts,
     passOverAutomatic: witnesses.passOverAutomatic,
@@ -304,15 +307,11 @@ export function createStructuredAgentSessionRestartResume(
     listFailures,
     // Block old witnesses after dismissal; later captures are fresh interruptions.
     // Reveal before dismiss-all so newer/unlisted chats remain preserved.
-    dismiss: (sessionIds, audience) =>
-      failures.dismiss(
-        sessionIds,
-        async (clearAudience) => {
-          witnesses.clear(clearAudience)
-          await revealEvery()
-        },
-        audience
-      ),
+    dismiss: dismissals.dismissing(failures.dismiss, async (clearAudience) => {
+      witnesses.clear(clearAudience)
+      await revealEvery()
+    }),
+    onDismissed: dismissals.onDismissed,
     continueAfterRestart,
     onAgentStarted: withdrawal.onAgentStarted,
     continueInterrupted: createInterruptedContinuation(continuationHost, readMarkers)

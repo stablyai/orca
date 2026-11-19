@@ -108,7 +108,10 @@ describe('continuing interrupted chats at launch', () => {
 
   it('with the setting off, still offers what a crash cut and passes it over, continuing nothing', async () => {
     const { result, restartResume, calls } = launch(false)
-    expect((await result).continued).toEqual(new Set())
+    const settled = await result
+    expect(settled.continued).toEqual(new Set())
+    // Every cut waits for the person; no coordinator hears of one before they act.
+    expect(settled.cutByLastRun).toEqual(new Set())
     expect(restartResume.continueAfterRestart).not.toHaveBeenCalled()
     expect(calls).toEqual(['adopt', 'pass over'])
   })

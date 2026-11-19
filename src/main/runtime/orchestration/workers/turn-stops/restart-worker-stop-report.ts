@@ -27,9 +27,9 @@ export type RestartWorkerStopReportDeps = {
 }
 
 const CUT_BY: Record<StructuredAgentSessionRestartCut['cause'], string> = {
-  crash: 'Orca crashed during its turn; its chat is kept and can be continued',
-  quit: 'Orca quit during its turn; its chat is kept and can be continued',
-  update: 'Orca restarted to update during its turn; its chat is kept and can be continued'
+  crash: 'Orca crashed during its turn',
+  quit: 'Orca quit during its turn',
+  update: 'Orca restarted to update during its turn'
 }
 
 function openDispatchIds(db: OrchestrationDb): string[] {
@@ -70,12 +70,39 @@ async function reportCutChat(
           from: worker.from,
           reason: 'exited',
           stopKey: `cut:${sessionId}:${cut.turnId}`,
-          cause: CUT_BY[cut.cause],
+          cause: `${CUT_BY[cut.cause]}; its chat is kept and can be continued`,
           restartsOnMail: true,
           lastOutput
         },
     deps.reportDeps
   )
+}
+
+/** A person dismissed these chats' restart offers: their work is abandoned, so each worker's
+ *  coordinator is told once, under the same key a startup report of that cut uses. */
+export function reportDismissedCutWorkers(
+  deps: Pick<RestartWorkerStopReportDeps, 'db' | 'reportDeps'> & {
+    lastOutput: (sessionId: string) => string | undefined
+  },
+  dismissed: readonly { sessionId: string; cut: StructuredAgentSessionRestartCut }[]
+): void {
+  for (const { sessionId, cut } of dismissed) {
+    for (const worker of chatWorkerDispatches(sessionId, deps.db)) {
+      reportWorkerTurnStop(
+        deps.db,
+        { kind: 'local', dispatch: worker.dispatch },
+        {
+          from: worker.from,
+          reason: 'exited',
+          stopKey: `cut:${sessionId}:${cut.turnId}`,
+          cause: `${CUT_BY[cut.cause]}, and its restart offer was dismissed`,
+          restartsOnMail: true,
+          lastOutput: deps.lastOutput(sessionId)
+        },
+        deps.reportDeps
+      )
+    }
+  }
 }
 
 export async function reportWorkerStopsAcrossRestart(

@@ -62,6 +62,12 @@ export type StructuredAgentSessionRestartResume = {
     sessionIds?: readonly string[],
     audience?: StructuredAgentSessionRestartAudience
   ) => Promise<number>
+  /** Called with the cuts a person's dismissal removed, after it is written. */
+  onDismissed: (
+    listener: (
+      dismissed: readonly { sessionId: string; cut: StructuredAgentSessionRestartCut }[]
+    ) => void
+  ) => void
   onAgentStarted: (sessionId: string) => void
   /** Continue a cut reply with or without an offer. */
   continueInterrupted: ReturnType<typeof createInterruptedContinuation>

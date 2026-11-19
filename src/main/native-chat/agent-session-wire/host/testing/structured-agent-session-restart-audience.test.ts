@@ -71,3 +71,16 @@ it('keeps a failure the caller cannot show, and leaves it out of an action reply
   expect(await host.restartResume.dismiss(undefined, showsCodex)).toBe(1)
   expect(await host.restartResume.listFailures()).toEqual([])
 })
+
+it('tells listeners of the cut a dismissal removed, and nothing for one it kept', async () => {
+  const { host } = await interruptedRestart()
+  const heard = vi.fn()
+  host.restartResume.onDismissed(heard)
+
+  await host.restartResume.dismiss([SESSION], cannotShowCodex)
+  expect(heard).not.toHaveBeenCalled()
+  await host.restartResume.dismiss([SESSION], showsCodex)
+  expect(heard).toHaveBeenCalledExactlyOnceWith([
+    { sessionId: SESSION, cut: expect.objectContaining({ cause: 'quit' }) }
+  ])
+})

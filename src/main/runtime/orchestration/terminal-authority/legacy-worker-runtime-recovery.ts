@@ -9,7 +9,10 @@ import {
   structuredAgentSessionLaunchContinuationDeps
 } from '../../agent-session/lifecycle/structured-agent-session-launch-continuation'
 import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
-import { reportWorkerStopsAcrossRestart } from '../workers/turn-stops/restart-worker-stop-report'
+import {
+  reportDismissedCutWorkers,
+  reportWorkerStopsAcrossRestart
+} from '../workers/turn-stops/restart-worker-stop-report'
 import { agentHookServer } from '../../../agent-hooks/server/agent-hook-server'
 
 export abstract class LegacyWorkerRuntimeRecovery extends RuntimeWorkspaceSessionFlush {
@@ -46,6 +49,7 @@ export abstract class LegacyWorkerRuntimeRecovery extends RuntimeWorkspaceSessio
   protected abstract reportRestingPane: (paneKey: string) => Promise<void>
 
   private restartWorkerStopReport: Promise<void> | null = null
+  private readonly dismissalWatched = new WeakSet<object>()
 
   /** Once per start, after restored terminal authority: tell coordinators about workers that
    *  stopped while Orca was down, or that this start did not continue. */
@@ -67,15 +71,29 @@ export abstract class LegacyWorkerRuntimeRecovery extends RuntimeWorkspaceSessio
   ): Promise<void> {
     try {
       // Continued chats are working again, and replayed hooks have been probed once.
-      const [{ cutByLastRun }] = await Promise.all([
-        launch,
-        agentHookServer.whenRestoredOwnersChecked()
-      ])
+      const { cutByLastRun } = await launch
+      const host = getStructuredAgentSessionHost()
+      if (host && !this.dismissalWatched.has(host)) {
+        this.dismissalWatched.add(host)
+        host.restartResume.onDismissed((dismissed) => {
+          const db = this.getExistingOrchestrationDb()
+          if (db) {
+            reportDismissedCutWorkers(
+              {
+                db,
+                reportDeps: this.workerTurnStopReportDeps,
+                lastOutput: (sessionId) => host.readStatusSummary(sessionId)?.lastAssistantMessage
+              },
+              dismissed
+            )
+          }
+        })
+      }
+      await agentHookServer.whenRestoredOwnersChecked()
       const db = this.getExistingOrchestrationDb()
       if (!db) {
         return
       }
-      const host = getStructuredAgentSessionHost()
       await reportWorkerStopsAcrossRestart({
         db,
         reportDeps: this.workerTurnStopReportDeps,

@@ -22,7 +22,8 @@ export type StructuredAgentSessionLaunchContinuation = {
   answer?: RestartContinuationAnswer
   /** Chats the run that just ended may have cut and this start did not continue: the chats it held,
    *  which covers a cut that left no offer, and chats with an offer it recorded (a quit releases its
-   *  chats first). */
+   *  chats first). None with the setting off: every cut waits for the person, and only a dismissal
+   *  tells a coordinator. */
   cutByLastRun: ReadonlySet<string>
 }
 
@@ -74,7 +75,7 @@ export async function continueStructuredAgentSessionsAtLaunch(
   }
   try {
     if (!deps.resumeWorkOnRestart()) {
-      return { continued: new Set(), cutByLastRun: await cutByLastRun() }
+      return { continued: new Set(), cutByLastRun: new Set() }
     }
     const answer = await deps.restartResume.continueAfterRestart(
       undefined,
