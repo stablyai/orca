@@ -84,6 +84,7 @@ export function NativeChatTranscriptSignInNotice({
   agentName,
   account,
   rowId,
+  sent = false,
   fallback,
   details,
   className
@@ -92,6 +93,8 @@ export function NativeChatTranscriptSignInNotice({
   account: AgentSessionAccountKind | undefined
   /** The transcript row that reports the failure; a later successful turn resolved it. */
   rowId?: string
+  /** The row reports a message that wasn't sent; a start failure never sent one. */
+  sent?: boolean
   /** Today's row, kept where this chat has no Sign in, since its sentence says how. */
   fallback: (resolved: boolean) => React.ReactNode
   /** The provider's own words, under the line. */
@@ -121,11 +124,13 @@ export function NativeChatTranscriptSignInNotice({
         <div className="flex min-w-0 items-center gap-2 text-xs text-chat-foreground-faint">
           <AlertCircle aria-hidden className="size-3.5 shrink-0" />
           <p className={TEXT}>
-            {t(
-              'components.native-chat.signInNotice.notSent',
-              "Not sent: {{agent}} isn't signed in.",
-              { agent }
-            )}
+            {sent
+              ? t(
+                  'components.native-chat.signInNotice.notSent',
+                  "Not sent: {{agent}} isn't signed in.",
+                  { agent }
+                )
+              : nativeChatNotSignedInSentence(agent, t)}
           </p>
         </div>
       )}

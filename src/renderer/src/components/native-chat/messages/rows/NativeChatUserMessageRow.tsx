@@ -211,6 +211,7 @@ export function NativeChatUserMessageRow({
           agentName={deliveryNotice.signIn.agentName}
           account={deliveryNotice.signIn.account}
           rowId={message.id}
+          sent
           className="max-w-[85%]"
           fallback={() => <NativeChatDeliveryLine notice={deliveryNotice} rowId={message.id} />}
         />

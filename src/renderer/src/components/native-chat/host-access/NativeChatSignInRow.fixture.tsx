@@ -210,59 +210,55 @@ export const opencode300Text15 = defineFixture({
   render: () => <Scene agent="opencode" fontSize={15} />
 })
 
-/** A start failure's transcript row, with the sentence an older host sent. */
-export const transcriptRowOldHost = defineFixture({
-  width: 520,
-  render: () => (
+type StartFailureSetup = 'alone' | 'both' | 'resolved'
+
+/** Start failures' transcript rows, each carrying the longer sentence an older host sent. */
+function StartFailureRows({ setup }: { setup: StartFailureSetup }) {
+  return (
     <div className="native-chat-appearance space-y-4 p-3">
       {AGENT_IDS.map((agent) => (
         <NativeChatHostSetupContext.Provider
           key={agent}
-          value={setupsFor(agent, 'signedOut').alone}
+          value={setupsFor(agent, 'signedOut')[setup]}
         >
-          <NativeChatNoticeRow
-            agentName={AGENTS[agent].label}
-            block={{
-              type: 'text',
-              tone: 'error',
-              text: AGENTS[agent].oldSentence,
-              failure: {
-                kind: 'notSignedIn',
-                ...(AGENTS[agent].account ? { account: AGENTS[agent].account } : {})
-              }
-            }}
-          />
+          <div className="space-y-2">
+            <NativeChatNoticeRow
+              agentName={AGENTS[agent].label}
+              messageId={`failure-${agent}`}
+              block={{
+                type: 'text',
+                tone: 'error',
+                text: AGENTS[agent].oldSentence,
+                failure: {
+                  kind: 'notSignedIn',
+                  ...(AGENTS[agent].account ? { account: AGENTS[agent].account } : {})
+                }
+              }}
+            />
+            {setup === 'both' ? (
+              <Composer agent={agent} setup={setupsFor(agent, 'signedOut').alone} />
+            ) : null}
+          </div>
         </NativeChatHostSetupContext.Provider>
       ))}
     </div>
   )
+}
+
+/** A start failure's row alone: an older host's long sentence still reads short. */
+export const transcriptRowOldHost = defineFixture({
+  width: 520,
+  render: () => <StartFailureRows setup="alone" />
+})
+
+/** A start failure's row while the composer's notice has Sign in: nothing was sent, so no "Not sent". */
+export const transcriptRowStartFailureBoth = defineFixture({
+  width: 520,
+  render: () => <StartFailureRows setup="both" />
 })
 
 /** A failure a later successful turn resolved: history, so a plain muted line with no button. */
 export const transcriptRowResolved = defineFixture({
   width: 520,
-  render: () => (
-    <div className="native-chat-appearance space-y-4 p-3">
-      {AGENT_IDS.map((agent) => (
-        <NativeChatHostSetupContext.Provider
-          key={agent}
-          value={setupsFor(agent, 'signedOut').resolved}
-        >
-          <NativeChatNoticeRow
-            agentName={AGENTS[agent].label}
-            messageId={`failure-${agent}`}
-            block={{
-              type: 'text',
-              tone: 'error',
-              text: AGENTS[agent].oldSentence,
-              failure: {
-                kind: 'notSignedIn',
-                ...(AGENTS[agent].account ? { account: AGENTS[agent].account } : {})
-              }
-            }}
-          />
-        </NativeChatHostSetupContext.Provider>
-      ))}
-    </div>
-  )
+  render: () => <StartFailureRows setup="resolved" />
 })
