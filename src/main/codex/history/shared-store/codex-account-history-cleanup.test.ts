@@ -15,6 +15,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { CodexHistoryCleanupMode } from '../cleanup-policy/codex-history-cleanup-policy'
 import type { CodexHistoryCleanupSweepPolicy } from '../cleanup-policy/codex-history-cleanup-policy-live-update'
 import { cleanUpCodexHistoryLeftBehind } from './codex-account-history-cleanup'
+import { checkThenCleanUpCodexHistory } from './codex-account-history-cleanup-sweep'
 import { checkCodexHistoryLeftBehind } from './codex-account-history-content-check'
 import { shareCodexAccountHistory } from './codex-account-history-links'
 
@@ -22,6 +23,13 @@ import { shareCodexAccountHistory } from './codex-account-history-links'
 // is open, so the proofs alone decide.
 vi.mock('../../../filesystem/open-file-check', () => ({
   findOpenFiles: async () => new Set<string>()
+}))
+
+vi.mock('../cleanup-policy/codex-history-cleanup-policy-live-update', () => ({
+  codexHistoryCleanupSweepPolicy: async () => policy('report')
+}))
+vi.mock('../../../telemetry/codex-history-cleanup-telemetry', () => ({
+  reportCodexHistoryCleanupOnce: async () => {}
 }))
 
 const busyPath = vi.hoisted(() => {
@@ -74,6 +82,8 @@ beforeEach(() => {
 })
 afterEach(() => {
   vi.useRealTimers()
+  vi.unstubAllEnvs()
+  vi.restoreAllMocks()
   busyPath.value = null
   busyPath.attempts = 0
   Object.defineProperty(process, 'platform', { value: platform })
@@ -140,7 +150,7 @@ async function sharedHome() {
       shouldStop: () => false,
       policy: policy(mode)
     })
-  return { account, aside, share, cleanUp }
+  return { root, account, store, aside, share, cleanUp }
 }
 
 describe('cleanUpCodexHistoryLeftBehind', () => {
@@ -181,6 +191,24 @@ describe('cleanUpCodexHistoryLeftBehind', () => {
     expect(existsSync(join(aside, SAME))).toBe(true)
     expect(existsSync(join(account, 'thread_history_1.sqlite'))).toBe(true)
     expect(existsSync(join(account, 'thread_history_1.sqlite-wal'))).toBe(true)
+  })
+
+  it('reports a home once per policy revision', async () => {
+    const { root, account, store } = await sharedHome()
+    Object.defineProperty(process, 'platform', { value: 'darwin' })
+    vi.stubEnv('ORCA_USER_DATA_PATH', join(root, 'user-data'))
+    const info = vi.spyOn(console, 'info').mockImplementation(() => {})
+    const sweep = () =>
+      checkThenCleanUpCodexHistory({
+        accountHome: account,
+        storeHome: store,
+        shouldStop: () => false
+      })
+
+    expect(await sweep()).toBe(true)
+    expect(info).toHaveBeenCalledTimes(1)
+    expect(await sweep()).toBe(true)
+    expect(info).toHaveBeenCalledTimes(1)
   })
 
   it('keeps a copy for good after three busy unlinks', async () => {

@@ -54,7 +54,7 @@ type ReadyRollout = {
  * redundant: a set-aside rollout form or merge conflict whose content matched the store copy, while
  * both files keep the size and mtime that check saw, the home file still hashes the same and the
  * home is still shared; and the home's own databases, untouched for the grace period, once the
- * home has worked shared that long. In report mode every check runs but nothing is deleted.
+ * home has worked shared that long. In report mode nothing is deleted or hashed again.
  */
 export async function cleanUpCodexHistoryLeftBehind(args: {
   accountHome: string
@@ -137,7 +137,10 @@ export async function cleanUpCodexHistoryLeftBehind(args: {
     if (budget.skipOversized(rollout.path, rollout.facts.bytes)) {
       continue
     }
-    if (!budget.fits(rollout.facts.bytes) || !(await settleRollout(rollout))) {
+    if (
+      (enforcing('rollouts') && !budget.fits(rollout.facts.bytes)) ||
+      !(await settleRollout(rollout))
+    ) {
       break
     }
   }
@@ -254,11 +257,13 @@ export async function cleanUpCodexHistoryLeftBehind(args: {
   async function settleRollout(rollout: ReadyRollout): Promise<boolean> {
     const tally = result.rollouts
     try {
-      // Size and a millisecond mtime can miss a same-size rewrite of the copy being deleted.
-      if ((await contentSha256(fromManifestPath(home, rollout.path), budget)) !== rollout.sha256) {
-        if (enforcing('rollouts')) {
-          voided.set(rollout.path, rollout.facts)
-        }
+      // Size and a millisecond mtime can miss a same-size rewrite of the copy being deleted. Report
+      // mode deletes nothing, so its own check's hash stands.
+      if (
+        enforcing('rollouts') &&
+        (await contentSha256(fromManifestPath(home, rollout.path), budget)) !== rollout.sha256
+      ) {
+        voided.set(rollout.path, rollout.facts)
         tally.skipped.rehash_mismatch += 1
         return true
       }

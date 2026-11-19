@@ -7,6 +7,7 @@ import {
   checkCodexHistoryLeftBehind,
   type ReportModeMemory
 } from './codex-account-history-content-check'
+import { recordReportSweep, wasReportSwept } from './codex-history-cleanup-report-sweeps'
 import { CleanupBudget, describeCleanupSweep } from './codex-history-cleanup-sweep-tally'
 
 // The content check may spend this share of each limit, so a sweep it cuts short still tallies.
@@ -26,6 +27,17 @@ export async function checkThenCleanUpCodexHistory(args: {
   const policy = await codexHistoryCleanupSweepPolicy()
   const modes = { rollouts: policy.rollouts.mode, databases: policy.databases.mode }
   if (modes.rollouts === 'off' && modes.databases === 'off') {
+    return true
+  }
+  const markerDir = join(getOrcaUserDataPath(), 'codex-account-history')
+  // Report mode saves nothing, so it reports each home once per revision instead of every launch.
+  const reportOnly = modes.rollouts !== 'enforce' && modes.databases !== 'enforce'
+  const reportSweep = {
+    markerPath: join(markerDir, 'cleanup-report-swept.json'),
+    revision: policy.revision,
+    accountHome: args.accountHome
+  }
+  if (reportOnly && (await wasReportSwept(reportSweep))) {
     return true
   }
   // Once asked to stop, the run is unfinished even if the pass that asked has ended by the time it
@@ -68,8 +80,14 @@ export async function checkThenCleanUpCodexHistory(args: {
   if (result.policyChanged) {
     return true
   }
+  // A sweep the budget cut short, or that couldn't tell what was open, continues next launch.
+  const openUnknown =
+    result.rollouts.skipped.open_unknown + result.databases.skipped.open_unknown > 0
+  if (reportOnly && !result.budgetHit && !openUnknown) {
+    await recordReportSweep(reportSweep)
+  }
   await reportCodexHistoryCleanupOnce({
-    markerPath: join(getOrcaUserDataPath(), 'codex-account-history', 'cleanup-telemetry-sent.json'),
+    markerPath: join(markerDir, 'cleanup-telemetry-sent.json'),
     revision: policy.revision,
     modes,
     result

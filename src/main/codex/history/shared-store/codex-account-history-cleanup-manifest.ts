@@ -339,12 +339,13 @@ export async function inventoryCodexHistoryLeftBehind(args: {
   if (!rollouts) {
     return null
   }
+  // The twin pairs only feed what gets saved.
+  if (args.persist === false) {
+    return rollouts
+  }
   const pairs = await storeTwinPairs(args.storeHome, shouldStop)
   if (shouldStop()) {
     return null
-  }
-  if (args.persist === false) {
-    return rollouts
   }
   if (pairs.length > 0) {
     console.warn(
