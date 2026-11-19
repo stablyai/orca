@@ -20,28 +20,22 @@ export function bindTerminalPaneStatusLifecycle(
   agentHookServer.setTerminalPaneLifecycle({
     retireSavedRecord: (paneKey, exitedAt) => runtime?.retireExitedPaneResume(paneKey, exitedAt),
     confirmProcessExit: async (paneKey, agent) => {
-      if (!runtime) {
-        return false
-      }
       try {
-        const pane = runtime.resolveTerminalPane(paneKey)
-        const launch = runtime.getLaunchStatementForPaneKey(paneKey, agent)
+        const launch = runtime?.getLaunchStatementForPaneKey(paneKey, agent)
         // A finished command already retired a gone launch; an unknown one (reattach) needs the proof.
-        if (!pane.ptyId || isRemoteExecutionHostPtyId(pane.ptyId) || launch === null) {
-          return false
-        }
-        const shellAlone = await confirmShellAlone(pane.ptyId, pane.incarnationId ?? undefined)
-        const current = runtime.resolveTerminalPane(paneKey)
         return (
-          shellAlone === true &&
-          current.ptyId === pane.ptyId &&
-          current.incarnationId === pane.incarnationId &&
-          runtime.getLaunchStatementForPaneKey(paneKey, agent) === launch
+          launch !== null &&
+          (await paneShellAlone(
+            runtime,
+            paneKey,
+            () => runtime?.getLaunchStatementForPaneKey(paneKey, agent) === launch
+          ))
         )
       } catch {
         return false
       }
     },
+    confirmShellAlone: (paneKey) => paneShellAlone(runtime, paneKey),
     readSavedRecord: (paneKey) => {
       try {
         const worktreeId = runtime?.getTerminalWorktreeIdForPaneKey(paneKey)
@@ -109,6 +103,33 @@ export function bindTerminalPaneStatusLifecycle(
     }
   })
   agentHookServer.pruneUnplacedSleepingPanes()
+}
+
+/** A local pane's shell alone holds its PTY, and the pane still runs that PTY afterwards. */
+async function paneShellAlone(
+  runtime: OrcaRuntimeService | undefined,
+  paneKey: string,
+  stillCurrent: () => boolean = () => true
+): Promise<boolean> {
+  if (!runtime) {
+    return false
+  }
+  try {
+    const pane = runtime.resolveTerminalPane(paneKey)
+    if (!pane.ptyId || isRemoteExecutionHostPtyId(pane.ptyId)) {
+      return false
+    }
+    const shellAlone = await confirmShellAlone(pane.ptyId, pane.incarnationId ?? undefined)
+    const current = runtime.resolveTerminalPane(paneKey)
+    return (
+      shellAlone &&
+      current.ptyId === pane.ptyId &&
+      current.incarnationId === pane.incarnationId &&
+      stillCurrent()
+    )
+  } catch {
+    return false
+  }
 }
 
 /** The shell alone holds the PTY, with no job behind it, stopped or running. A daemon answers

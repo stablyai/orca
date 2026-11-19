@@ -235,6 +235,7 @@ describe('a hookless resumed Codex across wakes and shell-confirmed command fini
   it.each([
     ['quit', ['0'], false],
     ['quit without command marks', ['unmarked'], false],
+    ['a shell nested in the live Codex finishing a command', ['nested'], true],
     ['suspended', ['148'], true],
     ['macOS suspended', ['146'], true],
     ['suspended, then another command', ['148', '0'], true],
@@ -244,6 +245,8 @@ describe('a hookless resumed Codex across wakes and shell-confirmed command fini
     vi.useFakeTimers({ toFake: ['Date'] })
     vi.setSystemTime(1_000)
     const tick = () => vi.setSystemTime(Date.now() + 1_000)
+    // The host's word on the pane's shell: alone unless a nested shell marked a command.
+    let shellAlone = true
     const fixture = makeRuntimeStoreWithWorkspaceSession(
       makeWorkspaceSessionWithHeadlessTerminal({
         sleepingAgentSessionsByPaneKey: { [PANE_KEY]: SLEPT }
@@ -262,6 +265,7 @@ describe('a hookless resumed Codex across wakes and shell-confirmed command fini
       isPlaced: () => true,
       readSavedRecord: (paneKey) => fixture.getSession().sleepingAgentSessionsByPaneKey?.[paneKey],
       confirmProcessExit: async () => true,
+      confirmShellAlone: async () => shellAlone,
       retireSavedRecord: (paneKey, at) => runtime.retireExitedPaneResume(paneKey, at)
     })
     const clears: AgentStatusClearIpcPayload[] = []
@@ -341,7 +345,11 @@ describe('a hookless resumed Codex across wakes and shell-confirmed command fini
             'pty-3'
           )
         } else {
-          runtime.onPtyData('pty-3', `\x1b]133;C\x07\x1b]133;D;${status}\x07`, Date.now())
+          shellAlone = status !== 'nested'
+          const code = status === 'nested' ? '0' : status
+          runtime.onPtyData('pty-3', `\x1b]133;C\x07\x1b]133;D;${code}\x07`, Date.now())
+          // Let the host's shell-alone answer land.
+          await new Promise((resolve) => setImmediate(resolve))
         }
       }
       expect(clears.filter((clear) => 'paneKey' in clear && clear.refusedResume)).toEqual(

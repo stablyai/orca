@@ -54,6 +54,8 @@ export abstract class AgentHookServerState extends AgentHookServerStateContract 
     retireSavedRecord?(paneKey: string, exitedAt: number): void
     readSavedRecord?(paneKey: string): SleepingAgentSessionRecord | undefined
     confirmProcessExit?(paneKey: string, agent: string): Promise<boolean>
+    /** The host's word that the pane's shell holds its PTY alone, whatever launch it ran. */
+    confirmShellAlone?(paneKey: string): Promise<boolean>
     ownsProcess(paneKey: string, ptyId: string, incarnationId?: string): boolean
     isStopping(paneKey: string): boolean
     isReversibleStop(ptyId: string, incarnationId?: string): boolean

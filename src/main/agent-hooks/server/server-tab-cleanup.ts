@@ -23,12 +23,19 @@ export abstract class AgentHookServerTabCleanup extends AgentHookServerCleanup {
   ): void {
     const identity = this.paneAgentIdentity(paneKey)
     const shared = identity?.processTopology === 'shared'
+    // A command mark can come from a shell nested in a live agent; one with no process to probe
+    // ends only on the host's word that the pane's shell is alone.
+    const awaitsHost = options?.confirmedExit === true && !this.hasVerifiableAgentProcess(paneKey)
+    const confirmedExit = options?.confirmedExit === true && !awaitsHost
     const { paneKeys, authorityChanged } = this.revokeProcessAuthority(paneKey)
     const { untouched } = this.reconcileEndedProcess(
       paneKeys,
-      { ...options, preserveResumeIdentity: !options?.confirmedExit && !shared },
+      { confirmedExit, preserveResumeIdentity: !confirmedExit && !shared },
       (key) => this.clearRevokedPaneState(key)
     )
+    if (awaitsHost && identity && !shared) {
+      void this.confirmCommandFinishedExit(paneKey)
+    }
     for (const key of untouched) {
       this.clearTmuxInnerSubjects(key)
       this.clearPaneProcessState(key)
@@ -36,6 +43,18 @@ export abstract class AgentHookServerTabCleanup extends AgentHookServerCleanup {
     if (authorityChanged) {
       this.scheduleStatusPersist()
       this.notifyStatusChangeListeners()
+    }
+  }
+
+  private async confirmCommandFinishedExit(paneKey: string): Promise<void> {
+    const resolved = this.resolvePaneKeyAlias(paneKey)
+    const row = this.state.lastStatusByPaneKey.get(resolved)
+    const alone = await this.terminalPaneLifecycle?.confirmShellAlone?.(resolved)
+    if (alone === true && this.state.lastStatusByPaneKey.get(resolved) === row) {
+      this.reconcileEndedProcessForPaneKeys([resolved], {
+        preserveResumeIdentity: true,
+        confirmedExit: true
+      })
     }
   }
 

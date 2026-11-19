@@ -60,7 +60,8 @@ it.each(['claude', 'codex'] as const)(
       ownsProcess: () => true,
       isStopping: () => false,
       isReversibleStop: () => true,
-      isPlaced: () => true
+      isPlaced: () => true,
+      confirmShellAlone: async () => true
     })
     server.ingestRemote(
       {
@@ -130,6 +131,6 @@ it.each(['claude', 'codex'] as const)(
     expect(row?.agents[0]?.agentWait).toBeUndefined()
 
     server.retireProcessAuthority(PANE, { confirmedExit: true })
-    expect((await listed())?.agents).toEqual([])
+    await vi.waitFor(async () => expect((await listed())?.agents).toEqual([]))
   }
 )
