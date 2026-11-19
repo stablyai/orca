@@ -2,7 +2,6 @@ import { realpath, stat } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { isPathInsideOrEqual } from '../../../../shared/file-access/cross-platform-path'
 import { isDefinitiveAbsence } from '../../../../shared/errors/definitive-filesystem-absence'
-import { parseWslUncPath } from '../../../../shared/file-access/wsl-paths'
 import { wslDistroForPath } from '../../../wsl/filesystem/wsl-unc-access-gate'
 
 /** Orca's homes to delete in, and roots (the user's import folder) no deletion may reach. */
@@ -10,8 +9,8 @@ export type RolloutHomes = { homes: readonly string[]; protectedRoots: readonly 
 
 /**
  * A protected root as seen from one rollout: the dev:ino of the root and of the folders that hold
- * this rollout in it, or, on a filesystem that gives the root no inode, its real path. A WSL root is
- * never read, so it has only its spelling.
+ * this rollout in it, or, on a filesystem that gives the root no inode, its real path. A root in WSL
+ * is never read, and stands for its whole distro.
  */
 export type ProtectedRoot = { folderIds: ReadonlySet<string>; inodelessRealPath: string | null }
 
@@ -40,10 +39,10 @@ async function folderId(path: string): Promise<string | null> {
   }
 }
 
-/** One spelling for a WSL folder on Windows, whichever host name and case reach it; null for any other. */
-function wslFolderSpelling(path: string): string | null {
-  const wsl = wslDistroForPath(path) ? parseWslUncPath(path) : null
-  return wsl ? `//wsl.localhost/${wsl.distro.toLowerCase()}${wsl.linuxPath}` : null
+/** The root of the WSL distro a Windows path is in (`\\?\UNC\` spellings too); null for any other. */
+function wslDistroRoot(path: string): string | null {
+  const distro = wslDistroForPath(path.replace(/^[\\/]{2}\?[\\/]UNC[\\/]/i, '\\\\'))
+  return distro ? `\\\\wsl.localhost\\${distro}` : null
 }
 
 /** Without inodes to compare, only a home whose real path is exactly the root's is that root. */
@@ -70,9 +69,9 @@ export async function resolveProtectedRoots(
   const dated = dirname(stem).split('/')
   const resolved: ProtectedRoot[] = []
   for (const root of protectedRoots) {
-    // Known by its spelling alone: reading it would boot a stopped distro, and a home linked into it
-    // resolves to it.
-    const wslRoot = wslFolderSpelling(root)
+    // Reading it would boot a stopped distro, and links inside the distro can reach it by any path
+    // there: every name that resolves into that distro stays.
+    const wslRoot = wslDistroRoot(root)
     if (wslRoot) {
       resolved.push({ folderIds: new Set(), inodelessRealPath: wslRoot })
       continue
@@ -121,8 +120,7 @@ export async function isOutsideProtectedRoots(
   if (
     protectedRoots.some(
       (root) =>
-        root.inodelessRealPath !== null &&
-        isPathInsideOrEqual(root.inodelessRealPath, wslFolderSpelling(realFolder) ?? realFolder)
+        root.inodelessRealPath !== null && isPathInsideOrEqual(root.inodelessRealPath, realFolder)
     )
   ) {
     return false
