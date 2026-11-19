@@ -8,8 +8,8 @@ import type { OrchestrationAccessRuleInput } from './orchestration-method-access
 export type WorkerApprovalAccess = { answeredBy: 'person' | 'coordinator'; reason: string | null }
 
 /** Approve requires a person, or an agent caller when the user's setting is on; deny allows an agent
- *  or a person. A person is proven by the transport: the desktop app's own IPC, or a paired window or
- *  phone that says so; the orca CLI never does, so an older CLI fails closed. An agent session and a
+ *  or a person. A person is proven by the transport: the desktop app's own IPC, a phone's pairing, or
+ *  a paired window that says so; the orca CLI never does, so an older CLI fails closed. An agent session and a
  *  paired Orca's forwarded call are agents. The setting read is this machine's, which runs the worker. */
 export function workerApprovalAccess({
   params,
@@ -20,7 +20,10 @@ export function workerApprovalAccess({
     (ctx.caller?.kind === 'paired-device' &&
       !isAgentRpcCaller(ctx.caller) &&
       ctx.orchestrationCaller === undefined &&
-      ctx.clientCapabilities?.includes(ORCHESTRATION_PERSON_APPROVALS_CLIENT_CAPABILITY) === true)
+      // Only the phone app holds a phone's pairing; a paired window says it is one.
+      (ctx.clientKind === 'mobile' ||
+        ctx.clientCapabilities?.includes(ORCHESTRATION_PERSON_APPROVALS_CLIENT_CAPABILITY) ===
+          true))
   const reason = params.reason?.trim() || null
   // Without a reason it is not a coordinator's approve.
   if (

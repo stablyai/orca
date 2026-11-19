@@ -8,7 +8,8 @@ const PERSON_CLIENT = ['orchestration.person-approvals.v1']
 const allow = (
   caller: RpcCallerIdentity,
   clientCapabilities: readonly string[] = PERSON_CLIENT,
-  orchestrationCaller?: RpcContext['orchestrationCaller']
+  orchestrationCaller?: RpcContext['orchestrationCaller'],
+  clientKind: RpcContext['clientKind'] = 'runtime'
 ) =>
   workerApprovalAccess({
     params: { dispatch: 'ctx_1', prompt: 'apr_1', decision: 'allow' },
@@ -16,6 +17,7 @@ const allow = (
     ctx: {
       caller,
       clientCapabilities,
+      clientKind,
       orchestrationCaller,
       runtime: { coordinatorApprovalsEnabled: () => false }
     } as unknown as RpcContext,
@@ -24,7 +26,12 @@ const allow = (
 
 describe('worker approval access', () => {
   it('lets a person on a paired window or phone allow a worker prompt', () => {
-    expect(allow({ kind: 'paired-device', deviceId: 'phone-1' })).toEqual({
+    expect(allow({ kind: 'paired-device', deviceId: 'laptop-1' })).toEqual({
+      answeredBy: 'person',
+      reason: null
+    })
+    // A phone app that predates the window's claim is still the person.
+    expect(allow({ kind: 'paired-device', deviceId: 'phone-1' }, [], undefined, 'mobile')).toEqual({
       answeredBy: 'person',
       reason: null
     })
