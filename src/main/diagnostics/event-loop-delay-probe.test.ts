@@ -106,6 +106,33 @@ describe('createEventLoopStallSummary', () => {
     ])
   })
 
+  it('ticks rarely while main is idle and measures a stall against that slower tick', () => {
+    const windows: EventLoopStallWindow[] = []
+    const summary = createEventLoopStallSummary(0, { ...MINUTE, idleTickMs: 10_000 }, (window) =>
+      windows.push(window)
+    )
+    expect(summary.tick(500, 0)).toBe(10_000)
+    expect(summary.tick(10_500, 1)).toBe(10_000)
+    // A 2 s block that overlapped the idle tick: busy again, so back to 500 ms.
+    expect(summary.tick(22_500, 2_001)).toBe(500)
+    expect(summary.tick(23_000, 2_001)).toBe(10_000)
+    summary.tick(33_000, 2_001)
+    summary.tick(43_000, 2_001)
+    summary.tick(53_000, 2_001)
+    summary.tick(63_000, 2_001)
+    expect(windows).toEqual([
+      {
+        windowMs: 63_000,
+        maxGapMs: 2_000,
+        maxGapCpuMs: 2_000,
+        stallsSeen: 1,
+        stalledMsSeen: 2_000,
+        cpuMs: 2_001,
+        uncountedMaxGapMs: 0
+      }
+    ])
+  })
+
   it('counts every gap when no cap is set, reporting at the tick that closed the window', () => {
     const reports: [EventLoopStallWindow, number][] = []
     const summary = createEventLoopStallSummary(

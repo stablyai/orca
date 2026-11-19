@@ -11,6 +11,10 @@ export const EVENT_LOOP_DELAY_REPORT_FILE = 'event-loop-delay.ndjson'
 
 const RESOLUTION_MS = 10
 const TICK_MS = 500
+/** An idle main ticks this rarely so the probe alone never keeps it awake. */
+const IDLE_TICK_MS = 10_000
+/** Below this share of main-thread CPU since the last tick, main counts as idle. */
+const BUSY_CPU_SHARE = 0.01
 const REPORT_EVERY_TICKS = 2
 /** Main's summary: one window a minute, and quieter windows write nothing. */
 const MAIN_STALL_SUMMARY: EventLoopStallSummaryOptions = {
@@ -53,6 +57,8 @@ export type EventLoopStallWindow = {
 
 export type EventLoopStallSummaryOptions = {
   tickMs: number
+  /** While main is idle, tick this rarely instead; any busy or late tick returns to tickMs. */
+  idleTickMs?: number
   windowMs: number
   reportableMaxGapMs: number
   /** Longer gaps are treated as sleep and not counted; unset counts every gap. */
@@ -65,18 +71,19 @@ export function isEventLoopDelayProbeEnabled(env: NodeJS.ProcessEnv = process.en
   return Boolean(env.ORCA_E2E_USER_DATA_DIR) || env[EVENT_LOOP_DELAY_PROBE_ENV] === '1'
 }
 
-/** Timer drift per tick, given the time and the process's cumulative CPU ms at each tick. */
+/** Timer drift per tick, given the time and the process's cumulative CPU ms at each tick; tick returns the delay to the next one. */
 export function createEventLoopStallSummary(
   startedAt: number,
   options: EventLoopStallSummaryOptions,
   report: (window: EventLoopStallWindow, now: number) => void
 ): {
-  tick: (now: number, cpuMs?: number) => void
+  tick: (now: number, cpuMs?: number) => number
   pause: () => void
   resume: (now: number, cpuMs?: number) => void
 } {
   let lastTick = startedAt
   let lastCpuMs: number | null = null
+  let intervalMs = options.tickMs
   let windowStart = startedAt
   let windowCpuMs = 0
   let paused = false
@@ -87,8 +94,10 @@ export function createEventLoopStallSummary(
   let uncountedMaxGapMs = 0
   return {
     tick: (now, cpuMs = 0) => {
-      const gap = now - lastTick - options.tickMs
+      const gap = now - lastTick - intervalMs
       const tickCpuMs = lastCpuMs === null ? 0 : Math.max(0, cpuMs - lastCpuMs)
+      const idle = tickCpuMs < (now - lastTick) * BUSY_CPU_SHARE && gap < options.reportableMaxGapMs
+      intervalMs = options.idleTickMs !== undefined && idle ? options.idleTickMs : options.tickMs
       lastTick = now
       lastCpuMs = cpuMs
       windowCpuMs += tickCpuMs
@@ -105,11 +114,11 @@ export function createEventLoopStallSummary(
         stalledMsSeen += gap
       }
       if (now - windowStart < options.windowMs) {
-        return
+        return intervalMs
       }
       if (maxGapMs >= options.reportableMaxGapMs || uncountedMaxGapMs > 0) {
         if (options.canReport && !options.canReport()) {
-          return
+          return intervalMs
         }
         report(
           {
@@ -131,6 +140,7 @@ export function createEventLoopStallSummary(
       stallsSeen = 0
       stalledMsSeen = 0
       uncountedMaxGapMs = 0
+      return intervalMs
     },
     // System sleep stops timers without blocking the loop; never count it as a stall.
     pause: () => {
@@ -207,7 +217,7 @@ function createDelayReport(
 
 /**
  * Main always traces a once-a-minute stall summary so a support capture shows main stalls;
- * the per-second histogram file stays opt-in for perf runs.
+ * the per-second histogram file stays opt-in for perf runs and keeps a fixed tick.
  */
 export function startEventLoopDelayProbe(
   processKind: EventLoopDelayWindow['process'],
@@ -220,7 +230,11 @@ export function startEventLoopDelayProbe(
     : null
   const stallSummary =
     processKind === 'main'
-      ? createEventLoopStallSummary(startedAt, MAIN_STALL_SUMMARY, traceStallWindow(processKind))
+      ? createEventLoopStallSummary(
+          startedAt,
+          delayReport ? MAIN_STALL_SUMMARY : { ...MAIN_STALL_SUMMARY, idleTickMs: IDLE_TICK_MS },
+          traceStallWindow(processKind)
+        )
       : null
   if (!delayReport && !stallSummary) {
     return
@@ -231,10 +245,13 @@ export function startEventLoopDelayProbe(
       onResume: () => stallSummary.resume(performance.now(), mainThreadCpuMs())
     })
   }
-  const timer = setInterval(() => {
-    const now = performance.now()
-    stallSummary?.tick(now, mainThreadCpuMs())
-    delayReport?.(now)
-  }, TICK_MS)
-  timer.unref?.()
+  const schedule = (delayMs: number): void => {
+    setTimeout(() => {
+      const now = performance.now()
+      const nextDelayMs = stallSummary?.tick(now, mainThreadCpuMs()) ?? TICK_MS
+      delayReport?.(now)
+      schedule(nextDelayMs)
+    }, delayMs).unref?.()
+  }
+  schedule(TICK_MS)
 }
