@@ -102,11 +102,17 @@ export function recordTerminalTabRename(
     state.tabsByWorktree[worktreeId]?.find((tab) => tab.id === tabId)?.customTitle
   )
   const name = normalizeTerminalSessionName(title)
+  const at = options.now ?? Date.now()
+  const earlier = localNameWriteByTabId.get(tabId)
   const write: LocalNameWrite = {
-    at: options.now ?? Date.now(),
+    at,
     name,
     sessionId: null,
-    previousName
+    // Renames in quick succession before the session is known still count from the first name.
+    previousName:
+      earlier && earlier.sessionId === null && at - earlier.at < LOCAL_TAB_NAME_WRITE_GRACE_MS
+        ? earlier.previousName
+        : previousName
   }
   localNameWriteByTabId.set(tabId, write)
   if (!name && !hasTerminalSessionNames()) {
@@ -235,10 +241,13 @@ export function reconcileTerminalSessionNames(
           title: name
         })
       }
-    } else if (owned || (closedOwner && renamedWhileBound)) {
-      forgetTerminalSessionNames(
-        keysClearedBy(state, tab.id, binding, renamedWhileBound ? previous.name : '')
-      )
+    } else if (owned || (closedOwner && (renamedWhileBound || renamedFromSavedName))) {
+      const shownBeforeClear = renamedFromSavedName
+        ? write.previousName
+        : renamedWhileBound
+          ? previous.name
+          : ''
+      forgetTerminalSessionNames(keysClearedBy(state, tab.id, binding, shownBeforeClear))
     }
   }
   lastSeenByTabId = seen
