@@ -175,7 +175,12 @@ async function leftBehindRollouts(
 ): Promise<LeftBehindRollout[] | null> {
   // A pending folder is `<folder>[.<ms>].orca-profile-merge`; its files conflict by name.
   const sources: { root: string; folder: string; kind: LeftBehindRollout['kind'] }[] = []
-  for (const folder of await readEntries(join(accountHome, SET_ASIDE_ROLLOUTS_DIR))) {
+  const setAside = join(accountHome, SET_ASIDE_ROLLOUTS_DIR)
+  // A link here would lead the inventory outside the account home.
+  const setAsideFolders = (await lstatIfPresent(setAside))?.isDirectory()
+    ? await readEntries(setAside)
+    : []
+  for (const folder of setAsideFolders) {
     if (folder.isDirectory() && ROLLOUT_FOLDERS.has(folder.name)) {
       sources.push({
         root: join(accountHome, SET_ASIDE_ROLLOUTS_DIR, folder.name),
