@@ -167,11 +167,13 @@ function WorkspaceCleanupDialogContent({
     () => new Map(facetRows.allRows.map((row) => [row.identity, row])),
     [facetRows.allRows]
   )
-  const orderResetKey = `${browse.sort.field}:${browse.sort.direction}:${JSON.stringify(browse.filters)}`
+  const orderFilterKey = JSON.stringify(browse.filters)
+  const orderResetKey = `${browse.sort.field}:${browse.sort.direction}:${orderFilterKey}`
   const { rows, releaseRows } = useWorkspaceCleanupHeldRows({
     liveRows: facetRows.rows,
     liveRowByIdentity,
     resetKey: orderResetKey,
+    filterKey: orderFilterKey,
     open,
     loading,
     gitChecking: gitEvidence.pendingWorktreeIds.size > 0,

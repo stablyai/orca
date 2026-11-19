@@ -60,6 +60,7 @@ function props(rows: Row[], extra: Partial<Props> = {}): Props {
     liveRows: rows,
     liveRowByIdentity: new Map(rows.map((r) => [r.identity, r])),
     resetKey: 'last-activity:asc:{}',
+    filterKey: '{}',
     open: true,
     loading: false,
     shouldResortAtSettle: () => true,
@@ -125,7 +126,12 @@ describe('useWorkspaceCleanupHeldRows', () => {
     const { result, update } = mount(props([row('a'), row('b'), row('c')]))
     update(props([row('c'), row('a'), row('b')], { resetKey: 'size:desc:{}' }))
     expect(ids(result.rows)).toEqual(['c', 'a', 'b'])
-    update(props([row('b'), row('c')], { resetKey: 'size:desc:{"query":"x"}' }))
+    update(
+      props([row('b'), row('c')], {
+        resetKey: 'size:desc:{"query":"x"}',
+        filterKey: '{"query":"x"}'
+      })
+    )
     expect(ids(result.rows)).toEqual(['b', 'c'])
   })
 

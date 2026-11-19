@@ -612,4 +612,58 @@ describe('WorkspaceCleanupDialog stale-while-revalidate', () => {
     expect(rowNames()).toEqual(['alpha', 'beta'])
     expect(rowCheckbox('alpha')?.getAttribute('aria-checked')).toBe('true')
   })
+
+  it('a sort-only change keeps a selected row that late evidence filtered out visible and checked', async () => {
+    installApi(cachedFleet())
+    const browse = holders.store.getState().workspaceCleanupBrowse as WorkspaceCleanupBrowseState
+    holders.store.setState({
+      workspaceCleanupBrowse: {
+        ...browse,
+        filters: {
+          ...browse.filters,
+          safety: { ...browse.filters.safety, blockers: ['dirty-files'], blockerMode: 'none-of' }
+        }
+      }
+    })
+    await renderDialog()
+    await openDialog()
+    await act(async () => {
+      holders.rig?.resolvers.at(-1)?.(cachedFleet())
+    })
+    await flush()
+    await act(async () => rowCheckbox('beta')?.click())
+    expect(rowCheckbox('beta')?.getAttribute('aria-checked')).toBe('true')
+
+    await act(async () => {
+      holders.store.setState({
+        workspaceCleanupScan: {
+          scannedAt: NOW,
+          candidates: [
+            makeCandidate({ worktreeId: 'repo1::/tmp/alpha', displayName: 'alpha' }),
+            makeCandidate({
+              worktreeId: 'repo1::/tmp/beta',
+              displayName: 'beta',
+              blockers: ['dirty-files']
+            })
+          ],
+          errors: []
+        }
+      })
+    })
+    await flush()
+    expect(rowNames()).toEqual(['alpha', 'beta'])
+
+    const sorted = holders.store.getState().workspaceCleanupBrowse as WorkspaceCleanupBrowseState
+    await act(async () => {
+      holders.store.setState({
+        workspaceCleanupBrowse: {
+          ...sorted,
+          sort: { field: 'created', direction: 'asc' }
+        }
+      })
+    })
+    await flush()
+    expect(rowNames()).toEqual(['alpha', 'beta'])
+    expect(rowCheckbox('beta')?.getAttribute('aria-checked')).toBe('true')
+  })
 })

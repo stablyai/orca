@@ -69,7 +69,7 @@ export function arrangeWorkspaceCleanupHeldRows<Row extends HeldRow>(
 }
 
 /**
- * Rebuild the order on a reset. Selected rows that still exist keep their displayed place,
+ * Rebuild the order on a reset. Selected rows that still exist keep the place they had on screen,
  * even when late evidence has filtered them out; unselected rows take the live sort.
  */
 export function createWorkspaceCleanupResetOrder<Row extends HeldRow>({
@@ -85,19 +85,33 @@ export function createWorkspaceCleanupResetOrder<Row extends HeldRow>({
   pinnedIdentities: ReadonlySet<string>
   key: string
 }): WorkspaceCleanupHeldRowOrder {
-  const pinnedInPlace: { row: Row; index: number }[] = []
+  const pinned: { row: Row; index: number }[] = []
   displayedRows.forEach((displayed, index) => {
-    const live = pinnedIdentities.has(displayed.identity)
-      ? liveRowByIdentity.get(displayed.identity)
-      : undefined
+    if (!pinnedIdentities.has(displayed.identity)) {
+      return
+    }
+    const live = liveRowByIdentity.get(displayed.identity)
     if (live !== undefined) {
-      pinnedInPlace.push({ row: live, index })
+      pinned.push({ row: live, index })
     }
   })
-  const pinnedSet = new Set(pinnedInPlace.map((entry) => entry.row.identity))
-  const arranged = liveRows.filter((row) => !pinnedSet.has(row.identity))
-  for (const { row, index } of pinnedInPlace) {
-    arranged.splice(Math.min(index, arranged.length), 0, row)
+  const pinnedIds = new Set(pinned.map((entry) => entry.row.identity))
+  const rest = liveRows.filter((row) => !pinnedIds.has(row.identity))
+  const arranged: Row[] = []
+  let nextPinned = 0
+  let nextRest = 0
+  for (;;) {
+    const pin = pinned[nextPinned]
+    const restRow = rest[nextRest]
+    if (pin !== undefined && (pin.index <= arranged.length || restRow === undefined)) {
+      arranged.push(pin.row)
+      nextPinned += 1
+    } else if (restRow !== undefined) {
+      arranged.push(restRow)
+      nextRest += 1
+    } else {
+      break
+    }
   }
   return createWorkspaceCleanupHeldRowOrder(arranged, key)
 }
@@ -109,11 +123,13 @@ const NO_PINNED_IDENTITIES: ReadonlySet<string> = new Set()
  * refresh row data in place but never move a row. The order is re-derived only when:
  * the sort or filters change (`resetKey`), the dialog opens, a scan starts (Refresh), a
  * scan settles with nothing the user is mid-way through, or `resetOrder()` is called.
+ * A sort-only change or a reset keeps selected rows in place; a filter or search change does not.
  */
 export function useWorkspaceCleanupHeldRows<Row extends HeldRow>({
   liveRows,
   liveRowByIdentity,
   resetKey,
+  filterKey,
   open,
   loading,
   gitChecking = false,
@@ -126,6 +142,8 @@ export function useWorkspaceCleanupHeldRows<Row extends HeldRow>({
   liveRowByIdentity: ReadonlyMap<string, Row>
   /** Changes when the sort, filters or search change. */
   resetKey: string
+  /** Changes only when the filters or search change; a sort-only change keeps the same value. */
+  filterKey: string
   open: boolean
   loading: boolean
   /** Targeted git checks are still running; their completion counts as a settle. */
@@ -143,6 +161,8 @@ export function useWorkspaceCleanupHeldRows<Row extends HeldRow>({
   const [resetRequest, setResetRequest] = useState(0)
   const [held, setHeld] = useState<WorkspaceCleanupHeldRowOrder | null>(null)
   const previousRef = useRef({ open, loading, gitChecking })
+  const displayedRef = useRef<readonly Row[]>(liveRows)
+  const appliedFilterKeyRef = useRef(filterKey)
 
   const rows = useMemo(
     () =>
@@ -200,17 +220,33 @@ export function useWorkspaceCleanupHeldRows<Row extends HeldRow>({
   }, [resetRequest])
 
   const captureOrder = useEffectEvent(() => {
+    const filterChanged = appliedFilterKeyRef.current !== filterKey
+    appliedFilterKeyRef.current = filterKey
+    const displayedBefore = displayedRef.current
     // Only committed renders advance the held order.
-    setHeld((current) =>
-      current !== null && current.key === resetKey
-        ? extendWorkspaceCleanupHeldRowOrder(liveRows, current)
-        : createWorkspaceCleanupHeldRowOrder(liveRows, resetKey)
-    )
+    setHeld((current) => {
+      if (current !== null && current.key === resetKey) {
+        return extendWorkspaceCleanupHeldRowOrder(liveRows, current)
+      }
+      if (current !== null && !filterChanged) {
+        return createWorkspaceCleanupResetOrder({
+          liveRows,
+          displayedRows: displayedBefore,
+          liveRowByIdentity,
+          pinnedIdentities,
+          key: resetKey
+        })
+      }
+      return createWorkspaceCleanupHeldRowOrder(liveRows, resetKey)
+    })
   })
   // Released rows that still match take their end slot now, not at the next live-row change.
   useEffect(() => {
     captureOrder()
   }, [resetKey, liveRows, releaseCount])
+  useEffect(() => {
+    displayedRef.current = rows
+  })
 
   return { rows, resetOrder, releaseRows }
 }
