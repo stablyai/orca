@@ -243,7 +243,8 @@ export abstract class RateLimitServiceState {
           }
           throw error
         }
-        if (this.publicationStopped || this.publicationPending) {
+        // Deliver completed snapshots even when newer updates are queued.
+        if (this.publicationStopped) {
           continue
         }
         for (const listener of this.stateListeners) {

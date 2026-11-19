@@ -55,11 +55,50 @@ it.each([100, 1000])(
     expect(presence.cookie).toHaveBeenCalledTimes(2)
     expect(presence.minimax).toHaveBeenCalledTimes(2)
     expect(presence.zcode).toHaveBeenCalledTimes(2)
-    expect(received).toHaveLength(1)
+    expect(received).toHaveLength(2)
     expect(received[0].codex?.session?.usedPercent).toBe(count)
     expect(received[0].inactiveCodexAccounts[0].rateLimits?.session?.usedPercent).toBe(count)
+    expect(received[1].codex?.session?.usedPercent).toBe(count)
+    expect(received[1].inactiveCodexAccounts[0].rateLimits?.session?.usedPercent).toBe(count)
   }
 )
+
+it.each([100, 1000])('publishes progress during %i continuous updates', async (count) => {
+  const service = new PublicationService()
+  const reads = Array.from({ length: count + 1 }, () => ({
+    entered: Promise.withResolvers<void>(),
+    release: Promise.withResolvers<boolean>()
+  }))
+  let nextRead = 0
+  presence.cookie.mockImplementation(() => {
+    const read = reads[nextRead++]
+    read.entered.resolve()
+    return read.release.promise
+  })
+  const received: RateLimitState[] = []
+  service.onStateChange((state) => received.push(state))
+  const publishing = service.inactive(0)
+  await reads[0].entered.promise
+  for (let value = 1; value <= count; value++) {
+    service.change(value)
+    void service.inactive(value)
+    reads[value - 1].release.resolve(false)
+    await reads[value].entered.promise
+    expect(received).toHaveLength(value)
+    expect(received[value - 1].codex?.session?.usedPercent).toBe(value)
+    expect(received[value - 1].inactiveCodexAccounts[0].rateLimits?.session?.usedPercent).toBe(
+      value
+    )
+  }
+  reads[count].release.resolve(false)
+  await publishing
+  expect(presence.cookie).toHaveBeenCalledTimes(count + 1)
+  expect(presence.minimax).toHaveBeenCalledTimes(count + 1)
+  expect(presence.zcode).toHaveBeenCalledTimes(count + 1)
+  expect(received).toHaveLength(count + 1)
+  expect(received[count].codex?.session?.usedPercent).toBe(count)
+  expect(received[count].inactiveCodexAccounts[0].rateLimits?.session?.usedPercent).toBe(count)
+})
 
 it('drops pending and late publication work on stop', async () => {
   const service = new PublicationService()
