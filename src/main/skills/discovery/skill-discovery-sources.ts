@@ -91,6 +91,7 @@ function providerRepoSources(
 const PROJECT_SKILL_FOLDERS: readonly (readonly [AgentType, string, SkillProvider[]])[] = [
   ['codex', '.codex', ['codex']],
   ['cursor', '.cursor', ['agent-skills']],
+  ['copilot', '.github', ['agent-skills']],
   ['qoder', '.qoder', ['agent-skills']],
   ['opencode', '.opencode', ['agent-skills']]
 ]
@@ -192,6 +193,23 @@ export function buildSkillDiscoverySources(
       'home',
       ['agent-skills'],
       'muse'
+    ),
+    source(
+      'home-copilot',
+      'Copilot home',
+      pathApi.join(home, '.copilot', 'skills'),
+      'home',
+      ['agent-skills'],
+      'copilot'
+    ),
+    // Cursor writes its own built-in skills here; they cannot be deleted like a user's.
+    source(
+      'home-cursor-builtin',
+      'Cursor',
+      pathApi.join(home, '.cursor', 'skills-cursor'),
+      'bundled',
+      ['agent-skills'],
+      'cursor'
     ),
     // Why: Antigravity also reads its CLI's skill folder beside the `config/skills` install root.
     source(

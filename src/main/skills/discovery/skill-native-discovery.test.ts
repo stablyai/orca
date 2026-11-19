@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { clearSkillRootScanCache, discoverSkills } from './skill-native-discovery'
 import { isNativeChatSkillForAgent } from '../../../shared/native-chat/input/commands/native-chat-skill-visibility'
+import type { AgentType } from '../../../shared/agent-status/contracts/agent-status-types'
 import '../../../shared/agent-launch/catalog/tui-agent-config'
 
 import type * as SkillRootFileWalk from './skill-root-file-walk'
@@ -170,17 +171,22 @@ describe('skill discovery', () => {
     expect(result.sources.some((source) => source.id.startsWith('claude-plugin'))).toBe(false)
   })
 
-  it("lists the skills Cursor's chat loads from its own and compatibility folders", async () => {
+  it('lists for each chat agent the skills its CLI loads', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-skills-'))
     const home = join(root, 'home')
     const repo = join(root, 'repo')
     const folders: [string, string][] = [
       [join(home, '.cursor', 'skills'), 'cursor-home'],
+      [join(home, '.cursor', 'skills-cursor'), 'cursor-builtin'],
+      [join(home, '.copilot', 'skills'), 'copilot-home'],
       [join(home, '.agents', 'skills'), 'agents-home'],
       [join(home, '.claude', 'skills'), 'claude-home'],
       [join(home, '.codex', 'skills'), 'codex-home'],
       [join(home, '.grok', 'skills'), 'grok-home'],
       [join(repo, '.cursor', 'skills'), 'cursor-project'],
+      [join(repo, '.github', 'skills'), 'github-project'],
+      [join(repo, '.claude', 'skills'), 'claude-project'],
+      [join(repo, '.agents', 'skills'), 'agents-project'],
       [join(repo, '.codex', 'skills'), 'codex-project'],
       [join(home, '.codex', 'skills', '.system'), 'codex-bundled'],
       [join(home, '.pi', 'agent', 'skills'), 'pi-only']
@@ -191,20 +197,32 @@ describe('skill discovery', () => {
     }
 
     const result = await discoverSkills({ homeDir: home, cwd: repo, repos: [] })
-
-    expect(
+    const visibleTo = (agent: AgentType) =>
       result.skills
-        .filter((skill) => isNativeChatSkillForAgent('cursor', skill, result))
+        .filter((skill) => isNativeChatSkillForAgent(agent, skill, result))
         .map((skill) => skill.name)
         .sort()
-    ).toEqual([
+
+    // Each list is what that CLI loaded from these folders (cursor-agent 2026.11.17,
+    // Copilot 1.0.109).
+    expect(visibleTo('cursor')).toEqual([
       'agents-home',
+      'agents-project',
       'claude-home',
+      'claude-project',
       'codex-home',
       'codex-project',
+      'cursor-builtin',
       'cursor-home',
       'cursor-project',
       'grok-home'
+    ])
+    expect(visibleTo('copilot')).toEqual([
+      'agents-home',
+      'agents-project',
+      'claude-project',
+      'copilot-home',
+      'github-project'
     ])
   })
 
