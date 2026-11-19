@@ -135,7 +135,7 @@ async function importFolder(
         failed = true
         continue
       }
-      staged = outcome
+      staged = outcome.staged
     } catch (error) {
       console.warn(`[codex-history-import] Could not copy ${from}:`, error)
       // An unreadable source is that conversation's problem; a store that refuses writes ends the pass.

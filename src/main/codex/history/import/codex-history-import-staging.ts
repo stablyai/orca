@@ -89,7 +89,7 @@ export async function stageImportRollout(
   from: string,
   folder: string,
   runId: string
-): Promise<string | 'source-changed'> {
+): Promise<{ staged: string } | 'source-changed'> {
   const readSource = (): Promise<BigIntStats> =>
     readingSource(from, () => stat(from, { bigint: true }))
   const staged = stagedImportPath(folder, runId)
@@ -101,7 +101,7 @@ export async function stageImportRollout(
       return 'source-changed'
     }
     kept = true
-    return staged
+    return { staged }
   } finally {
     if (!kept) {
       await removeStagedCopy(staged).catch((error: unknown) =>
