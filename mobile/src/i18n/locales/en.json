@@ -245,12 +245,16 @@
       "removeHost": "Remove host",
       "saveHost": "Save host",
       "goBack": "Go back",
-      "help": "Change the display name or connection address. Leave the name empty to use the name the desktop reports. Address edits only switch where this phone connects — they do not re-pair. Use this when the same desktop is reachable at a different IP (for example home LAN vs Tailscale).",
+      "help": "Change the display name or connection address. Leave the name empty to use the name the host reports. Address edits only switch where this phone connects — they do not re-pair. Use this when the same host is reachable at a different IP (for example home LAN vs Tailscale).",
       "name": "Name",
       "hostNamePlaceholder": "Host name",
       "address": "Address",
       "addressHint": "Accepts IP, host:port, or ws:// / wss://. A wss:// URL without a port uses 443. Bare addresses keep the current port (or 6768).",
-      "connectionPreview": "Connects to {{endpoint}}"
+      "connectionPreview": "Connects to {{endpoint}}",
+      "updateStepsServiceManager": "This server can't update itself. Update Orca on it with its package manager if it came from a .deb or .rpm, otherwise through the service manager that starts it.",
+      "updateStepsSourceCheckout": "This is a development build. Update it from its source checkout.",
+      "updateStepsServer": "This server can't update itself. Update Orca on the server computer, then restart the server.",
+      "orcaVersion": "Orca version"
     }
   },
   "app": {
