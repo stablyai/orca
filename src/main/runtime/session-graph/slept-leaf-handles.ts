@@ -6,6 +6,8 @@ import {
   parsePaneKey
 } from '../../../shared/workspace-layout/stable-pane-id'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-resume'
+import type { AgentStatusIpcPayload } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
+import { agentProviderSessionsEqual } from '../../../shared/agent-session/lifecycle/resume/agent-provider-session-equality'
 import type {
   RuntimeLeafRecord,
   RuntimePtyWorktreeRecord
@@ -181,7 +183,7 @@ export abstract class OrcaRuntimeWithSleptLeafHandles extends OrcaRuntimeWithAdm
     const handle =
       [
         parked,
-        this.sleepingMailRecord(paneKey)?.terminalHandle,
+        sleepRow && this.recordedSleptHandle(paneKey, sleepRow),
         this.dispatchedSleptHandle(paneKey, sleepRow?.paneSleep)
       ].find((kept) => kept && !this.handles.has(kept)) ?? `term_${randomUUID()}`
     this.terminalIdentity.addSynthetic(handle)
@@ -198,6 +200,20 @@ export abstract class OrcaRuntimeWithSleptLeafHandles extends OrcaRuntimeWithAdm
     this.terminalIdentity.bindLeaf(leafKey, handle)
     this.sleptLeafHandles.set(leafKey, { handle, ptyId: sleptPtyId })
     return handle
+  }
+
+  /** The handle saved on the pane's sleep record, only for the conversation the sleep row stopped. */
+  private recordedSleptHandle(
+    paneKey: string,
+    row: Pick<AgentStatusIpcPayload, 'agentType' | 'providerSession'>
+  ): string | undefined {
+    const record = this.sleepingMailRecord(paneKey)
+    const sameConversation =
+      !!record &&
+      (row.agentType === undefined || row.agentType === record.agent) &&
+      (!row.providerSession ||
+        agentProviderSessionsEqual(record.agent, row.providerSession, record.providerSession))
+    return sameConversation ? record.terminalHandle : undefined
   }
 
   /** Records the sleep kept before they carried a handle: the pane's Dispatch handle, only when that
