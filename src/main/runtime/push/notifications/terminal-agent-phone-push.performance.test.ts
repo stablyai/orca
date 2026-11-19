@@ -75,14 +75,25 @@ function finishBurst(panes: number, host: { window: boolean; reply: string | und
   return { builds: built.count, sent: sent.length }
 }
 
+// Guards #44649's perf review: a late-reply alert was rebuilt before window/mute suppression and
+// before the burst cooldown, so every finish in a burst built its alert twice.
 describe('phone finish alerts at the quiet window', () => {
-  it.each([100, 1_000])(
-    'build each alert once, and rebuild only the late reply a phone gets (N=%i)',
-    (n) => {
-      expect(finishBurst(n, { window: true, reply: 'Done.' })).toEqual({ builds: n, sent: 0 })
-      expect(finishBurst(n, { window: false, reply: undefined })).toEqual({ builds: n, sent: 1 })
-      // The workspace cooldown sends one alert per burst, and only that one is rebuilt.
-      expect(finishBurst(n, { window: false, reply: 'Done.' })).toEqual({ builds: n + 1, sent: 1 })
-    }
-  )
+  it.each([
+    [100, { windowOwned: 100, quiet: 100, lateReply: 101 }],
+    [1_000, { windowOwned: 1_000, quiet: 1_000, lateReply: 1_001 }]
+  ])('build each alert once, and rebuild only the late reply a phone gets (N=%i)', (n, builds) => {
+    expect(finishBurst(n, { window: true, reply: 'Done.' })).toEqual({
+      builds: builds.windowOwned,
+      sent: 0
+    })
+    expect(finishBurst(n, { window: false, reply: undefined })).toEqual({
+      builds: builds.quiet,
+      sent: 1
+    })
+    // The workspace cooldown sends one alert per burst, and only that one is rebuilt.
+    expect(finishBurst(n, { window: false, reply: 'Done.' })).toEqual({
+      builds: builds.lateReply,
+      sent: 1
+    })
+  })
 })
