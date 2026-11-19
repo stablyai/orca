@@ -62,6 +62,7 @@ export function terminalSpawnOptions({
     ...(terminalColorQueryReplies ? { terminalColorQueryReplies } : {}),
     ...launcherSpawnArgs,
     terminalKittyKeyboardProtocol: launchOpts.terminalKittyKeyboardProtocol,
+    ...(launchOpts.accountEnv ? { accountEnv: launchOpts.accountEnv } : {}),
     ...(launchOpts.agentSessionClaim
       ? {
           agentSessionEnsure: {

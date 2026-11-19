@@ -32,6 +32,17 @@ function isAccountPath(key: AgentLaunchAccountEnvKey, value: string): boolean {
   return !value.split('/').includes('..')
 }
 
+/** The account variables a caller set itself, in `env` or `accountEnv`; undefined when none. */
+export function callerAgentLaunchAccountEnv(requested: {
+  env?: Readonly<Record<string, string>>
+  accountEnv?: Readonly<Record<string, string>>
+}): Record<string, string> | undefined {
+  const named = Object.entries({ ...requested.env, ...requested.accountEnv }).filter(([key]) =>
+    isAccountEnvKey(key)
+  )
+  return named.length > 0 ? Object.fromEntries(named) : undefined
+}
+
 /** Why a refusal, not a drop: a dropped home would start the agent under another account. */
 export const AgentLaunchAccountEnv = z.record(z.string(), z.string()).superRefine((env, ctx) => {
   for (const [key, value] of Object.entries(env)) {
