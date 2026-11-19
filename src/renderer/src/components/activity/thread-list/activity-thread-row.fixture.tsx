@@ -25,7 +25,13 @@ function thread(minutesAgo: number, unread: boolean): AgentPaneThread {
       sortOrder: 0,
       lastActivityAt: 0
     },
-    repo: null,
+    repo: {
+      id: 'fixture-repo',
+      path: '/projects/acme-web',
+      displayName: 'acme-web',
+      badgeColor: 'var(--muted-foreground)',
+      addedAt: 0
+    },
     tab: {
       id: 'fixture-tab',
       ptyId: null,
