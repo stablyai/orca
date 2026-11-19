@@ -276,18 +276,22 @@ export function useBotPictureSetting(
     save: () => void
     look: BotLookUpdate
   } | null>(null)
+  const lookPick = useRef(0)
   const pickLook = (change: BotLookUpdate): void => {
     const look = { ...lookTimer.current?.look, ...change }
+    const pick = (lookPick.current += 1)
     setPickedLook((picked) => ({ ...picked, ...change }))
     if (lookTimer.current) {
       clearTimeout(lookTimer.current.timer)
     }
     const save = (): void => {
       lookTimer.current = null
-      void update(look).finally(() =>
+      void update(look).finally(() => {
         // Shown as saved once it lands, unless something newer was picked meanwhile.
-        setPickedLook((picked) => (lookTimer.current ? picked : null))
-      )
+        if (lookPick.current === pick) {
+          setPickedLook(null)
+        }
+      })
     }
     lookTimer.current = { timer: setTimeout(save, BOT_PICTURE_SAVE_DELAY_MS), save, look }
   }
