@@ -12,7 +12,7 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('electron', () => ({
-  app: { getPath: () => mocks.userData },
+  app: { getPath: () => mocks.userData, commandLine: { hasSwitch: () => false } },
   session: { fromPartition: mocks.fromPartition }
 }))
 vi.mock('../../sessions/partition-policies/browser-session-partition-policies', () => ({
