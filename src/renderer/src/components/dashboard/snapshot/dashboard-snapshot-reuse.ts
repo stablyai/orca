@@ -9,7 +9,7 @@ import type {
   DashboardSnapshot
 } from '../../../../../shared/agent-status/presentation/dashboard-snapshot'
 import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
-import type { AgentStatusProjection } from '@/store/slices/agent-status/agent-status-projection'
+import type { AgentStatusProjection } from '@/store/slices/agent-status/projection/agent-status-projection'
 import type { DashboardAgentRow } from '../rows/dashboard-agent-row'
 import type { DashboardSnapshotInput } from './build-dashboard-snapshot'
 import type { DashboardCardContext } from './dashboard-card-context'
