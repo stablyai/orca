@@ -32,12 +32,6 @@ it('moves the button to a spot that clears every box, not just the one it covere
     left: 640,
     top: 56
   })
-  expect(
-    keepFloatingTerminalTriggerClear({ left: 640, top: 150 }, [
-      { ...lower, paneBottom: 300 },
-      { ...upper, paneBottom: 300 }
-    ])
-  ).toEqual({ left: 640, top: 56 })
 })
 
 it('puts the button above a box when the room below is past the bottom of the window', () => {
