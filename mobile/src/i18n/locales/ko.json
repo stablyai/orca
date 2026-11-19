@@ -4378,7 +4378,7 @@
   "bots": {
     "link": {
       "pairTitle": "컴퓨터 페어링",
-      "pairRequired": "이 링크를 열려면 이 휴대폰을 컴퓨터와 페어링하세요.",
+      "pairRequired": "이 링크를 열려면 이 휴대폰을 컴퓨터와 페어링한 다음 링크를 다시 여세요.",
       "pairAction": "컴퓨터 페어링",
       "openFailed": "이 링크를 열 수 없습니다",
       "ambiguous": "이 봇은 {{names}}에 있습니다. 원하는 컴퓨터의 Orca에서 채팅을 여세요.",

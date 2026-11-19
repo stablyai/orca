@@ -5195,7 +5195,7 @@
   "bots": {
     "link": {
       "pairTitle": "配对电脑",
-      "pairRequired": "要打开此链接，请将这部手机与电脑配对。",
+      "pairRequired": "要打开此链接，请将这部手机与电脑配对，然后重新打开该链接。",
       "pairAction": "配对电脑",
       "openFailed": "无法打开此链接",
       "ambiguous": "此机器人位于 {{names}}。请在你想用的电脑上通过 Orca 打开聊天。",
