@@ -40,6 +40,10 @@ describe('buildBotPreamble', () => {
     expect(preamble).toContain(`${SESSION_CLI} automations create --bot`)
     expect(preamble).toContain(BOT_QUIET_MARKER)
     expect(preamble).toContain(`${SESSION_CLI} bot reply --text`)
+    // A bare "do it" in a new conversation is asked about, never taken as a yes elsewhere.
+    expect(preamble.slice(preamble.indexOf('## Rules'))).toContain(
+      "never take it as a yes to another conversation's offer"
+    )
   })
 
   it("lets only the owner's and Who can ask's PR comments reach the worker from a PR wait", () => {
