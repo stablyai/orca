@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useRef } from 'react'
+import { useMemo } from 'react'
 import {
   botItemNoteJoins,
   type BotItemNoteJoin
@@ -7,10 +7,9 @@ import type { NativeChatResolvedPrompt } from '../../../../../../src/shared/nati
 import { deriveNativeChatRowContent } from '../../../../../../src/shared/native-chat/transcript/row-content/native-chat-row-content'
 import {
   NATIVE_CHAT_EMPTY_TURN_FOLD,
-  nativeChatHistoryTurnFold,
+  nativeChatTurnFold,
   nativeChatTurnFoldRow,
-  type NativeChatTurnFold,
-  type NativeChatTurnFoldHistory
+  type NativeChatTurnFold
 } from '../../../../../../src/shared/native-chat/transcript/folding/native-chat-turn-fold'
 import {
   nativeChatRowRendersProse,
@@ -32,6 +31,25 @@ type TranscriptRows = {
 export type MobileNativeChatWorkRuns = {
   heads: ReadonlyMap<number, readonly NativeChatMessage[]>
   joined: ReadonlySet<number>
+}
+
+function mobileNativeChatTurnFold({
+  rows,
+  turnKeys,
+  receipts,
+  settledTurnKeys,
+  expandedTurnKeys
+}: TranscriptRows & {
+  settledTurnKeys: ReadonlySet<string>
+  expandedTurnKeys: ReadonlySet<string>
+}): NativeChatTurnFold {
+  return nativeChatTurnFold({
+    rows: rows.map((message, index) =>
+      nativeChatTurnFoldRow(message, turnKeys[index], receipts?.get(message.id))
+    ),
+    settledTurnKeys,
+    expandedTurnKeys
+  })
 }
 
 // Invisible thoughts neither join nor split work runs; visible thoughts stay inside the run.
@@ -75,8 +93,6 @@ const NO_WORK_RUNS: MobileNativeChatWorkRuns = { heads: new Map(), joined: new S
 // Fold/frontier/work-run projection applies only to structured turn rows.
 export function useMobileNativeChatTranscriptRows({
   enabled,
-  scopeKey,
-  historyHead,
   rows,
   turnKeys,
   receipts,
@@ -86,8 +102,6 @@ export function useMobileNativeChatTranscriptRows({
   turnDiffs
 }: TranscriptRows & {
   enabled: boolean
-  scopeKey: string
-  historyHead?: string
   /** Turn diffs by the row they draw under (undefined: its turn changed nothing); one ends an
    *  item-note cluster there. */
   turnDiffs: ReadonlyMap<string, unknown>
@@ -96,36 +110,28 @@ export function useMobileNativeChatTranscriptRows({
   liveReasoningId: string | undefined
 }): {
   fold: NativeChatTurnFold
-  expandedTurnKeys: ReadonlySet<string>
   trailingRunIndex: number
   workRuns: MobileNativeChatWorkRuns
+  /** Item-note rows that touch another, past rows this projection hides. */
   itemNoteJoins: ReadonlyMap<number, BotItemNoteJoin>
 } {
-  const committedFold = useRef<NativeChatTurnFoldHistory | null>(null)
-  const historyFold = useMemo(
+  const fold = useMemo(
     () =>
       enabled
-        ? nativeChatHistoryTurnFold(committedFold.current, {
-            scope: scopeKey,
-            historyHead,
-            messages: rows,
-            rows: rows.map((message, index) =>
-              nativeChatTurnFoldRow(message, turnKeys[index], receipts?.get(message.id))
-            ),
+        ? mobileNativeChatTurnFold({
+            rows,
+            turnKeys,
+            receipts,
             settledTurnKeys: new Set(
-              Object.entries(completedByTurn).flatMap(([key, status]) =>
-                status.workedSeconds != null ? [key] : []
+              Object.entries(completedByTurn).flatMap(([turnKey, status]) =>
+                status.workedSeconds != null ? [turnKey] : []
               )
             ),
             expandedTurnKeys
           })
-        : null,
-    [enabled, scopeKey, historyHead, rows, turnKeys, receipts, completedByTurn, expandedTurnKeys]
+        : NATIVE_CHAT_EMPTY_TURN_FOLD,
+    [completedByTurn, enabled, expandedTurnKeys, receipts, rows, turnKeys]
   )
-  useLayoutEffect(() => {
-    committedFold.current = historyFold
-  }, [historyFold])
-  const fold = historyFold?.fold ?? NATIVE_CHAT_EMPTY_TURN_FOLD
   // The turn owns liveness: its frontier stays live between calls, while earlier runs are settled.
   const trailingRunIndex = useMemo(
     () =>
@@ -152,11 +158,5 @@ export function useMobileNativeChatTranscriptRows({
       ),
     [fold, rows, turnDiffs, workRuns]
   )
-  return {
-    fold,
-    expandedTurnKeys: historyFold?.expandedTurnKeys ?? expandedTurnKeys,
-    trailingRunIndex,
-    workRuns,
-    itemNoteJoins
-  }
+  return { fold, trailingRunIndex, workRuns, itemNoteJoins }
 }

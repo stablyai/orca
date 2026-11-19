@@ -360,9 +360,10 @@ export function MobileNativeChatView({
                         onScroll,
                         layoutKey
                       }}
-                      {...{ header, onNearTop: loadEarlierNearTop }}
+                      {...{ header, hasHeader: hasMore === true, onNearTop: loadEarlierNearTop }}
                       itemJump={itemJump}
                       rows={turns.listMessages}
+                      runs={turns.presentation.workRuns.heads}
                       roots={disclosures.roots}
                       contentContainerStyle={styles.listContent}
                       pinchGesture={pinchGesture}

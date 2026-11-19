@@ -13,18 +13,9 @@ import type { MobileNativeChatScrollRoots } from './mobile-native-chat-scroll-ro
 import { MAX_CACHED_TRANSCRIPTS } from '../persistence/mobile-native-chat-transcript-cache'
 
 // Anchor by key so streaming rows below cannot move the drawn range.
-export type MobileNativeChatDrawn = {
-  scope: string
-  firstKey: string | null
-  count: number
-  fromStart?: boolean
-  detached?: boolean
-  automatic?: boolean
-}
+export type MobileNativeChatDrawn = { scope: string; firstKey: string | null; count: number }
 
-type SavedPlace = Pick<MobileNativeChatDrawn, 'firstKey' | 'count'> & {
-  place: MobileNativeChatReadingUnit[]
-}
+type SavedPlace = Omit<MobileNativeChatDrawn, 'scope'> & { place: MobileNativeChatReadingUnit[] }
 
 // One chat view serves every tab, so each chat's place lives here, for the page's lifetime.
 const savedPlaces = new Map<string, SavedPlace>()
@@ -32,8 +23,7 @@ const savedPlaces = new Map<string, SavedPlace>()
 /** The rows a chat drew when the reader left it away from its tail, so its place can be put back. */
 export function savedMobileNativeChatDrawn(scope: string): MobileNativeChatDrawn | null {
   const saved = savedPlaces.get(scope)
-  // A saved place is one the reader took, so following again releases its window.
-  return saved ? { scope, firstKey: saved.firstKey, count: saved.count, detached: true } : null
+  return saved ? { scope, firstKey: saved.firstKey, count: saved.count } : null
 }
 
 /** The reader went back to the chat's tail, even while its list is not mounted to see it. */
@@ -87,31 +77,11 @@ export function useMobileNativeChatPlaceKeeper<S extends MobileNativeChatScrollN
         const from = Math.max(first, indexOf.get(head ?? '') ?? first)
         const saved = { firstKey: keys[from] ?? null, count: n - from, place: place.current }
         setBoundedScopeCacheEntry(savedPlaces, rowKeys.scope, saved, MAX_CACHED_TRANSCRIPTS)
-        if (keys[first] !== undefined) {
-          // Appends may slide the opening tail window only until the reader takes it.
-          setDrawn((current) => {
-            if (current.scope !== rowKeys.scope || current.firstKey === null || current.automatic) {
-              return {
-                scope: rowKeys.scope,
-                firstKey: keys[first]!,
-                count: n - first,
-                fromStart: first === 0,
-                detached: true
-              }
-            }
-            return current.fromStart || current.detached ? current : { ...current, detached: true }
-          })
-        }
       } else {
         savedPlaces.delete(rowKeys.scope)
-        setDrawn((current) =>
-          current.scope === rowKeys.scope && current.detached
-            ? { scope: rowKeys.scope, firstKey: null, count: 0 }
-            : current
-        )
       }
     },
-    [isFollowing, latest, setDrawn]
+    [isFollowing, latest]
   )
 
   // With nothing saved, or its rows gone, the chat opens following.
@@ -130,9 +100,7 @@ export function useMobileNativeChatPlaceKeeper<S extends MobileNativeChatScrollN
       place.current = saved.place
       write(s, s.scrollTop + drift)
       setDrawn((was) =>
-        was.scope === scope
-          ? was
-          : { scope, firstKey: saved.firstKey, count: saved.count, detached: true }
+        was.scope === scope ? was : { scope, firstKey: saved.firstKey, count: saved.count }
       )
       onEndDistance(Math.max(0, -s.scrollTop), false)
       onPlaceRestored(scope)

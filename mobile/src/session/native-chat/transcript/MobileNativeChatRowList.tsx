@@ -18,6 +18,7 @@ type Props = Pick<
   | 'rows'
   | 'roots'
   | 'renderItem'
+  | 'runs'
   | 'layoutKey'
   | 'contentContainerStyle'
   | 'header'
@@ -28,6 +29,8 @@ type Props = Pick<
 > & {
   tail: MobileNativeChatTailFollow
   rowKeys: MobileNativeChatRowKeys
+  /** With a header, the row below it anchors the native list's visible content. */
+  hasHeader: boolean
   pinchGesture: LegacyComposedGesture
 }
 
@@ -35,14 +38,14 @@ export function MobileNativeChatRowList(props: Props): ReactElement {
   const { tail, rowKeys, rows, renderItem, contentContainerStyle, onScroll, footer } = props
   const { header, emptyStateView } = props
   if (Platform.OS === 'web') {
-    const { roots, layoutKey, onNearTop, itemJump } = props
+    const { roots, runs, layoutKey, onNearTop, itemJump } = props
     return (
       <MobileNativeChatPinchZoom gesture={props.pinchGesture}>
         {/* Only the page list draws row keys to scroll to. */}
         <MobileNativeChatScrollRowToTopContext value={tail.scrollRowToTop}>
           <MobileNativeChatPageList
             {...tail.pageListProps}
-            {...{ rows, rowKeys, roots, renderItem, contentContainerStyle, layoutKey }}
+            {...{ rows, rowKeys, roots, renderItem, runs, contentContainerStyle, layoutKey }}
             {...{ header, footer, emptyStateView, onScroll, onNearTop, itemJump }}
           />
         </MobileNativeChatScrollRowToTopContext>
@@ -68,7 +71,7 @@ export function MobileNativeChatRowList(props: Props): ReactElement {
         scrollEventThrottle={32}
         onContentSizeChange={tail.pinToTailAfterContentResize}
         onLayout={tail.pinToTail}
-        maintainVisibleContentPosition={mobileNativeChatRowAnchor()}
+        maintainVisibleContentPosition={mobileNativeChatRowAnchor(props.hasHeader)}
         ListHeaderComponent={header ?? undefined}
         ListFooterComponent={footer ?? undefined}
         ListEmptyComponent={emptyStateView ?? undefined}
