@@ -3,7 +3,10 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { OrchestrationDb } from '../orchestration-db'
-import { checkpointOffMainThread } from './orchestration-checkpoint-thread'
+import {
+  checkpointOffMainThread,
+  MAIN_CHECKPOINT_BACKSTOP_PAGES
+} from './orchestration-checkpoint-thread'
 
 const cleanup: (() => void)[] = []
 afterEach(() => {
@@ -43,6 +46,17 @@ describe('the orchestration checkpoint thread', () => {
     for (let i = 0; i < 1200; i++) {
       write.run(i, 'y'.repeat(3000))
     }
-    await vi.waitFor(() => expect(frames(db).checkpointed).toBeGreaterThan(0), { timeout: 5000 })
+    // Pending frames, not `checkpointed`: a WAL restart after the last batch zeroes both counters.
+    await vi.waitFor(
+      () => {
+        const { log, checkpointed } = frames(db)
+        expect(log - checkpointed).toBeLessThan(1000)
+      },
+      { timeout: 5000 }
+    )
+    // Main kept its backstop, so the worker, not main's own autocheckpoint, drained it.
+    expect(db.db.prepare('PRAGMA wal_autocheckpoint').get()).toEqual({
+      wal_autocheckpoint: MAIN_CHECKPOINT_BACKSTOP_PAGES
+    })
   })
 })
