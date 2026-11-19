@@ -655,10 +655,6 @@
       "imageTooLarge": "Image trop volumineuse pour être jointe",
       "permissionDenied": "Accès aux photos refusé"
     },
-    "agentMessage": {
-      "handedOffToAgent": "Confié à un agent",
-      "startedAgent": "Agent démarré"
-    },
     "textAttachmentPreview": {
       "unreadableReply": "La réponse de la pièce jointe est illisible. Réessayez.",
       "incompleteReply": "La pièce jointe a changé ou sa réponse était incomplète. Fermez-la et réessayez.",

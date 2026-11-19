@@ -690,10 +690,6 @@
       "imageTooLarge": "Изображение слишком большое для прикрепления",
       "permissionDenied": "Нет доступа к фото"
     },
-    "agentMessage": {
-      "handedOffToAgent": "Передано агенту",
-      "startedAgent": "Агент запущен"
-    },
     "textAttachmentPreview": {
       "unreadableReply": "Не удалось прочитать ответ для вложения. Повторите попытку.",
       "incompleteReply": "Вложение изменилось или ответ был неполным. Закройте его и повторите попытку.",
