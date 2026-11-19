@@ -286,69 +286,71 @@ export function StatusBarSurface({
         </div>
       </div>
 
-      {/* Why: attention segments never give way to usage; wider than the bar on their own, they scroll. */}
+      {/* Why: attention segments never give way to usage; wider than the bar on their own, they scroll. The max width leaves the bar gap that still follows the emptied usage area. */}
       <div
         ref={attachSidewaysWheel}
-        className="flex min-w-0 max-w-full shrink-0 items-center gap-3 self-stretch overflow-x-auto scrollbar-none"
+        className="flex min-w-0 max-w-[calc(100%-1rem)] shrink-0 items-center self-stretch overflow-x-auto scrollbar-none"
       >
-        {!isPairedWebClientWindow() ? (
-          <>
-            <PluginsStatusSegment />
-            <PluginStatusBarItems iconOnly={false} />
-            <CaffeinateStatusSegment iconOnly={false} />
-          </>
-        ) : null}
-        <RemoteServerUpdateStatusSegment iconOnly={false} />
-        <SkillUpdateStatusSegment iconOnly={false} />
-        <AgentCliUpdateStatusSegment iconOnly={false} />
-        <NativeChatResumeStatusSegment iconOnly={false} />
-        <UpdateStatusSegment compact={false} iconOnly={false} />
-        {showGitBlame ? <GitBlameStatusSegment iconOnly={false} /> : null}
-        <React.Suspense fallback={null}>
-          {petEnabled ? <PetStatusSegment /> : null}
-          {showResourceUsage ? (
-            <ResourceUsageStatusSegment compact={false} iconOnly={false} />
+        <div className="flex w-max items-center gap-3">
+          {!isPairedWebClientWindow() ? (
+            <>
+              <PluginsStatusSegment />
+              <PluginStatusBarItems iconOnly={false} />
+              <CaffeinateStatusSegment iconOnly={false} />
+            </>
           ) : null}
-          {showPorts ? <PortsStatusSegment compact={false} iconOnly={false} /> : null}
-          {showSsh ? <SshStatusSegment compact={false} iconOnly={false} /> : null}
-        </React.Suspense>
-        {showFloatingTerminalToggle && (
-          <FloatingTerminalIconContextMenu currentLocation="status-bar" className="relative">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  type="button"
-                  className="relative inline-flex size-5 cursor-pointer items-center justify-center rounded border border-border bg-secondary text-secondary-foreground shadow-xs transition-colors hover:bg-accent hover:text-accent-foreground"
-                  aria-label={
-                    showFloatingWorkspaceAttentionDot
-                      ? t(
-                          'auto.components.status.bar.StatusBar.floatingTerminalNewActivity',
-                          '{{label}}, new activity',
-                          { label: floatingTerminalActionLabel }
-                        )
-                      : floatingTerminalActionLabel
-                  }
-                  onClick={() => {
-                    window.dispatchEvent(new CustomEvent(TOGGLE_FLOATING_TERMINAL_EVENT))
-                  }}
-                >
-                  <PanelsTopLeft className="size-3.5" />
-                  {showFloatingWorkspaceAttentionDot ? (
-                    // Why: amber = Orca's "needs attention" convention; ring matches the fill so the dot reads on the icon.
-                    <span
-                      aria-hidden
-                      data-floating-terminal-attention
-                      className="pointer-events-none absolute right-0.5 top-0.5 size-1.5 rounded-full bg-amber-500 ring-1 ring-secondary"
-                    />
-                  ) : null}
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="top" sideOffset={6}>
-                {floatingTerminalActionLabel} ({floatingTerminalShortcut})
-              </TooltipContent>
-            </Tooltip>
-          </FloatingTerminalIconContextMenu>
-        )}
+          <RemoteServerUpdateStatusSegment iconOnly={false} />
+          <SkillUpdateStatusSegment iconOnly={false} />
+          <AgentCliUpdateStatusSegment iconOnly={false} />
+          <NativeChatResumeStatusSegment iconOnly={false} />
+          <UpdateStatusSegment compact={false} iconOnly={false} />
+          {showGitBlame ? <GitBlameStatusSegment iconOnly={false} /> : null}
+          <React.Suspense fallback={null}>
+            {petEnabled ? <PetStatusSegment /> : null}
+            {showResourceUsage ? (
+              <ResourceUsageStatusSegment compact={false} iconOnly={false} />
+            ) : null}
+            {showPorts ? <PortsStatusSegment compact={false} iconOnly={false} /> : null}
+            {showSsh ? <SshStatusSegment compact={false} iconOnly={false} /> : null}
+          </React.Suspense>
+          {showFloatingTerminalToggle && (
+            <FloatingTerminalIconContextMenu currentLocation="status-bar" className="relative">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    className="relative inline-flex size-5 cursor-pointer items-center justify-center rounded border border-border bg-secondary text-secondary-foreground shadow-xs transition-colors hover:bg-accent hover:text-accent-foreground"
+                    aria-label={
+                      showFloatingWorkspaceAttentionDot
+                        ? t(
+                            'auto.components.status.bar.StatusBar.floatingTerminalNewActivity',
+                            '{{label}}, new activity',
+                            { label: floatingTerminalActionLabel }
+                          )
+                        : floatingTerminalActionLabel
+                    }
+                    onClick={() => {
+                      window.dispatchEvent(new CustomEvent(TOGGLE_FLOATING_TERMINAL_EVENT))
+                    }}
+                  >
+                    <PanelsTopLeft className="size-3.5" />
+                    {showFloatingWorkspaceAttentionDot ? (
+                      // Why: amber = Orca's "needs attention" convention; ring matches the fill so the dot reads on the icon.
+                      <span
+                        aria-hidden
+                        data-floating-terminal-attention
+                        className="pointer-events-none absolute right-0.5 top-0.5 size-1.5 rounded-full bg-amber-500 ring-1 ring-secondary"
+                      />
+                    ) : null}
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="top" sideOffset={6}>
+                  {floatingTerminalActionLabel} ({floatingTerminalShortcut})
+                </TooltipContent>
+              </Tooltip>
+            </FloatingTerminalIconContextMenu>
+          )}
+        </div>
       </div>
 
       <StatusBarVisibilityMenu controller={controller} />
