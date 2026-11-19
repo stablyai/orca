@@ -13,6 +13,7 @@ import { NativeChatUserMessageRow } from './NativeChatUserMessageRow'
 import { orchestrationMailFixture } from '../../../../../../shared/agent-session/orchestration-mail.test-fixture'
 import { NativeChatWorkersContext } from '../../native-chat-workers-context'
 import type { OrchestrationSessionWorker } from '../../../../../../shared/orchestration-session-workers'
+import { nativeChatEventPlan } from '../../../../../../shared/native-chat/transcript/events/native-chat-event-plan'
 
 const workspace = 'agent-message-fixture'
 const image =
@@ -303,4 +304,83 @@ export const workerStates = defineFixture({
       </NativeChatWorkersContext.Provider>
     )
   }
+})
+
+// A worker's start and its failed update, back to back: drawn as two rows, then as the event plan
+// merges them, one failed row whose details hold the report and, under it, the start.
+const reviewStarted = projectStructuredAgentStartItem({
+  itemId: 'review-started',
+  revision: 1,
+  sequence: 8,
+  observedAt: 1_800_000_000_000,
+  body: {
+    kind: 'agent-start',
+    dispatchId: 'review-dispatch',
+    task: 'Review the share dialog change and run its tests.',
+    worker: {
+      party: { address: 'term_worker', terminalHandle: 'term_worker', orcaSessionId: null },
+      name: 'Review worker',
+      agent: 'codex'
+    }
+  }
+})!
+const reviewFailed = {
+  ...orchestrationMailFixture({
+    body: 'share-dialog.test.tsx timed out twice on CI; the change itself is on the branch.'
+  }),
+  timestamp: 1_800_000_060_000
+}
+const reviewWorkers = [
+  { ...sessionWorker('review-dispatch', 'failed', 'term_worker'), agent: 'codex' }
+]
+
+function reviewRows(merge: boolean) {
+  const rows = [reviewStarted, reviewFailed]
+  const shown = merge
+    ? nativeChatEventPlan(rows, { turnKeys: [undefined, undefined], workers: reviewWorkers })
+    : rows
+  return (
+    <NativeChatWorkersContext.Provider value={reviewWorkers}>
+      <div className="space-y-1 bg-chat-pane p-4">
+        {shown
+          .filter((message) => message.mergedInto === undefined)
+          .map((message) => (
+            <MessageRow
+              key={message.id}
+              message={message}
+              expandSignal={false}
+              onScrollMessageToTop={() => {}}
+              runtimeContext={{
+                worktreeId: workspace,
+                worktreePath: null,
+                target: { kind: 'local' }
+              }}
+            />
+          ))}
+      </div>
+    </NativeChatWorkersContext.Provider>
+  )
+}
+// Opens each row, then its Show more once the details have measured.
+const openEveryRow = async (frame: HTMLElement) => {
+  for (let pass = 0; pass < 2; pass += 1) {
+    for (const button of frame.querySelectorAll('button')) {
+      if (button.getAttribute('aria-expanded') === 'false') {
+        button.click()
+      }
+    }
+    await new Promise((resolve) => setTimeout(resolve, 50))
+  }
+}
+export const sameDispatchBefore = defineFixture({
+  width: 560,
+  store,
+  render: () => reviewRows(false),
+  interact: openEveryRow
+})
+export const sameDispatchMerged = defineFixture({
+  width: 560,
+  store,
+  render: () => reviewRows(true),
+  interact: openEveryRow
 })

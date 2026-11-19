@@ -39,7 +39,7 @@ export type BotChatTree = {
   workspaceChats: Record<string, string>
   /** Reads the chat's next 8 finished workers onto its list. */
   loadMore: (chatId: string) => void
-  /** Whether the chats have been read; an older host without the read stays `unsupported`. */
+  /** Whether the chats have been read. */
   state: BotHostReadState
   retry: () => void
 }

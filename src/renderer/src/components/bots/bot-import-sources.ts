@@ -45,11 +45,11 @@ export function useBotImportSources(
 /** The first-bot nudge's line: OpenClaw's bots, else Hermes'; the apps with the most users first. */
 export function botImportNudge(
   sources: readonly BotImportSource[]
-): { label: string; count: number } | null {
+): { app: 'openclaw' | 'hermes'; label: string; count: number } | null {
   for (const app of ['openclaw', 'hermes'] as const) {
     const count = sources.find((source) => source.app === app)?.bots.length ?? 0
     if (count > 0) {
-      return { label: app === 'openclaw' ? 'OpenClaw' : 'Hermes', count }
+      return { app, label: app === 'openclaw' ? 'OpenClaw' : 'Hermes', count }
     }
   }
   return null

@@ -14,6 +14,8 @@ export function withNativeChatOrcaCommands(
     name: NATIVE_CHAT_RESUME_COMMAND,
     description: copy.resume,
     ...(copy.resumeArgumentHint ? { argumentHint: copy.resumeArgumentHint } : {}),
+    // OpenCode's session picker is /sessions; chats reach theirs through this row.
+    aliases: ['sessions'],
     orcaOwned: true
   }
   let rows = [...commands]

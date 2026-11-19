@@ -2,7 +2,8 @@
 import '@testing-library/jest-dom/vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, expect, it } from 'vitest'
-import { NativeChatSubagentEntries } from './subagents/NativeChatSubagentRun'
+import { TooltipProvider } from '@/components/ui/tooltip'
+import { NativeChatSubagentRun } from './subagents/NativeChatSubagentRun'
 import {
   NativeChatChildNavigationContext,
   useNativeChatChildNavigator
@@ -13,24 +14,34 @@ afterEach(cleanup)
 function Conversation({ sessionKey }: { sessionKey: string }) {
   const navigator = useNativeChatChildNavigator(sessionKey)
   return (
-    <NativeChatChildNavigationContext.Provider value={navigator.navigation}>
-      {navigator.child ? (
-        <>
-          <button onClick={navigator.back}>Back</button>
-          <p>{navigator.child.label} history</p>
-          <NativeChatSubagentEntries
-            agents={[{ id: 'nested', label: 'Nested', state: 'completed' }]}
-          />
-        </>
-      ) : (
-        <>
-          <p>Parent history</p>
-          <NativeChatSubagentEntries
-            agents={[{ id: 'child', label: 'Research', state: 'working' }]}
-          />
-        </>
-      )}
-    </NativeChatChildNavigationContext.Provider>
+    <TooltipProvider>
+      <NativeChatChildNavigationContext.Provider value={navigator.navigation}>
+        {navigator.child ? (
+          <>
+            <button onClick={navigator.back}>Back</button>
+            <p>{navigator.child.label} history</p>
+            <NativeChatSubagentRun
+              block={{
+                type: 'subagent-group',
+                groupId: 'nested',
+                agents: [{ id: 'nested', label: 'Nested', state: 'completed' }]
+              }}
+            />
+          </>
+        ) : (
+          <>
+            <p>Parent history</p>
+            <NativeChatSubagentRun
+              block={{
+                type: 'subagent-group',
+                groupId: 'parent',
+                agents: [{ id: 'child', label: 'Research', state: 'working' }]
+              }}
+            />
+          </>
+        )}
+      </NativeChatChildNavigationContext.Provider>
+    </TooltipProvider>
   )
 }
 

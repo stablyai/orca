@@ -675,15 +675,6 @@
       "imageTooLarge": "Imagem grande demais para anexar",
       "permissionDenied": "Permissão de acesso às fotos negada"
     },
-    "agentMessage": {
-      "handedOffToAgent": "Entregue a um agente",
-      "startedAgent": "Agente iniciado",
-      "startedWorker": "Worker iniciado",
-      "taskFromCoordinator": "Tarefa do coordenador",
-      "messageFromCoordinator": "Mensagem do coordenador",
-      "updateFromWorker": "Atualização do worker",
-      "messageFrom": "Mensagem de"
-    },
     "textAttachmentPreview": {
       "unreadableReply": "A resposta do anexo não pode ser lida. Tente novamente.",
       "incompleteReply": "O anexo foi alterado ou a resposta estava incompleta. Feche-o e tente novamente.",
@@ -2655,6 +2646,7 @@
       "providerUnavailable": "{{agent}} não conseguiu responder porque o serviço está ocupado. Escolha outro modelo ou aguarde um pouco e envie novamente.",
       "providerSafetyStopped": "{{agent}} interrompeu esta resposta após uma verificação de segurança. Revise sua solicitação e envie novamente.",
       "providerResponseFailed": "{{agent}} não conseguiu concluir esta resposta. Abra os detalhes para obter mais informações.",
+      "providerResponseFailedQuoted": "{{agent}} não conseguiu concluir esta resposta: {{detail}}.",
       "selectedModel": "o modelo selecionado",
       "providerRejected": "{{agent}} não aceitou esta mensagem.",
       "providerRejectedQuoted": "{{agent}} não aceitou esta mensagem: {{detail}}.",

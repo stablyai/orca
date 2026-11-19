@@ -655,10 +655,6 @@
       "imageTooLarge": "Image trop volumineuse pour être jointe",
       "permissionDenied": "Accès aux photos refusé"
     },
-    "agentMessage": {
-      "handedOffToAgent": "Confié à un agent",
-      "startedAgent": "Agent démarré"
-    },
     "textAttachmentPreview": {
       "unreadableReply": "La réponse de la pièce jointe est illisible. Réessayez.",
       "incompleteReply": "La pièce jointe a changé ou sa réponse était incomplète. Fermez-la et réessayez.",
@@ -2292,6 +2288,7 @@
       "providerUnavailable": "{{agent}} n’a pas pu répondre car le service est occupé. Choisissez un autre modèle ou patientez un peu, puis renvoyez le message.",
       "providerSafetyStopped": "{{agent}} a arrêté cette réponse après un contrôle de sécurité. Vérifiez votre demande et renvoyez-la.",
       "providerResponseFailed": "{{agent}} n’a pas pu terminer cette réponse. Ouvrez les détails pour en savoir plus.",
+      "providerResponseFailedQuoted": "{{agent}} n’a pas pu terminer cette réponse : {{detail}}.",
       "selectedModel": "le modèle sélectionné",
       "providerRejected": "{{agent}} n'a pas accepté ce message.",
       "providerRejectedQuoted": "{{agent}} n'a pas accepté ce message : {{detail}}.",

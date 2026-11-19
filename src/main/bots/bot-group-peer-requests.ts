@@ -235,6 +235,7 @@ export function reserveGroupMailTurn(
         botId: bot.id,
         botName: bot.name,
         avatar: bot.avatar,
+        ...(bot.avatarColor ? { avatarColor: bot.avatarColor } : {}),
         agent: bot.agent,
         sessionId: member.sessionId,
         mailbox: true

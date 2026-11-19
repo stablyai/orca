@@ -21,6 +21,8 @@ type ColorPickerProps = {
   selected?: boolean
   triggerLabel?: string
   showHexInTrigger?: boolean
+  /** Replaces the default trigger button, such as a swatch-sized '+' in a row of swatches. */
+  trigger?: React.ReactElement
 }
 
 const FULL_HEX_COLOR_PATTERN = /^#?[0-9a-fA-F]{6}$/
@@ -33,7 +35,8 @@ export function ColorPicker({
   defaultOpen,
   selected,
   triggerLabel,
-  showHexInTrigger
+  showHexInTrigger,
+  trigger
 }: ColorPickerProps): React.JSX.Element {
   const t = useTranslate()
   const inputId = React.useId()
@@ -67,30 +70,40 @@ export function ColorPicker({
   }
 
   return (
-    <Popover defaultOpen={defaultOpen}>
+    <Popover
+      defaultOpen={defaultOpen}
+      onOpenChange={(open) => {
+        // Reopening starts from the current color, not a draft left from last time.
+        if (!open) {
+          setDraftState({ syncedColor: currentColor, draft: currentColor, isEditing: false })
+        }
+      }}
+    >
       <PopoverTrigger asChild>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className={cn(
-            'h-8 gap-2 px-2.5',
-            selected ? 'ring-2 ring-foreground ring-offset-2 ring-offset-background' : null,
-            className
-          )}
-          aria-label={label}
-          aria-pressed={selected}
-        >
-          <span
-            aria-hidden="true"
-            className="size-4 rounded-[4px] border border-border/70"
-            style={{ backgroundColor: currentColor }}
-          />
-          {triggerLabel ? <span className="text-xs">{triggerLabel}</span> : null}
-          {shouldShowTriggerHex ? (
-            <span className="font-mono text-xs uppercase">{currentColor}</span>
-          ) : null}
-        </Button>
+        {trigger ?? (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className={cn(
+              'h-8 gap-2 px-2.5',
+              selected ? 'ring-2 ring-foreground ring-offset-2 ring-offset-background' : null,
+              className
+            )}
+            aria-label={label}
+            aria-pressed={selected}
+          >
+            <span
+              aria-hidden="true"
+              className="size-4 rounded-[4px] border border-border/70"
+              style={{ backgroundColor: currentColor }}
+            />
+            {triggerLabel ? <span className="text-xs">{triggerLabel}</span> : null}
+            {shouldShowTriggerHex ? (
+              <span className="font-mono text-xs uppercase">{currentColor}</span>
+            ) : null}
+          </Button>
+        )}
       </PopoverTrigger>
       <PopoverContent align="start" className="w-64 p-3">
         <div className="space-y-3">
