@@ -151,10 +151,12 @@ describe('SourceControlChangeScopeBar menu', () => {
 
   it('supports keyboard entry, typing and exit through the commit filter', async () => {
     renderBar({
+      summary: { ...READY, commitsAhead: 12 },
       history: {
         status: 'ready',
         result: {
           ...PAGE,
+          branch: { ...PAGE.branch!, ahead: 12, unpushed: 12 },
           items: Array.from({ length: 12 }, (_, index) => ({
             ...COMMIT,
             id: `commit-${index}`,
