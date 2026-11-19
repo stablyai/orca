@@ -6,7 +6,7 @@ import { randomUUID } from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
 import { CACHE_ROOT } from './fleet-gate-builds.mjs'
-import { identityState, processIdentity } from './fleet-gate-cache-lock.mjs'
+import { identityState, probeProcess, processIdentity } from './fleet-gate-cache-lock.mjs'
 import { descendantPids, readDaemonPids, stopCopyDaemons } from './fleet-gate-copies.mjs'
 
 export const RUNS_ROOT = path.join(CACHE_ROOT, 'runs')
@@ -82,6 +82,21 @@ export function recordCopyLaunch(runDir, userDataDir) {
   }
 }
 
+/**
+ * Records a batch of helpers (CPU load) before they spawn, under a marker their command lines carry; record(pid) adds
+ * each one for the exit kill, done() drops the marker once they are stopped.
+ */
+export function recordHelperLaunch(runDir) {
+  const marker = randomUUID()
+  const pending = path.join(ownerFolder(runDir), 'helpers', `pending-${marker}`)
+  writeRecord(pending, { marker })
+  return {
+    arg: `--fleet-gate-helper=${marker}`,
+    record: (pid) => recordHelper(runDir, pid),
+    done: () => fs.rmSync(pending, { force: true })
+  }
+}
+
 /** Records a helper the gate spawned (Xvfb, CPU load); returns the call that forgets it once it is stopped. */
 export function recordHelper(runDir, pid) {
   const identity = processIdentity(pid)
@@ -112,10 +127,36 @@ function signal(pid, sig, group) {
 }
 
 // Playwright starts the app in its own process group: this reaches its renderer, GPU and utility processes too.
+// false when ps failed, so the caller can't know whether the recorded process still runs.
 function killVerified(pid, identity, group) {
-  if (identityState(identity) === 'alive') {
+  const state = identityState(identity)
+  if (state === 'alive') {
     signal(pid, 'SIGKILL', group)
   }
+  return state !== 'unknown'
+}
+
+/** true once every daemon recorded in userDataDir is provably gone; a failed ps or read is never proof. */
+function daemonsGone(userDataDir) {
+  const daemonDir = path.join(userDataDir, 'daemon')
+  let names
+  try {
+    names = fs.readdirSync(daemonDir).filter((name) => name.endsWith('.pid'))
+  } catch (error) {
+    return error?.code === 'ENOENT'
+  }
+  for (const name of names) {
+    let pid = null
+    try {
+      pid = JSON.parse(fs.readFileSync(path.join(daemonDir, name), 'utf8')).pid
+    } catch {
+      // Torn or legacy: nothing in it can name a process.
+    }
+    if (Number.isInteger(pid) && probeProcess(pid).state === 'unknown') {
+      return false
+    }
+  }
+  return readDaemonPids(userDataDir).length === 0
 }
 
 /** For process 'exit': synchronous, so it also runs on a thrown error or process.exit. */
@@ -123,7 +164,13 @@ export function killLiveNow() {
   for (const [pid, { identity, userDataDir }] of live) {
     killVerified(pid, identity, Boolean(userDataDir))
     // readDaemonPids proves each daemon is this copy's (launch nonce, pid record, start time) just before the kill.
-    for (const root of userDataDir ? readDaemonPids(userDataDir) : []) {
+    let daemons = []
+    try {
+      daemons = userDataDir ? readDaemonPids(userDataDir) : []
+    } catch {
+      // The folder (and its records) stays for the next gate's reap.
+    }
+    for (const root of daemons) {
       for (const daemonPid of [...descendantPids(root), root]) {
         signal(daemonPid, 'SIGKILL', false)
       }
@@ -163,32 +210,61 @@ function readRecords(dir) {
   }
 }
 
-/** false when it couldn't prove a recorded copy gone; the folder then stays for a later reap. */
+function killByMarker(arg, group) {
+  const pids = pidsCarrying(arg)
+  for (const pid of pids ?? []) {
+    signal(pid, 'SIGKILL', group)
+  }
+  return pids !== null
+}
+
+/**
+ * false when it couldn't prove every recorded process gone (a failed ps or read): the folder then stays, records
+ * intact, for a later reap, since deleting it would orphan whatever still runs.
+ */
 async function reapFolder(dir) {
   const inside = (userDataDir) =>
     typeof userDataDir === 'string' && !path.relative(dir, userDataDir).startsWith('..')
   for (const record of readRecords(path.join(dir, 'apps'))) {
-    if (record.name.startsWith('pending-')) {
-      const pids = pidsCarrying(`--fleet-gate-copy=${String(record.marker)}`)
-      if (pids === null) {
-        return false
-      }
-      for (const pid of pids) {
-        signal(pid, 'SIGKILL', true)
-      }
-    } else {
-      killVerified(Number(record.name), record.identity, true)
+    const settled = record.name.startsWith('pending-')
+      ? killByMarker(`--fleet-gate-copy=${String(record.marker)}`, true)
+      : killVerified(Number(record.name), record.identity, true)
+    if (!settled) {
+      return false
     }
     // Only daemons recorded inside this folder: a pid record anywhere else could be another gate's.
     if (inside(record.userDataDir)) {
-      await stopCopyDaemons(record.userDataDir)
+      try {
+        await stopCopyDaemons(record.userDataDir)
+      } catch {
+        return false
+      }
+      if (!daemonsGone(record.userDataDir)) {
+        return false
+      }
     }
   }
   for (const record of readRecords(path.join(dir, 'helpers'))) {
-    killVerified(Number(record.name), record.identity, false)
+    const settled = record.name.startsWith('pending-')
+      ? killByMarker(`--fleet-gate-helper=${String(record.marker)}`, false)
+      : killVerified(Number(record.name), record.identity, false)
+    if (!settled) {
+      return false
+    }
   }
   fs.rmSync(dir, { recursive: true, force: true })
   return true
+}
+
+/** For the exit handler: a pending record means a launch this gate couldn't confirm, so the folder must stay. */
+export function hasPendingRecords(dir) {
+  return ['apps', 'helpers'].some((sub) => {
+    try {
+      return fs.readdirSync(path.join(dir, sub)).some((name) => name.startsWith('pending-'))
+    } catch {
+      return false
+    }
+  })
 }
 
 /** Stops what dead gates left behind (verified processes only), then deletes their folders. */

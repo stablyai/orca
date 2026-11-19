@@ -13,8 +13,10 @@ import {
   createRunDir,
   killLiveNow,
   reapStaleRunDirs,
+  hasPendingRecords,
   recordCopyLaunch,
-  recordHelper
+  recordHelper,
+  recordHelperLaunch
 } from './fleet-gate-run-dirs.mjs'
 import { startVirtualDisplay } from './fleet-gate-display.mjs'
 import { waitForAppWindow } from './fleet-gate-app-ready.mjs'
@@ -152,9 +154,17 @@ async function launchCopy({ buildDir, runDir, userDataDir, label, outDir, extraE
       timeout: 180_000
     })
   } catch (error) {
+    // Still in flight until its daemons are stopped and its record dropped, so a stop signal waits for it.
+    // A failed daemon stop keeps the pending record, so the next gate's reap retries it.
+    if (
+      await stopCopyDaemons(userDataDir).then(
+        () => true,
+        () => false
+      )
+    ) {
+      launchRecord.forget()
+    }
     launchesInFlight -= 1
-    await stopCopyDaemons(userDataDir)
-    launchRecord.forget()
     throw error
   }
   // Captured now: app.process() throws once the app object is closed.
@@ -229,7 +239,7 @@ async function burstOnce({ arm, sha, buildDir, seedDir, runDir, outDir, repoRoot
     stderrOwnership += first.ownershipText()
     await first.close()
   }
-  const stopLoad = startCpuLoad(repoRoot, (pid) => recordHelper(gateRunDir, pid))
+  const stopLoad = startCpuLoad(repoRoot, recordHelperLaunch(gateRunDir))
   liveCleanups.add(stopLoad)
   try {
     const second = await copy('restart')
@@ -561,7 +571,7 @@ function installStopHandlers() {
 process.on('exit', () => {
   killLiveNow()
   // A copy still launching isn't in the live list yet: keep its pending record for the next gate's reap.
-  if (gateRunDir && launchesInFlight === 0) {
+  if (gateRunDir && launchesInFlight === 0 && !hasPendingRecords(gateRunDir)) {
     fs.rmSync(gateRunDir, { recursive: true, force: true })
   }
 })

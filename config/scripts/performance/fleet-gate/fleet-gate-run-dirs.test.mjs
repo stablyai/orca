@@ -104,3 +104,31 @@ it.skipIf(process.platform === 'win32')(
   },
   30_000
 )
+
+it.skipIf(process.platform === 'win32')(
+  "keeps a dead gate's folder while ps fails, then reaps it once ps works",
+  async () => {
+    root = fs.mkdtempSync(path.join(os.tmpdir(), 'fleet-gate-runs-test-'))
+    const dead = createRunDir('gate', root)
+    const deadCopy = await runFolderWithCopy(dead, 'marker-busy')
+    fs.writeFileSync(path.join(dead, 'owner'), '999999 Thu Jan  1 00:00:00 1970')
+    // A busy host: ps fails, which proves nothing about the recorded processes.
+    const fakeBin = path.join(root, 'bin')
+    fs.mkdirSync(fakeBin)
+    fs.writeFileSync(path.join(fakeBin, 'ps'), '#!/bin/sh\nexit 2\n', { mode: 0o755 })
+    const realPath = process.env.PATH
+    process.env.PATH = `${fakeBin}${path.delimiter}${realPath}`
+    try {
+      expect(await reapStaleRunDirs(root)).toBe(0)
+    } finally {
+      process.env.PATH = realPath
+    }
+    expect(fs.existsSync(dead)).toBe(true)
+    expect(deadCopy.map(alive)).toEqual([true, true, true, true])
+
+    expect(await reapStaleRunDirs(root)).toBe(1)
+    await until(() => deadCopy.every((pid) => !alive(pid)))
+    expect(deadCopy.map(alive)).toEqual([false, false, false, false])
+  },
+  30_000
+)

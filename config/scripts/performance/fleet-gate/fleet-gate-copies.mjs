@@ -91,9 +91,12 @@ export function readDaemonPids(userDataDir) {
   let entries = []
   try {
     entries = fs.readdirSync(daemonDir)
-  } catch {
-    // Another gate's reap removed it first.
-    return []
+  } catch (error) {
+    // Another gate's reap removed it first; any other failure must not pass for "no daemons".
+    if (error?.code === 'ENOENT') {
+      return []
+    }
+    throw error
   }
   const pids = []
   for (const entry of entries) {

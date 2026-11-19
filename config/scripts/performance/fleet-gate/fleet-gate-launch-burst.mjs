@@ -44,15 +44,16 @@ async function waitForLaunches(launchLog, expected, timeoutMs = LAUNCH_WAIT_MS) 
 }
 
 /** Loads every core while a burst runs, as an update restart under load does; killed when the burst ends. */
-export function startCpuLoad(repoRoot, record = () => () => {}) {
+export function startCpuLoad(repoRoot, tracker = null) {
   const worker = path.join(repoRoot, 'tests', 'tools', 'benchmarks', 'cpu-pressure-worker.mjs')
   let stopped = false
   let earlyExits = 0
   const children = Array.from({ length: os.availableParallelism() }, () => {
     // An hour outlasts any burst (the burst stops it); the cap only bounds an orphan.
-    const child = spawn(process.execPath, [worker, '3600000'], { stdio: 'ignore' })
-    // Recorded so a gate killed mid-burst doesn't leave every core loaded.
-    const forget = record(child.pid)
+    // Marked and recorded so a gate killed mid-burst doesn't leave every core loaded.
+    const args = tracker ? [worker, '3600000', tracker.arg] : [worker, '3600000']
+    const child = spawn(process.execPath, args, { stdio: 'ignore' })
+    const forget = tracker?.record(child.pid) ?? (() => {})
     child.once('exit', () => {
       earlyExits += stopped ? 0 : 1
       forget()
@@ -65,6 +66,7 @@ export function startCpuLoad(repoRoot, record = () => () => {}) {
     for (const child of children) {
       child.kill('SIGKILL')
     }
+    tracker?.done()
     return earlyExits
   }
 }
