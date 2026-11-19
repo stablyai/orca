@@ -1,3 +1,4 @@
+import { MobileNativeChatRemoteControlStrip } from '../remote-control/MobileNativeChatRemoteControlStrip'
 import { MobileSlackMirrorItem } from '../slack-mirror/MobileSlackMirrorItem'
 import { getNativeChatAgentProfile } from '../../../../../src/shared/native-chat/input/commands/native-chat-agent-profiles'
 import { recordMobileNativeChatSkillPick } from './drafts/mobile-native-chat-draft-store'
@@ -7,7 +8,7 @@ import {
   pruneMobileNativeChatDraftSkills
 } from './drafts/mobile-native-chat-draft-inputs'
 import { MobileNativeChatComposerAllocation } from './field/MobileNativeChatComposerAllocation'
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { Keyboard, View, type HostInstance, type TextInputInstance } from 'react-native'
 import { colors } from '../../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
@@ -28,6 +29,7 @@ import { MobileNativeChatComposerSendSlot } from './delivery/MobileNativeChatCom
 import { MobileNativeChatEditActions } from './field/MobileNativeChatEditActions'
 import { useMobileNativeChatContextRing } from './commands/MobileNativeChatContextUsageRing'
 import type { MobileNativeChatSendIntent } from './delivery/mobile-native-chat-send'
+import { useMobileNativeChatSendSurfaceGeneration } from './delivery/use-mobile-native-chat-send-surface-generation'
 import { MobileNativeChatComposerMic } from './dictation/MobileNativeChatComposerMic'
 import { MobileNativeChatDictationLeading } from './dictation/MobileNativeChatDictationLeading'
 import { useMobileNativeChatComposerGoalMode } from './commands/use-mobile-native-chat-composer-goal-mode'
@@ -162,15 +164,8 @@ export function MobileNativeChatComposer({
     placeCaret: menu.placeCaret
   })
   const sendingRef = useRef(false)
-  const mountedRef = useRef(true)
-  const sendSurfaceIdRef = useRef(sendSurfaceId)
-  const sendSurfaceGenerationRef = useRef(0)
-  useLayoutEffect(() => {
-    if (sendSurfaceIdRef.current !== sendSurfaceId) {
-      sendSurfaceIdRef.current = sendSurfaceId
-      sendSurfaceGenerationRef.current += 1
-    }
-  }, [sendSurfaceId])
+  const { mountedRef, sendSurfaceGenerationRef } =
+    useMobileNativeChatSendSurfaceGeneration(sendSurfaceId)
   const [sending, setSending] = useState(false)
   const sessionOptionDispatching = sessionOptions?.controller.pendingId != null
   const filesUploading = files.some((file) => file.path === null)
@@ -184,14 +179,6 @@ export function MobileNativeChatComposer({
     !isAttaching &&
     !filesUploading &&
     !sessionOptionDispatching
-
-  useEffect(() => {
-    mountedRef.current = true
-    return () => {
-      mountedRef.current = false
-      sendSurfaceGenerationRef.current += 1
-    }
-  }, [])
 
   const handleSend = async (
     intent?: MobileNativeChatSendIntent,
@@ -247,6 +234,9 @@ export function MobileNativeChatComposer({
       />
       <View style={styles.composerInset} testID="native-chat-composer-inset">
         {editSession ? null : <MobileNativeChatMcpTray panel={structured?.mcpPanel} />}
+        {editSession ? null : (
+          <MobileNativeChatRemoteControlStrip remoteControl={structured?.remoteControl} />
+        )}
         {orca.usageSheet}
         {goal.strip}
         {editSession ? null : <MobileNativeChatQuoteTab {...{ value, onChangeText, fieldRef }} />}

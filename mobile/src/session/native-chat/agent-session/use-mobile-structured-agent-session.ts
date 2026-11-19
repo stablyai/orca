@@ -1,3 +1,4 @@
+import { useMobileStructuredRemoteControl } from '../remote-control/use-mobile-structured-remote-control'
 import { useMobileStructuredAsyncQuestions } from './use-mobile-structured-async-questions'
 import { useMobileUnresolvedFailureRows } from '../status/use-mobile-unresolved-failure-rows'
 import { structuredChatTranscriptIdentity } from '../transcript/persistence/mobile-native-chat-transcript-store'
@@ -10,6 +11,7 @@ import {
   structuredAgentSessionQueueSendsNext
 } from '../../../../../src/shared/agent-session/view/structured-agent-session-live-turn'
 import { mobileStructuredLinkedPrompts } from '../input/prompts/mobile-structured-linked-prompts'
+import { useMobileNativeChatCommandRefusalCauses } from '../composer/delivery/use-mobile-native-chat-send-error'
 import {
   projectStructuredPermission,
   projectStructuredQuestion
@@ -175,6 +177,7 @@ export function useMobileStructuredAgentSession(
     commands: useMobileStructuredCommandController(options)
   })
   const mcp = useMobileStructuredMcpPanel(args, sessionKey, goal.commands)
+  const remote = useMobileStructuredRemoteControl(args, mcp.commands)
   const sendWithOutcomeUngated = useMobileStructuredSendWithOutcome({
     agent,
     client,
@@ -189,19 +192,16 @@ export function useMobileStructuredAgentSession(
     commandPending: commandPendingRef,
     onClearSent: transcript.onClearSent,
     sendsOut,
-    controller: mcp.commands,
+    controller: remote.commands,
     sessionCommands: args.sessionCommands,
     onSendError,
     queueSendsNext,
     sendSelection: options.sendSelection,
     takesSkills: hostSupport?.sendSkills === true
   })
-  const commandRefusalCauses = useMemo(
-    () => ({
-      working: turnId !== null || queueSendsNext,
-      prompt: approvalPrompt !== null || questionPrompt !== null
-    }),
-    [approvalPrompt, questionPrompt, queueSendsNext, turnId]
+  const commandRefusalCauses = useMobileNativeChatCommandRefusalCauses(
+    turnId !== null || queueSendsNext,
+    approvalPrompt !== null || questionPrompt !== null
   )
   const { rewind, sendWithOutcome } = useMobileStructuredAgentRewind({
     ...args,
@@ -299,6 +299,7 @@ export function useMobileStructuredAgentSession(
     ),
     threadGoal: goal.threadGoal,
     mcpPanel: mcp.mcpPanel,
+    remoteControl: remote.remoteControl,
     accountUsage: useMobileStructuredAccountUsage(args, accountUsageReported),
     rewind,
     usageLimit,

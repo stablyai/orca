@@ -21941,7 +21941,9 @@
         "forkSessionTerminal": "Fork the session in Terminal",
         "renameSessionTerminal": "Rename the session in Terminal",
         "timelineTerminal": "Browse the session timeline in Terminal",
-        "exportTerminal": "Export the session in Terminal"
+        "exportTerminal": "Export the session in Terminal",
+        "remoteControlToggle": "Connect or disconnect Remote Control",
+        "remoteControlAlias": "Short for /remote-control"
       },
       "modelDescriptions": {
         "grok_4_7": "xAI's latest frontier model",
@@ -22311,6 +22313,26 @@
         "openAgain": "Open again",
         "finished": "Sign-in finished",
         "finishedWith": "Sign-in finished · {{message}}"
+      },
+      "remoteControl": {
+        "sentFrom": "Sent via Remote Control",
+        "label": "Remote Control",
+        "copyLink": "Copy Remote Control Link",
+        "disconnect": "Disconnect Remote Control",
+        "connect": "Connect to Remote Control",
+        "connected": "Connected to Remote Control",
+        "connecting": "Connecting to Remote Control…",
+        "failedWithDetail": "Remote Control failed: {{detail}}",
+        "failed": "Remote Control failed",
+        "policyDisabled": "Remote Control is turned off by your organization",
+        "off": "Remote Control is off",
+        "connectFailed": "Unable to connect to Remote Control",
+        "disconnectFailed": "Unable to disconnect from Remote Control",
+        "retry": "Retry",
+        "openOnClaudeAi": "Open on claude.ai",
+        "onByDefault": "Remote Control is on by default for your account, so this chat also appears in the Claude app and on claude.ai.",
+        "pending": "Remote Control connects with this chat's next message",
+        "turnOff": "Turn Off Remote Control"
       },
       "offerCard": {
         "dismiss": "Dismiss",
@@ -22990,6 +23012,14 @@
         "turnDiffsCopy": "Shows the files each turn changed, with line counts, below the reply.",
         "turnDiffsSearchChangedFiles": "changed files",
         "turnDiffsSearchEdits": "edits",
+        "claudeRemoteControlFollow": "Claude Code",
+        "claudeRemoteControlOn": "On",
+        "claudeRemoteControlOff": "Off",
+        "claudeRemoteControlTitle": "Claude Remote Control",
+        "claudeRemoteControlCopy": "Show Claude chats in the Claude app and on claude.ai.",
+        "claudeRemoteControlSearchPhone": "phone",
+        "claudeRemoteControlSearchMobile": "mobile app",
+        "claudeRemoteControlSearchRc": "rc",
         "promptSuggestionsTitle": "Suggested prompts",
         "promptSuggestionsCopy": "After Claude replies, its guess at your next message shows in the empty message box. Press Tab to use it. Each guess is an extra request that counts toward your Claude usage.",
         "promptSuggestionsSearchNext": "next prompt",

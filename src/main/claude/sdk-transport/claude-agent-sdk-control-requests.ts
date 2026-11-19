@@ -8,6 +8,10 @@ import {
   providerDiagnostic,
   withProviderDiagnostic
 } from '../../../shared/agent-session/failures/agent-session-failure'
+import {
+  claudeQueryRemoteControl,
+  type ClaudeRemoteControlAnswer
+} from './claude-remote-control-request'
 
 export class ClaudeControlRequestError extends Error {
   constructor(
@@ -212,6 +216,12 @@ export type ClaudeControlSurface = {
   renameSession: (title: string, sessionId: string, options?: ClaudeControlOptions) => Promise<void>
   /** The `/mcp` panel's requests; test connections leave it out. */
   mcp?: ClaudeMcpControls
+  /** Connects or disconnects this session's Remote Control (claude.ai/code and the Claude apps);
+   * test connections leave it out. */
+  remoteControl?: (
+    enabled: boolean,
+    options?: ClaudeControlOptions
+  ) => Promise<ClaudeRemoteControlAnswer>
   /** Stops or restarts the CLI generating prompt suggestions; a new process starts unpaused. */
   setPromptSuggestionsPaused?: (paused: boolean, options?: ClaudeControlOptions) => Promise<void>
 }
@@ -317,6 +327,17 @@ export function createClaudeControlSurface(query: Query): ClaudeControlSurface {
             new ClaudeControlRequestError(
               'get_settings',
               'this SDK exposes no get_settings request'
+            )
+          )
+    },
+    remoteControl: (enabled, options) => {
+      const send = claudeQueryRemoteControl(query)
+      return send
+        ? runClaudeControl('remote_control', () => send(enabled), options?.timeoutMs)
+        : Promise.reject(
+            new ClaudeControlRequestError(
+              'remote_control',
+              'this SDK exposes no remote_control request'
             )
           )
     }

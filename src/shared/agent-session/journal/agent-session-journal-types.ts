@@ -1,5 +1,5 @@
 import type { AgentJournalBotMessageFields } from './agent-journal-bot-message-fields'
-import type { AgentJournalTypedBy } from './agent-journal-typed-by'
+import type { AgentJournalMessageSource, AgentJournalTypedBy } from './agent-journal-typed-by'
 import type { AgentSessionForkedFromMark } from '../conversation-naming/agent-session-fork-name'
 import type {
   AgentJournalApprovalMatchedAskRule,
@@ -75,6 +75,9 @@ export type AgentJournalMessageItem = {
   /** Absent ⇒ an ordinary turn input. `goal` ⇒ the text was set as the thread
    *  goal's objective, and the provider pursues it without a turn of its own. */
   sentAs?: AgentJournalMessageSendMode
+  /** Absent ⇒ sent from Orca. `provider-remote-control` ⇒ the person sent it to the agent from the
+   *  provider's own apps (Claude Code's Remote Control), so Orca saw it only as the agent's echo. */
+  sentFrom?: AgentJournalMessageSource
   /** Present on a conversation command the user sent, such as `/compact`. The text is what the
    *  user typed; this names the command and its instructions so no reader parses it. Open like
    *  `sentAs`. */

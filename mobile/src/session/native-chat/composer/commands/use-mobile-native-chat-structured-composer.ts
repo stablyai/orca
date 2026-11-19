@@ -1,3 +1,4 @@
+import type { MobileStructuredRemoteControl } from '../../remote-control/use-mobile-structured-remote-control'
 import { useMemo } from 'react'
 import type { AgentSessionConversationCommand } from '../../../../../../src/shared/agent-session/conversation-context/agent-session-conversation-command'
 import type { MobileNativeChatStructuredComposer } from './mobile-native-chat-structured-composer'
@@ -19,24 +20,27 @@ export function useMobileNativeChatStructuredComposer(args: {
   files: MobileNativeChatFileAttachments
   threadGoal: MobileStructuredThreadGoal | null
   mcpPanel: MobileStructuredMcpPanel | null
+  remoteControl: MobileStructuredRemoteControl | null
   accountUsage: MobileStructuredAccountUsage | null
   onCommandNotice: (message: string) => void
 }): MobileNativeChatStructuredComposer | null {
   const { structured, acceptsFiles, compactInstructions, files, threadGoal, mcpPanel } = args
-  const { accountUsage, onCommandNotice } = args
+  const { remoteControl, accountUsage, onCommandNotice } = args
   const conversationCommands = args.conversationCommands ?? NO_COMMANDS
   const { commands, refresh, setMenuOpen } = args.sessionCommands
   const { files: pendingFiles, attachFiles, attachPastedText, removeFiles } = files
   // Memoize commands separately so attachment changes cannot rebuild the menu catalog.
   const offersMcpPanel = mcpPanel !== null
+  const offersRemoteControl = remoteControl !== null
   const catalog = useMemo(
     () => ({
       reported: commands,
       conversationCommands,
       compactInstructions,
-      mcpPanel: offersMcpPanel
+      mcpPanel: offersMcpPanel,
+      remoteControl: offersRemoteControl
     }),
-    [commands, compactInstructions, conversationCommands, offersMcpPanel]
+    [commands, compactInstructions, conversationCommands, offersMcpPanel, offersRemoteControl]
   )
   return useMemo(
     () =>
@@ -54,6 +58,7 @@ export function useMobileNativeChatStructuredComposer(args: {
             onRemoveFile: (id: string) => removeFiles([id]),
             threadGoal,
             mcpPanel,
+            remoteControl,
             accountUsage,
             onCommandNotice
           }
@@ -61,6 +66,7 @@ export function useMobileNativeChatStructuredComposer(args: {
     [
       threadGoal,
       mcpPanel,
+      remoteControl,
       accountUsage,
       onCommandNotice,
       acceptsFiles,

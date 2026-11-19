@@ -1,3 +1,4 @@
+import { NATIVE_CHAT_CLAUDE_REMOTE_CONTROL_VALUES } from '../../native-chat/settings/native-chat-claude-remote-control'
 import * as z from 'zod'
 import { isTaskProvider } from '../../work-items/task-providers'
 import type { TaskProvider } from '../../work-items/task-providers'
@@ -137,6 +138,7 @@ export const SettingsUpdate = z
       .transform((value) => normalizePRBotAuthorOverrides(value))
       .optional(),
     nativeChatAutoContinueAfterUsageLimit: z.boolean().optional(),
+    nativeChatClaudeRemoteControl: z.enum(NATIVE_CHAT_CLAUDE_REMOTE_CONTROL_VALUES).optional(),
     nativeChatPermissionMode: z.enum(AGENT_CHAT_PERMISSION_MODES).optional(),
     workspaceCleanupPolicy: WorkspaceCleanupRulesParam.optional(),
     prAutoRefresh: z.enum(PR_AUTO_REFRESH_CADENCES).optional(),

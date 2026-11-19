@@ -148,6 +148,9 @@ function createClaudeAdapter(
     atRestCommandProbe: createClaudeCommandCatalogProbe(claudeListingDeps(context)),
     atRestDiscovery: claudeAtRestDiscovery(deps),
     onLifecycleEvent: context.deliverLifecycle,
+    ...(deps.resolveClaudeRemoteControl
+      ? { resolveClaudeRemoteControl: deps.resolveClaudeRemoteControl }
+      : {}),
     logger: deps.logger,
     onChildWorkEvidence: (sessionId, evidence, producer) =>
       host()?.publishChildWorkEvidence(sessionId, evidence, producer),

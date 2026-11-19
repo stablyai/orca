@@ -46,6 +46,22 @@ export const getChatBehaviorEntriesByKey = createLocalizedCatalog(() => ({
       )
     ]
   },
+  claudeRemoteControl: {
+    targetSectionId: 'chat-claude-remote-control',
+    title: translate(
+      'components.settings.nativeChat.claudeRemoteControlTitle',
+      'Claude Remote Control'
+    ),
+    description: translate(
+      'components.settings.nativeChat.claudeRemoteControlCopy',
+      'Show Claude chats in the Claude app and on claude.ai.'
+    ),
+    keywords: [
+      translate('components.settings.nativeChat.claudeRemoteControlSearchPhone', 'phone'),
+      translate('components.settings.nativeChat.claudeRemoteControlSearchMobile', 'mobile app'),
+      translate('components.settings.nativeChat.claudeRemoteControlSearchRc', 'rc')
+    ]
+  },
   idleStop: {
     targetSectionId: 'chat-idle-stop',
     title: translate('components.settings.nativeChat.idleStopTitle', 'Stop idle agents after'),

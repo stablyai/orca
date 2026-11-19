@@ -1,3 +1,4 @@
+import { observeClaudeBridgeState } from '../remote-control/claude-remote-control-link'
 import type { AgentSessionAcquisition } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import { openClaudeStreamJsonConnection } from '../../claude-stream-json-connection'
 import { claudeLaunchPermissions } from '../permissions/claude-structured-inbound-control'
@@ -6,7 +7,7 @@ import { claudeFrameSendFacts } from '../turns/claude-command-lifecycle'
 import { claudeSessionStateEndsTurn } from '../turns/claude-session-state-turn-over'
 import { settleClaudeTurnEndWaiters } from '../turns/claude-request-end-wait'
 import * as proof from '../startup/claude-structured-init-proof'
-import { claudeConfigDirEnvPatch } from '../launch/claude-config-dir-pin'
+import { claudeConnectionSpawnRequest } from '../launch/claude-structured-connection-spawn'
 import { claudeProcessIdentity } from './claude-structured-owner-identity'
 import { ClaudePromptRegistry } from '../permissions/claude-prompt-registry'
 import { adoptClaudeStructuredSpawnOptions } from '../launch/claude-structured-spawn-options'
@@ -118,6 +119,9 @@ export async function acquireClaudeSession({
     if (liveSession) {
       liveSession.leafUuid = observedLeafUuid
       observeClaudeFastModeFacts(liveSession, message)
+      observeClaudeBridgeState(liveSession, message, sessionId, deps, (session, event) =>
+        callbacks.emit(session, input.events, event)
+      )
       if (message.type === 'result' && sessions.get(sessionId) === liveSession) {
         reportClaudeOptions(liveSession, sessions, input, deps.requestTimeoutMs, attempt, callbacks)
       }
@@ -193,18 +197,7 @@ export async function acquireClaudeSession({
     observedLeafUuid = launch.resumeLeafUuid
     const connection = await withAgentSessionCreatePhase('spawn', input.recordPhase, () =>
       (deps.openConnection ?? openClaudeStreamJsonConnection)(
-        {
-          pathToClaudeCodeExecutable: launch.pathToClaudeCodeExecutable,
-          prefixArgs: launch.prefixArgs,
-          options: launch.options,
-          cwd: launch.cwd,
-          env: {
-            ...launch.env,
-            // The saved account directory must override a conflicting environment overlay.
-            ...claudeConfigDirEnvPatch(launch.claudeConfigDir, { env: launch.env })
-          },
-          ...(launch.envToDelete ? { envToDelete: launch.envToDelete } : {})
-        },
+        claudeConnectionSpawnRequest(launch),
         {
           onMessage,
           ...permissions.handlers,

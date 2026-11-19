@@ -74,7 +74,13 @@ export function useStructuredNativeChatPaneCommands({
         : undefined,
     chatPane:
       ownerWorktreeId && groupId && terminalPaneActions === undefined
-        ? { tabId, worktreeId: ownerWorktreeId, groupId, sessionId }
+        ? {
+            tabId,
+            worktreeId: ownerWorktreeId,
+            groupId,
+            sessionId,
+            ...(pane.agent === 'claude' ? { remoteControlTarget: target } : {})
+          }
         : undefined
   }
   return { menu, onSplit }

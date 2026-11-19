@@ -41,6 +41,8 @@ export type MobileComposerStructuredCatalog = {
   compactInstructions?: boolean
   /** `/mcp` opens the chat's MCP tray. */
   mcpPanel?: boolean
+  /** `/rc` toggles the chat's Remote Control. */
+  remoteControl?: boolean
   /** `/fork` forks the chat, and `/side` and `/btw` are Orca's, as on desktop. */
   fork?: boolean
   /** `/usage` opens the chat's Codex account usage. */
@@ -81,7 +83,8 @@ export function mobileComposerCatalog({
           reported,
           structured.compactInstructions,
           interactionModeSupported,
-          structured.mcpPanel
+          structured.mcpPanel,
+          structured.remoteControl
         ),
         structured
       )

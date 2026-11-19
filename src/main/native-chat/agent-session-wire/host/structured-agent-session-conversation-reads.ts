@@ -1,3 +1,7 @@
+import type {
+  AgentSessionProviderRemoteControlChoice,
+  AgentSessionProviderRemoteControlResult
+} from '../../../../shared/agent-session/remote-control/agent-session-provider-remote-control'
 import { agentSessionLeaseOwnerVerdict } from '../../../../shared/agent-session/lifecycle/leases/agent-session-lease-adjudication'
 import { holdStructuredMailSources } from '../observations/structured-agent-session-mail-sources'
 import {
@@ -161,6 +165,36 @@ export function createStructuredAgentSessionConversationReads(context: () => Rea
         }
         await deps.store.skipAsyncQuestions(sessionId, itemId)
         publishStatus(sessionId)
+      })
+    },
+    /** Saved on the chat for every device and its next start; a running child follows at once.
+     *  Without a choice it only reads. */
+    providerRemoteControl: async (
+      sessionId: string,
+      choice: AgentSessionProviderRemoteControlChoice | undefined
+    ): Promise<AgentSessionProviderRemoteControlResult> => {
+      const saved = context().deps.store.getRecord(sessionId)
+      const adapter = saved && context().deps.agents.registration(saved.provider)?.adapter
+      if (!adapter?.setProviderRemoteControl) {
+        return { status: 'unsupported' }
+      }
+      await context().conversation(sessionId)
+      return context().serialize(sessionId, async () => {
+        const { deps, sessions, publishStatus } = context()
+        let live = false
+        if (choice) {
+          await deps.store.updateRecord(sessionId, { kind: 'provider-remote-control', choice })
+          live = adapter.setProviderRemoteControl?.(sessionId, choice === 'on') === true
+          publishStatus(sessionId)
+        }
+        const record = deps.store.getRecord(sessionId)
+        const link = sessions.get(sessionId)?.child?.providerRemoteControl
+        return {
+          status: 'ok' as const,
+          ...(record?.providerRemoteControl ? { choice: record.providerRemoteControl } : {}),
+          live,
+          ...(link ? { link } : {})
+        }
       })
     },
     holdMailSources: (attempts: readonly JournalMailAttempt[], signal: AbortSignal) => {

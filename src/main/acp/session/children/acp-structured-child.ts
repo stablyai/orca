@@ -1,6 +1,6 @@
 import type { SubmissionRejectionFact } from '../../../../shared/agent-session/failures/agent-session-failure'
 import type { StructuredAgentSessionProviderOpenResult } from '../../../native-chat/agent-session-wire/startup/structured-agent-session-provider-open-contract'
-import type { StructuredAgentSessionSetOptionInput } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
+import type { StructuredAgentSessionSetOptionInput } from '../../../native-chat/agent-session-wire/options/structured-agent-session-option-models'
 import { AcpAgentError } from '../../transport/acp-errors'
 import { acpAuthenticationRequired, acpSignInRequiredFailure } from '../../turns/acp-prompt-failure'
 import type { AcpStructuredSession } from '../acp-structured-session-contract'

@@ -1,3 +1,4 @@
+import type { NativeChatClaudeRemoteControl } from '../../../../shared/native-chat/settings/native-chat-claude-remote-control'
 import type { ReadOnlySessionMode } from '../../../bots/bot-look-around-policy'
 import type { BotLaunchTools } from '../../../bots/bot-launch-tools'
 import type { StructuredAgentSessionHostDeps } from '../../../native-chat/agent-session-wire/host/structured-agent-session-host-types'
@@ -63,6 +64,8 @@ export type StructuredAgentSessionRuntimeDeps = StructuredAgentSessionTransportO
   resolveAgentLaunchEnv?: (agent: string) => Record<string, string>
   /** The settings a per-agent Command override is read from, for the same agents. */
   resolveAgentCommandSettings?: () => StructuredAgentCommandSettings
+  /** Whether Claude chats join Remote Control when they start, read at each start. */
+  resolveClaudeRemoteControl?: () => NativeChatClaudeRemoteControl
   /** See `StructuredAgentLaunchSources.resolveInstructions`. */
   resolveSessionInstructions?: (
     record: AgentSessionRecord,

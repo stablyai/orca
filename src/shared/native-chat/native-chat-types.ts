@@ -35,7 +35,10 @@ import type { AutomationRunMessage } from '../automations/automation-run-message
 import type { WaitEnding } from '../automation-once'
 import type { AgentMessageSource } from '../agent-session/journal/agent-session-message-source'
 import type { ConnectorMessageAsker } from '../connector-message-asker'
-import type { OtherPersonTypist } from '../agent-session/journal/agent-journal-typed-by'
+import type {
+  AgentJournalMessageSource,
+  OtherPersonTypist
+} from '../agent-session/journal/agent-journal-typed-by'
 import type { BotItemNoteView } from '../bots/bot-item-note'
 import type { BotContextNote } from '../bots/bot-context-note'
 import type { AutomationResultNote } from '../bots/bot-automation-result-note'
@@ -261,6 +264,8 @@ export type NativeChatMessage = AgentJournalProducerLinkage & {
   parentId?: string
   /** How a user message was delivered when it was not an ordinary prompt. */
   sentAs?: AgentJournalMessageSendMode
+  /** Where the person sent a user message from when it was not Orca. */
+  sentFrom?: AgentJournalMessageSource
   /** On a person's message: how many automation result notes went to the agent with it. */
   automationResultsCarried?: number
   /** Its text was shortened to fit the copy sent to this client; the host keeps it whole. */

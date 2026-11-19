@@ -8,9 +8,9 @@ import type {
   AgentSessionAcquisition,
   AgentSessionDispatchOutcome,
   StructuredAgentSessionAcquireInput,
-  StructuredAgentSessionAdapter as SessionAdapter,
-  StructuredAgentSessionSetOptionInput
+  StructuredAgentSessionAdapter as SessionAdapter
 } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
+import type { StructuredAgentSessionSetOptionInput } from '../../../native-chat/agent-session-wire/options/structured-agent-session-option-models'
 import type { CodexJournalTranslationAdmission } from '../journal/codex-structured-journal-contracts'
 import { dispatchCodexTurn } from '../turns/codex-structured-turn-start'
 import { isCodexTurnOptionKey } from '../turns/codex-turn-option-keys'

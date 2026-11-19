@@ -1,3 +1,4 @@
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import {
   useCallback,
   useRef,
@@ -77,7 +78,13 @@ export type UseNativeChatContextMenuArgs = {
   actions: NativeChatContextMenuActions
   showTerminalPaneActions?: boolean
   splitShortcutLabels?: { right: string; down: string }
-  chatPane?: { tabId: string; worktreeId: string; groupId: string; sessionId: string }
+  chatPane?: {
+    tabId: string
+    worktreeId: string
+    groupId: string
+    sessionId: string
+    remoteControlTarget?: RuntimeClientTarget
+  }
   chatSession?: NativeChatSessionMenuSource
   /** A structured chat tab's Orca session ID; a chat in a terminal pane is that terminal's agent. */
   resolveOrcaSessionId?: () => Promise<string | null>

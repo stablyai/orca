@@ -3734,6 +3734,22 @@
       },
       "pasteHint": "When the browser lands on a page that won't load, copy its address and paste it here."
     },
+    "remoteControl": {
+      "changeFailed": "couldn't change it",
+      "onByDefault": "on by default",
+      "openOnClaudeAi": "Open on claude.ai",
+      "retry": "Retry",
+      "disconnect": "Disconnect",
+      "sentFrom": "Sent via Remote Control",
+      "turnOff": "Turn off",
+      "stateOnNextMessage": "on next message",
+      "stateConnected": "connected",
+      "stateConnecting": "connecting…",
+      "stateFailedWithDetail": "failed: {{detail}}",
+      "stateFailed": "failed",
+      "stateOffByOrganization": "off by your organization",
+      "label": "Remote Control"
+    },
     "selectionQuote": {
       "action": "Quote",
       "hint": "Adds the selected text to your message as a quote"

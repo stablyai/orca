@@ -7,6 +7,12 @@ import type {
 import { waitForPromiseWithSignal } from '../../../../shared/concurrency/abort-signal-reason'
 import { readClaudeStructuredSessionSettings } from '../launch/claude-structured-session-acquisition-options'
 import { openClaudeSession, readClaudeStartupFacts } from './claude-structured-session-startup'
+import { readClaudeRemoteControlDefault } from './claude-structured-init-proof'
+import { claudeRemoteControlAtStart } from '../remote-control/claude-remote-control-start'
+import {
+  claudeRemoteControlLinkDeps,
+  driveClaudeRemoteControl
+} from '../remote-control/claude-remote-control-link'
 import { catchUpClaudeTranscript } from '../../transcripts/claude-transcript-catch-up'
 import { readyClaudePromptSuggestionPause } from '../claude-prompt-suggestion-pause'
 import type {
@@ -49,20 +55,21 @@ async function openStartingClaudeSession(
 ): Promise<StructuredAgentSessionProviderOpenResult> {
   const { request, session, sessions, deps, emit } = input
   const { proof, account, resumesTranscript, onLateRefusal, startup } = session.initialization
+  const facts =
+    session.initialization.facts ??
+    readClaudeStartupFacts({
+      connection: session.connection,
+      initProof: proof,
+      sessionId: request.sessionId,
+      providerSessionId: session.providerSessionId,
+      resumesTranscript,
+      account,
+      requestTimeoutMs: deps.requestTimeoutMs,
+      emit: (event) => emit(session, event)
+    })
   const opened = openClaudeSession({
     session,
-    facts:
-      session.initialization.facts ??
-      readClaudeStartupFacts({
-        connection: session.connection,
-        initProof: proof,
-        sessionId: request.sessionId,
-        providerSessionId: session.providerSessionId,
-        resumesTranscript,
-        account,
-        requestTimeoutMs: deps.requestTimeoutMs,
-        emit: (event) => emit(session, event)
-      }),
+    facts,
     readSettings: () =>
       readClaudeStructuredSessionSettings(session.connection, deps.requestTimeoutMs),
     isCurrent: () => sessions.get(request.sessionId) === session,
@@ -82,6 +89,8 @@ async function openStartingClaudeSession(
     startup.race(opened, request.signal),
     request.signal
   )
+  // Settled: the open above resolves only after these facts do.
+  const claudeRemoteControl = readClaudeRemoteControlDefault((await facts).initialization)
   const current = () => {
     if (sessions.get(request.sessionId) !== session || request.signal.aborted) {
       throw new Error('claude session closed before startup completed')
@@ -137,5 +146,20 @@ async function openStartingClaudeSession(
     current()
   }
   startup.open()
+  // After catch-up, so a turn sent from the phone cannot race the transcript catch-up.
+  const connect = claudeRemoteControlAtStart({
+    claude: claudeRemoteControl,
+    ...(deps.remoteControlStart?.(request.sessionId) ?? {
+      setting: 'claude-code',
+      choice: undefined
+    })
+  })
+  if (connect) {
+    driveClaudeRemoteControl(
+      session,
+      connect,
+      claudeRemoteControlLinkDeps(request.sessionId, deps, (event) => emit(session, event))
+    )
+  }
   return { ...result, link: session.link, newConversation: !resumesTranscript }
 }

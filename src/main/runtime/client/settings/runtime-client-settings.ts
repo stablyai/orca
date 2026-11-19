@@ -1,4 +1,4 @@
-import { publishedLegacyChatPermissionMode } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
+import { runtimeClientNativeChatSettings } from './runtime-client-native-chat-settings'
 import { getClaudeAgentViewService } from '../../../claude/agent-view/agent-view-service'
 import { getAppEnvironment } from '../../../../shared/app-lifecycle/app-environment'
 import { isArtifactSharingEnabled } from '../../../../shared/artifacts/artifact-sharing-gate'
@@ -18,8 +18,6 @@ import { applyNativeChatSessionOptionSettingsMutation } from '../../../../shared
 import type { NativeChatSessionOptionSettingsMutation } from '../../../../shared/native-chat/input/native-chat-session-options'
 import { getHostDisplayLabelOverrides } from '../../../../shared/execution-host/host-setting-overrides'
 import { getDefaultWorkspaceCleanupRules } from '../../../../shared/workspace-cleanup/workspace-cleanup-policy'
-import { nativeChatQueueFollowUps } from '../../../../shared/native-chat/input/composer/native-chat-follow-up-behavior'
-import { nativeChatShowsCiResultLines } from '../../../../shared/native-chat/settings/native-chat-appearance-settings'
 import { normalizeDesktopTerminalScrollbackRows } from '../../../../shared/terminal/replay/terminal-scrollback-policy'
 import { TERMINAL_DEFAULT_WORD_SEPARATOR } from '../../../../shared/terminal/input/terminal-word-separator'
 import type { TerminalQuickCommand } from '../../../../shared/terminal/quick-commands/terminal-quick-command-types'
@@ -130,19 +128,13 @@ export class RuntimeClientSettingsController {
       ...(this.sharingServices?.skills() === false
         ? {}
         : { agentSkillSharingEnabled: isAgentSkillSharingEnabled(settings) }),
-      nativeChatAutoContinueAfterUsageLimit:
-        settings.nativeChatAutoContinueAfterUsageLimit === true,
+      ...runtimeClientNativeChatSettings(settings),
       machineName: settings.machineName ?? '',
       // A paired browser dictates through this host, which refuses unless these allow it.
       voice: {
         enabled: settings.voice?.enabled === true,
         sttModel: settings.voice?.sttModel ?? ''
       },
-      nativeChatPermissionMode: publishedLegacyChatPermissionMode(settings),
-      // Mirror the host preference; delivery still depends on queue capability.
-      nativeChatQueueFollowUps: nativeChatQueueFollowUps(settings),
-      // Resolved, so a phone can tell a reported value from an older host's absence.
-      nativeChatCiResultLines: nativeChatShowsCiResultLines(settings),
       // Why projected: a paired client's AI buttons start these actions' agents, and must honour
       // the agent saved for each one as the desktop does. Absent on older hosts.
       sourceControlAi: projectSourceControlLaunchRecipes(settings),

@@ -19,6 +19,15 @@ export type StructuredAgentSessionLiveOptions = AgentSessionOptionsResult & {
   effortFixed?: true
 }
 
+export type StructuredAgentSessionSetOptionInput = {
+  sessionId: string
+  key: string
+  value: string
+  fence: number
+  /** Stop/close/quit aborts cannot wait for hung option writes; self-bounded adapters may ignore the signal. */
+  signal?: AbortSignal
+}
+
 export type StructuredAgentSessionRestingOptions = Pick<
   AgentSessionOptionsResult,
   'models' | 'listedModelIds' | 'fastModeSupport' | 'current'

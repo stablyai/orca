@@ -6,6 +6,7 @@ import {
   type PersistedAgentSessionRecord,
   type PersistedAgentSessionObservationLease
 } from '../leases/agent-session-legacy-handoff-lease'
+import { isAgentSessionProviderRemoteControlChoice } from '../../remote-control/agent-session-provider-remote-control'
 import {
   decodePersistedAgentSessionProviderHandleChain,
   encodePersistedAgentSessionProviderHandleChain
@@ -56,6 +57,7 @@ export function decodePersistedAgentSessionRecord<L extends PersistedAgentSessio
     lastTurn,
     instructionsKey,
     asyncQuestionsSkippedThrough: skipped,
+    providerRemoteControl,
     ...rest
   } = record
   const validSleep = typeof sleptAt === 'number' && Number.isFinite(sleptAt) && sleptAt > 0
@@ -71,6 +73,9 @@ export function decodePersistedAgentSessionRecord<L extends PersistedAgentSessio
       ...(validKey ? { instructionsKey } : {}),
       ...(isAgentSessionLastTurn(lastTurn) ? { lastTurn } : {}),
       ...(typeof skipped === 'string' && skipped ? { asyncQuestionsSkippedThrough: skipped } : {}),
+      ...(isAgentSessionProviderRemoteControlChoice(providerRemoteControl)
+        ? { providerRemoteControl }
+        : {}),
       providerHandleChain,
       lease: { ...lease, deathEvidence: decodeDeathEvidence(lease.deathEvidence) }
     },

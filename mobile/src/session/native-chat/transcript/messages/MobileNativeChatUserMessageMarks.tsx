@@ -19,6 +19,7 @@ import { themedStyleSheet } from '../../../../theme/themed-styles'
 import { MobileNativeChatAutomationResultsCarried } from '../MobileNativeChatBotRowNotes'
 import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
 import { MobileSlackMirrorPostLine } from '../../slack-mirror/MobileSlackMirrorPost'
+import { MobileNativeChatSentViaRemoteControl } from '../../remote-control/MobileNativeChatSentViaRemoteControl'
 import { useMobileSlackMirrorContext } from '../../slack-mirror/use-mobile-slack-mirror'
 import { slackMirrorPostedAsker } from '../../../../../../src/shared/connectors/slack-mirror-state'
 import {
@@ -194,6 +195,9 @@ export function MobileNativeChatUserMessageNotes({
     <>
       <MobileSlackMirrorPostLine messageId={message.id} />
       {message.sentAs === 'goal' ? <MobileNativeChatSentAsGoal /> : null}
+      {message.sentFrom === 'provider-remote-control' ? (
+        <MobileNativeChatSentViaRemoteControl />
+      ) : null}
       {message.automationResultsCarried ? (
         <MobileNativeChatAutomationResultsCarried count={message.automationResultsCarried} />
       ) : null}

@@ -37,7 +37,8 @@ export function useNativeChatStructuredPaneNotices({
   composerError,
   install,
   hostSendGate,
-  hostNotice
+  hostNotice,
+  remoteControlNotice
 }: {
   props: Omit<NativeChatStructuredViewProps, 'mode'>
   ownerWorktreeId: string | null
@@ -54,6 +55,7 @@ export function useNativeChatStructuredPaneNotices({
   install: ReturnType<typeof useNativeChatInstallSlot>
   hostSendGate: ReturnType<typeof useNativeChatHostSendGate>
   hostNotice: NativeChatComposerNotice | null
+  remoteControlNotice: NativeChatComposerNotice | null
 }) {
   const t = useTranslate()
   const launch = { ...provisionalLaunch, retry: submits.retryLaunch }
@@ -132,6 +134,9 @@ export function useNativeChatStructuredPaneNotices({
   )
   if (hostNotice) {
     notices.push(hostNotice)
+  }
+  if (remoteControlNotice) {
+    notices.push(remoteControlNotice)
   }
   // One Sign in on screen: while the composer's notice has it, transcript rows only say what wasn't sent.
   const signInInComposer = notices.some((notice) => notice.signIn !== undefined)

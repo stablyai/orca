@@ -1,3 +1,4 @@
+import { setClaudeSessionRemoteControl } from './remote-control/claude-remote-control-link'
 import { dispatchClaudeCommand } from './turns/claude-structured-command-dispatch'
 import { isKillDeliveredExitReceipt } from './lifecycle/claude-kill-delivered-exit-receipt'
 import { manageClaudeMcp } from './lifecycle/claude-structured-mcp'
@@ -15,6 +16,7 @@ import {
   type ClaudeReleaseRequest
 } from './lifecycle/claude-structured-acquisition-release'
 import { acquireClaudeSession } from './lifecycle/claude-structured-session-acquisition'
+import { claudeHoldsLiveProviderProcess } from './lifecycle/claude-live-provider-process'
 import { supportsClaudeStructuredLocation } from './launch/claude-structured-location-support'
 import * as claudeOptions from './launch/claude-structured-options'
 import { dispatchClaudeMessage } from './launch/claude-structured-message-options'
@@ -222,16 +224,15 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
     const held = session && claudeHeldSends(session)
     return held ?? (this.settledExitErrors.has(sessionId) ? new Set() : undefined)
   }
-  holdsLiveProviderProcess = (sessionId: string, acquisitionGeneration: string): boolean => {
-    const session = this.sessions.get(sessionId)
-    return (
-      session?.acquisitionGeneration === acquisitionGeneration &&
-      session.connection.pid !== undefined &&
-      session.connection.exitVerdict.root === 'live'
-    )
-  }
+  holdsLiveProviderProcess = (sessionId: string, acquisitionGeneration: string): boolean =>
+    claudeHoldsLiveProviderProcess(this.sessions.get(sessionId), acquisitionGeneration)
   answerPrompt: StructuredAgentSessionAdapter['answerPrompt'] = (request) =>
     settleClaudePromptFreeingChild(this.asker(request), answerClaudeStructuredPrompt)
+  setProviderRemoteControl: NonNullable<StructuredAgentSessionAdapter['setProviderRemoteControl']> =
+    (id, on) =>
+      setClaudeSessionRemoteControl(this.sessions.get(id), on, id, this.deps, (s, e) =>
+        this.emit(s, e)
+      )
   setOption: StructuredAgentSessionAdapter['setOption'] = (input) =>
     claudeOptions.setClaudeStructuredSessionOption(
       this.session(input.sessionId),

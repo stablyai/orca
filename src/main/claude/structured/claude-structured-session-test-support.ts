@@ -246,9 +246,11 @@ export function adapterAtPublishFor(
   requestTimeoutMs?: number,
   persistHandle?: ClaudeStructuredSessionAdapterDeps['persistHandle'],
   onChildWorkEvidence?: ClaudeStructuredSessionAdapterDeps['onChildWorkEvidence'],
-  onDispatchSettledLate?: ClaudeStructuredSessionAdapterDeps['onDispatchSettledLate']
+  onDispatchSettledLate?: ClaudeStructuredSessionAdapterDeps['onDispatchSettledLate'],
+  extraDeps: Pick<ClaudeStructuredSessionAdapterDeps, 'remoteControlStart'> = {}
 ): ClaudeStructuredSessionAdapter {
   return new ClaudeStructuredSessionAdapter({
+    ...extraDeps,
     resolveLaunch: async ({ spawnToken }) => ({
       pathToClaudeCodeExecutable: 'claude',
       options: {},

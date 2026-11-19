@@ -1,3 +1,4 @@
+import type { NativeChatClaudeRemoteControl } from '../../../../shared/native-chat/settings/native-chat-claude-remote-control'
 import { claudeProviderHandle } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import type { ClaudeEnvDeps } from '../../../claude/structured/launch/claude-structured-child-env'
 import { ClaudeStructuredSessionAdapter } from '../../../claude/structured/claude-structured-session-adapter'
@@ -18,6 +19,8 @@ import { prewarmClaudeCliFlags } from '../../../claude/cli-capabilities/claude-c
 
 export type StructuredClaudeRuntimeAdapterDeps = {
   store: AgentSessionRecordStore
+  /** Orca's Remote Control setting, read at each chat start; absent follows Claude Code's own. */
+  resolveClaudeRemoteControl?: () => NativeChatClaudeRemoteControl
   resolveWorkspacePath: (workspaceId: string) => Promise<string>
   resolveAccountHome?: ClaudeAtRestCommandsDeps['resolveAccountHome']
   resolveLaunch: ClaudeStructuredSessionAdapterDeps['resolveLaunch']
@@ -46,7 +49,11 @@ export type StructuredClaudeRuntimeAdapterDeps = {
 export function structuredClaudeLifecycleEvent(
   event: ClaudeStructuredSessionEvent
 ): StructuredAgentSessionLifecycleEvent | null {
-  if (event.type === 'options-reported' || event.type === 'retiring') {
+  if (
+    event.type === 'options-reported' ||
+    event.type === 'retiring' ||
+    event.type === 'provider-remote-control'
+  ) {
     return event
   }
   // Every exit of a child with an identity, expected or not: the host ends that child's record.
@@ -96,6 +103,10 @@ export function createStructuredClaudeRuntimeAdapter(
       ...(deps.atRestDiscovery ? { discovery: deps.atRestDiscovery } : {})
     }),
     resolveLaunch: deps.resolveLaunch,
+    remoteControlStart: (sessionId) => ({
+      choice: store.getRecord(sessionId)?.providerRemoteControl,
+      setting: deps.resolveClaudeRemoteControl?.() ?? 'claude-code'
+    }),
     ...(deps.namingInputs
       ? {
           namingInputs: deps.namingInputs,

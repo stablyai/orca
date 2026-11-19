@@ -1,3 +1,4 @@
+import type { StructuredAgentSessionProviderRemoteControlEvent } from './structured-agent-session-provider-remote-control-event'
 import type { StructuredMessageSteeringInputs } from '../../../../shared/agent-session/options/codex-message-compiler'
 import type {
   AgentSessionMcpOperation,
@@ -59,7 +60,8 @@ import type {
 
 import type {
   StructuredAgentSessionLiveOptions,
-  StructuredAgentSessionOptionProjection
+  StructuredAgentSessionOptionProjection,
+  StructuredAgentSessionSetOptionInput
 } from '../options/structured-agent-session-option-models'
 
 export type AgentSessionAcquisition = {
@@ -144,6 +146,7 @@ export type StructuredAgentSessionLifecycleEvent =
   | StructuredAgentSessionEndedEvent
   | StructuredAgentSessionOptionsReportedEvent
   | StructuredAgentSessionRetiringEvent
+  | StructuredAgentSessionProviderRemoteControlEvent
 
 /** A logical failure stops input immediately; only a later ended event proves writer death. */
 export type StructuredAgentSessionRetiringEvent = {
@@ -169,15 +172,6 @@ export type StructuredAgentSessionAcquireInput = Pick<
     onSpawned?: (process: AgentSessionProcessIdentity) => Promise<void>
   }
 
-export type StructuredAgentSessionSetOptionInput = {
-  sessionId: string
-  key: string
-  value: string
-  fence: number
-  /** Stop/close/quit aborts cannot wait for hung option writes; self-bounded adapters may ignore the signal. */
-  signal?: AbortSignal
-}
-
 type AdapterControls = StructuredAgentSessionAdapterStop & StructuredAgentSessionAdapterPermission
 
 export type StructuredAgentSessionAdapter = AdapterControls & {
@@ -187,6 +181,9 @@ export type StructuredAgentSessionAdapter = AdapterControls & {
     record: AgentSessionRecord,
     operation: AgentSessionMcpOperation
   ): Promise<AgentSessionMcpResult>
+  /** Connects or disconnects the running child's own remote link at once; false when no child runs,
+   *  and its next start follows the saved choice. */
+  setProviderRemoteControl?(sessionId: string, enabled: boolean): boolean
   /** Records the person's approval of one action the agent's automatic review denied; the retry is
    *  still reviewed. False: no running agent to record it. */
   approveAutoReviewDenial?(input: {

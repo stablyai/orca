@@ -21,6 +21,20 @@ export const STRUCTURED_AGENT_SESSION_MCP_COMMAND: SlashCommandSuggestion = {
   orcaOwned: true
 }
 
+/** Orca's Remote Control switch for a Claude chat; Claude's own command refuses there. */
+export const STRUCTURED_AGENT_SESSION_REMOTE_CONTROL_COMMAND: SlashCommandSuggestion = {
+  name: 'remote-control',
+  description: 'Connect or disconnect Remote Control',
+  orcaOwned: true
+}
+
+/** Claude's own short name for /remote-control, listed so typing /rc picks it, not a fuzzy match. */
+export const STRUCTURED_AGENT_SESSION_REMOTE_CONTROL_ALIAS_COMMAND: SlashCommandSuggestion = {
+  name: 'rc',
+  description: 'Short for /remote-control',
+  orcaOwned: true
+}
+
 /** Session options remain available on hosts predating conversation commands. */
 export const STRUCTURED_AGENT_SESSION_SLASH_COMMANDS: readonly SlashCommandSuggestion[] = [
   { name: 'model', description: 'Choose the model' },
@@ -59,7 +73,8 @@ export function structuredSessionSlashCommands(
   reported: readonly AgentSessionSlashCommand[] | undefined,
   compactInstructions?: boolean,
   interactionModeSupported = false,
-  mcpPanel = false
+  mcpPanel = false,
+  remoteControl = false
 ): readonly SlashCommandSuggestion[] {
   const modeCommands: SlashCommandSuggestion[] = interactionModeSupported
     ? [
@@ -69,7 +84,16 @@ export function structuredSessionSlashCommands(
           : [])
       ]
     : []
-  const orcaOwned = [...modeCommands, ...(mcpPanel ? [STRUCTURED_AGENT_SESSION_MCP_COMMAND] : [])]
+  const orcaOwned = [
+    ...modeCommands,
+    ...(mcpPanel ? [STRUCTURED_AGENT_SESSION_MCP_COMMAND] : []),
+    ...(agent === 'claude' && remoteControl
+      ? [
+          STRUCTURED_AGENT_SESSION_REMOTE_CONTROL_COMMAND,
+          STRUCTURED_AGENT_SESSION_REMOTE_CONTROL_ALIAS_COMMAND
+        ]
+      : [])
+  ]
   const hostOwned = [
     ...orcaOwned,
     ...structuredSlashCommands(conversationCommands, agent, compactInstructions).filter(

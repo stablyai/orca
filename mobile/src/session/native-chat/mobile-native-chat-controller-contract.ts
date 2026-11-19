@@ -1,3 +1,4 @@
+import type { MobileStructuredRemoteControl } from './remote-control/use-mobile-structured-remote-control'
 import type { NativeChatSkillDiscoverySnapshot } from '../../../../src/shared/native-chat/input/composer/native-chat-picker-items'
 import type { AgentSessionRewindSurface } from '../../../../src/shared/agent-session/lifecycle/rewind/agent-session-rewind-request'
 import type { NativeChatSendFollowUp } from '../../../../src/shared/native-chat/input/composer/native-chat-follow-up-behavior'
@@ -108,6 +109,8 @@ export type MobileNativeChatController = {
   nativeChatInterruptedContinue: MobileStructuredInterruptedContinue | null
   nativeChatThreadGoal: MobileStructuredThreadGoal | null
   nativeChatMcpPanel: MobileStructuredMcpPanel | null
+  /** Null unless the host saves a Claude chat's Remote Control choice. */
+  nativeChatRemoteControl: MobileStructuredRemoteControl | null
   nativeChatAccountUsage: MobileStructuredAccountUsage | null
   nativeChatRewind: AgentSessionRewindSurface | undefined
   nativeChatFilePaths: string[]

@@ -29,6 +29,7 @@ export function useNativeChatComposerCatalog(
     structuredTransport?.optionSnapshot.some((entry) => entry.id === 'interactionMode') === true
   const accountUsage = structuredTransport?.accountUsage !== undefined
   const mcpPanel = structuredTransport?.mcpPanel !== undefined
+  const remoteControl = structuredTransport?.remoteControl === true
   const fork = structuredTransport?.fork !== undefined
   const sideChat = structuredTransport?.sideChat !== undefined
   const sideChatNotReady = structuredTransport?.sideChat?.notReadyReason ?? null
@@ -43,7 +44,8 @@ export function useNativeChatComposerCatalog(
         reported,
         compactInstructions,
         interactionModeSupported,
-        mcpPanel
+        mcpPanel,
+        remoteControl
       ),
       accountUsage,
       fork
@@ -60,7 +62,8 @@ export function useNativeChatComposerCatalog(
     reported,
     structured,
     interactionModeSupported,
-    mcpPanel
+    mcpPanel,
+    remoteControl
   ])
   const sessionSkills = useMemo(() => nativeChatSessionSkills(agent, reported), [agent, reported])
   return { agentCommands, sessionSkills }

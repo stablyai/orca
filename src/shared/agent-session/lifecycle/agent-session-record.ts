@@ -14,6 +14,7 @@ import {
 /** Identity pins location, provider and account home independently of terminal tabs; the lease separately grants one process writer authority. */
 
 import type { AgentSessionLastTurn } from './records/agent-session-last-turn'
+import type { AgentSessionProviderRemoteControlChoice } from '../remote-control/agent-session-provider-remote-control'
 import type { AgentSessionForkedFrom } from './records/agent-session-forked-from'
 export type { AgentSessionForkedFrom }
 import type { ExecutionHostId } from '../../execution-host/execution-host'
@@ -128,6 +129,9 @@ export type AgentSessionRecord = {
   /** The newest async question row the person skipped; it and every earlier question stop
    *  waiting on them, on every device. A malformed one is dropped on read. */
   asyncQuestionsSkippedThrough?: string
+  /** The person's Remote Control choice for this chat, replayed whenever its provider starts.
+   *  Absent follows the global setting; a malformed one is dropped on read. */
+  providerRemoteControl?: AgentSessionProviderRemoteControlChoice
   rewind?: AgentSessionRewindRecord
   conversationCommand?: AgentSessionConversationCommandRecord
   /** The conversation's one name: Orca's automatic name or the user's rename. Session History,

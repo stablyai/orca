@@ -271,6 +271,13 @@ orca chat rename --name "Migrate auth"
 
 Renames a chat tab, the same as renaming it by hand. `--session` takes the `sessionId` that `orca agent launch` prints. Run inside a chat, it defaults to that chat; with `--environment` it is required.
 
+```bash
+orca chat remote-control on
+orca chat remote-control status --session <sessionId> --json
+```
+
+Turns a Claude chat's Remote Control on or off, or shows it. A chat with Remote Control on also appears in the Claude app and on claude.ai, where it can be followed and answered. `on` and `off` are saved on the chat, and a running chat connects or disconnects at once; `status`, the default, only reads. `--session` works as it does for `chat rename`.
+
 ## Files
 
 ```bash
