@@ -55,15 +55,22 @@ function settle(
 }
 
 describe('decideTitlebarChromeFold', () => {
-  it('settles in one step and never flips while the pane width is stationary', () => {
+  it('folds one level per reading and never flips while the pane width is stationary', () => {
     expect(settle(550)).toEqual([0, 0, 0, 0, 0, 0])
     expect(settle(549)).toEqual([1, 1, 1, 1, 1, 1])
     expect(settle(344)).toEqual([1, 1, 1, 1, 1, 1])
-    expect(settle(343)).toEqual([2, 2, 2, 2, 2, 2])
+    expect(settle(343)).toEqual([1, 2, 2, 2, 2, 2])
     for (let row = 250; row <= 700; row++) {
       const levels = settle(row)
-      expect(new Set(levels).size, `row ${row}`).toBe(1)
+      expect(new Set(levels.slice(1)).size, `row ${row}`).toBe(1)
+      expect(levels[1]! >= levels[0]!, `row ${row}`).toBe(true)
     }
+  })
+
+  it('measures step 1 on the way to step 2, so widening can unfold to step 1', () => {
+    const cache: Partial<Record<0 | 1 | 2, number>> = {}
+    expect(settle(330, 0, cache).at(-1)).toBe(2)
+    expect(settle(400, 2, cache)).toEqual([1, 1, 1, 1, 1, 1])
   })
 
   it('unfolds from a measured level only past the hysteresis', () => {

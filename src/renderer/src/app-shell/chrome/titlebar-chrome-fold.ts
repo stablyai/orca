@@ -34,6 +34,7 @@ export function resolveTitlebarChromeFoldLevel({
  * Fold decision from live measurements. Deeper levels are measured from the header's visible
  * foldable parts; shallower ones only from a cached measurement taken at that level. With no
  * measurement the level holds (no estimates), so the header can't oscillate on a guess.
+ * Folding moves one level per reading; unfolding may jump, since shallower levels were measured.
  */
 export function decideTitlebarChromeFold({
   previous,
@@ -60,11 +61,13 @@ export function decideTitlebarChromeFold({
     const cached = cachedHeaderWidths[level]
     return cached === undefined ? Number.NEGATIVE_INFINITY : stripWidth + headerWidth - cached
   }
-  return resolveTitlebarChromeFoldLevel({
+  const next = resolveTitlebarChromeFoldLevel({
     previous: hysteresisFrom,
     stripWidthAtLevel0: stripWidthAt(0),
     stripWidthAtLevel1: stripWidthAt(1)
   })
+  // Fold one level per reading, so every level is measured on the way down and can unfold later.
+  return next > previous + 1 ? 1 : next
 }
 
 // Layout-only state with one writer (the app shell's observer); not persisted, so not a store slice.

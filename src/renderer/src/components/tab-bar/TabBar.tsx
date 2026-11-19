@@ -22,6 +22,7 @@ import type { ClientHostedBrowserRow } from '../../../../shared/browser/client-h
 
 const EMPTY_ROWS: readonly ClientHostedBrowserRow[] = []
 const NO_TERMINAL_TABS: readonly TerminalTab[] = []
+const NO_IDS: readonly string[] = []
 
 function TabBarInner(props: TabBarProps): React.JSX.Element {
   const t = useTranslate()
@@ -156,7 +157,16 @@ function TabBarInner(props: TabBarProps): React.JSX.Element {
           ),
     [condense.hiddenIds, itemProjection.orderedItems]
   )
-  const attentionIds = useTerminalTabAttentionIds(attentionTerminalTabs)
+  const attentionChatTabIds = useMemo(
+    () =>
+      condense.hiddenIds.size === 0
+        ? NO_IDS
+        : itemProjection.orderedItems.flatMap((item) =>
+            item.type === 'agent-session' ? [item.id] : []
+          ),
+    [condense.hiddenIds, itemProjection.orderedItems]
+  )
+  const attentionIds = useTerminalTabAttentionIds(attentionTerminalTabs, attentionChatTabIds)
   const attachFileDropOwner = useEditorGroupFileDropOwner({ worktreeId, groupId })
   const { clearPendingNewTabMenuFocusOnUnmount } = createMenu
   const { setSurface } = condense
