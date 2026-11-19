@@ -28828,7 +28828,7 @@
       "loading": "Loading chats…",
       "readFailed": "Couldn't read this bot's chats.",
       "unsupported": "This bot's computer runs an older Orca that can't list chats.",
-      "seeItems": "See its work in Items"
+      "seeItems": "See its work in Home"
     },
     "working": {
       "title": "Working on",
@@ -28872,7 +28872,7 @@
       "copyPath": "Copy path",
       "topicFiles": "Topic files",
       "schedule": "Schedule",
-      "automationsFoot": "Automations are in Items › Automations.",
+      "automationsFoot": "Automations are in Home › Automations.",
       "soulAndMemory": "Soul and memory",
       "access": "Access",
       "whoCanAsk": "Who can ask",
@@ -28885,7 +28885,7 @@
       "deleteBot": "Delete bot…",
       "openAsFile": "Open as file",
       "backToSettings": "Back to Settings",
-      "backToItems": "Back to Items",
+      "backToItems": "Back to Home",
       "backToBots": "Back to Bots",
       "crumb": "Bot settings",
       "sharing": "Sharing",
@@ -29062,7 +29062,7 @@
         "planned": "Planned",
         "working": "In progress"
       },
-      "tab": "Items",
+      "tab": "Home",
       "view": {
         "activity": "Activity",
         "canceledNote": "Canceled:",

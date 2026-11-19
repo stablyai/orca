@@ -115,7 +115,7 @@ export function BotItemPaneFrame({
       <div className="flex items-center gap-1 px-1.5 pb-1 text-xs text-muted-foreground">
         <Button variant="ghost" size="xs" onClick={onBack}>
           <ArrowLeft />
-          {t('bots.items.tab', 'Items')}
+          {t('bots.items.tab', 'Home')}
         </Button>
         {owner ? (
           <span className="flex min-w-0 items-center gap-1.5 px-1 text-foreground">
