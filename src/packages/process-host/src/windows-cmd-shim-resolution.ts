@@ -144,9 +144,25 @@ function readParsedShim(program: string): ParsedWindowsCmdShim | null {
 }
 
 /** Win32 resolves environment names case-insensitively; a JS object does not. */
-function firstEnvKey(env: NodeJS.ProcessEnv, name: string): string | undefined {
+function firstEnvKey(
+  env: NodeJS.ProcessEnv,
+  name: string,
+  accepts: (value: string | undefined) => boolean = (value) => value !== undefined
+): string | undefined {
   const lower = name.toLowerCase()
-  return Object.keys(env).find((key) => key.toLowerCase() === lower && env[key] !== undefined)
+  return Object.keys(env).find((key) => key.toLowerCase() === lower && accepts(env[key]))
+}
+
+/** First non-blank value for any spelling of the name; cmd has no empty variables. */
+export function readWindowsEnv(env: NodeJS.ProcessEnv, ...names: string[]): string | undefined {
+  for (const name of names) {
+    const key = firstEnvKey(env, name, (value) => !!value?.trim())
+    const value = key ? env[key] : undefined
+    if (value !== undefined) {
+      return value.trim()
+    }
+  }
+  return undefined
 }
 
 // Preserve cmd PATHEXT order: node.com outranks node.exe.
