@@ -137,10 +137,11 @@ export class BrowserCertificateRequestGuard {
    * Requests that started before the guard listened keep their route through redirects, so a
    * session's first grant ends them before the reload lets Chromium cache this trust.
    */
-  async settleGrant(session: Session): Promise<void> {
+  async settleGrant(session: Session, reload: () => Promise<void> | undefined): Promise<void> {
     if (this.unsettledFirstGrants.delete(session)) {
       await Promise.resolve(session.closeAllConnections?.()).catch(() => {})
     }
+    await reload()?.catch(() => {})
   }
 
   canOfferCertificate(session: Session, identity: CertificateIdentity): boolean {
