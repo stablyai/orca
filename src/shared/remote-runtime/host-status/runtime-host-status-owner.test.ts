@@ -176,3 +176,17 @@ it('answers background refreshes of a failing host from its backoff until a forc
   await owner.refresh({ force: true })
   expect(request).toHaveBeenCalledTimes(2)
 })
+
+it('lengthens the backoff for a verified host whose transport is down while a caller keeps polling', async () => {
+  const { owner, request } = createOwner(true)
+  owner.connectionChanged('ready')
+  await owner.refresh()
+  owner.connectionChanged('disconnected')
+  request.mockResolvedValue(runtimeHostStatusFailure('runtime_unavailable', 'host down'))
+  for (let tick = 0; tick < 12; tick += 1) {
+    await owner.refresh()
+    await vi.advanceTimersByTimeAsync(5_000)
+  }
+  // Probes at 0, 5, 15 and 30 s (backoff 3, 6, 12, 30 s) after the first verification.
+  expect(request).toHaveBeenCalledTimes(5)
+})
