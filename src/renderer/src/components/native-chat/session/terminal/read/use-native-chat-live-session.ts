@@ -1,5 +1,6 @@
 import { useNativeChatOlderHistory } from '../../../viewport/history/use-native-chat-older-history'
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useNativeChatHistoryTrim } from '../../../viewport/history/use-native-chat-history-trim'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import {
   NATIVE_CHAT_SOURCE_PRIORITY,
   type NativeChatMessage
@@ -13,7 +14,8 @@ import {
 import { mergeNativeChatLiveSession } from '../../../../../../../shared/native-chat/transcript/streaming/native-chat-live-status'
 import {
   hasMoreNativeChatHistory,
-  NATIVE_CHAT_INITIAL_LIMIT
+  NATIVE_CHAT_INITIAL_LIMIT,
+  withHeldOlderHistory
 } from '../../../viewport/history/native-chat-pagination'
 import type {
   NativeChatLiveSession,
@@ -51,6 +53,7 @@ export function useNativeChatLiveSession(
     [runtimeEnvironmentId]
   )
   const [read, setRead] = useState<ReadState>({ phase: 'loading' })
+  const heldRef = useRef(read)
   const [hasMore, setHasMore] = useState(false)
   const [loadingEarlier, setLoadingEarlier] = useState(false)
   const [olderHistoryGeneration, setOlderHistoryGeneration] = useState(0)
@@ -129,7 +132,9 @@ export function useNativeChatLiveSession(
     if (sourceChanged) {
       limitRef.current = NATIVE_CHAT_INITIAL_LIMIT
     }
-    setRead({ phase: 'loading' })
+    // Frames can land before this commit; never join them to another source's rows.
+    heldRef.current = { phase: 'loading' }
+    setRead(heldRef.current)
     replaceList(appendMergerRef.current, [])
     setAppended([])
     setHasMore(false)
@@ -212,8 +217,13 @@ export function useNativeChatLiveSession(
           const messages = boundNativeChatWindow(frame.messages, limitRef.current)
           replaceList(appendMergerRef.current, messages)
           setAppended([])
-          setRead({ phase: 'ready', messages: appendMergerRef.current.list })
-          setHasMore(frame.hasMore || messages !== frame.messages)
+          // A reread of the latest window keeps paged-in history instead of shrinking the reader's view.
+          const base = withHeldOlderHistory(agent, heldRef.current, messages)
+          heldRef.current = { phase: 'ready', messages: base }
+          setRead(heldRef.current)
+          setHasMore((more) =>
+            base === messages ? frame.hasMore || messages !== frame.messages : more
+          )
           return
         }
         transcriptLifecycleControl.append(frame.lifecycle)
@@ -236,6 +246,7 @@ export function useNativeChatLiveSession(
     transport,
     hasMore,
     read,
+    heldRef,
     liveTailRef: appendMergerRef,
     olderHistoryGeneration,
     transcriptLifecycleControl,
@@ -249,43 +260,22 @@ export function useNativeChatLiveSession(
     setHasMore
   })
 
-  const trimHistory = useCallback(() => {
-    if (
-      !latestEnabled.current ||
-      latestSessionId.current !== sessionId ||
-      latestTransport.current !== transport
-    ) {
-      return
-    }
-    limitRef.current = NATIVE_CHAT_INITIAL_LIMIT
-    // Retire pagination without closing the independently owned live stream.
-    transcriptEpochRef.current += 1
-    setOlderHistoryGeneration(transcriptEpochRef.current)
-    setLoadingEarlier(false)
-    const merger = appendMergerRef.current
-    const bounded = boundNativeChatWindow(merger.list, NATIVE_CHAT_INITIAL_LIMIT)
-    const trimmedAppend = bounded !== merger.list
-    setRead((current) => {
-      if (current.phase !== 'ready') {
-        return current
-      }
-      // Evict the base too when the append prefix is gone, keeping one contiguous suffix.
-      const messages = trimmedAppend
-        ? []
-        : boundNativeChatWindow(current.messages, NATIVE_CHAT_INITIAL_LIMIT)
-      return messages === current.messages ? current : { ...current, messages }
-    })
-    if (trimmedAppend) {
-      replaceList(merger, bounded)
-      setAppended(merger.list)
-    }
-    if (
-      (read.phase === 'ready' && read.messages.length > NATIVE_CHAT_INITIAL_LIMIT) ||
-      trimmedAppend
-    ) {
-      setHasMore(true)
-    }
-  }, [read, sessionId, transport])
+  const trimHistory = useNativeChatHistoryTrim({
+    sessionId,
+    transport,
+    read,
+    appendMergerRef,
+    limitRef,
+    latestEnabled,
+    latestSessionId,
+    latestTransport,
+    transcriptEpochRef,
+    setOlderHistoryGeneration,
+    setLoadingEarlier,
+    setRead,
+    setAppended,
+    setHasMore
+  })
 
   // Keep status-only hook updates from rerunning the assembler.
   const baseMessages = read.phase === 'ready' ? read.messages : EMPTY_MESSAGES

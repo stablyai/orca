@@ -1,6 +1,7 @@
 import type { AgentType } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import { resolveNativeChatTranscriptAgent } from '../../../../../../shared/native-chat/native-chat-agent-support'
 import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
+import type { ReadState } from '../../session/terminal/read/native-chat-live-session-contract'
 
 export const NATIVE_CHAT_INITIAL_LIMIT = 300
 export const NATIVE_CHAT_PAGE = 200
@@ -32,6 +33,24 @@ export function nativeChatHistoryCursor(
   }
   const cursor = message.transcriptOrder
   return Number.isSafeInteger(cursor) && cursor! >= 0 ? cursor : undefined
+}
+
+/** A re-sent latest window keeps the held older rows when its first row is held at the same transcript position. */
+export function withHeldOlderHistory(
+  agent: AgentType,
+  held: ReadState,
+  window: NativeChatMessage[]
+): NativeChatMessage[] {
+  const first = window[0]
+  const cursor = nativeChatHistoryCursor(agent, first)
+  if (cursor === undefined || held.phase !== 'ready') {
+    return window
+  }
+  const at = held.messages.findIndex((message) => message.id === first!.id)
+  if (at <= 0 || nativeChatHistoryCursor(agent, held.messages[at]) !== cursor) {
+    return window
+  }
+  return [...held.messages.slice(0, at), ...window]
 }
 
 /** A bounded live tail that starts after the held window's last row hides a gap only a full reread repairs. */
