@@ -27,6 +27,8 @@ export type JournalStatusItemSelection =
   | { kind: 'assistant-exists' }
   | { kind: 'prompt' }
   | { kind: 'pending-prompts'; floor?: number }
+  /** The newest approval or question row, whatever its state. */
+  | { kind: 'latest-prompt-row'; floor?: number }
   | { kind: 'scoped-statuses'; turnItemId: string; floor?: number }
   | { kind: 'tools'; after: JournalStatusPosition; running?: true }
 

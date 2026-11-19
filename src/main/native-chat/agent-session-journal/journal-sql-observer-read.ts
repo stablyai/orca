@@ -3,10 +3,29 @@ import { withStructuredAgentSessionDiedTurnVerdict } from '../agent-session-wire
 import type { JournalSqlStatusContext } from './journal-sql-status-context'
 import type { JournalObserverRead, JournalObserverResult } from './journal-observer-read'
 import { readJournalSqlStatusState } from './journal-sql-status-state'
+import { readJournalSqlRestoredPrompt } from './journal-sql-status-restored-prompt'
 import { readJournalSqlStatusIndicators } from './journal-sql-status-indicators'
 import { readJournalSqlUsageLimitCut, readJournalSqlOrcaStopCut } from './journal-sql-status-cuts'
 import { readJournalSqlGoalRows } from './journal-sql-item-reads'
 import { agentSessionThreadGoalStartsTurns } from '../../../shared/agent-session/thread-goals/agent-session-thread-goal'
+
+/** A chat whose agent exited on a prompt still waits on the person, so it reads as needing them.
+ *  Its prompt is not live, so it raises no prompt edge; answering it resumes the chat. */
+function withRestoredPromptAttention(
+  context: JournalSqlStatusContext,
+  liveFence: number | null,
+  state: JournalObserverResult['state']
+): JournalObserverResult['state'] {
+  if (liveFence !== null || state.summary.status !== 'idle') {
+    return state
+  }
+  const restored = readJournalSqlRestoredPrompt(context, context.contextFloor())
+  if (!restored) {
+    return state
+  }
+  const { turnOutcome: _cut, ...summary } = state.summary
+  return { ...state, summary: { ...summary, status: 'attention', statusStartedAt: restored.observedAt } }
+}
 
 /** Status, cuts and current work share one ready snapshot and one captured live authority. */
 export function readJournalSqlObserver(
@@ -15,14 +34,18 @@ export function readJournalSqlObserver(
 ): JournalObserverResult {
   const { authority } = input
   const work = readJournalSqlCurrentWork(context, authority)
-  const state = withStructuredAgentSessionDiedTurnVerdict(
-    readJournalSqlStatusState(
-      context,
-      authority.record?.currentFence,
-      work.scope,
-      input.botSession === true
-    ),
-    work.diedTurn()
+  const state = withRestoredPromptAttention(
+    context,
+    work.liveFence,
+    withStructuredAgentSessionDiedTurnVerdict(
+      readJournalSqlStatusState(
+        context,
+        authority.record?.currentFence,
+        work.scope,
+        input.botSession === true
+      ),
+      work.diedTurn()
+    )
   )
   // A dead generation starts no next turn, so its active goal cannot hold completion.
   const goalContinues =

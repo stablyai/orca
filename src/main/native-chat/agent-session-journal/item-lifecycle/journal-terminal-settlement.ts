@@ -13,6 +13,7 @@ import {
 } from '../../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import { cancelledJournalPromptBody } from './journal-prompt-body-bounds'
 import { endedJournalReasoning } from './journal-reasoning-row'
+import { AGENT_EXIT_PROMPT_ENDING } from '../../../../shared/agent-session/requests/prompts/agent-session-restored-prompt'
 
 /** Unsettled lifecycle rows must not be shed under pressure. */
 export function requiresTerminalSettlement(body: AgentJournalItemBody): boolean {
@@ -43,7 +44,10 @@ export function terminalAgentJournalBody(
     return body.state === 'running' && end ? endedRunningAgentJournalToolCall(body, end) : null
   }
   if (body.kind === 'approval' || body.kind === 'question') {
-    return body.resolution.state === 'pending' ? cancelledJournalPromptBody(body) : null
+    // Only a dead agent reaches here: its prompt can still be answered by resuming the chat.
+    return body.resolution.state === 'pending'
+      ? cancelledJournalPromptBody(body, AGENT_EXIT_PROMPT_ENDING)
+      : null
   }
   return null
 }

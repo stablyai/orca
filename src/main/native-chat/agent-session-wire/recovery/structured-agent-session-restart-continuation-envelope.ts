@@ -5,13 +5,16 @@ import { restartContinuationMessage } from '../../../../shared/agent-session/lif
 import type { AgentSessionResumeMarker } from '../../../../shared/agent-session/lifecycle/resume/agent-session-resume-marker'
 import type { AgentSessionMutationEnvelope } from '../../../../shared/agent-session/agent-session-wire'
 
-export function restartContinuationBody(
-  marker: Pick<AgentSessionResumeMarker, 'activity'>
-): AgentJournalMessageItem {
+/** What the continuation says: a restart offer's own wording, or a restored prompt's answer. */
+export type RestartContinuationWording = Pick<AgentSessionResumeMarker, 'activity'> & {
+  message?: string
+}
+
+export function restartContinuationBody(marker: RestartContinuationWording): AgentJournalMessageItem {
   return {
     kind: 'message',
     role: 'user',
-    blocks: [{ type: 'text', text: restartContinuationMessage(marker) }]
+    blocks: [{ type: 'text', text: marker.message ?? restartContinuationMessage(marker) }]
   }
 }
 
@@ -52,7 +55,7 @@ export function isRestartContinuationOf(
 export function restartContinuationEnvelope(
   sessionId: string,
   fence: number,
-  marker: Pick<AgentSessionResumeMarker, 'activity'>,
+  marker: RestartContinuationWording,
   continuationId: string
 ): { envelope: AgentSessionMutationEnvelope; body: AgentJournalMessageItem } {
   const body = restartContinuationBody(marker)

@@ -28,14 +28,19 @@ import {
 
 import { isAgentChatPermissionMode } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 
+/** `waiting`: Orca stopped while the agent asked the person something, which they can still answer. */
 export function savedStructuredAgentSessionStatus(
   record: AgentSessionConversationView,
-  markerAt?: number
+  markerAt?: number,
+  waiting = false
 ): AgentSessionStatusSummary {
   const turn = record.lastTurn
-  const at = turn?.at ?? markerAt
-  const outcome =
-    turn?.state === 'open' || (!turn && markerAt !== undefined) ? 'cancellation' : turn?.outcome
+  const at = waiting ? markerAt : (turn?.at ?? markerAt)
+  const outcome = waiting
+    ? undefined
+    : turn?.state === 'open' || (!turn && markerAt !== undefined)
+      ? 'cancellation'
+      : turn?.outcome
   const model = normalizeOptionalField(record.options?.model, AGENT_MODEL_MAX_LENGTH)
   const interactionMode = record.options?.interactionMode
   const launchDirectory = agentSessionPinnedLaunchDirectory(record)
@@ -43,7 +48,7 @@ export function savedStructuredAgentSessionStatus(
     sessionId: record.sessionId,
     workspaceId: record.location.workspaceId,
     agent: record.provider,
-    status: turn || markerAt !== undefined ? 'idle' : null,
+    status: waiting ? 'attention' : turn || markerAt !== undefined ? 'idle' : null,
     latestPrompt: turn?.prompt ?? '',
     runtimePermission: null,
     ...(turn?.reply ? { lastAssistantMessage: turn.reply } : {}),
@@ -139,7 +144,8 @@ export class StructuredAgentSessionSavedStatus {
 
 export type SavedStructuredStatusPublisher = (
   record: AgentSessionConversationView,
-  markerAt?: number
+  markerAt?: number,
+  waiting?: boolean
 ) => void
 export type SavedStructuredStatusGroup = (
   visit: (publish: SavedStructuredStatusPublisher) => void
@@ -158,13 +164,14 @@ export function createSavedStructuredStatusGroup(
 ): SavedStructuredStatusGroup {
   const publish = (
     record: AgentSessionConversationView,
-    markerAt?: number,
+    markerAt: number | undefined,
+    waiting: boolean | undefined,
     publisher?: StructuredAgentSessionStatusPublisher
   ): void => {
     if (isOpen(record.sessionId) || published.has(record.sessionId)) {
       return
     }
-    const summary = savedStructuredAgentSessionStatus(record, markerAt)
+    const summary = savedStructuredAgentSessionStatus(record, markerAt, waiting)
     published.set(record.sessionId, { summary, firstInputSubmissionKey: null })
     if (summary.status !== null) {
       sink(summary, record.location, publisher)
@@ -174,7 +181,7 @@ export function createSavedStructuredStatusGroup(
   return (visit) => {
     const sink = readSink()
     const run = (publisher?: StructuredAgentSessionStatusPublisher): void =>
-      visit((record, markerAt) => publish(record, markerAt, publisher))
+      visit((record, markerAt, waiting) => publish(record, markerAt, waiting, publisher))
     if (sink?.withSavedStatusGroup) {
       sink.withSavedStatusGroup(run)
     } else {
@@ -197,12 +204,19 @@ export async function seedSavedStructuredSessionTabs(
   const targets = ids ?? deps.store.listVisibleSessionIds()
   await recover(targets)
   const markers = new Map<string, number>()
+  const waiting = new Set<string>()
   try {
     const capsule = deps.recoveryCapsule
     const now = deps.now?.() ?? Date.now()
     const [pending, failed] = await Promise.all([capsule?.list(now), capsule?.listFailed(now)])
     for (const marker of [...(pending ?? []), ...(failed ?? []).map((entry) => entry.marker)]) {
       markers.set(marker.sessionId, marker.recordedAt)
+    }
+    // An unanswered offer whose agent was asking the person: its card can still be answered.
+    for (const marker of pending ?? []) {
+      if ((marker.activity?.prompts.length ?? 0) > 0) {
+        waiting.add(marker.sessionId)
+      }
     }
   } catch (error) {
     deps.logger.warn('reading saved chat recovery status failed', { scope: 'saved-status', error })
@@ -211,7 +225,7 @@ export async function seedSavedStructuredSessionTabs(
     for (const id of targets) {
       const record = deps.store.getConversation(id)
       if (record && deps.store.isSessionTabVisible(id)) {
-        publish(record, markers.get(id))
+        publish(record, markers.get(id), waiting.has(id))
       }
     }
   })

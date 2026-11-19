@@ -97,6 +97,10 @@ export function* sqlJournalStatusItems(
       predicates.push("kind IN ('approval','question') AND lifecycle_state='pending'")
       ascending = true
       break
+    case 'latest-prompt-row':
+      predicates.push("kind IN ('approval','question')")
+      single = true
+      break
     case 'scoped-statuses':
       predicates.push("kind='status' AND turn_item_id=?")
       params.push(selection.turnItemId)

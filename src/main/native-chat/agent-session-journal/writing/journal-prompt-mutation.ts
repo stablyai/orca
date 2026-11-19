@@ -13,6 +13,7 @@ import type { JournalReducerState } from '../projection/journal-reducer'
 import { readJournalInputItem } from '../input-order/journal-input-obligations'
 import { journalContextCursor } from '../context-epochs/journal-context-epoch'
 import { journalItemRowBuilder } from './journal-row-builders'
+import { isAgentExitPromptBody } from '../../../../shared/agent-session/requests/prompts/agent-session-restored-prompt'
 import type { JournalRowWriter, JournalOperationReceipt } from './journal-row-writer'
 
 export type PendingPromptBody = Extract<AgentJournalItemBody, { kind: 'approval' | 'question' }>
@@ -34,6 +35,7 @@ export function validateJournalPendingPrompt(
     itemId: string
     expectedRevision: number
     kind?: 'approval' | 'question'
+    restored?: true
   }
 ): PendingPromptValidation {
   if (!item) {
@@ -55,7 +57,7 @@ export function validateJournalPendingPrompt(
       )
     }
   }
-  if (prompt.resolution.state !== 'pending') {
+  if (input.restored ? !isAgentExitPromptBody(prompt) : prompt.resolution.state !== 'pending') {
     return {
       ok: false,
       refusal: refuse(

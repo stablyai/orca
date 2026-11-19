@@ -14,7 +14,8 @@ import {
 import {
   CODEX_COMMAND_APPROVAL_METHOD,
   CODEX_FILE_CHANGE_APPROVAL_METHOD,
-  CODEX_MCP_ELICITATION_METHOD
+  CODEX_MCP_ELICITATION_METHOD,
+  CODEX_USER_INPUT_METHOD
 } from './codex-prompt-registry'
 import {
   codexJournalPromptIdPart,
@@ -22,6 +23,7 @@ import {
 } from './codex-prompt-registry-bounds'
 import { codexMcpToolApprovalDecisions } from './codex-mcp-tool-approval'
 import { codexFileChangeApprovalDetail } from './codex-file-change-approval-detail'
+import { journalPromptRequestDigest } from '../../../native-chat/agent-session-journal/item-lifecycle/journal-prompt-request-digest'
 
 const APPROVAL_DECISION_LABELS: Record<CodexApprovalDecision, string> = {
   accept: 'Allow',
@@ -83,6 +85,34 @@ export function codexApprovalOptions(params: unknown): AgentJournalPromptOption[
   return decisions.map(codexApprovalOption)
 }
 
+// Transport identity and the model's own wording: they change when the same request is re-asked.
+const UNHASHED_REQUEST_KEYS = new Set([
+  'threadId',
+  'turnId',
+  'itemId',
+  'approvalId',
+  'callId',
+  'reason',
+  'availableDecisions'
+])
+
+/** A request without its full subject (a file change whose diff lives on its item) gets none. */
+function codexRequestDigest(
+  method: string,
+  params: Record<string, unknown>
+): { requestDigest?: string } {
+  if (
+    (method === CODEX_COMMAND_APPROVAL_METHOD && params.command === undefined) ||
+    (method === CODEX_FILE_CHANGE_APPROVAL_METHOD && params.changes === undefined)
+  ) {
+    return {}
+  }
+  const request = Object.fromEntries(
+    Object.entries(params).filter(([key]) => !UNHASHED_REQUEST_KEYS.has(key))
+  )
+  return { requestDigest: journalPromptRequestDigest('codex', { method, request }) }
+}
+
 export function codexApprovalItem(input: {
   method: string
   params: unknown
@@ -105,6 +135,7 @@ export function codexApprovalItem(input: {
         codexFileChangeApprovalDetail(params.changes) ?? input.detail
       ),
       options: codexApprovalOptions(input.params),
+      ...codexRequestDigest(input.method, params),
       resolution: { ...PENDING }
     }
   }
@@ -114,6 +145,7 @@ export function codexApprovalItem(input: {
       input.method === CODEX_COMMAND_APPROVAL_METHOD ? 'Run a command?' : 'Approve this action?',
     detail: boundNullablePromptText(approvalDetail(params) ?? input.detail),
     options: codexApprovalOptions(input.params),
+    ...codexRequestDigest(input.method, params),
     resolution: { ...PENDING }
   }
 }
@@ -131,6 +163,7 @@ function codexMcpToolApprovalItem(params: Record<string, unknown>): AgentJournal
       // MCP cancel refuses this one call; the turn continues.
       intent: decision === 'cancel' ? 'reject_once' : APPROVAL_DECISION_INTENTS[decision]
     })),
+    ...codexRequestDigest(CODEX_MCP_ELICITATION_METHOD, params),
     resolution: { ...PENDING }
   }
 }
@@ -168,6 +201,8 @@ export function codexQuestionItems(input: {
     return []
   }
   const items: CodexQuestionItem[] = []
+  // One digest per row: a single-question request is the only kind a resumed agent's answer can take.
+  const digest = codexRequestDigest(CODEX_USER_INPUT_METHOD, readParams(input.params))
   for (const entry of questions.slice(0, MAX_CODEX_PROMPT_QUESTIONS)) {
     const question = readParams(entry)
     const questionId = readString(question, 'id')
@@ -185,6 +220,7 @@ export function codexQuestionItems(input: {
         ...(questionAllowsFreeText(question)
           ? { freeTextQuestionId: codexJournalPromptIdPart(questionId) }
           : {}),
+        ...(questions.length === 1 ? digest : {}),
         resolution: { ...PENDING }
       }
     })

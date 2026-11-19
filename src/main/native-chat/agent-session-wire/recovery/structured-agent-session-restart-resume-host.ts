@@ -312,6 +312,7 @@ export function createStructuredAgentSessionRestartResume(
       ),
     continueAfterRestart,
     onAgentStarted: withdrawal.onAgentStarted,
-    continueInterrupted: createInterruptedContinuation(continuationHost, readMarkers)
+    continueInterrupted: createInterruptedContinuation(continuationHost, readMarkers),
+    continuationHost
   }
 }

@@ -1,6 +1,9 @@
 import type { AgentSessionResumeTrigger } from '../../../../shared/agent-session/lifecycle/resume/agent-session-resume-marker'
 import type { createInterruptedContinuation } from './structured-agent-session-interrupted-continuation'
-import type { StructuredAgentSessionContinuationOutcome } from './structured-agent-session-restart-continuation'
+import type {
+  StructuredAgentSessionContinuationHost,
+  StructuredAgentSessionContinuationOutcome
+} from './structured-agent-session-restart-continuation'
 import type { StructuredAgentSessionResumeOutcome } from './structured-agent-session-restart-resume-runner'
 import type {
   StructuredAgentSessionRestartAudience,
@@ -40,4 +43,6 @@ export type StructuredAgentSessionRestartResume = {
   onAgentStarted: (sessionId: string) => void
   /** Continue a cut reply with or without an offer. */
   continueInterrupted: ReturnType<typeof createInterruptedContinuation>
+  /** Sends Orca's own continuations, such as a restored prompt's answer. */
+  continuationHost: Omit<StructuredAgentSessionContinuationHost, 'stillResumable'>
 }

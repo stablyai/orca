@@ -8,6 +8,7 @@ import type {
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { isPlanApprovalSubject } from '../../../../shared/agent-session/requests/prompts/agent-session-approval-subject'
 import { boundInlineText, boundPayload } from './journal-payload-bounds'
+import type { AGENT_EXIT_PROMPT_ENDING } from '../../../../shared/agent-session/requests/prompts/agent-session-restored-prompt'
 
 export const MAX_JOURNAL_PROMPT_OPTIONS = 64
 export const MAX_JOURNAL_GROUPED_PROMPT_QUESTIONS = 4
@@ -18,8 +19,10 @@ const JOURNAL_PROMPT_OPTION_PREVIEW_LIMITS = { inlineHeadBytes: 8 * 1024 }
 const JOURNAL_PROMPT_TEXT_LIMITS = { inlineHeadBytes: 128 * 1024 }
 const JOURNAL_PROMPT_ID_MAX_BYTES = 1024
 
+/** `agent_exit` marks a prompt whose agent process ended while it waited; a resumed agent can take its answer. */
 export function cancelledJournalPromptBody(
-  body: AgentJournalItemBody
+  body: AgentJournalItemBody,
+  endedBy?: typeof AGENT_EXIT_PROMPT_ENDING
 ): AgentJournalApprovalItem | AgentJournalQuestionItem | null {
   if (body.kind !== 'approval' && body.kind !== 'question') {
     return null
@@ -31,7 +34,8 @@ export function cancelledJournalPromptBody(
       state: 'cancelled',
       selectedOptionId: null,
       resolvedBy: null,
-      resolvedAt: null
+      resolvedAt: null,
+      ...(endedBy ? { endedBy } : {})
     }
   }
 }

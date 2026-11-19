@@ -139,7 +139,9 @@ const Resolution = z.object({
       z.object({ kind: z.literal('named'), name: z.string() })
     ])
     .optional(),
-  resolvedAt: z.number().nullable()
+  resolvedAt: z.number().nullable(),
+  // Open: an ending a newer build names reads as a plain cancellation.
+  endedBy: z.string().min(1).optional()
 })
 
 const ApprovalMatchedAskRule = z.object({
@@ -220,6 +222,7 @@ const KnownItemBody = z.discriminatedUnion('kind', [
     personOnly: z.literal(true).optional(),
     detail: z.string().nullable(),
     options: z.array(PromptOption),
+    requestDigest: z.string().min(1).optional(),
     resolution: Resolution
   }),
   z.object({
@@ -229,6 +232,7 @@ const KnownItemBody = z.discriminatedUnion('kind', [
     questions: z.array(Question).optional(),
     freeTextQuestionId: z.string().optional(),
     freeTextInput: FreeTextInput.optional(),
+    requestDigest: z.string().min(1).optional(),
     resolution: Resolution
   }),
   z.object({

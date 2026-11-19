@@ -65,6 +65,8 @@ export type JournalPromptMutationInput = {
   kind?: 'approval' | 'question'
   resolution: AgentJournalResolution
   options: JournalItemAppendOptions
+  /** Answer a prompt whose agent exited waiting on it, instead of a pending one. */
+  restored?: true
 }
 
 export type AgentSessionJournalOptions = {

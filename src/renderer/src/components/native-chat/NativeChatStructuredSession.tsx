@@ -16,6 +16,7 @@ import { useStructuredNativeChatSubagents } from './subagents/use-structured-nat
 import { NativeChatContextClearFade } from './conversation/projection/NativeChatContextClearFade'
 import { useStructuredNativeChatSubmitReveal } from './pane/actions/use-structured-native-chat-submit-reveal'
 import { useStructuredPromptResponseHold } from './prompts/use-structured-prompt-response-hold'
+import { useRestoredStructuredPrompt } from './prompts/use-restored-structured-prompt'
 import { nativeChatStructuredAsyncQuestion } from './prompts/NativeChatStructuredAsyncQuestion'
 import {
   selectNativeChatViewState,
@@ -164,7 +165,13 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
     composerRef,
     rewind: controller.rewind.surface
   })
-  const prompt = useBotLinkPrompt(props.sessionId, controller.prompts)
+  const livePrompt = useBotLinkPrompt(props.sessionId, controller.prompts)
+  // A card whose agent exited waiting on it (Orca restarted): answering it resumes the chat.
+  const restored = useRestoredStructuredPrompt(
+    livePrompt === null && hostExecution.phase === null && !controller.isWorking,
+    controller.journalItems
+  )
+  const prompt = livePrompt ?? restored.prompt
   // Unknown prompts leave the composer usable; a send starts a turn whose cancel can resolve them.
   const promptsUnanswerable = pendingPromptsAllUnanswerableHere(controller.prompts)
   // A bot's page whose server is down keeps its last read; the recovery card stands in for the composer.
@@ -182,7 +189,8 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
   const installLayout = viewState.kind === 'empty' ? 'hero' : 'strip'
   const install = useNativeChatInstallSlot(props, agentLabel, installLayout)
   const canMention = composerShown && install.unavailableHint === undefined
-  const cancelPrompt = () => cancelStructuredPrompt(controller, prompt)
+  const cancelPrompt = () =>
+    restored.prompt ? restored.dismiss() : cancelStructuredPrompt(controller, prompt)
   const surface = useNativeChatSurface({
     tabId: props.tabId,
     sessionId: props.sessionId,
@@ -353,7 +361,8 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
             <NativeChatStructuredPromptCard
               key={prompt ? `${prompt.itemId}:${prompt.revision}` : undefined}
               prompt={prompt}
-              promptResponse={promptResponse}
+              promptResponse={restored.prompt ? restored.response(promptResponse) : promptResponse}
+              restored={restored.prompt ? { failed: restored.failed } : undefined}
               onCancel={cancelPrompt}
               shouldFocus={!promptsUnanswerable && props.isVisible && props.isFocusedGroup}
               answerInputRef={questionAnswerInputRef}

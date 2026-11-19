@@ -139,6 +139,8 @@ export type AgentJournalResolution = {
   /** Read-time device description; never written back into the journal. */
   resolvedByDevice?: { kind: 'current' } | { kind: 'named'; name: string }
   resolvedAt: number | null
+  /** `agent_exit`: the agent's process ended while the prompt waited, so a resumed agent can take its answer. */
+  endedBy?: string
 }
 
 export const AGENT_JOURNAL_PROMPT_INTENTS = [
@@ -203,6 +205,8 @@ export type AgentJournalApprovalItem = {
   personOnly?: true
   detail: string | null
   options: AgentJournalPromptOption[]
+  /** Digest of the provider's full request, without request ids; matches the same request re-asked. */
+  requestDigest?: string
   resolution: AgentJournalResolution
 }
 
@@ -214,6 +218,7 @@ export type AgentJournalQuestionItem = {
   /** Present when the provider accepts an answer outside the offered options. */
   freeTextQuestionId?: string
   freeTextInput?: AgentJournalFreeTextInput
+  requestDigest?: string
   resolution: AgentJournalResolution
 }
 

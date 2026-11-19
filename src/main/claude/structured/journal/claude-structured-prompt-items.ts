@@ -15,6 +15,20 @@ import { boundJournalPromptBody } from '../../../native-chat/agent-session-journ
 import { claudeRecord, claudeText } from './claude-structured-item-translation'
 import { encodeClaudeQuestionOptionId } from './claude-structured-prompt-replies'
 import type { ClaudePendingPrompt } from '../permissions/claude-prompt-registry'
+import { journalPromptRequestDigest } from '../../../native-chat/agent-session-journal/item-lifecycle/journal-prompt-request-digest'
+
+/** A subagent's request can't be re-asked by a resumed session, so only the lead's prompts get one. */
+function claudeRequestDigest(prompt: ClaudePendingPrompt): { requestDigest?: string } {
+  return prompt.agentId
+    ? {}
+    : {
+        requestDigest: journalPromptRequestDigest('claude', {
+          kind: prompt.kind,
+          toolName: prompt.toolName,
+          input: prompt.input
+        })
+      }
+}
 
 const APPROVAL_OPTIONS: readonly AgentJournalPromptOption[] = [
   { id: 'allow', label: 'Allow', intent: 'allow_once' },
@@ -63,6 +77,7 @@ export function claudeApprovalItem(prompt: ClaudePendingPrompt): AgentJournalApp
     options: (planSubject ? PLAN_APPROVAL_OPTIONS : APPROVAL_OPTIONS).map((option) => ({
       ...option
     })),
+    ...claudeRequestDigest(prompt),
     resolution: { ...PENDING }
   })
 }
@@ -141,6 +156,7 @@ export function claudeQuestionItems(input: {
         options: legacyCompatible ? first.options : [],
         ...(legacyCompatible ? { freeTextQuestionId: first.freeTextQuestionId } : {}),
         questions,
+        ...claudeRequestDigest(input.prompt),
         resolution: { ...PENDING }
       })
     }

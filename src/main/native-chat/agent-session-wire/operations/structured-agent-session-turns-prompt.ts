@@ -46,7 +46,7 @@ function invalid(
   return { ok: false, refusal: refuse('agent_session_operation_invalid', { reason }, message) }
 }
 
-function readPromptChoice(
+export function readPromptChoice(
   prompt: AgentJournalApprovalItem | AgentJournalQuestionItem,
   input: AgentSessionPromptRequest
 ): { response: AgentSessionPromptResponse; selectedOptionId: string } | null {

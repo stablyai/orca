@@ -29,7 +29,10 @@ import {
   AGENT_SESSION_RESTART_NOT_CONNECTED_NOTE
 } from '../../../../shared/agent-session/lifecycle/stopping/agent-session-restart-continuation'
 import { AgentSessionPreDispatchError } from '../operations/structured-agent-session-operation-settlement'
-import { restartContinuationEnvelope } from './structured-agent-session-restart-continuation-envelope'
+import {
+  restartContinuationEnvelope,
+  type RestartContinuationWording
+} from './structured-agent-session-restart-continuation-envelope'
 import type { AgentSessionResumeMarker } from '../../../../shared/agent-session/lifecycle/resume/agent-session-resume-marker'
 import type { StructuredAgentSessionLogger } from '../host/structured-agent-session-logger'
 import { liftStructuredQueueRestartHold } from '../delivery/structured-agent-session-queued-pause'
@@ -193,7 +196,7 @@ export type StartedStructuredAgentSessionContinuation =
 export async function startStructuredAgentSessionContinuation(
   deps: StructuredAgentSessionContinuationDeps,
   sessionId: string,
-  marker: Pick<AgentSessionResumeMarker, 'activity'>,
+  marker: RestartContinuationWording,
   continuationId: string
 ): Promise<StartedStructuredAgentSessionContinuation> {
   let started: StartedStructuredAgentSessionContinuation
@@ -279,7 +282,7 @@ async function noteNotContinued(
 async function sendContinuation(
   deps: StructuredAgentSessionContinuationDeps,
   sessionId: string,
-  marker: Pick<AgentSessionResumeMarker, 'activity'>,
+  marker: RestartContinuationWording,
   continuationId: string
 ): Promise<StartedStructuredAgentSessionContinuation> {
   const fence = deps.currentFence(sessionId)

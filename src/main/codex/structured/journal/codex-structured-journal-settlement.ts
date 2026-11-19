@@ -16,6 +16,7 @@ import type {
 } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import { cancelledJournalPromptBody } from '../../../native-chat/agent-session-journal/item-lifecycle/journal-prompt-body-bounds'
 import type { CodexTurnOrdinals } from './codex-turn-ordinals'
+import { AGENT_EXIT_PROMPT_ENDING } from '../../../../shared/agent-session/requests/prompts/agent-session-restored-prompt'
 import type { CodexStructuredItemStreams } from '../items/codex-structured-item-stream-contracts'
 import type { CodexStructuredSessionEvent } from '../session-lifecycle/codex-structured-session-state'
 import { codexCommandOutlivesTurn } from '../items/codex-command-lifecycle'
@@ -62,7 +63,7 @@ export function settleCodexJournalSession(input: {
     }
   }
   for (const prompt of input.pendingPrompts.values()) {
-    const body = cancelledJournalPromptBody(prompt.body)
+    const body = cancelledJournalPromptBody(prompt.body, AGENT_EXIT_PROMPT_ENDING)
     if (body) {
       mutations.push(settledRow(input.attributionFor, prompt, body))
     }

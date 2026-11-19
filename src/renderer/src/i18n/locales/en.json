@@ -22287,6 +22287,10 @@
         "questionUnconfirmed": "{{agent}} couldn't confirm the side chat got your question",
         "questionUnconfirmedDetail": "Check the side chat before asking again. Your question is still in this chat."
       },
+      "restoredPrompt": {
+        "note": "Asked before Orca restarted. Answering resumes the chat.",
+        "failed": "Couldn't resume this chat, so your answer wasn't sent. Send a message to continue it."
+      },
       "urlRequest": {
         "title": "Sign-in requested",
         "open": "Open sign-in page",

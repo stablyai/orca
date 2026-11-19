@@ -19,6 +19,7 @@ import { StructuredAgentSessionBackgroundTaskChannel as BackgroundTasks } from '
 import { StructuredAgentSessionClientDelivery } from '../publication/subscribers/structured-agent-session-client-delivery'
 import { createStructuredAgentSessionPublicationWiring } from './structured-agent-session-publication-wiring'
 import * as resume from '../recovery/structured-agent-session-restart-resume-host'
+import { StructuredAgentSessionRestoredPrompts } from '../recovery/structured-agent-session-restored-prompts'
 import type { StructuredAgentSessionRestartResume } from '../recovery/structured-agent-session-restart-resume-contract'
 import { structuredAgentSessionRestartResumeSurfaces } from '../recovery/structured-agent-session-restart-resume-wiring'
 import * as conversation from '../delivery/structured-agent-session-host-delivery'
@@ -228,6 +229,7 @@ export class StructuredAgentSessionHost {
 
   /** Quit stops delivery and queued-card handover. */
   stopDelivery = () => {
+    this.restoredPrompts.dispose()
     this.sessions.endPublications()
     ;[this.conversationDelivery, this.queued.drain].forEach((d) => d.dispose())
     this.usageLimitContinue.dispose()
@@ -276,7 +278,20 @@ export class StructuredAgentSessionHost {
     () => this.attachContext()
   )
   cancel = this.mutations.cancel
-  respondToPrompt = this.mutations.respondToPrompt
+  private readonly restoredPrompts = new StructuredAgentSessionRestoredPrompts({
+    conversation: (sessionId) => this.lifetime.conversation(sessionId),
+    agentRunning: (sessionId) =>
+      (this.sessions.get(sessionId)?.child ?? null) !== null ||
+      this.runtimeState.hasDeliveryWork(sessionId),
+    continuationHost: () => this.restartResume.continuationHost,
+    respond: (caller, params) => this.respondToPrompt(caller, params),
+    subscribeTurnCompletions: (subscriber) => this.clientDelivery.subscribeTurnCompletions(subscriber),
+    resolvedBy: (caller) => caller.callerKey,
+    now: () => this.now()
+  })
+  /** A prompt whose agent exited waiting on it is answered by resuming the chat. */
+  respondToPrompt: typeof this.mutations.respondToPrompt = (caller, params) =>
+    this.restoredPrompts.respond(caller, params, () => this.mutations.respondToPrompt(caller, params))
   approveAutoReviewDenial = this.mutations.approveAutoReviewDenial
   setOption = this.mutations.setOption
   changeThreadGoal = this.mutations.changeThreadGoal

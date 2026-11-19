@@ -5,6 +5,7 @@ import { chatApprovalFromJournal } from '../../../../../shared/native-chat/input
 import { NativeChatApprovalCard } from './NativeChatApprovalCard'
 import { NativeChatStructuredQuestionCard } from './NativeChatStructuredQuestionCard'
 import { NativeChatPromptStrip } from './NativeChatPromptCollapse'
+import { useTranslate } from '@/i18n/use-translate'
 import type { useStructuredPromptResponseHold } from './use-structured-prompt-response-hold'
 
 type PromptResponse = ReturnType<typeof useStructuredPromptResponseHold>
@@ -17,24 +18,51 @@ export function NativeChatStructuredPromptCard({
   promptResponse,
   onCancel,
   shouldFocus,
-  answerInputRef
+  answerInputRef,
+  restored
 }: {
   prompt: PromptItem | null
   promptResponse: PromptResponse
   onCancel: () => void
   shouldFocus: boolean
   answerInputRef: RefObject<HTMLTextAreaElement | null>
+  /** Asked before the agent exited (Orca restarted); answering resumes the chat. */
+  restored?: { failed: boolean }
 }): React.JSX.Element | null {
   const [collapsed, setCollapsed] = useState(false)
+  const t = useTranslate()
+  const note = restored ? (
+    <p
+      role={restored.failed ? 'alert' : undefined}
+      className="mx-auto w-full max-w-(--chat-content-max-width) shrink-0 bg-chat-pane px-3 pt-2 text-xs text-muted-foreground sm:px-4"
+    >
+      {restored.failed
+        ? t(
+            'components.native-chat.restoredPrompt.failed',
+            "Couldn't resume this chat, so your answer wasn't sent. Send a message to continue it."
+          )
+        : t(
+            'components.native-chat.restoredPrompt.note',
+            'Asked before Orca restarted. Answering resumes the chat.'
+          )}
+    </p>
+  ) : null
   if (prompt?.body.kind === 'approval') {
+    const body = restored
+      ? // Stop means nothing to an agent that isn't running; only allow and deny carry over.
+        { ...prompt.body, options: prompt.body.options.filter((option) => option.intent) }
+      : prompt.body
     return (
+      <>
+      {note}
       <NativeChatApprovalCard
-        approval={chatApprovalFromJournal(prompt.body)}
+        approval={chatApprovalFromJournal(body)}
         onChoose={(optionId) => void promptResponse.respond(prompt, { kind: 'option', optionId })}
         isSubmitting={promptResponse.holds(prompt)}
         onCancel={onCancel}
         shouldFocus={shouldFocus}
       />
+      </>
     )
   }
   if (prompt?.body.kind === 'question') {
@@ -42,6 +70,7 @@ export function NativeChatStructuredPromptCard({
     // Collapsing only frees transcript room; the composer stays away while the agent waits on the answer.
     return (
       <>
+        {note}
         <div hidden={collapsed} inert={collapsed} className="contents">
           <NativeChatStructuredQuestionCard
             questions={questions}
