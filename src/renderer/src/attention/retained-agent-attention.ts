@@ -14,7 +14,7 @@ import {
 
 /** Retained host attention uses the same client policy and delivery as agent input requests. */
 export function createRetainedAgentAttentionReceiver() {
-  const presented = new Map<string, { environmentId: string; signature: string }>()
+  const presentedByEnvironment = new Map<string, Map<string, string>>()
   const receive = (
     environmentId: string,
     event: Extract<RuntimeClientEvent, { type: 'agentAttentionChanged' }>
@@ -22,17 +22,22 @@ export function createRetainedAgentAttentionReceiver() {
     const executionHost = toRuntimeExecutionHostId(environmentId)
     const id = notificationDeliveryId(event.notificationId, executionHost)
     const notice = event.notice
+    const presented = presentedByEnvironment.get(environmentId)
     if (!notice) {
-      presented.delete(id)
+      presented?.delete(id)
       void window.api.notifications.dismiss([id])
       return
     }
     const content = { title: notice.title, body: notice.body }
     const signature = JSON.stringify(content)
-    if (presented.get(id)?.signature === signature) {
+    if (presented?.get(id) === signature) {
       return
     }
-    presented.set(id, { environmentId, signature })
+    if (presented) {
+      presented.set(id, signature)
+    } else {
+      presentedByEnvironment.set(environmentId, new Map([[id, signature]]))
+    }
     const state = useAppStore.getState()
     if (
       notice.worktreeId &&
@@ -71,9 +76,10 @@ export function createRetainedAgentAttentionReceiver() {
       const retained = new Set(
         notices.map((notice) => notificationDeliveryId(notice.notificationId, host))
       )
-      for (const id of presented.keys()) {
-        if (presented.get(id)?.environmentId === environmentId && !retained.has(id)) {
-          presented.delete(id)
+      const presented = presentedByEnvironment.get(environmentId)
+      for (const id of presented?.keys() ?? []) {
+        if (!retained.has(id)) {
+          presented?.delete(id)
           void window.api.notifications.dismiss([id])
         }
       }
@@ -84,6 +90,22 @@ export function createRetainedAgentAttentionReceiver() {
           notice
         })
       }
+    },
+    /** A host removed from the catalog sends no clearing snapshot, so its notice state ends here. */
+    keepCatalogEnvironments: (state: { runtimeEnvironments?: readonly { id: string }[] }): void => {
+      // Why the catalog, not connection: a disconnected host keeps its notices for the reconnect snapshot.
+      for (const environmentId of presentedByEnvironment.keys()) {
+        if (!state.runtimeEnvironments?.some((environment) => environment.id === environmentId)) {
+          presentedByEnvironment.delete(environmentId)
+        }
+      }
+    },
+    presentedNoticeCount: (): number => {
+      let count = 0
+      for (const presented of presentedByEnvironment.values()) {
+        count += presented.size
+      }
+      return count
     }
   }
 }

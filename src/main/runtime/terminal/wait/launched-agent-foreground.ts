@@ -17,7 +17,7 @@ import { judgeTerminalForeground } from '../lifecycle/terminal-foreground-group'
 import { readTerminalProcessRows } from '../../../pty/process-retirement/terminal-process-rows'
 import { readProcessStartTimeMs } from '../../agent-session/ownership/agent-session-process-identity-probe'
 import { isTerminalForegroundObservation } from '../../../../shared/terminal/pty/lifecycle/terminal-foreground-observation'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
+import { readLegacyPtyRootProcessId } from './legacy-pty-root-process'
 
 /** agent permits writing; shell drops readiness; unknown proves neither. */
 export type LaunchedAgentForeground = 'agent' | 'shell' | 'unknown'
@@ -153,7 +153,7 @@ async function inspectLaunchedAgentForeground(
           }
           const named = recognizeForeground(observation.processName)
           if (named) {
-            return identify(named)
+            return await identify(named)
           }
           if (
             !agent &&
@@ -167,7 +167,7 @@ async function inspectLaunchedAgentForeground(
           const confirmed = recognizeForeground(
             (await controller.confirmForegroundProcess?.(ptyId)) ?? null
           )
-          return confirmed ? identify(confirmed) : 'non-shell'
+          return confirmed ? await identify(confirmed) : 'non-shell'
         }
         // Local launch policy admits non-shell user wrappers independently of mail's identity proof.
         if (!host.remote) {
@@ -181,20 +181,11 @@ async function inspectLaunchedAgentForeground(
       }
     }
     if (!host.remote) {
-      const target = (
-        await controller.listProcesses?.(LOCAL_EXECUTION_HOST_ID, {
-          ptyIds: [ptyId],
-          targetOwnerOnly: true
-        })
-      )?.find((pane) => pane.id === ptyId)
-      if (
-        expectedIncarnationId &&
-        target?.incarnationId &&
-        target.incarnationId !== expectedIncarnationId
-      ) {
+      const root = await readLegacyPtyRootProcessId(controller, ptyId, expectedIncarnationId)
+      if (root === 'replaced') {
         return 'unknown'
       }
-      const rootPid = target?.rootProcessId
+      const rootPid = root
       const rows = rootPid ? await readTerminalProcessRows(rootPid) : null
       const verdict = rows && rootPid ? judgeTerminalForeground(rows, rootPid, agent) : 'unknown'
       if (mailboxEvidence && verdict !== 'unknown') {

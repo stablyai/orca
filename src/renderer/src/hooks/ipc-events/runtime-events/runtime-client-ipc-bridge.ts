@@ -295,9 +295,12 @@ export function registerRuntimeClientIpcBridge(
     },
     sync: runtimeClientEventsSync.sync
   })
-  const unsubscribeRuntimeEnvironmentStore = useAppStore.subscribe(
-    handleRuntimeEnvironmentStoreWrite
-  )
+  const unsubscribeRuntimeEnvironmentStore = useAppStore.subscribe((state, previousState) => {
+    if (state.runtimeEnvironments !== previousState.runtimeEnvironments) {
+      receiveRetainedAttention.keepCatalogEnvironments(state)
+    }
+    handleRuntimeEnvironmentStoreWrite(state, previousState)
+  })
   // Subscribe before streams start; replay invalidation can synchronously publish SSH buckets needing exactly one replacement subscription.
   runtimeClientEventsSync.sync()
   unsubs.push(runtimeClientEventsSync.stop)
