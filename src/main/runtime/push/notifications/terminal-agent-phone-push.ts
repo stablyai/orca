@@ -214,21 +214,17 @@ export class TerminalAgentPhonePush {
     ) {
       return
     }
-    const news = current()
     const settings = this.deps.readNotificationSettings()
+    const { source } = decided.event
     // The window's own fan-out gates the phone on these same preferences.
-    const desktopAllowed =
-      !settings || isNotificationSourceEnabled(settings, news.event.source, news.event.agentState)
+    const desktopAllowed = !settings || isNotificationSourceEnabled(settings, source, agentState)
     const now = this.deps.now()
-    const burstKey = JSON.stringify([
-      desktopAllowed,
-      news.event.source,
-      news.event.agentState,
-      news.worktreeId
-    ])
+    const burstKey = JSON.stringify([desktopAllowed, source, agentState, decided.worktreeId])
     if (!reserveNotificationCooldown(this.recentDispatches, burstKey, now)) {
       return
     }
+    // Only the alert that goes out is rebuilt; a refresh keeps its source, state and workspace.
+    const news = current()
     // No attention key: later cooldowns then key on the workspace, as the window's request does.
     this.deps.dispatch({
       ...news.event,

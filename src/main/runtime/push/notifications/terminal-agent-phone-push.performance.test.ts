@@ -76,9 +76,13 @@ function finishBurst(panes: number, host: { window: boolean; reply: string | und
 }
 
 describe('phone finish alerts at the quiet window', () => {
-  it.each([100, 1_000])('build each alert once unless a phone gets a late reply (N=%i)', (n) => {
-    expect(finishBurst(n, { window: true, reply: 'Done.' })).toEqual({ builds: n, sent: 0 })
-    expect(finishBurst(n, { window: false, reply: undefined })).toEqual({ builds: n, sent: 1 })
-    expect(finishBurst(n, { window: false, reply: 'Done.' })).toEqual({ builds: 2 * n, sent: 1 })
-  })
+  it.each([100, 1_000])(
+    'build each alert once, and rebuild only the late reply a phone gets (N=%i)',
+    (n) => {
+      expect(finishBurst(n, { window: true, reply: 'Done.' })).toEqual({ builds: n, sent: 0 })
+      expect(finishBurst(n, { window: false, reply: undefined })).toEqual({ builds: n, sent: 1 })
+      // The workspace cooldown sends one alert per burst, and only that one is rebuilt.
+      expect(finishBurst(n, { window: false, reply: 'Done.' })).toEqual({ builds: n + 1, sent: 1 })
+    }
+  )
 })
