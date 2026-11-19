@@ -7,6 +7,7 @@ import type { GitHubRepoContext } from './github-repository-identity'
 type LocalGitConfigPaths = {
   commonConfigPath: string
   worktreeConfigPath: string
+  headPath: string
 }
 
 // A dead mount can stall stat before the bounded Git probe; missing signatures use shorter cache lifetimes.
@@ -61,7 +62,9 @@ async function readUncachedLocalGitConfigSignature(repoPath: string): Promise<st
   }
   const signatures = await Promise.all([
     readConfigPathSignatures(configPaths.commonConfigPath),
-    readConfigPathSignatures(configPaths.worktreeConfigPath)
+    readConfigPathSignatures(configPaths.worktreeConfigPath),
+    // Conditional config can depend on the checkout's branch without any config file changing.
+    readConfigPathSignature(configPaths.headPath)
   ])
   return signatures.flat().join('\0')
 }
@@ -218,7 +221,8 @@ async function resolveLocalGitConfigPaths(repoPath: string): Promise<LocalGitCon
     if (dotGitStats.isDirectory()) {
       return {
         commonConfigPath: join(dotGitPath, 'config'),
-        worktreeConfigPath: join(dotGitPath, 'config.worktree')
+        worktreeConfigPath: join(dotGitPath, 'config.worktree'),
+        headPath: join(dotGitPath, 'HEAD')
       }
     }
     if (!dotGitStats.isFile()) {
@@ -246,7 +250,8 @@ async function resolveLocalGitConfigPaths(repoPath: string): Promise<LocalGitCon
     }
     return {
       commonConfigPath: join(commonGitDir, 'config'),
-      worktreeConfigPath: join(gitDir, 'config.worktree')
+      worktreeConfigPath: join(gitDir, 'config.worktree'),
+      headPath: join(gitDir, 'HEAD')
     }
   } catch {
     return null
