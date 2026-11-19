@@ -7,6 +7,7 @@ import { collectLeafIds } from '../../../../shared/workspace-layout/terminal-top
 import { paneKeyPtyId } from './key-state'
 import { ptyIncarnationById } from '../provider/ownership-state'
 import { getRegisteredPtyPid } from '../../../memory/pty-registry'
+import { lastInputAtByPty } from '../delivery/visibility-state'
 import { isLocalHookConnectionId } from '../../../../shared/agent-hook-listener/transport/wsl-hook-relay-contract'
 import { getProviderForPty } from '../provider/registry'
 import { inspectPtyProviderProcess } from '../../../providers/pty/process-inspection'
@@ -131,10 +132,13 @@ async function paneShellAlone(
     if (isRemoteExecutionHostPtyId(pane.ptyId)) {
       return null
     }
+    // Input during the proof may start the next agent (`codex resume`) after the table was read.
+    const inputBefore = lastInputAtByPty.get(pane.ptyId)
     const shellAlone = await confirmShellAlone(pane.ptyId, pane.incarnationId ?? undefined, agent)
     const current = runtime.resolveTerminalPane(paneKey)
     return (
       shellAlone &&
+      lastInputAtByPty.get(pane.ptyId) === inputBefore &&
       current.ptyId === pane.ptyId &&
       current.incarnationId === pane.incarnationId &&
       stillCurrent()

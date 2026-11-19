@@ -186,13 +186,12 @@ export abstract class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends O
     const pty = this.retireHeldLaunch(ptyId)
     const receipt = this.restoredOrchestrationAuthorityByPtyId.get(ptyId)
     const launch = pty && (pty.launchToken || pty.launchAgent || pty.launchCommandAgent)
-    // With nothing held, an earlier mark (maybe a nested shell's) retired the launch this one ends.
-    if (!pty || (!launch && !receipt && !confirmedExit)) {
+    if (!pty || (!launch && !receipt)) {
+      this.noticeLaunchlessCommandMark(ptyId, confirmedExit)
       return
     }
     const exited = confirmedExit === true && Boolean(launch || (receipt && !finishedBefore))
-    const ended = { confirmedExit: exited, jobStopped: confirmedExit === false }
-    const retirement = launch || receipt ? ended : { launchRetired: true as const }
+    const retirement = { confirmedExit: exited, jobStopped: confirmedExit === false }
     // Why: collect before the delete below, which drops the restored-authority receipt a
     // receipt-only pane's key comes from.
     const paneKeys = this.collectPaneKeysForPty(ptyId)
