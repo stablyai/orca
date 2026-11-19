@@ -14,9 +14,14 @@ export function setupGrabShortcutForwarding(args: {
   guest: Electron.WebContents
   resolveRenderer: ResolveRenderer
   hasActiveGrabOp: (browserTabId: string) => boolean
+  /** True while a page field (input, editor, frame) has focus during a pick: its typing stays with the page. */
+  isGuestEditableFocused?: (browserTabId: string) => boolean
   getKeybindings?: () => KeybindingOverrides | undefined
 }): () => void {
   const { browserTabId, guest, resolveRenderer, hasActiveGrabOp, getKeybindings } = args
+  const isGuestEditableFocused = args.isGuestEditableFocused ?? (() => false)
+  // Electron's input carries no AltGraph flag; the AltGr key reports itself, so its own edges say when it is held.
+  let altGraphHeld = false
   const handler = (event: Electron.Event, input: Electron.Input): void => {
     // Agent-injected keys must not trigger Orca actions (#20595).
     if (isAgentInjectingInput(guest)) {
@@ -36,6 +41,10 @@ export function setupGrabShortcutForwarding(args: {
       }
       return
     }
+    if (input.key === 'AltGraph') {
+      altGraphHeld = input.type === 'keyDown'
+      return
+    }
     if (input.type !== 'keyDown') {
       return
     }
@@ -45,10 +54,12 @@ export function setupGrabShortcutForwarding(args: {
       !input.control &&
       !input.alt &&
       !input.shift &&
-      // An IME composition owns its keys.
+      // An IME composition owns its keys, and so does AltGr's layer of characters.
       !input.isComposing &&
+      !altGraphHeld &&
       isBrowserGuestToolKey(bareKey) &&
-      hasActiveGrabOp(browserTabId)
+      hasActiveGrabOp(browserTabId) &&
+      !isGuestEditableFocused(browserTabId)
     ) {
       const renderer = resolveRenderer(browserTabId)
       if (!renderer) {

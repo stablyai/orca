@@ -13,13 +13,13 @@ import {
   type GrabIntent
 } from '../../../../../../shared/browser/element-grab/browser-grab-types'
 import { isEditableKeyboardTarget } from './browser-keyboard'
-import { keyEventBelongsToOtherAnnotatePage } from '../../annotate/palette/annotate-esc-ownership'
+import { annotateLetterOwner } from '../../annotate/palette/annotate-esc-ownership'
 import { useBrowserPageWebviewShortcuts } from './use-browser-page-webview-shortcuts'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
 
-/** Bare tool letters belong to this page unless they come from another page's pane or palette (see helper). */
+/** Bare tool letters act only from this page's own surfaces, or from no element when this page was used last. */
 function annotateKeysOwnTarget(target: EventTarget | null, browserTabId: string): boolean {
-  return !keyEventBelongsToOtherAnnotatePage(target, browserTabId)
+  return annotateLetterOwner(target) === browserTabId
 }
 
 export function useBrowserPageKeyboardShortcuts({

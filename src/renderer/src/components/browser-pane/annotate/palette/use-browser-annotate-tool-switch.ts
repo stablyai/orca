@@ -9,6 +9,8 @@ import type {
 import type { GrabModeHook } from '../grab/useGrabMode'
 import type { MarkupModeController, MarkupResumeSnapshot } from '../capture/useMarkupMode'
 import type { MarkupShape } from '../drawing/markup-drawing-model'
+import { isEditableKeyboardTarget } from '../../host-guest/input/browser-keyboard'
+import { annotateEscOwner } from './annotate-esc-ownership'
 
 const DISCARDED_DRAWING_UNDO_MS = 5000
 
@@ -202,7 +204,13 @@ export function useBrowserAnnotateToolSwitch({
         onDismiss: expire,
         action: {
           label: translate('browser.annotatePalette.undo', 'Undo'),
-          onClick: () => reopenDrawing(saved, shapes)
+          // Only while this is still the drawing on offer: re-entering Draw, a newer discard, expiry or a new
+          // document consumed it, and a toast still fading out must not bring it back.
+          onClick: () => {
+            if (discardedRef.current === discarded) {
+              reopenDrawing(saved, shapes)
+            }
+          }
         }
       }
     )
@@ -307,13 +315,13 @@ export function useBrowserAnnotateToolSwitch({
       return
     }
     const onKeyDown = (event: KeyboardEvent): void => {
-      // Only from this page's palette (focus sits on its Draw button), never from another pane or field.
+      // Same owner rule as the picker's and Draw's Esc: this page's surfaces, or no element when it was used last.
       if (
         event.key === 'Escape' &&
         !event.isComposing &&
         event.keyCode !== 229 &&
-        event.target instanceof Element &&
-        event.target.closest(`[data-browser-annotate-page="${CSS.escape(toolTargetId)}"]`)
+        !isEditableKeyboardTarget(event.target) &&
+        annotateEscOwner(event.target) === toolTargetId
       ) {
         event.preventDefault()
         exit()

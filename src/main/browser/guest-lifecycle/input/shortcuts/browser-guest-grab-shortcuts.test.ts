@@ -8,7 +8,10 @@ import { setupGrabShortcutForwarding } from './browser-guest-grab-shortcuts'
 
 type Handler = (event: { preventDefault: () => void }, input: Partial<Electron.Input>) => void
 
-function setup(activeGrab: boolean | (() => boolean)): {
+function setup(
+  activeGrab: boolean | (() => boolean),
+  editableFocused: () => boolean = () => false
+): {
   press: (input: Partial<Electron.Input>) => boolean
   send: ReturnType<typeof vi.fn>
 } {
@@ -28,7 +31,8 @@ function setup(activeGrab: boolean | (() => boolean)): {
     guest: guestFixture as unknown as Electron.WebContents,
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the forwarder only calls send on the renderer, which this fixture implements.
     resolveRenderer: () => rendererFixture as unknown as Electron.WebContents,
-    hasActiveGrabOp: typeof activeGrab === 'function' ? activeGrab : () => activeGrab
+    hasActiveGrabOp: typeof activeGrab === 'function' ? activeGrab : () => activeGrab,
+    isGuestEditableFocused: editableFocused
   })
   return {
     send,
@@ -64,6 +68,38 @@ describe('grab shortcut forwarding from a focused page', () => {
         key
       })
     }
+  })
+
+  it('lets a page field keep its typing while it has focus during a pick, and takes letters again once it loses it', () => {
+    let fieldFocused = true
+    const { press, send } = setup(true, () => fieldFocused)
+
+    for (const [key, code] of [
+      ['c', 'KeyC'],
+      ['s', 'KeyS'],
+      ['d', 'KeyD']
+    ]) {
+      expect(press({ key, code })).toBe(false)
+    }
+    expect(send).not.toHaveBeenCalled()
+
+    fieldFocused = false
+    expect(press({ key: 'g', code: 'KeyG' })).toBe(true)
+    expect(send).toHaveBeenLastCalledWith('browser:grabActionShortcut', {
+      browserPageId: 'page-1',
+      key: 'g'
+    })
+  })
+
+  it("leaves AltGr's characters to the page while AltGr is held, even letters that map to a tool key", () => {
+    const { press, send } = setup(true)
+    press({ key: 'AltGraph', code: 'AltRight' })
+    // A layout whose AltGr level types Greek: γ sits on the G key.
+    expect(press({ key: 'γ', code: 'KeyG' })).toBe(false)
+    expect(send).not.toHaveBeenCalled()
+
+    press({ type: 'keyUp', key: 'AltGraph', code: 'AltRight' })
+    expect(press({ key: 'g', code: 'KeyG' })).toBe(true)
   })
 
   it('swallows a held tool key without switching again', () => {

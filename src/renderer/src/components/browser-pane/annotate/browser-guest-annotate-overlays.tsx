@@ -3,6 +3,7 @@ import {
   interceptAnnotateEscape,
   registerAnnotateEscapeInterceptor
 } from './palette/annotate-escape-interceptor'
+import { useAnnotateKeyPage } from './palette/use-annotate-key-page'
 import { createPortal } from 'react-dom'
 import type { MutableRefObject, RefObject } from 'react'
 import { Copy, Image } from 'lucide-react'
@@ -123,6 +124,12 @@ export function BrowserGuestAnnotateOverlays({
   // Esc closes an open list first (from the palette, the list or the page) and hands focus back to the chip;
   // the next Esc leaves the mode. The picker asks this interceptor before exiting.
   const notesPageId = toolSwitch.toolTargetId
+  useAnnotateKeyPage({
+    pageId: notesPageId,
+    containerRef,
+    markupPortalContainer,
+    modeOn: activeTool !== null
+  })
   useEffect(() => {
     if (!notesOpen) {
       return

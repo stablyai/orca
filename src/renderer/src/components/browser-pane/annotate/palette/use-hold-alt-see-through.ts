@@ -23,9 +23,17 @@ export function useHoldAltSeeThrough(pageId: string | null): boolean {
     }
     // Losing the window mid-hold never delivers the keyup.
     const release = (): void => setHeld(false)
+    // Neither does moving into a page with Alt still down: the page drops a key-up whose key-down it never saw.
+    // Holding Alt in the page during a pick fades the palette again (main mirrors that key-down).
+    const onFocusIn = (event: FocusEvent): void => {
+      if (event.target instanceof Element && event.target.tagName === 'WEBVIEW') {
+        setHeld(false)
+      }
+    }
     window.addEventListener('keydown', onKeyDown, true)
     window.addEventListener('keyup', onKeyUp, true)
     window.addEventListener('blur', release)
+    window.addEventListener('focusin', onFocusIn, true)
     const unsubscribe = pageId
       ? window.api.browser.onGrabActionShortcut(({ browserPageId, key }) => {
           if (browserPageId !== pageId) {
@@ -42,6 +50,7 @@ export function useHoldAltSeeThrough(pageId: string | null): boolean {
       window.removeEventListener('keydown', onKeyDown, true)
       window.removeEventListener('keyup', onKeyUp, true)
       window.removeEventListener('blur', release)
+      window.removeEventListener('focusin', onFocusIn, true)
       unsubscribe?.()
     }
   }, [pageId])

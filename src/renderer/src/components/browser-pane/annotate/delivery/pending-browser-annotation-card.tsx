@@ -1,5 +1,5 @@
 import { ImeTextarea } from '@/lib/text-input/ime/ime-text-field'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { CornerDownLeft, MessageSquarePlus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
@@ -72,6 +72,20 @@ export function PendingBrowserAnnotationCard({
   const trimmed = comment.trim()
   const canAdd = Boolean(trimmed) && !saving
   const submitModifierLabel = getScreenSubmitModifierLabel()
+  // One Esc does one thing. The card's layer sees an Esc (document capture) before the textarea does (bubble), and
+  // closing the notes list in between unregisters its interceptor, so without this the same key would close the
+  // list and then the card.
+  const handledEscapesRef = useRef(new WeakSet<Event>())
+  const handleEscape = (nativeEvent: Event): void => {
+    if (handledEscapesRef.current.has(nativeEvent)) {
+      return
+    }
+    handledEscapesRef.current.add(nativeEvent)
+    if (onEscape?.()) {
+      return
+    }
+    onCancel()
+  }
 
   return (
     <Popover
@@ -104,10 +118,10 @@ export function PendingBrowserAnnotationCard({
         onEscapeKeyDown={(event) => {
           event.preventDefault()
           // Esc during IME composition only ends the composition.
-          if (event.isComposing || event.keyCode === 229 || onEscape?.()) {
+          if (event.isComposing || event.keyCode === 229) {
             return
           }
-          onCancel()
+          handleEscape(event)
         }}
       >
         {/* Selector lives in the tooltip: truncated to a popover width it reads as noise. */}
@@ -141,10 +155,7 @@ export function PendingBrowserAnnotationCard({
             if (event.key === 'Escape' && !event.nativeEvent.isComposing && event.keyCode !== 229) {
               event.preventDefault()
               event.stopPropagation()
-              if (onEscape?.()) {
-                return
-              }
-              onCancel()
+              handleEscape(event.nativeEvent)
               return
             }
             if (isScreenSubmitShortcut(event)) {

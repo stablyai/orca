@@ -92,6 +92,8 @@ export function BrowserAnnotateToolPalette({
   const toolRefs = useRef(new Map<BrowserAnnotateTool, HTMLButtonElement>())
   const labelProbeRef = useRef<HTMLSpanElement>(null)
   const hintRef = useRef<HTMLDivElement>(null)
+  const focusingToolRef = useRef(false)
+  const [openTooltip, setOpenTooltip] = useState<BrowserAnnotateTool | null>(null)
   // Why state: the hooks below must re-run once the page area is attached, which can be after this mounts.
   const [bounds, setBounds] = useState<HTMLElement | null>(null)
   useLayoutEffect(() => {
@@ -167,7 +169,11 @@ export function BrowserAnnotateToolPalette({
     if (focused instanceof HTMLElement && isEditableFocus(focused)) {
       return
     }
+    // The palette moving focus itself must not open that tool's tooltip: an open tooltip takes the next Esc,
+    // and Esc then seems to do nothing.
+    focusingToolRef.current = true
     toolRefs.current.get(activeTool)?.focus({ preventScroll: true })
+    focusingToolRef.current = false
   }, [activeTool])
 
   useLayoutEffect(() => {
@@ -241,7 +247,18 @@ export function BrowserAnnotateToolPalette({
             const checked = option.tool === activeTool
             const Icon = option.icon
             return (
-              <Tooltip key={option.tool}>
+              <Tooltip
+                key={option.tool}
+                open={openTooltip === option.tool}
+                onOpenChange={(open) => {
+                  if (open && focusingToolRef.current) {
+                    return
+                  }
+                  setOpenTooltip((current) =>
+                    open ? option.tool : current === option.tool ? null : current
+                  )
+                }}
+              >
                 <TooltipTrigger asChild>
                   <button
                     ref={(node) => {

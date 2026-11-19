@@ -40,6 +40,21 @@ describe('hold Alt to see through the palette', () => {
     expect(document.documentElement.hasAttribute('data-browser-annotate-see-through')).toBe(false)
   })
 
+  it('releases when focus moves into the page with Alt still down, whose key-up the page never reports', () => {
+    const { result } = renderHook(() => useHoldAltSeeThrough('page-1'))
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Alt' }))
+    })
+    const page = document.createElement('webview')
+    page.tabIndex = 0
+    document.body.append(page)
+
+    act(() => page.focus())
+
+    expect(result.current).toBe(false)
+    page.remove()
+  })
+
   it("ignores another page's Alt release", () => {
     const { result } = renderHook(() => useHoldAltSeeThrough('page-1'))
     act(() => {
