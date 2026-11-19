@@ -1,7 +1,3 @@
-// The open item in the list's place: the back row with its place in the list and ↓ ↑ to the next and
-// previous item, over the item itself. Esc, and Back's chord (Cmd+[ / Alt+Left), go back from anywhere
-// in it, and typing or dictating anywhere in it goes to the comment box. The row stays up across
-// steps, so a clicked arrow keeps focus; offline only the item is off.
 import { useEffect, useLayoutEffect, useRef } from 'react'
 import { ArrowLeft, ChevronDown, ChevronUp } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -123,15 +119,16 @@ export function BotItemPaneFrame({
             <span className="min-w-0 truncate">{owner.name}</span>
           </span>
         ) : null}
-        {walk.place ? (
-          <BotItemStepper root={root} walk={walk} offline={offline} place={walk.place} />
-        ) : null}
       </div>
       {walk.failed ? <BotItemsReadFailed onRetry={walk.retry} closedPage /> : null}
       {/* min-w-0: a fieldset is never narrower than its content, so one long unwrapped line widened the item. */}
       <fieldset disabled={offline} className="flex min-h-0 min-w-0 flex-1 flex-col">
         {children(comment)}
       </fieldset>
+      {/* Outside the keyed item view so an arrow can keep focus as the item changes. */}
+      {walk.place ? (
+        <BotItemStepper root={root} walk={walk} offline={offline} place={walk.place} />
+      ) : null}
     </div>
   )
 }
@@ -194,7 +191,7 @@ function BotItemStepper({
   return (
     <div
       ref={nav}
-      className="ml-auto flex items-center gap-0.5"
+      className="flex shrink-0 items-center justify-end gap-0.5 px-3 pb-2 text-xs text-muted-foreground"
       onFocus={() => (hadFocus.current = true)}
       onBlur={(event) => {
         // Focus moved on to something; a drop to nothing (a disabled arrow) is caught above.
