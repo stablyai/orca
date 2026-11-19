@@ -10,6 +10,7 @@ import type { NativeChatDeliveryNotice } from './NativeChatMessageRow'
 import { NativeChatRewindAction } from '../actions/NativeChatRewindAction'
 import type { NativeChatRewindSurface } from '../actions/use-native-chat-rewind-host'
 import { NativeChatMarkdown } from '../../markdown/NativeChatMarkdown'
+import { nativeChatQuoteSourceProps } from '../../selection-quotes/native-chat-quote-selection'
 import { NativeChatUserMessageFold } from './NativeChatUserMessageFold'
 import { NativeChatCodeBlock } from '../../markdown/code/NativeChatCodeBlock'
 import { NativeChatCopyButton } from '../actions/NativeChatCopyButton'
@@ -130,6 +131,7 @@ export function NativeChatUserMessageRow({
                       quoteChips
                       className="text-sm"
                       renderCodeBlock={NativeChatCodeBlock}
+                      {...nativeChatQuoteSourceProps(message.id)}
                     />
                   )}
                 />

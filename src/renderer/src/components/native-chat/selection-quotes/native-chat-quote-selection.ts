@@ -2,7 +2,7 @@ import { quotePlace } from './native-chat-quote-highlight'
 import type { QuoteSource } from './native-chat-quote-sources'
 import { markdownMathSelectionText } from '../../../../../shared/markdown-math-selection'
 
-/** Only agent-reply prose marked with this attribute may be quoted; its value is the message id. */
+/** Only message prose marked with this attribute may be quoted; its value is the message id. */
 export function nativeChatQuoteSourceProps(messageId: string): Record<string, string> {
   return { 'data-native-chat-quote-source': messageId }
 }
