@@ -1,5 +1,5 @@
 import type { AgentMapTimelineEvent } from '../../../../shared/agent-session-map/agent-session-map-model'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 /** The time scrubber: drag to replay the session up to a moment; the far right is the
  *  live edge (follow). Scrubbing is indexed over the timeline so the thumb lands on
@@ -14,8 +14,9 @@ export function AgentSessionMapTimeline({
   playheadTs: number | null
   onScrub: (ts: number | null) => void
 }) {
-  const liveLabel = translate('components.agentSessionMap.timeline.live', 'Live')
-  const scrubberAriaLabel = translate(
+  const t = useTranslate()
+  const liveLabel = t('components.agentSessionMap.timeline.live', 'Live')
+  const scrubberAriaLabel = t(
     'components.agentSessionMap.timeline.scrubberAriaLabel',
     'Session time scrubber'
   )
