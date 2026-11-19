@@ -4235,7 +4235,11 @@
         "shownCount_one": "{{count}} shown",
         "localRefresh": "Refresh",
         "localEmpty": "No task files in this folder yet.",
-        "localSourceLabel": "Local"
+        "localSourceLabel": "Local",
+        "localReady": "ready",
+        "localWaiting": "waiting on {{value0}}",
+        "localClaimed": "claimed by {{value0}}",
+        "localFlagged": "flagged: {{value0}}"
       },
       "Terminal": {
         "73768427cf": "Close",

@@ -77,7 +77,7 @@ export function TaskPageContent({
   ) : taskSource === 'gitlab' ? (
     <TaskPageGitLabItemList model={model} />
   ) : taskSource === 'local' ? (
-    <TaskPageLocalContent />
+    <TaskPageLocalContent model={model} />
   ) : (
     <TaskPageJiraContent model={model} />
   )
