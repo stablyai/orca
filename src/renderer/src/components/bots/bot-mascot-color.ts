@@ -1,6 +1,6 @@
 // A mascot on another tile color: its SVG with the background, and on a dark color the light rim, filled in.
 import { useEffect, useSyncExternalStore } from 'react'
-import type { BotMascotId } from '../../../../shared/bot-avatar'
+import { isBotMascotId, type BotMascotId } from '../../../../shared/bot-avatar'
 import {
   DEFAULT_BOT_AVATAR_COLOR,
   isDarkBotAvatarColor
@@ -21,6 +21,8 @@ export function recolorMascotSvg(svg: string, color: string): string {
 // Bounded, since dragging the custom color makes a new one per step; room for the picker's 19 on several colors.
 const MAX_RECOLORED = 200
 const recolored = new Map<string, string>()
+// How many mounted readers show each picture; those are never evicted, so a shown picture never reloads.
+const shown = new Map<string, number>()
 const loading = new Set<string>()
 // Bumped whenever a recolored picture is ready, so readers render again.
 let version = 0
@@ -53,10 +55,7 @@ function loadRecolored(id: BotMascotId, color: string): void {
         key,
         `data:image/svg+xml;charset=utf-8,${encodeURIComponent(recolorMascotSvg(svg, color))}`
       )
-      const oldest = recolored.keys().next()
-      if (recolored.size > MAX_RECOLORED && !oldest.done) {
-        recolored.delete(oldest.value)
-      }
+      evictUnshown()
       version += 1
       for (const listener of listeners) {
         listener()
@@ -65,6 +64,33 @@ function loadRecolored(id: BotMascotId, color: string): void {
     // A picture that can't load stays on the bundled sky blue.
     () => loading.delete(key)
   )
+}
+
+function evictUnshown(): void {
+  for (const stale of recolored.keys()) {
+    if (recolored.size <= MAX_RECOLORED) {
+      return
+    }
+    if (!shown.has(stale)) {
+      recolored.delete(stale)
+    }
+  }
+}
+
+function holdShown(keys: readonly string[]): () => void {
+  for (const key of keys) {
+    shown.set(key, (shown.get(key) ?? 0) + 1)
+  }
+  return () => {
+    for (const key of keys) {
+      const left = (shown.get(key) ?? 1) - 1
+      if (left > 0) {
+        shown.set(key, left)
+      } else {
+        shown.delete(key)
+      }
+    }
+  }
 }
 
 function isDefaultColor(color: string | null | undefined): color is null | undefined {
@@ -92,14 +118,19 @@ export function useBotMascotSrcs(
   color: string | null | undefined
 ): Record<BotMascotId, string> {
   const ready = useSyncExternalStore(subscribe, readVersion, readVersion)
-  // Runs again as the cache changes, so a picture evicted while still shown is built again.
+  // One string, so a caller passing a fresh array each render doesn't re-run this.
+  const idList = ids.join(',')
   useEffect(() => {
-    if (!isDefaultColor(color)) {
-      for (const id of ids) {
-        loadRecolored(id, color)
-      }
+    if (isDefaultColor(color) || !idList) {
+      return
     }
-  }, [ids, color, ready])
+    const shownIds = idList.split(',').filter(isBotMascotId)
+    const release = holdShown(shownIds.map((id) => recoloredKey(id, color)))
+    for (const id of shownIds) {
+      loadRecolored(id, color)
+    }
+    return release
+  }, [idList, color])
   return mascotSrcs(ids, color, ready)
 }
 
