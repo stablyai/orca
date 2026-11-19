@@ -620,10 +620,6 @@
       "imageTooLarge": "Bild zum Anhängen zu groß",
       "permissionDenied": "Zugriff auf Fotos verweigert"
     },
-    "agentMessage": {
-      "handedOffToAgent": "An Agenten übergeben",
-      "startedAgent": "Agent gestartet"
-    },
     "textAttachmentPreview": {
       "unreadableReply": "Die Antwort zum Anhang ist nicht lesbar. Erneut versuchen.",
       "incompleteReply": "Der Anhang wurde geändert oder die Antwort war unvollständig. Schließen und erneut versuchen.",
@@ -2221,6 +2217,7 @@
       "providerUnavailable": "{{agent}} konnte nicht antworten, weil der Dienst ausgelastet ist. Wähle ein anderes Modell oder warte kurz und sende erneut.",
       "providerSafetyStopped": "{{agent}} hat diese Antwort nach einer Sicherheitsprüfung gestoppt. Überprüfe deine Anfrage und sende sie erneut.",
       "providerResponseFailed": "{{agent}} konnte diese Antwort nicht abschließen. Öffnen Sie die Details für weitere Informationen.",
+      "providerResponseFailedQuoted": "{{agent}} konnte diese Antwort nicht abschließen: {{detail}}.",
       "selectedModel": "das ausgewählte Modell",
       "providerRejected": "{{agent}} hat diese Nachricht nicht angenommen.",
       "providerRejectedQuoted": "{{agent}} hat diese Nachricht nicht angenommen: {{detail}}.",

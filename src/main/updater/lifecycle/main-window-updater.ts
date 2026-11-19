@@ -71,6 +71,7 @@ function buildUpdaterSetupOptions(store: Store, options?: UpdaterSetupHooks): Up
     },
     getReleaseChannelOverride: () => store.getUI().releaseChannelOverride ?? null,
     getUpdateDelayDays: () => normalizeUpdateDelayDays(store.getSettings().updateDelayDays),
+    getAutomaticUpdates: () => store.getSettings().automaticUpdates === true,
     onBeforeQuitFailure: options?.onBeforeUpdateQuitFailure,
     installMode: options?.updateInstallMode
   }

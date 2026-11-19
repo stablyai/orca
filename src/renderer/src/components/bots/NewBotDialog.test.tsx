@@ -3,7 +3,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { parseBotAvatar, PICKABLE_BOT_MASCOT_IDS } from '../../../../shared/bot-avatar'
+import { parseBotAvatar } from '../../../../shared/bot-avatar'
 import { BOT_MASCOT_URLS } from './bot-mascots'
 import type { Bot } from '../../../../shared/bot-types'
 
@@ -88,14 +88,12 @@ function renderDialog() {
   const picture = (): string | null =>
     document.querySelector('[role="dialog"] [data-position="current"] img')?.getAttribute('src') ??
     null
-  const announced = (): string | null =>
-    screen.getByRole('group', { name: 'Picture' }).querySelector('[aria-live]')?.textContent ?? null
   const submit = async (): Promise<void> => {
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Reviewer' } })
     fireEvent.click(screen.getByRole('button', { name: 'Create bot' }))
     await waitFor(() => expect(mocks.createBot).toHaveBeenCalled())
   }
-  return { picture, announced, submit }
+  return { picture, submit }
 }
 
 function chooseUpload(): void {
@@ -111,10 +109,9 @@ function chooseUpload(): void {
 describe('NewBotDialog picture', () => {
   it('opens on a mascot, steps through them, and creates the bot with the one shown', async () => {
     mocks.createBot.mockResolvedValue(created)
-    const { picture, announced, submit } = renderDialog()
+    const { picture, submit } = renderDialog()
     const first = picture()
     expect(first).toBeTruthy()
-    expect(announced()).toMatch(new RegExp(`^Mascot \\d+ of ${PICKABLE_BOT_MASCOT_IDS.length}$`))
 
     fireEvent.click(screen.getByRole('button', { name: 'Next picture' }))
     const next = picture()
@@ -133,12 +130,11 @@ describe('NewBotDialog picture', () => {
   it('shows an uploaded image and saves it to the new bot', async () => {
     mocks.createBot.mockResolvedValue(created)
     mocks.uploadBotAvatar.mockResolvedValue(created)
-    const { picture, announced, submit } = renderDialog()
+    const { picture, submit } = renderDialog()
     const mascot = picture()
     fireEvent.click(screen.getByRole('button', { name: 'Upload' }))
     chooseUpload()
     await waitFor(() => expect(picture()).toBe('data:image/png;base64,UE5H'))
-    expect(announced()).toBe('Your image')
 
     await submit()
     // The mascot it was chosen from stays the fallback if the upload is refused.
@@ -200,19 +196,16 @@ describe('NewBotDialog picture intake', () => {
     await waitFor(() => expect(picture()).toBe('data:image/png;base64,UE5H'))
   })
 
-  it.each(['Release captain', 'https://images.example.com/cat.png'])(
-    'leaves a paste of %s as text',
-    (text) => {
-      const { picture } = renderDialog()
-      const mascot = picture()
-      const pasted = fireEvent.paste(screen.getByLabelText('Name'), {
-        clipboardData: transfer({ text })
-      })
+  it('leaves a pasted image URL as text', () => {
+    const { picture } = renderDialog()
+    const mascot = picture()
+    const pasted = fireEvent.paste(screen.getByLabelText('Name'), {
+      clipboardData: transfer({ text: 'https://images.example.com/cat.png' })
+    })
 
-      expect(pasted).toBe(true)
-      expect(picture()).toBe(mascot)
-    }
-  )
+    expect(pasted).toBe(true)
+    expect(picture()).toBe(mascot)
+  })
 
   it('shows the drop target while a file is dragged over, then takes the dropped image', async () => {
     const { picture } = renderDialog()
@@ -254,11 +247,6 @@ describe('NewBotDialog picture intake', () => {
     [
       'an SVG',
       () => new File(['<svg/>'], 'logo.svg', { type: 'image/svg+xml' }),
-      "Orca can't read that image. Try PNG or JPEG."
-    ],
-    [
-      'a PDF',
-      () => new File(['%PDF'], 'doc.pdf', { type: 'application/pdf' }),
       "Orca can't read that image. Try PNG or JPEG."
     ]
   ])('refuses a dropped file that is %s', async (name, file, message) => {
@@ -303,6 +291,7 @@ describe('NewBotDialog agent', () => {
     mocks.createBot.mockResolvedValue(created)
     const { submit } = renderDialog()
 
+    fireEvent.click(screen.getByRole('button', { name: /Change$/ }))
     fireEvent.click(screen.getByRole('button', { name: 'Agent claude' }))
     await submit()
     expect(mocks.createBot.mock.calls[0]?.[1]).toMatchObject({

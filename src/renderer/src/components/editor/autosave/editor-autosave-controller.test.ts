@@ -246,7 +246,7 @@ describe('attachEditorAutosaveController', () => {
     }
   })
 
-  it('leaves dirty editor drafts ready for the combined hot-exit checkpoint', async () => {
+  it('flushes pending editor input into the combined hot-exit checkpoint', async () => {
     const writeFile = vi.fn().mockResolvedValue(undefined)
     const eventTarget = new EventTarget()
     vi.stubGlobal('window', {
@@ -271,18 +271,20 @@ describe('attachEditorAutosaveController', () => {
       language: 'markdown',
       mode: 'edit'
     })
-    store.getState().setEditorDraft('/repo/file.md', '')
-    store.getState().markFileDirty('/repo/file.md', true)
-
     const cleanup = attachEditorAutosaveController(withLoadedBaselines(store))
+    const unregisterFlush = registerPendingEditorFlush('/repo/file.md', () => {
+      store.getState().setEditorDraft('/repo/file.md', 'latest unsaved text')
+      store.getState().markFileDirty('/repo/file.md', true)
+    })
     try {
       await requestEditorHotExitBackup()
       await vi.advanceTimersByTimeAsync(1000)
 
       expect(writeFile).not.toHaveBeenCalled()
       expect(store.getState().openFiles[0]?.isDirty).toBe(true)
-      expect(store.getState().editorDrafts['/repo/file.md']).toBe('')
+      expect(store.getState().editorDrafts['/repo/file.md']).toBe('latest unsaved text')
     } finally {
+      unregisterFlush()
       cleanup()
     }
   })
