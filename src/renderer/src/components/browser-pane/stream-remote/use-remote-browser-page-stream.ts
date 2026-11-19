@@ -68,8 +68,6 @@ export function useRemoteBrowserPageStream({
   setFrameMetadata: (metadata: BrowserScreencastFrameMetadata | null) => void
 }): {
   reconnectRemoteStream: () => void
-  /** Page zoom changes the guest's CSS viewport but not the painted frame size, so pointer mapping must re-read it. */
-  resyncRemoteViewport: () => void
 } {
   const [reopenNonce, setReopenNonce] = useState(0)
   const lastFrameDeviceSizeRef = useRef<string | null>(null)
@@ -230,8 +228,8 @@ export function useRemoteBrowserPageStream({
           }
           const prevUrl = streamFrameUrlRef.current
           streamFrameUrlRef.current = nextUrl
-          // The host can refit its painted viewport independently, invalidating cached CSS size.
-          const deviceSize = `${frame.metadata.deviceWidth}x${frame.metadata.deviceHeight}`
+          // A refit painted viewport or a page zoom (from any viewer, or a site's saved zoom) changes the CSS size.
+          const deviceSize = `${frame.metadata.deviceWidth}x${frame.metadata.deviceHeight}@${frame.metadata.zoomFactor ?? 1}`
           const previousDeviceSize = lastFrameDeviceSizeRef.current
           lastFrameDeviceSizeRef.current = deviceSize
           if (previousDeviceSize !== null && previousDeviceSize !== deviceSize) {
@@ -301,12 +299,5 @@ export function useRemoteBrowserPageStream({
     stagedPage
   })
 
-  const resyncRemoteViewport = useCallback((): void => {
-    const pageId = lifecycle.tokens.remotePage
-    if (pageId && isActiveRef.current) {
-      void syncRemoteViewport(pageId).catch(() => {})
-    }
-  }, [isActiveRef, lifecycle, syncRemoteViewport])
-
-  return { reconnectRemoteStream, resyncRemoteViewport }
+  return { reconnectRemoteStream }
 }

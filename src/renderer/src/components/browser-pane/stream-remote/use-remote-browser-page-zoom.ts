@@ -4,10 +4,7 @@ import { useRuntimeEnvironmentCapability } from '@/runtime/rpc/compatibility/use
 import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
 import { BROWSER_PAGE_ZOOM_RUNTIME_CAPABILITY } from '../../../../../shared/browser/runtime/browser-runtime-capabilities'
 import type { BrowserPageZoomDirection } from '../../../../../shared/browser/site-settings/browser-page-zoom'
-import {
-  browserSiteDisplayKey,
-  type BrowserPageSiteDisplay
-} from '../../../../../shared/browser/site-settings/browser-site-display'
+import type { BrowserPageSiteDisplay } from '../../../../../shared/browser/site-settings/browser-site-display'
 import type { BrowserPageFeedbackBadgeHandle } from '../assemble-chrome/feedback/browser-page-feedback-badge'
 import { addBrowserPageZoomEventListener } from '../host-guest/viewport/browser-page-zoom'
 import { useBrowserPageZoomFeedback } from '../host-guest/viewport/use-browser-page-zoom-feedback'
@@ -34,9 +31,7 @@ export function remoteBrowserWheelZoomDirection(
 /** Zoom belongs to the page's site in the host's browser profile, so the host steps it and says the new level. */
 export function useRemoteBrowserPageZoom({
   browserPageId,
-  pageUrl,
   runtimeEnvironmentId,
-  onZoomChanged,
   lifecycle,
   runtimeTarget,
   runtimeWorktree,
@@ -45,10 +40,7 @@ export function useRemoteBrowserPageZoom({
   setPaneNotice
 }: {
   browserPageId: string
-  pageUrl: string
   runtimeEnvironmentId: string
-  /** The host applies each site's saved zoom on navigation too, so this also runs when the site changes. */
-  onZoomChanged: () => void
   lifecycle: RemoteBrowserStreamLifecycle
   runtimeTarget: () => RemoteBrowserRuntimeTarget | null
   runtimeWorktree: string
@@ -95,7 +87,6 @@ export function useRemoteBrowserPageZoom({
         .then((display) => {
           if (isCurrentRemoteOperationToken(token) && display?.site) {
             showBrowserZoomFeedback(display.zoomLevel)
-            onZoomChanged()
           }
         })
         .catch((error: unknown) => {
@@ -123,18 +114,12 @@ export function useRemoteBrowserPageZoom({
       createRemoteOperationToken,
       isCurrentRemoteOperationToken,
       lifecycle,
-      onZoomChanged,
       runtimeTarget,
       runtimeWorktree,
       setPaneNotice,
       showBrowserZoomFeedback
     ]
   )
-
-  const site = browserSiteDisplayKey(pageUrl)
-  useEffect(() => {
-    onZoomChanged()
-  }, [onZoomChanged, site])
 
   useEffect(() => {
     if (!supported) {
