@@ -196,7 +196,7 @@ export function readHookTrustKeySpellings(configPath: string): (key: string) => 
   return (key) => getTrustKeyWriteVariants(key).every((spelling) => written.has(spelling))
 }
 
-export function readTomlForMutation(configPath: string): string {
+function readTomlForMutation(configPath: string): string {
   // Only confirmed absence permits seeding an empty config.
   const observation = observe(() => readTomlFile(configPath))
   if (observation.kind === 'indeterminate') {
@@ -205,10 +205,10 @@ export function readTomlForMutation(configPath: string): string {
   return observation.kind === 'present' ? observation.value : ''
 }
 
-export function readTomlFile(configPath: string): string {
+function readTomlFile(configPath: string): string {
   return stripLeadingBom(readFileSync(configPath, 'utf-8'))
 }
 
-function stripLeadingBom(content: string): string {
+export function stripLeadingBom(content: string): string {
   return content.charCodeAt(0) === 0xfeff ? content.slice(1) : content
 }

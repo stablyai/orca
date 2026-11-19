@@ -18,6 +18,21 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { markCodexProjectTrusted } from '../../../agent-launch/trust/agent-trust-presets'
 import { removeOrcaCreatedProjectTrustEntries } from './codex-project-trust-worker-client'
+import type * as TomlAtomicWrite from '../../configuration/toml/config-toml-atomic-write'
+
+// Runs just before each config publication, between the grant's read and its write.
+const beforePublish = vi.hoisted(() => ({ run: null as null | ((configPath: string) => void) }))
+
+vi.mock('../../configuration/toml/config-toml-atomic-write', async (importOriginal) => {
+  const actual = await importOriginal<typeof TomlAtomicWrite>()
+  return {
+    ...actual,
+    writeTomlConfigAtomically: (...args: Parameters<typeof actual.writeTomlConfigAtomically>) => {
+      beforePublish.run?.(args[0])
+      return actual.writeTomlConfigAtomically(...args)
+    }
+  }
+})
 
 vi.mock('./codex-project-trust-worker-spawn', async () => ({
   spawnCodexProjectTrustWorker: (await import('./codex-project-trust-worker.test-fixture'))
@@ -52,6 +67,7 @@ describe('Orca-created project trust lifecycle', () => {
   })
 
   afterEach(() => {
+    beforePublish.run = null
     rmSync(userDataDir, { recursive: true, force: true })
     if (previousUserDataPath === undefined) {
       delete process.env.ORCA_USER_DATA_PATH
@@ -182,6 +198,41 @@ describe('Orca-created project trust lifecycle', () => {
         expect(config).toContain(`[projects."${path}"]`)
       }
       expect(config).not.toContain(`[projects."${project(0)}"]`)
+    }
+  })
+
+  it('keeps an edit another writer publishes between the grant reading and replacing a config', async () => {
+    writeFileSync(managedConfigPath, 'model = "o3"\n')
+    beforePublish.run = (configPath) => {
+      beforePublish.run = null
+      writeFileSync(configPath, 'model = "gpt-5"\n')
+    }
+
+    await markCodexProjectTrusted(PROJECT, [managedConfigPath])
+
+    const config = readFileSync(managedConfigPath, 'utf-8')
+    expect(config).toContain('model = "gpt-5"')
+    expect(config).not.toContain('model = "o3"')
+    expect(config).toContain(`[projects."${PROJECT}"]`)
+    expect(readLedger()[managedConfigPath]).toHaveLength(1)
+  })
+
+  it('records every table a grant creates before it publishes any config', async () => {
+    let ledgerWhenSystemPublished: Record<string, unknown> | null = null
+    beforePublish.run = (configPath) => {
+      if (configPath === systemConfigPath) {
+        ledgerWhenSystemPublished = readLedger()
+      }
+    }
+
+    await markCodexProjectTrusted(PROJECT, [managedConfigPath, systemConfigPath])
+
+    expect(Object.keys(ledgerWhenSystemPublished ?? {}).sort()).toEqual(
+      [managedConfigPath, systemConfigPath].sort()
+    )
+    await removeOrcaCreatedProjectTrustEntries(PROJECT)
+    for (const configPath of [managedConfigPath, systemConfigPath]) {
+      expect(readFileSync(configPath, 'utf-8')).not.toContain(`[projects."${PROJECT}"]`)
     }
   })
 

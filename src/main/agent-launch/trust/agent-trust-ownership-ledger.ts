@@ -27,8 +27,14 @@ export type CreatedTrustRecord = { configPath: string; projectPath: string; writ
 
 export type AgentTrustOwnershipLedger = {
   record: (configPath: string, projectPath: string, written: string) => void
-  /** One read and at most one publication for every record of a grant. */
-  recordAll: (records: readonly CreatedTrustRecord[]) => void
+  /**
+   * One read and at most one publication for a whole grant. Forgets only entries with exactly the
+   * given bytes; returns the records it added, skipping paths already recorded.
+   */
+  apply: (changes: {
+    record?: readonly CreatedTrustRecord[]
+    forget?: readonly CreatedTrustRecord[]
+  }) => CreatedTrustRecord[]
   getWritten: (configPath: string, projectPath: string) => string | null
   listConfigFiles: (projectPath: string) => string[]
   forget: (configPath: string, projectPath: string) => void
@@ -86,30 +92,49 @@ export function createAgentTrustOwnershipLedger(
   const find = (ledger: CreatedTrustLedger, configPath: string, projectPath: string) =>
     (ledger.created[configPath] ?? []).find((recorded) => matches(recorded, projectPath))
 
-  const recordAll = (records: readonly CreatedTrustRecord[]): void => {
-    if (records.length === 0) {
-      return
+  const apply: AgentTrustOwnershipLedger['apply'] = ({ record = [], forget = [] }) => {
+    if (record.length === 0 && forget.length === 0) {
+      return []
     }
     const ledger = read()
     let changed = false
-    for (const { configPath, projectPath, written } of records) {
-      if (find(ledger, configPath, projectPath)) {
+    for (const { configPath, projectPath, written } of forget) {
+      const entries = ledger.created[configPath] ?? []
+      const remaining = entries.filter(
+        (recorded) => !(matches(recorded, projectPath) && recorded.written === written)
+      )
+      if (remaining.length !== entries.length) {
+        changed = true
+        if (remaining.length === 0) {
+          delete ledger.created[configPath]
+        } else {
+          ledger.created[configPath] = remaining
+        }
+      }
+    }
+    const added: CreatedTrustRecord[] = []
+    for (const entry of record) {
+      if (find(ledger, entry.configPath, entry.projectPath)) {
         continue
       }
-      ledger.created[configPath] = [
-        ...(ledger.created[configPath] ?? []),
-        { path: projectPath, written }
+      ledger.created[entry.configPath] = [
+        ...(ledger.created[entry.configPath] ?? []),
+        { path: entry.projectPath, written: entry.written }
       ]
+      added.push(entry)
       changed = true
     }
     if (changed) {
       write(ledger)
     }
+    return added
   }
 
   return {
-    record: (configPath, projectPath, written) => recordAll([{ configPath, projectPath, written }]),
-    recordAll,
+    record: (configPath, projectPath, written) => {
+      apply({ record: [{ configPath, projectPath, written }] })
+    },
+    apply,
     getWritten: (configPath, projectPath) => find(read(), configPath, projectPath)?.written ?? null,
     listConfigFiles: (projectPath) =>
       Object.entries(read().created)
