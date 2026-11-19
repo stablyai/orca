@@ -1,4 +1,5 @@
 import { execFileSync, spawn } from 'node:child_process'
+import { windowsSystem32Binary } from '@orca/process-host/windows-system-binary'
 import { assertWslDistroAllowed } from '@orca/process-host/wsl-distro-allowlist'
 import type { WindowsHostInteractiveLoginSpawn } from '../providers/shell-launch/windows/windows-interactive-login-spawn'
 import type {
@@ -39,22 +40,21 @@ function killLoginProcessTree(
   child: CodexLoginChild,
   interactiveLogin?: WindowsHostInteractiveLoginSpawn | null
 ): void {
-  const terminationPid = interactiveLogin?.getTerminationPid?.() ?? child.pid
+  const pid = interactiveLogin?.getTerminationPid?.() ?? child.pid
   if (
     process.platform === 'win32' &&
-    typeof terminationPid === 'number' &&
-    child.exitCode === null &&
-    child.signalCode === null &&
+    typeof pid === 'number' &&
+    (child.exitCode ?? child.signalCode) === null &&
     // Record only attempted kills; Electron-owned PIDs fall back to a direct signal.
     admitSelfInitiatedTreeKill({
-      pid: terminationPid,
+      pid,
       site: 'codex-account-login-teardown',
       scope: 'win-taskkill-tree'
     })
   ) {
     try {
       // Kill descendants too: their Windows file handles can block post-login home operations.
-      execFileSync('taskkill', ['/pid', String(terminationPid), '/t', '/f'], {
+      execFileSync(windowsSystem32Binary('taskkill.exe'), ['/pid', String(pid), '/t', '/f'], {
         windowsHide: true,
         timeout: WINDOWS_LOGIN_TREE_KILL_TIMEOUT_MS,
         stdio: 'ignore'
