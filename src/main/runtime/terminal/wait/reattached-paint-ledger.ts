@@ -9,15 +9,29 @@ import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import { readsTrustedScreen } from '../../agent-state-rules/agent-state-rules-engine'
 import type { TerminalCommandPaintRecord } from '../input/terminal-command-paint'
-import { durableWriteTempPath, writeFileDurable } from '../../../filesystem/durable-file-write'
+import {
+  durableWriteTempPath,
+  removeStaleDurableWriteTempFiles,
+  writeFileDurable
+} from '../../../filesystem/durable-file-write'
 
 /** One terminal at quit: its process incarnation, the daemon's output count when its command's
  *  paint was attributed, and the agent then in front. */
-export type ReattachedPaintEntry = { incarnationId: string; sequence: number; agent: string }
+export type ReattachedPaintEntry = {
+  incarnationId: string
+  sequence: number
+  agent: string
+  /** When a quit saved it; another runtime's entry is kept this long. */
+  savedAt?: number
+}
 
 const LEDGER_VERSION = 1
 /** A quit never waits on this write longer than this; a ledger missed only keeps today's hold. */
 const SAVE_BUDGET_MS = 500
+/** An entry for a terminal no run attached since is kept this long. */
+const UNTRACKED_ENTRY_MS = 7 * 24 * 60 * 60_000
+/** A temp file this old is a writer's that stopped mid-quit; younger ones may be another instance's. */
+const STALE_TEMP_MS = 60_000
 
 type LedgerFile = { version: number; entries: Record<string, ReattachedPaintEntry> }
 
@@ -59,24 +73,41 @@ export class ReattachedPaintLedger {
 
   constructor(private readonly path: string) {}
 
-  /** The entry the last quit saved for this terminal; any read failure is no entry. */
-  async read(ptyId: string): Promise<ReattachedPaintEntry | null> {
-    this.loaded ??= readFile(this.path, 'utf-8').then(parseLedger, () => new Map())
-    return (await this.loaded.catch(() => new Map())).get(ptyId) ?? null
+  /** What the last quits saved, read once; a quit cut off mid-write left a temp this reclaims. */
+  private load(): Promise<Map<string, ReattachedPaintEntry>> {
+    if (!this.loaded) {
+      void removeStaleDurableWriteTempFiles(this.path, { minimumAgeMs: STALE_TEMP_MS })
+      this.loaded = readFile(this.path, 'utf-8').then(parseLedger, () => new Map())
+    }
+    return this.loaded.catch(() => new Map())
   }
 
-  /** Replaces the ledger with this quit's terminals, within a small budget. */
-  save(entries: Map<string, ReattachedPaintEntry>): Promise<void> {
-    const file: LedgerFile = { version: LEDGER_VERSION, entries: Object.fromEntries(entries) }
+  /** The entry the last quit saved for this terminal; any read failure is no entry. */
+  async read(ptyId: string): Promise<ReattachedPaintEntry | null> {
+    return (await this.load()).get(ptyId) ?? null
+  }
+
+  /** Saves this quit's terminals over the ledger within a small budget. Recent entries for
+   *  terminals this run never attached (`tracked` lacks them) are kept for a later start. */
+  save(entries: Map<string, ReattachedPaintEntry>, tracked: ReadonlySet<string>): Promise<void> {
     let timer: NodeJS.Timeout | undefined
     const budget = new Promise<void>((resolve) => {
       timer = setTimeout(resolve, SAVE_BUDGET_MS)
     })
-    const write = writeFileDurable(
-      durableWriteTempPath(this.path),
-      this.path,
-      JSON.stringify(file)
-    ).catch(() => {})
+    const write = this.load()
+      .then((previous) => {
+        const now = Date.now()
+        const kept = [...previous].filter(
+          ([ptyId, entry]) => !tracked.has(ptyId) && now - (entry.savedAt ?? 0) < UNTRACKED_ENTRY_MS
+        )
+        const saved = [...entries].map(([ptyId, entry]) => [ptyId, { ...entry, savedAt: now }])
+        const file: LedgerFile = {
+          version: LEDGER_VERSION,
+          entries: Object.fromEntries([...kept, ...saved])
+        }
+        return writeFileDurable(durableWriteTempPath(this.path), this.path, JSON.stringify(file))
+      })
+      .catch(() => {})
     return Promise.race([write, budget]).finally(() => clearTimeout(timer))
   }
 }

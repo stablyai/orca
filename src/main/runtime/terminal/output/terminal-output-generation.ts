@@ -149,7 +149,8 @@ export abstract class OrcaRuntimeWithRecordAgentPromptLifecycleState extends Orc
         return entry ? [[ptyId, entry] as const] : []
       })
     )
-    return reattachedPaintLedger().save(entries)
+    // A terminal this run never attached keeps the entry its last quit saved.
+    return reattachedPaintLedger().save(entries, this.providerSequenceInitializedPtys)
   }
 
   /** Whether the quit ledger proves the reattached frame is this agent's own last paint. */

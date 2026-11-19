@@ -47,9 +47,13 @@ it("restores a quiet agent's retained frame as its paint when nothing was writte
   paint(before, '❯ Ask me anything…')
   const entry = reattachedPaintEntry(before, 4_096)
   expect(entry).toEqual({ incarnationId: 'inc-1', sequence: 4_096, agent: 'hermes' })
-  await new ReattachedPaintLedger(join(dir, 'ledger.json')).save(new Map([['pty-1', entry!]]))
+  await new ReattachedPaintLedger(join(dir, 'ledger.json')).save(
+    new Map([['pty-1', entry!]]),
+    new Set(['pty-1'])
+  )
 
   const saved = await new ReattachedPaintLedger(join(dir, 'ledger.json')).read('pty-1')
+  expect(saved).toMatchObject({ incarnationId: 'inc-1', sequence: 4_096, agent: 'hermes' })
   const after = reattached()
   expect(hasTerminalCommandPainted(after)).toBe(false)
   const current = { incarnationId: 'inc-1', agent: 'hermes' }
@@ -78,4 +82,18 @@ it('records nothing for a command whose paint was never attributed', () => {
   const notReattachedHost = hermesPane()
   paint(notReattachedHost, '\x1b]133;C\x07❯ Ask me anything…')
   expect(reattachedPaintEntry(notReattachedHost, undefined)).toBeNull()
+})
+
+it('keeps the proof of a terminal this run never attached', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'orca-paint-ledger-'))
+  dirs.push(dir)
+  const path = join(dir, 'ledger.json')
+  const entry = { incarnationId: 'inc-a', sequence: 7, agent: 'hermes' }
+  await new ReattachedPaintLedger(path).save(new Map([['pty-a', entry]]), new Set(['pty-a']))
+  // A run that attached only pty-b, now unproven, saves nothing of its own.
+  await new ReattachedPaintLedger(path).save(new Map(), new Set(['pty-b']))
+  expect(await new ReattachedPaintLedger(path).read('pty-a')).toMatchObject(entry)
+  // A run that attached pty-a drops it once it is no longer proven.
+  await new ReattachedPaintLedger(path).save(new Map(), new Set(['pty-a']))
+  expect(await new ReattachedPaintLedger(path).read('pty-a')).toBeNull()
 })
