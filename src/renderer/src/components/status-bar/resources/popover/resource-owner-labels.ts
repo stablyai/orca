@@ -9,7 +9,7 @@ export function resourceOwnerLabels(t: Translate = translate): Record<ResourceOw
   return {
     orca: t('resourceManager.owner.orca', 'Orca'),
     agents: t('resourceManager.owner.agents', 'Agents'),
-    yourProcesses: t('resourceManager.owner.yourProcesses', 'Your processes'),
+    yourProcesses: t('resourceManager.owner.otherTerminals', 'Other terminals'),
     otherApps: t('resourceManager.owner.otherApps', 'Other apps and system')
   }
 }

@@ -339,7 +339,7 @@ export function renderResourceUsageSummary(
           <p>
             {t(
               'resourceManager.owner.description',
-              'Orca is the app. Agents and Your processes are terminals you run in Orca. Other apps and system is everything else on this machine.'
+              'Orca is the app. Agents and Other terminals are the terminals you run in Orca. Other apps and system is everything else on this machine.'
             )}
           </p>
           <p>
@@ -352,7 +352,7 @@ export function renderResourceUsageSummary(
             <p>
               {t(
                 'resourceManager.owner.overlapScaled',
-                'Shared memory is counted in more than one process here, so the bar scales Orca, Agents and Your processes down to fit what this machine reports as used.'
+                'Shared memory is counted in more than one process here, so the bar scales Orca, Agents and Other terminals down to fit what this machine reports as used.'
               )}
             </p>
           ) : null}
