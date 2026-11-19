@@ -174,7 +174,7 @@ export function restoredImages(
 export function restoredFiles(
   files: readonly MobileNativeChatSavedFile[]
 ): PendingNativeChatFile[] {
-  return files.map((file) => ({ ...file, id: createUuidV4() }))
+  return files.map((file) => ({ ...file, id: createUuidV4(), sentBytes: file.byteLength }))
 }
 
 export function readMobileNativeChatInFlightSend(

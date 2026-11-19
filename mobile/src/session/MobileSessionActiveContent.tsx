@@ -108,7 +108,6 @@ export function MobileSessionActiveContent({
     handleKeyboardAvoidanceMetrics,
     handleHaptic,
     nativeChatImages,
-    nativeChatStructuredComposer,
     activeMarkdownTab,
     activeFileTab,
     activeBrowserTab,
@@ -352,7 +351,8 @@ export function MobileSessionActiveContent({
                     activeSessionTabId={controller.activeSessionTab?.id}
                     onOpenFile={handleNativeChatFileTap}
                     images={nativeChatImages}
-                    structuredComposer={nativeChatStructuredComposer}
+                    structuredComposer={controller.nativeChatStructuredComposer}
+                    fileAttachments={controller.nativeChatFileAttachments}
                     onMicPress={dictationEnabled ? handleDictationToggle : undefined}
                     micActive={dictation.isStarting || dictation.isRecording}
                     micStarting={dictation.isStarting}

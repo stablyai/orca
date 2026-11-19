@@ -27,7 +27,7 @@ export type SaveClipboardImageAsTempFileArgs = {
 }
 
 // The path is typed into terminals, so keep no character a shell would expand.
-function shellInertFileName(name: string): string {
+export function shellInertFileName(name: string): string {
   return sanitizeAgentSessionAttachmentName(name).replace(/[^\p{L}\p{M}\p{N} ._-]/gu, '_')
 }
 
