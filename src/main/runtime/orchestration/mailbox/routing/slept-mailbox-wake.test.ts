@@ -290,8 +290,6 @@ it('holds unknown dispatch custody but retries a positively undispatched wake on
   const retained: SleepingAgentSessionRecord = {
     ...record,
     worktreeId: 'repo::/workspace',
-    origin: 'quit',
-    restoreOnTabOpenOnly: true,
     mailWake: { id: 'not-dispatched', capturedAt: 1, startedAt: 100 }
   }
   let session: WorkspaceSessionState = {
@@ -327,7 +325,7 @@ it('holds unknown dispatch custody but retries a positively undispatched wake on
     await settled()
     expect(await runtime.readSleepingMailHold(mailbox)).toMatchObject({
       resuming: false,
-      openTab: true,
+      openTab: false,
       liveShell: false
     })
     runtime.retrySleptMailboxWakes()

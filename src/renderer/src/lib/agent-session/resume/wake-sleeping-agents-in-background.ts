@@ -263,10 +263,9 @@ async function wakeSleepingPaneInBackground(
   ) {
     return false
   }
+  // The wake claim sits beside the sleep record; restoration fields stay as Agent Sleep wrote them.
   const captured: SleepingAgentSessionRecord = {
     ...record,
-    origin: 'quit',
-    restoreOnTabOpenOnly: true,
     mailWake: {
       id: createNonSecureContextUuid(),
       capturedAt: record.capturedAt,

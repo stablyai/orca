@@ -52,6 +52,5 @@ export function undispatchedMailWakeRecord(
   if (mailWakeObligation(record) !== 'retained' || !record.mailWake || record.mailWake.attempt) {
     return null
   }
-  const { restoreOnTabOpenOnly: _tabOnly, ...resume } = withoutMailWake(record)
-  return { ...resume, origin: 'worktree-sleep', capturedAt: record.mailWake.capturedAt }
+  return withoutMailWake(record)
 }
