@@ -32,17 +32,18 @@ function followPageVisibility(guest: Electron.WebContents): InternalSend | null 
   if (existing) {
     return existing
   }
-  const internal = guest as unknown as { _sendInternal?: InternalSend }
-  const original = internal._sendInternal
+  const original: unknown = Reflect.get(guest, '_sendInternal')
   if (typeof original !== 'function') {
     return null
   }
-  const send: InternalSend = (channel, ...args) => original.call(guest, channel, ...args)
+  const send: InternalSend = (channel, ...args) =>
+    Reflect.apply(original, guest, [channel, ...args])
   // Electron's window-only value, sent on show/hide/minimize and replayed at dom-ready, would undo the page's.
-  internal._sendInternal = (channel, ...args) =>
+  const follow: InternalSend = (channel, ...args) =>
     channel === ELECTRON_GUEST_VISIBILITY_CHANNEL
       ? send(channel, pageVisibility.get(guest) ?? args[0])
       : send(channel, ...args)
+  Reflect.set(guest, '_sendInternal', follow)
   // Electron drops messages that reach a document before its element exists.
   guest.on('dom-ready', () => {
     const state = pageVisibility.get(guest)

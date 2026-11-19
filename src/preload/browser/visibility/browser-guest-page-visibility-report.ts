@@ -5,9 +5,8 @@ export function installBrowserGuestPageVisibilityReport(
   let reported: DocumentVisibilityState | null = null
   const report = (): void => {
     // Electron overrides visibilityState and hidden but leaves the prefixed property alone.
-    const state = (document as { webkitVisibilityState?: DocumentVisibilityState })
-      .webkitVisibilityState
-    if (state && state !== reported) {
+    const state: unknown = Reflect.get(document, 'webkitVisibilityState')
+    if ((state === 'visible' || state === 'hidden') && state !== reported) {
       reported = state
       send(state)
     }
