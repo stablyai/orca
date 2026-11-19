@@ -24,13 +24,20 @@ it('puts the button just below a box it would cover while the pane has room ther
   ).toEqual({ left: 640, top: 356 })
 })
 
-it('keeps moving until the button clears every box, not just the first it covered', () => {
+it('moves the button to a spot that clears every box, not just the one it covered', () => {
   const lower = { left: 300, top: 210, right: 700, bottom: 280, paneBottom: 768 }
   const upper = { left: 300, top: 100, right: 700, bottom: 200, paneBottom: 768 }
+  // Below the upper box would land on the lower one, so the button goes above the upper box.
   expect(keepFloatingTerminalTriggerClear({ left: 640, top: 150 }, [lower, upper])).toEqual({
     left: 640,
-    top: 288
+    top: 56
   })
+  expect(
+    keepFloatingTerminalTriggerClear({ left: 640, top: 150 }, [
+      { ...lower, paneBottom: 300 },
+      { ...upper, paneBottom: 300 }
+    ])
+  ).toEqual({ left: 640, top: 56 })
 })
 
 it('puts the button above a box when the room below is past the bottom of the window', () => {

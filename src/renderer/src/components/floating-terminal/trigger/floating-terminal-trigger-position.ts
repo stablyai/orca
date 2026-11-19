@@ -103,27 +103,29 @@ export function keepFloatingTerminalTriggerClear(
   position: FloatingTerminalTriggerPosition,
   keepClear: readonly FloatingTerminalTriggerKeepClearRect[]
 ): FloatingTerminalTriggerPosition {
-  let top = position.top
-  // Moving off one box can land on another, so look again until the spot covers none of them.
-  for (let pass = 0; pass <= keepClear.length; pass++) {
-    const covered = keepClear.find(
-      (rect) =>
-        position.left < rect.right &&
-        position.left + TRIGGER_SIZE > rect.left &&
-        top < rect.bottom &&
-        top + TRIGGER_SIZE > rect.top
-    )
-    if (!covered) {
-      break
-    }
-    const below = covered.bottom + KEEP_CLEAR_GAP
-    // The pane may run past the window, which the button must stay inside too.
-    const floor = Math.min(covered.paneBottom, getViewport().height) - DRAG_MARGIN
-    top = below + TRIGGER_SIZE <= floor ? below : covered.top - KEEP_CLEAR_GAP - TRIGGER_SIZE
+  const covers = (top: number, rect: FloatingTerminalTriggerKeepClearRect): boolean =>
+    position.left < rect.right &&
+    position.left + TRIGGER_SIZE > rect.left &&
+    top < rect.bottom &&
+    top + TRIGGER_SIZE > rect.top
+  const covered = keepClear.filter((rect) => covers(position.top, rect))
+  if (covered.length === 0) {
+    return position
   }
-  return top === position.top
-    ? position
-    : clampFloatingTerminalTriggerPosition({ left: position.left, top })
+  // Below a covered box first, then above it, then beside the others: moving off one box can land on another.
+  const spots = [...covered, ...keepClear.filter((rect) => !covered.includes(rect))].flatMap(
+    (rect) => {
+      const below = rect.bottom + KEEP_CLEAR_GAP
+      // The pane may run past the window, which the button must stay inside too.
+      const floor = Math.min(rect.paneBottom, getViewport().height) - DRAG_MARGIN
+      const above = rect.top - KEEP_CLEAR_GAP - TRIGGER_SIZE
+      return below + TRIGGER_SIZE <= floor ? [below, above] : [above]
+    }
+  )
+  const clear = spots.find(
+    (top) => top >= TITLEBAR_SAFE_TOP && !keepClear.some((rect) => covers(top, rect))
+  )
+  return clampFloatingTerminalTriggerPosition({ left: position.left, top: clear ?? spots[0] })
 }
 
 export function hasUsableFloatingTerminalTriggerViewport(): boolean {
