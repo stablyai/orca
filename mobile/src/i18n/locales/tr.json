@@ -1653,7 +1653,10 @@
       "removeHostMessage": "“{{name}}” kaldırılsın mı? Daha sonra yeniden eşleştirebilirsiniz.",
       "sleep": "Uyut",
       "unpin": "Sabitlemeyi Kaldır",
-      "rename": "Yeniden adlandır"
+      "rename": "Yeniden adlandır",
+      "markRead": "Okundu Olarak İşaretle",
+      "markUnread": "Okunmadı Olarak İşaretle",
+      "moveToStatus": "Duruma Taşı"
     },
     "workspaceDetailsSheet": {
       "checksFailing": "Kontroller: Başarısız",

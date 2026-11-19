@@ -14,6 +14,7 @@ export const WORKER_THREAD_ENTRY_NAMES = [
   'worker-thread-child-process-entry',
   ...(['usage-scan', 'workspace-space-scan'] as const).map((n) => `${n}-worker-entry` as const),
   'codex-history-disk-usage-worker-entry',
+  'codex-project-trust-worker-entry',
   'claude-profile-setup-worker-entry',
   ...(['backup', 'writer'] as const).map((kind) => `profile-state-${kind}-worker-entry` as const),
   'plugin-source-transpile-worker-entry'

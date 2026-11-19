@@ -74,18 +74,24 @@ export const updating = defineFixture({
   interact: open
 })
 
-export const failedWithOutput = defineFixture({
+export const failed = defineFixture({
   ...bar([
-    ['', { updates: [claude, codex], runs: { codex: { phase: 'failed', output: OUTPUT } } }]
+    [
+      '',
+      {
+        updates: [claude, codex],
+        runs: {
+          codex: {
+            phase: 'failed',
+            output: OUTPUT,
+            command: 'codex update',
+            finishedAt: Date.UTC(2026, 10, 18, 18, 42)
+          }
+        }
+      }
+    ]
   ]),
-  interact: async (frame) => {
-    await open(frame)
-    const showOutput = [...document.querySelectorAll<HTMLButtonElement>('button')].find(
-      (button) => button.textContent === 'Show output'
-    )
-    showOutput?.click()
-    await settle()
-  }
+  interact: open
 })
 
 export const manualCommand = defineFixture({

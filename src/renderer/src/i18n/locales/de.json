@@ -19208,7 +19208,6 @@
         "sendAgainToTryOnceMore": "Die Nachricht erneut senden, um es noch einmal zu versuchen.",
         "couldNotStart": "{{agent}} konnte nicht gestartet werden.",
         "couldNotRestart": "{{agent}} konnte nicht neu gestartet werden.",
-        "cliTooOld": "{{agent}} {{installedVersion}} ist zu alt für Chats. Auf {{minimumVersion}} oder neuer aktualisieren.",
         "startTimedOut": "{{agent}} hat zu lange zum Starten gebraucht (keine Antwort auf {{method}} nach {{seconds}}s).",
         "startTimedOutKeepsHappening": "Wenn dies wiederholt auftritt, ist der Computer, auf dem dieser Chat läuft, möglicherweise überlastet.",
         "notSignedIn": "{{agent}} ist nicht angemeldet.",
@@ -19897,14 +19896,7 @@
         "unreported": "Die Kontextnutzung ist für diese Sitzung nicht verfügbar."
       },
       "agentMessage": {
-        "messageFrom": "Nachricht von",
         "unnamedSender": "einem Agenten",
-        "messageFromCoordinator": "Nachricht vom Koordinator",
-        "startedWorker": "Worker gestartet",
-        "handedOffToAgent": "An Agenten übergeben",
-        "startedAgent": "Agent gestartet",
-        "taskFromCoordinator": "Aufgabe vom Koordinator",
-        "updateFromWorker": "Aktualisierung vom Worker",
         "senderReplaced": "{{name}} läuft nicht mehr in seinem Terminal; dort läuft jetzt ein anderer Agent. Öffne das Terminal bei Bedarf über die Seitenleiste.",
         "senderAmbiguous": "Orca kann nicht feststellen, in welchem Terminal {{name}} läuft. Öffne es über die Seitenleiste.",
         "senderNotRunning": "{{name}} läuft nicht mehr. Starte einen neuen Agenten über die Seitenleiste, um die Arbeit fortzusetzen.",

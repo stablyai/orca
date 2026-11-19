@@ -4,6 +4,7 @@ import path from 'node:path'
 import { test } from '../../desktop/electron-fixtures/orca-app'
 import { expect } from '@stablyai/playwright-test'
 import { waitForSessionReady } from '../../desktop/renderer-probes/store'
+import { dismissSetupScriptPrompts } from './sidebar-setup-prompt'
 
 test('cycles visible folder workspaces with shortcuts and focused list arrows', async ({
   orcaPage,
@@ -48,6 +49,8 @@ test('cycles visible folder workspaces with shortcuts and focused list arrows', 
     store.setState({ collapsedGroups: new Set() })
     return [first.id, `folder:${folder.folderWorkspace.id}`, last.id]
   }, folderPath)
+  // The seeded repo's setup prompt overlays the list bottom and would intercept row clicks.
+  await dismissSetupScriptPrompts(orcaPage)
 
   expect(
     await electronApp.evaluate(({ BrowserWindow }) =>

@@ -66,19 +66,3 @@ export function slackHowToAsk(bot: Pick<Bot, 'name'>): string {
     { name: bot.name, ...HOW_TO_ASK_ESCAPED }
   )
 }
-
-/** A setup dialog's header: how to ask, and that the bot then works on its computer. */
-export function slackSetupIntro(bot: Pick<Bot, 'name'>, hostName: string | null): string {
-  if (hostName) {
-    return translate(
-      'bots.slack.setupIntroOnHost',
-      'Mention <code>@{{name}}</code> in a channel, or send it a direct message, and {{name}} starts working on {{host}}.',
-      { name: bot.name, host: hostName, ...HOW_TO_ASK_ESCAPED }
-    )
-  }
-  return translate(
-    'bots.slack.setupIntro',
-    'Mention <code>@{{name}}</code> in a channel, or send it a direct message, and {{name}} starts working on this computer.',
-    { name: bot.name, ...HOW_TO_ASK_ESCAPED }
-  )
-}

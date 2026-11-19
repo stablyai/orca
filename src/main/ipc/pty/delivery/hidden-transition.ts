@@ -57,14 +57,14 @@ export function revealHiddenRendererPty(
   if (!transition.droppedWhileHidden || transition.hiddenDropEpisode === sentEpisode) {
     return undefined
   }
-  sendModelRestoreNeededMarker(
+  const sent = sendModelRestoreNeededMarker(
     session,
     id,
     'unhide',
     session.runtime?.getPtyOutputSequence(id),
     transition.hiddenDropEpisode
   )
-  return transition.hiddenDropEpisode
+  return sent ? transition.hiddenDropEpisode : undefined
 }
 
 /** Records a dropped hidden pending entry and tells the renderer the pane printed. */

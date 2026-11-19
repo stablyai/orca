@@ -19775,7 +19775,6 @@
         "sendAgainToTryOnceMore": "Отправьте сообщение снова, чтобы повторить попытку.",
         "couldNotStart": "Не удалось запустить {{agent}}.",
         "couldNotRestart": "Не удалось перезапустить {{agent}}.",
-        "cliTooOld": "{{agent}} {{installedVersion}} слишком стар для чатов. Обновите до {{minimumVersion}} или новее.",
         "startTimedOut": "{{agent}} запускается слишком долго: нет ответа на {{method}} за {{seconds}} с.",
         "startTimedOutKeepsHappening": "Если это повторяется, возможно, компьютер с этим чатом перегружен.",
         "notSignedIn": "Вход в {{agent}} не выполнен.",
@@ -20560,14 +20559,7 @@
         "unreported": "Размер контекста недоступен для этой сессии."
       },
       "agentMessage": {
-        "messageFrom": "Сообщение от",
         "unnamedSender": "агента",
-        "messageFromCoordinator": "Сообщение от координатора",
-        "startedWorker": "Исполнитель запущен",
-        "handedOffToAgent": "Передано агенту",
-        "startedAgent": "Агент запущен",
-        "taskFromCoordinator": "Задача от координатора",
-        "updateFromWorker": "Обновление от исполнителя",
         "senderReplaced": "{{name}} больше не работает в своём терминале; теперь там работает другой агент. При необходимости откройте этот терминал через боковую панель.",
         "senderAmbiguous": "Orca не может определить, в каком терминале работает {{name}}. Откройте его через боковую панель.",
         "senderNotRunning": "{{name}} больше не работает. Запустите нового агента через боковую панель, чтобы продолжить работу.",
