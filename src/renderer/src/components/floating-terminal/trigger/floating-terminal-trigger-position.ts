@@ -104,19 +104,23 @@ export function keepFloatingTerminalTriggerClear(
   keepClear: readonly FloatingTerminalTriggerKeepClearRect[]
 ): FloatingTerminalTriggerPosition {
   let top = position.top
-  for (const rect of keepClear) {
-    if (
-      position.left < rect.right &&
-      position.left + TRIGGER_SIZE > rect.left &&
-      top < rect.bottom &&
-      top + TRIGGER_SIZE > rect.top
-    ) {
-      const below = rect.bottom + KEEP_CLEAR_GAP
-      top =
-        below + TRIGGER_SIZE <= rect.paneBottom - DRAG_MARGIN
-          ? below
-          : rect.top - KEEP_CLEAR_GAP - TRIGGER_SIZE
+  // Moving off one box can land on another, so look again until the spot covers none of them.
+  for (let pass = 0; pass <= keepClear.length; pass++) {
+    const covered = keepClear.find(
+      (rect) =>
+        position.left < rect.right &&
+        position.left + TRIGGER_SIZE > rect.left &&
+        top < rect.bottom &&
+        top + TRIGGER_SIZE > rect.top
+    )
+    if (!covered) {
+      break
     }
+    const below = covered.bottom + KEEP_CLEAR_GAP
+    top =
+      below + TRIGGER_SIZE <= covered.paneBottom - DRAG_MARGIN
+        ? below
+        : covered.top - KEEP_CLEAR_GAP - TRIGGER_SIZE
   }
   return top === position.top
     ? position

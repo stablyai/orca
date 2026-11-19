@@ -23,3 +23,12 @@ it('puts the button just below a box it would cover while the pane has room ther
     keepFloatingTerminalTriggerClear({ left: 640, top: 580 }, [{ ...card, paneBottom: 651 }])
   ).toEqual({ left: 640, top: 356 })
 })
+
+it('keeps moving until the button clears every box, not just the first it covered', () => {
+  const lower = { left: 300, top: 210, right: 700, bottom: 280, paneBottom: 768 }
+  const upper = { left: 300, top: 100, right: 700, bottom: 200, paneBottom: 768 }
+  expect(keepFloatingTerminalTriggerClear({ left: 640, top: 150 }, [lower, upper])).toEqual({
+    left: 640,
+    top: 288
+  })
+})

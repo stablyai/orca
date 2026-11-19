@@ -4,17 +4,28 @@ import { useEffect, useSyncExternalStore, type RefObject } from 'react'
 import type { FloatingTerminalTriggerKeepClearRect } from './floating-terminal-trigger-position'
 
 const NONE: readonly FloatingTerminalTriggerKeepClearRect[] = []
-// Each element with the column it sits in, whose bottom bounds where the button may go below it.
-const elements = new Map<HTMLElement, HTMLElement | null>()
+type Registration = {
+  /** The column the element sits in, whose bottom bounds where the button may go below it. */
+  column: HTMLElement | null
+  /** Watches `column` instead, when the element's column changes. */
+  watch: (column: HTMLElement | null) => void
+}
+
+const elements = new Map<HTMLElement, Registration>()
 const listeners = new Set<() => void>()
 let rects = NONE
 
 function measure(): void {
   const next: FloatingTerminalTriggerKeepClearRect[] = []
-  for (const [element, column] of elements) {
+  for (const [element, registration] of elements) {
     const { left, top, right, bottom } = element.getBoundingClientRect()
     // A hidden page's box measures empty and has nothing to keep clear.
     if (right > left && bottom > top) {
+      // Resolved again each time: a wrapper hidden at registration lays nothing out once shown.
+      const column = layoutParentOf(element)
+      if (column !== registration.column) {
+        registration.watch(column)
+      }
       const paneBottom = column?.getBoundingClientRect().bottom ?? window.innerHeight
       next.push({ left, top, right, bottom, paneBottom })
     }
@@ -53,24 +64,28 @@ function keepClearOf(element: HTMLElement): () => void {
   }
   // The element also moves without resizing when a box above it in its column grows, e.g. Activity
   // filling in, so the column and every box in it are watched, including boxes added later.
-  const column = layoutParentOf(element)
-  elements.set(element, column)
   const resized = new ResizeObserver(measure)
-  const watch = (): void => {
-    resized.disconnect()
-    resized.observe(element)
-    for (const box of column ? [column, ...column.children] : []) {
-      resized.observe(box)
-    }
-  }
-  watch()
   const added = new MutationObserver(() => {
-    watch()
+    registration.watch(registration.column)
     measure()
   })
-  if (column) {
-    added.observe(column, { childList: true })
+  const registration: Registration = {
+    column: null,
+    watch: (column) => {
+      registration.column = column
+      resized.disconnect()
+      added.disconnect()
+      resized.observe(element)
+      if (column) {
+        for (const box of [column, ...column.children]) {
+          resized.observe(box)
+        }
+        added.observe(column, { childList: true })
+      }
+    }
   }
+  registration.watch(layoutParentOf(element))
+  elements.set(element, registration)
   measure()
   return () => {
     resized.disconnect()
