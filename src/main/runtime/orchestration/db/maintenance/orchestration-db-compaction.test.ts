@@ -127,7 +127,7 @@ describe('compactOrchestrationDb', () => {
     expect(inspect(file)).toEqual({ autoVacuum: 0, integrity: 'ok' })
   })
 
-  it('stops at its budget and leaves the file as it was', async () => {
+  it('stops when the checks used up its budget and leaves the file as it was', async () => {
     const file = legacyDatabase()
 
     expect((await compactOrchestrationDb(file, { budgetMs: 0 })).kind).toBe('timed-out')

@@ -7,9 +7,12 @@ import { structuredWorkerIdentityFromRow } from '../terminal-authority/structure
 import { isStructuredWorkerHandle } from '../../../../shared/orchestration/workers/structured-worker-handle'
 import { committedHandBackTypes, type MailHandBack } from './messages/helper-mailbox-hand-back'
 import { existsSync } from 'node:fs'
+import { setImmediate as yieldToEventLoop } from 'node:timers/promises'
 import { structuredMailboxCustody } from '../mailbox/routing/structured-session-mail-target'
 import { closeOrphanedTerminalApprovals } from '../workers/approvals/terminal-approval-orphans'
 import { OrcaRuntimeWithAutomationApiOperations } from '../../workspaces/persisted-surfaces/automation-api-operations'
+
+const RUNS_PER_ACTIVITY_PAGE = 500
 
 export abstract class RuntimeOrchestrationDatabaseAccess extends OrcaRuntimeWithAutomationApiOperations {
   private orchestrationDbMaintenance: OrchestrationDbMaintenance | undefined
@@ -74,7 +77,7 @@ export abstract class RuntimeOrchestrationDatabaseAccess extends OrcaRuntimeWith
   }
 
   /** In-flight orchestration work, including Runs whose coordinator is still alive in a terminal. */
-  hasActiveOrchestrationWork(): boolean {
+  async hasActiveOrchestrationWork(): Promise<boolean> {
     const db = this._orchestrationDb
     if (!db) {
       return false
@@ -82,16 +85,31 @@ export abstract class RuntimeOrchestrationDatabaseAccess extends OrcaRuntimeWith
     if (db.db.prepare(ACTIVE_ORCHESTRATION_WORK_SQL).get()?.active) {
       return true
     }
-    return db.db
-      .prepare('SELECT coordinator_handle, coordinator_pane_key FROM runs')
-      .all()
-      .some(
+    const page = db.db.prepare(
+      'SELECT rowid AS row_id, coordinator_handle, coordinator_pane_key FROM runs WHERE rowid > ? ORDER BY rowid LIMIT ?'
+    )
+    // Paged with yields, so a long Run history never holds quit past its cap.
+    for (let after = 0; ;) {
+      const runs = page.all(after, RUNS_PER_ACTIVITY_PAGE)
+      const live = runs.some(
         (run) =>
           (typeof run.coordinator_handle === 'string' &&
             this.isLiveOrchestrationHandle(run.coordinator_handle)) ||
           (typeof run.coordinator_pane_key === 'string' &&
             this.hasLiveTerminalForPaneKey(run.coordinator_pane_key))
       )
+      if (live) {
+        return true
+      }
+      if (runs.length < RUNS_PER_ACTIVITY_PAGE) {
+        return false
+      }
+      after = Number(runs.at(-1)?.row_id)
+      await yieldToEventLoop()
+      if (this._orchestrationDb !== db) {
+        return true
+      }
+    }
   }
 
   /** At the end of a clean quit, for a one-time compaction: closes the database and keeps it closed. */

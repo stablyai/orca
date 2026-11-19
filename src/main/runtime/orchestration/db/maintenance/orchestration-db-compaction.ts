@@ -1,4 +1,4 @@
-import { open, readFile, rm, statfs, writeFile } from 'node:fs/promises'
+import { open, readFile, rm, stat, statfs, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import { tmpdir } from 'node:os'
 import { spawnProcess } from '@orca/process-host'
@@ -14,6 +14,8 @@ const QUIT_BUDGET_MS = 2_000
 const EXIT_GRACE_MS = 500
 // Quit pays the wait once: a stopped attempt waits until the live data shrinks this much.
 const MAX_TIMEOUTS = 1
+// Our close checkpoints only if the child died after 'ready'; this (journal_size_limit) bounds that close.
+const MAX_WAL_BYTES = 8 * MIB
 const RETRY_LIVE_FRACTION = 0.75
 
 /** Orchestration state another agent or process may still act on; compaction waits for a quit with none. */
@@ -57,6 +59,14 @@ async function availableBytesIn(dir: string): Promise<number> {
     return Number(disk.bavail) * Number(disk.bsize)
   } catch {
     return 0
+  }
+}
+
+async function walBacklogExceeds(filename: string, maxBytes: number): Promise<boolean> {
+  try {
+    return (await stat(`${filename}-wal`)).size > maxBytes
+  } catch {
+    return false
   }
 }
 
@@ -123,20 +133,11 @@ async function readDeferral(filename: string): Promise<CompactionDeferral | null
   }
 }
 
-/** Remembers stopped attempts, so a disk too slow for the budget doesn't pay it on every quit. */
-async function recordOutcome(
-  filename: string,
-  liveBytes: number,
-  result: OrchestrationDbCompaction
-): Promise<void> {
+async function writeDeferral(filename: string, deferral: CompactionDeferral | null): Promise<void> {
   try {
-    if (result.kind === 'timed-out') {
-      const previous = await readDeferral(filename)
-      await writeFile(
-        deferralFile(filename),
-        JSON.stringify({ liveBytes, timeouts: (previous?.timeouts ?? 0) + 1 })
-      )
-    } else if (result.kind === 'compacted') {
+    if (deferral) {
+      await writeFile(deferralFile(filename), JSON.stringify(deferral))
+    } else {
       await rm(deferralFile(filename), { force: true })
     }
   } catch {
@@ -144,11 +145,16 @@ async function recordOutcome(
   }
 }
 
+/** An attempt that waited without compacting (stopped, failed or cut off at quit) keeps its deferral. */
+function keepsDeferral(result: OrchestrationDbCompaction): boolean {
+  return result.kind === 'timed-out' || result.kind === 'failed'
+}
+
 export type OrchestrationDbQuitOwner = {
   /** The database file, or null when there is none. */
   orchestrationDbFileForQuit(): string | null
   /** Orchestration work in flight, including live coordinators only this process can see. */
-  hasActiveOrchestrationWork(): boolean
+  hasActiveOrchestrationWork(): Promise<boolean>
   /** Closes this process's connection and keeps it closed. */
   closeOrchestrationDbForQuit(): void
 }
@@ -161,7 +167,11 @@ export type OrchestrationDbQuitOwner = {
  */
 export async function compactOrchestrationDb(
   filename: string,
-  options: { budgetMs?: number; isActive?: () => boolean; release?: () => void } = {}
+  options: {
+    budgetMs?: number
+    isActive?: () => boolean | Promise<boolean>
+    release?: () => void
+  } = {}
 ): Promise<OrchestrationDbCompaction> {
   const { budgetMs = QUIT_BUDGET_MS, isActive = () => false, release = () => {} } = options
   // The budget covers the checks too, so a slow disk or long history can't stretch quit past it.
@@ -188,15 +198,22 @@ export async function compactOrchestrationDb(
   if (availableBytes < neededBytes || (await availableBytesIn(sqliteTempDir())) < liveBytes) {
     return { kind: 'low-disk', neededBytes, availableBytes }
   }
-  if (isActive()) {
+  if (await walBacklogExceeds(filename, MAX_WAL_BYTES)) {
+    return { kind: 'busy' }
+  }
+  if (await isActive()) {
     return { kind: 'active' }
   }
+  // Recorded before the wait, so a quit cut off mid-attempt still counts as the one wait it paid.
+  await writeDeferral(filename, { liveBytes, timeouts: (deferral?.timeouts ?? 0) + 1 })
   const remainingMs = budgetMs - (performance.now() - started)
   const result =
     remainingMs > 0
       ? await runCompactionChild(filename, remainingMs, release, started)
       : { kind: 'timed-out' as const, ms: Math.round(performance.now() - started) }
-  await recordOutcome(filename, liveBytes, result)
+  if (!keepsDeferral(result)) {
+    await writeDeferral(filename, result.kind === 'compacted' ? null : deferral)
+  }
   return result
 }
 
@@ -237,8 +254,8 @@ function runCompactionChild(
       output += chunk.toString()
       if (!released && output.startsWith('ready\n')) {
         released = true
-        // A child gone after 'ready' would make our close the last one, which checkpoints on quit.
-        if (child.exitCode !== null || child.signalCode !== null) {
+        // A stopped child can't take over; the WAL cap bounds the close if it died unseen.
+        if (timedOut || child.exitCode !== null || child.signalCode !== null) {
           return
         }
         try {
