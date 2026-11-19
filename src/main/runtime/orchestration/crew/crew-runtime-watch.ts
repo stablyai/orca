@@ -14,7 +14,8 @@ import { peekOpenedAgentSessionRecordStore } from '../../agent-session/records/a
 import { isDeepStrictEqual } from 'node:util'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import type { RuntimeClientEvent } from '../../../../shared/remote-runtime/session-graph/runtime-client-events'
-import { crewWorkspaceNames } from './crew-workspace-names'
+import { crewWorkspaceNames, type CrewWorktreeLocations } from './crew-workspace-names'
+import { crewTopologyInputs } from './crew-topology-inputs'
 import {
   scopedCrewChange,
   sessionCrewChanges,
@@ -33,6 +34,18 @@ type CrewRuntimeWatchDependencies = {
 const scoped = (facets: CrewFacet[], paneKey: string): CrewInvalidation =>
   scopedCrewChange(facets, { paneKeys: new Set([paneKey]) })
 
+type Scoped<T> = { scope: CrewRelevance | null; value: T }
+
+/** A new scope compares the write under the old one: what the new scope adds was read by the read that made it. */
+function changedSince<T>(
+  previous: Scoped<T>,
+  next: Scoped<T>,
+  underScope: (scope: CrewRelevance | null) => Scoped<T>
+): boolean {
+  const comparable = previous.scope === next.scope ? next : underScope(previous.scope)
+  return !isDeepStrictEqual(previous.value, comparable.value)
+}
+
 /** `relevance` is what mounted crews show, or null before their first read; names compare only that. */
 export function watchCrewRuntimeSources(
   deps: CrewRuntimeWatchDependencies,
@@ -40,19 +53,44 @@ export function watchCrewRuntimeSources(
   relevance: () => CrewRelevance | null = () => null
 ) {
   const hostIds = () => deps.store?.getWorkspaceSessionHostIds?.() ?? (['local'] as const)
-  const names = (id: ReturnType<typeof hostIds>[number]) => {
-    const scope = relevance()
+  type HostId = ReturnType<typeof hostIds>[number]
+  // Per scope and host, where the scope's tabs live.
+  const locations = new WeakMap<CrewRelevance, Map<HostId, CrewWorktreeLocations>>()
+  const locatedFor = (id: HostId, scope: CrewRelevance | null) => {
+    if (!scope) {
+      return undefined
+    }
+    let byHost = locations.get(scope)
+    if (!byHost) {
+      byHost = new Map()
+      locations.set(scope, byHost)
+    }
+    let located = byHost.get(id)
+    if (!located) {
+      located = new Map()
+      byHost.set(id, located)
+    }
+    return located
+  }
+  const names = (id: HostId, scope = relevance()) => ({
+    scope,
+    value: crewWorkspaceNames(
+      deps.store?.getWorkspaceSession?.(id),
+      scope ?? undefined,
+      locatedFor(id, scope)
+    )
+  })
+  const namesByHost = new Map(hostIds().map((hostId) => [hostId, names(hostId)]))
+  const topology = (id: HostId, scope = relevance()) => {
+    const session = deps.store?.getWorkspaceSession?.(id)
+    const context = runtimeLayoutLoadContext(deps.store, id)
     return {
       scope,
-      names: crewWorkspaceNames(deps.store?.getWorkspaceSession?.(id), scope ?? undefined)
+      value: scope
+        ? crewTopologyInputs(session, context, scope, locatedFor(id, scope)!)
+        : mainTerminalSourceInputs(session, context)
     }
   }
-  const namesByHost = new Map(hostIds().map((hostId) => [hostId, names(hostId)]))
-  const topology = (id: ReturnType<typeof hostIds>[number]) =>
-    mainTerminalSourceInputs(
-      deps.store?.getWorkspaceSession?.(id),
-      runtimeLayoutLoadContext(deps.store, id)
-    )
   const topologyByHost = new Map(
     ORCA_LAYOUT_OWNER_IS_MAIN ? hostIds().map((id) => [id, topology(id)]) : []
   )
@@ -64,17 +102,17 @@ export function watchCrewRuntimeSources(
     deps.store?.onWorkspaceSessionWritten?.((hostId) => {
       for (const id of hostId === null ? hostIds() : [hostId]) {
         if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+          const previous = topologyByHost.get(id)
           const next = topology(id)
-          if (!isDeepStrictEqual(topologyByHost.get(id), next)) {
-            topologyByHost.set(id, next)
+          topologyByHost.set(id, next)
+          if (previous && changedSince(previous, next, (scope) => topology(id, scope))) {
             wake(new Set(['topology']))
           }
         }
         const previous = namesByHost.get(id)
         const next = names(id)
         namesByHost.set(id, next)
-        // A changed scope only re-baselines: the read that changed it already read these names.
-        if (previous?.scope === next.scope && !isDeepStrictEqual(previous.names, next.names)) {
+        if (previous && changedSince(previous, next, (scope) => names(id, scope))) {
           wake(new Set(['names']))
         }
       }
