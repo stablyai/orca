@@ -4,9 +4,15 @@ import type { TerminalWaiter } from './terminal-waiter'
 /** Waits keyed by the terminal they follow; the handle they were asked through only labels the result. */
 export class RuntimeTerminalWaiterRegistry {
   private readonly byPtyId = new Map<string, Set<TerminalWaiter>>()
+  /** Waits moved to another terminal (an Agent-slept agent's woken process) keep their own record. */
+  private readonly movedTo = new WeakMap<TerminalWaiter, string>()
+
+  private ptyOf(waiter: TerminalWaiter): string {
+    return this.movedTo.get(waiter) ?? waiter.ptyId
+  }
 
   has(waiter: TerminalWaiter): boolean {
-    return this.byPtyId.get(waiter.ptyId)?.has(waiter) ?? false
+    return this.byPtyId.get(this.ptyOf(waiter))?.has(waiter) ?? false
   }
 
   forPty(ptyId: string): TerminalWaiter[] {
@@ -14,19 +20,16 @@ export class RuntimeTerminalWaiterRegistry {
   }
 
   add(waiter: TerminalWaiter): void {
-    const waiters = this.byPtyId.get(waiter.ptyId) ?? new Set<TerminalWaiter>()
+    const ptyId = this.ptyOf(waiter)
+    const waiters = this.byPtyId.get(ptyId) ?? new Set<TerminalWaiter>()
     waiters.add(waiter)
-    this.byPtyId.set(waiter.ptyId, waiters)
+    this.byPtyId.set(ptyId, waiters)
   }
 
   /** Re-files a wait under another terminal, keeping its deadline and abort. */
   move(waiter: TerminalWaiter, ptyId: string): void {
-    const waiters = this.byPtyId.get(waiter.ptyId)
-    waiters?.delete(waiter)
-    if (waiters?.size === 0) {
-      this.byPtyId.delete(waiter.ptyId)
-    }
-    waiter.ptyId = ptyId
+    this.unindex(waiter)
+    this.movedTo.set(waiter, ptyId)
     this.add(waiter)
   }
 
@@ -84,13 +87,18 @@ export class RuntimeTerminalWaiterRegistry {
       waiter.abortCleanup()
       waiter.abortCleanup = null
     }
-    const waiters = this.byPtyId.get(waiter.ptyId)
+    this.unindex(waiter)
+  }
+
+  private unindex(waiter: TerminalWaiter): void {
+    const ptyId = this.ptyOf(waiter)
+    const waiters = this.byPtyId.get(ptyId)
     if (!waiters) {
       return
     }
     waiters.delete(waiter)
     if (waiters.size === 0) {
-      this.byPtyId.delete(waiter.ptyId)
+      this.byPtyId.delete(ptyId)
     }
   }
 }

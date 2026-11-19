@@ -11,8 +11,6 @@ import { joinWithin } from './slept-agent-wake-join'
 
 // Covers a cold agent resume; a caller's own deadline overrides it.
 const SLEPT_AGENT_WAKE_TIMEOUT_MS = 120_000
-// Backstop for a bind no identity change reports; only while a wake is in flight.
-const SLEPT_AGENT_WAKE_RECHECK_MS = 500
 const SLEPT_PANE_CLOSED = 'slept_pane_closed'
 
 /** An Agent-slept pane answers orchestration as an idle agent: terminal acts wake it in place. */
@@ -21,8 +19,6 @@ export abstract class RuntimeSleptAgentWakes extends RuntimeSleptMailboxWakes {
   private readonly sleptAgentWakes = new Map<string, { paneKey: string; woken: Promise<void> }>()
   private readonly wokenHandleChecks = new Set<() => void>()
   private stopWatchingWokenHandles: (() => void) | null = null
-  private wakeRecheck: ReturnType<typeof setInterval> | null = null
-  private wakesInFlight = 0
   private recheckingSleptWaits = false
   private sleptRecheckQueued = false
   /** Exit waits begun before the sleep, carried to the woken process, with the leaf id they slept in. */
@@ -206,24 +202,12 @@ export abstract class RuntimeSleptAgentWakes extends RuntimeSleptMailboxWakes {
   ): Promise<void> {
     const deadline = Date.now() + SLEPT_AGENT_WAKE_TIMEOUT_MS
     await this.requestSleptPaneResume(pane)
-    // One backstop for all in-flight wakes.
-    this.wakesInFlight += 1
-    this.wakeRecheck ??= setInterval(
-      () => this.onSleptLeafGraphSynced(),
-      SLEPT_AGENT_WAKE_RECHECK_MS
-    )
     try {
       await this.awaitWokenHandle(handle, deadline, undefined, parsePaneKey(pane.paneKey)?.leafId)
     } catch (error) {
       throw error instanceof Error && error.message === SLEPT_PANE_CLOSED
         ? new Error('terminal_handle_stale')
         : error
-    } finally {
-      this.wakesInFlight -= 1
-      if (this.wakesInFlight === 0 && this.wakeRecheck) {
-        clearInterval(this.wakeRecheck)
-        this.wakeRecheck = null
-      }
     }
     // The wait controller directly: the main-owned starter would route back into this wake.
     const ready = await this.terminalWait.wait(handle, {
