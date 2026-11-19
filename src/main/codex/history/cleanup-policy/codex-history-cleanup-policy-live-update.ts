@@ -45,7 +45,7 @@ let refreshing: Promise<void> | null = null
 let refreshFailedAt: number | null = null
 // The launch download, which a sweep waits for rather than downloading again beside it.
 let starting: Promise<void> | null = null
-// The newest policy known as of the last sweep's start: only its `off` counts.
+// The newest policy any sweep this run has seen: only its `off` counts.
 let newestKnown: CodexHistoryCleanupPolicy | null = null
 
 function liveMode(kind: CodexHistoryCleanupKind): CodexHistoryCleanupMode {
@@ -100,7 +100,9 @@ export async function codexHistoryCleanupSweepPolicy(): Promise<CodexHistoryClea
     await refreshing.catch(() => {})
     refreshFailedAt = updater.lastFetched() ? null : Date.now()
   }
-  newestKnown = (await updater?.newestKnown()) ?? null
+  const read = (await updater?.newestKnown()) ?? null
+  // Kept across sweeps, so a cache read that fails later can't bring back an older revision.
+  newestKnown = newestCodexHistoryCleanupPolicy(read ? { policy: read } : null, newestKnown)
   const fetched = updater?.lastFetched() ?? null
   const known = newestCodexHistoryCleanupPolicy(fetched, newestKnown)
   const policy = authoritativeDownload(fetched, known) ?? known
