@@ -1,0 +1,73 @@
+import type { Translate } from '@/i18n/use-translate'
+import {
+  isBrowserAnnotationPageFull,
+  type GrabIntent
+} from '../../../../../../shared/browser/element-grab/browser-grab-types'
+import { browserAnnotationLimitMessage } from '../delivery/browser-annotation-limit-message'
+import type { GrabModeHook } from '../grab/useGrabMode'
+import type { BrowserAnnotateTool } from './use-browser-annotate-tool-switch'
+
+/** The palette's one-line hint; empty once the palette's own controls say it (Draw, notes, a Grab pick). */
+export function browserAnnotatePaletteHint({
+  t,
+  activeTool,
+  grab,
+  grabIntent,
+  hasPendingAnnotation,
+  browserAnnotationsLength
+}: {
+  t: Translate
+  activeTool: BrowserAnnotateTool
+  grab: Pick<GrabModeHook, 'state' | 'error'>
+  grabIntent: GrabIntent
+  hasPendingAnnotation: boolean
+  browserAnnotationsLength: number
+}): { text: string; isError: boolean } {
+  if (activeTool === 'draw') {
+    return { text: '', isError: false }
+  }
+  if (grab.state === 'error') {
+    return {
+      text: t('auto.components.browser.pane.BrowserPane.4328a0a062', 'Grab failed: {{value0}}', {
+        value0: grab.error ?? 'Unknown error'
+      }),
+      isError: true
+    }
+  }
+  if (grabIntent === 'annotate') {
+    if (hasPendingAnnotation) {
+      return {
+        text: t(
+          'auto.components.browser.pane.BrowserPane.b733a91bd9',
+          'Add feedback for the selected element.'
+        ),
+        isError: false
+      }
+    }
+    if (isBrowserAnnotationPageFull(browserAnnotationsLength)) {
+      return { text: browserAnnotationLimitMessage(t), isError: false }
+    }
+    // The palette's note count and Send say the rest; a second sentence here would point at actions not shown.
+    if (browserAnnotationsLength > 0) {
+      return { text: '', isError: false }
+    }
+    return {
+      text: t(
+        'auto.components.browser.pane.BrowserPane.777b5bc4ec',
+        'Click an element to add feedback for the agent.'
+      ),
+      isError: false
+    }
+  }
+  // After a pick the Copy button shows Copied and Screenshot sits beside it, so no hint repeats them.
+  if (grab.state === 'confirming') {
+    return { text: '', isError: false }
+  }
+  return {
+    text: t(
+      'auto.components.browser.pane.BrowserPane.168350ae6a',
+      'Click or hover an element, then press C to copy or S to screenshot.'
+    ),
+    isError: false
+  }
+}

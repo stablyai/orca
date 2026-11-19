@@ -93,6 +93,42 @@ export type BrowserAnnotationPayload = Omit<BrowserGrabPayload, 'screenshot'> & 
 
 export type GrabIntent = 'copy' | 'annotate'
 
+/** Bare keys that copy (C) or screenshot (S) the hovered or picked element while Grab is on. */
+export type BrowserGrabActionKey = 'c' | 's'
+
+/** Bare keys that switch the annotate palette's tool: Annotate, Grab, Draw. */
+export type BrowserAnnotateToolKey = 'a' | 'g' | 'd'
+
+/** Bare keys a focused page forwards to the renderer while a grab op runs. */
+export type BrowserGuestToolKey = BrowserGrabActionKey | BrowserAnnotateToolKey
+
+/** Alt held over a focused page fades the palette so the element under it can be picked. */
+export type BrowserGuestSeeThroughKey = 'alt-down' | 'alt-up'
+
+/** Payload of the guest → renderer tool-key forward. */
+export type BrowserGrabActionShortcutArgs = {
+  browserPageId: string
+  key: BrowserGuestToolKey | BrowserGuestSeeThroughKey
+}
+
+const BROWSER_GUEST_TOOL_KEYS: ReadonlySet<string> = new Set(['c', 's', 'a', 'g', 'd'])
+
+export function isBrowserGuestToolKey(key: string): key is BrowserGuestToolKey {
+  return BROWSER_GUEST_TOOL_KEYS.has(key)
+}
+
+/** Physical key → tool key, so the keys work on non-Latin layouts; falls back to the typed letter. */
+export function browserGuestToolKeyFromEvent(event: { code?: string; key: string }): string {
+  const code = event.code ?? ''
+  return code.startsWith('Key') && code.length === 4
+    ? code.slice(3).toLowerCase()
+    : event.key.toLowerCase()
+}
+
+export function isBrowserGrabActionKey(key: BrowserGuestToolKey): key is BrowserGrabActionKey {
+  return key === 'c' || key === 's'
+}
+
 /** Why a grab operation was cancelled before the user selected an element. */
 export type BrowserGrabCancelReason = 'user' | 'tab-inactive' | 'navigation' | 'evicted' | 'timeout'
 

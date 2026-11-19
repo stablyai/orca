@@ -22,13 +22,17 @@ import {
 import { useBrowserAnnotationImages } from './use-browser-annotation-images'
 import { BrowserAnnotationImageStrip } from './browser-annotation-image-strip'
 
+export type BrowserAnnotationDraft = { comment: string; intent: BrowserAnnotationIntent }
+
 export function PendingBrowserAnnotationCard({
   payload,
   worktreeId,
   resolveAnchor,
   portalContainer,
   onAdd,
-  onCancel
+  onCancel,
+  initialDraft,
+  onDraftChange
 }: {
   payload: BrowserGrabPayload
   worktreeId: string
@@ -37,6 +41,9 @@ export function PendingBrowserAnnotationCard({
   portalContainer: HTMLElement | null
   onAdd: (comment: string, intent: BrowserAnnotationIntent, imagePaths: string[]) => void
   onCancel: () => void
+  /** A comment typed earlier for this element and closed without adding. */
+  initialDraft?: BrowserAnnotationDraft
+  onDraftChange?: (draft: BrowserAnnotationDraft) => void
 }): React.JSX.Element {
   const t = useTranslate()
   const [card, setCard] = useState<HTMLDivElement | null>(null)
@@ -51,8 +58,12 @@ export function PendingBrowserAnnotationCard({
     return () => observer.disconnect()
   }, [card])
   const anchor = resolveAnchor(cardHeight)
-  const [comment, setComment] = useState('')
-  const [intent, setIntent] = useState<BrowserAnnotationIntent>('change')
+  const [comment, setComment] = useState(initialDraft?.comment ?? '')
+  const [intent, setIntent] = useState<BrowserAnnotationIntent>(initialDraft?.intent ?? 'change')
+  // Closing the card (Esc, outside click, Cancel) keeps what was typed for this element until the mode ends.
+  useEffect(() => {
+    onDraftChange?.({ comment, intent })
+  }, [comment, intent, onDraftChange])
   const { images, imagePaths, saving, handlePaste, removeImage } =
     useBrowserAnnotationImages(worktreeId)
   const trimmed = comment.trim()

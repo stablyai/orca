@@ -51,6 +51,7 @@ import type {
   BrowserCaptureSelectionScreenshotResult,
   BrowserExtractHoverArgs,
   BrowserExtractHoverResult,
+  BrowserGrabActionShortcutArgs,
   GrabIntent
 } from '../../../shared/browser/element-grab/browser-grab-types'
 import type {
@@ -213,9 +214,7 @@ export type BrowserApi = {
   ) => Promise<BrowserCaptureSelectionScreenshotResult>
   extractHoverPayload: (args: BrowserExtractHoverArgs) => Promise<BrowserExtractHoverResult>
   onGrabModeToggle: (callback: (browserPageId: string, intent: GrabIntent) => void) => () => void
-  onGrabActionShortcut: (
-    callback: (args: { browserPageId: string; key: 'c' | 's' }) => void
-  ) => () => void
+  onGrabActionShortcut: (callback: (args: BrowserGrabActionShortcutArgs) => void) => () => void
   /** Escape pressed in a focused page; the page also receives it unless a grab pick is running. */
   onGuestEscape: (callback: (args: { browserPageId: string }) => void) => () => void
   sessionListProfiles: () => Promise<BrowserSessionProfile[]>

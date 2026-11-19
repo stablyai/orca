@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { translate } from '@/i18n/i18n'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useAppStore } from '@/store/index'
 import { imageCopyFailedMessage } from '@/lib/clipboard/images/clipboard-image-copy'
@@ -17,29 +16,18 @@ import {
   DEFAULT_BROWSER_ANNOTATION_PRIORITY
 } from '../../describe-page/browser-annotation-geometry'
 import { useBrowserPageAnnotationViewportTracking } from '../viewport/use-browser-page-annotation-viewport-tracking'
-import { runBrowserGrabActionShortcut } from './browser-page-grab-action'
+import { grabHoverStillCurrent, runBrowserGrabActionShortcut } from './browser-page-grab-action'
+import {
+  annotationAddedGrabToastMessage,
+  copiedGrabToastMessage,
+  screenshottedGrabToastMessage
+} from './grab-toast-messages'
 import { useGrabScreenshotCopy } from '../capture/use-grab-screenshot-copy'
 import type {
   BrowserPageGrabAnnotations,
   BrowserPageGrabAnnotationsOptions,
   BrowserPageGrabToastState
 } from '../../describe-page/browser-page-types'
-
-const copiedGrabToastMessage = (): string =>
-  translate(
-    'auto.components.browser.pane.annotate.use.browser.page.grab.annotations.0c7b9b2b7a',
-    'Copied'
-  )
-const screenshottedGrabToastMessage = (): string =>
-  translate(
-    'auto.components.browser.pane.annotate.use.browser.page.grab.annotations.c937229f19',
-    'Screenshotted'
-  )
-const annotationAddedGrabToastMessage = (): string =>
-  translate(
-    'auto.components.browser.pane.annotate.use.browser.page.grab.annotations.1f5cb19034',
-    'Annotation added'
-  )
 
 export function useBrowserPageGrabAnnotations({
   browserTabId,
@@ -61,6 +49,10 @@ export function useBrowserPageGrabAnnotations({
   const [pendingAnnotationPayload, setPendingAnnotationPayload] =
     useState<BrowserGrabPayload | null>(null)
   const pendingAnnotationPayloadRef = useRef<BrowserGrabPayload | null>(null)
+  // Every way out of picking (Done, Esc, the toolbar, navigation) ends here: an unsaved comment card can't outlive it.
+  if (grab.state === 'idle' && pendingAnnotationPayload !== null) {
+    setPendingAnnotationPayload(null)
+  }
   // Place the toast beside the selected element without covering it.
   const [grabToast, setGrabToast] = useState<BrowserPageGrabToastState | null>(null)
   const grabRef = useRef(grab)
@@ -195,6 +187,15 @@ export function useBrowserPageGrabAnnotations({
       if (nextIntent === 'annotate') {
         recordFeatureInteraction('browser-annotations')
       }
+      if (grab.state === 'confirming' && grabIntent !== nextIntent) {
+        // Why rearm: the intent effect would otherwise treat the held pick as a new one under the new intent
+        // (copy it, or open a comment card for it). Rearm drops the pick and keeps picking.
+        pendingAnnotationPayloadRef.current = null
+        setPendingAnnotationPayload(null)
+        setGrabIntent(nextIntent)
+        grab.rearm()
+        return
+      }
       setGrabIntent(nextIntent)
       if (nextIntent === 'copy') {
         setPendingAnnotationPayload(null)
@@ -210,6 +211,8 @@ export function useBrowserPageGrabAnnotations({
   const handleGrabActionShortcut = useCallback(
     (key: 'c' | 's'): void => {
       runBrowserGrabActionShortcut({
+        // A hover read resolves later; drop it if the user left Grab or the page changed meanwhile.
+        isStillCurrent: grabHoverStillCurrent(grabRef, grabIntentRef, toolTargetIdRef),
         key,
         grabIntent,
         grab,

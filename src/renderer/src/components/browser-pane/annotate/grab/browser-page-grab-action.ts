@@ -8,6 +8,19 @@ import { formatGrabPayloadAsText } from './GrabConfirmationSheet'
 import type { GrabModeHook } from './useGrabMode'
 import type { BrowserPageGrabToastState } from '../../describe-page/browser-page-types'
 
+/** Snapshot of the picker's target at action start; true while the same Grab session on the same page is on. */
+export function grabHoverStillCurrent(
+  grabRef: MutableRefObject<Pick<GrabModeHook, 'state'>>,
+  grabIntentRef: MutableRefObject<GrabIntent>,
+  toolTargetIdRef: MutableRefObject<string>
+): () => boolean {
+  const startedTarget = toolTargetIdRef.current
+  return () =>
+    grabRef.current.state !== 'idle' &&
+    grabIntentRef.current === 'copy' &&
+    toolTargetIdRef.current === startedTarget
+}
+
 export function runBrowserGrabActionShortcut({
   key,
   grabIntent,
@@ -16,7 +29,8 @@ export function runBrowserGrabActionShortcut({
   toolTargetIdRef,
   recordFeatureInteraction,
   showGrabToast,
-  copyGrabScreenshot
+  copyGrabScreenshot,
+  isStillCurrent = () => true
 }: {
   key: 'c' | 's'
   grabIntent: GrabIntent
@@ -30,6 +44,8 @@ export function runBrowserGrabActionShortcut({
     payload?: BrowserGrabPayload | null
   ) => void
   copyGrabScreenshot: (dataUrl: string, payload: BrowserGrabPayload) => void
+  /** False once the user left Grab or the page changed; a late hover result is then dropped. */
+  isStillCurrent?: () => boolean
 }): void {
   if (grabIntent === 'annotate') {
     return
@@ -79,6 +95,9 @@ export function runBrowserGrabActionShortcut({
         showGrabToast('Could not read the hovered element', 'error')
         return
       }
+      if (!isStillCurrent()) {
+        return
+      }
       if (!result.ok) {
         showGrabToast('No element hovered', 'error')
         return
@@ -96,6 +115,9 @@ export function runBrowserGrabActionShortcut({
           }
         } catch {
           // Screenshot failure is non-fatal for the copy flow
+        }
+        if (!isStillCurrent()) {
+          return
         }
       }
 

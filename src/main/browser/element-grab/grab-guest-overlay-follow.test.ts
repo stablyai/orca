@@ -2,6 +2,7 @@ import { runInNewContext } from 'node:vm'
 import { afterEach, describe, expect, it } from 'vitest'
 import { BROWSER_GRAB_SELECTED_ATTRIBUTE } from '../../../shared/browser/annotations/browser-annotation-viewport-bridge'
 import { buildGuestOverlayScript } from './grab-guest-script'
+import { GRAB_LABEL_RESERVED_TOP_PX } from './grab-guest-overlay-script'
 
 type Rect = { x: number; y: number; width: number; height: number }
 
@@ -11,7 +12,11 @@ afterEach(async () => {
   await Promise.all(guestAborts.splice(0).map((abort) => abort()))
 })
 
-async function armGuest(previousMarker?: string, inShadowRoot = false) {
+async function armGuest(
+  previousMarker?: string,
+  inShadowRoot = false,
+  initialRect: Rect = { x: 40, y: 300, width: 120, height: 30 }
+) {
   const { Window } = await import('happy-dom')
   const window = new Window()
   guestAborts.push(() => window.happyDOM.abort())
@@ -46,7 +51,7 @@ async function armGuest(previousMarker?: string, inShadowRoot = false) {
     pageRoot.appendChild(scroller)
     Object.defineProperty(pageRoot, 'elementFromPoint', { value: () => target })
   }
-  let targetRect: Rect = { x: 40, y: 300, width: 120, height: 30 }
+  let targetRect: Rect = initialRect
   const contentSize = { width: 120, height: 30 }
   const rootSize = { width: 1000, height: 800 }
   const spacing = { padding: 0, border: 0 }
@@ -115,11 +120,20 @@ async function armGuest(previousMarker?: string, inShadowRoot = false) {
     }
   }
 
-  grab.host.dispatchEvent(new window.MouseEvent('mousemove', { clientX: 50, clientY: 310 }))
+  grab.host.dispatchEvent(
+    new window.MouseEvent('mousemove', { clientX: initialRect.x + 10, clientY: initialRect.y + 10 })
+  )
   flushFrames()
+  const hoverLabelTop = Number.parseFloat(
+    shadowRoots
+      .at(-1)
+      ?.firstElementChild?.children[1]?.getAttribute('style')
+      ?.match(/top:\s*([\d.-]+)px/)?.[1] ?? 'NaN'
+  )
   grab.freezeHighlight('selection-1')
 
   return {
+    hoverLabelTop,
     window,
     scroller,
     target,
@@ -185,5 +199,12 @@ describe('grab overlay after the click', () => {
     guest.grab.cleanup()
 
     expect(guest.target.getAttribute(BROWSER_GRAB_SELECTED_ATTRIBUTE)).toBe('page-updated')
+  })
+
+  it('keeps the hover label out of the band the annotate palette covers', async () => {
+    // An element hugging the top of the page: the label must not sit under the palette.
+    const guest = await armGuest(undefined, false, { x: 40, y: 4, width: 120, height: 30 })
+
+    expect(guest.hoverLabelTop).toBe(GRAB_LABEL_RESERVED_TOP_PX)
   })
 })

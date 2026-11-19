@@ -129,7 +129,8 @@ export function HtmlDocPreview({
     browserOverlayViewport,
     handleAnnotationViewportMessage,
     resetBrowserOverlayViewport,
-    elementTools
+    elementTools,
+    toolSwitch
   } = useDocPreviewGuestTools({
     previewId,
     worktreeId,
@@ -345,7 +346,7 @@ export function HtmlDocPreview({
         onOpenExternally={() => openDocPreviewExternally(previewDocument)}
         elementTools={elementTools}
         markupActive={markup.isActive}
-        onToggleMarkup={() => (markup.isActive ? markup.cancel() : void markup.start())}
+        onToggleMarkup={() => toolSwitch.toggleTool('draw')}
         // Nothing has painted yet on a loading or failed preview, so there is nothing to draw on.
         markupDisabled={isUnavailable || state !== 'ready' || grab.state !== 'idle'}
         shareControl={buildDocPreviewShareControl(filePath, grant?.location ?? null)}
@@ -380,6 +381,10 @@ export function HtmlDocPreview({
           webviewRef={webviewRef}
           browserOverlayViewport={browserOverlayViewport}
           worktreeId={worktreeId}
+          toolSwitch={toolSwitch}
+          canPickElements={state === 'ready' && !isUnavailable}
+          // Why: the preview wires no A/G/D keys, so its tooltips don't name them.
+          showPaletteKeyHints={false}
         />
         {state === 'loading' && failureReason === null ? (
           <div className="absolute inset-0 z-10 flex items-center justify-center bg-editor-surface">

@@ -12,7 +12,10 @@ import {
 import type { PreloadApi } from '../../api-types'
 import type { BrowserUserAgentMode } from '../../../shared/browser/identity/browser-user-agent-mode'
 import type { ManagedBrowserProfileOwner } from '../../../shared/browser/profiles/browser-profile-scope'
-import type { GrabIntent } from '../../../shared/browser/element-grab/browser-grab-types'
+import type {
+  BrowserGrabActionShortcutArgs,
+  GrabIntent
+} from '../../../shared/browser/element-grab/browser-grab-types'
 import type {
   BrowserSitePermissionKey,
   BrowserSitePermissionDecision
@@ -152,13 +155,9 @@ export const browserPageInteractionAndSessionsApi = {
     ipcRenderer.on('browser:grabModeToggle', listener)
     return () => ipcRenderer.removeListener('browser:grabModeToggle', listener)
   },
-  onGrabActionShortcut: (
-    callback: (args: { browserPageId: string; key: 'c' | 's' }) => void
-  ): (() => void) => {
-    const listener = (
-      _event: Electron.IpcRendererEvent,
-      data: { browserPageId: string; key: 'c' | 's' }
-    ) => callback(data)
+  onGrabActionShortcut: (callback: (args: BrowserGrabActionShortcutArgs) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, data: BrowserGrabActionShortcutArgs) =>
+      callback(data)
     ipcRenderer.on('browser:grabActionShortcut', listener)
     return () => ipcRenderer.removeListener('browser:grabActionShortcut', listener)
   },

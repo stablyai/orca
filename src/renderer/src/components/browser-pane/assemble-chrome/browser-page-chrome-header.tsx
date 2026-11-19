@@ -2,6 +2,7 @@ import type { Dispatch, MutableRefObject, RefObject, SetStateAction } from 'reac
 import type { BrowserPage as BrowserPageState } from '../../../../../shared/browser/workspaces/browser-workspace-types'
 import type { ShareableBrowserArtifactFile } from '../describe-page/browser-artifact-upload'
 import type { GrabModeHook } from '../annotate/grab/useGrabMode'
+import type { GrabIntent } from '../../../../../shared/browser/element-grab/browser-grab-types'
 import { BrowserPageToolbar } from './browser-page-toolbar'
 import { BrowserPageDownloadList } from '../navigate/browser-page-download-list'
 import { BrowserPageChromeBanners } from './feedback/browser-page-chrome-banners'
@@ -27,6 +28,7 @@ export function BrowserPageChromeHeader({
   annotationSend,
   onOpenFind,
   markupIsActive,
+  startGrabIntent,
   markupStart,
   markupCancel,
   grabElementShortcut,
@@ -53,6 +55,8 @@ export function BrowserPageChromeHeader({
   annotationSend: ReturnType<typeof useBrowserPageAnnotationSend>
   onOpenFind: () => void
   markupIsActive: boolean
+  /** Toolbar entries go through the page's tool switch, like the palette and keys. */
+  startGrabIntent: (intent: GrabIntent) => void
   markupStart: () => Promise<void>
   markupCancel: () => void
   grabElementShortcut: string
@@ -94,7 +98,7 @@ export function BrowserPageChromeHeader({
         dismissAddressBarSuggestionsRef={dismissAddressBarSuggestionsRef}
         grab={grab}
         grabIntent={grabAnnotations.grabIntent}
-        startGrabIntent={grabAnnotations.startGrabIntent}
+        startGrabIntent={startGrabIntent}
         isBlankTab={isBlankTab}
         markupIsActive={markupIsActive}
         markupStart={markupStart}
@@ -119,23 +123,6 @@ export function BrowserPageChromeHeader({
       <BrowserPageChromeBanners
         resourceNotice={resourceNotice}
         setResourceNotice={setResourceNotice}
-        grab={grab}
-        grabIntent={grabAnnotations.grabIntent}
-        pendingAnnotationPayload={grabAnnotations.pendingAnnotationPayload}
-        browserAnnotationsLength={annotationSend.browserAnnotations.length}
-        annotationBannerSendOpen={annotationSend.annotationBannerSendOpen}
-        handleAnnotationBannerSendOpenChange={annotationSend.handleAnnotationBannerSendOpenChange}
-        worktreeId={worktreeId}
-        activeGroupId={annotationSend.activeGroupId}
-        browserAnnotationsPrompt={annotationSend.browserAnnotationsPrompt}
-        includePageDetails={annotationSend.includePageDetails}
-        handleIncludePageDetailsChange={annotationSend.handleIncludePageDetailsChange}
-        handleBrowserAnnotationsSentToAgent={annotationSend.handleBrowserAnnotationsSentToAgent}
-        handleBrowserAnnotationsHandedOff={annotationSend.handleBrowserAnnotationsHandedOff}
-        handleCopyBrowserAnnotations={annotationSend.handleCopyBrowserAnnotations}
-        browserAnnotationsCopied={annotationSend.browserAnnotationsCopied}
-        handleClearBrowserAnnotations={annotationSend.handleClearBrowserAnnotations}
-        setPendingAnnotationPayload={grabAnnotations.setPendingAnnotationPayload}
       />
     </div>
   )

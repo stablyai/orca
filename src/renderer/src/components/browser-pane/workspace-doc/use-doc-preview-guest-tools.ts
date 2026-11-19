@@ -8,6 +8,10 @@ import { useBrowserPageGrabAnnotations } from '@/components/browser-pane/annotat
 import { useBrowserPageMarkupCapture } from '@/components/browser-pane/annotate/capture/use-browser-page-markup-capture'
 import { useGrabMode } from '@/components/browser-pane/annotate/grab/useGrabMode'
 import type { BrowserOverlayViewport } from '@/components/browser-pane/describe-page/browser-annotation-geometry'
+import {
+  useBrowserAnnotateToolSwitch,
+  type BrowserAnnotateToolSwitch
+} from '@/components/browser-pane/annotate/palette/use-browser-annotate-tool-switch'
 import type { BrowserChromeElementTools } from '@/components/browser-pane/assemble-chrome/toolbar/browser-annotate-tool-button'
 
 /** Use the stable browser page ID for annotations and tools so replacing the guest grant preserves both. */
@@ -34,6 +38,7 @@ export function useDocPreviewGuestTools({
   handleAnnotationViewportMessage: (event: { message?: string }) => void
   resetBrowserOverlayViewport: () => void
   elementTools: BrowserChromeElementTools
+  toolSwitch: BrowserAnnotateToolSwitch
 } {
   // No tool target exists before the first grant commits; do not queue requests for a page without a document.
   const toolTargetId = grantId === null ? '' : previewId
@@ -88,10 +93,21 @@ export function useDocPreviewGuestTools({
     })
   }, [browserAnnotations, pendingAnnotationPayload, toolTargetId, toolsReady])
 
+  const toolSwitch = useBrowserAnnotateToolSwitch({
+    grab,
+    grabIntent: grabAnnotations.grabIntent,
+    startGrabIntent: grabAnnotations.startGrabIntent,
+    cancelPendingBrowserCapture: grabAnnotations.cancelPendingBrowserCapture,
+    markup,
+    canPickElements: toolsReady,
+    toolTargetId
+  })
+
   const elementTools = useMemo<BrowserChromeElementTools>(
     () => ({
       activeIntent: grab.state !== 'idle' ? grabAnnotations.grabIntent : null,
-      onStartIntent: grabAnnotations.startGrabIntent,
+      // Toolbar entries go through the same switch as the palette.
+      onStartIntent: toolSwitch.toggleTool,
       // Nothing has painted on a loading or failed preview, so there is no element to pick.
       disabled: !toolsReady || markup.isActive,
       grabShortcutLabel: grabElementShortcut,
@@ -101,14 +117,15 @@ export function useDocPreviewGuestTools({
       browserAnnotations.length,
       grab.state,
       grabAnnotations.grabIntent,
-      grabAnnotations.startGrabIntent,
       grabElementShortcut,
       markup.isActive,
+      toolSwitch.toggleTool,
       toolsReady
     ]
   )
 
   return {
+    toolSwitch,
     grab,
     markup,
     annotationSend,

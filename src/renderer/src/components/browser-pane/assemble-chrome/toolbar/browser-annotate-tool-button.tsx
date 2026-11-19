@@ -14,6 +14,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import type { GrabIntent } from '../../../../../../shared/browser/element-grab/browser-grab-types'
+import { BROWSER_ANNOTATE_BUTTON_ATTRIBUTE } from '../../annotate/palette/palette-focus-and-fit'
 import {
   MarkupDrawHintPopover,
   useMarkupDrawHintState
@@ -157,15 +158,14 @@ export function BrowserAnnotateToolButton({
     markup.onToggle()
   }
   const hasNotes = Boolean(notes) && tools.annotationCount > 0
+  // The palette over the page now carries the per-tool detail, so the button names the whole mode.
   const primaryTooltip = active
-    ? mode.label
+    ? t('browser.annotatePalette.doneTitle', 'Done (Esc)')
     : tools.annotateShortcutLabel
-      ? t(
-          'auto.components.browser.pane.BrowserPane.cc4a071d3a',
-          'Annotate page element ({{value0}})',
-          { value0: tools.annotateShortcutLabel }
-        )
-      : annotateLabel
+      ? t('browser.toolbar.annotateModeWithShortcut', 'Annotate, grab or draw ({{value0}})', {
+          value0: tools.annotateShortcutLabel
+        })
+      : t('browser.toolbar.annotateMode', 'Annotate, grab or draw')
 
   return (
     <MarkupDrawHintPopover open={showHint} onDismiss={dismissHint} onStart={startDraw}>
@@ -190,6 +190,7 @@ export function BrowserAnnotateToolButton({
                   disabled={!active && tools.disabled}
                   aria-label={annotateLabel}
                   aria-pressed={active}
+                  {...{ [BROWSER_ANNOTATE_BUTTON_ATTRIBUTE]: '' }}
                   // Same gestures as Reload: left click runs the tool, right click opens the menu.
                   onPointerDown={(event) => {
                     if (event.button === 0) {

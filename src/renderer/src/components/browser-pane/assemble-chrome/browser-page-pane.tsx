@@ -40,6 +40,8 @@ import { useBrowserPageWebviewUrlSync } from '../navigate/use-browser-page-webvi
 import { useBrowserPageZoomFeedback } from '../host-guest/viewport/use-browser-page-zoom-feedback'
 import { useBrowserPageViewportScrollReporting } from '../host-guest/viewport/use-browser-page-viewport-scroll-reporting'
 import { BrowserPageDevToolsDock } from '../devtools-dock/BrowserDevToolsDock'
+import { useBrowserAnnotateToolSwitch } from '../annotate/palette/use-browser-annotate-tool-switch'
+import { useWebviewInputLock } from '../host-guest/input/use-webview-input-lock'
 import { useBrowserPageViewportSizeFeedback } from '../host-guest/viewport/use-browser-page-viewport-size-feedback'
 
 export function BrowserPagePane({
@@ -257,6 +259,17 @@ export function BrowserPagePane({
     chromeShortcutScope,
     setFindOpen
   })
+  // Why: a blank tab reads as 'about:blank' or the resolved data: URL, so match both to keep the "New Browser Tab" overlay visible.
+  const isBlankTab = browserTab.url === 'about:blank' || browserTab.url === ORCA_BROWSER_BLANK_URL
+  const toolSwitch = useBrowserAnnotateToolSwitch({
+    grab,
+    grabIntent: grabAnnotations.grabIntent,
+    startGrabIntent: grabAnnotations.startGrabIntent,
+    cancelPendingBrowserCapture: grabAnnotations.cancelPendingBrowserCapture,
+    markup,
+    canPickElements: !isBlankTab,
+    toolTargetId: browserTab.id
+  })
   useBrowserPageKeyboardShortcuts({
     browserTabId: browserTab.id,
     workspaceId,
@@ -267,13 +280,12 @@ export function BrowserPagePane({
     webviewRef,
     showBrowserZoomFeedback: zoom.showBrowserZoomFeedback,
     reloadWebviewOrRecoverGuest: reload.reloadWebviewOrRecoverGuest,
-    startGrabIntent: grabAnnotations.startGrabIntent,
+    startGrabIntent: toolSwitch.toggleTool,
     handleGrabActionShortcut: grabAnnotations.handleGrabActionShortcut,
+    handleAnnotateToolKey: toolSwitch.selectToolByKey,
     grabIsInteractive: grab.state !== 'idle' && grab.state !== 'error'
   })
 
-  // Why: a blank tab reads as 'about:blank' or the resolved data: URL, so match both to keep the "New Browser Tab" overlay visible.
-  const isBlankTab = browserTab.url === 'about:blank' || browserTab.url === ORCA_BROWSER_BLANK_URL
   // Why: synchronous webview URL access blocks render; navigation handlers update this cache before their store writes can re-render the pane.
   const liveBrowserUrl = getLiveBrowserUrl(browserTab.id) ?? browserTab.url
   const externalUrl = getOpenableExternalUrl(liveBrowserUrl)
@@ -284,14 +296,7 @@ export function BrowserPagePane({
   const failureExternalUrl = normalizeExternalBrowserUrl(failedNavigationUrl)
   const showFailureOverlay = Boolean(browserTab.loadError) && !isBlankTab
 
-  useEffect(() => {
-    const webview = webviewRef.current
-    if (!webview) {
-      return
-    }
-    // Why: Electron webviews keep receiving native input under a React overlay unless their own hit testing is disabled.
-    webview.style.pointerEvents = inputLocked ? 'none' : 'auto'
-  }, [inputLocked])
+  useWebviewInputLock(webviewRef, inputLocked)
 
   useEffect(() => {
     const webview = webviewRef.current
@@ -343,8 +348,10 @@ export function BrowserPagePane({
         annotationSend={annotationSend}
         onOpenFind={() => setFindOpen(true)}
         markupIsActive={markup.isActive}
-        markupStart={markup.start}
-        markupCancel={markup.cancel}
+        // Toolbar and menu entries go through the same switch as the palette and keys.
+        startGrabIntent={toolSwitch.toggleTool}
+        markupStart={async () => toolSwitch.selectTool('draw')}
+        markupCancel={toolSwitch.exit}
         grabElementShortcut={grabElementShortcut}
         shareableArtifactFile={shareableArtifactFile}
         currentBrowserUrl={currentBrowserUrl}
@@ -387,6 +394,8 @@ export function BrowserPagePane({
               grab={grab}
               annotationSend={annotationSend}
               grabAnnotations={grabAnnotations}
+              toolSwitch={toolSwitch}
+              canPickElements={!isBlankTab}
             />,
             pageViewport.container
           )

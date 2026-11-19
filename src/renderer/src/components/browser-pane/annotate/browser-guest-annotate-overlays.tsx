@@ -1,3 +1,4 @@
+import { useCallback, useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { MutableRefObject, RefObject } from 'react'
 import { Copy, Image } from 'lucide-react'
@@ -19,9 +20,21 @@ import {
 } from '../describe-page/browser-annotation-geometry'
 import { BrowserPageAnnotationTray } from './browser-page-annotation-tray'
 import { BrowserPageGrabToast } from './grab/browser-page-grab-toast'
-import { PendingBrowserAnnotationCard } from './delivery/pending-browser-annotation-card'
+import {
+  PendingBrowserAnnotationCard,
+  type BrowserAnnotationDraft
+} from './delivery/pending-browser-annotation-card'
+import {
+  browserAnnotationDraftKey,
+  useBrowserAnnotationDrafts
+} from './delivery/use-browser-annotation-drafts'
 import type { useBrowserPageAnnotationSend } from './delivery/use-browser-page-annotation-send'
 import type { useBrowserPageGrabAnnotations } from './grab/use-browser-page-grab-annotations'
+import { BrowserAnnotateToolPalette } from './palette/BrowserAnnotateToolPalette'
+import { BrowserAnnotatePaletteNotes } from './palette/browser-annotate-palette-send'
+import { BrowserAnnotationSendMenuContent } from './delivery/BrowserAnnotationSendMenuContent'
+import { browserAnnotatePaletteHint } from './palette/browser-annotate-palette-hint'
+import type { BrowserAnnotateToolSwitch } from './palette/use-browser-annotate-tool-switch'
 
 /** Pair guest tools with all their result overlays so every surface that arms a picker can display its result. */
 export function BrowserGuestAnnotateOverlays({
@@ -35,7 +48,10 @@ export function BrowserGuestAnnotateOverlays({
   webviewRef,
   browserOverlayViewport,
   worktreeId,
-  currentUrl
+  currentUrl,
+  toolSwitch,
+  canPickElements,
+  showPaletteKeyHints
 }: {
   markup: MarkupModeController
   grab: GrabModeHook
@@ -48,8 +64,16 @@ export function BrowserGuestAnnotateOverlays({
   browserOverlayViewport: BrowserOverlayViewport
   worktreeId: string
   currentUrl?: string
+  toolSwitch: BrowserAnnotateToolSwitch
+  /** False on blank tabs, where the picker and Draw have nothing to work on. */
+  canPickElements: boolean
+  /** Only where the A/G/D keys are wired. */
+  showPaletteKeyHints: boolean
 }): React.JSX.Element {
   const t = useTranslate()
+  const [drawSlot, setDrawSlot] = useState<HTMLElement | null>(null)
+  const [drawCompact, setDrawCompact] = useState(false)
+  const [notesRevealSignal, setNotesRevealSignal] = useState(0)
   const {
     pendingAnnotationPayload,
     handleAddBrowserAnnotation,
@@ -82,22 +106,117 @@ export function BrowserGuestAnnotateOverlays({
     handleUpdateBrowserAnnotation
   } = annotationSend
 
+  const activeTool = toolSwitch.activeTool
+  const drafts = useBrowserAnnotationDrafts(activeTool !== null)
+  const pendingDraftKey = pendingAnnotationPayload
+    ? browserAnnotationDraftKey(pendingAnnotationPayload)
+    : null
+  const { set: setDraft } = drafts
+  const onPendingDraftChange = useCallback(
+    (draft: BrowserAnnotationDraft): void => {
+      if (pendingDraftKey !== null) {
+        setDraft(pendingDraftKey, draft)
+      }
+    },
+    [pendingDraftKey, setDraft]
+  )
+  // Palette buttons act on the picked element only; hovering keeps using C/S, so the target can't shift en route.
+  const grabPicked = grab.state === 'confirming' && grab.payload !== null && grabIntent === 'copy'
+  const runPaletteGrabAction = (action: () => void): void => {
+    action()
+    // These handlers flag the right-click menu as handled; nothing from that menu is open here.
+    grabMenuActionTakenRef.current = false
+  }
+  // Leaving the mode with the Send menu open must not leave its agent-target mode behind.
+  const { annotationBannerSendOpen, handleAnnotationBannerSendOpenChange } = annotationSend
+  useEffect(() => {
+    if (activeTool === null && annotationBannerSendOpen) {
+      handleAnnotationBannerSendOpenChange(false)
+    }
+  }, [activeTool, annotationBannerSendOpen, handleAnnotationBannerSendOpenChange])
+  const paletteHint = activeTool
+    ? browserAnnotatePaletteHint({
+        t,
+        activeTool,
+        grab,
+        grabIntent,
+        hasPendingAnnotation: pendingAnnotationPayload !== null,
+        browserAnnotationsLength: browserAnnotations.length
+      })
+    : null
+
   return (
     <>
+      {activeTool && paletteHint ? (
+        <BrowserAnnotateToolPalette
+          boundsRef={containerRef}
+          // Only browser pages mirror Alt from a focused page; the preview's guest forwards no keys.
+          pageId={showPaletteKeyHints ? toolSwitch.toolTargetId : null}
+          activeTool={activeTool}
+          onSelectTool={toolSwitch.selectTool}
+          onDone={toolSwitch.exit}
+          canPickElements={canPickElements}
+          showKeyHints={showPaletteKeyHints}
+          hint={paletteHint.text}
+          hintIsError={paletteHint.isError}
+          annotateActions={
+            browserAnnotations.length > 0
+              ? (short) => (
+                  <BrowserAnnotatePaletteNotes
+                    count={browserAnnotations.length}
+                    short={short}
+                    onShowNotes={() => setNotesRevealSignal((signal) => signal + 1)}
+                    sendOpen={annotationBannerSendOpen}
+                    onSendOpenChange={handleAnnotationBannerSendOpenChange}
+                    sendDisabled={!browserAnnotationsPrompt}
+                    sendMenu={
+                      <BrowserAnnotationSendMenuContent
+                        worktreeId={worktreeId}
+                        groupId={activeGroupId ?? worktreeId}
+                        prompt={browserAnnotationsPrompt}
+                        includePageDetails={includePageDetails}
+                        onIncludePageDetailsChange={handleIncludePageDetailsChange}
+                        onPromptDelivered={handleBrowserAnnotationsSentToAgent}
+                        onPromptHandedOff={handleBrowserAnnotationsHandedOff}
+                      />
+                    }
+                  />
+                )
+              : null
+          }
+          grabCopyDone={grabToast?.type === 'success'}
+          grabPicked={grabPicked}
+          grabCanScreenshot={
+            grabPicked && Boolean(grab.payload?.screenshot?.dataUrl?.startsWith('data:image/png;'))
+          }
+          onGrabCopy={() => runPaletteGrabAction(handleGrabCopy)}
+          onGrabScreenshot={() => runPaletteGrabAction(handleGrabCopyScreenshot)}
+          onDrawSlotChange={setDrawSlot}
+          onDrawCompactChange={setDrawCompact}
+        />
+      ) : null}
       {markup.isActive && markup.baseImage && markupTarget
         ? createPortal(
             <MarkupOverlay
               baseImage={markup.baseImage}
               busy={markup.state === 'composing'}
               onComplete={(input) => void markup.complete(input)}
-              onCancel={markup.cancel}
+              // Esc and Cancel go through the switch, so a discarded drawing can be undone.
+              onCancel={toolSwitch.exit}
               controlsContainer={markupControlsContainer}
+              paletteSlot={drawSlot}
+              paletteCompact={drawCompact}
+              initialShapes={toolSwitch.restoredShapes}
+              onShapesChange={toolSwitch.reportShapes}
             />,
             markupTarget
           )
         : null}
       {pendingAnnotationPayload ? (
         <PendingBrowserAnnotationCard
+          key={pendingDraftKey ?? undefined}
+          initialDraft={drafts.get(pendingDraftKey)}
+          onDraftChange={onPendingDraftChange}
           payload={pendingAnnotationPayload}
           worktreeId={worktreeId}
           resolveAnchor={(cardHeight) =>
@@ -110,12 +229,18 @@ export function BrowserGuestAnnotateOverlays({
             )
           }
           portalContainer={containerRef.current}
-          onAdd={handleAddBrowserAnnotation}
+          onAdd={(comment, intent, imagePaths) => {
+            if (pendingDraftKey !== null) {
+              drafts.remove(pendingDraftKey)
+            }
+            handleAddBrowserAnnotation(comment, intent, imagePaths)
+          }}
           onCancel={handleCancelPendingBrowserAnnotation}
         />
       ) : null}
       {browserAnnotations.length > 0 ? (
         <BrowserPageAnnotationTray
+          revealSignal={notesRevealSignal}
           browserAnnotations={browserAnnotations}
           currentUrl={currentUrl}
           annotationTraySendOpen={annotationTraySendOpen}

@@ -4,7 +4,14 @@ import { useAppStore } from '@/store/index'
 import { keybindingMatchesAction } from '../../../../../../shared/keybindings/matching'
 import { browserChromeShortcutOwnsEvent } from '../../describe-page/browser-overlay-shortcut-target'
 import type { BrowserChromeShortcutScope } from '../../describe-page/browser-page-types'
-import type { GrabIntent } from '../../../../../../shared/browser/element-grab/browser-grab-types'
+import {
+  browserGuestToolKeyFromEvent,
+  isBrowserGrabActionKey,
+  isBrowserGuestToolKey,
+  type BrowserAnnotateToolKey,
+  type BrowserGrabActionKey,
+  type GrabIntent
+} from '../../../../../../shared/browser/element-grab/browser-grab-types'
 import { isEditableKeyboardTarget } from './browser-keyboard'
 import { useBrowserPageWebviewShortcuts } from './use-browser-page-webview-shortcuts'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
@@ -21,6 +28,7 @@ export function useBrowserPageKeyboardShortcuts({
   reloadWebviewOrRecoverGuest,
   startGrabIntent,
   handleGrabActionShortcut,
+  handleAnnotateToolKey,
   grabIsInteractive
 }: {
   browserTabId: string
@@ -33,7 +41,9 @@ export function useBrowserPageKeyboardShortcuts({
   showBrowserZoomFeedback: (level: number) => void
   reloadWebviewOrRecoverGuest: (ignoreCache: boolean) => void
   startGrabIntent: (intent: GrabIntent) => void
-  handleGrabActionShortcut: (key: 'c' | 's') => void
+  handleGrabActionShortcut: (key: BrowserGrabActionKey) => void
+  /** A/G/D switch the annotate palette's tool while picking or drawing. */
+  handleAnnotateToolKey: (key: BrowserAnnotateToolKey) => void
   grabIsInteractive: boolean
 }): void {
   const keybindings = useAppStore((state) => state.keybindings)
@@ -99,28 +109,50 @@ export function useBrowserPageKeyboardShortcuts({
     })
   }, [browserTabId, markupIsActive, startGrabIntent])
 
+  const annotateModeIsOn = grabIsInteractive || markupIsActive
   useEffect(() => {
-    if (!grabIsInteractive) {
+    if (!annotateModeIsOn || !isActive) {
       return
     }
     const handleKeyDown = (e: KeyboardEvent): void => {
-      if (isEditableKeyboardTarget(e.target)) {
+      // keyCode 229 marks IME composition on engines that don't set isComposing.
+      if (isEditableKeyboardTarget(e.target) || e.isComposing || e.keyCode === 229) {
         return
       }
-      if (e.metaKey || e.ctrlKey || e.altKey) {
+      if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) {
         return
       }
-      const key = e.key.toLowerCase()
-      if (key !== 'c' && key !== 's') {
+      const key = browserGuestToolKeyFromEvent(e)
+      if (!isBrowserGuestToolKey(key)) {
+        return
+      }
+      if (isBrowserGrabActionKey(key)) {
+        // Why: copy and screenshot only mean something while the picker runs, not while drawing.
+        if (!grabIsInteractive) {
+          return
+        }
+        e.preventDefault()
+        e.stopPropagation()
+        handleGrabActionShortcut(key)
+        return
+      }
+      // Why: a held key would flip tools on every repeat.
+      if (e.repeat) {
         return
       }
       e.preventDefault()
       e.stopPropagation()
-      handleGrabActionShortcut(key as 'c' | 's')
+      handleAnnotateToolKey(key)
     }
     addAppKeyListener('keydown', handleKeyDown)
     return () => removeAppKeyListener('keydown', handleKeyDown)
-  }, [grabIsInteractive, handleGrabActionShortcut])
+  }, [
+    annotateModeIsOn,
+    grabIsInteractive,
+    handleAnnotateToolKey,
+    handleGrabActionShortcut,
+    isActive
+  ])
 
   useEffect(() => {
     if (!grabIsInteractive) {
@@ -130,7 +162,15 @@ export function useBrowserPageKeyboardShortcuts({
       if (browserPageId !== browserTabId) {
         return
       }
-      handleGrabActionShortcut(key)
+      // Alt edges belong to the palette's see-through, which listens for them itself.
+      if (key === 'alt-down' || key === 'alt-up') {
+        return
+      }
+      if (isBrowserGrabActionKey(key)) {
+        handleGrabActionShortcut(key)
+      } else {
+        handleAnnotateToolKey(key)
+      }
     })
-  }, [browserTabId, grabIsInteractive, handleGrabActionShortcut])
+  }, [browserTabId, grabIsInteractive, handleAnnotateToolKey, handleGrabActionShortcut])
 }

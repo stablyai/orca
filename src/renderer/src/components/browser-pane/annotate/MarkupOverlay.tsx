@@ -1,11 +1,12 @@
 import { ImeInput } from '@/lib/text-input/ime/ime-text-field'
-import React, { useCallback, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Check, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import { MarkupToolbar } from './markup-tools/MarkupToolbar'
+import { MarkupPaletteTools } from './palette/MarkupPaletteTools'
 import type { MarkupBaseImage } from './capture/markup-base-image'
 import type { MarkupShape } from './drawing/markup-drawing-model'
 import { TEXT_FONT_FAMILY } from './drawing/markup-shape-render'
@@ -18,6 +19,14 @@ export type MarkupOverlayProps = {
   onCancel: () => void
   /** Element outside the page box that hosts the controls as a footer instead of over the page. */
   controlsContainer?: HTMLElement | null
+  /** The annotate palette's Draw slot; when set, only the markup tools and Copy markup render there. */
+  paletteSlot?: HTMLElement | null
+  /** The palette is short on room: fewer tools in the row and a short Copy label. */
+  paletteCompact?: boolean
+  /** Strokes of a reopened drawing. */
+  initialShapes?: readonly MarkupShape[]
+  /** Latest strokes, so leaving Draw can offer Undo. */
+  onShapesChange?: (shapes: readonly MarkupShape[]) => void
 }
 
 export function MarkupOverlay({
@@ -25,12 +34,19 @@ export function MarkupOverlay({
   busy,
   onComplete,
   onCancel,
-  controlsContainer
+  controlsContainer,
+  paletteSlot,
+  paletteCompact = false,
+  initialShapes,
+  onShapesChange
 }: MarkupOverlayProps): React.JSX.Element {
   const t = useTranslate()
   const baseImgRef = useRef<HTMLImageElement | null>(null)
   const [baseLoaded, setBaseLoaded] = useState(false)
-  const editor = useMarkupEditor(busy, onCancel)
+  const editor = useMarkupEditor(busy, onCancel, initialShapes)
+  useEffect(() => {
+    onShapesChange?.(editor.shapes)
+  }, [editor.shapes, onShapesChange])
   const { pendingText } = editor
 
   const handleDone = useCallback(() => {
@@ -40,6 +56,38 @@ export function MarkupOverlay({
     }
     onComplete({ imageElement, shapes: editor.shapes })
   }, [baseLoaded, editor.shapes, onComplete])
+
+  const paletteControls = paletteSlot ? (
+    <div className="flex min-w-0 flex-wrap items-center gap-1">
+      <MarkupPaletteTools
+        compact={paletteCompact}
+        tool={editor.tool}
+        onToolChange={editor.setTool}
+        color={editor.color}
+        onColorChange={editor.setColor}
+        width={editor.width}
+        onWidthChange={editor.setWidth}
+        fontSize={editor.fontSize}
+        onFontSizeChange={editor.setFontSize}
+        canUndo={editor.canUndo}
+        canRedo={editor.canRedo}
+        onUndo={editor.undo}
+        onRedo={editor.redo}
+        onClear={editor.clear}
+      />
+      <Button
+        type="button"
+        size="xs"
+        className="shrink-0"
+        onClick={handleDone}
+        disabled={busy || !baseLoaded || editor.shapes.length === 0}
+      >
+        {paletteCompact
+          ? t('browser.annotatePalette.copy', 'Copy')
+          : t('browser.annotatePalette.copyMarkup', 'Copy markup')}
+      </Button>
+    </div>
+  ) : null
 
   const controls = (
     <div
@@ -164,7 +212,11 @@ export function MarkupOverlay({
         />
       ) : null}
 
-      {controlsContainer ? createPortal(controls, controlsContainer) : controls}
+      {paletteSlot && paletteControls
+        ? createPortal(paletteControls, paletteSlot)
+        : controlsContainer
+          ? createPortal(controls, controlsContainer)
+          : controls}
     </div>
   )
 }

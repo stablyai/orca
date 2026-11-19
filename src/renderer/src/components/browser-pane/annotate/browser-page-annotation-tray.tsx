@@ -1,5 +1,5 @@
 import { ImeTextarea } from '@/lib/text-input/ime/ime-text-field'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   ChevronDown,
   ChevronRight,
@@ -38,6 +38,7 @@ import { BrowserAnnotationImageStrip } from './delivery/browser-annotation-image
 import type { BrowserPageAnnotationTrayProps } from '../describe-page/browser-page-types'
 
 export function BrowserPageAnnotationTray({
+  revealSignal = 0,
   browserAnnotations,
   currentUrl,
   annotationTraySendOpen,
@@ -61,6 +62,18 @@ export function BrowserPageAnnotationTray({
   const [editIntent, setEditIntent] = useState<BrowserAnnotationIntent>('change')
   const editImages = useBrowserAnnotationImages(worktreeId)
   const [expanded, setExpanded] = useState(true)
+  const headerRef = useRef<HTMLButtonElement>(null)
+  // The palette's note count asks for the list: expand during render, then move focus once it is painted.
+  const [seenRevealSignal, setSeenRevealSignal] = useState(revealSignal)
+  if (revealSignal !== seenRevealSignal) {
+    setSeenRevealSignal(revealSignal)
+    setExpanded(true)
+  }
+  useEffect(() => {
+    if (revealSignal !== 0) {
+      headerRef.current?.focus()
+    }
+  }, [revealSignal])
   const ToggleChevron = expanded ? ChevronDown : ChevronRight
 
   // Why: a delete or clear while a row is mid-edit must not leave edit state pointing at nothing.
@@ -106,6 +119,7 @@ export function BrowserPageAnnotationTray({
             <TooltipTrigger asChild>
               <CollapsibleTrigger asChild>
                 <button
+                  ref={headerRef}
                   type="button"
                   className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-sm text-left text-sm font-medium outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
                 >

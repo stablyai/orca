@@ -1,5 +1,11 @@
 import { BROWSER_GRAB_SELECTED_ATTRIBUTE } from '../../../shared/browser/annotations/browser-annotation-viewport-bridge'
 
+/**
+ * Page band the annotate palette covers while picking: 8px inset + 38px palette + 8px gap.
+ * Why a fixed band: the palette always sits at the top of the page, and its exact x position needs no IPC.
+ */
+export const GRAB_LABEL_RESERVED_TOP_PX = 54
+
 export const GRAB_GUEST_OVERLAY_SCRIPT = `  var host = document.createElement('div');
   host.id = '__orca-grab-host';
   host.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:2147483647;pointer-events:all;cursor:crosshair;';
@@ -54,6 +60,10 @@ export const GRAB_GUEST_OVERLAY_SCRIPT = `  var host = document.createElement('d
     var labelY = rect.bottom + 6;
     if (labelY + 28 > window.innerHeight) {
       labelY = rect.top - 28;
+    }
+    // Orca's annotate palette floats over the top of the page while picking; keep the label out from under it.
+    if (labelY < ${GRAB_LABEL_RESERVED_TOP_PX}) {
+      labelY = Math.min(Math.max(rect.bottom + 6, ${GRAB_LABEL_RESERVED_TOP_PX}), window.innerHeight - 28);
     }
     hoverLabel.style.left = Math.max(4, rect.x) + 'px';
     hoverLabel.style.top = labelY + 'px';

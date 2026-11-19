@@ -115,6 +115,8 @@ export type BrowserPageFailLoadEvent = {
 }
 
 export type BrowserPageAnnotationTrayProps = {
+  /** Bumped by the palette's note count: expand the list and move focus to it. */
+  revealSignal?: number
   browserAnnotations: BrowserPageAnnotation[]
   currentUrl?: string
   annotationTraySendOpen: boolean

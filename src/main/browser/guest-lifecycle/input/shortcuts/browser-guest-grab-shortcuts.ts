@@ -1,6 +1,11 @@
 import { keybindingMatchesAction } from '../../../../../shared/keybindings/matching'
 import type { KeybindingOverrides } from '../../../../../shared/keybindings/types'
 import { isAgentInjectingInput } from '../../../cdp/input/agent-input-injection'
+import {
+  browserGuestToolKeyFromEvent,
+  isBrowserGrabActionKey,
+  isBrowserGuestToolKey
+} from '../../../../../shared/browser/element-grab/browser-grab-types'
 import type { ResolveRenderer } from '../../browser-guest-renderer-target'
 
 // Guests swallow renderer shortcuts; keep normal copy when editing or text is selected.
@@ -12,29 +17,49 @@ export function setupGrabShortcutForwarding(args: {
   getKeybindings?: () => KeybindingOverrides | undefined
 }): () => void {
   const { browserTabId, guest, resolveRenderer, hasActiveGrabOp, getKeybindings } = args
+  let altDownMirrored = false
   const handler = (event: Electron.Event, input: Electron.Input): void => {
     // Agent-injected keys must not trigger Orca actions (#20595).
     if (isAgentInjectingInput(guest)) {
       return
     }
+    // Alt alone, held over the page while picking, fades the palette so what's under it can be picked. The page
+    // still receives Alt; only its up/down edges are mirrored.
+    if (input.key === 'Alt' && !input.isAutoRepeat) {
+      // A pick can end while Alt is held, so the key-up of a mirrored key-down is always sent.
+      const shouldMirror =
+        input.type === 'keyDown' ? hasActiveGrabOp(browserTabId) : altDownMirrored
+      if (shouldMirror) {
+        altDownMirrored = input.type === 'keyDown'
+        resolveRenderer(browserTabId)?.send('browser:grabActionShortcut', {
+          browserPageId: browserTabId,
+          key: input.type === 'keyDown' ? 'alt-down' : 'alt-up'
+        })
+      }
+      return
+    }
     if (input.type !== 'keyDown') {
       return
     }
-    const bareKey = input.key.toLowerCase()
+    const bareKey = browserGuestToolKeyFromEvent(input)
     if (
       !input.meta &&
       !input.control &&
       !input.alt &&
       !input.shift &&
-      (bareKey === 'c' || bareKey === 's') &&
+      isBrowserGuestToolKey(bareKey) &&
       hasActiveGrabOp(browserTabId)
     ) {
       const renderer = resolveRenderer(browserTabId)
       if (!renderer) {
         return
       }
-      // During a grab, bare C/S control copy/screenshot instead of page typing.
+      // During a grab, bare C/S copy or screenshot and A/G/D switch tools instead of typing into the page.
       event.preventDefault()
+      // A held tool key would switch on every repeat; swallowing it is enough.
+      if (input.isAutoRepeat && !isBrowserGrabActionKey(bareKey)) {
+        return
+      }
       renderer.send('browser:grabActionShortcut', { browserPageId: browserTabId, key: bareKey })
       return
     }
