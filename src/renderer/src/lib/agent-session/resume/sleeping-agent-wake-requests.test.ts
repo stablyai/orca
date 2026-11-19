@@ -63,7 +63,7 @@ it('background mail wake authorizes only its pane when a tab contains several sl
   expect(takeSleepingAgentWakeRequest(second)).toBe(false)
 })
 
-it('keeps pre-launch custody on its quit bookmark through an already armed wake without authorizing retirement', () => {
+it('keeps pre-launch custody on its sleep record through an already armed wake without authorizing retirement', () => {
   const original: SleepingAgentSessionRecord = {
     paneKey: 'tab:11111111-1111-4111-8111-111111111111',
     tabId: 'tab',
@@ -78,8 +78,6 @@ it('keeps pre-launch custody on its quit bookmark through an already armed wake 
   }
   const retained: SleepingAgentSessionRecord = {
     ...original,
-    origin: 'quit',
-    restoreOnTabOpenOnly: true,
     mailWake: { id: 'obligation', capturedAt: 1, startedAt: 100 }
   }
   const startup: ColdRestoreAgentResumeStartup = {
@@ -136,8 +134,6 @@ it('preserves custody through the installed spawn/alias/shell callbacks and rest
   }
   const retained: SleepingAgentSessionRecord = {
     ...original,
-    origin: 'quit',
-    restoreOnTabOpenOnly: true,
     mailWake: { id: 'obligation', capturedAt: 1, startedAt: 100 }
   }
   const alias = { ...retained, paneKey: 'tab:22222222-2222-4222-8222-222222222222' }
