@@ -1,10 +1,18 @@
 import { dirname } from 'node:path'
 import { runProcess } from '@orca/process-host'
 import { resolveCliCommandAsync } from '../../../shared/shell/command-resolution/node-cli-command-async-resolution'
+import { pathEnvRelativeTo } from '../../../shared/shell/command-resolution/node-cli-command-resolution'
 import { resolveCommandOnLocalPath } from '../../ipc/command-path/command-path-resolver'
 import { resolvePathEnvKey } from '../../pty/environment/windows-path-segment-merge'
 
 const LOCAL_AUTOMATION_COMMAND_TIMEOUT_MS = 30_000
+
+function resolveLocalCommand(command: string): Promise<string> {
+  const pathKey = resolvePathEnvKey(process.env, process.platform)
+  return resolveCliCommandAsync(command, {
+    pathEnv: pathEnvRelativeTo(process.env[pathKey], process.cwd())
+  })
+}
 
 // Why: CLIs resolved outside the inherited PATH (nvm-style) need their dir for shebang and .cmd interpreter lookup.
 function withProgramDirectoryOnPath(program: string): NodeJS.ProcessEnv {
@@ -12,15 +20,21 @@ function withProgramDirectoryOnPath(program: string): NodeJS.ProcessEnv {
   const pathKey = resolvePathEnvKey(env, process.platform)
   const pathDelimiter = process.platform === 'win32' ? ';' : ':'
   const programDirectory = dirname(program)
-  const isProgramDirectory = (entry: string): boolean =>
-    process.platform === 'win32'
-      ? entry.toLowerCase() === programDirectory.toLowerCase()
-      : entry === programDirectory
-  const inheritedEntries = (env[pathKey] ?? '')
-    .split(pathDelimiter)
-    // Empty entries are meaningful on POSIX (current directory), so keep them.
-    .filter((entry) => !isProgramDirectory(entry))
-  env[pathKey] = [programDirectory, ...inheritedEntries].join(pathDelimiter)
+  const pathEntryKey = (entry: string): string =>
+    process.platform === 'win32' ? entry.replace(/[\\/]+$/, '').toLowerCase() : entry
+  const programDirectoryKey = pathEntryKey(programDirectory)
+  const inheritedPath = env[pathKey]
+  if (inheritedPath === undefined) {
+    env[pathKey] = programDirectory
+    return env
+  }
+  // Keep empty entries (POSIX current directory) and inherited order: prepending the CLI dir
+  // could select a sibling `node` ahead of the one the inherited PATH would have used.
+  const inheritedEntries = inheritedPath.split(pathDelimiter)
+  if (inheritedEntries.some((entry) => pathEntryKey(entry) === programDirectoryKey)) {
+    return env
+  }
+  env[pathKey] = [...inheritedEntries, programDirectory].join(pathDelimiter)
   return env
 }
 
@@ -29,8 +43,11 @@ async function runLocalProviderCommand(
   args: string[],
   options: { timeoutMs: number; timeoutMessage: string }
 ): Promise<void> {
-  // Unresolved names come back unchanged, so a missing CLI still fails as a spawn error.
-  const program = await resolveCliCommandAsync(command)
+  // Fall back to the local-path resolver so a Windows .cmd/.bat shim the availability check
+  // accepts is spawned by its real path instead of a bare name that cannot match the shim.
+  const cliProgram = await resolveLocalCommand(command)
+  const program =
+    cliProgram === command ? ((await resolveCommandOnLocalPath(command)) ?? command) : cliProgram
   const result = await runProcess({
     program,
     args,
@@ -51,7 +68,7 @@ export async function isExternalAutomationCommandOnPath(command: string): Promis
     // A relative PATH entry can normalize a hit back to the bare name, so string inequality
     // alone would miss it; the path resolver returns null only for a real miss.
     return (
-      (await resolveCliCommandAsync(command)) !== command ||
+      (await resolveLocalCommand(command)) !== command ||
       (await resolveCommandOnLocalPath(command)) !== null
     )
   } catch {
