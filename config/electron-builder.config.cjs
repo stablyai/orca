@@ -469,6 +469,13 @@ module.exports = {
         'orca_menu_dead_key.node'
       )
       await signMacStandaloneHelper(menuDeadKeyAddon, 'Menu dead-key guard', context.packager)
+      const memoryStatusAddon = buildMacNativeAddon(
+        resourcesDir,
+        architecture,
+        'macos-memory-status',
+        'orca_memory_status.node'
+      )
+      await signMacStandaloneHelper(memoryStatusAddon, 'Memory status reader', context.packager)
       const version = context.packager.appInfo.version
       let commit = process.env.ORCA_BUILD_COMMIT || process.env.GITHUB_SHA || 'unknown'
       if (commit === 'unknown') {

@@ -2,6 +2,7 @@ import { runProcess } from '@orca/process-host'
 import { readFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
+import { readDarwinMemoryFreePercent } from './darwin-memory-status'
 import type {
   HostAvailableMemorySource,
   HostMemory
@@ -87,6 +88,10 @@ async function readAvailableMemory(
 }
 
 async function readDarwinAvailableMemory(total: number): Promise<number | null> {
+  const freePercent = readDarwinMemoryFreePercent()
+  if (freePercent !== null && total > 0) {
+    return Math.round((total * freePercent) / 100)
+  }
   try {
     const result = await runProcess({
       program: '/usr/bin/memory_pressure',

@@ -9,6 +9,8 @@ on:
       - 'src/main/updater*'
       - 'src/main/updater/**'
       - 'native/macos-shipit-scheduling/**'
+      - 'native/macos-memory-status/**'
+      - 'config/scripts/desktop-distribution/macos/macos-memory-status*'
       - 'config/scripts/macos-shipit-scheduling*'
       - 'config/electron-builder.config.cjs'
       - 'src/main/startup/quit/main-process-quit*'
@@ -51,5 +53,6 @@ jobs:
         run: >-
           pnpm exec vitest run --config config/vitest.config.ts
           config/scripts/desktop-distribution/macos/macos-shipit-scheduling.test.mjs
+          config/scripts/desktop-distribution/macos/macos-memory-status.test.mjs
           src/main/updater/mac-install/macos-update-running-instances.integration.test.ts
           src/main/updater/mac-install/updater-mac-quit-guard.test.ts
