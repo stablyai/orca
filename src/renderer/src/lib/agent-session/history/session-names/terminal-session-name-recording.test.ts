@@ -27,8 +27,8 @@ function seed(sessionId: string, title: string, tabId: string) {
   })
 }
 
-// Far enough past any rename's grace window.
-const LATER = Date.now() + LOCAL_TAB_NAME_WRITE_GRACE_MS * 10
+// Far past any rename's grace window, including renames stamped with the real clock.
+const LATER = 10_000_000_000_000
 const pass = (tabs: FixtureTab[], now = LATER) =>
   reconcileTerminalSessionNames(makeTerminalNamesState(tabs), now)
 
@@ -166,12 +166,13 @@ describe('terminal session name recording', () => {
     })
 
     it("does not save a stale echo of the old name after this client's clear", () => {
-      const now = Date.now()
+      const now = 1_000_000
       seed('s1', 'Old', 'tab-1')
       recordTerminalTabRename(
         makeTerminalNamesState([{ id: 'tab-1', sessionId: 's1', customTitle: 'Old' }]),
         'tab-1',
-        null
+        null,
+        { now }
       )
       // main or the paired host has not applied the clear yet.
       const result = pass([{ id: 'tab-1', sessionId: 's1', customTitle: 'Old' }], now + 1)
@@ -180,7 +181,7 @@ describe('terminal session name recording', () => {
     })
 
     it('names the session once a rename made while its host was unknown shows', () => {
-      const now = Date.now()
+      const now = 1_000_000
       const state = makeTerminalNamesState([{ id: 'tab-1', sessionId: 's1' }])
       seed('s1', 'Other tab name', 'tab-2')
       recordTerminalTabRename(
@@ -190,7 +191,8 @@ describe('terminal session name recording', () => {
           getKnownWorktreeById: () => undefined
         },
         'tab-1',
-        'Mine'
+        'Mine',
+        { now }
       )
       pass(
         [
@@ -201,6 +203,43 @@ describe('terminal session name recording', () => {
       )
       expect(saved('s1')).toBe('Mine')
       expect(owner('s1')).toBe('tab-1')
+    })
+
+    it('gives a rename no say over a session bound after it, or a name a tab was created with', () => {
+      const now = 1_000_000
+      seed('s2', 'Fix auth bug', 'closed-tab')
+      // The user renames a tab running s1, then resumes s2 in it within the grace window.
+      recordTerminalTabRename(
+        makeTerminalNamesState([{ id: 'tab-1', sessionId: 's1' }]),
+        'tab-1',
+        'backend',
+        { now }
+      )
+      pass([{ id: 'tab-1', sessionId: 's2', customTitle: 'backend' }], now + 1)
+      expect(saved('s2')).toBe('Fix auth bug')
+
+      // A tab named by code, not a person, resumes s2 within the window.
+      recordTerminalTabRename(
+        {
+          ...makeTerminalNamesState([{ id: 'tab-2', sessionId: 's2' }]),
+          activeWorktreeId: null,
+          getKnownWorktreeById: () => undefined
+        },
+        'tab-2',
+        'Worker 3',
+        { now, interactive: false }
+      )
+      pass([{ id: 'tab-2', sessionId: 's2', customTitle: 'Worker 3' }], now + 1)
+      expect(saved('s2')).toBe('Fix auth bug')
+    })
+
+    it('keeps the saved name when naming a resumed tab failed', () => {
+      seed('s1', 'Fix auth bug', 'closed-tab')
+      // The host ignored the name, so the resumed tab stays unnamed.
+      pass([{ id: 'tab-new', sessionId: 's1' }])
+      pass([{ id: 'tab-new', sessionId: 's1' }])
+      expect(saved('s1')).toBe('Fix auth bug')
+      expect(owner('s1')).toBe('closed-tab')
     })
 
     it('reports skipped tabs whose host is not known yet', () => {

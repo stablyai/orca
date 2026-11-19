@@ -127,7 +127,14 @@ function withTerminalSessionNameRecording<T extends Pick<TerminalSlice, 'setTabC
   return {
     ...actions,
     setTabCustomTitle: (tabId, title, opts) => {
-      recordTerminalTabRename(get(), tabId, title)
+      try {
+        recordTerminalTabRename(get(), tabId, title, {
+          interactive: opts?.recordInteraction !== false
+        })
+      } catch (error) {
+        // Remembering the name for Session History must never block the rename itself.
+        console.warn('[terminal-session-names] could not record tab rename:', error)
+      }
       actions.setTabCustomTitle(tabId, title, opts)
     }
   }

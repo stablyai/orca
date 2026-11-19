@@ -8,7 +8,11 @@ import {
   startTerminalSessionNameSync,
   terminalTabNamesChanged
 } from './terminal-session-name-sync'
-import { resetTerminalSessionNameRecordingForTest } from './terminal-session-name-recording'
+import {
+  LOCAL_TAB_NAME_WRITE_GRACE_MS,
+  recordTerminalTabRename,
+  resetTerminalSessionNameRecordingForTest
+} from './terminal-session-name-recording'
 import {
   getSavedTerminalSessionName,
   resetTerminalSessionNamesForTest
@@ -32,7 +36,7 @@ function withTabTitle(state: AppState, patch: { title?: string; customTitle?: st
   }
 }
 
-function harness(initial: AppState) {
+function harness(initial: AppState, clock?: { now: number; timers: (() => void)[] }) {
   let state = initial
   const listeners = new Set<(next: AppState, previous: AppState) => void>()
   const pending: (() => void)[] = []
@@ -45,7 +49,17 @@ function harness(initial: AppState) {
     scheduleReconcile: (callback) => {
       pending.push(callback)
       return () => pending.splice(pending.indexOf(callback), 1)
-    }
+    },
+    ...(clock
+      ? {
+          now: () => clock.now,
+          setTimer: (callback: () => void) => {
+            clock.timers.push(callback)
+            return setTimeout(() => {}, 0)
+          },
+          clearTimer: () => {}
+        }
+      : {})
   })
   return {
     pending,
@@ -122,6 +136,26 @@ describe('terminal session name sync', () => {
     expect(
       terminalTabNamesChanged(makeTerminalNamesState([{ id: 'tab-2', customTitle: 'A' }]), state)
     ).toBe(true)
+  })
+
+  it('looks again when the grace window ends, so a clear made elsewhere is not missed', () => {
+    const timers: (() => void)[] = []
+    const clock = { now: 1_000_000, timers }
+    const named = makeTerminalNamesState([{ id: 'tab-1', sessionId: 's1', customTitle: 'Mine' }])
+    recordTerminalTabRename(named, 'tab-1', 'Mine', { now: clock.now })
+    const sync = harness(named, clock)
+    sync.flush()
+    expect(getSavedTerminalSessionName('local', 'claude', 's1')).toBe('Mine')
+    // A phone clears the name inside the window; the pass holds back and arms a recheck.
+    sync.set(withTabTitle(sync.state, { customTitle: null }))
+    sync.flush()
+    expect(getSavedTerminalSessionName('local', 'claude', 's1')).toBe('Mine')
+    expect(clock.timers).toHaveLength(1)
+    clock.now += LOCAL_TAB_NAME_WRITE_GRACE_MS
+    clock.timers.shift()!()
+    sync.flush()
+    expect(getSavedTerminalSessionName('local', 'claude', 's1')).toBeNull()
+    sync.stop()
   })
 
   it('retries tabs skipped for an unknown host when owner facts change', () => {

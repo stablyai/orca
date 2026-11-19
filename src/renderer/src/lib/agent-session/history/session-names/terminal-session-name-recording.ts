@@ -25,7 +25,14 @@ export const LOCAL_TAB_NAME_WRITE_GRACE_MS = 30_000
 
 type Binding = AgentPaneConversation<AiVaultAgent> & { key: string }
 
-const localNameWriteByTabId = new Map<string, { at: number; name: string }>()
+type LocalNameWrite = {
+  at: number
+  name: string
+  /** The session a user rename named; only it may take the name once the rename shows. */
+  sessionId: string | null
+}
+
+const localNameWriteByTabId = new Map<string, LocalNameWrite>()
 // What the last pass saw on each bound tab, so a pass can tell a rename made while bound.
 let lastSeenByTabId = new Map<string, { key: string; name: string }>()
 
@@ -82,7 +89,8 @@ function keysClearedBy(
 export function recordTerminalTabRename(
   state: AppState,
   tabId: string,
-  title: string | null
+  title: string | null,
+  options: { interactive?: boolean; now?: number } = {}
 ): void {
   const worktreeId = getTerminalTabOwnerWorktreeId(state.tabsByWorktree, tabId)
   if (!worktreeId) {
@@ -92,13 +100,19 @@ export function recordTerminalTabRename(
     state.tabsByWorktree[worktreeId]?.find((tab) => tab.id === tabId)?.customTitle
   )
   const name = normalizeTerminalSessionName(title)
-  localNameWriteByTabId.set(tabId, { at: Date.now(), name })
+  const write: LocalNameWrite = { at: options.now ?? Date.now(), name, sessionId: null }
+  localNameWriteByTabId.set(tabId, write)
   if (!name && !hasTerminalSessionNames()) {
     return
   }
   const conversation = collectAgentPaneConversations(state, isAiVaultAgent, {
     tab: { worktreeId, tabId }
   })[0]
+  // Only a person's rename may later name a session whose host was not known yet; a name a tab was
+  // created with, or a session bound after the rename, keeps the normal rules.
+  if (name && options.interactive !== false) {
+    write.sessionId = conversation?.providerSession.id || null
+  }
   const resolved = bindingOf(state, conversation)
   const binding = resolved === 'host-unknown' ? null : resolved
   if (!name) {
@@ -180,20 +194,18 @@ export function reconcileTerminalSessionNames(
       result.recheckAt = Math.min(result.recheckAt ?? due, due)
       continue
     }
-    if (write) {
-      // The rename shows. It was the user's act, so it names the session even when its host was
-      // not known at rename time. Grace runs its full window: a paired host's optimistic local
-      // name shows at once, and a snapshot built before the host applied it may still arrive.
-      if (name) {
-        saveTerminalSessionName({
-          executionHostId: binding.executionHostId,
-          sessionId: binding.providerSession.id,
-          agent: binding.agent,
-          tabId: tab.id,
-          title: name
-        })
-        continue
-      }
+    // The rename shows, for the session the user renamed: it names that session even when its host
+    // was not known at rename time. Grace runs its full window: a paired host's optimistic local
+    // name shows at once, and a snapshot built before the host applied it may still arrive.
+    if (write?.sessionId === binding.providerSession.id) {
+      saveTerminalSessionName({
+        executionHostId: binding.executionHostId,
+        sessionId: binding.providerSession.id,
+        agent: binding.agent,
+        tabId: tab.id,
+        title: name
+      })
+      continue
     }
     const renamedWhileBound =
       previous !== undefined && previous.key === binding.key && previous.name !== name

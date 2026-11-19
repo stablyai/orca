@@ -134,7 +134,7 @@ function commit(change: (current: Entries) => boolean): void {
       JSON.stringify(Object.fromEntries(current))
     )
   } catch {
-    // Quota or a disabled store: keep the name for this run.
+    // Quota or a disabled store: the change lives in memory only until the next write re-reads.
   }
   notify()
 }
