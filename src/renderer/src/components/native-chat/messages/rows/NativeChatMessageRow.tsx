@@ -64,6 +64,8 @@ export type MessageRowProps = {
   continuesTurn?: boolean
   /** Its turn opens with an automation's row, which already stands for a quiet reply. */
   inAutomationTurn?: boolean
+  /** Its turn changed an item, posted or otherwise did something others see. */
+  inActingTurn?: boolean
   /** In a turn: whether this row holds the response's actions (its last words, else its last images). */
   endsResponse?: boolean
   latestResponse?: boolean

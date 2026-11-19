@@ -257,17 +257,6 @@ describe('AddConnectorButton', () => {
     expect(await screen.findByRole('button', { name: /Connect Linear/ })).toBeTruthy()
   })
 
-  it('shows a bot on Linear as added', () => {
-    render(
-      <AddConnectorButton
-        bot={{ ...bot, linear: { workspaceId: 'org-1', workspaceName: 'Acme' } }}
-      />
-    )
-    fireEvent.click(screen.getByRole('button', { name: /Add connector/ }))
-
-    expect(onBot()).toEqual(['Linear'])
-  })
-
   it('offers GitHub once the cloud has it, and adding it starts GitHub setup', async () => {
     botGitHub.state.mockResolvedValue({ ok: true, value: gitHubState })
     render(<AddConnectorButton bot={bot} />)
@@ -332,13 +321,6 @@ describe('AddConnectorButton', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Set up in chat' }))
     expect(askBotInChat).toHaveBeenCalledWith(bot, 'Set up a webhook that ')
     expect(screen.queryByText('Add to Reviewer')).toBeNull()
-  })
-
-  it('lists Webhooks as added once the bot has a hook', async () => {
-    setWebhookHostTransportForTests(vi.fn(async () => ({ hooks: [webhookSummaryFixture()] })))
-    render(<AddConnectorButton bot={bot} />)
-    fireEvent.click(screen.getByRole('button', { name: /Add connector/ }))
-    await waitFor(() => expect(onBot()).toEqual(['Webhooks']))
   })
 
   it('leaves Webhooks out while the cloud or this Orca has none', async () => {

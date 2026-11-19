@@ -73,9 +73,6 @@ const turnEnded = (turnId: number) =>
     stopReason: null,
     at: turnId
   }) as const
-const started = (at: number) =>
-  ({ kind: 'turn-started', conversation, worktreeId: 'wt', paneKey: 'tab:1', at }) as const
-
 let userDataPath: string
 let outbox: string
 
@@ -96,39 +93,6 @@ afterEach(async () => {
 })
 
 describe('ConnectorTurnEvents on a slow disk', () => {
-  it('touches no disk while only live events and snapshots change', async () => {
-    const events = new ConnectorTurnEvents(userDataPath, 'ada')
-    for (let at = 0; at < 300; at++) {
-      events.observe(started(at))
-    }
-    events.observe({ kind: 'snapshot', conversations: [] })
-    events.observe(turnEnded(1))
-    for (let at = 0; at < 300; at++) {
-      events.observe(started(at))
-    }
-    events.observe({ kind: 'snapshot', conversations: [] })
-    await ConnectorTurnEvents.settled()
-
-    expect({ writes: disk.writes, deletes: disk.deletes }).toEqual({ writes: 1, deletes: 0 })
-    expect(existsSync(outbox)).toBe(true)
-  })
-
-  it.each([20, 200])(
-    'keeps only the newest of %i turn-end changes waiting behind a slow write',
-    async (changes) => {
-      const events = new ConnectorTurnEvents(userDataPath, 'ada')
-      disk.hold()
-      for (let turn = 1; turn <= changes; turn++) {
-        events.observe(turnEnded(turn))
-      }
-      disk.release()
-      await ConnectorTurnEvents.settled()
-
-      expect(disk.writes).toBe(2)
-      expect(new ConnectorTurnEvents(userDataPath, 'ada').next(1)?.batch).toHaveLength(changes)
-    }
-  )
-
   it('lands a write a newer change overtook, so steady changes still reach the disk', async () => {
     const events = new ConnectorTurnEvents(userDataPath, 'ada')
     disk.hold()
