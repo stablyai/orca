@@ -79,6 +79,16 @@ export function buildAgentSessionMap(journal: readonly AgentJournalRenderItem[])
       case 'diff':
         recordDiff(node, item)
         break
+      // Orca creation-fact cards (agent launches, handoffs, automation saves, tool adds,
+      // wait ends, bot notes) carry no node or edge, so the map skips them.
+      case 'agent-start':
+      case 'agent-handoff':
+      case 'automation-run-not-started':
+      case 'automation-saved':
+      case 'tool-added':
+      case 'wait-ended':
+      case 'bot-item-note':
+        break
     }
   }
 

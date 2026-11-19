@@ -6,7 +6,7 @@ import { AgentSessionMapDetail } from './AgentSessionMapDetail'
 import { AgentSessionMapGraph, AGENT_MAP_CHIP_ROW_HEIGHT } from './AgentSessionMapGraph'
 import { AgentSessionMapTimeline } from './AgentSessionMapTimeline'
 import { useAgentSessionMap } from './use-agent-session-map'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 const MIN_GRAPH_WIDTH = 320
 const DETAIL_PANEL_WIDTH = 320
@@ -23,6 +23,7 @@ export function AgentSessionMapView({
   paneKey: string
   isVisible: boolean
 }): React.JSX.Element {
+  const t = useTranslate()
   const { map } = useAgentSessionMap({ tabId, paneKey, isVisible })
   const [playheadTs, setPlayheadTs] = useState<number | null>(null)
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null)
@@ -65,11 +66,11 @@ export function AgentSessionMapView({
     <div className="flex h-full min-h-0 w-full flex-col bg-background">
       <div className="flex items-center justify-between border-b border-border px-4 py-2">
         <h2 className="text-sm font-semibold text-foreground">
-          {translate('components.agentSessionMap.title', 'Agent Map')}
+          {t('components.agentSessionMap.title', 'Agent Map')}
         </h2>
         {map && (
           <span className="text-xs text-muted-foreground">
-            {translate('components.agentSessionMap.agents.count', '{{count}} agents', {
+            {t('components.agentSessionMap.agents.count', '{{count}} agents', {
               count: map.nodes.length
             })}
           </span>
@@ -87,7 +88,7 @@ export function AgentSessionMapView({
             />
           ) : (
             <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-              {translate('components.agentSessionMap.empty', 'No agent session in this pane')}
+              {t('components.agentSessionMap.empty', 'No agent session in this pane')}
             </div>
           )}
         </div>
@@ -103,24 +104,20 @@ export function AgentSessionMapView({
         <div className="border-t border-border px-4 py-3">
           <div className="mb-2 flex items-center gap-3 text-xs text-muted-foreground">
             <span className="tabular-nums">
-              {translate('components.agentSessionMap.session.tools', '{{count}} tools', {
+              {t('components.agentSessionMap.session.tools', '{{count}} tools', {
                 count: summary.toolCallCount
               })}
             </span>
             <span className="tabular-nums">
-              {translate('components.agentSessionMap.session.files', '{{count}} files', {
+              {t('components.agentSessionMap.session.files', '{{count}} files', {
                 count: summary.filesTouched.length
               })}
             </span>
             {summary.lastPromptText && (
               <span className="min-w-0 flex-1 truncate" title={summary.lastPromptText}>
-                {translate(
-                  'components.agentSessionMap.session.lastPrompt',
-                  'Last prompt: {{text}}',
-                  {
-                    text: summary.lastPromptText
-                  }
-                )}
+                {t('components.agentSessionMap.session.lastPrompt', 'Last prompt: {{text}}', {
+                  text: summary.lastPromptText
+                })}
               </span>
             )}
           </div>

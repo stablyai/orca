@@ -7,7 +7,7 @@ import type {
 import { agentMapToolChipsAt } from '../../../../shared/agent-session-map/agent-session-map-tool-chips'
 import type { AgentMapLayout } from '../../../../shared/agent-session-map/agent-session-map-layout'
 import { AGENT_MAP_STATUS_COLORS, agentMapStatusLabel } from './agent-session-map-status-color'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 export const AGENT_MAP_NODE_WIDTH = 168
 export const AGENT_MAP_NODE_HEIGHT = 56
@@ -43,6 +43,7 @@ export function AgentSessionMapGraph({
   selectedNodeId?: string
   onSelectNode?: (nodeId: string) => void
 }) {
+  const t = useTranslate()
   const nodeById = new Map(map.nodes.map((node) => [node.id, node]))
   const viewById = new Map(viewState.nodes.map((node) => [node.nodeId, node]))
 
@@ -52,7 +53,7 @@ export function AgentSessionMapGraph({
       height={layout.height}
       viewBox={`0 0 ${layout.width} ${layout.height}`}
       role="img"
-      aria-label={translate('components.agentSessionMap.graph.ariaLabel', 'Agent session map')}
+      aria-label={t('components.agentSessionMap.graph.ariaLabel', 'Agent session map')}
       className="block"
     >
       <g>
@@ -133,6 +134,7 @@ function MapNode({
   selected: boolean
   onSelect?: () => void
 }) {
+  const t = useTranslate()
   const color = AGENT_MAP_STATUS_COLORS[status]
   const left = x - AGENT_MAP_NODE_WIDTH / 2
   const top = y - AGENT_MAP_NODE_HEIGHT / 2
@@ -140,11 +142,11 @@ function MapNode({
     status === 'running' && activeTool
       ? activeTool
       : status === 'waiting' && waitingOn
-        ? translate('components.agentSessionMap.node.waitingOn', 'Waiting on {{target}}', {
+        ? t('components.agentSessionMap.node.waitingOn', 'Waiting on {{target}}', {
             target: waitingOn
           })
         : isRoot
-          ? translate('components.agentSessionMap.node.mainAgent', 'Main agent')
+          ? t('components.agentSessionMap.node.mainAgent', 'Main agent')
           : agentMapStatusLabel(status)
   const chips = agentMapToolChipsAt(node.toolCalls, ts)
   return (
