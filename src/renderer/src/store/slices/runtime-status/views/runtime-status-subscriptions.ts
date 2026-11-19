@@ -53,8 +53,8 @@ export function createRuntimeStatusSubscriptions(store: RuntimeStatusStore) {
       return
     }
     // A slice may subscribe while the store is still being created, before it has state.
-    previousStatuses = (store.getState() as RuntimeStatusState | undefined)
-      ?.runtimeStatusByEnvironmentId
+    const initial: RuntimeStatusState | undefined = store.getState()
+    previousStatuses = initial?.runtimeStatusByEnvironmentId
     unsubscribeStore = store.subscribe((_state, prior) => {
       const statuses = store.getState().runtimeStatusByEnvironmentId
       // Subscribed during creation: the first write's prior state is the real baseline.
@@ -264,9 +264,9 @@ function diffStatuses(
   return { ids, added, deleted }
 }
 
-// Keyed by subscribe: the store's hook and the api its slices receive are different objects sharing it.
+// Keyed by getState: the store's hook and the api its slices receive are different objects sharing it.
 const subscriptionsByStore = new WeakMap<
-  RuntimeStatusStore['subscribe'],
+  RuntimeStatusStore['getState'],
   ReturnType<typeof createRuntimeStatusSubscriptions>
 >()
 
@@ -274,10 +274,10 @@ const subscriptionsByStore = new WeakMap<
 export function runtimeStatusSubscriptionsFor(
   store: RuntimeStatusStore
 ): ReturnType<typeof createRuntimeStatusSubscriptions> {
-  let subscriptions = subscriptionsByStore.get(store.subscribe)
+  let subscriptions = subscriptionsByStore.get(store.getState)
   if (!subscriptions) {
     subscriptions = createRuntimeStatusSubscriptions(store)
-    subscriptionsByStore.set(store.subscribe, subscriptions)
+    subscriptionsByStore.set(store.getState, subscriptions)
   }
   return subscriptions
 }
