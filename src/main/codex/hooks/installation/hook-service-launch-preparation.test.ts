@@ -263,22 +263,7 @@ describe('completed Codex launch preparation', () => {
     expect(readFileSync(runtime, 'utf8')).not.toContain('model = "B"')
   })
 
-  it('takes the hooks back out when Off lands while the worker installs them', async () => {
-    const { service, home } = seed()
-    let enabled = true
-    controls.aroundMirror = () => {
-      enabled = false
-      return () => {}
-    }
-
-    await service.installForLaunchPrep(home, true, () => enabled)
-
-    expect(readFileSync(join(home, 'hooks.json'), 'utf8')).not.toContain(
-      basename(getManagedScriptPath())
-    )
-  })
-
-  it('keeps user hook approvals at their own slots when Off lands mid-install', async () => {
+  it('removes managed hooks and restores user approvals when Off lands mid-install', async () => {
     const { service, home, source } = seed()
     const systemHooks = join(homes.tmpHome, '.codex', 'hooks.json')
     writeFileSync(
@@ -306,7 +291,9 @@ describe('completed Codex launch preparation', () => {
     await service.installForLaunchPrep(home, true, () => enabled)
 
     const runtimeHooks = join(home, 'hooks.json')
-    expect(readFileSync(runtimeHooks, 'utf8')).toContain('user-stop')
+    const runtimeHookContents = readFileSync(runtimeHooks, 'utf8')
+    expect(runtimeHookContents).toContain('user-stop')
+    expect(runtimeHookContents).not.toContain(basename(getManagedScriptPath()))
     const runtimeToml = readFileSync(join(home, 'config.toml'), 'utf8')
     expect(runtimeToml).toContain(hookTrustHeader(`${runtimeHooks}:stop:0:0`))
     expect(runtimeToml).not.toContain(hookTrustHeader(`${runtimeHooks}:stop:1:0`))
