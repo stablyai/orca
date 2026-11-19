@@ -42,6 +42,7 @@ import type {
   TaskViewPresetId
 } from '../ui-chrome/ui-chrome-types'
 import type { WorktreeVisibilityDefaults } from '../repository/repo-types'
+import type { FileExplorerSortMode } from '../file-listing/file-name-sort'
 
 /** MiniMax account region used to select the quota endpoint. */
 export type MiniMaxEndpoint = 'overseas' | 'cn'
@@ -236,6 +237,8 @@ export type GlobalSettings = GlobalSettingsBase & {
   rightSidebarOpenByDefault: boolean
   followSymlinkedDirectories?: boolean
   showGitIgnoredFiles?: boolean
+  /** File Explorer display order only; host listings and page cursors stay folders-first. */
+  fileExplorerSortMode?: FileExplorerSortMode
   /** Preferred Source Control changes layout. Per-user, not per-workspace. */
   sourceControlViewMode: SourceControlViewMode
   /** Preferred Source Control group order. Per-user, not per-workspace. */

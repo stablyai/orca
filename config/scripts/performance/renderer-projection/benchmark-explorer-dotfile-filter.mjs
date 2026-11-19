@@ -131,6 +131,7 @@ for (const count of [1000, 10_000, 100_000]) {
       },
       showDotfiles: false,
       showGitIgnoredFiles: false,
+      sortMode: 'folders-first',
       worktreePath: '/workspace'
     }
     const functions = versions.map(

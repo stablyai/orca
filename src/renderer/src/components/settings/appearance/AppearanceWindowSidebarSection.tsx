@@ -27,6 +27,7 @@ import {
 } from './appearance-usage-percentage-search'
 
 import { LeftSidebarAppearanceSetting } from './LeftSidebarAppearanceSetting'
+import { FileExplorerSortModeSetting } from './FileExplorerSortModeSetting'
 import { getStatusBarUsageFormatEntry } from './appearance-status-bar-usage-format-search'
 import { StatusBarUsageFormatSetting } from './StatusBarUsageFormatSetting'
 
@@ -387,6 +388,7 @@ export function AppearanceWindowSidebarSection({
                   }
                 />
               </SearchableSetting>
+              <FileExplorerSortModeSetting settings={settings} updateSettings={updateSettings} />
             </SettingsGroupSubsection>
           ) : null}
         </SettingsGroupDisclosure>
