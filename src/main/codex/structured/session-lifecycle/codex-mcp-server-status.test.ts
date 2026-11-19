@@ -6,58 +6,36 @@ function request(replies: Record<string, unknown>): CodexMcpRequest {
   return async (method) => replies[method]
 }
 
+// config/read with the chat's cwd, as Codex 0.167 answers for a trusted project.
 const projectConfig = {
   config: {
     mcp_servers: {
-      docs: { command: 'docs' },
-      search: { enabled: false }
+      docs: { command: 'docs', enabled: true },
+      search: { command: 'search', enabled: false },
+      tracker: { command: 'tracker', enabled: true }
     }
   },
   layers: [
-    {
-      name: { type: 'user' },
-      config: { mcp_servers: { docs: { command: 'docs' } } }
-    }
+    { name: { type: 'project' }, config: { mcp_servers: { docs: {}, search: {} } } },
+    { name: { type: 'user' }, config: { mcp_servers: { tracker: {} } } }
   ]
 }
 
-it('lists configured MCP servers when the runtime inventory is empty', async () => {
+it('lists project servers that a threadless status read leaves out, without polling them', async () => {
   const servers = await listCodexMcpServers(
     request({
       'config/read': projectConfig,
-      'mcpServerStatus/list': { data: [] }
+      // Without a thread Codex reports only the user config's servers.
+      'mcpServerStatus/list': {
+        data: [{ name: 'tracker', runtimeStatus: null, tools: { read: {} }, toolsError: null }],
+        nextCursor: null
+      }
     }),
     { threadId: null, cwd: '/repo' }
   )
   expect(servers.map((server) => [server.name, server.status, server.canToggle])).toEqual([
-    ['docs', 'pending', true],
+    ['tracker', 'connected', true],
+    ['docs', 'not-started', false],
     ['search', 'disabled', false]
   ])
-})
-
-it('keeps a runtime row and adds only the configured servers the inventory omitted', async () => {
-  const servers = await listCodexMcpServers(
-    request({
-      'config/read': projectConfig,
-      'mcpServerStatus/list': {
-        data: [
-          { name: 'docs', runtimeStatus: 'connected', tools: { read: {} } },
-          {
-            name: 'plugin-server',
-            runtimeStatus: 'failed',
-            pluginId: 'plugin',
-            toolsError: 'error: boom'
-          }
-        ]
-      }
-    }),
-    { threadId: 'thread-1', cwd: '/repo' }
-  )
-  expect(servers.map((server) => [server.name, server.status, server.source])).toEqual([
-    ['docs', 'connected', null],
-    ['plugin-server', 'failed', 'plugin'],
-    ['search', 'disabled', null]
-  ])
-  expect(servers[0]?.toolCount).toBe(1)
-  expect(servers[1]?.canReconnect).toBe(true)
 })

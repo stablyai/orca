@@ -22260,6 +22260,7 @@
           "failed": "Failed",
           "failedReason": "Failed: {{error}}",
           "disabled": "Disabled",
+          "notStarted": "Not started",
           "needsAuthAfterSend": "Needs sign-in. Send a message to sign in here."
         },
         "signIn": {
