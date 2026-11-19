@@ -5978,7 +5978,7 @@
           "3f1bdf3cb4": "O texto do ambiente é muito grande para interpretar com segurança.",
           "codexSessionSource": "Importar conversas do Codex de",
           "codexSessionSourceInfo": "Sobre importar conversas do Codex",
-          "codexSessionSourceTooltip": "Enquanto o histórico é compartilhado entre contas, o Orca adiciona as conversas deste diretório Codex a ~/.codex para que o /resume as liste. Evite continuar a mesma conversa aqui e no Codex fora do Orca ao mesmo tempo.",
+          "codexSessionSourceTooltip": "Enquanto o histórico é compartilhado entre contas, o Orca copia as conversas deste diretório Codex para ~/.codex para que o /resume as liste. Turnos adicionados nesta pasta depois que uma conversa é copiada não chegam à cópia.",
           "noAgentsDetected": "Nenhum agente detectado. Se um estiver instalado, a verificação pode ter expirado.",
           "9f30095d49": "Permissões do Agente"
         },

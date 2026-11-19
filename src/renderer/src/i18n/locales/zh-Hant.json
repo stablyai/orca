@@ -7513,7 +7513,7 @@
           "3f1bdf3cb4": "環境文字過長，無法安全解析。",
           "codexSessionSource": "從此處匯入 Codex 對話",
           "codexSessionSourceInfo": "關於匯入 Codex 對話",
-          "codexSessionSourceTooltip": "在帳號之間共用歷史記錄時，Orca 會將此 Codex 主目錄中的對話加入 ~/.codex，讓 /resume 列出它們。請勿同時在此處和 Orca 以外的 Codex 中繼續同一段對話。",
+          "codexSessionSourceTooltip": "在帳號之間共用歷史記錄時，Orca 會將此 Codex 主目錄中的對話複製到 ~/.codex，讓 /resume 列出它們。對話複製後在此資料夾中新增的內容不會出現在副本中。",
           "noAgentsDetected": "未偵測到代理程式。若已安裝代理程式，可能是偵測作業逾時。",
           "9f30095d49": "代理程式權限"
         },

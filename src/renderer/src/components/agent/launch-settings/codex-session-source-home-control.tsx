@@ -115,7 +115,7 @@ export function AgentSessionSourceHomeInput({
           <TooltipContent side="top" sideOffset={6} className="max-w-xs">
             {t(
               'auto.components.settings.AgentsPane.codexSessionSourceTooltip',
-              "While history is shared across accounts, Orca adds this Codex home's conversations to ~/.codex so /resume lists them. Avoid continuing one conversation here and in Codex outside Orca at the same time."
+              "While history is shared across accounts, Orca copies this Codex home's conversations into ~/.codex so /resume lists them. Turns added in this folder after a conversation is copied don't reach the copy."
             )}
           </TooltipContent>
         </Tooltip>

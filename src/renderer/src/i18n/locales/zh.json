@@ -7629,7 +7629,7 @@
           "3f1bdf3cb4": "环境文本过长，无法安全解析",
           "codexSessionSource": "从此处导入 Codex 对话",
           "codexSessionSourceInfo": "关于导入 Codex 对话",
-          "codexSessionSourceTooltip": "在账号之间共享历史记录时，Orca 会将此 Codex 主目录中的对话加入 ~/.codex，让 /resume 列出它们。请勿同时在此处和 Orca 以外的 Codex 中继续同一段对话。",
+          "codexSessionSourceTooltip": "在账号之间共享历史记录时，Orca 会将此 Codex 主目录中的对话复制到 ~/.codex，让 /resume 列出它们。对话复制后在此文件夹中新增的内容不会出现在副本中。",
           "03e1a5081a": "在 {{value0}} 上",
           "25a41a9aad": "重新检测此服务器上安装的代理",
           "remoteDetectionFailed": "无法检测已安装的代理，请检查主机连接后重试",

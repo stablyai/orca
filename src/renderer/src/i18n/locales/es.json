@@ -7274,7 +7274,7 @@
           "3f1bdf3cb4": "El texto de entorno es demasiado grande para analizarlo de forma segura.",
           "codexSessionSource": "Importar conversaciones de Codex desde",
           "codexSessionSourceInfo": "Sobre la importación de conversaciones de Codex",
-          "codexSessionSourceTooltip": "Mientras el historial se comparte entre cuentas, Orca añade las conversaciones de este directorio Codex a ~/.codex para que /resume las muestre. Evita continuar una misma conversación aquí y en Codex fuera de Orca a la vez.",
+          "codexSessionSourceTooltip": "Mientras el historial se comparte entre cuentas, Orca copia las conversaciones de este directorio Codex a ~/.codex para que /resume las muestre. Los turnos añadidos en esta carpeta después de copiar una conversación no llegan a la copia.",
           "03e1a5081a": "on {{value0}}",
           "25a41a9aad": "Volver a detectar los agentes instalados en este servidor",
           "remoteDetectionFailed": "No se pudieron detectar los agentes instalados. Verifique la conexión del host e inténtelo nuevamente.",

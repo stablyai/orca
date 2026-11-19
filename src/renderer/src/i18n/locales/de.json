@@ -7694,7 +7694,7 @@
           "3f1bdf3cb4": "Der Umgebungstext ist zu groß, um sicher analysiert zu werden.",
           "codexSessionSource": "Codex-Unterhaltungen importieren aus",
           "codexSessionSourceInfo": "Informationen zum Import von Codex-Unterhaltungen",
-          "codexSessionSourceTooltip": "Solange der Verlauf kontoübergreifend geteilt wird, fügt Orca die Unterhaltungen dieses Codex-Home-Verzeichnisses zu ~/.codex hinzu, damit /resume sie anzeigt. Dieselbe Unterhaltung nicht gleichzeitig hier und in Codex außerhalb von Orca fortsetzen.",
+          "codexSessionSourceTooltip": "Solange der Verlauf kontoübergreifend geteilt wird, kopiert Orca die Unterhaltungen dieses Codex-Home-Verzeichnisses nach ~/.codex, damit /resume sie anzeigt. Beiträge, die nach dem Kopieren in diesem Ordner hinzukommen, erreichen die Kopie nicht.",
           "noAgentsDetected": "Keine Agenten erkannt. Falls einer installiert ist, hat die Erkennung möglicherweise das Zeitlimit überschritten.",
           "9f30095d49": "Agentenberechtigungen"
         },

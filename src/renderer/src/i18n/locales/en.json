@@ -8833,7 +8833,7 @@
           "3f1bdf3cb4": "Environment text is too large to parse safely.",
           "codexSessionSource": "Import Codex conversations from",
           "codexSessionSourceInfo": "About importing Codex conversations",
-          "codexSessionSourceTooltip": "While history is shared across accounts, Orca adds this Codex home's conversations to ~/.codex so /resume lists them. Avoid continuing one conversation here and in Codex outside Orca at the same time.",
+          "codexSessionSourceTooltip": "While history is shared across accounts, Orca copies this Codex home's conversations into ~/.codex so /resume lists them. Turns added in this folder after a conversation is copied don't reach the copy.",
           "noAgentsDetected": "No agents detected. If one is installed, the probe may have timed out.",
           "9f30095d49": "Agent permissions"
         },
