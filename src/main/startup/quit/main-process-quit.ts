@@ -323,7 +323,8 @@ function installWillQuitHandler(): void {
       )
       // After everything else: nothing can reach the orchestration database again. Bounded to a few seconds.
       .then(() =>
-        teardownSettledCleanly && !updateQuitInProgress && !isDevParentShutdownRequested()
+        // Read live: an update install can start while teardown awaits.
+        teardownSettledCleanly && !isQuittingForUpdate() && !isDevParentShutdownRequested()
           ? compactOrchestrationDbAtQuit(state.runtime)
           : undefined
       )
