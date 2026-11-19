@@ -39,6 +39,8 @@ export type WorkspaceCleanupWorkspace = {
   input: WorkspaceCleanupEvaluationInput
   paneAgentStates: WorkspaceCleanupPaneAgentStates
   removing: boolean
+  /** The folder workspace this checkout is attached to; siblings clean as one unit (#44715). */
+  folderParentKey?: string
 }
 
 /** Repos whose checkouts this process owns; a host served by its own orcad is that server's to clean. */
@@ -238,7 +240,10 @@ export async function collectWorkspaceCleanupWorkspaces(args: {
         dirtyEditors.has(worktreeIdentityKey(summary.worktreeId))
       ),
       paneAgentStates,
-      removing: summary.removing === true
+      removing: summary.removing === true,
+      ...(summary.workspaceLineage?.parentWorkspaceKey
+        ? { folderParentKey: summary.workspaceLineage.parentWorkspaceKey }
+        : {})
     }
   })
 }

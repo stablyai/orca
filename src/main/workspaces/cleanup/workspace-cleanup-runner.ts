@@ -25,6 +25,7 @@ import {
   type WorkspaceCleanupWorkspace
 } from './workspace-cleanup-run-evidence'
 import { decideWorkspaceCleanup, removeWorkspaceForCleanup } from './workspace-cleanup-removal-step'
+import { applyFolderWorkspaceCleanupGroupVeto } from '../../../shared/workspace-cleanup/workspace-cleanup-folder-group'
 import {
   keptRunOutcome,
   summarizeWorkspaceCleanupRun,
@@ -261,7 +262,14 @@ export class WorkspaceCleanupRunner {
         evaluation: await decideWorkspaceCleanup(this.deps.runtime, workspace, now)
       })
     }
-    return decided
+    // A folder workspace cleans as one unit: any member that keeps vetoes its siblings (#44715).
+    const evaluations = applyFolderWorkspaceCleanupGroupVeto(
+      decided.map(({ workspace, evaluation }) => ({
+        ...(workspace.folderParentKey ? { folderParentKey: workspace.folderParentKey } : {}),
+        evaluation
+      }))
+    )
+    return decided.map((row, index) => ({ ...row, evaluation: evaluations[index]! }))
   }
 
   private async readSizes(): Promise<Map<string, number>> {
@@ -293,16 +301,34 @@ export class WorkspaceCleanupRunner {
       }
       // Nested checkouts first, so a parent's removal never sweeps a child it did not re-check.
       removals.sort((a, b) => b.ref.path.length - a.ref.path.length)
+      // Folder siblings must stay removable at this moment too, not just at scan time (#44715).
+      const folderMembers = new Map<string, string[]>()
+      for (const { workspace } of decided) {
+        const parent = workspace.folderParentKey
+        if (parent !== undefined) {
+          const ids = folderMembers.get(parent) ?? []
+          ids.push(workspace.ref.worktreeId)
+          folderMembers.set(parent, ids)
+        }
+      }
       for (const { workspace, ref, reason } of removals) {
         if (this.abort.signal.aborted) {
           break
         }
+        const parent = workspace.folderParentKey
         const outcome = await removeWorkspaceForCleanup({
           runtime: this.deps.runtime,
           store: this.deps.store,
           globalRules: () => this.globalRules(),
           workspace,
           now: () => Date.now(),
+          ...(parent !== undefined
+            ? {
+                folderMemberWorktreeIds: (folderMembers.get(parent) ?? []).filter(
+                  (id) => id !== workspace.ref.worktreeId
+                )
+              }
+            : {}),
           signal: this.abort.signal
         })
         rows.push({ ...ref, reason, ...outcome })

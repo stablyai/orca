@@ -78,6 +78,8 @@ export async function removeWorkspaceForCleanup(args: {
   globalRules: () => WorkspaceCleanupRules
   workspace: WorkspaceCleanupWorkspace
   now: () => number
+  /** The other checkouts of the same folder workspace; they must stay removable right now too. */
+  folderMemberWorktreeIds?: readonly string[]
   signal?: AbortSignal
 }): Promise<RemovalOutcome> {
   const { runtime, store, workspace } = args
@@ -98,6 +100,31 @@ export async function removeWorkspaceForCleanup(args: {
     const recheck = await decideWorkspaceCleanup(runtime, fresh, args.now())
     if (recheck.action === 'keep') {
       return { ...keptRunOutcome(recheck), keptOnRecheck: true }
+    }
+    // A folder workspace cleans as one unit: a sibling that is being used right now keeps this
+    // checkout in place too, on evidence read at this moment rather than the run's scan (#44715).
+    for (const memberId of args.folderMemberWorktreeIds ?? []) {
+      const [member] = await collectWorkspaceCleanupWorkspaces({
+        store,
+        runtime,
+        globalRules: args.globalRules(),
+        now: args.now(),
+        worktreeId: memberId,
+        signal: args.signal
+      })
+      if (!member) {
+        return {
+          ...keptRunOutcome({ action: 'keep', cause: 'folder-mate-in-use' }),
+          keptOnRecheck: true
+        }
+      }
+      const memberDecision = await decideWorkspaceCleanup(runtime, member, args.now())
+      if (memberDecision.action === 'keep') {
+        return {
+          ...keptRunOutcome({ action: 'keep', cause: 'folder-mate-in-use' }),
+          keptOnRecheck: true
+        }
+      }
     }
     if (args.signal?.aborted) {
       return { outcome: 'failed', error: 'Cleanup stopped before removing this workspace.' }

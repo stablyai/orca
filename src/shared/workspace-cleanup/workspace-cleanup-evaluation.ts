@@ -37,6 +37,8 @@ export type WorkspaceCleanupKeepCause =
   | 'archive-unavailable'
   | 'archive-script'
   | 'removing'
+  /** A sibling checkout of the same folder workspace must keep, and the folder cleans as one unit. */
+  | 'folder-mate-in-use'
 
 export type WorkspaceCleanupWaiting = { elapsedDays: number; afterDays: number }
 
