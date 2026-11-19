@@ -137,6 +137,8 @@ export class ReleaseAssetPolicyLiveUpdater<P extends { revision: number }> {
   // The newest policy this process has known, so a cache write that failed can't let an older
   // download win later.
   private newest: P | null = null
+  // The downloaded text of `newest`, so a retried cache write saves the policy in force.
+  private newestText: string | null = null
   // One refresh at a time, so the cache is never published out of order.
   private refreshing: Promise<void> = Promise.resolve()
 
@@ -219,15 +221,17 @@ export class ReleaseAssetPolicyLiveUpdater<P extends { revision: number }> {
     const known = newerPolicy(cached, this.newest)
     const stale = known !== null && parsed.policy.revision <= known.revision
     const policy = stale ? known : parsed.policy
+    if (policy !== this.newest) {
+      this.newestText = policy === parsed.policy ? text : null
+    }
     this.newest = policy
     this.fetched = { policy, downloaded: parsed.policy, at: Date.now() }
     // Before the write, so the policy applies this run even if caching it fails.
     this.deps.onFetched?.(policy)
-    // Against the file, not memory: a write that failed earlier is retried by the next download.
-    if (
-      parsed.policy.revision < policy.revision ||
-      (cached !== null && parsed.policy.revision <= cached.revision)
-    ) {
+    // Against the file, not memory: a write that failed earlier is retried by the next download,
+    // always with the text of the policy in force, never a same-revision download's.
+    const policyText = policy === parsed.policy ? text : this.newestText
+    if (policyText === null || (cached !== null && policy.revision <= cached.revision)) {
       return
     }
     try {
@@ -235,7 +239,7 @@ export class ReleaseAssetPolicyLiveUpdater<P extends { revision: number }> {
       // and an equal revision never rewrites the cache, so a newer build would never see them.
       await writePluginFileAtomically(
         join(this.deps.userDataPath, releaseAssetPolicyCacheFileName(this.spec, channel)),
-        text
+        policyText
       )
     } catch (error) {
       this.warn(`downloaded policy not cached: ${describeError(error)}`)
