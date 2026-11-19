@@ -78,12 +78,6 @@ export const hostScreenSecondaryStyles = themedStyleSheet(() => ({
   optionSegmented: {
     marginBottom: spacing.md
   },
-  // Over the sheet header's empty leading side, centred in its 52pt row.
-  optionPageBack: {
-    position: 'absolute',
-    top: 8,
-    left: spacing.xs
-  },
   filterRepoDot: {
     width: 8,
     height: 8,

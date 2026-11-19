@@ -3,8 +3,7 @@
 // with its comment box docked. Its own toast sits over the sheet, just above the home indicator, or just
 // above the comment box on an item's page. (An older host keeps MobileBotSheet.)
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { Pressable, ScrollView, Text, View } from 'react-native'
-import { ChevronLeft } from 'lucide-react-native'
+import { ScrollView, View } from 'react-native'
 import {
   BOT_ITEM_NO_FILTER,
   botItemChats,
@@ -31,7 +30,6 @@ import { MobileBotAutomationsTab } from './MobileBotAutomationsTab'
 import { MobileBotSettingsTab } from './MobileBotSettingsTab'
 import { MobileBotUpNext } from './MobileBotUpNext'
 import { botAgentLabel } from './mobile-bot-sheet-copy'
-import { optionStyles } from './mobile-bot-option-styles'
 import type { BotChatTreeActions } from './MobileBotChatTree'
 import type { BotAccessRequests } from './use-bot-access-requests'
 import { useBotUpNext } from './use-bot-up-next'
@@ -83,7 +81,7 @@ export function MobileBotPanel(props: {
   useMobileColorScheme()
   const t = useMobileTranslation()
   const visible = props.open !== null
-  const { bot, avatar } = props.routeBot
+  const { bot } = props.routeBot
   const [tab, setTab] = useState<PanelTab>('items')
   const pager = useOptionPager<PanelPage>()
   const { message, showToast } = useTransientToast()
@@ -319,7 +317,6 @@ export function MobileBotPanel(props: {
   const main = (
     <View style={styles.main}>
       <MobileBotPanelHeader
-        avatar={avatar}
         name={bot.name}
         sub={`${botAgentLabel(bot.agent)} · ${props.hostName}`}
         tab={tab}
@@ -344,17 +341,12 @@ export function MobileBotPanel(props: {
   const pageNode =
     page === 'settings' ? (
       <View style={styles.page}>
-        <Pressable
-          onPress={pager.close}
-          accessibilityRole="button"
-          hitSlop={8}
-          style={optionStyles.optionBack}
-        >
-          <ChevronLeft size={18} color={colors.textSecondary} />
-          <Text style={optionStyles.optionBackText}>{bot.name}</Text>
-        </Pressable>
         <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
           <MobileBotSettingsTab
+            onBack={{
+              label: t('bots.panel.backTo', 'Back to {{name}}', { name: bot.name }),
+              onPress: pager.close
+            }}
             routeBot={props.routeBot}
             client={props.client}
             showToast={showToast}
