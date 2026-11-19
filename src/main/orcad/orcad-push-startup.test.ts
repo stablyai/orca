@@ -232,6 +232,7 @@ vi.mock('../runtime/orca-runtime', () => ({
     flushPaneGrids() {
       return null
     }
+    async saveReattachedPaintLedger() {}
     syncWindowGraph() {}
     setAgentSenderPeerKey() {}
     setMobilePushRegistrar(

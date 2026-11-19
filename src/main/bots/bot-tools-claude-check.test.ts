@@ -44,27 +44,37 @@ function stuckConnection() {
 
 beforeEach(() => mocks.open.mockReset())
 
-it('closes the Claude CLI as soon as its check is stopped, its status request still unanswered', async () => {
+it('shares an in-flight Claude check, closes only that bot on stop, and can start again', async () => {
   const first = stuckConnection()
+  const other = stuckConnection()
   const second = stuckConnection()
-  mocks.open.mockResolvedValueOnce(first).mockResolvedValueOnce(second)
-  const check = () =>
-    sharedBotToolHealthCheck('bot-1', 'claude\0remote', (signal) =>
+  mocks.open.mockResolvedValueOnce(first).mockResolvedValueOnce(other).mockResolvedValueOnce(second)
+  const otherBot = { ...cli, botId: 'bot-2', folder: '/bots/two' }
+  const check = (target: BotToolsCli) =>
+    sharedBotToolHealthCheck(target.botId, 'claude\0remote', (signal) =>
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the check reads only `servers`.
-      claudeBotToolProblems(cli, tools as BotLaunchTools, signal).then(Object.fromEntries)
+      claudeBotToolProblems(target, tools as BotLaunchTools, signal).then(Object.fromEntries)
     )
 
-  const stopped = check()
-  await vi.waitFor(() => expect(mocks.open).toHaveBeenCalledTimes(1))
+  const stopped = check(cli)
+  const joined = check(cli)
+  const independent = check(otherBot)
+  await vi.waitFor(() => expect(mocks.open).toHaveBeenCalledTimes(2))
   cancelBotToolHealthChecks('bot-1')
-  await expect(stopped).rejects.toBeDefined()
+  await expect(stopped).rejects.toMatchObject({ name: 'AbortError' })
+  await expect(joined).rejects.toMatchObject({ name: 'AbortError' })
   expect(first.close).toHaveBeenCalled()
+  expect(other.close).not.toHaveBeenCalled()
 
   // The next check opens its own connection, and stopping it closes that one too.
-  const next = check()
-  await vi.waitFor(() => expect(mocks.open).toHaveBeenCalledTimes(2))
+  const next = check(cli)
+  await vi.waitFor(() => expect(mocks.open).toHaveBeenCalledTimes(3))
   expect(second.close).not.toHaveBeenCalled()
   cancelBotToolHealthChecks('bot-1')
-  await expect(next).rejects.toBeDefined()
+  await expect(next).rejects.toMatchObject({ name: 'AbortError' })
   expect(second.close).toHaveBeenCalled()
+
+  cancelBotToolHealthChecks(otherBot.botId)
+  await expect(independent).rejects.toMatchObject({ name: 'AbortError' })
+  expect(other.close).toHaveBeenCalled()
 })

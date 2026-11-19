@@ -34,6 +34,12 @@ export const ORCHESTRATION_WORKER_TURN_STOP_REPORTS_RUNTIME_CAPABILITY =
 /** ask can record a question and return at once; its answer arrives as Dispatch mail. */
 export const ORCHESTRATION_ASK_RETURNS_AT_ONCE_RUNTIME_CAPABILITY =
   'orchestration.ask-returns-at-once.v1' as const
+/** Paired windows and phones read a chat's worker approvals and answer them as the person. */
+export const ORCHESTRATION_PAIRED_WORKER_APPROVALS_RUNTIME_CAPABILITY =
+  'orchestration.paired-worker-approvals.v1' as const
+/** Sent by a paired window or phone, never by the orca CLI: its approvals are the person's. */
+export const ORCHESTRATION_PERSON_APPROVALS_CLIENT_CAPABILITY =
+  'orchestration.person-approvals.v1' as const
 export const ORCHESTRATION_FEDERATION_CONTROL_MAIL_PROTOCOL_VERSION = 2 as const
 export const ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_PROTOCOL_VERSION = 3 as const
 export const ORCHESTRATION_CONTRACT_VERSION = 1 as const
@@ -66,6 +72,7 @@ export const ORCHESTRATION_RUNTIME_CAPABILITIES = [
   ORCHESTRATION_RETAINED_RUN_BINDINGS_RUNTIME_CAPABILITY,
   ORCHESTRATION_WORKER_TURN_STOP_REPORTS_RUNTIME_CAPABILITY,
   ORCHESTRATION_ASK_RETURNS_AT_ONCE_RUNTIME_CAPABILITY,
+  ORCHESTRATION_PAIRED_WORKER_APPROVALS_RUNTIME_CAPABILITY,
   ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY,
   ORCHESTRATION_PEER_MAIL_RUNTIME_CAPABILITY,
   ORCHESTRATION_PEER_MAIL_TYPES_RUNTIME_CAPABILITY,

@@ -1785,7 +1785,7 @@
       "addressHint": "Aceita IP, host:port ou ws:// / wss://. Uma URL wss:// sem porta usa a porta 443. Endereços sem protocolo mantêm a porta atual (ou 6768).",
       "connectionPreview": "Conecta a {{endpoint}}",
       "goBack": "Voltar",
-      "help": "Altere o nome de exibição ou o endereço de conexão. Deixe o nome em branco para usar o nome informado pelo desktop. Alterar o endereço só muda onde este celular se conecta — não refaz o pareamento. Use esta opção quando o mesmo desktop estiver acessível por outro IP (por exemplo, pela LAN doméstica ou pelo Tailscale).",
+      "help": "Altere o nome de exibição ou o endereço de conexão. Deixe o nome em branco para usar o nome informado pelo host. Alterar o endereço só muda onde este celular se conecta — não refaz o pareamento. Use esta opção quando o mesmo host estiver acessível por outro IP (por exemplo, pela LAN doméstica ou pelo Tailscale).",
       "hostNamePlaceholder": "Nome do host",
       "hostRemoved": "Este host foi removido deste celular.",
       "loadFailed": "Falha ao carregar o host.",

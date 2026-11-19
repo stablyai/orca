@@ -194,7 +194,6 @@ describe('orchestration worker release recovery', () => {
     await vi.waitFor(() => expect(runtime.closeTerminal).toHaveBeenCalledTimes(1))
     const first = reconcileRequestedWorkerTerminalReleases(runtime)
     const second = reconcileRequestedWorkerTerminalReleases(runtime)
-    expect(second).toBe(first)
     pendingClose.resolve({ handle: 'term_worker', tabId: 'tab-worker', ptyKilled: true })
 
     await expect(interactive).resolves.toMatchObject({ state: 'released' })

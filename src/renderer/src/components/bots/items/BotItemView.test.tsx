@@ -32,11 +32,22 @@ vi.mock(import('@/lib/browser/navigation/app-http-link-open'), async (importOrig
   openAppHttpLink
 }))
 vi.mock('./BotItemActivityList', () => ({
-  BotItemActivityList: ({ events }: { events: BotItemEvent[] }) => (
+  BotItemActivityList: ({
+    events,
+    onReplyToQuestion
+  }: {
+    events: BotItemEvent[]
+    onReplyToQuestion?: (text: string) => void
+  }) => (
     <ol>
       {events.map((event) => (
         <li key={event.id}>{event.id}</li>
       ))}
+      {onReplyToQuestion ? (
+        <button type="button" onClick={() => onReplyToQuestion('b, by hand')}>
+          Reply from Activity
+        </button>
+      ) : null}
     </ol>
   )
 }))
@@ -316,6 +327,19 @@ it('keeps the comment box for a question asked where answers are not recorded', 
 
   expect(screen.getByRole('textbox', { name: 'Comment' })).toBeTruthy()
   expect(screen.queryByPlaceholderText('Type your answer')).toBeNull()
+})
+
+it("sends a Reply from an open question's card in Activity as the item's comment", async () => {
+  renderItem(
+    makeTestBotItem(6, { status: 'needs_you', question: { eventId: 'e3', text: 'a, b or c?' } })
+  )
+
+  await act(async () =>
+    fireEvent.click(screen.getByRole('button', { name: 'Reply from Activity' }))
+  )
+
+  expect(sent).toHaveBeenCalledExactlyOnceWith(BOT, 'uid-6', 'b, by hand', [], expect.any(String))
+  expect(answered).not.toHaveBeenCalled()
 })
 
 function askingItem(

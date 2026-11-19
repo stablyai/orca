@@ -25,7 +25,7 @@ vi.mock('os', async (importOriginal) => {
 })
 
 import { AntigravityHookService } from './hook-service'
-import { ANTIGRAVITY_EVENTS, ANTIGRAVITY_PRE_TOOL_USE_DECISION } from './hook-events'
+import { ANTIGRAVITY_EVENTS } from './hook-events'
 
 // Literal ! characters expose inherited delayed-expansion corruption.
 const PANE_KEY = 'tab-1:leaf-1!bang'
@@ -146,7 +146,7 @@ function hookEnvironment(extra: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
 
 function expectedStdout(eventName: string): string {
   if (eventName === 'PreToolUse') {
-    return ANTIGRAVITY_PRE_TOOL_USE_DECISION
+    return ''
   }
   return eventName === 'Stop' ? '{"decision":""}' : '{}'
 }
@@ -321,7 +321,7 @@ describe.skipIf(process.platform !== 'win32')('Antigravity Windows hook payload 
 
     expect(result.timedOut).toBe(false)
     expect(result.exitCode).toBe(0)
-    expect(result.stdout.trim()).toBe(ANTIGRAVITY_PRE_TOOL_USE_DECISION)
+    expect(result.stdout).toBe('')
     expect(listener.posts).toHaveLength(0)
   }, 30_000)
 })

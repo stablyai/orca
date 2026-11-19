@@ -185,10 +185,6 @@
         "moveFailed_other": "Couldn’t move {{count}} items: {{why}}"
       }
     },
-    "lookAround": {
-      "suggestions_one": "{{count}} suggestion",
-      "suggestions_other": "{{count}} suggestions"
-    },
     "panel": {
       "needYou_one": "{{count}} needs you",
       "needYou_other": "{{count}} need you"

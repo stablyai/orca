@@ -197,7 +197,7 @@ export function GeneralUpdateSettingsSection({
                   )
                 : t(
                     'auto.components.settings.GeneralUpdateSettingsSection.8311da27ba',
-                    'is available. Click "Download Update" to download it.'
+                    'is available.'
                   )}{' '}
               {updateStatus.source !== 'local' && (
                 <a

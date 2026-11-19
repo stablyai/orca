@@ -245,12 +245,16 @@
       "removeHost": "Remove host",
       "saveHost": "Save host",
       "goBack": "Go back",
-      "help": "Change the display name or connection address. Leave the name empty to use the name the desktop reports. Address edits only switch where this phone connects — they do not re-pair. Use this when the same desktop is reachable at a different IP (for example home LAN vs Tailscale).",
+      "help": "Change the display name or connection address. Leave the name empty to use the name the host reports. Address edits only switch where this phone connects — they do not re-pair. Use this when the same host is reachable at a different IP (for example home LAN vs Tailscale).",
       "name": "Name",
       "hostNamePlaceholder": "Host name",
       "address": "Address",
       "addressHint": "Accepts IP, host:port, or ws:// / wss://. A wss:// URL without a port uses 443. Bare addresses keep the current port (or 6768).",
-      "connectionPreview": "Connects to {{endpoint}}"
+      "connectionPreview": "Connects to {{endpoint}}",
+      "updateStepsServiceManager": "This server can't update itself. Update Orca on it with its package manager if it came from a .deb or .rpm, otherwise through the service manager that starts it.",
+      "updateStepsSourceCheckout": "This is a development build. Update it from its source checkout.",
+      "updateStepsServer": "This server can't update itself. Update Orca on the server computer, then restart the server.",
+      "orcaVersion": "Orca version"
     }
   },
   "app": {
@@ -5079,12 +5083,12 @@
       "permissions": "Permissions",
       "permissionsDetail": "The starting permission for new sessions. Anything beyond it asks in the session.",
       "sameAsChats": "Same as chats",
-      "sameAsChatsDetail": "Starts like any new chat, from your chat permission setting.",
+      "sameAsChatsDetail": "Uses your chat permission setting.",
       "notifications": "Notifications",
       "needsPermission": "Needs permission",
-      "needsPermissionDetail": "When the bot or a worker needs your approval.",
+      "needsPermissionDetail": "When it or a worker needs your approval.",
       "taskComplete": "Task complete",
-      "taskCompleteDetail": "When a thread, automation or worker finishes.",
+      "taskCompleteDetail": "A thread, automation or worker finishes.",
       "couldNotFinish": "Couldn’t finish",
       "couldNotFinishDetail": "An automation run or worker fails.",
       "general": "General"
@@ -5159,7 +5163,7 @@
     },
     "lookAround": {
       "title": "Look around",
-      "detail": "Reads connected apps and projects to suggest next steps. Read-only.",
+      "detail": "Reads connected apps and projects to suggest next steps. Read-only. Each look uses your agent plan, and Orca must be running on the host.",
       "on": "Suggest next steps",
       "every": "How often",
       "weekdaysOnly": "Weekdays only",
@@ -5168,15 +5172,11 @@
       "lastLooked": "Last looked",
       "looking": "Looking…",
       "lookNow": "Look now",
-      "notYet": "The first look comes a few hours after your first conversation.",
-      "suggestions_one": "{{count}} suggestion",
-      "suggestions_other": "{{count}} suggestions",
+      "notYet": "Not yet",
       "focusPlaceholder": "PRs waiting on me, questions in #eng, issues due this week",
       "focusDetail": "Optional. Leave it empty and it looks for anything waiting on you.",
       "save": "Save",
-      "back": "Back to Settings",
-      "suggestions": "{{count}} suggestions",
-      "requirements": "Each look uses your agent plan. Orca must be running on the host."
+      "back": "Back to Settings"
     },
     "new": {
       "failed": "Couldn’t create the bot",
@@ -5296,7 +5296,6 @@
       "turnedOff": "Turned off after 10 tidy-ups in a row failed.",
       "every": "How often",
       "lastTidied": "Last tidied",
-      "changes": "{{count}} changes",
       "never": "Not yet",
       "tidying": "Tidying…",
       "now": "Tidy now",

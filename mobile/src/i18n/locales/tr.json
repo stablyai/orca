@@ -1608,7 +1608,7 @@
       "addressHint": "IP, host:port veya ws:// / wss:// kabul edilir. Bağlantı noktası belirtilmeyen wss:// URL'lerinde 443 kullanılır. Yalnızca adres girilirse mevcut bağlantı noktası (veya 6768) korunur.",
       "connectionPreview": "Bağlanılacak adres: {{endpoint}}",
       "goBack": "Geri git",
-      "help": "Görünen adı veya bağlantı adresini değiştirin. Masaüstünün bildirdiği adı kullanmak için ad alanını boş bırakın. Adres değişikliği yalnızca bu telefonun bağlandığı yeri değiştirir; yeniden eşleştirme yapmaz. Aynı masaüstüne farklı bir IP adresinden erişilebildiğinde bunu kullanın (örneğin evdeki LAN veya Tailscale üzerinden).",
+      "help": "Görünen adı veya bağlantı adresini değiştirin. Sunucunun bildirdiği adı kullanmak için ad alanını boş bırakın. Adres değişikliği yalnızca bu telefonun bağlandığı yeri değiştirir; yeniden eşleştirme yapmaz. Aynı sunucuya farklı bir IP adresinden erişilebildiğinde bunu kullanın (örneğin evdeki LAN veya Tailscale üzerinden).",
       "hostNamePlaceholder": "Sunucu adı",
       "hostRemoved": "Bu sunucu bu telefondan kaldırıldı.",
       "loadFailed": "Sunucu yüklenemedi.",

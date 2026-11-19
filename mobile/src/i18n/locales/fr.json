@@ -1649,7 +1649,7 @@
       "addressHint": "Accepte une adresse IP, host:port ou ws:// / wss://. Une URL wss:// sans port utilise le port 443. Une adresse seule conserve le port actuel (ou 6768).",
       "connectionPreview": "Connexion à {{endpoint}}",
       "goBack": "Précédent",
-      "help": "Modifiez le nom affiché ou l'adresse de connexion. Laissez le nom vide pour utiliser celui indiqué par l'ordinateur. Modifier l'adresse change uniquement l'adresse à laquelle ce téléphone se connecte, sans nouvel appairage. Utilisez cette option si le même ordinateur est accessible à une autre adresse IP (par exemple, via le LAN domestique ou Tailscale).",
+      "help": "Modifiez le nom affiché ou l'adresse de connexion. Laissez le nom vide pour utiliser celui indiqué par l'hôte. Modifier l'adresse change uniquement l'adresse à laquelle ce téléphone se connecte, sans nouvel appairage. Utilisez cette option si le même hôte est accessible à une autre adresse IP (par exemple, via le LAN domestique ou Tailscale).",
       "hostNamePlaceholder": "Nom de l'hôte",
       "hostRemoved": "Cet hôte a été supprimé de ce téléphone.",
       "loadFailed": "Impossible de charger l'hôte.",
