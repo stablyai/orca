@@ -5,7 +5,7 @@ import { randomUUID } from 'node:crypto'
 import { existsSync, mkdirSync, mkdtempSync, realpathSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
-import { prepareDockerSshHostImage } from './helpers/docker-ssh-host-image'
+import { prepareDockerSshHostImage } from './remote/managed-ssh/host-lifecycle/docker-ssh-host-image'
 
 export const E2E_TEST_REPO_PATH_FILE_ENV = 'ORCA_E2E_TEST_REPO_PATH_FILE'
 const RUN_TEST_REPO_PATH_FILE =

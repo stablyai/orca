@@ -7,7 +7,7 @@ import { useAutomationRuns, type AutomationRunScope } from './use-automation-run
 import { useState, type ReactNode } from 'react'
 import { useAutomationCreateAttempt } from './use-automation-create-attempt'
 import { ScrollView, Text, View } from 'react-native'
-import type { ExecutionHostId } from '../../../src/shared/execution-host'
+import type { ExecutionHostId } from '../../../src/shared/execution-host/execution-host'
 import { toAutomationOwnerPrecondition } from '../../../src/shared/automations/ownership/automation-owner-precondition'
 import { ConfirmModal } from '../components/sheets/ConfirmModal'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'

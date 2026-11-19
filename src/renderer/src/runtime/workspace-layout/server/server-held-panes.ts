@@ -1,6 +1,6 @@
 // Show server frame status=held in the existing newer-build banner. Reopen asks server main; desktop starts nothing and subsequent cleared/bound frames show recovery.
 
-import type { NewerDaemonReopenResult } from '../../../../../shared/newer-daemon-hold'
+import type { NewerDaemonReopenResult } from '../../../../../shared/terminal/daemon/newer-daemon-hold'
 import {
   isTerminalLeafId,
   makePaneKey

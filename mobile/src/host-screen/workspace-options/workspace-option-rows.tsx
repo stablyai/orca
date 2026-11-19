@@ -53,30 +53,46 @@ export function SwitchRow(props: {
   value: boolean
   onChange: (value: boolean) => void
   indent?: boolean
+  detail?: string
+  disabled?: boolean
+  /** When the label alone does not say what the switch does. */
+  accessibilityLabel?: string
 }) {
   return (
     <ListRow
       title={props.label}
+      subtitle={props.detail}
       // An empty leading slot indents the row under the option it qualifies.
       leading={props.indent ? <View /> : undefined}
       accessory={
         <MobileSwitch
           value={props.value}
           onValueChange={props.onChange}
-          accessibilityLabel={props.label}
+          disabled={props.disabled}
+          accessibilityLabel={props.accessibilityLabel ?? props.label}
         />
       }
     />
   )
 }
 
-export function DrillRow(props: { label: string; value: string; onPress: () => void }) {
+/** `detail` puts the value under the label, for one too long to share its line. */
+export function DrillRow(props: {
+  label: string
+  value: string
+  onPress: () => void
+  detail?: boolean
+  disabled?: boolean
+}) {
   return (
     <ListRow
       title={props.label}
-      value={props.value || undefined}
+      value={(!props.detail && props.value) || undefined}
+      subtitle={(props.detail && props.value) || undefined}
+      accessibilityLabel={props.detail ? `${props.label}, ${props.value}` : undefined}
       navigates
       onPress={props.onPress}
+      disabled={props.disabled}
     />
   )
 }

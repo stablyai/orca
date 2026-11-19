@@ -11,7 +11,7 @@ import {
 import type { SearchableSimulatorTab } from '@/lib/simulator/search/simulator-palette-search-types'
 import '@/lib/workspace/search/tabs/workspace-tab-search-types'
 import type { SearchableWorkspaceTab } from '@/lib/workspace/search/tabs/workspace-tab-search-types'
-import { buildSearchableWorkspaceTabEntries } from '@/lib/workspace/search/tabs/workspace-tab-palette-entry-builder'
+import { createWorkspaceTabPaletteIndex } from '@/lib/workspace/search/tabs/workspace-tab-palette-index'
 
 import { searchWorkspaceTabs } from '@/lib/workspace/search/tabs/workspace-tab-palette-results'
 import { comparePaletteRankedItems } from '@/lib/workspace/search/palette/cmd-j-section-leadership'
@@ -58,7 +58,6 @@ export function useWorktreeJumpPaletteOpenTabs({
   tabsByWorktree,
   openFiles,
   agentStatusByPaneKey,
-  retainedAgentsByPaneKey,
   sleepingAgentSessionsByPaneKey,
   activeTabId,
   activeTabIdByWorktree,
@@ -162,11 +161,15 @@ export function useWorktreeJumpPaletteOpenTabs({
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- simulator titles translate the default label.
     [simulatorTabEntries, deferredQuery, paletteSearchContext, languageRevision, t]
   )
+  const buildWorkspaceTabEntries = useMemo(
+    () => (paletteStatusInputsActive ? createWorkspaceTabPaletteIndex() : null),
+    [paletteStatusInputsActive]
+  )
   const workspaceTabEntries = useMemo<SearchableWorkspaceTab[]>(() => {
-    if (!paletteStatusInputsActive) {
+    if (!buildWorkspaceTabEntries) {
       return EMPTY_WORKSPACE_TAB_ENTRIES
     }
-    return buildSearchableWorkspaceTabEntries({
+    return buildWorkspaceTabEntries({
       worktrees: browserSortedWorktrees,
       ownershipWorktrees: workspaces,
       repoMap,
@@ -176,7 +179,6 @@ export function useWorktreeJumpPaletteOpenTabs({
       tabsByWorktree,
       openFiles,
       agentStatusByPaneKey,
-      retainedAgentsByPaneKey,
       sleepingAgentSessionsByPaneKey,
       activeGroupIdByWorktree,
       groupsByWorktree,
@@ -194,7 +196,7 @@ export function useWorktreeJumpPaletteOpenTabs({
       paneForegroundAgentByPaneKey
     })
   }, [
-    paletteStatusInputsActive,
+    buildWorkspaceTabEntries,
     activeFileId,
     activeFileIdByWorktree,
     activeGroupIdByWorktree,
@@ -212,7 +214,6 @@ export function useWorktreeJumpPaletteOpenTabs({
     openFiles,
     repoMap,
     repoByHostIdentity,
-    retainedAgentsByPaneKey,
     settings?.tabAutoGenerateTitle,
     sleepingAgentSessionsByPaneKey,
     paneForegroundAgentByPaneKey,

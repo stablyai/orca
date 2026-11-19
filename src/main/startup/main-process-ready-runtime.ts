@@ -19,13 +19,16 @@ import { recordProcessGoneCrash } from './main-window/main-window-lifecycle-flag
 import { handleGpuChildCrash } from './gpu-recovery/gpu-lifecycle'
 import { isGpuFallbackCrashCandidate } from '../crash-reporting/recovery/gpu-crash-fallback-decision'
 import { startCodexHooks } from '../codex/hooks/reconciliation/codex-hook-reconcile'
+import { startCodexStateDbBackfillRecoveryInBackground } from '../codex/history/index/codex-state-db-backfill-recovery'
+import { getOrcaManagedCodexHomePath } from '../codex/configuration/homes/codex-home-paths'
 import { hydrateAgentCliShellPath } from '../agent-hooks/installation/local-agent-cli-presence'
 import { isAgentStatusHooksEnabledForAgent } from '../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
 import { reconcileStartupManagedAgentHooks } from '../agent-hooks/installation/managed-agent-hook-startup'
 import { shouldInstallManagedHooks } from './configure-process'
 import { mainProcessState as state } from './main-process-state'
 import { initializeMainProcessObservers } from './main-process-observers'
-import { installFirstWorkRenameHookSubscription } from './workspace-startup/branch-rename-hook'
+import { installFirstWorkRenameHookSubscription } from '../agent-hooks/first-work/first-work-rename-hook-subscription'
+import { firstWorkRenameDeps } from '../agent-hooks/first-work/first-work-rename-runtime'
 import { initializeMainProcessAccountServices } from './agent-accounts/main-process-account-services'
 import {
   initializeMainProcessRuntime,
@@ -45,7 +48,8 @@ import { logStartupMilestone } from './diagnostics/startup-diagnostics'
 import { refreshInstalledOpenCodeStatusPlugins } from '../opencode/status-hooks/opencode-status-plugin-startup-refresh'
 import { pruneDesktopOrcadArtifactCache } from '../orcad/artifact-slots/orcad-artifact-cache-retention'
 import { runGatedWslMoveDesktopRewritePass } from '../persistence/moving-wsl-projects/desktop-state/wsl-move-desktop-rewrite'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/workspace-layout/layout-owner-switch'
+import { reapLeftoverMacOSPermissionStatusHelpers } from '../computer/macos-permissions/macos-permission-status-leftover-reap'
 import { repairDuplicatePtyPanesOnStart } from '../runtime/terminal/identity/moved-pane-owner-rekey'
 import { WslUsageReporter } from '../telemetry/wsl-usage-reporter'
 import { ALL_RPC_METHODS } from '../runtime/rpc/methods/rpc-method-registry'
@@ -70,7 +74,7 @@ export async function initializeReadyRuntimeServices(): Promise<void> {
   initializeMainProcessAutomations()
   startWorkspaceCleanupRunner(runtime, store)
   configureRuntimeServices(runtime)
-  installFirstWorkRenameHookSubscription()
+  installFirstWorkRenameHookSubscription(firstWorkRenameDeps(store, runtime))
   await initializeMainProcessPlugins(runtime)
   state.starNag = new StarNagService(store, state.stats!)
   state.starNag.start()
@@ -104,8 +108,13 @@ export async function initializeReadyRuntimeServices(): Promise<void> {
   // Only Orca-managed emulator helpers belong to workspaces; external serve-sim stays independent. macOS capability gates live in CLI/runtime.
   state.emulatorBridge = new EmulatorBridge()
   runtime.setEmulatorBridge(state.emulatorBridge)
+  let releaseProviderMaintenance: () => void
+  const providerMaintenanceReady = new Promise<void>((resolve) => {
+    releaseProviderMaintenance = resolve
+  })
   // Finish recorded deletes and old trash left across crashes; defer disk sweeps so they do not compete with first paint/catalog hydration.
   runAfterFirstWindowShown(() => {
+    releaseProviderMaintenance()
     void sweepStaleWorktreeTrash(
       collectWorktreeTrashSweepRoots(store.getRepos(), store.getSettings())
     ).catch((error) => {
@@ -119,6 +128,10 @@ export async function initializeReadyRuntimeServices(): Promise<void> {
   }, WORKTREE_TRASH_SWEEP_FALLBACK_MS)
   runAfterFirstWindowShown(() => {
     new WslUsageReporter(store, app.getPath('userData')).start()
+  }, WORKTREE_TRASH_SWEEP_FALLBACK_MS)
+  // Suspended permission probes left by older builds hold LaunchServices slots until every app launch hangs.
+  runAfterFirstWindowShown(() => {
+    void reapLeftoverMacOSPermissionStatusHelpers()
   }, WORKTREE_TRASH_SWEEP_FALLBACK_MS)
   runAfterFirstWindowShown(() => {
     void pruneDesktopOrcadArtifactCache(app.getPath('userData')).catch((error) => {
@@ -144,8 +157,12 @@ export async function initializeReadyRuntimeServices(): Promise<void> {
     })
   }, WORKTREE_TRASH_SWEEP_FALLBACK_MS)
   nativeTheme.themeSource = store.getSettings().theme ?? 'system'
-  // Wait for shell PATH before probing Codex; start reconciliation early so first launch can share it.
+  void providerMaintenanceReady.then(() =>
+    startCodexStateDbBackfillRecoveryInBackground(getOrcaManagedCodexHomePath())
+  )
+  // Register launch reconciliation now; defer background probes and scratch cleanup until first paint.
   startCodexHooks({
+    startAfter: providerMaintenanceReady,
     pathReady: app.isPackaged ? hydrateAgentCliShellPath() : Promise.resolve(),
     isEnabled: () => isAgentStatusHooksEnabledForAgent(store.getSettings(), 'codex'),
     resolveLaunchHome: () => {

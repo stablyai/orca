@@ -1,5 +1,5 @@
 import { posix, win32 } from 'node:path'
-import { isWindowsAbsolutePathLike } from '../cross-platform-path'
+import { isWindowsAbsolutePathLike } from '../file-access/cross-platform-path'
 
 function pathFlavor(rootPath: string): typeof posix | typeof win32 {
   if (isWindowsAbsolutePathLike(rootPath)) {

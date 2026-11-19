@@ -3,7 +3,7 @@ import {
   CALM_STATUS_IDLE,
   stepCalmStatusReveal,
   type CalmStatusReveal
-} from '../../../../src/shared/calm-status-reveal'
+} from '../../../../src/shared/remote-runtime/connection-status/calm-status-reveal'
 import type { ConnectionState } from './connection-state'
 
 // Hide short drops after a successful connection; show initial connects and refused pairings immediately.

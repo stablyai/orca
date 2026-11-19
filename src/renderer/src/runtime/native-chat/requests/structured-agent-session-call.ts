@@ -1,14 +1,14 @@
-import '../../../../../shared/agent-session/agent-session-attention-capabilities'
-import { AGENT_SESSION_REWIND_RUNTIME_CAPABILITY } from '../../../../../shared/agent-session/agent-session-runtime-capabilities'
-import '../../../../../shared/agent-session/structured-agent-session-surface-capabilities'
+import '../../../../../shared/agent-session/view/agent-session-attention-capabilities'
+import { AGENT_SESSION_REWIND_RUNTIME_CAPABILITY } from '../../../../../shared/agent-session/capabilities/agent-session-runtime-capabilities'
+import '../../../../../shared/agent-session/capabilities/structured-agent-session-surface-capabilities'
 import '../../../../../shared/agent-session/lifecycle/stopping/agent-session-stop-capabilities'
-import '../../../../../shared/agent-session/agent-session-create-capabilities'
+import '../../../../../shared/agent-session/lifecycle/operations/agent-session-create-capabilities'
 import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'
 import { runtimeEnvironmentSupportsCapability } from '../../rpc/compatibility/runtime-capability-proof'
 import '../../hosts/capabilities/local-runtime-capabilities'
 import '../../rpc/subscriptions/runtime-rpc-subscribe'
 import { STRUCTURED_AGENT_SESSION_METHOD_TIMEOUT_MS } from './structured-agent-session-request-timeouts'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 
 export async function callStructuredAgentSession<TResult>(
   target: RuntimeClientTarget,

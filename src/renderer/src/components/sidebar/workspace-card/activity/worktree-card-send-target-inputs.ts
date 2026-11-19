@@ -1,4 +1,6 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/status-ownership/accepted-agent-statuses'
 import type { AppState } from '@/store/types'
+import { selectSendApprovalGuardEnvironmentIds } from '@/runtime/hosts/capabilities/send-approval-guard-hosts'
 import type { RunningAgentTargetState } from '@/lib/agent-session/messaging/running-agent-targets'
 
 export type SendTargetInputsState = Pick<
@@ -10,6 +12,7 @@ export type SendTargetInputsState = Pick<
   | 'terminalLayoutsByTabId'
   | 'ptyIdsByTabId'
   | 'runtimePaneTitlesByTabId'
+  | 'runtimeStatusByEnvironmentId'
 >
 
 export type SendTargetControlInputsState = Pick<
@@ -24,12 +27,13 @@ export type SendTargetControlInputs = {
 
 // Share an inactive-card sentinel so pane-title/status churn cannot wake every idle agent body.
 export const EMPTY_SEND_TARGET_INPUTS: RunningAgentTargetState = Object.freeze({
-  agentStatusByPaneKey: {},
+  agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({})),
   tabsByWorktree: {},
   unifiedTabsByWorktree: {},
   terminalLayoutsByTabId: {},
   ptyIdsByTabId: {},
-  runtimePaneTitlesByTabId: {}
+  runtimePaneTitlesByTabId: {},
+  sendApprovalGuardEnvironmentIds: new Set<string>()
 })
 
 // Inactive cards ignore picker-mode and freshness-epoch changes.
@@ -52,7 +56,10 @@ export function selectSendTargetInputs(
     unifiedTabsByWorktree: s.unifiedTabsByWorktree,
     terminalLayoutsByTabId: s.terminalLayoutsByTabId,
     ptyIdsByTabId: s.ptyIdsByTabId,
-    runtimePaneTitlesByTabId: s.runtimePaneTitlesByTabId
+    runtimePaneTitlesByTabId: s.runtimePaneTitlesByTabId,
+    sendApprovalGuardEnvironmentIds: selectSendApprovalGuardEnvironmentIds(
+      s.runtimeStatusByEnvironmentId
+    )
   }
 }
 

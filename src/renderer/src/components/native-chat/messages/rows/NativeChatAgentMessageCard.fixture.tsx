@@ -1,11 +1,14 @@
-import type { AgentStatusEntry } from '../../../../../../shared/agent-status/contracts/agent-status-types'
+import {
+  acceptedAgentStatuses,
+  type AcceptedAgentStatuses
+} from '@/store/slices/agent-status/status-ownership/accepted-agent-statuses'
 import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
 import { defineFixture } from '../../../../component-fixtures/component-fixture'
 import { makeTab } from '@/store/terminals/testing/terminal-tab.test-fixture'
-import type { AgentMessageSource } from '../../../../../../shared/agent-session/agent-session-message-source'
+import type { AgentMessageSource } from '../../../../../../shared/agent-session/journal/agent-session-message-source'
 import { NativeChatAgentMessageCard } from './NativeChatAgentMessageCard'
 import { MessageRow } from './NativeChatMessageRow'
-import { projectStructuredAgentStartItem } from '../../../../../../shared/structured-agent-start-projection'
+import { projectStructuredAgentStartItem } from '../../../../../../shared/native-chat/transcript/messages/structured-agent-start-projection'
 import { NativeChatUserMessageRow } from './NativeChatUserMessageRow'
 import { orchestrationMailFixture } from '../../../../../../shared/agent-session/orchestration-mail.test-fixture'
 
@@ -124,26 +127,31 @@ function cards() {
     </div>
   )
 }
-const agentStatusByPaneKey: Record<string, AgentStatusEntry> = {}
+let agentStatusByPaneKey: AcceptedAgentStatuses = acceptedAgentStatuses(Object.entries({}))
 for (const [id, agentType, state] of [
   ['sender', 'codex', 'done'],
   ['progress', 'claude', 'working']
 ] as const) {
   const paneKey = `${id}:11111111-1111-4111-8111-111111111111`
-  agentStatusByPaneKey[paneKey] = {
-    paneKey,
-    worktreeId: workspace,
-    terminalHandle: `term_${id}`,
-    agentType,
-    state,
-    prompt: 'Parser worker',
-    updatedAt: 1_800_000_000_000,
-    stateStartedAt: 1_800_000_000_000,
-    stateHistory: [],
-    ...(state === 'working'
-      ? { programStatus: { state, progress: 40, observedAt: 1_800_000_000_000 } }
-      : {})
-  }
+  agentStatusByPaneKey = agentStatusByPaneKey.replace([
+    [
+      paneKey,
+      {
+        paneKey,
+        worktreeId: workspace,
+        terminalHandle: `term_${id}`,
+        agentType,
+        state,
+        prompt: 'Parser worker',
+        updatedAt: 1_800_000_000_000,
+        stateStartedAt: 1_800_000_000_000,
+        stateHistory: [],
+        ...(state === 'working'
+          ? { programStatus: { state, progress: 40, observedAt: 1_800_000_000_000 } }
+          : {})
+      }
+    ]
+  ])
 }
 const store = {
   activeWorktreeId: workspace,
@@ -183,4 +191,52 @@ export const expanded = defineFixture({
       }
     }
   }
+})
+// Mail from a paired computer: a bot there by its carried avatar, and a terminal agent, each with its host pill.
+export const fromAnotherComputer = defineFixture({
+  width: 440,
+  render: () => (
+    <div className="space-y-4 p-4">
+      {[
+        { name: 'Bot builder', bot: true as const, botAvatar: 'mascot:A1', agent: 'claude' },
+        { name: 'Release check', agent: 'codex' }
+      ].map((sender) => {
+        const from: AgentMessageSource = {
+          kind: 'agent',
+          senders: [
+            {
+              party: {
+                address: `${sender.name} on Alice's Mac`,
+                terminalHandle: null,
+                orcaSessionId: null
+              },
+              host: "Alice's Mac",
+              ...sender
+            }
+          ],
+          orchestration: {
+            message: 'mail-notice',
+            mailbox: 'term_recipient',
+            dispatchId: null,
+            messages: []
+          }
+        }
+        return (
+          <NativeChatAgentMessageCard
+            key={sender.name}
+            message={{
+              id: sender.name,
+              role: 'user',
+              source: 'transcript',
+              blocks: [{ type: 'text', text: 'Where is the install guide?' }],
+              timestamp: 1_800_000_000_000,
+              from
+            }}
+            from={from}
+            onRefolded={() => {}}
+          />
+        )
+      })}
+    </div>
+  )
 })

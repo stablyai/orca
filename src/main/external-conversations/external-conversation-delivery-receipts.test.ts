@@ -11,7 +11,7 @@ import {
 } from './external-conversation-delivery-receipts'
 import type { ConversationKey, Delivery } from './external-conversation-types'
 
-const KEY: ConversationKey = { source: 'dev', externalId: 'thread' }
+const KEY: ConversationKey = { source: 'slack', externalId: 'thread' }
 const ORDINARY = {
   callerFingerprint: 'ordinary-user',
   requestId: 'send',
@@ -46,7 +46,9 @@ describe('DeliveryReceipts ledger capacity', () => {
       outcome: 'refused',
       reason: 'delivery_backlog_full'
     })
-    expect(db.countPendingMutationReceipts(['connector:dev'])).toBe(CONNECTOR_PENDING_RECEIPT_LIMIT)
+    expect(db.countPendingMutationReceipts(['connector:slack'])).toBe(
+      CONNECTOR_PENDING_RECEIPT_LIMIT
+    )
     db.close()
 
     // Reopen without starting connectors to model a process restart before connector initialization.
@@ -77,7 +79,7 @@ describe('DeliveryReceipts ledger capacity', () => {
         reason: 'delivery_backlog_full'
       })
     }
-    expect(db.countPendingMutationReceipts(['connector:dev'])).toBe(
+    expect(db.countPendingMutationReceipts(['connector:slack'])).toBe(
       CONNECTOR_PENDING_RECEIPT_LIMIT + CONNECTOR_CANCEL_RECEIPT_RESERVE
     )
     expect(db.beginMutationReceipt(ORDINARY).disposition).toBe('started')
@@ -104,13 +106,13 @@ describe('DeliveryReceipts ledger capacity', () => {
       reason: 'replayed_after_restart'
     })
     expect(
-      reopened.getMutationReceipt('connector:dev', JSON.stringify(['thread', '0']))?.state
+      reopened.getMutationReceipt('connector:slack', JSON.stringify(['thread', '0']))?.state
     ).toBe('completed')
     await expect(after.run(KEY, 'new', 'connector.send', ['hello'], execute)).resolves.toEqual({
       outcome: 'accepted'
     })
     expect(executed).toBe(1)
-    expect(reopened.countPendingMutationReceipts(['connector:dev'])).toBe(0)
+    expect(reopened.countPendingMutationReceipts(['connector:slack'])).toBe(0)
     reopened.close()
   })
 

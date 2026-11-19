@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { resolveRepoBackedProjectDialogState } from './project-dialog-state'
 
-import type { Repo } from '../../../../../shared/repo-types'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 
 const localRow: Repo = {
   id: 'repo-1',

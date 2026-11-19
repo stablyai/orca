@@ -9,7 +9,7 @@ import {
   hasSleepableWorkspaceActivity,
   useWorkspaceLineageMenuActions
 } from './workspace-lineage-menu-actions'
-import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import { getDeleteStateForWorktreeHost } from '../deletion/worktree-delete-state-host-match'
 import {
   EMPTY_AGENT_STATUS_BY_PANE_KEY,
@@ -27,7 +27,7 @@ import {
   shouldRemoveProjectFromContextMenu
 } from './worktree-context-menu-policy'
 import { useWorktreeContextMenuCommands } from './use-worktree-context-menu-commands'
-import { selectWorkspaceShowsUnread } from '../../worktree-card-slot-rollup'
+import { selectWorkspaceShowsUnread } from '../../workspace-card/slots/worktree-card-slot-rollup'
 import {
   useWorktreeParentPickerTransition,
   type PendingParentPicker

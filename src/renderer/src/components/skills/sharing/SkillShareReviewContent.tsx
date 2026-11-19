@@ -1,4 +1,3 @@
-import { Check, Clipboard } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Progress } from '@/components/ui/progress'
@@ -7,10 +6,11 @@ import { useTranslate, type Translate } from '@/i18n/use-translate'
 import type {
   SkillSharePreview,
   SkillShareProgress
-} from '../../../../../shared/skill-sharing-contract'
+} from '../../../../../shared/skills/sharing/skill-sharing-contract'
 import { SkillSharePackageSummary } from './SkillSharePackageSummary'
 import { SkillShareReleaseNotesField } from './SkillShareReleaseNotesField'
 import { shortDigest } from './skill-package-digest'
+import { ShareLinkCopyRow } from './ShareLinkCopyRow'
 
 /** Keep dialog description presence aligned with the header to satisfy Radix accessibility checks. */
 export function skillShareDialogHasDescription(
@@ -173,16 +173,7 @@ export function SkillSharePublishedLink({
   const t = useTranslate()
   return (
     <div className="space-y-3">
-      <div className="flex items-center gap-3 rounded-md border border-border p-3">
-        <div className="flex size-8 items-center justify-center rounded-full bg-secondary text-secondary-foreground">
-          <Check className="size-4" />
-        </div>
-        <p className="min-w-0 flex-1 truncate font-mono text-xs">{shareUrl}</p>
-        <Button type="button" variant="outline" size="sm" onClick={onCopy}>
-          <Clipboard className="size-4" />
-          {t('auto.components.skills.SkillShareReviewContent.6d6233a3a4', 'Copy link')}
-        </Button>
-      </div>
+      <ShareLinkCopyRow url={shareUrl} onCopy={onCopy} />
       <p className="font-mono text-[11px] text-muted-foreground" title={packageDigest}>
         {t('auto.components.skills.SkillShareReviewContent.b3b1d4b911', 'SHA-256')}{' '}
         {shortDigest(packageDigest)}

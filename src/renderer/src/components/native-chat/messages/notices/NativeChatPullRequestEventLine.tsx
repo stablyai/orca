@@ -7,7 +7,7 @@ import {
   pullRequestEventCommitUrl,
   pullRequestEventPullRequestUrl,
   pullRequestEventShortSha
-} from '../../../../../../shared/native-chat/native-chat-pull-request-event'
+} from '../../../../../../shared/native-chat/transcript/notices/native-chat-pull-request-event'
 import { NATIVE_CHAT_CI_RESULT_LINES_SETTING_SECTION_ID } from '../../../settings/chat/native-chat-ci-result-lines-setting-target'
 import {
   NativeChatCardHideButton,
@@ -55,7 +55,7 @@ export function NativeChatPullRequestEventLine({
     <div
       className={`${NATIVE_CHAT_HIDEABLE_CARD_CLASS} rounded-lg border border-chat-code-border p-2 text-sm`}
     >
-      <div className="flex min-w-0 items-center gap-1.5 px-1 text-xs text-chat-foreground-faint">
+      <div className="flex min-w-0 items-center gap-1.5 px-1 text-sm text-chat-foreground-faint">
         <Icon
           aria-hidden
           className={cn('size-3.5 shrink-0', failing ? 'text-destructive' : 'text-status-success')}

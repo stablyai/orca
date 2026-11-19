@@ -34,7 +34,11 @@ function tokenPathForSite(siteId: string): string {
   return join(tempHome, '.orca', 'jira-tokens', `${Buffer.from(siteId).toString('base64url')}.enc`)
 }
 
-function writeJiraFiles(siteId: string, token: string | Buffer): void {
+function writeJiraFiles(
+  siteId: string,
+  token: string | Buffer,
+  siteOverrides: Record<string, unknown> = {}
+): void {
   const orcaDir = join(tempHome, '.orca')
   mkdirSync(join(orcaDir, 'jira-tokens'), { recursive: true })
   writeFileSync(
@@ -50,7 +54,8 @@ function writeJiraFiles(siteId: string, token: string | Buffer): void {
             siteUrl: 'https://example.atlassian.net',
             email: 'ada@example.com',
             displayName: 'Ada',
-            accountId: 'account-alpha'
+            accountId: 'account-alpha',
+            ...siteOverrides
           }
         ]
       },
@@ -407,6 +412,77 @@ describe('Jira client credential storage', () => {
     }
     expect(stored.sites).toHaveLength(2)
     expect(stored.sites.map((site) => site.accountId).sort()).toEqual(['alice', 'bot'])
+  })
+})
+
+describe('Jira Cloud site saved through the self-hosted form', () => {
+  function mockMyself(): void {
+    netFetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ accountId: 'account-alpha', displayName: 'Ada' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      })
+    )
+  }
+
+  it('uses Cloud REST paths for an atlassian.net site already stored as server', async () => {
+    writeJiraFiles('site-alpha', 'token-alpha', { authType: 'server' })
+    mockMyself()
+    const jira = await loadClientModule()
+
+    expect(jira.getClients('site-alpha')[0].site.authType).toBe('cloud')
+    await expect(jira.testConnection('site-alpha')).resolves.toMatchObject({ ok: true })
+    expect(netFetchMock).toHaveBeenCalledWith(
+      'https://example.atlassian.net/rest/api/3/myself',
+      expect.anything()
+    )
+  })
+
+  it('saves an atlassian.net site connected through the self-hosted form as Cloud', async () => {
+    mockMyself()
+    const jira = await loadClientModule()
+
+    await expect(
+      jira.connect({
+        siteUrl: 'example.atlassian.net',
+        email: 'ada@example.com',
+        apiToken: 'token-alpha',
+        authType: 'server'
+      })
+    ).resolves.toMatchObject({ ok: true })
+
+    expect(jira.getClients()[0].site.authType).toBe('cloud')
+    expect(netFetchMock).toHaveBeenCalledWith(
+      'https://example.atlassian.net/rest/api/3/myself',
+      expect.anything()
+    )
+  })
+
+  it('keeps a non-Atlassian site connected through the self-hosted form as server', async () => {
+    mockMyself()
+    const jira = await loadClientModule()
+
+    await expect(
+      jira.connect({
+        siteUrl: 'jira.example.com',
+        email: 'ada@example.com',
+        apiToken: 'password-alpha',
+        authType: 'server'
+      })
+    ).resolves.toMatchObject({ ok: true })
+
+    expect(jira.getClients()[0].site.authType).toBe('server')
+    expect(netFetchMock).toHaveBeenCalledWith(
+      'https://jira.example.com/rest/api/2/myself',
+      expect.anything()
+    )
+  })
+
+  it('keeps an emailless server record on an Atlassian host unchanged', async () => {
+    writeJiraFiles('site-alpha', 'token-alpha', { authType: 'server', email: '' })
+    const jira = await loadClientModule()
+
+    expect(jira.getClients('site-alpha')[0].site).toMatchObject({ authType: 'server', email: '' })
   })
 })
 

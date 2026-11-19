@@ -5,18 +5,19 @@ import {
 import type {
   RuntimeOrchestrationEnvelope,
   RuntimeRpcResponse
-} from '../../../../shared/runtime-rpc-envelope'
+} from '../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import {
   isOrchestrationMutation,
   orchestrationMigrationData
 } from '../../../../shared/orchestration/orchestration-rpc-contract'
-import type { RuntimeStatus } from '../../../../shared/runtime-session-contracts'
+import type { RuntimeStatus } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type {
   OrchestrationEnvironmentCallOptions,
   OrchestrationEnvironmentTransport,
   OrchestrationWorkerServer
 } from './environment-transport'
 import { OrchestrationError } from '../orchestration-error'
+import { UnsentRequestError } from './unsent-request-error'
 import {
   clearFederationAckCheckpoints,
   releaseFederationAckCheckpoint
@@ -71,14 +72,18 @@ export class RuntimeOrchestrationFederation {
     this.warnings.clear()
   }
 
-  resolveWorkerServer(selector: string): OrchestrationWorkerServer {
+  async resolveWorkerServer(selector: string): Promise<OrchestrationWorkerServer> {
     if (!this.transport) {
       throw new OrchestrationError(
         'server_required',
         'Connected-server orchestration is unavailable in this runtime.'
       )
     }
-    return this.transport.resolve(selector)
+    return await this.transport.resolve(selector)
+  }
+
+  async listWorkerServers(): Promise<readonly { environmentId: string; name: string }[]> {
+    return (await this.transport?.list?.()) ?? []
   }
 
   async callWorkerServer(
@@ -106,7 +111,11 @@ export class RuntimeOrchestrationFederation {
           ? { ...envelope, orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION }
           : envelope,
         internal?.expectedEnvironmentPairingRevision,
-        { prepareRequest: internal?.prepareRequest, expectedRuntimeId }
+        {
+          prepareRequest: internal?.prepareRequest,
+          prepareGuard: internal?.prepareGuard,
+          expectedRuntimeId
+        }
       )
     const response =
       isOrchestrationMutation(method, params) && !internal?.contractVerified
@@ -153,7 +162,7 @@ export class RuntimeOrchestrationFederation {
       internal?.expectedEnvironmentPairingRevision
     )
     if (statusResponse.ok === false) {
-      throw new OrchestrationError(
+      throw new UnsentRequestError(
         statusResponse.error.code,
         statusResponse.error.message,
         statusResponse.error.data
@@ -255,8 +264,8 @@ export class RuntimeOrchestrationFederation {
     }
     return this.syncDispatch(dispatchId).then(
       (result): FederationRelayTickOutcome => (federatedSyncMovedMail(result) ? 'moved' : 'idle'),
-      (): FederationRelayTickOutcome => {
-        if (!this.isEnvironmentRemoved(dispatchId)) {
+      async (): Promise<FederationRelayTickOutcome> => {
+        if (!(await this.isEnvironmentRemoved(dispatchId))) {
           return 'failed'
         }
         this.warnings.delete(dispatchId)
@@ -266,7 +275,7 @@ export class RuntimeOrchestrationFederation {
   }
 
   /** Checked only after a failed sync; a store read error keeps the relay retrying. */
-  private isEnvironmentRemoved(dispatchId: string): boolean {
+  private async isEnvironmentRemoved(dispatchId: string): Promise<boolean> {
     const environmentId = this.runtime
       .getOrchestrationDb()
       .getFederatedDispatch(dispatchId)?.environment_id
@@ -275,7 +284,7 @@ export class RuntimeOrchestrationFederation {
     }
     try {
       // A removed server cannot answer; the next ensureRelay re-arms it if the server is added back.
-      return this.transport?.hasEnvironment?.(environmentId) === false
+      return (await this.transport?.hasEnvironment?.(environmentId)) === false
     } catch {
       return false
     }

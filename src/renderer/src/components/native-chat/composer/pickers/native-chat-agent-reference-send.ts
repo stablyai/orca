@@ -1,5 +1,5 @@
 import type { JSONContent } from '@tiptap/react'
-import { imageReferenceToken } from '../../../../../../shared/native-chat/native-chat-image-reference'
+import { promptLeafString } from '../editor/native-chat-prompt-document-text'
 import {
   agentReferenceNote,
   agentReferenceToken,
@@ -82,10 +82,7 @@ export function serializeNativeChatAgentReferences(
         })
         .join(node.type === 'doc' ? '\n' : '')
     }
-    const plain =
-      node.type === 'nativeChatImageReference'
-        ? imageReferenceToken(String(node.attrs?.attachmentId))
-        : (node.text ?? (typeof node.attrs?.token === 'string' ? node.attrs.token : ''))
+    const plain = promptLeafString(node.type, node.attrs, node.text)
     occurrences.push(plain)
     return plain
   }

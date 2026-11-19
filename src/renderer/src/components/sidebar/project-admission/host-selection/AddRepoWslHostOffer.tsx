@@ -1,19 +1,19 @@
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
-import { LoadingSpinner } from '@/components/LoadingSpinner'
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { useTranslate } from '@/i18n/use-translate'
 import { readIpcErrorDetail } from '@/runtime/errors/ipc-error'
 import { addOnThisComputerLabel } from '@/lib/workspace/creation/wsl-host-windows-drive-refusal-toast'
 import { useAppStore } from '@/store/index'
-import type { AddRepoExistingWorkspaceSource } from '../../../../../../shared/telemetry-events'
+import type { AddRepoExistingWorkspaceSource } from '../../../../../../shared/telemetry/schemas/telemetry-property-schemas'
 import { addWslHostDistro } from '../../host-admission/wsl/add-wsl-host-distro'
-import { wslHostAddRefusalMessage } from '../../wsl-host-failure-text'
+import { wslHostAddRefusalMessage } from '../../host-admission/wsl/wsl-host-failure-text'
 import {
   acceptWslHostOffer,
   declineWslHostOffer,
   type WslHostOffer
-} from '../../wsl-host-offer-actions'
-import { moveWslHostOfferProject } from '../../wsl-host-offer-move'
+} from './wsl-host-offer-actions'
+import { moveWslHostOfferProject } from '../../../wsl-move/wsl-host-offer-move'
 
 /** Inline in the add-project flow: run the `\\wsl.localhost` path's distro as a host instead. */
 export function AddRepoWslHostOffer({

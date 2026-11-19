@@ -1,7 +1,5 @@
-import {
-  openTestAgentSessionDatabase,
-  withTestAgentSessionDatabase
-} from '../../runtime/agent-session/records/agent-session-record-store-test-harness'
+import { openTestAgentSessionDatabase } from '../../runtime/agent-session/records/agent-session-record-store-test-harness'
+import { withTestAgentSessionDatabase } from '../../runtime/agent-session/records/agent-session-record-store-persistence.test-fixture'
 import { prWatchStorage, type PRWatchStorage } from './pr-watch-storage'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -114,7 +112,7 @@ function readOfP(headSha: string, final = false): PRRefreshOutcome {
     dataHeadRepo: { owner: 'acme', repo: 'repo' },
     stack: undefined,
     mergeable: 'MERGEABLE',
-    stackMergeQueueRequired: undefined,
+    stackMergeMetadata: undefined,
     confirmedContainedHeadOid: null,
     headDivergedFromMergedPRAtOid: null,
     conflictSummary: undefined

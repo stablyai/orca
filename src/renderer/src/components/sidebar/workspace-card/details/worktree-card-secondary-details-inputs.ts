@@ -34,6 +34,8 @@ export type WorktreeCardSecondaryDetailsInputs = Pick<
     showPR: boolean
     showAutomation: boolean
     showCli: boolean
+    /** Off under the card's own bot, where its avatar only repeats the section. */
+    showBot?: boolean
     showComment: boolean
     showPorts: boolean
   }

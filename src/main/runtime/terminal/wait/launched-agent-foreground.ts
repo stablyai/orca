@@ -3,7 +3,7 @@ import {
   isNodeInterpreterOfAgent,
   recognizeAgentProcess
 } from '../../../../shared/agent-status/process/agent-process-recognition'
-import { PROCESS_TABLE_SNAPSHOT_MAX_STALENESS_MS } from '../../../../shared/process-table-snapshot'
+import { PROCESS_TABLE_SNAPSHOT_MAX_STALENESS_MS } from '../../../../shared/process-observation/tables/process-table-snapshot'
 import { isShellProcess } from '../../../../shared/agent-status/process/shell-process-detection'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import { TUI_AGENT_CONFIG } from '../../../../shared/agent-launch/catalog/tui-agent-config'
@@ -11,7 +11,7 @@ import type { RuntimePtyController } from '../lifecycle/runtime-pty-controller-c
 import { judgeTerminalForeground } from '../lifecycle/terminal-foreground-group'
 import { readTerminalProcessRows } from '../../../pty/process-retirement/terminal-process-rows'
 import { isTerminalForegroundObservation } from '../../../../shared/terminal/pty/lifecycle/terminal-foreground-observation'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
 
 /** agent permits writing; shell drops readiness; unknown proves neither. */
 export type LaunchedAgentForeground = 'agent' | 'shell' | 'unknown'

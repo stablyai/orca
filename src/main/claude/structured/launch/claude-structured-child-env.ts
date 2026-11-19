@@ -1,5 +1,5 @@
 import { withOrcaClaudeChatEntrypoint } from '../../../../shared/agent-launch/startup/claude-chat-entrypoint'
-import { waitForPromiseWithSignal } from '../../../../shared/abort-signal-reason'
+import { waitForPromiseWithSignal } from '../../../../shared/concurrency/abort-signal-reason'
 import {
   assertStructuredAgentResolutionCurrent,
   resolveAgainAfterRefreshOnMissingProgram,
@@ -9,12 +9,12 @@ import {
 // What a structured Claude child's environment is built from, shared by its launch and the
 // `--version` probe that runs the same binary.
 
-import { withCliRuntimeOnPath } from '../../../../shared/node-cli-command-resolution'
+import { withCliRuntimeOnPath } from '../../../../shared/shell/command-resolution/node-cli-command-resolution'
 import { applyClaudeEnvPatch } from '../../../claude-accounts/runtime-auth/environment'
 import { resolveClaudeCommand } from '../../../codex-cli/command'
 import { withoutInheritedClaudeConfigDir } from './claude-config-dir-pin'
 import { stripInheritedAgentSessionEnv } from '../../../../shared/agent-launch/startup/parent-agent-session-env'
-import { overlayEnvironmentVariables } from '../../../../shared/environment-overlay'
+import { overlayEnvironmentVariables } from '../../../../shared/shell/launch/environment-overlay'
 
 function cloneDefinedEnv(env: NodeJS.ProcessEnv | Record<string, string>): Record<string, string> {
   const next: Record<string, string> = {}

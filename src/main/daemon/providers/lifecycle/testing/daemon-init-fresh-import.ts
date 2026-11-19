@@ -1,5 +1,8 @@
 import { vi } from 'vitest'
-import { setAppEnvironment, type AppEnvironment } from '../../../../../shared/app-environment'
+import {
+  setAppEnvironment,
+  type AppEnvironment
+} from '../../../../../shared/app-lifecycle/app-environment'
 import type { DaemonInitMockState } from './daemon-init-mock-types'
 
 export async function importFreshDaemonInit(state: DaemonInitMockState) {

@@ -1,8 +1,8 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
-import type { ProjectGroup } from '../../../../shared/project-group-types'
+import type { ProjectGroup } from '../../../../shared/project/groups/project-group-types'
 import { createTestStore } from '../testing/app-store-test-fixture'
-import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
+import { folderWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import { showDeleteWorktreeFailureToast } from '@/components/sidebar/workspace-actions/deletion/delete-worktree-failure-toast'
 import { deleteFolderWorkspaceUnlessUnsaved } from '@/components/sidebar/workspace-actions/deletion/folder-workspace-delete'
 
@@ -181,4 +181,42 @@ it('rechecks unsaved editor text before the Archive failure toast waives removal
   store.setState({ openFiles: [], editorDrafts: {} })
   await retry?.()
   expect(store.getState().folderWorkspaces).toEqual([])
+})
+
+it('lets a bot owner remove its folder without the Archive prompt or failure retry', async () => {
+  const store = createTestStore()
+  const folder = makeFolderWorkspace({ executionHostId: 'local' })
+  const purgeWorktreeTerminalState = vi.fn()
+  store.setState({
+    projectGroups: [projectGroup],
+    folderWorkspaces: [folder],
+    shutdownWorktreeBrowsers: vi.fn(async () => {}),
+    deleteManagedBrowserSessionProfile: vi.fn(),
+    purgeWorktreeTerminalState
+  })
+  vi.mocked(showDeleteWorktreeFailureToast).mockClear()
+  const checkHooks = vi.mocked(window.api.projectGroups.checkHooks)
+  checkHooks.mockClear()
+  const failingRemove = vi
+    .fn<() => Promise<boolean>>()
+    .mockRejectedValue(
+      new Error('WorktreeArchiveHookFailedError: Archive hook failed for worktree: /x')
+    )
+  await expect(
+    deleteFolderWorkspaceUnlessUnsaved(store.getState, folder.id, 'local', {
+      remove: failingRemove
+    })
+  ).resolves.toBe(false)
+  expect(showDeleteWorktreeFailureToast).not.toHaveBeenCalled()
+  expect(store.getState().folderWorkspaces).toEqual([folder])
+
+  const remove = vi.fn<() => Promise<boolean>>().mockResolvedValue(true)
+  await expect(
+    deleteFolderWorkspaceUnlessUnsaved(store.getState, folder.id, 'local', { remove })
+  ).resolves.toBe(true)
+  expect(remove).toHaveBeenCalledTimes(1)
+  expect(folderWorkspacesDelete).not.toHaveBeenCalled()
+  expect(checkHooks).not.toHaveBeenCalled()
+  expect(store.getState().folderWorkspaces).toEqual([])
+  expect(purgeWorktreeTerminalState).toHaveBeenCalledWith([folderWorkspaceKey(folder.id)])
 })

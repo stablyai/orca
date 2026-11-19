@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { useWindowStreamVisible } from '@/hooks/use-window-stream-visibility'
+import { useWindowStreamVisible } from '@/lib/window-activity/use-window-stream-visibility'
 import type { RemoteBrowserStreamLifecycle } from './remote-browser-stream-lifecycle'
 
 type RemoteBrowserStreamActivationOptions = {

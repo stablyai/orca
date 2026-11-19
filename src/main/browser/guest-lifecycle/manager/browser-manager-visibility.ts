@@ -17,7 +17,7 @@ import { resolveBrowserRouteGuestPopupOpener } from '../../routing/guest-authori
 import type { RpcCallerIdentity } from '../../../runtime/rpc/callers/rpc-caller-identity'
 
 export abstract class BrowserManagerVisibility extends BrowserManagerState {
-  private readonly capturePaintHolds = new Map<Electron.WebContents, Map<string, number>>()
+  protected readonly capturePaintHolds = new Map<Electron.WebContents, Map<string, number>>()
   protected readonly agentActivity = new BrowserAgentActivity({
     pageIdForGuest: (guestWebContentsId) =>
       this.resolveBrowserTabIdForGuestWebContentsId(guestWebContentsId),
@@ -221,9 +221,12 @@ export abstract class BrowserManagerVisibility extends BrowserManagerState {
   // Agent input moves Chromium focus into the guest; the pane restores the user's focus.
   guardUserFocusForAgentInput(guestWebContentsId: number): Promise<() => void> {
     const browserPageId = this.resolveBrowserTabIdForGuestWebContentsId(guestWebContentsId)
-    const renderer = browserPageId ? this.resolveRendererForBrowserTab(browserPageId) : null
-    if (!browserPageId || !renderer || renderer.isDestroyed()) {
-      return Promise.reject(focusGuardUnavailableError())
+    if (!browserPageId) {
+      return Promise.reject(focusGuardUnavailableError('missing_page'))
+    }
+    const renderer = this.resolveRendererForBrowserTab(browserPageId)
+    if (!renderer) {
+      return Promise.reject(focusGuardUnavailableError('missing_renderer'))
     }
     return guardPaneFocusForAgentInput(renderer, browserPageId)
   }

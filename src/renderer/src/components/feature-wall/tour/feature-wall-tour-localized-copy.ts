@@ -1,8 +1,8 @@
-import type { AgentsStepId } from '../../../../../shared/agents-orchestration-steps'
-import type { FeatureWallMediaTileId } from '../../../../../shared/feature-wall-tiles'
-import type { FeatureWallWorkflowId } from '../../../../../shared/feature-wall-workflows'
-import type { ReviewStepId } from '../../../../../shared/review-steps'
-import type { WorkbenchStepId } from '../../../../../shared/workbench-steps'
+import type { AgentsStepId } from '../../../../../shared/feature-education/explore/agents-orchestration-steps'
+import type { FeatureWallMediaTileId } from '../../../../../shared/feature-education/explore/feature-wall-tiles'
+import type { FeatureWallWorkflowId } from '../../../../../shared/feature-education/explore/feature-wall-workflows'
+import type { ReviewStepId } from '../../../../../shared/feature-education/explore/review-steps'
+import type { WorkbenchStepId } from '../../../../../shared/feature-education/explore/workbench-steps'
 import { translate } from '@/i18n/i18n'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 

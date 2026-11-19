@@ -1,4 +1,6 @@
 import { useMemo } from 'react'
+import { MobileForkMarkedName } from '../session/fork/MobileForkMarkedName'
+import { mobileForkAccessibleName } from '../session/fork/mobile-fork-marked-name'
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { ChevronDown, Play } from 'lucide-react-native'
 import { colors } from '../theme/mobile-theme'
@@ -9,6 +11,7 @@ import { DisclosureChevron } from '../components/list/DisclosureChevron'
 import { MobileAgentIcon } from '../components/icons/MobileAgentIcon'
 import { recentSessionConversationTurns } from '../../../src/shared/ai-vault/session-display/ai-vault-session-display'
 import type { AiVaultSession } from '../../../src/shared/ai-vault/contracts/ai-vault-types'
+import { isAntigravityReferenceSession } from '../../../src/shared/agent-session/lifecycle/provider-handles/antigravity-session-origin'
 import type {
   MobileAgentHistoryCard,
   MobileAgentHistoryResumeActionState
@@ -51,7 +54,7 @@ export function AgentHistorySessionRow({
       onPress={onPress}
       accessibilityRole="button"
       accessibilityState={{ expanded }}
-      accessibilityLabel={card.title}
+      accessibilityLabel={card.forked ? mobileForkAccessibleName(card.title) : card.title}
       accessibilityHint={
         expanded
           ? t('agentHistory.sessionHistoryList.hidePreview', 'Hides the recent messages.')
@@ -66,7 +69,7 @@ export function AgentHistorySessionRow({
           <View style={styles.main}>
             <View style={styles.titleRow}>
               <Text style={styles.title} numberOfLines={1}>
-                {card.title}
+                {card.forked ? <MobileForkMarkedName name={card.title} /> : card.title}
               </Text>
               {card.timeAgo ? <Text style={styles.timeAgo}>{card.timeAgo}</Text> : null}
               <DisclosureChevron expanded={expanded} collapsedDeg={0} expandedDeg={180}>
@@ -110,10 +113,11 @@ export function AgentHistorySessionRow({
               disabled={resumeDisabled}
               hitSlop={8}
               accessibilityRole="button"
-              accessibilityLabel={t(
-                'agentHistory.sessionHistoryList.resumeSession',
-                'Resume agent session'
-              )}
+              accessibilityLabel={
+                isAntigravityReferenceSession(session)
+                  ? t('agentHistory.sessionHistoryList.continueInCli', 'Continue in CLI')
+                  : t('agentHistory.sessionHistoryList.resumeSession', 'Resume agent session')
+              }
             >
               {resumeActionState?.loading ? (
                 <ActivityIndicator size="small" color={colors.textPrimary} />

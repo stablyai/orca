@@ -5,7 +5,7 @@ import type { RuntimeLeafRecord } from '../records/runtime-terminal-state-record
 import type {
   RuntimeTerminalPromptDelivery,
   RuntimeTerminalSend
-} from '../../../../shared/runtime-terminal-send-contract'
+} from '../../../../shared/terminal/runtime/runtime-terminal-send-contract'
 import { OrcaRuntimeWithResolveTerminalPane } from '../recovery/resolve-terminal-pane'
 import { wrapTerminalBracketedPasteText } from '../../../../shared/terminal/input/terminal-bracketed-paste-text'
 import { PROVEN_ABSENT_LEAF_PTY_TTL_MS } from './proven-absent-leaf-pty'
@@ -20,7 +20,7 @@ import {
   agentPromptTakesLeadLine,
   buildAgentPromptPasteBytes
 } from '../../../../shared/agent-launch/startup/agent-prompt-injection'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 
 export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntimeWithResolveTerminalPane {
   protected abstract writeTerminalAction(

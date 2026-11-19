@@ -1,6 +1,9 @@
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { getStructuredAgentSessionTabsByPaneKey } from '@/components/native-chat/session/status/structured-agent-session-tabs'
-import { activateRetainedAgentRow } from './activate-retained-agent-row'
+import {
+  structuredAgentSessionOwnerForTab,
+  structuredAgentSessionTargetForTab
+} from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 import { useCallback } from 'react'
 import { useAppStore } from '@/store'
 import { activateAndRevealWorkspace } from '@/lib/workspace/activation/worktree-activation'
@@ -15,22 +18,43 @@ import { isExecutionHostForWorktree } from '@/lib/workspace/ownership/qualified-
 export function useWorktreeAgentActivation(worktreeId: string, executionHostId?: ExecutionHostId) {
   return useCallback(
     (tabId: string, paneKey: string) =>
-      activateWorktreeAgentPane(worktreeId, tabId, paneKey, executionHostId),
+      activateWorktreeAgentPane(worktreeId, tabId, paneKey, executionHostId, {
+        revealInSidebar: false
+      }),
     [worktreeId, executionHostId]
   )
 }
 
-/** Open an agent's pane the way its sidebar row does, including before its tab hydrates. */
+/** Open an agent's pane the way its sidebar row does, including before its tab hydrates.
+ * A row passes revealInSidebar: false: it opens its own card, which is on screen. */
 export function activateWorktreeAgentPane(
   worktreeId: string,
   tabId: string,
   paneKey: string,
-  executionHostId?: ExecutionHostId
+  executionHostId?: ExecutionHostId,
+  options?: { revealInSidebar?: boolean }
 ): void {
   const state = useAppStore.getState()
   const nativeTab = getStructuredAgentSessionTabsByPaneKey(state.unifiedTabsByWorktree).get(paneKey)
   if (nativeTab?.worktreeId === worktreeId && nativeTab.id === tabId) {
-    activateRetainedAgentRow(worktreeId, tabId, paneKey, executionHostId)
+    const target = structuredAgentSessionTargetForTab(state, nativeTab)
+    const owner = structuredAgentSessionOwnerForTab(state, nativeTab)
+    if (
+      !target ||
+      (executionHostId &&
+        owner &&
+        !isExecutionHostForWorktree(state, worktreeId, executionHostId, owner))
+    ) {
+      return
+    }
+    if (
+      activateAndRevealWorkspace(worktreeId, {
+        ...options,
+        executionHostId: executionHostId ?? owner ?? undefined
+      }) !== false
+    ) {
+      activateStructuredAgentSessionTab({ worktreeId, tabId, target })
+    }
     return
   }
   const parsed = parsePaneKey(paneKey)
@@ -60,7 +84,7 @@ export function activateWorktreeAgentPane(
     return
   }
   // Use shared activation for cross-repo reveal and navigation history.
-  if (activateAndRevealWorkspace(worktreeId, { executionHostId }) === false) {
+  if (activateAndRevealWorkspace(worktreeId, { ...options, executionHostId }) === false) {
     return
   }
   const tabs = useAppStore.getState().tabsByWorktree[worktreeId] ?? []
@@ -72,7 +96,7 @@ export function activateWorktreeAgentPane(
     })
     activateTerminalTabOnOwner(worktreeId, tabId, parsed.leafId)
   } else if (!activateStructuredAgentSessionTab({ worktreeId, tabId })) {
-    const liveEntry = useAppStore.getState().agentStatusByPaneKey[paneKey]
+    const liveEntry = useAppStore.getState().agentStatusByPaneKey.get(paneKey)
     if (liveEntry?.worktreeId === worktreeId) {
       // Live worker status can precede tab hydration; retain the row and activate its owning terminal.
       activateTerminalTabOnOwner(worktreeId, tabId, parsed.leafId)

@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import type { Repo } from '../../../shared/repo-types'
+import type { Repo } from '../../../shared/repository/repo-types'
 import {
   normalizeSparsePresetDirectories,
   normalizeSparsePresetName
@@ -45,5 +45,15 @@ export class RuntimeRepositorySparsePresets {
       createdAt: existing?.createdAt ?? now,
       updatedAt: now
     })
+  }
+
+  async remove(repoSelector: string, presetId: string): Promise<void> {
+    const store = this.deps.getStore()
+    if (!store?.removeSparsePreset) {
+      throw new Error('runtime_unavailable')
+    }
+    const repo = await this.deps.resolveRepo(repoSelector)
+    assertWslMoveRepoWritable(store, repo)
+    store.removeSparsePreset(repo.id, presetId)
   }
 }

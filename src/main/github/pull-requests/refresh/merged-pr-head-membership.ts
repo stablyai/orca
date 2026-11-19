@@ -1,11 +1,13 @@
 import type { GitHubRepositoryIdentity as OwnerRepo } from '../../../../shared/github/repositories/repository-identity'
 import type { GitHubRepoExecOptions } from '../../repositories/github-api-repository'
 import type { HostedReviewLocalGitOptions } from '../../../source-control/hosted-review-git-options'
-import { isCommitPartOfMergedPR } from './merged-pr-commit-membership'
-import type { MergedReviewCommitMembership as MergedPRCommitMembership } from '../../../source-control/merged-review-membership-memo'
+import {
+  getMergedPRHeadRelationship,
+  type MergedPRHeadRelationship
+} from './merged-pr-commit-membership'
 import { mergedReviewHeadIsEquivalent } from '../../../source-control/merged-review-head-equivalence'
 
-/** PR-history membership, or a local proof that HEAD is an equivalent rebase GitHub never saw. */
+/** Membership or local equivalence proves containment; force-push history alone stays associated. */
 export async function mergedPRHeadMembership(args: {
   ownerRepo: OwnerRepo
   prNumber: number
@@ -16,8 +18,8 @@ export async function mergedPRHeadMembership(args: {
   repoPath: string
   connectionId?: string | null
   localGitOptions: HostedReviewLocalGitOptions
-}): Promise<MergedPRCommitMembership> {
-  const membership = await isCommitPartOfMergedPR({
+}): Promise<MergedPRHeadRelationship> {
+  const membership = await getMergedPRHeadRelationship({
     ownerRepo: args.ownerRepo,
     prNumber: args.prNumber,
     commitOid: args.headOid,

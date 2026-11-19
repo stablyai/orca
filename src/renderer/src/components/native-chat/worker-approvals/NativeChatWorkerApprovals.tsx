@@ -20,12 +20,12 @@ import {
   useNativeChatWorkerApprovalReceipts,
   type NativeChatWorkerApproval
 } from './native-chat-worker-approval-feed'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { NativeChatTimedRow } from '../conversation/slots/native-chat-timed-rows'
 import {
   formatOrcaSessionAddress,
   isOrcaSessionId
-} from '../../../../../shared/orca-session-address'
+} from '../../../../../shared/agent-session/identity/orca-session-address'
 import type { WorkerApprovalDecision } from '../../../../../shared/orchestration/approvals/worker-approval-payload'
 
 // The person's own Deny: the worker gets this, word for word where its agent takes a message.
@@ -56,8 +56,8 @@ export function NativeChatWorkerApprovalReceipt({
   )
 }
 
-/** Workers' prompts pinned above the composer, oldest first: open ones as cards, and ones just
- *  closed as their receipt. A card here never takes focus or cancels the chat's turn. */
+/** Workers' prompts pinned above the composer, oldest first: open ones as cards, and ones only the
+ *  worker's terminal can answer as their receipt. A card here never takes focus or cancels the chat's turn. */
 export function NativeChatWorkerApprovalStack({
   approvals,
   target,
@@ -133,7 +133,7 @@ export function NativeChatWorkerApprovalStack({
       {approvals.map((entry) => {
         const { approval } = entry
         if (approval.state !== 'open') {
-          // Settling, or only the worker's terminal can answer it: the outcome stays where the card was.
+          // Only the worker's terminal can answer it: the outcome stays where the card was.
           return (
             <div
               key={approval.approvalId}

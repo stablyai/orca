@@ -12,7 +12,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import {
   getRepoExecutionHostId,
   isRuntimeOwnedSshTargetId
-} from '../../../../../shared/execution-host'
+} from '../../../../../shared/execution-host/execution-host'
 import {
   isPaletteCurrentWorktree,
   getPaletteWorktreeExecutionHostId,
@@ -21,7 +21,7 @@ import {
 import { formatPaletteSessionAge } from '@/components/cmd-j/palette-session-age'
 import type { WorktreePaletteItem } from '../worktree-jump-palette-model'
 import type { WorktreeJumpPaletteController } from '../use-worktree-jump-palette-controller'
-import { getWorkspaceLastActiveAt } from '../../../../../shared/workspace-last-active'
+import { getWorkspaceLastActiveAt } from '../../../../../shared/workspace-cleanup/workspace-last-active'
 import { getWorktreeVisitTimestamp } from '@/lib/workspace/activation/worktree-visit-recency'
 import {
   getPaletteSupportingTextLabel,

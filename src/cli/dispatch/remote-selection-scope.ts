@@ -2,6 +2,7 @@
 export function ignoresRemoteSelection(commandPath: readonly string[]): boolean {
   return (
     commandPath[0] === 'account' ||
+    commandPath[0] === 'auth' ||
     commandPath[0] === 'artifacts' ||
     commandPath[0] === 'environment' ||
     // Paired servers come from the local store; routing SSH lookup would mix two machines in one list.
@@ -9,7 +10,8 @@ export function ignoresRemoteSelection(commandPath: readonly string[]): boolean 
     // Removes ids that `host list` printed from this runtime; an ambient selection must not retarget it.
     commandPath.join(' ') === 'host rm' ||
     commandPath[0] === 'serve' ||
-    (commandPath[0] === 'agent' && commandPath[1] !== 'launch') ||
+    // `agent hooks` configures this machine; launch and the ID commands act on the selected host.
+    (commandPath[0] === 'agent' && commandPath[1] === 'hooks') ||
     commandPath[0] === 'vm' ||
     commandPath[0] === 'agent-context' ||
     commandPath[0] === 'profile' ||

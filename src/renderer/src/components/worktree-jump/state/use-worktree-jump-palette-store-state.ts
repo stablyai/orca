@@ -4,7 +4,7 @@ import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store/index'
 import { usePluginCommands } from '@/store/plugins/catalog/plugin-contribution-catalog'
 import { usePluginNewFiles } from '@/store/plugins/file-creation/plugin-new-files'
-import { useSettingsNavigationMetadata } from '@/hooks/useSettingsNavigationMetadata'
+import { useSettingsNavigationMetadata } from '@/components/settings/navigation/useSettingsNavigationMetadata'
 import { dedupePaletteWorktrees } from '@/lib/workspace/search/palette-repo-resolution'
 import {
   readHiddenVmCheckouts,
@@ -116,7 +116,6 @@ export function useWorktreeJumpPaletteStoreState({
   const openFiles = useAppStore((state) => state.openFiles)
   const activeGroupIdByWorktree = useAppStore((state) => state.activeGroupIdByWorktree)
   const groupsByWorktree = useAppStore((state) => state.groupsByWorktree)
-  const retainedAgentsByPaneKey = useAppStore((state) => state.retainedAgentsByPaneKey)
   const sleepingAgentSessionsByPaneKey = useAppStore(
     (state) => state.sleepingAgentSessionsByPaneKey
   )
@@ -204,7 +203,6 @@ export function useWorktreeJumpPaletteStoreState({
     openFiles,
     activeGroupIdByWorktree,
     groupsByWorktree,
-    retainedAgentsByPaneKey,
     sleepingAgentSessionsByPaneKey,
     paneForegroundAgentByPaneKey,
     settings,

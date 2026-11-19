@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import type { Repo } from '../../../../../../shared/repo-types'
-import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
+import { getRepoExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import {
   withEveryRuleOff,
   type RepoWorkspaceCleanupPolicy
@@ -16,7 +16,7 @@ import { WorkspaceCleanupRuleRows } from '../../workspace-cleanup/workspace-clea
 import { setWorkspaceCleanupRuleEnabled } from '../../workspace-cleanup/workspace-cleanup-rule-keys'
 import { formatWorkspaceCleanupRuleSummary } from '../../workspace-cleanup/workspace-cleanup-rule-summary'
 import { getRepositoryWorkspaceCleanupSearchEntry } from './repository-workspace-cleanup-search'
-import { isFolderRepo } from '../../../../../../shared/repo-kind'
+import { isFolderRepo } from '../../../../../../shared/repository/repo-kind'
 import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { matchesSettingsSearch } from '../../search/settings-search'
 

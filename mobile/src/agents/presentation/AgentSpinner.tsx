@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Activity } from 'lucide-react-native'
 import { View } from 'react-native'
 import type { AgentWorkingMode } from '../../../../src/shared/agent-status/contracts/agent-status-types'
-import type { WorktreeStatus } from '../../../../src/shared/worktree-status-rollup'
+import type { WorktreeStatus } from '../../../../src/shared/worktree/row-display/worktree-status-rollup'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { colors, radii } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
@@ -139,7 +139,6 @@ const styles = themedStyleSheet(() => ({
     width: 8,
     height: 8,
     borderRadius: radii.pill,
-    borderWidth: 2,
-    borderTopColor: 'transparent'
+    borderWidth: 2
   }
 }))

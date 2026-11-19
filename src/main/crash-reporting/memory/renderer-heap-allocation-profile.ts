@@ -1,5 +1,5 @@
 import type { WebContents } from 'electron'
-import type { CrashReportBreadcrumbData } from '../../../shared/crash-reporting'
+import type { CrashReportBreadcrumbData } from '../../../shared/crash-reporting/crash-reporting'
 import {
   RENDERER_HEAP_ALLOCATION_PROFILE_BREADCRUMB,
   recordCrashBreadcrumb
@@ -8,7 +8,7 @@ import {
   readSamplingProfile,
   summarizeSamplingProfile,
   trustedScriptPrefixFor
-} from './renderer-heap-allocation-sites'
+} from './heap-allocation-sites'
 
 // A 512 KiB interval samples about two allocation stacks per MiB near OOM.
 const SAMPLING_INTERVAL_BYTES = 512 * 1024

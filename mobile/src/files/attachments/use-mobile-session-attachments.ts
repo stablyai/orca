@@ -117,7 +117,8 @@ export function useMobileSessionAttachments(scope: MobileSessionAccessorySelecti
     compactInstructions:
       nativeChatController.nativeChatSessionOptions?.controller.compactInstructions,
     files: nativeChatFiles,
-    threadGoal: nativeChatController.nativeChatThreadGoal
+    threadGoal: nativeChatController.nativeChatThreadGoal,
+    mcpPanel: nativeChatController.nativeChatMcpPanel
   })
 
   useEffect(() => {
@@ -156,6 +157,7 @@ export function useMobileSessionAttachments(scope: MobileSessionAccessorySelecti
   return {
     createTabAgentLoadState: createTabAgents.loadState,
     createTabAgentOptions: createTabAgents.options,
+    createTabAgentSurfaceChoice: createTabAgents.surfaceChoice,
     handlePaste,
     flushPendingLiveInputBeforeAttachmentSend,
     attachImage,

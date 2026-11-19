@@ -1,6 +1,6 @@
-import { isFolderRepo } from '../../../../shared/repo-kind'
-import { isPathInsideOrEqual } from '../../../../shared/cross-platform-path'
-import { createProjectGroup } from '../../../../shared/project-groups'
+import { isFolderRepo } from '../../../../shared/repository/repo-kind'
+import { isPathInsideOrEqual } from '../../../../shared/file-access/cross-platform-path'
+import { createProjectGroup } from '../../../../shared/project/groups/project-groups'
 import { createNestedProjectGroupResolver } from '../../../project-groups/nested-repo-import'
 
 import type { StoreRuntimeState } from '../store-runtime-state'

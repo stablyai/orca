@@ -3,18 +3,18 @@ import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
 } from '../../../../../../src/shared/agent-session/journal/agent-session-journal-types'
-import { latestNativeChatOrcaStopCut } from '../../../../../../src/shared/native-chat/native-chat-orca-stop-cut'
+import { latestNativeChatOrcaStopCut } from '../../../../../../src/shared/native-chat/transcript/continuation/native-chat-orca-stop-cut'
 import {
   failNativeChatInterruptedContinue,
   nativeChatInterruptedContinueState,
   NO_NATIVE_CHAT_INTERRUPTED_CONTINUE_ATTEMPT,
   nativeChatInterruptedContinueAccepted,
   type NativeChatInterruptedContinueAttempt
-} from '../../../../../../src/shared/native-chat/native-chat-interrupted-continue'
+} from '../../../../../../src/shared/native-chat/transcript/continuation/native-chat-interrupted-continue'
 import type { RpcClient } from '../../../../transport/rpc/rpc-client-contract'
 import { callAgentSession } from '../../agent-session/mobile-structured-agent-session-rpc'
 import { useRouteRelaysCapability } from '../../../../worktree/execution-hosts/workspace-server-context'
-import { AGENT_SESSION_PHONE_CONTINUE_INTERRUPTED_RUNTIME_CAPABILITY } from '../../../../../../src/shared/agent-session/agent-session-continue-interrupted-capability'
+import { AGENT_SESSION_PHONE_CONTINUE_INTERRUPTED_RUNTIME_CAPABILITY } from '../../../../../../src/shared/agent-session/lifecycle/stopping/agent-session-continue-interrupted-capability'
 import type { StructuredAgentSessionHostSupport } from '../../agent-session/mobile-structured-agent-session-host-support'
 
 export type MobileStructuredInterruptedContinue = {

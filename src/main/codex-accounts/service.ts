@@ -1,19 +1,19 @@
 import { execFileSync, spawn } from 'node:child_process'
 import { assertWslDistroAllowed } from '@orca/process-host/wsl-distro-allowlist'
-import type { WindowsHostInteractiveLoginSpawn } from '../../shared/windows-interactive-login-spawn'
+import type { WindowsHostInteractiveLoginSpawn } from '../providers/shell-launch/windows/windows-interactive-login-spawn'
 import type {
   CodexManagedAccount,
   CodexManagedAccountSummary,
   CodexRateLimitAccountsState,
   CodexSystemDefaultIdentity
-} from '../../shared/managed-account-types'
-import type { CodexRateLimitResetResult } from '../../shared/rate-limit-types'
-import type { CodexResetCreditExpectedScope } from '../../shared/codex-reset-credit-scope'
+} from '../../shared/agent-accounts/managed-account-types'
+import type { CodexRateLimitResetResult } from '../../shared/agent-usage/rate-limits/rate-limit-types'
+import type { CodexResetCreditExpectedScope } from '../../shared/agent-accounts/codex/codex-reset-credit-scope'
 import type { CodexRuntimeHomeService } from './runtime-home-service'
 import type { Store } from '../persistence/loading-store/store'
 import type { RateLimitService } from '../rate-limits/service/rate-limit-service'
 import { admitSelfInitiatedTreeKill } from '../pty/process-retirement/own-chromium-tree-kill-guard'
-import type { CodexAccountSelectionTarget } from '../../shared/codex-selection-lane'
+import type { CodexAccountSelectionTarget } from '../../shared/agent-accounts/codex/codex-selection-lane'
 import { CodexAccountIdentity } from './credentials/codex-account-identity'
 import type { CodexAuthIdentity as ResolvedCodexIdentity } from './credentials/codex-auth-identity'
 import { CodexConfigMirror } from './managed-homes/codex-config-mirror'
@@ -30,8 +30,8 @@ import type {
   CodexResetCreditConsumeResult
 } from './account-management/codex-account-service-types'
 import { toCodexManagedAccountSummary } from './account-management/codex-account-service-types'
-import { CODEX_LOGIN_CANCELLED_MESSAGE } from '../../shared/codex-auth-errors'
-import type { HostAccountSignInChannel } from '../../shared/host-account-sign-in-types'
+import { CODEX_LOGIN_CANCELLED_MESSAGE } from '../../shared/agent-accounts/codex/codex-auth-errors'
+import type { HostAccountSignInChannel } from '../../shared/agent-accounts/host-account-sign-in-types'
 
 const WINDOWS_LOGIN_TREE_KILL_TIMEOUT_MS = 5_000
 
@@ -70,6 +70,7 @@ function killLoginProcessTree(
 export class CodexAccountService {
   // Serialize settings read-modify-write operations to prevent overlapping account changes losing updates.
   private mutationQueue: Promise<unknown> = Promise.resolve()
+  private readonly renameListeners = new Set<() => void>()
   private cancelPendingCodexLogin: (() => boolean) | null = null
   private pendingLoginUrl: string | null = null
   private readonly pendingLoginUrlListeners = new Set<(url: string | null) => void>()
@@ -83,7 +84,7 @@ export class CodexAccountService {
   private readonly registration: CodexAccountRegistration
 
   constructor(
-    store: Store,
+    private readonly store: Store,
     rateLimits: RateLimitService,
     private readonly runtimeHome: CodexRuntimeHomeService,
     lifecycle: CodexAccountServiceLifecycle = {}
@@ -154,14 +155,17 @@ export class CodexAccountService {
     return this.serializeMutation(() => this.registration.add(target))
   }
 
-  async addAccountWithDeviceCode(
-    channel: HostAccountSignInChannel
+  /** Adds a host account, or re-authenticates `accountId`, through a device code opened on another device. */
+  async signInWithDeviceCode(
+    channel: HostAccountSignInChannel,
+    accountId?: string
   ): Promise<CodexRateLimitAccountsState> {
     this.supersedePendingLogin()
+    const login = (home: string): Promise<void> => this.runCodexLogin(home, channel)
     return this.serializeMutation(() =>
-      this.registration.add({ runtime: 'host' }, (managedHomePath) =>
-        this.runCodexLogin(managedHomePath, channel)
-      )
+      accountId
+        ? this.registration.reauthenticate(accountId, undefined, login)
+        : this.registration.add({ runtime: 'host' }, login)
     )
   }
 
@@ -224,6 +228,28 @@ export class CodexAccountService {
     return this.serializeMutation(() => this.selection.remove(accountId))
   }
 
+  // Outside the mutation queue: a pending sign-in can hold it for minutes, and this
+  // synchronous write touches no state a queued account change reads.
+  renameAccount(accountId: string, displayName: string | null): CodexRateLimitAccountsState {
+    const before = this.store.getSettings().managedAccountDisplayNames
+    const state = this.selection.rename(accountId, displayName)
+    // Account streams otherwise republish only on usage changes; an unchanged name writes nothing.
+    if (this.store.getSettings().managedAccountDisplayNames !== before) {
+      for (const listener of this.renameListeners) {
+        listener()
+      }
+    }
+    return state
+  }
+
+  /** Listeners live as long as their account stream subscription. */
+  onAccountRenamed(listener: () => void): () => void {
+    this.renameListeners.add(listener)
+    return () => {
+      this.renameListeners.delete(listener)
+    }
+  }
+
   async selectAccount(accountId: string | null): Promise<CodexRateLimitAccountsState> {
     this.supersedePendingLogin()
     return this.serializeMutation(() => this.selection.select(accountId))
@@ -264,7 +290,10 @@ export class CodexAccountService {
   }
 
   private toSummary(account: CodexManagedAccount): CodexManagedAccountSummary {
-    return toCodexManagedAccountSummary(account)
+    return toCodexManagedAccountSummary(
+      account,
+      this.store.getSettings().managedAccountDisplayNames
+    )
   }
 
   private safeRemoveManagedHome(candidatePath: string, expectedAccountId: string): Promise<void> {

@@ -1,5 +1,5 @@
-import { z } from 'zod'
-import { parseRetryAfterHeaderMs } from '../../../../src/shared/retry-after-header'
+import * as z from 'zod'
+import { parseRetryAfterHeaderMs } from '../../../../src/shared/network/retry-after-header'
 import { MOBILE_RELAY_RETRY_AFTER_MAX_MS } from './mobile-relay-retry-delays'
 import type { MobileRelayEndpoint } from '../../../../src/shared/remote-runtime/relay/mobile-relay-credential-contract'
 

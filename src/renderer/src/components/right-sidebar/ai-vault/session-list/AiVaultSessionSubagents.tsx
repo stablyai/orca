@@ -12,13 +12,13 @@ import {
 import { useSubagentSessions } from './use-subagent-sessions'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { AgentStateDot, type AgentDotState } from '@/components/AgentStateDot'
+import { AgentStateDot, type AgentDotState } from '@/components/agent/status/AgentStateDot'
 import {
   isAiVaultSessionResumableContent,
   type AiVaultSession,
   type AiVaultSubagentRunStatus
 } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../../../shared/execution-host/execution-host'
 import { canOpenAiVaultSessionLogInOrca } from '../session-actions/ai-vault-session-path-actions'
 import { openAiVaultSessionLogInOrca } from '../session-actions/ai-vault-session-log-open'
 import { useTranslate } from '@/i18n/use-translate'

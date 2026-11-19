@@ -1,11 +1,11 @@
 import React from 'react'
-import type { RateLimitBucket } from '../../../../../shared/rate-limit-types'
-import type { UsagePercentageDisplay } from '../../../../../shared/usage-percentage-display'
+import type { RateLimitBucket } from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
+import type { UsagePercentageDisplay } from '../../../../../shared/agent-usage/display/usage-percentage-display'
 import {
   formatPoolGroupLabel,
-  formatPoolWindowLabel,
   type GroupedUsagePool
-} from './usage-pool-label'
+} from '../../../../../shared/agent-usage/display/grouped-usage-pool'
+import { formatPoolWindowLabel } from './usage-pool-label'
 import { formatBareUsagePercentage } from './usage-percentage-label'
 import { useTranslate } from '../../../i18n/use-translate'
 

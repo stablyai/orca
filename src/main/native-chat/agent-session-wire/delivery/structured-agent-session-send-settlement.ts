@@ -25,7 +25,12 @@ type SettledSend = {
 
 type SendSettlement = SettledSend | 'pending' | 'missing'
 
-export type SendSettlementPoint = 'answered' | 'handed-over' | 'handed-over-or-behind-command'
+/** `dispatched` ignores attempt-end evidence: a send handed over during a turn that ends without it can still open the next one. */
+export type SendSettlementPoint =
+  | 'answered'
+  | 'dispatched'
+  | 'handed-over'
+  | 'handed-over-or-behind-command'
 
 export type SendSettlementWaitOptions = {
   signal?: AbortSignal
@@ -75,8 +80,10 @@ async function settledSend(
   const waiting =
     until === 'answered'
       ? submission.dispatchState === 'pending' && !ended
-      : isQueuedAgentJournalSubmission(submission) &&
-        !(until === 'handed-over-or-behind-command' && (await runningCommand(journal)))
+      : until === 'dispatched'
+        ? submission.dispatchState === 'pending'
+        : isQueuedAgentJournalSubmission(submission) &&
+          !(until === 'handed-over-or-behind-command' && (await runningCommand(journal)))
   return waiting
     ? 'pending'
     : { cursor: await journal.cursor(), value: { clientMessageId, submission: observed } }

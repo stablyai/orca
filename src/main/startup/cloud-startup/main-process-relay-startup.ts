@@ -1,37 +1,22 @@
 import { app, powerMonitor } from 'electron'
-import { getOrcaCloudAuthConfig } from '../../orca-profiles/cloud-auth/profile-cloud-auth-config'
 import { getProfileUserDataPath } from '../../orca-profiles/profile-storage-paths'
 import type { OrcaRuntimeRpcServer } from '../../runtime/rpc/server/runtime-rpc'
-import { DesktopRelayService } from '../../runtime/mobile-cloud-relay/desktop-relay-service'
-import { createDesktopRelayServiceInstaller } from '../../runtime/mobile-cloud-relay/desktop-relay-service-installer'
+import { installRelayHost } from '../../runtime/mobile-cloud-relay/relay-host-install'
 import { publishDesktopRelayStatus } from './main-process-relay-status'
 import { mainProcessState as state } from '../main-process-state'
 
-// Register before proxy readiness; the installer waits before its first request.
-export function startDesktopRelayService(runtimeRpc: OrcaRuntimeRpcServer): void {
-  const installer = createDesktopRelayServiceInstaller({
+/**
+ * The desktop's or Electron `orca serve`'s relay, as this process's own Orca account, so phones
+ * reach it without a direct path. Register before proxy readiness; the install waits for it.
+ */
+export function startMainProcessRelayService(runtimeRpc: OrcaRuntimeRpcServer): void {
+  state.relayHost = installRelayHost({
     runtimeRpc,
+    userDataPath: getProfileUserDataPath(),
+    appVersion: app.getVersion(),
     whenNetworkReady: state.initialProxyApplicationReady,
     isFenced: () => state.isQuitting,
-    create: () => {
-      const cloudAuth = getOrcaCloudAuthConfig()
-      return cloudAuth.configured
-        ? new DesktopRelayService({
-            authConfig: cloudAuth.config,
-            userDataPath: getProfileUserDataPath(),
-            appVersion: app.getVersion(),
-            runtimeRpc,
-            onStatus: publishDesktopRelayStatus
-          })
-        : null
-    },
-    onInstalled: (service) => {
-      state.desktopRelayService = service
-    }
+    onStatus: publishDesktopRelayStatus
   })
-  state.desktopRelayInstaller = installer
-  runtimeRpc.setMobileRelayPairingProviderInstaller(() => installer.ensure())
-  // Sleep can expire the token with no retry timer; resume is the recovery opportunity.
-  powerMonitor.on('resume', () => state.desktopRelayService?.ensureLive())
-  void installer.ensure()
+  powerMonitor.on('resume', () => state.relayHost?.ensureLive())
 }

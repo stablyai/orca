@@ -3,8 +3,9 @@ import {
   type AcpStructuredChild
 } from '../session/children/acp-structured-child'
 import type { StructuredAgentSessionAdapter } from '../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
-import { waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
+import { waitForPromiseWithSignal } from '../../../shared/concurrency/abort-signal-reason'
 import type { AcpStructuredSession } from '../session/acp-structured-session-contract'
+import { acpRunningPermission } from '../options/acp-live-permission-mode'
 
 type AcpStoppableSession = Pick<AcpStructuredSession, 'connection' | 'lane' | 'prompts' | 'turns'>
 
@@ -81,6 +82,10 @@ export async function settleAcpPermissionTransition(
   input.signal?.throwIfAborted()
   if (session.fence !== input.fence || session.closeRequested) {
     return false
+  }
+  // A pick the agent already applied live needs no stop.
+  if (acpRunningPermission(session) === input.mode) {
+    return true
   }
   session.turns.interruptForPermissionTransition()
   await awaitAcpTurnEnd(session, Date.now(), graceMs, input.signal)
