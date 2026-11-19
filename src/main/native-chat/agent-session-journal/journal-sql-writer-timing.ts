@@ -32,7 +32,7 @@ export function journalSqlTimingOp(command: JournalSqlRequest['command']): strin
 
 type ParkedMarks = { bulk: number; urgent: number }
 
-/** When each queued request arrived; time parked for WAL room while it queued counts as gate time, not queue wait. */
+/** When each queued request arrived; time the writer parked for WAL room meanwhile counts as gate time, not queue wait. */
 export class JournalSqlQueueClock {
   private readonly received = new Map<number, { at: number; parked: ParkedMarks }>()
 
@@ -48,8 +48,9 @@ export class JournalSqlQueueClock {
     gateMs: number
   ) {
     const queued = this.received.get(request.id)
-    const lane = request.urgent ? 'urgent' : 'bulk'
-    const parked = queued ? this.parked()[lane] - queued.parked[lane] : 0
+    // A park on either lane stops the whole writer, so all of it counts as gate time for every queued request.
+    const now = this.parked()
+    const parked = queued ? now.bulk + now.urgent - queued.parked.bulk - queued.parked.urgent : 0
     return {
       op: journalSqlTimingOp(request.command),
       waitMs: startedAt - (queued?.at ?? startedAt) - parked,
