@@ -225,6 +225,8 @@ export type AcpDialect = {
   withheldCommands?: readonly string[]
   /** Which sign-in a not-signed-in chat needs; absent is the agent's usual one. */
   signInAccount?: AgentSessionAccountKind
+  /** A session row's own description when the row is one of the agent's skills; null for a command. */
+  skillDescription?(command: AvailableCommand): string | null
   /** Which session rows are the agent's own built-ins, as this process's initialize response proves. */
   builtinCommands?(initialized: InitializeResponse): (command: AvailableCommand) => boolean
   /** This agent's fast parameter, mapped to Orca's fast mode toggle. */

@@ -53,6 +53,7 @@ function answer(key: string, extra: Record<string, unknown> = {}) {
 
 describe('Composio in a bot’s Tools', () => {
   beforeEach(() => {
+    mocks.openUrl.mockClear()
     Object.assign(window, { api: { shell: { openUrl: mocks.openUrl } } })
   })
   afterEach(() => {
@@ -65,6 +66,10 @@ describe('Composio in a bot’s Tools', () => {
     show()
     expect(await screen.findByLabelText('Composio API key')).toBeTruthy()
     expect(screen.queryByLabelText('Search Composio’s apps')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: /Get a key/ }))
+    expect(mocks.openUrl).toHaveBeenCalledWith(
+      'https://dashboard.composio.dev/~/project/settings/api-keys'
+    )
   })
 
   it('opens to the catalog after the key: sign-ins first, then Connect or Set up in Composio', async () => {
@@ -100,11 +105,14 @@ describe('Composio in a bot’s Tools', () => {
     })
   })
 
-  it('removes the key from the key line after the owner confirms', async () => {
+  it('can cancel replacing a key and removes it only after the owner confirms', async () => {
     answer('ok', { 'bots.composio.removeKey': { key: 'none' } })
     mocks.confirm.mockReset().mockResolvedValueOnce(false).mockResolvedValueOnce(true)
     show()
     fireEvent.click(await screen.findByRole('button', { name: 'Composio apps' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Change' }))
+    expect(await screen.findByRole('button', { name: 'Replace key' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
     const remove = await screen.findByRole('button', { name: 'Remove' })
     fireEvent.click(remove)
     await waitFor(() => expect(mocks.confirm).toHaveBeenCalledTimes(1))

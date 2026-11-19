@@ -124,7 +124,11 @@ function watchdog() {
         message = listener
       },
       close: () => {},
-      postMessage: (value) => message({ type: 'capture-drain-ack', token: value.token })
+      postMessage: (value) => {
+        if (value.type === 'capture-drain') {
+          message({ type: 'capture-drain-ack', token: value.token })
+        }
+      }
     }
   )
   return { send: (value: MainToHangWatchdogWorkerMessage) => message(value) }

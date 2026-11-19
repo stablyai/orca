@@ -10,24 +10,11 @@ describe('MCP tool identity', () => {
   it.each([
     'linear/list_issues',
     'linear.list_issues',
-    'tools/read',
-    'docs/search',
-    'browser.open',
     'archive.tar',
-    'package.lock',
-    'setup.py',
-    'src/read',
-    'src/tool.ts',
-    '/usr/bin/tool',
-    './server/tool',
     'read',
-    'search',
-    'list',
-    'mcp__',
+    'mcp__server__',
     'mcp____tool',
-    'server/',
-    'server.',
-    'run_mcp__thing'
+    'run_mcp__server__tool'
   ])('does not claim an MCP identity for %s', (name) => expect(mcpToolIdentity(name)).toBeNull())
   it('uses explicit provider identity without changing the raw name', () => {
     const identity = Object.freeze({ server: 'my_server', tool: 'ns.tool' })

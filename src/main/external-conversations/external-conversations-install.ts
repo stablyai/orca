@@ -153,6 +153,8 @@ function connectorReplyOutbox(
       getStructuredAgentSessionHost()?.deps.store.getConversation(sessionId) != null,
     isBot: (sessionId) =>
       [...allLinks(store)].some(({ link }) => link.sessionId === sessionId && link.bot),
+    agentOf: (sessionId) =>
+      [...allLinks(store)].find(({ link }) => link.sessionId === sessionId)?.link.agent ?? '',
     fillTurn: fill,
     filled
   })

@@ -60,15 +60,19 @@ export function applyPtyBinding(
   const tabs = rows?.[bindingWorktreeId]
   const tab = tabs?.find((t) => t.id === args.tabId)
   if (tab) {
-    if (args.correctStartupCwd !== undefined) {
-      tab.startupCwd = args.correctStartupCwd
+    // Replace, never edit, saved entries: incremental saves compare entries by identity but re-read
+    // container keys, so swapping the one entry in its map is enough.
+    const boundTab = {
+      ...tab,
+      ...(args.correctStartupCwd !== undefined ? { startupCwd: args.correctStartupCwd } : {}),
+      ptyId: tabRowPtyIdAfterLeafBinding(
+        tab,
+        layoutsByTab?.[args.tabId]?.ptyIdsByLeafId,
+        args.leafId,
+        args.ptyId
+      )
     }
-    tab.ptyId = tabRowPtyIdAfterLeafBinding(
-      tab,
-      layoutsByTab?.[args.tabId]?.ptyIdsByLeafId,
-      args.leafId,
-      args.ptyId
-    )
+    rows![bindingWorktreeId] = tabs!.map((t) => (t === tab ? boundTab : t))
   } else {
     terminalMembershipChanged = true
     // Persist spawn-created tabs before delayed renderer saves to keep their bindings from becoming orphans.
@@ -106,8 +110,10 @@ export function applyPtyBinding(
   }
   // Durable pane maps use UUID leaf keys; exclude legacy renderer-local IDs.
   const leafKeyed = isTerminalLeafId(args.leafId)
-  const layout = layoutsByTab?.[args.tabId]
-  if (leafKeyed && layout) {
+  const storedLayout = layoutsByTab?.[args.tabId]
+  if (leafKeyed && storedLayout) {
+    const layout = { ...storedLayout }
+    layoutsByTab![args.tabId] = layout
     if (!layout.root) {
       terminalMembershipChanged = true
       layout.root = { type: 'leaf', leafId: args.leafId }
