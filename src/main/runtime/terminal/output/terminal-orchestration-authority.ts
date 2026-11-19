@@ -179,8 +179,8 @@ export abstract class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends O
     }
   }
 
-  /** `confirmedExit`: a command mark said the launched command finished (true) or stopped as a
-   *  job (false); undefined when no mark retires the launch (the PTY exited). */
+  /** `confirmedExit`: a command mark finished the launched command (whether its agent quit or
+   *  stopped is the host's proof to tell); undefined when the PTY exited. */
   protected retirePtyAgentLaunchAuthority(ptyId: string, confirmedExit?: boolean): void {
     const finishedBefore = this.ptysById.get(ptyId)?.launchEvidence?.kind === 'gone'
     const pty = this.retireHeldLaunch(ptyId)
@@ -191,7 +191,7 @@ export abstract class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends O
       return
     }
     const exited = confirmedExit === true && Boolean(launch || (receipt && !finishedBefore))
-    const retirement = { confirmedExit: exited, jobStopped: confirmedExit === false }
+    const retirement = { confirmedExit: exited }
     // Why: collect before the delete below, which drops the restored-authority receipt a
     // receipt-only pane's key comes from.
     const paneKeys = this.collectPaneKeysForPty(ptyId)

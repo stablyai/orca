@@ -1,5 +1,4 @@
 import { OrcaRuntimeWithEmitDaemonPtyTransientFact } from './terminal-transient-facts'
-import { isJobStopStatus } from '../../../../shared/terminal/output/terminal-osc133-command-finished'
 import { getDecorativeTitleGateKey } from '../../../../shared/agent-status/title/agent-decorative-title-signature'
 import { shouldEmitTitleFactForFrame } from './decorative-title-fact-emission'
 import type { RuntimePtyTitleTrackerEntry } from '../records/runtime-terminal-state-records'
@@ -167,7 +166,7 @@ export abstract class OrcaRuntimeWithGetUnpersistedTrackedTitleForPty extends Or
         },
         onCommandFinished: (exitCode: number | null) => {
           void this.recheckHookAgentPresenceForPty(ptyId)
-          this.retirePtyAgentLaunchAuthority(ptyId, !isJobStopStatus(exitCode))
+          this.retirePtyAgentLaunchAuthority(ptyId, true)
           this.recordTerminalSideEffectFact(ptyId, { kind: 'command-finished', exitCode })
           this.openCodeRunLifetime.onCommandFinished(ptyId, exitCode)
         },

@@ -243,6 +243,8 @@ describe('a hookless resumed Codex across wakes and shell-confirmed command fini
     ['macOS suspended, then another command', ['146', '0'], true],
     ['macOS suspended, then a listing and another command', ['146', 'listing', '0'], true],
     ['suspended, resumed (fg), then quit', ['148', 'fg', '0'], false],
+    // A stop-like status is no proof: an agent that exits 146 for real is gone at that mark.
+    ['quit with a stop-like exit status', ['exit146'], false],
     ['quit where the host gives no shell proof (remote, Windows)', ['unproven'], false],
     ['quit of an agent no Orca launch held (typed at the prompt)', ['typed'], false]
   ] as const)('%s', async (_, finishes, keepsRecovery) => {
@@ -358,7 +360,12 @@ describe('a hookless resumed Codex across wakes and shell-confirmed command fini
         } else {
           stopped ||= status === '148' || status === '146'
           shellAlone = status === 'unproven' ? null : status !== 'nested' && !stopped
-          const code = status === 'nested' || status === 'unproven' ? '0' : status
+          const code =
+            status === 'exit146'
+              ? '146'
+              : status === 'nested' || status === 'unproven'
+                ? '0'
+                : status
           runtime.onPtyData('pty-3', `\x1b]133;C\x07\x1b]133;D;${code}\x07`, Date.now())
           // Let the host's shell-alone answer land.
           await new Promise((resolve) => setImmediate(resolve))

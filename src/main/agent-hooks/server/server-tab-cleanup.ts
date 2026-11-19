@@ -13,6 +13,7 @@ import type {
   RefusedPaneResume
 } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import { UnprovenAgentExits } from './unproven-agent-exits'
+import { isLocalHookConnectionId } from '../../../shared/agent-hook-listener/transport/wsl-hook-relay-contract'
 import { agentProviderSessionsEqual } from '../../../shared/agent-session/lifecycle/resume/agent-provider-session-equality'
 
 export abstract class AgentHookServerTabCleanup extends AgentHookServerCleanup {
@@ -23,34 +24,34 @@ export abstract class AgentHookServerTabCleanup extends AgentHookServerCleanup {
 
   retireProcessAuthority(
     paneKey: string,
-    options?: Pick<EndedProcessReconciliationOptions, 'confirmedExit'> & {
-      jobStopped?: boolean
-      launchRetired?: true
-    }
+    options?: Pick<EndedProcessReconciliationOptions, 'confirmedExit'> & { launchRetired?: true }
   ): void {
     const resolved = this.resolvePaneKeyAlias(paneKey)
     const identity = this.paneAgentIdentity(paneKey)
     const shared = identity?.processTopology === 'shared'
     // A command mark can come from a shell nested in a live agent; one with no process to probe
     // ends only on the host's word that the pane's shell is alone.
-    const unprovable =
-      identity?.ended === false && !shared && !this.hasVerifiableAgentProcess(paneKey)
+    const verifiable = this.hasVerifiableAgentProcess(paneKey)
+    const unprovable = identity?.ended === false && !shared && !verifiable
     if (options?.launchRetired) {
       // An agent typed at the prompt holds no launch; its quit is proved the same way.
       this.unprovenExits.onCommandFinished(resolved, unprovable)
       return
     }
-    const awaitsHost = options?.confirmedExit === true && !this.hasVerifiableAgentProcess(paneKey)
-    const confirmedExit = options?.confirmedExit === true && !awaitsHost
+    // A mark's exit status can't tell a quit from a stop (Ctrl-Z). A local process answers through
+    // its presence probe, a stopped one included; a remote one can't be probed, so its mark stands.
+    const awaitsHost = options?.confirmedExit === true && !verifiable
+    const connectionId = this.state.lastStatusByPaneKey.get(resolved)?.connectionId ?? null
+    const confirmedExit =
+      options?.confirmedExit === true && verifiable && !isLocalHookConnectionId(connectionId)
     const { paneKeys, authorityChanged } = this.revokeProcessAuthority(paneKey)
     const { untouched } = this.reconcileEndedProcess(
       paneKeys,
       { confirmedExit, preserveResumeIdentity: !confirmedExit && !shared },
       (key) => this.clearRevokedPaneState(key)
     )
-    // A stopped job (Ctrl-Z) may later resume and quit at a mark that finds no launch left.
-    const unseen = unprovable && (awaitsHost || options?.jobStopped === true)
-    this.unprovenExits.launchRetired(resolved, unseen, awaitsHost)
+    // A stopped agent (Ctrl-Z) refuses the proof, and a later mark proves its quit.
+    this.unprovenExits.launchRetired(resolved, unprovable && awaitsHost, awaitsHost)
     for (const key of untouched) {
       this.clearTmuxInnerSubjects(key)
       this.clearPaneProcessState(key)
