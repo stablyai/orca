@@ -76,7 +76,8 @@ export function BotItemsSection({
       return botRead.state === 'failed' || chatFailed ? (
         <BotItemsReadFailed onRetry={chatFailed ? chatRead.retry : botRead.retry} />
       ) : (
-        <BotItemsLoading header={!asking} />
+        // Needs you shows only for counted asks; runs a sign-in stopped, alone, leave it out.
+        <BotItemsLoading afterAsks={asks.needs.length > 0} />
       )
     }
     if (items.length === 0 && !filtered) {

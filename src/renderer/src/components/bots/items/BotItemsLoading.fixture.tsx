@@ -90,7 +90,7 @@ function loaded(width: number) {
 /** A header bar and five rows at the list's geometry while the first item read is out. */
 export const loadingPanel = loading(360)
 export const loadingNarrow = loading(RIGHT_SIDEBAR_MIN_WIDTH)
-/** An ask already shows Needs you: the bars continue its rows, without a second header. */
+/** An ask already shows Needs you: the bars follow as their own group, a section's gap below. */
 export const loadingWithAsk = loading(360, [
   fixtureWorker('d1', 'Fix flaky relay reconnect test', 'blocked')
 ])

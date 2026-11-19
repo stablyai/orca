@@ -11,10 +11,10 @@ const BAR = 'animate-pulse rounded bg-muted-foreground/15 motion-reduce:animate-
 const TITLE_WIDTHS = ['w-[78%]', 'w-[62%]', 'w-[85%]', 'w-[54%]', 'w-[70%]'] as const
 
 export function BotItemsLoading({
-  header = true
+  afterAsks = false
 }: {
-  /** Off when Orca's asks already show the Needs you header: the bars continue its rows. */
-  header?: boolean
+  /** Orca's asks already show Needs you above: the bars sit a section's gap below it, as their own group. */
+  afterAsks?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
   return (
@@ -22,20 +22,19 @@ export function BotItemsLoading({
       role="status"
       aria-busy="true"
       className={cn(
-        // Why: the list above stays mounted (empty) while loading, so the panel's gap-3.5 sits between it
-        // and these bars; pulling up by that gap draws them where the list's first header and rows land.
-        header ? '-mt-3.5' : '-mt-3',
+        // Why: the list above stays mounted while loading, so the panel's gap-3.5 sits between it and these
+        // bars. Empty, pulling up by that gap draws them where its first header lands; under the asks, by
+        // all but the list's own gap-2 between sections.
+        afterAsks ? '-mt-1.5' : '-mt-3.5',
         // Why: a read that lands within 150 ms shows nothing rather than a one-frame flash of bars.
         'flex flex-col gap-0.5 animate-in fade-in-0 fill-mode-backwards delay-150 motion-reduce:duration-0'
       )}
     >
       <span className="sr-only">{t('bots.items.loading', 'Loading items…')}</span>
-      {header ? (
-        // BotPanelSectionHeader's h-7 row; its title starts after pl-1, the chevron's ml-0.5 size-5, and gap-1.
-        <div aria-hidden className="flex h-7 items-center pl-[30px]">
-          <span className={cn(BAR, 'h-2 w-16')} />
-        </div>
-      ) : null}
+      {/* BotPanelSectionHeader's h-7 row; its title starts after pl-1, the chevron's ml-0.5 size-5, and gap-1. */}
+      <div aria-hidden className="flex h-7 items-center pl-[30px]">
+        <span className={cn(BAR, 'h-2 w-16')} />
+      </div>
       {TITLE_WIDTHS.map((width) => (
         // BotItemRow's geometry: px-2 py-1 around a 20 px line, the status slot w-4, then gap-2.
         <div key={width} aria-hidden className="flex items-center gap-2 px-2 py-1">
