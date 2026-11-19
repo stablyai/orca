@@ -23,6 +23,7 @@ import { observeCodexSettingsBaseline, readCodexSettingsBaseline } from './confi
 import { getCodexConfigSyncStatus, reportCodexConfigSyncOutcome } from './config-sync-stall'
 import { preserveRuntimeConflictValues } from './codex-config-settings-preservation'
 import { applyRuntimeOwnedConfig } from './codex-config-runtime-owned-values'
+import { applyCodexDaemonSocketGuard } from '../shared-server/codex-daemon-socket-path-guard'
 import { stripRuntimeOwnedTomlSections } from '../toml/config-toml-runtime-owned-sections'
 import { mergeSystemCodexConfigIntoRuntime } from './codex-config-mirror-merge'
 
@@ -258,9 +259,10 @@ function syncSystemConfigIntoManagedCodexHomeUnsafe(
     }
   }
 
-  const systemConfig = prepareSystemConfigForRuntimeMirror(
-    rawSystemConfig,
-    sourceConfigDir,
+  // Why: guard the settings part before runtime tables join it. Hook approvals and project trust are
+  // appended after the runtime tables, so a guard re-added at the end made every pass reorder the file.
+  const systemConfig = applyCodexDaemonSocketGuard(
+    prepareSystemConfigForRuntimeMirror(rawSystemConfig, sourceConfigDir, runtimeHomePath),
     runtimeHomePath
   )
   const { names: mirroredMcpServerNames, ownsRoot: mirroredMcpServerRoot } =
