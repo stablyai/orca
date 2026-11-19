@@ -50,9 +50,17 @@ export async function writeAgentSessionContextSnapshot(
       }
       await writeFile(temporary, text, { flag: 'wx', mode: 0o600 })
       // Staging can finish out of order; only publication holds the shared path queue.
-      published = await runKeyedSerializedOperation(publications, path, () =>
-        renameFileWithWindowsRetryAsync(temporary, path, isCurrent)
-      )
+      published = await runKeyedSerializedOperation(publications, path, async () => {
+        if (!(await renameFileWithWindowsRetryAsync(temporary, path, isCurrent))) {
+          return false
+        }
+        // Rename keeps the last write's time, which a paused capture can leave old; the sweep ages
+        // by it. Dated inside the queue, so no sweep's delete of this path can run in between.
+        const now = new Date()
+        await utimes(path, now, now).catch(() => undefined)
+        publishedAt.set(path, Date.now())
+        return true
+      })
     } finally {
       await rm(temporary, { force: true }).catch(() => undefined)
       staging.delete(temporary)
@@ -61,11 +69,6 @@ export async function writeAgentSessionContextSnapshot(
     if (!published || !isCurrent()) {
       throw new Error('Chat context snapshot publication was replaced')
     }
-    // Rename keeps the last write's time, which a paused capture can leave old; the sweep ages by this.
-    const now = new Date()
-    await utimes(path, now, now).catch(() => undefined)
-    // After the update settles, however long it took; the claim covers the wait.
-    publishedAt.set(path, Date.now())
     void sweepAgentSessionContextSnapshots(root)
     return path
   } finally {
