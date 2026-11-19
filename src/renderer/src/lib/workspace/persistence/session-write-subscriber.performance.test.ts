@@ -52,7 +52,24 @@ async function deepComparesForOneTitleChange(size: number): Promise<number> {
       store.getState().createTab(worktree.id, undefined, undefined, { id: `tab-${index}-a` })
       store.getState().createTab(worktree.id, undefined, undefined, { id: `tab-${index}-b` })
     }
-    store.setState({ workspaceSessionReady: true, hydrationSucceeded: true })
+    // Saved scrollback on every tab: a live local tab's copy is stripped on save, a dormant one's kept.
+    const { tabsByWorktree, terminalLayoutsByTabId } = store.getState()
+    store.setState({
+      tabsByWorktree: Object.fromEntries(
+        Object.entries(tabsByWorktree).map(([worktreeId, tabs]) => [
+          worktreeId,
+          tabs.map((tab) => (tab.id.endsWith('-a') ? { ...tab, ptyId: `pty-${tab.id}` } : tab))
+        ])
+      ),
+      terminalLayoutsByTabId: Object.fromEntries(
+        Object.entries(terminalLayoutsByTabId).map(([tabId, layout]) => [
+          tabId,
+          { ...layout, buffersByLeafId: { 'leaf-1': `scrollback of ${tabId}` } }
+        ])
+      ),
+      workspaceSessionReady: true,
+      hydrationSucceeded: true
+    })
     // The first save sends whole fields and main acknowledges them.
     await vi.advanceTimersByTimeAsync(DEBOUNCE_MS)
 
