@@ -50,6 +50,7 @@
     "check:max-lines-ratchet": "node config/scripts/static-analysis/ratchets/source-budget/check-max-lines-ratchet.mjs",
     "check:ts-nocheck-ratchet": "node config/scripts/static-analysis/ratchets/source-budget/check-ts-nocheck-ratchet.mjs",
     "check:host-list-render-ratchet": "node config/scripts/static-analysis/ratchets/renderer-state/check-host-list-render-ratchet.mjs",
+    "check:whole-hot-map-selector-ratchet": "node config/scripts/static-analysis/ratchets/renderer-state/check-whole-hot-map-selector-ratchet.mjs",
     "check:memo-translate-subscription-ratchet": "node config/scripts/static-analysis/ratchets/renderer-state/check-memo-translate-subscription-ratchet.mjs",
     "check:react-compiler-compat-ratchet": "node config/scripts/static-analysis/ratchets/react-compiler/check-react-compiler-compat-ratchet.mjs",
     "check:render-path-translate-ratchet": "node config/scripts/static-analysis/ratchets/renderer-state/check-render-path-translate-ratchet.mjs",
