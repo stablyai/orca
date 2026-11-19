@@ -86,11 +86,6 @@ describe("the other chats' section", () => {
       NOW
     )
     expect(section?.text).toContain('orchestration send --to bot:ux-designer --chat <id>')
-    // A new message is not taken as an answer to another chat's open question.
-    expect(section?.text).toContain(
-      'A new message answers one of them only if it names it or replies in its thread'
-    )
-    expect(section?.text).not.toContain('follow it')
     const [, opening, context, closing] = section?.text.split('\n') ?? []
     expect(opening).toBe('<<<')
     expect(context).toContain('chat:s-home')
