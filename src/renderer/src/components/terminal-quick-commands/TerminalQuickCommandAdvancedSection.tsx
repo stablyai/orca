@@ -120,7 +120,7 @@ export function TerminalQuickCommandAdvancedSection({
             />
             {showFilePlaceholders ? (
               <p className="text-xs text-muted-foreground">
-                {translate(
+                {t(
                   'components.terminal.quickCommands.filePlaceholderHelp',
                   'Editor path tokens: ${file}, ${relativeFile}, ${fileBasename}, ${fileDirname}, ${workspaceFolder}. Quote paths that may contain spaces, for example python "${file}". If a file token is used and no editor file is open, the command is not sent.'
                 )}

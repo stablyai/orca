@@ -212,7 +212,7 @@ export function TerminalQuickCommandContentSection({
             </span>
           ) : (
             <span className="min-w-0 truncate text-[11px] text-muted-foreground">
-              {translate(
+              {t(
                 'components.terminal.quickCommands.filePlaceholderToolbarHint',
                 'Supports ${file} and other editor path tokens'
               )}

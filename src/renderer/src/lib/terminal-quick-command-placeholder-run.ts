@@ -3,7 +3,10 @@ import type { TerminalCommandQuickCommand } from '../../../shared/terminal/quick
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
-import { resolveWorkspaceDirectory, type WorkspaceDirectoryState } from '@/lib/workspace/paths/workspace-directory'
+import {
+  resolveWorkspaceDirectory,
+  type WorkspaceDirectoryState
+} from '@/lib/workspace/paths/workspace-directory'
 import {
   substituteTerminalQuickCommandPlaceholders,
   terminalQuickCommandUsesPlaceholders,
