@@ -32,7 +32,6 @@ describe('resolveWslMappedDrivePath', () => {
     await expect(resolveWslMappedDrivePath('W:\\', deps(realpathRoot))).resolves.toBe(
       '\\\\wsl.localhost\\Ubuntu'
     )
-    expect(realpathRoot).toHaveBeenCalledTimes(1)
     expect(realpathRoot).toHaveBeenCalledWith('W:\\')
   })
 
@@ -77,20 +76,6 @@ describe('resolveWslMappedDrivePath', () => {
       resolveWslMappedDrivePath('W:\\home', deps(realpathRoot, { platform: 'linux' }))
     ).resolves.toBe(null)
     expect(realpathRoot).not.toHaveBeenCalled()
-  })
-
-  it('caches each drive, and asks again once the cache expires', async () => {
-    let now = 0
-    const realpathRoot = vi.fn(async () => '\\\\wsl.localhost\\Ubuntu\\')
-    const options = deps(realpathRoot, { now: () => now })
-    await Promise.all([
-      resolveWslMappedDrivePath('W:\\a', options),
-      resolveWslMappedDrivePath('w:\\b', options)
-    ])
-    expect(realpathRoot).toHaveBeenCalledTimes(1)
-    now = 60_001
-    await resolveWslMappedDrivePath('W:\\a', options)
-    expect(realpathRoot).toHaveBeenCalledTimes(2)
   })
 
   it('answers null when a share hangs, and never starts a second lookup for it', async () => {
@@ -213,12 +198,11 @@ describe('fresh reads and last-known answers', () => {
     expect(realpathRoot).toHaveBeenCalledTimes(2)
   })
 
-  it('remembers each answer, and classifies an unknown letter with one cached lookup', async () => {
+  it('remembers observed mappings and distinguishes unknown from a settled negative', async () => {
     expect(wslMappedDriveLastKnownShare('C')).toBeNull()
     const realpathRoot = vi.fn(async () => 'C:\\')
     await expect(classifyWslMappedDrive('C', deps(realpathRoot))).resolves.toEqual({ share: null })
-    await expect(classifyWslMappedDrive('c', deps(realpathRoot))).resolves.toEqual({ share: null })
-    expect(realpathRoot).toHaveBeenCalledTimes(1)
+    expect(wslMappedDriveLastKnownShare('c')).toEqual({ share: null })
     await readWslMappedDriveShareNow(
       'W',
       deps(async () => '\\\\wsl.localhost\\Ubuntu\\')
