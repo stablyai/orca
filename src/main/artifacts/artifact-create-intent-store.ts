@@ -255,3 +255,21 @@ export function clearArtifactCreateIntents(profileId: string, userDataPath: stri
   }
   bestEffortFsyncDirectorySync(directory)
 }
+
+export async function clearArtifactCreateIntentsAsync(
+  profileId: string,
+  userDataPath: string
+): Promise<void> {
+  return serializeArtifactFileChange(intentDirectory(profileId, userDataPath), async () => {
+    const directory = intentDirectory(profileId, userDataPath)
+    if (!(await intentExists(directory))) {
+      return
+    }
+    for (const name of await readdir(directory)) {
+      if (name.endsWith('.json') || name.endsWith('.tmp')) {
+        await rm(join(directory, name), { force: true })
+      }
+    }
+    await bestEffortFsyncDirectory(directory)
+  })
+}

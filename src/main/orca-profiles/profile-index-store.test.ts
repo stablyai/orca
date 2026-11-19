@@ -44,6 +44,64 @@ describe('profile index store', () => {
     removeTreeSync(testState.dir)
   })
 
+  it('recovers a corrupt index asynchronously without replacing its valid backup', async () => {
+    const { ensureActiveOrcaProfileAsync } = await import('./profile-index-store-async')
+    const profile = { ...createDefaultLocalOrcaProfile(100), id: 'work-profile', name: 'Work' }
+    const indexPath = join(testState.dir, 'orca-profile-index.json')
+    const backup = JSON.stringify({
+      schemaVersion: 1,
+      activeProfileId: 'work-profile',
+      profiles: [profile]
+    })
+    writeFileSync(indexPath, '{broken')
+    writeFileSync(`${indexPath}.bak`, backup)
+    const active = await ensureActiveOrcaProfileAsync(testState.dir)
+    expect(active.profile.id).toBe('work-profile')
+    expect(readFileSync(`${indexPath}.bak`, 'utf8')).toBe(backup)
+  })
+
+  it('keeps legacy JSON out of an asynchronously opened database-authoritative profile', async () => {
+    const { ensureActiveOrcaProfileAsync } = await import('./profile-index-store-async')
+    const directory = join(testState.dir, 'profiles', DEFAULT_LOCAL_ORCA_PROFILE_ID)
+    mkdirSync(directory, { recursive: true })
+    writeFileSync(join(directory, 'profile-state.db.authority'), 'sqlite\n')
+    writeFileSync(join(testState.dir, 'orca-data.json'), '{"legacy":true}')
+    const active = await ensureActiveOrcaProfileAsync(testState.dir)
+    expect(existsSync(active.dataFile)).toBe(false)
+  })
+
+  it('retains both profiles when their cloud links change concurrently', async () => {
+    const store = await loadProfileIndexStore()
+    const { linkOrcaProfileToCloudAsync } = await import('./cloud-auth/profile-cloud-index')
+    const first = store.ensureActiveOrcaProfile(testState.dir)
+    const second = store.createLocalOrcaProfile({ name: 'Work' }, testState.dir)
+    await Promise.all([
+      linkOrcaProfileToCloudAsync(
+        first.profile.id,
+        {
+          userId: 'user-one',
+          cloudProfileId: 'cloud-one',
+          email: 'one@example.com',
+          linkedAt: 1
+        },
+        testState.dir
+      ),
+      linkOrcaProfileToCloudAsync(
+        second.profile.id,
+        {
+          userId: 'user-two',
+          cloudProfileId: 'cloud-two',
+          email: 'two@example.com',
+          linkedAt: 2
+        },
+        testState.dir
+      )
+    ])
+    expect(
+      store.readProfileIndex(join(testState.dir, 'orca-profile-index.json'))?.profiles
+    ).toMatchObject([{ cloud: { userId: 'user-one' } }, { cloud: { userId: 'user-two' } }])
+  })
+
   it('uses an existing active profile data file without overwriting it from legacy state', async () => {
     const profileId = 'work-profile'
     const profileDirectory = join(testState.dir, 'profiles', profileId)

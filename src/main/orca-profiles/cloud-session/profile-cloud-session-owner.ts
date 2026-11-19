@@ -145,7 +145,7 @@ async function rotateSession(
   }
   if (linkUnmoved) {
     try {
-      relink(owner, profileId, userDataPath, rotated.cloud)
+      await relink(owner, profileId, userDataPath, rotated.cloud)
     } catch {
       // The tokens are saved; the link is retried by the next refresh or org change.
     }
@@ -175,7 +175,11 @@ async function commitServerReply(
   const current = await readCurrentCloudSession(profileId, userDataPath)
   const linkMoved =
     owner.linkVersion !== ticket.linkVersion &&
-    !(acceptsSameOrg && reply.cloud && isSameOrgAsLink(profileId, userDataPath, reply.cloud))
+    !(
+      acceptsSameOrg &&
+      reply.cloud &&
+      (await isSameOrgAsLink(profileId, userDataPath, reply.cloud))
+    )
   if (owner.generation !== ticket.generation || current.status !== 'found' || linkMoved) {
     return null
   }

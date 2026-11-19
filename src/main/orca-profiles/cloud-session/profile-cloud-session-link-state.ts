@@ -4,8 +4,8 @@ import type {
   OrcaProfileCloudSummary,
   OrcaProfileListState
 } from '../../../shared/orca-profiles/orca-profiles'
-import { linkOrcaProfileToCloud } from '../cloud-auth/profile-cloud-index'
-import { loadOrCreateProfileIndex } from '../profile-index-store'
+import { linkOrcaProfileToCloudAsync } from '../cloud-auth/profile-cloud-index'
+import { loadOrCreateProfileIndexAsync } from '../profile-index-store-async'
 import { orcaCloudSessionKey, type OrcaCloudSession } from './profile-cloud-session-store'
 import type { OrcaCloudSessionExchangeResponse } from './profile-cloud-session-exchange'
 
@@ -41,25 +41,25 @@ export function ownerOf(profileId: string, userDataPath: string): SessionOwnerSt
   return owner
 }
 
-export function isSameOrgAsLink(
+export async function isSameOrgAsLink(
   profileId: string,
   userDataPath: string,
   cloud: OrcaProfileCloudSummary
-): boolean {
-  const linked = loadOrCreateProfileIndex(userDataPath).profiles.find(
+): Promise<boolean> {
+  const linked = (await loadOrCreateProfileIndexAsync(userDataPath)).profiles.find(
     (profile) => profile.id === profileId
   )?.cloud
   return (linked?.activeOrgId ?? '') === (cloud.activeOrgId ?? '')
 }
 
-export function relink(
+export async function relink(
   owner: SessionOwnerState,
   profileId: string,
   userDataPath: string,
   cloud: OrcaProfileCloudSummary
-): OrcaProfileListState {
-  const orgChanged = !isSameOrgAsLink(profileId, userDataPath, cloud)
-  const list = linkOrcaProfileToCloud(profileId, cloud, userDataPath)
+): Promise<OrcaProfileListState> {
+  const orgChanged = !(await isSameOrgAsLink(profileId, userDataPath, cloud))
+  const list = await linkOrcaProfileToCloudAsync(profileId, cloud, userDataPath)
   if (orgChanged) {
     owner.linkVersion++
   }

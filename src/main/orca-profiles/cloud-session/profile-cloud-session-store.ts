@@ -63,7 +63,7 @@ async function writeSession(
   )
   rememberMemorySession(orcaCloudSessionKey(profileId, userDataPath), {
     session,
-    persistence: persistence as Exclude<OrcaCloudSessionPersistence, 'none'>
+    persistence
   })
   return persistence
 }

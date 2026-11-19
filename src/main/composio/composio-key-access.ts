@@ -5,8 +5,8 @@ import { ComposioKeyHealth } from './composio-key-health'
 
 export type ComposioKeyStore = {
   read: () => string | null | Promise<string | null>
-  save: (key: string) => unknown | Promise<unknown>
-  clear: () => unknown | Promise<unknown>
+  save: (key: string) => unknown
+  clear: () => unknown
 }
 
 export class ComposioKeyAccess {

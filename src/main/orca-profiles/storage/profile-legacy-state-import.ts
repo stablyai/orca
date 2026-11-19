@@ -1,3 +1,4 @@
+import { copyFile, mkdir, rename, stat } from 'node:fs/promises'
 import { copyFileSync, existsSync, mkdirSync, renameSync } from 'node:fs'
 import { dirname } from 'node:path'
 import {
@@ -30,5 +31,43 @@ export function copyLegacyStateToProfile(userDataPath: string, profileId: string
   )
   for (let i = 0; i < LEGACY_BACKUP_COUNT; i++) {
     copyIfPresent(legacyBackupPath(userDataPath, i), profileBackupPath(profileDataFile, i))
+  }
+}
+
+async function copyIfPresentAsync(source: string, target: string): Promise<void> {
+  if (!(await pathExists(source)) || (await pathExists(target))) {
+    return
+  }
+  await mkdir(dirname(target), { recursive: true })
+  // Publish atomically: partial copies must not pass the completed-migration existence check.
+  const tmpTarget = `${target}.tmp`
+  await copyFile(source, tmpTarget)
+  await rename(tmpTarget, target)
+}
+
+export async function copyLegacyStateToProfileAsync(
+  userDataPath: string,
+  profileId: string
+): Promise<void> {
+  const profileDataFile = getOrcaProfileDataFile(profileId, userDataPath)
+  await copyIfPresentAsync(legacyDataFilePath(userDataPath), profileDataFile)
+  await copyIfPresentAsync(
+    legacyBrowserSessionMetaPath(userDataPath),
+    getOrcaProfileBrowserSessionMetaFile(profileId, userDataPath)
+  )
+  for (let i = 0; i < LEGACY_BACKUP_COUNT; i++) {
+    await copyIfPresentAsync(
+      legacyBackupPath(userDataPath, i),
+      profileBackupPath(profileDataFile, i)
+    )
+  }
+}
+
+async function pathExists(path: string): Promise<boolean> {
+  try {
+    await stat(path)
+    return true
+  } catch {
+    return false
   }
 }

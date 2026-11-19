@@ -1,10 +1,13 @@
-import { inCredentialFileOrder } from '../credentials/credential-file-io'
-import { credentialFileExists, hardenCredentialFile } from '../credentials/credential-file-io'
+import {
+  inCredentialFileOrder,
+  credentialFileExists,
+  hardenCredentialFile,
+  writeCredentialEnvelope as writeSecureFile
+} from '../credentials/credential-file-io'
 import { getSecretStore } from '../../shared/secure-storage/secret-store'
 import { readFile, rm } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import { writeCredentialEnvelope as writeSecureFile } from '../credentials/credential-file-io'
 import {
   encryptedCredentialProtection,
   type SecretAtRestProtection

@@ -7,6 +7,7 @@ import type * as ProfileCloudClient from '../cloud-auth/profile-cloud-client'
 import type * as CredentialFileIo from '../../credentials/credential-file-io'
 import type * as Fs from 'node:fs/promises'
 import type * as ProfileIndexStore from '../profile-index-store'
+import type * as ProfileIndexStoreAsync from '../profile-index-store-async'
 import type { ActiveOrcaProfileState } from '../profile-index-store'
 import type { OrcaCloudSession } from './profile-cloud-session-store'
 import { setSecretStore } from '../../../shared/secure-storage/secret-store'
@@ -82,7 +83,14 @@ vi.mock('../cloud-auth/profile-cloud-client', async (importOriginal) => {
   }
 })
 
-vi.mock('../cloud-auth/profile-cloud-index', () => ({ linkOrcaProfileToCloud: linkMock }))
+vi.mock('../cloud-auth/profile-cloud-index', () => ({ linkOrcaProfileToCloudAsync: linkMock }))
+
+vi.mock('../profile-index-store-async', async (importOriginal) => ({
+  ...(await importOriginal<typeof ProfileIndexStoreAsync>()),
+  loadOrCreateProfileIndexAsync: async () => ({
+    profiles: [{ id: 'profile-1', cloud: linked.cloud }]
+  })
+}))
 
 vi.mock('../profile-index-store', async (importOriginal) => ({
   ...(await importOriginal<typeof ProfileIndexStore>()),

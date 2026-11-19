@@ -1,4 +1,5 @@
 import { realpathSync } from 'node:fs'
+import { realpath } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { basename, isAbsolute, join, relative, toNamespacedPath } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -40,6 +41,56 @@ export function loadWindowsSecurity(): WindowsSecurity | { error: string } {
   return loaded
 }
 
+let loading: Promise<WindowsSecurity | { error: string }> | undefined
+
+export async function loadWindowsSecurityAsync(): Promise<WindowsSecurity | { error: string }> {
+  if (loaded) {
+    return loaded
+  }
+  loading ??= loadOnceAsync()
+  try {
+    const result = await loading
+    loaded ??= result
+    return loaded
+  } finally {
+    loading = undefined
+  }
+}
+
+async function loadOnceAsync(): Promise<WindowsSecurity | { error: string }> {
+  if (process.platform !== 'win32') {
+    return { error: `unsupported on ${process.platform}` }
+  }
+  const failures: string[] = []
+  const candidates = [
+    () => join(nativeLookupDirectory, ORCAD_WINDOWS_SECURITY_FILENAME),
+    () => join(nativeLookupDirectory, '..', '..', ORCAD_WINDOWS_SECURITY_FILENAME),
+    () => trustedPackagePathAsync(requireFromHere.resolve('@orca/windows-security'), appRoots())
+  ]
+  for (const candidate of candidates) {
+    try {
+      const modulePath = await candidate()
+      return { ...prepare(requireFromHere(modulePath)), modulePath }
+    } catch (error) {
+      failures.push(error instanceof Error ? error.message : String(error))
+    }
+  }
+  return { error: failures.join('; ') }
+}
+
+export async function trustedPackagePathAsync(
+  resolved: string,
+  roots: readonly string[]
+): Promise<string> {
+  const real = await realpath(resolved)
+  for (const root of roots) {
+    if (isInsidePackageRoot(real, await realpath(root))) {
+      return real
+    }
+  }
+  throw new Error(`refusing @orca/windows-security outside the app: ${real}`)
+}
+
 function loadOnce(): WindowsSecurity | { error: string } {
   if (process.platform !== 'win32') {
     return { error: `unsupported on ${process.platform}` }
@@ -77,14 +128,15 @@ function appRoots(): string[] {
 /** `resolved` when its real location is inside one of `roots`; throws otherwise. */
 export function trustedPackagePath(resolved: string, roots: readonly string[]): string {
   const real = realpathSync(resolved)
-  const inside = roots.some((root) => {
-    const fromRoot = relative(realpathSync(root), real)
-    return fromRoot !== '' && !fromRoot.startsWith('..') && !isAbsolute(fromRoot)
-  })
-  if (!inside) {
-    throw new Error(`refusing @orca/windows-security outside the app: ${real}`)
+  if (roots.some((root) => isInsidePackageRoot(real, realpathSync(root)))) {
+    return real
   }
-  return real
+  throw new Error(`refusing @orca/windows-security outside the app: ${real}`)
+}
+
+function isInsidePackageRoot(real: string, root: string): boolean {
+  const fromRoot = relative(root, real)
+  return fromRoot !== '' && !fromRoot.startsWith('..') && !isAbsolute(fromRoot)
 }
 
 /** Namespace paths once for MAX_PATH-limited Win32 APIs. Serialize async writes per path so a read/merge grant cannot race a re-lock and restore broader access.

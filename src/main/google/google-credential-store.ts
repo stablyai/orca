@@ -1,5 +1,4 @@
-import { inCredentialFileOrder } from '../credentials/credential-file-io'
-import { credentialFileExists } from '../credentials/credential-file-io'
+import { inCredentialFileOrder, credentialFileExists } from '../credentials/credential-file-io'
 // This host's Google client and each Google account signed in on it, in Orca's encrypted credential
 // files (an owner-only file where the OS keyring is missing, as for Linear). Never sent to Orca Cloud,
 // a paired phone or an SSH target.

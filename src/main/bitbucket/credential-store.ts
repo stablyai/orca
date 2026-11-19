@@ -1,5 +1,4 @@
-import { inCredentialFileOrder } from '../credentials/credential-file-io'
-import { credentialFileExists } from '../credentials/credential-file-io'
+import { inCredentialFileOrder, credentialFileExists } from '../credentials/credential-file-io'
 import { mkdir, readFile, unlink } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
@@ -76,7 +75,7 @@ async function readMetadataFromDisk(): Promise<BitbucketStoredMetadata | null> {
     return null
   }
   try {
-    const parsed = JSON.parse(await readFile(path, 'utf-8')) as Partial<BitbucketStoredMetadata>
+    const parsed: Partial<BitbucketStoredMetadata> = JSON.parse(await readFile(path, 'utf-8'))
     if (parsed.authMode !== 'token' && parsed.authMode !== 'basic') {
       return null
     }

@@ -155,7 +155,7 @@ export async function writeOrcaCloudSessionFile(
   userDataPath: string,
   session: OrcaCloudSession,
   requireSealed = false
-): Promise<OrcaCloudSessionPersistence> {
+): Promise<Exclude<OrcaCloudSessionPersistence, 'none'>> {
   const { persistence, data } = serializeSession(session, requireSealed)
   const path = getOrcaCloudSessionPath(profileId, userDataPath)
   await (data === null
@@ -187,9 +187,9 @@ export async function readOrcaCloudSessionFile(
   const path = getOrcaCloudSessionPath(profileId, userDataPath)
 
   try {
-    const parsed = JSON.parse(await readFile(path, 'utf-8')) as
-      | PersistedEncryptedSession
-      | PersistedPlaintextSession
+    const parsed: PersistedEncryptedSession | PersistedPlaintextSession = JSON.parse(
+      await readFile(path, 'utf-8')
+    )
     if (parsed.version !== 1) {
       return { status: 'decrypt-failed', persistence: 'none', error: 'Unsupported session format.' }
     }

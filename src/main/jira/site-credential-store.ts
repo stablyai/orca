@@ -1,5 +1,4 @@
-import { inCredentialFileOrder } from '../credentials/credential-file-io'
-import { credentialFileExists } from '../credentials/credential-file-io'
+import { inCredentialFileOrder, credentialFileExists } from '../credentials/credential-file-io'
 import { mkdir, readFile, unlink, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
@@ -116,7 +115,7 @@ async function readSiteFileFromDisk(): Promise<JiraSiteFile> {
     return emptySiteFile()
   }
   try {
-    const parsed = JSON.parse(await readFile(path, { encoding: 'utf-8' })) as Partial<JiraSiteFile>
+    const parsed: Partial<JiraSiteFile> = JSON.parse(await readFile(path, { encoding: 'utf-8' }))
     const sites = Array.isArray(parsed.sites)
       ? parsed.sites
           .map((site) => normalizeSite(site))

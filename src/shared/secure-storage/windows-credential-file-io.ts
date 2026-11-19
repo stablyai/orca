@@ -7,7 +7,7 @@ import {
   DEFAULT_HARDENING_CACHE_BOUNDS,
   SecurePathHardeningCache
 } from './secure-path-hardening-cache'
-import { loadWindowsSecurity, type WindowsSecurity } from './windows-security-addon'
+import { loadWindowsSecurityAsync, type WindowsSecurity } from './windows-security-addon'
 import {
   findPrivateDaclViolation,
   findSecureDaclViolation,
@@ -20,16 +20,48 @@ let worker: Worker | undefined
 let nextId = 0
 const pending = new Map<number, Pending>()
 
+type FileOperations = Pick<WindowsSecurity['addon'], FileOperation>
+type FileRequest = {
+  [K in FileOperation]: [operation: K, ...args: Parameters<FileOperations[K]>]
+}[FileOperation]
+
 function fileOperation(
   security: WindowsSecurity,
-  operation: FileOperation,
-  args: unknown[]
-): Promise<unknown> {
+  operation: 'createFileWithDacl',
+  ...args: Parameters<FileOperations['createFileWithDacl']>
+): Promise<ReturnType<FileOperations['createFileWithDacl']>>
+function fileOperation(
+  security: WindowsSecurity,
+  operation: 'readFileWithDacl',
+  ...args: Parameters<FileOperations['readFileWithDacl']>
+): Promise<ReturnType<FileOperations['readFileWithDacl']>>
+function fileOperation(
+  security: WindowsSecurity,
+  operation: 'getDaclAces',
+  ...args: Parameters<FileOperations['getDaclAces']>
+): Promise<ReturnType<FileOperations['getDaclAces']>>
+function fileOperation(
+  security: WindowsSecurity,
+  operation: 'setDaclSddl',
+  ...args: Parameters<FileOperations['setDaclSddl']>
+): Promise<ReturnType<FileOperations['setDaclSddl']>>
+function fileOperation(security: WindowsSecurity, ...request: FileRequest): Promise<unknown> {
   // Injected test addons have no loadable module or native I/O.
   if (!security.modulePath) {
-    const call = security.addon[operation] as (...args: unknown[]) => unknown
-    return Promise.resolve(call(...args))
+    switch (request[0]) {
+      case 'createFileWithDacl':
+        return Promise.resolve(
+          security.addon.createFileWithDacl(request[1], request[2], request[3], request[4])
+        )
+      case 'readFileWithDacl':
+        return Promise.resolve(security.addon.readFileWithDacl(request[1], request[2]))
+      case 'getDaclAces':
+        return Promise.resolve(security.addon.getDaclAces(request[1]))
+      case 'setDaclSddl':
+        return Promise.resolve(security.addon.setDaclSddl(request[1], request[2]))
+    }
   }
+  const [operation, ...args] = request
   if (!worker) {
     const current = new Worker(
       `
@@ -86,7 +118,7 @@ export async function createWindowsCredentialStage(
   strict: boolean,
   syncFile = false
 ): Promise<boolean> {
-  const security = loadWindowsSecurity()
+  const security = await loadWindowsSecurityAsync()
   if ('error' in security) {
     if (strict) {
       throw new Error('Private Windows credential-file protection is unavailable.')
@@ -103,12 +135,14 @@ export async function createWindowsCredentialStage(
     return false
   }
   const nativePath = toNamespacedPath(path)
-  await fileOperation(security, 'createFileWithDacl', [
+  await fileOperation(
+    security,
+    'createFileWithDacl',
     nativePath,
     hardenedDaclSddl(security.userSid, false),
     typeof data === 'string' ? Buffer.from(data) : data,
     strict
-  ])
+  )
   if (syncFile && !strict) {
     const handle = await open(path, 'r+')
     try {
@@ -118,9 +152,7 @@ export async function createWindowsCredentialStage(
     }
   }
   try {
-    const aces = (await fileOperation(security, 'getDaclAces', [nativePath])) as ReturnType<
-      WindowsSecurity['addon']['getDaclAces']
-    >
+    const aces = await fileOperation(security, 'getDaclAces', nativePath)
     const invalid = findSecureDaclViolation(aces, security.userSid, false)
     if (invalid) {
       report(path, 'verify', invalid)
@@ -164,7 +196,7 @@ async function hardenWindowsPath(path: string, directory: boolean): Promise<bool
     return false
   }
   try {
-    const security = loadWindowsSecurity()
+    const security = await loadWindowsSecurityAsync()
     if ('error' in security) {
       recordHardeningOutcome(path, false)
       return false
@@ -182,9 +214,7 @@ async function hardenWindowsPath(path: string, directory: boolean): Promise<bool
     const nativePath = toNamespacedPath(path)
     const violation = async () =>
       findSecureDaclViolation(
-        (await fileOperation(security, 'getDaclAces', [nativePath])) as ReturnType<
-          WindowsSecurity['addon']['getDaclAces']
-        >,
+        await fileOperation(security, 'getDaclAces', nativePath),
         security.userSid,
         directory
       )
@@ -193,10 +223,12 @@ async function hardenWindowsPath(path: string, directory: boolean): Promise<bool
       await remember()
       return true
     }
-    await fileOperation(security, 'setDaclSddl', [
+    await fileOperation(
+      security,
+      'setDaclSddl',
       nativePath,
       hardenedDaclSddl(security.userSid, directory)
-    ])
+    )
     const restricted = (await violation()) === null
     recordHardeningOutcome(path, restricted)
     if (restricted) {
@@ -214,14 +246,11 @@ export async function readPrivateWindowsCredentialFile(
   path: string,
   maxBytes: number
 ): Promise<Buffer | null> {
-  const security = loadWindowsSecurity()
+  const security = await loadWindowsSecurityAsync()
   if ('error' in security) {
     throw new Error('Private Windows credential-file protection is unavailable.')
   }
-  const file = (await fileOperation(security, 'readFileWithDacl', [
-    toNamespacedPath(path),
-    maxBytes
-  ])) as ReturnType<WindowsSecurity['addon']['readFileWithDacl']>
+  const file = await fileOperation(security, 'readFileWithDacl', toNamespacedPath(path), maxBytes)
   if (!file) {
     return null
   }

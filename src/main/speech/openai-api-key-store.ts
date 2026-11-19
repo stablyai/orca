@@ -1,5 +1,8 @@
-import { inCredentialFileOrder } from '../credentials/credential-file-io'
-import { credentialFileExists } from '../credentials/credential-file-io'
+import {
+  inCredentialFileOrder,
+  credentialFileExists,
+  stageCredentialFile
+} from '../credentials/credential-file-io'
 import { getSecretStore } from '../../shared/secure-storage/secret-store'
 import { readCredentialFileProtection } from '../credentials/credential-file-protection'
 import {
@@ -8,7 +11,6 @@ import {
   type SecretAtRestProtection
 } from '../../shared/secure-storage/secret-at-rest-protection'
 import { mkdir, readFile, rm } from 'node:fs/promises'
-import { stageCredentialFile } from '../credentials/credential-file-io'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 
@@ -40,7 +42,7 @@ async function readLegacyJsonStoredOpenAiKey(): Promise<StoredOpenAiKey | null> 
     return null
   }
   try {
-    const parsed = JSON.parse(await readFile(keyPath, 'utf8')) as Partial<StoredOpenAiKey>
+    const parsed: Partial<StoredOpenAiKey> = JSON.parse(await readFile(keyPath, 'utf8'))
     if (typeof parsed.encryptedKeyBase64 !== 'string' || parsed.encryptedKeyBase64 === '') {
       return null
     }

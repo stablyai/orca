@@ -52,14 +52,14 @@ export function createIntegrationTokenFileCache(args: {
     try {
       const token = readStoredCredentialToken(args.service, await readFile(args.filePath(id)))
       if ((await stateFor(id)) !== state) {
-        return readToken(id, force)
+        return await readToken(id, force)
       }
       state.token = token ?? undefined
       state.error = undefined
       return token
     } catch (error) {
       if ((await stateFor(id)) !== state) {
-        return readToken(id, force)
+        return await readToken(id, force)
       }
       if (error instanceof CredentialDecryptionError) {
         state.error = error.message
