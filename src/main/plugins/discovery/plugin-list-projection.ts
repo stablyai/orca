@@ -82,6 +82,7 @@ const devChangeCountOf = (plugin: DiscoveredPlugin) =>
 
 const withImages = (images: PluginHostImages | undefined) => (images ? { images } : {})
 
+/** Clients need contribution metadata even when consent or lifecycle state prevents a worker from running. */
 export async function buildPluginList(
   service: PluginService,
   lock: PluginLockfile,
@@ -193,6 +194,7 @@ export async function buildPluginList(
           id: panel.id,
           title: panel.title,
           ...(panel.icon ? { icon: panel.icon } : {}),
+          ...(panel.placement ? { placement: panel.placement } : {}),
           tabKey: pluginPanelTabKey(plugin.pluginKey, panel.id)
         })),
         customEditors: plugin.manifest.contributes.customEditors.map((editor, index) => ({

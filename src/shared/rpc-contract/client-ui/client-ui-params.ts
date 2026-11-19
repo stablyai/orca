@@ -22,6 +22,7 @@ import { ClientUiWorkspaceFilterFields } from './client-ui-workspace-filter-fiel
 import { TaskResumeState } from './task-resume-state-params'
 import { WorkspaceCleanup } from '../workspace-cleanup/workspace-cleanup-ui-params'
 import { omitUndefinedValues, tolerateUnknownValues } from './ui-update-value-tolerance-params'
+import { isTopLevelView } from '../../ui-chrome/top-level-view'
 
 export const NullableString = z.string().nullable()
 
@@ -104,21 +105,11 @@ export const FeatureInteractionIdParam = z.custom<FeatureInteractionId>(isFeatur
   message: 'Unknown feature interaction id'
 })
 
-export const TopLevelViewSchema = z
-  .enum([
-    'terminal',
-    'settings',
-    'tasks',
-    'activity',
-    'automations',
-    'space',
-    'skills',
-    // Bot templates was a view before it became a dialog; an older peer can still send it.
-    'botTemplates',
-    'artifacts',
-    'mobile'
-  ])
-  .transform((view) => (view === 'botTemplates' ? 'terminal' : view))
+// Older peers can still send the view replaced by the bot-templates dialog.
+export const TopLevelViewSchema = z.preprocess(
+  (view) => (view === 'botTemplates' ? 'terminal' : view),
+  z.custom(isTopLevelView, { message: 'Unknown top-level view' })
+)
 
 export const UiUpdateFields = z
   .object({

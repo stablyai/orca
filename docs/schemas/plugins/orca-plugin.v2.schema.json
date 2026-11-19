@@ -577,6 +577,18 @@
             "link"
           ]
         },
+        "placement": {
+          "description": "Where Orca shows the panel. Defaults to `right-sidebar`; `left-navigation` opens a full page from the left navigation.",
+          "x-orca-since": "1.4.246",
+          "examples": [
+            "left-navigation"
+          ],
+          "type": "string",
+          "enum": [
+            "right-sidebar",
+            "left-navigation"
+          ]
+        },
         "entry": {
           "type": "string",
           "minLength": 1,

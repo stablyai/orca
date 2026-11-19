@@ -1,86 +1,43 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../../types'
 import { findFirstIndexedWorktree } from '../../../lib/workspace/ownership/worktree-runtime-owner-index'
-import type { GitHubWorkItem } from '../../../../../shared/github/work-items/work-item-types'
-import type { JiraIssue } from '../../../../../shared/jira/jira-types'
-import type { LinearIssue } from '../../../../../shared/linear/issue-types'
-import type { GitLabWorkItem } from '../../../../../shared/gitlab/gitlab-types'
-import {
-  getTaskSourceCacheScope,
-  type TaskSourceContext
-} from '../../../../../shared/work-items/task-source-context'
+import { getTaskSourceCacheScope } from '../../../../../shared/work-items/task-source-context'
 import { parseWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
-import {
-  automationsPageLocationKey,
-  isAutomationsHistoryEntry,
-  type AutomationsPageLocation
-} from './automations-page-location'
+import { automationsPageLocationKey, isAutomationsHistoryEntry } from './automations-page-location'
 import {
   selectFolderWorkspaces,
   selectWorktreesByRepo
 } from '../../workspaces/catalog/workspace-record-fields'
+import { isPluginPanelTabKey } from '../../../../../shared/plugins/frames/plugin-tab-key'
+import {
+  collectLeftNavigationPluginPanels,
+  usePluginPanelsStore
+} from '../../plugins/catalog/plugin-contribution-catalog'
+
+import type {
+  WorktreeNavHistoryEntry,
+  WorktreeNavHistorySimpleViewEntry,
+  WorktreeNavHistorySlice,
+  WorktreeNavHistoryViewEntry
+} from './workspace-navigation-history-types'
+export type {
+  WorktreeNavHistoryEntry,
+  WorktreeNavHistorySimpleViewEntry,
+  WorktreeNavHistorySlice,
+  WorktreeNavHistoryViewEntry,
+  WorktreeNavHistoryTaskDetailEntry,
+  WorktreeNavHistoryAutomationsPageEntry
+} from './workspace-navigation-history-types'
 
 // Why: bound per-session history growth; 50 keeps goBack/goForward's linear scans cheap yet is never hit in normal use.
 const MAX_HISTORY = 50
 
-// Why: entries may be page sentinels, not just worktree IDs; names keep the "worktree" prefix for call-site stability.
-export type WorktreeNavHistorySimpleViewEntry = 'tasks' | 'automations' | 'artifacts' | 'skills'
 const SIMPLE_VIEW_ENTRIES: readonly WorktreeNavHistorySimpleViewEntry[] = [
   'tasks',
   'automations',
   'artifacts',
   'skills'
 ]
-export type WorktreeNavHistoryTaskDetailEntry =
-  | {
-      kind: 'task-detail'
-      source: 'github'
-      workItem: GitHubWorkItem
-      sourceContext?: TaskSourceContext | null
-      initialTab?: 'conversation' | 'checks' | 'files'
-    }
-  | {
-      kind: 'task-detail'
-      source: 'linear'
-      issue: LinearIssue
-      sourceContext?: TaskSourceContext | null
-    }
-  | {
-      kind: 'task-detail'
-      source: 'gitlab'
-      workItem: GitLabWorkItem
-      sourceContext?: TaskSourceContext | null
-    }
-  | {
-      kind: 'task-detail'
-      source: 'jira'
-      issue: JiraIssue
-      sourceContext?: TaskSourceContext | null
-    }
-/** One Automations sub-page, so titlebar Back steps through them like any other page. */
-export type WorktreeNavHistoryAutomationsPageEntry = {
-  kind: 'automations-page'
-  location: AutomationsPageLocation
-}
-export type WorktreeNavHistoryViewEntry =
-  | WorktreeNavHistorySimpleViewEntry
-  | WorktreeNavHistoryTaskDetailEntry
-  | WorktreeNavHistoryAutomationsPageEntry
-export type WorktreeNavHistoryEntry = (string & {}) | WorktreeNavHistoryViewEntry
-
-export type WorktreeNavHistorySlice = {
-  // Linear history, oldest -> newest.
-  worktreeNavHistory: WorktreeNavHistoryEntry[]
-  // Index into worktreeNavHistory pointing at the active entry; -1 means empty.
-  worktreeNavHistoryIndex: number
-  // Why: true during goBack/goForward so recordWorktreeVisit skips re-recording a history-driven navigation.
-  isNavigatingHistory: boolean
-
-  recordWorktreeVisit: (worktreeId: string) => void
-  recordViewVisit: (entry: WorktreeNavHistoryViewEntry) => void
-  goBackWorktree: () => void
-  goForwardWorktree: () => void
-}
 
 type ActivateFn = (worktreeId: string) => unknown
 type ViewActivateFn = (entry: WorktreeNavHistoryViewEntry) => void
@@ -107,18 +64,19 @@ function isSimpleViewEntry(
   )
 }
 
-// Why: view entries count as live unconditionally — findWorktreeById can't resolve page sentinels.
+/** Recognize page routes before treating string history entries as workspace identities. */
 export function isViewEntry(entry: WorktreeNavHistoryEntry): entry is WorktreeNavHistoryViewEntry {
-  return isSimpleViewEntry(entry) || typeof entry === 'object'
+  return typeof entry === 'object' || isSimpleViewEntry(entry) || isPluginPanelTabKey(entry)
 }
 
 function isTaskStackEntry(entry: WorktreeNavHistoryEntry): boolean {
   return entry === 'tasks' || (typeof entry === 'object' && entry.kind === 'task-detail')
 }
 
+/** History deduplication must distinguish page routes, workspaces, and provider-scoped task identities. */
 function getHistoryEntryKey(entry: WorktreeNavHistoryEntry): string {
   if (typeof entry === 'string') {
-    return isSimpleViewEntry(entry) ? `view:${entry}` : `worktree:${entry}`
+    return isViewEntry(entry) ? `view:${entry}` : `worktree:${entry}`
   }
   if (entry.kind === 'automations-page') {
     return `view:automations-page:${automationsPageLocationKey(entry.location)}`
@@ -153,7 +111,19 @@ function getHistoryEntryKey(entry: WorktreeNavHistoryEntry): string {
 
 type WorkspaceCatalog = Pick<AppState, 'folderWorkspaces' | 'worktreesByRepo'>
 
-function isLiveEntry(entry: WorktreeNavHistoryEntry, state: WorkspaceCatalog): boolean {
+/** Cached plugin entries lose authority immediately when the system setting is disabled. */
+function isLiveEntry(
+  entry: WorktreeNavHistoryEntry,
+  state: WorkspaceCatalog & Partial<Pick<AppState, 'settings'>>
+): boolean {
+  if (typeof entry === 'string' && isPluginPanelTabKey(entry)) {
+    return (
+      state.settings?.pluginSystemEnabled === true &&
+      collectLeftNavigationPluginPanels(usePluginPanelsStore.getState().plugins).some(
+        (panel) => panel.tabKey === entry
+      )
+    )
+  }
   if (isViewEntry(entry)) {
     return true
   }

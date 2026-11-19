@@ -5,6 +5,7 @@ import { PLUGIN_ENUM_SINCE_KEY } from '../manifest/plugin-engine-floor-keys'
 import {
   pluginPathFieldDoc,
   pluginFieldDoc,
+  PLUGIN_PANEL_PLACEMENT_SINCE,
   PLUGIN_PANEL_UI_SINCE,
   PLUGIN_SCHEMA_SINCE_V1,
   PLUGIN_SOURCE_MODULES_SINCE
@@ -122,6 +123,16 @@ export const pluginPanelContributionSchema = z
         ),
         [PLUGIN_ENUM_SINCE_KEY]: PLUGIN_PANEL_ICON_SINCE
       }),
+    placement: z
+      .enum(['right-sidebar', 'left-navigation'])
+      .optional()
+      .meta(
+        pluginFieldDoc(
+          'Where Orca shows the panel. Defaults to `right-sidebar`; `left-navigation` opens a full page from the left navigation.',
+          PLUGIN_PANEL_PLACEMENT_SINCE,
+          ['left-navigation']
+        )
+      ),
     entry: pluginRelativePathSchema.meta(
       pluginPathFieldDoc(
         `What the panel runs: an HTML page for \`ui: "html"\`, a \`.js\`/\`.mjs\` module for \`ui: "components"\`. Either may instead be a \`.ts\`/\`.tsx\`/\`.mts\`/\`.jsx\` file, which Orca transpiles when it loads (needs \`engines.orca\` \`>=${PLUGIN_SOURCE_MODULES_SINCE}\`; an \`html\` panel then gets a generated page around it). It is trusted code: install panels you trust.`,

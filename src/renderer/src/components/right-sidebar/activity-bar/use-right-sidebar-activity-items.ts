@@ -22,7 +22,7 @@ import {
 } from '../ports/ports-panel-host'
 import {
   collectInstalledPluginTabKeys,
-  usePluginPanels,
+  useRightSidebarPluginPanels,
   usePluginPanelsStore,
   type PluginPanelsFetchStatus
 } from '@/store/plugins/catalog/plugin-contribution-catalog'
@@ -56,6 +56,7 @@ export type RightSidebarActivityItems = {
   isBotPage: boolean
 }
 
+/** Keep installed panel identities for persisted tabs while exposing only eligible sidebar contributions. */
 export function useRightSidebarActivityItems({
   rightSidebarOpen
 }: {
@@ -100,7 +101,7 @@ export function useRightSidebarActivityItems({
     )
   )
   const pluginSystemEnabled = useAppStore((s) => s.settings?.pluginSystemEnabled === true)
-  const pluginPanels = usePluginPanels()
+  const pluginPanels = useRightSidebarPluginPanels()
   const visiblePluginPanels = useMemo(
     () => (pluginSystemEnabled ? pluginPanels : []),
     [pluginPanels, pluginSystemEnabled]

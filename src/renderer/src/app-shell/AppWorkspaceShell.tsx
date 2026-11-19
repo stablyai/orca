@@ -11,6 +11,8 @@ import Sidebar from '../components/sidebar/index'
 import RightSidebar from '../components/right-sidebar/RightSidebar'
 import { RecoverableRenderErrorBoundary } from '../components/error-boundaries/RecoverableRenderErrorBoundary'
 import { FloatingTerminalToggleButton } from '../components/floating-terminal/trigger/FloatingTerminalToggleButton'
+import { isPluginPanelTabKey } from '../../../shared/plugins/frames/plugin-tab-key'
+import { PluginMainPage } from '../components/plugins/page/PluginMainPage'
 import { TerminalWorkbenchContainer } from '../components/terminal/workbench/TerminalWorkbenchContainer'
 import type { VirtualizedScrollAnchor } from '../lib/list-interaction/virtualized-scrolling/useVirtualizedScrollAnchor'
 import { TitlebarLeftControls } from './chrome/TitlebarLeftControls'
@@ -133,10 +135,12 @@ function HandToBotMount(): React.JSX.Element | null {
   ) : null
 }
 
+/** Plugin routes own a main page while the existing workspace shell remains mounted. */
 function ActivePage({ layout }: { layout: AppChromeLayout }): React.JSX.Element {
   const { activeView, hasActiveWorktree, activePendingCreationId, creationLayoutActive } = layout
   return (
     <>
+      {isPluginPanelTabKey(activeView) ? <PluginMainPage tabKey={activeView} /> : null}
       {activeView === 'settings' ? <Settings /> : null}
       {activeView === 'skills' ? <SkillsPage /> : null}
       {activeView === 'artifacts' ? <ArtifactsPage /> : null}

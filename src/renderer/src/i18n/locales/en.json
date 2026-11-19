@@ -20424,6 +20424,10 @@
             "openWith": "Open with (except while typing in an Orca text field)"
           }
         },
+        "PluginMainPage": {
+          "close": "Close plugin page",
+          "unavailableTitle": "Plugin page"
+        },
         "pluginInstallCount": {
           "installs": "{{value0}} installs"
         },
