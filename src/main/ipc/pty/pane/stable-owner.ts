@@ -1,6 +1,8 @@
 import { persistFreshPaneBinding } from './fresh-pane-binding'
-import { rollbackWorkspaceSessionAfterFailedAsyncWrite } from '../../../persistence/restoring-sessions/workspace-session-write-rollback'
-import { cloneWorkspaceSessionState } from '../../../persistence/restoring-sessions/session-owner-fields'
+import {
+  rollbackWorkspaceSessionAfterFailedAsyncWrite,
+  snapshotWorkspaceSessionForRollback
+} from '../../../persistence/restoring-sessions/workspace-session-write-rollback'
 import { toSshExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { makePaneKey, parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import type { Store } from '../../../persistence/loading-store/store'
@@ -135,7 +137,7 @@ export async function retirePersistedStablePaneOwner(
     if (current.ptyId !== owner.ptyId || current.incarnationId !== owner.persistedIncarnationId) {
       return { value: false, persist: false }
     }
-    const session = cloneWorkspaceSessionState(store.getWorkspaceSession(hostId))
+    const session = store.getWorkspaceSession(hostId)
     const retired = retireTerminalSurfaceFromPersistence(session, {
       worktreeId,
       parentTabId: owner.tabId,
@@ -147,7 +149,8 @@ export async function retirePersistedStablePaneOwner(
       return { value: false, persist: false }
     }
     store.setWorkspaceSession(retired, hostId)
-    const staged = cloneWorkspaceSessionState(store.getWorkspaceSession(hostId))
+    // The setter may normalize, so snapshot what it published.
+    const staged = snapshotWorkspaceSessionForRollback(session, store.getWorkspaceSession(hostId))
     return {
       value: true,
       rollback: () => {

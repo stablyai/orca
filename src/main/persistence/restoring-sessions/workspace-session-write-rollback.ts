@@ -129,3 +129,27 @@ export function rollbackWorkspaceSessionAfterFailedAsyncWrite(
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Each restored field retains a value from the same field of a typed session.
   return rollbackValue(original, staged, current) as WorkspaceSessionState
 }
+
+/**
+ * What a copy-on-write session write published, for rollback after a failed save. Shares saved
+ * entries (replaced, never edited) and copies only the containers the write replaced, since other
+ * writers may still edit those containers' keys in place.
+ */
+export function snapshotWorkspaceSessionForRollback(
+  before: WorkspaceSessionState,
+  published: WorkspaceSessionState
+): WorkspaceSessionState {
+  const snapshot: Record<string, unknown> = { ...published }
+  for (const [key, value] of Object.entries(published)) {
+    if (
+      value === before[key as keyof WorkspaceSessionState] ||
+      !value ||
+      typeof value !== 'object'
+    ) {
+      continue
+    }
+    snapshot[key] = Array.isArray(value) ? [...value] : { ...value }
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Each field is a shallow copy of the same field of a typed session.
+  return snapshot as WorkspaceSessionState
+}

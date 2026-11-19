@@ -54,15 +54,21 @@ export function registerPtyBindingAsyncDurabilityTests(): void {
         throw new Error('binding did not create its terminal row')
       }
       const layout = session.terminalLayoutsByTabId[binding.tabId]
-      layout.root = {
-        type: 'split',
-        direction: 'horizontal',
-        first: { type: 'leaf', leafId: TEST_LEAF_2 },
-        second: { type: 'leaf', leafId: binding.leafId }
+      // A newer write replaces saved entries and edits their container keys in place.
+      session.terminalLayoutsByTabId[binding.tabId] = {
+        ...layout,
+        root: {
+          type: 'split',
+          direction: 'horizontal',
+          first: { type: 'leaf', leafId: TEST_LEAF_2 },
+          second: { type: 'leaf', leafId: binding.leafId }
+        },
+        ptyIdsByLeafId: { ...layout.ptyIdsByLeafId, [TEST_LEAF_2]: 'new-root-pty' }
       }
-      layout.ptyIdsByLeafId = { ...layout.ptyIdsByLeafId, [TEST_LEAF_2]: 'new-root-pty' }
-      tab.ptyId = 'new-root-pty'
-      const expectedRoot = structuredClone(layout.root)
+      session.tabsByWorktree[binding.worktreeId] = session.tabsByWorktree[binding.worktreeId].map(
+        (candidate) => (candidate === tab ? { ...tab, ptyId: 'new-root-pty' } : candidate)
+      )
+      const expectedRoot = structuredClone(session.terminalLayoutsByTabId[binding.tabId].root)
       gate.finish.reject(
         new ProfileStateWriterError('test-disk-failure', 'disk refused', 'known-failure')
       )
