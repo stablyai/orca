@@ -1,4 +1,4 @@
-import { win32 } from 'node:path'
+import { posix } from 'node:path'
 import type {
   AgentJournalApprovalItem,
   AgentJournalPromptOption,
@@ -31,14 +31,21 @@ const PATH_FIELD: Record<string, string> = {
   Grep: 'path'
 }
 
+// On Windows a rooted path without a drive (`\\repo`, `/repo`) takes the current drive.
+const WINDOWS_ROOT = /^(?:[A-Za-z]:[\\/]|[\\/]{2}[^\\/]+[\\/][^\\/]+)/
+
+/** True only when the path can't resolve differently from another directory on this host. */
+function namesItsRoot(path: string): boolean {
+  return process.platform === 'win32' ? WINDOWS_ROOT.test(path) : posix.isAbsolute(path)
+}
+
 function meansTheSameAfterResume(prompt: ClaudePendingPrompt): boolean {
   if (prompt.kind === 'question' || DIRECTORY_FREE_TOOLS.has(prompt.toolName)) {
     return true
   }
   const field = PATH_FIELD[prompt.toolName]
   const target = field === undefined ? undefined : prompt.input[field]
-  // win32 rules accept both drive and POSIX absolute paths, whichever host the agent runs on.
-  return typeof target === 'string' && win32.isAbsolute(target)
+  return typeof target === 'string' && namesItsRoot(target)
 }
 
 /** A subagent's request can't be re-asked by a resumed session, so only the lead's prompts get one.
