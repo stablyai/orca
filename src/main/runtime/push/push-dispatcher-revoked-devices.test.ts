@@ -2,12 +2,10 @@
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, expect, it } from 'vitest'
 import { DeviceRegistry } from '../rpc/server/pairing/device-registry'
 import { DEVICE_REGISTRY_FILENAME } from '../rpc/server/pairing/mobile-pairing-files'
-import { PushDispatcher } from './push-dispatcher'
-import { flush, notification, registration, type SendCall } from './push-dispatcher.test-fixture'
-import type { PushGatewayClient } from './push-gateway-client'
+import { createHarness, flush, notification, registration } from './push-dispatcher.test-fixture'
 
 let dir: string
 
@@ -27,14 +25,7 @@ it('sends nothing to a delegated phone once its desktop is removed on disk', asy
     { phoneKey: 'phone-1', name: 'Pixel' }
   ])
   registry.setPushRegistration(phone!.deviceId, registration())
-  const sends: SendCall[] = []
-  const client = {
-    send: vi.fn(async (input: SendCall) => {
-      sends.push(input)
-      return { ok: true as const, results: [] }
-    })
-  } as unknown as PushGatewayClient
-  const dispatcher = new PushDispatcher({ client, registry })
+  const { dispatcher, sends } = createHarness({ devices: [], registry })
 
   const path = join(dir, DEVICE_REGISTRY_FILENAME)
   const rows: { deviceId: string }[] = JSON.parse(readFileSync(path, 'utf8'))
