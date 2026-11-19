@@ -1,3 +1,4 @@
+import { SESSION_TABS_OWNED_STARTUP_RUNTIME_CAPABILITY } from '../../../src/shared/remote-runtime/protocol/session-tabs-runtime-capabilities'
 import type {
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
@@ -19,10 +20,7 @@ import { resolveWindowsShellStartupFamily } from '../../../src/shared/shell/laun
 import { RESUME_RPC_TIMEOUT_MS } from './ai-vault-resume-preparation'
 import type { UnvalidatedRpcRequestPort } from '../transport/rpc/unvalidated-rpc-request-port'
 import { interpretOrThrowRefusalMessage } from '../transport/rpc/rpc-refusal-message'
-import {
-  reviewTerminalCreateRun,
-  reviewTerminalSendRun
-} from '../source-control/review/terminal-delivery/mobile-review-terminal-operations'
+import { reviewTerminalCreateRun } from '../source-control/review/terminal-delivery/mobile-review-terminal-operations'
 import type { MobileReviewTerminalTab } from '../source-control/review/terminal-delivery/review-terminal-reply-schema'
 import type { AiVaultResumeTargetStatus } from '../../../src/shared/ai-vault/resume/ai-vault-resume-target'
 import { QODER_OWNED_TERMINAL_CREATE_CAPABILITY } from '../../../src/shared/agent-launch/startup/qoder-terminal-create-capability'
@@ -108,16 +106,27 @@ export async function resumeAiVaultSessionInTerminal(
 ): Promise<MobileReviewTerminalTab> {
   assertCurrentOwner?.()
   // Qoder's execution host must select its installed executable before the resume starts.
-  const launchAtCreate =
+  const qoderOwnedCreate =
     launch.launchAgent === 'qoder' &&
     Boolean(launch.clientMutationId) &&
     launch.hostCapabilities?.includes(QODER_OWNED_TERMINAL_CREATE_CAPABILITY) === true
+  const ownedStartup =
+    launch.hostCapabilities?.includes(SESSION_TABS_OWNED_STARTUP_RUNTIME_CAPABILITY) === true
+  if (!launch.clientMutationId || (!ownedStartup && !qoderOwnedCreate)) {
+    throw new Error(
+      translate(
+        'agentHistory.resume.safeStartupUpdateRequired',
+        'Update Orca on this host to resume safely from history.'
+      )
+    )
+  }
   // Await requests outside refusal handling so transport errors keep their original delivery-unknown identity.
   const created = await reviewTerminalCreateRun.request(
     client,
     {
       worktree: `id:${worktreeId}`,
-      ...(launchAtCreate ? { command: launch.command } : {}),
+      command: launch.command,
+      ...(ownedStartup ? { requireOwnedStartup: true } : {}),
       ...(launch.cwd ? { cwd: launch.cwd } : {}),
       ...(launch.env ? { env: launch.env } : {}),
       ...(launch.envToDelete ? { envToDelete: launch.envToDelete } : {}),
@@ -132,41 +141,20 @@ export async function resumeAiVaultSessionInTerminal(
       select: true,
       navigation: 'caller'
     },
-    { timeoutMs: RESUME_RPC_TIMEOUT_MS }
+    { timeoutMs: RESUME_RPC_TIMEOUT_MS, beforeSend: assertCurrentOwner }
   )
-  let terminalTab
-  terminalTab = interpretOrThrowRefusalMessage(
+  return interpretOrThrowRefusalMessage(
     () => reviewTerminalCreateRun.interpret(created),
     translate('session.aiVaultResumeLaunch.createFailed', 'Failed to create terminal')
   )
-  if (launchAtCreate) {
-    return terminalTab
-  }
-  assertCurrentOwner?.()
-  const sent = await reviewTerminalSendRun.request(
-    client,
-    {
-      terminal: terminalTab.terminal,
-      text: launch.command,
-      enter: true
-    },
-    { timeoutMs: RESUME_RPC_TIMEOUT_MS }
-  )
-  let accepted
-  accepted = interpretOrThrowRefusalMessage(
-    () => reviewTerminalSendRun.interpret(sent),
-    translate('session.aiVaultResumeLaunch.sendFailed', 'Failed to send resume command')
-  )
-  if (!accepted) {
-    throw new Error(
-      translate('session.aiVaultResumeLaunch.inputLocked', 'Terminal input is locked')
-    )
-  }
-  return terminalTab
 }
 
 export type MobileAiVaultResumeMutationRegistry = {
   claim(sessionId: string): string
+  claimLaunch(
+    sessionId: string,
+    create: () => MobileAiVaultResumeLaunch
+  ): MobileAiVaultResumeLaunch & { clientMutationId: string }
   releaseOnSuccess(sessionId: string): void
 }
 
@@ -175,6 +163,7 @@ export function createMobileAiVaultResumeMutationRegistry(
   mintId: (sessionId: string) => string
 ): MobileAiVaultResumeMutationRegistry {
   const bySessionId = new Map<string, string>()
+  const launches = new Map<string, MobileAiVaultResumeLaunch & { clientMutationId: string }>()
   return {
     claim(sessionId: string): string {
       const existing = bySessionId.get(sessionId)
@@ -185,7 +174,17 @@ export function createMobileAiVaultResumeMutationRegistry(
       bySessionId.set(sessionId, minted)
       return minted
     },
+    claimLaunch(sessionId, create) {
+      const existing = launches.get(sessionId)
+      if (existing) {
+        return existing
+      }
+      const captured = { ...create(), clientMutationId: this.claim(sessionId) }
+      launches.set(sessionId, captured)
+      return captured
+    },
     releaseOnSuccess(sessionId: string): void {
+      launches.delete(sessionId)
       bySessionId.delete(sessionId)
     }
   }

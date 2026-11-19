@@ -2445,9 +2445,7 @@
       "fromSender": "来自"
     },
     "aiVaultResumeLaunch": {
-      "createFailed": "创建终端失败",
-      "inputLocked": "终端输入已锁定",
-      "sendFailed": "发送恢复命令失败"
+      "createFailed": "创建终端失败"
     },
     "aiVaultResumePreparation": {
       "prepareFailed": "无法准备此旧版 Codex 会话。请重试恢复"

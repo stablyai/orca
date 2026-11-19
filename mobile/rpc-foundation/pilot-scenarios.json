@@ -3580,7 +3580,7 @@
             "ok": false,
             "error": {
               "code": "worktree_archive_hook_failed",
-              "message": "Archive hook failed for worktree: /repos/marlin/wt-1 — exited 1.",
+              "message": "Archive hook failed for worktree: /repos/marlin/wt-1 \u2014 exited 1.",
               "data": {
                 "worktreePath": "/repos/marlin/wt-1",
                 "outcome": "exited",
@@ -6386,7 +6386,7 @@
           "complete": "session.tabs.createTerminal#1",
           "params": {
             "activate": false,
-            "clientMutationId": "resume-mutation-1",
+            "clientMutationId": "1700000000000-00000000000000000000000000000001",
             "env": {
               "ORCA_RESUME": "1"
             },
@@ -6394,7 +6394,9 @@
             "launchAgent": "codex",
             "navigation": "caller",
             "select": true,
-            "worktree": "id:workspace-1"
+            "worktree": "id:workspace-1",
+            "command": "codex resume rollout",
+            "requireOwnedStartup": true
           },
           "reply": {
             "ok": true,
@@ -6404,22 +6406,6 @@
                 "type": "terminal",
                 "title": "codex",
                 "terminal": "terminal-9"
-              }
-            }
-          }
-        },
-        {
-          "complete": "terminal.send#1",
-          "params": {
-            "terminal": "terminal-9",
-            "text": "codex resume rollout",
-            "enter": true
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "send": {
-                "accepted": true
               }
             }
           }
@@ -6444,7 +6430,7 @@
           "complete": "session.tabs.createTerminal#1",
           "params": {
             "activate": false,
-            "clientMutationId": "resume-mutation-1",
+            "clientMutationId": "1700000000000-00000000000000000000000000000001",
             "env": {
               "ORCA_RESUME": "1"
             },
@@ -6452,33 +6438,15 @@
             "launchAgent": "codex",
             "navigation": "caller",
             "select": true,
-            "worktree": "id:workspace-1"
+            "worktree": "id:workspace-1",
+            "command": "codex resume rollout",
+            "requireOwnedStartup": true
           },
           "reply": {
-            "ok": true,
-            "result": {
-              "tab": {
-                "id": "tab-9",
-                "type": "terminal",
-                "title": "codex",
-                "terminal": "terminal-9"
-              }
-            }
-          }
-        },
-        {
-          "complete": "terminal.send#1",
-          "params": {
-            "terminal": "terminal-9",
-            "text": "codex resume rollout",
-            "enter": true
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "send": {
-                "accepted": false
-              }
+            "ok": false,
+            "error": {
+              "code": "terminal_input_locked",
+              "message": "Terminal input is locked"
             }
           }
         },
@@ -6502,7 +6470,7 @@
           "complete": "session.tabs.createTerminal#1",
           "params": {
             "activate": false,
-            "clientMutationId": "resume-mutation-1",
+            "clientMutationId": "1700000000000-00000000000000000000000000000001",
             "env": {
               "ORCA_RESUME": "1"
             },
@@ -6510,7 +6478,9 @@
             "launchAgent": "codex",
             "navigation": "caller",
             "select": true,
-            "worktree": "id:workspace-1"
+            "worktree": "id:workspace-1",
+            "command": "codex resume rollout",
+            "requireOwnedStartup": true
           },
           "reply": {
             "ok": true,

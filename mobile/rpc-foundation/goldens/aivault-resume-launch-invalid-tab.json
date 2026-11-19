@@ -4,11 +4,6 @@
   "family": "aiVault.resume-launch",
   "namedDeltas": [],
   "values": {
-    "0bce25f5646d": {
-      "name": "session.tabs.createTerminal#1",
-      "ordinal": 2,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"session.tabs.createTerminal\",\"params\":{\"worktree\":\"id:workspace-1\",\"env\":{\"ORCA_RESUME\":\"1\"},\"envToDelete\":[\"CODEX_HOME\"],\"launchAgent\":\"codex\",\"clientMutationId\":\"resume-mutation-1\",\"activate\":false,\"select\":true,\"navigation\":\"caller\"}}"
-    },
     "478ad4afe83e": {
       "status": "rejected",
       "startedAt": 0,
@@ -19,11 +14,7 @@
         "isRpcDeliveryUnknown": false
       }
     },
-    "84a5c9365ee8": {
-      "failure": "The host sent a reply this app could not read (session.tabs.createTerminal)",
-      "launched": "unlaunched"
-    },
-    "8de69c55b96f": {
+    "7cf788e7696e": {
       "name": "session.tabs.createTerminal#1",
       "ordinal": 1,
       "args": [
@@ -35,13 +26,15 @@
           "name": "params",
           "value": {
             "activate": false,
-            "clientMutationId": "resume-mutation-1",
+            "clientMutationId": "1700000000000-00000000000000000000000000000001",
+            "command": "codex resume rollout",
             "env": {
               "ORCA_RESUME": "1"
             },
             "envToDelete": ["CODEX_HOME"],
             "launchAgent": "codex",
             "navigation": "caller",
+            "requireOwnedStartup": true,
             "select": true,
             "worktree": "id:workspace-1"
           }
@@ -49,6 +42,9 @@
         {
           "name": "options",
           "value": {
+            "beforeSend": {
+              "$rpc": "undefined"
+            },
             "timeoutMs": 30000
           }
         }
@@ -67,6 +63,15 @@
           }
         }
       }
+    },
+    "84a5c9365ee8": {
+      "failure": "The host sent a reply this app could not read (session.tabs.createTerminal)",
+      "launched": "unlaunched"
+    },
+    "ef0733a06396": {
+      "name": "session.tabs.createTerminal#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"session.tabs.createTerminal\",\"params\":{\"worktree\":\"id:workspace-1\",\"command\":\"codex resume rollout\",\"requireOwnedStartup\":true,\"env\":{\"ORCA_RESUME\":\"1\"},\"envToDelete\":[\"CODEX_HOME\"],\"launchAgent\":\"codex\",\"clientMutationId\":\"1700000000000-00000000000000000000000000000001\",\"activate\":false,\"select\":true,\"navigation\":\"caller\"}}"
     }
   },
   "recording": {
@@ -75,8 +80,8 @@
       {
         "id": "invalid-tab",
         "observation": {
-          "sender": ["8de69c55b96f"],
-          "payloads": ["0bce25f5646d"],
+          "sender": ["7cf788e7696e"],
+          "payloads": ["ef0733a06396"],
           "settlements": {
             "full": "478ad4afe83e"
           },

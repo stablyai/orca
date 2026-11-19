@@ -55,13 +55,14 @@ export function aiVaultResumeMountAdapters(
             WORKTREE,
             mountFixture<Parameters<typeof resume>[2]>({
               command: 'codex resume rollout',
+              hostCapabilities: ['session.tabs.owned-startup.v1'],
               ...(name === 'bare'
                 ? {}
                 : {
                     env: { ORCA_RESUME: '1' },
                     envToDelete: ['CODEX_HOME'],
                     launchAgent: 'codex',
-                    clientMutationId: 'resume-mutation-1'
+                    clientMutationId: '1700000000000-00000000000000000000000000000001'
                   })
             })
           ).then(

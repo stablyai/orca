@@ -13,7 +13,7 @@ export async function refreshMobileHistorySession(
     client,
     {
       force: true,
-      limit: 500,
+      unlimited: true,
       includeAntigravityIdeSessions: true,
       ...(selected.cwd ? { scopePaths: [selected.cwd], scopeOnly: true } : {})
     },
@@ -29,6 +29,11 @@ export async function refreshMobileHistorySession(
     (row) => row?.id === selected.id && row.executionHostId === selected.executionHostId
   )
   if (!session) {
+    if (result.issues.length > 0) {
+      throw new Error(
+        translate('agentHistory.resume.refreshFailed', 'Unable to refresh this session. Try again.')
+      )
+    }
     throw new Error(
       translate(
         'agentHistory.resume.sessionChanged',

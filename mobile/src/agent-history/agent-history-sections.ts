@@ -26,6 +26,7 @@ export function buildMobileAgentHistorySections(
   sessions: readonly AiVaultSession[],
   options: {
     query: string
+    providerSessionId?: string
     agents: readonly AiVaultAgent[]
     sort: AiVaultSort
     scope: AiVaultScope
@@ -36,7 +37,10 @@ export function buildMobileAgentHistorySections(
 ): MobileAgentHistorySection[] {
   // Until worktree.ps supplies prefixes, leave scoped tabs unfiltered rather than flash empty; memo reruns when paths arrive.
   const narrowByPath = options.scope !== 'all' && options.scopeFilterPaths.length > 0
-  const filtered = filterAiVaultSessions(sessions, {
+  const selected = options.providerSessionId
+    ? sessions.filter((row) => row.sessionId === options.providerSessionId)
+    : sessions
+  const filtered = filterAiVaultSessions(selected, {
     query: options.query,
     agents: options.agents,
     scope: narrowByPath ? 'workspace' : 'all',

@@ -1,5 +1,8 @@
 import { splitOpenCodeSqliteCandidate } from '../../agent-session/lifecycle/provider-handles/opencode-sqlite-session-path'
-import { buildBoundedSessionTranscript } from './agent-session-fork-context'
+import {
+  buildBoundedSessionTranscript,
+  getMarkdownFenceForTranscript
+} from './agent-session-fork-context'
 import type { LaunchSource } from '../../telemetry/schemas/telemetry-property-schemas'
 import type { TuiAgent } from '../../agent-launch/catalog/tui-agent'
 
@@ -25,12 +28,6 @@ export type AgentSessionContinuationRequest = {
   initialCwd?: string | null
   launchSource: LaunchSource
   avoidSourceAgent?: boolean
-}
-
-function markdownFenceFor(value: string): string {
-  const matches = value.match(/`+/g)
-  const longest = matches?.reduce((length, fence) => Math.max(length, fence.length), 0) ?? 0
-  return '`'.repeat(Math.max(3, longest + 1))
 }
 
 export function hasFullAgentSessionContext(source: AgentSessionContinuationSource): boolean {
@@ -119,11 +116,11 @@ function buildContextSection(args: {
   capturedTranscript: string | null
 }): string[] {
   if (args.transcriptPath) {
-    const fence = markdownFenceFor(args.transcriptPath)
+    const fence = getMarkdownFenceForTranscript(args.transcriptPath)
     const pathBlock = [`${fence}text`, args.transcriptPath, fence]
     if (args.sourceKind === 'chat') {
       const transcript = args.capturedTranscript ?? ''
-      const textFence = markdownFenceFor(transcript)
+      const textFence = getMarkdownFenceForTranscript(transcript)
       return [
         'Recent saved chat context (earlier messages may be omitted below):',
         `${textFence}text`,
@@ -152,7 +149,7 @@ function buildContextSection(args: {
   }
 
   const transcript = args.capturedTranscript ?? ''
-  const fence = markdownFenceFor(transcript)
+  const fence = getMarkdownFenceForTranscript(transcript)
   return [
     args.sourceKind === 'chat'
       ? 'A saved session transcript was unavailable, so use these recent chat messages:'

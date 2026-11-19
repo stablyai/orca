@@ -75,6 +75,7 @@ export async function launchAgentInExistingWorkspace(args: {
   reservation?: MobileAgentLaunchReservation
   placement?: AgentLaunchPlacement
   mintOperationId?: () => string
+  assertCurrentOwner?: () => void
 }): Promise<MobileExistingAgentLaunch> {
   if (!supportsMobileExistingAgentLaunch(args.hostCapabilities)) {
     return { kind: 'unsupported' }
@@ -101,6 +102,15 @@ export async function launchAgentInExistingWorkspace(args: {
   if (args.reservation?.sessionId) {
     rememberMobileCreatedStructuredSession(args.reservation.sessionId, `id:${args.worktreeId}`)
   }
+  let ownerFailure: { cause: unknown } | undefined
+  const beforeAttempt = () => {
+    try {
+      args.assertCurrentOwner?.()
+    } catch (cause) {
+      ownerFailure = { cause }
+      throw cause
+    }
+  }
   let sent
   try {
     sent = await sendReplayingAmbiguousDelivery(
@@ -109,11 +119,22 @@ export async function launchAgentInExistingWorkspace(args: {
         agentLaunchReplayRun.request(
           args.client,
           params,
-          args.prompt ? { timeoutMs: PROMPTED_AGENT_LAUNCH_TIMEOUT_MS } : undefined
+          args.assertCurrentOwner
+            ? {
+                ...(args.prompt ? { timeoutMs: PROMPTED_AGENT_LAUNCH_TIMEOUT_MS } : {}),
+                beforeSend: beforeAttempt
+              }
+            : args.prompt
+              ? { timeoutMs: PROMPTED_AGENT_LAUNCH_TIMEOUT_MS }
+              : undefined
         ),
-      { kind: 'durable' }
+      { kind: 'durable' },
+      beforeAttempt
     )
   } catch {
+    if (ownerFailure) {
+      throw ownerFailure.cause
+    }
     return { kind: 'unknown', message: AGENT_LAUNCH_UNCONFIRMED_MESSAGE }
   }
   const { response, replayed } = sent

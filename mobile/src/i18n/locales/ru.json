@@ -2130,9 +2130,7 @@
       "fromSender": "От"
     },
     "aiVaultResumeLaunch": {
-      "createFailed": "Не удалось создать терминал",
-      "inputLocked": "Ввод в терминал заблокирован",
-      "sendFailed": "Не удалось отправить команду возобновления"
+      "createFailed": "Не удалось создать терминал"
     },
     "aiVaultResumePreparation": {
       "prepareFailed": "Не удалось подготовить эту сессию Codex старого формата. Попробуйте возобновить её ещё раз."

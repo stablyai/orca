@@ -2013,9 +2013,7 @@
       "fromSender": "來自"
     },
     "aiVaultResumeLaunch": {
-      "createFailed": "無法建立終端機",
-      "inputLocked": "終端機輸入已鎖定",
-      "sendFailed": "無法傳送恢復命令"
+      "createFailed": "無法建立終端機"
     },
     "aiVaultResumePreparation": {
       "prepareFailed": "無法準備此舊版 Codex 工作階段。請再次嘗試恢復。"

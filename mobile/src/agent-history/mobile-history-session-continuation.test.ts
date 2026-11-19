@@ -81,14 +81,20 @@ describe('mobile history handoff', () => {
       const result = continueMobileHistorySession({
         client,
         session: source,
-        action: { kind: 'handoff', agent: 'codex' },
+        action: { kind: 'handoff', agent: 'codex', worktreeId: 'route' },
         worktreeId: 'route',
         worktrees: [],
         assertCurrentOwner: () => {},
-        mutations: createMobileAiVaultResumeMutationRegistry(() => 'handoff-operation')
+        mutations: createMobileAiVaultResumeMutationRegistry(() => 'handoff-operation'),
+        handoffs: new Map()
       })
       if (outcome === 'unconfirmed') {
-        await expect(result).rejects.toThrow(/context delivery was not confirmed/)
+        await expect(result).resolves.toMatchObject({
+          worktreeId: 'route',
+          terminal: 'pty',
+          paneKey: 'group:11111111-1111-4111-8111-111111111111',
+          warning: expect.stringContaining('context delivery was not confirmed')
+        })
       } else {
         await expect(result).resolves.toEqual({
           worktreeId: 'route',

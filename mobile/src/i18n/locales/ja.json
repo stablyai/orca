@@ -2018,9 +2018,7 @@
       "fromSender": "送信元:"
     },
     "aiVaultResumeLaunch": {
-      "createFailed": "ターミナルの作成に失敗しました。",
-      "inputLocked": "ターミナル入力はロックされています。",
-      "sendFailed": "再開コマンドの送信に失敗しました。"
+      "createFailed": "ターミナルの作成に失敗しました。"
     },
     "aiVaultResumePreparation": {
       "prepareFailed": "この旧形式の Codex セッションを準備できませんでした。再開を再試行してください。"

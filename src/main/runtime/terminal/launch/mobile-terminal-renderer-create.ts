@@ -73,9 +73,7 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
     worktreeSelector: string,
     opts: MobileTerminalCreateOptions = {}
   ): Promise<RuntimeMobileSessionCreateTerminalResult> {
-    const pairedCreate = Boolean(opts.clientNavigationId)
     const graphEpoch = this.captureReadyGraphEpoch()
-    // The paired client's own create: its user's act, as every start below.
     const workspace = await this.resolveTerminalWorkspaceLaunchScope(worktreeSelector, undefined, {
       wslUserAct: true
     })
@@ -111,25 +109,31 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
     if (opts.signal?.aborted) {
       throw new Error('client_disconnected')
     }
-    if (opts.clientMutationId && startupCommand.command && startupCommand.launchAgent === 'qoder') {
+    if (
+      opts.clientMutationId &&
+      startupCommand.command &&
+      (startupCommand.launchAgent === 'qoder' || opts.requireOwnedStartup)
+    ) {
       const clientIdentity = opts.clientNavigationId ?? 'local'
       const seed = `${clientIdentity}\0${worktreeId}\0${opts.clientMutationId}`
+
       // A command-bearing retry must reconcile the owning PTY before delivering the resume again.
       return await this.createRuntimeOwnedMobileSessionTerminal(
         worktreeId,
         opts.activate !== false,
         afterTabId,
         {
-          // The paired client's own create: its user's act.
           wslUserAct: true,
           ...startupCommand,
           ...(opts.trustWorktreeId ? { trustWorktreeId: opts.trustWorktreeId } : {}),
           cwd,
+          // Retain the legacy namespace so earlier Qoder mutations still reconcile.
           identity: {
             tabId: deterministicAgentSessionUuid(`mobile-qoder-tab\0${seed}`),
             leafId: deterministicAgentSessionUuid(`mobile-qoder-leaf\0${seed}`)
           },
           createMutation: { clientIdentity, id: opts.clientMutationId },
+          onPtySpawnDispatched: opts.onPtySpawnDispatched,
           viewMode: opts.viewMode,
           targetGroupId: opts.targetGroupId,
           supportsSplitGroupPlacement: opts.supportsSplitGroupPlacement,
@@ -170,7 +174,7 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
     if (rendererWebContents.isDestroyed?.()) {
       throw new Error('runtime_unavailable')
     }
-    const releasePublicationThrottle = pairedCreate
+    const releasePublicationThrottle = opts.clientNavigationId
       ? rendererPublicationThrottle.acquire(rendererWebContents)
       : () => {}
     try {
@@ -234,7 +238,7 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
       // Rescue uses the active group; renderer reconciliation later moves the tab into its requested group.
       this.pendingMobileTerminalCreatesByKey.set(pendingCreateKey, {
         activate: opts.activate !== false,
-        paired: pairedCreate,
+        paired: Boolean(opts.clientNavigationId),
         selectIfNoActiveTab: true,
         ...(startupCommand.command ? { startupCommand: startupCommand.command } : {}),
         ...(opts.viewMode ? { viewMode: opts.viewMode } : {})

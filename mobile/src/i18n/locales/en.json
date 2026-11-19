@@ -453,7 +453,8 @@
       "forkUnsupported": "This agent cannot resume in a new CLI conversation.",
       "cliUpdateRequired": "Update Orca on this host to resume this chat in a new CLI.",
       "refreshFailed": "Unable to refresh this session. Try again.",
-      "sessionChanged": "This session is no longer available. Refresh history and choose it again."
+      "sessionChanged": "This session is no longer available. Refresh history and choose it again.",
+      "safeStartupUpdateRequired": "Update Orca on this host to resume safely from history."
     },
     "interrupted": {
       "failed": "Couldn't resume the interrupted chats.",
@@ -489,7 +490,9 @@
       "empty": "No enabled agents were detected on this host.",
       "noContext": "No conversation context is available to hand off.",
       "updateRequired": "Update Orca on this host to hand off a session.",
-      "unconfirmed": "The agent started, but context delivery was not confirmed. Check the new session before retrying."
+      "unconfirmed": "The agent started, but context delivery was not confirmed. Check the new session before retrying.",
+      "openSession": "Open session",
+      "workspaceChanged": "The workspace changed. Choose an agent again."
     }
   },
   "diagnostics": {
@@ -2461,9 +2464,7 @@
       "editorDescription": "Save terminal commands or agent prompts for quick access."
     },
     "aiVaultResumeLaunch": {
-      "createFailed": "Failed to create terminal",
-      "sendFailed": "Failed to send resume command",
-      "inputLocked": "Terminal input is locked"
+      "createFailed": "Failed to create terminal"
     },
     "aiVaultResumePreparation": {
       "prepareFailed": "Could not prepare this legacy Codex session. Retry resume."

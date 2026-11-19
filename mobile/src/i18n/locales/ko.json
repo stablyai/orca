@@ -2018,9 +2018,7 @@
       "fromSender": "보낸 사람:"
     },
     "aiVaultResumeLaunch": {
-      "createFailed": "터미널을 생성하지 못했습니다.",
-      "inputLocked": "터미널 입력이 잠겨 있습니다.",
-      "sendFailed": "재개 명령을 보내지 못했습니다."
+      "createFailed": "터미널을 생성하지 못했습니다."
     },
     "aiVaultResumePreparation": {
       "prepareFailed": "이 레거시 Codex 세션을 준비하지 못했습니다. 재개를 다시 시도하세요."

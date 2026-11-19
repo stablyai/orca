@@ -2422,9 +2422,7 @@
       "fromSender": "De"
     },
     "aiVaultResumeLaunch": {
-      "createFailed": "Falha ao criar terminal",
-      "inputLocked": "A entrada do terminal está bloqueada",
-      "sendFailed": "Falha ao enviar comando de retomada"
+      "createFailed": "Falha ao criar terminal"
     },
     "aiVaultResumePreparation": {
       "prepareFailed": "Não foi possível preparar esta sessão legada do Codex. Tente retomar novamente."

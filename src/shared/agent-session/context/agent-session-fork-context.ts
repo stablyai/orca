@@ -10,7 +10,7 @@ export type AgentSessionForkPromptInput = {
   agentLabel?: string | null
 }
 
-function getMarkdownFenceForTranscript(value: string): string {
+export function getMarkdownFenceForTranscript(value: string): string {
   let longestFence = 0
   let currentFence = 0
   for (let index = 0; index < value.length; index++) {
@@ -35,10 +35,19 @@ function tailBoundForkCapture(value: string): string {
 export function cleanAgentSessionForkTranscript(value: string): string {
   let result = ''
   let newlineRun = 0
+  let oscSuffixHasNoTerminator = false
 
   for (let index = 0; index < value.length; index++) {
     const code = value.charCodeAt(index)
     if (code === ESCAPE_CODE) {
+      if (value.charCodeAt(index + 1) === 93) {
+        const end: number | null = oscSuffixHasNoTerminator
+          ? null
+          : findOscSequenceEnd(value, index + 2)
+        oscSuffixHasNoTerminator ||= end === null
+        index = end ?? index + 1
+        continue
+      }
       const skippedIndex = findTerminalEscapeEnd(value, index)
       if (skippedIndex !== null) {
         index = skippedIndex
@@ -67,9 +76,6 @@ export function cleanAgentSessionForkTranscript(value: string): string {
 
 function findTerminalEscapeEnd(value: string, escapeIndex: number): number | null {
   const nextCode = value.charCodeAt(escapeIndex + 1)
-  if (nextCode === 93) {
-    return findOscSequenceEnd(value, escapeIndex + 2) ?? escapeIndex + 1
-  }
   if (nextCode === 91) {
     return findCsiSequenceEnd(value, escapeIndex + 2)
   }

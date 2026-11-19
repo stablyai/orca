@@ -108,9 +108,11 @@ function AgentHistorySkippedNotice({ issues }: { issues: readonly AiVaultScanIss
 
 export function AgentHistoryResumeNotice({
   message,
+  onOpen,
   onDismiss
 }: {
   message: string
+  onOpen?: () => void
   onDismiss: () => void
 }) {
   useMobileColorScheme()
@@ -118,6 +120,18 @@ export function AgentHistoryResumeNotice({
   return (
     <View style={[styles.notice, styles.noticeRow]}>
       <Text style={styles.noticeText}>{message}</Text>
+      {onOpen ? (
+        <Pressable
+          style={({ pressed }) => pressed && pressedStyle}
+          onPress={onOpen}
+          hitSlop={10}
+          accessibilityRole="button"
+        >
+          <Text style={styles.noticeAction}>
+            {t('agentHistory.handoff.openSession', 'Open session')}
+          </Text>
+        </Pressable>
+      ) : null}
       <Pressable
         style={({ pressed }) => pressed && pressedStyle}
         onPress={onDismiss}

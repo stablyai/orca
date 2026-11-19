@@ -4,37 +4,7 @@
   "family": "aiVault.resume-launch",
   "namedDeltas": [],
   "values": {
-    "0bce25f5646d": {
-      "name": "session.tabs.createTerminal#1",
-      "ordinal": 2,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"session.tabs.createTerminal\",\"params\":{\"worktree\":\"id:workspace-1\",\"env\":{\"ORCA_RESUME\":\"1\"},\"envToDelete\":[\"CODEX_HOME\"],\"launchAgent\":\"codex\",\"clientMutationId\":\"resume-mutation-1\",\"activate\":false,\"select\":true,\"navigation\":\"caller\"}}"
-    },
-    "400d946a183d": {
-      "failure": {
-        "$rpc": "null"
-      },
-      "launched": {
-        "id": "tab-9",
-        "terminal": "terminal-9",
-        "title": "codex"
-      }
-    },
-    "6e79da536ca9": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "id": "tab-9",
-        "terminal": "terminal-9",
-        "title": "codex"
-      }
-    },
-    "7d9e7036f3d0": {
-      "name": "terminal.send#1",
-      "ordinal": 4,
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-9\",\"text\":\"codex resume rollout\",\"enter\":true}}"
-    },
-    "a67829619e64": {
+    "0b1294a2080e": {
       "name": "session.tabs.createTerminal#1",
       "ordinal": 1,
       "args": [
@@ -46,13 +16,15 @@
           "name": "params",
           "value": {
             "activate": false,
-            "clientMutationId": "resume-mutation-1",
+            "clientMutationId": "1700000000000-00000000000000000000000000000001",
+            "command": "codex resume rollout",
             "env": {
               "ORCA_RESUME": "1"
             },
             "envToDelete": ["CODEX_HOME"],
             "launchAgent": "codex",
             "navigation": "caller",
+            "requireOwnedStartup": true,
             "select": true,
             "worktree": "id:workspace-1"
           }
@@ -60,6 +32,9 @@
         {
           "name": "options",
           "value": {
+            "beforeSend": {
+              "$rpc": "undefined"
+            },
             "timeoutMs": 30000
           }
         }
@@ -82,43 +57,30 @@
         }
       }
     },
-    "cceac9bcb36d": {
-      "name": "terminal.send#1",
-      "ordinal": 3,
-      "args": [
-        {
-          "name": "method",
-          "value": "terminal.send"
-        },
-        {
-          "name": "params",
-          "value": {
-            "enter": true,
-            "terminal": "terminal-9",
-            "text": "codex resume rollout"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "timeoutMs": 30000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-2",
-          "ok": true,
-          "result": {
-            "send": {
-              "accepted": true
-            }
-          }
-        }
+    "400d946a183d": {
+      "failure": {
+        "$rpc": "null"
+      },
+      "launched": {
+        "id": "tab-9",
+        "terminal": "terminal-9",
+        "title": "codex"
       }
+    },
+    "6e79da536ca9": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "id": "tab-9",
+        "terminal": "terminal-9",
+        "title": "codex"
+      }
+    },
+    "ef0733a06396": {
+      "name": "session.tabs.createTerminal#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"session.tabs.createTerminal\",\"params\":{\"worktree\":\"id:workspace-1\",\"command\":\"codex resume rollout\",\"requireOwnedStartup\":true,\"env\":{\"ORCA_RESUME\":\"1\"},\"envToDelete\":[\"CODEX_HOME\"],\"launchAgent\":\"codex\",\"clientMutationId\":\"1700000000000-00000000000000000000000000000001\",\"activate\":false,\"select\":true,\"navigation\":\"caller\"}}"
     }
   },
   "recording": {
@@ -127,8 +89,8 @@
       {
         "id": "resumed",
         "observation": {
-          "sender": ["a67829619e64", "cceac9bcb36d"],
-          "payloads": ["0bce25f5646d", "7d9e7036f3d0"],
+          "sender": ["0b1294a2080e"],
+          "payloads": ["ef0733a06396"],
           "settlements": {
             "full": "6e79da536ca9"
           },

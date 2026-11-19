@@ -1,18 +1,15 @@
 import type { AiVaultSession } from '../../../src/shared/ai-vault/contracts/ai-vault-types'
 import type { TuiAgent } from '../../../src/shared/agent-launch/catalog/tui-agent'
-import { buildAgentSessionContinuationPrompt } from '../../../src/shared/agent-session/context/agent-session-continuation'
-import { prepareAiVaultSessionContinuation } from '../../../src/shared/agent-session/context/ai-vault-session-continuation'
 import { SESSION_TABS_CHAT_FORK_CLI_RUNTIME_CAPABILITY } from '../../../src/shared/remote-runtime/protocol/session-tabs-runtime-capabilities'
-import {
-  structuredAgentSessionPaneKey,
-  structuredAgentSessionTabId
-} from '../../../src/shared/agent-session/view/structured-agent-session-projection'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import type { Worktree } from '../worktree/workspace-list/workspace-list-types'
 import { interpretOrThrowRefusalMessage } from '../transport/rpc/rpc-refusal-message'
 import { translate } from '../i18n/mobile-i18n'
 import { sessionTabCreateTerminal } from '../session/tabs/mobile-session-tab-write-operations'
-import { launchAgentInExistingWorkspace } from '../session/agent-launch/mobile-existing-agent-launch'
+import {
+  handoffMobileHistorySession,
+  type PendingMobileHistoryHandoff
+} from './mobile-history-session-handoff'
 import { agentHistoryHostStatusRead } from './mobile-agent-history-operations'
 import { prepareMobileHistoryResumeTarget } from './mobile-history-resume-target-preparation'
 import {
@@ -31,7 +28,28 @@ import { terminalTabPaneKey } from '../session/tabs/notification-pane-tab'
 export type MobileHistorySessionAction =
   | { kind: 'resume' }
   | { kind: 'cli' }
-  | { kind: 'handoff'; agent: TuiAgent }
+  | { kind: 'handoff'; agent: TuiAgent; worktreeId: string }
+
+export type MobileHistoryContinuationDestination = {
+  worktreeId: string
+  paneKey?: string
+  terminal?: string
+  warning?: string
+}
+export type MobileHistoryResumeResult = void | {
+  kind: 'handoff-target-changed'
+  session: AiVaultSession
+}
+export class MobileHistoryHandoffWorkspaceChanged extends Error {
+  constructor(readonly session: AiVaultSession) {
+    super(
+      translate(
+        'agentHistory.handoff.workspaceChanged',
+        'The workspace changed. Choose an agent again.'
+      )
+    )
+  }
+}
 
 type ContinuationContext = {
   client: RpcClient
@@ -65,10 +83,17 @@ export async function continueMobileHistorySession(
   args: ContinuationContext & {
     action: Exclude<MobileHistorySessionAction, { kind: 'resume' }>
     mutations: MobileAiVaultResumeMutationRegistry
+    handoffs: Map<string, PendingMobileHistoryHandoff>
   }
-): Promise<{ worktreeId: string; paneKey?: string; terminal?: string }> {
+): Promise<MobileHistoryContinuationDestination> {
   const { client, session, action, assertCurrentOwner, mutations } = args
-  const mutationKey = `${session.id}:${action.kind}`
+  const mutationKey = JSON.stringify([
+    session.id,
+    action.kind,
+    session.executionHostId,
+    session.structuredSession?.sessionId ?? session.sessionId,
+    session.structuredSession?.workspaceId ?? ''
+  ])
   if (action.kind === 'cli' && session.structuredSession) {
     const reply = await agentHistoryHostStatusRead.request(client)
     assertCurrentOwner()
@@ -105,62 +130,20 @@ export async function continueMobileHistorySession(
   const { target, platform, settings, host, status } =
     await loadMobileHistoryContinuationTarget(args)
   if (action.kind === 'handoff') {
-    // shortcut: database-backed rows use their preview; add host snapshots when mobile exposes that RPC.
-    const request = prepareAiVaultSessionContinuation({
-      session,
-      targetWorktreeId: target.worktreeId,
-      targetWorkspacePath: target.workspacePath ?? session.cwd ?? ''
-    })
-    const prompt = buildAgentSessionContinuationPrompt(request.source, 'focused')
-    if (!prompt) {
-      throw new Error(
-        translate(
-          'agentHistory.handoff.noContext',
-          'No conversation context is available to hand off.'
-        )
-      )
+    if (target.worktreeId !== action.worktreeId) {
+      throw new MobileHistoryHandoffWorkspaceChanged(session)
     }
-    assertCurrentOwner()
-    const launched = await launchAgentInExistingWorkspace({
+    return handoffMobileHistorySession({
       client,
-      hostCapabilities: host.capabilities,
-      worktreeId: target.worktreeId,
+      session,
       agent: action.agent,
-      prompt: { text: prompt, delivery: 'submit' },
-      mintOperationId: () => mutations.claim(`${mutationKey}:${action.agent}`)
+      target,
+      capabilities: host.capabilities,
+      assertCurrentOwner,
+      mutations,
+      handoffs: args.handoffs,
+      mutationKey
     })
-    assertCurrentOwner()
-    if (launched.kind !== 'launched') {
-      throw new Error(
-        'message' in launched
-          ? launched.message
-          : translate(
-              'agentHistory.handoff.updateRequired',
-              'Update Orca on this host to hand off a session.'
-            )
-      )
-    }
-    if (launched.promptDelivered !== true || launched.result.prompt?.outcome === 'unconfirmed') {
-      throw new Error(
-        translate(
-          'agentHistory.handoff.unconfirmed',
-          'The agent started, but context delivery was not confirmed. Check the new session before retrying.'
-        )
-      )
-    }
-    mutations.releaseOnSuccess(`${mutationKey}:${action.agent}`)
-    const outcome = launched.result.outcome
-    return {
-      worktreeId: launched.result.worktreeId,
-      ...(outcome.kind === 'terminal' ? { terminal: outcome.handle } : {}),
-      paneKey:
-        outcome.kind === 'structured'
-          ? structuredAgentSessionPaneKey(
-              outcome.tabId ?? structuredAgentSessionTabId(outcome.sessionId),
-              outcome.sessionId
-            )
-          : outcome.paneKey
-    }
   }
   if (session.agent !== 'codex' && session.agent !== 'claude') {
     throw new Error(
@@ -172,23 +155,25 @@ export async function continueMobileHistorySession(
   }
   const prepared = await prepareMobileAiVaultSessionResume(client, session)
   assertCurrentOwner()
-  const launch = buildMobileAiVaultResumeLaunch({
-    session: prepared,
-    workspacePlatform: platform,
-    hostTerminalWindowsShell: readMobileRuntimeTerminalWindowsShell(status),
-    settings,
-    fork: true
-  })
+  const launchKey = JSON.stringify([mutationKey, target.worktreeId])
+  const launch = mutations.claimLaunch(launchKey, () =>
+    buildMobileAiVaultResumeLaunch({
+      session: prepared,
+      workspacePlatform: platform,
+      hostTerminalWindowsShell: readMobileRuntimeTerminalWindowsShell(status),
+      settings,
+      fork: true
+    })
+  )
   const tab = await resumeAiVaultSessionInTerminal(
     client,
     target.worktreeId,
     {
       ...launch,
-      hostCapabilities: host.capabilities,
-      clientMutationId: mutations.claim(mutationKey)
+      hostCapabilities: host.capabilities
     },
     assertCurrentOwner
   )
-  mutations.releaseOnSuccess(mutationKey)
+  mutations.releaseOnSuccess(launchKey)
   return { worktreeId: target.worktreeId, paneKey: terminalTabPaneKey(tab), terminal: tab.terminal }
 }

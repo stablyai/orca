@@ -27,13 +27,15 @@ export type AmbiguousDeliveryReplay =
 export async function sendReplayingAmbiguousDelivery(
   client: RpcClient,
   send: () => Promise<RpcResponse>,
-  replay: AmbiguousDeliveryReplay | null
+  replay: AmbiguousDeliveryReplay | null,
+  beforeAttempt?: () => void
 ): Promise<{ response: RpcResponse; replayed: boolean }> {
   let migrationRetry = 0
   let ambiguousRetry = 0
   const firstSentAt = Date.now()
   let replayDeadlineAt: number | null = null
   for (;;) {
+    beforeAttempt?.()
     try {
       // Keep the transport promise’s original rejection object; delivery-unknown is tracked by WeakSet identity.
       const response = await send()

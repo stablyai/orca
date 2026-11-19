@@ -2020,9 +2020,7 @@
       "fromSender": "Gönderen"
     },
     "aiVaultResumeLaunch": {
-      "createFailed": "Terminal oluşturulamadı",
-      "inputLocked": "Terminal girişi kilitli",
-      "sendFailed": "Sürdürme komutu gönderilemedi"
+      "createFailed": "Terminal oluşturulamadı"
     },
     "aiVaultResumePreparation": {
       "prepareFailed": "Bu eski Codex oturumu hazırlanamadı. Oturumu sürdürmeyi yeniden deneyin."

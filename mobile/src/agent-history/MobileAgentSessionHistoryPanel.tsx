@@ -86,15 +86,21 @@ function MobileAgentSessionHistoryPanelContent({
     client,
     connState
   )
-  const [query, setQuery] = useState(sessionId ?? '')
+  const [query, setQuery] = useState('')
   // Desktop History's defaults: every agent, most recently updated first.
   const [agents, setAgents] = useState<readonly AiVault.AiVaultAgent[]>(AiVault.AI_VAULT_AGENTS)
   const [sort, setSort] = useState<AiVault.AiVaultSort>('updated')
   const [searchBarHeight, setSearchBarHeight] = useState(0)
   const insets = useSafeAreaInsets()
   const now = useNow(30_000)
-  const { onResumeSession, resumingSessionId, resumeMessage, setResumeMessage, resumeToast } =
-    useMobileHistorySessionResume({ hostId, worktreeId, origin, client, connState, worktrees })
+  const {
+    onResumeSession,
+    resumingSessionId,
+    resumeMessage,
+    setResumeMessage,
+    resumeToast,
+    openUnconfirmedContinuation
+  } = useMobileHistorySessionResume({ hostId, worktreeId, origin, client, connState, worktrees })
   const worktreeLabel = getWorktreeLabel(name, worktreeId)
 
   const {
@@ -129,6 +135,7 @@ function MobileAgentSessionHistoryPanelContent({
     () =>
       buildMobileAgentHistorySections(sessions, {
         query,
+        providerSessionId: sessionId,
         agents,
         sort,
         scope,
@@ -136,7 +143,7 @@ function MobileAgentSessionHistoryPanelContent({
         activeWorktreePath,
         now
       }),
-    [sessions, query, agents, sort, scope, scopeFilterPaths, activeWorktreePath, now, t]
+    [sessions, query, sessionId, agents, sort, scope, scopeFilterPaths, activeWorktreePath, now, t]
   )
 
   const showRefreshLine = useRefreshHint(revalidating)
@@ -222,6 +229,7 @@ function MobileAgentSessionHistoryPanelContent({
           {resumeMessage ? (
             <AgentHistoryResumeNotice
               message={resumeMessage}
+              onOpen={openUnconfirmedContinuation}
               onDismiss={() => setResumeMessage(null)}
             />
           ) : null}

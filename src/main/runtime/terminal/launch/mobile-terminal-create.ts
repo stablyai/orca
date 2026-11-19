@@ -27,6 +27,8 @@ export type MobileTerminalCreateOptions = {
   sourceChatFork?: { sessionId: string }
   targetGroupId?: string
   command?: string
+  requireOwnedStartup?: true
+  onPtySpawnDispatched?: () => void
   shellOverride?: string
   cwd?: string
   env?: Record<string, string>
@@ -101,6 +103,8 @@ export abstract class OrcaRuntimeWithCreateMobileSessionTerminal extends OrcaRun
       sourceChatFork?: { sessionId: string }
       targetGroupId?: string
       command?: string
+      requireOwnedStartup?: true
+      onPtySpawnDispatched?: () => void
       shellOverride?: string
       cwd?: string
       env?: Record<string, string>

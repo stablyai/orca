@@ -2077,9 +2077,7 @@
       "fromSender": "De"
     },
     "aiVaultResumeLaunch": {
-      "createFailed": "Impossible de créer le terminal",
-      "inputLocked": "La saisie du terminal est verrouillée",
-      "sendFailed": "Impossible d'envoyer la commande de reprise"
+      "createFailed": "Impossible de créer le terminal"
     },
     "aiVaultResumePreparation": {
       "prepareFailed": "Impossible de préparer cette ancienne session Codex. Réessayez de la reprendre."

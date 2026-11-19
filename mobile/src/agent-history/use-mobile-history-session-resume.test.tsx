@@ -1,3 +1,5 @@
+import type { MobileHistoryResumeResult } from './mobile-history-session-continuation'
+import { historyClient, historySession } from './mobile-history-test-fixture'
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -71,8 +73,9 @@ function success(result: unknown): RpcResponse {
 async function withResume(
   client: RpcClient,
   run: (
-    resume: ReturnType<typeof useMobileHistorySessionResume>['onResumeSession']
-  ) => Promise<void>
+    resume: ReturnType<typeof useMobileHistorySessionResume>['onResumeSession'],
+    current: () => ReturnType<typeof useMobileHistorySessionResume>
+  ) => Promise<unknown>
 ) {
   const probe: { value?: ReturnType<typeof useMobileHistorySessionResume> } = {}
   function Probe() {
@@ -94,8 +97,22 @@ async function withResume(
     if (!probe.value) {
       throw new Error('missing probe')
     }
-    const resume = probe.value.onResumeSession
-    await act(() => run(resume))
+    const current = () => {
+      if (!probe.value) {
+        throw new Error('missing probe')
+      }
+      return probe.value
+    }
+    const resume: ReturnType<typeof useMobileHistorySessionResume>['onResumeSession'] = async (
+      ...args
+    ) => {
+      let result: MobileHistoryResumeResult = undefined
+      await act(async () => {
+        result = await current().onResumeSession(...args)
+      })
+      return result
+    }
+    await run(resume, current)
   } finally {
     await act(() => mounted.tree?.unmount())
   }
@@ -197,7 +214,10 @@ describe('continuing mobile history from the current host record', () => {
         sendRequest: async (method) => {
           const results: Record<string, unknown> = {
             'aiVault.listSessions': { sessions: [selected], issues: [] },
-            'status.get': { hostPlatform: 'darwin', capabilities: [] },
+            'status.get': {
+              hostPlatform: 'darwin',
+              capabilities: ['session.tabs.owned-startup.v1']
+            },
             'repo.list': { repos: [{ id: 'repo', path: '/repo' }] },
             'folderWorkspace.list': { folderWorkspaces: [] },
             'projectGroup.list': { groups: [] },
@@ -233,6 +253,41 @@ describe('continuing mobile history from the current host record', () => {
       expect(navigation.replace).not.toHaveBeenCalled()
     }
   )
+
+  it('keeps an unconfirmed handoff destination available to open without launching again', async () => {
+    const selected = historySession()
+    const client = historyClient(selected, async (method) =>
+      method === 'agent.launchReplay'
+        ? {
+            id: 'reply',
+            ok: true,
+            result: {
+              outcome: { kind: 'terminal', handle: 'pty', paneKey: `group:${LEAF}` },
+              worktreeId: 'route',
+              receipt: {
+                mode: 'terminal',
+                preferred: 'terminal',
+                reason: 'user_default',
+                detail: 'CLI'
+              },
+              prompt: { delivery: 'submit', outcome: 'unconfirmed' }
+            }
+          }
+        : undefined
+    )
+    await withResume(client, async (resume, current) => {
+      await resume(selected, { kind: 'handoff', agent: 'codex', worktreeId: 'repo::/repo' })
+      expect(navigation.shellOpen).not.toHaveBeenCalled()
+      const open = current().openUnconfirmedContinuation
+      if (!open) {
+        throw new Error('The created session has no open action')
+      }
+      act(() => open())
+      expect(navigation.shellOpen).toHaveBeenCalledWith(
+        '/h/host/session/route?paneKey=group%3A11111111-1111-4111-8111-111111111111'
+      )
+    })
+  })
 
   it('does not launch a stale row when only another host still lists that id', async () => {
     const selected = session('claude')

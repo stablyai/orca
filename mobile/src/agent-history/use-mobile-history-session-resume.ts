@@ -1,3 +1,5 @@
+import { structuredSessionOperationId } from '../session/native-chat/agent-session/structured-session-operation-id'
+import type { PendingMobileHistoryHandoff } from './mobile-history-session-handoff'
 import { useCallback, useRef, useState } from 'react'
 import type { AiVaultSession } from '../../../src/shared/ai-vault/contracts/ai-vault-types'
 import type { Worktree } from '../worktree/workspace-list/workspace-list-types'
@@ -25,6 +27,9 @@ import { refreshMobileHistorySession } from './refresh-mobile-history-session'
 import {
   continueMobileHistorySession,
   loadMobileHistoryContinuationTarget,
+  MobileHistoryHandoffWorkspaceChanged,
+  type MobileHistoryContinuationDestination,
+  type MobileHistoryResumeResult,
   type MobileHistorySessionAction
 } from './mobile-history-session-continuation'
 
@@ -56,15 +61,18 @@ export function useMobileHistorySessionResume({
   const [resumingSessionId, setResumingSessionId] = useState<string | null>(null)
   const [resumeMessage, setResumeMessage] = useState<string | null>(null)
   const { message: resumeToast, showToast: showResumeToast } = useTransientToast()
+  const [unconfirmedContinuation, setUnconfirmedContinuation] =
+    useState<MobileHistoryContinuationDestination | null>(null)
+  const handoffs = useRef(new Map<string, PendingMobileHistoryHandoff>())
   const resumeLaunchInFlightRef = useRef(false)
   const resumeMutationRegistryRef = useRef(
-    createMobileAiVaultResumeMutationRegistry(createMobileAiVaultResumeMutationId)
+    createMobileAiVaultResumeMutationRegistry(() => structuredSessionOperationId())
   )
   const onResumeSession = useCallback(
     async (
       selected: AiVaultSession,
       action: MobileHistorySessionAction = { kind: 'resume' }
-    ): Promise<void> => {
+    ): Promise<MobileHistoryResumeResult> => {
       if (resumeLaunchInFlightRef.current) {
         return
       }
@@ -78,6 +86,7 @@ export function useMobileHistorySessionResume({
       resumeLaunchInFlightRef.current = true
       setResumingSessionId(selected.id)
       setResumeMessage(null)
+      setUnconfirmedContinuation(null)
       try {
         const session = await refreshMobileHistorySession(client, selected)
         assertCurrentOwner()
@@ -89,9 +98,16 @@ export function useMobileHistorySessionResume({
             worktreeId,
             worktrees,
             assertCurrentOwner,
-            mutations: resumeMutationRegistryRef.current
+            mutations: resumeMutationRegistryRef.current,
+            handoffs: handoffs.current
           })
           assertCurrentOwner()
+          if (destination.warning) {
+            setResumeMessage(destination.warning)
+            setUnconfirmedContinuation(destination)
+            triggerError()
+            return
+          }
           triggerSuccess()
           openSessionPane({
             ...destination,
@@ -148,23 +164,30 @@ export function useMobileHistorySessionResume({
 
         const preparedSession = await prepareMobileAiVaultSessionResume(client, session)
         assertCurrentOwner()
-        const launch = buildMobileAiVaultResumeLaunch({
-          session: preparedSession,
-          workspacePlatform: platform,
-          hostTerminalWindowsShell: readMobileRuntimeTerminalWindowsShell(hostStatus),
-          settings
-        })
+        const mutationKey = JSON.stringify([
+          session.id,
+          session.sessionId,
+          session.executionHostId,
+          target.worktreeId
+        ])
+        const launch = resumeMutationRegistryRef.current.claimLaunch(mutationKey, () =>
+          buildMobileAiVaultResumeLaunch({
+            session: preparedSession,
+            workspacePlatform: platform,
+            hostTerminalWindowsShell: readMobileRuntimeTerminalWindowsShell(hostStatus),
+            settings
+          })
+        )
         const resumed = await resumeAiVaultSessionInTerminal(
           client,
           target.worktreeId,
           {
             ...launch,
-            hostCapabilities: resumeHost.capabilities,
-            clientMutationId: resumeMutationRegistryRef.current.claim(session.id)
+            hostCapabilities: resumeHost.capabilities
           },
           assertCurrentOwner
         )
-        resumeMutationRegistryRef.current.releaseOnSuccess(session.id)
+        resumeMutationRegistryRef.current.releaseOnSuccess(mutationKey)
         triggerSuccess()
         // The host accepted the resume; a cutover now only stops navigation.
         try {
@@ -180,6 +203,10 @@ export function useMobileHistorySessionResume({
         })
       } catch (err) {
         triggerError()
+        if (err instanceof MobileHistoryHandoffWorkspaceChanged) {
+          setResumeMessage(err.message)
+          return { kind: 'handoff-target-changed', session: err.session }
+        }
         setResumeMessage(
           err instanceof Error
             ? err.message
@@ -206,11 +233,22 @@ export function useMobileHistorySessionResume({
     ]
   )
 
-  return { onResumeSession, resumingSessionId, resumeMessage, setResumeMessage, resumeToast }
-}
-
-function createMobileAiVaultResumeMutationId(sessionId: string): string {
-  const sessionPart = sessionId.replace(/[^a-zA-Z0-9_.:-]/g, '_').slice(0, 64) || 'session'
-  const randomPart = Math.random().toString(36).slice(2, 10)
-  return `ai-vault-resume:${sessionPart}:${Date.now().toString(36)}:${randomPart}`
+  const openUnconfirmedContinuation = unconfirmedContinuation
+    ? () => {
+        openSessionPane({
+          ...unconfirmedContinuation,
+          fromSession: origin === 'session' && unconfirmedContinuation.worktreeId === worktreeId
+        })
+        setUnconfirmedContinuation(null)
+        setResumeMessage(null)
+      }
+    : undefined
+  return {
+    onResumeSession,
+    resumingSessionId,
+    resumeMessage,
+    setResumeMessage,
+    resumeToast,
+    openUnconfirmedContinuation
+  }
 }

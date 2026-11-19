@@ -2020,9 +2020,7 @@
       "fromSender": "Von"
     },
     "aiVaultResumeLaunch": {
-      "createFailed": "Terminal konnte nicht erstellt werden.",
-      "inputLocked": "Die Terminal-Eingabe ist gesperrt.",
-      "sendFailed": "Befehl zum Fortsetzen konnte nicht gesendet werden."
+      "createFailed": "Terminal konnte nicht erstellt werden."
     },
     "aiVaultResumePreparation": {
       "prepareFailed": "Diese ältere Codex-Sitzung konnte nicht vorbereitet werden. Erneut versuchen, die Sitzung fortzusetzen."

@@ -1,22 +1,21 @@
+import { loadMobileHistoryHandoffAgents } from './mobile-history-handoff-agents'
 import { useEffect, useState } from 'react'
 import { MessageSquarePlus, Play, SquareTerminal } from 'lucide-react-native'
 import type { AiVaultSession } from '../../../src/shared/ai-vault/contracts/ai-vault-types'
 import { agentForksConversations } from '../../../src/shared/agent-launch/startup/agent-resume-argv'
-import { SESSION_TABS_CHAT_FORK_CLI_RUNTIME_CAPABILITY } from '../../../src/shared/remote-runtime/protocol/session-tabs-runtime-capabilities'
+import {
+  SESSION_TABS_CHAT_FORK_CLI_RUNTIME_CAPABILITY,
+  SESSION_TABS_OWNED_STARTUP_RUNTIME_CAPABILITY
+} from '../../../src/shared/remote-runtime/protocol/session-tabs-runtime-capabilities'
 import { ActionSheetModal } from '../components/sheets/ActionSheetModal'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import type { Worktree } from '../worktree/workspace-list/workspace-list-types'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import {
-  loadMobileAgentLaunchContext,
-  newTabAgentOptionsFrom,
-  hostRefusesOtherRuntimeWorkspace
-} from '../session/agent-launch/mobile-new-tab-agent-loader'
 import type { MobileNewTabAgentOption } from '../session/agent-launch/mobile-new-tab-agent-options'
 import { supportsMobileExistingAgentLaunch } from '../session/agent-launch/mobile-existing-agent-launch'
-import {
-  loadMobileHistoryContinuationTarget,
-  type MobileHistorySessionAction
+import type {
+  MobileHistoryResumeResult,
+  MobileHistorySessionAction
 } from './mobile-history-session-continuation'
 
 export function MobileHistorySessionActionSheets(props: {
@@ -27,7 +26,10 @@ export function MobileHistorySessionActionSheets(props: {
   worktrees: readonly Worktree[]
   capabilities: readonly string[] | undefined
   busy: boolean
-  onRun: (session: AiVaultSession, action?: MobileHistorySessionAction) => Promise<void>
+  onRun: (
+    session: AiVaultSession,
+    action?: MobileHistorySessionAction
+  ) => Promise<MobileHistoryResumeResult>
   onHandoff: (session: AiVaultSession) => void
   onClose: () => void
 }) {
@@ -37,16 +39,20 @@ export function MobileHistorySessionActionSheets(props: {
   const [agents, setAgents] = useState<MobileNewTabAgentOption[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [workspaceChanged, setWorkspaceChanged] = useState(false)
+  const [handoffWorktreeId, setHandoffWorktreeId] = useState<string | null>(null)
   useEffect(() => {
     if (!handoffSession || !client) {
+      setWorkspaceChanged(false)
       return
     }
     let cancelled = false
     setAgents([])
+    setHandoffWorktreeId(null)
     setError('')
     setLoading(true)
     const load = async () => {
-      const { target, host } = await loadMobileHistoryContinuationTarget({
+      const choices = await loadMobileHistoryHandoffAgents({
         client,
         session: handoffSession,
         worktreeId,
@@ -57,13 +63,9 @@ export function MobileHistorySessionActionSheets(props: {
           }
         }
       })
-      const context = await loadMobileAgentLaunchContext({
-        client,
-        worktreeId: target.worktreeId,
-        hostRefusesOtherRuntime: hostRefusesOtherRuntimeWorkspace(host.capabilities)
-      })
       if (!cancelled) {
-        setAgents(newTabAgentOptionsFrom(context.settings, context.detectedAgents))
+        setAgents(choices.agents)
+        setHandoffWorktreeId(choices.worktreeId)
       }
     }
     void load()
@@ -85,9 +87,9 @@ export function MobileHistorySessionActionSheets(props: {
       cancelled = true
     }
   }, [handoffSession, client, worktreeId, worktrees, t])
-  const cliSupported =
-    !session?.structuredSession ||
-    capabilities?.includes(SESSION_TABS_CHAT_FORK_CLI_RUNTIME_CAPABILITY) === true
+  const cliSupported = session?.structuredSession
+    ? capabilities?.includes(SESSION_TABS_CHAT_FORK_CLI_RUNTIME_CAPABILITY) === true
+    : capabilities?.includes(SESSION_TABS_OWNED_STARTUP_RUNTIME_CAPABILITY) === true
   const handoffSupported = supportsMobileExistingAgentLaunch(capabilities)
   const updateHint = t(
     'agentHistory.actions.updateHost',
@@ -151,6 +153,12 @@ export function MobileHistorySessionActionSheets(props: {
           loading
             ? t('agentHistory.handoff.detecting', 'Detecting agents on this workspace host…')
             : error ||
+              (workspaceChanged
+                ? t(
+                    'agentHistory.handoff.workspaceChanged',
+                    'The workspace changed. Choose an agent again.'
+                  )
+                : '') ||
               (agents.length
                 ? t(
                     'agentHistory.handoff.context',
@@ -162,11 +170,20 @@ export function MobileHistorySessionActionSheets(props: {
         actions={agents.map(({ agent, label }) => ({
           id: agent,
           label,
-          disabled: props.busy || loading,
+          disabled: props.busy || loading || handoffWorktreeId === null,
           onPress: () => {
-            if (handoffSession) {
+            if (handoffSession && handoffWorktreeId) {
               onClose()
-              void onRun(handoffSession, { kind: 'handoff', agent })
+              void onRun(handoffSession, {
+                kind: 'handoff',
+                agent,
+                worktreeId: handoffWorktreeId
+              }).then((result) => {
+                if (result?.kind === 'handoff-target-changed') {
+                  setWorkspaceChanged(true)
+                  props.onHandoff(result.session)
+                }
+              })
             }
           }
         }))}

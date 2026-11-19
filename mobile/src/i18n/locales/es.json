@@ -2077,9 +2077,7 @@
       "fromSender": "De"
     },
     "aiVaultResumeLaunch": {
-      "createFailed": "No se pudo crear la terminal",
-      "inputLocked": "La entrada de la terminal está bloqueada",
-      "sendFailed": "No se pudo enviar el comando de reanudación"
+      "createFailed": "No se pudo crear la terminal"
     },
     "aiVaultResumePreparation": {
       "prepareFailed": "No se pudo preparar esta sesión antigua de Codex. Vuelve a intentar reanudarla."

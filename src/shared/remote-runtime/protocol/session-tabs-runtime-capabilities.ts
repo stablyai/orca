@@ -5,6 +5,9 @@ export const SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY =
   'session-tabs.split-group-placement.v1' as const
 export const SESSION_TABS_CHAT_FORK_CLI_RUNTIME_CAPABILITY =
   'session.tabs.chat-fork-cli.v1' as const
+// Host-owned startup delivery reconciles the mutation's PTY instead of typing the command again.
+export const SESSION_TABS_OWNED_STARTUP_RUNTIME_CAPABILITY =
+  'session.tabs.owned-startup.v1' as const
 // Host will follow placeholder session-tabs answers with a published one (#25736); never wait for that on older hosts.
 export const SESSION_TABS_EMPTY_WORKTREE_ANSWER_RUNTIME_CAPABILITY =
   'session-tabs.empty-worktree-answer.v1' as const
@@ -51,6 +54,7 @@ export const TERMINAL_AGENT_ID_RUNTIME_CAPABILITY = 'terminal.agent-id.v1' as co
 
 export const SESSION_TABS_RUNTIME_CAPABILITIES = [
   QODER_OWNED_TERMINAL_CREATE_CAPABILITY,
+  SESSION_TABS_OWNED_STARTUP_RUNTIME_CAPABILITY,
   SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY,
   SESSION_TAB_CLOSE_FORCE_RUNTIME_CAPABILITY,
   SESSION_TAB_CLOSE_REPLAY_REASON_RUNTIME_CAPABILITY,

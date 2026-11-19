@@ -1,3 +1,4 @@
+import { parseAgentSessionOperationTimestamp } from '../../agent-session/lifecycle/operations/agent-session-host-authority'
 import { BotLinkOpenTargetSchema } from '../../bots/bot-link-open-target'
 import { z } from 'zod'
 import { RUNTIME_NAVIGATION_TARGETS } from '../../remote-runtime/session-graph/runtime-navigation'
@@ -164,6 +165,7 @@ export const CreateTerminalTab = WorktreeTabSelector.extend({
   afterTabId: z.string().optional(),
   targetGroupId: z.string().optional(),
   command: z.string().optional(),
+  requireOwnedStartup: z.literal(true).optional(),
   // Why: the shell the terminal IS; a shell sent as `command` runs nested in the host default.
   shell: WindowsShellOverrideParam.optional(),
   cwd: z.string().min(1).optional(),
@@ -199,6 +201,18 @@ export const CreateTerminalTab = WorktreeTabSelector.extend({
   // Retry the same in-flight create on double-tap/reconnect instead of spawning another terminal.
   clientMutationId: z.string().min(1).max(128).optional()
 }).superRefine((value, context) => {
+  if (
+    value.requireOwnedStartup &&
+    (!value.command?.trim() ||
+      !value.clientMutationId ||
+      parseAgentSessionOperationTimestamp(value.clientMutationId) === null)
+  ) {
+    context.addIssue({
+      code: 'custom',
+      path: ['requireOwnedStartup'],
+      message: 'Owned startup requires a command and mutation id'
+    })
+  }
   if (value.sourceChatFork) {
     if (!value.clientMutationId) {
       context.addIssue({
@@ -209,6 +223,7 @@ export const CreateTerminalTab = WorktreeTabSelector.extend({
     }
     for (const field of [
       'command',
+      'requireOwnedStartup',
       'shell',
       'agent',
       'agentPrompt',
