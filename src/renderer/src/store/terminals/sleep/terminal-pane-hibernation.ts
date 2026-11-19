@@ -68,6 +68,13 @@ export function createTerminalPaneHibernationActions(
       ) {
         throw new Error('agent_hibernation_pane_binding_mismatch')
       }
+      // Main refuses Agent Sleep while orchestration work waits; ask before capturing anything.
+      if (
+        expectedRuntimePtyIds.length === 0 &&
+        (await window.api.pty.sleepAdmitted?.(opts.ptyId)) === false
+      ) {
+        throw new Error('orchestration_busy')
+      }
       const sleepingAgentSessionRecords = collectSleepingAgentSessionRecordsForWorktree(
         state,
         worktreeId,

@@ -18,9 +18,9 @@ export abstract class OrcaRuntimeWithSleptLeafHandles extends OrcaRuntimeWithAdm
   /** Graph sync rebinds handles; waits on a woken slept pane re-check here. */
   protected onSleptLeafGraphSynced(): void {}
 
-  /** Closed panes take their slept names with them. */
+  /** Closed panes take their slept names with them; a reloading graph may be partial, so it prunes nothing. */
   protected pruneSleptLeafHandles(): void {
-    for (const leafKey of this.sleptLeafHandles.keys()) {
+    for (const leafKey of this.graphStatus === 'reloading' ? [] : this.sleptLeafHandles.keys()) {
       if (!this.leaves.has(leafKey)) {
         this.sleptLeafHandles.delete(leafKey)
       }
@@ -149,7 +149,7 @@ export abstract class OrcaRuntimeWithSleptLeafHandles extends OrcaRuntimeWithAdm
       paneKey
     )?.assignee_handle
     const handle =
-      [dispatched, parked].find((kept) => kept && !this.handles.has(kept)) ?? `term_${randomUUID()}`
+      [parked, dispatched].find((kept) => kept && !this.handles.has(kept)) ?? `term_${randomUUID()}`
     this.terminalIdentity.addSynthetic(handle)
     this.terminalIdentity.setHandle(handle, {
       handle,

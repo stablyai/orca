@@ -189,6 +189,7 @@ export const ptySessionControlApi = {
     ipcRenderer.invoke('pty:killFenced', request),
   kill: (id: string, opts?: { keepHistory?: boolean }): Promise<void> =>
     ipcRenderer.invoke('pty:kill', { id, keepHistory: opts?.keepHistory ?? false }),
+  sleepAdmitted: (id: string): Promise<boolean> => ipcRenderer.invoke('pty:sleepAdmitted', { id }),
   listSessions: (
     scope?: PtySessionListScope,
     admission?: ResourceViewAdmission

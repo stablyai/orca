@@ -45,6 +45,15 @@ export function installPtyKillIpcHandler(deps: PtyKillIpcDeps): void {
   getPtyIpc().handle('pty:killFenced', (_event, args: PtyFencedTerminationRequest | undefined) =>
     stopFencedRendererPty(deps, args)
   )
+  // Agent Sleep asks before capturing anything; the kill itself still enforces it.
+  getPtyIpc().handle('pty:sleepAdmitted', (_event, args: { id: string }) => {
+    try {
+      deps.runtime?.assertAgentSleepAdmitted(args.id)
+      return true
+    } catch {
+      return false
+    }
+  })
 }
 
 /** Label successful replacement stops as handoff; failed stops leave no label. */

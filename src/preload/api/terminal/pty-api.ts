@@ -140,6 +140,8 @@ export type PtyApi = {
   resetInputModes: (id: string) => void
   killFenced: (request: PtyFencedTerminationRequest) => Promise<PtyFencedTerminationOutcome>
   kill: (id: string, opts?: { keepHistory?: boolean }) => Promise<void>
+  /** False while orchestration mail or a pending Dispatch would make Agent Sleep refuse this terminal. */
+  sleepAdmitted: (id: string) => Promise<boolean>
   /** Acknowledge the pane that actually painted the restored frame. */
   ackColdRestore: (id: string, pane?: PaintedRestorePane) => void
   /** Hidden-output recovery painted main's snapshot; retires the hidden-delivery drop latch. */
