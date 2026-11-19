@@ -22133,7 +22133,11 @@
         "sharedOne": "Aynı konuşma başka bir bölmede açık olduğu için 1 Claude oturumu {{previous}} üzerinde kalır. Yeniden başlatmak diğer bölmedeki konuşmayı yeniden açabilir.",
         "sharedOther": "Aynı konuşma başka bir bölmede açık olduğu için {{count}} Claude oturumu {{previous}} üzerinde kalır. Yeniden başlatmak diğer bölmedeki konuşmayı yeniden açabilir.",
         "strandedOne": "1 Claude oturumu hâlâ {{previous}} hesabında olabilir. Geçirmek için kendiniz yeniden başlatın.",
-        "strandedOther": "{{count}} Claude oturumu hâlâ {{previous}} hesabında olabilir. Geçirmek için kendiniz yeniden başlatın."
+        "strandedOther": "{{count}} Claude oturumu hâlâ {{previous}} hesabında olabilir. Geçirmek için kendiniz yeniden başlatın.",
+        "hostAskOne": "1 Claude oturumu hâlâ {{previous}} hesabında.",
+        "hostAskOther": "{{count}} Claude oturumu hâlâ {{previous}} hesabında.",
+        "hostAskDescription": "Yeniden başlatma, süren işi durdurur.",
+        "hostAskRestart": "Yeniden başlat"
       },
       "oauthUsage": {
         "title": "Claude kullanımını sorgula",

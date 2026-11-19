@@ -21574,7 +21574,11 @@
         "sharedOne": "1 sesión de Claude permanece en {{previous}} porque otro panel tiene abierta la misma conversación. Reiniciarla podría volver a abrir la conversación del otro panel.",
         "sharedOther": "{{count}} sesiones de Claude permanecen en {{previous}} porque otro panel tiene abierta la misma conversación. Reiniciarlas podría volver a abrir la conversación del otro panel.",
         "strandedOne": "Es posible que 1 sesión de Claude siga en {{previous}}. Reiníciala manualmente para cambiarla.",
-        "strandedOther": "Es posible que {{count}} sesiones de Claude sigan en {{previous}}. Reinícialas manualmente para cambiarlas."
+        "strandedOther": "Es posible que {{count}} sesiones de Claude sigan en {{previous}}. Reinícialas manualmente para cambiarlas.",
+        "hostAskOne": "1 sesión de Claude sigue en {{previous}}.",
+        "hostAskOther": "{{count}} sesiones de Claude siguen en {{previous}}.",
+        "hostAskDescription": "Reiniciar detiene el trabajo en curso.",
+        "hostAskRestart": "Reiniciar"
       },
       "oauthUsage": {
         "title": "Consulta de uso de Claude",

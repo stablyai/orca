@@ -22278,7 +22278,11 @@
         "sharedOne": "1 session Claude reste sur {{previous}} car la même conversation est ouverte dans un autre volet. Un redémarrage pourrait rouvrir la conversation de l’autre volet.",
         "sharedOther": "{{count}} sessions Claude restent sur {{previous}} car la même conversation est ouverte dans un autre volet. Un redémarrage pourrait rouvrir la conversation de l’autre volet.",
         "strandedOne": "1 session Claude est peut-être encore sur {{previous}}. Redémarrez-la manuellement pour basculer.",
-        "strandedOther": "{{count}} sessions Claude sont peut-être encore sur {{previous}}. Redémarrez-les manuellement pour basculer."
+        "strandedOther": "{{count}} sessions Claude sont peut-être encore sur {{previous}}. Redémarrez-les manuellement pour basculer.",
+        "hostAskOne": "1 session Claude est encore sur {{previous}}.",
+        "hostAskOther": "{{count}} sessions Claude sont encore sur {{previous}}.",
+        "hostAskDescription": "Le redémarrage interrompt le travail en cours.",
+        "hostAskRestart": "Redémarrer"
       },
       "oauthUsage": {
         "title": "Suivi de l’utilisation de Claude",

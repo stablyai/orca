@@ -150,6 +150,8 @@ export type ClaudeHostRunningSessionsMove = {
   restarting: number
   /** Running Claude terminals that may still be on the previous account. */
   notMoved: number
+  /** Of `notMoved`, those the server restarts when the same switch is sent again with `restart`. */
+  canRestart?: number
 }
 
 /** `runningSessions` is absent from older servers, and from hosts whose window moves its own. */

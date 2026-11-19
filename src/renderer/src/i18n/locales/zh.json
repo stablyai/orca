@@ -23474,7 +23474,11 @@
         "sharedOne": "由于另一个窗格打开了同一对话，1 个 Claude 会话将保持在 {{previous}}。重新启动可能会重新打开另一个窗格的对话。",
         "sharedOther": "由于另一个窗格打开了同一对话，{{count}} 个 Claude 会话将保持在 {{previous}}。重新启动可能会重新打开另一个窗格的对话。",
         "strandedOne": "1 个 Claude 会话可能仍在 {{previous}} 上。请手动重启以切换",
-        "strandedOther": "{{count}} 个 Claude 会话可能仍在 {{previous}} 上。请手动重启以切换"
+        "strandedOther": "{{count}} 个 Claude 会话可能仍在 {{previous}} 上。请手动重启以切换",
+        "hostAskOne": "1 个 Claude 会话仍在 {{previous}} 上。",
+        "hostAskOther": "{{count}} 个 Claude 会话仍在 {{previous}} 上。",
+        "hostAskDescription": "重启会停止正在进行的工作。",
+        "hostAskRestart": "重启"
       },
       "oauthUsage": {
         "title": "Claude 用量轮询",

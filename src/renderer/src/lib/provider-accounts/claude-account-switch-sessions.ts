@@ -2,7 +2,11 @@ import { useAppStore } from '@/store/index'
 import type { CodexAccountSelectionTarget } from '../../../../shared/agent-accounts/codex/codex-selection-lane'
 import type { ClaudeAccountSwitchRunningSessions } from '../../../../shared/agent-accounts/claude/claude-account-switch-settings'
 import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
-import type { ClaudeHostRunningSessionsMove } from '../../../../shared/agent-accounts/managed-account-types'
+import type {
+  ClaudeAccountSelectResult,
+  ClaudeHostRunningSessionsMove
+} from '../../../../shared/agent-accounts/managed-account-types'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import {
   announceHostMove,
   announceRestart,
@@ -114,7 +118,17 @@ export async function handleRunningClaudeSessionsAfterSwitch(args: {
 }): Promise<'show-confirmation' | 'handled'> {
   // Why: a server moves its own sessions and reports them; nothing here runs on it.
   if (args.owner.kind !== 'local') {
-    return announceHostMove(args.hostMove, args.before, args.after)
+    const { owner, after } = args
+    return announceHostMove(args.hostMove, args.before, after, async () => {
+      // The same account sent again with `restart` answers the Ask the server left open.
+      const reply = await callRuntimeRpc<ClaudeAccountSelectResult>(
+        owner,
+        'accounts.selectClaude',
+        { accountId: after.accountId, runningSessions: 'restart' },
+        { timeoutMs: 30_000 }
+      )
+      return reply.runningSessions
+    })
   }
   const fromAccountId = claudeLaunchAccountId(args.before.state, args.before.accountId)
   const toAccountId = claudeLaunchAccountId(args.after.state, args.after.accountId)
