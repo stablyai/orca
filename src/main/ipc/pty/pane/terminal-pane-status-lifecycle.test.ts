@@ -104,10 +104,8 @@ it.each([
       return shellAlone
     }
     // POSIX reads the PTY's root shell from the process table, whatever the provider says.
-    confirmRootShellAlone.mockImplementation(async (rootPid: number, options: unknown) =>
-      rootPid === 4242 && JSON.stringify(options) === '{"noLiveDescendants":true}'
-        ? proveShellAlone()
-        : false
+    confirmRootShellAlone.mockImplementation(async (rootPid: number) =>
+      rootPid === 4242 ? proveShellAlone() : false
     )
     getProviderForPty.mockReturnValue({
       listProcesses: async () => [{ id: 'pty-1', rootProcessId: 4242 }],

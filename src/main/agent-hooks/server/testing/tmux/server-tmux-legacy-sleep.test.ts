@@ -1,3 +1,6 @@
+import { mkdtempSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { expect, it, vi } from 'vitest'
 import { PANE } from '../server.test-fixtures'
 import {
@@ -33,8 +36,8 @@ registerRootTestHarness()
 const CLIENT: Proc = [4050, 101, 4050, 'tmux -L qa attach', 'S+']
 
 // A pane the runtime places, so the hook's binding keeps the topology it reported.
-async function placedServer(): Promise<RootTestServer> {
-  const server = await createServer()
+async function placedServer(userDataPath?: string): Promise<RootTestServer> {
+  const server = await createServer(userDataPath)
   server.setHookRootEvidenceReader((request) => readHookRootEvidence(request, io))
   const identities = new AgentStatusObservedPaneIdentities()
   const observed = new AgentStatusObservedPaneIdentityCapture(identities)
@@ -108,15 +111,8 @@ it.each([
   }
 )
 
-it('leaves a tmux-hosted conversation no checkpoint, so a restart cannot resume it beside its server', async () => {
-  const checkpointOf = async (tmuxPane?: string) => {
-    const server = await placedServer()
-    await hook(server, 'UserPromptSubmit', {
-      session: 'detached-session',
-      pid: 4043,
-      prompt: 'In tmux',
-      ...(tmuxPane ? { tmuxPane } : {})
-    })
+it('leaves a tmux-hosted conversation no checkpoint, before or after a restart', async () => {
+  const checkpointOf = (server: RootTestServer) => {
     const row = server.row()
     const status = row && resumeStatusFromHookRow(row, undefined)
     return status
@@ -129,7 +125,26 @@ it('leaves a tmux-hosted conversation no checkpoint, so a restart cannot resume 
         })
       : null
   }
-  expect(await checkpointOf()).toMatchObject({ origin: 'live' })
-  // Detached or not, the tmux server keeps the agent; the pane must not resume it after a restart.
-  expect(await checkpointOf(TMUX_HINT)).toBeNull()
+  const runIn = async (userDataPath: string, tmuxPane?: string) => {
+    const server = await placedServer(userDataPath)
+    await hook(server, 'UserPromptSubmit', {
+      session: 'detached-session',
+      pid: 4043,
+      prompt: 'In tmux',
+      ...(tmuxPane ? { tmuxPane } : {})
+    })
+    const before = checkpointOf(server)
+    server.flushStatusPersistSync()
+    server.stop()
+    // A restart hydrates the row; the agent still runs (in tmux, detached or not).
+    const restarted = await createServer(userDataPath)
+    const after = restarted.row() && checkpointOf(restarted)
+    restarted.stop()
+    return [before, after]
+  }
+  expect(await runIn(mkdtempSync(join(tmpdir(), 'orca-pane-')))).toEqual([
+    expect.objectContaining({ origin: 'live' }),
+    expect.objectContaining({ origin: 'live' })
+  ])
+  expect(await runIn(mkdtempSync(join(tmpdir(), 'orca-tmux-')), TMUX_HINT)).toEqual([null, null])
 })

@@ -71,9 +71,10 @@ export type RuntimeConstructionDependencies = {
     connectionId: string | null
     terminalProvenance: 'current_runtime' | 'restored'
   }) => AgentHookAuthorityAttestation | null
+  /** `launchRetired`: a command finished after an earlier mark already retired the launch. */
   retireAgentHookCompatibilityAuthority?: (
     paneKey: string,
-    options?: { confirmedExit?: boolean }
+    options?: { confirmedExit?: boolean; launchRetired?: true }
   ) => void
   readHookCliWriterObservation?: (row: AgentStatusIpcPayload) => CliWriterObservation | null
   /** `exitedSince`: also answer `exited` for an exit the hook store proved at or after it. */

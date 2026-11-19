@@ -11,7 +11,8 @@ import {
 } from '../../../shared/process-observation/tables/process-table-snapshot-reader'
 import {
   collectDescendantsFromIndex,
-  getProcessTableIndex
+  getProcessTableIndex,
+  type ProcessTableIndex
 } from '../../../shared/process-observation/tables/process-table-index'
 import {
   resolveWindowsAgentForegroundProcessWithAvailability,
@@ -46,11 +47,11 @@ type ShellForegroundConfirmationOptions = {
     | null
     | Promise<ReadonlySet<number> | null>
   readWindowsProcessIdentityTable?: () => Promise<WindowsProcessIdentityRow[]>
-  /** Exit proof: a running background job (Ctrl-Z, then bg) also keeps the agent alive. */
-  noLiveDescendants?: boolean
+  /** POSIX: a capture the caller already took, so one proof costs one table read. */
+  processIndex?: ProcessTableIndex
 }
 
-function commandExecutable(command: string): string {
+export function commandExecutable(command: string): string {
   const trimmed = command.trim().replace(/^[-]/, '')
   if (trimmed.startsWith('"') || trimmed.startsWith("'")) {
     const closingQuote = trimmed.indexOf(trimmed[0], 1)
@@ -85,7 +86,8 @@ export async function confirmShellForegroundProcess(
     }
   }
   try {
-    const index = getProcessTableIndex(await getFreshShellForegroundSnapshot())
+    const index =
+      options.processIndex ?? getProcessTableIndex(await getFreshShellForegroundSnapshot())
     const root = index.byPid.get(shellPid)
     if (!root) {
       return false
@@ -104,11 +106,6 @@ export async function confirmShellForegroundProcess(
       return false
     }
     const confirmed = foregroundShell?.stat.includes('+') === true
-    if (confirmed && foregroundShell && options.noLiveDescendants) {
-      return !collectDescendantsFromIndex(index, foregroundShell.pid).some(
-        (row) => !row.stat.includes('Z')
-      )
-    }
     return confirmed
   } catch {
     return false

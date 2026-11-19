@@ -53,6 +53,7 @@ export function buildHookProcessCapture(): string[] {
 export function buildHookTmuxPaneCapture(): string[] {
   return [
     'orca_tmux_pane=',
-    'case "${TMUX_PANE:-}" in %[0-9]*) [ -z "${TMUX:-}" ] || orca_tmux_pane="$TMUX_PANE ${TMUX%,*,*}" ;; esac'
+    'case "${TMUX_PANE:-}" in %[0-9]*) [ -z "${TMUX:-}" ] || orca_tmux_pane="$TMUX_PANE ${TMUX%,*,*}" ;; esac',
+    '[ "$orca_tmux_pane" != "${ORCA_INHERITED_TMUX:-}" ] || orca_tmux_pane='
   ]
 }

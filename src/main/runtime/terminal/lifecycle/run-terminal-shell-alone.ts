@@ -1,23 +1,32 @@
 /** Read execution-host process tables: daemon shell-ownership changes only after full-screen exit and misses plain failed/finished commands. Observation failure is unproven. */
-import { confirmShellForegroundProcess } from '../../../providers/foreground/agent-process'
-import { getFreshProcessTableSnapshot } from '../../../../shared/process-observation/tables/process-table-snapshot-reader'
-import { getProcessTableIndex } from '../../../../shared/process-observation/tables/process-table-index'
+import {
+  commandExecutable,
+  confirmShellForegroundProcess
+} from '../../../providers/foreground/agent-process'
+import { getFreshShellForegroundSnapshot } from '../../../../shared/process-observation/tables/process-table-snapshot-reader'
+import {
+  collectDescendantsFromIndex,
+  getProcessTableIndex
+} from '../../../../shared/process-observation/tables/process-table-index'
 import { isShellProcess } from '../../../../shared/agent-status/process/shell-process-detection'
 import type { TerminalProcessInspection } from '../../../../shared/terminal/pty/lifecycle/terminal-process-inspection'
 
-/** POSIX: the PTY's root shell owns the terminal's foreground group and nothing under it is stopped
- *  (nor, for exit proof, still running). */
-export async function confirmRootShellAloneFromProcessTable(
-  rootPid: number,
-  options?: { noLiveDescendants?: boolean }
-): Promise<boolean> {
+/** POSIX: the PTY's shell owns the terminal's foreground group and nothing under it is stopped. */
+export async function confirmRootShellAloneFromProcessTable(rootPid: number): Promise<boolean> {
   try {
-    const root = getProcessTableIndex(await getFreshProcessTableSnapshot()).byPid.get(rootPid)
-    const executable = root?.command.trim().split(/\s+/, 1)[0] ?? ''
-    if (!isShellProcess(executable)) {
+    const processIndex = getProcessTableIndex(await getFreshShellForegroundSnapshot())
+    const root = processIndex.byPid.get(rootPid)
+    if (!root) {
       return false
     }
-    return await confirmShellForegroundProcess(rootPid, executable, options)
+    // macOS roots each PTY at /usr/bin/login, with the login shell beneath it.
+    const shell = [{ ...root, depth: 0 }, ...collectDescendantsFromIndex(processIndex, rootPid)]
+      .map((row) => ({ depth: row.depth, executable: commandExecutable(row.command) }))
+      .filter((row) => isShellProcess(row.executable))
+      .sort((left, right) => left.depth - right.depth)[0]
+    return shell
+      ? await confirmShellForegroundProcess(rootPid, shell.executable, { processIndex })
+      : false
   } catch {
     return false
   }

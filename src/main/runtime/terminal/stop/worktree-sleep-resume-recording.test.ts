@@ -236,6 +236,7 @@ describe('a hookless resumed Codex across wakes and shell-confirmed command fini
     ['quit', ['0'], false],
     ['quit without command marks', ['unmarked'], false],
     ['a shell nested in the live Codex finishing a command', ['nested'], true],
+    ['a nested shell finishing a command, then quit', ['nested', '0'], false],
     ['suspended', ['148'], true],
     ['macOS suspended', ['146'], true],
     ['suspended, then another command', ['148', '0'], true],

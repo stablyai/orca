@@ -132,7 +132,7 @@ async function paneShellAlone(
   }
 }
 
-/** The shell alone holds the PTY, with no job behind it, stopped or running. A daemon answers
+/** The shell alone holds the PTY, with no stopped job behind it. A daemon answers
  *  shell ownership from prompt marks, so POSIX reads the PTY's root shell from a fresh process
  *  table instead, local or daemon alike. Windows shells stop no jobs, so the host's job census
  *  finding no child beside a shell foreground suffices there. Never fall back to a foreground
@@ -142,9 +142,7 @@ async function confirmShellAlone(ptyId: string, incarnationId?: string): Promise
   if (process.platform !== 'win32') {
     const processes = await provider.listProcesses({ ptyIds: [ptyId] }).catch(() => [])
     const rootPid = processes.find((entry) => entry.id === ptyId)?.rootProcessId
-    return rootPid
-      ? confirmRootShellAloneFromProcessTable(rootPid, { noLiveDescendants: true })
-      : false
+    return rootPid ? confirmRootShellAloneFromProcessTable(rootPid) : false
   }
   if ((await provider.confirmShellForeground?.(ptyId)) === true) {
     return true

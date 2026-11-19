@@ -19,6 +19,7 @@ import { pruneAgentExits, serializeAgentExits } from './agent-exit-evidence'
 import { LastStatusStore } from './last-status-store'
 import { KeyedDeadlines } from '../../../shared/collections/keyed-deadlines'
 import { rowsOf, selectedStatusEntries } from './last-status-saved-rows'
+import { cliWriterTopology } from './cli-writer-topology'
 import { nextRetryDelayMs } from '../../sqlite/row-cache/row-cache-failure'
 
 export abstract class AgentHookServerPersistence extends AgentHookServerHydration {
@@ -97,7 +98,8 @@ export abstract class AgentHookServerPersistence extends AgentHookServerHydratio
       entries[paneKey] = {
         ...persistedPayload,
         payload: persistedStatus,
-        ...(launchTokenHash ? { launchTokenHash } : {})
+        ...(launchTokenHash ? { launchTokenHash } : {}),
+        ...(cliWriterTopology(enrichedPayload) === 'shared' ? { sharedHost: true as const } : {})
       }
       const commitment = this.toAuthorityEvidence(persistedPayload, launchTokenHash)
       if (commitment && !conflictedCommitments.has(paneKey)) {
