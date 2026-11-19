@@ -99,11 +99,12 @@ export abstract class AgentHookServerTabCleanup extends AgentHookServerCleanup {
     const row = this.state.lastStatusByPaneKey.get(resolved)
     const identity = this.paneAgentIdentity(resolved)
     const agent = identity?.status.agentType
-    const shared = identity?.processTopology === 'shared'
+    // An ended agent needs no proof, and a command mark's proof already owns a tracked pane.
     const confirmedExit =
-      identity &&
+      identity?.ended === false &&
+      identity.processTopology !== 'shared' &&
       agent &&
-      !shared &&
+      !this.unprovenExits.has(resolved) &&
       (await this.terminalPaneLifecycle?.confirmProcessExit?.(resolved, agent))
     if (this.state.lastStatusByPaneKey.get(resolved) !== row) {
       return
