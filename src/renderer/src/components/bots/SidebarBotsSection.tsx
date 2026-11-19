@@ -59,11 +59,17 @@ import { useBotsSidebarReveal } from './bots-sidebar-reveal'
 import { BotsRevealProvider } from './bots-sidebar-reveal-context'
 import { SidebarBotsEmptyState } from './SidebarBotsEmptyState'
 
-/** The sidebar's Bots section, its own top-level section above Projects: one row per bot, this computer's and each paired server's. */
 // The + menu's rows only: 28px tall (a 20px line in the item's own 4px padding), roomier than other menus.
 const BOT_MENU_ROW = 'flex min-h-5 items-center gap-2'
 
-export function SidebarBotsSection({ onOpenBot }: { onOpenBot: () => void }): React.JSX.Element {
+/** Lists bots from this computer and paired servers in the sidebar. */
+export function SidebarBotsSection({
+  onOpenBot,
+  reorderable = false
+}: {
+  onOpenBot: () => void
+  reorderable?: boolean
+}): React.JSX.Element {
   const t = useTranslate()
   const bots = useBots()
   const savedCollapsed = useAppStore((s) => s.collapsedGroups.has(BOTS_GROUP_KEY))
@@ -164,7 +170,6 @@ export function SidebarBotsSection({ onOpenBot }: { onOpenBot: () => void }): Re
   })
   const listShown = !collapsed && entries.length > 0
   const reveal = useBotsSidebarReveal(listRef, listShown, savedEntries, search.endForReveal)
-  const label = t('bots.section.title', 'Bots')
   const newBotLabel = t('bots.section.newBot', 'New bot')
   const newLabel = t('bots.section.new', 'New bot or group')
 
@@ -189,8 +194,9 @@ export function SidebarBotsSection({ onOpenBot }: { onOpenBot: () => void }): Re
     <div className={cn('flex min-h-0 flex-col', searchOpen && 'grow')}>
       {/* Each folded face is a button of its own above the shared fold button. */}
       <SidebarSectionHeader
-        title={label}
+        title={t('bots.section.title', 'Bots')}
         sectionId="bots"
+        reorderable={reorderable}
         fold={{
           collapsed,
           label: t(
