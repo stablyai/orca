@@ -127,7 +127,11 @@ export abstract class BrowserManagerGuestNavigationPolicy extends BrowserManager
       isInPlace: boolean,
       isMainFrame: boolean
     ): void => {
-      if (!isMainFrame || isChromiumInternalErrorUrl(url)) {
+      if (!isMainFrame) {
+        this.noteSubframeUserAgentDemand(guest, url)
+        return
+      }
+      if (isChromiumInternalErrorUrl(url)) {
         return
       }
       // Like the tab strip: a load that fails on the new origin never commits to clear it.

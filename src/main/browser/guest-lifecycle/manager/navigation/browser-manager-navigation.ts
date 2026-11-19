@@ -94,14 +94,19 @@ export abstract class BrowserManagerNavigation extends BrowserManagerVisibility 
     url: string,
     identity: BrowserTabIdentity
   ): void {
-    const processUserAgent = getBrowserProcessUserAgentIdentity().userAgent
-    setBrowserGuestUserAgentDemand(
-      guest.session,
-      guest.id,
-      identity.kind === 'mobile' ||
-        identity.userAgent !== processUserAgent ||
-        teamsRequestUserAgent(url, processUserAgent) !== processUserAgent
-    )
+    setBrowserGuestUserAgentDemand(guest.session, guest.id, rewritesRequestHeaders(url, identity))
+  }
+
+  /** A site iframe (e.g. Teams inside another page) keeps the policy on until the next page. */
+  protected noteSubframeUserAgentDemand(guest: Electron.WebContents, url: string): void {
+    const identity = resolveBrowserTabIdentity({
+      url,
+      mobile: false,
+      processIdentity: getBrowserProcessUserAgentIdentity()
+    })
+    if (rewritesRequestHeaders(url, identity)) {
+      setBrowserGuestUserAgentDemand(guest.session, guest.id, true)
+    }
   }
 
   protected hasTabIdentityOverrideWork(guest: Electron.WebContents, url: string): boolean {
@@ -272,4 +277,13 @@ export abstract class BrowserManagerNavigation extends BrowserManagerVisibility 
   protected resolveTabNavigationUrl(guest: Electron.WebContents): string {
     return this.pendingNavigationByGuestId.get(guest.id)?.currentUrl ?? guest.getURL()
   }
+}
+
+function rewritesRequestHeaders(url: string, identity: BrowserTabIdentity): boolean {
+  const processUserAgent = getBrowserProcessUserAgentIdentity().userAgent
+  return (
+    identity.kind === 'mobile' ||
+    identity.userAgent !== processUserAgent ||
+    teamsRequestUserAgent(url, processUserAgent) !== processUserAgent
+  )
 }

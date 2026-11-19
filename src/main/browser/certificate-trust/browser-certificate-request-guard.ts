@@ -44,6 +44,7 @@ export class BrowserCertificateRequestGuard {
     { release: (() => void) | null; stop: () => void }
   >()
   private readonly acceptedIdentityBySession = new Map<Session, Map<string, CertificateIdentity>>()
+  private readonly unsettledFirstGrants = new Set<Session>()
 
   constructor(private readonly dependencies: RequestGuardDependencies) {
     onProxySessionReadinessChanged((proxySession) => {
@@ -78,6 +79,7 @@ export class BrowserCertificateRequestGuard {
       return
     }
     this.guardedSessions.delete(session)
+    this.unsettledFirstGrants.delete(session)
     guarded.stop()
     guarded.release?.()
     this.acceptedIdentityBySession.delete(session)
@@ -131,6 +133,16 @@ export class BrowserCertificateRequestGuard {
     })
   }
 
+  /**
+   * Requests that started before the guard listened keep their route through redirects, so a
+   * session's first grant ends them before the reload lets Chromium cache this trust.
+   */
+  async settleGrant(session: Session): Promise<void> {
+    if (this.unsettledFirstGrants.delete(session)) {
+      await Promise.resolve(session.closeAllConnections?.()).catch(() => {})
+    }
+  }
+
   canOfferCertificate(session: Session, identity: CertificateIdentity): boolean {
     if (!this.guardedSessions.has(session)) {
       return false
@@ -154,6 +166,9 @@ export class BrowserCertificateRequestGuard {
     if (!acceptedByEndpoint) {
       acceptedByEndpoint = new Map()
       this.acceptedIdentityBySession.set(session, acceptedByEndpoint)
+    }
+    if (acceptedByEndpoint.size === 0) {
+      this.unsettledFirstGrants.add(session)
     }
     acceptedByEndpoint.set(grant.secureEndpoint, {
       secureEndpoint: grant.secureEndpoint,
