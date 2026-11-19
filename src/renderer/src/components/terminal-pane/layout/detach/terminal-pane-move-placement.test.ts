@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest'
-import type { AppState } from '@/store/types'
 import { newTabTargetBesideSource } from './terminal-pane-move-placement'
 
 const WT = 'repo::/wt'
@@ -17,7 +16,7 @@ function state(tabOrder: string[]) {
         }
       ]
     }
-  } as unknown as Pick<AppState, 'groupsByWorktree' | 'unifiedTabsByWorktree'>
+  }
 }
 
 describe('where a pane moved without a drop goes', () => {

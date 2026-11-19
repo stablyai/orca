@@ -13,12 +13,19 @@ import {
 } from './terminal-pane-tab-detach-fixture'
 import type { TerminalPaneTabDetachStore } from './terminal-pane-tab-detach'
 
-const hostMove = vi.hoisted(() => ({
-  route: { kind: 'window' } as
-    | { kind: 'host'; environmentId: string }
-    | { kind: 'window' }
-    | { kind: 'unavailable' },
-  outcome: 'moved' as 'moved' | 'refused' | 'unknown',
+type HostRoute =
+  | { kind: 'host'; environmentId: string }
+  | { kind: 'window' }
+  | { kind: 'unavailable' }
+type HostMoveState = {
+  route: HostRoute
+  outcome: 'moved' | 'refused' | 'unknown'
+  settle: ReturnType<typeof vi.fn>
+}
+
+const hostMove = vi.hoisted((): HostMoveState => ({
+  route: { kind: 'window' },
+  outcome: 'moved',
   settle: vi.fn()
 }))
 

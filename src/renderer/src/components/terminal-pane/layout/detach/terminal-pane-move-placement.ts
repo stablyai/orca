@@ -1,10 +1,19 @@
-import type { AppState } from '@/store/types'
 import { focusTerminalTabSurface } from '../../input/focus/focus-terminal-tab-surface'
 import type { DetachedTerminalPaneTab, TerminalPaneNewTabTarget } from './terminal-pane-tab-detach'
 
 /** A pane moved without a drop lands in a new tab right after its source tab. */
+type PlacementState = {
+  groupsByWorktree: Readonly<Record<string, readonly { id: string; tabOrder?: string[] }[]>>
+  unifiedTabsByWorktree: Readonly<
+    Record<
+      string,
+      readonly { id: string; entityId: string; contentType: string; groupId: string }[]
+    >
+  >
+}
+
 export function newTabTargetBesideSource(
-  state: Pick<AppState, 'groupsByWorktree' | 'unifiedTabsByWorktree'>,
+  state: PlacementState,
   worktreeId: string,
   sourceTabId: string
 ): TerminalPaneNewTabTarget | null {
