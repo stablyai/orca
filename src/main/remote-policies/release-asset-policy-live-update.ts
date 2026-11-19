@@ -103,7 +103,7 @@ export type ReleaseAssetPolicyLiveUpdateDeps<P> = {
 export class ReleaseAssetPolicyLiveUpdater<P extends { revision: number }> {
   private channel: ReleaseAssetPolicyChannel | null = null
   private timer: ReturnType<typeof setInterval> | null = null
-  private fetched: { policy: P; at: number } | null = null
+  private fetched: { policy: P; downloaded: P; at: number } | null = null
 
   constructor(
     private readonly spec: ReleaseAssetPolicySpec<P>,
@@ -132,8 +132,11 @@ export class ReleaseAssetPolicyLiveUpdater<P extends { revision: number }> {
     }
   }
 
-  /** The policy in force when the last download succeeded, and when; null after a failed one. */
-  lastFetched(): { policy: P; at: number } | null {
+  /**
+   * The policy in force when the last download succeeded, what that download itself held (older
+   * than `policy` when the cache won), and when; null after a failed one.
+   */
+  lastFetched(): { policy: P; downloaded: P; at: number } | null {
     return this.fetched
   }
 
@@ -161,7 +164,7 @@ export class ReleaseAssetPolicyLiveUpdater<P extends { revision: number }> {
     )
     const stale = cached !== null && parsed.policy.revision <= cached.revision
     const policy = stale ? cached : parsed.policy
-    this.fetched = { policy, at: Date.now() }
+    this.fetched = { policy, downloaded: parsed.policy, at: Date.now() }
     // Before the write, so the policy applies this run even if caching it fails.
     this.deps.onFetched?.(policy)
     if (stale) {
