@@ -1,3 +1,4 @@
+import { useAppStore } from '@/store/index'
 import {
   getTerminalNoticeLifetime,
   isTerminalNoticeLifetimeCurrent,
@@ -19,7 +20,7 @@ import {
 import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 // System default already matches new terminals; key explicit selections so account switches recheck old shells.
-function selectedClaudeAccountKey(state: AppState): string | null {
+function selectedClaudeAccountKey(state: Pick<AppState, 'settings'>): string | null {
   const settings = state.settings
   if (!settings || settings.claudeManagedAccounts.length === 0) {
     return null
@@ -80,7 +81,7 @@ export function ClaudeOldTerminalBanner({
   const dismissed =
     lifetime !== undefined &&
     (dismissedLifetime === lifetime || lifetime.dismissed.has('claude-old-terminal'))
-  const selectionKey = useAppStoreWithChannels(selectedClaudeAccountKey)
+  const selectionKey = useAppStore(selectedClaudeAccountKey)
   // Why either signal: a typed claude is seen by the process read, or by its hooks.
   const claudeInPane = useAppStoreWithChannels(
     (state) =>
