@@ -57,7 +57,7 @@ export function renderResourceUsageStatusTrigger(
             <span className="text-[11px] tabular-nums text-muted-foreground">
               {triggerSessionCount}
               {orphanCount > 0 && (
-                <span className="ml-0.5 text-status-warning">({orphanCount})</span>
+                <span className="ml-0.5 text-status-warning-text">({orphanCount})</span>
               )}
             </span>
             {daemonUnreachable && (
