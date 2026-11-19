@@ -221,6 +221,10 @@ export class TerminalHost {
     this.sessions.get(sessionId)?.reportFocusLost()
   }
 
+  requestRepaint(sessionId: string): void {
+    this.sessions.get(sessionId)?.requestRepaint()
+  }
+
   async getCwd(sessionId: string): Promise<string | null> {
     return await resolveTerminalHostSessionCwd(
       getAliveTerminalHostSession(this.sessions, sessionId)
