@@ -19,6 +19,8 @@ import { exitedSplitPaneFacts } from './exited-split-pane-rule'
 
 import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
 
+type ExactRetiredSurface = Pick<RetiredTerminalSurface, 'worktreeId' | 'parentTabId' | 'leafId'>
+
 export abstract class OrcaRuntimeWithOnPtyExit extends RuntimePtyExitSurfaceReads {
   abstract resolveTerminalPane(paneKey: string): RuntimeTerminalResolvePane
 
@@ -152,45 +154,46 @@ export abstract class OrcaRuntimeWithOnPtyExit extends RuntimePtyExitSurfaceRead
     let retirement: Promise<void> | undefined
     let preservesIntentionallyStoppedSurface = false
     try {
-      const exactSurfaceByKey = new Map<
-        string,
-        Pick<RetiredTerminalSurface, 'worktreeId' | 'parentTabId' | 'leafId'>
-      >()
-      for (const [worktreeId, snapshot] of this.mobileSessionTabsByWorktree) {
-        for (const tab of snapshot.tabs) {
-          if (
-            tab.type === 'terminal' &&
-            (tab.ptyId === ptyId || tab.parentLayout?.ptyIdsByLeafId?.[tab.leafId] === ptyId)
-          ) {
-            exactSurfaceByKey.set(`${worktreeId}\0${tab.parentTabId}\0${tab.leafId}`, {
-              worktreeId,
-              parentTabId: tab.parentTabId,
-              leafId: tab.leafId
-            })
-          }
-        }
-      }
-      for (const leaf of this.getLeavesForPty(ptyId)) {
-        exactSurfaceByKey.set(`${leaf.worktreeId}\0${leaf.tabId}\0${leaf.leafId}`, {
-          worktreeId: leaf.worktreeId,
-          parentTabId: leaf.tabId,
-          leafId: leaf.leafId
-        })
-      }
-      const recorded = closedPane ?? this.paneOfPty(pty)
-      const parsedPaneKey = parsePaneKey(recorded.paneKey ?? '')
-      if (pty && recorded.tabId && parsedPaneKey) {
-        exactSurfaceByKey.set(`${pty.worktreeId}\0${recorded.tabId}\0${parsedPaneKey.leafId}`, {
-          worktreeId: pty.worktreeId,
-          parentTabId: recorded.tabId,
-          leafId: parsedPaneKey.leafId
-        })
-      }
-      const exactSurfaces = [...exactSurfaceByKey.values()]
       // Why both kinds: a sleep keeps its wake hint, and a restart's replacement takes the pane.
       preservesIntentionallyStoppedSurface =
         this.intentionalPtyStops.claimExit(ptyId, exitIncarnationId ?? pty?.incarnationId).length >
         0
+      // A preserved stop keeps its surfaces; only a retirement needs the census of every cached tab.
+      let exactSurfaces: ExactRetiredSurface[] = []
+      if (!preservesIntentionallyStoppedSurface) {
+        const exactSurfaceByKey = new Map<string, ExactRetiredSurface>()
+        for (const [worktreeId, snapshot] of this.mobileSessionTabsByWorktree) {
+          for (const tab of snapshot.tabs) {
+            if (
+              tab.type === 'terminal' &&
+              (tab.ptyId === ptyId || tab.parentLayout?.ptyIdsByLeafId?.[tab.leafId] === ptyId)
+            ) {
+              exactSurfaceByKey.set(`${worktreeId}\0${tab.parentTabId}\0${tab.leafId}`, {
+                worktreeId,
+                parentTabId: tab.parentTabId,
+                leafId: tab.leafId
+              })
+            }
+          }
+        }
+        for (const leaf of this.getLeavesForPty(ptyId)) {
+          exactSurfaceByKey.set(`${leaf.worktreeId}\0${leaf.tabId}\0${leaf.leafId}`, {
+            worktreeId: leaf.worktreeId,
+            parentTabId: leaf.tabId,
+            leafId: leaf.leafId
+          })
+        }
+        const recorded = closedPane ?? this.paneOfPty(pty)
+        const parsedPaneKey = parsePaneKey(recorded.paneKey ?? '')
+        if (pty && recorded.tabId && parsedPaneKey) {
+          exactSurfaceByKey.set(`${pty.worktreeId}\0${recorded.tabId}\0${parsedPaneKey.leafId}`, {
+            worktreeId: pty.worktreeId,
+            parentTabId: recorded.tabId,
+            leafId: parsedPaneKey.leafId
+          })
+        }
+        exactSurfaces = [...exactSurfaceByKey.values()]
+      }
       advertisedUrlWatcher.unbindPty(ptyId)
       this.mobileSubscribers.delete(ptyId)
       this.terminalViewSubscribers.clearSubscribers(ptyId)
