@@ -1,3 +1,4 @@
+import { usesHttpLinkMode } from '@/lib/links/preferences/http-link-mode'
 import type { SettingsSearchEntry } from '../search/settings-search'
 import { isMacUserAgent } from '../../../app-shell/platform/user-agent-platform'
 import { translate } from '@/i18n/i18n'
@@ -8,6 +9,7 @@ import { getBrowserProfileScopeSearchEntry } from './profiles/browser-profile-sc
 import { getBrowserSitePermissionsSearchEntry } from './browser-site-permissions-search'
 import {
   getBrowserLinkRoutingDescription,
+  getBrowserOpenLinksCopy,
   getLinkRoutingBackgroundSearchEntry,
   getLinkRoutingModifierDescription,
   getLinkRoutingModifierTitle
@@ -94,7 +96,9 @@ export function getBrowserPaneSearchEntries(
         )
       ]
     },
-    {
+    usesHttpLinkMode()
+      ? getBrowserOpenLinksCopy(platform, t)
+      : {
       title: t('auto.components.settings.browser.search.f0eb09ce09', 'Link routing'),
       description: getBrowserLinkRoutingDescription(platform, undefined, t),
       keywords: [

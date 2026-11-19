@@ -32,7 +32,8 @@ export async function readSettingsWithRuntimeEnvironmentPreference(
     // An unavailable registry cannot prove the selected host was removed.
     environments = await listEnvironments(userDataPath, { requireStoreFile: true })
   } catch {
-    return settings
+    // Reply with state at send time; a write may have landed while the registry read was pending.
+    return store.getSettings()
   }
   return reconcileRuntimeEnvironmentPreference(store, environments)
 }

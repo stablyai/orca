@@ -203,6 +203,8 @@ export type GlobalSettings = GlobalSettingsBase & {
   terminalLinkActionPopoverEnabled?: boolean
   /** Plain-click behavior for terminal links; optional for profiles saved before this setting existed. */
   terminalLinkClickBehavior?: 'actions' | 'open' | 'none'
+  /** Desktop plain-click mode for HTTP links in chat, terminals, the dashboard and sidebar; absent until the first load maps it. */
+  httpLinkClickBehavior?: 'ask' | 'open'
   /** Middle mouse URL behavior; defaults to opening the primary routed destination. */
   terminalUrlMiddleClickBehavior?: 'open' | 'actions' | 'none'
   /** Resume working structured chats after restart; on for new profiles, off for profiles that predate the default. Off still lists them for review before token spending. */

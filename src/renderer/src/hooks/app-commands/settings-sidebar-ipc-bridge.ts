@@ -7,6 +7,10 @@ import { translate } from '@/i18n/i18n'
 import { toast } from 'sonner'
 import { useAppStore } from '../../store/index'
 import { openPluginInstallLink } from '../../store/plugins/navigation/plugin-preview-request'
+import {
+  noteIncomingLinkPatch,
+  noteLinkFieldsArrived
+} from '@/lib/links/preferences/link-preference-operation'
 
 function getShortcutPlatform(): NodeJS.Platform {
   if (navigator.userAgent.includes('Mac')) {
@@ -113,6 +117,7 @@ export function registerSettingsAndSidebarIpcBridge(unsubs: (() => void)[]): voi
       if (!store.settings) {
         return
       }
+      noteIncomingLinkPatch(updates, store.settings as never)
       const { worktreeVisibilityDefaults, ...activeOwnerUpdates } = updates
       const settingsUpdates = store.settings.activeRuntimeEnvironmentId
         ? activeOwnerUpdates
@@ -135,6 +140,7 @@ export function registerSettingsAndSidebarIpcBridge(unsubs: (() => void)[]): voi
             }
           : {})
       })
+      noteLinkFieldsArrived(useAppStore.getState().settings as never)
       if ('worktreeVisibilityDefaults' in updates) {
         void store.fetchAllWorktrees({ visibilityOwnerHostId: 'local' })
       }

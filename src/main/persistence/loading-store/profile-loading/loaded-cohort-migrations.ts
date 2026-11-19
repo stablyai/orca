@@ -17,6 +17,9 @@ export class LoadedCohortMigrationOperations {
   /** Freezes each rollout's new-or-existing cohort on first load, before a save makes a fresh install look existing. */
   migrateCohortSeeds(state: PersistedState, fileExistedOnLoad: boolean): PersistedState {
     const existingProfile = fileExistedOnLoad && !isTelemetryOnlyProfile(state)
+    state = mapLinkOpenMode(state, existingProfile, () => {
+      this.runtime.loadNeedsSave = true
+    })
     for (const key of [
       'tabSwitchKeybindingSeed',
       'searchKeybindingSeed',
@@ -205,8 +208,54 @@ export class LoadedCohortMigrationOperations {
   }
 }
 
+/** New profiles open links directly in the system browser and never see the retired first-use prompt. */
+const NEW_PROFILE_LINK_SEED = {
+  httpLinkClickBehavior: 'open',
+  openLinksInAppPreferencePrompted: true
+} as const
+
+function isLinkClickMode(value: unknown): value is 'ask' | 'open' {
+  return value === 'ask' || value === 'open'
+}
+
+/** A stored mode wins; otherwise new profiles get the seed and existing ones keep today's terminal behavior. */
+function mapLinkOpenMode(
+  state: PersistedState,
+  existingProfile: boolean,
+  markSave: () => void
+): PersistedState {
+  const saved: Record<string, unknown> = isRecord(state.settings) ? state.settings : {}
+  if (isLinkClickMode(saved.httpLinkClickBehavior)) {
+    return state
+  }
+  markSave()
+  if (!existingProfile) {
+    return { ...state, settings: { ...state.settings, ...NEW_PROFILE_LINK_SEED } }
+  }
+  // Mirrors terminalLinkClickBehaviorFor on raw fields: only the Actions popover meant "ask".
+  const asks =
+    saved.terminalLinkClickBehavior !== 'open' &&
+    saved.terminalLinkClickBehavior !== 'none' &&
+    saved.terminalLinkActionPopoverEnabled !== false
+  return {
+    ...state,
+    settings: { ...state.settings, httpLinkClickBehavior: asks ? 'ask' : 'open' }
+  }
+}
+
+/** Seeds a raw profile root that is absent or exactly telemetry-only; returns undefined for anything else. */
+export function seedNewProfileLinkMode(
+  root: Record<string, unknown> | undefined
+): Record<string, unknown> | undefined {
+  if (root !== undefined && !isTelemetryOnlyProfile(root)) {
+    return undefined
+  }
+  const settings = root && isRecord(root.settings) ? root.settings : {}
+  return { ...root, settings: { ...settings, ...NEW_PROFILE_LINK_SEED } }
+}
+
 /** Secondary profiles start with only the install's telemetry consent, before their first load. */
-function isTelemetryOnlyProfile(profile: unknown): boolean {
+export function isTelemetryOnlyProfile(profile: unknown): boolean {
   const settings = isRecord(profile) ? profile.settings : undefined
   return (
     isRecord(profile) &&

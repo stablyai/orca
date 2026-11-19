@@ -203,6 +203,8 @@ registerWorkspaceHttpLinkBrowserOpener(async (request) => {
       ...request,
       linkContext: request.linkContext
     })
+    // The chooser needs the detailed outcome before it is projected into a toast, error or page id.
+    request.linkContext.onDetailedOutcome?.(outcome)
     if (
       outcome.status === 'failed' ||
       (outcome.status === 'refused' && !request.linkContext.linkIntent?.targetGroupId)

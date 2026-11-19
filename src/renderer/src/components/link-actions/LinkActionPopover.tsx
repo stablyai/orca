@@ -1,4 +1,4 @@
-import { useEffect, useEffectEvent, useMemo, useRef } from 'react'
+import { useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
 import { Check, Copy, ExternalLink, Globe, Settings } from 'lucide-react'
 import { toast } from 'sonner'
 import { ShortcutKeyCombo } from '@/components/ui/ShortcutKeyCombo'
@@ -10,6 +10,9 @@ import { useTranslate } from '@/i18n/use-translate'
 import { BROWSER_TERMINAL_LINK_ACTIONS_SETTINGS_TARGET_ID } from '@/components/settings/navigation/settings-navigation-types'
 import { useAppStore } from '@/store/index'
 import type { LinkAction, LinkActionRequest } from './link-action-request'
+import { openLinkSettings } from '@/lib/links/preferences/link-preference-notice'
+
+const MENU_ITEM_SELECTOR = '[data-link-popover-item]'
 
 type LinkActionPopoverProps<TRequest extends LinkActionRequest> = {
   request: TRequest | null
@@ -37,6 +40,8 @@ function ActionRow({
 
   return (
     <Button
+      role="menuitem"
+      data-link-popover-item
       className="h-8 w-full justify-start gap-1.5 px-1.5 text-[13px] font-normal has-[>svg]:px-1.5"
       variant="ghost"
       onClick={onRun}
@@ -70,6 +75,10 @@ export function LinkActionPopover<TRequest extends LinkActionRequest>({
   const { copyText, status: copyStatus } = useClipboardTextCopyFeedback(copyableDestination)
   const copyInFlightRef = useRef(false)
   const contentRef = useRef<HTMLDivElement>(null)
+  // Keyed by request so every chooser starts unticked without resetting in an effect.
+  const [rememberFor, setRememberFor] = useState<TRequest | null>(null)
+  const remember = request?.rememberEligible === true && rememberFor === request
+  const keyboardHost = request?.linkPreferenceHost === true && request.kind === 'url'
   const dismissOnOutsidePointerDown = useEffectEvent((event: PointerEvent): void => {
     if (!request || (event.target instanceof Node && contentRef.current?.contains(event.target))) {
       return
@@ -95,16 +104,64 @@ export function LinkActionPopover<TRequest extends LinkActionRequest>({
     [request?.anchorX, request?.anchorY]
   )
 
+  useEffect(() => {
+    if (!keyboardHost) {
+      return
+    }
+    // Opt-in keyboard model: focus lands on the first destination row once the content mounts.
+    const frame = requestAnimationFrame(() =>
+      contentRef.current?.querySelector<HTMLElement>('[role="menuitem"]')?.focus()
+    )
+    return () => cancelAnimationFrame(frame)
+  }, [keyboardHost, request])
+
+  const onMenuKeyDown = (event: React.KeyboardEvent<HTMLDivElement>): void => {
+    if (!keyboardHost || !request) {
+      return
+    }
+    if (event.key === 'Tab') {
+      // Close and hand focus back; the browser then moves Tab on from the restored element.
+      onClose(request)
+      request.restoreFocus()
+      return
+    }
+    const items = Array.from(
+      event.currentTarget.querySelectorAll<HTMLElement>(MENU_ITEM_SELECTOR)
+    )
+    if (items.length === 0) {
+      return
+    }
+    const current = items.findIndex((item) => item === document.activeElement)
+    const next =
+      event.key === 'ArrowDown'
+        ? (current + 1) % items.length
+        : event.key === 'ArrowUp'
+          ? (current - 1 + items.length) % items.length
+          : event.key === 'Home'
+            ? 0
+            : event.key === 'End'
+              ? items.length - 1
+              : null
+    if (next === null) {
+      return
+    }
+    event.preventDefault()
+    items[next]?.focus()
+  }
+
   const runAction = (action: LinkAction): void => {
     onClose()
     request?.restoreFocus()
-    void action.run()
+    // Only the two browser rows save; Copy and "Open in new tab" never do.
+    void action.run(action.rememberAs ? { remember } : undefined)
   }
 
-  const settingsLabel = t(
-    'auto.components.terminal.pane.TerminalLinkActionPopover.terminalLinkSettings',
-    'Terminal link settings'
-  )
+  const settingsLabel = keyboardHost
+    ? t('components.link.actions.linkSettings', 'Link settings')
+    : t(
+        'auto.components.terminal.pane.TerminalLinkActionPopover.terminalLinkSettings',
+        'Terminal link settings'
+      )
   const copyLabel =
     copyStatus === 'copied'
       ? t('auto.components.terminal.pane.TerminalLinkActionPopover.copied', 'Copied')
@@ -150,6 +207,10 @@ export function LinkActionPopover<TRequest extends LinkActionRequest>({
   const openTerminalLinkSettings = (): void => {
     onClose()
     onOpenSettings?.()
+    if (keyboardHost) {
+      openLinkSettings()
+      return
+    }
     openSettingsTarget({
       pane: 'browser',
       repoId: null,
@@ -177,6 +238,7 @@ export function LinkActionPopover<TRequest extends LinkActionRequest>({
           onOpenAutoFocus={(event) => event.preventDefault()}
           onCloseAutoFocus={(event) => event.preventDefault()}
           onEscapeKeyDown={() => request.restoreFocus()}
+          {...(keyboardHost ? { role: 'menu', onKeyDown: onMenuKeyDown } : {})}
         >
           <div className="mb-0.5 flex items-center gap-1 overflow-hidden border-b border-border px-1.5 py-0.5 font-mono text-xs text-muted-foreground">
             <span
@@ -190,6 +252,7 @@ export function LinkActionPopover<TRequest extends LinkActionRequest>({
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
+                    data-link-popover-item
                     aria-label={copyLabel}
                     className="text-muted-foreground"
                     size="icon-xs"
@@ -208,6 +271,7 @@ export function LinkActionPopover<TRequest extends LinkActionRequest>({
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
+                    data-link-popover-item
                     aria-label={settingsLabel}
                     className="text-muted-foreground"
                     size="icon-xs"
@@ -243,6 +307,26 @@ export function LinkActionPopover<TRequest extends LinkActionRequest>({
               onRun={() => runAction(action)}
             />
           ))}
+          {request.rememberEligible ? (
+            <Button
+              role="menuitemcheckbox"
+              aria-checked={remember}
+              data-link-popover-item
+              className="mt-0.5 h-8 w-full justify-start gap-2 rounded-t-none border-t border-border px-1.5 text-xs font-normal text-muted-foreground"
+              variant="ghost"
+              // Toggling keeps the chooser open; the browser row chosen next reads it.
+              onClick={() => setRememberFor(remember ? null : request)}
+            >
+              <span
+                aria-hidden
+                className="grid size-3.5 place-items-center rounded-[3px] border border-muted-foreground/60 aria-checked:border-primary aria-checked:bg-primary aria-checked:text-primary-foreground"
+                aria-checked={remember}
+              >
+                {remember ? <Check className="size-3" /> : null}
+              </span>
+              {t('components.link.actions.rememberChoice', 'Always open links this way')}
+            </Button>
+          ) : null}
         </PopoverContent>
       ) : null}
     </Popover>

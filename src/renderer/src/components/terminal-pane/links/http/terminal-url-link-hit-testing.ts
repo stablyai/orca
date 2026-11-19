@@ -23,6 +23,8 @@ import {
   requestTerminalLinkAction,
   type TerminalLinkActionContext
 } from '../terminal-link-action-request'
+import { captureLinkActionContext } from '@/lib/links/preferences/link-action-context'
+import { canRememberLinkChoice, rememberOnAdmission } from '@/lib/links/preferences/link-remember-choice'
 
 type UrlLinkHitTestDeps = {
   worktreeId: string
@@ -75,18 +77,46 @@ export function handleTerminalHttpLink(
     return true
   }
 
+  const rememberMode = deps.linkActionContext?.rememberMode
+  // Captured at click: the chooser's actions must not follow later focus or host changes.
+  const actionContext = rememberMode
+    ? captureLinkActionContext(deps.worktreeId, deps.sourceTabId)
+    : undefined
+  const chooserDeps = actionContext ? { ...deps, actionContext } : deps
   return requestTerminalLinkAction(event, deps.linkActionContext, {
     destination: deps.actionDestination ?? url,
     kind: 'url',
+    ...(rememberMode && actionContext && deps.actionDestinations
+      ? {
+          linkPreferenceHost: true,
+          rememberEligible: canRememberLinkChoice({
+            plainClick: true,
+            mode: rememberMode,
+            destinations: deps.actionDestinations,
+            actionContext
+          })
+        }
+      : {}),
     ...buildHttpLinkActions(
       deps.actionDestinations,
-      (destination) =>
-        openRoutedHttpLink(url, { ...deps, modifierHeld: false, forceDestination: destination }),
+      (destination, choice) => {
+        const onAdmission = destination ? rememberOnAdmission(destination, choice) : undefined
+        openRoutedHttpLink(url, {
+          ...chooserDeps,
+          modifierHeld: false,
+          forceDestination: destination,
+          ...(onAdmission ? { onAdmission } : {})
+        })
+      },
       {
         ...deps,
         url,
         openInSourceGroup: () =>
-          openRoutedHttpLink(url, { ...deps, forceDestination: 'orca', openInSourceGroup: true })
+          openRoutedHttpLink(url, {
+            ...chooserDeps,
+            forceDestination: 'orca',
+            openInSourceGroup: true
+          })
       }
     )
   })

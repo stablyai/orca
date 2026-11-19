@@ -5,7 +5,15 @@ import { installTerminalLinkifierClickPriming } from '@/components/terminal-pane
 import { installTerminalLinkPointerGesture } from '@/components/terminal-pane/links/gestures/terminal-link-pointer-gesture'
 import { installTerminalLinkPtyMouseSuppression } from '@/components/terminal-pane/links/gestures/terminal-link-pty-mouse-suppression'
 import { requestTerminalLinkAction } from '@/components/terminal-pane/links/terminal-link-action-request'
-import { terminalLinkClickBehaviorFor } from '@/components/terminal-pane/links/gestures/terminal-link-click-behavior'
+import {
+  terminalLinkClickBehaviorFor,
+  type TerminalLinkClickBehavior
+} from '@/components/terminal-pane/links/gestures/terminal-link-click-behavior'
+import {
+  httpLinkModeFor,
+  usesHttpLinkMode,
+  type HttpLinkMode
+} from '@/lib/links/preferences/http-link-mode'
 import {
   isTerminalLinkActionActivation,
   isTerminalLinkDirectActivation
@@ -20,6 +28,18 @@ import {
   dashboardPreviewHttpActions,
   type DashboardPreviewLinkSource
 } from './dashboard-preview-http-actions'
+
+/** Desktop URLs follow the link mode unless plain clicks are left to the terminal app. */
+function dashboardHttpClickBehavior(settings: GlobalSettings | null): {
+  httpPlainClickBehavior?: TerminalLinkClickBehavior
+  rememberMode?: HttpLinkMode
+} {
+  if (!usesHttpLinkMode() || terminalLinkClickBehaviorFor(settings) === 'none') {
+    return {}
+  }
+  const mode = httpLinkModeFor(settings)
+  return { httpPlainClickBehavior: mode === 'ask' ? 'actions' : 'open', rememberMode: mode }
+}
 
 export function installDashboardPreviewLinkInteraction(
   terminal: Terminal,
@@ -122,6 +142,7 @@ export function installDashboardPreviewLinkInteraction(
           request: deps.request,
           focusTerminal: () => terminal.focus(),
           plainClickBehavior: terminalLinkClickBehaviorFor(deps.getSettings()),
+          ...dashboardHttpClickBehavior(deps.getSettings()),
           middleClickBehavior: 'none',
           sourceOwner: actions.owner
         },
@@ -131,7 +152,10 @@ export function installDashboardPreviewLinkInteraction(
           kind: 'url',
           primary: actions.primary,
           alternate: actions.alternate,
-          secondaryActions: actions.secondaryActions
+          secondaryActions: actions.secondaryActions,
+          ...(usesHttpLinkMode()
+            ? { linkPreferenceHost: true, rememberEligible: actions.rememberEligible }
+            : {})
         }
       )
     }

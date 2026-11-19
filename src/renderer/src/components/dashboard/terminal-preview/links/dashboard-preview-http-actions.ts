@@ -18,9 +18,13 @@ import {
   openRoutedHttpLink
 } from '@/lib/browser/navigation/http-link-destinations'
 import type {
+  HttpLinkActionChoice,
   HttpLinkDestination,
   HttpLinkActionDestinations
 } from '@/lib/browser/navigation/http-link-destinations'
+import { captureLinkActionContext } from '@/lib/links/preferences/link-action-context'
+import { canRememberLinkChoice, rememberOnAdmission } from '@/lib/links/preferences/link-remember-choice'
+import { httpLinkModeFor, usesHttpLinkMode } from '@/lib/links/preferences/http-link-mode'
 import type { DashboardCard } from '../../../../../../shared/agent-status/presentation/dashboard-snapshot'
 import type { HttpLinkSourceOwner } from '@/lib/browser/navigation/http-link-routing'
 
@@ -33,7 +37,13 @@ type DashboardHttpActions = ReturnType<typeof buildHttpLinkActions> & {
   owner: HttpLinkSourceOwner
   canOpen: boolean
   destinations: HttpLinkActionDestinations
-  open: (destination: HttpLinkDestination | undefined, inSourceGroup?: boolean) => void
+  open: (
+    destination: HttpLinkDestination | undefined,
+    inSourceGroup?: boolean,
+    choice?: HttpLinkActionChoice
+  ) => void
+  /** Desktop: the click-time capture and whether a plain-click chooser may offer Remember. */
+  rememberEligible: boolean
 }
 
 export function dashboardPreviewHttpActions(
@@ -88,9 +98,20 @@ export function dashboardPreviewHttpActions(
   const destinations = canOpen
     ? httpLinkActionDestinationsFor(state.settings, owner, true, url)
     : { primary: 'system' as const }
-  const open = (destination: HttpLinkDestination | undefined, inSourceGroup = false): void => {
+  // Captured when the chooser is built at click; desktop only.
+  const actionContext = usesHttpLinkMode()
+    ? captureLinkActionContext(source.worktreeId, source.tabId)
+    : undefined
+  const open = (
+    destination: HttpLinkDestination | undefined,
+    inSourceGroup = false,
+    choice?: HttpLinkActionChoice
+  ): void => {
+    const target = destination ?? destinations.primary
+    const onAdmission = rememberOnAdmission(target, choice)
     const current = dashboardPreviewHttpActions(source, url, onForegroundOpen)
     if (!current || (destination === 'orca' && !current.canOpen)) {
+      onAdmission?.('refused')
       toast.error(intentPresentation({ kind: 'url' }, url).error)
       return
     }
@@ -100,6 +121,8 @@ export function dashboardPreviewHttpActions(
       sourceOwner: owner,
       forceDestination: destination ?? current.destinations.primary,
       ...(inSourceGroup ? { openInSourceGroup: true } : {}),
+      ...(actionContext ? { actionContext } : {}),
+      ...(onAdmission ? { onAdmission } : {}),
       onBrowserOpenComplete: ({ pageId, background }) => {
         if (!pageId || background || !onForegroundOpen) {
           return
@@ -130,9 +153,18 @@ export function dashboardPreviewHttpActions(
     canOpen,
     destinations,
     open,
+    rememberEligible: Boolean(
+      actionContext &&
+      canRememberLinkChoice({
+        plainClick: true,
+        mode: httpLinkModeFor(state.settings),
+        destinations,
+        actionContext
+      })
+    ),
     ...buildHttpLinkActions(
       destinations,
-      open,
+      (destination, choice) => open(destination, false, choice),
       canOpen
         ? {
             worktreeId: source.worktreeId,

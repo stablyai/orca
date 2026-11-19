@@ -3,6 +3,10 @@ import type { AppState } from '../../types'
 import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host/execution-host'
 import { hydrateOwnerWorktreeVisibilityDefaults } from './worktree-visibility-owner-settings'
+import {
+  applyArrivedLinkFields,
+  withCurrentLinkFields
+} from '@/lib/links/preferences/link-preference-publication'
 
 export type SettingsStateSetter = Parameters<StateCreator<AppState, [], []>>[0]
 type SettingsStateGetter = Parameters<StateCreator<AppState, [], []>>[1]
@@ -72,6 +76,7 @@ export async function fetchSettingsWithOwnerHydration(args: {
   let ownerHydrationStarted = false
   try {
     const localSettings = (await window.api.settings.get()) as GlobalSettings
+    applyArrivedLinkFields(args.set as never, localSettings)
     if (!shouldPublishSettings()) {
       return
     }
@@ -108,7 +113,7 @@ export function startOwnerWorktreeVisibilityDefaultsHydration(args: {
 }): Promise<void> {
   if (args.deferPublication) {
     args.set((state) => ({
-      settings: args.settings,
+      settings: withCurrentLinkFields(args.settings, state.settings),
       worktreeVisibilityDefaultsByHost: args.settings.worktreeVisibilityDefaults
         ? {
             ...state.worktreeVisibilityDefaultsByHost,
@@ -129,7 +134,7 @@ export function startOwnerWorktreeVisibilityDefaultsHydration(args: {
       args.set((state) => ({
         settings:
           state.settings === settingsAtHydrationStart
-            ? hydrated.settings
+            ? withCurrentLinkFields(hydrated.settings, state.settings)
             : mergeOwnerDefaultsIntoCurrentSettings(state.settings, hydrated.settings),
         worktreeVisibilityDefaultsByHost: {
           ...state.worktreeVisibilityDefaultsByHost,

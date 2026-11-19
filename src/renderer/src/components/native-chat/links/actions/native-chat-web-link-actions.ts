@@ -10,9 +10,13 @@ import {
   httpLinkDirectClickDestination,
   openRoutedHttpLink,
   type HttpLinkActionDestinations,
-  type HttpLinkDestination
+  type HttpLinkDestination,
+  type LinkActionContext
 } from '@/lib/browser/navigation/http-link-destinations'
-import type { HttpLinkSourceOwner } from '@/lib/browser/navigation/http-link-routing'
+import type { HttpLinkAdmission, HttpLinkSourceOwner } from '@/lib/browser/navigation/http-link-routing'
+import { captureLinkActionContext } from '@/lib/links/preferences/link-action-context'
+import { canRememberLinkChoice, rememberOnAdmission } from '@/lib/links/preferences/link-remember-choice'
+import type { HttpLinkMode } from '@/lib/links/preferences/http-link-mode'
 
 export type NativeChatWebLinkDeps = {
   worktreeId: string
@@ -22,6 +26,8 @@ export type NativeChatWebLinkDeps = {
   /** Off: a plain click opens the routed destination outright, as it did before actions existed. */
   actionsEnabled: boolean
   plainClickBehavior?: TerminalLinkClickBehavior
+  /** Chat transcripts on desktop: chooser actions keep their click capture and may offer Remember. */
+  rememberHost?: { mode: HttpLinkMode }
   restoreFocus: () => void
   request: (request: LinkActionRequest) => void
 }
@@ -38,7 +44,10 @@ type ChatLinkMouseEvent = Pick<
 
 export function openNativeChatWebLink(
   url: string,
-  deps: Pick<NativeChatWebLinkDeps, 'worktreeId' | 'sourceOwner' | 'sourceTabId'>,
+  deps: Pick<NativeChatWebLinkDeps, 'worktreeId' | 'sourceOwner' | 'sourceTabId'> & {
+    actionContext?: LinkActionContext
+    onAdmission?: (outcome: HttpLinkAdmission) => void
+  },
   destination: HttpLinkDestination | undefined,
   openInSourceGroup = false
 ): void {
@@ -48,7 +57,9 @@ export function openNativeChatWebLink(
     ...(openInSourceGroup ? { openInSourceGroup: true } : {}),
     sourceOwner: deps.sourceOwner,
     modifierHeld: false,
-    ...(destination ? { forceDestination: destination } : {})
+    ...(destination ? { forceDestination: destination } : {}),
+    ...(deps.actionContext ? { actionContext: deps.actionContext } : {}),
+    ...(deps.onAdmission ? { onAdmission: deps.onAdmission } : {})
   })
 }
 
@@ -80,17 +91,39 @@ export function handleNativeChatWebLink(
   }
   event.preventDefault()
   const keyboardAnchor = event.detail === 0 ? event.currentTarget?.getBoundingClientRect() : null
+  const actionContext = deps.rememberHost
+    ? captureLinkActionContext(deps.worktreeId, deps.sourceTabId)
+    : undefined
+  const chooserDeps = actionContext ? { ...deps, actionContext } : deps
   deps.request({
     anchorX: keyboardAnchor?.left ?? event.clientX,
     anchorY: keyboardAnchor?.bottom ?? event.clientY,
     destination: url,
     kind: 'url',
     restoreFocus: deps.restoreFocus,
-    ...buildHttpLinkActions(deps.destinations, open, {
-      ...deps,
-      url,
-      openInSourceGroup: () => openNativeChatWebLink(url, deps, 'orca', true)
-    })
+    ...(deps.rememberHost && actionContext
+      ? {
+          linkPreferenceHost: true,
+          rememberEligible: canRememberLinkChoice({
+            plainClick: true,
+            mode: deps.rememberHost.mode,
+            destinations: deps.destinations,
+            actionContext
+          })
+        }
+      : {}),
+    ...buildHttpLinkActions(
+      deps.destinations,
+      (destination, choice) => {
+        const onAdmission = destination ? rememberOnAdmission(destination, choice) : undefined
+        openNativeChatWebLink(url, { ...chooserDeps, ...(onAdmission ? { onAdmission } : {}) }, destination)
+      },
+      {
+        ...deps,
+        url,
+        openInSourceGroup: () => openNativeChatWebLink(url, chooserDeps, 'orca', true)
+      }
+    )
   })
   return true
 }

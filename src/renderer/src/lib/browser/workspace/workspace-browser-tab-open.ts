@@ -8,7 +8,8 @@ import {
   workspaceBrowserLinkDestination,
   openClientWorkspaceBrowserLink,
   prepareRuntimeBrowserLink,
-  materializedBrowserLinkOutcome
+  materializedBrowserLinkOutcome,
+  ownsRuntimeBrowserRoute
 } from './workspace-browser-link-open'
 import { createWebRuntimeSessionBrowserTab } from '@/runtime/browser/creation/web-runtime-browser-creation'
 import { resolveWebRuntimeBrowserClientTargetGroup } from '@/runtime/browser/creation/web-runtime-browser-client-target-group'
@@ -128,7 +129,12 @@ export async function openWorkspaceBrowserTab(
   if (!route) {
     throw openFailure(presentation.error, 'no active worktree route')
   }
-  const capturedHost = request.linkContext?.linkIntent?.hostId
+  // The click host qualifies a null intent; chooser actions refuse when there is none.
+  const capturedHost = request.linkContext?.linkIntent?.hostId ?? request.linkContext?.clickHostId
+  if (request.linkContext?.requireClickHost && !capturedHost) {
+    request.onLinkOutcome?.({ status: 'refused' })
+    return null
+  }
   if (
     capturedHost &&
     (!route.executionHostId ||
@@ -248,6 +254,26 @@ export async function openWorkspaceBrowserTab(
       ...(request.linkContext ? { isCurrentRequest: request.linkContext.isCurrentRequest } : {}),
       ...(destination
         ? {
+            admitDispatch: () => {
+              const current = useAppStore.getState()
+              if (request.linkContext?.isCurrentRequest?.() === false) {
+                request.onLinkOutcome?.({ status: 'superseded' })
+                return false
+              }
+              if (
+                !ownsRuntimeBrowserRoute(current, request, destination) ||
+                (capturedHost &&
+                  !createBrowserLinkHostMatcher(current, request.workspaceId, destination.executionHostId)(capturedHost))
+              ) {
+                request.onLinkOutcome?.({ status: 'refused' })
+                return false
+              }
+              return true
+            }
+          }
+        : {}),
+      ...(destination
+        ? {
             onMaterialized: (pageId: string) =>
               request.onLinkOutcome?.(materializedBrowserLinkOutcome(request, destination, pageId))
           }
@@ -279,14 +305,20 @@ export async function openWorkspaceBrowserTabForLink(
   request: OpenWorkspaceBrowserTabRequest & { linkContext: BrowserLinkOpenContext }
 ): Promise<BrowserOpenOutcome> {
   let outcome: BrowserOpenOutcome = { status: 'failed' }
+  let reported = false
   try {
     await openWorkspaceBrowserTab({
       ...request,
       onLinkOutcome: (result) => {
+        reported = true
         outcome = result
       }
     })
   } catch {
+    // A guard refusal already reported its outcome; the thrown cleanup must not turn it into failed.
+    if (reported) {
+      return outcome
+    }
     return { status: request.linkContext.isCurrentRequest?.() === false ? 'superseded' : 'failed' }
   }
   return outcome

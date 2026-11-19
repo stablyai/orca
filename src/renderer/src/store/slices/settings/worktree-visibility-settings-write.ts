@@ -6,6 +6,10 @@ import {
 } from '../../../../../shared/execution-host/execution-host'
 import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import type { AppState } from '../../types'
+import {
+  applyArrivedLinkFields,
+  withCurrentLinkFields
+} from '@/lib/links/preferences/link-preference-publication'
 
 export async function persistVisibilityAwareSettings(args: {
   normalizedUpdates: Partial<GlobalSettings>
@@ -44,6 +48,9 @@ export async function persistVisibilityAwareSettings(args: {
       Object.keys(localUpdates).length > 0
         ? ((await window.api.settings.set(localUpdates)) as GlobalSettings)
         : currentSettings
+    if (Object.keys(localUpdates).length > 0) {
+      applyArrivedLinkFields(set as never, localSettings)
+    }
     let nextSettings = localSettings
     if (target.environmentId === supportedRuntimeEnvironmentId) {
       let result: { settings: Partial<GlobalSettings> }
@@ -68,7 +75,10 @@ export async function persistVisibilityAwareSettings(args: {
             return {
               settings:
                 stillFocused && defaults
-                  ? { ...localSettings, worktreeVisibilityDefaults: defaults }
+                  ? withCurrentLinkFields(
+                      { ...localSettings, worktreeVisibilityDefaults: defaults },
+                      state.settings
+                    )
                   : state.settings
             }
           })
@@ -91,7 +101,7 @@ export async function persistVisibilityAwareSettings(args: {
       const stillFocused =
         currentTarget.kind === 'environment' && currentTarget.environmentId === target.environmentId
       return {
-        settings: stillFocused ? nextSettings : state.settings,
+        settings: stillFocused ? withCurrentLinkFields(nextSettings, state.settings) : state.settings,
         worktreeVisibilityDefaultsByHost:
           target.environmentId === supportedRuntimeEnvironmentId &&
           nextSettings?.worktreeVisibilityDefaults
@@ -106,6 +116,7 @@ export async function persistVisibilityAwareSettings(args: {
     return
   }
   const nextSettings = await window.api.settings.set(normalizedUpdates)
+  applyArrivedLinkFields(set as never, nextSettings)
   onAcknowledged?.(nextSettings)
   if (!shouldPublish()) {
     return

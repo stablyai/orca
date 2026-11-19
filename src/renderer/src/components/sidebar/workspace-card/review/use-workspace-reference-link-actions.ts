@@ -6,6 +6,7 @@ import { nativeChatPlainLinkClickBehavior } from '@/components/native-chat/links
 import { isTerminalLinkDirectActivation } from '@/components/terminal-pane/links/gestures/terminal-link-activation'
 import { httpLinkDirectClickDestination } from '@/lib/browser/navigation/http-link-destinations'
 import { useAppStore } from '@/store'
+import { httpLinkModeFor, usesHttpLinkMode } from '@/lib/links/preferences/http-link-mode'
 import type { WorktreeCardDetailsHoverControl } from '../details/worktree-card-details-hover-state'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
@@ -18,13 +19,13 @@ export function useWorkspaceReferenceLinkActions(
   // system-browser open should leave the card where it was.
   const closeHoverOnInternalRun = (action: LinkAction): LinkAction => ({
     ...action,
-    run: () => {
+    run: (choice) => {
       if (action.external) {
         holdOpenUntilRefocus()
       } else {
         closeHover()
       }
-      return action.run()
+      return action.run(choice)
     }
   })
   const onOpenLink = (url: string, event: MouseEvent): void => {
@@ -37,14 +38,16 @@ export function useWorkspaceReferenceLinkActions(
     }
     const state = useAppStore.getState()
     const anchor = event.currentTarget
-    const plainClickBehavior = nativeChatPlainLinkClickBehavior(state.settings)
+    // Desktop follows the link mode (no Remember row here); the web keeps its own resolver.
+    const desktopMode = usesHttpLinkMode() ? httpLinkModeFor(state.settings) : null
+    const plainClickBehavior = desktopMode ? undefined : nativeChatPlainLinkClickBehavior(state.settings)
     const routing = resolveNativeChatHttpLinkRouting(state, workspaceId, url)
     let requested = false
     const consumed = handleNativeChatWebLink(event, url, {
       worktreeId: workspaceId,
       ...routing,
-      actionsEnabled: plainClickBehavior === 'actions',
-      plainClickBehavior,
+      actionsEnabled: desktopMode ? desktopMode === 'ask' : plainClickBehavior === 'actions',
+      ...(plainClickBehavior ? { plainClickBehavior } : {}),
       restoreFocus: () => {
         if (anchor instanceof HTMLElement && anchor.isConnected) {
           anchor.focus({ preventScroll: true })

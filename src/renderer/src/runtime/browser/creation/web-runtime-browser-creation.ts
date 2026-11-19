@@ -84,6 +84,10 @@ export async function createWebRuntimeSessionBrowserTabOnHost(
         )
       }
     }
+    // Preparation can outlive the click's owner or request; recheck before the create is sent.
+    if (args.admitDispatch && !args.admitDispatch()) {
+      throw new Error('browser link dispatch no longer admitted')
+    }
     restageWebRuntimeBrowserCreation(context, placement.kind === 'client')
     context.createAttempted = true
     const navigateAfterCreate =

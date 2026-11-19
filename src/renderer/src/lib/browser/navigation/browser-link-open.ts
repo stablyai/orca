@@ -51,6 +51,11 @@ export function browserLinkCommitIsValid(
   ) {
     return false
   }
+  // The click host also qualifies a null intent at commit.
+  const qualifiedHost = intent?.hostId ?? context.clickHostId
+  if (context.requireClickHost && (!qualifiedHost || !matchesHost(qualifiedHost))) {
+    return false
+  }
   return (
     !intent?.targetGroupId ||
     (intent.workspaceId === destination.worktreeId &&

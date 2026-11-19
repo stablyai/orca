@@ -1,3 +1,5 @@
+import { seedNewProfileLinkMode } from '../../persistence/loading-store/profile-loading/loaded-cohort-migrations'
+import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
 import type {
   TransferOrcaProfileProjectArgs,
   TransferOrcaProfileProjectResult
@@ -41,6 +43,22 @@ function assertKnownProfiles(args: TransferOrcaProfileProjectArgs, userDataPath:
   if (args.sourceProfileId === args.targetProfileId) {
     throw new Error('matching_orca_profile_transfer')
   }
+}
+
+// Domain writes erase whether an established target was never opened (revision 0 or telemetry-only), so seed first.
+function seedNeverOpenedTarget(
+  snapshot: { revision?: number; documents?: readonly { domain: string; value: unknown }[] },
+  after: PersistedState
+): PersistedState {
+  if (snapshot.revision === undefined || !snapshot.documents) {
+    return after
+  }
+  const raw =
+    snapshot.revision === 0
+      ? undefined
+      : Object.fromEntries(snapshot.documents.map(({ domain, value }) => [domain, value]))
+  const seeded = seedNewProfileLinkMode(raw)
+  return seeded ? { ...after, settings: { ...after.settings, ...seeded.settings } } : after
 }
 
 export function transferOrcaProfileProject(
@@ -105,7 +123,10 @@ export function transferOrcaProfileProject(
     targetRepo,
     includeSessions: args.mode === 'move'
   })
-  const targetAfterState = applyPayloadToTarget(targetState, payload)
+  const targetAfterState = seedNeverOpenedTarget(
+    targetSnapshot,
+    applyPayloadToTarget(targetState, payload)
+  )
   const sourceAfterState =
     args.mode === 'move' ? removeSourceRepo(sourceState, sourceRepo.id) : undefined
   if (targetSnapshot.documents === undefined || targetSnapshot.revision === undefined) {

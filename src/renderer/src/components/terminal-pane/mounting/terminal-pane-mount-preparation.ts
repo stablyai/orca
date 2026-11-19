@@ -1,3 +1,4 @@
+import { httpLinkModeFor, usesHttpLinkMode } from '@/lib/links/preferences/http-link-mode'
 import type { LocalScrollbackSnapshots } from '@/runtime/hosted-terminals/hydration/host-terminal-scrollback-hydration'
 import type { HttpLinkActionDestinations as TerminalHttpLinkActionDestinations } from '@/lib/browser/navigation/http-link-destinations'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
@@ -134,6 +135,14 @@ export function prepareTerminalPaneMount(
     if (plainClickBehavior === 'none' && middleClickBehavior === 'none') {
       return null
     }
+    // Desktop URLs follow the link mode unless plain clicks are left to the terminal app.
+    const rememberMode = usesHttpLinkMode() ? httpLinkModeFor(deps.settingsRef.current) : undefined
+    const httpPlainClickBehavior =
+      rememberMode && plainClickBehavior !== 'none'
+        ? rememberMode === 'ask'
+          ? 'actions'
+          : 'open'
+        : plainClickBehavior
     const pane = deps.managerRef.current?.getPanes().find((candidate) => candidate.id === paneId)
     const pointerGesture = refs.linkPointerGesturesRef.current.get(paneId)
     const suppression =
@@ -148,6 +157,8 @@ export function prepareTerminalPaneMount(
       request: deps.requestTerminalLinkAction,
       focusTerminal: () => pane.terminal.focus(),
       plainClickBehavior,
+      httpPlainClickBehavior,
+      ...(rememberMode ? { rememberMode } : {}),
       middleClickBehavior,
       sourceOwner: getHttpLinkSourceOwnerForPane(paneId)
     }
@@ -237,7 +248,10 @@ export function prepareTerminalPaneMount(
         getHttpLinkSourceOwnerForPane(paneId),
         canOpenOwnedBrowserForPane(paneId)
       ),
-      showActions: terminalLinkClickBehaviorFor(deps.settingsRef.current) === 'actions'
+      showActions: usesHttpLinkMode()
+        ? terminalLinkClickBehaviorFor(deps.settingsRef.current) !== 'none' &&
+          httpLinkModeFor(deps.settingsRef.current) === 'ask'
+        : terminalLinkClickBehaviorFor(deps.settingsRef.current) === 'actions'
     })
   return {
     container,

@@ -18,6 +18,10 @@ export type LinkActionRequest = {
   secondaryActions?: readonly LinkAction[]
   /** Hands focus back to the surface that owned the click (terminal, chat transcript). */
   restoreFocus: () => void
+  /** Desktop URL choosers opened by a plain click in Ask mode with both browsers and a qualified click host. */
+  rememberEligible?: boolean
+  /** URL choosers in chat, terminal and dashboard: gear opens "Open links" and the keyboard model applies. */
+  linkPreferenceHost?: boolean
 }
 
 export function closeLinkActionRequest<T extends LinkActionRequest>(

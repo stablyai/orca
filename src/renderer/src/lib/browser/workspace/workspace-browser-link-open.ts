@@ -50,6 +50,9 @@ function ownsBrowserRoute(
   )
 }
 
+/** Route ownership as link placement checks it, reused by the remote dispatch guard. */
+export const ownsRuntimeBrowserRoute = ownsBrowserRoute
+
 export function workspaceBrowserLinkDestination(
   request: OpenWorkspaceBrowserTabRequest,
   executionHostId: ExecutionHostId,

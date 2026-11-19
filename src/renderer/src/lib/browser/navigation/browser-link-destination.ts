@@ -50,6 +50,12 @@ export type BrowserLinkOpenContext = {
   linkIntent: LinkOpenIntent | null
   isCurrentRequest?: () => boolean
   canReveal?: () => boolean
+  /** Host qualified at click; used when the intent names none. */
+  clickHostId?: ExecutionHostId | null
+  /** Chooser actions refuse when no qualified click host exists. */
+  requireClickHost?: boolean
+  /** Detailed outcome, delivered once before the opener projects it into a toast, error or page id. */
+  onDetailedOutcome?: (outcome: BrowserOpenOutcome) => void
 }
 
 /** Credential-bearing requests cannot use their redacted stored URL as an identity. */

@@ -74,6 +74,7 @@ const SETTINGS_NAV_INTENT_SET: ReadonlySet<string> = new Set(SETTINGS_NAV_INTENT
 
 export type SettingsNavTarget = (typeof SETTINGS_NAV_TARGETS)[number]
 export const FULL_DISK_ACCESS_SETTINGS_TARGET_ID = 'developer-permissions-full-disk-access'
+export const BROWSER_OPEN_LINKS_SETTINGS_TARGET_ID = 'browser-open-links'
 export const BROWSER_TERMINAL_LINK_ACTIONS_SETTINGS_TARGET_ID = 'browser-terminal-link-actions'
 export const BROWSER_CLIENT_HOSTED_REMOTE_SETTINGS_TARGET_ID = 'browser-client-hosted-remote'
 export const BROWSER_SSH_WORKSPACE_ROUTING_SETTINGS_TARGET_ID = 'browser-ssh-workspace-routing'

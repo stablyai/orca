@@ -66,6 +66,14 @@ export function updateSettings(
     // Loaded defaults are ambiguous; synchronize the legacy switch only on an explicit write.
     sanitizedUpdates.terminalLinkActionPopoverEnabled = linkBehavior === 'actions'
   }
+  if (
+    'httpLinkClickBehavior' in sanitizedUpdates &&
+    sanitizedUpdates.httpLinkClickBehavior !== 'ask' &&
+    sanitizedUpdates.httpLinkClickBehavior !== 'open'
+  ) {
+    // An invalid mode would shadow the stored one; drop it so readers keep the last valid value.
+    delete sanitizedUpdates.httpLinkClickBehavior
+  }
   const windowMaterial = updates.windowMaterial
   if (windowMaterial === 'off' || windowMaterial === 'translucent' || windowMaterial === 'blur') {
     // Every writer (settings, Ghostty import) mirrors the legacy switch an older Orca reads after rollback.

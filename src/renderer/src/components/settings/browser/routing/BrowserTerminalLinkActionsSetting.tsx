@@ -1,3 +1,4 @@
+import { usesHttpLinkMode } from '@/lib/links/preferences/http-link-mode'
 import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
 import { useTranslate } from '@/i18n/use-translate'
 import { BROWSER_TERMINAL_LINK_ACTIONS_SETTINGS_TARGET_ID } from '@/components/settings/navigation/settings-navigation-types'
@@ -40,10 +41,16 @@ export function BrowserTerminalLinkActionsSetting({
     'auto.components.settings.BrowserTerminalLinkActionsSetting.plainClickLabel',
     'Plain click'
   )
-  const plainClickDescription = t(
-    'auto.components.settings.BrowserTerminalLinkActionsSetting.plainClickDescription',
-    'Choose whether a left-click shows actions, opens the URL, or leaves it to the terminal. Cmd/Ctrl-click always opens directly.'
-  )
+  // Desktop web links follow "Open links", so this row now governs file paths and pass-through.
+  const plainClickDescription = usesHttpLinkMode()
+    ? t(
+        'components.settings.browser.terminalLinkClicks.plainClickDescription',
+        'For file paths in the terminal. Web links follow Open links unless left to the terminal app.'
+      )
+    : t(
+        'auto.components.settings.BrowserTerminalLinkActionsSetting.plainClickDescription',
+        'Choose whether a left-click shows actions, opens the URL, or leaves it to the terminal. Cmd/Ctrl-click always opens directly.'
+      )
   const plainClickAriaLabel = t(
     'auto.components.settings.BrowserTerminalLinkActionsSetting.plainClickAriaLabel',
     'Plain click URL behavior'

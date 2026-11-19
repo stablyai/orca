@@ -38,6 +38,10 @@ import {
 import * as ownerHydration from './settings-owner-hydration-publication'
 import { persistVisibilityAwareSettings } from './worktree-visibility-settings-write'
 import { getSettingsFocusedExecutionHostId } from '../../../../../shared/execution-host/execution-host'
+import {
+  applyArrivedLinkFields,
+  withCurrentLinkFields
+} from '@/lib/links/preferences/link-preference-publication'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/identifiers/non-secure-context-uuid'
 
 export type SettingsSlice = SettingsSearchState & {
@@ -267,6 +271,7 @@ export const createSettingsSlice: StateCreator<AppState, [], [], SettingsSlice> 
       const nextSettings = await window.api.settings.setActiveRuntimeEnvironmentPreference({
         environmentId: nextId
       })
+      applyArrivedLinkFields(set as never, nextSettings as GlobalSettings | undefined)
       bumpProviderRuntimeSessionGeneration()
       // Why: this is a focus change, so keep other host state while hydrating only the new owner's default.
       const focusedSettings =
@@ -281,7 +286,7 @@ export const createSettingsSlice: StateCreator<AppState, [], [], SettingsSlice> 
           return true
         }
         set((state) => ({
-          settings: hydrated.settings,
+          settings: withCurrentLinkFields(hydrated.settings, state.settings),
           worktreeVisibilityDefaultsByHost: {
             ...state.worktreeVisibilityDefaultsByHost,
             ...hydrated.defaultsByHost
