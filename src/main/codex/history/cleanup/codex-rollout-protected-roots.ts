@@ -37,6 +37,14 @@ async function folderId(path: string): Promise<string | null> {
   }
 }
 
+/** Without inodes to compare, only a home whose real path is exactly the root's is that root. */
+async function isHomeRealPath(homes: readonly string[], realPath: string): Promise<boolean> {
+  const homePaths = await Promise.all(
+    homes.map((home) => realpathUnlessAbsent(home).catch(() => null))
+  )
+  return homePaths.includes(realPath)
+}
+
 /**
  * Each protected root for the rollout at `stem` (`YYYY/MM/DD/<name>`), unless it is the very folder
  * of a home Orca deletes from. A root that can't be read for a reason other than being gone throws.
@@ -58,7 +66,7 @@ export async function resolveProtectedRoots(
       continue
     }
     const rootId = await folderId(realPath)
-    if (rootId && homeIds.has(rootId)) {
+    if (rootId ? homeIds.has(rootId) : await isHomeRealPath(homes, realPath)) {
       continue
     }
     // Where this rollout's names or marker sit in the root: a home's subfolder mounted from one of
