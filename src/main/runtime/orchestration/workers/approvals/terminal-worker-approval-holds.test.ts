@@ -50,7 +50,7 @@ const record = (
 ): ClaudeToolRecord => ({ hookDecision, result })
 
 // A helper's calls are recorded only in its own transcript beside the session's.
-const HELPER_TRANSCRIPT = '/t/session/subagents/agent-a28760f4d40f595de.jsonl'
+const helperTranscript = (helper: string) => `/t/session/subagents/agent-${helper}.jsonl`
 // The screen while a held helper prompt waits: Claude draws no dialog for it (probe 2026-11-19, 2.1.326).
 const LEAD_WAITING = ['⏺ Agent(Run rm check)', '✻ Waiting for 1 background agent to finish', '❯']
 
@@ -67,6 +67,7 @@ function setup(options: { canAnswer?: boolean; coordinatorApprovals?: boolean } 
     lines: readonly string[] | null
     incarnation: string
     record: ClaudeToolRecord | null
+    /** Keyed by transcript path and tool call. */
     helperRecords: Map<string, ClaudeToolRecord>
   } = { lines: DIALOG, incarnation: 'run-1', record: null, helperRecords: new Map() }
   const timers: { run: () => void; cancelled: boolean }[] = []
@@ -82,9 +83,7 @@ function setup(options: { canAnswer?: boolean; coordinatorApprovals?: boolean } 
     readToolRecord: async ({ transcriptPath, toolUseId }) =>
       transcriptPath === '/t/session.jsonl' && toolUseId === 'tool-1'
         ? screen.record
-        : transcriptPath === HELPER_TRANSCRIPT
-          ? (screen.helperRecords.get(toolUseId) ?? null)
-          : null,
+        : (screen.helperRecords.get(`${transcriptPath}|${toolUseId}`) ?? null),
     now: () => Date.UTC(2026, 10, 10, 12, 0, 0),
     setTimer: (run) => {
       const timer = { run, cancelled: false }
@@ -421,12 +420,14 @@ describe('terminal worker approval holds', () => {
 
 describe("terminal worker approval holds for a helper agent's prompt", () => {
   const HELPER = 'a28760f4d40f595de'
+  const OTHER_HELPER = 'a5a826dca766863e5'
   const helperAsks = (
     ctx: ReturnType<typeof setup>,
     toolUseId: string,
-    onWrite?: (verdict: ClaudePermissionVerdict | null) => void
+    onWrite?: (verdict: ClaudePermissionVerdict | null) => void,
+    helper = HELPER
   ) => {
-    const asked = hook(toolUseId, onWrite, HELPER)
+    const asked = hook(toolUseId, onWrite, helper)
     expect(ctx.holds.admit(asked.request)).toBe(true)
     return asked
   }
@@ -434,8 +435,10 @@ describe("terminal worker approval holds for a helper agent's prompt", () => {
     const message = ctx.escalations()[index]
     return { body: message.body, approval: JSON.parse(message.payload ?? '{}').approval }
   }
-  const deniedInHelperTranscript = (ctx: ReturnType<typeof setup>, toolUseId: string) => () =>
-    ctx.screen.helperRecords.set(toolUseId, record(OURS, 'deny'))
+  const deniedInHelperTranscript =
+    (ctx: ReturnType<typeof setup>, toolUseId: string, helper = HELPER) =>
+    () =>
+      ctx.screen.helperRecords.set(`${helperTranscript(helper)}|${toolUseId}`, record(OURS, 'deny'))
 
   it("cards a helper's prompt at once and denies it without a dialog, claimed from the helper's transcript", async () => {
     const ctx = setup()
@@ -458,19 +461,22 @@ describe("terminal worker approval holds for a helper agent's prompt", () => {
     expect(asked.replies).toEqual([{ behavior: 'deny', message: REASON }])
   })
 
-  it('gives two helpers prompting at once a card each, and answers each through its own hook', async () => {
+  it('gives two helpers prompting at once a card each, each answered and claimed from its own transcript', async () => {
     const ctx = setup()
     ctx.screen.lines = LEAD_WAITING
     const first = helperAsks(ctx, 'tool-2', deniedInHelperTranscript(ctx, 'tool-2'))
-    const second = helperAsks(ctx, 'tool-3')
+    const second = helperAsks(
+      ctx,
+      'tool-3',
+      deniedInHelperTranscript(ctx, 'tool-3', OTHER_HELPER),
+      OTHER_HELPER
+    )
 
     expect(ctx.escalations()).toHaveLength(2)
+    expect(await deny(ctx, cardOf(ctx, 1).approval.approvalId)).toMatchObject({ ok: true })
     expect(await deny(ctx, cardOf(ctx, 0).approval.approvalId)).toMatchObject({ ok: true })
-    expect(await answer(ctx, cardOf(ctx, 1).approval.approvalId, 'allow')).toMatchObject({
-      ok: true
-    })
     expect(first.replies).toEqual([{ behavior: 'deny', message: REASON }])
-    expect(second.replies).toEqual([{ behavior: 'allow' }])
+    expect(second.replies).toEqual([{ behavior: 'deny', message: REASON }])
   })
 
   it("keeps the lead's on-screen prompt answerable while a helper's is held", async () => {
