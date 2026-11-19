@@ -63,9 +63,8 @@ function emit(change: StructuredAgentSessionStatusChange): void {
 
 const workspaces = [HOME]
 
-function Reader({ onStops }: { onStops: (count: number) => void }) {
-  onStops(useBotUsageLimitStops({ hostId: 'local' }, workspaces).length)
-  return null
+function Reader() {
+  return <span>{useBotUsageLimitStops({ hostId: 'local' }, workspaces).length}</span>
 }
 
 /** Mounts the readers over `sessions` host sessions, then counts cut reads per kind of event. */
@@ -73,7 +72,7 @@ function measure(sessions: number): {
   mount: number
   perStatusEvent: number
   wholeHost: number
-  stops: number
+  stops: string | null
 } {
   feed.owner = newFeedOwner()
   feed.snapshot = new Map()
@@ -84,12 +83,11 @@ function measure(sessions: number): {
   for (let index = 0; index < sessions; index++) {
     feed.snapshot.set(`s${index}`, summary(`s${index}`, `w${index}`))
   }
-  let stops = 0
   feed.cutReads = 0
   const view = render(
     <>
       {Array.from({ length: READERS }, (_, index) => (
-        <Reader key={index} onStops={(count) => (stops = count)} />
+        <Reader key={index} />
       ))}
     </>
   )
@@ -104,6 +102,7 @@ function measure(sessions: number): {
   feed.cutReads = 0
   emit(null)
   const wholeHost = feed.cutReads
+  const stops = view.container.textContent
   view.unmount()
   return { mount, perStatusEvent, wholeHost, stops }
 }
@@ -118,6 +117,16 @@ afterEach(() => {
 })
 
 it('derives usage-limit stops once per host change, whatever the readers and sessions', () => {
-  expect(measure(100)).toEqual({ mount: 205, perStatusEvent: 1, wholeHost: 103, stops: 1 })
-  expect(measure(1000)).toEqual({ mount: 2005, perStatusEvent: 1, wholeHost: 1003, stops: 1 })
+  expect(measure(100)).toEqual({
+    mount: 205,
+    perStatusEvent: 1,
+    wholeHost: 103,
+    stops: '111111111111'
+  })
+  expect(measure(1000)).toEqual({
+    mount: 2005,
+    perStatusEvent: 1,
+    wholeHost: 1003,
+    stops: '111111111111'
+  })
 })
