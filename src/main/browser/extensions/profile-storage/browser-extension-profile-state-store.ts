@@ -141,7 +141,8 @@ export class BrowserExtensionProfileStateStore {
       clearTimeout(this.timer)
       this.timer = null
     }
-    if (!this.cache || this.revision === this.queuedRevision) {
+    // Closed for quit: later changes stay in memory only.
+    if (!this.cache || this.closed || this.revision === this.queuedRevision) {
       return
     }
     this.queuedRevision = this.revision

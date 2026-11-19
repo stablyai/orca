@@ -93,7 +93,7 @@ describe('BrowserExtensionProfileStateStore', () => {
     })
   })
 
-  it('reports a failed save, retries it at quit and writes nothing for an unchanged update', async () => {
+  it('reports a failed save, retries it at quit and writes nothing more after close', async () => {
     const store = new BrowserExtensionProfileStateStore(root)
     disk.failNext = true
     store.update('default', EXTENSION, (state) => ({ ...state, removalGeneration: 3 }))
@@ -106,6 +106,8 @@ describe('BrowserExtensionProfileStateStore', () => {
 
     store.update('default', EXTENSION, (state) => ({ ...state, removalGeneration: 3 }))
     store.forgetProfile('missing')
+    store.update('default', EXTENSION, (state) => ({ ...state, removalGeneration: 4 }))
+    await store.flush()
     await store.close()
     expect(disk.renames).toBe(2)
   })
