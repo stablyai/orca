@@ -7,6 +7,8 @@ import { fixture } from '../profile-writing/profile-state-delayed-authority-fixt
 // Perf contract: a PTY bind or retire on main copied the whole session for rollback (~250-550 ms
 // per terminal spawn at a 9M-char session). Neither may copy the session, whatever its size.
 
+const clone = globalThis.structuredClone
+
 afterEach(() => {
   vi.restoreAllMocks()
 })
@@ -44,9 +46,8 @@ async function wholeSessionCopiesPerBindAndRetire(worktrees: number): Promise<nu
   const { store } = await fixture()
   store.setWorkspaceSession(seededSession(store.getWorkspaceSession(), worktrees))
   await store.flushPendingOrThrowAsync()
-  const clone = globalThis.structuredClone
   let copies = 0
-  vi.spyOn(globalThis, 'structuredClone').mockImplementation((value, options) => {
+  const spy = vi.spyOn(globalThis, 'structuredClone').mockImplementation((value, options) => {
     if (typeof value === 'object' && value !== null && 'tabsByWorktree' in value) {
       copies += 1
     }
@@ -70,6 +71,7 @@ async function wholeSessionCopiesPerBindAndRetire(worktrees: number): Promise<nu
       undefined
     )
   ).toBe(true)
+  spy.mockRestore()
   return copies
 }
 
