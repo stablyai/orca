@@ -173,7 +173,7 @@ async function paneShellAlone(
 type PtyProvider = ReturnType<typeof getProviderForPty>
 const pendingRootLookups = new Map<
   PtyProvider,
-  { ptyIds: Set<string>; result: ReturnType<PtyProvider['listProcesses']> | Promise<null> }
+  { ptyIds: Set<string>; result: Promise<Map<string, number | undefined> | null> }
 >()
 
 /** Cold lookups started together (a sleep's proofs) share one owner inventory. */
@@ -185,7 +185,11 @@ function lookupRootPids(provider: PtyProvider, ptyId: string) {
       pendingRootLookups.delete(provider)
       return provider.listProcesses({ ptyIds: [...ptyIds], targetOwnerOnly: true })
     })
-    batch = { ptyIds, result: result.catch(() => null) }
+    // One index of the shared reply serves every caller in the batch.
+    const rootPids = result.then(
+      (rows) => new Map(rows.map((row) => [row.id, row.rootProcessId] as const))
+    )
+    batch = { ptyIds, result: rootPids.catch(() => null) }
     pendingRootLookups.set(provider, batch)
   }
   batch.ptyIds.add(ptyId)
@@ -205,9 +209,9 @@ async function readPtyRootPid(
   if (known && known.incarnationId === incarnationId) {
     return known.rootPid ?? undefined
   }
-  const processes = await lookupRootPids(provider, ptyId)
-  const rootPid = processes?.find((entry) => entry.id === ptyId)?.rootProcessId
-  if (processes && incarnationId && ptyIncarnationById.get(ptyId) === incarnationId) {
+  const rootPids = await lookupRootPids(provider, ptyId)
+  const rootPid = rootPids?.get(ptyId)
+  if (rootPids && incarnationId && ptyIncarnationById.get(ptyId) === incarnationId) {
     ptyFallbackRootPidById.set(ptyId, { incarnationId, rootPid: rootPid ?? null })
   }
   return rootPid
