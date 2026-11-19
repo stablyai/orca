@@ -22521,11 +22521,9 @@
   "worktree": {
     "nestedRemoval": {
       "refreshFailed": "No se pudo actualizar la lista de espacios de trabajo",
-      "review": "Eliminar con worktrees anidados…",
       "description": "Esto elimina de forma permanente \"{{name}}\", todos los worktrees anidados que se indican a continuación y todos los archivos que contienen, incluidos los cambios sin confirmar. Se detendrán sus terminales y agentes.",
       "detached": "HEAD desacoplado",
       "loading": "Comprobando worktrees anidados…",
-      "order": "Los worktrees anidados se eliminan primero. Si uno falla, la eliminación se detiene y se conserva el principal. Las ramas siguen tu configuración de eliminación existente.",
       "cancel": "Cancelar",
       "retry": "Revisar de nuevo",
       "deleting": "Eliminando…",
@@ -22558,13 +22556,11 @@
       "forceDelete": "Forzar eliminación",
       "alwaysForceDelete": "Forzar siempre la eliminación",
       "batchTitle": "¿Eliminar {{count}} espacios de trabajo?",
-      "batchVerb": "Eliminar {{count}} espacios de trabajo",
       "withChildrenTitle_one": "¿Eliminar {{name}} y {{count}} espacio de trabajo secundario?",
       "withChildrenTitle_other": "¿Eliminar {{name}} y {{count}} espacios de trabajo secundarios?",
       "withChildrenTitle_many": "¿Eliminar {{name}} y {{count}} espacios de trabajo secundarios?",
       "allVerb": "Eliminar todo",
       "singleTitle": "¿Eliminar {{name}}?",
-      "singleVerb": "Eliminar espacio de trabajo",
       "forceExplanation": "Git no pudo eliminarlo porque tiene cambios. La eliminación forzada los elimina de todos modos.",
       "errorDetails": "Detalles",
       "changesIncomplete": "Algunos cambios no se pudieron comprobar por completo."

@@ -22055,11 +22055,9 @@
   "worktree": {
     "nestedRemoval": {
       "refreshFailed": "Die Liste der Arbeitsbereiche konnte nicht aktualisiert werden",
-      "review": "Mit verschachtelten Worktrees löschen…",
       "description": "Dadurch werden „{{name}}“, alle unten aufgeführten verschachtelten Worktrees und alle darin enthaltenen Dateien einschließlich nicht committeter Änderungen endgültig gelöscht. Ihre Terminals und Agenten werden gestoppt.",
       "detached": "Losgelöster HEAD",
       "loading": "Verschachtelte Worktrees werden überprüft…",
-      "order": "Verschachtelte Worktrees werden zuerst gelöscht. Schlägt ein Löschvorgang fehl, wird das Löschen gestoppt und der übergeordnete Arbeitsbereich beibehalten. Für Branches gelten die bestehenden Löscheinstellungen.",
       "cancel": "Abbrechen",
       "retry": "Erneut überprüfen",
       "deleting": "Wird gelöscht…",
@@ -22090,12 +22088,10 @@
       "forceDelete": "Löschen erzwingen",
       "alwaysForceDelete": "Löschen immer erzwingen",
       "batchTitle": "{{count}} Arbeitsbereiche löschen?",
-      "batchVerb": "{{count}} Arbeitsbereiche löschen",
       "withChildrenTitle_one": "{{name}} und {{count}} untergeordneten Arbeitsbereich löschen?",
       "withChildrenTitle_other": "{{name}} und {{count}} untergeordnete Arbeitsbereiche löschen?",
       "allVerb": "Alle löschen",
       "singleTitle": "{{name}} löschen?",
-      "singleVerb": "Arbeitsbereich löschen",
       "forceExplanation": "Git konnte ihn wegen vorhandener Änderungen nicht löschen. Erzwungenes Löschen entfernt diese Änderungen trotzdem.",
       "errorDetails": "Details",
       "changesIncomplete": "Einige Änderungen konnten nicht vollständig geprüft werden."

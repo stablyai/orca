@@ -22197,11 +22197,9 @@
   "worktree": {
     "nestedRemoval": {
       "refreshFailed": "Çalışma alanı listesi yenilenemedi",
-      "review": "İç içe worktree'lerle birlikte sil…",
       "description": "Bu işlem, \"{{name}}\" çalışma alanını, aşağıda listelenen tüm iç içe worktree'leri ve commit edilmemiş değişiklikler de dahil olmak üzere içlerindeki tüm dosyaları kalıcı olarak siler. Terminalleri ve ajanları durdurulacak.",
       "detached": "Ayrık HEAD",
       "loading": "İç içe worktree'ler kontrol ediliyor…",
-      "order": "Önce iç içe worktree'ler silinir. Biri silinemezse silme işlemi durur ve üst worktree korunur. Branch'ler için mevcut silme ayarlarınız uygulanır.",
       "cancel": "İptal",
       "retry": "Yeniden incele",
       "deleting": "Siliniyor…",
@@ -22232,12 +22230,10 @@
       "forceDelete": "Zorla sil",
       "alwaysForceDelete": "Her zaman zorla sil",
       "batchTitle": "{{count}} çalışma alanı silinsin mi?",
-      "batchVerb": "{{count}} çalışma alanını sil",
       "withChildrenTitle_one": "{{name}} ve {{count}} alt çalışma alanı silinsin mi?",
       "withChildrenTitle_other": "{{name}} ve {{count}} alt çalışma alanı silinsin mi?",
       "allVerb": "Tümünü sil",
       "singleTitle": "{{name}} silinsin mi?",
-      "singleVerb": "Çalışma alanını sil",
       "forceExplanation": "Git, değişiklikler olduğu için silemedi. Zorla silme işlemi bu değişiklikleri de siler.",
       "errorDetails": "Ayrıntılar",
       "changesIncomplete": "Bazı değişiklikler tam olarak kontrol edilemedi."

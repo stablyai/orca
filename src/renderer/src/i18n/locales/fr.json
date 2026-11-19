@@ -22542,11 +22542,9 @@
   "worktree": {
     "nestedRemoval": {
       "refreshFailed": "Impossible d'actualiser la liste des espaces de travail",
-      "review": "Supprimer avec les worktrees imbriqués…",
       "description": "Cela supprime définitivement « {{name}} », chaque worktree imbriqué listé ci-dessous et tous les fichiers qu'il contient, y compris les modifications non validées. Leurs terminaux et agents seront arrêtés.",
       "detached": "HEAD détaché",
       "loading": "Vérification des worktrees imbriqués…",
-      "order": "Les worktrees imbriqués sont supprimés en premier. Si l'un échoue, la suppression s'arrête et le parent est conservé. Les branches suivent vos paramètres de suppression existants.",
       "cancel": "Annuler",
       "retry": "Vérifier à nouveau",
       "deleting": "Suppression…",
@@ -22579,13 +22577,11 @@
       "forceDelete": "Forcer la suppression",
       "alwaysForceDelete": "Toujours forcer la suppression",
       "batchTitle": "Supprimer {{count}} espaces de travail ?",
-      "batchVerb": "Supprimer {{count}} espaces de travail",
       "withChildrenTitle_one": "Supprimer {{name}} et {{count}} espace de travail enfant ?",
       "withChildrenTitle_other": "Supprimer {{name}} et {{count}} espaces de travail enfants ?",
       "withChildrenTitle_many": "Supprimer {{name}} et {{count}} espaces de travail enfants ?",
       "allVerb": "Tout supprimer",
       "singleTitle": "Supprimer {{name}} ?",
-      "singleVerb": "Supprimer l'espace de travail",
       "forceExplanation": "Git n’a pas pu le supprimer car il contient des modifications. La suppression forcée les supprime quand même.",
       "errorDetails": "Détails",
       "changesIncomplete": "Certaines modifications n’ont pas pu être entièrement vérifiées."
