@@ -1,9 +1,12 @@
-import { createBrowserUuid } from '@/lib/browser-uuid'
-import type { TabGroup, TabGroupLayoutNode } from '../../../../../shared/tab-types'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/identifiers/non-secure-context-uuid'
+import type {
+  TabGroup,
+  TabGroupLayoutNode
+} from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { TabsSlice } from './tabs-slice-contract'
 import { insertSplitGroup } from './tabs-group-actions'
-import { sanitizeRecentTabIds } from '../tab-group-state'
-import { applyTabOrderSortValues } from '../../../../../shared/workspace-layout/tab-order'
+import { sanitizeRecentTabIds } from './tab-selection-history'
+import { applyTabOrderSortValues } from '../../../../../shared/workspace-layout/tab-groups/tab-order'
 
 type ChatPanelLayout = Pick<
   TabsSlice,

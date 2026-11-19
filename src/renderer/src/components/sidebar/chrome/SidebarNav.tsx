@@ -1,13 +1,5 @@
 import React from 'react'
-import {
-  BookOpen,
-  CalendarClock,
-  EyeOff,
-  Files,
-  Bot,
-  Search,
-  Smartphone
-} from 'lucide-react'
+import { BookOpen, CalendarClock, EyeOff, Files, Bot, Search, Smartphone } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useAppStore } from '@/store/index'
 import { cn } from '@/lib/class-names'
@@ -181,9 +173,7 @@ const SidebarNav = React.memo(function SidebarNav() {
           className={cn('size-4 shrink-0', !roomsActive && 'text-worktree-sidebar-foreground/30')}
           strokeWidth={roomsActive ? 2.25 : 1.75}
         />
-        <span className="flex-1">
-          {translate('auto.components.sidebar.SidebarNav.rooms', 'Bots')}
-        </span>
+        <span className="flex-1">{t('auto.components.sidebar.SidebarNav.rooms', 'Bots')}</span>
       </button>
       {showSkillsButton ? (
         <ContextMenu>
