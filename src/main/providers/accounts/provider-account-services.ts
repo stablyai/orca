@@ -28,6 +28,7 @@ import { normalizeClaudeRuntimeSelection } from '../../claude-accounts/selection
 import { CLAUDE_HOST_SYSTEM_DEFAULT_USAGE_ID } from '../../../shared/agent-accounts/claude/claude-system-default-usage'
 import { WORKSPACE_SYSTEM_DEFAULT_ACCOUNT_ID } from '../../../shared/agent-accounts/workspace-account-binding'
 import type { ClaudeStatusLineRateLimits } from '../../../shared/agent-usage/rate-limits/claude-statusline-rate-limits'
+import { claudeSystemDefaultUsageAccountId } from '../../../shared/agent-accounts/claude/claude-system-default-usage-account'
 
 export type ProviderAccountServices = {
   rateLimits: RateLimitService
@@ -205,7 +206,7 @@ export function createProviderAccountServices(
       ...(previewSystemDefault
         ? [
             {
-              id: `system-default:host:${JSON.stringify([login?.email ?? null, login?.organizationUuid ?? null])}`
+              id: claudeSystemDefaultUsageAccountId(login?.email, login?.organizationUuid)
             }
           ]
         : []),

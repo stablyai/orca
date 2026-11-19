@@ -6,6 +6,7 @@ import { applyClaudeEnvPatch } from '../../../claude-accounts/runtime-auth/envir
 import { claudeConfigDirEnvPatch } from './claude-config-dir-pin'
 import { resolveStructuredClaudeAccountHomePath } from '../../../runtime/agent-session/environment/structured-agent-account-home'
 import { getClaudeWorkspaceProfiles } from '../../../claude-accounts/profiles/routing/claude-profile-installed-router'
+import { normalizeRuntimePathForComparison } from '../../../../shared/file-access/cross-platform-path'
 
 /** Existing conversations keep their acquired account; fresh chats resolve the workspace selection. */
 export async function prepareClaudeLaunchAccount(
@@ -17,9 +18,19 @@ export async function prepareClaudeLaunchAccount(
   record?: AgentSessionRecord
 ): Promise<ClaudeAccountRecipe> {
   if (providerSessionId) {
+    await router?.environmentReady
     const acquired = record ? acquiredAgentSessionAccount(record)?.recipe : undefined
     recordHome = acquired?.home ?? recordHome
-    env.CLAUDE_CONFIG_DIR = recordHome
+    const systemHome = router?.systemDefaultHome()
+    if (
+      !systemHome ||
+      normalizeRuntimePathForComparison(recordHome) !==
+        normalizeRuntimePathForComparison(systemHome)
+    ) {
+      env.CLAUDE_CONFIG_DIR = recordHome
+    } else {
+      delete env.CLAUDE_CONFIG_DIR
+    }
     env.ORCA_CLAUDE_PROFILE_POINTER = ''
     env.ORCA_CLAUDE_INJECTED_CONFIG_DIR = recordHome
     return acquired ?? { route: 'system', home: recordHome, configDir: recordHome }

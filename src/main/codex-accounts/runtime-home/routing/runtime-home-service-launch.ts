@@ -170,6 +170,9 @@ export abstract class CodexRuntimeHomeLaunch extends CodexRuntimeHomeWorkspaceRo
       if (target?.runtime === 'wsl') {
         const wslTarget = this.resolveWslDefaultTarget(target)
         if (await blockedWslDistroForExec(wslTarget.wslDistro)) {
+          if (this.workspaceAccount(options?.workspaceId, target)?.id !== workspaceAccount.id) {
+            throw new Error('The workspace Codex account changed during preparation. Launch again.')
+          }
           return home
         }
         await this.startLegacyWslAuthDrain(wslTarget, { throwOnFailure: true })
@@ -210,7 +213,10 @@ export abstract class CodexRuntimeHomeLaunch extends CodexRuntimeHomeWorkspaceRo
     // A passive restore reaches this before its hold (#35813); the probe, drain, sync and bridge
     // below would each start a stopped distro (E9). A user act passes and does them all.
     if (await blockedWslDistroForExec(wslTarget.wslDistro)) {
-      if (this.workspaceUsesSystemDefault(options?.workspaceId)) {
+      if (
+        this.workspaceAccount(options?.workspaceId, target) ||
+        this.workspaceUsesSystemDefault(options?.workspaceId)
+      ) {
         throw new Error('The workspace Codex account changed during preparation. Launch again.')
       }
       return this.getWslCodexHomePathForSelection(wslTarget, { probeHome: false })

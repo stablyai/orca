@@ -15,7 +15,7 @@ import { runWslGuestNodeHelper } from '../../../wsl/execution/wsl-guest-node-hel
 import { describeWslProcessFailure } from '../../../wsl/execution/wsl-process-failure'
 import { blockedWslDistroForPath } from '../../../wsl/filesystem/wsl-unc-access-gate'
 import { claudeProfileMarkerPath, type ClaudeProfileDescriptor } from '../claude-profile-paths'
-import type { ClaudeProfileRouterSettings } from '../routing/claude-profile-router'
+import type { ClaudeProfileRouterSettings } from '../routing/claude-profile-router-settings'
 import {
   claudeProfileMissing,
   claudeProfileSetupFailed

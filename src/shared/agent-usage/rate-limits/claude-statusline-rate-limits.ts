@@ -18,6 +18,7 @@ export type ClaudeStatusLineRateLimits = {
   configDir: string | null
   /** Reporting Claude session (payload session_id); null when the payload omits it. */
   sessionId?: string | null
+  accountId?: string | null
   fiveHour: ClaudeStatusLineWindow | null
   sevenDay: ClaudeStatusLineWindow | null
 }
@@ -61,12 +62,13 @@ export function readClaudeStatusLineForm(body: unknown): ClaudeStatusLineForm | 
   if (typeof body !== 'object' || body === null || !('payload' in body)) {
     return null
   }
-  if (typeof body.payload !== 'string' || !body.payload) {
+  const fields = body as { payload?: unknown; configDir?: unknown; accountId?: unknown }
+  if (typeof fields.payload !== 'string' || !fields.payload) {
     return null
   }
   let payload: unknown
   try {
-    payload = JSON.parse(body.payload)
+    payload = JSON.parse(fields.payload)
   } catch {
     return null
   }
@@ -89,10 +91,13 @@ export function readClaudeStatusLineRateLimits({
   }
   const configDir =
     'configDir' in fields && typeof fields.configDir === 'string' ? fields.configDir.trim() : ''
+  const accountId =
+    'accountId' in fields && typeof fields.accountId === 'string' ? fields.accountId.trim() : ''
   const sessionId =
     'session_id' in payload && typeof payload.session_id === 'string' ? payload.session_id : ''
   return {
     configDir: configDir || null,
+    accountId: accountId || null,
     sessionId: sessionId || null,
     fiveHour,
     sevenDay

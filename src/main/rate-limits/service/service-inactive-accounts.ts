@@ -49,6 +49,7 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
         }
         try {
           const startedAt = Date.now()
+          const liveAtStart = this.inactiveClaudeLiveUsage.get(account.id) ?? null
           const fresh = await fetchInactiveClaudeAccountUsage(account, {
             allowUsagePanelSupplement: this.shouldAllowClaudeUsagePanelSupplement(),
             networkProxySettings: this.networkProxySettingsResolver?.(),
@@ -68,11 +69,25 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
             continue
           }
           const cached = this.inactiveClaudeCache.get(account.id) ?? null
-          if (
-            !(cached?.usageMetadata?.source === 'live-session' && cached.updatedAt >= startedAt)
-          ) {
-            this.inactiveClaudeCache.set(account.id, this.applyStalePolicy(fresh, cached))
-          }
+          const live = this.inactiveClaudeLiveUsage.get(account.id) ?? null
+          const newerLive = live && live.updatedAt >= startedAt ? live : null
+          const merged = newerLive
+            ? {
+                ...fresh,
+                session:
+                  newerLive.session !== liveAtStart?.session ? newerLive.session : fresh.session,
+                weekly: newerLive.weekly !== liveAtStart?.weekly ? newerLive.weekly : fresh.weekly,
+                updatedAt: Math.max(fresh.updatedAt, newerLive.updatedAt),
+                usageMetadata: {
+                  ...fresh.usageMetadata,
+                  ...(newerLive.session !== liveAtStart?.session ||
+                  newerLive.weekly !== liveAtStart?.weekly
+                    ? newerLive.usageMetadata
+                    : {})
+                }
+              }
+            : fresh
+          this.inactiveClaudeCache.set(account.id, this.applyStalePolicy(merged, cached))
         } catch {
           // Isolate each account's Keychain/network failure so siblings continue.
           if (

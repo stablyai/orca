@@ -5,13 +5,17 @@ import { toWindowsWslPath } from '../../../shared/file-access/wsl-paths'
 
 export function resolveClaudeLiveAccount(
   configDir: string | null,
-  accounts: InactiveClaudeAccount[]
+  accounts: InactiveClaudeAccount[],
+  accountId?: string | null
 ) {
   const normalized = normalizeClaudeConfigDir(configDir)
   if (!normalized) {
     return null
   }
   for (const account of accounts) {
+    if (accountId ? account.id !== accountId : account.id.startsWith('system-default:host:')) {
+      continue
+    }
     const wsl = account.managedAuthRuntime === 'wsl'
     const home = wsl
       ? account.wslLinuxAuthPath
