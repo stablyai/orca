@@ -163,7 +163,7 @@ describe('quit admits idle-agent stops within its deadline', () => {
         const stopped = await runtime.stopIdleAgentTerminalsForQuit(targets, 5_000)
 
         expect(stopped).toEqual([])
-        expect(stopAndWait).toHaveBeenCalledTimes(4)
+        expect(stopAndWait).toHaveBeenCalledTimes(8)
       } finally {
         vi.useRealTimers()
       }

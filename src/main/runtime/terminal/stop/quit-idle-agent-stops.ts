@@ -17,8 +17,9 @@ export type QuitStopTarget = {
 // report done over a running job, and stopping them would kill it.
 const AGENTS_REPORTING_BACKGROUND_WORK = new Set(['claude'])
 
-// Checkpoints run one at a time in the daemon adapter, so more stops in flight only queue work.
-const QUIT_STOP_CONCURRENCY = 4
+// A stop holds its slot through the daemon's kill sweep and exit wait, which run per session, so
+// later checkpoints can start meanwhile; the cap still bounds checkpoints left queued at the deadline.
+const QUIT_STOP_CONCURRENCY = 8
 
 /** Typing from the turn's start on may be a queued or unsent draft (with no turn start, any typing
  *  may be); any write after the turn ended, Orca's own deliveries included, may start the next turn. */
