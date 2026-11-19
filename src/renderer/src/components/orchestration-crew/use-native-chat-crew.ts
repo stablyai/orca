@@ -48,12 +48,11 @@ export type NativeChatCrew = NativeChatCrewSource & {
 /** The chat's crew source for its strip and `@` menu; null where it follows none. */
 export const NativeChatCrewContext = createContext<NativeChatCrewSource | null>(null)
 
-/** Follows only while the chat is visible and focused: hidden, offscreen and unfocused panes hold nothing. */
+/** Follows while the chat is visible, like its other strips; splits of one chat share a subscription. */
 export function useNativeChatCrewSource({
   target,
   sessionId,
   isVisible,
-  isFocusedGroup,
   composerRef,
   canMention,
   selfLabel
@@ -61,15 +60,11 @@ export function useNativeChatCrewSource({
   target: RuntimeClientTarget
   sessionId: string
   isVisible: boolean
-  isFocusedGroup: boolean
   composerRef: RefObject<NativeChatComposerHandle | null>
   canMention: boolean
   selfLabel: string
 }): NativeChatCrewSource | null {
-  const party =
-    isVisible && isFocusedGroup && isOrcaSessionId(sessionId)
-      ? formatOrcaSessionAddress(sessionId)
-      : null
+  const party = isVisible && isOrcaSessionId(sessionId) ? formatOrcaSessionAddress(sessionId) : null
   const kind = target.kind
   const environmentId = target.kind === 'environment' ? target.environmentId : null
   const observation = useMemo(() => {

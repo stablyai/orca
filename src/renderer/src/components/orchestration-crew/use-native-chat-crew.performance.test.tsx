@@ -37,12 +37,11 @@ const SESSIONS = Array.from(
 const composerRef = createRef<NativeChatComposerHandle>()
 
 /** One chat as the pane mounts it: the strip and the composer's `@` reader share its source. */
-function Chat(props: { sessionId: string; isVisible: boolean; isFocusedGroup: boolean }) {
+function Chat(props: { sessionId: string; isVisible: boolean }) {
   const source = useNativeChatCrewSource({
     target: { kind: 'local' },
     sessionId: props.sessionId,
     isVisible: props.isVisible,
-    isFocusedGroup: props.isFocusedGroup,
     composerRef,
     canMention: true,
     selfLabel: 'Claude'
@@ -52,35 +51,26 @@ function Chat(props: { sessionId: string; isVisible: boolean; isFocusedGroup: bo
   return null
 }
 
-function Panes(props: { focused: number | null; windowVisible: boolean }) {
-  return SESSIONS.map((sessionId, index) => (
-    <Chat
-      key={sessionId}
-      sessionId={sessionId}
-      // Every split of the window is visible; only one group has focus.
-      isVisible={props.windowVisible}
-      isFocusedGroup={props.focused === index}
-    />
+// Ten split panes showing three chats; panes of one chat share its subscription.
+const PANES = [0, 0, 0, 1, 1, 1, 2, 2, 2, 2].map((chat) => SESSIONS[chat])
+
+function Panes(props: { windowVisible: boolean }) {
+  return PANES.map((sessionId, index) => (
+    <Chat key={index} sessionId={sessionId} isVisible={props.windowVisible} />
   ))
 }
 
-it('follows one crew for ten panes: only the visible, focused chat subscribes', async () => {
-  const view = render(<Panes focused={0} windowVisible />)
+it('follows each visible chat once: ten panes of three chats hold three subscriptions, none once hidden', async () => {
+  const view = render(<Panes windowVisible />)
   await act(async () => {})
-  expect(rpc.calls).toEqual([
-    {
-      method: 'orchestration.crewSubscribe',
-      params: { party: `orca_session_id:${SESSIONS[0]}`, view: 'summary', deltas: true }
-    }
+  expect(rpc.calls.map((call) => call.params)).toEqual([
+    { party: `orca_session_id:${SESSIONS[0]}`, view: 'summary', deltas: true },
+    { party: `orca_session_id:${SESSIONS[1]}`, view: 'summary', deltas: true },
+    { party: `orca_session_id:${SESSIONS[2]}`, view: 'summary', deltas: true }
   ])
-  expect(rpc.live).toBe(1)
+  expect(rpc.live).toBe(3)
 
-  view.rerender(<Panes focused={3} windowVisible />)
-  await act(async () => {})
-  expect(rpc.calls).toHaveLength(2)
-  expect(rpc.live).toBe(1)
-
-  view.rerender(<Panes focused={3} windowVisible={false} />)
+  view.rerender(<Panes windowVisible={false} />)
   await act(async () => {})
   expect(rpc.live).toBe(0)
   view.unmount()

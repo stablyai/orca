@@ -190,7 +190,6 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
     target: props.target,
     sessionId: props.sessionId,
     isVisible: props.isVisible,
-    isFocusedGroup: props.isFocusedGroup,
     composerRef,
     canMention,
     selfLabel: agentLabel
