@@ -248,6 +248,15 @@ describe('botAgentChoices', () => {
     expect(botAgentChoices(model, 'omp')).toEqual(['codex', 'opencode', 'omp'])
   })
 
+  it('offers agents with chat regardless of their default surface', () => {
+    const rows = settled([
+      { kind: 'terminal', agent: 'claude' },
+      { kind: 'cli', agent: 'codex', chat: true },
+      { kind: 'chat-unavailable', agent: 'grok', reason: 'windows' }
+    ])
+    expect(botAgentChoices(rows)).toEqual(['codex'])
+  })
+
   it('offers Antigravity only on a host that publishes Orca’s managed Antigravity server', () => {
     const rows = settled([
       { kind: 'chat', agent: 'codex' },
