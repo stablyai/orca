@@ -246,4 +246,6 @@ export type GapRecovery = {
   gaps: number
   /** An execution-context correction deferred until the rebuilt screen is trusted. */
   contextChangePending?: boolean
+  /** A capture that outlived its slot's hold; this PTY asks for no other until it settles. */
+  lateCapture?: Promise<unknown>
 }
