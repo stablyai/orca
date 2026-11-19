@@ -84,6 +84,33 @@ describe('botItemAskAdvice', () => {
     expect(botItemAskAdvice({ comment: 'Does internationalization ship?' })).toBeNull()
   })
 
+  it('reads a lowercase article after "reply with" as prose, not option A', () => {
+    expect(botItemAskAdvice({ comment: 'Should I reply with a summary?' })).toBeNull()
+    expect(codes({ comment: 'Should I go ahead? Reply with A or B.' })).toEqual(['prose_choices'])
+  })
+
+  it('skips ids inside parent-relative, Windows and wrapped paths', () => {
+    for (const comment of [
+      'Is ../runs/ctx_e24f9ab3c1d2/notes.md right?',
+      'Is the log (~/runs/363e3235aa01.md) right?',
+      'Is "/tmp/orca_session_id:abc/log" right?',
+      'Is C:\\runs\\363e3235aa01.md right?'
+    ]) {
+      expect(botItemAskAdvice({ comment })).toBeNull()
+    }
+    expect(codes({ comment: 'Restart orca_session_id:abc now?' })).toEqual(['jargon'])
+  })
+
+  it('still skips links and URLs inside long runs without spaces', () => {
+    expect(botItemAskAdvice({ comment: `Ship it?\n\n${'](x'.repeat(2_600)}` })).toBeNull()
+    expect(
+      botItemAskAdvice({ comment: `Ship it?\n\n${'a:/'.repeat(2_600)}https://x.dev/363e3235aa01` })
+    ).toBeNull()
+    expect(codes({ comment: `Ship it?\n\n${'a'.repeat(3_500)} ${'b'.repeat(3_500)}` })).toEqual([
+      'jargon'
+    ])
+  })
+
   it('leaves review labels to the rule text', () => {
     expect(botItemAskAdvice({ comment: 'D4 needs P2 fixes on M4 Air; land it?' })).toBeNull()
   })

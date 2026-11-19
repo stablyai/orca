@@ -44,7 +44,9 @@ const ORDER: readonly BotItemAskAdviceCode[] = [
 // Choices spelled out in prose: "Reply **yes**", "Reply A or B", "Options: (a) …", "A) …", "Option 2",
 // "Pick one:", "A/B/C", "(recommended)".
 const PROSE_CHOICES = [
-  /\b(?:reply|answer|say)\s+(?:with\s+)?(?:e\.g\.\s*)?(?:[*"“'`]|[A-D1-4](?=[\s,.;]|$))/i,
+  /\b(?:reply|answer|say)\s+(?:with\s+)?(?:e\.g\.\s*)?[*"“'`]/i,
+  // Capital letters only, so "reply with a summary" is not a choice.
+  /\b(?:[Rr]eply|[Aa]nswer|[Ss]ay)\s+(?:with\s+)?[A-D1-4](?=[\s,.;]|$)/,
   /\b(?:pick(?: one)?|choose|options?)\s*:/i,
   /\(\s*[a-dA-D1-4]\s*\)\s/,
   /(?:^|\s)[A-D]\)\s/m,
@@ -62,14 +64,32 @@ const FUSED = /[a-z]{12}[A-Z0-9]|[a-z]{22}/
 const PIECE_SPLIT = /[/+,;:()[\]{}<>"'“”‘’|=*]+/
 const END_MARKS = /^[.!?…-]+|[.!?…-]+$/g
 
-/** The words a reader sees: no code, link targets or URLs. */
+/** A word without its Markdown link target, or nothing for a URL. Linear in the word. */
+function shownWord(word: string): string {
+  const target = word.indexOf('](')
+  const shown = target === -1 ? word : word.slice(0, target + 1)
+  return shown.includes('://') ? ' ' : shown
+}
+
+/** The words a reader sees: no code, link targets or URLs. Every pass is linear in the text. */
 function prose(text: string): string {
   return text
     .slice(0, SCAN_LIMIT)
     .replace(/```[\s\S]*?(?:```|$)/g, ' ')
     .replace(/`[^`\n]*`/g, ' ')
-    .replace(/\]\([^)\s]*\)/g, ']')
-    .replace(/\S+:\/\/\S+/g, ' ')
+    .replace(/\S+/g, shownWord)
+}
+
+/** A path, even wrapped in brackets or quotes: the bot pointed at it, so its ids are fine. */
+function isPath(token: string): boolean {
+  const bare = token.replace(/^[([{<"'“‘]+/, '')
+  return (
+    bare.startsWith('/') ||
+    bare.startsWith('~/') ||
+    bare.startsWith('./') ||
+    bare.startsWith('../') ||
+    /^[A-Za-z]:[\\/]/.test(bare)
+  )
 }
 
 function hasHash(piece: string): boolean {
@@ -83,13 +103,13 @@ function hasHash(piece: string): boolean {
 
 /** Hashes, internal ids, or two or more run-together words: things the owner can't decode. */
 function hasJargon(words: string): boolean {
-  if (words.includes('orca_session_id:')) {
-    return true
-  }
   let fused = 0
   for (const token of words.split(/\s+/)) {
-    if (token.startsWith('/') || token.startsWith('~/') || token.startsWith('./')) {
+    if (isPath(token)) {
       continue
+    }
+    if (token.includes('orca_session_id:')) {
+      return true
     }
     for (const raw of token.split(PIECE_SPLIT)) {
       const piece = raw.slice(0, PIECE_LIMIT).replace(END_MARKS, '')
