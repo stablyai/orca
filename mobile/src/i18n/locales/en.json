@@ -5034,7 +5034,7 @@
       "botNotFound": "Bot not found",
       "openOn": "Open {{name}} On",
       "pairTitle": "Pair a computer",
-      "pairRequired": "To open this link, pair this phone with a computer.",
+      "pairRequired": "To open this link, pair this phone with a computer, then open the link again.",
       "pairAction": "Pair a computer",
       "openFailed": "Couldn’t open this link",
       "ambiguous": "This bot is on {{names}}. Open the chat in Orca on the one you want.",
