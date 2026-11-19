@@ -120,7 +120,8 @@ afterEach(() => {
   cleanup()
   vi.restoreAllMocks()
   sent.mockClear()
-  answered.mockClear()
+  // Back to its own implementation, so one test's refusal never reaches the next.
+  answered.mockReset()
   openAppHttpLink.mockClear()
   fileContextOwners.mockReturnValue(new Map())
 })
@@ -480,8 +481,6 @@ it("never resends an unconfirmed older-host comment on its own; only the owner's
 
   expect(sent).toHaveBeenCalledTimes(2)
   expect(screen.getByRole('status').textContent).toContain('Sent as a comment')
-  answered.mockReset()
-  answered.mockImplementation(() => Promise.resolve('answered'))
 })
 
 it("knows an earlier attempt's recorded answer as its own after a changed answer was sent", async () => {
@@ -598,8 +597,6 @@ it('posts once however fast Send again is pressed', async () => {
 
   expect(sent).toHaveBeenCalledTimes(2)
   expect(screen.getByRole('status').textContent).toContain('Sent as a comment')
-  answered.mockReset()
-  answered.mockImplementation(() => Promise.resolve('answered'))
 })
 
 it('reads Activity again after Send again', async () => {
@@ -613,8 +610,6 @@ it('reads Activity again after Send again', async () => {
   await flush()
 
   expect(screen.getByText('e4')).toBeTruthy()
-  answered.mockReset()
-  answered.mockImplementation(() => Promise.resolve('answered'))
 })
 
 const ENVIRONMENT = {

@@ -9,7 +9,6 @@ import {
 } from '../../shared/bots/bot-items'
 import { BOT_ITEM_SNOOZE_MAX_MS } from '../../shared/bots/bot-item-snooze'
 import {
-  BOT_ITEM_ASK_LIMITS,
   botItemAnswerProblem,
   botItemAnswerText,
   botItemAskOf,
@@ -172,9 +171,10 @@ export class BotItemsOwner extends BotItemsWrites {
         answers: botItemEventId(questionEventId),
         decisions: given,
         answerId,
-        // A prose question's words, so its receipt still says what was asked when the question is
-        // off the loaded page; an ask's decisions are already in `text`.
-        ...(ask ? {} : { asked: asked.slice(0, BOT_ITEM_ASK_LIMITS.prompt * 4) })
+        // A prose question's words, whole (the item's text limit bounds them), so its receipt still
+        // says what was asked when the question is off the loaded page; an ask's decisions are
+        // already in `text`.
+        ...(ask ? {} : { asked })
       }
       const eventId = this.appendEvent(uid, 'commented', actor, data, true, now)
       this.endSnooze(uid, actor, now)

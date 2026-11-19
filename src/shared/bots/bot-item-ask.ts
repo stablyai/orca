@@ -96,7 +96,7 @@ export function botItemAskOf(data: Record<string, unknown>): BotItemAsk | null {
 }
 
 /** The open question as views get it with the item: its words, its decisions (so its card never
- *  waits on its event's page), and whether only a recorded answer closes it. */
+ *  waits on its event's page), and whether its card takes a recorded answer. */
 export function botItemQuestionView(
   eventId: string,
   data: Record<string, unknown>

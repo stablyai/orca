@@ -63,6 +63,10 @@ export function botItemAskFromFlags(
   const asks = getRepeatedStringFlag(flags, 'ask')
   const strays = ['option', 'recommended', 'multi'].filter((name) => flags.has(name))
   if (asks.length === 0) {
+    if (flags.has('ask')) {
+      // `--ask ""`: a question with no words is no question, never a quiet plain comment.
+      fail('--ask needs its question.')
+    }
     return strays.length > 0
       ? fail(`--${strays[0]} goes after the --ask it belongs to.`)
       : undefined

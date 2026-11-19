@@ -296,6 +296,8 @@ export function BotItemActivityList({
                     entry={entry}
                     onJump={jump}
                     textOverride={context}
+                    // A jump to the question lands on its card when Activity draws one.
+                    jumpTarget={carded}
                   />
                 ) : null}
                 {/* The open card sits right under Activity; here only a line marks its place

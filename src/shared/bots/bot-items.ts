@@ -189,7 +189,8 @@ export type BotItem = {
   madeBy: { botId: string; name: string | null; chatId: string } | null
   /** Needs you: the agent's comment asking the owner, the row's second line. `ask`: its decisions and
    *  choices when it gave them, so the open question's card never waits on its event's page.
-   *  `answerable`: asked on a host that takes answers, so only a recorded answer closes it. */
+   *  `answerable`: asked on a host that takes answers, so its card records one. A recorded answer or
+   *  the owner's reply (which moves the item on) closes it; a later unrelated comment never counts. */
   question: { eventId: string; text: string; ask?: BotItemAsk; answerable?: true } | null
   closeNote: string | null
   links: BotItemLinkView[]

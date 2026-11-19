@@ -257,6 +257,8 @@ export function NativeChatQuestionCard({
     <div
       ref={cardRef}
       data-native-chat-prompt-card-focus={shouldFocus || undefined}
+      // How many choices its digit keys pick, for a surface that sends other typing elsewhere.
+      data-native-chat-question-options={q.options.length}
       role="group"
       aria-label={q.question}
       tabIndex={-1}

@@ -79,7 +79,8 @@ export function assertBotItemText(
 }
 
 /** A status move's comment data. A Needs you question is marked `answerable`: this host records answers,
- *  so only one closes it and a later plain comment never counts as one. With an ask it holds the
+ *  so a recorded answer or the owner's reply closes it, and a later unrelated comment never counts as
+ *  its answer. With an ask it holds the
  *  decisions and a host-built `text` spelling them out for readers without the ask; the sent `comment`
  *  (an older host's fallback) is not kept. */
 export function botItemCommentData(

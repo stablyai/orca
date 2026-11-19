@@ -32,7 +32,7 @@ import { MobileMarkdown } from '../../components/markdown/MobileMarkdown'
 import { formatPhoneSnoozeTime } from './bot-item-snooze-time'
 import { getUiIntlLocale } from '../../i18n/ui-intl-locale'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
-import { mobileBotItemAnsweredLine } from './mobile-bot-item-answered-line'
+import { mobileBotItemAnsweredLine, mobileBotItemQuote } from './mobile-bot-item-answered-line'
 import type { Translate } from '../../i18n/mobile-i18n'
 import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
@@ -263,7 +263,7 @@ function CommentCard({
   const t = useMobileTranslation()
   const { event } = entry
   const question = entry.kind === 'comment' ? entry.question : null
-  const replyTo = entry.kind === 'comment' ? entry.replyTo : undefined
+  const replyTo = mobileBotItemQuote(entry)
   const answered = mobileBotItemAnsweredLine(t, entry)
   const mine = event.actor.kind === 'owner'
   const text = commentText(event.data)

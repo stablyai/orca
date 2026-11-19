@@ -3,7 +3,7 @@
 // half-given answer survives, as in chat.
 import { useState } from 'react'
 import { useTranslate } from '@/i18n/use-translate'
-import { readCachedRuntimeEnvironmentCapability } from '@/runtime/rpc/compatibility/runtime-compatibility-cache'
+import { useRuntimeEnvironmentCapability } from '@/runtime/rpc/compatibility/use-runtime-environment-capability'
 import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
 import { botHostTarget } from '@/lib/bot-hosts'
 import { BOTS_ITEM_ANSWERS_RUNTIME_CAPABILITY } from '../../../../../shared/bot-runtime-capabilities'
@@ -24,20 +24,25 @@ export type BotItemOpenAsk = {
   unfold: () => void
 }
 
-/** Whether the agent's host records answers: this computer always does; a remote host says so. */
-function useHostTakesAnswers(bot: Bot): boolean {
-  let environmentId: string | null = null
+/** The agent's host environment: null for this computer, undefined when its host can't be reached. */
+function hostEnvironmentOf(bot: Bot): string | null | undefined {
   try {
-    environmentId = runtimeTargetEnvironmentId(botHostTarget(bot.hostId))
+    return runtimeTargetEnvironmentId(botHostTarget(bot.hostId))
   } catch {
-    return false
+    return undefined
   }
+}
+
+/** Whether the agent's host records answers: this computer always does; a remote host says so, and
+ *  the card appears once its answer comes. */
+function useHostTakesAnswers(bot: Bot): boolean {
+  const environmentId = hostEnvironmentOf(bot)
   // An unknown answer is no: an older host would refuse the answer's fields.
-  return (
-    environmentId === null ||
-    readCachedRuntimeEnvironmentCapability(environmentId, BOTS_ITEM_ANSWERS_RUNTIME_CAPABILITY) ===
-      true
+  const remote = useRuntimeEnvironmentCapability(
+    environmentId,
+    BOTS_ITEM_ANSWERS_RUNTIME_CAPABILITY
   )
+  return environmentId === null || remote
 }
 
 /** The item's open question, when this page answers it in a card: a host that records answers marked

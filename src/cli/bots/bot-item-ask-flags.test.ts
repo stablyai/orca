@@ -71,6 +71,12 @@ it('refuses an option with no --ask before it, and a recommendation that names n
   ).toThrow(/--recommended takes the number of an option given before it/)
 })
 
+it('refuses an --ask with no question rather than drop it', () => {
+  expect(() => askOf(['bot', 'item', 'set', '4', '--status', 'needs-you', '--ask', ''])).toThrow(
+    /--ask needs its question/
+  )
+})
+
 it('leaves a set without --ask as it was', () => {
   expect(
     askOf(['bot', 'item', 'set', '4', '--status', 'needs-you', '--comment', 'Ship?'])

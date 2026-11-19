@@ -61,7 +61,8 @@ export function BotItemCommentCard({
   entry,
   onJump,
   failed,
-  textOverride
+  textOverride,
+  jumpTarget = true
 }: {
   bot: Bot
   item: BotItem
@@ -72,6 +73,8 @@ export function BotItemCommentCard({
   failed?: { retry: () => void; discard: () => void }
   /** Words to show instead of the event's text (a question's context, without its decisions). */
   textOverride?: string
+  /** False when another card (its question's) is where a jump to this event lands. */
+  jumpTarget?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
   const runtimeContext = useContext(NativeChatMarkdownImageOwnerContext)?.runtimeContext ?? null
@@ -91,7 +94,7 @@ export function BotItemCommentCard({
     // column so the avatar and time sit on the event rows' glyph and time edges.
     <div className="relative -mx-2 my-1 rounded-[10px] bg-sidebar">
       <div
-        {...{ [BOT_ITEM_COMMENT_ATTRIBUTE]: event.id }}
+        {...(jumpTarget ? { [BOT_ITEM_COMMENT_ATTRIBUTE]: event.id } : {})}
         tabIndex={-1}
         role="article"
         aria-label={t('bots.items.activity.commentLabel', '{{name}}, {{time}}', {

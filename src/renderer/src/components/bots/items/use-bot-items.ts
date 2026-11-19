@@ -240,8 +240,9 @@ export async function answerBotItem(
     if (hasRuntimeRpcErrorCode(error, 'question_closed')) {
       return 'closed'
     }
-    // An older host: its params refuse the answer's fields or its empty text.
-    if (error instanceof Error && /Missing text|answering|answers|answerId/.test(error.message)) {
+    // An older host: its params refuse the answer's fields or its empty text. A current host's own
+    // refusal of the answer ("Your answers come to …") is no such sign, so it surfaces as an error.
+    if (error instanceof Error && /Missing text|answering|answerId/.test(error.message)) {
       return 'unsupported'
     }
     throw error

@@ -48,7 +48,7 @@ describe('bot items store', () => {
     expect(asking?.status).toBe('needs_you')
     expect(store.needsYou().map((row) => row.botId)).toEqual(['bot-a'])
     const question = store.viewRows([uid]).questions[uid]
-    // Marked, so only a recorded answer closes it: a later plain comment never reads as one.
+    // Marked: a recorded answer or the owner's reply closes it; a later unrelated comment never does.
     expect(question?.data).toEqual({ text: 'Ship behind a flag?', answerable: true })
 
     store.set(uid, { status: 'working' }, owner)

@@ -110,7 +110,7 @@ export function BotItemAskCard({
     }
     const existing = readBotItemAnswerDraft(draftKey)
     // An older host may already have this answer as a comment: it goes again only from the notice.
-    if (existing?.commentUnconfirmed) {
+    if (existing?.commentUnconfirmed || existing?.sentAsComment) {
       return
     }
     // The same answer again reuses its id, so the host records it once; every id is kept with the

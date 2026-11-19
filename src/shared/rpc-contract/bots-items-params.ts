@@ -142,6 +142,10 @@ export const BotItemsOwnerComment = z
       (value.answering === undefined) === (value.answerId === undefined),
     { message: 'An answer names its question, its answers and its answer id.' }
   )
+  .refine(
+    (value) => value.answering === undefined || (!value.text.trim() && !value.images?.length),
+    { message: 'An answer goes without text or images: the host spells it out.' }
+  )
 
 /** One status for one or many items; Cancel needs a reason, Needs you may carry a comment. */
 export const BotItemsOwnerStatus = z.object({

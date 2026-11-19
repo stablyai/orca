@@ -157,7 +157,10 @@ const COMMENT = defineMethod({
       )
       if (!outcome.unchanged) {
         botItems.changed([item.ownerBotId])
-        await botItems.sendOwedMail()
+        // As with a comment: the answer is stored and its mail owed, so the reply never waits on it.
+        void botItems
+          .sendOwedMail()
+          .catch((error: unknown) => console.warn('[bots] items: mailing an answer failed', error))
       }
       return {
         eventId: outcome.eventId === null ? null : botItemEventId(outcome.eventId),

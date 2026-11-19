@@ -288,6 +288,7 @@ export function BotItemBody({
                   bot={bot}
                   item={item}
                   attachTo={attachTo}
+                  hidden={ask.shown}
                   onSend={(text, paths) => {
                     pending.send(text, paths, view.events.at(-1)?.id ?? item.lastEventId)
                     jumpToLatest()

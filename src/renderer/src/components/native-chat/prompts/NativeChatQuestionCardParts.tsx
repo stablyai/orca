@@ -76,6 +76,7 @@ export function NativeChatQuestionSteps({
           key={i}
           type="button"
           data-native-chat-question-step
+          aria-current={i === current ? 'step' : undefined}
           disabled={disabled}
           onClick={() => onStep(i)}
           className={cn(

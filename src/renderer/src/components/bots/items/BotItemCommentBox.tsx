@@ -71,6 +71,7 @@ export function BotItemCommentBox({
   item,
   attachTo,
   onSend,
+  hidden = false,
   ref
 }: {
   bot: Bot
@@ -79,6 +80,8 @@ export function BotItemCommentBox({
   attachTo: BotItemCommentAttachTarget | null
   /** Takes the comment as the box empties: it shows and goes to the host from there. */
   onSend: (text: string, paths: readonly string[]) => void
+  /** Behind the open question's card: files dropped on the pane are not taken into its hidden draft. */
+  hidden?: boolean
   ref?: Ref<BotItemCommentBoxHandle>
 }): React.JSX.Element {
   const t = useTranslate()
@@ -144,7 +147,7 @@ export function BotItemCommentBox({
     terminalTabId: scopeKey,
     structuredWorktreeId: access.session ? attachTo?.worktreeId : undefined,
     structuredSession: access.session ?? undefined,
-    disabled: !access.session,
+    disabled: !access.session || hidden,
     attachResolvedPaths: attachments.attachResolvedPaths,
     pendingChips: attachments.pendingChips,
     setNotice
