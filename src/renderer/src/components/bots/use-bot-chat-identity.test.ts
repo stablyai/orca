@@ -46,10 +46,10 @@ function seed() {
 describe('session owner bot identity', () => {
   it('does not carry Home identity into an ordinary chat or worker, or after deletion', () => {
     const bot = seed()
+    const initialProps: { sessionId: string | null } = { sessionId: 'home-session' }
     const { result, rerender } = renderHook(
-      ({ sessionId }: { sessionId: string | null }) =>
-        useBotChatIdentity('folder:home', sessionId, { kind: 'local' }),
-      { initialProps: { sessionId: 'home-session' } }
+      ({ sessionId }) => useBotChatIdentity('folder:home', sessionId, { kind: 'local' }),
+      { initialProps }
     )
     expect(result.current).toBe(bot)
     for (const sessionId of ['ordinary', 'worker', null]) {

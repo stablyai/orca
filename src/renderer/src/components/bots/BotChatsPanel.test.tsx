@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { useAppStore } from '@/store/index'
@@ -30,12 +30,24 @@ const bot: Bot = {
 }
 const workspaceId = 'folder:home-1'
 
-const tree = vi.hoisted((): { current: BotChatTree | null } => ({ current: null }))
+const tree = vi.hoisted(() => {
+  const listeners = new Set<() => void>()
+  const snapshot: { current: BotChatTree | null } = { current: null }
+  return {
+    snapshot,
+    listeners,
+    subscribe(listener: () => void) {
+      listeners.add(listener)
+      return () => listeners.delete(listener)
+    }
+  }
+})
 const opened = vi.hoisted(() => vi.fn())
-vi.mock('./use-bot-chat-tree', () => ({
-  useBotChatTree: () => tree.current,
-  useBotOwnChatTree: () => tree.current
-}))
+vi.mock('./use-bot-chat-tree', async () => {
+  const { useSyncExternalStore } = await import('react')
+  const useTree = () => useSyncExternalStore(tree.subscribe, () => tree.snapshot.current)
+  return { useBotChatTree: useTree, useBotOwnChatTree: useTree }
+})
 vi.mock('./bot-workspace', () => ({ useBotForWorkspace: () => bot }))
 const host = vi.hoisted(() => ({ offline: false }))
 vi.mock('@/lib/bot-host-views', () => ({ useBotHostOffline: () => host.offline }))
@@ -87,7 +99,10 @@ function showTree(patch: Partial<BotChatTree>): void {
     retry: vi.fn(),
     ...patch
   }
-  tree.current = value
+  tree.snapshot.current = value
+  for (const listener of tree.listeners) {
+    listener()
+  }
 }
 
 /** Makes the chat's tab the front one on the bot's page, so its row is the active one. */
@@ -121,8 +136,8 @@ function frontTab(chatId: string): void {
   })
 }
 
-function renderPanel(): ReturnType<typeof render> {
-  return render(<BotChatsPanel />, { wrapper: TooltipProvider })
+function renderPanel(): void {
+  render(<BotChatsPanel />, { wrapper: TooltipProvider })
 }
 
 beforeEach(() => {
@@ -196,17 +211,15 @@ describe('the Chats tab', () => {
   it('shows loading, offers retry on failure and renders the chat once retry succeeds', () => {
     const retry = vi.fn()
     showTree({ state: 'loading' })
-    const view = renderPanel()
+    renderPanel()
     expect(screen.getByText('Loading chats…')).toBeTruthy()
 
-    showTree({ state: 'failed', retry })
-    view.rerender(<BotChatsPanel />)
+    act(() => showTree({ state: 'failed', retry }))
     expect(screen.getByText(/Couldn't read this bot's chats/)).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
     expect(retry).toHaveBeenCalledTimes(1)
 
-    showTree({ chats: [rollout] })
-    view.rerender(<BotChatsPanel />)
+    act(() => showTree({ chats: [rollout] }))
     expect(screen.getByRole('button', { name: /^Connector fix rollout · Side chat/ })).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull()
   })
