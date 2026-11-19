@@ -7,6 +7,12 @@ import type { SecretAtRestProtection } from '../../shared/secure-storage/secret-
 
 const UNSUPPORTED_DIRECTORY_FSYNC_CODES = new Set(['EINVAL', 'ENOTSUP', 'EOPNOTSUPP'])
 
+function errorCode(error: unknown): string | undefined {
+  return error instanceof Error && 'code' in error && typeof error.code === 'string'
+    ? error.code
+    : undefined
+}
+
 type EncryptedApiKeyFileStore = {
   envelopeFile: () => { path: string; envelopePrefix: string }
   protection: () => Promise<SecretAtRestProtection | null>
@@ -88,7 +94,7 @@ export function createEncryptedApiKeyFileStoreAsync({
       await chmod(dirname(keyPath), 0o700)
       await chmod(keyPath, 0o600)
     } catch (error) {
-      const code = (error as NodeJS.ErrnoException).code
+      const code = errorCode(error)
       if (!['EPERM', 'EACCES', 'EROFS'].includes(code ?? '')) {
         throw error
       }
@@ -121,7 +127,7 @@ export function createEncryptedApiKeyFileStoreAsync({
           try {
             await directoryFile.sync()
           } catch (error) {
-            const code = (error as NodeJS.ErrnoException).code
+            const code = errorCode(error)
             if (!UNSUPPORTED_DIRECTORY_FSYNC_CODES.has(code ?? '')) {
               throw error
             }
@@ -157,7 +163,7 @@ export function createEncryptedApiKeyFileStoreAsync({
           }
           cachedPresence = true
         } catch (error) {
-          cachedPresence = (error as NodeJS.ErrnoException).code !== 'ENOENT'
+          cachedPresence = errorCode(error) !== 'ENOENT'
         }
         return cachedPresence
       }),
@@ -170,7 +176,7 @@ export function createEncryptedApiKeyFileStoreAsync({
           cachedPresence = true
           return envelope.kind === 'plaintext' ? 'plaintext' : 'sealed'
         } catch (error) {
-          cachedPresence = (error as NodeJS.ErrnoException).code !== 'ENOENT'
+          cachedPresence = errorCode(error) !== 'ENOENT'
           return null
         }
       }),
@@ -218,7 +224,7 @@ export function createEncryptedApiKeyFileStoreAsync({
           cachedPresence = true
           return cachedApiKey
         } catch (error) {
-          if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+          if (errorCode(error) === 'ENOENT') {
             cachedPresence = false
             return null
           }

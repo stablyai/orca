@@ -13,6 +13,10 @@ export type SavedCredentialFile = {
   legacyRaw?: boolean
 }
 
+function isFileNotFound(error: unknown): boolean {
+  return error instanceof Error && 'code' in error && error.code === 'ENOENT'
+}
+
 // Orcad can report encryption available before its host key is loaded; probe actual use.
 function secretStoreWorks(): boolean {
   try {
@@ -49,7 +53,7 @@ export async function savedCredentialUnreadableAsync(
   try {
     text = await readFile(file.path, 'utf8')
   } catch (error) {
-    return (error as NodeJS.ErrnoException).code === 'ENOENT' ? undefined : 'unreadable'
+    return isFileNotFound(error) ? undefined : 'unreadable'
   }
   return classifyCredentialText(file, text)
 }
