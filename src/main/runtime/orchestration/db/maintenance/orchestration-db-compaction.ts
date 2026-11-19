@@ -15,6 +15,8 @@ const EXIT_GRACE_MS = 500
 // Quit pays the wait once: a stopped attempt waits until the live data shrinks this much.
 const MAX_TIMEOUTS = 1
 const MARKER_WRITE_MS = 250
+// How long the child waits for other connections to close; the runtime's checkpoint worker exits async.
+const LOCK_WAIT_MS = 300
 // Time after the kill grace for rolling back a stopped VACUUM's WAL; launch does it if this runs out.
 const RECOVERY_MS = 500
 // Our close checkpoints only if the child died after 'ready'; this (journal_size_limit) bounds that close.
@@ -300,7 +302,8 @@ function runCompactionChild(
             minFreeBytes: MIN_FREE_BYTES,
             minFreeFraction: MIN_FREE_FRACTION,
             maxLiveBytes: MAX_LIVE_BYTES,
-            activeWorkSql: ACTIVE_ORCHESTRATION_WORK_SQL
+            activeWorkSql: ACTIVE_ORCHESTRATION_WORK_SQL,
+            lockWaitMs: LOCK_WAIT_MS
           })
         },
         stdio: 'pipe'
