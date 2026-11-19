@@ -27,6 +27,36 @@ describe('--on trigger specs', () => {
     expect(parseAutomationEventTrigger(formatAutomationEventTrigger(trigger))).toEqual(trigger)
   })
 
+  it('parses and formats webhook filters for a new hook', () => {
+    const trigger = parseAutomationEventTrigger(
+      'webhook.call where="body.action in opened, reopened" where="headers.X-GitHub-Event = pull_request" where="body.draft !exists" contains="deploy now" pick=body.number,body.title subject-from=body.number subject=4512'
+    )
+    expect(trigger).toEqual({
+      id: '',
+      source: 'webhook',
+      event: 'call',
+      rev: 0,
+      where: [
+        { path: 'body.action', op: 'in', values: ['opened', 'reopened'] },
+        { path: 'headers.X-GitHub-Event', op: '=', values: ['pull_request'] },
+        { path: 'body.draft', op: '!exists' }
+      ],
+      textContains: 'deploy now',
+      pick: ['body.number', 'body.title'],
+      subjectFrom: 'body.number',
+      subject: '4512'
+    })
+    expect(formatAutomationEventTrigger(trigger)).toBe(
+      'webhook.call where="body.action in opened,reopened" where="headers.X-GitHub-Event = pull_request" where="body.draft !exists" contains="deploy now" pick=body.number,body.title subject-from=body.number subject=4512'
+    )
+    // One value may hold commas; only `in` lists.
+    expect(
+      parseAutomationEventTrigger('webhook.call where="body.title contains a, b"')
+    ).toMatchObject({
+      where: [{ path: 'body.title', op: 'contains', values: ['a, b'] }]
+    })
+  })
+
   it('keeps one id for the same rule however it is written', () => {
     const a = parseAutomationEventTrigger('slack.message in=C1,C2')
     const b = parseAutomationEventTrigger('  slack.message   in=C2,C1,C2 ')
@@ -47,7 +77,10 @@ describe('--on trigger specs', () => {
     ['slack.mentioned who=me', 'Unknown filter "who=me"'],
     ['slack.mentioned deploy', 'Unknown filter "deploy"'],
     ['slack.mentioned in=C1 in=C2', 'needs one value for in='],
-    ['slack.mentioned contains=', 'needs one value for contains=']
+    ['slack.mentioned contains=', 'needs one value for contains='],
+    ['webhook.call in=C0123', 'Unknown filter "in="'],
+    ['webhook.call where="body.action ~ x"', 'where= takes "<path> <op> <value>"'],
+    ['webhook.call pick=a pick=b', 'needs one value for pick=']
   ])('refuses %j', (spec, message) => {
     expect(() => parseAutomationEventTrigger(spec)).toThrow(message)
   })
@@ -150,7 +183,7 @@ describe('--on trigger specs', () => {
     }
   })
 
-  it("offers GitHub's newer events and label= only where the bot's Orca Cloud sends them", () => {
+  it("offers newer GitHub events and webhooks according to the bot's cloud capabilities", () => {
     const bot = { name: 'Scout', github: {} }
     const older = formatAutomationTriggerOptions('github', bot)
     expect(older).not.toContain('github.ci_passed  when')
@@ -165,5 +198,11 @@ describe('--on trigger specs', () => {
     expect(formatAutomationTriggerOptions('github', newer)).not.toContain("doesn't send")
     expect(offeredEvents('github', newer)).toContain('security_alert')
     expect(offeredEvents('slack', bot)).toEqual(['mentioned', 'message', 'reaction'])
+    expect(formatAutomationTriggerOptions(undefined, { name: 'Scout' })).not.toContain(
+      'webhook.call'
+    )
+    expect(formatAutomationTriggerOptions(undefined, { name: 'Scout', webhooks: true })).toContain(
+      'webhook.call'
+    )
   })
 })
