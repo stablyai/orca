@@ -330,8 +330,9 @@ function applyMove(
   afterCreateStore.setActiveTabType('terminal', worktreeId)
   // The pane's own name is what made it findable, so its new tab starts with it (copied, not linked).
   // The client that asked for the move names the tab; its rename reaches this window through the owner.
+  // Switch point: main's rename frame redraws the moved pane without its title; main should name the tab.
   const paneTitle = detachedLayout.titlesByLeafId?.[leafId]?.trim()
-  if (paneTitle && !args.targetTabId && !tab.customTitle) {
+  if (!ORCA_LAYOUT_OWNER_IS_MAIN && paneTitle && !args.targetTabId && !tab.customTitle) {
     afterCreateStore.setTabCustomTitle(tab.id, paneTitle, { recordInteraction: false })
   }
 

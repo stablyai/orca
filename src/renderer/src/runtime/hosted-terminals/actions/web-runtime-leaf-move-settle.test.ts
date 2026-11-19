@@ -17,7 +17,7 @@ const REQUEST = {
   worktreeId: 'repo::/wt',
   sourceTabId: 'source-tab',
   targetTabId: 'drawn-tab',
-  leafId: 'leaf-1',
+  leafId: '11111111-1111-4111-8111-111111111111',
   ptyId: 'pty-1'
 }
 
