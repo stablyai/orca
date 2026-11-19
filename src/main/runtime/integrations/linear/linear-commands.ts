@@ -19,10 +19,16 @@ export abstract class OrcaRuntimeWithLinearCommands extends OrcaRuntimeWithRepos
     listResolvedWorktrees: () => this.listResolvedWorktrees(),
     setWorktreeMeta: (worktree, meta) => {
       const target = worktreeRowTarget(this.store!, worktree)
+      const current = target && readWorktreeMetaForHost(this.store!, target.id, target.hostId)
+      // A relink (issue, workspace or organization) that landed during the async lookup wins.
       if (
         target &&
-        readWorktreeMetaForHost(this.store!, target.id, target.hostId)?.linkedLinearIssue ===
-          worktree.linkedLinearIssue
+        current &&
+        current.linkedLinearIssue === worktree.linkedLinearIssue &&
+        (current.linkedLinearIssueWorkspaceId ?? null) ===
+          (worktree.linkedLinearIssueWorkspaceId ?? null) &&
+        (current.linkedLinearIssueOrganizationUrlKey ?? null) ===
+          (worktree.linkedLinearIssueOrganizationUrlKey ?? null)
       ) {
         this.store!.setWorktreeMeta(target, meta)
       }
