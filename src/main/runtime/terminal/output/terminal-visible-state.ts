@@ -25,9 +25,12 @@ export abstract class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeW
   ): Promise<{ preview: string; isStale: () => boolean }> {
     const fresh = { preview, isStale: () => false }
     const knownAlternateScreen = this.isTerminalAlternateScreen(ptyId)
-    const providerModeUnknown =
-      this.providerSnapshotPreferredPtys.has(ptyId) && !this.providerModeTrackersByPtyId.has(ptyId)
-    if (!providerModeUnknown && !knownAlternateScreen && !this.headlessTerminals.has(ptyId)) {
+    // A provider-owned screen tracked as normal previews its raw tail, as on main: only an alternate one needs a frame.
+    if (
+      this.providerSnapshotPreferredPtys.has(ptyId)
+        ? this.providerModeTrackersByPtyId.get(ptyId)?.isAlternateScreen === false
+        : !knownAlternateScreen && !this.headlessTerminals.has(ptyId)
+    ) {
       return fresh
     }
     const gaps = this.ptyGapCounts.get(ptyId)
@@ -297,36 +300,6 @@ export abstract class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeW
       return projectTerminalVisibleLines(emulator)
     } finally {
       emulator.dispose()
-    }
-  }
-
-  protected async readRendererVisibleSnapshotLines(
-    ptyId: string
-  ): Promise<RuntimeTerminalProjection> {
-    const controller = this.ptyController
-    const token = this.rendererScreenToken(ptyId)
-    if (!controller?.serializeBuffer || token === null) {
-      return { lines: [] }
-    }
-    if (controller.hasRendererSerializer && !controller.hasRendererSerializer(ptyId)) {
-      return { lines: [] }
-    }
-    try {
-      // Raw tails can be blank while full-screen TUIs paint visible cells; ask renderer for the active screen.
-      const snapshot = await withTimeout(
-        controller.serializeBuffer(ptyId, { scrollbackRows: 0 }),
-        VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS,
-        null
-      )
-      if (!snapshot || snapshot.data.length === 0 || this.rendererScreenToken(ptyId) !== token) {
-        return { lines: [] }
-      }
-      const projection = await this.parseVisibleSnapshot(snapshot)
-      return this.rendererScreenToken(ptyId) === token
-        ? { ...projection, rendererToken: token }
-        : { lines: [] }
-    } catch {
-      return { lines: [] }
     }
   }
 }

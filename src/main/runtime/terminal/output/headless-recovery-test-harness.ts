@@ -50,6 +50,7 @@ export const headlessOf = (runtime: OrcaRuntimeService) =>
     readWholeScreenModel(ptyId: string): RuntimeHeadlessTerminal | null
     readCaughtUpRuledScreen(ptyId: string): { lines: string[]; alternateScreen: boolean } | null
     readScreenProjection(ptyId: string, limit?: number): Promise<{ lines: string[] } | null>
+    visibleSnapshotPreview(ptyId: string, preview: string): Promise<{ preview: string }>
   }
 
 // As the provider listener delivers a frame the daemon stamped with its stream position.

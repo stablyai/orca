@@ -162,3 +162,55 @@ it.each([10, 100])(
   },
   30_000
 )
+
+// A preview of a provider-owned normal screen uses its raw tail, as on main; it never fetches a frame to discard.
+it.each([10, 100])(
+  'previews %i provider-owned normal recovering screens without reader captures',
+  async (count) => {
+    const runtime = createRuntime()
+    const ptyIds = Array.from({ length: count }, (_, index) => `pty-preview-${index}`)
+    let recoveryCaptures = 0
+    let readerCaptures = 0
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null,
+      getSize: () => grid,
+      serializeProviderBuffer: (ptyId, opts): Promise<PtyProviderBufferSnapshot> => {
+        if (opts?.recovery) {
+          recoveryCaptures += 1
+        } else {
+          readerCaptures += 1
+        }
+        return Promise.resolve({
+          data: '\x1b[H\x1b[2Jprovider screen',
+          ...grid,
+          // Recovery's snapshot predates its journal: it installs the normal-mode tracker but cannot rebuild.
+          seq: opts?.recovery ? 0 : runtime.getPtyOutputSequence(ptyId),
+          source: 'headless',
+          alternateScreen: false
+        })
+      }
+    })
+    try {
+      for (const ptyId of ptyIds) {
+        anchorStream(runtime, ptyId)
+        runtime.onPtyData(ptyId, 'before\r\n', 1)
+        runtime.notePtyDataGap(ptyId, 9)
+      }
+      await vi.waitFor(() => expect(recoveryCaptures).toBeGreaterThanOrEqual(count))
+      await new Promise((resolve) => setImmediate(resolve))
+      for (let round = 0; round < 10; round += 1) {
+        for (const ptyId of ptyIds) {
+          runtime.onPtyData(ptyId, `line ${round}\r\n`, 2)
+          const shown = await headlessOf(runtime).visibleSnapshotPreview(ptyId, 'raw tail')
+          expect(shown.preview).toBe('raw tail')
+        }
+      }
+      expect(readerCaptures).toBe(0)
+    } finally {
+      await Promise.all(ptyIds.map((ptyId) => runtime.onPtyExit(ptyId, 0)))
+    }
+  },
+  30_000
+)
