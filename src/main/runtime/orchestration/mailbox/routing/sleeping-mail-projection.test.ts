@@ -12,6 +12,7 @@ import type { RuntimeNotifier } from '../../../client/events/runtime-notifier-co
 import { SleepingMailRecordIndex } from './sleeping-mail-record-index'
 import { SleptMailboxWake } from './slept-mailbox-wake'
 import { reconcileSleepingMail } from './sleeping-mail-owner-mailboxes'
+import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 
 const pane = 'tab:11111111-1111-4111-8111-111111111111'
 const otherPane = 'other:22222222-2222-4222-8222-222222222222'
@@ -30,7 +31,11 @@ const sleeper: SleepingAgentSessionRecord = {
 }
 const settled = () => new Promise<void>((resolve) => setImmediate(resolve))
 
-function fixture(db: OrchestrationDb, records: Record<string, SleepingAgentSessionRecord> = {}) {
+function fixture(
+  db: OrchestrationDb,
+  records: Record<string, SleepingAgentSessionRecord> = {},
+  resumes = false
+) {
   const sessions = new Map<ExecutionHostId, ReturnType<typeof getDefaultWorkspaceSession>>([
     ['local', { ...getDefaultWorkspaceSession(), sleepingAgentSessionsByPaneKey: records }]
   ])
@@ -48,7 +53,7 @@ function fixture(db: OrchestrationDb, records: Record<string, SleepingAgentSessi
     terminalFitOverrideChanged: vi.fn(),
     terminalDriverChanged: vi.fn(),
     sleepingMailChanged: bell,
-    resumeSleepingAgents: vi.fn(async () => false)
+    resumeSleepingAgents: vi.fn(async () => resumes)
   }
   const runtime = new OrcaRuntimeService(
     partialRuntimeStore({
@@ -188,5 +193,27 @@ it('keeps same-sequence success through record replacement/removal and releases 
   } finally {
     stop()
     db.close()
+  }
+})
+
+it('releases a wake the window accepted but never launched, so later mail can wake the pane', async () => {
+  vi.useFakeTimers({ toFake: ['setTimeout'] })
+  const db = new OrchestrationDb(':memory:')
+  const run = db.createRun({
+    objective: 'unlaunched',
+    coordinatorHandle: 'term',
+    coordinatorPaneKey: pane
+  })
+  const { runtime } = fixture(db, { [pane]: { ...sleeper, restoreOnTabOpenOnly: false } }, true)
+  try {
+    await runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, { tabs: [], leaves: [] })
+    db.insertMessage({ runId: run.id, from: 'worker', to: `run:${run.id}`, subject: 'owed' })
+    await vi.waitFor(() => expect(db.listMailWakeAttempts()).toHaveLength(1))
+    await vi.advanceTimersByTimeAsync(31_000)
+    expect(db.listMailWakeAttempts()).toEqual([])
+  } finally {
+    runtime.setNotifier(null)
+    db.close()
+    vi.useRealTimers()
   }
 })
