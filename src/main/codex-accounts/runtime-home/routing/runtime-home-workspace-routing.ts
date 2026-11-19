@@ -2,6 +2,7 @@ import { codexWorkspaceAccountId } from '../../../../shared/agent-accounts/codex
 import type { CodexManagedAccount } from '../../../../shared/agent-accounts/managed-account-types'
 import type { CodexAccountSelectionTarget } from '../../../../shared/agent-accounts/codex/codex-selection-lane'
 import { CodexRuntimeHomeRouting } from './runtime-home-service-home-routing'
+import { WORKSPACE_SYSTEM_DEFAULT_ACCOUNT_ID } from '../../../../shared/agent-accounts/workspace-account-binding'
 
 export abstract class CodexRuntimeHomeWorkspaceRouting extends CodexRuntimeHomeRouting {
   protected workspaceAccount(
@@ -10,7 +11,7 @@ export abstract class CodexRuntimeHomeWorkspaceRouting extends CodexRuntimeHomeR
   ): CodexManagedAccount | null {
     const settings = this.store.getSettings()
     const id = codexWorkspaceAccountId(settings.codexWorkspaceAccounts, workspaceId)
-    if (!id) {
+    if (!id || id === WORKSPACE_SYSTEM_DEFAULT_ACCOUNT_ID) {
       return null
     }
     const account = settings.codexManagedAccounts.find((entry) => entry.id === id)
@@ -23,6 +24,13 @@ export abstract class CodexRuntimeHomeWorkspaceRouting extends CodexRuntimeHomeR
       return null
     }
     return account
+  }
+
+  protected workspaceUsesSystemDefault(workspaceId?: string): boolean {
+    return (
+      codexWorkspaceAccountId(this.store.getSettings().codexWorkspaceAccounts, workspaceId) ===
+      WORKSPACE_SYSTEM_DEFAULT_ACCOUNT_ID
+    )
   }
 
   protected workspaceAccountHome(

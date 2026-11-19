@@ -98,3 +98,47 @@ it('attributes the first live reading when the bound account is also the host de
   expect(service.getState().claude?.session?.usedPercent).toBe(13)
   expect(service.getState().claude?.usageMetadata?.readingAccount?.accountId).toBe('work')
 })
+
+it('records system-default workspace usage from live posts without replacing the managed host quota', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'orca-default-live-'))
+  roots.push(root)
+  mkdirSync(join(root, 'user'), { recursive: true })
+  const router = new ClaudeProfileRouter({
+    dataRoot: join(root, 'data'),
+    userHome: join(root, 'user'),
+    env: {},
+    getSettings: () => ({
+      activeClaudeManagedAccountId: null,
+      claudeManagedAccounts: [],
+      agentStatusHooksEnabled: false,
+      disabledTuiAgents: []
+    })
+  })
+  installClaudeProfileRouter(router)
+  const service = new RateLimitService()
+  service.setClaudeOAuthUsageEnabledResolver(() => false)
+  service.setInactiveClaudeAccountsResolver(() => [
+    { id: 'system-default:host:["personal@example.com","personal-org"]' }
+  ])
+  service.setClaudeAuthPreparationResolver(async () => ({
+    configDir: router.accountHome('work'),
+    envPatch: { CLAUDE_CONFIG_DIR: router.accountHome('work') },
+    provenance: 'profile:work',
+    readingAccount: { accountId: 'work', runtime: 'host', wslDistro: null }
+  }))
+  await service.refreshClaudeForTarget({ runtime: 'host' })
+  service.ingestLiveClaudeRateLimits({
+    configDir: router.accountHome('work'),
+    fiveHour: { used_percentage: 91 },
+    sevenDay: null
+  })
+  service.ingestLiveClaudeRateLimits({
+    configDir: router.systemDefaultHome(),
+    fiveHour: { used_percentage: 38 },
+    sevenDay: null
+  })
+  const state = service.getState()
+  expect(state.claude?.session?.usedPercent).toBe(91)
+  expect(state.inactiveClaudeAccounts[0]?.rateLimits?.session?.usedPercent).toBe(38)
+  expect(state.inactiveClaudeAccounts[0]?.rateLimits?.usageMetadata?.authProvenance).toBe('system')
+})

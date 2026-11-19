@@ -9,6 +9,7 @@ import {
 import { createSettings } from '../../../codex-accounts/runtime-home/runtime-home-settings-test-fixtures'
 import { recordCodexPaneAccountForSpawn } from '../../../ipc/pty/host-env/codex-home'
 import { listStaleCodexPanes } from './codex-stale-pane-accounts'
+import { resolveCodexPaneLaunchAccount } from './codex-pane-launch-account'
 
 beforeEach(() => {
   setupRuntimeHomeTest()
@@ -81,4 +82,51 @@ it('detects a new workspace binding for an inherited pane and ignores runtime-mi
   ])
   settings.codexWorkspaceAccounts = { 'folder:client': 'guest' }
   expect(listStaleCodexPanes({ ptyIds: ['inherited'], settings })).toEqual([])
+  settings.codexWorkspaceAccounts = { 'folder:client': 'system-default' }
+  expect(listStaleCodexPanes({ ptyIds: ['inherited'], settings })).toEqual([
+    { ptyId: 'inherited', launchAccountId: 'personal', activeAccountId: null }
+  ])
+})
+
+it('records a real-home launch as system default when the host selection is a managed account', () => {
+  expect(
+    resolveCodexPaneLaunchAccount({
+      pinnedByResume: false,
+      launchCodexHomePath: '/user/.codex',
+      systemCodexHomePath: '/user/.codex',
+      settings: createSettings({
+        activeCodexManagedAccountId: 'personal',
+        activeCodexManagedAccountIdsByRuntime: { host: 'personal', wsl: {} }
+      }),
+      target: { runtime: 'host' }
+    })
+  ).toEqual({ accountId: null, selectionKey: 'host', homeRoute: 'real-home' })
+})
+
+it('records a WSL real-home launch as system default when its distro uses a managed account', () => {
+  expect(
+    resolveCodexPaneLaunchAccount({
+      pinnedByResume: false,
+      launchCodexHomePath: '\\\\wsl.localhost\\Ubuntu\\home\\dev\\.codex',
+      systemCodexHomePath: 'C:/Users/example/.codex',
+      target: { runtime: 'wsl', wslDistro: 'Ubuntu' },
+      settings: createSettings({
+        activeCodexManagedAccountId: 'work-wsl',
+        activeCodexManagedAccountIdsByRuntime: { host: null, wsl: { Ubuntu: 'work-wsl' } },
+        codexManagedAccounts: [
+          {
+            id: 'work-wsl',
+            email: 'work@example.com',
+            managedHomeRuntime: 'wsl',
+            wslDistro: 'Ubuntu',
+            managedHomePath: '\\\\wsl.localhost\\Ubuntu\\home\\dev\\orca-work',
+            wslLinuxHomePath: '/home/dev/orca-work',
+            createdAt: 1,
+            updatedAt: 1,
+            lastAuthenticatedAt: 1
+          }
+        ]
+      })
+    })
+  ).toEqual({ accountId: null, selectionKey: 'wsl:Ubuntu', homeRoute: 'real-home' })
 })

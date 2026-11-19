@@ -1,4 +1,12 @@
-import { workspaceAccountId } from '../../../../shared/agent-accounts/workspace-account-binding'
+import {
+  workspaceAccountId,
+  WORKSPACE_SYSTEM_DEFAULT_ACCOUNT_ID
+} from '../../../../shared/agent-accounts/workspace-account-binding'
+import { posix } from 'node:path'
+import { parseWslUncPath, toWindowsWslPath } from '../../../../shared/file-access/wsl-paths'
+import { getWslHomeAsync } from '../../../wsl/discovery/distro-catalog'
+import { getCachedWslHome } from '../../../wsl/discovery/wsl-home-cache'
+import { blockedWslDistroForExec } from '../../../wsl/discovery/wsl-background-exec-gate'
 import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import type { ClaudeAccountSelectionTarget } from '../../selection/runtime-selection'
 import type { ClaudeRuntimeAuthPreparation } from '../../runtime-auth/runtime-auth-types'
@@ -37,6 +45,33 @@ export class ClaudeWorkspaceProfiles {
   ): Promise<ClaudeRuntimeAuthPreparation | null> {
     const settings = this.settings()
     const id = workspaceAccountId(settings.claudeWorkspaceAccounts, workspaceId)
+    if (id === WORKSPACE_SYSTEM_DEFAULT_ACCOUNT_ID) {
+      const distro = target.runtime === 'wsl' ? target.wslDistro : null
+      const guestHomePath = distro
+        ? !prepare || (await blockedWslDistroForExec(distro))
+          ? getCachedWslHome(distro)
+          : await getWslHomeAsync(distro)
+        : null
+      const guestHome = parseWslUncPath(guestHomePath ?? '')?.linuxPath
+      if (target.runtime === 'wsl' && (!distro || !guestHome)) {
+        throw new Error('The WSL system-default Claude home is unavailable.')
+      }
+      const configDir = guestHome
+        ? posix.join(guestHome, '.claude')
+        : this.router.systemDefaultHome()
+      return {
+        configDir: distro ? toWindowsWslPath(configDir, distro) : configDir,
+        runtime: distro ? 'wsl' : 'host',
+        wslDistro: distro,
+        wslLinuxConfigDir: distro ? configDir : null,
+        envPatch: {
+          CLAUDE_CONFIG_DIR: configDir,
+          [CLAUDE_PROFILE_POINTER_ENV]: '',
+          [CLAUDE_INJECTED_CONFIG_DIR_ENV]: configDir
+        },
+        provenance: distro ? `wsl:${distro}:system` : 'system'
+      }
+    }
     if (!id) {
       return null
     }

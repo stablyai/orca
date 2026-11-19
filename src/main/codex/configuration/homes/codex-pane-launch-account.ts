@@ -30,7 +30,9 @@ export function resolveCodexPaneLaunchAccount(args: {
   const homeOwner = resolveCodexHomeOwnerAccountId(args)
   const accountId = args.pinnedByResume
     ? homeOwner
-    : (homeOwner ?? getSelectedCodexAccountIdForTarget(args.settings, args.target))
+    : homeOwner === undefined
+      ? getSelectedCodexAccountIdForTarget(args.settings, args.target)
+      : homeOwner
   if (accountId === undefined) {
     return null
   }
@@ -92,7 +94,7 @@ function resolveCodexHomeOwnerAccountId(args: {
     accountOwnsCodexHome(account, args.target, launchHomePath)
   )
   // Unknown owners cannot produce safe restart prompts; guessing could block terminal input.
-  return owner ? owner.id : undefined
+  return owner ? owner.id : resolveCodexPaneHomeRoute(args) === 'real-home' ? null : undefined
 }
 
 function accountOwnsCodexHome(

@@ -20,7 +20,7 @@ From the CLI, run `orca account add --agent codex --home PATH`. A Windows path i
 
 ## Choose an account per workspace
 
-Open the workspace context menu, then **Agent accounts**, and choose the Codex or Claude account for that workspace. This also works for folder workspaces. A saved workspace choice takes precedence over the host default for new launches. Clear the workspace choice to inherit the host default again.
+Open the workspace context menu, then **Agent accounts**, and choose the Codex or Claude account for that workspace. This also works for folder workspaces. A saved workspace choice takes precedence over the host default for new launches. The list matches the usage account switcher, including System default. The **Host default** label marks the host selection; choosing that row restores inheritance. Choosing another row pins that account to the workspace, including the real System default home when a managed account is selected for the host.
 
 Accounts belong to the host running the workspace. A missing or incompatible assigned account requires attention rather than silently launching another account. Existing terminal processes keep the account they started with. Workspace-aware usage readouts use the assigned account and avoid showing another account's quota when its usage is unavailable.
 

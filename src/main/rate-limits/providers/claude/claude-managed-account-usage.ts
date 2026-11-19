@@ -23,7 +23,12 @@ export async function fetchInactiveClaudeAccountUsage(
 ): Promise<ProviderRateLimits> {
   if (account.managedAuthRuntime !== 'wsl') {
     // Covered accounts share System Default usage and launch routing.
-    const authPreparation = getClaudeProfileRouter()?.accountUsagePreparation(account.id)
+    const router = getClaudeProfileRouter()
+    const authPreparation =
+      router &&
+      (account.id.startsWith('system-default:host:')
+        ? { configDir: router.systemDefaultHome(), envPatch: {}, provenance: 'system' }
+        : router.accountUsagePreparation(account.id))
     return authPreparation
       ? fetchActiveClaudeRateLimits({ signal: options.signal, authPreparation })
       : signInAgain()

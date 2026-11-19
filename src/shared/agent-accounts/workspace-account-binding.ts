@@ -2,6 +2,7 @@ import { normalizeWorkspaceSessionKeyToWorkspaceId } from '../workspace/identity
 
 export type WorkspaceAccountAssignment = { workspaceId: string; accountId: string | null }
 export const workspaceAccountKey = normalizeWorkspaceSessionKeyToWorkspaceId
+export const WORKSPACE_SYSTEM_DEFAULT_ACCOUNT_ID = 'system-default'
 
 export function workspaceAccountId(
   bindings: Record<string, string> | undefined,
@@ -22,6 +23,7 @@ export function assignWorkspaceAccount(
 ): Record<string, string> {
   if (
     assignment.accountId !== null &&
+    assignment.accountId !== WORKSPACE_SYSTEM_DEFAULT_ACCOUNT_ID &&
     !accounts?.some((account) => account.id === assignment.accountId)
   ) {
     throw new Error(`That ${provider} account no longer exists on this host.`)
