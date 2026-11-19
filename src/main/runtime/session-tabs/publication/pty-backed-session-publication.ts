@@ -189,10 +189,21 @@ export abstract class OrcaRuntimeWithPublishPtyBackedMobileSessionTerminal exten
     }
   }
 
+  private mobileSessionSnapshotsEndedForQuit = false
+
+  /** Quit's last profile save is frozen and the app is exiting: a touch would only rescan every
+   *  cached tab for each agent quit stops. */
+  protected endMobileSessionSnapshotTouchesForQuit(): void {
+    this.mobileSessionSnapshotsEndedForQuit = true
+  }
+
   protected touchMobileSessionSnapshotsForPty(
     ptyId: string,
     options: { immediate?: boolean } = {}
   ): void {
+    if (this.mobileSessionSnapshotsEndedForQuit) {
+      return
+    }
     // All visible title/foreground/bind updates pass here; apply phone pane-title rules consistently.
     this.markPaneLiveTitlesDirty()
     for (const [worktreeId, snapshot] of this.mobileSessionTabsByWorktree) {

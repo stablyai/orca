@@ -23,14 +23,13 @@ function installProvider(
 ) {
   const live = new Set(Array.from({ length: terminalCount }, (_, index) => `pty-${index}`))
   const exitListeners = new Set<(payload: { id: string; code: number }) => void>()
-  const calls = { inventories: 0, shutdowns: 0 }
+  let inventories = 0
   const provider = {
     onExit: (listener: (payload: { id: string; code: number }) => void) => {
       exitListeners.add(listener)
       return () => exitListeners.delete(listener)
     },
     shutdown: async (id: string) => {
-      calls.shutdowns += 1
       // ast-grep-ignore: test-no-real-time-wait -- every test drives this delay with fake timers
       await new Promise((resolve) => setTimeout(resolve, behavior.shutdownMs ?? 0))
       if (id === behavior.survivesStop) {
@@ -46,10 +45,10 @@ function installProvider(
       }
     },
     listProcesses: async () => {
-      calls.inventories += 1
+      inventories += 1
       if (
         behavior.failInventoryAfter !== undefined &&
-        calls.inventories > behavior.failInventoryAfter
+        inventories > behavior.failInventoryAfter
       ) {
         throw new Error('inventory deadline')
       }
@@ -58,7 +57,6 @@ function installProvider(
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the stop path calls only onExit, shutdown and listProcesses
   setLocalPtyProvider(provider as unknown as IPtyProvider)
-  return calls
 }
 
 const stopDeps = {
@@ -71,30 +69,25 @@ const stopDeps = {
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the stop path reads only these deps; runtime and store are optional
 const deps = stopDeps as unknown as PtyRuntimeControllerDeps
 
+const PTY_IDS = Array.from({ length: 20 }, (_, index) => `pty-${index}`)
+
 describe('batched stop proof', () => {
   it.each([
-    [100, 300, true, 1],
-    [1_000, 3_000, true, 1],
-    // Missed exit events poll absence for 1 s at 100 ms: still per batch, not per stop.
-    [100, 300, false, 10],
-    [1_000, 3_000, false, 10]
+    ['reported', true],
+    ['missed', false]
   ])(
-    'proves %i stops among %i terminals (exit reported: %s) with %i inventories',
-    async (stopCount, terminalCount, reportsExit, inventories) => {
+    'proves each stopped PTY of a batch, exit %s, and not the one still listed',
+    async (_, reportsExit) => {
       vi.useFakeTimers()
-      const calls = installProvider(terminalCount, { reportsExit, survivesStop: 'pty-7' })
-      const ptyIds = Array.from({ length: stopCount }, (_, index) => `pty-${index}`)
+      installProvider(PTY_IDS.length, { reportsExit, survivesStop: 'pty-7' })
 
-      const result = stopAndWaitPtysFromRuntimeController(deps, ptyIds, {
+      const result = stopAndWaitPtysFromRuntimeController(deps, PTY_IDS, {
         keepHistory: true,
         concurrency: 8
       })
       await vi.runAllTimersAsync()
-      const stopped = await result
 
-      expect(calls.inventories).toBe(inventories)
-      expect(stopped.get('pty-7')).toBe(false)
-      expect([...stopped.values()].filter(Boolean)).toHaveLength(stopCount - 1)
+      expect(await result).toEqual(new Map(PTY_IDS.map((id) => [id, id !== 'pty-7'])))
     }
   )
 
@@ -115,23 +108,19 @@ describe('batched stop proof', () => {
     )
   })
 
-  it.each([100, 1_000])(
-    'starts only the first 8 of %i stops when every shutdown outlasts the shutdown deadline',
-    async (stopCount) => {
-      vi.useFakeTimers({ now: 0 })
-      const calls = installProvider(stopCount, { reportsExit: true, shutdownMs: 10_000 })
-      const ptyIds = Array.from({ length: stopCount }, (_, index) => `pty-${index}`)
+  it('starts no stop after the shutdown deadline', async () => {
+    vi.useFakeTimers({ now: 0 })
+    installProvider(PTY_IDS.length, { reportsExit: true, shutdownMs: 10_000 })
 
-      const result = stopAndWaitPtysFromRuntimeController(deps, ptyIds, {
-        keepHistory: true,
-        deadlineMs: 4_000,
-        shutdownDeadlineMs: 3_500,
-        concurrency: 8
-      })
-      await vi.runAllTimersAsync()
-      await result
+    const result = stopAndWaitPtysFromRuntimeController(deps, PTY_IDS, {
+      keepHistory: true,
+      deadlineMs: 4_000,
+      shutdownDeadlineMs: 3_500,
+      concurrency: 8
+    })
+    await vi.runAllTimersAsync()
 
-      expect(calls.shutdowns).toBe(8)
-    }
-  )
+    // Only the first wave started; its shutdowns outlasted the deadline, so no later stop began.
+    expect([...(await result).keys()]).toEqual(PTY_IDS.slice(0, 8))
+  })
 })

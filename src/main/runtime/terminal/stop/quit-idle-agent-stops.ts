@@ -149,6 +149,7 @@ export abstract class OrcaRuntimeWithQuitIdleAgentStops extends OrcaRuntimeWithW
     if (!stopAndWaitMany || targets.length === 0) {
       return []
     }
+    this.endMobileSessionSnapshotTouchesForQuit()
     const targetsByPtyId = new Map(targets.map((target) => [target.ptyId, target]))
     const settleStops = new Map<string, (stopped: boolean) => void>()
     let stopped = new Map<string, boolean>()
