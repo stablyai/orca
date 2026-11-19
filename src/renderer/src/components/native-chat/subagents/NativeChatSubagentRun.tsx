@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
-import { useTranslation } from 'react-i18next'
 import { readUiLanguageMemoInput } from '@/i18n/ui-language-memo-input'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { Bot } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { useNow } from '@/lib/window-activity/use-now'
@@ -128,12 +128,12 @@ export function NativeChatSubagentRun({
   disclosureId?: string
   onOpenSubagent?: (agentId: string) => void
 }): React.JSX.Element | null {
-  const { i18n } = useTranslation()
-  const language = i18n.resolvedLanguage ?? i18n.language
+  // Changes with the UI language and its catalogs, which `say` reads.
+  const languageRevision = useUiLanguageRevision()
   const header = useMemo(() => {
-    readUiLanguageMemoInput(language)
+    readUiLanguageMemoInput(String(languageRevision))
     return nativeChatSubagentGroupHeader(block.agents, say)
-  }, [block.agents, language])
+  }, [block.agents, languageRevision])
   if (header.total === 0) {
     return null
   }
