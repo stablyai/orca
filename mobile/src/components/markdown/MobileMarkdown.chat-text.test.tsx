@@ -108,18 +108,24 @@ describe("Slack mention tokens in an agent's reply on the phone", () => {
 })
 
 describe('ordered list numbers on the phone', () => {
+  const LISTS = ['1. a\n2. b\n4. c', '1. a\n1. b\n1. c', '1. a\n1. b\n3. c', '3. a\n3. b\n3. c']
   const markers = (chatMath: boolean): string[] => {
     let tree: ReactTestRenderer | undefined
     act(() => {
-      tree = create(createElement(MobileMarkdown, { content: '1. a\n2. b\n4. c', chatMath }))
+      tree = create(
+        createElement(MobileMarkdown, { content: LISTS.join('\n\nnext\n\n'), chatMath })
+      )
     })
     return tree!.root
       .findAll((node) => isHostText(node.type) && hasStyle(node, styles.listMarker))
       .map(textOf)
   }
 
-  it('keeps typed numbers in chat and renumbers like GitHub elsewhere', () => {
-    expect(markers(true)).toEqual(['1.', '2.', '4.'])
-    expect(markers(false)).toEqual(['1.', '2.', '3.'])
+  it('keeps typed numbers in chat, counting up a list that repeats one number', () => {
+    expect(markers(true).join(' ')).toBe('1. 2. 4. 1. 2. 3. 1. 1. 3. 3. 4. 5.')
+  })
+
+  it('renumbers like GitHub outside chat', () => {
+    expect(markers(false).join(' ')).toBe('1. 2. 3. 1. 2. 3. 1. 2. 3. 3. 4. 5.')
   })
 })

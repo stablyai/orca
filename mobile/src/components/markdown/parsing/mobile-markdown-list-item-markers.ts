@@ -1,4 +1,8 @@
-import type { ListItemData, Parent } from 'mdast'
+import type { List, ListItem, Parent } from 'mdast'
+import {
+  keepTypedListItemNumber,
+  type ListItemNumberStore
+} from '../../../../../src/shared/markdown/chat-list-item-numbers'
 import type { MathEnv } from '../math/mobile-markdown-math'
 
 const TASK_MARKER = /^\[([ xX])\](?:\s+|$)/
@@ -14,11 +18,19 @@ export function readTaskMarker(item: Parent & { checked?: boolean | null }): voi
   }
 }
 
-/** Chat means typed numbers literally ("4." is step 4); GitHub text renumbers like GitHub.
+const isList = (node: Parent): node is List => node.type === 'list'
+
+const itemData: ListItemNumberStore<ListItem> = {
+  read: (item) => item.data?.value,
+  write: (item, typed) => {
+    item.data = { ...item.data, value: typed }
+  }
+}
+
+/** Chat keeps typed list numbers; GitHub text renumbers like GitHub. Call after the item opens.
  *  markdown-it's `info` is an ordered item's typed number, empty on a bullet. */
-export function typedItemNumber(
-  { info }: { info: string },
-  env: MathEnv
-): ListItemData | undefined {
-  return env.chatMath && info ? { value: Number(info) } : undefined
+export function numberChatListItem(list: Parent, { info }: { info: string }, env: MathEnv): void {
+  if (env.chatMath && info && isList(list)) {
+    keepTypedListItemNumber(list, Number(info), itemData)
+  }
 }
