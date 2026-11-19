@@ -28,6 +28,10 @@ import { projectRuntimeSurfaces } from '../records/runtime-leaf-record-projectio
 import type { WorkspaceLayoutReads } from './workspace-layout-stream'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import { loadChatTabLayout } from '../../session-tabs/chat/agent-session-tab-layout'
+import {
+  projectedWorkspacesByWorktree,
+  type ProjectedWorkspace
+} from './projected-workspaces-by-worktree'
 
 type LoadedPartition = Pick<LoadedWorkspaceLayout, 'layout' | 'desktopView' | 'facts'>
 
@@ -54,11 +58,12 @@ export class TerminalSurfaceIndex {
   private currentJson = ''
   /** The loaded partitions `current` was projected from: the projection's own cached objects. */
   private projectedFrom: (LoadedWorkspaceLayout | null)[] = []
-  private projectedHostIds: readonly ExecutionHostId[] = []
   private projectedHomes = ''
   private projectedTitles: boolean | null = null
   /** Workspace key → its home partition, as of the last projection. */
   private routes = new Map<string, ExecutionHostId | null>()
+  /** Worktree id → the first workspace its home partition holds for it in the last projection. */
+  private projectedWorkspaces = new Map<string, ProjectedWorkspace>()
   private routesStale = true
 
   constructor(
@@ -129,8 +134,8 @@ export class TerminalSurfaceIndex {
     }
     this.projectedTitles = titles
     this.projectedFrom = loaded
-    this.projectedHostIds = hostIds
     this.projectedHomes = homes
+    this.projectedWorkspaces = projectedWorkspacesByWorktree(loaded, hostIds, this.routes)
     const next = this.project(hostIds, loaded)
     const json = JSON.stringify({
       tabs: next.tabs,
@@ -239,24 +244,18 @@ export class TerminalSurfaceIndex {
 
   /** Main-owned rows from the partitions last projected: reads no session. */
   lastSessionTabsOf(worktreeId: string): ProjectedSessionTabs | null {
-    if (!this.current?.worktreeIds.has(worktreeId)) {
-      return null
-    }
-    for (const [index, partition] of this.projectedFrom.entries()) {
-      const hostId = this.projectedHostIds[index]
-      for (const [key, workspace] of Object.entries(partition?.layout.workspaces ?? {})) {
-        if (partition && workspace.worktreeId === worktreeId && this.routes.get(key) === hostId) {
-          return projectSessionTabs(
-            key,
-            workspace,
-            partition.desktopView,
-            partition.facts,
-            this.deps.generatedTitlesEnabled()
-          )
-        }
-      }
-    }
-    return null
+    const found = this.current?.worktreeIds.has(worktreeId)
+      ? this.projectedWorkspaces.get(worktreeId)
+      : undefined
+    return found
+      ? projectSessionTabs(
+          found.key,
+          found.workspace,
+          found.desktopView,
+          found.facts,
+          this.deps.generatedTitlesEnabled()
+        )
+      : null
   }
 
   private homeOf(key: string): ExecutionHostId | null {
