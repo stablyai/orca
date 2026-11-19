@@ -1,3 +1,4 @@
+import { tabCreateMenuTrigger } from '../../terminal/layout/terminal-tab-menu'
 // Assert tab management through rendered DOM: setup/store writes alone previously passed despite render crashes (#1186/#1193).
 // Hidden-window drag setup may use production store actions, but final selection/order/count assertions still read DOM.
 
@@ -76,12 +77,12 @@ test.describe('Tabs', () => {
       () => window.__store?.getState().openFiles.map((file) => file.id) ?? []
     )
 
-    await orcaPage.getByRole('button', { name: 'New tab' }).click({ force: true })
+    await (await tabCreateMenuTrigger(orcaPage)).click({ force: true })
     const newMarkdownMenuItem = orcaPage
       .getByRole('menu')
-      .getByRole('button', { name: 'New Markdown' })
+      .getByRole('button', { name: /New Markdown/i })
       .first()
-    await newMarkdownMenuItem.click()
+    await newMarkdownMenuItem.click({ force: true })
 
     // Require a newly minted id and retain its cleanup path so existing Markdown cannot satisfy or be deleted by this test.
     const createdFileHandle = await orcaPage.waitForFunction(

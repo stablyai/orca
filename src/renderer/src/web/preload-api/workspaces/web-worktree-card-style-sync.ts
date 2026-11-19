@@ -3,7 +3,10 @@ import { webRuntimeState } from '../../runtime/client/web-runtime-session'
 
 type CardStyleSettings = Pick<
   Partial<GlobalSettings>,
-  'experimentalNewWorktreeCardStyle' | 'worktreeCardDetailsRow' | 'compactWorktreeCards'
+  | 'experimentalNewWorktreeCardStyle'
+  | 'worktreeCardDetailsRow'
+  | 'compactWorktreeCards'
+  | 'compactWorktreeHeader'
 >
 
 /** Mirror card preferences and remember whether this host accepts the details-row field. */
@@ -17,6 +20,7 @@ export function read(
       typeof host.worktreeCardDetailsRow === 'boolean' ? environmentId : null
   }
   return {
+    compactWorktreeHeader: host.compactWorktreeHeader === true,
     ...(environmentStillActive && typeof host.worktreeCardDetailsRow === 'boolean'
       ? { worktreeCardDetailsRow: host.worktreeCardDetailsRow }
       : {}),
@@ -32,6 +36,9 @@ export function read(
 /** Older hosts reject unknown setting keys; only send the details preference when advertised. */
 export function updates(patch: CardStyleSettings, environmentId: string): CardStyleSettings {
   return {
+    ...(typeof patch.compactWorktreeHeader === 'boolean'
+      ? { compactWorktreeHeader: patch.compactWorktreeHeader }
+      : {}),
     ...(typeof patch.worktreeCardDetailsRow === 'boolean' &&
     webRuntimeState.worktreeCardDetailsRowRuntimeEnvironmentId === environmentId
       ? { worktreeCardDetailsRow: patch.worktreeCardDetailsRow }

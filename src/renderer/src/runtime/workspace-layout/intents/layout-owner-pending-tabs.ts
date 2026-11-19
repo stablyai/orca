@@ -183,3 +183,13 @@ export function pendingTabRevision(): number {
 export function pendingEntityWorkspaceIds(entityId: string): Iterable<string> {
   return byEntity.get(entityId)?.keys() ?? []
 }
+
+/** A dismissed creation menu must not seed over a surface still awaiting its owner frame. */
+export function afterPendingWorkspaceTabs(worktreeId: string, run: () => void): void {
+  afterPendingTabs(
+    [...pending]
+      .filter(([, entry]) => entry.worktreeId === worktreeId && entry.ask.kind === 'open')
+      .map(([id]) => id),
+    run
+  )
+}

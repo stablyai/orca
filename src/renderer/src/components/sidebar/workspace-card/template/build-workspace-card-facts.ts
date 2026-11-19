@@ -128,6 +128,7 @@ export function buildWorkspaceCardFacts(card: WorktreeCardController): Workspace
           : null
     },
     options: {
+      compactHeader: !card.newCardStyle && card.settings?.compactWorktreeHeader === true,
       style: card.newCardStyle ? 'new' : card.compactCards ? 'compact' : 'classic',
       show: showOptions(card.cardProps),
       detailsRow: card.settings?.worktreeCardDetailsRow !== false,

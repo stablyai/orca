@@ -1,4 +1,5 @@
 import React from 'react'
+import { getWorktreeExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 
 import { shouldBeginWorktreeRename } from '../controller/worktree-card-model'
 import type { WorktreeCardPresentation } from './worktree-card-presentation'
@@ -14,13 +15,18 @@ import {
 import { WorktreeCardSshHostControl } from '../host/WorktreeCardSshHostControl'
 import { WorktreeTitleInlineRename } from '../identity/WorktreeTitleInlineRename'
 import type { WorktreeCardController } from '../controller/use-worktree-card-controller'
+import { WorktreeCreateButton } from './WorktreeCreateButton'
 
 export function WorktreeCardHeader({
   card,
-  presentation
+  presentation,
+  agentDisclosure,
+  branchLabel
 }: {
   card: WorktreeCardController
   presentation: WorktreeCardPresentation
+  agentDisclosure?: React.ReactNode
+  branchLabel?: string
 }): React.JSX.Element {
   const {
     worktree,
@@ -105,6 +111,13 @@ export function WorktreeCardHeader({
           }
           onBeginEditingConsumed={affiliateListMode ? undefined : () => setRenamingWorktreeId(null)}
         />
+        {!affiliateListMode && !titleRenaming ? (
+          <WorktreeCreateButton
+            worktreeId={worktree.id}
+            executionHostId={getWorktreeExecutionHostId(worktree, repo)}
+            disabled={isDeleting || isRuntimeDisconnected || card.isSshDisconnected}
+          />
+        ) : null}
         {card.compactLine && card.lineNote && !titleRenaming ? (
           <span className="-ml-1 shrink-0 text-2xs whitespace-nowrap text-muted-foreground">
             · {card.lineNote}
@@ -131,6 +144,15 @@ export function WorktreeCardHeader({
           />
         )}
 
+        {branchLabel && !titleRenaming && (
+          <span
+            className="min-w-0 flex-1 truncate text-xs text-muted-foreground"
+            data-compact-workspace-branch="true"
+          >
+            {branchLabel}
+          </span>
+        )}
+        {agentDisclosure}
         {showTitleRowIndicators && titleRowIndicators}
         {showLineRepoChip ? (
           <span className="ml-auto flex shrink-0">

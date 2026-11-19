@@ -150,6 +150,9 @@ export class ProjectHostPersistenceOperations {
         )
       }
     }
+    if ('agentLaunchDefault' in updates) {
+      project.agentLaunchDefault = updates.agentLaunchDefault ?? null
+    }
     project.updatedAt = Date.now()
     this.scheduleSave(['projects'])
     return { ...project }

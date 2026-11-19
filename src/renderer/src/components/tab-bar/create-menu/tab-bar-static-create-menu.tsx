@@ -26,6 +26,7 @@ const ICON_CLASS = 'size-4'
 
 export function TabBarStaticCreateMenu({
   groupId,
+  onNewPluginFile,
   terminalOnly,
   mobileEmulatorEnabled,
   managedBrowserCreationEnabled,
@@ -39,6 +40,7 @@ export function TabBarStaticCreateMenu({
   queueNewActiveTerminalFocusAfterNewTabMenuClose
 }: {
   props: TabBarProps
+  onNewPluginFile?: (file: ReturnType<typeof usePluginNewFiles>[number]) => void
   groupId: string
   terminalOnly: boolean
   mobileEmulatorEnabled: boolean
@@ -135,7 +137,11 @@ export function TabBarStaticCreateMenu({
               />
             ),
             run: () => {
-              void useAppStore.getState().openNewPluginFileInActiveWorkspace(newFile, groupId)
+              if (onNewPluginFile) {
+                onNewPluginFile(newFile)
+              } else {
+                void useAppStore.getState().openNewPluginFileInActiveWorkspace(newFile, groupId)
+              }
             }
           }))
         ]

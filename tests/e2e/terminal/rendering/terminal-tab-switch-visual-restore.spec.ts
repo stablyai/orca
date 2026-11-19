@@ -1,3 +1,4 @@
+import { tabCreateMenuTrigger } from '../layout/terminal-tab-menu'
 import type { XtermWithRenderDimensions } from './xterm-render-dimensions'
 import type { Page, TestInfo } from '@stablyai/playwright-test'
 import { test } from '../../desktop/electron-fixtures/orca-app'
@@ -94,7 +95,7 @@ async function ensureTwoTerminalTabs(
 ): Promise<{ firstTabId: string; secondTabId: string }> {
   const worktreeId = (await getActiveWorktreeId(page))!
   if ((await page.locator('[data-testid="sortable-tab"]').count()) < 2) {
-    await page.getByRole('button', { name: 'New tab' }).click({ force: true })
+    await (await tabCreateMenuTrigger(page)).click({ force: true })
     await page
       .getByRole('menu')
       .getByRole('button', { name: /New Terminal/i })

@@ -76,8 +76,13 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
       className={cn(
         WORKTREE_CARD_SURFACE_CLASS_NAME,
         'flex flex-col',
-        // A bot's line is as tall as its chat's row.
-        titleOnlyCard ? (card.compactLine ? 'py-px' : 'py-2') : 'pt-1.25 pb-1.5',
+        titleOnlyCard && card.compactLine
+          ? 'py-px'
+          : !newCardStyle && card.settings?.compactWorktreeHeader === true
+            ? 'py-0.5'
+            : titleOnlyCard
+              ? 'py-2'
+              : 'pt-1.25 pb-1.5',
         flushSurface && 'w-[calc(100%-0.25rem)]',
         // Navigation updates the live attribute before React; it must own the complete active style.
         isLineageDropTarget

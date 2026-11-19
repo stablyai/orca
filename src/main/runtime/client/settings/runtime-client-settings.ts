@@ -1,3 +1,4 @@
+import { projectSourceControlLaunchRecipes } from './runtime-client-source-control-settings'
 import { publishedLegacyChatPermissionMode } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import { getClaudeAgentViewService } from '../../../claude/agent-view/agent-view-service'
 import { getAppEnvironment } from '../../../../shared/app-lifecycle/app-environment'
@@ -10,10 +11,7 @@ import {
   type TerminalQuickCommandMutation
 } from '../../../../shared/terminal/quick-commands/terminal-quick-commands'
 import { haveSameDisabledTuiAgents } from '../../../../shared/agent-launch/catalog/tui-agent-selection'
-import { normalizeSourceControlAiSettings } from '../../../../shared/source-control/ai/settings/source-control-ai-settings'
 import { normalizeSourceControlGroupOrder } from '../../../../shared/source-control/listing/source-control-group-order'
-import { SOURCE_CONTROL_LAUNCH_ACTION_IDS } from '../../../../shared/source-control/ai/recipes/source-control-ai-actions'
-import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import { applyNativeChatSessionOptionSettingsMutation } from '../../../../shared/native-chat/input/session-options/native-chat-session-option-defaults'
 import type { NativeChatSessionOptionSettingsMutation } from '../../../../shared/native-chat/input/native-chat-session-options'
 import { getHostDisplayLabelOverrides } from '../../../../shared/execution-host/host-setting-overrides'
@@ -41,7 +39,6 @@ import { agentLaunchSettingsRollbackUpdates } from '../../terminal/launch/agent-
 import type {
   RuntimeClientSettings,
   RuntimeClientSettingsUpdate,
-  RuntimeClientSourceControlAi,
   RuntimeHostDisplayLabelOverrides
 } from './runtime-client-settings-shape'
 import { normalizeNewTabMenuLayout } from '../../../../shared/new-tab-menu/new-tab-menu-layout'
@@ -104,6 +101,7 @@ export class RuntimeClientSettingsController {
       experimentalNewWorktreeCardStyle: settings.experimentalNewWorktreeCardStyle === true,
       worktreeCardDetailsRow: settings.worktreeCardDetailsRow !== false,
       compactWorktreeCards: settings.compactWorktreeCards === true,
+      compactWorktreeHeader: settings.compactWorktreeHeader === true,
       minimaxGroupId: settings.minimaxGroupId ?? '',
       minimaxUsageModels: settings.minimaxUsageModels ?? 'general',
       minimaxEndpoint: settings.minimaxEndpoint ?? 'overseas',
@@ -166,6 +164,12 @@ export class RuntimeClientSettingsController {
     this.store.updateSettings(
       {
         ...otherUpdates,
+        // An older client's layout picker cannot name the compact-header flag.
+        ...(beforeSettings.compactWorktreeHeader === true &&
+        updates.compactWorktreeCards !== undefined &&
+        updates.compactWorktreeHeader === undefined
+          ? { compactWorktreeHeader: false }
+          : {}),
         // An older client writes Arguments as it reads them, flag included.
         ...(agentDefaultArgs !== undefined || agentDefaultEnv !== undefined
           ? legacyLaunchTextUpdates(
@@ -310,23 +314,5 @@ export class RuntimeClientSettingsController {
     })
     this.reconciliationTail = reconciliation.catch(() => {})
     return reconciliation
-  }
-}
-
-function projectSourceControlLaunchRecipes(
-  settings: Partial<Pick<GlobalSettings, 'sourceControlAi' | 'commitMessageAi'>>
-): RuntimeClientSourceControlAi {
-  const { enabled, actions } = normalizeSourceControlAiSettings(
-    settings.sourceControlAi,
-    settings.commitMessageAi
-  )
-  return {
-    enabled,
-    actions: Object.fromEntries(
-      SOURCE_CONTROL_LAUNCH_ACTION_IDS.flatMap((actionId) => {
-        const recipe = actions?.[actionId]
-        return recipe ? [[actionId, recipe]] : []
-      })
-    )
   }
 }

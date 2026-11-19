@@ -99,7 +99,7 @@ const HOST_BINDINGS = {
   repos: ['executionHostId', 'connectionId'],
   projectGroups: ['executionHostId', 'connectionId'],
   folderWorkspaces: ['executionHostId', 'connectionId'],
-  projects: ['localWindowsRuntimePreference'],
+  projects: ['localWindowsRuntimePreference', 'agentLaunchDefault'],
   automations: [
     'executionTargetType',
     'executionTargetId',

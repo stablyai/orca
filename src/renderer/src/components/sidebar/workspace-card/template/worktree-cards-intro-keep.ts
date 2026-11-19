@@ -1,3 +1,4 @@
+import { worktreeCardStyleUpdates } from '@/store/appearance/worktree-card-style'
 import { useSyncExternalStore } from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
@@ -24,7 +25,7 @@ function subscribe(listener: () => void): () => void {
 async function runKeep(): Promise<void> {
   const store = useAppStore.getState
   try {
-    await store().updateSettingsOrThrow({ experimentalNewWorktreeCardStyle: true })
+    await store().updateSettingsOrThrow(worktreeCardStyleUpdates(true, store().settings))
   } catch {
     toast.error(
       translate(

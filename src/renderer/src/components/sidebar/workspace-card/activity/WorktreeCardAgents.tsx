@@ -11,7 +11,7 @@ import {
 } from './worktree-card-send-target-inputs'
 import { useAgentPresentation, useWorktreeAgentRow } from './useWorktreeAgentRows'
 import { useHostRootKeys } from './use-worktree-agent-host-roots'
-import { KeyedSummary } from './worktree-card-agent-keyed-summary'
+import { KeyedSummary, CompactHeaderAgentList } from './worktree-card-agent-keyed-summary'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { useWorktreeAgentDisplay } from './use-worktree-agent-display'
 import { cn } from '@/lib/class-names'
@@ -36,12 +36,14 @@ type Props = {
   /** The card's host; local and remote copies can share a workspace ID, so activation must name it. */
   executionHostId?: ExecutionHostId
   className?: string
+  renderHeader?: (summary: React.ReactNode) => React.ReactElement
 }
 
 export default React.memo(function WorktreeCardAgents({
   worktreeId,
   executionHostId,
-  className
+  className,
+  renderHeader
 }: Props) {
   const allRoots = useAgentPresentation(
     `roots\0${worktreeId}`,
@@ -55,8 +57,11 @@ export default React.memo(function WorktreeCardAgents({
       roots={roots}
       hostFiltered={roots !== allRoots}
       className={className}
+      renderHeader={renderHeader}
     />
-  ) : null
+  ) : (
+    (renderHeader?.(null) ?? null)
+  )
 })
 
 function WorktreeCardAgentsBody({
@@ -64,7 +69,8 @@ function WorktreeCardAgentsBody({
   executionHostId,
   roots,
   hostFiltered,
-  className
+  className,
+  renderHeader
 }: Props & { roots: readonly string[]; hostFiltered: boolean }) {
   const t = useTranslate(),
     languageRevision = useUiLanguageRevision()
@@ -105,12 +111,7 @@ function WorktreeCardAgentsBody({
       }),
     [control, inputs, worktreeId, t, languageRevision]
   )
-  const onSend = useCallback(
-    (key: string) => {
-      void send(key)
-    },
-    [send]
-  )
+  const onSend = useCallback((key: string) => void send(key), [send])
   const { toggleLineageParent: toggleLineage, toggleIdleChildGroup: toggleIdle } = expansion
   const now = useNow(30_000)
   const context = useMemo(
@@ -157,6 +158,20 @@ function WorktreeCardAgentsBody({
     }
     return undefined
   }, [compact, expansion.compactRootListExpanded])
+  if (renderHeader) {
+    const open = expansion.compactRootListExpanded || Boolean(targets)
+    return (
+      <CompactHeaderAgentList
+        {...{ worktreeId, roots, hostFiltered, className, renderHeader }}
+        expanded={open}
+        onToggle={expansion.toggleCompactRootList}
+        rootRef={rootRef}
+      >
+        <AgentBranches keysToRender={roots} context={context} timerActive={open} root />
+      </CompactHeaderAgentList>
+    )
+  }
+
   return (
     <div
       ref={rootRef}

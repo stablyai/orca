@@ -1,12 +1,11 @@
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { toast } from 'sonner'
 import { useAppStore } from '../../../store/index'
-import { focusTerminalTabSurface } from '../../terminal-pane/input/focus/focus-terminal-tab-surface'
-import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/identifiers/non-secure-context-uuid'
 import { createWebRuntimeSessionBrowserTab } from '../../../runtime/browser/creation/web-runtime-browser-creation'
-import { createWebRuntimeSessionTerminal } from '../../../runtime/hosted-terminals/creation/web-runtime-terminal-creation'
-import { isWebRuntimeSessionActive } from '../../../runtime/web-session-tabs-sync/identity/web-runtime-session-environment'
-import { openTabBarEntry } from '../../tab-bar/create-entry/tab-create-entry-action'
-import type { TabCreateEntryArgs } from '../../tab-bar/create-entry/tab-create-entry-action'
+import {
+  openTabBarEntry,
+  type TabCreateEntryArgs
+} from '../../tab-bar/create-entry/tab-create-entry-action'
 import { openMobileEmulatorTab } from '@/lib/simulator/launch/open-mobile-emulator-tab'
 import {
   ensureSimulatorTab,
@@ -22,15 +21,14 @@ import type { TabGroupWorktreeSnapshot } from './useTabGroupItemProjections'
 export function useTabGroupCreationCommands({
   groupId,
   worktreeId,
-  worktreeState
+  worktreeState,
+  executionHostId
 }: {
   groupId: string
   worktreeId: string
   worktreeState: TabGroupWorktreeSnapshot
+  executionHostId?: ExecutionHostId
 }) {
-  const createTab = useAppStore((state) => state.createTab)
-  const setActiveTab = useAppStore((state) => state.setActiveTab)
-  const setActiveTabType = useAppStore((state) => state.setActiveTabType)
   const createBrowserTab = useAppStore((state) => state.createBrowserTab)
   const openNewBrowserTabInActiveWorkspace = useAppStore(
     (state) => state.openNewBrowserTabInActiveWorkspace
@@ -43,20 +41,30 @@ export function useTabGroupCreationCommands({
   )
 
   return {
-    newBrowserTab: () => {
-      void openNewBrowserTabInActiveWorkspace(groupId).catch((error) => {
+    newBrowserTab: async () => {
+      await openNewBrowserTabInActiveWorkspace(
+        groupId,
+        undefined,
+        worktreeId,
+        executionHostId
+      ).catch((error) => {
         toast.error(error instanceof Error ? error.message : String(error))
       })
     },
     newSimulatorTab: worktreeState.mobileEmulatorEnabled
-      ? () => {
-          if (getSimulatorTabForWorktree(worktreeId)) {
-            void ensureSimulatorTab(worktreeId, { surfacePane: true })
+      ? async () => {
+          if (getSimulatorTabForWorktree(worktreeId, executionHostId)) {
+            ensureSimulatorTab(worktreeId, {
+              surfacePane: true,
+              targetGroupId: groupId,
+              executionHostId
+            })
             return
           }
-          void openMobileEmulatorTab(worktreeId, {
+          await openMobileEmulatorTab(worktreeId, {
             placement: 'rightSplit',
-            targetGroupId: groupId
+            targetGroupId: groupId,
+            executionHostId
           }).catch((error) => {
             toast.error(error instanceof Error ? error.message : String(error))
           })
@@ -114,36 +122,13 @@ export function useTabGroupCreationCommands({
     },
     // Why: target the owning group explicitly; the "+" menu can fire from an unfocused panel without updating global group focus.
     newFileTab: async () => {
-      await openNewMarkdownInActiveWorkspace(groupId)
+      await openNewMarkdownInActiveWorkspace(groupId, worktreeId, executionHostId)
     },
     newTerminalTab: () => {
-      void openNewTerminalTabInActiveWorkspace(groupId)
+      void openNewTerminalTabInActiveWorkspace(groupId, worktreeId, executionHostId)
     },
-    newTerminalWithShell: (shellOverride: string) => {
-      void (async () => {
-        const environmentId = runtimeEnvironmentIdOrLocalUnlessTwin(
-          useAppStore.getState(),
-          worktreeId
-        )
-        const outcome = await createWebRuntimeSessionTerminal(
-          {
-            worktreeId,
-            environmentId,
-            targetGroupId: groupId,
-            shell: shellOverride,
-            activate: true
-          },
-          { userAct: true }
-        )
-        if (outcome.status === 'created' || isWebRuntimeSessionActive(environmentId)) {
-          return
-        }
-        const tabId = createBrowserUuid()
-        createTab(worktreeId, groupId, shellOverride, { id: tabId })
-        setActiveTab(tabId)
-        setActiveTabType('terminal', worktreeId)
-        focusTerminalTabSurface(tabId)
-      })()
+    newTerminalWithShell: async (shellOverride: string) => {
+      await openNewTerminalTabInActiveWorkspace(groupId, worktreeId, executionHostId, shellOverride)
     }
   }
 }
