@@ -102,7 +102,10 @@ export abstract class AgentHookServerHydration extends AgentHookServerTabCleanup
         // The binding's topology is runtime metadata; a shared host still runs this conversation.
         if (
           entry.providerSession &&
-          (rawResolvedEntry as { sharedHost?: unknown } | null)?.sharedHost === true
+          typeof rawResolvedEntry === 'object' &&
+          rawResolvedEntry !== null &&
+          'sharedHost' in rawResolvedEntry &&
+          rawResolvedEntry.sharedHost === true
         ) {
           retainTmuxWriterTopology(entry.providerSession)
         }
