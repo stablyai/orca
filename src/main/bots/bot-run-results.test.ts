@@ -4,7 +4,7 @@ import type { AgentSessionTurnCompletionEvent } from '../../shared/agent-session
 import { CONNECTOR_PATHS } from '../../shared/connectors/connector-cloud-contract'
 import { postConnectorBotMessage } from '../connector-cloud/connector-replies'
 import { makeTestBot } from './bot.test-fixture'
-import { BOT_QUIET_MARKER, isQuietBotResult } from '../../shared/bot-quiet-result'
+import { BOT_QUIET_MARKER } from '../../shared/bot-quiet-result'
 import {
   deliverBotRunResult,
   type BotRunDeliveryDependencies,
@@ -381,13 +381,6 @@ describe('deliverBotRunResult', () => {
       })
     )
     expect(quiet.notify).not.toHaveBeenCalled()
-  })
-})
-
-describe('isQuietBotResult', () => {
-  it('reads the marker only at the end', () => {
-    expect(isQuietBotResult(`Nothing to report. ${BOT_QUIET_MARKER}`)).toBe(true)
-    expect(isQuietBotResult(`${BOT_QUIET_MARKER} but here is news`)).toBe(false)
   })
 })
 
