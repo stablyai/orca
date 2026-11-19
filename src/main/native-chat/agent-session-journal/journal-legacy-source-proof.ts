@@ -65,7 +65,7 @@ export function readJournalLegacyProofPage(
   destination: Database.Database
 ): LegacyProofPage {
   if (cursor.table === 0 && cursor.after === null) {
-    assertNoLegacyComparesDue(destination)
+    assertNoLegacyComparesDue(db, destination)
     for (const { name, columns } of JOURNAL_DOMAIN_PROFILE_TABLES) {
       const present = new Set(
         destination

@@ -580,4 +580,26 @@ it('converts the copies the reconcile keeps, and keeps the original while a chat
   for (const copy of copies) {
     expect(journalDomainImportState(twoCopies.db, copy).state).toBe('ready')
   }
+
+  // A compare due on a chat the original holds refuses before any chat converts; one left for a
+  // chat the original no longer holds doesn't keep it.
+  const dueFirst = await profile()
+  // More chats than one proof page holds, so the due chat is on a later page.
+  for (let chat = 0; chat < 32; chat++) {
+    olderOrcaChat(dueFirst.filename, `a${String(chat).padStart(2, '0')}`)
+  }
+  olderOrcaChat(dueFirst.filename, 'zz-later')
+  await initializeJournalDomainDatabase(dueFirst.root)
+  dueFirst.db.exec(`INSERT INTO agent_session_store_meta
+    VALUES('journal.legacy-compare:zz-later','["epoch",9,null,null]')`)
+  dueFirst.ensured.length = 0
+  await dueFirst.launch().run()
+  expect(dueFirst.ensured).toEqual([])
+  expect(companions(dueFirst.filename)).toContain(dueFirst.filename)
+  const stale = await profile()
+  stale.db.exec(`INSERT INTO agent_session_store_meta
+    VALUES('journal.legacy-compare:deleted-in-older-orca','["epoch",9,null,null]')`)
+  await stale.launch().run()
+  expect(stale.errors).toEqual([])
+  expect(companions(stale.filename)).toEqual([])
 })

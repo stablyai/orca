@@ -32,14 +32,31 @@ export function assertLegacyChatSettled(store: Database.Database, sessionId: str
   }
 }
 
-/** Before walking any chat: one pending anywhere would refuse the walk once it reached that chat. */
-export function assertNoLegacyComparesDue(store: Database.Database): void {
-  const due = store.prepare('SELECT 1 FROM agent_session_store_meta WHERE key>? AND key<? LIMIT 1')
+/**
+ * Before walking any chat: a compare or copy still due for a chat the original holds would refuse
+ * the walk once it reached that chat. One for a chat the original no longer holds settles nothing.
+ */
+export function assertNoLegacyComparesDue(
+  source: Database.Database,
+  store: Database.Database
+): void {
+  const due = store.prepare('SELECT key FROM agent_session_store_meta WHERE key>? AND key<?')
+  const held = source.prepare(`SELECT EXISTS(SELECT 1 FROM journal_sessions WHERE session_id=?1)
+    ${hasRecords(source) ? 'OR EXISTS(SELECT 1 FROM agent_session_records WHERE session_id=?1)' : ''}
+    AS held`)
   for (const prefix of [JOURNAL_LEGACY_COMPARE, JOURNAL_LEGACY_COPY_DUE]) {
-    if (due.get(prefix, prefixEnd(prefix))) {
-      throw new JournalLegacyRetentionError('an older Orca chat is still being compared')
+    for (const row of due.iterate(prefix, prefixEnd(prefix))) {
+      if (held.get(String(row.key).slice(prefix.length))?.held) {
+        throw new JournalLegacyRetentionError('an older Orca chat is still being compared')
+      }
     }
   }
+}
+
+function hasRecords(source: Database.Database): boolean {
+  return !!source
+    .prepare("SELECT 1 FROM sqlite_schema WHERE type='table' AND name='agent_session_records'")
+    .get()
 }
 
 /**
