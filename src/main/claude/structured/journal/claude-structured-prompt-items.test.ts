@@ -24,4 +24,15 @@ it('never lets a resumed shell command take an answer given in another directory
   // An absolute path means the same file wherever it is asked from.
   const edit = { file_path: '/repo/a/output.json', old_string: 'a', new_string: 'b' }
   expect(ask('Edit', edit, 'call-2')).toBe(ask('Edit', edit, 'call-1'))
+  const windowsEdit = { file_path: 'C:\\repo\\output.json', old_string: 'a', new_string: 'b' }
+  expect(ask('Edit', windowsEdit, 'call-2')).toBe(ask('Edit', windowsEdit, 'call-1'))
+
+  // A search with no path searches wherever the session is; any tool Orca can't vouch for asks live.
+  const search = { pattern: 'secret' }
+  expect(ask('Grep', search, 'call-2')).not.toBe(ask('Grep', search, 'call-1'))
+  const rooted = { pattern: 'secret', path: '/repo' }
+  expect(ask('Grep', rooted, 'call-2')).toBe(ask('Grep', rooted, 'call-1'))
+  expect(ask('mcp__db__query', { sql: 'select 1' }, 'call-2')).not.toBe(
+    ask('mcp__db__query', { sql: 'select 1' }, 'call-1')
+  )
 })

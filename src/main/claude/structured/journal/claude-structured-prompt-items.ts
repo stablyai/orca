@@ -1,3 +1,4 @@
+import { win32 } from 'node:path'
 import type {
   AgentJournalApprovalItem,
   AgentJournalPromptOption,
@@ -17,12 +18,31 @@ import { encodeClaudeQuestionOptionId } from './claude-structured-prompt-replies
 import type { ClaudePendingPrompt } from '../permissions/claude-prompt-registry'
 import { journalPromptRequestDigest } from '../../../native-chat/agent-session-journal/item-lifecycle/journal-prompt-request-digest'
 
-// Claude doesn't report the shell's directory, and a resumed session's shell starts back in the
-// project, so the same command can mean another directory.
-const DIRECTORY_DEPENDENT_TOOLS = new Set(['Bash', 'PowerShell'])
+// Claude doesn't report the directory a tool runs in, and a resumed session starts back in the
+// project, so only a request that names no directory-relative target can mean the same thing again.
+const DIRECTORY_FREE_TOOLS = new Set(['ExitPlanMode', 'WebFetch', 'WebSearch'])
+const PATH_FIELD: Record<string, string> = {
+  Read: 'file_path',
+  Write: 'file_path',
+  Edit: 'file_path',
+  MultiEdit: 'file_path',
+  NotebookEdit: 'notebook_path',
+  Glob: 'path',
+  Grep: 'path'
+}
+
+function meansTheSameAfterResume(prompt: ClaudePendingPrompt): boolean {
+  if (prompt.kind === 'question' || DIRECTORY_FREE_TOOLS.has(prompt.toolName)) {
+    return true
+  }
+  const field = PATH_FIELD[prompt.toolName]
+  const target = field === undefined ? undefined : prompt.input[field]
+  // win32 rules accept both drive and POSIX absolute paths, whichever host the agent runs on.
+  return typeof target === 'string' && win32.isAbsolute(target)
+}
 
 /** A subagent's request can't be re-asked by a resumed session, so only the lead's prompts get one.
- *  A shell command's digest names its own call: its card still restores, its re-ask is asked live. */
+ *  Any other request's digest names its own call: its card still restores, its re-ask is asked live. */
 function claudeRequestDigest(prompt: ClaudePendingPrompt): { requestDigest?: string } {
   return prompt.agentId
     ? {}
@@ -34,7 +54,7 @@ function claudeRequestDigest(prompt: ClaudePendingPrompt): { requestDigest?: str
           // "Allow for this session" grants the re-asked request's own suggestions.
           suggestions: prompt.suggestions,
           blockedPath: prompt.blockedPath,
-          ...(DIRECTORY_DEPENDENT_TOOLS.has(prompt.toolName) ? { call: prompt.toolUseId } : {})
+          ...(meansTheSameAfterResume(prompt) ? {} : { call: prompt.toolUseId })
         })
       }
 }
