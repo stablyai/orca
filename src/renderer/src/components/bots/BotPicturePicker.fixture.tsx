@@ -287,13 +287,21 @@ function stubGeneration(
   }
 }
 
+function carousel(): HTMLElement {
+  return document.querySelector<HTMLElement>('[aria-roledescription="carousel"]')!
+}
+
+async function step(key: 'ArrowLeft' | 'ArrowRight'): Promise<void> {
+  carousel().dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }))
+  await settle(80)
+}
+
+// The Generate face sits just before mascot 1: step left until its description box shows.
 async function openGenerate(frame: HTMLElement, description?: string): Promise<void> {
   await openPicture(frame)
-  const tab = Array.from(document.querySelectorAll<HTMLButtonElement>('[role="tab"]')).find(
-    (entry) => entry.textContent?.includes('Generate')
-  )
-  tab?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
-  tab?.click()
+  for (let tries = 0; tries < 25 && !document.querySelector('textarea'); tries += 1) {
+    await step('ArrowLeft')
+  }
   await settle()
   if (description === undefined) {
     return
@@ -305,9 +313,7 @@ async function openGenerate(frame: HTMLElement, description?: string): Promise<v
   )
   box.dispatchEvent(new Event('input', { bubbles: true }))
   await settle(100)
-  Array.from(document.querySelectorAll<HTMLButtonElement>('button:not([role="tab"])'))
-    .find((entry) => entry.textContent === 'Generate')
-    ?.click()
+  document.querySelector<HTMLButtonElement>('button[aria-label="Generate"]')?.click()
   await settle(600)
 }
 
@@ -366,8 +372,42 @@ export const generateAgentPicker = defineFixture({
   setup: stubGeneration(READY, 'image'),
   render: () => <Settings />,
   interact: async (frame) => {
-    await openGenerate(frame)
-    document.querySelector<HTMLButtonElement>('[role="tabpanel"] button[role="combobox"]')?.click()
+    await openGenerate(frame, 'a friendly orange fox astronaut')
+    await openGenerateAgainBox()
+    const trigger = document.querySelector<HTMLButtonElement>('button[aria-label^="Generate with"]')
+    trigger?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 }))
     await settle()
+  }
+})
+
+async function openGenerateAgainBox(): Promise<void> {
+  document.querySelector<HTMLButtonElement>('button[aria-label="Edit description"]')?.click()
+  await settle()
+}
+
+export const generateEditing = defineFixture({
+  width: 420,
+  setup: stubGeneration(READY, 'image'),
+  render: () => <Settings />,
+  interact: async (frame) => {
+    await openGenerate(frame, 'a friendly orange fox astronaut')
+    await openGenerateAgainBox()
+  }
+})
+
+export const generateOneAgent = defineFixture({
+  width: 420,
+  setup: stubGeneration({ agents: [{ agent: 'codex', status: 'ready' }] }, 'image'),
+  render: () => <Settings />,
+  interact: (frame) => openGenerate(frame, 'a friendly orange fox astronaut')
+})
+
+export const generateBackToMascot = defineFixture({
+  width: 420,
+  setup: stubGeneration(READY, 'image'),
+  render: () => <Settings />,
+  interact: async (frame) => {
+    await openGenerate(frame, 'a friendly orange fox astronaut')
+    await step('ArrowRight')
   }
 })

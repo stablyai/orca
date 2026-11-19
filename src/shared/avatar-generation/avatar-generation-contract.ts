@@ -33,8 +33,6 @@ export type AvatarGenerationApi = {
     requestId: string
     description: string
     agent: AvatarImageAgent
-    /** The picker's chosen background color, as #rrggbb. */
-    backgroundColor?: string
   }) => Promise<AvatarGenerationResult>
   cancel: (args: { requestId: string }) => Promise<void>
 }

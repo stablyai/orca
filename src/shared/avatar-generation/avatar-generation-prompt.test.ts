@@ -36,9 +36,4 @@ describe('avatarGenerationPrompt', () => {
     expect(prompt).toContain('Subject: a fox astronaut ')
     expect(prompt).not.toContain('\n')
   })
-
-  it('asks for the chosen background color only when one is set', () => {
-    expect(avatarGenerationPrompt('a fox', '#c9b8e8')).toContain('flat #c9b8e8 color')
-    expect(avatarGenerationPrompt('a fox')).not.toContain('flat #')
-  })
 })

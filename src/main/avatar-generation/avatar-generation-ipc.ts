@@ -21,13 +21,11 @@ import {
   type AvatarAgentEnv
 } from './avatar-generation-capability'
 import { runAvatarImageAgent } from './avatar-image-agent-run'
-import { BotAvatarColorSchema } from '../../shared/bots/bot-avatar-color'
 
 const GenerateArgs = z.object({
   requestId: z.string().min(1).max(128),
   description: z.string().trim().min(1).max(MAX_AVATAR_DESCRIPTION_CHARS),
-  agent: z.enum(AVATAR_IMAGE_AGENTS),
-  backgroundColor: BotAvatarColorSchema.optional()
+  agent: z.enum(AVATAR_IMAGE_AGENTS)
 })
 const CancelArgs = z.object({ requestId: z.string().min(1).max(128) })
 
@@ -68,7 +66,7 @@ export function registerAvatarGenerationHandlers(
   ipcMain.handle(
     'avatarGeneration:generate',
     async (_event, raw: unknown): Promise<AvatarGenerationResult> => {
-      const { requestId, description, agent, backgroundColor } = GenerateArgs.parse(raw)
+      const { requestId, description, agent } = GenerateArgs.parse(raw)
       // The renderer checks too; this keeps any other caller from skipping it.
       if (describesRealPerson(description)) {
         return { ok: false, error: 'real-person' }
@@ -100,7 +98,7 @@ export function registerAvatarGenerationHandlers(
         if (env === null) {
           return { ok: false, error: 'failed', agent }
         }
-        const prompt = avatarGenerationPrompt(description, backgroundColor)
+        const prompt = avatarGenerationPrompt(description)
         const outcome = await runAvatarImageAgent({
           agent,
           prompt,
