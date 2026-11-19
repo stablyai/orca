@@ -14,6 +14,7 @@ import { parseCodexRolloutThreadId } from '../rollouts/codex-rollout-thread-id'
 import { isCodexSessionRolloutFileName } from '../rollouts/codex-session-file-listing'
 import { linkCodexSessionFileAsync } from '../rollouts/codex-session-link'
 import {
+  hasUnsavedImportLedger,
   readImportLedger,
   writeImportLedger,
   type ImportedSource
@@ -166,6 +167,7 @@ async function importFolder(
   const target = archived ? ARCHIVED : folder
   let linked = 0
   let failed = false
+  let waiting = false
   let targetReady = false
   const names = (await readEntries(path))
     .filter((entry) => entry.isFile() && isCodexSessionRolloutFileName(entry.name))
@@ -183,14 +185,15 @@ async function importFolder(
     const from = join(path, name)
     const to = join(args.storeHome, target, name)
     const targetNames = await store.names(target)
+    const twinInStore = !targetNames.has(name) && targetNames.has(rolloutTwinPath(name))
+    const twinKept = twinInStore && (await isRolloutTwinKeptFromStore(from, to))
+    if (twinKept && !name.endsWith(COMPRESSED_ROLLOUT_SUFFIX)) {
+      // A plain form no newer than the store's compressed one may still grow: read it again.
+      waiting = true
+    }
     // A conversation handled before joins again only as the newer plain form of a compressed copy
     // the store still holds; one the user deleted stays deleted whichever form Codex leaves here.
-    if (
-      handled.has(key) &&
-      (targetNames.has(name) ||
-        !targetNames.has(rolloutTwinPath(name)) ||
-        (await isRolloutTwinKeptFromStore(from, to)))
-    ) {
+    if (handled.has(key) && (targetNames.has(name) || !twinInStore || twinKept)) {
       continue
     }
     // The store's own copy wins: the same name, either form filed in the other place, or a twin
@@ -198,7 +201,7 @@ async function importFolder(
     if (
       targetNames.has(name) ||
       (await store.holds(archived ? datedFolderOf(name) : ARCHIVED, name)) ||
-      (targetNames.has(rolloutTwinPath(name)) && (await isRolloutTwinKeptFromStore(from, to)))
+      twinKept
     ) {
       handled.add(key)
       continue
@@ -217,16 +220,16 @@ async function importFolder(
       targetNames.add(name)
     } else {
       // No heal runs while this pass is active, so the marker can't settle the thread as missing.
-      await rm(join(args.indexPendingDir, name), { force: true })
+      await rm(join(args.indexPendingDir, name), { force: true, maxRetries: 3 })
       failed = true
     }
   }
   const after = (await stat(path, { bigint: true })).mtimeNs
-  // A folder that changed while read, or a link that failed, is read again next time.
+  // A folder that changed while read, a link that failed or a form that may still grow is read again.
   return {
     linked,
     stopped: false,
-    ...(!failed && after === before ? { mtimeNs: String(before) } : {})
+    ...(!failed && !waiting && after === before ? { mtimeNs: String(before) } : {})
   }
 }
 
@@ -257,7 +260,7 @@ export async function importCodexHistory(args: CodexHistoryImportArgs): Promise<
           handled: known?.handled ?? [],
           folders: {},
           // After a damaged ledger, passes only record what this folder holds until one finishes.
-          ...(ledger.recovered && !known ? { seeding: true } : {})
+          ...(known?.seeding || (ledger.recovered && !known) ? { seeding: true } : {})
         }
   ledger.sources[sourceKey] = source
   const seedOnly = source.seeding === true
@@ -307,7 +310,7 @@ export async function importCodexHistory(args: CodexHistoryImportArgs): Promise<
       }
     }
   } finally {
-    if (unsaved > 0 || !known) {
+    if (unsaved > 0 || !known || hasUnsavedImportLedger(args.ledgerPath)) {
       await save()
     }
   }

@@ -25,7 +25,10 @@ export type ImportedSource = {
 type ImportLedger = {
   version: 1
   sources: Record<string, ImportedSource>
-  /** Read from a damaged file: its record of handled names is lost, so a full pass only seeds it. */
+  /**
+   * Once a damaged file lost its record of handled names: every import folder it doesn't know
+   * from then on only seeds, since any may have been one whose deletions it held.
+   */
   recovered?: true
 }
 
@@ -80,7 +83,12 @@ async function loadImportLedger(path: string): Promise<ImportLedger> {
   }
   try {
     const parsed = JSON.parse(text) as Partial<ImportLedger>
-    if (parsed.version !== 1 || typeof parsed.sources !== 'object' || parsed.sources === null) {
+    if (
+      parsed.version !== 1 ||
+      typeof parsed.sources !== 'object' ||
+      parsed.sources === null ||
+      Array.isArray(parsed.sources)
+    ) {
       return { ...emptyLedger(), recovered: true }
     }
     const sources: Record<string, ImportedSource> = {}
@@ -93,22 +101,32 @@ async function loadImportLedger(path: string): Promise<ImportLedger> {
       }
     }
     // A dropped entry lost its record of handled names like a damaged file does.
-    return damaged ? { version: 1, sources, recovered: true } : { version: 1, sources }
+    return damaged || parsed.recovered === true
+      ? { version: 1, sources, recovered: true }
+      : { version: 1, sources }
   } catch {
     console.warn(`[codex-history-import] Damaged ledger ${path}; importing only new conversations`)
     return { ...emptyLedger(), recovered: true }
   }
 }
 
+// Ledgers whose last write failed: the cached copy is ahead of the file until a write succeeds.
+const unsaved = new Set<string>()
+
+export function hasUnsavedImportLedger(path: string): boolean {
+  return unsaved.has(path)
+}
+
 export async function writeImportLedger(path: string, ledger: ImportLedger): Promise<void> {
+  unsaved.add(path)
   await mkdir(dirname(path), { recursive: true })
   const temporary = `${path}.${process.pid}.tmp`
   try {
-    const { recovered: _recovered, ...saved } = ledger
-    await writeFile(temporary, JSON.stringify(saved))
+    await writeFile(temporary, JSON.stringify(ledger))
     await renameFileWithWindowsRetryAsync(temporary, path)
   } catch (error) {
     await rm(temporary, { force: true })
     throw error
   }
+  unsaved.delete(path)
 }
