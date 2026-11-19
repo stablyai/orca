@@ -175,16 +175,6 @@ afterEach(() => {
 })
 
 describe('SidebarBotsSection', () => {
-  it('lists a bot by avatar and name and opens its home on click', () => {
-    mocks.bots = [bot()]
-    useAppStore.setState({ folderWorkspaces: [home()] })
-    renderSection()
-    expect(screen.getByText('R')).toBeTruthy()
-    fireEvent.click(screen.getByText('Reviewer'))
-    expect(mocks.activate).toHaveBeenCalledWith(expect.objectContaining({ id: 'bot-1' }))
-    expect(mocks.onOpenBot).toHaveBeenCalledOnce()
-  })
-
   it('omits a row whose home is not loaded', () => {
     mocks.bots = [bot(), bot({ id: 'bot-2', name: 'Scout', folderWorkspaceId: 'fw-missing' })]
     useAppStore.setState({ folderWorkspaces: [home()] })

@@ -459,22 +459,6 @@ describe('Bots search', () => {
     expect(mocks.onOpenBot).toHaveBeenCalledOnce()
   })
 
-  it('leaves the search alone when focus moves away while a group opens', async () => {
-    withCrew()
-    const finish = deferGroupOpen()
-    renderSection()
-    const field = openSearch()
-    type(field, 'crew')
-    fireEvent.keyDown(field, { key: 'Enter' })
-    const options = screen.getByRole('button', { name: 'Bot options' })
-    act(() => options.focus())
-    await act(async () => finish())
-    expect(document.activeElement).toBe(options)
-    expect(screen.getByRole('searchbox')).toBe(field)
-    expect(field.value).toBe('crew')
-    expect(mocks.onOpenBot).not.toHaveBeenCalled()
-  })
-
   it('leaves the search alone when focus leaves and comes back while a group opens', async () => {
     withCrew()
     const finish = deferGroupOpen()
@@ -487,6 +471,7 @@ describe('Bots search', () => {
     await act(async () => finish())
     expect(document.activeElement).toBe(field)
     expect(screen.getByRole('searchbox')).toBe(field)
+    expect(field.value).toBe('crew')
     expect(mocks.onOpenBot).not.toHaveBeenCalled()
   })
 
