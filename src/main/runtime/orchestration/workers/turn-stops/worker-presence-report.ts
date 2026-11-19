@@ -24,7 +24,13 @@ const STORED_OUTPUT_MAX_CHARS = 2_000
 
 export type WorkerRest = Pick<
   WorkerTurnStop,
-  'from' | 'lastOutput' | 'awaitsReply' | 'approval' | 'turnStartedAt' | 'mailTaken'
+  | 'from'
+  | 'lastOutput'
+  | 'awaitsReply'
+  | 'approval'
+  | 'turnStartedAt'
+  | 'mailTaken'
+  | 'requestError'
 > & { reason: 'finished' | 'errored' | 'needs-input' }
 
 export type WorkerGone = Pick<
@@ -42,6 +48,8 @@ export type WorkerObservation =
       rest: WorkerRest
       /** The key builds before the presence table gave this rest; its report must not go out twice. */
       legacyStopKey: string
+      /** The whole id, for a report those builds did not key by a stop. */
+      legacyReportId?: string
     }
   | {
       presence: 'gone'
@@ -55,6 +63,7 @@ export type WorkerObservation =
 
 type StoredRest = (WorkerRest | (WorkerGone & Pick<WorkerTurnStop, 'settled'>)) & {
   legacyStopKey: string
+  legacyReportId?: string
 }
 
 /** Edges only observe; whether and how the coordinator hears of it is decided below.
@@ -129,8 +138,8 @@ function isDispatchOpen(db: OrchestrationDb, target: WorkerTurnStopDispatch): bo
 }
 
 function storedReport(
-  report: Omit<StoredRest, 'legacyStopKey'>,
-  { legacyStopKey }: { legacyStopKey: string }
+  report: Omit<StoredRest, 'legacyStopKey' | 'legacyReportId'>,
+  legacy: { legacyStopKey: string; legacyReportId?: string }
 ): string {
   const { lastOutput } = report
   return JSON.stringify({
@@ -138,7 +147,8 @@ function storedReport(
     ...(lastOutput && lastOutput.length > STORED_OUTPUT_MAX_CHARS
       ? { lastOutput: lastOutput.slice(-STORED_OUTPUT_MAX_CHARS) }
       : {}),
-    legacyStopKey
+    legacyStopKey: legacy.legacyStopKey,
+    ...(legacy.legacyReportId ? { legacyReportId: legacy.legacyReportId } : {})
   })
 }
 
@@ -175,10 +185,12 @@ function reconcileWorkerReport(
     writeWorkerPresence(db, dispatchId, decided(undefined))
     return false
   }
-  // Left undecided: the same rest seen again is decided again. Going away is never deliberate.
+  // Left undecided: the same rest seen again is decided again. Going away, or a failed request the
+  // chat showed, is never deliberate.
   if (
     rest.reason !== 'exited' &&
     rest.reason !== 'lost' &&
+    !('requestError' in rest && rest.requestError) &&
     isDeliberateRest(db, target, rest, deps)
   ) {
     return keep()
@@ -240,7 +252,10 @@ function reportedByEarlierBuild(
     return false
   }
   const dispatchId = workerTurnStopDispatchId(target)
-  const id = stopReportId(dispatchId, legacyKey)
+  const id =
+    finishedMail === undefined && rest.legacyReportId
+      ? rest.legacyReportId
+      : stopReportId(dispatchId, legacyKey)
   return target.kind === 'local'
     ? db.getMessageById(id) !== undefined
     : hasRelayedWorkerReport(db, dispatchId, id)

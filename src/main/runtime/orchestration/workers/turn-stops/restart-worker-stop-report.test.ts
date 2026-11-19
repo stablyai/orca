@@ -15,7 +15,7 @@ import {
   reportWorkerStopsAcrossRestart
 } from './restart-worker-stop-report'
 import { chatWorkerDispatches } from './chat-worker-error-escalation'
-import { reportWorkerTurnStop } from './worker-turn-stop-report'
+import { observeWorker } from './worker-presence-report'
 import type { StructuredAgentSessionRestartResume } from '../../../../native-chat/agent-session-wire/recovery/structured-agent-session-restart-resume-contract'
 
 const PANE = makePaneKey('tab-worker', '11111111-1111-4111-8111-111111111111')
@@ -152,10 +152,15 @@ describe('worker stops across a restart', () => {
     const reported = setup(formatOrcaSessionAddress(CHAT_SESSION))
     const [worker] = chatWorkerDispatches(CHAT_SESSION, reported.db)
     // What the live path sent before Orca stopped: the same prompt, by its item id.
-    reportWorkerTurnStop(
+    observeWorker(
       reported.db,
       { kind: 'local', dispatch: worker!.dispatch },
-      { from: worker!.from, stopKey: 'prompt:ask-1', reason: 'needs-input', lastOutput: undefined },
+      {
+        presence: 'at-rest',
+        fence: 'prompt:ask-1',
+        legacyStopKey: 'prompt:ask-1',
+        rest: { from: worker!.from, reason: 'needs-input', lastOutput: undefined }
+      },
       reported.reportDeps
     )
     await chatPass(reported, asking)

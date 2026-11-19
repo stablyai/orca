@@ -1,6 +1,7 @@
 // A worker whose turn ended while Orca was down, or whose chat the run that just ended cut and Orca did
-// not continue, raised no live edge. One pass at startup reports each through the same turn-stop
-// report: a terminal as its live stop, a chat as the restart left it. Other chats are not opened.
+// not continue, raised no live edge. One pass at startup observes each as a live edge would: a terminal
+// as its live stop, so a rest already reported is not reported again, and a chat as the restart left it.
+// Other chats are not opened.
 
 import type { OrchestrationDb } from '../../db/orchestration-db'
 import type {
@@ -8,7 +9,9 @@ import type {
   StructuredAgentSessionRestartResume
 } from '../../../../native-chat/agent-session-wire/recovery/structured-agent-session-restart-resume-contract'
 import { chatWorkerDispatches } from './chat-worker-error-escalation'
-import { reportWorkerTurnStop, type WorkerTurnStopReportDeps } from './worker-turn-stop-report'
+import type { WorkerTurnStopReportDeps } from './worker-turn-stop-report'
+import { observeWorker } from './worker-presence-report'
+import type { DispatchContextRow } from '../../db/orchestration-records'
 
 export type RestartWorkerStopReportDeps = {
   db: OrchestrationDb
@@ -55,31 +58,55 @@ async function reportCutChat(
     return
   }
   const lastOutput = chats.lastOutput(sessionId)
-  reportWorkerTurnStop(
+  const target = { kind: 'local' as const, dispatch: worker.dispatch }
+  if (cut.waitingOnPerson) {
+    // A rest of its own: the restart cancelled the prompt its live report said to wait on.
+    const fence = `restart-prompt:${cut.turnId}`
+    observeWorker(
+      deps.db,
+      target,
+      {
+        presence: 'at-rest',
+        fence,
+        legacyStopKey: fence,
+        rest: { from: worker.from, reason: 'needs-input', lastOutput }
+      },
+      deps.reportDeps
+    )
+    return
+  }
+  observeCutWorkerGone(deps, target, sessionId, cut, {
+    from: worker.from,
+    cause: `${CUT_BY[cut.cause]}; its chat is kept and can be continued`,
+    lastOutput
+  })
+}
+
+/** The cut ended the worker's provider; mail starts its chat again. A startup report and a dismissal
+ *  of the same cut are one fact. */
+function observeCutWorkerGone(
+  deps: Pick<RestartWorkerStopReportDeps, 'db' | 'reportDeps'>,
+  target: { kind: 'local'; dispatch: DispatchContextRow },
+  sessionId: string,
+  cut: StructuredAgentSessionRestartCut,
+  gone: { from: string; cause: string; lastOutput: string | undefined }
+): void {
+  const fence = `cut:${sessionId}:${cut.turnId}`
+  observeWorker(
     deps.db,
-    { kind: 'local', dispatch: worker.dispatch },
-    cut.waitingOnPerson
-      ? {
-          from: worker.from,
-          reason: 'needs-input',
-          // Not its live report's key: the restart cancelled the prompt that report said to wait on.
-          stopKey: `restart-prompt:${cut.turnId}`,
-          lastOutput
-        }
-      : {
-          from: worker.from,
-          reason: 'exited',
-          stopKey: `cut:${sessionId}:${cut.turnId}`,
-          cause: `${CUT_BY[cut.cause]}; its chat is kept and can be continued`,
-          restartsOnMail: true,
-          lastOutput
-        },
+    target,
+    {
+      presence: 'gone',
+      fence,
+      legacyStopKey: fence,
+      gone: { ...gone, reason: 'exited', restartsOnMail: true }
+    },
     deps.reportDeps
   )
 }
 
 /** A person dismissed these chats' restart offers: their work is abandoned, so each worker's
- *  coordinator is told once, under the same key a startup report of that cut uses. */
+ *  coordinator is told once, as the same fact a startup report of that cut observed. */
 export function reportDismissedCutWorkers(
   deps: Pick<RestartWorkerStopReportDeps, 'db' | 'reportDeps'> & {
     lastOutput: (sessionId: string) => string | undefined
@@ -88,19 +115,11 @@ export function reportDismissedCutWorkers(
 ): void {
   for (const { sessionId, cut } of dismissed) {
     for (const worker of chatWorkerDispatches(sessionId, deps.db)) {
-      reportWorkerTurnStop(
-        deps.db,
-        { kind: 'local', dispatch: worker.dispatch },
-        {
-          from: worker.from,
-          reason: 'exited',
-          stopKey: `cut:${sessionId}:${cut.turnId}`,
-          cause: `${CUT_BY[cut.cause]}, and its restart offer was dismissed`,
-          restartsOnMail: true,
-          lastOutput: deps.lastOutput(sessionId)
-        },
-        deps.reportDeps
-      )
+      observeCutWorkerGone(deps, { kind: 'local', dispatch: worker.dispatch }, sessionId, cut, {
+        from: worker.from,
+        cause: `${CUT_BY[cut.cause]}, and its restart offer was dismissed`,
+        lastOutput: deps.lastOutput(sessionId)
+      })
     }
   }
 }

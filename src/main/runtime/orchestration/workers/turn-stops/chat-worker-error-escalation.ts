@@ -10,7 +10,7 @@ import { isSenderOwnRejection } from './chat-worker-error-words'
 import { readChatRequestError } from './chat-request-error-read'
 import type { OrchestrationDb } from '../../db/orchestration-db'
 import type { DispatchContextRow } from '../../db/orchestration-records'
-import { escalateWorkerFailure } from '../reports/worker-failure-escalation'
+import { observeWorker } from './worker-presence-report'
 import type { WorkerTurnStopReportDeps } from './worker-turn-stop-report'
 
 type ChatWorkerDispatch = { dispatch: DispatchContextRow; from: string }
@@ -34,6 +34,7 @@ export function chatWorkerDispatches(sessionId: string, db: OrchestrationDb): Ch
   return found
 }
 
+/** The id builds before the presence table gave a failed request's report. */
 function escalationId(dispatchId: string, request: StructuredAgentSessionRequestFailure): string {
   return `msg_chaterr_${createHash('sha256')
     .update(JSON.stringify([dispatchId, request.sessionId, request.kind, request.id]))
@@ -66,35 +67,34 @@ export async function escalateChatWorkerError(
       ) {
         continue
       }
-      escalateWorkerFailure(
+      observeWorker(
         db,
-        dispatch,
+        { kind: 'local', dispatch },
         {
-          id: escalationId(dispatch.id, request),
-          from,
-          describe: (task) => ({
-            subject: `Agent hit an error: ${text.length > 120 ? `${text.slice(0, 119)}…` : text}`,
-            body: [
-              `Worker ${from} hit an error while running task ${task}.`,
-              `Error: ${text}`,
-              ...(detail ? [`Details from the agent: ${detail}`] : []),
-              'The task is still assigned to this chat, which keeps its history.'
-            ].join('\n')
-          }),
-          payload: {
-            taskId: dispatch.task_id,
-            dispatchId: dispatch.id,
-            handle: from,
-            sessionId: request.sessionId,
-            agent: request.agent,
-            turnOutcome: request.outcome,
-            requestId: request.id,
-            ...(kind ? { failureKind: kind } : {}),
-            error: text,
-            ...(detail ? { detail } : {})
+          presence: 'at-rest',
+          fence: `request:${request.sessionId}:${request.kind}:${request.id}`,
+          legacyStopKey: `request:${request.kind}:${request.id}`,
+          legacyReportId: escalationId(dispatch.id, request),
+          rest: {
+            from,
+            reason: 'errored',
+            lastOutput: undefined,
+            requestError: {
+              text,
+              ...(detail ? { detail } : {}),
+              facts: {
+                sessionId: request.sessionId,
+                agent: request.agent,
+                turnOutcome: request.outcome,
+                requestId: request.id,
+                ...(kind ? { failureKind: kind } : {}),
+                error: text,
+                ...(detail ? { detail } : {})
+              }
+            }
           }
         },
-        deps.notify
+        deps
       )
     }
   } catch (error) {

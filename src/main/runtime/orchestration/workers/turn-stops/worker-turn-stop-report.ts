@@ -10,7 +10,7 @@ import { escalateWorkerFailure } from '../reports/worker-failure-escalation'
 import { runLifecycleWriteTransaction } from '../../db/lifecycle-write-transaction-runner'
 import type { WorkerApprovalPayload } from '../../../../../shared/orchestration/approvals/worker-approval-payload'
 import { describeApprovalClosed } from './worker-approval-text'
-import { describeStop, WORKER_STOP_SUBJECTS } from './worker-turn-stop-wording'
+import { describeStop, requestErrorSubject, WORKER_STOP_SUBJECTS } from './worker-turn-stop-wording'
 
 export type WorkerTurnStopReason = 'finished' | 'errored' | 'needs-input' | 'exited' | 'lost'
 
@@ -37,6 +37,15 @@ export type WorkerTurnStop = {
   neverStarted?: true
   /** How its going away settled the Dispatch; absent while the Dispatch stays open. */
   settled?: 'failed' | 'circuit_broken'
+  /** A chat request that failed, reported in the chat's own error words. */
+  requestError?: WorkerRequestError
+}
+
+export type WorkerRequestError = {
+  text: string
+  detail?: string
+  /** What the coordinator's mail carries about the failed request. */
+  facts: Record<string, unknown>
 }
 
 export type WorkerTurnStopDispatch =
@@ -88,11 +97,13 @@ export function sendWorkerReport(
   const dispatchId = workerTurnStopDispatchId(target)
   const subject = stop.approval
     ? 'Worker is waiting for permission'
-    : WORKER_STOP_SUBJECTS[stop.reason]
+    : stop.requestError
+      ? requestErrorSubject(stop.requestError)
+      : WORKER_STOP_SUBJECTS[stop.reason]
   const payload = {
     dispatchId,
     handle: stop.from,
-    stopReason: stop.reason,
+    ...(stop.requestError ? stop.requestError.facts : { stopReason: stop.reason }),
     ...(stop.approval ? { approval: stop.approval } : {})
   }
   if (target.kind === 'local') {

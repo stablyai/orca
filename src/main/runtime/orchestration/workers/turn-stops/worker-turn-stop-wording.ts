@@ -2,7 +2,11 @@ import { redactString } from '../../../../../shared/observability/redactor'
 import { replaceDispatchCapabilities } from '../../terminal-authority/views/worker-terminal-redaction'
 import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../../../shared/agent-session/identity/orca-session-address-prefix'
 import { describeCoordinatorAnswer } from './worker-approval-text'
-import type { WorkerTurnStop, WorkerTurnStopReason } from './worker-turn-stop-report'
+import type {
+  WorkerRequestError,
+  WorkerTurnStop,
+  WorkerTurnStopReason
+} from './worker-turn-stop-report'
 
 // One screenful: enough to show the agent's last words or error banner without flooding the inbox.
 const LAST_OUTPUT_MAX_CHARS = 2_000
@@ -31,7 +35,20 @@ export type StopContext = {
   coordinatorApprovals?: boolean
 }
 
+export function requestErrorSubject({ text }: WorkerRequestError): string {
+  return `Agent hit an error: ${text.length > 120 ? `${text.slice(0, 119)}…` : text}`
+}
+
 export function describeStop(stop: WorkerTurnStop, context: StopContext): string {
+  if (stop.requestError) {
+    const { text, detail } = stop.requestError
+    return [
+      `Worker ${stop.from} hit an error while running task ${context.task}.`,
+      `Error: ${text}`,
+      ...(detail ? [`Details from the agent: ${detail}`] : []),
+      'The task is still assigned to this chat, which keeps its history.'
+    ].join('\n')
+  }
   const { task, dispatchId } = context
   // Agent prose and failure text can echo its injected capability; mail must never carry it.
   const redact = (text: string | undefined) => text && replaceDispatchCapabilities(text).value
