@@ -1,3 +1,4 @@
+import { retainsHiddenGraphics } from './hidden-graphics-delivery'
 import { parseTerminalOscColorQuery } from '../../../../../../shared/terminal/protocol/queries/terminal-osc-color-reply'
 import {
   HIDDEN_STARTUP_RENDERER_QUERY_PENDING_CHARS,
@@ -168,6 +169,7 @@ export function bindHiddenRendererQueryAdmission(session: ConnectPanePtySession)
     const ptyId = session.transport.getPtyId()
     if (
       foreground ||
+      retainsHiddenGraphics(session.pane.terminal, ptyId) ||
       (!session.shouldSnapshotHiddenCodexOutput && session.remoteOutputGatedPtyId !== ptyId) ||
       !session.canUseHiddenOutputSnapshot(ptyId)
     ) {
