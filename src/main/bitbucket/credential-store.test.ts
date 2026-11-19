@@ -2,6 +2,7 @@ import { existsSync, mkdtempSync, readdirSync, statSync } from 'node:fs'
 import type * as Fs from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import type * as Os from 'node:os'
+import type * as WindowsCredentialIo from '../../shared/secure-storage/windows-credential-file-io'
 import { join } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -18,6 +19,7 @@ async function loadStore(
   vi.resetModules()
   // resetModules leaves doMock registrations behind.
   vi.doUnmock('node:fs/promises')
+  vi.doUnmock('../../shared/secure-storage/windows-credential-file-io')
   const { setSecretStore } = await import('../../shared/secure-storage/secret-store')
   setSecretStore({
     isEncryptionAvailable: () => true,
@@ -31,6 +33,12 @@ async function loadStore(
   })
   if (options.writeError) {
     const error = options.writeError
+    vi.doMock('../../shared/secure-storage/windows-credential-file-io', async (importOriginal) => ({
+      ...(await importOriginal<typeof WindowsCredentialIo>()),
+      createWindowsCredentialStage: async () => {
+        throw error
+      }
+    }))
     vi.doMock('node:fs/promises', async () => {
       const actual = await vi.importActual<typeof Fs>('node:fs/promises')
       return {
@@ -97,7 +105,6 @@ describe('Bitbucket credential store', () => {
       apiToken: 'first-token'
     })
     const { readFileSync } = await import('node:fs')
-    const before = readFileSync(join(tempHome, '.orca', 'bitbucket-credential.enc'))
 
     const failing = await loadStore({ writeError: new Error('disk full') })
     await expect(
@@ -111,7 +118,15 @@ describe('Bitbucket credential store', () => {
       })
     ).rejects.toThrow(/disk full/)
 
-    expect(readFileSync(join(tempHome, '.orca', 'bitbucket-credential.enc'))).toEqual(before)
+    expect(
+      JSON.parse(readFileSync(join(tempHome, '.orca', 'bitbucket-credential.enc'), 'utf8'))
+    ).toEqual({
+      accessToken: null,
+      apiToken: 'first-token',
+      authMode: 'basic',
+      email: 'ada@example.com',
+      baseUrl: null
+    })
     expect(readdirSync(join(tempHome, '.orca')).filter((name) => name.endsWith('.tmp'))).toEqual([])
   })
 
@@ -170,6 +185,41 @@ describe('Bitbucket credential store', () => {
       email: 'ada@example.com',
       apiToken: 'legacy-token'
     })
+  })
+
+  it('keeps legacy authentication on one account while a replacement save is queued', async () => {
+    const store = await loadStore()
+    await store.saveBitbucketCredential({
+      authMode: 'basic',
+      email: 'ada@example.com',
+      baseUrl: 'https://first.example.com',
+      account: 'ada',
+      accessToken: null,
+      apiToken: 'legacy-token'
+    })
+    const { writeFileSync } = await import('node:fs')
+    writeFileSync(store.getSecretPath(), JSON.stringify({ apiToken: 'legacy-token' }))
+    store._resetBitbucketCredentialCache()
+    const { resolveBitbucketAuthConfig } = await import('./resolve-auth')
+    const resolving = resolveBitbucketAuthConfig()
+    const saving = store.saveBitbucketCredential({
+      authMode: 'basic',
+      email: 'grace@example.com',
+      baseUrl: 'https://second.example.com',
+      account: 'grace',
+      accessToken: null,
+      apiToken: 'new-token'
+    })
+    try {
+      expect(await resolving).toEqual({
+        baseUrl: 'https://first.example.com',
+        accessToken: null,
+        email: 'ada@example.com',
+        apiToken: 'legacy-token'
+      })
+    } finally {
+      await saving
+    }
   })
 
   it('clears both files and in-memory state on disconnect', async () => {

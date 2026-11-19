@@ -157,6 +157,40 @@ describe('Refreshing the login', () => {
     })
   })
 
+  it('rejects a refresh when its guarded persistence read fails, preserving the saved login', async () => {
+    const { store, refresh, paths } = await load()
+    await store.keepConnectedLinearLogin(login(NOW + HOUR / 2), linked)
+    const fs = await import('node:fs/promises')
+    await store.readWorkspaceLogin('org-acme')
+    const request = vi.fn(async () => {
+      vi.spyOn(fs, 'readFile').mockRejectedValueOnce(
+        Object.assign(new Error('credential read denied'), { code: 'EACCES' })
+      )
+      return new Response(
+        JSON.stringify({
+          access_token: 'lin_oauth_access_2',
+          refresh_token: 'lin_refresh_2',
+          expires_in: 86_399
+        }),
+        { status: 200 }
+      )
+    })
+    await expect(
+      refresh.refreshLinearLogin('org-acme', { now: () => NOW, request })
+    ).rejects.toThrow('credential read denied')
+    const { readFileSync } = await import('node:fs')
+    expect(
+      JSON.parse(
+        readFileSync(paths.getWorkspaceLoginPath('org-acme'), 'utf8').replace(/^sealed:/, '')
+      )
+    ).toEqual({
+      accessToken: 'lin_oauth_access_1',
+      refreshToken: 'lin_refresh_1',
+      expiresAt: 1_800_001_800_000,
+      clientId: 'client-1'
+    })
+  })
+
   it('leaves a login with hours left alone', async () => {
     const { store, refresh } = await load()
     await store.keepConnectedLinearLogin(login(NOW + 20 * HOUR), linked)

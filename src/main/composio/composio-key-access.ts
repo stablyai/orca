@@ -49,7 +49,7 @@ export class ComposioKeyAccess {
   /** Runs a call with the saved key, noting when Composio refuses it so every client can say so.
    *  While a limit holds only a deliberate call goes out. */
   async withKey<T>(
-    call: (api: ComposioApi) => Promise<T>,
+    call: (api: ComposioApi, credential: { key: string; project: string }) => Promise<T>,
     options: { deliberate?: boolean } = {}
   ): Promise<T> {
     const key = await this.requireKey()
@@ -62,7 +62,7 @@ export class ComposioKeyAccess {
     // A replaced key's late answer is its caller's alone; it says nothing about the saved key.
     const current = async () => (await this.keys.read()) === key
     try {
-      const result = await call(api)
+      const result = await call(api, { key, project: composioProjectOf(key) })
       if (await current()) {
         this.health.answered(ticket)
       }

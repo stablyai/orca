@@ -92,14 +92,16 @@ async function readMetadataFromDisk(): Promise<BitbucketStoredMetadata | null> {
   }
 }
 
+async function loadMetadata(): Promise<BitbucketStoredMetadata | null> {
+  if (!metadataLoadedFromDisk) {
+    cachedMetadata = await readMetadataFromDisk()
+    metadataLoadedFromDisk = true
+  }
+  return cachedMetadata
+}
+
 export async function getStoredBitbucketMetadata(): Promise<BitbucketStoredMetadata | null> {
-  return inCredentialFileOrder(`${getSecretPath()}.mutation`, async () => {
-    if (!metadataLoadedFromDisk) {
-      cachedMetadata = await readMetadataFromDisk()
-      metadataLoadedFromDisk = true
-    }
-    return cachedMetadata
-  })
+  return inCredentialFileOrder(`${getSecretPath()}.mutation`, loadMetadata)
 }
 
 // Presence checks must avoid keychain prompts.
@@ -118,42 +120,54 @@ export function getStoredBitbucketCredentialError(): string | null {
 export async function loadStoredBitbucketSecret(
   options: { force?: boolean } = {}
 ): Promise<BitbucketStoredSecret | null> {
-  return inCredentialFileOrder(`${getSecretPath()}.mutation`, async () => {
-    if (cachedSecret !== null) {
-      return cachedSecret
-    }
-    if (!options.force) {
+  return inCredentialFileOrder(`${getSecretPath()}.mutation`, () => loadSecret(options))
+}
+
+export async function loadStoredBitbucketCredential(options: { force?: boolean } = {}): Promise<{
+  secret: BitbucketStoredSecret | null
+  metadata: BitbucketStoredMetadata | null
+}> {
+  return inCredentialFileOrder(`${getSecretPath()}.mutation`, async () => ({
+    secret: await loadSecret(options),
+    metadata: await loadMetadata()
+  }))
+}
+
+async function loadSecret(options: { force?: boolean }): Promise<BitbucketStoredSecret | null> {
+  if (cachedSecret !== null) {
+    return cachedSecret
+  }
+  if (!options.force) {
+    return null
+  }
+  const path = getSecretPath()
+  if (!(await credentialFileExists(path))) {
+    return null
+  }
+  try {
+    const token = readStoredCredentialToken('Bitbucket', await readFile(path))
+    if (!token) {
       return null
     }
-    const path = getSecretPath()
-    if (!(await credentialFileExists(path))) {
-      return null
+    const parsed = JSON.parse(token) as Partial<BitbucketStoredSecret>
+    cachedSecret = {
+      accessToken: asOptionalString(parsed.accessToken),
+      apiToken: asOptionalString(parsed.apiToken),
+      ...(parsed.authMode === 'token' || parsed.authMode === 'basic'
+        ? { authMode: parsed.authMode }
+        : {}),
+      email: asOptionalString(parsed.email),
+      baseUrl: asOptionalString(parsed.baseUrl)
     }
-    try {
-      const token = readStoredCredentialToken('Bitbucket', await readFile(path))
-      if (!token) {
-        return null
-      }
-      const parsed = JSON.parse(token) as Partial<BitbucketStoredSecret>
-      cachedSecret = {
-        accessToken: asOptionalString(parsed.accessToken),
-        apiToken: asOptionalString(parsed.apiToken),
-        ...(parsed.authMode === 'token' || parsed.authMode === 'basic'
-          ? { authMode: parsed.authMode }
-          : {}),
-        email: asOptionalString(parsed.email),
-        baseUrl: asOptionalString(parsed.baseUrl)
-      }
-      credentialError = null
-      return cachedSecret
-    } catch (error) {
-      if (error instanceof CredentialDecryptionError) {
-        credentialError = error.message
-        throw error
-      }
-      return null
+    credentialError = null
+    return cachedSecret
+  } catch (error) {
+    if (error instanceof CredentialDecryptionError) {
+      credentialError = error.message
+      throw error
     }
-  })
+    return null
+  }
 }
 
 export async function getBitbucketCredentialProtection(): Promise<SecretAtRestProtection | null> {

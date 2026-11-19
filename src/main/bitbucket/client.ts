@@ -22,9 +22,8 @@ import { authHeaders, getEnvAuthConfig, hasAuth } from './bitbucket-auth-config'
 import { accountNameFromUser, fetchBitbucketUserResult } from './user-request'
 import {
   getStoredBitbucketCredentialError,
-  getStoredBitbucketMetadata,
   hasStoredBitbucketCredential,
-  loadStoredBitbucketSecret
+  loadStoredBitbucketCredential
 } from './credential-store'
 import { resolveBitbucketAuthConfig, storedAuthConfig } from './resolve-auth'
 
@@ -166,12 +165,11 @@ export async function getBitbucketAuthStatus(): Promise<BitbucketAuthStatus> {
       account: result.ok ? accountNameFromUser(result.user) : null
     }
   }
-  const metadata = await getStoredBitbucketMetadata()
+  const { metadata, secret: cached } = await loadStoredBitbucketCredential()
   if (metadata && (await hasStoredBitbucketCredential())) {
     if (getStoredBitbucketCredentialError()) {
       return { configured: true, authenticated: false, account: metadata.account }
     }
-    const cached = await loadStoredBitbucketSecret()
     if (!cached) {
       return { configured: true, authenticated: true, account: metadata.account }
     }

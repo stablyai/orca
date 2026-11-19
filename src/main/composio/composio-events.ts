@@ -78,11 +78,7 @@ export class ComposioEvents {
   private async withProject<T>(
     work: (api: ComposioApi, project: string) => Promise<T>
   ): Promise<T> {
-    const project = await this.composio.project()
-    if (!project) {
-      throw new Error('Add your Composio key first.')
-    }
-    return this.composio.withKey((api) => work(api, project))
+    return this.composio.withKey((api, credential) => work(api, credential.project))
   }
 
   private ownHook(botId: string, hookId: string): void {

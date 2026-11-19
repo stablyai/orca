@@ -10,7 +10,7 @@ export type RuntimeLinearCommandPorts = {
   resolveWorkspaceSelector: (selector: string) => Promise<ResolvedWorktree>
   listResolvedWorktrees: () => Promise<ResolvedWorktree[]>
   setWorktreeMeta: (
-    worktree: Pick<ResolvedWorktree, 'id' | 'hostId'>,
+    worktree: Pick<ResolvedWorktree, 'id' | 'hostId' | 'linkedLinearIssue'>,
     meta: {
       linkedLinearIssueWorkspaceId: string
       linkedLinearIssueOrganizationUrlKey: string | null
@@ -42,7 +42,7 @@ export class RuntimeLinearCommandBase extends RuntimeLinearBrowseCommands {
   }
 
   protected setWorktreeMeta(
-    worktree: Pick<ResolvedWorktree, 'id' | 'hostId'>,
+    worktree: Pick<ResolvedWorktree, 'id' | 'hostId' | 'linkedLinearIssue'>,
     meta: {
       linkedLinearIssueWorkspaceId: string
       linkedLinearIssueOrganizationUrlKey: string | null

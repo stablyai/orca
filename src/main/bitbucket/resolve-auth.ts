@@ -6,8 +6,7 @@ import {
   type BitbucketAuthConfig
 } from './bitbucket-auth-config'
 import {
-  getStoredBitbucketMetadata,
-  loadStoredBitbucketSecret,
+  loadStoredBitbucketCredential,
   type BitbucketStoredMetadata,
   type BitbucketStoredSecret
 } from './credential-store'
@@ -36,8 +35,8 @@ export async function resolveBitbucketAuthConfig(): Promise<BitbucketAuthConfig>
     return env
   }
   try {
-    const secret = await loadStoredBitbucketSecret({ force: true })
-    return secret ? storedAuthConfig(await getStoredBitbucketMetadata(), secret) : env
+    const { secret, metadata } = await loadStoredBitbucketCredential({ force: true })
+    return secret ? storedAuthConfig(metadata, secret) : env
   } catch {
     return env
   }

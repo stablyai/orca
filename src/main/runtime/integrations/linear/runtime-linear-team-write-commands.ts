@@ -89,7 +89,7 @@ export class RuntimeLinearTeamWriteCommands extends RuntimeLinearDedupeCommands 
     workspaceName?: string
   }> {
     signal?.throwIfAborted()
-    this.validateLinearCreateWorkspaceScope(workspaceId === 'all' ? undefined : workspaceId)
+    await this.validateLinearCreateWorkspaceScope(workspaceId === 'all' ? undefined : workspaceId)
     let teams: Awaited<ReturnType<typeof listLinearTeamsOrThrow>>
     try {
       teams = await listLinearTeamsOrThrow(workspaceId ?? 'all', signal)
@@ -150,7 +150,7 @@ export class RuntimeLinearTeamWriteCommands extends RuntimeLinearDedupeCommands 
     }
 
     const scope = parent?.workspaceId ?? workspaceId
-    this.validateLinearCreateWorkspaceScope(scope)
+    await this.validateLinearCreateWorkspaceScope(scope)
     let teams: Awaited<ReturnType<typeof listLinearTeamsOrThrow>>
     try {
       teams = await listLinearTeamsOrThrow(scope ?? 'all', signal)

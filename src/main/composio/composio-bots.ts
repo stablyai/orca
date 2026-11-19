@@ -273,8 +273,8 @@ export class ComposioBots extends ComposioKeyAccess {
     const key = await this.deps.keys.read()
     if (key && (await this.keyState()) === 'ok' && this.cleanup.pending().length > 0) {
       const live = this.deps.botExists ?? ((botId) => this.deps.botIds().includes(botId))
-      await this.withKey((api) => this.cleanup.drain(api, key, live)).catch((error: unknown) =>
-        console.warn('[composio] cleaning up deleted bots failed', error)
+      await this.withKey((api, credential) => this.cleanup.drain(api, credential.key, live)).catch(
+        (error: unknown) => console.warn('[composio] cleaning up deleted bots failed', error)
       )
     }
   }

@@ -28,9 +28,12 @@ async function refreshTokenOnDisk(workspaceId: string): Promise<string | undefin
   try {
     const raw = await readFile(getWorkspaceLoginPath(workspaceId))
     const token = readStoredCredentialToken('Linear', raw)
-    return token ? ConnectLoginSchema.safeParse(JSON.parse(token)).data?.refreshToken : undefined
-  } catch {
-    return undefined
+    return token ? ConnectLoginSchema.parse(JSON.parse(token)).refreshToken : undefined
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+      return undefined
+    }
+    throw error
   }
 }
 
