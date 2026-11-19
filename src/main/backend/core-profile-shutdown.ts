@@ -20,13 +20,12 @@ export class BackendCoreProfileShutdown {
   readonly finalize = async (): Promise<void> => {
     await this.checkpointing?.catch(() => {})
     // Saved while the daemon is still connected; its disconnect runs after this cleanup.
-    const paintLedger = this.paintLedger?.saveReattachedPaintLedger()
-    try {
-      if (this.store) {
-        await flushOrcadProfileStoreForShutdown(this.store, this.paneGrids)
-      }
-    } finally {
-      await paintLedger
+    const [, flushed] = await Promise.allSettled([
+      this.paintLedger?.saveReattachedPaintLedger(),
+      this.store ? flushOrcadProfileStoreForShutdown(this.store, this.paneGrids) : undefined
+    ])
+    if (flushed.status === 'rejected') {
+      throw flushed.reason
     }
   }
 }
