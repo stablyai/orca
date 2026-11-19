@@ -183,6 +183,10 @@ export const newOutfit = defineFixture({
   render: () => <NewBot />,
   interact: async () => {
     document.querySelector<HTMLButtonElement>('[role="dialog"] button[aria-label="Pink"]')?.click()
+    Array.from(document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button'))
+      .find((button) => button.textContent?.startsWith('Outfits'))
+      ?.click()
+    await settle(300)
     document
       .querySelector<HTMLButtonElement>('[role="dialog"] button[aria-label="Detective"]')
       ?.click()

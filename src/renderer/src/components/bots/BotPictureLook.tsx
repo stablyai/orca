@@ -1,5 +1,7 @@
 // A mascot's look under the picture carousel: its tile color and what it wears.
-import { Plus } from 'lucide-react'
+import { ChevronDown, Plus } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { ColorPicker } from '@/components/ui/color-picker'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
@@ -129,7 +131,7 @@ function OutfitTile({
   )
 }
 
-/** What the mascot wears: nothing, then each outfit, shown on the mascot itself. */
+/** What the mascot wears, under a row that names it: nothing, then each outfit, shown on the mascot itself. */
 export function BotPictureOutfits({
   id,
   color,
@@ -153,31 +155,44 @@ export function BotPictureOutfits({
     security: t('bots.new.outfitSecurity', 'Security'),
     party: t('bots.new.outfitParty', 'Party')
   }
+  const label = t('bots.new.pictureOutfit', 'Outfit')
   return (
-    <div
-      role="group"
-      aria-label={t('bots.new.pictureOutfit', 'Outfit')}
-      className="mx-auto mb-1 grid w-fit grid-cols-5 gap-2 pt-1"
-    >
-      <OutfitTile
-        id={id}
-        color={color}
-        outfit={null}
-        label={t('bots.new.outfitNone', 'No outfit')}
-        selected={outfit === null}
-        onPick={() => onChange(null)}
-      />
-      {BOT_AVATAR_OUTFITS.map((worn) => (
-        <OutfitTile
-          key={worn}
-          id={id}
-          color={color}
-          outfit={worn}
-          label={names[worn]}
-          selected={outfit === worn}
-          onPick={() => onChange(worn)}
-        />
-      ))}
-    </div>
+    <Collapsible className="mt-1 flex flex-col items-center">
+      <CollapsibleTrigger asChild>
+        <Button type="button" variant="disclosure" size="xs" className="group">
+          {outfit
+            ? t('bots.new.pictureOutfitsWorn', 'Outfits · {{outfit}}', { outfit: names[outfit] })
+            : t('bots.new.pictureOutfits', 'Outfits')}
+          <ChevronDown className="transition-transform group-data-[state=open]:rotate-180 motion-reduce:transition-none" />
+        </Button>
+      </CollapsibleTrigger>
+      <CollapsibleContent animation="height">
+        <div
+          role="group"
+          aria-label={label}
+          className="mx-auto grid w-fit grid-cols-5 gap-2 pt-1 pb-1"
+        >
+          <OutfitTile
+            id={id}
+            color={color}
+            outfit={null}
+            label={t('bots.new.outfitNone', 'No outfit')}
+            selected={outfit === null}
+            onPick={() => onChange(null)}
+          />
+          {BOT_AVATAR_OUTFITS.map((worn) => (
+            <OutfitTile
+              key={worn}
+              id={id}
+              color={color}
+              outfit={worn}
+              label={names[worn]}
+              selected={outfit === worn}
+              onPick={() => onChange(worn)}
+            />
+          ))}
+        </div>
+      </CollapsibleContent>
+    </Collapsible>
   )
 }

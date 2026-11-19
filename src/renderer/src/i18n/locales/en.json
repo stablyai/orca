@@ -26868,6 +26868,8 @@
       "pictureColor": "Background color",
       "pictureColorCustom": "Custom color",
       "pictureOutfit": "Outfit",
+      "pictureOutfits": "Outfits",
+      "pictureOutfitsWorn": "Outfits · {{outfit}}",
       "outfitNone": "No outfit",
       "outfitTie": "Tie",
       "outfitDetective": "Detective",
