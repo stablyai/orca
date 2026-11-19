@@ -8,13 +8,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSessionRecordStore } from '../../../agent-session/records/agent-session-record-store'
 import { openTestAgentSessionRecordStore } from '../../../agent-session/records/agent-session-record-store-test-harness'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
-import type { RpcContext } from '../../core'
 import { RpcDispatcher } from '../../dispatcher'
 import '../../../orchestration/orchestration-error'
 import {
-  CAPABLE_CLIENT,
   methodNamed,
-  rpcContext,
   runtimeStub,
   setAgentLaunchRecordStore,
   type AgentLaunchRuntimeStub as RuntimeStub
@@ -28,7 +25,6 @@ vi.mock('../structured-sessions/creation/structured-agent-session-create', () =>
 }))
 
 const { AGENT_LAUNCH_METHODS } = await import('./agent-launch')
-const AGENT_LAUNCH = methodNamed(AGENT_LAUNCH_METHODS, 'agent.launch')
 const AGENT_LAUNCH_REPLAY = methodNamed(AGENT_LAUNCH_METHODS, 'agent.launchReplay')
 
 const TAB_ID = '9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d'
@@ -42,14 +38,6 @@ const EXISTING_LAUNCH = { agent: 'claude', target: { kind: 'existing', worktree:
 const CREATE_LAUNCH = {
   agent: 'claude',
   target: { kind: 'create-worktree', create: { repo: 'id:repo-1', name: 'task' } }
-}
-
-async function launch(params: unknown, runtime: RuntimeStub, context: Partial<RpcContext> = {}) {
-  const parsed = AGENT_LAUNCH.params.safeParse(params)
-  if (!parsed.success) {
-    throw new Error(parsed.error.issues[0]?.message ?? 'invalid')
-  }
-  return AGENT_LAUNCH.handler(parsed.data, rpcContext(runtime, { ...CAPABLE_CLIENT, ...context }))
 }
 
 describe('a live-pane refusal under a named operation', () => {
@@ -83,22 +71,7 @@ describe('a live-pane refusal under a named operation', () => {
     return dispatcher.dispatch({ id: 'request-1', authToken: 'token', method, params })
   }
 
-  it('records the refusal as a failure, so a retry is answered rather than left unknown', async () => {
-    const params = { ...EXISTING_LAUNCH, paneKey: PANE_KEY, operationId: OPERATION_ID }
-    await expect(
-      launch(params, runtimeStub({ settings: TERMINAL_ONLY, terminalPaneAlreadyLive: true }))
-    ).rejects.toThrow('agent_launch_pane_already_live')
-    expect(outcomeOf(OPERATION_ID)).toMatchObject({
-      status: 'failed',
-      code: 'agent_launch_pane_already_live'
-    })
-
-    const retry = runtimeStub({ settings: TERMINAL_ONLY })
-    await expect(launch(params, retry)).rejects.toThrow('agent_launch_pane_already_live')
-    expect(retry.createTerminal).not.toHaveBeenCalled()
-  })
-
-  it('answers agent.launchReplay with the refusal code, not operation_unknown', async () => {
+  it('records the pane refusal and returns it on retry', async () => {
     const runtime = runtimeStub({ settings: TERMINAL_ONLY, terminalPaneAlreadyLive: true })
     const params = AGENT_LAUNCH_REPLAY.params.parse({
       ...EXISTING_LAUNCH,
@@ -112,7 +85,16 @@ describe('a live-pane refusal under a named operation', () => {
       ok: false,
       error: { code: 'agent_launch_pane_already_live' }
     })
-    expect(outcomeOf(OPERATION_ID)).toMatchObject({ status: 'failed' })
+    expect(outcomeOf(OPERATION_ID)).toMatchObject({
+      status: 'failed',
+      code: 'agent_launch_pane_already_live'
+    })
+    const retry = runtimeStub({ settings: TERMINAL_ONLY })
+    expect(await dispatch(retry, 'agent.launch', params)).toMatchObject({
+      ok: false,
+      error: { code: 'agent_launch_pane_already_live' }
+    })
+    expect(retry.createTerminal).not.toHaveBeenCalled()
   })
 
   it('leaves a create-worktree launch unknown, because its workspace was already created', async () => {
