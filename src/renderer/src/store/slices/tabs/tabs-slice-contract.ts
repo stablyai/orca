@@ -8,6 +8,7 @@ import type {
 } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { WorkspaceSessionState } from '../../../../../shared/workspace-session/workspace-session-state-types'
 import type { WorkspaceSessionHydrationOptions } from '@/lib/workspace/persistence/workspace-session-hydration-keys'
+import type { TerminalViewMode } from '../../../../../shared/terminal-view-mode.ts'
 
 export type TabSplitDirection = 'left' | 'right' | 'up' | 'down'
 
@@ -124,7 +125,7 @@ export type TabsSlice = {
     }
   ) => void
   setTabLabel: (tabId: string, label: string) => void
-  setTabViewMode: (tabId: string, mode: 'terminal' | 'chat') => void
+  setTabViewMode: (tabId: string, mode: TerminalViewMode) => void
   /** Flip a tab between terminal and native-chat renderings; the live TerminalPane stays mounted. */
   toggleTabViewMode: (tabId: string) => void
   setTabCustomLabel: (

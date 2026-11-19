@@ -23795,6 +23795,10 @@
           "sleepWorkspaceInstead": "Sleep workspace instead",
           "stopAgentSentence": "Stop agent",
           "stopAndClose": "Stop and close"
+        },
+        "contextMenu": {
+          "switchToTerminalView": "Back to Terminal",
+          "showAgentMapView": "Show Agent Map"
         }
       }
     },
@@ -23813,6 +23817,63 @@
         "disconnectedHostLine": "{{host}} isn’t connected. Its files stay on the host.",
         "filesStayLine": "Its files stay on {{host}}.",
         "removing": "Removing…"
+      }
+    },
+    "agentSessionMap": {
+      "graph": {
+        "ariaLabel": "Agent session map"
+      },
+      "node": {
+        "waitingOn": "Waiting on {{target}}",
+        "mainAgent": "Main agent",
+        "subagent": "Sub-agent"
+      },
+      "timeline": {
+        "live": "Live",
+        "scrubberAriaLabel": "Session time scrubber"
+      },
+      "title": "Agent Map",
+      "agents": {
+        "count": "{{count}} agents"
+      },
+      "session": {
+        "tools": "{{count}} tools",
+        "files": "{{count}} files",
+        "lastPrompt": "Last prompt: {{text}}"
+      },
+      "detail": {
+        "close": "Close details",
+        "duration": "Duration",
+        "tools": "Tool calls",
+        "prompts": "Prompts",
+        "files": "Files touched",
+        "lastPrompt": "Last prompt",
+        "requests": "Questions & approvals ({{count}})",
+        "question": "Question",
+        "approval": "Approval",
+        "resolution": {
+          "pending": "pending",
+          "resolved": "resolved",
+          "cancelled": "cancelled"
+        },
+        "toolCalls": "Tool calls ({{count}})",
+        "turns": "Turns ({{count}})",
+        "turnState": {
+          "running": "Running",
+          "completed": "Completed",
+          "interrupted": "Interrupted",
+          "unverifiable": "Unverifiable"
+        },
+        "filesTouched": "Files touched ({{count}})"
+      },
+      "empty": "No agent session in this pane",
+      "status": {
+        "running": "Running",
+        "waiting": "Waiting",
+        "done": "Done",
+        "idle": "Idle",
+        "failed": "Failed",
+        "unknown": "Unknown"
       }
     }
   },
@@ -25972,7 +26033,8 @@
       "e9da9f872a": "Send review notes to agent",
       "1524825c2c": "Toggle workspace board",
       "d286d1ab85": "Clear pane title",
-      "botItemBack": "Back to items"
+      "botItemBack": "Back to items",
+      "terminalToggleAgentMap": "Show the agent session as a live map"
     },
     "group": {
       "global": "Global",

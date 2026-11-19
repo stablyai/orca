@@ -36,6 +36,7 @@ import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host/ex
 import { useWslHostStartCardReplacesPaneError } from '../pty-transport/recovery/wsl/use-wsl-host-stopped-pane'
 import { terminalPaneMenuAddToChat } from '../clipboard/terminal-pane-menu-copy-actions'
 import { useTranslate } from '@/i18n/use-translate'
+import { TerminalPaneAgentMapPortal } from '../TerminalPaneAgentMapPortal'
 
 export function TerminalPaneSurface({
   controller
@@ -69,6 +70,7 @@ export function TerminalPaneSurface({
     handleCancelClose,
     handleConfirmClose,
     handleContextMenuToggleNativeChat,
+    handleContextMenuToggleAgentMap,
     handlePrimarySelectionAuxClick,
     handlePrimarySelectionMiddleMouseDown,
     handleRemoveTitle,
@@ -254,6 +256,7 @@ export function TerminalPaneSurface({
         )}
       <SessionRestoredBannerPortals panes={managedPanes} paneIds={sessionRestoredBannerPaneIds} />
       <TerminalPaneNativeChatPortal controller={controller} />
+      <TerminalPaneAgentMapPortal controller={controller} />
       <TerminalContextMenu
         open={Boolean(terminalManager) && contextMenu.open}
         onOpenChange={contextMenu.setOpen}
@@ -292,6 +295,9 @@ export function TerminalPaneSurface({
         canToggleNativeChat={contextMenuCanToggleChat}
         isNativeChatView={contextMenuIsChatView}
         onToggleNativeChat={handleContextMenuToggleNativeChat}
+        canShowAgentMap={controller.contextMenuCanShowAgentMap}
+        isAgentMapView={controller.contextMenuIsMapView}
+        onToggleAgentMap={handleContextMenuToggleAgentMap}
         onCopyAgentSessionContext={() => void contextMenu.onCopyAgentSessionContext()}
         quickCommandHosts={visibleQuickCommandHosts}
         quickCommandHostLoadFailed={quickCommandHostLoadFailed}

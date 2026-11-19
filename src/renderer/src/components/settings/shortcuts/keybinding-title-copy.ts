@@ -146,6 +146,8 @@ const STATIC_TITLE_COPY = {
   'botItem.back': () => translate('keybindings.title.botItemBack', 'Back to items'),
   'terminal.toggleNativeChat': () =>
     translate('keybindings.title.terminalToggleNativeChat', 'Switch between Chat UI and terminal'),
+  'terminal.toggleAgentMap': () =>
+    translate('keybindings.title.terminalToggleAgentMap', 'Show the agent session as a live map'),
   'sidebar.childWorkspaces.toggle': () =>
     translate('keybindings.title.8788e3be3a', 'Toggle child workspaces'),
   'terminal.clearPaneTitle': () => translate('keybindings.title.d286d1ab85', 'Clear pane title'),
