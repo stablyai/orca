@@ -15,6 +15,15 @@ import type { JournalStatusItem, JournalStatusItemSelection } from './journal-st
 
 const PAGE = 128
 
+/** Pinned where a newest-first walk over every row would otherwise be chosen. */
+function indexFor(selection: JournalStatusItemSelection): string {
+  if (selection.kind === 'tools' && selection.running) {
+    return 'INDEXED BY journal_items_unsettled'
+  }
+  // Prompt rows are few; walking the visible rows from the end to find one is not.
+  return selection.kind === 'latest-prompt-row' ? 'INDEXED BY journal_items_kind' : ''
+}
+
 /** Select current metadata in keyset pages, then decode only the reached candidates. */
 export function* sqlJournalStatusItems(
   scope: JournalSqlScope,
@@ -130,7 +139,7 @@ export function* sqlJournalStatusItems(
       : ''
     const rows = scope.db
       .prepare(`SELECT item_id,sequence,sequence_index,ordinal
-      FROM journal_items ${selection.kind === 'tools' && selection.running ? 'INDEXED BY journal_items_unsettled' : ''}
+      FROM journal_items ${indexFor(selection)}
       WHERE ${predicates.join(' AND ')}${cursor}
       ${unordered ? '' : `ORDER BY ${order}`} LIMIT ?`)
       .all(...params, ...(after ?? []), single ? 1 : limit)
