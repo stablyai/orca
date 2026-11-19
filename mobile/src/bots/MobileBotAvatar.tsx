@@ -4,7 +4,14 @@ import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { colors } from '../theme/mobile-theme'
 import type { MobileBotAvatarSource } from './host-bot-row-facts'
 import { mobileBotMascotAsset, mobileBotMascotRimAsset } from './mobile-bot-mascot-assets'
-import { mobileBotOutfitAsset, mobileBotOutfitReplacesPicture } from './mobile-bot-outfit-assets'
+import {
+  mobileBotOutfitAsset,
+  mobileBotOutfitReplacesPicture,
+  OUTFIT_SHEET_COLUMNS,
+  OUTFIT_SHEET_ROWS
+} from './mobile-bot-outfit-assets'
+import type { BotMascotId } from '../../../src/shared/bot-avatar'
+import type { BotAvatarOutfit } from '../../../src/shared/bots/bot-avatar-outfit'
 import {
   DEFAULT_BOT_AVATAR_COLOR,
   isDarkBotAvatarColor
@@ -59,13 +66,35 @@ export function MobileBotAvatar({
           accessibilityIgnoresInvertColors
         />
       )}
-      {avatar.outfit ? (
-        <Image
-          source={mobileBotOutfitAsset(avatar.outfit, avatar.id)}
-          style={[StyleSheet.absoluteFill, layer]}
-          accessibilityIgnoresInvertColors
-        />
-      ) : null}
+      {avatar.outfit ? <OutfitLayer outfit={avatar.outfit} id={avatar.id} size={size} /> : null}
+    </View>
+  )
+}
+
+/** The mascot's cell of its outfit's sheet: the sheet drawn at `size` per cell, shifted under a `size` window. */
+function OutfitLayer({
+  outfit,
+  id,
+  size
+}: {
+  outfit: BotAvatarOutfit
+  id: BotMascotId
+  size: number
+}) {
+  const { sheet, column, row } = mobileBotOutfitAsset(outfit, id)
+  return (
+    <View style={[StyleSheet.absoluteFill, styles.window]}>
+      <Image
+        source={sheet}
+        style={{
+          position: 'absolute',
+          left: -column * size,
+          top: -row * size,
+          width: size * OUTFIT_SHEET_COLUMNS,
+          height: size * OUTFIT_SHEET_ROWS
+        }}
+        accessibilityIgnoresInvertColors
+      />
     </View>
   )
 }
@@ -75,6 +104,9 @@ const styles = themedStyleSheet(() => ({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.bgRaised,
+    overflow: 'hidden'
+  },
+  window: {
     overflow: 'hidden'
   },
   letter: {

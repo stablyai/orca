@@ -16,9 +16,8 @@ import {
 import type { Bot } from '../../../../../shared/bot-types'
 import type { BotUpdateParams } from '../../../../../shared/rpc-contract/bots-params'
 import type { BotAvatarOutfit } from '../../../../../shared/bots/bot-avatar-outfit'
+import { useBotLookSave } from './use-bot-look-save'
 import { useSaveOnClose } from './use-save-on-close'
-
-type BotLookUpdate = Pick<BotUpdateParams['updates'], 'avatarColor' | 'avatarOutfit'>
 
 export const BOT_PICTURE_SAVE_DELAY_MS = 500
 
@@ -269,39 +268,11 @@ export function useBotPictureSetting(
     })
   }
 
-  // The tile color and outfit save on their own, the latest picks after a pause; until they land they show as picked.
-  const [pickedLook, setPickedLook] = useState<BotLookUpdate | null>(null)
-  const lookTimer = useRef<{
-    timer: ReturnType<typeof setTimeout>
-    save: () => void
-    look: BotLookUpdate
-  } | null>(null)
-  const lookPick = useRef(0)
-  const pickLook = (change: BotLookUpdate): void => {
-    const look = { ...lookTimer.current?.look, ...change }
-    const pick = (lookPick.current += 1)
-    setPickedLook((picked) => ({ ...picked, ...change }))
-    if (lookTimer.current) {
-      clearTimeout(lookTimer.current.timer)
-    }
-    const save = (): void => {
-      lookTimer.current = null
-      void update(look).finally(() => {
-        // Shown as saved once it lands, unless something newer was picked meanwhile.
-        if (lookPick.current === pick) {
-          setPickedLook(null)
-        }
-      })
-    }
-    lookTimer.current = { timer: setTimeout(save, BOT_PICTURE_SAVE_DELAY_MS), save, look }
-  }
+  const look = useBotLookSave(update, BOT_PICTURE_SAVE_DELAY_MS)
 
   useSaveOnClose(() => {
     commit()
-    if (lookTimer.current) {
-      clearTimeout(lookTimer.current.timer)
-      lookTimer.current.save()
-    }
+    look.flush()
   })
 
   // A picture set elsewhere (the CLI, another window) is adopted while nothing is pending here.
@@ -339,14 +310,14 @@ export function useBotPictureSetting(
     upload,
     undo,
     color:
-      pickedLook && 'avatarColor' in pickedLook
-        ? (pickedLook.avatarColor ?? null)
+      look.picked && 'avatarColor' in look.picked
+        ? (look.picked.avatarColor ?? null)
         : (bot.avatarColor ?? null),
-    pickColor: (color) => pickLook({ avatarColor: color }),
+    pickColor: (color) => look.pick({ avatarColor: color }),
     outfit:
-      pickedLook && 'avatarOutfit' in pickedLook
-        ? (pickedLook.avatarOutfit ?? null)
+      look.picked && 'avatarOutfit' in look.picked
+        ? (look.picked.avatarOutfit ?? null)
         : (bot.avatarOutfit ?? null),
-    pickOutfit: (outfit) => pickLook({ avatarOutfit: outfit })
+    pickOutfit: (outfit) => look.pick({ avatarOutfit: outfit })
   }
 }
