@@ -142,13 +142,16 @@ export function useNativeChatTranscriptWindow({
       setScrollMargin((current) => (current === offset ? current : offset))
     }
   }, [scrollRef])
-  // A hidden pane is display:none: its offset walk would only force layout on every retained chat's render.
+  // A hidden pane is display:none, so read again once it shows.
   useLayoutEffect(() => {
     if (isVisible) {
       readScrollMargin()
     }
-  })
+  }, [isVisible, readScrollMargin])
 
+  // Only the scroller or the column above the rows (lead content) moves the margin. Observer
+  // callbacks run after layout, so reading there forces none, unlike a read after every render.
+  const marginObserverRef = useRef<ResizeObserver | null>(null)
   useLayoutEffect(() => {
     const container = scrollRef.current
     if (!container) {
@@ -159,8 +162,16 @@ export function useNativeChatTranscriptWindow({
       return
     }
     const observer = new ResizeObserver(readScrollMargin)
+    marginObserverRef.current = observer
     observer.observe(container)
-    return () => observer.disconnect()
+    const column = sizerElementRef.current?.parentElement
+    if (column) {
+      observer.observe(column)
+    }
+    return () => {
+      observer.disconnect()
+      marginObserverRef.current = null
+    }
   }, [readScrollMargin, scrollRef])
 
   useLayoutEffect(() => {
@@ -199,6 +210,9 @@ export function useNativeChatTranscriptWindow({
       sizerElementRef.current = node
       if (node) {
         readScrollMargin()
+        if (node.parentElement) {
+          marginObserverRef.current?.observe(node.parentElement)
+        }
       }
     },
     [readScrollMargin]
