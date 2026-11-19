@@ -6,7 +6,11 @@ vi.mock('../../agent-session/ownership/agent-session-process-identity-probe', ()
   readProcessStartTimeMs: async () => startTime.value
 }))
 
-const daemon = (sessions: number, incarnationId: string | undefined = 'incarnation-1') => {
+const daemon = (
+  sessions: number,
+  incarnationId: string | undefined = 'incarnation-1',
+  rootProcessId = process.pid
+) => {
   const counts = { requests: 0, rows: 0 }
   return {
     counts,
@@ -17,7 +21,7 @@ const daemon = (sessions: number, incarnationId: string | undefined = 'incarnati
       return (opts?.ptyIds ?? []).map((id) => ({
         id,
         ...(incarnationId ? { incarnationId } : {}),
-        rootProcessId: 42,
+        rootProcessId,
         cwd: '',
         title: ''
       }))
@@ -45,7 +49,7 @@ it.each([
             `pty-${held}-${incarnationId}-${startedAtMs}-${index}`,
             incarnationId
           )
-        ).resolves.toBe(42)
+        ).resolves.toBe(process.pid)
       }
     }
     expect(controller.counts).toEqual({ requests: held, rows: held * held })
@@ -57,5 +61,14 @@ it('a terminal that exits is listed again on its next probe', async () => {
   await readLegacyPtyRootProcessId(controller, 'pty-exited', 'incarnation-1')
   forgetLegacyPtyRoot('pty-exited')
   await readLegacyPtyRootProcessId(controller, 'pty-exited', 'incarnation-1')
+  expect(controller.counts.requests).toBe(2)
+})
+
+it('a root that exited with an unreadable start time is listed again', async () => {
+  startTime.value = null
+  // Why this PID: the kernel never hands out PID 0x7ffffffe to a live process here.
+  const controller = daemon(1, 'incarnation-1', 0x7ffffffe)
+  await readLegacyPtyRootProcessId(controller, 'pty-dead-root', 'incarnation-1')
+  await readLegacyPtyRootProcessId(controller, 'pty-dead-root', 'incarnation-1')
   expect(controller.counts.requests).toBe(2)
 })

@@ -29,6 +29,8 @@ export function isTerminalRelayClient(command: string): boolean {
   const name = getCommandTokenPathBasename(getFirstCommandToken(command))
     .replace(/^-/, '')
     .replace(/\.exe$/i, '')
+    // tmux retitles its client `tmux: client`.
+    .replace(/:$/, '')
     .toLowerCase()
   return RELAY_CLIENT_NAMES.has(name)
 }

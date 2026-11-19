@@ -1,5 +1,6 @@
 import type { RuntimePtyController } from '../lifecycle/runtime-pty-controller-contract'
 import { readProcessStartTimeMs } from '../../agent-session/ownership/agent-session-process-identity-probe'
+import { isProcessAlive } from '../../../daemon/endpoint/identity/daemon-process-inspection'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
 
 const rootByPtyId = new Map<
@@ -18,7 +19,12 @@ export async function readLegacyPtyRootProcessId(
   const remembered = rootByPtyId.get(ptyId)
   if (remembered && remembered.incarnationId === expectedIncarnationId) {
     // Why the start time: a reused PID must not stand in for a root that exited.
-    if ((await readProcessStartTimeMs(remembered.pid)) === remembered.startedAtMs) {
+    const startedAtMs = await readProcessStartTimeMs(remembered.pid)
+    // Why the liveness check: an exited root also reads as an unreadable start time.
+    if (
+      startedAtMs === remembered.startedAtMs &&
+      (startedAtMs !== null || isProcessAlive(remembered.pid))
+    ) {
       return remembered.pid
     }
     rootByPtyId.delete(ptyId)

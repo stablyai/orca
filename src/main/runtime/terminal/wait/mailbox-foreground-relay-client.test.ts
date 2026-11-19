@@ -35,6 +35,7 @@ it('another program in front is told apart from a multiplexer relaying to the ag
   await expect(read('cat')).resolves.toMatchObject({ foreground: 'non-shell' })
   await expect(read('tmux')).resolves.toMatchObject({ foreground: 'unknown' })
   await expect(read('/usr/bin/ssh')).resolves.toMatchObject({ foreground: 'unknown' })
+  await expect(read('tmux: client')).resolves.toMatchObject({ foreground: 'unknown' })
 })
 
 it('a foreground whose name cannot be read proves nothing', async () => {
