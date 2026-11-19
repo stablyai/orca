@@ -31,9 +31,6 @@ export function replaceTabContent(
   model: WorkspaceLayoutModel,
   command: CommandOf<'replaceTabContent'>
 ): Applied {
-  if (command.replacement.kind !== 'browser-page') {
-    return refuse('invalid_params')
-  }
   const { browserTabId, pageId, newPageId } = command.replacement
   return withPageIds(model, { workspace: command.workspace, browserTabId }, (pageIds) => {
     if (pageIds.includes(newPageId)) {

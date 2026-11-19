@@ -19,6 +19,7 @@ import type { LayoutEditorView } from './editor-tabs/layout-editor-view'
 import type * as LayoutModel from './workspace-layout-model'
 
 type On = { workspace: string }
+
 /** Desktop drag-out trusts the displayed PTY over stale bindings and permits moving the last known pane because the window may hold unseen siblings. */
 export type WindowPaneDetach = {
   ptyId: string | null
@@ -202,6 +203,7 @@ export type LayoutCommand =
     })
   | (On & { type: 'openBrowserPage'; browserTabId: string; pageId: string })
   | (On & { type: 'closeBrowserPage'; browserTabId: string; pageId: string })
+  /** Swaps what a tab shows; its id, group, order, pin and presentation stay. */
   | (On & { type: 'replaceTabContent'; replacement: LayoutModel.TabContentReplacement })
   | (On & {
       type: 'setBrowserTabProfile'
@@ -242,6 +244,7 @@ export type LayoutCommand =
   /** A workspace's default terminal tabs, in order, and the mark: nothing once it is marked. */
   | (On & { type: 'applyDefaultTabs'; tabs: DefaultTerminalTab[] })
 
+/** Restore/activation may request the first surface; both become no-ops once any tab exists. */
 export type InitialSurfaceReason = 'restore' | 'activation'
 
 /** The ids are the window's: it keys its spawn inputs by them before main answers. */
