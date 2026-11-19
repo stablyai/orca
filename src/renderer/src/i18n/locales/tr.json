@@ -5103,8 +5103,6 @@
                 "copy": {
                   "terminalSessionCount_one": "{{count}} terminal oturumu",
                   "terminalSessionCount_other": "{{count}} terminal oturumu",
-                  "memoryUnavailable": "bellek bilgisi yok",
-                  "tooltipSummary": "Kaynak Yöneticisi - {{memory}} - {{sessions}}",
                   "spaceScanReady": "Alan taraması hazır",
                   "sessionsGroupedByWorkspace": "Terminal oturumları çalışma alanına göre gruplandırılır.",
                   "noTerminalSessions": "Henüz terminal oturumu yok.",

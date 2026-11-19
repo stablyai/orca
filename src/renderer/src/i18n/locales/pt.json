@@ -3759,8 +3759,6 @@
                   "terminalSessionCount_one": "{{count}} sessão de terminal",
                   "terminalSessionCount_other": "{{count}} sessões de terminal",
                   "terminalSessionCount_many": "{{count}} sessões de terminal",
-                  "memoryUnavailable": "memória indisponível",
-                  "tooltipSummary": "Gerenciador de Recursos - {{memory}} - {{sessions}}",
                   "spaceScanReady": "Verificação de espaço pronta",
                   "sessionsGroupedByWorkspace": "As sessões de terminal são agrupadas por espaço de trabalho.",
                   "noTerminalSessions": "Nenhuma sessão de terminal ainda.",

@@ -6050,8 +6050,6 @@
                 "copy": {
                   "terminalSessionCount_one": "{{count}} terminal session",
                   "terminalSessionCount_other": "{{count}} terminal sessions",
-                  "memoryUnavailable": "memory unavailable",
-                  "tooltipSummary": "Resource Manager - {{memory}} - {{sessions}}",
                   "spaceScanReady": "Space scan ready",
                   "sessionsGroupedByWorkspace": "Terminal sessions are grouped by workspace.",
                   "noTerminalSessions": "No terminal sessions yet.",

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import type { AppState } from '../../../store/types'
 import type { MemorySnapshot } from '../../../../../shared/diagnostics/process-stats-types'
 import type { Worktree } from '../../../../../shared/worktree/types'
@@ -25,7 +25,6 @@ import {
 } from './popover/resource-memory-metric-copy'
 import { formatMemory } from './popover/resource-usage-metrics'
 import { readAgentPaneKeys, splitSnapshotByOwner } from './popover/resource-owner-split'
-import { formatOwnerSplitLine } from './popover/resource-owner-labels'
 import {
   findAmbiguousWorktreeIds,
   findDuplicateIds
@@ -152,21 +151,14 @@ export function useResourceUsageDerivedModel({
     ]
   )
 
-  // Why: keyed to the 2 s snapshot and daemon inventory only, not titles or bindings; agent status is
-  // read here rather than subscribed because it churns many times a second.
-  // Why: closed, the snapshot is frozen, so keep the inventory it was split with; exits published
-  // while closed neither rescan nor drop the daemon's pane keys from the badge tooltip.
-  const [openSessions, setOpenSessions] = useState(sessions)
-  if (open && openSessions !== sessions) {
-    setOpenSessions(sessions)
-  }
-  const splitSessions = open ? sessions : openSessions
+  // Why: open-only and keyed to the 2 s snapshot and daemon inventory; agent status is read here
+  // rather than subscribed because it churns many times a second.
   const ownerSplit = useMemo(
     () =>
-      resourceSnapshot
-        ? splitSnapshotByOwner(resourceSnapshot, splitSessions, readAgentPaneKeys())
+      open && resourceSnapshot
+        ? splitSnapshotByOwner(resourceSnapshot, sessions, readAgentPaneKeys())
         : null,
-    [resourceSnapshot, splitSessions]
+    [open, resourceSnapshot, sessions]
   )
 
   // Why: orphan detection needs daemon inventory; keep it open-only so the closed badge never triggers a background global session scan.
@@ -188,11 +180,9 @@ export function useResourceUsageDerivedModel({
   const commitMetricCopy = resourceSnapshot?.processCommitMetric
     ? getResourceCommitMetricCopy(t)
     : null
-  const { memBadgeLabel, totalPrivateMemory, commitToneClass } = useMemo(() => {
-    const memory = resourceSnapshot?.totalMemory ?? 0
+  const { totalPrivateMemory, commitToneClass } = useMemo(() => {
     const privateMemory = resourceSnapshot?.totalPrivateMemory
     return {
-      memBadgeLabel: resourceSnapshot ? formatMemory(memory) : '—',
       totalPrivateMemory: privateMemory,
       commitToneClass: getCommitPressureToneClass({
         privateMemory,
@@ -209,8 +199,6 @@ export function useResourceUsageDerivedModel({
   const sessionsOnlyError = sessionsError && memorySnapshotError === null
   const resourceManagerTooltipLines = getResourceManagerTooltipLines(
     {
-      // Why: the badge shows no total; its tooltip names each owner so a screenshot can't misread it.
-      memoryLabel: ownerSplit ? formatOwnerSplitLine(ownerSplit, t) : memBadgeLabel,
       sessionCount: triggerSessionCount,
       spaceScanReady
     },

@@ -4966,8 +4966,6 @@
                 "copy": {
                   "terminalSessionCount_one": "{{count}} 个终端会话",
                   "terminalSessionCount_other": "{{count}} 个终端会话",
-                  "memoryUnavailable": "内存信息不可用",
-                  "tooltipSummary": "资源管理器 - {{memory}} - {{sessions}}",
                   "spaceScanReady": "空间扫描已就绪",
                   "sessionsGroupedByWorkspace": "终端会话按工作区分组",
                   "noTerminalSessions": "暂无终端会话",

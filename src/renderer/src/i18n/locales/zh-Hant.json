@@ -4896,8 +4896,6 @@
                 "copy": {
                   "terminalSessionCount_one": "{{count}} 個終端機工作階段",
                   "terminalSessionCount_other": "{{count}} 個終端機工作階段",
-                  "memoryUnavailable": "記憶體資訊不可用",
-                  "tooltipSummary": "資源管理員 - {{memory}} - {{sessions}}",
                   "spaceScanReady": "空間掃描已就緒",
                   "sessionsGroupedByWorkspace": "終端機工作階段依工作區分組。",
                   "noTerminalSessions": "暫無終端機工作階段。",

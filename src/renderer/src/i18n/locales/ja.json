@@ -4933,8 +4933,6 @@
                 "copy": {
                   "terminalSessionCount_one": "{{count}} 件のターミナルセッション",
                   "terminalSessionCount_other": "{{count}} 件のターミナルセッション",
-                  "memoryUnavailable": "メモリ情報を取得できません",
-                  "tooltipSummary": "リソースマネージャー - {{memory}} - {{sessions}}",
                   "spaceScanReady": "容量スキャンの準備完了",
                   "sessionsGroupedByWorkspace": "ターミナルセッションはワークスペースごとにグループ化されます。",
                   "noTerminalSessions": "ターミナルセッションはまだありません。",

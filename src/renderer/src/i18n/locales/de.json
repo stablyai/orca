@@ -4996,8 +4996,6 @@
                 "copy": {
                   "terminalSessionCount_one": "{{count}} Terminal-Sitzung",
                   "terminalSessionCount_other": "{{count}} Terminal-Sitzungen",
-                  "memoryUnavailable": "Speicher nicht verfügbar",
-                  "tooltipSummary": "Ressourcenverwaltung - {{memory}} - {{sessions}}",
                   "spaceScanReady": "Speicherplatz-Scan bereit",
                   "sessionsGroupedByWorkspace": "Terminal-Sitzungen sind nach Arbeitsbereich gruppiert.",
                   "noTerminalSessions": "Noch keine Terminal-Sitzungen.",

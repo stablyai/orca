@@ -4372,8 +4372,6 @@
                 "copy": {
                   "terminalSessionCount_one": "터미널 세션 {{count}}개",
                   "terminalSessionCount_other": "터미널 세션 {{count}}개",
-                  "memoryUnavailable": "메모리 정보 없음",
-                  "tooltipSummary": "리소스 관리자 - {{memory}} - {{sessions}}",
                   "spaceScanReady": "공간 스캔 준비됨",
                   "sessionsGroupedByWorkspace": "터미널 세션은 워크스페이스별로 그룹화됩니다.",
                   "noTerminalSessions": "아직 터미널 세션이 없습니다.",
