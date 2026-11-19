@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Platform, useWindowDimensions, type HostInstance } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import type { ReservedRect } from '../../modules/orca-reserved-regions/src'
-import { useReservedRegions } from './reserved-regions'
+import { useTopChromeOcclusions } from './reserved-regions'
 import { topChromeSpace } from './top-chrome-space'
 
 export function useTopChromeSpace() {
@@ -10,7 +10,7 @@ export function useTopChromeSpace() {
   const [frame, setFrame] = useState<ReservedRect | null>(null)
   const dimensions = useWindowDimensions()
   const { top } = useSafeAreaInsets()
-  const { occlusions } = useReservedRegions()
+  const occlusions = useTopChromeOcclusions()
   const onLayout = useCallback(() => {
     const updateFrame = (x: number, y: number, width: number, height: number) => {
       setFrame((current) =>

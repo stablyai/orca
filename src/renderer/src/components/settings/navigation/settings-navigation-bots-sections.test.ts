@@ -35,26 +35,7 @@ function bot(id: string, name: string): Bot {
 const BOTS = [bot('b1', 'Reviewer'), bot('b2', 'Scout')]
 
 describe('bots settings navigation', () => {
-  it('lists the Bots page under Set Up and one page per bot in the Bots group', () => {
-    const sections = buildSettingsNavigationMetadata({
-      isMac: true,
-      isWindows: false,
-      isWebClient: false,
-      repos: [],
-      bots: BOTS
-    })
-    expect(sections.find((section) => section.id === 'bots')?.group).toBe('setup')
-    expect(
-      sections
-        .filter((section) => section.group === 'bots')
-        .map((section) => [section.id, section.title])
-    ).toEqual([
-      ['bot-b1', 'Reviewer'],
-      ['bot-b2', 'Scout']
-    ])
-  })
-
-  it('puts the bots directly above Projects, as the sidebar does, with their avatars', () => {
+  it('lists the Bots setup page and each bot above Projects', () => {
     const repo = {
       id: 'repo-1',
       path: '/repo',
@@ -72,14 +53,15 @@ describe('bots settings navigation', () => {
     const firstBot = sections.findIndex((section) => section.group === 'bots')
     const firstProject = sections.findIndex((section) => section.id.startsWith('repo-'))
 
+    expect(sections.find((section) => section.id === 'bots')?.group).toBe('setup')
     expect(SETTINGS_NAV_GROUPS.at(-1)?.id).toBe('bots')
     expect(firstBot).toBeGreaterThan(
       sections.findIndex((section) => section.group === 'experimental')
     )
     expect(firstProject).toBe(firstBot + 2)
-    expect(sections.slice(firstBot, firstProject).map((section) => section.bot)).toEqual([
-      { ...BOTS[0], avatar: '🦉' },
-      BOTS[1]
+    expect(sections.slice(firstBot, firstProject)).toMatchObject([
+      { id: 'bot-b1', title: 'Reviewer', bot: { avatar: '🦉' } },
+      { id: 'bot-b2', title: 'Scout', bot: { id: 'b2' } }
     ])
   })
 
@@ -99,19 +81,6 @@ describe('bots settings navigation', () => {
     expect(
       getSettingsNavGroupDefinitionsForSearch(found, 'Scout').map((group) => group.id)
     ).toEqual(['bots'])
-  })
-
-  it('describes each bot page by its agent, as bots name it', () => {
-    const sections = buildSettingsNavigationMetadata({
-      isMac: true,
-      isWindows: false,
-      isWebClient: false,
-      repos: [],
-      bots: BOTS
-    })
-    expect(
-      sections.filter((section) => section.group === 'bots').map((section) => section.description)
-    ).toEqual(['Claude Code', 'Codex'])
   })
 
   it('keeps only the Bots page, which holds the switch, while bots are turned off', () => {

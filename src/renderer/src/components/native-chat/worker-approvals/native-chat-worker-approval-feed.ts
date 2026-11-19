@@ -11,10 +11,7 @@ export type NativeChatWorkerApproval = OrchestrationWorkerApprovalEntry
 type Feed = {
   /** The host's list, as last received. */
   received: readonly NativeChatWorkerApproval[]
-  /** Prompts that closed while shown, kept pinned until then (epoch ms) so the outcome lands in view. */
-  settling: Map<string, number>
-  settleTimer?: ReturnType<typeof setTimeout>
-  /** Above the composer: open prompts, ones only the worker's terminal can answer, and settling ones. */
+  /** Above the composer: open prompts, and ones only the worker's terminal can answer. */
   pinned: readonly NativeChatWorkerApproval[]
   /** In the transcript, at the time each was asked. */
   receipts: readonly NativeChatWorkerApproval[]
@@ -25,8 +22,6 @@ type Feed = {
 const EMPTY: readonly NativeChatWorkerApproval[] = []
 // Why 5 s: a dropped local stream is rare; retry without hammering a host that refuses it.
 const RETRY_MS = 5_000
-// Why 4 s: long enough to read the outcome where the card was, short enough not to crowd the composer.
-const SETTLE_MS = 4_000
 const feeds = new Map<string, Feed>()
 
 const signature = (entries: readonly NativeChatWorkerApproval[]): string =>
@@ -47,35 +42,17 @@ const keep = (
 ): readonly NativeChatWorkerApproval[] =>
   signature(previous) === signature(next) ? previous : next.length ? next : EMPTY
 
+// An answered prompt goes straight to its transcript place: holding it above the composer jumped it there later.
+const pinned = ({ approval }: NativeChatWorkerApproval): boolean =>
+  approval.state === 'open' || approval.outcome?.by === 'terminal-only'
+
 function publish(feed: Feed): void {
-  const wasOpen = new Set(
-    feed.pinned.flatMap(({ approval }) => (approval.state === 'open' ? [approval.approvalId] : []))
-  )
   const entries = feed.received
-  const now = Date.now()
-  for (const { approval } of entries) {
-    if (approval.state !== 'open' && wasOpen.has(approval.approvalId)) {
-      feed.settling.set(approval.approvalId, now + SETTLE_MS)
-    }
-  }
-  for (const [approvalId, until] of feed.settling) {
-    if (until <= now || !entries.some(({ approval }) => approval.approvalId === approvalId)) {
-      feed.settling.delete(approvalId)
-    }
-  }
-  const pinned = (entry: NativeChatWorkerApproval): boolean =>
-    entry.approval.state === 'open' ||
-    entry.approval.outcome?.by === 'terminal-only' ||
-    feed.settling.has(entry.approval.approvalId)
   feed.pinned = keep(feed.pinned, entries.filter(pinned))
   feed.receipts = keep(
     feed.receipts,
     entries.filter((entry) => !pinned(entry))
   )
-  clearTimeout(feed.settleTimer)
-  if (feed.settling.size) {
-    feed.settleTimer = setTimeout(() => publish(feed), Math.min(...feed.settling.values()) - now)
-  }
   feed.listeners.forEach((notify) => notify())
 }
 
@@ -86,7 +63,6 @@ function observeWorkerApprovals(party: string, listener: () => void): () => void
   if (!feed) {
     const held: Feed = {
       received: EMPTY,
-      settling: new Map(),
       pinned: EMPTY,
       receipts: EMPTY,
       listeners: new Set(),
@@ -151,7 +127,6 @@ function observeWorkerApprovals(party: string, listener: () => void): () => void
     }
     held.dispose = () => {
       generation += 1
-      clearTimeout(held.settleTimer)
       clearTimeout(retry)
       close?.()
     }

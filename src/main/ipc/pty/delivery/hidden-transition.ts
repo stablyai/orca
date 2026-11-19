@@ -1,10 +1,11 @@
 import {
   markHiddenRendererPty,
+  recordHiddenPendingPtyDataDrop,
   shouldDropHiddenRendererPtyData,
   unmarkHiddenRendererPty
 } from './pty-hidden-delivery-gate'
 import { invalidatePendingPtyDrainPolicy } from './visibility-state'
-import { sendModelRestoreNeededMarker } from './payload'
+import { sendModelRestoreNeededMarker, sendPtyHiddenOutputActivity } from './payload'
 import type { PtyIpcSession } from '../session'
 
 export function transitionHiddenRendererPtyDeliveryState(
@@ -56,12 +57,25 @@ export function revealHiddenRendererPty(
   if (!transition.droppedWhileHidden || transition.hiddenDropEpisode === sentEpisode) {
     return undefined
   }
-  sendModelRestoreNeededMarker(
+  const sent = sendModelRestoreNeededMarker(
     session,
     id,
     'unhide',
     session.runtime?.getPtyOutputSequence(id),
     transition.hiddenDropEpisode
   )
-  return transition.hiddenDropEpisode
+  return sent ? transition.hiddenDropEpisode : undefined
+}
+
+/** Records a dropped hidden pending entry and tells the renderer the pane printed. */
+export function dropHiddenPendingPtyData(
+  session: PtyIpcSession,
+  id: string,
+  pending: { data: string; droppedOutput?: true }
+): ReturnType<typeof recordHiddenPendingPtyDataDrop> {
+  const drop = recordHiddenPendingPtyDataDrop(id, pending)
+  if (drop.shouldEmitActivityNotice) {
+    sendPtyHiddenOutputActivity(session, id)
+  }
+  return drop
 }

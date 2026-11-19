@@ -1,25 +1,22 @@
 import { useState } from 'react'
-import { Text, View } from 'react-native'
 import { ListRow } from '../components/list/ListGroup'
 import { MobileBotTextButton } from './MobileBotTextButton'
 import { BottomDrawer } from '../components/bottom-drawer/BottomDrawer'
 import { MobileSegmentedControl } from '../components/controls/MobileSegmentedControl'
+import { SheetHeader } from '../components/nav-bar/SheetHeader'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { hostScreenStyles as styles } from '../host-screen/host-screen-styles'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { MobileBotActivityTab } from './MobileBotActivityTab'
 import { MobileBotAutomationsTab } from './MobileBotAutomationsTab'
-import { MobileBotAvatar } from './MobileBotAvatar'
 import { MobileBotSettingsTab } from './MobileBotSettingsTab'
 import { botAgentLabel } from './mobile-bot-sheet-copy'
-import { sheetStyles } from './mobile-bot-sheet-styles'
 import type { BotAccessRequests } from './use-bot-access-requests'
 import { useBotUpNext } from './use-bot-up-next'
 import { lookAroundSupported } from '../../../src/shared/bots/bot-look-around'
 import type { RouteBot } from './use-route-bot'
 import type { BotChatTreeActions } from './MobileBotChatTree'
 import { usePhoneBotChatTree } from './use-phone-bot-chat-tree'
-import { optionStyles } from './mobile-bot-option-styles'
 
 type BotSheetTab = 'activity' | 'automations' | 'settings'
 
@@ -40,6 +37,8 @@ export function MobileBotSheet(props: {
   hostKey: string
   /** Opens a chat or a worker's workspace from Activity's Chats. */
   treeActions: BotChatTreeActions
+  online: boolean
+  hostName: string
 }) {
   const t = useMobileTranslation()
   const [tab, setTab] = useState<BotSheetTab>('activity')
@@ -63,31 +62,20 @@ export function MobileBotSheet(props: {
     { value: 'automations', label: t('bots.sheet.automations', 'Automations') },
     { value: 'settings', label: t('bots.sheet.settings', 'Settings') }
   ] as const
-  const { bot, avatar } = props.routeBot
+  const { bot } = props.routeBot
   return (
     <BottomDrawer visible={props.visible} onClose={props.onClose} scrollResetKey={tab}>
-      <View style={optionStyles.filterModalHeader}>
-        <View style={sheetStyles.heading}>
-          <MobileBotAvatar avatar={avatar} size={32} />
-          <View style={optionStyles.filterModalHeading}>
-            <Text style={optionStyles.filterModalTitle} numberOfLines={1}>
-              {bot.name}
-            </Text>
-            <Text style={styles.filterModalSubtitle} numberOfLines={1}>
-              {botAgentLabel(bot.agent)}
-            </Text>
-          </View>
-        </View>
-      </View>
+      <SheetHeader title={bot.name} subtitle={botAgentLabel(bot.agent)} onClose={props.onClose} />
       <MobileSegmentedControl
         segments={tabs}
         selected={tab}
         onSelect={setTab}
         fill
+        tabs
         style={styles.optionSegmented}
         testIDPrefix="bot-sheet-tab-"
       />
-      {props.routeBot.activity && props.routeBot.activityError ? (
+      {props.routeBot.activity && props.routeBot.activityError != null ? (
         <ListRow
           title={t('bots.activity.readFailed', 'Couldn’t load activity.')}
           subtitle={t('bots.activity.lastRead', 'Showing the last activity read.')}
@@ -109,20 +97,24 @@ export function MobileBotSheet(props: {
           treeActions={props.treeActions}
           upNextActions={upNext}
           loading={props.routeBot.activityLoading}
-          error={!!props.routeBot.activityError}
+          error={props.routeBot.activityError ?? null}
           onRetry={props.routeBot.refresh}
+          online={props.online}
+          hostName={props.hostName}
         />
       ) : tab === 'automations' && !props.routeBot.activity ? (
         <MobileBotActivityTab
           bot={bot}
           hostKey={props.hostKey}
           activity={null}
-          tree={{ kind: 'none' }}
+          tree={{ kind: 'loading' }}
           treeActions={props.treeActions}
           upNextActions={upNext}
           loading={props.routeBot.activityLoading}
-          error={!!props.routeBot.activityError}
+          error={props.routeBot.activityError ?? null}
           onRetry={props.routeBot.refresh}
+          online={props.online}
+          hostName={props.hostName}
         />
       ) : tab === 'automations' ? (
         <MobileBotAutomationsTab

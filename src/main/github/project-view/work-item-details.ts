@@ -2,6 +2,7 @@ import { githubBodyImageUrls, removeFailedGitHubBodyHtml } from '../attachments/
 import { assertPositiveInt, validateSlugArgs } from './project-argument-validation'
 import { projectGhExecOptions } from './project-host-execution'
 import { runGraphql } from './project-graphql'
+import { normalizePRCheckHeadSha } from '../../../shared/github/checks/pr-check-head'
 import type { PRComment } from '../../../shared/github/comments/comment-types'
 import type { GitHubAssignableUser } from '../../../shared/github/pull-requests/pull-request-types'
 import type { GitHubWorkItemDetails } from '../../../shared/github/work-items/work-item-types'
@@ -31,6 +32,7 @@ type RawWorkItemContent = {
   bodyHTML?: unknown
   headRefName?: string
   baseRefName?: string
+  headRefOid?: string
   author?: { login?: string } | null
   labels?: { nodes?: RawLabel[] }
   assignees?: { nodes?: RawUser[] }
@@ -114,7 +116,8 @@ const ISSUE_FRAGMENT = `issue(number:$num) {
 }`
 
 const PULL_REQUEST_FRAGMENT = `pullRequest(number:$num) {
-  id number title url state isDraft updatedAt headRefName baseRefName body bodyHTML author { login }
+  id number title url state isDraft updatedAt headRefName baseRefName headRefOid body bodyHTML
+  author { login }
   labels(first:50) { nodes { name } }
   assignees(first:50) { nodes { login } }
   participants(first:50) { nodes { login name avatarUrl } }
@@ -159,6 +162,7 @@ function mapWorkItemDetails(
       })
     }
   }
+  const headSha = args.type === 'pr' ? normalizePRCheckHeadSha(raw.headRefOid) : undefined
   const state: 'open' | 'closed' | 'merged' | 'draft' =
     args.type === 'pr'
       ? raw.isDraft
@@ -191,6 +195,7 @@ function mapWorkItemDetails(
     bodyImageUrls: githubBodyImageUrls(raw.body, raw.bodyHTML),
     comments,
     participants,
-    assignees
+    assignees,
+    ...(headSha ? { headSha } : {})
   }
 }

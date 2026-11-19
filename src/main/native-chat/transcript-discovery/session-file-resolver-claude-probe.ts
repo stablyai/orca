@@ -1,6 +1,8 @@
 import { lstat, readdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { encodeClaudeProjectPaths } from '../../ai-vault/scanners/claude/claude-project-dir-encoding'
+import { isMissingTranscriptPathError } from '../../ai-vault/discovery/session-path-absence'
+import { errnoCodeOrUnknown } from '../../../shared/errors/errno-code'
 
 // Ids become path segments here; a separator or dot segment would escape the bucket.
 function isSafeClaudeSessionId(sessionId: string): boolean {
@@ -13,12 +15,9 @@ function isSafeClaudeSessionId(sessionId: string): boolean {
   )
 }
 
-function isMissingPathError(error: unknown): boolean {
-  const code =
-    error && typeof error === 'object' && 'code' in error && typeof error.code === 'string'
-      ? error.code
-      : null
-  return code === 'ENOENT' || code === 'ENOTDIR'
+// A bucket this user can't read can't hold a transcript their Claude can resume (e.g. one left by `sudo claude`).
+function isAbsentForUserError(error: unknown): boolean {
+  return isMissingTranscriptPathError(error) || errnoCodeOrUnknown(error) === 'EACCES'
 }
 
 type ProbeOptions = { signal?: AbortSignal; strictErrors?: boolean }
@@ -36,7 +35,7 @@ async function isEntry(
     return kind === 'file' ? info.isFile() : info.isDirectory()
   } catch (error) {
     options.signal?.throwIfAborted()
-    if (options.strictErrors && !isMissingPathError(error)) {
+    if (options.strictErrors && !isAbsentForUserError(error)) {
       throw error
     }
     return false
@@ -75,7 +74,7 @@ export async function findClaudeSessionFile(
     buckets = await readdir(projectsDir, { withFileTypes: true })
   } catch (error) {
     options.signal?.throwIfAborted()
-    if (options.strictErrors && !isMissingPathError(error)) {
+    if (options.strictErrors && !isMissingTranscriptPathError(error)) {
       throw error
     }
     return null

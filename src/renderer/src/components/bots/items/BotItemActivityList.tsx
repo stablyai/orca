@@ -1,6 +1,6 @@
-// An item's Activity on a rail: comments as cards, and between them one muted line per event (worker
-// started and finished from the worker's record, edits, links and status changes).
-import { useState } from 'react'
+// An item's Activity on a rail: comments on one quiet surface, and between them one muted line per event
+// (worker started and finished from the worker's record, edits, links and status changes).
+import { useCallback, useRef, useState } from 'react'
 import {
   AlarmClock,
   AlarmClockOff,
@@ -26,9 +26,10 @@ import {
 } from '../../../../../shared/bots/bot-item-activity'
 import { botItemActorName } from '../../../../../shared/bots/bot-item-actor-name'
 import { botItemStatusName } from './bot-item-status-name'
-import { BotItemCommentCard } from './BotItemCommentCard'
+import { BOT_ITEM_COMMENT_ATTRIBUTE, BotItemCommentCard } from './BotItemCommentCard'
 import { BotItemStatusIcon } from './BotItemStatusIcon'
-import { formatBotItemSnoozeTime } from './BotItemSnooze'
+import { formatBotItemSnoozeTime } from './bot-item-snooze-time'
+import type { BotItemPendingComments } from './use-bot-item-pending-comments'
 
 const TIME = { hour: 'numeric', minute: '2-digit' } as const
 const ACTOR = 'font-medium text-foreground/80'
@@ -238,30 +239,40 @@ export function BotItemActivityList({
   bot,
   item,
   events,
-  onReply
+  pending
 }: {
   bot: Bot
   item: BotItem
   events: readonly BotItemEvent[]
-  /** The open question's Reply: focuses the comment box. */
-  onReply: () => void
+  /** Comments sent from the box the host's read doesn't show yet: last, as they were sent. */
+  pending?: BotItemPendingComments
 }): React.JSX.Element {
   const t = useTranslate()
   const entries = botItemActivity(item, events)
+  const list = useRef<HTMLDivElement | null>(null)
+  // A reply's quote and a question's Answered lead to each other: centred, so the sticky header never
+  // covers it, and focused, so Tab goes on from there.
+  const jump = useCallback((eventId: string) => {
+    const target = list.current?.querySelector<HTMLElement>(
+      `[${BOT_ITEM_COMMENT_ATTRIBUTE}="${CSS.escape(eventId)}"]`
+    )
+    if (!target) {
+      return
+    }
+    const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    target.scrollIntoView({ block: 'center', behavior: still ? 'auto' : 'smooth' })
+    target.focus({ preventScroll: true })
+  }, [])
   // The rail runs through the event glyphs; each glyph and card sits on the panel fill over it.
   return (
     <>
-      <div className="relative flex flex-col before:absolute before:inset-y-2.5 before:left-[9.5px] before:w-px before:bg-foreground/12">
+      <div
+        ref={list}
+        className="relative flex flex-col before:absolute before:inset-y-2.5 before:left-[9.5px] before:w-px before:bg-foreground/12"
+      >
         {entries.map((entry) =>
           entry.kind === 'comment' ? (
-            <BotItemCommentCard
-              key={entry.key}
-              bot={bot}
-              item={item}
-              event={entry.event}
-              question={entry.question}
-              onReply={onReply}
-            />
+            <BotItemCommentCard key={entry.key} bot={bot} item={item} entry={entry} onJump={jump} />
           ) : (
             <div
               key={entry.key}
@@ -283,8 +294,22 @@ export function BotItemActivityList({
             </div>
           )
         )}
+        {/* Last, as sent: never placed by this machine's clock among the host's events. */}
+        {pending?.shown.map(({ event, failed }) => (
+          <BotItemCommentCard
+            key={event.id}
+            bot={bot}
+            item={item}
+            entry={{ event, question: null }}
+            failed={
+              failed
+                ? { retry: () => pending.retry(event.id), discard: () => pending.discard(event.id) }
+                : undefined
+            }
+          />
+        ))}
       </div>
-      {entries.some((entry) => entry.kind === 'comment') ? null : (
+      {entries.some((entry) => entry.kind === 'comment') || pending?.shown.length ? null : (
         <p className="pt-0.5 text-xs leading-[18px] text-muted-foreground">
           {t('bots.items.activity.noComments', 'No comments yet.')}
         </p>

@@ -21,19 +21,6 @@ const items = [
 const ids = (visible: ActivityBarItem[]): string[] => visible.map((entry) => entry.id)
 
 describe('getVisibleRightSidebarActivityItems', () => {
-  it("keeps only Activity, Connectors and then Explorer on a bot's page", () => {
-    expect(
-      ids(
-        getVisibleRightSidebarActivityItems(items, {
-          isFolder: true,
-          isFolderWorkspace: true,
-          hasSshHost: true,
-          isBot: true
-        })
-      )
-    ).toEqual(['bot-activity', 'bot-connectors', 'explorer'])
-  })
-
   const pluginItems = getPluginPanelActivityItems([
     {
       id: 'panel',
@@ -44,13 +31,13 @@ describe('getVisibleRightSidebarActivityItems', () => {
     }
   ])
 
-  it("offers installed plugin panels on a bot's page, after Files", () => {
+  it("keeps bot panels and Files before installed plugin panels on a bot's page", () => {
     expect(
       ids(
         getVisibleRightSidebarActivityItems([...items, ...pluginItems], {
           isFolder: true,
           isFolderWorkspace: true,
-          hasSshHost: false,
+          hasSshHost: true,
           isBot: true
         })
       )
@@ -94,7 +81,7 @@ describe('getVisibleRightSidebarActivityItems', () => {
     ).toEqual(['explorer', 'bot-activity', 'vault', 'source-control'])
   })
 
-  it("drops the attached-worktree, PR-check and Source Control panels on a bot group's home", () => {
+  it("keeps only Items on a bot group's home", () => {
     expect(
       ids(
         getVisibleRightSidebarActivityItems(items, {
@@ -105,6 +92,6 @@ describe('getVisibleRightSidebarActivityItems', () => {
           isGroupHome: true
         })
       )
-    ).toEqual(['explorer', 'vault'])
+    ).toEqual(['bot-activity'])
   })
 })

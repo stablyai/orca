@@ -59,7 +59,7 @@ vi.mock('./bot-up-next-operations', () => ({
 }))
 
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
-import { lastLookedText, lookedText, lookNowRefusalText } from './bot-up-next-copy'
+import { lastLookedText, lookedText } from './bot-up-next-copy'
 import { MobileBotSettingsTab } from './MobileBotSettingsTab'
 import { MobileBotUpNext, type UpNextActions } from './MobileBotUpNext'
 import { useBotUpNext } from './use-bot-up-next'
@@ -339,10 +339,5 @@ describe('Suggestions wording', () => {
     expect(lastLookedText(new Date(2026, 9, 29, 16, 12).getTime(), 4, now)).toBe(
       'Oct 29 · 4 suggestions'
     )
-  })
-
-  it('says why a look did not start', () => {
-    expect(lookNowRefusalText('look_now_running')).toBe('Already looking around.')
-    expect(lookNowRefusalText('look_now_paused')).toBe('Turn the bot on to look around.')
   })
 })

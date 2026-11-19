@@ -29,8 +29,10 @@ export type BotSidebarRowProps = {
   /** Its home's key: the status and unread mark are the home's. */
   workspaceId: string
   hostId: ExecutionHostId
-  /** Null shows no status on the picture's corner, only the unread mark. */
+  /** The avatar shows activity and exceptions; healthy states stay unmarked. */
   status: WorktreeStatus | null
+  /** Its chat, worker or run stopped on a usage limit while the row is quiet: the corner's tooltip. */
+  stopTip?: string | null
   isUnread: boolean
   isActive: boolean
   dimmed?: boolean
@@ -61,6 +63,7 @@ export function BotSidebarRow({
   workspaceId,
   hostId,
   status,
+  stopTip = null,
   isUnread,
   isActive,
   expanded,
@@ -81,7 +84,11 @@ export function BotSidebarRow({
   const [renameRequested, setRenameRequested] = useState(false)
   const [hoverOpen, setHoverOpen] = useState(false)
   const toggleUnread = (): void => setWorkspaceUnreadByUser(workspaceId, !isUnread, hostId)
-  const badge = { status, isUnread, sleeping: useBotAvatarBadgeSleeping(workspaceId, status) }
+  const badge = {
+    status,
+    sleeping: useBotAvatarBadgeSleeping(workspaceId, status),
+    stopTip
+  }
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild>
@@ -94,7 +101,7 @@ export function BotSidebarRow({
             WORKTREE_CARD_SURFACE_CLASS_NAME,
             // A two-line workspace card's padding, so bots sit as tight as Projects' rows.
             // A size container: the fold strip slims down in a narrow sidebar.
-            'group/bot-row @container/bot-row flex items-center pt-1.25 pb-1.5 pl-1.5',
+            'group/bot-row @container/bot-row flex items-center pt-1.25 pb-1.25 pl-1.25',
             !isActive && 'worktree-sidebar-card-hover',
             dimmed && 'opacity-60'
           )}

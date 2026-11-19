@@ -11,6 +11,7 @@ import { DisclosureChevron } from '../components/list/DisclosureChevron'
 import { MobileAgentIcon } from '../components/icons/MobileAgentIcon'
 import { recentSessionConversationTurns } from '../../../src/shared/ai-vault/session-display/ai-vault-session-display'
 import type { AiVaultSession } from '../../../src/shared/ai-vault/contracts/ai-vault-types'
+import { isAntigravityReferenceSession } from '../../../src/shared/agent-session/lifecycle/provider-handles/antigravity-session-origin'
 import type {
   MobileAgentHistoryCard,
   MobileAgentHistoryResumeActionState
@@ -112,10 +113,11 @@ export function AgentHistorySessionRow({
               disabled={resumeDisabled}
               hitSlop={8}
               accessibilityRole="button"
-              accessibilityLabel={t(
-                'agentHistory.sessionHistoryList.resumeSession',
-                'Resume agent session'
-              )}
+              accessibilityLabel={
+                isAntigravityReferenceSession(session)
+                  ? t('agentHistory.sessionHistoryList.continueInCli', 'Continue in CLI')
+                  : t('agentHistory.sessionHistoryList.resumeSession', 'Resume agent session')
+              }
             >
               {resumeActionState?.loading ? (
                 <ActivityIndicator size="small" color={colors.textPrimary} />

@@ -1,12 +1,10 @@
-// A bot's items in groups: Needs you (led by Orca's asks), In progress and Closed open; Planned, Snoozed
-// and Stale folded. Each shows five rows, then Show N more. Checked rows get the floating pill; Stale's header
+// A bot's items in groups: Needs you (led by Orca's asks) and In progress open; Planned, Snoozed, Stale
+// and Closed folded. Each shows five rows, then Show N more. Checked rows get the floating pill; Stale's header
 // cancels them all. Asks have no checkbox, so selection and ranges never reach them.
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ChevronRight } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
-import { cn } from '@/lib/class-names'
 import { useLatestHandler } from '@/lib/use-latest-handler'
 import type { Bot } from '../../../../../shared/bot-types'
 import {
@@ -23,6 +21,7 @@ import {
   type BotItemGroups
 } from '../../../../../shared/bots/bot-item-groups'
 import { botErrorMessage } from '../bot-presentation'
+import { BotPanelSectionHeader } from '../BotPanelSection'
 import { useBotPanelFold, type BotPanelFoldId } from '../use-bot-panel-fold'
 import { BotNeedsYouSection, type BotNeedsYouAsks } from '../BotNeedsYouSection'
 import { botNeedsYouCount } from '../../../../../shared/bots/bot-now'
@@ -30,16 +29,33 @@ import { BotItemRow, type BotItemRowAction } from './BotItemRow'
 import { BotItemCancelDialog } from './BotItemCancelDialog'
 import { BotItemSelectionPill } from './BotItemSelectionPill'
 import { botItemGroupName } from '../../../../../shared/bots/bot-item-status-name'
-import { setBotItemsStatus } from './use-bot-items'
+import { botItemsByBot, setBotItemsStatus } from './use-bot-items'
+import type { BotNeedView } from '../use-bot-now'
 import { useBotItemSnoozing, type BotItemSnoozing } from './BotItemSnooze'
 
-// Closed's old flag meant "opened" under its old folded default; its own id keeps that from folding it.
-const foldId = (id: BotItemGroupId): BotPanelFoldId =>
-  id === 'closed' ? 'items-closed-folded' : `items-${id}`
+const foldId = (id: BotItemGroupId): BotPanelFoldId => `items-${id}`
+
+/** A group's members' items in one list: each row acts on its own bot and shows its face. */
+export type BotItemsListMembers = {
+  /** Where the list keeps its folds. */
+  foldKey: string
+  botOf: (item: BotItem) => Bot
+  /** Each bot's seen mark, for its rows' dots. */
+  seenOf: (item: BotItem) => string
+  /** Each ask's bot. */
+  needBot: (need: BotNeedView) => Bot
+  /** The chat a row names on its second line, for a row outside the chats the list is about. */
+  placeOf: (item: BotItem) => string | null
+  /** Needs you's rows the shown bots have outside the list's chats, "N more outside this group", and
+   *  what those chats are. */
+  outside: { count: number; of: 'group' | 'room' | 'thread' }
+}
 
 export type BotItemsListProps = {
-  bot: Bot
+  /** The bot whose items these are, or a group's members. */
+  bot: Bot | BotItemsListMembers
   groups: BotItemGroups
+  /** One bot's seen mark; a group's list reads its members'. */
   seenEventId: string
   /** Closed items on the host, past what is loaded; Show more reads them. */
   closedTotal: number
@@ -59,8 +75,31 @@ export type BotItemsListProps = {
 
 const NO_ASKS: BotNeedsYouAsks = { needs: [], stoppedForSignIn: [], itemOf: () => null }
 
+type ListOwner = Omit<BotItemsListMembers, 'needBot'> & {
+  needBot: Bot | BotItemsListMembers['needBot']
+  /** Rows show their bot's face: the list is a group's. */
+  faces: boolean
+}
+
+function listOwner(bot: Bot | BotItemsListMembers, seenEventId: string): ListOwner {
+  if ('botOf' in bot) {
+    return { ...bot, faces: true }
+  }
+  return {
+    foldKey: bot.id,
+    botOf: () => bot,
+    seenOf: () => seenEventId,
+    needBot: bot,
+    placeOf: () => null,
+    outside: { count: 0, of: 'group' },
+    faces: false
+  }
+}
+
 export function BotItemsList(props: BotItemsListProps): React.JSX.Element {
-  const { bot, groups, onOpen } = props
+  const { groups, onOpen } = props
+  const owner = listOwner(props.bot, props.seenEventId)
+  const { botOf } = owner
   const t = useTranslate()
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set())
   const [anchor, setAnchor] = useState<string | null>(null)
@@ -74,7 +113,7 @@ export function BotItemsList(props: BotItemsListProps): React.JSX.Element {
     )
   }
   const selectedItems = ordered.filter((item) => selected.has(item.uid))
-  const snoozing = useBotItemSnoozing(bot, () => setSelected(new Set()))
+  const snoozing = useBotItemSnoozing(botOf, () => setSelected(new Set()))
 
   const select = (item: BotItem, on: boolean, range: boolean): void => {
     setSelected((current) => {
@@ -93,11 +132,15 @@ export function BotItemsList(props: BotItemsListProps): React.JSX.Element {
 
   const move = async (items: readonly BotItem[], to: BotItemStatus, reason?: string) => {
     try {
-      await setBotItemsStatus(
-        bot,
-        items.map((item) => item.uid),
-        to,
-        reason
+      await Promise.all(
+        botItemsByBot(items, botOf).map(([ref, mine]) =>
+          setBotItemsStatus(
+            ref,
+            mine.map((item) => item.uid),
+            to,
+            reason
+          )
+        )
       )
       setSelected(new Set())
     } catch (error) {
@@ -131,6 +174,7 @@ export function BotItemsList(props: BotItemsListProps): React.JSX.Element {
           key={id}
           id={id}
           {...props}
+          owner={owner}
           selected={selected}
           onSelect={select}
           onAction={act}
@@ -165,9 +209,8 @@ export function BotItemsList(props: BotItemsListProps): React.JSX.Element {
 
 function BotItemGroup({
   id,
-  bot,
+  owner,
   groups,
-  seenEventId,
   closedTotal,
   onMoreClosed,
   now,
@@ -183,6 +226,7 @@ function BotItemGroup({
   focusFallback
 }: BotItemsListProps & {
   id: BotItemGroupId
+  owner: ListOwner
   selected: ReadonlySet<string>
   onSelect: (item: BotItem, on: boolean, range: boolean) => void
   onAction: (item: BotItem, action: BotItemRowAction) => void
@@ -192,7 +236,7 @@ function BotItemGroup({
 }): React.JSX.Element | null {
   const t = useTranslate()
   const items = groups[id]
-  const fold = useBotPanelFold(bot.id, foldId(id))
+  const fold = useBotPanelFold(owner.foldKey, foldId(id))
   const foldedByDefault = BOT_ITEM_GROUPS_FOLDED_BY_DEFAULT.has(id)
   const open = foldedByDefault ? !fold.open : fold.open
   const setOpen = (next: boolean): void => fold.onOpenChange(foldedByDefault ? !next : next)
@@ -228,7 +272,9 @@ function BotItemGroup({
   const total = id === 'closed' ? Math.max(closedTotal, items.length) : items.length
   // Needs you counts the rows it lists, asks first; runs a sign-in stopped are context, not counted.
   const count = needsYou ? botNeedsYouCount(asks.needs.length, items.length) : total
-  if (count === 0) {
+  // A group's Needs you also says what its bots need elsewhere, which its count leaves out.
+  const outside = needsYou ? owner.outside.count : 0
+  if (count === 0 && outside === 0) {
     return null
   }
   const row = (item: BotItem): React.JSX.Element => (
@@ -238,15 +284,18 @@ function BotItemGroup({
       stale={id === 'stale'}
       snoozed={id === 'snoozed'}
       snoozing={snoozing}
-      unseen={isBotItemUnseen(item, seenEventId)}
+      unseen={isBotItemUnseen(item, owner.seenOf(item))}
       selected={selected.has(item.uid)}
       selecting={selected.size > 0}
       now={now}
       onSelect={(on, range) => onSelect(item, on, range)}
       onAction={(action) => onAction(item, action)}
+      face={owner.faces ? owner.botOf(item) : null}
+      place={owner.placeOf(item)}
     />
   )
-  const fresh = id === 'closed' ? items.filter((item) => isBotItemUnseen(item, seenEventId)) : []
+  const fresh =
+    id === 'closed' ? items.filter((item) => isBotItemUnseen(item, owner.seenOf(item))) : []
   const more = total - Math.min(shown, items.length)
   const showMore = async (): Promise<void> => {
     if (shown + BOT_ITEM_GROUP_ROWS > items.length && onMoreClosed && id === 'closed') {
@@ -258,29 +307,31 @@ function BotItemGroup({
   }
   return (
     <section ref={section} className="flex flex-col gap-0.5">
-      <div className="flex min-h-6 items-center gap-2 pr-1">
-        <button
-          type="button"
-          aria-expanded={open}
-          className="flex min-w-0 items-center gap-1 rounded-sm px-1 text-xs text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-          onClick={() => setOpen(!open)}
-        >
-          <ChevronRight className={cn('size-3 transition-transform', open && 'rotate-90')} />
-          {botItemGroupName(id, t)}
-          <span className="tabular-nums">{count}</span>
-        </button>
-        {fresh.length > 0 && !open ? (
-          <span className="ml-auto flex items-center gap-1 text-2xs text-foreground">
-            <span aria-hidden className="size-1.5 rounded-full bg-foreground" />
-            {t('bots.items.group.new', '{{count}} new', { count: fresh.length })}
-          </span>
-        ) : null}
-        {onCancelAll && items.length > 0 ? (
-          <Button variant="ghost" size="xs" className="ml-auto" onClick={() => setConfirming(true)}>
-            {t('bots.items.stale.cancelAll', 'Cancel all')}
-          </Button>
-        ) : null}
-      </div>
+      <BotPanelSectionHeader
+        title={botItemGroupName(id, t)}
+        fold={{ open, onOpenChange: setOpen }}
+        // Open, the rows count themselves; folded, nothing else says what it hides.
+        summary={
+          open ? null : (
+            <>
+              {count}
+              {fresh.length > 0 ? (
+                <span className="text-foreground">
+                  {' · '}
+                  {t('bots.items.group.new', '{{count}} new', { count: fresh.length })}
+                </span>
+              ) : null}
+            </>
+          )
+        }
+        actions={
+          onCancelAll && items.length > 0 ? (
+            <Button variant="ghost" size="xs" className="h-6" onClick={() => setConfirming(true)}>
+              {t('bots.items.stale.cancelAll', 'Cancel all')}
+            </Button>
+          ) : null
+        }
+      />
       {confirming && onCancelAll ? (
         <div className="mx-1 my-1 flex flex-col gap-2 rounded-md border border-border bg-popover p-2.5 text-xs">
           <span className="font-medium text-foreground">
@@ -316,7 +367,7 @@ function BotItemGroup({
       ) : null}
       {open && needsYou ? (
         <BotNeedsYouSection
-          bot={bot}
+          bot={owner.needBot}
           asks={asks}
           items={items}
           renderItem={row}
@@ -338,6 +389,24 @@ function BotItemGroup({
             </button>
           ) : null}
         </>
+      ) : null}
+      {open && outside > 0 ? (
+        <p className="py-0.5 pl-8 pr-2 text-xs text-muted-foreground">
+          {owner.outside.of === 'room'
+            ? t('bots.groups.items.outsideRoom', '{{count}} more outside this room', {
+                count: outside,
+                defaultValue_one: '{{count}} more outside this room'
+              })
+            : owner.outside.of === 'thread'
+              ? t('bots.groups.items.outsideThread', '{{count}} more outside this thread', {
+                  count: outside,
+                  defaultValue_one: '{{count}} more outside this thread'
+                })
+              : t('bots.groups.items.outside', '{{count}} more outside this group', {
+                  count: outside,
+                  defaultValue_one: '{{count}} more outside this group'
+                })}
+        </p>
       ) : null}
     </section>
   )
