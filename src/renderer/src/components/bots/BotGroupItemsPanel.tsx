@@ -224,7 +224,6 @@ export function BotGroupItemsPanel({ group }: { group: BotGroup }): React.JSX.El
               members.length > 0 ? (
                 <BotItemsFilterButton
                   items={merged.shown}
-                  chats={[]}
                   filter={filter}
                   onFilter={setFilter}
                   group={{

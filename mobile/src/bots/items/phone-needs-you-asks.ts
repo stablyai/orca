@@ -7,11 +7,7 @@ import type { AgentSessionAwaitedApproval } from '../../../../src/shared/agent-s
 import type { ConnectorAccessRequest } from '../../../../src/shared/connector-bot-access-contract'
 import { accessRequestPerson } from '../../../../src/shared/bots/bot-access-request'
 import type { BotChatTreeChat, BotChatTreeWorker } from '../../../../src/shared/bots/bot-chat-tree'
-import {
-  botItemsByDispatch,
-  filterBotNeeds,
-  type BotItemFilter
-} from '../../../../src/shared/bots/bot-item-groups'
+import { botItemsByDispatch } from '../../../../src/shared/bots/bot-item-groups'
 import type { BotItem } from '../../../../src/shared/bots/bot-items'
 import { botNeedsYouCount } from '../../../../src/shared/bots/bot-now'
 import { useOptionalHostProtocolGates } from '../../components/host-connection/host-protocol-gates-context'
@@ -172,7 +168,7 @@ function useChatApprovals(
   }, [approvals])
 }
 
-/** The asks the filter keeps (`shown`), and the tab's count: every ask the phone reads plus `itemCount`.
+/** Every ask the phone reads, and the tab's count: those asks plus `itemCount`.
  *  It is what the phone lists, so it is lower than the desktop's when a sign-in waits. */
 export function usePhoneNeedsYouAsks({
   client,
@@ -180,7 +176,6 @@ export function usePhoneNeedsYouAsks({
   workers,
   items,
   access,
-  filter,
   itemCount
 }: {
   /** The bot host's client, whose status feed says which chats wait on an approval; null while the
@@ -193,10 +188,9 @@ export function usePhoneNeedsYouAsks({
   items: readonly BotItem[] | undefined
   /** The bot's waiting access requests; null without a route bot. */
   access: Pick<BotAccessRequests, 'requests'> | null
-  filter: BotItemFilter
   /** Needs you items that aren't stale, unfiltered. */
   itemCount: number
-}): { shown: readonly PhoneAsk[]; count: number } {
+}): { asks: readonly PhoneAsk[]; count: number } {
   const chatApproval = useChatApprovals(client, chats)
   const accessRequests = access?.requests
   const all = useMemo(() => {
@@ -210,6 +204,5 @@ export function usePhoneNeedsYouAsks({
       accessRequests ?? []
     )
   }, [chats, workers, items, chatApproval, accessRequests])
-  const shown = useMemo(() => filterBotNeeds(all, filter, (ask) => ask.chatId), [all, filter])
-  return { shown, count: botNeedsYouCount(all.length, itemCount) }
+  return { asks: all, count: botNeedsYouCount(all.length, itemCount) }
 }

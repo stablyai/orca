@@ -85,7 +85,7 @@ export function MobileBotItemsTab({
   setSheet: (sheet: BotItemSheet) => void
   /** Automations and Up next, below the groups as on the desktop. */
   after: ReactNode
-  /** Orca's asks the phone reads, as the filter keeps them; they lead Needs you whatever the items say. */
+  /** Orca's asks the phone reads; they lead Needs you whatever the items say. */
   asks: readonly PhoneAsk[]
   askOpeners: PhoneAskOpeners
   client: RpcClient | null
