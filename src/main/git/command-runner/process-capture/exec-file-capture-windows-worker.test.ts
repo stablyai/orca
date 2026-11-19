@@ -161,7 +161,7 @@ describe('Windows process creation off the calling loop', () => {
     ['buffered', execFileCapture],
     ['termination-barrier', execFileCaptureToTermination]
   ] as const)(
-    'returns a %s capture its capacity when the worker dies, but not termination while the tree kill fails',
+    'returns a %s capture its capacity when the worker dies, and termination only once the root is gone',
     async (_kind, capture) => {
       const child = new WorkerThreadChildProcess(1, () => true)
       worker.spawn.mockReturnValue(child)
@@ -184,9 +184,21 @@ describe('Windows process creation off the calling loop', () => {
       await expect(pending).rejects.toThrow('Child process worker exited with code 1')
       expect(workerLost).toHaveBeenCalledOnce()
       expect(treeKills.args).toEqual([['/pid', '4242', '/t', '/f']])
-      treeKills.killers[0]!.emit('close', 1)
-      await new Promise((resolve) => setImmediate(resolve))
-      expect(terminated).not.toHaveBeenCalled()
+      const rootAlive = vi.spyOn(process, 'kill').mockImplementation(() => true)
+      vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] })
+      try {
+        treeKills.killers[0]!.emit('close', 1)
+        await vi.advanceTimersByTimeAsync(1_000)
+        expect(terminated).not.toHaveBeenCalled()
+        rootAlive.mockImplementation(() => {
+          throw Object.assign(new Error('kill ESRCH'), { code: 'ESRCH' })
+        })
+        await vi.advanceTimersByTimeAsync(1_000)
+        expect(terminated).toHaveBeenCalledOnce()
+      } finally {
+        vi.useRealTimers()
+        rootAlive.mockRestore()
+      }
     }
   )
 

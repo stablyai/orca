@@ -11,7 +11,10 @@ import {
   isAbandonedWorkerChildError,
   spawnProcessOnWorkerThread
 } from '../../../worker-thread-child-process/worker-thread-child-process'
-import { killAbandonedWorkerChildTree } from './spawned-command-tree-kill'
+import {
+  killAbandonedWorkerChildTree,
+  reportWhenAbandonedRootEnds
+} from './spawned-command-tree-kill'
 
 function isPlainPiped(spec: ProcessSpec): boolean {
   const { stdio } = spec
@@ -67,18 +70,14 @@ export function launchProcessSpecOnWindowsWorker(
       ? stopping.settled.then((verdict) => verdict === 'exited')
       : killAbandonedWorkerChildTree(child)
     const barrier = spec.terminationBarrier
-    // Ending wsl.exe proves nothing about the Linux process group; only the guest barrier's kill does.
+    // Ending wsl.exe proves nothing about the Linux process group; the guest barrier's kill does.
     const proven =
       typeof barrier === 'object'
         ? Promise.all([treeEnded, barrier.force(launched).catch(() => false)]).then(
             ([, guestEnded]) => guestEnded
           )
         : treeEnded
-    void proven.then((ended) => {
-      if (ended) {
-        onTerminated()
-      }
-    })
+    reportWhenAbandonedRootEnds(child.pid, proven, onTerminated)
   })
   return { child: launched, withdrawPendingLaunch: () => child.cancelPendingSpawn() }
 }

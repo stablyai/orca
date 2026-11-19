@@ -33,7 +33,7 @@ function batchTaskkill(pids: readonly number[], onWorker: boolean): Promise<bool
   return batch.ended
 }
 
-/** A dead worker can no longer stop its children; end a still-running Windows tree whose PID it reported. True only when the tree provably ended. */
+/** A dead worker can no longer stop its children; end a still-running Windows tree whose PID it reported. True when the tree ended or its root already had. */
 export function killAbandonedWorkerChildTree(
   child: Pick<ChildProcess, 'pid' | 'exitCode' | 'signalCode' | 'kill'>
 ): Promise<boolean> {
@@ -45,10 +45,11 @@ export function killAbandonedWorkerChildTree(
   if (process.platform !== 'win32' || !pid) {
     return Promise.resolve(true)
   }
+  // An exited root's pid may be reused, so it is never killed; its exit is the evidence.
+  if ((child.exitCode ?? null) !== null || (child.signalCode ?? null) !== null) {
+    return Promise.resolve(true)
+  }
   if (
-    // An exited root's PID may be reused and descendants may still hold its pipes: nothing provable is left to kill.
-    (child.exitCode ?? null) !== null ||
-    (child.signalCode ?? null) !== null ||
     !admitSelfInitiatedTreeKill({ pid, site: 'git-command-tree-kill', scope: 'win-taskkill-tree' })
   ) {
     return Promise.resolve(false)
@@ -60,18 +61,46 @@ export function killAbandonedWorkerChildTree(
   return kill
 }
 
-/** Capacity returns at once; termination is reported only if the tree kill proves the child ended. */
+const ABANDONED_ROOT_POLL_MS = 1_000
+
+function processIsGone(pid: number): boolean {
+  try {
+    process.kill(pid, 0)
+    return false
+  } catch (error) {
+    return typeof error === 'object' && error !== null && 'code' in error && error.code === 'ESRCH'
+  }
+}
+
+/** Without a proven tree kill, the root's own end stands in for the close a dead worker can't deliver; a reused pid only delays it. */
+export function reportWhenAbandonedRootEnds(
+  pid: number | undefined,
+  proven: Promise<boolean>,
+  onTerminated: () => void
+): void {
+  void proven.then((ended) => {
+    if (ended || !pid || processIsGone(pid)) {
+      onTerminated()
+      return
+    }
+    const poll = setInterval(() => {
+      if (processIsGone(pid)) {
+        clearInterval(poll)
+        onTerminated()
+      }
+    }, ABANDONED_ROOT_POLL_MS)
+    poll.unref?.()
+  })
+}
+
+/** Capacity returns at once; termination is reported once the tree kill succeeds or the root is gone. */
 export function endAbandonedWorkerChild(
   child: Pick<ChildProcess, 'pid' | 'exitCode' | 'signalCode' | 'kill'>,
   onWorkerLost: (() => void) | undefined,
   onTerminated: () => void
 ): void {
   onWorkerLost?.()
-  void killAbandonedWorkerChildTree(child).then((proven) => {
-    if (proven) {
-      onTerminated()
-    }
-  })
+  reportWhenAbandonedRootEnds(child.pid, killAbandonedWorkerChildTree(child), onTerminated)
 }
 
 /** Resolves once the stop is done; a stopped child's own close still reports its termination. */
