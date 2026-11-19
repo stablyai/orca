@@ -1,4 +1,5 @@
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
+import { ORCA_CODEX_KITTY_GRAPHICS_ENV } from '../../../../shared/terminal/images/terminal-image-protocol'
 import { applyRemoteViewerClipboardEnv } from '../../../ipc/pty/host-env/remote-viewer-clipboard-env'
 import { applyClaudeTerminalImageViewerEnv } from './terminal-image-viewer-env'
 
@@ -14,7 +15,10 @@ export function applyRemoteViewerLaunchEnv<
     return next
   }
   // Desktop hosts lack headless env; mark remote caller viewer capability explicitly (#10861).
-  const env = { ...next.env }
+  const env = {
+    ...next.env,
+    [ORCA_CODEX_KITTY_GRAPHICS_ENV]: terminalImageViewerSupported ? '1' : '0'
+  }
   applyRemoteViewerClipboardEnv(env, { launchAgent: agent, viewerIsRemote: true })
   return { ...next, env }
 }

@@ -84,6 +84,7 @@ if (a.length === 1 && a[0] === '--help') {
 }
 let out = ['ARGV', ...a].join('|')
 if (process.env.FAKE_CODEX_READ_CLIPBOARD_ENV === '1') out += '|ssh=' + (process.env.SSH_CONNECTION ?? '<unset>')
+if (process.env.FAKE_CODEX_READ_IMAGE_ENV === '1') out += '|kitty=' + (process.env.KITTY_WINDOW_ID ?? '<unset>')
 if (process.env.FAKE_CODEX_READ_STDIN === '1') out += '|stdin=' + fs.readFileSync(0, 'utf8').trim()
 console.log(out)
 process.exit(Number(process.env.FAKE_CODEX_EXIT || 0))
@@ -101,6 +102,7 @@ if [ "$#" -eq 1 ] && [ "$1" = --help ]; then echo help >> ${JSON.stringify(helpL
 out=ARGV
 for a in "$@"; do out="$out|$a"; done
 [ "\${FAKE_CODEX_READ_CLIPBOARD_ENV:-}" = 1 ] && out="$out|ssh=\${SSH_CONNECTION-<unset>}"
+[ "\${FAKE_CODEX_READ_IMAGE_ENV:-}" = 1 ] && out="$out|kitty=\${KITTY_WINDOW_ID-<unset>}"
 [ "\${FAKE_CODEX_READ_STDIN:-}" = 1 ] && out="$out|stdin=$(cat)"
 printf '%s\\n' "$out"
 exit "\${FAKE_CODEX_EXIT:-0}"
@@ -179,6 +181,8 @@ function run(
     SSH_CONNECTION: undefined,
     SSH_TTY: undefined,
     [REMOTE_VIEWER_CLIPBOARD_ENV]: undefined,
+    KITTY_WINDOW_ID: undefined,
+    ORCA_CODEX_KITTY_GRAPHICS: undefined,
     ...env
   })
 }
@@ -199,6 +203,52 @@ const shells: [Shell, boolean][] = [
   // Windows PowerShell 5.1 promotes redirected native stderr to errors; pwsh does not.
   ['powershell', isWindows && canRun('powershell')]
 ]
+
+describe.concurrent('Codex terminal image compatibility', () => {
+  for (const [shell, available] of shells) {
+    it.skipIf(!available)(
+      `${shell} keeps the synthetic ID in the Codex process`,
+      async ({ expect }) => {
+        const sandbox = makeSandbox(HELP_WITHOUT_FLAG)
+        const set = (name: string, value: string): string =>
+          isPowerShell(shell)
+            ? `$env:${name} = '${value}'`
+            : shell === 'fish'
+              ? `set -gx ${name} ${value}`
+              : `export ${name}=${value}`
+        const direct = isPowerShell(shell)
+          ? `& ${quote(shell, sandbox.codex)} direct`
+          : `${quote(shell, sandbox.codex)} direct`
+        const result = await run(
+          shell,
+          [
+            'codex enabled',
+            direct,
+            set('KITTY_WINDOW_ID', '42'),
+            'codex existing',
+            isPowerShell(shell)
+              ? 'Remove-Item Env:KITTY_WINDOW_ID'
+              : shell === 'fish'
+                ? 'set -e KITTY_WINDOW_ID'
+                : 'unset KITTY_WINDOW_ID',
+            set('ORCA_CODEX_KITTY_GRAPHICS', '0'),
+            'codex disabled'
+          ].join('\n'),
+          sandbox,
+          { FAKE_CODEX_READ_IMAGE_ENV: '1', ORCA_CODEX_KITTY_GRAPHICS: '1' }
+        )
+
+        expect(result.status, result.stderr).toBe(0)
+        expect(lines(result.stdout)).toEqual([
+          'ARGV|enabled|kitty=0',
+          'ARGV|direct|kitty=<unset>',
+          'ARGV|existing|kitty=42',
+          'ARGV|disabled|kitty=<unset>'
+        ])
+      }
+    )
+  }
+})
 
 describe.concurrent('codex wrapper --no-daemon rule', () => {
   for (const [shell, available] of shells) {

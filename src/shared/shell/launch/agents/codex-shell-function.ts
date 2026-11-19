@@ -2,6 +2,10 @@ import {
   CODEX_REMOTE_VIEWER_SSH_CONNECTION,
   REMOTE_VIEWER_CLIPBOARD_ENV
 } from '../../../clipboard/remote-viewer-clipboard-env'
+import {
+  CODEX_KITTY_WINDOW_ID,
+  ORCA_CODEX_KITTY_GRAPHICS_ENV
+} from '../../../terminal/images/terminal-image-protocol'
 
 // Embed launch-prep/--no-daemon wrappers on all hosts. Codex 0.156+ otherwise shares CODEX_HOME servers with the first tab’s Orca hooks/env and lifetime (#22873). agents/queue/--remote require sharing; any -c opts out.
 const CODEX_SHARED_SERVER_ARGS = ['agents', 'queue', '--remote'] as const
@@ -61,6 +65,9 @@ ${CODEX_COMMAND_IDENTITY_ENV_KEYS.map((key) => `      [[ -z "\${${key}:-}" || "\
     if [[ "$__orca_codex_isolate" != 0 ]]; then
       case "$(command codex --help 2>/dev/null </dev/null)" in *--no-daemon*) set -- --no-daemon "$@" ;; esac
     fi
+    if [[ "\${${ORCA_CODEX_KITTY_GRAPHICS_ENV}:-}" == 1 && -z "\${KITTY_WINDOW_ID+x}" ]]; then
+      local -x KITTY_WINDOW_ID='${CODEX_KITTY_WINDOW_ID}'
+    fi
     command codex "$@"
   }
 fi
@@ -86,6 +93,9 @@ ${CODEX_COMMAND_IDENTITY_ENV_KEYS.map((key) => `      test -n "$${key}"; and not
     end
     if test "$ORCA_CODEX_ISOLATE" != 0; and not string match -qr -- '${CODEX_NO_DAEMON_SKIP_ARG_PATTERN}' $argv; and command codex --help 2>/dev/null </dev/null | string match -q -- '*--no-daemon*'
       set argv --no-daemon $argv
+    end
+    if test "$${ORCA_CODEX_KITTY_GRAPHICS_ENV}" = 1; and not set -q KITTY_WINDOW_ID
+      set -fx KITTY_WINDOW_ID '${CODEX_KITTY_WINDOW_ID}'
     end
     if test "$${REMOTE_VIEWER_CLIPBOARD_ENV}" = 1; and not set -q SSH_CONNECTION; and not set -q SSH_TTY
       set -lx SSH_CONNECTION '${CODEX_REMOTE_VIEWER_SSH_CONNECTION}'
@@ -134,6 +144,8 @@ if ($orcaCodexCommand -and
         }
         $orcaCodexArgs = @(__OrcaEscapeNativeArgs $orcaCodexExecutable.Source (@($orcaCodexIdentity) + @($args)))
         if ($orcaCodexRemoteClipboard) { $env:SSH_CONNECTION = '${CODEX_REMOTE_VIEWER_SSH_CONNECTION}' }
+        $orcaCodexKitty = $env:${ORCA_CODEX_KITTY_GRAPHICS_ENV} -eq '1' -and -not (Test-Path Env:KITTY_WINDOW_ID)
+        if ($orcaCodexKitty) { $env:KITTY_WINDOW_ID = '${CODEX_KITTY_WINDOW_ID}' }
         # Why: a native command inside a function never sees the function's pipeline input on its own.
         try {
             if ($MyInvocation.ExpectingInput) {
@@ -143,6 +155,7 @@ if ($orcaCodexCommand -and
             }
         } finally {
             if ($orcaCodexRemoteClipboard) { Remove-Item Env:SSH_CONNECTION }
+            if ($orcaCodexKitty) { Remove-Item Env:KITTY_WINDOW_ID }
         }
         $global:LASTEXITCODE = $LASTEXITCODE
     }

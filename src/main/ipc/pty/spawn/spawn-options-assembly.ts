@@ -29,6 +29,11 @@ import {
   stripInheritedAgentSessionEnv
 } from '../../../../shared/agent-launch/startup/parent-agent-session-env'
 import { shouldSeedPreAttachPtySize } from '../delivery/attached-pty-size'
+import {
+  CODEX_KITTY_WINDOW_ID,
+  ORCA_CODEX_KITTY_GRAPHICS_ENV
+} from '../../../../shared/terminal/images/terminal-image-protocol'
+import { resolveTerminalInlineImagesEnabled } from '../../../../shared/terminal/images/terminal-inline-images-settings'
 
 type TrustInput = Parameters<typeof applyAgentWorkspaceTrustToSpawn>[0]
 
@@ -115,6 +120,7 @@ export type PtySpawnLaunchOptionsInput = {
   spawnIntent: PtySpawnOptions['spawnIntent']
   /** Host history is sampled before preparation; otherwise read it after OpenCode preparation. */
   historyIsolationEnabled?: boolean
+  headlessHost?: boolean
   getSettings?: () => GlobalSettings | undefined
   store: TrustInput['store']
   claudeAuth: TrustInput['claudeAuth']
@@ -149,8 +155,22 @@ export async function assemblePtySpawnLaunchOptions(input: PtySpawnLaunchOptions
       ? { wsl: { distro: input.expectedWslDistro ?? undefined } }
       : {})
   })
-  const env = openCodeLaunch.env
-  const pluginDir = !connectionId ? env?.ORCA_CLAUDE_AGENT_VIEW_PLUGIN_DIR : undefined
+  const settings = input.getSettings?.()
+  const viewerSupportsImages = openCodeLaunch.env?.[ORCA_CODEX_KITTY_GRAPHICS_ENV]
+  const codexKittyGraphics =
+    !input.envToDelete.includes('KITTY_WINDOW_ID') &&
+    !input.envToDelete.includes(ORCA_CODEX_KITTY_GRAPHICS_ENV) &&
+    (viewerSupportsImages === undefined ? !input.headlessHost : viewerSupportsImages === '1') &&
+    resolveTerminalInlineImagesEnabled(settings?.terminalInlineImages)
+  const env: Record<string, string> = {
+    ...openCodeLaunch.env,
+    [ORCA_CODEX_KITTY_GRAPHICS_ENV]: codexKittyGraphics ? '1' : '0'
+  }
+  // Managed launches can bypass the shell function (e.g. cmd.exe or an absolute executable).
+  if (launchAgent === 'codex' && codexKittyGraphics) {
+    env.KITTY_WINDOW_ID ??= process.env.KITTY_WINDOW_ID ?? CODEX_KITTY_WINDOW_ID
+  }
+  const pluginDir = !connectionId ? env.ORCA_CLAUDE_AGENT_VIEW_PLUGIN_DIR : undefined
   const launchCommand =
     pluginDir && openCodeLaunch.command
       ? withClaudeAgentViewPlugin(openCodeLaunch.command, pluginDir, shell)
@@ -165,9 +185,7 @@ export async function assemblePtySpawnLaunchOptions(input: PtySpawnLaunchOptions
       : {}),
     env,
     historyIsolationEnabled:
-      input.historyIsolationEnabled ??
-      input.getSettings?.()?.terminalScopeHistoryByWorktree ??
-      true,
+      input.historyIsolationEnabled ?? settings?.terminalScopeHistoryByWorktree ?? true,
     ...(input.isNewSession ? { isNewSession: true } : {}),
     envToDelete: input.envToDelete
   }
@@ -212,7 +230,7 @@ export async function assemblePtySpawnLaunchOptions(input: PtySpawnLaunchOptions
     cwd: input.cwd,
     store: input.store,
     isFreshLaunch: !input.preAdoptedStablePane && launchCommand !== undefined,
-    settings: input.getSettings?.(),
+    settings,
     env,
     claudeAuth: input.claudeAuth,
     wslDistro: input.expectedWslDistro,
