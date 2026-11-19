@@ -23,6 +23,8 @@ export type RuntimeTerminalSummary = {
   worktreePath: string
   branch: string
   tabId: string
+  /** Workspace tab ID from Copy Tab ID, when the host can resolve the owning tab. */
+  unifiedTabId?: string
   leafId: string
   title: string | null
   /** A user's name for this pane from the host's saved layout; absent when unset or the host predates it. */

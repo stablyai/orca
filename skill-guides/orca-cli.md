@@ -259,7 +259,9 @@ Old runtimes that predate these existing fields may ignore them; verify with `wo
 ## Terminals
 
 When a message contains `orcaTabId: <id>`, run `ORCA terminal list --json` in the relevant
-worktree and match the ID exactly against `terminals[].tabId`. Read the matching pane with
+worktree and match the ID exactly against `terminals[].unifiedTabId`. For rows missing that
+field, try an exact `tabId` match. If the listing is truncated, increase `--limit` before
+reporting that the ID could not be resolved. Read the matching pane with
 `ORCA terminal read --terminal <handle> --json` using its `handle`. If multiple panes share
 the tab ID, use `--include-visual-layouts` on the list command to identify the intended pane.
 

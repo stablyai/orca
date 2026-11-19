@@ -3,6 +3,7 @@ import type {
   RuntimeTerminalListResult,
   RuntimeTerminalSummary
 } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
+import type { Tab } from '../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import type { PtyControllerInventory } from '../lifecycle/runtime-pty-controller-contract'
@@ -41,6 +42,7 @@ type RuntimeTerminalListDependencies = {
     pty: RuntimePtyWorktreeRecord,
     worktrees: Map<string, ResolvedWorktree>
   ): RuntimeTerminalSummary
+  getUnifiedTabs(worktreeId: string, hostId?: ExecutionHostId): readonly Tab[] | undefined
   getSnapshots(): ReadonlyMap<string, RuntimeMobileSessionTabsSnapshot>
   getTabTitle(tabId: string): string | null
   getTopologyRevision(worktreeId: string): number
@@ -159,6 +161,25 @@ export class RuntimeTerminalList {
       ? terminals.filter((terminal) => requestedHandles.has(terminal.handle))
       : terminals
     const listed = matching.slice(0, limit)
+    const tabIdsByWorkspace = new Map<string, Map<string, string>>()
+    for (const terminal of listed) {
+      if (terminal.orphaned) {
+        continue
+      }
+      const workspace = JSON.stringify([terminal.executionHostId, terminal.worktreeId])
+      let ids = tabIdsByWorkspace.get(workspace)
+      if (!ids) {
+        const tabs = this.deps.getUnifiedTabs(terminal.worktreeId, terminal.executionHostId) ?? []
+        ids = new Map(
+          tabs.filter((tab) => tab.contentType === 'terminal').map((tab) => [tab.entityId, tab.id])
+        )
+        tabIdsByWorkspace.set(workspace, ids)
+      }
+      const id = ids.get(terminal.tabId)
+      if (id !== undefined) {
+        terminal.unifiedTabId = id
+      }
+    }
     const snapshots = this.deps.getSnapshots()
     const visualLayouts =
       opts.includeVisualLayouts === false
