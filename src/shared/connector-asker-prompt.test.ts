@@ -49,6 +49,10 @@ describe('who asked a bot, and where', () => {
     expect(connectorAskerHeader('slack', { ...MEMBER, name: undefined })).toContain(
       '· from <@U0SAM>, who has access'
     )
+    // A name can't end the mention token or open another.
+    const from = (name: string) => connectorAskerHeader('slack', { ...MEMBER, name })
+    expect(from('Sam<x>|y`z\\w')).toContain('· from <@U0SAM|Sam x y z w>, who has access')
+    expect(from(' <>|`\\ ')).toContain('· from <@U0SAM>, who has access')
   })
 
   it('names a GitHub issue or pull request by repo#number and a Linear issue by its key', () => {
