@@ -3,7 +3,7 @@ import { runtimeEnvironmentIdForWorkspaceOwner } from '@/lib/workspace/ownership
 import { useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '../../../store/index'
-import { buildStatusMap } from '../../../lib/source-control/paths/git-path-decoration'
+import { buildStatusMap } from '../../../../../shared/git/status/git-path-decoration'
 import { useAgentDetectionTargetForWorktree } from '@/lib/agent-session/launch/inventory/useAgentDetectionTarget'
 import {
   getConnectionIdFromState,

@@ -173,7 +173,14 @@ const emojiShortcodeDatasetResource = {
   from: 'node_modules/emojibase-data/en/shortcodes/emojibase.json',
   to: 'node_modules/emojibase-data/en/shortcodes/emojibase.json'
 }
+// The native dependency rebuild runs after beforePack and replaces node-pty/build.
+const journalFileLockBuildDir = 'native/journal-file-lock/.build'
 const commonExtraResources = [
+  {
+    from: `${journalFileLockBuildDir}/\${arch}`,
+    to: 'bin',
+    filter: ['journal-file-lock', 'journal-file-lock.exe']
+  },
   relayExtraResource,
   orcadTemplateExtraResource,
   orcadTemplateNodeModulesExtraResource,
@@ -342,7 +349,7 @@ module.exports = {
     'out/package.json',
     'out/cli/**',
     'out/shared/**',
-    'out/main/worker-threads/worker-thread-{entry-path,spawn}.js',
+    'out/main/worker-threads/{worker-thread-entry-path,worker-thread-spawn,worker-send-ledger}.js',
     'out/main/agent-hooks/**',
     'out/main/antigravity/**',
     'out/main/claude/**',
@@ -371,16 +378,15 @@ module.exports = {
     'out/main/skills/bundled-skill-install/bundled-skill-local-host.js',
     'out/main/skills/bundled-skill-install/bundled-skill-installation.js',
     'out/main/startup/network-compatibility/http1-compatibility-marker.js',
-    // `orca uninstall` runs the app's cleanup in the CLI process.
-    'out/main/uninstall/orca-{install-identity,uninstall-cleanup}.js',
-    'out/main/daemon/launch/local-terminal-daemon-stop.js',
-    'out/main/cli/cli-installer.js',
+    // `orca agent hooks` gives main hook code an app environment in the CLI process.
     'out/main/backend/node-service-environment.js',
     'out/main/daemon-entry.js',
     'out/main/session-scanner-service-entry.js',
     'out/main/wsl-transcript-fs-process-entry.js',
     'out/main/foreign-sqlite-reader-entry.js',
     'out/main/agent-identity-worker-entry.js',
+    'out/main/bots-db-worker-entry.js',
+    'out/main/orchestration-reader-entry.js',
     'out/main/session-search-worker-entry.js',
     'out/main/journal-sql-worker-entry.js',
     'out/main/journal-sql-reader-entry.js',
@@ -427,6 +433,16 @@ module.exports = {
     if (context.electronPlatformName !== 'win32') {
       ensureProviderExec(context.electronPlatformName, context.arch)
     }
+    return import('./scripts/native-build/build-journal-file-lock.mjs').then(
+      ({ buildJournalFileLock }) => {
+        const lockName =
+          context.electronPlatformName === 'win32' ? 'journal-file-lock.exe' : 'journal-file-lock'
+        const arch = normalizeElectronArchitecture(context.arch)
+        buildJournalFileLock(join(__dirname, '..', journalFileLockBuildDir, arch, lockName), arch, {
+          glibcFloor: context.electronPlatformName === 'linux' ? 'desktop' : false
+        })
+      }
+    )
   },
   afterPack: async (context) => {
     const resourcesDir =
@@ -564,6 +580,11 @@ module.exports = {
     })
     chmodUnixCliLaunchers(resourcesDir, context.electronPlatformName)
     if (context.electronPlatformName === 'darwin') {
+      await signMacStandaloneHelper(
+        join(resourcesDir, 'bin', 'journal-file-lock'),
+        'journal file lock',
+        context.packager
+      )
       await signMacComputerUseHelper(join(resourcesDir, 'Orca Computer Use.app'), context.packager)
       await signMacStandaloneHelper(
         join(resourcesDir, '..', 'MacOS', 'orca-notification-status'),

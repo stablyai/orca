@@ -916,6 +916,13 @@
       "cleanup": {
         "recipeDescription": "在听写文本插入前进行整理"
       }
+    },
+    "bots": {
+      "tidyUp": {
+        "everyNightLine": "每晚凌晨 3 点之后，或这台电脑唤醒后",
+        "everyWeekLine": "每周一次，凌晨 3 点之后，或这台电脑唤醒后",
+        "everyDescriptionAwake": "如果这台电脑当时处于睡眠状态，会在唤醒后运行。只在有新聊天的夜晚之后运行。每次整理都会像一次简短聊天一样使用你的 {{agent}} 套餐。"
+      }
     }
   },
   "menu": {
@@ -1980,7 +1987,9 @@
         "noSavedConversation": "此聊天没有可复制的已保存对话"
       },
       "projectHostSetupOptions": {
-        "locationNotSet": "尚未设置项目位置"
+        "locationNotSet": "尚未设置项目位置",
+        "hostLocalGitProject": "此项目没有匹配的 Git 远程仓库",
+        "hostLocalFolderProject": "文件夹项目无法关联到其他主机"
       },
       "updateCheckClickOptions": {
         "releaseHint": "{{rcKey}}+ 点击检查最新候选发布版(RC)，{{perfKey}}+ 点击检查最新性能测试构建",
@@ -4567,7 +4576,6 @@
             "27a74f91f0": "现在没有任何运行",
             "298f4be7f2": "CPU",
             "2aa2de6cb9": "名称",
-            "1fedf94eae": "组合 CPU 负载，高于 100% 的值意味着多个核心同时工作",
             "e7cf14ec78": "终端会话不可用，该列表可能已过时",
             "93b0de3c21": "重新启动",
             "f85af9cda6": "资源快照和终端会话不可用",
@@ -4958,8 +4966,6 @@
                 "copy": {
                   "terminalSessionCount_one": "{{count}} 个终端会话",
                   "terminalSessionCount_other": "{{count}} 个终端会话",
-                  "memoryUnavailable": "内存信息不可用",
-                  "tooltipSummary": "资源管理器 - {{memory}} - {{sessions}}",
                   "spaceScanReady": "空间扫描已就绪",
                   "sessionsGroupedByWorkspace": "终端会话按工作区分组",
                   "noTerminalSessions": "暂无终端会话",
@@ -5647,8 +5653,6 @@
         "SkillInstallManagementDialog": {
           "8095927ff3": "关闭",
           "64c71cf7b9": "Orca 尚未在此计算机上安装任何技能",
-          "0900db719a": "— 已断开连接",
-          "176fef9516": "· SSH",
           "6cb1fbe039": "此计算机",
           "3677ae58e7": "Orca 通过链接安装的技能。可以重新安装、回退到早期版本或将其删除",
           "44d118a8f7": "由 Orca 安装",
@@ -5682,8 +5686,6 @@
           "a4dfd33095": "单个工作区",
           "c779621aa0": "全局技能",
           "63cc9e31fe": "目标位置",
-          "85d85880df": "· SSH",
-          "71eefd7660": "— 已断开连接",
           "0785d0a503": "— 需要更新",
           "8562dd1e6e": "此计算机",
           "b8a0b706ad": "计算机"
@@ -6001,7 +6003,6 @@
           "74fc00776f": "错误详情",
           "ca3b225195": "分支自动命名失败",
           "couldNotGenerateBranchName": "Orca 无法根据智能体的第一条消息为 <name>{{name}}</name> 生成分支名称",
-          "dismissError": "清除错误",
           "dismissing": "正在清除…"
         },
         "CreateProjectLocationField": {
@@ -6153,10 +6154,8 @@
           "removeDescriptionSsh": "此操作仅将 {{name}} 从 Orca 中移除，文件仍保留在 {{host}} 上 — 重新添加该 SSH 主机即可恢复",
           "removeDescriptionLocal": "此操作仅将 {{name}} 从 Orca 中移除，文件仍保留在您的磁盘上",
           "removeDescriptionVmRecipe": "这将从 Orca 中移除 {{name}}，其 VM 配方决定是否永久删除环境及其文件",
+          "linkedWorkspaceWarning_other": "此项目中的 {{count}} 个工作区也将从 Orca 中移除",
           "openTerminalWarning_other": "此项目中打开的 {{count}} 个终端将被关闭"
-        },
-        "ScrollToCurrentWorkspaceToolbarButton": {
-          "23989bb663": "显示活动工作区"
         },
         "SetupGuideSidebarEntry": {
           "b0a7bfc34c": "从侧边栏隐藏",
@@ -6349,7 +6348,6 @@
           "e029a2d775": "状态",
           "c2c7a45cda": "没有任何",
           "hosts": "主机",
-          "showSection": "显示",
           "allHostsDetail": "显示所有主机",
           "configuredSshHost": "已配置 SSH",
           "projectSshHost": "项目 SSH",
@@ -6362,7 +6360,6 @@
           "automation": "自动化",
           "folderPathIdentity": "分支 / 文件夹路径",
           "cli": "Orca CLI",
-          "workspaceOptions": "工作区选项",
           "optionsActiveFilters_other": "工作区选项（{{count}} 个筛选条件已启用）",
           "optionsFilterCount_other": "工作区选项（{{count}} 个筛选条件）"
         },
@@ -8762,7 +8759,7 @@
           "112f3b934f": "源代码控制 AI"
         },
         "RuntimeAccessGrantList": {
-          "sshAccessCaveat": "在此撤销并不能阻止拥有这台电脑 SSH 访问权限的人重新配对，要彻底阻止，请移除其 SSH 访问权限",
+          "sshAccessCaveat": "撤销链接也会撤销在它打开的终端中创建的链接。任何能在这台电脑上使用终端的人（通过 SSH 或链接）仍可重新配对。",
           "6f6d5188ed": "撤销 {{value0}}",
           "434e4a6af6": "当前链接",
           "df142657a5": "尚未使用",
@@ -13712,10 +13709,8 @@
             "f61af83316": "新建文件夹",
             "37c875d827": "新文件",
             "b3e288bf41": "无法下载\"{{value0}}\"",
-            "f729bcd97d": "无法下载文件夹\"{{value0}}\"",
             "1a3df04ae1": "打开",
             "bce4d4e44f": "下载\"{{value0}}\"",
-            "a4029c996b": "已下载文件夹\"{{value0}}\"",
             "e26010014a": "被 .gitignore 忽略",
             "a06551beee": "进入",
             "66a29dde82": "复制相对路径",
@@ -19504,7 +19499,6 @@
         "couldNotStart": "{{agent}} 无法启动",
         "editSavedArguments": "请在设置 > 代理 > 参数中编辑",
         "couldNotRestart": "{{agent}} 无法重新启动",
-        "cliTooOld": "{{agent}} {{installedVersion}} 版本过旧，无法用于聊天。请更新到 {{minimumVersion}} 或更高版本",
         "startTimedOut": "{{agent}} 启动时间过长（{{seconds}} 秒后 {{method}} 仍无响应）",
         "startTimedOutKeepsHappening": "如果此问题持续出现，运行此聊天的计算机可能负载过重",
         "notSignedIn": "{{agent}} 尚未登录",
@@ -19612,6 +19606,7 @@
         "providerUnavailable": "{{agent}} 因服务繁忙而无法回复。请选择其他模型，或稍等片刻后重新发送。",
         "providerSafetyStopped": "{{agent}} 在安全检查后停止了此次回复。请检查您的请求后重新发送。",
         "providerResponseFailed": "{{agent}} 未能完成此回复。打开详情了解更多信息。",
+        "providerResponseFailedQuoted": "{{agent}} 未能完成此回复：{{detail}}",
         "selectedModel": "所选模型",
         "forkOriginalMissing": "{{agent}} 在原始聊天中找不到此回复，请打开原始聊天并从那里创建分支",
         "forkOriginalUnavailable": "{{agent}} 无法在原始聊天中从此回复创建分支，请打开原始聊天并从那里创建分支",
@@ -19763,6 +19758,7 @@
         "availableAfterSessionStarts": "会话开始后可用",
         "optionUpdateFailed": "无法更新选项",
         "optionValue": {
+          "none": "无",
           "fast": "快速",
           "minimal": "最小",
           "low": "低",
@@ -20009,17 +20005,32 @@
         "answerNotApplied": "{{name}}：回答未送达此提示",
         "answerWorkerEnded": "{{name}} 已结束，因此此提示已关闭",
         "countdown": "如果无人回答，Claude 将在 {{time}} 后自动拒绝",
-        "allowedByYou": "已由你允许",
-        "deniedByYou": "已由你拒绝",
-        "deniedByCoordinator": "已被协调者拒绝",
-        "allowedByCoordinator": "已由协调者允许：{{reason}}",
-        "allowedInTerminal": "已在工作者的终端中允许",
-        "deniedInTerminal": "已在工作者的终端中拒绝",
-        "answeredInChat": "已在工作者的聊天中回答",
-        "closedUnnamed": "已关闭，未记录回答",
-        "autoDenied": "已由 Claude 在 2:00 后自动拒绝",
-        "workerEnded": "已关闭 · 工作者已结束",
-        "answerInTerminal": "请在工作者的终端中回答"
+        "record": {
+          "showLess": "收起",
+          "showMore": "展开",
+          "cancelled": "<tool>{{tool}}</tool> 的请求已取消",
+          "youAllowed": "你已允许 <tool>{{tool}}</tool>",
+          "youAllowedForSession": "你已在本次会话中允许 <tool>{{tool}}</tool>",
+          "youDenied": "你已拒绝 <tool>{{tool}}</tool>",
+          "youAnswered": "你已回答 <tool>{{tool}}</tool>：{{answer}}",
+          "youAllowedFor": "你已为 <task>{{task}}</task> 允许 <tool>{{tool}}</tool>",
+          "youDeniedFor": "你已为 <task>{{task}}</task> 拒绝 <tool>{{tool}}</tool>",
+          "coordinatorAllowed": "协调者已为 <task>{{task}}</task> 允许 <tool>{{tool}}</tool>",
+          "coordinatorDenied": "协调者已为 <task>{{task}}</task> 拒绝 <tool>{{tool}}</tool>",
+          "allowedInTerminal": "<task>{{task}}</task> 的 <tool>{{tool}}</tool> 已在工作者的终端中允许",
+          "deniedInTerminal": "<task>{{task}}</task> 的 <tool>{{tool}}</tool> 已在工作者的终端中拒绝",
+          "allowedInChat": "<task>{{task}}</task> 的 <tool>{{tool}}</tool> 已在工作者的聊天中允许",
+          "deniedInChat": "<task>{{task}}</task> 的 <tool>{{tool}}</tool> 已在工作者的聊天中拒绝",
+          "autoDenied": "<task>{{task}}</task> 的 <tool>{{tool}}</tool> 已在 2:00 后自动拒绝",
+          "waitsInTerminal": "<task>{{task}}</task> 的 <tool>{{tool}}</tool> 正在工作者的终端中等待回答",
+          "workerEnded": "<task>{{task}}</task> 的 <tool>{{tool}}</tool> 已关闭：工作者已结束",
+          "closedUnnamed": "<task>{{task}}</task> 的 <tool>{{tool}}</tool> 已关闭，未记录回答",
+          "coordinatorReason": "协调者的原因",
+          "coordinatorAllowedHere": "协调者已允许 <tool>{{tool}}</tool>",
+          "coordinatorDeniedHere": "协调者已拒绝 <tool>{{tool}}</tool>",
+          "allowedUnnamed": "已允许 <tool>{{tool}}</tool>",
+          "deniedUnnamed": "已拒绝 <tool>{{tool}}</tool>"
+        }
       },
       "imagePreview": {
         "fileActions": "文件操作",
@@ -20180,7 +20191,6 @@
         "backToMain": "返回主智能体",
         "mainAgent": "主智能体",
         "promptFromMain": "来自主智能体的提示词",
-        "clickToOpen": "点击打开",
         "backTo": "返回 {{value0}}",
         "path": "子智能体路径",
         "stateHeading": {
@@ -20211,21 +20221,12 @@
         "unreported": "此会话无法提供上下文用量"
       },
       "agentMessage": {
-        "messageFrom": "消息来自",
         "unnamedSender": "一个代理",
-        "messageFromCoordinator": "来自协调者的消息",
-        "startedWorker": "已启动工作者",
-        "handedOffToAgent": "已移交给智能体",
-        "startedAgent": "已启动智能体",
-        "taskFromCoordinator": "来自协调者的任务",
-        "updateFromWorker": "来自工作者的更新",
         "senderReplaced": "{{name}} 已不在其终端中运行；现在有另一个智能体在该终端中运行。如有需要，请从侧边栏打开该终端。",
         "senderAmbiguous": "Orca 无法确定 {{name}} 在哪个终端中运行。请从侧边栏打开终端。",
         "senderNotRunning": "{{name}} 已停止运行。请从侧边栏启动新智能体以继续其工作。",
         "unnamedSenderSubject": "一个智能体",
-        "goToAgent": "转到智能体",
-        "reopenedWorker": "已重新打开工作者",
-        "sentFollowUpToWorker": "已向工作者发送后续消息"
+        "goToAgent": "转到智能体"
       },
       "goal": {
         "placeholder": "描述您的目标，定义可衡量的结果以获得最佳结果",
@@ -20330,7 +20331,7 @@
       "rewind": {
         "unsupported": "此聊天无法返回到更早的消息",
         "historyNotPaginated": "此旧版 Codex 聊天无法返回到更早的消息，请开始新聊天以使用“回溯到此处”",
-        "busy": "当代理空闲且此聊天中没有等待您处理的内容时可用",
+        "busy": "聊天空闲时可用",
         "staleEpoch": "对话已发生变化，请查看最新消息后重试",
         "invalidTarget": "对话无法返回到此消息，未做任何更改",
         "historyLimit": "此对话过长，无法回溯，未做任何更改",
@@ -21148,7 +21149,8 @@
         "chat": {
           "label": "聊天界面",
           "description": "智能体在聊天中回复，消息和差异会渲染显示",
-          "terminalFallback": "不支持聊天的智能体，以及在此计算机上通过 SSH 或 WSL 打开的文件夹，仍会在终端中打开",
+          "recommended": "推荐",
+          "terminalFallback": "不支持聊天的 Agent 会改用终端打开。",
           "noneDetected": "已检测的智能体都不支持聊天界面"
         },
         "terminal": {
@@ -22492,6 +22494,16 @@
       "confirm": "清除筛选条件并显示",
       "cancel": "保留筛选条件"
     },
+    "revealCurrent": {
+      "label": "显示当前项",
+      "noWorkspace": "没有打开任何内容",
+      "fullPageView": "此页面在侧边栏中没有对应的行",
+      "archived": "已归档的工作区不会列在侧边栏中",
+      "botsOff": "机器人已关闭，因此不会列出此机器人",
+      "botHidden": "此机器人已暂停，并被机器人选项隐藏",
+      "renameBotPage": "机器人或群组的页面不是工作树。要重命名，请使用其行菜单中的“重命名”。",
+      "renameUnlisted": "此工作区当前未列在侧边栏中，因此无法在那里重命名。"
+    },
     "wslMoved": {
       "movedToHost": "已移至 {{distro}} 主机",
       "sectionTitle": "已移至 WSL 主机 ({{count}})",
@@ -23382,7 +23394,6 @@
       "projectPlaceholder": "my-project-id",
       "locationPlaceholder": "us-central1",
       "chatSeparate": "与你的 agy 终端账户相互独立",
-      "chatAccount": "聊天账户",
       "chatBadgeSigningIn": "正在登录",
       "chatBadgeSignedIn": "已登录",
       "chatBadgeSignedOut": "未登录",
@@ -23396,8 +23407,6 @@
       "enterpriseFieldsShort": "请输入项目和位置",
       "chatUseMethod": "重新登录以使用 {{method}}",
       "signInEllipsis": "登录…",
-      "terminalInfoWindows": "运行 agy 登录后，在此保存该登录信息；如需添加其他账户，请在 agy 中运行 /logout 并重新登录；选择后将应用到主机默认的 agy 凭据",
-      "terminalInfo": "运行 agy 登录后，在此保存该登录信息；如需添加其他账户，请在 agy 中运行 /logout 并重新登录；适用于新的 agy 会话",
       "loadFailed": "无法加载 agy 账户",
       "loading": "正在加载账户…",
       "notSignedIn": "未登录",
@@ -23762,9 +23771,7 @@
     }
   },
   "mediaPreview": {
-    "unavailable": "无法播放此媒体文件，文件可能不可用或使用了不支持的编解码器",
-    "openFailed": "无法在默认应用中打开此文件",
-    "openDefault": "在默认应用中打开"
+    "unavailable": "无法播放此媒体文件，文件可能不可用或使用了不支持的编解码器"
   },
   "projectBoard": {
     "noColumnField": "此看板视图没有可用于分组的单选或迭代字段，因此 Orca 改为列出各项",
@@ -24357,6 +24364,7 @@
     "controlledByHost": "由 {{host}} 控制"
   },
   "nativeChat": {
+    "linkedMessageMissing": "找不到该消息。",
     "math": {
       "scrollDisplayEquation": "滚动显示公式"
     }
@@ -25497,6 +25505,47 @@
     "branchName": "分支名称",
     "invalidBranchName": "此分支名称无效。请选择其他名称。",
     "createBranchFailed": "Orca 无法创建分支。请在终端中检查此仓库，然后重试。"
+  },
+  "bots": {
+    "deepLink": {
+      "missing": "该对话未在此电脑上打开。"
+    },
+    "activity": {
+      "title": "活动"
+    },
+    "connectors": {
+      "tab": "连接器"
+    },
+    "files": {
+      "tab": "文件"
+    },
+    "upcoming": {
+      "tidyNightAfter": "每晚 {{from}} 之后，或这台电脑唤醒后",
+      "tidyWeekAfter": "每周一次，{{from}} 之后，或这台电脑唤醒后"
+    },
+    "palette": {
+      "placeholder": "搜索机器人、聊天、终端、工作区、任务、设置和操作...",
+      "description": "搜索机器人、聊天、终端、工作区、任务、设置和操作",
+      "scopedPlaceholder": "搜索机器人...",
+      "scopedLabel": "搜索机器人",
+      "scopeHint": "输入 @ 只显示机器人",
+      "chip": "机器人",
+      "chipLabel": "机器人，显示全部",
+      "searchEverything": "在全部内容中搜索“{{text}}”",
+      "searchBotsFor": "在机器人中搜索“{{text}}”",
+      "noMatch": "没有与“{{text}}”匹配的机器人",
+      "noBotsYet": "还没有机器人",
+      "filtersPaused": "筛选仅适用于工作区，不适用于机器人",
+      "showEverything": "显示全部",
+      "footerBots": "机器人",
+      "matchesPurpose": "与用途匹配。",
+      "scopedStatus_other": "仅显示机器人。找到 {{count}} 个结果。",
+      "sidebarSearchLabel": "搜索机器人、工作区和浏览器标签页",
+      "section": "机器人"
+    },
+    "templates": {
+      "browse": "浏览模板"
+    }
   },
   "speechModelUpdate": {
     "update": "更新",

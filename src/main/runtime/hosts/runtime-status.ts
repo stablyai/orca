@@ -1,11 +1,14 @@
 import {
   BROWSER_GOOGLE_COOKIE_CLEAR_CAPABILITY,
   BROWSER_CERTIFICATE_TRUST_RUNTIME_CAPABILITY,
+  BROWSER_STOP_HARD_RELOAD_RUNTIME_CAPABILITY,
   BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,
   BROWSER_HEADLESS_RUNTIME_CAPABILITY,
   BROWSER_IDENTITY_RUNTIME_CAPABILITY,
   BROWSER_TAB_CREATE_KNOWN_ID_RUNTIME_CAPABILITY
 } from '../../../shared/browser/runtime/browser-runtime-capabilities'
+import { orcaAccountRuntimeCapabilities } from '../../orca-profiles/orca-server-sign-in'
+import { googleRuntimeCapabilities } from '../../google/google-connect'
 import {
   runtimeBrowserCommandsFactoryIsHeadless,
   runtimeBrowserCommandsFactorySupportsGoogleCookieClear,
@@ -108,8 +111,13 @@ export abstract class OrcaRuntimeWithGetStatus extends RuntimeWorkspaceChangeEve
     capabilities.push(...advertisedOrcadMigrationDestinationCapabilities())
     // Certificate proceed belongs to whichever process hosts the page, renderer or offscreen.
     if (canBrowse) {
-      capabilities.push(BROWSER_CERTIFICATE_TRUST_RUNTIME_CAPABILITY)
+      capabilities.push(
+        BROWSER_CERTIFICATE_TRUST_RUNTIME_CAPABILITY,
+        BROWSER_STOP_HARD_RELOAD_RUNTIME_CAPABILITY
+      )
     }
+    capabilities.push(...orcaAccountRuntimeCapabilities())
+    capabilities.push(...googleRuntimeCapabilities())
     if (getManagedServerActions()) {
       capabilities.push(MANAGED_SERVER_RUNTIME_CAPABILITY)
     }

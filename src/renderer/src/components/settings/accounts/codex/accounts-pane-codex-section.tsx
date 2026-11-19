@@ -12,7 +12,7 @@ import { ACCOUNTS_SECTION_IDS, getAccountsCodexSearchEntries } from '../accounts
 import { getCodexSystemDefaultSubtitle } from '../scope/accounts-pane-runtime'
 import type { AccountsPaneSectionModel } from '../accounts-pane-types'
 import { renderCodexAccountRow } from './accounts-pane-codex-account-row'
-import { addCodexAccountOnHost } from '@/runtime/provider-accounts/sign-in/runtime-host-account-sign-in-client'
+import { signInCodexAccountOnHost } from '@/runtime/provider-accounts/sign-in/runtime-host-account-sign-in-client'
 import { HostAccountSignInPrompt } from '../sign-in/HostAccountSignInPrompt'
 import {
   accountAdditionShownInPrompt,
@@ -171,7 +171,7 @@ export function renderCodexAccountsSection(
                     trackAccountAddition('codex', accountOwner, () =>
                       // Run remote login on the account owner rather than this device.
                       accountOwner.kind === 'environment'
-                        ? addCodexAccountOnHost(accountOwner)
+                        ? signInCodexAccountOnHost(accountOwner)
                         : window.api.codexAccounts.add({
                             runtime: accountRuntime.runtime,
                             wslDistro: accountRuntime.wslDistro

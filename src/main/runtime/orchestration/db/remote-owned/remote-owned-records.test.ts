@@ -6,6 +6,9 @@ import type { RunRow } from '../orchestration-records'
 import type { OrchestrationWorkerServer } from '../../federation/environment-transport'
 import { getRemoteDispatch, listRemoteDispatches } from './remote-dispatch-records'
 import { importRemoteOwnedItem, type PulledRemoteOwnedItem } from './remote-owned-import'
+import { structuredMailSource } from '../../mailbox/structured-mail/structured-mail-source'
+import { observeSenderSnapshot } from '../../mailbox/senders/agent-message-sender'
+import { reconcileLifecycleMessage } from '../../workers/lifecycle/lifecycle-reconciliation'
 import {
   getRemotePlacement,
   recordRemoteStart,
@@ -123,7 +126,8 @@ describe('remote-owned records on the coordinating Orca', () => {
   function mailItem(
     id: string,
     type: string,
-    provenance: { dispatchId: string; taskId: string } | null
+    provenance: { dispatchId: string; taskId: string } | null,
+    payload: Record<string, unknown> | null = null
   ) {
     return item('worker_mail', {
       v: 1,
@@ -135,7 +139,7 @@ describe('remote-owned records on the coordinating Orca', () => {
         type,
         subject: `${type} subject`,
         body: 'body',
-        payload: null,
+        payload: payload && JSON.stringify(payload),
         priority: 'normal',
         threadId: null
       },
@@ -342,6 +346,24 @@ describe('remote-owned records on the coordinating Orca', () => {
     })
   })
 
+  it("delivers the server worker's imported worker_done as it was sent", () => {
+    startedOnB('task_t', 'ctx_b1')
+    importItem(
+      mailItem(
+        'msg_done',
+        'worker_done',
+        { dispatchId: 'ctx_b1', taskId: 'task_t' },
+        { taskId: 'task_t', dispatchId: 'ctx_b1', outcome: 'succeeded' }
+      )
+    )
+    const imported = db.getMessageById('msg_done')!
+    expect(reconcileLifecycleMessage(db, imported)).toEqual({ action: 'ignored' })
+    expect(db.getMessageById('msg_done')).toMatchObject({
+      subject: 'worker_done subject',
+      body: 'body'
+    })
+  })
+
   describe('S3 / S8 queue items', () => {
     it('lets a late start answer seed identity only, never state', () => {
       placeTask('task_t')
@@ -365,6 +387,56 @@ describe('remote-owned records on the coordinating Orca', () => {
         worker_state: 'succeeded'
       })
       expect(db.getTask('task_t')?.status).toBe('completed')
+    })
+  })
+
+  describe("a server's worker mail on its card here", () => {
+    it.each(['status', 'worker_done', 'question'])('names %s by its Dispatch', (type) => {
+      placeTask('task_t')
+      recordRemoteStart(db, {
+        conversationId: link.conversation_id,
+        taskId: 'task_t',
+        dispatchId: 'ctx_b1',
+        requestKey: 'key_task_t',
+        peerRunId: PEER_RUN,
+        agent: 'claude'
+      })
+      importItem(
+        item('worker_mail', {
+          v: 1,
+          id: 'msg_b1',
+          homeRunId: run.id,
+          peerRunId: PEER_RUN,
+          message: {
+            from: 'term_on_b',
+            type,
+            subject: 'from the server',
+            body: 'body',
+            payload: null,
+            priority: 'normal',
+            threadId: null
+          },
+          dispatchId: 'ctx_b1',
+          taskId: 'task_t'
+        })
+      )
+      const sources = {
+        db,
+        records: null,
+        chatTab: () => null,
+        terminal: () => null,
+        generatedTitlesEnabled: false,
+        store: null
+      }
+      const sender = structuredMailSource({
+        db,
+        mailboxHandle: `run:${run.id}`,
+        dispatchId: null,
+        batch: [db.getMessageById('msg_b1')!],
+        senderSnapshot: (party, reported) => observeSenderSnapshot(party, sources, reported)
+      }).senders[0]
+
+      expect(sender).toMatchObject({ name: 'do task_t', agent: 'claude' })
     })
   })
 })

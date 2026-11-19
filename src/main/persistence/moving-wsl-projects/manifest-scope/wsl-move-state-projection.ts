@@ -23,6 +23,7 @@ import {
   createWslMoveStringNormalizer,
   isRecord
 } from './wsl-move-canonical-form'
+import type { WslMappedDrive } from '../../../../shared/wsl-move/wsl-mapped-drive-paths'
 import { WSL_MOVE_DROPPED_PTY_BINDING_KEYS } from '../../../../shared/wsl-move/wsl-move-dispositions'
 import {
   fieldOf,
@@ -34,6 +35,8 @@ import {
 
 export type WslMoveProjectionScope = {
   distro: string
+  /** The move's mapped drives, from its cutover. */
+  mappedDrives?: readonly WslMappedDrive[]
   repoIds: ReadonlySet<string>
   folderWorkspaceIds: ReadonlySet<string>
   ownerHostId: ExecutionHostId

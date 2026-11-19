@@ -1,6 +1,7 @@
 // Skip coalescing requires a fixed, byte-identical sentence for each refusal reason.
 import type { Store } from '../../persistence/loading-store/store'
 import type { Automation } from '../../../shared/automations/automation-definition'
+import type { AutomationRun } from '../../../shared/automations/history/automation-run'
 import {
   resolveAutomationRunTarget,
   type AutomationRunTargetResult
@@ -8,6 +9,7 @@ import {
 import type { AutomationRunWriter } from '../run-history/run-writer'
 import { wslMoveRepoBackoff } from '../../persistence/moving-wsl-projects/orchestration/wsl-move-background-backoff'
 import { isOrcadFencedAutomation } from '../ownership/orcad-fenced-automation'
+import type { AutomationRunEvent } from '../../../shared/automation-event-triggers'
 import { blockedWslDistroForPath } from '../../wsl/filesystem/wsl-unc-access-gate'
 import { getLocalProjectWorktreeGitOptions } from '../../workspaces/execution-host/project-runtime-git-options'
 import {
@@ -19,12 +21,21 @@ import {
 export const NO_DISPATCH_HOST = AUTOMATION_RUN_FAILURE_COPY.noDispatchHost
 export const WSL_MOVE_IN_PROGRESS = AUTOMATION_RUN_FAILURE_COPY.wslMoveInProgress
 export const WSL_MOVE_OWNED_BY_HOST = AUTOMATION_RUN_FAILURE_COPY.wslMoveOwnedByHost
+export const MISSED_RUN = AUTOMATION_RUN_FAILURE_COPY.missedGraceWindow
 
 function targetFailure({
   ok: _ok,
   ...failure
 }: Extract<AutomationRunTargetResult, { ok: false }>): AutomationRunFailure {
   return failure
+}
+
+/** Bot runs launch in main; other runs need a window or the headless dispatcher. */
+export function canDispatchTo(
+  launchers: { repo: boolean; bot: boolean },
+  target: AutomationRunTargetResult
+): boolean {
+  return target.ok && 'bot' in target ? launchers.bot : launchers.repo
 }
 
 /** Decide refusals before creating rows so repeated skips can coalesce. */
@@ -35,7 +46,7 @@ export function describeScheduledRefusal(input: {
   if (!input.target.ok) {
     return targetFailure(input.target)
   }
-  const backoff = wslMoveRepoBackoff(input.target.repo)
+  const backoff = 'repo' in input.target ? wslMoveRepoBackoff(input.target.repo) : null
   if (backoff) {
     return automationRunFailure(backoff === 'moving' ? 'wslMoveInProgress' : 'wslMoveOwnedByHost')
   }
@@ -52,7 +63,9 @@ export async function describeStoppedWslDistroRefusal(
 ): Promise<AutomationRunFailure | null> {
   let wslDistro: string | undefined
   try {
-    wslDistro = getLocalProjectWorktreeGitOptions(store, target.repo).wslDistro
+    // A bot target has no project runtime; its folder path alone names a UNC distro.
+    wslDistro =
+      'repo' in target ? getLocalProjectWorktreeGitOptions(store, target.repo).wslDistro : undefined
   } catch {
     // A runtime needing repair fails its own dispatch; the path alone still names a UNC distro.
   }
@@ -142,19 +155,33 @@ export function missedBeyondGrace(input: {
   return input.now - input.scheduledFor > graceMs + jitterMs
 }
 
+/** A missed event folds into the previous missed row, so events missed while Orca was off read as one. */
 export async function recordMissedRun(input: {
   runs: AutomationRunWriter
   automation: Automation
   scheduledFor: number
-}): Promise<void> {
-  const missed = await input.runs.createRun(input.automation, input.scheduledFor)
-  if (missed.status !== 'pending') {
-    return
+  event?: AutomationRunEvent
+}): Promise<AutomationRun> {
+  const { runs, automation, scheduledFor, event } = input
+  const repeated = event
+    ? await runs.repeatSkip(automation.id, MISSED_RUN, scheduledFor, event)
+    : null
+  if (repeated) {
+    return repeated
   }
-  await input.runs.updateRun({
+  const missed = await runs.createRun(
+    automation,
+    scheduledFor,
+    event ? 'event' : 'scheduled',
+    event
+  )
+  if (missed.status !== 'pending') {
+    return missed
+  }
+  return runs.updateRun({
     runId: missed.id,
     status: 'skipped_missed',
-    workspaceId: input.automation.workspaceId,
+    workspaceId: automation.workspaceId,
     ...automationRunFailure('missedGraceWindow')
   })
 }

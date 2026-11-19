@@ -14,7 +14,7 @@ import {
   isProviderConfigured
 } from '../composition/status-bar-provider-visibility'
 import { hasUsageData } from '../../../../../shared/agent-usage/display/usage-provider-windows'
-import { describeOwnerNotSetUp } from './owner-not-set-up-copy'
+import { describeOwnerNotSetUp } from '../../../../../shared/agent-usage/status-copy/owner-not-set-up-copy'
 
 /** Whose usage the status bar shows: this device, or the remote host that owns the accounts. */
 export type OwnerUsageState =
@@ -206,7 +206,7 @@ function addNotSetUpPlaceholders(
       if (!ownerNotSetUp) {
         return remote[key]
       }
-      return ownerPlaceholderSnapshot(key, describeOwnerNotSetUp(ownerNotSetUp), {
+      return ownerPlaceholderSnapshot(key, describeOwnerNotSetUp(ownerNotSetUp, translate), {
         ownerNotSetUp
       })
     })

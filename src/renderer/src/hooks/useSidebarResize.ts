@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 
-type UseSidebarResizeOptions = {
+type UseSidebarResizeOptions<T extends HTMLElement> = {
   isOpen: boolean
   width: number
   minWidth: number
@@ -9,6 +9,17 @@ type UseSidebarResizeOptions = {
   renderedExtraWidth?: number
   setWidth: (width: number) => void
   onDraftWidthChange?: (width: number) => void
+  /** 'y' resizes a stacked section's height; `width` options then mean height. */
+  axis?: 'x' | 'y'
+  /** Content-sized sections start a drag from what is on screen, not the saved size. */
+  measureStartSize?: (container: T) => number
+  /** Read at drag start from live layout, so the limit never trails the space actually free. */
+  measureMaxSize?: (container: T) => number
+  applyRenderedSize?: (container: T, size: number) => void
+  /** Every drag's end, after the final size is applied and before `setWidth`: the size the drag
+   *  ended at, or null when it ended where it started. `setWidth` alone skips a drag that ends at the
+   *  current size. */
+  onResizeEnd?: (movedTo: number | null) => void
 }
 
 type UseSidebarResizeResult<T extends HTMLElement> = {
@@ -56,13 +67,19 @@ export function useSidebarResize<T extends HTMLElement>({
   deltaSign,
   renderedExtraWidth = 0,
   setWidth,
-  onDraftWidthChange
-}: UseSidebarResizeOptions): UseSidebarResizeResult<T> {
+  onDraftWidthChange,
+  axis = 'x',
+  measureStartSize,
+  measureMaxSize,
+  applyRenderedSize,
+  onResizeEnd
+}: UseSidebarResizeOptions<T>): UseSidebarResizeResult<T> {
   const containerRef = useRef<T | null>(null)
   const isResizingRef = useRef(false)
   const startXRef = useRef(0)
   const startWidthRef = useRef(width)
   const draftWidthRef = useRef(width)
+  const measuredMaxWidthRef = useRef<number | null>(null)
   const frameRef = useRef<number | null>(null)
   const overlayRef = useRef<HTMLDivElement | null>(null)
   const [isResizing, setIsResizing] = useState(false)
@@ -88,10 +105,14 @@ export function useSidebarResize<T extends HTMLElement>({
         return
       }
 
+      if (applyRenderedSize) {
+        applyRenderedSize(container, nextWidth)
+        return
+      }
       // Keep live drag width out of React props so unrelated renders cannot reset it to the persisted width.
       container.style.width = getRenderedSidebarWidthCssValue(isOpen, nextWidth, renderedExtraWidth)
     },
-    [isOpen, renderedExtraWidth]
+    [applyRenderedSize, isOpen, renderedExtraWidth]
   )
 
   useLayoutEffect(() => {
@@ -119,13 +140,16 @@ export function useSidebarResize<T extends HTMLElement>({
 
     resetDocumentStyles()
 
-    const finalWidth = draftWidthRef.current
+    // A press without movement (or a double-click) must not save the measured start size.
+    const moved = draftWidthRef.current !== startWidthRef.current
+    const finalWidth = moved ? draftWidthRef.current : width
     applyRenderedWidth(finalWidth)
     onDraftWidthChange?.(finalWidth)
+    onResizeEnd?.(moved ? finalWidth : null)
     if (finalWidth !== width) {
       setWidth(finalWidth)
     }
-  }, [applyRenderedWidth, onDraftWidthChange, resetDocumentStyles, setWidth, width])
+  }, [applyRenderedWidth, onDraftWidthChange, onResizeEnd, resetDocumentStyles, setWidth, width])
 
   const handleMouseMove = useCallback(
     (event: MouseEvent) => {
@@ -134,12 +158,12 @@ export function useSidebarResize<T extends HTMLElement>({
       }
 
       const nextWidth = getNextSidebarResizeWidth({
-        clientX: event.clientX,
+        clientX: axis === 'y' ? event.clientY : event.clientX,
         startX: startXRef.current,
         startWidth: startWidthRef.current,
         deltaSign,
         minWidth,
-        maxWidth
+        maxWidth: measuredMaxWidthRef.current ?? maxWidth
       })
       if (nextWidth === draftWidthRef.current) {
         return
@@ -156,18 +180,26 @@ export function useSidebarResize<T extends HTMLElement>({
         onDraftWidthChange?.(draftWidthRef.current)
       })
     },
-    [applyRenderedWidth, deltaSign, maxWidth, minWidth, onDraftWidthChange]
+    [applyRenderedWidth, axis, deltaSign, maxWidth, minWidth, onDraftWidthChange]
   )
 
+  // Stable listeners read the latest handlers, so a re-render mid-drag neither tears the gesture down nor leaves it on stale props.
+  const dragHandlersRef = useRef({ move: handleMouseMove, stop: stopResize })
+  useLayoutEffect(() => {
+    dragHandlersRef.current = { move: handleMouseMove, stop: stopResize }
+  })
+
   useEffect(() => {
-    window.addEventListener('mousemove', handleMouseMove)
-    window.addEventListener('mouseup', stopResize)
-    window.addEventListener('blur', stopResize)
+    const onWindowMouseMove = (event: MouseEvent): void => dragHandlersRef.current.move(event)
+    const onWindowStop = (): void => dragHandlersRef.current.stop()
+    window.addEventListener('mousemove', onWindowMouseMove)
+    window.addEventListener('mouseup', onWindowStop)
+    window.addEventListener('blur', onWindowStop)
 
     return () => {
-      window.removeEventListener('mousemove', handleMouseMove)
-      window.removeEventListener('mouseup', stopResize)
-      window.removeEventListener('blur', stopResize)
+      window.removeEventListener('mousemove', onWindowMouseMove)
+      window.removeEventListener('mouseup', onWindowStop)
+      window.removeEventListener('blur', onWindowStop)
 
       if (frameRef.current !== null) {
         cancelAnimationFrame(frameRef.current)
@@ -177,18 +209,22 @@ export function useSidebarResize<T extends HTMLElement>({
       isResizingRef.current = false
       resetDocumentStyles()
     }
-  }, [handleMouseMove, resetDocumentStyles, stopResize])
+  }, [resetDocumentStyles])
 
   const onResizeStart = useCallback(
     (event: React.MouseEvent) => {
       event.preventDefault()
+      const container = containerRef.current
+      const startWidth = container && measureStartSize ? measureStartSize(container) : width
+      measuredMaxWidthRef.current = container && measureMaxSize ? measureMaxSize(container) : null
+      const cursor = axis === 'y' ? 'row-resize' : 'col-resize'
       isResizingRef.current = true
       setIsResizing(true)
-      startXRef.current = event.clientX
-      startWidthRef.current = width
-      draftWidthRef.current = width
-      onDraftWidthChange?.(width)
-      document.body.style.cursor = 'col-resize'
+      startXRef.current = axis === 'y' ? event.clientY : event.clientX
+      startWidthRef.current = startWidth
+      draftWidthRef.current = startWidth
+      onDraftWidthChange?.(startWidth)
+      document.body.style.cursor = cursor
       document.body.style.userSelect = 'none'
 
       // A viewport overlay captures mouseup over native plugins such as PDF embeds, preventing a stuck resize.
@@ -197,13 +233,13 @@ export function useSidebarResize<T extends HTMLElement>({
         overlay.style.position = 'fixed'
         overlay.style.inset = '0'
         overlay.style.zIndex = '2147483647'
-        overlay.style.cursor = 'col-resize'
+        overlay.style.cursor = cursor
         overlay.style.background = 'transparent'
         document.body.appendChild(overlay)
         overlayRef.current = overlay
       }
     },
-    [onDraftWidthChange, width]
+    [axis, measureMaxSize, measureStartSize, onDraftWidthChange, width]
   )
 
   return { containerRef, isResizing, onResizeStart }

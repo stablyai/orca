@@ -6,6 +6,7 @@ import {
   type NodeViewProps
 } from '@tiptap/react'
 import { Users } from 'lucide-react'
+import { useTranslate } from '@/i18n/use-translate'
 import { NativeChatPromptPill } from './NativeChatPromptPill'
 import {
   agentReferenceToken,
@@ -14,6 +15,8 @@ import {
 import { closeHistory } from '@tiptap/pm/history'
 
 function AgentReferencePill({ node, selected }: NodeViewProps): React.JSX.Element {
+  const t = useTranslate()
+  const label = String(node.attrs.label)
   return (
     <NodeViewWrapper
       as="span"
@@ -21,7 +24,14 @@ function AgentReferencePill({ node, selected }: NodeViewProps): React.JSX.Elemen
       contentEditable={false}
       data-native-chat-agent-reference={node.attrs.address}
     >
-      <NativeChatPromptPill icon={Users} label={String(node.attrs.label)} selected={selected} />
+      <NativeChatPromptPill
+        icon={Users}
+        label={label}
+        spokenLabel={t('components.native-chat.composer.agentPillLabel', 'Agent: {{name}}', {
+          name: label
+        })}
+        selected={selected}
+      />
     </NodeViewWrapper>
   )
 }

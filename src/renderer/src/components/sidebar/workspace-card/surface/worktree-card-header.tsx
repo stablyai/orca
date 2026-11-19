@@ -59,6 +59,7 @@ export function WorktreeCardHeader({
   const {
     showPinnedRepoIcon,
     showInlineRepoBadge,
+    showLineRepoChip,
     showHeaderActions,
     showTitleRowPrimary,
     showDeleteQuickAction,
@@ -117,6 +118,11 @@ export function WorktreeCardHeader({
             disabled={isDeleting || isRuntimeDisconnected || card.isSshDisconnected}
           />
         ) : null}
+        {card.compactLine && card.lineNote && !titleRenaming ? (
+          <span className="-ml-1 shrink-0 text-2xs whitespace-nowrap text-muted-foreground">
+            · {card.lineNote}
+          </span>
+        ) : null}
 
         {typeof worktree.firstAgentMessageRenameError === 'string' &&
         worktree.firstAgentMessageRenameError.length > 0 &&
@@ -148,6 +154,11 @@ export function WorktreeCardHeader({
         )}
         {agentDisclosure}
         {showTitleRowIndicators && titleRowIndicators}
+        {showLineRepoChip ? (
+          <span className="ml-auto flex shrink-0">
+            <WorktreeCardRepoChip repo={repo!} />
+          </span>
+        ) : null}
       </div>
 
       {showHeaderActions && (

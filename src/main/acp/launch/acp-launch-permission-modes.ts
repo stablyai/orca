@@ -24,10 +24,15 @@ export function acpLaunchPermission(
   fullAccess: boolean,
   permission: AgentChatPermissionChoice | undefined
 ) {
-  const args = (grant: boolean) => spec.args({ fullAccess: grant, pluginDir: null }).join('\0')
+  const args = (grant: boolean) => spec.args({ fullAccess: grant, pluginDirs: [] }).join('\0')
   return {
     permissionModes: acpLaunchPermissionModes(spec, fullAccess),
     permission: permission ?? 'ask',
     launchArgsGrantFullAccess: fullAccess && args(true) !== args(false)
   }
+}
+
+/** Whether Orca answers the agent's permission requests itself under full access. */
+export function acpAnswersRequests(spec: Pick<AcpLaunchSpec, 'permissionModeConfig'>) {
+  return !spec.permissionModeConfig || spec.permissionModeConfig.fullAccessAnswersRequests === true
 }

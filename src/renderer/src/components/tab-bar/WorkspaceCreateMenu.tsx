@@ -1,3 +1,9 @@
+import { BotNewChatMenuItems } from '../bots/BotNewChatMenuItems'
+import { BotGroupNewThreadMenuItems } from '../bots/BotGroupNewThreadMenuItems'
+import { useBotForWorkspace, useBotGroupForWorkspace } from '../bots/bot-workspace'
+import { OpenAgentSettingsMenuItem } from '../agent/launch-menu/OpenAgentSettingsMenuItem'
+import type { Bot } from '../../../../shared/bot-types'
+import type { BotGroup } from '../../../../shared/bots/bot-group'
 import React from 'react'
 import type { usePluginNewFiles } from '@/store/plugins/file-creation/plugin-new-files'
 import { Plus } from 'lucide-react'
@@ -20,6 +26,9 @@ import type { TabBarCreateMenuController } from './create-menu/tab-bar-create-me
 export function WorkspaceCreateMenu({
   props,
   onNewPluginFile,
+  bot: givenBot,
+  botGroup: givenBotGroup,
+  excludedTabId,
   runtime,
   createMenu,
   trigger,
@@ -29,6 +38,9 @@ export function WorkspaceCreateMenu({
   onEscapeKeyDown
 }: {
   props: TabBarProps
+  bot?: Bot | null
+  botGroup?: BotGroup | null
+  excludedTabId?: string | null
   onNewPluginFile?: (newFile: ReturnType<typeof usePluginNewFiles>[number]) => void
   runtime: TabBarRuntimeModel
   createMenu: TabBarCreateMenuController
@@ -46,6 +58,10 @@ export function WorkspaceCreateMenu({
     onNewTerminalTab,
     onOpenEntry
   } = props
+  const workspaceBot = useBotForWorkspace(worktreeId)
+  const workspaceBotGroup = useBotGroupForWorkspace(worktreeId)
+  const bot = givenBot ?? workspaceBot
+  const botGroup = givenBotGroup ?? workspaceBotGroup
   const {
     resolvedGroupId,
     mobileEmulatorEnabled,
@@ -119,6 +135,9 @@ export function WorkspaceCreateMenu({
           <>
             <TabBarAgentPickerEntry
               inventory={agentPickerInventory}
+              terminalPending={agentMenu.state === 'settled' && agentMenu.terminalPending}
+              excludedTabId={excludedTabId}
+              hideAgents={bot != null || botGroup != null}
               worktreeId={worktreeId}
               groupId={resolvedGroupId}
               menuOpen={newTabMenuOpen}
@@ -134,6 +153,13 @@ export function WorkspaceCreateMenu({
               onSelectMenuOption={handleSelectCreateMenuOption}
               onDidOpenEntry={() => setNewTabMenuOpen(false)}
             />
+            {showStaticCreateMenuItems ? <DropdownMenuSeparator /> : null}
+          </>
+        ) : null}
+        {bot && !terminalOnly ? <BotNewChatMenuItems bot={bot} model={agentMenu} /> : null}
+        {botGroup && !terminalOnly ? (
+          <>
+            <BotGroupNewThreadMenuItems group={botGroup} />
             {showStaticCreateMenuItems ? <DropdownMenuSeparator /> : null}
           </>
         ) : null}
@@ -156,16 +182,20 @@ export function WorkspaceCreateMenu({
             }
           />
         ) : null}
-        {showStaticCreateMenuItems && showAgentLaunchItems ? (
+        {showStaticCreateMenuItems && showAgentLaunchItems && !botGroup ? (
           <>
             <DropdownMenuSeparator />
-            <ProjectedAgentMenuItems
-              model={agentMenu}
-              pickerInventory={agentPickerInventory}
-              onSelectPickerAgent={selectPickerAgent}
-              hidePickerSearch={!terminalOnly && Boolean(onOpenEntry)}
-              runLaunch={launchAgentRow}
-            />
+            {bot ? (
+              <OpenAgentSettingsMenuItem variant="create" />
+            ) : (
+              <ProjectedAgentMenuItems
+                model={agentMenu}
+                pickerInventory={agentPickerInventory}
+                onSelectPickerAgent={selectPickerAgent}
+                hidePickerSearch={!terminalOnly && Boolean(onOpenEntry)}
+                runLaunch={launchAgentRow}
+              />
+            )}
           </>
         ) : null}
       </NewTabMenuContent>

@@ -145,7 +145,8 @@ it('accepts Send-now on an incompatible card and sends it once a new turn can us
     )
   await rig.host.flushStreamedEvents(SESSION)
   await eventually(async () => expect((await rig.handoff(queued.id))?.handedOverAt).toBeDefined())
-  expect(rig.dispatch.mock.calls[1]?.[0].executionOptions).toEqual(choices)
+  // Handover is recorded before the dispatch reaches the provider.
+  await eventually(() => expect(rig.dispatch.mock.calls[1]?.[0].executionOptions).toEqual(choices))
   expect(await rig.sendNow(queued.id, operationId)).toMatchObject({
     ok: true,
     value: { submission: { queuedMessageId: queued.id } }
