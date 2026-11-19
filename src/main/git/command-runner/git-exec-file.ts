@@ -25,7 +25,10 @@ import {
   GitCommandTimeoutError,
   gitCommandTimeoutMs
 } from '../../../shared/git/commands/git-command-timeout'
-import { classifyGitCommand } from '../../../shared/git/commands/git-command-classification'
+import {
+  classifyGitCommand,
+  findGitSubcommandIndex
+} from '../../../shared/git/commands/git-command-classification'
 import { createAbortError } from './process-capture/abort-error'
 import { readCapturedGitBuffer, readCapturedGitString } from './process-capture/captured-git-output'
 import { runUnlessGitCwdKnownMissing } from './host-routing/missing-git-spawn-cwd'
@@ -83,6 +86,8 @@ async function gitExecFileAsyncUnlocked(
       span?.setAttribute('git.runs_in', gitRunsIn(resolved))
       const timeoutMs = gitCommandTimeoutMs(args, options.timeout, options.timeoutMsForTest)
       const readOnly = classifyGitCommand(args) === 'read'
+      // ls-remote is network but writes nothing, so like a read it holds no fence past its worker.
+      const holdsNoFence = readOnly || args[findGitSubcommandIndex(args)] === 'ls-remote'
       // Set once a child's worker is lost: its permit is back in the pool, so nothing may replay on it.
       let workerLost = false
       const capture = (
@@ -112,11 +117,11 @@ async function gitExecFileAsyncUnlocked(
           // while a read (which no fence or writer observer tracks) ends with the worker.
           onWorkerLost: () => {
             workerLost = true
-            if (!readOnly) {
+            if (!holdsNoFence) {
               grant.release()
             }
           },
-          workerLossEndsLifetime: readOnly,
+          workerLossEndsLifetime: holdsNoFence,
           ...(options.onStderr ? { onStderr: options.onStderr } : {}),
           ...(timeoutMs === undefined
             ? {}
