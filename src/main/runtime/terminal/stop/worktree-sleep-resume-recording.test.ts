@@ -304,6 +304,19 @@ describe('a hookless resumed Codex across wakes and shell-confirmed command fini
     const wake = async (ptyId: string) => {
       tick()
       live.add(ptyId)
+      // The window saves the woken terminal into the pane's layout; a sleep checkpoints only the
+      // pane its stopped terminal still holds.
+      const session = fixture.getSession()
+      const layout = session.terminalLayoutsByTabId?.['host-tab']
+      if (layout) {
+        fixture.setSession({
+          ...session,
+          terminalLayoutsByTabId: {
+            ...session.terminalLayoutsByTabId,
+            'host-tab': { ...layout, ptyIdsByLeafId: { [HEADLESS_LEAF_ID]: ptyId } }
+          }
+        })
+      }
       const binding = { tabId: 'host-tab', leafId: HEADLESS_LEAF_ID, incarnationId: ptyId }
       await runtime.syncWindowGraph(1, {
         tabs: [
