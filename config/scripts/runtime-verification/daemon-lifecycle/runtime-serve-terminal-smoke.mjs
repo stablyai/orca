@@ -282,8 +282,7 @@ async function main() {
         '--worktree',
         created.id,
         '--url',
-        'about:blank',
-        '--headless'
+        'about:blank'
       ])?.browserPageId
       if (!browserPageId) {
         throw new Error('browser.tabCreate returned no browser page id')
