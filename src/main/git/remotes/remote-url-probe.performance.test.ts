@@ -3,7 +3,9 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { gitExecFileAsyncMock } = vi.hoisted(() => ({ gitExecFileAsyncMock: vi.fn() }))
+const { gitExecFileAsyncMock } = vi.hoisted(() => ({
+  gitExecFileAsyncMock: vi.fn<(args: string[]) => Promise<{ stdout: string }>>()
+}))
 
 vi.mock('../command-runner/git-exec-file', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
@@ -50,7 +52,7 @@ async function warmOriginReads(repos: number, rounds: number) {
       await expect(readRemoteUrl({ repoPath }, 'origin')).rejects.toThrow(/No such remote/)
     }
   }
-  const calls = gitExecFileAsyncMock.mock.calls.map(([args]) => (args as string[]).join(' '))
+  const calls = gitExecFileAsyncMock.mock.calls.map(([args]) => args.join(' '))
   return {
     listings: calls.filter((call) => call === 'remote').length,
     urlReads: calls.filter((call) => call.startsWith('remote get-url')).length
