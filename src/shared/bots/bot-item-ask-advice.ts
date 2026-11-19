@@ -59,7 +59,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 // A long lowercase run into a capital or digit ("questionalreadyNeedsyou"), or one past real English
 // words ("internationalization" is 20); camelCase identifiers keep their lowercase runs short.
 const FUSED = /[a-z]{12}[A-Z0-9]|[a-z]{22}/
-const PIECE_SPLIT = /[/+,;:()[\]{}<>"'“”‘’|=*]+/
+const PIECE_SPLIT = /[/+,;:()[\]{}<>"'“”‘’|=*`]+/
 const END_MARKS = /^[.!?…-]+|[.!?…-]+$/g
 
 // "Reply A or B" in any case; the letter must be a capital or a digit, so "reply with a summary" is
@@ -77,55 +77,109 @@ function repliesWithOption(words: string): boolean {
 
 const URL_END = new Set(['.', ',', ';', ':', '!', '?', ')'])
 const SCHEME = /[A-Za-z0-9+.-]/
+const TARGET_STOP = /[\s()[\]]/
 
-/** A word without its closed Markdown link targets: `[label](target)` shows as `[label]`. An
- *  unclosed `](` hides nothing. Linear in the word. */
-function withoutLinkTargets(word: string): string {
+type TickRun = { start: number; end: number; line: number }
+
+/** Without closed code: a run of backticks hides text only up to the next run of the same length,
+ *  on the same line for one or two ticks (a span), anywhere for three or more (a fence). A run with
+ *  no such closer is plain text. Linear. */
+function withoutCode(text: string): string {
+  const runs: TickRun[] = []
+  let line = 0
+  for (let i = 0; i < text.length;) {
+    if (text[i] !== '`') {
+      line += text[i] === '\n' ? 1 : 0
+      i += 1
+      continue
+    }
+    const start = i
+    while (i < text.length && text[i] === '`') {
+      i += 1
+    }
+    runs.push({ start, end: i, line })
+  }
+  // Each run's next run of the same length.
+  const closer: number[] = []
+  const nextOfLength = new Map<number, number>()
+  for (let k = runs.length - 1; k >= 0; k -= 1) {
+    const length = runs[k]!.end - runs[k]!.start
+    closer[k] = nextOfLength.get(length) ?? -1
+    nextOfLength.set(length, k)
+  }
   let shown = ''
   let at = 0
-  for (;;) {
-    const open = word.indexOf('](', at)
-    const close = open === -1 ? -1 : word.indexOf(')', open + 2)
-    if (close === -1) {
-      return shown + word.slice(at)
+  for (const [k, run] of runs.entries()) {
+    const close = closer[k] === -1 ? null : runs[closer[k]!]!
+    if (run.start < at || !close || (run.end - run.start < 3 && close.line !== run.line)) {
+      continue
     }
-    shown += word.slice(at, open + 1)
-    at = close + 1
+    shown += `${text.slice(at, run.start)} `
+    at = close.end
   }
+  return shown + text.slice(at)
 }
 
-/** A word as a reader sees it: no link targets, and a URL (from its scheme to the word's end) as
- *  only the punctuation after it; text before the URL stays. Linear in the word. */
-function shownWord(word: string): string {
-  const shown = withoutLinkTargets(word)
-  const slashes = shown.indexOf('://')
+/** Without closed link targets: `[label](target)` shows as `[label]` when the label's `[` is on the
+ *  same line and the target has no spaces, brackets or parentheses. Anything else is plain text.
+ *  Linear: a target's scan stops at the next `]` or `(`, so scans never overlap. */
+function withoutLinkTargets(text: string): string {
+  let shown = ''
+  let at = 0
+  let labelOpen = false
+  for (let i = 0; i < text.length; i += 1) {
+    const char = text[i]
+    if (char === '\n') {
+      labelOpen = false
+    } else if (char === '[') {
+      labelOpen = true
+    } else if (char === ']') {
+      const isLabel = labelOpen
+      labelOpen = false
+      if (!isLabel || text[i + 1] !== '(') {
+        continue
+      }
+      let end = i + 2
+      while (end < text.length && !TARGET_STOP.test(text[end]!)) {
+        end += 1
+      }
+      if (text[end] === ')') {
+        shown += text.slice(at, i + 1)
+        at = end + 1
+        i = end
+      }
+    }
+  }
+  return shown + text.slice(at)
+}
+
+/** A word without its URL (from the scheme to the word's end), keeping the text before it and the
+ *  punctuation after it. Linear in the word. */
+function withoutUrl(word: string): string {
+  const slashes = word.indexOf('://')
   if (slashes === -1) {
-    return shown
+    return word
   }
   let start = slashes
-  while (start > 0 && SCHEME.test(shown[start - 1]!)) {
+  while (start > 0 && SCHEME.test(word[start - 1]!)) {
     start -= 1
   }
-  let end = shown.length
-  while (end > slashes && URL_END.has(shown[end - 1]!)) {
+  let end = word.length
+  while (end > slashes && URL_END.has(word[end - 1]!)) {
     end -= 1
   }
-  return `${shown.slice(0, start)} ${shown.slice(end)}`
+  return `${word.slice(0, start)} ${word.slice(end)}`
 }
 
-/** The words a reader sees: no closed code spans or fences, link targets or URLs. An unclosed
- *  backtick or fence hides nothing. Every pass is linear in the text. */
+/** The words a reader sees: closed code, closed link targets and URLs are hidden; nothing else is.
+ *  Every pass is linear in the text. */
 function prose(text: string): string {
-  return text
-    .slice(0, SCAN_LIMIT)
-    .replace(/```[\s\S]*?```/g, ' ')
-    .replace(/`[^`\n]*`/g, ' ')
-    .replace(/\S+/g, shownWord)
+  return withoutLinkTargets(withoutCode(text.slice(0, SCAN_LIMIT))).replace(/\S+/g, withoutUrl)
 }
 
 /** A path, even wrapped in brackets or quotes: the bot pointed at it, so its ids are fine. */
 function isPath(token: string): boolean {
-  const bare = token.replace(/^[([{<"'“‘]+/, '')
+  const bare = token.replace(/^[([{<"'“‘`]+/, '')
   return (
     bare.startsWith('/') ||
     bare.startsWith('~/') ||
