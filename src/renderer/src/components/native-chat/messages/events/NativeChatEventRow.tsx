@@ -15,14 +15,10 @@ import { NativeChatToolRunWindowContext } from '../../tools/runs/native-chat-too
 export const NATIVE_CHAT_EVENT_ROW_REVEAL =
   'transition-opacity can-hover:pointer-events-none can-hover:opacity-0 group-hover/event-row:pointer-events-auto group-hover/event-row:opacity-100 group-has-[:focus-visible]/event-row:pointer-events-auto group-has-[:focus-visible]/event-row:opacity-100'
 
-/** The reveal's fade alone, for marks the row button must keep receiving clicks under. */
-const NATIVE_CHAT_EVENT_ROW_FADE =
-  'transition-opacity can-hover:opacity-0 group-hover/event-row:opacity-100 group-has-[:focus-visible]/event-row:opacity-100'
-
 export type NativeChatEventBadge = 'running' | 'failed'
 
 /** The row's 14px mark with its state in a badge at the bottom right: a spinner while it runs, a red ✕ when it failed. */
-export function NativeChatEventIcon({
+function NativeChatEventIcon({
   children,
   badge
 }: {
@@ -119,6 +115,7 @@ function EventDetails({
  */
 export function NativeChatEventRow({
   icon,
+  badge,
   children,
   label,
   action,
@@ -133,6 +130,8 @@ export function NativeChatEventRow({
   className
 }: {
   icon: React.ReactNode
+  /** Its state on the mark; screen readers hear it with the row's words. */
+  badge?: NativeChatEventBadge | null
   /** The row's words; may hold links and chips. */
   children: React.ReactNode
   /** The words as plain text: the row button's name, with the time. */
@@ -154,22 +153,30 @@ export function NativeChatEventRow({
 }): React.JSX.Element {
   const disclosure = useNativeChatDisclosure(disclosureKey, defaultOpen)
   const { findActive } = useContext(NativeChatToolRunWindowContext)
+  const t = useTranslate()
   const time = useNativeChatMessageTimeLabel(timestamp)
+  const state =
+    badge === 'running'
+      ? t('components.native-chat.eventRow.running', 'Running')
+      : badge === 'failed'
+        ? t('components.native-chat.eventRow.failed', 'Failed')
+        : null
   const detailsId = useId()
   const toggles = details !== undefined && details !== null && details !== false
   const open = openProp ?? disclosure.open
+  const hasTime = timestamp !== undefined && timestamp !== null
   // Find searches drawn text: while it has a query, folded details are drawn so it can reach them.
   const shown = open || findActive
   return (
     <div className={className}>
-      <div className="group/event-row relative flex min-h-6 items-start gap-1.5 font-sans text-sm leading-relaxed text-chat-foreground-faint">
+      <div className="group/event-row @container/event-row relative flex min-h-6 items-start gap-1.5 font-sans text-sm leading-relaxed text-chat-foreground-faint">
         {toggles ? (
           <button
             type="button"
             ref={buttonRef}
             aria-expanded={shown}
             aria-controls={shown ? detailsId : undefined}
-            aria-label={[label, time].filter(Boolean).join(', ') || undefined}
+            aria-label={[label, state, time].filter(Boolean).join(', ') || undefined}
             className="absolute -inset-x-1 -inset-y-0.5 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             onClick={() => {
               if (openProp === undefined) {
@@ -186,7 +193,7 @@ export function NativeChatEventRow({
               'pointer-events-none [&_a]:pointer-events-auto [&_button]:pointer-events-auto'
           )}
         >
-          {icon}
+          <NativeChatEventIcon badge={badge}>{icon}</NativeChatEventIcon>
         </span>
         <span
           className={cn(
@@ -195,27 +202,35 @@ export function NativeChatEventRow({
               'pointer-events-none [&_a]:pointer-events-auto [&_button]:pointer-events-auto'
           )}
         >
+          {/* A row with no button says its state in its own text. */}
+          {state && !toggles ? <span className="sr-only">{state}, </span> : null}
           {children}
         </span>
-        {/* Beside the words, not in them, so a clamped line never cuts it off. */}
-        {action ? (
-          <span className={cn('relative mt-1 flex shrink-0', NATIVE_CHAT_EVENT_ROW_REVEAL)}>
-            {action}
-          </span>
-        ) : null}
-        <span className="min-w-2 flex-1" />
-        {toggles ? (
-          <ChevronRight
-            aria-hidden
+        {/* With a pointer the controls lie over the row's end and take no width until shown; touch keeps them in line. */}
+        {action || toggles || hasTime ? (
+          <span
             className={cn(
-              'pointer-events-none relative mt-[3px] size-3.5 shrink-0 transition-[transform,opacity]',
-              shown ? 'rotate-90' : NATIVE_CHAT_EVENT_ROW_FADE
+              'relative ml-auto flex h-6 shrink-0 items-center gap-1.5 pl-2',
+              "can-hover:absolute can-hover:top-0 can-hover:right-0 can-hover:bg-chat-pane can-hover:before:pointer-events-none can-hover:before:absolute can-hover:before:inset-y-0 can-hover:before:right-full can-hover:before:w-4 can-hover:before:bg-linear-to-r can-hover:before:from-transparent can-hover:before:to-chat-pane can-hover:before:content-['']",
+              !shown && NATIVE_CHAT_EVENT_ROW_REVEAL
             )}
-          />
-        ) : null}
-        {timestamp !== undefined && timestamp !== null ? (
-          <span className={cn('relative mt-[3px] shrink-0', NATIVE_CHAT_EVENT_ROW_REVEAL)}>
-            <NativeChatMessageTimestamp timestamp={timestamp} />
+          >
+            {action ? <span className="flex">{action}</span> : null}
+            {toggles ? (
+              <ChevronRight
+                aria-hidden
+                className={cn(
+                  'pointer-events-none size-3.5 shrink-0 transition-transform',
+                  shown && 'rotate-90'
+                )}
+              />
+            ) : null}
+            {hasTime ? (
+              // A narrow pane drops the time; the row button still names it.
+              <span className="hidden @sm/event-row:block">
+                <NativeChatMessageTimestamp timestamp={timestamp} />
+              </span>
+            ) : null}
           </span>
         ) : null}
       </div>
