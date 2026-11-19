@@ -164,7 +164,12 @@ export function BrowserAnnotateToolPalette({
 
   // Entry and tool changes focus the active tool, so A/G/D never type into the page and keep reaching the app
   // (Draw has no page picker to forward keys from). A comment draft being typed keeps its focus.
+  // Why wait for placement: the palette stays invisible until it is measured, and an invisible button can't take focus.
+  const placed = left !== null
   useLayoutEffect(() => {
+    if (!placed) {
+      return
+    }
     const focused = document.activeElement
     if (focused instanceof HTMLElement && isEditableFocus(focused)) {
       return
@@ -174,7 +179,7 @@ export function BrowserAnnotateToolPalette({
     focusingToolRef.current = true
     toolRefs.current.get(activeTool)?.focus({ preventScroll: true })
     focusingToolRef.current = false
-  }, [activeTool])
+  }, [activeTool, placed])
 
   useLayoutEffect(() => {
     const palette = paletteRef.current

@@ -255,6 +255,14 @@ describe('grab overlay after the click', () => {
     expect(overlaps(label, { left: 300, top: 8, right: 600, bottom: 72 })).toBe(false)
   })
 
+  it('keeps the label inside the viewport for an element at its right edge', async () => {
+    const { width } = await armGuest().then((guest) => guest.viewport)
+    const guest = await armGuest(undefined, false, { x: width - 60, y: 200, width: 50, height: 20 })
+
+    expect(guest.hoverLabelLeft + LABEL.width).toBeLessThanOrEqual(width - 4)
+    expect(guest.hoverLabelLeft).toBeGreaterThanOrEqual(4)
+  })
+
   it('moves the label under a wrapped palette when there is no room beside it', async () => {
     // A two-row palette spanning the page width at the top: the label goes just under it.
     const { width, height } = await armGuest().then((guest) => guest.viewport)

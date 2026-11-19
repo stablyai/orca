@@ -37,7 +37,8 @@ export const GRAB_GUEST_LABEL_PLACEMENT_SCRIPT = `  // Where Orca's annotate pal
   // Below the element, else above it, else beside the palette, else just under it: never under the palette.
   function placeLabel(rect) {
     var width = hoverLabel.offsetWidth || 160;
-    var left = Math.max(4, rect.x);
+    // Starts at the element, but never runs past the viewport's right edge.
+    var left = Math.max(4, Math.min(rect.x, window.innerWidth - width - 4));
     var below = rect.bottom + 6;
     var above = rect.top - LABEL_SPACE;
     var avoid = labelAvoidRect();
