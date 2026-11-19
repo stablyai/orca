@@ -1,11 +1,11 @@
 import {
   sanitizeCrashReportBreadcrumbs,
   sanitizeCrashReportDetails
-} from '../../../shared/crash-report-redaction'
+} from '../../../shared/crash-reporting/crash-report-redaction'
 import type {
   CrashReportBreadcrumbData,
   CrashReportBreadcrumb
-} from '../../../shared/crash-reporting'
+} from '../../../shared/crash-reporting/crash-reporting'
 
 const MAX_BREADCRUMBS = 30
 const MAX_RETAINED_BREADCRUMBS = 10

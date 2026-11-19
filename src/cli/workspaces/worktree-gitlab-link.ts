@@ -1,5 +1,5 @@
 import { parseGitLabIssueOrMRLink } from '../../shared/new-workspace/gitlab-links'
-import { RuntimeClientError } from '../runtime/types'
+import { RuntimeClientError } from '../runtime/connection/types'
 import { getOptionalWorktreeLinkFlagValue } from './worktree-link-flag-value'
 
 export type GitLabLinkKind = 'issue' | 'mr'

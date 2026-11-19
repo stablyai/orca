@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   coordinateHostStackNavigation,
+  navigateToHostStackRoute,
   type HostStackNavigationState
 } from './host-stack-navigation'
 
@@ -49,6 +50,58 @@ function committedHostState(hostIdParam: string): HostStackNavigationState {
 }
 
 describe('host stack navigation', () => {
+  it('reuses the room on screen for its own tap and opens a different room over it', () => {
+    const room = (groupId: string) => ({
+      name: '[hostId]/group/[groupId]',
+      params: { hostId: 'host/one', groupId }
+    })
+    const harness = navigationHarness({
+      index: 0,
+      routes: [
+        {
+          name: 'h',
+          state: {
+            key: '/h',
+            index: 1,
+            routes: [
+              { key: 'host-index', name: '[hostId]/index', params: { hostId: 'host/one' } },
+              { key: 'room-g', ...room('g') }
+            ]
+          }
+        }
+      ]
+    })
+    const router = { push: vi.fn(), replace: vi.fn() }
+
+    navigateToHostStackRoute(harness.navigation, router, 'host/one', room('g'))
+    navigateToHostStackRoute(harness.navigation, router, 'host/one', room('h'))
+
+    expect(harness.navigation.dispatch.mock.calls.map(([action]) => action.type)).toEqual([
+      'SET_PARAMS',
+      'PUSH'
+    ])
+  })
+
+  it('pushes a group room from the host list even where sessions open inside its document', () => {
+    const harness = navigationHarness(committedHostState('host/one'))
+    const room = {
+      name: '[hostId]/group/[groupId]',
+      params: { hostId: 'host/one', groupId: 'g-1' }
+    }
+
+    navigateToHostStackRoute(
+      harness.navigation,
+      { push: vi.fn(), replace: vi.fn() },
+      'host/one',
+      room,
+      true
+    )
+
+    expect(harness.navigation.dispatch.mock.calls).toEqual([
+      [{ type: 'PUSH', target: '/h', payload: room }]
+    ])
+  })
+
   describe('a session opened inside its host document', () => {
     const SESSION = {
       name: '[hostId]/session/[worktreeId]',

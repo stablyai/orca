@@ -1,5 +1,6 @@
-import type { BaseRefSearchResult } from '../../../../shared/repo-types'
+import type { BaseRefSearchResult } from '../../../../shared/repository/repo-types'
 import { branchRefLabel } from '../../../../shared/git/refs/branch-ref-label'
+import { getRefSearchTokens } from '../../../../shared/git/refs/ref-search-tokens'
 import { isSafeGitRefName } from '../../../../shared/git/status/git-status-upstream-ref'
 import { isRemoteHeadRef } from '../../../../shared/source-control/hosted-review/hosted-review-refs'
 
@@ -67,8 +68,34 @@ export function resolveLocalBranchName(
   )
 }
 
-export function matchesBranchRef(ref: BranchRef, query: string, remoteOnly: boolean): boolean {
-  return (!remoteOnly || ref.refName.startsWith('refs/remotes/')) && ref.searchName.includes(query)
+// Substring match, or tokens matched per segment (git `*` never crosses `/`): without an edge
+// slash the ref has one segment per token; an edge slash requires a further segment on that side.
+function createBranchRefMatcher(query: string): (searchName: string) => boolean {
+  const tokens = getRefSearchTokens(query)
+  const leading = query.startsWith('/')
+  const trailing = query.endsWith('/')
+  const segmented = tokens.length > 1 || (tokens.length === 1 && (leading || trailing))
+  const matchesAt = (segments: string[], start: number): boolean =>
+    tokens.every((token, index) => segments[start + index].includes(token))
+  return (searchName) => {
+    if (searchName.includes(query)) {
+      return true
+    }
+    if (!segmented) {
+      return false
+    }
+    const segments = searchName.split('/')
+    const lastStart = segments.length - tokens.length - (trailing ? 1 : 0)
+    if (!leading && !trailing) {
+      return lastStart === 0 && matchesAt(segments, 0)
+    }
+    for (let start = leading ? 1 : 0; start <= lastStart; start += 1) {
+      if (matchesAt(segments, start)) {
+        return true
+      }
+    }
+    return false
+  }
 }
 
 export function projectBranchRefs(
@@ -101,10 +128,12 @@ export function createBranchRefProjection(
     .trim()
     .replace(/[*?[\]\\]/g, '')
     .toLowerCase()
+  const matches = createBranchRefMatcher(normalized)
   const longestFirst = [...remotes].sort((left, right) => right.length - left.length)
   return (ref) => {
     if (
-      !matchesBranchRef(ref, normalized, remoteOnly) ||
+      (remoteOnly && !ref.refName.startsWith('refs/remotes/')) ||
+      !matches(ref.searchName) ||
       isRemoteHeadRef(ref.refName, longestFirst)
     ) {
       return null

@@ -9,7 +9,7 @@ import {
 import { translate } from '@/i18n/i18n'
 import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translate'
 import { formatUiRelativeTime } from '@/i18n/relative-time-format'
-import type { BrowserPasswordEntrySummary } from '../../../../../../shared/browser-passwords-types'
+import type { BrowserPasswordEntrySummary } from '../../../../../../shared/browser/passwords/browser-passwords-types'
 import { browserPasswordHostOf } from './browser-passwords-copy'
 
 export type BrowserPasswordRowActions = {

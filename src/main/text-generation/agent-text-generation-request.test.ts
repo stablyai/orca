@@ -8,7 +8,7 @@ const mocks = vi.hoisted(() => ({
   mkdtemp: vi.fn(),
   realMkdtemp: undefined as undefined | ((prefix: string) => Promise<string>)
 }))
-vi.mock('./commit-message-agent-environment', () => ({
+vi.mock('./execution/commit-message-agent-environment', () => ({
   prepareLocalCommitMessageAgentEnv: mocks.prepare
 }))
 // The folder step is wrapped so a test can stop the request while it is still being made.
@@ -19,7 +19,7 @@ vi.mock('node:fs/promises', async (importOriginal) => {
   return { ...actual, mkdtemp: mocks.mkdtemp }
 })
 
-import { spawnSourceControlAgent } from './source-control-agent-launch'
+import { spawnSourceControlAgent } from './execution/source-control-agent-launch'
 import { generateAgentText } from './agent-text-generation-request'
 
 const host = { getAgentEnvironment: () => undefined }

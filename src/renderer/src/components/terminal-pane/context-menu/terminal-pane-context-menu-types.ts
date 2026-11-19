@@ -26,7 +26,7 @@ export type UseTerminalPaneContextMenuDeps = {
   rightClickToPaste: boolean
 }
 
-/** Copy Agent ID's click: resolve on the pane's host, then hand focus back to that pane. */
+/** Copy Orca Session ID's click: resolve on the pane's host, then hand focus back to that pane. */
 export type TerminalPaneAgentIdCopy = {
   resolve: () => Promise<string | null>
   focusPane: () => void

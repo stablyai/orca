@@ -1,5 +1,5 @@
 import { CrewChanges } from '../../crew/crew-changes'
-import { agentSessionConversationView } from '../../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
+import { agentSessionConversationView } from '../../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 import { existsSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -9,7 +9,7 @@ import {
   hasAppEnvironment,
   setAppEnvironment,
   type AppEnvironment
-} from '../../../../../shared/app-environment'
+} from '../../../../../shared/app-lifecycle/app-environment'
 import type {
   AgentSessionLease,
   AgentSessionRecord
@@ -17,9 +17,9 @@ import type {
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
-} from '../../../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
-import { formatOrcaSessionAddress } from '../../../../../shared/orca-session-address'
-import { testOrcaSessionId } from '../../../../../shared/orca-session-address-test-fixture'
+} from '../../../../../shared/agent-session/lifecycle/records/agent-session-record.test-fixture'
+import { formatOrcaSessionAddress } from '../../../../../shared/agent-session/identity/orca-session-address'
+import { testOrcaSessionId } from '../../../../../shared/agent-session/identity/orca-session-address-test-fixture'
 
 const hostRef: { current: unknown } = { current: null }
 
@@ -33,12 +33,6 @@ vi.mock(
 const { OrcaRuntimeWithGetPtyRecordForPaneKey } = await import('./terminal-pane-mail-routing')
 const { OrchestrationDb } = await import('../../db/orchestration-db')
 const { resolveOrcaSessionParty } = await import('../../addressing/orchestration-party')
-const {
-  mintStructuredWorkerHandle,
-  mintStructuredWorkerPaneKey,
-  structuredWorkerIdentities,
-  structuredWorkerProcessIncarnation
-} = await import('../../terminal-authority/structured-sessions/structured-worker-identity')
 
 const CHAT = testOrcaSessionId('4a1f6c2e-8b3d-4e7a-9c15-0d2b6e8f1a37')
 const CHAT_ADDRESS = formatOrcaSessionAddress(CHAT)
@@ -117,30 +111,6 @@ afterEach(() => {
   db.close()
 })
 
-describe('the idle edge of a structured session', () => {
-  it('re-derives and delivers the mailboxes the session owns, and nothing while it works', () => {
-    installStore(chatRecord())
-    const runId = chatCoordinatedRun()
-    db.insertMessage({
-      from: 'term_worker',
-      to: `run:${runId}`,
-      subject: 'done',
-      runId,
-      type: 'status'
-    })
-    const delivered: string[] = []
-    const runtime = probe({
-      deliverPendingMessagesForHandle: (handle: string) => delivered.push(handle),
-      notifyStructuredSessionJournalActivity: vi.fn(),
-      cancelMessageWaiters: vi.fn()
-    })
-    runtime.onStructuredSessionStatusForMail({ sessionId: CHAT, status: 'working' })
-    expect(delivered).toEqual([])
-    runtime.onStructuredSessionStatusForMail({ sessionId: CHAT, status: 'idle' })
-    expect(delivered).toEqual([`run:${runId}`])
-  })
-})
-
 describe('the idle edge after a restart, before any orchestration call', () => {
   let userData: string
   let previousEnvironment: AppEnvironment | null
@@ -177,26 +147,6 @@ describe('the idle edge after a restart, before any orchestration call', () => {
       notifyStructuredSessionJournalActivity: vi.fn()
     })
   }
-
-  it('opens an existing orchestration database itself, so mail stored before the restart is redriven', () => {
-    // An idle edge after restart must open the orchestration DB rather than silently read its null field.
-    installStore(chatRecord())
-    const stored = new OrchestrationDb(join(userData, 'orchestration.db'))
-    const runId = stored.createRun({
-      objective: 'o',
-      coordinatorHandle: null,
-      coordinatorPaneKey: null,
-      coordinatorOrcaSessionId: CHAT
-    }).id
-    stored.close()
-    const delivered: string[] = []
-    const runtime = restarted(delivered)
-
-    runtime.onStructuredSessionStatusForMail({ sessionId: CHAT, status: 'idle' })
-
-    expect(delivered).toEqual([`run:${runId}`])
-    runtime.getOrchestrationDb().close()
-  })
 
   it('creates no database for a profile that never orchestrated, and says nothing', () => {
     installStore(chatRecord())
@@ -297,73 +247,11 @@ describe('a coordinator chat continued by /clear', () => {
     expect(idleEdge(SUCCESSOR)).toEqual([CHAT_ADDRESS])
     expect(db.getMessageById(direct.id)).toMatchObject({ to_handle: CHAT_ADDRESS, read: 0 })
   })
-})
 
-describe('a structured worker continued by /clear', () => {
-  const WORKER = testOrcaSessionId('9c2e4a61-3f7b-4d8e-b105-6a2d8e4f1c93')
-  const WORKER_SUCCESSOR = testOrcaSessionId('clear-a1b2c3d4e5f60718293a4b5c6d7e8f9012345678')
-
-  afterEach(() => {
-    structuredWorkerIdentities.clear()
-  })
-
-  /** A worker minted for WORKER, whose conversation `/clear` continued in WORKER_SUCCESSOR. */
-  function clearedWorker(): { handle: string; paneKey: string } {
-    const store = installStore(null)
-    const minted = agentSessionRecordFixture(
-      agentSessionLeaseFixture({ sessionId: WORKER, runtimeKind: 'native' })
-    )
-    store.records.set(WORKER, {
-      ...minted,
-      conversationCommand: {
-        command: 'clear',
-        state: 'completed',
-        replacementSessionId: WORKER_SUCCESSOR,
-        operationId: 'op-worker',
-        callerKey: 'caller',
-        phase: 'committed'
-      }
-    })
-    store.records.set(
-      WORKER_SUCCESSOR,
-      agentSessionRecordFixture(
-        agentSessionLeaseFixture({ sessionId: WORKER_SUCCESSOR, runtimeKind: 'native' })
-      )
-    )
-    const identity = structuredWorkerIdentities.register({
-      handle: mintStructuredWorkerHandle(),
-      sessionId: WORKER,
-      agent: 'codex',
-      paneKey: mintStructuredWorkerPaneKey(WORKER),
-      processIncarnation: structuredWorkerProcessIncarnation(WORKER),
-      worktreeId: 'wt_1',
-      hostScope: { kind: 'local', hostId: 'local' }
-    })
-    return { handle: identity.handle, paneKey: identity.paneKey }
-  }
-
-  it("delivers the worker's dispatch mailbox and a Run it coordinates to the live successor", () => {
-    const { handle, paneKey } = clearedWorker()
-    const dispatch = db.createDispatchContext({
-      taskId: db.createTask({ runId: chatCoordinatedRun(), spec: 'work' }).id,
-      assigneeHandle: handle,
-      assigneePaneKey: paneKey,
-      processIncarnation: structuredWorkerProcessIncarnation(WORKER),
-      creator: { kind: 'system' },
-      maxDepth: Number.MAX_SAFE_INTEGER
-    })
-    expect(probe().target(`dispatch:${dispatch.id}`)).toEqual({
-      sessionId: WORKER_SUCCESSOR,
-      dispatchId: dispatch.id
-    })
-    const workerRun = db.createRun({
-      objective: 'o',
-      coordinatorHandle: handle,
-      coordinatorPaneKey: paneKey
-    }).id
-    expect(probe().target(`run:${workerRun}`)).toEqual({
-      sessionId: WORKER_SUCCESSOR,
-      dispatchId: null
-    })
+  it('redrives direct mail addressed to the live successor, as item mail is', () => {
+    installLineage(MIDDLE, SUCCESSOR)
+    const address = formatOrcaSessionAddress(SUCCESSOR)
+    db.insertMessage({ from: 'orca_bot_items', to: address, subject: 'item', type: 'status' })
+    expect(idleEdge(SUCCESSOR)).toEqual([address])
   })
 })

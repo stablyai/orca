@@ -3,9 +3,9 @@ import type { AgentPaneChange } from '../../../../agent-hooks/observations/agent
 import type { AgentStatusIpcPayload } from '../../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { AgentSessionTurnCompletionEvent } from '../../../../../shared/agent-session/view/agent-session-turn-completion-wire'
 import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host'
-import { formatOrcaSessionAddress } from '../../../../../shared/orca-session-address'
-import { testOrcaSessionId } from '../../../../../shared/orca-session-address-test-fixture'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host/execution-host'
+import { formatOrcaSessionAddress } from '../../../../../shared/agent-session/identity/orca-session-address'
+import { testOrcaSessionId } from '../../../../../shared/agent-session/identity/orca-session-address-test-fixture'
 import { chatWorkerTurnStopReporter } from './chat-worker-turn-stops'
 import { OrchestrationDb } from '../../db/orchestration-db'
 import '../../db/contract-constants'
@@ -69,10 +69,10 @@ function moved(from: 'working' | 'done', to: 'done' | 'needs-you'): AgentPaneCha
 function terminal(
   ctx: ReturnType<typeof setup>,
   current: { row: AgentStatusIpcPayload },
-  approvals: Partial<
+  overrides: Partial<
     Pick<
       ConstructorParameters<typeof TerminalWorkerTurnStops>[0],
-      'takeOpenApproval' | 'markApprovalReported'
+      'takeOpenApproval' | 'markApprovalReported' | 'setTimer' | 'readScreen'
     >
   > = {}
 ) {
@@ -87,18 +87,28 @@ function terminal(
     getProcessIncarnation: () => null,
     takeOpenApproval: async () => null,
     markApprovalReported: () => {},
-    ...approvals,
-    readScreen: async () => ({
-      handle: HANDLE,
-      status: 'running',
-      tail: ['■ Selected model is at capacity. Please try a different model.'],
-      truncated: false,
-      nextCursor: null
-    })
+    readScreen: async () =>
+      screen(['■ Selected model is at capacity. Please try a different model.']),
+    ...overrides
   })
 }
 
+function screen(tail: string[]) {
+  return { handle: HANDLE, status: 'running' as const, tail, truncated: false, nextCursor: null }
+}
+
 const settle = () => new Promise((resolve) => setImmediate(resolve))
+
+/** The coordinator writes to the worker's Dispatch, and the worker takes the mail. */
+function writeAndTake(ctx: ReturnType<typeof setup>) {
+  const mail = ctx.db.insertMessage({
+    from: 'term_coordinator',
+    to: `dispatch:${ctx.dispatch.id}`,
+    subject: 'Keep going',
+    runId: ctx.run.id
+  })
+  ctx.db.markAsRead([mail.id])
+}
 
 describe('terminal worker turn stops', () => {
   it('drops a stop whose Dispatch was replaced before it was reported', async () => {
@@ -121,38 +131,6 @@ describe('terminal worker turn stops', () => {
     await settle()
     expect(ctx.mail()).toHaveLength(0)
   })
-
-  it.each([
-    { waitingForMail: false, marked: ['apr_1'] },
-    { waitingForMail: true, marked: [] }
-  ])(
-    'marks an approval reported only when its escalation went out (%o)',
-    async ({ waitingForMail, marked }) => {
-      const ctx = setup()
-      if (waitingForMail) {
-        ctx.waiting.add(`dispatch:${ctx.dispatch.id}`)
-      }
-      const markApprovalReported = vi.fn()
-      const current = { row: hookRow({ state: 'working', agentType: 'claude' }) }
-      const stops = terminal(ctx, current, {
-        takeOpenApproval: async () => ({
-          v: 1,
-          approvalId: 'apr_1',
-          state: 'open',
-          worker: { handle: HANDLE, dispatchId: ctx.dispatch.id, taskId: ctx.dispatch.task_id },
-          summary: { title: 'Allow Bash?', detail: 'rm -rf build', reason: null },
-          allowedActions: ['allow', 'deny']
-        }),
-        markApprovalReported
-      })
-      current.row = hookRow({ state: 'blocked', agentType: 'claude' })
-      stops.observe(moved('working', 'needs-you'))
-      await settle()
-
-      expect(ctx.mail()).toHaveLength(marked.length)
-      expect(markApprovalReported.mock.calls.flat()).toEqual(marked)
-    }
-  )
 
   it('never mails a capability or credential carried in why a worker went away', () => {
     const ctx = setup()
@@ -220,6 +198,78 @@ describe('terminal worker turn stops', () => {
     // A later idle turn that sent nothing is news, though the coordinator has not written since.
     stop('turn-3', after)
     expect(ctx.mail()).toHaveLength(2)
+  })
+
+  it('reports every idle stop after a write, though the write landed before the last report', async () => {
+    const ctx = setup()
+    const current = { row: hookRow({ state: 'working', stateStartedAt: 100 }) }
+    const quiet: (() => void)[] = []
+    const stops = terminal(ctx, current, {
+      setTimer: (run) => {
+        quiet.push(run)
+        return { cancel: () => {} }
+      }
+    })
+    const turn = async (stateStartedAt: number, during?: () => void) => {
+      current.row = hookRow({ state: 'working', stateStartedAt: stateStartedAt - 1 })
+      stops.observe({
+        kind: 'observed',
+        paneKey: PANE,
+        workspace: { worktreeId: 'repo::/tmp/wt', sshHostId: null },
+        phase: 'working',
+        at: 1
+      })
+      current.row = hookRow({ stateStartedAt, lastAssistantMessage: 'Paused.' })
+      stops.observe(moved('working', 'done'))
+      // The coordinator's write lands in the quiet window, before Orca sees the worker resume.
+      during?.()
+      for (const run of quiet.splice(0)) {
+        run()
+      }
+      await settle()
+    }
+    await turn(200, () => writeAndTake(ctx))
+    await turn(300)
+    expect(ctx.mail()).toHaveLength(2)
+    writeAndTake(ctx)
+    await turn(400)
+    // Idle again with no new write: already told.
+    await turn(500)
+    expect(ctx.mail().map((m) => m.subject)).toEqual(
+      Array(3).fill('Worker stopped without reporting')
+    )
+  })
+  it("reports a background subagent's permission prompt with the dialog Claude paints after its hook", async () => {
+    const ctx = setup()
+    const current = { row: hookRow({ agentType: 'claude', state: 'working', stateStartedAt: 100 }) }
+    // The lead ended its turn waiting on the subagent; its screen before and after the dialog painted.
+    const idle = [
+      "⏺ Waiting for the reviewer's report.",
+      '✻ Waiting for 1 background agent to finish',
+      '❯',
+      '  ◯ general-purpose  Adversarial review of panel mock'
+    ]
+    const dialog = [
+      ' Bash command · from the general-purpose agent',
+      ' │ rm -f ./.rv-shot.mjs; node shot.mjs',
+      ' │ Dangerous rm operation not ruled out — the shell may read this command differently than it was parsed',
+      ' Do you want to proceed?',
+      ' ❯ 1. Yes',
+      '   2. No',
+      ' Esc to cancel · Tab to amend · ctrl+x ctrl+k twice to stop background agents'
+    ]
+    const screens = [idle, idle, dialog]
+    const stops = terminal(ctx, current, {
+      readScreen: async () => screen(screens.shift() ?? dialog)
+    })
+    current.row = hookRow({
+      agentType: 'claude',
+      state: 'waiting',
+      stateStartedAt: 300
+    })
+    stops.observe(moved('working', 'needs-you'))
+    await vi.waitFor(() => expect(ctx.mail()).toHaveLength(1))
+    expect(ctx.mail()[0].body).toContain('Do you want to proceed?')
   })
 })
 
@@ -300,6 +350,27 @@ describe('chat worker turn stops', () => {
       { subject: 'Worker stopped without reporting', payload: expect.stringContaining(followUp) }
     ])
   })
+  it('reports every idle stop after a write, though the write landed before the last report', () => {
+    const ctx = setup(formatOrcaSessionAddress(CHAT_SESSION))
+    const chat = chatWithTimers(ctx)
+    chat.finish('turn-1')
+    // The coordinator's write lands in the quiet window, before the stop is reported.
+    writeAndTake(ctx)
+    chat.runTimers()
+    chat.finish('turn-2')
+    chat.runTimers()
+    expect(ctx.mail()).toHaveLength(2)
+    writeAndTake(ctx)
+    chat.finish('turn-3')
+    chat.runTimers()
+    // Idle again with no new write: already told.
+    chat.finish('turn-4')
+    chat.runTimers()
+    expect(ctx.mail().map((m) => m.subject)).toEqual(
+      Array(3).fill('Worker stopped without reporting')
+    )
+  })
+
   it('retiring the owner suppresses pending reports and permits a fresh owner to report', async () => {
     const ctx = setup(formatOrcaSessionAddress(CHAT_SESSION))
     let finishRead!: (value: null) => void

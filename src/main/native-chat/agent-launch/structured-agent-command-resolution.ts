@@ -1,12 +1,12 @@
-import { waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
+import { waitForPromiseWithSignal } from '../../../shared/concurrency/abort-signal-reason'
 import { homedir } from 'node:os'
 import { delimiter, isAbsolute, resolve as resolvePath } from 'node:path'
-import type { GlobalSettings } from '../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import {
   resolveCliCommand,
   resolveExecutableCommand
-} from '../../../shared/node-cli-command-resolution'
+} from '../../../shared/shell/command-resolution/node-cli-command-resolution'
 import {
   hasExplicitTuiLaunchCommand,
   structuredAgentCommandPlan
@@ -19,7 +19,11 @@ import {
 import {
   guestNativePathEnv,
   resolveGuestNativeProgram
-} from '../../ipc/wsl-guest-windows-drive-path'
+} from '../../wsl/filesystem/wsl-guest-windows-drive-path'
+import {
+  isManagedAgentCli,
+  managedAgentCommand
+} from '../../managed-agent-cli/managed-agent-cli-registry'
 
 export type StructuredAgentResolutionOperation = {
   deadline?: number
@@ -91,6 +95,14 @@ export function resolveStructuredAgentCommand(
     // WSL PATH may contain drive-mounted Windows shims after native entries.
     const command = stock.command ?? agent
     const resolved = resolveGuestNativeProgram(command, options, stock.resolve)
+    // The user's own install wins; Orca's copy serves hosts that have none.
+    const managed =
+      isManagedAgentCli(agent) && !stock.command && (resolved === null || !isAbsolute(resolved))
+        ? managedAgentCommand(agent)
+        : null
+    if (managed) {
+      return { command: managed, prefixArgs: [] }
+    }
     if (resolved === null) {
       throw new AgentSessionPreSpawnError(
         `${command} is installed only on Windows, not in WSL ${process.env.WSL_DISTRO_NAME ?? 'distro'}`,

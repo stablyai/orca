@@ -15,9 +15,9 @@ import { runGenerationRequest } from './agent-generation-request'
 import {
   prepareLocalCommitMessageAgentEnv,
   type CommitMessageAgentEnvironmentResolvers
-} from './commit-message-agent-environment'
-import { spawnSourceControlAgent } from './source-control-agent-launch'
-import { cancelLocalGeneration } from './source-control-generation-lanes'
+} from './execution/commit-message-agent-environment'
+import { spawnSourceControlAgent } from './execution/source-control-agent-launch'
+import { cancelLocalGeneration } from './execution/source-control-generation-lanes'
 import type { SpawnSourceControlAgent } from './source-control-text-generation-types'
 
 export type AgentTextGenerationHost = {

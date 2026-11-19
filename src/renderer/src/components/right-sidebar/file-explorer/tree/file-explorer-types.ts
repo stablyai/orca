@@ -1,6 +1,6 @@
 import type { Dispatch, SetStateAction } from 'react'
 import type { UserOpenedPathStat } from '@/lib/files/access/user-opened-local-path'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import type { DirEntryCursor } from '../../../../../../shared/file-listing/file-dir-page'
 
 export type FileExplorerOperationOwner =

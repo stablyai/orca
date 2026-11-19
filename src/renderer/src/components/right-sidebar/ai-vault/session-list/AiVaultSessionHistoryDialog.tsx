@@ -4,8 +4,8 @@ import { useAppStore } from '@/store/index'
 import type { AppState } from '@/store/types'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogClose, DialogContent, DialogTitle } from '@/components/ui/dialog'
-import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
-import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
+import { ShortcutKeyCombo } from '@/components/ui/ShortcutKeyCombo'
+import { useConfirmationDialog } from '@/components/dismiss/confirmation/confirmation-dialog-context'
 import { useTranslate } from '@/i18n/use-translate'
 import {
   AI_VAULT_AGENTS,
@@ -93,6 +93,7 @@ export default function AiVaultSessionHistoryDialog(): React.JSX.Element | null 
               tabId: request.chatTabId,
               workspaceId: request.workspace.worktreeId,
               agent: request.agent,
+              alongside: request.alongside,
               // A refusal can settle after this opening closed and another modal took the slot.
               dismiss: () => {
                 if (useAppStore.getState().modalData === modalData) {

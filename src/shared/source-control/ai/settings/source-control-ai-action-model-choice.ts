@@ -8,8 +8,8 @@ import type {
   SourceControlActionRecipeSaveResult
 } from './source-control-ai-recipe-save'
 import { toSourceControlAiRepoUpdate } from './source-control-ai-recipe-save'
-import type { GlobalSettings } from '../../../global-settings-types'
-import type { Repo } from '../../../repo-types'
+import type { GlobalSettings } from '../../../settings/global-settings-types'
+import type { Repo } from '../../../repository/repo-types'
 import type {
   AiTextOperation,
   SourceControlAiModelChoice

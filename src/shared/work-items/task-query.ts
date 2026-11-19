@@ -3,7 +3,7 @@ export type ParsedTaskQuery = {
   state: 'open' | 'closed' | 'all' | 'merged' | null
   draft: boolean
   assignee: string | null
-  author: string | null
+  authors: string[]
   reviewRequested: string | null
   reviewedBy: string | null
   labels: string[]
@@ -66,7 +66,7 @@ export function parseTaskQuery(rawQuery: string): ParsedTaskQuery {
     state: null,
     draft: false,
     assignee: null,
-    author: null,
+    authors: [],
     reviewRequested: null,
     reviewedBy: null,
     labels: [],
@@ -124,7 +124,7 @@ export function parseTaskQuery(rawQuery: string): ParsedTaskQuery {
       continue
     }
     if (key === 'author') {
-      query.author = value
+      query.authors.push(value)
       continue
     }
     if (key === 'review-requested') {
@@ -195,8 +195,8 @@ export function serializeTaskQuery(q: ParsedTaskQuery): string {
   if (q.draft) {
     parts.push('is:draft')
   }
-  if (q.author) {
-    parts.push(`author:${quoteIfNeeded(q.author)}`)
+  for (const author of q.authors) {
+    parts.push(`author:${quoteIfNeeded(author)}`)
   }
   if (q.assignee) {
     parts.push(`assignee:${quoteIfNeeded(q.assignee)}`)
@@ -217,7 +217,7 @@ export function serializeTaskQuery(q: ParsedTaskQuery): string {
 }
 
 export type TaskQueryFilterKey =
-  | 'author'
+  | 'authors'
   | 'assignee'
   | 'reviewRequested'
   | 'reviewedBy'
@@ -225,7 +225,7 @@ export type TaskQueryFilterKey =
   | 'state'
   | 'draft'
 
-/** Single-value null clears the qualifier; labels replaces the full array (caller manages membership). */
+/** Single-value null clears the qualifier; authors and labels replace the full array (caller manages membership). */
 export function withQualifier(
   rawQuery: string,
   key: TaskQueryFilterKey,
@@ -233,8 +233,8 @@ export function withQualifier(
 ): string {
   const parsed = parseTaskQuery(rawQuery)
   switch (key) {
-    case 'author':
-      parsed.author = typeof value === 'string' ? value : null
+    case 'authors':
+      parsed.authors = Array.isArray(value) ? value : []
       break
     case 'assignee':
       parsed.assignee = typeof value === 'string' ? value : null

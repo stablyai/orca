@@ -1,5 +1,5 @@
 import type { AppState } from '../types'
-import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { isRemovedRuntimeHostId } from './removed-runtime-host-rows'
 import { getEnvironmentSshStateGeneration } from '../slices/ssh/runtime-environment-ssh'
 import { getRuntimeTargetHostId } from '../../runtime/rpc/targets/runtime-client-target'

@@ -198,6 +198,14 @@ Everything else, such as `node:` builtins, resolves exactly as Node resolves it 
 worker. `orca/worker` holds only types, so import it with `import type`; a value import fails when
 the worker starts.
 
+A worker does not inherit Orca's full environment: tokens, shell-rc variables and display variables
+(`DISPLAY`, `WAYLAND_DISPLAY`) are withheld. It keeps `PATH`, `HOME`, locale and temp-dir
+variables, plus `XDG_RUNTIME_DIR`, `DBUS_SESSION_BUS_ADDRESS` and `SSH_AUTH_SOCK` from Orca's launch
+environment, so `git` credential helpers (such as libsecret) and ssh-agent can reach the session
+Orca started in. `GIT_TERMINAL_PROMPT=0` is set, so `git` fails instead of asking for a password.
+This filter only keeps secrets held in Orca's environment out of plugins; it is not a sandbox. A
+worker runs as you and can read your files, saved logins and SSH keys like any other program.
+
 ### Panels, workers and data
 
 A plugin's panels, custom editors and worker are one program. A panel asks its own worker, the
@@ -620,6 +628,20 @@ exists inside the plugin and fits its size limit. On a catalog it also
 checks that listed images exist and fit. It warns when the manifest still declares the deprecated
 `publisher`, and, in a Git repository, when that value is not the owner of the `origin` remote.
 Warnings do not fail the check. Run it in CI for the plugin and catalog repositories.
+
+It also reads the host calls in the code the worker, panel and editor entries ship (their
+imports and `<script src>` files, literal `orca.host.call('name')` names only, as bundlers keep
+them; comments are ignored). A call fails the check when this Orca has no such method
+(unreleased or misspelled), unless the plugin calls `orca.host.has` anywhere, or when it is
+still proposed, unless the plugin checks that name with a literal `orca.host.has('name')`; then
+it is a warning. A method newer than your
+`engines.orca` or one that surface cannot call is a warning, because a text scan cannot see
+guards or which code a surface runs: raise `engines.orca` to the release it names, or guard the
+call with `orca.host.has(name)`. Guards count plugin-wide, not per call. A deprecated method is
+a warning starting `deprecated host method <name>`. The Orca plugin directory runs this
+against the latest Orca release, so a method that release does not have holds your listing
+until it ships, and it shows you the warnings. Each minor's first release is in the
+[host API reference](plugin-host-api.md#stability-and-deprecation).
 
 The two report failure with different exit codes. `pnpm validate:plugin` exits `0` when every
 file is valid, `1` when any is invalid or missing, and `2` when no path is given.

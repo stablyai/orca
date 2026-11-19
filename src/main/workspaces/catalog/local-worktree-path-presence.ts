@@ -1,6 +1,6 @@
 import { stat } from 'node:fs/promises'
-import { mapWithConcurrency } from '../../../shared/map-with-concurrency'
-import { PrioritySemaphore } from '../../../shared/priority-semaphore'
+import { mapWithConcurrency } from '../../../shared/concurrency/map-with-concurrency'
+import { PrioritySemaphore } from '../../../shared/concurrency/priority-semaphore'
 import { abortSignalWithTimeout } from '../../lib/abort-signal-with-timeout'
 
 // Share a concurrency bound across polling callers so slow mounts cannot multiply libuv work.

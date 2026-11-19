@@ -1,13 +1,14 @@
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { WORKSPACE_LINEAGE_DOMAINS } from '../../profile-save-domains'
-import type { WorkspaceKey } from '../../../../shared/workspace-scope'
+import type { WorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import type { CrossStoreWorkspaceLineage } from '../../../../shared/worktree/lineage-types'
 import { hostWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
-import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
+import { releaseMatchingLineage } from './workspace-lineage-release'
 import {
   isCrossStoreWorkspaceLineage,
   validCrossStoreLineage
-} from '../../../../shared/worktree/cross-store-lineage-records'
+} from '../../../../shared/worktree/lineage/cross-store-lineage-records'
 import { ownsRawIdBucket } from './metadata-lineage-operations'
 import type { StoreRuntimeState } from '../store-runtime-state'
 import { type WriteSchedulingOperations, scheduleSave } from '../profile-writing/write-scheduling'
@@ -64,6 +65,18 @@ export class CrossStoreLineagePersistence {
     state.crossStoreLineageByChildKey[lineage.childWorkspaceKey] = lineage
     scheduleSave(this[crossStoreLineagePersistenceContext].scheduling, WORKSPACE_LINEAGE_DOMAINS)
     return lineage
+  }
+
+  /** Drops the links that match; returns the children it released. */
+  removeCrossStoreWorkspaceLineage(
+    matches: (lineage: CrossStoreWorkspaceLineage) => boolean
+  ): WorkspaceKey[] {
+    const saved =
+      this[crossStoreLineagePersistenceContext].runtime.state.crossStoreLineageByChildKey
+    const all = Object.values(this.getAllCrossStoreWorkspaceLineage())
+    return releaseMatchingLineage(saved, all, matches, () =>
+      scheduleSave(this[crossStoreLineagePersistenceContext].scheduling, WORKSPACE_LINEAGE_DOMAINS)
+    )
   }
 }
 

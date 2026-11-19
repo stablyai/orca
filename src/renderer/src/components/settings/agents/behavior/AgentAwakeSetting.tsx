@@ -1,4 +1,4 @@
-import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
 import { Label } from '../../../ui/label'
 import {
   getAgentAwakeDescription,
@@ -12,7 +12,7 @@ import {
   computerAwakeSettingsForMode,
   normalizeComputerAwakeMode,
   type ComputerAwakeMode
-} from '../../../../../../shared/computer-awake-mode'
+} from '../../../../../../shared/app-lifecycle/computer-awake-mode'
 import { useTranslate } from '../../../../i18n/use-translate'
 
 type AgentAwakeSettingProps = {

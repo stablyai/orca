@@ -56,6 +56,7 @@ const SELECTABLE_ENTRY_TYPES = [
   'simulator-tab',
   'project-target',
   'extra',
+  'bot-scope-action',
   'hint'
 ] as const
 

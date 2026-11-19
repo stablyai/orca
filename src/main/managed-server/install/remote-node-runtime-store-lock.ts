@@ -1,6 +1,6 @@
 // Promotion waits for the store lock; GC skips busy stores rather than queuing behind installs.
 import { randomUUID } from 'node:crypto'
-import { ORCAD_RUNTIMES_DIRNAME } from '../../../shared/orcad-artifacts'
+import { ORCAD_RUNTIMES_DIRNAME } from '../../../shared/remote-runtime/orcad-distribution/orcad-artifacts'
 import type { RemoteInstallTransport } from './remote-install-transport'
 import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
 import { execHostCommand } from '../../ssh/remote-exec/remote-host-exec'

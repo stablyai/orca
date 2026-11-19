@@ -1,12 +1,12 @@
-import { Plug } from 'lucide-react'
+import { Puzzle } from 'lucide-react'
 import type { ActivePluginPanel } from '@/store/plugins/catalog/plugin-contribution-catalog'
-import type { ActivityBarItem } from '../activity-bar-buttons'
+import type { ActivityBarItem } from '../activity-bar/activity-bar-buttons'
 import { resolvePluginIconGlyph } from '../../plugins/plugin-icon-glyphs'
 
 type PluginPanelIcon = ActivityBarItem['icon']
 
 export function resolvePluginPanelIcon(iconName: string | undefined): PluginPanelIcon {
-  return resolvePluginIconGlyph(iconName, Plug)
+  return resolvePluginIconGlyph(iconName, Puzzle)
 }
 
 export function getPluginPanelActivityItems(
@@ -20,6 +20,8 @@ export function getPluginPanelActivityItems(
     // Manifest titles are plugin-owned and render without app-catalog translation.
     title: panel.title,
     shortcut: '',
+    // Plugin panels are app-wide, so a bot's page offers them beside its own tabs.
+    onBotPage: true,
     ...(panelErrors[panel.tabKey] ? { statusIndicator: 'failure' as const } : {})
   }))
 }

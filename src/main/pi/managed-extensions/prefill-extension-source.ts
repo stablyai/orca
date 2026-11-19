@@ -1,4 +1,4 @@
-import type { PiAgentKind } from '../../../shared/pi-agent-kind'
+import type { PiAgentKind } from '../../../shared/agent-launch/catalog/pi-agent-kind'
 
 export const ORCA_PI_PREFILL_EXTENSION_FILE = 'orca-prefill.ts'
 

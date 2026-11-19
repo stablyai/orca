@@ -1,4 +1,4 @@
-import type { GitLabMRInvolvement, MRListState } from '../../../shared/gitlab-types'
+import type { GitLabMRInvolvement, MRListState } from '../../../shared/gitlab/gitlab-types'
 
 export type GitLabIssueListState = 'opened' | 'closed' | 'all'
 

@@ -1,12 +1,12 @@
-import type { Repo } from '../../../shared/repo-types'
+import type { Repo } from '../../../shared/repository/repo-types'
 import { composeWorktreeHostIdentity } from '../../../shared/worktree/host-qualified-identity'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 import {
   workspaceMetadataSetRow,
   type WorkspaceMetadataSet
-} from '../../../shared/worktree/workspace-metadata-set'
+} from '../../../shared/worktree/metadata/workspace-metadata-set'
 import type { WorkspaceAttachment } from '../../../shared/worktree/types'
-import { getRepoRoutingConnectionId } from '../../../shared/execution-host'
+import { getRepoRoutingConnectionId } from '../../../shared/execution-host/execution-host'
 import type { Store } from '../../persistence/loading-store/store'
 import { getLocalProjectGhExecOptions } from '../../workspaces/execution-host/project-runtime-git-options'
 import { getIssue } from '../issues/issues'

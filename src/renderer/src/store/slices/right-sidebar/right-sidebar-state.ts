@@ -3,7 +3,7 @@ import type {
   ActiveRightSidebarTab,
   ActivityBarPosition,
   RightSidebarExplorerView
-} from '../../../../../shared/ui-chrome-types'
+} from '../../../../../shared/ui-chrome/ui-chrome-types'
 import { defaultFileSearchState } from '../editor/search/file-search-state'
 
 export type RightSidebarState = {

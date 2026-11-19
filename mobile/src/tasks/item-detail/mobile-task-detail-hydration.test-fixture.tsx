@@ -3,7 +3,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import {
   createFakeRpcClient,
   type SentRequest
-} from '../../mobile-web-shell/bridge-host-test-fakes'
+} from '../../mobile-web-shell/test-support/bridge-host-test-fakes'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import type { RpcResponse } from '../../transport/rpc/rpc-wire-types'
 import type { ActionableTaskItem, TaskItem } from '../mobile-tasks-project-workspace-types'

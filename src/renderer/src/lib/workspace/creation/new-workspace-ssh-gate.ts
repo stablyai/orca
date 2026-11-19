@@ -1,6 +1,6 @@
 import { isConnectingSshStatus } from '@/ssh/ssh-connection-recoverability'
-import { isRuntimeOwnedSshTargetId } from '../../../../../shared/execution-host'
-import type { SshConnectionStatus } from '../../../../../shared/ssh-types'
+import { isRuntimeOwnedSshTargetId } from '../../../../../shared/execution-host/execution-host'
+import type { SshConnectionStatus } from '../../../../../shared/remote-runtime/ssh/ssh-types'
 
 export type SelectedRepoSshGate = {
   selectedRepoConnectionId: string | null

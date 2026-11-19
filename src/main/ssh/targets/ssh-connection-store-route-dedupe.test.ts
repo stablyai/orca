@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { SshConnectionStore } from './ssh-connection-store'
 import { createMockStore } from './testing/ssh-connection-store-test-fixture'
 import { parseSshGOutput } from '../config/ssh-g-config-resolution'
-import type { SshTarget } from '../../../shared/ssh-types'
+import type { SshTarget } from '../../../shared/remote-runtime/ssh/ssh-types'
 
 const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => ({
   loadUserSshConfigMock: vi.fn(),

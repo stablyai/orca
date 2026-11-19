@@ -1,5 +1,5 @@
 import * as z from 'zod'
-import { salvagedOptional, salvagingArray } from '../../../../src/shared/zod-salvage'
+import { salvagedOptional, salvagingArray } from '../../../../src/shared/validation/zod-salvage'
 import { linearIssueRowSchema } from '../item-detail/task-item-detail-reply-schema'
 
 // Keep guarded identity fields optional; labels are the unguarded exception shared by both provider editors.

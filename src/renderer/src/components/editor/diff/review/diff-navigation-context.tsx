@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import type { editor } from 'monaco-editor'
-import { installMonacoDiffChangeNavigationShortcut } from '../../editor-shortcuts'
+import { installMonacoDiffChangeNavigationShortcut } from '../../commands/editor-shortcuts'
 
 export type DiffEditorRegistrationContextValue = {
   registerDiffEditor: (editor: editor.IStandaloneDiffEditor) => void

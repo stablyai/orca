@@ -1,4 +1,5 @@
 import { defineMethod, defineStreamingMethod, type RpcContext } from '../../core'
+import { ACCOUNT_RENAME_METHODS } from './account-rename-methods'
 import type { OrcadFeature } from '../../startup/orcad-readiness'
 import { rpcCallerOperationKey } from '../../callers/rpc-caller-identity'
 import { HostAccountSignInFlows } from '../../../agent-session/environment/host-account-sign-in-flows'
@@ -22,9 +23,9 @@ import {
   HostAccountSignInWaitParams,
   HostAccountSignInFlowParams,
   HostAccountSignInCodeParams
-} from '../../../../../shared/rpc-contract/accounts-params'
+} from '../../../../../shared/rpc-contract/accounts/accounts-params'
 import { HostAccountLaunchEnvParams } from '../../../../../shared/agent-launch/startup/host-account-launch-env'
-import { withTimeout } from '../../../../../shared/promise-timeout-fallback'
+import { withTimeout } from '../../../../../shared/concurrency/promise-timeout-fallback'
 
 // Use a per-process counter: same-millisecond subscriptions must not evict each other's cleanup.
 let accountsSubscriptionSeq = 0
@@ -36,8 +37,8 @@ const hostSignIns = new WeakMap<OrcaRuntimeService, HostAccountSignInFlows>()
 function hostSignInFlows(runtime: OrcaRuntimeService): HostAccountSignInFlows {
   let flows = hostSignIns.get(runtime)
   if (!flows) {
-    flows = new HostAccountSignInFlows((provider, channel) =>
-      runtime.runHostAccountSignIn(provider, channel)
+    flows = new HostAccountSignInFlows((provider, channel, accountId) =>
+      runtime.runHostAccountSignIn(provider, channel, accountId)
     )
     hostSignIns.set(runtime, flows)
   }
@@ -193,6 +194,7 @@ const ACCOUNT_METHOD_DEFINITIONS = [
     params: RemoveAccountParams,
     handler: async (params, { runtime }) => runtime.removeCodexAccount(params.accountId)
   }),
+  ...ACCOUNT_RENAME_METHODS,
   defineMethod({
     name: 'accounts.addClaudeFromConfigDir',
     permission: 'accounts-admin',
@@ -222,8 +224,8 @@ const ACCOUNT_METHOD_DEFINITIONS = [
     name: 'accounts.hostSignInStart',
     permission: 'accounts-admin',
     params: HostAccountSignInStartParams,
-    handler: async ({ provider }, ctx) =>
-      hostSignInFlows(ctx.runtime).start(signInOwner(ctx), provider)
+    handler: async ({ provider, accountId }, ctx) =>
+      hostSignInFlows(ctx.runtime).start(signInOwner(ctx), provider, accountId)
   }),
   defineMethod({
     name: 'accounts.hostSignInWait',

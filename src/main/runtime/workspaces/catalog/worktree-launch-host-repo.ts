@@ -7,8 +7,8 @@ import {
 import {
   getSshTargetIdForExecutionHost,
   type ExecutionHostId
-} from '../../../../shared/execution-host'
-import type { Repo } from '../../../../shared/repo-types'
+} from '../../../../shared/execution-host/execution-host'
+import type { Repo } from '../../../../shared/repository/repo-types'
 
 export type LaunchHostRepo = Pick<Repo, 'id' | 'connectionId' | 'executionHostId'>
 

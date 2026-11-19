@@ -7,13 +7,14 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
 import { usePublishedMachineName } from '@/components/machine-identity/use-published-machine-name'
-import { getWorktreeGitIdentityDisplay } from '../../../../../../shared/worktree/git-identity-display'
-import { parseExecutionHostId } from '../../../../../../shared/execution-host'
+import { getWorktreeGitIdentityDisplay } from '../../../../../../shared/worktree/row-display/git-identity-display'
+import { parseExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import {
   createNativeChatComposerWorkspaceSelector,
   type NativeChatComposerWorkspaceTarget
 } from './native-chat-composer-workspace'
 import { NativeChatComposerBranchPicker } from './NativeChatComposerBranchPicker'
+import { NativeChatSlackMirrorItem } from '../../slack-mirror/NativeChatSlackMirrorItem'
 
 // Trim to cap height so flex centering aligns glyphs with icons; clip x only to keep descenders.
 const FOOTER_TEXT =
@@ -168,6 +169,7 @@ export function NativeChatComposerWorkspace({
           </TooltipContent>
         </Tooltip>
       )}
+      <NativeChatSlackMirrorItem />
       {identity && (
         <div className="flex min-w-[min(100%,calc(var(--spacing)*18))] flex-1 items-center">
           {identity.kind === 'branch' &&

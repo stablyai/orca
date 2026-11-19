@@ -2,18 +2,18 @@ import { parseRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/re
 import {
   getCodexSelectionLaneKey,
   normalizeCodexAccountSelectionTarget
-} from '../../../../../shared/codex-selection-lane'
-import type { CodexAccountSelectionTarget } from '../../../../../shared/codex-selection-lane'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
+} from '../../../../../shared/agent-accounts/codex/codex-selection-lane'
+import type { CodexAccountSelectionTarget } from '../../../../../shared/agent-accounts/codex/codex-selection-lane'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/workspace/identity/floating-workspace-id'
 import {
   isWslShellName,
   resolveLocalWindowsTerminalRuntimeOptions
-} from '../../../../../shared/local-windows-terminal-runtime'
-import type { LocalWindowsTerminalRuntimeOptions } from '../../../../../shared/local-windows-terminal-runtime'
-import { parseAppSshPtyId } from '../../../../../shared/ssh-pty-id'
+} from '../../../../../shared/shell/launch/local-windows-terminal-runtime'
+import type { LocalWindowsTerminalRuntimeOptions } from '../../../../../shared/shell/launch/local-windows-terminal-runtime'
+import { parseAppSshPtyId } from '../../../../../shared/remote-runtime/ssh/ssh-pty-id'
 import { resolveTerminalStartupCwd } from '../../../../../shared/shell/launch/terminal-startup-cwd'
-import { parseWorkspaceKey } from '../../../../../shared/workspace-scope'
-import { parseWslUncPath } from '../../../../../shared/wsl-paths'
+import { parseWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
+import { parseWslUncPath } from '../../../../../shared/file-access/wsl-paths'
 import { getLocalProjectExecutionRuntimeContext } from '../../../runtime/hosts/preflight/local-preflight-context'
 import { getRendererAppPlatform } from '../../../app-shell/platform/renderer-app-platform'
 import { wslHostDistroForTarget } from '../../../runtime/provider-accounts/ownership/wsl-host-account-owner'
@@ -26,7 +26,7 @@ import {
   selectWorktreesByRepo
 } from '@/store/workspaces/catalog/workspace-record-fields'
 import type { AppState } from '@/store/types'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { TerminalTab } from '../../../../../shared/workspace-layout/terminal-tab-types'
 
 type CodexPaneLaneState = Pick<

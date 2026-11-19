@@ -1,7 +1,10 @@
 import type { AppState } from '../../types'
-import type { BrowserWorkspace } from '../../../../../shared/browser-workspace-types'
+import type { BrowserWorkspace } from '../../../../../shared/browser/workspaces/browser-workspace-types'
 import type { WorktreeLayoutPatch } from './worktree-layout-lifecycle'
-import { replaceRecordEntries, replaceTabBuckets } from '../../keyed-record-transitions'
+import {
+  replaceRecordEntries,
+  replaceTabBuckets
+} from '../../record-transitions/keyed-record-transitions'
 
 function rekeyWorktreeEntry<T>(
   map: Record<string, T> | undefined,

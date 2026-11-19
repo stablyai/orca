@@ -1,4 +1,4 @@
-import type { PiAgentKind } from '../../../../shared/pi-agent-kind'
+import type { PiAgentKind } from '../../../../shared/agent-launch/catalog/pi-agent-kind'
 
 // OMP task sessions and Pi subagents load the same extension in-process with their own SessionManager.
 export function getOmpSessionOwnerHandlerSourceLines(kind: PiAgentKind): string[] {

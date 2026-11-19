@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { isTuiAgent } from '../../agent-launch/catalog/tui-agent-config'
 import { PLUGIN_COMMAND_ALIAS_ACTION_IDS } from '../contributions/plugin-command-actions'
-import { parseWorkspaceKey } from '../../workspace-scope'
+import { parseWorkspaceKey } from '../../workspace/identity/workspace-scope'
 import { spec, WORKER_ONLY } from './plugin-host-method-spec'
 
 /**
@@ -12,7 +12,7 @@ import { spec, WORKER_ONLY } from './plugin-host-method-spec'
 
 /** Provisional release floor for host API 1.7, for plugins that require it in `engines.orca`
  *  instead of checking `host.has`; not a stock-release claim. */
-export const PLUGIN_HOST_API_1_7_SINCE = '1.4.258'
+export const PLUGIN_HOST_API_1_7_SINCE = '1.4.259'
 
 export const PLUGIN_WORKSPACE_LIST_LIMIT = 500
 export const PLUGIN_PROJECT_LIST_LIMIT = 500

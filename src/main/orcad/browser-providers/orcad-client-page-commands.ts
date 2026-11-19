@@ -15,13 +15,14 @@ import {
   retireRuntimeBrowserClientPage
 } from '../../runtime/browser/client-pages/browser-client-page-close'
 import {
-  canPlacePairedPage,
   createBrowserClientPage,
   createBrowserPageOnPairedHost,
   DEFAULT_BROWSER_PROFILE_ID,
   hasPairedPageHost,
   openBrowserUrlOnClient
 } from '../../runtime/browser/client-pages/browser-client-page-opening'
+import { opensOnPairedDesktop } from '../../runtime/browser/client-pages/server-agent-tab-placement'
+import { cloneBrowserClientPage } from '../../runtime/browser/client-pages/browser-client-page-clone'
 import {
   BrowserClientPageQueries,
   yieldClientPageSelection,
@@ -42,6 +43,24 @@ const LOGICAL_TAB_QUERIES = [
   'browserTabSwitch'
 ] as const
 
+export function orcadClientPageCommand<
+  K extends
+    | 'browserTabCreate'
+    | 'browserOpenUrlOnClient'
+    | 'browserTabProfileShow'
+    | 'browserTabProfileClone'
+>(
+  host: RuntimeBrowserCommandHost,
+  name: K,
+  forward: Forward,
+  engineAvailable: () => boolean
+): RuntimeBrowserCommands[K] | undefined
+export function orcadClientPageCommand(
+  host: RuntimeBrowserCommandHost,
+  name: string,
+  forward: Forward,
+  engineAvailable: () => boolean
+): ((...args: never[]) => unknown) | undefined
 export function orcadClientPageCommand(
   host: RuntimeBrowserCommandHost,
   name: string,
@@ -56,7 +75,7 @@ export function orcadClientPageCommand(
     )
   if (name === 'browserOpenUrlOnClient') {
     return (...args: Parameters<RuntimeBrowserCommands['browserOpenUrlOnClient']>) =>
-      openBrowserUrlOnClient(host, args[0])
+      openBrowserUrlOnClient(host, args[0], args[1]?.signal)
   }
   if (name === 'browserTabCreate') {
     return (...args: Parameters<RuntimeBrowserCommands['browserTabCreate']>) =>
@@ -83,6 +102,51 @@ export function orcadClientPageCommand(
         ? findListedBrowserTab((await logicalTabs().browserTabList({ worktree })).tabs, page)
         : (await logicalTabs().browserTabCurrent({ worktree })).tab
       return readBrowserTabAnnotations(host, tab)
+    }
+  }
+  if (name === 'browserTabProfileShow') {
+    return async (...args: Parameters<RuntimeBrowserCommands['browserTabProfileShow']>) => {
+      if (!host.getRuntimeBrowserPageRegistry().getPage(args[0].page)) {
+        return forward(args)
+      }
+      const { tab } = await logicalTabs().browserTabShow(args[0])
+      return {
+        browserPageId: tab.browserPageId,
+        worktreeId: tab.worktreeId ?? null,
+        profileId: tab.profileId ?? null,
+        profileLabel: tab.profileLabel ?? null
+      }
+    }
+  }
+  if (name === 'browserTabProfileClone') {
+    return async (...args: Parameters<RuntimeBrowserCommands['browserTabProfileClone']>) => {
+      const params = args[0]
+      const pages = host.getRuntimeBrowserPageRegistry()
+      const workspaceId = params.worktree
+        ? (await host.resolveBrowserWorkspace(params.worktree)).id
+        : undefined
+      const source = params.page
+        ? pages.getPage(params.page)
+        : workspaceId !== undefined
+          ? pages.listPages(workspaceId).find((page) => page.active)
+          : undefined
+      if (!source) {
+        return forward(args)
+      }
+      if (workspaceId !== undefined && source.workspaceId !== workspaceId) {
+        throw new BrowserError(
+          'browser_tab_not_found',
+          `Browser page ${source.browserPageId} was not found in this worktree`
+        )
+      }
+      const profile = orcadProfileLabel(orcadBrowserProfileId(params.profileId))
+      const created = await cloneBrowserClientPage(host, source, profile.id)
+      return {
+        browserPageId: created.browserPageId,
+        sourceBrowserPageId: source.browserPageId,
+        profileId: profile.id,
+        profileLabel: profile.label
+      }
     }
   }
   const query = LOGICAL_TAB_QUERIES.find((candidate) => candidate === name)
@@ -117,31 +181,36 @@ function createTab(
       )
     })()
   }
-  // Only this host’s CLI defaults to client pages; omitted paired-client placement means server.
-  if (
-    !params?.placement &&
-    !caller?.pairedDeviceId &&
-    !engineAvailable() &&
-    canPlacePairedPage(host)
-  ) {
+  const hasEngine = engineAvailable()
+  const createOnEngine = async (): Promise<unknown> => {
+    const created = await forward([params, caller])
+    if (
+      hasEngine &&
+      browserTabCreateClientPageStartsActive(params?.activate) &&
+      host.getRuntimeBrowserPageRegistry().listPages().length > 0
+    ) {
+      await yieldClientPageSelection(host, params?.worktree)
+    }
+    return created
+  }
+  // Engine tabs reach no client, so this host's own agents open on a paired desktop when one can host.
+  // The engine keeps profiles orcad cannot describe to a desktop.
+  const engineOnlyProfile =
+    hasEngine && params?.profileId !== undefined && params.profileId !== DEFAULT_BROWSER_PROFILE_ID
+  if (!engineOnlyProfile && opensOnPairedDesktop(host, params, caller, hasEngine)) {
     return createBrowserPageOnPairedHost(
       host,
       params ?? {},
-      orcadBrowserProfileId(params?.profileId)
+      orcadBrowserProfileId(params?.profileId),
+      hasEngine ? async () => requireCreatedPage(await createOnEngine()) : undefined,
+      caller?.signal
     )
   }
-  if (
-    !engineAvailable() ||
-    !browserTabCreateClientPageStartsActive(params?.activate) ||
-    host.getRuntimeBrowserPageRegistry().listPages().length === 0
-  ) {
-    return forward([params, caller])
-  }
-  return (async () => {
-    const created = await forward([params, caller])
-    await yieldClientPageSelection(host, params?.worktree)
-    return created
-  })()
+  return createOnEngine()
+}
+
+function requireCreatedPage(value: unknown): { browserPageId: string } {
+  return requireTabResult(value, isTabSwitchResult)
 }
 
 function engineTabs(forward: Forward): BrowserEngineTabs {

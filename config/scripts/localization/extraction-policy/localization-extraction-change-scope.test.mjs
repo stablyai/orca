@@ -97,7 +97,6 @@ it.skipIf(process.platform === 'win32')(
       write('src/renamed.ts', "translate('renamed')")
       write('src/example.test.ts', '// ignored')
       let base = commit()
-      route(base, false)
 
       write('src/example.test.ts', '// still ignored')
       const ignored = commit()

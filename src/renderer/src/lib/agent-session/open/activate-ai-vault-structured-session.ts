@@ -6,13 +6,16 @@ import { toast } from 'sonner'
 import { activateAndRevealWorktree } from '../../workspace/activation/worktree-activation'
 import { activateWslMovedWorkspace } from '../../workspace/activation/wsl-moved-chat-activation'
 import { useAppStore } from '@/store/index'
+import { readBotGroups } from '../../bot-group-catalog-snapshot'
+import { openBotGroupRoom } from '../../bot-group-catalog'
+import { botGroupRoomOfRow } from '../../bot-group-room-history'
 import type { AiVaultSession } from '../../../../../shared/ai-vault/contracts/ai-vault-types'
 import type {
   StructuredSessionOpenSource,
   StructuredSessionOpenResult,
   StructuredSessionOpenDeps
-} from '../../../../../shared/open-structured-agent-session'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+} from '../../../../../shared/agent-session/view/open-structured-agent-session'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 
 type StructuredSessionActivationDeps = StructuredSessionOpenAdapterDeps & {
   unavailable: (agent?: string) => void
@@ -20,11 +23,12 @@ type StructuredSessionActivationDeps = StructuredSessionOpenAdapterDeps & {
   hostCannotOpen: (agent?: string) => void
 }
 
-/** `terminalGone` replaces the shared pane-unavailable notice for callers that name the agent themselves. */
+/** `terminalGone` replaces the shared pane-unavailable notice for callers that name the agent themselves;
+ *  `notLocated` the one for an agent its host answered it cannot find. */
 export type StructuredSessionOpenFeedback = Pick<
   StructuredSessionActivationDeps,
   'unavailable' | 'gone' | 'hostCannotOpen'
-> & { terminalGone?: () => void }
+> & { terminalGone?: () => void; notLocated?: (agent?: string) => void }
 
 /** The open remedies' words, so labelled opens (the orchestration panel) say the same thing. */
 export const structuredSessionOpenFeedbackText = {
@@ -42,7 +46,18 @@ export const structuredSessionOpenFeedbackText = {
     translate(
       'auto.lib.activateAiVaultStructuredSession.hostCannotOpen',
       "This chat can't be reopened until Orca is updated."
-    )
+    ),
+  notLocated: (agent?: string) =>
+    agent
+      ? translate(
+          'auto.lib.activateAiVaultStructuredSession.notLocatedNamed',
+          "Orca can't find where {{agent}} is running, so it can't open it.",
+          { agent }
+        )
+      : translate(
+          'auto.lib.activateAiVaultStructuredSession.notLocated',
+          "Orca can't find where this agent is running, so it can't open it."
+        )
 }
 
 export const structuredSessionOpenFeedback: StructuredSessionOpenFeedback = {
@@ -59,6 +74,12 @@ export async function activateAiVaultStructuredSession(
 ): Promise<boolean> {
   if (!session.structuredSession) {
     return false
+  }
+  // A group member's session reopens the room it talks in, not the member's own chat.
+  const room = botGroupRoomOfRow(readBotGroups(), session)
+  if (room) {
+    await openBotGroupRoom(room.group, room.roomId, room.label)
+    return true
   }
   await openDesktopStructuredSession(
     { kind: 'history', structuredSession: session.structuredSession, agent: session.agent },
@@ -95,8 +116,10 @@ function presentDesktopStructuredSession(
 ): void {
   if (result.kind === 'opened') {
     const workspace = result.target.worktreeId
+    const { activeWorktreeId, activeView } = useAppStore.getState()
+    // Settings or another page may cover the chat's own workspace; its tab is selected but not shown.
     if (
-      useAppStore.getState().activeWorktreeId !== workspace &&
+      (activeWorktreeId !== workspace || activeView !== 'terminal') &&
       !activateWslMovedWorkspace(workspace)
     ) {
       activateAndRevealWorktree(workspace)
@@ -124,6 +147,13 @@ function presentDesktopStructuredSession(
       }
     } else if (result.failure.reason === 'unsupported') {
       deps.hostCannotOpen(agent)
+    } else if (result.failure.reason === 'unknown' && source.kind === 'sender') {
+      // The host answered and found no chat or terminal for this agent: no session is pending.
+      if (deps.notLocated) {
+        deps.notLocated(agent)
+      } else {
+        toast.error(structuredSessionOpenFeedbackText.notLocated(agent))
+      }
     } else {
       deps.unavailable(agent)
     }

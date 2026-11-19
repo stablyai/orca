@@ -60,8 +60,8 @@ beforeAll(async () => {
   await writeFile(
     join(routeDir, 'live-input-probe.tsx'),
     liveInputProbeRouteSource({
-      bindingModule: join(terminalDir, 'use-terminal-text-field-submit-binding'),
-      commitModule: join(terminalDir, 'use-terminal-live-input-commit')
+      bindingModule: join(terminalDir, 'live-input', 'use-terminal-text-field-submit-binding'),
+      commitModule: join(terminalDir, 'live-input', 'use-terminal-live-input-commit')
     })
   )
   const built = await buildMobileWebAppBundle({

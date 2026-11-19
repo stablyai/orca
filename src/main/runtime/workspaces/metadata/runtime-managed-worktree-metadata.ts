@@ -5,9 +5,9 @@ import {
   folderWorkspaceKey,
   parseWorkspaceKey,
   worktreeWorkspaceKey
-} from '../../../../shared/workspace-scope'
+} from '../../../../shared/workspace/identity/workspace-scope'
 import { splitWorktreeId } from '../../../../shared/worktree/id'
-import type { WorktreeSortOrderUpdate } from '../../../../shared/worktree/sort-order-update'
+import type { WorktreeSortOrderUpdate } from '../../../../shared/worktree/metadata/sort-order-update'
 import { stripOrcaProvenanceMetaUpdates } from '../../../workspaces/removal/worktree-removal-safety'
 import { isRemovedFolderWorkspaceInstance } from '../../../workspaces/catalog/folder-workspace-meta-presence'
 import { worktreeRowTarget } from '../../../persistence/host-qualified-worktree-meta'
@@ -26,6 +26,7 @@ import { RuntimeLineageError, explicitParentError } from '../lineage/runtime-lin
 import type { ResolvedWorkspaceParent } from '../lineage/runtime-worktree-lineage-resolution'
 import { assertParentInAnotherStore } from '../lineage/cross-store-parent-store-check'
 import type { CrossStoreParentRef } from '../../../../shared/worktree/lineage-types'
+import { LINEAGE_PARENT_CHANGED } from '../../../../shared/worktree/lineage-parent-changed'
 import type { ResolvedWorktree } from '../catalog/runtime-worktree-path-identity'
 
 type Updates = Omit<Partial<WorktreeMeta>, 'pushTarget'> & {
@@ -36,6 +37,8 @@ type Updates = Omit<Partial<WorktreeMeta>, 'pushTarget'> & {
     matchFolderWorkspaces?: boolean
     crossStoreParent?: CrossStoreParentRef
     noParent?: boolean
+    /** Write only while the current parent is this workspace key; else refuse, so a newer move stands. */
+    ifParentWorkspace?: string
   }
 }
 
@@ -103,7 +106,17 @@ export async function updateRuntimeManagedWorktreeMetadata(args: {
   if (clearPushTarget) {
     persisted.pushTarget = undefined
   }
+  // Checked just before each write, with no await between, so nothing moves it in between.
+  const assertParentUnchanged = (): void => {
+    if (
+      lineage?.ifParentWorkspace !== undefined &&
+      currentParentWorkspaceKey(args.store, worktree.id) !== lineage.ifParentWorkspace
+    ) {
+      throw new Error(`${LINEAGE_PARENT_CHANGED}: the workspace was moved since.`)
+    }
+  }
   if (lineage?.noParent === true) {
+    assertParentUnchanged()
     args.store.removeWorktreeLineage?.(target)
   } else if (lineage?.crossStoreParent) {
     // Trusted like any paired mutation, unverified here: a forged ref only nests falsely and readers drop cycles.
@@ -117,6 +130,7 @@ export async function updateRuntimeManagedWorktreeMetadata(args: {
         'Worktree instance identity or lineage storage was unavailable.'
       )
     }
+    assertParentUnchanged()
     const recorded = args.store.setCrossStoreWorkspaceLineage(
       {
         childWorkspaceKey: worktreeWorkspaceKey(worktree.id),
@@ -142,6 +156,7 @@ export async function updateRuntimeManagedWorktreeMetadata(args: {
       .catch((error: unknown) => {
         throw explicitParentError(error)
       })
+    assertParentUnchanged()
     const recorded =
       parent.type === 'folder'
         ? recordFolderParent(args.store, target, worktree, parent)
@@ -276,4 +291,19 @@ function omitUndefinedProperties<T extends Record<string, unknown>>(value: T): P
 function folderParentKey(selector: string): string | undefined {
   const raw = selector.startsWith('id:') ? selector.slice(3) : selector
   return parseWorkspaceKey(raw)?.type === 'folder' ? raw : undefined
+}
+
+/** The workspace key of a worktree's parent in this store, by whichever record holds it. */
+function currentParentWorkspaceKey(store: RuntimeStore, worktreeId: string): string | null {
+  const childKey = worktreeWorkspaceKey(worktreeId)
+  const crossStore = store.getCrossStoreWorkspaceLineage?.(childKey)
+  if (crossStore) {
+    return crossStore.parent.workspaceKey
+  }
+  const folder = store.getWorkspaceLineage?.(childKey)
+  if (folder) {
+    return folder.parentWorkspaceKey
+  }
+  const parent = store.getWorktreeLineage?.(worktreeId)?.parentWorktreeId
+  return parent ? worktreeWorkspaceKey(parent) : null
 }

@@ -1,6 +1,6 @@
 import { selectFreshExplicitAgentStatus } from '../../workspaces/process-listing/runtime-hook-agent-row-selection'
 import { OrcaRuntimeWithPluginHookedTerminalInput } from './terminal-plugin-hooked-input'
-import type { RuntimeTerminalAgentStatus } from '../../../../shared/runtime-terminal-contracts'
+import type { RuntimeTerminalAgentStatus } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import type { RuntimeTerminalAgentStatusSnapshot } from '../query/runtime-terminal-agent-status-query'
 import { getDisplayPromptLifecycle } from '../../workspaces/process-listing/runtime-worktree-status-projection'
 import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
@@ -243,7 +243,7 @@ export abstract class OrcaRuntimeWithSerializeAgentPromptSubmission extends Orca
     return selectFreshExplicitAgentStatus({
       handle,
       paneKey: this.getPaneKeyForTerminalHandle(handle),
-      hookRows: this.getAgentStatusSnapshotFn?.() ?? [],
+      hookRows: this.publicPaneStatusFn?.(this.getPaneKeyForTerminalHandle(handle) ?? '') ?? [],
       screenMayHoldDialog: () => this.screenMayHoldAgentDialog(ptyId)
     })
   }

@@ -20,14 +20,14 @@ import type {
   CodexUsageSlice,
   MuseUsageSlice,
   OpenCodeUsageSlice
-} from './slices/usage/usage-provider-slices'
+} from './slices/usage/usage-provider-slice-contract'
 import type { BrowserSlice } from './slices/browser/browser-slice-contract'
 import type { RateLimitSlice } from './slices/usage/rate-limits'
 import type { SshSlice } from './slices/ssh/create-ssh-slice'
 import type { RuntimeEnvironmentSshSlice } from './slices/ssh/runtime-environment-ssh'
 import type { WslHostsSlice } from './slices/wsl/wsl-hosts'
-import type { AgentStatusSlice } from './slices/agent-status/agent-status-slice-contract'
-import type { PaneForegroundAgentSlice } from './slices/agent-status/pane-foreground-agent'
+import type { AgentStatusSlice } from './slices/agent-status/contracts/agent-status-slice-contract'
+import type { PaneForegroundAgentSlice } from './slices/agent-status/pane-authority/pane-foreground-agent'
 import type { DiffCommentsSlice } from './slices/diff-comments/create-diff-comments-slice'
 import type { DetectedAgentsSlice } from './slices/agent-inventory/create-detected-agents-slice'
 import type { RuntimeDetectedAgentsSlice } from './slices/agent-inventory/runtime-detected-agents'
@@ -39,17 +39,18 @@ import type { RuntimeStatusSlice } from './slices/runtime-status/runtime-status-
 import type { PullRequestGenerationSlice } from './slices/hosted-review/generation/pull-request-generation-state'
 import type { CommitMessageGenerationSlice } from './slices/hosted-review/generation/commit-message-generation'
 import type { PinnedTabCloseConfirmSlice } from './slices/tabs/pinned-tab-close-confirm'
-import type { RecentlyClosedTerminalTabsSlice } from './terminals/recently-closed-terminal-tabs'
+import type { RecentlyClosedTerminalTabsSlice } from './terminals/tabs/recently-closed-terminal-tabs'
 import type { RecentlyClosedTabsSlice } from './slices/tabs/recently-closed-tabs'
 import type { OrcaProfilesSlice } from './slices/orca-profiles/create-orca-profiles-slice'
 import type { NewIssueDraftSlice } from './slices/task-creation/new-issue-draft'
 import type { FeedbackDraftSlice } from './slices/feedback/feedback-draft'
 import type { TaskCreationDraftsSlice } from './slices/task-creation/task-creation-drafts'
 import type { RemoteServerUpdatesSlice } from './slices/runtime-host-updates/remote-server-updates'
-import type { TerminalQuickCommandHostsSlice } from './terminals/terminal-quick-command-hosts'
-import type { StructuredSessionLaunchDirectorySlice } from './slices/agent-status/structured-session-launch-directories'
-import type { StructuredChatSleptAtSlice } from './slices/agent-status/structured-chat-slept-at'
-import type { StructuredChatCompanionWritesSlice } from './slices/agent-status/structured-chat-companion-writes'
+import type { AgentCliUpdatesSlice } from './slices/runtime-host-updates/agent-cli-updates'
+import type { TerminalQuickCommandHostsSlice } from './terminals/quick-commands/terminal-quick-command-hosts'
+import type { StructuredSessionLaunchDirectorySlice } from './slices/agent-status/structured-sessions/structured-session-launch-directories'
+import type { StructuredChatSleptAtSlice } from './slices/agent-status/structured-sessions/structured-chat-slept-at'
+import type { StructuredChatCompanionWritesSlice } from './slices/agent-status/structured-sessions/structured-chat-companion-writes'
 import type { EphemeralVmLifecycleSlice } from './slices/ephemeral-vm/ephemeral-vm-lifecycle'
 import type { WorkspaceAttentionSlice } from './slices/workspace-attention/workspace-attention-contract'
 
@@ -99,6 +100,7 @@ export type AppState = RepoSlice &
   FeedbackDraftSlice &
   TaskCreationDraftsSlice &
   RemoteServerUpdatesSlice &
+  AgentCliUpdatesSlice &
   TerminalQuickCommandHostsSlice &
   StructuredSessionLaunchDirectorySlice &
   StructuredChatSleptAtSlice &

@@ -1,4 +1,4 @@
-import type { BaseRefSearchResult } from '../../../../shared/repo-types'
+import type { BaseRefSearchResult } from '../../../../shared/repository/repo-types'
 import type { BranchSnapshotIdentity } from './branch-ref-snapshot-identity'
 import {
   BranchSnapshotOwners,

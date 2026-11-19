@@ -11,8 +11,11 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { runProcessSync } from '@orca/process-host'
-import { NODE_RUNTIME_ASSETS, type ServerTarget } from '../../../shared/node-runtime-pin'
-import { ORCAD_NODE_RUNTIME_MARKER_FILENAME } from '../../../shared/orcad-artifacts'
+import {
+  NODE_RUNTIME_ASSETS,
+  type ServerTarget
+} from '../../../shared/node-runtime/node-runtime-pin'
+import { ORCAD_NODE_RUNTIME_MARKER_FILENAME } from '../../../shared/remote-runtime/orcad-distribution/orcad-artifacts'
 import {
   installNodeRuntimeFromHostArchiveCommand,
   nodeRuntimeStoreDir,

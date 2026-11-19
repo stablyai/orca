@@ -2,15 +2,17 @@ import type { TaskPageProviderMetadataModel } from '../use-task-page-provider-me
 import { useEffect } from 'react'
 import { translate } from '@/i18n/i18n'
 import { readIpcErrorDetail } from '@/runtime/errors/ipc-error'
+import { knownUnreachableRuntimeHostError } from '@/runtime/hosts/connections/runtime-host-connection-state'
+import { GITLAB_WEB_RPC_METHODS } from '@/web/preload-api/gitlab/web-gitlab-routes'
 import {
   gitLabApiFor,
   type GitLabCapabilityChecks
 } from '@/runtime/repository-gitlab/gitlab-owner-api'
-import { mapSettledWithConcurrency } from '../../../../../shared/map-with-concurrency'
-import type { Repo } from '../../../../../shared/repo-types'
-import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
+import { mapSettledWithConcurrency } from '../../../../../shared/concurrency/map-with-concurrency'
+import type { Repo } from '../../../../../shared/repository/repo-types'
+import { getRepoExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import type { GitLabDialogRepoSelector } from '../../gitlab-item-dialog/gitlab-item-dialog-types'
-import type { GitLabWorkItem, GitLabTodo } from '../../../../../shared/gitlab-types'
+import type { GitLabWorkItem, GitLabTodo } from '../../../../../shared/gitlab/gitlab-types'
 import { getTaskPageRepoSourceContext } from '../../../lib/work-items/task-repo-source-context'
 import { isGitLabIssueFilter, isGitLabMRFilter } from '../task-page-source-context'
 
@@ -57,6 +59,9 @@ type GitLabLoadingInput = Pick<
   | 'displayedGitLabItems'
   | 'gitlabListQueryKey'
   | 'setGitlabListQueryKey'
+  | 'unreachableTaskSourceHostIds'
+  | 'unreachableTaskSourceHostKey'
+  | 'recheckUnreachableTaskSourceHosts'
 >
 
 export function useTaskPageGitLabLoading<Model extends GitLabLoadingInput>(model: Model): Model {
@@ -75,7 +80,10 @@ export function useTaskPageGitLabLoading<Model extends GitLabLoadingInput>(model
     activeGitlabFilter,
     gitlabMRInvolvement,
     gitlabListQueryKey,
-    setGitlabListQueryKey
+    setGitlabListQueryKey,
+    unreachableTaskSourceHostIds,
+    unreachableTaskSourceHostKey,
+    recheckUnreachableTaskSourceHosts
   } = model
   const currentListQueryKey = gitLabListQueryKey(
     gitlabView,
@@ -170,9 +178,24 @@ export function useTaskPageGitLabLoading<Model extends GitLabLoadingInput>(model
                 }
               })
           }
+    recheckUnreachableTaskSourceHosts()
+    const isOnUnreachableHost = (repo: Repo): boolean => {
+      const hostId = getTaskPageRepoSourceContext(repo, 'gitlab')?.hostId
+      return hostId !== undefined && unreachableTaskSourceHostIds.has(hostId)
+    }
     void mapSettledWithConcurrency(eligibleRepos, GITLAB_TASK_FETCH_CONCURRENCY, (repo) =>
       // Why: a stale selection's results are discarded below, so skip the repos not yet started.
-      stale ? Promise.resolve({ repo, items: [], error: undefined }) : fetchItems(repo)
+      stale
+        ? Promise.resolve({ repo, items: [], error: undefined })
+        : isOnUnreachableHost(repo)
+          ? Promise.reject(
+              knownUnreachableRuntimeHostError(
+                gitlabView === 'issues'
+                  ? GITLAB_WEB_RPC_METHODS.listIssues
+                  : GITLAB_WEB_RPC_METHODS.listMRs
+              )
+            )
+          : fetchItems(repo)
     )
       .then((results) => {
         if (stale) {
@@ -228,6 +251,7 @@ export function useTaskPageGitLabLoading<Model extends GitLabLoadingInput>(model
     gitlabMRInvolvement,
     gitlabRefreshNonce,
     selectedReposKey,
+    unreachableTaskSourceHostKey,
     setGitlabError,
     setGitlabItems,
     setGitlabLoading,

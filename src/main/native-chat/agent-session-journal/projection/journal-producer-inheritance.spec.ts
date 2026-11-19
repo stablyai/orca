@@ -1,3 +1,4 @@
+import { readTestJournalItems } from '../journal-observation.test-support'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalMessageItem,
@@ -11,7 +12,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 
 import { createTrackedJournalOpener } from '../store-lifecycle/journal-host-database-test-support'
-import { codexProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 
 export function registerJournalProducerInheritanceTests(): void {
   const child: AgentJournalItemIdentity = {
@@ -112,7 +113,7 @@ export function registerJournalProducerInheritanceTests(): void {
           }
         ]
       })
-      const live = journal.snapshot().items
+      const live = await readTestJournalItems(journal)
       expect(live.map((item) => [item.revision, producerOf(item)])).toEqual([
         [3, linkage],
         [2, NO_PRODUCER]
@@ -120,7 +121,7 @@ export function registerJournalProducerInheritanceTests(): void {
 
       await journal.close()
       const reopened = await open()
-      expect(reopened.snapshot().items).toEqual(live)
+      expect(await readTestJournalItems(reopened)).toEqual(live)
     })
   })
 }

@@ -1,7 +1,7 @@
 import type {
   ComputerUsePermissionSetupResult,
   ComputerUsePermissionStatusResult
-} from '../../../../shared/computer-use-permissions-types'
+} from '../../../../shared/computer/computer-use-permissions-types'
 import {
   COMPUTER_USE_SKILL_NAME,
   ORCA_LINEAR_SKILL_NAME,
@@ -15,7 +15,7 @@ import {
   ORCHESTRATION_SETUP_DISMISSED_STORAGE_KEY,
   notifyOrchestrationSetupStateChanged
 } from '@/components/orchestration/setup/orchestration-setup-state'
-import type { EventProps } from '../../../../shared/telemetry-event-classification'
+import type { EventProps } from '../../../../shared/telemetry/telemetry-event-classification'
 import type { BundledSkillInstallState } from '@/hooks/skills/installation/use-bundled-skill-install'
 
 export type OnboardingFeatureSetupId =

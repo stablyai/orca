@@ -1,4 +1,4 @@
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/workspace-layout/layout-owner-switch'
 import type { TerminalIdentityReadContext } from '../../../terminal/query/terminal-identity-read-context'
 import { ptyRecordForPaneKey } from '../../../terminal/query/pty-pane-record'
 import type { RuntimeTerminalAgentPresenceOptions } from '../../../terminal/query/runtime-terminal-agent-presence'
@@ -20,14 +20,14 @@ import type { OrchestrationDb } from '../../db/orchestration-db'
 import {
   orchestrationMailNotice,
   type AgentMessageSource
-} from '../../../../../shared/agent-session/agent-session-message-source'
+} from '../../../../../shared/agent-session/journal/agent-session-message-source'
 import type { QueuedMessageOwed } from '../../../../native-chat/agent-session-journal/queued-messages/queued-message-consume-error'
 import {
   structuredMailboxCustody,
   structuredSessionIdleEdgeMailboxes,
   type StructuredMailboxCustody
 } from './structured-session-mail-target'
-import { exitedChatDispatchesForSession } from '../../workers/lifecycle/chat-assignee'
+import { closedChatWorkersForSession } from '../../workers/lifecycle/chat-assignee'
 import { OPERATOR_CLOSE_EXIT_CAUSE } from '../../../../../shared/terminal/pty/lifecycle/terminal-exit-cause'
 import { resolveTerminalIdentityFromProbes } from '../../../terminal/identity/terminal-identity-probe'
 
@@ -196,14 +196,12 @@ export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeW
     }
     // Log failures without blocking the later first-turn workspace rename.
     try {
-      // A working edge can follow a human answer, unblocking parked mail too.
-      this.notifyStructuredSessionJournalActivity(summary.sessionId)
       if (summary.status === 'working') {
+        // A working edge can follow a human answer, unblocking parked mail too.
+        this.notifyStructuredSessionJournalActivity(summary.sessionId)
         return
       }
-      const openDb = () => this.getExistingOrchestrationDb()
-      const deliver = (mailbox: string) => this.deliverPendingMessagesForHandle(mailbox)
-      structuredSessionIdleEdgeMailboxes(summary.sessionId, openDb).forEach(deliver)
+      this.redriveStructuredSessionMail(summary.sessionId)
     } catch (error) {
       console.warn('[orchestration] structured session mail redrive failed', {
         sessionId: summary.sessionId,
@@ -212,12 +210,20 @@ export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeW
     }
   }
 
-  /** Settle ended chat Dispatches on tab hide; /clear successors retain their work. */
+  /** A chat's idle edge for its mail: parked mail retried, and the mailboxes it owns re-derived. */
+  redriveStructuredSessionMail(sessionId: string): void {
+    this.notifyStructuredSessionJournalActivity(sessionId)
+    const openDb = () => this.getExistingOrchestrationDb()
+    const deliver = (mailbox: string) => this.deliverPendingMessagesForHandle(mailbox)
+    structuredSessionIdleEdgeMailboxes(sessionId, openDb).forEach(deliver)
+  }
+
+  /** A closed chat ends its workers' Dispatches as a closed terminal does; /clear successors retain their work. */
   onStructuredSessionTabHidden(sessionId: string): void {
     try {
       const db = this.getExistingOrchestrationDb()
-      for (const dispatch of db ? exitedChatDispatchesForSession(sessionId, db) : []) {
-        this.failActiveDispatchOnExit(dispatch.assignee_handle, null, OPERATOR_CLOSE_EXIT_CAUSE)
+      for (const worker of db ? closedChatWorkersForSession(sessionId, db) : []) {
+        this.failActiveDispatchOnExit(worker.handle, worker.paneKey, OPERATOR_CLOSE_EXIT_CAUSE)
       }
     } catch (error) {
       console.warn('[orchestration] settling a closed chat worker failed', {
@@ -238,12 +244,11 @@ export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeW
     this.orchestrationStructuredMailboxPointerDelivery.withdrawStale(mailboxes)
   }
 
-  /** Asked as a chat's queue hands over an agent's card, or, with `peek`, as it chooses its next card;
-   *  opening the database lets a restart's first handover decide. */
+  /** Read current mailbox custody without settling a card or its reservation. */
   structuredChatMailOwed(
     sessionId: string,
     from: AgentMessageSource,
-    peek = false
+    claimedDeliveryId?: string
   ): QueuedMessageOwed {
     if (!orchestrationMailNotice(from)) {
       return 'owed'
@@ -254,10 +259,12 @@ export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeW
     } catch {
       return 'unavailable'
     }
-    const delivery = this.orchestrationStructuredMailboxPointerDelivery
-    return peek
-      ? delivery.owedNow(sessionId, from, db)
-      : delivery.owedAtHandover(sessionId, from, db)
+    return this.orchestrationStructuredMailboxPointerDelivery.owedNow(
+      sessionId,
+      from,
+      db,
+      claimedDeliveryId
+    )
   }
 
   /** Resolve every structured-owned mailbox here; declining Run or direct mail would leave both delivery lanes refusing it. */

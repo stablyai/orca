@@ -6,7 +6,7 @@ import {
   localZcodeCredentialHost,
   type ZcodeCredentialHost
 } from '../../../zcode/zcode-v2-plan-credentials'
-import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
+import type { ProviderRateLimits } from '../../../../shared/agent-usage/rate-limits/rate-limit-types'
 
 const SUPPORTED_HOSTS = new Set(['api.z.ai', 'open.bigmodel.cn', 'dev.bigmodel.cn'])
 const CREDENTIAL_IDENTITY_KEY = randomBytes(32)

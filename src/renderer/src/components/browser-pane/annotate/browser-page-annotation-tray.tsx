@@ -30,11 +30,11 @@ import { BROWSER_ANNOTATION_INTENT_OPTIONS } from '../describe-page/browser-anno
 import {
   BrowserAnnotationSendMenuContent,
   browserAnnotationCopyTooltip
-} from './BrowserAnnotationSendMenuContent'
-import { preventAgentSendTargetOutsideDismiss } from './prevent-agent-send-target-outside-dismiss'
-import { browserAnnotationMatchesPageUrl } from './browser-annotation-page-url'
-import { useBrowserAnnotationImages } from './use-browser-annotation-images'
-import { BrowserAnnotationImageStrip } from './browser-annotation-image-strip'
+} from './delivery/BrowserAnnotationSendMenuContent'
+import { preventAgentSendTargetOutsideDismiss } from './delivery/prevent-agent-send-target-outside-dismiss'
+import { browserAnnotationMatchesPageUrl } from './viewport/browser-annotation-page-url'
+import { useBrowserAnnotationImages } from './delivery/use-browser-annotation-images'
+import { BrowserAnnotationImageStrip } from './delivery/browser-annotation-image-strip'
 import type { BrowserPageAnnotationTrayProps } from '../describe-page/browser-page-types'
 
 export function BrowserPageAnnotationTray({
