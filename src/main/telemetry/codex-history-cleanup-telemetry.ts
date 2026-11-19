@@ -1,10 +1,6 @@
 import { mkdir, readFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import type { EventProps } from '../../shared/telemetry/telemetry-event-classification'
-import {
-  CODEX_HISTORY_CLEANUP_SKIP_REASONS,
-  type CodexHistoryCleanupSkipReason
-} from '../../shared/telemetry/schemas/telemetry-codex-history-cleanup-event-schemas'
 import type {
   CodexHistoryCleanupKind,
   CodexHistoryCleanupMode
@@ -82,12 +78,6 @@ export async function reportCodexHistoryCleanupOnce(args: {
     if (keys.has(key)) {
       continue
     }
-    const skipped = Object.fromEntries(
-      CODEX_HISTORY_CLEANUP_SKIP_REASONS.map((reason: CodexHistoryCleanupSkipReason) => [
-        `skipped_${reason}_bucket`,
-        countBucket(tally.skipped[reason])
-      ])
-    ) as Pick<Props, `skipped_${CodexHistoryCleanupSkipReason}_bucket`>
     const tracked = track('codex_history_cleanup_sweep', {
       kind,
       mode,
@@ -97,7 +87,17 @@ export async function reportCodexHistoryCleanupOnce(args: {
       eligible_bucket: countBucket(tally.eligible),
       deleted_bucket: countBucket(tally.deleted),
       bytes_bucket: bytesBucket(tally.bytes),
-      ...skipped,
+      skipped_changed_bucket: countBucket(tally.skipped.changed),
+      skipped_hard_linked_bucket: countBucket(tally.skipped.hard_linked),
+      skipped_open_bucket: countBucket(tally.skipped.open),
+      skipped_open_unknown_bucket: countBucket(tally.skipped.open_unknown),
+      skipped_rehash_mismatch_bucket: countBucket(tally.skipped.rehash_mismatch),
+      skipped_unshared_bucket: countBucket(tally.skipped.unshared),
+      skipped_not_proven_shared_bucket: countBucket(tally.skipped.not_proven_shared),
+      skipped_unlink_failed_bucket: countBucket(tally.skipped.unlink_failed),
+      skipped_transient_capped_bucket: countBucket(tally.skipped.transient_capped),
+      skipped_oversized_bucket: countBucket(tally.skipped.oversized),
+      skipped_budget_bucket: countBucket(tally.skipped.budget),
       budget_hit: args.result.budgetHit
     })
     if (!tracked) {

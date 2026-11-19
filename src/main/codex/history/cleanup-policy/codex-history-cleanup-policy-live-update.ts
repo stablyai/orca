@@ -10,6 +10,7 @@ import {
 } from '../../../remote-policies/release-asset-policy-live-update'
 import {
   CODEX_HISTORY_CLEANUP_POLICY_MAX_BYTES,
+  authoritativeDownload,
   codexHistoryCleanupThresholds,
   effectiveCodexHistoryCleanupMode,
   parseCodexHistoryCleanupPolicy,
@@ -26,8 +27,9 @@ const CODEX_HISTORY_CLEANUP_POLICY: ReleaseAssetPolicySpec<CodexHistoryCleanupPo
   maxBytes: CODEX_HISTORY_CLEANUP_POLICY_MAX_BYTES,
   parse: parseCodexHistoryCleanupPolicy
 }
-// Homes checked one after another in a run share a download this recent.
+// Homes checked one after another in a run share a download this recent, or a failure.
 const SWEEP_REFRESH_REUSE_MS = 5 * 60_000
+const SWEEP_REFRESH_FAILURE_BACKOFF_MS = 10 * 60_000
 
 /** One sweep's modes and thresholds, decided at its start; `liveMode` is asked before each unlink. */
 export type CodexHistoryCleanupSweepPolicy = {
@@ -43,6 +45,7 @@ export type CodexHistoryCleanupSweepPolicy = {
 let updater: ReleaseAssetPolicyLiveUpdater<CodexHistoryCleanupPolicy> | null = null
 let readInstallId: () => string | undefined = () => undefined
 let refreshing: Promise<void> | null = null
+let refreshFailedAt: number | null = null
 let cachePath: string | null = null
 // The cached policy as of the last sweep's start: only its `off` counts.
 let cached: CodexHistoryCleanupPolicy | null = null
@@ -88,24 +91,26 @@ export function startCodexHistoryCleanupPolicyLiveUpdates(
 /** Downloads the policy (at most once per few minutes) and decides this sweep's modes from it. */
 export async function codexHistoryCleanupSweepPolicy(): Promise<CodexHistoryCleanupSweepPolicy> {
   const fetchedAt = updater?.lastFetched()?.at
-  if (updater && (fetchedAt === undefined || Date.now() - fetchedAt > SWEEP_REFRESH_REUSE_MS)) {
+  const now = Date.now()
+  if (
+    updater &&
+    (fetchedAt === undefined || now - fetchedAt > SWEEP_REFRESH_REUSE_MS) &&
+    (refreshFailedAt === null || now - refreshFailedAt > SWEEP_REFRESH_FAILURE_BACKOFF_MS)
+  ) {
     refreshing ??= updater.refresh().finally(() => {
       refreshing = null
     })
     await refreshing.catch(() => {})
+    refreshFailedAt = updater.lastFetched() ? null : Date.now()
   }
   cached = await readCachedPolicy()
-  const policy = updater?.lastFetched()?.policy ?? cached
+  const fetched = updater?.lastFetched() ?? null
+  const policy = authoritativeDownload(fetched) ?? fetched?.policy ?? cached
+  const thresholds = codexHistoryCleanupThresholds(policy)
   return {
     revision: policy?.revision ?? 0,
-    rollouts: {
-      mode: liveMode('rollouts'),
-      thresholds: codexHistoryCleanupThresholds(policy, 'rollouts')
-    },
-    databases: {
-      mode: liveMode('databases'),
-      thresholds: codexHistoryCleanupThresholds(policy, 'databases')
-    },
+    rollouts: { mode: liveMode('rollouts'), thresholds: thresholds.rollouts },
+    databases: { mode: liveMode('databases'), thresholds: thresholds.databases },
     liveMode
   }
 }

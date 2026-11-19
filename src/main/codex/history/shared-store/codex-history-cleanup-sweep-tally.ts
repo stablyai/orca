@@ -1,7 +1,4 @@
-import {
-  CODEX_HISTORY_CLEANUP_SKIP_REASONS,
-  type CodexHistoryCleanupSkipReason
-} from '../../../../shared/telemetry/schemas/telemetry-codex-history-cleanup-event-schemas'
+import type { CodexHistoryCleanupSkipReason } from '../../../../shared/telemetry/schemas/telemetry-codex-history-cleanup-event-schemas'
 import type { CodexHistoryCleanupKind } from '../cleanup-policy/codex-history-cleanup-policy'
 
 /** One kind's sweep: in report mode `deleted` and `bytes` are what enforce would have deleted. */
@@ -19,15 +16,29 @@ export type CodexHistoryCleanupResult = Record<CodexHistoryCleanupKind, CleanupK
   policyChanged: boolean
 }
 
+function emptySkips(): Record<CodexHistoryCleanupSkipReason, number> {
+  return {
+    changed: 0,
+    hard_linked: 0,
+    open: 0,
+    open_unknown: 0,
+    rehash_mismatch: 0,
+    unshared: 0,
+    not_proven_shared: 0,
+    unlink_failed: 0,
+    transient_capped: 0,
+    oversized: 0,
+    budget: 0
+  }
+}
+
 export function emptyCleanupResult(): CodexHistoryCleanupResult {
   const tally = (): CleanupKindTally => ({
     candidates: 0,
     eligible: 0,
     deleted: 0,
     bytes: 0,
-    skipped: Object.fromEntries(
-      CODEX_HISTORY_CLEANUP_SKIP_REASONS.map((reason) => [reason, 0])
-    ) as Record<CodexHistoryCleanupSkipReason, number>
+    skipped: emptySkips()
   })
   return { rollouts: tally(), databases: tally(), budgetHit: false, policyChanged: false }
 }
@@ -40,20 +51,17 @@ export class CleanupBudgetExceeded extends Error {}
 
 /**
  * One sweep's work in either mode, content check included: files examined, bytes read, and time.
- * A read that would not fit what is left is skipped; one that overruns while reading is abandoned.
+ * A read that would not fit what is left ends the work; one that overruns while reading is
+ * abandoned.
  */
 export class CleanupBudget {
   private files = 0
   private bytes = 0
   private readonly deadline = Date.now() + BUDGET_MS
-  private skippedLarge = false
+  /** Copies one read of which exceeds the whole byte budget: never checked, so never deleted. */
+  oversized = 0
   /** Whether the budget ended the sweep's work early. */
   ranOut = false
-
-  /** Whether the budget left anything undone, a file too large for what was left included. */
-  get hit(): boolean {
-    return this.ranOut || this.skippedLarge
-  }
 
   /** Before examining `count` more files; false once any limit is reached. */
   startFiles(count = 1): boolean {
@@ -65,18 +73,32 @@ export class CleanupBudget {
     return true
   }
 
-  /** Whether reading `bytes` more fits what is left; one that doesn't is skipped, not started. */
+  /** True, and counted, when one read of `bytes` alone exceeds the whole budget. */
+  skipOversized(bytes: number): boolean {
+    const oversized = bytes > BUDGET_READ_BYTES
+    this.oversized += oversized ? 1 : 0
+    return oversized
+  }
+
+  /** Whether reading `bytes` more fits what is left. */
   fits(bytes: number): boolean {
     const fits = this.bytes + bytes <= BUDGET_READ_BYTES && !this.pastDeadline()
-    this.skippedLarge ||= !fits
+    this.ranOut ||= !fits
     return fits
   }
 
   /** Charges bytes as they are read; throws once the bytes or the time run out. */
   read(bytes: number): void {
     this.bytes += bytes
-    if (this.bytes > BUDGET_READ_BYTES || this.pastDeadline()) {
+    if (this.bytes > BUDGET_READ_BYTES) {
       this.ranOut = true
+      throw new CleanupBudgetExceeded('cleanup budget reached')
+    }
+    this.throwIfPastDeadline()
+  }
+
+  throwIfPastDeadline(): void {
+    if (this.pastDeadline()) {
       throw new CleanupBudgetExceeded('cleanup budget reached')
     }
   }

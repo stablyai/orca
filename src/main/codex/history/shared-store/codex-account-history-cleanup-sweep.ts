@@ -3,7 +3,10 @@ import { reportCodexHistoryCleanupOnce } from '../../../telemetry/codex-history-
 import { getOrcaUserDataPath } from '../../configuration/homes/codex-home-paths'
 import { codexHistoryCleanupSweepPolicy } from '../cleanup-policy/codex-history-cleanup-policy-live-update'
 import { cleanUpCodexHistoryLeftBehind } from './codex-account-history-cleanup'
-import { checkCodexHistoryLeftBehind } from './codex-account-history-content-check'
+import {
+  checkCodexHistoryLeftBehind,
+  type UnsavedContentCheck
+} from './codex-account-history-content-check'
 import { CleanupBudget, describeCleanupSweep } from './codex-history-cleanup-sweep-tally'
 
 /** Checks what the home left behind, then deletes (or reports) what the finished check proved. */
@@ -28,10 +31,12 @@ export async function checkThenCleanUpCodexHistory(args: {
   const shouldStop = (): boolean => (stopped ||= args.shouldStop())
   // One budget for the whole sweep: what it leaves undone waits for the next run's sweep.
   const budget = new CleanupBudget()
+  // Report mode keeps its checks to itself, so it never changes what a later enforce deletes.
+  const unsaved = modes.rollouts === 'enforce' ? undefined : new Map<string, UnsavedContentCheck>()
   // The content check proves only rollouts.
   if (
     modes.rollouts !== 'off' &&
-    !(await checkCodexHistoryLeftBehind({ ...args, shouldStop, budget }))
+    !(await checkCodexHistoryLeftBehind({ ...args, shouldStop, budget, unsaved }))
   ) {
     return false
   }
@@ -47,7 +52,8 @@ export async function checkThenCleanUpCodexHistory(args: {
     shouldStop,
     now: Date.now(),
     policy,
-    budget
+    budget,
+    unsaved
   })
   if (result.rollouts.candidates + result.databases.candidates > 0) {
     console.info(

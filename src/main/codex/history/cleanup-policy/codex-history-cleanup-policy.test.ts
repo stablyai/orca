@@ -56,6 +56,13 @@ describe('effectiveCodexHistoryCleanupMode', () => {
     // A failed download keeps a cached kill switch.
     const killed = parsed('{"version":1,"revision":9,"kinds":{"rollouts":{"mode":"off"}}}')
     expect(mode({ fetched: null, cached: killed })).toBe('off')
+    // An equal-revision download speaks for itself: its own rule decides, never the cached one.
+    for (const rule of ['{"mode":"off"}', '{"mode":"report"}', '{"mode":"enforce"}', '{}']) {
+      const same = parsed(`{"version":1,"revision":3,"kinds":{"rollouts":${rule}}}`)
+      expect(mode({ fetched: { policy, downloaded: same, at: NOW } })).toBe(
+        rule === '{"mode":"off"}' ? 'off' : 'report'
+      )
+    }
     expect(mode({ installId: 'install-b' })).toBe('report')
     expect(mode({ installId: undefined })).toBe('report')
     expect(mode({ platform: 'win32' })).toBe('report')
@@ -75,7 +82,7 @@ describe('effectiveCodexHistoryCleanupMode', () => {
     const remote = parsed(
       '{"version":1,"revision":5,"kinds":{"databases":{"thresholds":{"minSharedDays":0,"maxSinceLastSharedDays":400,"minSharedPasses":"7"}}}}'
     )
-    expect(codexHistoryCleanupThresholds(remote, 'databases')).toEqual({
+    expect(codexHistoryCleanupThresholds(remote).databases).toEqual({
       minSharedDays: 14,
       minSharedPasses: 5,
       maxSinceLastSharedDays: 30,

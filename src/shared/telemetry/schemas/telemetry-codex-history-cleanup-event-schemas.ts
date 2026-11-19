@@ -31,14 +31,13 @@ export const CODEX_HISTORY_CLEANUP_SKIP_REASONS = [
   'unshared',
   'not_proven_shared',
   'unlink_failed',
-  'transient_capped'
+  'transient_capped',
+  'oversized',
+  'budget'
 ] as const
 export type CodexHistoryCleanupSkipReason = (typeof CODEX_HISTORY_CLEANUP_SKIP_REASONS)[number]
 
 const count = z.enum(CODEX_HISTORY_CLEANUP_COUNT_BUCKETS)
-const skippedFields = Object.fromEntries(
-  CODEX_HISTORY_CLEANUP_SKIP_REASONS.map((reason) => [`skipped_${reason}_bucket`, count])
-) as Record<`skipped_${CodexHistoryCleanupSkipReason}_bucket`, typeof count>
 
 /** Sent once per install, kind, policy revision and mode, after the first sweep that finished. */
 export const codexHistoryCleanupSweepSchema = z
@@ -52,7 +51,25 @@ export const codexHistoryCleanupSweepSchema = z
     // In report mode: what enforce would have deleted.
     deleted_bucket: count,
     bytes_bucket: z.enum(CODEX_HISTORY_CLEANUP_BYTES_BUCKETS),
-    ...skippedFields,
+    skipped_changed_bucket: count,
+    skipped_hard_linked_bucket: count,
+    skipped_open_bucket: count,
+    skipped_open_unknown_bucket: count,
+    skipped_rehash_mismatch_bucket: count,
+    skipped_unshared_bucket: count,
+    skipped_not_proven_shared_bucket: count,
+    skipped_unlink_failed_bucket: count,
+    skipped_transient_capped_bucket: count,
+    skipped_oversized_bucket: count,
+    skipped_budget_bucket: count,
     budget_hit: z.boolean()
   })
   .strict()
+
+// Every skip reason has its own field.
+type SkipFieldsListed = Exclude<
+  `skipped_${CodexHistoryCleanupSkipReason}_bucket`,
+  keyof z.infer<typeof codexHistoryCleanupSweepSchema>
+>
+const everySkipReasonListed: [SkipFieldsListed] extends [never] ? true : never = true
+void everySkipReasonListed

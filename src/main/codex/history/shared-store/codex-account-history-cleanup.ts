@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { MERGE_PENDING_SUFFIX } from '../../../filesystem/merged-directory-link'
 import type { CodexHistoryCleanupKind } from '../cleanup-policy/codex-history-cleanup-policy'
 import type { CodexHistoryCleanupSweepPolicy } from '../cleanup-policy/codex-history-cleanup-policy-live-update'
-import { cleanUpUnusedDatabases, eligibleDatabaseGroups } from './codex-account-database-cleanup'
+import { cleanUpUnusedDatabases, databasesReadyToCheck } from './codex-account-database-cleanup'
 import {
   SET_ASIDE_ROLLOUTS_DIR,
   PRE_SHARE_DATABASES_DIR,
@@ -16,7 +16,7 @@ import {
   storeFileFacts,
   updateManifest
 } from './codex-account-history-cleanup-manifest'
-import { contentSha256 } from './codex-account-history-content-check'
+import { contentSha256, type UnsavedContentCheck } from './codex-account-history-content-check'
 import {
   MAX_TRANSIENT_DELETE_FAILURES,
   hasProvenShared,
@@ -60,6 +60,8 @@ export async function cleanUpCodexHistoryLeftBehind(args: {
   policy: CodexHistoryCleanupSweepPolicy
   /** The sweep's, already partly spent by its content check. */
   budget?: CleanupBudget
+  /** Report mode's content checks, never saved. */
+  unsaved?: Map<string, UnsavedContentCheck>
 }): Promise<CodexHistoryCleanupResult> {
   const result = emptyCleanupResult()
   const budget = args.budget ?? new CleanupBudget()
@@ -93,34 +95,22 @@ export async function cleanUpCodexHistoryLeftBehind(args: {
     }
 
   const ready = policy.rollouts.mode === 'off' ? [] : await readyRollouts(manifest)
-  const leftBehindDatabases =
-    policy.databases.mode === 'off'
-      ? []
-      : manifest.databases.filter((database) => isLeftBehindPath(database.path, 'database'))
-  result.databases.candidates = leftBehindDatabases.length
   const databaseRule = policy.databases.thresholds
-  const provenShared = hasProvenShared(manifest, args.now, databaseRule)
-  if (!provenShared) {
-    result.databases.skipped.not_proven_shared += leftBehindDatabases.length
-  }
   // Asked before taking the lock, which a starting pass waits only seconds for. A Codex still
   // holding one open would lose its later writes.
   const readyDatabases =
-    provenShared && leftBehindDatabases.length > 0
-      ? (
-          await eligibleDatabaseGroups({
-            home,
-            databases: leftBehindDatabases,
-            now: args.now,
-            minUnchangedDays: databaseRule.minUnchangedDays,
-            shouldStop: args.shouldStop,
-            budget
-          })
-        ).flatMap((group) => group.files)
-      : []
-  if (provenShared) {
-    result.databases.skipped.changed += leftBehindDatabases.length - readyDatabases.length
-  }
+    policy.databases.mode === 'off'
+      ? []
+      : await databasesReadyToCheck({
+          home,
+          manifest,
+          databases: manifest.databases,
+          now: args.now,
+          thresholds: databaseRule,
+          tally: result.databases,
+          shouldStop: args.shouldStop,
+          budget
+        })
   // One open-file check per run covers both kinds, and comes before any hash, so one that can't
   // tell costs no hashing.
   const targets = [...ready, ...readyDatabases].map((file) => fromManifestPath(home, file.path))
@@ -140,10 +130,10 @@ export async function cleanUpCodexHistoryLeftBehind(args: {
       result.rollouts.skipped.open += 1
       continue
     }
-    if (!budget.fits(rollout.facts.bytes)) {
+    if (budget.skipOversized(rollout.facts.bytes)) {
       continue
     }
-    if (!(await settleRollout(rollout))) {
+    if (!budget.fits(rollout.facts.bytes) || !(await settleRollout(rollout))) {
       break
     }
   }
@@ -196,17 +186,26 @@ export async function cleanUpCodexHistoryLeftBehind(args: {
       updatedAt: new Date(args.now).toISOString()
     }
   })
-  result.budgetHit = budget.hit
+  result.budgetHit = budget.ranOut
+  result.rollouts.skipped.oversized += budget.oversized
   return result
 
   // Each proof is the file itself and its store copy, so no pass can void it meanwhile. A random
   // start keeps copies left open from holding back the rest run after run.
   async function readyRollouts(leftBehind: CodexHistoryCleanupManifest): Promise<ReadyRollout[]> {
-    const proven = leftBehind.rollouts.filter(
-      (rollout) =>
-        rollout.check?.sameContent &&
-        rollout.storePath === rollout.check.store.path &&
-        isLeftBehindPath(rollout.path, 'rollout')
+    // Report mode's own checks count only for this sweep, and only for the file they saw.
+    const withCheck = leftBehind.rollouts.map((rollout) => {
+      const unsaved = args.unsaved?.get(rollout.path)
+      return !rollout.check && unsaved && sameFacts(rollout, unsaved.facts)
+        ? { ...rollout, check: unsaved.check }
+        : rollout
+    })
+    const proven = withCheck.flatMap((rollout) =>
+      rollout.check?.sameContent &&
+      rollout.storePath === rollout.check.store.path &&
+      isLeftBehindPath(rollout.path, 'rollout')
+        ? [{ ...rollout, check: rollout.check }]
+        : []
     )
     result.rollouts.candidates = proven.length
     // An account no longer shared keeps its own copies.
@@ -226,7 +225,7 @@ export async function cleanUpCodexHistoryLeftBehind(args: {
         break
       }
       try {
-        const check = rollout.check!
+        const { check } = rollout
         const file = await currentLeftBehindFile(home, rollout.path)
         if (
           !file ||
@@ -277,14 +276,14 @@ export async function cleanUpCodexHistoryLeftBehind(args: {
         tally.skipped.unshared += 1
         return false
       }
+      if (stopKind('rollouts') || budget.pastDeadline()) {
+        return false
+      }
       tally.eligible += 1
       if (!enforcing('rollouts')) {
         tally.deleted += 1
         tally.bytes += freedBy(rollout.stats)
         return true
-      }
-      if (stopKind('rollouts') || budget.pastDeadline()) {
-        return false
       }
       await remove('rollouts')(rollout.path, rollout.stats).catch((error: unknown) => {
         const failures = rollout.transientFailures + 1

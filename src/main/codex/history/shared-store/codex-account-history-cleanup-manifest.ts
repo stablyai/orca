@@ -190,11 +190,13 @@ export function sameFacts(left: FileFacts, right: FileFacts | null): boolean {
   return right !== null && left.bytes === right.bytes && left.mtimeMs === right.mtimeMs
 }
 
+// Null when `shouldStop` cut the walk short.
 async function leftBehindRollouts(
   accountHome: string,
   storeHome: string,
-  previous: Map<string, LeftBehindRollout>
-): Promise<LeftBehindRollout[]> {
+  previous: Map<string, LeftBehindRollout>,
+  shouldStop: () => boolean
+): Promise<LeftBehindRollout[] | null> {
   // A pending folder is `<folder>[.<ms>].orca-profile-merge`; its files conflict by name.
   const sources: { root: string; folder: string; kind: LeftBehindRollout['kind'] }[] = []
   for (const folder of await readEntries(join(accountHome, SET_ASIDE_ROLLOUTS_DIR))) {
@@ -218,6 +220,9 @@ async function leftBehindRollouts(
   const rollouts: LeftBehindRollout[] = []
   for (const source of sources) {
     for await (const file of regularFiles(source.root)) {
+      if (shouldStop()) {
+        return null
+      }
       const inFolder = `${source.folder}/${toManifestPath(source.root, file.path)}`
       if (!parseCodexRolloutThreadId(inFolder)) {
         continue
@@ -311,19 +316,31 @@ export async function recordCodexHistoryLeftBehind(args: {
   })
 }
 
-/** Rebuilds the left-behind rollouts and store twin pairs from disk, keeping still-valid checks. */
+/**
+ * Rebuilds the left-behind rollouts and store twin pairs from disk, keeping still-valid checks.
+ * False, with nothing written, when `shouldStop` cut the walk short.
+ */
 export async function inventoryCodexHistoryLeftBehind(args: {
   accountHome: string
   storeHome: string
-}): Promise<void> {
+  shouldStop?: () => boolean
+}): Promise<boolean> {
   const before = await readManifest(args.accountHome)
   if (!before || before === 'newer') {
-    return
+    return true
   }
   // Walked outside the write, which then touches only these fields: a pass (or, in WSL, another
   // process) may rewrite the streak meanwhile, and a launch never waits behind the walk.
   const previous = new Map(before.rollouts.map((rollout) => [rollout.path, rollout]))
-  const rollouts = await leftBehindRollouts(args.accountHome, args.storeHome, previous)
+  const rollouts = await leftBehindRollouts(
+    args.accountHome,
+    args.storeHome,
+    previous,
+    args.shouldStop ?? (() => false)
+  )
+  if (!rollouts) {
+    return false
+  }
   const pairs = await storeTwinPairs(args.storeHome)
   if (pairs.length > 0) {
     console.warn(
@@ -336,4 +353,5 @@ export async function inventoryCodexHistoryLeftBehind(args: {
     storeTwinPairs: pairs,
     updatedAt: new Date().toISOString()
   }))
+  return true
 }

@@ -24,7 +24,10 @@ vi.mock('../../../filesystem/open-file-check', () => ({
   findOpenFiles: async () => new Set<string>()
 }))
 
-const busyPath = vi.hoisted(() => ({ value: null as string | null, attempts: 0 }))
+const busyPath = vi.hoisted(() => {
+  const state: { value: string | null; attempts: number } = { value: null, attempts: 0 }
+  return state
+})
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof FsPromises>()
   return {
