@@ -25,6 +25,12 @@ it('finds every agent kind that job control stopped behind the foreground progra
   ).toEqual(['claude'])
 })
 
+it('an interactive Codex whose option value reads `exec` is still a stopped agent', () => {
+  expect(findStoppedAgents([shell, row(5, 5, 'T', 'codex --profile exec'), front], 7)).toEqual([
+    'codex'
+  ])
+})
+
 it('a running, exited or non-agent process is not a stopped agent', () => {
   expect(findStoppedAgents([row(5, 5, 'S', 'claude'), front], 7)).toEqual([])
   expect(findStoppedAgents([row(5, 5, 'TZ', 'claude'), front], 7)).toEqual([])

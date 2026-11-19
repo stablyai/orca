@@ -23,9 +23,10 @@ export function findStoppedAgents(
 }
 
 // Why local: `codex exec` is one-shot, but the shared headless table also drives Codex's TUI status recognition.
+// Why only directly after the binary: an option value (`--profile exec`) must not hide an interactive Codex.
 function isCodexExec(command: string): boolean {
   const tokens = tokenizeCommandLine(command)
   const binary = tokens.findIndex((token) => /(?:^|[/\\])codex(?:\.js|\.exe)?$/i.test(token))
-  const subcommand = tokens.slice(binary + 1).find((token) => !token.startsWith('-'))
-  return binary !== -1 && (subcommand === 'exec' || subcommand === 'e')
+  const subcommand = binary === -1 ? undefined : tokens[binary + 1]
+  return subcommand === 'exec' || subcommand === 'e'
 }
