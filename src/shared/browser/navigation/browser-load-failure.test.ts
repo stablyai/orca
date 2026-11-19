@@ -15,8 +15,10 @@ function siteListText(validatedUrl: string): { title: string; description: strin
 }
 
 describe('site list load failure copy', () => {
-  it('tells the person to add a blocked site, but not to add an ftp page', () => {
+  it('tells the person to add a blocked site, but not to add an ftp or file page', () => {
     expect(siteListText('https://blocked.test/').description).toContain('add it in Settings')
-    expect(siteListText('ftp://blocked.test/').description).toContain("ftp: pages can't open")
+    for (const url of ['ftp://blocked.test/', 'file:///tmp/a.html']) {
+      expect(siteListText(url).description).toContain("pages can't open")
+    }
   })
 })
