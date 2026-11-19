@@ -27109,12 +27109,7 @@
       "idle": "Idle",
       "needsYou": "Needs you",
       "askedCoordinator": "Asked {{name}} a question",
-      "chat": "Chat",
-      "startedByChat": "Started by your chat",
-      "startedByThread": "Started by a {{source}} thread",
-      "startedByAutomation": "Started by automation {{name}}",
-      "startedInSession": "Started in {{name}}",
-      "run": "Run"
+      "chat": "Chat"
     },
     "workspaces": {
       "showMore": "Show {{count}} more",
@@ -27451,7 +27446,12 @@
       "failed": "Failed",
       "running": "Running",
       "all": "All {{count}} automations",
-      "pausedCount": "{{count}} paused"
+      "pausedCount": "{{count}} paused",
+      "next": "Next",
+      "runNow": "Run now",
+      "openOnPage": "Open on Automations page",
+      "pauseShort": "Pause",
+      "resumeShort": "Resume"
     },
     "access": {
       "thisComputer": "this computer",
@@ -27723,7 +27723,6 @@
       "pausedSignedOut": "{{hooks}} · paused while signed out"
     },
     "upNext": {
-      "looking": "Looking around…",
       "looked": "Looked {{time}}",
       "lookedYesterday": "Looked yesterday {{time}}",
       "lookNow": "Look now",
@@ -27738,7 +27737,8 @@
       "newSuggestions_one": "{{count}} new suggestion · click to see",
       "newSuggestions_other": "{{count}} new suggestions · click to see",
       "newCount": "{{count}} new",
-      "newSuggestions": "{{count}} new suggestions · click to see"
+      "newSuggestions": "{{count}} new suggestions · click to see",
+      "lookingShort": "Looking around"
     },
     "firstScreen": {
       "namesMore": "{{names}} and {{count}} more",
@@ -28647,8 +28647,13 @@
       "twiceDaily": "twice a day",
       "tidyNightAfter": "Each night after {{from}}, or once this computer is awake",
       "tidyWeekAfter": "Once a week after {{from}}, or once this computer is awake",
-      "lookDueNow": "Due now · {{every}}",
-      "lastNeededSignIn": "Its last run stopped for a sign-in"
+      "lastNeededSignIn": "Its last run stopped for a sign-in",
+      "stopped": "Stopped",
+      "lookAroundSettings": "Look around settings",
+      "dueNow": "Due now",
+      "runsEvery": "Runs {{every}}",
+      "tidySettings": "Tidy memory settings",
+      "needsSignIn": "Needs sign-in"
     },
     "toolApp": {
       "address": "Address",
@@ -28830,17 +28835,7 @@
       "workers": "Workers",
       "waitingCount": "{{count}} waiting",
       "loading": "Loading chats…",
-      "readFailed": "Couldn't read this bot's chats.",
-      "unsupported": "This bot's computer runs an older Orca that can't list chats.",
-      "seeItems": "See its work in Home"
-    },
-    "working": {
-      "title": "Working on",
-      "replying": "Replying"
-    },
-    "recent": {
-      "title": "Recent",
-      "seeAll": "See all"
+      "readFailed": "Couldn't read this bot's chats."
     },
     "cloudSignIn": {
       "automationScheduledOnly": "Runs on its schedule only: its events are paused while signed out of Orca",

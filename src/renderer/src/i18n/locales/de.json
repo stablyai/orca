@@ -23669,8 +23669,7 @@
     },
     "upcoming": {
       "tidyNightAfter": "Jede Nacht ab {{from}} oder sobald dieser Computer wach ist",
-      "tidyWeekAfter": "Einmal pro Woche ab {{from}} oder sobald dieser Computer wach ist",
-      "lookDueNow": "Jetzt fällig · {{every}}"
+      "tidyWeekAfter": "Einmal pro Woche ab {{from}} oder sobald dieser Computer wach ist"
     },
     "palette": {
       "placeholder": "Bots, Chats, Terminals, Arbeitsbereiche, Aufgaben, Einstellungen und Aktionen suchen…",

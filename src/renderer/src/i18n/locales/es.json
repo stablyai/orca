@@ -24230,8 +24230,7 @@
     },
     "upcoming": {
       "tidyNightAfter": "Cada noche a partir de las {{from}}, o en cuanto este ordenador esté activo",
-      "tidyWeekAfter": "Una vez por semana a partir de las {{from}}, o en cuanto este ordenador esté activo",
-      "lookDueNow": "Pendiente ahora · {{every}}"
+      "tidyWeekAfter": "Una vez por semana a partir de las {{from}}, o en cuanto este ordenador esté activo"
     },
     "palette": {
       "placeholder": "Busca bots, chats, terminales, espacios de trabajo, tareas, ajustes y acciones...",

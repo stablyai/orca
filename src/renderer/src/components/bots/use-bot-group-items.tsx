@@ -27,7 +27,7 @@ import type { BotItemWalkList } from './items/use-bot-item-walk'
 /** One member as the group panel reads it. */
 type MemberRead = {
   bot: Bot
-  /** Its item read: loading, ready, failed, or a host without items. */
+  /** Its item read: loading, ready or failed. */
   state: BotHostReadState
   retry: () => void
   /** Null until its first read says where its seen mark was; its rows wait for it. */
@@ -57,7 +57,7 @@ const MemberReader = memo(function MemberReader({
   report: (botId: string, read: MemberRead | null) => void
 }): null {
   const items = useBotItems(bot)
-  const read = items.state === 'unsupported' ? null : items.read
+  const read = items.read
   const seenEventId = useBotItemsSeenMark(read)
   const list = useBotItemsShownList(bot, read, filter, now, seenEventId ?? '')
   const botNow = useBotNow(bot)
@@ -221,12 +221,7 @@ export function useBotGroupItems(
   ))
   const reads = useMemo(() => members.flatMap((bot) => byBot.get(bot.id) ?? []), [members, byBot])
   const shownReads = useMemo(
-    () =>
-      reads.filter(
-        (read) =>
-          read.state !== 'unsupported' &&
-          (filter.botIds === null || filter.botIds.includes(read.bot.id))
-      ),
+    () => reads.filter((read) => filter.botIds === null || filter.botIds.includes(read.bot.id)),
     [reads, filter.botIds]
   )
   const ready =

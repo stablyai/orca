@@ -24251,8 +24251,7 @@
     },
     "upcoming": {
       "tidyNightAfter": "Chaque nuit après {{from}}, ou dès que cet ordinateur est réveillé",
-      "tidyWeekAfter": "Une fois par semaine après {{from}}, ou dès que cet ordinateur est réveillé",
-      "lookDueNow": "Prévu maintenant · {{every}}"
+      "tidyWeekAfter": "Une fois par semaine après {{from}}, ou dès que cet ordinateur est réveillé"
     },
     "palette": {
       "placeholder": "Rechercher bots, chats, terminaux, espaces de travail, tâches, paramètres et actions...",

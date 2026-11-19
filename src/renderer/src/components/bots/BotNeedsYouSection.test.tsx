@@ -333,9 +333,11 @@ describe('Needs you', () => {
     expect(screen.getByText('Worker: Webhook wake-up')).toBeTruthy()
     expect(screen.getByText('git push origin')).toBeTruthy()
     // No item and no tool: its own title, and what any approval says.
-    expect(screen.getByRole('button', { name: 'Open: Rotate fix' }).textContent).toBe(
-      'Rotate fixPermission needed'
-    )
+    const rotate = screen.getByRole('button', { name: 'Open: Rotate fix' })
+    expect(rotate.textContent).toBe('Rotate fix')
+    expect(
+      document.getElementById(rotate.getAttribute('aria-describedby') ?? '')?.textContent
+    ).toBe('Permission needed')
   })
 
   it('says where a worker with nowhere to open runs, with no action', () => {

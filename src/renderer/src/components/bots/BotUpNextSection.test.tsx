@@ -138,7 +138,7 @@ describe('Suggestions', () => {
     const { rerender, container } = render(
       <BotUpNextSection bot={bot} upNext={upNext({ running: true }, [])} />
     )
-    expect(screen.getByText('Looking around…')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Looking around' })).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Look now' })).toBeNull()
     rerender(<BotUpNextSection bot={bot} upNext={upNext({}, [])} />)
     expect(container.textContent).toBe('')
@@ -149,10 +149,8 @@ describe('a suggestion’s whole text', () => {
   it('reads in full from its row, which the hovered row’s actions partly cover', async () => {
     render(<BotUpNextSection bot={bot} upNext={upNext()} />)
     fireEvent.focus(screen.getByRole('button', { name: new RegExp(`^${review.title}`) }))
-    const tip = await screen.findByRole('tooltip')
-    expect(tip.textContent).toContain(review.title)
-    expect(tip.textContent).toContain(review.why)
-    expect(tip.textContent).toContain('orca#1234')
+    expect(await screen.findByText(review.why)).toBeTruthy()
+    expect(screen.getByText('orca#1234')).toBeTruthy()
   })
 })
 
@@ -217,12 +215,12 @@ describe('Suggestions while a look starts', () => {
     mocks.rpc.mockResolvedValueOnce({})
     render(<BotUpNextSection bot={bot} upNext={upNext({ lastLookedAt: 1 })} />)
     fireEvent.click(screen.getByRole('button', { name: 'Look now' }))
-    expect(screen.getByText('Looking around…')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Looking around' })).toBeTruthy()
     cleanup()
     mocks.rpc.mockRejectedValueOnce(new Error('look_now_running'))
     render(<BotUpNextSection bot={bot} upNext={upNext({ lastLookedAt: 1 })} />)
     fireEvent.click(screen.getByRole('button', { name: 'Look now' }))
-    await waitFor(() => expect(screen.queryByText('Looking around…')).toBeNull())
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Looking around' })).toBeNull())
     expect(mocks.toastMessage).toHaveBeenCalledWith('Already looking around.')
   })
 })
@@ -232,7 +230,7 @@ describe('Suggestions v2', () => {
     const { container } = render(
       <BotUpNextSection bot={bot} upNext={upNext({ running: true, runSessionId: 'look-1' })} />
     )
-    const toggle = screen.getByRole('button', { name: /Looking around…/ })
+    const toggle = screen.getByRole('button', { name: 'Looking around' })
     expect(toggle.getAttribute('aria-expanded')).toBe('false')
     expect(container.querySelector('.animate-pulse')).toBeNull()
     fireEvent.click(toggle)
@@ -243,7 +241,9 @@ describe('Suggestions v2', () => {
 
   it('has no steps toggle on a host that does not name the look', () => {
     render(<BotUpNextSection bot={bot} upNext={upNext({ running: true })} />)
-    expect(screen.queryByRole('button', { name: /Looking around…/ })).toBeNull()
+    expect(
+      screen.getByRole('button', { name: 'Looking around' }).getAttribute('aria-expanded')
+    ).toBeNull()
   })
 
   it('says how many are new since it was last seen, marks them seen, and keeps saying it', async () => {
@@ -251,13 +251,13 @@ describe('Suggestions v2', () => {
     const { rerender } = render(
       <BotUpNextSection bot={bot} upNext={upNext({ seenAt: 5 }, [fresh, review])} />
     )
-    expect(screen.getByText('1 new')).toBeTruthy()
     await waitFor(() =>
       expect(mocks.markSeen).toHaveBeenCalledWith(expect.objectContaining({ id: 'b1' }))
     )
-    // The host now says it was seen; this panel still shows what was new when it opened.
+    // The host now says it was seen; folded, this panel still says what was new when it opened.
     rerender(<BotUpNextSection bot={bot} upNext={upNext({ seenAt: 20 }, [fresh, review])} />)
-    expect(screen.getByText('1 new')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Suggestions', expanded: true }))
+    expect(screen.getByText(/1 new/)).toBeTruthy()
   })
 
   it('leaves new suggestions unseen while the card is folded, and marks them once it opens', async () => {

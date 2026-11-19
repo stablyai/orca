@@ -54,7 +54,7 @@ export function BotItemsSection({
   /** The row Back returns to: shown, focused and scrolled to once. */
   focusUid: string | null
   onOpen: (item: BotItem) => void
-  /** The bot's own item read: `unsupported` for a host without items, which says nothing of them. */
+  /** The bot's own item read. */
   botRead: { state: BotHostReadState; retry: () => void }
   /** Orca's asks the filter keeps; they lead Needs you whatever the item read says. */
   asks: BotNeedsYouAsks
@@ -71,9 +71,6 @@ export function BotItemsSection({
   // Every message here speaks for items only; the asks above it stand on their own.
   const itemsNote = (): React.ReactNode => {
     if (!read) {
-      if (botRead.state === 'unsupported') {
-        return null
-      }
       const chatFailed = filter.chatIds !== null && chatRead.failed
       return botRead.state === 'failed' || chatFailed ? (
         <BotItemsReadFailed onRetry={chatFailed ? chatRead.retry : botRead.retry} />
