@@ -51,8 +51,8 @@ export abstract class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeW
         rendererToken !== undefined
           ? this.rendererScreenToken(ptyId) !== rendererToken
           : // A model or provider screen: a gap, a replaced model or a new lifecycle since the read makes it older.
+            // A recovering model never answers the read, so a frame read during recovery is the provider's.
             this.headlessTerminals.get(ptyId) !== model ||
-            model?.gapReseed !== undefined ||
             this.ptyGapCounts.get(ptyId) !== gaps ||
             this.getPtyLifecycleGeneration(ptyId) !== generation
     }
@@ -83,11 +83,11 @@ export abstract class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeW
     if (!this.providerSnapshotPreferredPtys.has(ptyId)) {
       return this.readHeadlessVisibleTerminalState(ptyId)
     }
-    // A recovering screen is unknown, never an empty frame; one the provider owned before the gap keeps main's path below.
-    if (this.headlessTerminals.get(ptyId)?.gapReseed?.providerOwnedBeforeGap === false) {
+    // A recovering screen is unknown, never an empty frame; one the provider owned before the gap takes its frame below.
+    const recovery = this.headlessTerminals.get(ptyId)?.gapReseed
+    if (recovery?.providerOwnedBeforeGap === false) {
       return null
     }
-
     const generation = this.getPtyLifecycleGeneration(ptyId)
     const outputSequence = this.getPtyOutputSequence(ptyId)
     const cached = this.readCurrentProviderVisibleState(ptyId)
@@ -95,7 +95,7 @@ export abstract class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeW
       return cached
     }
     const trackedMode = this.providerModeTrackersByPtyId.get(ptyId)
-    if (trackedMode && !trackedMode.isAlternateScreen) {
+    if (trackedMode && !trackedMode.isAlternateScreen && !recovery) {
       const headlessState = await this.readHeadlessVisibleTerminalState(ptyId)
       return headlessState
         ? { ...headlessState, isAlternateScreen: false }
@@ -161,8 +161,7 @@ export abstract class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeW
     }
     this.providerVisibleRetryAtByPtyId.delete(ptyId)
     if (this.providerSnapshotsWithLiveModeTransition.has(snapshot)) {
-      // Why: the provider frame can predate a mode switch observed while its
-      // RPC was pending; the ordered live emulator owns the post-switch grid.
+      // Why: the frame can predate a mode switch seen while its RPC was pending; the live emulator owns that grid.
       const liveState = await this.readHeadlessVisibleTerminalState(ptyId)
       if (liveState && liveState.isAlternateScreen === (snapshot.alternateScreen ?? false)) {
         return liveState
