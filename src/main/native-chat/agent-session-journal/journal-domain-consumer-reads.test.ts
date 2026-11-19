@@ -6,11 +6,20 @@ import {
   lifecycleOptions as options
 } from './journal-domain-lifecycle.test-fixture'
 import { readJournalSqlPoint } from './journal-sql-point-read'
+import { JOURNAL_ENDED_TURN_COUNTS_SCHEMA } from './database/journal-ended-turn-counts'
+import { runJournalTransaction } from './database/journal-database'
+import Database from '../../sqlite/sync-database'
+import { join } from 'node:path'
 import { journalSqlReads } from './journal-sql-reads'
 import { insertJournalDomainQueueRow } from './journal-domain-queue-rows'
 import { resolveChatAutomationRun } from '../../automations/observation/automation-chat-run-observation'
+import type {
+  AgentJournalMessageItem,
+  AgentJournalTurnLifecycleState
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { agentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
 import { agentJournalTurnBody } from '../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
-import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 
 const cleanup: (() => void)[] = []
 afterEach(() => cleanup.splice(0).forEach((close) => close()))
@@ -536,6 +545,194 @@ it('reuses a saved outline after reopen and refuses a cache result from an older
   f.reopen()
   expect(read().outline).toEqual(idle.outline)
 })
+
+it("counts a chat's ended turns once each, whatever opened them, and never a refused send or a clear", async () => {
+  const f = domainLifecycleFixture(cleanup)
+  const workerReport: AgentJournalMessageItem = {
+    ...body('worker finished'),
+    from: {
+      kind: 'agent',
+      senders: [],
+      orchestration: { message: 'mail-notice', mailbox: 'peer', dispatchId: null, messages: [] }
+    }
+  }
+  const send = async (
+    id: string,
+    message: AgentJournalMessageItem,
+    state: 'accepted' | 'rejected'
+  ) => {
+    await f.run({
+      kind: 'submission',
+      input: { clientMessageId: id, fence: 1, body: message, payloadFingerprint: id }
+    })
+    await f.run({
+      kind: 'dispatch',
+      input:
+        state === 'accepted'
+          ? {
+              clientMessageId: id,
+              fence: 1,
+              state,
+              providerIdentity: { provider: 'claude', sessionId: 'provider', uuid: id }
+            }
+          : {
+              clientMessageId: id,
+              fence: 1,
+              state,
+              ...agentSessionFailureWords(agentSessionFailureFact('notSignedIn'), {
+                surface: 'rejection'
+              })
+            }
+    })
+  }
+  const turn = (id: string, state: AgentJournalTurnLifecycleState, revision?: 'legacy-status') =>
+    f.run({
+      kind: 'item',
+      identity: identity(revision ? `${id}-status` : `${id}-turn`),
+      options,
+      body:
+        revision === 'legacy-status'
+          ? { kind: 'status', text: 'Claude finished', turnLifecycle: { turnId: id, state } }
+          : { kind: 'turn', turnId: id, state, ...(state === 'running' ? {} : { completedAt: 5 }) }
+    })
+  // The owner's turn, which ended while the worker it started still ran.
+  await send('owner', body('start a worker'), 'accepted')
+  await turn('t1', 'completed')
+  // The worker's report, a queued message, opens a turn; a legacy status row of it marks it again.
+  await send('report', workerReport, 'accepted')
+  await turn('t2', 'completed')
+  await turn('t2', 'completed', 'legacy-status')
+  await send('stopped', body('then stop'), 'accepted')
+  await turn('t3', 'interrupted')
+  await send('refused', body('never started'), 'rejected')
+  await f.run({
+    kind: 'item',
+    identity: identity('clear'),
+    body: {
+      kind: 'status',
+      text: 'Cleared',
+      contextClear: { operationId: 'clear', afterFence: 1, clearedAt: 1 }
+    },
+    options
+  })
+  await send('now', body('in progress'), 'accepted')
+  await turn('t4', 'running')
+  expect(await readsOf(f).endedTurnCount()).toBe(3)
+  await turn('t4', 'completed')
+  f.reopen()
+  expect(await readsOf(f).endedTurnCount()).toBe(4)
+})
+
+const ENDED_TURNS_REFERENCE = `SELECT COUNT(DISTINCT turn_id) AS count FROM journal_items
+  WHERE session_id='chat' AND epoch='epoch' AND hidden=0 AND turn_marker=1 AND context_clear=0
+  AND lifecycle_state IS NOT 'running'`
+
+async function endedTurnsFixture(turns: number) {
+  const f = domainLifecycleFixture(cleanup)
+  for (let index = 0; index < turns; index += 1) {
+    await f.run({
+      kind: 'item',
+      identity: identity(`t${index}-turn`),
+      options,
+      body: { kind: 'turn', turnId: `t${index}`, state: 'completed', completedAt: 5 }
+    })
+  }
+  return f
+}
+
+it('reads the ended-turn count without visiting the chat’s turn rows', async () => {
+  const turns = 20
+  const f = await endedTurnsFixture(turns)
+  const prepared: string[] = []
+  const prepare = f.db.prepare.bind(f.db)
+  f.db.prepare = (sql: string) => (prepared.push(sql), prepare(sql))
+
+  expect(await readsOf(f).endedTurnCount()).toBe(turns)
+  f.db.prepare = prepare
+  const plans = prepared.flatMap((sql) =>
+    f.db
+      .prepare(`EXPLAIN QUERY PLAN ${sql}`)
+      .all(...['chat', 'epoch', 'journal_ended_turn_counts'].slice(0, sql.split('?').length - 1))
+      .map((row) => String(row.detail))
+  )
+  expect(plans.filter((detail) => /turn_marker|ended_turn/.test(detail))).toEqual([
+    'SEARCH journal_ended_turn_counts USING PRIMARY KEY (session_id=? AND epoch=?)'
+  ])
+})
+
+it('keeps the ended-turn count equal to a recount through hides, removals, reopened turns and a first open', async () => {
+  const f = await endedTurnsFixture(6)
+  await f.run({
+    kind: 'item',
+    identity: identity('t1-status'),
+    options,
+    body: {
+      kind: 'status',
+      text: 'Claude finished',
+      turnLifecycle: { turnId: 't1', state: 'completed' }
+    }
+  })
+  const recount = () => Number(f.db.prepare(ENDED_TURNS_REFERENCE).get()?.count)
+  const steps = [
+    `UPDATE journal_items SET hidden=1 WHERE item_id='orca:t0-turn'`,
+    `DELETE FROM journal_items WHERE item_id='orca:t1-turn'`,
+    `DELETE FROM journal_items WHERE item_id='orca:t1-status'`,
+    `UPDATE journal_items SET lifecycle_state='running' WHERE item_id='orca:t2-turn'`,
+    `UPDATE journal_items SET turn_id='t4' WHERE item_id='orca:t3-turn'`,
+    `UPDATE journal_items SET hidden=0 WHERE item_id='orca:t0-turn'`,
+    `UPDATE journal_items SET epoch='next' WHERE item_id='orca:t5-turn'`
+  ]
+  const counts = [await readsOf(f).endedTurnCount()]
+  for (const step of steps) {
+    f.db.exec(step)
+    expect(await readsOf(f).endedTurnCount()).toBe(recount())
+    counts.push(await readsOf(f).endedTurnCount())
+  }
+  expect(counts).toEqual([6, 5, 5, 4, 3, 2, 3, 2])
+
+  f.db.exec(`DROP TABLE journal_ended_turn_counts; DROP TABLE journal_ended_turn_rows;
+    DROP TRIGGER journal_ended_turns_insert; DROP TRIGGER journal_ended_turns_delete;
+    DROP TRIGGER journal_ended_turns_update_old; DROP TRIGGER journal_ended_turns_update_new`)
+  f.reopen()
+  expect(await readsOf(f).endedTurnCount()).toBe(2)
+  createEndedTurnCounts(f.db)
+  expect(await readsOf(f).endedTurnCount()).toBe(2)
+  await f.run({
+    kind: 'item',
+    identity: identity('t6-turn'),
+    options,
+    body: { kind: 'turn', turnId: 't6', state: 'completed', completedAt: 5 }
+  })
+  expect(await readsOf(f).endedTurnCount()).toBe(3)
+})
+
+it('creates the ended-turn counts once when another process opens the journal at the same moment', async () => {
+  const f = await endedTurnsFixture(3)
+  const filename = join(f.directory, 'journal.sqlite')
+  f.db.exec(`DROP TABLE journal_ended_turn_counts; DROP TABLE journal_ended_turn_rows;
+    DROP TRIGGER journal_ended_turns_insert; DROP TRIGGER journal_ended_turns_delete;
+    DROP TRIGGER journal_ended_turns_update_old; DROP TRIGGER journal_ended_turns_update_new`)
+  const first = new Database(filename)
+  const second = new Database(filename)
+  cleanup.push(() => (first.close(), second.close()))
+  createEndedTurnCounts(first)
+  await f.run({
+    kind: 'item',
+    identity: identity('t3-turn'),
+    options,
+    body: { kind: 'turn', turnId: 't3', state: 'completed', completedAt: 5 }
+  })
+
+  expect(() => createEndedTurnCounts(second)).not.toThrow()
+  expect(
+    first.prepare(`SELECT count FROM journal_ended_turn_counts WHERE session_id='chat'`).get()
+  ).toEqual({ count: 4 })
+})
+
+/** The journal SQL worker's open step. */
+function createEndedTurnCounts(db: Database): void {
+  runJournalTransaction(db, (writer) => writer.exec(JOURNAL_ENDED_TURN_COUNTS_SCHEMA))
+}
 
 it('counts a Codex thread as exchanged once it has a turn row or an accepted send', async () => {
   const f = domainLifecycleFixture(cleanup)

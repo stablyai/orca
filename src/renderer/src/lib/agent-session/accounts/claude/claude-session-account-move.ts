@@ -5,8 +5,12 @@ import { normalizeCodexAccountSelectionTarget } from '../../../../../../shared/a
 import type { CodexAccountSelectionTarget } from '../../../../../../shared/agent-accounts/codex/codex-selection-lane'
 import { resolveAgentAccountRestartResumeStartup } from '../agent-account-restart-startup'
 import { isSessionHeldByAnotherPane } from '../../identity/claude-session-pane-holders'
-import { isClaudePaneOnAccount, resolveClaudePaneFolder } from './claude-pane-account-folder'
-import type { ClaudeHostFolders } from './claude-pane-account-folder'
+import {
+  isClaudePaneOnAccount,
+  resolveClaudePaneFolder,
+  type ClaudeHostFolders
+} from '../../../../../../shared/agent-accounts/claude/claude-pane-account-folder'
+import { getRendererAppPlatform } from '../../../../app-shell/platform/renderer-app-platform'
 import {
   isClaudeRunning,
   isWslLane,
@@ -16,25 +20,13 @@ import {
 } from './claude-pane-inventory'
 import type { AppState } from '@/store/types'
 import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
-import type {
-  ClaudeManagedAccount,
-  ClaudeRateLimitAccountsState
-} from '../../../../../../shared/agent-accounts/managed-account-types'
+import type { ClaudeManagedAccount } from '../../../../../../shared/agent-accounts/managed-account-types'
 
 export type { ClaudeSessionMoveCandidate } from './claude-pane-inventory'
 
 export function isClaudePaneMidTurn(state: AppState, paneKey: string): boolean {
   const entry = state.agentStatusByPaneKey.get(paneKey)
   return entry?.agentType === 'claude' && entry.state !== 'done'
-}
-
-/** Resolve the account actually used at launch; an account without its own login may use System default (null). */
-export function claudeLaunchAccountId(
-  state: Pick<ClaudeRateLimitAccountsState, 'accounts'>,
-  accountId: string | null
-): string | null {
-  const account = state.accounts.find((candidate) => candidate.id === accountId)
-  return account?.runsOnSystemDefault ? null : accountId
 }
 
 export function findQueuedClaudeRestartsOnAccount(args: {
@@ -52,7 +44,7 @@ export function findQueuedClaudeRestartsOnAccount(args: {
       pane.inLane &&
       state.pendingPaneAccountRestarts[pane.ptyId] === 'claude' &&
       isClaudePaneOnAccount(
-        resolveClaudePaneFolder(pane.transcriptPath, saved, host),
+        resolveClaudePaneFolder(pane.transcriptPath, saved, host, getRendererAppPlatform()),
         args.accountId,
         host
       )
@@ -113,7 +105,12 @@ function scanPane(
   if (!pane.resumable) {
     return { group: 'cantMove', pane, reason: 'no-session', stranded: true }
   }
-  const folder = resolveClaudePaneFolder(pane.transcriptPath, args.saved, args.host)
+  const folder = resolveClaudePaneFolder(
+    pane.transcriptPath,
+    args.saved,
+    args.host,
+    getRendererAppPlatform()
+  )
   if (!folder) {
     return { group: 'cantMove', pane, reason: 'unknown-account', stranded: true }
   }

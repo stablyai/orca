@@ -2,6 +2,7 @@ import {
   MANAGED_RUNTIME_INSTALL_RUNTIME_CAPABILITY,
   MANAGED_RUNTIME_REMOVE_RUNTIME_CAPABILITY
 } from '../../agent-launch/installation/managed-runtime-install'
+import { AGENT_CLI_UPDATE_RUNTIME_CAPABILITY } from '../../agent-launch/installation/agent-cli-update'
 import { REMOTE_SERVER_UPDATE_CAPABILITY } from '../host-catalog/remote-server-update'
 import { SSH_TARGET_MANAGEMENT_RUNTIME_CAPABILITY } from '../ssh/ssh-target-management'
 import { ENVIRONMENT_DOCTOR_RUNTIME_CAPABILITY } from '../../workspace-setup/environment-doctor/environment-doctor-runtime'
@@ -17,6 +18,8 @@ export const RUNTIME_SOURCE_FENCE_RUNTIME_CAPABILITY = 'runtime-source-fence.v1'
 // Hosts with this capability publish settingsChanged, so a client keeps settings until it says otherwise.
 export const SETTINGS_CHANGED_EVENT_RUNTIME_CAPABILITY =
   'runtime.settings-changed-event.v1' as const
+// Why: hosts without it never computed their own usage; clients say to update instead of showing zeros.
+export const USAGE_ANALYTICS_RUNTIME_CAPABILITY = 'usage.analytics.v1' as const
 
 // The paired host itself: status, environments, control, updates and the servers it manages.
 export const HOST_RUNTIME_CAPABILITIES = [
@@ -27,8 +30,10 @@ export const HOST_RUNTIME_CAPABILITIES = [
   REMOTE_SERVER_UPDATE_CAPABILITY,
   MANAGED_RUNTIME_INSTALL_RUNTIME_CAPABILITY,
   MANAGED_RUNTIME_REMOVE_RUNTIME_CAPABILITY,
+  AGENT_CLI_UPDATE_RUNTIME_CAPABILITY,
   RUNTIME_SOURCE_FENCE_RUNTIME_CAPABILITY,
   SETTINGS_CHANGED_EVENT_RUNTIME_CAPABILITY,
   SSH_TARGET_MANAGEMENT_RUNTIME_CAPABILITY,
-  ENVIRONMENT_DOCTOR_RUNTIME_CAPABILITY
+  ENVIRONMENT_DOCTOR_RUNTIME_CAPABILITY,
+  USAGE_ANALYTICS_RUNTIME_CAPABILITY
 ] as const

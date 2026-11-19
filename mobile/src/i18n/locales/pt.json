@@ -65,6 +65,7 @@
       "messages_one": "{{count}} mensagem",
       "messages_other": "{{count}} mensagens",
       "resumeSession": "Retomar sessão de agente",
+      "continueInCli": "Continuar na CLI",
       "hidePreview": "Oculta as mensagens recentes.",
       "showPreview": "Mostra as mensagens recentes.",
       "you": "Você"
@@ -180,11 +181,13 @@
       "invalidUrl": "Digite uma URL válida."
     },
     "paneView": {
-      "dialogTitle": "Diálogo do navegador",
       "forward": "Avançar",
       "keyboardPlaceholder": "Digite na página…",
       "reload": "Recarregar",
-      "sendText": "Enviar texto ao navegador"
+      "sendText": "Enviar texto ao navegador",
+      "dialogTitleWithOrigin": "{{origin}} diz",
+      "dialogTitleNoOrigin": "Esta página diz",
+      "dialogAnswer": "Resposta"
     },
     "pointerModifiers": {
       "clickModifier": "Modificador de clique {{key}}"
@@ -203,6 +206,20 @@
       "checking": "Verificando o suporte de streaming do navegador de desktop.",
       "pageUnavailable": "A página do navegador ainda não está disponível.",
       "timedOut": "A transmissão do navegador expirou."
+    },
+    "loadFailure": {
+      "retry": "Tentar novamente",
+      "connectionNotSecure": "A conexão não é segura",
+      "certificateNameMismatch": "O certificado não corresponde a {{value0}}.",
+      "certificateDateInvalid": "O certificado de {{value0}} não é válido na data e hora atuais.",
+      "certificateAuthorityInvalid": "O Orca não confia na autoridade que emitiu o certificado de {{value0}}.",
+      "certificateVerificationFailed": "O Orca não conseguiu verificar o certificado de {{value0}}.",
+      "proceedUnsafe": "Continuar Assim Mesmo (Inseguro)",
+      "connecting": "Conectando…",
+      "certificateChallengeExpired": "Esta aprovação de certificado expirou. Tente novamente a página para solicitar uma nova.",
+      "certificateChallengeChanged": "A solicitação de certificado foi alterada. Tente novamente a página e revise o novo aviso.",
+      "certificateProceedFailed": "O Orca não conseguiu aprovar esta solicitação de certificado. Tente novamente a página.",
+      "certificateChallengeUnavailable": "Esta solicitação de certificado não está mais disponível. Tente novamente a página para solicitar uma nova."
     }
   },
   "chat": {
@@ -236,7 +253,8 @@
     "contextUsage": {
       "label": "Contexto: {{used}} de {{window}} tokens, {{percent}}% usado",
       "title": "Contexto",
-      "estimated": "Estimado a partir da última resposta."
+      "estimated": "Estimado a partir da última resposta.",
+      "deferredNote": "Carregado sob demanda. Não conta no total usado."
     },
     "composerAttachments": {
       "attachedImage": "Imagem anexada",
@@ -713,7 +731,7 @@
       "confirm": "Voltar",
       "unsupported": "Este chat não permite voltar a uma mensagem anterior.",
       "historyNotPaginated": "Este chat antigo do Codex não permite voltar a uma mensagem anterior. Inicie um novo chat para usar Voltar até aqui.",
-      "busy": "Disponível quando o agente estiver ocioso e não houver nada neste chat aguardando sua resposta.",
+      "busy": "Disponível quando o chat estiver ocioso",
       "staleEpoch": "A conversa mudou. Confira as mensagens mais recentes e tente novamente.",
       "invalidTarget": "Não é possível voltar a esta mensagem na conversa. Nada foi alterado.",
       "historyLimit": "Esta conversa é longa demais para voltar a uma mensagem anterior. Nada foi alterado.",
@@ -1042,7 +1060,9 @@
       "label": "Script de configuração",
       "run": "Executar",
       "runSetupCommand": "Executar comando de configuração",
-      "skip": "Pular"
+      "skip": "Pular",
+      "waitForSetup": "Esperar a configuração terminar antes de iniciar o agente",
+      "waitForSetupSaveFailed": "Falha ao salvar o comportamento de inicialização da configuração."
     },
     "newWorkspaceSshConnectionField": {
       "connect": "Conectar",
@@ -1268,6 +1288,9 @@
         "partial": "Diff parcial",
         "showMoreFiles": "Mostrar mais {{count}}",
         "changedFiles_many": "{{count}} arquivos alterados"
+      },
+      "goal": {
+        "sentAsGoal": "Enviado como objetivo"
       }
     },
     "pullDownMenu": {
@@ -2896,6 +2919,11 @@
       "sendReviewNotes": "Enviar Notas de Revisão",
       "shortcut": "Atalho",
       "terminal": "Terminal",
+      "terminalWithShell": "Terminal: {{shell}}",
+      "shellPowerShell": "PowerShell",
+      "shellCmd": "Prompt CMD",
+      "shellGitBash": "Git Bash",
+      "shellWsl": "WSL",
       "terminalName": "Nome do terminal",
       "unsavedMarkdown": "Alterações em Markdown não salvas",
       "urlPrompt": "Digite uma URL ou deixe em branco para abrir uma nova aba.",
@@ -3084,7 +3112,7 @@
       "disconnected": "Falha ao colar (sem conexão)",
       "imageTooLarge": "Imagem grande demais para colar",
       "pasteFailed": "Falha ao colar",
-      "pasteTooLarge": "Colagem grande demais (máx. 256 KiB)",
+      "pasteTooLarge": "A colagem é muito grande.",
       "terminalChanged": "Colagem cancelada (o terminal mudou)"
     },
     "worktreeLabel": {
@@ -3226,7 +3254,8 @@
       "paneUnavailable": "O painel do agente não está mais disponível."
     },
     "nativeChatView": {
-      "loading": "Carregando conversa…"
+      "loading": "Carregando conversa…",
+      "linkedMessageMissing": "Não foi possível encontrar essa mensagem."
     },
     "contentState": {
       "connectingTo": "Conectando-se a {{host}}…",
@@ -3250,6 +3279,9 @@
     },
     "usePrTextAction": {
       "updateFailed": "Falha ao atualizar o pull request."
+    },
+    "browserProfile": {
+      "default": "Padrão"
     }
   },
   "settings": {
@@ -5025,6 +5057,23 @@
           }
         }
       }
+    }
+  },
+  "bots": {
+    "link": {
+      "pairTitle": "Emparelhar um computador",
+      "pairRequired": "Para abrir este link, emparelhe este telefone com um computador.",
+      "pairAction": "Emparelhar um computador",
+      "openFailed": "Não foi possível abrir este link",
+      "ambiguous": "Este bot está em {{names}}. Abra a conversa no Orca no computador que você quiser.",
+      "computer": "seu computador",
+      "updateNeeded": "Atualize o Orca em {{names}} para abrir este link.",
+      "unreachable": "Não foi possível conectar a {{names}}. Verifique se o Orca está aberto em um deles e tente novamente.",
+      "missing": "Nenhum dos seus computadores emparelhados tem este bot.",
+      "offline": "{{name}} está offline. Abra o link novamente quando ele se conectar.",
+      "chatOpenFailed": "{{name}} não conseguiu abrir esta conversa. Tente o link novamente.",
+      "unreachableSingle": "Não foi possível conectar a {{name}}. Verifique se o Orca está aberto nele e tente novamente.",
+      "workspaceDeleted": "O espaço de trabalho desta conversa foi excluído em {{name}}."
     }
   }
 }

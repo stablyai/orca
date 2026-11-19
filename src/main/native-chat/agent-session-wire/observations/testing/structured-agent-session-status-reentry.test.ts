@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSessionExecutionLocation } from '../../../../../shared/agent-session/lifecycle/agent-session-record'
+import type { AgentSessionStatusEvent } from '../../../../../shared/agent-session/agent-session-wire'
 import type { AgentSessionHandleProvider } from '../../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
 import type { AgentSessionJournal } from '../../../agent-session-journal/journal-store'
 import { createTrackedJournalOpener } from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
@@ -82,6 +83,7 @@ describe('structured status canonical owner re-entry', () => {
     sessions.delete(SESSION)
     feed.forget(SESSION)
     expect(server.getCanonicalStatusSnapshot().parents).toEqual([])
+    expect(feed.readPublished(SESSION)).toBeUndefined()
     const publishedBeforeReentry = vi.mocked(statusSink.publish).mock.calls.length
     sessions.set(SESSION, session)
 
@@ -92,6 +94,19 @@ describe('structured status canonical owner re-entry', () => {
     expect(server.getStatusSnapshot()).toEqual([
       expect.objectContaining({ paneKey: expect.any(String), prompt: 'hello' })
     ])
+  })
+
+  it('drops a closed chat that is no longer live from later snapshots', async () => {
+    const { sessions, feed } = await createFeed()
+    sessions.delete(SESSION)
+    feed.close(SESSION)
+    const events: AgentSessionStatusEvent[] = []
+    feed.subscribe({ id: 'late', emit: (event) => events.push(event) })
+
+    expect(events.findLast((event) => event.type === 'snapshot')).toMatchObject({
+      sessions: []
+    })
+    expect(feed.readPublished(SESSION)).toBeUndefined()
   })
 
   it('moves an unchanged projection to a new trusted execution scope', async () => {

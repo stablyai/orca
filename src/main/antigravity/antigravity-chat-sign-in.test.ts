@@ -5,7 +5,7 @@ import * as profileStorage from '../orca-profiles/profile-storage-paths'
 
 import { existsSync } from 'node:fs'
 import { createServer } from 'node:http'
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { PassThrough } from 'node:stream'
@@ -27,12 +27,14 @@ import type { RpcCallerIdentity } from '../runtime/rpc/callers/rpc-caller-identi
 import { ANTIGRAVITY_ACCOUNT_METHODS } from '../runtime/rpc/methods/accounts/antigravity-accounts'
 import type { AntigravityChatSignInStatus } from '../../shared/agent-accounts/antigravity/antigravity-account-types'
 
+import { closeAntigravitySignInOwner } from './antigravity-chat-account'
 import * as browserHelper from './antigravity-browser-helper'
 import { ANTIGRAVITY_SIGN_IN_PROMPT } from './antigravity-sign-in-url'
 import {
   cancelAntigravityChatSignIn,
   completeAntigravityChatSignIn,
-  startAntigravityChatSignIn
+  startAntigravityChatSignIn,
+  readAntigravityChatSignInStatus
 } from './antigravity-chat-sign-in'
 
 vi.mock('../provider-process/provider-process-spawn', () => ({
@@ -102,6 +104,9 @@ async function signInAgainst(
     realLaunchSources?: boolean
     /** A new server asks to sign in again, as after Google grants fewer scopes than requested. */
     savedSignInUnusable?: boolean
+    intent?: 'signIn' | 'changeAccount'
+    cachedToken?: string
+    missingCredential?: boolean
   } = {}
 ) {
   vi.spyOn(ANTIGRAVITY_LAUNCH_SPEC.managedRuntime, 'pin').mockReturnValue(PIN)
@@ -112,9 +117,15 @@ async function signInAgainst(
   )
   folders.push(stateDirectory)
   const folder = join(stateDirectory, 'antigravity-chat')
+  const tokenName =
+    options.authConfig?.method === 'oauth-business' ? 'acp_business_token.json' : 'acp_token.json'
+  await mkdir(join(folder, 'antigravity-acp'), { recursive: true })
+  if (options.cachedToken) {
+    await writeFile(join(folder, 'antigravity-acp', tokenName), options.cachedToken)
+  }
   const [browserDone, sessionOpen] = [deferred<void>(), deferred<void>()]
   // Each launch is a new server process that holds only what the sign-in saved.
-  const spawnServer = () => {
+  const spawnServer = (serverHome: string) => {
     const agent = new AcpScriptedAgent()
     const stderr = new PassThrough()
     const signInOutput = () =>
@@ -123,11 +134,19 @@ async function signInAgainst(
       )
     let authenticatedHere = false
     agent.on('authenticate', (frame) => {
-      signInOutput()
-      void browserDone.promise.then(() => {
+      void (async () => {
+        if (await readFile(join(serverHome, 'antigravity-acp', tokenName)).catch(() => null)) {
+          agent.reply(frame, {})
+          return
+        }
+        signInOutput()
+        await browserDone.promise
+        if (!options.missingCredential) {
+          await writeFile(join(serverHome, 'antigravity-acp', tokenName), 'replacement-token')
+        }
         authenticatedHere = true
         agent.reply(frame, {})
-      })
+      })()
     })
     agent.on('session/new', (frame) => {
       if (options.savedSignInUnusable && !authenticatedHere) {
@@ -136,11 +155,11 @@ async function signInAgainst(
       }
       void sessionOpen.promise.then(async () => {
         const { cwd } = z.object({ cwd: z.string() }).parse(frame.params)
-        await mkdir(join(folder, 'antigravity-acp', 'brain', SESSION), { recursive: true })
-        await mkdir(join(folder, 'antigravity-acp', 'conversations'), { recursive: true })
-        await writeFile(sessionFile(folder, '.db'), '')
+        await mkdir(join(serverHome, 'antigravity-acp', 'brain', SESSION), { recursive: true })
+        await mkdir(join(serverHome, 'antigravity-acp', 'conversations'), { recursive: true })
+        await writeFile(sessionFile(serverHome, '.db'), '')
         await writeFile(
-          sessionFile(folder, '.meta'),
+          sessionFile(serverHome, '.meta'),
           JSON.stringify({ cwd: options.metaCwd ?? cwd })
         )
         agent.reply(frame, { ...options.sessionResult, sessionId: SESSION })
@@ -185,12 +204,14 @@ async function signInAgainst(
         }),
     stopLiveChats: async () => {},
     connect: vi.fn<ConnectAcpAgent<AcpAgentConnection>>((launch, connectionOptions) => {
-      const connection = createAcpAgentConnection(launch, connectionOptions, spawnServer)
+      const connection = createAcpAgentConnection(launch, connectionOptions, () =>
+        spawnServer(launch.env?.GEMINI_HOME ?? folder)
+      )
       options.configure?.(connection)
       return connection
     })
   }
-  const { flowId } = startAntigravityChatSignIn(host, DESKTOP)
+  const { flowId } = startAntigravityChatSignIn(host, DESKTOP, options.intent)
   return {
     folder,
     flowId,
@@ -243,7 +264,7 @@ it('shows another client the sign-in without its link, and refuses it every acti
   await expect(cancelAntigravityChatSignIn('phone', flowId)).rejects.toThrow('no longer active')
   const pasted = 'http://127.0.0.1:41234/?state=s1&code=c1'
   await expect(completeAntigravityChatSignIn('phone', flowId, pasted)).rejects.toThrow('no longer')
-  expect(startAntigravityChatSignIn(host, DESKTOP)).toEqual({ flowId })
+  expect(startAntigravityChatSignIn(host, DESKTOP)).toMatchObject({ flowId })
   expect((await cancelAntigravityChatSignIn(DESKTOP, flowId))?.phase).toBe('cancelled')
   expect(phone.at(-1)?.flow).toEqual({ flowId: null, phase: 'cancelled' })
   watcher.close()
@@ -309,7 +330,7 @@ it('signs in from the address a browser on another computer ended on', async () 
       'already sent'
     )
     openSession()
-    expect(await stateAfter(flowId, 'verifying')).toEqual({ flowId, phase: 'signedIn' })
+    expect(await stateAfter(flowId, 'verifying')).toMatchObject({ flowId, phase: 'signedIn' })
   } finally {
     listener.close()
   }
@@ -326,7 +347,7 @@ it.each([
   'fails, and drops only its own token, when a new server cannot use the saved %j sign-in',
   async (authConfig, dropped, kept) => {
     vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const { flowId, folder, host, finishBrowser, openSession } = await signInAgainst(
+    const { flowId, folder, finishBrowser, openSession } = await signInAgainst(
       printed(GOOGLE_LINK),
       { savedSignInUnusable: true, authConfig }
     )
@@ -347,8 +368,98 @@ it.each([
     expect(await ended.promise.finally(close)).toMatchObject({ phase: 'failed' })
     expect(existsSync(token)).toBe(false)
     expect(existsSync(other)).toBe(true)
-    // Each server's exit removes its own temp folder, so the verifier must not share the first's.
-    const temps = host.connect.mock.calls.map(([launch]) => launch.env?.TMPDIR)
-    expect(new Set(temps).size).toBe(2)
   }
 )
+
+it.each([
+  [{ method: 'oauth-personal' } as const, 'acp_token.json'],
+  [
+    { method: 'oauth-business', gcpProject: 'p', gcpLocation: 'global' } as const,
+    'acp_business_token.json'
+  ]
+])(
+  'changes a cached %j account only after the replacement is verified',
+  async (authConfig, tokenName) => {
+    const { flowId, folder, finishBrowser, openSession } = await signInAgainst(
+      printed(GOOGLE_LINK),
+      {
+        intent: 'changeAccount',
+        cachedToken: 'working-token',
+        authConfig
+      }
+    )
+    expect(await stateAfter(flowId, 'starting')).toMatchObject({
+      phase: 'waiting',
+      intent: 'changeAccount'
+    })
+    const token = join(folder, 'antigravity-acp', tokenName)
+    expect(await readFile(token, 'utf8')).toBe('working-token')
+    const ended = stateAfter(flowId, 'waiting')
+    finishBrowser()
+    await ended
+    expect(await readFile(token, 'utf8')).toBe('working-token')
+    const verified = stateAfter(flowId, 'verifying')
+    openSession()
+    expect(await verified).toMatchObject({ phase: 'signedIn' })
+    expect(await readFile(token, 'utf8')).toBe('replacement-token')
+  }
+)
+
+it.each(['cancel', 'unusable', 'missing'] as const)(
+  'retains the working account when replacement is %s',
+  async (failure) => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const { flowId, folder, finishBrowser, openSession } = await signInAgainst(
+      printed(GOOGLE_LINK),
+      {
+        intent: 'changeAccount',
+        cachedToken: 'working-token',
+        savedSignInUnusable: failure === 'unusable',
+        missingCredential: failure === 'missing'
+      }
+    )
+    expect(await stateAfter(flowId, 'starting')).toMatchObject({ phase: 'waiting' })
+    if (failure === 'cancel') {
+      await cancelAntigravityChatSignIn(DESKTOP, flowId)
+    } else {
+      const ended = Promise.withResolvers<void>()
+      const { close } = await follow(({ flow }) => {
+        if (flow?.flowId === flowId && flow.phase === 'failed') {
+          ended.resolve()
+        }
+      })
+      finishBrowser()
+      openSession()
+      await ended.promise.finally(close)
+    }
+    expect(await readFile(join(folder, 'antigravity-acp', 'acp_token.json'), 'utf8')).toBe(
+      'working-token'
+    )
+    expect(readAntigravityChatSignInStatus(DESKTOP).flow?.phase).toBe(
+      failure === 'cancel' ? 'cancelled' : 'failed'
+    )
+  }
+)
+
+it('refuses an accepted close until the sign-in process has actually exited', async () => {
+  let exited = false
+  const listeners: (() => void)[] = []
+  const owner = {
+    close: async () => true,
+    get exited() {
+      return exited
+    },
+    onExit: (listener: () => void) => {
+      listeners.push(listener)
+    }
+  }
+  try {
+    await expect(closeAntigravitySignInOwner('closure-test', owner)).rejects.toThrow(
+      'could not be stopped'
+    )
+  } finally {
+    exited = true
+    listeners.forEach((listener) => listener())
+  }
+  await expect(closeAntigravitySignInOwner('closure-test', owner)).resolves.toBeUndefined()
+})

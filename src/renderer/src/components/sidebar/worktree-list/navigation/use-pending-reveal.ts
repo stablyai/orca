@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { toast } from 'sonner'
 import { useAppStore } from '@/store'
-import { translate } from '@/i18n/i18n'
+import { toastSidebarRowRevealMissing } from './sidebar-row-reveal-missing'
 import {
   requestVirtualizedScrollAnchorRecord,
   supersedeVirtualizedScrollAnchorRestore
@@ -12,8 +11,11 @@ import {
   revealMountedSidebarRowElement,
   revealMountedWorktreeElement
 } from './mounted-row-reveal'
+import { unfoldProjectsSectionForReveal } from './reveal-ancestors'
 import {
   expandGroupsForWorktreeReveal,
+  handPendingRevealToBots,
+  isPendingRevealOwnedOutsideProjects,
   MAX_REVEAL_RETRIES,
   preparePendingSidebarRowReveal,
   resolvePendingWorktreeRevealTarget,
@@ -79,7 +81,8 @@ export function usePendingSidebarReveal(args: PendingSidebarRevealArgs): void {
     const isCurrent = () => useAppStore.getState().pendingRevealWorktree === pendingRevealWorktree
     if (
       !pendingRevealWorktree.rowKey &&
-      current.agentSendTargetWorktreeId !== pendingRevealWorktree.worktreeId
+      current.agentSendTargetWorktreeId !== pendingRevealWorktree.worktreeId &&
+      !isPendingRevealOwnedOutsideProjects(pendingRevealWorktree)
     ) {
       expandGroupsForWorktreeReveal(
         current,
@@ -102,9 +105,12 @@ export function usePendingSidebarReveal(args: PendingSidebarRevealArgs): void {
         pendingRevealRetryRef.current = null
         requestVirtualizedScrollAnchorRecord(argsRef.current.scrollRef.current)
         clearPendingRevealWorktreeId(pendingRevealWorktree)
+        if (argsRef.current.agentSendTargetWorktreeId !== pendingRevealWorktree.worktreeId) {
+          handPendingRevealToBots(pendingRevealWorktree)
+        }
         return
       }
-      if (outcome !== 'scroll-and-clear') {
+      if (outcome !== 'scroll-and-clear' || unfoldProjectsSectionForReveal(argsRef.current)) {
         return
       }
       const targetRow = currentRows[targetIndex]
@@ -240,12 +246,10 @@ export function usePendingSidebarReveal(args: PendingSidebarRevealArgs): void {
         pendingRowRevealRetryRef.current = null
         requestVirtualizedScrollAnchorRecord(argsRef.current.scrollRef.current)
         clearPendingRevealSidebarRow(pendingRevealSidebarRow)
-        toast.error(
-          translate(
-            'auto.components.sidebar.WorktreeList.sidebarRowMissing',
-            'Target no longer exists'
-          )
-        )
+        toastSidebarRowRevealMissing()
+        return
+      }
+      if (unfoldProjectsSectionForReveal(argsRef.current)) {
         return
       }
 

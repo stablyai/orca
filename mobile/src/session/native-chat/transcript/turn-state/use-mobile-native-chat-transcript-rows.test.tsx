@@ -4,6 +4,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { NativeChatMessage } from '../../../../../../src/shared/native-chat/native-chat-types'
 import { Harness, Result, userMessage } from './use-mobile-native-chat-turn-disclosure.test-fixture'
+import { useMobileNativeChatTranscriptRows } from './use-mobile-native-chat-transcript-rows'
 
 function toolRow(id: string): NativeChatMessage {
   return {
@@ -41,18 +42,38 @@ describe('how the structured lane draws its rows, as desktop does', () => {
         { type: 'image-ref' as const, path: '/tmp/elephant.png' }
       ]
     }
-    const messages = [userMessage('u1'), toolRow('work'), answer('final'), generated]
+    const cardAnswer: NativeChatMessage = {
+      ...userMessage('card-answer'),
+      orcaNotice: 'card-answer'
+    }
+    const quiet: NativeChatMessage = {
+      ...answer('quiet'),
+      blocks: [{ type: 'text', text: 'NO_REPLY' }]
+    }
+    const messages = [
+      userMessage('u1'),
+      toolRow('work'),
+      answer('final'),
+      generated,
+      cardAnswer,
+      quiet
+    ]
     act(() => {
       renderer = create(
         createElement(Harness, {
           messages,
           enabled: true,
           isWorking: false,
-          settledTurns: new Map([['u1', { startedAt: 0, workedSeconds: 3 }]])
+          settledTurns: new Map([
+            ['u1', { startedAt: 0, workedSeconds: 3 }],
+            ['card-answer', { startedAt: 4_000, workedSeconds: 7 }]
+          ])
         })
       )
     })
     const read = () => renderer!.root.findByType(Result).props.disclosure
+    expect(read().listMessages.map((row: NativeChatMessage) => row.id)).not.toContain('card-answer')
+    expect(read().listMessages.map((row: NativeChatMessage) => row.id)).not.toContain('quiet')
     const final = read().listMessages.find((row: NativeChatMessage) => row.id === 'final')!
     expect(final.blocks).toEqual([
       { type: 'text', text: 'Done.' },
@@ -156,4 +177,42 @@ describe('how the structured lane draws its rows, as desktop does', () => {
       ).toEqual(retained ? [{ type: 'image-ref' as const, path: '/tmp/p.png' }] : [])
     }
   )
+
+  it('keeps item notes touching across a turn that changed no files, and apart under a diff', () => {
+    const note = (id: string): NativeChatMessage => ({
+      id,
+      role: 'system',
+      blocks: [],
+      timestamp: null,
+      source: 'transcript',
+      botItemNote: {
+        noteId: id,
+        by: 'bot',
+        entries: [{ uid: id, number: 1, title: id, status: 'planned', event: 'made' }]
+      }
+    })
+    const rows = [note('a'), note('b')]
+    let joins: ReadonlyMap<number, string> = new Map()
+    function Rows({ turnDiffs }: { turnDiffs: ReadonlyMap<string, unknown> }) {
+      joins = useMobileNativeChatTranscriptRows({
+        enabled: true,
+        rows,
+        turnKeys: ['t1', 't2'],
+        receipts: null,
+        completedByTurn: {},
+        expandedTurnKeys: new Set(),
+        liveReasoningId: undefined,
+        turnDiffs
+      }).itemNoteJoins
+      return null
+    }
+    // The turn-diff map has an entry for every turn's last row, undefined when nothing changed.
+    act(() => {
+      renderer = create(createElement(Rows, { turnDiffs: new Map([['a', undefined]]) }))
+    })
+    expect(Object.fromEntries(joins)).toEqual({ 0: 'below', 1: 'above' })
+
+    act(() => renderer!.update(createElement(Rows, { turnDiffs: new Map([['a', { files: [] }]]) })))
+    expect(joins.size).toBe(0)
+  })
 })
