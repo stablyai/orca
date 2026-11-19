@@ -4,7 +4,10 @@ import type { KeyboardEvent, ReactNode } from 'react'
 import { expect, it, vi } from 'vitest'
 import type { ComposerAutocomplete } from '../../../../shared/native-chat/input/composer/native-chat-composer-autocomplete'
 import { useNativeChatComposerMentions } from './native-chat-composer-room'
-import { applyNativeChatMention } from './composer/editor/native-chat-composer-input'
+import {
+  applyNativeChatMention,
+  type NativeChatMentionToken
+} from './composer/editor/native-chat-composer-input'
 import {
   NativeChatBotChatPickerContext,
   NativeChatBotChatRoomContext,
@@ -134,7 +137,7 @@ it("names the highlighted chat as the list's active option while a bot's chats s
 
 it('puts a file picked from the bots, back from a filter with spaces, over the `@` and that filter', () => {
   let draft = 'Ask @'
-  const completeMention = (path: string, token?: string, from?: number) => {
+  const completeMention = (path: string, token?: NativeChatMentionToken, from?: number) => {
     draft = applyNativeChatMention(null, draft, draft.length, path, token, from).draft
   }
   const { result, rerender } = renderHook(
