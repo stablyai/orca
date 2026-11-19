@@ -44,6 +44,10 @@ export function rememberChangeScope(
   rememberedScope = worktreeId ? { worktreeId, scope, owner } : null
 }
 
+export function clearRememberedChangeScope(): void {
+  rememberedScope = null
+}
+
 export function changeScopeKey(scope: SourceControlChangeScope): string {
   return scope.kind === 'commit' ? `commit:${scope.commit.id}` : scope.kind
 }
