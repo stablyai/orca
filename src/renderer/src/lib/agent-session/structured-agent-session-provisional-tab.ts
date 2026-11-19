@@ -1,7 +1,7 @@
 import { readNativeChatComposerDraft } from '@/components/native-chat/drafts/native-chat-composer-draft-store'
 import { structuredAgentSessionDraftScopeKey } from '@/components/native-chat/drafts/native-chat-draft-scope'
 import { nativeChatDraftPositions } from '@/components/native-chat/drafts/native-chat-composer-draft-memory'
-import { structuredAgentSessionTabId } from '../../../../shared/agent-session/view/structured-agent-session-projection'
+import { structuredLaunchSlotTabId } from './launch/structured-agent-session-launch-slot'
 import { afterPendingTab } from '@/runtime/workspace-layout/intents/layout-owner-pending-tabs'
 import type { NativeChatComposerFocusIntent } from '@/components/native-chat/composer/focus/native-chat-composer-focus-intent'
 import type {
@@ -205,7 +205,7 @@ function beginLocalProvisionalLaunch(
   }
   const draft = readNativeChatComposerDraft(structuredAgentSessionDraftScopeKey(handle.sessionId))
   const position = nativeChatDraftPositions.get(draft)
-  const retirePosition = (target = structuredAgentSessionTabId(handle.sessionId)) => {
+  const retirePosition = (target = structuredLaunchSlotTabId(handle.sessionId)) => {
     if (position?.at === 'end' && position.target === target) {
       position.pending = false
     }
@@ -225,10 +225,6 @@ function beginLocalProvisionalLaunch(
       ...(args.afterTabId ? { afterTabId: args.afterTabId } : {}),
       ...(args.activate !== undefined ? { activate: args.activate } : {})
     })
-    // The draft was seeded before the chat's slot id was minted.
-    if (position?.target === structuredAgentSessionTabId(handle.sessionId)) {
-      position.target = tab.id
-    }
     afterPendingTab(tab.id, (shown) => {
       if (!shown || !useAppStore.getState().getTab(shown)) {
         retirePosition(tab.id)

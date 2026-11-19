@@ -14,9 +14,7 @@ import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-ag
 import { defaultAgentChatLabel } from '../../../../../shared/agent-session/conversation-naming/agent-session-chat-label'
 import { structuredAgentSessionTabId } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
 import { findTabByIdOrChatAlias } from '../../../../../shared/agent-session/view/structured-agent-session-tab'
-import { mintAgentSessionSlotTabId } from '../../../../../shared/agent-session/view/agent-session-slot-tab-id'
-import { createNonSecureContextUuid } from '../../../../../shared/identifiers/non-secure-context-uuid'
-import { hostTakesChatTabId } from './structured-agent-session-chat-tab-id'
+import { structuredLaunchSlotTabId } from './structured-agent-session-launch-slot'
 import { useAppStore } from '@/store/index'
 import { resolveUnifiedTabCreatePlacement } from '@/store/slices/tabs/tabs-create-placement'
 import type { StructuredLaunchSurfaceAddress } from './structured-agent-session-launch-record'
@@ -89,13 +87,6 @@ export function captureStructuredLaunchSurfaceAddress(
   }
 }
 
-/** Mint only for a host that will save the chat under the id this window draws. */
-function newChatTabId(executionHostId: ExecutionHostId, legacyTabId: string): string {
-  return hostTakesChatTabId(structuredAgentSessionTargetForHost(executionHostId))
-    ? mintAgentSessionSlotTabId(createNonSecureContextUuid)
-    : legacyTabId
-}
-
 function hasChatTab(tabs: readonly Tab[] | undefined, sessionId: string): boolean {
   return findTabByIdOrChatAlias(tabs, structuredAgentSessionTabId(sessionId)) !== undefined
 }
@@ -118,7 +109,7 @@ function trackSlotAddresses(): void {
       if (!address || record.executionHostId !== 'local') {
         continue
       }
-      const tabId = structuredAgentSessionTabId(record.sessionId)
+      const tabId = record.tabId ?? structuredAgentSessionTabId(record.sessionId)
       if (hasChatTab(state.unifiedTabsByWorktree[address.worktreeId], record.sessionId)) {
         continue
       }
@@ -159,7 +150,7 @@ export function reserveStructuredLaunchSlot(launch: LaunchSurface): void {
   }
   trackSlotAddresses()
   state.ensureWorktreeRootGroup(address.worktreeId, {
-    tabId: structuredAgentSessionTabId(launch.sessionId),
+    tabId: structuredLaunchSlotTabId(launch.sessionId),
     targetGroupId: address.targetGroupId,
     precedingTabIds: address.precedingTabIds
   })
@@ -185,15 +176,14 @@ export function openStructuredAgentSessionProvisionalTab(args: {
     }
     return existing
   }
-  const legacyTabId = structuredAgentSessionTabId(args.sessionId)
+  // The id the launch's create carries, so this window and the host save the tab alike.
+  const tabId = structuredLaunchSlotTabId(args.sessionId)
   const record = readStructuredAgentLaunchRecord(args.sessionId)
   const address =
     record?.executionHostId === args.executionHostId ? record.surfaceAddress : undefined
-  // A slot reserved before a restart keeps its legacy id; every other new chat gets a minted one.
   const group = state.groupsByWorktree?.[args.worktreeId]?.find((entry) =>
-    entry.tabOrder.includes(legacyTabId)
+    entry.tabOrder.includes(tabId)
   )
-  const tabId = group ? legacyTabId : newChatTabId(args.executionHostId, legacyTabId)
   const targetGroupId =
     group?.id ??
     (address?.worktreeId === args.worktreeId ? address.targetGroupId : args.targetGroupId)

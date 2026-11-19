@@ -12,7 +12,6 @@ import type { Repo } from '../../../../../shared/repository/repo-types'
 import { parseAppSshPtyId } from '../../../../../shared/remote-runtime/ssh/ssh-pty-id'
 import type { Tab } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { TerminalTab } from '../../../../../shared/workspace-layout/terminal-tab-types'
-import { structuredAgentSessionAddressTabId } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
 import {
   projectedStructuredChatTabSavedName,
   type StructuredChatTabNames
@@ -67,15 +66,10 @@ export function buildActivityTabContext(
   }
   for (const [worktreeId, tabs] of Object.entries(unifiedTabsByWorktree ?? {})) {
     for (const tab of tabs) {
-      // Keyed as its status pane key names it.
-      const id =
-        tab.contentType === 'agent-session'
-          ? structuredAgentSessionAddressTabId(tab.id, tab.entityId)
-          : null
-      if (id === null || contexts.has(id)) {
+      if (tab.contentType !== 'agent-session' || contexts.has(tab.id)) {
         continue
       }
-      contexts.set(id, { worktreeId, tab: terminalTabFromAgentSessionTab(tab, names) })
+      contexts.set(tab.id, { worktreeId, tab: terminalTabFromAgentSessionTab(tab, names) })
     }
   }
   return contexts

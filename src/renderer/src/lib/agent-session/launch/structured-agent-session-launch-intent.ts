@@ -20,6 +20,7 @@ import {
   structuredAgentSessionTargetForHost
 } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 import { createNonSecureContextUuid } from '../../../../../shared/identifiers/non-secure-context-uuid'
+import { mintAgentSessionSlotTabId } from '../../../../../shared/agent-session/view/agent-session-slot-tab-id'
 import { StructuredAgentSessionOwnerUnresolvedError } from '@/lib/agent-session/launch/structured-agent-session-launch-errors'
 import type { StructuredAgentSessionCreateGate } from '@/lib/agent-session/launch/structured-agent-session-launch-errors'
 import './structured-agent-session-launch-abandon'
@@ -116,7 +117,11 @@ export function createStructuredAgentSessionLaunchIntent(
     sessionId,
     resumeFrom,
     hostSeedOptions,
-    forkFrom
+    forkFrom,
+    // Only this computer is told a minted id; a paired host keeps deriving the legacy one.
+    owner.target.kind === 'local'
+      ? mintAgentSessionSlotTabId(createNonSecureContextUuid)
+      : undefined
   )
 }
 
@@ -127,7 +132,8 @@ function buildStructuredAgentSessionLaunchIntent(
   sessionId: string,
   resumeFrom: StructuredAgentSessionResumeSource | undefined,
   hostSeedOptions: LaunchSeed,
-  forkFrom: StructuredAgentSessionForkSource | undefined
+  forkFrom: StructuredAgentSessionForkSource | undefined,
+  tabId: string | undefined
 ): StructuredAgentSessionLaunchIntent {
   const state = useAppStore.getState()
   return {
@@ -142,6 +148,7 @@ function buildStructuredAgentSessionLaunchIntent(
       agent,
       ...(resumeFrom ? { resumeFrom } : {}),
       ...(forkFrom ? { forkFrom } : {}),
+      ...(tabId ? { tabId } : {}),
       randomUuid: createNonSecureContextUuid
     }),
     ...(forkFrom ? {} : launchSeedOptions(state, owner, agent, hostSeedOptions, resumeFrom))
@@ -176,7 +183,8 @@ export function retryStructuredAgentSessionLaunchIntent(
       intent.sessionId,
       fresh ? undefined : intent.params.resumeFrom,
       intent.seedOptions,
-      intent.params.forkFrom
+      intent.params.forkFrom,
+      intent.params.tabId
     ),
     forkRequiresInheritedOriginal: intent.forkRequiresInheritedOriginal,
     explicitLaunchOptions: intent.explicitLaunchOptions
@@ -193,6 +201,8 @@ export function restoreStructuredAgentSessionLaunchIntent(args: {
   expectedRuntimeFence: number | null
   resumeFrom?: StructuredAgentSessionResumeSource
   forkFrom?: StructuredAgentSessionForkSource
+  /** The chat's minted slot id, part of the recorded create. */
+  tabId?: string
   /** A paired server's seed, kept with the launch so a reload shows what create runs. */
   explicitLaunchOptions?: Readonly<Record<string, string>>
   seedOptions?: Readonly<Record<string, string>>
@@ -221,6 +231,7 @@ export function restoreStructuredAgentSessionLaunchIntent(args: {
       agent: args.agent,
       ...(args.resumeFrom ? { resumeFrom: args.resumeFrom } : {}),
       ...(args.forkFrom ? { forkFrom: args.forkFrom } : {}),
+      ...(args.tabId ? { tabId: args.tabId } : {}),
       ...(args.firstMessage ? { firstMessage: args.firstMessage } : {}),
       ...(args.optionsMode ? { optionsMode: args.optionsMode } : {}),
       ...(args.options ? { options: args.options } : {})

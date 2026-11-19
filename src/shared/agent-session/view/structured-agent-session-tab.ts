@@ -32,16 +32,19 @@ export function structuredAgentSessionIdOfTab(tabId: string): string | null {
 export function findTabByIdOrChatAlias<
   T extends { id: string; contentType?: string; entityId?: string | null }
 >(tabs: readonly T[] | undefined, id: string): T | undefined {
-  const exact = tabs?.find((tab) => tab.id === id)
-  if (exact || !tabs) {
-    return exact
-  }
   const sessionId =
     structuredAgentSessionIdOfTab(id) ??
     (isStructuredAgentSessionHostTabId(id)
       ? id.slice(structuredAgentSessionHostTabId('').length)
       : null)
-  return sessionId
-    ? tabs.find((tab) => tab.contentType === 'agent-session' && tab.entityId === sessionId)
-    : undefined
+  let chat: T | undefined
+  for (const tab of tabs ?? []) {
+    if (tab.id === id) {
+      return tab
+    }
+    if (!chat && sessionId && tab.contentType === 'agent-session' && tab.entityId === sessionId) {
+      chat = tab
+    }
+  }
+  return chat
 }
