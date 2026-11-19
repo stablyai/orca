@@ -25,6 +25,7 @@ export const BOT_ACCESS_COPY = {
   thisComputer: 'this computer',
   here: 'here',
   thisServer: 'this server',
+  executionComputer: 'the computer this agent runs on',
   there: 'there',
   confirm: 'Give access',
   heading: 'Asking for access',
@@ -101,8 +102,9 @@ export type BotAccessHost =
   | { kind: 'this-computer' }
   | { kind: 'server'; name: string | null }
   | { kind: 'owner-computer' }
+  | { kind: 'unknown'; name: string | null }
 
-type PlaceWordId = 'thisComputer' | 'here' | 'thisServer' | 'there'
+type PlaceWordId = 'thisComputer' | 'here' | 'thisServer' | 'there' | 'executionComputer'
 
 /** {{computer}} and {{there}} for `host`; `word` translates on the desktop. */
 export function botAccessPlace(
@@ -116,6 +118,8 @@ export function botAccessPlace(
       return { computer: host.name?.trim() || word('thisServer'), there: word('there') }
     case 'owner-computer':
       return BOT_ACCESS_FROM_PHONE
+    case 'unknown':
+      return { computer: host.name?.trim() || word('executionComputer'), there: word('there') }
   }
 }
 

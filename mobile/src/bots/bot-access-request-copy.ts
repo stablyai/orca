@@ -10,6 +10,8 @@ import {
 } from '../../../src/shared/bots/bot-access-request'
 import type { ConnectorAccessRequest } from '../../../src/shared/connector-bot-access-contract'
 import { CONNECTOR_SOURCE_NAMES } from '../../../src/shared/connectors/external-conversation-link'
+import type { HostStatusReply } from '../transport/hosts/host-status-reply-schema'
+import type { ExecutionHostId } from '../../../src/shared/execution-host/execution-host'
 import type { AgentChatPermissionMode } from '../../../src/shared/agent-launch/permissions/agent-chat-permission-mode'
 import { TUI_AGENT_DISPLAY_NAMES } from '../../../src/shared/agent-launch/catalog/tui-agent-display-names'
 import { isTuiAgent } from '../../../src/shared/agent-launch/catalog/tui-agent-config'
@@ -29,8 +31,23 @@ export type PhoneAccessBot = {
   google?: boolean
 }
 
-/** The desktop's What it can reach list, from the shared model, as the phone words it: the computer
- *  is "your computer", and Google's services can't be read here. */
+export function phoneAccessHost(
+  server: { name?: string | null } | undefined,
+  executionHost: ExecutionHostId | undefined,
+  status: HostStatusReply | undefined
+): BotAccessHost {
+  if (
+    server ||
+    status?.hostMachine?.kind === 'server' ||
+    (executionHost && executionHost !== 'local')
+  ) {
+    return { kind: 'server', name: server?.name ?? status?.machineName ?? null }
+  }
+  return status?.hostMachine
+    ? { kind: 'owner-computer' }
+    : { kind: 'unknown', name: status?.machineName ?? null }
+}
+
 export function phoneBotReachLines(bot: PhoneAccessBot): { title: string; detail?: string }[] {
   const permission = botStartingPermission(bot, null)
   return botAccessReach({
@@ -42,7 +59,7 @@ export function phoneBotReachLines(bot: PhoneAccessBot): { title: string; detail
     botReachLineText(line, {
       name: bot.name,
       agentLabel: isTuiAgent(bot.agent) ? TUI_AGENT_DISPLAY_NAMES[bot.agent] : bot.agent,
-      place: botAccessPlace(bot.accessHost ?? { kind: 'owner-computer' }),
+      place: botAccessPlace(bot.accessHost ?? { kind: 'unknown', name: null }),
       mode: (mode) => agentChatPermissionModeCopy(bot.agent, mode)
     })
   )
@@ -80,7 +97,7 @@ export function accessGrantConfirmCopy(
         person,
         name,
         place: accessRequestPlace(request),
-        ...botAccessPlace(bot.accessHost ?? { kind: 'owner-computer' })
+        ...botAccessPlace(bot.accessHost ?? { kind: 'unknown', name: null })
       }),
       identity
         ? botAccessCopy('account', { connector: CONNECTOR_SOURCE_NAMES[request.source], identity })
@@ -91,7 +108,7 @@ export function accessGrantConfirmCopy(
       ),
       botAccessCopy('yourAccess', {
         name,
-        ...botAccessPlace(bot.accessHost ?? { kind: 'owner-computer' })
+        ...botAccessPlace(bot.accessHost ?? { kind: 'unknown', name: null })
       }),
       botAccessCopy('removeAnyTime')
     ]

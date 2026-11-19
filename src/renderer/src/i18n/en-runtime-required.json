@@ -1514,6 +1514,7 @@
       "controlMany": "They can use {{name}} to work on {{computer}} as you: run commands, open and change files, and use your connected accounts.",
       "controlNone": "Anyone you add can use {{name}} to work on {{computer}} as you: run commands, open and change files, and use your connected accounts.",
       "controlOne": "{{person}} can use {{name}} to work on {{computer}} as you: run commands, open and change files, and use your connected accounts.",
+      "executionComputer": "the computer this agent runs on",
       "fixAsk": "Start new conversations in Ask for approval",
       "fixAskAction": "Switch",
       "fixAskConfirm": "Start new conversations in Ask for approval?",

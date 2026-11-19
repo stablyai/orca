@@ -32,6 +32,7 @@ import type { RpcResponse } from '../transport/rpc/rpc-wire-types'
 import { decideBotAccessRequest } from './bot-access-request-operations'
 import { WorkspaceServerContext } from '../worktree/execution-hosts/workspace-server-context'
 import { MobileBotSettingsTab } from './MobileBotSettingsTab'
+import { readHostStatusReply } from '../query/host-status-query'
 import type { BotAccessRequests } from './use-bot-access-requests'
 import type { RouteBot } from './use-route-bot'
 
@@ -144,6 +145,34 @@ describe('access requests in the bot sheet', () => {
     const confirm = root.findByProps({ confirmLabel: 'Give access' })
     expect(confirm.props.message).toContain('Atlas Server')
   })
+
+  it.each(['status pending', 'hardware probe timed out'])(
+    'keeps the grant host neutral when %s',
+    async (scenario) => {
+      const direct = {
+        ...client({ id: 'status', ok: true, result: { hostPlatform: 'linux' } }),
+        getLastConnectedAt: () => 1
+      }
+      if (scenario === 'hardware probe timed out') {
+        await readHostStatusReply(direct)
+      }
+      const decide = vi.fn(async () => {})
+      const root = renderTab(
+        { requests: [request], deciding: false, decide },
+        { client: direct }
+      ).root
+      expect(texts(root).some((text) => text.includes('the computer this agent runs on'))).toBe(
+        true
+      )
+      press(root, 'Review Dana Kim')
+      const confirm = root.findByProps({ confirmLabel: 'Give access' })
+      expect(confirm.props.message).toContain('the computer this agent runs on')
+      expect(confirm.props.message).not.toContain('your computer')
+      expect(decide).not.toHaveBeenCalled()
+      press(root, 'Give access')
+      expect(decide).toHaveBeenCalledExactlyOnceWith(request, 'granted')
+    }
+  )
 
   it('declines without asking, as the desktop does', () => {
     const decide = vi.fn(async () => {})

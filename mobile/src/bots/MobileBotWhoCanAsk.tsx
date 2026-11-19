@@ -37,7 +37,7 @@ export function MobileBotWhoCanAsk(props: {
 }) {
   const { bot } = props
   const name = bot.name
-  const place = botAccessPlace(bot.accessHost ?? { kind: 'owner-computer' })
+  const place = botAccessPlace(bot.accessHost ?? { kind: 'unknown', name: null })
   const others = bot.members.map((member) => member.name || member.id)
   const permission = botStartingPermission(bot, null)
   const { who, control } = botAccessSummary(others)

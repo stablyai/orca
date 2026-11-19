@@ -27502,7 +27502,8 @@
       "reachGoogleSheets": "Read and edit your Sheets",
       "here": "here",
       "thisServer": "this server",
-      "there": "there"
+      "there": "there",
+      "executionComputer": "the computer this agent runs on"
     },
     "accessRequest": {
       "toast": "{{person}} asked for access to {{name}}",

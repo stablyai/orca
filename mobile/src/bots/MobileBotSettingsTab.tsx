@@ -30,13 +30,16 @@ import {
 import { MobileTidyUpPage, MobileTidyUpSection, type TidyUpPage } from './MobileBotTidyUp'
 import { useMobileBotTidyUp } from './use-mobile-bot-tidy-up'
 import { BOT_ACCESS_COPY, botAccessCopy } from '../../../src/shared/bots/bot-access-copy'
-import { accessGrantConfirmCopy, accessRequestLine } from './bot-access-request-copy'
+import {
+  accessGrantConfirmCopy,
+  accessRequestLine,
+  phoneAccessHost
+} from './bot-access-request-copy'
 import type { BotAccessRequests } from './use-bot-access-requests'
 import type { RouteBot } from './use-route-bot'
 import { WorkspaceServerContext } from '../worktree/execution-hosts/workspace-server-context'
 import { useWorkspaceExecutionHost } from '../navigation/workspace-execution-host'
 import { readConnectionStatusProbe } from '../transport/connection/runtime-status-probe'
-import type { PhoneAccessBot } from './bot-access-request-copy'
 import { useBackClaim } from '../navigation/use-back-claim'
 import { ListRow } from '../components/list/ListGroup'
 import { optionStyles } from './mobile-bot-option-styles'
@@ -118,15 +121,8 @@ export function MobileBotSettingsTab(props: {
   const { bot, applyBot } = props.routeBot
   const server = useContext(WorkspaceServerContext)
   const executionHost = useWorkspaceExecutionHost()
-  const directServer =
-    props.client && readConnectionStatusProbe(props.client)?.hostMachine?.kind === 'server'
-  const accessBot: typeof bot & PhoneAccessBot = {
-    ...bot,
-    accessHost:
-      server || directServer || (executionHost && executionHost !== 'local')
-        ? { kind: 'server', name: server?.name ?? null }
-        : { kind: 'owner-computer' }
-  }
+  const status = props.client ? readConnectionStatusProbe(props.client) : undefined
+  const accessBot = { ...bot, accessHost: phoneAccessHost(server, executionHost, status) }
   const [saving, setSaving] = useState(false)
   const [removing, setRemoving] = useState<BotMember | null>(null)
   const [granting, setGranting] = useState<ConnectorAccessRequest | null>(null)
