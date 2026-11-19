@@ -321,6 +321,7 @@ async function run(arm, sessions, round) {
   let inWindow = 0
   // The longest stretch with no acknowledged write at all, across every chat.
   let lastAck = performance.now()
+  const windowEnd = lastAck + (stopAt - Date.now())
   let maxGap = 0
   const ack = () => {
     const now = performance.now()
@@ -378,7 +379,7 @@ async function run(arm, sessions, round) {
   // Streams run the whole window, so throughput divides by the time it was measured over.
   await new Promise((resolve) => setTimeout(resolve, Math.max(0, stopAt - Date.now())))
   // A stall still open at the window's end counts up to the boundary.
-  maxGap = Math.max(maxGap, performance.now() - lastAck)
+  maxGap = Math.max(maxGap, Math.min(performance.now(), windowEnd) - lastAck)
   stops.forEach((stop) => stop())
   await new Promise((resolve) => setTimeout(resolve, 2000))
   await owner.close()
