@@ -19,7 +19,7 @@ import {
   selectEphemeralVmWorkspaceRuntime,
   selectEphemeralVmWorkspaceWaking
 } from '@/store/slices/ephemeral-vm/ephemeral-vm-lifecycle'
-import { useIsSleepingWorktree } from '../../workspace-actions/sleep/use-worktree-sleep-state'
+import { selectIsSleepingWorktree } from '../../workspace-actions/sleep/use-worktree-sleep-state'
 import { getEphemeralVmHostState } from '../../../../../../shared/execution-host/execution-host-health'
 import { getVmStateLabel, VmStateIcon, WorktreeCardVmStateBadge } from './WorktreeCardVmStateBadge'
 import type { WorktreeCardPrDisplay } from '../review/worktree-card-pr-display'
@@ -29,7 +29,7 @@ import {
   WorkspaceReviewChecksIndicator,
   workspaceReviewChecksLabel
 } from '../../workspace-status/presentation/WorkspaceReviewChecksIndicator'
-import { useAppStore } from '@/store/index'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 type WorktreeCardStatusSlotProps = {
   worktreeId: string
@@ -153,9 +153,9 @@ export function WorktreeCardStatusSlot({
   const liveStatus = laneStatusWithLineage(useWorktreeActivityStatus(worktreeId), lineageStatus)
   const status = statusOverride ?? liveStatus
   // One subscription per card: rows mount by the hundreds, and every listener runs on each store write.
-  const isSleeping = useIsSleepingWorktree(worktreeId)
-  const { vmRuntime, vmWaking } = useAppStore(
+  const { isSleeping, vmRuntime, vmWaking } = useAppStoreWithChannels(
     useShallow((state) => ({
+      isSleeping: selectIsSleepingWorktree(state, worktreeId),
       vmRuntime: selectEphemeralVmWorkspaceRuntime(state, worktreeId),
       vmWaking: selectEphemeralVmWorkspaceWaking(state, worktreeId)
     }))
