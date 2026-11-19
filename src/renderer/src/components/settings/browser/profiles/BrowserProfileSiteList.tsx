@@ -34,7 +34,11 @@ export function BrowserProfileSiteList({
   profiles: Pick<BrowserSessionProfile, 'id' | 'label'>[]
 }): React.JSX.Element {
   const t = useTranslate()
-  const [profileId, setProfileId] = useState(profiles[0]?.id ?? 'default')
+  const [pickedId, setPickedId] = useState(profiles[0]?.id ?? 'default')
+  // A deleted pick falls back to a listed profile, so the editor never shows or saves a removed one.
+  const profileId = profiles.some((profile) => profile.id === pickedId)
+    ? pickedId
+    : (profiles[0]?.id ?? 'default')
   const [saved, setSaved] = useState<string[] | null>(null)
   const [loadFailed, setLoadFailed] = useState(false)
   const [text, setText] = useState('')
@@ -104,7 +108,7 @@ export function BrowserProfileSiteList({
             )}
           </p>
         </div>
-        <Select value={profileId} onValueChange={setProfileId} disabled={saving}>
+        <Select value={profileId} onValueChange={setPickedId} disabled={saving}>
           <SelectTrigger size="sm" className="max-w-48">
             <SelectValue />
           </SelectTrigger>
