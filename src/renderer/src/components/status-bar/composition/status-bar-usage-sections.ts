@@ -7,7 +7,7 @@ import { isCursorUsageBucket } from '../../../../../shared/agent-usage/rate-limi
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import { formatRateLimitWindowChipLabel } from '../../../../../shared/agent-usage/rate-limits/rate-limit-window-label'
-import { getUsageHeadlineSection } from '../usage/usage-headline-sections'
+import { getUsageHeadlineSection, isScopedUsageWindow } from '../usage/usage-headline-sections'
 
 export type StatusBarUsageSection = {
   key: string
@@ -71,8 +71,8 @@ export function getStatusBarUsageSections(
           label: t('auto.components.status.bar.StatusBar.a79c64f87e', 'Fable')
         }
       : null,
-    // Monthly-only providers keep their limit inline; other plans show it in the details.
-    p.monthly && !p.session && !p.weekly
+    // Show monthly inline when the provider has no weekly window (excluding scoped pools like ZCode MCP).
+    p.monthly && !p.weekly && !isScopedUsageWindow(p, p.monthly)
       ? { key: 'monthly', window: p.monthly, label: formatRateLimitWindowChipLabel(p.monthly) }
       : null
   ].filter((section) => section !== null)

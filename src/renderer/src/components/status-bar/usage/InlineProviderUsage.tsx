@@ -15,6 +15,7 @@ import { formatWindowLabel } from '../../../../../shared/agent-usage/rate-limits
 import { formatResetDuration } from '../../../../../shared/agent-usage/rate-limits/rate-limit-reset-format'
 import { formatBareUsagePercentage, formatUsagePercentageLabel } from './usage-percentage-label'
 import { getUsageRosterRowState } from './usage-roster-row-state'
+import { isScopedUsageWindow } from './usage-headline-sections'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { uiNumberFormat } from '@/i18n/ui-intl-formatters'
 import { formatUiNarrowDuration } from '@/i18n/relative-time-format'
@@ -71,8 +72,8 @@ export function InlineUsageBars({
           resetsAt: limits.fableWeekly.resetsAt
         }
       : null,
-    // Why: matches the status bar chip; monthly is the only limit when there is no 5h/7d window.
-    limits.monthly && !limits.session && !limits.weekly
+    // Matches the status bar chip: show monthly inline when there is no weekly window (excluding scoped pools).
+    limits.monthly && !limits.weekly && !isScopedUsageWindow(limits, limits.monthly)
       ? {
           key: 'monthly',
           used: clampUsedPercent(limits.monthly.usedPercent),
