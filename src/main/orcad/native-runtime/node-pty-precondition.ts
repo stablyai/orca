@@ -130,10 +130,10 @@ export function buildNodePtyLoadProbeScript(nodePtyDir: string): string {
   const entry = JSON.stringify(join(nodePtyDir, 'lib', 'index.js'))
   const utils = JSON.stringify(join(nodePtyDir, 'lib', 'utils.js'))
   const root = JSON.stringify(nodePtyDir)
-  // Follow node-pty’s search order and platform module name; Windows defers conpty until spawn.
+  // Follow node-pty’s search order and platform module name; Orca's patched ConPTY floor is 17763 on Windows.
   return [
     `const fs=require('fs'),p=require('path');`,
-    `const n=process.platform==='win32'&&Number(require('os').release().split('.')[2])>=18309?'conpty':'pty';`,
+    `const n=process.platform==='win32'&&Number(require('os').release().split('.')[2])>=17763?'conpty':'pty';`,
     `let f=null;`,
     `for(const d of ['build/orca-napi-'+process.platform+'-'+process.arch,'build/Release','build/Debug','prebuilds/'+process.platform+'-'+process.arch]){`,
     `for(const r of [${root},p.join(${root},'lib')]){`,

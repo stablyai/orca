@@ -71,7 +71,7 @@ function smokeSpawn(backend, windowsOptions) {
 void (async () => {
   await smokeSpawn('pty', { useConptyDll: true })
   if (process.platform === 'win32') {
-    // node-pty picks winpty below build 18309 (#30906); `useConpty: false` forces it on this runner.
+    // Orca's patched node-pty picks bundled ConPTY from build 17763 (#24262); `useConpty: false` forces winpty on this runner.
     await smokeSpawn('winpty', { useConpty: false })
   }
   process.stdout.write(`${token} node=${process.version} napi=${process.versions.napi}\n`)

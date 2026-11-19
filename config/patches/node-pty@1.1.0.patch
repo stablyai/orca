@@ -1924,6 +1924,16 @@ diff --git a/lib/windowsConoutConnection.js b/lib/windowsConoutConnection.js
 diff --git a/lib/windowsPtyAgent.js b/lib/windowsPtyAgent.js
 --- a/lib/windowsPtyAgent.js
 +++ b/lib/windowsPtyAgent.js
+@@ -36,6 +36,8 @@
+         this._innerPid = 0;
++        // Orca: bundled conpty.dll works from build 17763, not only 18309.
+         if (this._useConpty === undefined || this._useConpty === true) {
+-            this._useConpty = this._getWindowsBuildNumber() >= 18309;
++            var build = this._getWindowsBuildNumber();
++            this._useConpty = build >= 18309 || (this._useConptyDll && build >= 17763);
+         }
+         if (this._useConpty) {
+             if (!conptyNative) {
 @@ -75,6 +75,10 @@
          this._conoutSocketWorker.onReady(function () {
              _this._conoutSocketWorker.connectSocket(_this._outSocket);
@@ -2131,6 +2141,17 @@ diff --git a/src/windowsConoutConnection.ts b/src/windowsConoutConnection.ts
 diff --git a/src/windowsPtyAgent.ts b/src/windowsPtyAgent.ts
 --- a/src/windowsPtyAgent.ts
 +++ b/src/windowsPtyAgent.ts
+@@ -59,7 +59,9 @@
+     conptyInheritCursor: boolean = false
+   ) {
++    // Orca: bundled conpty.dll works from build 17763, not only 18309.
+     if (this._useConpty === undefined || this._useConpty === true) {
+-      this._useConpty = this._getWindowsBuildNumber() >= 18309;
++      const build = this._getWindowsBuildNumber();
++      this._useConpty = build >= 18309 || (this._useConptyDll && build >= 17763);
+     }
+     if (this._useConpty) {
+       if (!conptyNative) {
 @@ -103,6 +103,10 @@
      this._conoutSocketWorker.onReady(() => {
        this._conoutSocketWorker.connectSocket(this._outSocket);
@@ -2362,6 +2383,15 @@ diff --git a/lib/unixTerminal.js b/lib/unixTerminal.js
 diff --git a/typings/node-pty.d.ts b/typings/node-pty.d.ts
 --- a/typings/node-pty.d.ts
 +++ b/typings/node-pty.d.ts
+@@ -88,6 +88,7 @@
+   export interface IWindowsPtyForkOptions extends IBasePtyForkOptions {
+     /**
+      * Whether to use the ConPTY system on Windows. When this is not set, ConPTY will be used when
+-     * the Windows build number is >= 18309 (instead of winpty). Note that ConPTY is available from
++     * the Windows build number is >= 18309, or >= 17763 when useConptyDll is enabled (instead of
++     * winpty). Note that ConPTY is available from
+      * build 17134 but is too unstable to enable by default.
+      *
 @@ -114,6 +114,7 @@
     * An interface representing a pseudoterminal, on Windows this is emulated via the winpty library.
     */

@@ -440,7 +440,7 @@ function prunePackagedNodePty(resourcesDir, electronPlatformName, electronArch) 
   }
 
   // Remove only conpty.node/pdb fallbacks when PE machine proves source addon matches target, preventing silent fallback to unpatched teardown.
-  // Keep other prebuilds: source builds omit console-list/winpty binaries, needed for membership probing and Windows <18309.
+  // Keep other prebuilds: source builds omit console-list/winpty binaries, needed for membership probing and Windows <17763 (patched ConPTY floor with the bundled DLL).
   // Host/target arch equality is insufficient: foreign or cross-built build/Release contents can differ from host architecture.
   if (electronPlatformName === 'win32' && conptyTargetsArch(nodePtyDir, electronArch)) {
     const prebuildDir = join(nodePtyDir, 'prebuilds', `win32-${electronArch}`)

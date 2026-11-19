@@ -51,13 +51,21 @@ function loadedNativeBuildDir(packageDir, moduleName, target) {
   return existsSync(entryDir) ? entryDir : join(packageDir, 'build', 'Release')
 }
 
-// Match node-pty: ConPTY from Windows build 18309, winpty earlier.
-function nodePtyNativeModuleName(platform = process.platform, osRelease = release()) {
+// Match Orca's patched node-pty: ConPTY from 18309, or from 17763 with the bundled DLL (always on win32 here).
+function nodePtyNativeModuleName(
+  platform = process.platform,
+  osRelease = release(),
+  useConptyDll = platform === 'win32'
+) {
   if (platform !== 'win32') {
     return 'pty'
   }
   const match = /(\d+)\.(\d+)\.(\d+)/.exec(osRelease)
-  return match && Number.parseInt(match[3], 10) >= 18309 ? 'conpty' : 'pty'
+  if (!match) {
+    return 'pty'
+  }
+  const build = Number.parseInt(match[3], 10)
+  return build >= 18309 || (useConptyDll && build >= 17763) ? 'conpty' : 'pty'
 }
 
 function isNativeBuildEntryName(name) {
