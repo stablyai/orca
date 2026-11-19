@@ -8,10 +8,8 @@ import {
 } from './utility-worker-host-crash-loop'
 import { HostedWorker } from './hosted-worker'
 import { asError, stopChild, type Host } from './utility-worker-host-process'
-import {
-  recordUtilityWorkerHeapPressure,
-  utilityWorkerHeapData
-} from './utility-worker-heap-report'
+import { recordUtilityWorkerHeapPressure } from './utility-worker-heap-report'
+import { recordHostExited, recordHostedWorkerFailure } from './utility-worker-host-breadcrumbs'
 import {
   UtilityWorkerHostPausedError,
   type HostedWorkerThread,
@@ -262,16 +260,9 @@ export class UtilityWorkerHost {
   private recordWorkerOutOfMemory(host: Host, worker: HostedWorker, code?: string): void {
     // A lost host's exit breadcrumb already names its workers' reads.
     if (!quitting && !host.lossCounted) {
-      recordDurableCrashBreadcrumb('worker_thread_failed', {
-        serviceName: this.serviceName,
-        role: worker.spawn.name,
-        code: code ?? 'ERR_WORKER_OUT_OF_MEMORY',
-        lastReply: worker.lastReplyType,
-        receivedMB: Math.round(worker.receivedBytes / 2 ** 20),
-        ...utilityWorkerHeapData(host.heap, [worker]),
-        // Before the worker fails, which ends what its owner was waiting on.
-        ...this.exitContext?.([worker])
-      })
+      // Before the worker fails, which ends what its owner was waiting on.
+      const context = this.exitContext?.([worker])
+      recordHostedWorkerFailure(this.serviceName, host, worker, code, context)
     }
   }
 
@@ -331,20 +322,9 @@ export class UtilityWorkerHost {
     const workers = [...host.workers.values()]
     this.retire(host)
     if (!quitting) {
-      const data: CrashReportBreadcrumbData = {
-        serviceName: this.serviceName,
-        code,
-        workers: workers.length,
-        ...utilityWorkerHeapData(host.heap, workers)
-      }
-      workers.forEach((worker, index) => {
-        data[`w${index}_role`] = worker.spawn.name
-        data[`w${index}_lastReply`] = worker.lastReplyType
-        data[`w${index}_receivedMB`] = Math.round(worker.receivedBytes / 2 ** 20)
-      })
       // Before the workers fail, which ends what their owners were waiting on.
-      Object.assign(data, host.exitContext ?? this.exitContext?.(workers))
-      recordDurableCrashBreadcrumb('utility_worker_host_exited', data)
+      const context = host.exitContext ?? this.exitContext?.(workers)
+      recordHostExited(this.serviceName, host, workers, code, context)
     }
     // Counted before consumers hear, so none of them can start a host past the cap.
     this.countLoss(host)
