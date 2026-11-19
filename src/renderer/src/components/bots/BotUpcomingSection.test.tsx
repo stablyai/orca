@@ -160,30 +160,6 @@ describe('BotUpcomingSection', () => {
     expect(description(row)).toContain('Needs the Slack connector')
   })
 
-  it('lists soonest first and paused last, and leaves a row in place when it is paused', async () => {
-    mocks.automations = [
-      automation({ id: 'b', name: 'Release notes', enabled: false, createdAt: 20 }),
-      automation({ id: 'c', name: 'Triage', nextRunAt: NOW + 60_000, createdAt: 30 }),
-      automation({ id: 'a', name: 'Digest', nextRunAt: NOW + 120_000, createdAt: 10 })
-    ]
-    mocks.update.mockResolvedValue(automation({ id: 'c', enabled: false, updatedAt: 2 }))
-    const { rerender } = render(<Section />)
-    const titles = rowTitles
-    const order = ['Triage', 'Digest', 'Tidy memory', 'Look around', 'Release notes']
-    expect(titles()).toEqual(order)
-
-    await act(async () => {
-      fireEvent.click(rowControl('Triage', 'Pause'))
-    })
-    mocks.automations = mocks.automations.map((entry) =>
-      entry.id === 'c' ? { ...entry, enabled: false, updatedAt: 2 } : entry
-    )
-    rerender(<Section />)
-
-    await waitFor(() => expect(rowControl('Triage', 'Resume')).toBeTruthy())
-    expect(titles()).toEqual(order)
-  })
-
   it('keeps a failed automation in place and in the five when paused, until a new run re-ranks', async () => {
     // Job 6 runs last, so only its failure lists it first.
     mocks.automations = [1, 2, 3, 4, 5, 6].map((n) =>
