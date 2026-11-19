@@ -13,7 +13,7 @@ import { importHomeUnusableReason } from './codex-history-import-home-check'
 import { copyConversationIntoStore } from './codex-history-import-conversation'
 import { canHardLinkIn, pickImportForm } from './codex-history-import-staging'
 import {
-  removeAbandonedStagedImport,
+  removeAbandonedStagedImports,
   stagingRecordPath
 } from './codex-history-import-staging-record'
 import {
@@ -162,7 +162,7 @@ async function importFolder(
  * Returns how many were copied, or null when it stopped early (progress so far is kept).
  */
 export async function importCodexHistory(args: CodexHistoryImportArgs): Promise<number | null> {
-  await removeAbandonedStagedImport(stagingRecordPath(args.ledgerPath)).catch((error: unknown) =>
+  await removeAbandonedStagedImports(stagingRecordPath(args.ledgerPath)).catch((error: unknown) =>
     console.warn('[codex-history-import] Could not remove an abandoned staged copy:', error)
   )
   const reason = await importHomeUnusableReason(args.importHome, args.storeHome)
