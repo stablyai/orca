@@ -5,6 +5,10 @@ import {
   fakeSpawnReturning
 } from '../../../../shared/__fixtures__/fake-spawned-child'
 import type * as WslModule from '../../../wsl/discovery/distro-catalog'
+import {
+  NativeExecutableResolver,
+  nativeExecutableResolver
+} from '@orca/process-host/native-executable-resolution'
 
 const { execFileSyncMock, spawnMock, getDefaultWslDistroMock } = vi.hoisted(() => ({
   execFileSyncMock: vi.fn(),
@@ -44,6 +48,10 @@ function spawnEnoent(command: string): { spawnError: Error } {
   return { spawnError: Object.assign(new Error(`spawn ${command} ENOENT`), { code: 'ENOENT' }) }
 }
 
+// Why: the shared resolver captured the real platform at import, so on a Mac it would hand the
+// spawn mock the host's absolute gh path (e.g. /opt/homebrew/bin/gh). Windows resolves by name.
+const win32Resolver = new NativeExecutableResolver('win32')
+
 describe('ghExecFileAsync WSL fallback', () => {
   const originalPlatform = process.platform
 
@@ -53,6 +61,9 @@ describe('ghExecFileAsync WSL fallback', () => {
     getDefaultWslDistroMock.mockReturnValue(null)
     setDefaultWslDistroOverride(null)
     _resetGhRateLimitBreaker()
+    vi.spyOn(nativeExecutableResolver, 'resolve').mockImplementation((program, env) =>
+      win32Resolver.resolve(program, env)
+    )
     Object.defineProperty(process, 'platform', {
       configurable: true,
       value: 'win32'
@@ -61,6 +72,7 @@ describe('ghExecFileAsync WSL fallback', () => {
 
   afterEach(() => {
     vi.useRealTimers()
+    vi.restoreAllMocks()
     _resetGhRateLimitBreaker()
     Object.defineProperty(process, 'platform', {
       configurable: true,
