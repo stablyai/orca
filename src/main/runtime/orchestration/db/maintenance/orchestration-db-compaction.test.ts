@@ -12,6 +12,8 @@ import '../dispatch-row-writer'
 import '../attempt-outcome-projection'
 import { compactOrchestrationDb } from './orchestration-db-compaction'
 
+// Results that don't depend on timing get a budget a loaded CI machine can't overrun.
+const AMPLE = { budgetMs: 30_000 }
 const dirs: string[] = []
 const holders: ReturnType<typeof spawn>[] = []
 
@@ -93,17 +95,17 @@ describe('compactOrchestrationDb', () => {
     const file = legacyDatabase()
     const before = statSync(file).size
 
-    expect((await compactOrchestrationDb(file)).kind).toBe('compacted')
+    expect((await compactOrchestrationDb(file, AMPLE)).kind).toBe('compacted')
 
     expect(statSync(file).size).toBeLessThan(before / 4)
     expect(inspect(file)).toEqual({ autoVacuum: 2, integrity: 'ok' })
-    expect(await compactOrchestrationDb(file)).toEqual({ kind: 'not-needed' })
+    expect(await compactOrchestrationDb(file, AMPLE)).toEqual({ kind: 'not-needed' })
   })
 
   it('leaves the file alone while a worker is still running', async () => {
     const file = legacyDatabase({ activeWorker: true })
 
-    expect(await compactOrchestrationDb(file)).toEqual({ kind: 'active' })
+    expect(await compactOrchestrationDb(file, AMPLE)).toEqual({ kind: 'active' })
     expect(inspect(file)).toEqual({ autoVacuum: 0, integrity: 'ok' })
   })
 
@@ -111,7 +113,7 @@ describe('compactOrchestrationDb', () => {
     const file = legacyDatabase()
     await holdOpenInAnotherProcess(file)
 
-    expect(await compactOrchestrationDb(file)).toEqual({ kind: 'busy' })
+    expect(await compactOrchestrationDb(file, AMPLE)).toEqual({ kind: 'busy' })
     expect(inspect(file)).toEqual({ autoVacuum: 0, integrity: 'ok' })
   })
 
@@ -121,12 +123,12 @@ describe('compactOrchestrationDb', () => {
 
     // The runtime sees the worker first; without it, the daemon's connection still refuses the lock.
     expect(await compactOrchestrationDb(file, { isActive: () => true })).toEqual({ kind: 'active' })
-    expect(await compactOrchestrationDb(file)).toEqual({ kind: 'busy' })
+    expect(await compactOrchestrationDb(file, AMPLE)).toEqual({ kind: 'busy' })
     const holder = holders.pop()!
     holder.kill('SIGKILL')
     await once(holder, 'exit')
     // That attempt counted as the file's one try.
-    expect(await compactOrchestrationDb(file)).toEqual({ kind: 'deferred', timeouts: 1 })
+    expect(await compactOrchestrationDb(file, AMPLE)).toEqual({ kind: 'deferred', timeouts: 1 })
     expect(inspect(file)).toEqual({ autoVacuum: 0, integrity: 'ok' })
   })
 
@@ -143,7 +145,7 @@ describe('compactOrchestrationDb', () => {
     expect((await compactOrchestrationDb(file, { isActive: () => 'timeout' })).kind).toBe(
       'timed-out'
     )
-    expect(await compactOrchestrationDb(file)).toEqual({ kind: 'deferred', timeouts: 1 })
+    expect(await compactOrchestrationDb(file, AMPLE)).toEqual({ kind: 'deferred', timeouts: 1 })
     expect(inspect(file).autoVacuum).toBe(0)
   })
 
@@ -151,7 +153,7 @@ describe('compactOrchestrationDb', () => {
     const file = legacyDatabase()
     await compactOrchestrationDb(file, { budgetMs: 0 })
 
-    expect(await compactOrchestrationDb(file)).toEqual({ kind: 'deferred', timeouts: 1 })
+    expect(await compactOrchestrationDb(file, AMPLE)).toEqual({ kind: 'deferred', timeouts: 1 })
     expect(inspect(file).autoVacuum).toBe(0)
   })
 
@@ -160,7 +162,7 @@ describe('compactOrchestrationDb', () => {
     const own = new DatabaseSync(file)
     own.prepare('SELECT count(*) FROM runs').get()
 
-    const result = await compactOrchestrationDb(file, { release: () => own.close() })
+    const result = await compactOrchestrationDb(file, { ...AMPLE, release: () => own.close() })
 
     expect(result.kind).toBe('compacted')
     expect(inspect(file)).toEqual({ autoVacuum: 2, integrity: 'ok' })
@@ -169,7 +171,7 @@ describe('compactOrchestrationDb', () => {
   it('skips a file with under 32 MiB free', async () => {
     const file = legacyDatabase({ keptMiB: 1, freedMiB: 20 })
 
-    expect(await compactOrchestrationDb(file)).toEqual({ kind: 'not-needed' })
+    expect(await compactOrchestrationDb(file, AMPLE)).toEqual({ kind: 'not-needed' })
     expect(inspect(file).autoVacuum).toBe(0)
   })
 })
