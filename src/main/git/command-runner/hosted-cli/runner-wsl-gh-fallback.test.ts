@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as BackgroundDistroGate from '../../../wsl/discovery/wsl-background-distro-gate'
 import {
   fakeSpawnDispatch,
@@ -28,6 +28,17 @@ vi.mock('child_process', () => ({
   spawn: spawnMock
 }))
 
+// Worker-thread children use the worker's own child_process, which the guard below cannot see.
+vi.mock(
+  '../../../worker-thread-child-process/worker-thread-child-process',
+  async (importOriginal) => ({
+    ...(await importOriginal<object>()),
+    canSpawnOnWorkerThread: () => false,
+    spawnProcessOnWorkerThread: (spec: { program: string }) =>
+      blockedLaunch('worker thread', spec.program)
+  })
+)
+
 vi.mock('../../../wsl/discovery/distro-catalog', async (importOriginal) => ({
   ...(await importOriginal<typeof WslModule>()),
   getDefaultWslDistro: getDefaultWslDistroMock
@@ -43,6 +54,42 @@ const PRIMARY_RATE_LIMIT_STDERR =
 // What the distro prints when the CLI is absent inside WSL but present on the host.
 const WSL_GH_MISSING = 'bash: line 1: gh: command not found\n'
 const TRANSIENT_502 = 'HTTP 502 Bad Gateway'
+
+// Why: without config/vitest.config.ts, @orca/process-host loads its built CommonJS, which calls the
+// real child_process and bypasses the mock above, so the developer's gh, glab or wsl.exe would run with
+// their credentials. Every real launch in this file is refused and recorded, so it fails closed.
+const realChildProcess = process.getBuiltinModule('node:child_process')
+const { syncBuiltinESMExports } = process.getBuiltinModule('node:module')
+const REAL_LAUNCHERS = [
+  'spawn',
+  'spawnSync',
+  'execFile',
+  'execFileSync',
+  'exec',
+  'execSync',
+  'fork'
+] as const
+type RealLauncher = (typeof REAL_LAUNCHERS)[number]
+const realLaunchers = new Map<RealLauncher, (typeof realChildProcess)[RealLauncher]>()
+const blockedLaunches: string[] = []
+
+function blockedLaunch(launcher: string, program: unknown): never {
+  blockedLaunches.push(`${launcher} ${String(program)}`)
+  throw new Error(`Test blocked a real ${launcher} of ${String(program)}; use spawnMock`)
+}
+
+beforeAll(() => {
+  for (const name of REAL_LAUNCHERS) {
+    realLaunchers.set(name, realChildProcess[name])
+    Object.assign(realChildProcess, { [name]: (program: unknown) => blockedLaunch(name, program) })
+  }
+  syncBuiltinESMExports()
+})
+
+afterAll(() => {
+  Object.assign(realChildProcess, Object.fromEntries(realLaunchers))
+  syncBuiltinESMExports()
+})
 
 function spawnEnoent(command: string): { spawnError: Error } {
   return { spawnError: Object.assign(new Error(`spawn ${command} ENOENT`), { code: 'ENOENT' }) }
@@ -78,6 +125,8 @@ describe('ghExecFileAsync WSL fallback', () => {
       configurable: true,
       value: originalPlatform
     })
+    // Last, so a blocked launch still leaves the platform and breaker restored.
+    expect(blockedLaunches.splice(0)).toEqual([])
   })
 
   it('does not fall back for repo-context gh calls without explicit repo context', async () => {
