@@ -154,7 +154,7 @@ function BotSlackSetupFlow({
             }))}
             another={
               <Button variant="ghost" onClick={pasteToken}>
-                {t('bots.slack.setup.another', 'Connect another Slack workspace')}
+                {t('bots.slack.setup.another', 'Connect another workspace')}
               </Button>
             }
           />

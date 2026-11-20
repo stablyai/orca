@@ -30,17 +30,6 @@ afterEach(async () => {
 })
 
 describe('releasing a finished background run', () => {
-  it('stops the agent of a run nobody watches without waiting out the idle window', async () => {
-    await finishedRun()
-
-    // A send still owed keeps the agent; under load the dispatch's settle trails its call.
-    await eventually(async () => {
-      await rig.host.releaseIdleSession(SESSION)
-      expect(rig.adapter.closeSession).toHaveBeenCalledWith(SESSION, undefined)
-    })
-    expect(agentRunning()).toBe(false)
-  })
-
   it('keeps the agent while someone has the chat open', async () => {
     await finishedRun()
     await rig.host.subscribe({ id: 'pane', sessionId: SESSION, emit: () => {} })
@@ -49,6 +38,30 @@ describe('releasing a finished background run', () => {
 
     expect(rig.adapter.closeSession).not.toHaveBeenCalled()
     expect(agentRunning()).toBe(true)
+  })
+
+  it('stops an open chat idle agent when asked to anyway, as an account switch does', async () => {
+    await finishedRun(() => null)
+    await rig.host.subscribe({ id: 'pane', sessionId: SESSION, emit: () => {} })
+
+    await eventually(async () => {
+      await rig.host.releaseIdleSession(SESSION, true)
+      expect(agentRunning()).toBe(false)
+    })
+  })
+
+  it("names a running agent's pinned home when its adapter reports none, as ACP's do", async () => {
+    await finishedRun()
+    const pinned = rig.store.getConversation(SESSION)?.accountHome
+
+    expect(pinned).toBeDefined()
+    expect(rig.host.childAccountHome(SESSION)).toBeUndefined()
+    expect(rig.host.childAccountHome(SESSION, true)).toEqual(pinned)
+    await eventually(async () => {
+      await rig.host.releaseIdleSession(SESSION, true)
+      expect(agentRunning()).toBe(false)
+    })
+    expect(rig.host.childAccountHome(SESSION, true)).toBeUndefined()
   })
 
   it('keeps the agent while the provider still holds a send', async () => {
@@ -91,13 +104,14 @@ describe('releasing a finished background run', () => {
     expect(agentRunning()).toBe(true)
   })
 
-  it('resumes the same conversation when someone replies after the release', async () => {
+  it('releases an unwatched run immediately and resumes the same conversation on reply', async () => {
     await finishedRun()
-    // As above: the founding dispatch's settle can trail its call, which keeps the agent.
+    // Wait for the founding dispatch to settle so release can close the agent.
     await eventually(async () => {
       await rig.host.releaseIdleSession(SESSION)
-      expect(agentRunning()).toBe(false)
+      expect(rig.adapter.closeSession).toHaveBeenCalledWith(SESSION, undefined)
     })
+    expect(agentRunning()).toBe(false)
 
     const fence = rig.store.getConversation(SESSION)!.currentFence
     expect(await rig.host.send(REST_TEST_CALLER, restTestSend('and then?', fence))).toMatchObject({

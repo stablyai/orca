@@ -94,7 +94,7 @@ test.describe('native chat automation card', () => {
     await expect(chat.getByText(/results to Chat · paused$/)).toBeVisible()
     await chat.screenshot({ path: test.info().outputPath('02-updated.png') })
 
-    await chat.getByRole('button', { name: 'Open full page', exact: true }).last().click()
+    await chat.getByRole('button', { name: 'Open page', exact: true }).last().click()
     await expect
       .poll(() => page.evaluate(() => window.__store?.getState().activeView))
       .toBe('automations')

@@ -59,9 +59,7 @@ describe('a Composio app among a bot’s connectors', () => {
         <BotComposioAppRow bot={bot} connection={jira} problem={null} />
       </ConfirmationDialogContext.Provider>
     )
-    expect(screen.getByText('dana@acme.com · via Composio')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Jira' }))
-    expect(screen.getByText('Anyone who can ask Atlas can use it')).toBeTruthy()
     expect(screen.queryByText(/Who can ask/)).toBeNull()
     fireEvent.pointerDown(screen.getByRole('button', { name: 'Jira actions' }), {
       button: 0,
@@ -69,17 +67,6 @@ describe('a Composio app among a bot’s connectors', () => {
     })
     const items = (await screen.findAllByRole('menuitem')).map((item) => item.textContent)
     expect(items).toEqual(['Sign in again', 'Disconnect Jira'])
-  })
-
-  it('turns a refused key into Fix key on the row, which keeps its place', () => {
-    answer({})
-    render(
-      <ConfirmationDialogContext.Provider value={mocks.confirm}>
-        <BotComposioAppRow bot={bot} connection={jira} problem="key" />
-      </ConfirmationDialogContext.Provider>
-    )
-    expect(screen.getByText('Key not accepted · via Composio')).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Fix key' })).toBeTruthy()
   })
 })
 

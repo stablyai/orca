@@ -36,6 +36,7 @@ import { MobileNativeChatAwaitingInputRow } from './transcript/messages/MobileNa
 import { MobileNativeChatFloatingControls } from './lower-region/MobileNativeChatFloatingControls'
 import { MobileNativeChatDraftComposer } from './composer/MobileNativeChatDraftComposer'
 import { MobileNativeChatPromptCard } from './input/prompts/MobileNativeChatPromptCard'
+import { useMobileNativeChatWorkerApprovalSlot } from './input/prompts/MobileNativeChatWorkerApproval'
 import type { MobileNativeChatMicProps } from './composer/dictation/MobileNativeChatComposerMic'
 import { useMobileNativeChatPromptInputOwner } from './input/prompts/use-mobile-native-chat-prompt-input-owner'
 import {
@@ -131,6 +132,7 @@ export function MobileNativeChatView({
   question,
   onAnswerQuestion,
   permission,
+  workerApprovals,
   promptKey,
   onRespondPermission,
   composerTray: { content: trayContent, composerInputRef: inputRef, steerHead } = NO_COMPOSER_TRAY,
@@ -271,8 +273,19 @@ export function MobileNativeChatView({
   )
   // A collapsed structured question still holds the input: the agent waits on that answer alone.
   const promptHeld = promptShown || collapsedPrompt?.holdsInput === true
+  const workerApproval = useMobileNativeChatWorkerApprovalSlot(
+    workerApprovals,
+    (ask ?? permission ?? question ?? collapsedPrompt) != null
+  )
   const promptOwnsInput = useMobileNativeChatPromptInputOwner(
-    { promptShown: promptHeld, ask, askRequiresTerminal, permission, micActive, micProcessing },
+    {
+      promptShown: promptHeld || workerApproval.card !== null,
+      ask,
+      askRequiresTerminal,
+      permission,
+      micActive,
+      micProcessing
+    },
     inputRef
   )
   const emptyStateView = emptyState ? <MobileNativeChatEmptyStateView copy={emptyState} /> : null
@@ -280,7 +293,7 @@ export function MobileNativeChatView({
   // The queue sits above a shown prompt card in a closed box, rather than tucking into the composer.
   const lowerContent = (
     <>
-      <MobileNativeChatPromptStrip prompt={collapsedPrompt} />
+      <MobileNativeChatPromptStrip prompt={collapsedPrompt ?? workerApproval.strip} />
       <MobileNativeChatInputLockStatus
         lockReason={offlineQueue.lockReason}
         waitingText={composerPlaceholder}
@@ -291,6 +304,7 @@ export function MobileNativeChatView({
         {trayContent}
         <MobileNativeChatOfflineQueue queue={offlineQueue} />
       </MobileNativeChatQueueAbovePromptContext>
+      {workerApproval.card}
       <MobileNativeChatPromptCard
         key={promptKey ?? undefined}
         answering={promptOwnsInput && keyboardInset > 0}
