@@ -57,11 +57,11 @@ that the CLI is installed; a missing one fails as an `agent_readiness` timeout.
   (the user will work in those chats), don't start workers; per workspace run
   `ORCA worktree create --name <name> --no-parent --agent <agent> --prompt "<brief>" --json`
   and end your turn.
-- If the user named a machine for this project, now or earlier in this Run,
-  resolve that machine first. Otherwise skip host discovery for your current
-  workspace's project. For another project, or from a workspace with no
-  project, load `references/placement-and-remote.md` ("Which machine") before
-  you start.
+- Pick the machine before you start when the user named another machine for
+  this project, now or earlier in this Run, when the work is for another
+  project, or when your workspace has no project: load
+  `references/placement-and-remote.md` ("Which machine"). Otherwise your
+  current workspace's project runs where you are, with no host check.
 - Add `--model` only if the user named one.
 - If `worker-start` fails, do not rerun it; read `failedStage` and load
   `references/recovery-and-cleanup.md`.
@@ -111,6 +111,17 @@ Make each spec self-contained: the target, the change, constraints, what the
 worker may edit, and the evidence that proves it is done. Say whether a
 non-zero exit means the Task failed or capturing it is the deliverable. Send
 fixes to a worker unless the user gave them to you.
+
+If the user said which machine to use, this one ("here") included, or "Which
+machine" picked it, a new Task's spec ends with a second line, either a line
+break inside the quotes or the last line of a `--spec-file`:
+
+```text
+--spec "<task>
+Placement: <machine name> (<kind> <id>), <reason>."
+```
+
+This machine is `this machine (local)`; a reason is `the user named it`.
 
 Fetch this guide once. Summarize the worker's evidence; rerun checks only for a
 gap or contradiction.

@@ -39,10 +39,11 @@ handle.
 
 ## Which machine
 
-If the user named a machine for this project, now or earlier in this Run,
-resolve that machine first. Otherwise skip this for your current workspace's
-project: `current` and `new-child` already run where you are. Use it for
-another project, or from a workspace with no project.
+Use this when the user named a machine for this project, now or earlier in
+this Run, when the work is for another project, or from a workspace with no
+project. Otherwise skip it: `current` and `new-child` already run where you
+are. When the machine the user named is this one and the work is in your
+current workspace, nothing needs listing: go to steps 4 and 5.
 
 Only a coordinator places work on another machine. If you are a dispatched
 worker, do not pass `--on`: ask your coordinator to place it.
@@ -56,13 +57,16 @@ worker, do not pass `--on`: ask your coordinator to place it.
    each one, the servers together in one shell command:
 
    ```text
-   ORCA project setups --json                          # this machine
+   ORCA project setups --environment local --json      # this machine
    ORCA project setups --environment <id> --json       # once per paired server
    ```
 
-   `<id>` is the `id` of that server's `kind: environment` row. Do not add
+   `--environment local` pins a command to this machine whatever
+   `ORCA_ENVIRONMENT` or a pairing code in your shell selects; without it, that
+   read can be answered by a server and look like this machine's. `<id>` is the
+   `id` of that server's `kind: environment` row. Do not add
    `--host runtime:<id>`: it drops the server's SSH rows. If `ORCA_PAIRING_CODE`
-   or `ORCA_REMOTE_PAIRING` is set in your shell, unset it for these reads.
+   or `ORCA_REMOTE_PAIRING` is set in your shell, unset it for the server reads.
 
    Match the project by `projectId` (such as `github:owner/repo`); a name must
    match one project id across every answer, or you ask. A `repo:<…>` id exists
@@ -79,10 +83,11 @@ worker, do not pass `--on`: ask your coordinator to place it.
    cut-off answer. An `invalid_argument` about your selector is not an answer:
    fix the command first.
 
-3. Decide. The first line that applies wins. A retry of an attempt that ran on
-   a server is limited to two machines: that server and, once that attempt is
-   settled, this one. Apply the lines to those two only, and on that server
-   keep that attempt's repo.
+3. Decide. The first line that applies wins, and a line that says stop or ask
+   ends the decision. A retry of an attempt that ran on a server is limited to
+   two machines: that server and, once that attempt is settled, this one.
+   Apply the lines to those two only. That attempt counts as your Run having
+   placed the project on that server, and there you keep that attempt's repo.
    - The user named a machine, now or earlier in this Run for this project:
      use it, and the repo chosen with it. If that is no longer usable there,
      or the machine cannot be checked, stop and tell the user. Never
@@ -90,7 +95,8 @@ worker, do not pass `--on`: ask your coordinator to place it.
    - Your Run already placed this project, that machine and repo are still
      usable, and this machine has not become usable since: use the same
      machine and repo.
-   - Usable on this machine: stay here, as before, with no `--on`.
+   - Usable on this machine: stay here, with no `--on`. Add
+     `--environment local` to the start.
    - Registered on this machine but not usable: stop and tell the user. Do not
      move it to a server.
    - Usable on exactly one paired server: start there with `--on`; do not wait
@@ -117,12 +123,17 @@ worker, do not pass `--on`: ask your coordinator to place it.
    its exact worktree selector, or `current` for your own on this machine, and
    omit `--repo`: creation flags are refused there.
 
-5. Record it. For a new Task (`--spec`), add one line to the spec, not as its
-   first line:
+5. Record it. For a new Task (`--spec`), write the task first, because the
+   spec's first line becomes its title, then end the spec with a line of its
+   own, either a line break inside the quotes or the last line of a
+   `--spec-file`:
 
    ```text
-   Placement: <machine name> (<kind> <id>), <reason>.
+   --spec "<task>
+   Placement: <machine name> (<kind> <id>), <reason>."
    ```
+
+   This machine is `this machine (local)`.
 
    `<reason>` is one of: the user named it; set up on this machine; the only
    ready candidate; the only known ready candidate (a server was unchecked);

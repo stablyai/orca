@@ -28,7 +28,7 @@ export const ENVIRONMENT_COMMAND_SPECS: CommandSpec[] = [
       'Paired-server rows come from the pairing store and report platform unknown; ask one server directly with `orca host name --environment <name>`.',
       "SSH targets are read from this machine's own Orca runtime, so this lists that machine's targets and not another server's. Run `orca host list` on the other machine to see the targets registered there.",
       '--environment and --pairing-code are rejected rather than ignored: paired servers come from this machine\u2019s pairing store, so a routed answer would describe two machines at once.',
-      'To see which of these hosts a project is set up on, run `orca project setups` for this machine and `orca project setups --environment <id>` for each paired server.'
+      'To see which of these hosts a project is set up on, run `orca project setups --environment local` for this machine and `orca project setups --environment <id>` for each paired server.'
     ],
     examples: ['orca host list', 'orca host list --json']
   },
