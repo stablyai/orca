@@ -268,6 +268,7 @@ export const largest340 = defineFixture(templateReview(340, 'security-check'))
 export const largest480 = defineFixture(templateReview(480, 'security-check'))
 export const manyApps340 = defineFixture(templateReview(340, 'meeting-prep'))
 export const longName340 = defineFixture(templateReview(340, 'pr-review', LONG_TEMPLATE_NAME))
+export const longName480 = defineFixture(templateReview(480, 'pr-review', LONG_TEMPLATE_NAME))
 export const skillsOpen340 = defineFixture({
   ...templateReview(340, 'pr-review'),
   interact: openChip(/skill/)
