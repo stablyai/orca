@@ -34,6 +34,8 @@ export type BotWhoCanAskFound = {
   note?: string
   /** What an empty result says, when the search knows better than the service's `noMatch`. */
   empty?: { title: string; detail: string }
+  /** Part of this search failed and can be asked again in place (BotWhoCanAskSession.retry). */
+  retryable?: boolean
   /** Headings and tags naming where this search actually looked, over the service's defaults. */
   labels?: { scoped?: string; outsideTag?: string }
 }
@@ -43,6 +45,8 @@ export type BotWhoCanAskFound = {
 export type BotWhoCanAskSession = {
   search: (query: string) => Promise<BotSlackResult<BotWhoCanAskFound>>
   onUpdate?: (listener: () => void) => () => void
+  /** Forget what failed in the last search (only when the owner asks), so asking again retries. */
+  retry?: () => void
 }
 
 /** One connector's people: who is listed, how to find more, and what the card says around them. */

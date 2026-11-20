@@ -27,7 +27,8 @@ const roster: BotGitHubRoster = {
   omitted: false,
   cut: { people: false, members: false, repositories: false },
   readAt: 0,
-  reused: false
+  reused: false,
+  readFor: { scope: { repositories: ['stablyai/orca'], owners: [], more: false }, owner: 'owner' }
 }
 type Users = BotSlackResult<ConnectorGitHubUsersResponse>
 
@@ -46,7 +47,10 @@ function setUp() {
   const scope = { repositories: ['acme/web'], owners: [], more: false }
   const searches = vi.fn()
   const begin = () => {
-    const session = gitHubWhoCanAskSession({ people, users }, { scope, ownerLogin: 'o', t })
+    const session = gitHubWhoCanAskSession(
+      { people, users },
+      { scope, ownerLogin: 'o', producer: 'local', t }
+    )
     return {
       ...session,
       search: (query: string) => {
@@ -137,5 +141,65 @@ describe('the Add picker on a GitHub session', () => {
     await vi.advanceTimersByTimeAsync(0)
     // A closed picker asks nothing more when the roster lands.
     expect(searches).toHaveBeenCalledTimes(asked)
+  })
+
+  it('retries a failed username check in place, keeping the query, the picks and the rows', async () => {
+    const team: BotGitHubRoster = {
+      ...roster,
+      people: [
+        { id: '2', login: 'brennanb2025', name: 'Brennan Benson' },
+        { id: '3', login: 'brenda-q', name: 'Brenda Quinn' }
+      ]
+    }
+    const users = vi
+      .fn<(args: { query: string }) => Promise<Users>>()
+      .mockResolvedValueOnce({ ok: false, error: 'network' })
+      .mockResolvedValue({
+        ok: true,
+        value: { members: [{ id: '9', name: 'bren' }], complete: true }
+      })
+    const scope = { repositories: ['acme/web'], owners: [], more: false }
+    const begin = () =>
+      gitHubWhoCanAskSession(
+        { people: async () => ({ ok: true, value: team }), users },
+        { scope, ownerLogin: 'o', producer: 'local', t }
+      )
+    const { service } = setUp()
+    const onPicked = vi.fn()
+    render(
+      <BotWhoCanAskPicker
+        bot={bot}
+        service={{ ...service, begin, search: (query) => begin().search(query) }}
+        owner="You"
+        onPicked={onPicked}
+      />
+    )
+    const box = screen.getByPlaceholderText('Search by name or username')
+    fireEvent.change(box, { target: { value: 'bren' } })
+    await act(() => vi.advanceTimersByTimeAsync(300))
+    expect(screen.getByText('Username check failed.')).toBeTruthy()
+    fireEvent.click(screen.getByText('brenda-q'))
+    expect(screen.getByText('1 selected')).toBeTruthy()
+
+    const searching = vi.fn()
+    const observer = new MutationObserver(() => {
+      if (screen.queryByText('Searching…')) {
+        searching()
+      }
+    })
+    observer.observe(document.body, { childList: true, subtree: true })
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
+      await vi.advanceTimersByTimeAsync(0)
+    })
+    observer.disconnect()
+    // The lookup ran again once, found its match, and nothing else changed meanwhile.
+    expect(users).toHaveBeenCalledTimes(2)
+    expect(screen.getByText('bren')).toBeTruthy()
+    expect(screen.getByText('brennanb2025')).toBeTruthy()
+    expect(box).toHaveProperty('value', 'bren')
+    expect(screen.getByText('1 selected')).toBeTruthy()
+    expect(searching).not.toHaveBeenCalled()
+    expect(screen.queryByText('Username check failed.')).toBeNull()
   })
 })

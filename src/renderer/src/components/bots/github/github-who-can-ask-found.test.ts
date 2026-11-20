@@ -11,6 +11,7 @@ const t = ((_key: string, fallback: string, values?: Record<string, unknown>) =>
   fallback.replace(/\{\{(\w+)\}\}/g, (_m, name: string) => String(values?.[name] ?? ''))) as never
 
 type Read = Extract<BotGitHubRoster, { status: 'read' }>
+const scope = { repositories: ['acme/web'], owners: [], more: false }
 const noCut = { people: false, members: false, repositories: false }
 const read = (more: Partial<Read> = {}): BotGitHubRoster => ({
   status: 'read',
@@ -21,6 +22,7 @@ const read = (more: Partial<Read> = {}): BotGitHubRoster => ({
   cut: noCut,
   readAt: new Date(2026, 10, 19, 14, 5).getTime(),
   reused: false,
+  readFor: { scope, owner: 'owner' },
   ...more
 })
 type Exact = BotSlackResult<ConnectorGitHubUsersResponse>
@@ -32,8 +34,12 @@ const none: Exact = { ok: true, value: { members: [], complete: true } }
 const failed: Exact = { ok: false, error: 'network' }
 const off: Exact = { ok: false, error: 'github_off' }
 const loading = { status: 'loading' } as const
-const answer = (roster: GitHubRosterState, exact: Exact | null, query = 'brennan') =>
-  gitHubWhoCanAskAnswer({ roster, exact, query, ownerLogin: 'owner' }, t)
+const answer = (
+  roster: GitHubRosterState,
+  exact: Exact | null,
+  query = 'brennan',
+  producer: 'local' | 'remote' = 'local'
+) => gitHubWhoCanAskAnswer({ roster, exact, query, ownerLogin: 'owner', scope, producer }, t)
 const value = (result: ReturnType<typeof answer>) => {
   if (!result.ok) {
     throw new Error(result.error)
@@ -113,16 +119,20 @@ describe('the GitHub picker’s reading of a search', () => {
     ])
     // A failed exact lookup waits for the roster rather than failing the whole search.
     expect(value(answer(loading, failed)).note).toBe(
-      'Still loading your repos. Username check failed. Reopen to retry.'
+      'Still loading your repos. Username check failed.'
     )
   })
 
   it('fails only when nothing could look, and always when GitHub is off', () => {
-    expect(answer({ status: 'unavailable', retry: 'restart' }, failed)).toEqual(failed)
+    expect(answer({ status: 'unavailable' }, failed)).toEqual(failed)
     expect(answer(read(), off)).toEqual(off)
     expect(answer(loading, off)).toEqual(off)
-    // The failed lookup says how to recover: a new open is a new session, which asks again.
-    expect(value(answer(read(), failed)).note).toBe('Username check failed. Reopen to retry.')
+    // The failed lookup can be asked again in place (the picker's Try again).
+    expect(value(answer(read(), failed))).toMatchObject({
+      note: 'Username check failed.',
+      retryable: true
+    })
+    expect(value(answer(read(), none)).retryable).toBeUndefined()
   })
 
   it('says only what a settled empty search looked at', () => {
@@ -133,12 +143,12 @@ describe('the GitHub picker’s reading of a search', () => {
       detail: 'Searched your repos and exact usernames.'
     })
     expect(empty(read(), null, 'neil par')?.detail).toBe('Searched your repos.')
-    expect(empty({ status: 'unavailable', retry: 'restart' }, none)?.detail).toBe(
-      'Couldn’t read repos. Restart Orca to retry.'
+    expect(empty({ status: 'unavailable' }, none)?.detail).toBe(
+      'Couldn’t read repos. Check gh sign-in, then restart Orca.'
     )
-    expect(empty({ status: 'unavailable', retry: 'reopen' }, null, 'neil par')).toEqual({
+    expect(empty({ status: 'unavailable' }, null, 'neil par')).toEqual({
       title: 'Couldn’t search for “neil par”',
-      detail: 'Couldn’t read repos. Reopen to retry.'
+      detail: 'Couldn’t read repos. Check gh sign-in, then restart Orca.'
     })
     expect(empty({ status: 'skipped' }, null, 'neil par')?.detail).toBe('Try an exact username.')
   })
@@ -147,7 +157,15 @@ describe('the GitHub picker’s reading of a search', () => {
     const readAt = new Date(2026, 10, 19, 14, 5).getTime()
     const at = (now: number, query: string) =>
       gitHubWhoCanAskAnswer(
-        { roster: read({ reused: true }), exact: none, query, ownerLogin: 'owner', now },
+        {
+          roster: read({ reused: true }),
+          exact: none,
+          query,
+          ownerLogin: 'owner',
+          scope,
+          producer: 'local',
+          now
+        },
         t
       )
     const note = (result: ReturnType<typeof at>) => (result.ok ? result.value.note : undefined)
@@ -167,6 +185,88 @@ describe('the GitHub picker’s reading of a search', () => {
     )
     // A list read during this open is never labelled.
     expect(value(answer(read(), none)).note).toBeUndefined()
+  })
+
+  it('treats a list read for another scope or account as history, claiming nothing current', () => {
+    const now = new Date(2026, 10, 19, 14, 15).getTime()
+    const at = (
+      readFor: Read['readFor'],
+      exact: Exact,
+      query = 'brennan',
+      owner: string | null = 'owner'
+    ) =>
+      gitHubWhoCanAskAnswer(
+        {
+          roster: read({ reused: true, readFor }),
+          exact,
+          query,
+          ownerLogin: owner,
+          scope,
+          producer: 'local',
+          now
+        },
+        t
+      )
+    const histories: [string, Read['readFor'], string | null][] = [
+      [
+        'another scope (repos added or removed)',
+        { scope: { ...scope, repositories: ['acme/api'] }, owner: 'owner' },
+        'owner'
+      ],
+      ['another linked account', { scope, owner: 'someone-else' }, 'owner'],
+      ['an unknown account then', { scope, owner: null }, 'owner'],
+      ['an unknown account now', { scope, owner: 'owner' }, null]
+    ]
+    for (const [label, readFor, owner] of histories) {
+      const result = at(readFor, found, 'brennan', owner)
+      const found_ = result.ok ? result.value : null
+      expect(found_?.labels?.scoped, label).toBe('From an earlier repo list')
+      // The stranger isn't called an outsider: an old list proves no current absence.
+      expect(found_?.members.at(-1), label).toEqual({
+        id: '9',
+        name: 'brennan',
+        tag: 'Not in the earlier list'
+      })
+      // Recent and matched, yet it still says when the list is from.
+      expect(found_?.note, label).toMatch(/^Repo list from 2:05\s?PM\. Restart Orca to refresh\.$/)
+    }
+    // The same scope and account, read this run: current.
+    const same = at({ scope, owner: 'owner' }, found)
+    expect(same.ok && same.value.labels?.scoped).toBe('Found in your repos')
+  })
+
+  it('keeps a live exact match visible however the list holds that person', () => {
+    const renamed = read({ people: [{ id: '9', login: 'old-name', name: null }] })
+    // In the list under an old login that doesn't match: shown by its current login.
+    expect(value(answer(renamed, found)).members).toEqual([
+      { id: '9', name: 'brennan', group: 'scoped' }
+    ])
+    // Already shown: one row, with the current login.
+    const shown = read({ people: [{ id: '9', login: 'brennan-old', name: 'Brennan' }] })
+    expect(value(answer(shown, found, 'brennan')).members).toEqual([
+      { id: '9', name: 'brennan', handle: 'Brennan', group: 'scoped' }
+    ])
+    // Past the shown cap: still shown, once.
+    const many = Array.from({ length: 40 }, (_, index) => ({
+      id: String(100 + index),
+      login: `brennan${index}`,
+      name: null
+    }))
+    const capped = read({ people: [...many, { id: '9', login: 'brennanz', name: null }] })
+    const members = value(answer(capped, found, 'brennan')).members
+    expect(members.filter((member) => member.id === '9')).toEqual([
+      { id: '9', name: 'brennan', group: 'scoped' }
+    ])
+  })
+
+  it('points restart advice at the computer that read the list', () => {
+    expect(value(answer({ status: 'unavailable' }, none, 'zed', 'remote')).note).toBe(
+      'Couldn’t read repos. Check gh sign-in, then restart the bot’s Orca.'
+    )
+    const old = read({ reused: true, readAt: new Date(2026, 10, 1).getTime() })
+    expect(value(answer(old, none, 'brennan', 'remote')).note).toBe(
+      'Repo list from Nov 1. Restart the bot’s Orca to refresh.'
+    )
   })
 
   it('names a different gh account, and not the same one', () => {

@@ -52,23 +52,23 @@ describe('the one roster read per app run, on the real gh runner', () => {
     const first = child(11)
     spawnMock.mockReturnValueOnce(first)
     const rosters = new GitHubPeopleRosters()
-    const slow = rosters.read(repos('a/b'))
+    const slow = rosters.read(repos('a/b'), 'owner')
     await vi.advanceTimersByTimeAsync(0)
     expect(spawnMock).toHaveBeenCalledOnce()
     await vi.advanceTimersByTimeAsync(ROSTER_TIMEOUT_MS)
     expect(signalMock).toHaveBeenCalled()
     // The group is still reported alive: the caller gets its answer anyway...
     await vi.advanceTimersByTimeAsync(5 * 60_000)
-    expect(await slow).toEqual({ status: 'unavailable', retry: 'restart' })
+    expect(await slow).toEqual({ status: 'unavailable' })
     // ...and no later request, for any scope, starts a second child, before or after it closes.
-    expect(await rosters.read(repos('c/d'))).toEqual({ status: 'unavailable', retry: 'restart' })
+    expect(await rosters.read(repos('c/d'), 'owner')).toEqual({ status: 'unavailable' })
     close(first, 1)
     await vi.advanceTimersByTimeAsync(0)
-    expect(await rosters.read(repos('e/f'))).toEqual({ status: 'unavailable', retry: 'restart' })
+    expect(await rosters.read(repos('e/f'), 'owner')).toEqual({ status: 'unavailable' })
     expect(spawnMock).toHaveBeenCalledOnce()
   })
 
-  it('reads again on the next request when gh could not be started at all', async () => {
+  it('keeps the latch when gh could not be started either: no failure proves no process existed', async () => {
     // gh missing: every attempt (the runner may try another gh binary) fails to spawn.
     const spawnFails = (): ChildProcess => {
       const failed = child(0)
@@ -82,14 +82,11 @@ describe('the one roster read per app run, on the real gh runner', () => {
     }
     spawnMock.mockImplementation(spawnFails)
     const rosters = new GitHubPeopleRosters()
-    const failed = rosters.read(repos('a/b'))
+    const failed = rosters.read(repos('a/b'), 'owner')
     await vi.advanceTimersByTimeAsync(0)
-    expect(await failed).toEqual({ status: 'unavailable', retry: 'reopen' })
+    expect(await failed).toEqual({ status: 'unavailable' })
     const attempts = spawnMock.mock.calls.length
-    // Nothing was left behind, so the next request asks gh again rather than keeping the failure.
-    const again = rosters.read(repos('a/b'))
-    await vi.advanceTimersByTimeAsync(0)
-    expect(await again).toEqual({ status: 'unavailable', retry: 'reopen' })
-    expect(spawnMock.mock.calls.length).toBeGreaterThan(attempts)
+    expect(await rosters.read(repos('a/b'), 'owner')).toEqual({ status: 'unavailable' })
+    expect(spawnMock).toHaveBeenCalledTimes(attempts)
   })
 })

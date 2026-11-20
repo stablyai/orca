@@ -22,7 +22,8 @@ const roster: BotGitHubRoster = {
   omitted: false,
   cut: { people: false, members: false, repositories: false },
   readAt: 0,
-  reused: false
+  reused: false,
+  readFor: { scope: { repositories: ['stablyai/orca'], owners: [], more: false }, owner: 'owner' }
 }
 const deferred = <T>() => {
   let resolve = (_value: T): void => {}
@@ -47,7 +48,10 @@ describe('one Add picker open on GitHub', () => {
   it('asks for the roster once and filters it as the owner types', async () => {
     const people = vi.fn(async () => ({ ok: true as const, value: roster }))
     const users = vi.fn(async (_args: { query: string }): Promise<Users> => noOne)
-    const session = gitHubWhoCanAskSession({ people, users }, { scope, ownerLogin: 'owner', t })
+    const session = gitHubWhoCanAskSession(
+      { people, users },
+      { scope, ownerLogin: 'owner', producer: 'local', t }
+    )
     expect(names(await session.search(''))).toEqual(['brennanb2025', 'jinwoo-h'])
     expect(names(await session.search('bren'))).toEqual(['brennanb2025'])
     expect(names(await session.search('hong'))).toEqual(['jinwoo-h'])
@@ -61,7 +65,7 @@ describe('one Add picker open on GitHub', () => {
     const users = vi.fn(async (_args: { query: string }): Promise<Users> => stranger)
     const session = gitHubWhoCanAskSession(
       { people: () => slow.promise, users },
-      { scope, ownerLogin: 'owner', t }
+      { scope, ownerLogin: 'owner', producer: 'local', t }
     )
     const replaced = vi.fn()
     const told = vi.fn()
@@ -90,7 +94,7 @@ describe('one Add picker open on GitHub', () => {
     const never = deferred<BotSlackResult<BotGitHubRoster>>()
     const session = gitHubWhoCanAskSession(
       { people: () => never.promise, users: async () => noOne },
-      { scope, ownerLogin: 'owner', t }
+      { scope, ownerLogin: 'owner', producer: 'local', t }
     )
     const answers = ['b', 'br', 'bre', 'bren'].map((query) => session.search(query))
     await vi.advanceTimersByTimeAsync(0)
@@ -108,7 +112,7 @@ describe('one Add picker open on GitHub', () => {
     const slowExact = deferred<Users>()
     const session = gitHubWhoCanAskSession(
       { people: () => slowRoster.promise, users: () => slowExact.promise },
-      { scope, ownerLogin: 'owner', t }
+      { scope, ownerLogin: 'owner', producer: 'local', t }
     )
     const answer = session.search('brennan')
     await vi.advanceTimersByTimeAsync(ROSTER_WAIT_MS)
@@ -123,7 +127,7 @@ describe('one Add picker open on GitHub', () => {
     const late = deferred<BotSlackResult<BotGitHubRoster>>()
     const session = gitHubWhoCanAskSession(
       { people: () => late.promise, users: async () => failed },
-      { scope, ownerLogin: 'owner', t }
+      { scope, ownerLogin: 'owner', producer: 'local', t }
     )
     const first = session.search('brennan')
     await vi.advanceTimersByTimeAsync(ROSTER_WAIT_MS)
@@ -132,16 +136,37 @@ describe('one Add picker open on GitHub', () => {
     await vi.advanceTimersByTimeAsync(0)
     const second = await session.search('brennan')
     expect(names(second)).toEqual(['brennanb2025'])
-    expect(second.ok && second.value.note).toBe('Username check failed. Reopen to retry.')
+    expect(second.ok && second.value.note).toBe('Username check failed.')
 
     const unreadable = gitHubWhoCanAskSession(
       {
-        people: async () => ({ ok: true, value: { status: 'unavailable', retry: 'restart' } }),
+        people: async () => ({ ok: true, value: { status: 'unavailable' } }),
         users: async () => failed
       },
-      { scope, ownerLogin: 'owner', t }
+      { scope, ownerLogin: 'owner', producer: 'local', t }
     )
     expect(await unreadable.search('brennan')).toEqual(failed)
+  })
+
+  it('asks a failed exact lookup again only when told to retry', async () => {
+    const users = vi
+      .fn<(args: { query: string }) => Promise<Users>>()
+      .mockResolvedValueOnce({ ok: false, error: 'network' })
+      .mockResolvedValue(stranger)
+    const session = gitHubWhoCanAskSession(
+      { people: async () => ({ ok: true, value: roster }), users },
+      { scope, ownerLogin: 'owner', producer: 'local', t }
+    )
+    expect((await session.search('brennan')).ok && (await session.search('brennan'))).toMatchObject(
+      {
+        value: { retryable: true }
+      }
+    )
+    // Asking again for the same query reuses the failure; only retry() forgets it.
+    expect(users).toHaveBeenCalledOnce()
+    session.retry?.()
+    expect(names(await session.search('brennan'))).toEqual(['brennanb2025', 'brennan'])
+    expect(users).toHaveBeenCalledTimes(2)
   })
 
   it('sends no roster request until the GitHub state is known, or when nothing is connected', async () => {
@@ -150,7 +175,7 @@ describe('one Add picker open on GitHub', () => {
     for (const unknown of [undefined, { repositories: [], owners: [], more: false }]) {
       const session = gitHubWhoCanAskSession(
         { people, users },
-        { scope: unknown, ownerLogin: null, t }
+        { scope: unknown, ownerLogin: null, producer: 'local', t }
       )
       expect((await session.search('octocat')).ok).toBe(true)
     }

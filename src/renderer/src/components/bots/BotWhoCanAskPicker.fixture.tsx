@@ -37,6 +37,7 @@ const users = async ({
   const id = strangers[query.toLowerCase()]
   return { ok: true, value: { members: id ? [{ id, name: query }] : [], complete: true } }
 }
+const scope = { repositories: ['acme/web'], owners: [], more: false }
 const readRoster = (more: Partial<Extract<BotGitHubRoster, { status: 'read' }>> = {}) =>
   ({
     status: 'read',
@@ -48,11 +49,11 @@ const readRoster = (more: Partial<Extract<BotGitHubRoster, { status: 'read' }>> 
     // 2:05 PM local time on a fixed day, so the shot is stable.
     readAt: new Date(2026, 10, 19, 14, 5).getTime(),
     reused: false,
+    readFor: { scope, owner: 'owner' },
     ...more
   }) satisfies BotGitHubRoster
 
 type Roster = BotGitHubRoster
-const scope = { repositories: ['acme/web'], owners: [], more: false }
 
 // 'loading': a roster that never lands, to show the picker while it is on its way.
 const make = (roster: Roster | 'loading'): BotWhoCanAskService => {
@@ -65,7 +66,7 @@ const make = (roster: Roster | 'loading'): BotWhoCanAskService => {
             : Promise.resolve({ ok: true as const, value: roster }),
         users
       },
-      { scope, ownerLogin: 'owner', t }
+      { scope, ownerLogin: 'owner', producer: 'local', t }
     )
   return {
     listed: () => [],
@@ -122,7 +123,7 @@ const searching =
     await settle()
   }
 const full = readRoster()
-const unavailable: Roster = { status: 'unavailable', retry: 'restart' }
+const unavailable: Roster = { status: 'unavailable' }
 
 /** An empty search suggests the people found in the connected repositories. */
 export const suggestions = defineFixture({ width: 340, render: pickerOf(full), interact: settle })
@@ -248,11 +249,17 @@ export const reusedListOlder = defineFixture({
   interact: searching('maya')
 })
 
-/** No gh child was started (gh missing): the next open tries again. */
-export const unavailableReopen = defineFixture({
+/** A list read earlier for other repos (or another account): history, claiming nothing current. */
+export const historicalList = defineFixture({
   width: 340,
-  render: pickerOf({ status: 'unavailable', retry: 'reopen' }),
-  interact: searching('neil par')
+  render: pickerOf(
+    readRoster({
+      reused: true,
+      readAt: new Date(2026, 10, 10, 9, 30).getTime(),
+      readFor: { scope: { repositories: ['acme/old'], owners: [], more: false }, owner: 'owner' }
+    })
+  ),
+  interact: searching('maya')
 })
 
 /** An org past its first 100 members. */
@@ -277,4 +284,39 @@ export const mixedCut = defineFixture({
     })
   ),
   interact: searching('a')
+})
+
+// The exact lookup fails until asked again.
+let usersFail = true
+const flakyUsers = async ({
+  query
+}: {
+  query: string
+}): Promise<BotSlackResult<ConnectorGitHubUsersResponse>> =>
+  usersFail ? { ok: false, error: 'network' } : users({ query })
+
+/** A failed username check: Try again in place, rows and picks kept. */
+export const exactFailedRetry = defineFixture({
+  width: 340,
+  render: () => (
+    <div className="w-80 rounded-md border border-border bg-popover">
+      <BotWhoCanAskPicker
+        bot={bot}
+        service={{
+          ...make(readRoster()),
+          begin: () =>
+            gitHubWhoCanAskSession(
+              { people: async () => ({ ok: true, value: readRoster() }), users: flakyUsers },
+              { scope, ownerLogin: 'owner', producer: 'local', t }
+            )
+        }}
+        owner="You"
+        onPicked={() => {}}
+      />
+    </div>
+  ),
+  interact: async (frame) => {
+    usersFail = true
+    await searching('maya')(frame)
+  }
 })

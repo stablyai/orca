@@ -33,7 +33,7 @@ type Found = BotWhoCanAskFound['members'][number]
 function useMemberSearch(
   service: BotWhoCanAskService,
   query: string
-): { search: Search; retry: () => void } {
+): { search: Search; retry: () => void; retryInPlace: () => void } {
   const [search, setSearch] = useState<Search>({ status: 'loading' })
   // Try again starts a fresh session (and with it a fresh read of what the service lists).
   const [session, setSession] = useState(0)
@@ -74,7 +74,36 @@ function useMemberSearch(
       stopWatching()
     }
   }, [active, errorMessage, query])
-  return { search, retry: () => setSession((count) => count + 1) }
+  // Try again for a part that failed: the same query asked again in place, rows and picks kept.
+  const [nudge, setNudge] = useState(0)
+  useEffect(() => {
+    if (nudge === 0) {
+      return
+    }
+    let current = true
+    void active.search(query.trim()).then((result) => {
+      if (current) {
+        setSearch(
+          result.ok
+            ? { status: 'ready', found: result.value }
+            : { status: 'failed', error: errorMessage(result.error) }
+        )
+      }
+    })
+    return () => {
+      current = false
+    }
+    // Only an asked-for retry runs this; the query's own search runs in the effect above.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nudge])
+  return {
+    search,
+    retry: () => setSession((count) => count + 1),
+    retryInPlace: () => {
+      active.retry?.()
+      setNudge((count) => count + 1)
+    }
+  }
 }
 
 const matches = (name: string, needle: string): boolean =>
@@ -102,11 +131,20 @@ function PersonLabel({ name, handle }: { name: string; handle?: string }): React
   )
 }
 
-function PickerNote({ title, detail }: { title: string; detail: string }): React.JSX.Element {
+function PickerNote({
+  title,
+  detail,
+  action
+}: {
+  title: string
+  detail: string
+  action?: React.ReactNode
+}): React.JSX.Element {
   return (
     <div role="status" className="px-6 py-6 text-center text-sm text-muted-foreground">
       <p className="text-foreground">{title}</p>
       <p className="mt-1 text-xs">{detail}</p>
+      {action ? <div className="mt-3 flex justify-center">{action}</div> : null}
     </div>
   )
 }
@@ -133,7 +171,7 @@ export function BotWhoCanAskPicker({
   const [pickedLabels, setPickedLabels] = useState<
     Readonly<Record<string, { label?: string; name?: string }>>
   >({})
-  const { search, retry } = useMemberSearch(service, query)
+  const { search, retry, retryInPlace } = useMemberSearch(service, query)
   const needle = query.trim().toLowerCase()
   const listed = service.listed(bot.members)
   const added = new Set(listed.map((member) => member.id))
@@ -213,6 +251,13 @@ export function BotWhoCanAskPicker({
       </CommandGroup>
     ) : null
 
+  // Asks a failed part of this search again in place; the query, rows and picks stay.
+  const retryAction =
+    search.status === 'ready' && search.found.retryable ? (
+      <Button size="xs" variant="outline" onClick={retryInPlace}>
+        {t('bots.whoCanAsk.retry', 'Try again')}
+      </Button>
+    ) : null
   const noMatch =
     !idle &&
     search.status === 'ready' &&
@@ -263,6 +308,7 @@ export function BotWhoCanAskPicker({
     </>
   ) : noMatch ? (
     <PickerNote
+      action={retryAction}
       {...(search.status === 'ready' && search.found.empty
         ? search.found.empty
         : {
@@ -333,7 +379,10 @@ export function BotWhoCanAskPicker({
         </p>
       ) : null}
       {note && !idle && !noMatch ? (
-        <p className="px-3 pb-2 text-xs text-muted-foreground">{note}</p>
+        <div className="flex items-center gap-2 px-3 pb-2">
+          <p className="min-w-0 flex-1 text-xs text-muted-foreground">{note}</p>
+          {retryAction}
+        </div>
       ) : search.status === 'ready' && !search.found.complete ? (
         <p className="px-3 pb-2 text-xs text-muted-foreground">
           {t(

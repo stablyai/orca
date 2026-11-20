@@ -37,7 +37,10 @@ export const BOT_GITHUB_METHODS = [
     name: 'bots.github.people',
     permission: 'accounts-admin',
     params: BotGitHubPeople,
-    handler: async ({ scope }) => ({ ok: true, value: await gitHubPeopleRosters().read(scope) })
+    handler: async ({ scope, owner }) => ({
+      ok: true,
+      value: await gitHubPeopleRosters().read(scope, owner)
+    })
   }),
   defineMethod({
     name: 'bots.github.unlink',

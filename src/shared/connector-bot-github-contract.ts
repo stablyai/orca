@@ -2,6 +2,7 @@
 // Every route acts as the caller's Orca account: confirm and set-default touch only that account's
 // own link and default, and a link token is single use.
 import * as z from 'zod'
+import type { GitHubPeopleScope } from './bots/github-people-scope'
 
 /** How people ask a bot on GitHub: "@orca-bots ranger …" in an issue or pull request comment. */
 export const GITHUB_BOT_MENTION = '@orca-bots'
@@ -74,13 +75,16 @@ export type BotGitHubRoster =
       readAt: number
       /** This answer is an earlier read reused: a host reads once per app run. */
       reused: boolean
+      /** What the read was made for: the scope it read, and the linked GitHub login the asking
+       *  picker had then (null when it had none). A picker whose own differs treats the list as
+       *  historical: its sources and absences say nothing about the current repos or account. */
+      readFor: { scope: GitHubPeopleScope; owner: string | null }
       /** The GitHub account gh read every source as, from the same call; absent when unknown. */
       searchedAs?: string
     }
-  /** No source could be read. `reopen`: no gh child was started (gh missing, a spawn error), so
-   *  the next picker open tries again. `restart`: a gh child ran, and none runs again for this
-   *  list until the app restarts. */
-  | { status: 'unavailable'; retry: 'reopen' | 'restart' }
+  /** No source could be read. No later read runs in this app run of the host (a gh process may
+   *  have started, and a second must never start behind it). */
+  | { status: 'unavailable' }
 
 /** People per repository or organization a roster read returns. */
 export const GITHUB_PEOPLE_PER_SOURCE = 100

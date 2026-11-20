@@ -46,6 +46,8 @@ export const BotGitHubDefaultBot = z.object({ botId: Id.nullable() })
 /** The connected repositories and whole-account installs whose people the Add picker lists,
  *  already bounded by gitHubPeopleScope; `more` says the installations held more than was sent. */
 export const BotGitHubPeople = z.object({
+  /** The asking picker's linked GitHub login, recorded with the read it starts. */
+  owner: z.string().max(39).nullable(),
   scope: z.object({
     repositories: z.array(z.string().max(140)).max(GITHUB_PEOPLE_MAX_REPOSITORIES),
     owners: z.array(z.string().max(39)).max(GITHUB_PEOPLE_MAX_OWNERS),
