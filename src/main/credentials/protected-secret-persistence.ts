@@ -44,6 +44,8 @@ export class ProtectedSecretPersistence {
   // Ciphertext sealed ahead of a save, valid only for the exact plaintext it sealed.
   private readonly readySeals = new Map<string, { plaintext: string; blob: string }>()
   private readonly sealRequests = new Map<string, SealRequest>()
+  // Plaintext whose seal failed during this save; its capture degrades instead of sealing again.
+  private readonly failedSeals = new Map<string, string>()
 
   hasPendingEncryption(): boolean {
     return this.pendingEncryption.size > 0
@@ -53,6 +55,7 @@ export class ProtectedSecretPersistence {
     // A cleared or replaced secret drops its seals, so a late seal cannot write the old value back.
     this.readySeals.delete(slot)
     this.sealRequests.delete(slot)
+    this.failedSeals.delete(slot)
     this.retentionEpochs.delete(slot)
     this.retainedBlobs.delete(slot)
     this.sealedSlots.delete(slot)
@@ -124,6 +127,10 @@ export class ProtectedSecretPersistence {
       }
     }
     try {
+      if (this.failedSeals.get(slot) === plaintext) {
+        this.failedSeals.delete(slot)
+        throw new Error('sealing this value already failed during this save')
+      }
       const blob =
         this.readySealFor(slot, plaintext) ??
         getSecretStore().encryptString(plaintext).toString('base64')
@@ -181,8 +188,8 @@ export class ProtectedSecretPersistence {
 
   /**
    * Seals the values a save is about to write before it captures them, so the capture needs no
-   * synchronous sealing. Null when every value already has its seal. A seal that fails leaves the
-   * value to the save's own sealing, which keeps today's degradation and retention.
+   * synchronous sealing. Null when every value already has its seal or failed to seal. A failed
+   * value keeps today's degradation and retention when the save captures it.
    */
   sealAhead(values: readonly ProtectedSecretPlaintext[]): Promise<void> | null {
     const pending: Promise<void>[] = []
@@ -207,6 +214,7 @@ export class ProtectedSecretPersistence {
         () => {
           if (this.sealRequests.get(slot) === request) {
             this.sealRequests.delete(slot)
+            this.failedSeals.set(slot, plaintext)
           }
         }
       )
@@ -216,9 +224,15 @@ export class ProtectedSecretPersistence {
     return pending.length > 0 ? Promise.all(pending).then(() => {}) : null
   }
 
+  /** Each save tries a failed value once more, as a synchronous save always has. */
+  forgetFailedSeals(): void {
+    this.failedSeals.clear()
+  }
+
   private needsSeal(slot: string, plaintext: string): boolean {
     return (
       plaintext !== '' &&
+      this.failedSeals.get(slot) !== plaintext &&
       this.readySeals.get(slot)?.plaintext !== plaintext &&
       !this.isSealed(slot, plaintext) &&
       this.encryptionAvailable()

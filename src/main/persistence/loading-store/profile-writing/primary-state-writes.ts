@@ -278,8 +278,11 @@ async function sealProtectedSecretsBeforeCapture(
   owner: PrimaryStateWriteOperations
 ): Promise<boolean> {
   const { runtime, serialization } = owner[primaryStateWriteOperationsContext]
+  runtime.protectedSecrets.forgetFailedSeals()
   for (let round = 0; round < SEAL_AHEAD_ROUNDS; round++) {
-    const sealing = runtime.protectedSecrets.sealAhead(serialization.protectedPlaintexts())
+    const sealing = runtime.protectedSecrets.sealAhead(
+      serialization.protectedPlaintexts(runtime.dirtyProfileStateDomains)
+    )
     if (!sealing) {
       return true
     }

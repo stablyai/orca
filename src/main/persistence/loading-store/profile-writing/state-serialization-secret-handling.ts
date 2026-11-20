@@ -219,23 +219,42 @@ export class StateSerializationSecretHandlingOperations {
     return { payload, stateHash, protectedSecretUpdates }
   }
 
-  /** The protected values the next save writes, in the slots its projection seals them under. */
-  protectedPlaintexts(): ProtectedSecretPlaintext[] {
-    const { state } = this.runtime
+  /** The protected values a save of these dirty domains writes; null or empty means a whole save. */
+  protectedPlaintexts(dirtyDomains: ReadonlySet<string> | null): ProtectedSecretPlaintext[] {
+    const { state, protectedSecrets } = this.runtime
+    // Mirrors buildStateDomainsToSave: pending encryption forces a whole save.
+    const saved =
+      dirtyDomains && dirtyDomains.size > 0 && !protectedSecrets.hasPendingEncryption()
+        ? withDependentSaveDomains(dirtyDomains)
+        : null
+    const writes = (domain: string): boolean => saved === null || saved.has(domain)
     return [
-      {
-        slot: PROTECTED_SECRET_SLOT.opencodeSessionCookie,
-        plaintext: state.settings.opencodeSessionCookie
-      },
-      { slot: PROTECTED_SECRET_SLOT.httpProxyUrl, plaintext: state.settings.httpProxyUrl ?? '' },
-      {
-        slot: PROTECTED_SECRET_SLOT.browserKagiSessionLink,
-        plaintext: state.ui.browserKagiSessionLink ?? ''
-      },
-      ...(state.sshPtyConsumerRecoveries ?? []).map((record) => ({
-        slot: sshPtyOwnerLeaseSecretSlot(record.targetId),
-        plaintext: record.ownerLease
-      }))
+      ...(writes('settings')
+        ? [
+            {
+              slot: PROTECTED_SECRET_SLOT.opencodeSessionCookie,
+              plaintext: state.settings.opencodeSessionCookie
+            },
+            {
+              slot: PROTECTED_SECRET_SLOT.httpProxyUrl,
+              plaintext: state.settings.httpProxyUrl ?? ''
+            }
+          ]
+        : []),
+      ...(writes('ui')
+        ? [
+            {
+              slot: PROTECTED_SECRET_SLOT.browserKagiSessionLink,
+              plaintext: state.ui.browserKagiSessionLink ?? ''
+            }
+          ]
+        : []),
+      ...(writes('sshPtyConsumerRecoveries')
+        ? (state.sshPtyConsumerRecoveries ?? []).map((record) => ({
+            slot: sshPtyOwnerLeaseSecretSlot(record.targetId),
+            plaintext: record.ownerLease
+          }))
+        : [])
     ]
   }
 
