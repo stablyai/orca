@@ -35,14 +35,21 @@ afterEach(async () => {
 
 it.each(['folder', 'linked worktree', 'escaped condition', 'reftable'])(
   'refreshes branch-conditional remotes immediately in a %s',
-  async (kind) => {
-    await git(
-      root,
-      'init',
-      '-b',
-      'nope-remote',
-      ...(kind === 'reftable' ? ['--ref-format=reftable'] : [])
-    )
+  async (kind, context) => {
+    try {
+      await git(
+        root,
+        'init',
+        '-b',
+        'nope-remote',
+        ...(kind === 'reftable' ? ['--ref-format=reftable'] : [])
+      )
+    } catch (error) {
+      if (kind === 'reftable' && /unknown option|unknown ref storage format/i.test(String(error))) {
+        context.skip()
+      }
+      throw error
+    }
     await git(
       root,
       '-c',
