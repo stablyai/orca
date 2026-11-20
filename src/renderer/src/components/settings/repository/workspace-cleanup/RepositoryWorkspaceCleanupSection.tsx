@@ -141,7 +141,8 @@ export function RepositoryWorkspaceCleanupSection({
                   }
                 }}
                 onKeyDown={(event) => {
-                  if (change.checking || change.saving || change.pending) {
+                  // Tab still moves focus; only keys that open or pick are held while it's busy.
+                  if ((change.checking || change.saving || change.pending) && event.key !== 'Tab') {
                     event.preventDefault()
                   }
                 }}
@@ -161,7 +162,7 @@ export function RepositoryWorkspaceCleanupSection({
                     }
                   }}
                   onKeyDown={(event) => {
-                    if (change.guarded) {
+                    if (change.guarded && event.key !== 'Tab') {
                       event.preventDefault()
                     }
                   }}
@@ -180,7 +181,7 @@ export function RepositoryWorkspaceCleanupSection({
                     }
                   }}
                   onKeyDown={(event) => {
-                    if (change.guarded) {
+                    if (change.guarded && event.key !== 'Tab') {
                       event.preventDefault()
                     }
                   }}
