@@ -20,7 +20,7 @@ describe('terminal image advertisement', () => {
     expect(explicit).toEqual({ ORCA_IMAGE_PROTOCOL: 'kitty', KITTY_WINDOW_ID: '42' })
   })
 
-  it('uses the attached viewer when the host has no window', () => {
+  it('uses the attached viewer instead of the host window state', () => {
     vi.stubEnv('CLAUDE_CODE_FORCE_TERMINAL_IMAGES', undefined)
     try {
       const desktop = { ORCA_TERMINAL_IMAGE_VIEWER: '1' }
@@ -31,7 +31,7 @@ describe('terminal image advertisement', () => {
       })
 
       const mobile = { ORCA_TERMINAL_IMAGE_VIEWER: '0' }
-      applyTerminalImageEnvironment(mobile, [], 'claude', undefined, true)
+      applyTerminalImageEnvironment(mobile, [], 'claude', undefined, false)
       expect(mobile).toEqual({ CLAUDE_CODE_FORCE_TERMINAL_IMAGES: '0' })
     } finally {
       vi.unstubAllEnvs()
