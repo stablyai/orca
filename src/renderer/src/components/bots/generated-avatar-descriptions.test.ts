@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import { renderHook } from '@testing-library/react'
+import { renderHook, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { useAppStore } from '@/store'
 import { getDefaultSettings } from '../../../../shared/orca-profiles/constants'
@@ -25,11 +25,11 @@ describe('generated picture descriptions', () => {
     })
   })
 
-  it('keeps the description of a generated picture saved as the avatar', () => {
+  it('keeps the description of a generated picture saved as the avatar', async () => {
     rememberGeneratedPicture('UE5HMQ==', 'a fox astronaut')
     keepSavedPictureDescription(OWNER, 'UE5HMQ==')
     const { result } = renderHook(() => useSavedPictureDescription(OWNER))
-    expect(result.current).toBe('a fox astronaut')
+    await waitFor(() => expect(result.current).toBe('a fox astronaut'))
     const other = renderHook(() => useSavedPictureDescription({ ...OWNER, avatar: 'upload:v3' }))
     expect(other.result.current).toBeNull()
   })

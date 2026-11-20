@@ -27,20 +27,39 @@ function savedKey(owner: SavedPictureOwner): string | null {
   return owner.avatar ? `${owner.hostId ?? 'local'}|${owner.id}|${owner.avatar}` : null
 }
 
-/** After `png` is saved as the owner's avatar: keeps its description, when it was generated. */
-export function keepSavedPictureDescription(owner: SavedPictureOwner, png: string): void {
-  const description = generatedPictureDescription(png)
+// Each save reads the record once the one before it has published, so two quick saves keep both.
+let saving: Promise<void> = Promise.resolve()
+
+/** The description saved with an avatar, read outside render. */
+export function savedPictureDescription(owner: SavedPictureOwner): string | null {
   const key = savedKey(owner)
-  const { settings, updateSettings } = useAppStore.getState()
-  if (!description || !key || !settings) {
+  return key ? (useAppStore.getState().settings?.generatedAvatarDescriptions?.[key] ?? null) : null
+}
+
+/** After `png` is saved as the owner's avatar: keeps its description, when it was generated. A picture
+ *  put back (Undo) brings the description saved with its earlier avatar as `known`. */
+export function keepSavedPictureDescription(
+  owner: SavedPictureOwner,
+  png: string,
+  known: string | null = null
+): void {
+  const description = generatedPictureDescription(png) ?? known
+  const key = savedKey(owner)
+  if (!description || !key) {
     return
   }
-  const entries = Object.entries(settings.generatedAvatarDescriptions ?? {}).filter(
-    ([saved]) => saved !== key
-  )
-  // Newest last; the oldest go once there are more than the cap.
-  const kept = [...entries, [key, description] as const].slice(-MAX_SAVED)
-  void updateSettings({ generatedAvatarDescriptions: Object.fromEntries(kept) })
+  saving = saving.then(async () => {
+    const { settings, updateSettings } = useAppStore.getState()
+    if (!settings) {
+      return
+    }
+    const entries = Object.entries(settings.generatedAvatarDescriptions ?? {}).filter(
+      ([saved]) => saved !== key
+    )
+    // Newest last; the oldest go once there are more than the cap.
+    const kept = [...entries, [key, description] as const].slice(-MAX_SAVED)
+    await updateSettings({ generatedAvatarDescriptions: Object.fromEntries(kept) })
+  })
 }
 
 /** The description saved with the owner's current avatar, if it was generated. */

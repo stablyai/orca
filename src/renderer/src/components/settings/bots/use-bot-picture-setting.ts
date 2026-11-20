@@ -10,6 +10,7 @@ import { readBotAvatarPng, uploadBotAvatar } from '@/lib/bot-catalog'
 import {
   generatedPictureDescription,
   keepSavedPictureDescription,
+  savedPictureDescription,
   useSavedPictureDescription
 } from '@/components/bots/generated-avatar-descriptions'
 import {
@@ -153,8 +154,14 @@ export function useBotPictureSetting(
       return !isUploadAvatar(target.avatar) && (await update({ avatar: target.avatar })) !== null
     }
     try {
+      // Read before the upload: a picture put back keeps the caption saved with its earlier avatar.
+      const known = savedPictureDescription({
+        id: bot.id,
+        hostId: bot.hostId,
+        avatar: target.avatar
+      })
       const saved = await uploadBotAvatar(bot, png)
-      keepSavedPictureDescription(saved, png)
+      keepSavedPictureDescription(saved, png, known)
       if (live.kept?.id === target.id) {
         setKept({ ...target, avatar: saved.avatar, replaced: undefined })
       }
@@ -329,7 +336,7 @@ export function useBotPictureSetting(
       // A generated picture's caption is the description that made it.
       description:
         generatedPictureDescription(kept.png) ??
-        (kept.png ? null : savedDescription) ??
+        savedDescription ??
         (kept.png || isUploadAvatar(kept.avatar)
           ? t('bots.new.pictureUpload', 'Your image')
           : t('settings.bots.pictureCurrent', 'Current picture'))
