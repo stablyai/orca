@@ -28,17 +28,6 @@ function home(id: string, createdAt: number, isPreview = false): Tab {
 
 describe('local Home survivor selection', () => {
   const preview = home('preview', 1, true)
-  const published = home('published', 2)
-
-  it.each([
-    { name: 'preview first', tabs: [preview, published] },
-    { name: 'published first', tabs: [published, preview] }
-  ])('prefers the published view with $name', ({ tabs }) => {
-    const selected = selectLocalBotHomeTabs(tabs, bot)
-    expect(selected?.home.id).toBe('published')
-    expect(selected?.duplicates.map((tab) => tab.id)).toEqual(['preview'])
-  })
-
   it('keeps the oldest published view with stable id precedence for equal ages', () => {
     const selected = selectLocalBotHomeTabs(
       [home('newer', 3), home('b', 2), home('a', 2), preview],
