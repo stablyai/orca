@@ -24,6 +24,10 @@ export function clearPipelineConfigCache(): void {
   cache.clear()
 }
 
+export function invalidatePipelineConfig(workspaceRoot: string): boolean {
+  return cache.delete(workspaceRoot)
+}
+
 function fallback(reason: string): PipelineConfigLoadResult {
   return { config: DEFAULT_PIPELINE_CONFIG, source: 'default', error: reason }
 }
