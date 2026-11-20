@@ -5,11 +5,10 @@ import {
   observeFilePublication
 } from './file-content-observation'
 import { randomUUID } from 'node:crypto'
-import { chmodSync, linkSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { linkSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { grantDirAcl } from '../windows/windows-directory-acl'
 import { isPermissionError } from './permission-errors'
-import { isDefinitiveAbsence } from '../../shared/errors/definitive-filesystem-absence'
 import { nodeFileContentsEqualSync } from '../../shared/file-content/node-file-content-equality'
 import { renameFileWithWindowsRetry } from '../../shared/file-write/windows-retry-file-operations'
 import { assertGuardedFileCurrent, recordGuardedPublication } from './concurrent-file-edit-guard'
@@ -119,8 +118,9 @@ export function recoverInterruptedGuardedFileOperation(targetPath: string): void
 
 /**
  * Drops a held file once its bytes are back at the target (`restore` puts them back when the target
- * is free). Otherwise it stays beside the target, owner-only: a writer that recreated the target
- * found no file, so the held bytes can be the user's only copy of their settings or sign-in.
+ * is free). Otherwise its bytes stay beside the target in a new owner-only file: a writer that
+ * recreated the target found no file, so the held bytes can be the user's only copy of their
+ * settings or sign-in. Held bytes never go back over a target that a newer writer created.
  */
 function restoreMovedFileWithoutOverwrite(
   sourcePath: string,
@@ -134,23 +134,20 @@ function restoreMovedFileWithoutOverwrite(
     rmSync(sourcePath, { force: true })
     return
   }
+  // Read through a held link: the copy must not share or re-permission what it points at.
+  const held = readFileSync(sourcePath)
+  let matches = false
   try {
-    if (nodeFileContentsEqualSync(targetPath, readFileSync(sourcePath))) {
-      rmSync(sourcePath, { force: true })
-      return
-    }
-  } catch (error) {
-    // A target gone meanwhile matches nothing: keep the held bytes.
-    if (!isDefinitiveAbsence(error)) {
-      throw error
-    }
+    matches = nodeFileContentsEqualSync(targetPath, held)
+  } catch {
+    // An unreadable or vanished target proves nothing: keep the held bytes.
   }
-  const keptPath = `${targetPath}.orca-kept-${randomUUID()}`
-  renameFileWithWindowsRetry(sourcePath, keptPath)
-  if (process.platform !== 'win32') {
-    chmodSync(keptPath, 0o600)
+  if (!matches) {
+    const keptPath = `${targetPath}.orca-kept-${randomUUID()}`
+    writeFileSync(keptPath, held, { mode: 0o600, flag: 'wx' })
+    console.warn('[atomic-file] Kept an earlier version beside', targetPath, keptPath)
   }
-  console.warn('[atomic-file] Kept an earlier version beside', targetPath, keptPath)
+  rmSync(sourcePath, { force: true })
 }
 
 export function getGuardedOperationHeldPath(targetPath: string): string {
@@ -166,6 +163,7 @@ function attemptGuardedAtomicWrite(
   const tmpPath = `${targetPath}.${process.pid}.${randomUUID()}.tmp`
   const heldPath = getGuardedOperationHeldPath(targetPath)
   restoreMovedFileWithoutOverwrite(heldPath, targetPath)
+  let superseded = false
   try {
     writeFileSync(tmpPath, contents, { encoding: 'utf-8', mode: options?.mode })
     if (expectedContents === null) {
@@ -186,13 +184,14 @@ function attemptGuardedAtomicWrite(
     }
     if (!publishFileWithoutOverwrite(tmpPath, targetPath)) {
       // Another writer's file supersedes the held one, even if it is deleted again meanwhile.
+      superseded = true
       restoreMovedFileWithoutOverwrite(heldPath, targetPath, false)
       return false
     }
     rmSync(heldPath, { force: true })
     return true
   } catch (error) {
-    restoreMovedFileWithoutOverwrite(heldPath, targetPath)
+    restoreMovedFileWithoutOverwrite(heldPath, targetPath, !superseded)
     throw error
   } finally {
     rmSync(tmpPath, { force: true })
