@@ -6,11 +6,21 @@ import {
 } from './zotz-agent-queue'
 
 function rpcContext(signal: AbortSignal): never {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handler reads only runtime.registerSubscriptionCleanup, signal and connectionId, so a partial context is enough.
   return {
     runtime: { registerSubscriptionCleanup: vi.fn() },
     signal,
     connectionId: 'socket-1'
   } as never
+}
+
+function queuedCount(frame: unknown): number {
+  return typeof frame === 'object' &&
+    frame !== null &&
+    'queued' in frame &&
+    Array.isArray(frame.queued)
+    ? frame.queued.length
+    : -1
 }
 
 describe('zotz.agentQueue', () => {
@@ -30,6 +40,7 @@ describe('zotz.agentQueue', () => {
         subscribe: () => () => {}
       },
       queue: {
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the snapshot builder copies only id, agent, priority, label, estimatedBytes, enqueuedAt, position and waitReason from each task.
         list: () => queued as never,
         listCanceled: () => [],
         subscribe: (listener) => {
@@ -41,14 +52,14 @@ describe('zotz.agentQueue', () => {
         }
       }
     })
-    const emitted: { queued: unknown[] }[] = []
+    const emitted: unknown[] = []
     const leave = new AbortController()
 
     const stream = subscribeMethod.handler({}, rpcContext(leave.signal), (frame) =>
-      emitted.push(frame as { queued: unknown[] })
+      emitted.push(frame)
     )
     await Promise.resolve()
-    expect(emitted.map((frame) => frame.queued.length)).toEqual([0])
+    expect(emitted.map(queuedCount)).toEqual([0])
 
     queued = [
       {
@@ -63,7 +74,7 @@ describe('zotz.agentQueue', () => {
       }
     ]
     queueListeners.forEach((listener) => listener())
-    expect(emitted.map((frame) => frame.queued.length)).toEqual([0, 1])
+    expect(emitted.map(queuedCount)).toEqual([0, 1])
 
     leave.abort()
     await stream

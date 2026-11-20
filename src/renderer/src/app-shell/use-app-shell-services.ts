@@ -16,6 +16,7 @@ import { useLocalStructuredSessionTabsSync } from '../runtime/local-structured-s
 import { useHostStructuredAgentsSync } from '../runtime/native-chat/agent-catalogs/host-structured-agents-sync'
 import { useLegacyChatRenameMigration } from '../runtime/native-chat/naming/legacy-chat-rename-migration'
 import { useHostModelCatalogSnapshotsSync } from '../runtime/native-chat/model-catalogs/host-model-catalog-snapshots-sync'
+import { useZotzHostAgentQueueSync } from '../components/zotz/agent-queue/zotz-host-agent-queue-store'
 import { useRemoteRuntimeRecoveryTriggers } from '../runtime/hosts/connections/use-remote-runtime-recovery-triggers'
 import { useTerminalViewerColorPublication } from './use-terminal-viewer-color-publication'
 import { useBrowserIdentityMigrationNotice } from '../components/browser-pane/browser-user-agent-migration-notice'
@@ -40,6 +41,7 @@ export function useAppShellServices(): void {
   useHostStructuredAgentsSync()
   useLegacyChatRenameMigration()
   useHostModelCatalogSnapshotsSync()
+  useZotzHostAgentQueueSync()
   useIpcEvents()
   useProfileStateSaveDelayNotice()
   useRemoteRuntimeRecoveryTriggers()

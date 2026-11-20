@@ -345,7 +345,7 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
       </NativeChatCrewFrame>
       {readFailure?.final ? null : (
         <>
-          <ZotzQueuedChatNotice sessionId={props.sessionId} />
+          <ZotzQueuedChatNotice sessionId={props.sessionId} target={props.target} />
           {/* Keep queued drafts outside the transcript and above the background-task dock. */}
           <NativeChatQueuedMessageList
             controller={submits.queuedMessages}

@@ -25892,6 +25892,7 @@
       "waitPressure": "The machine is low on memory; nothing new starts until some is freed.",
       "waitStarting": "Checking memory…",
       "autoStart": "The agent starts on its own when there is room. Nothing is lost if you wait.",
+      "onHost": "On {{host}}",
       "cancel": "Cancel",
       "forceStart": "Launch anyway",
       "board": {

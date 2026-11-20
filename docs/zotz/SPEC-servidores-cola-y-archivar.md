@@ -75,7 +75,7 @@ Llamadas nuevas, solo se agregan (no se renombra nada existente):
 ## 4. Fases y PRs
 
 1. **PR 1 (#26, mergeado):** este spec + Parte A (archivar principales).
-2. **PR 2:** Parte B de lectura: RPC `snapshot`/`subscribe`, capability, store por host y la interfaz que lo muestra.
+2. **PR 2 (lectura):** RPC `snapshot`/`subscribe` y capability, store por servidor, aviso de cola en el chat de un servidor (solo lectura, con "En MSI Server") y reloj de arena en la barra lateral. **Pendiente para después:** las tarjetas sobre terminales de un servidor (hay que comprobar que la clave de panel coincide entre la laptop y el servidor) y el tablero con una sección por máquina.
 3. **PR 3:** Parte B de acciones: `cancel`, `forceStart`, `dismissCanceled` desde la laptop.
 
 Cada PR pasa `pnpm check:changed`, sale a `main` y, para macOS, el release se arma según el procedimiento de firma local (el runner `macos-15` de GitHub suele no estar disponible).
