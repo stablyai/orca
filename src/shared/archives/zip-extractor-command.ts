@@ -1,9 +1,7 @@
-import { win32 } from 'node:path'
+import { windowsSystem32Binary } from '@orca/process-host/windows-system-binary'
 
 export function getTarProgram(): string {
-  return process.platform === 'win32'
-    ? win32.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'tar.exe')
-    : 'tar'
+  return process.platform === 'win32' ? windowsSystem32Binary('tar.exe') : 'tar'
 }
 
 /** The destination must already exist; callers extract only checksum-verified archives. */
