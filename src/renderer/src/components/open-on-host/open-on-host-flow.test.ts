@@ -47,25 +47,25 @@ const setupProjectClone = vi.fn()
 const initialState = useAppStore.getState()
 
 const hostRepo: Repo = {
-  id: 'devdesk-repo',
+  id: 'buildbox-repo',
   path: '/home/me/orca',
   displayName: 'orca',
-  executionHostId: 'runtime:devdesk',
+  executionHostId: 'runtime:buildbox',
   badgeColor: '',
   addedAt: 0
 }
 
 const target: OpenOnHostTarget = {
-  hostId: 'runtime:devdesk',
-  environmentId: 'devdesk',
-  label: 'devdesk',
+  hostId: 'runtime:buildbox',
+  environmentId: 'buildbox',
+  label: 'buildbox',
   existingSetup: {
-    id: 'setup-devdesk',
+    id: 'setup-buildbox',
     kind: 'ready',
     projectId: 'project-1',
-    hostId: 'runtime:devdesk',
-    repoId: 'devdesk-repo',
-    label: 'devdesk',
+    hostId: 'runtime:buildbox',
+    repoId: 'buildbox-repo',
+    label: 'buildbox',
     detail: '',
     path: '/home/me/orca'
   },
@@ -93,7 +93,7 @@ const base = {
   projectId: 'project-1',
   displayName: 'orca',
   target,
-  location: { kind: 'existing', repoId: 'devdesk-repo', path: '/home/me/orca' }
+  location: { kind: 'existing', repoId: 'buildbox-repo', path: '/home/me/orca' }
 } as const
 const workspaceRequest: OpenOnHostRequest = {
   ...base,
@@ -139,16 +139,16 @@ describe('runOpenOnHost', () => {
   it('opens a workspace from the same branch on the host', async () => {
     expect(await runOpenOnHost(workspaceRequest)).toEqual({ worktreeId: 'w2', notice: null })
     expect(fetch).toHaveBeenCalledWith(
-      expect.objectContaining({ worktreeId: 'devdesk-repo::/home/me/orca' }),
+      expect.objectContaining({ worktreeId: 'buildbox-repo::/home/me/orca' }),
       undefined
     )
     expect(createWorktree.mock.calls[0][2]).toBe('origin/feature/x')
     expect(createWorktree.mock.calls[0][12]).toBe('feature/x')
     expect(createWorktree.mock.calls[0].at(-1)).toEqual({
-      executionHostId: 'runtime:devdesk',
+      executionHostId: 'runtime:buildbox',
       branchIntent: 'open-existing-v2'
     })
-    expect(activate).toHaveBeenCalledWith('w2', { executionHostId: 'runtime:devdesk' })
+    expect(activate).toHaveBeenCalledWith('w2', { executionHostId: 'runtime:buildbox' })
   })
 
   it('fetches the fork remote and refuses when the host clone lacks it', async () => {
@@ -173,7 +173,10 @@ describe('runOpenOnHost', () => {
 
   it('warns when the host opened a different commit than the source', async () => {
     createWorktree.mockResolvedValue({ worktree: { id: 'w2', head: 'bbb' } })
-    expect((await runOpenOnHost(workspaceRequest))?.notice).not.toBeNull()
+    expect(await runOpenOnHost(workspaceRequest)).toEqual({
+      worktreeId: 'w2',
+      notice: expect.any(String)
+    })
   })
 
   it('pushes before fetching when the plan says push', async () => {
@@ -191,11 +194,29 @@ describe('runOpenOnHost', () => {
     expect(createWorktree).not.toHaveBeenCalled()
   })
 
+  it('tells the dialog not to clone again when a step after the clone fails', async () => {
+    setupProjectClone.mockResolvedValue({ repo: hostRepo })
+    fetch.mockRejectedValue(new Error('network down'))
+    const request: OpenOnHostRequest = {
+      ...workspaceRequest,
+      target: cloneTarget,
+      location: {
+        kind: 'clone',
+        url: 'https://github.com/o/orca.git',
+        destination: '/home/me',
+        folderName: 'orca'
+      }
+    }
+    expect(await runOpenOnHost(request)).toBe('failed-after-clone')
+    expect(setupProjectClone).toHaveBeenCalledOnce()
+    expect(createWorktree).not.toHaveBeenCalled()
+  })
+
   it('opens a project on the host with a generated name and the default base', async () => {
     expect(await runOpenOnHost(base)).toEqual({ worktreeId: 'w2', notice: null })
     expect(createWorktree.mock.calls[0][2]).toBeUndefined()
     expect(createWorktree.mock.calls[0].at(-1)).toEqual({
-      executionHostId: 'runtime:devdesk',
+      executionHostId: 'runtime:buildbox',
       nameWasGenerated: true
     })
   })
