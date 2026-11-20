@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { elementScroll, useVirtualizer, type VirtualItem } from '@tanstack/react-virtual'
 import { createProgrammaticScrollMarks } from '@/lib/list-interaction/virtualized-scrolling/programmatic-scroll-marks'
+import { observeOffscreenRow } from '@/lib/window-activity/offscreen-animation-pause'
 import {
   NATIVE_CHAT_ROW_GAP_PX,
   type NativeChatRowTypography,
@@ -31,7 +32,7 @@ export type NativeChatTranscriptWindow = {
   totalSize: number
   scrollMargin: number
   sizerRef: (node: HTMLDivElement | null) => void
-  measureRow: (node: HTMLElement | null) => void
+  measureRow: React.RefCallback<HTMLDivElement>
   /** Scroll so this element's top meets the top of the viewport. */
   alignToViewportTop: (element: HTMLElement, edge?: NativeChatAlignEdge) => void
   /** Whether a jump is still settling as its target row is measured. */
@@ -331,12 +332,28 @@ export function useNativeChatTranscriptWindow({
     }
   }, [isAlignHeld, reconcileReaderScroll])
 
+  const measureRow = useCallback(
+    (element: HTMLDivElement | null) => {
+      virtualizer.measureElement(element)
+      if (element === null) {
+        return undefined
+      }
+      // Overscan rows sit outside the scroller's clip; their loops would still draw every frame.
+      const stopObserving = observeOffscreenRow(element)
+      return () => {
+        stopObserving()
+        virtualizer.measureElement(null)
+      }
+    },
+    [virtualizer]
+  )
+
   return {
     virtualItems: virtualizer.getVirtualItems(),
     totalSize: virtualizer.getTotalSize(),
     scrollMargin,
     sizerRef,
-    measureRow: virtualizer.measureElement,
+    measureRow,
     alignToViewportTop,
     isAlignPending,
     cancelAlign,
