@@ -15,8 +15,8 @@ export const BROWSER_CLIENT_DOWNLOAD_WORKSPACE_DIRECTORY = '.orca/browser-downlo
 
 type TransferMutation = { workspaceId: string; expectation: RuntimeFileMutationExpectation }
 export type BrowserClientDownloadTransferDependencies = {
-  /** Pins the workspace's current host and creates the directory there. */
-  prepareDirectory(workspaceId: string, directory: string): Promise<RuntimeFileMutationExpectation>
+  /** Pins the workspace's current host; the first chunk write creates the directory there. */
+  pinWorkspaceHost(workspaceId: string): Promise<RuntimeFileMutationExpectation>
   writeChunk(
     input: TransferMutation & { relativePath: string; contentBase64: string; append: boolean }
   ): Promise<void>
@@ -168,10 +168,7 @@ export class BrowserClientDownloadTransferStore {
     let expectation = session.pinnedExpectation
     try {
       if (!expectation) {
-        expectation = await this.dependencies.prepareDirectory(
-          session.workspaceId,
-          BROWSER_CLIENT_DOWNLOAD_WORKSPACE_DIRECTORY
-        )
+        expectation = await this.dependencies.pinWorkspaceHost(session.workspaceId)
         session.pinnedExpectation = expectation
         this.assertLive(session)
       }
