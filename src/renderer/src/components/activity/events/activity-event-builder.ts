@@ -1,6 +1,7 @@
 import type { AcceptedAgentStatuses } from '@/store/slices/agent-status/status-ownership/accepted-agent-statuses'
 import {
   getStructuredAgentSessionTabsByPaneKey,
+  structuredTabsByPaneKey,
   type StructuredTab
 } from '@/components/native-chat/session/status/structured-agent-session-tabs'
 import { parseAgentStatusPaneIdentity } from '../../../../../shared/agent-status/identity/agent-status-worktree-attribution'
@@ -44,8 +45,8 @@ export type BuildActivityEventsArgs = {
   tabsByWorktree: Record<string, TerminalTab[]>
   ptyIdsByTabId?: Record<string, string[]>
   unifiedTabsByWorktree?: Record<string, Tab[]>
-  /** Chats by pane key from the store's own tab map; a projected map would rebuild the shared chat list. */
-  structuredTabsByPaneKey?: ReadonlyMap<string, StructuredTab>
+  /** Chats from the store's own tab map; reading them from a projected map rebuilds the shared list. */
+  structuredTabs?: readonly StructuredTab[]
   worktreeMap: Map<string, Worktree>
   repoMap: Map<string, Repo>
   repos?: readonly Repo[]
@@ -67,7 +68,7 @@ function paneBuildInputs(args: BuildActivityEventsArgs, t: Translate | undefined
     args.tabsByWorktree,
     args.ptyIdsByTabId,
     args.unifiedTabsByWorktree,
-    args.structuredTabsByPaneKey,
+    args.structuredTabs,
     args.worktreeMap,
     args.repoMap,
     args.repos,
@@ -127,9 +128,9 @@ export function buildActivityEvents(
   const buildLivePane = (paneKey: string, entry: AgentStatusEntry): PaneBuild | null => {
     const parsed = parseAgentStatusPaneIdentity(
       paneKey,
-      (
-        args.structuredTabsByPaneKey ??
-        getStructuredAgentSessionTabsByPaneKey(args.unifiedTabsByWorktree)
+      (args.structuredTabs
+        ? structuredTabsByPaneKey(args.structuredTabs)
+        : getStructuredAgentSessionTabsByPaneKey(args.unifiedTabsByWorktree)
       ).get(paneKey)
     )
     if (!parsed) {

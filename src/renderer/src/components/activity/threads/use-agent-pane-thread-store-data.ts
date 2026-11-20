@@ -1,6 +1,6 @@
 import { selectVisibleAgentOrchestration } from '@/runtime/agent-orchestration/visible-agent-orchestration'
 import {
-  getStructuredAgentSessionTabsByPaneKey,
+  getStructuredAgentSessionTabs,
   type StructuredTab
 } from '@/components/native-chat/session/status/structured-agent-session-tabs'
 import { useAppStore } from '@/store'
@@ -39,7 +39,8 @@ export type AllAgentPaneThreadsStoreData = Pick<
 > & {
   /** Current native-chat originals and terminal tabs with semantic identity reuse. */
   activityTabs: ActivityTabProjection
-  structuredTabsByPaneKey: ReadonlyMap<string, StructuredTab>
+  /** Same list while no chat tab changes; the builder indexes it by pane key only when a pane needs it. */
+  structuredTabs: readonly StructuredTab[]
   worktreeMap: ReturnType<typeof getIndexedWorktreeMap>
   repoMap: ReturnType<typeof getIndexedRepoMap>
   generatedTitlesEnabled: boolean
@@ -85,7 +86,7 @@ export function selectAllAgentPaneThreadStoreData(s: AppState): AllAgentPaneThre
     tabsByWorktree: s.tabsByWorktree,
     ptyIdsByTabId: s.ptyIdsByTabId,
     activityTabs: selectActivityTabs(s.unifiedTabsByWorktree),
-    structuredTabsByPaneKey: getStructuredAgentSessionTabsByPaneKey(s.unifiedTabsByWorktree),
+    structuredTabs: getStructuredAgentSessionTabs(s.unifiedTabsByWorktree),
     repos: s.repos,
     // Read by getKnownWorktreeById for folder owners, so a change must rebuild Activity owners.
     projectGroups: s.projectGroups,
