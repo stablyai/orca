@@ -1,8 +1,17 @@
-// Joining item reads: the changed items a notice named onto the list, and newer Activity pages onto an
-// open item's.
+// Joining item reads: Closed pages onto the list, the changed items a notice named onto it, and newer
+// Activity pages onto an open item's.
 import { reuseEqualJson } from '../reuse-equal-json'
-import type { BotItemEvent } from './bot-items'
+import type { BotItem, BotItemEvent } from './bot-items'
 import type { BotItemsListRead } from './bot-item-schema'
+
+/** Each item once: a later read's copy (a reopened item) over a loaded page's. */
+export function mergeBotItemsByUid(
+  first: readonly BotItem[],
+  second: readonly BotItem[]
+): BotItem[] {
+  const seen = new Set(first.map((item) => item.uid))
+  return [...first, ...second.filter((item) => !seen.has(item.uid))]
+}
 
 /** Both lists in id order, each event once. */
 export function mergeBotItemEvents(

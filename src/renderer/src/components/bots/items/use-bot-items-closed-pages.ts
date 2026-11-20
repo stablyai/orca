@@ -69,15 +69,15 @@ function withClosed(pages: Pages, items: readonly BotItem[]): Pages {
   return next ? { ...pages, items: next } : pages
 }
 
-/** Whether `read` joins what's loaded with nothing between: it has every Closed item, or one of its
- *  Closed items is held still unchanged in place (everything above it changed since, so it's all in
- *  `read`; everything below it is held). */
-function joins(pages: Pages, read: BotItemsRead): boolean {
-  if (!read.nextClosedCursor) {
+/** Whether `to` joins what's loaded with nothing between: its first page ends where `from`'s did (a
+ *  named read keeps it), or one of its Closed items is held still unchanged in place (everything above
+ *  it changed since, so it's all in `to`; everything below it is held). */
+function joins(pages: Pages, from: BotItemsRead, to: BotItemsRead): boolean {
+  if (to.nextClosedCursor === from.nextClosedCursor) {
     return true
   }
   const held = new Map(pages.items.map((item) => [item.uid, item]))
-  return read.items.some((item) => {
+  return to.items.some((item) => {
     const kept = held.get(item.uid)
     return (
       isClosed(item) &&
@@ -88,11 +88,26 @@ function joins(pages: Pages, read: BotItemsRead): boolean {
   })
 }
 
+/** Every Closed item `read` counts is loaded or in it, when the loaded pages say they reach the end. */
+function countsMet(pages: Pages, read: BotItemsRead): boolean {
+  if (pages.cursor !== null) {
+    return true
+  }
+  const uids = new Set(pages.items.map((item) => item.uid))
+  read.items.forEach((item) => isClosed(item) && uids.add(item.uid))
+  return uids.size >= (read.counts.done ?? 0) + (read.counts.canceled ?? 0)
+}
+
 /** Loaded pages carried from the read they continued (`from`) to a newer one (`to`): `from`'s Closed
- *  items kept, so a row `to` pushed past its first page stays; null when `to` doesn't join them. */
+ *  items kept, so a row `to` pushed past its first page stays. Null, back to `to`'s first page, when
+ *  `to` holds every Closed item itself, or doesn't join them, or counts some they lack (a host clock
+ *  set back can close an item below the loaded end). */
 function carry(pages: Pages, from: BotItemsRead, to: BotItemsRead | null): Pages | null {
   const kept = withClosed(pages, from.items)
-  return !to || to === from || joins(kept, to) ? kept : null
+  if (!to || to === from) {
+    return kept
+  }
+  return to.nextClosedCursor && joins(kept, from, to) && countsMet(kept, to) ? kept : null
 }
 
 /** The read's items (Closed ones only down to the loaded end) and the loaded ones, each uid once. */
@@ -123,18 +138,19 @@ export function useBotItemsClosedPages(
   const chats = useStableBotItemChats(chatIds)
   const [kept, setPages] = useState<Pages | null>(null)
   const pages = kept?.chats === chats ? kept : null
-  const [lastRead, setLastRead] = useState(read)
-  if (lastRead !== read) {
-    setLastRead(read)
-    if (pages && lastRead) {
-      const next = carry(pages, lastRead, read)
+  // Only a newer read of the same chats carries the pages; another filter's read is its own list.
+  const [last, setLast] = useState({ read, chats })
+  if (last.read !== read || last.chats !== chats) {
+    setLast({ read, chats })
+    if (pages && last.read && last.chats === chats) {
+      const next = carry(pages, last.read, read)
       if (next !== pages) {
         setPages(next)
       }
     }
   }
-  const latest = useRef(read)
-  latest.current = read
+  const latest = useRef({ read, chats })
+  latest.current = { read, chats }
   const generation = useRef(0)
 
   const cursor = pages ? pages.cursor : (read?.nextClosedCursor ?? null)
@@ -145,12 +161,13 @@ export function useBotItemsClosedPages(
     }
     const mine = ++generation.current
     const next = await readMoreClosedItems({ hostId, id }, cursor, chats)
-    if (generation.current === mine) {
+    // A page of a filter no longer shown is dropped.
+    if (generation.current === mine && latest.current.chats === chats) {
       setPages((prev) => {
         const held: Pages = prev && prev.chats === chats ? prev : { chats, items: [], cursor: null }
         const grown = withClosed(held, next.items)
         // The read this page continues stays loaded, so a newer one landed meanwhile strands nothing.
-        return carry({ ...grown, cursor: next.nextClosedCursor ?? null }, from, latest.current)
+        return carry({ ...grown, cursor: next.nextClosedCursor ?? null }, from, latest.current.read)
       })
     }
     return { items: next.items, more: Boolean(next.nextClosedCursor) }
