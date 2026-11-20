@@ -7,8 +7,6 @@ export type CoreWriteRequest =
   | { kind: 'ui'; updates: Partial<PersistedUIState> }
   /** Best effort: saves what is pending and swallows failures. */
   | { kind: 'flush-pending' }
-  /** Throws unless a full checkpoint of the profile reaches disk. */
-  | { kind: 'checkpoint' }
 
 /** Main's native code reads settings and UI state through this, never through the Store. */
 export type NativeSettingsProjection = {
@@ -39,8 +37,6 @@ export function createStoreNativeSettingsProjection(store: Store): NativeSetting
           return Promise.resolve()
         case 'flush-pending':
           return store.flushPendingAsync()
-        case 'checkpoint':
-          return store.flushPendingOrThrowAsync({ fullCheckpoint: true })
       }
     }
   }
