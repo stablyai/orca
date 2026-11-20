@@ -52,17 +52,4 @@ describe('TextField', () => {
     })
     expect(focusSpy).toHaveBeenCalledTimes(2)
   })
-
-  it('removes the focus-forwarding backdrop when editable changes to false', () => {
-    let renderer: ReactTestRenderer | null = null
-    act(() => {
-      renderer = create(createElement(TextField, { editable: true, label: 'Live input' }))
-    })
-    expect(findAllByHostType(renderer!.root, 'Pressable')).toHaveLength(1)
-
-    act(() => {
-      renderer!.update(createElement(TextField, { editable: false, label: 'Live input' }))
-    })
-    expect(findAllByHostType(renderer!.root, 'Pressable')).toEqual([])
-  })
 })

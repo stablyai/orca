@@ -47,14 +47,7 @@ export function TextField({
     (node: TextInputInstance | null) => {
       ownInputRef.current = node
       if (typeof inputRef === 'function') {
-        const cleanup = inputRef(node)
-        if (typeof cleanup === 'function') {
-          return () => {
-            ownInputRef.current = null
-            cleanup()
-          }
-        }
-        return undefined
+        return inputRef(node)
       }
       if (inputRef) {
         inputRef.current = node
@@ -63,12 +56,6 @@ export function TextField({
     },
     [inputRef]
   )
-  const focusInput = useCallback(() => {
-    if (!editable) {
-      return
-    }
-    ownInputRef.current?.focus()
-  }, [editable])
   const input = (
     <TextInput
       ref={bindInputRef}
@@ -89,8 +76,7 @@ export function TextField({
         <Pressable
           accessible={false}
           focusable={false}
-          tabIndex={-1}
-          onPress={focusInput}
+          onPress={() => ownInputRef.current?.focus()}
           style={StyleSheet.absoluteFill}
         />
       ) : null}
