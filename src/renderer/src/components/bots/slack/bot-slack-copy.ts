@@ -10,11 +10,6 @@ export function botSlackErrorMessage(code: string, hostName: string | null): str
     return onHost
   }
   switch (code) {
-    case 'connection_changed':
-      return translate(
-        'bots.slack.errors.connectionChanged',
-        'This bot’s Slack app changed. Check its connection, then try again.'
-      )
     case 'invalid_request':
       return translate(
         'bots.slack.errors.notAToken',

@@ -228,14 +228,47 @@ describe('bots.slack', () => {
     expect(editedFrom({ slack: { teamId: 'T1', appId: 'A-new' } })).toBeNull()
   })
 
-  it('does not remove a different app the cloud holds in the selected workspace', async () => {
+  it('removes the workspace when Cloud has a newer app than the saved record', async () => {
     mocks.call.mockResolvedValueOnce({
       ok: true,
-      value: { state: 'created', teamId: 'T1', appId: 'A-new' }
+      value: {
+        state: 'installed',
+        teamId: 'T1',
+        appId: 'A-new',
+        botUserId: 'U1',
+        installerUserId: 'U2'
+      }
+    })
+    mocks.call.mockResolvedValueOnce({ ok: true, value: undefined })
+    expect(await invoke('bots.slack.remove', { botId: 'bot-1', teamId: 'T1' })).toEqual({
+      ok: true,
+      value: undefined
+    })
+    expect(mocks.call.mock.calls.map((call) => call[3]?.method)).toEqual(['GET', 'DELETE'])
+    expect(editedFrom(inT1)).toEqual({ slackApps: [] })
+    expect(editedFrom({ slack: { teamId: 'T1', appId: 'A-new' } })).toBeNull()
+  })
+
+  it('removes the workspace even when its app was never saved locally', async () => {
+    mocks.list.mockReturnValue([{ id: 'bot-1', slack: null }])
+    mocks.call.mockResolvedValueOnce(createdIn('T1'))
+    mocks.call.mockResolvedValueOnce({ ok: true, value: undefined })
+    expect(await invoke('bots.slack.remove', { botId: 'bot-1', teamId: 'T1' })).toEqual({
+      ok: true,
+      value: undefined
+    })
+    expect(mocks.call.mock.calls.map((call) => call[3]?.method)).toEqual(['GET', 'DELETE'])
+    expect(editedFrom({ slack: null })).toBeNull()
+  })
+
+  it('does not send DELETE as a different account after the workspace check', async () => {
+    mocks.call.mockImplementationOnce(async () => {
+      mocks.account = 'acct-2'
+      return createdIn('T1')
     })
     expect(await invoke('bots.slack.remove', { botId: 'bot-1', teamId: 'T1' })).toEqual({
       ok: false,
-      error: 'connection_changed'
+      error: 'account_changed'
     })
     expect(mocks.call.mock.calls.map((call) => call[3]?.method)).toEqual(['GET'])
     expect(mocks.update).not.toHaveBeenCalled()
