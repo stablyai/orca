@@ -111,6 +111,7 @@ export function settledJournalDomainSubmission(
   delete next.recovered
   if (input.state === 'pending') {
     next.handedOverAt = savedAt
+    delete next.writtenAt
   }
   if (input.state === 'rejected') {
     const rejection = readStoredRejectionFact(input.rejection)

@@ -109,7 +109,8 @@ export function useMobileNativeChatTurnDisclosure({
     liveTurnKey,
     enabled,
     // The clock starts once the agent has the opening message, as desktop's "Sending…" clears.
-    isWorking: isWorking && !structuredAgentTurnOpeningSendPending(liveTurnKey, turnJournal),
+    isWorking:
+      isWorking && !structuredAgentTurnOpeningSendPending(liveTurnKey, turnJournal?.submissions),
     workingStartedAt,
     settledTurns,
     thinking,

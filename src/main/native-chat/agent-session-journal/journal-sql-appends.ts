@@ -190,6 +190,11 @@ export abstract class SqlJournalAppends {
     return this.answerOf(this.write({ kind: 'dispatch', input }, receipted(receipt)))
   }
 
+  /** The provider took a pending send's write while running no other turn; the echo still settles it. */
+  async markDispatchWritten(input: { clientMessageId: string; fence: number }): Promise<void> {
+    await this.write({ kind: 'dispatch-written', ...input })
+  }
+
   appendStopEvent(event: Omit<JournalStopEvent, 'at'>, fence: number): Promise<AgentJournalCursor> {
     return this.answerOf(this.write({ kind: 'stop', event, fence }))
   }

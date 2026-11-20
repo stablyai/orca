@@ -143,8 +143,7 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
     submissions: controller.submissions,
     journalItems: controller.journalItems,
     startFailures,
-    agentName: agentLabel,
-    latestTurn: controller.latestTurn
+    agentName: agentLabel
   })
   // A lost contact is the host notice's to say; the read adds only a refusal the host sent.
   const readFailure =

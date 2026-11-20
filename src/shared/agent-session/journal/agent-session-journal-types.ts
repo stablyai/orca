@@ -441,6 +441,9 @@ export type AgentJournalSubmission = {
   handoverRecorded?: true
   /** When the host handed it to the provider (its `dispatch{pending}` row). */
   handedOverAt?: number
+  /** When the provider took the write while running no other turn, so its turn has begun; still
+   *  pending until the provider's echo. Never delivery proof. Absent on older hosts. */
+  writtenAt?: number
   /** Host-only: the submission row's sequence, which tells which host process accepted it. Set
    *  only on a send accepted for later handover. The snapshot still carries it, but the submission
    *  schema omits it; no released client reads it, and clients read `submittedSequence` instead. */
