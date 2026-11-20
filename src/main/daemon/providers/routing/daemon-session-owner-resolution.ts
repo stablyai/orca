@@ -148,6 +148,10 @@ export class DaemonSessionOwnerResolver<T extends IPtyProvider> {
     // Retries share the first read's budget, so a busy host still answers within one timeout.
     const deadlineMs = opts?.deadlineMs ?? Date.now() + OWNER_RESOLUTION_TIMEOUT_MS
     for (let attempt = 0; ; attempt++) {
+      // A re-read admitted after the budget ran out would list the daemon for no caller.
+      if (attempt > 0 && Date.now() >= deadlineMs) {
+        throw new TerminalSessionOwnerUnverifiedError('inventory deadline')
+      }
       const pending = this.inventory(false, { ...opts, deadlineMs }, true)
       if (
         !(await awaitDaemonWorkWithinCallerDeadline(

@@ -64,7 +64,8 @@ export type WorktreeMemoryBucket = {
   memory: number
   privateMemory: number
   sessions: SessionMemory[]
-  chats: ChatAgentMemory[]
+  /** Created with the first chat, so a terminal-only workspace sends no empty list. */
+  chats?: ChatAgentMemory[]
 }
 
 /** Project-group names read once per snapshot, not once per folder bucket. */
@@ -141,7 +142,6 @@ export function createEmptyWorktreeMemoryBucket(
     cpu: 0,
     memory: 0,
     privateMemory: 0,
-    sessions: [],
-    chats: []
+    sessions: []
   }
 }

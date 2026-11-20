@@ -153,13 +153,20 @@ export function spawnManagedProviderProcess(
   const exitPromise = new Promise<void>((resolve) => {
     resolveExit = resolve
   })
+  // Once the process exits or its pipes close, its pid can name another process.
   let releaseAgentMemory: (() => void) | null = null
+  let agentMemoryRetired = false
+  const retireAgentMemory = (): void => {
+    agentMemoryRetired = true
+    releaseAgentMemory?.()
+    releaseAgentMemory = null
+  }
   const observeExit = (exit: ProviderProcessExit): void => {
     if (observed) {
       return
     }
     observed = exit
-    releaseAgentMemory?.()
+    retireAgentMemory()
     resolveExit()
     for (const listener of listeners) {
       listener(exit)
@@ -179,6 +186,7 @@ export function spawnManagedProviderProcess(
     spawnError ??= error
   })
   child.on('close', (code, signal) => {
+    retireAgentMemory()
     const processless = spawnFailed && child.pid === undefined
     if (processless) {
       observeExit({ code, signal, processless })
@@ -186,7 +194,7 @@ export function spawnManagedProviderProcess(
   })
   // Hosted launches publish their pid only once the agent host starts them.
   void awaitProviderChildSpawn(child).then(() => {
-    if (child.pid !== undefined && !observed) {
+    if (child.pid !== undefined && !agentMemoryRetired && !child.numericIdentityRetired) {
       releaseAgentMemory = registerAgentProcess(child.pid)
     }
   })

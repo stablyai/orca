@@ -11,9 +11,7 @@ import { AgentSessionRecordStore } from './agent-session-record-store'
 import type { JournalSqlDatabase } from '../../../native-chat/agent-session-journal/database/journal-sql-database'
 import { openStructuredAgentSessionSqlJournalDatabase } from '../installation/structured-agent-session-journal-open'
 import type { StructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/host/structured-agent-session-logger'
-import { setAgentProcessOwnerReader } from '../../../memory/agent-process-registry'
-import { agentSessionRuntimeIncarnation } from './agent-session-runtime-attribution'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
+import { setAgentProcessChatReader } from '../../../memory/agent-process-registry'
 
 export type AgentSessionRecordStoreLocation = {
   stateDirectory: string
@@ -110,27 +108,17 @@ export function peekOpenedAgentSessionRecordStore(): AgentSessionRecordStore | n
   return opening?.store ?? null
 }
 
-// Resource Manager attributes each agent process tree to the chat whose lease names that process.
-// Only this run's owners count: a lease left by an earlier run may name a pid that is now another process.
-setAgentProcessOwnerReader(() =>
-  (peekOpenedAgentSessionRecordStore()?.listLeaseHolders() ?? []).flatMap((record) => {
-    const owner = record.lease.ownerProcess
-    return owner &&
-      owner.runtime === agentSessionRuntimeIncarnation() &&
-      record.location.executionHostId === LOCAL_EXECUTION_HOST_ID &&
-      record.location.wslDistro === null
-      ? [
-          {
-            pid: owner.pid,
-            agentSessionId: record.sessionId,
-            worktreeId: record.location.workspaceId,
-            agent: record.provider,
-            name: record.conversationName ?? null
-          }
-        ]
-      : []
-  })
-)
+// The Resource Manager names a chat's row from its record, read only for chats with a live process.
+setAgentProcessChatReader((agentSessionId) => {
+  const record = peekOpenedAgentSessionRecordStore()?.getRecord(agentSessionId)
+  return record
+    ? {
+        worktreeId: record.location.workspaceId,
+        agent: record.provider,
+        name: record.conversationName ?? null
+      }
+    : null
+})
 
 async function openRecordStore(
   location: AgentSessionRecordStoreLocation
