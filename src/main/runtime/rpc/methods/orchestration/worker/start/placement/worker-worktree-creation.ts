@@ -133,6 +133,7 @@ export async function createWorkerWorktree(args: {
   }
   agent: TuiAgent
   /** Structured creation skips startup agent and TUI trust presets: no PTY menu can consume its first paste. Setup/default tabs still run, matching renderer chat creates. */
+  taskTitle?: string | null
   withAgentTerminal: boolean
   promisedAgentChat?: boolean
   onWorkspaceCreated?: (worktreeId: string) => void
@@ -172,6 +173,7 @@ export async function createWorkerWorktree(args: {
     ...(args.withAgentTerminal
       ? {
           startupAgent: args.agent,
+          ...(args.taskTitle ? { startupTitle: args.taskTitle } : {}),
           startupLaunchSource: 'orchestration',
           startupSuppressUpdatePrompt: true,
           ...(args.launchPreferences ? { startupLaunchPreferences: args.launchPreferences } : {})

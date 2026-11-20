@@ -188,6 +188,7 @@ export async function startFederatedWorker(args: FederatedWorkerStartRequest): P
           dispatchId: started.dispatch.id,
           taskId: taskForRemote.id,
           taskSpec: taskForRemote.spec,
+          taskTitle: started.task.task_title ?? undefined,
           // Carry home dispatch depth so remote workers cannot re-enter as roots when nesting.
           depth: started.dispatch.depth,
           protocolVersion: federationProtocolVersion,

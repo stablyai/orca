@@ -23,7 +23,7 @@ import {
 } from '../../../../../../../shared/app-lifecycle/app-environment'
 import { getWorkerTerminalAutoReleaseScheduler } from '../../../../../orchestration/terminal-authority/release/worker-terminal-auto-release-scheduler'
 
-type WorkerStartOptions = { terminal?: string; agent?: TuiAgent }
+type WorkerStartOptions = { terminal?: string; agent?: TuiAgent; taskTitle?: string }
 
 function isWorkerStartResult(value: unknown): value is { state: 'ready'; dispatchId: string } {
   return (
@@ -244,7 +244,11 @@ export function createOrchestrationWorkerReleaseHarness(): OrchestrationWorkerRe
     taskId: string
     dispatchId: string
   }> {
-    const task = db.createTask({ spec: 'release fixture task', runId: activeRunId })
+    const task = db.createTask({
+      spec: 'release fixture task',
+      taskTitle: options.taskTitle,
+      runId: activeRunId
+    })
     const result = await call('orchestration.workerStart', {
       task: task.id,
       from: 'term_coord',

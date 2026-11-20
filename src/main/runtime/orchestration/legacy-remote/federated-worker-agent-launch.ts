@@ -100,6 +100,7 @@ export async function launchFederatedWorkerAgent(args: {
           observeSetupCompletion: true,
           createdWithAgent: agent,
           startupAgent: agent,
+          ...(params.taskTitle ? { startupTitle: params.taskTitle } : {}),
           startupLaunchSource: 'orchestration',
           startupSuppressUpdatePrompt: true,
           ...(args.launchPreferences ? { startupLaunchPreferences: args.launchPreferences } : {}),
@@ -158,7 +159,7 @@ export async function launchFederatedWorkerAgent(args: {
           launchSource: 'orchestration',
           suppressStartupUpdatePrompt: true,
           ...(args.launchPreferences ? { launchPreferences: args.launchPreferences } : {}),
-          title: `worker-${params.taskId}`,
+          title: params.taskTitle || `worker-${params.taskId}`,
           presentation: 'background'
         })
         effects.push({ kind: 'terminal', role: 'agent', action: 'created', id: terminal.handle })

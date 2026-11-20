@@ -56,6 +56,20 @@ describe('worker terminal custody is recorded at terminal creation', () => {
     return { dispatchId: startingDispatchId(), taskId: task.id, start, finish }
   }
 
+  it('opens a named task in a readable terminal that can still be released', async () => {
+    h.setup()
+    const { taskId, dispatchId } = await h.startWorker({ taskTitle: 'Check login' })
+    expect(h.runtime.createTerminal).toHaveBeenCalledWith(
+      'id:repo::worktree',
+      expect.objectContaining({ title: 'Check login' })
+    )
+
+    h.settle(taskId, dispatchId, 'succeeded')
+    await expect(
+      h.call('orchestration.workerRelease', { dispatch: dispatchId })
+    ).resolves.toMatchObject({ state: 'released' })
+  })
+
   it('claims nothing for an explicitly reused terminal until authority transfers it', async () => {
     h.setup()
     const held = await startHeldAtBootWait({ terminal: 'term_worker' })
