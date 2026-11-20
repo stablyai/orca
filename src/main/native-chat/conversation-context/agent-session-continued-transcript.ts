@@ -2,7 +2,10 @@ import { randomUUID } from 'node:crypto'
 import { createReadStream } from 'node:fs'
 import { open, stat } from 'node:fs/promises'
 import { StringDecoder } from 'node:string_decoder'
-import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type {
+  AgentJournalBoundedPayload,
+  AgentJournalRenderItem
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { NativeChatMessage } from '../../../shared/native-chat/native-chat-types'
 
 /**
@@ -17,18 +20,19 @@ export class ContinuedTranscriptMarkers {
     'g'
   )
 
-  mark(item: AgentJournalRenderItem, index: number): AgentJournalRenderItem {
+  /** `whole`: the streamed text is complete, so the row's truncation note is left out. */
+  mark(item: AgentJournalRenderItem, index: number, whole = false): AgentJournalRenderItem {
     const { body } = item
-    const wrap = (head: string) =>
-      `\u0000orca-continued:${this.id}:${index}\u0001${head}\u0000orca-continued-end:${this.id}\u0001`
+    const wrap = (payload: AgentJournalBoundedPayload) => ({
+      ...payload,
+      head: `\u0000orca-continued:${this.id}:${index}\u0001${payload.head}\u0000orca-continued-end:${this.id}\u0001`,
+      ...(whole ? { truncated: false } : {})
+    })
     if (body.kind === 'diff') {
-      return { ...item, body: { ...body, patch: { ...body.patch, head: wrap(body.patch.head) } } }
+      return { ...item, body: { ...body, patch: wrap(body.patch) } }
     }
     if (body.kind === 'tool-call' && body.output) {
-      return {
-        ...item,
-        body: { ...body, output: { ...body.output, head: wrap(body.output.head) } }
-      }
+      return { ...item, body: { ...body, output: wrap(body.output) } }
     }
     return item
   }

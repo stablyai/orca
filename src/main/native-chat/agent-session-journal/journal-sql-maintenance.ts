@@ -31,6 +31,10 @@ import {
 import { compactJournalStoredOutputPage } from './journal-stored-output-compaction'
 import { pruneJournalSqlEventTail, type JournalSqlEventTailResult } from './journal-sql-event-tail'
 import {
+  sweepJournalOutputFiles,
+  type JournalOutputFileSweepResult
+} from './journal-output-file-sweep'
+import {
   discardJournalDomainImportPage,
   type JournalDomainImportDiscard
 } from './journal-domain-import-discard'
@@ -56,6 +60,7 @@ export type JournalPagedMaintenanceKind =
   | 'page-reclaim'
   | 'chat-discard'
   | 'stored-output-compaction'
+  | 'output-file-sweep'
 
 export type JournalSqlMaintenance =
   | { kind: 'legacy-retirement-state' }
@@ -85,6 +90,7 @@ export type JournalSqlMaintenance =
   | { kind: 'import-finish'; header: JournalDomainImportHeader }
   | JournalDomainMaintenance
   | { kind: 'event-tail-prune'; now: number }
+  | { kind: 'output-file-sweep'; now: number }
   | ({ kind: 'legacy-compare-settle' } & Parameters<typeof settleJournalLegacyCompare>[1])
   | { kind: 'legacy-copy-failed'; sessionId: string; error: string }
   // The reply outbox's rows outside any chat's lane: filled with outcomes, and sent.
@@ -99,6 +105,7 @@ export type JournalSqlMaintenanceResult =
   | JournalForkStageResult
   | JournalSqlProjectionState
   | JournalSqlEventTailResult
+  | JournalOutputFileSweepResult
   | JournalDomainMaintenanceResult
   | JournalDomainImportDiscard
   | ReturnType<typeof discardForgottenJournalChatPage>
@@ -208,5 +215,7 @@ export function applyJournalSqlMaintenance(
       return null
     case 'stored-output-compaction':
       return compactJournalStoredOutputPage(db)
+    case 'output-file-sweep':
+      return sweepJournalOutputFiles(db, operation.now)
   }
 }

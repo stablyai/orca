@@ -54,6 +54,8 @@ export type JournalContinuedPayload = {
   field: JournalContinuedField
   /** Stored UTF-8 length of the whole text. */
   bytes: number
+  /** The whole text's side file, named by its sha256, when the row holds only its head. */
+  file?: string
 }
 
 export type JournalContinuedField = 'output' | 'patch'
@@ -65,7 +67,7 @@ export type JournalContinuationContext = {
   continued: readonly JournalContinuedPayload[]
 }
 
-export type JournalContinuationSpill = Omit<JournalContinuedPayload, 'index' | 'bytes'> & {
+export type JournalContinuationSpill = Omit<JournalContinuedPayload, 'index' | 'bytes' | 'file'> & {
   /** A new private file the reader writes the whole stored UTF-8 text to. */
   path: string
 }

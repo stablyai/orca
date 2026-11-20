@@ -20,6 +20,7 @@ import { journalSqlFailure } from './journal-sql-failure'
 import type { JournalSqlRequest, JournalSqlResponse } from './journal-sql-protocol'
 import { assertJournalWritable } from './writing/journal-write-guards'
 import { applyJournalSqlMaintenance } from './journal-sql-maintenance'
+import { JOURNAL_OUTPUT_FILE_SCHEMA, registerJournalOutputFileRoot } from './journal-output-files'
 import { tryFoldJournalTextTails } from './journal-text-tail'
 import { installWorkerSendLedger } from '../../worker-threads/worker-send-ledger'
 import { JournalSqlQueueClock, journalSqlTimedGate } from './journal-sql-writer-timing'
@@ -79,6 +80,8 @@ async function open(): Promise<void> {
     if (!readOnly) {
       db.exec(JOURNAL_ASYNC_QUESTION_INDEXES)
       runJournalTransaction(db, (writer) => writer.exec(JOURNAL_ENDED_TURN_COUNTS_SCHEMA))
+      db.exec(JOURNAL_OUTPUT_FILE_SCHEMA)
+      registerJournalOutputFileRoot(db, stateDirectory)
     }
     forks = new JournalForkStages(db, stateDirectory)
     commands = new JournalSqlCommand(db, stateDirectory, forks)

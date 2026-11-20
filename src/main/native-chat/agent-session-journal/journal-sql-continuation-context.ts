@@ -10,6 +10,7 @@ import type {
 import { journalContextEpoch } from './context-epochs/journal-context-epoch'
 import type { SqliteBindings, SqliteRow } from '../../sqlite/sqlite-statement'
 import { readJournalStoredRow } from './journal-stored-output-rows'
+import { journalOutputFile } from './journal-output-file-references'
 
 const PAGE = 256
 // Rows under this size carry their whole text; a larger tool output or patch streams in byte chunks.
@@ -144,7 +145,8 @@ function readJournalDomainContinuationPage(
           index: items.length,
           itemId: item.itemId,
           revision: item.revision,
-          ...taken
+          ...taken,
+          ...outputFileOf(item)
         })
       }
       items.push(item)
@@ -167,6 +169,14 @@ function readJournalDomainContinuationPage(
     submissions: rows.map((row) => JSON.parse(String(row.payload_json))),
     next: next.length ? { part: 'sends', after: next } : null
   }
+}
+
+function outputFileOf(item: AgentJournalRenderItem): { file?: string } {
+  const { body } = item
+  const file = journalOutputFile(
+    body.kind === 'diff' ? body.patch : body.kind === 'tool-call' ? body.output : undefined
+  )
+  return file ? { file } : {}
 }
 
 function takeContinuedField(

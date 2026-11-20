@@ -70,6 +70,8 @@ export function storeJournalItemOutput<T extends AgentJournalRenderItem>(
     !payload ||
     (item.body.kind === 'tool-call' && item.body.state === 'running') ||
     storedMarker(payload) ||
+    // A head beside its side file keeps the file's name, which a blob form would drop.
+    'outputFile' in payload ||
     payload.head.length * 3 < MIN_STORED_TEXT_BYTES ||
     payload.head.length > MAX_STORED_TEXT_BYTES
   ) {

@@ -15,6 +15,8 @@ import {
   writeAgentSessionContextSnapshot
 } from '../../conversation-context/agent-session-context-snapshots'
 import type { JournalContinuedPayload } from '../../agent-session-journal/journal-reads'
+import { journalOutputFilePath } from '../../agent-session-journal/journal-output-file-references'
+import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   ContinuedTranscriptMarkers,
   continuedFileText
@@ -58,7 +60,7 @@ export function continuationContextReader(
     const markers = new ContinuedTranscriptMarkers()
     const items = [...context.items]
     context.continued.forEach((part, index) => {
-      items[part.index] = markers.mark(items[part.index], index)
+      items[part.index] = markers.mark(items[part.index], index, Boolean(part.file))
     })
     const messages = projectStructuredAgentSessionMessages(
       items,
@@ -82,7 +84,17 @@ export function continuationContextReader(
     // Apart from published snapshots, so the crash sweep visits only spills.
     const spillRoot = join(snapshotRoot, 'spills')
     // One extraction per text, written by the reader to a private file main then streams.
-    const spill = async (part: JournalContinuedPayload, trimEnd: boolean) => {
+    const spill = async (index: number, trimEnd: boolean) => {
+      const part = context.continued[index]
+      // Checked as its turn to stream comes, not all before the first.
+      const file = await continuedFile(
+        deps.journalDatabase.stateDirectory,
+        part,
+        context.items[part.index]
+      )
+      if (file) {
+        return continuedFileText(file, trimEnd)
+      }
       // Checked and swept once per export, before its first spill.
       prepared ??= (async () => {
         if (
@@ -118,11 +130,7 @@ export function continuationContextReader(
       path = await writeAgentSessionContextSnapshot(
         deps.journalDatabase.stateDirectory,
         input.sessionId,
-        continued
-          ? markers.transcript(formatted, (index, trimEnd) =>
-              spill(context.continued[index], trimEnd)
-            )
-          : text
+        continued ? markers.transcript(formatted, (index, trimEnd) => spill(index, trimEnd)) : text
       )
     } catch (error) {
       if (error instanceof ContinuedPayloadSuperseded) {
@@ -170,4 +178,32 @@ async function removeStaleSpills(root: string): Promise<void> {
       await rm(path, { force: true })
     }
   }
+}
+
+/**
+ * The side file a row promises its whole text in. One missing or of the wrong size fails the
+ * export: a promised whole text never quietly becomes its head.
+ */
+async function continuedFile(
+  stateDirectory: string,
+  part: JournalContinuedPayload,
+  item: AgentJournalRenderItem
+): Promise<string | null> {
+  const { body } = item
+  const payload =
+    body.kind === 'diff' ? body.patch : body.kind === 'tool-call' ? body.output : undefined
+  if (!part.file || !payload) {
+    return null
+  }
+  const path = journalOutputFilePath(stateDirectory, part.file)
+  const size = await stat(path).then(
+    (info) => info.size,
+    () => -1
+  )
+  if (size !== payload.byteLength) {
+    throw new Error(
+      `chat output ${part.itemId} is missing its saved file (${size < 0 ? 'not found' : `${size} of ${payload.byteLength} bytes`})`
+    )
+  }
+  return path
 }

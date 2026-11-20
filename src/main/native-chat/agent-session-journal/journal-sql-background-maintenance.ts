@@ -6,8 +6,7 @@ import type { JournalSqlActivity } from './journal-sql-activity'
 import type { JournalPagedMaintenanceKind, JournalSqlMaintenance } from './journal-sql-maintenance'
 import { JOURNAL_STORED_OUTPUT_WRITES } from './journal-stored-output'
 
-const MINUTE = 60_000
-const COMPACTION_INTERVAL = 6 * 60 * MINUTE
+const COMPACTION_INTERVAL = 6 * 60 * 60_000
 // About 8k saved outputs a minute at the shared 10% duty cycle; none while writes are off.
 const STORED_OUTPUT_PAGES_PER_TICK = JOURNAL_STORED_OUTPUT_WRITES ? 256 : 0
 
@@ -70,7 +69,7 @@ export class JournalSqlBackgroundMaintenance {
       this.wake = new AbortController()
       this.armPeriodic()
       void this.requestRun()
-    }, MINUTE)
+    }, 60_000)
     this.timer.unref()
   }
 
@@ -143,6 +142,7 @@ export class JournalSqlBackgroundMaintenance {
         if (state.completedAt === null || now - state.completedAt >= COMPACTION_INTERVAL) {
           await this.pages({ kind: 'event-tail-prune', now })
           if (!this.stopped.signal.aborted) {
+            await this.pages({ kind: 'output-file-sweep', now })
             await this.writer.maintain({ kind: 'compaction-complete', now: Date.now() })
           }
         }
@@ -311,7 +311,6 @@ export class JournalSqlBackgroundMaintenance {
     }
     return complete ? work : Promise.reject(new Error('journal maintenance stopped'))
   }
-
   private report(error: unknown, sessionId?: string): void {
     if (!this.stopped.signal.aborted) {
       this.onError(error, sessionId)
