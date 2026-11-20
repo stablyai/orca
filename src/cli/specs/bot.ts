@@ -191,7 +191,7 @@ export const BOT_COMMAND_SPECS: CommandSpec[] = [
     notes: [
       'Prints the page to open; the sign-in finishes when it is done in the browser.',
       "Signed in on another computer? Its browser ends on a page that can't load: pass that address with --finish.",
-      'For a paired server’s bot (--environment), an app Orca signs in to prints its page and waits: paste the address you landed on.'
+      'An app Orca signs in to prints its page and waits; if the browser ends on a page that can’t load, paste that address (not --finish).'
     ]
   },
   {
