@@ -2,10 +2,10 @@ import { ClaudeHelperKillPoller } from '../../../shared/agent-hook-listener/prov
 import { retainTmuxHookWriterTopology } from './cli-writer-observation'
 import {
   pollCodexTranscriptStatus,
-  readCodexTranscriptPoll,
   type CodexTranscriptPollReads
 } from '../../../shared/agent-hook-listener/providers/codex/codex-transcript-poll'
 import { normalizeHookPayload } from '../../../shared/agent-hook-listener/normalization/normalize-hook-payload'
+import { readHookTranscriptPoll } from '../../../shared/agent-hook-listener/transcripts/hook-transcript-poll-reads'
 import {
   hasPendingAgentResultText,
   preparePendingGrokResultDiscovery
@@ -162,7 +162,7 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
       return
     }
     // Nested CLIs inherit pane keys; another provider must not clear this transcript poll.
-    if (source !== 'codex' && source !== 'muse') {
+    if (source !== 'codex' && source !== 'muse' && source !== 'droid') {
       return
     }
     if (!shouldPollHookTranscript(this.state, source, original)) {
@@ -194,17 +194,17 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
     if (!this.ownsTranscriptPoll(paneKey, poll)) {
       return
     }
-    if (poll.source !== 'codex') {
+    if (poll.source !== 'codex' && poll.source !== 'droid') {
       this.applyTranscriptPoll(paneKey, poll, undefined)
       return
     }
-    // Why: rollout reads stay off the main thread (#43539); the next tick waits for this one.
-    return readCodexTranscriptPoll(this.state, paneKey).then((reads) => {
+    // Why: transcript reads stay off the main thread (#43539); the next tick waits for this one.
+    return readHookTranscriptPoll(this.state, poll.source, paneKey).then((reads) => {
       // A hook that replaced the row mid-read owns the pane's poll now; its reads still apply.
       const current = this.transcriptPollScheduler.peek(paneKey)
       const owner = this.ownsTranscriptPoll(paneKey, poll)
         ? poll
-        : current?.source === 'codex' && this.ownsTranscriptPoll(paneKey, current)
+        : current?.source === poll.source && this.ownsTranscriptPoll(paneKey, current)
           ? current
           : undefined
       try {
@@ -212,7 +212,7 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
           this.applyTranscriptPoll(paneKey, owner, reads)
         }
       } finally {
-        reads.batch.release()
+        reads?.batch.release()
       }
     })
   }

@@ -19,6 +19,7 @@ import type { CodexSubagentRoster } from './providers/codex/codex-subagent-roste
 import type { CodexSubagentTranscriptState } from './providers/codex/codex-subagent-transcript'
 import type { CodexAsyncQuestions } from './providers/codex/codex-async-questions'
 import type { MusePaneState } from './providers/muse/muse-pane-state'
+import type { DroidPaneTurn } from './providers/droid/droid-turn-outcome'
 import type { AgentHookEventPayload, AntigravityChildWork, ToolSnapshot } from './listener-event'
 import {
   deletePaneScopedCacheEntry,
@@ -98,6 +99,8 @@ export type HookListenerState = {
   grokBackgroundTasksByPaneKey: Map<string, Map<string, AgentChildWorkKind>>
   /** Muse child-session filter and session-log cursor per pane. */
   musePaneStateByPaneKey: Map<string, MusePaneState>
+  /** Droid turn per pane, whose transcript verdict lands after its Stop hook. */
+  droidTurnByPaneKey: Map<string, DroidPaneTurn>
   /** Client-observed OpenCode1 session ownership replaces frozen shared-server stamps before ingest. This map names owners, not status claims. */
   opencodeSessionPaneBySessionId: Map<string, OpenCodeSessionBinding>
   /** Last launch token seen per pane; a rewritten shared-server post needs the bound pane's live token to pass its fence. */
@@ -150,6 +153,7 @@ export function createHookListenerState(
     grokMainAgentStatusByPaneKey: new Map(),
     grokBackgroundTasksByPaneKey: new Map(),
     musePaneStateByPaneKey: new Map(),
+    droidTurnByPaneKey: new Map(),
     opencodeSessionPaneBySessionId: new Map(),
     lastLaunchTokenByPaneKey: new Map(),
     hermesTurnByPaneKey: new Map(),
@@ -187,6 +191,7 @@ export function clearPaneProcessCacheState(state: HookListenerState, paneKey: st
   state.grokMainAgentStatusByPaneKey.delete(paneKey)
   state.grokBackgroundTasksByPaneKey.delete(paneKey)
   state.musePaneStateByPaneKey.delete(paneKey)
+  state.droidTurnByPaneKey.delete(paneKey)
   unbindOpenCodeSessionsOfPane(state, paneKey)
   deletePaneScopedCacheEntry(state.lastLaunchTokenByPaneKey, paneKey)
   state.hermesTurnByPaneKey.delete(paneKey)
@@ -245,6 +250,7 @@ export function movePaneCacheState(
   movePaneScopedMapEntries(state.grokMainAgentStatusByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.grokBackgroundTasksByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.musePaneStateByPaneKey, fromPaneKey, toPaneKey)
+  movePaneScopedMapEntries(state.droidTurnByPaneKey, fromPaneKey, toPaneKey)
   moveOpenCodeSessionBindings(state, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.lastLaunchTokenByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.hermesTurnByPaneKey, fromPaneKey, toPaneKey)
@@ -261,6 +267,7 @@ export function clearPaneTurnCacheState(state: HookListenerState, paneKey: strin
   state.grokActiveTurnByPaneKey.delete(paneKey)
   state.grokMainAgentStatusByPaneKey.delete(paneKey)
   state.grokBackgroundTasksByPaneKey.delete(paneKey)
+  state.droidTurnByPaneKey.delete(paneKey)
 }
 
 export function clearAllListenerCaches(state: HookListenerState): void {
@@ -294,6 +301,7 @@ export function clearAllListenerCaches(state: HookListenerState): void {
   state.grokMainAgentStatusByPaneKey.clear()
   state.grokBackgroundTasksByPaneKey.clear()
   state.musePaneStateByPaneKey.clear()
+  state.droidTurnByPaneKey.clear()
   state.opencodeSessionPaneBySessionId.clear()
   state.lastLaunchTokenByPaneKey.clear()
   state.hermesTurnByPaneKey.clear()

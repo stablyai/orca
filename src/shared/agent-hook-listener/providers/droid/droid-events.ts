@@ -12,6 +12,7 @@ import {
   isDroidIdleNotification,
   isDroidPermissionNotification
 } from './droid-tool-fields'
+import { noteDroidTurnStop } from './droid-turn-outcome'
 
 export function normalizeDroidEvent(
   state: HookListenerState,
@@ -52,6 +53,26 @@ export function normalizeDroidEvent(
   if (!stateName) {
     return null
   }
+  if (eventName === 'UserPromptSubmit') {
+    const turnId = readString(hookPayload, 'message_id')
+    if (turnId) {
+      state.droidTurnByPaneKey.set(paneKey, { turnId })
+    } else {
+      state.droidTurnByPaneKey.delete(paneKey)
+    }
+  } else if (
+    stateName !== 'done' &&
+    state.droidTurnByPaneKey.get(paneKey)?.stoppedAt !== undefined
+  ) {
+    // Work after a stop without a new prompt is an unnamed turn; never hand it the last verdict.
+    state.droidTurnByPaneKey.delete(paneKey)
+  }
+  const turn = state.droidTurnByPaneKey.get(paneKey)
+  // Why: Stop carries no verdict; Droid records cancels and model failures only in its transcript.
+  const outcome =
+    stateName === 'done'
+      ? noteDroidTurnStop(turn, readString(hookPayload, 'transcript_path'), Date.now())
+      : undefined
 
   const snapshot = resolveToolState(
     state,
@@ -73,6 +94,9 @@ export function normalizeDroidEvent(
     toolInput: snapshot.toolInput,
     interactivePrompt: snapshot.interactivePrompt,
     lastAssistantMessage: snapshot.lastAssistantMessage,
-    lastAssistantMessageIsToolOutput: snapshot.lastAssistantMessageIsToolOutput
+    lastAssistantMessageIsToolOutput: snapshot.lastAssistantMessageIsToolOutput,
+    ...(outcome && turn?.stoppedAt !== undefined
+      ? { mainAgent: { state: 'done', outcome, stateStartedAt: turn.stoppedAt } }
+      : {})
   })
 }
