@@ -25,6 +25,7 @@ import { GROK_TRANSCRIPT_IMPORT } from '../../grok/grok-transcript-import'
 import { OPENCODE_SESSION_HISTORY } from '../../opencode/transcripts/opencode-session-history'
 import { OPENCODE_TRANSCRIPT_IMPORT } from '../../opencode/transcripts/opencode-transcript-import'
 import { assertOpenCodeCopyUsesLocalStore } from '../../../shared/agent-launch/startup/opencode-launch-command'
+import { readOmpMcpServers } from '../../omp/omp-mcp-servers'
 import { OMP_SESSION_HISTORY } from '../../omp/omp-session-history'
 import { OMP_TRANSCRIPT_IMPORT } from '../../omp/omp-transcript-import'
 import { ANTIGRAVITY_LAUNCH_SPEC } from '../../antigravity/antigravity-acp-launch-spec'
@@ -148,6 +149,7 @@ const OMP_LAUNCH_SPEC: AcpLaunchSpec = {
     sessionFolderArgs: (folder) => ['--session-dir', folder]
   },
   skillRoots: loadOmpSkillRoots,
+  ownMcpServers: readOmpMcpServers,
   instructions: deliverOmpInstructions,
   compaction: true,
   compactionInstructions: true,

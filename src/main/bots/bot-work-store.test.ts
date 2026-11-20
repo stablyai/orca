@@ -20,7 +20,16 @@ function bind(overrides: Partial<BotWorkBind> = {}): BotWorkBind {
 
 describe('BotWorkStore', () => {
   const dirs: string[] = []
+  const stores: BotWorkStore[] = []
+  const openStore = (path: string): BotWorkStore => {
+    const store = BotWorkStore.open(path)
+    stores.push(store)
+    return store
+  }
   afterEach(() => {
+    for (const store of stores.splice(0)) {
+      store.dispose()
+    }
     for (const dir of dirs.splice(0)) {
       rmSync(dir, { recursive: true, force: true })
     }
@@ -79,8 +88,10 @@ describe('BotWorkStore', () => {
     const dir = mkdtempSync(join(tmpdir(), 'bot-work-'))
     dirs.push(dir)
     const path = botWorkStoreFile(dir)
-    BotWorkStore.open(path).bind(bind())
-    const reopened = BotWorkStore.open(path)
+    const first = BotWorkStore.open(path)
+    first.bind(bind())
+    first.dispose()
+    const reopened = openStore(path)
     expect(reopened.live('bot-1', THREAD)?.generation).toBe(1)
     expect(reopened.bind(bind())).toBeNull()
   })
@@ -103,7 +114,7 @@ describe('BotWorkStore', () => {
     `)
     old.close()
 
-    const store = BotWorkStore.open(path)
+    const store = openStore(path)
     const row = store.live('bot-1', THREAD)
     expect(row).toMatchObject({ rowId: 'old-row', current: true })
     expect(store.bind(bind({ dispatchId: 'dispatch-2' }))).toBeNull()

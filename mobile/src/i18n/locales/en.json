@@ -2463,6 +2463,9 @@
       "inputLocked": "Terminal input is locked"
     },
     "aiVaultResumePreparation": {
+      "openInChat": "This {{agent}} conversation is open in a chat. Refresh Session History to open it.",
+      "ownershipUnknown": "Orca could not confirm who owns this {{agent}} conversation. Refresh Session History and try again.",
+      "preparationRefused": "Orca could not prepare this {{agent}} conversation. Start a new chat to continue.",
       "prepareFailed": "Could not prepare this legacy Codex session. Retry resume."
     },
     "floatingWorkspace": {
@@ -3679,7 +3682,10 @@
       "collapse": "Hide full goal",
       "attachmentsUnsupported": "Remove attachments before setting a goal.",
       "pause": "Pause",
-      "resume": "Resume"
+      "resume": "Resume",
+      "checks_one": "{{count}} check",
+      "checks_other": "{{count}} checks",
+      "last-check": "Last goal check"
     },
     "rewind": {
       "title": "Rewind to here?",
@@ -5227,6 +5233,7 @@
     },
     "connectorOffer": {
       "connected": "Connected",
+      "paused": "Paused until {{host}} signs in to Orca.",
       "onComputer": "Connect it in Orca on your computer, from the card in this chat.",
       "addGitHubAccess": "Add repositories or organizations in Orca on your computer, from the card in this chat.",
       "addWorkspace": "Add another workspace in Orca on your computer, from the card in this chat."

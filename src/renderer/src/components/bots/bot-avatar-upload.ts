@@ -1,5 +1,6 @@
 // An uploaded picture, cropped square from its center and scaled to Slack's 512 px, as base64 PNG.
 import { BOT_AVATAR_SIZE, MIN_BOT_AVATAR_SOURCE_SIDE } from '../../../../shared/bot-avatar'
+import { pictureTint, rememberPictureTint } from './avatar-picture-tint'
 
 export const BOT_AVATAR_TOO_SMALL = 'bot_avatar_too_small'
 
@@ -29,6 +30,11 @@ export async function squareAvatarPng(file: Blob): Promise<string> {
       BOT_AVATAR_SIZE,
       BOT_AVATAR_SIZE
     )
+    // Read once here, where the pixels are at hand, so nothing reads the picture again to tint by it.
+    const tint = pictureTint(
+      context.getImageData(0, 0, BOT_AVATAR_SIZE, BOT_AVATAR_SIZE).data,
+      BOT_AVATAR_SIZE
+    )
     const png = await new Promise<Blob>((resolve, reject) =>
       canvas.toBlob(
         (blob) => (blob ? resolve(blob) : reject(new Error('bot_avatar_invalid'))),
@@ -40,7 +46,9 @@ export async function squareAvatarPng(file: Blob): Promise<string> {
     for (const byte of bytes) {
       binary += String.fromCharCode(byte)
     }
-    return btoa(binary)
+    const base64 = btoa(binary)
+    rememberPictureTint(base64, tint)
+    return base64
   } finally {
     bitmap.close()
   }

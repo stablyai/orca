@@ -11,7 +11,11 @@ import {
 } from '../../../../../shared/automation-event-triggers'
 import { listAutomationsForTarget } from '../hosts/automation-host-client'
 import { dispatchAutomationReread } from '../hosts/automation-row-action-dispatch'
-import { resolveAutomationCreateDestination } from './automation-create-destination'
+import {
+  automationCreateHostFor,
+  automationCreateHostStableKey,
+  resolveAutomationCreateDestination
+} from './automation-create-destination'
 import { buildDraftSchedule } from './automation-draft-model'
 import {
   createAutomationOnDestination,
@@ -22,6 +26,7 @@ import type { AutomationSaveContext } from './automation-save-context'
 import { botResultsPlace, withBotResultsPlace } from './automation-bot-results-to'
 import { botAutomationSetup, sameBotAgentSetup } from '../../../../../shared/bots/bot-agent-setup'
 import { isBotAgent } from '../../../../../shared/bot-types'
+import { readBots } from '@/lib/bot-catalog'
 
 /** Why the target cannot be saved yet, or null when it can. */
 export function botTargetError(target: AutomationBotTarget): string | null {
@@ -81,7 +86,7 @@ export function botSchedulePatch(
   return !scheduled || current?.rrule !== schedule.rrule ? schedule : {}
 }
 
-/** Saves an automation that runs as a bot; it lives on this computer, beside its bot. */
+/** Saves an automation that runs as a bot; it lives beside its bot, on the bot's host. */
 export async function saveBotAutomation(
   context: AutomationSaveContext,
   target: AutomationBotTarget,
@@ -142,16 +147,20 @@ export async function saveBotAutomation(
     return
   }
 
-  const here = resolveAutomationCreateDestination(
-    destination.createDestination.control.entries.find(
-      (entry) => entry.owner?.authority.kind === 'desktop' && entry.owner.selector.kind === 'self'
-    )
+  // Like the CLI's --bot, the automation lives on the host that runs its bot.
+  const botHostId = readBots().find((entry) => entry.id === bot.botId)?.hostId
+  const botHost = automationCreateHostFor(
+    destination.createDestination.control.entries,
+    automationCreateHostStableKey(botHostId)
   )
+  const here = resolveAutomationCreateDestination(botHost)
   if (here.status !== 'ready') {
+    // Recovery acts on the bot's host, not the Host picker the bot form hides.
+    local.setEditorNoticeHost(botHost)
     local.setEditorNotice({
       message: translate(
         'automations.botTarget.hostUnavailable',
-        "This computer can't hold a new automation yet. Try again in a moment."
+        "The bot's computer can't hold a new automation yet. Try again in a moment."
       ),
       recovery: 'retry',
       severity: 'owner'
@@ -181,6 +190,7 @@ export async function saveBotAutomation(
   )
   if (!saved.ok) {
     local.setEditorNotice(saved.notice)
+    local.setEditorNoticeHost(botHost)
     return
   }
   await completeAutomationSave(context, saved.value, null, false)

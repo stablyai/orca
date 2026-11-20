@@ -25,7 +25,7 @@ export abstract class OrcaRuntimeWithSessionTitleAuthority extends OrcaRuntimeWi
 
   protected isSessionTitlePublisher(worktreeId: string, surfaceId: string): boolean {
     return !!(
-      this.getAvailableAuthoritativeWindow() &&
+      this.hasAuthoritativeWindow() &&
       this.currentSessionTitlePublisher(worktreeId)?.surfaceIds.has(surfaceId)
     )
   }

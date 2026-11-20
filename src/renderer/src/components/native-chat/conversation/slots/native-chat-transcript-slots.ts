@@ -45,7 +45,7 @@ import {
   type NativeChatSideChatForkPoint
 } from '../../messages/actions/native-chat-side-chat-fork-point'
 import { markNativeChatResponseActionsHang } from './native-chat-response-actions-hang'
-import { nativeChatShownRows } from './native-chat-quiet-turn-rows'
+import { nativeChatBotIntroTurn, nativeChatShownRows } from './native-chat-quiet-turn-rows'
 import type { Translate } from '../../../../i18n/use-translate'
 
 export type NativeChatTranscriptSlot = NativeChatMessageSlot | NativeChatSubagentHeadSlot
@@ -167,6 +167,7 @@ export function buildNativeChatTranscript(
   const bars = nativeChatTurnBarRows(messages, turnKeys)
   const automationTurns = nativeChatAutomationTurnKeys(messages, turnKeys)
   const actingTurns = nativeChatActingTurnKeys(messages, turnKeys)
+  const introTurn = nativeChatBotIntroTurn(input, messages)
   // Turn rows can interleave with other prompts; emit one rollup after their last row.
   const lastRowByTurn = new Map<string, number>()
   turnKeys.forEach((turnKey, index) => {
@@ -199,7 +200,7 @@ export function buildNativeChatTranscript(
     pushHeadsBefore(message)
     const turnKey = turnKeys[index]
     const receipt = receipts.get(message.id)
-    const bar = turnKey === undefined ? undefined : bars.get(turnKey)
+    const bar = turnKey === undefined || turnKey === introTurn ? undefined : bars.get(turnKey)
     // A turn's bar draws at its first row, so a message folded into it (a steer) carries none.
     const status =
       turnKey === undefined || bar?.index !== index || quiet.turns.has(turnKey)
@@ -285,7 +286,7 @@ export function buildNativeChatTranscript(
       continue
     }
     slot.endsResponse = false
-    if (!slot.drawsMessage || slot.message.role !== 'assistant') {
+    if (!slot.drawsMessage || slot.message.role !== 'assistant' || slot.turnKey === introTurn) {
       continue
     }
     if (

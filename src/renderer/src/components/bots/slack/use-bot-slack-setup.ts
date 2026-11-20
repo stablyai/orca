@@ -47,8 +47,9 @@ export type BotSlackSetupStep =
   /** `teamId`: the workspace it is in, whose people the owner then picks. */
   /** `setupState`: the install link this flow installed with, so its identity pick applies at once. */
   | { kind: 'installed'; teamId: string; setupState?: string }
-  /** `code` is the desktop error code, so a signed-out failure can offer Sign in. */
-  | { kind: 'failed'; code: string }
+  /** `code` is the desktop error code, so a signed-out failure can offer Sign in; `local`: this
+   *  computer's own account failed, not the bot's host's. */
+  | { kind: 'failed'; code: string; local?: true }
 
 type OpenedSlackPage = { returnUrl: string | null; link: SlackInstallLink }
 
@@ -192,7 +193,7 @@ export function useBotSlackSetup(
         setStep(
           app.error === 'grant_expired' && code.ok
             ? { kind: 'token', reconnect: true, error: null, teamId, mine: true }
-            : { kind: 'failed', code: app.error }
+            : { kind: 'failed', code: app.error, ...(code.ok ? { local: true as const } : {}) }
         )
         return
       }

@@ -23,29 +23,6 @@ const pwshAvailable = canRun('pwsh')
 const HELP_WITH_FLAG = 'Usage: codex [OPTIONS] [PROMPT]\n      --no-daemon  Run in-process\n'
 const HELP_WITHOUT_FLAG = 'Usage: codex [OPTIONS] [PROMPT]\n      --no-alt-screen\n'
 
-const ADDED: string[][] = [
-  [],
-  ['fix the bug'],
-  // PowerShell .cmd invocation needs embedded quotes escaped.
-  ['say "hi" to "bob"'],
-  ['exec the plan'],
-  ['-m', 'gpt-5', '--yolo', 'x'],
-  ['resume'],
-  ['resume', '--last'],
-  ['--yolo', 'resume', '--last'],
-  ['fork', '--last'],
-  ['-a', 'never', 'resume'],
-  ['-c', 'model=o3'],
-  ['archive', 'S'],
-  ['delete', 'S'],
-  ['exec', 'x'],
-  ['e', 'x'],
-  ['-m', 'x', 'exec', 'x'],
-  ['review'],
-  ['login'],
-  ['mcp', 'list']
-]
-
 type Shell = 'bash' | 'zsh' | 'fish' | 'pwsh' | 'powershell'
 const isPowerShell = (shell: Shell): boolean => shell === 'pwsh' || shell === 'powershell'
 const roots: string[] = []
@@ -193,10 +170,6 @@ function lines(output: string): string[] {
   return output.trimEnd().split(/\r?\n/)
 }
 
-function expectedLine(argv: string[], added: boolean): string {
-  return ['ARGV', ...(added ? ['--no-daemon'] : []), ...argv].join('|')
-}
-
 const shells: [Shell, boolean][] = [
   ['bash', !isWindows && existsSync('/bin/bash')],
   ['zsh', !isWindows && existsSync('/bin/zsh')],
@@ -296,34 +269,31 @@ describe.concurrent('Codex terminal image compatibility', () => {
 describe.concurrent('codex wrapper --no-daemon rule', () => {
   for (const [shell, available] of shells) {
     describe.skipIf(!available)(shell, () => {
-      it('adds nothing when --help does not list the flag (0.155 and older)', async ({
+      it('only adds the flag when Codex advertises it, including after version changes', async ({
         expect
       }) => {
         const sandbox = makeSandbox(HELP_WITHOUT_FLAG)
-        const result = await run(
-          shell,
-          ADDED.map((argv) => codexCall(shell, argv)).join('\n'),
-          sandbox
-        )
-
-        expect(lines(result.stdout)).toEqual(ADDED.map((argv) => expectedLine(argv, false)))
-      })
-
-      it('re-probes --help when Codex changes version mid-shell', async ({ expect }) => {
-        const sandbox = makeSandbox(HELP_WITH_FLAG)
         const swap = (help: string): string =>
           isPowerShell(shell)
             ? `Set-Content -NoNewline -LiteralPath ${quote(shell, sandbox.helpFile)} -Value ${quote(shell, help)}`
             : `printf '%s' ${quote(shell, help)} > ${quote(shell, sandbox.helpFile)}`
         const result = await run(
           shell,
-          ['codex a', swap(HELP_WITHOUT_FLAG), 'codex b', swap(HELP_WITH_FLAG), 'codex c'].join(
-            '\n'
-          ),
+          [
+            codexCall(shell, ['say "hi" to "bob"']),
+            swap(HELP_WITH_FLAG),
+            'codex upgraded',
+            swap(HELP_WITHOUT_FLAG),
+            'codex downgraded'
+          ].join('\n'),
           sandbox
         )
 
-        expect(lines(result.stdout)).toEqual(['ARGV|--no-daemon|a', 'ARGV|b', 'ARGV|--no-daemon|c'])
+        expect(lines(result.stdout)).toEqual([
+          'ARGV|say "hi" to "bob"',
+          'ARGV|--no-daemon|upgraded',
+          'ARGV|downgraded'
+        ])
       })
 
       it("keeps piped stdin for Codex and returns Codex's exit status", async ({ expect }) => {

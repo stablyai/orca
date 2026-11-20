@@ -42,8 +42,10 @@ async function readModes(session: Session) {
 }
 
 describe('Session.resetInputModes', () => {
-  it('grounds modes an app left armed without a command end, and the next snapshot carries it', async () => {
+  it('grounds app-owned modes without a command end and preserves host focus', async () => {
     const { session, received, emit } = createSession()
+    // ConPTY can enable focus reporting before any shell marker.
+    emit('\x1b[?1004h')
     // Model a crashed app with no OSC 133;D boundary to trigger automatic grounding.
     emit('prompt$ app\r\n\x1b[>31u\x1b[?1000h\x1b[?1006h\x1b[?2004h\x1b[?1h')
     const armed = await readModes(session)
@@ -69,21 +71,11 @@ describe('Session.resetInputModes', () => {
     expect(received).toHaveLength(broadcast)
     const records = session.takePendingOutput(false)!.records
     expect(records).toEqual([{ kind: 'output', data: expect.stringContaining('\x1b[<99u') }])
-    session.dispose()
-  })
-
-  it('keeps focus reporting the terminal host armed for the pane', async () => {
-    const { session, emit } = createSession()
-    // ConPTY can enable focus reporting before any shell marker.
-    emit('\x1b[?1004hprompt$ ')
-    await readModes(session)
-    session.takePendingOutput(false)
-
-    session.resetInputModes()
-
-    const [record] = session.takePendingOutput(false)!.records
-    expect(record).toMatchObject({ kind: 'output' })
-    expect(record?.kind === 'output' && record.data).not.toContain('\x1b[?1004l')
+    expect(records).not.toContainEqual({
+      kind: 'output',
+      data: expect.stringContaining('\x1b[?1004l')
+    })
+    expect(session.getSnapshot()?.snapshotAnsi).toContain('\x1b[?1004h')
     session.dispose()
   })
 })

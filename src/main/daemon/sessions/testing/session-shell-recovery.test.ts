@@ -95,11 +95,10 @@ describe('Session shell-owned recovery through the output barrier', () => {
     session.dispose()
   })
 
-  it('flushes queued bytes to clients when the shell exits mid-proof instead of dropping them', async () => {
+  it('flushes nested episodes stacked inside one proof window when the shell exits', async () => {
     const sub = createSubprocess()
-    // Match the host’s synchronous exit-to-reaper chain.
     const session: Session = new Session({
-      sessionId: 's3',
+      sessionId: 's4',
       cols: 80,
       rows: 24,
       subprocess: sub.handle,
@@ -113,29 +112,6 @@ describe('Session shell-owned recovery through the output barrier', () => {
       onExit: (code: number) => exits.push(code)
     })
 
-    sub.emit('\x1b[?1049hTUI\x1b]133;D;137\x07\r\nprompt-after-death')
-    await vi.waitFor(() => expect(sub.confirmShellForeground).toHaveBeenCalledTimes(1))
-    // Let exit beat the pending process-tree proof.
-    sub.exit(0)
-
-    expect(received.join('')).toContain('prompt-after-death')
-    expect(exits).toEqual([0])
-    expect(received.join('')).not.toContain('\x1b[?1049l')
-  })
-
-  it('flushes nested episodes stacked inside one proof window when the shell exits', async () => {
-    const sub = createSubprocess()
-    const session: Session = new Session({
-      sessionId: 's4',
-      cols: 80,
-      rows: 24,
-      subprocess: sub.handle,
-      shellReadySupported: false,
-      onExit: () => session.dispose()
-    } as never)
-    const received: string[] = []
-    session.attachClient({ onData: (data: string) => received.push(data), onExit: () => {} })
-
     // Each flush can re-enter recovery; one pass would strand the final prompt.
     sub.emit(
       '\x1b[?1049hT1\x1b]133;D;1\x07AAA\x1b[?1049hT2\x1b]133;D;2\x07BBB\x1b[?1049hT3\x1b]133;D;3\x07CCC'
@@ -148,5 +124,6 @@ describe('Session shell-owned recovery through the output barrier', () => {
       expect(joined).toContain(marker)
     }
     expect(joined).not.toContain('\x1b[?1049l')
+    expect(exits).toEqual([0])
   })
 })

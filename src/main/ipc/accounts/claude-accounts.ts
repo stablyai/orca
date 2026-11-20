@@ -3,8 +3,19 @@ import { registerAppHandler } from '../app-registry/app-handler-registry'
 import type { ClaudeAccountService } from '../../claude-accounts/service'
 import type { ClaudeAccountSelectionTarget } from '../../claude-accounts/selection/runtime-selection'
 import { openAccountSignInLink } from './account-sign-in-link-opener'
+import type { ClaudeHostRunningSessionsMove } from '../../../shared/agent-accounts/managed-account-types'
+import type { ClaudeHostSelectionChange } from '../../../shared/agent-accounts/claude/claude-pane-account-folder'
 
-export function registerClaudeAccountHandlers(claudeAccounts: ClaudeAccountService): void {
+/** The host's mover for the running Claude terminals the window doesn't hold. */
+export type MoveUnheldClaudeSessions = (
+  change: ClaudeHostSelectionChange,
+  heldPtyIds: ReadonlySet<string>
+) => Promise<ClaudeHostRunningSessionsMove | undefined>
+
+export function registerClaudeAccountHandlers(
+  claudeAccounts: ClaudeAccountService,
+  moveUnheldSessions: MoveUnheldClaudeSessions
+): void {
   claudeAccounts.setWslSignInLinkOpener((signInLink) => openAccountSignInLink('claude', signInLink))
   registerAppHandler('claudeAccounts:list', () => claudeAccounts.listAccounts())
   registerAppHandler(
@@ -33,5 +44,10 @@ export function registerClaudeAccountHandlers(claudeAccounts: ClaudeAccountServi
       args.runtime
         ? claudeAccounts.selectAccountForTarget(args.accountId, args)
         : claudeAccounts.selectAccount(args.accountId)
+  )
+  ipcMain.handle(
+    'claudeAccounts:moveUnheldRunningSessions',
+    (_event, args: { change: ClaudeHostSelectionChange; heldPtyIds: string[] }) =>
+      moveUnheldSessions(args.change, new Set(args.heldPtyIds))
   )
 }

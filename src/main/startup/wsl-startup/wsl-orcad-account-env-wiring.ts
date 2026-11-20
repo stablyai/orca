@@ -43,7 +43,7 @@ function broadcastAccountNotApplied(distro: string): void {
 export function installWslOrcadAccountShim(store: Pick<Store, 'getSettings'>): void {
   installWslOrcadAccountEnvDependencies({
     prepareClaudeLaunch: (target) => {
-      const auth = state.claudeRuntimeAuth
+      const auth = state.core.claudeRuntimeAuth
       if (!auth) {
         throw new Error('Claude account service is not initialized')
       }
@@ -51,7 +51,7 @@ export function installWslOrcadAccountShim(store: Pick<Store, 'getSettings'>): v
     },
     claudeTerminalEnv: (target) => withClaudeProfileTerminalEnv({}, target),
     prepareCodexHome: async (target) => {
-      const runtimeHome = state.codexRuntimeHome
+      const runtimeHome = state.core.codexRuntimeHome
       if (!runtimeHome || !getSelectedCodexAccountIdForTarget(store.getSettings(), target)) {
         return null
       }

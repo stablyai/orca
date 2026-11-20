@@ -54,21 +54,6 @@ describe('BotAvatarSync', () => {
     })
   })
 
-  it('sends the picture of a bot linked only to GitHub, for the cloud’s pages', async () => {
-    const { sync, call } = harness([
-      { id: 'bot-1', avatar: 'mascot:K2', github: {} },
-      { id: 'bot-2', avatar: 'mascot:A1' }
-    ])
-    sync.changed()
-    await vi.waitFor(() => expect(call).toHaveBeenCalledTimes(1))
-    expect(call).toHaveBeenCalledWith(
-      '/v1/connector/bots/bot-1/avatar',
-      { v: 1, kind: 'mascot', id: 'K2' },
-      expect.anything(),
-      { method: 'PUT' }
-    )
-  })
-
   it('sends again after a failed send', async () => {
     const { sync, call } = harness([{ avatar: 'mascot:K2', slack: SLACK }])
     call.mockResolvedValueOnce({ ok: false, status: null })
@@ -84,6 +69,12 @@ describe('BotAvatarSync', () => {
     let answer!: (value: unknown) => void
     call.mockReturnValueOnce(new Promise((resolve) => (answer = resolve)))
     sync.changed()
+    expect(call).toHaveBeenCalledExactlyOnceWith(
+      '/v1/connector/bots/bot-1/avatar',
+      { v: 1, kind: 'mascot', id: 'K2' },
+      expect.anything(),
+      { method: 'PUT' }
+    )
     list[0] = { id: 'bot-1', slack: null, github: {}, avatar: 'mascot:A1' }
     sync.changed()
     answer({ ok: false, status: 404, error: 'unknown_bot', retryAfterMs: null })
