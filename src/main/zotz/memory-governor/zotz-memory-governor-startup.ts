@@ -12,6 +12,7 @@ import { createZotzSystemPressureReader } from './zotz-darwin-memory-signals'
 import { ZotzAgentLaunchQueue } from './zotz-agent-launch-queue'
 import { setZotzAgentLaunchQueue } from './zotz-agent-launch-hold'
 import { registerZotzAgentQueueHandlers } from './zotz-agent-queue-ipc'
+import { registerZotzAgentQueueSource } from './zotz-agent-queue-source'
 
 let governor: ZotzMemoryGovernorService | null = null
 
@@ -52,11 +53,13 @@ export function startZotzMemoryGovernor(input: {
     }
   })
   const unregisterIpc = registerZotzAgentQueueHandlers(service, launchQueue)
+  const unregisterSource = registerZotzAgentQueueSource({ governor: service, queue: launchQueue })
   void service.start()
   const unsubscribe = input.server.subscribeStatusRowMutations(() => service.wake())
   return () => {
     unsubscribe()
     unregisterIpc()
+    unregisterSource()
     stopSettingsSync()
     service.dispose()
     setZotzAgentLaunchQueue(null)

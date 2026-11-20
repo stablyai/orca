@@ -4,6 +4,7 @@ import {
 } from './project/groups/project-group-order-capability'
 import { EMULATOR_RUNTIME_CAPABILITIES } from './remote-runtime/protocol/emulator-runtime-capabilities'
 import { ACCOUNT_RUNTIME_CAPABILITIES } from './remote-runtime/protocol/account-runtime-capabilities'
+import { ZOTZ_RUNTIME_CAPABILITIES } from './zotz/agent-queue/zotz-agent-queue-runtime-capability'
 import * as agentLaunchCapabilities from './agent-launch/contracts/agent-launch-runtime-capability'
 import {
   AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY,
@@ -82,6 +83,7 @@ export const RUNTIME_CAPABILITIES = /* @__PURE__ */ (() =>
     ...agentLaunchCapabilities.AGENT_LAUNCH_RUNTIME_CAPABILITIES,
     ...AGENT_SESSION_RUNTIME_CAPABILITIES,
     ...ACCOUNT_RUNTIME_CAPABILITIES,
+    ...ZOTZ_RUNTIME_CAPABILITIES,
     ...SKILL_RUNTIME_CAPABILITIES,
     ...AUTOMATION_RUNTIME_CAPABILITIES,
     ...WORKTREE_RUNTIME_CAPABILITIES,
