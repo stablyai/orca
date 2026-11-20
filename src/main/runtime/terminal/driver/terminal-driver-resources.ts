@@ -110,7 +110,7 @@ export abstract class OrcaRuntimeWithTerminalDrivers extends OrcaRuntimeWithFitO
   abstract closeTerminal(handle: string): Promise<RuntimeTerminalClose>
   abstract getExactWorkerProviderSession(
     handle: string,
-    observedAfter: number
+    observedAfter?: number
   ): ExactWorkerProviderSession | null
   abstract readTerminal(
     handle: string,

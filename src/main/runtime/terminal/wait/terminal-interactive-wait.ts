@@ -182,7 +182,7 @@ export abstract class OrcaRuntimeWithGetTerminalInteractiveWait extends OrcaRunt
 
   getExactWorkerProviderSession(
     handle: string,
-    observedAfter: number
+    observedAfter?: number
   ): ExactWorkerProviderSession | null {
     const paneKey = this.getTerminalPaneKey(handle)
     const processIncarnation = this.getTerminalProcessIncarnation(handle)
@@ -205,13 +205,17 @@ export abstract class OrcaRuntimeWithGetTerminalInteractiveWait extends OrcaRunt
     } catch {
       // Exact worker validation rejects this in production; test/legacy providers may not expose PTY metadata.
     }
+    // A plain terminal read has no dispatch attachment time to fence out a prior launch.
+    if (observedAfter === undefined && !launchToken) {
+      return null
+    }
     const session = selectExactWorkerProviderSession({
       paneKey,
       processIncarnation,
       connectionId,
       launchToken,
       wslDistro,
-      observedAfter,
+      observedAfter: observedAfter ?? 0,
       statuses: this.publicPaneStatusFn?.(paneKey) ?? []
     })
     const launchConfig = session ? heldLaunchConfig(pty, session.agent) : undefined
