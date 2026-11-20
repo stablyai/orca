@@ -86,16 +86,20 @@ export async function resolveScopedWorktreeIdRow(
   }
   const lineageById = store.getAllWorktreeLineage?.() ?? {}
   const relatedIds = getConnectedWorktreeLineageIds([target.id], lineageById)
+  // Each repo reads only its own lineage ids, so a component spanning many repos isn't read once per repo.
+  const relatedIdsByRepo = new Map<string, Set<string>>()
+  for (const id of relatedIds) {
+    const repoId = splitWorktreeIdForFilesystem(id)?.repoId
+    if (repoId !== undefined) {
+      relatedIdsByRepo.set(repoId, (relatedIdsByRepo.get(repoId) ?? new Set()).add(id))
+    }
+  }
   // Lineage links only rows in the target's connected component, so other rows cannot change it.
   const ownerRows =
     ownerScan && relatedIds.size > 1
-      ? projectOwner(new Set([...relatedIds, ...equivalentIds]))
+      ? projectOwner(new Set([...(relatedIdsByRepo.get(repo.id) ?? []), ...equivalentIds]))
       : candidates
-  const relatedRepoIds = new Set(
-    [...relatedIds]
-      .map((id) => splitWorktreeIdForFilesystem(id)?.repoId)
-      .filter((id) => id !== undefined)
-  )
+  const relatedRepoIds = new Set(relatedIdsByRepo.keys())
   relatedRepoIds.delete(repo.id)
   const hostId = getRepoExecutionHostId(repo)
   const registered = store.getRepos()
@@ -114,7 +118,11 @@ export async function resolveScopedWorktreeIdRow(
         ? null
         : await scanRepoWorktreeRows(deps, relatedRepo, projectRuntimeByRepoId, count)
       const stamped = stampRepoWorktreeRows(deps, relatedRepo, scan, metaById, count)
-      const kept = scanRowsWithIds(relatedRepo, scan, relatedIds)
+      const kept = scanRowsWithIds(
+        relatedRepo,
+        scan,
+        relatedIdsByRepo.get(relatedRepo.id) ?? new Set()
+      )
       return projectRepoWorktreeRows(deps, relatedRepo, kept, metaById, count, stamped)
     })
   )
