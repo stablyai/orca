@@ -86,6 +86,20 @@ describeBundling('the app bundle', () => {
       expect(after.script.equals(before.script)).toBe(false)
     })
   }, 240_000)
+
+  it('emits regex lookbehind as a RegExp call, not a literal older WebKit cannot parse', async () => {
+    await withScratch(async (scratch) => {
+      const directory = join(scratch, MOBILE_WEB_APP_ROUTE_ROOT)
+      await mkdir(directory, { recursive: true })
+      await writeFile(
+        join(directory, 'index.tsx'),
+        "export default function Route() { return 'abb'.replace(/(?<!a)b/g, 'c') }\n"
+      )
+      const sources = allScriptSource(await bundleMobileWebApp({ appDir: scratch }))
+      expect(sources.some((source) => source.includes('(?<!a)b'))).toBe(true)
+      expect(sources.some((source) => source.includes('/(?<!a)b/'))).toBe(false)
+    })
+  }, 240_000)
 })
 
 describe('the verifier', () => {

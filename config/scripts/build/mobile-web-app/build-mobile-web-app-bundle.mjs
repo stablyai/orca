@@ -297,6 +297,8 @@ export function mobileWebAppBuildOptions(
     // Pinned rather than defaulted, so the entry is found by name and not by elimination.
     entryNames: ENTRY_CHUNK_NAME,
     target: ['es2022'],
+    // WebKit before Safari 16.4 rejects a whole chunk with a lookbehind regex literal; as `new RegExp(...)` only its caller throws.
+    supported: { 'regexp-lookbehind-assertions': false },
     // Keep ESM tree shaking when a dependency also requires the same package.
     mainFields: ['browser', 'module', 'main'],
     charset: 'utf8',
