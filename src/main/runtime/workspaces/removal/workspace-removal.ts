@@ -135,7 +135,8 @@ export abstract class OrcaRuntimeWithRemoveManagedWorktree extends RuntimeWorksp
     const inFlightRemoval = this.removeManagedWorktreeInFlight.get(
       cleanupScopeKey,
       removalTarget.id,
-      optionsKey
+      optionsKey,
+      !!expectation
     )
     if (inFlightRemoval) {
       return options.waitForBackgroundRemoval
