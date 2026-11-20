@@ -257,6 +257,8 @@ it.each([100, 1_000])(
         [workspace]: [{ ...group, tabOrder: [...group.tabOrder, 'stale'] }]
       }
     })
+    pendingReads = 0
+    editorReads = 0
     persistedReads = 0
     launches.reads = 0
     const assertNoInventoryWork = (): void => {
@@ -272,9 +274,11 @@ it.each([100, 1_000])(
       for (const refused of [false, true]) {
         const reply = Promise.withResolvers<LayoutApplyReply>()
         transport.callRuntimeRpc.mockReturnValueOnce(reply.promise)
-        createInitialTerminalThroughLayoutOwner(store.getState, workspace, () => {
-          store.getState().createTab(workspace)
-        })
+        expect(
+          createInitialTerminalThroughLayoutOwner(store.getState, workspace, () => {
+            store.getState().createTab(workspace)
+          })
+        ).toBe(true)
         if (refused) {
           reply.resolve({ ok: false, code: 'host_not_owned', frameSeq: 0 })
         } else {
