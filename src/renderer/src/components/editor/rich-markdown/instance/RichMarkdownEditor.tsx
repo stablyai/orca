@@ -350,7 +350,7 @@ export default function RichMarkdownEditor({
       markdownReviewContent={markdownReviewContent}
       worktreeId={worktreeId}
       filePath={filePath}
-      markdownCommentsCount={review.markdownComments.length}
+      markdownReviewNotes={review.markdownComments}
       reviewRailOpen={review.reviewRailOpen}
       reviewNotesCopied={review.reviewNotesCopied}
       unsentMarkdownReviewScope={review.unsentMarkdownReviewScope}
@@ -406,6 +406,7 @@ export default function RichMarkdownEditor({
       onCopyReviewNotes={() => void review.handleCopyMarkdownReviewNotes()}
       onCopyReviewNote={(note) => void review.handleCopyMarkdownReviewNote(note)}
       onToggleReviewRail={() => review.setReviewRailOpen((open) => !open)}
+      clearDeliveredDiffComments={clearDeliveredDiffComments}
       onReviewNotesDelivered={(notes) =>
         void (commentOwner && clearDeliveredDiffComments(commentOwner, notes))
       }
