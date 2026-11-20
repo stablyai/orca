@@ -36,7 +36,9 @@ vi.mock('../../../telemetry/client', () => ({ track: trackMock }))
 function trackedImportOutcomes(): string[] {
   return trackMock.mock.calls
     .filter(([event]) => event === 'codex_legacy_history_import')
-    .map(([, props]) => (props as { outcome: string }).outcome)
+    .map(([, props]: unknown[]) =>
+      props && typeof props === 'object' && 'outcome' in props ? String(props.outcome) : ''
+    )
 }
 
 function writeHistory(accountId: string, contents: string): string {
@@ -59,24 +61,33 @@ function archivedHistoryPath(accountId: string): string {
   )
 }
 
-async function startService(): Promise<void> {
+async function constructService(): Promise<void> {
   const { CodexRuntimeHomeService } = await import('../../runtime-home-service')
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture store implements what the service reads.
   new CodexRuntimeHomeService(createStore(createSettings()) as never)
+}
+
+async function startService(): Promise<void> {
+  await constructService()
   await waitForMigrationMarker()
 }
 
+// Settled: the marker exists and no longer waits on the history import.
 async function waitForMigrationMarker(): Promise<void> {
   const markerPath = join(testState.userDataDir, 'codex-runtime-home', 'migration-v1.json')
-  await vi.waitFor(() => expect(existsSync(markerPath)).toBe(true))
+  await vi.waitFor(() => {
+    expect(existsSync(markerPath)).toBe(true)
+    expect(readFileSync(markerPath, 'utf-8')).not.toContain('"historyImportPending"')
+  })
 }
 
 async function removeAccountHome(managedHomePath: string): Promise<void> {
   const { CodexManagedHomeLifecycle } =
     await import('../../managed-homes/codex-managed-home-lifecycle')
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: safeRemove reads only these two members.
   const paths = {
     assert: async (candidate: string) => candidate,
     getRoot: () => join(testState.userDataDir, 'codex-accounts')
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: safeRemove reads only these two members.
   } as unknown as CodexManagedHomePath
   await new CodexManagedHomeLifecycle(paths).safeRemove(managedHomePath, 'account-1')
 }
@@ -84,6 +95,7 @@ async function removeAccountHome(managedHomePath: string): Promise<void> {
 const fsHooks = vi.hoisted(() => ({ afterRead: new Map<string, () => void>() }))
 vi.mock(import('node:fs/promises'), async (importOriginal) => {
   const actual = await importOriginal()
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: forwards every overload unchanged.
   const readFile = (async (...args: Parameters<typeof actual.readFile>) => {
     const contents = await actual.readFile(...args)
     fsHooks.afterRead.get(String(args[0]))?.()
@@ -164,9 +176,7 @@ describe('CodexRuntimeHomeService', () => {
     mkdirSync(join(getRuntimeCodexHomePath(), 'sessions'), { recursive: true })
     // A file where account 2's session folder must go: its session copy throws.
     writeFileSync(join(getRuntimeCodexHomePath(), 'sessions', 'nested'), 'not a folder', 'utf-8')
-    const { CodexRuntimeHomeService } = await import('../../runtime-home-service')
-
-    new CodexRuntimeHomeService(createStore(createSettings()) as never)
+    await constructService()
     await removeAccountHome(accountOneHome)
 
     expect(existsSync(join(accountOneHome, 'history.jsonl'))).toBe(false)
@@ -205,6 +215,25 @@ describe('CodexRuntimeHomeService', () => {
     expect(readFileSync(runtimeHistoryPath, 'utf-8')).toBe('{"id":"codex-new"}\n')
     expect(trackedImportOutcomes()).toEqual(['skipped_existing'])
     expect(readFileSync(archivedHistoryPath('account-1'), 'utf-8')).toBe('{"id":"legacy-1"}\n')
+  })
+
+  it('retries a failed import on a later launch from the kept copy, after the account is gone', async () => {
+    const runtimeHistoryPath = join(getRuntimeCodexHomePath(), 'history.jsonl')
+    const managedHomePath = writeHistory('account-1', '{"id":"legacy-1"}\n')
+    fsHooks.afterRead.set(archivedHistoryPath('account-1'), () => {
+      throw Object.assign(new Error('busy'), { code: 'EBUSY' })
+    })
+    await constructService()
+    await vi.waitFor(() => expect(trackedImportOutcomes()).toEqual(['failed']))
+    expect(existsSync(runtimeHistoryPath)).toBe(false)
+    await removeAccountHome(managedHomePath)
+    fsHooks.afterRead.clear()
+
+    vi.resetModules()
+    await startService()
+
+    expect(readFileSync(runtimeHistoryPath, 'utf-8')).toBe('{"id":"legacy-1"}\n')
+    expect(trackedImportOutcomes()).toEqual(['failed', 'imported'])
   })
 
   it('does not re-run migration when marker already exists', async () => {

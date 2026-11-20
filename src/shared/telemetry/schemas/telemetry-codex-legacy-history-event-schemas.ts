@@ -1,13 +1,14 @@
 import { z } from 'zod'
 
-/** `skipped_existing` and `failed` keep each legacy history aside in Orca's metadata. */
+/** Orca keeps every legacy history aside in its metadata whatever the outcome; `failed` retries. */
 export const CODEX_LEGACY_HISTORY_IMPORT_OUTCOMES = [
   'imported',
   'skipped_existing',
+  'nothing_to_import',
   'failed'
 ] as const
 
-/** Sent once per install, by the one-time migration of legacy per-account prompt history. */
+/** Sent by each launch that tries the one-time import of legacy per-account prompt history. */
 export const codexLegacyHistoryImportSchema = z
   .object({
     outcome: z.enum(CODEX_LEGACY_HISTORY_IMPORT_OUTCOMES),
