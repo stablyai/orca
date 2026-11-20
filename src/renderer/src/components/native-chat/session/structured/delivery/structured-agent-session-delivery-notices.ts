@@ -7,6 +7,8 @@ import { agentSessionFailureStatedByRow } from '../../../../../../../shared/agen
 import { classifyDispatchRejection } from '../../../../../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
 import { agentJournalSubmissionKey } from '../../../../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { AgentJournalSubmission } from '../../../../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentSessionLatestTurn } from '../../../../../../../shared/agent-session/agent-session-wire'
+import { agentJournalSubmissionAwaitsAgent } from '../../../../../../../shared/agent-session/requests/agent-session-queued-submission'
 import { structuredAgentSessionRejectionParts } from '../../../../../../../shared/agent-session/failures/structured-agent-session-rejection-words'
 import { structuredAgentSessionRejectedShownInPlace } from '../../../../../../../shared/agent-session/view/structured-agent-session-message-projection'
 import { agentSessionWriteNotDoneParts } from '../../../../../../../shared/agent-session/failures/agent-session-refusal-notice'
@@ -25,6 +27,7 @@ export function structuredAgentSessionDeliveryNotices(args: {
   agentName: string
   startFailures: readonly AgentSessionFailureFact[]
   commandItemIds?: ReadonlySet<string>
+  latestTurn?: AgentSessionLatestTurn | null
 }): ReadonlyMap<string, NativeChatDeliveryNotice> {
   const { agentName, submissions } = args
   const notices = new Map<string, NativeChatDeliveryNotice>()
@@ -45,7 +48,9 @@ export function structuredAgentSessionDeliveryNotices(args: {
   for (const submission of submissions) {
     const id = agentJournalSubmissionKey(submission.clientMessageId)
     if (submission.dispatchState === 'pending') {
-      notices.set(id, STRUCTURED_AGENT_SESSION_DELIVERY_SENDING)
+      if (agentJournalSubmissionAwaitsAgent(submission, args.latestTurn)) {
+        notices.set(id, STRUCTURED_AGENT_SESSION_DELIVERY_SENDING)
+      }
     } else if (submission.dispatchState === 'rejected' && shown.has(id)) {
       // A failed start's words, unless its row carries them; other sentences quote their own.
       const fact = readWholeAgentSessionFailureFact(submission.rejection)
