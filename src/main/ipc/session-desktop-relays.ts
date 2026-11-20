@@ -80,11 +80,11 @@ export function parseCarriedDesktopRelays(
 export function registerDesktopRelayHandlers(
   store: RelayStore,
   isFenced: (hostId: string) => boolean
-): () => DesktopRelayHostApply {
+): (hostIds: readonly ExecutionHostId[]) => DesktopRelayHostApply {
   const legacyBaseline = captureLegacyRelayBaseline(store)
   // One apply batch: legacy adoption indexes rows at most once and partitions are listed at most once.
-  const relayApplier = (): DesktopRelayHostApply => {
-    const adoptionFor = legacyRelayAdoptionBatch(store, legacyBaseline)
+  const relayApplier = (hostIds: readonly ExecutionHostId[]): DesktopRelayHostApply => {
+    const adoptionFor = legacyRelayAdoptionBatch(store, legacyBaseline, hostIds)
     let existing: Set<string> | null = null
     return (hostId, host, base) => {
       const { patch, refused, changedTabIds } = applyDesktopRelayWrite(
@@ -111,12 +111,16 @@ export function registerDesktopRelayHandlers(
         skipped: [],
         refused: []
       }
-      const apply = relayApplier()
-      for (const { hostId: rawHostId, ...host } of hosts) {
+      const hostIds = hosts.map(({ hostId: rawHostId }) => {
         const hostId = parseExecutionHostId(rawHostId)?.id
         if (!hostId) {
           throw new Error(`invalid_relay_host:${rawHostId}`)
         }
+        return hostId
+      })
+      const apply = relayApplier(hostIds)
+      for (const [index, { hostId: _rawHostId, ...host }] of hosts.entries()) {
+        const hostId = hostIds[index]!
         if (isFenced(hostId)) {
           result.skipped.push(hostId)
           continue

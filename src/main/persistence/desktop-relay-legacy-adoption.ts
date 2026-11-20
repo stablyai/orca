@@ -1,6 +1,7 @@
 import type { Store } from './loading-store/store'
 import {
   getRepoExecutionHostId,
+  getRepoSshConnectionId,
   type ExecutionHostId
 } from '../../shared/execution-host/execution-host'
 import { parseAppSshPtyId } from '../../shared/remote-runtime/ssh/ssh-pty-id'
@@ -31,8 +32,9 @@ export function captureLegacyRelayBaseline(store: AdoptionStore): LegacyRelayBas
   return baseline
 }
 
-/** Where each tab row lives when it is in exactly one partition, under a worktree of an SSH repo the
- *  window saves (repo worktrees whose repo has a connection, as the window's session builder writes). */
+/** The host each tab row's relay id belongs to, when the row is in exactly one partition under a
+ *  worktree of an SSH repo the window saves: its repo's partition, which an older build may not be the
+ *  one storing the row (the window's next save routes it there). */
 function uniqueSshRepoTabHosts(store: AdoptionStore): Map<string, ExecutionHostId> {
   const repoById = new Map(store.getRepos().map((repo) => [repo.id, repo]))
   const hostByTab = new Map<string, ExecutionHostId | null>()
@@ -41,13 +43,14 @@ function uniqueSshRepoTabHosts(store: AdoptionStore): Map<string, ExecutionHostI
       store.getWorkspaceSession(hostId).tabsByWorktree ?? {}
     )) {
       const repo = repoById.get(getRepoIdFromWorktreeId(worktreeId))
-      const owner = repo?.connectionId
-        ? workspaceSessionPartitionHostId(getRepoExecutionHostId(repo))
-        : null
+      const owner =
+        repo && getRepoSshConnectionId(repo)
+          ? workspaceSessionPartitionHostId(getRepoExecutionHostId(repo))
+          : null
       for (const tab of tabs) {
         const seen = hostByTab.get(tab.id)
-        // A row in two partitions, or under a host that isn't its repo's, is ambiguous.
-        hostByTab.set(tab.id, seen === undefined && owner === hostId ? owner : null)
+        // A row in two partitions is ambiguous.
+        hostByTab.set(tab.id, seen === undefined ? owner : null)
       }
     }
   }
@@ -67,22 +70,33 @@ function uniqueSshRepoTabHosts(store: AdoptionStore): Map<string, ExecutionHostI
  *  unattributable ids stay main's. */
 export function legacyRelayAdoptionBatch(
   store: AdoptionStore,
-  baseline: LegacyRelayBaseline
+  baseline: LegacyRelayBaseline,
+  // The partitions this batch writes; only one still awaiting adoption makes it read the others.
+  hostIds: readonly ExecutionHostId[]
 ): (hostId: ExecutionHostId) => LegacyRelayAdoption {
+  // A partition's stored version records its adoption; drop it from the baseline only then, so a
+  // write that failed to store still adopts on its retry.
+  for (const hostId of hostIds) {
+    if (
+      baseline.has(hostId) &&
+      (store.getWorkspaceSession(hostId).desktopRelayAdoptionVersion ?? 0) >=
+        DESKTOP_RELAY_LEGACY_ADOPTION_VERSION
+    ) {
+      baseline.delete(hostId)
+    }
+  }
   let tabHosts: Map<string, ExecutionHostId> | null = null
-  // Read before this batch patches any partition; empty once every partition has adopted.
+  // Read before this batch patches any partition.
   const relaysAtStart = new Map(
-    baseline.size === 0
-      ? []
-      : store
+    hostIds.some((hostId) => baseline.has(hostId))
+      ? store
           .getWorkspaceSessionHostIds()
           .map((hostId) => [hostId, store.getWorkspaceSession(hostId).remoteSessionIdsByTabId])
+      : []
   )
   const relaysOf = (hostId: ExecutionHostId) => relaysAtStart.get(hostId)
   return (hostId) => () => {
     const legacy = baseline.get(hostId)
-    // Adopted once; the record's version keeps it from running again after a restart.
-    baseline.delete(hostId)
     if (!legacy) {
       return {}
     }

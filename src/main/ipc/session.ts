@@ -118,7 +118,7 @@ export function registerSessionHandlers(store: Store, runtime: OrcaRuntimeServic
     const relayHostId = normalizeExecutionHostId(hostId) ?? LOCAL_EXECUTION_HOST_ID
     const applied =
       relays && !ORCA_LAYOUT_OWNER_IS_MAIN
-        ? relayApplier()(relayHostId, relays, { ...stored, ...save })
+        ? relayApplier([relayHostId])(relayHostId, relays, { ...stored, ...save })
         : null
     const relayStatus =
       applied && (applied.refused ? 'refused' : applied.patch ? 'applied' : 'unchanged')

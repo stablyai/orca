@@ -57,11 +57,38 @@ describe('adopting relay ids saved before ownership was recorded', () => {
       ])
     )
 
-    const adoptionFor = legacyRelayAdoptionBatch(store, captureLegacyRelayBaseline(store))
+    const adoptionFor = legacyRelayAdoptionBatch(store, captureLegacyRelayBaseline(store), [
+      SSH,
+      LOCAL_EXECUTION_HOST_ID
+    ])
 
     expect(adoptionFor(SSH)(store.getWorkspaceSession(SSH))).toEqual({
       'tab-a': 'ssh:box@@relay-a'
     })
+    expect(
+      adoptionFor(LOCAL_EXECUTION_HOST_ID)(store.getWorkspaceSession(LOCAL_EXECUTION_HOST_ID))
+    ).toEqual({ 'tab-a': 'ssh:box@@relay-a' })
+  })
+
+  it("adopts an SSH repo tab's id an older build stored with its row in the local partition", () => {
+    const store = storeWith(
+      new Map<string, Partial<WorkspaceSessionState>>([
+        [
+          LOCAL_EXECUTION_HOST_ID,
+          {
+            tabsByWorktree: {
+              // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: adoption reads tab ids only.
+              'repo-ssh::/w': [tab('tab-a')] as WorkspaceSessionState['tabsByWorktree'][string]
+            },
+            remoteSessionIdsByTabId: { 'tab-a': 'ssh:box@@relay-a' }
+          }
+        ]
+      ])
+    )
+    const adoptionFor = legacyRelayAdoptionBatch(store, captureLegacyRelayBaseline(store), [
+      LOCAL_EXECUTION_HOST_ID
+    ])
+
     expect(
       adoptionFor(LOCAL_EXECUTION_HOST_ID)(store.getWorkspaceSession(LOCAL_EXECUTION_HOST_ID))
     ).toEqual({ 'tab-a': 'ssh:box@@relay-a' })
