@@ -29,8 +29,8 @@ import {
 import { watchTerminalSymbolsFontLoad } from './terminal-symbols-font'
 import {
   handleTerminalWebglAtlasPage,
-  releaseTerminalWebglAtlasWatcher,
-  watchTerminalWebglAtlasOutput
+  trackTerminalWebglAtlasPane,
+  untrackTerminalWebglAtlasPane
 } from './terminal-webgl-atlas-memory-rebuild'
 
 export const ENABLE_WEBGL_RENDERER = true
@@ -123,7 +123,7 @@ export function disposeWebgl(
 ): void {
   cancelPendingWebglRefresh(pane)
   panesAwaitingWebglAddon.delete(pane)
-  releaseTerminalWebglAtlasWatcher(pane)
+  untrackTerminalWebglAtlasPane(pane)
   if (!pane.webglAddon) {
     return
   }
@@ -285,7 +285,7 @@ export function attachWebgl(pane: ManagedPaneInternal): void {
     addon.onAddTextureAtlasCanvas((page) => handleTerminalWebglAtlasPage(page, pane))
     pane.terminal.loadAddon(addon)
     pane.webglAddon = addon
-    watchTerminalWebglAtlasOutput(pane)
+    trackTerminalWebglAtlasPane(pane)
     const canvas = getXtermWebglCanvas(addon)
     if (canvas) {
       // Why: panes of a hidden worktree surface keep their backing so switching worktrees never pays a reallocation.
@@ -303,7 +303,7 @@ export function attachWebgl(pane: ManagedPaneInternal): void {
     }
     pane.webglAttachFailedSinceRecovery = true
     console.warn('[terminal] WebGL unavailable for pane', pane.id, '— using DOM renderer:', err)
-    releaseTerminalWebglAtlasWatcher(pane)
+    untrackTerminalWebglAtlasPane(pane)
     try {
       webglAddon?.dispose()
     } catch {}

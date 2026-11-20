@@ -8,6 +8,7 @@ import { flushTerminalOutputImpl } from './pane-terminal-output-flusher'
 import { writeTerminalOutputImpl } from './pane-terminal-output-writer'
 import { writeXtermParseBarrier } from './xterm-parse-barrier'
 import { noteTerminalOutputArrival } from './terminal-output-arrival-observer'
+import { noteTerminalWebglAtlasOutput } from '../terminal-rendering/terminal-webgl-atlas-memory-rebuild'
 import {
   requestRegisteredTerminalBacklogRecovery,
   type WriteTerminalOutputOptions
@@ -25,6 +26,7 @@ export function writeTerminalOutput(
 ): void {
   if (data) {
     noteTerminalOutputArrival(terminal)
+    noteTerminalWebglAtlasOutput(terminal)
   }
   writeTerminalOutputImpl(terminal, data, options)
 }
