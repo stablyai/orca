@@ -3,7 +3,10 @@ import {
   claudeBuildPermissionMode,
   leaveClaudePlanModeOnApproval
 } from './claude-plan-approval-mode'
-import { setClaudeAllowedPermissionMode } from './claude-full-access-refusal'
+import {
+  claimClaudePermissionModeRequest,
+  setClaudeAllowedPermissionMode
+} from './claude-full-access-refusal'
 import { ClaudeControlRequestTimeoutError } from '../../sdk-transport/claude-agent-sdk-control-requests'
 
 const BYPASS_REFUSAL =
@@ -147,6 +150,28 @@ describe('leaving Plan mode after an approved plan', () => {
     refuses.push('bypassPermissions')
     expect(await setClaudeAllowedPermissionMode(session, 'bypassPermissions')).toBe('auto')
     expect(await setClaudeAllowedPermissionMode(session, 'bypassPermissions')).toBe('auto')
+  })
+
+  it('leaves the mode to a newer request that went out before Claude refused', async () => {
+    const session: Parameters<typeof setClaudeAllowedPermissionMode>[0] = {
+      launchIntent: { permissionMode: 'bypassPermissions' },
+      firstRootInit: { permissionMode: 'bypassPermissions' },
+      connection: {
+        setPermissionMode: vi.fn((mode: string) => {
+          // The user switches to Plan while Claude's answer is on its way.
+          claimClaudePermissionModeRequest(session)
+          return mode === 'bypassPermissions'
+            ? Promise.reject(new Error(BYPASS_REFUSAL))
+            : Promise.resolve()
+        })
+      }
+    }
+    await expect(setClaudeAllowedPermissionMode(session, 'bypassPermissions')).rejects.toThrow(
+      BYPASS_REFUSAL
+    )
+    expect(vi.mocked(session.connection.setPermissionMode).mock.calls).toEqual([
+      ['bypassPermissions', undefined]
+    ])
   })
 
   it('stops when Claude refuses bypass for a chat that never asked for Full access', async () => {

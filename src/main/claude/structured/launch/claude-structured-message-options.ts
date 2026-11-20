@@ -1,6 +1,7 @@
 import { setTimeout as delay } from 'node:timers/promises'
 import { claudeBuildPermissionMode } from '../permissions/claude-plan-approval-mode'
 import {
+  claimClaudePermissionModeRequest,
   claudeBypassRefused,
   claudeInPlan,
   claudeOwesFullAccessFallback,
@@ -69,6 +70,7 @@ export async function applyClaudeMessageOptions(
   throwIfSignalAborted(signal)
   if (options.interactionMode !== undefined) {
     if (options.interactionMode === 'plan') {
+      claimClaudePermissionModeRequest(session)
       await waitForPromiseWithSignal(
         session.connection.setPermissionMode('plan', { timeoutMs }),
         signal

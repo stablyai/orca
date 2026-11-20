@@ -161,6 +161,9 @@ export type ClaudeSession = {
   bypassRefusal?: ClaudeBypassRefusal
   /** The Full access refusal warning this process last wrote, so each change gets one row. */
   fullAccessRefusalNoticeId?: string
+  /** Counts permission mode requests, so a fallback written after Claude answers never lands
+   *  over a newer request. */
+  permissionModeRequests?: number
   /** The startup `get_settings` read; settles once its facts are recorded, never rejects. */
   startupSettings?: Promise<void>
   /** Claude's settings turn auto mode off for this process (startup `get_settings`, or a refusal). */

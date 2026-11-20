@@ -22,6 +22,7 @@ export type ClaudeBypassFacts = Partial<
     | 'autoDisabled'
     | 'autoUnsettled'
     | 'appliedInputOptions'
+    | 'permissionModeRequests'
   >
 >
 
@@ -168,6 +169,12 @@ function claudePermissionModeLadder(
   return bypassKnown ? fallback : [...fallback, 'bypassPermissions']
 }
 
+/** Marks a new permission mode request; a pending fallback for an older one no longer writes. */
+export function claimClaudePermissionModeRequest(session: ClaudeBypassFacts): number {
+  session.permissionModeRequests = (session.permissionModeRequests ?? 0) + 1
+  return session.permissionModeRequests
+}
+
 /** Asks for the mode Claude allows and resolves to the mode applied, remembering what Claude
  *  accepted or refused for this process. Claude rereads its settings, so bypass or auto it
  *  allowed earlier can be refused later; that refusal is followed by the fallback, and a
@@ -181,6 +188,7 @@ export async function setClaudeAllowedPermissionMode(
   refusedBefore: ReadonlySet<PermissionMode> = new Set()
 ): Promise<PermissionMode> {
   const ladder = claudePermissionModeLadder(session, mode)
+  const request = claimClaudePermissionModeRequest(session)
   const writes = await Promise.allSettled(
     ladder.map((step) => session.connection.setPermissionMode(step, options))
   )
@@ -252,6 +260,13 @@ export async function setClaudeAllowedPermissionMode(
     return applied
   }
   if (refused.has(next) || refused.size > 2) {
+    throw lastRefusal
+  }
+  // A newer request (Plan, another Build) has gone out since: its answer decides the mode.
+  if (session.permissionModeRequests !== request) {
+    if (applied !== null) {
+      return applied
+    }
     throw lastRefusal
   }
   // Only a refusal of a mode allowed earlier gets here; each one is a new fact.
