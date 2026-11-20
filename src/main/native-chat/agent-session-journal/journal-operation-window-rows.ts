@@ -96,8 +96,8 @@ export function readOperationWindowItems(
   const cutSize = scope.db.prepare(`SELECT ${projectedStoredText} AS stored,
       CASE WHEN ${projectedStoredText} = 0 THEN octet_length(${cutJson}) END AS cut_bytes
     FROM journal_items WHERE session_id=? AND epoch=? AND item_id=?`)
-  const storedSize = scope.db
-    .prepare(`SELECT output_blob, octet_length(${projected}) AS projected_bytes,
+  const storedSize = scope.db.prepare(`SELECT output_blob,
+      octet_length(json_remove(${projected},'$.body.output.stored','$.body.patch.stored')) AS projected_bytes,
       octet_length(json_quote(${field('head')})) AS head_bytes,
       ${field('byteLength')} AS byte_length, ${field('stored.truncated')} AS truncated
     FROM journal_items WHERE session_id=? AND epoch=? AND item_id=?`)
