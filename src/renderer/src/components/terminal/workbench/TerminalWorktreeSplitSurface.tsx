@@ -11,6 +11,7 @@ import {
 } from '../../browser-pane/host-guest/retention/browser-worktree-surface-paintability'
 import TabGroupSplitLayout from '../../tab-group/TabGroupSplitLayout'
 import { useAppStore } from '../../../store/index'
+import { hasMountedEditorFrame } from '../../editor/save/flush/editor-pending-flush'
 import { WorkspacePaneOverlayLayers } from './WorkspacePaneOverlayLayers'
 import type { TerminalPrewarmStage } from '../worktree-prewarm/terminal-worktree-prewarm'
 
@@ -44,12 +45,19 @@ export const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
 }): React.JSX.Element {
   const browserPageIds = useWorktreeBrowserPageIds(worktreeId)
   const needsBrowserGuestPaint = useBrowserGuestPaintRetention(browserPageIds)
-  const hasSimulatorTab = useAppStore((state) =>
-    (state.unifiedTabsByWorktree[worktreeId] ?? []).some((tab) => tab.contentType === 'simulator')
+  const hasUnreleasableTab = useAppStore((state) =>
+    (state.unifiedTabsByWorktree[worktreeId] ?? []).some(
+      (tab) =>
+        tab.contentType === 'simulator' ||
+        (tab.contentType === 'editor' && hasMountedEditorFrame(tab.entityId))
+    )
   )
-  // Parked means every terminal restores from its snapshot; browser guests and simulators would lose live state.
+  // Parked terminals restore from snapshots; browser guests, simulators and plugin editor frames (async flush) would lose state.
   const surfaceReleased =
-    shouldColdParkTerminalPanes && !isForceParked && browserPageIds.length === 0 && !hasSimulatorTab
+    shouldColdParkTerminalPanes &&
+    !isForceParked &&
+    browserPageIds.length === 0 &&
+    !hasUnreleasableTab
   const shouldKeepPaintable = shouldKeepHiddenWorktreeSurfacePaintable({
     // A mount-stage prewarm stays display:none so its style/layout cost lands in a later task.
     shouldMeasureHiddenWorktree: shouldMeasureHiddenWorktree && prewarmStage !== 'mount',
