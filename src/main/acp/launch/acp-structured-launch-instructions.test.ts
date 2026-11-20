@@ -28,7 +28,8 @@ const SPECS = {
   },
   omp: acpLaunchSpecFor('omp')!,
   antigravity: acpLaunchSpecFor('antigravity')!,
-  cursor: acpLaunchSpecFor('cursor')!
+  cursor: acpLaunchSpecFor('cursor')!,
+  hermes: acpLaunchSpecFor('hermes')!
 }
 
 const ACCOUNT_HOMES: Record<keyof typeof SPECS, AgentSessionRecord['accountHome']> = {
@@ -36,12 +37,14 @@ const ACCOUNT_HOMES: Record<keyof typeof SPECS, AgentSessionRecord['accountHome'
   opencode: { kind: 'opencode', locator: { kind: 'unmanaged' } },
   omp: { variable: 'PI_CODING_AGENT_DIR', path: '/home/user/.omp/agent' },
   antigravity: { variable: 'GEMINI_HOME', path: '/home/user/orca-data/antigravity-chat' },
-  cursor: { variable: 'CURSOR_CONFIG_DIR', path: '/home/user/.cursor' }
+  cursor: { variable: 'CURSOR_CONFIG_DIR', path: '/home/user/.cursor' },
+  hermes: { variable: 'HERMES_HOME', path: '/home/user/.hermes' }
 }
 
 const PROBED_VERSIONS: Partial<Record<keyof typeof SPECS, string>> = {
   omp: '17.2.9',
-  cursor: '2026.11.19-f005e9d'
+  cursor: '2026.11.19-f005e9d',
+  hermes: '0.23.3'
 }
 
 let dataDirectory = ''
@@ -155,6 +158,22 @@ describe('ACP launch: standing instructions', () => {
       await undo?.()
     }
     expect(await readdir(workspacePath)).toEqual([])
+  })
+
+  it("writes them to Hermes's .hermes.md in the folder it runs in, rewriting it at each launch", async () => {
+    const home = await mkdtemp(join(tmpdir(), 'acp-instructions-hermes-'))
+    try {
+      const first = await launch('hermes', { instructions: 'first preamble', workspacePath: home })
+      expect(first.args).toEqual((await launch('hermes', { workspacePath: home })).args)
+      expect(first.sessionMeta).toBeUndefined()
+      await launch('hermes', { instructions: PREAMBLE, workspacePath: home })
+      const written = await readFile(join(home, '.hermes.md'), 'utf8')
+      expect(written).toContain(PREAMBLE)
+      expect(written).not.toContain('first preamble')
+      expect((await readdir(home)).sort()).toEqual(['.hermes.md'])
+    } finally {
+      await rm(home, { recursive: true, force: true })
+    }
   })
 
   it('refuses to start an agent that has no way to take them', async () => {
