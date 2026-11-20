@@ -1,4 +1,7 @@
 import { defineFixture } from '../../component-fixtures/component-fixture'
+import { useAppStore } from '@/store'
+import { publicRuntimeEnvironment } from '@/runtime/rpc/testing/paired-runtime-environment-test-fixture'
+import { createCompatibleRuntimeStatusResponse } from '@/runtime/rpc/testing/runtime-compatibility-test-fixture'
 import { openBotConnectorPage } from './bot-connector-page'
 import {
   base,
@@ -189,6 +192,30 @@ export const needsOwnerNarrow = defineFixture({
 export const needsOwnerPageNarrow = defineFixture({
   width: 300,
   setup: () => fresh({ linearLinked: false, composio: false }),
+  render: () => <Panel bot={base} />,
+  interact: () => openRow('Linear · Globex')
+})
+
+export const remoteOwnerOnlyPageNarrow = defineFixture({
+  width: 300,
+  setup: () => {
+    fresh({ linearLinked: false, composio: false, host: 'paste' })
+    const environment = publicRuntimeEnvironment({ id: 'build-server', pairingRevision: 1 })
+    const store = useAppStore.getState()
+    store.setRuntimeEnvironments([environment])
+    store.applyRuntimeHostStatusSnapshot({
+      environmentId: environment.id,
+      pairingRevision: 1,
+      sequence: 1,
+      checkedAt: 1,
+      verification: 'verified',
+      transport: 'ready',
+      status: {
+        ...createCompatibleRuntimeStatusResponse(environment.id).result,
+        machineName: 'Build server (Ubuntu 24.04)'
+      }
+    })
+  },
   render: () => <Panel bot={base} />,
   interact: () => openRow('Linear · Globex')
 })
