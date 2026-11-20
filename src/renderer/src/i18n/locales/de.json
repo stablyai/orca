@@ -20262,7 +20262,8 @@
           "unmuteTab": "Stummschaltung des Tabs aufheben"
         },
         "EditorFileTabContextMenu": {
-          "closeOthers": "Andere schließen"
+          "closeOthers": "Andere schließen",
+          "revealInOrcaExplorer": "Im Orca-Dateiexplorer anzeigen"
         },
         "CopyTabIdMenuItem": {
           "copied": "Tab-ID kopiert",

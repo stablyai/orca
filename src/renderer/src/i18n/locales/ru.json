@@ -20932,7 +20932,8 @@
           "unmuteTab": "Включить звук вкладки"
         },
         "EditorFileTabContextMenu": {
-          "closeOthers": "Закрыть остальные"
+          "closeOthers": "Закрыть остальные",
+          "revealInOrcaExplorer": "Показать в проводнике Orca"
         },
         "CopyTabIdMenuItem": {
           "copied": "ID вкладки скопирован",

@@ -19517,7 +19517,8 @@
           "unmuteTab": "탭 음소거 해제"
         },
         "EditorFileTabContextMenu": {
-          "closeOthers": "다른 탭 닫기"
+          "closeOthers": "다른 탭 닫기",
+          "revealInOrcaExplorer": "Orca 탐색기에 표시"
         },
         "CopyTabIdMenuItem": {
           "copied": "탭 ID 복사됨",

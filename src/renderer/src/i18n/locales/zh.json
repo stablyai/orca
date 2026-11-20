@@ -20922,7 +20922,8 @@
           "unmuteTab": "取消静音标签"
         },
         "EditorFileTabContextMenu": {
-          "closeOthers": "关闭其他"
+          "closeOthers": "关闭其他",
+          "revealInOrcaExplorer": "在 Orca 文件资源管理器中显示"
         },
         "CopyTabIdMenuItem": {
           "copied": "已复制标签页 ID",

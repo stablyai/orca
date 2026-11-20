@@ -19951,7 +19951,8 @@
           "unmuteTab": "取消分頁靜音"
         },
         "EditorFileTabContextMenu": {
-          "closeOthers": "關閉其他"
+          "closeOthers": "關閉其他",
+          "revealInOrcaExplorer": "在 Orca 檔案總管中顯示"
         },
         "CopyTabIdMenuItem": {
           "copied": "已複製分頁 ID",

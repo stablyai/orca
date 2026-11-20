@@ -20409,7 +20409,8 @@
           "unmuteTab": "Sekmenin sesini aç"
         },
         "EditorFileTabContextMenu": {
-          "closeOthers": "Diğerlerini Kapat"
+          "closeOthers": "Diğerlerini Kapat",
+          "revealInOrcaExplorer": "Orca Gezgininde Göster"
         },
         "CopyTabIdMenuItem": {
           "copied": "Sekme kimliği kopyalandı",

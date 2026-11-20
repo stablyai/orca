@@ -20301,7 +20301,8 @@
           "unmuteTab": "Réactiver le son de l'onglet"
         },
         "EditorFileTabContextMenu": {
-          "closeOthers": "Fermer les autres"
+          "closeOthers": "Fermer les autres",
+          "revealInOrcaExplorer": "Afficher dans l’explorateur d’Orca"
         },
         "CopyTabIdMenuItem": {
           "copied": "ID de l'onglet copié",
