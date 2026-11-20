@@ -17,6 +17,10 @@ import { createTerminalIosHangulPreeditRenderer } from './ime/terminal-ios-hangu
 import { isCurrentPlatformIosWeb } from '@/app-shell/platform/ios-web-platform'
 import { resolveTerminalJisYenInput } from './keyboard/terminal-jis-yen-input'
 import {
+  encodeWin32InputRecordForAltGr,
+  isAltGrTextKey
+} from './keyboard/terminal-win32-input-records'
+import {
   isNonLatinControlChordKeyup,
   resolveNonLatinControlChordInput
 } from './keyboard/terminal-non-latin-control-chord'
@@ -136,6 +140,18 @@ export function installTerminalPaneInputHandling(context: PaneInputContext): voi
     }
     if (isNonLatinControlChordKeyup(event, claimedNonLatinControlChordCode)) {
       claimedNonLatinControlChordCode = null
+      return false
+    }
+    // The tracker only records DECSET 9001 on Windows, so other platforms never reach this.
+    if (
+      paneKittyKeyboardModesRef.current.get(pane.id)?.win32InputMode === true &&
+      isAltGrTextKey(event)
+    ) {
+      const record = encodeWin32InputRecordForAltGr(event)
+      if (record) {
+        pane.terminal.input(record)
+      }
+      // Swallow the keypress too, or xterm would also send the bare character.
       return false
     }
     const nonLatinControlChord = resolveNonLatinControlChordInput(event)

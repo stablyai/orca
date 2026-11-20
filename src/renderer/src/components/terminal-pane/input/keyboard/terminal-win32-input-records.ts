@@ -72,7 +72,7 @@ export type Win32InputRecordKeyEvent = {
   getModifierState?: (key: string) => boolean
 }
 
-function isAltGrTextKey(event: Win32InputRecordKeyEvent): boolean {
+export function isAltGrTextKey(event: Win32InputRecordKeyEvent): boolean {
   // Why: Chromium on Windows reports AltGr as Ctrl+Alt with the produced character as `key`.
   return (
     event.ctrlKey &&
