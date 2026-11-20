@@ -27,6 +27,8 @@ export type ManagedRuntimeInstallationDeps = {
   findExternal: () => Promise<boolean>
   /** Told the release launches resolve to each time this reads the disk; null when none is whole. */
   onRelease?: (folder: string | null) => void
+  /** False while Orca shouldn't keep this copy current; absent means it should. */
+  updatesEnabled?: () => boolean
   /** Reject unless no host workload uses this runtime. */
   fence: (work: () => Promise<void>) => Promise<void>
   fetcher?: MainHttpClient['fetch']
@@ -131,7 +133,7 @@ export class ManagedRuntimeInstallation {
 
   /** Bring Orca's own copy to the latest release; never installs one nobody asked for or touches a user's own. */
   async updateIfBehind(): Promise<void> {
-    if (!this.runtime.refreshPin || this.running) {
+    if (!this.runtime.refreshPin || this.running || this.deps.updatesEnabled?.() === false) {
       return
     }
     // Nothing installed has nothing to update, so the latest release isn't looked up.

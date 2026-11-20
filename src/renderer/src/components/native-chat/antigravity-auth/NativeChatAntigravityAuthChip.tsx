@@ -39,7 +39,7 @@ export function NativeChatAntigravityAuthChip({
   const auth = useNativeChatAntigravityAuth()
   const method = auth?.detection?.method
   const onAgy = auth?.backend === 'agy'
-  if (!auth || (!method && !onAgy)) {
+  if (!auth || (!method && !onAgy) || (onAgy && auth.programPending)) {
     return null
   }
   // On the host's agy, agy's own login serves this chat whatever Google method is saved; another

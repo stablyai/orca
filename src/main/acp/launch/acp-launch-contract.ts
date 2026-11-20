@@ -134,6 +134,9 @@ export type AcpHostBackend = {
   /** Where Orca also keeps its own copy of the host program: whether Install, its status and
    *  removal act on the outer spec's `managedRuntime` instead of that copy. */
   installsManagedRuntime?(input: AcpHostBackendInput): Promise<boolean>
+  /** Whether Orca's own copy of the host program may take new chats and be kept updated; absent
+   *  means it may. Chats already pinned to the program still launch Orca's copy either way. */
+  managedCopyServesNewChats?(settings: AcpHostBackendSettings): boolean
 }
 
 /** The settings a host backend weighs; a change to any of them can change its answers. */

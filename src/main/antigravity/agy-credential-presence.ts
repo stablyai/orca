@@ -42,15 +42,21 @@ export async function agyCredentialPresence(homePath: string): Promise<AgyCreden
   if (await antigravityUsesFileStoreAsync(env)) {
     return tokenFile()
   }
-  if (process.platform === 'darwin') {
-    // Reading the secret would ask for keychain access; its attributes do not.
-    const item = await hasAntigravityMacOSCredential().catch(() => false)
-    return item ? 'present' : tokenFile()
-  }
-  if (process.platform === 'win32') {
-    // Credential Manager reads never prompt.
-    const item = await hasAntigravityWindowsCredential().catch(() => false)
-    return item ? 'present' : tokenFile()
+  // macOS reads the item's attributes, which would not ask for keychain access as its secret would;
+  // Credential Manager reads never prompt. A failed read can't say the login is absent.
+  const item =
+    process.platform === 'darwin'
+      ? hasAntigravityMacOSCredential
+      : process.platform === 'win32'
+        ? hasAntigravityWindowsCredential
+        : null
+  if (item) {
+    const found = await item().then(
+      (present) => (present ? 'present' : 'absent'),
+      () => 'unread' as const
+    )
+    const file = found === 'present' ? 'present' : await tokenFile()
+    return file === 'present' ? 'present' : found === 'unread' ? 'locked' : 'absent'
   }
   // The read refuses a locked collection rather than unlocking it. Without gdbus Orca can't tell
   // whether it is locked, so it stays `locked`; secret-tool is only needed after gdbus found the

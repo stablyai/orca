@@ -14,12 +14,14 @@ const host = vi.hoisted(
 vi.mock('./native-file-credentials', () => ({
   antigravityUsesFileStoreAsync: async () => host.fileStore
 }))
-vi.mock('./native-macos-credentials', () => ({
-  hasAntigravityMacOSCredential: async () => host.keyring === 'item'
-}))
-vi.mock('./native-windows-credentials', () => ({
-  hasAntigravityWindowsCredential: async () => host.keyring === 'item'
-}))
+const storeItem = vi.hoisted(() => async () => {
+  if (host.keyring === 'locked') {
+    throw new Error('The credential store could not be read.')
+  }
+  return host.keyring === 'item'
+})
+vi.mock('./native-macos-credentials', () => ({ hasAntigravityMacOSCredential: storeItem }))
+vi.mock('./native-windows-credentials', () => ({ hasAntigravityWindowsCredential: storeItem }))
 vi.mock('./native-linux-credentials', async () => {
   class AntigravityKeyringToolMissingError extends Error {
     constructor(readonly program: 'gdbus' | 'secret-tool') {
@@ -82,6 +84,8 @@ it.each<
   ['a macOS keychain item', 'darwin', { keyring: 'item' }, {}, 'present'],
   ['a macOS token file', 'darwin', { keyring: 'none' }, { token: true }, 'present'],
   ['macOS with neither', 'darwin', { keyring: 'none' }, {}, 'absent'],
+  // A failed read can't say the login is absent.
+  ['a macOS keychain that could not be read', 'darwin', { keyring: 'locked' }, {}, 'locked'],
   ['a locked Linux keyring', 'linux', { keyring: 'locked' }, { token: true }, 'locked'],
   ['an unlocked Linux keyring without an item', 'linux', { keyring: 'none' }, {}, 'absent'],
   // agy reaches the Secret Service itself; without gdbus Orca can't tell if it is locked.
@@ -95,7 +99,8 @@ it.each<
     'present'
   ],
   ['a Windows Credential Manager item', 'win32', { keyring: 'item' }, {}, 'present'],
-  ['Windows with neither', 'win32', { keyring: 'none' }, {}, 'absent']
+  ['Windows with neither', 'win32', { keyring: 'none' }, {}, 'absent'],
+  ['a Credential Manager that could not be read', 'win32', { keyring: 'locked' }, {}, 'locked']
 ])('reads %s as its login presence', async (_case, platform, state, files, expected) => {
   Object.assign(host, { fileStore: false, keyring: 'none' }, state)
   vi.spyOn(process, 'platform', 'get').mockReturnValue(platform)

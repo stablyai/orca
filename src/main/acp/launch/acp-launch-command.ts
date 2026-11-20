@@ -150,7 +150,11 @@ export async function acpHostBackendInput(
     backend.spec.installDirectories({ env, homePath })
   )
   // The user's own program wins; Orca's copy serves hosts that have none.
-  const program = found ?? managedAgentCommandFor(spec.agent, command, { use: false }) ?? command
+  const managedCopy =
+    backend.managedCopyServesNewChats?.(settings) !== false
+      ? managedAgentCommandFor(spec.agent, command, { use: false })
+      : null
+  const program = found ?? managedCopy ?? command
   return { command: program, env, envToDelete, homePath, stateDirectory, settings }
 }
 

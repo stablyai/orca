@@ -79,7 +79,9 @@ export async function antigravityChatRoute(
     return ON_SERVER
   }
   const agyResolves = isAbsolute(command)
-  // Off, Orca's copy of agy takes no new chats: agy needs its own login, as before Orca installed it.
+  // Off, Orca's copy of agy takes no new chats (the input never offers it): only the user's own,
+  // signed-in agy does, as before Orca installed one. Unlike then, a missing secret-tool lets agy be
+  // asked, since gdbus already found the keyring unlocked.
   const managedAgy = input.settings.antigravityManagedAgyEnabled !== false
   if (!managedAgy || (await usesOrcaServer(input, server))) {
     // A signed-in agy still takes new chats; with no login to find, agy isn't asked at all.

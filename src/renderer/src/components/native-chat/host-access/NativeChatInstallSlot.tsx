@@ -90,14 +90,17 @@ export function useNativeChatInstallSlot(
               ? observation.snapshot.state.installedVersion
               : null
         }
-      : // Until the host says which agy is there, or while none is, the chip names none.
-        props.agent === 'antigravity' &&
-          props.isVisible &&
-          hostProgram &&
-          slot.kind !== 'install' &&
-          observation.kind === 'active' &&
-          observation.snapshot.kind === 'known'
-        ? { host: props.target, backend: 'agy', ...orcasAgy(observation) }
+      : props.agent === 'antigravity' && props.isVisible && hostProgram
+        ? {
+            host: props.target,
+            backend: 'agy',
+            ...orcasAgy(observation),
+            // Until the host says which agy is there, or while none is, the chip names none.
+            programPending:
+              slot.kind === 'install' ||
+              observation.kind === 'pending' ||
+              (observation.kind === 'active' && observation.snapshot.kind === 'unknown')
+          }
         : null
   }
 }

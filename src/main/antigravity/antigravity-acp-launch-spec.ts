@@ -203,6 +203,8 @@ export const ANTIGRAVITY_LAUNCH_SPEC = {
         : null,
     installsManagedRuntime: async (input) =>
       (await antigravityHostChatRoute(input)).installs === 'server',
+    // Off, a chat pinned to agy on a host without any agy keeps launch's cliMissing refusal.
+    managedCopyServesNewChats: (settings) => settings.antigravityManagedAgyEnabled !== false,
     // Installing Orca's agy, a new agy login or a changed agy answer changes the route.
     selectionRevision: () => managedRuntimeReleasesRevision() + antigravityHostAcpChecksRevision(),
     onSelectionChanged: onAntigravityHostAcpAnswersChanged

@@ -275,6 +275,25 @@ describe('with Orca’s copy of agy switched off', () => {
     expect(await installsManagedRuntime(input)).toBe(true)
   })
 
+  it("keeps new chats and Install off a signed-in Orca's agy, the only agy here", async () => {
+    const { rememberManagedAgentRelease } =
+      await import('../managed-agent-cli/managed-agent-cli-registry')
+    const { acpHostBackendInput } = await import('../acp/launch/acp-launch-command')
+    const { homePath, stateDirectory } = host({ noAgy: true })
+    rememberManagedAgentRelease(
+      'antigravity',
+      join(stateDirectory, 'agent-runtimes', 'agy', '1.5.13')
+    )
+    const shell = { PATH: '', HOME: homePath, USERPROFILE: homePath }
+    const off = { antigravityManagedAgyEnabled: false }
+
+    const input = await acpHostBackendInput(ANTIGRAVITY_LAUNCH_SPEC, shell, stateDirectory, off)
+    rememberManagedAgentRelease('antigravity', null)
+
+    expect(input && (await select(input))).toBeNull()
+    expect(input && (await installsManagedRuntime(input))).toBe(true)
+  })
+
   it('still runs new chats on a signed-in agy', async () => {
     const input = host({ managedAgyOff: true })
 

@@ -271,8 +271,9 @@ export type GlobalSettings = GlobalSettingsBase & {
   floatingTerminalEnabled: boolean
   /** Main-side new-page kill switch for paired Electron client-hosted browser placement. */
   browserClientHostedRemoteEnabled?: boolean
-  /** Main-side kill switch: new Antigravity chats on a host without a signed-in agy run Orca's copy
-   *  of agy, which Install provides; off keeps them on Orca's server. Absent means on. */
+  /** Main-side kill switch for Orca's copy of agy. Off, it takes no new chats and isn't updated;
+   *  new chats use the user's own signed-in agy or Orca's server, and chats already on Orca's copy
+   *  keep launching it. Absent means on. */
   antigravityManagedAgyEnabled?: boolean
   /** Browser profile new tabs in a workspace use; missing = 'shared' (the Default profile). */
   browserProfileScope?: BrowserProfileScope
