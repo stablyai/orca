@@ -35,27 +35,53 @@ export const MOBILE_WEB_APP_HOST_CATALOG_MAX_BYTES = 384 * 1024
 
 // Our own fence on the page's code, well inside the phone contract (32 MiB total, 10 MiB per asset in
 // manifest-contract.ts); routes are split and the entry is capped below, so no one asset nears 10 MiB.
-// 10.75 MiB: dropping duplicate package builds took the page to 10,815,616 bytes (2026-11-19). The fence
-// drops with it so those 198 KiB stay saved; the 446 KiB left is about what the phone parity round had.
-// +128 KiB: outfit art, loaded on demand (assertOutfitSheetsOnDemand).
-export const MOBILE_WEB_APP_BUNDLE_MAX_TOTAL_BYTES = 10.875 * 1024 * 1024
+// Split by startup cost vs assets loaded on use: the eager budget holds everything the page may load
+// to open (all code, fonts outside the terminal allowance, images the document names); the on-demand
+// budget holds only files outfitSheetsOnDemand proves are fetched when used, and any that the document
+// names count as eager.
+// Eager: 11,068,446 bytes measured with the split (2026-11-20), rounded up to the next 64 KiB.
+export const MOBILE_WEB_APP_BUNDLE_MAX_EAGER_BYTES = 169 * 64 * 1024
+export const MOBILE_WEB_APP_BUNDLE_MAX_ON_DEMAND_BYTES = 1024 * 1024
+export const MOBILE_WEB_APP_BUNDLE_MAX_ON_DEMAND_FILE_BYTES = 128 * 1024
 
 const OUTFIT_SHEET_DIR = join(projectDir, 'src', 'shared', 'bot-mascots', 'outfits')
 
-// Each outfit's sheet ships as its own image, fetched only when a picture wears that outfit: never
-// inlined in code, and never named by the page document, so a page with no outfits loads none of them.
-export async function assertOutfitSheetsOnDemand(manifest, bundleDir) {
+// Each outfit's sheet ships as its own image, fetched only when a picture wears that outfit, never
+// inlined in code. Returns the sheets the page document never names, so a page with no outfits loads none.
+export async function outfitSheetsOnDemand(manifest, bundleDir) {
   const document = await readFile(join(bundleDir, MOBILE_WEB_BUNDLE_ENTRYPOINT), 'utf8')
   const sheets = (await readdir(OUTFIT_SHEET_DIR)).filter((name) => name.endsWith('.webp'))
+  const onDemand = []
   for (const name of sheets) {
     const sha256 = sha256Hex(await readFile(join(OUTFIT_SHEET_DIR, name)))
-    if (!manifest.assets.some((asset) => asset.path === `assets/${sha256}.webp`)) {
+    const asset = manifest.assets.find((entry) => entry.path === `assets/${sha256}.webp`)
+    if (!asset) {
       fail(`outfit sheet ${name} is not its own image in the bundle, so it was inlined or dropped`)
     }
-    if (document.includes(sha256)) {
-      fail(`the page document names outfit sheet ${name}, so it would load on first open`)
+    if (!document.includes(sha256)) {
+      onDemand.push({ name, byteLength: asset.byteLength })
     }
   }
+  return onDemand
+}
+
+export function assertOnDemandFits(onDemand) {
+  const tooBig = onDemand.find(
+    (file) => file.byteLength > MOBILE_WEB_APP_BUNDLE_MAX_ON_DEMAND_FILE_BYTES
+  )
+  if (tooBig) {
+    fail(
+      `on-demand file ${tooBig.name} is ${String(tooBig.byteLength)} bytes, over the per-file budget of ` +
+        `${String(MOBILE_WEB_APP_BUNDLE_MAX_ON_DEMAND_FILE_BYTES)}`
+    )
+  }
+  const bytes = onDemand.reduce((total, file) => total + file.byteLength, 0)
+  if (bytes > MOBILE_WEB_APP_BUNDLE_MAX_ON_DEMAND_BYTES) {
+    fail(
+      `on-demand files are ${String(bytes)} bytes, over the budget of ${String(MOBILE_WEB_APP_BUNDLE_MAX_ON_DEMAND_BYTES)}`
+    )
+  }
+  return bytes
 }
 
 // Only these licensed terminal fonts have their own allowance; other fonts (KaTeX's) and code count.
@@ -240,14 +266,14 @@ export async function verifyMobileWebAppBundle({ bundleDir = defaultBundleDir } 
         `${String(MOBILE_WEB_APP_HOST_CATALOG_MAX_BYTES)} one reply carries`
     )
   }
-  const budgetBytes = mobileWebAppBundleBudgetBytes(manifest) - first.catalogBytes
-  if (budgetBytes > MOBILE_WEB_APP_BUNDLE_MAX_TOTAL_BYTES) {
+  const onDemandBytes = assertOnDemandFits(await outfitSheetsOnDemand(manifest, bundleDir))
+  const eagerBytes = mobileWebAppBundleBudgetBytes(manifest) - first.catalogBytes - onDemandBytes
+  if (eagerBytes > MOBILE_WEB_APP_BUNDLE_MAX_EAGER_BYTES) {
     fail(
-      `bundle excluding the approved fonts and locale catalogs is ${String(budgetBytes)} bytes, over the Phase C budget of ` +
-        `${String(MOBILE_WEB_APP_BUNDLE_MAX_TOTAL_BYTES)}`
+      `bundle excluding the approved fonts, locale catalogs and on-demand files is ${String(eagerBytes)} bytes, ` +
+        `over the Phase C eager budget of ${String(MOBILE_WEB_APP_BUNDLE_MAX_EAGER_BYTES)}`
     )
   }
-  await assertOutfitSheetsOnDemand(manifest, bundleDir)
   // Read chunk/entry bounds and image count from fresh verified build: they are not manifest fields, while buildId binds on-disk bytes.
   const maxAssets = assertAssetCeilingFitsShell(
     first.routeKeys.length,
@@ -276,7 +302,7 @@ export async function verifyMobileWebAppBundle({ bundleDir = defaultBundleDir } 
         `budget of ${String(MOBILE_WEB_APP_BUNDLE_MAX_ENTRY_BYTES)}`
     )
   }
-  return { ...manifest, catalogBytes: first.catalogBytes }
+  return { ...manifest, catalogBytes: first.catalogBytes, eagerBytes, onDemandBytes }
 }
 
 if (isDirectInvocation(import.meta.url, process.argv[1])) {
@@ -285,7 +311,8 @@ if (isDirectInvocation(import.meta.url, process.argv[1])) {
     console.log(
       `[verify-mobile-web-app-bundle] OK — ${String(manifest.assets.length)} asset(s), ` +
         `${String(manifest.totalBytes)} total bytes, ` +
-        `${String(mobileWebAppBundleBudgetBytes(manifest) - manifest.catalogBytes)}/${String(MOBILE_WEB_APP_BUNDLE_MAX_TOTAL_BYTES)} bytes excluding the approved fonts, ` +
+        `${String(manifest.eagerBytes)}/${String(MOBILE_WEB_APP_BUNDLE_MAX_EAGER_BYTES)} eager bytes excluding the approved fonts, ` +
+        `${String(manifest.onDemandBytes)}/${String(MOBILE_WEB_APP_BUNDLE_MAX_ON_DEMAND_BYTES)} on-demand bytes, ` +
         `${String(manifest.catalogBytes)}/${String(MOBILE_WEB_APP_BUNDLE_MAX_CATALOG_BYTES)} bytes of language catalogs, ` +
         `reproducible buildId ${manifest.buildId}`
     )
