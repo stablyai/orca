@@ -58,11 +58,17 @@ export async function prepareAgentImageFile(
   if (!image) {
     return { path }
   }
-  const decoded = image.resize(clipboardImageSizeWithinEdge(image, AGENT_IMAGE_MAX_LONG_EDGE))
+  const target = clipboardImageSizeWithinEdge(image, AGENT_IMAGE_MAX_LONG_EDGE)
+  if (image.width !== target.width || image.height !== target.height) {
+    image.resize(target)
+  }
+  const decoded = image
   const encoded = await encodeAgentImageWithinLimit(
     decoded,
     (size) => {
-      decoded.resize(size)
+      if (decoded.width !== size.width || decoded.height !== size.height) {
+        decoded.resize(size)
+      }
       return jpeg ? decoded.encodeJPEG({ quality: 85, gainMap: false }) : decoded.encodePNG()
     },
     (bytes) => bytes.byteLength
