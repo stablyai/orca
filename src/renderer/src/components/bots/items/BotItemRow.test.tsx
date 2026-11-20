@@ -265,3 +265,25 @@ it('closes the card after its delay when the pointer leaves the row away from it
     vi.useRealTimers()
   }
 })
+
+it('dismisses an item preview on an outside press during the close delay', async () => {
+  vi.useFakeTimers()
+  try {
+    const { open } = renderPanelRow(100)
+    await hoverOpen(open)
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1)
+    })
+    vi.spyOn(cardElement()!, 'getBoundingClientRect').mockReturnValue(cardBox())
+    fireEvent.pointerLeave(open, { pointerType: 'mouse', clientX: 772, clientY: 110 })
+    fireEvent.pointerDown(document.body, { pointerType: 'mouse', clientX: 741, clientY: 110 })
+    fireEvent.pointerUp(document.body)
+    fireEvent.click(document.body)
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(300)
+    })
+    expect(cardElement()).toBeNull()
+  } finally {
+    vi.useRealTimers()
+  }
+})

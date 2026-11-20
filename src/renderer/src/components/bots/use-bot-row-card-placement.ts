@@ -1,6 +1,4 @@
-// Where a right side-panel row's hover card opens: beside the panel, over the main view, so it covers
-// nothing in the panel (not the row, its status icon or the rows around it).
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { inRowCardGraceArea, type Point } from './bot-row-card-grace'
 
 /** The right sidebar's panel; a row's card opens outside its left edge. */
@@ -8,46 +6,48 @@ const SIDE_PANEL = '[data-right-sidebar-panel]'
 /** Between the card's right edge and the panel's left edge. */
 const PANEL_GAP = 8
 
-export type BotRowCardPlacement = {
-  /** Spread on the HoverCard: the card's open state. */
-  root: { open: boolean; onOpenChange: (open: boolean) => void }
-  /** Spread on the HoverCardTrigger. */
-  trigger: {
-    ref: (node: HTMLElement | null) => void
-    onPointerEnter: () => void
-    onPointerLeave: (event: React.PointerEvent) => void
-  }
-  /** Spread on the HoverCardContent. */
-  content: {
-    ref: (node: HTMLElement | null) => void
-    onPointerEnter: () => void
-    side: 'left'
-    align: 'start'
-    sideOffset: number
-    collisionPadding: number
-  }
+function overAnotherTrigger(target: EventTarget | null, row: HTMLElement): boolean {
+  const trigger = target instanceof Element && target.closest('[data-slot=hover-card-trigger]')
+  return Boolean(trigger && trigger !== row)
 }
 
-/** Opens the card left of the side panel with its top at the row's, shifted up only to stay in the window.
- *  The gap the pointer crosses from the row to the card keeps it open, and closing still waits the
- *  HoverCard's close delay. Outside a side panel (a fixture, another surface) the card opens beside the row. */
-export function useBotRowCardPlacement(): BotRowCardPlacement {
+export function useBotRowCardPlacement() {
   const triggerNode = useRef<HTMLElement | null>(null)
   const cardNode = useRef<HTMLElement | null>(null)
   const [open, setOpen] = useState(false)
   const [sideOffset, setSideOffset] = useState(PANEL_GAP)
-  // Where the pointer left the row while its card was open, until it reaches the card or the row again.
-  const exit = useRef<Point | null>(null)
-  const pointer = useRef<Point | null>(null)
-  // Set while a close request is held because the pointer is on its way to the card.
-  const held = useRef(false)
-  const untrack = useRef<(() => void) | null>(null)
+  const [maxWidth, setMaxWidth] = useState<number>()
+  useLayoutEffect(() => {
+    const row = triggerNode.current
+    const panel = row?.closest(SIDE_PANEL)
+    if (!open || !row) {
+      return
+    }
+    if (!panel) {
+      setSideOffset(PANEL_GAP)
+      setMaxWidth(undefined)
+      return
+    }
+    const measure = (): void => {
+      const left = panel.getBoundingClientRect().left
+      setSideOffset(Math.max(0, row.getBoundingClientRect().left - left) + PANEL_GAP)
+      setMaxWidth(Math.max(0, left - 2 * PANEL_GAP))
+    }
+    measure()
+    const observer = new ResizeObserver(measure)
+    observer.observe(row)
+    observer.observe(panel)
+    window.addEventListener('resize', measure)
+    return () => {
+      observer.disconnect()
+      window.removeEventListener('resize', measure)
+    }
+  }, [open])
 
+  const crossing = useRef<{ hold: () => boolean; stop: () => void } | null>(null)
   const settle = useCallback(() => {
-    untrack.current?.()
-    untrack.current = null
-    exit.current = null
-    held.current = false
+    crossing.current?.stop()
+    crossing.current = null
   }, [])
   const close = useCallback(() => {
     settle()
@@ -56,78 +56,47 @@ export function useBotRowCardPlacement(): BotRowCardPlacement {
   useEffect(() => settle, [settle])
 
   const onPointerLeave = useCallback(
-    (event: React.PointerEvent) => {
+    (event: React.PointerEvent<HTMLElement>) => {
       if (!open || event.pointerType === 'touch') {
         return
       }
-      exit.current = { x: event.clientX, y: event.clientY }
-      pointer.current = exit.current
-      if (untrack.current) {
+      const row = event.currentTarget
+      settle()
+      if (overAnotherTrigger(event.relatedTarget, row)) {
         return
       }
-      // Listened only between leaving the row and reaching the card, so idle rows cost nothing.
-      const onMove = (move: PointerEvent): void => {
-        pointer.current = { x: move.clientX, y: move.clientY }
-        if (!held.current || !exit.current) {
-          return
-        }
+      // A fast move can report its destination as the leave coordinate.
+      const box = row.getBoundingClientRect()
+      const exit = { x: box.left, y: Math.max(box.top, Math.min(box.bottom, event.clientY)) }
+      let pointer: Point | null = { x: event.clientX, y: event.clientY }
+      let held = false
+      const hold = (): boolean => {
         const card = cardNode.current?.getBoundingClientRect()
-        if (!card || !inRowCardGraceArea(pointer.current, exit.current, card)) {
+        held = Boolean(pointer && card && inRowCardGraceArea(pointer, exit, card))
+        return held
+      }
+      const onMove = (move: PointerEvent): void => {
+        pointer = overAnotherTrigger(move.target, row) ? null : { x: move.clientX, y: move.clientY }
+        if (held && !hold()) {
           close()
         }
       }
-      // A click or Escape while crossing the gap closes the card as it would anywhere else.
-      const onPress = (): void => {
-        if (held.current) {
-          close()
-        }
-      }
-      const onKey = (key: KeyboardEvent): void => {
-        if (key.key === 'Escape') {
-          onPress()
-        }
-      }
-      document.addEventListener('pointermove', onMove, {
-        capture: true,
-        passive: true
-      })
-      document.addEventListener('pointerdown', onPress, true)
-      document.addEventListener('keydown', onKey, true)
-      untrack.current = () => {
-        document.removeEventListener('pointermove', onMove, { capture: true })
-        document.removeEventListener('pointerdown', onPress, true)
-        document.removeEventListener('keydown', onKey, true)
+      document.addEventListener('pointermove', onMove, { capture: true, passive: true })
+      crossing.current = {
+        hold,
+        stop: () => document.removeEventListener('pointermove', onMove, true)
       }
     },
-    [open, close]
+    [open, close, settle]
   )
 
   const onOpenChange = useCallback(
     (next: boolean) => {
       if (next) {
-        const row = triggerNode.current
-        const panel = row?.closest(SIDE_PANEL)
-        // Side "left" offsets from the row, so the gap to the panel's edge includes the row's inset.
-        setSideOffset(
-          row && panel
-            ? Math.max(0, row.getBoundingClientRect().left - panel.getBoundingClientRect().left) +
-                PANEL_GAP
-            : PANEL_GAP
-        )
         setOpen(true)
-        return
+      } else if (!crossing.current?.hold()) {
+        close()
       }
-      const card = cardNode.current?.getBoundingClientRect()
-      if (
-        exit.current &&
-        pointer.current &&
-        card &&
-        inRowCardGraceArea(pointer.current, exit.current, card)
-      ) {
-        held.current = true
-        return
-      }
-      close()
     },
     [close]
   )
@@ -147,10 +116,13 @@ export function useBotRowCardPlacement(): BotRowCardPlacement {
         cardNode.current = node
       }, []),
       onPointerEnter: settle,
-      side: 'left',
-      align: 'start',
+      onPointerDownOutside: settle,
+      onEscapeKeyDown: settle,
+      style: { maxWidth },
+      side: 'left' as const,
+      align: 'start' as const,
       sideOffset,
-      collisionPadding: 8
+      collisionPadding: PANEL_GAP
     }
   }
 }
