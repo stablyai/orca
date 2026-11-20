@@ -11,17 +11,16 @@ description: >-
   Also use when you are a dispatched worker (a prompt with Task and Dispatch
   IDs: ask, worker_done). Unless the user asks for Orca workers or a named
   agent, searches, reads and research in your workspace stay with your own
-  subagents, even in parallel. Use `orca-cli` to hand work off
-  with nothing expected back ("hand off", "handover", "give this to another
-  agent", "another worktree"), and for terminal control, shell commands,
-  worktree management, and reading or waiting on terminals.
+  subagents, even in parallel. Use this guide to hand off a role or task
+  ("hand off", "handover", "give this to another agent"). Use `orca-cli` for
+  terminal control, shell commands, and worktree management.
 ---
 
 # Orca orchestration
 
 If your prompt has a preamble with Task and Dispatch IDs, you are a worker:
 follow the preamble. To ask your coordinator, run `ask`, then end your turn;
-Orca wakes you with the answer. To hand work off with nothing back, use `orca-cli`.
+Orca wakes you with the answer.
 When you report your effort, take it from the dispatch's `--effort` or your process
 argv, not from a numeric `reasoning_effort`: that number is not on a 0–100 scale
 (claude-opus-5-5: low=5, medium=10, high=15, xhigh=40).
@@ -53,10 +52,7 @@ that the CLI is installed; a missing one fails as an `agent_readiness` timeout.
   asks or sharing would conflict: `--worktree new-child --name <short-name>`
   nests it under yours. For one with no parent, use
   `--worktree new-top-level --repo id:<repoId> --name <short-name>`
-  (`ORCA repo list --json` gives the id). If nothing needs to come back to you
-  (the user will work in those chats), don't start workers; per workspace run
-  `ORCA worktree create --name <name> --no-parent --agent <agent> --prompt "<brief>" --json`
-  and end your turn.
+  (`ORCA repo list --json` gives the id).
 - Add `--model` only if the user named one.
 - If `worker-start` fails, do not rerun it; read `failedStage` and load
   `references/recovery-and-cleanup.md`.
@@ -75,6 +71,20 @@ Never:
   hidden from you and Orca has nothing to wake you with. Orca wakes you.
 - Steer through a worker's terminal; use `send`.
 - Make checkouts yourself; let `worker-start` create a worker's workspace.
+
+## Hand work off to another agent
+
+For a handoff in a new workspace, put the brief in a local text file and run:
+
+```text
+ORCA orchestration worker-start --spec-file <brief-file> --agent <agent> --worktree new-top-level --repo id:<repoId> --name <name> --keep-open --json
+```
+
+On success, give the user the workspace and Dispatch ID and end your turn.
+The receiving agent owns the work. Keeping it open lets the user continue in
+its chat or terminal. For a correction, use `send --to dispatch:<dispatch_id>`
+as above. For a worker on a paired server, follow the placement and remote
+guide for its supported follow-ups.
 
 ## When Orca wakes you
 

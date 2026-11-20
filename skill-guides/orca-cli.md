@@ -4,7 +4,7 @@ description: >-
   Operate Orca-managed worktrees, folder contexts, terminals, repos, automations, worktree
   comments, and Orca's embedded browser through the `orca` CLI. Use when the user says
   "$orca-cli", "Orca worktree", "child worktree", "spawn codex/claude in a worktree",
-  "read/wait/send Orca terminal", "handoff" / "handover" / "give this to another agent",
+  "read/wait/send Orca terminal",
   "ask/tell/message another agent" (including an agent on a paired Orca server), or
   "Orca browser". Also use for opening, testing, screenshotting, or checking how a local or
   external web page renders while working in Orca, unless the user or project names another
@@ -25,47 +25,24 @@ Use `orca` when Orca's running editor/runtime is the source of truth. Use plain 
 
 Prefer `--json` for agent-driven calls. If the CLI is missing, say so explicitly instead of inspecting source files first.
 
-## Full Handoffs
+## Handing off a role or task
 
-A full handoff transfers ownership to another agent or worktree, then the original agent stops. Treat requests phrased as "hand off", "handoff", "handover", "give this to another agent", "give this to another worktree", "another agent", or "another worktree" as full handoffs unless the user expects the result back ("have another agent review this and report") or explicitly asks to supervise, monitor, wait for results, track completion, coordinate a DAG, use decision gates, or manage ask/reply.
-
-A handoff is done when the new worktree id and agent handle have been reported and the prompt was delivered: the launch's `prompt.outcome` is `journaled` or `handed-to-terminal`, or, for an agent that was already running, `orchestration send` returned a message ID. Do not wait for the receiving agent to finish.
-
-Do not use `orca orchestration task-create`, `orca orchestration dispatch --inject`, or `orca orchestration check --wait` for full handoffs. `task-create` is also forbidden because it records coordinator-owned tracking state; if a task row is needed, the user asked for supervised orchestration. Deliver the prompt with the agent launch, or with `orchestration send` for an agent that is already running (see Messaging agents); a one-way message needs no Task or Run.
-
-For local work in the caller’s project, omit `--repo` and `--project`. Pass one to target another project or when Orca asks you to disambiguate; do not pick a repo from a list for unambiguous same-project work. The project comes from the caller’s directory, not the project visible in the app. Paired-server calls require an explicit server-side target.
-
-Independent new-worktree handoff:
-
-```text
-ORCA worktree create --name <task-name> --no-parent --agent codex --prompt "<task brief>" --json
-```
-
-Use `--no-parent` and omit `--base-branch` for independent top-level handoffs unless the user explicitly asks for stacked work, "branch from current", or a specific base. Put any current-branch context in the prompt.
-
-For a requested model or effort, such as `gpt-6-astra high`, add `--model` and `--effort` to the same command:
-
-```text
-ORCA worktree create --name <task-name> --no-parent --agent codex --model gpt-6-astra --effort high --prompt "<task brief>" --json
-```
-
-Read what started from `result.launch`: `outcome.kind` is `structured` (a chat) or `terminal`, `outcome.handle` is the agent handle, `receipt.detail` says why, and `prompt.outcome` says whether the brief arrived. An Orca host older than this returns the terminal handle in `result.agentTerminalHandle` and refuses `--model`/`--effort`.
-
-For a fresh agent in a worktree that already exists, use `agent launch`, which takes the same `--prompt`, `--model` and `--effort`:
-
-```text
-ORCA agent launch --agent codex --worktree id:<repoId>::<worktreePath> --prompt "<task brief>" --json
-```
-
-Handoff to an agent that is already running:
-
-```text
-ORCA orchestration send --to <terminal handle or orca_session_id:<chat id>> --subject "<task name>" --body "<task brief>" --json
-```
+When the user hands work to another agent, load `ORCA skills get orchestration`
+for the `worker-start --keep-open` recipe. Its Dispatch ID gives later
+corrections a durable address. To message an agent the user already identified,
+see **Messaging agents** below.
 
 ## Starting agents
 
 `worktree create --agent` (new checkout) and `agent launch` (existing worktree) are how to start an agent. They go through Orca's agent launch, the same one the app's new-agent tab uses: the user's Chat | CLI choice for that agent decides whether it opens as a chat or a terminal, and the result reports which (`outcome.kind`) and why (`receipt.detail`). When a chat is not possible, such as for an agent without chat support, the launch starts a terminal and the receipt says so. `--surface chat|terminal` picks one for that launch instead of the setting; pass it only when the user asked for a chat or a terminal. `--surface chat` is refused when Orca can establish before starting anything that the agent cannot open as a chat. If support cannot be checked, the launch can fall back to a terminal. If chat becomes unavailable only after a new workspace is created, Orca keeps that workspace, its setup and default tabs, then opens a terminal; the receipt explains the fallback. `terminal create` makes a terminal for shells and commands.
+
+For a standalone launch with a prompt, pass `--prompt "<brief>"` to either command.
+Pass `--model` and `--effort` when the user requests them. Read `result.launch`:
+`outcome.handle` identifies the agent and `prompt.outcome` records delivery.
+For `worktree create`, omit `--repo` and `--project` to use the caller's local
+project, or pass an explicit project on the paired server. For `agent launch`
+on a paired server, pass `--worktree <selector>` for an existing workspace
+on that server.
 
 To see which agents can start here, run `ORCA agent installed --json`: each `agents[].id` is a valid `--agent` value, and `default: true` marks the user's default agent. When the user names no agent, use the default. Pass `--worktree <selector>` to check where that workspace runs agents, such as its SSH host or WSL distro. It lists installed agent CLIs, not running agents; for those, use `agent list` below.
 
@@ -393,7 +370,7 @@ Search rules:
 
 ## Conditional references
 
-This guide covers worktrees, terminals, and handoffs on its own. At a gate below, run `ORCA skills get orca-cli --reference references/<file>.md` and read only that document; `--references` lists the names. If the CLI rejects `--reference`, run `ORCA skills get orca-cli --full` once instead: it returns this guide plus every reference this CLI build serves on this host, so read only the named one. If `--full` is rejected too, the CLI predates bundled references: use `ORCA <command> --help`, keep the rules above, and do not guess flags.
+This guide covers worktrees and terminals. At a gate below, run `ORCA skills get orca-cli --reference references/<file>.md` and read only that document; `--references` lists the names. If the CLI rejects `--reference`, run `ORCA skills get orca-cli --full` once instead: it returns this guide plus every reference this CLI build serves on this host, so read only the named one. If `--full` is rejected too, the CLI predates bundled references: use `ORCA <command> --help`, keep the rules above, and do not guess flags.
 
 | Action gate                                                                                                                  | Reference                        |
 | ---------------------------------------------------------------------------------------------------------------------------- | -------------------------------- |

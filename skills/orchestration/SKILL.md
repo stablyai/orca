@@ -11,10 +11,9 @@ description: >-
   Also use when you are a dispatched worker (a prompt with Task and Dispatch
   IDs: ask, worker_done). Unless the user asks for Orca workers or a named
   agent, searches, reads and research in your workspace stay with your own
-  subagents, even in parallel. Use `orca-cli` to hand work off
-  with nothing expected back ("hand off", "handover", "give this to another
-  agent", "another worktree"), and for terminal control, shell commands,
-  worktree management, and reading or waiting on terminals.
+  subagents, even in parallel. Use this guide to hand off a role or task
+  ("hand off", "handover", "give this to another agent"). Use `orca-cli` for
+  terminal control, shell commands, and worktree management.
 ---
 
 # Orca Orchestration
