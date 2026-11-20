@@ -96,4 +96,20 @@ describe('BotComputerPicker', () => {
     expect(setHostId).toHaveBeenCalledWith('runtime:gpu')
     expect(screen.queryByText('Add SSH host')).toBeNull()
   })
+
+  it('tells assistive tech the picked computer, not the row being browsed', () => {
+    useAppStore.setState({
+      remoteServerUpdates: new Map(),
+      refreshRemoteServerUpdates: async () => {}
+    })
+    const field = renderPicker(choiceOf([local, ready], ready))
+    const described = (): string | null | undefined =>
+      document.getElementById(field.getAttribute('aria-describedby') ?? '')?.textContent
+    expect(described()).toBe('gpu-box')
+
+    fireEvent.focus(field)
+    fireEvent.keyDown(field, { key: 'ArrowDown' })
+    fireEvent.keyDown(field, { key: 'ArrowUp' })
+    expect(described()).toBe('gpu-box')
+  })
 })

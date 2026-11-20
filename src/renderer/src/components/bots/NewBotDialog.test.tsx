@@ -292,6 +292,34 @@ describe('NewBotDialog picture intake', () => {
     expect(screen.getByRole('button', { name: 'Create' })).toHaveProperty('disabled', false)
   })
 
+  it('keeps a picture being read when another file is dragged across without a drop', async () => {
+    let finish: (png: string) => void = () => {}
+    mocks.squareAvatarPng.mockImplementationOnce(
+      () => new Promise<string>((resolve) => (finish = resolve))
+    )
+    mocks.createBot.mockResolvedValue(created)
+    mocks.uploadBotAvatar.mockResolvedValue(created)
+    const { picture } = renderDialog()
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Reviewer' } })
+    fireEvent.paste(screen.getByLabelText('Name'), { clipboardData: transfer({ files: [png()] }) })
+    const create = screen.getByRole('button', { name: 'Create' })
+    await waitFor(() => expect(create).toHaveProperty('disabled', true))
+    const dialog = screen.getByRole('dialog')
+    fireEvent.dragEnter(dialog, { dataTransfer: transfer({ files: [], types: ['Files'] }) })
+    fireEvent.dragLeave(dialog, { dataTransfer: transfer({ files: [], types: ['Files'] }) })
+
+    expect(create).toHaveProperty('disabled', true)
+    finish('UE5H')
+    await waitFor(() => expect(picture()).toBe('data:image/png;base64,UE5H'))
+    fireEvent.click(create)
+    await waitFor(() =>
+      expect(mocks.uploadBotAvatar).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'bot-1' }),
+        'UE5H'
+      )
+    )
+  })
+
   it('leaves a pasted image URL as text', () => {
     const { picture } = renderDialog()
     const mascot = picture()
@@ -562,6 +590,72 @@ describe('NewBotDialog Generate and an upload', () => {
       )
     }
   )
+
+  it('keeps the same image pasted again when it and an older Generate land in one render', async () => {
+    stubGeneration()
+    mocks.createBot.mockResolvedValue(created)
+    mocks.uploadBotAvatar.mockResolvedValue(created)
+    const { picture, openPicker, submit } = renderDialog()
+    const paste = (): void => {
+      fireEvent.paste(screen.getByLabelText('Name'), {
+        clipboardData: {
+          files: [new File(['x'], 'cat.png', { type: 'image/png' })],
+          types: ['Files'],
+          getData: () => ''
+        }
+      })
+    }
+    paste()
+    finishUpload('UE5H')
+    await waitFor(() => expect(picture()).toBe('data:image/png;base64,UE5H'))
+    openPicker()
+    fireEvent.click(await screen.findByRole('button', { name: 'Previous picture' }))
+    const box = await screen.findByRole('textbox', { name: 'Picture description' })
+    fireEvent.change(box, { target: { value: 'a fox' } })
+    fireEvent.keyDown(box, { key: 'Enter' })
+    paste()
+
+    // Both settle before React renders again.
+    finishUpload('UE5H')
+    finishGenerate()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(picture()).toBe('data:image/png;base64,UE5H')
+    await submit()
+    await waitFor(() =>
+      expect(mocks.uploadBotAvatar).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'bot-1' }),
+        'UE5H'
+      )
+    )
+  })
+
+  it('keeps an upload being read when a Generate prompt is turned away', async () => {
+    stubGeneration()
+    mocks.createBot.mockResolvedValue(created)
+    mocks.uploadBotAvatar.mockResolvedValue(created)
+    const { picture, openPicker } = renderDialog()
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Reviewer' } })
+    const create = screen.getByRole('button', { name: 'Create' })
+    openPicker()
+    chooseUpload()
+    fireEvent.click(await screen.findByRole('button', { name: 'Previous picture' }))
+    const box = await screen.findByRole('textbox', { name: 'Picture description' })
+    fireEvent.change(box, { target: { value: 'a picture of me' } })
+    fireEvent.keyDown(box, { key: 'Enter' })
+
+    expect(await screen.findByRole('alert')).toBeTruthy()
+    expect(create).toHaveProperty('disabled', true)
+    finishUpload('UE5H')
+    await waitFor(() => expect(create).toHaveProperty('disabled', false))
+    expect(picture()).toBe('data:image/png;base64,UE5H')
+    fireEvent.click(create)
+    await waitFor(() =>
+      expect(mocks.uploadBotAvatar).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'bot-1' }),
+        'UE5H'
+      )
+    )
+  })
 
   it.each([
     ['the upload finishes first', ['upload', 'generate']],

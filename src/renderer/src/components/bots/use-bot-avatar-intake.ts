@@ -35,6 +35,9 @@ export type BotAvatarIntake = {
   take: (image: Blob) => void
   /** Back to the hint; a decode in flight is dropped. */
   dismiss: () => void
+  /** Another way of choosing a picture (Generate) takes the next turn: a decode in flight is dropped,
+   *  and the returned check says whether that turn is still the newest when its picture arrives. */
+  claim: () => () => boolean
   /** A picture is dragged over one of its surfaces, or no longer. */
   setDragging: (dragging: boolean) => void
 }
@@ -76,6 +79,12 @@ export function useBotAvatarIntakeState({
     setLine(HINT)
   }
 
+  const claim = (): (() => boolean) => {
+    dismiss()
+    const id = run.current
+    return () => run.current === id
+  }
+
   const take = (image: Blob): void => {
     run.current += 1
     const id = run.current
@@ -108,9 +117,8 @@ export function useBotAvatarIntakeState({
   }
 
   const setDragging = (dragging: boolean): void => {
+    // Only feedback: a picture dragged across without a drop leaves one still being read alone.
     if (dragging) {
-      run.current += 1
-      setReading(false)
       setLine({ kind: 'drop' })
     } else {
       setLineState((current) => (current.kind === 'drop' ? HINT : current))
@@ -127,7 +135,7 @@ export function useBotAvatarIntakeState({
     []
   )
 
-  return { line, reading, taken, take, dismiss, setDragging }
+  return { line, reading, taken, take, dismiss, claim, setDragging }
 }
 
 /** Takes pasted and dropped pictures into `intake` from the dialog or popover around `rootRef`; whether

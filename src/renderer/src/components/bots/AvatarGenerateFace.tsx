@@ -25,10 +25,10 @@ import { useAvatarGeneration, type GeneratedAvatar } from './use-avatar-generati
 const TILE = 'size-28 rounded-xl'
 
 /** The Generate face's state, shared by its tile and the caption line under the carousel. */
-/** `onStart` runs as a picture is asked for, so a picture taken earlier and still being read can't
- *  replace it. */
+/** `onStart` runs as a picture is asked for (once the description passes its checks), so a picture
+ *  taken earlier and still being read can't replace it. */
 export function useGenerateFace(onResult: (result: GeneratedAvatar) => void, onStart?: () => void) {
-  const generation = useAvatarGeneration(onResult)
+  const generation = useAvatarGeneration(onResult, onStart)
   const [description, setDescription] = useState('')
   // Editing reopens the description field under a picture already made.
   const [editing, setEditing] = useState(false)
@@ -57,7 +57,6 @@ export function useGenerateFace(onResult: (result: GeneratedAvatar) => void, onS
     },
     generate: () => {
       setEditing(false)
-      onStart?.()
       generation.generate(description)
     }
   }

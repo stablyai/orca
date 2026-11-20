@@ -1,5 +1,5 @@
 import { ImeInput } from '@/lib/text-input/ime/ime-text-field'
-import React, { useState } from 'react'
+import React, { useId, useState } from 'react'
 import { ChevronDown, Cloud } from 'lucide-react'
 import { PopoverAnchor } from '@/components/ui/popover'
 import { cn } from '@/lib/class-names'
@@ -49,6 +49,9 @@ export default function RunTargetField({
 }): React.JSX.Element {
   const t = useTranslate()
   const [tooltipOpen, setTooltipOpen] = useState(false)
+  // The visible name is drawn over the search input and hidden from assistive tech, so the committed
+  // target is its description: it holds whatever is typed or highlighted, until a row is picked.
+  const committedId = useId()
   return (
     <Tooltip open={tooltipOpen && committed && !open} onOpenChange={setTooltipOpen}>
       <PopoverAnchor asChild>
@@ -71,6 +74,11 @@ export default function RunTargetField({
               ) : null}
             </span>
             <div className="relative min-w-0 flex-1 overflow-hidden">
+              {label ? (
+                <span id={committedId} className="sr-only">
+                  {label}
+                </span>
+              ) : null}
               <ImeInput
                 ref={inputRef}
                 type="text"
@@ -83,6 +91,7 @@ export default function RunTargetField({
                 aria-controls={listId}
                 aria-autocomplete="list"
                 aria-activedescendant={open && hasArmedRow ? `${listId}-armed` : undefined}
+                aria-describedby={label ? committedId : undefined}
                 value={query}
                 placeholder={
                   committed

@@ -191,14 +191,18 @@ export function BotPicturePicker({
   })
   const intake = sharedIntake ?? ownIntake
   const outlinePicker = useBotAvatarIntakeHost(rootRef, intake)
+  // The intake turn a generated picture holds: one taken after it was asked for wins, in any order and
+  // even within one render, since the turn is checked when the picture arrives, not from React state.
+  const generateTurn = useRef<(() => boolean) | null>(null)
   const face = useGenerateFace(
     (made) => {
-      if (onGenerate) {
+      if (onGenerate && (generateTurn.current?.() ?? true)) {
         onUpload(made.png, -1)
       }
     },
-    // Asking for a picture is the newest action: a picture taken before it, still being read, is dropped.
-    () => intake.dismiss()
+    () => {
+      generateTurn.current = intake.claim()
+    }
   )
   const withGenerate = face.agent !== null
   const generatedCustom = withGenerate && isGeneratedCustom(custom?.src, face.result?.png ?? null)
