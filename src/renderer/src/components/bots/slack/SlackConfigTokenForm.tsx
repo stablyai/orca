@@ -159,6 +159,8 @@ export function SlackConfigTokenForm({
           value={token}
           aria-invalid={error !== null}
           onChange={(event) => {
+            // What is typed wins over a clipboard read still pending.
+            reads.current++
             setAccessPasted(false)
             setToken(event.target.value)
           }}

@@ -1,3 +1,4 @@
+import { OrchestrationError } from '../../orchestration-error'
 import { BOT_ITEM_MAIL_SENDER } from '../../../../../shared/bots/bot-item-note-runs'
 
 export type OrcaAuthoredMail = 'item-mail' | 'bot-request'
@@ -14,7 +15,10 @@ export function callerMailProvenance(msg: {
     return payload
   }
   if (from === BOT_ITEM_MAIL_SENDER) {
-    throw new Error(`${BOT_ITEM_MAIL_SENDER} is Orca's own sender.`)
+    throw new OrchestrationError(
+      'invalid_argument',
+      `${BOT_ITEM_MAIL_SENDER} is Orca's own sender.`
+    )
   }
   if (orcaAuthored === 'bot-request' || !payload) {
     return payload
