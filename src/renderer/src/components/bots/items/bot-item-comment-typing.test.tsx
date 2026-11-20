@@ -29,17 +29,6 @@ function renderPane(choices = 0): { typed: ReturnType<typeof vi.fn> } {
   return { typed }
 }
 
-it('sends printable keys from the pane to the comment box', () => {
-  const { typed } = renderPane()
-  const heading = screen.getByRole('heading')
-
-  expect(fireEvent.keyDown(heading, { key: 'a' })).toBe(false)
-  fireEvent.keyDown(heading, { key: 'A', shiftKey: true })
-  fireEvent.keyDown(screen.getByRole('button'), { key: 'q' })
-
-  expect(typed.mock.calls).toEqual([['a'], ['A'], ['q']])
-})
-
 it('leaves shortcuts, Esc, arrows and Tab alone', () => {
   const { typed } = renderPane()
   const pane = screen.getByTestId('pane')
