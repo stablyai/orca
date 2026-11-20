@@ -10,6 +10,7 @@ import { CliqIcon } from '@/components/icons/CliqIcon'
 import { refreshBotCliq, useBotCliq } from '@/lib/bot-cliq-state'
 import { cancelConnectorConnect, useResumeAfterConnect } from '@/lib/connector-connect-state'
 import { botCliqCalls } from '@/lib/bot-connector-host-calls'
+import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 import { BotHostSignInButton } from '../BotHostSignInButton'
 import { useBotHostLabel } from '../use-bot-host-label'
 import { botCliqBots, type Bot } from '../../../../../shared/bot-types'
@@ -288,7 +289,7 @@ export function BotCliqSetupFlow({
               {doneIn ? (
                 <Button
                   variant="outline"
-                  onClick={() => void window.api.shell.openUrl(cliqWebUrl(doneIn.dataCenter))}
+                  onClick={() => openAppHttpLink(cliqWebUrl(doneIn.dataCenter))}
                 >
                   {t('bots.cliq.setup.openCliq', 'Open Cliq')}
                   <ExternalLink />
