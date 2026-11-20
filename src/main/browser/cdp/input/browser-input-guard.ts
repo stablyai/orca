@@ -5,6 +5,8 @@ import {
   BROWSER_INPUT_GUARD_ACK
 } from '../../../../shared/browser/element-grab/browser-input-guard'
 
+type BrowserInputOwner = Pick<WebContents, 'id'>
+
 type PendingGuard = {
   suspended: boolean
   promise: Promise<void>
@@ -20,10 +22,10 @@ type Guard = {
   chordToken: string | null
   pending?: PendingGuard
 }
-const guards = new WeakMap<object, Guard>()
+const guards = new WeakMap<BrowserInputOwner, Guard>()
 
 /** The guard covers all private policies, including one whose main-side callback retired. */
-export function setBrowserInputGuard(target: object, suspended: boolean): Promise<void> {
+export function setBrowserInputGuard(target: BrowserInputOwner, suspended: boolean): Promise<void> {
   const guard = guards.get(target)
   if (!guard) {
     return Promise.resolve()
@@ -105,7 +107,7 @@ export function setBrowserInputGuard(target: object, suspended: boolean): Promis
   return promise
 }
 
-export function hasBrowserInputGuard(guest: object): boolean {
+export function hasBrowserInputGuard(guest: BrowserInputOwner): boolean {
   return guards.has(guest)
 }
 
