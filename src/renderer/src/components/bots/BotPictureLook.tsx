@@ -110,7 +110,7 @@ function OutfitTile({
   side: 'top' | 'bottom'
   onPick: () => void
 }): React.JSX.Element {
-  const look = useBotMascotTileLooks(color, outfit)(id)
+  const look = useBotMascotTileLooks(outfit)(id)
   return (
     <Tooltip>
       <TooltipTrigger asChild>

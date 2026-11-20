@@ -202,13 +202,7 @@ export const newOutfit = defineFixture({
   interact: wearOutfit('Detective')
 })
 
-// The reviewer redraws the eyes: its mascot is a baked bitmap too, so the carousel draws no SVG.
-export const newReviewer = defineFixture({
-  width: 560,
-  setup: stubUpload,
-  render: () => <NewBot />,
-  interact: wearOutfit('Reviewer')
-})
+export const newReviewer = defineFixture({ ...newOutfit, interact: wearOutfit('Reviewer') })
 
 export const newDrag = defineFixture({
   width: 560,

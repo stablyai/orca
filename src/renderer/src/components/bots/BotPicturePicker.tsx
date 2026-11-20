@@ -149,7 +149,7 @@ export function BotPicturePicker({
         ? CUSTOM_FACE
         : (PICKABLE_BOT_MASCOT_IDS[mascotIndex] ?? PICKABLE_BOT_MASCOT_IDS[0])
   const generating = currentKey === GENERATE_FACE
-  const lookOf = useBotMascotTileLooks(color, outfit, 'large')
+  const lookOf = useBotMascotTileLooks(outfit, 'large')
   // The description field mounts the first time Generate is current, not with every open, and stays
   // for the fold back.
   const [seenGenerate, setSeenGenerate] = useState(generating)

@@ -153,7 +153,6 @@ const faces = new Map<string, string>()
 // No mascot SVG is built here, so dragging the color builds none and the picker draws no SVG blur.
 function tileLook(
   id: BotMascotId,
-  color: string | null,
   outfit: BotAvatarOutfit | null,
   layers: BotOutfitLayers | null | undefined,
   largeArt: BotOutfitLargeArt | null | undefined
@@ -190,17 +189,16 @@ export function useBotMascotSrc(
   return dressedSrc(id, tile, worn, layers, largeArt)
 }
 
-/** Each mascot's tile layers on `color`, wearing `outfit`: for the picker, where the color is dragged. */
+/** Each mascot's tile layers wearing `outfit`, apart from the tile color: for the picker, where the
+ *  color is dragged. */
 export function useBotMascotTileLooks(
-  color: string | null | undefined,
   outfit: BotAvatarOutfit | null | undefined = null,
   size: BotPictureSize = 'small'
 ): (id: BotMascotId) => BotMascotTileLook {
   const worn = outfit ?? null
   const layers = useBotOutfitLayers(worn)
   const largeArt = useBotOutfitLargeArt(worn, size === 'large')
-  const tile = tileColor(color)
-  return (id) => tileLook(id, tile, worn, layers, largeArt)
+  return (id) => tileLook(id, worn, layers, largeArt)
 }
 
 /** One mascot's picture in layers, its SVG on `color` with the outfit's art apart from it: the art
@@ -222,7 +220,7 @@ export function useBotMascotLayers(
   const src = layer?.face
     ? pictureSrc(id, tile, `${worn}|faced`, (svg) => faceMascotSvg(svg, layer))
     : plainSrc(id, tile)
-  return { src, outfit: tileLook(id, tile, worn, layers, largeArt).outfit }
+  return { src, outfit: tileLook(id, worn, layers, largeArt).outfit }
 }
 
 /** useBotMascotLayers for a mascot that is always there. */
