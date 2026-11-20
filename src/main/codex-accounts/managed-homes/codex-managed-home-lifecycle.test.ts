@@ -79,6 +79,8 @@ describe('CodexManagedHomeLifecycle.safeRemove', () => {
     symlinkSync(join('bridge', 'prompts.jsonl'), join(f.home, 'history.jsonl'))
     writeFileSync(join(f.home, 'auth.json'), '{}')
     writeFileSync(join(f.home, '.credentials.json'), '{}')
+    mkdirSync(join(f.home, 'secrets'))
+    writeFileSync(join(f.home, 'secrets', 'codex_auth.age'), 'sealed')
 
     await f.lifecycle.safeRemove(f.home, 'a')
 

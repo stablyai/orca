@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { installFakeAppEnvironment } from '../../../../../config/scripts/test-runtime/environment/vitest-host-ports-setup'
 import {
+  chmodSync,
   existsSync,
   lstatSync,
   mkdirSync,
@@ -290,6 +291,34 @@ describe('CodexRuntimeHomeService', () => {
       '{"id":"legacy-1"}\n'
     )
   })
+
+  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)(
+    'copies no sessions and leaves the migration unmarked until every account history has its copy',
+    async () => {
+      const managedHomePath = writeHistory('account-1', '{"id":"legacy-1"}\n')
+      mkdirSync(join(managedHomePath, 'sessions'), { recursive: true })
+      writeFileSync(join(managedHomePath, 'sessions', 'rollout.jsonl'), '{}', 'utf-8')
+      chmodSync(join(managedHomePath, 'history.jsonl'), 0o000)
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      try {
+        await constructService()
+        await vi.waitFor(
+          () =>
+            expect(warn).toHaveBeenCalledWith(
+              '[codex-runtime-home] Failed to migrate legacy Codex prompt history:',
+              expect.anything()
+            ),
+          { timeout: WAIT_MS }
+        )
+      } finally {
+        warn.mockRestore()
+        chmodSync(join(managedHomePath, 'history.jsonl'), 0o644)
+      }
+
+      expect(existsSync(join(getRuntimeCodexHomePath(), 'sessions', 'rollout.jsonl'))).toBe(false)
+      expect(existsSync(migrationMarkerPath())).toBe(false)
+    }
+  )
 
   it('imports history even when a session copy fails', async () => {
     const managedHomePath = writeHistory('account-1', '{"id":"a-1"}\n')

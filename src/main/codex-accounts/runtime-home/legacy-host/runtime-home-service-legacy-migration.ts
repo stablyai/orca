@@ -64,17 +64,21 @@ export abstract class CodexRuntimeHomeLegacyMigration extends CodexRuntimeHomePa
       return
     }
 
-    // Started first and independent of the session copies, so one that fails can't hold it back.
-    void settleLegacyHistory({
-      accountsRoot: this.getManagedAccountsRoot(),
-      runtimeHistoryPath: join(this.getRuntimeHomePath(), 'history.jsonl'),
-      statePath: join(this.getRuntimeMetadataDir(), 'migration-v1-history.json'),
-      sessionsStatePath: this.getSessionsMigratedStatePath(),
-      markerPath: this.getMigrationMarkerPath()
-    })
-    if (sessionsDone) {
-      return
-    }
+    void settleLegacyHistory(
+      {
+        accountsRoot: this.getManagedAccountsRoot(),
+        runtimeHistoryPath: join(this.getRuntimeHomePath(), 'history.jsonl'),
+        statePath: join(this.getRuntimeMetadataDir(), 'migration-v1-history.json'),
+        sessionsStatePath: this.getSessionsMigratedStatePath(),
+        markerPath: this.getMigrationMarkerPath()
+      },
+      sessionsDone ? null : () => this.migrateLegacySessionsAndMarkDone()
+    )
+  }
+
+  // Synchronous end to end, so no quit lands between the session copies and the marker older
+  // builds read: without it they would rerun their overwriting migration.
+  protected migrateLegacySessionsAndMarkDone(): void {
     const managedHomes = this.getLegacyManagedHomes()
     for (const managedHomePath of managedHomes) {
       const accountId = parse(relative(this.getManagedAccountsRoot(), managedHomePath)).dir.split(
@@ -84,12 +88,9 @@ export abstract class CodexRuntimeHomeLegacyMigration extends CodexRuntimeHomePa
         this.migrateLegacySessions(managedHomePath, accountId)
       }
     }
-    // The history migration turns this into the marker older builds read, once it has preserved
-    // every account history: only then can't their account removal take the only copy.
-    writeFileAtomically(
-      this.getSessionsMigratedStatePath(),
-      `${JSON.stringify({ completedAt: Date.now(), migratedHomeCount: managedHomes.length })}\n`
-    )
+    const record = `${JSON.stringify({ completedAt: Date.now(), migratedHomeCount: managedHomes.length })}\n`
+    writeFileAtomically(this.getSessionsMigratedStatePath(), record)
+    writeFileAtomically(this.getMigrationMarkerPath(), record)
   }
 
   protected getSessionsMigratedStatePath(): string {

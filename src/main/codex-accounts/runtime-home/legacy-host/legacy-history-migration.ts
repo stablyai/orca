@@ -27,6 +27,8 @@ export const HISTORY_IMPORT_RETRY_INTERVAL_MS = 24 * 60 * 60 * 1000
 type LegacyHistoryState = {
   /** Every account history has a copy in the runtime home. */
   historiesPreserved?: boolean
+  /** Accounts whose history has its copy, so a retry doesn't copy them again. */
+  preservedAccounts?: string[]
   /** The shared history was created, or already existed, so nothing is owed. */
   historyImportSettled?: boolean
   historyImportAttempts?: number
@@ -40,7 +42,7 @@ export type LegacyHistoryMigrationPaths = {
   accountsRoot: string
   runtimeHistoryPath: string
   statePath: string
-  /** Written once the session pass finishes; its contents become the migration marker. */
+  /** Written with the marker once the session pass finishes. */
   sessionsStatePath: string
   /** The only marker older builds read. */
   markerPath: string
@@ -54,6 +56,11 @@ function parseLegacyHistoryState(text: string): LegacyHistoryState {
   }
   if ('historiesPreserved' in parsed && parsed.historiesPreserved === true) {
     state.historiesPreserved = true
+  }
+  if ('preservedAccounts' in parsed && Array.isArray(parsed.preservedAccounts)) {
+    state.preservedAccounts = parsed.preservedAccounts.filter(
+      (accountId): accountId is string => typeof accountId === 'string'
+    )
   }
   if ('historyImportSettled' in parsed && parsed.historyImportSettled === true) {
     state.historyImportSettled = true
@@ -142,7 +149,9 @@ async function sharedHistoryFile(runtimeHistoryPath: string): Promise<string | n
 // older build's account removal can never take the only copy.
 async function preserveLegacyHistories(
   accountsRoot: string,
-  runtimeHistoryPath: string
+  runtimeHistoryPath: string,
+  alreadyPreserved: ReadonlySet<string>,
+  recordPreserved: (accountId: string) => Promise<void>
 ): Promise<void> {
   const accounts = await readdir(accountsRoot, { withFileTypes: true }).catch((error: unknown) => {
     if (errnoCodeOrUnknown(error) === 'ENOENT') {
@@ -151,27 +160,31 @@ async function preserveLegacyHistories(
     throw error
   })
   const sharedHistory = await sharedHistoryFile(runtimeHistoryPath)
-  const preserved = new Set<string>()
+  const copiedSources = new Set<string>()
   const names = accounts.filter((entry) => entry.isDirectory()).map((entry) => entry.name)
   for (const accountId of names.sort()) {
+    if (alreadyPreserved.has(accountId)) {
+      continue
+    }
     const source = await realpathIfPresent(join(accountsRoot, accountId, 'home', 'history.jsonl'))
-    if (!source || source === sharedHistory || preserved.has(source)) {
+    if (!source || !(await stat(source)).isFile()) {
       continue
     }
-    if (!(await stat(source)).isFile()) {
-      continue
-    }
-    preserved.add(source)
-    const base = runtimeHistoryPath.replace(/\.jsonl$/, '')
-    for (let attempt = 0; ; attempt++) {
-      const suffix = attempt === 0 ? '' : `-${attempt}`
-      if (await copyIntoFreeName(source, `${base}.orca-legacy-${accountId}${suffix}.jsonl`)) {
-        break
+    if (source !== sharedHistory && !copiedSources.has(source)) {
+      const base = runtimeHistoryPath.replace(/\.jsonl$/, '')
+      for (let attempt = 0; ; attempt++) {
+        const suffix = attempt === 0 ? '' : `-${attempt}`
+        if (await copyIntoFreeName(source, `${base}.orca-legacy-${accountId}${suffix}.jsonl`)) {
+          break
+        }
       }
+      copiedSources.add(source)
     }
+    await recordPreserved(accountId)
   }
 }
 
+// Repairs a marker lost to a crash right after the session pass.
 async function writeMarkerOnceSessionsDone(paths: LegacyHistoryMigrationPaths): Promise<void> {
   const sessionsState = await readTextIfPresent(paths.sessionsStatePath)
   if (sessionsState === null) {
@@ -185,18 +198,38 @@ async function writeMarkerOnceSessionsDone(paths: LegacyHistoryMigrationPaths): 
 }
 
 /**
- * Off the startup path. Preserves the account histories, then marks the migration done for older
- * builds (once the session pass also finished), then imports the shared history until it settles.
- * Never rejects; whatever fails retries on a later launch.
+ * Off the startup path. Preserves the account histories, then runs the session pass, which marks
+ * the migration done for older builds, then imports the shared history until it settles. The
+ * session pass waits for the copies so an older build never sees the marker while an account
+ * history has no copy, and never sees copied sessions without the marker. Never rejects; whatever
+ * fails retries on a later launch.
  */
-export async function settleLegacyHistory(paths: LegacyHistoryMigrationPaths): Promise<void> {
+export async function settleLegacyHistory(
+  paths: LegacyHistoryMigrationPaths,
+  migrateSessions: (() => void) | null
+): Promise<void> {
   try {
     const text = await readTextIfPresent(paths.statePath)
     let state = text === null ? {} : parseLegacyHistoryState(text)
     if (!state.historiesPreserved) {
-      await preserveLegacyHistories(paths.accountsRoot, paths.runtimeHistoryPath)
+      const preserved = new Set(state.preservedAccounts)
+      await preserveLegacyHistories(
+        paths.accountsRoot,
+        paths.runtimeHistoryPath,
+        preserved,
+        async (accountId) => {
+          preserved.add(accountId)
+          state = { ...state, preservedAccounts: [...preserved] }
+          await writeTextAtomically(paths.statePath, `${JSON.stringify(state)}\n`)
+        }
+      )
       state = { ...state, historiesPreserved: true }
       await writeTextAtomically(paths.statePath, `${JSON.stringify(state)}\n`)
+    }
+    try {
+      migrateSessions?.()
+    } catch (error) {
+      console.warn('[codex-runtime-home] Failed to migrate legacy Codex sessions:', error)
     }
     await writeMarkerOnceSessionsDone(paths)
     if (!state.historyImportSettled) {

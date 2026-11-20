@@ -40,9 +40,10 @@ const KEPT_HISTORY = [
   HISTORY_CLEANUP_MANIFEST,
   PRE_SHARE_DATABASES_DIR
 ]
-// The sign-in and MCP logins: all that removal deletes from a home whose history.jsonl is a link,
-// since what the link reaches inside the home can't be told apart from private state by name.
-const LOGIN_FILES = ['auth.json', '.credentials.json']
+// The sign-in and MCP logins, in files or Codex's encrypted store: all that removal deletes from a
+// home whose history.jsonl is a link, since what the link reaches inside the home can't be told
+// apart from private state by name.
+const LOGIN_ENTRIES = ['auth.json', '.credentials.json', 'secrets']
 const KEEP_ON_REMOVAL_SCRIPT = [
   'set -u',
   'home=$1',
@@ -50,7 +51,7 @@ const KEEP_ON_REMOVAL_SCRIPT = [
   'if [ -L "$home/history.jsonl" ]; then linked_history=1; fi',
   'kept() {',
   '  if [ "$linked_history" = 1 ]; then',
-  `    case "\${1##*/}" in ${LOGIN_FILES.join(' | ')}) return 1 ;; *) return 0 ;; esac`,
+  `    case "\${1##*/}" in ${LOGIN_ENTRIES.join(' | ')}) return 1 ;; *) return 0 ;; esac`,
   '  fi',
   '  case "${1##*/}" in',
   '    *.orca-profile-merge) return 0 ;;',
@@ -85,7 +86,7 @@ async function removeManagedHomeKeepingSharedHistory(home: string): Promise<bool
     (entry) => entry.name === 'history.jsonl' && entry.isSymbolicLink()
   )
   const kept = (entry: Dirent): boolean =>
-    (linkedHistory ? !LOGIN_FILES.includes(entry.name) : KEPT_HISTORY.includes(entry.name)) ||
+    (linkedHistory ? !LOGIN_ENTRIES.includes(entry.name) : KEPT_HISTORY.includes(entry.name)) ||
     entry.name.endsWith(MERGE_PENDING_SUFFIX) ||
     (sharedOnce && entry.isFile() && CODEX_DATABASE_FILE.test(entry.name))
   for (const entry of entries.filter((candidate) => !kept(candidate))) {
