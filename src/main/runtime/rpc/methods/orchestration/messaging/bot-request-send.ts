@@ -10,7 +10,7 @@ import { heldChatSentNext, namedChatHeld } from '../../../../../bots/bot-held-ch
 import { admitInOwnConversation, sessionAddress } from './bot-request-conversation'
 import { actsForOwner } from '../../../../../../shared/bots/bot-acts-for'
 import { ownerChatCard } from './bot-request-owner-card'
-import { botRequestView, type BotRequestRecord } from '../../../../../bots/bot-request-view'
+import { botRequestPayload, type BotRequestRecord } from '../../../../../bots/bot-request-view'
 import type { BotRequestAdmission } from '../../../../orchestration/db/bot-requests/bot-request-store'
 import {
   BOT_REQUEST_TYPE_REFUSAL,
@@ -74,9 +74,7 @@ export async function sendToBot(
     /** About something in the addressed chat (a comment on its item): lands there, a teammate's
      *  request included, instead of in a conversation of its own. */
     keepChat?: boolean
-    /** Who sent it as the card shows them, for a sender this Orca has no record of (another computer's). */
-    senderSnapshot?: string
-  }
+  } & Pick<SendBotRequestArgs, 'senderSnapshot' | 'images'>
 ): Promise<{ receipt: unknown; nudge: () => void } | null> {
   const { runtime } = context
   const db = runtime.getOrchestrationDb()
@@ -125,7 +123,10 @@ type SendBotRequestArgs = {
   recordMutationReceipt: ((receipt: unknown) => void) | undefined
   messageId?: string
   keepChat?: boolean
+  /** Who sent it as the card shows them, for a sender this Orca has no record of (another computer's). */
   senderSnapshot?: string
+  /** Store images claimed for the receiving chat (`send --item --file`). */
+  images?: readonly string[]
   /** Nudges the sender runs later instead of now. */
   held?: (() => void)[]
 }
@@ -234,7 +235,7 @@ async function admitBotRequestMail(
     return blockedReceipt(blocked).receipt
   }
   // The whole payload is Orca's, so the receiving bot never reads the sender's own fields as these.
-  const payload = JSON.stringify({ botRequest: botRequestView(record, messageId) })
+  const payload = botRequestPayload(record, messageId, args.images)
   const request = {
     ...key,
     fromBotId: record.fromBotId,
