@@ -175,7 +175,7 @@ describe('git exec admission lifetime', () => {
     })
     const options = {
       cwd: process.cwd(),
-      admissionExempt: true,
+      admissionExempt: true as const,
       env: { ...process.env, GIT_SSH_COMMAND: 'ssh' }
     }
     const first = gitExecFileAsync(['fetch', 'first'], options)
