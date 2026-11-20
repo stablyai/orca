@@ -325,8 +325,8 @@ function installWillQuitHandler(): void {
       )
       // After everything else: nothing can reach the orchestration database again. Renames only, capped.
       .then(() =>
-        // Read the updater live: an install can start while teardown awaits.
-        mayCompact && !isQuittingForUpdate() && !isDevParentShutdownRequested()
+        // Update installs included: the swap is a rename, and they are most quits for an app left open.
+        mayCompact && !isDevParentShutdownRequested()
           ? swapCompactedOrchestrationDbAtQuit(state.runtime)
           : undefined
       )

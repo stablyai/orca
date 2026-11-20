@@ -1,19 +1,26 @@
 import type { ChildProcess } from 'node:child_process'
 import { watch, type FSWatcher } from 'node:fs'
-import { link, open, rename, rm, stat, statfs } from 'node:fs/promises'
+import { link, readFile, rename, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import { spawnProcess } from '@orca/process-host'
 import type Database from '../../../../sqlite/sync-database'
 import type { OrchestrationDb } from '../orchestration-db'
 import { compactionChildSource } from './orchestration-db-compaction-child-source'
+import {
+  availableBytesIn,
+  removeQuietly,
+  sizeOf,
+  syncDirectory
+} from './orchestration-db-compaction-files'
 
 const MIB = 1024 * 1024
 const MIN_FREE_BYTES = 32 * MIB
 const MIN_FREE_FRACTION = 0.25
 // Maintenance minutes with no write before copying; a write after the copy makes it stale.
 const QUIET_TICKS = 5
-// A copy that keeps going stale costs one background copy an hour, three per session at most.
+// Each copy rewrites the live data, so a file whose copies keep going stale stops after a few, for good.
 const ATTEMPTS_PER_SESSION = 3
+const ATTEMPTS_PER_FILE = 6
 const ATTEMPT_SPACING_MS = 60 * 60_000
 // The copy blocks no one; this only bounds the disk and CPU it uses.
 const COPY_BUDGET_MS = 120_000
@@ -57,27 +64,6 @@ function readFileState(db: Database.Database): FileState {
   }
 }
 
-async function availableBytesIn(dir: string): Promise<number> {
-  try {
-    const disk = await statfs(dir)
-    return Number(disk.bavail) * Number(disk.bsize)
-  } catch {
-    return 0
-  }
-}
-
-async function sizeOf(path: string): Promise<number | null> {
-  try {
-    return (await stat(path)).size
-  } catch {
-    return null
-  }
-}
-
-function removeQuietly(path: string): Promise<void> {
-  return rm(path, { force: true }).catch(() => {})
-}
-
 /** The work's result, or 'late' when it hasn't settled within `ms`. */
 async function settlesWithin<T>(work: Promise<T>, ms: number): Promise<T | 'late'> {
   let timer: NodeJS.Timeout | undefined
@@ -104,6 +90,7 @@ export class OrchestrationDbCompaction {
   private lastFingerprint: string | null = null
   private quietTicks = 0
   private attempts = 0
+  private pastAttempts = 0
   private lastAttemptAt = Number.NEGATIVE_INFINITY
   private copying: ChildProcess | undefined
   private ready: { fingerprint: string } | undefined
@@ -121,6 +108,11 @@ export class OrchestrationDbCompaction {
 
   private get replacedPath(): string {
     return `${this.filename}-replaced`
+  }
+
+  /** How many copies this file has cost across sessions. */
+  private get attemptsPath(): string {
+    return `${this.filename}-compaction-attempts`
   }
 
   /** Called once per maintenance minute. */
@@ -149,6 +141,11 @@ export class OrchestrationDbCompaction {
       // From a session that quit or crashed part-way.
       this.leftoversRemoved = true
       await Promise.all([removeQuietly(this.copyPath), removeQuietly(this.replacedPath)])
+      this.pastAttempts = Number(await readFile(this.attemptsPath, 'utf8').catch(() => '0')) || 0
+    }
+    if (this.pastAttempts + this.attempts >= ATTEMPTS_PER_FILE) {
+      this.finished = true
+      return
     }
     if (
       this.quietTicks < this.quietTicksNeeded ||
@@ -171,6 +168,17 @@ export class OrchestrationDbCompaction {
     }
     this.attempts++
     this.lastAttemptAt = Date.now()
+    // Counted before it starts, so a quit or crash mid-copy still counts.
+    const counted = await writeFile(
+      this.attemptsPath,
+      String(this.pastAttempts + this.attempts)
+    ).then(
+      () => true,
+      () => false
+    )
+    if (!counted || this.stopped || readFileState(db).fingerprint !== fingerprint) {
+      return
+    }
     const copied = await this.copy(fingerprint)
     if (copied && !this.stopped && readFileState(db).fingerprint === fingerprint) {
       this.ready = { fingerprint }
@@ -284,6 +292,7 @@ export class OrchestrationDbCompaction {
       )
       await rename(copy, this.filename)
       await syncDirectory(dirname(this.filename))
+      await removeQuietly(this.attemptsPath)
       if (kept) {
         await settlesWithin(removeQuietly(this.replacedPath), UNLINK_WAIT_MS)
       }
@@ -297,19 +306,6 @@ export class OrchestrationDbCompaction {
       await removeQuietly(copy)
       return { kind: 'failed', error: String(error) }
     }
-  }
-}
-
-/** Makes the rename durable; Windows can't open a directory and its renames are already written through. */
-async function syncDirectory(dir: string): Promise<void> {
-  if (process.platform === 'win32') {
-    return
-  }
-  try {
-    const handle = await open(dir, 'r')
-    await handle.sync().finally(() => handle.close())
-  } catch {
-    // Some file systems refuse to sync a directory; the rename itself already happened.
   }
 }
 

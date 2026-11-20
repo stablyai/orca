@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, rmSync, statSync } from 'node:fs'
+import { existsSync, mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
@@ -90,6 +90,19 @@ describe('OrchestrationDbCompaction', () => {
     orchestration.close()
 
     expect(inspect(file)).toEqual({ autoVacuum: 0, integrity: 'ok', tasks: 2 })
+    expect(existsSync(`${file}-compacted`)).toBe(false)
+  })
+
+  it('stops copying a file whose copies have already cost six full rewrites', async () => {
+    const file = legacyDatabase()
+    writeFileSync(`${file}-compaction-attempts`, '6')
+    const orchestration = new OrchestrationDb(file)
+    const compaction = new OrchestrationDbCompaction(orchestration, file, () => true, 1)
+
+    await compaction.tick()
+    await compaction.tick()
+    orchestration.close()
+
     expect(existsSync(`${file}-compacted`)).toBe(false)
   })
 })
