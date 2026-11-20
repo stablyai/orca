@@ -23,10 +23,16 @@ const READERS = import.meta.glob<OutfitLayers>('../../../../shared/bot-mascots/o
   import: 'default'
 })
 
+/** `id`'s layer of `outfit`; undefined while the outfit is being read, which this starts. */
+export type BotOutfitLayerOf = (
+  outfit: BotAvatarOutfit,
+  id: BotMascotId
+) => BotOutfitLayer | null | undefined
+
 const outfits = new Map<BotAvatarOutfit, OutfitLayers>()
 const reading = new Set<BotAvatarOutfit>()
 const listeners = new Set<() => void>()
-let version = 0
+let layerOf: BotOutfitLayerOf = (outfit, id) => lookUp(outfit, id)
 
 function read(outfit: BotAvatarOutfit): void {
   const reader = READERS[`../../../../shared/bot-mascots/outfits/${outfit}.json`]
@@ -37,7 +43,8 @@ function read(outfit: BotAvatarOutfit): void {
   reader().then(
     (layers) => {
       outfits.set(outfit, layers)
-      version += 1
+      // A new lookup on each arrival, so a memoized look built with the last one is built again.
+      layerOf = (worn, id) => lookUp(worn, id)
       for (const listener of listeners) {
         listener()
       }
@@ -47,11 +54,7 @@ function read(outfit: BotAvatarOutfit): void {
   )
 }
 
-/** `id`'s layer of `outfit`; undefined while the outfit is being read, which this starts. */
-export function botOutfitLayer(
-  outfit: BotAvatarOutfit,
-  id: BotMascotId
-): BotOutfitLayer | null | undefined {
+function lookUp(outfit: BotAvatarOutfit, id: BotMascotId): BotOutfitLayer | null | undefined {
   const layers = outfits.get(outfit)
   if (!layers) {
     read(outfit)
@@ -65,7 +68,7 @@ function subscribe(listener: () => void): () => void {
   return () => listeners.delete(listener)
 }
 
-/** Renders again each time another outfit's art arrives. */
-export function useBotOutfitArtArrivals(): number {
-  return useSyncExternalStore(subscribe, () => version)
+/** The outfit layers read so far; a new lookup each time another outfit's art arrives. */
+export function useBotOutfitLayerOf(): BotOutfitLayerOf {
+  return useSyncExternalStore(subscribe, () => layerOf)
 }

@@ -8,7 +8,7 @@ import {
 } from '../../../../shared/bots/bot-avatar-color'
 import type { BotAvatarOutfit } from '../../../../shared/bots/bot-avatar-outfit'
 import { BOT_MASCOT_URLS } from './bot-mascots'
-import { botOutfitLayer, useBotOutfitArtArrivals, type BotOutfitLayer } from './bot-outfit-art'
+import { useBotOutfitLayerOf, type BotOutfitLayer, type BotOutfitLayerOf } from './bot-outfit-art'
 
 const MASCOT_SVGS = import.meta.glob<string>('../../../../shared/bot-mascots/*.svg', {
   query: '?raw',
@@ -56,7 +56,12 @@ export function dressMascotSvg(svg: string, outfit: BotOutfitLayer): string {
 const MAX_LOOKS = 300
 const looks = new Map<string, string>()
 
-function lookSrc(id: BotMascotId, color: string | null, outfit: BotAvatarOutfit | null): string {
+function lookSrc(
+  id: BotMascotId,
+  color: string | null,
+  outfit: BotAvatarOutfit | null,
+  layerOf: BotOutfitLayerOf
+): string {
   const key = `${id}|${color ?? ''}|${outfit ?? ''}`
   const cached = looks.get(key)
   if (cached) {
@@ -66,7 +71,7 @@ function lookSrc(id: BotMascotId, color: string | null, outfit: BotAvatarOutfit 
   if (!svg) {
     return BOT_MASCOT_URLS[id]
   }
-  const layer = outfit ? botOutfitLayer(outfit, id) : null
+  const layer = outfit ? layerOf(outfit, id) : null
   if (layer === undefined) {
     // Not cached, so the dressed look is built once the outfit's art arrives.
     return color ? svgSrc(recolorMascotSvg(svg, color)) : BOT_MASCOT_URLS[id]
@@ -91,13 +96,13 @@ export function useBotMascotSrcs(
   color: string | null | undefined,
   outfit: BotAvatarOutfit | null | undefined = null
 ): Record<BotMascotId, string> {
-  useBotOutfitArtArrivals()
+  const layerOf = useBotOutfitLayerOf()
   const tile = !color || color === DEFAULT_BOT_AVATAR_COLOR ? null : color
   const worn = outfit ?? null
   const srcs = { ...BOT_MASCOT_URLS }
   if (tile || worn) {
     for (const id of ids) {
-      srcs[id] = lookSrc(id, tile, worn)
+      srcs[id] = lookSrc(id, tile, worn, layerOf)
     }
   }
   return srcs

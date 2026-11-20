@@ -39,7 +39,7 @@ function OutfitSheet({ outfit }: { outfit: BotAvatarOutfit }): React.JSX.Element
 }
 
 // The outfit's art is read on first use; wait for it and the pictures it dresses.
-const settle = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 1000))
+const settle = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 4000))
 
 function sheet(outfit: BotAvatarOutfit): ComponentFixture {
   return defineFixture({
