@@ -1,5 +1,5 @@
 import { existsSync, readFileSync, statSync } from 'node:fs'
-import { lstat, mkdir, readFile } from 'node:fs/promises'
+import { lstat, mkdir, readFile, stat } from 'node:fs/promises'
 import { inCredentialFileOrder } from '../credentials/credential-file-io'
 import { dirname } from 'node:path'
 import { writeCredentialFileAtomic } from '../credentials/integration-credential-file'
@@ -10,16 +10,52 @@ import type { AntigravityCredentialBackend } from './native-account-service'
 const CONFLICT =
   'The native Antigravity credential changed during selection; refresh before retrying.'
 
+const sessionBusAddressMissing = (env: NodeJS.ProcessEnv): boolean =>
+  ['', 'none:', 'disabled:'].includes(env.DBUS_SESSION_BUS_ADDRESS ?? '')
+const sessionBusSocket = (): string => `/run/user/${process.getuid?.()}/bus`
+
 // Mirrors agy's Linux dbus detector: no session bus address and no per-user bus socket.
 function lacksAntigravitySessionBus(env: NodeJS.ProcessEnv): boolean {
-  if (!['', 'none:', 'disabled:'].includes(env.DBUS_SESSION_BUS_ADDRESS ?? '')) {
+  if (!sessionBusAddressMissing(env)) {
     return false
   }
   try {
-    return !statSync(`/run/user/${process.getuid?.()}/bus`).isSocket()
+    return !statSync(sessionBusSocket()).isSocket()
   } catch {
     return true
   }
+}
+
+/** `isAntigravityFileStorageHost` and `isAntigravityContainerOrWslHost` together, read without
+ *  blocking: where agy keeps its login in its token file on Linux. */
+export async function antigravityUsesFileStoreAsync(env: NodeJS.ProcessEnv): Promise<boolean> {
+  if (forcesAntigravityFileStore(env)) {
+    return true
+  }
+  if (process.platform !== 'linux') {
+    return false
+  }
+  if (
+    sessionBusAddressMissing(env) &&
+    (await stat(sessionBusSocket()).then(
+      (bus) => !bus.isSocket(),
+      () => true
+    ))
+  ) {
+    return true
+  }
+  if (
+    await stat(DOCKER_MARKER).then(
+      () => true,
+      () => false
+    )
+  ) {
+    return true
+  }
+  const texts = await Promise.all(
+    CONTAINER_OR_WSL_MARKERS.map(([path]) => readFile(path, 'utf8').catch(() => ''))
+  )
+  return CONTAINER_OR_WSL_MARKERS.some(([, pattern], index) => pattern.test(texts[index] ?? ''))
 }
 
 /** agy keeps its login in a file, not a keyring, in a remote or WSL session. */
@@ -36,14 +72,17 @@ export function isAntigravityFileStorageHost(env: NodeJS.ProcessEnv): boolean {
   )
 }
 
+const DOCKER_MARKER = '/.dockerenv'
+const CONTAINER_OR_WSL_MARKERS = [
+  ['/proc/1/cgroup', /docker|containerd|kubepods/],
+  ['/proc/sys/kernel/osrelease', /microsoft|wsl/i]
+] as const
+
 export function isAntigravityContainerOrWslHost(): boolean {
-  if (existsSync('/.dockerenv')) {
+  if (existsSync(DOCKER_MARKER)) {
     return true
   }
-  for (const [path, pattern] of [
-    ['/proc/1/cgroup', /docker|containerd|kubepods/],
-    ['/proc/sys/kernel/osrelease', /microsoft|wsl/i]
-  ] as const) {
+  for (const [path, pattern] of CONTAINER_OR_WSL_MARKERS) {
     try {
       if (pattern.test(readFileSync(path, 'utf8'))) {
         return true

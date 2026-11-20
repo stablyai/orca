@@ -112,11 +112,21 @@ export function managedAgentStandsInFor(agent: ManagedAgentCliId, command: strin
   return only === undefined || only === command
 }
 
-/** Orca's copy standing in for `command` when the user has none; null without one. */
-export function managedAgentCommandFor(agent: string, command: string): string | null {
-  return isManagedAgentCli(agent) && managedAgentStandsInFor(agent, command)
-    ? managedAgentCommand(agent)
-    : null
+/** Orca's copy standing in for `command` when the user has none; null without one. Only a launch
+ *  counts as use: reads that just weigh the program pass `use: false`. */
+export function managedAgentCommandFor(
+  agent: string,
+  command: string,
+  { use }: { use: boolean } = { use: true }
+): string | null {
+  if (!isManagedAgentCli(agent) || !managedAgentStandsInFor(agent, command)) {
+    return null
+  }
+  if (use) {
+    return managedAgentCommand(agent)
+  }
+  const folder = installedFolders.get(agent)
+  return folder ? MANAGED_AGENT_CLIS[agent].executable(folder) : null
 }
 
 /** Orca's installed copy of `agent` on this host, used only when the user has none of their own. */

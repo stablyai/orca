@@ -18,7 +18,7 @@ import {
 import { useNativeChatHostSetupView } from '../native-chat/host-access/native-chat-host-setup'
 import {
   nativeChatSignInNoticeView,
-  type NativeChatSignInButton
+  type NativeChatSignInNoticeView
 } from '../native-chat/host-access/native-chat-sign-in-notice'
 import { useNativeChatVisualOwner } from '../native-chat/media/visuals/native-chat-visual-owner'
 import { useBotForWorkspace } from './bot-workspace'
@@ -182,15 +182,17 @@ function TryAgain({
   bot: Bot
   /** The agent's Command setting is why it failed, so its fix is one press away. */
   commandSetting: boolean
-  signIn: NativeChatSignInButton | null
+  signIn: NativeChatSignInNoticeView | null
 }): React.JSX.Element {
   const t = useTranslate()
   const [asked, setAsked] = useState(false)
   const settingsAction = openAgentSettingsAction(botTarget(bot), t)
+  const button = signIn?.button ?? null
   return (
     <div className="mt-1 flex items-center gap-2 border-t border-border pt-2">
+      {/* An agent whose Sign in opens its CLI says the step to take there. */}
       <span className="min-w-0 flex-1 text-xs text-muted-foreground">
-        {t('bots.firstScreen.failed', 'Couldn’t finish setting up')}
+        {signIn?.steps ?? t('bots.firstScreen.failed', 'Couldn’t finish setting up')}
       </span>
       {commandSetting ? (
         <Button variant="outline" size="xs" onClick={settingsAction.onClick}>
@@ -198,15 +200,15 @@ function TryAgain({
         </Button>
       ) : null}
       {/* The chat's own Sign in; once it's done, Try again sends the setup again. */}
-      {signIn ? (
+      {button ? (
         <Button
           size="xs"
-          disabled={signIn.busy}
-          title={signIn.description}
-          aria-description={signIn.description}
-          onClick={signIn.onClick}
+          disabled={button.busy}
+          title={button.description}
+          aria-description={button.description}
+          onClick={button.onClick}
         >
-          {signIn.label}
+          {button.label}
         </Button>
       ) : null}
       <Button
@@ -270,12 +272,12 @@ function BotSetupSteps({
   const { install, signIn } = useBotSetupInstall(bot, failed && isVisible, retry)
   const setup = useNativeChatHostSetupView()
   const owed = nativeChatFirstScreenSignIn(firstScreen)
-  const signInButton =
+  const signInView =
     owed && !install && !signIn
-      ? (nativeChatSignInNoticeView(
+      ? nativeChatSignInNoticeView(
           { kind: 'notSignedIn', agent: bot.agent, account: owed.account, setup },
           t
-        )?.button ?? null)
+        )
       : null
   return (
     <div className="mt-6 w-96 max-w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground">
@@ -324,7 +326,7 @@ function BotSetupSteps({
         <TryAgain
           bot={bot}
           commandSetting={firstScreen.refused?.kind === 'agentCommandNotRunnable'}
-          signIn={signInButton}
+          signIn={signInView}
         />
       ) : null}
     </div>

@@ -9,7 +9,11 @@ import { AntigravityChatAuthConfigSchema } from '../../shared/agent-accounts/ant
 import { assertAntigravityChatAuthPublished } from './antigravity-chat-auth-publication'
 import { hasSavedAntigravityGoogleSignIn } from './antigravity-chat-saved-sign-in'
 import { ANTIGRAVITY_CHAT_HOME_FOLDER } from './antigravity-chat-home'
-import { agyUsesApiKey, checkAntigravityHostAcp } from './antigravity-host-acp'
+import {
+  agyUsesApiKey,
+  checkAntigravityHostAcp,
+  checkAntigravityHostAcpCompatible
+} from './antigravity-host-acp'
 import { agyCredentialPresence } from './agy-credential-presence'
 
 export type AntigravityChatRoute = {
@@ -87,9 +91,11 @@ export async function antigravityChatRoute(
   if (!agyResolves) {
     return { agy: 'notInstalled', installs: 'agy' }
   }
-  // Asking agy behind a locked keyring could raise an unlock dialog; agy asks when the chat starts.
+  // A session request behind a locked keyring could raise an unlock dialog, so only whether agy
+  // can serve chats is asked; agy asks for the keyring when the chat starts.
   if ((await agyCredentialPresence(homePath)) === 'locked') {
-    return { agy: 'unknown', installs: 'agy' }
+    const compatible = await checkAntigravityHostAcpCompatible(command, env, envToDelete)
+    return compatible === 'incompatible' ? ON_SERVER : { agy: 'unknown', installs: 'agy' }
   }
   const answer = await checkAntigravityHostAcp(command, env, envToDelete)
   // An agy that can't serve chats shadows Orca's copy too, so only the server can help.

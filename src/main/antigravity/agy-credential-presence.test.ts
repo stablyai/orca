@@ -1,0 +1,95 @@
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { dirname, join } from 'node:path'
+import { afterEach, expect, it, vi } from 'vitest'
+
+type Keyring = 'item' | 'none' | 'locked' | 'toolMissing'
+const host = vi.hoisted(
+  (): { platform: NodeJS.Platform; fileStore: boolean; keyring: Keyring } => ({
+    platform: 'linux',
+    fileStore: false,
+    keyring: 'none'
+  })
+)
+vi.mock('./native-file-credentials', () => ({
+  antigravityUsesFileStoreAsync: async () => host.fileStore
+}))
+vi.mock('./native-macos-credentials', () => ({
+  hasAntigravityMacOSCredential: async () => host.keyring === 'item'
+}))
+vi.mock('./native-windows-credentials', () => ({
+  hasAntigravityWindowsCredential: async () => host.keyring === 'item'
+}))
+vi.mock('./native-linux-credentials', async () => {
+  class AntigravityKeyringToolMissingError extends Error {}
+  return {
+    AntigravityKeyringToolMissingError,
+    readAntigravityLinuxCredential: async () => {
+      if (host.keyring === 'locked') {
+        throw new Error('Your Linux keyring is locked')
+      }
+      if (host.keyring === 'toolMissing') {
+        throw new AntigravityKeyringToolMissingError('needs gdbus')
+      }
+      return host.keyring === 'item' ? { contents: '{}' } : null
+    }
+  }
+})
+
+const { agyCredentialPresence } = await import('./agy-credential-presence')
+
+const homes: string[] = []
+afterEach(() => {
+  vi.restoreAllMocks()
+  homes.splice(0).forEach((home) => rmSync(home, { recursive: true, force: true }))
+})
+
+function home(files: { token?: boolean; marker?: boolean }): string {
+  const path = mkdtempSync(join(tmpdir(), 'agy-presence-'))
+  homes.push(path)
+  const cli = join(path, '.gemini', 'antigravity-cli')
+  if (files.token) {
+    mkdirSync(cli, { recursive: true })
+    writeFileSync(join(cli, 'antigravity-oauth-token'), '{}')
+  }
+  if (files.marker) {
+    const marker = join(cli, 'cache', 'antigravity-keyring-unavailable')
+    mkdirSync(dirname(marker), { recursive: true })
+    writeFileSync(marker, '1')
+  }
+  return path
+}
+
+it.each<
+  [string, NodeJS.Platform, Partial<typeof host>, { token?: boolean; marker?: boolean }, string]
+>([
+  ['a keyring-fallback marker', 'linux', { keyring: 'locked' }, { marker: true }, 'present'],
+  [
+    'a file-store host with a token',
+    'linux',
+    { fileStore: true, keyring: 'locked' },
+    { token: true },
+    'present'
+  ],
+  ['a file-store host without one', 'linux', { fileStore: true, keyring: 'item' }, {}, 'absent'],
+  ['a macOS keychain item', 'darwin', { keyring: 'item' }, {}, 'present'],
+  ['a macOS token file', 'darwin', { keyring: 'none' }, { token: true }, 'present'],
+  ['macOS with neither', 'darwin', { keyring: 'none' }, {}, 'absent'],
+  ['a locked Linux keyring', 'linux', { keyring: 'locked' }, { token: true }, 'locked'],
+  ['an unlocked Linux keyring without an item', 'linux', { keyring: 'none' }, {}, 'absent'],
+  [
+    'a Linux host without gdbus, and a token',
+    'linux',
+    { keyring: 'toolMissing' },
+    { token: true },
+    'present'
+  ],
+  ['a Linux host without gdbus or a token', 'linux', { keyring: 'toolMissing' }, {}, 'absent'],
+  ['a Windows Credential Manager item', 'win32', { keyring: 'item' }, {}, 'present'],
+  ['Windows with neither', 'win32', { keyring: 'none' }, {}, 'absent']
+])('reads %s as its login presence', async (_case, platform, state, files, expected) => {
+  Object.assign(host, { fileStore: false, keyring: 'none' }, state)
+  vi.spyOn(process, 'platform', 'get').mockReturnValue(platform)
+
+  expect(await agyCredentialPresence(home(files))).toBe(expected)
+})

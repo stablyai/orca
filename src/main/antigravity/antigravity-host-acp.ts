@@ -118,20 +118,43 @@ export async function antigravityHostAcpReady(
 
 /** One check answers every question about `command acp`. An incompatible binary is not asked
  *  again; a sign-in can land or lapse and a hung agy recover, so other answers are rechecked. */
-export async function checkAntigravityHostAcp(
+export function checkAntigravityHostAcp(
   command: string,
   env: Record<string, string>,
   envToDelete: string[],
   now: () => number = Date.now
+): Promise<AntigravityHostAcpAnswer> {
+  return askAntigravityHostAcp(command, env, envToDelete, now, true)
+}
+
+/** Whether `command acp` is a compatible server, asked without a session request, which would make
+ *  agy read its login: `ready` here means compatible, signed in or not. */
+export function checkAntigravityHostAcpCompatible(
+  command: string,
+  env: Record<string, string>,
+  envToDelete: string[]
+): Promise<AntigravityHostAcpAnswer> {
+  return askAntigravityHostAcp(command, env, envToDelete, Date.now, false)
+}
+
+async function askAntigravityHostAcp(
+  command: string,
+  env: Record<string, string>,
+  envToDelete: string[],
+  now: () => number,
+  sessions: boolean
 ): Promise<AntigravityHostAcpAnswer> {
   const stats = await stat(command).catch(() => null)
   if (!stats?.isFile()) {
     return 'unanswered'
   }
   const identity = `${stats.size}:${stats.mtimeMs}`
-  const cached = checks.get(command)
+  const key = sessions ? command : `${command}\u0000initialize`
+  const cached = checks.get(key)
   if (cached?.identity === identity && (cached.retryAt === undefined || now() < cached.retryAt)) {
-    latestAsked = cached
+    if (sessions) {
+      latestAsked = cached
+    }
     return cached.answer
   }
   let answered = false
@@ -150,11 +173,15 @@ export async function checkAntigravityHostAcp(
         // A present keychain item does not prove agy can sign in silently; session requests
         // answer "Authentication required" until it has. Unlike session/new, listing writes no
         // conversation into agy's history.
-        await connection.listSessions({ cwd: folder })
+        if (sessions) {
+          await connection.listSessions({ cwd: folder })
+        }
       }
     ).then(
       (initialized): AntigravityHostAcpAnswer => {
-        check.version = initialized.agentInfo?.version
+        if (sessions) {
+          check.version = initialized.agentInfo?.version
+        }
         return 'ready'
       },
       (error: unknown): AntigravityHostAcpAnswer => {
@@ -173,8 +200,10 @@ export async function checkAntigravityHostAcp(
       }
     )
   }
-  checks.set(command, check)
-  latestAsked = check
+  checks.set(key, check)
+  if (sessions) {
+    latestAsked = check
+  }
   const previous = cached?.answer
   if (previous) {
     void Promise.all([previous, check.answer]).then(([before, after]) => {

@@ -6,14 +6,21 @@ import type * as HostAcp from './antigravity-host-acp'
 import type { AgyCredentialPresence } from './agy-credential-presence'
 
 const agy = vi.hoisted(
-  (): { answer: HostAcp.AntigravityHostAcpAnswer; login: AgyCredentialPresence } => ({
+  (): {
+    answer: HostAcp.AntigravityHostAcpAnswer
+    /** What agy answers when asked only whether it is compatible, without its login. */
+    compatible: HostAcp.AntigravityHostAcpAnswer
+    login: AgyCredentialPresence
+  } => ({
     answer: 'ready',
+    compatible: 'ready',
     login: 'present'
   })
 )
 vi.mock('./antigravity-host-acp', async (importOriginal) => ({
   ...(await importOriginal<typeof HostAcp>()),
-  checkAntigravityHostAcp: async () => agy.answer
+  checkAntigravityHostAcp: async () => agy.answer,
+  checkAntigravityHostAcpCompatible: async () => agy.compatible
 }))
 vi.mock('./agy-credential-presence', () => ({ agyCredentialPresence: async () => agy.login }))
 
@@ -27,7 +34,7 @@ afterEach(() => {
     chmodSync(path, 0o755)
     rmSync(path, { recursive: true, force: true })
   })
-  Object.assign(agy, { answer: 'ready', login: 'present' })
+  Object.assign(agy, { answer: 'ready', compatible: 'ready', login: 'present' })
 })
 
 type Host = {
@@ -216,13 +223,21 @@ describe('a fresh host with neither agy nor Orca’s server', () => {
 })
 
 describe('agy behind a keyring that needs unlocking', () => {
-  it('runs new chats on agy without asking it, so no unlock dialog appears', async () => {
-    // Asking would answer incompatible and move chats to Orca's server.
-    Object.assign(agy, { login: 'locked', answer: 'incompatible' })
+  it('runs new chats on a compatible agy without asking for its login, so no unlock dialog appears', async () => {
+    // A session request would answer incompatible and move chats to Orca's server.
+    Object.assign(agy, { login: 'locked', answer: 'incompatible', compatible: 'ready' })
     const input = host()
 
     expect(await installsManagedRuntime(input)).toBe(false)
     expect(await select(input)).not.toBeNull()
+  })
+
+  it('keeps an incompatible agy out of new chats even behind a locked keyring', async () => {
+    Object.assign(agy, { login: 'locked', compatible: 'incompatible' })
+    const input = host()
+
+    expect(await installsManagedRuntime(input)).toBe(true)
+    expect(await select(input)).toBeNull()
   })
 
   it("keeps new chats on Orca's server where agy has no login to find", async () => {

@@ -4,9 +4,13 @@
 import { stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { antigravityKeyringFallbackMarker } from './native-credential-backend'
-import { forcesAntigravityFileStore } from './native-file-credentials'
+import { antigravityUsesFileStoreAsync } from './native-file-credentials'
 import { hasAntigravityMacOSCredential } from './native-macos-credentials'
-import { readAntigravityLinuxCredential } from './native-linux-credentials'
+import {
+  AntigravityKeyringToolMissingError,
+  readAntigravityLinuxCredential
+} from './native-linux-credentials'
+import { hasAntigravityWindowsCredential } from './native-windows-credentials'
 
 /** `locked`: the keyring can't be read without unlocking it, so asking agy could prompt. */
 export type AgyCredentialPresence = 'present' | 'absent' | 'locked'
@@ -22,23 +26,37 @@ export async function agyCredentialPresence(homePath: string): Promise<AgyCreden
   if (await exists(antigravityKeyringFallbackMarker(homePath))) {
     return 'present'
   }
-  const tokenFile = exists(join(homePath, '.gemini', 'antigravity-cli', 'antigravity-oauth-token'))
-  if (forcesAntigravityFileStore(process.env)) {
-    return (await tokenFile) ? 'present' : 'absent'
+  const tokenFile = (): Promise<AgyCredentialPresence> =>
+    exists(join(homePath, '.gemini', 'antigravity-cli', 'antigravity-oauth-token')).then((found) =>
+      found ? 'present' : 'absent'
+    )
+  // Windows environment names are case-insensitive.
+  const env =
+    process.platform === 'win32'
+      ? Object.fromEntries(
+          Object.entries(process.env).map(([key, value]) => [key.toUpperCase(), value])
+        )
+      : process.env
+  // The same store choice agy's credential backends make.
+  if (await antigravityUsesFileStoreAsync(env)) {
+    return tokenFile()
   }
   if (process.platform === 'darwin') {
     // Reading the secret would ask for keychain access; its attributes do not.
     const item = await hasAntigravityMacOSCredential().catch(() => false)
-    return item || (await tokenFile) ? 'present' : 'absent'
+    return item ? 'present' : tokenFile()
   }
-  if (process.platform === 'linux') {
-    // The read refuses a locked collection rather than unlocking it.
-    const keyring = await readAntigravityLinuxCredential().then(
-      (credential) => (credential ? 'present' : 'absent'),
-      () => 'locked' as const
-    )
-    return keyring === 'absent' && (await tokenFile) ? 'present' : keyring
+  if (process.platform === 'win32') {
+    // Credential Manager reads never prompt.
+    const item = await hasAntigravityWindowsCredential().catch(() => false)
+    return item ? 'present' : tokenFile()
   }
-  // agy's Windows credential store never prompts.
-  return 'present'
+  // The read refuses a locked collection rather than unlocking it; a missing tool makes agy fall
+  // back to its token file.
+  const keyring = await readAntigravityLinuxCredential().then(
+    (credential): AgyCredentialPresence | 'tokenFile' => (credential ? 'present' : 'tokenFile'),
+    (error: unknown) =>
+      error instanceof AntigravityKeyringToolMissingError ? 'tokenFile' : 'locked'
+  )
+  return keyring === 'tokenFile' ? tokenFile() : keyring
 }
