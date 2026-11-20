@@ -9,6 +9,7 @@ import type { getRemoteFileArgs } from '../runtime-file-routing'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { toRuntimeWorktreeSelector } from '../../rpc/targets/runtime-worktree-selector'
 import { captureRuntimeEnvironmentRequestRevision } from '../../rpc/environment-revisions/runtime-environment-revision'
+import { showDownloadProgressToast } from '@/lib/files/download/download-progress-toast'
 
 const REMOTE_DOWNLOAD_CHUNK_BYTES = 384 * 1024
 const REMOTE_DOWNLOAD_UPDATE_REQUIRED_MESSAGE =
@@ -66,8 +67,16 @@ export async function downloadRemoteRuntimeFile(
   if (!(await remoteChunkedDownloadAvailable(remoteArgs))) {
     return downloadRemoteFileViaPreview(remoteArgs, suggestedName)
   }
-  return streamDownloadedFile(suggestedName, (offset) =>
-    readRemoteDownloadChunk(remoteArgs, offset)
+  return streamDownloadedFile(
+    suggestedName,
+    (offset) => readRemoteDownloadChunk(remoteArgs, offset),
+    () =>
+      callRuntimeRpc<{ size: number }>(
+        remoteArgs.target,
+        'files.stat',
+        { worktree: remoteArgs.worktreeSelector, relativePath: remoteArgs.relativePath },
+        { timeoutMs: 15_000 }
+      ).then((stat) => stat.size)
   )
 }
 
@@ -85,36 +94,52 @@ export function downloadGrantedRuntimeFile(
   const expectedEnvironmentPairingRevision = captureRuntimeEnvironmentRequestRevision(
     grant.target.environmentId
   )
-  return streamDownloadedFile(suggestedName, (offset) =>
-    callRuntimeRpc<RuntimeFileReadChunkResult>(
-      grant.target,
-      'files.readTerminalArtifactChunk',
-      {
-        worktree: toRuntimeWorktreeSelector(grant.worktreeId),
-        grantId: grant.grantId,
-        absolutePath: grant.absolutePath,
-        offset,
-        length: REMOTE_DOWNLOAD_CHUNK_BYTES
-      },
-      { timeoutMs: 60_000, expectedEnvironmentPairingRevision }
-    )
+  const file = {
+    worktree: toRuntimeWorktreeSelector(grant.worktreeId),
+    grantId: grant.grantId,
+    absolutePath: grant.absolutePath
+  }
+  return streamDownloadedFile(
+    suggestedName,
+    (offset) =>
+      callRuntimeRpc<RuntimeFileReadChunkResult>(
+        grant.target,
+        'files.readTerminalArtifactChunk',
+        { ...file, offset, length: REMOTE_DOWNLOAD_CHUNK_BYTES },
+        { timeoutMs: 60_000, expectedEnvironmentPairingRevision }
+      ),
+    () =>
+      callRuntimeRpc<{ size: number }>(grant.target, 'files.statTerminalArtifact', file, {
+        timeoutMs: 15_000,
+        expectedEnvironmentPairingRevision
+      }).then((stat) => stat.size)
   )
 }
 
-/** Appends pages to a user-chosen local file until EOF, discarding it on any failure. */
+/** Appends pages to a user-chosen local file until EOF, discarding it on any failure or cancel. */
 export async function streamDownloadedFile(
   suggestedName: string,
-  readChunk: (offset: number) => Promise<RuntimeFileReadChunkResult>
+  readChunk: (offset: number) => Promise<RuntimeFileReadChunkResult>,
+  readSize?: () => Promise<number>
 ): Promise<RuntimeFileDownloadResult> {
+  // Why: stat overlaps the save dialog; a failed stat only hides the total, never blocks the download.
+  const totalBytes = readSize
+    ? readSize().then(
+        (size) => size,
+        () => null
+      )
+    : Promise.resolve(null)
   const download = await window.api.fs.startDownloadedFile({ suggestedName })
   if (download.canceled) {
     return download
   }
 
+  const progress = showDownloadProgressToast(suggestedName, totalBytes)
   let finished = false
   try {
     let offset = 0
     for (;;) {
+      progress.signal.throwIfAborted()
       const chunk = await readChunk(offset)
       if (chunk.bytesRead > 0) {
         await window.api.fs.appendDownloadedFileChunk({
@@ -123,6 +148,7 @@ export async function streamDownloadedFile(
         })
       }
       offset += chunk.bytesRead
+      progress.update(offset)
       if (chunk.eof) {
         break
       }
@@ -130,10 +156,18 @@ export async function streamDownloadedFile(
         throw new Error('Remote download stalled before reaching EOF')
       }
     }
+    // Why: a cancel during the last append would otherwise still commit the file.
+    progress.signal.throwIfAborted()
     const result = await window.api.fs.finishDownloadedFile({ transferId: download.transferId })
     finished = true
     return result
+  } catch (error) {
+    if (progress.signal.aborted) {
+      return { canceled: true }
+    }
+    throw error
   } finally {
+    progress.close()
     if (!finished) {
       await window.api.fs.cancelDownloadedFile({ transferId: download.transferId }).catch(() => {})
     }
