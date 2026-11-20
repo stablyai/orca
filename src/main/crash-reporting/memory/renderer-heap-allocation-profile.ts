@@ -8,7 +8,7 @@ import {
   readSamplingProfile,
   summarizeSamplingProfile,
   trustedScriptPrefixFor
-} from './renderer-heap-allocation-sites'
+} from './heap-allocation-sites'
 
 // A 512 KiB interval samples about two allocation stacks per MiB near OOM.
 const SAMPLING_INTERVAL_BYTES = 512 * 1024

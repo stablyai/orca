@@ -21,3 +21,18 @@ export function selectActiveTabForWorktree(
     null
   )
 }
+
+/** The tab in front of the window: the active workspace's, while its tabs are the view. */
+export function selectFrontTab(state: {
+  activeView: string
+  activeWorkspaceKey: string | null
+  activeWorktreeId: string | null
+  activeGroupIdByWorktree: Record<string, string>
+  groupsByWorktree: Record<string, TabGroup[]>
+  unifiedTabsByWorktree: Record<string, Tab[]>
+}): Tab | null {
+  const workspaceId = state.activeWorkspaceKey ?? state.activeWorktreeId
+  return workspaceId && state.activeView === 'terminal'
+    ? selectActiveTabForWorktree(state, workspaceId)
+    : null
+}

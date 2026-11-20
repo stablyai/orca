@@ -6,7 +6,7 @@ import { parseAppSshPtyId, toAppSshPtyId } from '../../../shared/remote-runtime/
 import { toSshExecutionHostId } from '../../../shared/execution-host/execution-host'
 import { normalizeManualRepoOrder } from '../../../shared/repository/manual-repo-order'
 
-/** Re-adoption must migrate every persisted id carrier together or reconnect/reattach resurrects dead target ids (STA-1468). Mutate in place and report changes for save scheduling. */
+/** Re-adoption must migrate every persisted id carrier together or reconnect/reattach resurrects dead target ids (STA-1468). Non-session carriers mutate in place and report changes for save scheduling. */
 
 function rewriteSshPtyId(ptyId: string, oldTargetId: string, newTargetId: string): string | null {
   const parsed = parseAppSshPtyId(ptyId)
@@ -20,62 +20,87 @@ function rewriteSshPtyIdRecordValues(
   record: Record<string, string> | undefined,
   oldTargetId: string,
   newTargetId: string
-): boolean {
-  if (!record) {
-    return false
-  }
-  let changed = false
-  for (const [key, ptyId] of Object.entries(record)) {
-    const next = rewriteSshPtyId(ptyId, oldTargetId, newTargetId)
-    if (next) {
-      record[key] = next
-      changed = true
+): Record<string, string> | null {
+  let next: Record<string, string> | null = null
+  for (const [key, ptyId] of Object.entries(record ?? {})) {
+    const rewritten = rewriteSshPtyId(ptyId, oldTargetId, newTargetId)
+    if (rewritten) {
+      next ??= { ...record }
+      next[key] = rewritten
     }
   }
-  return changed
+  return next
 }
 
+/** A new session with the target id rewritten, or null when nothing references the old id. */
 export function migrateWorkspaceSessionSshTargetId(
   session: WorkspaceSessionState,
   oldTargetId: string,
   newTargetId: string
-): boolean {
-  let changed = false
-  for (const tabs of Object.values(session.tabsByWorktree ?? {})) {
-    for (const tab of tabs) {
-      if (!tab.ptyId) {
-        continue
-      }
-      const next = rewriteSshPtyId(tab.ptyId, oldTargetId, newTargetId)
-      if (next) {
-        tab.ptyId = next
-        changed = true
+): WorkspaceSessionState | null {
+  let next: WorkspaceSessionState | null = null
+  let rows: WorkspaceSessionState['tabsByWorktree'] | null = null
+  for (const [worktreeId, tabs] of Object.entries(session.tabsByWorktree ?? {})) {
+    let nextTabs: typeof tabs | null = null
+    for (const [index, tab] of tabs.entries()) {
+      const rewritten = tab.ptyId ? rewriteSshPtyId(tab.ptyId, oldTargetId, newTargetId) : null
+      if (rewritten) {
+        nextTabs ??= [...tabs]
+        nextTabs[index] = { ...tab, ptyId: rewritten }
       }
     }
-  }
-  for (const layout of Object.values(session.terminalLayoutsByTabId ?? {})) {
-    if (rewriteSshPtyIdRecordValues(layout.ptyIdsByLeafId, oldTargetId, newTargetId)) {
-      changed = true
+    if (nextTabs) {
+      rows ??= { ...session.tabsByWorktree }
+      rows[worktreeId] = nextTabs
     }
   }
-  if (rewriteSshPtyIdRecordValues(session.remoteSessionIdsByTabId, oldTargetId, newTargetId)) {
-    changed = true
+  if (rows) {
+    next = { ...(next ?? session), tabsByWorktree: rows }
+  }
+  let layouts: WorkspaceSessionState['terminalLayoutsByTabId'] | null = null
+  for (const [tabId, layout] of Object.entries(session.terminalLayoutsByTabId ?? {})) {
+    const ptyIdsByLeafId = rewriteSshPtyIdRecordValues(
+      layout.ptyIdsByLeafId,
+      oldTargetId,
+      newTargetId
+    )
+    if (ptyIdsByLeafId) {
+      layouts ??= { ...session.terminalLayoutsByTabId }
+      layouts[tabId] = { ...layout, ptyIdsByLeafId }
+    }
+  }
+  if (layouts) {
+    next = { ...(next ?? session), terminalLayoutsByTabId: layouts }
+  }
+  const remoteSessionIdsByTabId = rewriteSshPtyIdRecordValues(
+    session.remoteSessionIdsByTabId,
+    oldTargetId,
+    newTargetId
+  )
+  if (remoteSessionIdsByTabId) {
+    next = { ...(next ?? session), remoteSessionIdsByTabId }
   }
   if (session.activeConnectionIdsAtShutdown?.includes(oldTargetId)) {
-    session.activeConnectionIdsAtShutdown = [
-      ...new Set(
-        session.activeConnectionIdsAtShutdown.map((id) => (id === oldTargetId ? newTargetId : id))
-      )
-    ]
-    changed = true
-  }
-  for (const record of Object.values(session.sleepingAgentSessionsByPaneKey ?? {})) {
-    if (record.connectionId === oldTargetId) {
-      record.connectionId = newTargetId
-      changed = true
+    next = {
+      ...(next ?? session),
+      activeConnectionIdsAtShutdown: [
+        ...new Set(
+          session.activeConnectionIdsAtShutdown.map((id) => (id === oldTargetId ? newTargetId : id))
+        )
+      ]
     }
   }
-  return changed
+  let sleeping: WorkspaceSessionState['sleepingAgentSessionsByPaneKey'] | null = null
+  for (const [paneKey, record] of Object.entries(session.sleepingAgentSessionsByPaneKey ?? {})) {
+    if (record.connectionId === oldTargetId) {
+      sleeping ??= { ...session.sleepingAgentSessionsByPaneKey }
+      sleeping[paneKey] = { ...record, connectionId: newTargetId }
+    }
+  }
+  if (sleeping) {
+    next = { ...(next ?? session), sleepingAgentSessionsByPaneKey: sleeping }
+  }
+  return next
 }
 
 /** Folder workspace and group host stamps are outside the repo sweep; leaving either stale strands workspaces and pinned automations. */

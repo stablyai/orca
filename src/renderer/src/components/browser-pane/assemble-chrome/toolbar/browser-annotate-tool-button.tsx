@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Check, Copy, Crosshair, MessageSquarePlus, PenTool, Trash2 } from 'lucide-react'
+import { Check, Copy, Crosshair, PenTool, SquareMousePointer, Trash2 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -82,21 +82,24 @@ export function BrowserAnnotateToolMenuItems({
   markup,
   onDraw
 }: {
-  tools: BrowserChromeElementTools
+  /** Null where the page can't run the element picker; only Draw is offered. */
+  tools: BrowserChromeElementTools | null
   markup: BrowserChromeMarkupTool
   onDraw?: () => void
 }): React.JSX.Element {
   const t = useTranslate()
   return (
     <>
-      <MenuToolRow
-        icon={Crosshair}
-        label={t('auto.components.browser.pane.BrowserPane.fdfc7fe0ef', 'Grab page element')}
-        shortcut={tools.grabShortcutLabel}
-        checked={tools.activeIntent === 'copy'}
-        disabled={tools.disabled}
-        onSelect={() => tools.onStartIntent('copy')}
-      />
+      {tools ? (
+        <MenuToolRow
+          icon={Crosshair}
+          label={t('auto.components.browser.pane.BrowserPane.fdfc7fe0ef', 'Grab page element')}
+          shortcut={tools.grabShortcutLabel}
+          checked={tools.activeIntent === 'copy'}
+          disabled={tools.disabled}
+          onSelect={() => tools.onStartIntent('copy')}
+        />
+      ) : null}
       <MenuToolRow
         icon={PenTool}
         label={t('auto.components.browser-pane.markup.drawButton', 'Draw on screenshot')}
@@ -135,7 +138,7 @@ export function BrowserAnnotateToolButton({
     ? { icon: PenTool, label: t('browser.toolbar.draw', 'Draw') }
     : tools.activeIntent === 'copy'
       ? { icon: Crosshair, label: t('browser.toolbar.grab', 'Grab') }
-      : { icon: MessageSquarePlus, label: t('browser.toolbar.annotate', 'Annotate') }
+      : { icon: SquareMousePointer, label: t('browser.toolbar.annotate', 'Annotate') }
   const active = markup.active || tools.activeIntent !== null
   const ModeIcon = mode.icon
 
@@ -220,7 +223,7 @@ export function BrowserAnnotateToolButton({
           </Tooltip>
           <DropdownMenuContent align="end" className="w-64">
             <MenuToolRow
-              icon={MessageSquarePlus}
+              icon={SquareMousePointer}
               label={annotateLabel}
               shortcut={tools.annotateShortcutLabel}
               checked={tools.activeIntent === 'annotate'}

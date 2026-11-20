@@ -12,6 +12,7 @@ import {
 } from './preload-api/agents/web-agent-accounts-api'
 import { createWebAgentStatusApi } from './preload-api/agents/web-agent-status-api'
 import { createWebAiVaultApi } from './preload-api/agents/web-ai-vault-api'
+import { createRuntimeUsageProviderApi } from '../runtime/usage-analytics/runtime-usage-provider-api'
 import { createWebAppApi } from './preload-api/app/web-app-api'
 import { createBrowserApi, createEmulatorApi } from './preload-api/browser/web-browser-api'
 import { createCliApi } from './preload-api/host-capabilities/web-cli-api'
@@ -115,11 +116,18 @@ function createWebPreloadApi(): Omit<Partial<PreloadApi>, 'settings' | 'plugins'
     },
     memory: {
       getSnapshot: () => Promise.resolve(createEmptyMemorySnapshot()),
+      // The web client reads no local host, so it has nothing to warn about.
+      readPerfNoticeSignals: () => Promise.resolve(null),
+      countHiddenBrowserPages: () => Promise.resolve(0),
       // Browser pages have no native-window veto; document visibility owns admission.
       resourceWindowVisible: () => Promise.resolve(true),
       onResourceWindowVisibility: () => () => {}
     },
     aiVault: createWebAiVaultApi(),
+    claudeUsage: createRuntimeUsageProviderApi(callRuntimeResult, 'claudeUsage'),
+    codexUsage: createRuntimeUsageProviderApi(callRuntimeResult, 'codexUsage'),
+    openCodeUsage: createRuntimeUsageProviderApi(callRuntimeResult, 'openCodeUsage'),
+    museUsage: createRuntimeUsageProviderApi(callRuntimeResult, 'museUsage'),
     preflight: createPreflightApi(),
     notifications: createNotificationsApi(),
     rateLimits: createRateLimitsApi(),

@@ -45,6 +45,8 @@ export function mobileMcpServerStatusLine(server: AgentSessionMcpServer, t: Tran
         : t('chat.mcp.status.failed', 'Failed')
     case 'disabled':
       return t('chat.mcp.status.off', 'Off')
+    case 'not-started':
+      return t('chat.mcp.status.notStarted', 'Not started')
   }
 }
 

@@ -29,6 +29,7 @@ import { isScreenSubmitShortcut } from '@/lib/keyboard/screen-submit-shortcut'
 import { isImeOwnedKeyboardEvent } from '@/lib/text-input/ime/ime-composition-keyboard-event'
 import { NativeChatSessionOptionRows } from '../native-chat/session/options/controls/NativeChatSessionOptionRows'
 import { AgentLaunchSetupFooter, type AgentLaunchSetupFooterHandle } from './AgentLaunchSetupFooter'
+import { AgentLaunchSetupPermission } from './AgentLaunchSetupPermission'
 import {
   acceptAgentPickerArguments,
   applyAgentPickerEdit,
@@ -170,11 +171,7 @@ export function AgentLaunchSetupPanel({
         selection="palette"
         disabled={state.modelDisabled}
         data-current={current}
-        onSelect={() => {
-          if (!model.unlisted) {
-            pickModel({ kind: 'choice', patch: { model: model.id } })
-          }
-        }}
+        onSelect={() => model.unlisted || pickModel({ kind: 'choice', patch: { model: model.id } })}
       >
         <span className="min-w-0 flex-1 truncate">{model.label}</span>
         <span className="flex size-3.5 shrink-0 items-center justify-center">
@@ -352,7 +349,7 @@ export function AgentLaunchSetupPanel({
         )}
       </Command>
       {optionRows.length ? (
-        <div className="flex min-h-9 min-w-0 items-center border-t border-border px-2.5 py-1.5">
+        <div className="flex min-h-9 min-w-0 shrink-0 items-center border-t border-border px-2.5 py-1.5">
           <div className="min-w-0 flex-1">
             <NativeChatSessionOptionRows
               options={optionRows}
@@ -377,6 +374,9 @@ export function AgentLaunchSetupPanel({
       ) : null}
       {mode === 'select' ? (
         <>
+          {installed && !searching ? (
+            <AgentLaunchSetupPermission {...{ entry, draft, disabled }} onEdit={editDraft} />
+          ) : null}
           {installed || searching ? children : null}
           {choices.length && !searching ? (
             <AgentPickerChoiceRows

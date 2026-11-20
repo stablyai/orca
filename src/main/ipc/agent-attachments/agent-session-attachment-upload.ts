@@ -67,40 +67,76 @@ async function callAttachmentMethod<TResult>(
   return response.result as TResult
 }
 
+/** One `agentSessionAttachment.*` call on the store's host; `abort` is the cleanup call, sent even
+ *  after the transfer's signal fired. */
+export type AgentSessionAttachmentCall = (
+  method: string,
+  params: unknown,
+  abort?: boolean
+) => Promise<unknown>
+
+function environmentCall(context: UploadContext): AgentSessionAttachmentCall {
+  return (method, params, abort) =>
+    callAttachmentMethod(abort ? { ...context, signal: undefined } : context, method, params)
+}
+
 /** Abort failed transfers so the server frees their slots and part files. */
 async function uploadAttachment(
-  context: UploadContext,
+  call: AgentSessionAttachmentCall,
+  sessionId: string,
   file: { name: string; byteLength: number },
   writeBody: (
     appendSlice: (contentBase64: string, offset: number) => Promise<void>
   ) => Promise<void>
 ): Promise<AgentSessionAttachmentUploadCommitResult> {
-  const { uploadId } = await callAttachmentMethod<AgentSessionAttachmentUploadStartResult>(
-    context,
-    'agentSessionAttachment.uploadStart',
-    { sessionId: context.sessionId, name: file.name, byteLength: file.byteLength }
-  )
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: uploadStart's handler returns this shape.
+  const { uploadId } = (await call('agentSessionAttachment.uploadStart', {
+    sessionId,
+    name: file.name,
+    byteLength: file.byteLength
+  })) as AgentSessionAttachmentUploadStartResult
   try {
-    await writeBody((contentBase64, offset) =>
-      callAttachmentMethod(context, 'agentSessionAttachment.uploadAppend', {
-        uploadId,
-        offset,
-        contentBase64
-      })
-    )
-    return await callAttachmentMethod<AgentSessionAttachmentUploadCommitResult>(
-      context,
-      'agentSessionAttachment.uploadCommit',
-      { uploadId }
-    )
+    await writeBody(async (contentBase64, offset) => {
+      await call('agentSessionAttachment.uploadAppend', { uploadId, offset, contentBase64 })
+    })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: uploadCommit's handler returns this shape.
+    return (await call('agentSessionAttachment.uploadCommit', {
+      uploadId
+    })) as AgentSessionAttachmentUploadCommitResult
   } catch (error) {
-    await callAttachmentMethod(
-      { ...context, signal: undefined },
-      'agentSessionAttachment.uploadAbort',
-      { uploadId }
-    ).catch(() => {})
+    await call('agentSessionAttachment.uploadAbort', { uploadId }, true).catch(() => {})
     throw error
   }
+}
+
+/** A buffer into a chat's store on the host `call` reaches, in the chunks a paste uses. */
+export function uploadBufferWith(
+  call: AgentSessionAttachmentCall,
+  sessionId: string,
+  name: string,
+  buffer: Buffer,
+  signal?: AbortSignal
+): Promise<AgentSessionAttachmentUploadCommitResult> {
+  return uploadAttachment(
+    call,
+    sessionId,
+    { name, byteLength: buffer.byteLength },
+    async (appendSlice) => {
+      if (buffer.byteLength === 0) {
+        await appendSlice('', 0)
+        return
+      }
+      for (
+        let offset = 0;
+        offset < buffer.byteLength;
+        offset += AGENT_SESSION_ATTACHMENT_CHUNK_BYTES
+      ) {
+        signal?.throwIfAborted()
+        const slice = buffer.subarray(offset, offset + AGENT_SESSION_ATTACHMENT_CHUNK_BYTES)
+        await appendSlice(slice.toString('base64'), offset)
+      }
+    }
+  )
 }
 
 export function uploadBufferToAgentSessionAttachments(
@@ -108,21 +144,7 @@ export function uploadBufferToAgentSessionAttachments(
   name: string,
   buffer: Buffer
 ): Promise<AgentSessionAttachmentUploadCommitResult> {
-  return uploadAttachment(context, { name, byteLength: buffer.byteLength }, async (appendSlice) => {
-    if (buffer.byteLength === 0) {
-      await appendSlice('', 0)
-      return
-    }
-    for (
-      let offset = 0;
-      offset < buffer.byteLength;
-      offset += AGENT_SESSION_ATTACHMENT_CHUNK_BYTES
-    ) {
-      context.signal?.throwIfAborted()
-      const slice = buffer.subarray(offset, offset + AGENT_SESSION_ATTACHMENT_CHUNK_BYTES)
-      await appendSlice(slice.toString('base64'), offset)
-    }
-  })
+  return uploadBufferWith(environmentCall(context), context.sessionId, name, buffer, context.signal)
 }
 
 export async function uploadPasteToAgentSessionAttachments(
@@ -184,7 +206,8 @@ export async function uploadExternalPathsToAgentSessionAttachments(
     }
     try {
       const stored = await uploadAttachment(
-        context,
+        environmentCall(context),
+        context.sessionId,
         { name: staged.name, byteLength: entry.byteLength },
         async (appendSlice) => {
           await streamExternalFileSlices({

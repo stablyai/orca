@@ -29,6 +29,7 @@ export type UpdaterHandlerContext = {
   failMacStaging: (error: unknown) => void
   isAwaitingMacStaging: () => boolean
   isMacStagingDeferredToInstall: () => boolean
+  watchMacStaging: (version: string) => void
   shouldDeferMacQuitForInstall: () => boolean
   recordCompletedUpdateCheck: () => void
   restoreReleaseUpdateSource: () => void
@@ -40,6 +41,10 @@ export type UpdaterHandlerContext = {
   ) => Promise<void>
   sendErrorStatus: (message: string, userInitiated?: boolean) => void
   sendStatus: (status: UpdateStatus) => void
+  publishUpdateOffer: (
+    status: UpdateStatus,
+    options: { eligible: boolean; backgroundCheck: boolean }
+  ) => void
   scheduleAutomaticUpdateCheck: (delayMs: number) => void
   shouldSuppressMissingManifestPrereleaseFallbackEvent: (message: string, error: unknown) => boolean
   suppressMissingManifestPrereleaseFallbackPromiseFailure: (message: string) => void

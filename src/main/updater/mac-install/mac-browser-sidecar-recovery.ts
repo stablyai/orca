@@ -54,7 +54,7 @@ function sidecarProfile(command: string, executable: string): string | null {
   const args = command.slice(executable.length + 1)
   // Match only the isolated browser launch, never a user's ordinary serve profile.
   const match =
-    /^--serve --serve-port \d+ --serve-json --serve-no-pairing (?:--password-store=basic --use-mock-keychain )?--user-data-dir=(\/tmp\/orcad-browser-[\w-]+)$/.exec(
+    /^--serve --serve-port \d+ --serve-json --serve-no-pairing (?:--password-store=basic --use-mock-keychain )?--user-data-dir=(\/tmp\/orcad-browser-[\w-]+|\/.+\/browser-sidecar-profile)$/.exec(
       args
     )
   return match?.[1] ?? null

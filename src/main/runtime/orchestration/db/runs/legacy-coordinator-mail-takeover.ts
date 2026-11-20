@@ -69,6 +69,20 @@ export function promoteLegacyCoordinatorMailForTakeover(
     )
 }
 
+// Unary + keeps run_id out of the index choice: probing by run_id scans every Dispatch in the run per task.
+export const LEGACY_COORDINATOR_DURABLE_HANDLES_SQL = `SELECT coordinator_handle AS handle
+       FROM coordinator_runs
+       WHERE scheduler_lost_at = ?
+       UNION
+       SELECT created_by_terminal_handle AS handle
+       FROM tasks t
+       WHERE t.run_id = ? AND t.created_by_terminal_handle IS NOT NULL
+         AND t.created_at <= ?
+         AND EXISTS(
+           SELECT 1 FROM dispatch_contexts d
+           WHERE d.task_id = t.id AND +d.run_id = t.run_id
+         )`
+
 export function getUniqueLegacyCoordinatorHandle(
   this: OrchestrationDb,
   runId: string
@@ -93,21 +107,9 @@ export function getUniqueLegacyCoordinatorHandle(
         .all(runId, runId) as { handle: string }[]
     ).map((row) => row.handle)
   )
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: both UNION branches select one non-null TEXT column aliased handle.
   const durableRows = this.db
-    .prepare(
-      `SELECT coordinator_handle AS handle
-       FROM coordinator_runs
-       WHERE scheduler_lost_at = ?
-       UNION
-       SELECT created_by_terminal_handle AS handle
-       FROM tasks t
-       WHERE t.run_id = ? AND t.created_by_terminal_handle IS NOT NULL
-         AND t.created_at <= ?
-         AND EXISTS(
-           SELECT 1 FROM dispatch_contexts d
-           WHERE d.task_id = t.id AND d.run_id = t.run_id
-         )`
-    )
+    .prepare(LEGACY_COORDINATOR_DURABLE_HANDLES_SQL)
     .all(adoption.adopted_at, runId, adoption.adopted_at) as {
     handle: string
   }[]

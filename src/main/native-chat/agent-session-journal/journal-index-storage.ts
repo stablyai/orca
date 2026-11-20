@@ -15,7 +15,14 @@ import type { JournalStateQueries } from './journal-state-queries'
 // Expose named queries, so a SQL implementation cannot accidentally become a collection scan.
 export type JournalInputPlaceStorage = Pick<
   JournalInputPlaceIndex,
-  'setPosition' | 'delete' | 'isEmpty' | 'lastId' | 'successorId' | 'idsAfter' | 'allPlaces'
+  | 'setPosition'
+  | 'delete'
+  | 'isEmpty'
+  | 'lastId'
+  | 'successorId'
+  | 'idsAfter'
+  | 'allPlaces'
+  | 'orderedIds'
 >
 
 /** Live queue rows in (position, message id) order; `set` reports whether membership changed. */

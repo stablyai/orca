@@ -1,3 +1,4 @@
+import { useLayoutEffect, useRef, type Ref } from 'react'
 import { ChevronDown, ChevronUp } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -9,11 +10,16 @@ import type { InteractivePromptCard } from '../../../../../shared/native-chat/in
 export function NativeChatPromptCollapseToggle({
   expanded,
   disabled = false,
-  onToggle
+  onToggle,
+  ref,
+  wantsFocus = false
 }: {
   expanded: boolean
   disabled?: boolean
   onToggle: () => void
+  ref?: Ref<HTMLButtonElement>
+  /** Names this control as the pane's prompt focus target, as an open card is. */
+  wantsFocus?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
   const label = expanded
@@ -23,6 +29,8 @@ export function NativeChatPromptCollapseToggle({
     <Tooltip>
       <TooltipTrigger asChild>
         <Button
+          ref={ref}
+          data-native-chat-prompt-card-focus={wantsFocus || undefined}
           type="button"
           variant="ghost"
           size="icon-xs"
@@ -45,11 +53,20 @@ export function NativeChatPromptCollapseToggle({
 /** A collapsed prompt above the usable composer; expanding gives it the input again. */
 export function NativeChatPromptStrip({
   card,
-  onExpand
+  onExpand,
+  takeFocus = false
 }: {
   card: NonNullable<InteractivePromptCard>
   onExpand: () => void
+  /** No composer returns to hold focus, so the strip keeps it off the hidden card. */
+  takeFocus?: boolean
 }): React.JSX.Element {
+  const toggleRef = useRef<HTMLButtonElement>(null)
+  useLayoutEffect(() => {
+    if (takeFocus) {
+      toggleRef.current?.focus()
+    }
+  }, [takeFocus])
   const title =
     card.kind === 'approval' ? card.approval.title : (card.prompt.questions[0]?.question ?? '')
   return (
@@ -60,7 +77,12 @@ export function NativeChatPromptStrip({
           className="flex items-center gap-2 rounded-lg border border-input bg-card py-1 pr-1.5 pl-3.5 shadow-xs"
         >
           <p className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">{title}</p>
-          <NativeChatPromptCollapseToggle expanded={false} onToggle={onExpand} />
+          <NativeChatPromptCollapseToggle
+            ref={toggleRef}
+            wantsFocus={takeFocus}
+            expanded={false}
+            onToggle={onExpand}
+          />
         </div>
       </div>
     </div>

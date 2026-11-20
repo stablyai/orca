@@ -7,7 +7,7 @@ import {
   type BridgePageGeometry
 } from '../bridge/page-geometry/bridge-page-geometry'
 import { getFoldSplit } from '../../layout/fold-division'
-import { useReservedRegions } from '../../layout/reserved-regions'
+import { useReservedRegions, useTopChromeOcclusions } from '../../layout/reserved-regions'
 import type { BridgeFoldDivision } from '../bridge/page-geometry/bridge-fold-division'
 import type { BridgeSafeAreaInsets } from '../bridge/page-geometry/bridge-safe-area-insets'
 import { measuredPageSafeAreaInsets } from './page-safe-area-insets'
@@ -27,7 +27,9 @@ export function usePageFoldDivision(): {
   onRootLayout: () => void
   onShellLayout: (event: LayoutChangeEvent) => void
 } {
-  const { divisions, occlusions, windowSafeArea } = useReservedRegions()
+  const { divisions, windowSafeArea } = useReservedRegions()
+  // The page only reads these for its header; its side rail comes from the native strip.
+  const occlusions = useTopChromeOcclusions()
   const strip = useSideRailStrip()
   const sideRail = strip !== null
   const directionPadAvailable = useSideRailDirectionPadAvailable()

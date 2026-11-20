@@ -65,4 +65,29 @@ describe('native chat math', () => {
     expect(setData).toHaveBeenCalledWith('text/plain', '$x^2$')
     selection?.removeAllRanges()
   })
+
+  it('copies rendered line breaks, nested lists and tables without extra blank lines', () => {
+    const rendered = render(
+      <CommentMarkdown
+        content={
+          'Inline $x^2$ here.\nSecond line\n\n- one\n  - nested\n- two\n\n| a | b |\n| - | - |\n| 1 | 2<br> |'
+        }
+        math
+        variant="document"
+      />
+    )
+    const markdown = rendered.container.firstElementChild
+    if (!markdown) {
+      throw new Error('Missing markdown')
+    }
+    const selection = document.getSelection()
+    selection?.selectAllChildren(markdown)
+    const setData = vi.fn()
+    fireEvent.copy(markdown, { clipboardData: { setData } })
+    expect(setData).toHaveBeenCalledWith(
+      'text/plain',
+      'Inline $x^2$ here.\nSecond line\n\none\nnested\ntwo\na\tb\n1\t2'
+    )
+    selection?.removeAllRanges()
+  })
 })

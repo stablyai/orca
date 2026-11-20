@@ -1,6 +1,7 @@
 import { useMemo, useSyncExternalStore } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useShallow } from 'zustand/react/shallow'
+import { useRuntimeStatusByEnvironmentId } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { useAppStore } from '@/store/index'
 import { usePluginCommands } from '@/store/plugins/catalog/plugin-contribution-catalog'
 import { usePluginNewFiles } from '@/store/plugins/file-creation/plugin-new-files'
@@ -127,7 +128,7 @@ export function useWorktreeJumpPaletteStoreState({
   const sshTargetLabels = useAppStore((state) => state.sshTargetLabels)
   const sshConnectionStates = useAppStore((state) => state.sshConnectionStates)
   const runtimeEnvironments = useAppStore((state) => state.runtimeEnvironments)
-  const runtimeStatusByEnvironmentId = useAppStore((state) => state.runtimeStatusByEnvironmentId)
+  const runtimeStatusByEnvironmentId = useRuntimeStatusByEnvironmentId()
   const hideDefaultBranchWorkspace = useAppStore((state) => state.hideDefaultBranchWorkspace)
   const hideAutomationGeneratedWorkspaces = useAppStore(
     (state) => state.hideAutomationGeneratedWorkspaces

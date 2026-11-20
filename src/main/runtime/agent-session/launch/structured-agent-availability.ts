@@ -1,7 +1,7 @@
 // Share/cache this host's agent health independently of readers. Probe each registration in server home; launches recheck in their workspace.
 
 import { homedir } from 'node:os'
-import { delimiter, isAbsolute } from 'node:path'
+import { posix, win32 } from 'node:path'
 import type { AgentSessionAgentAvailability } from '../../../../shared/agent-session/agent-discovery/agent-session-agent-availability'
 import type { AgentSessionExecutionLocation } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
@@ -22,6 +22,7 @@ import type { StructuredAgentRuntimeMetadata } from '../installation/structured-
 import { recaptureHostShellEnvironment } from '../environment/structured-agent-shell-environment'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import { structuredChatUnavailableOnPlatform } from '../../../../shared/agent-session/capabilities/structured-chat-platform-support'
+import { normalizePathEntry } from '../../../../shared/shell/command-resolution/node-cli-command-resolution'
 
 export type StructuredAgentAvailabilityReader = (
   agents: readonly AgentSessionAgentAvailability[]
@@ -95,6 +96,7 @@ async function observeChatProgram(
     settings = runtime.requireStore().getSettings()
     shellEnv = await resolveHostStructuredAgentLaunchEnvironment(agent, settings)
     const { command, env } = chatProgram.resolve(shellEnv, settings)
+    const { delimiter, isAbsolute } = process.platform === 'win32' ? win32 : posix
     if (isAbsolute(command)) {
       return 'available'
     }
@@ -104,7 +106,7 @@ async function observeChatProgram(
     if (
       /[\\/]/.test(command) ||
       path.some((rawEntry) => {
-        const entry = rawEntry.trim()
+        const entry = normalizePathEntry(process.platform, rawEntry.trim())
         return entry && !isAbsolute(entry) && !/^~(?:[\\/]|$)/.test(entry)
       })
     ) {

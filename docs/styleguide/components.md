@@ -26,7 +26,7 @@ Variants in priority order:
 
 Sizes are defined in `button.tsx` (`default`, `sm`, `xs`, `lg`, plus `icon`, `icon-xs`, `icon-sm`, `icon-lg`). Match the size to the surrounding row height — don't drop a `default` button into a 28px toolbar.
 
-Buttons inside `DialogFooter` get an outline on hover, a solid `ring` outline on focus (including the initially focused dialog action), and a closer outline while pressed (see `main.css`). Keep these cues scoped to dialog actions; elsewhere buttons use the default `focus-visible` ring only — toolbar and icon buttons should not get hover outlines.
+Buttons inside `DialogFooter` get an outline on hover, a solid `ring` outline on keyboard focus (`:focus-visible`, so an auto-focused action usually shows no ring when the dialog opens from a click; Chromium may still show it after keyboard input), and a closer outline while pressed (see `main.css`). Disabled and `aria-disabled` buttons skip these cues; a focusable `aria-disabled` button keeps the default `focus-visible` ring. Keep these cues scoped to dialog actions; elsewhere buttons use the default `focus-visible` ring only — toolbar and icon buttons should not get hover outlines.
 
 ## Picking the right primitive
 
@@ -80,7 +80,7 @@ Icons come from **`lucide-react`**. Don't import a second icon library.
 - **`size-7`+:** for featured/empty-state hero icons only.
 - **Stroke width:** lucide's default. Don't override per-icon.
 - **Color:** inherit from surrounding text — `text-muted-foreground` for secondary, `text-destructive` for destructive, etc. Don't apply a token to the SVG directly when the parent already carries the right color.
-- **Spinner:** the canonical loading icon is `<Loader2 className="size-4 animate-spin" />`. For 3s+ multi-step work, prefer a label that names the stage ("Cloning…" → "Installing…") over an unlabeled spinner. See [in-flight feedback](./ux-rules.md#1-match-in-flight-feedback-to-perceived-duration).
+- **Spinner:** the canonical loading icon is `<Loader2 className="size-4 animate-spin" />`. `animate-spin` and `animate-pulse` are paused in CSS; `looping-animation-clock.ts` advances them one step each time an elapsed-time label repaints, so they never draw a frame of their own and hold still when nothing else on screen changes. A free-running animation redraws the whole window every display refresh, so don't give an indicator its own `infinite` animation or timer; `pnpm bench:spinners` fails if one costs a frame of its own. For 3s+ multi-step work, prefer a label that names the stage ("Cloning…" → "Installing…") over an unlabeled spinner. See [in-flight feedback](./ux-rules.md#1-match-in-flight-feedback-to-perceived-duration).
 
 ## Keyboard shortcut chips
 

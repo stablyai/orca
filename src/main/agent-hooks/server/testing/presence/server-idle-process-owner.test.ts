@@ -109,6 +109,7 @@ describe('idle foreground process owns its provider session', () => {
       })
       await server.checkAgentPresence(PANE)
       expect(emitted.mock.lastCall?.[0].agentPresence?.suspended).toBe(true)
+      expect(server.paneAgentIdentity(PANE)?.suspended).toBe(true)
       probe.mockImplementation(async (_identity, _read, _platform, observe) => {
         if (verdict === 'live') {
           observe?.(false)
@@ -127,6 +128,7 @@ describe('idle foreground process owns its provider session', () => {
       expect(probe).toHaveBeenCalledTimes(2)
       assertClaudeSession(server)
       expect(emitted.mock.lastCall?.[0].agentPresence?.suspended).toBeUndefined()
+      expect(server.paneAgentIdentity(PANE)?.suspended).toBeUndefined()
     }
   )
 
@@ -263,6 +265,30 @@ describe('idle foreground process owns its provider session', () => {
       providerSession: { id: 'foreground-codex' }
     })
   })
+
+  it.each([
+    ['stopped', 'unverifiable', true],
+    ['still running', 'live', true],
+    ['exited without a session end', 'exited', false]
+  ] as const)(
+    'lets a verifiable owner answer when its shell takes the foreground: %s',
+    async (_, verdict, keepsOwner) => {
+      const server = await start()
+      await idleClaude(server)
+      const confirmProcessExit = vi.fn(async () => true)
+      server.setTerminalPaneLifecycle({
+        ownsProcess: () => true,
+        isStopping: () => false,
+        isReversibleStop: () => false,
+        isPlaced: () => true,
+        confirmProcessExit
+      })
+      probe.mockResolvedValue(verdict)
+      await server.reconcilePaneProcessExit(PANE)
+      expect(server.hasVerifiableAgentProcess(PANE)).toBe(keepsOwner)
+      expect(confirmProcessExit).not.toHaveBeenCalled()
+    }
+  )
 
   it.each(['live', 'unverifiable'] as const)(
     'retains mobile and resume selection after turn completion when owner is %s',

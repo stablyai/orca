@@ -169,8 +169,8 @@ export function ensureBrowserPageViewport(
 export const BROWSER_PAGE_PRESET_VIEWPORT_CLASS_NAME = 'browser-page-preset-viewport'
 
 // CDP presets use window DIP while UI zoom changes CSS pixels; divide the host box to avoid unpainted strips.
-function applyViewportPresetSizeStyles(
-  viewport: BrowserPageViewport,
+export function applyViewportPresetSizeStyles(
+  viewport: Pick<BrowserPageViewport, 'content' | 'scroller'>,
   size: { width: number; height: number } | null
 ): void {
   if (size) {
@@ -247,13 +247,9 @@ export function scrollBrowserPageViewport(
   scroller.scrollTop += deltaY
 }
 
-export function getBrowserPageViewportScrollState(
-  browserPageId: string
-): BrowserPageViewportScrollState | null {
-  const scroller = browserPageViewports.get(browserPageId)?.scroller
-  if (!scroller) {
-    return null
-  }
+export function readBrowserPageViewportScrollState(
+  scroller: HTMLElement
+): BrowserPageViewportScrollState {
   return {
     scrollLeft: Math.max(0, scroller.scrollLeft),
     scrollTop: Math.max(0, scroller.scrollTop),

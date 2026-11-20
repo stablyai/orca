@@ -25,9 +25,19 @@ export const BROWSER_NETWORK_TUNNEL_WINDOW_V2_CAPABILITY =
 // Older hosts drop expectUrl and would act unguarded, so the CLI refuses the flag without this.
 export const BROWSER_EXPECT_URL_RUNTIME_CAPABILITY = 'browser.expect-url.v1' as const
 
-// Headless, identity and certificate trust are host-conditional, so getStatus adds them itself.
+// Older hosts publish server tabs with canGoBack/canGoForward hardcoded false, so clients keep both arrows enabled without this.
+export const BROWSER_TAB_HISTORY_STATE_RUNTIME_CAPABILITY = 'browser.tab-history-state.v1' as const
+
+// Older hosts have no browser.zoom, so streamed panes keep zoom chords on Orca's own zoom.
+export const BROWSER_PAGE_ZOOM_RUNTIME_CAPABILITY = 'browser.page-zoom.v1' as const
+
+// Older hosts have no browser.stop and drop browser.reload's ignoreCache, so streamed panes offer only plain reload.
+export const BROWSER_STOP_HARD_RELOAD_RUNTIME_CAPABILITY = 'browser.stop-hard-reload.v1' as const
+
+// Headless, identity, certificate trust, page zoom and stop/hard reload are host-conditional, so getStatus adds them itself.
 export const BROWSER_RUNTIME_CAPABILITIES = [
   BROWSER_EXPECT_URL_RUNTIME_CAPABILITY,
+  BROWSER_TAB_HISTORY_STATE_RUNTIME_CAPABILITY,
   BROWSER_GOOGLE_COOKIE_CLEAR_CAPABILITY,
   BROWSER_SCREENCAST_RUNTIME_CAPABILITY,
   BROWSER_TAB_CREATE_KNOWN_ID_RUNTIME_CAPABILITY,

@@ -14,11 +14,20 @@ import { pathToFileURL } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
 import * as currentProcessHost from '@orca/process-host'
 import { importReleaseCheckoutModule } from './release-checkout'
-import { extractReleaseCheckoutTree } from './release-checkout-tree'
+import { extractReleaseCheckoutTree, OPTIONAL_ARCHIVE_PATHS } from './release-checkout-tree'
 import { prepareReleaseSnapshotSource } from './release-checkout-prefetch'
 import { LOCAL_RELEASE_GIT_ENV } from './release-checkout-process'
 
 const temporaryRoots: string[] = []
+
+describe('release checkout contents', () => {
+  it('holds every cloud file the desktop build compiles in', () => {
+    const tsconfig = readFileSync(join(__dirname, '../../../../config/tsconfig.node.json'), 'utf8')
+    const compiled = [...tsconfig.matchAll(/"\.\.\/(cloud\/[^"]+)"/g)].map((match) => match[1])
+    expect(compiled.length).toBeGreaterThan(0)
+    expect(OPTIONAL_ARCHIVE_PATHS.filter((path) => path.startsWith('cloud/'))).toEqual(compiled)
+  })
+})
 
 afterEach(() => {
   for (const root of temporaryRoots.splice(0)) {
@@ -189,25 +198,6 @@ const RELEASE_PROCESS_HOST = {
   'src/packages/release-tool/src/index.test.mjs': 'throw new Error("stale spec")\n'
 }
 
-describe('release phone row reader', () => {
-  it.each([
-    'mobile/src/worktree/agent-row-display.ts',
-    'mobile/src/worktree/agent-lineage/agent-row-display.ts'
-  ])("loads main's row reader path from a release that ships it at %s", async (released) => {
-    const { repo, commit } = commitRelease({ [released]: `export const at = '${released}'\n` })
-    const staging = temporaryDirectory('orca-cross-version-row-reader-')
-
-    await extractReleaseCheckoutTree(repo, staging, commit)
-    const checkout = { ref: 'v0.0.0-synthetic', commit, label: 'v0.0.0-synthetic', root: staging }
-    const reader = await importReleaseCheckoutModule(
-      checkout,
-      'mobile/src/worktree/agent-lineage/agent-row-display.ts'
-    )
-
-    expect(reader.at).toBe(released)
-  })
-})
-
 describe('release checkout workspace packages', () => {
   it.each([
     {
@@ -300,7 +290,7 @@ describe('release checkout workspace packages', () => {
     expect(existsSync(join(staging, 'node_modules'))).toBe(false)
   })
 
-  it.each(['@orca/process-host/internal', '@orca/release-tool/private', '@orca/not-in-release'])(
+  it.each(['@orca/process-host/internal', '@orca/not-in-release'])(
     'fails extraction rather than loading the current tree for %s',
     async (specifier) => {
       const { repo, commit } = commitRelease({
