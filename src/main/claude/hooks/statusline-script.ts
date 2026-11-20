@@ -64,7 +64,7 @@ export function getManagedStatusLineScript(target: 'local' | 'posix' = 'local'):
       'set "ORCA_STATUSLINE_CONFIG_DIR_FIELD=configDir="',
       'if defined CLAUDE_CONFIG_DIR set "ORCA_STATUSLINE_CONFIG_DIR_FIELD=configDir=%CLAUDE_CONFIG_DIR%"',
       'set "ORCA_STATUSLINE_ACCOUNT_ID_FIELD=accountId="',
-      'if defined ORCA_CLAUDE_USAGE_ACCOUNT_ID set "ORCA_STATUSLINE_ACCOUNT_ID_FIELD=accountId=%ORCA_CLAUDE_USAGE_ACCOUNT_ID%"',
+      'if defined ORCA_CLAUDE_USAGE_ACCOUNT_ID set "ORCA_STATUSLINE_ACCOUNT_ID_FIELD=accountId=%ORCA_CLAUDE_USAGE_ACCOUNT_ID:"=\\"%"',
       [
         '"%SystemRoot%\\System32\\curl.exe" -sS -X POST',
         `"http://127.0.0.1:%ORCA_AGENT_HOOK_PORT%${CLAUDE_STATUSLINE_PATHNAME}"`,

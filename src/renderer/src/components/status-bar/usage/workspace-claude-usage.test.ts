@@ -1,6 +1,7 @@
 import { expect, it } from 'vitest'
 import { createEmptyRateLimitState } from '../../../../../shared/agent-usage/rate-limits/rate-limit-state-factory'
 import type { ProviderRateLimits } from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
+import { resolveOwnerUsageRateLimits } from './owner-usage-rate-limits'
 import { workspaceAccountUsage } from './workspace-account-usage'
 
 function reading(accountId: string, usedPercent: number): ProviderRateLimits {
@@ -96,4 +97,30 @@ it('does not show an unlabeled managed-account reading as System default usage',
     }
   })
   expect(workspaceAccountUsage(state, 'claude', 'system-default')?.session).toBeNull()
+})
+
+it('suppresses cached workspace usage when the owner becomes unverifiable', () => {
+  const lastKnown = createEmptyRateLimitState({
+    claude: {
+      provider: 'claude',
+      session: null,
+      weekly: null,
+      updatedAt: 0,
+      error: null,
+      status: 'unavailable'
+    },
+    inactiveClaudeAccounts: [
+      { accountId: 'work', rateLimits: reading('work', 27), updatedAt: 1, isFetching: false }
+    ]
+  })
+  const unresolved = resolveOwnerUsageRateLimits(createEmptyRateLimitState(), {
+    kind: 'remote-unverifiable',
+    ownerLabel: 'Remote',
+    reason: 'unreachable',
+    lastKnown
+  })
+
+  expect(workspaceAccountUsage(unresolved, 'claude', 'work')?.session).toBeNull()
+  expect(unresolved.claude?.status).toBe('unavailable')
+  expect(unresolved.claude?.usageMetadata?.unverifiableOwner).toBe(true)
 })

@@ -52,6 +52,8 @@ it('keeps WSL accounts available when the distro name differs only by case', () 
     { runtime: 'wsl', wslDistro: 'ubuntu' }
   )
   expect(
-    groups.find((group) => group.key === 'wsl:ubuntu')?.targets.map((target) => target.id)
-  ).toContain('wsl-account')
+    groups
+      .find((group) => group.key === 'wsl:ubuntu')
+      ?.targets.find((target) => target.id === 'wsl-account')
+  ).toMatchObject({ active: true })
 })
