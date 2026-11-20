@@ -86,3 +86,46 @@ it('opens a chat beside a mounted one without rebuilding for an unrelated Dispat
   expect(builds).toBe(1)
   mounted()
 })
+
+it('stops filtering for a chat that closed beside an open one', () => {
+  const f = fixture()
+  f.assign('term_worker')
+  const other = f.db.createRun({
+    objective: 'Other',
+    coordinatorHandle: 'term_peer',
+    coordinatorPaneKey: null
+  })
+  const task = f.db.createTask({ runId: other.id, spec: 'Other work' })
+  f.db.createDispatchContext({
+    taskId: task.id,
+    assigneeHandle: 'term_helper',
+    creator: { kind: 'terminal', handle: 'term_peer' },
+    maxDepth: 10
+  })
+  let builds = 0
+  const model = new CrewReadModel((previous) => {
+    if (!previous) {
+      builds++
+    }
+    return f.deps
+  }, f.db.crewChanges.subscribe)
+  const show = (party: string) =>
+    subscribeCrew(
+      () => model.read(party),
+      (wake) => model.subscribe(wake, party),
+      () => {}
+    )
+  const mounted = show('term_coord')
+  show('term_peer')()
+  // The closed chat's crew starts another worker; the open chat's next read must not rebuild for it.
+  const next = f.db.createTask({ runId: other.id, spec: 'More work' })
+  f.db.createDispatchContext({
+    taskId: next.id,
+    assigneeHandle: 'term_outbound',
+    creator: { kind: 'terminal', handle: 'term_peer' },
+    maxDepth: 10
+  })
+  model.read('term_coord')
+  expect(builds).toBe(1)
+  mounted()
+})

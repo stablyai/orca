@@ -51,6 +51,8 @@ export class CrewReadModel {
   private broadTraffic = false
   private unwatch: (() => void) | undefined
   private release: ReturnType<typeof setTimeout> | undefined
+  /** Why a subscribe forced the next rebuild, for its trace. */
+  private forced: CrewRebuildTrigger | undefined
   /** Parties whose last listener left since the last subscribe: their rows still filter wakes, so their return reads fresh. */
   private readonly departed = new Set<string>()
   /** A terminal record write while nobody listened, checked by the next read instead of on every notice. */
@@ -135,6 +137,7 @@ export class CrewReadModel {
       (party === undefined || !this.departed.has(party))
     ) {
       this.dirty.add('topology')
+      this.forced = 'first-subscribe'
     }
     for (const left of this.departed) {
       if (left !== party) {
@@ -154,7 +157,12 @@ export class CrewReadModel {
     return () => {
       this.listeners.delete(listener)
       if (party !== undefined && ![...this.listeners.values()].includes(party)) {
-        this.departed.add(party)
+        // Only the last party to leave is kept for: beside other listeners its rows stop filtering wakes.
+        if (this.listeners.size === 0) {
+          this.departed.add(party)
+        } else if (this.partyRelevance.delete(party)) {
+          this.refreshRelevance()
+        }
       }
       if (this.listeners.size === 0) {
         // The watch stays for the grace period, so the kept host sees every change; then nothing runs.
@@ -259,9 +267,10 @@ export class CrewReadModel {
       }
       // A one-shot read has no watch to keep captured truth current.
       const host = this.hosts.build(
-        crewRebuildTrigger(previous, this.listeners.size > 0, dirty, now, cause),
+        crewRebuildTrigger(previous, this.listeners.size > 0, dirty, now, cause ?? this.forced),
         deps
       )
+      this.forced = undefined
       this.host = this.rebuilt(host)
       this.skipped = undefined
     } else if (dirty.has('status') || dirty.has('names')) {
@@ -311,16 +320,23 @@ export class CrewReadModel {
     if ([...this.listeners.values()].some((party) => party === address || party === undefined)) {
       this.partyRelevance.set(address, shown)
     }
+    this.refreshRelevance()
+    return snapshot
+  }
+
+  /** What the shown rows, together, filter wakes by. */
+  private refreshRelevance(): void {
     // Kept while unchanged, so the session-write scope and its worktree cache hold across wakes.
     const union = CrewRelevance.union(this.partyRelevance.values())
     if (!this.relevance?.sameAs(union)) {
       this.relevance = union
     }
     try {
-      this.identity = crewIdentityFingerprint(this.relevance, this.host.deps)
+      this.identity = this.host
+        ? crewIdentityFingerprint(this.relevance, this.host.deps)
+        : undefined
     } catch {
       this.identity = undefined
     }
-    return snapshot
   }
 }
