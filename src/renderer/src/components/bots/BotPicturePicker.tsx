@@ -29,6 +29,7 @@ import {
   useGenerateFace
 } from './AvatarGenerateFace'
 import { BotPictureRowFold } from './BotPictureRowFold'
+import { readAvatarCapability } from './avatar-generation-capability-store'
 import {
   CUSTOM_FACE,
   GENERATE_FACE,
@@ -196,22 +197,31 @@ export function BotPicturePicker({
   const generateTurn = useRef<(() => boolean) | null>(null)
   const face = useGenerateFace(
     (made) => {
-      if (onGenerate && (generateTurn.current?.() ?? true)) {
+      const ownTurn = generateTurn.current?.() ?? true
+      // Applied only while Generate is the current face and no picture was taken since it was asked for.
+      if (generating && ownTurn) {
         onUpload(made.png, -1)
+      } else if (!ownTurn) {
+        face.supersede()
       }
     },
+    custom?.src ? { src: custom.src, description: custom.description } : null,
     () => {
       generateTurn.current = intake.claim()
     }
   )
-  const withGenerate = face.agent !== null
-  const generatedCustom = withGenerate && isGeneratedCustom(custom?.src, face.result?.png ?? null)
+  // Read once, at mount: the face list is final from the first paint. A check still unanswered
+  // at the very first open (just after launch) means no Generate face for that open only.
+  const [withGenerate] = useState(() => (readAvatarCapability()?.length ?? 0) > 0)
+  // With Generate, the user's own picture lives in its slot: one tile, never two. An older
+  // picture with no image (an emoji) keeps its own face.
+  const customInSlot = withGenerate && Boolean(custom?.src)
   const order = pictureFaceOrder(
-    custom && !generatedCustom ? custom.after : null,
+    custom && !customInSlot ? custom.after : null,
     withGenerate ? generateSlot : null
   )
   const currentKey: PictureFaceKey =
-    withGenerate && (onGenerate || (showingCustom && generatedCustom))
+    withGenerate && (onGenerate || (showingCustom && customInSlot))
       ? GENERATE_FACE
       : showingCustom
         ? CUSTOM_FACE
@@ -230,32 +240,34 @@ export function BotPicturePicker({
         ? { key, src: custom?.src ?? null, fallback: custom?.fallback ?? '' }
         : { key, src: srcs[key], fallback: '' }
   )
-  // Every picture an intake takes, shared or not and even the same image again, leaves Generate.
+  // Every picture an intake takes, shared or not and even the same image again, leaves Generate and
+  // wins the slot back from a picture made earlier.
   const [seenTaken, setSeenTaken] = useState(intake.taken)
   if (intake.taken !== seenTaken) {
     setSeenTaken(intake.taken)
     setOnGenerate(false)
+    face.supersede()
   }
   const { line } = intake
   const dropping = line.kind === 'drop'
   const select = (key: PictureFaceKey | undefined): void => {
     // Choosing a picture is the newest action, so one still being read is dropped. Browsing onto an
     // empty Generate face chooses nothing, and a picture still being read lands as usual.
-    const chooses = key !== undefined && (key !== GENERATE_FACE || face.result !== null)
+    const chooses = key !== undefined && (key !== GENERATE_FACE || face.picture !== null)
     if (chooses || line.kind === 'error') {
       intake.dismiss()
     }
     setOnGenerate(key === GENERATE_FACE)
     face.setEditing(false)
-    if (key === GENERATE_FACE && !face.result && byPointer.current) {
+    if (key === GENERATE_FACE && !face.picture && byPointer.current) {
       face.focusField(false)
     }
     if (key === GENERATE_FACE) {
-      // Its picture, if one was made, becomes the bot's picture again.
-      if (face.result && generatedCustom) {
+      // The slot's picture becomes the bot's picture again; one made while away is applied now.
+      if (face.made && !isGeneratedCustom(custom?.src, face.made.png)) {
+        onUpload(face.made.png, -1)
+      } else if (face.picture) {
         onChange({ kind: 'custom' })
-      } else if (face.result) {
-        onUpload(face.result.png, -1)
       }
     } else if (key === CUSTOM_FACE) {
       onChange({ kind: 'custom' })
@@ -268,6 +280,11 @@ export function BotPicturePicker({
       line={line}
       onUndo={() => {
         intake.dismiss()
+        face.supersede()
+        // An undo isn't an intake turn, so a run still going is stopped here instead.
+        if (face.run.kind === 'running') {
+          face.cancel()
+        }
         onUndo?.()
       }}
     >
@@ -344,6 +361,8 @@ export function BotPicturePicker({
       {withGenerate ? (
         <BotPictureRowFold open={generating}>
           <GenerateField face={face} />
+          {/* A picture just taken in lands in this slot: its Undo or error stays in reach. */}
+          <BotPictureRowFold open={line.kind !== 'hint'}>{uploadLine}</BotPictureRowFold>
         </BotPictureRowFold>
       ) : null}
       <input

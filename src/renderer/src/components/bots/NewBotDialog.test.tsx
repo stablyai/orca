@@ -53,8 +53,13 @@ vi.mock('./BotAgentLaunchPicker', () => ({
 }))
 
 import { NewBotDialog } from './NewBotDialog'
+import {
+  resetAvatarCapabilityForTest,
+  seedAvatarCapabilityForTest
+} from './avatar-generation-capability-store'
 
 afterEach(() => {
+  resetAvatarCapabilityForTest()
   cleanup()
   vi.clearAllMocks()
   mocks.squareAvatarPng.mockImplementation(async () => 'UE5H')
@@ -515,6 +520,7 @@ describe('NewBotDialog Generate and an upload', () => {
         cancel: async () => {}
       }
     })
+    seedAvatarCapabilityForTest([{ agent: 'codex', status: 'ready' }])
     // The upload is read slowly; the generated picture at once.
     mocks.squareAvatarPng.mockImplementation((blob: Blob) =>
       blob instanceof File

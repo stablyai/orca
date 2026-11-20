@@ -8,6 +8,11 @@ import { botFallback } from '../../../../../shared/bots/bot-avatar-fallback'
 import { useTranslate } from '@/i18n/use-translate'
 import { readBotAvatarPng, uploadBotAvatar } from '@/lib/bot-catalog'
 import {
+  generatedPictureDescription,
+  keepSavedPictureDescription,
+  useSavedPictureDescription
+} from '@/components/bots/generated-avatar-descriptions'
+import {
   isUploadAvatar,
   mascotAvatar,
   parseBotAvatar,
@@ -98,6 +103,11 @@ export function useBotPictureSetting(
     avatar: kept?.png ? null : (kept?.avatar ?? null)
   })
   const src = kept?.png ? `${PNG_DATA_URL_PREFIX}${kept.png}` : keptSrc
+  const savedDescription = useSavedPictureDescription({
+    id: bot.id,
+    hostId: bot.hostId,
+    avatar: kept?.avatar ?? null
+  })
 
   // The save loop reads these between awaits, so they live in a ref.
   const loop = useRef<SaveLoop>({
@@ -144,6 +154,7 @@ export function useBotPictureSetting(
     }
     try {
       const saved = await uploadBotAvatar(bot, png)
+      keepSavedPictureDescription(saved, png)
       if (live.kept?.id === target.id) {
         setKept({ ...target, avatar: saved.avatar, replaced: undefined })
       }
@@ -315,10 +326,13 @@ export function useBotPictureSetting(
       src,
       fallback: botFallback({ name: bot.name, avatar: kept.avatar }),
       after: kept.after,
+      // A generated picture's caption is the description that made it.
       description:
-        kept.png || isUploadAvatar(kept.avatar)
+        generatedPictureDescription(kept.png) ??
+        (kept.png ? null : savedDescription) ??
+        (kept.png || isUploadAvatar(kept.avatar)
           ? t('bots.new.pictureUpload', 'Your image')
-          : t('settings.bots.pictureCurrent', 'Current picture')
+          : t('settings.bots.pictureCurrent', 'Current picture'))
     },
     pick,
     upload,

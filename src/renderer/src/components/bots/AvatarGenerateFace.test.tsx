@@ -8,14 +8,26 @@ import type {
   AvatarGenerationApi,
   AvatarImageAgentStatus
 } from '../../../../shared/avatar-generation/avatar-generation-contract'
-import { GenerateField, GenerateFaceTile, useGenerateFace } from './AvatarGenerateFace'
+import {
+  GenerateField,
+  GenerateFaceTile,
+  useGenerateFace,
+  type SlotPicture
+} from './AvatarGenerateFace'
 import type { GeneratedAvatar } from './use-avatar-generation'
+import { resetAvatarCapabilityForTest } from './avatar-generation-capability-store'
 
 // The real crop draws on a canvas, which happy-dom lacks.
 vi.mock('./bot-avatar-intake', () => ({ avatarPngFromBlob: async () => 'CROPPED' }))
 
-function Face({ onResult }: { onResult: (made: GeneratedAvatar) => void }): React.JSX.Element {
-  const face = useGenerateFace(onResult)
+function Face({
+  onResult,
+  applied = null
+}: {
+  onResult: (made: GeneratedAvatar) => void
+  applied?: SlotPicture | null
+}): React.JSX.Element {
+  const face = useGenerateFace(onResult, applied)
   return (
     <TooltipProvider>
       <GenerateFaceTile face={face} />
@@ -60,6 +72,7 @@ async function describeAndEnter(text: string): Promise<HTMLTextAreaElement> {
 
 describe('Generate face', () => {
   beforeEach(() => {
+    resetAvatarCapabilityForTest()
     Reflect.deleteProperty(window, 'api')
   })
   afterEach(cleanup)
@@ -97,6 +110,27 @@ describe('Generate face', () => {
     fireEvent.keyDown(box, { key: 'Escape' })
     expect(folded(box)).toBe(true)
     expect(onOpenChange).not.toHaveBeenCalled()
+  })
+
+  it('holds the picture in use in its slot until a new one is made', async () => {
+    stubAgents([CODEX], async () => ({ ok: true, agent: 'codex', image: IMAGE }))
+    render(
+      <Face
+        onResult={() => {}}
+        applied={{ src: 'data:image/png;base64,T0xE', description: 'Your image' }}
+      />
+    )
+    const slot = (): string | null =>
+      screen
+        .getByRole('button', { name: 'Edit description' })
+        .querySelector('img')
+        ?.getAttribute('src') ?? null
+    expect(slot()).toBe('data:image/png;base64,T0xE')
+    expect(screen.getByRole('button', { name: 'Your image' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Edit description' }))
+    await describeAndEnter('a fox astronaut')
+    await screen.findByRole('button', { name: 'a fox astronaut' })
+    expect(slot()).toBe('data:image/png;base64,CROPPED')
   })
 
   it('reopens the field from the description line too', async () => {
