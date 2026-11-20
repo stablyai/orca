@@ -73,10 +73,16 @@ export function registerNotificationSoundHandlers(store: Store): void {
 /** Plays the selected custom sound for an alert main delivered itself; the renderer owns audio. */
 export function playDeliveredSound(store: Store): void {
   const settings = store.getSettings().notifications
-  if (usesCustomNotificationSound(getEffectiveNotificationSoundId(settings))) {
-    getTrustedUIRendererWebContents()?.send(
-      'notifications:playDeliveredSound',
-      settings.customSoundVolume
-    )
+  const renderer = getTrustedUIRendererWebContents()
+  if (!renderer || !usesCustomNotificationSound(getEffectiveNotificationSoundId(settings))) {
+    return
+  }
+  const play = (): void =>
+    renderer.send('notifications:playDeliveredSound', settings.customSoundVolume)
+  // Why: a reloading page has no listener yet, so the sound waits for the page to load.
+  if (renderer.isLoading()) {
+    renderer.once('did-finish-load', play)
+  } else {
+    play()
   }
 }

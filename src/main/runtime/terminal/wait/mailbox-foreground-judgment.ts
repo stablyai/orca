@@ -1,6 +1,4 @@
 import { agentOf } from '../../../../shared/agent-hook-listener/presence/hook-process-root-evidence'
-import { tokenizeCommandLine } from '../../../../shared/agent-status/process/agent-command-line-entrypoint'
-import { classifyClaudeArgv } from '../../../../shared/agent-status/title/claude-cli-argv-classification'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import { findStoppedAgents } from '../../../../shared/agent-status/process/stopped-agent-process'
@@ -22,17 +20,6 @@ export function otherProgram(
     : 'unknown'
 }
 
-/** The interactive agent a process row runs, never a one-shot that cannot take mail.
- * Why agentOf: native installs exec a versioned binary (`…/claude/versions/2.1.0`) the bare recognizer misses.
- * Why Claude's grammar: print mode hides in short-flag clusters (`-pc`) the shared one-shot filter misses. */
-function mailAgentOf(command: string): string | undefined {
-  const agent = agentOf(command, false)
-  return agent === 'claude' &&
-    classifyClaudeArgv(tokenizeCommandLine(command).slice(1)) === 'headless'
-    ? undefined
-    : agent
-}
-
 /** Mail's read of an older daemon's terminal rows: the agent's own process in front, or a program standing in for a stopped one. */
 export async function judgeLegacyMailboxRows(
   rows: readonly ProcessTableRow[],
@@ -42,11 +29,12 @@ export async function judgeLegacyMailboxRows(
   onAgent?: (agent: TuiAgent, process?: MailboxAgentProcess) => void
 ): Promise<MailboxForeground> {
   const group = rows.find((row) => row.pid === rootPid)?.tpgid
+  // Why agentOf: native installs exec a versioned binary (`…/claude/versions/2.1.0`) the bare recognizer misses.
   const agentRow = rows.find((row) => {
-    const candidate = mailAgentOf(row.command)
+    const candidate = agentOf(row.command, false)
     return row.pgid === group && isTuiAgent(candidate) && (!agent || candidate === agent)
   })
-  const found = agentRow && mailAgentOf(agentRow.command)
+  const found = agentRow && agentOf(agentRow.command, false)
   if (agentRow && isTuiAgent(found)) {
     const startedAtMs = await readProcessStartTimeMs(agentRow.pid)
     onAgent?.(agent ?? found, startedAtMs === null ? undefined : { pid: agentRow.pid, startedAtMs })
