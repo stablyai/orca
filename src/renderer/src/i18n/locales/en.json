@@ -596,6 +596,9 @@
       "resetViewport": "Reset viewport size",
       "findOnPage": "Find on page",
       "profile": "Profile"
+    },
+    "loadStall": {
+      "waitingForHost": "Waiting for {{host}}…"
     }
   },
   "editor": {
