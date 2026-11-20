@@ -95,6 +95,11 @@ export class SessionHostPartitionOperations {
     )
   }
 
+  /** Whether a partition is saved for this host (local always is), without listing them all. */
+  hasWorkspaceSessionHost(hostId?: string | null): boolean {
+    return hasPersistedWorkspaceSession(this, resolveHostId(hostId))
+  }
+
   getWorkspaceSessionHostIds(): ExecutionHostId[] {
     const hostIds = new Set<ExecutionHostId>([LOCAL_EXECUTION_HOST_ID])
     for (const key of Object.keys(

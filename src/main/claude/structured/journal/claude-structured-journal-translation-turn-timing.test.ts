@@ -1,35 +1,9 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import type { AgentJournalItemBody } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
-import type {
-  StructuredAgentSessionAppendOptions,
-  StructuredAgentSessionEventSink
-} from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
+import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import { createClaudeJournalTranslator } from './claude-structured-journal-translation'
 import type { ClaudeStructuredSessionEvent } from '../lifecycle/claude-structured-session-event'
-
-type Append = {
-  identity: AgentJournalItemIdentity
-  body: AgentJournalItemBody
-  options: StructuredAgentSessionAppendOptions | undefined
-}
-
-function sinkState() {
-  const items: Append[] = []
-  const tombstones: AgentJournalItemIdentity[] = []
-  const sink: StructuredAgentSessionEventSink = {
-    appendItem: (identity, body, options) => items.push({ identity, body, options }),
-    appendTombstone: (identity) => tombstones.push(identity),
-    publish: vi.fn()
-  }
-  const lifecycle = () =>
-    items.flatMap((item) => {
-      const turn = readAgentJournalTurn(item.body)
-      return turn ? [{ ...turn, options: item.options }] : []
-    })
-  return { sink, items, tombstones, lifecycle }
-}
 
 function userTurn(uuid: string, observedAt?: number): ClaudeStructuredSessionEvent {
   return {
@@ -67,38 +41,21 @@ function sessionState(
   }
 }
 
-describe('the CLI session state ends a turn no result settled', () => {
-  it('settles the open turn on idle, with no verdict it was not given', () => {
-    const state = sinkState()
-    const translator = createClaudeJournalTranslator({ sink: state.sink })
-
-    translator.handle(userTurn('user-1', 1_000))
-    expect(state.lifecycle().at(-1)?.state).toBe('running')
-
-    translator.handle(sessionState('idle', 5_000))
-
-    expect(state.lifecycle().at(-1)).toMatchObject({
-      turnId: 'user-1',
-      state: 'completed',
-      completedAt: 5_000
-    })
-    expect(state.lifecycle().at(-1)?.outcome).toBeUndefined()
-  })
-})
-
 describe('Claude structured turn timing', () => {
-  afterEach(() => {
-    vi.useRealTimers()
-  })
-
-  it('interrupts the open turn at the receipt time of the turn that replaces it', () => {
-    const state = sinkState()
-    const translator = createClaudeJournalTranslator({ sink: state.sink })
+  it('settles replaced and resultless turns at the receipt time of the next event', () => {
+    const items: AgentJournalItemBody[] = []
+    const sink: StructuredAgentSessionEventSink = {
+      appendItem: (_identity, body) => items.push(body),
+      appendTombstone: () => {},
+      publish: () => {}
+    }
+    const translator = createClaudeJournalTranslator({ sink })
 
     translator.handle(userTurn('user-1', 1_000))
     translator.handle(userTurn('user-2', 3_000))
+    translator.handle(sessionState('idle', 5_000))
 
-    expect(state.lifecycle().map(({ options: _options, ...row }) => row)).toEqual([
+    expect(items.map(readAgentJournalTurn).filter(Boolean)).toEqual([
       { turnId: 'user-1', state: 'running', startedAt: 1_000, userItemId: USER_1_KEY },
       {
         turnId: 'user-1',
@@ -112,6 +69,13 @@ describe('Claude structured turn timing', () => {
         turnId: 'user-2',
         state: 'running',
         startedAt: 3_000,
+        userItemId: 'claude:claude-session:user-2'
+      },
+      {
+        turnId: 'user-2',
+        state: 'completed',
+        startedAt: 3_000,
+        completedAt: 5_000,
         userItemId: 'claude:claude-session:user-2'
       }
     ])
