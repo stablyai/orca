@@ -14,6 +14,7 @@ import {
 import type { WorktreeRemovalRecord } from './worktree-removal-records'
 import { areWorktreePathsEqual } from '../../git/worktrees/catalog/worktree-path-comparison'
 import { CLIENT_REMOVAL_HOME } from './worktree-removal-home-guard'
+import { listWorktreesStrict as listUncachedWorktreesStrict } from '../../git/worktrees/catalog/worktree-listing'
 import { failedWorktreeRemovals, worktreeCheckoutExists } from './worktree-removal-table'
 import { waitForWorktreeRemovalAcceptance } from './worktree-removal-settlement'
 import {
@@ -144,6 +145,25 @@ export async function assertUnregisteredLeftoverRemovable(
     throw unregisteredFolderRefusal(worktreePath)
   }
   return true
+}
+
+/** Deletion-time check: Git still doesn't register the path or anything inside it, and `.git` still proves it. */
+export async function isLeftoverStillRemovable(
+  repoPath: string,
+  record: WorktreeRemovalRecord,
+  localOptions: LocalProjectWorktreeGitOptions,
+  signal: AbortSignal
+): Promise<boolean> {
+  // Worktrees still being created count too: they hold files deletion must not touch.
+  const current = await listUncachedWorktreesStrict(repoPath, {
+    ...localOptions,
+    includeCreatePreparations: true,
+    signal
+  })
+  if (current.some((worktree) => areWorktreePathsEqual(worktree.path, record.worktreePath))) {
+    throw differentCheckoutAtPathError(record.worktreePath)
+  }
+  return assertUnregisteredLeftoverRemovable(repoPath, record.worktreePath, current, localOptions)
 }
 
 /** Registered paths use normal deletion; otherwise the folder must be gone or provably this repo's leftover. */

@@ -169,12 +169,19 @@ export async function removeUnregisteredLocalCheckout(
     }
     return
   }
-  await runWslCommand(
-    distro,
-    guestCommand(
-      targetPath,
-      (target) =>
-        `if [ -e ${target} ] || [ -L ${target} ]; then find ${target} -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf -- {} + && rm -f -- ${target}/.git && rmdir -- ${target}; fi`
+  try {
+    await runWslCommand(
+      distro,
+      guestCommand(
+        targetPath,
+        (target) =>
+          `LC_ALL=C find ${target} -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf -- {} + && rm -f -- ${target}/.git && LC_ALL=C rmdir -- ${target}`
+      )
     )
-  )
+  } catch (error) {
+    // Only a definitive "No such file" means done; permission errors must not read as removed.
+    if (!isWslMissingPathError(error)) {
+      throw error
+    }
+  }
 }

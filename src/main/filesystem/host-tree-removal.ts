@@ -90,9 +90,9 @@ export async function removeHostCheckout(
   }
 }
 
-// Only Windows folds case; elsewhere `.GIT` is ordinary content that must not outlive the marker.
+// Linux is case-sensitive, so `.GIT` there is ordinary content; Windows and macOS volumes usually fold case.
 function isCheckoutMarkerName(name: string): boolean {
-  return process.platform === 'win32' ? name.toLowerCase() === '.git' : name === '.git'
+  return process.platform === 'linux' ? name === '.git' : name.toLowerCase() === '.git'
 }
 
 export async function removeHostEmptyDirectory(targetPath: string): Promise<void> {
