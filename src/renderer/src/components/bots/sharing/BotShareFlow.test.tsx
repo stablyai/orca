@@ -7,6 +7,7 @@ import type { BotOwnedShare } from '../../../../../shared/bots/bot-share-status'
 import { useAppStore } from '@/store'
 import { ORCA_SIGNED_OUT, orcaSignIn } from '../orca-sign-in.test-fixture'
 import { BotSharingPage } from '../settings-view/BotSharingPage'
+import { BotSharePrepare } from '../../../../../shared/rpc-contract/bots-share-params'
 import { BotShareFlow } from './BotShareFlow'
 
 const calls = vi.hoisted(() => {
@@ -23,7 +24,8 @@ const calls = vi.hoisted(() => {
     statusReady,
     digest: 'digest',
     failMemory: false,
-    failStatus: false
+    failStatus: false,
+    memory: [{ topic: 'area-owners', lines: 3 }]
   }
 })
 
@@ -78,7 +80,7 @@ function candidate(id: string): BotShareCandidateSummary {
       schedules: [],
       eventSuggestions: [],
       tools: [],
-      memory: [{ topic: 'area-owners', lines: 3 }]
+      memory: calls.memory
     },
     automationIds: { schedules: [], eventSuggestions: [] },
     flags: [],
@@ -135,6 +137,7 @@ afterEach(() => {
   calls.last.value = undefined
   calls.expired.clear()
   calls.failMemory = false
+  calls.memory = [{ topic: 'area-owners', lines: 3 }]
   calls.failStatus = false
   calls.statusReady.promise = undefined
   calls.shares.length = 0
@@ -205,6 +208,36 @@ it('picks every memory file with Include memory, and All clears or picks them al
   fireEvent.click(screen.getByRole('button', { name: 'Preview area-owners' }))
   expect(await screen.findByRole('button', { name: 'Memory' })).toBeDefined()
 })
+
+it.each([64, 65])(
+  'turns memory and All on for %i files within what a share can carry',
+  async (count) => {
+    calls.memory = Array.from({ length: count }, (_, index) => ({ topic: `m${index}`, lines: 1 }))
+    const preparedMemory = () => {
+      const params = calls.rpc.findLast(({ method }) => method === 'bots.share.prepare')?.params
+      // What the runtime would accept: the real params schema, not the mock.
+      const parsed = BotSharePrepare.safeParse(params)
+      expect(parsed.success).toBe(true)
+      return parsed.data?.memory
+    }
+    render(<BotShareFlow bot={bot} link={null} onClose={() => {}} />)
+    fireEvent.click(await screen.findByRole('switch', { name: 'Include memory' }))
+    await waitFor(() => expect(preparedMemory()).toHaveLength(64))
+    const all = screen.getByRole('switch', { name: 'All' })
+    expect(all.getAttribute('aria-checked')).toBe('true')
+
+    fireEvent.click(all)
+    fireEvent.click(all)
+    await waitFor(() => expect(preparedMemory()).toHaveLength(64))
+    // Past the limit, the files left over wait until one picked file goes.
+    expect(screen.getByRole('checkbox', { name: 'm63' }).hasAttribute('disabled')).toBe(false)
+    if (count > 64) {
+      expect(screen.getByRole('checkbox', { name: 'm64' }).hasAttribute('disabled')).toBe(true)
+      fireEvent.click(screen.getByRole('checkbox', { name: 'm0' }))
+      expect(screen.getByRole('checkbox', { name: 'm64' }).hasAttribute('disabled')).toBe(false)
+    }
+  }
+)
 
 it('leads with Done when the link already serves the bot as it is', async () => {
   render(<BotShareFlow bot={bot} link={link('digest')} onClose={() => {}} />)

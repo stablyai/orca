@@ -28596,6 +28596,7 @@
       "memory": "Memory",
       "all": "All",
       "previewFile": "Preview {{name}}",
+      "memoryLimit": "Up to {{count}} files",
       "linkCopied": "Link copied",
       "stopped": "Stopped sharing {{name}}",
       "webhookNotShared": "Webhook · not shared",

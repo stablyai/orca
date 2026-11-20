@@ -107,6 +107,7 @@ export function BotShareMemoryRow({
   name,
   lines,
   checked,
+  disabled = false,
   flags,
   onChange,
   onPreview
@@ -114,6 +115,8 @@ export function BotShareMemoryRow({
   name: string
   lines: number
   checked: boolean
+  /** Unpickable: the share already carries as many files as it can. */
+  disabled?: boolean
   flags: { kind: 'secret' | 'warning'; text: string }[]
   onChange: (on: boolean) => void
   onPreview: () => void
@@ -124,15 +127,17 @@ export function BotShareMemoryRow({
   const flagText = flags.map((entry) => entry.text).join(', ')
   return (
     <div
-      onClick={() => onChange(!checked)}
-      className="group/row flex h-8 cursor-pointer items-center gap-2.5 rounded-md px-2 text-sm select-none hover:bg-accent/60 has-[:focus-visible]:bg-accent/60"
+      onClick={() => !disabled && onChange(!checked)}
+      className={cn(
+        'group/row flex h-8 items-center gap-2.5 rounded-md px-2 text-sm select-none hover:bg-accent/60 has-[:focus-visible]:bg-accent/60',
+        disabled ? 'text-muted-foreground' : 'cursor-pointer'
+      )}
     >
       <Checkbox
         checked={checked}
+        disabled={disabled}
         aria-label={name}
         aria-describedby={flag ? flagId : undefined}
-        // On the muted card an unticked box needs a firmer edge in the light theme.
-        className="data-[state=unchecked]:border-foreground/25 dark:data-[state=unchecked]:border-muted-foreground/60"
         // The line's own click ticks it; the box must not tick twice.
         onClick={(event) => event.stopPropagation()}
         onCheckedChange={(value) => onChange(value === true)}

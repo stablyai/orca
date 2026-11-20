@@ -18,6 +18,7 @@ import { cn } from '@/lib/class-names'
 import { SettingsInsetGroup } from '../settings-view/BotSettingsRows'
 import { botShareCheckSummary } from './bot-share-flags'
 import {
+  allMemory,
   pickedOf,
   type BotShareContext,
   type BotShareList,
@@ -231,7 +232,7 @@ export function BotShareOverview({ ctx }: { ctx: BotShareContext }): React.JSX.E
               aria-label={t('bots.share.includeMemory', 'Include memory')}
               onCheckedChange={(on) => {
                 // On sends every file; the list that opens is for leaving some out.
-                ctx.select({ memory: on ? available.memory.map((note) => note.topic) : undefined })
+                ctx.select({ memory: on ? allMemory(available.memory) : undefined })
                 if (on) {
                   ctx.open({ kind: 'list', list: 'memory' })
                 }
