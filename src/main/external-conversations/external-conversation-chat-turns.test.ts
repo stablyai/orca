@@ -291,14 +291,16 @@ describe('questions of a bot turn typed in Orca (10:27Z regression)', () => {
     conversation: { source: 'slack', externalId: 'T1:D7:U9' },
     deliveryId: 'd1'
   }
+  // A success reads only whom the turn acts for; a failure reads the whole turn for its reason.
   it.each([
-    ['first adopted', false, 'success', [], 'someone_else'],
-    ['first adopted', false, 'failure', [steered], undefined],
-    ['first adopted', false, 'success', [steered], undefined],
-    ['re-adopted after a restart', true, 'success', [steered], undefined]
+    ['first adopted', false, 'success', [], true, 'someone_else'],
+    ['first adopted', false, 'failure', [steered], false, undefined],
+    ['first adopted', false, 'success', [steered], true, undefined],
+    ['re-adopted after a restart', true, 'success', [steered], true, undefined],
+    ['first adopted', false, 'success', [], false, 'someone_else']
   ] as const)(
-    'reads whom a turn %s (restarted: %s, %s, stamps %j) acts for from its journal',
-    async (_, restarted, outcome, stamps, turnFor) => {
+    'reads whom a turn %s (restarted: %s, %s, stamps %j, attribution read: %s) acts for from its journal',
+    async (_, restarted, outcome, stamps, attributed, turnFor) => {
       // The restart forgot any delivery steered in; only the journal's stamps still show it.
       const h = mailStartedBot('bot-chat')
       let turns = h.create()
@@ -315,7 +317,11 @@ describe('questions of a bot turn typed in Orca (10:27Z regression)', () => {
         sessionId: SESSION,
         outcome,
         at: 600,
-        readTurn: async () => ({ ...(await h.end('Done.')()), stamps: [...stamps] })
+        readTurn: async () =>
+          outcome === 'failure' ? { ...(await h.end('Done.')()), stamps: [...stamps] } : {},
+        ...(attributed
+          ? { readAttribution: async () => ({ ...(await h.end('Done.')()), stamps: [...stamps] }) }
+          : {})
       })
       await vi.waitFor(() =>
         expect(h.events.at(-1)).toMatchObject({ kind: 'turn-ended', origin: 'local' })
@@ -383,7 +389,8 @@ describe('an Orca-typed turn in a chat that posts to its Slack thread', () => {
           sequence: 1,
           observedAt: 1,
           body: { kind: 'message', role: 'user', blocks: [] }
-        }
+        },
+        stamps: []
       })
     })
     return events
@@ -453,7 +460,7 @@ describe('a turn its conversation heard across a host restart', () => {
     connectorConversation: { source: 'slack', externalId: link.externalId }
   }
 
-  async function turnForAfterRestart(opener: AgentJournalRenderItem['body']) {
+  async function turnForAfterRestart(opener: AgentJournalRenderItem['body'] | null) {
     // The restarted host remembers no delivery; only the chat's journal survived.
     const deliveries = new ChatDeliveries(() => {})
     const events: ConversationEvent[] = []
@@ -494,10 +501,15 @@ describe('a turn its conversation heard across a host restart', () => {
       sessionId: SESSION,
       outcome: 'success',
       at: 5,
-      readTurn: async () => ({
-        lastAssistantMessage: 'Done.',
-        opener: { itemId: 'm1', revision: 0, sequence: 1, observedAt: 1, body: opener }
-      })
+      // null: the journal couldn't be read, so nothing is proven.
+      readTurn: async () =>
+        opener
+          ? {
+              lastAssistantMessage: 'Done.',
+              opener: { itemId: 'm1', revision: 0, sequence: 1, observedAt: 1, body: opener },
+              stamps: []
+            }
+          : { lastAssistantMessage: 'Done.' }
     })
     await vi.waitFor(() => expect(events).toHaveLength(1))
     const [ended] = events
@@ -510,5 +522,9 @@ describe('a turn its conversation heard across a host restart', () => {
 
   it('still says the owner for a turn the journal shows the owner typed', async () => {
     expect(await turnForAfterRestart({ kind: 'message', role: 'user', blocks: [] })).toBe('owner')
+  })
+
+  it('never says the owner for a turn whose journal proves nothing', async () => {
+    expect(await turnForAfterRestart(null)).toBe('someone_else')
   })
 })

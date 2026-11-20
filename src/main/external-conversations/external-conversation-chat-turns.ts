@@ -322,8 +322,7 @@ export class ChatTurns {
       if (!heard && !reported) {
         // No one in the thread asked: a bot's turn Orca raised tells how it went, never what it said.
         if (linked.link.bot && promptRaisedBy(linked.link, turn.opener ?? null) === 'orca') {
-          const read = { ...end, news: { ...news, readTurn: async () => turn } }
-          endAdoptedTurn(read, this.deps.promptsAudience)
+          endAdoptedTurn(end, this.deps.promptsAudience, turn)
         }
         return
       }

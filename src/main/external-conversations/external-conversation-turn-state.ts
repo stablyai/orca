@@ -42,25 +42,34 @@ export function conversationWorking(row: AgentStatusIpcPayload | null): boolean 
 /** Whom an ended chat turn acts for, as its final post tells Orca Cloud: none for a delivery's turn,
  *  whose person the cloud reads from its own record; else the owner only when Orca recorded that the
  *  conversation acts for them (bot-turn-for.ts says why). A delivery is remembered only until a
- *  restart, so a "local" turn also needs its journal to show Orca began it; unproven, it says none. */
+ *  restart, so the journal must also prove Orca began the turn; unproven, it is someone else's, as a
+ *  failed read in bot-turn-for.ts is, never the owner's. */
 export function chatTurnFor(
   origin: ConnectorTurnOrigin,
   actsFor: ConnectorActsFor | undefined
 ): (turn: Pick<EndedChatTurn, 'opener' | 'stamps'>) => { turnFor?: ConnectorTurnFor } {
-  return (turn) =>
-    origin === 'delivery' || !journalShowsLocalTurn(turn)
-      ? {}
-      : { turnFor: actsFor === 'owner' ? 'owner' : 'someone_else' }
+  return (turn) => {
+    const opened = origin === 'delivery' ? 'delivery' : journalTurnOpening(turn)
+    if (opened === 'delivery') {
+      return {}
+    }
+    return { turnFor: opened === 'local' && actsFor === 'owner' ? 'owner' : 'someone_else' }
+  }
 }
 
-/** A message no connector sent opened the turn, and it answered no delivery. */
-function journalShowsLocalTurn({ opener, stamps }: Pick<EndedChatTurn, 'opener' | 'stamps'>) {
+/** What the turn's journal proves began it: a delivery (a connector's message opened it or it
+ *  answered one), Orca (any other message opened it and it answered none), or nothing it can read. */
+function journalTurnOpening({
+  opener,
+  stamps
+}: Pick<EndedChatTurn, 'opener' | 'stamps'>): 'delivery' | 'local' | 'unknown' {
   const body = opener?.body
-  return (
-    body?.kind === 'message' &&
-    body.origin !== 'connector' &&
-    !body.connectorDelivery &&
-    !body.connectorConversation &&
-    !stamps?.length
-  )
+  if (
+    stamps?.length ||
+    (body?.kind === 'message' &&
+      (body.origin === 'connector' || body.connectorDelivery || body.connectorConversation))
+  ) {
+    return 'delivery'
+  }
+  return body?.kind === 'message' && stamps ? 'local' : 'unknown'
 }

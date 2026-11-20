@@ -25,10 +25,21 @@ export type ChatTurnEnd = {
   current: () => boolean
 }
 
-/** An adopted turn's end: how it went, never what it said or the links its work opened. */
-export function endAdoptedTurn(end: ChatTurnEnd, promptsAudience: () => boolean): void {
+/** An adopted turn's end: how it went, never what it said or the links its work opened. A success
+ *  reads only whom it acts for (by index); without that read it proves nothing. `read`: the turn
+ *  already read in full. */
+export function endAdoptedTurn(
+  end: ChatTurnEnd,
+  promptsAudience: () => boolean,
+  read?: EndedChatTurn
+): void {
   const failed = end.news.outcome === 'failure'
-  void end.news.readTurn().then(async (turn) => {
+  const reading: Promise<EndedChatTurn> = read
+    ? Promise.resolve(read)
+    : failed
+      ? end.news.readTurn()
+      : (end.news.readAttribution?.() ?? Promise.resolve({}))
+  void reading.then(async (turn) => {
     if (!end.current()) {
       return
     }
