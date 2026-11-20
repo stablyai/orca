@@ -103,14 +103,11 @@ const acpRegistryLookup = hourly('ACP registry', acpRegistryVersions)
 
 async function refreshClaudeLatest(): Promise<string | null> {
   // Shares Orca's own Claude lookup, which follows the user's update channel.
-  const signal = AbortSignal.timeout(RELEASE_LOOKUP_TIMEOUT_MS)
-  // A lookup already in flight ignores this signal, so the wait is bounded here as well.
-  await Promise.race([
-    CLAUDE_MANAGED_RUNTIME.refreshPin?.(signal).catch((error: unknown) => {
+  await CLAUDE_MANAGED_RUNTIME.refreshPin?.(AbortSignal.timeout(RELEASE_LOOKUP_TIMEOUT_MS)).catch(
+    (error: unknown) => {
       console.warn('[agent-cli-update] Claude release lookup failed:', error)
-    }),
-    new Promise((resolve) => signal.addEventListener('abort', resolve, { once: true }))
-  ])
+    }
+  )
   return CLAUDE_MANAGED_RUNTIME.pin()?.version ?? null
 }
 
