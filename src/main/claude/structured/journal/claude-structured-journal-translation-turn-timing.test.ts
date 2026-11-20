@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import type { AgentSessionPromptSuggestion } from '../../../../shared/agent-session/agent-session-wire'
 import type { AgentJournalItemBody } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
@@ -79,5 +80,52 @@ describe('Claude structured turn timing', () => {
         userItemId: 'claude:claude-session:user-2'
       }
     ])
+  })
+
+  it('publishes suggestions between turns and ignores them once the next send starts', () => {
+    const suggestions: (AgentSessionPromptSuggestion | null)[] = []
+    const journal: AgentJournalItemBody[] = []
+    const translator = createClaudeJournalTranslator({
+      sink: {
+        appendItem: (_identity, body) => journal.push(body),
+        appendTombstone: () => {},
+        publish: () => {},
+        setPromptSuggestion: (suggestion) => suggestions.push(suggestion)
+      }
+    })
+    const handleMessage = (
+      message: Record<string, unknown>,
+      pending?: { clientMessageId: string }
+    ) =>
+      translator.handle({
+        type: 'message',
+        sessionId: 'orca-session',
+        message: { session_id: 'claude-session', ...message },
+        ...(pending && { startedSend: pending })
+      })
+
+    translator.handle(userTurn('user-1'))
+    handleMessage({
+      type: 'result',
+      uuid: 'result-1',
+      subtype: 'success',
+      duration_ms: 1200,
+      duration_api_ms: 1100,
+      num_turns: 1,
+      is_error: false,
+      stop_reason: 'end_turn',
+      terminal_reason: 'completed'
+    })
+    const beforeSuggestion = journal.slice()
+    handleMessage({ type: 'prompt_suggestion', uuid: 's-1', suggestion: '  add a test for it ' })
+    handleMessage(
+      { type: 'prompt_suggestion', uuid: 's-2', suggestion: 'stale' },
+      { clientMessageId: 'send-2' }
+    )
+    expect(journal).toEqual(beforeSuggestion)
+
+    translator.handle(userTurn('user-2'))
+    handleMessage({ type: 'prompt_suggestion', uuid: 's-3', suggestion: 'also stale' })
+    expect(suggestions).toEqual([null, { id: 's-1', text: 'add a test for it' }, null])
   })
 })
