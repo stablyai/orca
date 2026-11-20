@@ -17751,7 +17751,8 @@
           "createIdempotencyUpdateRequired": "將自動化移至此主機需要較新版本的 Orca 伺服器。請更新 HUB 後再試一次。"
         },
         "editDraft": {
-          "unsupportedSchedule": "此自動化儲存的排程不受支援。請在儲存變更前選擇支援的排程。"
+          "unsupportedSchedule": "此自動化儲存的排程不受支援。請在儲存變更前選擇支援的排程。",
+          "savedScheduleRefused": "此儲存的排程無法執行：{{reason}}"
         },
         "hostCatalog": {
           "orphanEntryLabel": "未指派的舊版自動化"
@@ -22948,6 +22949,9 @@
         "effortRepeated": "額外引數重複設定了推理強度。"
       },
       "hostUpdateRequired": "請更新此主機上的 Orca 以使用額外引數。"
+    },
+    "scheduleRules": {
+      "hostUpdateRequired": "此主機上的 Orca 版本過舊，無法使用此排程。請更新該主機上的 Orca。"
     },
     "setupTrust": {
       "reviewTitle": "要核准此自動化的新設定命令嗎？",

@@ -127,6 +127,7 @@ export const AUTOMATION_HANDLERS: Record<string, CommandHandler> = {
     const schedule = getCreateScheduleFlag(flags, on, once)
     const bot = await getBotTargetFlags(flags, client, on, schedule, once)
     if (bot) {
+      await assertAutomationFieldsSupported(client, schedule)
       const saved = await createBotAutomation(client, flags, bot, schedule, on, once)
       printSavedAutomation(saved, json, on)
       return

@@ -19490,7 +19490,8 @@
           "createIdempotencyUpdateRequired": "Moving automations to this host requires a newer Orca server. Update the HUB and try again."
         },
         "editDraft": {
-          "unsupportedSchedule": "This automation has an unsupported saved schedule. Pick a supported schedule before saving changes."
+          "unsupportedSchedule": "This automation has an unsupported saved schedule. Pick a supported schedule before saving changes.",
+          "savedScheduleRefused": "This saved schedule can't run: {{reason}}"
         },
         "hostCatalog": {
           "orphanEntryLabel": "Unassigned legacy automations"
@@ -26571,6 +26572,9 @@
         "effortRepeated": "Extra arguments set the effort more than once."
       },
       "hostUpdateRequired": "Update Orca on this host to use extra arguments."
+    },
+    "scheduleRules": {
+      "hostUpdateRequired": "This host's Orca is too old for this schedule. Update Orca on that host."
     },
     "setupTrust": {
       "reviewTitle": "Approve the new setup commands for this automation?",

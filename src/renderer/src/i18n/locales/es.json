@@ -17710,7 +17710,8 @@
           "createIdempotencyUpdateRequired": "Mover automatizaciones a este host requiere un servidor de Orca más reciente. Actualiza el HUB y vuelve a intentarlo."
         },
         "editDraft": {
-          "unsupportedSchedule": "Esta automatización tiene una programación guardada no compatible. Elige una programación compatible antes de guardar los cambios."
+          "unsupportedSchedule": "Esta automatización tiene una programación guardada no compatible. Elige una programación compatible antes de guardar los cambios.",
+          "savedScheduleRefused": "Esta programación guardada no se puede ejecutar: {{reason}}"
         },
         "hostCatalog": {
           "orphanEntryLabel": "Automatizaciones antiguas sin asignar"
@@ -23753,6 +23754,9 @@
         "effortRepeated": "Los argumentos adicionales establecen el esfuerzo más de una vez."
       },
       "hostUpdateRequired": "Actualiza Orca en este host para usar argumentos adicionales."
+    },
+    "scheduleRules": {
+      "hostUpdateRequired": "La versión de Orca de este host es demasiado antigua para esta programación. Actualiza Orca en ese host."
     },
     "setupTrust": {
       "reviewTitle": "¿Aprobar los nuevos comandos de configuración de esta automatización?",

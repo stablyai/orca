@@ -18137,7 +18137,8 @@
           "createIdempotencyUpdateRequired": "Otomasyonları bu sunucuya taşımak için daha yeni bir Orca sunucusu gerekir. HUB'ı güncelleyip yeniden deneyin."
         },
         "editDraft": {
-          "unsupportedSchedule": "Bu otomasyonun kayıtlı zamanlaması desteklenmiyor. Değişiklikleri kaydetmeden önce desteklenen bir zamanlama seçin."
+          "unsupportedSchedule": "Bu otomasyonun kayıtlı zamanlaması desteklenmiyor. Değişiklikleri kaydetmeden önce desteklenen bir zamanlama seçin.",
+          "savedScheduleRefused": "Bu kayıtlı zamanlama çalıştırılamaz: {{reason}}"
         },
         "hostCatalog": {
           "orphanEntryLabel": "Atanmamış eski otomasyonlar"
@@ -23429,6 +23430,9 @@
         "effortRepeated": "Ek argümanlar çabayı birden fazla kez belirtiyor."
       },
       "hostUpdateRequired": "Ek argümanları kullanmak için bu ana makinedeki Orca'yı güncelleyin."
+    },
+    "scheduleRules": {
+      "hostUpdateRequired": "Bu ana makinedeki Orca bu zamanlama için çok eski. O ana makinedeki Orca'yı güncelleyin."
     },
     "setupTrust": {
       "reviewTitle": "Bu otomasyonun yeni kurulum komutları onaylansın mı?",

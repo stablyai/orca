@@ -15088,7 +15088,8 @@
           "createIdempotencyUpdateRequired": "Mover automações para este host exige um servidor Orca mais recente. Atualize o HUB e tente novamente."
         },
         "editDraft": {
-          "unsupportedSchedule": "Esta automação tem um agendamento salvo não compatível. Escolha um agendamento compatível antes de salvar as alterações."
+          "unsupportedSchedule": "Esta automação tem um agendamento salvo não compatível. Escolha um agendamento compatível antes de salvar as alterações.",
+          "savedScheduleRefused": "Este agendamento salvo não pode ser executado: {{reason}}"
         },
         "hostCatalog": {
           "orphanEntryLabel": "Automações antigas não atribuídas"
@@ -24312,6 +24313,9 @@
         "effortRepeated": "Os argumentos extras definem o esforço mais de uma vez."
       },
       "hostUpdateRequired": "Atualize o Orca neste host para usar argumentos extras."
+    },
+    "scheduleRules": {
+      "hostUpdateRequired": "O Orca deste host é antigo demais para esta programação. Atualize o Orca nesse host."
     },
     "setupTrust": {
       "reviewTitle": "Aprovar os novos comandos de configuração desta automação?",

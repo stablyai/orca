@@ -11,7 +11,7 @@ const RANGER = {
   slack: { appId: 'A1', teamId: 'T1' }
 }
 
-function host(automations: { id: string }[] = []) {
+function host(automations: { id: string }[] = [], capabilities: string[] = []) {
   const writes: { method: string; params: unknown }[] = []
   const call = vi.fn(async (method: string, params?: unknown) => {
     const ok = (result: unknown) => ({
@@ -22,7 +22,7 @@ function host(automations: { id: string }[] = []) {
     })
     switch (method) {
       case 'status.get':
-        return ok({ capabilities: [] })
+        return ok({ capabilities })
       case 'bots.list':
         return ok({ bots: [RANGER] })
       case 'automation.show': {
@@ -85,6 +85,41 @@ describe('orca automations --timezone', () => {
     expect(writes[2]?.params).toMatchObject({
       updates: { timezone: 'Asia/Tokyo', timezoneExplicit: true }
     })
+  })
+})
+
+describe('orca automations schedule rules', () => {
+  const BIWEEKLY = 'FREQ=WEEKLY;INTERVAL=2;BYDAY=WE;BYHOUR=11;BYMINUTE=0'
+
+  it('refuses an interval rule to a host without the capability', async () => {
+    const { client, writes } = host()
+    await expect(
+      run('automations create', client, [...BOT_CREATE, ['trigger', BIWEEKLY]])
+    ).rejects.toThrow("This host's Orca is too old for this schedule.")
+    await expect(
+      run('automations edit', client, [
+        ['id', 'a1'],
+        ['trigger', BIWEEKLY]
+      ])
+    ).rejects.toThrow("This host's Orca is too old for this schedule.")
+    expect(writes).toEqual([])
+  })
+
+  it('writes it to a host with the capability', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => undefined)
+    const { client, writes } = host([], ['automations.schedule-rules.v1'])
+    await run('automations create', client, [...BOT_CREATE, ['trigger', BIWEEKLY]])
+    expect(writes[0]?.params).toMatchObject({ rrule: BIWEEKLY })
+  })
+
+  it('names the refused part', async () => {
+    const { client } = host()
+    await expect(
+      run('automations create', client, [
+        ...BOT_CREATE,
+        ['trigger', 'FREQ=WEEKLY;WKST=SU;BYDAY=WE']
+      ])
+    ).rejects.toThrow('"WKST"')
   })
 })
 

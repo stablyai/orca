@@ -17979,7 +17979,8 @@
           "createIdempotencyUpdateRequired": "Le déplacement d’automatisations vers cet hôte nécessite un serveur Orca plus récent. Mettez le HUB à jour et réessayez."
         },
         "editDraft": {
-          "unsupportedSchedule": "Cette automatisation a une planification enregistrée non prise en charge. Choisissez une planification prise en charge avant d’enregistrer les modifications."
+          "unsupportedSchedule": "Cette automatisation a une planification enregistrée non prise en charge. Choisissez une planification prise en charge avant d’enregistrer les modifications.",
+          "savedScheduleRefused": "Cette planification enregistrée ne peut pas s’exécuter : {{reason}}"
         },
         "hostCatalog": {
           "orphanEntryLabel": "Anciennes automatisations non assignées"
@@ -23774,6 +23775,9 @@
         "effortRepeated": "Les arguments supplémentaires définissent l’effort plusieurs fois."
       },
       "hostUpdateRequired": "Mettez à jour Orca sur cet hôte pour utiliser des arguments supplémentaires."
+    },
+    "scheduleRules": {
+      "hostUpdateRequired": "La version d’Orca sur cet hôte est trop ancienne pour cette planification. Mettez à jour Orca sur cet hôte."
     },
     "setupTrust": {
       "reviewTitle": "Approuver les nouvelles commandes de configuration de cette automatisation ?",
