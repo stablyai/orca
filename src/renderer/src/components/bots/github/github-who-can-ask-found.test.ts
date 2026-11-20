@@ -40,6 +40,8 @@ const answer = (
   query = 'brennan',
   producer: 'local' | 'remote' = 'local'
 ) => gitHubWhoCanAskAnswer({ roster, exact, query, ownerLogin: 'owner', scope, producer }, t)
+// A read list's note starts with the line dating it; `after` is the rest, line by line.
+const after = (note: string | undefined) => note?.split('\n').slice(1).join('\n') || undefined
 const value = (result: ReturnType<typeof answer>) => {
   if (!result.ok) {
     throw new Error(result.error)
@@ -68,43 +70,43 @@ describe('the GitHub picker’s reading of a search', () => {
 
   it('names only the kinds of source that were read', () => {
     const labels = (from: Read['from']) => value(answer(read({ from }), found)).labels
-    // Each list is dated from the first search on, and an absence refers to that list.
-    expect(labels({ repositories: true, organizations: false })?.scoped).toMatch(
-      /^Your repos as of (2:05\s?PM|Nov 19)$/
-    )
+    // The note dates the list; the heading names it, and an absence refers to it.
+    expect(labels({ repositories: true, organizations: false })?.scoped).toBe('Your repos')
     expect(labels({ repositories: false, organizations: true })).toEqual({
-      scoped: expect.stringMatching(/^Your orgs as of /),
+      scoped: 'Your orgs',
       outsideTag: 'Not in your repo list'
     })
-    expect(labels({ repositories: true, organizations: true })?.scoped).toMatch(
-      /^Your repos and orgs as of /
-    )
+    expect(labels({ repositories: true, organizations: true })?.scoped).toBe('Your repos and orgs')
   })
 
   it('explains each kind of fixed cut, and an omission, without advising typing', () => {
     const note = (more: Partial<Read>) => value(answer(read(more), none, 'zed')).note
-    expect(note({ cut: { ...noCut, people: true } })).toBe('Showing the first 100 people per repo.')
-    expect(note({ cut: { ...noCut, members: true } })).toBe(
+    expect(after(note({ cut: { ...noCut, people: true } }))).toBe(
+      'Showing the first 100 people per repo.'
+    )
+    expect(after(note({ cut: { ...noCut, members: true } }))).toBe(
       'Showing the first 100 members per org.'
     )
-    expect(note({ cut: { ...noCut, repositories: true } })).toBe(
+    expect(after(note({ cut: { ...noCut, repositories: true } }))).toBe(
       'Only your 5 latest repos were read.'
     )
-    expect(note({ cut: { people: true, members: true, repositories: false } })).toBe(
+    expect(after(note({ cut: { people: true, members: true, repositories: false } }))).toBe(
       'Some lists were only partly read.'
     )
     // A repo's people and a person's repos, no org at all: the line names no org.
-    expect(note({ cut: { people: true, members: false, repositories: true } })).toBe(
+    expect(after(note({ cut: { people: true, members: false, repositories: true } }))).toBe(
       'Some lists were only partly read.'
     )
-    expect(note({ omitted: true })).toBe('Not every connected repo was read.')
+    expect(after(note({ omitted: true }))).toBe('Not every connected repo was read.')
     // Only the shown-list cap is helped by typing.
     const many = Array.from({ length: 40 }, (_, index) => ({
       id: String(100 + index),
       login: `dev${index}`,
       name: null
     }))
-    expect(value(answer(read({ people: many }), none, 'dev')).note).toBe('Keep typing to narrow.')
+    expect(after(value(answer(read({ people: many }), none, 'dev')).note)).toBe(
+      'Keep typing to narrow.'
+    )
   })
 
   it('never says no one was found while the roster is still loading', () => {
@@ -121,8 +123,9 @@ describe('the GitHub picker’s reading of a search', () => {
       { id: '9', name: 'brennan', tag: 'Repos still loading' }
     ])
     // A failed exact lookup waits for the roster rather than failing the whole search.
+    // No list yet, so no dated line: one sentence per line.
     expect(value(answer(loading, failed)).note).toBe(
-      'Still loading your repos. Username check failed.'
+      'Still loading your repos.\nUsername check failed.'
     )
   })
 
@@ -131,10 +134,8 @@ describe('the GitHub picker’s reading of a search', () => {
     expect(answer(read(), off)).toEqual(off)
     expect(answer(loading, off)).toEqual(off)
     // The failed lookup can be asked again in place (the picker's Try again).
-    expect(value(answer(read(), failed))).toMatchObject({
-      note: 'Username check failed.',
-      retryable: true
-    })
+    expect(value(answer(read(), failed)).retryable).toBe(true)
+    expect(after(value(answer(read(), failed)).note)).toBe('Username check failed.')
     expect(value(answer(read(), none)).retryable).toBeUndefined()
   })
 
@@ -143,16 +144,20 @@ describe('the GitHub picker’s reading of a search', () => {
       value(answer(roster, exact, query)).empty
     expect(empty(read(), none)).toEqual({
       title: 'No one found for “zed”',
-      detail: 'Searched your repo list and exact usernames.'
+      detail: expect.stringMatching(
+        /^Searched your repo list and exact usernames\.\nRepo list from (2:05\s?PM|Nov 19)\.$/
+      )
     })
-    expect(empty(read(), null, 'neil par')?.detail).toBe('Searched your repo list.')
+    expect(empty(read(), null, 'neil par')?.detail).toMatch(
+      /^Searched your repo list\.\nRepo list from /
+    )
     // Nothing readable asked for: nothing spent, and no gh advice.
     expect(empty({ status: 'unavailable', spent: false }, null, 'neil par')?.detail).toBe(
       'No readable repos to search.'
     )
     // The host never answered: a new open asks again.
     expect(empty({ status: 'unreached' }, null, 'neil par')?.detail).toBe(
-      'Couldn’t get the repo list. Reopen to retry.'
+      'Couldn’t get the repo list.'
     )
     expect(empty({ status: 'unavailable', spent: true }, none)?.detail).toBe(
       'Couldn’t read repos. Check gh, restart Orca.'
@@ -181,21 +186,24 @@ describe('the GitHub picker’s reading of a search', () => {
       )
     const note = (result: ReturnType<typeof at>) => (result.ok ? result.value.note : undefined)
     const minutes = (count: number) => readAt + count * 60_000
-    // Recent, and the search found someone in it: nothing to say.
-    expect(note(at(minutes(10), 'brennan'))).toBeUndefined()
-    expect(note(at(minutes(10), ''))).toBeUndefined()
+    // Every answer from a list dates it; restart advice joins only when it matters.
+    // Recent, and the search found someone in it: the date alone.
+    expect(note(at(minutes(10), 'brennan'))).toMatch(/^Repo list from 2:05\s?PM\.$/)
+    expect(note(at(minutes(10), ''))).toMatch(/^Repo list from 2:05\s?PM\.$/)
     // Recent, but no one in it matched: the list's age could be why.
     expect(note(at(minutes(10), 'zed'))).toMatch(
       /^Repo list from 2:05\s?PM\. Restart Orca to refresh\.$/
     )
     // Over an hour old: always, with the time today...
-    expect(note(at(minutes(90), 'brennan'))).toMatch(/^Repo list from 2:05\s?PM\./)
+    expect(note(at(minutes(90), 'brennan'))).toMatch(
+      /^Repo list from 2:05\s?PM\. Restart Orca to refresh\.$/
+    )
     // ...and the date once it's another day (date and time wouldn't fit one line).
     expect(note(at(minutes(60 * 20), 'brennan'))).toMatch(
       /^Repo list from Nov 19\. Restart Orca to refresh\.$/
     )
-    // A list read during this open is never labelled.
-    expect(value(answer(read(), none)).note).toBeUndefined()
+    // A list read during this open is dated too, without restart advice.
+    expect(value(answer(read(), none)).note).toMatch(/^Repo list from [^.]+\.$/)
   })
 
   it('treats a list read for another scope or account as history, claiming nothing current', () => {
@@ -243,7 +251,7 @@ describe('the GitHub picker’s reading of a search', () => {
     }
     // The same scope and account, read this run: current.
     const same = at({ scope, owner: 'owner' }, found)
-    expect(same.ok && same.value.labels?.scoped).toMatch(/^Your repos as of /)
+    expect(same.ok && same.value.labels?.scoped).toBe('Your repos')
   })
 
   it('keeps a live exact match visible however the list holds that person', () => {
@@ -281,9 +289,9 @@ describe('the GitHub picker’s reading of a search', () => {
   })
 
   it('names a different gh account, and not the same one', () => {
-    expect(value(answer(read({ searchedAs: 'someone-else' }), none)).note).toBe(
+    expect(after(value(answer(read({ searchedAs: 'someone-else' }), none)).note)).toBe(
       'Repos read as @someone-else.'
     )
-    expect(value(answer(read({ searchedAs: 'OWNER' }), none)).note).toBeUndefined()
+    expect(after(value(answer(read({ searchedAs: 'OWNER' }), none)).note)).toBeUndefined()
   })
 })

@@ -136,7 +136,7 @@ describe('one Add picker open on GitHub', () => {
     await vi.advanceTimersByTimeAsync(0)
     const second = await session.search('brennan')
     expect(names(second)).toEqual(['brennanb2025'])
-    expect(second.ok && second.value.note).toBe('Username check failed.')
+    expect(second.ok && second.value.note).toMatch(/\nUsername check failed\.$/)
 
     const unreadable = gitHubWhoCanAskSession(
       {

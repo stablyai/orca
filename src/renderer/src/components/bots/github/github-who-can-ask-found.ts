@@ -160,7 +160,7 @@ export function gitHubWhoCanAskAnswer(
               )
             : t('bots.github.whoCanAsk.unavailable', 'Couldn’t read repos. Check gh, restart Orca.')
           : roster.status === 'unreached'
-            ? t('bots.github.whoCanAsk.unreached', 'Couldn’t get the repo list. Reopen to retry.')
+            ? t('bots.github.whoCanAsk.unreached', 'Couldn’t get the repo list.')
             : roster.status === 'none'
               ? t('bots.github.whoCanAsk.localNone', 'No repos connected.')
               : null
@@ -171,24 +171,31 @@ export function gitHubWhoCanAskAnswer(
       : null
   const time = read ? readTime(read.readAt, now) : ''
   const limits = [
-    // A host reads its list once per app run. A reused list for this same scope and account says
-    // when it was read only when that matters (over an hour old, or no one in it matched); one read
-    // for another scope or account always says it.
-    read?.reused &&
-    (historical || now - read.readAt > STALE_LIST_MS || (query.trim() !== '' && shown.length === 0))
-      ? remote
-        ? t(
-            'bots.github.whoCanAsk.readEarlierRemote',
-            'Repo list from {{time}}. Restart the bot’s Orca.',
-            { time }
-          )
-        : t(
-            'bots.github.whoCanAsk.readEarlier',
-            'Repo list from {{time}}. Restart Orca to refresh.',
-            {
-              time
-            }
-          )
+    // Whatever the list contributes to this answer (rows, a stranger's tag, an empty result, a
+    // limit) is dated by this first line, with or without a heading in view. A host reads its
+    // list once per app run; restart advice joins it only when that matters (a list read for
+    // another scope or account, over an hour old, or no one in it matched).
+    read
+      ? read.reused &&
+        (historical ||
+          now - read.readAt > STALE_LIST_MS ||
+          (query.trim() !== '' && shown.length === 0))
+        ? remote
+          ? t(
+              'bots.github.whoCanAsk.readEarlierRemote',
+              'Repo list from {{time}}. Restart the bot’s Orca.',
+              {
+                time
+              }
+            )
+          : t(
+              'bots.github.whoCanAsk.readEarlier',
+              'Repo list from {{time}}. Restart Orca to refresh.',
+              {
+                time
+              }
+            )
+        : t('bots.github.whoCanAsk.listFrom', 'Repo list from {{time}}.', { time })
       : null,
     read?.omitted && !historical
       ? t('bots.github.whoCanAsk.omitted', 'Not every connected repo was read.')
@@ -207,7 +214,8 @@ export function gitHubWhoCanAskAnswer(
         })
       : null
   ]
-  const note = [rosterLine, exactOnly, ...limits].filter(Boolean).join(' ') || undefined
+  // One sentence per line, so no line wraps at the popover's width.
+  const note = [rosterLine, exactOnly, ...limits].filter(Boolean).join('\n') || undefined
 
   const exactSearched = exact?.ok === true
   // An absence refers to the dated list in the heading, never to the repos as they are now.
@@ -240,11 +248,11 @@ export function gitHubWhoCanAskAnswer(
                 ? rosterLine
                 : [rosterLine, t('bots.github.whoCanAsk.tryExact', 'Try an exact username.')]
                     .filter(Boolean)
-                    .join(' ')
+                    .join('\n')
           }
         : {
             title: t('bots.github.whoCanAsk.noPerson', 'No one found for “{{query}}”', { query }),
-            detail: [searchedLine, note].filter(Boolean).join(' ')
+            detail: [searchedLine, note].filter(Boolean).join('\n')
           }
 
   return {
@@ -253,24 +261,22 @@ export function gitHubWhoCanAskAnswer(
       members,
       // The note says what was left out, so the picker's generic "not everyone" line stays away.
       complete: true,
-      // Every list is a dated read: from the first search on, the heading says when, and an
-      // absence refers to that list.
+      // The note's first line dates the list; an absence refers to that list.
       labels: {
         scoped: historical
           ? t('bots.github.whoCanAsk.fromEarlierList', 'From an earlier repo list')
           : place === 'both'
-            ? t('bots.github.whoCanAsk.reposOrgsAsOf', 'Your repos and orgs as of {{time}}', {
-                time
-              })
+            ? t('bots.github.whoCanAsk.reposOrgs', 'Your repos and orgs')
             : place === 'orgs'
-              ? t('bots.github.whoCanAsk.orgsAsOf', 'Your orgs as of {{time}}', { time })
-              : t('bots.github.whoCanAsk.reposAsOf', 'Your repos as of {{time}}', { time }),
+              ? t('bots.github.whoCanAsk.orgs', 'Your orgs')
+              : t('bots.github.whoCanAsk.repos', 'Your repos'),
         outsideTag: t('bots.github.whoCanAsk.notInList', 'Not in your repo list')
       },
       ...(note ? { note } : {}),
       empty,
-      // A failed exact lookup can be asked again in place, keeping the query, rows and picks.
-      ...(exact && !exact.ok ? { retryable: true } : {})
+      // A failed exact lookup or an unanswered list request can be asked again in place,
+      // keeping the query, rows and picks.
+      ...((exact && !exact.ok) || roster.status === 'unreached' ? { retryable: true } : {})
     }
   }
 }

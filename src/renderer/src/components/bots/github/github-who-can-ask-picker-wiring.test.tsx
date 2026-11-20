@@ -177,7 +177,7 @@ describe('the Add picker on a GitHub session', () => {
     const box = screen.getByPlaceholderText('Search by name or username')
     fireEvent.change(box, { target: { value: 'bren' } })
     await act(() => vi.advanceTimersByTimeAsync(300))
-    expect(screen.getByText('Username check failed.')).toBeTruthy()
+    expect(screen.getByText(/Username check failed\./)).toBeTruthy()
     fireEvent.click(screen.getByText('brenda-q'))
     expect(screen.getByText('1 selected')).toBeTruthy()
 
@@ -200,7 +200,7 @@ describe('the Add picker on a GitHub session', () => {
     expect(box).toHaveProperty('value', 'bren')
     expect(screen.getByText('1 selected')).toBeTruthy()
     expect(searching).not.toHaveBeenCalled()
-    expect(screen.queryByText('Username check failed.')).toBeNull()
+    expect(screen.queryByText(/Username check failed\./)).toBeNull()
   })
 
   it.each([
@@ -254,6 +254,8 @@ describe('the Add picker on a GitHub session', () => {
         resolveRetry({ ok: true, value: { members: [{ id: '9', name: 'bren' }], complete: true } })
         await vi.advanceTimersByTimeAsync(0)
       })
+      // Right after the old retry answers, before the new query's search is issued: not painted.
+      expect(screen.queryByText('bren')).toBeNull()
       await act(() => vi.advanceTimersByTimeAsync(300))
       // The old query's answer never painted, and the new query asked once for itself.
       expect(screen.queryByText('bren')).toBeNull()
@@ -264,4 +266,118 @@ describe('the Add picker on a GitHub session', () => {
       expect(screen.getByText('1 selected')).toBeTruthy()
     }
   )
+
+  it.each([
+    // A cut list isn't whole, so the stranger is tagged neutrally, not called an outsider.
+    ['a stranger alone (neutral tag, no heading)', 'jordan', /Not all people loaded/],
+    ['an empty result', 'zzqx', /No one found for/],
+    ['a row with a limit', 'brennan', /Showing the first 100 people per repo\./]
+  ])('dates the list on %s, with or without a heading in view', async (_case, query, shows) => {
+    const cutRoster: BotGitHubRoster = {
+      ...roster,
+      readAt: new Date(2026, 10, 10, 9, 30).getTime(),
+      cut: { people: true, members: false, repositories: false }
+    }
+    const users = async ({ query: login }: { query: string }): Promise<Users> => ({
+      ok: true,
+      value: { members: login === 'jordan' ? [{ id: '10', name: 'jordan' }] : [], complete: true }
+    })
+    const scope = { repositories: ['acme/web'], owners: [], more: false }
+    const begin = () =>
+      gitHubWhoCanAskSession(
+        { people: async () => ({ ok: true, value: cutRoster }), users },
+        { scope, ownerLogin: 'o', producer: 'local', t }
+      )
+    const { service } = setUp()
+    render(
+      <BotWhoCanAskPicker
+        bot={bot}
+        service={{ ...service, begin, search: (q) => begin().search(q) }}
+        owner="You"
+        onPicked={vi.fn()}
+      />
+    )
+    fireEvent.change(screen.getByPlaceholderText('Search by name or username'), {
+      target: { value: query }
+    })
+    await act(() => vi.advanceTimersByTimeAsync(300))
+    expect(screen.getByText(shows)).toBeTruthy()
+    expect(screen.getByText(/Repo list from Nov 10\./)).toBeTruthy()
+  })
+
+  it('recovers an unanswered list request in place, keeping the exact row, the pick and the query', async () => {
+    let failFirst = (_value: BotSlackResult<BotGitHubRoster>): void => {}
+    let answerSecond = (_value: BotSlackResult<BotGitHubRoster>): void => {}
+    const people = vi
+      .fn<() => Promise<BotSlackResult<BotGitHubRoster>>>()
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            failFirst = resolve
+          })
+      )
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            answerSecond = resolve
+          })
+      )
+    const users = vi.fn(async (): Promise<Users> => ({
+      ok: true,
+      value: { members: [{ id: '9', name: 'brennan' }], complete: true }
+    }))
+    const scope = { repositories: ['acme/web'], owners: [], more: false }
+    const begin = () =>
+      gitHubWhoCanAskSession({ people, users }, { scope, ownerLogin: 'o', producer: 'local', t })
+    const { service } = setUp()
+    render(
+      <BotWhoCanAskPicker
+        bot={bot}
+        service={{ ...service, begin, search: (q) => begin().search(q) }}
+        owner="You"
+        onPicked={vi.fn()}
+      />
+    )
+    const box = screen.getByPlaceholderText('Search by name or username')
+    fireEvent.change(box, { target: { value: 'brennan' } })
+    await act(() => vi.advanceTimersByTimeAsync(300 + ROSTER_WAIT_MS))
+    // The exact match shows while the list is still on its way; the owner ticks it.
+    fireEvent.click(screen.getByText('brennan'))
+    expect(screen.getByText('1 selected')).toBeTruthy()
+    // The list request fails without an answer from the host.
+    await act(async () => {
+      failFirst({ ok: false, error: 'network' })
+      await vi.advanceTimersByTimeAsync(0)
+    })
+    expect(screen.getByText(/Couldn’t get the repo list\./)).toBeTruthy()
+    const searching = vi.fn()
+    const observer = new MutationObserver(() => {
+      if (screen.queryByText('Searching…')) {
+        searching()
+      }
+    })
+    observer.observe(document.body, { childList: true, subtree: true })
+    // Try again asks the host once more; double clicks share that one request.
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
+      await vi.advanceTimersByTimeAsync(ROSTER_WAIT_MS * 2)
+    })
+    // While the new request waits, the row, the pick and the query stay.
+    expect(screen.getByText('brennan')).toBeTruthy()
+    expect(screen.getByText('1 selected')).toBeTruthy()
+    expect(box).toHaveProperty('value', 'brennan')
+    await act(async () => {
+      answerSecond({ ok: true, value: roster })
+      await vi.advanceTimersByTimeAsync(0)
+    })
+    observer.disconnect()
+    expect(screen.getByText('brennanb2025')).toBeTruthy()
+    expect(screen.queryByText(/Couldn’t get the repo list/)).toBeNull()
+    expect(screen.getByText('1 selected')).toBeTruthy()
+    expect(searching).not.toHaveBeenCalled()
+    expect(people).toHaveBeenCalledTimes(2)
+    // The exact lookup for this query didn't fail, so it isn't asked again.
+    expect(users).toHaveBeenCalledOnce()
+  })
 })

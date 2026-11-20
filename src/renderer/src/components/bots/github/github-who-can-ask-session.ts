@@ -67,7 +67,10 @@ export function gitHubWhoCanAskSession(
     })
   // The last valid query's exact lookup: one entry, so asking again for that same query never
   // repeats it (a failure included) unless the owner asks to retry; a different query is its own.
-  let lastExact: { login: string; answer: Promise<Exact> } | null = null
+  let lastExact: { login: string; answer: Promise<Exact>; failed: boolean } | null = null
+  // Set by an asked-for retry: the next search waits for the whole list answer (the picker keeps
+  // its rows on screen meanwhile) rather than going out at ROSTER_WAIT_MS.
+  let patient = false
 
   const load = (): Promise<GitHubRosterState> => {
     roster ??= (
@@ -75,8 +78,8 @@ export function gitHubWhoCanAskSession(
         ? Promise.resolve<GitHubRosterState>({ status: 'skipped' })
         : scope.repositories.length + scope.owners.length === 0
           ? Promise.resolve<GitHubRosterState>({ status: 'none' })
-          : // The call itself failing (the host unreachable) leaves this session without a list;
-            // the next open asks the host again, which keeps to its one read per app run.
+          : // The call itself failing (the host unreachable) leaves this session without a list
+            // until the owner asks again (retry); the host still keeps its one read per app run.
             calls.people({ scope, owner: ownerLogin }).then(
               (result): GitHubRosterState => (result.ok ? result.value : { status: 'unreached' }),
               (): GitHubRosterState => ({ status: 'unreached' })
@@ -99,7 +102,11 @@ export function gitHubWhoCanAskSession(
       return null
     }
     if (lastExact?.login !== login) {
-      lastExact = { login, answer: calls.users({ query: login }) }
+      const entry = { login, answer: calls.users({ query: login }), failed: false }
+      void entry.answer.then((answer) => {
+        entry.failed = !answer.ok
+      })
+      lastExact = entry
     }
     return lastExact.answer
   }
@@ -109,9 +116,11 @@ export function gitHubWhoCanAskSession(
       return waiting.size
     },
     search: async (query) => {
-      void load()
+      const loading = load()
       const exact = exactFor(query.trim().replace(/^@/, ''))
-      const early = settled ?? (await settledWithin(ROSTER_WAIT_MS))
+      const waitWhole = patient
+      patient = false
+      const early = settled ?? (await (waitWhole ? loading : settledWithin(ROSTER_WAIT_MS)))
       const exactAnswer = exact ? await exact : null
       // The roster may have landed while the exact lookup was still on its way.
       const now = settled ?? early
@@ -127,8 +136,18 @@ export function gitHubWhoCanAskSession(
         t
       )
     },
+    // Only what failed is asked again: a list request the host never answered (one new request,
+    // shared by every search until it settles), and a failed exact lookup. Nothing runs until the
+    // picker searches again.
     retry: () => {
-      lastExact = null
+      if (settled?.status === 'unreached') {
+        roster = null
+        settled = null
+      }
+      if (lastExact?.failed) {
+        lastExact = null
+      }
+      patient = true
     },
     onUpdate: (next) => {
       if (settled) {

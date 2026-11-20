@@ -137,7 +137,7 @@ function PickerNote({
   return (
     <div role="status" className="px-6 py-6 text-center text-sm text-muted-foreground">
       <p className="text-foreground">{title}</p>
-      <p className="mt-1 text-xs">{detail}</p>
+      <p className="mt-1 whitespace-pre-line text-xs">{detail}</p>
       {action ? <div className="mt-3 flex justify-center">{action}</div> : null}
     </div>
   )
@@ -374,7 +374,7 @@ export function BotWhoCanAskPicker({
       ) : null}
       {note && !idle && !noMatch ? (
         <div className="flex items-center gap-2 px-3 pb-2">
-          <p className="min-w-0 flex-1 text-xs text-muted-foreground">{note}</p>
+          <p className="min-w-0 flex-1 whitespace-pre-line text-xs text-muted-foreground">{note}</p>
           {retryAction}
         </div>
       ) : search.status === 'ready' && !search.found.complete ? (
