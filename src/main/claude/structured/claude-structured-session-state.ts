@@ -227,7 +227,7 @@ export type ClaudeAcquisitionAttempt = {
   /** The resolved launch: its account words a sign-in failure, its Command a start that exited. */
   launch?: Pick<
     ClaudeStructuredLaunch,
-    'account' | 'pathToClaudeCodeExecutable' | 'configuredProgram'
+    'account' | 'pathToClaudeCodeExecutable' | 'configuredProgram' | 'prefixArgs'
   >
 }
 

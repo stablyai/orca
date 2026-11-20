@@ -11,6 +11,17 @@ import { redactString } from '../../../../shared/observability/redactor'
 import type { ClaudeStructuredLaunch } from '../launch/claude-structured-launch-resolution'
 
 const EXIT_STATUS = /^\((?:code|signal) [^)]*\)$/
+/** Shorter arguments (`-p`, `on`) are too common to hide and too short to be secrets. */
+const MIN_HIDDEN_ARGUMENT_CHARS = 4
+
+/** A program may echo its arguments, which can be private (a profile, a token in no known shape). */
+function withoutArguments(text: string, args: readonly string[] = []): string {
+  const values = args.flatMap((arg) => [arg, arg.slice(arg.indexOf('=') + 1)])
+  return values
+    .filter((value) => value.length >= MIN_HIDDEN_ARGUMENT_CHARS)
+    .sort((a, b) => b.length - a.length)
+    .reduce((hidden, value) => hidden.replaceAll(value, '…'), text)
+}
 
 /** The first line the program wrote when it exited, else its exit status. */
 function exitText(error: unknown): string {
@@ -28,7 +39,7 @@ function exitText(error: unknown): string {
  *  the original exit stays as the cause for local logs. */
 export async function explainConfiguredCommandExit(
   error: unknown,
-  launch: Pick<ClaudeStructuredLaunch, 'configuredProgram'> | undefined
+  launch: Pick<ClaudeStructuredLaunch, 'configuredProgram' | 'prefixArgs'> | undefined
 ): Promise<unknown> {
   // Claude's own answer, such as a missing conversation, explains the start better than its Command.
   const fact =
@@ -36,7 +47,9 @@ export async function explainConfiguredCommandExit(
   if (!launch?.configuredProgram || fact.kind !== 'providerStartFailed') {
     return error
   }
-  const words = redactString(`'${launch.configuredProgram}' exited${exitText(error)}`)
+  const words = redactString(
+    `'${launch.configuredProgram}' exited${withoutArguments(exitText(error), launch.prefixArgs)}`
+  )
   return withProviderDiagnostic(
     Object.assign(new AgentSessionAcquisitionRefusal(words, 'agentCommandNotRunnable'), {
       cause: error

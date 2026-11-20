@@ -40,9 +40,9 @@ describe.skipIf(process.platform === 'win32')("a Claude start under the user's C
       )
     )
   const startFact = async (command: string, stderr: string) => {
-    const { configuredProgram } = resolve(command)
+    const { configuredProgram, prefixArgs } = resolve(command)
     return providerStartupFailureFact(
-      await explainConfiguredCommandExit(exited(stderr), { configuredProgram })
+      await explainConfiguredCommandExit(exited(stderr), { configuredProgram, prefixArgs })
     )
   }
 
@@ -113,13 +113,24 @@ describe.skipIf(process.platform === 'win32')("a Claude start under the user's C
     const key = `sk-ant-${'a'.repeat(48)}`
     const fact = await startFact(
       `${wrapper} --api-key ${key} --profile acme-private`,
-      `wrapper: rejected key ${key}`
+      `wrapper: rejected environment key sk-ant-${'b'.repeat(48)}`
     )
     expect(fact).toMatchObject({
       kind: 'agentCommandNotRunnable',
-      detail: { text: "'wrapper' exited: wrapper: rejected key [redacted:anthropic-key]" }
+      detail: {
+        text: "'wrapper' exited: wrapper: rejected environment key [redacted:anthropic-key]"
+      }
     })
     expect(fact.detail?.text).not.toContain('acme-private')
+  })
+
+  it('hides a private argument its program echoes when it exits', async () => {
+    const wrapper = script('wrapper')
+    const fact = await startFact(
+      `${wrapper} --profile acme-private --workspace=team-secret -p`,
+      "wrapper: unknown profile 'acme-private' in team-secret"
+    )
+    expect(fact.detail?.text).toBe("'wrapper' exited: wrapper: unknown profile '…' in …")
   })
 })
 
