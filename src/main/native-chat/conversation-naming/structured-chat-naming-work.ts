@@ -54,6 +54,10 @@ export function createStructuredChatNamingWork(deps: {
         }
         return
       }
+      // A stale run still waiting for a slot would hold this request behind the whole queue.
+      if (job.executing && !deps.applicable(job.executing)) {
+        job.executing.generation.cancel()
+      }
       job.desired = { record, automatic, generation: new BackgroundGenerationRequest(!automatic) }
       jobs.set(sessionId, job)
       if (!job.preparing) {

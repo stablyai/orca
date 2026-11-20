@@ -120,6 +120,25 @@ describe('chat naming during a launch burst', () => {
     expect(started).not.toContain('session-50')
   })
 
+  it('starts a user request next even when its own queued automatic run went stale', async () => {
+    const { records, naming, running, started, startAll, finishOne } = await burst()
+    await startAll()
+    const chat = records.get('session-50')
+    if (!chat) {
+      throw new Error('missing fixture record')
+    }
+    // The queued automatic run no longer applies once the chat's name changes under it.
+    records.set('session-50', { ...chat, conversationName: 'Changed elsewhere' })
+    expect(naming.regenerate('session-50')).toBe(true)
+    await vi.advanceTimersByTimeAsync(0)
+
+    await finishOne()
+    expect(started[3]).toBe('session-50')
+    while (running.length > 0) {
+      await finishOne()
+    }
+  })
+
   it('keeps a slot through the agent deadline, then frees it from an agent that never stops', async () => {
     const { started, startAll } = await burst()
     await startAll()

@@ -19,7 +19,7 @@ export type GenerationAdmission = <E extends Execution>(
 ) => Promise<E | null>
 
 type Waiter = {
-  grant: () => void
+  grant: (granted: boolean) => void
   queue: WaiterQueue | null
   prev: Waiter | null
   next: Waiter | null
@@ -73,7 +73,7 @@ const backgroundRuns = new WaiterQueue()
 function releaseSlot(): void {
   const next = lockHolders.shift() ?? userRequests.shift() ?? backgroundRuns.shift()
   if (next) {
-    next.grant()
+    next.grant(true)
   } else {
     running--
   }
@@ -103,6 +103,15 @@ export class BackgroundGenerationRequest {
     }
   }
 
+  /** Leaves the queue at once; a waiting admission resolves to null without taking a slot. */
+  cancel(): void {
+    const waiter = this.queued
+    if (waiter?.queue) {
+      waiter.queue.remove(waiter)
+      waiter.grant(false)
+    }
+  }
+
   /** An admission that starts nothing once `stillWanted` is false when its slot frees. */
   admitWhile(stillWanted: () => boolean): GenerationAdmission {
     return (start, options) => this.admit(start, stillWanted, options?.holdsAccountLock === true)
@@ -113,7 +122,9 @@ export class BackgroundGenerationRequest {
     stillWanted: () => boolean,
     holdsAccountLock: boolean
   ): Promise<E | null> {
-    await this.acquire(holdsAccountLock)
+    if (!(await this.acquire(holdsAccountLock))) {
+      return null
+    }
     let released = false
     const release = (): void => {
       if (!released) {
@@ -137,19 +148,20 @@ export class BackgroundGenerationRequest {
     }
   }
 
-  private acquire(holdsAccountLock: boolean): Promise<void> {
+  /** False when canceled while queued. */
+  private acquire(holdsAccountLock: boolean): Promise<boolean> {
     if (running < MAX_RUNNING) {
       running++
-      return Promise.resolve()
+      return Promise.resolve(true)
     }
     return new Promise((resolve) => {
       const waiter: Waiter = {
         queue: null,
         prev: null,
         next: null,
-        grant: () => {
+        grant: (granted) => {
           this.queued = null
-          resolve()
+          resolve(granted)
         }
       }
       this.queued = waiter
