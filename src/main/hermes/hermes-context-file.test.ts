@@ -50,4 +50,15 @@ describe('Hermes context file', () => {
     await writeHermesContextFile(dir, 'text')
     expect((await lstat(join(dir, HERMES_CONTEXT_FILE))).isSymbolicLink()).toBe(true)
   })
+
+  it('keeps notes under a stray begin marker and handles CRLF files', async () => {
+    const path = join(dir, HERMES_CONTEXT_FILE)
+    await writeFile(path, 'intro\r\n<!-- orca:begin -->\r\nKEEP ME\r\n')
+    await writeHermesContextFile(dir, 'first')
+    await writeHermesContextFile(dir, 'second')
+    const content = await readFile(path, 'utf8')
+    expect(content).toContain('KEEP ME')
+    expect(content).toContain('second')
+    expect(content).not.toContain('first')
+  })
 })

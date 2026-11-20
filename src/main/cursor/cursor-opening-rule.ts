@@ -90,9 +90,9 @@ export async function placeCursorOpeningRule(
       ...((await exists(rulesDir)) ? [] : [rulesDir])
     ]
     await mkdir(rulesDir, { recursive: true })
+    await sweepLeftoverRules(rulesDir)
     // A file the user wrote under this name is theirs: this chat's rule goes beside it.
     if (await isUserFile(path)) {
-      await sweepLeftoverRules(rulesDir)
       path = join(rulesDir, `${SIBLING_PREFIX}${randomUUID()}.mdc`)
     }
     const staged = `${path}.${randomUUID()}`
