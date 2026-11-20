@@ -69,7 +69,26 @@ describe('createPdfViewerSession', () => {
     const layer = document.createElement('div')
     layer.className = 'annotationLayer'
     layer.innerHTML =
-      '<input type="password" value="secret"><input type="text" value="Ada"><select><option value="saved" selected>Saved</option></select><input type="checkbox" checked><a href="#page">Page</a>'
+      '<input type="password" value="secret"><input type="text" value="Ada"><select><option value="saved" selected>Saved</option><option value="other">Other</option></select><input type="checkbox" checked>'
+    const page = document.createElement('a')
+    page.href = '#page'
+    page.textContent = 'Page'
+    let followed = false
+    page.onclick = () => {
+      followed = true
+      return false
+    }
+    const reset = document.createElement('a')
+    reset.textContent = 'Reset'
+    reset.onclick = () => {
+      const select = layer.querySelector('select')
+      if (select instanceof HTMLSelectElement) {
+        select.value = 'other'
+        select.dispatchEvent(new Event('resetform'))
+      }
+      return false
+    }
+    layer.append(page, reset)
     container.append(layer)
     try {
       expect(constructed).toHaveLength(1)
@@ -79,20 +98,17 @@ describe('createPdfViewerSession', () => {
       const text = layer.querySelector('input[type="text"]')
       const choice = layer.querySelector('select')
       const box = layer.querySelector('input[type="checkbox"]')
-      const link = layer.querySelector('a')
       expect(password).toBeInstanceOf(HTMLInputElement)
       expect(text).toBeInstanceOf(HTMLInputElement)
       expect(choice).toBeInstanceOf(HTMLSelectElement)
       expect(box).toBeInstanceOf(HTMLInputElement)
-      expect(link).toBeInstanceOf(HTMLAnchorElement)
       if (
         !(password instanceof HTMLInputElement) ||
         !(text instanceof HTMLInputElement) ||
         !(choice instanceof HTMLSelectElement) ||
-        !(box instanceof HTMLInputElement) ||
-        !(link instanceof HTMLAnchorElement)
+        !(box instanceof HTMLInputElement)
       ) {
-        return
+        throw new Error('form controls were not created')
       }
       expect(password.readOnly).toBe(true)
       expect(password.type).toBe('password')
@@ -103,7 +119,11 @@ describe('createPdfViewerSession', () => {
       expect(choice.value).toBe('saved')
       expect(box.disabled).toBe(true)
       expect(box.checked).toBe(true)
-      expect(link.getAttribute('href')).toBe('#page')
+      reset.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      expect(choice.value).toBe('saved')
+      page.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      expect(followed).toBe(true)
+      expect(page.getAttribute('href')).toBe('#page')
     } finally {
       session.dispose()
     }

@@ -22,6 +22,7 @@ import {
 } from './pdf-view-position'
 
 const PAGE_WIDTH_REFIT_SETTLE_MS = 150
+const frozenAnnotationLayers = new WeakSet<Element>()
 
 function isCheckableOrButton(control: HTMLInputElement): boolean {
   return (
@@ -34,9 +35,23 @@ function isCheckableOrButton(control: HTMLInputElement): boolean {
   )
 }
 
-// Why: widget values live only in pdf.js memory, but static rendering reveals passwords and drops choice labels.
+function isPdfResetFormAction(link: HTMLAnchorElement): boolean {
+  const action = link.onclick
+  // pdf.js binds ResetForm on an anchor and then dispatches "resetform" to the widgets.
+  return typeof action === 'function' && action.toString().includes('resetform')
+}
+
+function stopResetFormEvent(event: Event): void {
+  event.stopImmediatePropagation()
+}
+
+// Why: these widgets write only into pdf.js memory, and a reload drops those edits.
 function freezePdfPreviewFormControls(root: ParentNode): void {
   for (const layer of root.querySelectorAll('.annotationLayer')) {
+    if (!frozenAnnotationLayers.has(layer)) {
+      frozenAnnotationLayers.add(layer)
+      layer.addEventListener('resetform', stopResetFormEvent, true)
+    }
     for (const control of layer.querySelectorAll('input, textarea, select, button')) {
       if (
         control instanceof HTMLSelectElement ||
@@ -48,6 +63,11 @@ function freezePdfPreviewFormControls(root: ParentNode): void {
       }
       if (control instanceof HTMLInputElement || control instanceof HTMLTextAreaElement) {
         control.readOnly = true
+      }
+    }
+    for (const link of layer.querySelectorAll('a')) {
+      if (link instanceof HTMLAnchorElement && isPdfResetFormAction(link)) {
+        link.onclick = () => false
       }
     }
   }
