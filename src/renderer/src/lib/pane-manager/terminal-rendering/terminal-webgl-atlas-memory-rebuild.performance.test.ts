@@ -167,6 +167,21 @@ describe('terminal WebGL atlas-memory rebuild', () => {
     expect(rebuilds).toEqual([[visible.pane]])
   })
 
+  it('gives an atlas re-armed by output a fresh retry budget', async () => {
+    const atlas = await loadModule({ userAgent: MAC_AGENT })
+    const visible = fakePane(atlas, newAtlas())
+    visible.terminal.modes.synchronizedOutputMode = true
+    visible.output()
+    atlas.handleTerminalWebglAtlasPage(LARGE_PAGE, visible.pane)
+    await vi.advanceTimersByTimeAsync(120_000)
+    visible.output()
+    await vi.advanceTimersByTimeAsync(0)
+    // The frame then closes with no further output; a fresh retry still catches it.
+    visible.terminal.modes.synchronizedOutputMode = false
+    await vi.advanceTimersByTimeAsync(10_000)
+    expect(rebuilds).toEqual([[visible.pane]])
+  })
+
   it('catches a frame that closes without further output', async () => {
     const atlas = await loadModule({ userAgent: MAC_AGENT })
     const visible = fakePane(atlas, newAtlas())

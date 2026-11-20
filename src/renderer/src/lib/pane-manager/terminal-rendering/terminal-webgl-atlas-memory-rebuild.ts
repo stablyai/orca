@@ -134,6 +134,7 @@ function rebuildDueAtlases(): void {
         // Out of retries: the frame's closing output re-arms it.
         dueAtlases.delete(atlas)
         atlasesWithOutput.delete(atlas)
+        deferredRetries.delete(atlas)
       }
       continue
     }
