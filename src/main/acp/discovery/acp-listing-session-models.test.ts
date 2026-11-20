@@ -1,3 +1,7 @@
+import { existsSync } from 'node:fs'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join, sep } from 'node:path'
 import { createStructuredAgentSessionCatalogReads } from '../../native-chat/agent-session-wire/options/structured-agent-session-catalog-reads'
 import type { StructuredAgentSessionHostDeps } from '../../native-chat/agent-session-wire/host/structured-agent-session-host-types'
 import type { createAgentModelCatalogSuccessWriter } from '../../native-chat/agent-model-catalog/agent-model-catalog-entry-lifetime'
@@ -308,4 +312,199 @@ it('keeps a slow OpenCode 1.x version response and selects its command listing',
   expect((await result).models.map((row) => row.id)).toEqual(['opencode/slow-valid-model'])
   expect(session).not.toHaveBeenCalled()
   expect(command.mock.calls[0]?.[1]).toMatchObject({ timeoutMs: null })
+})
+
+it('lists OpenCode 1.x models without a workspace folder', async () => {
+  const folder = await mkdtemp(join(tmpdir(), 'orca-opencode1-folderless-'))
+  onTestFinished(() => rm(folder, { recursive: true, force: true }))
+  const base = acpLaunchSpecFor('opencode')!
+  const command = vi.fn<typeof runAgentModelCatalogListing>(
+    async () => 'anthropic/claude-opus-4\nopenai/gpt-5\n'
+  )
+  const probe = createAcpModelCatalogProbe(
+    { ...base, account: { ...base.account, environment: (_home, env) => env } },
+    {
+      resolveEnvironment: async () => ({}),
+      resolveCommand: () => process.execPath,
+      probeVersion: async () => ({ version: '1.18.31' }),
+      dataDirectory: folder,
+      homePath: folder,
+      runListing: command
+    }
+  )
+  const service = createAgentModelCatalogService({
+    store: new AgentModelCatalogStore(),
+    getRecord: () => undefined,
+    getConversation: () => undefined,
+    drivesRecord: () => true,
+    resolveAccountHome: async () => ({ kind: 'opencode', locator: { kind: 'unmanaged' } }),
+    listsInChatFolder: new Set(['opencode']),
+    probes: { opencode: probe }
+  })
+  onTestFinished(() => service.stop())
+  const result = await service.read({ agent: 'opencode', waitForListing: true })
+  expect(result).toMatchObject({
+    origin: 'probe',
+    modelsDifferByWorkspace: true
+  })
+  if (result.origin === 'unknown') {
+    throw new Error('Expected OpenCode 1.x models')
+  }
+  expect(result.models.map((row) => row.id)).toEqual(['anthropic/claude-opus-4', 'openai/gpt-5'])
+  expect(command.mock.calls[0]?.[0]?.cwd).toBe(folder)
+})
+
+it('lists OpenCode 2.x models in a temporary private folder when no workspace is provided', async () => {
+  const folder = await mkdtemp(join(tmpdir(), 'orca-opencode2-folderless-'))
+  onTestFinished(() => rm(folder, { recursive: true, force: true }))
+  const base = acpLaunchSpecFor('opencode')!
+  const config = (selected: string) =>
+    NewSessionResponseSchema.parse({
+      ...recorded,
+      configOptions: recorded.configOptions.map((option) =>
+        option.id === 'model'
+          ? {
+              ...option,
+              currentValue: selected,
+              options: [
+                { value: 'opencode/claude-opus-4-6', name: 'opencode/Claude Opus 4.6' },
+                { value: 'opencode/gpt-5.4', name: 'opencode/GPT-5.4' }
+              ]
+            }
+          : option
+      )
+    })
+  let startedCwd = ''
+  let cwdExistedAtStart = false
+  const deletedSessions: string[] = []
+  const probe = createAcpModelCatalogProbe(
+    { ...base, account: { ...base.account, environment: (_home, env) => env } },
+    {
+      resolveEnvironment: async () => ({}),
+      resolveCommand: () => process.execPath,
+      probeVersion: async () => ({ version: '2.1.0' }),
+      dataDirectory: folder,
+      homePath: folder,
+      connectSession: () => ({
+        initialize: async () => ({
+          protocolVersion: 1,
+          agentCapabilities: { sessionCapabilities: { delete: {} } }
+        }),
+        start: async (options) => {
+          startedCwd = options.cwd
+          cwdExistedAtStart = existsSync(options.cwd)
+          return { kind: 'new', sessionId: 'listing', response: config('opencode/claude-opus-4-6') }
+        },
+        setConfigOption: async (_id, model) => ({ configOptions: config(model).configOptions! }),
+        deleteSession: async (sessionId) => {
+          deletedSessions.push(sessionId)
+          return {}
+        },
+        close: async () => {}
+      })
+    }
+  )
+  const service = createAgentModelCatalogService({
+    store: new AgentModelCatalogStore(),
+    getRecord: () => undefined,
+    getConversation: () => undefined,
+    drivesRecord: () => true,
+    resolveAccountHome: async () => ({ kind: 'opencode', locator: { kind: 'unmanaged' } }),
+    listsInChatFolder: new Set(['opencode']),
+    probes: { opencode: probe }
+  })
+  onTestFinished(() => service.stop())
+  const result = await service.read({ agent: 'opencode', waitForListing: true })
+  await service.stop()
+  expect(result).toMatchObject({
+    origin: 'probe',
+    modelsDifferByWorkspace: true
+  })
+  if (result.origin === 'unknown') {
+    throw new Error('Expected OpenCode 2.x models')
+  }
+  expect(result.models.map((row) => row.id)).toEqual([
+    'opencode/claude-opus-4-6',
+    'opencode/gpt-5.4'
+  ])
+  expect(cwdExistedAtStart).toBe(true)
+  expect(startedCwd.startsWith(`${join(folder, 'acp-listing-sessions', 'opencode')}${sep}`)).toBe(
+    true
+  )
+  expect(deletedSessions).toEqual(['listing'])
+  expect(existsSync(startedCwd)).toBe(false)
+})
+
+it('lists OMP models without a workspace folder using separate session and cwd temp folders', async () => {
+  const folder = await mkdtemp(join(tmpdir(), 'orca-omp-folderless-'))
+  onTestFinished(() => rm(folder, { recursive: true, force: true }))
+  const base = acpLaunchSpecFor('omp')!
+  const config = (selected: string) =>
+    NewSessionResponseSchema.parse({
+      ...recorded,
+      configOptions: recorded.configOptions.map((option) =>
+        option.id === 'model'
+          ? {
+              ...option,
+              currentValue: selected,
+              options: [
+                { value: 'anthropic/claude-opus-4', name: 'Claude Opus 4' },
+                { value: 'openai/gpt-5', name: 'GPT-5' }
+              ]
+            }
+          : option
+      )
+    })
+  let sessionDir = ''
+  let startedCwd = ''
+  let dirsExistedAtStart = false
+  const probe = createAcpModelCatalogProbe(base, {
+    resolveEnvironment: async () => ({}),
+    resolveCommand: () => process.execPath,
+    probeVersion: async () => ({ version: '17.0.5' }),
+    dataDirectory: folder,
+    homePath: folder,
+    connectSession: (launch) => {
+      const flagIndex = launch.args.indexOf('--session-dir')
+      sessionDir = flagIndex !== -1 ? (launch.args[flagIndex + 1] ?? '') : ''
+      return {
+        initialize: async () => ({ protocolVersion: 1 }),
+        start: async (options) => {
+          startedCwd = options.cwd
+          dirsExistedAtStart = existsSync(sessionDir) && existsSync(startedCwd)
+          return { kind: 'new', sessionId: 'listing', response: config('anthropic/claude-opus-4') }
+        },
+        setConfigOption: async (_id, model) => ({ configOptions: config(model).configOptions! }),
+        deleteSession: async () => ({}),
+        close: async () => {}
+      }
+    }
+  })
+  const service = createAgentModelCatalogService({
+    store: new AgentModelCatalogStore(),
+    getRecord: () => undefined,
+    getConversation: () => undefined,
+    drivesRecord: () => true,
+    resolveAccountHome: async () => ({ variable: 'PI_CODING_AGENT_DIR', path: folder }),
+    listsInChatFolder: new Set(['omp']),
+    probes: { omp: probe }
+  })
+  onTestFinished(() => service.stop())
+  const result = await service.read({ agent: 'omp', waitForListing: true })
+  await service.stop()
+  expect(result).toMatchObject({
+    origin: 'probe',
+    modelsDifferByWorkspace: true
+  })
+  if (result.origin === 'unknown') {
+    throw new Error('Expected OMP models')
+  }
+  expect(result.models.map((row) => row.id)).toEqual(['anthropic/claude-opus-4', 'openai/gpt-5'])
+  const expectedRoot = `${join(folder, 'acp-listing-sessions', 'omp')}${sep}`
+  expect(dirsExistedAtStart).toBe(true)
+  expect(sessionDir.startsWith(expectedRoot)).toBe(true)
+  expect(startedCwd.startsWith(expectedRoot)).toBe(true)
+  expect(sessionDir).not.toBe(startedCwd)
+  expect(existsSync(sessionDir)).toBe(false)
+  expect(existsSync(startedCwd)).toBe(false)
 })
