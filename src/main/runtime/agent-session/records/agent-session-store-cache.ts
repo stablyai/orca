@@ -47,7 +47,8 @@ export function applyAgentSessionStoreCacheRows(
           {
             ids: writes.sessionTabs.background ?? prior?.backgroundSessionIds() ?? [],
             backfilled:
-              writes.sessionTabs.backgroundBackfilled || (prior?.backgroundBackfilled ?? false)
+              writes.sessionTabs.backgroundBackfilled || (prior?.backgroundBackfilled ?? false),
+            ended: writes.sessionTabs.ended ?? prior?.endedSessionIds() ?? []
           }
         )
       : null

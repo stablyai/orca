@@ -11,10 +11,7 @@ import {
   isReadableAgentSessionStoreTab,
   isReadableRetiredAgentSessionClaimKey
 } from '../../runtime/agent-session/records/agent-session-store-row-rules'
-import type {
-  AgentSessionTabTable,
-  PersistedAgentSessionTab
-} from '../../runtime/agent-session/records/agent-session-tab-table'
+import type { PersistedAgentSessionTab } from '../../runtime/agent-session/records/agent-session-tab-table'
 
 type KeyedRowWrites = { upsert: [key: string, json: string][]; remove: string[] }
 
@@ -29,6 +26,8 @@ export type AgentSessionStoreRowWrites = {
     tabs: PersistedAgentSessionTab[]
     /** Open chats with no tab; null when unchanged. */
     background: string[] | null
+    /** Bot chats a person ended; null when unchanged. */
+    ended: string[] | null
     /** The one-time background backfill finished in this write. */
     backgroundBackfilled: boolean
   } | null
@@ -130,7 +129,14 @@ export function agentSessionStoreRowChanges(
       ? {
           recorded: draft.sessionTabs !== null,
           tabs,
-          background: changedBackground(published.sessionTabs, draft.sessionTabs),
+          background: changedList(
+            published.sessionTabs?.backgroundSessionIds(),
+            draft.sessionTabs?.backgroundSessionIds()
+          ),
+          ended: changedList(
+            published.sessionTabs?.endedSessionIds(),
+            draft.sessionTabs?.endedSessionIds()
+          ),
           backgroundBackfilled:
             (draft.sessionTabs?.backgroundBackfilled ?? false) &&
             !(published.sessionTabs?.backgroundBackfilled ?? false)
@@ -139,12 +145,12 @@ export function agentSessionStoreRowChanges(
   }
 }
 
-function changedBackground(
-  published: AgentSessionTabTable | null,
-  next: AgentSessionTabTable | null
+function changedList(
+  published: readonly string[] | undefined,
+  next: readonly string[] | undefined
 ): string[] | null {
-  const before = published?.backgroundSessionIds() ?? []
-  const after = next?.backgroundSessionIds() ?? []
+  const before = published ?? []
+  const after = [...(next ?? [])]
   return before.length === after.length && before.every((id, index) => id === after[index])
     ? null
     : after

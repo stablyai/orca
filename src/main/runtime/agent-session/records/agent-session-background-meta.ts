@@ -3,6 +3,8 @@ import type { StoredAgentSessionBackground } from './agent-session-tab-table'
 
 /** A JSON list of open chats with no tab; older builds ignore it. */
 const BACKGROUND_SESSIONS = 'background_sessions'
+/** A JSON list of bot chats a person ended; older builds ignore it and see them as closed. */
+const ENDED_SESSIONS = 'ended_sessions'
 /** TEMPORARY: marks the one-time background backfill done; delete with it after the next release. */
 const BACKGROUND_SESSIONS_BACKFILLED = 'background_sessions_backfilled'
 
@@ -19,13 +21,13 @@ function writeMeta(db: Database.Database, key: string, value: string | null): vo
   ).run(...(value === null ? [key] : [key, value]))
 }
 
-function readBackgroundSessionIds(db: Database.Database): string[] {
-  const value = readMeta(db, BACKGROUND_SESSIONS)
+function readSessionIdList(db: Database.Database, key: string): string[] {
+  const value = readMeta(db, key)
   try {
     const ids: unknown = typeof value === 'string' ? JSON.parse(value) : []
     return Array.isArray(ids) ? ids.filter((id): id is string => typeof id === 'string') : []
   } catch {
-    // An unreadable list only costs those chats their open state: their mail waits.
+    // An unreadable list only costs those chats their state: their mail waits, or an ended chat reads closed.
     return []
   }
 }
@@ -34,15 +36,16 @@ export function readAgentSessionBackgroundMeta(
   db: Database.Database
 ): StoredAgentSessionBackground {
   return {
-    ids: readBackgroundSessionIds(db),
-    backfilled: readMeta(db, BACKGROUND_SESSIONS_BACKFILLED) !== undefined
+    ids: readSessionIdList(db, BACKGROUND_SESSIONS),
+    backfilled: readMeta(db, BACKGROUND_SESSIONS_BACKFILLED) !== undefined,
+    ended: readSessionIdList(db, ENDED_SESSIONS)
   }
 }
 
 /** Most tab writes keep the background list (`background: null`); those writes skip it. */
 export function writeAgentSessionBackgroundMeta(
   db: Database.Database,
-  write: { background: string[] | null; backgroundBackfilled: boolean }
+  write: { background: string[] | null; backgroundBackfilled: boolean; ended?: string[] | null }
 ): void {
   if (write.background) {
     writeMeta(
@@ -50,6 +53,9 @@ export function writeAgentSessionBackgroundMeta(
       BACKGROUND_SESSIONS,
       write.background.length > 0 ? JSON.stringify(write.background) : null
     )
+  }
+  if (write.ended) {
+    writeMeta(db, ENDED_SESSIONS, write.ended.length > 0 ? JSON.stringify(write.ended) : null)
   }
   if (write.backgroundBackfilled) {
     writeMeta(db, BACKGROUND_SESSIONS_BACKFILLED, '1')

@@ -143,4 +143,21 @@ describe('chat tab table', () => {
     await reopened.setSessionTabVisibility('session-alpha', false)
     expect((await open()).isSessionInBackground('session-alpha')).toBe(false)
   })
+
+  it('keeps an ended chat ended across a restart, until it is shown again', async () => {
+    const store = await open()
+    await store.reserveOwner(reserveRequest())
+    await store.setSessionTabVisibility('session-alpha', false, undefined, { background: true })
+    await store.setSessionTabVisibility('session-alpha', false, undefined, { end: true })
+    expect(store.isSessionEnded('session-alpha')).toBe(true)
+    expect(store.isSessionInBackground('session-alpha')).toBe(false)
+
+    const reopened = await open()
+    expect(reopened.isSessionEnded('session-alpha')).toBe(true)
+    expect(reopened.isSessionInBackground('session-alpha')).toBe(false)
+
+    await reopened.setSessionTabVisibility('session-alpha', true)
+    expect(reopened.isSessionEnded('session-alpha')).toBe(false)
+    expect((await open()).isSessionEnded('session-alpha')).toBe(false)
+  })
 })

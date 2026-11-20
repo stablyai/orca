@@ -2,7 +2,7 @@ import { AgentSessionRecordPublication } from './agent-session-record-publicatio
 import { isAgentSessionSurfaceTabId } from '../../../../shared/agent-session/view/agent-session-surface-tab-id'
 import type { AgentSessionReserveRequest } from '../ownership/agent-session-reservation-admission'
 import { agentSessionRefusalError } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
-import { structuredAgentSessionTabId } from '../../../../shared/agent-session/view/structured-agent-session-projection'
+import { AgentSessionTabTable } from './agent-session-tab-index'
 import {
   hasAgentSessionConversation,
   listAgentSessionConversations,
@@ -10,129 +10,12 @@ import {
 } from './agent-session-store-state'
 import type { AgentSessionConversationView } from '../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 
-/** Tab membership defines visibility; tab and session ids form a one-to-one mapping. */
-export class AgentSessionTabTable {
-  private readonly sessionByTab = new Map<string, string>()
-  private readonly tabBySession = new Map<string, string>()
-  /** Live chats with no tab (started in the background, or kept running past their tab's close);
-   *  unlike a chat whose tab a person closed, they are still open. */
-  private readonly background = new Set<string>()
-  /** TEMPORARY, with `backfillBackgroundSessions`: set once chats from before the list are added. */
-  backgroundBackfilled = false
-
-  constructor(
-    entries: Iterable<readonly [tabId: string, sessionId: string]> = [],
-    background: Iterable<string> = []
-  ) {
-    for (const [tabId, sessionId] of entries) {
-      this.put(tabId, sessionId)
-    }
-    for (const sessionId of background) {
-      this.holdInBackground(sessionId)
-    }
-  }
-
-  tabIdFor(sessionId: string): string | undefined {
-    return this.tabBySession.get(sessionId)
-  }
-
-  sessionIdFor(tabId: string): string | undefined {
-    return this.sessionByTab.get(tabId)
-  }
-
-  /** Visible sessions in tab issuance order. */
-  sessionIds(): string[] {
-    return [...this.sessionByTab.values()]
-  }
-
-  entries(): [tabId: string, sessionId: string][] {
-    return [...this.sessionByTab.entries()]
-  }
-
-  /** Show once, using the reserved id or the id clients derive. */
-  show(sessionId: string, tabId?: string): void {
-    if (this.tabBySession.has(sessionId)) {
-      return
-    }
-    const derived = structuredAgentSessionTabId(sessionId)
-    this.put(tabId ?? derived, sessionId)
-  }
-
-  hide(sessionId: string): string | undefined {
-    this.background.delete(sessionId)
-    const tabId = this.tabBySession.get(sessionId)
-    if (tabId !== undefined) {
-      this.tabBySession.delete(sessionId)
-      this.sessionByTab.delete(tabId)
-    }
-    return tabId
-  }
-
-  /** Take the tab away but keep the chat open. */
-  holdInBackground(sessionId: string): void {
-    this.hide(sessionId)
-    this.background.add(sessionId)
-  }
-
-  isInBackground(sessionId: string): boolean {
-    return this.background.has(sessionId)
-  }
-
-  backgroundSessionIds(): string[] {
-    return [...this.background]
-  }
-
-  clone(): AgentSessionTabTable {
-    const copy = new AgentSessionTabTable(this.sessionByTab, this.background)
-    copy.backgroundBackfilled = this.backgroundBackfilled
-    return copy
-  }
-
-  equals(other: AgentSessionTabTable): boolean {
-    const left = this.entries()
-    const right = other.entries()
-    return (
-      this.backgroundBackfilled === other.backgroundBackfilled &&
-      this.background.size === other.background.size &&
-      [...this.background].every((sessionId) => other.background.has(sessionId)) &&
-      left.length === right.length &&
-      left.every(([tabId, sessionId], index) => {
-        const [otherTabId, otherSessionId] = right[index]
-        return tabId === otherTabId && sessionId === otherSessionId
-      })
-    )
-  }
-
-  private put(tabId: string, sessionId: string): void {
-    const owner = this.sessionByTab.get(tabId)
-    if (owner !== undefined && owner !== sessionId) {
-      throw agentSessionRefusalError('agent_session_conflict', { reason: 'tabIdTaken' })
-    }
-    this.hide(sessionId)
-    this.sessionByTab.set(tabId, sessionId)
-    this.tabBySession.set(sessionId, tabId)
-  }
-}
-
-/** The background list as it crosses the writer boundary beside the tab entries. */
-export type StoredAgentSessionBackground = { ids: string[]; backfilled: boolean }
-
-export function storedAgentSessionBackground(
-  table: AgentSessionTabTable | null
-): StoredAgentSessionBackground | null {
-  return table
-    ? { ids: table.backgroundSessionIds(), backfilled: table.backgroundBackfilled }
-    : null
-}
-
-export function agentSessionTabTableFromStored(
-  entries: Iterable<readonly [tabId: string, sessionId: string]>,
-  background: StoredAgentSessionBackground | null | undefined
-): AgentSessionTabTable {
-  const table = new AgentSessionTabTable(entries, background?.ids ?? [])
-  table.backgroundBackfilled = background?.backfilled ?? false
-  return table
-}
+export {
+  AgentSessionTabTable,
+  agentSessionTabTableFromStored,
+  storedAgentSessionBackground,
+  type StoredAgentSessionBackground
+} from './agent-session-tab-index'
 
 /** TEMPORARY, with `backfillBackgroundSessions`: holds the named tabless chats once. */
 export function backfillAgentSessionBackground(
@@ -159,6 +42,8 @@ export type AgentSessionTabVisibilityOptions = {
   capture?: (tabId: string | null) => void
   /** Hide the tab but keep the chat open (see `isSessionInBackground`). */
   background?: boolean
+  /** Hide the tab, drop any background hold, and mark the bot chat ended (see `isSessionEnded`). */
+  end?: boolean
 }
 
 /** Derive the complete legacy selection only at a real ownership/visibility boundary. */
@@ -212,7 +97,8 @@ export function setAgentSessionTabVisibility(
   visible: boolean,
   tabId?: string,
   legacyIds: readonly string[] = [],
-  background = false
+  background = false,
+  end = false
 ): void {
   if (visible && !hasAgentSessionConversation(state, sessionId)) {
     throw agentSessionRefusalError('agent_session_identity_required', { reason: 'recordMissing' })
@@ -224,6 +110,9 @@ export function setAgentSessionTabVisibility(
   )
   if (visible) {
     state.sessionTabs.show(sessionId, tabId)
+    state.sessionTabs.renewShowing(sessionId)
+  } else if (end) {
+    state.sessionTabs.end(sessionId)
   } else if (background) {
     state.sessionTabs.holdInBackground(sessionId)
   } else {
@@ -299,6 +188,15 @@ export abstract class AgentSessionRecordTabs extends AgentSessionRecordPublicati
   getSessionTabId = (sessionId: string): string | null =>
     this.transactions.state.sessionTabs?.tabIdFor(sessionId) ?? null
 
+  /** Names the current showing of a session's tab, so a late close of an earlier one is told apart. */
+  getSessionTabShowing = (id: string): string | null =>
+    this.transactions.state.sessionTabs?.showingOf(id) ?? null
+
+  /** A bot chat a person ended, until it is shown or held in the background again. */
+  isSessionEnded = (id: string): boolean =>
+    (this.transactions.state.sessionTabs?.isEnded(id) ?? false) &&
+    hasAgentSessionConversation(this.transactions.state, id)
+
   /** A live chat with no tab, which no person closed. */
   isSessionInBackground = (id: string): boolean =>
     (this.transactions.state.sessionTabs?.isInBackground(id) ?? false) &&
@@ -326,7 +224,7 @@ export abstract class AgentSessionRecordTabs extends AgentSessionRecordPublicati
     sessionId: string,
     visible: boolean,
     tabId?: string,
-    { check, capture, background, writerFence }: AgentSessionTabVisibilityOptions = {}
+    { check, capture, background, end, writerFence }: AgentSessionTabVisibilityOptions = {}
   ): Promise<void> {
     return this.commitStoreCommand(
       {
@@ -336,7 +234,8 @@ export abstract class AgentSessionRecordTabs extends AgentSessionRecordPublicati
         tabId,
         legacyTabIds: this.transactions.legacySessionTabIds,
         ...(writerFence ? { writerFence } : {}),
-        ...(background ? { background: true } : {})
+        ...(background ? { background: true } : {}),
+        ...(end ? { end: true } : {})
       },
       check
     ).then((tab) => {
