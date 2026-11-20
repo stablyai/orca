@@ -232,13 +232,13 @@ export function normalizeHookPayload(
   if (!turnOrder) {
     return null
   }
-  const promptText = extractedPrompt.text
   const dispatched = normalizeProviderEvent({
     state,
     source,
     eventName: turnOrder.eventName,
     opensTurn: turnOrder.opensTurn,
-    promptText,
+    isReplay: options.isReplay,
+    promptText: extractedPrompt.text,
     paneKey,
     hookPayload: turnOrder.hookPayload,
     envelope: record,
@@ -278,7 +278,7 @@ export function normalizeHookPayload(
     ...(restoredUnconfirmed ? { restoredUnconfirmed: true } : {}),
     hasExplicitPrompt:
       source === 'amp'
-        ? hasExplicitAmpPrompt(eventName, promptText, hookPayloadRecord)
+        ? hasExplicitAmpPrompt(eventName, extractedPrompt.text, hookPayloadRecord)
           ? true
           : undefined
         : hasExplicitUserPrompt(

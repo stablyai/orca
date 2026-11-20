@@ -6,11 +6,24 @@ import { readString } from '../../../tool-input-preview'
 import { readFirstString } from '../../../interactive-tool'
 import { withClaudeToolRequestId } from '../../../claude-tool-request-identity'
 import { isClaudePluginToolCall } from './claude-tool-events'
-import { extractPromptText } from '../../../prompt-fields'
+import type { ExtractedPromptText } from '../../../prompt-fields'
 import { hasExplicitUserPrompt } from '../../../provider-event-routing'
 
 /** A UserPromptSubmit whose turn already began: it landed late, or was typed into the running turn. */
 export const CLAUDE_LATE_PROMPT_SUBMIT_EVENT = 'UserPromptSubmit:late'
+
+/** A person's live prompt that joined an open turn still counts as sent; a task wakeup's never does. */
+export function isLateClaudePromptSent(
+  eventName: unknown,
+  extractedPrompt: ExtractedPromptText,
+  isReplay: boolean | undefined
+): boolean {
+  return (
+    eventName === CLAUDE_LATE_PROMPT_SUBMIT_EVENT &&
+    isReplay !== true &&
+    hasExplicitUserPrompt('claude', 'UserPromptSubmit', extractedPrompt, '')
+  )
+}
 
 // Why 16: a late prompt trails its own turn by milliseconds; this only has to outlast a burst of short wakeup turns.
 const TURN_IDS_PER_SESSION = 16
@@ -138,7 +151,7 @@ function orderClaudeTurn(
 
 type ClaudeHookOrder = ClaudeTurnOrder & {
   hookPayload: Record<string, unknown>
-  hostTurnSignals: Pick<AgentHookEventPayload, 'nativeTurnKey' | 'opensTurn' | 'lateExplicitPrompt'>
+  hostTurnSignals: Pick<AgentHookEventPayload, 'nativeTurnKey' | 'opensTurn'>
 }
 
 /** Orders an admitted hook into its Claude turn and names a Claude PermissionRequest's request once, so the listener
@@ -162,15 +175,9 @@ export function orderClaudeHook(
   if (!order) {
     return null
   }
-  // A person's live prompt that joined an open turn still counts as sent; a task wakeup's never does.
-  const lateExplicitPrompt =
-    order.eventName === CLAUDE_LATE_PROMPT_SUBMIT_EVENT &&
-    options.isReplay !== true &&
-    hasExplicitUserPrompt('claude', 'UserPromptSubmit', extractPromptText(hookPayload), '')
   const hostTurnSignals = {
     ...(order.turnKey ? { nativeTurnKey: order.turnKey } : {}),
-    ...(order.opensTurn ? { opensTurn: true as const } : {}),
-    ...(lateExplicitPrompt ? { lateExplicitPrompt: true as const } : {})
+    ...(order.opensTurn ? { opensTurn: true as const } : {})
   }
   if (source !== 'claude') {
     return { ...order, hookPayload, hostTurnSignals }
