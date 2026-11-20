@@ -123,7 +123,7 @@ export function NativeChatAgentMessageCard({
         waitingId ? <NativeChatWaitingAgentMailActions queuedMessageId={waitingId} /> : undefined
       }
       timestamp={waiting ? null : message.timestamp}
-      disclosureKey={`agent-message:${message.id}`}
+      disclosureKey={`agent-message:${message.queuedMessageId ?? message.id}`}
       onOpenChange={(open) => {
         if (!open) {
           requestAnimationFrame(onRefolded)

@@ -19,7 +19,10 @@ import { dispatchWasWithdrawn } from '../requests/structured-agent-session-dispa
 import { isStructuredAgentSessionStartFailureRow } from '../failures/structured-agent-session-start-failure-row-key'
 import { isRootAgentJournalItem } from '../journal/agent-session-journal-producer'
 import { projectStructuredItemsToNativeChat } from './structured-agent-session-projection'
-import { structuredAgentSessionEchoRows } from './structured-agent-session-echo-rows'
+import {
+  deliveredAgentMailRow,
+  structuredAgentSessionEchoRows
+} from './structured-agent-session-echo-rows'
 import {
   automationResultMarks,
   withAutomationResultMarks
@@ -205,7 +208,9 @@ export function projectStructuredAgentSessionMessageRows(
             deliveryState: submission.dispatchState,
             ...(submission.queuedMessageId ? { queuedMessageId: submission.queuedMessageId } : {})
           }
-        : row
+        : submission?.queuedMessageId && row.from
+          ? deliveredAgentMailRow(row, submission.queuedMessageId)
+          : row
     // Until handover, queued sends have no conversation position.
     if (
       submission &&

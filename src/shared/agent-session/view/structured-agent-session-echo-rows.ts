@@ -60,3 +60,20 @@ export function structuredAgentSessionEchoRows(
       }
     })
 }
+
+const deliveredAgentMail = new WeakMap<NativeChatMessage, NativeChatMessage>()
+
+/** A delivered agent message keeps the queued id its waiting row had, so its open state carries
+ *  over; cached per row so an unchanged row keeps its identity across projections. */
+export function deliveredAgentMailRow(
+  row: NativeChatMessage,
+  queuedMessageId: string
+): NativeChatMessage {
+  const cached = deliveredAgentMail.get(row)
+  if (cached?.queuedMessageId === queuedMessageId) {
+    return cached
+  }
+  const next = { ...row, queuedMessageId }
+  deliveredAgentMail.set(row, next)
+  return next
+}

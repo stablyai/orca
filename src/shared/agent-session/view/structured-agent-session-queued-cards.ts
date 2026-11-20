@@ -31,6 +31,7 @@ import {
 } from '../journal/agent-session-message-source'
 import { handedOffQueuedMessageIds } from './structured-agent-session-draft-hand-off'
 import type { StructuredAgentSessionOptimisticMessage } from './structured-agent-session-message-projection'
+import { structuralValuesEqual } from '../../collections/structural-value-equality'
 import {
   NATIVE_CHAT_IMAGE_LABEL_ENGLISH,
   nativeChatImageLabel,
@@ -125,6 +126,36 @@ export function waitingAgentMailEchoes(
       queuedAt: null,
       waitingAgentMail: true as const
     }))
+}
+
+/** One chat's echoes with its waiting agent mail after them. While the mail is unchanged it returns
+ *  the previous list, so a queue change elsewhere keeps the transcript's incremental projection. */
+export function createTranscriptEchoes(): (
+  sends: readonly StructuredAgentSessionOptimisticMessage[],
+  queuedMessages: readonly AgentSessionQueuedMessage[] | null | undefined,
+  submissions: readonly AgentJournalSubmission[]
+) => readonly StructuredAgentSessionOptimisticMessage[] {
+  let previous: readonly StructuredAgentSessionOptimisticMessage[] = []
+  return (sends, queuedMessages, submissions) => {
+    const mail = waitingAgentMailEchoes(queuedMessages, submissions)
+    const next = mail.length > 0 ? [...sends, ...mail] : sends
+    const same =
+      previous.length === next.length &&
+      next.every((entry, index) => {
+        const before = previous[index]!
+        return (
+          entry === before ||
+          (entry.waitingAgentMail === true &&
+            before.waitingAgentMail === true &&
+            entry.clientMessageId === before.clientMessageId &&
+            structuralValuesEqual(entry.body, before.body))
+        )
+      })
+    if (!same) {
+      previous = next
+    }
+    return previous
+  }
 }
 
 /** A person's steer the running turn will take in: never a card where the transcript draws it. */

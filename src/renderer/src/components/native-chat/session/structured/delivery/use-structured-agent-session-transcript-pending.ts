@@ -7,7 +7,7 @@ import {
   steeringQueuedMessageEchoes
 } from '../../../queue/structured-agent-session-sending-queued-cards'
 import type { StructuredAgentSessionPendingSend } from './structured-agent-session-pending-sends'
-import { waitingAgentMailEchoes } from '../../../../../../../shared/agent-session/view/structured-agent-session-queued-cards'
+import { createTranscriptEchoes } from '../../../../../../../shared/agent-session/view/structured-agent-session-queued-cards'
 
 /** The sends the transcript draws before the host records them: queued ones stay in their cards,
  *  and other agents' waiting mail follows them in queue order. */
@@ -22,6 +22,7 @@ export function useStructuredAgentSessionTranscriptPending(
 ): readonly StructuredAgentSessionOptimisticMessage[] {
   const { queuedMessages, submissions } = chat
   const queuePaused = chat.queuePause !== null
+  const echoes = useMemo(createTranscriptEchoes, [])
   return useMemo(() => {
     const queuedIds = (queuedMessages ?? []).map((message) => message.messageId)
     const outside = pendingSendsOutsideQueuedCards(pending, queuedIds, isWorking)
@@ -29,9 +30,10 @@ export function useStructuredAgentSessionTranscriptPending(
       agentWorking: isWorking,
       queuePaused
     })
-    const agentMail = waitingAgentMailEchoes(queuedMessages, submissions)
-    return steering.length > 0 || agentMail.length > 0
-      ? [...outside, ...steering, ...agentMail]
-      : outside
-  }, [isWorking, pending, queuePaused, queuedMessages, submissions])
+    return echoes(
+      steering.length > 0 ? [...outside, ...steering] : outside,
+      queuedMessages,
+      submissions
+    )
+  }, [echoes, isWorking, pending, queuePaused, queuedMessages, submissions])
 }

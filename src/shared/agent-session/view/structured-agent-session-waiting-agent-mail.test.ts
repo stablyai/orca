@@ -19,6 +19,7 @@ import {
   type StructuredAgentSessionOptimisticMessage
 } from './structured-agent-session-message-projection'
 import {
+  createTranscriptEchoes,
   projectQueuedMessageCards,
   waitingAgentMailEchoes
 } from './structured-agent-session-queued-cards'
@@ -275,4 +276,13 @@ describe("worker mail, which the host delivers past a Stop and ahead of the pers
       cards: ['follow-up']
     })
   })
+})
+
+it("keeps the transcript's echoes across a queue change that leaves the waiting mail alone", () => {
+  const echoes = createTranscriptEchoes()
+  const before = echoes([], [card('mail', 1), personCard('a', 2), personCard('b', 3)], [])
+  // A fresh publication of the same mail, after the person reorders their own follow-ups.
+  const after = echoes([], [card('mail', 1), personCard('b', 2), personCard('a', 3)], [])
+  expect(after).toBe(before)
+  expect(echoes([], [card('mail', 1), card('more', 2)], []).length).toBe(2)
 })

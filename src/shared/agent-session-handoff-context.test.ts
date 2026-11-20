@@ -29,6 +29,11 @@ it('retains saved decisions, delivery states and image references while excludin
     text('reasoning', 'Private reasoning'),
     text('system', 'Prompt state: resolved\nSelected choice: Keep planning'),
     { ...text('user', 'Do not deploy'), queued: true },
+    {
+      ...text('user', 'Private waiting worker mail'),
+      queued: true,
+      from: { kind: 'agent', senders: [], orchestration: null }
+    },
     { ...text('user', 'Unsent request'), unsent: true },
     message('user', [{ type: 'image-ref', path: '/work/reference.png' }])
   ])

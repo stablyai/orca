@@ -7,7 +7,7 @@ import {
 import type { StructuredAgentSessionState } from '../../../../../../src/shared/agent-session/view/live-read/structured-agent-session-reducer'
 import type { StructuredAgentSessionOptimisticMessage } from '../../../../../../src/shared/agent-session/view/structured-agent-session-message-projection'
 import type { AgentSessionQueuedMessage } from '../../../../../../src/shared/agent-session/requests/agent-session-queued-message-wire'
-import { waitingAgentMailEchoes } from '../../../../../../src/shared/agent-session/view/structured-agent-session-queued-cards'
+import { createTranscriptEchoes } from '../../../../../../src/shared/agent-session/view/structured-agent-session-queued-cards'
 import { createStructuredAgentSessionMessageProjection } from '../../../../../../src/shared/agent-session/view/structured-agent-session-message-stream'
 import { tuiAgentDisplayName } from '../../../../../../src/shared/agent-launch/catalog/tui-agent-display-names'
 import { withNativeChatCutTurnNotices } from '../../../../../../src/shared/native-chat/transcript/turns/native-chat-cut-turn-notice'
@@ -75,10 +75,11 @@ export function useMobileStructuredTranscript(
     [agent, floor, state.items]
   )
   // Other agents' waiting mail follows this phone's sends at the transcript's end, as on desktop.
-  const optimistic = useMemo(() => {
-    const agentMail = waitingAgentMailEchoes(host.queuedMessages, state.submissions)
-    return agentMail.length > 0 ? [...sends, ...agentMail] : sends
-  }, [host.queuedMessages, sends, state.submissions])
+  const echoes = useMemo(createTranscriptEchoes, [])
+  const optimistic = useMemo(
+    () => echoes(sends, host.queuedMessages, state.submissions),
+    [echoes, host.queuedMessages, sends, state.submissions]
+  )
   const projectMessages = useMemo(
     () => createStructuredAgentSessionMessageProjection(mobileStructuredTranscript.messages),
     []

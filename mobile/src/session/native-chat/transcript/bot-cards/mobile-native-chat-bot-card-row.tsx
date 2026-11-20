@@ -34,5 +34,8 @@ export function mobileNativeChatBotCardRow(
       </View>
     )
   }
-  return foldedIntoRequest ? <View testID={mobileNativeChatRowId(rowId)} /> : null
+  // Mail still waiting keeps its row, and its Steer and Delete, until the agent takes it.
+  return foldedIntoRequest && !message.queued ? (
+    <View testID={mobileNativeChatRowId(rowId)} />
+  ) : null
 }

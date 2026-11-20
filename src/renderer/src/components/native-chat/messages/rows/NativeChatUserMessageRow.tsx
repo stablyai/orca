@@ -103,7 +103,8 @@ export function NativeChatUserMessageRow({
   const folded = useFoldedIntoBotRequest(from)
   // A Slack message draws its markup; copy keeps `markdown`, its readable form.
   const drawn = message.drawnMarkdown
-  if (folded) {
+  // Mail still waiting keeps its row, and its Steer and Delete, until the agent takes it.
+  if (folded && !message.queued) {
     return <div ref={rowRef} hidden />
   }
   return (

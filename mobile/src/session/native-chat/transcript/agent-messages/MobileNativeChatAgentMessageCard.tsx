@@ -120,7 +120,7 @@ export const MobileNativeChatAgentMessageCard = memo(function MobileNativeChatAg
         )
       }
       timestamp={waiting ? null : message.timestamp}
-      disclosureKey={`agent-message:${message.id}`}
+      disclosureKey={`agent-message:${message.queuedMessageId ?? message.id}`}
       fontScale={fontScale}
       onLongPress={onLongPress}
       details={

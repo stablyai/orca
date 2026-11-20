@@ -66,7 +66,12 @@ function contextEntryChars(entries: readonly { text: string }[]): number {
 
 function prioritizeConversation(messages: readonly NativeChatMessage[]): ConversationMessage[] {
   const candidates = messages.flatMap((message, messageIndex) => {
-    if (isNativeChatOrcaCard(message) || message.role === 'reasoning') {
+    // Another agent's mail the agent has not taken is no one's words in this conversation yet.
+    if (
+      isNativeChatOrcaCard(message) ||
+      message.role === 'reasoning' ||
+      (message.queued && message.from)
+    ) {
       return []
     }
     const fallbacks = workerTranscriptBlockFallbacks(message.blocks)
