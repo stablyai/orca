@@ -229,8 +229,6 @@ export abstract class RuntimeConstructionServices extends RuntimeAgentStatusRead
       immediate?: boolean
     }
   ): void
-  protected abstract finishDelayedForegroundSnapshot(ptyId: string, changed: boolean): void
-  protected abstract releaseCommandCodeComposer(ptyId: string, previous: TerminalAgent | null): void
   protected abstract wslDistroByPtyId: Map<string, string>
   protected abstract runAfterPendingTerminalSideEffectFacts(ptyId: string, run: () => void): void
   protected abstract emitTerminalAgentStatusEvents(
