@@ -235,6 +235,10 @@ async function finishInterruptedLocalWorktreeRemoval(
     throwIfSignalAborted(args.stopSignal)
     await args.stopPtys?.()
     throwIfSignalAborted(args.stopSignal)
+    // Teardown awaited: the folder may have been swapped for another checkout since the first check.
+    if (deletable || native) {
+      await assertCheckoutNotReplaced(record)
+    }
   } catch (error) {
     await gate.finish(false)
     throw error
