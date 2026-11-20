@@ -2,6 +2,7 @@
 
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import type { BotItem } from '../../../../../shared/bots/bot-items'
 import type { Bot } from '../../../../../shared/bot-types'
 import { makeTestBotItem } from '../../../../../shared/bots/bot-item.test-fixture'
@@ -121,7 +122,7 @@ function Section({
 }
 
 it('keeps a chat’s items up when their re-read fails, saying so, with Retry', () => {
-  render(<Section />)
+  render(<Section />, { wrapper: TooltipProvider })
 
   expect(screen.getByText('Item 1')).toBeTruthy()
   expect(screen.getByText("Couldn't refresh items. Showing the last read.")).toBeTruthy()
@@ -131,7 +132,8 @@ it('keeps a chat’s items up when their re-read fails, saying so, with Retry', 
 
 it('lists Orca’s asks while items load and after', () => {
   const { rerender } = render(
-    <Section filter={NO_FILTER} read={null} state="loading" asks={SIGN_IN} />
+    <Section filter={NO_FILTER} read={null} state="loading" asks={SIGN_IN} />,
+    { wrapper: TooltipProvider }
   )
 
   expect(screen.getByRole('button', { name: 'Open Linear' })).toBeTruthy()

@@ -1,9 +1,10 @@
 import { waitForPromiseWithSignal } from '../../../shared/concurrency/abort-signal-reason'
-import { homedir } from 'node:os'
 import { delimiter, isAbsolute, resolve as resolvePath } from 'node:path'
 import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import {
+  expandHomeArgs,
+  isSpawnableCommand,
   resolveCliCommand,
   resolveExecutableCommand
 } from '../../../shared/shell/command-resolution/node-cli-command-resolution'
@@ -12,6 +13,10 @@ import {
   structuredAgentCommandPlan
 } from '../../../shared/agent-launch/startup/tui-agent-launch-command-override'
 import '../agent-session-wire/providers/structured-agent-session-adapter'
+import {
+  providerDiagnostic,
+  withProviderDiagnostic
+} from '../../../shared/agent-session/failures/agent-session-failure'
 import {
   AgentSessionPreSpawnError,
   isAgentSessionPreSpawnError
@@ -68,21 +73,17 @@ function resolveOverride(
   return command && plan
     ? {
         command,
-        prefixArgs: plan.prefixArgs.map((token) =>
-          token.startsWith('~/')
-            ? resolvePath(options.homePath ?? homedir(), token.slice(2))
-            : token
-        )
+        prefixArgs: expandHomeArgs(plan.prefixArgs, options.homePath)
       }
     : null
 }
 
-// Extensionless commands cannot spawn on Windows; .cmd/.bat use Orca’s shim handling.
-function spawnableOn(platform: NodeJS.Platform, command: string): boolean {
-  return platform !== 'win32' || /\.(exe|com|cmd|bat)$/i.test(command)
+export type StructuredAgentCommand = {
+  command: string
+  prefixArgs: string[]
+  /** The user's Command setting as written; absent for the stock CLI. */
+  configured?: string
 }
-
-export type StructuredAgentCommand = { command: string; prefixArgs: string[] }
 
 /** Read live settings on every lookup; invalid explicit commands must refuse instead of launching stock CLI. */
 export function resolveStructuredAgentCommand(
@@ -111,13 +112,24 @@ export function resolveStructuredAgentCommand(
     }
     return { command: resolved, prefixArgs: [] }
   }
+  const configured = settings.agentCmdOverrides?.[agent]?.trim() ?? ''
+  const platform = options.platform ?? process.platform
   const invocation = resolveOverride(agent, settings, options)
-  if (!invocation || !spawnableOn(options.platform ?? process.platform, invocation.command)) {
-    throw new AgentSessionPreSpawnError(`the ${agent} Command setting is not a runnable program`, {
-      reason: 'agentCommandNotRunnable'
-    })
+  if (!invocation || !isSpawnableCommand(platform, invocation.command)) {
+    const refusal = new AgentSessionPreSpawnError(
+      `the ${agent} Command setting is not a runnable program`,
+      { reason: 'agentCommandNotRunnable' }
+    )
+    // Shell syntax keeps the general sentence, which says how to fix it; only a name not found is named.
+    const plan = invocation ? null : structuredAgentCommandPlan(configured, platform)
+    throw plan
+      ? withProviderDiagnostic(
+          refusal,
+          providerDiagnostic(`'${plan.program}' isn't a program Orca can find`, 'person')
+        )
+      : refusal
   }
-  return invocation
+  return { ...invocation, configured }
 }
 
 export type ProgramSearch<T> = {

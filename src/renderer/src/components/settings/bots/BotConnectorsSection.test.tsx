@@ -130,7 +130,7 @@ const sentence =
 
 describe('BotConnectorsSection', () => {
   it('gives a Slack workspace a row named for it, with no status while well, and its own Who can ask', async () => {
-    renderWith(bot(), {
+    renderWith(bot({ name: '<b>Scout</b> & co' }), {
       state: 'installed',
       teamId: 'T05',
       teamName: 'Globex',
@@ -145,6 +145,9 @@ describe('BotConnectorsSection', () => {
     expect(screen.getByText('Sam Lee')).toBeDefined()
     // Another service's people belong on that service's card.
     expect(screen.queryByText('Cy on Discord')).toBeNull()
+    const mention = screen.getByText('@<b>Scout</b> & co')
+    expect(mention.tagName).toBe('CODE')
+    expect(mention.querySelector('b')).toBeNull()
   })
 
   it('says once, signed out, what is off and offers Sign in, which reads the connectors again', async () => {
@@ -230,7 +233,7 @@ describe('BotConnectorsSection', () => {
     expect(await screen.findByText('web, api · signed in as @dana')).toBeDefined()
     expect(screen.getByRole('button', { name: 'GitHub · acme' })).toBeDefined()
     expect(
-      screen.getByText(sentence('Mention @orca-ide scout … on an issue or pull request.'))
+      screen.getByText(sentence('Mention @orca-bots scout … on an issue or pull request.'))
     ).toBeDefined()
     // Each row lists only its own service's people.
     expect(screen.getAllByText('octocat')).toHaveLength(1)

@@ -102,14 +102,28 @@ export async function maintainRepoPackIndex(
     const startedAt = Date.now()
     // Git 2.20+: writes lookup metadata atomically without rewriting or deleting packs.
     // Let the writer finish: force-killing it on Windows can strand its index lock.
-    await gitExecFileAsync(['multi-pack-index', 'write'], {
-      cwd: args.repoPath,
-      ...(args.wslDistro ? { wslDistro: args.wslDistro } : {}),
-      admissionTier: 'background',
-      timeout: PACK_INDEX_TIMEOUT_MS,
-      admissionSignal: signal,
-      canStart: args.canWrite
-    })
+    let termination: Promise<void> | undefined
+    try {
+      await gitExecFileAsync(['multi-pack-index', 'write'], {
+        cwd: args.repoPath,
+        ...(args.wslDistro ? { wslDistro: args.wslDistro } : {}),
+        admissionTier: 'background',
+        timeout: PACK_INDEX_TIMEOUT_MS,
+        admissionSignal: signal,
+        canStart: args.canWrite,
+        ...(process.platform === 'win32'
+          ? {
+              observeChildTermination: (ended: Promise<void>) => {
+                termination = ended
+              }
+            }
+          : {})
+      })
+    } finally {
+      if (termination) {
+        await termination
+      }
+    }
     const writtenStamp = await readRepoPackDirectoryStamp(directory).catch(() => undefined)
     // A racing new pack remains readable; the forced refresh bounds a missed directory change.
     if (writtenStamp) {

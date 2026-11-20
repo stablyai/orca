@@ -83,7 +83,7 @@ describe('persistent native group lifecycle', () => {
         }
       }
     })
-    const told = groups.store.message('mail:fyi-op')
+    const told = groups.store.operationMessage('fyi-op')
     expect(told?.requester).toEqual({ id: 'bot-0', name: 'Scout', told: true })
     expect(told?.text).toBe('Scout told Forge')
   })
@@ -153,7 +153,7 @@ describe('persistent native group lifecycle', () => {
         }
       }
     })
-    const reply = groups.store.message('mail:reply-op')
+    const reply = groups.store.operationMessage('reply-op')
     expect(reply?.requester).toBeUndefined()
     expect(reply?.answeredBy).toEqual({ id: 'bot-1', name: 'Forge' })
     expect(reply?.text).toBe("Scout read Forge's reply")
@@ -177,14 +177,30 @@ describe('persistent native group lifecycle', () => {
       text: '@Forge start a worker'
     })
     groups.store.bindWorker('owned-worker', work.turns[0].operationId)
-    mails.set('peer', { id: 'peer', from_handle: 'dispatch:owned-worker', thread_id: null })
-    groups.reserveMailTurn({ ...input, operationId: 'verified-worker' })
+    mails.set('report', { id: 'report', from_handle: 'dispatch:owned-worker', thread_id: null })
+    groups.reserveMailTurn({
+      ...input,
+      operationId: 'verified-worker',
+      body: {
+        ...input.body,
+        from: {
+          kind: 'agent',
+          senders: [],
+          orchestration: {
+            message: 'mail-notice',
+            mailbox: target.sessionId,
+            dispatchId: null,
+            messages: [{ messageId: 'report', runId: 'run', from: 'dispatch:owned-worker' }]
+          }
+        }
+      }
+    })
     expect(groups.store.messages(group.id)).toHaveLength(4)
-    expect(groups.store.message('mail:verified-worker')).toMatchObject({
+    expect(groups.store.operationMessage('verified-worker')).toMatchObject({
       rootRequestId: work.id,
       rootSequence: work.sequence
     })
-    expect(groups.store.message('mail:verified-worker')?.requester).toBeUndefined()
+    expect(groups.store.operationMessage('verified-worker')?.requester).toBeUndefined()
   })
   it('scopes Stop to room sessions and preserves the cutoff after runtime recreation', async () => {
     const { groups, runtime } = fixture()

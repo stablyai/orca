@@ -13,6 +13,8 @@ type ClockDeps = {
 type SharedNowClock = {
   getSnapshot: () => number
   subscribe: (listener: () => void) => () => void
+  /** Hears ticks that subscribers cause, without keeping the timer alive itself. */
+  ride: (passenger: () => void) => () => void
 }
 
 const nowClocks = new Map<number, SharedNowClock>()
@@ -28,16 +30,26 @@ export function createSharedNowClock(
   let now = deps.now()
   let stopInterval: (() => void) | null = null
   const listeners = new Set<() => void>()
+  const passengers = new Set<() => void>()
 
   const tick = (): void => {
     now = deps.now()
     for (const listener of listeners) {
       listener()
     }
+    for (const passenger of passengers) {
+      passenger()
+    }
   }
 
   return {
     getSnapshot: () => now,
+    ride: (passenger) => {
+      passengers.add(passenger)
+      return () => {
+        passengers.delete(passenger)
+      }
+    },
     subscribe: (listener) => {
       listeners.add(listener)
       if (!stopInterval) {
@@ -67,6 +79,11 @@ function getSharedNowClock(intervalMs: number): SharedNowClock {
     nowClocks.set(intervalMs, clock)
   }
   return clock
+}
+
+/** Hear the ticks labels cause without causing any: a passenger never starts or keeps the timer. */
+export function rideSharedNow(intervalMs: number, passenger: () => void): () => void {
+  return getSharedNowClock(intervalMs).ride(passenger)
 }
 
 // Disabled callers read the shared frozen snapshot without retaining its timer or subscribing to ticks.

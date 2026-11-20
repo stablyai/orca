@@ -81,30 +81,29 @@ describe('nativeChatFirstScreen', () => {
   })
 })
 
-describe('nativeChatKickoffEnded', () => {
-  it('ends a kickoff its agent failed to start, before any turn opened, with the host’s reason', () => {
-    const refused = {
-      isWorking: false,
-      latestTurn: null,
-      submissions: [{ dispatchState: 'rejected' as const, reason: 'Claude Code could not start.' }]
-    }
-    expect(nativeChatKickoffEnded(refused)).toBe(true)
-    expect(
-      nativeChatFirstScreen(
-        [kickoff],
-        nativeChatKickoffEnded(refused),
-        nativeChatKickoffRefusal(refused)
-      )
-    ).toEqual({ phase: 'failed', turn: [], refused: 'Claude Code could not start.' })
-  })
+it('shows a pending kickoff until the host refuses it before a turn opens', () => {
+  const pending = {
+    isWorking: false,
+    latestTurn: null,
+    submissions: [{ dispatchState: 'pending' as const, reason: null }]
+  }
+  expect(
+    nativeChatFirstScreen(
+      [kickoff],
+      nativeChatKickoffEnded(pending),
+      nativeChatKickoffRefusal(pending)
+    )
+  ).toEqual({ phase: 'starting', turn: [], refused: null })
 
-  it('keeps a kickoff starting while it is on its way', () => {
-    const pending = {
-      isWorking: false,
-      latestTurn: null,
-      submissions: [{ dispatchState: 'pending' as const, reason: null }]
-    }
-    expect(nativeChatKickoffEnded(pending)).toBe(false)
-    expect(nativeChatKickoffRefusal(pending)).toBeNull()
-  })
+  const refused = {
+    ...pending,
+    submissions: [{ dispatchState: 'rejected' as const, reason: 'Claude Code could not start.' }]
+  }
+  expect(
+    nativeChatFirstScreen(
+      [kickoff],
+      nativeChatKickoffEnded(refused),
+      nativeChatKickoffRefusal(refused)
+    )
+  ).toEqual({ phase: 'failed', turn: [], refused: { reason: 'Claude Code could not start.' } })
 })

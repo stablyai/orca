@@ -1,33 +1,35 @@
-import { rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { AgentSessionResumeMarker } from '../../../../shared/agent-session/lifecycle/resume/agent-session-resume-marker'
-import { readNodeFileWithinLimit } from '../../../../shared/file-content/node-bounded-file-reader'
-import { stringifyJsonWithinByteLimit } from '../../../../shared/json-stream/node-bounded-json-stringify'
-import {
-  durableWriteTempPath,
-  removeStaleDurableWriteTempFiles,
-  renameDurable,
-  writeTempFileDurable
-} from '../../../filesystem/durable-file-write'
 import { withFileTransactionLock } from '../../../filesystem/file-transaction-lock'
 import {
   MAX_FAILURE_FIELD_LENGTH,
   normalizeState,
-  parseState,
   shouldReplaceMarker,
   splitDismissedAll,
   type AgentSessionResumeFailureInput,
   type AgentSessionResumeFailureRecord,
   type KeepRecord,
+  removeOffers,
+  NO_RECOVERY_DISMISSAL,
+  type RecoveryDismissal,
   type RecoveryCapsuleState,
   type RecoveryEntry
 } from './agent-session-recovery-capsule-entries'
+import {
+  automaticallyContinuable,
+  dismissedOffer,
+  passOverAutomaticOffers,
+  recordDismissedOffers,
+  readAutomaticReservationLedger,
+  recordAutomaticContinuations,
+  writeAutomaticRestartLedger
+} from './agent-session-recovery-automatic-ledger'
+import {
+  publishRecoveryCapsuleState,
+  readRecoveryCapsuleState
+} from './agent-session-recovery-capsule-file'
 
 export const AGENT_SESSION_RECOVERY_CAPSULE_FILE = 'agent-session-recovery.json'
-const MAX_CAPSULE_BYTES = 4 * 1024 * 1024
-
-/** Crash-leftover temp files only; offers themselves have no expiry. */
-const STALE_WRITE_TEMP_FILE_AGE_MS = 24 * 60 * 60 * 1000
 
 type StoredRecords = Pick<RecoveryCapsuleState, 'entries' | 'failed'>
 
@@ -62,8 +64,12 @@ export class AgentSessionRecoveryCapsule {
       const bySession = new Map(entries.map((entry) => [entry.marker.sessionId, entry]))
       const failedBySession = new Map(failed.map((failure) => [failure.marker.sessionId, failure]))
       const dismissedAt = state.dismissedAt
+      const ledger = await readAutomaticReservationLedger(this.filePath)
       for (const marker of markers) {
-        if (dismissedAt !== undefined && marker.recordedAt <= dismissedAt) {
+        if (
+          (dismissedAt !== undefined && marker.recordedAt <= dismissedAt) ||
+          (ledger !== null && dismissedOffer(ledger, marker))
+        ) {
           continue
         }
         const existing = bySession.get(marker.sessionId)
@@ -93,15 +99,21 @@ export class AgentSessionRecoveryCapsule {
   }
 
   /** Reserve selected offers for one user action; failures retry only when named explicitly.
-   * Preserve failure guidance until the retry settles. */
+   * Preserve failure guidance until the retry settles. An automatic action reserves only what
+   * the ledger allows, and records it under the same lock. */
   beginResume(
     sessionIds: readonly string[] | undefined,
     operationId: string,
-    now: number
+    now: number,
+    automatic = false
   ): Promise<AgentSessionResumeMarker[]> {
     return withFileTransactionLock(this.filePath, async () => {
       const state = await this.readState()
       const { entries, failed } = normalizeState(state, now)
+      const ledger = automatic ? await readAutomaticReservationLedger(this.filePath) : null
+      if (automatic && !ledger) {
+        return []
+      }
       const requested = sessionIds === undefined ? null : new Set(sessionIds)
       const selected: AgentSessionResumeMarker[] = []
       const reserve = (marker: AgentSessionResumeMarker): RecoveryEntry => {
@@ -109,18 +121,49 @@ export class AgentSessionRecoveryCapsule {
         return { state: 'in-progress', operationId, startedAt: now, marker }
       }
       const next = entries.map((entry) =>
-        entry.state === 'pending' && (requested === null || requested.has(entry.marker.sessionId))
+        entry.state === 'pending' &&
+        (requested === null || requested.has(entry.marker.sessionId)) &&
+        (!ledger || automaticallyContinuable(ledger, entry.marker, now))
           ? reserve(entry.marker)
           : entry
       )
       const held = new Set(entries.map((entry) => entry.marker.sessionId))
       for (const failure of failed) {
-        if (requested?.has(failure.marker.sessionId) && !held.has(failure.marker.sessionId)) {
+        if (
+          !ledger &&
+          requested?.has(failure.marker.sessionId) &&
+          !held.has(failure.marker.sessionId)
+        ) {
           next.push(reserve(failure.marker))
         }
       }
       await this.publish({ entries: next, failed }, now, state.dismissedAt)
+      if (ledger && selected.length > 0) {
+        // Unrecorded, an automatic reservation is undone: a later launch must not take it again.
+        await writeAutomaticRestartLedger(
+          this.filePath,
+          recordAutomaticContinuations(ledger, selected, now)
+        ).catch(async (error: unknown) => {
+          await this.publish({ entries, failed }, now, state.dismissedAt)
+          throw error
+        })
+      }
       return selected
+    })
+  }
+
+  /** Ends a launch's automatic turn: what it saw that still waits is left to a person from now on.
+   *  A quit during the turn records offers after `recordedBy`; those are the next launch's. */
+  passOverAutomatic(recordedBy: number, now: number): Promise<void> {
+    return withFileTransactionLock(this.filePath, async () => {
+      const { entries } = normalizeState(await this.readState(), now)
+      const ledger = await readAutomaticReservationLedger(this.filePath)
+      if (ledger) {
+        await writeAutomaticRestartLedger(
+          this.filePath,
+          passOverAutomaticOffers(ledger, entries, recordedBy)
+        )
+      }
     })
   }
 
@@ -190,33 +233,25 @@ export class AgentSessionRecoveryCapsule {
     })
   }
 
-  /** Dismiss selected/all records without fencing later teardown offers; clearAll provides that fence. */
+  /** Dismiss selected/all records; the same cut read again stays dismissed, a later cut is offered. */
   dismiss(
     sessionIds: readonly string[] | 'all',
     now: number,
     /** Evaluate preserved records under the lock against their stored markers. */
     keep: (marker: AgentSessionResumeMarker) => boolean = () => false
-  ): Promise<number> {
+  ): Promise<RecoveryDismissal> {
     return withFileTransactionLock(this.filePath, async () => {
       const named = sessionIds === 'all' ? null : new Set(sessionIds)
       const state = await this.readState()
-      const { entries, failed } = normalizeState(state, now)
-      const dismissed = new Set(
-        [...entries, ...failed]
-          .filter(({ marker }) => (named?.has(marker.sessionId) ?? true) && !keep(marker))
-          .map((record) => record.marker.sessionId)
+      const removal = removeOffers(
+        normalizeState(state, now),
+        (marker) => (named?.has(marker.sessionId) ?? true) && !keep(marker)
       )
-      if (dismissed.size > 0) {
-        await this.publish(
-          {
-            entries: entries.filter((entry) => !dismissed.has(entry.marker.sessionId)),
-            failed: failed.filter((failure) => !dismissed.has(failure.marker.sessionId))
-          },
-          now,
-          state.dismissedAt
-        )
+      if (removal.recorded.length > 0) {
+        await recordDismissedOffers(this.filePath, removal.recorded)
+        await this.publish(removal.kept, now, state.dismissedAt)
       }
-      return dismissed.size
+      return removal.dismissal
     })
   }
 
@@ -266,7 +301,7 @@ export class AgentSessionRecoveryCapsule {
   }
 
   /** Preserve records unreadable to this host for a compatible Orca. */
-  clearAll(now: number, keep: KeepRecord = () => false): Promise<number> {
+  clearAll(now: number, keep: KeepRecord = () => false): Promise<RecoveryDismissal> {
     return withFileTransactionLock(this.filePath, async () => {
       let state: Pick<RecoveryCapsuleState, 'entries' | 'failed'>
       try {
@@ -274,12 +309,12 @@ export class AgentSessionRecoveryCapsule {
       } catch {
         // Explicit dismiss may replace unreadable advisory data; fence it against late teardown resurrection.
         await this.publish({ entries: [], failed: [] }, now, now)
-        return 0
+        return NO_RECOVERY_DISMISSAL
       }
-      const { kept, dismissedPending } = splitDismissedAll(state, keep)
+      const { kept, dismissal } = splitDismissedAll(state, keep)
       // Fence every dismissed record; in-flight completion/rollback then cannot resurrect it.
       await this.publish(kept, now, now)
-      return dismissedPending
+      return dismissal
     })
   }
 
@@ -287,45 +322,15 @@ export class AgentSessionRecoveryCapsule {
     return entry.state === 'in-progress' && entry.operationId === operationId
   }
 
-  private async readState(): Promise<RecoveryCapsuleState> {
-    let raw: string
-    try {
-      raw = (await readNodeFileWithinLimit(this.filePath, MAX_CAPSULE_BYTES)).buffer.toString(
-        'utf8'
-      )
-    } catch (error) {
-      if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
-        return { entries: [], failed: [] }
-      }
-      throw error
-    }
-    return parseState(raw)
+  private readState(): Promise<RecoveryCapsuleState> {
+    return readRecoveryCapsuleState(this.filePath)
   }
 
-  private async publish(
+  private publish(
     records: StoredRecords,
     now: number,
     dismissedAt: number | undefined
   ): Promise<void> {
-    const { entries, failed } = normalizeState(records, now)
-    const { serialized } = stringifyJsonWithinByteLimit(
-      {
-        version: 2,
-        entries,
-        ...(dismissedAt === undefined ? {} : { dismissedAt }),
-        ...(failed.length === 0 ? {} : { failed })
-      },
-      MAX_CAPSULE_BYTES
-    )
-    await removeStaleDurableWriteTempFiles(this.filePath, {
-      minimumAgeMs: STALE_WRITE_TEMP_FILE_AGE_MS
-    })
-    const tempPath = durableWriteTempPath(this.filePath)
-    try {
-      await writeTempFileDurable(tempPath, serialized, 0o600)
-      await renameDurable(tempPath, this.filePath)
-    } finally {
-      await rm(tempPath, { force: true }).catch(() => {})
-    }
+    return publishRecoveryCapsuleState(this.filePath, records, now, dismissedAt)
   }
 }

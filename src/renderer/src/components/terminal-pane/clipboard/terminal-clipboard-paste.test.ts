@@ -7,6 +7,21 @@ import {
 } from '../input/paste/terminal-bracketed-paste'
 
 describe('terminal clipboard paste', () => {
+  it('records a preview only after an image path reaches a local terminal', async () => {
+    const onLocalImagePasted = vi.fn()
+    const deps = {
+      readClipboardText: async () => '',
+      saveClipboardImageAsTempFile: async () => '/tmp/preview.png',
+      onLocalImagePasted
+    }
+    await pasteTerminalClipboard({ ...deps, pasteText: () => true, connectionId: 'ssh-target' })
+    await pasteTerminalClipboard({ ...deps, pasteText: () => true, runtimeEnvironmentId: 'paired' })
+    expect(onLocalImagePasted).not.toHaveBeenCalled()
+
+    await pasteTerminalClipboard({ ...deps, pasteText: () => true })
+    expect(onLocalImagePasted).toHaveBeenCalledWith('/tmp/preview.png')
+  })
+
   it('forces generated image paste onto the native bracketed-paste path after Ctrl+C', async () => {
     const observedIgnoreBracketedPasteMode: boolean[] = []
     const terminal = {
@@ -26,7 +41,10 @@ describe('terminal clipboard paste', () => {
       saveClipboardImageAsTempFile: vi
         .fn()
         .mockResolvedValue('/tmp/orca-paste-1760000000000-id.png'),
-      pasteText: (text, options) => pasteTerminalText(terminal, text, options)
+      pasteText: (text, options) => {
+        pasteTerminalText(terminal, text, options)
+        return true
+      }
     })
 
     expect(terminal.input).toHaveBeenCalledWith(

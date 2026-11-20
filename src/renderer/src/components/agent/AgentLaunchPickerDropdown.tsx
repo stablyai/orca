@@ -7,7 +7,7 @@ import { AgentPickerAgentTabs, AgentPickerBlankTerminalPane } from './AgentPicke
 import type { AgentPickerChoice } from './agent-picker-search-rows'
 import { useAgentPickerSetup } from './agent-launch-picker-drafts'
 import { useRetiredAgentPickerDrafts } from './AgentLaunchPickerMenu'
-import { chatUnavailableLabel } from './launch-menu/agent-menu-row-presentation'
+import { chatUnavailableLabel, entrySetupLabel } from './launch-menu/agent-menu-row-presentation'
 import {
   acceptAgentPickerArguments,
   applyAgentPickerEdit
@@ -333,6 +333,9 @@ function AgentLaunchOpenAs({
         primary={entry.defaultSurface}
         onSelect={onChoose}
       />
+      {entrySetupLabel(entry, t) ? (
+        <span className="ml-auto text-xs text-muted-foreground">{entrySetupLabel(entry, t)}</span>
+      ) : null}
     </div>
   )
 }

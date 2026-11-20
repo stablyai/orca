@@ -26,6 +26,7 @@ import {
 } from './native-chat-host-command-terminal'
 import type { AgentCliUpdateView } from '@/components/agent-cli-update/use-agent-cli-update'
 import { useNativeChatCliUpdate } from './native-chat-cli-update'
+import { openAgentSettingsAction } from '@/components/settings/navigation/open-agent-settings'
 
 const SIGN_IN_FAILURE_KINDS: ReadonlySet<string> = new Set([
   'notSignedIn',
@@ -121,6 +122,9 @@ export function nativeChatSetupAction(
       disabled: install.busy,
       onClick: install.run
     }
+  }
+  if (kind === 'agentCommandNotRunnable') {
+    return { ...openAgentSettingsAction(setup?.host, t), primary: true }
   }
   return undefined
 }

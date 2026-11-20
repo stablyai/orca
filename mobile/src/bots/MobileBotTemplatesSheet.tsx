@@ -1,4 +1,4 @@
-// The phone's bot templates, from New bot's "Start from a template": search, category pills, then the
+// The phone's bot templates, from New bot's "Use template": search, category pills, then the
 // desktop page's rows; a tap opens the template's detail, whose Use template… prefills New bot.
 import { useState } from 'react'
 import { Keyboard, ScrollView, View } from 'react-native'
@@ -7,7 +7,7 @@ import { BottomDrawer, OptionPager, useOptionPager } from '../components/bottom-
 import { useBottomDrawerModalHostBackClaim } from '../components/bottom-drawer/bottom-drawer-modal-host-scope'
 import { MobileSearchField } from '../components/controls/MobileSearchField'
 import { MobileNoMatchState } from '../components/feedback/MobileStateView'
-import { ListGroup, ListRow, SectionHeader } from '../components/list/ListGroup'
+import { LIST_ROW_PADDING, ListGroup, ListRow, SectionHeader } from '../components/list/ListGroup'
 import { FilterChip } from '../components/nav-bar/FilterChip'
 import { SheetHeader } from '../components/nav-bar/SheetHeader'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
@@ -30,6 +30,8 @@ import {
 import { MobileBotAvatar } from './MobileBotAvatar'
 import { MobileBotTemplateDetail } from './MobileBotTemplateDetail'
 import { useBotTemplateCategoryLabel } from './mobile-bot-template-labels'
+
+const AVATAR_SIZE = 32
 
 export type BotTemplatePick = { proposal: BotProposal; origin: string } | { blank: true }
 
@@ -113,12 +115,15 @@ export function MobileBotTemplatesSheet(props: {
         {groups.map((group, index) => (
           <View key={group.category}>
             <SectionHeader first={index === 0} title={label(group.category)} />
-            <ListGroup>
+            <ListGroup separatorInset={LIST_ROW_PADDING + AVATAR_SIZE + spacing.md}>
               {group.templates.map((template) => (
                 <ListRow
                   key={template.id}
                   leading={
-                    <MobileBotAvatar avatar={{ kind: 'mascot', id: template.mascot }} size={32} />
+                    <MobileBotAvatar
+                      avatar={{ kind: 'mascot', id: template.mascot }}
+                      size={AVATAR_SIZE}
+                    />
                   }
                   title={template.name}
                   subtitle={template.line}

@@ -27,6 +27,13 @@ export async function exchangeCliPairingCode(
     // The store reports the invalid code.
     return pairingCode
   }
+  // A phone's pairing is the phone app's alone; the host takes its calls as the person's.
+  if (offer.scope === 'mobile') {
+    throw new RuntimeClientError(
+      'invalid_argument',
+      'This link grants mobile-only access. Generate a link for another Orca client.'
+    )
+  }
   let status: RuntimeRpcResponse<RuntimeStatus>
   try {
     status = await send<RuntimeStatus>(

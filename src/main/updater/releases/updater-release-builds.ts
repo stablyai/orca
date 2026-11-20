@@ -20,18 +20,22 @@ import { UpdaterCodedError } from '../lifecycle/updater-coded-error'
 
 const FETCH_TIMEOUT_MS = 8000
 const MAX_LISTED_BUILDS = 100
+// Each release carries full notes and ~30 assets (~65 KB), so delay lookups page small and stop early.
+const DELAY_LOOKUP_PAGE_SIZE = 20
 const RETRY_AFTER_MAX_MS = 60 * 60_000
 
-function getReleasesApiUrl(repo: string): string {
-  return `https://api.github.com/repos/${repo}/releases?per_page=${MAX_LISTED_BUILDS}`
+type ReleasePage = { perPage: number; page: number }
+
+function getReleasesApiUrl(repo: string, { perPage, page }: ReleasePage): string {
+  return `https://api.github.com/repos/${repo}/releases?per_page=${perPage}&page=${page}`
 }
 
-function fetchReleases(repo: string, token: string | null): Promise<Response> {
+function fetchReleases(repo: string, token: string | null, page: ReleasePage): Promise<Response> {
   const headers: Record<string, string> = { Accept: 'application/vnd.github+json' }
   if (token) {
     headers.Authorization = `Bearer ${token}`
   }
-  return net.fetch(getReleasesApiUrl(repo), {
+  return net.fetch(getReleasesApiUrl(repo, page), {
     headers,
     signal: AbortSignal.timeout(FETCH_TIMEOUT_MS)
   })
@@ -153,11 +157,12 @@ function parseReleaseEntry(
   }
 }
 
-// REST exposes older builds the short Atom feed omits; use only for explicit picker requests.
-export async function listReleaseBuilds(
+// REST exposes older builds the short Atom feed omits; use only for explicit picker requests and update-delay gaps.
+async function fetchReleaseBuildsPage(
   channel: ReleaseChannel,
-  platform: NodeJS.Platform = process.platform
-): Promise<ReleaseBuild[]> {
+  platform: NodeJS.Platform,
+  page: ReleasePage
+): Promise<{ builds: ReleaseBuild[]; isLastPage: boolean }> {
   const repo = getReleaseRepoForChannel(channel)
   // Skip a known-exhausted token bucket and try the separate per-IP quota.
   const credential = await resolveReleaseApiToken()
@@ -166,19 +171,19 @@ export async function listReleaseBuilds(
     getGhRateLimitBlockedUntilMs('core', Date.now(), credential.rateLimitScope) !== null
   const token = tokenBucketBlocked ? null : (credential?.token ?? null)
   let signedIn = credential !== null
-  let res = await fetchReleases(repo, token)
+  let res = await fetchReleases(repo, token, page)
   if (token && res.status === 401) {
     // A rejected token must not prevent listing a public repo unauthenticated.
     rejectReleaseApiToken()
     signedIn = false
-    res = await fetchReleases(repo, null)
+    res = await fetchReleases(repo, null, page)
   } else if (token && isRateLimited(res) && isPrimaryRateLimited(res)) {
     // The per-IP quota may still be available; mark the token bucket spent before retrying.
     const resetAtMs = rateLimitResetAtMs(res.headers, Date.now())
     if (resetAtMs !== null && credential) {
       recordGhPrimaryRateLimit('core', resetAtMs, credential.rateLimitScope)
     }
-    res = await fetchReleases(repo, null)
+    res = await fetchReleases(repo, null, page)
   }
   if (!res.ok) {
     throw releaseListError(res, repo, channel, signedIn)
@@ -190,8 +195,37 @@ export async function listReleaseBuilds(
   const builds = payload
     .map((entry) => parseReleaseEntry(entry as GitHubReleaseEntry, repo, platform))
     .filter((build): build is ReleaseBuild => build !== null)
-    .filter((build) => build.channel === channel)
-  return sortReleaseBuildsNewestFirst(builds)
+  return { builds, isLastPage: payload.length < page.perPage }
+}
+
+export async function listReleaseBuilds(
+  channel: ReleaseChannel,
+  platform: NodeJS.Platform = process.platform
+): Promise<ReleaseBuild[]> {
+  const { builds } = await fetchReleaseBuildsPage(channel, platform, {
+    perPage: MAX_LISTED_BUILDS,
+    page: 1
+  })
+  return sortReleaseBuildsNewestFirst(builds.filter((build) => build.channel === channel))
+}
+
+/** Main-repo (stable and rc) builds, newest first, paged until `hasEnough` or the picker's reach. */
+export async function listMainRepoReleaseBuildsUntil(
+  hasEnough: (builds: ReleaseBuild[]) => boolean,
+  platform: NodeJS.Platform = process.platform
+): Promise<ReleaseBuild[]> {
+  const builds: ReleaseBuild[] = []
+  for (let page = 1; page * DELAY_LOOKUP_PAGE_SIZE <= MAX_LISTED_BUILDS; page++) {
+    const result = await fetchReleaseBuildsPage('stable', platform, {
+      perPage: DELAY_LOOKUP_PAGE_SIZE,
+      page
+    })
+    builds.push(...result.builds)
+    if (result.isLastPage || hasEnough(builds)) {
+      break
+    }
+  }
+  return builds
 }
 
 export type ResolvedTargetBuild = {

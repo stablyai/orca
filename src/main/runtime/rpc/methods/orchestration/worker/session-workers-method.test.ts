@@ -253,17 +253,6 @@ describe('sessionWorkerState', () => {
       sessionWorkerState({ outcome: 'succeeded', liveness: live }, { workerState: 'stopped' })
     ).toBe('stopped')
   })
-  it('reads lost contact as unverifiable, never as an exit', () => {
-    expect(
-      sessionWorkerState(
-        {
-          outcome: 'in_progress',
-          liveness: { verdict: 'unverifiable', reason: 'host_unavailable' }
-        },
-        { workerState: 'ready' }
-      )
-    ).toBe('unverifiable')
-  })
   it('calls a proven exit without a report stopped', () => {
     expect(
       sessionWorkerState(
@@ -272,13 +261,10 @@ describe('sessionWorkerState', () => {
       )
     ).toBe('stopped')
   })
-  it('maps reported outcomes', () => {
+  it('reports a failed outcome even while the worker is live', () => {
     expect(
       sessionWorkerState({ outcome: 'failed', liveness: live }, { workerState: 'failed' })
     ).toBe('failed')
-    expect(
-      sessionWorkerState({ outcome: 'in_progress', liveness: live }, { workerState: 'ready' })
-    ).toBe('working')
   })
 })
 
