@@ -43,12 +43,16 @@ describe('orca tab show with a copied tab id', () => {
 
   it('shows the page the copied browser tab holds', async () => {
     callMock.mockImplementation(async (method: string) =>
-      method === 'session.tabs.listAll'
+      method === 'browser.tabList'
         ? okFixture('req_tabs', {
-            snapshots: [
+            tabs: [
               {
-                worktree: 'repo::/w',
-                tabs: [{ type: 'browser', id: TAB_ID, browserPageId: PAGE_ID }]
+                browserPageId: PAGE_ID,
+                unifiedTabId: TAB_ID,
+                index: 0,
+                url: 'https://www.google.com/',
+                title: 'Google',
+                active: true
               }
             ]
           })

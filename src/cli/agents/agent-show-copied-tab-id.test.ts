@@ -41,24 +41,7 @@ describe('orca agent show with a copied chat tab id', () => {
   })
 
   it('shows the chat the copied tab holds', async () => {
-    callMock.mockImplementation(async (method: string) =>
-      method === 'session.tabs.listAll'
-        ? okFixture('req_tabs', {
-            snapshots: [
-              {
-                worktree: 'repo::/w',
-                tabs: [
-                  {
-                    type: 'agent-session',
-                    id: `structured-agent-session-${SESSION}`,
-                    sessionId: SESSION
-                  }
-                ]
-              }
-            ]
-          })
-        : okFixture('req_show', { agent: null, locations: [] })
-    )
+    callMock.mockResolvedValue(okFixture('req_show', { agent: null, locations: [] }))
     vi.spyOn(console, 'log').mockImplementation(() => {})
 
     await main(['agent', 'show', '--id', `structured-agent-session-${SESSION}`, '--json'], '/tmp/w')

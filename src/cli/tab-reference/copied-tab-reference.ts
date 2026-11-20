@@ -1,12 +1,12 @@
 import type { RuntimeClient } from '../runtime/client'
 import { RuntimeClientError } from '../runtime/connection/types'
+import { ORCA_SESSION_ADDRESS_PREFIX } from '../../shared/agent-session/identity/orca-session-address-prefix'
+import type { BrowserTabListResult } from '../../shared/browser/runtime/runtime-browser-contracts'
 
-// Why: Copy Tab ID copies the workspace tab id (`orcaTabId`), but `--page` takes a browser page id
-// and `--terminal` a terminal handle. Agents handed a copied id would otherwise get "not found" and
-// fall back to guessing the tab by title or URL. The session tab inventory links both.
+// Copy Tab ID copies the workspace tab id (`orcaTabId`), but `--page` takes a browser page id and
+// `--terminal`/`--to` a terminal handle; without this mapping agents fall back to guessing the tab.
 
 type InventoryTab =
-  | { type: 'browser'; id: string; browserPageId?: string | null }
   | {
       type: 'terminal'
       id: string
@@ -14,28 +14,19 @@ type InventoryTab =
       leafId?: string
       terminal?: string | null
     }
-  | { type: 'agent-session'; id: string; sessionId?: string }
   | { type: string; id: string }
 
 export type SessionTabsInventory = {
   snapshots: { worktree: string; tabs: InventoryTab[] }[]
 }
 
-// Workspace tab ids are UUIDs; anything else (handles, group names, selectors) skips the lookup.
 const TAB_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+const COPIED_LABEL_RE = /^orcaTabId:\s*/i
 
-export function findBrowserPageForTabId(
-  inventory: SessionTabsInventory,
-  tabId: string
-): string | null {
-  for (const snapshot of inventory.snapshots) {
-    for (const tab of snapshot.tabs) {
-      if (tab.type === 'browser' && tab.id === tabId && 'browserPageId' in tab) {
-        return tab.browserPageId ?? null
-      }
-    }
-  }
-  return null
+/** A pasted `orcaTabId: <id>` line or padded id reads as the bare, lower-case tab id. */
+function copiedTabId(value: string): string | null {
+  const id = value.trim().replace(COPIED_LABEL_RE, '')
+  return TAB_ID_RE.test(id) ? id.toLowerCase() : null
 }
 
 export function findTerminalsForTabId(
@@ -53,58 +44,57 @@ export function findTerminalsForTabId(
   return found
 }
 
-// Copy Tab ID gives a chat `structured-agent-session-<sessionId>` (or a minted `chat-tab-…` slot id);
-// the tab inventory lists the same chat as `agent-session:<sessionId>`.
-const SESSION_NAMING_CHAT_TAB_PREFIXES = ['structured-agent-session-', 'agent-session:']
-const CHAT_TAB_PREFIXES = [...SESSION_NAMING_CHAT_TAB_PREFIXES, 'chat-tab-']
+// Copy Tab ID gives a chat `structured-agent-session-<sessionId>`; the inventory lists `agent-session:<sessionId>`.
+const CHAT_TAB_PREFIXES = ['structured-agent-session-', 'agent-session:']
 
-export function findChatSessionForTabId(
-  inventory: SessionTabsInventory | null,
-  tabId: string
-): string | null {
-  for (const snapshot of inventory?.snapshots ?? []) {
-    for (const tab of snapshot.tabs) {
-      if (tab.type === 'agent-session' && tab.id === tabId && 'sessionId' in tab) {
-        return tab.sessionId ?? null
-      }
-    }
-  }
-  // These forms name their session even when the tab is closed or the host lists no chats.
-  const prefix = SESSION_NAMING_CHAT_TAB_PREFIXES.find((candidate) => tabId.startsWith(candidate))
-  return prefix ? tabId.slice(prefix.length) || null : null
+/** The chat session a copied chat tab id names, read from the id itself; null for anything else. */
+export function chatSessionForTabId(value: string): string | null {
+  const id = value.trim().replace(COPIED_LABEL_RE, '')
+  const prefix = CHAT_TAB_PREFIXES.find((candidate) => id.startsWith(candidate))
+  return prefix ? id.slice(prefix.length) || null : null
 }
 
-/** Maps a copied chat tab id to the chat's Orca session id; any other value is returned as null. */
-export async function resolveChatSessionReference(
+/** Maps a copied chat or terminal tab id given as a message recipient; `remote` hosts own their tabs. */
+export async function resolveRecipientReference(
   client: RuntimeClient,
-  value: string
-): Promise<string | null> {
-  if (!CHAT_TAB_PREFIXES.some((prefix) => value.startsWith(prefix))) {
-    return null
+  to: string,
+  options: { remote?: boolean } = {}
+): Promise<string> {
+  const chatSession = chatSessionForTabId(to)
+  if (chatSession) {
+    return `${ORCA_SESSION_ADDRESS_PREFIX}${chatSession}`
   }
-  return findChatSessionForTabId(await readInventory(client), value)
+  return options.remote ? to : resolveTerminalReference(client, to, '--to')
 }
 
-async function readInventory(client: RuntimeClient): Promise<SessionTabsInventory | null> {
+/** Only an older host's missing method passes the value through; other failures surface as they are. */
+async function callUnlessMissing<T>(client: RuntimeClient, method: string, params: unknown) {
   try {
-    const response = await client.call<SessionTabsInventory>('session.tabs.listAll', null)
-    return Array.isArray(response.result?.snapshots) ? response.result : null
-  } catch {
-    // Older hosts without the inventory keep the value as given; the command reports its own error.
-    return null
+    return (await client.call<T>(method, params)).result
+  } catch (error) {
+    if (error instanceof RuntimeClientError && error.code === 'method_not_found') {
+      return null
+    }
+    throw error
   }
 }
 
-/** Maps a copied browser tab id to the page it shows; any other value is returned unchanged. */
+/** Maps a copied browser tab id to the page it shows; page ids and other values are returned unchanged. */
 export async function resolveBrowserPageReference(
   client: RuntimeClient,
   page: string
 ): Promise<string> {
-  if (!TAB_ID_RE.test(page)) {
+  const tabId = copiedTabId(page)
+  if (!tabId) {
     return page
   }
-  const inventory = await readInventory(client)
-  return (inventory && findBrowserPageForTabId(inventory, page)) ?? page
+  // A read-only page listing, not the session inventory, since page ids look like tab ids too.
+  const listing = await callUnlessMissing<BrowserTabListResult>(client, 'browser.tabList', {})
+  const tabs = listing?.tabs ?? []
+  if (tabs.some((tab) => tab.browserPageId === tabId)) {
+    return tabId
+  }
+  return tabs.find((tab) => tab.unifiedTabId === tabId)?.browserPageId ?? page
 }
 
 /** Maps a copied terminal tab id to its terminal handle; handles and other values pass through. */
@@ -114,11 +104,17 @@ export async function resolveTerminalReference(
   /** The flag the caller read the value from, so recovery steps name the flag to retry with. */
   flag: '--terminal' | '--to' = '--terminal'
 ): Promise<string> {
-  if (!TAB_ID_RE.test(terminal)) {
+  const tabId = copiedTabId(terminal)
+  if (!tabId) {
     return terminal
   }
-  const inventory = await readInventory(client)
-  const panes = inventory ? findTerminalsForTabId(inventory, terminal) : []
+  const inventory = await callUnlessMissing<SessionTabsInventory>(
+    client,
+    'session.tabs.listAll',
+    null
+  )
+  const panes =
+    inventory && Array.isArray(inventory.snapshots) ? findTerminalsForTabId(inventory, tabId) : []
   if (panes.length === 0) {
     return terminal
   }
@@ -129,14 +125,14 @@ export async function resolveTerminalReference(
   if (handles.length === 0) {
     throw new RuntimeClientError(
       'terminal_not_ready',
-      `Tab ${terminal} has no running terminal yet. Nothing was sent.`,
+      `Tab ${tabId} has no running terminal yet.`,
       { nextSteps: ['Open the tab in Orca, then retry.'] }
     )
   }
   // A split tab holds several terminals; picking one would act on a pane the user did not mean.
   throw new RuntimeClientError(
     'invalid_argument',
-    `Tab ${terminal} holds ${panes.length} terminals. Pass one of their handles as ${flag}. Nothing was sent.`,
+    `Tab ${tabId} holds ${panes.length} terminals. Pass one of their handles as ${flag}.`,
     { nextSteps: handles.map((handle) => `${flag} ${handle}`) }
   )
 }

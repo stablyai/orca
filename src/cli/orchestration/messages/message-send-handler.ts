@@ -26,12 +26,7 @@ import {
   resolveOrchestrationTerminalHandle,
   throwNoActiveSenderTerminal
 } from '../identity/terminal-identity'
-import {
-  findChatSessionForTabId,
-  resolveChatSessionReference,
-  resolveTerminalReference
-} from '../../tab-reference/copied-tab-reference'
-import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../shared/agent-session/identity/orca-session-address-prefix'
+import { resolveRecipientReference } from '../../tab-reference/copied-tab-reference'
 
 const WORKER_DONE_UNAVAILABLE_RETRY_MS = 120_000
 
@@ -91,13 +86,11 @@ export const ORCHESTRATION_SEND_HANDLER: Record<string, CommandHandler> = {
     await refuseAgentServerRoute('send', ctx)
     await requirePeerMailCarrier(ctx)
     const toFlag = getOptionalStringFlag(flags, 'to')
-    // A copied tab id names the agent's tab; send to the chat or the terminal it holds. With --on the
-    // recipient lives on that server, so this Orca's tabs cannot name it: only the chat forms that spell
-    // their session id are mapped, and anything else goes through unchanged.
+    // With --on the recipient lives on that server, so this Orca's tabs cannot name it.
     const to = toFlag
-      ? getOptionalStringFlag(flags, 'on')
-        ? recipientFromChatTabId(toFlag)
-        : await resolveRecipientReference(client, toFlag)
+      ? await resolveRecipientReference(client, toFlag, {
+          remote: Boolean(getOptionalStringFlag(flags, 'on'))
+        })
       : toFlag
     const type = getOptionalStringFlag(flags, 'type')
     if (to) {
@@ -257,19 +250,4 @@ function sendFields(value: Exclude<OrchestrationSendResult, { delivery: string }
 function attachedFiles(flags: Map<string, string | boolean>, cwd: string): { files?: string[] } {
   const files = getRepeatedStringFlag(flags, 'file').map((path) => resolve(cwd, path))
   return files.length > 0 ? { files } : {}
-}
-
-function recipientFromChatTabId(to: string): string {
-  const chatSession = findChatSessionForTabId(null, to)
-  return chatSession ? `${ORCA_SESSION_ADDRESS_PREFIX}${chatSession}` : to
-}
-
-async function resolveRecipientReference(
-  client: Parameters<typeof resolveTerminalReference>[0],
-  to: string
-): Promise<string> {
-  const chatSession = await resolveChatSessionReference(client, to)
-  return chatSession
-    ? `${ORCA_SESSION_ADDRESS_PREFIX}${chatSession}`
-    : await resolveTerminalReference(client, to, '--to')
 }

@@ -6,6 +6,7 @@ import { orchestrationMigrationData } from '../../../shared/orchestration/orches
 import { callOrchestrationMutation } from '../recovery/mutation-request'
 import { isDevCliInvocation } from '../recovery/runtime-compatibility'
 import { resolveCoordinatorTerminalHandle } from '../identity/terminal-identity'
+import { resolveRecipientReference } from '../../tab-reference/copied-tab-reference'
 import { injectedSessionAddress } from '../../../shared/agent-session/lifecycle/launch/agent-session-caller-env'
 
 export const ORCHESTRATION_DISPATCH_HANDLER: Record<string, CommandHandler> = {
@@ -13,7 +14,8 @@ export const ORCHESTRATION_DISPATCH_HANDLER: Record<string, CommandHandler> = {
     const from = await resolveCoordinatorTerminalHandle(flags, cwd, client)
     const dryRun = flags.has('dry-run') ? true : undefined
     const returnPreamble = flags.has('return-preamble') ? true : undefined
-    const to = dryRun ? getOptionalStringFlag(flags, 'to') : getRequiredStringFlag(flags, 'to')
+    const toFlag = dryRun ? getOptionalStringFlag(flags, 'to') : getRequiredStringFlag(flags, 'to')
+    const to = toFlag ? await resolveRecipientReference(client, toFlag) : toFlag
     const result = await callOrchestrationMutation<{
       dispatch: { id: string; task_id: string; status: string } | null
       injected?: boolean

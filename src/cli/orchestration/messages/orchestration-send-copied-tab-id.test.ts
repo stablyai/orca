@@ -10,7 +10,6 @@ import { orchestrationTestContext } from '../orchestration-handler-test-context'
 import { ORCHESTRATION_PEER_MAIL_RUNTIME_CAPABILITY } from '../../../shared/orchestration/orchestration-runtime-capabilities'
 
 const TAB = '0a7cc9d3-af43-4b69-bc20-c11d3f4c9d99'
-const SESSION = '8fcfc5dc-20e1-4aab-a394-c6faaf99d982'
 
 function respond(): void {
   callMock.mockReset().mockImplementation(async (method: string) =>
@@ -34,6 +33,7 @@ function respond(): void {
 }
 
 async function send(to: string, on?: string): Promise<unknown> {
+  const remote: [string, string][] = on ? [['on', on]] : []
   await ORCHESTRATION_HANDLERS['orchestration send'](
     orchestrationTestContext(
       callMock,
@@ -42,7 +42,7 @@ async function send(to: string, on?: string): Promise<unknown> {
         ['to', to],
         ['subject', 'hi'],
         ['body', 'hello'],
-        ...(on ? ([['on', on]] as [string, string][]) : [])
+        ...remote
       ]),
       false
     )
@@ -84,11 +84,4 @@ it('does not map a copied tab id against this Orca when --on names another serve
   respond()
   expect(await send(TAB, 'devB')).toMatchObject({ to: TAB })
   expect(callMock.mock.calls.some(([method]) => method === 'session.tabs.listAll')).toBe(false)
-})
-
-it('still maps a chat tab id with --on, since it spells its own session id', async () => {
-  respond()
-  expect(await send(`structured-agent-session-${SESSION}`, 'devB')).toMatchObject({
-    to: `orca_session_id:${SESSION}`
-  })
 })
