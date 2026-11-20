@@ -25,6 +25,7 @@ import { sayMobileNativeChatSessionOption as say } from './native-chat-session-o
 import {
   mobileDeferredPermissionSummary,
   mobileEffectivePermissionValue,
+  mobileReportedPermissionAccessibleValue,
   mobileSessionOptionSummaryValue
 } from './mobile-native-chat-session-option-labels'
 import {
@@ -197,7 +198,12 @@ export function MobileNativeChatSessionOptionPickers({
                 )
               : t('chat.sessionOptionPickers.modelLabel', 'Model, {{value}}', { value: modelValue })
             : t('chat.sessionOptionPickers.permissionsLabel', 'Permissions, {{value}}', {
-                value: permissionDeferred ?? primary
+                value:
+                  permissionDeferred ??
+                  (home === permission
+                    ? mobileReportedPermissionAccessibleValue(permission)
+                    : null) ??
+                  primary
               })
         }
         disabled={!canOpen}
@@ -361,7 +367,10 @@ function OptionRows({
               }
               value={deferred?.saved ?? mobileSessionOptionSummaryValue(descriptor)}
               subtitle={deferred?.timing}
-              accessibleValue={deferred?.full}
+              accessibleValue={
+                deferred?.full ??
+                (isPermission ? mobileReportedPermissionAccessibleValue(descriptor) : undefined)
+              }
               valueColor={isPermission ? permissionColor : undefined}
               disabled={disabled}
               onPress={

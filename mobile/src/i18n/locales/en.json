@@ -178,9 +178,6 @@
       "speechModel": "Speech Model",
       "loading": "Loading voice settings…"
     },
-    "agents": {
-      "permissionOwnAll": "Agents' own settings"
-    },
     "voiceTranscribeOn": {
       "heading": "TRANSCRIBE ON",
       "description": "Speech heard on this phone stays on it. Automatic uses your computer when this phone can’t transcribe.",
@@ -1633,7 +1630,9 @@
         "permissionAsk": "Ask for approval",
         "permissionAcceptEdits": "Accept edits",
         "permissionAuto": "Approve for me",
-        "permissionFullAccess": "Full access"
+        "permissionFullAccess": "Full access",
+        "permissionAgentSettings": "{{agent}} settings",
+        "permissionFromAgentSettings": "{{mode}}, from {{agent}} settings"
       },
       "goal": {
         "sentAsGoal": "Sent as goal"

@@ -9,6 +9,7 @@ import {
   isAgentChatPermissionMode,
   type AgentChatPermissionMode
 } from '../../../../../../src/shared/agent-launch/permissions/agent-chat-permission-mode'
+import { agentPermissionSettingsSourceName } from '../../../../../../src/shared/agent-launch/permissions/agent-permission-settings-source'
 
 /** The value a drill-in row shows beside its label; desktop lists the choices in place instead. */
 export function mobileSessionOptionSummaryValue(descriptor: SessionOptionDescriptor): string {
@@ -28,13 +29,8 @@ export function mobileSessionOptionSummaryValue(descriptor: SessionOptionDescrip
     descriptor.kind.type === 'select' &&
     descriptor.kind.currentValue === 'own'
   ) {
-    // Name the mode the agent reports running in when it has a translated name.
-    const reported = descriptor.kind.reportedValue
-    return isAgentChatPermissionMode(reported)
-      ? mobilePermissionModeLabel(reported)
-      : reported === 'plan'
-        ? translate('components.native-chat.composer.planMode', 'Plan')
-        : translate('settings.agents.permissionOwnAll', "Agents' own settings")
+    // Name the mode the agent reports running in; until it reports, name the agent's settings.
+    return reportedPermissionLabel(descriptor) ?? mobileAgentSettingsLabel(descriptor)
   }
   const choice = selectedNativeChatChoice(descriptor)
   if (!choice) {
@@ -80,7 +76,7 @@ function deferredPermissionSummary(
   const activeLabel = active
     ? nativeChatSessionChoiceLabel(active, say, descriptor.id)
     : descriptor.activeValue === 'own'
-      ? translate('settings.agents.permissionOwnAll', "Agents' own settings")
+      ? mobileAgentSettingsLabel(descriptor)
       : null
   if (!activeLabel) {
     return null
@@ -104,6 +100,50 @@ function deferredPermissionSummary(
       { saved, active: activeLabel }
     )
   }
+}
+
+/** An Own chat's reported mode, by its translated name; null until the agent reports one. */
+function reportedPermissionLabel(descriptor: SessionOptionDescriptor): string | null {
+  if (descriptor.kind.type !== 'select' || descriptor.kind.currentValue !== 'own') {
+    return null
+  }
+  const reported = descriptor.kind.reportedValue
+  return isAgentChatPermissionMode(reported)
+    ? mobilePermissionModeLabel(reported)
+    : reported === 'plan'
+      ? translate('components.native-chat.composer.planMode', 'Plan')
+      : null
+}
+
+function mobileAgentSettingsLabel(descriptor: SessionOptionDescriptor): string {
+  return translate(
+    'components.native-chat.composer.permissionAgentSettings',
+    '{{agent}} settings',
+    {
+      agent: agentPermissionSettingsSourceName(
+        descriptor.kind.type === 'select' ? descriptor.kind.settingsAgent : undefined
+      )
+    }
+  )
+}
+
+/** A reported mode is not an explicit pick, so its spoken value says where it comes from. */
+export function mobileReportedPermissionAccessibleValue(
+  descriptor: SessionOptionDescriptor | undefined
+): string | undefined {
+  const mode = descriptor ? reportedPermissionLabel(descriptor) : null
+  return mode && descriptor
+    ? translate(
+        'components.native-chat.composer.permissionFromAgentSettings',
+        '{{mode}}, from {{agent}} settings',
+        {
+          mode,
+          agent: agentPermissionSettingsSourceName(
+            descriptor.kind.type === 'select' ? descriptor.kind.settingsAgent : undefined
+          )
+        }
+      )
+    : undefined
 }
 
 function mobilePermissionModeLabel(mode: AgentChatPermissionMode): string {

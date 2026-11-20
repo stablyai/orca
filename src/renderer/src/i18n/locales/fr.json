@@ -19433,6 +19433,8 @@
         "permissionAuto": "Approuver pour moi",
         "permissionAutoDescription": "Examine les demandes d’approbation pour vous",
         "permissionFullAccess": "Accès complet",
+        "permissionAgentSettings": "Paramètres de {{agent}}",
+        "permissionFromAgentSettings": "{{mode}}, d’après les paramètres de {{agent}}",
         "permissionFullAccessDescription": "Ne demande jamais avant les modifications ou les commandes",
         "permissionFullAccessCodexDescription": "Ne demande jamais ; peut modifier n’importe quel fichier et utiliser le réseau",
         "permissionFullAccessSharedDescription": "Ne demande jamais avant les modifications ou les commandes",

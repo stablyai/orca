@@ -18739,6 +18739,8 @@
         "permissionAuto": "대신 승인",
         "permissionAutoDescription": "승인 요청을 대신 검토합니다",
         "permissionFullAccess": "전체 액세스",
+        "permissionAgentSettings": "{{agent}} 설정",
+        "permissionFromAgentSettings": "{{mode}}, {{agent}} 설정에서",
         "permissionFullAccessDescription": "편집이나 명령 전에 묻지 않습니다",
         "permissionFullAccessCodexDescription": "묻지 않습니다. 모든 파일을 편집하고 네트워크를 사용할 수 있습니다",
         "permissionFullAccessSharedDescription": "편집이나 명령 전에 묻지 않습니다",

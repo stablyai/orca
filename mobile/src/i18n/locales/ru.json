@@ -1229,7 +1229,9 @@
         "permissionAsk": "Запрашивать разрешение",
         "permissionAcceptEdits": "Разрешать правки",
         "permissionAuto": "Одобрять за меня",
-        "permissionFullAccess": "Полный доступ"
+        "permissionFullAccess": "Полный доступ",
+        "permissionAgentSettings": "Настройки {{agent}}",
+        "permissionFromAgentSettings": "{{mode}}, из настроек {{agent}}"
       },
       "goal": {
         "sentAsGoal": "Отправлено как цель"
@@ -3109,9 +3111,6 @@
       "title": "Голос",
       "toggleMode": "Переключение",
       "updateFailed": "Не удалось обновить"
-    },
-    "agents": {
-      "permissionOwnAll": "Собственные настройки агентов"
     },
     "voiceTranscribeOn": {
       "heading": "ГДЕ РАСПОЗНАВАТЬ",

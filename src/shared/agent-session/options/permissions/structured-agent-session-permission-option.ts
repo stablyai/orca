@@ -4,6 +4,7 @@
 import type { AgentChatPermissionMode } from '../../../agent-launch/permissions/agent-chat-permission-mode'
 import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../../agent-launch/permissions/agent-chat-permission-mode-option-id'
 import { agentChatPermissionModes } from '../../../agent-launch/permissions/agent-chat-permission-support'
+import { agentPermissionSettingsSourceName } from '../../../agent-launch/permissions/agent-permission-settings-source'
 import type { StructuredAgentSessionOptionRecord } from '../reconciliation/structured-agent-session-option-state'
 import type { SessionOptionDescriptor } from '../../../native-chat/input/native-chat-session-options'
 
@@ -81,7 +82,7 @@ export function structuredAgentSessionPermissionDescriptor(state: {
   const known = support.modes.find((mode) => mode === shown)
   const label =
     own && reportedValue === undefined
-      ? "Agent's own settings"
+      ? `${agentPermissionSettingsSourceName(state.record.agent)} settings`
       : known
         ? MODE_COPY[known].label
         : shown === 'plan'
@@ -104,6 +105,7 @@ export function structuredAgentSessionPermissionDescriptor(state: {
       type: 'select',
       currentValue: current,
       ...(reportedValue !== undefined ? { reportedValue } : {}),
+      settingsAgent: state.record.agent,
       choices: support.modes.map((value) => ({
         value,
         ...agentChatPermissionModeCopy(state.record.agent, value)
