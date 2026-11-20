@@ -1,21 +1,35 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest'
-import { windowsPowerShellPath, windowsSystem32Binary, windowsSystemRoot } from './windows-system-binary'
+import {
+  windowsPowerShellPath,
+  windowsSystem32Binary,
+  windowsSystemRoot
+} from './windows-system-binary'
 
 // Windows spells the install root three ways: process.env on Windows, SYSTEMROOT in MSYS/Git Bash
 // and cloned plain objects, and windir on older shells. Missing the lowercase spellings silently
 // falls back to C:\Windows on a machine installed elsewhere (#pending).
 describe('windowsSystemRoot', () => {
   it('prefers SystemRoot, then SYSTEMROOT, then windir', () => {
-    expect(windowsSystemRoot({ SystemRoot: 'D:\\Windows', SYSTEMROOT: 'E:\\W', windir: 'F:\\W' })).toBe(
-      'D:\\Windows'
-    )
+    expect(
+      windowsSystemRoot({ SystemRoot: 'D:\\Windows', SYSTEMROOT: 'E:\\W', windir: 'F:\\W' })
+    ).toBe('D:\\Windows')
     expect(windowsSystemRoot({ SYSTEMROOT: 'E:\\W', windir: 'F:\\W' })).toBe('E:\\W')
     expect(windowsSystemRoot({ windir: 'F:\\W' })).toBe('F:\\W')
   })
 
   it('falls back to C:\\Windows only when no spelling is present', () => {
     expect(windowsSystemRoot({})).toBe('C:\\Windows')
+  })
+
+  // A set-but-empty spelling is unusable, not a deliberate root: joining it would make the path relative.
+  it('treats an empty spelling like an absent one', () => {
+    expect(windowsSystemRoot({ SystemRoot: '' })).toBe('C:\\Windows')
+    expect(windowsSystemRoot({ SystemRoot: '', SYSTEMROOT: 'D:\\Windows' })).toBe('D:\\Windows')
+    expect(windowsSystemRoot({ SystemRoot: '', SYSTEMROOT: '', windir: '' })).toBe('C:\\Windows')
+    expect(windowsSystem32Binary('taskkill.exe', { SystemRoot: '' })).toBe(
+      'C:\\Windows\\System32\\taskkill.exe'
+    )
   })
 })
 
