@@ -11,7 +11,11 @@ import type { PluginMarketplaceInstaller } from '../../plugins/catalog/plugin-ma
 import type { PluginMarketplaceService } from '../../plugins/catalog/plugin-marketplace-service'
 import { PLUGIN_MARKETPLACE_SOURCE_ID_PATTERN } from '../../plugins/catalog/plugin-marketplace-store'
 import type { PluginService } from '../../plugins/plugin-service'
-import type { PluginAutoUpdater } from '../../plugins/catalog/plugin-auto-updater'
+import {
+  PLUGIN_AUTO_UPDATE_INTERVAL_MS,
+  type PluginAutoUpdater
+} from '../../plugins/catalog/plugin-auto-updater'
+import { createStaleMarketplaceRefresh } from '../../plugins/catalog/plugin-marketplace-stale-refresh'
 import type { PluginInstallStatsService } from '../../plugins/catalog/plugin-install-stats-service'
 import type { PluginUpdateReviewNotices } from '../../plugins/catalog/plugin-update-review-notices'
 import type {
@@ -78,11 +82,14 @@ export function registerPluginMarketplaceHandlers(
       })
     }
   )
+  const refreshStaleCatalogs = createStaleMarketplaceRefresh(services.marketplace)
   // Startup defers the official seed; a marketplace view must not wait for that timer.
   const ensureOfficialSeed = (): void => {
     if (getSettings().pluginSystemEnabled === true) {
       void services.marketplace.seedOfficialSource().catch(() => undefined)
       void services.marketplace.seedCommunitySource().catch(() => undefined)
+      // Why: browsing a catalog is what keeps it current when nothing is installed from one.
+      void refreshStaleCatalogs(PLUGIN_AUTO_UPDATE_INTERVAL_MS).catch(() => undefined)
     }
   }
   ipcMain.handle('plugins:listMarketplaces', () => {

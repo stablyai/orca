@@ -1,68 +1,79 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { PluginLockfile } from '../../../shared/plugins/installation/plugin-install-lockfile'
+import type {
+  PluginLockEntry,
+  PluginLockfile
+} from '../../../shared/plugins/installation/plugin-install-lockfile'
 import { PluginAutoUpdater } from './plugin-auto-updater'
+
+const CATALOG_URL = 'https://github.com/stablyai/orca-community-plugins.git'
+
+function lockEntry(pluginKey: string, source: PluginLockEntry['source']): PluginLockEntry {
+  return {
+    pluginKey,
+    version: '1.0.0',
+    source,
+    resolvedCommit: null,
+    contentHash: 'a'.repeat(64),
+    consentFingerprint: 'fingerprint',
+    installedAt: 0
+  }
+}
 
 function makeUpdater(readInstallLockfile: () => Promise<PluginLockfile>) {
   const refreshCatalogs = vi.fn(async () => undefined)
   const updater = new PluginAutoUpdater({
     pluginService: {
-      options: {} as never,
+      options: {
+        isPluginSystemEnabled: () => true,
+        getPluginConsents: () => ({}),
+        getDisabledPlugins: () => [],
+        getPluginKillListEntry: () => null
+      },
       getDiscovered: () => [],
       findValidPlugin: () => null,
       refresh: async () => undefined
     },
     installer: {
       readInstallLockfile,
-      findInstalledUpdateListing: vi.fn(),
-      previewInstalledUpdate: vi.fn(),
-      install: vi.fn()
-    } as never,
-    firstSeen: { firstSeen: vi.fn() } as never,
+      findInstalledUpdateListing: async () => null,
+      previewInstalledUpdate: async () => {
+        throw new Error('unexpected preview')
+      },
+      install: async () => {
+        throw new Error('unexpected install')
+      }
+    },
+    firstSeen: { firstSeen: async () => 0 },
     isEnabled: () => true,
     refreshCatalogs,
-    refreshKillList: vi.fn(async () => undefined),
-    approve: vi.fn(async () => undefined),
-    onChanged: vi.fn()
+    refreshKillList: async () => undefined,
+    approve: async () => undefined,
+    onChanged: () => undefined
   })
   return { updater, refreshCatalogs }
 }
 
-const marketplaceEntry = {
-  pluginKey: 'acme.theme',
-  source: {
-    kind: 'marketplace',
-    marketplace: {
-      url: 'https://github.com/stablyai/orca-community-plugins.git',
-      ref: 'main',
-      resolvedCommit: 'a'.repeat(40)
-    },
-    plugin: { url: 'https://github.com/stablyai/orca-community-plugins.git', ref: 'main' }
-  }
-}
-
 describe('PluginAutoUpdater catalog refresh', () => {
   it('does not clone catalogs when no plugin was installed from one', async () => {
-    const { updater, refreshCatalogs } = makeUpdater(
-      async () =>
-        ({
-          version: 1,
-          plugins: {
-            'acme.local': { pluginKey: 'acme.local', source: { kind: 'local-path', path: '/x' } }
-          }
-        }) as never
-    )
+    const { updater, refreshCatalogs } = makeUpdater(async () => ({
+      version: 1,
+      plugins: { 'acme.local': lockEntry('acme.local', { kind: 'local-path', path: '/x' }) }
+    }))
     await updater.run()
     expect(refreshCatalogs).not.toHaveBeenCalled()
   })
 
   it('refreshes catalogs when a marketplace install exists', async () => {
-    const { updater, refreshCatalogs } = makeUpdater(
-      async () =>
-        ({
-          version: 1,
-          plugins: { 'acme.theme': marketplaceEntry }
-        }) as never
-    )
+    const { updater, refreshCatalogs } = makeUpdater(async () => ({
+      version: 1,
+      plugins: {
+        'acme.theme': lockEntry('acme.theme', {
+          kind: 'marketplace',
+          marketplace: { url: CATALOG_URL, ref: 'main', resolvedCommit: 'b'.repeat(40) },
+          plugin: { url: CATALOG_URL, ref: 'main' }
+        })
+      }
+    }))
     await updater.run()
     expect(refreshCatalogs).toHaveBeenCalledTimes(1)
   })
