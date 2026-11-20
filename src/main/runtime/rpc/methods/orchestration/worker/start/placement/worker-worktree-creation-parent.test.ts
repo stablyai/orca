@@ -75,6 +75,7 @@ describe('createWorkerWorktree lineage', () => {
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: creation records only worker stages.
       db: { recordWorkerStage: () => {} } as never,
       dispatchId: 'ctx_1',
+      terminalTitle: 'Workspace task',
       requestedWorktree,
       target: await target(callerWorktreeId, 'path:/sandbox', requestedWorktree),
       orchestrationContext: { taskId: 'task_1', orchestrationRunId: 'run_1' },

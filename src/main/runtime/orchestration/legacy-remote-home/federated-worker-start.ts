@@ -131,6 +131,7 @@ export async function startFederatedWorker(args: FederatedWorkerStartRequest): P
     maxDepth: runtime.getNestedWorkerMaxDepth(),
     taskId: task?.id,
     taskSpec: params.spec,
+    taskDisplayName: params.taskDisplayName,
     taskTitle: params.taskTitle,
     taskDeps: args.taskDeps,
     taskParentId: params.parent,

@@ -124,6 +124,7 @@ export async function startRemoteOwnedWorker(
       : {
           spec: params.spec!,
           taskTitle: params.taskTitle,
+          displayName: params.taskDisplayName,
           deps: taskDeps,
           parentId: params.parent,
           createdByTerminalHandle: coordinator?.terminalHandle ?? undefined,
