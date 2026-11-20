@@ -14,7 +14,7 @@ import { FILE_MUTATION_OWNERSHIP_RUNTIME_CAPABILITY } from '../../../../../share
 import {
   MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
   RUNTIME_PROTOCOL_VERSION
-} from '../../../../../shared/protocol-version'
+} from '../../../../../shared/remote-runtime/protocol/protocol-version'
 
 const ENVIRONMENT_ID = 'env-repaired'
 const CAPTURED_REVISION = 41

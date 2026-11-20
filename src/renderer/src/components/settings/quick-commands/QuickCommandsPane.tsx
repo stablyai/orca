@@ -1,16 +1,17 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import type { TerminalQuickCommand } from '../../../../../shared/terminal/quick-commands/terminal-quick-command-types'
 import { getTerminalQuickCommandScope } from '../../../../../shared/terminal/quick-commands/terminal-quick-commands'
 import {
   createTerminalQuickCommandDraft,
   TerminalQuickCommandDialog
 } from '@/components/terminal-quick-commands/TerminalQuickCommandDialog'
-import { searchTerminalQuickCommands } from '@/lib/terminal/quick-commands/terminal-quick-command-search'
+import { searchTerminalQuickCommands } from '../../../../../shared/terminal/quick-commands/terminal-quick-command-search'
+import { useRuntimeStatusByEnvironmentId } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { useAppStore } from '../../../store/index'
 import { getTerminalQuickCommandHostPromptMaxLength } from '@/lib/terminal/quick-commands/terminal-quick-command-host-prompt-limit'
 import { Button } from '../../ui/button'
-import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
+import { useConfirmationDialog } from '@/components/dismiss/confirmation/confirmation-dialog-context'
 import { getSettingOwnershipSummary } from '../page/setting-ownership'
 import { useTranslate } from '@/i18n/use-translate'
 import { QuickCommandsList } from './QuickCommandsList'
@@ -22,11 +23,11 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
   type ExecutionHostId
-} from '../../../../../shared/execution-host'
+} from '../../../../../shared/execution-host/execution-host'
 import {
   getTerminalQuickCommandHostOptions,
   shouldShowTerminalQuickCommandHostOwnership
-} from '@/hooks/use-terminal-quick-command-hosts'
+} from '@/lib/terminal/quick-commands/use-terminal-quick-command-hosts'
 
 type QuickCommandsPaneProps = {
   settings: GlobalSettings
@@ -93,7 +94,7 @@ export function QuickCommandsPane({
   const repos = useAppStore((s) => s.repos)
   const activeRepoId = useAppStore((s) => s.activeRepoId)
   const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
-  const runtimeStatuses = useAppStore((s) => s.runtimeStatusByEnvironmentId)
+  const runtimeStatuses = useRuntimeStatusByEnvironmentId()
   const runtimeCommands = useAppStore((s) => s.runtimeTerminalQuickCommands)
   const loadRuntimeCommands = useAppStore((s) => s.loadRuntimeTerminalQuickCommands)
   const ownership = getSettingOwnershipSummary('terminalQuickCommands', t)
@@ -391,7 +392,7 @@ export function QuickCommandsPane({
           repos={hostRepos}
           defaultAdvancedOpen
           agentPromptMaxLength={getTerminalQuickCommandHostPromptMaxLength(
-            { runtimeStatusByEnvironmentId: runtimeStatuses },
+            runtimeStatuses,
             editor.hostId
           )}
           onOpenChange={(open) => !open && setEditor(null)}

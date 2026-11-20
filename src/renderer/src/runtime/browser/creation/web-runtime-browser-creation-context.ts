@@ -1,7 +1,8 @@
+import { readRuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import { subscribeLinkOpenRequests } from '../../../lib/links/link-open-request'
 import { BROWSER_TAB_CREATE_KNOWN_ID_RUNTIME_CAPABILITY } from '../../../../../shared/browser/runtime/browser-runtime-capabilities'
 import { assertRuntimeManagedBrowserCreationAvailable } from '../../../lib/workspace/creation/surface-policy/client-creation-action-policy'
-import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/identifiers/non-secure-context-uuid'
 import { useAppStore } from '../../../store/index'
 import {
   clearWebSessionFocusIntentIfMatches,
@@ -80,8 +81,7 @@ export function createWebRuntimeBrowserCreationContext(
   const shouldFocusOnCreate = args.focusOnCreate !== false
   const provisionalPageId = createBrowserUuid()
   const advertisedCapabilities =
-    useAppStore.getState().runtimeStatusByEnvironmentId?.get(environmentId)?.status?.capabilities ??
-    []
+    readRuntimeStatuses()?.get(environmentId)?.status?.capabilities ?? []
   const hostSupportsKnownPageId = advertisedCapabilities.includes(
     BROWSER_TAB_CREATE_KNOWN_ID_RUNTIME_CAPABILITY
   )
@@ -89,8 +89,7 @@ export function createWebRuntimeBrowserCreationContext(
   const expectsClientHosting = expectsBrowserClientHosting({
     enabled: useAppStore.getState().settings?.browserClientHostedRemoteEnabled !== false,
     preference: args.placementPreference,
-    deviceScope: useAppStore.getState().runtimeStatusByEnvironmentId?.get(environmentId)?.status
-      ?.deviceScope,
+    deviceScope: readRuntimeStatuses()?.get(environmentId)?.status?.deviceScope,
     capabilities: advertisedCapabilities
   })
   return {

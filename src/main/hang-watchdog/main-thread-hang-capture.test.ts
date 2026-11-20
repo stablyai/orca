@@ -12,7 +12,12 @@ const state = vi.hoisted(() => ({
   terminations: new Array<() => void>(),
   records: new Array<unknown>()
 }))
-vi.mock('node:worker_threads', () => ({ isMainThread: false, parentPort: null, workerData: null }))
+vi.mock('node:worker_threads', () => ({
+  isMainThread: false,
+  parentPort: null,
+  workerData: null,
+  getEnvironmentData: () => undefined
+}))
 vi.mock('node:inspector', () => ({
   Session: class {
     connectToMainThread() {}
@@ -119,7 +124,11 @@ function watchdog() {
         message = listener
       },
       close: () => {},
-      postMessage: (value) => message({ type: 'capture-drain-ack', token: value.token })
+      postMessage: (value) => {
+        if (value.type === 'capture-drain') {
+          message({ type: 'capture-drain-ack', token: value.token })
+        }
+      }
     }
   )
   return { send: (value: MainToHangWatchdogWorkerMessage) => message(value) }

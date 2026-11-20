@@ -1,9 +1,9 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import { WorkspaceAttachmentsSchema } from '../../workspace-attachments/workspace-attachment-schema'
 import { WorkspaceLinkedItemSchema } from '../../workspace-attachments/workspace-linked-item-schema'
 import { TaskSourceContextSchema } from '../../work-items/task-source-context-schema'
-import { workspaceSourceSchema } from '../../telemetry-property-schemas'
-import { RUNTIME_NAVIGATION_TARGETS } from '../../runtime-navigation'
+import { workspaceSourceSchema } from '../../telemetry/schemas/telemetry-property-schemas'
+import { RUNTIME_NAVIGATION_TARGETS } from '../../remote-runtime/session-graph/runtime-navigation'
 import { sleepingAgentLaunchConfigSchema } from '../../workspace-session/workspace-session-sleeping-agents'
 import { isTuiAgent } from '../../agent-launch/catalog/tui-agent-config'
 import { AgentArgs, LaunchPreferences } from '../terminal/agent-session-params'
@@ -106,6 +106,8 @@ export const WorktreeCreate = z
     cwdParentAmbiguous: z.literal(true).optional(),
     noParent: OptionalBoolean,
     callerTerminalHandle: OptionalString,
+    // Older hosts strip it; a paired route's claim names a session on another host and is dropped.
+    callerAgentSessionId: OptionalString,
     orchestrationContext: z
       .object({
         parentWorktreeId: OptionalString,

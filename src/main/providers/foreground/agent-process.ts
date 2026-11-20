@@ -1,15 +1,19 @@
 import { recognizeAgentProcessFromCommandLine } from '../../../shared/agent-status/process/agent-process-recognition'
-import { resolveOuterWrapperForegroundProcess } from '../../../shared/foreground-wrapper-agent'
-import { unreadableArgvName, type ProcessTableRow } from '../../../shared/process-table-snapshot'
+import { resolveOuterWrapperForegroundProcess } from '../../../shared/agent-status/process/foreground-wrapper-agent'
+import {
+  unreadableArgvName,
+  type ProcessTableRow
+} from '../../../shared/process-observation/tables/process-table-snapshot'
 import {
   getFreshProcessTableSnapshot,
   getFreshShellForegroundSnapshot,
   getProcessTableSnapshot
-} from '../../../shared/process-table-snapshot-reader'
+} from '../../../shared/process-observation/tables/process-table-snapshot-reader'
 import {
   collectDescendantsFromIndex,
-  getProcessTableIndex
-} from '../../../shared/process-table-index'
+  getProcessTableIndex,
+  type ProcessTableIndex
+} from '../../../shared/process-observation/tables/process-table-index'
 import {
   resolveWindowsAgentForegroundProcessWithAvailability,
   shouldInspectWindowsAgentForeground,
@@ -19,7 +23,7 @@ import { isShellProcess } from '../../../shared/agent-status/process/shell-proce
 import {
   selectForegroundProcessCandidate,
   type SelectedForegroundProcess
-} from '../../../shared/foreground-process-selection'
+} from '../../../shared/agent-status/process/foreground-process-selection'
 import { isWindowsShellAloneInJob } from './windows/shell-alone-in-job'
 import {
   readWindowsProcessIdentityTableFresh,
@@ -43,9 +47,13 @@ type ShellForegroundConfirmationOptions = {
     | null
     | Promise<ReadonlySet<number> | null>
   readWindowsProcessIdentityTable?: () => Promise<WindowsProcessIdentityRow[]>
+  /** POSIX: a capture the caller already took, so one proof costs one table read. */
+  processIndex?: ProcessTableIndex
+  /** POSIX: which stopped jobs deny the shell its foreground; every one by default. */
+  stoppedJobBlocks?: (row: ProcessTableRow) => boolean
 }
 
-function commandExecutable(command: string): string {
+export function commandExecutable(command: string): string {
   const trimmed = command.trim().replace(/^[-]/, '')
   if (trimmed.startsWith('"') || trimmed.startsWith("'")) {
     const closingQuote = trimmed.indexOf(trimmed[0], 1)
@@ -80,7 +88,8 @@ export async function confirmShellForegroundProcess(
     }
   }
   try {
-    const index = getProcessTableIndex(await getFreshShellForegroundSnapshot())
+    const index =
+      options.processIndex ?? getProcessTableIndex(await getFreshShellForegroundSnapshot())
     const root = index.byPid.get(shellPid)
     if (!root) {
       return false
@@ -95,7 +104,8 @@ export async function confirmShellForegroundProcess(
           isShellProcess(commandExecutable(row.command))
       )
       .sort((left, right) => left.depth - right.depth)[0]
-    if (tree.some((row) => row.depth > 0 && row.stat.includes('T'))) {
+    const blocks = options.stoppedJobBlocks ?? (() => true)
+    if (tree.some((row) => row.depth > 0 && row.stat.includes('T') && blocks(row))) {
       return false
     }
     const confirmed = foregroundShell?.stat.includes('+') === true

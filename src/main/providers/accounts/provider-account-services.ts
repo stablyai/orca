@@ -9,7 +9,7 @@ import { ClaudeAccountService } from '../../claude-accounts/service'
 import { getInitialCodexRateLimitTarget } from '../../rate-limits/providers/codex/codex-rate-limit-target'
 import { getInitialClaudeRateLimitTarget } from '../../rate-limits/providers/claude/claude-rate-limit-target'
 import { resolveKimiHome } from '../../kimi/kimi-runtime-home'
-import { resolveLocalAccountUsageTarget } from '../../../shared/local-account-runtime'
+import { resolveLocalAccountUsageTarget } from '../../../shared/agent-accounts/local-account-runtime'
 import { resolveCodexRateLimitHomeUnlessStopped } from '../../rate-limits/providers/codex/codex-rate-limit-wsl-home-gate'
 import { inactiveCodexHomeUnlessStopped } from '../../rate-limits/inactive-codex-home'
 import { readMiniMaxSessionCookie } from '../../minimax/minimax-cookie-store'
@@ -23,7 +23,7 @@ import {
 import { createAccountRuntimeTargetSettingsSync } from '../../rate-limits/service/account-runtime-target-sync'
 import { normalizeCodexRuntimeSelection } from '../../codex-accounts/account-management/runtime-selection'
 import { normalizeClaudeRuntimeSelection } from '../../claude-accounts/selection/runtime-selection'
-import type { ClaudeStatusLineRateLimits } from '../../../shared/claude-statusline-rate-limits'
+import type { ClaudeStatusLineRateLimits } from '../../../shared/agent-usage/rate-limits/claude-statusline-rate-limits'
 
 export type ProviderAccountServices = {
   rateLimits: RateLimitService
@@ -73,7 +73,8 @@ export function createProviderAccountServices(
       rateLimits.discardClaudeOAuthUsage()
     } else if (updates.claudeOAuthUsageEnabled === true) {
       void rateLimits
-        .refreshClaudeForTarget(rateLimits.getState().claudeTarget)
+        .getState()
+        .then((state) => rateLimits.refreshClaudeForTarget(state.claudeTarget))
         .catch((error: unknown) => {
           console.warn(
             '[rate-limits] Failed to refresh Claude usage after enabling polling:',
@@ -133,20 +134,20 @@ export function createProviderAccountServices(
       workspaceIdOverride: settings.opencodeWorkspaceId
     }
   }, readOpenCodeGoApiKey)
-  rateLimits.setMiniMaxConfigResolver(() => {
+  rateLimits.setMiniMaxConfigResolver(async () => {
     const settings = store.getSettings()
-    const apiKey = readMiniMaxApiKey() ?? ''
+    const apiKey = (await readMiniMaxApiKey()) ?? ''
     return {
-      sessionCookie: apiKey ? '' : (readMiniMaxSessionCookie() ?? ''),
+      sessionCookie: apiKey ? '' : ((await readMiniMaxSessionCookie()) ?? ''),
       groupId: settings.minimaxGroupId,
       models: settings.minimaxUsageModels,
       endpoint: settings.minimaxEndpoint,
       apiKey
     }
   })
-  rateLimits.setZcodePlanConfigResolver(() => ({
+  rateLimits.setZcodePlanConfigResolver(async () => ({
     site: store.getSettings().zcodePlanSite ?? 'zai',
-    apiKey: readZcodePlanApiKey() ?? ''
+    apiKey: (await readZcodePlanApiKey()) ?? ''
   }))
   rateLimits.setGeminiCliOAuthEnabledResolver(() => store.getSettings().geminiCliOAuthEnabled)
   rateLimits.setClaudeOAuthUsageEnabledResolver(() => store.getSettings().claudeOAuthUsageEnabled)
@@ -195,6 +196,19 @@ export function createProviderAccountServices(
       .filter((account) => !activeIds.has(account.id))
       .map((account) => ({
         id: account.id,
+        ...(account.managedHomeRuntime === 'wsl'
+          ? account.wslDistro
+            ? {
+                readingAccount: {
+                  accountId: account.id,
+                  runtime: 'wsl' as const,
+                  wslDistro: account.wslDistro
+                }
+              }
+            : {}
+          : {
+              readingAccount: { accountId: account.id, runtime: 'host' as const, wslDistro: null }
+            }),
         resolveHome: () =>
           inactiveCodexHomeUnlessStopped(
             codexRuntimeHome.resolveCodexManagedAccountHomeForInactiveFetch(account)

@@ -2,11 +2,11 @@ import { randomUUID } from 'node:crypto'
 import type {
   BrowserCertificateFailure,
   BrowserCertificateProceedResult
-} from '../../../shared/browser-workspace-types'
+} from '../../../shared/browser/workspaces/browser-workspace-types'
 import {
   isEligibleLocalCertificateHost,
   toSecureCertificateEndpoint
-} from '../../../shared/browser-url'
+} from '../../../shared/browser/navigation/browser-url'
 import {
   certificateChallengeIdentityMatches,
   CERTIFICATE_CHALLENGE_TTL_MS,
@@ -125,9 +125,12 @@ export class BrowserCertificateTrustController {
   }
 
   onGuestRetired(webContentsId: number): void {
-    this.clearPending(webContentsId, true)
-    this.requestGuard.revokeGuest(webContentsId)
-    this.navigationSequenceByGuestId.delete(webContentsId)
+    try {
+      this.clearPending(webContentsId, true)
+    } finally {
+      this.requestGuard.revokeGuest(webContentsId)
+      this.navigationSequenceByGuestId.delete(webContentsId)
+    }
   }
 
   onMainFrameNavigationStarted(webContentsId: number): void {

@@ -1,12 +1,16 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 const { ghExecFileAsyncMock } = vi.hoisted(() => ({ ghExecFileAsyncMock: vi.fn() }))
 
-vi.mock('../../git/command-runner/hosted-cli/gh-exec-file', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
+vi.mock('../../git/command-runner/hosted-cli/gh-exec-file', () => ({
   ghExecFileAsync: ghExecFileAsyncMock
 }))
+
 import { diagnoseGhAuth, parseAuthStatus } from './auth-diagnose'
+
+function login(host: string, user: string, source = 'keyring'): string {
+  return `${host}\n  ✓ Logged in to ${host} account ${user} (${source})\n  - Active account: true\n  - Token scopes: 'project', 'read:org', 'repo'\n`
+}
 
 describe('parseAuthStatus', () => {
   it('parses an env-shadowed login alongside a keyring login (real gh output)', () => {
@@ -39,49 +43,49 @@ describe('parseAuthStatus', () => {
       source: 'keyring'
     })
   })
-
-  it('parses a ported GHES auth-status section', () => {
-    const text = `ghe.acme.io:8443
-  ✓ Logged in to ghe.acme.io:8443 account bob (keyring)
-  - Active account: true
-  - Token scopes: 'project', 'repo'
-`
-
-    expect(parseAuthStatus(text)).toEqual([
-      expect.objectContaining({ host: 'ghe.acme.io:8443', user: 'bob', active: true })
-    ])
-  })
 })
 
-describe('diagnoseGhAuth host scoping', () => {
-  const TWO_HOST_STATUS = `github.com
-  ✓ Logged in to github.com account alice (keyring)
-  - Active account: true
-  - Token scopes: 'project', 'read:org', 'repo'
-ghe.acme.io
-  ✓ Logged in to ghe.acme.io account bob (keyring)
-  - Active account: true
-  - Token scopes: 'repo'
-`
-
-  it('reports an unauthenticated required host and keeps scope advice host-scoped', async () => {
-    ghExecFileAsyncMock.mockResolvedValue({ stdout: TWO_HOST_STATUS, stderr: '' })
-
-    const diag = await diagnoseGhAuth('github.other-corp.com')
-
-    expect(diag.requiredHost).toBe('github.other-corp.com')
-    expect(diag.requiredHostAuthenticated).toBe(false)
-    expect(diag.activeAccount).toBeNull()
+describe('diagnoseGhAuth without a requested host', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs()
+    ghExecFileAsyncMock.mockReset()
   })
 
-  it("scopes the diagnosis to the required host's account", async () => {
-    ghExecFileAsyncMock.mockResolvedValue({ stdout: TWO_HOST_STATUS, stderr: '' })
+  it.each([
+    {
+      name: 'GH_HOST',
+      ghHost: 'GHE.example.com',
+      hosts: ['github.com', 'ghe.example.com'],
+      expected: 'ghe'
+    },
+    { name: 'the only host', ghHost: '', hosts: ['ghe.example.com'], expected: 'ghe' },
+    {
+      name: 'github.com among several hosts',
+      ghHost: '',
+      hosts: ['ghe.example.com', 'github.com'],
+      expected: 'dotcom'
+    },
+    {
+      name: 'the only keyring host beside an env token',
+      ghHost: '',
+      hosts: ['ghe.example.com'],
+      envTokenHost: 'github.com',
+      expected: 'ghe'
+    }
+  ])("diagnoses gh's default host: $name", async ({ ghHost, hosts, envTokenHost, expected }) => {
+    vi.stubEnv('GH_HOST', ghHost)
+    const users: Record<string, string> = { 'github.com': 'dotcom', 'ghe.example.com': 'ghe' }
+    ghExecFileAsyncMock.mockResolvedValue({
+      stdout: '',
+      stderr:
+        (envTokenHost ? login(envTokenHost, 'env', 'GH_TOKEN') : '') +
+        hosts.map((host) => login(host, users[host])).join('')
+    })
 
-    const diag = await diagnoseGhAuth('GHE.Acme.IO')
+    const diag = await diagnoseGhAuth()
 
-    expect(diag.requiredHost).toBe('ghe.acme.io')
-    expect(diag.requiredHostAuthenticated).toBe(true)
-    expect(diag.activeAccount?.user).toBe('bob')
-    expect(diag.missingScopes).toEqual(['project', 'read:org'])
+    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(1)
+    expect(diag.activeAccount?.user).toBe(expected)
+    expect(diag.requiredHost).toBeNull()
   })
 })

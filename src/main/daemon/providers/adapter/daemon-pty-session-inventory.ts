@@ -1,12 +1,13 @@
+import type { TerminalExitCause } from '../../../../shared/terminal/pty/lifecycle/terminal-exit-cause'
 import { emitPtyListeners, createPtyExitPayload } from './daemon-pty-listener-emission'
 import { basename } from 'node:path'
 import { existsSync } from 'node:fs'
 import {
   isAgentSessionOwnerBinding,
   type AgentSessionOwnerBinding
-} from '../../../../shared/agent-session/agent-session-host-authority'
-import { MAX_CLAIMED_AGENT_PTY_OWNER_ENTRIES } from '../../../../shared/claimed-agent-pty-owner'
-import { cloneAgentSessionOwnerBinding } from '../../../../shared/claimed-agent-pty-owner-snapshot'
+} from '../../../../shared/agent-session/lifecycle/operations/agent-session-host-authority'
+import { MAX_CLAIMED_AGENT_PTY_OWNER_ENTRIES } from '../../../../shared/agent-session/lifecycle/leases/claimed-agent-pty-owner'
+import { cloneAgentSessionOwnerBinding } from '../../../../shared/agent-session/lifecycle/leases/claimed-agent-pty-owner-snapshot'
 import { recordAuthenticatedInventory } from '../../observability/daemon-audit-classifier'
 import { isMissingWindowsNamedPipeError } from '../../endpoint/identity/daemon-endpoint-errors'
 import { DaemonPtyProcessInspection } from './daemon-pty-process-inspection'
@@ -135,7 +136,10 @@ export abstract class DaemonPtySessionInventory extends DaemonPtyProcessInspecti
   }
 
   // Daemon shutdown suppresses exit fanout; notify panes before teardown so they stop writing to dead PTYs.
-  fanoutSyntheticExits(code: number, exit: { replacedByRestart?: true } = {}): void {
+  fanoutSyntheticExits(
+    code: number,
+    exit: { replacedByRestart?: true; cause?: TerminalExitCause } = {}
+  ): void {
     const ids = [...this.activeSessionIds]
     this.activeSessionIds.clear()
     this.ptyInventory.reset()

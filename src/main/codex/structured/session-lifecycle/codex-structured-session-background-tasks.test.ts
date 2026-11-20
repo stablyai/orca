@@ -13,7 +13,7 @@ import { CodexJournalItems } from '../journal/codex-structured-journal-items'
 import type { CodexStructuredSessionEvent } from './codex-structured-session-state'
 import type { StructuredAgentSessionEndedEvent } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
-import { codexProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 
 type Published = { sessionId: string; evidence: AgentChildWorkEvidence['type'][] }
 
@@ -161,7 +161,10 @@ describe("codex background tasks reach the host's child records", () => {
 
   it('does not let an old exit callback clear a replacement roster', async () => {
     const published: Published[] = []
-    const { adapter, codex } = await adapterWithSession(published)
+    const observed: CodexStructuredSessionEvent[] = []
+    const { adapter, codex } = await adapterWithSession(published, undefined, (event) =>
+      observed.push(event)
+    )
     const oldExit = codex.handlers().onExit
     await acquireReadyCodexForTest(adapter, {
       identity: identity('session-1'),
@@ -177,9 +180,12 @@ describe("codex background tasks reach the host's child records", () => {
     const before = adapter.backgroundTaskState('session-1')
     expect(before?.tasks).toHaveLength(1)
     published.length = 0
+    observed.length = 0
     oldExit?.(new Error('old provider exited late'))
     expect(adapter.backgroundTaskState('session-1')).toEqual(before)
     expect(published).toEqual([])
+    expect(observed.filter((event) => event.type === 'ended')).toEqual([])
+    expect(adapter.backgroundTaskStops('session-1')).toBeDefined()
     await adapter.closeSession('session-1')
   })
 

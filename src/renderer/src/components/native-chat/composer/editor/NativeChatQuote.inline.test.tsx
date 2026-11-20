@@ -19,14 +19,24 @@ afterEach(() => {
 
 const CHIP = 'CHIP'
 
+const isQuoteChip = (node: Element): boolean =>
+  node.querySelector('[data-native-chat-sent-quote]') !== null ||
+  [...node.querySelectorAll('.sr-only')].some((label) => label.textContent?.startsWith('Quote'))
+
+/** What a node shows, without the spoken labels of other pills. */
+function shownText(node: Node): string {
+  if (!(node instanceof Element)) {
+    return node.textContent ?? ''
+  }
+  const copy = node.cloneNode(true) as Element
+  copy.querySelectorAll('.sr-only').forEach((label) => label.remove())
+  return copy.textContent ?? ''
+}
+
 /** A line as a reader sees it: CHIP for each quote chip, then the text, one space apart. */
 function lineText(line: Element): string {
   return [...line.childNodes]
-    .map((node) =>
-      node instanceof Element && node.querySelector('.sr-only, [data-native-chat-sent-quote]')
-        ? CHIP
-        : (node.textContent ?? '').trim()
-    )
+    .map((node) => (node instanceof Element && isQuoteChip(node) ? CHIP : shownText(node).trim()))
     .filter((part) => part !== '')
     .join(' ')
 }
@@ -202,7 +212,7 @@ it.each(KEY_CASES)('%s on %j at %s', (key, text, _caret, place, outcome) => {
   expect(input.value).toBe(outcome)
 })
 
-it('moves the caret across a chip as across an image: the chip is selected on the way', () => {
+it('moves the caret across a chip as across an image: one press steps over it', () => {
   const { input, editor } = mount('> q\n\nc')
   const key = (name: string) =>
     act(() => {
@@ -210,16 +220,12 @@ it('moves the caret across a chip as across an image: the chip is selected on th
     })
   act(() => editor.commands.setTextSelection(1))
   key('ArrowRight')
-  expect(editor.state.selection.toJSON()).toEqual({ type: 'node', anchor: 1 })
-  key('ArrowRight')
   expect(editor.state.selection.toJSON()).toEqual({ type: 'text', anchor: 2, head: 2 })
   act(() => {
     editor.commands.insertContent('x')
   })
   expect(input.value).toBe('> q\n\nxc')
   act(() => editor.commands.setTextSelection(2))
-  key('ArrowLeft')
-  expect(editor.state.selection.toJSON()).toEqual({ type: 'node', anchor: 1 })
   key('ArrowLeft')
   expect(editor.state.selection.toJSON()).toEqual({ type: 'text', anchor: 1, head: 1 })
 })

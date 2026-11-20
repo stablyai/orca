@@ -7,7 +7,7 @@ import {
   useQueryClient,
   type QueryObserverResult
 } from '@tanstack/react-query'
-import { warmUpWebShell } from '../../modules/orca-mobile-web-shell/src'
+import { warmUpWebShell } from '../../modules/orca-mobile-web-shell/src/index'
 import {
   countAgentsNeedingYouByHost,
   selectActiveAgents,
@@ -39,11 +39,15 @@ import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import {
   homeWorktreeCountsQuery,
   type HomeWorktreeCounts
-} from '../worktree/home-host-worktree-fetch'
-import { homeWorktreeInfo, type HostWorktreeInfo } from '../worktree/home-worktree-info'
+} from '../worktree/catalog/home-host-worktree-fetch'
+import { homeWorktreeInfo, type HostWorktreeInfo } from '../worktree/catalog/home-worktree-info'
 import { homeStatsQuery } from '../stats/home-stats-summary-read'
 import { totalHomeStats, type HomeStatsRow } from '../stats/home-stats-total'
-import { projectHomeHostConnections } from './home-host-connection-projection'
+import { useHomeBots } from './bots/use-home-bots'
+import {
+  homeUnreachableHostIds,
+  projectHomeHostConnections
+} from './home-host-connection-projection'
 import { restoreHomeQueries } from './home-query-restore'
 import { useMobileHomeHostConnections } from './use-mobile-home-host-connections'
 
@@ -263,20 +267,45 @@ export function useMobileHomeData() {
     () => sortedHosts.filter((host) => hostStates[host.id] === 'connected'),
     [sortedHosts, hostStates]
   )
-  // Before a desktop's first connect settles, "not connected" is not yet true.
-  const hostsConnecting = hosts.some((host) => {
-    const state = hostStates[host.id]
-    return state === undefined || state === 'connecting' || state === 'handshaking'
-  })
   const hostIds = useMemo(() => hosts.map((host) => host.id), [hosts])
   const stats = useMemo(() => totalHomeStats(statsByHost, hostIds), [statsByHost, hostIds])
   const hostConnections = useMemo(() => projectHomeHostConnections(allClients), [allClients])
+  const { autoConnectHostIds, hostAttempts } = connections
+  // Keyed by its members, so a retry that moves no desktop in or out keeps Home's rows as they are.
+  const unreachableKey = useMemo(
+    () =>
+      homeUnreachableHostIds(
+        hosts,
+        { autoConnectHostIds, hostAttempts, hostConnections, hostLastConnected, hostStates },
+        now
+      ).join('\n'),
+    [hosts, autoConnectHostIds, hostAttempts, hostConnections, hostLastConnected, hostStates, now]
+  )
+  const unreachableHosts = useMemo(
+    () => new Set(unreachableKey ? unreachableKey.split('\n') : []),
+    [unreachableKey]
+  )
+  // A desktop still dialing may yet connect; one Home never dials or gave up on won't.
+  const hostsConnecting = hosts.some(
+    (host) => hostStates[host.id] !== 'connected' && !unreachableHosts.has(host.id)
+  )
+  const { bots, botsByHost } = useHomeBots({
+    homeHosts,
+    hosts: sortedHosts,
+    hostStates,
+    unreachableHosts,
+    worktreeInfo,
+    now,
+    subscribed: homeFocused
+  })
 
   return {
     ...connections,
     accountsByHost,
     applyAgentActivity: agentActivity.apply,
     activeAgents,
+    bots,
+    botsByHost,
     agentList,
     agentsNeedingYou,
     connectedHosts,
@@ -290,6 +319,7 @@ export function useMobileHomeData() {
     sortedHostCatalog,
     sortedHosts,
     stats,
+    unreachableHosts,
     worktreeInfo
   }
 }

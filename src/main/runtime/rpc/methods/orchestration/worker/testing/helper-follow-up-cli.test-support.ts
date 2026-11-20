@@ -21,7 +21,7 @@ import {
   structuredWorkerIdentities,
   structuredWorkerProcessIncarnation
 } from '../../../../../orchestration/terminal-authority/structured-sessions/structured-worker-identity'
-import { testOrcaSessionId } from '../../../../../../../shared/orca-session-address-test-fixture'
+import { testOrcaSessionId } from '../../../../../../../shared/agent-session/identity/orca-session-address-test-fixture'
 import * as placement from '../start/placement/worker-start-agent-placement'
 
 export const receipt = z.object({
@@ -249,6 +249,7 @@ export function useHelperFollowUpCli() {
     })
     vi.spyOn(placement, 'placeWorkerAgent').mockImplementationOnce(async (args) => ({
       mode: args.mode,
+      launch: args.launch.receipt,
       worktree: { id: 'repo::worktree', repoId: 'repo' },
       terminalHandle: identity.handle,
       setupReceipt: placement.EXISTING_WORKTREE_SETUP,

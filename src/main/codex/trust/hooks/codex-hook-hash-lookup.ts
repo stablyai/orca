@@ -1,4 +1,4 @@
-import { withTimeout } from '../../../../shared/promise-timeout-fallback'
+import { withTimeout } from '../../../../shared/concurrency/promise-timeout-fallback'
 import { dedupeInFlightRun } from '../../../runtime/concurrency/in-flight-run-dedupe'
 import { resolveCodexCommand, resolveCodexCommandForSpawn } from '../../../codex-cli/command'
 import { getManagedScriptPath } from '../../hooks/definitions/codex-hook-definition'
@@ -17,7 +17,7 @@ import {
   readMemoizedCodexHookAnswer,
   readMemoizedVersionAnswer
 } from './codex-hook-trust-memo'
-import { normalizeRuntimePathForComparison as codexBinaryKey } from '../../../../shared/cross-platform-path'
+import { normalizeRuntimePathForComparison as codexBinaryKey } from '../../../../shared/file-access/cross-platform-path'
 
 // Cold hash derivation must not delay launches beyond this bound.
 export const CODEX_HOOK_LAUNCH_WAIT_MS = 3_000
@@ -38,9 +38,12 @@ const derivations = new Map<string, Promise<CodexHookAnswer>>()
 let appPathReady: Promise<unknown> | null = null
 
 /** App main only; pathReady must settle without rejecting. */
-export function startCodexHookHashLookup(pathReady: Promise<unknown>): void {
+export function startCodexHookHashLookup(
+  pathReady: Promise<unknown>,
+  maintenanceReady: Promise<unknown> = pathReady
+): void {
   appPathReady = pathReady
-  void sweepStaleCodexScratchHomes()
+  void maintenanceReady.then(() => sweepStaleCodexScratchHomes())
 }
 
 /** Reuse known answers or query Codex in app main, deduplicated per binary. */

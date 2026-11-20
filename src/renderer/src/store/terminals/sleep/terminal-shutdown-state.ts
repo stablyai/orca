@@ -1,4 +1,7 @@
-import { replaceTabBuckets, replaceRecordEntries } from '@/store/keyed-record-transitions'
+import {
+  replaceTabBuckets,
+  replaceRecordEntries
+} from '@/store/record-transitions/keyed-record-transitions'
 import type {
   TerminalLayoutSnapshot,
   TerminalTab
@@ -11,11 +14,8 @@ import {
   settleDeferredPtyShutdownExits
 } from '@/components/terminal-pane/pty-transport/shutdown/pty-shutdown-exit-deferral'
 import '../../slices/agent-status/agent-status'
-import { removeSleepingRecordsReplacedByManualWorktreeSleep } from '../../slices/agent-status/agent-status-sleeping-records'
-import type {
-  AgentStatusWorktreeShutdownReason,
-  RetainedAgentEntry
-} from '../../slices/agent-status/agent-status-contract'
+import { removeSleepingRecordsReplacedByManualWorktreeSleep } from '../../slices/agent-status/sleep-recovery/agent-status-sleeping-records'
+import type { AgentStatusWorktreeShutdownReason } from '../../slices/agent-status/contracts/agent-status-contract'
 import type { TerminalStoreGet, TerminalStoreSet } from '../terminal-state'
 import { copyOnWriteRecord } from './terminal-shutdown-record'
 import { removeTabsAttention } from '../../slices/workspace-attention/subject-attention-transitions'
@@ -25,7 +25,6 @@ export function commitTerminalShutdownState({
   exitGuardPtyIds,
   get,
   keepIdentifiers,
-  retainedCompletionEvidence,
   set,
   shutdownReason,
   sleepingAgentSessionRecords,
@@ -36,7 +35,6 @@ export function commitTerminalShutdownState({
   exitGuardPtyIds: readonly string[]
   get: TerminalStoreGet
   keepIdentifiers: boolean
-  retainedCompletionEvidence: readonly RetainedAgentEntry[]
   set: TerminalStoreSet
   shutdownReason: AgentStatusWorktreeShutdownReason
   sleepingAgentSessionRecords: Record<string, SleepingAgentSessionRecord>
@@ -148,10 +146,12 @@ export function commitTerminalShutdownState({
           layoutReplacements.length > 0
             ? replaceRecordEntries(state.terminalLayoutsByTabId, layoutReplacements)
             : state.terminalLayoutsByTabId,
-        ...removeTabsAttention(
-          state,
-          tabs.map((tab) => tab.id)
-        ),
+        ...(keepIdentifiers
+          ? {}
+          : removeTabsAttention(
+              state,
+              tabs.map((tab) => tab.id)
+            )),
         lastTerminalInputAtByPaneKey: lastTerminalInputAtByPaneKey.read()
       }
     })
@@ -179,11 +179,7 @@ export function commitTerminalShutdownState({
     get().clearSleepingAgentSessionsByWorktree(worktreeId)
   }
 
-  get().dropAgentStatusByWorktree(worktreeId, {
-    shutdownReason,
-    sleepingPaneKeys,
-    retainedCompletionEvidence
-  })
+  get().dropAgentStatusByWorktree(worktreeId, { shutdownReason })
   get().clearPaneForegroundAgentByWorktree(worktreeId)
   const settledPtyIds = exitGuardPtyIds.filter((ptyId) => !get().isPtyShutdownPending(ptyId))
   markCommittedPtyShutdowns(settledPtyIds)

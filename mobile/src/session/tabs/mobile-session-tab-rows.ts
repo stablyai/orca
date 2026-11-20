@@ -11,7 +11,7 @@ import {
   agentRowTimeAt,
   agentStateLabel,
   type AgentDotState
-} from '../../worktree/agent-row-display'
+} from '../../worktree/agent-lineage/agent-row-display'
 import type { MobileSessionTab } from './mobile-session-tabs'
 
 export type MobileSessionTabGroup = 'needs-you' | 'working' | 'other'
@@ -24,6 +24,8 @@ export type MobileSessionTabSummary = {
   agentId: string | null
   dotState: AgentDotState | undefined
   group: MobileSessionTabGroup
+  /** The desktop Agents list holds this tab's agent unread; hosts with no verdict never set it. */
+  unread: boolean
 }
 
 /** A row of the all-tabs sheet: the summary plus what only the open sheet shows. */
@@ -31,6 +33,11 @@ export type MobileSessionTabRow = MobileSessionTabSummary & {
   /** The second line: the state, then what the tab is doing or showing. */
   detail: string
   timeAt: number | null
+}
+
+/** A chat tab the host marked as a fork; its title is drawn after the fork mark. */
+export function isForkedChatTab(tab: MobileSessionTab): boolean {
+  return tab.type === 'agent-session' && tab.forked === true
 }
 
 export function mobileSessionTabDotState(
@@ -110,7 +117,8 @@ export function buildMobileSessionTabSummary(
           ? resolveMobileTerminalTabAgentId(tab, hostAgentIdentity)
           : null,
     dotState,
-    group: tabGroup(dotState)
+    group: tabGroup(dotState),
+    unread: (tab.type === 'terminal' || tab.type === 'agent-session') && tab.unread === true
   }
 }
 

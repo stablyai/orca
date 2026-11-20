@@ -3,22 +3,32 @@ import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'
+import { useAppStoreWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { signInToClaudeAccount } from '@/lib/provider-accounts/claude-account-sign-in'
 import { getRendererAppPlatform } from '@/app-shell/platform/renderer-app-platform'
 import { readAgentInventoryForTarget } from '@/lib/agent-session/launch/inventory/agent-detection-target-inventory'
 import { runtimeHostPlatform } from '@/components/terminal-pane/pty-transport/host-ownership/pty-owner-machine-platform'
 import {
   agentSessionInstallCommand,
-  agentSessionSignInCommand
-} from '../../../../../shared/agent-session/lifecycle/agent-session-setup-commands'
-import type { AgentSessionAccountKind } from '../../../../../shared/agent-session/agent-session-availability'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+  agentSessionSignInCommand,
+  agentSessionSignInEnv
+} from '../../../../../shared/agent-session/lifecycle/launch/agent-session-setup-commands'
+import type { AgentJournalRenderItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
+import {
+  agentSessionUnresolvedFailureRows,
+  isAgentSessionSetupFailureKind
+} from '../../../../../shared/agent-session/failures/agent-session-visible-failures'
+import type { AgentSessionAccountKind } from '../../../../../shared/agent-session/failures/agent-session-availability'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { lastVerifiedRuntimeStatus } from '../../../../../shared/remote-runtime/host-status/runtime-host-status'
-import { resolveHostAgentStartupShell } from '../../../../../shared/windows-terminal-shell'
+import { resolveHostAgentStartupShell } from '../../../../../shared/shell/launch/windows-terminal-shell'
 import {
   useNativeChatHostCommandTerminal,
   type NativeChatHostCommandTerminal
 } from './native-chat-host-command-terminal'
+import type { AgentCliUpdateView } from '@/components/agent-cli-update/use-agent-cli-update'
+import { useNativeChatCliUpdate } from './native-chat-cli-update'
+import { openAgentSettingsAction } from '@/components/settings/navigation/open-agent-settings'
 
 const SIGN_IN_FAILURE_KINDS: ReadonlySet<string> = new Set([
   'notSignedIn',
@@ -38,12 +48,24 @@ function isNativeChatSignInFailureKind(
 }
 
 /** Failure kinds a host setup step can fix; rows check this before subscribing to the setup context. */
-export function isNativeChatSetupFailureKind(kind: string | undefined): boolean {
-  return kind === 'modelNotSelected' || kind === 'cliMissing' || isNativeChatSignInFailureKind(kind)
+export const isNativeChatSetupFailureKind = isAgentSessionSetupFailureKind
+
+/** Whether a later successful turn resolved the setup failure this row reports. */
+export function isNativeChatFailureRowResolved(
+  setup: NativeChatHostSetup | null,
+  rowId: string | undefined
+): boolean {
+  return (
+    rowId !== undefined &&
+    setup?.unresolvedFailureRows !== undefined &&
+    !setup.unresolvedFailureRows.has(rowId)
+  )
 }
 
 export type NativeChatSignIn = {
   signingIn: boolean
+  /** Signed in since this failure; nothing to press until the user sends again. */
+  signedIn?: boolean
   signIn: () => void
   loginCommand?: string
 }
@@ -58,8 +80,14 @@ type NativeChatInstall = {
 export type NativeChatHostSetup = {
   signIn: NativeChatSignIn | null
   install: NativeChatInstall | null
+  /** The user's own CLI update on the chat's host; null for agents Orca can't update. */
+  update?: AgentCliUpdateView | null
   /** The chat's host, so setup links open Settings on it. */
   host?: RuntimeClientTarget
+  /** Rows whose failure no later successful turn resolved; absent when the transcript is unknown. */
+  unresolvedFailureRows?: ReadonlySet<string>
+  /** The composer's notice shows Sign in, so transcript rows only say what wasn't sent. */
+  signInInComposer?: boolean
 }
 
 export const NativeChatHostSetupContext = createContext<NativeChatHostSetup | null>(null)
@@ -75,7 +103,7 @@ export function nativeChatSetupAction(
   t: Translate = translate
 ): { label: string; primary: true; disabled: boolean; onClick: () => void } | undefined {
   const signIn = setup?.signIn
-  if (signIn && isNativeChatSignInFailureKind(kind, signIn)) {
+  if (signIn && !signIn.signedIn && isNativeChatSignInFailureKind(kind, signIn)) {
     return {
       label: signIn.signingIn
         ? t('components.native-chat.claudeSignIn.signingIn', 'Signing in…')
@@ -97,10 +125,13 @@ export function nativeChatSetupAction(
       onClick: install.run
     }
   }
+  if (kind === 'agentCommandNotRunnable') {
+    return { ...openAgentSettingsAction(setup?.host, t), primary: true }
+  }
   return undefined
 }
 
-/** Offer selected-account sign-in until successful, then suppress it until the failure or failure-row count changes. */
+/** Offer selected-account sign-in until successful, then report signed in until the failure or failure-row count changes. */
 function useManagedClaudeSignIn(
   accountId: string | null,
   failure: unknown,
@@ -131,7 +162,7 @@ function useManagedClaudeSignIn(
     signedInFor !== null && signedInFor.failure === failure && signedInFor.rows === failureRows
   // Why memoized: rows read it through context, and a chat re-renders on every streamed token.
   return useMemo(
-    () => (accountId && !signedInSinceFailure ? { signingIn, signIn } : null),
+    () => (accountId ? { signingIn, signedIn: signedInSinceFailure, signIn } : null),
     [accountId, signedInSinceFailure, signingIn, signIn]
   )
 }
@@ -144,6 +175,7 @@ type NativeChatHostSetupInput = {
   account: AgentSessionAccountKind | undefined
   failure: unknown
   startFailures: readonly { kind: string }[]
+  journalItems: readonly AgentJournalRenderItem[]
   /** After a recheck reads the host's agents, so the chat can retry what the install fixed. */
   onRechecked: () => void
 }
@@ -165,10 +197,10 @@ function useNativeChatSignIn(
     input.failure,
     input.startFailures.filter((fact) => isNativeChatSignInFailureKind(fact.kind)).length
   )
-  const shell = useAppStore((s) => {
+  const shell = useAppStoreWithHostStatuses((s, statuses) => {
     const status =
       input.target.kind === 'environment'
-        ? lastVerifiedRuntimeStatus(s.runtimeStatusByEnvironmentId.get(input.target.environmentId))
+        ? lastVerifiedRuntimeStatus(statuses.get(input.target.environmentId))
         : null
     const platform = input.target.kind === 'local' ? getRendererAppPlatform() : status?.hostPlatform
     if (!platform) {
@@ -190,16 +222,17 @@ function useNativeChatSignIn(
     remote: input.target.kind !== 'local',
     shell
   })
+  const { agent } = input
   const viaTerminal = useMemo(
     () =>
       command && terminal
         ? {
             signingIn: terminal.opening,
-            signIn: () => void terminal.open(command),
+            signIn: () => void terminal.open(command, agentSessionSignInEnv(agent)),
             loginCommand: command
           }
         : null,
-    [command, terminal]
+    [agent, command, terminal]
   )
   // A managed account owns sign-in: a terminal login after it succeeds would sign in another account.
   return accountId ? managed : viaTerminal
@@ -213,8 +246,8 @@ function useNativeChatInstall(
   const environmentId = input.target.kind === 'environment' ? input.target.environmentId : null
   const command = agentSessionInstallCommand(
     input.agent,
-    useAppStore((s) =>
-      environmentId ? runtimeHostPlatform(s, environmentId) : getRendererAppPlatform()
+    useAppStoreWithHostStatuses((_s, statuses) =>
+      environmentId ? runtimeHostPlatform(statuses, environmentId) : getRendererAppPlatform()
     )
   )
   const [opened, setOpened] = useState(false)
@@ -279,6 +312,23 @@ export function useNativeChatHostSetup(input: NativeChatHostSetupInput): NativeC
   const terminal = useNativeChatHostCommandTerminal(input)
   const signIn = useNativeChatSignIn(input, terminal)
   const install = useNativeChatInstall(input, terminal)
-  const { target } = input
-  return useMemo(() => ({ signIn, install, host: target }), [signIn, install, target])
+  const update = useNativeChatCliUpdate(input.target, input.agent, input.onRechecked)
+  const { target, journalItems } = input
+  // Keyed by its ids so a streamed reply leaves the set, and the rows reading it, alone.
+  const unresolvedKey = useMemo(
+    // Sent messages too: a refused one's line can offer the fix.
+    () => agentSessionUnresolvedFailureRows(journalItems, { sentMessages: true }).join('\n'),
+    [journalItems]
+  )
+  const unresolvedFailureRows = useMemo(() => new Set(unresolvedKey.split('\n')), [unresolvedKey])
+  return useMemo(
+    () => ({
+      signIn,
+      install,
+      update,
+      host: target,
+      unresolvedFailureRows
+    }),
+    [signIn, install, update, target, unresolvedFailureRows]
+  )
 }

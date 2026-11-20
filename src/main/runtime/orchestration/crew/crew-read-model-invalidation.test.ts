@@ -5,6 +5,7 @@ import {
   type OrchestrationCrewSnapshot
 } from '../../../../shared/orchestration/orchestration-crew'
 
+import type { CrewInvalidation } from './crew-changes'
 import { CrewReadModel } from './crew-read-model'
 import { fixture } from './crew-read-model.test-fixture'
 import { subscribeCrew } from './crew-stream'
@@ -62,5 +63,35 @@ it('invalidates the current coordinator alias using returned persisted routing e
     )
   } finally {
     stream.stop()
+  }
+})
+
+it('announces a coordinator rebind once with every mailbox it changed, and a no-op not at all', () => {
+  const f = fixture()
+  const bind = (runId: string) =>
+    f.db.bindRun({
+      runId,
+      coordinatorHandle: 'term_helper',
+      coordinatorPaneKey: f.handles.get('term_helper')!
+    })
+  bind(f.run.id)
+  const other = f.db.createRun({
+    objective: 'second run',
+    coordinatorHandle: null,
+    coordinatorPaneKey: null
+  })
+  const notices: CrewInvalidation[] = []
+  const stop = f.db.crewChanges.subscribe((facets) => notices.push(facets))
+  try {
+    bind(f.run.id)
+    expect(notices).toEqual([])
+    bind(other.id)
+    // One notice, after commit, naming both Runs the rebind changed.
+    expect(notices).toHaveLength(1)
+    expect([...(notices[0].trafficAddresses ?? [])]).toEqual(
+      expect.arrayContaining([`run:${f.run.id}`, `run:${other.id}`])
+    )
+  } finally {
+    stop()
   }
 })

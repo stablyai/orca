@@ -1,15 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { GitExecFn } from './fork-remote-refspec'
-import {
-  fetchForkRemoteWithStaleRefspecRepair,
-  parseMissingForkBranchRef
-} from './fork-remote-stale-branch-refspec'
-
-describe('parseMissingForkBranchRef', () => {
-  it('returns null for unrelated stderr', () => {
-    expect(parseMissingForkBranchRef('fatal: Authentication failed\n')).toBeNull()
-  })
-})
+import { fetchForkRemoteWithStaleRefspecRepair } from './fork-remote-stale-branch-refspec'
 
 function makeExec(getAllStdout: string): GitExecFn {
   return vi.fn<GitExecFn>(async (args: string[]) => {
@@ -24,13 +15,16 @@ describe('fetchForkRemoteWithStaleRefspecRepair', () => {
   it('rethrows immediately when the error is not a stale-refspec failure', async () => {
     const exec = makeExec('+refs/heads/keep:refs/remotes/fork/keep\n')
     const runFetch = vi.fn(async () => {
-      throw new Error('network unreachable')
+      throw Object.assign(new Error('authentication failed'), {
+        stderr: 'fatal: Authentication failed\n'
+      })
     })
 
     await expect(
       fetchForkRemoteWithStaleRefspecRepair(exec, '/repo', 'fork', runFetch)
-    ).rejects.toThrow('network unreachable')
+    ).rejects.toThrow('authentication failed')
     expect(runFetch).toHaveBeenCalledTimes(1)
+    expect(exec).not.toHaveBeenCalled()
   })
 
   it('rethrows when the reported stale ref is not actually a tracked refspec (fail safe, no infinite loop)', async () => {

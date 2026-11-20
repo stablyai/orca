@@ -1,5 +1,7 @@
 import type { SetupTrustMismatch } from '../../worktree/create-types'
 import type { TaskSourceContext, WorkspaceRunContext } from '../../work-items/task-source-context'
+import type { AutomationRunEvent } from '../../automation-event-triggers'
+import type { AutomationTriggeredBy } from '../../bots/bot-acts-for'
 
 export type AutomationRunStatus =
   | 'pending'
@@ -12,9 +14,23 @@ export type AutomationRunStatus =
   | 'skipped_needs_interactive_auth'
   | 'dispatch_failed'
 
-export type AutomationRunTrigger = 'scheduled' | 'manual'
+export type AutomationRunTrigger = 'scheduled' | 'manual' | 'event'
 
 /** Statuses a run can never leave; only these are safe to evict from history. */
+/**
+ * The time a run is listed under everywhere (list, detail, rail, run tables): its scheduled
+ * slot. A folded run (repeated identical refusals) is listed under its latest occurrence.
+ */
+export function getAutomationRunListedAt(
+  run: Pick<AutomationRun, 'scheduledFor' | 'occurrenceCount' | 'lastOccurrenceAt'>
+): number {
+  return (run.occurrenceCount ?? 1) > 1 &&
+    run.lastOccurrenceAt !== undefined &&
+    run.lastOccurrenceAt > run.scheduledFor
+    ? run.lastOccurrenceAt
+    : run.scheduledFor
+}
+
 export function isFinalAutomationRunStatus(status: AutomationRunStatus): boolean {
   return (
     status === 'completed' ||
@@ -106,6 +122,7 @@ export type AutomationRun = {
   workspaceId: string | null
   /** Keep run history understandable after workspace deletion removes live metadata. */
   workspaceDisplayName?: string | null
+  /** 'chat' for a structured-session run (a bot or a chat-surface automation), whose id is chatSessionId. */
   sessionKind: 'terminal' | 'chat'
   chatSessionId: string | null
   terminalSessionId: string | null
@@ -121,6 +138,14 @@ export type AutomationRun = {
   errorParams?: Record<string, string | number>
   startedAt: number | null
   dispatchedAt: number | null
+  /**
+   * The dispatch-start time (taken just before the dispatcher runs, the same instant as
+   * `dispatchedAt`), recorded only once the launch produced a terminal or chat session, even
+   * if the run failed afterwards (prompt delivery, a partial start). It is not a measured
+   * open time. Survives terminal retention clearing the pane key. Absent on older records
+   * and on runs that never launched.
+   */
+  launchedAt?: number
   createdAt: number
   /** Persist unique run numbers; retention makes retained count unsuitable. */
   runNumber?: number
@@ -128,6 +153,14 @@ export type AutomationRun = {
   occurrenceCount?: number
   /** `scheduledFor` of the most recently folded occurrence; absent until one folds. */
   lastOccurrenceAt?: number
+  /** The latest event folded into it; a manual run of an event automation replays the latest one. */
+  event?: AutomationRunEvent
+  /** Who did the event that started it, kept as it was when later events fold in; never whom it acts for. */
+  triggeredBy?: AutomationTriggeredBy
+  /** Keys of the earlier events folded into it, oldest first, so a resend of any is known. */
+  eventKeys?: string[]
+  /** Its event was a message the bot answered: the bot's conversation turn ran it, in that chat. */
+  handledInTurn?: true
   /** Setup was skipped: the new workspace's branch has different setup than the automation approved. */
   setupSkippedReason?: AutomationRunSetupSkippedReason
   /** The skipped setup content, so it can be reviewed and approved for later runs. Older hosts omit it. */
@@ -142,7 +175,7 @@ export type AutomationRunsPage = {
   nextCursor: string | null
 }
 
-export type AutomationDispatchResult = {
+export type AutomationDispatchResult = Pick<AutomationRun, 'handledInTurn'> & {
   runId: string
   sessionKind?: 'terminal' | 'chat'
   chatSessionId?: string | null
@@ -160,6 +193,8 @@ export type AutomationDispatchResult = {
   errorParams?: Record<string, string | number> | null
   /** With `dispatched`: when the agent was handed the run, if not now. */
   dispatchedAt?: number
+  /** Dispatch-start time, set once the launch produced a terminal or session; kept once recorded. */
+  launchedAt?: number
   setupSkippedReason?: AutomationRunSetupSkippedReason
   setupSkippedContent?: SetupTrustMismatch
 }

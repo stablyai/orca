@@ -1,4 +1,5 @@
 import { realpath, stat } from 'node:fs/promises'
+import { defaultClaudeConfigDir } from '../structured/launch/claude-config-dir-pin'
 import { claudeVersionReaches, probeClaudeCliVersion } from './claude-hook-event-versions'
 
 export type ClaudeCliFlag = { readonly option: string; readonly firstVersion: string }
@@ -13,6 +14,18 @@ export const CLAUDE_PLUGIN_DIR_FLAG: ClaudeCliFlag = {
   firstVersion: '2.0.25'
 }
 
+/** Claude loads the folders this variable names as plugins; managed settings can refuse it. */
+export const CLAUDE_PLUGIN_DIRS_ENV: ClaudeCliFlag = {
+  option: 'CLAUDE_CODE_PLUGIN_DIRS',
+  firstVersion: '0.0.0'
+}
+
+/** A managed agent's own tools; managed settings can refuse it. */
+export const CLAUDE_MCP_CONFIG_FLAG: ClaudeCliFlag = {
+  option: '--mcp-config',
+  firstVersion: '0.0.0'
+}
+
 export const CLAUDE_EFFORT_FLAG: ClaudeCliFlag = {
   option: '--effort',
   firstVersion: '2.1.38'
@@ -24,6 +37,12 @@ export const CLAUDE_APPLY_FLAG_SETTINGS_CONTROL: ClaudeCliFlag = {
   firstVersion: '2.1.50'
 }
 
+/** Suggestions are enabled only where they can be paused; each one costs a model request. */
+export const CLAUDE_PROMPT_SUGGESTIONS_PAUSE_CONTROL: ClaudeCliFlag = {
+  option: 'set_prompt_suggestions_paused',
+  firstVersion: '2.1.280'
+}
+
 // Allow cold CLI startup without blocking for the full probe kill timeout.
 export const CLAUDE_CLI_FLAG_PROBE_BUDGET_MS = 1_500
 
@@ -32,8 +51,34 @@ export const CLAUDE_CLI_FLAG_PROBE_KILL_AFTER_MS = 10_000
 /** Reads a version an earlier check or prewarm already learned. */
 export const CLAUDE_CACHED_FLAG_CHECK_BUDGET_MS = 250
 
-// Only an explicit unknown-option diagnostic proves flag rejection.
+// Only an explicit unknown-option or managed-settings refusal proves flag rejection.
 const UNKNOWN_OPTION_DIAGNOSTIC = /unknown option '(--[a-z][a-z0-9-]*)'/
+// Lists every refused item, e.g. `--plugin-dir, --agents, plugins (initialize request), CLAUDE_CODE_PLUGIN_DIRS are`.
+const SIDELOAD_ITEM = String.raw`(?:--[a-z][a-z0-9-]*|[A-Z][A-Z0-9_]+|[a-z]+ \([a-z ]+\))`
+const MANAGED_SIDELOAD_REFUSAL = new RegExp(
+  String.raw`(?<![\w-])((?:${SIDELOAD_ITEM}, )*${SIDELOAD_ITEM}) (?:is|are) disabled by your organization's managed settings \(disableSideloadFlags\)`
+)
+
+// Managed settings can come from the signed-in account, so their refusals hold only for its config folder.
+function refusedOptions(message: string): { options: string[]; perAccount: boolean } {
+  const unknown = UNKNOWN_OPTION_DIAGNOSTIC.exec(message)?.[1]
+  if (unknown) {
+    return { options: [unknown], perAccount: false }
+  }
+  return {
+    options: MANAGED_SIDELOAD_REFUSAL.exec(message)?.[1].split(', ') ?? [],
+    perAccount: true
+  }
+}
+
+/** Whether Claude exited because the organization's managed settings refuse `option`. */
+export function claudeManagedSettingsRefuse(error: unknown, option: string): boolean {
+  if (!(error instanceof Error)) {
+    return false
+  }
+  const { options, perAccount } = refusedOptions(error.message)
+  return perAccount && options.includes(option)
+}
 
 const MAX_REMEMBERED = 32
 
@@ -75,9 +120,9 @@ export type ClaudeCliFlagSupport = {
   ) => Promise<ClaudeCliFlagFact>
   /** Warm the version cache without waiting; failures remain retryable. */
   prewarm: (launch: ClaudeCliLaunch) => void
-  /** Remember explicit flag rejection for this binary and cwd. */
+  /** Remember explicit flag rejection for this binary and cwd, and for the account if policy refused it. */
   observeExit: (
-    launch: Pick<ClaudeCliLaunch, 'command' | 'prefixArgs' | 'cwd'>,
+    launch: Pick<ClaudeCliLaunch, 'command' | 'prefixArgs' | 'cwd' | 'env'>,
     error: Error
   ) => void
 }
@@ -105,7 +150,11 @@ async function within<T>(pending: Promise<T>, ms: number): Promise<T | undefined
   }
 }
 
-type BinaryFacts = { version?: string; refused: Set<string> }
+type BinaryFacts = {
+  version?: string
+  refused: Set<string>
+  refusedByAccount: Map<string, Set<string>>
+}
 
 export function createClaudeCliFlagSupport(
   deps: {
@@ -127,7 +176,10 @@ export function createClaudeCliFlagSupport(
   const known = new Map<string, BinaryFacts>()
   const probing = new Map<string, { settled: Promise<void>; startedAt: number }>()
   const touch = (key: string): BinaryFacts => {
-    const facts = known.get(key) ?? { refused: new Set<string>() }
+    const facts = known.get(key) ?? {
+      refused: new Set<string>(),
+      refusedByAccount: new Map<string, Set<string>>()
+    }
     known.delete(key)
     known.set(key, facts)
     for (const stale of known.keys()) {
@@ -146,9 +198,12 @@ export function createClaudeCliFlagSupport(
   }
   const versionOf = (key: string): string | undefined =>
     known.has(key) ? touch(key).version : undefined
-  const answer = (key: string, flag: ClaudeCliFlag): ClaudeCliFlagFact => {
+  const answer = (key: string, flag: ClaudeCliFlag, launch: ClaudeCliLaunch): ClaudeCliFlagFact => {
     const facts = known.get(key)
-    if (facts?.refused.has(flag.option)) {
+    if (
+      facts?.refused.has(flag.option) ||
+      facts?.refusedByAccount.get(defaultClaudeConfigDir(launch.env))?.has(flag.option)
+    ) {
       return 'unsupported'
     }
     if (facts?.version === undefined) {
@@ -183,15 +238,15 @@ export function createClaudeCliFlagSupport(
         return 'unknown'
       }
       if (versionOf(key) !== undefined) {
-        return answer(key, flag)
+        return answer(key, flag, launch)
       }
       const running = probing.get(key) ?? (startProbe ? probe(key, launch) : undefined)
       if (!running) {
-        return answer(key, flag)
+        return answer(key, flag, launch)
       }
       // An already-running probe does not get a fresh wait budget.
       await within(running.settled, Math.min(running.startedAt + budgetMs, deadline) - deps.now())
-      return answer(key, flag)
+      return answer(key, flag, launch)
     },
     prewarm: (launch) => {
       void keyOf(launch).then(
@@ -204,14 +259,22 @@ export function createClaudeCliFlagSupport(
       )
     },
     observeExit: (launch, error) => {
-      const option = UNKNOWN_OPTION_DIAGNOSTIC.exec(error.message)?.[1]
-      if (!option) {
+      const { options, perAccount } = refusedOptions(error.message)
+      if (options.length === 0) {
         return
       }
       void keyOf(launch).then((key) => {
-        if (key !== null) {
-          touch(key).refused.add(option)
+        if (key === null) {
+          return
         }
+        const facts = touch(key)
+        let refused = facts.refused
+        if (perAccount) {
+          const account = defaultClaudeConfigDir(launch.env)
+          refused = facts.refusedByAccount.get(account) ?? new Set<string>()
+          facts.refusedByAccount.set(account, refused)
+        }
+        options.forEach((option) => refused.add(option))
       })
     }
   }

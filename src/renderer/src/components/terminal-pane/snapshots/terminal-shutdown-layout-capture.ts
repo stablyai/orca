@@ -10,9 +10,11 @@ import { serializeWithAbsoluteCursor } from '../../../../../shared/terminal/repl
 import {
   getUtf8ByteLength,
   isUtf8ByteLengthWithinLimit
-} from '../../../../../shared/utf8-byte-limits'
+} from '../../../../../shared/text/utf8-byte-limits'
 
 const MAX_BUFFER_BYTES = TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT
+// Saved layouts replay as bare ANSI into a pane of any width, so they must not repaint cells.
+const SAVED_LAYOUT_CURSOR_OPTIONS = { repaintPendingWrap: false }
 
 type ShutdownPane = Pick<ManagedPane, 'id' | 'leafId' | 'terminal' | 'serializeAddon'>
 
@@ -73,9 +75,13 @@ function serializeWithinSessionScrollbackByteLimit(
     if (rows <= fitRows || rows >= overRows) {
       break
     }
-    const attempt = serializeWithAbsoluteCursor(pane.serializeAddon, pane.terminal, {
-      scrollback: rows
-    })
+    const attempt = serializeWithAbsoluteCursor(
+      pane.serializeAddon,
+      pane.terminal,
+      { scrollback: rows },
+      null,
+      SAVED_LAYOUT_CURSOR_OPTIONS
+    )
     if (fitsSessionScrollbackByteLimit(attempt)) {
       best = attempt
       fitRows = rows
@@ -107,9 +113,13 @@ export function captureTerminalShutdownLayout({
         const leafId = pane.leafId
         let scrollback = pane.terminal.options.scrollback ?? 10_000
         // Absolute cursor restore avoids SerializeAddon’s one-column-short relative restore after wrap-pending rows.
-        let serialized = serializeWithAbsoluteCursor(pane.serializeAddon, pane.terminal, {
-          scrollback
-        })
+        let serialized = serializeWithAbsoluteCursor(
+          pane.serializeAddon,
+          pane.terminal,
+          { scrollback },
+          null,
+          SAVED_LAYOUT_CURSOR_OPTIONS
+        )
         // Cap persisted SSH sleep history by UTF-8 bytes so non-ASCII cannot bypass the limit.
         if (!fitsSessionScrollbackByteLimit(serialized) && scrollback > 1) {
           serialized = serializeWithinSessionScrollbackByteLimit(pane, serialized, scrollback)

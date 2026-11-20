@@ -1,9 +1,14 @@
-import { dirname, join } from 'node:path'
+import { createReadStream } from 'node:fs'
+import { basename, dirname, join } from 'node:path'
+import {
+  agentSessionRefusalError,
+  isAgentSessionRefusalError
+} from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import { sessionIdFromFileName } from '../../../ai-vault/parsing/session-scanner-accumulator'
 import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
-import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
+import { normalizeRuntimePathForComparison } from '../../../../shared/file-access/cross-platform-path'
 import { readNodeFileWithinLimit } from '../../../../shared/file-content/node-bounded-file-reader'
-import { extractString } from '../../../../shared/trimmed-string'
+import { extractString } from '../../../../shared/text/trimmed-string'
 import { parseJsonObject } from '../../../ai-vault/parsing/session-json-object'
 import { asRecord } from '../../../ai-vault/parsing/session-record-fields'
 
@@ -11,6 +16,13 @@ import { readOpenCodeTranscriptSignalViaWorker } from '../../../ai-vault/scanner
 import { samePiDirectory } from '../../../pi/rpc/launch/rpc-launch-resolution'
 import { admitTranscriptPath } from '../../transcript-discovery/transcript-path-admission'
 import { adoptedDirectoryProbes } from './adopted-directory-probe'
+import {
+  encodeClaudeProjectPaths,
+  isClaudeProjectOwnBucketName
+} from '../../../ai-vault/scanners/claude/claude-project-dir-encoding'
+import { grokEncodedCwdDirName } from '../../../../shared/agent-hook-listener/providers/grok/grok-session-paths'
+import { resolveNativeChatTranscriptAgent } from '../../../../shared/native-chat/native-chat-agent-support'
+import { decodeTranscriptStream } from '../../transcript-streaming/transcript-stream-lines'
 
 export type AdoptedTranscriptSource = {
   providerSessionId: string
@@ -46,7 +58,11 @@ export async function assertAdoptedSourceIdentity(
       ? await samePiDirectory(actual.cwd, source.workspaceCwd)
       : await adoptedDirectoryProbes.matches(source.workspaceCwd, actual.cwd, signal)
   if (!matched) {
-    throw new Error('This conversation belongs to another directory.')
+    throw agentSessionRefusalError(
+      'agent_session_identity_required',
+      { reason: 'transcriptUnreadable', otherFolder: true },
+      'This conversation belongs to another directory.'
+    )
   }
 }
 
@@ -98,6 +114,10 @@ export function adoptedTranscriptSourceObserver(input: {
       if (input.agent === 'pi' && sessionIdFromFileName(input.filePath) !== sessionId) {
         throw new Error('The saved conversation header does not match its file identity.')
       }
+      // Moved or copied chats keep their old cwd; Claude and Grok resume from the cwd's bucket regardless.
+      if (isWorkspaceCwdBucket(input.agent, input.filePath, input.source.workspaceCwd)) {
+        cwd = input.source.workspaceCwd
+      }
       await assertAdoptedSourceIdentity(
         input.source,
         { sessionId, cwd },
@@ -107,6 +127,21 @@ export function adoptedTranscriptSourceObserver(input: {
       )
     }
   }
+}
+
+// Windows file systems resolve bucket names without case, as the agents' own lookups do.
+function isWorkspaceCwdBucket(agent: AgentType, filePath: string, cwd: string): boolean {
+  const fold = (name: string) => (process.platform === 'win32' ? name.toLowerCase() : name)
+  if (agent === 'grok') {
+    const encoded = grokEncodedCwdDirName(cwd)
+    return encoded !== null && fold(basename(dirname(dirname(filePath)))) === fold(encoded)
+  }
+  return (
+    agent === 'claude' &&
+    encodeClaudeProjectPaths(cwd).some((encoded) =>
+      isClaudeProjectOwnBucketName(fold(basename(dirname(filePath))), fold(encoded))
+    )
+  )
 }
 
 export async function validateAdoptedOpenCodeSource(
@@ -130,4 +165,57 @@ export async function validateAdoptedOpenCodeSource(
     true,
     signal
   )
+}
+
+// Agents record their folder in the opening records, so a large transcript stays quick to check.
+const ADOPTED_FOLDER_HEAD_BYTES = 1024 * 1024
+
+function folderCheckedTranscriptAgent(agent: AgentType) {
+  const transcriptAgent = agent === 'pi' ? 'omp' : resolveNativeChatTranscriptAgent(agent)
+  return transcriptAgent === 'codex' ? null : transcriptAgent
+}
+
+/** Whether the import refuses a conversation saved in another folder. */
+export function importChecksAdoptedFolder(agent: AgentType): boolean {
+  return folderCheckedTranscriptAgent(agent) !== null
+}
+
+/** The import's other-folder refusal, read from the transcript's opening records only; any other
+ *  outcome is left to the full import. */
+export async function assertAdoptedTranscriptFolder(input: {
+  agent: AgentType
+  filePath: string
+  source: AdoptedTranscriptSource
+  signal?: AbortSignal
+}): Promise<void> {
+  const transcriptAgent = folderCheckedTranscriptAgent(input.agent)
+  try {
+    if (transcriptAgent === 'opencode') {
+      await validateAdoptedOpenCodeSource(input.filePath, input.source, input.signal)
+    } else if (transcriptAgent) {
+      const observer = adoptedTranscriptSourceObserver({
+        ...input,
+        maxSourceBytes: ADOPTED_FOLDER_HEAD_BYTES
+      })
+      await decodeTranscriptStream(
+        createReadStream(input.filePath, {
+          end: ADOPTED_FOLDER_HEAD_BYTES - 1,
+          signal: input.signal
+        }),
+        input.filePath,
+        0,
+        (line) => {
+          observer.observe(line)
+          return null
+        },
+        false
+      )
+      await observer.validate()
+    }
+  } catch (error) {
+    const refusal = isAgentSessionRefusalError(error) ? error.refusal : null
+    if (refusal?.code === 'agent_session_identity_required' && refusal.details?.otherFolder) {
+      throw error
+    }
+  }
 }

@@ -1,7 +1,8 @@
 import { isCompletePRCheckOwner } from '../../../../../shared/github/checks/complete-pr-check-owner'
-import { usePRCheckRefreshOwner } from '@/hooks/use-pr-check-refresh-owner'
+import { usePRCheckRefreshOwner } from '@/lib/work-items/github/use-pr-check-refresh-owner'
 import { getChecksTabSummaryPresentation } from '@/components/github-item-dialog/inspect-pull-request/checks-tab-summary'
 import React, { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useRuntimeStatusByEnvironmentId } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { useAppStore } from '@/store/index'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import {
@@ -9,14 +10,14 @@ import {
   resolveGitHubChecksTabState,
   toggleGitHubChecksTabExpandedKey,
   type GitHubChecksContextOwner
-} from '@/components/github-checks-tab-state'
+} from '@/components/github/github-checks-tab-state'
 
 import { getCheckDetailsKey } from '@/components/github/pr-check-presentation'
 import {
   getCheckCounts,
   getOverallCheckCounts,
   getChecksSummaryLabel
-} from '@/components/pr-check-counts'
+} from '@/components/github/pr-check-counts'
 import { getBrokenChecks } from '../../../../../shared/source-control/checks/pr-checks-fix-prompt'
 import { sortChecksBySeverity } from '../../../../../shared/source-control/checks/pr-check-severity-order'
 import { githubRepoIdentityKey } from '../../../../../shared/github/repositories/repository-identity-key'
@@ -133,14 +134,15 @@ export function ChecksTab({
   )
   const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
   const sshStateByEnvironment = useAppStore((s) => s.sshStateByEnvironment)
-  const runtimeStatusByEnvironmentId = useAppStore((s) => s.runtimeStatusByEnvironmentId)
+  const runtimeStatusByEnvironmentId = useRuntimeStatusByEnvironmentId()
   // Why: the fix agent runs on the repo's execution host, so its OS decides quoting (#27971).
   const fixChecksLaunchPlatform = useMemo(() => {
     if (!repo) {
       return undefined
     }
     const fact = resolveRepoExecutionHostPlatform(
-      { sshConnectionStates, sshStateByEnvironment, runtimeStatusByEnvironmentId },
+      { sshConnectionStates, sshStateByEnvironment },
+      runtimeStatusByEnvironmentId,
       repo,
       () =>
         getLocalRepoProjectExecutionRuntimeContext(

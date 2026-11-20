@@ -110,22 +110,6 @@ describe("Don't Save against running and queued saves", () => {
     vi.unstubAllGlobals()
   })
 
-  it('keeps the running save and never writes the queued newest text', async () => {
-    edit('a')
-    const release = holdNextWrite(disk)
-    const running = requestEditorFileSave({ fileId: PATH })
-    await vi.advanceTimersByTimeAsync(0)
-    edit('ab')
-    const queued = requestEditorFileSave({ fileId: PATH })
-
-    const discard = discardEditorFileChangesAndClose(PATH)
-    release()
-    await Promise.all([running, queued, discard])
-
-    expect(written()).toEqual(['a'])
-    expect(disk.files.get(PATH)).toBe('a')
-  })
-
   it('keeps the running save and never writes a queued autosave', async () => {
     edit('a')
     const release = holdNextWrite(disk)
@@ -163,6 +147,7 @@ describe("Don't Save against running and queued saves", () => {
     }
 
     expect(written()).toEqual(['a'])
+    expect(disk.files.get(PATH)).toBe('a')
   })
 
   it('never sends a stale Overwrite after discard and reopening the same file', async () => {

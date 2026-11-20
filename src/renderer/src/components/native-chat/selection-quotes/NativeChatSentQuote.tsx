@@ -11,8 +11,8 @@ import { nativeChatFileOpenDeps } from '../links/actions/native-chat-link-target
 import { NativeChatMarkdownImageOwnerContext } from '../media/images/native-chat-markdown-image-owner'
 import { jumpToQuoteSource, type QuotedFileLocation } from './native-chat-quote-sources'
 import { NativeChatQuoteJumpContext } from './use-native-chat-quote-jump'
-import { quotedText } from './native-chat-quote-selection'
-import { CommentMarkdownBlockLineContext } from '@/components/sidebar/comment-markdown-code-renderers'
+import { quotedText } from '../../../../../shared/native-chat/input/quotes/native-chat-quote-selection'
+import { CommentMarkdownBlockLineContext } from '@/components/comment-markdown/comment-markdown-code-renderers'
 
 type HastNode = {
   type: string

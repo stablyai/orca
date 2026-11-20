@@ -3,10 +3,11 @@ import { useAppStore } from '../../../store/index'
 import type { NativeChatComposerHandle } from '../composer/native-chat-composer-types'
 import {
   formatNativeChatQuote,
-  readNativeChatQuotableSelection,
-  readNativeChatTranscriptSelection
-} from './native-chat-quote-selection'
+  readNativeChatQuotableSelection
+} from '../../../../../shared/native-chat/input/quotes/native-chat-quote-selection'
+import { readNativeChatTranscriptSelection } from './native-chat-transcript-selection'
 import { SelectionAddToChatPopover } from './SelectionAddToChatPopover'
+import { quoteSourceOf } from './native-chat-quote-highlight'
 import { rememberNativeChatQuoteSource, type QuoteSource } from './native-chat-quote-sources'
 
 function copyTranscriptSelectionOnSelect(root: HTMLElement): void {
@@ -50,7 +51,9 @@ export function NativeChatSelectionQuote({
         const quotable = composerRef.current?.acceptsText()
           ? readNativeChatQuotableSelection(root)
           : null
-        offeredSource.current = quotable?.source ?? null
+        offeredSource.current = quotable
+          ? quoteSourceOf(quotable.sourceElement, quotable.range)
+          : null
         return quotable
       }}
       onSelectionSettled={copyTranscriptSelectionOnSelect}

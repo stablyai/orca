@@ -1,10 +1,10 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../../types'
-import type { RemoteServerUpdaterSnapshot } from '../../../../../shared/remote-server-update'
+import type { RemoteServerUpdaterSnapshot } from '../../../../../shared/remote-runtime/host-catalog/remote-server-update'
 import { isListedRemoteServer } from '../../../../../shared/remote-runtime/host-catalog/runtime-environments'
-import type { RuntimeRpcResponse } from '../../../../../shared/runtime-rpc-envelope'
-import type { RuntimeStatus } from '../../../../../shared/runtime-session-contracts'
-import type { UpdateCheckOptions } from '../../../../../shared/update-status-types'
+import type { RuntimeRpcResponse } from '../../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
+import type { RuntimeStatus } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import type { UpdateCheckOptions } from '../../../../../shared/updater/update-status-types'
 import { unwrapRuntimeRpcResult } from '@/runtime/rpc/calls/runtime-rpc-result'
 import {
   checkingRemoteServerUpdateEntry,
@@ -29,9 +29,9 @@ function callRemoteUpdater<TResult>(
 }
 
 const transport: RemoteServerUpdateTransport = {
-  getRuntimeStatus: (environmentId, timeoutMs) =>
+  getRuntimeStatus: (environmentId, timeoutMs, options) =>
     window.api.runtimeEnvironments
-      .getStatus({ selector: environmentId, timeoutMs })
+      .getStatus({ selector: environmentId, timeoutMs, ...options })
       .then((response) => unwrapRuntimeRpcResult<RuntimeStatus>(response)),
   getUpdaterStatus: (environmentId, timeoutMs) =>
     callRemoteUpdater<RemoteServerUpdaterSnapshot>(

@@ -1,6 +1,6 @@
 // C3: window draws immediately for synchronous callers; main records the same IDs before later pane commands. Main-created tabs retain main’s facts so window saves do not mutate them.
 
-import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/identifiers/non-secure-context-uuid'
 import { afterLayoutFrame } from '@/runtime/workspace-layout/frames/layout-frame-position'
 import { expectTabRowFields } from '@/runtime/workspace-layout/intents/layout-owner-pane-intents'
 import { runtimeEnvironmentIdUnlessTwin } from '@/lib/workspace/ownership/resolve-owner'
@@ -16,6 +16,10 @@ import type {
 } from '../../../../../../shared/workspace-layout/workspace-layout-command-types'
 import type { AppState } from '../../../types'
 import { makePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
+import { findPendingWorktreeCreationId } from '@/lib/workspace/creation/pending-worktree-creation'
+import { hasStructuredAgentLaunchInWorktree } from '@/lib/agent-session/launch/structured-agent-session-launch-status'
+import { isEmptyWorkspaceDefaultSurfacePending } from '@/lib/workspace/activation/initial-surface/empty-workspace-default-surface-claims'
+import { hasRecordIndependentRenderableTab } from '../../../slices/tabs/tabs-reconciliation'
 import {
   clearWindowTabMark,
   markWindowTabStarting,
@@ -141,9 +145,21 @@ export function createInitialTerminalThroughLayoutOwner(
   // Today's create, only while the workspace is still shown and still empty, as before the await.
   const createAsToday = (): void => {
     const state = getState()
-    if (state.activeWorktreeId === worktreeId && !state.tabsByWorktree[worktreeId]?.length) {
-      create()
+    if (
+      state.activeWorktreeId !== worktreeId ||
+      state.tabsByWorktree[worktreeId]?.length ||
+      isEmptyWorkspaceDefaultSurfacePending(worktreeId) ||
+      hasRecordIndependentRenderableTab(state, worktreeId) ||
+      findPendingWorktreeCreationId(state.pendingWorktreeCreations, worktreeId) !== null ||
+      hasStructuredAgentLaunchInWorktree(worktreeId)
+    ) {
+      return
     }
+    // A chat may have opened while the host was answering the initial-terminal request.
+    if (state.reconcileWorktreeTabModel(worktreeId).renderableTabCount !== 0) {
+      return
+    }
+    create()
   }
   // Kept until the frame bringing main's tab takes it, even one an owed write holds back.
   const release = expectTabRowFields(tabId, ACTIVATION_ROW_FIELDS)

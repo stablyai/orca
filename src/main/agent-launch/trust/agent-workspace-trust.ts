@@ -7,7 +7,7 @@ import type { AgentTrustPreset } from './agent-trust-presets'
 import { resolveLocalClaudeTrustConfig } from '../../claude/configuration/claude-folder-trust-file'
 import type { ClaudeRuntimeAuthPreparation } from '../../claude-accounts/runtime-auth/runtime-auth-types'
 import type { AgentWorkspaceTrustSpawnRequest } from '../../../shared/agent-launch/permissions/agent-workspace-trust-spawn-request'
-import { parseWslUncPath, toLinuxPath } from '../../../shared/wsl-paths'
+import { parseWslUncPath, toLinuxPath } from '../../../shared/file-access/wsl-paths'
 import { applyWorkspaceTrustOnThisHost, launchedAgentHome } from './execution-host-workspace-trust'
 import { getLocalCodexTrustConfigFiles } from '../../codex/configuration/homes/codex-home-paths'
 import { getCachedWslHome } from '../../wsl/discovery/wsl-home-cache'
@@ -101,6 +101,7 @@ export async function applyAgentWorkspaceTrust(
         }),
       codexConfigFiles: () => getLocalCodexTrustConfigFiles(agentHome, context.codexHome),
       kimiHome: context.env?.KIMI_CODE_HOME || process.env.KIMI_CODE_HOME,
+      agentEnv: { ...process.env, ...context.env },
       // Codex shares its config lock queue with hook installs.
       deadlineMs:
         preset === 'codex' ? AGENT_TRUST_WRITE_DEADLINE_MS : SHORT_AGENT_TRUST_WRITE_DEADLINE_MS

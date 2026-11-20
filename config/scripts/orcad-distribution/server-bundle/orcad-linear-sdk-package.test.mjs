@@ -6,7 +6,7 @@ import { runProcessSync } from '@orca/process-host'
 import {
   ORCAD_LINEAR_SDK_ENTRY,
   ORCAD_SERVER_ENTRY_FILENAME
-} from '../../../../src/shared/orcad-artifacts.ts'
+} from '../../../../src/shared/remote-runtime/orcad-distribution/orcad-artifacts.ts'
 import { stageOrcadLinearSdk } from './orcad-linear-sdk-package.mjs'
 
 const root = join(import.meta.dirname, '../../..', '..')

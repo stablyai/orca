@@ -42,6 +42,23 @@ type Observer = (
 ) => void
 
 let observer: Observer | null = null
+const guestObservers = new Map<number, Set<Observer>>()
+
+export function observeBrowserGuestRequests(webContentsId: number, next: Observer): () => void {
+  let observers = guestObservers.get(webContentsId)
+  if (!observers) {
+    observers = new Set()
+    guestObservers.set(webContentsId, observers)
+  }
+  observers.add(next)
+  return () => {
+    const current = guestObservers.get(webContentsId)
+    current?.delete(next)
+    if (current?.size === 0) {
+      guestObservers.delete(webContentsId)
+    }
+  }
+}
 
 export function setBrowserSessionWebRequestObserver(next: Observer): void {
   observer = next
@@ -53,6 +70,18 @@ export function reportBrowserSessionWebRequest(
   event: ObservedWebRequestEvent,
   details: ObservedWebRequestDetails
 ): void {
+  if (details.webContentsId !== undefined) {
+    const observers = guestObservers.get(details.webContentsId)
+    if (observers) {
+      for (const guestObserver of observers) {
+        try {
+          guestObserver(session, event, details)
+        } catch (error) {
+          console.warn('[browser] guest web request observer failed:', error)
+        }
+      }
+    }
+  }
   if (!observer) {
     return
   }

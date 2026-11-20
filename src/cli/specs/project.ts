@@ -1,5 +1,5 @@
 import type { CommandSpec } from '../discovery/command-spec'
-import { CLI_GLOBAL_FLAGS as GLOBAL_FLAGS } from '../../shared/cli-argument-boundary'
+import { CLI_GLOBAL_FLAGS as GLOBAL_FLAGS } from '../../shared/cli/cli-argument-boundary'
 
 export const PROJECT_COMMAND_SPECS: CommandSpec[] = [
   {
@@ -15,6 +15,7 @@ export const PROJECT_COMMAND_SPECS: CommandSpec[] = [
     usage: 'orca project setups [--project <id>] [--host <host>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'project', 'host'],
     notes: [
+      "Lists only the Orca that answers: a project set up only on a paired server is not listed until you ask that server. --environment <environment-id> returns everything that server lists, with its own machine's rows as hostId local; --host runtime:<environment-id> returns only those rows and leaves out the server's SSH targets. --environment local pins the read to this machine whatever ORCA_ENVIRONMENT or a pairing code selects.",
       'A setup means a project is available on a host at a concrete filesystem path.',
       '--host runtime:<environment-id> runs the command on that paired Orca server instead of filtering this runtime; unknown environment ids are rejected rather than answered with an empty list.',
       'Run `orca environment list` to see the environment ids that runtime:<environment-id> accepts. It matches ids only, never environment names.',

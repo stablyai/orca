@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from '../../dispatcher'
 import type { RpcRequest, RpcResponse } from '../../core'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
-import '../../../../../shared/clipboard-image'
+import '../../../../../shared/clipboard/clipboard-image'
 
 const { saveClipboardImageBufferAsTempFile } = vi.hoisted(() => ({
   saveClipboardImageBufferAsTempFile: vi.fn()

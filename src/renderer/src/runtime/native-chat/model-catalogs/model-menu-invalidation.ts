@@ -1,12 +1,13 @@
 import { useAppStore } from '@/store/index'
-import { HOST_MODEL_CATALOG_ACCOUNT_SETTINGS } from '../../../../../shared/agent-session/options/host-model-catalog-snapshot-rules'
-import { structuralValuesEqual } from '../../../../../shared/structural-value-equality'
+import { readRuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
+import { HOST_MODEL_CATALOG_ACCOUNT_SETTINGS } from '../../../../../shared/agent-session/options/model-catalog/host-model-catalog-snapshot-rules'
+import { structuralValuesEqual } from '../../../../../shared/collections/structural-value-equality'
 import {
   LOCAL_EXECUTION_HOST_ID,
   toRuntimeExecutionHostId
-} from '../../../../../shared/execution-host'
+} from '../../../../../shared/execution-host/execution-host'
 import { lastVerifiedRuntimeStatus } from '../../../../../shared/remote-runtime/host-status/runtime-host-status'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { subscribeRuntimeHostContactRegained } from '../../hosts/connections/runtime-host-contact-regained'
 import {
   readLocalRuntimeCapabilitiesOrUnknown,
@@ -21,9 +22,7 @@ import { runtimeEnvironmentContinuityStamp } from '../../rpc/environment-revisio
 export function modelMenuRequestContext(target: RuntimeClientTarget): string {
   const state = useAppStore.getState()
   const status =
-    target.kind === 'environment'
-      ? state.runtimeStatusByEnvironmentId.get(target.environmentId)
-      : undefined
+    target.kind === 'environment' ? readRuntimeStatuses().get(target.environmentId) : undefined
   return JSON.stringify(
     target.kind === 'local'
       ? HOST_MODEL_CATALOG_ACCOUNT_SETTINGS.map((key) => state.settings?.[key])
@@ -48,9 +47,7 @@ export function subscribeModelMenuInvalidation(
         : toRuntimeExecutionHostId(target.environmentId),
       target.kind === 'local'
         ? null
-        : lastVerifiedRuntimeStatus(
-            useAppStore.getState().runtimeStatusByEnvironmentId.get(target.environmentId)
-          )?.runtimeId
+        : lastVerifiedRuntimeStatus(readRuntimeStatuses().get(target.environmentId))?.runtimeId
     )
   let agents = registered()
   const stopAgents = subscribeHostStructuredAgents(() => {

@@ -1,3 +1,4 @@
+import { readRuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import { getConnectionIdFromState } from '@/lib/workspace/ownership/connection-owner-resolution'
 import { useAppStore } from '@/store/index'
 import { buildAgentResumeStartupPlan } from '../../../../../shared/agent-launch/startup/tui-agent-resume-startup'
@@ -54,7 +55,7 @@ export function resolveAgentAccountRestartResumeStartup(
 ): AgentAccountRestartStartup | null {
   const state = useAppStore.getState()
   const paneKey = makePaneKey(args.tabId, args.leafId)
-  const entry = state.agentStatusByPaneKey[paneKey]
+  const entry = state.agentStatusByPaneKey.get(paneKey)
   const sleeping = state.sleepingAgentSessionsByPaneKey[paneKey]
   const agentType = entry?.agentType ?? sleeping?.agent
   if (agentType !== agent) {
@@ -119,7 +120,7 @@ export function buildPaneAccountRestartStartup(
 ): AgentAccountRestartStartup | null {
   const resume = resolveAgentAccountRestartResumeStartup(agent, args)
   const sessionId = resume?.resumeProviderSession?.id
-  // Why here: a queued restart runs at idle, and another pane may have resumed the session since.
+  // Why here: another pane may have resumed the session since the restart was queued.
   if (
     agent === 'claude' &&
     sessionId &&
@@ -185,7 +186,10 @@ function resolveAccountRestartLaunchTarget(
       runtimeEnvironmentIdUnlessTwin(state, args.worktreeId),
       connectionId
     ),
-    runtimeHostPlatform: resolveRuntimeHostReportedPlatform(state, executionHostId),
-    runtimeHostTerminalWindowsShell: resolveRuntimeHostTerminalWindowsShell(state, executionHostId)
+    runtimeHostPlatform: resolveRuntimeHostReportedPlatform(readRuntimeStatuses(), executionHostId),
+    runtimeHostTerminalWindowsShell: resolveRuntimeHostTerminalWindowsShell(
+      readRuntimeStatuses(),
+      executionHostId
+    )
   })
 }

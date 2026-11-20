@@ -1,4 +1,4 @@
-import type { RuntimeTerminalSend } from '../../../../../../shared/runtime-terminal-send-contract'
+import type { RuntimeTerminalSend } from '../../../../../../shared/terminal/runtime/runtime-terminal-send-contract'
 import {
   sanitizeBracketedPasteText as sanitizeTerminalPasteText,
   BRACKETED_PASTE_START as BRACKETED_PASTE_BEGIN,
@@ -90,6 +90,9 @@ export async function sendPromptWithGuardedPasteAndEnter(
     if (!send.accepted) {
       if (send.refusedReason === 'permission') {
         return { status: 'permission', code: 'terminal-send-permission' }
+      }
+      if (send.refusedReason === 'approval-unseen') {
+        return { status: 'approval-unseen', code: 'terminal-send-approval-unseen' }
       }
       if (send.refusedReason === 'no-agent') {
         return { status: 'no-agent', code: 'no-agent' }

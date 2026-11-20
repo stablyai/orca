@@ -23,8 +23,6 @@ function Segment({
   label,
   ariaLabel,
   tooltip,
-  iconOnly,
-  count,
   onOpen,
   machineName
 }: {
@@ -32,8 +30,6 @@ function Segment({
   label: string
   ariaLabel: string
   tooltip: string
-  iconOnly: boolean
-  count: number
   onOpen: () => Promise<void>
   machineName?: string
 }): React.JSX.Element {
@@ -47,9 +43,7 @@ function Segment({
           aria-label={machineName ? `${machineName}: ${ariaLabel}` : ariaLabel}
         >
           {icon}
-          <span className="text-[11px]">
-            {iconOnly ? count : machineName ? `${machineName}: ${label}` : label}
-          </span>
+          <span className="text-[11px]">{machineName ? `${machineName}: ${label}` : label}</span>
         </button>
       </TooltipTrigger>
       <TooltipContent side="top" sideOffset={6}>
@@ -137,24 +131,18 @@ function checkText(count: number, t: Translate = translate): SegmentText {
   }
 }
 
-export function NativeChatResumeStatusSegment({
-  iconOnly
-}: {
-  iconOnly: boolean
-}): React.JSX.Element {
+export function NativeChatResumeStatusSegment(): React.JSX.Element {
   const enabled = useLocalStructuredChatsInUse()
   const runtimes = useNativeChatRestartRuntimes()
   return (
     <>
       <NativeChatRuntimeResumeStatusSegment
-        iconOnly={iconOnly}
         store={localNativeChatRestartStore}
         offerEnabled={enabled}
       />
       {runtimes.map(({ environment, store }) => (
         <NativeChatRuntimeResumeStatusSegment
           key={environment.id}
-          iconOnly={iconOnly}
           store={store}
           machineName={environment.name}
           offerEnabled
@@ -165,12 +153,10 @@ export function NativeChatResumeStatusSegment({
 }
 
 function NativeChatRuntimeResumeStatusSegment({
-  iconOnly,
   store,
   machineName,
   offerEnabled
 }: {
-  iconOnly: boolean
   store: NativeChatRestartStore
   machineName?: string
   offerEnabled: boolean
@@ -206,8 +192,6 @@ function NativeChatRuntimeResumeStatusSegment({
         <Segment
           onOpen={store.reopenNativeChatRestartOffer}
           machineName={machineName}
-          iconOnly={iconOnly}
-          count={view?.counts.total ?? 0}
           icon={<Loader2 className="size-3 animate-spin text-muted-foreground" />}
           {...resumingText(view?.counts.done ?? 0, view?.counts.total ?? 0, t)}
         />
@@ -216,8 +200,6 @@ function NativeChatRuntimeResumeStatusSegment({
         <Segment
           onOpen={store.reopenNativeChatRestartOffer}
           machineName={machineName}
-          iconOnly={iconOnly}
-          count={pending}
           icon={<RotateCcw className="size-3 text-muted-foreground" />}
           label={t(
             'auto.components.status.bar.NativeChatResumeStatusSegment.labelCount',
@@ -240,8 +222,6 @@ function NativeChatRuntimeResumeStatusSegment({
         <Segment
           onOpen={store.reopenNativeChatRestartOffer}
           machineName={machineName}
-          iconOnly={iconOnly}
-          count={failures}
           icon={<AlertCircle className="size-3 text-status-warning" />}
           {...(unconfirmed ? checkText(failures, t) : failedText(failures, t))}
         />
@@ -250,8 +230,6 @@ function NativeChatRuntimeResumeStatusSegment({
         <Segment
           onOpen={store.reopenNativeChatRestartOffer}
           machineName={machineName}
-          iconOnly={iconOnly}
-          count={resumed}
           icon={<CheckCircle2 className="size-3 text-status-success" />}
           {...resumedText(resumed, t)}
         />

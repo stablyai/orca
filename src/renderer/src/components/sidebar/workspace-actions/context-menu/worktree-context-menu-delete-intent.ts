@@ -3,7 +3,7 @@ import { runWorktreeBatchDelete, runWorktreeDelete } from '../deletion/delete-wo
 import { deleteFolderWorkspaceUnlessUnsaved } from '../deletion/folder-workspace-delete'
 import type { WorktreeDeleteIdentity } from '../deletion/worktree-delete-request'
 import type { Worktree } from '../../../../../../shared/worktree/types'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 
 export type WorktreeContextMenuDeleteIntent =
   | { kind: 'worktree'; worktree: WorktreeDeleteIdentity }

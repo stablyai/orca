@@ -13,8 +13,8 @@ import {
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { GlobalSettings } from '../../../shared/global-settings-types'
-import type { CodexManagedAccount } from '../../../shared/managed-account-types'
+import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
+import type { CodexManagedAccount } from '../../../shared/agent-accounts/managed-account-types'
 
 export const testState: {
   userDataDir: string

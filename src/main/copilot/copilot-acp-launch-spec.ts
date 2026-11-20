@@ -2,7 +2,9 @@ import { join } from 'node:path'
 import type { AcpLaunchSpec } from '../acp/launch/acp-launch-contract'
 import { COPILOT_ACP_DIALECT } from '../acp/acp-dialects/copilot-dialect'
 import { directoryAccountBinding } from '../acp/launch/acp-account-binding'
-import { agentSessionSetupFor } from '../../shared/agent-session/lifecycle/agent-session-setup-commands'
+import { deliverCopilotInstructions } from '../acp/launch/acp-instructions'
+import { loadCopilotSkillRoots } from '../acp/launch/acp-skill-roots'
+import { agentSessionSetupFor } from '../../shared/agent-session/lifecycle/launch/agent-session-setup-commands'
 import {
   resumeInvocationFromOptions,
   sessionFileResumeTargetMatches,
@@ -45,6 +47,8 @@ export const COPILOT_LAUNCH_SPEC: AcpLaunchSpec = {
     kind: 'unavailable',
     reason: 'Copilot lists the models a plan allows only inside a session'
   },
+  skillRoots: loadCopilotSkillRoots,
+  instructions: deliverCopilotInstructions,
   compaction: true,
   compactionInstructions: true,
   transcriptImport: null,

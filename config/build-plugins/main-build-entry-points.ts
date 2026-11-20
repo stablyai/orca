@@ -1,10 +1,13 @@
 import { resolve } from 'node:path'
-import { ORCAD_LOCAL_SERVE_SELECTION_ENTRY } from '../../src/shared/orcad-local-serve-selection'
+import { ORCAD_LOCAL_SERVE_SELECTION_ENTRY } from '../../src/shared/remote-runtime/serve-supervisor/orcad-local-serve-selection'
 import { CLI_MAIN_ENTRY_NAMES } from './cli-main-entry-names'
 
 /** Main-build Rollup inputs: output file name (without .js) to its source entry. */
 export const MAIN_BUILD_ENTRY_POINTS: Record<string, string> = {
   index: resolve('src/main/index.ts'),
+  'runtime-environment-store-worker-entry': resolve(
+    'src/shared/remote-runtime/host-store/runtime-environment-store-worker-entry.ts'
+  ),
   'backend-entry': resolve('src/main/backend/backend-entry.ts'),
   'browser-extension-native-host-supervisor-entry': resolve(
     'src/main/browser/extensions/native-messaging/browser-extension-native-host-supervisor-entry.ts'
@@ -26,8 +29,20 @@ export const MAIN_BUILD_ENTRY_POINTS: Record<string, string> = {
   'foreign-sqlite-reader-entry': resolve(
     'src/main/foreign-sqlite-readers/foreign-sqlite-reader-entry.ts'
   ),
+  'journal-sql-reader-entry': resolve(
+    'src/main/native-chat/agent-session-journal/journal-sql-reader-entry.ts'
+  ),
+  // Chat reader threads run here so their heaps stay out of main's V8 cage.
+  'utility-worker-host-entry': resolve('src/main/utility-worker-host/utility-worker-host-entry.ts'),
+  'journal-sql-worker-entry': resolve(
+    'src/main/native-chat/agent-session-journal/journal-sql-worker-entry.ts'
+  ),
   'agent-identity-worker-entry': resolve(
     'src/main/agent-hooks/identity/agent-identity-worker-entry.ts'
+  ),
+  'bots-db-worker-entry': resolve('src/main/bots/db-worker/bots-db-worker-entry.ts'),
+  'orchestration-reader-entry': resolve(
+    'src/main/runtime/orchestration/db/reader-worker/orchestration-reader-entry.ts'
   ),
   'session-scanner-service-entry': resolve(
     'src/main/ai-vault/scan-service/session-scanner-service-entry.ts'
@@ -46,9 +61,21 @@ export const MAIN_BUILD_ENTRY_POINTS: Record<string, string> = {
   ),
   // Usage scans synchronously walk histories/SQLite; keep them off the main loop.
   'usage-scan-worker-entry': resolve('src/main/usage/scan-worker/usage-scan-worker-entry.ts'),
+  'codex-history-disk-usage-worker-entry': resolve(
+    'src/main/codex/history/disk-usage/codex-history-disk-usage-worker-entry.ts'
+  ),
+  'codex-rollout-history-references-worker-entry': resolve(
+    'src/main/codex/history/cleanup/codex-rollout-history-references-worker-entry.ts'
+  ),
+  // Launch trust grants edit large Codex configs and the ownership ledger; keep them off main.
+  'codex-project-trust-worker-entry': resolve(
+    'src/main/codex/trust/project-trust/codex-project-trust-worker-entry.ts'
+  ),
   'workspace-space-scan-worker-entry': resolve(
     'src/main/workspaces/space-analysis/workspace-space-scan-worker-entry.ts'
   ),
+  // A long PDF's text extraction would freeze the window on the main thread.
+  'google-pdf-text-worker-entry': resolve('src/main/google/google-pdf-text-worker-entry.ts'),
   // Why: a first account setup can merge a large history tree with sync fs calls.
   'claude-profile-setup-worker-entry': resolve(
     'src/main/claude-accounts/profiles/setup/claude-profile-setup-worker-entry.ts'

@@ -5,7 +5,7 @@ import { build, testContext, WS } from './workspace-layout-command.test-fixture'
 
 const switchState = vi.hoisted(() => ({ layoutOwnerIsMain: true }))
 
-vi.mock('../../layout-owner-switch', () => ({
+vi.mock('../layout-owner-switch', () => ({
   get ORCA_LAYOUT_OWNER_IS_MAIN() {
     return switchState.layoutOwnerIsMain
   }
@@ -43,6 +43,14 @@ describe('a chat tab a window drew', () => {
     expect(again.ok && again.model).toEqual(model)
     const other = applyLayoutCommand(model, drawn({ sessionId: 'chat-2' }), ctx)
     expect(other.ok ? 'applied' : other.code).toBe('tab_exists')
+  })
+
+  it('shows the tab a chat already has when it is opened under another slot id', () => {
+    const ctx = testContext()
+    const { model } = build(ctx, [drawn()])
+    const again = applyLayoutCommand(model, drawn({ tabId: 'chat-tab-minted' }), ctx)
+    expect(again.ok && again.model).toEqual(model)
+    expect(again.ok && again.result.tabId).toBe('structured-agent-session-chat-1')
   })
 
   it('takes its place after the tab the window drew it beside', () => {

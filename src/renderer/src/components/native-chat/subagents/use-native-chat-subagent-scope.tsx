@@ -1,6 +1,6 @@
 import { useEffect, useMemo } from 'react'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
-import { latestAgentSessionContextClearSequence } from '../../../../../shared/agent-session/agent-session-context-clear'
+import { latestAgentSessionContextClearSequence } from '../../../../../shared/agent-session/conversation-context/agent-session-context-clear'
 import type { AgentSessionLatestTurn } from '../../../../../shared/agent-session/agent-session-wire'
 import type {
   AgentJournalRenderItem,
@@ -11,7 +11,7 @@ import type {
   NativeChatMessage,
   NativeChatSubagentEntry
 } from '../../../../../shared/native-chat/native-chat-types'
-import { normalizeSubagentState } from '../../../../../shared/native-chat/transcript/native-chat-subagent-summary'
+import { normalizeSubagentState } from '../../../../../shared/native-chat/transcript/subagents/native-chat-subagent-summary'
 import type { NativeChatSubagentRow } from '../../../../../shared/native-chat/transcript/native-chat-transcript-projection'
 import {
   useNativeChatTurnMembership,

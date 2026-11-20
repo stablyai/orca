@@ -1,23 +1,26 @@
 import { normalize } from 'node:path'
 import { realpath, stat } from 'node:fs/promises'
 import type { Store } from '../../../persistence/loading-store/store'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import type { Repo } from '../../../../shared/repo-types'
-import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
-import { isFolderRepo } from '../../../../shared/repo-kind'
+import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
+import {
+  getRepoExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID
+} from '../../../../shared/execution-host/execution-host'
+import { isFolderRepo } from '../../../../shared/repository/repo-kind'
 import {
   getRuntimePathBasename,
   normalizeRuntimePathForComparison
-} from '../../../../shared/cross-platform-path'
-import { isWslUncPath } from '../../../../shared/wsl-paths'
-import { mapWithConcurrency } from '../../../../shared/map-with-concurrency'
+} from '../../../../shared/file-access/cross-platform-path'
+import { isWslUncPath } from '../../../../shared/file-access/wsl-paths'
+import { mapWithConcurrency } from '../../../../shared/concurrency/map-with-concurrency'
 import { getWorktreeMirrorDistro } from '../../../workspaces/execution-host/project-runtime-git-options'
 import {
   computeWorkspaceRoot,
   getWorktreePathSettings,
   workspaceRootMirrorsIntoWsl
-} from '../../worktree-logic'
-import { shouldEmitBoundedWarning } from '../../bounded-warning-dedupe'
+} from '../paths/worktree-logic'
+import { shouldEmitBoundedWarning } from '../bounded-warning-dedupe'
 import { resolveWorktreeCommonGitDirectory } from './worktree-common-git-directory'
 import type {
   WorktreeBaseRepoWatchConfig,
@@ -85,7 +88,8 @@ async function maybeAddBaseTarget(
   const config = {
     repoId: repo.id,
     repoName: getRuntimePathBasename(repo.path).replace(/\.git$/, ''),
-    nestWorkspaces: pathSettings.nestWorkspaces
+    nestWorkspaces: pathSettings.nestWorkspaces,
+    headMovesNeedListing: mirrorDistro !== undefined
   }
   // A root mirrored into WSL is a UNC path either way; probing the distro's home (which can kill a
   // booting distro) would only lead to the same skip, so keep just the Git-common watch.

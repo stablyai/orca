@@ -9,7 +9,7 @@ import {
 } from './native-chat-composer-input'
 import { promptEditor } from './native-chat-prompt-editor.test-support'
 import { promptTextContent } from './native-chat-prompt-document-text'
-import { formatNativeChatQuote } from '../../selection-quotes/native-chat-quote-selection'
+import { formatNativeChatQuote } from '../../../../../../shared/native-chat/input/quotes/native-chat-quote-selection'
 
 afterEach(cleanup)
 

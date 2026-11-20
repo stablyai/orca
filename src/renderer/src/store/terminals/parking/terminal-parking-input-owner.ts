@@ -6,8 +6,9 @@ import {
   retireParkedTerminalTab
 } from '@/components/terminal-pane/parking/output-watchers/terminal-parked-watcher-registry'
 import type { AppState } from '../../types'
-import { readRecordChanges } from '@/store/keyed-record-change-reads'
-import { readTabRowChanges } from '@/store/keyed-tab-row-changes'
+import type { RuntimeStatuses } from '../../slices/runtime-status/views/runtime-status-owner'
+import { readRecordChanges } from '@/store/record-transitions/keyed-record-change-reads'
+import { readTabRowChanges } from '@/store/record-transitions/keyed-tab-row-changes'
 import {
   sameTerminalParkingTab,
   sameTerminalParkingTitleSlots,
@@ -34,6 +35,7 @@ const tabIdsByPtyId = new Map<string, Set<string>>()
 const ptyIdsByTabId = new Map<string, Set<string>>()
 const tabIdsByEnvironmentId = new Map<string, Set<string>>()
 let accepted: AppState | null = null
+let acceptedStatuses: RuntimeStatuses | null = null
 
 function diffUnknownParkingRecordKeys(
   previous: Readonly<Record<string, unknown>>,
@@ -100,11 +102,15 @@ function replacePtyMembership(state: AppState, tabId: string): void {
 }
 
 /** Accepted source ownership makes retirement synchronous without starting watchers inside a store write. */
-export function acceptTerminalParkingInputs(state: AppState): ReadonlySet<string> {
-  if (accepted === state) {
+export function acceptTerminalParkingInputs(
+  state: AppState,
+  statuses: RuntimeStatuses
+): ReadonlySet<string> {
+  if (accepted === state && acceptedStatuses === statuses) {
     return new Set()
   }
   const previous = accepted
+  const previousStatuses = acceptedStatuses
   const dirty = new Set<string>()
   const changedTabs = new Set<string>()
   if (!previous || previous.tabsByWorktree !== state.tabsByWorktree) {
@@ -209,25 +215,16 @@ export function acceptTerminalParkingInputs(state: AppState): ReadonlySet<string
     }
     replacePtyMembership(state, tabId)
   }
-  if (previous?.runtimeStatusByEnvironmentId !== state.runtimeStatusByEnvironmentId) {
-    const changes = previous
-      ? readRecordChanges(state.runtimeStatusByEnvironmentId, previous.runtimeStatusByEnvironmentId)
-      : null
+  if (previousStatuses !== statuses) {
+    const changes = previousStatuses ? readRecordChanges(statuses, previousStatuses) : null
     const environmentIds =
       changes?.kind === 'addressed'
         ? changes.keys
-        : new Set([
-            ...(previous?.runtimeStatusByEnvironmentId.keys() ?? []),
-            ...state.runtimeStatusByEnvironmentId.keys()
-          ])
+        : new Set([...(previousStatuses?.keys() ?? []), ...statuses.keys()])
     for (const environmentId of environmentIds) {
       if (
-        runtimeEnvironmentSupportsTerminalParking(
-          previous?.runtimeStatusByEnvironmentId.get(environmentId)
-        ) ===
-        runtimeEnvironmentSupportsTerminalParking(
-          state.runtimeStatusByEnvironmentId.get(environmentId)
-        )
+        runtimeEnvironmentSupportsTerminalParking(previousStatuses?.get(environmentId)) ===
+        runtimeEnvironmentSupportsTerminalParking(statuses.get(environmentId))
       ) {
         continue
       }
@@ -251,6 +248,7 @@ export function acceptTerminalParkingInputs(state: AppState): ReadonlySet<string
     }
   }
   accepted = state
+  acceptedStatuses = statuses
   return dirty
 }
 

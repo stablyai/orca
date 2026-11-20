@@ -2,7 +2,7 @@ import { NodeViewWrapper, type NodeViewProps } from '@tiptap/react'
 import { Quote } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { NativeChatPromptPill } from './NativeChatPromptPill'
-import { quotedText } from '../../selection-quotes/native-chat-quote-selection'
+import { quotedText } from '../../../../../../shared/native-chat/input/quotes/native-chat-quote-selection'
 
 export function NativeChatQuotePill({ node, selected }: NodeViewProps): React.JSX.Element {
   const t = useTranslate()

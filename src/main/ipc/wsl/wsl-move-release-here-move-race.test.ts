@@ -5,7 +5,7 @@
  * refuses after it stopped the host's terminals.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { WSL_HOSTS_INTERNAL_GATE_ENV } from '../../../shared/wsl-host-internal-gate'
+import { WSL_HOSTS_INTERNAL_GATE_ENV } from '../../../shared/remote-runtime/wsl-hosts/wsl-host-internal-gate'
 import { testState } from '../../persistence/persistence-test-harness'
 import {
   createWslMoveKillRig,
@@ -56,14 +56,14 @@ beforeEach(() => {
   rig = createWslMoveKillRig()
 })
 
-afterEach(() => {
+afterEach(async () => {
   for (const [distro, run] of claimed.splice(0)) {
     releaseWslMoveRun(distro, run)
   }
   vi.restoreAllMocks()
   vi.unstubAllEnvs()
   resetWslMoveDesktopRewriteStoresForTests()
-  removeWslMoveRigDirs()
+  await removeWslMoveRigDirs()
 })
 
 async function movedProject(): Promise<void> {

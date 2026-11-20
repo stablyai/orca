@@ -1,9 +1,13 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { useShallow } from 'zustand/react/shallow'
+import { shallow } from 'zustand/shallow'
 import type { IDisposable } from '@xterm/xterm'
 import { useAppStore } from '../../../store/index'
+import { useAppStoreWithHostStatuses } from '../../../store/slices/runtime-status/views/use-runtime-status-view'
 import { hydrateRuntimeEnvironmentSshState } from '@/runtime/hosts/ssh/runtime-environment-ssh-state'
-import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../../shared/execution-host'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  type ExecutionHostId
+} from '../../../../../shared/execution-host/execution-host'
 import type { TerminalKittyKeyboardModeTracker } from '../../../../../shared/terminal/protocol/input-modes/terminal-kitty-keyboard-mode-tracker'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { PtyTransport } from '../pty-transport/pty-transport-types'
@@ -71,7 +75,10 @@ export function useTerminalPaneFoundation(props: TerminalPaneProps) {
     sshReconnectTargetId,
     sshReconnectTargetLabel,
     sshReconnectTargetRemoved
-  } = useAppStore(useShallow((store) => selectTerminalPaneHostState(store, worktreeId)))
+  } = useAppStoreWithHostStatuses(
+    (store, statuses) => selectTerminalPaneHostState(store, statuses, worktreeId),
+    shallow
+  )
   const sshReconnectOwnsTerminalErrors = Boolean(
     sshReconnectTargetId && sshReconnectStatus && sshReconnectStatus !== 'connected'
   )

@@ -17,7 +17,7 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import { NativeChatMarkdown } from '../markdown/NativeChatMarkdown'
 import { NativeChatMarkdownImageOwnerContext } from '../media/images/native-chat-markdown-image-owner'
 import { NativeChatQuoteJumpContext, type NativeChatQuoteJump } from './use-native-chat-quote-jump'
-import { formatNativeChatQuote } from './native-chat-quote-selection'
+import { formatNativeChatQuote } from '../../../../../shared/native-chat/input/quotes/native-chat-quote-selection'
 import { rememberNativeChatQuoteSource } from './native-chat-quote-sources'
 
 afterEach(() => {

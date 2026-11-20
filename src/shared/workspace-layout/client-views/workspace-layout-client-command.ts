@@ -1,4 +1,4 @@
-import type { TabGroupLayoutNode } from '../../tab-types'
+import type { TabGroupLayoutNode } from '../tab-groups/tab-types'
 import {
   changedSplitRatios,
   splitRatioIntentAt,
@@ -124,6 +124,7 @@ export function clientLayoutCommand(
     case 'openSimulatorTab':
     case 'openBrowserTab':
     case 'openAgentSessionTab':
+    case 'openRoomTab':
       return placement(model.workspaces[command.workspace], command, visible)
     case 'movePaneToNewTab': {
       const workspace = model.workspaces[command.workspace]
@@ -164,7 +165,7 @@ export function clientLayoutCommand(
     case 'renameEditorFiles':
     case 'openBrowserPage':
     case 'closeBrowserPage':
-    case 'replaceBrowserPage':
+    case 'replaceTabContent':
     case 'setBrowserTabProfile':
     case 'startPane':
     case 'restartPane':

@@ -5,7 +5,8 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { TranslationScopeProvider } from '@/i18n/translation-scope-provider'
 import { MessageRow } from './NativeChatMessageRow'
-import { readNativeChatQuotableSelection } from '../../selection-quotes/native-chat-quote-selection'
+import { quoteSourceOf } from '../../selection-quotes/native-chat-quote-highlight'
+import { readNativeChatQuotableSelection } from '../../../../../../shared/native-chat/input/quotes/native-chat-quote-selection'
 
 afterEach(cleanup)
 
@@ -53,8 +54,10 @@ it("offers the user's own sent words to Add to chat, with the message as the sou
   range.setEnd(words, 6)
   window.getSelection()!.removeAllRanges()
   window.getSelection()!.addRange(range)
-  expect(readNativeChatQuotableSelection(container)).toMatchObject({
-    text: 'own',
-    source: { messageId: 'mine', place: { offset: 3, length: 3 } }
+  const quotable = readNativeChatQuotableSelection(container)
+  expect(quotable?.text).toBe('own')
+  expect(quoteSourceOf(quotable!.sourceElement, quotable!.range)).toMatchObject({
+    messageId: 'mine',
+    place: { offset: 3, length: 3 }
   })
 })

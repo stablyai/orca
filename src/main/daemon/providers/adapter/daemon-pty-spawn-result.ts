@@ -1,4 +1,4 @@
-import { isAgentSessionClaimedSpawnResult } from '../../../../shared/agent-session/agent-session-host-authority'
+import { isAgentSessionClaimedSpawnResult } from '../../../../shared/agent-session/lifecycle/operations/agent-session-host-authority'
 import { parseTerminalKittyKeyboardFlags } from '../../../../shared/terminal/protocol/input-modes/terminal-kitty-keyboard-flags'
 import { daemonSpawnResultIdentity } from './daemon-spawn-result-identity'
 import { retireUnexpectedAttachOnlySpawn } from './daemon-attach-only-retirement'
@@ -281,10 +281,6 @@ export abstract class DaemonPtySpawnResult extends DaemonPtySpawnRequest {
     }
 
     const reattachSnapshot = await this.overlayDurableRestoreSnapshot(sessionId, result.snapshot)
-    const reattachProviderSequence =
-      typeof reattachSnapshot.outputSequence === 'number'
-        ? { value: reattachSnapshot.outputSequence, generation: 'continued' as const }
-        : providerSequence
     const isAltScreen = reattachSnapshot.modes.alternateScreen
     const snapshotPrefix = reattachSnapshot.scrollbackAnsi + reattachSnapshot.rehydrateSequences
     const snapshotFrame = reattachSnapshot.snapshotAnsi
@@ -308,7 +304,8 @@ export abstract class DaemonPtySpawnResult extends DaemonPtySpawnRequest {
             snapshotFrameRestoreAnsi: reattachSnapshot.frameRestoreAnsi
           }
         : {}),
-      ...(reattachProviderSequence ? { providerSequence: reattachProviderSequence } : {}),
+      // Overlay-window bytes also arrive live; the overlay's later sequence would count them twice.
+      ...(providerSequence ? { providerSequence } : {}),
       ...(kittyKeyboardFlags !== undefined
         ? { snapshotKittyKeyboardFlags: kittyKeyboardFlags }
         : {}),

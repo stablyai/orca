@@ -1,9 +1,16 @@
+import type { AgentJournalRenderItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { SqlAgentSessionJournal as AgentSessionJournal } from '../../../agent-session-journal/journal-sql-store'
+import type { StructuredAgentSessionObservedWork } from '../../observations/structured-agent-session-observed-work'
+import type { StructuredAgentSessionWorkFrameReader } from '../../observations/structured-agent-session-status-reader'
+import type {
+  SubscriberFieldHooks,
+  SubscriberFieldState
+} from './agent-session-subscriber-frame-fields'
 import type { CurrentRequestsSubscriber } from '../../observations/agent-session-current-requests'
 import type { ForkMarker } from '../history/agent-session-fork-marker'
 import type { HistoryReader } from '../history/agent-session-history-page-bounds'
 import type { AgentJournalCursor } from '../../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentSessionSubscribeEvent } from '../../../../../shared/agent-session/agent-session-wire'
-import type { SubscriberFieldState } from './agent-session-subscriber-frame-fields'
 
 export type AgentSessionSubscribeInput = {
   commandsOnRequest?: boolean
@@ -22,6 +29,8 @@ export type AgentSessionSubscribeInput = {
   readsCurrentRequests?: boolean
   /** False for desktops that need exact replay to keep send echoes and current requests. */
   snapshotCatchUp?: boolean
+  /** The reader shows prompt suggestions on screen; only these receive them or keep them generated. */
+  showsPromptSuggestions?: boolean
 }
 
 export type AgentSessionSubscriberEmit = (event: AgentSessionSubscribeEvent) => void
@@ -36,9 +45,29 @@ export type Subscriber = {
   readHistorySnapshot?: HistoryReader['snapshot']
   readQueueSourceIds?: HistoryReader['queueSourceIds']
   snapshotCatchUp?: boolean
+  /** The fence of a snapshot whose capture was abandoned; the next delivery sends it, not a batch. */
+  owedSnapshotFence?: number
+  showsPromptSuggestions?: boolean
   /** The current-work view the last frame's fields were read under
    *  (`StructuredAgentSessionCurrentWork.viewKey`); a change with no row still owes a frame. */
   workView?: string
   historyView?: string
+  /** Aborts when the subscriber is dropped, withdrawing its reads still waiting for a reader. */
+  stopped?: AbortSignal
 } & CurrentRequestsSubscriber &
   SubscriberFieldState
+
+export type AgentSessionSubscribersHooks = SubscriberFieldHooks & {
+  readLiveText?: (sessionId: string) => readonly AgentJournalRenderItem[]
+  readForkMarker?: (sessionId: string) => ForkMarker | undefined
+  readForkJournal?: (sessionId: string) => AgentSessionJournal | undefined
+  onJournalPublished?: (sessionId: string, journal: AgentSessionJournal) => void
+  readCurrentWork?: (
+    sessionId: string,
+    journal: AgentSessionJournal
+  ) => Promise<StructuredAgentSessionObservedWork | null>
+  readWorkFrame?: StructuredAgentSessionWorkFrameReader
+  /** The session gained its first, or lost its last, subscriber that shows prompt suggestions. */
+  onPromptSuggestionInterest?: (sessionId: string, wanted: boolean) => void
+  now?: () => number
+}

@@ -2,10 +2,11 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { getDefaultPersistedState } from '../../shared/constants'
-import { setSecretStore } from '../../shared/secret-store'
-import type { RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
+import { getDefaultPersistedState } from '../../shared/orca-profiles/constants'
+import { setSecretStore } from '../../shared/secure-storage/secret-store'
+import type { RuntimeRpcResponse } from '../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import {
+  forgetHostRepoCatalogRepo,
   listHostRepoCatalogSnapshots,
   recordHostRepoCatalogAnswer
 } from './host-repo-catalog-snapshot-recorder'
@@ -55,13 +56,18 @@ afterEach(async () => {
   vi.restoreAllMocks()
 })
 
-function profile() {
+function profile(savedSnapshots: Record<string, unknown> = {}) {
   const directory = mkdtempSync(join(tmpdir(), 'orca-host-repo-catalog-'))
   directories.push(directory)
   const databasePath = join(directory, 'profile-state.db')
   const profileId = 'host-repo-catalog'
   new ProfileStateSqliteAuthority(databasePath, profileId).writeSerializedState(
-    Buffer.from(JSON.stringify(getDefaultPersistedState(directory)))
+    Buffer.from(
+      JSON.stringify({
+        ...getDefaultPersistedState(directory),
+        hostRepoCatalogSnapshots: savedSnapshots
+      })
+    )
   )
   const open = () => {
     const store = new Store({
@@ -114,7 +120,7 @@ const notes = {
   kind: 'folder' as const
 }
 
-it("keeps a WSL host's projects across a restart, with only the row fields", () => {
+it('keeps only offline project fields across restart and persists removal by host', () => {
   const { open } = profile()
   const store = open()
   recordHostRepoCatalogAnswer(
@@ -123,6 +129,7 @@ it("keeps a WSL host's projects across a restart, with only the row fields", () 
     'repo.list',
     repoListAnswer([helloWorld, django, notes])
   )
+  recordHostRepoCatalogAnswer(store, otherWslHost, 'repo.list', repoListAnswer([django]))
   store.flushOrThrow()
 
   const restarted = open()
@@ -149,6 +156,24 @@ it("keeps a WSL host's projects across a restart, with only the row fields", () 
       ]
     }
   })
+
+  forgetHostRepoCatalogRepo(restarted, wslHost.id, 'django')
+  restarted.flushOrThrow()
+  expect(listHostRepoCatalogSnapshots(open(), [wslHost, otherWslHost])).toEqual({
+    'env-wsl': {
+      repos: [expect.objectContaining({ id: 'hello' }), expect.objectContaining({ id: 'notes' })]
+    },
+    'env-wsl-2': { repos: [expect.objectContaining({ id: 'django' })] }
+  })
+})
+
+it('leaves a damaged saved catalog alone when a WSL project is removed', () => {
+  const { open } = profile({ 'env-wsl': { repos: 'damaged' }, 'env-wsl-2': null })
+  const store = open()
+
+  expect(() => forgetHostRepoCatalogRepo(store, wslHost.id, 'django')).not.toThrow()
+  expect(() => forgetHostRepoCatalogRepo(store, otherWslHost.id, 'django')).not.toThrow()
+  expect(listHostRepoCatalogSnapshots(store, [wslHost, otherWslHost])).toEqual({})
 })
 
 it('keeps each distro separately and ignores failures, other methods and paired servers', () => {

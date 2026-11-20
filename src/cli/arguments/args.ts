@@ -1,4 +1,5 @@
-import { RuntimeClientError } from '../runtime/types'
+import { RuntimeClientError } from '../runtime/connection/types'
+import { resolveInvokedCliCommand } from '../orchestration/recovery/runtime-compatibility'
 import { unknownCommandData, unknownFlagData } from '../discovery/command-suggestion'
 import { specPaths, type CommandSpec } from '../discovery/command-spec'
 import {
@@ -6,7 +7,7 @@ import {
   CLI_GLOBAL_FLAGS,
   CLI_GLOBAL_VALUE_FLAGS,
   findCliCommandIndex
-} from '../../shared/cli-argument-boundary'
+} from '../../shared/cli/cli-argument-boundary'
 
 export type ParsedArgs = {
   commandPath: string[]
@@ -86,7 +87,11 @@ export function parseArgs(
     }
 
     const flag = assignment
-    if (BOOLEAN_FLAGS.has(flag)) {
+    const spec = specForPathPrefix(specs, commandPath)
+    const isBoolean = spec?.valueFlags?.includes(flag)
+      ? false
+      : BOOLEAN_FLAGS.has(flag) || spec?.booleanFlags?.includes(flag) === true
+    if (isBoolean) {
       flagEntries.push([flag, true])
       continue
     }
@@ -219,10 +224,15 @@ export function validateCommandAndFlags(specs: CommandSpec[], parsed: ParsedArgs
     const path = parsed.commandPath.join(' ')
     // A real group is not a typo; point at its help instead of unrelated suggestions.
     if (isCommandGroup(specs, parsed.commandPath)) {
-      throw new RuntimeClientError('invalid_argument', `Missing subcommand for: orca ${path}`, {
-        suggestions: [],
-        nextSteps: [`Run \`orca ${path} --help\` to list its commands.`]
-      })
+      const command = resolveInvokedCliCommand()
+      throw new RuntimeClientError(
+        'invalid_argument',
+        `Missing subcommand for: ${command} ${path}`,
+        {
+          suggestions: [],
+          nextSteps: [`Run \`${command} ${path} --help\` to list its commands.`]
+        }
+      )
     }
     throw new RuntimeClientError(
       'invalid_argument',

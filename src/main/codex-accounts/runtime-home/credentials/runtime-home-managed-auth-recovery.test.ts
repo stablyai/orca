@@ -19,7 +19,7 @@ vi.mock(
   '../../../codex/configuration/shared-server/codex-daemon-socket-path-guard',
   async (importOriginal) => ({
     ...(await importOriginal<object>()),
-    applyCodexDaemonSocketGuard: (config: string) => config
+    codexDaemonSocketPathExceedsLimit: () => false
   })
 )
 
@@ -111,7 +111,8 @@ describe('CodexRuntimeHomeService', () => {
     expect(service.isHostSystemDefaultRealHomeSelected()).toBe(false)
     expect(service.prepareForRateLimitFetch()).toEqual({
       kind: 'ready',
-      codexHomePath: managedHomePath1
+      codexHomePath: managedHomePath1,
+      readingAccount: { accountId: 'account-1', runtime: 'host', wslDistro: null }
     })
     expect(service.prepareForCodexLaunch()).toBe(managedHomePath1)
     expect(existsSync(join(managedHomePath1, 'auth.json'))).toBe(false)

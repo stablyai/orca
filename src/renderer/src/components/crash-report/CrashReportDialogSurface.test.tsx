@@ -2,7 +2,7 @@
 
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
-import type { CrashReportRecord } from '../../../../shared/crash-reporting'
+import type { CrashReportRecord } from '../../../../shared/crash-reporting/crash-reporting'
 import { CrashReportDialogSurface } from './CrashReportDialogSurface'
 
 vi.mock('sonner', () => ({
@@ -54,7 +54,7 @@ it('honors attachment consent when sending a manually opened freeze report', asy
   expect(submit).not.toHaveBeenCalled()
   fireEvent.click(screen.getByRole('checkbox'))
   await act(async () => {
-    fireEvent.click(screen.getByRole('button', { name: 'Send Report' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Send report' }))
   })
   expect(submit).toHaveBeenCalledWith({
     reportId: 'freeze-report-1',

@@ -2,7 +2,7 @@ import { pickApprovedSetupHashes } from '../../../../../shared/worktree/creation
 import { terminalImageViewerSupported } from '../../../terminal/launch/terminal-image-viewer-env'
 import { callerLaunchSource } from '../../../../agent-launch/agent-started-telemetry'
 import type { z } from 'zod'
-import { resolveRuntimeNavigationTarget } from '../../../../../shared/runtime-navigation'
+import { resolveRuntimeNavigationTarget } from '../../../../../shared/remote-runtime/session-graph/runtime-navigation'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import {
   hostQualifiedRepoSelector,
@@ -139,6 +139,9 @@ export function buildManagedWorktreeCreateArgs(
         : {}),
       noParent: params.noParent === true,
       callerTerminalHandle: params.callerTerminalHandle,
+      ...(params.callerAgentSessionId && !origin?.pairedDeviceId
+        ? { callerAgentSessionId: params.callerAgentSessionId }
+        : {}),
       orchestrationContext: params.orchestrationContext
     }
   }

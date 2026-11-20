@@ -6,8 +6,8 @@ import { join } from 'node:path'
 import { promisify } from 'node:util'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { installRealWorkerThreadChildProcesses } from '../../worker-thread-child-process/worker-thread-child-process-real.test-fixtures'
-import { removeTree } from '../../../shared/windows-transient-lock-removal'
-import type { Repo } from '../../../shared/repo-types'
+import { removeTree } from '../../../shared/file-write/windows-transient-lock-removal'
+import type { Repo } from '../../../shared/repository/repo-types'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
 import type { WorktreeLineage } from '../../../shared/worktree/lineage-types'
 import type { RuntimeStore } from '../../runtime/construction/runtime-store-contract'
@@ -44,7 +44,7 @@ async function commitFile(cwd: string, name: string): Promise<void> {
 async function addWorktree(name: string, from: string): Promise<{ id: string; path: string }> {
   const path = join(scratchDir, name)
   await git(['worktree', 'add', '-q', '-b', name, path, from], repoPath)
-  const id = `repo::${path}`
+  const id = `repo::${path.replaceAll('\\', '/')}`
   meta[id] = {
     instanceId: `${name}-instance`,
     displayName: name,

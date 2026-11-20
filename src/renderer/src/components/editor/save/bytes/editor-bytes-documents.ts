@@ -4,7 +4,7 @@ import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import { editorTabFileAccess } from '@/lib/files/access/local-file-access'
 import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 import { writeRuntimeFileBytes } from '@/runtime/files/mutations/runtime-file-bytes-write'
-import type { CustomEditorBinaryDocument } from '../../plugin-custom-editor-host-types'
+import type { CustomEditorBinaryDocument } from '../../plugin-editors/plugin-custom-editor-host-types'
 import type { EditorSaveResult, EditorSaveTrigger } from '../queue/editor-save-disk-precondition'
 import {
   clearSelfWrite,
@@ -14,9 +14,11 @@ import {
 import { markEditorSaveRefusal } from '../queue/editor-save-rebaseline'
 import { EditorSaveDiscardedError } from '../flush/editor-discard-epoch'
 import { editorBufferSiblingViewIds } from '@/store/slices/editor/buffers/editor-buffer-views'
-import { bytesDocumentBoxes } from './editor-bytes-document-boxes'
+import { bytesDocumentBoxes, type BytesDocumentBox } from './editor-bytes-document-boxes'
 
 const listeners = new Set<() => void>()
+// Per tab id: the mounted view holding edits it has not yet serialized into the draft.
+const editingViews = new Map<string, symbol>()
 let unsubscribeStore: (() => void) | null = null
 // Why: boxes change outside the store, so a store write that leaves the tabs alone may still need a sweep.
 let boxesChangedSinceSweep = false
@@ -62,7 +64,13 @@ function dropSettledDrafts(state: AppState, previous: AppState): void {
       changed = true
     }
   }
-  if (bytesDocumentBoxes.size === 0) {
+  for (const [fileId] of editingViews) {
+    if (!state.openFiles.find((file) => file.id === fileId)?.isDirty) {
+      editingViews.delete(fileId)
+      changed = true
+    }
+  }
+  if (bytesDocumentBoxes.size === 0 && editingViews.size === 0) {
     unsubscribeStore?.()
     unsubscribeStore = null
   }
@@ -81,9 +89,25 @@ export function subscribeEditorBytes(listener: () => void): () => void {
   return () => listeners.delete(listener)
 }
 
+/** A tab's box, else its record twin's, so a view that has read nothing yet still sees edits. */
+function recordBytesBox(fileId: string): BytesDocumentBox | undefined {
+  return (
+    bytesDocumentBoxes.get(fileId) ??
+    editorBufferSiblingViewIds(useAppStore.getState(), fileId)
+      .map((id) => bytesDocumentBoxes.get(id))
+      .find(Boolean)
+  )
+}
+
+function recordEditingView(fileId: string): symbol | undefined {
+  return [fileId, ...editorBufferSiblingViewIds(useAppStore.getState(), fileId)]
+    .map((id) => editingViews.get(id))
+    .find(Boolean)
+}
+
 /** The document the editor shows: the unsaved edit, else the bytes on disk. */
 export function editorBytesDocument(fileId: string): CustomEditorBinaryDocument | null {
-  const document = bytesDocumentBoxes.get(fileId)?.current
+  const document = recordBytesBox(fileId)?.current
   return document ? (document.draft ?? document.saved) : null
 }
 
@@ -98,8 +122,7 @@ export function loadEditorBytes(
   unsubscribeStore ??= useAppStore.subscribe(dropSettledDrafts)
   const own = bytesDocumentBoxes.get(fileId)
   if (!own) {
-    const siblings = editorBufferSiblingViewIds(useAppStore.getState(), fileId)
-    const shared = siblings.map((id) => bytesDocumentBoxes.get(id)).find(Boolean)
+    const shared = recordBytesBox(fileId)
     // Why adopt as is: the twin's box is newer than a read that may have started before its save.
     bytesDocumentBoxes.set(
       fileId,
@@ -125,7 +148,7 @@ export function loadEditorBytes(
 }
 
 export function setEditorBytesDraft(fileId: string, draft: CustomEditorBinaryDocument): void {
-  const box = bytesDocumentBoxes.get(fileId)
+  const box = recordBytesBox(fileId)
   if (!box) {
     return
   }
@@ -133,6 +156,33 @@ export function setEditorBytesDraft(fileId: string, draft: CustomEditorBinaryDoc
   box.edits += 1
   useAppStore.getState().markFileDirty(fileId, true)
   notify()
+}
+
+/**
+ * Marks the tab dirty with edits `view` holds and hands over as a draft when flushed; while it
+ * holds them no other view of the file may edit. False when another view already holds edits.
+ */
+export function holdEditorBytesEdits(fileId: string, view: symbol): boolean {
+  const holder = recordEditingView(fileId)
+  if (holder && holder !== view) {
+    return false
+  }
+  unsubscribeStore ??= useAppStore.subscribe(dropSettledDrafts)
+  editingViews.set(fileId, view)
+  useAppStore.getState().markFileDirty(fileId, true)
+  notify()
+  return true
+}
+
+export function releaseEditorBytesEdits(fileId: string, view: symbol): void {
+  if (editingViews.get(fileId) === view) {
+    editingViews.delete(fileId)
+    notify()
+  }
+}
+
+export function editorBytesEditingView(fileId: string): symbol | null {
+  return recordEditingView(fileId) ?? null
 }
 
 const mountedViews = new Map<string, number>()
@@ -150,18 +200,19 @@ export function releaseEditorBytes(fileId: string): void {
     return
   }
   mountedViews.delete(fileId)
-  if (bytesDocumentBoxes.get(fileId)?.current.draft === null) {
+  const box = bytesDocumentBoxes.get(fileId)
+  if (box && box.current.draft === null && !recordEditingView(fileId)) {
     bytesDocumentBoxes.delete(fileId)
     notify()
   }
 }
 
 export function editorBytesEdits(fileId: string): number | undefined {
-  return bytesDocumentBoxes.get(fileId)?.edits
+  return recordBytesBox(fileId)?.edits
 }
 
 export function hasEditorBytesDraft(fileId: string): boolean {
-  return Boolean(bytesDocumentBoxes.get(fileId)?.current.draft)
+  return Boolean(recordBytesBox(fileId)?.current.draft || recordEditingView(fileId))
 }
 
 /** Writes the tab's unsaved bytes, guarded by the hash of the bytes the edit started from. */
@@ -174,11 +225,12 @@ export async function saveEditorBytesDraft(
   discarded: () => boolean,
   assertWriterCurrent?: () => void
 ): Promise<EditorSaveResult> {
-  const box = bytesDocumentBoxes.get(file.id)
+  const box = recordBytesBox(file.id)
   const document = box?.current
   const draft = document?.draft
   if (!box || !document || !draft) {
-    return 'written'
+    // Why: a view still holds edits it never serialized, so nothing written would be the latest.
+    return recordEditingView(file.id) ? 'failed' : 'written'
   }
   const remote = Boolean(context.connectionId || file.runtimeEnvironmentId?.trim())
   // Stamp before writing so the watcher's echo of this save is not taken as an outside change.
@@ -226,7 +278,9 @@ export async function saveEditorBytesDraft(
     box.current = { saved: draft, savedSha256, draft: newer }
     box.edits += 1
     const state = getState()
-    state.markFileDirty(holder, newer !== null, { written: true })
+    state.markFileDirty(holder, newer !== null || recordEditingView(holder) !== undefined, {
+      written: true
+    })
     if (state.openFiles.find((tab) => tab.id === holder)?.externalMutation) {
       state.setExternalMutation(holder, null)
     }

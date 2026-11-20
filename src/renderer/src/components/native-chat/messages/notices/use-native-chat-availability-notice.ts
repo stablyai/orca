@@ -4,7 +4,7 @@ import {
 } from '../../host-access/native-chat-host-setup'
 import { structuredAgentLabel } from '@/lib/agent-session/launch/structured-agent-session-launch-label'
 import { useMemo, useState } from 'react'
-import type { AgentSessionUnavailable } from '../../../../../../shared/agent-session/agent-session-availability'
+import type { AgentSessionUnavailable } from '../../../../../../shared/agent-session/failures/agent-session-availability'
 import { readAgentSessionFailureFact } from '../../../../../../shared/agent-session/failures/agent-session-failure'
 import type {
   AgentJournalRenderItem,
@@ -12,7 +12,7 @@ import type {
 } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentType } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import { agentJournalSubmissionKey } from '../../../../../../shared/agent-session/journal/agent-session-journal-item-key'
-import { inSendOrder } from '../../../../../../shared/native-chat/native-chat-send-order'
+import { inSendOrder } from '../../../../../../shared/native-chat/transcript/pending-sends/native-chat-send-order'
 import { agentSessionRefusalReasonWords } from '../../../../../../shared/agent-session/failures/agent-session-refusal-reason-words'
 import type { AgentSessionWriteRefusal } from '../../../../../../shared/agent-session/failures/agent-session-write-failure'
 import { isStructuredAgentSessionStartFailureRow } from '../../../../../../shared/agent-session/failures/structured-agent-session-start-failure-row-key'
@@ -20,8 +20,11 @@ import { sayAgentSessionFailureTranslated } from './agent-session-failure-words-
 import {
   cliMissingSentence,
   notSignedInSentence
-} from '../../../../../../shared/agent-session/agent-session-availability-sentences'
-import { nativeChatAntigravitySignInContent } from '../../host-access/native-chat-antigravity-settings'
+} from '../../../../../../shared/agent-session/failures/agent-session-availability-sentences'
+import {
+  nativeChatNotSignedInSentence,
+  nativeChatSignInNoticeView
+} from '../../host-access/native-chat-sign-in-notice'
 import type { NativeChatComposerNotice } from '../../composer/controls/native-chat-composer-notice'
 import { useTranslate } from '@/i18n/use-translate'
 
@@ -109,6 +112,24 @@ export function useNativeChatAvailabilityNotice(input: {
     return null
   }
   const agentName = structuredAgentLabel(input.agent)
+  const signIn = nativeChatSignInNoticeView(
+    {
+      kind: unavailable.reason,
+      agent: input.agent,
+      account: unavailable.reason === 'notSignedIn' ? unavailable.account : undefined,
+      setup: input.setup
+    },
+    t
+  )
+  // No dismiss: it clears once signed in or once a send says why it wasn't sent.
+  if (signIn) {
+    return {
+      key: 'availability',
+      kind: 'error',
+      text: nativeChatNotSignedInSentence(agentName, t),
+      signIn
+    }
+  }
   return {
     key: 'availability',
     action: nativeChatSetupAction(unavailable.reason, input.setup, t),
@@ -127,13 +148,6 @@ export function useNativeChatAvailabilityNotice(input: {
             { kind: 'notSignedIn', account: unavailable.account },
             sayAgentSessionFailureTranslated
           ),
-    content: nativeChatAntigravitySignInContent(
-      unavailable.reason,
-      input.agent,
-      unavailable.reason === 'notSignedIn' ? unavailable.account : undefined,
-      t,
-      input.setup?.host
-    ),
     onDismiss: () => setDismissal({ key, dismissed: true })
   }
 }

@@ -1,6 +1,6 @@
 import { callStructuredAgentSession } from '@/runtime/native-chat/requests/structured-agent-session-call'
 import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { executionHostIdForStructuredTarget } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 import type { ResumeCandidate, ResumeFailure } from '../tree/native-chat-resume-on-restart-grouping'
 export type HostOfferRead = {
@@ -58,6 +58,28 @@ export async function readRestartHostOffer(target: RuntimeClientTarget): Promise
       failed: [],
       available: error instanceof RuntimeRpcCallError && error.code === 'method_not_found'
     }
+  }
+}
+
+/** The chats the host's own launch continuation took, once it has reserved them.
+ *  `unsupported`: an older host leaves continuing to this client. */
+export async function readRestartHostLaunchTaken(
+  target: RuntimeClientTarget
+): Promise<readonly ResumeCandidate[] | 'unsupported'> {
+  try {
+    const answer = await callStructuredAgentSession<{ sessions?: unknown }>(
+      target,
+      'agentSession.restartLaunchSettled',
+      { until: 'taken' }
+    )
+    // SAFETY: the host is the single writer of these rows, as for restartResumable.
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: see above.
+    return Array.isArray(answer.sessions) ? (answer.sessions as ResumeCandidate[]) : []
+  } catch (error) {
+    // Any other failure still comes from a host that continues on its own; continuing here too would repeat it.
+    return error instanceof RuntimeRpcCallError && error.code === 'method_not_found'
+      ? 'unsupported'
+      : []
   }
 }
 

@@ -17,7 +17,7 @@ import type {
   BrowserClientHostLeaseAuthority
 } from '../../../../shared/browser/client-hosting/browser-client-host-protocol'
 
-import { sameRuntimeBrowserPlacement } from '../../../../shared/runtime-browser-placement'
+import { sameRuntimeBrowserPlacement } from '../../../../shared/browser/client-hosting/runtime-browser-placement'
 import { isRestoredClientHostedBrowserPlacement } from './client-hosted-browser-page-persistence'
 import type { BrowserExecutionHostKeyResolution } from './runtime-browser-client-page-adoption'
 import type { BrowserHostLeaseRegistry } from '../../browser-host/leases/browser-host-lease-registry'

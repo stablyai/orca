@@ -4,17 +4,19 @@ import { readOpenCodeForkCoverageViaWorker } from '../../ai-vault/scanners/openc
 import type { NativeCopyCoverage } from '../../native-chat/agent-session-journal/context-epochs/journal-history-origin'
 import { observeAcpForkSupport } from '../capabilities/acp-fork-support'
 import { normalizeAgentProviderSession } from '../../../shared/agent-session/lifecycle/agent-session-resume'
-import { OpenCodeCopyServerRouteError } from '../../../shared/opencode-launch-command'
+import { OpenCodeCopyServerRouteError } from '../../../shared/agent-launch/startup/opencode-launch-command'
 import {
   agentSessionAccountHomesEqual,
   type AgentSessionAccountHome
-} from '../../../shared/agent-session/lifecycle/agent-session-account-home'
-import { waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
+} from '../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
+import { waitForPromiseWithSignal } from '../../../shared/concurrency/abort-signal-reason'
 import type { AiVaultConversationCopy } from '../../../shared/ai-vault/resume/ai-vault-resume-preparation'
 import { resolveSessionFilePath } from '../../native-chat/session-file-resolver'
 import { resolveOmpSessionsDir } from '../../ai-vault/scanners/omp/omp-session-root'
 import { AcpRpcError } from '../transport/acp-errors'
+import { acpReleaseWithChild } from '../launch/acp-structured-launch-preparation'
 import { acpAgentName } from '../session/acp-structured-agent-definitions'
+import { acpClientInfo } from '../launch/acp-client-info'
 import type { AcpStructuredConnection } from '../process/acp-structured-connection'
 import type { AcpStructuredSessionAdapterDeps } from '../session/acp-structured-session-adapter-deps'
 
@@ -47,6 +49,7 @@ export async function copyAcpConversation(
   let connection: AcpStructuredConnection | null = null
   let result: AiVaultConversationCopy
   let launchEnv: Record<string, string>
+  let release: (() => Promise<void>) | undefined
   try {
     try {
       signal.throwIfAborted()
@@ -54,13 +57,24 @@ export async function copyAcpConversation(
         await waitForPromiseWithSignal(Promise.resolve(deps.resolveLaunchArgs?.() ?? []), signal)
       )
       signal.throwIfAborted()
-      const launch = await waitForPromiseWithSignal(deps.readLaunch(input.identity), signal)
+      const reading = deps.readLaunch(input.identity)
+      // An abort leaves the read running; whatever it then writes is released when it lands.
+      reading.then(
+        (late) => {
+          if (signal.aborted) {
+            void late.release?.().catch(() => undefined)
+          }
+        },
+        () => undefined
+      )
+      const launch = await waitForPromiseWithSignal(reading, signal)
       launchEnv = launch.env
+      release = launch.release
       signal.throwIfAborted()
       deps.spec.assertCopyLaunchArgs?.([], launch.prefixArgs)
       await assertCopyAccountSelected(deps, input.accountHome, launch.env, signal)
       signal.throwIfAborted()
-      connection = deps.connect(
+      connection = acpReleaseWithChild(deps.connect, launch.release)(
         {
           command: launch.command,
           args: launch.args,
@@ -68,7 +82,7 @@ export async function copyAcpConversation(
           env: launch.env,
           envToDelete: launch.envToDelete
         },
-        { clientInfo: { name: 'orca', version: '1' } }
+        { clientInfo: acpClientInfo(launch.spec, launch.version ?? null) }
       )
       options.track(connection)
       const sessionId = await waitForPromiseWithSignal(
@@ -149,7 +163,9 @@ export async function copyAcpConversation(
     }
     return result
   } finally {
-    if (connection && !(await connection.close().catch(() => false))) {
+    if (!connection) {
+      await release?.().catch(() => undefined)
+    } else if (!(await connection.close().catch(() => false))) {
       deps.logger?.warn('ACP conversation copy child exit is unproven; retained for cleanup', {
         scope: 'acp-conversation-copy',
         sessionId: input.identity.sessionId

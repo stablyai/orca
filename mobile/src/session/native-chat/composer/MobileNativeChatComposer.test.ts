@@ -4,12 +4,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   useMobileNativeChatDraft,
   setMobileNativeChatDraftText
-} from './mobile-native-chat-draft-store'
+} from './drafts/mobile-native-chat-draft-store'
 
 import { MobileNativeChatComposer as NativeChatComposer } from './MobileNativeChatComposer'
 import { findByHostType } from '../../../test-support/react-test-renderer-host-nodes'
 
-import { captureMobileNativeChatTextDestination } from './mobile-native-chat-draft-inputs'
+import { captureMobileNativeChatTextDestination } from './drafts/mobile-native-chat-draft-inputs'
 
 const getNoComposerEditGeneration = () => 0
 
@@ -22,8 +22,8 @@ function MobileNativeChatComposer({
   return createElement(NativeChatComposer, { ...props, getComposerEditGeneration })
 }
 
-vi.mock('../../../components/MobileSwitch', () => ({ MobileSwitch: 'Switch' }))
-vi.mock('./MobileNativeChatContextUsageRing', () => ({
+vi.mock('../../../components/controls/MobileSwitch', () => ({ MobileSwitch: 'Switch' }))
+vi.mock('./commands/MobileNativeChatContextUsageRing', () => ({
   useMobileNativeChatContextRing: () => ({ barProps: {}, ring: null })
 }))
 // BottomDrawer also carries the option pager, which loads Reanimated at import.

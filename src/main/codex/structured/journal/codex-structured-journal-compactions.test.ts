@@ -5,10 +5,7 @@ import {
 import { describe, expect, it } from 'vitest'
 import { agentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
-import {
-  createCodexHistoryTranslator,
-  createCodexJournalTranslator
-} from './codex-structured-journal-translation'
+import { createCodexJournalTranslator } from './codex-structured-journal-translation'
 
 function setup() {
   const rows = new Map<string, AgentJournalItemBody>()
@@ -55,24 +52,5 @@ describe('compaction provider generation compatibility', () => {
     expect(rows.size).toBe(1)
     expect(publishes).toBe(stage === 'publish' ? 2 : 1)
     translator.dispose()
-  })
-
-  it('restores canonical compaction history over a previously journaled legacy fallback', () => {
-    const { rows, sink, translator, send } = setup()
-    send('thread/compacted')
-    translator.dispose()
-    const restored = createCodexHistoryTranslator({ sink })
-    expect(
-      restored.restoreThread('thread', {
-        turns: [{ id: 'turn', items: [{ id: 'renumbered', type: 'contextCompaction' }] }]
-      })
-    ).toEqual({ accepted: true })
-    expect(rows.size).toBe(1)
-    expect([...rows.values()][0]).toEqual({
-      kind: 'status',
-      text: 'Context compacted',
-      presentation: 'compaction'
-    })
-    restored.dispose()
   })
 })

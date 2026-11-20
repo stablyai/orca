@@ -1,7 +1,7 @@
 import { createBrowserTabInRenderer } from './browser-tab-renderer-create'
-import type { RuntimeNavigationTarget } from '../../../../shared/runtime-navigation'
+import type { RuntimeNavigationTarget } from '../../../../shared/remote-runtime/session-graph/runtime-navigation'
 import type { BrowserPageCreationPlacement } from '../../../../shared/browser/client-hosting/browser-client-host-placement'
-import type { BrowserTabSplitDirection } from '../../../../shared/browser-tab-split-direction'
+import type { BrowserTabSplitDirection } from '../../../../shared/browser/workspaces/browser-tab-split-direction'
 import {
   publishCreatedBrowserSessionTab,
   resolveBrowserTabCreateFocus,
@@ -51,9 +51,9 @@ export class RuntimeBrowserTabCreation {
       | 'getBrowserHostRequestRegistry'
       | 'getPairedDeviceName'
       | 'getRuntimeBrowserPageRegistry'
-      | 'getAvailableAuthoritativeWindow'
+      | 'getAvailableAuthoritativeWindowId'
       | 'getOffscreenBrowserBackend'
-      | 'getAuthoritativeWindow'
+      | 'getAuthoritativeWindowId'
       | 'markHeadlessBrowserSessionTabActive'
       | 'notifyHeadlessBrowserSessionTabsChanged'
       | 'serveBrowserTabs'
@@ -89,7 +89,8 @@ export class RuntimeBrowserTabCreation {
     // Why reject rather than ignore: a caller asking for a split pane should learn it got none.
     if (
       params.split &&
-      (params.placement?.kind === 'client' || !this.host.getAvailableAuthoritativeWindow())
+      (params.placement?.kind === 'client' ||
+        this.host.getAvailableAuthoritativeWindowId() === null)
     ) {
       throw new BrowserError(
         'invalid_argument',
@@ -108,7 +109,7 @@ export class RuntimeBrowserTabCreation {
       )
     }
     // Headless hosts use offscreen WebContents because no renderer webview exists.
-    if (!this.host.getAvailableAuthoritativeWindow()) {
+    if (this.host.getAvailableAuthoritativeWindowId() === null) {
       const offscreen = this.host.getOffscreenBrowserBackend()
       const createOffscreen = async (): Promise<{ browserPageId: string }> => {
         if (!offscreen) {
@@ -150,7 +151,7 @@ export class RuntimeBrowserTabCreation {
     }
 
     const bridge = this.targets.requireAgentBrowserBridge()
-    publishCreatedBrowserSessionTab(this.host, {
+    await publishCreatedBrowserSessionTab(this.host, {
       placementKind: 'renderer',
       browserPageId,
       worktreeId,
@@ -165,7 +166,7 @@ export class RuntimeBrowserTabCreation {
         // Nobody reads a new tab's effects, so its first load skips the settle.
         const result = await bridge.goto(url, worktreeId, browserPageId, { reportEffects: false })
         this.targets.notifyRendererNavigation(browserPageId, result.url, result.title)
-        if (!this.host.getAvailableAuthoritativeWindow() && worktreeId) {
+        if (this.host.getAvailableAuthoritativeWindowId() === null && worktreeId) {
           this.host.notifyHeadlessBrowserSessionTabsChanged?.(worktreeId)
         }
       }
@@ -207,7 +208,7 @@ export class RuntimeBrowserTabCreation {
         ...(params.targetGroupId ? { groupId: params.targetGroupId } : {})
       })
     }
-    publishCreatedBrowserSessionTab(this.host, {
+    await publishCreatedBrowserSessionTab(this.host, {
       placementKind: 'offscreen',
       browserPageId: created.browserPageId,
       worktreeId,

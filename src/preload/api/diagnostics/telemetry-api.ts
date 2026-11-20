@@ -1,6 +1,8 @@
-import type { ResourceViewAdmission } from '../../../shared/resource-view-admission'
-import type { TelemetryConsentState } from '../../../shared/telemetry-consent-types'
-import type { MemorySnapshot, StatsSummary } from '../../../shared/process-stats-types'
+import type { BrowserExtensionsBannerAssignmentReply } from '../../../shared/browser/extensions/browser-extensions-banner'
+import type { ResourceViewAdmission } from '../../../shared/diagnostics/resource-view-admission'
+import type { PerfNoticeSignals } from '../../../shared/diagnostics/perf-notice-signals'
+import type { TelemetryConsentState } from '../../../shared/telemetry/telemetry-consent-types'
+import type { MemorySnapshot, StatsSummary } from '../../../shared/diagnostics/process-stats-types'
 
 export type StatsApi = {
   getSummary: () => Promise<StatsSummary>
@@ -33,6 +35,8 @@ export type DiagnosticsUploadPayload =
 
 export type MemoryApi = {
   getSnapshot: (admission?: ResourceViewAdmission) => Promise<MemorySnapshot>
+  readPerfNoticeSignals: () => Promise<PerfNoticeSignals | null>
+  countHiddenBrowserPages: (hiddenForMs: number) => Promise<number>
   resourceWindowVisible: () => Promise<boolean>
   onResourceWindowVisibility: (callback: (visible: boolean) => void) => () => void
 }
@@ -54,6 +58,8 @@ export type TelemetryApi = {
   /** Main retains upload payloads so the renderer cannot read or substitute arbitrary bytes. */
   diagnostics: DiagnosticsApi
   telemetryGetConsentState: () => Promise<TelemetryConsentState>
+  /** Asks main which browser extensions banner this install follows. */
+  telemetryAssignBrowserExtensionsBanner: () => Promise<BrowserExtensionsBannerAssignmentReply>
   /** Banner dismissal opts in without emitting telemetry_opted_in; shares the consent rate limit. */
   telemetryAcknowledgeBanner: () => Promise<void>
   stats: StatsApi

@@ -3,7 +3,7 @@ import {
   normalizeComputerAwakeMode,
   type ComputerAwakeMode,
   type ComputerAwakeStatus
-} from '../../shared/computer-awake-mode'
+} from '../../shared/app-lifecycle/computer-awake-mode'
 import { LinuxLidSleepAssertion } from './linux-lid-sleep-assertion'
 import { MacosSystemSleepAssertion } from './macos-system-sleep-assertion'
 import { AgentAwakeStatusLease, type AgentAwakeStatus } from './agent-awake-status-lease'
@@ -97,6 +97,14 @@ export class AgentAwakeService {
 
   setStatuses(statuses: AgentAwakeStatus[]): void {
     this.statusLease.replace(statuses)
+    this.refresh('status-change')
+  }
+
+  updateStatus(paneKey: string, status?: AgentAwakeStatus): void {
+    this.statusLease.remove(paneKey)
+    if (status) {
+      this.statusLease.renew(status)
+    }
     this.refresh('status-change')
   }
 

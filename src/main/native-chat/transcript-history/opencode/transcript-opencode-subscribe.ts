@@ -1,6 +1,6 @@
 import { pruneOpenCodeFingerprintCache } from './transcript-opencode-fingerprint-window'
 
-import { errorMessage } from '../../../../shared/error-message'
+import { errorMessage } from '../../../../shared/errors/error-message'
 import {
   DESKTOP_READ_WINDOW,
   UNFLUSHED_SETTLE_MS,
@@ -12,7 +12,7 @@ import { openCodeTranscriptDefaultDeps, type OpenCodeTranscriptDeps } from './tr
 import {
   openCodeTranscriptPageLimit,
   OPENCODE_TRANSCRIPT_MAX_WINDOW
-} from '../../../../shared/opencode-transcript-page-limit'
+} from '../../../../shared/agent-session/lifecycle/provider-handles/opencode-transcript-page-limit'
 
 const OPENCODE_POLL_MS = 1_000
 

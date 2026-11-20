@@ -1,5 +1,5 @@
-import { sanitizeCrashReportString } from '../../shared/crash-report-redaction'
-import { redactString } from '../observability/redactor'
+import { sanitizeCrashReportString } from '../../shared/crash-reporting/crash-report-redaction'
+import { redactString } from '../../shared/observability/redactor'
 
 export type HangFrame = { name: string; module: string; line?: number; column?: number }
 export type HangStack = { frames: HangFrame[]; count: number; hot: boolean }

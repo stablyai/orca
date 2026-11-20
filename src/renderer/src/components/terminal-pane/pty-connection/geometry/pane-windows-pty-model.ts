@@ -1,6 +1,6 @@
 import type { Terminal } from '@xterm/xterm'
 import { useAppStore } from '@/store/index'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import {
   buildWindowsPtyCompatibilityOptions,
   isLocalPtyOwner
@@ -11,6 +11,10 @@ import {
   type PaneOwnerTransport,
   type PtyOwnerMachineState
 } from '../../pty-transport/host-ownership/pty-owner-machine-platform'
+import {
+  runtimeStatusSubscriptionsFor,
+  type RuntimeStatusStore
+} from '@/store/slices/runtime-status/views/runtime-status-subscriptions'
 
 export type PaneWindowsPtyModelContext = {
   terminal: Pick<Terminal, 'options'>
@@ -23,7 +27,7 @@ export type PaneWindowsPtyModelContext = {
 }
 
 type OwnerMachineStore = {
-  getState: () => PtyOwnerMachineState
+  getState: () => PtyOwnerMachineState & ReturnType<RuntimeStatusStore['getState']>
   subscribe: (listener: () => void) => () => void
 }
 
@@ -33,13 +37,14 @@ type OwnerMachineStore = {
  * arrive after mount or bind; until then the pane keeps its model and watches the store, applying
  * the answer once it is known. A paired server's transport can also learn the PTY's own host after
  * bind (a reattached mirror of the server's SSH target), so the pane re-resolves when it does.
- * Switching mid-session is safe: the model only steers resize.
+ * Switching mid-session is safe for resize; one-time writes ask `ownerUsesConpty`, null while unknown.
  */
 export function createPaneWindowsPtyModel(
   readContext: () => PaneWindowsPtyModelContext,
   store: OwnerMachineStore = useAppStore
-): { apply: () => void; dispose: () => void } {
+): { apply: () => void; dispose: () => void; ownerUsesConpty: () => boolean | null } {
   let unsubscribeStore: (() => void) | null = null
+  let ownerUsesConpty: boolean | null = null
   let transportWatch: { transport: PaneOwnerTransport; unsubscribe: () => void } | null = null
   const stopWatchingStore = (): void => {
     unsubscribeStore?.()
@@ -51,6 +56,8 @@ export function createPaneWindowsPtyModel(
   }
   const applyKnown = (): boolean => {
     const { terminal, owner, transport } = readContext()
+    // A re-resolved owner must not keep the previous owner's answer.
+    ownerUsesConpty = null
     const isLocal = isLocalPtyOwner(owner)
     const machine = isLocal ? null : resolveRemotePtyOwnerMachine(owner, transport)
     if (!isLocal && !machine) {
@@ -58,7 +65,11 @@ export function createPaneWindowsPtyModel(
       return true
     }
     const remoteOwnerPlatform = machine
-      ? remotePtyOwnerMachinePlatform(store.getState(), machine)
+      ? remotePtyOwnerMachinePlatform(
+          store.getState(),
+          runtimeStatusSubscriptionsFor(store).readStatuses(),
+          machine
+        )
       : null
     if (machine && remoteOwnerPlatform === null) {
       return false
@@ -71,6 +82,7 @@ export function createPaneWindowsPtyModel(
       remoteOwnerPlatform
     })
     terminal.options.windowsPty = windowsPty ?? {}
+    ownerUsesConpty = windowsPty?.backend === 'conpty'
     return true
   }
   const apply = (): void => {
@@ -87,14 +99,18 @@ export function createPaneWindowsPtyModel(
       stopWatchingStore()
       return
     }
-    unsubscribeStore ??= store.subscribe(() => {
-      if (applyKnown()) {
-        stopWatchingStore()
+    if (!unsubscribeStore) {
+      const onChange = (): void => {
+        if (applyKnown()) {
+          stopWatchingStore()
+        }
       }
-    })
+      unsubscribeStore = runtimeStatusSubscriptionsFor(store).subscribeStore(onChange)
+    }
   }
   return {
     apply,
+    ownerUsesConpty: () => ownerUsesConpty,
     dispose: () => {
       stopWatchingStore()
       stopWatchingTransport()

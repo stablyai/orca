@@ -2,8 +2,8 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import type { SecretStore } from '../../../shared/secret-store'
-import { classifyUnenvelopedCredential } from '../../../shared/secret-at-rest-protection'
+import type { SecretStore } from '../../../shared/secure-storage/secret-store'
+import { classifyUnenvelopedCredential } from '../../../shared/secure-storage/secret-at-rest-protection'
 import {
   hardenExistingSecureFile,
   writeSecureFile
@@ -24,6 +24,7 @@ import {
 import { COOKIE_ENVELOPE_PREFIX, getMiniMaxCookiePath } from '../../minimax/minimax-cookie-store'
 import { miniMaxApiKeyEnvelopeFile } from '../../minimax/minimax-api-key-store'
 import { openCodeGoApiKeyEnvelopeFile } from '../../opencode/accounts/opencode-go-api-key-store'
+import { composioKeyEnvelopeFile } from '../../composio/composio-key-store'
 import { openAiCompatibleSpeechProviderEnvelopeFile } from '../../speech/openai-compatible-speech-provider-store'
 
 type PlaintextCredentialTarget = {
@@ -61,11 +62,12 @@ function listPlaintextCredentialTargets(): PlaintextCredentialTarget[] {
     { path: getZcodePlanApiKeyPath(), envelopePrefix: API_KEY_ENVELOPE_PREFIX },
     miniMaxApiKeyEnvelopeFile(),
     openCodeGoApiKeyEnvelopeFile(),
+    composioKeyEnvelopeFile(),
     openAiCompatibleSpeechProviderEnvelopeFile()
   ]
 }
 
-function sealTarget(store: SecretStore, target: PlaintextCredentialTarget): boolean {
+async function sealTarget(store: SecretStore, target: PlaintextCredentialTarget): Promise<boolean> {
   const original = readFileSync(target.path)
   // Restrict permissions even when sealing fails.
   hardenExistingSecureFile(target.path)
@@ -101,7 +103,7 @@ function sealTarget(store: SecretStore, target: PlaintextCredentialTarget): bool
     throw new Error('sealed value did not read back')
   }
   // Preserve concurrent desktop saves to the shared credential directory.
-  const published = writeCredentialFileAtomic(target.path, sealed, unchanged)
+  const published = await writeCredentialFileAtomic(target.path, sealed, unchanged)
   if (published) {
     hardenExistingSecureFile(target.path)
   }
@@ -109,18 +111,18 @@ function sealTarget(store: SecretStore, target: PlaintextCredentialTarget): bool
 }
 
 /** Never log credential contents or replace bytes when sealing fails. */
-export function migratePlaintextCredentials(
+export async function migratePlaintextCredentials(
   store: SecretStore,
   targets: readonly PlaintextCredentialTarget[] = listPlaintextCredentialTargets(),
   log: (message: string) => void = (message) => console.warn(message)
-): PlaintextCredentialMigrationResult {
+): Promise<PlaintextCredentialMigrationResult> {
   const result: PlaintextCredentialMigrationResult = { sealed: 0, failed: 0 }
   for (const target of targets) {
     if (!existsSync(target.path)) {
       continue
     }
     try {
-      if (sealTarget(store, target)) {
+      if (await sealTarget(store, target)) {
         result.sealed += 1
       }
     } catch (error) {

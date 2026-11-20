@@ -1,29 +1,31 @@
-import { openTestChats } from './structured-agent-session-open-test-chats.test-support'
+import { readTestHostJournal } from '../../../agent-session-journal/journal-observation.test-support'
+import { openTestChats } from './structured-agent-session-open-test-chats.test-fixture'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 
 import { cp, rm } from 'node:fs/promises'
 import { afterEach, expect, it, vi } from 'vitest'
-import type { AgentSessionOwnerProbe } from '../../../../../shared/agent-session/lifecycle/agent-session-lease-adjudication'
-import { readAgentJournalTurn } from '../../../../../shared/agent-session/lifecycle/agent-session-turn-record'
-import { openTestAgentSessionRecordStore } from '../../../../runtime/agent-session/records/agent-session-record-store-test-harness'
+import type { AgentSessionOwnerProbe } from '../../../../../shared/agent-session/lifecycle/leases/agent-session-lease-adjudication'
+import { readAgentJournalTurn } from '../../../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
+import {
+  closeTestAgentSessionDatabase,
+  openTestAgentSessionRecordStore,
+  openTestAgentSessionDatabase
+} from '../../../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import { StructuredAgentSessionHost } from '../structured-agent-session-host'
 import {
   adapter,
   attach,
   hostTestState,
   replaceHostTestState
-} from './structured-agent-session-host-test-harness'
+} from './structured-agent-session-host.test-fixture'
 import {
   HOST_TEST_NOW as NOW,
   HOST_TEST_SESSION as SESSION,
   HOST_TEST_THREAD as THREAD
-} from './structured-agent-session-host-test-data'
-import {
-  closeTestJournalHostDatabases,
-  openTestJournalHostDatabase
-} from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
+} from './structured-agent-session-host-test-data.test-fixture'
+import { closeTestJournalHostDatabases } from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { createStructuredAgentSessionLogger } from '../structured-agent-session-logger'
-import { NO_STRUCTURED_AGENTS } from '../../providers/testing/structured-agent-session-adapter-router-test-support'
+import { NO_STRUCTURED_AGENTS } from '../../providers/testing/structured-agent-session-adapter-router.test-fixture'
 
 const relaunchedRoots: string[] = []
 
@@ -52,6 +54,7 @@ async function relaunchAfterCrashMidTurn(
   await dying.host.flushStreamedEvents(SESSION)
   // Empty renewal drains preceding record writes before copying crash state.
   await dying.store.renewLeases([])
+  await closeTestAgentSessionDatabase(dying.root)
   const relaunched = `${dying.root}-relaunched`
   relaunchedRoots.push(relaunched)
   await cp(dying.root, relaunched, {
@@ -67,7 +70,7 @@ async function relaunchAfterCrashMidTurn(
     logger: createStructuredAgentSessionLogger(),
     store,
     adapter: { ...adapter(), acquire },
-    journalDatabase: openTestJournalHostDatabase(relaunched),
+    journalDatabase: await openTestAgentSessionDatabase(relaunched),
     claimKeyId: 'key-1',
     mintSpawnToken: () => 'spawn-next',
     probeOwner: async () => probe,
@@ -81,7 +84,7 @@ async function relaunchAfterCrashMidTurn(
 }
 
 async function turnStates(host: StructuredAgentSessionHost) {
-  return (await host.journalSnapshot(SESSION)).items
+  return (await readTestHostJournal(host, SESSION)).items
     .flatMap((item) => readAgentJournalTurn(item.body) ?? [])
     .map((turn) => turn.state)
 }

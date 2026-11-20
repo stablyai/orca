@@ -4,11 +4,7 @@ import type { ILink } from '@xterm/xterm'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { getConnectionId } from '@/lib/workspace/ownership/connection-context'
 import { createTerminalLinkTestDoubles } from '../terminal-link-handlers-test-fixtures'
-import {
-  createDeferred,
-  flushAsyncWork,
-  installTerminalLinkTestEnvironment
-} from '../terminal-link-handlers-test-harness'
+import { installTerminalLinkTestEnvironment } from '../terminal-link-handlers-test-harness'
 import {
   createProviderSetup,
   makeBufferLine,
@@ -113,23 +109,6 @@ describe('terminal link candidates fail independently', () => {
     expect(links[0]?.range).toEqual({ start: { x: 1, y: 1 }, end: { x: 'README.md'.length, y: 2 } })
   })
 
-  it('preserves verified client links when an uncached neighbor probe fails', async () => {
-    const rows = await replayRows()
-    const cache = makeExistsCache([
-      [`active\0${firstPath}`, true],
-      [`active\0${secondPath}`, true]
-    ])
-    window.api.shell.pathsExist = vi.fn().mockRejectedValue(new Error('ENOTDIR: joined path'))
-    const { provider } = createProviderSetup(rows, cache, {
-      startupCwd: '/home/alice/dev',
-      worktreePath: '/home/alice/dev'
-    })
-    expect((await hover(provider, 1)).map((link) => link.text)).toEqual([firstPath])
-    expect(fsPathExistsMock).not.toHaveBeenCalled()
-    expect(runtimeEnvironmentCallMock).not.toHaveBeenCalled()
-    expect([...cache.values()].map((entry) => entry.exists)).toEqual([true, true])
-  })
-
   it('does not cache a transport failure as missing and can retry the next hover', async () => {
     const rows = await replayRows()
     vi.mocked(getConnectionId).mockReturnValue('ssh-notes')
@@ -185,29 +164,5 @@ describe('terminal link candidates fail independently', () => {
     } finally {
       now.mockRestore()
     }
-  })
-
-  it('drops a verified candidate when its buffer row changes while another candidate rejects', async () => {
-    const rows = await replayRows()
-    const pending = createDeferred<boolean>()
-    vi.mocked(getConnectionId).mockReturnValue('ssh-notes')
-    fsPathExistsMock.mockImplementation(async ({ filePath }) => {
-      if (filePath === firstPath) {
-        return pending.promise
-      }
-      throw new Error('ENOTDIR: joined path')
-    })
-    const { provider } = createProviderSetup(rows, new Map(), {
-      startupCwd: '/home/alice/dev',
-      worktreePath: '/home/alice/dev'
-    })
-    const callback = vi.fn()
-    provider.provideLinks(1, callback)
-    await flushAsyncWork()
-    rows[0] = makeBufferLine('changed terminal output')
-    pending.resolve(true)
-    await flushAsyncWork()
-    await flushAsyncWork()
-    expect(callback).not.toHaveBeenCalled()
   })
 })

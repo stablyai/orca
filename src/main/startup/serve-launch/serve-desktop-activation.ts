@@ -1,10 +1,12 @@
-import type { RuntimeDesktopWindowStatus } from '../../../shared/runtime-session-contracts'
+import type { RuntimeDesktopWindowStatus } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 
 type ActivationGateState = Exclude<RuntimeDesktopWindowStatus, 'available' | 'openable'> | 'ready'
 
+export type DesktopActivationRequest = { background?: boolean }
+
 export type ServeDesktopActivationGate = {
   getState: () => ActivationGateState
-  requestActivation: () => void
+  requestActivation: (request?: DesktopActivationRequest) => void
   markReady: () => void
   markBlocked: (reason: string) => void
 }
@@ -30,29 +32,38 @@ export function releaseDesktopActivationAfter<TArgs extends unknown[], TResult>(
 ): (...args: TArgs) => TResult {
   return (...args) => {
     const result = open(...args)
-    gate?.markReady()
+    if (result instanceof Promise) {
+      void result.then(
+        () => gate?.markReady(),
+        () => {}
+      )
+    } else {
+      gate?.markReady()
+    }
     return result
   }
 }
 
 export function createServeDesktopActivationGate(options: {
   initialState: 'initializing' | 'ready'
-  activateWindow: () => void
+  activateWindow: (request: DesktopActivationRequest) => void
   onBlocked?: (reason: string) => void
 }): ServeDesktopActivationGate {
   let state: ActivationGateState = options.initialState
-  let pendingActivation = false
+  let pendingActivation: DesktopActivationRequest | null = null
   let blockedReason = 'desktop activation is unavailable'
 
   return {
     getState: () => state,
-    requestActivation: () => {
+    requestActivation: (request = {}) => {
       if (state === 'ready') {
-        options.activateWindow()
+        options.activateWindow(request)
         return
       }
       if (state === 'initializing') {
-        pendingActivation = true
+        // Any queued user activation keeps its claim to the foreground.
+        const background = request.background === true && pendingActivation?.background !== false
+        pendingActivation = { background }
         return
       }
       options.onBlocked?.(blockedReason)
@@ -63,8 +74,9 @@ export function createServeDesktopActivationGate(options: {
       }
       state = 'ready'
       if (pendingActivation) {
-        pendingActivation = false
-        options.activateWindow()
+        const request = pendingActivation
+        pendingActivation = null
+        options.activateWindow(request)
       }
     },
     markBlocked: (reason) => {
@@ -74,7 +86,7 @@ export function createServeDesktopActivationGate(options: {
       state = 'blocked'
       blockedReason = reason
       if (pendingActivation) {
-        pendingActivation = false
+        pendingActivation = null
         options.onBlocked?.(blockedReason)
       }
     }

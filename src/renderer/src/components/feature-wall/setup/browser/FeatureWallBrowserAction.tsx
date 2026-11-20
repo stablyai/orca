@@ -1,3 +1,4 @@
+import { useAppStoreWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { useBundledSkillInstallAction } from '@/hooks/skills/installation/use-bundled-skill-install-action'
 import { bundledSkillSetupActionLabel } from '../../../skills/setup/bundled-skill-setup-copy'
 import { ORCA_CLI_SKILL_NAME } from '@/lib/skills/installation/agent-feature-skill-names'
@@ -34,10 +35,10 @@ import type { OnboardingFeatureSetupRuntimeContext } from '../../../onboarding/o
 export function BrowserAction(props: { done: boolean }): React.JSX.Element {
   const t = useTranslate()
   const targetWorktree = useSetupTargetWorktree()
-  const browserCreationEnabled = useAppStore(
-    (state) =>
-      getClientCreationActionPolicy(state, targetWorktree?.id ?? null)['managed-browser'].state ===
-      'enabled'
+  const browserCreationEnabled = useAppStoreWithHostStatuses(
+    (state, statuses) =>
+      getClientCreationActionPolicy(state, targetWorktree?.id ?? null, statuses)['managed-browser']
+        .state === 'enabled'
   )
   const openModal = useAppStore((s) => s.openModal)
   const closeModal = useAppStore((s) => s.closeModal)
@@ -253,7 +254,7 @@ function BrowserSkillInstallForRuntime({
           : installAction.kind === 'replace'
             ? t(
                 'auto.components.settings.AgentSkillSetupPanel.replaceWithOrcaCopy',
-                "Replace with Orca's copy"
+                'Replace with Orca’s'
               )
             : installAction.kind === 'run' && installAction.changes
               ? bundledSkillSetupActionLabel(installAction.changes, t)

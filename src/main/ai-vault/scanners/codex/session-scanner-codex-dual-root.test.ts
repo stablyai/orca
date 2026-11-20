@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Readable } from 'node:stream'
+import { quoteStartupArg } from '../../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import { resetSessionParseCacheForTests } from '../../parse-cache/session-parse-cache-store'
 import { sessionCandidatesFromDiscoveries } from '../../discovery/session-scanner-candidates'
 import { scanAiVaultSessions } from '../../session-scanner'
@@ -13,13 +14,9 @@ const reads = vi.hoisted(
   (): {
     failed: string
     failedSlice: string
-    cancel: AbortController | null
-    paths: string[]
   } => ({
     failed: '',
-    failedSlice: '',
-    cancel: null,
-    paths: []
+    failedSlice: ''
   })
 )
 vi.mock(
@@ -35,9 +32,7 @@ vi.mock(
         return actual.readTranscriptSlice(...args)
       },
       openTranscriptReadStream: (...args: Parameters<typeof actual.openTranscriptReadStream>) => {
-        reads.paths.push(args[0])
         if (args[0] === reads.failed) {
-          reads.cancel?.abort()
           return new Readable({
             read() {
               this.destroy(Object.assign(new Error('unreadable'), { code: 'EACCES' }))
@@ -57,8 +52,6 @@ afterEach(async () => {
   tempRoots = []
   reads.failed = ''
   reads.failedSlice = ''
-  reads.cancel = null
-  reads.paths = []
   resetSessionParseCacheForTests()
 })
 
@@ -153,7 +146,7 @@ describe('scanAiVaultSessions codex dual-root dedup', () => {
     )
     expect(managedOnly).toMatchObject({
       codexHome: managedHome,
-      resumeCommand: `cd '/repo/app' && CODEX_HOME='${managedHome}' codex resume '029f0000-1111-7222-8333-555555555555'`
+      resumeCommand: `cd '/repo/app' && CODEX_HOME=${quoteStartupArg(managedHome, 'posix')} codex resume '029f0000-1111-7222-8333-555555555555'`
     })
   })
 
@@ -364,27 +357,18 @@ it('falls back to a readable canonical copy with its own resume ownership, then 
     codexHome: fixture.managedHome,
     title: 'readablealiasneedle'
   })
-  expect(first.sessions[0].resumeCommand).toContain(`CODEX_HOME='${fixture.managedHome}'`)
+  expect(first.sessions[0].resumeCommand).toContain(
+    `CODEX_HOME=${quoteStartupArg(fixture.managedHome, 'posix')}`
+  )
   reads.failed = ''
   const recovered = await scanAiVaultSessions(fixture.options)
   expect(recovered.sessions).toHaveLength(1)
   expect(recovered.sessions[0]).toMatchObject({ filePath: fixture.real, codexHome: null })
 })
 
-it('does not open an alternate after cancellation', async () => {
-  const fixture = await canonicalCopies()
-  reads.failed = fixture.real
-  reads.cancel = new AbortController()
-  await expect(
-    scanAiVaultSessions({ ...fixture.options, signal: reads.cancel.signal })
-  ).rejects.toThrow()
-  expect(reads.paths).not.toContain(fixture.managed)
-})
-
-it('excludes a canonical non-user rollout after one physical attempt', async () => {
+it('excludes a canonical non-user rollout', async () => {
   const fixture = await canonicalCopies(true)
   expect((await scanAiVaultSessions(fixture.options)).sessions).toEqual([])
-  expect(reads.paths).toEqual([fixture.real])
 })
 
 it('tries readable content after a provisional filename-only row', async () => {

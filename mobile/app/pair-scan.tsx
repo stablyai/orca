@@ -25,8 +25,8 @@ import { useRefreshHostClient } from '../src/transport/connection/host-client-ho
 import { colors, spacing, pressedStyle } from '../src/theme/mobile-theme'
 import { useMobileColorScheme } from '../src/theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../src/i18n/use-mobile-translation'
-import { TextInputModal } from '../src/components/TextInputModal'
-import { ConnectionLog } from '../src/components/ConnectionLog'
+import { TextInputModal } from '../src/components/sheets/TextInputModal'
+import { ConnectionLog } from '../src/components/host-connection/ConnectionLog'
 import {
   loadMobileOnboardingSteps,
   mobileOnboardingDestination
@@ -355,7 +355,7 @@ export default function PairScanScreen() {
           >
             <ClipboardIcon size={16} color={colors.textSecondary} />
             <Text style={styles.pasteButtonText}>
-              {t('app.pairScan.pastePairingCode', 'Or paste pairing code')}
+              {t('app.pairScan.pastePairingCode', 'Paste pairing code')}
             </Text>
           </Pressable>
         </>

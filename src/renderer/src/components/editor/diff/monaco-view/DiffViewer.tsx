@@ -2,25 +2,28 @@ import { NO_RESOURCE_EVIDENCE } from '@/lib/workspace/ownership/workspace-copy-o
 import { useDiffCommentView } from '../../../diff-comments/use-diff-comment-owner'
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { DiffEditor, type DiffOnMount } from '@monaco-editor/react'
-import type { editor } from 'monaco-editor'
+import type { IDisposable, editor } from 'monaco-editor'
 import { useAppStore } from '@/store/index'
 import {
   diffViewStateCache,
   setWithLRU
 } from '@/components/editor/model-lifetime/retention/editor-view-state-cache'
 import { monacoTypographyOptions } from '@/lib/editor/appearance/editor-typography'
-import { useEditorTypography } from '@/hooks/use-editor-typography'
-import { useContextualCopySetup } from '../../useContextualCopySetup'
+import { useEditorTypography } from '@/lib/editor/appearance/use-editor-typography'
+import { useContextualCopySetup } from '../../contextual-copy/useContextualCopySetup'
 import { useDiffCommentDecorator } from '../../../diff-comments/useDiffCommentDecorator'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { applyDiffEditorLineNumberOptions } from './diff-editor-line-number-options'
 import { isDiffComment } from '@/lib/source-control/review/comments/diff-comment-compat'
-import { installEditorSaveShortcut, installMonacoEditorFindShortcut } from '../../editor-shortcuts'
+import {
+  installEditorSaveShortcut,
+  installMonacoEditorFindShortcut
+} from '../../commands/editor-shortcuts'
 import { diffEditorScrollbarOptions } from './diff-editor-scrollbar-options'
 import { LargeDiffFallback } from '../large-files/LargeDiffFallback'
-import { getLargeDiffRenderLimit } from '../../../../../../shared/large-diff-render-limit'
+import { getLargeDiffRenderLimit } from '../../../../../../shared/source-control/diff/large-diff-render-limit'
 import { useDiffViewerLargeDiffLifecycle } from '../large-files/useDiffViewerLargeDiffLifecycle'
 import { useDiffViewerFirstChangeAutoScroll } from './useDiffViewerFirstChangeAutoScroll'
 import { getDiffViewerLargeDiffSaveAction } from '../large-files/diff-viewer-large-diff-save-action'
@@ -31,16 +34,17 @@ import {
   syncDiffEditorOriginalWordWrap
 } from './diff-editor-word-wrap-options'
 import { buildDiffEditorHideUnchangedOptions } from './diff-editor-hide-unchanged-options'
+import { restoreDiffViewStateWhileLayoutSettles } from './diff-view-state-restore'
 import { useDiffEditorRegistration } from '../review/diff-navigation-context'
 import { preserveDiffViewStateAcrossModelSwaps } from './diff-model-swap-view-state'
-import { monacoFindOptions } from '../../monaco-find-options'
-import { buildEditorUnicodeHighlightOptions } from '../../editor-unicode-highlight-options'
-import { usePluginSyntaxLanguage } from '../../use-plugin-syntax-language'
+import { monacoFindOptions } from '../../monaco/monaco-find-options'
+import { buildEditorUnicodeHighlightOptions } from '../../monaco/editor-unicode-highlight-options'
+import { usePluginSyntaxLanguage } from '../../monaco/use-plugin-syntax-language'
 import {
   PLUGIN_SYNTAX_EDITOR_OPTIONS,
   applyModelLanguage
 } from '@/lib/monaco-languages/plugin-syntax-editor-options'
-import { useMonacoTheme } from '@/hooks/use-monaco-theme'
+import { useMonacoTheme } from '@/lib/editor/appearance/use-monaco-theme'
 import { cn } from '@/lib/class-names'
 import { wholeFileDiffTintClass } from './whole-file-diff-tint'
 
@@ -194,6 +198,14 @@ export default function DiffViewer({
     onPendingScrollConsumed: () => setScrollToDiffCommentId(null)
   })
 
+  // Note navigation scrolls after the cached restore; end the settle window so it can't pull the view back.
+  const viewStateRestoreRef = useRef<IDisposable | null>(null)
+  useEffect(() => {
+    if (pendingScrollForThisViewer) {
+      viewStateRestoreRef.current?.dispose()
+    }
+  }, [pendingScrollForThisViewer, modifiedEditor])
+
   useDiffViewerFirstChangeAutoScroll({
     diffEditorRef,
     modifiedEditor,
@@ -208,6 +220,7 @@ export default function DiffViewer({
     cancelAnimationFrame(wordWrapMountFrameRef.current)
     wordWrapOptionsSubRef.current?.dispose()
     wordWrapOptionsSubRef.current = null
+    viewStateRestoreRef.current = null
     // Capture the exact instance before clearing; unregister ignores stale identities.
     const fallenBackEditor = diffEditorRef.current
     diffEditorRef.current = null
@@ -265,6 +278,7 @@ export default function DiffViewer({
         lineNumberOptionsSubRef.current = null
         wordWrapOptionsSubRef.current?.dispose()
         wordWrapOptionsSubRef.current = null
+        viewStateRestoreRef.current = null
         unregisterDiffEditor(diffEditor)
         diffEditorRef.current = null
         setModifiedEditor(null)
@@ -277,9 +291,9 @@ export default function DiffViewer({
 
       // Restore cursor and selection across both panes alongside scroll.
       const savedViewState = diffViewStateCache.get(modelKey)
-      if (savedViewState) {
-        requestAnimationFrame(() => diffEditor.restoreViewState(savedViewState))
-      }
+      viewStateRestoreRef.current = savedViewState
+        ? restoreDiffViewStateWhileLayoutSettles(diffEditor, savedViewState)
+        : null
       // Auto-scroll runs separately after decorator view zones mount.
 
       if (editable) {

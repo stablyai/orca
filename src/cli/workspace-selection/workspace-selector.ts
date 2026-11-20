@@ -2,17 +2,24 @@ import { resolve as resolvePath } from 'node:path'
 import { resolveFolderWorkspaceSelector } from './folder-workspace-selector'
 import { resolveCallerDistroPathSelector } from './wsl-caller-path-selector'
 import type { RuntimeClient } from '../runtime/client'
-import { RuntimeClientError } from '../runtime/types'
+import { RuntimeClientError } from '../runtime/connection/types'
 import { assertLocalCwdWorktreeSelector } from '../hosts/local-environment-selector'
-import { isLaunchedByAnotherRuntime } from '../runtime/runtime-source-fence'
+import { isLaunchedByAnotherRuntime } from '../runtime/connection/runtime-source-fence'
 import { getOptionalStringFlag, getRequiredStringFlag } from '../arguments/flags'
 import { readEnclosingWorkspaceCatalog } from './enclosing-workspace-catalog'
+import { ORCA_SESSION_ADDRESS_PREFIX } from '../../shared/agent-session/identity/orca-session-address-prefix'
+import { createChatCallerEvidence } from '../orchestration/identity/orchestration-compatibility-envelope'
+import type { OrchestrationPartyLocationResult } from '../../shared/orchestration/orchestration-caller-status'
+import type { ExecutionHostId } from '../../shared/execution-host/execution-host'
+import type { CatalogRow } from './workspace-catalog-row'
+import { parseWorkspaceKey } from '../../shared/workspace/identity/workspace-scope'
 import {
   getCallerExecutionHostId,
   getCallerWorkspaceIds,
   selectWorktreeCreateCwdContext,
   selectEnclosingWorktreeSelectionOnHost,
   selectCallerTerminalWorkspace,
+  selectWorktreeIdOnHost,
   selectorPurpose,
   type WorkspaceSelectionPurpose,
   type HostScopedWorktreeSelection
@@ -142,16 +149,44 @@ export async function getBrowserWorktreeSelector(
   // The folder reads fall back on their own; a worktree-list failure surfaces rather than retargeting.
   const catalog = await readEnclosingWorkspaceCatalog(client, cwd)
   const hostId = getCallerExecutionHostId()
+  const callerWorkspaceIds = getCallerWorkspaceIds()
   const enclosing = selectEnclosingWorktreeSelectionOnHost(
     catalog,
     cwd,
     hostId,
-    getCallerWorkspaceIds(),
+    callerWorkspaceIds,
     purpose
   )
   if (enclosing || isLaunchedByAnotherRuntime(process.env, client.userDataPath)) {
     return enclosing?.selector
   }
-  // An Orca terminal knows its workspace; without this an unmanaged cwd lands in the focused one.
-  return selectCallerTerminalWorkspace(catalog, hostId)
+  // An Orca terminal or chat knows its workspace; without this an unmanaged cwd lands in the focused one.
+  return callerWorkspaceIds.length > 0
+    ? selectCallerTerminalWorkspace(catalog, hostId)
+    : await selectCallerChatWorkspace(catalog, hostId, client)
+}
+
+/** A chat's child drops its pane's workspace env, so ask the host; anything unresolved keeps the focused default. */
+async function selectCallerChatWorkspace(
+  catalog: readonly CatalogRow[],
+  hostId: ExecutionHostId,
+  client: RuntimeClient
+): Promise<string | undefined> {
+  const sessionId = createChatCallerEvidence(process.env)?.agentSessionId
+  if (!sessionId) {
+    return undefined
+  }
+  const found = await client
+    .call<OrchestrationPartyLocationResult>('orchestration.partyLocation', {
+      address: `${ORCA_SESSION_ADDRESS_PREFIX}${sessionId}`
+    })
+    .catch(() => null)
+  const location = found?.result.location
+  if (location?.kind !== 'chat') {
+    return undefined
+  }
+  // The catalog holds only folders enclosing cwd, so a folder chat's key passes through as a terminal's does.
+  return parseWorkspaceKey(location.worktreeId)?.type === 'folder'
+    ? location.worktreeId
+    : selectWorktreeIdOnHost(catalog, location.worktreeId, hostId)
 }

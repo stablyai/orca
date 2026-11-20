@@ -1,5 +1,5 @@
-import { useAppStore } from '@/store/index'
-import '../../../../../../shared/protocol-version'
+import { readRuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
+import '../../../../../../shared/remote-runtime/protocol/protocol-version'
 import { TERMINAL_PAIRED_PARKING_RUNTIME_CAPABILITY } from '../../../../../../shared/terminal/runtime-policy/terminal-runtime-capabilities'
 import { getRemoteRuntimePtyEnvironmentId } from '@/runtime/hosted-terminals/identity/remote-runtime-pty-owner'
 import {
@@ -13,7 +13,7 @@ export function canRestorePairedParkedTerminal(ptyId: string): boolean {
     return false
   }
   // Retain last-verified capability across contact loss so reattach cannot cold-resume a duplicate (docs/reference/ssh-execution-boundary.md).
-  const entry = useAppStore.getState().runtimeStatusByEnvironmentId.get(environmentId)
+  const entry = readRuntimeStatuses().get(environmentId)
   if (isRuntimeHostContactRevoked(entry)) {
     return false
   }

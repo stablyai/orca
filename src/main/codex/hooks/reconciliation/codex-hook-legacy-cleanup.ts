@@ -1,4 +1,8 @@
-import { existsSync, readFileSync, unlinkSync } from 'node:fs'
+import {
+  readObservedFileSync as readFileSync,
+  observedExistsSync as existsSync,
+  observeFilePublication
+} from '../../../filesystem/file-content-observation'
 import { join } from 'node:path'
 import {
   hookDefinitionHasManagedCommand,
@@ -9,7 +13,9 @@ import { readHooksJsonWithRaw } from '../../../agent-hooks/installation/configur
 import { resolveHooksJsonWritePath } from '../../../agent-hooks/installation/configuration/hook-config-write-path'
 import { findManagedTomlBlocks } from '../../../agent-hooks/installation/configuration/managed-toml-ownership'
 import type { CodexTrustEntry } from '../../trust/toml/config-toml-trust'
+import { unlinkSync } from 'node:fs'
 import { writeTomlConfigAtomically as writeConfigAtomically } from '../../configuration/toml/config-toml-atomic-write'
+import { ConcurrentFileEditError } from '../../../filesystem/concurrent-file-edit-guard'
 import {
   getConfigPath,
   getSystemCodexConfigTomlPath,
@@ -29,7 +35,7 @@ const LEGACY_ORCA_PROFILE_NAME = 'orca-agent-status'
 const LEGACY_ORCA_PROFILE_BLOCK_START = '# BEGIN ORCA AGENT STATUS HOOKS'
 const LEGACY_ORCA_PROFILE_BLOCK_END = '# END ORCA AGENT STATUS HOOKS'
 
-function getLegacyCodexProfileTomlPath(): string {
+export function getLegacyCodexProfileTomlPath(): string {
   return join(getSystemCodexHomePath(), `${LEGACY_ORCA_PROFILE_NAME}.config.toml`)
 }
 
@@ -147,18 +153,27 @@ function cleanupLegacyCodexProfileHooks(): void {
   if (next === existing) {
     return
   }
-  if (next.trim().length === 0) {
-    unlinkSync(profilePath)
-  } else {
-    writeConfigAtomically(profilePath, next)
+  // Both refuse when a save landed after the read; the next cleanup pass retries.
+  if (next.trim().length > 0) {
+    if (!writeConfigAtomically(profilePath, next, existing)) {
+      throw new ConcurrentFileEditError(profilePath)
+    }
+    return
   }
+  if (readFileSync(profilePath, 'utf-8') !== existing) {
+    throw new ConcurrentFileEditError(profilePath)
+  }
+  unlinkSync(profilePath)
+  observeFilePublication(profilePath, null)
 }
 
-export async function cleanupLegacyManagedHookRepresentations(): Promise<void> {
+export async function cleanupLegacyManagedHookRepresentations(): Promise<boolean> {
   try {
     await cleanupLegacySystemManagedHooks()
     cleanupLegacyCodexProfileHooks()
+    return true
   } catch (error) {
     console.warn('[codex-hook-service] failed to clean legacy Codex hooks', error)
+    return false
   }
 }

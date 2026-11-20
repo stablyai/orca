@@ -1,31 +1,29 @@
 import { accessSync, constants, existsSync } from 'node:fs'
 import { arch, platform } from 'node:os'
 import { dirname, join } from 'node:path'
-import { orcadAgentBrowserNativeName } from '../../../shared/orcad-agent-browser-name'
-import { ensureDependencyBinaryExecutable } from '../../browser/agent-browser/helper-process/agent-browser-dependency-binary'
+import {
+  agentBrowserDependencyBinaryPath,
+  orcadAgentBrowserNativeName
+} from '../../../shared/remote-runtime/orcad-distribution/orcad-agent-browser-name'
 
 /** A slot carries only its own target's driver, so trying both libc names needs no libc probe. */
-function hostDriverNames(): string[] {
-  const names = [orcadAgentBrowserNativeName(platform(), arch())]
-  if (platform() === 'linux') {
-    names.push(orcadAgentBrowserNativeName('linux', arch(), 'musl'))
-  }
-  return names
+function hostLibcs(): ('glibc' | 'musl')[] {
+  return platform() === 'linux' ? ['glibc', 'musl'] : ['glibc']
 }
 
 export function resolveOrcadAgentBrowserBinary(): string | null {
-  const candidates = hostDriverNames().flatMap((name) => [
-    { path: join(dirname(process.argv[1] ?? __filename), name), dependency: false },
-    { path: join(process.cwd(), 'node_modules', 'agent-browser', 'bin', name), dependency: true }
+  const candidates = hostLibcs().flatMap((libc) => [
+    join(
+      dirname(process.argv[1] ?? __filename),
+      orcadAgentBrowserNativeName(platform(), arch(), libc)
+    ),
+    join(process.cwd(), ...agentBrowserDependencyBinaryPath(platform(), arch(), libc))
   ])
-  for (const { path: candidate, dependency } of candidates) {
+  for (const candidate of candidates) {
     if (!existsSync(candidate)) {
       continue
     }
     try {
-      if (dependency) {
-        ensureDependencyBinaryExecutable(candidate)
-      }
       accessSync(candidate, process.platform === 'win32' ? constants.F_OK : constants.X_OK)
       return candidate
     } catch {

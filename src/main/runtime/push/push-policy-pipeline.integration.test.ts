@@ -8,7 +8,7 @@ import { RuntimeMobileNotificationController } from './notifications/runtime-mob
 import { setRuntimeDesktopSurface } from '../construction/runtime-desktop-surface'
 import { RuntimeSubscriptionRegistry } from '../client/runtime-subscription-registry'
 import { reportDesktopPresence } from '../rpc/methods/notifications/notifications'
-import { DESKTOP_PRESENCE_TTL_MS } from '../../../shared/desktop-client-presence'
+import { DESKTOP_PRESENCE_TTL_MS } from '../../../shared/app-lifecycle/presence/desktop-client-presence'
 import { DesktopPushService } from './desktop-push-service'
 import { PushUnregisterOutbox } from './push-unregister-outbox'
 import { createPushHostKeypair } from './push-host-challenge-fixtures'
@@ -83,9 +83,10 @@ it('carries the native idle boundary through replay and push dispatch', async ()
         getSystemIdleTime: () => idle
       }),
     showNotification: () => false,
-    findWindowById: () => null,
-    onIpc: () => {},
-    removeIpcListener: () => {}
+    hasWindow: () => false,
+    hasLiveRenderer: () => false,
+    sendToWindow: () => false,
+    requestRenderer: () => Promise.reject(new Error('No renderer window available'))
   })
   const h = await pipeline()
   h.dispatch()

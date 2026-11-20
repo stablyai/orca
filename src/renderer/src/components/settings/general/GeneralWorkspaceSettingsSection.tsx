@@ -1,7 +1,7 @@
 import { GENERAL_SETTING_ANCHORS } from './general-setting-anchors'
 import { getGeneralSubPageTitle, type GeneralSubPage } from './general-sub-pages'
 import type React from 'react'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import { OpenInMenuEditor, type useOpenInMenuDraft } from './OpenInMenuSetting'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { SettingsSwitchRow } from '../form-controls/SettingsFormControls'
@@ -10,6 +10,14 @@ import { useTranslate } from '@/i18n/use-translate'
 import { GlobalWorktreeVisibilitySourcesSetting } from './GlobalWorktreeVisibilitySourcesSetting'
 import { GLOBAL_WORKTREE_VISIBILITY_SETTINGS_TARGET_ID } from '@/components/settings/navigation/settings-navigation-types'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
+import type { SettingsHostScope } from '../host-scope/settings-host-scope'
+import { LOCAL_SETTINGS_HOST_SCOPE } from '../host-scope/settings-host-scope'
+import {
+  getHostSettingUnsupportedNote,
+  getHostSettingUpdateFailedMessage,
+  useHostSetting,
+  useSettingsHostLabel
+} from '../host-scope/use-host-setting'
 
 type GeneralWorkspaceSettingsSectionProps = {
   openInDraft: ReturnType<typeof useOpenInMenuDraft>
@@ -19,6 +27,25 @@ type GeneralWorkspaceSettingsSectionProps = {
   updateSettingsOrThrow?: (updates: Partial<GlobalSettings>) => void | Promise<void>
   defaultsSupported?: boolean
   sourceDefaultsSupported?: boolean
+  /** The host whose workspace creates read Folder per project. */
+  hostScope?: SettingsHostScope
+}
+
+/** The host that creates a workspace decides its folder layout, so this reads and writes that host. */
+export function useNestWorkspacesSetting(
+  hostScope: SettingsHostScope,
+  settings: GlobalSettings,
+  updateSettings: (updates: Partial<GlobalSettings>) => void | Promise<void>
+): ReturnType<typeof useHostSetting<'nestWorkspaces'>> {
+  const t = useTranslate()
+  const hostLabel = useSettingsHostLabel(hostScope.target)
+  return useHostSetting({
+    owner: hostScope.target,
+    settingKey: 'nestWorkspaces',
+    localSettings: settings,
+    updateLocalSettings: updateSettings,
+    updateFailedMessage: getHostSettingUpdateFailedMessage(hostLabel, t)
+  })
 }
 
 export function GeneralWorkspaceSettingsSection({
@@ -28,9 +55,13 @@ export function GeneralWorkspaceSettingsSection({
   updateSettings,
   updateSettingsOrThrow = updateSettings,
   defaultsSupported = true,
-  sourceDefaultsSupported = true
+  sourceDefaultsSupported = true,
+  hostScope = LOCAL_SETTINGS_HOST_SCOPE
 }: GeneralWorkspaceSettingsSectionProps): React.JSX.Element {
   const t = useTranslate()
+  const hostLabel = useSettingsHostLabel(hostScope.target)
+  const nestWorkspaces = useNestWorkspacesSetting(hostScope, settings, updateSettings)
+  const nested = nestWorkspaces.setting.state === 'ready' && nestWorkspaces.setting.value
   return (
     <SettingsGroup title={getGeneralSubPageTitle(page, t)}>
       {page === 'folder' ? (
@@ -56,12 +87,17 @@ export function GeneralWorkspaceSettingsSection({
           >
             <SettingsSwitchRow
               label={t('settings.general.folder.perProject', 'Folder per project')}
-              description={t(
-                'auto.components.settings.GeneralWorkspaceSettingsSection.4fbf910ded',
-                'Create workspaces inside a repo-named subfolder.'
-              )}
-              checked={settings.nestWorkspaces}
-              onChange={() => updateSettings({ nestWorkspaces: !settings.nestWorkspaces })}
+              description={
+                nestWorkspaces.setting.state === 'unsupported'
+                  ? getHostSettingUnsupportedNote(hostLabel, t)
+                  : t(
+                      'auto.components.settings.GeneralWorkspaceSettingsSection.4fbf910ded',
+                      'Create workspaces inside a repo-named subfolder.'
+                    )
+              }
+              checked={nested}
+              disabled={nestWorkspaces.setting.state !== 'ready' || !hostScope.available}
+              onChange={() => void nestWorkspaces.update(!nested)}
             />
           </SearchableSetting>
         </div>

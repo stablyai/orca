@@ -25,7 +25,7 @@ import {
 } from '../transcripts/session-transcript-record-budget'
 
 // Bump for row-layout or cached-semantic changes; mismatched databases are discarded.
-export const SESSION_PARSE_CACHE_SCHEMA_VERSION = 9
+export const SESSION_PARSE_CACHE_SCHEMA_VERSION = 10
 
 const SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY, value TEXT NOT NULL);
@@ -44,6 +44,18 @@ CREATE TABLE IF NOT EXISTS rows(
   seen_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS rows_seen_at ON rows(seen_at);
+`
+// Reparse Grok rows (summary.json) cached before the synthetic-turn filter once, without a schema
+// bump. The pending gate is the outer loop, so later opens skip the rows scan.
+const GROK_ROWS_REPAIR_SQL = `
+DELETE FROM rows WHERE rowid IN (
+  SELECT rows.rowid
+  FROM (SELECT 1 WHERE NOT EXISTS (
+    SELECT 1 FROM meta WHERE key = 'grok_rows_version' AND value = '1'
+  )) AS pending CROSS JOIN rows
+  WHERE rows.path GLOB '*[/\\]summary.json'
+);
+INSERT OR REPLACE INTO meta(key, value) VALUES ('grok_rows_version', '1');
 `
 // Rows hold transcript-derived preview text; keep the directory user-only.
 const PRIVATE_DIRECTORY_MODE = 0o700
@@ -223,7 +235,7 @@ export class SessionParseCacheDatabase {
 function openDatabase(path: string): SyncDatabase {
   const db = openVersionedCacheDatabase(path, {
     version: SESSION_PARSE_CACHE_SCHEMA_VERSION,
-    sql: SCHEMA_SQL,
+    sql: `${SCHEMA_SQL}${GROK_ROWS_REPAIR_SQL}`,
     directoryMode: PRIVATE_DIRECTORY_MODE,
     pageSize: PAGE_SIZE,
     afterSchema: ensureScopeCwdsTable

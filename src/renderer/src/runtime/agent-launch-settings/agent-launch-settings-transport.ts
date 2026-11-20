@@ -1,8 +1,8 @@
+import { readRuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import { migrateAgentPermissionChoice } from '../../../../shared/agent-launch/permissions/tui-agent-permission-lift'
 import { usableAgentPickerDefaultSettings } from '../../../../shared/agent-launch/picker/agent-launch-picker-defaults'
 import { lastVerifiedRuntimeStatus } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
-import { useAppStore } from '@/store'
-import { AGENT_SESSION_PERMISSION_OWN_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/agent-session-permission-modes-capability'
+import { AGENT_SESSION_PERMISSION_OWN_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/options/permissions/agent-session-permission-modes-capability'
 import type {
   AgentLaunchSettings,
   AgentLaunchSettingsMutation,
@@ -108,7 +108,7 @@ export async function readHostAgentStartupSettings(
   }
   const settings = result.settings
   const platform = lastVerifiedRuntimeStatus(
-    useAppStore.getState().runtimeStatusByEnvironmentId.get(owner.environmentId)
+    readRuntimeStatuses().get(owner.environmentId)
   )?.hostPlatform
   return { ...settings, ...migrateAgentPermissionChoice(settings, platform) }
 }
@@ -125,7 +125,7 @@ export async function readHostAgentLaunchDefaults(
   })
   if (usableAgentPickerDefaultSettings(snapshot)) {
     const platform = lastVerifiedRuntimeStatus(
-      useAppStore.getState().runtimeStatusByEnvironmentId.get(owner.environmentId)
+      readRuntimeStatuses().get(owner.environmentId)
     )?.hostPlatform
     return { settings: hostAgentLaunchSettingsSource(snapshot, platform), structuredKnown: false }
   }

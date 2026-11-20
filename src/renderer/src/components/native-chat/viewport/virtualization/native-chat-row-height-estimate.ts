@@ -1,15 +1,15 @@
-import { nativeChatProseToMarkdown } from '../../../../../../shared/native-chat/transcript/native-chat-prose'
+import { nativeChatProseToMarkdown } from '../../../../../../shared/native-chat/transcript/row-content/native-chat-prose'
 // Keep estimates arithmetic over cached metrics; per-measurement block scans would traverse the whole transcript.
 
 import { NATIVE_CHAT_TURN_DIFF_FILE_LIMIT } from '../../../../../../shared/native-chat/tools/native-chat-turn-diffs'
-import { agentMessageIsCompact } from '../../../../../../shared/agent-session/agent-message-presentation'
+import { agentMessageIsCompact } from '../../../../../../shared/agent-session/view/messages/agent-message-presentation'
 import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
-import { withoutSentImagePromptMarkers } from '../../../../../../shared/native-chat/transcript/native-chat-image-transcript-markers'
-import { deriveNativeChatRowContent } from '../../../../../../shared/native-chat/transcript/native-chat-row-content'
+import { withoutSentImagePromptMarkers } from '../../../../../../shared/native-chat/transcript/images/native-chat-sent-image-prompt-markers'
+import { deriveNativeChatRowContent } from '../../../../../../shared/native-chat/transcript/row-content/native-chat-row-content'
 import {
   NATIVE_CHAT_USER_MESSAGE_FOLDED_PX,
   nativeChatUserMessageFolds
-} from '../../../../../../shared/native-chat/transcript/native-chat-user-message-fold'
+} from '../../../../../../shared/native-chat/transcript/folding/native-chat-user-message-fold'
 
 export type NativeChatRowContentMetrics = {
   role: NativeChatMessage['role']
@@ -20,6 +20,7 @@ export type NativeChatRowContentMetrics = {
   userFolds: boolean
   imageCount: number
   toolCount: number
+  /** One closed summary row per subagent group; its rows exist only once opened. */
   subagentGroupCount: number
 }
 
@@ -28,7 +29,7 @@ export type NativeChatRowChromeMetrics = {
   hasStatus: boolean
   hasTurnDiff: boolean
   turnDiffFileCount?: number
-  openedPullRequestCount?: number
+  hasOpenedPullRequests?: boolean
   /** Folded prose/tools paint only a roster and must not reserve their expanded height. */
   folded?: boolean
 }
@@ -52,17 +53,16 @@ const IMAGE_STRIP_PX = 88
 const TOOL_RUN_CHROME_PX = 16
 /** A reasoning row draws only its one-line trigger (`min-h-6`) until opened; opening remeasures it. */
 const COLLAPSED_REASONING_PX = 24
-const COMPACT_AGENT_MESSAGE_PX = 38
+/** A message between agents is one status row until opened. */
+const COMPACT_AGENT_MESSAGE_PX = 24
 const SUBAGENT_ROW_PX = 32
 export const NATIVE_CHAT_SUBAGENT_HEAD_PX = SUBAGENT_ROW_PX
 const STATUS_ROW_PX = 28
 const TURN_DIFF_PX = 28
-/** The opened-PR card: its heading, then one row per pull request. */
-const OPENED_PULL_REQUEST_ROW_PX = 30
 const RECEIPT_PX = 56
-/** How far assistant prose's controls hang below the row (`-mb-5`) when they may; a row that keeps
+/** How far assistant prose's controls hang below the row (`-mb-1`) when they may; a row that keeps
  *  them in flow is that much taller. */
-const AGENT_CONTROLS_OVERHANG_PX = 20
+const AGENT_CONTROLS_OVERHANG_PX = 4
 const ROW_MIN_PX = 24
 /** Charge internal gap-5 only; the virtualizer owns inter-row gaps, which would otherwise compound drift. */
 export const NATIVE_CHAT_ROW_GAP_PX = 20
@@ -171,7 +171,7 @@ export function estimateNativeChatRowHeight(
     height = RECEIPT_PX * scale
     partCount = 1
   } else if (chrome.folded === true) {
-    height = content.subagentGroupCount * SUBAGENT_ROW_PX * scale
+    height = content.subagentGroupCount * STATUS_ROW_PX * scale
     partCount = height > 0 ? 1 : 0
   } else if (content.compactAgentMessage) {
     height = COMPACT_AGENT_MESSAGE_PX * scale
@@ -195,7 +195,7 @@ export function estimateNativeChatRowHeight(
       // A run is one collapsed header by default; its members only exist while open.
       height += TOOL_RUN_CHROME_PX * scale + 2 * typography.lineHeightPx
     }
-    height += content.subagentGroupCount * SUBAGENT_ROW_PX * scale
+    height += content.subagentGroupCount * STATUS_ROW_PX * scale
     partCount = height > 0 ? 1 : 0
   }
   if (chrome.hasStatus) {
@@ -214,8 +214,9 @@ export function estimateNativeChatRowHeight(
           : 0))
     partCount += 1
   }
-  if (chrome.openedPullRequestCount) {
-    height += OPENED_PULL_REQUEST_ROW_PX * scale * (1 + chrome.openedPullRequestCount)
+  if (chrome.hasOpenedPullRequests) {
+    // One status row, however many it lists once opened.
+    height += STATUS_ROW_PX * scale
     partCount += 1
   }
   height += Math.max(0, partCount - 1) * NATIVE_CHAT_ROW_GAP_PX
