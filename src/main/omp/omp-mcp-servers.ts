@@ -46,11 +46,17 @@ async function readObject(
 
 const readJsonObject = (path: string) => readObject([path], JSON.parse)
 
-/** OMP takes a named profile's folder over PI_CODING_AGENT_DIR. */
+/** OMP takes a named profile's folder, under its own home, over PI_CODING_AGENT_DIR. */
 function ompAgentDir(env: Readonly<Record<string, string>>): string | undefined {
   const profile = normalizedOmpProfile(env.OMP_PROFILE ?? env.PI_PROFILE)
   return profile
-    ? join(homedir(), env.PI_CONFIG_DIR || '.omp', 'profiles', profile, 'agent')
+    ? join(
+        (process.platform === 'win32' ? env.USERPROFILE : env.HOME) || homedir(),
+        env.PI_CONFIG_DIR || '.omp',
+        'profiles',
+        profile,
+        'agent'
+      )
     : env.PI_CODING_AGENT_DIR
 }
 

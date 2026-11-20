@@ -258,7 +258,14 @@ export function acpStructuredLaunchPart(
     // A managed release's receipt names its version; other programs answer the check.
     const launchedVersion = version ?? launchVersion.version
     const botServers = acpBotMcpServers(tools)
-    const ownServers = (await spec.ownMcpServers?.({ cwd, env, version: launchedVersion })) ?? []
+    // Like its bot tools, a read-only session gets none of the agent's own servers.
+    const ownServers = basis.readOnly
+      ? []
+      : ((await spec.ownMcpServers?.({
+          cwd,
+          env: childEnvironmentView(env, inherited, envToDelete),
+          version: launchedVersion
+        })) ?? [])
     // On a shared name the bot's server wins.
     const mcpServers = [
       ...botServers,
