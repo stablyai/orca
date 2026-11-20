@@ -54,7 +54,8 @@ export const LEGACY_JOURNAL_RETIREMENT_DEFERS = [
   // An older Orca wrote the file since; the next launch takes that in first.
   'not_reconciled',
   // The file's storage can't be locked safely, so it is never deleted there.
-  'unsupported_storage'
+  'unsupported_storage',
+  'leftover_files'
 ] as const
 
 /** Shapes builds left behind that the refusal saw; `none` when it saw neither. */

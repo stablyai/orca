@@ -65,7 +65,13 @@ it('deletes only with a fresh download that enforces for this install, and never
     }).mode
   ).toBe('report')
   // A malformed entry or map holds that platform back rather than falling to the shared share.
-  for (const platformPermille of [{ darwin: '1000' }, { darwin: null }, [1000], 'all']) {
+  for (const platformPermille of [
+    { darwin: '1000' },
+    { darwin: null },
+    { darwin: 1000, Win32: 0 },
+    [1000],
+    'all'
+  ]) {
     expect(
       effectiveJournalRetirementMode({
         ...base,

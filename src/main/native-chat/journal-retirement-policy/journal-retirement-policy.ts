@@ -56,6 +56,20 @@ export function newestJournalRetirementPolicy(
     : newestKnown
 }
 
+const NODE_PLATFORMS = new Set<string>([
+  'aix',
+  'android',
+  'cygwin',
+  'darwin',
+  'freebsd',
+  'haiku',
+  'linux',
+  'netbsd',
+  'openbsd',
+  'sunos',
+  'win32'
+])
+
 /**
  * This platform's share: its own entry, or the shared one when the map doesn't name it. Anything
  * malformed gives 0, never the shared share: a bad entry must not widen a platform held back.
@@ -66,6 +80,10 @@ function platformShare(rule: JournalRetirementPolicy, platform: NodeJS.Platform)
     return rule.enforcePermille
   }
   if (typeof shares !== 'object' || shares === null || Array.isArray(shares)) {
+    return 0
+  }
+  // A name no platform has (a typo, `windows`) makes the whole map malformed.
+  if (Object.keys(shares).some((name) => !NODE_PLATFORMS.has(name))) {
     return 0
   }
   const entry = Object.entries(shares).find(([name]) => name === platform)

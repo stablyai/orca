@@ -110,13 +110,9 @@ export class JournalLegacyRetirement {
         this.done = true
         await this.outcome({ outcome: 'deferred', defer: 'unsupported_storage' }).catch(() => {})
       } else {
-        await this.outcome(
-          legacyProofFailureOutcome(
-            error,
-            this.proof.walked.counts,
-            this.proof.finished && this.policy.mode === 'enforce'
-          )
-        ).catch(() => {})
+        const removing = this.proof.finished && this.policy.mode === 'enforce'
+        const failed = legacyProofFailureOutcome(error, this.proof.walked, removing)
+        await this.outcome(failed).catch(() => {})
       }
       this.later()
       const reason = error instanceof Error ? error.message : String(error)
@@ -136,9 +132,12 @@ export class JournalLegacyRetirement {
       // Finishing a removal cut short deletes too, so it needs the same permission.
       if (this.ownsProfile() && (await legacyCompanionsPresent(this.filename))) {
         // Asked last, right before the unlink: the saved-state read can take a while.
-        const absorbed = absorbedWal((await this.savedState()).retirement)
+        const saved = await this.savedState()
+        const absorbed = absorbedWal(saved.retirement)
         if (!(await this.enforced())) {
-          return this.later()
+          this.reporter.saved(saved.reported)
+          this.later()
+          return this.outcome({ outcome: 'deferred', defer: 'leftover_files' })
         }
         await removeLeftoverLegacyCompanions(this.filename, absorbed)
       }

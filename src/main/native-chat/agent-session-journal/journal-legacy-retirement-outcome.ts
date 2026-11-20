@@ -230,10 +230,10 @@ export class LegacyJournalRetirementReporter {
  */
 export function legacyProofFailureOutcome(
   error: unknown,
-  counts: LegacyProofCounts,
+  { counts, resumed }: { counts: LegacyProofCounts; resumed: boolean },
   proven: boolean
 ): Partial<LegacyJournalRetirementOutcome> {
-  const walked = { completeness: 'partial', counts } as const
+  const walked = { completeness: 'partial', counts, resumed } as const
   if (error instanceof JournalLegacyRetentionError) {
     return error.reason
       ? { outcome: 'refused', reason: error.reason, artifact: error.artifact ?? 'none', ...walked }
