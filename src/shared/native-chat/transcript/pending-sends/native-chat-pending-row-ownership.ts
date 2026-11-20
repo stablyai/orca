@@ -24,24 +24,34 @@ export function createPendingRowOwnership(
     occurrences.set(entry, occurrence)
   }
   const claimed = new Map<string, string>()
+  const matches = new Map<NativeChatPendingSend, NativeChatMessage[]>()
   const ownership = {
     claimed,
     represented(entry: NativeChatPendingSend, generatedOnly = false): boolean {
       const occurrence = occurrences.get(entry) ?? 1
       const contentKey = nativeChatPendingContentKey(entry)
+      let rows = matches.get(entry)
+      if (!rows) {
+        rows = []
+        const collected = rows
+        count(entry, (message, key) => {
+          if (key === contentKey) {
+            collected.push(message)
+          }
+        })
+        matches.set(entry, rows)
+      }
       let available = 0
       let selected: NativeChatMessage | undefined
-      count(entry, (message, key) => {
-        if (
-          key !== contentKey ||
-          (claimed.has(message.id) && claimed.get(message.id) !== contentKey)
-        ) {
-          return
+      for (const message of rows) {
+        if (claimed.has(message.id) && claimed.get(message.id) !== contentKey) {
+          continue
         }
         if (++available === occurrence) {
           selected = message
+          break
         }
-      })
+      }
       if (!selected) {
         return false
       }
