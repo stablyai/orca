@@ -26,7 +26,6 @@ function moveReport(homes: string[], wslHomes = 1): CodexHistoryMoveReport {
   return new CodexHistoryMoveReport({
     markerPath: () => join(dir, 'move-status-sent.json'),
     wslHomeCount: () => wslHomes,
-    oldCopiesSetAside: () => 0,
     currentHomes: () => homes
   })
 }
@@ -51,8 +50,7 @@ describe('codex history move telemetry', () => {
       stuck_refused: 0,
       stuck_incomplete: 0,
       stuck_failed: 0,
-      wsl_homes: 1,
-      old_copies_set_aside: 0
+      wsl_homes: 1
     })
 
     // Unchanged counts at the next launch send nothing.

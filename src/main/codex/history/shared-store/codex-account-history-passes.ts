@@ -24,7 +24,6 @@ import {
   type CodexHistoryMoveOutcome
 } from '../../../telemetry/codex-history-move-telemetry'
 import { isLinkedDirectory } from '../../../filesystem/merged-directory-link'
-import { getLegacyCopiesSetAsideCount } from '../bridges/codex-legacy-session-copy'
 
 const BUSY_RETRY_MS = 5 * 60_000
 // Retries start outside any pass's trace, so each is its own trace instead of nesting forever.
@@ -62,7 +61,6 @@ export class CodexAccountHistoryPasses {
   private censusHomes: string[] = []
   private readonly moveReport = new CodexHistoryMoveReport({
     wslHomeCount: () => this.homes.wslHomeCount(),
-    oldCopiesSetAside: getLegacyCopiesSetAsideCount,
     // A launch's own pass runs before its census refreshes the listing.
     currentHomes: () => {
       const homes = this.homes.sharedHomes()

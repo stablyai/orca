@@ -83,11 +83,10 @@ export abstract class CodexRuntimeHomeLaunch extends CodexRuntimeHomeRouting {
       isCodexHistorySharedAcrossAccounts(this.store.getSettings()) &&
       !this.isHostHistorySourceInWsl()
     ) {
-      // Old copies it sets aside are counted in the move report.
       void startSystemCodexSessionBridgeInBackground(
         {},
         resolveHostCodexSessionSourceHome(this.store.getSettings())
-      ).then(() => this.accountHistoryPasses.reportMoves())
+      )
     }
     return this.getRuntimeHomePath()
   }

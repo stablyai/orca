@@ -17,8 +17,6 @@ export const codexHistoryMoveStatusSchema = z
     stuck_incomplete: homeCount,
     stuck_failed: homeCount,
     // Moved only at their own WSL launch, so the host knows no outcome for them.
-    wsl_homes: homeCount,
-    // Old session copies this run set aside (kept, never deleted) for a link to their source; capped.
-    old_copies_set_aside: homeCount
+    wsl_homes: homeCount
   })
   .strict()

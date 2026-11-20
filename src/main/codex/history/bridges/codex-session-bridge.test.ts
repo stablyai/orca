@@ -1,13 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  existsSync,
-  lstatSync,
-  mkdtempSync,
-  mkdirSync,
-  readFileSync,
-  rmSync,
-  writeFileSync
-} from 'node:fs'
+import { lstatSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import type * as NodeFs from 'node:fs'
 import type * as NodeOs from 'node:os'
 import { tmpdir } from 'node:os'
@@ -100,10 +92,7 @@ vi.mock('node:os', async () => {
     homedir: homedirMock
   }
 })
-import {
-  syncSystemCodexSessionsIntoManagedHome,
-  syncSystemCodexSessionsIntoManagedHomeIncrementally
-} from './codex-session-bridge'
+import { syncSystemCodexSessionsIntoManagedHome } from './codex-session-bridge'
 
 let fakeHomeDir: string
 let userDataDir: string
@@ -193,43 +182,5 @@ describe('syncSystemCodexSessionsIntoManagedHome', () => {
 
     expect(lstatSync(runtimeSessionPath).isSymbolicLink()).toBe(false)
     expect(readFileSync(runtimeSessionPath, 'utf-8')).toBe('{"id":"legacy"}\n')
-  })
-
-  it('keeps a legacy copy holding lines its source lacks', async () => {
-    const relativeSessionPath = join('2026', '05', '26', 'rollout-legacy-diverged.jsonl')
-    const systemSessionPath = join(getSystemCodexHomePath(), 'sessions', relativeSessionPath)
-    const runtimeSessionPath = join(getRuntimeCodexHomePath(), 'sessions', relativeSessionPath)
-    mkdirSync(dirname(systemSessionPath), { recursive: true })
-    mkdirSync(dirname(runtimeSessionPath), { recursive: true })
-    writeFileSync(systemSessionPath, '{"turn":1}\n', 'utf-8')
-    writeFileSync(runtimeSessionPath, '{"turn":1}\n{"turn":2}\n', 'utf-8')
-    writeLegacyCopyMarker(relativeSessionPath, systemSessionPath, runtimeSessionPath)
-
-    await syncSystemCodexSessionsIntoManagedHomeIncrementally()
-
-    expect(readFileSync(runtimeSessionPath, 'utf-8')).toBe('{"turn":1}\n{"turn":2}\n')
-    expect(existsSync(`${runtimeSessionPath}.orca-legacy-copy`)).toBe(false)
-  })
-
-  it('sets an untouched legacy copy aside and links the source that grew from it', async () => {
-    const relativeSessionPath = join('2026', '05', '27', 'rollout-legacy-grown.jsonl')
-    const systemSessionPath = join(getSystemCodexHomePath(), 'sessions', relativeSessionPath)
-    const runtimeSessionPath = join(getRuntimeCodexHomePath(), 'sessions', relativeSessionPath)
-    mkdirSync(dirname(systemSessionPath), { recursive: true })
-    mkdirSync(dirname(runtimeSessionPath), { recursive: true })
-    writeFileSync(systemSessionPath, '{"turn":1}\n', 'utf-8')
-    writeFileSync(runtimeSessionPath, '{"turn":1}\n', 'utf-8')
-    writeLegacyCopyMarker(relativeSessionPath, systemSessionPath, runtimeSessionPath)
-    writeFileSync(systemSessionPath, '{"turn":1}\n{"turn":2}\n', 'utf-8')
-
-    await syncSystemCodexSessionsIntoManagedHomeIncrementally()
-
-    expect(lstatSync(runtimeSessionPath).ino).toBe(lstatSync(systemSessionPath).ino)
-    expect(readFileSync(`${runtimeSessionPath}.orca-legacy-copy`, 'utf-8')).toBe('{"turn":1}\n')
-    expect(
-      existsSync(
-        join(getRuntimeCodexHomePath(), '.orca-session-copies', `${relativeSessionPath}.json`)
-      )
-    ).toBe(false)
   })
 })

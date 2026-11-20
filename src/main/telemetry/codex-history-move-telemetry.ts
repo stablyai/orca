@@ -59,7 +59,6 @@ export class CodexHistoryMoveReport {
     private readonly deps: {
       markerPath: () => string
       wslHomeCount: () => number
-      oldCopiesSetAside: () => number
       /**
        * The homes that should be shared now, null while sharing is off; read only right before a
        * report can go out.
@@ -126,8 +125,7 @@ export class CodexHistoryMoveReport {
       stuck_refused: tally('refused'),
       stuck_incomplete: tally('incomplete'),
       stuck_failed: tally('failed'),
-      wsl_homes: count(this.deps.wslHomeCount()),
-      old_copies_set_aside: count(this.deps.oldCopiesSetAside())
+      wsl_homes: count(this.deps.wslHomeCount())
     }
     // The one follow-up waits until no home is busy, so a second busy home's move isn't capped out.
     if (marker.sent.length > 0 && props.stuck_busy > 0) {
