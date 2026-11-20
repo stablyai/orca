@@ -82,9 +82,10 @@ export function readOperationWindowItems(
   // A cut row may keep a large input; the window total, not a per-row bound, admits it.
   // Largest first, Diff calls last: their patch names the files they edited. Each cut is
   // counted at the size it actually comes back at, which is whole when nothing could be cut.
-  // A cut row drops the stored marker, or decoding would read its whole saved text back in.
-  const shortened = `json_remove(${shortenedJsonSql(projected, JOURNAL_READER_REPLY_BYTE_LIMIT)},
-    '$.body.output.stored','$.body.patch.stored')`
+  // A cut stored row drops its marker, or decoding would read its whole saved text back in.
+  const cutJson = shortenedJsonSql(projected, JOURNAL_READER_REPLY_BYTE_LIMIT)
+  const shortened = `CASE WHEN output_blob IS NULL THEN ${cutJson}
+    ELSE json_remove(${cutJson},'$.body.output.stored','$.body.patch.stored') END`
   const cutSize = scope.db.prepare(`SELECT octet_length(${shortened}) AS bytes
     FROM journal_items WHERE session_id=? AND epoch=? AND item_id=?`)
   const cut: string[] = []
