@@ -1,5 +1,4 @@
 import { statfs } from 'node:fs/promises'
-import { posix, win32 } from 'node:path'
 import { webContents } from 'electron'
 import {
   isDiskAlmostFull,
@@ -10,10 +9,7 @@ import {
   getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID
 } from '../../shared/execution-host/execution-host'
-import {
-  isWindowsAbsolutePathLike,
-  normalizeRuntimePathForComparison
-} from '../../shared/file-access/cross-platform-path'
+import { normalizeRuntimePathForComparison } from '../../shared/file-access/cross-platform-path'
 import { isFolderRepo } from '../../shared/repository/repo-kind'
 import type { Repo } from '../../shared/repository/repo-types'
 import type { GlobalSettings } from '../../shared/settings/global-settings-types'
@@ -58,13 +54,9 @@ let disk: {
   bounded: Promise<PerfNoticeDisk | null>
 } | null = null
 
-function parentFolder(path: string): string {
-  return (isWindowsAbsolutePathLike(path) ? win32 : posix).dirname(path)
-}
-
 /** The folders whose disks hold local workspaces: where each project creates new ones (resolved as
- *  creation does), then wherever existing ones live, whatever the settings say now. WSL roots are
- *  skipped: resolving or reading them can wake a distro. */
+ *  creation does), then each existing workspace itself, since one can be its own mounted volume.
+ *  WSL roots are skipped: resolving or reading them can wake a distro. */
 function localWorktreeRoots(store: PerfNoticeSignalStore): string[] {
   const settings = store.getSettings()
   const repos = store
@@ -105,7 +97,7 @@ function localWorktreeRoots(store: PerfNoticeSignalStore): string[] {
       !meta.archivedCheckout &&
       normalizeRuntimePathForComparison(parsed.worktreePath) !== checkout
     ) {
-      add(parentFolder(parsed.worktreePath))
+      add(parsed.worktreePath)
     }
   }
   return [...roots.values()]

@@ -48,7 +48,7 @@ describe('readPerfNoticeSignals', () => {
     'warns about the volume holding existing workspaces after the workspace folder moved',
     async () => {
       statfs.mockImplementation(async (path: string) =>
-        path === '/vol/old/workspaces/app'
+        path === '/vol/old/workspaces/app/login-form'
           ? { bavail: 1, bsize: GB, blocks: 500 }
           : { bavail: 400, bsize: GB, blocks: 500 }
       )
@@ -61,7 +61,7 @@ describe('readPerfNoticeSignals', () => {
       // The repo's own checkout is not a workspace, so its folder is never read.
       expect(statfs.mock.calls.map(([path]) => path)).toEqual([
         '/vol/new/workspaces',
-        '/vol/old/workspaces/app'
+        '/vol/old/workspaces/app/login-form'
       ])
       expect(signals.disk).toEqual({ freeBytes: 1 * GB, totalBytes: 500 * GB })
     }
