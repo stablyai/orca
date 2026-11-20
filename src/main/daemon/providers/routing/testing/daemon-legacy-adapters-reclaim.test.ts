@@ -6,7 +6,10 @@ import { getDaemonPidPath, getDaemonTokenPath } from '../../../launch/daemon-spa
 import type * as LegacyProcessLiveness from '../../../launch/daemon-legacy-process-liveness'
 import { createLegacyDaemonAdapters } from '../daemon-legacy-adapters'
 
-const afterInspection = vi.hoisted(() => ({ run: null as null | (() => void) }))
+const afterInspection = vi.hoisted(() => {
+  const hook: { run: null | (() => void) } = { run: null }
+  return hook
+})
 
 vi.mock('../../../launch/daemon-legacy-process-liveness', async (importOriginal) => {
   const actual = await importOriginal<typeof LegacyProcessLiveness>()
