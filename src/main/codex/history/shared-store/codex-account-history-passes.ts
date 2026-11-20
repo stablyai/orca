@@ -272,7 +272,10 @@ export class CodexAccountHistoryPasses {
           void this.run(accountHome, true, {
             stillWanted: () =>
               !isCodexAccountHistoryWorkStopping() && this.isStillShared(accountHome)
-          }).catch(() => {})
+          })
+            // A home that moved on its retry updates the report without waiting for a launch.
+            .then(() => (this.censusWaiting ? undefined : this.moveReport.report(this.censusHomes)))
+            .catch(() => {})
         }
       }, BUSY_RETRY_MS)
     )
