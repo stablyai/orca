@@ -1103,15 +1103,6 @@ jobs:
         with:
           persist-credentials: false
 
-      # beforePack compiles provider-exec and journal-file-lock in this image; an uncached build cost ~75s inside packaging.
-      - name: Build Linux native toolchain image
-        id: native-toolchain-image
-        background: true
-        run: >-
-          node --input-type=module -e "import { spawnSync } from 'node:child_process';
-          import { linuxNativeToolchainImage } from './config/scripts/native-build/linux/build-wayland-clipboard.mjs';
-          linuxNativeToolchainImage(process.cwd(), (args) => { if (spawnSync('docker', args, { stdio: 'inherit' }).status !== 0) process.exit(1) })"
-
       # Electron and builder releases fix what this downloads; the lockfile churns far more often.
       - name: Resolve electron-builder download versions
         id: eb-versions
@@ -1148,6 +1139,24 @@ jobs:
           cache-dependency-path: |
             pnpm-lock.yaml
             mobile/pnpm-lock.yaml
+
+      - name: Restore native components
+        id: linux-native-restore
+        uses: ./.github/actions/prepare-wayland-clipboard
+        with:
+          build: 'false'
+
+      # A helper-cache miss rebuilds in this Ubuntu 20.04 image (~70s); building it now overlaps the Electron tests.
+      - name: Build Linux native toolchain image
+        id: native-toolchain-image
+        background: true
+        env:
+          CACHE_HIT: ${{ steps.linux-native-restore.outputs.cache-hit }}
+        run: |
+          if [ "$CACHE_HIT" = true ]; then exit 0; fi
+          node --input-type=module -e "import { spawnSync } from 'node:child_process';
+          import { linuxNativeToolchainImage } from './config/scripts/native-build/linux/build-wayland-clipboard.mjs';
+          linuxNativeToolchainImage(process.cwd(), (args) => { if (spawnSync('docker', args, { stdio: 'inherit' }).status !== 0) process.exit(1) })"
 
       # Why here: electron-builder's beforePack requires out/mobile-web, and the bundle
       # build resolves React Native and Expo from mobile/node_modules.
@@ -1196,11 +1205,7 @@ jobs:
           src/main/browser/extensions/actions/browser-extension-toolbar.electron.test.ts
           src/main/browser/extensions/native-messaging/browser-extension-native-messaging.electron.test.ts
 
-      - name: Restore native components
-        id: linux-native-restore
-        uses: ./.github/actions/prepare-wayland-clipboard
-        with:
-          build: 'false'
+      - wait: native-toolchain-image
 
       # The isolated glibc-floor build writes only the Wayland helper, so JavaScript can overlap.
       - name: Build native components
@@ -1277,7 +1282,7 @@ jobs:
         background: true
         run: pnpm run build:web-from-renderer
 
-      - wait: [linux-native, linux-package-tools, web-client, native-toolchain-image]
+      - wait: [linux-native, linux-package-tools, web-client]
 
       - name: Package unpacked app
         env:
