@@ -22,6 +22,7 @@ import { googleAppExportFileName } from '../../../../../shared/google/google-con
 import type { GoogleServiceChoice } from '../../../../../shared/google/google-scopes'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { Bot } from '../../../../../shared/bot-types'
+import { errorMessage } from '../../../../../shared/errors/error-message'
 import { googleReachAreas, type GoogleReachArea } from '../../../../../shared/bots/bot-access-reach'
 
 export type GoogleHostView =
@@ -73,10 +74,6 @@ function subscribe(listener: () => void): () => void {
   return () => listeners.delete(listener)
 }
 
-function errorText(error: unknown): string {
-  return error instanceof Error ? error.message : String(error)
-}
-
 async function supportsGoogle(target: RuntimeClientTarget): Promise<boolean> {
   return (
     target.kind === 'local' ||
@@ -103,7 +100,7 @@ export async function refreshGoogle(
         }
       : { status: 'update-server' }
   } catch (error) {
-    view = { status: 'failed', error: errorText(error) }
+    view = { status: 'failed', error: errorMessage(error) }
   }
   publish(target, view, read)
   return view
@@ -233,6 +230,15 @@ type SignInRun = {
 
 let running: SignInRun | null = null
 
+function nextStatus(run: SignInRun, status: GoogleSignInStatus): Promise<GoogleSignInStatus> {
+  return callRuntimeRpc<GoogleSignInStatus>(
+    run.target,
+    'google.signIn.wait',
+    { flowId: status.flowId, afterRevision: status.revision },
+    { timeoutMs: SIGN_IN_WAIT_MS }
+  )
+}
+
 /** Follows the flow until Google's link is ready, or it ends first. */
 async function settle(run: SignInRun, first: GoogleSignInStatus): Promise<GoogleSignInStatus> {
   let status = first
@@ -243,12 +249,7 @@ async function settle(run: SignInRun, first: GoogleSignInStatus): Promise<Google
     status.phase !== 'cancelled' &&
     !run.cancelled
   ) {
-    status = await callRuntimeRpc<GoogleSignInStatus>(
-      run.target,
-      'google.signIn.wait',
-      { flowId: status.flowId, afterRevision: status.revision },
-      { timeoutMs: SIGN_IN_WAIT_MS }
-    )
+    status = await nextStatus(run, status)
   }
   return status
 }
@@ -263,12 +264,7 @@ async function untilSettled(run: SignInRun, first: GoogleSignInStatus): Promise<
           : (status.error ?? 'The Google sign-in failed. Try again.')
       )
     }
-    status = await callRuntimeRpc<GoogleSignInStatus>(
-      run.target,
-      'google.signIn.wait',
-      { flowId: status.flowId, afterRevision: status.revision },
-      { timeoutMs: SIGN_IN_WAIT_MS }
-    )
+    status = await nextStatus(run, status)
   }
   if (!status.account) {
     throw new Error('Google signed in, but the host sent no account.')
@@ -337,9 +333,8 @@ export async function connectGoogle(
 }
 
 /** Open again: Google's page where this sign-in opened it, or the person's browser with none running. */
-export function openGoogleSignInAgain(url: string): void {
-  ;(running?.reopen ?? openInMyBrowser)(url)
-}
+export const openGoogleSignInAgain = (url: string): void =>
+  (running?.reopen ?? openInMyBrowser)(url)
 
 /** Finishes the running sign-in with the address its browser ended on; the host checks it. */
 export async function finishGoogleSignInWithAddress(address: string): Promise<void> {
