@@ -510,3 +510,55 @@ it('leaves a copy whose history failed to convert to an open, not to every idle 
       .get(`journal.legacy-failed:${copy}`)
   ).toBeUndefined()
 })
+
+it('isolates rejected upload claims to their chat and keeps the failure across launches', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'orca-legacy-reconcile-'))
+  cleanup.push(() => rmSync(root, { recursive: true, force: true }))
+  const { db: original } = openJournalDatabase(journalDatabasePath(root))
+  cleanup.push(() => original.close())
+  olderOrcaChat(original, 'existing', rows)
+  await (await upgrade(root)).close()
+  for (const id of ['before', 'rejected', 'after']) {
+    olderOrcaChat(original, id, [rows[0], turn(`${id}-turn`, 2)])
+    original
+      .prepare('INSERT INTO agent_session_attachment_claims VALUES(?,?,?)')
+      .run(`upload-${id}`, id, 100)
+  }
+  original.pragma('wal_checkpoint(TRUNCATE)')
+  const blocked = openJournalDomainDatabase(journalDomainDatabasePath(root)).db
+  blocked.exec(`CREATE TRIGGER refuse_claim BEFORE INSERT ON agent_session_attachment_claims
+    WHEN NEW.upload_id='upload-rejected' BEGIN SELECT RAISE(ABORT,'upload unavailable'); END`)
+  blocked.close()
+
+  const kept = await upgrade(root)
+  expect(await kept.convert('after')).toBe('epoch')
+  expect(items(kept.db, 'after')).toEqual(['after-turn'])
+  expect(
+    kept.db
+      .prepare('SELECT upload_id,session_id FROM agent_session_attachment_claims ORDER BY upload_id')
+      .all()
+  ).toEqual([
+    { upload_id: 'upload-after', session_id: 'after' },
+    { upload_id: 'upload-before', session_id: 'before' }
+  ])
+  expect(
+    JSON.parse(
+      String(
+        kept.db
+          .prepare('SELECT value FROM agent_session_store_meta WHERE key=?')
+          .get('journal.legacy-failed:rejected')?.value
+      )
+    )
+  ).toMatchObject({ error: 'upload unavailable' })
+  kept.db.exec('DROP TRIGGER refuse_claim')
+  await kept.close()
+
+  const again = await upgrade(root)
+  cleanup.push(again.close)
+  expect(
+    again.db.prepare('SELECT 1 FROM agent_session_records WHERE session_id=?').get('rejected')
+  ).toBeUndefined()
+  expect(
+    again.db.prepare('SELECT session_id FROM agent_session_records ORDER BY session_id').all()
+  ).toEqual([{ session_id: 'after' }, { session_id: 'before' }, { session_id: 'existing' }])
+})

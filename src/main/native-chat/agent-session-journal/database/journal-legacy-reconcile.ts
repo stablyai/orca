@@ -157,11 +157,6 @@ function absorbChats(
   walk: boolean
 ): boolean {
   const adoption = readAdoption(source, db, walk ? null : [...pass.forced.keys()])
-  runJournalTransaction(db, () => {
-    for (const [sessionId, claims] of adoption.claims) {
-      insertClaims(db, sessionId, claims)
-    }
-  })
   const chats = walk ? originalChatIds(source, 'saved') : [...pass.forced.keys()]
   for (const id of chats) {
     let revision: string | undefined
@@ -211,6 +206,10 @@ function absorbChat(
   const shown = readMeta(db, journalLegacyChatRevisionKey(id))
   if (revision === shown) {
     return
+  }
+  const claims = adoption.claims.get(id)
+  if (claims?.length) {
+    runJournalTransaction(db, () => insertClaims(db, id, claims))
   }
   const chat = db.prepare('SELECT epoch FROM journal_chat_state WHERE session_id=?').get(id)
   const converted = chat?.epoch !== null && chat?.epoch !== undefined
