@@ -75,7 +75,11 @@ export async function removeEveryoneWhoCanAsk(
     try {
       onBot(
         botUpdate.interpret(
-          await botUpdate.request(client, { botId: bot.id, updates: { removeMember } })
+          await botUpdate.request(
+            client,
+            { botId: bot.id, updates: { removeMember } },
+            { failWhenDisconnected: true }
+          )
         ).bot
       )
     } catch {

@@ -24,8 +24,7 @@ const mocks = vi.hoisted(() => {
   const state: {
     bots: Bot[]
     waits: Record<string, BotListWait[]>
-    openBotHomeTab: ReturnType<typeof vi.fn<(bot: Bot) => Promise<boolean>>>
-  } = { bots: [], waits: {}, openBotHomeTab: vi.fn(async () => true) }
+  } = { bots: [], waits: {} }
   return state
 })
 
@@ -34,8 +33,7 @@ vi.mock('@/lib/bot-catalog', async (importOriginal) => ({
   useBots: () => mocks.bots,
   useBotsEnabled: () => true,
   useBotWaits: () => [],
-  useListedBotItemsNeedingOwner: () => null,
-  openBotHomeTab: (bot: Bot) => mocks.openBotHomeTab(bot)
+  useListedBotItemsNeedingOwner: () => null
 }))
 vi.mock('@/lib/bot-catalog-snapshot', async (importOriginal) => ({
   ...(await importOriginal<object>()),
@@ -246,7 +244,6 @@ describe('Cmd+J bots', () => {
     setCommandQuery = null
     mocks.bots = []
     mocks.waits = {}
-    mocks.openBotHomeTab.mockClear()
     useAppStore.setState(initialAppState, true)
     testContainer = document.createElement('div')
     document.body.appendChild(testContainer)
@@ -295,15 +292,6 @@ describe('Cmd+J bots', () => {
       botRowId('b2')
     ])
     expect(testContainer.textContent).toContain('1 more')
-  })
-
-  it("opens the bot's Home chat on Enter", async () => {
-    await renderPalette(botState([{ id: 'b1', name: 'Triage' }]))
-    await typeQuery('triage')
-    await act(async () => {
-      testContainer.querySelector<HTMLElement>(`[data-command-item="${botRowId('b1')}"]`)?.click()
-    })
-    expect(mocks.openBotHomeTab).toHaveBeenCalledWith(mocks.bots[0])
   })
 
   it("lists a bot's chats in recents without listing its home as a workspace", async () => {

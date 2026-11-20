@@ -7,19 +7,21 @@ import {
 } from './bot-deep-link'
 
 describe('parseBotDeepLink', () => {
-  it('reads the bot id and the Slack conversation', () => {
-    expect(
-      parseBotDeepLink('orca://bot/bot_1?conversation=slack%3AT1%3AC1%3A1700000000.000100')
-    ).toEqual({
+  it('preserves reserved characters in the Slack conversation link', () => {
+    const link = 'orca://bot/bot_1?conversation=slack%3AT1%3AC1%3A1700.1%26x%3D%23y'
+    const target = {
       botId: 'bot_1',
-      conversation: { source: 'slack', externalId: 'T1:C1:1700000000.000100' }
-    })
+      conversation: { source: 'slack' as const, externalId: 'T1:C1:1700.1&x=#y' }
+    }
+
+    expect(parseBotDeepLink(link)).toEqual(target)
+    expect(formatBotDeepLink(target)).toBe(link)
   })
 
   it('reads a bare link as the bot alone, which opens its Home', () => {
     expect(parseBotDeepLink('orca://bot/bot_1')).toEqual({ botId: 'bot_1' })
     expect(parseBotDeepLink('orca://bot/bot_1/')).toEqual({ botId: 'bot_1' })
-    expect(parseBotDeepLink(formatBotDeepLink({ botId: 'bot-2' }))).toEqual({ botId: 'bot-2' })
+    expect(formatBotDeepLink({ botId: 'bot-2' })).toBe('orca://bot/bot-2')
   })
 
   it.each([
@@ -37,14 +39,6 @@ describe('parseBotDeepLink', () => {
   ])('rejects %s', (value) => {
     expect(parseBotDeepLink(value)).toBeNull()
   })
-
-  it('round-trips through the link it formats', () => {
-    const link = {
-      botId: 'bot-2',
-      conversation: { source: 'slack' as const, externalId: 'T1:C1:1700.1&x=#y' }
-    }
-    expect(parseBotDeepLink(formatBotDeepLink(link))).toEqual(link)
-  })
 })
 
 describe('parseBotAccessRequestDeepLink', () => {
@@ -54,9 +48,7 @@ describe('parseBotAccessRequestDeepLink', () => {
     const url = `orca://bot/access-request?t=${token}`
     expect(parseBotAccessRequestDeepLink(url)).toEqual({ token })
     expect(parseBotDeepLink(url)).toBeNull()
-    expect(parseBotAccessRequestDeepLink(formatBotAccessRequestDeepLink({ token }))).toEqual({
-      token
-    })
+    expect(formatBotAccessRequestDeepLink({ token })).toBe(url)
   })
 
   it('refuses a malformed token or another place', () => {

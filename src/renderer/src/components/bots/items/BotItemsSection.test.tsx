@@ -2,6 +2,7 @@
 
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import type { BotItem } from '../../../../../shared/bots/bot-items'
 import type { Bot } from '../../../../../shared/bot-types'
 import { makeTestBotItem } from '../../../../../shared/bots/bot-item.test-fixture'
@@ -121,7 +122,7 @@ function Section({
 }
 
 it('keeps a chat’s items up when their re-read fails, saying so, with Retry', () => {
-  render(<Section />)
+  render(<Section />, { wrapper: TooltipProvider })
 
   expect(screen.getByText('Item 1')).toBeTruthy()
   expect(screen.getByText("Couldn't refresh items. Showing the last read.")).toBeTruthy()
@@ -129,14 +130,16 @@ it('keeps a chat’s items up when their re-read fails, saying so, with Retry', 
   expect(chat.retry).toHaveBeenCalledOnce()
 })
 
-it('counts Orca’s asks with items and shows all clear only after both are gone', () => {
+it('lists Orca’s asks while items load and after', () => {
   const { rerender } = render(
-    <Section filter={NO_FILTER} read={null} state="loading" asks={SIGN_IN} />
+    <Section filter={NO_FILTER} read={null} state="loading" asks={SIGN_IN} />,
+    { wrapper: TooltipProvider }
   )
 
   expect(screen.getByRole('button', { name: 'Open Linear' })).toBeTruthy()
-  expect(screen.getByText('Loading items…')).toBeTruthy()
-  expect(screen.getByRole('button', { expanded: true }).textContent).toBe('Needs you1')
+  const loading = screen.getByRole('status')
+  expect(loading.textContent).toBe('Loading items…')
+  expect(loading.hasAttribute('aria-busy')).toBe(false)
 
   const asked = makeTestBotItem(2, { status: 'needs_you', lastActivityAt: NOW })
   rerender(
@@ -148,7 +151,6 @@ it('counts Orca’s asks with items and shows all clear only after both are gone
   )
   expect(screen.getByRole('button', { name: 'Open Linear' })).toBeTruthy()
   expect(screen.getByText('Item 2')).toBeTruthy()
-  expect(screen.getByRole('button', { expanded: true }).textContent).toBe('Needs you2')
 
   rerender(<Section filter={NO_FILTER} asks={SIGN_IN} />)
   expect(screen.queryByText('Nothing needs you and nothing is running.')).toBeNull()

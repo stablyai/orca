@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Text, View } from 'react-native'
+import { View } from 'react-native'
 import { AGENT_CHAT_PERMISSION_MODES } from '../../../src/shared/agent-launch/permissions/agent-chat-permission-mode'
 import { agentChatPermissionModes } from '../../../src/shared/agent-launch/permissions/agent-chat-permission-support'
 import { botMemberSource, type BotMember } from '../../../src/shared/bot-types'
@@ -19,9 +19,9 @@ import {
 } from '../host-screen/workspace-options/workspace-option-rows'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { botUpdate, removeEveryoneWhoCanAsk } from './bot-sheet-operations'
-import { memberSourceLabel } from './mobile-bot-sheet-copy'
 import { MobileBotTextButton } from './MobileBotTextButton'
-import { MobileBotSettingsSection as Section } from './MobileBotSettingsSection'
+import { MobileBotSettingsOffline } from './MobileBotSettingsOffline'
+import { SettingsNote, SettingsSection as Section } from '../settings/settings-screen-frame'
 import {
   MobileLookAroundPage,
   MobileLookAroundSection,
@@ -30,39 +30,29 @@ import {
 import { MobileTidyUpPage, MobileTidyUpSection, type TidyUpPage } from './MobileBotTidyUp'
 import { useMobileBotTidyUp } from './use-mobile-bot-tidy-up'
 import { BOT_ACCESS_COPY, botAccessCopy } from '../../../src/shared/bots/bot-access-copy'
-import { accessGrantConfirmCopy, accessRequestLine } from './bot-access-request-copy'
+import {
+  accessGrantConfirmCopy,
+  accessRequestLine,
+  phoneAccessHost
+} from './bot-access-request-copy'
 import type { BotAccessRequests } from './use-bot-access-requests'
 import type { RouteBot } from './use-route-bot'
+import { readConnectionStatusProbe } from '../transport/connection/runtime-status-probe'
 import { useBackClaim } from '../navigation/use-back-claim'
 import { ListRow } from '../components/list/ListGroup'
 import { optionStyles } from './mobile-bot-option-styles'
-import { MobileAccessFixConfirm, MobileBotWhoCanAsk } from './MobileBotWhoCanAsk'
+import {
+  MobileAccessFixConfirm,
+  MobileBotMemberRow,
+  MobileBotWhoCanAsk
+} from './MobileBotWhoCanAsk'
+import { isHostNotConnectedError } from '../query/host-query-errors'
 
 // What the host lets a phone change.
 type PhoneUpdates = Pick<
   BotUpdateParams['updates'],
   'paused' | 'permissionMode' | 'notifications' | 'removeMember' | 'lookAround' | 'tidyUp'
 >
-
-function MemberRow(props: { member: BotMember; disabled: boolean; onRemove: () => void }) {
-  const t = useMobileTranslation()
-  return (
-    <ListRow
-      title={props.member.name}
-      subtitle={memberSourceLabel(props.member)}
-      accessory={
-        <MobileBotTextButton
-          label={t('bots.settings.remove', 'Remove')}
-          accessibilityLabel={t('bots.settings.removeName', 'Remove {{name}}', {
-            name: props.member.name
-          })}
-          disabled={props.disabled}
-          onPress={props.onRemove}
-        />
-      }
-    />
-  )
-}
 
 function AccessRequestRow(props: {
   request: ConnectorAccessRequest
@@ -109,10 +99,17 @@ export function MobileBotSettingsTab(props: {
   lookAround: { onLookNow: () => void; busy: boolean } | null
   /** Settings as a page of its own, headed with a back to where it opened from; absent as a tab. */
   onBack?: { label: string; onPress: () => void }
+  /** The host answers: off, every setting is read-only. */
+  online: boolean
+  hostName: string
 }) {
   const t = useMobileTranslation()
   const { bot, applyBot } = props.routeBot
+  const status = props.client ? readConnectionStatusProbe(props.client) : undefined
+  const accessBot = { ...bot, accessHost: phoneAccessHost(status) }
   const [saving, setSaving] = useState(false)
+  const locked = saving || !props.online
+  const offlineBanner = <MobileBotSettingsOffline hostName={props.hostName} client={props.client} />
   const [removing, setRemoving] = useState<BotMember | null>(null)
   const [granting, setGranting] = useState<ConnectorAccessRequest | null>(null)
   const [fixing, setFixing] = useState<'only-me' | 'ask-for-approval' | null>(null)
@@ -136,12 +133,20 @@ export function MobileBotSettingsTab(props: {
     setSaving(true)
     try {
       const reply = botUpdate.interpret(
-        await botUpdate.request(props.client, { botId: bot.id, updates })
+        await botUpdate.request(
+          props.client,
+          { botId: bot.id, updates },
+          { failWhenDisconnected: true }
+        )
       )
       applyBot(reply.bot)
     } catch (error) {
       props.showToast(
-        error instanceof Error ? error.message : t('bots.saveFailed', 'Couldn’t save'),
+        isHostNotConnectedError(error)
+          ? t('bots.items.write.offline', '{{host}} is offline.', { host: props.hostName })
+          : error instanceof Error
+            ? error.message
+            : t('bots.saveFailed', 'Couldn’t save'),
         1800
       )
     } finally {
@@ -213,6 +218,8 @@ export function MobileBotSettingsTab(props: {
         bot={bot}
         view={tidyUp.view}
         busy={tidyUp.busy}
+        disabled={!props.online}
+        banner={offlineBanner}
         save={saveTidyUp}
         onUndo={tidyUp.undo}
         onBack={() => setTidyPage(null)}
@@ -226,13 +233,15 @@ export function MobileBotSettingsTab(props: {
         bot={bot}
         save={saveLookAround}
         onBack={() => setLookPage(null)}
+        disabled={!props.online}
+        banner={offlineBanner}
       />
     )
   }
 
   // Any paired phone may grant (D3), so it always asks first, as the desktop does.
   if (granting && access) {
-    const copy = accessGrantConfirmCopy(granting, bot)
+    const copy = accessGrantConfirmCopy(granting, accessBot)
     return (
       <ConfirmContent
         title={copy.title}
@@ -251,10 +260,7 @@ export function MobileBotSettingsTab(props: {
     {
       id: 'inherit',
       label: inherit,
-      description: t(
-        'bots.settings.sameAsChatsDetail',
-        'Starts like any new chat, from your chat permission setting.'
-      )
+      description: t('bots.settings.sameAsChatsDetail', 'Uses your chat permission setting.')
     },
     ...modes.map((mode) => ({ id: mode, ...agentChatPermissionModeCopy(bot.agent, mode) }))
   ]
@@ -268,15 +274,11 @@ export function MobileBotSettingsTab(props: {
             onPress: () => setPermissionsOpen(false)
           }}
         />
-        <Text style={[optionStyles.optionRowDetail, optionStyles.optionPageTitle]}>
-          {t(
-            'bots.settings.permissionsDetail',
-            'The starting permission for new sessions. Anything beyond it asks in the session.'
-          )}
-        </Text>
+        {offlineBanner}
         <ChoiceRows
           choices={permissionChoices}
           selected={bot.permissionMode ?? 'inherit'}
+          disabled={!props.online}
           onSelect={(mode) => {
             if (mode === 'inherit' || modes.some((value) => value === mode)) {
               void save({
@@ -286,6 +288,12 @@ export function MobileBotSettingsTab(props: {
             }
           }}
         />
+        <SettingsNote>
+          {t(
+            'bots.settings.permissionsDetail',
+            'The starting permission for new sessions. Anything beyond it asks in the session.'
+          )}
+        </SettingsNote>
       </>
     )
   }
@@ -296,12 +304,13 @@ export function MobileBotSettingsTab(props: {
       {props.onBack ? (
         <SheetHeader title={t('bots.sheet.settings', 'Settings')} onBack={props.onBack} />
       ) : null}
+      {offlineBanner}
       <Section title={t('bots.settings.general', 'General')}>
         <SwitchRow
           label={t('bots.settings.active', 'Active')}
           detail={t('bots.settings.activeDetail', 'Answers messages and runs automations.')}
           value={!bot.paused}
-          disabled={saving}
+          disabled={locked}
           onChange={(active) => void save({ paused: !active })}
         />
         <DrillRow
@@ -311,7 +320,7 @@ export function MobileBotSettingsTab(props: {
               ? agentChatPermissionModeCopy(bot.agent, bot.permissionMode).label
               : inherit
           }
-          disabled={saving}
+          disabled={locked}
           onPress={() => setPermissionsOpen(true)}
         />
       </Section>
@@ -319,7 +328,7 @@ export function MobileBotSettingsTab(props: {
         <MobileLookAroundSection
           bot={bot}
           upNext={props.routeBot.activity?.upNext}
-          disabled={saving || props.lookAround.busy}
+          disabled={locked || props.lookAround.busy}
           save={saveLookAround}
           onOpen={setLookPage}
           onLookNow={props.lookAround.onLookNow}
@@ -329,7 +338,7 @@ export function MobileBotSettingsTab(props: {
         <MobileTidyUpSection
           bot={bot}
           view={tidyUp.view}
-          disabled={saving || tidyUp.busy}
+          disabled={locked || tidyUp.busy}
           save={saveTidyUp}
           onOpen={setTidyPage}
           onTidyNow={tidyUp.tidyNow}
@@ -341,7 +350,7 @@ export function MobileBotSettingsTab(props: {
             <AccessRequestRow
               key={request.requestId}
               request={request}
-              disabled={access.deciding}
+              disabled={access.deciding || !props.online}
               onDecline={() => void access.decide(request, 'declined')}
               onReview={() => setGranting(request)}
             />
@@ -349,16 +358,16 @@ export function MobileBotSettingsTab(props: {
         </Section>
       ) : null}
       <MobileBotWhoCanAsk
-        bot={bot}
-        disabled={saving}
+        bot={accessBot}
+        disabled={locked}
         onKeepOnlyMe={() => setFixing('only-me')}
         onAskForApproval={() => setFixing('ask-for-approval')}
       >
         {bot.members.map((member) => (
-          <MemberRow
+          <MobileBotMemberRow
             key={`${botMemberSource(member)}:${member.workspaceId ?? ''}:${member.id}`}
             member={member}
-            disabled={saving}
+            disabled={locked}
             onRemove={() => setRemoving(member)}
           />
         ))}
@@ -369,28 +378,24 @@ export function MobileBotSettingsTab(props: {
           label={t('bots.settings.needsPermission', 'Needs permission')}
           detail={t(
             'bots.settings.needsPermissionDetail',
-            'When the bot or a worker needs your approval.',
-            { name: bot.name }
+            'When it or a worker needs your approval.'
           )}
           value={bot.notifications.needsPermission}
-          disabled={saving}
+          disabled={locked}
           onChange={notify('needsPermission')}
         />
         <SwitchRow
           label={t('bots.settings.taskComplete', 'Task complete')}
-          detail={t(
-            'bots.settings.taskCompleteDetail',
-            'When a thread, automation or worker finishes.'
-          )}
+          detail={t('bots.settings.taskCompleteDetail', 'A thread, automation or worker finishes.')}
           value={bot.notifications.taskComplete}
-          disabled={saving}
+          disabled={locked}
           onChange={notify('taskComplete')}
         />
         <SwitchRow
           label={t('bots.settings.couldNotFinish', 'Couldn’t finish')}
           detail={t('bots.settings.couldNotFinishDetail', 'An automation run or worker fails.')}
           value={bot.notifications.couldNotFinish}
-          disabled={saving}
+          disabled={locked}
           onChange={notify('couldNotFinish')}
         />
       </Section>

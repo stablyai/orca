@@ -2,8 +2,11 @@ import type { BotGroup } from '../../../shared/bots/bot-group'
 import { botGroupRoomLabel } from './bot-group-room-label'
 import { refreshBotHostGroups } from './bot-group-list'
 import { botTarget, callBotRpc } from './bot-hosts'
+import { callBotGroupRpc } from './bot-group-rpc'
 import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
 import { useAppStore } from '@/store'
+import { translate } from '@/i18n/i18n'
+import { selectExecutionHostDisplayLabel } from '@/runtime/hosts/display/execution-host-display-label'
 import { folderWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/workspace-layout/layout-owner-switch'
 import { openContentTabThroughLayoutOwner } from '@/runtime/workspace-layout/intents/layout-owner-content-tab-open'
@@ -36,7 +39,7 @@ export function openBotGroup(group: BotGroup): Promise<void> {
 
 /** A new thread in the group, opened in its own room tab beside the others. */
 export async function startBotGroupThread(group: BotGroup): Promise<void> {
-  const { group: saved, threadId } = await callBotRpc<{ group: BotGroup; threadId: string }>(
+  const { group: saved, threadId } = await callBotGroupRpc<{ group: BotGroup; threadId: string }>(
     group,
     'bots.groups.newThread',
     { groupId: group.id }
@@ -60,7 +63,16 @@ export async function openBotGroupRoom(
     revealInSidebar: false
   })
   if (opened === false) {
-    throw new Error('The group’s home workspace is unavailable.')
+    throw new Error(
+      translate(
+        'bots.groups.homeUnavailable',
+        'The home workspace for “{{name}}” on {{host}} is unavailable.',
+        {
+          name: group.name,
+          host: selectExecutionHostDisplayLabel(useAppStore.getState(), group.hostId)
+        }
+      )
+    )
   }
   const workspace = folderWorkspaceKey(group.folderWorkspaceId)
   const state = useAppStore.getState()

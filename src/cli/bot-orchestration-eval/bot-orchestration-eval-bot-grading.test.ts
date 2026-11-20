@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { EvalTurnOutcome } from './bot-orchestration-eval-conversation'
-import { noDeadEnd, restatesNot, saysNowhere, sendsTo } from './bot-orchestration-eval-bot-grading'
+import { noDeadEnd, saysNowhere, sendsTo } from './bot-orchestration-eval-bot-grading'
 
 const turn = (patch: Partial<EvalTurnOutcome> = {}): EvalTurnOutcome => ({
   reply: "I can't do docs work.",
@@ -74,9 +74,5 @@ describe('mention checks', () => {
     expect(sendsTo('Docs', 'handoff')(turn({ writes: [send('handoff', false)] }))).toEqual([
       'never sent the mention to Docs'
     ])
-  })
-  it('fails a reply that repeats the answer', () => {
-    expect(restatesNot(/three steps/)(turn({ reply: 'Docs added three steps.' }))).not.toEqual([])
-    expect(restatesNot(/three steps/)(turn({ reply: 'Docs finished it.' }))).toEqual([])
   })
 })

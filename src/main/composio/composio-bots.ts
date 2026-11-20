@@ -6,17 +6,16 @@ import {
   type ComposioAppPage,
   type ComposioConnection,
   type ComposioConnections,
-  type ComposioKey,
-  type ComposioKeyState,
   type ComposioStatus
 } from '../../shared/composio/composio-apps'
-import type { BotToolsCli } from '../bots/bot-tools-host'
+import type { BotToolsHome } from '../bots/bot-tools-host'
 import { removeBotTool } from '../bots/bot-tools-removal'
 import { readBotToolServers } from '../bots/bot-tools-file'
 import { ComposioApi } from './composio-api'
 import { ComposioCleanup, composioCleanupFile, composioProjectOf } from './composio-cleanup'
 import { ComposioConnectWaits, type ComposioConnectCard } from './composio-connect-waits'
-import { ComposioKeyHealth } from './composio-key-health'
+import { ComposioKeyAccess, type ComposioKeyStore } from './composio-key-access'
+export type { ComposioKeyStore } from './composio-key-access'
 import { composioServerOf, ensureComposioTool, sessionIdOf } from './composio-bot-tool'
 import { ComposioAppNames } from './composio-app-names'
 import {
@@ -27,16 +26,10 @@ import {
 
 export { composioServerOf, sessionIdOf } from './composio-bot-tool'
 
-export type ComposioKeyStore = {
-  read: () => string | null
-  save: (key: string) => void
-  clear: () => void
-}
-
 export type ComposioBotsDeps = {
   keys: ComposioKeyStore
   /** The agent CLI the bot's tools are kept for; throws for a bot without tools. */
-  cliOf: (botId: string) => Promise<BotToolsCli>
+  cliOf: (botId: string) => Promise<BotToolsHome>
   /** This host's bots that can have tools. */
   botIds: () => readonly string[]
   /** Something a client shows changed: the key, a bot's tool or a sign-in. */
@@ -60,17 +53,15 @@ export type ComposioBotsDeps = {
   now?: () => number
 }
 
-export class ComposioBots {
-  private readonly health = new ComposioKeyHealth(() => this.deps.onChange())
+export class ComposioBots extends ComposioKeyAccess {
   private readonly cleanup: ComposioCleanup
   private readonly waits: ComposioConnectWaits
   private readonly names = new ComposioAppNames()
   private readonly ensuring = new Map<string, Promise<string>>()
-  private readonly api: (key: string) => ComposioApi
   private readonly now: () => number
 
   constructor(private readonly deps: ComposioBotsDeps) {
-    this.api = deps.api ?? ((key) => new ComposioApi(key))
+    super(deps.keys, deps.api ?? ((key) => new ComposioApi(key)), () => deps.onChange())
     this.cleanup = deps.cleanup ?? new ComposioCleanup(composioCleanupFile())
     this.now = deps.now ?? Date.now
     this.waits = new ComposioConnectWaits({
@@ -87,30 +78,10 @@ export class ComposioBots {
     })
   }
 
-  /** The saved key's project, by its fingerprint; null without a key. */
-  project(): string | null {
-    const key = this.deps.keys.read()
-    return key ? composioProjectOf(key) : null
-  }
-
-  keyState(): ComposioKeyState {
-    let key: string | null
-    try {
-      key = this.deps.keys.read()
-    } catch {
-      return 'unreadable'
-    }
-    return key === null ? 'none' : this.health.rejected ? 'rejected' : 'ok'
-  }
-
-  key(): ComposioKey {
-    return { key: this.keyState(), hint: this.deps.keys.read()?.slice(-4) ?? null }
-  }
-
   async status(botId: string): Promise<ComposioStatus> {
     const cli = await this.deps.cliOf(botId)
     return {
-      key: this.keyState(),
+      key: await this.keyState(),
       limit: this.health.limit,
       added: composioServerOf(await readBotToolServers(cli.folder)) !== undefined
     }
@@ -125,10 +96,10 @@ export class ComposioBots {
     }
     const api = this.api(trimmed)
     await api.apps({ limit: 1 })
-    const previous = this.project()
+    const previous = await this.project()
     // A regenerated key reaches the old key's sessions: the same project, so its records carry over.
     const continued = previous !== null && (await this.reachesBotSession(api))
-    this.deps.keys.save(trimmed)
+    await this.deps.keys.save(trimmed)
     this.health.reset()
     if (previous && continued) {
       this.cleanup.relabel(previous, composioProjectOf(trimmed))
@@ -149,7 +120,7 @@ export class ComposioBots {
         `Orca couldn’t take the Composio tool off ${names}, so the key is kept. Try again.`
       )
     }
-    this.deps.keys.clear()
+    await this.deps.keys.clear()
     this.health.reset()
     this.deps.onChange()
   }
@@ -286,7 +257,7 @@ export class ComposioBots {
   /** Before a delete: lists the bot for cleanup in the saved key's project, so a crash
    *  mid-delete still cleans it up. Nothing is removed while the bot is still here. */
   async willDelete(botId: string): Promise<void> {
-    const key = this.deps.keys.read()
+    const key = await this.deps.keys.read()
     this.cleanup.add({ botId, project: key ? composioProjectOf(key) : null })
   }
 
@@ -299,11 +270,11 @@ export class ComposioBots {
 
   /** Cleans up deleted bots still listed; at startup, after a key is saved, and on each sweep. */
   async drainCleanup(): Promise<void> {
-    const key = this.deps.keys.read()
-    if (key && this.keyState() === 'ok' && this.cleanup.pending().length > 0) {
+    const key = await this.deps.keys.read()
+    if (key && (await this.keyState()) === 'ok' && this.cleanup.pending().length > 0) {
       const live = this.deps.botExists ?? ((botId) => this.deps.botIds().includes(botId))
-      await this.withKey((api) => this.cleanup.drain(api, key, live)).catch((error: unknown) =>
-        console.warn('[composio] cleaning up deleted bots failed', error)
+      await this.withKey((api, credential) => this.cleanup.drain(api, credential.key, live)).catch(
+        (error: unknown) => console.warn('[composio] cleaning up deleted bots failed', error)
       )
     }
   }
@@ -313,42 +284,5 @@ export class ComposioBots {
     await this.withKey((api) => api.disconnectOthers(composioUserOfBot(botId), kept)).catch(
       (error: unknown) => console.warn('[composio] dropping an old sign-in failed', error)
     )
-  }
-
-  private requireKey(): string {
-    const key = this.deps.keys.read()
-    if (!key) {
-      throw new Error('Add your Composio key first.')
-    }
-    return key
-  }
-
-  /** Runs a call with the saved key, noting when Composio refuses it so every client can say so.
-   *  While a limit holds only a deliberate call goes out. */
-  async withKey<T>(
-    call: (api: ComposioApi) => Promise<T>,
-    options: { deliberate?: boolean } = {}
-  ): Promise<T> {
-    const key = this.requireKey()
-    const api = this.api(key)
-    const held = options.deliberate ? null : this.health.holding()
-    if (held) {
-      throw held
-    }
-    const ticket = this.health.ticket()
-    // A replaced key's late answer is its caller's alone; it says nothing about the saved key.
-    const current = () => this.deps.keys.read() === key
-    try {
-      const result = await call(api)
-      if (current()) {
-        this.health.answered(ticket)
-      }
-      return result
-    } catch (error) {
-      if (current()) {
-        this.health.failed(error)
-      }
-      throw error
-    }
   }
 }

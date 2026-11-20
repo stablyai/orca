@@ -33,6 +33,8 @@ export const FLAG_HELP_TEXT: Record<string, string> = {
   force:
     '--force                Force worktree removal when supported; does not force branch deletion',
   focus: '--focus                Reveal the created terminal session in Orca',
+  headless:
+    '--headless             On a server or SSH host, open the tab in its own headless browser',
   for: '--for exit|tui-idle    Wait condition to satisfy',
   'from-element-index': '--from-element-index <n> Source element index from get-app-state',
   'from-x': '--from-x <x>           Source window-local x coordinate',

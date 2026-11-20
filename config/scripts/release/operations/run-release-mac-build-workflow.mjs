@@ -5,6 +5,8 @@ const DEFAULT_API_VERSION = '2026-03-10'
 const DEFAULT_TIMEOUT_MINUTES = 90
 const DEFAULT_POLL_SECONDS = 30
 const RUN_DISCOVERY_TIMEOUT_SECONDS = 120
+const DISPATCHED_RUN_READ_ATTEMPTS = 12
+const DISPATCHED_RUN_READ_RETRY_MS = 5_000
 
 export function readReleaseMacBuildWorkflowOptions(env = process.env) {
   return {
@@ -82,18 +84,26 @@ export function assertReleaseMacBuildRunIdentity(run, options, expected) {
 async function readDispatchedReleaseMacBuildRun(api, options, runId, deps) {
   const sleep = deps.sleep ?? sleepMilliseconds
   for (let attempt = 0; ; attempt += 1) {
-    const run = await api.request('GET', `/repos/${api.owner}/${api.repo}/actions/runs/${runId}`)
     try {
+      const run = await api.request('GET', `/repos/${api.owner}/${api.repo}/actions/runs/${runId}`)
       return assertReleaseMacBuildRunIdentity(run, options, { id: runId })
     } catch (error) {
-      if (attempt >= 6) {
+      if (attempt >= DISPATCHED_RUN_READ_ATTEMPTS || !isSettlingDispatchedRunError(error, runId)) {
         throw error
       }
-      // GitHub can return incomplete metadata immediately after dispatch.
+      // GitHub can 404 or return incomplete metadata for a run dispatched seconds ago.
       console.log(`Waiting for dispatched mac release build ${runId} metadata to settle.`)
-      await sleep(5_000)
+      await sleep(DISPATCHED_RUN_READ_RETRY_MS)
     }
   }
+}
+
+function isSettlingDispatchedRunError(error, runId) {
+  const message = String(error?.message ?? '')
+  return (
+    message.includes('does not match the dispatched workflow') ||
+    message.includes(`/actions/runs/${runId} failed with 404`)
+  )
 }
 
 export async function finishReleaseMacBuildWorkflow(options, workflowRunId, deps = {}) {

@@ -155,7 +155,7 @@ async function runIssueSearch(
   signal?: AbortSignal,
   strict = false
 ): Promise<JiraIssue[]> {
-  const entries = getClients(siteId)
+  const entries = await getClients(siteId)
   requireStrictJiraSite(entries, siteId, strict)
   if (entries.length === 0 || ('jql' in query && !query.jql)) {
     return []
@@ -179,7 +179,7 @@ async function runIssueSearch(
           }
           const authFailure = isAuthError(error)
           if (authFailure) {
-            clearToken(entry.site.id)
+            await clearToken(entry.site.id)
           }
           if (surfaceSiteFailure) {
             throw toIssueSearchFailureError(error)

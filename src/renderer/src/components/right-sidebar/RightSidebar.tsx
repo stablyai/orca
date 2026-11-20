@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { PanelRight } from 'lucide-react'
+import { SidebarToggleIcon } from '@/components/icons/SidebarToggleIcon'
 import { useAppStore } from '@/store/index'
 import { cn } from '@/lib/class-names'
 import { useSidebarResize } from '@/hooks/useSidebarResize'
@@ -199,7 +199,7 @@ function RightSidebarInner(): React.JSX.Element {
           onClick={toggleRightSidebar}
           aria-label={t('auto.components.right.sidebar.index.e8e2e4ce74', 'Toggle right sidebar')}
         >
-          <PanelRight size={16} />
+          <SidebarToggleIcon side="right" size={16} />
         </button>
       </TooltipTrigger>
       <TooltipContent side="bottom" sideOffset={6}>

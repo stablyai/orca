@@ -2,6 +2,7 @@
 
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import type { BotItem } from '../../../../../shared/bots/bot-items'
 import { makeTestBotItem } from '../../../../../shared/bots/bot-item.test-fixture'
 import { BotItemRow } from './BotItemRow'
@@ -23,19 +24,23 @@ function rowText(item: BotItem): string {
       now={0}
       onSelect={() => {}}
       onAction={() => {}}
-    />
+    />,
+    { wrapper: TooltipProvider }
   )
-  return container.querySelector('button[title]')?.textContent ?? ''
+  return container.querySelector('[data-bot-item-open]')?.textContent ?? ''
 }
 
-it('keeps the bot’s question as a Needs you row’s second line', () => {
+it('keeps a Needs you row to one line, its question in the row’s description', () => {
   const asking = makeTestBotItem(6, {
     title: 'Decide: paused mail',
     status: 'needs_you',
     question: { eventId: 'e2', text: 'Hold mail while paused?' }
   })
 
-  expect(rowText(asking)).toContain('Hold mail while paused?')
+  expect(rowText(asking)).not.toContain('Hold mail while paused?')
+  const open = document.querySelector('[data-bot-item-open]')
+  const description = document.getElementById(open?.getAttribute('aria-describedby') ?? '')
+  expect(description?.textContent).toBe('Hold mail while paused?')
 })
 
 function renderMenuRow(): { trigger: HTMLElement; menuOpen: () => boolean } {
@@ -50,7 +55,8 @@ function renderMenuRow(): { trigger: HTMLElement; menuOpen: () => boolean } {
       now={0}
       onSelect={() => {}}
       onAction={() => {}}
-    />
+    />,
+    { wrapper: TooltipProvider }
   )
   // Row 0–300 × 0–28, ⋯ at its right edge, menu 4px below the ⋯ and aligned to its end.
   vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {

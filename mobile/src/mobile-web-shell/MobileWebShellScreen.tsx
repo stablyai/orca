@@ -37,7 +37,7 @@ import { usePageHostSnapshot } from './host-gates/use-page-host-snapshot'
 import { useReportedHostAreaServing } from './host-gates/host-area-serving'
 import { isHostRouteOf } from './routing/page-route-policy'
 import { isStandaloneSessionHref } from '../navigation/host-stack-navigation'
-import { hrefQuery, nativeSessionReturn, nativeStackReturn } from './routing/native-stack-return'
+import { nativeSessionReturn, nativeStackReturn } from './routing/native-stack-return'
 import { useResponsiveLayout } from '../layout/responsive-layout'
 import {
   storageReadParamsSchema,
@@ -191,10 +191,9 @@ export function MobileWebShellScreen({
     // Return to an existing screen rather than pushing a duplicate over the live one.
     const rootState = navigationContainer.getRootState()
     // A pane request goes to the session's existing entry, whose spent paneKey no longer equals the href's.
-    const paneKey = hrefQuery(href).get('paneKey')
-    const session = rootState && paneKey ? nativeSessionReturn(rootState, href) : null
-    if (session && paneKey) {
-      const { target, source, count, routeKey } = session
+    const session = rootState ? nativeSessionReturn(rootState, href) : null
+    if (session) {
+      const { target, source, count, routeKey, params } = session
       if (count > 0) {
         navigation.dispatch({ type: 'POP', payload: { count }, target, source })
       }
@@ -202,7 +201,7 @@ export function MobileWebShellScreen({
         type: 'SET_PARAMS',
         target,
         source: routeKey,
-        payload: { params: { paneKey } }
+        payload: { params }
       })
       return
     }

@@ -1,8 +1,10 @@
+import { readFileSync } from 'node:fs'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import * as esbuild from 'esbuild'
+import ts from 'typescript-api'
 import { buildMobileWebAppBundle } from './build-mobile-web-app-bundle.mjs'
 import { isDirectInvocation } from '../../tool-invocation/script-entry-detection.mjs'
 import { assertNoCarriageReturnsInSource } from './mobile-web-source-line-endings.mjs'
@@ -34,9 +36,9 @@ export const MOBILE_WEB_APP_HOST_CATALOG_MAX_BYTES = 384 * 1024
 
 // Our own fence on the page's code, well inside the phone contract (32 MiB total, 10 MiB per asset in
 // manifest-contract.ts); routes are split and the entry is capped below, so no one asset nears 10 MiB.
-// 10.25 MiB plus 216 KiB for the bot and group screens (mascots are 131 KB of it; 211 KiB measured
-// 2026-11-18), then 11 MiB so the phone parity round that reuses desktop code fits.
-export const MOBILE_WEB_APP_BUNDLE_MAX_TOTAL_BYTES = 11 * 1024 * 1024
+// 10.75 MiB: dropping duplicate package builds took the page to 10,815,616 bytes (2026-11-19). The fence
+// drops with it so those 198 KiB stay saved; the 446 KiB left is about what the phone parity round had.
+export const MOBILE_WEB_APP_BUNDLE_MAX_TOTAL_BYTES = 10.75 * 1024 * 1024
 
 // Only these licensed terminal fonts have their own allowance; other fonts (KaTeX's) and code count.
 // The page fetches each only when the terminal draws with it, so none weighs on first open.
@@ -129,6 +131,133 @@ function fail(message) {
   throw new VerificationError(message)
 }
 
+const REGEX_LOOKBEHIND = /\(\?<[=!]/
+// marked builds its lookbehind only after this probe compiles inside a try.
+const MARKED_LOOKBEHIND_PROBE = '(?<=1)(?<!1)'
+const MARKED_PROBE_GATED_LOOKBEHIND = '(?<!`)()'
+
+// Escapes and character classes hold `(?<=` as plain characters.
+function hasLookbehindGroup(pattern) {
+  let inClass = false
+  for (let index = 0; index < pattern.length; index++) {
+    const char = pattern[index]
+    if (char === '\\') {
+      index++
+    } else if (char === '[' || char === ']') {
+      inClass = char === '['
+    } else if (
+      !inClass &&
+      (pattern.startsWith('(?<=', index) || pattern.startsWith('(?<!', index))
+    ) {
+      return true
+    }
+  }
+  return false
+}
+
+function isGuardedMarkedProbe(node) {
+  const construct = node.parent
+  if (
+    node.text !== MARKED_LOOKBEHIND_PROBE ||
+    !ts.isNewExpression(construct) ||
+    construct.arguments?.[0] !== node ||
+    !ts.isIdentifier(construct.expression) ||
+    construct.expression.text !== 'RegExp'
+  ) {
+    return false
+  }
+  for (
+    let inner = construct;
+    inner.parent !== undefined && !ts.isFunctionLike(inner.parent);
+    inner = inner.parent
+  ) {
+    if (ts.isTryStatement(inner.parent) && inner.parent.tryBlock === inner) {
+      return inner.parent.catchClause !== undefined
+    }
+  }
+  return false
+}
+
+// A bundler that lazily initializes marked assigns the probe's result instead of declaring it.
+function probeVariableName(node) {
+  for (let ancestor = node.parent; ancestor !== undefined; ancestor = ancestor.parent) {
+    if (ts.isVariableDeclaration(ancestor)) {
+      return ts.isIdentifier(ancestor.name) ? ancestor.name.text : undefined
+    }
+    if (
+      ts.isBinaryExpression(ancestor) &&
+      ancestor.operatorToken.kind === ts.SyntaxKind.EqualsToken
+    ) {
+      return ts.isIdentifier(ancestor.left) ? ancestor.left.text : undefined
+    }
+  }
+  return undefined
+}
+
+function isGatedByMarkedProbe(node, probeNames) {
+  const conditional = node.parent
+  return (
+    node.text === MARKED_PROBE_GATED_LOOKBEHIND &&
+    ts.isConditionalExpression(conditional) &&
+    conditional.whenTrue === node &&
+    ts.isIdentifier(conditional.condition) &&
+    probeNames.has(conditional.condition.text)
+  )
+}
+
+// WebKit before Safari 16.4 (iOS 16.0-16.3) has no regex lookbehind: a literal stops its chunk from
+// loading, and one in a string throws once a RegExp is built from it, so every string counts.
+export function findRegexLookbehinds(source, assetPath) {
+  const sourceFile = ts.createSourceFile(
+    assetPath,
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.JS
+  )
+  const [diagnostic] = sourceFile.parseDiagnostics
+  if (diagnostic !== undefined) {
+    fail(
+      `${assetPath} could not be parsed to look for regex lookbehind: ${ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n')}`
+    )
+  }
+  const found = []
+  const visit = (node) => {
+    if (ts.isRegularExpressionLiteral(node)) {
+      const pattern = node.text.slice(1, node.text.lastIndexOf('/'))
+      if (hasLookbehindGroup(pattern)) {
+        found.push({ node, text: pattern })
+      }
+    } else if (
+      (ts.isStringLiteralLike(node) || ts.isTemplateLiteralToken(node)) &&
+      REGEX_LOOKBEHIND.test(node.text)
+    ) {
+      found.push({ node, text: node.text })
+    }
+    ts.forEachChild(node, visit)
+  }
+  visit(sourceFile)
+  const probes = new Set(found.map(({ node }) => node).filter(isGuardedMarkedProbe))
+  const probeNames = new Set([...probes].map(probeVariableName))
+  return found
+    .filter(({ node }) => !probes.has(node) && !isGatedByMarkedProbe(node, probeNames))
+    .map(({ text }) => text)
+}
+
+function assertNoRegexLookbehind(bundleDir, manifest) {
+  for (const asset of manifest.assets.filter(({ path }) => path.endsWith('.js'))) {
+    const [lookbehind] = findRegexLookbehinds(
+      readFileSync(join(bundleDir, asset.path), 'utf8'),
+      asset.path
+    )
+    if (lookbehind !== undefined) {
+      fail(
+        `${asset.path} carries the regex lookbehind ${JSON.stringify(lookbehind)}, which iOS before 16.4 cannot run`
+      )
+    }
+  }
+}
+
 // Load phone’s manifest asset ceiling from contract through esbuild, which resolves extensionless TS imports; never copy native shell count.
 export async function readMobileWebBundleMaxAssets() {
   const { outputFiles } = await esbuild.build({
@@ -182,6 +311,7 @@ export async function verifyMobileWebAppBundle({ bundleDir = defaultBundleDir } 
   }
 
   const manifest = assertMobileWebBundleBuilt(bundleDir)
+  assertNoRegexLookbehind(bundleDir, manifest)
 
   const first = await buildIntoScratch()
   const second = await buildIntoScratch()

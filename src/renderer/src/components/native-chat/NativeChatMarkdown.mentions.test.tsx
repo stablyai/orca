@@ -2,12 +2,14 @@
 import { cleanup, render } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import { NativeChatMarkdown } from './markdown/NativeChatMarkdown'
+import { NativeChatLinkPeekContext } from './links/previews/native-chat-link-peek-context'
+import { TEST_REPO } from '@/store/repos/repo.test-fixture'
 import { slackMarkupShownText } from '../../../../shared/connectors/slack-message-markup'
 import {
   NativeChatBotChatTitleContext,
   NativeChatMentionEveryoneContext,
   NativeChatMentionNamesContext,
-  withBoundBotMentions
+  NativeChatSlackPeopleContext
 } from './native-chat-markdown-mentions'
 
 afterEach(cleanup)
@@ -53,18 +55,13 @@ describe('room mention chips', () => {
     expect(chips(container)).toEqual(['@Docs'])
   })
 
-  it('shows a bot picked in a workspace chat as its chip, not a link', () => {
+  it('chips a picked bot in a chat without bots', () => {
     const { container } = renderWithNames(
-      'Ask [Bot: QA \\[nightly\\]\\](bot:x)](bot:qa-id) to check',
-      ['Scout']
+      'Ask [Bot: QA \\[nightly\\]\\](bot:x)](bot:qa-id) to check, @everyone',
+      null
     )
     expect(chips(container)).toEqual(['@QA [nightly]](bot:x)'])
     expect(container.querySelector('a')).toBeNull()
-  })
-
-  it("still chips a picked bot's old token in a chat that has no bots", () => {
-    const { container } = renderWithNames('Ask [Bot: Perf bot](bot:perf-id) and @everyone', null)
-    expect(chips(container)).toEqual(['@Perf bot'])
   })
 
   it("chips a picked chat as bot and chat, its title looked up by id, else the chat's id", () => {
@@ -78,12 +75,6 @@ describe('room mention chips', () => {
     )
     expect(chips(container)).toEqual(['@Perf bot › perf-id:7f3c9a21-4b1e'])
     expect(container.querySelector('a')).toBeNull()
-  })
-
-  it('adds no mention pass to text without names or a picked bot', () => {
-    expect(withBoundBotMentions(null, 'plain [docs](https://x.dev) text')).toBeNull()
-    expect(withBoundBotMentions([], 'plain text')).toBeNull()
-    expect(withBoundBotMentions(null, '[Bot: Perf bot](bot:perf-id)')).toEqual([])
   })
 })
 
@@ -106,5 +97,51 @@ describe("a Slack message's mentions", () => {
     expect(container.textContent).toContain('mail ann@Ann.dev')
     expect(container.querySelector('code')?.textContent).toBe('@Ann (PM) *x*')
     expect(container.querySelector('em')).toBeNull()
+  })
+})
+
+describe("Slack mention tokens in an agent's reply", () => {
+  it('shows leading and inline Slack mentions as names while preserving code and math', () => {
+    const { container } = render(
+      <NativeChatSlackPeopleContext value={new Map([['U05BRPQSABY', 'Jinjing']])}>
+        <NativeChatMarkdown
+          content={[
+            '<!here> run `pnpm test` before merging',
+            'Hi <@U05BRPQSABY> The limit, see `<@U05BRPQSABY>` and $<@U2>$; ask <@U2>'
+          ].join('\n\n')}
+          variant="document"
+        />
+      </NativeChatSlackPeopleContext>
+    )
+    expect(chips(container)).toEqual(['@here', '@Jinjing'])
+    expect([...container.querySelectorAll('code')].map((code) => code.textContent)).toEqual([
+      'pnpm test',
+      '<@U05BRPQSABY>'
+    ])
+    expect(container.textContent).toContain('before merging')
+    expect(container.textContent).toContain('ask @user')
+    expect(container.textContent).toContain('<@U2>')
+  })
+
+  it('keeps them as names in a chat whose repo links #123', () => {
+    const { container } = render(
+      <NativeChatLinkPeekContext
+        value={{
+          githubRepo: {
+            repo: TEST_REPO,
+            identityKeys: [],
+            referenceRepo: { owner: 'o', repo: 'r' }
+          },
+          githubRoutingAuthorityKey: null,
+          webPreviews: null
+        }}
+      >
+        <NativeChatSlackPeopleContext value={new Map([['U1', 'Ann']])}>
+          <NativeChatMarkdown content="<@U1> see <#C1|123> and #7" variant="document" />
+        </NativeChatSlackPeopleContext>
+      </NativeChatLinkPeekContext>
+    )
+    expect(chips(container)).toEqual(['@Ann', '#123'])
+    expect([...container.querySelectorAll('a')].map((a) => a.textContent)).toEqual(['#7'])
   })
 })

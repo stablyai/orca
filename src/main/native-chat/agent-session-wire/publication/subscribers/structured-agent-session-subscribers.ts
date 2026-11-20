@@ -21,7 +21,7 @@ import {
   type SubscriberDeliveryPort
 } from './agent-session-subscriber-catch-up'
 import type { SqlAgentSessionJournal as AgentSessionJournal } from '../../../agent-session-journal/journal-sql-store'
-import { publishSubscriberLiveText } from './agent-session-live-publications'
+import { publishSubscriberLiveText, subscriberAtHead } from './agent-session-live-publications'
 import { emptyAgentSessionBatch } from './agent-session-empty-batch'
 import { rememberLatestPerSession } from './structured-agent-session-activity-retention'
 import { resumeSubscriber } from './agent-session-stop-note-refresh'
@@ -64,8 +64,8 @@ export class AgentSessionSubscribers {
   }
 
   /** What waits behind each subscriber's active delivery, for memory diagnostics. */
-  retention(measured: Map<object, number>): SubscriberDeliveryRetention[] {
-    return this.lanes.retention(this.bySession, this.now(), measured)
+  retention(counted: Set<object>): SubscriberDeliveryRetention[] {
+    return this.lanes.retention(this.bySession, this.now(), counted)
   }
 
   subscriberCount(sessionId: string): number {
@@ -110,7 +110,7 @@ export class AgentSessionSubscribers {
         sessionId: input.sessionId,
         journal,
         fence: input.fence,
-        items: this.hooks.readLiveText?.(input.sessionId) ?? [],
+        items: this.sentLiveText(subscriber, input.sessionId, journal),
         subscribers: [subscriber],
         hostNow
       })
@@ -154,8 +154,11 @@ export class AgentSessionSubscribers {
     targets = this.subscribers(sessionId)
   ): void => {
     const hostNow = this.now()
-    for (const subscriber of targets.filter(this.isActive)) {
-      this.lanes.of(subscriber).liveText({ journal, fence, items, hostNow })
+    for (const subscriber of targets) {
+      // Checked per subscriber, in case ending one ends another mid fan-out.
+      if (this.isActive(subscriber)) {
+        this.lanes.of(subscriber).liveText({ journal, fence, items, hostNow })
+      }
     }
   }
 
@@ -201,7 +204,7 @@ export class AgentSessionSubscribers {
           sessionId,
           journal,
           fence,
-          items: this.hooks.readLiveText?.(sessionId) ?? [],
+          items: this.sentLiveText(subscriber, sessionId, journal),
           subscribers: [subscriber],
           hostNow
         })
@@ -242,6 +245,16 @@ export class AgentSessionSubscribers {
     sourceIds?: readonly string[]
   ): void {
     this.forkMarkers.refreshSources(readJournal, sourceIds)
+  }
+
+  /** Live text an opening or snapshot sends itself counts against its subscriber's cap. */
+  private sentLiveText(subscriber: Subscriber, sessionId: string, journal: AgentSessionJournal) {
+    const items = this.hooks.readLiveText?.(sessionId) ?? []
+    // Sending nothing leaves any waiting live text for after the subscriber catches up.
+    if (items.length === 0 || !subscriberAtHead(subscriber, journal)) {
+      return []
+    }
+    return this.lanes.of(subscriber).sendsLiveText(items) ? items : []
   }
 
   private subscribers = (sessionId: string): Subscriber[] => [

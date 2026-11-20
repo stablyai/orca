@@ -20,8 +20,8 @@ export type NativeChatRowContentMetrics = {
   userFolds: boolean
   imageCount: number
   toolCount: number
-  /** One status row per subagent. */
-  subagentCount: number
+  /** One closed summary row per subagent group; its rows exist only once opened. */
+  subagentGroupCount: number
 }
 
 export type NativeChatRowChromeMetrics = {
@@ -123,7 +123,7 @@ export function nativeChatRowContentMetrics(
     userFolds: message.role === 'user' && nativeChatUserMessageFolds(markdown),
     imageCount: content.prose.filter((block) => block.type === 'image-ref').length,
     toolCount: content.tools.length,
-    subagentCount: content.subagentGroups.reduce((count, group) => count + group.agents.length, 0)
+    subagentGroupCount: content.subagentGroups.length
   }
   metricsCache.set(message, {
     charsPerLine: typography.charsPerLine,
@@ -144,7 +144,7 @@ export function nativeChatWorkRunContentMetrics(
     userFolds: false,
     imageCount: headIsLead ? head.imageCount : 0,
     toolCount: 1,
-    subagentCount: 0
+    subagentGroupCount: 0
   }
 }
 
@@ -171,7 +171,7 @@ export function estimateNativeChatRowHeight(
     height = RECEIPT_PX * scale
     partCount = 1
   } else if (chrome.folded === true) {
-    height = content.subagentCount * STATUS_ROW_PX * scale
+    height = content.subagentGroupCount * STATUS_ROW_PX * scale
     partCount = height > 0 ? 1 : 0
   } else if (content.compactAgentMessage) {
     height = COMPACT_AGENT_MESSAGE_PX * scale
@@ -195,7 +195,7 @@ export function estimateNativeChatRowHeight(
       // A run is one collapsed header by default; its members only exist while open.
       height += TOOL_RUN_CHROME_PX * scale + 2 * typography.lineHeightPx
     }
-    height += content.subagentCount * STATUS_ROW_PX * scale
+    height += content.subagentGroupCount * STATUS_ROW_PX * scale
     partCount = height > 0 ? 1 : 0
   }
   if (chrome.hasStatus) {
