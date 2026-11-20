@@ -244,5 +244,15 @@ it("finds a turn end's sends through their indexes, never by reading every send"
   ]) {
     expect(plans).toContain(`USING INDEX ${index}`)
   }
-  expect(plans).not.toMatch(/^SCAN (journal_submission_attempts|send)\b/m)
+  // Every send is reached by a key, never by walking the chat's sends; only the unanswered ones (a
+  // handful still handing over) are found by the chat alone, through their own partial index.
+  const walks = plans
+    .split('\n')
+    .filter(
+      (step) =>
+        /^(SCAN|SEARCH) (journal_submission_attempts|send) /.test(step) &&
+        (step.startsWith('SCAN') || step.endsWith('(session_id=? AND epoch=?)')) &&
+        !step.includes('INDEX journal_submission_recovery ')
+    )
+  expect(walks).toEqual([])
 })

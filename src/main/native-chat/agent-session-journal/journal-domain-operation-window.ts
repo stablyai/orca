@@ -10,9 +10,8 @@ import type { JournalSqlScope } from './journal-sql-scope'
 import type { SqliteRow } from '../../sqlite/sqlite-statement'
 import { readOperationWindowItems } from './journal-operation-window-rows'
 import {
-  JOURNAL_SEND_ANSWERED_TURN,
-  JOURNAL_SEND_QUEUED_CARD,
-  journalSendAnsweredTurn
+  journalSendAnsweredTurn,
+  journalSendQueuedCard
 } from './database/journal-submission-placement-indexes'
 
 /** Where a reader's interest starts; the window runs from a turn ahead of the earliest to the head. */
@@ -188,8 +187,29 @@ class WindowSends {
   }
 }
 
-const SEND_IDS = `SELECT message_id FROM journal_submission_attempts
-  WHERE session_id=? AND epoch=? AND current=1`
+// Sends by each key, the keys driving the loop (CROSS JOIN keeps that order): matched the other way
+// round, SQLite walks every send of the chat and probes the keys.
+const SEND_KEYS = {
+  item: 'send.item_id',
+  provider: 'send.provider_item_id',
+  message: 'send.message_id',
+  answered: journalSendAnsweredTurn('send.payload_json'),
+  card: journalSendQueuedCard('send.payload_json')
+}
+type SendKey = keyof typeof SEND_KEYS
+
+/** Sends whose key is one of a JSON array's values. */
+const sendsByValues = (key: SendKey) => `SELECT send.message_id FROM json_each(?) value
+  CROSS JOIN journal_submission_attempts send
+  WHERE send.session_id=? AND send.epoch=? AND send.current=1 AND ${SEND_KEYS[key]}=value.value`
+
+/** Sends whose key is a visible row's id in [start, until). */
+const sendsByRows = (key: SendKey) => `SELECT send.message_id
+  FROM journal_items item INDEXED BY journal_items_visible_position
+  CROSS JOIN journal_submission_attempts send
+  WHERE item.session_id=? AND item.epoch=? AND item.hidden=0 AND item.sequence>=? AND item.sequence<?
+  AND send.session_id=item.session_id AND send.epoch=item.epoch AND send.current=1
+  AND ${SEND_KEYS[key]}=item.item_id`
 
 function messageIds(scope: JournalSqlScope, rows: SqliteRow[]): string[] {
   return rows.map((row) => String(scope.examined(row).message_id))
@@ -207,13 +227,12 @@ function seedSends(
   return messageIds(
     scope,
     scope.db
-      .prepare(`${SEND_IDS} AND item_id IN (SELECT value FROM json_each(?))
-      UNION ${SEND_IDS} AND provider_item_id IN (SELECT value FROM json_each(?))
-      UNION ${SEND_IDS} AND message_id IN (SELECT value FROM json_each(?))
-      UNION ${SEND_IDS} AND ${JOURNAL_SEND_QUEUED_CARD} IN (SELECT value FROM json_each(?))
-      UNION ${SEND_IDS} AND (dispatch_state='pending' OR (dispatch_state='unknown' AND recovered=0))`)
+      .prepare(`${sendsByValues('item')} UNION ${sendsByValues('provider')}
+      UNION ${sendsByValues('message')} UNION ${sendsByValues('card')}
+      UNION SELECT message_id FROM journal_submission_attempts INDEXED BY journal_submission_recovery
+      WHERE session_id=? AND epoch=? AND current=1
+      AND (dispatch_state='pending' OR (dispatch_state='unknown' AND recovered=0))`)
       .all(
-        ...scope.prefix,
         rows,
         ...scope.prefix,
         rows,
@@ -221,6 +240,7 @@ function seedSends(
         JSON.stringify([...(anchors.operationIds ?? []), ...consumed]),
         ...scope.prefix,
         operations,
+        ...scope.prefix,
         ...scope.prefix
       )
   )
@@ -228,23 +248,13 @@ function seedSends(
 
 /** The sends whose opener, provider row or answering turn sits in [start, until). */
 function placedSends(scope: JournalSqlScope, start: number, until: number): string[] {
-  const placed = `(SELECT item_id FROM journal_items INDEXED BY journal_items_visible_position
-    WHERE session_id=? AND epoch=? AND hidden=0 AND sequence>=? AND sequence<?)`
   const range = [...scope.prefix, start, until]
   return messageIds(
     scope,
     scope.db
-      .prepare(`${SEND_IDS} AND item_id IN ${placed}
-      UNION ${SEND_IDS} AND provider_item_id IN ${placed}
-      UNION ${SEND_IDS} AND ${JOURNAL_SEND_ANSWERED_TURN} IN ${placed}`)
-      .all(
-        ...scope.prefix,
-        ...range,
-        ...scope.prefix,
-        ...range,
-        ...scope.prefix,
-        ...range
-      )
+      .prepare(`${sendsByRows('item')} UNION ${sendsByRows('provider')}
+      UNION ${sendsByRows('answered')}`)
+      .all(...range, ...range, ...range)
   )
 }
 
@@ -256,9 +266,8 @@ function sharingSends(
   return messageIds(
     scope,
     scope.db
-      .prepare(`${SEND_IDS} AND provider_item_id IN (SELECT value FROM json_each(?))
-      UNION ${SEND_IDS} AND ${JOURNAL_SEND_QUEUED_CARD} IN (SELECT value FROM json_each(?))`)
-      .all(...scope.prefix, JSON.stringify(providers), ...scope.prefix, JSON.stringify(cards))
+      .prepare(`${sendsByValues('provider')} UNION ${sendsByValues('card')}`)
+      .all(JSON.stringify(providers), ...scope.prefix, JSON.stringify(cards), ...scope.prefix)
   )
 }
 
@@ -269,7 +278,7 @@ function sendHeads(scope: JournalSqlScope, ids: readonly string[]): Send[] {
     AND item.hidden=0)`
   return scope.db
     .prepare(`SELECT message_id,item_id,ordinal,dispatch_state,recovered,provider_item_id,submitted_sequence,
-    ${JOURNAL_SEND_QUEUED_CARD} AS queued_message_id,
+    ${journalSendQueuedCard()} AS queued_message_id,
     ${at('send.item_id')} AS opener_sequence,${at('send.provider_item_id')} AS provider_sequence,
     ${at(journalSendAnsweredTurn('send.payload_json'))} AS answered_sequence
     FROM journal_submission_attempts send WHERE session_id=? AND epoch=? AND current=1
