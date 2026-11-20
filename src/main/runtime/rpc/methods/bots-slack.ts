@@ -48,17 +48,20 @@ export function withHostCloudClient<T>(
 async function recordSlack(
   runtime: Pick<OrcaRuntimeService, 'bots'>,
   botId: string,
-  change: Parameters<typeof nextSlackApps>[1]
+  change: Parameters<typeof nextSlackApps>[1],
+  expected?: readonly BotSlackApp[]
 ): Promise<void> {
   try {
     await runtime.bots.update(botId, (bot) => {
-      if (
-        'remove' in change &&
-        !botSlackApps(bot).some(
-          (app) => change.remove === undefined || app.teamId === change.remove
+      if ('remove' in change) {
+        const apps = botSlackApps(bot)
+        const next = apps.filter(
+          (app) =>
+            (change.remove !== undefined && app.teamId !== change.remove) ||
+            (expected !== undefined &&
+              !expected.some((saved) => saved.teamId === app.teamId && saved.appId === app.appId))
         )
-      ) {
-        return null
+        return next.length === apps.length ? null : { slackApps: next }
       }
       return { slackApps: nextSlackApps(bot, change) }
     })
@@ -155,6 +158,8 @@ export const BOT_SLACK_METHODS = [
     handler: async ({ botId, teamId }, context) => {
       const cloud = context.runtime.getConnectorCloud()
       const account = cloud?.signedInAccount(true) ?? null
+      const bot = context.runtime.bots.list().find((saved) => saved.id === botId)
+      const expected = bot ? botSlackApps(bot) : []
       const removed = await withHostCloudClient(context, async (client) => {
         if (teamId !== undefined) {
           const state = await client.slackState(botId, teamId)
@@ -164,6 +169,13 @@ export const BOT_SLACK_METHODS = [
           // An older service ignores the workspace selector; never remove its other workspace.
           if (state.value.state === 'not_created' || state.value.teamId !== teamId) {
             return { ok: true as const, value: undefined }
+          }
+          const appId = 'appId' in state.value ? state.value.appId : undefined
+          if (
+            appId !== undefined &&
+            !expected.some((saved) => saved.teamId === teamId && saved.appId === appId)
+          ) {
+            return { ok: false as const, error: 'connection_changed' }
           }
         }
         return client.removeSlackApp(botId, teamId)
@@ -182,7 +194,7 @@ export const BOT_SLACK_METHODS = [
           'account_inactive'
         ].includes(removed.error)
       ) {
-        await recordSlack(context.runtime, botId, { remove: teamId })
+        await recordSlack(context.runtime, botId, { remove: teamId }, expected)
         return { ok: true as const, value: undefined }
       }
       return removed

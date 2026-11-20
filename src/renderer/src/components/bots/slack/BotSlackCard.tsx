@@ -25,6 +25,8 @@ import { BotSlackSetupDialog } from './BotSlackSetupDialog'
 import { BotSlackSection } from './BotSlackSection'
 import { signedOutConnectorFace } from '../orca-cloud-sign-in'
 import { useSlackWhoCanAsk } from './use-slack-who-can-ask'
+import { useBotHostHas } from '@/lib/bot-host-status'
+import { BOTS_SLACK_SCOPED_REMOVE_RUNTIME_CAPABILITY } from '../../../../../shared/bot-runtime-capabilities'
 
 function slackAppSettingsUrl(appId: string): string {
   return `https://api.slack.com/apps/${encodeURIComponent(appId)}`
@@ -153,8 +155,12 @@ export function BotSlackCard({
   const people = useSlackWhoCanAsk(bot, teamId)
   const team = view.status === 'ready' ? slackTeamState(view.slack, teamId) : null
   const installed = team?.state === 'installed' ? team : null
+  const safeRemove = useBotHostHas(bot.hostId, BOTS_SLACK_SCOPED_REMOVE_RUNTIME_CAPABILITY)
   // A workspace's row can also remove an app that was never installed.
-  const removeTeamId = teamId ?? installed?.teamId ?? botSlackApps(bot)[0]?.teamId
+  const legacyTeam = installed ?? (teamId !== undefined && team && 'teamId' in team ? team : null)
+  const removeTeamId = safeRemove
+    ? (teamId ?? installed?.teamId ?? botSlackApps(bot)[0]?.teamId)
+    : legacyTeam?.teamId
 
   const remove = async (): Promise<void> => {
     const confirmed = await confirm({
@@ -173,10 +179,10 @@ export function BotSlackCard({
       return
     }
     setRemoving(true)
-    const result = await botSlackCalls(bot.hostId).remove({
-      botId: bot.id,
-      teamId: removeTeamId
-    })
+    const result = await botSlackCalls(bot.hostId).remove(
+      { botId: bot.id, teamId: removeTeamId },
+      legacyTeam === null
+    )
     setRemoving(false)
     if (!result.ok) {
       toast.error(botSlackErrorMessage(result.error, hostName))

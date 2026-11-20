@@ -23,6 +23,7 @@ import type {
 import type { ConnectorConnectSource } from '../../../shared/connectors/connector-cloud-contract'
 import type { ConnectorConnectRedeem } from '../../../../cloud/packages/connector-contract/src/connect-messages'
 import { botHostTarget } from './bot-hosts'
+import { BOTS_SLACK_SCOPED_REMOVE_RUNTIME_CAPABILITY } from '../../../shared/bot-runtime-capabilities'
 
 /** A trip's end: the linked account, or null when it ends at "Open Orca" and its deep link redeems. */
 export type ConnectorTripResult = BotSlackResult<ConnectorConnectRedeem | null>
@@ -37,9 +38,27 @@ const TRIP_WAIT_TIMEOUT_MS = 60_000
 function call<T>(
   hostId: ExecutionHostId,
   method: string,
-  params?: unknown
+  params?: unknown,
+  timeoutMs?: number,
+  requiredCapability?: string
 ): Promise<BotSlackResult<T>> {
-  return callRuntimeRpc<BotSlackResult<T>>(botHostTarget(hostId), method, params).catch(() => ({
+  const target = botHostTarget(hostId)
+  return callRuntimeRpc<BotSlackResult<T>>(target, method, params, {
+    timeoutMs,
+    ...(requiredCapability
+      ? {
+          paramsForStatus: (status) => {
+            if (
+              target.kind === 'environment' &&
+              !status?.capabilities?.includes(requiredCapability)
+            ) {
+              throw new Error('host_lacks_scoped_slack_remove')
+            }
+            return params
+          }
+        }
+      : {})
+  }).catch(() => ({
     ok: false,
     error: BOT_SLACK_DESKTOP_ERRORS.failed
   }))
@@ -64,8 +83,14 @@ export function botSlackCalls(hostId: ExecutionHostId) {
     adoptApp: (args: { botId: string; teamId: string }) =>
       call<undefined>(hostId, 'bots.slack.adoptApp', args),
     /** Without a team, every workspace. */
-    remove: (args: { botId: string; teamId?: string }) =>
-      call<undefined>(hostId, 'bots.slack.remove', args),
+    remove: (args: { botId: string; teamId?: string }, requireScoped = false) =>
+      call<undefined>(
+        hostId,
+        'bots.slack.remove',
+        args,
+        45_000,
+        requireScoped ? BOTS_SLACK_SCOPED_REMOVE_RUNTIME_CAPABILITY : undefined
+      ),
     members: (args: { botId: string; query: string; teamId?: string }) =>
       call<ConnectorBotSlackMembersResponse>(hostId, 'bots.slack.members', args),
     setPostAs: (
