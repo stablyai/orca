@@ -36,7 +36,7 @@ export async function explainConfiguredCommandExit(
   if (!launch?.configuredProgram || fact.kind !== 'providerStartFailed') {
     return error
   }
-  const words = `'${launch.configuredProgram}' exited${redactString(exitText(error))}`
+  const words = redactString(`'${launch.configuredProgram}' exited${exitText(error)}`)
   return withProviderDiagnostic(
     Object.assign(new AgentSessionAcquisitionRefusal(words, 'agentCommandNotRunnable'), {
       cause: error
