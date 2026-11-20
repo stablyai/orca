@@ -52,41 +52,26 @@ function validateEmulatorKeyboardPasteText(
     : { byteLength, reason: 'empty', status: 'rejected' }
 }
 
-// Main inserts the whole text with one simulator pasteboard paste, whatever the guest layout.
-export async function pasteTextIntoSimulator({
-  insertText,
+/**
+ * Simulator panes send the whole text to main for one pasteboard paste; Android's scrcpy text
+ * injection only types US keyboard text.
+ */
+export async function pasteTextIntoEmulator({
   maxBytes,
-  text
+  send,
+  text,
+  usKeyboardOnly
 }: {
-  insertText: (text: string) => Promise<boolean>
   maxBytes?: number
+  send: (text: string) => Promise<boolean>
   text: string
+  usKeyboardOnly: boolean
 }): Promise<EmulatorKeyboardPasteResult> {
-  const validation = validateEmulatorKeyboardPasteText(text, { maxBytes, usKeyboardOnly: false })
+  const validation = validateEmulatorKeyboardPasteText(text, { maxBytes, usKeyboardOnly })
   if (validation.status === 'rejected') {
     return validation
   }
-  if (!(await insertText(text))) {
-    return { byteLength: validation.byteLength, reason: 'target-unavailable', status: 'rejected' }
-  }
-  return { byteLength: validation.byteLength, status: 'sent' }
-}
-
-// Android has no HID socket: main injects the whole text over the scrcpy control socket.
-export async function pasteTextIntoAndroidEmulator({
-  maxBytes,
-  sendText,
-  text
-}: {
-  maxBytes?: number
-  sendText: (text: string) => Promise<boolean>
-  text: string
-}): Promise<EmulatorKeyboardPasteResult> {
-  const validation = validateEmulatorKeyboardPasteText(text, { maxBytes, usKeyboardOnly: true })
-  if (validation.status === 'rejected') {
-    return validation
-  }
-  if (!(await sendText(text.replaceAll('\r', '')))) {
+  if (!(await send(text))) {
     return { byteLength: validation.byteLength, reason: 'target-unavailable', status: 'rejected' }
   }
   return { byteLength: validation.byteLength, status: 'sent' }

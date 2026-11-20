@@ -29,7 +29,10 @@ export class EmulatorBridge {
   private readonly androidBackend: AndroidEmulatorBackend
 
   constructor(options: EmulatorBridgeOptions = {}) {
-    this.iosBackend = new IosEmulatorBackend(options)
+    this.iosBackend = new IosEmulatorBackend(
+      options,
+      (udid) => this.sessionRegistry.getSession(udid)?.wsUrl ?? null
+    )
     this.androidBackend = new AndroidEmulatorBackend()
     // Register all backends so explicit targets reach their own host-support errors.
     this.backends = [this.iosBackend, this.androidBackend]
@@ -168,10 +171,12 @@ export class EmulatorBridge {
 
   async type(text: string, opts?: EmulatorTargetOpts, paste = false): Promise<void> {
     const { backend, device } = await this.resolveTarget(opts)
-    // Only iOS resolves the device for its socket; Android keeps routing text without an adb census.
-    const wsUrlFor = (udid: string): string | null =>
-      this.sessionRegistry.getSession(udid)?.wsUrl ?? null
-    await backend.type(device, text, wsUrlFor, paste)
+    await backend.type(device, text, paste)
+  }
+
+  async syncKeyboardLayout(opts?: EmulatorTargetOpts): Promise<boolean> {
+    const { backend, device } = await this.resolveTarget(opts)
+    return (await backend.syncHardwareKeyboardLayout?.(device)) ?? false
   }
 
   async button(name: string, opts?: EmulatorTargetOpts): Promise<void> {

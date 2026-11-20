@@ -52,7 +52,11 @@ export class IosEmulatorBackend implements EmulatorBackend {
   private readonly hardwareKeyboardSync = new SimulatorHardwareKeyboardSync()
   private readonly waitForEndpointReady: (endpoint: string) => Promise<boolean>
 
-  constructor(options: EmulatorBridgeOptions = {}) {
+  constructor(
+    options: EmulatorBridgeOptions = {},
+    // The bridge owns sessions; the backend only needs a device's helper socket for text input.
+    private readonly helperWsUrl: (udid: string) => string | null = () => null
+  ) {
     this.waitForEndpointReady = options.waitForEndpointReady ?? waitForServeSimEndpointReady
   }
 
@@ -150,19 +154,14 @@ export class IosEmulatorBackend implements EmulatorBackend {
     await sendEmulatorGestureSequence(wsUrl, points)
   }
 
-  async type(
-    deviceId: string,
-    text: string,
-    wsUrlFor: (udid: string) => string | null,
-    paste = false
-  ): Promise<void> {
+  async type(deviceId: string, text: string, paste = false): Promise<void> {
     const udid = await this.resolveDeviceId(deviceId)
     await assertSimulatorInputNotShadowedByDeviceHub(udid)
     await typeSimulatorText({
       udid,
       text,
       paste,
-      wsUrl: wsUrlFor(udid),
+      wsUrl: this.helperWsUrl(udid),
       // `--` keeps text such as "--help" from being read as a serve-sim option.
       usHardwareKeyboard: () => this.hardwareKeyboardSync.isUSHardwareKeyboard(udid),
       typeKeys: () => this.execServeSim(['type', '-d', udid, '--', text]),

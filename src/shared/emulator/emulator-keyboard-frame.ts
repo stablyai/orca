@@ -42,9 +42,8 @@ const PHYSICAL_KEY_USAGES: ReadonlyMap<string, number> = buildPhysicalKeyUsages(
 
 function buildPhysicalKeyUsages(): Map<string, number> {
   const usages: Record<string, number> = {
+    ...NAMED_KEY_USAGES,
     Enter: 40,
-    Escape: 41,
-    Backspace: 42,
     Tab: 43,
     Space: 44,
     Minus: 45,
@@ -58,15 +57,6 @@ function buildPhysicalKeyUsages(): Map<string, number> {
     Comma: 54,
     Period: 55,
     Slash: 56,
-    Home: 74,
-    PageUp: 75,
-    Delete: 76,
-    End: 77,
-    PageDown: 78,
-    ArrowRight: 79,
-    ArrowLeft: 80,
-    ArrowDown: 81,
-    ArrowUp: 82,
     NumpadDivide: 84,
     NumpadMultiply: 85,
     NumpadSubtract: 86,

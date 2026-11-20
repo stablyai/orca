@@ -15,11 +15,7 @@ import {
   type ServeSimKeyboardFrame
 } from '../../../../../shared/emulator/emulator-keyboard-frame'
 import type { ScrcpyKeyboard } from '../streaming/use-emulator-control-stream'
-import {
-  pasteTextIntoAndroidEmulator,
-  pasteTextIntoSimulator,
-  type EmulatorKeyboardPasteResult
-} from './emulator-keyboard-paste'
+import { pasteTextIntoEmulator, type EmulatorKeyboardPasteResult } from './emulator-keyboard-paste'
 
 // Android keycode names (see android-input-mapping.ts) for the named keys; others type as text.
 const ANDROID_KEY_BUTTONS: Record<string, string> = {
@@ -249,10 +245,10 @@ export function useEmulatorScreenKeyboard({
 
       cancelActivePaste()
       const pasteRequestId = pasteRequestIdRef.current
-      const paste = scrcpyKeyboard
-        ? pasteTextIntoAndroidEmulator({ sendText: scrcpyKeyboard.sendText, text })
-        : pasteTextIntoSimulator({
-            insertText: (value) =>
+      const paste = pasteTextIntoEmulator({
+        send: scrcpyKeyboard
+          ? (value) => scrcpyKeyboard.sendText(value.replaceAll('\r', ''))
+          : (value) =>
               callRuntimeRpc({ kind: 'local' }, 'emulator.type', {
                 paste: true,
                 text: value,
@@ -260,8 +256,9 @@ export function useEmulatorScreenKeyboard({
               })
                 .then(() => true)
                 .catch(() => false),
-            text
-          })
+        text,
+        usKeyboardOnly: scrcpyKeyboard !== null
+      })
       void paste.then((result) => {
         if (pasteRequestIdRef.current === pasteRequestId) {
           showEmulatorKeyboardPasteResult(result)

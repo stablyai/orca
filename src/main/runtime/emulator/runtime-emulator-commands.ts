@@ -130,10 +130,8 @@ export class RuntimeEmulatorCommands {
     worktree?: string
   }): Promise<{ physicalKeys: boolean }> {
     const bridge = this.requireEmulatorBridge()
-    const active = bridge.getActiveForWorktree(await this.resolveWorktreeId(params.worktree))
-    const backend = bridge.listBackends().find((candidate) => candidate.kind === active?.backend)
-    const sync = backend?.syncHardwareKeyboardLayout?.bind(backend)
-    return { physicalKeys: active && sync ? await sync(active.deviceUdid) : false }
+    const worktreeId = await this.resolveWorktreeId(params.worktree)
+    return { physicalKeys: await bridge.syncKeyboardLayout({ worktreeId }) }
   }
 
   // Pane touches skip main, so the pane asks whether the active simulator still accepts input.

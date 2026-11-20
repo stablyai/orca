@@ -5,16 +5,14 @@ import {
   encodeServeSimKeyboardFrame,
   type ServeSimKeyboardFrame
 } from '../../shared/emulator/emulator-keyboard-frame'
+import { runKeyedSerializedOperation } from '../../shared/concurrency/keyed-serialized-operations'
 import { EmulatorError } from './emulator-errors'
 import { sendServeSimFrameSequence } from './emulator-gesture-sender'
 
 const PASTEBOARD_TIMEOUT_MS = 15_000
 const DEVICECTL_FLAGS = ['--timeout', '10', '--quiet']
-const ENTER_USAGE = 40
 
-export type SimulatorTextInputPlan =
-  | { kind: 'keys' }
-  | { kind: 'paste'; text: string; enterCount: number }
+type SimulatorTextInputPlan = { kind: 'keys' } | { kind: 'paste'; text: string; enterCount: number }
 
 /**
  * US key usages only type what they name on a US hardware layout; any other text goes through the
@@ -36,29 +34,33 @@ export function planSimulatorTextInput(
   return { kind: 'paste', text: body.replaceAll('\r', ''), enterCount }
 }
 
-async function readBack(program: string, args: string[]): Promise<string | null> {
-  const result = await runProcess({ program, args, timeoutMs: PASTEBOARD_TIMEOUT_MS })
-  return result.code === 0 ? result.stdout : null
+type PasteboardRoute = 'devicectl' | 'simctl'
+
+function pasteboardCommand(route: PasteboardRoute, verb: 'copy' | 'paste', udid: string): string[] {
+  return route === 'devicectl'
+    ? ['devicectl', 'device', 'pasteboard', verb, '--device', udid, ...DEVICECTL_FLAGS]
+    : ['simctl', verb === 'copy' ? 'pbcopy' : 'pbpaste', udid]
 }
+
+// Xcode 26 and older have no devicectl pasteboard for simulators, so a route that worked goes first.
+let pasteboardRoutes: PasteboardRoute[] = ['devicectl', 'simctl']
 
 /** Exit 0 is not proof: simctl pbcopy can leave the guest pasteboard stale, so success needs a matching read-back. */
 async function stageSimulatorPasteboard(udid: string, text: string): Promise<void> {
-  const routes: { copy: string[]; paste: string[] }[] = [
-    {
-      copy: ['devicectl', 'device', 'pasteboard', 'copy', '--device', udid, ...DEVICECTL_FLAGS],
-      paste: ['devicectl', 'device', 'pasteboard', 'paste', '--device', udid, ...DEVICECTL_FLAGS]
-    },
-    // Xcode 26 and older have no devicectl pasteboard for simulators.
-    { copy: ['simctl', 'pbcopy', udid], paste: ['simctl', 'pbpaste', udid] }
-  ]
-  for (const route of routes) {
-    const copy = await runProcess({
-      program: 'xcrun',
-      args: route.copy,
-      input: text,
-      timeoutMs: PASTEBOARD_TIMEOUT_MS
-    })
-    if (copy.code === 0 && (await readBack('xcrun', route.paste)) === text) {
+  for (const route of pasteboardRoutes) {
+    const run = (verb: 'copy' | 'paste', input?: string) =>
+      runProcess({
+        program: 'xcrun',
+        args: pasteboardCommand(route, verb, udid),
+        input,
+        timeoutMs: PASTEBOARD_TIMEOUT_MS
+      })
+    if ((await run('copy', text)).code !== 0) {
+      continue
+    }
+    const readBack = await run('paste')
+    if (readBack.code === 0 && readBack.stdout === text) {
+      pasteboardRoutes = [route, ...pasteboardRoutes.filter((other) => other !== route)]
       return
     }
   }
@@ -80,14 +82,14 @@ async function pasteSimulatorText(
     frames.push(...(buildServeSimKeyboardFramesForCode(pasteKeyCode, { meta: true }) ?? []))
   }
   for (let index = 0; index < plan.enterCount; index += 1) {
-    frames.push({ type: 'down', usage: ENTER_USAGE }, { type: 'up', usage: ENTER_USAGE })
+    frames.push(...(buildServeSimKeyboardFramesForCode('Enter') ?? []))
   }
   if (frames.length > 0) {
     await sendServeSimFrameSequence(wsUrl, frames.map(encodeServeSimKeyboardFrame))
   }
 }
 
-export type SimulatorTextInput = {
+type SimulatorTextInput = {
   udid: string
   text: string
   paste: boolean
@@ -102,16 +104,9 @@ export type SimulatorTextInput = {
 const pendingInputByDevice = new Map<string, Promise<void>>()
 
 export function typeSimulatorText(input: SimulatorTextInput): Promise<void> {
-  const previous = pendingInputByDevice.get(input.udid) ?? Promise.resolve()
-  const next = previous.catch(() => {}).then(() => typeSimulatorTextNow(input))
-  pendingInputByDevice.set(input.udid, next)
-  const clear = (): void => {
-    if (pendingInputByDevice.get(input.udid) === next) {
-      pendingInputByDevice.delete(input.udid)
-    }
-  }
-  void next.then(clear, clear)
-  return next
+  return runKeyedSerializedOperation(pendingInputByDevice, input.udid, () =>
+    typeSimulatorTextNow(input)
+  )
 }
 
 async function typeSimulatorTextNow(input: SimulatorTextInput): Promise<void> {

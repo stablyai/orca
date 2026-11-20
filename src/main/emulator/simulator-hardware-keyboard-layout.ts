@@ -1,4 +1,8 @@
 import { runProcess } from '@orca/process-host'
+import {
+  getKeyedSerializedQueueTail,
+  runKeyedSerializedOperation
+} from '../../shared/concurrency/keyed-serialized-operations'
 import { readCurrentKeyboardLayoutSourceId } from '../ipc/keyboard/macos-keyboard-input-source'
 import { readMacKeyboardLayoutSnapshot } from '../ipc/keyboard/macos-keyboard-layout-snapshot'
 
@@ -10,6 +14,7 @@ const IOS_LAYOUTS_PLIST =
   'System/Library/KeyboardLayouts/USBKeyboardLayouts.bundle/USBKeyboardLayouts.plist'
 // iOS's keyboard when AppleKeyboards is unset.
 const DEFAULT_KEYBOARD = 'en_US@sw=QWERTY'
+const AUTOMATIC_DEFAULT_KEYBOARD = `${DEFAULT_KEYBOARD};hw=Automatic`
 const US_HARDWARE_LAYOUT = 'U.S.'
 
 // USBKeyboardLayouts.plist: layout key to `{ KeyLayoutName, ... }`.
@@ -75,18 +80,14 @@ export function withOriginalHardwareLayouts(
   current: string[] | null,
   original: string[] | null
 ): string[] | null {
-  const automatic = (entry: string): string => entry.replace(/([@;]hw=)[^;]*/, '$1Automatic')
   const before = new Map(
-    (original ?? [`${DEFAULT_KEYBOARD};hw=Automatic`]).map((entry) => [
-      withoutHardwareLayout(entry),
-      entry
-    ])
+    (original ?? [AUTOMATIC_DEFAULT_KEYBOARD]).map((entry) => [withoutHardwareLayout(entry), entry])
   )
-  const restored = (current ?? []).map(
-    (entry) => before.get(withoutHardwareLayout(entry)) ?? automatic(entry)
+  const restored = withHardwareLayout(current, 'Automatic').map(
+    (entry) => before.get(withoutHardwareLayout(entry)) ?? entry
   )
   const untouchedDefault =
-    original === null && restored.every((entry) => entry === `${DEFAULT_KEYBOARD};hw=Automatic`)
+    original === null && restored.every((entry) => entry === AUTOMATIC_DEFAULT_KEYBOARD)
   return untouchedDefault ? null : restored
 }
 
@@ -105,7 +106,7 @@ async function simctlOrThrow(args: string[]): Promise<string> {
 }
 
 /** Null when AppleKeyboards is unset (iOS then uses its default keyboard); throws when it cannot be read. */
-export async function readSimulatorKeyboards(udid: string): Promise<string[] | null> {
+async function readSimulatorKeyboards(udid: string): Promise<string[] | null> {
   const result = await simctl(['simctl', 'spawn', udid, 'defaults', 'read', '-g', 'AppleKeyboards'])
   if (result.code === 0) {
     return parseAppleKeyboardsDefaults(result.stdout)
@@ -124,31 +125,36 @@ async function writeSimulatorKeyboards(udid: string, entries: string[] | null): 
   await simctlOrThrow(['simctl', 'spawn', udid, 'notifyutil', '-p', KEYBOARDS_CHANGED_NOTIFICATION])
 }
 
-const iosLayoutsByRuntimeRoot = new Map<string, Promise<IosKeyboardLayouts>>()
+// A device's runtime never changes, so each device reads its runtime's layout list once.
+const iosLayoutsByDevice = new Map<string, Promise<IosKeyboardLayouts>>()
 
-async function readIosKeyboardLayouts(udid: string): Promise<IosKeyboardLayouts> {
-  const root = (await simctlOrThrow(['simctl', 'getenv', udid, 'SIMULATOR_ROOT'])).trim()
-  let layouts = iosLayoutsByRuntimeRoot.get(root)
+function readIosKeyboardLayouts(udid: string): Promise<IosKeyboardLayouts> {
+  let layouts = iosLayoutsByDevice.get(udid)
   if (!layouts) {
-    layouts = runProcess({
-      program: '/usr/bin/plutil',
-      args: ['-convert', 'json', '-o', '-', `${root}/${IOS_LAYOUTS_PLIST}`],
-      timeoutMs: SIMCTL_TIMEOUT_MS
-    }).then((result) => {
-      if (result.code !== 0) {
-        throw new Error(`plutil exited with code ${result.code}`)
-      }
-      const layouts: unknown = JSON.parse(result.stdout)
-      if (!layouts || typeof layouts !== 'object') {
-        throw new Error('USBKeyboardLayouts.plist is not a dictionary')
-      }
-      return { ...layouts }
-    })
-    iosLayoutsByRuntimeRoot.set(root, layouts)
-    // Only a parsed runtime list is worth keeping; a transient failure retries on the next sync.
-    layouts.catch(() => iosLayoutsByRuntimeRoot.delete(root))
+    layouts = simctlOrThrow(['simctl', 'getenv', udid, 'SIMULATOR_ROOT']).then(
+      parseIosKeyboardLayouts
+    )
+    iosLayoutsByDevice.set(udid, layouts)
+    // Only a parsed list is worth keeping; a transient failure retries on the next sync.
+    layouts.catch(() => iosLayoutsByDevice.delete(udid))
   }
   return layouts
+}
+
+async function parseIosKeyboardLayouts(runtimeRoot: string): Promise<IosKeyboardLayouts> {
+  const result = await runProcess({
+    program: '/usr/bin/plutil',
+    args: ['-convert', 'json', '-o', '-', `${runtimeRoot.trim()}/${IOS_LAYOUTS_PLIST}`],
+    timeoutMs: SIMCTL_TIMEOUT_MS
+  })
+  if (result.code !== 0) {
+    throw new Error(`plutil exited with code ${result.code}`)
+  }
+  const layouts: unknown = JSON.parse(result.stdout)
+  if (!layouts || typeof layouts !== 'object') {
+    throw new Error('USBKeyboardLayouts.plist is not a dictionary')
+  }
+  return { ...layouts }
 }
 
 type DeviceSyncState = {
@@ -167,7 +173,8 @@ type DeviceSyncState = {
  */
 export class SimulatorHardwareKeyboardSync {
   private readonly devices = new Map<string, DeviceSyncState>()
-  private readonly inFlight = new Map<string, Promise<boolean>>()
+  // Each sync reads the Mac layout after the one before it settles, so a switch mid-sync is not lost.
+  private readonly syncQueues = new Map<string, Promise<void>>()
   // A guest prefs read costs ~0.3 s, so each helper session reads AppleKeyboards once and tracks its own writes.
   private readonly keyboards = new Map<string, string[] | null>()
 
@@ -188,21 +195,13 @@ export class SimulatorHardwareKeyboardSync {
 
   /** Resolves true when the simulator now uses the Mac's layout, so the pane can send physical keys. */
   sync(udid: string): Promise<boolean> {
-    // Each request reads the Mac layout after the one before it settles, so a switch mid-sync is not lost.
-    const pending = (this.inFlight.get(udid) ?? Promise.resolve(false))
-      .then(() => this.syncNow(udid))
-      .catch(() => false)
-    this.inFlight.set(udid, pending)
-    void pending.finally(() => {
-      if (this.inFlight.get(udid) === pending) {
-        this.inFlight.delete(udid)
-      }
-    })
-    return pending
+    return runKeyedSerializedOperation(this.syncQueues, udid, () => this.syncNow(udid)).catch(
+      () => false
+    )
   }
 
   async pasteKeyCode(udid: string): Promise<string> {
-    await this.inFlight.get(udid)
+    await getKeyedSerializedQueueTail(this.syncQueues, udid)
     return this.devices.get(udid)?.pasteKeyCode ?? 'KeyV'
   }
 
@@ -212,41 +211,36 @@ export class SimulatorHardwareKeyboardSync {
     if (known?.macLayoutId === macLayoutId) {
       return known.synced
     }
-    const hardwareLayout = iosHardwareLayoutForMacLayout(
-      macLayoutId,
-      await readIosKeyboardLayouts(udid)
-    )
-    const current = await this.readKeyboards(udid)
-    const original = known ? known.original : current
+    const [iosLayouts, current] = await Promise.all([
+      readIosKeyboardLayouts(udid),
+      this.readKeyboards(udid)
+    ])
+    const hardwareLayout = iosHardwareLayoutForMacLayout(macLayoutId, iosLayouts)
+    // Recorded before any write: one that lands but whose notify fails still needs restoring.
+    const state: DeviceSyncState = known ?? {
+      original: current,
+      macLayoutId: '',
+      synced: false,
+      rewritten: false,
+      pasteKeyCode: 'KeyV'
+    }
+    this.devices.set(udid, state)
     // A Mac layout iOS lacks leaves the simulator on the user's own setting.
-    const next = hardwareLayout ? withHardwareLayout(current, hardwareLayout) : original
-    const changed = JSON.stringify(next) !== JSON.stringify(current)
-    if (changed) {
-      // Record the original first: a write that lands but whose notify fails still needs restoring.
-      this.devices.set(udid, {
-        original,
-        macLayoutId: '',
-        synced: false,
-        rewritten: true,
-        pasteKeyCode: 'KeyV'
-      })
+    const next = hardwareLayout ? withHardwareLayout(current, hardwareLayout) : state.original
+    if (JSON.stringify(next) !== JSON.stringify(current)) {
+      state.rewritten = true
       this.keyboards.delete(udid)
       await writeSimulatorKeyboards(udid, next)
       this.keyboards.set(udid, next)
     }
-    const synced = hardwareLayout !== null
-    this.devices.set(udid, {
-      original,
-      macLayoutId,
-      synced,
-      rewritten: changed || known?.rewritten === true,
-      pasteKeyCode: synced ? await macKeyCodeTypingV(macLayoutId) : 'KeyV'
-    })
-    return synced
+    state.synced = hardwareLayout !== null
+    state.pasteKeyCode = state.synced ? await macKeyCodeTypingV(macLayoutId) : 'KeyV'
+    state.macLayoutId = macLayoutId
+    return state.synced
   }
 
   async restore(udid: string): Promise<void> {
-    await this.inFlight.get(udid)
+    await getKeyedSerializedQueueTail(this.syncQueues, udid)
     this.keyboards.delete(udid)
     const known = this.devices.get(udid)
     if (!known) {
