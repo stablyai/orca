@@ -27344,7 +27344,7 @@
         "drop": "Drop to use"
       },
       "generate": {
-        "placeholder": "Describe a picture…",
+        "placeholder": "Describe your bot's look…",
         "describe": "Picture description",
         "button": "Generate",
         "generating": "Generating…",

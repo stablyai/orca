@@ -273,7 +273,7 @@ function DescriptionField({ face }: { face: GenerateFace }): React.JSX.Element {
         // Read-only, not disabled, so focus stays and Esc can cancel.
         readOnly={running}
         maxLength={MAX_AVATAR_DESCRIPTION_CHARS}
-        placeholder={t('bots.avatar.generate.placeholder', 'Describe a picture…')}
+        placeholder={t('bots.avatar.generate.placeholder', "Describe your bot's look…")}
         aria-label={t('bots.avatar.generate.describe', 'Picture description')}
         onChange={(event) => face.setDescription(event.currentTarget.value)}
         onKeyDown={(event) => {
