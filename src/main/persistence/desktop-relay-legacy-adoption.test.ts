@@ -120,8 +120,8 @@ describe('adopting relay ids saved before ownership was recorded', () => {
   })
 
   it('adopts a row an older build left copies of in two partitions under the same repo', () => {
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: adoption reads tab ids only.
     const rows = {
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: adoption reads tab ids only.
       'repo-ssh::/w': [tab('tab-a')] as WorkspaceSessionState['tabsByWorktree'][string]
     }
     const store = storeWith(
