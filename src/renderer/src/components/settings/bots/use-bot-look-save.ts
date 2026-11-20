@@ -5,11 +5,10 @@ export type BotLookUpdate = Pick<BotUpdateParams['updates'], 'avatarColor' | 'av
 
 // Per bot: the save on its way to the host and the latest picks waiting behind it, merged. Every editor of a
 // bot shares it, so a pick made after closing and reopening settings still lands last. Editors that are open
-// hear when nothing is left to send; one that closes stops listening. Picks waiting hold the host's re-read
-// back, so the save ahead of them returns when it lands instead of after a re-read of every bot.
+// hear when nothing is left to send; one that closes stops listening. While any are left, the host's re-read
+// of its bots is held back, so each save returns as it lands and a later pick never waits on a re-read.
 type LookSaves = {
   waiting: BotLookUpdate | null
-  held: (() => unknown) | null
   update: (look: BotLookUpdate) => Promise<unknown>
   drained: Set<() => void>
 }
@@ -30,7 +29,6 @@ export function saveBotLook(
   const running = lookSaves.get(key)
   if (running) {
     running.waiting = { ...running.waiting, ...look }
-    running.held ??= hold?.() ?? null
     running.update = update
     if (onDrained) {
       running.drained.add(onDrained)
@@ -39,22 +37,20 @@ export function saveBotLook(
   }
   const saves: LookSaves = {
     waiting: look,
-    held: null,
     update,
     drained: new Set(onDrained ? [onDrained] : [])
   }
   lookSaves.set(key, saves)
+  const release = hold?.()
   void (async () => {
     while (saves.waiting) {
       const next = saves.waiting
-      const held = saves.held
       saves.waiting = null
-      saves.held = null
       // A failed save is reported by `update`; the picks after it still go.
       await saves.update(next).catch(() => undefined)
-      held?.()
     }
     lookSaves.delete(key)
+    release?.()
     for (const listener of saves.drained) {
       listener()
     }

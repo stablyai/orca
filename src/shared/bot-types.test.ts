@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { makeTestBot } from '../main/bots/bot.test-fixture'
 import { gitHubMembersOf, normalizePersistedBots, withGitHubMembersTagged } from './bot-types'
 import { applyBotUpdates } from './rpc-contract/bots-params'
+import { BotGroupMessageSchema } from './bots/bot-group-schema'
 
 describe('GitHub people per org', () => {
   const alice = { id: '101', name: 'alice', source: 'github' }
@@ -40,5 +41,28 @@ describe('stored outfits', () => {
     const [loaded] = normalizePersistedBots(saved)
     expect(loaded?.avatarOutfit).toBe('aviator')
     expect(JSON.parse(JSON.stringify(loaded)).avatarOutfit).toBe('aviator')
+  })
+
+  it("keeps a group turn's outfit a newer version added", () => {
+    const message = BotGroupMessageSchema.parse({
+      id: 'm1',
+      groupId: 'g1',
+      sequence: 0,
+      author: { kind: 'owner' },
+      text: 'hi',
+      createdAt: 0,
+      turns: [
+        {
+          operationId: 'op1',
+          botId: 'b1',
+          botName: 'Perf',
+          avatar: 'mascot:D1',
+          avatarOutfit: 'aviator',
+          agent: 'claude',
+          sessionId: 's1'
+        }
+      ]
+    })
+    expect(message.turns[0]?.avatarOutfit).toBe('aviator')
   })
 })

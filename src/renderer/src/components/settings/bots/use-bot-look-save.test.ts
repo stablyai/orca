@@ -26,15 +26,17 @@ describe('saveBotLook', () => {
     ])
   })
 
-  it('holds the host re-read back while a pick waits, so the save ahead of it returns on landing', async () => {
+  it('holds the host re-read back until the last pick lands, so each save returns on landing', async () => {
     const events: string[] = []
     let release = (): void => {}
     const first = new Promise<void>((resolve) => {
       release = resolve
     })
+    let sends = 0
     const update = (look: BotLookUpdate): Promise<unknown> => {
       events.push(`send ${look.avatarColor ?? look.avatarOutfit}`)
-      return events.length === 1 ? first : Promise.resolve()
+      sends += 1
+      return sends === 1 ? first : Promise.resolve()
     }
     const hold = (): (() => void) => {
       events.push('hold')
@@ -47,6 +49,6 @@ describe('saveBotLook', () => {
     saveBotLook('local:b2', { avatarOutfit: 'party' }, update, undefined, hold)
     release()
     await drained
-    expect(events).toEqual(['send #f4c4cf', 'hold', 'send party', 'release'])
+    expect(events).toEqual(['hold', 'send #f4c4cf', 'send party', 'release'])
   })
 })
