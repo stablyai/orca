@@ -33,8 +33,13 @@ import {
 } from '../../session-tabs/chat/structured-conversation-tab-title'
 import { structuredChatDisplayName } from '../../../../shared/agent-session/view/structured-chat-row-name'
 import { agentSessionRecordShownName } from '../../agent-session/records/agent-session-record-shown-name'
+import { hostMobileTerminalTheme } from './host-mobile-terminal-theme'
 
 export abstract class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends OrcaRuntimeWithSavedConversationTitlePublication {
+  private readonly hostMobileTerminalTheme = hostMobileTerminalTheme(this.store, () =>
+    this.notifyMobileSessionTabSnapshots()
+  )
+
   protected pruneMobileSessionTabGroupLayout(
     layout: TabGroupLayoutNode | null | undefined,
     validGroupIds: ReadonlySet<string>
@@ -156,7 +161,8 @@ export abstract class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends Or
       sanitizeGroups: (groups, tabs) => this.sanitizeMobileSessionTabGroups(groups, tabs),
       pruneGroupLayout: (layout, validGroupIds) =>
         this.pruneMobileSessionTabGroupLayout(layout, validGroupIds),
-      collectTabIds: (tabs) => this.collectReturnedSessionTabIds(tabs)
+      collectTabIds: (tabs) => this.collectReturnedSessionTabIds(tabs),
+      hostTerminalTheme: this.hostMobileTerminalTheme
     }
   }
 

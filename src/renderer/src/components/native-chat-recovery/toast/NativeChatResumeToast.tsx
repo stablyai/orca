@@ -178,17 +178,14 @@ export function NativeChatResumeToast({
             >
               {headline(view, t, machineName)}
             </p>
-            <p className="mt-0.5 text-xs leading-snug text-muted-foreground">
-              {offering
-                ? t(
-                    'auto.components.NativeChatResumeToast.promptsNotResent',
-                    'Resuming won’t send your prompts again.'
-                  )
-                : t(
-                    'auto.components.NativeChatResumeToast.promptsNotSent',
-                    'Your prompts weren’t sent again.'
-                  )}
-            </p>
+            {offering && (
+              <p className="mt-0.5 text-xs leading-snug text-muted-foreground">
+                {t(
+                  'auto.components.NativeChatResumeToast.promptsNotResent',
+                  'Resuming won’t send your prompts again.'
+                )}
+              </p>
+            )}
           </div>
           <div className="mt-2 flex flex-wrap items-center gap-1.5">
             {showResume && (

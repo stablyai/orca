@@ -220,8 +220,21 @@ export async function testConnection(
   }
 }
 
-export async function clearToken(siteId: string): Promise<void> {
+export async function clearToken(failedClient: JiraClientForSite): Promise<void> {
   await inSiteRegistryOrder(async () => {
+    const siteId = failedClient.site.id
+    let currentClient: JiraClientForSite | undefined
+    try {
+      currentClient = (await readClients(siteId))[0]
+    } catch (error) {
+      if (error instanceof CredentialDecryptionError) {
+        return
+      }
+      throw error
+    }
+    if (!currentClient || currentClient.authorization !== failedClient.authorization) {
+      return
+    }
     await deleteToken(siteId)
     clearAttachmentImagesForSite(siteId)
     const file = await getSiteFile()

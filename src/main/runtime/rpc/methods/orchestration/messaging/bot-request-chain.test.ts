@@ -188,31 +188,21 @@ describe('a bot request chain', () => {
     expect(db.getAllMessagesForHandle(`orca_session_id:${THREE_REQUEST_2}`)).toHaveLength(1)
   })
 
-  it('lets an owner chain hand the same bot a second job', async () => {
-    journals[RANGER_THREAD] = [message('ask')]
-    const toDocs = await sent(RANGER_THREAD, { to: 'bot:Docs', type: 'handoff', subject: 'one' })
-    wake(DOCS_CHAT, toDocs.message.id)
-    const toRanger = await sent(DOCS_CHAT, { to: 'bot:Ranger', type: 'handoff', subject: 'two' })
-    wake(RANGER_THREAD, toRanger.message.id)
-    const again = await sent(RANGER_THREAD, { to: 'bot:Docs', type: 'handoff', subject: 'three' })
-    expect(again.duplicate).toBeUndefined()
-    expect(record(again).depth).toBe(3)
-  })
-
   it('carries a chain on past its fourth hop, counting each hop', async () => {
     journals[RANGER_THREAD] = [message('ask')]
-    let receipt = await sent(RANGER_THREAD, { to: 'bot:Docs', type: 'question' })
+    let receipt = await sent(RANGER_THREAD, { to: 'bot:Docs', type: 'handoff' })
     for (const [from, to] of [
       [DOCS_CHAT, 'Ranger'],
       [RANGER_THREAD, 'Docs'],
       [DOCS_CHAT, 'Ranger']
     ] as const) {
       wake(from, receipt.message.id)
-      receipt = await sent(from, { to: `bot:${to}`, type: 'question' })
+      receipt = await sent(from, { to: `bot:${to}`, type: 'handoff' })
     }
     expect(record(receipt).depth).toBe(4)
     wake(RANGER_THREAD, receipt.message.id)
-    const fifth = await sent(RANGER_THREAD, { to: 'bot:Docs', type: 'question' })
+    const fifth = await sent(RANGER_THREAD, { to: 'bot:Docs', type: 'handoff' })
+    expect(fifth.duplicate).toBeUndefined()
     expect(record(fifth).depth).toBe(5)
   })
 })

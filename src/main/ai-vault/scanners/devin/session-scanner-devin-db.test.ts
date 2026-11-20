@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp, rm, stat, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import SyncDatabase from '../../../sqlite/sync-database'
 import { scanAiVaultSessions } from '../../session-scanner'
 import {
@@ -10,6 +10,7 @@ import {
 } from './session-scanner-devin-db'
 import { isolatedScanRoots } from '../../scanner-fixtures/session-scanner-test-fixtures'
 import type { SessionSidecarStat } from '../../parse-cache/session-sidecar-stat'
+import * as databaseReader from '../opencode/sqlite/session-scanner-opencode-sqlite-open'
 
 // Mirror the Devin CLI 3000.10.x schema so every probed column exists.
 const DEVIN_SESSIONS_SCHEMA = `
@@ -37,6 +38,7 @@ const DEVIN_ACTIVITY_S = 1_777_003_600
 let tempDirs: string[] = []
 
 afterEach(async () => {
+  vi.restoreAllMocks()
   resetDevinSessionsIndexCacheForTests()
   await Promise.all(tempDirs.map((dir) => rm(dir, { recursive: true, force: true })))
   tempDirs = []
@@ -116,12 +118,9 @@ describe('devinSessionsIndexForSidecar', () => {
 })
 
 describe('devin sessions.db through the scan', () => {
-  async function writeDevinVault(
-    dir: string,
-    directory = 'transcripts'
-  ): Promise<{ transcriptsDir: string; dbPath: string }> {
+  async function writeDevinVault(dir: string): Promise<{ transcriptsDir: string; dbPath: string }> {
     const cliDir = join(dir, 'devin-cli')
-    const transcriptsDir = join(cliDir, directory)
+    const transcriptsDir = join(cliDir, 'agent_logs')
     await mkdir(transcriptsDir, { recursive: true })
     await writeFile(
       join(transcriptsDir, 'devin-shown.json'),
@@ -146,32 +145,36 @@ describe('devin sessions.db through the scan', () => {
     return { transcriptsDir, dbPath }
   }
 
-  it.each(['transcripts', 'agent_logs'])(
-    'enriches %s sessions by session_id and excludes hidden ones',
-    async (directory) => {
-      const root = await tempDir('orca-devin-scan-')
-      const { transcriptsDir } = await writeDevinVault(root, directory)
-      const result = await scanAiVaultSessions({
-        ...isolatedScanRoots(root),
-        devinTranscriptsDir: transcriptsDir
-      })
-      const devin = result.sessions.filter((session) => session.agent === 'devin')
-      expect(devin.map((session) => session.sessionId)).toEqual(['shown'])
-      expect(devin[0]?.cwd).toBe('/srv/shown')
-      expect(devin[0]?.title).toBe('Shown session')
-      expect(devin[0]?.model).toBe('swe-1-6-fast')
-      expect(devin[0]?.createdAt).toBe(new Date(DEVIN_CREATED_S * 1000).toISOString())
-    }
-  )
-
-  it('picks up db-only changes on a rescan without the transcript moving', async () => {
+  it('scans through database contention, then applies recovered and changed metadata', async () => {
     const root = await tempDir('orca-devin-scan-')
     const { transcriptsDir, dbPath } = await writeDevinVault(root)
     const options = {
       ...isolatedScanRoots(root),
       devinTranscriptsDir: transcriptsDir
     }
-    await scanAiVaultSessions(options)
+    const reader = vi.spyOn(databaseReader, 'readOpenCodeDatabase').mockImplementation(() => {
+      throw new Error('SQLITE_BUSY')
+    })
+    const contended = await scanAiVaultSessions(options)
+    expect(
+      contended.sessions
+        .map(({ sessionId, cwd }) => ({ sessionId, cwd }))
+        .sort((a, b) => a.sessionId.localeCompare(b.sessionId))
+    ).toEqual([
+      { sessionId: 'hidden', cwd: null },
+      { sessionId: 'shown', cwd: null }
+    ])
+    reader.mockRestore()
+
+    const first = await scanAiVaultSessions(options)
+    const sessions = first.sessions.filter((session) => session.agent === 'devin')
+    expect(sessions.map((session) => session.sessionId)).toEqual(['shown'])
+    expect(sessions[0]).toMatchObject({
+      cwd: '/srv/shown',
+      title: 'Shown session',
+      model: 'swe-1-6-fast',
+      createdAt: new Date(DEVIN_CREATED_S * 1000).toISOString()
+    })
 
     // Bump mtime explicitly to detect the update on coarse filesystems.
     writeDevinSessionsDb(dbPath, [

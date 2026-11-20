@@ -226,6 +226,7 @@ vi.mock('../runtime/orca-runtime', () => ({
     restoreHostAccountLaunchEnv() {}
     async refreshRestoredOrchestrationAuthority() {}
     async reconcileLegacyWorkerTerminals() {}
+    async reportWorkerStopsAcrossRestartOnce() {}
     async installPendingOrcadMigrationShellHistory() {}
     async stopLegacyWorkerTerminalRecovery() {}
     async closeNotificationDismissals() {}

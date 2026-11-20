@@ -4432,6 +4432,7 @@
             "terminalListNeedsServerUpdate": "Terminal ajanlarını listelemek için bu sunucudaki Orca'yı güncelleyin",
             "terminalListFailed": "Bu çalışma alanındaki terminal ajanları listelenemedi",
             "chatNotInstalled": "Yüklü değil",
+            "chatInstallRequired": "Yükleme gerekli",
             "chatNotOverSsh": "SSH üzerinden sohbet kullanılamıyor",
             "chatNotInWsl": "WSL'de sohbet kullanılamıyor",
             "chatNotInSubfolder": "Alt klasörde sohbet yok",
@@ -12625,6 +12626,7 @@
         "CursorAccountsSection": {
           "source": {
             "keychain": "macOS Anahtar Zinciri (cursor-agent)",
+            "keyring": "Linux Anahtarlığı (cursor-agent)",
             "cli": "Cursor CLI kimlik doğrulama dosyası",
             "desktop": "Cursor IDE"
           },
@@ -18291,10 +18293,6 @@
           "hideOtherClients": "Diğer istemcilerin ajanlarını gizle"
         },
         "ActivityThreadHoverCard": {
-          "pathCopied": "Yol panoya kopyalandı",
-          "copyPathFailed": "Yol kopyalanamadı",
-          "workspace": "Çalışma alanı",
-          "copyPath": "Yolu kopyala",
           "jumpToWorkspace": "Çalışma alanına git"
         },
         "ActivityThreadRow": {
@@ -19079,7 +19077,6 @@
         "stoppedRestart_one": "Orca kapanırken {{count}} sohbet durdu.",
         "stoppedRestart_other": "Orca kapanırken {{count}} sohbet durdu.",
         "promptsNotResent": "Devam ettirmek istemlerinizi yeniden göndermez.",
-        "promptsNotSent": "İstemleriniz yeniden gönderilmedi.",
         "resume": "Devam ettir",
         "details": "Ayrıntılar",
         "close": "Kapat",
@@ -19305,7 +19302,8 @@
       "install": {
         "checking": "{{agent}} ajanının bu ana makinede hazır olup olmadığı denetleniyor…",
         "cliInstall": "Yükle",
-        "cliRecheck": "Yeniden kontrol et"
+        "cliRecheck": "Yeniden kontrol et",
+        "openAgentSettings": "Ayarları aç"
       },
       "reasoning": "Akıl yürütme",
       "failureWords": {
@@ -19339,6 +19337,7 @@
         "claudeAccountFolderMissing": "Seçilen Claude hesabının klasörü bulunamıyor. O hesapta yeniden oturum açın veya başka bir hesap seçin.",
         "claudeAccountSetupFailed": "Seçilen Claude hesabı ayarlanamadı. Yeniden deneyin veya başka bir hesap seçin.",
         "agentCommandNotRunnable": "Ayarlar → Ajanlar bölümündeki {{agent}} Komut ayarı, Orca'nın bulabileceği bir program yolu veya adı olmalı; argüman ya da değişken içermemelidir. Değiştirin veya sıfırlayın.",
+        "agentCommandFailed": "Ayarlar → Ajanlar bölümündeki {{agent}} Komut ayarı {{agent}} uygulamasını başlatmadı: {{detail}}. Değiştirin veya sıfırlayın.",
         "runtimeNotInstalled": "Bu sohbetin çalıştığı bilgisayarda {{agent}} yüklü değil. Orca'nın güncel bir sürümünde sohbet içinden yükleyin.",
         "fullAccessAsRoot": "{{agent}}, root olarak çalışırken Tam erişim iznini kullanmaz. Bu sohbeti çalıştıran bilgisayarda Ayarlar → Ajanlar bölümünden {{agent}} için başka bir izin seçin, ardından yeni bir sohbet başlatın.",
         "launchPreparationFailed": "Orca, bu sohbeti çalıştıran bilgisayarda {{agent}} başlatmayı hazırlayamadı.",
@@ -21005,7 +21004,6 @@
       "cancelFailed": "Kurulum iptal edilemedi. Yeniden deneyin.",
       "install": "{{agent}} yükle",
       "installManaged": "Orca'nın kopyasını yükle",
-      "installed": "Yüklendi",
       "notInstalled": "Yüklü değil.",
       "progress": "{{agent}} indirmesi",
       "readFailed": "Bu ana makinede {{agent}} kontrol edilemedi. Yeniden deneniyor.",
@@ -23795,7 +23793,6 @@
       "chip": "Botlar",
       "chipLabel": "Botlar, her şeyi göster",
       "searchEverything": "Her yerde \"{{text}}\" ara",
-      "searchBotsFor": "Botlarda \"{{text}}\" ara",
       "noMatch": "\"{{text}}\" ile eşleşen bot yok",
       "noBotsYet": "Henüz bot yok",
       "filtersPaused": "Filtreler botlara değil çalışma alanlarına uygulanır",
@@ -23811,7 +23808,7 @@
       "browse": "Şablonlara göz at"
     },
     "new": {
-      "fromTemplate": "Şablon kullan"
+      "fromTemplate": "Şablon"
     },
     "apps": {
       "paste": {

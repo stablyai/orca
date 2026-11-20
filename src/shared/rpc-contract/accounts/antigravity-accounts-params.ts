@@ -47,4 +47,6 @@ export type AntigravityChatAuthDetection = {
   adc: { available: boolean; project: string | null }
   /** Antigravity chats with a running child, which switching methods restarts. */
   liveChats: number
+  /** The version of the host's agy that last passed Orca's check, else null. Absent from older hosts. */
+  agyVersion?: string | null
 }
