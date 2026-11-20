@@ -222,8 +222,3 @@ export function supportedStructuredSeedOptions(
     Object.entries(options ?? {}).filter(([key]) => definition?.restingOptions.acceptsKey(key))
   )
 }
-
-/** Whether this host has Orca's managed runtime for `agent`, as its agent list publishes it. */
-export function hostHasManagedRuntime(agent: string): boolean {
-  return structuredAgentRuntimeMetadata(agent)?.definition.managedRuntime?.() === true
-}

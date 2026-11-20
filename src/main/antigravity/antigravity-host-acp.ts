@@ -14,6 +14,7 @@ import {
   isValidAppVersion
 } from '../../shared/app-lifecycle/identity/app-version'
 import { initializeAntigravityAcp } from './antigravity-acp-runtime-probe'
+import { antigravityTakesSystemPrompt } from '../acp/launch/acp-instructions'
 import {
   antigravityKeyringFallbackMarker,
   createAntigravityHostCredentialBackend,
@@ -42,7 +43,9 @@ export function isCompatibleAntigravityHostAcp(initialized: InitializeResponse):
     capabilities?.loadSession === true &&
     Boolean(capabilities.sessionCapabilities?.resume) &&
     // Readiness is checked by listing sessions.
-    Boolean(capabilities.sessionCapabilities?.list)
+    Boolean(capabilities.sessionCapabilities?.list) &&
+    // A managed agent's identity rides the system prompt; without it Orca's own server runs.
+    antigravityTakesSystemPrompt(initialized)
   )
 }
 
