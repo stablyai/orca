@@ -24,6 +24,7 @@ const AUTO_UPDATE_RETRY_MS = 60 * 60_000
 export type ManagedRuntimeInstallationDeps = {
   dataDirectory: string
   program: ManagedRuntimeProgram
+  available?: () => boolean
   findExternal: () => Promise<boolean>
   /** Told the release launches resolve to each time this reads the disk; null when none is whole. */
   onRelease?: (folder: string | null) => void
@@ -81,11 +82,6 @@ export class ManagedRuntimeInstallation {
     const { value: operation, revision } = this.state.get()
     const phase = `${operation?.id}:${operation?.phase}`
     let facts = this.facts
-    if (fresh && this.runtime.refreshPin) {
-      await this.runtime.refreshPin().catch((error: unknown) => {
-        console.warn(`[managed-runtime] ${this.agent} latest release unknown:`, error)
-      })
-    }
     if (fresh || facts?.phase !== phase) {
       const read = this.readInstalledFacts()
       facts = { phase, read }
@@ -119,7 +115,7 @@ export class ManagedRuntimeInstallation {
     }
     const source = (await this.deps.findExternal()) ? 'external' : release ? 'managed' : null
     return {
-      available: pin !== null,
+      available: this.deps.available?.() ?? (pin !== null || this.runtime.refreshPin !== undefined),
       version: pin?.version ?? null,
       ...(pin && { downloadBytes: pin.archiveBytes }),
       installedVersion: release?.version ?? null,
@@ -140,6 +136,14 @@ export class ManagedRuntimeInstallation {
     }
     // Nothing installed has nothing to update, so the latest release isn't looked up.
     if (!(await runtimeReleaseMayBePublished(this.root))) {
+      return
+    }
+    const installed = await this.status()
+    if (installed.source !== 'managed' || this.deps.updatesEnabled?.() === false) {
+      return
+    }
+    await this.runtime.refreshPin()
+    if (this.deps.updatesEnabled?.() === false) {
       return
     }
     const state = await this.status()

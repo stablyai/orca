@@ -83,6 +83,25 @@ describe('RateLimitService', () => {
     vi.mocked(fetchCodexRateLimits).mockResolvedValue(okProvider('codex', 0, 1_000))
   })
 
+  it('settles unavailable agents without reviving usage during full and targeted refreshes', async () => {
+    mockFreshBackgroundProviderFetches()
+    const service = new RateLimitService()
+    service.setUsageProviderAvailabilityResolver(async () => false)
+    await service.refresh()
+    expect((await service.getState()).kimi).toMatchObject({
+      status: 'idle',
+      session: null,
+      weekly: null
+    })
+    expect((await service.getState()).cursor).toMatchObject({ status: 'idle', session: null })
+    await service.refreshClaudeForTarget()
+    await service.refreshCodexForTarget()
+    await service.refreshGrok()
+    expect((await service.getState()).claude).toMatchObject({ status: 'idle', session: null })
+    expect((await service.getState()).codex?.status ?? null).toBe(null)
+    expect((await service.getState()).grok).toMatchObject({ status: 'idle', session: null })
+  })
+
   it('reads the account picked by a second switch made during a refresh', async () => {
     const service = new RateLimitService()
     const reads = [deferred<ProviderRateLimits>(), deferred<ProviderRateLimits>()]

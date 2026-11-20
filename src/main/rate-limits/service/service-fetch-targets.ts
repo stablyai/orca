@@ -21,6 +21,7 @@ import type {
   CodexRateLimitResetOutcome,
   UsageReadingAccount
 } from '../../../shared/agent-usage/rate-limits/rate-limit-types'
+import { disabledUsageSnapshot } from './disabled-usage-snapshot'
 import { ApiKeyFileUnreadableError } from '../../credentials/api-key-file-unreadable-error'
 
 const CODEX_RESET_REFRESH_RETRIES = 3
@@ -50,11 +51,54 @@ function codexResetUsageVisible(
 }
 
 export abstract class RateLimitServiceFetchTargets extends RateLimitServiceResultPolicy {
-  protected async resolveCodexHome(target?: CodexAccountSelectionTarget): Promise<{
+  protected async usageProviderAllowed(
+    provider: ProviderRateLimits['provider'],
+    signal: AbortSignal
+  ): Promise<boolean> {
+    const target =
+      provider === 'claude'
+        ? this.claudeFetchTarget
+        : provider === 'codex'
+          ? this.codexFetchTarget
+          : provider === 'kimi' || provider === 'antigravity'
+            ? this.antigravityFetchTarget
+            : undefined
+    return (
+      !signal.aborted &&
+      ((await this.usageProviderAvailabilityResolver?.(provider, signal, target)) ?? true)
+    )
+  }
+
+  protected async fetchUsageIfAllowed(
+    provider: ProviderRateLimits['provider'],
+    signal: AbortSignal,
+    fetch: () => Promise<ProviderRateLimits>
+  ): Promise<ProviderRateLimits> {
+    return (await this.usageProviderAllowed(provider, signal))
+      ? fetch()
+      : disabledUsageSnapshot(provider)
+  }
+
+  protected async resolveClaudeAuthPreparation(
+    target: NormalizedClaudeAccountSelectionTarget,
+    signal: AbortSignal
+  ): Promise<ClaudeRuntimeAuthPreparation | undefined> {
+    return (await this.usageProviderAllowed('claude', signal))
+      ? this.claudeAuthPreparationResolver?.(target)
+      : undefined
+  }
+
+  protected async resolveCodexHome(
+    target?: CodexAccountSelectionTarget,
+    signal?: AbortSignal
+  ): Promise<{
     skip: boolean
     homePath: string | null
     readingAccount?: UsageReadingAccount
   }> {
+    if (signal && !(await this.usageProviderAllowed('codex', signal))) {
+      return { skip: true, homePath: null }
+    }
     const resolution = await this.codexHomePathResolver?.(target)
     if (!resolution) {
       return { skip: false, homePath: null }
@@ -69,11 +113,11 @@ export abstract class RateLimitServiceFetchTargets extends RateLimitServiceResul
   }
 
   // WSL home resolution probes wsl.exe; chain it so other providers start immediately.
-  protected fetchKimiWithResolvedHome(): Promise<ProviderRateLimits> {
+  protected fetchKimiWithResolvedHome(signal: AbortSignal): Promise<ProviderRateLimits> {
     const pendingHome = this.kimiHomeResolver?.()
     return pendingHome
-      ? pendingHome.then((home) => fetchKimiRateLimits({ home }))
-      : fetchKimiRateLimits({ home: undefined })
+      ? pendingHome.then((home) => fetchKimiRateLimits({ home, signal }))
+      : fetchKimiRateLimits({ home: undefined, signal })
   }
 
   protected isSameCodexTarget(

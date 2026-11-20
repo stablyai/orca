@@ -27,7 +27,9 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
     options?: { force?: boolean }
   ): Promise<void> {
     const museBeforeFetch = this.state.muse
-    const museResultPromise = this.startMuseUsageFetch(signal)
+    const museResultPromise = this.usageProviderAllowed('muse', signal).then((allowed) =>
+      this.startMuseUsageFetch(signal, allowed)
+    )
     const prepared = await this.prepareFetchAllCycle(signal, options)
     if (!prepared) {
       return
@@ -149,8 +151,11 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
             status: 'error'
           } satisfies ProviderRateLimits)
 
-    const latestCodexHome = await this.resolveCodexHome(codexTarget)
-    const latestClaudeAuthPreparation = await this.claudeAuthPreparationResolver?.(claudeTarget)
+    const latestCodexHome = await this.resolveCodexHome(codexTarget, signal)
+    const latestClaudeAuthPreparation = await this.resolveClaudeAuthPreparation(
+      claudeTarget,
+      signal
+    )
     if (signal.aborted) {
       return
     }
@@ -290,8 +295,11 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
   }
 
   // Started before the shared preparation awaits; hidden meters skip the CLI spawn entirely.
-  private startMuseUsageFetch(signal: AbortSignal): Promise<SettledProviderResult> {
-    const enabled = this.museUsageEnabledResolver?.() ?? true
+  private startMuseUsageFetch(
+    signal: AbortSignal,
+    allowed: boolean
+  ): Promise<SettledProviderResult> {
+    const enabled = allowed && (this.museUsageEnabledResolver?.() ?? true)
     const previous = this.state.muse
     const beforeFetch = enabled
       ? this.withFetchingStatus(previous, 'muse')

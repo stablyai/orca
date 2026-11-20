@@ -22,25 +22,28 @@ function loadUi(ui: Partial<PersistedState['ui']>) {
   )
 }
 
-it('adds Muse on a headless profile that never ran the renderer default-on step', () => {
-  const legacyItems = getDefaultPersistedState(homedir()).ui.statusBarItems.filter(
-    (item) => item !== 'muse' && item !== 'antigravity'
-  )
-  const ui = loadUi({
-    statusBarItems: legacyItems,
-    _portsStatusBarDefaultAdded: true,
-    _kimiStatusBarDefaultAdded: true,
-    _minimaxStatusBarDefaultAdded: true,
-    _grokStatusBarDefaultAdded: true,
-    _cursorStatusBarDefaultAdded: true,
-    _zcodeStatusBarDefaultAdded: true
-  })
-
+it.each([undefined, true])('keeps Kimi removed across reloads with migration flag %s', (flag) => {
+  const ui = loadUi({ statusBarItems: ['ssh'], _kimiStatusBarDefaultAdded: flag })
   expect(ui.statusBarItems).toEqual([
-    ...legacyItems,
+    'ssh',
+    'ports',
+    'minimax',
     'antigravity',
-    'muse'
+    'grok',
+    'cursor',
+    'zcode',
+    'muse',
+    'git-blame'
   ] satisfies StatusBarItem[])
-  expect(ui._museStatusBarDefaultAdded).toBe(true)
-  expect(ui._antigravityStatusBarDefaultAdded).toBe(true)
+  expect(loadUi(ui).statusBarItems).toEqual([
+    'ssh',
+    'ports',
+    'minimax',
+    'antigravity',
+    'grok',
+    'cursor',
+    'zcode',
+    'muse',
+    'git-blame'
+  ] satisfies StatusBarItem[])
 })

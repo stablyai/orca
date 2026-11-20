@@ -58,7 +58,7 @@ export function applyDefaultOnStatusBarItems(
       continue
     }
     needsSave = true
-    if (!items.includes(item)) {
+    if (!items.includes(item) && (item !== 'kimi' || !Array.isArray(ui?.statusBarItems))) {
       items = [...items, item]
     }
   }

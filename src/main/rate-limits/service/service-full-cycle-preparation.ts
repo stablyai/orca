@@ -32,7 +32,7 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
     // Capture identities before awaits so a switch cannot reattribute the old credentials.
     const claudeTarget = this.claudeFetchTarget
     const claudeGeneration = this.claudeFetchGeneration
-    const claudeAuthPreparation = await this.claudeAuthPreparationResolver?.(claudeTarget)
+    const claudeAuthPreparation = await this.resolveClaudeAuthPreparation(claudeTarget, signal)
     if (signal.aborted) {
       return null
     }
@@ -41,8 +41,9 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
     const codexTarget = this.codexFetchTarget
     const codexGeneration = this.codexFetchGeneration
     // Gate only Codex, never siblings, when its runtime is skipped (#STA-4422).
-    const codexHome = await this.resolveCodexHome(codexTarget)
+    const codexHome = await this.resolveCodexHome(codexTarget, signal)
     const antigravityFetchAllowed =
+      (await this.usageProviderAllowed('antigravity', signal)) &&
       (this.antigravityUsageEnabledResolver?.() ?? true) &&
       (options?.force || !this.shouldSkipAutomatedFetch('antigravity', this.state.antigravity))
     // A login change seen here invalidates before the baseline below, so this read still counts.
@@ -158,16 +159,16 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
         : this.withFetchingStatus(previousState.zcode, 'zcode')
     })
     // Async Keychain/worker DB reads must not delay other providers.
-    const cursorResultPromise = readCursorAuthSession()
-      .then((authReadResult) => {
+    const cursorResultPromise = this.fetchUsageIfAllowed('cursor', signal, () =>
+      readCursorAuthSession().then((authReadResult) => {
         this.cursorAuthConfigured = authReadResult.status === 'ok'
         return fetchCursorRateLimits({ signal, authReadResult })
       })
-      .then(
-        (value) => ({ status: 'fulfilled', value }) as const,
-        (reason) => ({ status: 'rejected', reason }) as const
-      )
-    const zcodeResultPromise = (
+    ).then(
+      (value) => ({ status: 'fulfilled', value }) as const,
+      (reason) => ({ status: 'rejected', reason }) as const
+    )
+    const zcodeResultPromise = this.fetchUsageIfAllowed('zcode', signal, () =>
       zcodePlanConfigResult.error
         ? Promise.resolve(this.getZcodePlanCredentialError(zcodePlanConfigResult.error))
         : fetchZcodeRateLimits({ signal, planCredential: zcodePlanCredential })
@@ -188,15 +189,18 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
     )
     const missingWslCodexHome =
       codexFetchGated || codexHomePath ? null : this.getMissingWslCodexHomeResult(codexTarget)
-    const grokResultPromise = fetchGrokRateLimits({
-      signal,
-      authReadResult: grokAuthReadResult
-    }).then(
+    const grokResultPromise = this.fetchUsageIfAllowed('grok', signal, () =>
+      fetchGrokRateLimits({
+        signal,
+        authReadResult: grokAuthReadResult
+      })
+    ).then(
       (value) => ({ status: 'fulfilled', value }) as const,
       (reason) => ({ status: 'rejected', reason }) as const
     )
     // Live display does not waive automated Retry-After gates.
     const claudeFetchGated =
+      !(await this.usageProviderAllowed('claude', signal)) ||
       !this.isClaudeOAuthUsageEnabled() ||
       claudeGeneration !== this.claudeFetchGeneration ||
       (!options?.force && this.shouldSkipAutomatedFetch('claude', previousState.claude))
@@ -204,13 +208,15 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
       await Promise.allSettled([
         claudeFetchGated
           ? Promise.resolve(previousState.claude as ProviderRateLimits)
-          : fetchActiveClaudeRateLimits({
-              authPreparation: claudeAuthPreparation,
-              allowPtyFallback: this.shouldAllowClaudePtyFallback(claudeAuthPreparation),
-              allowUsagePanelSupplement: this.shouldAllowClaudeUsagePanelSupplement(),
-              networkProxySettings: this.networkProxySettingsResolver?.(),
-              signal: this.claudeUsageFetchSignal(signal)
-            }),
+          : this.fetchUsageIfAllowed('claude', signal, () =>
+              fetchActiveClaudeRateLimits({
+                authPreparation: claudeAuthPreparation,
+                allowPtyFallback: this.shouldAllowClaudePtyFallback(claudeAuthPreparation),
+                allowUsagePanelSupplement: this.shouldAllowClaudeUsagePanelSupplement(),
+                networkProxySettings: this.networkProxySettingsResolver?.(),
+                signal: this.claudeUsageFetchSignal(signal)
+              })
+            ),
         codexFetchGated
           ? Promise.resolve(previousState.codex as ProviderRateLimits)
           : (missingWslCodexHome ??
@@ -220,36 +226,42 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
               networkProxySettings: this.networkProxySettingsResolver?.(),
               signal
             })),
-        fetchGeminiRateLimits(geminiCliOAuthEnabled),
-        fetchOpenCodeGoUsage({
-          settingsApiKey: openCodeGoApiKey,
-          // Store/env keys become known only when the fetch resolves them.
-          onApiKeyResolved: (resolution) => {
-            // A credential change invalidates stale in-flight presence results.
-            if (opencodeGeneration !== this.opencodeFetchGeneration) {
-              return
-            }
-            // An undecryptable or briefly unreadable saved key still counts, so the bar stays up.
-            this.openCodeGoApiKeyConfigured =
-              resolution.status === 'found' ||
-              openCodeGoApiKeyError !== null ||
-              openCodeGoApiKeyReadSkipped
-          },
-          cookie,
-          workspaceIdOverride: workspaceIdOverride || undefined,
-          networkProxySettings: this.networkProxySettingsResolver?.(),
-          signal
-        }),
-        this.fetchKimiWithResolvedHome(),
-        miniMaxConfigResult.error
-          ? Promise.resolve(this.getMiniMaxCredentialError(miniMaxConfigResult.error))
-          : fetchMiniMaxRateLimits({
-              cookie: miniMaxCookie,
-              groupId: miniMaxGroupId,
-              models: miniMaxModels,
-              endpointMode: miniMaxEndpoint,
-              apiKey: miniMaxApiKey
-            })
+        this.fetchUsageIfAllowed('gemini', signal, () =>
+          fetchGeminiRateLimits(geminiCliOAuthEnabled, signal)
+        ),
+        this.fetchUsageIfAllowed('opencode-go', signal, () =>
+          fetchOpenCodeGoUsage({
+            settingsApiKey: openCodeGoApiKey,
+            // Store/env keys become known only when the fetch resolves them.
+            onApiKeyResolved: (resolution) => {
+              // A credential change invalidates stale in-flight presence results.
+              if (opencodeGeneration !== this.opencodeFetchGeneration) {
+                return
+              }
+              // An undecryptable or briefly unreadable saved key still counts, so the bar stays up.
+              this.openCodeGoApiKeyConfigured =
+                resolution.status === 'found' ||
+                openCodeGoApiKeyError !== null ||
+                openCodeGoApiKeyReadSkipped
+            },
+            cookie,
+            workspaceIdOverride: workspaceIdOverride || undefined,
+            networkProxySettings: this.networkProxySettingsResolver?.(),
+            signal
+          })
+        ),
+        this.fetchUsageIfAllowed('kimi', signal, () => this.fetchKimiWithResolvedHome(signal)),
+        this.fetchUsageIfAllowed('minimax', signal, () =>
+          miniMaxConfigResult.error
+            ? Promise.resolve(this.getMiniMaxCredentialError(miniMaxConfigResult.error))
+            : fetchMiniMaxRateLimits({
+                cookie: miniMaxCookie,
+                groupId: miniMaxGroupId,
+                models: miniMaxModels,
+                endpointMode: miniMaxEndpoint,
+                apiKey: miniMaxApiKey
+              })
+        )
       ])
     if (signal.aborted) {
       return null
