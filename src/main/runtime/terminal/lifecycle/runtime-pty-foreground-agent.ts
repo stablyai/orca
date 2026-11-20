@@ -14,6 +14,7 @@ type Dependencies = {
   getController(): RuntimePtyController | null
   getPty(ptyId: string): RuntimePtyWorktreeRecord | null
   touchSnapshot(ptyId: string): void
+  releaseComposer(ptyId: string, previous: TerminalAgent | null): void
   finishDelayedSnapshot(ptyId: string, changed: boolean): void
 }
 
@@ -166,11 +167,13 @@ export class RuntimePtyForegroundAgent {
       return false
     }
     const agent = result.process ? (recognizeAgentProcess(result.process)?.agent ?? null) : null
-    if (pty.foregroundAgent === agent) {
+    const previous = pty.foregroundAgent
+    if (previous === agent) {
       return false
     }
     pty.foregroundAgent = agent
     this.deps.touchSnapshot(ptyId)
+    this.deps.releaseComposer(ptyId, previous)
     return true
   }
 

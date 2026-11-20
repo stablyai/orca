@@ -1,3 +1,4 @@
+import { retainsHiddenGraphics } from './hidden-graphics-delivery'
 import { parseTerminalOscColorQuery } from '../../../../../../shared/terminal/protocol/queries/terminal-osc-color-reply'
 import {
   HIDDEN_STARTUP_RENDERER_QUERY_PENDING_CHARS,
@@ -15,6 +16,47 @@ import {
 } from '../../emulation/terminal-capability-replies'
 import { recordHiddenRendererSkip } from '../instrumentation/e2e-terminal-pty-harness'
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
+
+const MAX_DISCARDED_BACKLOG_QUERY_CHARS = 4096
+
+export function collectDiscardedBacklogQueries(
+  chunks: readonly { data: string }[],
+  startIndex: number
+): string {
+  let queries = ''
+  let pending = ''
+  for (let index = startIndex; index < chunks.length; index++) {
+    const {
+      statelessQueryData,
+      statefulQueryData,
+      oscColorQueryData,
+      pending: tail
+    } = extractHiddenStartupRendererQueryData(chunks[index].data, pending)
+    pending = tail
+    queries += statelessQueryData + statefulQueryData + oscColorQueryData
+    if (queries.length >= MAX_DISCARDED_BACKLOG_QUERY_CHARS) {
+      return queries.slice(0, MAX_DISCARDED_BACKLOG_QUERY_CHARS)
+    }
+  }
+  return queries
+}
+
+export function salvageDiscardedDeliveryQueries(
+  session: ConnectPanePtySession,
+  ptyId: string | null,
+  data: string,
+  meta?: PtyDataMeta
+): void {
+  const previous = session.skippedQueryCarry
+  const seq = meta?.seq
+  const startSeq = seq === undefined ? undefined : seq - (meta?.rawLength ?? data.length)
+  const pending =
+    previous?.ptyId === ptyId && startSeq !== undefined && previous.endSeq === startSeq
+      ? previous.pending
+      : ''
+  const tail = session.salvageRendererQueriesFromDiscardedRestoreData(data, pending)
+  session.skippedQueryCarry = ptyId && tail ? { ptyId, endSeq: seq, pending: tail } : null
+}
 
 /** Hidden-pane startup renderer query extraction, output skipping, and salvage from discarded restore data. */
 export function bindHiddenStartupRendererQueryWrite(session: ConnectPanePtySession): void {
@@ -168,6 +210,7 @@ export function bindHiddenRendererQueryAdmission(session: ConnectPanePtySession)
     const ptyId = session.transport.getPtyId()
     if (
       foreground ||
+      retainsHiddenGraphics(session.transport, ptyId) ||
       (!session.shouldSnapshotHiddenCodexOutput && session.remoteOutputGatedPtyId !== ptyId) ||
       !session.canUseHiddenOutputSnapshot(ptyId)
     ) {

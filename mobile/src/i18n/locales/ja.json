@@ -937,12 +937,10 @@
       "dismissDrawer": "ドロワーを閉じる"
     },
     "newWorkspaceSetupScriptField": {
-      "hooks": "フック",
       "label": "セットアップスクリプト",
-      "run": "実行",
-      "runSetupCommand": "セットアップコマンドを実行",
+      "runSetup": "セットアップを実行",
       "skip": "スキップ",
-      "waitForSetup": "セットアップが完了するまで待ってから Agent を開始してください",
+      "startAgentAfterSetup": "セットアップ後に Agent を開始",
       "waitForSetupSaveFailed": "セットアップ時の起動設定を保存できませんでした。"
     },
     "newWorkspaceSshConnectionField": {
@@ -1601,10 +1599,8 @@
   "host": {
     "edit": {
       "address": "アドレス",
-      "addressHint": "IP、host:port、ws:// / wss:// を使用できます。ポートを省略した wss:// URL は 443 を使用します。アドレスのみの場合は、現在のポート（未設定の場合は 6768）を引き継ぎます。",
       "connectionPreview": "{{endpoint}} に接続します",
       "goBack": "戻る",
-      "help": "表示名や接続先アドレスを変更できます。名前を空欄にすると、ホストから取得した名前を使用します。アドレスを編集しても、このスマートフォンの接続先が変わるだけで、再ペアリングは行われません。同じホストに別の IP で接続できる場合（自宅の LAN と Tailscale の切り替えなど）に使用してください。",
       "hostNamePlaceholder": "ホスト名",
       "hostRemoved": "このホストはこのスマートフォンから削除されました。",
       "loadFailed": "ホストの読み込みに失敗しました。",

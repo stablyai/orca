@@ -1,17 +1,14 @@
 import { useMemo } from 'react'
-import StatusIndicator from '@/components/sidebar/workspace-card/surface/StatusIndicator'
+import { AgentStateDot, type AgentDotState } from '@/components/agent/status/AgentStateDot'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { AgentTypeIcon } from '@/components/agent/icons/agent-type-icon'
 import { cn } from '@/lib/class-names'
 import { getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
-import { mapAgentStatusStateToVisualStatus } from '@/lib/agent-status/aggregation/worktree-agent-status'
-import { getWorktreeStatusLabel } from '@/lib/workspace/activity/worktree-status'
 import type { WorktreeStatus } from '../../../../shared/worktree/row-display/worktree-status-rollup'
 import {
   useAgentMessageSenderViews,
   type AgentMessageSenderInput
 } from '../native-chat/messages/agent-senders/native-chat-agent-message-sender-view'
-import { isAgentStatusState } from '../../../../shared/agent-status/contracts/agent-status-types'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import { formatAgentTypeLabel } from '../../../../shared/agent-status/presentation/agent-type-label'
 import {
@@ -19,17 +16,16 @@ import {
   formatOrcaSessionAddress
 } from '../../../../shared/agent-session/identity/orca-session-address'
 import type { AgentMessageSenderView } from '../../../../shared/agent-session/view/messages/agent-message-presentation'
+import { crewPartyDotState, crewPartyStatus } from './crew-party-status'
 import type { OrchestrationCrewRow } from '../../../../shared/orchestration/orchestration-crew'
 import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 
-export type CrewRowLook = { partyKey: string; status: WorktreeStatus; agentType: string }
-export type CrewStatusGroup = 'needsYou' | 'working' | 'idle' | 'failed'
-export const CREW_STATUS_GROUPS: readonly CrewStatusGroup[] = [
-  'needsYou',
-  'working',
-  'idle',
-  'failed'
-]
+export type CrewRowLook = {
+  partyKey: string
+  status: WorktreeStatus
+  dotState: AgentDotState
+  agentType: string
+}
 
 // Imported, missing, dispatch and other-host parties keep the Crew snapshot's own state.
 function crewRowSender(row: OrchestrationCrewRow): AgentMessageSenderInput {
@@ -59,77 +55,13 @@ function crewRowSender(row: OrchestrationCrewRow): AgentMessageSenderInput {
   return { sender: undefined, worktreeId: null }
 }
 
-function dotStatus(dot: NonNullable<AgentMessageSenderView['dot']>): WorktreeStatus {
-  switch (dot) {
-    case 'blocked':
-    case 'waiting':
-      return 'permission'
-    case 'idle':
-      return 'inactive'
-    case 'unverifiable':
-      return 'unconfirmed'
-    case 'working':
-    case 'monitoring':
-    case 'interrupted':
-    case 'failed':
-    case 'done':
-    case 'unconfirmed':
-    case 'permission':
-      return dot
-  }
-}
-
-export type CrewPartyState = {
-  pendingQuestion: boolean
-  dot: AgentMessageSenderView['dot']
-  /** The party's recorded agent state. */
-  status: string
-  taskFailed: boolean
-}
-
-/** The sidebar's status for a party: an open question, then live sender state, then its record. */
-export function crewPartyStatus(party: CrewPartyState): WorktreeStatus {
-  if (party.pendingQuestion) {
-    return 'permission'
-  }
-  if (party.dot) {
-    return dotStatus(party.dot)
-  }
-  const status = isAgentStatusState(party.status)
-    ? mapAgentStatusStateToVisualStatus(party.status)
-    : 'inactive'
-  // A settled assignment whose task failed is a failure, not a quiet finish.
-  return status === 'done' && party.taskFailed ? 'failed' : status
-}
-
 function crewRowLook(row: OrchestrationCrewRow, view: AgentMessageSenderView): CrewRowLook {
+  const party = { dot: view.dot, status: row.status, taskFailed: row.task?.state === 'failed' }
   return {
     partyKey: row.partyKey,
-    status: crewPartyStatus({
-      pendingQuestion: Boolean(row.pendingQuestion),
-      dot: view.dot,
-      status: row.status,
-      taskFailed: row.task?.state === 'failed'
-    }),
+    status: crewPartyStatus(party),
+    dotState: crewPartyDotState(party),
     agentType: view.agentType ?? row.agentKind
-  }
-}
-
-export function crewStatusGroup(status: WorktreeStatus): CrewStatusGroup {
-  switch (status) {
-    case 'permission':
-      return 'needsYou'
-    case 'working':
-    case 'monitoring':
-      return 'working'
-    case 'failed':
-      return 'failed'
-    case 'active':
-    case 'done':
-    case 'inactive':
-    case 'interrupted':
-    case 'unconfirmed':
-      return 'idle'
   }
 }
 
@@ -168,7 +100,7 @@ function agentLabel(agentType: string, hostLabel: string | undefined): string {
   return hostLabel ? `${label} · ${hostLabel}` : label
 }
 
-/** The sidebar's small status icon and agent icon, without a container. */
+/** The sidebar agent rows' status icon and agent icon, without a container. */
 export function CrewAgentIcons({
   look,
   hostLabel
@@ -178,11 +110,7 @@ export function CrewAgentIcons({
 }): React.JSX.Element {
   return (
     <span className="inline-flex shrink-0 items-center gap-1">
-      <StatusIndicator
-        status={look.status}
-        role="img"
-        aria-label={getWorktreeStatusLabel(look.status)}
-      />
+      <AgentStateDot state={look.dotState} size="sm" />
       <Tooltip>
         <TooltipTrigger asChild>
           <span

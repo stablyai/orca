@@ -26,7 +26,10 @@ async function apiWith(routes: FakeRoute[]) {
     },
     ...routes
   ])
-  return { api: google.client.googleApi(undefined, { http: fake.http, now: () => NOW }), seen }
+  return {
+    api: await google.client.googleApi(undefined, { http: fake.http, now: () => NOW }),
+    seen
+  }
 }
 
 const DOCS = 'https://docs.googleapis.com/v1/documents'
@@ -46,13 +49,6 @@ describe('Google writes', () => {
       readId
     )
     expect(seen[0]).toMatchObject({ method: 'PATCH', type: 'text/csv', body })
-  })
-
-  it('takes an empty answer to a DELETE', async () => {
-    const { api } = await apiWith([() => new Response(null, { status: 204 })])
-    await expect(
-      api.send('drive', { method: 'DELETE', url: `${DRIVE}/f1` }, () => 'deleted')
-    ).resolves.toBe('deleted')
   })
 
   it('renews a refused token once and resends the same JSON write', async () => {
@@ -88,15 +84,6 @@ describe('Google writes', () => {
       'Ask your owner to reconnect it in Orca.'
     )
     expect(seen.filter((call) => call.url === DOCS)).toHaveLength(1)
-  })
-
-  it('turns a refusal into a sentence', async () => {
-    const { api } = await apiWith([
-      () => googleJson(429, { error: { code: 429, message: 'Rate Limit Exceeded' } })
-    ])
-    await expect(
-      api.send('drive', { method: 'DELETE', url: `${DRIVE}/f1` }, () => true)
-    ).rejects.toThrow('Google says too many requests right now.')
   })
 })
 

@@ -94,8 +94,9 @@ export const uiStateAndMenuCommandsApi = {
     ipcRenderer.on('ui:toggleRightSidebar', listener)
     return () => ipcRenderer.removeListener('ui:toggleRightSidebar', listener)
   },
-  onToggleWorktreePalette: (callback: () => void): (() => void) => {
-    const listener = (_event: Electron.IpcRendererEvent) => callback()
+  onToggleWorktreePalette: (callback: (options?: { openOnly?: boolean }) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, options?: { openOnly?: boolean }) =>
+      callback(options)
     ipcRenderer.on('ui:toggleWorktreePalette', listener)
     return () => ipcRenderer.removeListener('ui:toggleWorktreePalette', listener)
   },

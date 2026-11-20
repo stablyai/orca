@@ -937,12 +937,10 @@
       "dismissDrawer": "關閉抽屜面板"
     },
     "newWorkspaceSetupScriptField": {
-      "hooks": "鉤子",
       "label": "設定指令碼",
-      "run": "執行",
-      "runSetupCommand": "執行設定命令",
+      "runSetup": "執行設定",
       "skip": "跳過",
-      "waitForSetup": "等待設定完成後再啟動代理程式",
+      "startAgentAfterSetup": "設定完成後再啟動代理程式",
       "waitForSetupSaveFailed": "儲存設定啟動行為失敗"
     },
     "newWorkspaceSshConnectionField": {
@@ -1601,10 +1599,8 @@
   "host": {
     "edit": {
       "address": "位址",
-      "addressHint": "可輸入 IP、host:port 或 ws:// / wss://。wss:// URL 未指定連接埠時會使用 443。僅輸入位址時，會保留目前的連接埠（或使用 6768）。",
       "connectionPreview": "將連線至 {{endpoint}}",
       "goBack": "返回",
-      "help": "變更顯示名稱或連線位址。名稱留空時，會使用主機回報的名稱。變更位址只會切換這支手機的連線位址，不會重新配對。適用於透過不同 IP 連線至同一台主機的情況（例如家用區域網路或 Tailscale）。",
       "hostNamePlaceholder": "主機名稱",
       "hostRemoved": "此主機已從這支手機移除。",
       "loadFailed": "無法載入主機資料。",
