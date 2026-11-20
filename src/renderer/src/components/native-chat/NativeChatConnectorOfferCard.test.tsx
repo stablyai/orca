@@ -583,12 +583,21 @@ describe("this computer's Sign in card when its sign-in changes after a read sai
 })
 
 describe('signing this computer in from the chat while its sign-in changes again', () => {
-  it('tells the bot nothing when it signs out, or another account signs in, before the read lands', async () => {
+  it('tells the bot nothing when it signs out, another account signs in, or it signs out and back in, before the read lands', async () => {
     const signedInAs = (userId: string) => ({
       ...ORCA_CONNECTED,
       cloud: { cloudProfileId: `c-${userId}`, userId, email: `${userId}@example.com`, linkedAt: 1 }
     })
-    for (const change of [ORCA_SIGNED_OUT, signedInAs('u2')]) {
+    // Each change runs while the read is out; the last signs out and back into the same account.
+    const changes: (() => void)[] = [
+      () => useAppStore.setState({ orcaProfileAuthStatus: ORCA_SIGNED_OUT }),
+      () => useAppStore.setState({ orcaProfileAuthStatus: signedInAs('u2') }),
+      () => {
+        useAppStore.setState({ orcaProfileAuthStatus: ORCA_SIGNED_OUT })
+        useAppStore.setState({ orcaProfileAuthStatus: signedInAs('u1') })
+      }
+    ]
+    for (const change of changes) {
       const initial = useAppStore.getState()
       const connect = vi.fn(async () => {
         useAppStore.setState({ orcaProfileAuthStatus: signedInAs('u1') })
@@ -619,7 +628,7 @@ describe('signing this computer in from the chat while its sign-in changes again
           await new Promise((resolve) => setTimeout(resolve, 0))
         })
         // The read the sign-in starts lands ok, but only after the sign-in changed again.
-        mocks.whileReading = () => useAppStore.setState({ orcaProfileAuthStatus: change })
+        mocks.whileReading = change
         fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
         await waitFor(() => expect(connect).toHaveBeenCalledTimes(1))
         await act(async () => {

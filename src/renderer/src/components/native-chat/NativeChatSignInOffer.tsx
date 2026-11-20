@@ -105,12 +105,19 @@ export function SignInOffer({ bot, offer, messageId }: SignInOfferProps): React.
   if (needsSignIn) {
     // Signing in clears it only once a read sent after the sign-in lands and says ok: tell the bot then.
     const tellOnceLinked = async (): Promise<void> => {
-      // The sign-in that just finished; a sign-out or another account before the read lands voids it.
-      const signedInAs = localSignInKey(useAppStore.getState())
+      // Any sign-in change before the read lands voids it, even a sign-out and back into the same account.
+      let signInChanged = false
+      const stopWatching = useAppStore.subscribe((state, previous) => {
+        signInChanged ||= localSignInKey(state) !== localSignInKey(previous)
+      })
       const mark = Math.max(botHostLinkReadMark(), link.mark)
-      await refreshBotHost(LOCAL_EXECUTION_HOST_ID)
+      try {
+        await refreshBotHost(LOCAL_EXECUTION_HOST_ID)
+      } finally {
+        stopWatching()
+      }
       if (
-        localSignInKey(useAppStore.getState()) === signedInAs &&
+        !signInChanged &&
         !readOrcaCloudSignedOut() &&
         botHostLinkReadSince(LOCAL_EXECUTION_HOST_ID, mark) &&
         readBotHostConnectorStatus(LOCAL_EXECUTION_HOST_ID) === 'ok'
