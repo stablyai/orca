@@ -6,6 +6,7 @@ import {
   withoutBackgroundTaskRows
 } from '../../input/task-lists/native-chat-background-task-row'
 import { isWordlessProviderFrameBlock } from '../notices/native-chat-provider-frame-summary'
+import { isAgentSessionExtensionStripBlock } from '../../../agent-session/view/agent-session-extension-ui'
 import { isNativeChatProviderTurnStartBlock } from '../turns/native-chat-provider-turn-start'
 import {
   isReplacedSubagentGroupTwin,
@@ -27,9 +28,13 @@ function readMarkdown(this: { prose: NativeChatBlock[] }): string {
 }
 
 function derive(blocks: readonly NativeChatBlock[]) {
+  // Extension statuses and widgets are drawn in the composer's strips, so they take no row here.
   const split = splitNativeChatBlocks(
     blocks.filter(
-      (block) => !isWordlessProviderFrameBlock(block) && !isNativeChatProviderTurnStartBlock(block)
+      (block) =>
+        !isWordlessProviderFrameBlock(block) &&
+        !isNativeChatProviderTurnStartBlock(block) &&
+        !(block.type === 'text' && isAgentSessionExtensionStripBlock(block))
     )
   )
   const groups = subagentGroupBlocks(split.prose)

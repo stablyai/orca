@@ -3,6 +3,7 @@ import { isRootAgentJournalItem } from '../agent-session/journal/agent-session-j
 import { agentSessionPromptQuestions } from '../agent-session/requests/prompts/agent-session-question-answer'
 import type { AgentReadEntry } from './agent-conversation-contracts'
 import { isAgentSessionContextClear } from '../agent-session/conversation-context/agent-session-context-clear'
+import { AGENT_SESSION_EXTENSION_NOTICE_PRESENTATION } from '../agent-session/view/agent-session-extension-ui'
 
 /** Whether a chat item can become an `orca agent read` entry by its kind alone: its own
  *  messages, failures, tool calls, approvals and questions, and the `/clear` divider the chat
@@ -15,7 +16,10 @@ export function isAgentChatEntryKind(item: AgentJournalRenderItem): boolean {
   return (
     isAgentSessionContextClear(body) ||
     (body.kind === 'message' && body.role !== 'reasoning') ||
-    (body.kind === 'status' && body.tone === 'error') ||
+    (body.kind === 'status' &&
+      body.tone === 'error' &&
+      // An extension's own red notice is the extension talking, not the agent failing.
+      body.presentation !== AGENT_SESSION_EXTENSION_NOTICE_PRESENTATION) ||
     body.kind === 'tool-call' ||
     body.kind === 'approval' ||
     body.kind === 'question'
