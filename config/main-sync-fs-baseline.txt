@@ -123,9 +123,9 @@
 6 src/main/codex-accounts/managed-homes/codex-managed-home-path.ts
 1 src/main/codex-accounts/managed-homes/guest-codex-account-homes.ts
 6 src/main/codex-accounts/managed-homes/host-codex-managed-home-ownership.ts
-7 src/main/codex-accounts/runtime-home/credentials/runtime-home-service-auth-core.ts
+6 src/main/codex-accounts/runtime-home/credentials/runtime-home-service-auth-core.ts
 5 src/main/codex-accounts/runtime-home/credentials/runtime-home-service-auth-provenance.ts
-23 src/main/codex-accounts/runtime-home/credentials/runtime-home-service-auth-sync.ts
+15 src/main/codex-accounts/runtime-home/credentials/runtime-home-service-auth-sync.ts
 2 src/main/codex-accounts/runtime-home/credentials/runtime-home-service-wsl-core.ts
 2 src/main/codex-accounts/runtime-home/legacy-host/legacy-shared-auth-migration.ts
 19 src/main/codex-accounts/runtime-home/legacy-host/runtime-home-service-legacy-migration.ts
