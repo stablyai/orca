@@ -47,11 +47,15 @@ function validatedCheckedInPolicy(bytes) {
   if (!isUsableRevision(policy.revision, MAX_CHOSEN_REVISION)) {
     throw new Error(`revision ${policy.revision} is above ${MAX_CHOSEN_REVISION}`)
   }
+  requireEnforceGate(policy)
+  return policy
+}
+
+function requireEnforceGate(policy) {
   const enforced = KINDS.filter((kind) => policy.kinds[kind]?.mode === 'enforce')
   if (!ENFORCE_GATE_CLEARED && enforced.length > 0) {
     throw new Error(`${enforced.join(', ')} can't be enforced until the enforce gate is cleared`)
   }
-  return policy
 }
 
 function isPlainObject(value) {
@@ -199,6 +203,8 @@ export function promoteCodexHistoryCleanupPolicy({ repo, target, gh = runGh }) {
   if (bytes === null) {
     throw new Error(`${nextTag} has not been published`)
   }
+  // Next can also be written by hand, outside this workflow.
+  requireEnforceGate(validatedCodexHistoryCleanupPolicy(bytes))
   return publishCodexHistoryCleanupPolicy({ repo, channel: 'stable', bytes, target, gh })
 }
 
