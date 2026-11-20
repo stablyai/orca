@@ -24911,10 +24911,10 @@
     "sourceUnavailable": "Não é possível acessar o host deste workspace",
     "noRemoteBranch": "Este branch não tem um branch remoto que {{host}} possa abrir",
     "missingRemote": "O clone em {{host}} não tem o remoto {{remote}}",
-    "headMismatch": "A cópia de {{branch}} em {{host}} está em um commit diferente deste Mac",
+    "headMismatch": "A cópia de {{branch}} em {{host}} está em um commit diferente de {{source}}",
     "hostCopyNotLoaded": "A cópia deste projeto em {{host}} ainda não foi carregada",
-    "localCommitsStay_one": "Seu {{count}} commit local fica neste Mac",
-    "localCommitsStay_other": "Seus {{count}} commits locais ficam neste Mac",
-    "localCommitsStay_many": "Seus {{count}} commits locais ficam neste Mac"
+    "localCommitsStay_one": "Seu {{count}} commit local fica em {{source}}",
+    "localCommitsStay_other": "Seus {{count}} commits locais ficam em {{source}}",
+    "localCommitsStay_many": "Seus {{count}} commits locais ficam em {{source}}"
   }
 }

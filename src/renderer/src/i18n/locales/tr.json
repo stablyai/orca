@@ -23980,9 +23980,9 @@
     "sourceUnavailable": "Bu çalışma alanının ana makinesine ulaşılamıyor",
     "noRemoteBranch": "Bu dalın {{host}} tarafından açılabilecek bir uzak dalı yok",
     "missingRemote": "{{host}} üzerindeki klonda {{remote}} uzak deposu yok",
-    "headMismatch": "{{host}} üzerindeki {{branch}} kopyası bu Mac'ten farklı bir commit'te",
+    "headMismatch": "{{host}} üzerindeki {{branch}} kopyası, {{source}} üzerindekinden farklı bir commit'te",
     "hostCopyNotLoaded": "Bu projenin {{host}} üzerindeki kopyası henüz yüklenmedi",
-    "localCommitsStay_one": "{{count}} yerel commit'iniz bu Mac'te kalır",
-    "localCommitsStay_other": "{{count}} yerel commit'iniz bu Mac'te kalır"
+    "localCommitsStay_one": "{{count}} yerel commit'iniz {{source}} üzerinde kalır",
+    "localCommitsStay_other": "{{count}} yerel commit'iniz {{source}} üzerinde kalır"
   }
 }

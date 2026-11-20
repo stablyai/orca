@@ -25214,8 +25214,8 @@
     "sourceUnavailable": "このワークスペースのホストに接続できません",
     "noRemoteBranch": "このブランチには {{host}} が開けるリモートブランチがありません",
     "missingRemote": "{{host}} のクローンにはリモート {{remote}} がありません",
-    "headMismatch": "{{host}} 上の {{branch}} のコピーは、この Mac とは別のコミットにあります",
+    "headMismatch": "{{host}} 上の {{branch}} のコピーは、{{source}} とは別のコミットにあります",
     "hostCopyNotLoaded": "{{host}} 上のこのプロジェクトのコピーはまだ読み込まれていません",
-    "localCommitsStay_other": "{{count}} 件のローカルコミットはこの Mac に残ります"
+    "localCommitsStay_other": "{{count}} 件のローカルコミットは {{source}} に残ります"
   }
 }

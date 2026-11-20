@@ -3,7 +3,12 @@ import type { Repo } from '../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { getRepoMainWorktreeId } from '../../../../shared/worktree/id'
 import { suggestionPathBasename } from '../../../../shared/worktree/naming/worktree-name-suggestion'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  parseExecutionHostId
+} from '../../../../shared/execution-host/execution-host'
 import { translate } from '@/i18n/i18n'
+import { selectExecutionHostDisplayLabel } from '@/runtime/hosts/display/execution-host-display-label'
 import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
 import {
   fetchRuntimeGit,
@@ -229,19 +234,32 @@ function getNotice({ target, workspace }: OpenOnHostRequest, hostHead: string): 
   if (plan.expectSameHead && hostHead !== worktree.head) {
     return translate(
       'openOnHost.headMismatch',
-      "{{host}}'s copy of {{branch}} is at a different commit than this Mac",
-      { host: target.label, branch: worktree.branch.replace(/^refs\/heads\//, '') }
+      "{{host}}'s copy of {{branch}} is at a different commit than {{source}}",
+      {
+        host: target.label,
+        branch: worktree.branch.replace(/^refs\/heads\//, ''),
+        source: getSourceHostLabel(worktree.hostId)
+      }
     )
   }
   if (plan.localOnlyCommits > 0) {
     return translate(
       'openOnHost.localCommitsStay',
-      'Your {{count}} local commits stay on this Mac',
+      'Your {{count}} local commits stay on {{source}}',
       {
         count: plan.localOnlyCommits,
-        defaultValue_one: 'Your {{count}} local commit stays on this Mac'
+        source: getSourceHostLabel(worktree.hostId),
+        defaultValue_one: 'Your {{count}} local commit stays on {{source}}'
       }
     )
   }
   return null
+}
+
+/** The display label of the host that owns the source workspace. */
+export function getSourceHostLabel(hostId: string | undefined): string {
+  return selectExecutionHostDisplayLabel(
+    useAppStore.getState(),
+    parseExecutionHostId(hostId ?? LOCAL_EXECUTION_HOST_ID)?.id ?? LOCAL_EXECUTION_HOST_ID
+  )
 }

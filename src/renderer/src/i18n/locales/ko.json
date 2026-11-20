@@ -23586,8 +23586,8 @@
     "sourceUnavailable": "이 워크스페이스의 호스트에 연결할 수 없습니다",
     "noRemoteBranch": "이 브랜치에는 {{host}}이(가) 열 수 있는 원격 브랜치가 없습니다",
     "missingRemote": "{{host}}의 클론에 원격 {{remote}}이(가) 없습니다",
-    "headMismatch": "{{host}}의 {{branch}} 복사본은 이 Mac과 다른 커밋에 있습니다",
+    "headMismatch": "{{host}}의 {{branch}} 복사본은 {{source}}와(과) 다른 커밋에 있습니다",
     "hostCopyNotLoaded": "{{host}}의 이 프로젝트 복사본이 아직 로드되지 않았습니다",
-    "localCommitsStay_other": "로컬 커밋 {{count}}개는 이 Mac에 남습니다"
+    "localCommitsStay_other": "로컬 커밋 {{count}}개는 {{source}}에 남습니다"
   }
 }

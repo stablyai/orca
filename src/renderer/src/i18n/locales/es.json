@@ -24296,10 +24296,10 @@
     "sourceUnavailable": "No se puede acceder al host de este espacio de trabajo",
     "noRemoteBranch": "Esta rama no tiene una rama remota que {{host}} pueda abrir",
     "missingRemote": "El clon de {{host}} no tiene el remoto {{remote}}",
-    "headMismatch": "La copia de {{branch}} en {{host}} está en un commit distinto al de este Mac",
+    "headMismatch": "La copia de {{branch}} en {{host}} está en un commit distinto al de {{source}}",
     "hostCopyNotLoaded": "La copia de este proyecto en {{host}} aún no se ha cargado",
-    "localCommitsStay_one": "Tu {{count}} commit local se queda en este Mac",
-    "localCommitsStay_other": "Tus {{count}} commits locales se quedan en este Mac",
-    "localCommitsStay_many": "Tus {{count}} commits locales se quedan en este Mac"
+    "localCommitsStay_one": "Tu {{count}} commit local se queda en {{source}}",
+    "localCommitsStay_other": "Tus {{count}} commits locales se quedan en {{source}}",
+    "localCommitsStay_many": "Tus {{count}} commits locales se quedan en {{source}}"
   }
 }

@@ -24311,10 +24311,10 @@
     "sourceUnavailable": "Impossible de joindre l'hôte de cet espace de travail",
     "noRemoteBranch": "Cette branche n'a pas de branche distante que {{host}} peut ouvrir",
     "missingRemote": "Le clone sur {{host}} n'a pas de dépôt distant {{remote}}",
-    "headMismatch": "La copie de {{branch}} sur {{host}} est sur un autre commit que ce Mac",
+    "headMismatch": "La copie de {{branch}} sur {{host}} est sur un autre commit que sur {{source}}",
     "hostCopyNotLoaded": "La copie de ce projet sur {{host}} n'est pas encore chargée",
-    "localCommitsStay_one": "Votre {{count}} commit local reste sur ce Mac",
-    "localCommitsStay_other": "Vos {{count}} commits locaux restent sur ce Mac",
-    "localCommitsStay_many": "Vos {{count}} commits locaux restent sur ce Mac"
+    "localCommitsStay_one": "Votre {{count}} commit local reste sur {{source}}",
+    "localCommitsStay_other": "Vos {{count}} commits locaux restent sur {{source}}",
+    "localCommitsStay_many": "Vos {{count}} commits locaux restent sur {{source}}"
   }
 }

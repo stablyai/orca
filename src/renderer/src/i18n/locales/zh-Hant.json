@@ -23498,8 +23498,8 @@
     "sourceUnavailable": "無法連線至此工作區的主機",
     "noRemoteBranch": "此分支沒有 {{host}} 可以開啟的遠端分支",
     "missingRemote": "{{host}} 上的複製沒有遠端儲存庫 {{remote}}",
-    "headMismatch": "{{host}} 上的 {{branch}} 副本與這台 Mac 位於不同的提交",
+    "headMismatch": "{{host}} 上的 {{branch}} 副本與 {{source}} 位於不同的提交",
     "hostCopyNotLoaded": "{{host}} 上此專案的副本尚未載入",
-    "localCommitsStay_other": "你的 {{count}} 個本機提交保留在這台 Mac 上"
+    "localCommitsStay_other": "你的 {{count}} 個本機提交保留在 {{source}} 上"
   }
 }

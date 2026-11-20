@@ -25664,8 +25664,8 @@
     "sourceUnavailable": "无法连接此工作区的主机",
     "noRemoteBranch": "此分支没有 {{host}} 可以打开的远程分支",
     "missingRemote": "{{host}} 上的克隆没有远程仓库 {{remote}}",
-    "headMismatch": "{{host}} 上的 {{branch}} 副本与这台 Mac 处于不同的提交",
+    "headMismatch": "{{host}} 上的 {{branch}} 副本与 {{source}} 处于不同的提交",
     "hostCopyNotLoaded": "{{host}} 上此项目的副本尚未加载",
-    "localCommitsStay_other": "你的 {{count}} 个本地提交保留在这台 Mac 上"
+    "localCommitsStay_other": "你的 {{count}} 个本地提交保留在 {{source}} 上"
   }
 }
