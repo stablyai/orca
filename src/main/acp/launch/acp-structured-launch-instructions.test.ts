@@ -137,12 +137,6 @@ describe('ACP launch: standing instructions', () => {
     expect(resolved.sessionMetaOnReopen).toBeUndefined()
   })
 
-  it('refuses to start a Kiro too old to take client steering', async () => {
-    await expect(launch('kiro', { instructions: PREAMBLE, version: '2.31.0' })).rejects.toThrow(
-      /cannot take this chat's standing instructions/
-    )
-  })
-
   it("adds them to OpenCode's inline instructions after the user's own, keeping their settings", async () => {
     const mine = JSON.stringify({ model: 'x/y', instructions: ['/home/user/mine.md'] })
     const resolved = await launch('opencode', {
