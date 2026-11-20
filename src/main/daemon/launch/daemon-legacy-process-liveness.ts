@@ -1,24 +1,48 @@
 import { readFileSync } from 'node:fs'
-import { parseDaemonPidFile } from '../endpoint/identity/daemon-pid-file-parse'
-import { hasErrorCode } from '../endpoint/identity/daemon-process-inspection'
+import {
+  parseDaemonPidFile,
+  type ParsedDaemonPid
+} from '../endpoint/identity/daemon-pid-file-parse'
+import {
+  hasErrorCode,
+  inspectProcessLiveness
+} from '../endpoint/identity/daemon-process-inspection'
 import { getDaemonPidPath } from './daemon-spawner'
 
-/** An older-protocol daemon's pid file names a process that still exists (it may be alive). */
+export type LegacyDaemonRecordVerdict =
+  | { status: 'absent' }
+  | { status: 'exited'; record: ParsedDaemonPid }
+  | { status: 'live' }
+  // A torn record names no process, so only its endpoint can prove the owner gone.
+  | { status: 'malformed' }
+  | { status: 'unverifiable'; reason: string }
+
+/** Only a missing record or ESRCH for the recorded PID proves an older-protocol daemon gone. */
+export function inspectLegacyDaemonRecord(
+  runtimeDir: string,
+  protocolVersion: number
+): LegacyDaemonRecordVerdict {
+  let contents: string
+  try {
+    contents = readFileSync(getDaemonPidPath(runtimeDir, protocolVersion), 'utf8')
+  } catch (error) {
+    return hasErrorCode(error, 'ENOENT')
+      ? { status: 'absent' }
+      : { status: 'unverifiable', reason: 'the pid record could not be read' }
+  }
+  const record = parseDaemonPidFile(contents)
+  if (!record) {
+    return { status: 'malformed' }
+  }
+  const liveness = inspectProcessLiveness(record.pid)
+  return liveness.status === 'exited' ? { status: 'exited', record } : liveness
+}
+
+/** An older-protocol daemon's pid record does not prove its process gone. */
 export function legacyDaemonProcessMayBeAlive(
   runtimeDir: string,
   protocolVersion: number
 ): boolean {
-  try {
-    const parsed = parseDaemonPidFile(
-      readFileSync(getDaemonPidPath(runtimeDir, protocolVersion), 'utf8')
-    )
-    if (!parsed) {
-      return false
-    }
-    process.kill(parsed.pid, 0)
-    return true
-  } catch (error) {
-    // EPERM: the process exists under another user; only a missing pid file or ESRCH proves it gone.
-    return hasErrorCode(error, 'EPERM')
-  }
+  const verdict = inspectLegacyDaemonRecord(runtimeDir, protocolVersion)
+  return verdict.status !== 'absent' && verdict.status !== 'exited'
 }
