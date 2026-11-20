@@ -18213,7 +18213,8 @@
           "createIdempotencyUpdateRequired": "将自动化移至此主机需要更新版本的 Orca 服务器。请更新 HUB 后重试"
         },
         "editDraft": {
-          "unsupportedSchedule": "此自动化保存的计划不受支持。请在保存更改前选择受支持的计划"
+          "unsupportedSchedule": "此自动化保存的计划不受支持。请在保存更改前选择受支持的计划",
+          "savedScheduleRefused": "此保存的计划无法运行：{{reason}}"
         },
         "hostCatalog": {
           "orphanEntryLabel": "未分配的旧版自动化"

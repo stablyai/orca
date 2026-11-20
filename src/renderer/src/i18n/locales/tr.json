@@ -18137,7 +18137,8 @@
           "createIdempotencyUpdateRequired": "Otomasyonları bu sunucuya taşımak için daha yeni bir Orca sunucusu gerekir. HUB'ı güncelleyip yeniden deneyin."
         },
         "editDraft": {
-          "unsupportedSchedule": "Bu otomasyonun kayıtlı zamanlaması desteklenmiyor. Değişiklikleri kaydetmeden önce desteklenen bir zamanlama seçin."
+          "unsupportedSchedule": "Bu otomasyonun kayıtlı zamanlaması desteklenmiyor. Değişiklikleri kaydetmeden önce desteklenen bir zamanlama seçin.",
+          "savedScheduleRefused": "Bu kayıtlı zamanlama çalıştırılamaz: {{reason}}"
         },
         "hostCatalog": {
           "orphanEntryLabel": "Atanmamış eski otomasyonlar"

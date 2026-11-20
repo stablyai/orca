@@ -4,6 +4,7 @@ import { hasAutomationSchedule } from '../../../../../shared/automation-event-tr
 import { translate } from '@/i18n/i18n'
 import { getAutomationRunRepoId } from '../../../../../shared/automations/history/automation-run-identity'
 import {
+  automationScheduleParseError,
   isRunnableAutomationSchedule,
   tryParseAutomationRrule
 } from '../../../../../shared/automations/scheduling/automation-schedule-parsing'
@@ -16,7 +17,9 @@ export function buildAutomationEditDraft(automation: Automation): AutomationDraf
   // An events-only automation's sentinel schedule is no cadence: picking one starts from a new one's.
   const scheduled = hasAutomationSchedule(automation)
   const schedule = scheduled ? tryParseAutomationRrule(automation.rrule) : null
-  const hasCustomSchedule = scheduled && !schedule && isRunnableAutomationSchedule(automation.rrule)
+  // A rule with no preset opens as Custom, unchanged, so a rename can't drop it.
+  const hasCustomSchedule = scheduled && !schedule
+  const refusedReason = hasCustomSchedule ? automationScheduleParseError(automation.rrule) : null
   return {
     name: automation.name,
     prompt: automation.prompt,
@@ -56,11 +59,17 @@ export function buildAutomationEditDraft(automation: Automation): AutomationDraf
       : {}),
     eventsOnly: !scheduled,
     scheduleWarning:
-      schedule || hasCustomSchedule || !scheduled
+      !hasCustomSchedule || isRunnableAutomationSchedule(automation.rrule)
         ? null
-        : translate(
-            'auto.components.automations.editDraft.unsupportedSchedule',
-            'This automation has an unsupported saved schedule. Pick a supported schedule before saving changes.'
-          )
+        : refusedReason
+          ? translate(
+              'auto.components.automations.editDraft.savedScheduleRefused',
+              "This saved schedule can't run: {{reason}}",
+              { reason: refusedReason }
+            )
+          : translate(
+              'auto.components.automations.editDraft.unsupportedSchedule',
+              'This automation has an unsupported saved schedule. Pick a supported schedule before saving changes.'
+            )
   }
 }

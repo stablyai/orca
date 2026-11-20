@@ -17988,7 +17988,8 @@
           "createIdempotencyUpdateRequired": "Zum Verschieben von Automatisierungen auf diesen Host ist ein neuerer Orca-Server erforderlich. HUB aktualisieren und erneut versuchen."
         },
         "editDraft": {
-          "unsupportedSchedule": "Diese Automatisierung hat einen nicht unterstützten gespeicherten Zeitplan. Vor dem Speichern einen unterstützten Zeitplan auswählen."
+          "unsupportedSchedule": "Diese Automatisierung hat einen nicht unterstützten gespeicherten Zeitplan. Vor dem Speichern einen unterstützten Zeitplan auswählen.",
+          "savedScheduleRefused": "Dieser gespeicherte Zeitplan kann nicht ausgeführt werden: {{reason}}"
         },
         "hostCatalog": {
           "orphanEntryLabel": "Nicht zugewiesene ältere Automatisierungen"

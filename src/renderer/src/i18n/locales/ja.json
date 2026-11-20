@@ -18158,7 +18158,8 @@
           "createIdempotencyUpdateRequired": "このホストにオートメーションを移動するには、最新の Orca サーバーが必要です。HUB を更新して再試行してください。"
         },
         "editDraft": {
-          "unsupportedSchedule": "このオートメーションには未対応のスケジュールが保存されています。変更を保存する前に、対応するスケジュールを選択してください。"
+          "unsupportedSchedule": "このオートメーションには未対応のスケジュールが保存されています。変更を保存する前に、対応するスケジュールを選択してください。",
+          "savedScheduleRefused": "この保存済みスケジュールは実行できません: {{reason}}"
         },
         "hostCatalog": {
           "orphanEntryLabel": "未割り当ての旧オートメーション"

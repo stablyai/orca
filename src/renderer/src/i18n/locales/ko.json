@@ -17283,7 +17283,8 @@
           "createIdempotencyUpdateRequired": "이 호스트로 자동화를 이동하려면 더 최신 Orca 서버가 필요합니다. HUB를 업데이트하고 다시 시도하세요."
         },
         "editDraft": {
-          "unsupportedSchedule": "이 자동화에 지원되지 않는 일정이 저장되어 있습니다. 변경 사항을 저장하기 전에 지원되는 일정을 선택하세요."
+          "unsupportedSchedule": "이 자동화에 지원되지 않는 일정이 저장되어 있습니다. 변경 사항을 저장하기 전에 지원되는 일정을 선택하세요.",
+          "savedScheduleRefused": "저장된 이 일정은 실행할 수 없습니다: {{reason}}"
         },
         "hostCatalog": {
           "orphanEntryLabel": "할당되지 않은 기존 자동화"
