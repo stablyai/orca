@@ -39,6 +39,24 @@ export function withMessageTaskId(payload: string | undefined, taskId: string): 
   return JSON.stringify({ ...parsed, taskId })
 }
 
+/** A caller's payload without the field only Orca's own bot-request mail may carry. */
+export function withoutBotRequestClaim(payload: string | undefined): string | undefined {
+  if (!payload) {
+    return payload
+  }
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(payload)
+  } catch {
+    return payload
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed) || !('botRequest' in parsed)) {
+    return payload
+  }
+  const { botRequest: _claimed, ...rest } = parsed as Record<string, unknown>
+  return JSON.stringify(rest)
+}
+
 export function isConversationReportOutcome(value: unknown): value is 'succeeded' | 'failed' {
   return value === 'succeeded' || value === 'failed'
 }

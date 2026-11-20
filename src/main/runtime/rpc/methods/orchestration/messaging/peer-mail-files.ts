@@ -6,6 +6,7 @@ import { basename } from 'node:path'
 import { z } from 'zod'
 import {
   AGENT_SESSION_ATTACHMENT_MAX_BYTES,
+  sanitizeAgentSessionAttachmentName,
   AGENT_SESSION_MESSAGE_IMAGE_MAX_COUNT,
   AGENT_SESSION_MESSAGE_IMAGE_MAX_TOTAL_BYTES
 } from '../../../../../../shared/agent-session/agent-session-attachments'
@@ -41,7 +42,11 @@ export async function uploadPeerMailFiles(
     throw refused("--file goes with --to bot:<name> --item <n>: the files go to that item's chat.")
   }
   // The limits a local `send --item --file` has, checked before anything is uploaded.
-  const imageCount = files.filter(isAgentInlineImagePath).length
+  // The paired Orca classifies by the name it stores, so classify by that name too.
+  const isImage = files.map((path) =>
+    isAgentInlineImagePath(sanitizeAgentSessionAttachmentName(basename(path)))
+  )
+  const imageCount = isImage.filter(Boolean).length
   if (imageCount > AGENT_SESSION_MESSAGE_IMAGE_MAX_COUNT) {
     throw refused(`A message takes up to ${AGENT_SESSION_MESSAGE_IMAGE_MAX_COUNT} images.`)
   }
@@ -60,10 +65,7 @@ export async function uploadPeerMailFiles(
       return info.size
     })
   )
-  const imageBytes = files.reduce(
-    (sum, path, index) => (isAgentInlineImagePath(path) ? sum + (sizes[index] ?? 0) : sum),
-    0
-  )
+  const imageBytes = sizes.reduce((sum, size, index) => (isImage[index] ? sum + size : sum), 0)
   if (imageBytes > AGENT_SESSION_MESSAGE_IMAGE_MAX_TOTAL_BYTES) {
     throw refused(
       `These images add up to ${Math.ceil(imageBytes / MB)} MB. A message takes up to ${AGENT_SESSION_MESSAGE_IMAGE_MAX_TOTAL_BYTES / MB} MB.`
