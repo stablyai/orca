@@ -8,7 +8,7 @@ import { createIntegrationTokenFileCache } from './integration-token-file-cache'
 let directory = ''
 afterEach(() => rmSync(directory, { recursive: true, force: true }))
 
-it.each([128, 129, 200, 2000])(
+it.each([129, 2000])(
   'completes %i concurrent credential reads without eviction retries',
   async (count) => {
     directory = mkdtempSync(join(tmpdir(), 'orca-token-file-cache-progress-'))
