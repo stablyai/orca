@@ -1,6 +1,15 @@
 import type { ManagedPane, ManagedPaneInternal } from '../pane-manager-types'
 import '../pane-layout/pane-tree-ops'
-import { cancelPendingSafeFitContinuations } from './pane-fit-continuation-registry'
+import {
+  cancelPendingSafeFitContinuations,
+  flushPendingSafeFitContinuations
+} from './pane-fit-continuation-registry'
+import { clearPaneFitContinuationRetry } from './pane-fit-continuation-retry'
+import {
+  isEchoOfLastRowFlip,
+  rowFlipToRemember,
+  type AppliedRowFlip
+} from './one-row-fit-oscillation'
 import { safeFitAndThen } from './pane-fit'
 
 type ProposedDimensions = {
@@ -14,6 +23,7 @@ type StableFitPane = ManagedPane &
 const MAX_STABILITY_FRAMES = 8
 const pendingStableFitRafIds = new WeakMap<StableFitPane, number>()
 const stableFitCallbacks = new WeakMap<StableFitPane, Set<() => void>>()
+const lastAppliedRowFlip = new WeakMap<StableFitPane, AppliedRowFlip>()
 
 function getPendingObservedFitRafId(pane: StableFitPane): number | null {
   return pane.pendingObservedFitRafId ?? pendingStableFitRafIds.get(pane) ?? null
@@ -78,6 +88,23 @@ function flushStableFitCallbacks(pane: StableFitPane): void {
 
 function finishStableFit(pane: StableFitPane): void {
   setPendingObservedFitRafId(pane, null)
+  const proposed = getProposedDimensions(pane)
+  const current = { cols: pane.terminal.cols, rows: pane.terminal.rows }
+  if (proposed && isEchoOfLastRowFlip(lastAppliedRowFlip.get(pane), current, proposed)) {
+    // Fitting the reverse of the row just applied is the cell-boundary echo (#20822).
+    lastAppliedRowFlip.delete(pane)
+    flushPendingSafeFitContinuations(pane)
+    clearPaneFitContinuationRetry(pane)
+    flushStableFitCallbacks(pane)
+    return
+  }
+  const flip = proposed ? rowFlipToRemember(current, proposed) : null
+  if (flip) {
+    lastAppliedRowFlip.set(pane, flip)
+  } else if (!proposed || proposed.cols !== current.cols || proposed.rows !== current.rows) {
+    // A matching measurement keeps the latch. Clearing it would let the echo fit on the next pass.
+    lastAppliedRowFlip.delete(pane)
+  }
   // An equal grid still proves measurability and must release hidden reattach continuations.
   safeFitAndThen(pane, 'stable-pane-fit', () => flushStableFitCallbacks(pane))
 }
