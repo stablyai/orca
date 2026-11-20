@@ -136,7 +136,7 @@ export function recoverInterruptedGuardedFileOperation(
 
 /**
  * Drops a held file once its bytes are back at the target (`restore` puts them back when the target
- * is free). Otherwise it moves aside to `<target>.orca-kept-<id>`, keeping its own permissions: a
+ * is free). Otherwise it is kept beside it as `<target>.orca-kept-<id>`, with its own permissions: a
  * writer that recreated the target found no file, so the held bytes can be the user's only copy of
  * their settings or sign-in. Held bytes never go back over a target that a newer writer created.
  */
@@ -154,44 +154,59 @@ function restoreMovedFileWithoutOverwrite(
     drop()
     return
   }
+  if (!keep) {
+    drop()
+    return
+  }
   let held: Buffer | null = null
   try {
     held = readFileSync(sourcePath)
   } catch {
     // Unreadable or vanished: nothing proves these bytes are kept elsewhere.
   }
-  // Named by content: a conflict that repeats with the same bytes finds its copy already kept.
+  // Named by content, so a repeated conflict finds its copy already kept; a name holding other
+  // bytes (a kept copy edited since) moves on to the next.
   const name = held ? createHash('sha256').update(held).digest('hex').slice(0, 16) : randomUUID()
-  let keptPath = `${targetPath}.orca-kept-${name}`
-  let keptPathFree = held === null
-  const kept = (keep && held ? [targetPath, keptPath] : [targetPath]).some((path) => {
+  for (let attempt = 0; attempt <= KEPT_NAME_ATTEMPTS; attempt++) {
+    const path =
+      attempt === 0 ? targetPath : `${targetPath}.orca-kept-${name}${keptSuffix(attempt)}`
+    // Unreadable held bytes take a random name, which the link below refuses if taken.
+    let free = held === null && attempt > 0
     try {
-      return held !== null && nodeFileContentsEqualSync(path, held)
+      if (held !== null && nodeFileContentsEqualSync(path, held)) {
+        drop()
+        return
+      }
     } catch (error) {
-      keptPathFree ||= path === keptPath && isDefinitiveAbsence(error)
-      return false
+      free = attempt > 0 && isDefinitiveAbsence(error)
     }
-  })
-  if (kept || !keep) {
-    drop()
-    return
-  }
-  if (!keptPathFree) {
-    // A copy by that name holds other bytes now (edited since): these are kept beside it.
-    keptPath = `${targetPath}.orca-kept-${randomUUID()}`
-  }
-  try {
-    // A rename needs no free space and never widens who can read the file.
-    renameFileWithWindowsRetry(sourcePath, keptPath)
-  } catch (error) {
-    // Another process already released this held file.
-    if (isDefinitiveAbsence(error)) {
+    if (!free) {
+      continue
+    }
+    try {
+      // A link refuses a taken name, needs no free space and keeps the file's own permissions.
+      if (!publishFileWithoutOverwrite(sourcePath, path)) {
+        continue
+      }
+    } catch (error) {
+      // Gone: another process already released this held file.
+      if (!isDefinitiveAbsence(error)) {
+        throw error
+      }
       return
     }
-    // Left held, the next guarded operation keeps it first, and fails until it can.
-    throw error
+    drop()
+    console.warn('[atomic-file] Kept an earlier version beside', targetPath, path)
+    return
   }
-  console.warn('[atomic-file] Kept an earlier version beside', targetPath, keptPath)
+  // Left held, the next guarded operation keeps it first, and fails until it can.
+  throw new Error(`Could not keep an earlier version of ${targetPath}`)
+}
+
+const KEPT_NAME_ATTEMPTS = 16
+
+function keptSuffix(attempt: number): string {
+  return attempt > 1 ? `-${attempt - 1}` : ''
 }
 
 export function getGuardedOperationHeldPath(targetPath: string): string {

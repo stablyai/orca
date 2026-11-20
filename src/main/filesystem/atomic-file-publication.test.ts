@@ -10,6 +10,20 @@ import {
 
 const fsMock = vi.hoisted(() => ({ linkSync: vi.fn(), renameSync: vi.fn() }))
 
+/** Runs `once` instead of the first link to a kept-copy name. */
+function onFirstKeptLink(once: (source: string, kept: string) => void): () => void {
+  const link = fsMock.linkSync.getMockImplementation()!
+  let done = false
+  fsMock.linkSync.mockImplementation((source: string, destination: string) => {
+    if (!done && destination.includes('.orca-kept-')) {
+      done = true
+      return once(source, destination)
+    }
+    return link(source, destination)
+  })
+  return () => fsMock.linkSync.mockImplementation(link)
+}
+
 vi.mock('node:fs', async (importOriginal) => {
   const actual = await importOriginal<typeof NodeFs>()
   fsMock.linkSync.mockImplementation(actual.linkSync)
@@ -132,7 +146,33 @@ describe('writeFileAtomically', () => {
       const keptName = readdirSync(dir).find((name) => name.includes('.orca-kept-'))!
       writeFileSync(join(dir, keptName), 'model = "edited"\n')
       conflict()
+      conflict()
       expect(kept()).toEqual(['model = "edited"\n', 'model = "o5"\n'])
+    } finally {
+      cleanup()
+    }
+  })
+
+  it('never replaces a copy another writer keeps under the same name meanwhile', () => {
+    setup()
+    try {
+      const target = join(dir, 'config.toml')
+      writeFileSync(`${target}.orca-guarded`, 'model = "o5"\n')
+      writeFileSync(target, 'approval = "never"\n')
+      const link = fsMock.linkSync.getMockImplementation()!
+      const restoreLink = onFirstKeptLink((source, kept) => {
+        writeFileSync(kept, 'model = "other"\n')
+        link(source, kept)
+      })
+
+      expect(writeFileAtomicallyIfUnchanged(target, 'approval = "never"\n', 'next')).toBe(true)
+      restoreLink()
+      expect(
+        readdirSync(dir)
+          .filter((name) => name.includes('.orca-kept-'))
+          .map((name) => readFileSync(join(dir, name), 'utf-8'))
+          .sort()
+      ).toEqual(['model = "o5"\n', 'model = "other"\n'])
     } finally {
       cleanup()
     }
@@ -144,13 +184,14 @@ describe('writeFileAtomically', () => {
       const target = join(dir, 'config.toml')
       writeFileSync(`${target}.orca-guarded`, 'model = "o5"\n')
       writeFileSync(target, 'approval = "never"\n')
-      fsMock.renameSync.mockImplementationOnce(() => {
+      const restoreLink = onFirstKeptLink(() => {
         throw Object.assign(new Error('no space'), { code: 'ENOSPC' })
       })
 
       expect(() => writeFileAtomicallyIfUnchanged(target, 'approval = "never"\n', 'next')).toThrow(
         'no space'
       )
+      restoreLink()
       expect(readFileSync(`${target}.orca-guarded`, 'utf-8')).toBe('model = "o5"\n')
       expect(writeFileAtomicallyIfUnchanged(target, 'approval = "never"\n', 'next')).toBe(true)
       expect(
