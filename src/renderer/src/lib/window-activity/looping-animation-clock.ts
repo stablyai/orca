@@ -11,7 +11,8 @@ const STEPS_PER_CYCLE: ReadonlyMap<string, number> = new Map([
   ['pulse', 4]
 ])
 const LABEL_TICK_MS = 1_000
-const MUTATIONS_TO_CHECK = 8
+// Bounds the hit tests in a tick where a lot of off-screen content changed.
+const MUTATIONS_TO_CHECK = 64
 
 // The slice of a CSS animation the clock touches; a DOM Animation satisfies it as is.
 type LoopingAnimation = {
@@ -24,8 +25,8 @@ type LoopingAnimation = {
 
 export type LoopingAnimationClockDeps = {
   getAnimations: () => readonly LoopingAnimation[]
-  /** A spinner or pulse began: it mounted, so its frame is being drawn anyway. */
-  onLoopStart: (listener: () => void) => () => void
+  /** A spinner or pulse began on an element: it mounted, so its frame is being drawn anyway. */
+  onLoopStart: (listener: (started: readonly LoopingAnimation[]) => void) => () => void
   /** A second tick in which something else on screen repainted. */
   onLabelRepaint: (listener: () => void) => () => void
 }
@@ -46,8 +47,9 @@ function documentDeps(doc: Document): LoopingAnimationClockDeps {
     getAnimations: () => doc.getAnimations(),
     onLoopStart: (listener) => {
       const onStart = (event: AnimationEvent): void => {
-        if (STEPS_PER_CYCLE.has(event.animationName)) {
-          listener()
+        if (STEPS_PER_CYCLE.has(event.animationName) && event.target instanceof Element) {
+          // Only this element's animations: a document-wide scan per mount would not scale.
+          listener(event.target.getAnimations())
         }
       }
       doc.addEventListener('animationstart', onStart)
@@ -89,11 +91,9 @@ export function installLoopingAnimationClock(
   deps: LoopingAnimationClockDeps = documentDeps(document)
 ): () => void {
   let step = 0
-  let alignQueued = false
 
-  // CSS is the registry: whatever currently carries one of these animations gets stepped.
-  const apply = (): void => {
-    for (const animation of deps.getAnimations()) {
+  const apply = (animations: readonly LoopingAnimation[]): void => {
+    for (const animation of animations) {
       const steps =
         animation.animationName === undefined
           ? undefined
@@ -113,18 +113,11 @@ export function installLoopingAnimationClock(
 
   const stopRepaints = deps.onLabelRepaint(() => {
     step++
-    apply()
+    // CSS is the registry: whatever currently carries one of these animations gets stepped.
+    apply(deps.getAnimations())
   })
-  const stopStarts = deps.onLoopStart(() => {
-    // One pass per batch of mounts puts new loops on the shared step before their first paint.
-    if (!alignQueued) {
-      alignQueued = true
-      queueMicrotask(() => {
-        alignQueued = false
-        apply()
-      })
-    }
-  })
+  // A new loop joins the shared step before its first paint.
+  const stopStarts = deps.onLoopStart(apply)
 
   return () => {
     stopRepaints()

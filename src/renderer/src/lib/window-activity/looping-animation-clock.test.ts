@@ -31,7 +31,7 @@ function fakeAnimation(
 
 function harness(animations: FakeAnimation[]) {
   let repaint: (() => void) | null = null
-  let start: (() => void) | null = null
+  let start: ((started: FakeAnimation[]) => void) | null = null
   const deps: LoopingAnimationClockDeps = {
     getAnimations: () => animations,
     onLabelRepaint: (listener) => {
@@ -51,10 +51,7 @@ function harness(animations: FakeAnimation[]) {
   return {
     dispose,
     labelRepainted: () => repaint?.(),
-    loopStarted: async () => {
-      start?.()
-      await Promise.resolve()
-    }
+    loopStarted: (animation: FakeAnimation) => start?.([animation])
   }
 }
 
@@ -72,10 +69,10 @@ describe('installLoopingAnimationClock', () => {
     expect(ring.currentTime).toBe(0)
   })
 
-  it('holds still while nothing else repaints', async () => {
+  it('holds still while nothing else repaints', () => {
     const ring = fakeAnimation('agent-spinner-rotate')
     const clock = harness([ring])
-    await clock.loopStarted()
+    clock.loopStarted(ring)
     expect(ring.currentTime).toBe(0)
   })
 
@@ -90,7 +87,7 @@ describe('installLoopingAnimationClock', () => {
     expect(seen).toEqual([500, 1_000, 1_500, 0])
   })
 
-  it('puts a spinner that mounts mid-cycle on the shared step as it mounts', async () => {
+  it('puts a spinner that mounts mid-cycle on the shared step as it mounts', () => {
     const first = fakeAnimation('agent-spinner-rotate')
     const animations = [first]
     const clock = harness(animations)
@@ -98,15 +95,15 @@ describe('installLoopingAnimationClock', () => {
     clock.labelRepainted()
     const late = fakeAnimation('agent-spinner-rotate')
     animations.push(late)
-    await clock.loopStarted()
+    clock.loopStarted(late)
     expect(late.currentTime).toBe(250)
     expect(first.currentTime).toBe(250)
   })
 
-  it('pauses a loop that something set running', async () => {
+  it('pauses a loop that something set running', () => {
     const loader = fakeAnimation('spin', 'running')
     const clock = harness([loader])
-    await clock.loopStarted()
+    clock.loopStarted(loader)
     expect(loader.playState).toBe('paused')
   })
 

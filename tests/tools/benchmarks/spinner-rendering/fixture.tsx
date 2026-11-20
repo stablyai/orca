@@ -35,7 +35,7 @@ function ElapsedLabel({ quiet }: { quiet: boolean }): React.JSX.Element {
 
 function WorkingAgent(): React.JSX.Element {
   return (
-    <div className="flex h-8 items-center gap-4 px-3" data-agent="">
+    <div className="flex h-8 items-center gap-3 px-3" data-agent="">
       {/* Tab, sidebar row, workspace card, chat event row, chat loading icon. */}
       <AgentStateDot state="working" size="md" title={null} />
       <AgentStateDot state="working" size="sm" title={null} />
@@ -85,14 +85,17 @@ function Fixture({ agents, label, offset = 0, legacy = false }: Scenario) {
       {legacy ? <style>{LEGACY_CSS}</style> : null}
       <div
         id="stage"
-        className="fixed top-12 left-[300px] z-20 h-[700px] w-[400px] overflow-auto bg-background"
+        className="fixed top-12 left-[300px] z-20 h-[700px] w-[1150px] overflow-auto bg-background"
         style={{ overflowAnchor: 'none' }}
       >
         {label ? <ElapsedLabel quiet={label === 'quiet'} /> : null}
         <div style={{ height: offset }} />
-        {Array.from({ length: agents }, (_, index) => (
-          <WorkingAgent key={index} />
-        ))}
+        {/* Four across, so every requested agent fits in the scrollport. */}
+        <div className="grid grid-cols-4">
+          {Array.from({ length: agents }, (_, index) => (
+            <WorkingAgent key={index} />
+          ))}
+        </div>
         <div style={{ height: 1000 }} />
       </div>
     </>
@@ -100,14 +103,15 @@ function Fixture({ agents, label, offset = 0, legacy = false }: Scenario) {
 }
 
 const root = createRoot(document.getElementById('root')!)
-let generation = 0
 let disposeClock: (() => void) | null = null
 Object.assign(window, {
   spinnerBenchmark: {
     render(scenario: Scenario) {
       disposeClock?.()
       disposeClock = scenario.legacy ? null : installLoopingAnimationClock()
-      flushSync(() => root.render(<Fixture key={++generation} {...scenario} />))
+      // Unmount first so each scenario starts from freshly mounted indicators.
+      flushSync(() => root.render(null))
+      flushSync(() => root.render(<Fixture {...scenario} />))
     },
     /** Every looping indicator animation in the document, as the browser sees it. */
     census() {

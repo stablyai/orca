@@ -87,16 +87,29 @@ try {
   if (!values['verify-only']) {
     const cdp = await page.context().newCDPSession(page)
     await cdp.send('Performance.enable')
-    const show = async (name) => {
-      const { baseline: _baseline, fresh, ...scenario } = SCENARIOS[name]
-      await page.evaluate((value) => window.spinnerBenchmark.render(value), scenario)
-      await pause(fresh ? 0 : SETTLE_MS)
+    const mount = (name) => {
+      const { baseline: _baseline, fresh: _fresh, ...scenario } = SCENARIOS[name]
+      return page.evaluate((value) => window.spinnerBenchmark.render(value), scenario)
     }
+    const show = async (name) => {
+      await mount(name)
+      await pause(SETTLE_MS)
+    }
+    const countFrames = () =>
+      app.evaluate((_electron, ms) => globalThis.spinnerBenchmarkCountFrames(ms), TRACE_MS)
     for (const name of Object.keys(SCENARIOS)) {
-      await show(name)
-      const frames = await app.evaluate((_electron, ms) => {
-        return globalThis.spinnerBenchmarkCountFrames(ms)
-      }, TRACE_MS)
+      let frames
+      if (SCENARIOS[name].fresh) {
+        // Trace first, then mount, so the mount and first paints are inside the measurement.
+        await show('idle')
+        const tracing = countFrames()
+        await pause(500)
+        await mount(name)
+        frames = await tracing
+      } else {
+        await show(name)
+        frames = await countFrames()
+      }
       const census = await page.evaluate(() => window.spinnerBenchmark.census())
       report.scenarios[name] = {
         frames,
