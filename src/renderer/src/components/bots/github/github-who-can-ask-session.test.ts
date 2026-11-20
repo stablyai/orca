@@ -38,10 +38,7 @@ describe('one Add picker open on GitHub', () => {
   it('asks for the roster once and filters it as the owner types', async () => {
     const people = vi.fn(async () => ({ ok: true as const, value: roster }))
     const users = vi.fn(async (_args: { query: string }): Promise<Users> => noOne)
-    const search = gitHubWhoCanAskSession(
-      { people, users },
-      { scope, ownerLogin: 'owner', hostName: null, t }
-    )
+    const search = gitHubWhoCanAskSession({ people, users }, { scope, ownerLogin: 'owner', t })
     const names = async (query: string) => {
       const result = await search(query)
       return result.ok ? result.value.members.map((member) => member.name) : result.error
@@ -62,7 +59,7 @@ describe('one Add picker open on GitHub', () => {
     }))
     const search = gitHubWhoCanAskSession(
       { people: () => slow.promise, users },
-      { scope, ownerLogin: 'owner', hostName: null, t }
+      { scope, ownerLogin: 'owner', t }
     )
     const answer = search('brennan')
     await vi.advanceTimersByTimeAsync(ROSTER_WAIT_MS)
@@ -91,7 +88,7 @@ describe('one Add picker open on GitHub', () => {
     for (const unknown of [undefined, { repositories: [], owners: [], more: false }]) {
       const search = gitHubWhoCanAskSession(
         { people, users },
-        { scope: unknown, ownerLogin: null, hostName: null, t }
+        { scope: unknown, ownerLogin: null, t }
       )
       expect((await search('octocat')).ok).toBe(true)
     }

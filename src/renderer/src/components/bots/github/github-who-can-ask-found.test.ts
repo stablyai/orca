@@ -32,9 +32,8 @@ const failed: BotSlackResult<ConnectorGitHubUsersResponse> = { ok: false, error:
 const answer = (
   roster: GitHubRosterState,
   exact: BotSlackResult<ConnectorGitHubUsersResponse> | null,
-  query = 'brennan',
-  hostName: string | null = null
-) => gitHubWhoCanAskAnswer({ roster, exact, query, ownerLogin: 'owner', hostName }, t)
+  query = 'brennan'
+) => gitHubWhoCanAskAnswer({ roster, exact, query, ownerLogin: 'owner' }, t)
 const value = (result: ReturnType<typeof answer>) => {
   if (!result.ok) {
     throw new Error(result.error)
@@ -107,8 +106,9 @@ describe('the GitHub picker’s reading of a search', () => {
       detail: 'Couldn’t read repos. Try an exact username.'
     })
     expect(empty({ status: 'skipped' }, null, 'neil par')?.detail).toBe('Try an exact username.')
-    expect(value(answer({ status: 'unavailable' }, none, 'zed', 'linux-box')).note).toBe(
-      'Couldn’t read repos on linux-box. Exact usernames only.'
+    // Which computer goes unsaid, local or remote: the line stays one line.
+    expect(value(answer({ status: 'unavailable' }, none, 'zed')).note).toBe(
+      'Couldn’t read repos. Exact usernames only.'
     )
   })
 

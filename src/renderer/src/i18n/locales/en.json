@@ -27540,9 +27540,7 @@
         "searchedOrgsExact": "Searched your orgs and exact usernames.",
         "searchedOrgs": "Searched your orgs.",
         "foundInOrgs": "Found in your orgs",
-        "notFoundInOrgs": "Not found in your orgs",
-        "unavailableOn": "Couldn’t read repos on {{host}}.",
-        "searchedAsOn": "Repos read as @{{login}} on {{host}}."
+        "notFoundInOrgs": "Not found in your orgs"
       },
       "connection": {
         "description": "{{repos}} · signed in as @{{login}}",
