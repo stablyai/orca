@@ -5,6 +5,8 @@ import { applyContentChanges } from './lsp-document-text.mjs'
 const SESSION_ID_PREFIX = 'orca-session-'
 const WATCHED_FILES = 'workspace/didChangeWatchedFiles'
 const SHUTDOWN_GRACE_MS = 5000
+// Matches the plugin's startupTimeout: a restart that hasn't initialized by then is abandoned.
+const RESTART_TIMEOUT_MS = 60_000
 const REQUEST_CANCELLED = -32800
 const REQUEST_FAILED = -32803
 // These carry no work for a stopped server; a new one rereads the disk anyway.
@@ -41,6 +43,7 @@ export function createServerSession({
   let withdrawId = null
   let idleTimer
   let killTimer
+  let idleExpired = false
   const queue = []
   const pending = new Set()
   // The current server's requests to the client, under wrapper ids so a late answer can't reach a newer server.
@@ -49,7 +52,8 @@ export function createServerSession({
   const documents = new Map()
   // Registrations the client holds for the current server, by id; withdrawn when that server stops.
   const clientRegistrations = new Map()
-  const folderChanges = []
+  // Current workspace folders by uri; a restart sends one change from the initialize set to this.
+  let folders = null
 
   const track = (message) => {
     const { method, params } = message
@@ -66,7 +70,13 @@ export function createServerSession({
     } else if (method === 'workspace/didChangeConfiguration') {
       configuration = message
     } else if (method === 'workspace/didChangeWorkspaceFolders') {
-      folderChanges.push(message)
+      folders ??= new Map()
+      for (const { uri } of params?.event?.removed ?? []) {
+        folders.delete(uri)
+      }
+      for (const folder of params?.event?.added ?? []) {
+        folders.set(folder.uri, folder)
+      }
     }
   }
 
@@ -79,6 +89,7 @@ export function createServerSession({
   }
 
   const armIdle = () => {
+    idleExpired = false
     clearTimer(idleTimer)
     if (Number.isFinite(idleMs)) {
       idleTimer = setTimer(onIdle, idleMs)
@@ -98,10 +109,11 @@ export function createServerSession({
     killTimer = setTimer(() => server?.kill(), SHUTDOWN_GRACE_MS)
   }
 
+  // With requests still out, the stop waits for the last answer instead of checking again later.
   function onIdle() {
     if (state === 'ready') {
       if (pending.size > 0) {
-        armIdle()
+        idleExpired = true
       } else {
         stop()
       }
@@ -145,16 +157,29 @@ export function createServerSession({
     }
     replayId = `${SESSION_ID_PREFIX}${++nextId}`
     server.write({ ...initialize, id: replayId })
+    killTimer = setTimer(() => server?.kill(), RESTART_TIMEOUT_MS)
   }
 
   const finishReplay = () => {
+    clearTimer(killTimer)
     replayId = null
     server.write({ jsonrpc: '2.0', method: 'initialized', params: {} })
     if (configuration) {
       server.write(configuration)
     }
-    for (const change of folderChanges) {
-      server.write(change)
+    const initialFolders = initialize.params?.workspaceFolders ?? []
+    if (folders) {
+      const added = [...folders.values()].filter(
+        ({ uri }) => !initialFolders.some((f) => f.uri === uri)
+      )
+      const removed = initialFolders.filter(({ uri }) => !folders.has(uri))
+      if (added.length > 0 || removed.length > 0) {
+        server.write({
+          jsonrpc: '2.0',
+          method: 'workspace/didChangeWorkspaceFolders',
+          params: { event: { added, removed } }
+        })
+      }
     }
     for (const [uri, { languageId, version, text }] of documents) {
       server.write({
@@ -213,7 +238,20 @@ export function createServerSession({
       return
     }
     if (state !== 'ready') {
-      queue.push(message)
+      // The new server rereads the disk, and a cancel takes back a queued request, so neither waits in the queue.
+      if (method === '$/cancelRequest') {
+        const index = queue.findIndex((queued) => queued.id === message.params?.id)
+        if (index !== -1) {
+          const [cancelled] = queue.splice(index, 1)
+          toClient({
+            jsonrpc: '2.0',
+            id: cancelled.id,
+            error: { code: REQUEST_CANCELLED, message: 'cancelled' }
+          })
+        }
+      } else if (method !== WATCHED_FILES) {
+        queue.push(message)
+      }
       return
     }
     if (!NOT_ACTIVITY.has(method) && !background) {
@@ -275,6 +313,9 @@ export function createServerSession({
       server.write({ jsonrpc: '2.0', method: 'exit' })
     } else if (!message.method && pending.delete(message.id)) {
       toClient(message)
+      if (idleExpired && pending.size === 0 && state === 'ready') {
+        stop()
+      }
     } else if (message.method === 'client/registerCapability') {
       onRegister(message)
     } else if (message.method === 'client/unregisterCapability') {
