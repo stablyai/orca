@@ -30,6 +30,9 @@ export function createFormPostNavigationTracker(): {
   // The mark came only from a remembered POST result, which a fresh GET navigation disproves.
   let fromMemory = false
   let startTarget = ''
+  // A redirect target first remembered on a memory-only mark: a reload or Back/Forward keeps it
+  // (a 307/308 re-POSTs there), a fresh navigation shows it was a GET page and forgets it.
+  let provisionalUrl: string | null = null
   const postResultUrls = new Set<string>()
   return {
     submitted: (actionUrl) => {
@@ -38,6 +41,7 @@ export function createFormPostNavigationTracker(): {
     started: (url) => {
       const target = withoutHash(url)
       startTarget = target
+      provisionalUrl = null
       fromMemory = target !== submitted && postResultUrls.has(target)
       post = target === submitted || fromMemory
       submitted = null
@@ -46,8 +50,10 @@ export function createFormPostNavigationTracker(): {
       const isPost = method !== null ? method !== 'GET' : post
       const target = withoutHash(url)
       fromMemory = fromMemory && method === null
-      // A remembered address that redirected elsewhere proves nothing about the new address.
-      if (isPost && !(fromMemory && target !== startTarget)) {
+      if (isPost) {
+        if (fromMemory && target !== startTarget && !postResultUrls.has(target)) {
+          provisionalUrl = target
+        }
         postResultUrls.delete(target)
         postResultUrls.add(target)
         if (postResultUrls.size > MAX_POST_RESULT_URLS) {
@@ -56,13 +62,17 @@ export function createFormPostNavigationTracker(): {
       }
       return isPost
     },
-    // The address stays remembered: an older history entry there is still a POST result.
+    // The start address stays remembered: an older history entry there is still a POST result.
     freshlyNavigated: () => {
       if (!fromMemory) {
         return false
       }
       fromMemory = false
       post = false
+      if (provisionalUrl !== null) {
+        postResultUrls.delete(provisionalUrl)
+        provisionalUrl = null
+      }
       return true
     }
   }
