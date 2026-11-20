@@ -145,16 +145,16 @@ export function structuredSessionSurfaceIsCurrent(
 }
 
 /** Bookkeeping cannot invalidate native proof or reach a surface created after admission.
- *  `background`: the chat keeps working with no tab, so it stays open. `end`: a bot chat a person
- *  ended, whose `admit` runs in the write's check. A refused check commits nothing and returns no
- *  error; an error means the write's outcome is unknown. */
+ *  `background`: the chat keeps working with no tab, so it stays open. `guard.end`: a bot chat a
+ *  person ended. `guard.admit` runs in the write's check: a refused check commits nothing and returns
+ *  no error; an error means the write's outcome is unknown. */
 export async function retireCapturedStructuredSessionSurface(
   host: StructuredAgentSessionHost,
   sessionId: string,
   surface: StructuredSessionSurface | null,
   runtime?: StructuredSessionSurfaceRuntime,
   background = false,
-  ending?: { admit: () => boolean }
+  guard?: { admit: () => boolean; end?: true }
 ): Promise<{ committed: boolean; error?: unknown }> {
   const current = (hidden = false) =>
     structuredSessionSurfaceIsCurrent(host, sessionId, surface, runtime, hidden)
@@ -168,9 +168,9 @@ export async function retireCapturedStructuredSessionSurface(
     await host.setSessionTabVisibility(sessionId, false, undefined, {
       deferHiddenNotice: true,
       ...(background ? { background } : {}),
-      ...(ending ? { end: true } : {}),
+      ...(guard?.end ? { end: true } : {}),
       check: () => {
-        if (!current() || (ending && !ending.admit())) {
+        if (!current() || (guard && !guard.admit())) {
           throw obsolete
         }
       }

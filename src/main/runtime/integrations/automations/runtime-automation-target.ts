@@ -1,3 +1,4 @@
+import { structuredAgentSessionTurnRefusal } from '../../../native-chat/agent-session-wire/operations/structured-agent-session-turn-gate'
 import type {
   Automation,
   AutomationBotTarget,
@@ -113,6 +114,11 @@ export function assertAutomationBotAtWrite(
 ): void {
   if (target) {
     requireAutomationBot(store, target)
+  }
+  // A chat ended (or being ended) since its check takes no new automation.
+  const refused = target?.chat && structuredAgentSessionTurnRefusal(target.chat.sessionId)
+  if (refused) {
+    throw new Error(refused.refusal.message)
   }
 }
 
