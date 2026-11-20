@@ -137,14 +137,14 @@ export async function retireOutgrownStructuredAgentSessionChild(
     const revision = session.operationalRevision
     const work = await accountSwitch.currentWorkOnce()
     // Uncertain or owed (a lead's wake-up for a finished background task included): keep it.
-    if (
-      !work ||
-      structuredAgentSessionChildHasOpenWork(deps.work, work) ||
-      owesWakeUp(work.newestTurnCompletedAt, deps.work.childWork())
-    ) {
+    // Child work and held sends change without a journal row, so the stop asks again at the end.
+    const owes = (answer: JournalWorkAnswer<'child-work'>) =>
+      structuredAgentSessionChildHasOpenWork(deps.work, answer) ||
+      owesWakeUp(answer.newestTurnCompletedAt, deps.work.childWork())
+    if (!work || owes(work)) {
       return
     }
-    // Anything written since that read, or the selection moving on, keeps the agent.
+    // Anything written since that read, owed since, or the selection moving on keeps the agent.
     await stopOutgrown(
       sessionId,
       deps,
@@ -153,6 +153,7 @@ export async function retireOutgrownStructuredAgentSessionChild(
         sameJournalCursor(cursor, journal.cursor()) &&
         sameJournalCursor(physical, journal.physicalCursor()) &&
         revision === session.operationalRevision &&
+        !owes(work) &&
         accountSwitch.committed()
     )
     return
