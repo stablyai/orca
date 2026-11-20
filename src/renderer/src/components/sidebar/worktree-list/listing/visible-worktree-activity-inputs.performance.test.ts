@@ -42,7 +42,11 @@ function workspaceTabs(worktreeId: string): Tab[] {
   ]
 }
 
-function workForTitleWrite(workspaces: number): { hashes: number; sleepLookups: number } {
+function workForTitleWrite(workspaces: number): {
+  hashes: number
+  sleepLookups: number
+  rescanHashes: number
+} {
   let sleepLookups = 0
   // Each scanned chat looks itself up here, so this counts chats a pass visits.
   const sleptAt = new Proxy(
@@ -69,11 +73,15 @@ function workForTitleWrite(workspaces: number): { hashes: number; sleepLookups: 
   sleepLookups = 0
   // No chat is marked asleep, so none rests its workspace.
   expect(getWorktreeIdsWithStructuredChat(retitled, sleptAt).size).toBe(0)
-  return { hashes: hashes.count, sleepLookups }
+  const work = { hashes: hashes.count, sleepLookups }
+  // A new sleep map forces a full pass; chats past the 2,048-entry pane-key memo must not re-hash.
+  hashes.count = 0
+  getWorktreeIdsWithStructuredChat(retitled, {})
+  return { ...work, rescanHashes: hashes.count }
 }
 
 it('a terminal title write rescans and hashes no chat, at N and 10N chats', () => {
   for (const chats of [2_500, 25_000]) {
-    expect(workForTitleWrite(chats)).toEqual({ hashes: 0, sleepLookups: 0 })
+    expect(workForTitleWrite(chats)).toEqual({ hashes: 0, sleepLookups: 0, rescanHashes: 0 })
   }
 })
