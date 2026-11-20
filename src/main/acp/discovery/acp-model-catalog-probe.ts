@@ -154,23 +154,23 @@ export function createAcpModelCatalogProbe(
           )
           models = listing.parse(stdout)
         } else if (listing.kind === 'session') {
-          // Remove disposable session storage and any folderless listing cwd after the process closes.
+          // Remove disposable session storage after the process closes.
           const folderArgs = listing.sessionFolderArgs
+          // Without a chat's folder, the account's models list in an empty private one.
+          const inPrivateFolder = listing.inPrivateFolder || !workspace
           const listInSession = async (model: string | undefined) => {
-            const root = join(deps.dataDirectory, 'acp-listing-sessions', spec.agent)
-            let sessionFolder: Awaited<ReturnType<typeof acpRunFolder>> | null = null
-            let cwdFolder: Awaited<ReturnType<typeof acpRunFolder>> | null = null
-            let sessionCwd = workspace
+            const folder =
+              folderArgs || inPrivateFolder
+                ? await acpRunFolder(join(deps.dataDirectory, 'acp-listing-sessions', spec.agent))
+                : null
+            const sessionCwd = inPrivateFolder && folder ? folder.path : workspace
             const started: string[] = []
             try {
-              sessionFolder = folderArgs ? await acpRunFolder(root) : null
-              cwdFolder = !workspace || listing.inPrivateFolder ? await acpRunFolder(root) : null
-              sessionCwd = cwdFolder ? cwdFolder.path : workspace
               assertStructuredAgentResolutionCurrent(operation)
               const args = [
                 ...prefixArgs,
                 ...spec.args({ fullAccess: false, pluginDirs: [], model }),
-                ...(folderArgs && sessionFolder ? folderArgs(sessionFolder.path) : [])
+                ...(folderArgs && folder ? folderArgs(folder.path) : [])
               ]
               return await runAgentModelCatalogSession<
                 AcpModelCatalogSessionConnection,
@@ -231,8 +231,7 @@ export function createAcpModelCatalogProbe(
                     })
                 }
               }
-              await sessionFolder?.remove()
-              await cwdFolder?.remove()
+              await folder?.remove()
             }
           }
           let result: Awaited<ReturnType<typeof listInSession>>
