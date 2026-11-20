@@ -1,7 +1,7 @@
 import type { IPty } from 'node-pty'
 import { recognizeAgentProcess } from '../../../shared/agent-status/process/agent-process-recognition'
 import { shouldInspectOuterWrapperForegroundProcess } from '../../../shared/agent-status/process/foreground-wrapper-agent'
-import { ptyShellProcessId } from '../../windows/windows-pty-job'
+import { listPtyJobProcessIds, ptyShellProcessId } from '../../windows/windows-pty-job'
 import { createPtyForegroundResolver } from '../../daemon/pty-subprocess/spawn-file-foreground-process'
 import {
   resolveAgentForegroundProcessWithAvailability,
@@ -14,6 +14,7 @@ import {
   type WindowsCachedAgentJobVerdict
 } from './windows/cached-agent-revalidation'
 import { readWindowsConsoleAttachedProcessIds } from './windows/console-attached-processes'
+import { paneMemberConsoleReader } from './windows/exited-root-orphans'
 import { isWindowsPtyJobReadable, readWindowsPtyJobProcessIds } from './windows/pty-job-membership'
 
 /** Execute fresh confirmation; owners retain cache publication and lifetime fences. */
@@ -55,8 +56,11 @@ export async function confirmFreshPtyForeground(args: {
       ...(process.platform === 'win32'
         ? {
             forceProcessScan: true,
-            readWindowsConsoleAttachedProcessIds: (memberPid?: number) =>
-              readWindowsConsoleAttachedProcessIds(memberPid ?? proc.pid)
+            readWindowsConsoleAttachedProcessIds: paneMemberConsoleReader(
+              proc.pid,
+              () => listPtyJobProcessIds(proc),
+              readWindowsConsoleAttachedProcessIds
+            )
           }
         : {})
     })

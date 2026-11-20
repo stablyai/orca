@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { tableRows } = vi.hoisted(() => ({
-  tableRows: { current: [] as { pid: number; ppid: number; name: string; command: string }[] }
-}))
+const { tableRows } = vi.hoisted(() => {
+  const current: { pid: number; ppid: number; name: string; command: string }[] = []
+  return { tableRows: { current } }
+})
 
 vi.mock('../../../windows/windows-process-table', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
@@ -12,6 +13,7 @@ vi.mock('../../../windows/windows-process-table', async (importOriginal) => ({
 }))
 
 import { resolveWindowsAgentForegroundProcessWithAvailability } from './agent-process'
+import { paneMemberConsoleReader } from './exited-root-orphans'
 
 const DEAD_ROOT = 5368
 const ORPHAN_SH = {
@@ -36,8 +38,47 @@ describe('resolveWindowsAgentForegroundProcessWithAvailability when the pane roo
 
   it('finds the agent the exited root left running', async () => {
     await expect(
-      resolveWindowsAgentForegroundProcessWithAvailability(DEAD_ROOT, 'bash.exe', { fresh: true })
+      resolveWindowsAgentForegroundProcessWithAvailability(DEAD_ROOT, 'bash.exe', {
+        fresh: true,
+        readWindowsConsoleAttachedProcessIds: async () => new Set([5656, 15864])
+      })
     ).resolves.toMatchObject({ available: true, processName: 'claude', processId: 15864 })
+  })
+
+  it('stays unavailable without console evidence', async () => {
+    await expect(
+      resolveWindowsAgentForegroundProcessWithAvailability(DEAD_ROOT, 'bash.exe', { fresh: true })
+    ).resolves.toEqual({ available: false, processName: null })
+  })
+
+  it('stays unavailable when the orphans name two different agents', async () => {
+    tableRows.current = [
+      ORPHAN_SH,
+      ORPHAN_CLAUDE,
+      { pid: 8000, ppid: DEAD_ROOT, name: 'sh.exe', command: 'sh.exe -c codex' },
+      { pid: 8001, ppid: 8000, name: 'codex.exe', command: 'codex.exe' }
+    ]
+    await expect(
+      resolveWindowsAgentForegroundProcessWithAvailability(DEAD_ROOT, 'bash.exe', {
+        fresh: true,
+        readWindowsConsoleAttachedProcessIds: async () => new Set([5656, 15864, 8000, 8001])
+      })
+    ).resolves.toEqual({ available: false, processName: null })
+  })
+
+  it("never credits another pane's orphan whose parent pid the dead root reused", async () => {
+    const readConsole = vi.fn(async () => new Set([5656, 15864]))
+    await expect(
+      resolveWindowsAgentForegroundProcessWithAvailability(DEAD_ROOT, 'bash.exe', {
+        fresh: true,
+        readWindowsConsoleAttachedProcessIds: paneMemberConsoleReader(
+          DEAD_ROOT,
+          () => [9100, 9101],
+          readConsole
+        )
+      })
+    ).resolves.toEqual({ available: false, processName: null })
+    expect(readConsole).not.toHaveBeenCalled()
   })
 
   it('stays unavailable on a cached table, which may be stale', async () => {

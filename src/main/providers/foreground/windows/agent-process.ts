@@ -76,24 +76,21 @@ export async function resolveWindowsAgentForegroundProcessWithAvailability(
   )
   // Orphans of an exited root may only prove an agent, read through a member of the pane console.
   const memberPid = inventory.rootExited ? findOrphanOnInheritedConsole(candidates) : undefined
-  if (inventory.rootExited && (!hasRecognizedCandidate || memberPid === undefined)) {
+  const { readWindowsConsoleAttachedProcessIds: readConsole } = options
+  if (
+    inventory.rootExited &&
+    (!hasRecognizedCandidate || memberPid === undefined || !readConsole)
+  ) {
     return { available: false, processName: null }
   }
   let filteredCandidates = candidates
-  if (hasRecognizedCandidate && options.readWindowsConsoleAttachedProcessIds) {
+  if (hasRecognizedCandidate && readConsole) {
     // Job membership retains detached descendants; only console attachment can exclude their byte authority.
-    const consoleProcessIds = await options.readWindowsConsoleAttachedProcessIds(memberPid)
+    const consoleProcessIds = await readConsole(memberPid)
     if (!consoleProcessIds) {
       return { available: false, processName: null }
     }
     filteredCandidates = candidates.filter((candidate) => consoleProcessIds.has(candidate.pid))
-    const { contextPaths } = options
-    if (
-      inventory.rootExited &&
-      !windowsCandidatesContainRecognizedAgent(filteredCandidates, fallbackProcess, contextPaths)
-    ) {
-      return { available: false, processName: null }
-    }
   }
   // Orphaned job members can hold recycled PIDs outside the descendant walk; inspect the full-table anchor.
   const anchorRow = inventory.anchorRow
@@ -106,11 +103,16 @@ export async function resolveWindowsAgentForegroundProcessWithAvailability(
         anchorRecognized.processName !== options.anchorProcessName
       : // Query-denied command === name is inconclusive, never foreign proof.
         anchorRow.command !== anchorRow.name)
-  return {
-    available: true,
-    ...resolveWindowsForegroundIdentity(filteredCandidates, fallbackProcess, options.contextPaths),
-    ...(anchorPidForeign ? { anchorPidForeign: true } : {})
+  const identity = resolveWindowsForegroundIdentity(
+    filteredCandidates,
+    fallbackProcess,
+    options.contextPaths
+  )
+  // Without a live root, no or an ambiguous agent would fall back to the dead shell's name.
+  if (inventory.rootExited && !identity.processName) {
+    return { available: false, processName: null }
   }
+  return { available: true, ...identity, ...(anchorPidForeign ? { anchorPidForeign: true } : {}) }
 }
 
 function windowsCandidatesContainRecognizedAgent(
