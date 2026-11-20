@@ -2,16 +2,20 @@
 // template's purpose does; Enter adds a line and ⌘↩ still creates.
 import { ImeTextarea } from '@/lib/text-input/ime/ime-text-field'
 import { useTranslate } from '@/i18n/use-translate'
+import { cn } from '@/lib/class-names'
 
 /** BotProposalSeedSchema.purpose's limit. */
-const PURPOSE_MAX_LENGTH = 200
+export const PURPOSE_MAX_LENGTH = 200
 const COUNTER_FROM = 160
 
 export function NewBotPurposeField({
   value,
+  prefilled,
   onChange
 }: {
   value: string
+  /** A template's text: no counter until it is edited, since it is sent as the template wrote it. */
+  prefilled?: string
   onChange: (value: string) => void
 }): React.JSX.Element {
   const t = useTranslate()
@@ -30,8 +34,13 @@ export function NewBotPurposeField({
           onChange={(event) => onChange(event.target.value)}
         />
       </div>
-      {value.length >= COUNTER_FROM ? (
-        <p className="text-right text-xs text-muted-foreground tabular-nums">
+      {value.length >= COUNTER_FROM && value !== prefilled ? (
+        <p
+          className={cn(
+            'text-right text-xs tabular-nums',
+            value.length > PURPOSE_MAX_LENGTH ? 'text-destructive' : 'text-muted-foreground'
+          )}
+        >
           {value.length}/{PURPOSE_MAX_LENGTH}
         </p>
       ) : null}

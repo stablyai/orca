@@ -27089,7 +27089,22 @@
       "purposePlaceholder": "Who it is and what it does",
       "uploadPasteOrDrop": "or upload, paste or drop your own",
       "pasteHint": "Paste an image with {{shortcut}}",
-      "changePicture": "Change picture"
+      "changePicture": "Change picture",
+      "parts": {
+        "olderHost": "{{host}} needs an Orca update to add skills and schedules",
+        "skillsKept_one": "{{kept}}/{{count}} skill",
+        "skillsKept_other": "{{kept}}/{{count}} skills",
+        "skills_one": "{{count}} skill",
+        "skills_other": "{{count}} skills",
+        "automations_one": "{{count}} automation",
+        "automations_other": "{{count}} automations",
+        "schedules_one": "{{count}} schedule",
+        "schedules_other": "{{count}} schedules",
+        "needsApp": "Needs {{app}}",
+        "needsApps_one": "Needs {{count}} app",
+        "needsApps_other": "Needs {{count}} apps",
+        "setUpInFirstChat": "Set up in first chat"
+      }
     },
     "section": {
       "title": "Bots",
@@ -28516,7 +28531,6 @@
       "close": "Close",
       "comesWith": "Comes with",
       "comesWithHelp": "About template schedules and setup",
-      "olderHost": "{{host}} runs an older Orca, so this template’s skills and schedules won’t be added. Update Orca there to get them, or create the bot with just its instructions.",
       "comesWithNote": "Schedules start turned off. Automations and connectors are set up in its first chat, once you pick the repo or channel.",
       "keepSkill": "Add the {{skill}} skill",
       "stateOff": "Off",
@@ -28537,7 +28551,6 @@
       "closeTooltip": "Close · Esc",
       "fromLink": "From a link",
       "search": "Search templates",
-      "originTemplateNamed": "From the {{template}} template",
       "aboutTemplate": "About {{name}}",
       "allTemplates": "All templates",
       "filterCategory": "Filter by category",
