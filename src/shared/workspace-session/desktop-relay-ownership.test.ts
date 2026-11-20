@@ -30,7 +30,13 @@ function save(
 /** A main writer setting these relay ids, as the writers in main do. */
 function mainWrites(session: WorkspaceSessionState, relays: Record<string, string>) {
   return {
-    ...forgetDesktopRelayKeys(session, changedRelayKeys(session.remoteSessionIdsByTabId, relays)),
+    ...forgetDesktopRelayKeys(
+      session,
+      changedRelayKeys(session.remoteSessionIdsByTabId, relays, [
+        ...Object.keys(session.remoteSessionIdsByTabId ?? {}),
+        ...Object.keys(relays)
+      ])
+    ),
     remoteSessionIdsByTabId: relays
   }
 }

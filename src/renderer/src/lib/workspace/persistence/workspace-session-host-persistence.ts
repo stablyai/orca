@@ -312,10 +312,11 @@ export async function persistWorkspaceSessionByHost(
 ): Promise<void> {
   const separate = await probeDesktopRelays(api)
   const { snapshots, desktopRelays } = buildWorkspaceSessionHostSnapshots(payload, state, separate)
-  await Promise.all(
-    snapshots.map((s) => api.set(s.state, s.hostId, desktopRelays ? { relays: 'separate' } : {}))
-  )
-  await (desktopRelays && sendDesktopRelayWrite(api, desktopRelays))
+  const options = desktopRelays ? { relays: 'separate' as const } : {}
+  const sets = snapshots.map((s) => api.set(s.state, s.hostId, options))
+  // Sent in the same turn as the sets, so a later save's relay write can't reach main before it.
+  const relays = desktopRelays && sendDesktopRelayWrite(api, desktopRelays)
+  await Promise.all([...sets, relays])
   await api.flush()
 }
 

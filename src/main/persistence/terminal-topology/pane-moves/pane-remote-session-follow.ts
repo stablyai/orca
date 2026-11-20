@@ -30,7 +30,7 @@ export function followRemoteSessionAfterPaneClose(
     delete next[command.tabId]
   }
   return {
-    ...forgetDesktopRelayKeys(written, changedRelayKeys(remoteSessionIds, next)),
+    ...forgetDesktopRelayKeys(written, changedRelayKeys(remoteSessionIds, next, [command.tabId])),
     remoteSessionIdsByTabId: next
   }
 }
@@ -62,7 +62,10 @@ export function followRemoteSessionAfterPaneDetach(
     delete next[sourceTabId]
   }
   return {
-    ...forgetDesktopRelayKeys(written, changedRelayKeys(remoteSessionIds, next)),
+    ...forgetDesktopRelayKeys(
+      written,
+      changedRelayKeys(remoteSessionIds, next, [targetTabId, sourceTabId])
+    ),
     remoteSessionIdsByTabId: next
   }
 }

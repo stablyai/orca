@@ -19,16 +19,27 @@ export function windowSaveKeepingRelayOwnership<
   options?: WindowSessionSetOptions
 ): T {
   const relaysSeparate = kind === 'set' && options?.relays === 'separate'
-  if (kind === 'patch' && !Object.hasOwn(save, 'desktopRelayOwnership')) {
+  if (
+    kind === 'patch' &&
+    !Object.hasOwn(save, 'desktopRelayOwnerByTabId') &&
+    !Object.hasOwn(save, 'desktopRelayAdoptionVersion')
+  ) {
     return save
   }
-  const { desktopRelayOwnership: _authored, ...rest } = save
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: same save with the two relay fields replaced by their stored values.
+  const {
+    desktopRelayOwnerByTabId: _authoredOwners,
+    desktopRelayAdoptionVersion: _authoredVersion,
+    ...rest
+  } = save
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: same save with the relay fields replaced by their stored values.
   return {
     ...rest,
     ...(relaysSeparate ? { remoteSessionIdsByTabId: stored.remoteSessionIdsByTabId } : {}),
-    ...(kind === 'set' || stored.desktopRelayOwnership
-      ? { desktopRelayOwnership: stored.desktopRelayOwnership }
+    ...(kind === 'set' || stored.desktopRelayOwnerByTabId
+      ? { desktopRelayOwnerByTabId: stored.desktopRelayOwnerByTabId }
+      : {}),
+    ...(kind === 'set' || stored.desktopRelayAdoptionVersion !== undefined
+      ? { desktopRelayAdoptionVersion: stored.desktopRelayAdoptionVersion }
       : {})
   } as T
 }

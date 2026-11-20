@@ -143,7 +143,10 @@ function moveLeafInPartition(
     {
       ...forgetDesktopRelayKeys(
         session,
-        changedRelayKeys(session.remoteSessionIdsByTabId, remoteSessionIdsByTabId)
+        changedRelayKeys(session.remoteSessionIdsByTabId, remoteSessionIdsByTabId, [
+          sourceTabId,
+          targetTabId
+        ])
       ),
       tabsByWorktree: { ...session.tabsByWorktree, [worktreeId]: [...nextTabs, targetTab] },
       terminalLayoutsByTabId,

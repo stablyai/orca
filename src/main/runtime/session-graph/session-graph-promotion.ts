@@ -242,7 +242,11 @@ export abstract class OrcaRuntimeWithAttachWindow extends OrcaRuntimeWithNotifyS
         {
           ...forgetDesktopRelayKeys(
             session,
-            changedRelayKeys(session.remoteSessionIdsByTabId, remoteSessionIdsByTabId)
+            changedRelayKeys(
+              session.remoteSessionIdsByTabId,
+              remoteSessionIdsByTabId,
+              ptys.flatMap(({ tabId }) => (tabId ? [tabId] : []))
+            )
           ),
           activeWorktreeIdsOnShutdown,
           ...(activeConnectionIdsAtShutdown.length > 0 ? { activeConnectionIdsAtShutdown } : {}),

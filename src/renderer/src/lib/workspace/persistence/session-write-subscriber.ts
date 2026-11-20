@@ -158,6 +158,11 @@ export function createSessionWriteSubscriber({
         // A rejection waits for the next store wake, not a retry loop.
         onPersistError?.(error)
       } else if (pendingChangedFields.size > 0) {
+        // A real change is already queued: it carries the deferred fields too.
+        for (const field of deferredFields) {
+          pendingChangedFields.add(field)
+        }
+        deferredFields.clear()
         armFlushTimer()
       }
     }

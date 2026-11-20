@@ -20,12 +20,12 @@ function rewriteSshPtyId(ptyId: string, oldTargetId: string, newTargetId: string
 function migratedRelayOwnership(
   session: WorkspaceSessionState,
   rewritten: Record<string, string>
-): Pick<WorkspaceSessionState, 'desktopRelayOwnership'> {
-  const before = session.desktopRelayOwnership
+): Pick<WorkspaceSessionState, 'desktopRelayOwnerByTabId'> {
+  const before = session.desktopRelayOwnerByTabId
   if (!before) {
     return {}
   }
-  const owners = { ...before.relayIdByTabId }
+  const owners = { ...before }
   for (const [tabId, relayId] of Object.entries(rewritten)) {
     const old = session.remoteSessionIdsByTabId?.[tabId]
     if (old === relayId) {
@@ -37,7 +37,7 @@ function migratedRelayOwnership(
       delete owners[tabId]
     }
   }
-  return { desktopRelayOwnership: { ...before, relayIdByTabId: owners } }
+  return { desktopRelayOwnerByTabId: Object.keys(owners).length > 0 ? owners : undefined }
 }
 
 function rewriteSshPtyIdRecordValues(

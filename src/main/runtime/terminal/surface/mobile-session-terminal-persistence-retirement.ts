@@ -205,7 +205,9 @@ export function retireTerminalSurfaceFromPersistence(
     {
       ...forgetDesktopRelayKeys(
         session,
-        changedRelayKeys(session.remoteSessionIdsByTabId, remoteSessionIdsByTabId)
+        changedRelayKeys(session.remoteSessionIdsByTabId, remoteSessionIdsByTabId, [
+          surface.parentTabId
+        ])
       ),
       activeTabId:
         session.activeTabId === surface.parentTabId ? nextActiveTabId : session.activeTabId,

@@ -13,7 +13,10 @@ export type DesktopRelayHostWrite = {
   removedTabIds?: string[]
 }
 
-type RelayFields = Pick<WorkspaceSessionState, 'remoteSessionIdsByTabId' | 'desktopRelayOwnership'>
+type RelayFields = Pick<
+  WorkspaceSessionState,
+  'remoteSessionIdsByTabId' | 'desktopRelayOwnerByTabId' | 'desktopRelayAdoptionVersion'
+>
 
 /** Relay ids saved before ownership was recorded that the window may treat as its own. */
 export type LegacyRelayAdoption = (session: WorkspaceSessionState) => Record<string, string>
@@ -35,11 +38,11 @@ export function applyDesktopRelayWrite(
   adoptLegacy: LegacyRelayAdoption | null
 ): DesktopRelayApplyResult {
   const stored = session.remoteSessionIdsByTabId ?? {}
-  const before = session.desktopRelayOwnership
-  const owners: Record<string, string> = { ...before?.relayIdByTabId }
+  const before = session.desktopRelayOwnerByTabId ?? {}
+  const owners: Record<string, string> = { ...before }
   const adopting =
     adoptLegacy !== null &&
-    (before?.legacyAdoptionVersion ?? 0) < DESKTOP_RELAY_LEGACY_ADOPTION_VERSION
+    (session.desktopRelayAdoptionVersion ?? 0) < DESKTOP_RELAY_LEGACY_ADOPTION_VERSION
   if (adoptLegacy && adopting) {
     for (const [tabId, relayId] of Object.entries(adoptLegacy(session))) {
       if (!Object.hasOwn(owners, tabId) && stored[tabId] === relayId) {
@@ -86,53 +89,50 @@ export function applyDesktopRelayWrite(
     }
   }
   const relaysChanged = !sameRecord(stored, relays)
-  const ownersChanged = adopting || !sameRecord(before?.relayIdByTabId ?? {}, owners)
-  if (!relaysChanged && !ownersChanged) {
+  const ownersChanged = !sameRecord(before, owners)
+  if (!relaysChanged && !ownersChanged && !adopting) {
     return { patch: null, refused }
   }
-  return {
-    refused,
-    patch: {
-      remoteSessionIdsByTabId: Object.keys(relays).length > 0 ? relays : undefined,
-      desktopRelayOwnership: {
-        legacyAdoptionVersion: adopting
-          ? DESKTOP_RELAY_LEGACY_ADOPTION_VERSION
-          : (before?.legacyAdoptionVersion ?? 0),
-        relayIdByTabId: owners
-      }
-    }
+  const patch: RelayFields = {}
+  if (relaysChanged) {
+    patch.remoteSessionIdsByTabId = Object.keys(relays).length > 0 ? relays : undefined
   }
+  if (ownersChanged) {
+    patch.desktopRelayOwnerByTabId = Object.keys(owners).length > 0 ? owners : undefined
+  }
+  if (adopting) {
+    patch.desktopRelayAdoptionVersion = DESKTOP_RELAY_LEGACY_ADOPTION_VERSION
+  }
+  return { refused, patch }
 }
 
 /** For main writers that change or remove these keys' relay ids: the window no longer owns them. A
  *  main write of the same id keeps the binding, so it keeps the window's ownership. */
 export function forgetDesktopRelayKeys<
-  T extends Pick<WorkspaceSessionState, 'desktopRelayOwnership'>
->(session: T, tabIds: Iterable<string>): T {
-  const before = session.desktopRelayOwnership
-  if (!before) {
+  T extends Pick<WorkspaceSessionState, 'desktopRelayOwnerByTabId'>
+>(session: T, tabIds: readonly string[]): T {
+  const before = session.desktopRelayOwnerByTabId
+  const owned = before ? tabIds.filter((tabId) => Object.hasOwn(before, tabId)) : []
+  if (!before || owned.length === 0) {
     return session
   }
-  const owners = { ...before.relayIdByTabId }
-  let changed = false
-  for (const tabId of tabIds) {
-    if (Object.hasOwn(owners, tabId)) {
-      delete owners[tabId]
-      changed = true
-    }
+  const owners = { ...before }
+  for (const tabId of owned) {
+    delete owners[tabId]
   }
-  return changed
-    ? { ...session, desktopRelayOwnership: { ...before, relayIdByTabId: owners } }
-    : session
+  return {
+    ...session,
+    desktopRelayOwnerByTabId: Object.keys(owners).length > 0 ? owners : undefined
+  }
 }
 
-/** Keys whose relay id differs between two maps (changed, added or removed). */
+/** Of the keys a main writer touched, those whose relay id it changed or removed. */
 export function changedRelayKeys(
   before: Record<string, string> | undefined,
-  after: Record<string, string> | undefined
+  after: Record<string, string> | undefined,
+  tabIds: Iterable<string>
 ): string[] {
-  const keys = new Set([...Object.keys(before ?? {}), ...Object.keys(after ?? {})])
-  return [...keys].filter((key) => before?.[key] !== after?.[key])
+  return [...new Set(tabIds)].filter((tabId) => before?.[tabId] !== after?.[tabId])
 }
 
 function tabIdsWithRows(session: WorkspaceSessionState): Set<string> {

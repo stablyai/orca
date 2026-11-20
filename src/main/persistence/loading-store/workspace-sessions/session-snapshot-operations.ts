@@ -123,6 +123,23 @@ export class SessionSnapshotOperations {
     this.publishSession(next, resolved, written, rewrites)
   }
 
+  /** Relay ids and their ownership only: no rows change, so topology is untouched. */
+  patchWorkspaceSessionRelays(
+    patch: Pick<
+      WorkspaceSessionPatch,
+      'remoteSessionIdsByTabId' | 'desktopRelayOwnerByTabId' | 'desktopRelayAdoptionVersion'
+    >,
+    hostId?: string | null
+  ): void {
+    const resolved = resolveHostId(hostId)
+    const session = this[sessionSnapshotOperationsContext].sessions.getWorkspaceSession(resolved)
+    let next: WorkspaceSessionState = { ...session, ...patch }
+    if (resolved === LOCAL_EXECUTION_HOST_ID) {
+      next = keepWslMoveFrozenSessionsForStore(next, session)
+    }
+    this.publishSession(next, resolved, undefined, undefined, false)
+  }
+
   /** Drops one pane's saved resume when `retire` accepts it. Topology is untouched, so rows keep
    *  their order and the next coalesced save persists it. */
   retireSleepingAgentSession(

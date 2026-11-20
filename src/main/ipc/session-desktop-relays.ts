@@ -34,7 +34,7 @@ const desktopRelayWriteSchema = z.object({
 
 type RelayStore = Pick<
   Store,
-  'getRepos' | 'getWorkspaceSession' | 'getWorkspaceSessionHostIds' | 'patchWorkspaceSession'
+  'getRepos' | 'getWorkspaceSession' | 'getWorkspaceSessionHostIds' | 'patchWorkspaceSessionRelays'
 >
 
 /** The relay map a window's write describes, applied without ownership (main-owned layout). */
@@ -103,7 +103,7 @@ export function registerDesktopRelayHandlers(
         existing ??= new Set(store.getWorkspaceSessionHostIds())
         // Never materialize a partition just to record that it holds nothing.
         if (patch && (existing.has(hostId) || patch.remoteSessionIdsByTabId)) {
-          store.patchWorkspaceSession(patch, hostId)
+          store.patchWorkspaceSessionRelays(patch, hostId)
           result.applied.push(hostId)
         } else {
           result.unchanged.push(hostId)

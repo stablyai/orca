@@ -22,8 +22,7 @@ export function captureLegacyRelayBaseline(store: AdoptionStore): LegacyRelayBas
   for (const hostId of store.getWorkspaceSessionHostIds()) {
     const session = store.getWorkspaceSession(hostId)
     const adopted =
-      (session.desktopRelayOwnership?.legacyAdoptionVersion ?? 0) >=
-      DESKTOP_RELAY_LEGACY_ADOPTION_VERSION
+      (session.desktopRelayAdoptionVersion ?? 0) >= DESKTOP_RELAY_LEGACY_ADOPTION_VERSION
     const saved = session.remoteSessionIdsByTabId
     if (!adopted && saved && Object.keys(saved).length > 0) {
       baseline.set(hostId, { ...saved })
