@@ -1,4 +1,4 @@
-import { setSshStartupReady } from './ssh-startup-ready'
+import { awaitSshStartupReady, setSshStartupReady } from './ssh-startup-ready'
 import { ipcMain, type BrowserWindow } from 'electron'
 import type { Store } from '../../persistence/loading-store/store'
 import type { SshConnectionStore } from '../../ssh/targets/ssh-connection-store'
@@ -78,7 +78,12 @@ export async function registerSshHandlers(
       ipcMain.handle(channel, (_event, args: unknown) => operation(args))
   })
   registerSshBrowseHandler(() => connectionManager)
-  registerPlainSshTerminalHandlers()
+  registerPlainSshTerminalHandlers((channel, listener) =>
+    ipcMain.handle(channel, async (...args) => {
+      await awaitSshStartupReady()
+      return listener(...args)
+    })
+  )
   // COMPAT(legacy-relay-bridge): terminals an older Orca's relay still runs.
   registerLegacyRelayBridgeIpc({ runtime: () => runtime ?? null })
 

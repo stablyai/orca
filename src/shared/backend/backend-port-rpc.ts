@@ -8,7 +8,12 @@ export type BackendPort = {
   close(): void
 }
 
-type Pending = { resolve(value: unknown): void; reject(error: Error): void; settled?: true }
+type Pending = {
+  resolve(value: unknown): void
+  reject(error: Error): void
+  settled?: true
+  release?: () => void
+}
 /** Request credits; later stream deliveries get their own pool so they cannot starve requests. */
 const MAX_REQUESTS = 32
 
@@ -66,23 +71,25 @@ export class BackendPortRpc {
         reject(error instanceof Error ? error : new Error(String(error)))
         return
       }
-      signal?.addEventListener(
-        'abort',
-        () => {
-          if (this.pending.get(id) !== call || call.settled) {
-            return
-          }
-          // The credit stays held until the peer's reply arrives and is acknowledged.
-          call.settled = true
-          reject(cancelled())
-          try {
-            this.port.postMessage({ cancel: id })
-          } catch {
-            this.close()
-          }
-        },
-        { once: true }
-      )
+      if (!signal) {
+        return
+      }
+      const abort = (): void => {
+        if (this.pending.get(id) !== call || call.settled) {
+          return
+        }
+        // The credit stays held until the peer's reply arrives and is acknowledged.
+        call.settled = true
+        reject(cancelled())
+        try {
+          this.port.postMessage({ cancel: id })
+        } catch {
+          this.close()
+        }
+      }
+      // A long-lived signal must not retain every finished call.
+      call.release = () => signal.removeEventListener('abort', abort)
+      signal.addEventListener('abort', abort, { once: true })
     })
   }
 
@@ -97,6 +104,7 @@ export class BackendPortRpc {
     }
     this.port.close()
     for (const call of this.pending.values()) {
+      call.release?.()
       call.reject(new Error('Orca disconnected. Try again after it reconnects.'))
     }
     this.pending.clear()
@@ -150,6 +158,7 @@ export class BackendPortRpc {
         return
       }
       this.pending.delete(reply.id)
+      call.release?.()
       this.port.postMessage({ ack: reply.id })
       if (call.settled) {
         return

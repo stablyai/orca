@@ -5,15 +5,20 @@ import { notifyReposChanged } from '../repos/repos-changed-notification'
 export function createElectronSshDesktopHost(
   getMainWindow: () => BrowserWindow | null
 ): SshDesktopHost {
+  const liveWindow = (): BrowserWindow | null => {
+    const win = getMainWindow()
+    return win && !win.isDestroyed() && !win.webContents.isDestroyed() ? win : null
+  }
   return {
     publish(channel, payload) {
-      const win = getMainWindow()
-      if (!win || win.isDestroyed()) {
+      const win = liveWindow()
+      if (!win) {
         return false
       }
       win.webContents.send(channel, payload)
       return true
     },
+    hasDocument: () => liveWindow() !== null,
     reposChanged: () => notifyReposChanged(getMainWindow()),
     onHostResume(listener) {
       powerMonitor.on('resume', listener)

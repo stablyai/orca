@@ -74,7 +74,8 @@ export function broadcastSshTargetRemoved(targetId: string): void {
 }
 
 export function broadcastPortForwards(targetId: string): void {
-  if (!portForwardManager) {
+  // Enrichment walks every worktree; skip it when no window would receive it.
+  if (!portForwardManager || !sshDesktopHost().hasDocument()) {
     return
   }
   sshDesktopHost().publish('ssh:port-forwards-changed', {
