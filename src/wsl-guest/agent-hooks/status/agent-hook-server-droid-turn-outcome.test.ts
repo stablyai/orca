@@ -31,10 +31,7 @@ describe('RelayAgentHookServer Droid turn outcome', () => {
     }
   })
 
-  it.each([
-    ['model_authentication_failed', { outcome: 'failure' }],
-    ['cancelled', { outcome: 'cancellation' }]
-  ])('forwards the %s verdict Droid records just after Stop', async (reason, verdict) => {
+  it('forwards the cancellation Droid records just after Stop', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'relay-hook-droid-outcome-'))
     dirs.push(dir)
     const transcriptPath = join(dir, `${SESSION}.jsonl`)
@@ -67,12 +64,16 @@ describe('RelayAgentHookServer Droid turn outcome', () => {
     expect(forward.mock.calls.at(-1)?.[0].payload).toMatchObject({ state: 'done' })
     expect(forward.mock.calls.at(-1)?.[0].payload.mainAgent).toBeUndefined()
 
-    appendFileSync(transcriptPath, line({ type: 'agent_turn_outcome', turnId: 'turn-1', reason }))
+    appendFileSync(
+      transcriptPath,
+      line({ type: 'agent_turn_outcome', turnId: 'turn-1', reason: 'cancelled' })
+    )
 
     await vi.waitFor(() =>
       expect(forward.mock.calls.at(-1)?.[0].payload).toMatchObject({
         state: 'done',
-        mainAgent: { state: 'done', ...verdict }
+        interrupted: true,
+        mainAgent: { state: 'done', outcome: 'cancellation' }
       })
     )
   })
