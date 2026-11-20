@@ -12,6 +12,7 @@ import netlifyLogo from '@/assets/connector-brands/netlify.svg'
 import notionLogo from '@/assets/connector-brands/notion.svg'
 import playwrightLogo from '@/assets/connector-brands/playwright.svg'
 import posthogLogo from '@/assets/connector-brands/posthog.svg'
+import revylLogo from '@/assets/connector-brands/revyl.svg'
 import sentryLogo from '@/assets/connector-brands/sentry.svg'
 import slackLogo from '@/assets/connector-brands/slack.svg'
 import stripeLogo from '@/assets/connector-brands/stripe.svg'
@@ -47,6 +48,7 @@ const BRANDS: Readonly<Record<string, BotAppBrand>> = {
   netlify: { logo: netlifyLogo },
   gitlab: { logo: gitlabLogo },
   context7: { logo: context7Logo },
+  revyl: { logo: revylLogo },
   atlassian: { logo: atlassianLogo },
   notion: { logo: notionLogo },
   stripe: { logo: stripeLogo },
