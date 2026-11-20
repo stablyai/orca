@@ -36,7 +36,7 @@ export function claudeBypassRefused(session: ClaudeBypassFacts): boolean {
   }
   const opened = session.firstRootInit?.permissionMode
   return (
-    session.bypassDisabled === true ||
+    session.bypassDisabled ??
     (typeof opened === 'string' && opened !== 'bypassPermissions' && opened !== 'plan')
   )
 }
@@ -56,6 +56,37 @@ export function claudeAllowedPermissionMode(
     opened === 'dontAsk'
     ? opened
     : 'default'
+}
+
+// Claude's answer to `set_permission_mode bypassPermissions` once its settings turn bypass off.
+const CLAUDE_BYPASS_REFUSAL = /bypassPermissions because it is disabled by settings/
+
+/** Asks for the mode Claude allows; a bypass refusal the startup settings read missed is
+ *  remembered for this process and answered with the fallback. Resolves to the mode applied. */
+export async function setClaudeAllowedPermissionMode(
+  session: ClaudeBypassFacts & {
+    connection: Pick<ClaudeSession['connection'], 'setPermissionMode'>
+  },
+  mode: PermissionMode,
+  options?: { timeoutMs?: number }
+): Promise<PermissionMode> {
+  const allowed = claudeAllowedPermissionMode(session, mode)
+  try {
+    await session.connection.setPermissionMode(allowed, options)
+    return allowed
+  } catch (error) {
+    if (
+      allowed !== 'bypassPermissions' ||
+      !(error instanceof Error) ||
+      !CLAUDE_BYPASS_REFUSAL.test(error.message)
+    ) {
+      throw error
+    }
+    session.bypassDisabled = true
+    const fallback = claudeAllowedPermissionMode(session, mode)
+    await session.connection.setPermissionMode(fallback, options)
+    return fallback
+  }
 }
 
 const MAX_ANNOUNCED = 1_000
@@ -86,7 +117,7 @@ export function claudeFullAccessRefusalRow(session: ClaudeBypassFacts): AgentJou
     kind: 'status',
     tone: 'warning',
     presentation: AGENT_SESSION_TURN_NOTICE_PRESENTATION,
-    text: `Claude's settings turn off Full access (permissions.disableBypassPermissionsMode), so this chat runs with ${running}.`
+    text: `Claude's settings turn off Full access (permissions.disableBypassPermissionsMode), so Claude uses ${running} instead.`
   }
 }
 

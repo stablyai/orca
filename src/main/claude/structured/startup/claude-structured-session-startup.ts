@@ -158,7 +158,6 @@ function applyClaudeSettingsFacts(
   writtenSinceRead: boolean
 ): void {
   const { settings, prepared } = facts
-  session.bypassDisabled = readClaudeSettingsBypassDisabled(settings) ?? session.bypassDisabled
   const published = claudeStructuredSessionPublicationOptions(prepared)
   if (!writtenSinceRead) {
     const applied = readClaudeSettingsApplied(settings)
@@ -242,6 +241,10 @@ async function settleClaudeStartupSettings(
   const token = { pending: session.settingsObservation?.pending ?? false }
   session.settingsObservation = token
   const settings = await input.readSettings()
+  // A process policy fact: a newer option write cannot make it stale.
+  if (input.isCurrent()) {
+    session.bypassDisabled = readClaudeSettingsBypassDisabled(settings) ?? session.bypassDisabled
+  }
   if (!input.isCurrent() || token.pending || session.settingsObservation !== token) {
     return
   }

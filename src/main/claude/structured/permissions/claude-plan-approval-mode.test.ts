@@ -30,6 +30,35 @@ describe('leaving Plan mode after an approved plan', () => {
     expect(approvePlan('bypassPermissions', 'plan', true)).toBe('default')
   })
 
+  it('falls back to Ask when Claude refuses bypass and no settings read said so', async () => {
+    const setPermissionMode = vi.fn((mode: string) =>
+      mode === 'bypassPermissions'
+        ? Promise.reject(
+            new Error(
+              'Cannot set permission mode to bypassPermissions because it is disabled by settings or configuration'
+            )
+          )
+        : Promise.resolve()
+    )
+    const appliedInputOptions = new Map<string, string>()
+    leaveClaudePlanModeOnApproval(
+      {
+        launchIntent: { permissionMode: 'bypassPermissions' },
+        firstRootInit: { permissionMode: 'plan' },
+        reportedOptions: { reportedPermissionMode: 'plan' },
+        appliedInputOptions,
+        connection: { setPermissionMode }
+      },
+      { toolName: 'ExitPlanMode' },
+      { behavior: 'allow', updatedInput: {} }
+    )
+    await vi.waitFor(() => expect(appliedInputOptions.get('buildPermissionMode')).toBe('default'))
+    expect(setPermissionMode.mock.calls.map(([mode]) => mode)).toEqual([
+      'bypassPermissions',
+      'default'
+    ])
+  })
+
   it('restores Full access where Claude allows it', () => {
     expect(approvePlan('bypassPermissions', 'bypassPermissions')).toBe('bypassPermissions')
     expect(approvePlan('bypassPermissions', 'plan', false)).toBe('bypassPermissions')

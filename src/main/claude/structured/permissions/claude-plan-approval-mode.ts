@@ -1,7 +1,10 @@
 import type { PermissionMode, PermissionResult } from '@anthropic-ai/claude-agent-sdk'
 import type { ClaudePendingPrompt } from './claude-prompt-registry'
 import type { ClaudeSession } from '../claude-structured-session-state'
-import { claudeAllowedPermissionMode } from './claude-full-access-refusal'
+import {
+  claudeAllowedPermissionMode,
+  setClaudeAllowedPermissionMode
+} from './claude-full-access-refusal'
 
 /** This process's requested mode, else its first init's; anything else asks for each edit. */
 export function claudePlanApprovalMode(
@@ -67,9 +70,7 @@ export function leaveClaudePlanModeOnApproval(
     return
   }
   try {
-    // Claude refuses bypass for the whole process once its settings turn it off.
-    const restored = claudeAllowedPermissionMode(session, claudePlanApprovalMode(session))
-    session.connection.setPermissionMode(restored).then(() => {
+    setClaudeAllowedPermissionMode(session, claudePlanApprovalMode(session)).then((restored) => {
       session.appliedInputOptions?.set('interactionMode', 'default')
       session.appliedInputOptions?.set('buildPermissionMode', restored)
     }, logPlanExitFailure)
