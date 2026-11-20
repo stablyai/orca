@@ -5,6 +5,7 @@ import { resolveLocalAccountRuntimeTarget } from '../../shared/agent-accounts/lo
 import type { Store } from '../persistence/loading-store/store'
 import { isWslDistroRunning } from '../wsl/discovery/wsl-background-distro-gate'
 import { getDefaultWslDistro, getWslHome } from '../wsl/discovery/distro-catalog'
+import { cleanUpUnlessWslDistroGone } from '../wsl/discovery/wsl-distro-presence'
 import { ClaudeProfileRouter } from './profiles/routing/claude-profile-router'
 import { measureClaudeAccountRetainedHistory } from './sign-in/claude-account-folder'
 import { ClaudeWslProfileRouter } from './profiles/wsl/claude-profile-wsl-router'
@@ -125,13 +126,10 @@ export class ClaudeRuntimeAuthService {
       await this.router.removeAccount(accountId, options.deleteRetainedHistory)
       return
     }
-    // Deleted distros must not block account removal.
-    await wsl.router.removeAccount(wsl.distro, accountId, options).catch((error: unknown) => {
-      console.warn(
-        `[claude-profile] Could not delete the Claude account folder in WSL ${wsl.distro}:`,
-        error
-      )
-    })
+    // Like the host: a failed cleanup keeps the account to retry; only a deleted distro skips it.
+    await cleanUpUnlessWslDistroGone(wsl.distro, () =>
+      wsl.router.removeAccount(wsl.distro, accountId, options)
+    )
   }
 
   /** Bytes of conversations only this account's folder holds; repeated opens share one walk. */
