@@ -120,12 +120,14 @@ export function execFileCapture(
         return
       }
       if (ownedPosixGroup) {
+        const output = isExecFileResultObject(error) ? error : readCapture?.()
         if ('stopOwnedGroup' in child) {
           child.stopOwnedGroup()
+          // The caller settles now; output during group cleanup stays on the worker.
+          child.discardOutput()
         } else {
           void groupTermination?.stop()
         }
-        const output = isExecFileResultObject(error) ? error : readCapture?.()
         finish(error, output?.stdout, output?.stderr)
         return
       }
