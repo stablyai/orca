@@ -9,12 +9,11 @@ import type { WorktreeDragGroup } from './worktree-manual-order'
 import { isFolderLaneSectionKey } from '../../../../../../shared/sidebar-list/folders/folder-workspace-occurrences'
 
 /** Group members are host identities: same-id copies on two machines are separate cards to reorder.
- * Rows nested under a folder workspace group by their folder's lane, as getWorktreeDragIndexes keys
- * them; every other row groups under the header above it. */
+ * Rows without their own section header group by their section key. */
 export function getWorktreeDragGroups(rows: HostSectionRow[]): WorktreeDragGroup[] {
   const groups: WorktreeDragGroup[] = []
   let current: { key: string; ids: string[] } | null = null
-  const folderLaneIds = new Map<string, string[]>()
+  const headerlessSectionIds = new Map<string, string[]>()
   const naturalWorktreeKeys = getNaturalWorktreeKeys(rows)
 
   for (const row of rows) {
@@ -36,11 +35,11 @@ export function getWorktreeDragGroups(rows: HostSectionRow[]): WorktreeDragGroup
     if (row.sectionKey === PINNED_GROUP_KEY && naturalWorktreeKeys.has(worktreeKey)) {
       continue
     }
-    if (isFolderLaneSectionKey(row.sectionKey)) {
-      let ids = folderLaneIds.get(row.sectionKey)
+    if (isFolderLaneSectionKey(row.sectionKey) || row.inlineProjectName !== undefined) {
+      let ids = headerlessSectionIds.get(row.sectionKey)
       if (!ids) {
         ids = []
-        folderLaneIds.set(row.sectionKey, ids)
+        headerlessSectionIds.set(row.sectionKey, ids)
         groups.push({ key: row.sectionKey, worktreeIds: ids })
       }
       ids.push(worktreeKey)

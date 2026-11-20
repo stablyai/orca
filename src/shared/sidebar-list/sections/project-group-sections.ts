@@ -6,10 +6,29 @@ import { getDistinctProjectGroups } from '../../project/groups/project-groups'
 import { getProjectGroupHeaderKey } from './group-keys'
 import { appendOrderedGroups } from './group-sections'
 import type { SectionAppendContext } from './group-sections'
-import type { OrderedGroupEntry } from './worktree-group-entry'
+import type { OrderedGroupEntry, WorktreeGroupEntry } from './worktree-group-entry'
 import { appendWorktreeRows } from './row-builders'
 import { getFolderLaneSectionKey } from '../folders/folder-workspace-occurrences'
 import { walkProjectGroupTree } from './project-group-tree'
+import { isSingleWorkspaceProject } from './project-section-grouping'
+import type { Worktree } from '../../worktree/types'
+
+export function getProjectWorkspaceRevealPath(
+  path: OccurrenceSectionPath,
+  project: WorktreeGroupEntry,
+  workspaces: readonly Worktree[],
+  extraRowsByRepo: readonly ReadonlyMap<string, unknown>[]
+): OccurrenceSectionPath {
+  if (!path.parent || !isSingleWorkspaceProject(project, workspaces)) {
+    return path
+  }
+  for (const repoId of project.repoIds) {
+    if (extraRowsByRepo.some((rows) => rows.has(repoId))) {
+      return path
+    }
+  }
+  return path.parent
+}
 
 export function appendProjectGroupSections(
   ctx: SectionAppendContext,

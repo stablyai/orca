@@ -3,6 +3,7 @@ import React from 'react'
 import { cn } from '@/lib/class-names'
 import type { AppState } from '@/store/types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
+import type { ProjectGroup } from '../../../../../../shared/project/groups/project-group-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import { isActiveSidebarWorkspace } from '../../../../../../shared/sidebar-list/selection/active-workspace'
@@ -15,10 +16,18 @@ import type { LineageRowFrame } from '../listing/lineage-row-projection'
 import type { WorktreeItemRow } from '../listing/renderable-rows'
 import { forwardOptionPressToCardSurface, getWorktreeOptionId } from './option-dom'
 import type { WorktreeRowDragState } from '../drag/row-state'
+import { ProjectHeaderActions } from './ProjectHeaderActions'
+import {
+  RepoProjectActionButtons,
+  type RepoHeaderProjectActions
+} from './repo-header-project-actions'
+import { stopNestedWorktreeCardBubble } from './header-event-guards'
 
 export type WorktreeItemRowContext = {
   settings: AppState['settings']
   groupBy: WorktreeGroupBy
+  projectActions: RepoHeaderProjectActions
+  projectGroups: readonly ProjectGroup[]
   groupKeyByRowKey: ReadonlyMap<string, string>
   groupIndexByRowKey: ReadonlyMap<string, number>
   agentSendTargetWorktreeId: string | null
@@ -60,6 +69,8 @@ export function renderWorktreeItemRow(
   forceActiveSurface = false
 ): React.JSX.Element {
   const { left: surfaceInset, right, contentIndent: cardContentIndent } = frame
+  const { repo, inlineProjectName } = itemRow
+  const showProjectActions = repo !== undefined && inlineProjectName !== undefined
   const worktreeDragGroupKey = ctx.groupKeyByRowKey.get(itemRow.rowKey)
   const worktreeIdentity = getWorktreeHostIdentity(itemRow.worktree)
   const isMultiSelected = ctx.selectedWorktreeIds.has(worktreeIdentity)
@@ -88,6 +99,7 @@ export function renderWorktreeItemRow(
       className={cn(
         // Why: don't transition 'transform' — it lags/flashes when TanStack Virtual repositions adjacent rows.
         'relative transition-[opacity,filter] duration-150 ease-out',
+        showProjectActions && 'group/sidebar-workspace',
         ctx.worktreeDragState.draggingWorktreeId === worktreeIdentity &&
           // Why: the fixed drag preview is the affordance; a translucent source row would bleed through sticky headers/footers.
           'pointer-events-none opacity-0'
@@ -107,7 +119,7 @@ export function renderWorktreeItemRow(
     >
       <WorktreeCard
         worktree={itemRow.worktree}
-        repo={itemRow.repo}
+        repo={repo}
         isActive={isActiveWorktree}
         isCurrentWorktree={ctx.currentWorktreeId === itemRow.worktree.id}
         // Why: a child-active parent should look active without the active-card side effects (e.g. SSH reconnect UI).
@@ -132,6 +144,25 @@ export function renderWorktreeItemRow(
         onCardDragStart={ctx.onCardDragStart}
         onCardDragEnd={ctx.onCardDragEnd}
         hideRepoBadge={ctx.groupBy === 'repo' && !itemRow.showProjectName}
+        inlineProjectName={inlineProjectName}
+        projectActions={
+          showProjectActions ? (
+            <ProjectHeaderActions
+              inline
+              onPointerDown={stopNestedWorktreeCardBubble}
+              onClick={stopNestedWorktreeCardBubble}
+              onDoubleClick={stopNestedWorktreeCardBubble}
+            >
+              <RepoProjectActionButtons
+                repo={repo}
+                label={inlineProjectName}
+                projectGroups={ctx.projectGroups}
+                actions={ctx.projectActions}
+                pinHost
+              />
+            </ProjectHeaderActions>
+          ) : undefined
+        }
         // Why: pinned worktrees mix repos; cross-repo children opt into the existing project-name badge.
         hostContextLabel={itemRow.hostContextLabel}
         showProjectName={itemRow.showProjectName}

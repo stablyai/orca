@@ -1,6 +1,9 @@
 import { projectGroupIdFromRepoId } from '../../../../src/shared/folder-workspaces/folder-workspace-worktree'
 import type { ProjectGroup } from '../../../../src/shared/project/groups/project-group-types'
-import type { ProjectSectionEntry } from '../../../../src/shared/sidebar-list/sections/project-section-grouping'
+import {
+  isSingleWorkspaceProject,
+  type ProjectSectionEntry
+} from '../../../../src/shared/sidebar-list/sections/project-section-grouping'
 import { getProjectGroupHeaderKey } from '../../../../src/shared/sidebar-list/sections/group-keys'
 import { withRepoSectionDisplayLabels } from '../../../../src/shared/sidebar-list/sections/project-section-order'
 import { getFolderBoundGroupingRoots } from '../../../../src/shared/sidebar-list/folders/folder-workspace-occurrences'
@@ -16,12 +19,12 @@ import type {
 
 type ProjectEntry = [string, ProjectSectionEntry<Worktree, SectionRepo>]
 
-type TreeSection = Pick<Section, 'isProjectGroup' | 'projectGroupDepth' | 'count'>
+type TreeSection = Pick<Section, 'isProjectGroup' | 'projectGroupDepth' | 'count' | 'hideHeader'>
 
 // Where a section sits in the tree: the groups that hide it and its rows' indent.
 export type GroupTreePlacement = {
   ancestorKeys: readonly string[]
-  rowView: Pick<WorktreeRowView, 'projectGroupDepth' | 'inFolderScanGroup'>
+  rowView: Pick<WorktreeRowView, 'projectGroupDepth' | 'inFolderScanGroup' | 'inlineProjectName'>
 }
 
 export type GroupFolderRows = {
@@ -83,7 +86,7 @@ export function bindGroupFolderRows(
 }
 
 // The desktop sidebar's group tree, as sections in list order; without groups, its plain project list.
-export function planProjectGroupTree<S extends object>(args: {
+export function planProjectGroupTree<S extends { data: readonly Worktree[] }>(args: {
   entries: readonly ProjectEntry[]
   catalog: Pick<ProjectSectionCatalog, 'projectGroups' | 'projectOrderBy' | 'repoOrder'>
   folderRowsByGroupId: ReadonlyMap<string, Worktree[]>
@@ -146,14 +149,21 @@ export function planProjectGroupTree<S extends object>(args: {
       projects: (entries, depth) => {
         groupPath.length = depth
         for (const entry of entries) {
+          const [key, project] = entry
+          const section = args.projectSection(entry)
+          const hideHeader = depth > 0 && isSingleWorkspaceProject(project, section.data)
           // A root project sits in no group, so it lists as it would without groups.
           if (depth > 0) {
-            placements.set(entry[0], {
+            placements.set(key, {
               ancestorKeys: [...groupPath],
-              rowView: { ...atDepth(depth), ...inFolderScanGroup(entry[1].repo?.projectGroupId) }
+              rowView: {
+                ...atDepth(depth),
+                ...inFolderScanGroup(project.repo?.projectGroupId),
+                ...(hideHeader ? { inlineProjectName: project.label } : {})
+              }
             })
           }
-          sections.push({ ...args.projectSection(entry), ...atDepth(depth) })
+          sections.push({ ...section, ...atDepth(depth), ...(hideHeader ? { hideHeader } : {}) })
         }
       }
     }

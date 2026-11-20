@@ -187,6 +187,14 @@ export function buildHostFeedSections(sources: HostFeedListSources): Section[] {
           row.repo?.displayName,
           'git'
         )
+        if (row.inlineProjectName !== undefined) {
+          push({
+            ...hostSectionKeys(row.sectionKey, sectionHostId),
+            title: row.inlineProjectName,
+            hideHeader: true,
+            data: []
+          })
+        }
         current().data.push({
           row: {
             ...drawn,
@@ -208,6 +216,7 @@ export function buildHostFeedSections(sources: HostFeedListSources): Section[] {
             isLastLineageChild: row.isLastLineageChild,
             ...(row.lineageGroupKey ? { lineageGroupKey: row.lineageGroupKey } : {}),
             showProjectName: row.showProjectName === true,
+            inlineProjectName: row.inlineProjectName,
             // The desktop's mixed-host rule names the host; a health word alone still shows.
             hostContextLabel:
               row.hostContextLabel ??

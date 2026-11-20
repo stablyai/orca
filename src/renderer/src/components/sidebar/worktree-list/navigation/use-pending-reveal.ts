@@ -254,10 +254,11 @@ export function usePendingSidebarReveal(args: PendingSidebarRevealArgs): void {
       }
 
       const container = argsRef.current.scrollRef.current
+      const targetRowKey = getRenderRowSidebarKey(argsRef.current.renderRows[targetIndex]!)!
       const revealedElement = container
         ? revealMountedSidebarRowElement(
             container,
-            pendingRevealSidebarRow.rowKey,
+            targetRowKey,
             pendingRevealSidebarRow.behavior,
             markRevealScroll,
             scrollToReveal
@@ -265,7 +266,7 @@ export function usePendingSidebarReveal(args: PendingSidebarRevealArgs): void {
         : null
       if (revealedElement) {
         if (pendingRevealSidebarRow.highlight && isCurrent()) {
-          flashRevealedRow(pendingRevealSidebarRow.rowKey)
+          flashRevealedRow(targetRowKey)
         }
         pendingRowRevealRetryRef.current = null
         requestVirtualizedScrollAnchorRecord(argsRef.current.scrollRef.current)

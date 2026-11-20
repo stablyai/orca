@@ -221,6 +221,9 @@ export function addHostSectionRows(args: {
     if (row.type === 'header' && row.repo) {
       retainPendingAncestors(row.projectGroupDepth ?? 0)
     }
+    if (row.type === 'item' && row.inlineProjectName !== undefined) {
+      retainPendingAncestors(row.groupDepth)
+    }
     if (row.type === 'header' && row.hostRepos) {
       // A project on several hosts heads each host's own rows, including when collapsed.
       for (const hostId of row.hostRepos.keys()) {

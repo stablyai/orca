@@ -90,7 +90,8 @@ function WorktreeListRowComponent({
   const lineageDepth = Math.max(0, view.lineageDepth ?? 0)
   const indent = projectGroupRowIndent(item, view) + lineageDepth * 18
   const count = view.lineageChildCount ?? 0
-  const shouldHideRepo = hideRepo && !view.showProjectName
+  const projectName = view.inlineProjectName ?? item.repo
+  const shouldHideRepo = hideRepo && !view.showProjectName && view.inlineProjectName === undefined
   const showRepoChip = cardDetails.repoInTitle && !shouldHideRepo && !isFolderWorkspace
   const showRepoInMetaRow = !cardDetails.repoInTitle && !shouldHideRepo
   const hostId = view.hostContextHostId ?? item.hostId
@@ -198,7 +199,7 @@ function WorktreeListRowComponent({
             <View
               style={styles.repoChip}
               accessibilityLabel={t('components.worktreeListRow.project', 'Project {{repo}}', {
-                repo: item.repo
+                repo: projectName
               })}
             >
               <MobileRepoIcon repoIcon={repoIcon} size={11} color={repoColor} />
@@ -222,6 +223,7 @@ function WorktreeListRowComponent({
             numberOfLines={1}
           >
             {item.displayName || item.repo}
+            {cardDetails.repoInTitle && view.inlineProjectName ? ` — ${projectName}` : ''}
           </Text>
           {/* A bot's worker line has no room for PR marks; the desktop drops them there too. */}
           {!view.botWorkspace && cardDetails.pr && item.linkedPR && (
@@ -269,7 +271,7 @@ function WorktreeListRowComponent({
               <>
                 <MobileRepoIcon repoIcon={repoIcon} size={11} color={repoColor} />
                 <Text style={styles.repoName} numberOfLines={1}>
-                  {item.repo}
+                  {projectName}
                 </Text>
               </>
             )}

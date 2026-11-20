@@ -108,6 +108,8 @@ export function buildWorktreeVirtualRowContext(args: BuildArgs): WorktreeVirtual
     item: {
       settings: args.settings,
       groupBy: props.groupBy,
+      projectActions: args.projectActions,
+      projectGroups: args.projectGroups,
       groupKeyByRowKey: session.groupKeyByRowKey,
       groupIndexByRowKey: session.groupIndexByRowKey,
       agentSendTargetWorktreeId: props.agentSendTargetWorktreeId,

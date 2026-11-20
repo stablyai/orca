@@ -102,11 +102,16 @@ export function appendOrderedGroups(
     occurrencePlan
   } = ctx
   for (const [key, group] of groupsToAppend) {
-    const isCollapsed = collapsedGroups.has(key)
+    const firstOccurrence = occurrencePlan.bySection.get(key)?.[0]
+    // A headerless project starts its reveal path at the enclosing project group.
+    const showProjectAsWorkspace =
+      firstOccurrence !== undefined && firstOccurrence.sectionPath.key !== key
+    const isCollapsed = !showProjectAsWorkspace && collapsedGroups.has(key)
     const repo = group.repo
     const folderPairs = group.folderWorkspaces ?? []
-    const header =
-      groupBy === 'repo'
+    const header = showProjectAsWorkspace
+      ? null
+      : groupBy === 'repo'
         ? {
             type: 'header' as const,
             key,
@@ -168,9 +173,11 @@ export function appendOrderedGroups(
               }
             })()
 
-    result.push(header)
+    if (header) {
+      result.push(header)
+    }
     if (!isCollapsed) {
-      if (groupBy === 'repo') {
+      if (groupBy === 'repo' && !showProjectAsWorkspace) {
         const repoIds =
           group.repoIds.size > 0
             ? [...group.repoIds]
@@ -216,6 +223,7 @@ export function appendOrderedGroups(
         collapsedGroups,
         groupDepth: projectGroupDepth,
         sectionKey: key,
+        inlineProjectName: showProjectAsWorkspace ? group.label : undefined,
         hostContextLabelByRepoId,
         hostContextLabelByWorktreeIdentity: mixedWorktreeHostContextLabels,
         folderPairByIdentity: ctx.folderPairByIdentity

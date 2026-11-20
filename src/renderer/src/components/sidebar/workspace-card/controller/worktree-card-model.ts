@@ -28,6 +28,8 @@ export type WorktreeCardProps = {
   revealHighlightTone?: 'default' | 'ai'
   selectedWorktrees?: readonly Worktree[]
   hideRepoBadge?: boolean
+  inlineProjectName?: string
+  projectActions?: React.ReactNode
   hostContextLabel?: string
   /** Reuse the normal project badge for a nested child owned by another repo. */
   showProjectName?: boolean

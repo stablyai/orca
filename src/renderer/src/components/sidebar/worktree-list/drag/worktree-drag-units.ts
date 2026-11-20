@@ -20,6 +20,7 @@ type WorktreeDragUnitRow =
       worktree: { id: string; hostId?: ExecutionHostId }
       depth: number
       sectionKey: string
+      inlineProjectName?: string
     }
   | { type: 'imported-worktrees-card' }
   | { type: 'new-external-worktrees-inbox' }
@@ -32,7 +33,10 @@ export function getWorktreeDragUnitGroups(
 ): WorktreeDragUnitGroup[] {
   const groups: WorktreeDragUnitGroup[] = []
   let current: { key: string; units: WorktreeDragUnitGroup['units'] } | null = null
-  const folderLanes = new Map<string, { key: string; units: WorktreeDragUnitGroup['units'] }>()
+  const headerlessSections = new Map<
+    string,
+    { key: string; units: WorktreeDragUnitGroup['units'] }
+  >()
   // A folder workspace row joins no unit, so the rows nested under it start their own units; within
   // them, a unit is a row plus the deeper rows below it.
   let folderChildUnit: { units: WorktreeDragUnitGroup['units']; depth: number } | null = null
@@ -66,11 +70,11 @@ export function getWorktreeDragUnitGroups(
       continue
     }
     let target = current
-    if (isFolderLaneSectionKey(row.sectionKey)) {
-      target = folderLanes.get(row.sectionKey) ?? null
+    if (isFolderLaneSectionKey(row.sectionKey) || row.inlineProjectName !== undefined) {
+      target = headerlessSections.get(row.sectionKey) ?? null
       if (!target) {
         target = { key: row.sectionKey, units: [] }
-        folderLanes.set(row.sectionKey, target)
+        headerlessSections.set(row.sectionKey, target)
         groups.push({ key: target.key, units: target.units, worktreeIds: [] })
       }
     } else if (!current) {

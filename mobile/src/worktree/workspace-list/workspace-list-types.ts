@@ -47,6 +47,7 @@ export type WorktreeRowView = WorktreeHostContextView & {
   sectionListKey?: string
   /** Show the existing project-name surface for a child from another repo. */
   showProjectName?: boolean
+  inlineProjectName?: string
   lineageDepth?: number
   // Match the desktop’s project-group row depth.
   projectGroupDepth?: number
@@ -103,6 +104,7 @@ export type Section = {
   /** The view's collapse key when it differs from `key`; a header's copies share it. */
   collapseKey?: string
   title: string
+  hideHeader?: boolean
   icon?: 'pin'
   repo?: SectionRepo
   isProjectGroup?: boolean

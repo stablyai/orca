@@ -74,6 +74,7 @@ export function appendWorktreeRows(
     collapsedGroups: Set<string>
     groupDepth: number
     sectionKey: string
+    inlineProjectName?: string
     hostContextLabelByRepoId?: ReadonlyMap<string, string>
     hostContextLabelByWorktreeIdentity?: ReadonlyMap<string, string>
     /** Occurrences that are folder workspaces render as folder rows. */
@@ -122,7 +123,10 @@ export function appendWorktreeRows(
       lineageChildCount: occurrence.childCount,
       lineageChildWorktreeIds: childIdsByParent.get(occurrence.key),
       lineageDescendantIdentities: lineageRanges.get(occurrence.key),
-      showProjectName: occurrence.showProjectName,
+      showProjectName: options.inlineProjectName !== undefined || occurrence.showProjectName,
+      ...(options.inlineProjectName === undefined
+        ? {}
+        : { inlineProjectName: options.inlineProjectName }),
       hostContextLabel:
         options.hostContextLabelByWorktreeIdentity?.get(getWorktreeHostIdentity(worktree)) ??
         options.hostContextLabelByRepoId?.get(worktree.repoId),

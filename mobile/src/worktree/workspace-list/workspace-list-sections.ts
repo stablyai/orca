@@ -189,6 +189,10 @@ export function buildMobileWorkspacePlan(
           .map((repo) => repo.id)
         const projectSections = buildProjectSections({
           items: folderLane.projectRows,
+          allItems:
+            projectCatalog.projectGroups.length > 0
+              ? worktrees.filter((w) => !w.isArchived && w.workspaceKind !== 'folder-workspace')
+              : undefined,
           repoIdOf: (w) => w.repoId,
           displayRepoIdOf: (w) => folderLane.groupingRootOf(w).repoId,
           repoMap,

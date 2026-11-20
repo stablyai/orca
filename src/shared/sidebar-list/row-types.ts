@@ -70,6 +70,8 @@ export type WorktreeRow = {
   lineageDescendantIdentities?: WorktreeLineageSource
   hostContextLabel?: string
   showProjectName?: boolean
+  /** The heading label when this card represents its entire project. */
+  inlineProjectName?: string
 }
 
 export type ImportedWorktreesCardCandidate = {
