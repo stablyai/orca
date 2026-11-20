@@ -5,7 +5,7 @@ import {
 import { useEffect, useMemo } from 'react'
 import { useAppStore } from '@/store/index'
 import {
-  selectAgentLaunchRouteView,
+  agentLaunchRouteStoreFor,
   type ProspectiveWorkspace
 } from '../routing/agent-launch-route-input'
 import { useAppStateValueWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
@@ -71,7 +71,7 @@ export function useChatProgramFacts(workspace: ProspectiveWorkspace, active = tr
   // Hidden worktrees' tab bars stay mounted; resolving per store write there is wasted work.
   const key = useAppStateValueWithHostStatuses((state, statuses) =>
     active
-      ? resolveChatProgramContext(selectAgentLaunchRouteView(state, statuses), workspace).revision
+      ? resolveChatProgramContext(agentLaunchRouteStoreFor(state, statuses), workspace).revision
       : null
   )
   useEffect(() => {
@@ -92,7 +92,7 @@ export function useAgentsOfferedForLaunch(
   const key = useAppStateValueWithHostStatuses((state, statuses) =>
     detected === null
       ? null
-      : agentsOfferedForLaunch(selectAgentLaunchRouteView(state, statuses), workspace, [
+      : agentsOfferedForLaunch(agentLaunchRouteStoreFor(state, statuses), workspace, [
           ...detected
         ]).join(',')
   )

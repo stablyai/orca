@@ -1,8 +1,8 @@
 import {
-  buildAgentMenuRouteInput,
   createAgentMenuTerminalPendingSelector,
   useAgentMenuLaunchFacts
 } from './agent-menu-launch-facts'
+import { buildRouteInputForStatuses } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
 import {
   useAppViewExternalStore,
   useAppStateView,
@@ -116,7 +116,7 @@ export function useAgentMenuObservation(
     [worktreeId, repoId, repoHostId]
   )
   const terminalPending = useAppStateValueWithHostStatuses(terminalPendingSelector)
-  const input = buildAgentMenuRouteInput(state, hostStatuses, { agent: 'claude', workspace })
+  const input = buildRouteInputForStatuses(state, hostStatuses, { agent: 'claude', workspace })
   const { settings, pending: preferencesPending } = useHostAgentMenuSettings(
     unresolvedTarget ? null : facts,
     desktopSettings,
@@ -213,7 +213,7 @@ export function useAgentMenuObservation(
     if (unresolvedTarget) {
       return 'not-yet-known'
     }
-    answerContext ??= buildAgentMenuRouteInput(state, hostStatuses, {
+    answerContext ??= buildRouteInputForStatuses(state, hostStatuses, {
       agent,
       workspace,
       ...(launchCwd ? { tuiCustomization: { cwd: launchCwd } } : {})

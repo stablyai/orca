@@ -1,15 +1,11 @@
-import { readRuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import type { AppState } from '@/store/types'
 import type { RuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import { useAppStateValueWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { shallow } from 'zustand/shallow'
 import type { AgentSessionLaunchRequest } from '@/lib/agent-session/launch/routing/agent-session-launch-plan'
 import {
-  buildAgentLaunchRouteInput,
-  buildAgentLaunchRouteView,
   hostCapabilitiesFrom,
-  resolveAgentLaunchOwner,
-  type AgentLaunchRouteArgs
+  resolveAgentLaunchOwner
 } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
 import {
   executionHostTerminalPending,
@@ -36,19 +32,6 @@ import {
 import { getRuntimeEnvironmentRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import { getRendererAppPlatform } from '@/app-shell/platform/renderer-app-platform'
 import { runtimeHostPlatform } from '@/components/terminal-pane/pty-transport/host-ownership/pty-owner-machine-platform'
-
-/** A route input read against the view's own host statuses, so a retained view stays frozen. */
-export function buildAgentMenuRouteInput(
-  state: AppState,
-  statuses: RuntimeStatuses,
-  args: AgentLaunchRouteArgs
-) {
-  // The live map needs no pinned view: the route reads the owner's statuses itself.
-  return buildAgentLaunchRouteInput(
-    statuses === readRuntimeStatuses() ? state : buildAgentLaunchRouteView(state, statuses),
-    args
-  )
-}
 
 /** Identity facts for the picker's owner and acquisition keys; readiness stays out of them. */
 export function readAgentMenuLaunchFacts(

@@ -166,6 +166,24 @@ function resolveExecutionHostId(store: AgentLaunchRouteStore, workspace: Prospec
   return workspace.executionHostId ?? LOCAL_EXECUTION_HOST_ID
 }
 
+/** The route store for these statuses; only a retained view's frozen map needs a pinned view. */
+export function agentLaunchRouteStoreFor(
+  state: AppState,
+  statuses: RuntimeStatuses
+): AppState | AgentLaunchRouteView {
+  // The live map needs no pinned view: routes read the owner's statuses themselves.
+  return statuses === readRuntimeStatuses() ? state : buildAgentLaunchRouteView(state, statuses)
+}
+
+/** A route input read against the given statuses, so a retained view stays frozen. */
+export function buildRouteInputForStatuses(
+  state: AppState,
+  statuses: RuntimeStatuses,
+  args: AgentLaunchRouteArgs
+): AgentLaunchRoutingInput {
+  return buildAgentLaunchRouteInput(agentLaunchRouteStoreFor(state, statuses), args)
+}
+
 /** Host statuses a route reads: the view's pinned snapshot, else the owner's. */
 export function routeHostStatuses(store: Pick<AgentLaunchRouteStore, 'hostStatuses'>) {
   return store.hostStatuses ?? readRuntimeStatuses()

@@ -25,10 +25,7 @@ import {
 import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import { readHostAgentLaunchDefaults } from '../../runtime/agent-launch-settings/agent-launch-settings-transport'
 import type { NewTabAgentMenuModel } from './launch-menu/new-tab-agent-menu-model'
-import {
-  buildAgentLaunchRouteInput,
-  buildAgentLaunchRouteView
-} from '@/lib/agent-session/launch/routing/agent-launch-route-input'
+import { buildRouteInputForStatuses } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
 import { readRuntimeStatusesForView } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import { workspaceKindForWorktreeId } from '../../../../shared/agent-launch/contracts/workspace-launch-kind'
 import { structuredAgentSessionTargetForHost } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
@@ -85,11 +82,8 @@ export function useAgentLaunchPickerInventorySource(
   }, [selected])
   const context = model.state === 'settled' ? model.pickerContext : undefined
   const settings = context ? context.settings : store.getState().settings
-  // Built only when a route is asked for; a closed picker reads none.
-  const routeView = () =>
-    buildAgentLaunchRouteView(store.getState(), readRuntimeStatusesForView(store))
   const pickerRoute = () =>
-    buildAgentLaunchRouteInput(routeView(), {
+    buildRouteInputForStatuses(store.getState(), readRuntimeStatusesForView(store), {
       agent: 'claude',
       workspace: context?.workspace ?? {
         kind: worktreeId ? workspaceKindForWorktreeId(worktreeId) : 'floating',

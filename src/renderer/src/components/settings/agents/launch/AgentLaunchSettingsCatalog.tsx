@@ -50,7 +50,7 @@ import {
   readChatProgram,
   resolveChatProgramContext
 } from '@/lib/agent-session/launch/inventory/host-chat-program'
-import { selectAgentLaunchRouteView } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
+import { agentLaunchRouteStoreFor } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
 import { readNativeDetectedAgents } from '@/store/slices/agent-inventory/local-detected-agent-store-state'
 import {
   useDetectedAgents,
@@ -124,7 +124,7 @@ export function AgentLaunchSettingsCatalog({
   const chosen = settings.defaultTuiAgent
   // The saved default reads as available where it opens as a chat without its CLI.
   const defaultOpensAsChat = useAppStateValueWithHostStatuses((appState, statuses) => {
-    const state = selectAgentLaunchRouteView(appState, statuses)
+    const state = agentLaunchRouteStoreFor(appState, statuses)
     const opensAsChat = chosen && chosen !== 'blank' && detectionTarget.kind !== 'ssh'
     return opensAsChat ? agentChoiceOpensAsChat(state, chosen, workspace, detected) : false
   })
@@ -140,7 +140,7 @@ export function AgentLaunchSettingsCatalog({
     if (detectionTarget.kind === 'ssh') {
       return ''
     }
-    const state = selectAgentLaunchRouteView(appState, statuses)
+    const state = agentLaunchRouteStoreFor(appState, statuses)
     const context = resolveChatProgramContext(state, workspace)
     const selectedDetected = detectionTarget.kind === 'runtime' ? detected : installedHere
     return chatProviderAgents(context.executionHostId, statuses)
