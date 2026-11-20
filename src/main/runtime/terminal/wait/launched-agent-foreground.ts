@@ -33,6 +33,9 @@ export type MailboxForegroundInspection = {
   agentUnprovable?: boolean
 }
 
+/** Set when a completed read showed something other than a shell on a host that can never name an agent. */
+type MailboxRead = { agentUnprovable?: boolean }
+
 /** Set when the read's own fresh, fenced observation named exactly the agent asked about. */
 export type ExactAgentName = { named: boolean }
 
@@ -106,7 +109,7 @@ async function inspectLaunchedAgentForeground(
   agent?: TuiAgent,
   expectedIncarnationId?: string,
   exact?: ExactAgentName,
-  mailboxEvidence = false,
+  mailboxEvidence: false | MailboxRead = false,
   onAgent?: (agent: TuiAgent, process?: MailboxAgentProcess) => void,
   adoptedRootPid?: number | null
 ): Promise<MailboxForeground> {
@@ -129,7 +132,11 @@ async function inspectLaunchedAgentForeground(
   try {
     if (host.windows) {
       // Windows SSH relays lack even the shell-alone check.
-      return (await controller.confirmShellForeground?.(ptyId)) ? 'shell' : 'unknown'
+      const alone = await controller.confirmShellForeground?.(ptyId)
+      if (mailboxEvidence && alone === false) {
+        mailboxEvidence.agentUnprovable = true
+      }
+      return alone ? 'shell' : 'unknown'
     }
     if (controller.supportsForegroundObservation?.(ptyId)) {
       const result = await controller.inspectProcess?.(ptyId, {
@@ -262,6 +269,9 @@ async function inspectLaunchedAgentForeground(
     }
     // Legacy: relays that send no evidence (older versions) keep the possibly cached name.
     if (!evidence) {
+      if (mailboxEvidence) {
+        mailboxEvidence.agentUnprovable = true
+      }
       return mailboxEvidence ? 'unknown' : 'agent'
     }
     if (!completable) {
@@ -307,6 +317,7 @@ export async function readMailboxForeground(
 ): Promise<MailboxForegroundInspection> {
   let agent: TuiAgent | undefined
   let process: MailboxAgentProcess | undefined
+  const read: MailboxRead = {}
   const foreground = await inspectLaunchedAgentForeground(
     controller,
     host,
@@ -314,7 +325,7 @@ export async function readMailboxForeground(
     expected,
     expectedIncarnationId,
     undefined,
-    true,
+    read,
     (value, row) => {
       agent = value
       process = row
@@ -324,8 +335,7 @@ export async function readMailboxForeground(
   if (foreground === 'agent') {
     return { foreground, agent: agent ?? expected, ...(process ? { process } : {}) }
   }
-  // Windows reads and SSH relays without fenced observations cannot name an agent back.
-  const agentUnprovable =
-    host.windows || (host.remote && !controller?.supportsForegroundObservation?.(ptyId))
-  return agentUnprovable ? { foreground, agentUnprovable } : { foreground }
+  return foreground === 'unknown' && read.agentUnprovable
+    ? { foreground, agentUnprovable: true }
+    : { foreground }
 }

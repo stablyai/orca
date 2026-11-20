@@ -136,9 +136,13 @@ export function submitOrchestrationMailboxPointer(
         finalizeReservation = false
         return
       }
+      // Why: a host that can never name an agent leaves recovery to live status, readiness and the composer.
+      const agentInFront =
+        foreground.foreground === 'agent' ||
+        (foreground.foreground === 'unknown' && !!foreground.agentUnprovable)
       const target = deps.resolveSubmitTarget(
         input.ptyId,
-        isRecovering() && foreground.foreground !== 'agent' ? undefined : foreground.foreground,
+        isRecovering() && !agentInFront ? undefined : foreground.foreground,
         input.stagedText,
         input.expectedTarget.agent ?? foreground.agent
       )
@@ -153,7 +157,7 @@ export function submitOrchestrationMailboxPointer(
         clearAndRedrive = true
         return
       }
-      if (isRecovering() && foreground.foreground !== 'agent') {
+      if (isRecovering() && !agentInFront) {
         deps.state.foreground.applyForeground(input.ptyId, foreground, foreground.foreground)
         preserveFlight = true
         return
@@ -161,7 +165,7 @@ export function submitOrchestrationMailboxPointer(
       if (
         input.expectedTarget.agent &&
         ((target?.agent && target.agent !== input.expectedTarget.agent) ||
-          ((foreground.foreground === 'agent' || isRecovering()) &&
+          ((foreground.foreground === 'agent' || (isRecovering() && !foreground.agentUnprovable)) &&
             foreground.agent !== input.expectedTarget.agent))
       ) {
         preserveFlight = true
@@ -188,10 +192,7 @@ export function submitOrchestrationMailboxPointer(
         preserveFlight = true
       } else if (
         isRecovering() &&
-        (foreground.foreground !== 'agent' ||
-          !terminal.lastAgentStatusObservedLive ||
-          !settled ||
-          !ownPointer)
+        (!agentInFront || !terminal.lastAgentStatusObservedLive || !settled || !ownPointer)
       ) {
         uncertain = typeof composer === 'string' && !ownPointer
         preserveFlight = !uncertain

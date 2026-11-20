@@ -270,7 +270,7 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
 
   const receiveAttention = createRetainedAgentAttentionReceiver({
     dispatch: deliveryService.dispatch,
-    dismiss: (id) => retireAnnouncements([{ id }]),
+    dismiss: (id) => retireAnnouncements(announced.takeNotification(id)),
     readWorkspaceSession: () => store.getWorkspaceSession()
   })
   stopRuntimeAttentionEvents?.()
