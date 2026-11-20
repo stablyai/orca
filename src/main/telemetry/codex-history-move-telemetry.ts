@@ -47,30 +47,23 @@ async function readMarker(path: string): Promise<SentMarker | null> {
 const count = (value: number): number => Math.min(value, 1000)
 
 /**
- * Reports, once every managed host home has had a pass this run, how many moved and why the rest
+ * Reports, after a launch's passes for every managed host home, how many moved and why the rest
  * are stuck. Without consent nothing is sent or kept.
  */
 export class CodexHistoryMoveReport {
   private readonly outcomes = new Map<string, CodexHistoryMoveOutcome>()
   private marker: Promise<SentMarker> | null = null
   private queue: Promise<void> = Promise.resolve()
-  // How many homes the last listing found: fewer outcomes than that can't cover them, so the
-  // ownership reads behind a listing wait until enough passes have finished.
-  private listedHomes = 0
 
   constructor(
     private readonly deps: {
       markerPath: () => string
-      /** Comparison keys of the managed host homes that should be shared now; null when off. */
-      sharedHomeKeys: () => string[] | null
       wslHomeCount: () => number
     }
   ) {}
 
-  /** Settles once any report this outcome completes has been sent; never rejects. */
-  record(homeKey: string, outcome: CodexHistoryMoveOutcome): Promise<void> {
+  record(homeKey: string, outcome: CodexHistoryMoveOutcome): void {
     this.outcomes.set(homeKey, outcome)
-    return this.refresh()
   }
 
   /** An unshared home's earlier outcome no longer says anything about its move. */
@@ -78,16 +71,18 @@ export class CodexHistoryMoveReport {
     this.outcomes.delete(homeKey)
   }
 
-  /** Reports if every home has an outcome, for consent given after the passes settled. */
-  refresh(): Promise<void> {
-    this.queue = this.queue.then(() => this.reportIfComplete()).catch(() => {})
+  /** `homeKeys`: the homes the launch's passes covered. Never rejects. */
+  report(homeKeys: string[]): Promise<void> {
+    this.queue = this.queue.then(() => this.reportIfComplete(homeKeys)).catch(() => {})
     return this.queue
   }
 
-  private async reportIfComplete(): Promise<void> {
+  private async reportIfComplete(homes: string[]): Promise<void> {
     const platform = process.platform
     if (
       (platform !== 'darwin' && platform !== 'win32' && platform !== 'linux') ||
+      homes.length === 0 ||
+      homes.some((home) => !this.outcomes.has(home)) ||
       !isTelemetryEnabled()
     ) {
       return
@@ -97,12 +92,7 @@ export class CodexHistoryMoveReport {
       saved?.version === version ? saved : { version, sent: [] }
     )
     const marker = await this.marker
-    if (marker.sent.length >= MAX_SENDS_PER_VERSION || this.outcomes.size < this.listedHomes) {
-      return
-    }
-    const homes = this.deps.sharedHomeKeys()
-    this.listedHomes = homes?.length ?? 0
-    if (!homes || homes.length === 0 || homes.some((home) => !this.outcomes.has(home))) {
+    if (marker.sent.length >= MAX_SENDS_PER_VERSION) {
       return
     }
     const tally = (outcome: CodexHistoryMoveOutcome): number =>

@@ -57,7 +57,6 @@ export class CodexAccountHistoryPasses {
   ) {}
 
   private readonly moveReport = new CodexHistoryMoveReport({
-    sharedHomeKeys: () => this.sharedHomeKeys(),
     wslHomeCount: () => this.homes.wslHomeCount(),
     markerPath: () => join(getOrcaUserDataPath(), 'codex-account-history', 'move-status-sent.json')
   })
@@ -67,11 +66,11 @@ export class CodexAccountHistoryPasses {
    * and the account may both have changed since it was found busy, or while the retry was queued.
    */
   private isStillShared(accountHome: string): boolean {
-    return this.sharedHomeKeys()?.includes(normalizeRuntimePathForComparison(accountHome)) ?? false
-  }
-
-  private sharedHomeKeys(): string[] | null {
-    return this.homes.sharedHomes()?.map((home) => normalizeRuntimePathForComparison(home)) ?? null
+    const key = normalizeRuntimePathForComparison(accountHome)
+    return (
+      this.homes.sharedHomes()?.some((home) => normalizeRuntimePathForComparison(home) === key) ??
+      false
+    )
   }
 
   private readonly requests = new CodexHistoryPassRequests()
@@ -132,9 +131,6 @@ export class CodexAccountHistoryPasses {
           return
         }
         if (this.settledThisRun.get(key) === shared) {
-          if (shared) {
-            void this.moveReport.refresh()
-          }
           // Moves are done; only index work a stopped or failed heal left behind is retried.
           if (hasIncompleteHostCodexIndexHeal(INDEX_PENDING_DIR())) {
             requestHostCodexIndexHeal(
@@ -158,6 +154,16 @@ export class CodexAccountHistoryPasses {
     )
   }
 
+  /** Every home's pass in the background; once all settle, the move report from this one listing. */
+  runAll(accountHomes: string[], shared: boolean): void {
+    const passes = accountHomes.map((home) => this.run(home, shared).catch(() => {}))
+    if (shared) {
+      void Promise.all(passes).then(() =>
+        this.moveReport.report(accountHomes.map((home) => normalizeRuntimePathForComparison(home)))
+      )
+    }
+  }
+
   /** Copies the import folder's conversations that ~/.codex lacks into it (see the runner). */
   importHistory(
     getSettings: () => CodexHistoryImportSettings,
@@ -177,7 +183,7 @@ export class CodexAccountHistoryPasses {
     })
     const moveOutcome = shared ? MOVE_OUTCOMES[outcome] : undefined
     if (moveOutcome) {
-      void this.moveReport.record(key, moveOutcome)
+      this.moveReport.record(key, moveOutcome)
     } else {
       this.moveReport.forget(key)
     }

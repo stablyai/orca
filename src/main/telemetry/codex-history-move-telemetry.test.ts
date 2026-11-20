@@ -22,22 +22,24 @@ afterEach(() => {
   rmSync(dir, { recursive: true, force: true })
 })
 
-function report(homes: string[]): CodexHistoryMoveReport {
+function moveReport(): CodexHistoryMoveReport {
   return new CodexHistoryMoveReport({
     markerPath: () => join(dir, 'move-status-sent.json'),
-    sharedHomeKeys: () => homes,
     wslHomeCount: () => 1
   })
 }
 
 describe('codex history move telemetry', () => {
   it('reports once every home has a pass, then once more when the counts change', async () => {
-    const first = report(['/a', '/b', '/c'])
-    void first.record('/a', 'moved')
-    await first.record('/b', 'busy')
+    const homes = ['/a', '/b', '/c']
+    const first = moveReport()
+    first.record('/a', 'moved')
+    first.record('/b', 'busy')
+    await first.report(homes)
     expect(telemetry.track).not.toHaveBeenCalled()
 
-    await first.record('/c', 'no_lock_helper')
+    first.record('/c', 'no_lock_helper')
+    await first.report(homes)
     expect(telemetry.track).toHaveBeenLastCalledWith('codex_history_move_status', {
       platform: process.platform,
       homes: 3,
@@ -50,7 +52,12 @@ describe('codex history move telemetry', () => {
       wsl_homes: 1
     })
 
-    await first.record('/b', 'moved')
+    // Unchanged counts at the next launch send nothing.
+    await first.report(homes)
+    expect(telemetry.track).toHaveBeenCalledTimes(1)
+
+    first.record('/b', 'moved')
+    await first.report(homes)
     expect(telemetry.track).toHaveBeenCalledTimes(2)
     expect(telemetry.track).toHaveBeenLastCalledWith(
       'codex_history_move_status',
@@ -58,8 +65,9 @@ describe('codex history move telemetry', () => {
     )
 
     // A later run of the same version has used both reports.
-    const next = report(['/a'])
-    await next.record('/a', 'failed')
+    const next = moveReport()
+    next.record('/a', 'failed')
+    await next.report(['/a'])
     expect(telemetry.track).toHaveBeenCalledTimes(2)
   })
 })

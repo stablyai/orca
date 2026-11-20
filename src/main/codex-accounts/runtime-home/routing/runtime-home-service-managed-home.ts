@@ -162,9 +162,10 @@ export abstract class CodexRuntimeHomeManagedHome extends CodexRuntimeHomeSync {
 
   /** Brings every trusted host account's history into the store without waiting for its launch. */
   protected prepareAllAccountHistoryInBackground(): void {
-    for (const home of this.getManagedHostAccountHomesForSessionDiscovery()) {
-      void this.prepareAccountHistory(home)
-    }
+    this.accountHistoryPasses.runAll(
+      this.getManagedHostAccountHomesForSessionDiscovery(),
+      isCodexHistorySharedAcrossAccounts(this.store.getSettings())
+    )
   }
 
   /**
