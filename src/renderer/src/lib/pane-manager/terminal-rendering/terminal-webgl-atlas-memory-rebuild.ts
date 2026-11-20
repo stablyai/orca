@@ -4,9 +4,11 @@ import { rebuildAllTerminalWebglRenderers } from '../pane-manager-registry'
 // A 4096² merged page means the shared atlas reached ~64 MiB; on Apple GPUs each context keeps its upload memory until the context is destroyed (GiBs across panes).
 const ATLAS_REBUILD_PAGE_SIZE = 4096
 const ATLAS_REBUILD_MIN_INTERVAL_MS = 10_000
-// Only Apple GPUs were measured retaining it; elsewhere a mass context recreate risks the driver's context budget.
+// Only macOS was measured retaining it; elsewhere a mass context recreate risks the driver's context budget. Touch excludes iPadOS desktop-mode agents.
 const ATLAS_MEMORY_REBUILD_ENABLED =
-  typeof navigator !== 'undefined' && navigator.userAgent.includes('Mac')
+  typeof navigator !== 'undefined' &&
+  navigator.userAgent.includes('Macintosh') &&
+  !(navigator.maxTouchPoints > 0)
 
 type OutputSource = { onWriteParsed(listener: () => void): IDisposable }
 
@@ -15,13 +17,6 @@ let rebuildRequested = false
 let outputSinceRebuild = true
 let lastRebuildAt = Number.NEGATIVE_INFINITY
 const outputWatchers = new Map<OutputSource, IDisposable>()
-
-function clearOutputWatchers(): void {
-  for (const watcher of outputWatchers.values()) {
-    watcher.dispose()
-  }
-  outputWatchers.clear()
-}
 
 function scheduleRebuild(): void {
   if (rebuildTimer !== null || !rebuildRequested || !outputSinceRebuild) {
@@ -34,36 +29,38 @@ function scheduleRebuild(): void {
     rebuildRequested = false
     outputSinceRebuild = false
     lastRebuildAt = Date.now()
-    clearOutputWatchers()
     rebuildAllTerminalWebglRenderers('atlas-memory')
   }, delay)
 }
 
-/** Drops a detached terminal's output watcher so a closed pane is not kept alive. */
+/** Watches a WebGL terminal's output for its renderer's lifetime; repaints, warm-up and reveals parse nothing, so only output re-arms a rebuild. */
+export function watchTerminalWebglAtlasOutput(terminal: OutputSource): void {
+  if (!ATLAS_MEMORY_REBUILD_ENABLED || outputWatchers.has(terminal)) {
+    return
+  }
+  outputWatchers.set(
+    terminal,
+    terminal.onWriteParsed(() => {
+      if (!outputSinceRebuild) {
+        outputSinceRebuild = true
+        scheduleRebuild()
+      }
+    })
+  )
+}
+
+/** Drops a detached terminal's watcher so a closed pane is not kept alive. */
 export function releaseTerminalWebglAtlasWatcher(terminal: OutputSource): void {
   outputWatchers.get(terminal)?.dispose()
   outputWatchers.delete(terminal)
 }
 
-/** Requests one global WebGL rebuild for a large atlas page; repaints, warm-up and reveals alone never re-trigger it. */
-export function handleTerminalWebglAtlasPage(
-  page: { width: number },
-  terminal: OutputSource
-): void {
+/** Requests one global WebGL rebuild, at most every 10 s and only after output since the last one. */
+export function handleTerminalWebglAtlasPage(page: { width: number }): void {
   // Exact match: the larger oversized-glyph page comes back as soon as its glyph redraws, so a rebuild can't free it.
   if (!ATLAS_MEMORY_REBUILD_ENABLED || page.width !== ATLAS_REBUILD_PAGE_SIZE) {
     return
   }
   rebuildRequested = true
-  if (!outputSinceRebuild && !outputWatchers.has(terminal)) {
-    outputWatchers.set(
-      terminal,
-      terminal.onWriteParsed(() => {
-        outputSinceRebuild = true
-        clearOutputWatchers()
-        scheduleRebuild()
-      })
-    )
-  }
   scheduleRebuild()
 }

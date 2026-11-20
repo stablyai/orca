@@ -29,7 +29,8 @@ import {
 import { watchTerminalSymbolsFontLoad } from './terminal-symbols-font'
 import {
   handleTerminalWebglAtlasPage,
-  releaseTerminalWebglAtlasWatcher
+  releaseTerminalWebglAtlasWatcher,
+  watchTerminalWebglAtlasOutput
 } from './terminal-webgl-atlas-memory-rebuild'
 
 export const ENABLE_WEBGL_RENDERER = true
@@ -122,10 +123,10 @@ export function disposeWebgl(
 ): void {
   cancelPendingWebglRefresh(pane)
   panesAwaitingWebglAddon.delete(pane)
+  releaseTerminalWebglAtlasWatcher(pane.terminal)
   if (!pane.webglAddon) {
     return
   }
-  releaseTerminalWebglAtlasWatcher(pane.terminal)
   releaseXtermWebglContext(pane.webglAddon)
   try {
     pane.webglAddon.dispose()
@@ -281,9 +282,10 @@ export function attachWebgl(pane: ManagedPaneInternal): void {
       pane.webglDisabledAfterContextLoss = true
       disposeWebgl(pane, { refreshDimensions: true })
     })
-    addon.onAddTextureAtlasCanvas((page) => handleTerminalWebglAtlasPage(page, pane.terminal))
+    addon.onAddTextureAtlasCanvas(handleTerminalWebglAtlasPage)
     pane.terminal.loadAddon(addon)
     pane.webglAddon = addon
+    watchTerminalWebglAtlasOutput(pane.terminal)
     const canvas = getXtermWebglCanvas(addon)
     if (canvas) {
       // Why: panes of a hidden worktree surface keep their backing so switching worktrees never pays a reallocation.
