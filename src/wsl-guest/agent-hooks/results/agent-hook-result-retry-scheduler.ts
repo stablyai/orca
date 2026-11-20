@@ -18,6 +18,7 @@ import { pickHostTurnEnd } from '../../../shared/agent-status/contracts/agent-st
 import {
   ignoredHookTranscriptPoll,
   museLogOffset,
+  nextHookTranscriptPollDelay,
   nextMusePollDelay,
   shouldPollHookTranscript,
   hookTranscriptWatchPath,
@@ -225,10 +226,7 @@ export class AgentHookResultRetryScheduler {
     const next = update ? this.host.applyEvent(update, source, env, version) : original
     if (next) {
       const quiet = !update && museLogOffset(this.host.state, paneKey) === logOffset
-      const delayMs =
-        source === 'muse' || source === 'antigravity'
-          ? nextMusePollDelay(poll.delayMs, quiet)
-          : undefined
+      const delayMs = nextHookTranscriptPollDelay(this.host.state, poll, paneKey, quiet)
       this.scheduleTranscriptPoll(source, body, next, env, version, delayMs)
     }
   }

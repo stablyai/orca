@@ -2,7 +2,10 @@ import { agentSubagentsEqual } from '../agent-status/contracts/agent-status-suba
 import type { AgentHookSource } from './transport/agent-hook-relay'
 import type { AgentHookEventPayload } from './listener-event'
 import type { HookListenerState } from './listener-state'
-import { hasAntigravityPollWork } from './providers/antigravity/antigravity-transcript-poll'
+import {
+  hasAntigravityPollWork,
+  isAntigravityPollSettled
+} from './providers/antigravity/antigravity-transcript-poll'
 import { hasCodexTranscriptSubagents } from './providers/codex/codex-state'
 import { hasMuseSessionLog } from './providers/muse/muse-events'
 import { hasPendingCodexSubagentIdentity } from './providers/codex/codex-subagent-roster'
@@ -36,9 +39,33 @@ const MUSE_POLL_MS = 1_000
 // live quiet session may still log a question), so back off to one stat per 5s instead of stopping.
 const MUSE_QUIET_POLL_MAX_MS = 5_000
 
+// Why: a settled agy pane can only change by a KILLED descriptor, which no hook announces.
+const ANTIGRAVITY_SETTLED_QUIET_POLL_MAX_MS = 30_000
+
 /** Log growth, a status change, or any hook for the session restores the 1s cadence. */
-export function nextMusePollDelay(previousMs?: number, quiet = false): number {
-  return quiet ? Math.min((previousMs ?? MUSE_POLL_MS) * 2, MUSE_QUIET_POLL_MAX_MS) : MUSE_POLL_MS
+export function nextMusePollDelay(
+  previousMs?: number,
+  quiet = false,
+  maxMs = MUSE_QUIET_POLL_MAX_MS
+): number {
+  return quiet ? Math.min((previousMs ?? MUSE_POLL_MS) * 2, maxMs) : MUSE_POLL_MS
+}
+
+export function nextHookTranscriptPollDelay(
+  state: HookListenerState,
+  { source, delayMs: previousMs }: { source: AgentHookSource; delayMs?: number },
+  paneKey: string,
+  quiet: boolean
+): number | undefined {
+  if (source !== 'muse' && source !== 'antigravity') {
+    return undefined
+  }
+  const settled = source === 'antigravity' && isAntigravityPollSettled(state, paneKey)
+  return nextMusePollDelay(
+    previousMs,
+    quiet,
+    settled ? ANTIGRAVITY_SETTLED_QUIET_POLL_MAX_MS : MUSE_QUIET_POLL_MAX_MS
+  )
 }
 
 export function museLogOffset(state: HookListenerState, paneKey: string): number | undefined {

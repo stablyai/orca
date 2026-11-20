@@ -14,6 +14,7 @@ import { pickHostTurnEnd } from '../../../shared/agent-status/contracts/agent-st
 import {
   ignoredHookTranscriptPoll,
   museLogOffset,
+  nextHookTranscriptPollDelay,
   nextMusePollDelay,
   shouldPollHookTranscript,
   hookTranscriptWatchPath,
@@ -228,10 +229,7 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
     if (next) {
       wakeAntigravityDone(this.state, source, paneKey, this.hookSilenceRechecks)
       const quiet = !update && museLogOffset(this.state, paneKey) === logOffset
-      const delayMs =
-        source === 'muse' || source === 'antigravity'
-          ? nextMusePollDelay(poll.delayMs, quiet)
-          : undefined
+      const delayMs = nextHookTranscriptPollDelay(this.state, poll, paneKey, quiet)
       this.scheduleTranscriptPoll(source, body, next, delayMs)
     }
   }

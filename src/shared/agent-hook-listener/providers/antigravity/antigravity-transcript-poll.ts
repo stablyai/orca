@@ -34,6 +34,24 @@ export function hasAntigravityPollWork(
           (readsLeadModel(pane) && pane.leadState === 'working' && pane.rootConversationId))))
   )
 }
+/** Every child is proven with a fixed model and nothing waits on proof, a spawn or the lead's model. */
+export function isAntigravityPollSettled(state: HookListenerState, paneKey: string): boolean {
+  const pane = state.antigravityChildWorkByPaneKey.get(paneKey)
+  return Boolean(
+    pane &&
+    !pane.dirty &&
+    pane.pendingHelperSpawns === undefined &&
+    pane.helpersIdleAt === undefined &&
+    !(readsLeadModel(pane) && pane.leadState === 'working') &&
+    [...pane.children.values()].every(
+      (child) =>
+        pane.verifiedChildren.has(child.id) &&
+        !child.stopped &&
+        !child.modelAuto &&
+        child.model !== undefined
+    )
+  )
+}
 export type AntigravityTranscriptPollReads = {
   pane: AntigravityPaneChildState
   cache: AntigravityPaneChildState['brainCache']
