@@ -7,6 +7,7 @@ import {
   type CrewInvalidation
 } from './crew-changes'
 import { buildCrewSnapshot } from './crew-party-snapshot'
+import { admitCrewWake, type CrewWakeSkips } from './crew-wake-admission'
 import type { CrewReadDependencies } from './crew-read-dependencies'
 import type { OrchestrationCrewSnapshot } from '../../../../shared/orchestration/orchestration-crew'
 import {
@@ -50,6 +51,12 @@ export class CrewReadModel {
   private broadTraffic = false
   private unwatch: (() => void) | undefined
   private release: ReturnType<typeof setTimeout> | undefined
+  /** Parties that left while the host stays: their rows still filter wakes, so their return reads fresh. */
+  private readonly departed = new Set<string>()
+  /** Mail wakes no shown row named; a party new to this host reads its mail fresh. */
+  private skippedTraffic = false
+  /** A terminal record write while nobody listened, checked by the next read instead of on every notice. */
+  private identityDeferred = false
   private readonly hosts = crewHostBuilder(() => this.listeners.size)
 
   constructor(
@@ -62,62 +69,23 @@ export class CrewReadModel {
 
   private readRelevance = (): CrewRelevance | null => (this.host && this.relevance) || null
 
-  /** Admit before any rebuild: a scoped wake about panes or dispatches no row shows changes no row. */
-  private admits(facets: CrewInvalidation): boolean {
-    const relevance = this.readRelevance()
-    if (!relevance) {
-      return true
-    }
-    const facetList = [...facets]
-    if (facetList.every((facet) => facet === 'identity')) {
-      return this.identityMoved()
-    }
-    if (
-      (facets.paneKeys || facets.sessionIds) &&
-      facetList.every((facet) => facet === 'status' || facet === 'names')
-    ) {
-      if (
-        [...(facets.paneKeys ?? [])].some((pane) => relevance.hasPane(pane)) ||
-        [...(facets.sessionIds ?? [])].some((session) => relevance.sessions.has(session))
-      ) {
-        return true
-      }
+  private readonly skips: CrewWakeSkips = {
+    deferIdentity: null,
+    identityMoved: () => this.identityMoved(),
+    status: () => {
       this.skipped ??= 'status'
-      return false
-    }
-    if (facetList.every((facet) => facet === 'traffic')) {
-      if (facets.trafficAddresses) {
-        return [...facets.trafficAddresses].some((address) => relevance.addresses.has(address))
-      }
-      if (facets.dispatchIds) {
-        return [...facets.dispatchIds].some(
-          (id) => relevance.dispatches.has(id) || relevance.addresses.has(`dispatch:${id}`)
-        )
-      }
-    }
-    if (
-      (facets.dispatchIds || facets.parties) &&
-      facetList.every((facet) => facet === 'topology' || facet === 'assignments')
-    ) {
-      // A new Dispatch or Run naming a shown party or Run changes who that crew shows.
-      let shown = Boolean(facets.parties && relevance.showsParty(facets.parties))
-      for (const id of facets.dispatchIds ?? []) {
-        if (relevance.dispatches.has(id)) {
-          shown = true
-          if (facets.has('assignments')) {
-            this.patches.add(id)
-          }
-        } else if (shown) {
-          continue
-        } else if (this.stale.size < STALE_CAP) {
-          this.stale.add(id)
-        } else {
-          this.dirty.add('topology')
-        }
-      }
-      return shown
-    }
-    return true
+    },
+    traffic: () => {
+      this.skippedTraffic = true
+    },
+    patch: (id) => this.patches.add(id),
+    stale: (id) => (this.stale.size < STALE_CAP ? this.stale.add(id) : this.dirty.add('topology'))
+  }
+
+  private admits(facets: CrewInvalidation): boolean {
+    this.skips.deferIdentity =
+      this.listeners.size === 0 ? () => (this.identityDeferred = true) : null
+    return admitCrewWake(facets, this.readRelevance(), this.skips)
   }
 
   /** A terminal record write changes a crew only if one of its panes or handles now resolves differently. */
@@ -169,6 +137,18 @@ export class CrewReadModel {
     clearTimeout(this.release)
     this.release = undefined
     this.unwatch ??= this.watch(this.invalidate, this.readRelevance)
+    if (party !== undefined && this.departed.delete(party)) {
+      // Its rows filtered wakes while it was away.
+    } else if (party === undefined || !this.partyRelevance.has(party)) {
+      // New to this host: writes skipped before it joined may concern it.
+      if (this.stale.size > 0) {
+        this.dirty.add('topology')
+      }
+      if (this.skippedTraffic) {
+        this.broadTraffic = true
+        this.dirty.add('traffic')
+      }
+    }
     // A party joining reads rows the skipped wakes may have changed; stale Dispatches it shows rebuild on read.
     if (this.skipped === 'status') {
       this.dirty.add('status').add('names')
@@ -177,7 +157,7 @@ export class CrewReadModel {
     return () => {
       this.listeners.delete(listener)
       if (party !== undefined && ![...this.listeners.values()].includes(party)) {
-        this.partyRelevance.delete(party)
+        this.departed.add(party)
       }
       if (this.listeners.size === 0) {
         // The watch stays for the grace period, so the kept host sees every change; then nothing runs.
@@ -195,9 +175,10 @@ export class CrewReadModel {
     this.unwatch?.()
     this.unwatch = this.host = this.relevance = this.identity = this.skipped = undefined
     this.broadTraffic = false
-    for (const kept of [this.partyRelevance, this.stale, this.patches, this.dirty]) {
+    for (const kept of [this.partyRelevance, this.departed, this.stale, this.patches, this.dirty]) {
       kept.clear()
     }
+    this.skippedTraffic = this.identityDeferred = false
     this.trafficAddresses.clear()
     this.renamed.clear()
   }
@@ -225,12 +206,24 @@ export class CrewReadModel {
     return snapshot
   }
 
+  /** A fresh host: nothing skipped yet, and parties that left read as new when they return. */
   private rebuilt(host: CrewHostDerivation): CrewHostDerivation {
     this.stale.clear()
+    this.skippedTraffic = false
+    for (const party of this.departed) {
+      this.partyRelevance.delete(party)
+    }
+    this.departed.clear()
     return host
   }
 
   private readOnce(address: string, cause?: CrewRebuildTrigger): OrchestrationCrewSnapshot {
+    if (this.identityDeferred) {
+      this.identityDeferred = false
+      if (this.identityMoved()) {
+        this.dirty.add('topology')
+      }
+    }
     const now = Date.now()
     const dirty = new Set(this.dirty)
     const renamed = new Set(this.renamed)
@@ -238,6 +231,8 @@ export class CrewReadModel {
     this.dirty.clear()
     this.renamed.clear()
     this.trafficAddresses.clear()
+    // A broad traffic invalidation rereads every mailbox, skipped ones included.
+    this.skippedTraffic &&= !this.broadTraffic
     this.broadTraffic = false
     if (this.host && this.patches.size > 0 && !dirty.has('topology') && !dirty.has('records')) {
       const patched = patchCrewAssignmentStages(this.host, this.patches)

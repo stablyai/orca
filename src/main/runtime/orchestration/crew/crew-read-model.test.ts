@@ -268,3 +268,50 @@ it('invalidates host membership when report import uses the transaction settleme
   expect(model.read('term_coord').sections.managing[0].task?.state).toBe('completed')
   stop()
 })
+
+it('shows what changed for a chat that left and one that is new while the host is kept', () => {
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+  const { db, deps, run, assign, handles } = fixture()
+  try {
+    assign('term_worker')
+    const other = db.createRun({
+      objective: 'Other crew',
+      coordinatorHandle: 'term_peer',
+      coordinatorPaneKey: handles.get('term_peer')!
+    })
+    const model = new CrewReadModel(() => deps, db.crewChanges.subscribe)
+    const show = (party: string) => {
+      const stop = model.subscribe(() => {}, party)
+      return { snapshot: model.read(party), stop }
+    }
+    show('term_coord').stop()
+    // A worker for the other crew starts while the first crew's host is kept.
+    const task = db.createTask({ runId: other.id, spec: 'Other work', taskTitle: 'Other work' })
+    db.updateTaskStatus(task.id, 'ready')
+    db.createDispatchContext({
+      taskId: task.id,
+      assigneeHandle: 'term_helper',
+      assigneePaneKey: handles.get('term_helper'),
+      creator: { kind: 'terminal', handle: 'term_peer', paneKey: handles.get('term_peer') },
+      maxDepth: 10
+    })
+    const peer = show('term_peer')
+    expect(peer.snapshot.sections.managing.map((row) => row.task?.title)).toEqual(['Other work'])
+    // Mail to the first crew while only the other one is shown.
+    db.insertMessage({
+      runId: run.id,
+      from: 'term_worker',
+      to: 'term_coord',
+      subject: 'Update',
+      body: 'while away'
+    })
+    peer.stop()
+    const back = show('term_coord')
+    expect(back.snapshot.sections.managing.map((row) => row.latest?.preview)).toEqual([
+      'while away'
+    ])
+    back.stop()
+  } finally {
+    vi.useRealTimers()
+  }
+})

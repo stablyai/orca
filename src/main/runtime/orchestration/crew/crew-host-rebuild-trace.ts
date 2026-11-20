@@ -1,4 +1,4 @@
-import { startSpan } from '../../../observability/tracer'
+import { startSpan, type ActiveSpan } from '../../../observability/tracer'
 import type { CrewFacet } from './crew-changes'
 import { createCrewHostDerivation, type CrewHostDerivation } from './crew-host-derivation'
 import type { CrewReadDependencies } from './crew-read-dependencies'
@@ -41,31 +41,26 @@ export function crewRebuildTrigger(
  *  first snapshot, so that snapshot is part of the rebuild's cost. */
 export function crewHostBuilder(listeners: () => number) {
   let rebuilds = 0
-  let pending:
-    | { trigger: CrewRebuildTrigger; started: number; host: CrewHostDerivation }
-    | undefined
+  let pending: { span: ActiveSpan; started: number; host: CrewHostDerivation } | undefined
   const settle = () => {
     if (!pending) {
       return
     }
-    const { trigger, started, host } = pending
+    const { span, started, host } = pending
     pending = undefined
-    startSpan('orchestration.crew.rebuild', {
-      attributes: {
-        trigger,
-        elapsedMs: Math.round(performance.now() - started),
-        assignments: host.assignmentsById.size,
-        statuses: host.deps.statuses.length,
-        listeners: listeners(),
-        rebuilds: ++rebuilds
-      }
-    }).end()
+    span.setAttribute('elapsedMs', Math.round(performance.now() - started))
+    span.setAttribute('assignments', host.assignmentsById.size)
+    span.setAttribute('statuses', host.deps.statuses.length)
+    span.setAttribute('listeners', listeners())
+    span.setAttribute('rebuilds', ++rebuilds)
+    span.end()
   }
   const build = (trigger: CrewRebuildTrigger, deps: CrewReadDependencies): CrewHostDerivation => {
     settle()
+    const span = startSpan('orchestration.crew.rebuild', { attributes: { trigger } })
     const started = performance.now()
     const host = createCrewHostDerivation(deps, () => Math.max(32, listeners() * 2))
-    pending = { trigger, started, host }
+    pending = { span, started, host }
     return host
   }
   return { build, settle }
