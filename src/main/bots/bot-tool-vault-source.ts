@@ -27,14 +27,17 @@ export function botVaultHeader(
   return scheme === 'bearer' ? { authorization: `Bearer ${value}` } : { 'x-api-key': value }
 }
 
-export function resolveBotVaultHeader(source: string, url: string): Record<string, string> | null {
+export async function resolveBotVaultHeader(
+  source: string,
+  url: string
+): Promise<Record<string, string> | null> {
   try {
     const binding = bindingSchema.safeParse(JSON.parse(source.slice(PREFIX.length)))
     if (!binding.success || new URL(url).protocol !== 'https:') {
       return null
     }
     const { scope, id, scheme } = binding.data
-    const result = getServerCredentialVault(scope)?.readValue(id, 'secret')
+    const result = await getServerCredentialVault(scope)?.readValue(id, 'secret')
     return result?.ok ? botVaultHeader(scheme, result.value) : null
   } catch {
     return null

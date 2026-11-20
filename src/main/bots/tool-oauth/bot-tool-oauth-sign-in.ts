@@ -299,8 +299,8 @@ function makeAttempt(
  * `changeBotToolServers(..., new Map([[id, { url, signIn: true }]]))` instead.
  */
 export function createBotToolSignIn(key: BotToolOAuthKey, url: string): Promise<void> {
-  return inTransaction(key, () => {
-    commitBotToolOAuth(key.folder, key.credentialId, (current) =>
+  return inTransaction(key, async () => {
+    await commitBotToolOAuth(key.folder, key.credentialId, (current) =>
       current ? undefined : { url, grant: 0, record: { resource: url } }
     )
   })

@@ -178,7 +178,7 @@ describe('Connect for a tool Orca signs in to', () => {
   })
 
   it('keeps a rotated refresh token when only why a sign-in failed changes', async () => {
-    commitBotToolOAuth(key.folder, key.credentialId, (current) => ({
+    await commitBotToolOAuth(key.folder, key.credentialId, (current) => ({
       url: current!.url,
       grant: current!.grant,
       record: {

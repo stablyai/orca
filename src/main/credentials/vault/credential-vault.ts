@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto'
-import { readFileSync } from 'node:fs'
+import { readFile } from 'node:fs/promises'
 import { z } from 'zod'
-import { writeSecureFile } from '../../../shared/secure-storage/secure-file'
+import { inCredentialFileOrder, stageCredentialFile } from '../credential-file-io'
+import { withFileTransactionLock } from '../../filesystem/file-transaction-lock'
 import { getSecretStore } from '../../../shared/secure-storage/secret-store'
 import type { VaultEntry, VaultResult } from '../../../shared/secure-storage/credential-vault'
 import {
@@ -26,11 +27,11 @@ export class CredentialVault {
     private readonly allowHostKey = false
   ) {}
 
-  list(): VaultResult<VaultEntry[]> {
+  list(): Promise<VaultResult<VaultEntry[]>> {
     return this.withVault((vault) => this.summaries(vault))
   }
 
-  save(raw: unknown): VaultResult<VaultEntry[]> {
+  async save(raw: unknown): Promise<VaultResult<VaultEntry[]>> {
     const parsed = vaultDraftSchema.safeParse(raw)
     if (!parsed.success) {
       return { ok: false, reason: 'invalid' }
@@ -65,10 +66,10 @@ export class CredentialVault {
         vault.entries.push({ entry, sealed })
       }
       return this.write(vault)
-    })
+    }, true)
   }
 
-  remove(id: string): VaultResult<VaultEntry[]> {
+  remove(id: string): Promise<VaultResult<VaultEntry[]>> {
     return this.withVault((vault) => {
       const index = vault.entries.findIndex(({ entry }) => entry.id === id)
       if (index === -1) {
@@ -76,10 +77,10 @@ export class CredentialVault {
       }
       vault.entries.splice(index, 1)
       return this.write(vault)
-    })
+    }, true)
   }
 
-  readValue(id: string, kind?: VaultEntry['kind']): VaultResult<string> {
+  readValue(id: string, kind?: VaultEntry['kind']): Promise<VaultResult<string>> {
     return this.withVault((vault) => {
       const item = vault.entries.find(
         ({ entry }) => entry.id === id && (kind === undefined || entry.kind === kind)
@@ -92,22 +93,28 @@ export class CredentialVault {
     })
   }
 
-  private withVault<T>(run: (vault: DiskVault) => VaultResult<T>): VaultResult<T> {
-    try {
-      const sealing = getSecretStore().describeSealing?.().kind
-      if (sealing !== 'os-keychain' && !(this.allowHostKey && sealing === 'host-key')) {
-        return { ok: false, reason: 'unprotected' }
+  private withVault<T>(
+    run: (vault: DiskVault) => VaultResult<T> | Promise<VaultResult<T>>,
+    mutate = false
+  ): Promise<VaultResult<T>> {
+    return inCredentialFileOrder(this.file, async () => {
+      try {
+        const sealing = getSecretStore().describeSealing?.().kind
+        if (sealing !== 'os-keychain' && !(this.allowHostKey && sealing === 'host-key')) {
+          return { ok: false, reason: 'unprotected' }
+        }
+        const operation = async () => run(await this.read())
+        return await (mutate ? withFileTransactionLock(this.file, operation) : operation())
+      } catch {
+        return { ok: false, reason: 'unavailable' }
       }
-      return run(this.read())
-    } catch {
-      return { ok: false, reason: 'unavailable' }
-    }
+    })
   }
 
-  private read(): DiskVault {
+  private async read(): Promise<DiskVault> {
     let sealed: string
     try {
-      sealed = readFileSync(this.file, 'utf8')
+      sealed = await readFile(this.file, 'utf8')
     } catch (error) {
       // Only a missing file permits starting a new vault; never replace an unreadable one.
       if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
@@ -118,10 +125,13 @@ export class CredentialVault {
     return diskSchema.parse(this.unseal(sealed))
   }
 
-  private write(vault: DiskVault): VaultResult<VaultEntry[]> {
-    return writeSecureFile(this.file, this.seal(vault), { durable: true, ownerOnly: true })
-      ? this.summaries(vault)
-      : { ok: false, reason: 'unavailable' }
+  private async write(vault: DiskVault): Promise<VaultResult<VaultEntry[]>> {
+    const published = await stageCredentialFile(this.file, this.seal(vault), {
+      durable: true,
+      createDirectory: true,
+      requirePrivateWindowsFile: true
+    })
+    return published ? this.summaries(vault) : { ok: false, reason: 'unavailable' }
   }
 
   private summaries(vault: DiskVault): VaultResult<VaultEntry[]> {

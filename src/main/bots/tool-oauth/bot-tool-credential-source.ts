@@ -2,8 +2,8 @@
 // headers, a source Orca fills (a hub's key), or Orca's own sign-in, which it refreshes here.
 import { createHash } from 'node:crypto'
 import {
-  readBotToolCredential,
-  readBotToolOAuth,
+  botToolCredentialsTransaction,
+  readBotToolCredentialSnapshot,
   type BotToolCredential
 } from '../bot-tool-credentials'
 import { botToolUrlOf } from '../bot-tools-path'
@@ -67,8 +67,13 @@ export function botToolCredentialSource(
   return async (request) => {
     const key: BotToolOAuthKey = { folder: request.folder, credentialId: request.credentialId }
     // The store opens only entries sealed for this folder and id; the address must also be the tool's.
-    const toolUrl = await botToolUrlOf(request.folder, request.credentialId)
-    const signIn = readBotToolOAuth(request.folder, request.credentialId)
+    const [toolUrl, credentials] = await botToolCredentialsTransaction(request.folder, () =>
+      Promise.all([
+        botToolUrlOf(request.folder, request.credentialId),
+        readBotToolCredentialSnapshot(request.folder)
+      ])
+    )
+    const signIn = credentials.oauth(request.credentialId)
     if (signIn && signIn.url !== toolUrl) {
       return { kind: 'missing' }
     }
@@ -96,7 +101,7 @@ export function botToolCredentialSource(
         bearer: grant.token
       }
     }
-    const credential = readBotToolCredential(request.folder, request.credentialId)
+    const credential = credentials.credential(request.credentialId)
     if (!credential || credential.url !== toolUrl) {
       return { kind: 'missing' }
     }
@@ -104,7 +109,7 @@ export function botToolCredentialSource(
     if (credential.source) {
       try {
         sourced = isBotVaultSource(credential.source)
-          ? resolveBotVaultHeader(credential.source, credential.url)
+          ? await resolveBotVaultHeader(credential.source, credential.url)
           : ((await headerSources[credential.source]?.(credential)) ?? null)
       } catch {
         sourced = null

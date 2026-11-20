@@ -129,7 +129,7 @@ export async function forgetDeletedBotTools(runtime: OrcaRuntimeService, bot: Bo
     )
   // Whether or not its CLI could run, the bot's token and saved values go with it.
   botToolRelay.revoke(bot.id)
-  revokeBotToolSignIns(forgetBotToolCredentials(botHomeFolder(bot)))
+  revokeBotToolSignIns(await forgetBotToolCredentials(botHomeFolder(bot)))
 }
 
 /** A pasted URL, or the command line that starts a server; its name from the URL or package. */

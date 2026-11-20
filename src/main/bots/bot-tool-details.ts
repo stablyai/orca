@@ -7,11 +7,10 @@ import {
   type BotToolServer
 } from '../../shared/bot-tools'
 import { readBotToolsSnapshot } from './bot-tools-file'
-import { readBotToolCredential } from './bot-tool-credentials'
 import { isBotVaultSource } from './bot-tool-vault-source'
 
 export async function readBotToolDetails(folder: string, name: string): Promise<BotToolDetails> {
-  const { servers, version } = await readBotToolsSnapshot(folder)
+  const { servers, version, credentials } = await readBotToolsSnapshot(folder)
   const server = servers.find((entry) => entry.name === name)
   if (!server) {
     throw new Error('This bot no longer has that tool.')
@@ -19,7 +18,7 @@ export async function readBotToolDetails(folder: string, name: string): Promise<
   const masked = (values: Record<string, string> | undefined) =>
     Object.keys(values ?? {}).map((key) => ({ key, configured: true }))
   const credential =
-    'url' in server && server.credential ? readBotToolCredential(folder, server.credential) : null
+    'url' in server && server.credential ? credentials.credential(server.credential) : null
   return {
     version,
     server:

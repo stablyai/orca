@@ -135,9 +135,9 @@ function keepProblem(
   started: { url: string; grant: number },
   problem: BotToolSignInProblem | undefined
 ): Promise<void> {
-  return inTransaction(key, () => {
+  return inTransaction(key, async () => {
     if (!flow.controller.signal.aborted && flows.get(flowKey(key)) === flow) {
-      commitBotToolOAuth(
+      await commitBotToolOAuth(
         key.folder,
         key.credentialId,
         (current) => {

@@ -48,8 +48,8 @@ const ask = (folder: string, credentialId: string) =>
     signal: new AbortController().signal
   })
 
-function saveLinear(folder: string): void {
-  changeBotToolCredentials(
+async function saveLinear(folder: string): Promise<void> {
+  await changeBotToolCredentials(
     folder,
     new Map([['cred-1', { url: LINEAR, headers: { authorization: SECRET } }]])
   )
@@ -59,7 +59,7 @@ function saveLinear(folder: string): void {
 describe("a bot's sealed tool credentials", () => {
   it('keep the address inside the seal, so editing the file cannot re-point the value', async () => {
     const folder = tempDir('bot-')
-    saveLinear(folder)
+    await saveLinear(folder)
     const path = botToolCredentialsPath(folder)
     expect(readFileSync(path, 'utf8')).not.toContain('linear.app')
     // An unsealed entry naming another address, written by anyone with the file.
@@ -80,10 +80,10 @@ describe("a bot's sealed tool credentials", () => {
     expect(await ask(folder, 'cred-1')).toEqual({ kind: 'missing' })
   })
 
-  it('open only for the folder and id they were sealed for', () => {
+  it('open only for the folder and id they were sealed for', async () => {
     const scout = tempDir('scout-')
     const docs = tempDir('docs-')
-    saveLinear(scout)
+    await saveLinear(scout)
     // Another bot copies scout's file as its own, and moves the value to another id.
     const text = readFileSync(botToolCredentialsPath(scout), 'utf8')
     writeFileSync(botToolCredentialsPath(docs), text)
@@ -94,7 +94,7 @@ describe("a bot's sealed tool credentials", () => {
 
   it('go to the relay only at the address the tools file gives the tool', async () => {
     const folder = tempDir('bot-')
-    saveLinear(folder)
+    await saveLinear(folder)
     expect(await ask(folder, 'cred-1')).toMatchObject({
       kind: 'ready',
       url: LINEAR,
@@ -106,7 +106,7 @@ describe("a bot's sealed tool credentials", () => {
 
   it('never unseal a file in the older layout, whatever sealed value it carries', async () => {
     const victim = tempDir('victim-')
-    saveLinear(victim)
+    await saveLinear(victim)
     // Another bot's whole sealed entry, dropped into an older-layout file pointing at the attacker.
     const stolen = JSON.parse(readFileSync(botToolCredentialsPath(victim), 'utf8')).credentials[
       'cred-1'
@@ -125,19 +125,19 @@ describe("a bot's sealed tool credentials", () => {
     expect(decrypt).not.toHaveBeenCalled()
   })
 
-  it('refuse saved secrets on a computer with no keyring', () => {
+  it('refuse saved secrets on a computer with no keyring', async () => {
     _resetSecretStoreForTests()
     const folder = tempDir('bot-')
-    expect(() => saveLinear(folder)).toThrow('no system keyring')
-    expect(() =>
+    await expect(saveLinear(folder)).rejects.toThrow('no system keyring')
+    await expect(
       commitBotToolOAuth(folder, 'cred-2', () => ({
         url: LINEAR,
         grant: 1,
         record: { resource: LINEAR, tokens: { access_token: 'a', token_type: 'Bearer' } }
       }))
-    ).toThrow('no system keyring')
+    ).rejects.toThrow('no system keyring')
     // A hub entry holds no value of its own; Orca adds the key per call.
-    changeBotToolCredentials(
+    await changeBotToolCredentials(
       folder,
       new Map([['cred-3', { url: LINEAR, headers: {}, source: 'composio' }]])
     )

@@ -106,7 +106,7 @@ describe("a bot's Composio tool through Orca's relay", () => {
   it('never adds the owner key for a saved hub entry that names another address', async () => {
     const folder = cliFor().folder
     const attacker = 'https://attacker.example/hub'
-    changeBotToolCredentials(
+    await changeBotToolCredentials(
       folder,
       new Map([['cred-hub', { url: attacker, headers: {}, source: 'composio' }]])
     )

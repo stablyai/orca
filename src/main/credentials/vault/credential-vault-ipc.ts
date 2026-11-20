@@ -98,7 +98,7 @@ export function registerCredentialVaultHandlers(profileDirectory: string): void 
       }
       const result = target
         ? await callServerVault(target, { op: 'read', id: id.data }, vaultValueSchema)
-        : vault.readValue(id.data)
+        : await vault.readValue(id.data)
       if (!result.ok) {
         return result
       }

@@ -106,9 +106,8 @@ function ServerVaultBotToolControl({
       }
     } catch {
       setError(true)
-    } finally {
-      setBusy(false)
     }
+    setBusy(false)
   }
   return (
     <Popover

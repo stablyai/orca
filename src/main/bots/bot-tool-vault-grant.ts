@@ -1,6 +1,6 @@
 import type { ServerCredentialVault } from '../credentials/vault/server-credential-vault'
 import type { BotToolVaultChange } from '../../shared/secure-storage/credential-vault'
-import { readBotToolCredential, newBotToolCredentialId } from './bot-tool-credentials'
+import { newBotToolCredentialId } from './bot-tool-credentials'
 import { changeBotToolServers, type BotToolNewCredential } from './bot-tools-file'
 import { botVaultHeader, botVaultSource, isBotVaultSource } from './bot-tool-vault-source'
 
@@ -12,7 +12,7 @@ export async function setBotToolVaultCredential(
   const credentials = new Map<string, BotToolNewCredential>()
   await changeBotToolServers(
     folder,
-    (tools) => {
+    async (tools, savedCredentials) => {
       const tool = tools.find((entry) => entry.name === change.name)
       if (
         !tool ||
@@ -22,13 +22,13 @@ export async function setBotToolVaultCredential(
       ) {
         throw new Error('The HTTPS bot tool is no longer available.')
       }
-      const saved = tool.credential ? readBotToolCredential(folder, tool.credential) : null
+      const saved = tool.credential ? savedCredentials.credential(tool.credential) : null
       if (tool.credential && !isBotVaultSource(saved?.source)) {
         throw new Error('Remove the tool’s existing credentials first.')
       }
       if (change.binding) {
         const { id, scheme } = change.binding
-        const result = server.vault.readValue(id, 'secret')
+        const result = await server.vault.readValue(id, 'secret')
         if (!result.ok || !botVaultHeader(scheme, result.value)) {
           throw new Error('The vault entry is no longer usable as an HTTP header.')
         }

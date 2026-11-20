@@ -16,13 +16,13 @@ const fakeKeychain = {
   decryptString: (cipher: Buffer) => cipher.toString()
 }
 
-it('keeps a saved secret out of summaries and preserves it when an edit leaves the value blank', () => {
+it('keeps a saved secret out of summaries and preserves it when an edit leaves the value blank', async () => {
   const directory = mkdtempSync(join(tmpdir(), 'orca-credential-vault-'))
   const file = join(directory, 'vault.enc')
   try {
     setSecretStore(fakeKeychain)
     const login = { kind: 'login', name: 'Example', username: 'alex', website: 'example.test' }
-    const saved = new CredentialVault(file).save({ ...login, value: '  secret value  ' })
+    const saved = await new CredentialVault(file).save({ ...login, value: '  secret value  ' })
     expect(saved).toEqual({
       ok: true,
       value: [
@@ -40,35 +40,35 @@ it('keeps a saved secret out of summaries and preserves it when an edit leaves t
     }
     const id = saved.value[0].id
     const reopened = new CredentialVault(file)
-    expect(reopened.save({ ...login, id, name: 'Example work' })).toEqual({
+    expect(await reopened.save({ ...login, id, name: 'Example work' })).toEqual({
       ok: true,
       value: [
         { id, kind: 'login', name: 'Example work', username: 'alex', website: 'example.test' }
       ]
     })
-    expect(reopened.readValue(id)).toEqual({ ok: true, value: '  secret value  ' })
-    expect(reopened.remove(id)).toEqual({ ok: true, value: [] })
-    expect(new CredentialVault(file).readValue(id)).toEqual({ ok: false, reason: 'missing' })
+    expect(await reopened.readValue(id)).toEqual({ ok: true, value: '  secret value  ' })
+    expect(await reopened.remove(id)).toEqual({ ok: true, value: [] })
+    expect(await new CredentialVault(file).readValue(id)).toEqual({ ok: false, reason: 'missing' })
   } finally {
     _resetSecretStoreForTests()
     rmSync(directory, { recursive: true, force: true })
   }
 })
 
-it('never replaces a sealed vault when encryption is weak or the old bytes cannot be opened', () => {
+it('never replaces a sealed vault when encryption is weak or the old bytes cannot be opened', async () => {
   const directory = mkdtempSync(join(tmpdir(), 'orca-credential-vault-'))
   const file = join(directory, 'vault.enc')
   try {
     setSecretStore(fakeKeychain)
     const vault = new CredentialVault(file)
     const entry = { kind: 'secret', name: 'API', username: '', website: '', value: 'first token' }
-    expect(vault.save(entry).ok).toBe(true)
+    expect((await vault.save(entry)).ok).toBe(true)
     const before = readFileSync(file)
     setSecretStore({
       ...fakeKeychain,
       describeSealing: () => ({ kind: 'none', reason: 'weak backend' })
     })
-    expect(vault.save({ ...entry, value: 'second token' })).toEqual({
+    expect(await vault.save({ ...entry, value: 'second token' })).toEqual({
       ok: false,
       reason: 'unprotected'
     })
@@ -78,7 +78,7 @@ it('never replaces a sealed vault when encryption is weak or the old bytes canno
         throw new Error('Wrong encryption key')
       }
     })
-    expect(vault.save({ ...entry, value: 'third token' })).toEqual({
+    expect(await vault.save({ ...entry, value: 'third token' })).toEqual({
       ok: false,
       reason: 'unavailable'
     })

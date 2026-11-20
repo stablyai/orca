@@ -104,9 +104,8 @@ export function CredentialVaultPane({
       }
     } catch {
       setError('unavailable')
-    } finally {
-      setBusy(false)
     }
+    setBusy(false)
   }
 
   const openForm = (entry: VaultEntry | null): void => {

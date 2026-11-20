@@ -296,12 +296,12 @@ export async function updateBotTool(
   let updated: BotToolServer | undefined
   await changeBotToolServers(
     cli.folder,
-    (servers) => {
+    (servers, credentials) => {
       const previous = servers.find((entry) => entry.name === name)
       if (!previous) {
         throw new Error('This bot no longer has that tool.')
       }
-      updated = resolveBotToolInput(input, withSavedBotToolHeaders(cli.folder, previous))
+      updated = resolveBotToolInput(input, withSavedBotToolHeaders(credentials, previous))
       const replacement = updated
       return servers.map((server) => (server.name === name ? replacement : server))
     },

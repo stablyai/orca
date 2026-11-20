@@ -26,7 +26,7 @@ it('resolves a linked key on each Bot tool request and never sends it to a chang
     })
     const server = configureServerCredentialVault(root)
     const draft = { kind: 'secret', name: 'Test key', username: '', website: '', value: 'key-one' }
-    const saved = server.vault.save(draft)
+    const saved = await server.vault.save(draft)
     if (!saved.ok) {
       throw new Error('Could not save the fixture credential')
     }
@@ -59,7 +59,7 @@ it('resolves a linked key on each Bot tool request and never sends it to a chang
       url,
       headers: { authorization: 'Bearer key-one' }
     })
-    expect(server.vault.save({ ...draft, id, value: 'key-two' }).ok).toBe(true)
+    expect((await server.vault.save({ ...draft, id, value: 'key-two' })).ok).toBe(true)
     expect(await readForTool()).toMatchObject({
       kind: 'ready',
       url,
@@ -71,7 +71,7 @@ it('resolves a linked key on each Bot tool request and never sends it to a chang
     )
     expect(await readForTool()).toEqual({ kind: 'missing' })
     writeFileSync(botToolsPath(folder), JSON.stringify({ servers: [tool] }))
-    expect(server.vault.remove(id).ok).toBe(true)
+    expect((await server.vault.remove(id)).ok).toBe(true)
     expect(await readForTool()).toEqual({ kind: 'unavailable' })
   } finally {
     useBotToolCredentialsRoot(null)

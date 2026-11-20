@@ -1,5 +1,6 @@
 import {
   loadWindowsSecurity,
+  loadWindowsSecurityAsync,
   WINDOWS_FILE_ALL_ACCESS
 } from '../../shared/secure-storage/windows-security-addon'
 
@@ -20,7 +21,7 @@ export function grantDirAcl(dirPath: string): void {
 
 /** Run the subtree grant on the thread pool. */
 export async function grantDirAclAsync(dirPath: string): Promise<void> {
-  const security = loadWindowsSecurity()
+  const security = await loadWindowsSecurityAsync()
   if (!('error' in security)) {
     await security.addon.grantAccessAsync(
       dirPath,

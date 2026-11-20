@@ -6,7 +6,7 @@
 import type { BotToolSignInFailure } from '../../../shared/bot-tool-sign-in'
 import { z } from 'zod'
 import type { AuthorizationServerMetadata } from '@modelcontextprotocol/sdk/shared/auth.js'
-import { botToolCredentialsTransaction, type BotToolOAuthRecord } from '../bot-tool-credentials'
+import { botToolCredentialWriteTransaction, type BotToolOAuthRecord } from '../bot-tool-credentials'
 import type { BotToolDiscoveryOptions } from './bot-tool-oauth-discovery'
 import { secureOAuthFetch, type OAuthFetch } from './secure-oauth-fetch'
 import type { AddressLookup } from './oauth-endpoint-address'
@@ -67,8 +67,8 @@ export const extra = (metadata: AuthorizationServerMetadata) => MetadataExtras.p
 /** Issuer identifiers compare as exact strings (RFC 8414 §3.3, RFC 9207 §2.4): no normalizing. */
 export const sameIssuer = (left: string, right: string): boolean => left === right
 
-export function inTransaction<T>(key: BotToolOAuthKey, work: () => T): Promise<T> {
-  return botToolCredentialsTransaction(key.folder, work)
+export function inTransaction<T>(key: BotToolOAuthKey, work: () => Promise<T>): Promise<T> {
+  return botToolCredentialWriteTransaction(key.folder, work)
 }
 
 export function expiring(record: BotToolOAuthRecord, margin = REFRESH_MARGIN_MS): boolean {

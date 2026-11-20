@@ -30,7 +30,7 @@
 1 src/main/automations/external-managers/external-manager-discovery.ts
 2 src/main/bots/bot-access-request-watch.ts
 1 src/main/bots/bot-look-around-store.ts
-3 src/main/bots/bot-tool-credentials.ts
+1 src/main/bots/bot-tool-credentials.ts
 1 src/main/bots/bot-tool-secret-scrub.ts
 1 src/main/bots/bot-tools-claude.ts
 1 src/main/bots/bot-tools-host.ts

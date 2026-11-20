@@ -4,7 +4,7 @@ import { mkdir, readFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import { z } from 'zod'
 import { createHash } from 'node:crypto'
-import { writeFileAtomicallyIfUnchanged } from '../filesystem/atomic-file-publication'
+import { writeFileAtomicallyIfUnchangedAsync } from '../filesystem/atomic-file-publication-async'
 import {
   BotToolServerSchema,
   botToolDetail,
@@ -23,13 +23,12 @@ import {
 import { botToolRelay, type BotToolRelay } from './tool-relay/bot-tool-relay'
 import { botToolsPath } from './bot-tools-path'
 import {
+  botToolCredentialWriteTransaction,
   botToolCredentialsTransaction,
   changeBotToolCredentials,
   commitBotToolOAuth,
   newBotToolCredentialId,
-  botToolCredentialsFingerprint,
-  readBotToolCredential,
-  readBotToolOAuth,
+  readBotToolCredentialSnapshot,
   type BotToolCredential
 } from './bot-tool-credentials'
 
@@ -48,6 +47,7 @@ type BotToolsSnapshot = {
   text: string | null
   file: z.infer<typeof BotToolsFile>
   servers: BotToolServer[]
+  credentials: Awaited<ReturnType<typeof readBotToolCredentialSnapshot>>
   version: string
 }
 
@@ -80,14 +80,16 @@ async function readRawSnapshot(folder: string): Promise<BotToolsSnapshot> {
     throw new Error('The bot tools file is invalid. Repair it before editing tools.')
   }
   const servers = parsed.data.servers.map((server) => BotToolServerSchema.parse(server))
+  const credentials = await readBotToolCredentialSnapshot(folder)
   return {
     text,
     file: parsed.data,
     servers,
+    credentials,
     // A header-only edit keeps the file and its credential id, so the saved values count too.
     version: createHash('sha256')
       .update(text ?? '')
-      .update(botToolCredentialsFingerprint(folder, credentialsOf(servers)))
+      .update(credentials.fingerprint(credentialsOf(servers)))
       .digest('hex')
   }
 }
@@ -101,13 +103,13 @@ const credentialsOf = (servers: readonly BotToolServer[]): Set<string> =>
   )
 
 /** Writes `servers`, moving any header values into the host's credential store. */
-function writeServers(
+async function writeServers(
   folder: string,
   snapshot: BotToolsSnapshot,
   servers: readonly BotToolServer[],
   rename?: { from: string; to: string },
   credentials: ReadonlyMap<string, BotToolNewCredential> = new Map()
-): void {
+): Promise<void> {
   const added = new Map<string, BotToolCredential>()
   // New sign-ins start signed out, created with the file write and rolled back with it.
   const signIns = new Map<string, string>()
@@ -129,7 +131,7 @@ function writeServers(
       return { ...unknown, ...server }
     }
     const { headers, credential, ...rest } = server
-    const signIn = credential ? readBotToolOAuth(folder, credential) : null
+    const signIn = credential ? snapshot.credentials.oauth(credential) : null
     if (signIn && signIn.url !== server.url) {
       // A new address is another app to sign in to: the old sign-in goes, and a new one starts out.
       const id = newBotToolCredentialId()
@@ -151,28 +153,28 @@ function writeServers(
   const removed = new Set([...credentialsOf(snapshot.servers)].filter((id) => !kept.has(id)))
   const replaced = new Map(
     [...added.keys()].flatMap((id) => {
-      const saved = readBotToolCredential(folder, id)
+      const saved = snapshot.credentials.credential(id)
       return saved ? [[id, saved] as const] : []
     })
   )
   // The file still names the old values when its write fails: put them back, drop only new ids
   // and the sign-ins this write created.
   const created: string[] = []
-  const rollBack = () => {
-    changeBotToolCredentials(
+  const rollBack = async () => {
+    await changeBotToolCredentials(
       folder,
       replaced,
       new Set([...added.keys()].filter((id) => !replaced.has(id)))
     )
     for (const id of created) {
-      commitBotToolOAuth(folder, id, () => null)
+      await commitBotToolOAuth(folder, id, () => null)
     }
   }
   let written: boolean
   try {
-    changeBotToolCredentials(folder, added)
+    await changeBotToolCredentials(folder, added)
     for (const [id, url] of signIns) {
-      const entry = commitBotToolOAuth(folder, id, (current) =>
+      const entry = await commitBotToolOAuth(folder, id, (current) =>
         current ? undefined : { url, grant: 0, record: { resource: url } }
       )
       if (!entry) {
@@ -180,21 +182,20 @@ function writeServers(
       }
       created.push(id)
     }
-    written = writeFileAtomicallyIfUnchanged(
+    written = await writeFileAtomicallyIfUnchangedAsync(
       botToolsPath(folder),
       snapshot.text,
-      `${JSON.stringify({ ...snapshot.file, servers: stored }, null, 2)}\n`,
-      { mode: 0o600 }
+      `${JSON.stringify({ ...snapshot.file, servers: stored }, null, 2)}\n`
     )
   } catch (error) {
-    rollBack()
+    await rollBack()
     throw error
   }
   if (!written) {
-    rollBack()
+    await rollBack()
     throw stale()
   }
-  revokeBotToolSignIns(changeBotToolCredentials(folder, new Map(), removed))
+  revokeBotToolSignIns(await changeBotToolCredentials(folder, new Map(), removed))
 }
 
 const KNOWN_KEYS = ['name', 'url', 'transport', 'headers', 'credential', 'command', 'args', 'env']
@@ -206,12 +207,15 @@ async function readMigratedSnapshot(folder: string): Promise<BotToolsSnapshot> {
     return snapshot
   }
   await mkdir(dirname(botToolsPath(folder)), { recursive: true })
-  writeServers(folder, snapshot, snapshot.servers)
+  await writeServers(folder, snapshot, snapshot.servers)
   return readRawSnapshot(folder)
 }
 
-export function readBotToolsSnapshot(folder: string): Promise<BotToolsSnapshot> {
-  return botToolCredentialsTransaction(folder, () => readMigratedSnapshot(folder))
+export async function readBotToolsSnapshot(folder: string): Promise<BotToolsSnapshot> {
+  const snapshot = await botToolCredentialsTransaction(folder, () => readRawSnapshot(folder))
+  return snapshot.servers.some(hasInlineHeaders)
+    ? botToolCredentialWriteTransaction(folder, () => readMigratedSnapshot(folder))
+    : snapshot
 }
 
 export async function readBotToolServers(folder: string): Promise<BotToolServer[]> {
@@ -224,19 +228,22 @@ export async function readBotToolServers(folder: string): Promise<BotToolServer[
  */
 export function changeBotToolServers(
   folder: string,
-  change: (servers: BotToolServer[]) => BotToolServer[],
+  change: (
+    servers: BotToolServer[],
+    credentials: BotToolsSnapshot['credentials']
+  ) => BotToolServer[] | Promise<BotToolServer[]>,
   expectedVersion?: string,
   rename?: { from: string; to: string },
   credentials?: ReadonlyMap<string, BotToolNewCredential>
 ): Promise<void> {
-  return botToolCredentialsTransaction(folder, async () => {
+  return botToolCredentialWriteTransaction(folder, async () => {
     const snapshot = await readMigratedSnapshot(folder)
     if (expectedVersion !== undefined && expectedVersion !== snapshot.version) {
       throw stale()
     }
-    const servers = change(snapshot.servers)
+    const servers = await change(snapshot.servers, snapshot.credentials)
     await mkdir(dirname(botToolsPath(folder)), { recursive: true })
-    writeServers(folder, snapshot, servers, rename, credentials)
+    await writeServers(folder, snapshot, servers, rename, credentials)
     advanceBotToolsEpoch(folder)
   })
 }

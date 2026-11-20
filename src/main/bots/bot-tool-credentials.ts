@@ -2,23 +2,25 @@
 // per call, or Orca's own sign-in to the app. Each entry is sealed whole on the host, bound to its bot
 // folder and id, so the bot's agent only ever gets Orca's relay address and its own token.
 import { createHash, randomBytes } from 'node:crypto'
-import { readFileSync, rmSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
+import { rm } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { z } from 'zod'
-import { writeSecureFile } from '../../shared/secure-storage/secure-file'
 import type { BotToolServer } from '../../shared/bot-tools'
+import { withFileTransactionLock } from '../filesystem/file-transaction-lock'
 import { announceBotToolCredentialsEnded } from './bot-tool-credential-ended'
 import { isBotVaultSource } from './bot-tool-vault-source'
 import {
-  CredentialsFile,
   type Entry,
-  openEntry,
   refuseUnsealedSecrets,
   sealEntry,
-  warnOnce,
   type Stored
 } from './bot-tool-credential-envelope'
+import {
+  parseBotToolCredentialFile,
+  publishBotToolCredentialFile,
+  readBotToolCredentialFile
+} from './bot-tool-credential-file'
 import { announceIfShownChanged } from './bot-tool-sign-in-changed'
 import {
   BotToolOAuthRecordSchema,
@@ -44,8 +46,6 @@ export type BotToolOAuthEntry = {
   revision: number
   record: BotToolOAuthRecord
 }
-
-const OlderLayout = z.object({ credentials: z.record(z.string(), z.unknown()) })
 
 let rootOverride: string | null = null
 
@@ -76,67 +76,18 @@ function readFileText(path: string): string | null {
   }
 }
 
-const parseJson = (text: string): unknown => {
-  try {
-    return JSON.parse(text)
-  } catch {
-    return null
-  }
-}
-
-/**
- * The file's entries. A file in the older layout, with plaintext addresses beside separately sealed
- * values, is never opened: nothing vouches for its addresses, so its tools need signing in again.
- */
-function parseStored(folder: string, text: string | null): Stored {
-  if (text === null) {
-    return {}
-  }
-  const json = parseJson(text)
-  const parsed = CredentialsFile.safeParse(json)
-  if (parsed.success) {
-    return Object.fromEntries(
-      Object.entries(parsed.data.credentials).map(([id, envelope]) => [
-        id,
-        { envelope, entry: openEntry(folder, id, envelope) }
-      ])
-    )
-  }
-  if (OlderLayout.safeParse(json).success) {
-    warnOnce(text, '[bot-tool-credentials] ignored credentials saved in the older layout')
-    return {}
-  }
-  throw new Error('The bot’s saved tool credentials are unreadable. Re-enter the tool’s values.')
-}
-
 const readSealed = (folder: string): Stored =>
-  parseStored(folder, readFileText(botToolCredentialsPath(folder)))
+  parseBotToolCredentialFile(folder, readFileText(botToolCredentialsPath(folder)))
 
 const entryOf = (stored: Stored, id: string): Entry | null => stored[id]?.entry ?? null
 
-/**
- * Publishes `next` only while the file still holds `expected`, so a write from another Orca on the
- * same home folder is never overwritten with what this one read before it. Answers whether it did.
- */
-function publish(folder: string, expected: string | null, next: Stored): boolean {
-  const path = botToolCredentialsPath(folder)
-  const unchanged = () => readFileText(path) === expected
-  if (Object.keys(next).length === 0) {
-    if (!unchanged()) {
-      return false
-    }
-    rmSync(path, { force: true })
-    return true
+export async function readBotToolCredentialSnapshot(folder: string) {
+  const { stored } = await readBotToolCredentialFile(folder, botToolCredentialsPath(folder))
+  return {
+    credential: (id: string) => credentialOf(entryOf(stored, id)),
+    oauth: (id: string) => oauthOf(entryOf(stored, id)),
+    fingerprint: (ids: ReadonlySet<string>) => credentialFingerprint(stored, ids)
   }
-  const credentials = Object.fromEntries(
-    Object.entries(next).map(([id, slot]) => [id, slot.envelope])
-  )
-  let published = false
-  writeSecureFile(path, `${JSON.stringify({ version: 2, credentials }, null, 2)}\n`, {
-    durable: true,
-    shouldPublish: () => (published = unchanged())
-  })
-  return published
 }
 
 // One queue per folder for every write: the tools file and its credentials, sign-ins, refreshes and
@@ -159,9 +110,21 @@ export function botToolCredentialsTransaction<T>(folder: string, work: () => Pro
   return next
 }
 
+export function botToolCredentialWriteTransaction<T>(
+  folder: string,
+  work: () => Promise<T>
+): Promise<T> {
+  return botToolCredentialsTransaction(folder, () =>
+    withFileTransactionLock(botToolCredentialsPath(folder), work)
+  )
+}
+
 /** One header or source credential, opened and checked against its folder and id; null for none or a sign-in. */
 export function readBotToolCredential(folder: string, id: string): BotToolCredential | null {
-  const entry = entryOf(readSealed(folder), id)
+  return credentialOf(entryOf(readSealed(folder), id))
+}
+
+function credentialOf(entry: Entry | null): BotToolCredential | null {
   if (!entry || entry.kind === 'oauth') {
     return null
   }
@@ -195,7 +158,10 @@ function oauthOf(entry: Entry | null): BotToolOAuthEntry | null {
  * address and sign-in for an app Orca signs in to, so a refreshed token restarts no chat.
  */
 export function botToolCredentialsFingerprint(folder: string, ids: ReadonlySet<string>): string {
-  const sealed = readSealed(folder)
+  return credentialFingerprint(readSealed(folder), ids)
+}
+
+function credentialFingerprint(sealed: Stored, ids: ReadonlySet<string>): string {
   return JSON.stringify(
     [...ids].sort().map((id) => {
       const slot = sealed[id]
@@ -220,11 +186,11 @@ const signInManaged = () => new Error('Orca signs in to this tool. Sign it in or
  * Adds `added` and drops `removed`, inside the folder's transaction; answers the sign-ins it dropped,
  * for the caller to revoke. Saved headers never replace a sign-in.
  */
-export function changeBotToolCredentials(
+export async function changeBotToolCredentials(
   folder: string,
   added: ReadonlyMap<string, BotToolCredential>,
   removed: ReadonlySet<string> = new Set()
-): BotToolOAuthEntry[] {
+): Promise<BotToolOAuthEntry[]> {
   if (added.size === 0 && removed.size === 0) {
     return []
   }
@@ -235,8 +201,7 @@ export function changeBotToolCredentials(
     )
   )
   const path = botToolCredentialsPath(folder)
-  const text = readFileText(path)
-  const current = parseStored(folder, text)
+  const { text, stored: current } = await readBotToolCredentialFile(folder, path)
   for (const id of added.keys()) {
     if (current[id]?.entry?.kind === 'oauth') {
       throw signInManaged()
@@ -260,7 +225,7 @@ export function changeBotToolCredentials(
         : { kind: 'headers', url: credential.url, headers }
     )
   }
-  if (!publish(folder, text, current)) {
+  if (!(await publishBotToolCredentialFile(path, text, current))) {
     throw new Error('The bot’s tool credentials changed in another Orca. Try again.')
   }
   announceBotToolCredentialsEnded(folder, ended)
@@ -273,17 +238,16 @@ export function changeBotToolCredentials(
  * except a `statusOnly` one (no tokens change), so a refresh under way still commits its tokens.
  * Answers the entry as committed, or `undefined` when nothing was written.
  */
-export function commitBotToolOAuth(
+export async function commitBotToolOAuth(
   folder: string,
   id: string,
   change: (
     current: BotToolOAuthEntry | null
   ) => { url: string; grant: number; record: BotToolOAuthRecord } | null | undefined,
   { statusOnly = false }: { statusOnly?: boolean } = {}
-): BotToolOAuthEntry | null | undefined {
+): Promise<BotToolOAuthEntry | null | undefined> {
   const path = botToolCredentialsPath(folder)
-  const text = readFileText(path)
-  const stored = parseStored(folder, text)
+  const { text, stored } = await readBotToolCredentialFile(folder, path)
   const existing = entryOf(stored, id)
   if (existing && existing.kind !== 'oauth') {
     throw signInManaged()
@@ -307,7 +271,7 @@ export function commitBotToolOAuth(
       record
     })
   }
-  if (!publish(folder, text, stored)) {
+  if (!(await publishBotToolCredentialFile(path, text, stored))) {
     return undefined
   }
   if (current && (next === null || next.grant !== current.grant || next.url !== current.url)) {
@@ -318,34 +282,36 @@ export function commitBotToolOAuth(
 }
 
 /** A deleted bot's credentials; answers its sign-ins for the caller to revoke. */
-export function forgetBotToolCredentials(folder: string): BotToolOAuthEntry[] {
-  let ids: string[] = []
-  let entries: BotToolOAuthEntry[] = []
-  try {
-    const stored = readSealed(folder)
-    ids = Object.keys(stored)
-    entries = Object.values(stored).flatMap((slot) => {
-      const read = oauthOf(slot.entry)
-      return read ? [read] : []
-    })
-  } catch {
-    // An unreadable file still goes; there's nothing in it to revoke.
-  }
-  rmSync(botToolCredentialsPath(folder), { force: true })
-  announceBotToolCredentialsEnded(folder, ids)
-  return entries
+export function forgetBotToolCredentials(folder: string): Promise<BotToolOAuthEntry[]> {
+  return botToolCredentialWriteTransaction(folder, async () => {
+    const path = botToolCredentialsPath(folder)
+    let ids: string[] = []
+    let entries: BotToolOAuthEntry[] = []
+    try {
+      const { stored } = await readBotToolCredentialFile(folder, path)
+      ids = Object.keys(stored)
+      entries = Object.values(stored).flatMap((slot) => {
+        const read = oauthOf(slot.entry)
+        return read ? [read] : []
+      })
+    } catch {
+      // An unreadable file still goes; there's nothing in it to revoke.
+    }
+    await rm(path, { force: true })
+    announceBotToolCredentialsEnded(folder, ids)
+    return entries
+  })
 }
 
 /** A stored tool with its saved values and the address they're bound to, to keep them on an edit. */
-export function withSavedBotToolHeaders(folder: string, server: BotToolServer): BotToolServer {
+export function withSavedBotToolHeaders(
+  credentials: Awaited<ReturnType<typeof readBotToolCredentialSnapshot>>,
+  server: BotToolServer
+): BotToolServer {
   if (!('url' in server) || !server.credential) {
     return server
   }
-  if (readBotToolOAuth(folder, server.credential)) {
-    // Its tokens are Orca's own sign-in; a generic edit keeps the id and changes no values.
-    return server
-  }
-  const saved = readBotToolCredential(folder, server.credential)
+  const saved = credentials.credential(server.credential)
   if (saved?.source) {
     // Its headers come from a source Orca fills per call; a generic edit would drop them.
     throw new Error('Orca manages this tool. Change it where you set it up.')

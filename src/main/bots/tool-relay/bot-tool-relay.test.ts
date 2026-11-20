@@ -23,7 +23,7 @@ let relay: BotToolRelay
 async function botWith(url: string, botId = 'scout', id = 'cred-notion', secret = SECRET) {
   const folder = mkdtempSync(join(tmpdir(), 'relay-bot-'))
   dirs.push(folder)
-  changeBotToolCredentials(folder, new Map([[id, { url, headers: { 'x-api-key': secret } }]]))
+  await changeBotToolCredentials(folder, new Map([[id, { url, headers: { 'x-api-key': secret } }]]))
   writeToolsFile(folder, { [id]: url })
   const { origin, token } = await relay.grant(botId, folder)
   return { folder, token, address: `${origin}/bot-tools/${id}/mcp` }
@@ -267,7 +267,7 @@ describe("Orca's tool relay", () => {
     const bot = await botWith(tool.url)
     const headers = { ...json, authorization: `Bearer ${bot.token}` }
     await call(bot.address, { headers, body: '{}' })
-    changeBotToolCredentials(
+    await changeBotToolCredentials(
       bot.folder,
       new Map([['cred-notion', { url: tool.url, headers: { 'x-api-key': 'rotated' } }]])
     )
@@ -301,7 +301,7 @@ describe('a tool whose headers come from a source', () => {
     )
     const folder = mkdtempSync(join(tmpdir(), 'relay-bot-'))
     dirs.push(folder)
-    changeBotToolCredentials(
+    await changeBotToolCredentials(
       folder,
       new Map([['cred-hub-1', { url: tool.url, headers: {}, source: 'hub' }]])
     )

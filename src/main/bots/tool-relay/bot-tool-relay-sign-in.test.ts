@@ -136,7 +136,7 @@ describe('a tool Orca signs in to, through the relay', () => {
     })
     const bot = await botUsing(botToolCredentialSource())
     writeToolsFile(bot.folder, { [ID]: app.url })
-    commitBotToolOAuth(bot.folder, ID, () => ({
+    await commitBotToolOAuth(bot.folder, ID, () => ({
       url: app.url,
       grant: 1,
       record: {
