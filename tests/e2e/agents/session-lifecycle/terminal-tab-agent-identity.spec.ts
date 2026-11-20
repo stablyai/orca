@@ -1,14 +1,19 @@
 import type { Page } from '@stablyai/playwright-test'
-import { test, expect } from './helpers/orca-app'
-import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
+import { expect } from '@stablyai/playwright-test'
+import { test } from '../../desktop/electron-fixtures/orca-app'
+import {
+  ensureTerminalVisible,
+  waitForActiveWorktree,
+  waitForSessionReady
+} from '../../desktop/renderer-probes/store'
+import { waitForActivePanePtyId } from '../../terminal/input/terminal'
 import {
   sendToTerminal,
-  waitForActivePanePtyId,
   waitForActiveTerminalManager,
   waitForTerminalOutput
-} from './helpers/terminal'
-import { runNodeScriptInTerminal } from './helpers/run-node-script-in-terminal'
-import { waitForRestoredTerminalInputReady } from './helpers/restored-terminal-input-readiness'
+} from '../../terminal/layout/terminal-pane-operations'
+import { runNodeScriptInTerminal } from '../../terminal/input/run-node-script-in-terminal'
+import { waitForRestoredTerminalInputReady } from '../../terminal/readiness/restored-terminal-input-readiness'
 
 const CLAUDE_IDENTITY_OSC_TITLE = '✳ Claude Code'
 const CLAUDE_IDENTITY_MARKER = 'claude identity seeded'
