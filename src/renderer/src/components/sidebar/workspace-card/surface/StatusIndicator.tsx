@@ -64,7 +64,7 @@ const StatusIndicator = React.memo(function StatusIndicator({
         className={cn('inline-flex h-3 w-3 shrink-0 items-center justify-center', className)}
         {...rest}
       >
-        <span className="block size-1.5 rounded-full bg-red-500" />
+        <span className="block size-1.5 rounded-full bg-agent-error" />
       </span>
     )
   } else if (status === 'interrupted') {
@@ -107,8 +107,8 @@ const StatusIndicator = React.memo(function StatusIndicator({
             'block size-2 rounded-full',
             status === 'done' || status === 'active'
               ? // Quiet active terminals share the completed-session dot.
-                'bg-emerald-500'
-              : 'bg-neutral-500/40'
+                'bg-agent-done'
+              : 'bg-agent-idle'
           )}
         />
       </span>
