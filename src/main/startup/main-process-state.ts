@@ -86,6 +86,7 @@ export const mainProcessState = {
   isQuitting: false,
   store: null as Store | null,
   // Main's native consumers read settings through this; it never exposes the Store.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: widens the null slot assigned by main-process-ready-foundation.
   nativeSettings: null as NativeSettingsProjection | null,
   profileShutdownCheckpoint: null as Promise<void> | null,
   profileStateStartup: createInitialProfileStateStartup(),
