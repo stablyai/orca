@@ -16,7 +16,11 @@ import {
 import { BOT_AVATAR_ACCEPT } from './bot-avatar-intake'
 import { botMascotSrcs } from './bot-mascot-color'
 import { BotPictureIntakeLine, LineAction } from './BotPictureIntakeLine'
-import { useBotAvatarIntake } from './use-bot-avatar-intake'
+import {
+  useBotAvatarIntakeHost,
+  useBotAvatarIntakeState,
+  type BotAvatarIntake
+} from './use-bot-avatar-intake'
 import { BotPictureCarousel, type BotPictureFace } from './BotPictureCarousel'
 import {
   GenerateField,
@@ -143,7 +147,8 @@ export function BotPicturePicker({
   onUndo,
   uploadLink = false,
   color = null,
-  onColorChange
+  onColorChange,
+  intake: sharedIntake
 }: {
   value: BotPictureValue
   custom: BotPictureCustom | null
@@ -157,6 +162,9 @@ export function BotPicturePicker({
   color?: string | null
   /** Shows the color swatches under a mascot. */
   onColorChange?: (color: string | null) => void
+  /** An intake that outlives this picker (New bot's picture button), so a decode survives the popover
+   *  closing and one order holds across both surfaces; its owner places the picture. */
+  intake?: BotAvatarIntake
 }): React.JSX.Element {
   const t = useTranslate()
   const rootRef = useRef<HTMLDivElement>(null)
@@ -204,8 +212,7 @@ export function BotPicturePicker({
         ? { key, src: custom?.src ?? null, fallback: custom?.fallback ?? '' }
         : { key, src: srcs[key], fallback: '' }
   )
-  const intake = useBotAvatarIntake({
-    rootRef,
+  const ownIntake = useBotAvatarIntakeState({
     // A new picture replaces the custom one in place, or lands beside the mascot shown.
     onPicture: (png) => {
       setOnGenerate(false)
@@ -213,6 +220,17 @@ export function BotPicturePicker({
     },
     undoable: onUndo !== undefined
   })
+  const intake = sharedIntake ?? ownIntake
+  const outlinePicker = useBotAvatarIntakeHost(rootRef, intake)
+  // A shared intake's picture lands as a new custom one; it leaves Generate as one taken here does.
+  const customSrc = custom?.src ?? null
+  const [seenCustomSrc, setSeenCustomSrc] = useState(customSrc)
+  if (customSrc !== seenCustomSrc) {
+    setSeenCustomSrc(customSrc)
+    if (onGenerate && !generatedCustom) {
+      setOnGenerate(false)
+    }
+  }
   const { line } = intake
   const dropping = line.kind === 'drop'
   const select = (key: PictureFaceKey | undefined): void => {
@@ -281,7 +299,7 @@ export function BotPicturePicker({
   return (
     <div
       ref={rootRef}
-      data-dropping={(dropping && intake.outlinePicker) || undefined}
+      data-dropping={(dropping && outlinePicker) || undefined}
       onPointerDownCapture={() => {
         byPointer.current = true
       }}

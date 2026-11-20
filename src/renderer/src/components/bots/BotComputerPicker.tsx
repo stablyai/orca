@@ -35,14 +35,17 @@ export function BotComputerPicker({
   const setUpdateDialogOpen = useAppStore((s) => s.setRemoteServerUpdateDialogOpen)
   const updatable = useServerUpdatable()
   const [readyAtOpen, setReadyAtOpen] = useState<ReadonlySet<ExecutionHostId> | null>(null)
+  // Only an open list reads every server's account and update state; the closed field shows one host.
+  const listOpen = readyAtOpen !== null
   const [reconnecting, setReconnecting] = useState<ReadonlySet<string>>(new Set())
   const refreshUpdates = useAppStore((s) => s.refreshRemoteServerUpdates)
   const { setListing } = hostChoice
   useEffect(() => {
-    setListing(true)
+    setListing(listOpen)
     return () => setListing(false)
-  }, [setListing])
-  const needsUpdateCheck = hosts.some(
+  }, [listOpen, setListing])
+  const listed = listOpen ? hosts : [host]
+  const needsUpdateCheck = listed.some(
     (entry) =>
       entry.blocked === 'no-bots' &&
       entry.environmentId &&
@@ -66,7 +69,7 @@ export function BotComputerPicker({
   }
 
   const rows = botCreateHostRows(
-    hosts,
+    listed,
     {
       readyAtOpen,
       otherAccountOf: hostChoice.otherAccountOf,

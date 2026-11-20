@@ -200,6 +200,57 @@ describe('NewBotDialog picture intake', () => {
     await waitFor(() => expect(picture()).toBe('data:image/png;base64,UE5H'))
   })
 
+  it('keeps a picture chosen in the popover when it closes before the image is read', async () => {
+    let finish: (png: string) => void = () => {}
+    mocks.squareAvatarPng.mockImplementationOnce(
+      () => new Promise<string>((resolve) => (finish = resolve))
+    )
+    mocks.createBot.mockResolvedValue(created)
+    mocks.uploadBotAvatar.mockResolvedValue(created)
+    const { picture, openPicker, submit } = renderDialog()
+    openPicker()
+    chooseUpload()
+    openPicker()
+    await waitFor(() => expect(screen.queryByRole('group', { name: 'Picture' })).toBeNull())
+
+    finish('UE5H')
+    await waitFor(() => expect(picture()).toBe('data:image/png;base64,UE5H'))
+    await submit()
+    await waitFor(() =>
+      expect(mocks.uploadBotAvatar).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'bot-1' }),
+        'UE5H'
+      )
+    )
+  })
+
+  it('keeps the newer picture when an older one, from the other surface, is read last', async () => {
+    const finishes: ((png: string) => void)[] = []
+    mocks.squareAvatarPng.mockImplementation(
+      () => new Promise<string>((resolve) => finishes.push(resolve))
+    )
+    mocks.createBot.mockResolvedValue(created)
+    mocks.uploadBotAvatar.mockResolvedValue(created)
+    const { picture, openPicker, submit } = renderDialog()
+    openPicker()
+    fireEvent.paste(screen.getByLabelText('Name'), { clipboardData: transfer({ files: [png()] }) })
+    chooseUpload()
+    await waitFor(() => expect(finishes).toHaveLength(2))
+
+    finishes[1]?.('QkJCQg')
+    await waitFor(() => expect(picture()).toBe('data:image/png;base64,QkJCQg'))
+    finishes[0]?.('QUFBQQ')
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(picture()).toBe('data:image/png;base64,QkJCQg')
+    await submit()
+    await waitFor(() =>
+      expect(mocks.uploadBotAvatar).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'bot-1' }),
+        'QkJCQg'
+      )
+    )
+  })
+
   it('leaves a pasted image URL as text', () => {
     const { picture } = renderDialog()
     const mascot = picture()

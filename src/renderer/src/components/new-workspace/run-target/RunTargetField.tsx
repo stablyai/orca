@@ -8,19 +8,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { HostRowIcon } from '../../host-picker/host-row-icon'
 import { COMBOBOX_FIELD_SHELL } from '../type-ahead/type-ahead-combobox-styles'
-
-// The tail of a long name stays, so hosts that differ only at the end stay apart.
-const MIDDLE_TAIL_CHARS = 10
-
-function MiddleTruncatedLabel({ text }: { text: string }): React.JSX.Element {
-  const tail = Math.min(MIDDLE_TAIL_CHARS, Math.floor(text.length / 2))
-  return (
-    <span className="flex min-w-0">
-      <span className="min-w-0 truncate">{text.slice(0, text.length - tail)}</span>
-      <span className="shrink-0 whitespace-pre">{text.slice(text.length - tail)}</span>
-    </span>
-  )
-}
+import { MiddleEllipsisLabel } from './MiddleEllipsisLabel'
 
 /** Overlay the committed selection while keeping the input ready to search. */
 export default function RunTargetField({
@@ -115,7 +103,7 @@ export default function RunTargetField({
                   className="pointer-events-none absolute inset-0 flex items-center text-sm"
                 >
                   {truncateMiddle ? (
-                    <MiddleTruncatedLabel text={label} />
+                    <MiddleEllipsisLabel text={label} />
                   ) : (
                     <span className="min-w-0 truncate">{label}</span>
                   )}

@@ -1,6 +1,6 @@
 // New bot's picture: one tile with a pencil; a click opens the picker in a popover. An image pasted
 // or dropped anywhere in the dialog is taken while the popover is closed.
-import React, { useRef } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { CircleAlert, Pencil } from 'lucide-react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { useTranslate } from '@/i18n/use-translate'
@@ -11,12 +11,16 @@ import { BOT_PICTURE_DROP_OUTLINE, BotPicturePicker, pictureMascotIndex } from '
 import { useBotAvatarIntake } from './use-bot-avatar-intake'
 import type { NewBotPicture } from './use-new-bot-picture'
 
+/** The unified form dialog's padding (`p-5`). */
+const DIALOG_PADDING_PX = 20
+
 export function NewBotPictureButton({ picture }: { picture: NewBotPicture }): React.JSX.Element {
   const t = useTranslate()
   const errorMessage = useIntakeErrorMessage()
   const rootRef = useRef<HTMLDivElement>(null)
   const showingCustom = picture.value.kind === 'custom' && picture.custom !== null
   // As the picker does: a new picture replaces the custom one in place, or lands beside the mascot.
+  // The popover's picker shares this intake, so its decodes outlive the popover and one order holds.
   const intake = useBotAvatarIntake({
     rootRef,
     onPicture: (png) =>
@@ -29,6 +33,11 @@ export function NewBotPictureButton({ picture }: { picture: NewBotPicture }): Re
     undoable: false
   })
   const { line } = intake
+  // The popover stays inside the dialog's padding, so a narrow dialog narrows it rather than its edge.
+  const [dialog, setDialog] = useState<HTMLElement | null>(null)
+  useEffect(() => {
+    setDialog(rootRef.current?.closest<HTMLElement>('[role="dialog"]') ?? null)
+  }, [])
   return (
     <div ref={rootRef} className="flex items-center gap-3">
       <Popover onOpenChange={(open) => open && line.kind === 'error' && intake.dismiss()}>
@@ -56,7 +65,12 @@ export function NewBotPictureButton({ picture }: { picture: NewBotPicture }): Re
             </span>
           </button>
         </PopoverTrigger>
-        <PopoverContent align="start" className="w-80">
+        <PopoverContent
+          align="start"
+          collisionBoundary={dialog}
+          collisionPadding={DIALOG_PADDING_PX}
+          className="w-[min(20rem,var(--radix-popover-content-available-width))]"
+        >
           {/* The whole popover takes a dropped picture, so all of it is outlined while one is dragged. */}
           <div className={cn(BOT_PICTURE_DROP_OUTLINE, 'pt-3')}>
             <BotPicturePicker
@@ -67,6 +81,7 @@ export function NewBotPictureButton({ picture }: { picture: NewBotPicture }): Re
               color={picture.color}
               onColorChange={picture.onColorChange}
               uploadLink
+              intake={intake}
             />
           </div>
         </PopoverContent>
