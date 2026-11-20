@@ -229,16 +229,21 @@ it('follows the automatic model a later turn resolves', async () => {
   expect((await poll())?.payload.model).toBe('model-c')
 })
 
-it('follows an automatic model stamped in the whole second its turn started', async () => {
+it('takes the automatic model stamped in the first second of its turn but not an earlier one', async () => {
   vi.useFakeTimers({ toFake: ['Date'] })
-  try {
-    vi.setSystemTime(Date.parse('2030-01-01T12:00:00.250Z'))
-    hook('root', 'Stop', { fullyIdle: true })
-    hook('root', 'PreInvocation', { lastUserInput: 'Next', modelName: 'auto' })
+  const rootTranscript = join(dir, 'root', '.system_generated', 'logs', 'transcript.jsonl')
+  const response = (model: string, createdAt: string) =>
     appendFileSync(
-      join(dir, 'root', '.system_generated', 'logs', 'transcript.jsonl'),
-      `${JSON.stringify({ type: 'PLANNER_RESPONSE', model: 'model-c', created_at: '2030-01-01T12:00:00Z' })}\n`
+      rootTranscript,
+      `${JSON.stringify({ type: 'PLANNER_RESPONSE', model, created_at: createdAt })}\n`
     )
+  try {
+    vi.setSystemTime(Date.parse('2030-01-01T12:00:00.600Z'))
+    hook('root', 'Stop', { fullyIdle: true })
+    response('model-z', '2030-01-01T12:00:00.100Z')
+    hook('root', 'PreInvocation', { lastUserInput: 'Next', modelName: 'auto' })
+    expect((await poll())?.payload.model ?? row.payload.model).toBe('model-a')
+    response('model-c', '2030-01-01T12:00:00Z')
     expect((await poll())?.payload.model).toBe('model-c')
   } finally {
     vi.useRealTimers()

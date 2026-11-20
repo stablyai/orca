@@ -50,7 +50,11 @@ export async function readAntigravityChildTranscriptTail(
     const model = normalizeAntigravityModel(parsed.model)
     if (model) {
       previous.model = model
-      previous.modelAt = Number.isFinite(createdAt) ? createdAt : undefined
+      // A whole-second stamp may hide a later millisecond, so it reads as that second's end.
+      const wholeSecond = typeof parsed.created_at === 'string' && !/\d\.\d/.test(parsed.created_at)
+      previous.modelAt = Number.isFinite(createdAt)
+        ? createdAt + (wholeSecond ? 999 : 0)
+        : undefined
     }
     previous.tail = { model: previous.model, modelAt: previous.modelAt }
   }
