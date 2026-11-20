@@ -11,6 +11,11 @@ function overAnotherTrigger(target: EventTarget | null, row: HTMLElement): boole
   return Boolean(trigger && trigger !== row)
 }
 
+function trackPointerInGap(onMove: (event: PointerEvent) => void): () => void {
+  document.addEventListener('pointermove', onMove, { capture: true, passive: true })
+  return () => document.removeEventListener('pointermove', onMove, true)
+}
+
 export function useBotRowCardPlacement() {
   const triggerNode = useRef<HTMLElement | null>(null)
   const cardNode = useRef<HTMLElement | null>(null)
@@ -81,11 +86,7 @@ export function useBotRowCardPlacement() {
           close()
         }
       }
-      document.addEventListener('pointermove', onMove, { capture: true, passive: true })
-      crossing.current = {
-        hold,
-        stop: () => document.removeEventListener('pointermove', onMove, true)
-      }
+      crossing.current = { hold, stop: trackPointerInGap(onMove) }
     },
     [open, close, settle]
   )
