@@ -1,10 +1,7 @@
 import { readFile, rename, writeFile } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
-import { join } from 'node:path'
 import { asRecord } from '../../../ai-vault/parsing/session-record-fields'
-import { getOrcaUserDataPath } from '../../configuration/homes/codex-home-paths'
 
-const CACHE_FILE = 'codex-rollout-history-bases.json'
 const CACHE_CHECKPOINT_MS = 30_000
 
 /** Each rollout's settled history base, kept across sweeps in Orca's data folder. */
@@ -25,8 +22,9 @@ function isCachedEntry(entry: unknown): entry is [string, string | null] {
   )
 }
 
-export async function loadCodexRolloutHistoryBaseCache(): Promise<CodexRolloutHistoryBaseCache> {
-  const cachePath = join(getOrcaUserDataPath(), CACHE_FILE)
+export async function loadCodexRolloutHistoryBaseCache(
+  cachePath: string
+): Promise<CodexRolloutHistoryBaseCache> {
   let bases: Map<string, string | null>
   try {
     const stored = asRecord(JSON.parse(await readFile(cachePath, 'utf-8')))?.bases

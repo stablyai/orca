@@ -27,16 +27,18 @@ export type CodexRolloutHistoryReferences = {
    * changed. False when anything couldn't be read, so no rollout is proven unreferenced.
    */
   refresh(homes: readonly string[]): Promise<boolean>
-  isReferenced(rolloutId: string): boolean
+  isReferenced(rolloutId: string): Promise<boolean>
   /** Drops a deleted rollout; returns the parent it was the last fork of, if any. */
-  forget(rolloutId: string): string | null
+  forget(rolloutId: string): Promise<string | null>
   save(): Promise<void>
 }
 
 /** A folder, rollout or link to read again: it couldn't be settled yet. */
 type Pending = { kind: 'folder' | 'rollout' | 'link'; rolloutId: string | null; recursive: boolean }
 
+/** The index itself; the sweep runs it in a worker (codex-rollout-history-references-client). */
 export function createCodexRolloutHistoryReferences(
+  cachePath: string,
   signal?: AbortSignal
 ): CodexRolloutHistoryReferences {
   let cache: CodexRolloutHistoryBaseCache | undefined
@@ -50,7 +52,7 @@ export function createCodexRolloutHistoryReferences(
   // Real sessions/archived_sessions folders read in full.
   const walkedRoots = new Set<string>()
   const stamps = createCodexRolloutFolderStamps()
-  // Each archived_sessions folder's names when last listed.
+  // Each re-listed folder's names when last listed.
   const listedNames = new Map<string, Set<string>>()
   // Read again on every pass; while any is left, no rollout is proven unreferenced.
   const pending = new Map<string, Pending>()
@@ -171,24 +173,7 @@ export function createCodexRolloutHistoryReferences(
     return true
   }
 
-  /** Lists a folder again only when its entries changed since the last listing; false: failed. */
-  const relist = async (folder: string, visited: Set<string>) => {
-    const statAt = Date.now()
-    const entry = await statUnlessAbsent(folder)
-    if (entry === undefined || entry === null) {
-      return entry === null && 'current'
-    }
-    if (stamps.isCurrent(folder, entry.mtimeMs)) {
-      return 'current'
-    }
-    const listed = await walk(folder, visited, false)
-    if (listed) {
-      stamps.listed(folder, entry.mtimeMs, statAt)
-    }
-    return listed && 'listed'
-  }
-
-  /** Reads the names a flat folder gained since its last listing: names only, no stat per entry. */
+  /** Reads the names a flat folder gained since its last listing: names only, no stat per known one. */
   const relistNames = async (folder: string, visited: Set<string>): Promise<boolean> => {
     let names: string[]
     try {
@@ -217,10 +202,27 @@ export function createCodexRolloutHistoryReferences(
     return true
   }
 
+  /** Lists a flat folder again only when its entries changed since the last listing. */
+  const relist = async (folder: string, visited: Set<string>): Promise<boolean> => {
+    const statAt = Date.now()
+    const entry = await statUnlessAbsent(folder)
+    if (entry === undefined || entry === null) {
+      return entry === null
+    }
+    if (stamps.isCurrent(folder, entry.mtimeMs)) {
+      return true
+    }
+    const listed = await relistNames(folder, visited)
+    if (listed) {
+      stamps.listed(folder, entry.mtimeMs, statAt)
+    }
+    return listed
+  }
+
   const update = async (homes: readonly string[], recent: boolean): Promise<boolean> => {
     try {
       signal?.throwIfAborted()
-      cache ??= await loadCodexRolloutHistoryBaseCache()
+      cache ??= await loadCodexRolloutHistoryBaseCache(cachePath)
       const visited = new Set<string>()
       const dates = recentDates()
       for (const [path, entry] of Array.from(pending)) {
@@ -237,8 +239,6 @@ export function createCodexRolloutHistoryReferences(
         }
       }
       let complete = true
-      // A rollout reaches archived_sessions only by moving out of a dated folder, which changes it.
-      let datedFolderChanged = false
       for (const home of homes) {
         for (const name of ['sessions', 'archived_sessions']) {
           let root: string
@@ -261,16 +261,13 @@ export function createCodexRolloutHistoryReferences(
             if (walked) {
               walkedRoots.add(root)
             }
-          } else if (recent && name === 'sessions') {
-            // New rollouts land in today's dated folders.
-            for (const parts of dates) {
-              const relisted = await relist(join(root, ...parts), visited)
-              complete &&= relisted !== false
-              datedFolderChanged ||= relisted === 'listed'
+          } else if (recent) {
+            // New rollouts land in today's dated folders; archiving moves them to the flat folder.
+            const folders =
+              name === 'sessions' ? dates.map((parts) => join(root, ...parts)) : [root]
+            for (const folder of folders) {
+              complete = (await relist(folder, visited)) && complete
             }
-          } else if (recent && datedFolderChanged) {
-            // Orca's own deletions change archived_sessions too: those never set this off.
-            complete = (await relistNames(root, visited)) && complete
           }
         }
       }
@@ -299,8 +296,8 @@ export function createCodexRolloutHistoryReferences(
   return {
     prepare: (homes) => update(homes, false),
     refresh: (homes) => update(homes, true),
-    isReferenced: (rolloutId) => (childrenByBase.get(rolloutId)?.size ?? 0) > 0,
-    forget: (rolloutId) => {
+    isReferenced: async (rolloutId) => (childrenByBase.get(rolloutId)?.size ?? 0) > 0,
+    forget: async (rolloutId) => {
       cache?.delete(rolloutId)
       const base = baseByChild.get(rolloutId)
       if (!base) {

@@ -14,6 +14,7 @@ import {
   createCodexRolloutHistoryReferences,
   type CodexRolloutHistoryReferences
 } from './codex-rollout-history-references'
+import { codexRolloutHistoryCachePath } from './codex-rollout-history-references-client'
 import {
   isOutsideProtectedRoots,
   resolveProtectedRoots,
@@ -91,7 +92,7 @@ async function deleteRollout(
     if (!(await references.prepare(homes))) {
       return 'done'
     }
-    if (references.isReferenced(rolloutId)) {
+    if (await references.isReferenced(rolloutId)) {
       return { referencedId: rolloutId }
     }
     const found = await readNames(names)
@@ -126,7 +127,7 @@ async function deleteRollout(
     if (!(await references.refresh(homes))) {
       return 'done'
     }
-    if (references.isReferenced(rolloutId)) {
+    if (await references.isReferenced(rolloutId)) {
       return { referencedId: rolloutId }
     }
     // A slow refresh (folders re-read) leaves the eligibility above stale: the workspace or setting
@@ -162,7 +163,7 @@ async function deleteRollout(
     result.deleted += 1
     // A name left (in the import folder) still reads its own parent.
     if ((await readNames(names)).length === 0) {
-      const freed = references.forget(rolloutId)
+      const freed = await references.forget(rolloutId)
       if (freed) {
         released.push(freed)
       }
@@ -199,7 +200,8 @@ export async function deleteCodexRolloutsPermanently(
 ): Promise<DeleteResult> {
   const result: DeleteResult = { deleted: 0, failed: 0, freedBytes: 0 }
   const deletedPaths: string[] = []
-  const references = sweepReferences ?? createCodexRolloutHistoryReferences()
+  const references =
+    sweepReferences ?? createCodexRolloutHistoryReferences(codexRolloutHistoryCachePath())
   try {
     // The first full read happens here, before any rollout is held from a resume, and only when
     // some target isn't open in Codex: those are skipped before anything else is read.
