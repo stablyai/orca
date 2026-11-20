@@ -1,3 +1,4 @@
+import { requiresExplicitCloudServiceUrl } from '../orca-profiles/cloud-auth/profile-cloud-server-preferences'
 import { randomUUID } from 'node:crypto'
 import type {
   ArtifactCloudOperation,
@@ -229,6 +230,14 @@ export class ArtifactCloudService {
       return {
         status: 'ok',
         value
+      }
+    }
+    if (
+      requiresExplicitCloudServiceUrl(options.apiUrl?.trim() || process.env.ORCA_ARTIFACTS_API_URL)
+    ) {
+      return {
+        status: 'unconfigured',
+        message: 'Configure an explicit artifact service URL before using a custom cloud server.'
       }
     }
     const config = getOrcaCloudAuthConfig()

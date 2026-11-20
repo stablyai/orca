@@ -70,7 +70,8 @@ export function installRelayHost(options: RelayHostOptions): RelayHost {
     stop: () => {
       options.runtimeRpc.setMobileRelayPairingProviderInstaller(null)
       options.runtimeRpc.setMobileRelayPairingProvider(null)
-      service?.stop()
+      installer.stop()
+      service = null
     }
   }
 }

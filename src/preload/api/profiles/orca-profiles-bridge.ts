@@ -12,6 +12,9 @@ import { prepareAndInvokeAppRestart } from '../../renderer/restart/renderer-rest
 import { awaitBeforeUnloadCheckpoint } from '../../renderer/renderer-runtime'
 
 export const orcaProfilesApi = {
+  cloudServerSettings: () => ipcRenderer.invoke('orcaProfiles:cloudServerSettings'),
+  testCloudServer: (settings) => ipcRenderer.invoke('orcaProfiles:testCloudServer', settings),
+  switchCloudServer: (settings) => ipcRenderer.invoke('orcaProfiles:switchCloudServer', settings),
   list: () => ipcRenderer.invoke('orcaProfiles:list'),
   authStatus: () => ipcRenderer.invoke('orcaProfiles:authStatus'),
   onAuthStatusChanged: (callback: () => void): (() => void) => {

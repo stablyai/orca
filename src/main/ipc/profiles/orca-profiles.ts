@@ -1,3 +1,4 @@
+import { registerCloudServerHandlers } from './cloud-server-handlers'
 import { ipcMain, type WebContents } from 'electron'
 import type { Store } from '../../persistence/loading-store/store'
 import { relaunchApp, type AppRelaunchReason } from '../../startup/quit/app-relaunch'
@@ -143,6 +144,7 @@ export function registerOrcaProfileHandlers(
   orcaAccount: OrcaAccountService,
   options: RegisterOrcaProfileHandlersOptions = {}
 ): void {
+  registerCloudServerHandlers(store, orcaAccount)
   ipcMain.handle('orcaProfiles:list', (): OrcaProfileListResult => ({
     ...getOrcaProfileListState(),
     multiProfileUi: isMultiProfileUiEnabled()

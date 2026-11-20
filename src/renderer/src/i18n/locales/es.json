@@ -583,6 +583,31 @@
         "showMore": "Mostrar {{count}} más",
         "notLoaded": "Ningún agente la carga"
       }
+    },
+    "customRelay": {
+      "title": "Servidor de retransmisión personalizado",
+      "description": "Elige los servidores de autenticación y retransmisión de este equipo. Inicia sesión tras aplicar un cambio.",
+      "enabled": "Usar servidor personalizado",
+      "authUrl": "URL del servidor de autenticación",
+      "clientId": "ID de cliente",
+      "relayUrl": "URL del director de retransmisión",
+      "validation": "Usa URL HTTPS y un ID de cliente no vacío. La URL de retransmisión debe ser un origen sin ruta. Las URL no pueden contener credenciales, consultas ni fragmentos. HTTP solo se permite en localhost, 127.0.0.1 o [::1] en compilaciones sin empaquetar.",
+      "environment": "Las variables de entorno tienen prioridad sobre los ajustes guardados. La prueba comprueba las URL introducidas aquí.",
+      "testing": "Probando conexión…",
+      "test": "Probar conexión",
+      "apply": "Aplicar cambios",
+      "reset": "Restablecer valores predeterminados",
+      "authSuccess": "Servidor de autenticación: conectado",
+      "authFailure": "Servidor de autenticación: error de conexión",
+      "relaySuccess": "Director de retransmisión: conectado",
+      "relayFailure": "Director de retransmisión: error de conexión",
+      "invalid": "Introduce URL de servidor válidas y un ID de cliente.",
+      "error": "No se pudo completar la solicitud. Revisa los ajustes del servidor e inténtalo de nuevo.",
+      "confirmTitle": "¿Cambiar los servidores de la nube?",
+      "confirmDescription": "Se cerrará tu sesión y se desconectarán los emparejamientos móviles de retransmisión existentes. Vuelve a emparejar esos dispositivos tras iniciar sesión en el servidor seleccionado. Se conservarán los emparejamientos solo locales.",
+      "cancel": "Cancelar",
+      "saving": "Cambiando servidores…",
+      "confirm": "Cambiar servidores"
     }
   },
   "menu": {

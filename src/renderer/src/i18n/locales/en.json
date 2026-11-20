@@ -1950,6 +1950,31 @@
       "description": "On supported desktop installs, Orca downloads eligible updates on its regular check schedule and restarts to install them automatically.",
       "info": "About automatic updates",
       "installingStatus": "is being installed."
+    },
+    "customRelay": {
+      "title": "Custom relay server",
+      "description": "Choose the cloud auth and relay servers used by this desktop. Sign in after applying a change.",
+      "enabled": "Use custom server",
+      "authUrl": "Auth server URL",
+      "clientId": "Client ID",
+      "relayUrl": "Relay director URL",
+      "validation": "Use HTTPS URLs and a nonempty client ID. The relay URL must be an origin without a path. URLs cannot contain credentials, queries, or fragments. HTTP is allowed only on localhost, 127.0.0.1, or [::1] in unpackaged builds.",
+      "environment": "Environment variables override saved settings. Test connection checks the URLs entered here.",
+      "testing": "Testing connection…",
+      "test": "Test connection",
+      "apply": "Apply changes",
+      "reset": "Reset to default",
+      "authSuccess": "Auth server: connected",
+      "authFailure": "Auth server: connection failed",
+      "relaySuccess": "Relay director: connected",
+      "relayFailure": "Relay director: connection failed",
+      "invalid": "Enter valid server URLs and a client ID before continuing.",
+      "error": "Could not complete the request. Check the server settings and try again.",
+      "confirmTitle": "Switch cloud servers?",
+      "confirmDescription": "This signs you out and disconnects existing mobile relay pairings. Pair those devices again after signing in to the selected server. Local-only pairings are preserved.",
+      "cancel": "Cancel",
+      "saving": "Switching servers…",
+      "confirm": "Switch servers"
     }
   },
   "menu": {

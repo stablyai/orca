@@ -1,3 +1,6 @@
+import { requiresExplicitCloudServiceUrl } from '../orca-profiles/cloud-auth/profile-cloud-server-preferences'
+import { cleanCloudServiceOrigin } from '../../shared/network/cloud-service-url'
+import { SIGNED_OUT } from './connector-cloud-request'
 import { getAppEnvironment } from '../../shared/app-lifecycle/app-environment'
 import { runtimeConversationHost } from '../external-conversations/external-conversation-runtime-host'
 import { getOrcaCloudAuthConfig } from '../orca-profiles/cloud-auth/profile-cloud-auth-config'
@@ -57,6 +60,11 @@ export function createConnectorCloud({
     return null
   }
   const environment = getAppEnvironment()
+  const explicitOrigin = cleanCloudServiceOrigin(
+    process.env.ORCA_CONNECTOR_URL,
+    !environment.isPackaged()
+  )
+  const canUseCloudAccount = () => !requiresExplicitCloudServiceUrl(explicitOrigin)
   const migratePlaces = botPlaceMigrationOnHello(
     {
       list: () => store.listAutomations(),
@@ -107,8 +115,13 @@ export function createConnectorCloud({
     userDataPath,
     origin: resolveConnectorOrigin(process.env, environment.isPackaged()),
     isFenced,
-    account: () => connectorAccount(userDataPath),
-    mintFor: (account) => desktopConnectorTokenMint(auth.config, userDataPath, account),
+    account: () => (canUseCloudAccount() ? connectorAccount(userDataPath) : null),
+    mintFor: (account) => async () => {
+      const current = getOrcaCloudAuthConfig()
+      return current.configured && canUseCloudAccount()
+        ? desktopConnectorTokenMint(current.config, userDataPath, account)()
+        : SIGNED_OUT
+    },
     onStatusChanged: () => runtime.notifyBotsChanged({ kinds: ['settings'] }),
     onAccountSwitched: cancelConnectorConnectsForAccountChange,
     replyJournal: () => getStructuredAgentSessionHost()?.deps.store.connectorReplies() ?? null,

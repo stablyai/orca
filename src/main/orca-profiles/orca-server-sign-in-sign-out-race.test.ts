@@ -24,7 +24,8 @@ import { OrcaServerSignIn } from './orca-server-sign-in'
 
 const ENV = {
   ORCA_CLOUD_API_URL: 'https://login.example.test',
-  ORCA_CLOUD_CLIENT_ID: 'orca-desktop'
+  ORCA_CLOUD_CLIENT_ID: 'orca-desktop',
+  ORCA_RELAY_URL: 'https://relay.example.test'
 }
 const REDIRECT = 'https://login.example.test/v1/server-sign-in/verify?request=req-1'
 

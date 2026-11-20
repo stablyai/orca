@@ -2126,6 +2126,31 @@
         "ownShort": "Skills próprias",
         "showMore": "Mostrar mais {{count}}"
       }
+    },
+    "customRelay": {
+      "title": "Servidor de retransmissão personalizado",
+      "description": "Escolha os servidores de autenticação e retransmissão deste computador. Entre na conta após aplicar uma alteração.",
+      "enabled": "Usar servidor personalizado",
+      "authUrl": "URL do servidor de autenticação",
+      "clientId": "ID do cliente",
+      "relayUrl": "URL do diretor de retransmissão",
+      "validation": "Use URLs HTTPS e um ID do cliente não vazio. A URL de retransmissão deve ser uma origem sem caminho. As URLs não podem conter credenciais, consultas ou fragmentos. HTTP só é permitido em localhost, 127.0.0.1 ou [::1] em compilações não empacotadas.",
+      "environment": "As variáveis de ambiente têm prioridade sobre as configurações salvas. O teste verifica as URLs inseridas aqui.",
+      "testing": "Testando conexão…",
+      "test": "Testar conexão",
+      "apply": "Aplicar alterações",
+      "reset": "Restaurar padrão",
+      "authSuccess": "Servidor de autenticação: conectado",
+      "authFailure": "Servidor de autenticação: falha na conexão",
+      "relaySuccess": "Diretor de retransmissão: conectado",
+      "relayFailure": "Diretor de retransmissão: falha na conexão",
+      "invalid": "Insira URLs de servidor válidas e um ID do cliente.",
+      "error": "Não foi possível concluir a solicitação. Verifique as configurações do servidor e tente novamente.",
+      "confirmTitle": "Trocar servidores da nuvem?",
+      "confirmDescription": "Você sairá da conta e os pareamentos móveis por retransmissão existentes serão desconectados. Pareie esses dispositivos novamente após entrar no servidor selecionado. Os pareamentos apenas locais serão preservados.",
+      "cancel": "Cancelar",
+      "saving": "Trocando servidores…",
+      "confirm": "Trocar servidores"
     }
   },
   "auto": {

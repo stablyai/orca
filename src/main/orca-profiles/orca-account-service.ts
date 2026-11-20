@@ -59,6 +59,7 @@ export class OrcaAccountService {
   private readonly userDataPath: () => string
   private readonly hooks: OrcaAccountLifecycleHooks
   private readonly accountBoundLinks: AccountBoundLinks | undefined
+  private switchingCloudServer = false
   private readonly signOutListeners = new Set<() => void>()
 
   constructor(ports: OrcaAccountServicePorts) {
@@ -97,6 +98,7 @@ export class OrcaAccountService {
   }
 
   async connect(): Promise<ConnectCurrentOrcaProfileResult> {
+    this.assertCloudServerStable()
     const result = await connectCurrentOrcaProfile(
       this.userDataPath(),
       this.openBrowser,
@@ -117,6 +119,7 @@ export class OrcaAccountService {
       'signal' | 'requireSealedStorage' | 'expectedLinkEpoch'
     > = {}
   ): Promise<ConnectCurrentOrcaProfileResult> {
+    this.assertCloudServerStable()
     const result = await signInCurrentOrcaProfileWithCode(this.userDataPath(), config, code, {
       ...guards,
       mayCommit: this.mayCommit
@@ -132,6 +135,7 @@ export class OrcaAccountService {
     args: CreateCloudLinkedOrcaProfileArgs,
     onCreated?: (profileId: string) => void
   ): Promise<CreateCloudLinkedOrcaProfileResult> {
+    this.assertCloudServerStable()
     const result = await createCloudLinkedOrcaProfile(this.userDataPath(), args)
     if (result.status === 'created') {
       onCreated?.(result.profile.id)
@@ -141,6 +145,7 @@ export class OrcaAccountService {
   }
 
   async refreshAuth(): Promise<RefreshCurrentOrcaProfileAuthResult> {
+    this.assertCloudServerStable()
     const result = await refreshCurrentOrcaProfileAuth(this.userDataPath())
     if (result.status === 'refreshed') {
       this.hooks.onAuthMutation?.()
@@ -149,11 +154,28 @@ export class OrcaAccountService {
   }
 
   async selectOrg(orgId: string): Promise<SelectOrcaProfileOrgResult> {
+    this.assertCloudServerStable()
     const result = await selectCurrentOrcaProfileOrg(this.userDataPath(), orgId)
     if (result.status === 'selected') {
       this.hooks.onAuthMutation?.()
     }
     return result
+  }
+
+  async withCloudServerSwitch<T>(operation: () => Promise<T>): Promise<T> {
+    this.assertCloudServerStable()
+    this.switchingCloudServer = true
+    try {
+      return await operation()
+    } finally {
+      this.switchingCloudServer = false
+    }
+  }
+
+  private assertCloudServerStable(): void {
+    if (this.switchingCloudServer) {
+      throw new Error('cloud_server_switch_in_progress')
+    }
   }
 
   /** Every sign-out, whichever caller (window or runtime RPC) made it. */

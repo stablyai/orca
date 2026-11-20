@@ -21,6 +21,7 @@ export type DesktopRelayServiceInstaller = {
   // Sign-out: refuse installs, including one already waiting, until the next auth change.
   suspend(): void
   authChanged(): Promise<boolean>
+  stop(): void
 }
 
 function pairingProviderFor(service: DesktopRelayService): MobileRelayPairingProvider {
@@ -40,9 +41,10 @@ export function createDesktopRelayServiceInstaller(
   let installed: DesktopRelayService | null = null
   let pending: Promise<boolean> | null = null
   let suspended = false
+  let stopped = false
   const install = async (): Promise<boolean> => {
     await options.whenNetworkReady
-    if (installed || suspended || options.isFenced()) {
+    if (installed || suspended || stopped || options.isFenced()) {
       return installed !== null
     }
     try {
@@ -76,6 +78,12 @@ export function createDesktopRelayServiceInstaller(
     ensure,
     suspend: () => {
       suspended = true
+    },
+    stop: () => {
+      stopped = true
+      installed?.stop()
+      installed = null
+      options.runtimeRpc.setMobileRelayPairingProvider(null)
     },
     authChanged: () => {
       suspended = false

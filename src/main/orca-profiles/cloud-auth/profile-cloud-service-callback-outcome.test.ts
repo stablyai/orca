@@ -67,6 +67,7 @@ describe('Orca sign-in browser page', () => {
     userDataPath = mkdtempSync(join(tmpdir(), 'orca-cloud-callback-outcome-'))
     vi.stubEnv('ORCA_CLOUD_API_URL', 'https://orca-cloud.example')
     vi.stubEnv('ORCA_CLOUD_CLIENT_ID', 'desktop-client')
+    vi.stubEnv('ORCA_RELAY_URL', 'https://relay.example.test')
   })
 
   afterEach(() => {

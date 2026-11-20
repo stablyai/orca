@@ -1,3 +1,4 @@
+import { requiresExplicitCloudServiceUrl } from '../../orca-profiles/cloud-auth/profile-cloud-server-preferences'
 import type {
   SkillCloudOperation,
   SkillCloudOptions
@@ -42,6 +43,16 @@ export async function runSkillCloudOperation<T>(input: {
     const value = await input.operation(override, apiUrl)
     assertCurrent()
     return { status: 'ok', value }
+  }
+  if (
+    requiresExplicitCloudServiceUrl(
+      input.options.apiUrl?.trim() || process.env.ORCA_ARTIFACTS_API_URL
+    )
+  ) {
+    return {
+      status: 'unconfigured',
+      message: 'Configure an explicit skill service URL before using a custom cloud server.'
+    }
   }
   const config = getOrcaCloudAuthConfig()
   if (!config.configured) {

@@ -82,6 +82,7 @@ describe('Orca cloud sign-out vs newer connect', () => {
     safeStorageMock.isEncryptionAvailable.mockReturnValue(true)
     vi.stubEnv('ORCA_CLOUD_API_URL', 'https://orca-cloud.example')
     vi.stubEnv('ORCA_CLOUD_CLIENT_ID', 'desktop-client')
+    vi.stubEnv('ORCA_RELAY_URL', 'https://relay.example.test')
     beginOrcaCloudPkceFlowMock.mockResolvedValue({
       code: 'auth-code',
       codeVerifier: 'code-verifier',
