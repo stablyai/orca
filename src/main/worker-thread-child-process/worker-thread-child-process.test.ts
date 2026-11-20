@@ -5,7 +5,7 @@ import { readdir, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { MessageChannel, Worker, type MessagePort } from 'node:worker_threads'
 import { runProcess } from '@orca/process-host'
-import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import {
   PROCESS_LAUNCHER_LOST_CODE,
   WORKER_CHILD_ABANDONED_CODE,
@@ -355,9 +355,9 @@ describe.runIf(process.platform === 'linux')(
       const child = host.spawn({ program: '/bin/sleep', args: ['300'] })
       const failure = new Promise<Error>((resolve) => child.once('error', resolve))
       const closed = waitForClose(child)
-      while ((await sleepChildrenOfThisProcess()).length === 0) {
-        await new Promise((resolve) => setTimeout(resolve, 20))
-      }
+      await vi.waitFor(async () => expect(await sleepChildrenOfThisProcess()).not.toEqual([]), {
+        timeout: 5_000
+      })
       expect(child.pid).toBeUndefined()
       transport?.emit('exit', 1)
       await expect(failure).resolves.toMatchObject({ code: PROCESS_LAUNCHER_LOST_CODE })
