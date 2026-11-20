@@ -1042,6 +1042,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'accounts.antigravityChatApiKeySave': AntigravityChatApiKeySaveParams,
   'accounts.antigravityChatApiKeyStatus': null,
   'accounts.antigravityChatAuthApply': AntigravityChatAuthConfigSchema,
+  'accounts.antigravityChatAuthDetect': null,
   'accounts.antigravityChatAuthGet': null,
   'accounts.antigravityChatSignInCancel': AntigravityChatSignInFlowParams,
   'accounts.antigravityChatSignInComplete': AntigravityChatSignInCompleteParams,

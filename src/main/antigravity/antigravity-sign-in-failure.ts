@@ -1,4 +1,8 @@
 import { AntigravityChatAuthConfigError } from '../../shared/agent-accounts/antigravity/antigravity-chat-auth-config'
+import {
+  ANTIGRAVITY_ACCOUNT_INELIGIBLE,
+  ANTIGRAVITY_SUBSCRIPTION_REQUIRED
+} from '../../shared/agent-accounts/antigravity/antigravity-sign-in-sentences'
 import { AcpAgentError } from '../acp/transport/acp-errors'
 import '../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import { isAgentSessionPreSpawnError } from '../native-chat/agent-session-wire/providers/structured-agent-session-adapter-errors'
@@ -24,10 +28,10 @@ export function antigravitySignInFailure(error: unknown): string {
       return 'Antigravity found no GEMINI_API_KEY. Set it in your shell or in Antigravity’s environment variables in Orca, then try again.'
     }
     if (text.includes('SUBSCRIPTION_REQUIRED')) {
-      return 'Google requires an eligible Antigravity subscription for this account.'
+      return ANTIGRAVITY_SUBSCRIPTION_REQUIRED
     }
     if (/onboarding failed|ineligible/i.test(text)) {
-      return "This Google account can't use Antigravity. Sign in with a different account."
+      return ANTIGRAVITY_ACCOUNT_INELIGIBLE
     }
     if (/access_denied|denied access|cancelled/i.test(text)) {
       return 'Google sign-in for Antigravity was not approved. Start sign-in again.'
