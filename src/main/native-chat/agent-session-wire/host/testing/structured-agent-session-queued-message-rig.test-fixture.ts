@@ -130,8 +130,10 @@ export async function createQueuedMessageTestRig(
       ...(delivery ? { delivery } : {}),
       ...(options?.carried ? { options: options.carried } : {})
     }
+    const sent = envelope(fields, 'agentSession.send', clientOperationId)
     const result = host.send(QUEUED_RIG_CALLER, {
-      envelope: envelope(fields, 'agentSession.send', clientOperationId),
+      envelope:
+        options?.fence === undefined ? sent : { ...sent, expectedRuntimeFence: options.fence },
       ...fields,
       body,
       ...(options?.internal ? {} : { userSend: true as const })

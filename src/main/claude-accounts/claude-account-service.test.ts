@@ -12,6 +12,7 @@ import type { ClaudeCommandConfig, ClaudeCommandOptions } from './sign-in/claude
 
 import type { ClaudeAccountSelectionTarget } from './selection/runtime-selection'
 import { ClaudeAccountService } from './service'
+import { CLAUDE_ACCOUNT_FOLDER_IN_USE_MESSAGE } from './selection/claude-account-selection'
 
 const spawnProcess = vi.hoisted(() => vi.fn())
 vi.mock('@orca/process-host', async (importOriginal) => ({
@@ -99,11 +100,14 @@ function fixture(
       options?: ClaudeCommandOptions
     ) => Promise<string>
   >(async () => '')
+  // A settings observer, run after each write lands, as the store notifies its listeners.
+  let observe: ((patch: Partial<GlobalSettings>) => void) | null = null
   const service = new ClaudeAccountService(
     {
       getSettings: () => settings,
       updateSettings: (patch) => {
         settings = { ...settings, ...patch }
+        observe?.(patch)
       }
     },
     {
@@ -113,7 +117,19 @@ function fixture(
     runtimeAuth,
     options.spawnClaude ? undefined : runLogin
   )
-  return { root, home, service, runtimeAuth, runLogin, signIn, covered, settings: () => settings }
+  return {
+    root,
+    home,
+    service,
+    runtimeAuth,
+    runLogin,
+    signIn,
+    covered,
+    settings: () => settings,
+    observeSettings: (next: typeof observe) => {
+      observe = next
+    }
+  }
 }
 
 function newId(f: ReturnType<typeof fixture>): string {
@@ -306,5 +322,165 @@ describe('ClaudeAccountService', () => {
     await expect(f.service.addAccount({ runtime: 'host' })).resolves.toMatchObject({
       accounts: [expect.objectContaining({ email: 'proxied@example.test' })]
     })
+  })
+
+  it('tells its listeners once a selection takes effect, and rechecks after one that rolled back', async () => {
+    const f = fixture()
+    const told: (() => boolean)[] = []
+    f.service.onSelectionApplied((committed) => told.push(committed))
+    for (const id of ['a', 'b']) {
+      f.signIn(id, `${id}@example.test`)
+      writeFileSync(
+        join(f.home(id), '.credentials.json'),
+        JSON.stringify({ claudeAiOauth: { refreshToken: 'refresh' } })
+      )
+    }
+    await f.service.selectAccount('b')
+    expect(told).toHaveLength(1)
+    expect(told[0]!()).toBe(true)
+
+    // While a later select is saved but not yet in effect, the earlier one is no longer committed.
+    let sawPending: boolean | undefined
+    f.runtimeAuth.syncForCurrentSelection.mockImplementationOnce(async () => {
+      sawPending = told[0]!()
+      throw new Error('publish failed')
+    })
+    await expect(f.service.selectAccount('a')).rejects.toThrow('publish failed')
+    expect(sawPending).toBe(false)
+    expect(f.settings().activeClaudeManagedAccountId).toBe('b')
+    // The restored selection is told again, so a run skipped while it was pending is redone.
+    expect(told).toHaveLength(2)
+    expect(told[0]!()).toBe(false)
+    expect(told[1]!()).toBe(true)
+
+    await f.service.selectAccountForTarget(null, { runtime: 'host' })
+    expect(told).toHaveLength(3)
+    expect(told[1]!()).toBe(false)
+    // Removing an account nothing selects moves no one.
+    await f.service.removeAccount('b')
+    expect(told).toHaveLength(3)
+  })
+
+  it('keeps a switch check alive across removing an account nothing selects', async () => {
+    const f = fixture([account('a'), account('b'), account('c'), account('d')])
+    const told: (() => boolean)[] = []
+    f.service.onSelectionApplied((committed) => told.push(committed))
+    for (const id of ['c', 'd']) {
+      mkdirSync(f.home(id), { recursive: true })
+    }
+    f.signIn('b', 'b@example.test')
+    writeFileSync(
+      join(f.home('b'), '.credentials.json'),
+      JSON.stringify({ claudeAiOauth: { refreshToken: 'refresh' } })
+    )
+    await f.service.selectAccount('b')
+    expect(told).toHaveLength(1)
+
+    // B's delayed check reaches its stop while C's removal is still in progress: it stands down...
+    let duringRemoval: boolean | undefined
+    f.runtimeAuth.syncForCurrentSelection.mockImplementationOnce(async () => {
+      duringRemoval = told[0]!()
+    })
+    await f.service.removeAccount('c')
+    expect(duringRemoval).toBe(false)
+    // ...and the removal, which left B selected, tells listeners again so the check is redone.
+    expect(told).toHaveLength(2)
+    expect(told[1]!()).toBe(true)
+    // A check that runs only after the removal still stands for B.
+    expect(told[0]!()).toBe(true)
+
+    // A removal no check waited on tells no one.
+    await f.service.removeAccount('d')
+    expect(told).toHaveLength(2)
+    expect(told[1]!()).toBe(true)
+  })
+
+  it('restores the selection when removing the selected account cannot publish its deselection', async () => {
+    const f = fixture()
+    const told: (() => boolean)[] = []
+    f.service.onSelectionApplied((committed) => told.push(committed))
+    f.runtimeAuth.syncForCurrentSelection.mockRejectedValueOnce(new Error('publish failed'))
+
+    await expect(f.service.removeAccount('a')).rejects.toThrow('publish failed')
+    // New launches still use A, so A stays selected and listed; nothing running on A may move.
+    expect(f.settings().activeClaudeManagedAccountId).toBe('a')
+    expect(f.settings().activeClaudeManagedAccountIdsByRuntime?.host).toBe('a')
+    expect(f.service.listAccounts().accounts.map((entry) => entry.id)).toContain('a')
+    expect(f.runtimeAuth.publishAll).toHaveBeenCalled()
+    expect(f.runtimeAuth.removeAccountFolder).not.toHaveBeenCalled()
+  })
+
+  it('keeps the selected account when a settings observer fails while removing it', async () => {
+    const f = fixture()
+    const told: (() => boolean)[] = []
+    f.service.onSelectionApplied((committed) => told.push(committed))
+    f.signIn('a', 'a@example.test')
+    // The deselection lands in settings, then an observer throws before anything is published.
+    f.observeSettings((patch) => {
+      if (patch.activeClaudeManagedAccountId === null) {
+        f.observeSettings(null)
+        throw new Error('observer failed')
+      }
+    })
+
+    await expect(f.service.removeAccount('a')).rejects.toThrow('observer failed')
+    expect(f.settings().activeClaudeManagedAccountId).toBe('a')
+    expect(f.service.listAccounts().accounts.map((entry) => entry.id)).toContain('a')
+    expect(existsSync(f.home('a'))).toBe(true)
+    expect(f.runtimeAuth.removeAccountFolder).not.toHaveBeenCalled()
+    // Its recheck runs against A, which nothing running on A has to leave.
+    expect(told).toHaveLength(1)
+    expect(told[0]!()).toBe(true)
+
+    // A later switch still takes effect and is told.
+    f.signIn('b', 'b@example.test')
+    writeFileSync(
+      join(f.home('b'), '.credentials.json'),
+      JSON.stringify({ claudeAiOauth: { refreshToken: 'refresh' } })
+    )
+    await f.service.selectAccount('b')
+    expect(f.settings().activeClaudeManagedAccountId).toBe('b')
+    expect(told).toHaveLength(2)
+    expect(told[1]!()).toBe(true)
+  })
+
+  it('lets no check act while a failed change could not restore the earlier selection', async () => {
+    const f = fixture()
+    const told: (() => boolean)[] = []
+    f.service.onSelectionApplied((committed) => told.push(committed))
+    for (const id of ['a', 'b']) {
+      f.signIn(id, `${id}@example.test`)
+      writeFileSync(
+        join(f.home(id), '.credentials.json'),
+        JSON.stringify({ claudeAiOauth: { refreshToken: 'refresh' } })
+      )
+    }
+    await f.service.selectAccount('b')
+    expect(told).toHaveLength(1)
+
+    f.runtimeAuth.syncForCurrentSelection.mockRejectedValueOnce(new Error('publish failed'))
+    f.runtimeAuth.publishAll.mockRejectedValueOnce(new Error('republish failed'))
+    await expect(f.service.selectAccount('a')).rejects.toThrow('publish failed')
+    // Which account new launches use is unknown: the earlier check stands down, and none is told.
+    expect(told).toHaveLength(1)
+    expect(told[0]!()).toBe(false)
+
+    // The next change that settles tells listeners again.
+    await f.service.selectAccount('a')
+    expect(told).toHaveLength(2)
+    expect(told[1]!()).toBe(true)
+  })
+
+  it('tells its listeners when removing the selected account moves off it, though its folder stays', async () => {
+    const f = fixture()
+    const applied = vi.fn()
+    f.service.onSelectionApplied(applied)
+    f.runtimeAuth.removeAccountFolder.mockRejectedValueOnce(new Error('busy'))
+
+    await expect(f.service.removeAccount('a')).rejects.toThrow(CLAUDE_ACCOUNT_FOLDER_IN_USE_MESSAGE)
+    // New launches already use System default; the account stays listed to retry the delete.
+    expect(f.settings().activeClaudeManagedAccountId).toBeNull()
+    expect(f.service.listAccounts().accounts.map((entry) => entry.id)).toContain('a')
+    expect(applied).toHaveBeenCalledTimes(1)
   })
 })
