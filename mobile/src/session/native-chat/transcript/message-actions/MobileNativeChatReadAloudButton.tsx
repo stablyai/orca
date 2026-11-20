@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import { Pressable } from 'react-native'
 import { Square, Volume2 } from 'lucide-react-native'
 import { mobileMarkdownSpokenText } from '../../../../components/markdown/parsing/mobile-markdown-spoken-text'
@@ -23,7 +24,9 @@ export function MobileNativeChatReadAloudButton({
   const t = useMobileTranslation()
   const engine = useReadAloudEngine()
   const speaking = useReadAloudSpeaking(messageId)
-  if (!engine.available) {
+  const spokenText = useMemo(() => mobileMarkdownSpokenText(markdown), [markdown])
+  // A reply that is only code has nothing to speak; Stop stays while it plays.
+  if (!engine.available || (!speaking && !spokenText)) {
     return null
   }
   const Icon = speaking ? Square : Volume2
@@ -39,10 +42,7 @@ export function MobileNativeChatReadAloudButton({
       }
       accessibilityState={{ selected: speaking }}
       onPress={() => {
-        const text = speaking ? '' : mobileMarkdownSpokenText(markdown)
-        if (speaking || text) {
-          toggleReadAloud(engine, messageId, text)
-        }
+        toggleReadAloud(engine, messageId, speaking ? '' : spokenText)
       }}
     >
       <Icon size={14} color={speaking ? colors.textPrimary : colors.textMuted} />
