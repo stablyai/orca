@@ -79,7 +79,7 @@ function isTabKeyedChatMark(key: string): boolean {
 }
 
 /** After a saved-UI sync: an older paired client can still acknowledge a chat under its tab's key.
- *  Only keys the sync added are classified, so a sync with none costs one pass over its keys. */
+ *  Only keys whose value the sync changed are classified, so a sync with none costs one pass. */
 export function carryChatAcknowledgementsAfterSync(
   store: { getState: () => AppState; setState: (patch: Partial<AppState>) => void },
   previous: Record<string, number>
@@ -89,7 +89,7 @@ export function carryChatAcknowledgementsAfterSync(
     return
   }
   for (const key in current) {
-    if (previous[key] === undefined && isTabKeyedChatMark(key)) {
+    if (previous[key] !== current[key] && isTabKeyedChatMark(key)) {
       carryChatReadMarks(store)
       return
     }
