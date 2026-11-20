@@ -1372,7 +1372,7 @@
 2 src/main/startup/diagnostics/startup-diagnostics.ts
 3 src/main/startup/gpu-recovery/gpu-fallback-marker.ts
 11 src/main/startup/gpu-recovery/gpu-lifecycle.ts
-21 src/main/startup/linux-display/ensure-virtual-display.ts
+22 src/main/startup/linux-display/ensure-virtual-display.ts # one-shot pre-ready Xvfb wait: /proc stat read ends the wait when the child exits
 3 src/main/startup/linux-display/x-display-artifacts.ts
 1 src/main/startup/linux-runtime/linux-dev-shm-policy.ts
 4 src/main/startup/linux-runtime/linux-realtime-scheduling-guard.ts
