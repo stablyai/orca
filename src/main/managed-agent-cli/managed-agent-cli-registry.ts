@@ -151,7 +151,9 @@ export function appendManagedAgentDirsToChildPath(
   }
   const key = resolvePathEnvKey(env, platform)
   const separator = platform === 'win32' ? ';' : delimiter
-  const inherited = readInheritedPath(env, platform).split(separator).filter(Boolean)
+  const raw = readInheritedPath(env, platform)
+  // An empty entry is the working directory; keep it, as the shell startup files do.
+  const inherited = raw === '' ? [] : raw.split(separator)
   // On a WSL host, Windows-drive entries hold shims it can't run: Orca's copies go after the user's
   // own entries but ahead of the Windows ones that follow them.
   const mounts = knownGuestWindowsDriveMounts()

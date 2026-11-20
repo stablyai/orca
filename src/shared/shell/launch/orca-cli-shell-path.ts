@@ -8,7 +8,7 @@ export const ORCA_CLI_POSIX_PATH_RESTORE = `if [ -n "\${ORCA_CLI_BIN_DIR:-}" ]; 
 fi
 orca_place_agents() {
   [ -z "\${ZSH_VERSION:-}" ] || setopt localoptions shwordsplit noglob
-  orca_ifs=$IFS; IFS=:
+  orca_ifs_set=\${IFS+1}; orca_ifs=\${IFS-}; IFS=:
   case $- in *f*) orca_noglob=1 ;; *) orca_noglob= ;; esac
   [ -n "\${ZSH_VERSION:-}" ] || set -f
   orca_head=; orca_tail=; orca_started=
@@ -29,13 +29,16 @@ orca_place_agents() {
   done
   # Field splitting drops a trailing empty entry (the working directory) everywhere but zsh.
   [ -n "\${ZSH_VERSION:-}" ] || case "\${PATH:-}" in
-    ?*:) [ -z "$orca_tail" ] || { orca_head="$orca_head:$orca_tail"; orca_tail=; }; orca_head="$orca_head:" ;;
+    *:)
+      [ -z "$orca_tail" ] || { orca_head="$orca_head\${orca_started:+:}$orca_tail"; orca_started=1; orca_tail=; }
+      orca_head="$orca_head\${orca_started:+:}"; orca_started=1 ;;
   esac
-  IFS=$orca_ifs
+  if [ -n "$orca_ifs_set" ]; then IFS=$orca_ifs; else unset IFS; fi
   [ -n "\${ZSH_VERSION:-}" ] || [ -n "$orca_noglob" ] || set +f
-  orca_head="$orca_head\${orca_started:+:}$ORCA_MANAGED_AGENT_PATH"
-  export PATH="$orca_head\${orca_tail:+:$orca_tail}"
-  unset orca_ifs orca_noglob orca_head orca_tail orca_started orca_entry orca_drive orca_mount
+  orca_head="$orca_head\${orca_started:+:}$ORCA_MANAGED_AGENT_PATH\${orca_tail:+:$orca_tail}"
+  # Assigning PATH makes zsh rehash every directory, so leave an already ordered PATH alone.
+  [ "$orca_head" = "\${PATH:-}" ] || export PATH="$orca_head"
+  unset orca_ifs_set orca_ifs orca_noglob orca_head orca_tail orca_started orca_entry orca_drive orca_mount
 }
 if [ -n "\${ORCA_MANAGED_AGENT_PATH:-}" ]; then
   if [ -n "\${ORCA_WINDOWS_DRIVE_MOUNTS:-}" ]; then

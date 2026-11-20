@@ -14,6 +14,11 @@ it.skipIf(process.platform === 'win32').each([
   { mounts: [], path: '/usr/bin', expected: '/usr/bin:/data/agent-runtimes/claude/.current' },
   {
     mounts: ['/mnt/c'],
+    path: ':/usr/bin:/mnt/c/W',
+    expected: ':/usr/bin:/data/agent-runtimes/claude/.current:/mnt/c/W'
+  },
+  {
+    mounts: ['/mnt/c'],
     path: '/usr/bin:/mnt/c/Users/me/AppData/Roaming/npm',
     expected: '/usr/bin:/data/agent-runtimes/claude/.current:/mnt/c/Users/me/AppData/Roaming/npm'
   }
