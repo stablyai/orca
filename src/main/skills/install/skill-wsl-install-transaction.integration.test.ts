@@ -6,7 +6,7 @@ import { promisify } from 'node:util'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { SkillInstallFilesystem } from '../filesystem/skill-install-filesystem'
 import { installSharedSkill } from './skill-installation'
-import { removeSharedSkill } from '../managed-remove/skill-managed-removal'
+import { removeLocalSharedSkill } from '../managed-remove/skill-remove-transaction'
 import { createSkillPackageArchive } from '../package-archive/skill-package-creation'
 import { createWslSkillInstallFilesystem } from '../filesystem/skill-wsl-install-filesystem'
 
@@ -136,17 +136,15 @@ describe.runIf(RUN_REAL_WSL)('real WSL skill install transactions', () => {
 
     const removeInput = {
       operationId: 'remove-global',
-      skillName: 'real-wsl-skill',
-      scope: 'global' as const,
-      homeDirectory,
-      orcaStateDirectory: join(localRoot, 'state-global'),
-      detectedProviders: ['codex', 'claude'],
+      canonicalPath: join(homeDirectory, '.agents', 'skills', 'real-wsl-skill'),
+      stateDirectory: join(localRoot, 'state-global', 'skill-installs'),
+      allowedProviderRoots: [join(homeDirectory, '.claude', 'skills')],
       filesystem
     }
-    expect((await removeSharedSkill(removeInput)).conflict?.kind).toBe('modified')
+    expect((await removeLocalSharedSkill(removeInput)).conflict?.kind).toBe('modified')
     expect(
       (
-        await removeSharedSkill({
+        await removeLocalSharedSkill({
           ...removeInput,
           conflictResolution: 'replace-and-discard-local'
         })
@@ -175,14 +173,11 @@ describe.runIf(RUN_REAL_WSL)('real WSL skill install transactions', () => {
     ).toContain('# Workspace')
     expect(
       (
-        await removeSharedSkill({
+        await removeLocalSharedSkill({
           operationId: 'remove-workspace',
-          skillName: 'real-wsl-skill',
-          scope: 'workspace',
-          homeDirectory,
-          workspaceDirectory,
-          orcaStateDirectory: join(localRoot, 'state-workspace'),
-          detectedProviders: ['codex', 'claude'],
+          canonicalPath: join(workspaceDirectory, '.agents', 'skills', 'real-wsl-skill'),
+          stateDirectory: join(localRoot, 'state-workspace', 'skill-installs'),
+          allowedProviderRoots: [join(workspaceDirectory, '.claude', 'skills')],
           filesystem
         })
       ).status
@@ -213,14 +208,11 @@ describe.runIf(RUN_REAL_WSL)('real WSL skill install transactions', () => {
     ).toContain('# DrvFS workspace')
     expect(
       (
-        await removeSharedSkill({
+        await removeLocalSharedSkill({
           operationId: 'remove-drvfs',
-          skillName: 'real-wsl-skill',
-          scope: 'workspace',
-          homeDirectory,
-          workspaceDirectory: windowsWorkspace,
-          orcaStateDirectory: join(localRoot, 'state-drvfs'),
-          detectedProviders: ['codex', 'claude'],
+          canonicalPath: join(windowsWorkspace, '.agents', 'skills', 'real-wsl-skill'),
+          stateDirectory: join(localRoot, 'state-drvfs', 'skill-installs'),
+          allowedProviderRoots: [join(windowsWorkspace, '.claude', 'skills')],
           filesystem
         })
       ).status

@@ -1,4 +1,7 @@
-import type { RuntimeBrowserCommandHost } from './browser-command-contracts'
+import type {
+  BrowserCommandTargetParams,
+  RuntimeBrowserCommandHost
+} from './browser-command-contracts'
 import { RuntimeBrowserCommandTargets } from './browser-command-targets'
 import { RuntimeBrowserTabCatalog } from '../tabs/browser-tab-catalog'
 import { RuntimeBrowserNavigation } from './browser-navigation'
@@ -14,12 +17,22 @@ import { RuntimeBrowserProfiles } from './browser-profiles'
 import { RuntimeBrowserScreencasts } from '../screencast/browser-screencasts'
 import { RuntimeBrowserDialogs } from './browser-dialogs'
 
+type BrowserPageCommand = (
+  params: BrowserCommandTargetParams & { index?: number },
+  ...rest: unknown[]
+) => unknown
+function isBrowserPageCommand(value: unknown): value is BrowserPageCommand {
+  return typeof value === 'function'
+}
+
 export class RuntimeBrowserCommands {
   readonly browserSnapshot: RuntimeBrowserCommandTargets['browserSnapshot']
   readonly browserClick: RuntimeBrowserNavigation['browserClick']
   readonly browserGoto: RuntimeBrowserNavigation['browserGoto']
   readonly browserBack: RuntimeBrowserNavigation['browserBack']
   readonly browserReload: RuntimeBrowserNavigation['browserReload']
+  readonly browserZoom: RuntimeBrowserNavigation['browserZoom']
+  readonly browserStop: RuntimeBrowserNavigation['browserStop']
   readonly browserFill: RuntimeBrowserElementActions['browserFill']
   readonly browserType: RuntimeBrowserElementActions['browserType']
   readonly browserSelect: RuntimeBrowserElementActions['browserSelect']
@@ -81,6 +94,7 @@ export class RuntimeBrowserCommands {
   readonly browserProceedCertificate: RuntimeBrowserTabQueries['browserProceedCertificate']
   readonly browserTabShow: RuntimeBrowserTabQueries['browserTabShow']
   readonly browserTabCurrent: RuntimeBrowserTabQueries['browserTabCurrent']
+  readonly browserTabAnnotations: RuntimeBrowserTabQueries['browserTabAnnotations']
   readonly browserTabSwitch: RuntimeBrowserTabQueries['browserTabSwitch']
   readonly browserTabCreate: RuntimeBrowserTabCreation['browserTabCreate']
   readonly browserOpenUrlOnClient: RuntimeBrowserTabCreation['browserOpenUrlOnClient']
@@ -112,7 +126,7 @@ export class RuntimeBrowserCommands {
     const queries = new RuntimeBrowserTabQueries(host, targets, catalog)
     const creation = new RuntimeBrowserTabCreation(host, targets)
     const close = new RuntimeBrowserTabClose(queries, host, targets)
-    const profiles = new RuntimeBrowserProfiles(host, targets, catalog)
+    const profiles = new RuntimeBrowserProfiles(host, targets, catalog, creation)
     const screencasts = new RuntimeBrowserScreencasts(host, targets, catalog)
     const dialogs = new RuntimeBrowserDialogs(targets)
     this.browserProfileDetectBrowsers = profiles.browserProfileDetectBrowsers.bind(profiles)
@@ -126,6 +140,8 @@ export class RuntimeBrowserCommands {
     this.browserGoto = navigation.browserGoto.bind(navigation)
     this.browserBack = navigation.browserBack.bind(navigation)
     this.browserReload = navigation.browserReload.bind(navigation)
+    this.browserZoom = navigation.browserZoom.bind(navigation)
+    this.browserStop = navigation.browserStop.bind(navigation)
     this.browserFill = elements.browserFill.bind(elements)
     this.browserType = elements.browserType.bind(elements)
     this.browserSelect = elements.browserSelect.bind(elements)
@@ -187,6 +203,7 @@ export class RuntimeBrowserCommands {
     this.browserProceedCertificate = queries.browserProceedCertificate.bind(queries)
     this.browserTabShow = queries.browserTabShow.bind(queries)
     this.browserTabCurrent = queries.browserTabCurrent.bind(queries)
+    this.browserTabAnnotations = queries.browserTabAnnotations.bind(queries)
     this.browserTabSwitch = queries.browserTabSwitch.bind(queries)
     this.browserTabCreate = creation.browserTabCreate.bind(creation)
     this.browserOpenUrlOnClient = creation.browserOpenUrlOnClient.bind(creation)
@@ -200,5 +217,69 @@ export class RuntimeBrowserCommands {
     this.browserScreencast = screencasts.browserScreencast.bind(screencasts)
     this.browserDialogAccept = dialogs.browserDialogAccept.bind(dialogs)
     this.browserDialogDismiss = dialogs.browserDialogDismiss.bind(dialogs)
+    const passive = new Set([
+      // Page admission waits for the load; zoom must apply while the page is still loading.
+      'browserZoom',
+      // Page admission waits for the main-frame load, the very load a stop ends.
+      'browserStop',
+      'browserTabList',
+      'browserTabCurrent',
+      'browserTabAnnotations',
+      'browserTabClose',
+      'browserTabCreate',
+      'browserOpenUrlOnClient',
+      'browserProfileList',
+      'browserProfileCreate',
+      'browserProfileDelete',
+      'browserProfileDetectBrowsers',
+      'browserProfileImportFromBrowser',
+      'browserProfileClearGoogleCookies',
+      'browserProfileClearDefaultCookies'
+    ])
+    for (const [name, value] of Object.entries(this)) {
+      if (passive.has(name)) {
+        continue
+      }
+      if (!isBrowserPageCommand(value)) {
+        continue
+      }
+      const command = value
+      Reflect.set(
+        this,
+        name,
+        async (params: BrowserCommandTargetParams & { index?: number }, ...rest: unknown[]) => {
+          const answer =
+            name === 'browserDialogAccept' ||
+            name === 'browserDialogDismiss' ||
+            name === 'browserProceedCertificate'
+          if (name === 'browserProceedCertificate' && !params.page) {
+            return command.call(this, params)
+          }
+          let target = params
+          if (name === 'browserTabSwitch' && !params.page) {
+            const listed = await queries.browserTabList(params)
+            const page = listed.tabs[params.index ?? -1]?.browserPageId
+            if (page) {
+              target = { ...params, page }
+            }
+          }
+          if (target.page && host.getRuntimeBrowserPageRegistry().getPage(target.page)) {
+            return command.call(this, target, ...(answer ? [] : rest))
+          }
+          return targets.withPageOperation(
+            target,
+            (admitted, admitAnswer) =>
+              Promise.resolve(
+                command.call(this, { ...target, ...admitted }, ...(answer ? [admitAnswer] : rest))
+              ),
+            answer
+              ? 'answer'
+              : name === 'browserReload' || name === 'browserGoto'
+                ? 'recover'
+                : 'ordinary'
+          )
+        }
+      )
+    }
   }
 }

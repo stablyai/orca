@@ -1,12 +1,15 @@
 import type { DiffCommentOwner } from '@/store/slices/diff-comments/diff-comment-owner'
-import { ImeTextarea } from '@/lib/ime-text-field'
+import { ImeTextarea } from '@/lib/text-input/ime/ime-text-field'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { CornerDownLeft } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useTranslate } from '@/i18n/use-translate'
-import { formatMarkdownReviewNotes, type MarkdownReviewNote } from '@/lib/markdown-review-notes'
-import { installOpenDraftAddReviewNoteGuard } from '../../editor-shortcuts'
+import {
+  formatMarkdownReviewNotes,
+  type MarkdownReviewNote
+} from '@/lib/editor/markdown/review-notes/markdown-review-notes'
+import { installOpenDraftAddReviewNoteGuard } from '../../commands/editor-shortcuts'
 import { NotesSendMenu } from '../../review-note-delivery/NotesSendMenu'
 
 export function MarkdownPreviewSingleNoteSendMenu({

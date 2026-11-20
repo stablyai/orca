@@ -1,7 +1,7 @@
 import {
   CLAUDE_PROFILE_MISSING_MESSAGE,
   CLAUDE_PROFILE_SETUP_FAILED_MESSAGE
-} from '../../claude-profile-routing'
+} from '../../agent-accounts/claude/claude-profile-routing'
 import type { AgentSessionRefusalReference } from './agent-session-wire-refusals'
 import type { AgentCliInstallationProblem } from '../../agent-launch/catalog/agent-cli-installation-problem'
 import { tuiAgentDisplayName } from '../../agent-launch/catalog/tui-agent-display-names'
@@ -20,6 +20,18 @@ export const AGENT_STILL_WORKING = 'The agent is still working.'
 /** Whole translatable pieces; the host fills agent (name or theAgent) and command (conversation command name) in English. */
 export const AGENT_SESSION_FAILURE_COPY = {
   theAgent: 'The agent',
+  forkOriginalMissing:
+    '{{agent}} could not find this response in the original chat. Open it and fork from there.',
+  forkOriginalUnavailable:
+    '{{agent}} cannot fork this response in the original chat. Open it and fork from there.',
+  forkOriginalMissingNamed:
+    '{{agent}} could not find this response in "{{detail}}". Open that chat and fork from there.',
+  forkOriginalUnavailableNamed:
+    '{{agent}} cannot fork this response in "{{detail}}". Open that chat and fork from there.',
+  forkOriginalLatestOnly:
+    '{{agent}} can only fork the latest response in the original chat. Open that chat and fork its latest response once it has finished.',
+  forkOriginalLatestOnlyNamed:
+    '{{agent}} can only fork the latest response in "{{detail}}". Open that chat and fork its latest response once it has finished.',
   unconfirmed: "Couldn't confirm whether this was sent. It hasn't been resent.",
   providerStartFailed: '{{agent}} stopped before it finished starting.',
   savedConversationMissing: "{{agent}} couldn't find this chat's saved conversation.",
@@ -29,7 +41,7 @@ export const AGENT_SESSION_FAILURE_COPY = {
   couldNotStart: "{{agent}} couldn't start.",
   couldNotRestart: "{{agent}} couldn't restart.",
   cliTooOld:
-    '{{agent}} {{installedVersion}} is too old for chats. Update to {{minimumVersion}} or newer.',
+    'Your {{agent}} CLI on {{host}} is {{installedVersion}}. Chats need {{minimumVersion}} or newer.',
   startTimedOut: '{{agent}} took too long to start (no response to {{method}} after {{seconds}}s).',
   startTimedOutKeepsHappening:
     'If this keeps happening, the computer running this chat may be overloaded.',
@@ -104,6 +116,14 @@ export const AGENT_SESSION_FAILURE_COPY = {
   claudeEffortInvalid:
     'Claude effort is invalid; choose low, medium, high, xhigh, or max and send again.',
   modelUnavailable: "{{agent}} couldn't use {{detail}}. Pick another model and send again.",
+  selectedModel: 'the selected model',
+  providerUnavailable:
+    "{{agent}} couldn't respond because the service is busy. Pick another model, or wait a little and send again.",
+  providerSafetyStopped:
+    '{{agent}} stopped this response after a safety check. Review your request and send again.',
+  providerResponseFailed:
+    "{{agent}} couldn't finish this response. Open Details for more information.",
+  providerResponseFailedQuoted: "{{agent}} couldn't finish this response: {{detail}}.",
   modelNotSelected:
     '{{agent}} has no model selected. Check your model selection and {{agent}} sign-in, then send again.',
   modelUnavailableUpdate:
@@ -187,6 +207,8 @@ export const AGENT_SESSION_FAILURE_COPY = {
 export type AgentSessionFailureCopyId = keyof typeof AGENT_SESSION_FAILURE_COPY
 
 export type AgentSessionFailureCopyValues = {
+  /** Where the agent runs: "this computer", or the host's name. */
+  host?: string
   installedVersion?: string
   minimumVersion?: string
   agent?: string
@@ -218,12 +240,15 @@ export type AgentSessionFailureSay = (
   values?: AgentSessionFailureCopyValues
 ) => string
 
+/** `host` is the reader's name for the chat's host; the host itself can only say this computer. */
 export function agentCliTooOldWords(
   { agent, installedVersion, minimumVersion }: AgentCliInstallationProblem,
-  say: AgentSessionFailureSay
+  say: AgentSessionFailureSay,
+  host = 'this computer'
 ): string {
   return say('cliTooOld', {
     agent: tuiAgentDisplayName(agent) ?? agent,
+    host,
     installedVersion,
     minimumVersion
   })
@@ -232,14 +257,15 @@ export function agentCliTooOldWords(
 /** A refusal's installation sentence; a refusal saved before `agentInstallation` is Codex's. */
 export function agentCliInstallationFailureWords(
   refusal: AgentSessionRefusalReference | undefined,
-  say: AgentSessionFailureSay
+  say: AgentSessionFailureSay,
+  host?: string
 ): string | null {
   if (refusal?.code !== 'agent_session_operation_invalid') {
     return null
   }
   const { agentInstallation, codexInstallation } = refusal.details ?? {}
   if (agentInstallation) {
-    return agentCliTooOldWords(agentInstallation, say)
+    return agentCliTooOldWords(agentInstallation, say, host)
   }
   if (!codexInstallation) {
     return null
@@ -247,7 +273,7 @@ export function agentCliInstallationFailureWords(
   const { installedVersion, minimumVersion } = codexInstallation
   return installedVersion === null
     ? say('cliMissing', { agent: 'Codex' })
-    : agentCliTooOldWords({ agent: 'codex', installedVersion, minimumVersion }, say)
+    : agentCliTooOldWords({ agent: 'codex', installedVersion, minimumVersion }, say, host)
 }
 
 /** The host's words, and any surface without translations. */
@@ -258,4 +284,33 @@ export const sayAgentSessionFailureEnglish: AgentSessionFailureSay = (id, values
     /\{\{(\w+)\}\}/g,
     (placeholder, name: string) => filled.get(name) ?? placeholder
   )
+}
+
+/** Translate authored original-chat refusals without changing other fork failures. */
+export function agentSessionForkSourceFailureWords(
+  message: string,
+  agent: string,
+  say: AgentSessionFailureSay
+): string | null {
+  for (const id of [
+    'forkOriginalMissing',
+    'forkOriginalUnavailable',
+    'forkOriginalMissingNamed',
+    'forkOriginalUnavailableNamed',
+    'forkOriginalLatestOnly',
+    'forkOriginalLatestOnlyNamed'
+  ] as const) {
+    const [prefix, suffix] = sayAgentSessionFailureEnglish(id, { agent }).split('{{detail}}')
+    if (
+      suffix === undefined
+        ? message === prefix
+        : message.startsWith(prefix) && message.endsWith(suffix)
+    ) {
+      return say(id, {
+        agent,
+        ...(suffix === undefined ? {} : { detail: message.slice(prefix.length, -suffix.length) })
+      })
+    }
+  }
+  return null
 }

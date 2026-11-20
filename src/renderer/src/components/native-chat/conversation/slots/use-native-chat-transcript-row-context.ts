@@ -6,7 +6,7 @@ import type { StructuredAgentSessionHostWork } from '../../session/structured/us
 
 type NativeChatTranscriptRowContextInput = Omit<
   NativeChatTranscriptRowContext,
-  'agentName' | 'actionablePromptIds'
+  'agentName' | 'actionablePromptIds' | 'timedRows'
 > & {
   agent: NativeChatLiveSession['agent']
   hostWork: StructuredAgentSessionHostWork | undefined
@@ -14,6 +14,7 @@ type NativeChatTranscriptRowContextInput = Omit<
 
 export function useNativeChatTranscriptRowContext({
   agent,
+  turnBot,
   hostWork,
   expandSignal,
   revealedDiff,
@@ -24,12 +25,14 @@ export function useNativeChatTranscriptRowContext({
   runtimeContext,
   structuredAttachments,
   onToggleExpandedTurn,
-  subagentDisclosure,
+  onOpenSubagent,
   onScrollMessageToTop,
+  readerAtEnd,
   onRevealDiff
 }: NativeChatTranscriptRowContextInput): NativeChatTranscriptRowContext {
   return useMemo<NativeChatTranscriptRowContext>(
     () => ({
+      turnBot,
       agentName: structuredAgentLabel(agent),
       actionablePromptIds: hostWork?.actionablePromptIds,
       expandSignal,
@@ -41,12 +44,14 @@ export function useNativeChatTranscriptRowContext({
       runtimeContext,
       structuredAttachments,
       onToggleExpandedTurn,
-      subagentDisclosure,
+      onOpenSubagent,
       onScrollMessageToTop,
+      readerAtEnd,
       onRevealDiff
     }),
     [
       agent,
+      turnBot,
       hostWork,
       expandSignal,
       expandedTurnIds,
@@ -57,8 +62,9 @@ export function useNativeChatTranscriptRowContext({
       runtimeContext,
       structuredAttachments,
       onScrollMessageToTop,
+      readerAtEnd,
       taskListPredecessors,
-      subagentDisclosure,
+      onOpenSubagent,
       onToggleExpandedTurn
     ]
   )

@@ -1,7 +1,11 @@
 import { parse as parseToml } from 'smol-toml'
-import { isPlainObject } from '../../../agent-hooks/hooks-json-read'
+import { isPlainObject } from '../../../agent-hooks/installation/configuration/hooks-json-read'
 import type { CodexHookTrustState } from './config-toml-trust'
-import { normalizeCodexHookTrustLookupKey } from '../identity/codex-trust-identity'
+import {
+  normalizeCodexHookTrustLookupKey,
+  parseCodexTrustKey,
+  usesWindowsCodexPathSeparators
+} from '../identity/codex-trust-identity'
 import { findAllHookTrustBlocks } from './config-toml-hook-trust-blocks'
 import {
   createTomlLineScanState,
@@ -66,13 +70,36 @@ function readParsedHookTrust(content: string): [string, CodexHookTrustState][] {
   )
 }
 
+// Orca writes Windows keys in both separator forms; Codex reads and rewrites only the backslash one.
 function readHookTrustTables(content: string): CodexHookTrustEntryMap {
-  const result = new CodexHookTrustEntryMap()
-  const conflictingTrustedHashKeys = new Set<string>()
+  const codexSpelling = new HookTrustSpellingStates()
+  const otherSpellings = new HookTrustSpellingStates()
   for (const block of findAllHookTrustBlocks(content)) {
     const state = readHookTrustBlockState(content.slice(block.contentStart, block.end))
-    const normalizedKey = normalizeCodexHookTrustLookupKey(block.key)
-    const existingState = result.get(normalizedKey)
+    ;(isCodexWindowsKeySpelling(block.key) ? codexSpelling : otherSpellings).add(block.key, state)
+  }
+  for (const [key, state] of codexSpelling.states) {
+    otherSpellings.states.set(key, state)
+  }
+  return otherSpellings.states
+}
+
+function isCodexWindowsKeySpelling(key: string): boolean {
+  const parsed = parseCodexTrustKey(key)
+  return (
+    parsed !== null &&
+    usesWindowsCodexPathSeparators(parsed.sourcePath) &&
+    !parsed.sourcePath.includes('/')
+  )
+}
+
+class HookTrustSpellingStates {
+  readonly states = new CodexHookTrustEntryMap()
+  private readonly conflictingTrustedHashKeys = new Set<string>()
+
+  add(key: string, state: ReturnType<typeof readHookTrustBlockState>): void {
+    const normalizedKey = normalizeCodexHookTrustLookupKey(key)
+    const existingState = this.states.get(normalizedKey)
     const trustedHash =
       state.trustedHashes.size === 1 ? state.trustedHashes.values().next().value : undefined
     if (
@@ -81,10 +108,10 @@ function readHookTrustTables(content: string): CodexHookTrustEntryMap {
         existingState?.trustedHash !== undefined &&
         existingState.trustedHash !== trustedHash)
     ) {
-      conflictingTrustedHashKeys.add(normalizedKey)
+      this.conflictingTrustedHashKeys.add(normalizedKey)
     }
-    result.set(normalizedKey, {
-      trustedHash: conflictingTrustedHashKeys.has(normalizedKey)
+    this.states.set(normalizedKey, {
+      trustedHash: this.conflictingTrustedHashKeys.has(normalizedKey)
         ? undefined
         : (trustedHash ?? existingState?.trustedHash),
       enabled:
@@ -93,7 +120,6 @@ function readHookTrustTables(content: string): CodexHookTrustEntryMap {
           : (state.enabled ?? existingState?.enabled)
     })
   }
-  return result
 }
 
 function readHookTrustBlockState(block: string): {

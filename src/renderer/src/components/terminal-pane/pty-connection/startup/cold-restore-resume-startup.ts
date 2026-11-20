@@ -1,28 +1,28 @@
 import {
   getConnectionIdForWorktreeCopy,
   getConnectionIdFromState
-} from '@/lib/connection-owner-resolution'
-import { normalizeExecutionHostId } from '../../../../../../shared/execution-host'
-import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
+} from '@/lib/workspace/ownership/connection-owner-resolution'
+import { normalizeExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
+import { parseWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import { useAppStore } from '@/store/index'
-import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/identifiers/non-secure-context-uuid'
 import { buildAgentResumeStartupPlan } from '../../../../../../shared/agent-launch/startup/tui-agent-resume-startup'
 import {
   resolveRuntimeHostReportedPlatform,
   resolveRuntimeHostTerminalWindowsShell,
   resolveSshHostReportedPlatform,
   resolveAgentResumeLaunchTarget
-} from '@/lib/agent-resume-launch-target'
+} from '@/lib/agent-session/resume/agent-resume-launch-target'
 import {
   agentResumeOriginNamesAnotherExecutionHost,
   sleepingRecordNamesAnotherExecutionHost
 } from '@/lib/agent-session/resume/sleeping-record-execution-host-scope'
-import { resolveResumeLaunchRecipe } from '../../../../../../shared/agent-launch/choices/tui-agent-launch-defaults'
+import { resolveResumeLaunchRecipe } from '../../../../../../shared/agent-launch/choices/resume-launch-recipe'
 import {
-  agentProviderSessionsEqual,
   isResumableTuiAgent,
   normalizeAgentProviderSession
 } from '../../../../../../shared/agent-session/lifecycle/agent-session-resume'
+import { agentProviderSessionsEqual } from '../../../../../../shared/agent-session/lifecycle/resume/agent-provider-session-equality'
 
 import type { HeldPaneReopenOutcome } from '../../session-restore/newer-daemon/newer-daemon-hold-state'
 import type { ColdRestoreAgentResumeStartup } from './fresh-spawn-types'
@@ -35,7 +35,7 @@ type AppState = ReturnType<typeof useAppStore.getState>
 
 /** The agent session a cold restore of this pane would resume; read-only, so pre-spawn checks can share it. */
 export function findColdRestoreResumeSource(session: ConnectPanePtySession, state: AppState) {
-  const entry = state.agentStatusByPaneKey[session.cacheKey]
+  const entry = state.agentStatusByPaneKey.get(session.cacheKey)
   const sleepingRecordEntry = session.getSleepingRecordForPane(state)
   const sleepingRecord = sleepingRecordEntry?.record
   const liveEntry = entry && entry.state !== 'done' ? entry : null
@@ -78,9 +78,10 @@ export function bindBuildColdRestoreAgentResumeStartup(session: ConnectPanePtySe
       agentProviderSessionsEqual(agent, sleepingRecord.providerSession, providerSession)
         ? sleepingRecord
         : undefined
-    const launchConfig =
-      (useLiveEntry && entry ? state.getAgentLaunchConfigForStatusEntry(entry) : undefined) ??
-      matchingSleepingRecord?.launchConfig
+    // A live invocation takes the decision's answer, none included; only otherwise the saved record.
+    const launchConfig = entry
+      ? state.getAgentLaunchConfigForStatusEntry(entry)
+      : matchingSleepingRecord?.launchConfig
     // Quote resume for the live pane’s effective Windows shell rather than the platform’s PowerShell default.
     // Why: a nested-SSH pane on a server runs on its SSH target; the pane's host names a worktree
     // copy, while a folder's own record carries its connection.
@@ -113,7 +114,7 @@ export function bindBuildColdRestoreAgentResumeStartup(session: ConnectPanePtySe
       agent,
       providerSession,
       cmdOverrides: state.settings?.agentCmdOverrides ?? {},
-      ...resolveResumeLaunchRecipe(launchConfig),
+      ...resolveResumeLaunchRecipe(launchConfig, agent, providerSession),
       platform: resumeTarget.platform,
       agentHostPlatform: resumeTarget.agentHostPlatform,
       shell: resumeTarget.shell,

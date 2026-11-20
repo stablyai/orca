@@ -1,6 +1,6 @@
 import { translate } from '@/i18n/i18n'
 import { basename } from '@/lib/path'
-import { resolveWorktreeDisplayName } from '@/lib/worktree-default-display-name'
+import { resolveWorktreeDisplayName } from '@/lib/workspace/display/worktree-default-display-name'
 import { useAppStore } from '@/store'
 import { selectKnownWorktreeById } from '@/store/workspaces/selection/known-worktree-selection'
 

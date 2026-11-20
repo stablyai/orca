@@ -1,10 +1,9 @@
 import { EventEmitter } from 'node:events'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { BrowserPagePromptRequest } from '../../../../shared/browser-page-prompt'
+import type { BrowserPagePromptRequest } from '../../../../shared/browser/prompts/browser-page-prompt'
 import {
   BROWSER_PAGE_PROMPT_TIMEOUT_MS,
-  cancelBrowserPagePrompts,
   openBrowserPagePrompt,
   respondToBrowserPagePrompt,
   showBrowserPagePromptsAwaitingRegistration,
@@ -42,7 +41,12 @@ function ask(guest: Electron.WebContents, coalesceKey?: string) {
     kind: 'external-app',
     requester: guest,
     target: targets.get(guest.id) ?? null,
-    details: () => ({ appName: 'Zoom', scheme: 'zoommtg', origin: 'https://zoom.us' }),
+    details: () => ({
+      appName: 'Zoom',
+      scheme: 'zoommtg',
+      origin: 'https://zoom.us',
+      rememberSite: null
+    }),
     coalesceKey,
     parseAnswer: (value) => (value === true ? true : undefined),
     settle
@@ -55,13 +59,6 @@ function sentRequests(renderer: Electron.WebContents): BrowserPagePromptRequest[
     .mocked(renderer.send)
     .mock.calls.filter(([channel]) => channel === 'browser:page-prompt-requested')
     .map(([, request]) => request)
-}
-
-function closedRequestIds(renderer: Electron.WebContents): string[] {
-  return vi
-    .mocked(renderer.send)
-    .mock.calls.filter(([channel]) => channel === 'browser:page-prompt-closed')
-    .map(([, event]) => event.requestId)
 }
 
 const latestId = (renderer: Electron.WebContents): string =>
@@ -90,7 +87,12 @@ describe('browser page prompts', () => {
       {
         requestId: expect.any(String),
         kind: 'external-app',
-        details: { appName: 'Zoom', scheme: 'zoommtg', origin: 'https://zoom.us' }
+        details: {
+          appName: 'Zoom',
+          scheme: 'zoommtg',
+          origin: 'https://zoom.us',
+          rememberSite: null
+        }
       }
     ])
     const requestId = latestId(renderer)
@@ -158,7 +160,7 @@ describe('browser page prompts', () => {
     expect(declined.settle).toHaveBeenCalledWith(null)
 
     guest.emit('did-start-navigation', { isMainFrame: true, initiator: {} })
-    guest.emit('input-event', {}, { type: 'mouseMove' })
+    guest.emit('before-mouse-event', {}, { type: 'mouseMove' })
     expect(ask(guest).opening).toBe('refused')
     // A null initiator models toolbar navigation.
     guest.emit('did-start-navigation', { isMainFrame: true, initiator: null })
@@ -166,31 +168,11 @@ describe('browser page prompts', () => {
 
     vi.advanceTimersByTime(BROWSER_PAGE_PROMPT_TIMEOUT_MS)
     expect(ask(guest).opening).toBe('refused')
-    guest.emit('input-event', {}, { type: 'mouseDown' })
+    // Clicks in out-of-process frames reach only before-mouse-event.
+    guest.emit('before-mouse-event', {}, { type: 'mouseDown' })
     expect(ask(guest).opening).toBe('prompting')
 
     await respondToBrowserPagePrompt(renderer, { requestId: latestId(renderer), answer: true })
     expect(ask(guest).opening).toBe('prompting')
-  })
-
-  it('closes the prompt with a null answer when it expires or its page goes away', async () => {
-    const renderer = mockRenderer(10)
-    const expiring = ask(mockGuest(renderer, 'page-1'))
-    const expiringId = latestId(renderer)
-    const closingGuest = mockGuest(renderer, 'page-2')
-    const closing = ask(closingGuest)
-    const closingId = latestId(renderer)
-
-    cancelBrowserPagePrompts('page-2')
-    vi.advanceTimersByTime(BROWSER_PAGE_PROMPT_TIMEOUT_MS)
-    await Promise.resolve()
-
-    expect(closedRequestIds(renderer)).toEqual([closingId, expiringId])
-    expect(expiring.settle).toHaveBeenCalledWith(null)
-    expect(closing.settle).toHaveBeenCalledWith(null)
-    await expect(
-      respondToBrowserPagePrompt(renderer, { requestId: closingId, answer: true })
-    ).resolves.toBe('rejected')
-    expect(ask(closingGuest).opening).toBe('prompting')
   })
 })

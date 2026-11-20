@@ -1,7 +1,7 @@
 import {
   parseLinuxStartTicks,
   readBootIdentity
-} from '../../../agent-hooks/managed-hook-owner-identity'
+} from '../../../agent-hooks/installation/locking/managed-hook-owner-identity'
 import { commandLineMatchesDaemon } from './daemon-pid-identity'
 import { startTimesWithinTolerance } from './daemon-process-start-time'
 import {

@@ -1,15 +1,12 @@
 import { toast } from 'sonner'
-import { extractIpcErrorMessage } from '@/lib/ipc-error'
-import { importExternalPathsToRuntime } from '@/runtime/files/imports/runtime-file-import-client'
+import { stageClientFilesForAgent } from '@/runtime/files/imports/agent-file-staging'
 import { createUploadProgressPanel } from '@/components/transfer-progress/upload-progress-panel'
 import type { NativeDropFlowArgs } from './terminal-drop-paste'
 import { pasteResolvedDropPaths } from './terminal-drop-paste'
 import { describeDropWorkspaceIfInactive } from './terminal-drop-workspace-label'
 import { reportTerminalDropUploadSkipsAndFailures } from './terminal-drop-upload-report'
 import { getTerminalTargetShellForWorktreePath } from './terminal-drop-shell'
-import { isTerminalDropWindowsPathLike } from '../../../../../../shared/image-path-paste'
-import { joinRuntimeTerminalDropDir } from './terminal-drop-worktree-path'
-import { runtimeTargetForOwnerEnvironment } from '@/runtime/rpc/targets/runtime-client-target'
+import { terminalFileDropErrorMessage } from './terminal-native-file-drop-error'
 
 export async function uploadRuntimeDropPaths(
   args: NativeDropFlowArgs & {
@@ -18,13 +15,12 @@ export async function uploadRuntimeDropPaths(
   }
 ): Promise<void> {
   const targetShell = getTerminalTargetShellForWorktreePath(args.worktreePath)
-  const destinationDir = joinRuntimeTerminalDropDir(args.worktreePath)
   const panel = createUploadProgressPanel({ worktreeId: args.worktreeId })
   try {
-    const { results } = await importExternalPathsToRuntime(
+    const { staged, skipped, failed } = await stageClientFilesForAgent(
       {
         // Use the destination worktree’s owner, which may differ from the focused sidebar host.
-        target: runtimeTargetForOwnerEnvironment(args.runtimeEnvironmentId),
+        runtimeEnvironmentId: args.runtimeEnvironmentId,
         worktreeId: args.worktreeId,
         worktreePath: args.worktreePath,
         expectedExecutionHostId: args.expectedExecutionHostId,
@@ -32,33 +28,24 @@ export async function uploadRuntimeDropPaths(
         expectedSshConnectionGeneration: args.expectedSshConnectionGeneration
       },
       args.dataPaths,
-      destinationDir,
-      {
-        assertCurrent: args.assertCurrent,
-        nameExtensionlessImages: true,
-        progress: panel.progress
-      }
+      args.assertCurrent,
+      panel.progress
     )
-    const imported = results.filter((result) => result.status === 'imported')
-    const importedPaths = imported.map((result) =>
-      isTerminalDropWindowsPathLike(args.worktreePath)
-        ? result.destPath.replace(/\//g, '\\')
-        : result.destPath
-    )
-    await pasteResolvedDropPaths({ ...args, paths: importedPaths, targetShell })
+    await pasteResolvedDropPaths({
+      ...args,
+      paths: staged.map(({ hostPath }) => hostPath),
+      targetShell
+    })
     reportTerminalDropUploadSkipsAndFailures(
-      results.filter((result) => result.status === 'skipped'),
-      // Why: a cancel is the user's own decision, not a failure to report back.
-      results
-        .filter((result) => result.status === 'failed')
-        .filter((result) => result.cancelled !== true),
+      skipped,
+      failed,
       describeDropWorkspaceIfInactive(args.worktreeId, args.worktreePath)
     )
   } catch (err) {
     // Why: only the error path tears the panel down immediately. On success it
     // owns its own exit, holding long enough to show how the drop ended.
     panel.close()
-    toast.error(extractIpcErrorMessage(err, 'Failed to upload files.'), {
+    toast.error(terminalFileDropErrorMessage(err, 'upload'), {
       description: describeDropWorkspaceIfInactive(args.worktreeId, args.worktreePath)
     })
   }

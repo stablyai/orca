@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useTranslate } from '@/i18n/use-translate'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import {
   Dialog,
   DialogContent,
@@ -9,11 +9,7 @@ import {
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog'
-import { LoadingSpinner } from '@/components/LoadingSpinner'
-import type {
-  WslMoveBlocker,
-  WslMoveRowRef
-} from '../../../../shared/wsl-move/wsl-move-driver-types'
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import {
   cancelWslMove,
   wslMoveDialogLocked,
@@ -27,14 +23,9 @@ import {
 import { collectWslMoveSleptPaneBindings } from './wsl-move-slept-pane-bindings'
 import { followWslMoveOrchestratorStatus } from './wsl-move-orchestrator-status'
 import { findWorktreeById } from '@/store/github/refresh/worktree-refresh'
-import { getWslDistroFromPath } from '@/lib/local-preflight-context'
-import {
-  wslMoveBlockerProjects,
-  wslMoveCounts,
-  wslMoveProjectRows,
-  type WslMoveCatalog
-} from './wsl-move-scope-rows'
-import type { WslMoveBlockerView } from './WslMoveBlockerList'
+import { getWslDistroFromPath } from '@/runtime/hosts/preflight/local-preflight-context'
+import { wslMoveBlockerProjects, wslMoveCounts, wslMoveProjectRows } from './wsl-move-scope-rows'
+import type { WslMoveCatalog } from './wsl-move-scope-rows'
 import {
   selectFolderWorkspaces,
   selectWorktreesByRepo
@@ -42,12 +33,17 @@ import {
 import { adoptWslMoveProgress } from './wsl-move-run-adoption'
 import { closeWslMoveDialog, reloadAfterWslMove } from './wsl-move-dialog-close'
 import { RecoverableRenderErrorBoundary } from '../error-boundaries/RecoverableRenderErrorBoundary'
-import { useWslHostsEnabled } from '../sidebar/use-wsl-hosts-enabled'
-import { useConfirmationDialog } from '../confirmation-dialog-context'
+import { useWslHostsEnabled } from '../../runtime/hosts/wsl/use-wsl-hosts-enabled'
+import { useConfirmationDialog } from '../dismiss/confirmation/confirmation-dialog-context'
 import { useWslMoveQuitGuard } from './use-wsl-move-quit-guard'
 import { WslMovePreviewBody, wslMoveNotMovingLines } from './WslMovePreviewBody'
 import { WslMoveProgressBody } from './WslMoveProgressBody'
 import { WslMoveResultBody, wslMoveResultTitle } from './WslMoveResultBody'
+import type {
+  WslMoveBlocker,
+  WslMoveRowRef
+} from '../../../../shared/wsl-move/wsl-move-driver-types'
+import type { WslMoveBlockerView } from './WslMoveBlockerList'
 
 function useMoveCatalog(): WslMoveCatalog {
   return useAppStore(

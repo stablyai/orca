@@ -4,8 +4,8 @@ import type {
   RuntimeTerminalRead,
   RuntimeTerminalShow,
   RuntimeTerminalSplit
-} from '../../../../shared/runtime-terminal-contracts'
-import type { RuntimeTerminalSend } from '../../../../shared/runtime-terminal-send-contract'
+} from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
+import type { RuntimeTerminalSend } from '../../../../shared/terminal/runtime/runtime-terminal-send-contract'
 import type { TerminalInputKind } from '../../../../shared/terminal/input/terminal-input-kind'
 
 export type AgentTeamsTmuxCompatRequest = {
@@ -39,8 +39,11 @@ export type AgentTeamsTerminalApi = {
       env?: Record<string, string>
       envToDelete?: string[]
       activate?: boolean
+      preAllocatedHandle?: string
     }
   ): Promise<RuntimeTerminalSplit>
+  /** A handle for a terminal not started yet, so the team holds it from its first moment. */
+  allocateTerminalHandle(): string
   readTerminal(handle: string, opts?: { limit?: number }): Promise<RuntimeTerminalRead>
   sendTerminal(
     handle: string,
@@ -72,6 +75,8 @@ export type AgentTeam = {
   tmuxValue: string
   baseEnv: Record<string, string>
   panes: Map<string, TeamPane>
+  /** Handles of teammates whose split is still starting; they belong to the team already. */
+  startingHandles: Set<string>
   paneOrder: string[]
   nextPaneNumber: number
   mainVertical: {

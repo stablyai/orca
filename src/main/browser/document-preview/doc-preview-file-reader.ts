@@ -2,12 +2,13 @@ import { extname } from 'node:path'
 import type { RuntimeFilePreviewResult } from '../../../shared/file-content/runtime-file-read'
 import type { DocPreviewFileFailureReason } from '../../../shared/document-preview/doc-preview-scheme'
 import { FONT_FILE_MIME_TYPES } from '../../../shared/file-preview/font-file-extensions'
+import { MEDIA_FILE_MIME_TYPES } from '../../../shared/file-preview/media-mime-types'
 import { isBinaryBuffer } from '../../../shared/file-preview/binary-buffer'
 import {
   DOC_PREVIEW_FILE_CHANGED_MESSAGE,
   type DocPreviewFileChunk
 } from '../../../shared/document-preview/doc-preview-file-access'
-import { callRuntimeEnvironment } from '../../ipc/runtime-environments/runtime-environment-transport-routing'
+import { callRuntimeEnvironment } from '../../ipc/runtime-environments/requests/runtime-environment-transport-routing'
 import { SSH_HOST_NOT_SERVED_MESSAGE } from '../../providers/ssh-host-not-served-error'
 import {
   getDocPreviewGrant,
@@ -18,8 +19,21 @@ import {
   toRuntimeWorktreeRelativePath,
   type DocPreviewGrant
 } from './doc-preview-grant-registry'
-import { getRuntimeEnvironmentRegistryRoot } from '../../ipc/runtime-environments/runtime-environment-registry-root'
-import { readDocPreviewTerminalFile } from './doc-preview-terminal-file-reader'
+import { getRuntimeEnvironmentRegistryRoot } from '../../ipc/runtime-environments/catalog/runtime-environment-registry-root'
+import {
+  readDocPreviewGrantedFile,
+  readDocPreviewTerminalFile
+} from './doc-preview-terminal-file-reader'
+import {
+  openGrantedDocPreviewMedia,
+  openWorkspaceDocPreviewMedia,
+  readRuntimeDocPreviewChunk,
+  RUNTIME_TOO_LARGE_ERROR,
+  type DocPreviewMediaRequest,
+  type DocPreviewMediaSource
+} from './doc-preview-ranged-read'
+import type { RuntimeDocPreviewReadParams } from './doc-preview-runtime-read-contract'
+import { REMOTE_PREVIEW_UPDATE_REQUIRED_MESSAGE } from '../../media/remote-file-preview-reader'
 
 const DOC_PREVIEW_READ_TIMEOUT_MS = 15_000
 // Why: under files.readDocPreviewChunk's 512 KiB cap, and a multiple of 3 so its base64 has no padding.
@@ -30,8 +44,6 @@ const UNSERVABLE_ASSET_PREVIEW_MESSAGE = 'This workspace cannot send this file t
 // Reject clamped text rather than rendering a partial document.
 const TRUNCATED_PREVIEW_MESSAGE = 'This document is too large for the server to send in full.'
 
-const RUNTIME_TOO_LARGE_ERROR = 'file_too_large'
-
 const RUNTIME_DOC_PREVIEW_UPDATE_REQUIRED_MESSAGE =
   'Secure document previews require a newer Orca on the paired machine. Update it and try again.'
 
@@ -41,6 +53,7 @@ function isTooLargeReadError(error: unknown): boolean {
 
 export type DocPreviewReadOutcome =
   | { ok: true; bytes: Buffer; contentType: string }
+  | { ok: true; media: DocPreviewMediaSource; contentType: string }
   | { ok: false; status: number; reason: DocPreviewFileFailureReason; message: string }
 
 const DOC_PREVIEW_CONTENT_TYPES: Record<string, string> = {
@@ -62,7 +75,12 @@ const DOC_PREVIEW_CONTENT_TYPES: Record<string, string> = {
   '.bmp': 'image/bmp',
   '.ico': 'image/x-icon',
   '.pdf': 'application/pdf',
-  ...FONT_FILE_MIME_TYPES
+  ...FONT_FILE_MIME_TYPES,
+  ...MEDIA_FILE_MIME_TYPES
+}
+
+function isDocPreviewMediaPath(path: string): boolean {
+  return MEDIA_FILE_MIME_TYPES[extname(path).toLowerCase()] !== undefined
 }
 
 export function docPreviewContentType(relativePath: string): string {
@@ -109,14 +127,6 @@ function toOutcome(source: PreviewFileBytes, contentType: string): DocPreviewRea
     : UNSUPPORTED_ASSET_OUTCOME
 }
 
-export type RuntimeDocPreviewReadParams = {
-  worktree: string
-  relativePath: string
-  entryRelativePath: string
-  implicitRootRelativePath: string | null
-  authorizedRootRelativePaths: string[]
-}
-
 async function readRuntimeDocPreviewFile(
   environmentId: string,
   params: RuntimeDocPreviewReadParams
@@ -144,20 +154,6 @@ async function readRuntimeDocPreviewFile(
   }
 }
 
-function isDocPreviewFileChunk(value: unknown): value is DocPreviewFileChunk {
-  if (typeof value !== 'object' || value === null) {
-    return false
-  }
-  const chunk: Partial<Record<keyof DocPreviewFileChunk, unknown>> = value
-  return (
-    typeof chunk.contentBase64 === 'string' &&
-    typeof chunk.size === 'number' &&
-    typeof chunk.mtimeMs === 'number' &&
-    typeof chunk.ctimeMs === 'number' &&
-    (chunk.mimeType === undefined || typeof chunk.mimeType === 'string')
-  )
-}
-
 /** A file too large for one reply, read by range under the same grant checks as a whole read. */
 async function readRuntimeDocPreviewFileInChunks(
   grant: DocPreviewGrant,
@@ -172,25 +168,12 @@ async function readRuntimeDocPreviewFileInChunks(
     if (!getDocPreviewGrant(grant.id)) {
       throw new Error('Not found')
     }
-    const response = await callRuntimeEnvironment(
-      getRuntimeEnvironmentRegistryRoot(),
+    const chunk = await readRuntimeDocPreviewChunk(
       environmentId,
-      'files.readDocPreviewChunk',
-      { ...params, offset, length: DOC_PREVIEW_CHUNK_BYTES },
-      DOC_PREVIEW_READ_TIMEOUT_MS
+      params,
+      offset,
+      DOC_PREVIEW_CHUNK_BYTES
     )
-    if (!response.ok) {
-      // Hosts before ranged preview reads keep the one-reply size refusal.
-      throw new Error(
-        response.error.code === 'method_not_found'
-          ? RUNTIME_TOO_LARGE_ERROR
-          : response.error.message
-      )
-    }
-    if (!isDocPreviewFileChunk(response.result)) {
-      throw new Error('The paired machine returned an unreadable file chunk.')
-    }
-    const chunk = response.result
     first ??= chunk
     const bytes = Buffer.from(chunk.contentBase64, 'base64')
     // Why: every chunk reports the opened file's version, so a rewrite between chunks is never spliced.
@@ -244,7 +227,11 @@ function runtimeWorkspaceReadParams(
 
 export async function readDocPreviewFile(
   grant: DocPreviewGrant,
-  relativePath: string
+  relativePath: string,
+  mediaRequest: DocPreviewMediaRequest = {
+    firstRead: { offset: 0, length: 1 },
+    signal: new AbortController().signal
+  }
 ): Promise<DocPreviewReadOutcome> {
   const candidatePath = resolveDocPreviewCandidatePath(grant, relativePath)
   if (!candidatePath) {
@@ -260,6 +247,7 @@ export async function readDocPreviewFile(
     }
   }
   const contentType = docPreviewContentType(relativePath)
+  const media = isDocPreviewMediaPath(relativePath)
   try {
     if (grant.owner.kind === 'ssh') {
       return notFoundOutcome(SSH_HOST_NOT_SERVED_MESSAGE)
@@ -269,13 +257,42 @@ export async function readDocPreviewFile(
       runtimeOwner.fileAccess === 'terminal-artifact'
         ? await readDocPreviewTerminalFile(grant, absolutePath)
         : null
-    if (terminalRead && 'preview' in terminalRead) {
-      return toOutcome(terminalRead.preview, contentType)
+    if (terminalRead && 'grantedFile' in terminalRead) {
+      const { grantedFile } = terminalRead
+      // Classify the host's target, so a media-named link can't stream another file type.
+      if (!media || !isDocPreviewMediaPath(grantedFile.absolutePath)) {
+        return toOutcome(await readDocPreviewGrantedFile(grantedFile), contentType)
+      }
+      const source = await openGrantedDocPreviewMedia(grant, grantedFile, mediaRequest).catch(
+        (error: unknown) => {
+          // Hosts without granted-file range reads can only be updated.
+          if (error instanceof Error && error.message === REMOTE_PREVIEW_UPDATE_REQUIRED_MESSAGE) {
+            return null
+          }
+          throw error
+        }
+      )
+      return source ? { ok: true, media: source, contentType } : UNSUPPORTED_ASSET_OUTCOME
     }
     const params = terminalRead?.workspaceParams ?? runtimeWorkspaceReadParams(grant, absolutePath)
     if (!params) {
       // Runtime file reads cannot address documents outside the worktree.
       return notFoundOutcome()
+    }
+    if (media) {
+      const source = await openWorkspaceDocPreviewMedia(
+        grant,
+        runtimeOwner.environmentId,
+        params,
+        mediaRequest
+      ).catch((error: unknown) => {
+        // Hosts before media previews refuse it by size or lack ranged reads.
+        if (isTooLargeReadError(error)) {
+          return null
+        }
+        throw error
+      })
+      return source ? { ok: true, media: source, contentType } : UNSUPPORTED_ASSET_OUTCOME
     }
     try {
       return toOutcome(

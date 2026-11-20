@@ -2,15 +2,15 @@ import type {
   PluginViewReply,
   PluginViewRequest
 } from '../../../../../shared/plugins/view/plugin-view-protocol'
-import { detectLanguage } from '@/lib/language-detect'
-import { dispatchAppCommand } from '@/lib/app-command-dispatch'
+import { detectLanguage } from '../../../../../shared/editor-language/editor-language-detect'
+import { dispatchAppCommand } from '@/lib/app-commands/app-command-dispatch'
 import { useAppStore } from '@/store'
 import { getIndexedWorktreeMap } from '@/store/slices/worktrees/listing/worktree-catalog-index'
 import {
   selectFolderWorkspaces,
   selectWorktreesByRepo
 } from '@/store/workspaces/catalog/workspace-record-fields'
-import { parseWorkspaceKey } from '../../../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 
 /** A plugin worker's `editor.open` and `commands.run`, run in this window. */
 

@@ -1,8 +1,39 @@
-import { describe, expect, it } from 'vitest'
+// @vitest-environment happy-dom
+import { describe, expect, it, vi } from 'vitest'
 
 import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
 import type { NativeChatTranscriptSlotsInput } from '../../conversation/slots/native-chat-transcript-input'
 import { buildNativeChatTranscript } from '../../conversation/slots/native-chat-transcript-slots'
+
+const host = vi.hoisted(
+  (): {
+    capabilities: Set<string>
+    contacts: Set<() => void>
+  } => ({
+    capabilities: new Set<string>(),
+    contacts: new Set<() => void>()
+  })
+)
+vi.mock('@/runtime/rpc/compatibility/runtime-capability-proof', () => ({
+  runtimeEnvironmentSupportsCapability: (_environmentId: string, capability: string) =>
+    Promise.resolve(host.capabilities.has(capability))
+}))
+vi.mock('@/runtime/hosts/connections/runtime-host-contact-regained', () => ({
+  subscribeRuntimeHostContactRegained: (_environmentId: string, listener: () => void) => {
+    host.contacts.add(listener)
+    return () => host.contacts.delete(listener)
+  }
+}))
+vi.mock('@/runtime/native-chat/agent-catalogs/use-host-structured-agent', () => ({
+  useHostStructuredAgent: () => ({ capabilities: { fork: 'tip' } })
+}))
+vi.mock('@/components/native-chat/messages/actions/native-chat-fork-launch', () => ({
+  launchNativeChatFork: vi.fn(),
+  nativeChatForkSurfaceAddress: vi.fn()
+}))
+vi.mock('@/components/native-chat/messages/actions/native-chat-side-chat-placement', () => ({
+  beginNativeChatSideChatPlacement: vi.fn()
+}))
 
 function row(id: string, role: 'user' | 'assistant', sequence: number): NativeChatMessage {
   return {

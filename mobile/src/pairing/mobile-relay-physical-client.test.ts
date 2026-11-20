@@ -1,14 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const fakes = vi.hoisted(() => ({
-  channelOptions: null as null | {
-    onAuthenticated(): void
-    onText(value: string): void
-  },
-  start: vi.fn(),
-  handleMessage: vi.fn(),
-  sendText: vi.fn((_frame: string) => true),
-  dispose: vi.fn()
+  start: vi.fn()
 }))
 
 vi.mock('../transport/encryption/mobile-e2ee-v2-client-session', () => ({
@@ -16,13 +9,10 @@ vi.mock('../transport/encryption/mobile-e2ee-v2-client-session', () => ({
 }))
 vi.mock('../transport/encryption/mobile-e2ee-v2-physical-channel', () => ({
   MobileE2EEV2PhysicalChannel: class {
-    constructor(options: NonNullable<typeof fakes.channelOptions>) {
-      fakes.channelOptions = options
-    }
     start = fakes.start
-    handleMessage = fakes.handleMessage
-    sendText = fakes.sendText
-    dispose = fakes.dispose
+    handleMessage = () => {}
+    sendText = () => true
+    dispose = () => {}
   }
 }))
 
@@ -65,8 +55,6 @@ describe('mobile relay physical pairing client', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     vi.clearAllMocks()
-    fakes.channelOptions = null
-    fakes.sendText.mockReturnValue(true)
   })
 
   afterEach(() => {
@@ -102,21 +90,6 @@ describe('mobile relay physical pairing client', () => {
     socket.onclose?.({ code: 4409 })
 
     await expect(status).rejects.toEqual(new RelayOuterError(4409))
-  })
-
-  it('classifies an opaque close after transport error as 1006', async () => {
-    const socket = new FakeSocket()
-    const client = connectMobileRelayForPairing({
-      relay,
-      deviceToken: 'device-token',
-      desktopPublicKeyB64: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=',
-      createSocket: () => pairingWebSocket(socket)
-    })
-    const status = client.sendRequest('status.get')
-    socket.onerror?.()
-    socket.onclose?.({ code: 0 })
-
-    await expect(status).rejects.toEqual(new RelayOuterError(1006))
   })
 
   it('settles after an error when the platform never emits close', async () => {

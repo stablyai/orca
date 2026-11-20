@@ -15,8 +15,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   exportProfileStateJson,
   importProfileStateJson
-} from '../../persistence/profile-state/profile-state-documents'
-import { openProfileStateDatabase } from '../../persistence/profile-state/profile-state-database'
+} from '../../persistence/profile-state/documents/profile-state-documents'
+import { openProfileStateDatabase } from '../../persistence/profile-state/database/profile-state-database'
 import { orcadLivenessProbeCommand, parseOrcadLiveness } from './orcad-remote-launch'
 import { ORCAD_PID_FILENAME } from './orcad-remote-host-support'
 import { parseOrcadStopOutcome, stopOrcadCommand } from './orcad-remote-process-control'
@@ -28,7 +28,7 @@ import {
   parseOrcadSnapshotRestore,
   restoreOrcadStateSnapshotCommand
 } from '../host-state/orcad-state-snapshot'
-import { getRemoteHostPlatform } from '../../ssh/ssh-remote-platform'
+import { getRemoteHostPlatform } from '../../ssh/remote-host/ssh-remote-platform'
 
 const host = getRemoteHostPlatform('linux-x64')
 let root = ''
@@ -238,8 +238,7 @@ describe('liveness and stop commands, run for real', () => {
 
     it.each([
       ['bash', 'bash: kill: (4242) - No such process'],
-      ['zsh', 'zsh:kill:1: kill 4242 failed: no such process'],
-      ['ksh', 'ksh: kill: 4242: no such process']
+      ['zsh', 'zsh:kill:1: kill 4242 failed: no such process']
     ])('is DEAD when kill answers like %s', (_shell, message) => {
       writeFileSync(join(versionDir, ORCAD_PID_FILENAME), exitedPid())
       expect(

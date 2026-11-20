@@ -1,5 +1,5 @@
 import { ipcMain } from 'electron'
-import { browserManager } from '../../browser/browser-manager'
+import { browserManager } from '../../browser/guest-lifecycle/manager/browser-manager'
 import { onDocPreviewGrantRevoked } from '../../browser/document-preview/doc-preview-grant-registry'
 import { isTrustedBrowserRenderer } from './browser-renderer-trust'
 import { waitForNextTabRegistration } from './browser-tab-registration-wait'
@@ -13,7 +13,7 @@ import type {
   BrowserCaptureSelectionScreenshotResult,
   BrowserExtractHoverArgs,
   BrowserExtractHoverResult
-} from '../../../shared/browser-grab-types'
+} from '../../../shared/browser/element-grab/browser-grab-types'
 
 const grabModeIntentByPageId = new Map<string, { generation: number; enabled: boolean }>()
 const grabModeOperationByPageId = new Map<string, Promise<void>>()

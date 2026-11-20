@@ -13,8 +13,11 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { runProcess } from '@orca/process-host'
 import { tryStealInstallLockCommand } from './remote-install-lock-commands'
-import { decodeRemotePowerShellScript } from '../../ssh/ssh-remote-powershell'
-import { getRemoteHostPlatform, type RemoteHostPlatform } from '../../ssh/ssh-remote-platform'
+import { decodeRemotePowerShellScript } from '../../ssh/remote-exec/ssh-remote-powershell'
+import {
+  getRemoteHostPlatform,
+  type RemoteHostPlatform
+} from '../../ssh/remote-host/ssh-remote-platform'
 
 const OWNER = '.orca-fence-owner'
 const successor = { fileName: OWNER, token: 't-relaunch' }

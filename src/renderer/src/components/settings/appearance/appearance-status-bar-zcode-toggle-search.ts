@@ -1,4 +1,4 @@
-import type { StatusBarItem } from '../../../../../shared/ui-chrome-types'
+import type { StatusBarItem } from '../../../../../shared/ui-chrome/ui-chrome-types'
 import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from '../search/settings-search-keywords'
 
@@ -11,7 +11,7 @@ export function getZcodeStatusBarToggleSearchEntry(): {
 } {
   return {
     id: 'zcode',
-    title: translate('auto.components.settings.appearance.search.zcodeUsageTitle', 'ZCode Usage'),
+    title: translate('auto.components.settings.appearance.search.183e6b8ef9', 'ZCode usage'),
     description: translate(
       'auto.components.settings.appearance.search.zcodeUsageDescription',
       'Show ZCode Coding Plan quota usage in the status bar.'

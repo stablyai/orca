@@ -4,8 +4,8 @@ import {
   cancelHostAccountSignIn,
   isLostHostAnswer
 } from '@/runtime/provider-accounts/sign-in/runtime-host-account-sign-in-client'
-import type { HostAccountSignInProvider } from '../../../../../../shared/host-account-sign-in-types'
-import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
+import type { HostAccountSignInProvider } from '../../../../../../shared/agent-accounts/host-account-sign-in-types'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 
 type Addition = { target: RuntimeClientTarget }
 

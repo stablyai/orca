@@ -1,3 +1,4 @@
+import type { WithAgentStatusObservation } from '../../agent-status/contracts/agent-status-observation'
 import type { AgentHookEventPayload } from '../listener-event'
 import type { AgentMainAgentStatus } from '../../agent-status/lifecycle/main-agent-status'
 import { foldMainAgentWithRowChildWork } from './agent-hook-row-child-work-fold'
@@ -21,7 +22,7 @@ export function isToolProgressWorkingAfterInterrupt(next: AgentHookEventPayload)
   return next.hookEventName !== undefined && TOOL_PROGRESS_HOOK_EVENTS.has(next.hookEventName)
 }
 
-type CancelledRow = AgentHookEventPayload & { receivedAt: number }
+type CancelledRow = AgentHookEventPayload & WithAgentStatusObservation & { receivedAt: number }
 
 export type CancelVerdictLatchDecision =
   | { hold: true }
@@ -74,11 +75,11 @@ function refoldUnderLatchedMainAgent(
   }
 }
 
-/** Main-agent submissions open turns even when harness notifications reuse the cached prompt. */
+/** Main-agent submissions and new native turn ids open turns even when harness notifications reuse the cached prompt. */
 export function opensNewTurn(event: AgentHookEventPayload): boolean {
   return (
     event.hookEventName === 'SessionStart' ||
-    (event.hookEventName === 'UserPromptSubmit' &&
+    ((event.hookEventName === 'UserPromptSubmit' || event.opensTurn === true) &&
       event.toolAgentId === undefined &&
       event.isReplay !== true)
   )
@@ -108,6 +109,8 @@ export function resolveCancelVerdictLatch(
   if (
     !previous ||
     !isCancelVerdictLatched(previous) ||
+    // A resumed row's verdict outlives its process; nothing late can follow it, as on main.
+    previous.observation?.origin === 'launch' ||
     previous.payload.agentType !== incoming.payload.agentType ||
     restatesAnotherPrompt(previous, incoming) ||
     incoming.payload.mainAgent?.state === 'done' ||

@@ -1,7 +1,11 @@
 import { randomUUID } from 'node:crypto'
 import { BrowserError } from '../../../browser/browser-error'
-import { browserNetworkExecutionHostKey } from '../../../browser/network/execution-routes/browser-network-execution-route'
-import type { RuntimeNavigationTarget } from '../../../../shared/runtime-navigation'
+import { activeRpcBrowserPagePicker } from '../../../browser/agent-browser/session-routing/person-pick-hold'
+import { retireFailedBrowserClientPagePublication } from './browser-client-page-close'
+import { unresponsiveHostMessage } from './browser-client-page-refusal-copy'
+import '../../../browser/network/execution-routes/browser-network-execution-route'
+import { browserNetworkExecutionHostKey } from '../../../../shared/browser/client-hosting/browser-network-execution-host'
+import type { RuntimeNavigationTarget } from '../../../../shared/remote-runtime/session-graph/runtime-navigation'
 import { BROWSER_CLIENT_AUTOMATION_HOST_CAPABILITY } from '../../../../shared/browser/client-hosting/browser-client-automation-protocol'
 import {
   BROWSER_HOST_WEBVIEW_CAPABILITY,
@@ -32,6 +36,7 @@ export type BrowserClientPageOpeningHost = Pick<
   | 'getRuntimeBrowserPageRegistry'
   | 'markHeadlessBrowserSessionTabActive'
   | 'notifyHeadlessBrowserSessionTabsChanged'
+  | 'retireRuntimeOwnedBrowserSessionTab'
 >
 
 type ResolvedWorkspace = Awaited<ReturnType<RuntimeBrowserCommandHost['resolveBrowserWorkspace']>>
@@ -45,7 +50,11 @@ export type BrowserClientPageCreateParams = {
   placement: { kind: 'client'; browserHostClientId: string }
 }
 
-export type BrowserClientPageCaller = { pairedDeviceId?: string; clientKind?: 'mobile' | 'runtime' }
+export type BrowserClientPageCaller = {
+  pairedDeviceId?: string
+  clientKind?: 'mobile' | 'runtime'
+  signal?: AbortSignal
+}
 
 export const DEFAULT_BROWSER_PROFILE_ID = 'default'
 
@@ -75,6 +84,8 @@ export async function createBrowserClientPage(
     )
   }
   const url = params.url ?? 'about:blank'
+  // Read now: the commit runs when the desktop answers, outside this call.
+  const picker = activeRpcBrowserPagePicker()
   const focus = resolveBrowserTabCreateFocus({
     activate: params.activate,
     navigation: params.navigation,
@@ -83,34 +94,57 @@ export async function createBrowserClientPage(
   const browserPageId = params.page ?? randomUUID()
   const executionHost = await host.resolveBrowserNetworkExecutionHost(worktree)
   const authority = host.getBrowserHostLeaseRegistry()
+  const pages = host.getRuntimeBrowserPageRegistry()
+  if (pages.getPage(browserPageId)) {
+    throw new Error('browser_page_replacement_requires_retirement')
+  }
+  let publication: Promise<void> | undefined
   const created = await createRuntimeBrowserClientPage(authority, {
     browserPageId,
     browserHostClientId: params.placement.browserHostClientId,
     pairedDeviceId: caller.pairedDeviceId,
     browserProfileId,
     executionHost,
-    workspaceId: worktree.id
-  })
-  const pages = host.getRuntimeBrowserPageRegistry()
-  pages.publishClientPage({
-    browserPageId,
     workspaceId: worktree.id,
-    browserProfileId,
-    executionHostKey: browserNetworkExecutionHostKey(executionHost),
-    placement: created.placement,
-    pairedDeviceId: caller.pairedDeviceId,
-    url: 'about:blank',
-    loading: url !== 'about:blank',
-    active: focus.startsActive
+    signal: caller.signal,
+    committed: (placement) => {
+      try {
+        pages.publishClientPage(
+          {
+            browserPageId,
+            workspaceId: worktree.id,
+            browserProfileId,
+            executionHostKey: browserNetworkExecutionHostKey(executionHost),
+            placement: placement,
+            pairedDeviceId: caller.pairedDeviceId,
+            url: 'about:blank',
+            loading: url !== 'about:blank',
+            active: focus.startsActive
+          },
+          picker
+        )
+        publication = publishCreatedBrowserSessionTab(host, {
+          placementKind: 'client',
+          browserPageId,
+          worktreeId: worktree.id,
+          focus,
+          clientNavigationId: caller.pairedDeviceId,
+          targetGroupId: params.targetGroupId
+        })
+      } catch (error) {
+        if (pages.retirePage(browserPageId, placement)) {
+          host.retireRuntimeOwnedBrowserSessionTab?.(worktree.id, browserPageId)
+        }
+        throw error
+      }
+    }
   })
-  publishCreatedBrowserSessionTab(host, {
-    placementKind: 'client',
-    browserPageId,
-    worktreeId: worktree.id,
-    focus,
-    clientNavigationId: caller.pairedDeviceId,
-    targetGroupId: params.targetGroupId
-  })
+  try {
+    await publication
+  } catch (error) {
+    await retireFailedBrowserClientPagePublication(host, browserPageId, created.placement)
+    throw error
+  }
   if (url !== 'about:blank') {
     try {
       await navigateRuntimeBrowserClientPage(authority, {
@@ -129,13 +163,16 @@ export async function createBrowserClientPage(
 
 export function openBrowserUrlOnClient(
   host: BrowserClientPageOpeningHost,
-  params: { url: string; worktree: string }
+  params: { url: string; worktree: string },
+  signal?: AbortSignal
 ): Promise<{ browserPageId: string }> {
   assertClientOpenableUrl(params.url)
   return createBrowserPageOnPairedHost(
     host,
     { url: params.url, worktree: params.worktree, activate: true, navigation: 'caller' },
-    DEFAULT_BROWSER_PROFILE_ID
+    DEFAULT_BROWSER_PROFILE_ID,
+    undefined,
+    signal
   )
 }
 
@@ -149,18 +186,30 @@ export function assertClientOpenableUrl(url: string): void {
 export async function createBrowserPageOnPairedHost(
   host: BrowserClientPageOpeningHost,
   params: Omit<BrowserClientPageCreateParams, 'placement'> & { worktree?: string },
-  browserProfileId: string
+  browserProfileId: string,
+  /** The server's own browser, used when no paired desktop takes the page. */
+  fallback?: () => Promise<{ browserPageId: string }>,
+  signal?: AbortSignal
 ): Promise<{ browserPageId: string }> {
   const { worktree: selector, ...rest } = params
   const worktree = selector ? await host.resolveBrowserWorkspace(selector) : undefined
-  const lease = await acquirePairedPageHost(host, worktree?.id)
+  let lease: BrowserHostLease
+  try {
+    // With a fallback, ask a desktop even while it hosts: its own setting decides, and a sleeping one times out.
+    lease = await acquirePairedPageHost(host, worktree?.id, fallback !== undefined)
+  } catch (error) {
+    if (fallback && error instanceof BrowserError && error.code === 'browser_host_unavailable') {
+      return fallback()
+    }
+    throw error
+  }
   return createBrowserClientPage(
     host,
     { ...rest, placement: { kind: 'client', browserHostClientId: lease.browserHostClientId } },
     {
       worktree,
       browserProfileId,
-      caller: { pairedDeviceId: lease.pairedDeviceId, clientKind: 'runtime' }
+      caller: { pairedDeviceId: lease.pairedDeviceId, clientKind: 'runtime', signal }
     }
   )
 }
@@ -198,18 +247,22 @@ type PairedPageHostSource = Pick<
 /** No caller names a host for these pages, so the server picks one desktop and never leaves it ambiguous. */
 async function acquirePairedPageHost(
   host: PairedPageHostSource,
-  workspaceId: string | undefined
+  workspaceId: string | undefined,
+  askDesktop: boolean
 ): Promise<BrowserHostLease> {
   const leases = host.getBrowserHostLeaseRegistry()
-  try {
-    return selectPairedPageHost(leases)
-  } catch (error) {
-    // Several desktops already host: choose one of them rather than asking for another lease.
-    if (error instanceof BrowserHostAmbiguousError) {
-      return chooseAmongHosts(host, error.browserHostClientIds, workspaceId)
-    }
-    if (!isHostError(error, 'browser_host_unavailable')) {
-      throw error
+  // Only desktops that answer asks are asked; older ones keep the server's own browser.
+  if (!askDesktop) {
+    try {
+      return selectPairedPageHost(leases)
+    } catch (error) {
+      // Several desktops already host: choose one of them rather than asking for another lease.
+      if (error instanceof BrowserHostAmbiguousError) {
+        return chooseAmongHosts(host, error.browserHostClientIds, workspaceId)
+      }
+      if (!isHostError(error, 'browser_host_unavailable')) {
+        throw error
+      }
     }
   }
   try {
@@ -259,11 +312,6 @@ function chooseAmongHosts(
     throw new Error('browser_host_unavailable')
   }
   return chosen
-}
-
-function unresponsiveHostMessage(deviceName: string | null | undefined): string {
-  const desktop = deviceName ? `The Orca desktop "${deviceName}"` : 'The paired Orca desktop'
-  return `${desktop} didn't respond when this server asked it to host browser pages; it may be asleep or disconnected. Wake it and retry, or open a browser tab in one of this server's workspaces on the desktop you want to use.`
 }
 
 function selectPairedPageHost(

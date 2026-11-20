@@ -8,7 +8,7 @@ import {
   encodeBrowserNetworkTunnelFrame,
   encodeBrowserNetworkTunnelOpen,
   encodeBrowserNetworkTunnelWindowUpdate
-} from '../../../../shared/browser-network-tunnel-protocol'
+} from '../../../../shared/browser/network/tunnels/browser-network-tunnel-protocol'
 import type { BrowserNetworkTunnelSocket } from './browser-network-tunnel-stream-state'
 import { BrowserNetworkTunnelSession } from './browser-network-tunnel-session'
 

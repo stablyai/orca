@@ -2,11 +2,15 @@ import { markdownParserAliases } from './config/build-plugins/markdown-parser-ex
 import { createRequire } from 'node:module'
 import { resolve } from 'node:path'
 import { defineConfig, type UserConfig } from 'electron-vite'
-import type { Plugin, Rollup } from 'vite'
+import type { Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
-import { createBootstrapFatalExitBanner } from './config/build-plugins/bootstrap-fatal-exit-banner'
-import { createSandboxedScriptBundlesPlugin } from './config/build-plugins/sandboxed-script-bundles'
+import { createInheritedOrcaIdentityFirstGuardPlugin } from './config/build-plugins/inherited-orca-identity-banner'
+import { createMainEntryPostBanner } from './config/build-plugins/main-entry-post-banner'
+import {
+  createSandboxedScriptBundlesPlugin,
+  ONE_BYTE_UNMINIFIED_OUTPUT
+} from './config/build-plugins/sandboxed-script-bundles'
 import { createMainLocaleSubsetPlugin } from './config/build-plugins/main-locale-subset'
 import { createSucraseUnusedTransformersPlugin } from './config/build-plugins/sucrase-unused-transformers'
 import { createPdfjsViewerAssetsPlugin } from './config/build-plugins/pdfjs-viewer-assets'
@@ -15,26 +19,14 @@ import { createViteCacheRetentionPlugin } from './config/build-plugins/vite-cach
 import { MAIN_BUILD_ENTRY_POINTS } from './config/build-plugins/main-build-entry-points'
 import { createPlainNodeEntryGuardPlugin } from './config/build-plugins/plain-node-entry-guard'
 import { createDevServeConfig } from './config/build-plugins/dev-serve-config'
+import {
+  ignoreIneffectiveDynamicImport,
+  RENDERER_CHUNK_SIZE_WARNING_LIMIT_KB
+} from './config/build-plugins/rollup-warning-filter'
+import { reactPluginOptions } from './config/build-plugins/react-compiler'
+import { BUNDLED_MAIN_DEPENDENCIES } from './config/build-plugins/bundled-main-dependencies'
 import { resolveBuildSourceCommit } from './config/scripts/build-identity/build-source-commit.mjs'
 
-const BUNDLED_MAIN_DEPENDENCIES = new Set([
-  'stream-json',
-  'stream-chain',
-  '@xterm/headless',
-  '@xterm/addon-serialize',
-  'tldts',
-  'smol-toml',
-  'yaml',
-  'fflate',
-  'mime-types',
-  'mime-db',
-  // Linear save confirmation; bundled like orcad so packaging needs no extra node_modules.
-  'unified',
-  'remark-parse',
-  'remark-gfm',
-  // Windows NSIS copies app.asar before external resources; bootstrap must not race resources/node_modules.
-  'zod'
-])
 // Official CI alone injects ORCA_BUILD_IDENTITY (stable|rc) and ORCA_POSTHOG_WRITE_KEY secrets; other builds substitute literal null.
 // Compile-time substitution gates telemetry at module load without runtime env fallback; declarations live in src/types/build-constants.d.ts.
 const orcaBuildIdentity = process.env.ORCA_BUILD_IDENTITY
@@ -186,18 +178,6 @@ function createStartupDiagnosticsBanner(chunkName: string): string {
 `
 }
 
-// postBanner lands after minification and Rolldown shifts index.js.map past it, keeping crash traces on the right line.
-function createMainBootstrapPostBanner(chunk: Rollup.RenderedChunk): string {
-  if (chunk.fileName !== 'index.js') {
-    return ''
-  }
-  if (!chunk.moduleIds.some((id) => resolve(id) === MAIN_BUILD_ENTRY_POINTS.index)) {
-    throw new Error('Main startup must stay in index.js so __dirname resolves app assets')
-  }
-  // Source guards run after Rollup’s require prelude, too late to handle missing bootstrap dependencies.
-  return createBootstrapFatalExitBanner() + createStartupDiagnosticsBanner(chunk.fileName)
-}
-
 // Dev-only unminified main bundle exposes function names in V8 profiles; releases and pnpm build never read this flag.
 const MAIN_MINIFY: 'oxc' | false = process.env.ORCA_UNMINIFIED_MAIN === '1' ? false : 'oxc'
 
@@ -222,6 +202,7 @@ export const electronViteConfig: UserConfig = {
       },
       rollupOptions: {
         input: MAIN_BUILD_ENTRY_POINTS,
+        onwarn: ignoreIneffectiveDynamicImport,
         // CLI builds replace exported entries; keep their internals separate without moving startup paths.
         preserveEntrySignatures: 'exports-only',
         // Electron and sidecar launchers require stable CommonJS paths despite Rolldown’s SSR ESM default.
@@ -231,10 +212,11 @@ export const electronViteConfig: UserConfig = {
           format: 'cjs',
           entryFileNames: '[name].js',
           chunkFileNames: 'chunks/[name]-[hash].js',
-          postBanner: createMainBootstrapPostBanner
+          postBanner: (chunk) => createMainEntryPostBanner(chunk, createStartupDiagnosticsBanner)
         },
         plugins: [
           createPlainNodeEntryGuardPlugin(),
+          createInheritedOrcaIdentityFirstGuardPlugin(),
           createProcessHostDevRebuildPlugin(),
           createDarkBuildMarkerPlugin(),
           createSandboxedScriptBundlesPlugin(),
@@ -262,10 +244,7 @@ export const electronViteConfig: UserConfig = {
   preload: {
     build: {
       externalizeDeps: false,
-      rollupOptions: {
-        // Unminified preload keeps dependency JSDoc whose em dashes would force two-byte storage in every renderer.
-        output: { charset: 'ascii', comments: { legal: true, annotation: true, jsdoc: false } }
-      }
+      rollupOptions: { output: ONE_BYTE_UNMINIFIED_OUTPUT }
     }
   },
   renderer: {
@@ -278,12 +257,16 @@ export const electronViteConfig: UserConfig = {
     resolve: {
       alias: {
         ...markdownParserAliases,
+        // Pin the browser-safe UMD entry so an unpatched package.json cannot bundle lib/addon-ligatures.mjs (which imports node:diagnostics_channel).
+        '@xterm/addon-ligatures': resolve(
+          'node_modules/@xterm/addon-ligatures/lib/addon-ligatures.js'
+        ),
         '@renderer': resolve('src/renderer/src'),
         '@': resolve('src/renderer/src')
       }
     },
     plugins: [
-      react(),
+      react(reactPluginOptions()),
       tailwindcss(),
       createPdfjsViewerAssetsPlugin(),
       createViteCacheRetentionPlugin()
@@ -297,6 +280,7 @@ export const electronViteConfig: UserConfig = {
     build: {
       manifest: true,
       reportCompressedSize: false,
+      chunkSizeWarningLimit: RENDERER_CHUNK_SIZE_WARNING_LIMIT_KB,
       modulePreload: { polyfill: true },
       minify: 'oxc',
       target: 'es2020',
@@ -304,6 +288,7 @@ export const electronViteConfig: UserConfig = {
       rollupOptions: {
         // Shared chunks must not import HTML entries that mount another React root.
         preserveEntrySignatures: 'strict',
+        onwarn: ignoreIneffectiveDynamicImport,
         output: { charset: 'ascii' },
         input: {
           index: resolve('src/renderer/index.html'),

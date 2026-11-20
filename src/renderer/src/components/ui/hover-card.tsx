@@ -5,7 +5,8 @@ import * as HoverCardPrimitive from 'radix-ui/hover-card'
 import { useControllableState } from 'radix-ui/internal'
 import { cva, type VariantProps } from 'class-variance-authority'
 
-import { cn } from '@/lib/utils'
+import { usePortalContainer } from './portal-container-context'
+import { cn } from '@/lib/class-names'
 
 const HoverCardInteractionContext = React.createContext({
   dismiss: () => {},
@@ -86,30 +87,42 @@ const hoverCardContentVariants = cva('', {
     variant: {
       default: 'w-64 p-4',
       'workspace-details':
-        'w-[360px] max-w-[calc(100vw-2rem)] max-h-[28rem] overflow-y-auto p-3 text-xs scrollbar-sleek'
+        'w-[360px] max-w-[calc(100vw-2rem)] max-h-[28rem] overflow-y-auto p-3 text-xs scrollbar-sleek',
+      // A list row's details beside its panel: compact, one short fact per line.
+      'row-details':
+        'max-h-(--radix-hover-card-content-available-height) w-64 overflow-y-auto p-2.5 text-xs leading-4 [overflow-wrap:anywhere]'
+    },
+    motion: {
+      default:
+        'data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in motion-reduce:data-[state=open]:animate-none motion-reduce:data-[state=closed]:animate-none data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95',
+      none: ''
     }
   },
-  defaultVariants: { variant: 'default' }
+  defaultVariants: { variant: 'default', motion: 'default' }
 })
 
 function HoverCardContent({
   className,
   variant,
+  motion,
   align = 'center',
   sideOffset = 4,
   ...props
 }: React.ComponentProps<typeof HoverCardPrimitive.Content> &
   VariantProps<typeof hoverCardContentVariants>) {
   return (
-    <HoverCardPrimitive.Portal data-slot="hover-card-portal">
+    <HoverCardPrimitive.Portal
+      data-slot="hover-card-portal"
+      container={usePortalContainer() ?? undefined}
+    >
       <HoverCardPrimitive.Content
         data-slot="hover-card-content"
         align={align}
         sideOffset={sideOffset}
         // Match dropdown surface/border/shadow tokens so hover cards remain distinct from the dark canvas.
         className={cn(
-          'z-50 origin-(--radix-hover-card-content-transform-origin) rounded-md border border-black/14 bg-floating-surface text-popover-foreground shadow-[0_16px_36px_rgba(0,0,0,0.24),inset_0_1px_0_rgba(255,255,255,0.14)] backdrop-blur-2xl outline-hidden dark:border-white/14 dark:shadow-[0_20px_44px_rgba(0,0,0,0.42),inset_0_1px_0_rgba(255,255,255,0.04)] data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in motion-reduce:data-[state=open]:animate-none motion-reduce:data-[state=closed]:animate-none data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95',
-          hoverCardContentVariants({ variant }),
+          'z-50 origin-(--radix-hover-card-content-transform-origin) rounded-md border border-black/14 bg-floating-surface text-popover-foreground shadow-[0_16px_36px_rgba(0,0,0,0.24),inset_0_1px_0_rgba(255,255,255,0.14)] backdrop-blur-2xl outline-hidden dark:border-white/14 dark:shadow-[0_20px_44px_rgba(0,0,0,0.42),inset_0_1px_0_rgba(255,255,255,0.04)]',
+          hoverCardContentVariants({ variant, motion }),
           className
         )}
         {...props}

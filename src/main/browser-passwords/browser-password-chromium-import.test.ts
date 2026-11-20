@@ -6,7 +6,7 @@ import { DatabaseSync } from 'node:sqlite'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as DetectionModule from '../browser/cookies/sources/browser-cookie-source-profiles'
 import type * as SnapshotModule from '../browser/cookies/chromium/chromium-cookie-snapshot'
-import type { EncryptionKeyResult } from '../browser/cookies/sources/browser-cookie-sqlite'
+import type { EncryptionKeyResult } from '../browser/cookies/sources/chromium-encryption-key-contract'
 
 type FixtureState = {
   root: string

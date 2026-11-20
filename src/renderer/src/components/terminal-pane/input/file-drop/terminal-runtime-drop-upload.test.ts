@@ -53,7 +53,7 @@ vi.mock('@/i18n/i18n', () => ({
       : fallback
     ).replace(/\{\{(\w+)\}\}/g, (_match, name: string) => String(values?.[name] ?? ''))
 }))
-vi.mock('../../../../../../shared/non-secure-context-uuid', () => ({
+vi.mock('../../../../../../shared/identifiers/non-secure-context-uuid', () => ({
   createNonSecureContextUuid: () => 'session-1'
 }))
 vi.mock('@/runtime/files/imports/runtime-file-import-client', () => ({

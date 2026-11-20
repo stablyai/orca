@@ -5,7 +5,7 @@ import {
   ORCAD_MOBILE_WEB_DIR,
   ORCAD_MOBILE_WEB_MANIFEST,
   orcadMobileWebAssetFilenames
-} from '../../../../src/shared/orcad-artifacts.ts'
+} from '../../../../src/shared/remote-runtime/orcad-distribution/orcad-artifacts.ts'
 
 const { MOBILE_WEB_BUNDLE_DIR, assertMobileWebBundleBuilt } = createRequire(import.meta.url)(
   '../../desktop-distribution/runtime-verification/verify-packaged-mobile-web-bundle.cjs'
@@ -19,7 +19,7 @@ export function stageOrcadMobileWebBundle(outputDir, bundleDir = MOBILE_WEB_BUND
   // The release template refuses the variable itself.
   assertNoDarkOutputOfOffSwitches([bundleDir])
   assertMobileWebBundleBuilt(bundleDir)
-  // The guard refuses unlisted files, so the tree is the manifest, its assets and a dark marker.
+  // The guard refuses unlisted files, so the tree is the manifest, its assets and catalogs, and a dark marker.
   cpSync(bundleDir, join(outputDir, ...ORCAD_MOBILE_WEB_DIR.split('/')), { recursive: true })
 }
 

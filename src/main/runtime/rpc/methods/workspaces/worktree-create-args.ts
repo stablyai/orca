@@ -1,14 +1,14 @@
-import { pickApprovedSetupHashes } from '../../../../../shared/worktree/approved-setup-hashes'
+import { pickApprovedSetupHashes } from '../../../../../shared/worktree/creation/approved-setup-hashes'
 import { terminalImageViewerSupported } from '../../../terminal/launch/terminal-image-viewer-env'
 import { callerLaunchSource } from '../../../../agent-launch/agent-started-telemetry'
 import type { z } from 'zod'
-import { resolveRuntimeNavigationTarget } from '../../../../../shared/runtime-navigation'
+import { resolveRuntimeNavigationTarget } from '../../../../../shared/remote-runtime/session-graph/runtime-navigation'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import {
   hostQualifiedRepoSelector,
   type RuntimeRepoSelector
 } from '../../../workspaces/catalog/runtime-repo-selector'
-import type { WorktreeCreate } from '../../../../../shared/rpc-contract/worktree-create-params'
+import type { WorktreeCreate } from '../../../../../shared/rpc-contract/workspaces/worktree-create-params'
 
 type WorktreeCreateParams = z.infer<typeof WorktreeCreate>
 type ManagedWorktreeCreateArgs = Parameters<OrcaRuntimeService['createManagedWorktree']>[0]
@@ -139,6 +139,9 @@ export function buildManagedWorktreeCreateArgs(
         : {}),
       noParent: params.noParent === true,
       callerTerminalHandle: params.callerTerminalHandle,
+      ...(params.callerAgentSessionId && !origin?.pairedDeviceId
+        ? { callerAgentSessionId: params.callerAgentSessionId }
+        : {}),
       orchestrationContext: params.orchestrationContext
     }
   }

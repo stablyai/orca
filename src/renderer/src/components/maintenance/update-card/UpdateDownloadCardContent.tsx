@@ -1,6 +1,6 @@
 import { Minus } from 'lucide-react'
-import type { ChangelogData } from '../../../../../shared/update-status-types'
-import { getReleaseNotesUrlForVersion } from '../../../../../shared/release-channel'
+import type { ChangelogData } from '../../../../../shared/updater/update-status-types'
+import { getReleaseNotesUrlForVersion } from '../../../../../shared/updater/release-channel'
 import { Button } from '../../ui/button'
 import { Progress } from '../../ui/progress'
 import { useTranslate } from '@/i18n/use-translate'
@@ -35,6 +35,7 @@ export function UpdateDownloadingContent({
 }): React.JSX.Element {
   const t = useTranslate()
   const release = changelog?.release
+  const releaseNotesUrl = release ? release.releaseNotesUrl : getReleaseNotesUrlForVersion(version)
   const showMedia =
     release?.mediaUrl && !mediaFailed && !(prefersReducedMotion && isAnimatedGif(release.mediaUrl))
   return (
@@ -84,19 +85,14 @@ export function UpdateDownloadingContent({
               value0: version
             })}
       </p>
-      {showReleaseNotes && (
+      {showReleaseNotes && releaseNotesUrl && (
         <button
           type="button"
           className="text-xs text-muted-foreground underline hover:text-foreground self-start"
-          onClick={(event) =>
-            openAppHttpLink(
-              release ? release.releaseNotesUrl : getReleaseNotesUrlForVersion(version),
-              { event }
-            )
-          }
+          onClick={(event) => openAppHttpLink(releaseNotesUrl, { event })}
         >
           {release
-            ? t('auto.components.UpdateCard.aad383aecc', 'Read the full release notes')
+            ? t('auto.components.UpdateCard.aad383aecc', 'Release notes')
             : t('auto.components.UpdateCard.44324ef542', 'Release notes')}
         </button>
       )}

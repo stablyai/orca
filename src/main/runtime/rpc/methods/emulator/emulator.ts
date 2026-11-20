@@ -21,7 +21,7 @@ import {
   TapParams,
   TypeParams,
   WorktreeParam
-} from '../../../../../shared/rpc-contract/emulator-params'
+} from '../../../../../shared/rpc-contract/emulator/emulator-params'
 
 const InstallParams = z.object({
   path: z.string().refine((value) => path.isAbsolute(value), {
@@ -69,6 +69,12 @@ export const EMULATOR_METHODS = [
     permission: 'workspace',
     params: ButtonParams,
     handler: async (params, { runtime }) => runtime.emulatorButton(params)
+  }),
+  defineMethod({
+    name: 'emulator.syncKeyboardLayout',
+    permission: 'workspace',
+    params: WorktreeParam,
+    handler: async (params, { runtime }) => runtime.emulatorSyncKeyboardLayout(params)
   }),
   defineMethod({
     name: 'emulator.checkInput',

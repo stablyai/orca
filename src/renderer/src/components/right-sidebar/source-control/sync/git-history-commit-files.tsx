@@ -1,14 +1,14 @@
 import { createElement } from 'react'
 import type React from 'react'
 import { ArrowUpRight } from 'lucide-react'
-import { STATUS_COLORS } from '../../../../lib/git-path-decoration'
+import { STATUS_COLORS } from '../../../../lib/source-control/paths/git-path-decoration'
 import { STATUS_LABELS } from '../../../../../../shared/git/status/git-status-labels'
 import {
   toPermanentSourceControlRowOpenEvent,
   toSourceControlRowOpenEvent,
   type SourceControlRowOpenEvent
 } from '../listing/split-open'
-import { FileTypeIcon } from '@/components/FileTypeIcon'
+import { FileTypeIcon } from '@/components/icons/FileTypeIcon'
 import { basename, dirname } from '@/lib/path'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { formatGitHistoryTimestamp } from './git-history-format'
@@ -123,7 +123,7 @@ function CommitFilesBody({
           <span>
             {t(
               'auto.components.right.sidebar.GitHistoryCommitFiles.c3d4e5f6a7',
-              'Open all changes together'
+              'Open all changes'
             )}
           </span>
         </button>

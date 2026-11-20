@@ -8,36 +8,31 @@ export type AiVaultAppliedScan = {
   result: AiVaultListResult
   limit: AiVaultSessionLimit
   scopeKey: string
+  /** Workspace and Project rows hold only that scope, so they never stand in for another one. */
+  scopeOnly: boolean
+  /** The scope's last list, shown until its rescan answers. */
+  stale?: true
 }
 
 export function useAppliedAiVaultScan(): {
   scan: AiVaultAppliedScan | null
-  applyScan: (
-    published: AiVaultListResult,
-    limit: AiVaultSessionLimit,
-    scopeKey: string,
-    onApplied?: (result: AiVaultListResult) => void
-  ) => void
+  applyScan: (applied: AiVaultAppliedScan, onApplied?: (result: AiVaultListResult) => void) => void
 } {
   const [scan, setScan] = useState<AiVaultAppliedScan | null>(null)
   const acceptedScanRef = useRef<AiVaultAppliedScan | null>(null)
   // Preserve identity on unchanged republication so React still bails out.
   const applyScan = useCallback(
-    (
-      published: AiVaultListResult,
-      limit: AiVaultSessionLimit,
-      scopeKey: string,
-      onApplied?: (result: AiVaultListResult) => void
-    ) => {
+    (applied: AiVaultAppliedScan, onApplied?: (result: AiVaultListResult) => void) => {
       const previous = acceptedScanRef.current
-      const result = reuseAiVaultListResult(previous?.result ?? null, published)
+      const result = reuseAiVaultListResult(previous?.result ?? null, applied.result)
       const next =
         previous !== null &&
         previous.result === result &&
-        previous.limit === limit &&
-        previous.scopeKey === scopeKey
+        previous.limit === applied.limit &&
+        previous.scopeKey === applied.scopeKey &&
+        previous.stale === applied.stale
           ? previous
-          : { result, limit, scopeKey }
+          : { ...applied, result }
       acceptedScanRef.current = next
       setScan(next)
       onApplied?.(result)

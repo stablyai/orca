@@ -1,8 +1,8 @@
 import { useAppStore } from '../../store/index'
 import { useTranslate } from '@/i18n/use-translate'
-import { isWebClientLocation } from '@/lib/web-client-location'
-import { cn } from '@/lib/utils'
-import { MACHINE_NAME_MAX_LENGTH } from '../../../../shared/machine-name'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
+import { cn } from '@/lib/class-names'
+import { MACHINE_NAME_MAX_LENGTH } from '../../../../shared/remote-runtime/host-metadata/machine-name'
 import { DebouncedSettingsTextInput } from '../settings/form-controls/DebouncedSettingsTextInput'
 import { usePublishedMachineName } from './use-published-machine-name'
 

@@ -1,10 +1,10 @@
 /** Share delivery, success sound and blocked-permission fallback across surfaces; callers own message content. Main applies banner preferences after mobile fanout, so callers cannot promise a banner. */
-import { playDesktopNotificationSound } from '@/lib/desktop-notification-sound'
-import { showBlockedNotificationFallbackToast } from '@/lib/blocked-notification-fallback'
+import { playDesktopNotificationSound } from '@/lib/notifications/desktop-notification-sound'
+import { showBlockedNotificationFallbackToast } from '@/lib/notifications/blocked-notification-fallback'
 import type {
   NotificationDispatchRequest,
   NotificationDispatchResult
-} from '../../../shared/notification-settings-types'
+} from '../../../shared/notifications/notification-settings-types'
 
 export type AgentAttentionNotificationSound = {
   customSoundId: string

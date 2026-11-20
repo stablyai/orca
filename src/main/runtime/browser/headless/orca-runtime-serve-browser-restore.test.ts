@@ -1,12 +1,12 @@
-import '../../orca-runtime-tests/orca-runtime-test-lifecycle.spec'
+import '../../construction/test-context/orca-runtime-test-lifecycle.spec'
 import { describe, expect, it, vi } from 'vitest'
-import '../../orca-runtime-tests/runtime-test-module-registration.spec'
+import '../../construction/test-context/runtime-test-module-registration.spec'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import {
   TEST_WORKTREE_ID,
   makeRuntimeStoreWithWorkspaceSession,
   makeWorkspaceSessionWithHeadlessTerminal
-} from '../../orca-runtime-tests/orca-runtime-test-fixtures.spec'
+} from '../../construction/test-context/orca-runtime-test-fixtures.spec'
 import { withOpenedServeBrowserTab } from './serve-browser-tab-layout'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 
@@ -30,7 +30,7 @@ function restartedServe(session: WorkspaceSessionState = savedServeTabs()) {
     ownsTab: () => true
   })
   runtime.setAgentBrowserBridge(
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the runtime reads only tabList from the bridge on these paths.
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the runtime reads only these bridge methods on these paths.
     {
       tabList: vi.fn(() => ({
         tabs: livePages.map((browserPageId, index) => ({
@@ -42,7 +42,10 @@ function restartedServe(session: WorkspaceSessionState = savedServeTabs()) {
           active: false
         }))
       })),
+      getRemoteTabFaviconUrl: () => null,
+      getPageNavigationState: () => null,
       getRegisteredTabs: vi.fn(() => registered()),
+      getRegisteredPageWebContentsId: (page: string) => registered().get(page),
       snapshot: vi.fn(async () => ({ snapshot: '' })),
       getActivePageId: vi.fn(() => livePages[0] ?? null),
       setActiveTab: vi.fn(),

@@ -1,20 +1,16 @@
 import { useRef, type JSX } from 'react'
 import type { AiVaultSearchStatus } from '../../../../shared/ai-vault/search/ai-vault-search-types'
-import type { FeatureTip } from '../../../../shared/feature-tips'
+import type { FeatureTip } from '../../../../shared/feature-education/feature-tips'
 import {
   sessionSearchStatusDetails,
   sessionSearchStatusMessage
-} from '@/components/settings/session-history/session-history-status-copy'
+} from '@/components/session-search/session-search-status'
 import { DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { translate } from '@/i18n/i18n'
 import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translate'
 import { FeatureTipActions } from './FeatureTipActions'
 import { getLocalizedFeatureTipCopy } from './feature-tip-localized-copy'
-import {
-  FeatureTipDialogFrame,
-  FeatureTipEyebrow,
-  FeatureTipSettingsLine
-} from './FeatureTipDialogFrame'
+import { FeatureTipDialogFrame, FeatureTipSettingsLine } from './FeatureTipDialogFrame'
 import { SessionSearchFeatureTipVisual } from './SessionSearchFeatureTipVisual'
 import type { SessionSearchTipStage } from './use-session-search-tip-setup'
 
@@ -125,7 +121,6 @@ export function SessionSearchTipDialog({
     >
       <DialogHeader className="gap-4 text-left">
         <div>
-          <FeatureTipEyebrow label={getLocalizedFeatureTipCopy(tip).eyebrow} />
           <DialogTitle className="text-2xl font-semibold leading-tight tracking-tight md:text-[1.75rem]">
             {copy.title}
           </DialogTitle>

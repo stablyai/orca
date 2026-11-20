@@ -6,7 +6,7 @@ import {
 import { endTransferSession, getTransferSession } from './transfer-session-state'
 
 vi.mock('sonner', () => ({ toast: { custom: vi.fn(() => 'toast-1'), dismiss: vi.fn() } }))
-vi.mock('../../../../shared/non-secure-context-uuid', () => ({
+vi.mock('../../../../shared/identifiers/non-secure-context-uuid', () => ({
   createNonSecureContextUuid: () => 'panel-1'
 }))
 

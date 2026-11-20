@@ -19,8 +19,8 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { cn } from '@/lib/utils'
-import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
+import { cn } from '@/lib/class-names'
+import { ShortcutKeyCombo } from '@/components/ui/ShortcutKeyCombo'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { agentSessionWriteNoticeText } from '@/components/native-chat/messages/notices/agent-session-write-notice-text'
@@ -34,6 +34,7 @@ import {
   type QueuedMessageCard
 } from '../../../../../shared/agent-session/view/structured-agent-session-queued-cards'
 import { NativeChatAgentMessageSenders } from '@/components/native-chat/messages/agent-senders/NativeChatAgentMessageSenders'
+import { NativeChatTypedByQueuedLine } from '@/components/native-chat/NativeChatTypedByTag'
 import { NativeChatPendingIcon } from '@/components/native-chat/queue/NativeChatPendingIcon'
 import type { QueuedMessagesPendingAction } from '@/components/native-chat/queue/use-structured-agent-session-queued-messages'
 import { useNativeChatClippedLine } from '@/components/native-chat/queue/use-native-chat-clipped-line'
@@ -113,7 +114,7 @@ export function queuedMessageCardSendNow(
     label: t('components.native-chat.queuedMessages.steer', 'Steer'),
     hint: t(
       'components.native-chat.queuedMessages.steerHint',
-      'Submit without interrupting the model'
+      'Send now, while the agent keeps working'
     )
   }
 }
@@ -174,6 +175,8 @@ export function NativeChatQueuedMessageCard({
   const textId = useId()
   const sender = card.from ? (
     <NativeChatAgentMessageSenders from={card.from} chatWorktreeId={chatWorktreeId} queued />
+  ) : card.typedByOther ? (
+    <NativeChatTypedByQueuedLine typist={card.typedByOther} />
   ) : null
   if (editor) {
     return (
@@ -268,7 +271,7 @@ export function NativeChatQueuedMessageCard({
                 <TooltipTrigger asChild>
                   <Button
                     type="button"
-                    variant="ghost"
+                    variant={showsSteerShortcut ? 'queued-head-steer' : 'ghost'}
                     size="xs"
                     onClick={onSteer}
                     disabled={steerHeld || busy}
@@ -314,8 +317,8 @@ export function NativeChatQueuedMessageCard({
                 {t('components.native-chat.queuedMessages.delete', 'Delete')}
               </TooltipContent>
             </Tooltip>
-            {/* A command's text is not a draft: edited, it would become a message. */}
-            {!card.command && onEdit ? (
+            {/* The host refuses these edits: a command would become a message, a run the owner's words. */}
+            {!card.notEditable && onEdit ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button

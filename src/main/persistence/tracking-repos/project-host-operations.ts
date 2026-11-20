@@ -1,3 +1,4 @@
+import type { ProfileSaveDomains } from '../profile-save-domains'
 import type {
   Project,
   ProjectHostSetup,
@@ -8,13 +9,21 @@ import type {
   ProjectHostSetupUpdateArgs,
   ProjectHostSetupUpdateResult,
   ProjectUpdateArgs
-} from '../../../shared/project-types'
-import type { PersistedState } from '../../../shared/persisted-state-types'
-import type { Repo } from '../../../shared/repo-types'
-import type { RepoHostTarget } from '../../../shared/repo-host-identity'
-import { getRepoExecutionHostId, normalizeExecutionHostId } from '../../../shared/execution-host'
+} from '../../../shared/project/project-types'
+import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
+import type { Repo } from '../../../shared/repository/repo-types'
+import type { RepoHostTarget } from '../../../shared/repository/repo-host-identity'
+import {
+  getRepoExecutionHostId,
+  normalizeExecutionHostId,
+  type ExecutionHostId
+} from '../../../shared/execution-host/execution-host'
+import {
+  createRepoRowExecutionHostLookup,
+  type RepoRowExecutionHostLookup
+} from '../../../shared/execution-host/worktree-execution-host-resolution'
 import { normalizeProjectRuntimePreference } from '../../../shared/execution-host/project-runtime-preference'
-import { findProjectHostSetup } from '../../../shared/project-host-setup-target'
+import { findProjectHostSetup } from '../../../shared/project/host-setup/project-host-setup-target'
 import { makeProjectHostSetupId } from './project-host-compatibility'
 import { repoGitUsernameCacheKey } from './repo-hydration'
 
@@ -33,11 +42,46 @@ export type ProjectHostMutationOperations = {
     updates: ProjectHostSetupUpdateArgs['updates']
   ) => ProjectHostSetup
   removeProjectForHost: (target: RepoHostTarget) => void
-  scheduleSave: () => void
+  scheduleSave: (domains: ProfileSaveDomains) => void
 }
 
 export class ProjectHostPersistenceOperations {
+  /** Repo rows by id, for keyed reads; dropped by every `repos` write and rebuilt on next use. */
+  private repoIndex: { source: Repo[]; lookup: RepoRowExecutionHostLookup<Repo> } | null = null
+  /** Hydrated rows, dropped with the index; reads at sidebar polling rates must not re-sanitize every repo. */
+  private hydratedRows = new WeakMap<Repo, Repo>()
+  private hydratedList: { source: Repo[]; rows: Repo[] } | null = null
+
   constructor(private readonly operations: ProjectHostMutationOperations) {}
+
+  /** A write changed the repo collection or any row's fields; every row edit must save `repos`. */
+  invalidateRepoIndex(): void {
+    this.repoIndex = null
+    this.hydratedRows = new WeakMap()
+    this.hydratedList = null
+  }
+
+  /** The repo registered under `id` on `hostId`, by key: never a pass over every registration. */
+  getRepoForHost(id: string, hostId: ExecutionHostId): Repo | undefined {
+    // A replaced collection is a new array, even with no write notice.
+    if (this.repoIndex?.source !== this.state.repos) {
+      this.repoIndex = {
+        source: this.state.repos,
+        lookup: createRepoRowExecutionHostLookup(this.state.repos)
+      }
+    }
+    const repo = this.repoIndex.lookup.byHost(id, hostId)
+    return repo ? this.readHydratedRepo(repo) : undefined
+  }
+
+  private readHydratedRepo(repo: Repo): Repo {
+    let hydrated = this.hydratedRows.get(repo)
+    if (!hydrated) {
+      hydrated = this.hydrateRepo(repo)
+      this.hydratedRows.set(repo, hydrated)
+    }
+    return hydrated
+  }
 
   private get state(): PersistedState {
     return this.operations.state
@@ -70,12 +114,19 @@ export class ProjectHostPersistenceOperations {
     this.operations.removeProjectForHost(target)
   }
 
-  private scheduleSave(): void {
-    this.operations.scheduleSave()
+  private scheduleSave(domains: ProfileSaveDomains): void {
+    this.operations.scheduleSave(domains)
   }
 
   getRepos(): Repo[] {
-    return this.state.repos.map((repo) => this.hydrateRepo(repo))
+    // A replaced collection is a new array, even with no write notice.
+    if (this.hydratedList?.source !== this.state.repos) {
+      this.hydratedList = {
+        source: this.state.repos,
+        rows: this.state.repos.map((repo) => this.readHydratedRepo(repo))
+      }
+    }
+    return [...this.hydratedList.rows]
   }
 
   getProjects(): Project[] {
@@ -100,7 +151,7 @@ export class ProjectHostPersistenceOperations {
       }
     }
     project.updatedAt = Date.now()
-    this.scheduleSave()
+    this.scheduleSave(['projects'])
     return { ...project }
   }
 
@@ -142,7 +193,7 @@ export class ProjectHostPersistenceOperations {
     }
     // Independent setup persistence survives future repo projection sync.
     this.state.projectHostSetups.push(setup)
-    this.scheduleSave()
+    this.scheduleSave(['projectHostSetups'])
     return { project, setup }
   }
 
@@ -197,7 +248,7 @@ export class ProjectHostPersistenceOperations {
       return { project, setup, repo: this.hydrateRepo(repo) }
     }
     this.state.projectHostSetups = this.state.projectHostSetups.filter((entry) => entry !== setup)
-    this.scheduleSave()
+    this.scheduleSave(['projectHostSetups'])
     return { project, setup }
   }
 
@@ -207,7 +258,7 @@ export class ProjectHostPersistenceOperations {
 
   getRepo(id: string): Repo | undefined {
     const repo = this.state.repos.find((r) => r.id === id)
-    return repo ? this.hydrateRepo(repo) : undefined
+    return repo ? this.readHydratedRepo(repo) : undefined
   }
 
   /** Store probed usernames by exact repo/host; renderer patches cannot author this cache. Returns whether hydration changed. */
@@ -234,7 +285,7 @@ export class ProjectHostPersistenceOperations {
     } else {
       delete repo.gitUsername
     }
-    this.scheduleSave()
+    this.scheduleSave(['repos'])
     return true
   }
 }

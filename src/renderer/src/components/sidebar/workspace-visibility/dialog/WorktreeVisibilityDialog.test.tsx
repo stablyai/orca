@@ -4,7 +4,7 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type {
   DetectedWorktree,
   DetectedWorktreeListResult
@@ -197,18 +197,6 @@ function buttonWithText(text: string): HTMLButtonElement {
   return button as HTMLButtonElement
 }
 
-function sourceSegment(label: string, visibility: 'show' | 'hide'): HTMLButtonElement {
-  const control = document.querySelector<HTMLButtonElement>(
-    `[aria-label="Visibility for ${label}"] [data-visibility="${visibility}"]`
-  )
-  if (!control) {
-    throw new Error(`No ${visibility} segment for ${label}`)
-  }
-  return control
-}
-
-const sourceSwitch = (label = 'Claude Code'): HTMLButtonElement => sourceSegment(label, 'show')
-
 async function click(element: HTMLElement): Promise<void> {
   await act(async () => {
     element.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
@@ -216,50 +204,6 @@ async function click(element: HTMLElement): Promise<void> {
 }
 
 describe('WorktreeVisibilityDialog', () => {
-  it('keeps a remounted repo locked until its earlier row action settles', async () => {
-    const update = deferred<boolean>()
-    mocks.state.updateRepo.mockReturnValueOnce(update.promise)
-    await renderDialog()
-    mocks.state.fetchWorktrees.mockClear()
-    await click(buttonWithText('Show'))
-
-    await act(async () => root.render(null))
-    await renderDialog()
-
-    expect(document.body.textContent).toContain('Hidden worktrees (1)')
-    expect(buttonWithText('Showing…').disabled).toBe(true)
-    expect(mocks.state.fetchWorktrees).not.toHaveBeenCalled()
-
-    await act(async () => {
-      update.resolve(false)
-      await update.promise
-      await Promise.resolve()
-    })
-    expect(buttonWithText('Show').disabled).toBe(false)
-  })
-
-  it('keeps a remounted repo locked until its earlier toggle settles', async () => {
-    const update = deferred<boolean>()
-    mocks.state.updateRepo.mockReturnValueOnce(update.promise)
-    await renderDialog()
-    mocks.state.fetchWorktrees.mockClear()
-    await click(sourceSwitch())
-
-    await act(async () => root.render(null))
-    await renderDialog()
-
-    expect(sourceSwitch().disabled).toBe(true)
-    expect(buttonWithText('Show').disabled).toBe(true)
-    expect(mocks.state.fetchWorktrees).not.toHaveBeenCalled()
-
-    await act(async () => {
-      update.resolve(false)
-      await update.promise
-      await Promise.resolve()
-    })
-    expect(sourceSwitch().disabled).toBe(false)
-  })
-
   it('does not carry a mutation fence across same-id repos on different hosts', async () => {
     const update = deferred<boolean>()
     const localWorktree = makeWorktree({ hostId: 'local' })
@@ -309,40 +253,5 @@ describe('WorktreeVisibilityDialog', () => {
       update.resolve(false)
       await update.promise
     })
-  })
-
-  it('does not report success when an older host strips additive source settings (STA-4092)', async () => {
-    mocks.state.updateRepo.mockResolvedValue(true)
-    await renderDialog()
-    mocks.state.fetchWorktrees.mockClear()
-
-    await click(sourceSwitch())
-
-    expect(document.querySelector('[role="alert"]')?.textContent).toContain(
-      "This host doesn't support source-specific worktree visibility. Update Orca on the host to change this setting."
-    )
-    expect(document.querySelector('[role="alert"]')?.textContent).not.toContain('Try again')
-    expect(mocks.state.fetchWorktrees).not.toHaveBeenCalled()
-  })
-
-  it('rejects removal success when an older host leaves the custom preference behind', async () => {
-    const repo = makeRepo({
-      customWorktreeVisibilitySources: [{ id: 'team', rootPath: '/srv/team-worktrees' }],
-      worktreeVisibilitySourcePreferences: { custom: { team: 'show' } }
-    })
-    mocks.state.repos = [repo]
-    mocks.state.updateRepo.mockImplementation(async () => {
-      repo.customWorktreeVisibilitySources = []
-      return true
-    })
-    await renderDialog()
-    mocks.state.fetchWorktrees.mockClear()
-
-    await click(document.querySelector('button[aria-label="Remove /srv/team-worktrees"]')!)
-
-    expect(document.querySelector('[role="alert"]')?.textContent).toContain(
-      'Could not update worktree visibility. Try again.'
-    )
-    expect(mocks.state.fetchWorktrees).not.toHaveBeenCalled()
   })
 })

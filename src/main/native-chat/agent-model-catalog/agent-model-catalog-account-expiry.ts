@@ -1,4 +1,4 @@
-import type { GlobalSettings } from '../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
 import type { AgentModelCatalogStore } from './agent-model-catalog-store'
 
 const ACCOUNT_SETTINGS = {
@@ -12,7 +12,7 @@ const ACCOUNT_SETTINGS = {
 
 /** Account changes invalidate probe answers even when the account path stays the same. */
 export function expireAgentModelCatalogFailuresForSettings(
-  store: Pick<AgentModelCatalogStore, 'expireFailures'>,
+  store: Pick<AgentModelCatalogStore, 'expireScopes'>,
   updates: Partial<GlobalSettings>
 ): void {
   const agents = new Set(
@@ -21,7 +21,7 @@ export function expireAgentModelCatalogFailuresForSettings(
       .map(([, agent]) => agent)
   )
   for (const agent of agents) {
-    store.expireFailures(agent)
+    store.expireScopes(agent)
   }
 }
 
@@ -36,6 +36,8 @@ type AgentLaunchSettings = Partial<
     | 'nativeChatShellEnvironmentVariables'
     | 'terminalWindowsShell'
     | 'terminalWindowsPowerShellImplementation'
+    | 'httpProxyUrl'
+    | 'httpProxyBypassRules'
   >
 >
 
@@ -72,9 +74,9 @@ export function agentsWithChangedLaunchSettings(
   )
 }
 
-/** Account changes expire failures; command/environment changes also expire saved listings. */
+/** Account and launch-setting changes retain display while requiring rediscovery. */
 export function createAgentModelCatalogSettingsExpiry(
-  store: Pick<AgentModelCatalogStore, 'expireFailures' | 'expireAgent' | 'expireLaunchScopes'>,
+  store: Pick<AgentModelCatalogStore, 'expireScopes' | 'expireAgent' | 'expireLaunchScopes'>,
   initial: AgentLaunchSettings
 ): (updates: Partial<GlobalSettings>, settings: AgentLaunchSettings) => void {
   let launch = initial
@@ -85,7 +87,9 @@ export function createAgentModelCatalogSettingsExpiry(
         value.nativeChatInheritShellEnvironment,
         value.nativeChatShellEnvironmentVariables,
         value.terminalWindowsShell,
-        value.terminalWindowsPowerShellImplementation
+        value.terminalWindowsPowerShellImplementation,
+        value.httpProxyUrl,
+        value.httpProxyBypassRules
       ])
     if (environment(launch) !== environment(settings)) {
       store.expireLaunchScopes()

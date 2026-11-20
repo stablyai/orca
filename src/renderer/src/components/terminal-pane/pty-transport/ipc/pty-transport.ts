@@ -1,8 +1,8 @@
-import { getConnectionExecutionHostId } from '../../../../../../shared/execution-host'
+import { getConnectionExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { attachIpcPty } from './ipc-pty-attach'
 import { connectIpcPty } from './ipc-pty-connect'
 import { createIpcPtySessionHandlers } from './ipc-pty-session-handlers'
-import { markTerminalProviderSessionBound } from '../../../terminal/terminal-provider-gone-sessions'
+import { markTerminalProviderSessionBound } from '../../../terminal/provider-snapshots/terminal-provider-gone-sessions'
 import { createPtyInputWriteQueue } from '../input/pty-input-write-queue'
 import { createPtyOutputProcessor } from '../output/pty-output-processor'
 import { createPtyPreconnectInputBuffer } from '../input/pty-preconnect-input-buffer'
@@ -180,6 +180,8 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
         void flushPreconnectInput()
       }
     },
+
+    isHoldingInput: () => !destroyed && preconnectInputBuffer?.isBuffering() === true,
 
     abandonPreconnectInput() {
       dropPreconnectInput('its pending connection was abandoned')

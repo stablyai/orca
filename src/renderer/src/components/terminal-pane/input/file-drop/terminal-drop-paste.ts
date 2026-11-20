@@ -5,6 +5,7 @@ import { getCurrentTerminalDropTransport } from './terminal-drop-target'
 import { writeTerminalDropPathsToCapturedTarget } from './terminal-drop-path-writer'
 import { showTerminalDropWriteFailure } from './terminal-drop-write-failure'
 import { recordTerminalUserInputForLeaf } from '../terminal-input-activity'
+import { recordRecentTerminalImage } from '../recent-terminal-images'
 
 /** Everything a drop flow needs to reach the terminal it was dropped on. */
 export type NativeDropFlowArgs = {
@@ -22,7 +23,11 @@ export type NativeDropFlowArgs = {
 }
 
 export async function pasteResolvedDropPaths(
-  args: NativeDropFlowArgs & { paths: string[]; targetShell: 'posix' | 'windows' }
+  args: NativeDropFlowArgs & {
+    paths: string[]
+    previewPaths?: readonly string[]
+    targetShell: 'posix' | 'windows'
+  }
 ): Promise<void> {
   args.assertCurrent?.()
   // Upload/resolution can outlive the pane; recheck before writing to its PTY.
@@ -44,5 +49,18 @@ export async function pasteResolvedDropPaths(
   showTerminalDropWriteFailure(writeResult.failureReason)
   if (writeResult.sentAnyPath) {
     recordTerminalUserInputForLeaf(args.tabId, args.pane.leafId)
+    if (
+      args.previewPaths &&
+      getCurrentTerminalDropTransport(args.manager, args.paneTransports, args.dropTarget)
+    ) {
+      const pane = args.manager
+        .getPanes()
+        .find((candidate) => candidate.leafId === args.pane.leafId)
+      if (pane) {
+        for (const path of args.previewPaths.slice(0, writeResult.pathsWritten)) {
+          recordRecentTerminalImage(pane.terminal, path)
+        }
+      }
+    }
   }
 }

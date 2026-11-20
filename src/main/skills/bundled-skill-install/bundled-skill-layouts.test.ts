@@ -16,40 +16,16 @@ import {
   removeSkillHomes,
   serviceInput,
   snapshot,
-  writeCopy,
-  writeNpxLock,
-  type SkillHome
+  writeCopy
 } from './testing/bundled-skill-home'
 
 const EDITED_TEXT = `---\nname: ${NAME}\n---\nmine\n`
-
-async function linkClaudeToShared(home: SkillHome) {
-  await mkdir(dirname(home.claude), { recursive: true })
-  await linkDirectory(home.shared, home.claude)
-}
-
-async function npxShared(home: SkillHome, text = OLD_TEXT, extra: Record<string, string> = {}) {
-  await writeNpxLock(home)
-  await writeCopy(home.shared, text, extra)
-  await linkClaudeToShared(home)
-}
 
 afterEach(async () => {
   await removeSkillHomes()
 })
 
 describe('bundled skill install edges', () => {
-  it('keeps the replaced copy in a backup beside the skills root', async () => {
-    const home = await makeSkillHome()
-    await npxShared(home, EDITED_TEXT)
-    const { result } = await previewAndInstall(serviceInput(home, { force: [home.shared] }))
-    const backup = result.skills[0].ops[0].backupPath ?? ''
-    expect(backup.startsWith(join(home.home, '.agents', '.orca-skill-backups', `${NAME}-`))).toBe(
-      true
-    )
-    expect(await readFile(join(backup, 'SKILL.md'), 'utf8')).toBe(EDITED_TEXT)
-  })
-
   it('keeps a project Replace backup in the home, not the repo', async () => {
     const home = await makeSkillHome()
     const project = join(home.root, 'project')

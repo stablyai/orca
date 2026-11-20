@@ -1,6 +1,6 @@
-import { AgentHookServer } from '../../../agent-hooks/server'
-import { agentHookRuntimeDeps } from '../../../agent-hooks/agent-hook-runtime-deps'
-import { installHookStatusSessionTabsRepublish } from '../../../agent-hooks/hook-status-session-tabs-republish'
+import { AgentHookServer } from '../../../agent-hooks/server/agent-hook-server'
+import { agentHookRuntimeDeps } from '../../../agent-hooks/runtime/agent-hook-runtime-deps'
+import { installHookStatusSessionTabsRepublish } from '../../../agent-hooks/runtime/hook-status-session-tabs-republish'
 import { AgentStatusObservedPaneIdentities } from './agent-status-observed-pane-identity'
 
 type WiredRuntime = {

@@ -44,13 +44,13 @@ Tokens pair a **surface** with a **foreground** that meets contrast on it; alway
 - Body letter-spacing is set globally on `body`; don't override per component.
 - Use Tailwind's scale. Common: 14px body/default buttons, 13px sidebar items and dense rows, 12px sub-text and paths, 11px uppercase meta/captions.
 - Use `text-2xs` (11px) and `text-3xs` (10px), not `text-[11px]` / `text-[10px]`.
-- Category labels: 11px, `font-semibold`, `uppercase`, `tracking-wider` (0.05em).
+- Category labels: 11px, `font-semibold`, `uppercase`, `tracking-wider` (0.05em). Settings content uses sentence case without tracking: 14px row labels, `text-settings-detail` (12.5px) help, and `text-settings-heading` (15px) semibold section headings. Settings form rows use about 9px vertical padding (44px minimum), selects are 28px, and the centered content column is at most 720px with at least 32px side gutters. These density rules are scoped to `.settings-view-shell`; shared primitives retain their defaults elsewhere. Every Settings card that holds rows is a `SettingsGroup` (`settings/section-layout/SettingsGroup.tsx`): one 20px side inset, rules between rows, title outside the card; use its `collapse` prop, `SettingsGroupSubsection`, `SettingsGroupNestedRows` and `SettingsGroupDisclosure` instead of local padding or indents.
 - Native chat has its own lint-enforced scale and colours: see [native-chat.md](./styleguide/native-chat.md).
 
 ## Radius and elevation
 
 - Radii derive from `--radius` in `main.css`. Buttons and inputs use `rounded-md`, `Card` uses `rounded-xl`, badges use `rounded-full`. Match the existing primitive's radius; don't introduce a new one.
-- Three elevation levels, no fourth: (1) `border` hairline, the default for almost everything; (2) `shadow-xs` + single-token border for outline buttons and embedded cards; (3) `shadow-floating`, reserved for popovers and popups that escape the editor surface. Needing more than floating usually means you want the focus `ring`.
+- Three elevation levels, no fourth: (1) `border` hairline, the default for almost everything; (2) `shadow-xs` + single-token border for outline buttons and embedded cards; (3) `shadow-floating`, reserved for popovers and popups that escape the editor surface; toasts and bottom-right notification cards use its notice form (`--notice-surface`, `--notice-border`, `shadow-notice`) so they read over chat, editor and terminal. Needing more than floating usually means you want the focus `ring`.
 
 ## Components
 
@@ -72,6 +72,7 @@ These apply to every UI change. Rationale: [ux-rules.md](./styleguide/ux-rules.m
 - **UI copy must not overclaim.** Never imply the app took an action, made a decision, or observed a fact without real state or result data. Use neutral process language while pending; reserve result verbs ("skipped", "protected", "found", "verified", "deleted") for actual results. Copy is typo-free, concise, specific, and free of filler ("please", "simply", "just").
 - **Match in-flight feedback to duration:** 0–100 ms none; 100 ms–1 s disabled only; 1–3 s disabled + spinner or label swap; 3 s+ or multi-step stage labels/progress. Pre-reserve space for label/icon swaps (`width`, not `min-width`). Bind disabled immediately; defer visible loading ~200 ms so local stays clean and SSH gets feedback.
 - **Match siblings:** adjacent components in the same flow share icons, shortcut conventions, and submit semantics. Diverge only for a real role difference, or fix both. With no sibling, match the surrounding chrome.
+- **Fold arrows lead section headings:** a heading that folds puts its chevron before the title (down while open, right while folded), so every arrow sits in one column whatever the title's length; titles of headings that don't fold line up with the folding ones. Only a full-width accordion row with trailing controls puts its chevron at the far end.
 - **Keep the back-out path quiet:** Cancel, Dismiss, Close, and Discard are not destructive: ghost, no color, no shortcut chip, no animated affordance. Esc still works.
 - Primary action obvious; common workflows in 1–2 actions; default focus on the likely field or primary action; Enter submits it, Esc backs out.
 - Respect reduced motion per element: `motion-reduce:` for movement, still-but-working states for spinners (`LoadingSpinner`), and `motionSafeScrollBehavior()` for scripted scrolls.

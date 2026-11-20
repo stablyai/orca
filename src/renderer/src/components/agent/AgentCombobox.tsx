@@ -4,13 +4,14 @@ import { Button } from '@/components/ui/button'
 import { Command, CommandEmpty, CommandInput, CommandList } from '@/components/ui/command'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { AgentIcon, type AgentCatalogEntry } from '@/lib/agent-catalog'
+import type { AgentCatalogEntry } from '@/lib/agent-catalog/agent-catalog'
+import { AgentIcon } from '@/components/agent/icons/AgentIcon'
 import {
   agentPickerBlankTerminalMatches,
   getAgentPickerCommandValue,
   searchAgentPickerEntries
-} from '@/lib/agent-picker-search'
-import { cn } from '@/lib/utils'
+} from '@/lib/agent-catalog/agent-picker-search'
+import { cn } from '@/lib/class-names'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import * as state from './agent-combobox-command-state'
 import {
@@ -19,7 +20,7 @@ import {
   renderAgentComboboxItem
 } from './agent-combobox-items'
 import { useTranslate } from '@/i18n/use-translate'
-import { rowLabel } from '@/components/tab-bar/tab-agent-row-presentation'
+import { rowLabel } from '@/components/agent/launch-menu/agent-menu-row-presentation'
 import {
   SurfaceAgentItems,
   surfaceCommandValues,

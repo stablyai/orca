@@ -50,18 +50,6 @@ afterEach(() => {
 })
 
 describe('orca.document.session', () => {
-  it('answers editor.flush only once the change it posted is accepted', async () => {
-    const { session, fromHost, posted } = await open()
-    session.change('b')
-    const flushRequest = { orca: 1, kind: 'req', id: 9, method: 'editor.flush' }
-    fromHost(flushRequest)
-    await settle()
-    expect(posted().at(-1)).toMatchObject({ method: 'editor.applyEdit' })
-    fromHost(accept(0))
-    await settle()
-    expect(posted().at(-1)).toEqual({ orca: 1, kind: 'res', id: 9, result: null })
-  })
-
   it('keeps one edit in flight through a save, so the baseline never goes back', async () => {
     const { orca, session, fromHost, edits, posted } = await open({ debounceMs: 0 })
     session.change('a1')

@@ -2,7 +2,7 @@ import {
   getTuiAgentDetectCommands,
   TUI_AGENT_CONFIG
 } from '../../../../../../shared/agent-launch/catalog/tui-agent-config'
-import { getCommandTokenPathBasename } from '../../../../../../shared/command-token-scanner'
+import { getCommandTokenPathBasename } from '../../../../../../shared/shell/command-resolution/command-token-scanner'
 import { getAgentLaunchCommandToken } from '../../../../../../shared/agent-launch/startup/agent-command-line-intent'
 
 const TERMINAL_STARTUP_COMMAND_EXTENSION_RE = /\.(?:exe|cmd|bat|ps1)$/i

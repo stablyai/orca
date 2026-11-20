@@ -1,12 +1,12 @@
 import { Loader2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import type { OrcadManagedStaleLockReclaimResult } from '../../../../../../shared/orcad-managed-runtime'
+import type { OrcadManagedStaleLockReclaimResult } from '../../../../../../shared/remote-runtime/orcad-lifecycle/orcad-managed-runtime'
 import {
   ORCAD_RECLAIM_STALE_LOCK_FLAG,
   type OrcadStaleLockEvidence
-} from '../../../../../../shared/orcad-stale-lock-reclaim'
-import type { SshManagedServerStatus } from '../../../../../../shared/ssh-types'
-import type { ManagedOrcadPreloadApi } from '../../../../../../preload/api/managed-orcad-api'
+} from '../../../../../../shared/remote-runtime/orcad-lifecycle/orcad-stale-lock-reclaim'
+import type { SshManagedServerStatus } from '../../../../../../shared/remote-runtime/ssh/ssh-types'
+import type { ManagedOrcadPreloadApi } from '../../../../../../preload/api/runtime/managed-orcad-api'
 import { quotePosixShellUnlessPlain } from '../../../../../../shared/shell/launch/shell-argument-quoting'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { formatUiRelativeTime } from '@/i18n/relative-time-format'
@@ -21,8 +21,14 @@ import {
   DialogHeader,
   DialogTitle
 } from '../../../ui/dialog'
+import {
+  DialogCancel,
+  DialogDisclosure,
+  DialogError,
+  DialogWarning
+} from '../../../ui/dialog-parts'
 import { Label } from '../../../ui/label'
-import { getManagedOrcadApi } from '../../runtime-environments/managed-servers/use-managed-server-catalog'
+import { getManagedOrcadApi } from '../../../../runtime/hosts/installation/managed-orcad-api-availability'
 
 /** Offered only when the slot's own refusal named the command, so that build supports it. */
 export function canRecoverSshHostServer(status: SshManagedServerStatus | undefined): boolean {
@@ -93,6 +99,7 @@ function OpenRecoverServerDialog({
   const [confirmed, setConfirmed] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [checkAttempt, setCheckAttempt] = useState(0)
 
   useEffect(() => {
     if (!opened) {
@@ -102,7 +109,13 @@ function OpenRecoverServerDialog({
       (next) => mountedRef.current && setCheck(next),
       (cause: unknown) => mountedRef.current && setError(messageOf(cause))
     )
-  }, [api, mountedRef, opened])
+  }, [api, mountedRef, opened, checkAttempt])
+  const checkAgain = (): void => {
+    setCheck(null)
+    setError(null)
+    setConfirmed(false)
+    setCheckAttempt((attempt) => attempt + 1)
+  }
 
   if (!opened) {
     return null
@@ -137,62 +150,81 @@ function OpenRecoverServerDialog({
   const eligible = check?.status === 'eligible'
   // Pin confirmation to the evidence nonce the user reviewed.
   const approvedNonce = eligible ? check.evidence?.nonce : undefined
+  const host = eligible ? check.evidence?.host : undefined
   return (
-    <Dialog open onOpenChange={(next) => !next && !busy && onOpenChange(false)}>
-      <DialogContent surface="security" showCloseButton={!busy}>
+    <Dialog open onOpenChange={(next) => !next && onOpenChange(false)}>
+      <DialogContent size="confirm" surface="security" busy={busy} initialFocus="cancel" scrollable>
         <DialogHeader>
           <DialogTitle>
-            {t('auto.components.settings.recoverServer.title', 'Recover Orca’s server')}
+            {host
+              ? t(
+                  'components.settings.recoverServer.titleOnHost',
+                  'Clear the old lock on {{host}}?',
+                  {
+                    host
+                  }
+                )
+              : t('components.settings.recoverServer.titleGeneric', 'Clear the old lock?')}
           </DialogTitle>
           <DialogDescription>
             {t(
-              'auto.components.settings.recoverServer.description',
-              'Orca’s server on this host won’t start because a lock from an earlier run is still in place.'
+              'components.settings.recoverServer.summary',
+              'An earlier run left a lock, so Orca’s server can’t start.'
             )}
           </DialogDescription>
         </DialogHeader>
         {!check && !error ? (
-          <p className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Loader2 className="size-4 animate-spin" />
+          <p className="flex items-center gap-2 text-[13px] text-muted-foreground">
+            <Loader2 className="size-3.5 animate-spin" />
             {t('auto.components.settings.recoverServer.checking', 'Checking the lock…')}
           </p>
         ) : null}
-        {eligible ? <EligibleLock evidence={check.evidence} /> : null}
         {eligible ? (
-          <div className="flex items-center gap-2">
+          <div className="flex items-start gap-2">
             <Checkbox
               id="ssh-host-recover-server-confirm"
+              className="mt-0.5"
               checked={confirmed}
               disabled={busy}
               onCheckedChange={(next) => setConfirmed(next === true)}
             />
-            <Label htmlFor="ssh-host-recover-server-confirm">
+            <Label htmlFor="ssh-host-recover-server-confirm" variant="dialog">
               {t(
-                'auto.components.settings.recoverServer.confirmCheck',
-                'No other machine sharing this home is running Orca'
+                'components.settings.recoverServer.confirmCheckHomeFolder',
+                'No other machine sharing this home folder is running Orca'
               )}
             </Label>
           </div>
         ) : null}
+        {eligible && check.evidence && !error ? <EligibleLock evidence={check.evidence} /> : null}
         {check && !eligible ? <CheckOutcome check={check} detail={detail} /> : null}
         {error ? (
-          <div className="space-y-2 text-sm">
-            <p className="text-destructive">{error}</p>
-            <ManualReclaim detail={detail} />
-          </div>
+          <>
+            <DialogError onRetry={eligible ? undefined : checkAgain}>{error}</DialogError>
+            {/* Why one disclosure: the lock evidence and the manual fallback read as one set of details. */}
+            <DialogDisclosure label={t('components.settings.recoverServer.details', 'Details')}>
+              <div className="space-y-2">
+                {eligible && check.evidence ? <LockEvidence evidence={check.evidence} /> : null}
+                <ManualReclaim detail={detail} />
+              </div>
+            </DialogDisclosure>
+          </>
         ) : null}
         <DialogFooter>
-          <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={busy}>
+          <DialogCancel>
             {check?.status === 'reclaimed'
               ? t('auto.components.settings.recoverServer.close', 'Close')
               : t('auto.components.settings.recoverServer.cancel', 'Cancel')}
-          </Button>
+          </DialogCancel>
           {eligible ? (
             <Button
+              size="sm"
               onClick={() => approvedNonce && void reclaim(approvedNonce)}
               disabled={busy || !confirmed || !approvedNonce}
             >
-              {t('auto.components.settings.recoverServer.confirm', 'Clear lock and restart')}
+              {busy
+                ? t('components.settings.recoverServer.clearing', 'Clearing…')
+                : t('auto.components.settings.recoverServer.confirm', 'Clear lock & restart')}
             </Button>
           ) : null}
         </DialogFooter>
@@ -201,48 +233,31 @@ function OpenRecoverServerDialog({
   )
 }
 
-function EligibleLock({
-  evidence
-}: {
-  evidence: OrcadStaleLockEvidence | undefined
-}): React.JSX.Element {
+function EligibleLock({ evidence }: { evidence: OrcadStaleLockEvidence }): React.JSX.Element {
+  const t = useTranslate()
+  return (
+    <DialogDisclosure label={t('components.settings.recoverServer.details', 'Details')}>
+      <LockEvidence evidence={evidence} />
+    </DialogDisclosure>
+  )
+}
+
+function LockEvidence({ evidence }: { evidence: OrcadStaleLockEvidence }): React.JSX.Element {
   const t = useTranslate()
   const intlLocale = useIntlLocale()
   return (
-    <div className="space-y-2 text-sm">
-      <p>
-        {t(
-          'auto.components.settings.recoverServer.eligible',
-          'Nothing answers on this machine at its old address, but Orca can’t rule out another machine with the same name that shares this home folder.'
-        )}
-      </p>
-      {evidence ? (
-        <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
-          <dt className="text-muted-foreground">
-            {t('auto.components.settings.recoverServer.host', 'Host')}
-          </dt>
-          <dd className="font-mono">{evidence.host}</dd>
-          <dt className="text-muted-foreground">
-            {t('auto.components.settings.recoverServer.lockBoot', 'Written during boot')}
-          </dt>
-          <dd className="font-mono break-all">{evidence.bootId}</dd>
-          <dt className="text-muted-foreground">
-            {t('auto.components.settings.recoverServer.currentBoot', 'Current boot')}
-          </dt>
-          <dd className="font-mono break-all">{evidence.currentBootId}</dd>
-          <dt className="text-muted-foreground">
-            {t('auto.components.settings.recoverServer.written', 'Written')}
-          </dt>
-          <dd>{formatUiRelativeTime(-evidence.ageMinutes * 60_000, intlLocale)}</dd>
-        </dl>
-      ) : null}
-      <p className="font-medium text-status-warning">
-        {t(
-          'auto.components.settings.recoverServer.warning',
-          'Only continue if no other machine sharing this home runs Orca for this profile.'
-        )}
-      </p>
-    </div>
+    <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5">
+      <dt>{t('auto.components.settings.recoverServer.host', 'Host')}</dt>
+      <dd className="font-mono text-foreground">{evidence.host}</dd>
+      <dt>{t('auto.components.settings.recoverServer.lockBoot', 'Written during boot')}</dt>
+      <dd className="font-mono break-all text-foreground">{evidence.bootId}</dd>
+      <dt>{t('auto.components.settings.recoverServer.currentBoot', 'Current boot')}</dt>
+      <dd className="font-mono break-all text-foreground">{evidence.currentBootId}</dd>
+      <dt>{t('auto.components.settings.recoverServer.written', 'Written')}</dt>
+      <dd className="text-foreground">
+        {formatUiRelativeTime(-evidence.ageMinutes * 60_000, intlLocale)}
+      </dd>
+    </dl>
   )
 }
 
@@ -256,20 +271,20 @@ function CheckOutcome({
   const t = useTranslate()
   if (check.status === 'reclaimed') {
     return (
-      <div className="space-y-2 text-sm">
-        <p>
+      <>
+        <p className="text-[13px]">
           {t(
             'auto.components.settings.recoverServer.reclaimedNotStarted',
             'The lock was cleared, but Orca’s server did not start.'
           )}
         </p>
-        {check.notRestarted ? <p className="text-destructive">{check.notRestarted}</p> : null}
-      </div>
+        {check.notRestarted ? <DialogError>{check.notRestarted}</DialogError> : null}
+      </>
     )
   }
   if (check.status === 'none') {
     return (
-      <p className="text-sm text-muted-foreground">
+      <p className="text-[13px] text-muted-foreground">
         {t(
           'auto.components.settings.recoverServer.none',
           'There is no lock to clear any more. Reconnect to start this host’s Orca server.'
@@ -277,21 +292,24 @@ function CheckOutcome({
       </p>
     )
   }
+  // Prefer the host’s own reclaim command; offer rm only when unsupported.
+  const manual =
+    check.status === 'refused' ||
+    check.status === 'no-answer' ||
+    (check.status === 'unsupported' && check.reclaimWithoutPin) ? (
+      <ManualReclaim detail={detail} />
+    ) : check.status === 'unsupported' ? (
+      <ManualLockDelete lockPath={check.lockPath} />
+    ) : null
   return (
-    <div className="space-y-2 text-sm">
-      <p className="text-destructive">{check.message}</p>
-      {check.status === 'refused' || check.status === 'no-answer' ? (
-        <ManualReclaim detail={detail} />
+    <>
+      <DialogError>{check.message}</DialogError>
+      {manual ? (
+        <DialogDisclosure label={t('components.settings.recoverServer.details', 'Details')}>
+          {manual}
+        </DialogDisclosure>
       ) : null}
-      {/* Prefer the host’s own reclaim command; offer rm only when unsupported. */}
-      {check.status === 'unsupported' ? (
-        check.reclaimWithoutPin ? (
-          <ManualReclaim detail={detail} />
-        ) : (
-          <ManualLockDelete lockPath={check.lockPath} />
-        )
-      ) : null}
-    </div>
+    </>
   )
 }
 
@@ -303,7 +321,7 @@ function ManualReclaim({ detail }: { detail: string }): React.JSX.Element {
   }
   return (
     <div className="space-y-1.5">
-      <p className="text-muted-foreground">
+      <p>
         {t(
           'auto.components.settings.recoverServer.manualCommand',
           'Run this on the host, or delete the lock file shown in Details:'
@@ -318,7 +336,7 @@ function ManualLockDelete({ lockPath }: { lockPath: string | undefined }): React
   const t = useTranslate()
   if (!lockPath) {
     return (
-      <p className="text-muted-foreground">
+      <p>
         {t(
           'auto.components.settings.recoverServer.manualDelete',
           'Delete the lock file shown in Details once you are sure no other machine uses it.'
@@ -328,26 +346,26 @@ function ManualLockDelete({ lockPath }: { lockPath: string | undefined }): React
   }
   return (
     <div className="space-y-1.5">
-      <p className="text-muted-foreground">
+      <p>
         {t(
           'auto.components.settings.recoverServer.manualDeleteCommand',
           'Delete the lock on the host by hand:'
         )}
       </p>
       <LiteralCommand command={`rm ${quotePosixShellUnlessPlain(lockPath)}`} />
-      <p className="font-medium text-status-warning">
+      <DialogWarning>
         {t(
           'auto.components.settings.recoverServer.manualDeleteWarning',
           'Only do this if no other machine sharing this home runs Orca for this profile.'
         )}
-      </p>
+      </DialogWarning>
     </div>
   )
 }
 
 function LiteralCommand({ command }: { command: string }): React.JSX.Element {
   return (
-    <pre className="whitespace-pre-wrap break-all rounded-md border border-border bg-background px-3 py-2 font-mono text-2xs leading-relaxed text-muted-foreground select-text">
+    <pre className="font-mono whitespace-pre-wrap break-all text-foreground select-text">
       {command}
     </pre>
   )

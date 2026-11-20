@@ -1,4 +1,4 @@
-import type { StructuredAgentSessionState } from '../../../../../../shared/agent-session/structured-agent-session-reducer'
+import type { StructuredAgentSessionState } from '../../../../../../shared/agent-session/view/live-read/structured-agent-session-reducer'
 import { projectStructuredAgentSessionStatusState } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
 import { isActionableStructuredAgentSessionPrompt } from '../../../../../../shared/agent-session/view/structured-agent-session-live-turn'
 

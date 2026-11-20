@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { useQueryClient, type QueryClient, type UseQueryResult } from '@tanstack/react-query'
-import { useOptionalHostProtocolGates } from '../../components/host-protocol-gates-context'
+import { useOptionalHostProtocolGates } from '../../components/host-connection/host-protocol-gates-context'
 import { useWorkspaceExecutionHost } from '../../navigation/workspace-execution-host'
 import { defineHostQuery, useHostQuery } from '../../query/host-query'
 import {
@@ -9,8 +9,13 @@ import {
   type HostQueryTarget
 } from '../../query/host-query-key'
 import { hostReadClient } from '../../query/host-read-client'
+import { useHostSettingsChangeSignal } from '../../query/settings-change-signal'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
-import { newTabSettingsRead } from './mobile-new-tab-settings-operations'
+import {
+  newTabSettingsRead,
+  requestServerAgentPolicy,
+  withServerAgentPolicy
+} from './mobile-new-tab-settings-operations'
 import {
   hostRefusesOtherRuntimeWorkspace,
   loadMobileDetectedAgents,
@@ -75,16 +80,23 @@ export async function refreshDetectedAgents(
 
 const NO_INPUT = {}
 
+// The launch reads the whole settings object, so any settingsChanged makes it stale.
 const newTabSettingsQuery = defineHostQuery({
   family: 'settings.newTab',
   staleTime: 60_000,
   gcTime: 30 * 60_000,
-  fetch: async (client, _target, _input: typeof NO_INPUT) => ({
-    settings: newTabSettingsRead.interpret(await newTabSettingsRead.request(client))()
-  })
+  signal: { events: ['settingsChanged'] },
+  fetch: async (client, _target, _input: typeof NO_INPUT) => {
+    const [response, readServerPolicy] = await Promise.all([
+      newTabSettingsRead.request(client),
+      requestServerAgentPolicy(client)
+    ])
+    const readSettings = newTabSettingsRead.interpret(response)
+    return { settings: withServerAgentPolicy(readSettings(), readServerPolicy()) }
+  }
 })
 
-// Settings are read again on every sheet open; the cached ones paint meanwhile.
+// A host without settingsChanged gets a reread on every sheet open; the cached ones paint meanwhile.
 export function reloadNewTabSettings(
   queryClient: QueryClient,
   hostId: string,
@@ -101,6 +113,8 @@ type MobileAgentLaunchQueries = {
   settings: UseQueryResult<{ settings: unknown }>
   target: HostQueryTarget
   input: DetectionInput
+  // The host tells this page when settings change, so a sheet open need not read them again.
+  settingsSignalled: boolean
 }
 
 // One agent list per workspace and document, shared by the "+" sheet and the "Fix with" labels.
@@ -130,11 +144,15 @@ export function useMobileAgentLaunchQueries(args: {
     enabled,
     subscribed: observed(detectedAgentsQuery.family, target, input)
   })
+  // The desktop's settings events don't cover a relayed server's agent preferences.
+  const settingsSignalled =
+    useHostSettingsChangeSignal(hostId, client) && !exec.startsWith('runtime:')
   const settings = useHostQuery(newTabSettingsQuery, { hostId, client }, settingsTarget, NO_INPUT, {
     enabled,
-    subscribed: observed(newTabSettingsQuery.family, settingsTarget, NO_INPUT)
+    subscribed: observed(newTabSettingsQuery.family, settingsTarget, NO_INPUT),
+    staleTime: settingsSignalled ? Infinity : undefined
   })
-  return { detection, settings, target, input }
+  return { detection, settings, target, input, settingsSignalled }
 }
 
 export function agentLaunchContextOf({

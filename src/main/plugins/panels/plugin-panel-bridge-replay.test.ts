@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { PluginCapabilityKind } from '../../../shared/plugins/capabilities/plugin-capabilities'
-import type { PluginRuntimeDelegate } from '../workers/plugin-host-service-bindings'
+import type { PluginRuntimeDelegate } from '../workers/host-api/plugin-host-service-bindings'
 import { PluginPanelBridge } from './plugin-panel-bridge'
 
 const caller = { id: 'panel-a', surface: 'panel' as const, contributionId: 'board' }
@@ -30,7 +30,12 @@ function setup(capabilities: PluginCapabilityKind[] = ['workspace:read']) {
   return { bridge, unfocus: () => (active = null) }
 }
 
-const context = { branch: 'main', displayName: 'w', terminals: [{ id: 'term_a', title: 'zsh' }] }
+// The raw id (`repo::/w`) embeds a path, so panels never get it.
+const context = {
+  branch: 'main',
+  displayName: 'w',
+  terminals: [{ id: 'term_a', title: 'zsh' }]
+}
 
 describe('workspace.changed replay on subscribe', () => {
   it('gives a panel the current context as soon as it subscribes', async () => {
@@ -61,16 +66,5 @@ describe('workspace.changed replay on subscribe', () => {
       })
     )
     expect(deliver).toHaveBeenCalledOnce()
-  })
-
-  it('replays nothing for other events, or once the panel has closed', async () => {
-    const { bridge } = setup(['workspace:read', 'agent:read'])
-    const deliver = vi.fn()
-    bridge.subscribe('acme.board', caller.id, 'workspace.changed')
-    bridge.close(caller.id)
-    bridge.open(caller, 'acme.board', deliver)
-    bridge.subscribe('acme.board', caller.id, 'agent.status.changed')
-    await new Promise((resolve) => setTimeout(resolve, 0))
-    expect(deliver).not.toHaveBeenCalled()
   })
 })

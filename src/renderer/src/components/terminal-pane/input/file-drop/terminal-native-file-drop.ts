@@ -1,7 +1,6 @@
 import { toast } from 'sonner'
-import { extractIpcErrorMessage } from '@/lib/ipc-error'
 import { translate } from '@/i18n/i18n'
-import { isWslUncPath } from '../../../../../../shared/wsl-paths'
+import { parseWslUncPath, toWindowsWslPath } from '../../../../../../shared/file-access/wsl-paths'
 import { openWorktreeScopedToast } from '@/lib/worktree-scoped-toast'
 import { reportTerminalDropUploadSkipsAndFailures } from './terminal-drop-upload-report'
 import { describeDropWorkspaceIfInactive } from './terminal-drop-workspace-label'
@@ -10,6 +9,7 @@ import { uploadRuntimeDropPaths } from './terminal-runtime-drop-upload'
 import { resolveTerminalDropTargetShell } from './terminal-drop-shell'
 import type { captureTerminalDropTransportOwner } from './terminal-drop-transport-owner'
 import { toLocalWslDropPath } from './terminal-drop-local-wsl'
+import { terminalFileDropErrorMessage } from './terminal-native-file-drop-error'
 
 export async function deliverNativeTerminalFileDrop(
   args: NativeDropFlowArgs & {
@@ -101,16 +101,22 @@ async function pasteLocalDropPaths(
   }
 ): Promise<void> {
   // Local WSL shells need distro-aware POSIX paths despite their Windows host.
-  if (isWslUncPath(args.worktreePath)) {
+  const wsl = parseWslUncPath(args.worktreePath)
+  if (wsl) {
     try {
       const { resolvedPaths, skipped, failed } = await window.api.fs.resolveDroppedPathsForAgent({
         paths: args.dataPaths,
         worktreePath: args.worktreePath
       })
-      await pasteResolvedDropPaths({ ...args, paths: resolvedPaths, targetShell: 'posix' })
+      await pasteResolvedDropPaths({
+        ...args,
+        paths: resolvedPaths,
+        targetShell: 'posix',
+        previewPaths: resolvedPaths.map((path) => toWindowsWslPath(path, wsl.distro))
+      })
       reportTerminalDropUploadSkipsAndFailures(skipped, failed)
     } catch (err) {
-      toast.error(extractIpcErrorMessage(err, 'Failed to resolve dropped files.'))
+      toast.error(terminalFileDropErrorMessage(err, 'resolve'))
     }
     return
   }
@@ -119,7 +125,8 @@ async function pasteLocalDropPaths(
   await pasteResolvedDropPaths({
     ...args,
     paths: args.localWslDrop ? args.dataPaths.map(toLocalWslDropPath) : args.dataPaths,
-    targetShell: args.targetShell
+    targetShell: args.targetShell,
+    previewPaths: args.dataPaths
   })
 }
 
@@ -155,7 +162,7 @@ async function uploadRemoteDropPaths(
       describeDropWorkspaceIfInactive(args.worktreeId, args.worktreePath)
     )
   } catch (err) {
-    toast.error(extractIpcErrorMessage(err, 'Failed to upload files.'), {
+    toast.error(terminalFileDropErrorMessage(err, 'upload'), {
       description: describeDropWorkspaceIfInactive(args.worktreeId, args.worktreePath)
     })
   } finally {

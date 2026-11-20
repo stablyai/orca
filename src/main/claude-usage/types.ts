@@ -106,7 +106,7 @@ export type ClaudeUsageAttributedTurn = ClaudeUsageParsedTurn & {
   repoId: string | null
   worktreeId: string | null
 }
-import type { JsonlFileCheckpoint } from '../usage/jsonl-file-checkpoint'
+import type { JsonlFileCheckpoint } from '../usage/source-input/jsonl/jsonl-file-checkpoint'
 
 export type ClaudeUsageTokenTotals = Pick<
   ClaudeUsageParsedTurn,

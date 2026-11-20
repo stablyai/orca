@@ -11,7 +11,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type * as NodePath from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as ClaudeFolderTrustFile from '../../claude/claude-folder-trust-file'
+import type * as ClaudeFolderTrustFile from '../../claude/configuration/claude-folder-trust-file'
+import type * as QoderWorkspaceTrust from '../../qoder/workspace-trust'
 
 const CODEX_CONFIG_FILES = ['/orca/codex-home/config.toml', '/home/u/.codex/config.toml']
 
@@ -46,8 +47,12 @@ vi.mock('./agent-trust-presets', () => ({
 vi.mock('../../codex/configuration/homes/codex-home-paths', () => ({
   getLocalCodexTrustConfigFiles: mocks.codexConfigFiles
 }))
-vi.mock('../../qoder/workspace-trust', () => ({ markQoderWorkspaceTrusted: mocks.qoder }))
-vi.mock('../../claude/claude-folder-trust-file', async (importOriginal) => {
+// Qwen reuses the real Qoder trustDirectories helper.
+vi.mock('../../qoder/workspace-trust', async (importOriginal) => ({
+  ...(await importOriginal<typeof QoderWorkspaceTrust>()),
+  markQoderWorkspaceTrusted: mocks.qoder
+}))
+vi.mock('../../claude/configuration/claude-folder-trust-file', async (importOriginal) => {
   const actual = await importOriginal<typeof ClaudeFolderTrustFile>()
   mocks.claudeGrant.mockImplementation(actual.grantClaudeWorkspaceTrust)
   return { ...actual, grantClaudeWorkspaceTrust: mocks.claudeGrant }
@@ -56,12 +61,6 @@ vi.mock('../../claude/claude-folder-trust-file', async (importOriginal) => {
 import { applyAgentWorkspaceTrust, type AgentTrustLaunchContext } from './agent-workspace-trust'
 import { applyAgentWorkspaceTrustToSpawn } from './agent-workspace-trust-spawn'
 import { clearWslHomeCache, rememberWslHome } from '../../wsl/discovery/wsl-home-cache'
-import {
-  AGENT_TRUST_WRITE_DEADLINE_MS,
-  SHORT_AGENT_TRUST_WRITE_DEADLINE_MS
-} from './agent-trust-write-deadline'
-
-const WORKSPACE = '/workspace/app'
 const local: AgentTrustLaunchContext = {
   env: {},
   claudeAuth: null,
@@ -69,68 +68,8 @@ const local: AgentTrustLaunchContext = {
   connectionId: null
 }
 
-function pending(): { promise: Promise<void>; release: () => void } {
-  let release!: () => void
-  const promise = new Promise<void>((resolve) => {
-    release = resolve
-  })
-  return { promise, release }
-}
-
 beforeEach(() => {
   vi.clearAllMocks()
-})
-
-afterEach(() => {
-  vi.useRealTimers()
-})
-
-describe('applyAgentWorkspaceTrust on this machine', () => {
-  it('gives only Codex the long deadline its shared config lane needs', async () => {
-    vi.useFakeTimers()
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const codexWrite = pending()
-    mocks.codex.mockReturnValueOnce(codexWrite.promise)
-    let codexSettled = false
-    const codex = applyAgentWorkspaceTrust('codex', WORKSPACE, local).then(() => {
-      codexSettled = true
-    })
-    await vi.advanceTimersByTimeAsync(SHORT_AGENT_TRUST_WRITE_DEADLINE_MS + 1)
-    expect(codexSettled).toBe(false)
-    await vi.advanceTimersByTimeAsync(AGENT_TRUST_WRITE_DEADLINE_MS)
-    await codex
-    expect(codexSettled).toBe(true)
-    codexWrite.release()
-    warn.mockRestore()
-  })
-})
-
-describe('applyAgentWorkspaceTrust in a WSL guest', () => {
-  const guestHome = '\\\\wsl.localhost\\Ubuntu\\home\\u'
-
-  afterEach(() => {
-    clearWslHomeCache()
-  })
-
-  it('writes Antigravity trust under the distro home, keyed by the guest path', async () => {
-    rememberWslHome('Ubuntu', guestHome)
-    await applyAgentWorkspaceTrust('antigravity', `${guestHome}\\repo`, local)
-    await applyAgentWorkspaceTrust('antigravity', 'C:\\src\\app', {
-      ...local,
-      wslDistro: 'ubuntu'
-    })
-    await applyAgentWorkspaceTrust('cursor', `${guestHome}\\repo`, local)
-    expect(mocks.antigravity.mock.calls).toEqual([
-      [`${guestHome}\\repo`, guestHome, '/home/u/repo'],
-      ['C:\\src\\app', guestHome, '/mnt/c/src/app']
-    ])
-    expect(mocks.cursor).not.toHaveBeenCalled()
-  })
-
-  it('leaves Antigravity to ask when the distro home is not known yet', async () => {
-    await applyAgentWorkspaceTrust('antigravity', `${guestHome}\\repo`, local)
-    expect(mocks.antigravity).not.toHaveBeenCalled()
-  })
 })
 
 describe('applyAgentWorkspaceTrust for Claude', () => {
@@ -266,26 +205,48 @@ describe('applyAgentWorkspaceTrust for Claude', () => {
       projects: { [root]: { hasTrustDialogAccepted: true } }
     })
   })
+})
 
-  it('gives a local Claude write a short budget, after which Claude asks', async () => {
-    vi.useFakeTimers()
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const grant = pending()
-    mocks.claudeGrant.mockReturnValueOnce(grant.promise.then(() => 'granted' as const))
-    let settled = false
-    const claude = applyAgentWorkspaceTrust('claude', root, {
+describe('applyAgentWorkspaceTrustToSpawn for qwen-code', () => {
+  let root: string
+
+  beforeEach(() => {
+    root = realpathSync(mkdtempSync(join(tmpdir(), 'orca-agent-trust-')))
+    // The spawn merges process.env, so a developer's Qwen config overrides must not leak in.
+    vi.stubEnv('QWEN_CONFIG_DIR', '')
+    vi.stubEnv('QWEN_CLI_HOME', '')
+  })
+
+  afterEach(() => {
+    vi.unstubAllEnvs()
+    rmSync(root, { recursive: true, force: true })
+  })
+
+  it('adds only the fresh worktree to Qwen trustDirectories and keeps other settings', async () => {
+    const home = join(root, 'home')
+    const worktree = join(root, 'workspaces', 'repo', 'feature')
+    mkdirSync(worktree, { recursive: true })
+    mkdirSync(join(home, '.qwen'), { recursive: true })
+    const settingsPath = join(home, '.qwen', 'settings.json')
+    const existing = {
+      general: { enableAutoUpdate: false },
+      permissions: { allow: ['Bash(git status)'], trustDirectories: ['/elsewhere'] }
+    }
+    writeFileSync(settingsPath, JSON.stringify(existing))
+    await applyAgentWorkspaceTrustToSpawn({
       ...local,
-      env: { CLAUDE_CONFIG_DIR: root }
-    }).then(() => {
-      settled = true
+      env: { HOME: home, USERPROFILE: home },
+      launchAgent: 'qwen-code',
+      worktreeId: `repo::${worktree}`,
+      cwd: worktree,
+      store: { getFolderWorkspace: () => undefined },
+      isFreshLaunch: true,
+      settings: {},
+      spawnOptions: {}
     })
-    await vi.advanceTimersByTimeAsync(SHORT_AGENT_TRUST_WRITE_DEADLINE_MS - 1)
-    expect(settled).toBe(false)
-    await vi.advanceTimersByTimeAsync(2)
-    await claude
-    expect(settled).toBe(true)
-    expect(String(warn.mock.calls[0]?.[0])).toContain('did not settle')
-    grant.release()
-    warn.mockRestore()
+    expect(JSON.parse(readFileSync(settingsPath, 'utf8'))).toEqual({
+      ...existing,
+      permissions: { ...existing.permissions, trustDirectories: ['/elsewhere', worktree] }
+    })
   })
 })

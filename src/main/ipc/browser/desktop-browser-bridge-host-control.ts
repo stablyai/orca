@@ -5,10 +5,10 @@ import {
   DESKTOP_BROWSER_BRIDGE_HOST_NOTICE_CHANNEL,
   DESKTOP_BROWSER_BRIDGE_HOST_STOP_CHANNEL,
   type DesktopBrowserBridgeHostNotice
-} from '../../../shared/desktop-browser-bridge-host-control-contract'
-import type { GlobalSettings } from '../../../shared/global-settings-types'
-import type { SshTarget } from '../../../shared/ssh-types'
-import { isRuntimeOwnedSshTarget } from '../../ssh/connection/ssh-connection-store'
+} from '../../../shared/browser/client-hosting/desktop-browser-bridge-host-control-contract'
+import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
+import type { SshTarget } from '../../../shared/remote-runtime/ssh/ssh-types'
+import { isRuntimeOwnedSshTarget } from '../../ssh/targets/ssh-target-runtime-ownership'
 import { setDesktopBrowserBridgeHostStopped } from './desktop-browser-bridge-reconcile'
 
 /** Old entries fall off so runtime-created hosts cannot grow the list without bound. */

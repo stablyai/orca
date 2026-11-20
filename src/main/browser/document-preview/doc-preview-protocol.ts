@@ -4,10 +4,13 @@ import {
   DOC_PREVIEW_SCHEME,
   parseDocPreviewUrl
 } from '../../../shared/document-preview/doc-preview-scheme'
-import { installBrowserSessionPartitionPolicies } from '../sessions/browser-session-partition-policies'
+import { installBrowserSessionPartitionPolicies } from '../sessions/partition-policies/browser-session-partition-policies'
+import { holdBrowserSessionWebRequest } from '../sessions/requests/browser-session-web-request-owner'
 import { readDocPreviewFile } from './doc-preview-file-reader'
 import { publishDocPreviewFailure } from './doc-preview-failure-notice'
 import { getDocPreviewGrant } from './doc-preview-grant-registry'
+import { createMediaRangeResponse } from '../../media/media-range-response'
+import { MAX_FILE_RANGE_READ_BYTES } from '../../../shared/file-content/file-range-read'
 
 /** Register before Electron readiness freezes scheme privileges. */
 export function registerDocPreviewSchemePrivileges(
@@ -62,6 +65,17 @@ function notFound(message: string): Response {
   })
 }
 
+/** The bytes a media response sends first; one byte when only the file's size can tell (HEAD, suffix ranges). */
+function firstMediaRead(request: Request): { offset: number; length: number } {
+  const match = /^bytes=(\d+)-(\d*)$/.exec(request.headers.get('range') ?? 'bytes=0-')
+  const start = Number(match?.[1])
+  const end = match?.[2] ? Number(match[2]) : Number.MAX_SAFE_INTEGER
+  if (request.method === 'HEAD' || !Number.isSafeInteger(start) || end < start) {
+    return { offset: 0, length: 1 }
+  }
+  return { offset: start, length: Math.min(MAX_FILE_RANGE_READ_BYTES, end - start + 1) }
+}
+
 export async function handleDocPreviewRequest(request: Request): Promise<Response> {
   const target = parseDocPreviewUrl(request.url)
   if (!target) {
@@ -78,13 +92,23 @@ export async function handleDocPreviewRequest(request: Request): Promise<Respons
     return notFound('Not found')
   }
   const relativePath = target.relativePath || grant.entryRelativePath
-  const outcome = await readDocPreviewFile(grant, relativePath)
+  const outcome = await readDocPreviewFile(grant, relativePath, {
+    firstRead: firstMediaRead(request),
+    signal: request.signal
+  })
   if (!outcome.ok) {
-    publishDocPreviewFailure({ grantId: target.grantId, relativePath, reason: outcome.reason })
+    // A cancelled media request (a seek, a new source) is not a file the page failed to load.
+    if (!request.signal.aborted) {
+      publishDocPreviewFailure({ grantId: target.grantId, relativePath, reason: outcome.reason })
+    }
     return new Response(outcome.message, {
       status: outcome.status,
       headers: { 'Content-Type': 'text/plain; charset=utf-8' }
     })
+  }
+  if ('media' in outcome) {
+    // Media streams by range, so seeking works and a long video never sits in memory.
+    return createMediaRangeResponse(request, outcome.contentType, outcome.media)
   }
   const bytes = outcome.bytes
   const body =
@@ -116,11 +140,12 @@ export function installDocPreviewProtocolHandler(): void {
   if (previewSession.protocol.isProtocolHandled(DOC_PREVIEW_SCHEME)) {
     return
   }
-  previewSession.protocol.handle(DOC_PREVIEW_SCHEME, handleDocPreviewRequest)
   // Block network requests beyond CSP; explicit DNS-prefetch bypasses this hook.
-  previewSession.webRequest.onBeforeRequest((details, callback) => {
+  // Why first: if the block can't be held, previews never get their scheme and stay closed.
+  holdBrowserSessionWebRequest(previewSession, 'onBeforeRequest', (details, callback) => {
     callback({ cancel: !isAllowedDocPreviewRequestUrl(details.url) })
   })
+  previewSession.protocol.handle(DOC_PREVIEW_SCHEME, handleDocPreviewRequest)
   installBrowserSessionPartitionPolicies(
     {
       id: DOC_PREVIEW_PARTITION,
@@ -129,7 +154,8 @@ export function installDocPreviewProtocolHandler(): void {
       label: 'Document preview',
       source: null
     },
-    // Previews have no browsing-page download flow or ambient device permissions.
-    { downloads: 'deny', permissions: 'deny' }
+    // Previews have no browsing-page download flow or ambient device permissions. The block above
+    // already cancels all network, and the certificate guard would replace it as onBeforeRequest.
+    { downloads: 'deny', permissions: 'deny', certificateRequestGuard: false }
   )
 }

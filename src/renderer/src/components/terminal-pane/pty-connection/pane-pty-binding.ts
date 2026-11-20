@@ -4,11 +4,11 @@ import type { HasPty } from './lifecycle/terminal-dead-session-reconcile'
 import { useAppStore } from '@/store'
 import { consumeRestartReplacement } from './spawn/restart-replacement-on-show'
 import { shouldReconcileMissingSession } from './lifecycle/terminal-dead-session-reconcile'
-import { cancelPendingSafeFitContinuations } from '@/lib/pane-manager/pane-fit-continuation-registry'
-import { PANE_PTY_RESIZE_HOLD_FLUSH_EVENT } from '@/lib/pane-manager/pane-pty-resize-hold'
-import { discardTerminalOutput } from '@/lib/pane-manager/pane-terminal-output-queue-registry'
+import { cancelPendingSafeFitContinuations } from '@/lib/pane-manager/terminal-fit/pane-fit-continuation-registry'
+import { PANE_PTY_RESIZE_HOLD_FLUSH_EVENT } from '@/lib/pane-manager/pane-layout/pane-pty-resize-hold'
+import { discardTerminalOutput } from '@/lib/pane-manager/terminal-output/pane-terminal-output-queue-registry'
 import '@/lib/agent-session/resume/sleeping-agent-pane-ownership'
-import { getProviderSessionClaimKey } from '../../../../../shared/sleeping-record-legacy-pane-key'
+import { getProviderSessionClaimKey } from '../../../../../shared/agent-session/lifecycle/resume/sleeping-record-legacy-pane-key'
 import { releaseRendererPtyVisibilityClaim } from '../pty-transport/delivery/pty-renderer-delivery-claims'
 import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
@@ -176,15 +176,16 @@ export function createPanePtyBinding(session: ConnectPanePtySession): PanePtyBin
       session.spawnedFreshPtyId === ptyId && !Number.isFinite(session.lastTerminalInputAt),
     dispose() {
       session.disposed = true
+      session.deps.releaseResumeInPlace?.()
       session.discardAgentPreReadyDraft?.()
       session.cleanupKittyFileReader()
       session.disposeSpawnDeferral()
       session.startupTiming?.finish('disposed')
       const unsentReplacedPtyId: string | null = session.claimPendingReplacedPtyId()
       if (unsentReplacedPtyId) {
-        // Why: no spawn will carry this stop now, and the pane no longer references the PTY.
+        // Why: no spawn will carry this stop now; a plain kill would let main retire the restarting pane's tab.
         void Promise.resolve()
-          .then(() => window.api.pty.kill(unsentReplacedPtyId))
+          .then(() => window.api.pty.kill(unsentReplacedPtyId, { replaced: true }))
           .catch((err: unknown) => console.warn('[terminal] failed to stop a replaced PTY:', err))
       }
       // Successors may reuse numeric pane slots before disposal; leave their errors untouched.

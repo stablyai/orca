@@ -8,12 +8,12 @@ import {
   sortReleaseBuildsNewestFirst,
   type ReleaseBuild,
   type ReleaseChannel
-} from '../../../shared/release-channel'
-import { parseRetryAfterHeaderMs } from '../../../shared/retry-after-header'
+} from '../../../shared/updater/release-channel'
+import { parseRetryAfterHeaderMs } from '../../../shared/network/retry-after-header'
 import {
   getGhRateLimitBlockedUntilMs,
   recordGhPrimaryRateLimit
-} from '../../git/gh-rate-limit-breaker'
+} from '../../git/command-runner/hosted-cli/gh-rate-limit-breaker'
 import { isValidVersion } from './updater-fallback'
 import { rejectReleaseApiToken, resolveReleaseApiToken } from './updater-release-api-token'
 import { UpdaterCodedError } from '../lifecycle/updater-coded-error'

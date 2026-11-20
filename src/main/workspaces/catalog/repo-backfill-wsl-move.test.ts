@@ -2,16 +2,16 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { getRepoExecutionHostId } from '../../../shared/execution-host'
-import type { Repo } from '../../../shared/repo-types'
-import type { RepoHostTarget } from '../../../shared/repo-host-identity'
+import { getRepoExecutionHostId } from '../../../shared/execution-host/execution-host'
+import type { Repo } from '../../../shared/repository/repo-types'
+import type { RepoHostTarget } from '../../../shared/repository/repo-host-identity'
 import { closeTestStores, createStore, testState } from '../../persistence/persistence-test-harness'
 import { wslMoveCutoverFixture as cutover } from '../../persistence/__fixtures__/wsl-mover/wsl-move-cutover-fixture'
 import { seedWslMoveCutover } from '../../persistence/__fixtures__/wsl-mover/wsl-move-journal-seeding'
 import {
   loadWslMoveFence,
   resetWslMoveFenceForTests
-} from '../../persistence/moving-wsl-projects/wsl-move-scope-guard'
+} from '../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
 import { probeGitRemoteIdentity } from './repo-git-remote-identity'
 import {
   enrichMissingRepoGitRemoteIdentities,
@@ -26,7 +26,7 @@ vi.mock('electron', () => ({
 }))
 vi.mock('./repo-git-remote-identity', () => ({ probeGitRemoteIdentity: vi.fn() }))
 vi.mock('../../github/client/fetch/repo-slug-upstream', () => ({
-  getRepoUpstream: vi.fn(async () => ({ owner: 'acme', repo: 'app' }))
+  probeRepoUpstream: vi.fn(async () => ({ upstream: { owner: 'acme', repo: 'app' }, origin: null }))
 }))
 vi.mock('../../repository-icons/repo-icon-autodetect', () => ({
   detectGitHubAvatarIcon: vi.fn(async () => null)

@@ -53,12 +53,14 @@ export type TuiAgentConfig = {
     | 'antigravity'
     | 'qoder'
     | 'qoder-cn'
+    | 'qwen-code'
     | 'kimi'
   /** Agent-specific signal that the composer is ready for paste, stronger than the default quiet-render window. */
   draftPasteReadySignal?: DraftPasteMarkerSignal
   /** Signal before a paste that Enter follows, for agents that show their composer before it can submit; defaults to `draftPasteReadySignal`. */
   submitPasteReadySignal?: DraftPasteReadySignal
-  /** A worker start also answers on the composer marker, for an agent whose rest title the user can turn off. */
+  /** A worker start also answers on the composer marker, for an agent whose rest title the user can turn off.
+   *  The same marker, not any visible byte, then corroborates its name-only idle title (terminal-command-paint.ts). */
   workerStartReadsComposerMarker?: true
   /** Hard deadline for the agent's composer readiness signal. */
   draftPasteReadyTimeoutMs?: number

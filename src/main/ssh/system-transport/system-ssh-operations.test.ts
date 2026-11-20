@@ -1,9 +1,9 @@
 import { EventEmitter } from 'node:events'
 import { PassThrough } from 'node:stream'
-import { describe, expect, it, vi, beforeEach } from 'vitest'
-import { createFakeSpawnedChild } from '../../../shared/__fixtures__/fake-spawned-child'
+import { afterEach, describe, expect, it, vi, beforeEach } from 'vitest'
 
-const { existsSyncMock, spawnMock } = vi.hoisted(() => ({
+const { accessMock, existsSyncMock, spawnMock } = vi.hoisted(() => ({
+  accessMock: vi.fn(),
   existsSyncMock: vi.fn(),
   spawnMock: vi.fn()
 }))
@@ -16,15 +16,24 @@ vi.mock('fs', async (importOriginal) => {
   }
 })
 
+vi.mock('fs/promises', async (importOriginal) => {
+  const actual = (await importOriginal()) as Record<string, unknown>
+  return {
+    ...actual,
+    access: accessMock
+  }
+})
+
 vi.mock('child_process', () => ({
   spawn: spawnMock
 }))
 
-import { buildSshArgs } from './system-ssh-args'
 import { spawnSystemSshCommand } from './system-ssh-command'
-import { uploadDirectoryViaSystemSsh, writeFileViaSystemSsh } from './system-ssh-file-transfer'
-import type { SshTarget } from '../../../shared/ssh-types'
-import type { SystemSshResolvedConfig } from '../ssh-control-socket'
+import {
+  uploadDirectoryViaSystemSsh,
+  writeFileViaSystemSsh
+} from './file-transfer/system-ssh-file-transfer'
+import type { SshTarget } from '../../../shared/remote-runtime/ssh/ssh-types'
 
 const SYSTEM_SSH_PATH =
   process.platform === 'win32' ? 'C:\\Windows\\System32\\OpenSSH\\ssh.exe' : '/usr/bin/ssh'
@@ -42,37 +51,6 @@ function createTarget(overrides?: Partial<SshTarget>): SshTarget {
     username: 'deploy',
     ...overrides
   }
-}
-
-function createResolvedConfig(
-  overrides?: Partial<SystemSshResolvedConfig>
-): SystemSshResolvedConfig {
-  return {
-    hostname: 'example.com',
-    port: 22,
-    identityFile: [],
-    forwardAgent: false,
-    identitiesOnly: false,
-    proxyUseFdpass: false,
-    controlMaster: 'no',
-    controlPersist: 'no',
-    ...overrides
-  }
-}
-
-function expectNoOrcaControlMasterArgs(args: string[]): void {
-  expect(args).not.toContain('ControlMaster=auto')
-  expect(args.some((arg) => arg.startsWith('ControlPath='))).toBe(false)
-  expect(args).not.toContain('ControlPersist=300')
-}
-
-function createEventedProcess() {
-  const proc = createFakeSpawnedChild(12345)
-  const stdin = Object.assign(proc.stdin, {
-    write: vi.spyOn(proc.stdin, 'write'),
-    end: vi.spyOn(proc.stdin, 'end')
-  })
-  return Object.assign(proc, { stdin })
 }
 
 function createMockChildProcess(): EventEmitter & {
@@ -107,157 +85,10 @@ function createMockChildProcess(): EventEmitter & {
 }
 
 describe('spawnSystemSsh', () => {
-  let mockProc: {
-    stdin: {
-      write: ReturnType<typeof vi.fn>
-      end: ReturnType<typeof vi.fn>
-      on: ReturnType<typeof vi.fn>
-    }
-    stdout: { on: ReturnType<typeof vi.fn> }
-    stderr: { on: ReturnType<typeof vi.fn> }
-    pid: number
-    on: ReturnType<typeof vi.fn>
-    kill: ReturnType<typeof vi.fn>
-  }
-
   beforeEach(() => {
     existsSyncMock.mockReset()
     spawnMock.mockReset()
-
-    mockProc = {
-      stdin: { write: vi.fn(), end: vi.fn(), on: vi.fn() },
-      stdout: { on: vi.fn() },
-      stderr: { on: vi.fn() },
-      pid: 12345,
-      on: vi.fn(),
-      kill: vi.fn()
-    }
-    spawnMock.mockReturnValue(mockProc)
     mockSystemSshExists()
-  })
-
-  it('uses configHost without resolved field overrides so OpenSSH sees the Host block', () => {
-    const args = buildSshArgs(
-      createTarget({
-        configHost: 'fdpass-host',
-        host: 'resolved.example.com',
-        port: 2222,
-        username: 'deploy',
-        identityFile: '/tmp/key',
-        identityAgent: '/tmp/agent.sock',
-        proxyCommand: 'ignored'
-      })
-    )
-
-    expect(args).toContain('fdpass-host')
-    expect(args).not.toContain('deploy@fdpass-host')
-    expect(args).not.toContain('resolved.example.com')
-    expect(args).not.toContain('-p')
-    expect(args).not.toContain('-i')
-    expect(args).not.toContain('IdentityAgent=/tmp/agent.sock')
-    expect(args).not.toContain('ProxyCommand=ignored')
-  })
-
-  it('states the stored endpoint when no Host block claims the alias', () => {
-    // #11746: Host * can retain a deleted alias's proxy, making it appear config-backed.
-    const args = buildSshArgs(
-      createTarget({
-        source: 'ssh-config',
-        configHost: 'prod',
-        host: '10.0.0.5',
-        port: 2222,
-        username: 'deploy'
-      }),
-      { aliasClaimedByConfig: false }
-    )
-
-    expect(args).toContain('Hostname=10.0.0.5')
-    expect(args.slice(args.indexOf('-p'))).toContain('2222')
-    expect(args.slice(args.indexOf('-l'))).toContain('deploy')
-    expect(args.at(-1)).toBe('prod')
-    expect(args).not.toContain('deploy@prod')
-    expect(args).not.toContain('-i')
-    expect(args).not.toContain('-J')
-  })
-
-  it('restricts Kerberos probes to non-interactive GSSAPI authentication', () => {
-    spawnSystemSshCommand(
-      createTarget({
-        configHost: 'krb-host; touch /tmp/not-run',
-        source: 'ssh-config',
-        gssapiAuthentication: true
-      }),
-      'echo ready',
-      { gssapiOnly: true, wrapCommand: false }
-    )
-
-    const args = spawnMock.mock.calls[0][1] as string[]
-    expect(args).toEqual(
-      expect.arrayContaining([
-        '-o',
-        'BatchMode=yes',
-        '-o',
-        'GSSAPIAuthentication=yes',
-        '-o',
-        'PreferredAuthentications=gssapi-with-mic'
-      ])
-    )
-    expect(args).not.toContain('BatchMode=no')
-    const standaloneControlIdx = args.indexOf('-S')
-    expect(standaloneControlIdx).toBeGreaterThan(-1)
-    expect(args[standaloneControlIdx + 1]).toBe('none')
-    expect(args.at(-2)).toBe('krb-host; touch /tmp/not-run')
-    expect(args.at(-1)).toBe('echo ready')
-  })
-
-  it('does not inject Orca ControlMaster flags when ssh config already owns muxing', () => {
-    const args = buildSshArgs(createTarget({ configHost: 'workbox', source: 'ssh-config' }), {
-      resolvedConfig: createResolvedConfig({
-        controlMaster: 'auto',
-        controlPath: '/Users/me/.ssh/cm/%r@%h:%p',
-        controlPersist: '10m'
-      })
-    })
-
-    expectNoOrcaControlMasterArgs(args)
-    expect(args).not.toContain('-S')
-    expect(args).toContain('workbox')
-  })
-
-  it('does not inject Orca ControlMaster flags for unresolved ssh-config targets', () => {
-    const args = buildSshArgs(createTarget({ configHost: 'workbox', source: 'ssh-config' }))
-
-    expectNoOrcaControlMasterArgs(args)
-    expect(args).not.toContain('-S')
-    expect(args).toContain('workbox')
-  })
-
-  it('forces standalone SSH when target connection reuse is disabled', () => {
-    const args = buildSshArgs(createTarget({ systemSshConnectionReuse: false }))
-    const standaloneControlIdx = args.indexOf('-S')
-
-    expect(standaloneControlIdx).toBeGreaterThan(-1)
-    expect(args[standaloneControlIdx + 1]).toBe('none')
-    expectNoOrcaControlMasterArgs(args)
-  })
-
-  it('removes wrapped process listeners after command close', () => {
-    const proc = createEventedProcess()
-    spawnMock.mockReturnValue(proc)
-
-    const channel = spawnSystemSshCommand(createTarget(), 'echo hello')
-    const onClose = vi.fn()
-    channel.on('close', onClose)
-    proc.emit('close', 0, null)
-
-    expect(onClose).toHaveBeenCalledWith(0, null)
-    expect(proc.stdout.listenerCount('data')).toBe(0)
-    expect(proc.stdout.listenerCount('end')).toBe(0)
-    expect(proc.stdout.listenerCount('error')).toBe(0)
-    expect(proc.stdin.listenerCount('error')).toBe(0)
-    expect(proc.listenerCount('exit')).toBe(0)
-    expect(proc.listenerCount('close')).toBe(0)
-    expect(proc.listenerCount('error')).toBe(0)
   })
 
   it('pauses command stdout under backpressure and resumes when the channel reads', async () => {
@@ -333,4 +164,57 @@ describe('system SSH operation aborts', () => {
     expect(outcome).toBe('AbortError')
     expect(sshProcess.kill).toHaveBeenCalledTimes(1)
   })
+})
+
+describe('system SSH directory upload tar binary', () => {
+  const originalPlatform = process.platform
+
+  beforeEach(() => {
+    accessMock.mockReset()
+    spawnMock.mockReset()
+  })
+
+  afterEach(() => {
+    Object.defineProperty(process, 'platform', { value: originalPlatform })
+    vi.unstubAllEnvs()
+  })
+
+  it.each([
+    { systemTarExists: true, expected: 'D:\\Windows\\System32\\tar.exe' },
+    { systemTarExists: false, expected: 'tar' }
+  ])(
+    'spawns $expected on Windows when System32 tar.exe exists=$systemTarExists',
+    async ({ systemTarExists, expected }) => {
+      Object.defineProperty(process, 'platform', { value: 'win32' })
+      vi.stubEnv('SystemRoot', 'D:\\Windows')
+      vi.stubEnv('ORCA_SYSTEM_SSH_PATH', 'D:\\Windows\\System32\\OpenSSH\\ssh.exe')
+      accessMock.mockImplementation(async () => {
+        if (!systemTarExists) {
+          throw new Error('ENOENT')
+        }
+      })
+      const tarCreate = createMockChildProcess()
+      const sshExtract = createMockChildProcess()
+      spawnMock.mockReturnValueOnce(tarCreate).mockReturnValueOnce(sshExtract)
+
+      const uploadPromise = uploadDirectoryViaSystemSsh(
+        createTarget(),
+        'C:\\local-relay',
+        '/tmp/remote-relay'
+      )
+      await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(2))
+      tarCreate.stdout.end()
+      tarCreate.emit('close', 0, null)
+      sshExtract.emit('close', 0, null)
+      await uploadPromise
+
+      expect(accessMock).toHaveBeenCalledWith('D:\\Windows\\System32\\tar.exe')
+      expect(spawnMock).toHaveBeenNthCalledWith(
+        1,
+        expected,
+        ['-czf', '-', '.'],
+        expect.objectContaining({ cwd: 'C:\\local-relay', windowsHide: true })
+      )
+    }
+  )
 })

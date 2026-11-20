@@ -1,8 +1,8 @@
-import { getConnectionIdForFile } from '@/lib/connection-context'
+import { getConnectionIdForFile } from '@/lib/workspace/ownership/connection-context'
 import type { HttpLinkSourceOwner } from '@/lib/browser/navigation/http-link-routing'
 import { dirname } from '@/lib/path'
 import { findFirstIndexedWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner-index'
-import { relativePathInsideRoot } from '../../../../../../shared/cross-platform-path'
+import { relativePathInsideRoot } from '../../../../../../shared/file-access/cross-platform-path'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { MarkdownPreviewSourceOpenFile } from '../render-tree/markdown-preview-types'
 

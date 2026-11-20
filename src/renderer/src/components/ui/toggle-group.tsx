@@ -4,7 +4,7 @@ import * as React from 'react'
 import type { VariantProps } from 'class-variance-authority'
 import * as ToggleGroupPrimitive from 'radix-ui/toggle-group'
 
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { toggleVariants } from '@/components/ui/toggle'
 
 type ToggleGroupVariantProps = Omit<VariantProps<typeof toggleVariants>, 'variant'> & {
@@ -14,6 +14,7 @@ type ToggleGroupVariantProps = Omit<VariantProps<typeof toggleVariants>, 'varian
 const ToggleGroupContext = React.createContext<
   ToggleGroupVariantProps & {
     spacing?: number
+    density?: 'default' | 'compact'
   }
 >({
   size: 'default',
@@ -26,13 +27,18 @@ function ToggleGroup({
   variant,
   size,
   spacing = 0,
+  density = 'default',
   children,
   ...props
 }: React.ComponentProps<typeof ToggleGroupPrimitive.Root> &
   ToggleGroupVariantProps & {
     spacing?: number
+    density?: 'default' | 'compact'
   }) {
-  const contextValue = React.useMemo(() => ({ variant, size, spacing }), [variant, size, spacing])
+  const contextValue = React.useMemo(
+    () => ({ variant, size, spacing, density }),
+    [variant, size, spacing, density]
+  )
 
   return (
     <ToggleGroupPrimitive.Root
@@ -74,7 +80,8 @@ function ToggleGroupItem({
           variant: selectedVariant === 'segmented-card' ? 'default' : selectedVariant,
           size: context.size || size
         }),
-        'w-auto min-w-0 shrink-0 px-3 focus:z-10 focus-visible:z-10 data-[size=xs]:px-2',
+        'w-auto min-w-0 shrink-0 px-3 focus:z-10 focus-visible:z-10',
+        context.density === 'compact' ? 'data-[size=xs]:px-1' : 'data-[size=xs]:px-2',
         'data-[spacing=0]:rounded-none data-[spacing=0]:shadow-none data-[spacing=0]:first:rounded-l-md data-[spacing=0]:last:rounded-r-md data-[spacing=0]:data-[variant=outline]:border-l-0 data-[spacing=0]:data-[variant=outline]:first:border-l',
         // Why foreground-derived cues: themes often paint --card and --muted the same, hiding a card-only thumb.
         selectedVariant === 'segmented-card' &&

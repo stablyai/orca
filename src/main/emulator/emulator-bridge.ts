@@ -29,7 +29,10 @@ export class EmulatorBridge {
   private readonly androidBackend: AndroidEmulatorBackend
 
   constructor(options: EmulatorBridgeOptions = {}) {
-    this.iosBackend = new IosEmulatorBackend(options)
+    this.iosBackend = new IosEmulatorBackend(
+      options,
+      (udid) => this.sessionRegistry.getSession(udid)?.wsUrl ?? null
+    )
     this.androidBackend = new AndroidEmulatorBackend()
     // Register all backends so explicit targets reach their own host-support errors.
     this.backends = [this.iosBackend, this.androidBackend]
@@ -162,15 +165,18 @@ export class EmulatorBridge {
     if (points.length === 0) {
       return
     }
-    const { backend, device } = await this.resolveTarget(opts)
-    const udid = await backend.resolveDeviceId(device)
-    const wsUrl = this.sessionRegistry.getSession(udid)?.wsUrl ?? null
-    await backend.gesture(udid, points, wsUrl)
+    const { backend, udid } = await this.resolveTargetUdid(opts)
+    await backend.gesture(udid, points, this.sessionRegistry.getSession(udid)?.wsUrl ?? null)
   }
 
-  async type(text: string, opts?: EmulatorTargetOpts): Promise<void> {
+  async type(text: string, opts?: EmulatorTargetOpts, paste = false): Promise<void> {
     const { backend, device } = await this.resolveTarget(opts)
-    await backend.type(device, text)
+    await backend.type(device, text, paste)
+  }
+
+  async syncKeyboardLayout(opts?: EmulatorTargetOpts): Promise<boolean> {
+    const { backend, device } = await this.resolveTarget(opts)
+    return (await backend.syncHardwareKeyboardLayout?.(device)) ?? false
   }
 
   async button(name: string, opts?: EmulatorTargetOpts): Promise<void> {
@@ -211,6 +217,11 @@ export class EmulatorBridge {
     })
   }
 
+  /** Renderers name only a device; main resolves its registered helper so they cannot pick hosts. */
+  getIosVideoStreamUrl(deviceUdid: string): string | null {
+    return this.sessionRegistry.getIosVideoStreamUrl(deviceUdid)
+  }
+
   async runCapability<T>(
     capability: keyof EmulatorBackendCapabilities,
     opts: EmulatorTargetOpts | undefined,
@@ -234,7 +245,7 @@ export class EmulatorBridge {
   }
 
   async kill(device?: string, worktreeId?: string): Promise<string> {
-    const { backend, udid } = await this.resolveStopTarget(device, worktreeId)
+    const { backend, udid } = await this.resolveTargetUdid({ device, worktreeId })
     await backend.stopHelperForDevice(udid, {
       helperPid: this.sessionRegistry.getSession(udid)?.pid,
       includeOrphaned: true
@@ -244,7 +255,7 @@ export class EmulatorBridge {
   }
 
   async shutdown(device?: string, worktreeId?: string): Promise<string> {
-    const { backend, udid } = await this.resolveStopTarget(device, worktreeId)
+    const { backend, udid } = await this.resolveTargetUdid({ device, worktreeId })
     await backend.stopHelperForDevice(udid, {
       helperPid: this.sessionRegistry.getSession(udid)?.pid,
       includeOrphaned: true
@@ -299,16 +310,11 @@ export class EmulatorBridge {
     )
   }
 
-  private async resolveStopTarget(
-    device?: string,
-    worktreeId?: string
+  private async resolveTargetUdid(
+    opts?: EmulatorTargetOpts
   ): Promise<{ backend: EmulatorBackend; udid: string }> {
-    if (device) {
-      const backend = await this.backendForDevice(device)
-      return { backend, udid: await backend.resolveDeviceId(device) }
-    }
-    const { backend, device: resolved } = await this.resolveTarget({ worktreeId })
-    return { backend, udid: await backend.resolveDeviceId(resolved) }
+    const { backend, device } = await this.resolveTarget(opts)
+    return { backend, udid: await backend.resolveDeviceId(device) }
   }
 
   private backendForKind(kind: EmulatorBackendKind): EmulatorBackend | null {
@@ -317,10 +323,7 @@ export class EmulatorBridge {
 
   private backendForActiveWorktree(worktreeId: string): EmulatorBackend | null {
     const key = this.sessionRegistry.getActiveSessionKey(worktreeId)
-    if (!key) {
-      return null
-    }
-    const session = this.sessionRegistry.getSession(key)
+    const session = key ? this.sessionRegistry.getSession(key) : undefined
     return session ? this.backendForKind(session.backend) : null
   }
 

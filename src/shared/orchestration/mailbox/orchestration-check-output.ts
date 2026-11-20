@@ -1,3 +1,8 @@
+import {
+  formatReportFollowUpLine,
+  type ReportFollowUpAction
+} from './orchestration-report-follow-up'
+import { formatBotItemReportHint, type BotItemReportFact } from '../../bots/bot-item-report-hint'
 import { ORCHESTRATION_LEGACY_RUN_ID } from '../orchestration-rpc-contract'
 import { escapeTerminalControlCharacters } from '../../terminal/output/terminal-control-character-escape'
 
@@ -13,6 +18,9 @@ export type OrchestrationMessageSummary = {
   payload?: string | null
   priority?: string
   read?: number
+  follow_up?: ReportFollowUpAction
+  /** The open item a finished worker was started for, as the host read it for this check. */
+  for_item?: BotItemReportFact
 }
 
 export type LegacyCompatibilityResult = {
@@ -172,13 +180,20 @@ function formatLegacyAwareCheckMessages(
       if (message.payload) {
         lines.push(formatQuotedMessageField('payload', message.payload))
       }
-      if (!legacyReadOnly) {
+      if (!legacyReadOnly && message.follow_up) {
+        lines.push(`[${formatReportFollowUpLine(message.follow_up)}]`)
+      } else if (!legacyReadOnly) {
         const replyTarget = message.to_handle ?? checkedTerminal
         const replyFrom =
           replyTarget.startsWith('run:') || replyTarget.startsWith('dispatch:')
             ? ''
             : ` --from ${replyTarget}`
         lines.push(`[Reply: orca orchestration reply --id ${message.id}${replyFrom} --body "..."]`)
+      }
+      if (!legacyReadOnly && message.for_item) {
+        lines.push(
+          `[${escapeTerminalControlCharacters(formatBotItemReportHint(message.for_item))}]`
+        )
       }
       return lines.join('\n')
     })

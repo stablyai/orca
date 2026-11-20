@@ -1,6 +1,7 @@
+import { setSshStartupReady } from './ssh-startup-ready'
 import { ipcMain, type BrowserWindow } from 'electron'
 import type { Store } from '../../persistence/loading-store/store'
-import { SshConnectionStore } from '../../ssh/connection/ssh-connection-store'
+import { SshConnectionStore } from '../../ssh/targets/ssh-connection-store'
 import { awaitSignInForCredentialHosts } from './ssh-sign-in-requirement'
 import {
   holdLaunchReconnectOptOuts,
@@ -23,9 +24,9 @@ import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import {
   initializeSshConnectionGenerationSession,
   resetSshConnectionGenerations
-} from '../../ssh/connection/ssh-connection-generation'
-import { resetSshProviderAuthorities } from '../../ssh/ssh-provider-authority'
-import { installManagedOrcadStartStatus } from '../runtime-environments/runtime-environment-managed-tunnel'
+} from '../../ssh/connection/authority/ssh-connection-generation'
+import { resetSshProviderAuthorities } from '../../ssh/connection/authority/ssh-provider-authority'
+import { installManagedOrcadStartStatus } from '../runtime-environments/managed-orcad/runtime-environment-managed-tunnel'
 import {
   connectInFlight,
   credentialRequestedForTarget,
@@ -33,8 +34,8 @@ import {
   testingTargets
 } from './ssh-connect-attempt-registry'
 import { createSshConnectionCallbacks } from './ssh-connection-state-callbacks'
-import { resetSshCredentialDeclinesForTests } from '../../ssh/ssh-credential-decline'
-import { resetSshUserDisconnectsForTests } from '../../ssh/ssh-user-disconnect'
+import { resetSshCredentialDeclinesForTests } from '../../ssh/authentication/ssh-credential-decline'
+import { resetSshUserDisconnectsForTests } from '../../ssh/connection/ssh-user-disconnect'
 import { registerSshConnectionHandlers } from './ssh-connection-handlers'
 import { registerPlainSshTerminalHandlers } from './plain-ssh-terminal-handlers'
 import {
@@ -59,21 +60,21 @@ import {
   getSshHostServerStatus,
   isSshHostKeptForBridgedTerminals,
   setSshHostServedListener
-} from '../../ssh/ssh-host-server-status'
+} from '../../ssh/host-server/ssh-host-server-status'
 import { broadcastPortForwards } from './ssh-renderer-broadcast'
 import { resetSshShutdownDrain } from './ssh-shutdown-drain'
 import { registerSshTargetCrudHandlers } from './ssh-target-crud-handlers'
 import { targetLifecycleInFlight } from './ssh-target-lifecycle-queue'
 import { disposeOrcadManagedTunnels } from '../../managed-server/lifecycle/orcad-managed-tunnel'
-import { retainUnretainedOrcadMigrationSources } from '../../ssh/orcad-migration-source-retention'
-import { reconcileManagedOrcadSshTargets } from '../../ssh/orcad-retained-source'
-import { installOrcadMigrationScrollbackRetention } from '../../ssh/orcad-migration-scrollback-retention-wiring'
-import { getAppEnvironment } from '../../../shared/app-environment'
-import { registerLegacyRelayBridgeIpc } from '../../ssh/legacy-relay/legacy-relay-bridge-ipc'
+import { retainUnretainedOrcadMigrationSources } from '../../persistence/migrating-orcad-catalog/retained-source/orcad-migration-source-retention'
+import { reconcileManagedOrcadSshTargets } from '../../persistence/migrating-orcad-catalog/retained-source/orcad-retained-source'
+import { installOrcadMigrationScrollbackRetention } from '../../persistence/migrating-orcad-catalog/terminal-history/orcad-migration-scrollback-retention-wiring'
+import { getAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
+import { registerLegacyRelayBridgeIpc } from '../../ssh/legacy-relay/bridge/legacy-relay-bridge-ipc'
 import {
   onLastBridgedTerminalExit,
   retryMoveAfterLastBridgedExit
-} from '../../ssh/legacy-relay/legacy-relay-move-retry'
+} from '../../ssh/legacy-relay/bridge/legacy-relay-move-retry'
 import { connectTarget } from './ssh-connect-flow'
 import {
   disposeDesktopBrowserBridge,
@@ -103,11 +104,12 @@ const SSH_IPC_CHANNELS = [
   'ssh:listDetectedPorts'
 ] as const
 
-export function registerSshHandlers(
+export async function registerSshHandlers(
   store: Store,
   getMainWindow: () => BrowserWindow | null,
-  runtime?: OrcaRuntimeService
-): { connectionManager: SshConnectionManager; sshStore: SshConnectionStore } {
+  runtime?: OrcaRuntimeService,
+  hostInitialization?: Promise<void>
+): Promise<{ connectionManager: SshConnectionManager; sshStore: SshConnectionStore }> {
   initializeSshConnectionGenerationSession()
   // macOS window recreation re-registers handlers; remove old channels to avoid duplicate registration.
   for (const ch of SSH_IPC_CHANNELS) {
@@ -118,10 +120,17 @@ export function registerSshHandlers(
   setCurrentRuntime(runtime)
   setSshTargetRegistryStore(new SshConnectionStore(store))
   setPersistedStore(store)
-  reconcileManagedOrcadSshTargets(getAppEnvironment().getPath('userData'), store)
-  void retainUnretainedOrcadMigrationSources(getAppEnvironment().getPath('userData'), store)
-  installOrcadMigrationScrollbackRetention(getAppEnvironment().getPath('userData'), store)
-  installManagedOrcadStartStatus()
+  const ready = (async () => {
+    await hostInitialization
+    await holdLaunchReconnectOptOuts(getSshTargetRegistryStore()!.listTargets())
+    await reconcileManagedOrcadSshTargets(getAppEnvironment().getPath('userData'), store)
+  })()
+  setSshStartupReady(ready)
+  const handle: typeof ipcMain.handle = (channel, listener) =>
+    ipcMain.handle(channel, async (...args) => {
+      await ready
+      return listener(...args)
+    })
 
   registerCredentialHandler()
 
@@ -132,7 +141,6 @@ export function registerSshHandlers(
     setConnectionManager(new SshConnectionManager(callbacks))
     // Window re-registration must not re-gate hosts already signed in during this process.
     awaitSignInForCredentialHosts(getSshTargetRegistryStore()!)
-    holdLaunchReconnectOptOuts(getSshTargetRegistryStore()!.listTargets())
   }
   setPortForwardManager(portForwardManager ?? new SshPortForwardManager())
   portForwardManager!.setCallbacks({
@@ -161,10 +169,10 @@ export function registerSshHandlers(
   registerSshBrowseHandler(() => connectionManager)
   setSshConnectionManagerResolver(() => connectionManager)
 
-  registerSshTargetCrudHandlers()
-  registerSshConnectionHandlers()
-  registerSshPortForwardHandlers()
-  registerPlainSshTerminalHandlers()
+  registerSshTargetCrudHandlers(handle)
+  registerSshConnectionHandlers(handle)
+  registerSshPortForwardHandlers(handle)
+  registerPlainSshTerminalHandlers(handle)
   // COMPAT(legacy-relay-bridge): terminals an older Orca's relay still runs.
   registerLegacyRelayBridgeIpc({
     store,
@@ -184,6 +192,10 @@ export function registerSshHandlers(
       })
   )
 
+  await ready
+  void retainUnretainedOrcadMigrationSources(getAppEnvironment().getPath('userData'), store)
+  installOrcadMigrationScrollbackRetention(getAppEnvironment().getPath('userData'), store)
+  installManagedOrcadStartStatus()
   if (runtime) {
     installDesktopBrowserBridge({
       userDataPath: getAppEnvironment().getPath('userData'),
@@ -200,6 +212,7 @@ export function registerSshHandlers(
 }
 
 export async function resetSshHandlerStateForTests(): Promise<void> {
+  setSshStartupReady(Promise.resolve())
   unregisterPowerMonitorReconnect()
   for (const ch of SSH_IPC_CHANNELS) {
     ipcMain.removeHandler(ch)

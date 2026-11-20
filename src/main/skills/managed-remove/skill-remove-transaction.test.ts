@@ -1,4 +1,20 @@
-import { cp, lstat, mkdir, mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises'
+import {
+  createSkillInstallHome,
+  removeSkillInstallHomes
+} from '../install/testing/skill-install-home'
+import { installSharedSkill } from '../install/skill-installation'
+import { nativeSkillInstallFilesystem } from '../filesystem/skill-install-filesystem'
+import {
+  cp,
+  lstat,
+  mkdir,
+  mkdtemp,
+  readFile,
+  realpath,
+  rename,
+  rm,
+  writeFile
+} from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -182,5 +198,45 @@ describe('skill removal recovery', () => {
       })
     ).resolves.toMatchObject({ status: 'removed' })
     await expect(lstat(oldPlacementPath)).rejects.toMatchObject({ code: 'ENOENT' })
+  })
+})
+
+describe('skill removal interruption', () => {
+  afterEach(removeSkillInstallHomes)
+  it('restores moved placements when removal is interrupted', async () => {
+    const { root, input } = await createSkillInstallHome()
+    await installSharedSkill(input)
+    const canonical = join(root, 'home', '.agents', 'skills', 'test-skill')
+    const claude = join(root, 'home', '.claude', 'skills', 'test-skill')
+    let renameCount = 0
+    const interruptedFilesystem = {
+      ...nativeSkillInstallFilesystem,
+      rename: async (source: string, target: string): Promise<void> => {
+        renameCount += 1
+        if (renameCount === 2) {
+          throw new Error('injected-removal-interruption')
+        }
+        await nativeSkillInstallFilesystem.rename(source, target)
+      }
+    }
+
+    await expect(
+      removeLocalSharedSkill({
+        operationId: 'remove_interrupted',
+        canonicalPath: join(input.homeDirectory, '.agents', 'skills', 'test-skill'),
+        stateDirectory: join(input.orcaStateDirectory, 'skill-installs'),
+        allowedProviderRoots: [join(input.homeDirectory, '.claude', 'skills')],
+        filesystem: interruptedFilesystem
+      })
+    ).rejects.toThrow('injected-removal-interruption')
+    expect(await realpath(claude)).toBe(await realpath(canonical))
+
+    const retried = await removeLocalSharedSkill({
+      operationId: 'remove_retried',
+      canonicalPath: join(input.homeDirectory, '.agents', 'skills', 'test-skill'),
+      stateDirectory: join(input.orcaStateDirectory, 'skill-installs'),
+      allowedProviderRoots: [join(input.homeDirectory, '.claude', 'skills')]
+    })
+    expect(retried.status).toBe('removed')
   })
 })

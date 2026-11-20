@@ -1,7 +1,7 @@
 import { ArrowUpRight, ChevronDown, Cloud, Link2, Plus, TerminalSquare } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'
-import { LoadingSpinner } from '../../LoadingSpinner'
+import { LoadingSpinner } from '../../ui/LoadingSpinner'
 import { Button } from '../../ui/button'
 import { ButtonGroup } from '../../ui/button-group'
 import {
@@ -12,7 +12,7 @@ import {
 } from '../../ui/dropdown-menu'
 import { useRuntimeServersPage } from './runtime-servers-page-context'
 import { RuntimeShareComputerButton } from './pairing/runtime-share-computer-button'
-import { getManagedOrcadApi } from './managed-servers/use-managed-server-catalog'
+import { getManagedOrcadApi } from '../../../runtime/hosts/installation/managed-orcad-api-availability'
 
 function AddServerMenuItem({
   icon,
@@ -117,10 +117,7 @@ export function RuntimeServersHeaderActions({
             {canInstall ? (
               <AddServerMenuItem
                 icon={<TerminalSquare />}
-                label={t(
-                  'auto.components.settings.serverList.setUpOnSshHost',
-                  'Set up Orca on an SSH host'
-                )}
+                label={t('auto.components.settings.serverList.installViaSsh', 'Install via SSH')}
                 description={t(
                   'auto.components.settings.managedServers.description',
                   'Orca installs itself on an empty SSH host and keeps itself up to date.'

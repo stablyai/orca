@@ -4,7 +4,7 @@ import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-
 import {
   createTranscriptPane,
   TRANSCRIPT_PANE_PTY_ID
-} from '../../../orca-runtime-tests/agent-transcript-pane-test-harness'
+} from '../../../terminal/wait/agent-transcript-pane-test-harness'
 import { OrchestrationDb } from '../../db/orchestration-db'
 import '../../db/contract-constants'
 import '../../db/messages/mailbox-routing-page'
@@ -81,7 +81,7 @@ describe('Codex reconnect failure inside a live worker PTY', () => {
         dispatch: 'failed',
         worker: 'failed',
         stage: 'agent_session_lost',
-        escalations: ['Agent session lost']
+        escalations: ['Worker lost without reporting']
       })
     } finally {
       db.close()
