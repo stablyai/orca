@@ -67,8 +67,8 @@ function uniqueSshRepoTabHosts(store: AdoptionStore): Map<string, ExecutionHostI
           : null
       for (const tab of tabs) {
         const seen = hostByTab.get(tab.id)
-        // A row in two partitions is ambiguous.
-        hostByTab.set(tab.id, seen === undefined ? owner : null)
+        // Copies of a row (an older build's leftovers) are ambiguous only when they name different hosts.
+        hostByTab.set(tab.id, seen === undefined || seen === owner ? owner : null)
       }
     }
   }

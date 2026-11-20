@@ -141,15 +141,17 @@ export function takeDesktopRelayWrite(
   return { version: DESKTOP_RELAY_WRITE_VERSION, hosts }
 }
 
+// A ptyIdsByTabId change rebuilds every host's relay ids on the next save; refused hosts retry then.
+const SEAM_RELAY_RETRY_FIELDS = ['ptyIdsByTabId'] as const satisfies readonly SessionRelevantField[]
+
 /** A write main accepted but could not fully apply (a fenced partition, a refused id): resend these fields later. */
 export type SessionWriteOutcome = { pendingFields?: readonly SessionRelevantField[] }
 
 export function relayWriteOutcome(
   result: DesktopRelayWriteResult | null | undefined
 ): SessionWriteOutcome | void {
-  // A ptyIdsByTabId change rebuilds every host's relay ids on the next save; refused hosts retry then.
   return result?.skipped.length || result?.refused.length
-    ? { pendingFields: ['ptyIdsByTabId'] }
+    ? { pendingFields: SEAM_RELAY_RETRY_FIELDS }
     : undefined
 }
 
@@ -265,7 +267,8 @@ export function settleSessionWrites(
   writes: readonly (Promise<unknown> | null | undefined)[],
   relayPlan: DesktopRelayPlan | null | undefined
 ): Promise<SessionWriteOutcome | void> {
-  return Promise.allSettled(writes).then((results) => {
+  const settled = writes.map((write) => write ?? Promise.resolve(undefined))
+  return Promise.allSettled(settled).then((results) => {
     const failure = results.find((result) => result.status === 'rejected')
     if (failure) {
       relayPlan?.forget()
