@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  createMobileWebShellSession,
   readyAgain,
   ROUTE,
   CACHED,
@@ -7,11 +8,221 @@ import {
   gates,
   readySession,
   run,
-  started
+  started,
+  awaitingManifest,
+  BUNDLE_REFUSED,
+  LINK_LOST,
+  withoutRecord
 } from '../test-support/mobile-web-shell-session-test-fixtures'
+import type { CachedGeneration } from './mobile-web-shell-session-contract'
 import { shellPageFrame } from '../page-document/shell-page-frame'
 
+function afterCacheRead(generation: CachedGeneration | null) {
+  return run(started().session, { type: 'cache-read', generation })
+}
+
+describe('the connected flow', () => {
+  it('asks the host for a manifest once the cache has been read', () => {
+    expect(afterCacheRead(null).effects).toEqual([{ kind: 'read-manifest' }])
+    const cached = afterCacheRead(CACHED)
+    expect(cached.session.state).toEqual({ kind: 'activating', source: 'cache' })
+    expect(cached.effects).toEqual([
+      {
+        kind: 'open-generation',
+        directory: CACHED.directory,
+        buildId: CACHED.buildId,
+        totalBytes: CACHED.totalBytes
+      },
+      { kind: 'read-manifest' }
+    ])
+  })
+
+  it('walls a manifest written in a schema this shell does not know', () => {
+    const step = run(afterCacheRead(null).session, {
+      type: 'manifest-read',
+      manifest: { ...MANIFEST, schemaVersion: 99 }
+    })
+    expect(step.session.state).toEqual({
+      kind: 'wall',
+      verdict: { kind: 'blocked', reason: 'bundle-shell-too-old', schemaVersion: 99 }
+    })
+    expect(step.effects).toEqual([])
+  })
+
+  it('opens a same-build hit without paging, under the fresh grants', () => {
+    // Use unservable cached routes to prove fresh manifest grants decide the online same-build session.
+    const stale = { ...CACHED, routes: [{ pathname: '/h/[hostId]', grants: ['teleport'] }] }
+    const step = run(afterCacheRead(stale).session, { type: 'manifest-read', manifest: MANIFEST })
+    expect(step.session.state).toEqual({ kind: 'activating', source: 'cache' })
+    // Opening must not rewrite the manifest while the native view reads it.
+    expect(step.effects).toEqual([
+      {
+        kind: 'open-generation',
+        directory: CACHED.directory,
+        buildId: CACHED.buildId,
+        totalBytes: CACHED.totalBytes
+      }
+    ])
+    expect(step.session.routeGrants).toEqual(['navigate', 'native.storage.read'])
+  })
+
+  it('keeps a same-build cache open instead of opening it again', () => {
+    const step = run(afterCacheRead(CACHED).session, { type: 'manifest-read', manifest: MANIFEST })
+    expect(step.session.state).toEqual({ kind: 'activating', source: 'cache' })
+    expect(step.effects).toEqual([])
+  })
+
+  it('downloads beside a cached generation instead of covering it', () => {
+    const stale = { ...CACHED, buildId: 'c'.repeat(64) }
+    const step = run(afterCacheRead(stale).session, { type: 'manifest-read', manifest: MANIFEST })
+    expect(step.session.state).toEqual({ kind: 'activating', source: 'cache' })
+    expect(step.effects).toEqual([{ kind: 'download' }])
+    expect(step.session.requestedBuildId).toBe(MANIFEST.buildId)
+  })
+
+  it('downloads when there is no cache at all', () => {
+    const step = run(afterCacheRead(null).session, { type: 'manifest-read', manifest: MANIFEST })
+    expect(step.effects).toEqual([{ kind: 'download' }])
+  })
+
+  it('walls a listed route whose page is older than this shell, as a desktop to update', () => {
+    for (const manifest of [
+      { ...MANIFEST, pageVersion: 0 },
+      { ...MANIFEST, pageVersion: undefined }
+    ]) {
+      const step = run(afterCacheRead(null).session, { type: 'manifest-read', manifest })
+      expect(step.session.state).toEqual({
+        kind: 'wall',
+        verdict: {
+          kind: 'blocked',
+          reason: 'bundle-incompatible',
+          side: 'desktop',
+          pageVersion: 0,
+          requiredPageVersion: 1
+        }
+      })
+    }
+  })
+
+  it('tells the page which routes it may keep, so it hands the rest back', () => {
+    const step = run(afterCacheRead(null).session, { type: 'manifest-read', manifest: MANIFEST })
+    expect(step.session.pageRoutes).toEqual(['/h/[hostId]'])
+  })
+
+  it('carries download progress and then stages and activates', () => {
+    const fetching = run(afterCacheRead(null).session, {
+      type: 'manifest-read',
+      manifest: MANIFEST
+    })
+    const progressed = run(fetching.session, {
+      type: 'fetch-progress',
+      completedAssets: 2,
+      totalAssets: 4,
+      receivedBytes: 2048,
+      totalBytes: 4096
+    })
+    expect(progressed.session.state).toMatchObject({ kind: 'fetching', completedAssets: 2 })
+    const staged = run(progressed.session, { type: 'download-staged' })
+    expect(staged.session.state).toEqual({ kind: 'activating', source: 'download' })
+    const ready = run(staged.session, {
+      type: 'activated',
+      generationDirectory: '/cache/gen',
+      sessionId: 'session-one',
+      buildId: MANIFEST.buildId,
+      totalBytes: 4096,
+      elapsedMs: 900
+    })
+    expect(ready.session.state).toEqual({
+      kind: 'ready',
+      generationDirectory: '/cache/gen',
+      sessionId: 'session-one',
+      buildId: MANIFEST.buildId,
+      totalBytes: 4096,
+      elapsedMs: 900
+    })
+  })
+
+  it('ignores progress that arrives after the fetching state is gone', () => {
+    const ready = readySession()
+    const step = run(ready.session, {
+      type: 'fetch-progress',
+      completedAssets: 1,
+      totalAssets: 4,
+      receivedBytes: 1,
+      totalBytes: 4096
+    })
+    expect(step.session.state).toEqual(ready.session.state)
+  })
+
+  it('fails when the download or the cache write never produced a generation', () => {
+    const step = run(afterCacheRead(null).session, {
+      type: 'download-failed',
+      cause: BUNDLE_REFUSED
+    })
+    expect(step.session.state).toEqual({
+      kind: 'failed',
+      reason: 'download-failed',
+      retriedOnce: false
+    })
+  })
+})
+
+describe('a read the link cut short falls back to what is on disk', () => {
+  function manifestInFlight() {
+    return afterCacheRead(CACHED)
+  }
+
+  it('keeps the cached open when the socket drops before the manifest does', () => {
+    const step = run(manifestInFlight().session, { type: 'download-failed', cause: LINK_LOST })
+    expect(step.session.state).toEqual({ kind: 'activating', source: 'cache' })
+    expect(withoutRecord(step.effects)).toEqual([])
+    const ready = run(step.session, {
+      type: 'activated',
+      generationDirectory: CACHED.directory,
+      sessionId: 'session-one',
+      buildId: CACHED.buildId,
+      totalBytes: CACHED.totalBytes,
+      elapsedMs: 12
+    })
+    expect(ready.session.state).toMatchObject({ kind: 'ready', buildId: CACHED.buildId })
+  })
+})
+
 describe('recovery follows the shell view contract', () => {
+  it.each(['generation-unreadable', 'document-load-failed'] as const)(
+    'deletes this host cache and runs once more on %s',
+    (reason) => {
+      const step = run(readySession().session, { type: 'shell-failed', reason })
+      expect(step.effects).toEqual([{ kind: 'delete-cache' }, { kind: 'open-cache' }])
+      expect(step.session.state).toEqual({ kind: 'checking' })
+      expect(step.session.retriedOnce).toBe(true)
+      expect(step.session.cached).toBeNull()
+    }
+  )
+
+  it('does not delete the host cache when Account usage fails to open', () => {
+    const routes = [...CACHED.routes, { pathname: '/h/[hostId]/accounts', grants: ['navigate'] }]
+    const cached = { ...CACHED, routes }
+    const manifest = { ...MANIFEST, routes }
+    const ready = run(
+      createMobileWebShellSession('/h/host-1/accounts'),
+      { type: 'gates-changed', gates: gates() },
+      { type: 'cache-read', generation: cached },
+      { type: 'manifest-read', manifest },
+      {
+        type: 'activated',
+        generationDirectory: cached.directory,
+        sessionId: 'session-accounts',
+        buildId: manifest.buildId,
+        totalBytes: manifest.totalBytes,
+        elapsedMs: 12
+      }
+    )
+    expect(ready.session.state.kind).toBe('ready')
+    const step = run(ready.session, { type: 'shell-failed', reason: 'document-load-failed' })
+    expect(step.effects).toEqual([{ kind: 'open-cache' }])
+  })
+
   it('is terminal the second time an unreadable generation needs a refetch', () => {
     const unreadable = { type: 'shell-failed', reason: 'generation-unreadable' } as const
     const first = run(readySession().session, unreadable)
@@ -81,6 +292,73 @@ describe('try again', () => {
       unreadable
     )
     expect(again.effects).toEqual([{ kind: 'delete-cache' }, { kind: 'open-cache' }])
+  })
+})
+
+describe('a result from a superseded flow reports into nothing', () => {
+  it('drops the cache read of a run a reconnect replaced, so nothing opens unchecked', () => {
+    const first = started({ reachability: 'unreachable' })
+    const restarted = run(first.session, { type: 'gates-changed', gates: gates() })
+    expect(restarted.effects).toEqual([{ kind: 'open-cache' }])
+    const stale = run(restarted.session, {
+      type: 'cache-read',
+      flow: first.session.flow,
+      generation: CACHED
+    })
+    expect(stale.effects).toEqual([])
+    expect(stale.session.cached).toBeNull()
+    expect(run(stale.session, { type: 'cache-read', generation: CACHED }).effects).toEqual([
+      {
+        kind: 'open-generation',
+        directory: CACHED.directory,
+        buildId: CACHED.buildId,
+        totalBytes: CACHED.totalBytes
+      },
+      { kind: 'read-manifest' }
+    ])
+  })
+
+  it('keeps a workspace on screen when the manifest read the drop abandoned finally rejects', () => {
+    // Settle the abandoned RPC only after socket loss opens cache, exposing any missing flow guard.
+    const inFlight = awaitingManifest(CACHED)
+    const offline = run(inFlight.session, {
+      type: 'gates-changed',
+      gates: gates({ reachability: 'unreachable' })
+    })
+    const ready = run(
+      offline.session,
+      { type: 'cache-read', generation: CACHED },
+      {
+        type: 'activated',
+        generationDirectory: CACHED.directory,
+        sessionId: 'session-one',
+        buildId: CACHED.buildId,
+        totalBytes: CACHED.totalBytes,
+        elapsedMs: 4
+      }
+    )
+    expect(ready.session.state).toMatchObject({ kind: 'ready' })
+    const late = run(ready.session, {
+      type: 'download-failed',
+      cause: BUNDLE_REFUSED,
+      flow: inFlight.session.flow
+    })
+    expect(late.session.state).toEqual(ready.session.state)
+  })
+})
+
+describe('a reconnect does not refill the remount budget', () => {
+  it('keeps the latch set when the gates restart the flow after a load failure', () => {
+    const remounted = run(
+      readySession().session,
+      { type: 'shell-failed', reason: 'render-process-gone' },
+      { type: 'remounted', sessionId: 'session-two' },
+      { type: 'shell-failed', reason: 'document-load-failed' }
+    )
+    expect(remounted.session.remountedOnce).toBe(true)
+    const restarted = run(remounted.session, { type: 'gates-changed', gates: gates() })
+    expect(restarted.session.remountedOnce).toBe(true)
+    expect(run(restarted.session, { type: 'retry-pressed' }).session.remountedOnce).toBe(false)
   })
 })
 

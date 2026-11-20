@@ -94,6 +94,16 @@ class OrcaMobileWebShellModule : Module() {
       MobileWebShellSparePool.discardAll()
     }.runOnQueue(Queues.MAIN)
 
+    Function("clearRetainedSlot") {
+      if (Looper.myLooper() == Looper.getMainLooper()) {
+        OrcaMobileWebShellView.clearRetainedSlot()
+      } else {
+        Handler(Looper.getMainLooper()).post {
+          OrcaMobileWebShellView.clearRetainedSlot()
+        }
+      }
+    }
+
     // Takes a FileProvider content:// URI; the grant lets the chosen viewer read Orca's cache file.
     AsyncFunction("presentPdf") { uri: String ->
       val activity = appContext.currentActivity ?: throw Exceptions.MissingActivity()
@@ -132,6 +142,10 @@ class OrcaMobileWebShellModule : Module() {
 
       Prop("bridgeEnabled") { view: OrcaMobileWebShellView, value: Boolean ->
         view.setBridgeEnabled(value)
+      }
+
+      Prop("retainsSlot") { view: OrcaMobileWebShellView, value: Boolean ->
+        view.setRetainsSlot(value)
       }
 
       AsyncFunction("postBridgeMessage") { view: OrcaMobileWebShellView, json: String ->
