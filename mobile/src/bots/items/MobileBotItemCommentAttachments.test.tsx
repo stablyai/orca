@@ -25,7 +25,6 @@ vi.mock('react-native', async () => {
     }
   }
 })
-vi.mock('lucide-react-native', () => ({ FileText: 'FileText' }))
 vi.mock('../../session/native-chat/visual/mobile-native-chat-image-preview', () => ({
   readHostChatImage: async (_source: unknown, path: string) => `data:image/png;base64,${path}`
 }))
@@ -82,9 +81,7 @@ it('folds images past six to five and "+N", steps the viewer through them, and o
 
   await act(async () =>
     tree.root
-      .find(
-        (node) => String(node.type) === 'Pressable' && node.props.accessibilityLabel === 'run.log'
-      )
+      .find((node) => String(node.type) === 'Text' && node.props.accessibilityLabel === 'run.log')
       .props.onPress()
   )
   expect(onOpenFile).toHaveBeenCalledWith(`${STORE}/run.log`)

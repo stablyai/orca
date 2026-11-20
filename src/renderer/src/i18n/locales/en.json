@@ -22506,11 +22506,6 @@
         "agyItem": "agy's own login",
         "agyHint": "This chat runs the Antigravity CLI on this host. Another method applies to new chats.",
         "confirmSignIn": "Sign in with Google?"
-      },
-      "attachmentPeek": {
-        "loading": "Loading preview…",
-        "unavailable": "Couldn't read a preview.",
-        "empty": "Empty file"
       }
     },
     "tab": {

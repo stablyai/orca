@@ -1,5 +1,5 @@
-// A comment in an item's Activity: one quiet surface for every author, with avatar, name and time, and
-// the text as Markdown. An agent's Needs you question is not drawn here: its row and card are chat's
+// A comment in an item's Activity: one quiet surface for every author, with avatar, name and time, then
+// the text as Markdown, its images and its file links. An agent's Needs you question is not drawn here: its row and card are chat's
 // question's. A reply to a question quotes it, and leads back to it.
 import { CornerDownRight } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
@@ -79,7 +79,7 @@ export function BotItemCommentCard({
   const t = useTranslate()
   const { event, replyTo } = entry
   const images = botItemCommentImages(event.data)
-  // Its images show above the words, so the [Image #N] its send wrote go, as in chat's sent messages.
+  // Its images show after the words, so the [Image #N] its send wrote go, as in chat's sent messages.
   const eventText = typeof event.data.text === 'string' ? event.data.text : ''
   // Its files show as buttons under the words, so their `@path`s go from the words.
   const { files } = botItemCommentFiles(eventText)
@@ -131,11 +131,11 @@ export function BotItemCommentCard({
           </button>
         ) : null}
         <div className="pl-7">
-          <BotItemCommentImages images={images} />
           {words.trim() ? (
             // 8 lines of 19 px.
             <BotItemClampedText text={words} clampClassName="max-h-[152px]" fade />
           ) : null}
+          <BotItemCommentImages images={images} />
           <BotItemCommentFiles paths={files} />
           {failed ? (
             <div className="mt-1.5 flex items-center gap-2 text-xs text-muted-foreground">

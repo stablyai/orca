@@ -3,7 +3,6 @@
 // bot's host, opening the image viewer over all of them; files as buttons that open like file links.
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { Image, Pressable, Text, View, type LayoutChangeEvent } from 'react-native'
-import { FileText } from 'lucide-react-native'
 import {
   botItemCommentImages,
   type BotItemCommentImage
@@ -185,7 +184,7 @@ export type MobileBotItemAttachmentSource = {
   onOpenFile?: (path: string) => void
 }
 
-/** The comment's images, then `children` (its words), then its files. */
+/** `children` (the comment's words), then its images, then its files as links. */
 export function MobileBotItemCommentAttachments({
   data,
   client,
@@ -213,6 +212,7 @@ export function MobileBotItemCommentAttachments({
   const height = columns === 1 ? null : columns === 2 ? (cell * 3) / 4 : cell
   return (
     <View>
+      {children}
       {images.length > 0 ? (
         <View
           style={styles.grid}
@@ -256,7 +256,6 @@ export function MobileBotItemCommentAttachments({
           ) : null}
         </View>
       ) : null}
-      {children}
       {files.length > 0 ? (
         <View style={styles.files}>
           {files.map((path) => {
@@ -265,22 +264,16 @@ export function MobileBotItemCommentAttachments({
               t('components.native-chat.composer.pastedTextLabel', 'Pasted text')
             )
             return (
-              <Pressable
+              <Text
                 key={path}
-                onPress={() => onOpenFile?.(path)}
-                disabled={!onOpenFile}
-                accessibilityRole="button"
+                onPress={onOpenFile ? () => onOpenFile(path) : undefined}
+                accessibilityRole="link"
                 accessibilityLabel={name}
-                style={({ pressed }) => [
-                  styles.file,
-                  pressed && { opacity: feedback.pressedOpacity }
-                ]}
+                style={styles.fileName}
+                numberOfLines={1}
               >
-                <FileText size={13} color={colors.textMuted} />
-                <Text style={styles.fileName} numberOfLines={1}>
-                  {name}
-                </Text>
-              </Pressable>
+                {name}
+              </Text>
             )
           })}
         </View>
@@ -293,7 +286,7 @@ export function MobileBotItemCommentAttachments({
 }
 
 const styles = themedStyleSheet(() => ({
-  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: GAP, marginBottom: spacing.sm },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: GAP, marginTop: spacing.xs },
   tile: {
     borderRadius: radii.surface,
     overflow: 'hidden',
@@ -305,16 +298,17 @@ const styles = themedStyleSheet(() => ({
   image: { width: '100%', height: '100%' },
   caption: { marginTop: 2, fontSize: typography.metaSize, color: colors.textMuted },
   more: { fontSize: typography.metaSize, color: colors.textMuted },
-  files: { flexDirection: 'row', flexWrap: 'wrap', gap: GAP, marginTop: spacing.sm },
-  file: {
+  files: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    maxWidth: '100%',
-    paddingHorizontal: spacing.md,
-    paddingVertical: 6,
-    borderRadius: radii.pill,
-    backgroundColor: colors.bgRaised
+    flexWrap: 'wrap',
+    columnGap: spacing.md,
+    rowGap: 4,
+    marginTop: spacing.xs
   },
-  fileName: { flexShrink: 1, fontSize: 13, fontWeight: '500', color: colors.textPrimary }
+  fileName: {
+    flexShrink: 1,
+    fontSize: 13,
+    color: colors.accentBlue,
+    textDecorationLine: 'underline'
+  }
 }))

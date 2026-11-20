@@ -1,7 +1,6 @@
-// A comment's files as chat's file buttons. Each is a file link: a click goes through the item view's
-// link handler, so it gets the link popover, its rows and its ⌘ / ⇧⌘ clicks like any file link there.
+// A comment's files as file links, styled as chat's: their names in one wrapping line. A click goes
+// through the item view's link handler, so it gets the regular file-link popover and ⌘ / ⇧⌘ clicks.
 import { useContext } from 'react'
-import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
 import { createNativeChatFileHref } from '../../../../../shared/native-chat/file-access/native-chat-href-routing'
 import {
@@ -24,30 +23,31 @@ export function BotItemCommentFiles({
     return null
   }
   return (
-    <div className="mt-2 flex flex-wrap gap-1.5">
+    <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-[13px]">
       {paths.map((path) => {
         const name = chatTextAttachmentName(
           path,
           t('components.native-chat.composer.pastedTextLabel', 'Pasted text')
         )
         const fallback = openText && isCommittedChatAttachmentCandidate(path) ? openText : null
+        const href = createNativeChatFileHref(path, 'literal')
         return (
-          <Button
+          <a
             key={path}
-            type="button"
-            variant="outline"
-            size="sm"
-            className="max-w-full"
+            href={href}
             title={name}
-            disabled={!onLinkClick && !fallback}
-            onClick={(event) =>
-              onLinkClick
-                ? onLinkClick(event, createNativeChatFileHref(path, 'literal'))
-                : fallback?.(path)
-            }
+            className="min-w-0 max-w-full truncate text-primary underline underline-offset-2 hover:text-primary/80"
+            onClick={(event) => {
+              event.preventDefault()
+              if (onLinkClick) {
+                onLinkClick(event, href)
+              } else {
+                fallback?.(path)
+              }
+            }}
           >
-            <span className="truncate">{name}</span>
-          </Button>
+            {name}
+          </a>
         )
       })}
     </div>

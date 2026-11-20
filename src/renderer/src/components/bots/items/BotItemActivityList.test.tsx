@@ -191,10 +191,10 @@ it("shows an agent's comment files as file buttons that open as file links, and 
   expect(screen.getByText('Full run.')).toBeTruthy()
   expect(document.body.textContent).not.toContain('agent-session-attachments')
 
-  fireEvent.click(screen.getByRole('button', { name: 'install report.html' }))
+  fireEvent.click(screen.getByRole('link', { name: 'install report.html' }))
   expect(opened).toHaveBeenCalledExactlyOnceWith(
     expect.anything(),
     `#orca-native-chat-file-path=${encodeURIComponent(file(9, 'install report.html'))}`
   )
-  expect(screen.getByRole('button', { name: 'run.log' })).toBeTruthy()
+  expect(screen.getByRole('link', { name: 'run.log' })).toBeTruthy()
 })

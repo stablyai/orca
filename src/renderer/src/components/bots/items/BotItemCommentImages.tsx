@@ -53,7 +53,10 @@ export function BotItemCommentImages({
   const more =
     'flex aspect-square w-full items-center justify-center rounded-md border border-border bg-chat-canvas text-xs text-muted-foreground transition-colors hover:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
   return (
-    <div className={cn('mb-2 grid gap-1.5', layout.grid)} data-bot-item-comment-images="">
+    <div
+      className={cn('mt-1.5 grid gap-1.5 first:mt-0', layout.grid)}
+      data-bot-item-comment-images=""
+    >
       {(folded ? blocks.slice(0, SHOWN) : blocks).map((block, index) => (
         <div key={block.path} className="flex min-w-0 max-w-full flex-col gap-0.5">
           <NativeChatImageTile
