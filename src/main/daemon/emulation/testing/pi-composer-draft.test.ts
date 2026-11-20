@@ -87,6 +87,20 @@ describe('piComposerHoldsDraft', () => {
     expect(piComposerHoldsDraft(context)).toBe(false)
   })
 
+  it.each(['| cat notes.txt', '│ a quoted note'])(
+    "holds typed text in Pi's own box that starts with a side line: %s",
+    (typed) => {
+      expect(piComposerHoldsDraft(editor([RULE], typed, [RULE]))).toBe(true)
+    }
+  )
+
+  it.each([
+    ['a rail with only padding rows', editor([RULE, '|'], '|', ['| model', RULE])],
+    ['a rounded box with an empty row', editor([RULE, '│      │'], '│ typed  │', [RULE])]
+  ])('leaves %s drawn by an extension to its own report', (_label, context) => {
+    expect(piComposerHoldsDraft(context)).toBe(false)
+  })
+
   it.each([
     ['pi', true],
     ['claude', false]

@@ -7,10 +7,13 @@ export function getPiAgentStatusComposerDraftSourceLines(kind: PiAgentKind): str
     return []
   }
   return [
-    'let composerDraft: boolean | undefined = undefined',
+    'type ComposerDraftState = { acked: boolean | undefined; sending: boolean | undefined; retries: number }',
+    'declare global { var __orcaPiComposerDraft: ComposerDraftState | undefined }',
+    // Why: the post queue outlives /reload, so what Orca last received must outlive it too.
+    'const composerDraftState: ComposerDraftState = globalThis.__orcaPiComposerDraft ??= { acked: undefined, sending: undefined, retries: 0 }',
     'let composerDraftUi: { getEditorText?: () => unknown } | null = null',
     'let stopComposerDraftInput: (() => void) | null = null',
-    'let composerDraftCheckQueued = false',
+    'let composerDraftCheck: ReturnType<typeof setTimeout> | null = null',
     '',
     'function readComposerDraft(): boolean | undefined {',
     '  try {',
@@ -21,18 +24,37 @@ export function getPiAgentStatusComposerDraftSourceLines(kind: PiAgentKind): str
     '  }',
     '}',
     '',
-    'function scheduleComposerDraftCheck(): void {',
-    '  if (composerDraftCheckQueued) return',
-    '  composerDraftCheckQueued = true',
+    'function scheduleComposerDraftCheck(delayMs = 0): void {',
+    '  if (composerDraftCheck !== null) return',
     // Why: input listeners run before the editor applies the key, so read once it has landed.
-    '  setTimeout(() => {',
-    '    composerDraftCheckQueued = false',
+    '  composerDraftCheck = setTimeout(() => {',
+    '    composerDraftCheck = null',
     '    const next = readComposerDraft()',
-    '    if (next === composerDraft) return',
-    '    composerDraft = next',
-    // A queued post builds its body at delivery and already carries the new reading.
+    '    if (next === undefined || next === composerDraftState.acked || next === composerDraftState.sending) return',
+    // A queued post reads the box when it is sent, so it already carries this reading.
     "    if (!hasQueuedPost()) post('composer_draft')",
-    '  }, 0)',
+    '  }, delayMs)',
+    "  if (typeof composerDraftCheck.unref === 'function') composerDraftCheck.unref()",
+    '}',
+    '',
+    // Why: every post reads the box afresh, so text an extension sets without a key still reaches Orca.
+    'function beginComposerDraftSend(ompRuntime: boolean): boolean | undefined {',
+    '  const reading = ompRuntime ? undefined : readComposerDraft()',
+    '  composerDraftState.sending = reading',
+    '  return reading',
+    '}',
+    '',
+    'function endComposerDraftSend(sent: boolean | undefined, delivered: boolean): void {',
+    '  if (composerDraftState.sending === sent) composerDraftState.sending = undefined',
+    '  if (sent === undefined) return',
+    '  if (delivered) {',
+    '    composerDraftState.acked = sent',
+    '    composerDraftState.retries = 0',
+    '    return',
+    '  }',
+    // A dropped report must not stand: recheck with backoff so the reading reaches Orca.
+    '  if (sent === composerDraftState.acked || composerDraftState.retries >= 3) return',
+    '  scheduleComposerDraftCheck(250 * 2 ** composerDraftState.retries++)',
     '}',
     '',
     'function watchComposerDraft(ctx): void {',
@@ -42,12 +64,36 @@ export function getPiAgentStatusComposerDraftSourceLines(kind: PiAgentKind): str
     "  if (!ui || ui === composerDraftUi || typeof ui.onTerminalInput !== 'function' || typeof ui.getEditorText !== 'function') return",
     '  stopComposerDraftInput?.()',
     '  composerDraftUi = ui',
-    '  composerDraft = readComposerDraft()',
     '  stopComposerDraftInput = ui.onTerminalInput(() => {',
+    '    composerDraftState.retries = 0',
     '    scheduleComposerDraftCheck()',
     '    return undefined',
     '  })',
+    // A /reload or an editor prefilled before this registration may differ from what Orca holds.
+    '  scheduleComposerDraftCheck()',
     '}',
     ''
   ]
+}
+
+/** postOnce lines that read the box into the body and record whether Orca received it. */
+export function getPiAgentStatusComposerDraftPostLines(kind: PiAgentKind): {
+  begin: string[]
+  delivered: string[]
+  end: string[]
+  payloadField: string
+} {
+  if (kind !== 'pi') {
+    return { begin: [], delivered: [], end: [], payloadField: '' }
+  }
+  return {
+    begin: [
+      '  const composerDraftSent = beginComposerDraftSend(ompRuntime)',
+      '  let composerDraftDelivered = false'
+    ],
+    delivered: ['    composerDraftDelivered = true'],
+    end: ['    endComposerDraftSend(composerDraftSent, composerDraftDelivered)'],
+    payloadField:
+      ' ...(composerDraftSent !== undefined ? { composer_draft: composerDraftSent } : {}),'
+  }
 }

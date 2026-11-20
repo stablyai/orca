@@ -11,11 +11,26 @@ function isPiEditorRule(row: string | undefined): boolean {
 
 // An extension's own editor (pi-zentui's `| ` rail, a `│ … │` box) can put status rows, such as the
 // model, between the rules. Its layout is unknown here; Orca's Pi extension reports that box's draft.
+// Such a box draws an empty padding row that is only its gutter; text typed into Pi's own box,
+// even text starting with `|`, never is.
 const EXTENSION_EDITOR_GUTTERS = ['|', '│', '┃', '▎', '▌', '▏']
 
-function isExtensionEditorRow(row: string): boolean {
-  const first = row.trimStart()[0]
-  return first !== undefined && EXTENSION_EDITOR_GUTTERS.includes(first)
+function isGutter(char: string | undefined): boolean {
+  return char !== undefined && EXTENSION_EDITOR_GUTTERS.includes(char)
+}
+
+function isExtensionPaddingRow(row: string): boolean {
+  const trimmed = row.trim()
+  if (!isGutter(trimmed[0])) {
+    return false
+  }
+  const inner = isGutter(trimmed.at(-1)) ? trimmed.slice(1, -1) : trimmed.slice(1)
+  return inner.trim() === ''
+}
+
+function isExtensionEditor(rows: string[]): boolean {
+  const drawn = rows.filter((row) => row.trim() !== '')
+  return drawn.some(isExtensionPaddingRow) && drawn.every((row) => isGutter(row.trim()[0]))
 }
 
 /** Whether Pi's built-in editor shows a typed draft, so mail must wait. False when the cursor is not
@@ -30,11 +45,7 @@ export function piComposerHoldsDraft(context: TerminalCursorContext): boolean {
   if (top === -1 || top === cursorIndex || bottom === -1) {
     return false
   }
-  if (
-    [...context.rows.slice(top + 1), ...context.rowsBelow.slice(0, bottom)].some(
-      isExtensionEditorRow
-    )
-  ) {
+  if (isExtensionEditor([...context.rows.slice(top + 1), ...context.rowsBelow.slice(0, bottom)])) {
     return false
   }
   const hasText = (row: string): boolean => row.trim() !== ''

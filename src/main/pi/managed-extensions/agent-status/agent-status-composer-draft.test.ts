@@ -28,8 +28,16 @@ function piEditor(initial = '') {
     type(next: string) {
       onInput?.('x')
       text = next
+    },
+    // An extension's setEditorText changes the box without a key.
+    set(next: string) {
+      text = next
     }
   }
+}
+
+function lastDraftReport(harness: AgentStatusExtensionHarness): unknown {
+  return postedPayloads(harness).findLast((payload) => 'composer_draft' in payload)?.composer_draft
 }
 
 describe('Pi composer draft reporting', () => {
@@ -68,6 +76,58 @@ describe('Pi composer draft reporting', () => {
     const harness = createAgentStatusExtensionHarness({ kind: 'pi' })
     const editor = piEditor('half typed')
     await harness.callHook('session_start', { reason: 'startup' }, { ui: editor.ui })
+    await harness.callHook('agent_start', {}, { ui: editor.ui })
+    await vi.waitFor(() => expect(harness.fetchMock).toHaveBeenCalledTimes(2))
+    expect(postedPayloads(harness)[1]).toMatchObject({
+      hook_event_name: 'agent_start',
+      composer_draft: true
+    })
+  })
+
+  it('resends a draft report that Orca did not receive', async () => {
+    let calls = 0
+    const harness = createAgentStatusExtensionHarness({
+      kind: 'pi',
+      fetchImpl: async () => {
+        calls += 1
+        if (calls === 2) {
+          throw new Error('hook server restarting')
+        }
+        return { ok: true }
+      }
+    })
+    const editor = piEditor()
+    await harness.callHook('session_start', { reason: 'startup' }, { ui: editor.ui })
+    await vi.waitFor(() => expect(harness.fetchMock).toHaveBeenCalledTimes(1))
+
+    editor.type('h')
+    await vi.waitFor(() => expect(harness.fetchMock).toHaveBeenCalledTimes(3), { timeout: 2000 })
+    expect(postedPayloads(harness)[2]).toMatchObject({
+      hook_event_name: 'composer_draft',
+      composer_draft: true
+    })
+  })
+
+  it('reports a draft cleared during /reload', async () => {
+    const harness = createAgentStatusExtensionHarness({ kind: 'pi' })
+    const editor = piEditor()
+    await harness.callHook('session_start', { reason: 'startup' }, { ui: editor.ui })
+    editor.type('h')
+    await vi.waitFor(() => expect(lastDraftReport(harness)).toBe(true))
+
+    await harness.reloadPi()
+    editor.set('')
+    await harness.callHook('session_start', { reason: 'reload' }, { ui: editor.ui })
+    await vi.waitFor(() => expect(lastDraftReport(harness)).toBe(false))
+  })
+
+  it('carries text an extension set without a key on the next post', async () => {
+    const harness = createAgentStatusExtensionHarness({ kind: 'pi' })
+    const editor = piEditor()
+    await harness.callHook('session_start', { reason: 'startup' }, { ui: editor.ui })
+    await vi.waitFor(() => expect(harness.fetchMock).toHaveBeenCalledTimes(1))
+
+    editor.set('prefilled')
     await harness.callHook('agent_start', {}, { ui: editor.ui })
     await vi.waitFor(() => expect(harness.fetchMock).toHaveBeenCalledTimes(2))
     expect(postedPayloads(harness)[1]).toMatchObject({
