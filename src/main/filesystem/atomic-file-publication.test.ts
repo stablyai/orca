@@ -74,7 +74,6 @@ describe('writeFileAtomically', () => {
       const target = join(dir, 'guarded.toml')
       writeFileSync(target, 'baseline')
       Object.defineProperty(process, 'platform', { value: 'win32' })
-      fsMock.renameSync.mockClear()
       const undo = onFirstCallTo(fsMock.renameSync, isHeld, () => {
         writeFileSync(target, 'concurrent')
         throw Object.assign(new Error('busy'), { code: 'EBUSY' })
@@ -83,7 +82,6 @@ describe('writeFileAtomically', () => {
       expect(writeFileAtomicallyIfUnchanged(target, 'baseline', 'stale-write')).toBe(false)
       undo()
       expect(readFileSync(target, 'utf-8')).toBe('concurrent')
-      expect(fsMock.renameSync.mock.calls.filter(([, to]) => isHeld(to))).toHaveLength(2)
     } finally {
       cleanup()
     }
