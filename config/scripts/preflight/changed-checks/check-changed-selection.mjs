@@ -206,7 +206,9 @@ export const VERIFY_CHECKS = [
     // CI's own predicate, so local and CI select this check identically.
     name: 'localization extraction',
     args: ['config/scripts/localization/source-extraction/verify-localization-extraction.mjs'],
-    matches: (files) => affectsLocalizationExtraction(files)
+    matches: (files, { readVersions }) =>
+      affectsLocalizationExtraction(files) &&
+      files.some((file) => mayChangeExtractedKeys(file, readVersions))
   },
   {
     name: 'reliability gates',
@@ -265,6 +267,18 @@ export const VERIFY_CHECKS = [
     inputs: ['src/renderer/', 'config/oxlint-dead-classes.json']
   }
 ]
+
+const TRANSLATION_USE = /\b(?:t|translate\w*)\(|useTranslation|i18n/
+const SCRIPT_SOURCE = /\.[cm]?[jt]sx?$/
+
+// Why: extraction re-parses all of src/ (~1-2 min); a source change that names no translation API
+// before or after cannot move its output. CI still runs it on every such change.
+function mayChangeExtractedKeys(file, readVersions) {
+  if (!file.startsWith('src/') || !SCRIPT_SOURCE.test(file) || !readVersions) {
+    return true
+  }
+  return readVersions(file).some((text) => text !== null && TRANSLATION_USE.test(text))
+}
 
 // Projects of run-typecheck-projects-in-parallel.mjs and the source trees whose types reach them.
 const TYPECHECK_INPUTS = [
@@ -377,12 +391,12 @@ function listRatchetChecks(scriptsDir) {
     }))
 }
 
-function isSelected(check, files) {
+function isSelected(check, files, context) {
   const stem = ownScriptStem(check)
   return (
     (stem !== undefined && files.some((file) => file.startsWith(stem))) ||
     files.some((file) => matchesPrefix(file, check.inputs ?? [])) ||
-    (check.matches?.(files) ?? false)
+    (check.matches?.(files, context) ?? false)
   )
 }
 
@@ -411,7 +425,7 @@ export function splitUnitTestInputs(files, listDirectory = () => []) {
 }
 
 /** Decides which checks a set of changed paths needs; CI's classifier gates the expensive jobs. */
-export function planChangedChecks(files, { scriptsDir, listDirectory }) {
+export function planChangedChecks(files, { scriptsDir, listDirectory, readVersions }) {
   const jobs = classifyPrJobs(files)
   const selectAll = files.some(
     (file) => SELECT_ALL_FILES.has(file) || matchesPrefix(file, SELECT_ALL_PREFIXES)
@@ -424,7 +438,7 @@ export function planChangedChecks(files, { scriptsDir, listDirectory }) {
       ? splitUnitTestInputs(files, listDirectory)
       : { related: [], colocated: [] },
     checks: jobs.static_analysis
-      ? checks.filter((check) => selectAll || isSelected(check, files))
+      ? checks.filter((check) => selectAll || isSelected(check, files, { readVersions }))
       : []
   }
 }

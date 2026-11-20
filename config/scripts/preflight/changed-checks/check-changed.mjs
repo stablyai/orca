@@ -64,6 +64,16 @@ function git(root, args) {
   return execFileSync('git', args, { cwd: root, encoding: 'utf8' }).trim()
 }
 
+function gitShow(root, spec) {
+  const result = spawnSync('git', ['show', spec], {
+    cwd: root,
+    encoding: 'utf8',
+    maxBuffer: 64 * 1024 * 1024,
+    stdio: ['ignore', 'pipe', 'ignore']
+  })
+  return result.status === 0 ? result.stdout : null
+}
+
 function resolveMergeBase(root, requested) {
   for (const candidate of [requested, process.env.ORCA_CODE_QUALITY_BASE, 'origin/main', 'main']) {
     if (!candidate) {
@@ -367,7 +377,12 @@ export async function main(root, argv) {
       } catch {
         return []
       }
-    }
+    },
+    // Working-tree and merge-base text; null where the file is absent on that side.
+    readVersions: (file) => [
+      existsSync(path.join(root, file)) ? readFileSync(path.join(root, file), 'utf8') : null,
+      gitShow(root, `${mergeBase}:${file}`)
+    ]
   })
   const env = {
     ...process.env,
