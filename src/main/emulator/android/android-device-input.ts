@@ -7,7 +7,7 @@ import { androidButton, androidSwipe, androidTap, androidTypeText } from './andr
 import type { DeviceScreenSize } from './android-input-mapping'
 import type { AndroidSdkPaths } from './android-sdk-discovery'
 import { sendScrcpyGesture, sendScrcpyTap } from './scrcpy-control-input'
-import { sendScrcpyKey, sendScrcpyText } from './scrcpy-keyboard-queue'
+import { sendScrcpyKey, sendScrcpyText } from './scrcpy-input-queue'
 import type { ScrcpyControlTarget } from './scrcpy-stream-session'
 
 export type AndroidDeviceInputDeps = {

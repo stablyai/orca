@@ -1,6 +1,6 @@
 import { ipcMain, BrowserWindow } from 'electron'
 import { scrcpyVideoRegistry } from '../../emulator/scrcpy-video-registry'
-import { sendScrcpyKey, sendScrcpyText } from '../../emulator/android/scrcpy-keyboard-queue'
+import { sendScrcpyKey, sendScrcpyText } from '../../emulator/android/scrcpy-input-queue'
 
 type ScrcpyKeyboardInput =
   | { deviceId: string; text: string; paste: boolean }

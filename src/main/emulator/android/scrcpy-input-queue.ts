@@ -17,14 +17,14 @@ export const SCRCPY_PASTE_SETTLE_MS = 200
 
 type Queued = { done: (ok: boolean) => void } & (
   | { kind: 'text'; text: string; paste: boolean }
-  | { kind: 'key'; send: () => boolean }
+  | { kind: 'action'; send: () => boolean }
 )
 
 /**
- * Keeps one device's keyboard input in order. US keyboard text stays INJECT_TEXT, which works on
+ * Keeps one device's keyboard input, and the pane's touches, in order. US keyboard text stays INJECT_TEXT, which works on
  * every Android version and in Chrome; text with other characters goes through the clipboard.
  */
-class ScrcpyKeyboardQueue {
+class ScrcpyInputQueue {
   private readonly queued: Queued[] = []
   private draining = false
   private nextPasteAt = 0
@@ -42,22 +42,34 @@ class ScrcpyKeyboardQueue {
     this.draining = true
     try {
       for (let item = this.queued.shift(); item; item = this.queued.shift()) {
-        if (item.kind === 'key') {
+        if (item.kind === 'action') {
           item.done(runSafely(item.send))
           continue
         }
         if (isUSKeyboardText(item.text)) {
-          item.done(this.inject(item.text))
+          item.done(runSafely(() => this.inject(item.text)))
           continue
         }
         await sleep(this.nextPasteAt - Date.now())
         // Typed text that arrived meanwhile joins this paste, so characters keep their order.
         const batch = [item]
+        let bytes = Buffer.byteLength(item.text, 'utf8')
         for (let next = this.queued[0]; !item.paste && isTypedText(next); next = this.queued[0]) {
+          const nextBytes = Buffer.byteLength(next.text, 'utf8')
+          // A trailing newline is an Enter press, and one paste has a size limit.
+          if (
+            batch.at(-1)?.text.endsWith('\n') ||
+            bytes + nextBytes > SCRCPY_CLIPBOARD_TEXT_MAX_BYTES
+          ) {
+            break
+          }
           this.queued.shift()
           batch.push(next)
+          bytes += nextBytes
         }
-        const ok = this.paste(batch.map((queued) => queued.text).join(''), item.paste)
+        const ok = runSafely(() =>
+          this.paste(batch.map((queued) => queued.text).join(''), item.paste)
+        )
         this.nextPasteAt = Date.now() + SCRCPY_PASTE_SETTLE_MS
         for (const queued of batch) {
           queued.done(ok)
@@ -95,7 +107,7 @@ function runSafely(send: () => boolean): boolean {
   try {
     return send()
   } catch {
-    // Unknown key names throw from the keycode table.
+    // A throwing sender (an unknown key name) fails only its own input, never the queue.
     return false
   }
 }
@@ -104,12 +116,12 @@ function sleep(ms: number): Promise<void> {
   return ms > 0 ? new Promise((resolve) => setTimeout(resolve, ms)) : Promise.resolve()
 }
 
-const queues = new WeakMap<ScrcpyControlTarget, ScrcpyKeyboardQueue>()
+const queues = new WeakMap<ScrcpyControlTarget, ScrcpyInputQueue>()
 
-function queueFor(control: ScrcpyControlTarget): ScrcpyKeyboardQueue {
+function queueFor(control: ScrcpyControlTarget): ScrcpyInputQueue {
   let queue = queues.get(control)
   if (!queue) {
-    queue = new ScrcpyKeyboardQueue(control)
+    queue = new ScrcpyInputQueue(control)
     queues.set(control, queue)
   }
   return queue
@@ -139,11 +151,13 @@ export function sendScrcpyKey(
   name: string,
   modifiers: { shift?: boolean } = {}
 ): Promise<boolean> {
-  return new Promise((done) =>
-    queueFor(control).enqueue({
-      kind: 'key',
-      send: () => sendScrcpyButton(control, name, modifiers),
-      done
-    })
-  )
+  return sendScrcpyInOrder(control, () => sendScrcpyButton(control, name, modifiers))
+}
+
+/** Runs `send` after the input queued before it; when nothing is queued it runs at once. */
+export function sendScrcpyInOrder(
+  control: ScrcpyControlTarget,
+  send: () => boolean
+): Promise<boolean> {
+  return new Promise((done) => queueFor(control).enqueue({ kind: 'action', send, done }))
 }

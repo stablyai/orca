@@ -30,9 +30,7 @@ let container: HTMLDivElement
 let root: Root
 
 beforeEach(() => {
-  ;(
-    globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
-  ).IS_REACT_ACT_ENVIRONMENT = true
+  vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
   vi.stubGlobal('api', { app: { onKeyboardLayoutChanged: () => () => undefined } })
   vi.clearAllMocks()
   container = document.createElement('div')
