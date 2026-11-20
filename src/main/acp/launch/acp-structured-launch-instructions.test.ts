@@ -189,7 +189,9 @@ describe('ACP launch: standing instructions', () => {
       `${foldsCase ? 'Mine.\n\n' : ''}${PREAMBLE}\n`
     )
     expect((await lstat(join(configDir, 'AGENTS.md'))).isSymbolicLink()).toBe(false)
-    expect(await readdir(configDir)).toEqual(['AGENTS.md'])
+    expect((await readdir(configDir)).sort()).toEqual(
+      foldsCase ? ['AGENTS.md'] : ['AGENTS.md', 'agents.md']
+    )
   })
 
   it('writes only the preamble when the explicitly configured OpenCode folder is missing', async () => {
