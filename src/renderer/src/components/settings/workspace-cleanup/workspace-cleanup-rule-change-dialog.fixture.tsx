@@ -58,6 +58,17 @@ function Example({ value, error }: { value: WorkspaceCleanupRuleChangeRequest; e
   )
 }
 export const rule = defineFixture({ width: 640, render: () => <Example value={request(2)} /> })
+/** Every match kept: confirming deletes nothing, so the button is the normal one. */
+export const allKept = defineFixture({
+  width: 640,
+  render: () => {
+    const value = request(2)
+    for (const row of value.rows) {
+      value.selection.toggle(row)
+    }
+    return <Example value={value} />
+  }
+})
 export const days = defineFixture({
   width: 640,
   render: () => <Example value={{ ...request(), kind: 'change', setting: 'inactive' }} />
