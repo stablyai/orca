@@ -4,14 +4,8 @@ import {
   navigateToHostStackRoute,
   type HostStackNavigationState
 } from './host-stack-navigation'
+import { mobileSessionRouteTarget } from '../session/mobile-session-route'
 
-const TARGET = { name: '[hostId]/tasks', params: { hostId: 'host/one' } } as const
-const OTHER_TARGET = {
-  name: '[hostId]/session/[worktreeId]',
-  params: { hostId: 'host/one', worktreeId: 'repo::/tmp/wt' }
-} as const
-
-// Remove listeners for real so teardown is tested instead of merely the active guard.
 function navigationHarness(initialState: HostStackNavigationState | undefined) {
   const stateListeners = new Set<() => void>()
   let state = initialState
@@ -56,167 +50,189 @@ function committedHostState(hostIdParam: string): HostStackNavigationState {
   }
 }
 
-// Model Expo’s internal root navigator: the host stack sits one level below the layout screen.
-function rootLayoutScopedState(inner: HostStackNavigationState): HostStackNavigationState {
-  return { key: 'internal', index: 0, routes: [{ key: '__root', name: '__root', state: inner }] }
-}
-
 describe('host stack navigation', () => {
-  it('matches a host committed as the encoded segment it was pushed as', () => {
-    const harness = navigationHarness({ index: 0, routes: [{ name: 'index' }] })
-    const push = vi.fn()
-
-    navigateToHostStackRoute(harness.navigation, { push, replace: vi.fn() }, 'host/one', TARGET)
-    expect(push).toHaveBeenCalledWith('/h/host%2Fone')
-    expect(harness.navigation.dispatch).not.toHaveBeenCalled()
-
-    harness.setState(committedHostState(encodeURIComponent('host/one')))
-
-    expect(harness.navigation.dispatch).toHaveBeenCalledTimes(1)
-    expect(harness.navigation.dispatch).toHaveBeenCalledWith({
-      type: 'REPLACE',
-      target: '/h',
-      source: 'host-index',
-      payload: TARGET
+  it('reuses the room on screen for its own tap and opens a different room over it', () => {
+    const room = (groupId: string) => ({
+      name: '[hostId]/group/[groupId]',
+      params: { hostId: 'host/one', groupId }
     })
-  })
-
-  it('replaces the host stack seen from the root layout, one navigator further down', () => {
-    const harness = navigationHarness(
-      rootLayoutScopedState({ index: 0, routes: [{ name: 'index' }] })
-    )
-
-    navigateToHostStackRoute(
-      harness.navigation,
-      { push: vi.fn(), replace: vi.fn() },
-      'host/one',
-      TARGET
-    )
-    harness.setState(rootLayoutScopedState(committedHostState('host/one')))
-
-    expect(harness.navigation.dispatch).toHaveBeenCalledWith({
-      type: 'REPLACE',
-      target: '/h',
-      source: 'host-index',
-      payload: TARGET
-    })
-  })
-
-  it('survives the state emitted before the root navigator has hydrated', () => {
-    const harness = navigationHarness(undefined)
-
-    navigateToHostStackRoute(
-      harness.navigation,
-      { push: vi.fn(), replace: vi.fn() },
-      'host/one',
-      TARGET
-    )
-
-    expect(() => harness.setState(undefined)).not.toThrow()
-    expect(harness.navigation.dispatch).not.toHaveBeenCalled()
-
-    harness.setState(rootLayoutScopedState(committedHostState('host/one')))
-    expect(harness.navigation.dispatch).toHaveBeenCalledTimes(1)
-  })
-
-  it('replaces through Expo Router when root state omits the mounted child stack', () => {
-    const harness = navigationHarness({ index: 0, routes: [{ name: 'index' }] })
-    const replace = vi.fn()
-
-    navigateToHostStackRoute(harness.navigation, { push: vi.fn(), replace }, 'host/one', TARGET)
-    harness.setState({
+    const harness = navigationHarness({
       index: 0,
-      routes: [{ name: 'h', params: { hostId: 'host/one' } }]
+      routes: [
+        {
+          name: 'h',
+          state: {
+            key: '/h',
+            index: 1,
+            routes: [
+              { key: 'host-index', name: '[hostId]/index', params: { hostId: 'host/one' } },
+              { key: 'room-g', ...room('g') }
+            ]
+          }
+        }
+      ]
     })
+    const router = { push: vi.fn(), replace: vi.fn() }
 
-    expect(harness.navigation.dispatch).not.toHaveBeenCalled()
-    expect(replace).toHaveBeenCalledWith({
-      pathname: '/h/[hostId]/tasks',
-      params: { hostId: 'host/one' }
-    })
-    expect(harness.listenerCount()).toBe(0)
+    navigateToHostStackRoute(harness.navigation, router, 'host/one', room('g'))
+    navigateToHostStackRoute(harness.navigation, router, 'host/one', room('h'))
+
+    expect(harness.navigation.dispatch.mock.calls.map(([action]) => action.type)).toEqual([
+      'SET_PARAMS',
+      'PUSH'
+    ])
   })
 
-  it('abandons the transition when navigation leaves the host route it was waiting on', () => {
-    const harness = navigationHarness({ index: 0, routes: [{ name: 'index' }] })
+  it('pushes a group room from the host list even where sessions open inside its document', () => {
+    const harness = navigationHarness(committedHostState('host/one'))
+    const room = {
+      name: '[hostId]/group/[groupId]',
+      params: { hostId: 'host/one', groupId: 'g-1' }
+    }
 
     navigateToHostStackRoute(
       harness.navigation,
       { push: vi.fn(), replace: vi.fn() },
       'host/one',
-      TARGET
+      room,
+      true
     )
-    harness.setState({ index: 0, routes: [{ name: 'h' }] })
-    harness.setState({ index: 0, routes: [{ name: 'index' }] })
-    harness.setState(committedHostState('host/one'))
 
-    expect(harness.navigation.dispatch).not.toHaveBeenCalled()
-    expect(harness.listenerCount()).toBe(0)
+    expect(harness.navigation.dispatch.mock.calls).toEqual([
+      [{ type: 'PUSH', target: '/h', payload: room }]
+    ])
   })
 
-  it('ignores a different host whose id merely decodes badly', () => {
-    const harness = navigationHarness({ index: 0, routes: [{ name: 'index' }] })
+  describe('a session opened inside its host document', () => {
+    const SESSION = {
+      name: '[hostId]/session/[worktreeId]',
+      params: { hostId: 'host/one', worktreeId: 'repo::/tmp/wt', paneKey: 'tab-1:leaf 2' }
+    } as const
+    it('opens a different session tapped while the push commits on the host stack it mounts', () => {
+      const harness = navigationHarness({ index: 0, routes: [{ name: 'index' }] })
+      const push = vi.fn()
+      const router = { push, replace: vi.fn() }
+      const OTHER_SESSION = {
+        name: '[hostId]/session/[worktreeId]',
+        params: { hostId: 'host/one', worktreeId: 'repo::/tmp/other' }
+      } as const
+
+      const pending = coordinateHostStackNavigation(
+        null,
+        harness.navigation,
+        router,
+        'host/one',
+        SESSION,
+        true
+      )
+      coordinateHostStackNavigation(
+        pending,
+        harness.navigation,
+        router,
+        'host/one',
+        OTHER_SESSION,
+        true
+      )
+      harness.setState(committedHostState('host/one'))
+
+      expect(push).toHaveBeenCalledTimes(1)
+      expect(harness.navigation.dispatch.mock.calls).toEqual([
+        [
+          {
+            type: 'SET_PARAMS',
+            target: '/h',
+            source: 'host-index',
+            payload: {
+              params: { open: '%2Fh%2Fhost%252Fone%2Fsession%2Frepo%253A%253A%252Ftmp%252Fother' }
+            }
+          }
+        ]
+      ])
+    })
+  })
+  it.each([
+    ['ends an earlier item when it names none', {}, ''],
+    [
+      'carries its own item',
+      { botItem: '{"sessionId":"lead","itemId":"q-2"}' },
+      '{"sessionId":"lead","itemId":"q-2"}'
+    ]
+  ] as const)('a pane request reusing the session on screen %s', (_, item, botItem) => {
+    const session = (params: Record<string, string>) => ({
+      name: '[hostId]/session/[worktreeId]',
+      params: { hostId: 'host/one', worktreeId: 'wt', ...params }
+    })
+    const harness = navigationHarness({
+      index: 0,
+      routes: [
+        {
+          name: 'h',
+          state: {
+            key: '/h',
+            index: 0,
+            routes: [
+              {
+                key: 'chat',
+                ...session({ paneKey: 'pane-1', botItem: '{"sessionId":"lead","itemId":"q-1"}' })
+              }
+            ]
+          }
+        }
+      ]
+    })
 
     navigateToHostStackRoute(
       harness.navigation,
       { push: vi.fn(), replace: vi.fn() },
       'host/one',
-      TARGET
+      session({ paneKey: 'pane-1', ...item })
     )
-    harness.setState(committedHostState('100%'))
 
-    expect(harness.navigation.dispatch).not.toHaveBeenCalled()
+    expect(harness.navigation.dispatch.mock.calls[0][0].payload.params.botItem).toBe(botItem)
   })
 
-  it('stops listening and never replaces once canceled', () => {
-    const harness = navigationHarness({ index: 0, routes: [{ name: 'index' }] })
-
-    const controller = navigateToHostStackRoute(
-      harness.navigation,
+  it('hands a pane request’s own intent to the session on screen and to its document', () => {
+    const target = mobileSessionRouteTarget({
+      hostId: 'host/one',
+      worktreeId: 'wt',
+      paneKey: 'pane-1'
+    })
+    // The session on screen still holds an earlier request's intent.
+    const shown: Record<string, string> = { ...target.params, paneIntent: 'old' }
+    const onScreen = navigationHarness({
+      index: 0,
+      routes: [
+        {
+          name: 'h',
+          state: {
+            key: '/h',
+            index: 0,
+            routes: [{ key: 'chat', ...target, params: shown }]
+          }
+        }
+      ]
+    })
+    navigateToHostStackRoute(
+      onScreen.navigation,
       { push: vi.fn(), replace: vi.fn() },
       'host/one',
-      TARGET
+      target
     )
-    expect(harness.listenerCount()).toBe(1)
-    controller.cancel()
+    expect(onScreen.navigation.dispatch.mock.calls[0][0].payload.params.paneIntent).toBe(
+      target.params.paneIntent
+    )
 
-    expect(harness.unsubscribe).toHaveBeenCalledTimes(1)
-    expect(harness.listenerCount()).toBe(0)
-    expect(controller.isActive()).toBe(false)
-
-    harness.setState(committedHostState('host/one'))
-    expect(harness.navigation.dispatch).not.toHaveBeenCalled()
-  })
-
-  it('retargets a still-pending transition to the same host instead of pushing twice', () => {
-    const harness = navigationHarness({ index: 0, routes: [{ name: 'index' }] })
-    const push = vi.fn()
-    const router = { push, replace: vi.fn() }
-
-    const pending = coordinateHostStackNavigation(
-      null,
-      harness.navigation,
-      router,
+    const hostList = navigationHarness(committedHostState('host/one'))
+    navigateToHostStackRoute(
+      hostList.navigation,
+      { push: vi.fn(), replace: vi.fn() },
       'host/one',
-      TARGET
+      target,
+      true
     )
-    const retargeted = coordinateHostStackNavigation(
-      pending,
-      harness.navigation,
-      router,
-      'host/one',
-      OTHER_TARGET
+    const open = decodeURIComponent(
+      hostList.navigation.dispatch.mock.calls[0][0].payload.params.open
     )
-
-    expect(retargeted).toBe(pending)
-    expect(push).toHaveBeenCalledTimes(1)
-    expect(harness.listenerCount()).toBe(1)
-
-    harness.setState(committedHostState('host/one'))
-
-    expect(harness.navigation.dispatch).toHaveBeenCalledTimes(1)
-    expect(harness.navigation.dispatch).toHaveBeenCalledWith(
-      expect.objectContaining({ payload: OTHER_TARGET })
-    )
+    expect(new URLSearchParams(open.split('?')[1]).get('paneIntent')).toBe(target.params.paneIntent)
   })
 })

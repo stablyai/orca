@@ -1,4 +1,4 @@
-import type { BrowserPage } from '../../../../../shared/browser-workspace-types'
+import type { BrowserPage } from '../../../../../shared/browser/workspaces/browser-workspace-types'
 
 const EMPTY_BROWSER_PAGES: BrowserPage[] = []
 

@@ -1,7 +1,7 @@
-import type { SleepingAgentLaunchConfig } from '../../../../shared/agent-session-resume'
-import type { PtySpawnResult } from '../../../providers/pty-provider-contract'
-import { isWorktreeTerminalsSleepingError } from '../../../runtime/worktree-terminals-sleeping-error'
-import type { PtySpawnOutcome } from '../spawn-outcome'
+import type { SleepingAgentLaunchConfig } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
+import type { PtySpawnResult } from '../../../providers/pty/spawn-result'
+import { isWorktreeTerminalsSleepingError } from '../../../../shared/workspace/lifecycle/workspace-sleep'
+import type { PtySpawnOutcome } from '../spawn/spawn-outcome'
 import type { PaneSpawnOperation } from './pane-spawn-operation'
 
 export type PaneSpawnReservation = {

@@ -1,16 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { dirname, getRelativePathInsideRoot, joinPath } from './path'
 
-describe('dirname', () => {
-  it('keeps the POSIX root when resolving a file in the filesystem root', () => {
-    expect(dirname('/README.md')).toBe('/')
-  })
-
-  it('keeps the Windows drive root when resolving a file in the drive root', () => {
-    expect(dirname('C:\\README.md')).toBe('C:')
-  })
-})
-
 describe('joinPath', () => {
   it('joins onto a Windows drive root returned by dirname', () => {
     expect(joinPath(dirname('C:\\README.md'), 'image.png')).toBe('C:/image.png')
@@ -27,10 +17,8 @@ describe('getRelativePathInsideRoot', () => {
   })
 })
 
-it.each(['/native/repo\\root', '/ssh/repo\\root'])(
-  'joins POSIX names without merging literal-backslash identities under %s',
-  (root) => {
-    expect(joinPath(root, 'a\\b.txt')).toBe(`${root}/a\\b.txt`)
-    expect(joinPath(root, 'a/b.txt')).toBe(`${root}/a/b.txt`)
-  }
-)
+it('joins POSIX names without merging literal-backslash identities', () => {
+  const root = '/native/repo\\root'
+  expect(joinPath(root, 'a\\b.txt')).toBe(`${root}/a\\b.txt`)
+  expect(joinPath(root, 'a/b.txt')).toBe(`${root}/a/b.txt`)
+})

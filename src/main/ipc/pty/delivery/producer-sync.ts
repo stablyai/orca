@@ -1,5 +1,8 @@
-import { recordDaemonStreamBacklogEvent } from '../../../daemon/daemon-stream-backlog-probe'
-import { isRuntimeOwnedHiddenRendererPty } from './pty-hidden-delivery-gate'
+import { recordDaemonStreamBacklogEvent } from '../../../daemon/transport/stream/daemon-stream-backlog-probe'
+import {
+  isRendererRetainingGraphics,
+  isRuntimeOwnedHiddenRendererPty
+} from './pty-hidden-delivery-gate'
 import { tryGetProviderForPty } from '../provider/registry'
 import {
   PRODUCER_FLOW_CONTROL_ENABLED,
@@ -24,7 +27,10 @@ export function syncPtyBackgroundedDelivery(
   const knownHidden =
     session.rendererPtyIsKnownHidden(id) ||
     (isRuntimeOwnedHiddenRendererPty(id) && !visibleRendererPtys.has(id))
-  const background = knownHidden && !(session.runtime?.hasRawTerminalViewSubscriber?.(id) ?? false)
+  const background =
+    knownHidden &&
+    !isRendererRetainingGraphics(id) &&
+    !(session.runtime?.hasRawTerminalViewSubscriber?.(id) ?? false)
   if (session.backgroundedDeliverySyncByPty.get(id) === background) {
     return
   }

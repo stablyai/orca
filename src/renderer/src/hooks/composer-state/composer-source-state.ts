@@ -1,16 +1,16 @@
 import type { ComposerTargetState } from './composer-target-state-contract'
 import type { ComposerExternalSyncState } from './composer-external-sync-contract'
 import type { ComposerSourceState } from './composer-source-state-contract'
-import { useSourceIdentityActions } from './source-identity-actions'
-import { useComposerAttachmentDropState } from './composer-attachment-drop-state'
-import { useTargetChangeActions } from './target-change-actions'
-import { useProjectTargetActions } from './project-target-actions'
-import { useBranchStartPointActions } from './branch-start-point-actions'
-import { useGitHubProviderSelection } from './github-provider-selection'
-import { useGitLabProviderSelection } from './gitlab-provider-selection'
-import { useWorkItemSourceActions } from './work-item-source-actions'
-import { useIssueSourceActions } from './issue-source-actions'
-import { useComposerNavigationActions } from './composer-navigation-actions'
+import { useSourceIdentityActions } from './linked-work-items/source-identity-actions'
+import { useComposerAttachmentDropState } from './attachments/composer-attachment-drop-state'
+import { useTargetChangeActions } from './workspace-target/target-change-actions'
+import { useProjectTargetActions } from './workspace-target/project-target-actions'
+import { useBranchStartPointActions } from './workspace-start-point/branch-start-point-actions'
+import { useGitHubProviderSelection } from './linked-work-items/github-provider-selection'
+import { useGitLabProviderSelection } from './linked-work-items/gitlab-provider-selection'
+import { useWorkItemSourceActions } from './workspace-start-point/work-item-source-actions'
+import { useIssueSourceActions } from './linked-work-items/issue-source-actions'
+import { useComposerNavigationActions } from './card-projection/composer-navigation-actions'
 
 export function useComposerSourceState(
   target: ComposerTargetState,
@@ -19,6 +19,7 @@ export function useComposerSourceState(
   const sourceIdentityActions = useSourceIdentityActions({
     applyLinkedWorkItem: external.githubSourceApplication.applyLinkedWorkItem,
     branchAutoNameRef: target.asyncComposerState.branchAutoNameRef,
+    branchIntent: target.workspaceIdentityState.branchIntent,
     branchNameOverride: target.workspaceIdentityState.branchNameOverride,
     branchNameOverridePreservesNameEdits:
       target.workspaceIdentityState.branchNameOverridePreservesNameEdits,
@@ -28,6 +29,7 @@ export function useComposerSourceState(
     name: target.sourceContextState.name,
     pushTarget: target.workspaceIdentityState.pushTarget,
     setBranchNameOverride: target.workspaceIdentityState.setBranchNameOverride,
+    setBranchIntent: target.workspaceIdentityState.setBranchIntent,
     setBranchNameOverridePreservesNameEdits:
       target.workspaceIdentityState.setBranchNameOverridePreservesNameEdits,
     setCreateError: target.asyncComposerState.setCreateError,
@@ -44,7 +46,6 @@ export function useComposerSourceState(
     setLinkedWorkItem: target.sourceContextState.setLinkedWorkItem,
     setName: target.sourceContextState.setName,
     setPushTarget: target.workspaceIdentityState.setPushTarget,
-    setReuseEligibleBranch: target.workspaceIdentityState.setReuseEligibleBranch,
     setReuseSelectedBranch: target.workspaceIdentityState.setReuseSelectedBranch,
     smartSourceSelectionRef: target.asyncComposerState.smartSourceSelectionRef
   })
@@ -95,6 +96,7 @@ export function useComposerSourceState(
     linkedWorkItem: target.sourceContextState.linkedWorkItem,
     projectGroups: target.composerTargetStore.projectGroups,
     projectHostSetups: target.composerTargetStore.projectHostSetups,
+    projectOptions: target.runtimeTargetSelection.projectOptions,
     projects: target.composerTargetStore.projects,
     repos: target.composerTargetStore.repos,
     setBaseBranch: target.workspaceIdentityState.setBaseBranch,
@@ -114,6 +116,10 @@ export function useComposerSourceState(
     setReuseEligibleBranch: target.workspaceIdentityState.setReuseEligibleBranch,
     setReuseSelectedBranch: target.workspaceIdentityState.setReuseSelectedBranch,
     setSelectedProjectGroupId: target.initialTargetState.setSelectedProjectGroupId,
+    setSelectedProjectHostSetupOverrideHostId:
+      target.initialTargetState.setSelectedProjectHostSetupOverrideHostId,
+    setSelectedProjectHostSetupOverrideId:
+      target.initialTargetState.setSelectedProjectHostSetupOverrideId,
     setSparseDirectories: target.asyncComposerState.setSparseDirectories,
     setSparseEnabled: target.asyncComposerState.setSparseEnabled,
     setSparseSelectedPresetId: target.asyncComposerState.setSparseSelectedPresetId,

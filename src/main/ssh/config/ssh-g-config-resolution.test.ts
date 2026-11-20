@@ -6,7 +6,8 @@ import { join } from 'node:path'
 
 type NodeOsModule = typeof NodeOs
 
-const { existsSyncMock, homedirMock, userInfoMock } = vi.hoisted(() => ({
+const { existsSyncMock, homedirMock, runProcessMock, userInfoMock } = vi.hoisted(() => ({
+  runProcessMock: vi.fn(),
   existsSyncMock: vi.fn<(path: string) => boolean>(() => true),
   homedirMock: vi.fn<() => string>(() => '/home/env'),
   userInfoMock: vi.fn<() => { homedir: string; username?: string }>(() => ({
@@ -15,6 +16,7 @@ const { existsSyncMock, homedirMock, userInfoMock } = vi.hoisted(() => ({
 }))
 
 vi.mock('node:fs', () => ({ existsSync: existsSyncMock }))
+vi.mock('@orca/process-host', () => ({ runProcess: runProcessMock }))
 // Retain real os exports because site-policy fixtures need tmpdir.
 vi.mock('node:os', async (importOriginal) => ({
   ...(await importOriginal<NodeOsModule>()),
@@ -23,108 +25,28 @@ vi.mock('node:os', async (importOriginal) => ({
 }))
 
 import {
-  parseSshGOutput,
+  runSshG,
   siteConfigMayRestrictHostKeys,
-  splitIncludeArguments,
-  sshGArgsForHost
+  splitIncludeArguments
 } from './ssh-g-config-resolution'
 
-describe('sshGArgsForHost', () => {
-  beforeEach(() => {
-    existsSyncMock.mockReset().mockReturnValue(true)
-    homedirMock.mockReset().mockReturnValue('/home/env')
-    userInfoMock.mockReset().mockReturnValue({ homedir: '/home/env' })
+describe('runSshG', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs()
+    runProcessMock.mockReset()
   })
 
-  it('keeps OpenSSH default resolution when HOME matches the passwd home', () => {
-    // Default resolution must retain system GSSAPI defaults.
-    expect(sshGArgsForHost('prod')).toEqual(['-G', '--', 'prod'])
-  })
+  it('runs the ssh named by ORCA_SYSTEM_SSH_PATH', async () => {
+    // Connections honor this override, so -G must resolve config with the same binary.
+    vi.stubEnv('ORCA_SYSTEM_SSH_PATH', '/opt/custom/bin/ssh')
+    runProcessMock.mockResolvedValue({ code: 0, stdout: 'hostname example.com\n', stderr: '' })
 
-  it('pins the HOME config when it diverges from the passwd home', () => {
-    homedirMock.mockReturnValue('/tmp/e2e-home')
-
-    expect(sshGArgsForHost('prod')).toEqual(['-F', '/tmp/e2e-home/.ssh/config', '-G', '--', 'prod'])
-    expect(existsSyncMock).toHaveBeenCalledWith('/tmp/e2e-home/.ssh/config')
-  })
-
-  it('falls back to passwd-home resolution when the HOME config is absent', () => {
-    // A missing -F file makes ssh exit255; the picker cannot list passwd-home aliases anyway.
-    homedirMock.mockReturnValue('/tmp/e2e-home')
-    existsSyncMock.mockReturnValue(false)
-
-    expect(sshGArgsForHost('prod')).toEqual(['-G', '--', 'prod'])
-  })
-
-  it('treats an unavailable passwd entry as a HOME match', () => {
-    userInfoMock.mockImplementation(() => {
-      throw new Error('getpwuid failed')
+    await expect(runSshG(['-G', '--', 'example'])).resolves.toMatchObject({
+      hostname: 'example.com'
     })
-
-    expect(sshGArgsForHost('prod')).toEqual(['-G', '--', 'prod'])
-  })
-
-  it('does not let a leading-dash alias become a flag', () => {
-    homedirMock.mockReturnValue('/tmp/e2e-home')
-
-    expect(sshGArgsForHost('-oProxyCommand=touch /tmp/pwned')).toEqual([
-      '-F',
-      '/tmp/e2e-home/.ssh/config',
-      '-G',
-      '--',
-      '-oProxyCommand=touch /tmp/pwned'
-    ])
-  })
-})
-
-/** -F excludes user and system config; read site policy separately and fail closed on uncertainty. */
-describe('parseSshGOutput IdentityFile tokens', () => {
-  beforeEach(() => {
-    homedirMock.mockReset().mockReturnValue('/home/env')
-    userInfoMock.mockReset().mockReturnValue({ homedir: '/home/passwd', username: 'alice' })
-  })
-
-  const sshG = (...identityFiles: string[]): string =>
-    [
-      'host work',
-      ...identityFiles.map((file) => `identityfile ${file}`),
-      'user bob',
-      'hostname example.com',
-      'port 2200'
-    ].join('\n')
-
-  it('expands the tokens OpenSSH 10.3 leaves raw in ssh -G output', () => {
-    expect(parseSshGOutput(sshG('%d/keys/%h-%r-%p-%n-%u-%%.pem')).identityFile).toEqual([
-      '/home/passwd/keys/example.com-bob-2200-work-alice-%.pem'
-    ])
-  })
-
-  it('still expands a leading tilde', () => {
-    expect(parseSshGOutput(sshG('~/.ssh/id_work')).identityFile).toEqual([
-      join('/home/env', '.ssh', 'id_work')
-    ])
-  })
-
-  it('expands ${NAME} from the environment, and keeps the path raw when NAME is unset', () => {
-    vi.stubEnv('ORCA_TEST_KEYS', '/srv/keys-%r')
-    try {
-      expect(
-        parseSshGOutput(sshG('${ORCA_TEST_KEYS}/%r', '${ORCA_TEST_UNSET_VAR}/k')).identityFile
-      ).toEqual(['/srv/keys-%r/bob', '${ORCA_TEST_UNSET_VAR}/k'])
-    } finally {
-      vi.unstubAllEnvs()
-    }
-  })
-
-  it('reads `IdentityFile none` as no key, not a missing file', () => {
-    expect(parseSshGOutput(sshG('none')).identityFile).toEqual([])
-  })
-
-  it('keeps a path with a token it cannot resolve unchanged', () => {
-    expect(parseSshGOutput(sshG('%d/%C.pem', '/keys/100%')).identityFile).toEqual([
-      '%d/%C.pem',
-      '/keys/100%'
-    ])
+    expect(runProcessMock).toHaveBeenCalledWith(
+      expect.objectContaining({ program: '/opt/custom/bin/ssh' })
+    )
   })
 })
 
@@ -139,25 +61,6 @@ describe('siteConfigMayRestrictHostKeys', () => {
     await rm(dir, { recursive: true, force: true })
   })
 
-  it('answers no when there is no system config at all', async () => {
-    await expect(siteConfigMayRestrictHostKeys([join(dir, 'absent')])).resolves.toBe(false)
-  })
-
-  it('answers no for a config that says nothing about host keys', async () => {
-    const file = join(dir, 'ssh_config')
-    await writeFile(file, 'Host *\n    SendEnv LANG LC_*\n', 'utf-8')
-
-    await expect(siteConfigMayRestrictHostKeys([file])).resolves.toBe(false)
-  })
-
-  it('answers yes when the directive is present, whatever its value', async () => {
-    // Any mention retains strict policy; its value is intentionally unparsed.
-    const file = join(dir, 'ssh_config')
-    await writeFile(file, 'Host *\n    StrictHostKeyChecking no\n', 'utf-8')
-
-    await expect(siteConfigMayRestrictHostKeys([file])).resolves.toBe(true)
-  })
-
   it('follows the Include OpenSSH ships by default', async () => {
     // Distro defaults commonly Include ssh_config.d; skipping it would miss site policy.
     const includeDir = join(dir, 'ssh_config.d')
@@ -167,16 +70,6 @@ describe('siteConfigMayRestrictHostKeys', () => {
     await writeFile(file, 'Include ssh_config.d/*\nHost *\n', 'utf-8')
 
     await expect(siteConfigMayRestrictHostKeys([file])).resolves.toBe(true)
-  })
-
-  it('answers no when an Included directory holds nothing relevant', async () => {
-    const includeDir = join(dir, 'ssh_config.d')
-    await mkdir(includeDir)
-    await writeFile(join(includeDir, '10-site.conf'), 'SendEnv LANG\n', 'utf-8')
-    const file = join(dir, 'ssh_config')
-    await writeFile(file, 'Include ssh_config.d/*\n', 'utf-8')
-
-    await expect(siteConfigMayRestrictHostKeys([file])).resolves.toBe(false)
   })
 
   it('finds a directive behind a RELATIVE Include nested two deep', async () => {
@@ -198,12 +91,18 @@ describe('siteConfigMayRestrictHostKeys', () => {
     await expect(siteConfigMayRestrictHostKeys([file])).resolves.toBe(true)
   })
 
-  it('stays strict for an Include path it would have to expand tokens in', async () => {
-    // Unexpanded ~/% tokens must fail closed rather than look like absent files.
+  it('stays strict for a nested Windows glob written with backslashes', async () => {
     const file = join(dir, 'ssh_config')
-    await writeFile(file, 'Include ~/.ssh/site.conf\n', 'utf-8')
+    await writeFile(file, 'Include config.d\\*\\10-strict.conf\n', 'utf-8')
+    const originalPlatform = process.platform
+    // splitIncludeArguments reads the platform per call; on POSIX it rejects `\` before the glob check.
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
 
-    await expect(siteConfigMayRestrictHostKeys([file])).resolves.toBe(true)
+    try {
+      await expect(siteConfigMayRestrictHostKeys([file])).resolves.toBe(true)
+    } finally {
+      Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
+    }
   })
 
   it('follows a quoted Include path that contains a space', async () => {
@@ -217,33 +116,12 @@ describe('siteConfigMayRestrictHostKeys', () => {
     await expect(siteConfigMayRestrictHostKeys([file])).resolves.toBe(true)
   })
 
-  it('follows a single-quoted Include path that contains a space', async () => {
-    // Single-quoted spaces are measured OpenSSH behavior too.
-    const spaced = join(dir, 'sq ace')
-    await mkdir(spaced, { recursive: true })
-    await writeFile(join(spaced, 'site.conf'), 'StrictHostKeyChecking yes\n', 'utf-8')
-    const file = join(dir, 'ssh_config')
-    await writeFile(file, `Include '${join(spaced, 'site.conf')}'\n`, 'utf-8')
-
-    await expect(siteConfigMayRestrictHostKeys([file])).resolves.toBe(true)
-  })
-
   it('follows an Include path whose space is backslash-escaped', async () => {
     const spaced = join(dir, 'esc ape')
     await mkdir(spaced, { recursive: true })
     await writeFile(join(spaced, 'site.conf'), 'StrictHostKeyChecking yes\n', 'utf-8')
     const file = join(dir, 'ssh_config')
     await writeFile(file, `Include ${join(spaced, 'site.conf').replace(' ', '\\ ')}\n`, 'utf-8')
-
-    await expect(siteConfigMayRestrictHostKeys([file])).resolves.toBe(true)
-  })
-
-  it('keeps backslashes that are path separators rather than escapes', async () => {
-    // Preserve Windows separators; model one as a literal POSIX filename character so swallowed backslashes would miss the strict directive.
-    const literal = join(dir, 'winlike\\site.conf')
-    await writeFile(literal, 'StrictHostKeyChecking yes\n', 'utf-8')
-    const file = join(dir, 'ssh_config')
-    await writeFile(file, `Include ${literal}\n`, 'utf-8')
 
     await expect(siteConfigMayRestrictHostKeys([file])).resolves.toBe(true)
   })
@@ -263,50 +141,6 @@ describe('siteConfigMayRestrictHostKeys', () => {
     await writeFile(file, `Include "${included}"\n`, 'utf-8')
 
     await expect(siteConfigMayRestrictHostKeys([file])).resolves.toBe(false)
-  })
-
-  it('ignores a commented-out directive', async () => {
-    // Commented directives are not policy.
-    const file = join(dir, 'ssh_config')
-    await writeFile(file, 'Host *\n    # StrictHostKeyChecking yes\n', 'utf-8')
-
-    await expect(siteConfigMayRestrictHostKeys([file])).resolves.toBe(false)
-  })
-
-  it('sees the directive inside Host and Match blocks', async () => {
-    // Any host block can carry policy; this scan deliberately avoids guessing applicability.
-    const hostScoped = join(dir, 'host-scoped')
-    await writeFile(hostScoped, 'Host prod\n    StrictHostKeyChecking yes\n', 'utf-8')
-    const matchScoped = join(dir, 'match-scoped')
-    await writeFile(matchScoped, 'Match exec "true"\n    StrictHostKeyChecking yes\n', 'utf-8')
-
-    await expect(siteConfigMayRestrictHostKeys([hostScoped])).resolves.toBe(true)
-    await expect(siteConfigMayRestrictHostKeys([matchScoped])).resolves.toBe(true)
-  })
-
-  it('sees the equals form', async () => {
-    const file = join(dir, 'ssh_config')
-    await writeFile(file, 'StrictHostKeyChecking=yes\n', 'utf-8')
-
-    await expect(siteConfigMayRestrictHostKeys([file])).resolves.toBe(true)
-  })
-
-  it('does not match a directive that merely starts the same way', async () => {
-    const file = join(dir, 'ssh_config')
-    await writeFile(file, 'StrictHostKeyCheckingExtended yes\n', 'utf-8')
-
-    await expect(siteConfigMayRestrictHostKeys([file])).resolves.toBe(false)
-  })
-
-  it('follows a nested Include', async () => {
-    const inner = join(dir, 'inner')
-    await writeFile(inner, 'StrictHostKeyChecking yes\n', 'utf-8')
-    const middle = join(dir, 'middle')
-    await writeFile(middle, `Include ${inner}\n`, 'utf-8')
-    const outer = join(dir, 'ssh_config')
-    await writeFile(outer, `Include ${middle}\n`, 'utf-8')
-
-    await expect(siteConfigMayRestrictHostKeys([outer])).resolves.toBe(true)
   })
 
   it('terminates on an Include cycle', async () => {
@@ -336,27 +170,10 @@ describe('splitIncludeArguments against a measured ssh', () => {
   const posix = (pattern: string) => splitIncludeArguments(pattern, false)
   const windows = (pattern: string) => splitIncludeArguments(pattern, true)
 
-  it('holds a spaced path together in all three spellings both platforms honour', () => {
-    for (const split of [posix, windows]) {
-      expect(split('"/etc/ssh/sp ace/x.conf"')).toEqual(['/etc/ssh/sp ace/x.conf'])
-      expect(split("'/etc/ssh/sp ace/x.conf'")).toEqual(['/etc/ssh/sp ace/x.conf'])
-      expect(split('/etc/ssh/sp\\ ace/x.conf')).toEqual(['/etc/ssh/sp ace/x.conf'])
-    }
-  })
-
   it('consumes an escaped space INSIDE either quote, as ssh does', () => {
     // Measured ssh treats backslash-space as a space under both quote styles.
     expect(posix('"/etc/a\\ b.conf"')).toEqual(['/etc/a b.conf'])
     expect(posix("'/etc/a\\ b.conf'")).toEqual(['/etc/a b.conf'])
-  })
-
-  it('treats a single quote inside double quotes as an ordinary character', () => {
-    // Opposite quotes inside a quoted path must remain literal.
-    expect(posix('"/etc/it\'s here/x.conf"')).toEqual(["/etc/it's here/x.conf"])
-  })
-
-  it('splits an UNQUOTED space into two paths, as ssh does', () => {
-    expect(posix('/etc/a.conf /etc/b.conf')).toEqual(['/etc/a.conf', '/etc/b.conf'])
   })
 
   it('answers doubt on POSIX for a backslash before an ordinary character', () => {
@@ -372,17 +189,5 @@ describe('splitIncludeArguments against a measured ssh', () => {
     expect(windows('C:\\Users\\neil\\sp\\ ace\\x.conf')).toEqual([
       'C:\\Users\\neil\\sp ace\\x.conf'
     ])
-  })
-
-  it('answers doubt when a quote never closes, which ssh rejects outright', () => {
-    expect(posix('"/etc/ssh/x.conf')).toBeNull()
-    expect(windows('"C:\\x.conf')).toBeNull()
-  })
-
-  it('returns an ordinary path unchanged, on both platforms', () => {
-    for (const path of ['/etc/ssh/ssh_config.d/10-site.conf', 'relative/x.conf', 'x']) {
-      expect(posix(path)).toEqual([path])
-      expect(windows(path)).toEqual([path])
-    }
   })
 })

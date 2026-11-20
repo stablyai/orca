@@ -1,0 +1,179 @@
+import { useEffect } from 'react'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  toRuntimeExecutionHostId
+} from '../../../../../shared/execution-host/execution-host'
+import { lastVerifiedRuntimeStatus } from '../../../../../shared/remote-runtime/host-status/runtime-host-status'
+import type { RuntimeStatus } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import {
+  agentsWithSavedModelPick,
+  HOST_MODEL_CATALOG_ACCOUNT_SETTINGS,
+  hostReadsSavedModelCatalogsOnly
+} from '../../../../../shared/agent-session/options/model-catalog/host-model-catalog-snapshot-rules'
+import { useAppStore } from '@/store/index'
+import type { AppState } from '@/store/types'
+import {
+  forgetHostModelCatalogSnapshots,
+  hostModelCatalogSnapshotAgents,
+  preloadHostModelCatalogSnapshots
+} from './host-model-catalog-snapshots'
+import {
+  readHostStructuredAgentsForRuntime,
+  subscribeHostStructuredAgents
+} from '../agent-catalogs/host-structured-agents'
+import {
+  ensureLocalRuntimeCapabilities,
+  readLocalRuntimeCapabilitiesOrUnknown,
+  subscribeLocalRuntimeCapabilitiesKnown
+} from '../../hosts/capabilities/local-runtime-capabilities'
+import { localStructuredChatsInUse } from '../local-sessions/local-structured-chats'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
+import { subscribeRuntimeHostContactRegained } from '../../hosts/connections/runtime-host-contact-regained'
+import { runtimeStatusSubscriptionsFor } from '@/store/slices/runtime-status/views/runtime-status-subscriptions'
+
+const LOCAL = { kind: 'local' } as const
+
+// The registered-agent list each host was last preloaded from; a new list preloads again.
+const preloadedFrom = new Map<string, unknown>()
+
+/** Preload every registered agent saved-only without starting CLIs. Wait for host registration; skip previously read unchanged lists unless again. */
+function preloadRegisteredAgents(
+  target: RuntimeClientTarget,
+  executionHostId: string,
+  runtimeId: string | null,
+  again: boolean
+): Promise<void> {
+  const agents = readHostStructuredAgentsForRuntime(executionHostId, runtimeId)
+  if (!agents || (!again && preloadedFrom.get(executionHostId) === agents)) {
+    return Promise.resolve()
+  }
+  preloadedFrom.set(executionHostId, agents)
+  return preloadHostModelCatalogSnapshots(
+    target,
+    agents.map((row) => row.agent),
+    { savedOnly: true }
+  )
+}
+
+/** Reload after local answers drop; never read older runtimes here because missing saved lists would start listing. */
+async function preloadLocal(again: boolean): Promise<void> {
+  const { settings } = useAppStore.getState()
+  if (!(await localStructuredChatsInUse(settings))) {
+    return
+  }
+  const capabilities = await ensureLocalRuntimeCapabilities()
+  if (hostReadsSavedModelCatalogsOnly(capabilities)) {
+    await preloadRegisteredAgents(LOCAL, LOCAL_EXECUTION_HOST_ID, null, again)
+  } else if (capabilities && !again) {
+    await preloadHostModelCatalogSnapshots(
+      LOCAL,
+      agentsWithSavedModelPick(settings?.nativeChatSessionOptions)
+    )
+  }
+}
+
+function pairedHostStatus(environmentId: string): RuntimeStatus | null {
+  return lastVerifiedRuntimeStatus(
+    useAppStore.getState().runtimeStatusByEnvironmentId.get(environmentId)
+  )
+}
+
+/** A paired host's lists again after contact returns: every registered agent from a host that reads
+ *  saved-only, else only the agents this client already had an answer for. */
+function reloadPairedHost(environmentId: string): void {
+  const target = { kind: 'environment', environmentId } as const
+  const answered = hostModelCatalogSnapshotAgents(target)
+  forgetHostModelCatalogSnapshots(target)
+  const status = pairedHostStatus(environmentId)
+  if (status && hostReadsSavedModelCatalogsOnly(status.capabilities)) {
+    const executionHostId = toRuntimeExecutionHostId(environmentId)
+    void preloadRegisteredAgents(target, executionHostId, status.runtimeId, true)
+  } else {
+    void preloadHostModelCatalogSnapshots(target, answered)
+  }
+}
+
+/** Preloads each host whose registered agents arrived (or changed) since its last preload. */
+function preloadHostsWithNewAgents(): void {
+  if (hostReadsSavedModelCatalogsOnly(readLocalRuntimeCapabilitiesOrUnknown())) {
+    void preloadRegisteredAgents(LOCAL, LOCAL_EXECUTION_HOST_ID, null, false)
+  }
+  for (const environmentId of useAppStore.getState().runtimeStatusByEnvironmentId.keys()) {
+    const executionHostId = toRuntimeExecutionHostId(environmentId)
+    const status = pairedHostStatus(environmentId)
+    if (!status || !hostReadsSavedModelCatalogsOnly(status.capabilities)) {
+      continue
+    }
+    const target = { kind: 'environment', environmentId } as const
+    void preloadRegisteredAgents(target, executionHostId, status.runtimeId, false)
+  }
+}
+
+function accountSettingsChanged(state: AppState, previous: AppState): boolean {
+  return (
+    state.settings !== previous.settings &&
+    HOST_MODEL_CATALOG_ACCOUNT_SETTINGS.some(
+      (key) => state.settings?.[key] !== previous.settings?.[key]
+    )
+  )
+}
+
+/** Preload host-saved lists before chat pickers render, without starting CLIs: local after runtime/agent discovery, paired at connect/reconnect. Older hosts permit only saved-pick local agents or previously answered paired agents. Account/launch-setting changes invalidate and reload local lists. Returns unsubscribe. */
+export function installHostModelCatalogSnapshotsSync(): () => void {
+  void preloadLocal(false)
+  const stopLocal = subscribeLocalRuntimeCapabilitiesKnown(() => void preloadLocal(false))
+  const stopAgents = subscribeHostStructuredAgents(preloadHostsWithNewAgents)
+  const contactStops = new Map<string, () => void>()
+  const watchHosts = (state: AppState, environmentIds: Iterable<string>): void => {
+    for (const environmentId of environmentIds) {
+      if (
+        state.runtimeStatusByEnvironmentId.has(environmentId) &&
+        !state.removedRuntimeEnvironmentIds.has(environmentId) &&
+        !contactStops.has(environmentId)
+      ) {
+        contactStops.set(
+          environmentId,
+          subscribeRuntimeHostContactRegained(environmentId, () => reloadPairedHost(environmentId))
+        )
+      }
+    }
+  }
+  const watchPairedHosts = (state: AppState): void => {
+    for (const [environmentId, stop] of contactStops) {
+      if (state.removedRuntimeEnvironmentIds.has(environmentId)) {
+        stop()
+        contactStops.delete(environmentId)
+        // A same-id re-add is a new host: its first status must not inherit these lists.
+        forgetHostModelCatalogSnapshots({ kind: 'environment', environmentId })
+        preloadedFrom.delete(toRuntimeExecutionHostId(environmentId))
+      }
+    }
+    watchHosts(state, state.runtimeStatusByEnvironmentId.keys())
+  }
+  watchPairedHosts(useAppStore.getState())
+  // A status write can only add hosts to watch, so it visits just the hosts it touched.
+  const stopStatuses = runtimeStatusSubscriptionsFor(useAppStore).subscribeStatusChanges((change) =>
+    watchHosts(useAppStore.getState(), change.ids)
+  )
+  const stopStore = useAppStore.subscribe((state, previous) => {
+    if (state.removedRuntimeEnvironmentIds !== previous.removedRuntimeEnvironmentIds) {
+      watchPairedHosts(state)
+    }
+    if (accountSettingsChanged(state, previous)) {
+      forgetHostModelCatalogSnapshots(LOCAL)
+      void preloadLocal(true)
+    }
+  })
+  return () => {
+    stopLocal()
+    stopAgents()
+    stopStatuses()
+    stopStore()
+    contactStops.forEach((stop) => stop())
+    preloadedFrom.clear()
+  }
+}
+
+export function useHostModelCatalogSnapshotsSync(): void {
+  useEffect(() => installHostModelCatalogSnapshotsSync(), [])
+}

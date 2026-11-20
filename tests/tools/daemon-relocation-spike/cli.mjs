@@ -7,7 +7,6 @@ daemon-relocation-spike — minimal relocated daemon-host file-set probe (Window
 
 Usage:
   node tests/tools/daemon-relocation-spike/spike.mjs --app-dir <win-unpacked> --work-dir <temp out> [--tier <t>]
-  node tests/tools/daemon-relocation-spike/spike.mjs --selftest
 
 Required (launch mode):
   --app-dir <path>    Path to a packaged win-unpacked build (contains Orca.exe)
@@ -23,9 +22,6 @@ Options:
                         minimal = Orca.exe + icudtl.dat + both snapshots +
                                   daemon bundle + node-pty only (no top-level DLLs)
   --keep-work-dir     Leave --work-dir on disk after the run (for inspection)
-  --selftest          Validate arg parsing, tier defs, and the module-path filter
-                        against synthetic inputs. No real build or launch. Exits
-                        0 on pass, non-zero on failure.
   -h, --help          Show this help
 
 Exit code is 0 only when the run PASSES: daemon ready, PTY echo round-trips the
@@ -36,15 +32,11 @@ export function getUsage() {
   return USAGE
 }
 
-// Parse sliced argv into help/selftest/launch/error; return usage errors for caller reporting.
+// Parse sliced argv into help/launch/error; return usage errors for caller reporting.
 export function parseArgs(argv) {
   if (argv.includes('-h') || argv.includes('--help')) {
     return { help: true }
   }
-  if (argv.includes('--selftest')) {
-    return { selftest: true }
-  }
-
   let appDir = ''
   let workDir = ''
   let tier = 'full'

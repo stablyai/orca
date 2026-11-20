@@ -1,7 +1,8 @@
-import type { TuiAgent } from '../../../../shared/tui-agent'
-
-/** Codex v0.162.1 emits OSC 52 under SSH/TMUX; a valid SSH_CONNECTION avoids tmux subprocess/passthrough and SSH_TTY device semantics. */
-export const CODEX_REMOTE_VIEWER_SSH_CONNECTION = '127.0.0.1 0 127.0.0.1 0'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
+import {
+  CODEX_REMOTE_VIEWER_SSH_CONNECTION,
+  REMOTE_VIEWER_CLIPBOARD_ENV
+} from '../../../../shared/clipboard/remote-viewer-clipboard-env'
 
 /** Pi's own opt-in to emit OSC 52 alongside its host clipboard write; inert for every other program. */
 export const PI_CLIPBOARD_OSC52_ENV = 'PI_CLIPBOARD_OSC52'
@@ -18,6 +19,7 @@ export function applyRemoteViewerClipboardEnv(
   if (!options.viewerIsRemote) {
     return
   }
+  env[REMOTE_VIEWER_CLIPBOARD_ENV] = '1'
   const inherited = options.inheritedEnv ?? process.env
   // Daemons merge their inherited environment after assembly; respect existing values there too.
   const isSet = (key: string): boolean => env[key] !== undefined || inherited[key] !== undefined

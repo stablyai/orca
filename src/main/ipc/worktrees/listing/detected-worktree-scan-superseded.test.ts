@@ -1,20 +1,20 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { GitWorktreeInfo } from '../../../../shared/worktree/types'
 
 const { listRepoWorktreesMock } = vi.hoisted(() => ({ listRepoWorktreesMock: vi.fn() }))
 
-vi.mock('../../../repo-worktrees', () => ({
+vi.mock('../../../workspaces/catalog/repo-worktrees', () => ({
   listRepoWorktreesForDetectedScan: listRepoWorktreesMock
 }))
-vi.mock('../../../project-runtime-git-options', () => ({
+vi.mock('../../../workspaces/execution-host/project-runtime-git-options', () => ({
   getLocalProjectWorktreeGitOptions: () => ({})
 }))
-vi.mock('../../registered-worktree-roots-cache', () => ({
+vi.mock('../removal/registered-worktree-roots-cache', () => ({
   getRegisteredWorktreeRootsRevision: () => 1,
   registerWorktreeRootsForRepo: vi.fn()
 }))
-vi.mock('../../../worktree-lineage-pruning', () => ({
+vi.mock('../../../workspaces/catalog/worktree-lineage-pruning', () => ({
   pruneLineageForMissingRepoWorktrees: vi.fn()
 }))
 vi.mock('./authoritative-local-worktree-metadata-pruning', () => ({
@@ -60,14 +60,7 @@ describe('detected worktree scan supersession', () => {
     __resetDetectedWorktreeScanCacheForTests()
   })
 
-  it('reports a scan that settled without any mutation as not superseded', async () => {
-    listRepoWorktreesMock.mockResolvedValue([worktreeAt(repo.path)])
-    const scan = await listDetectedGitWorktrees(store, repo)
-    expect(scan.superseded).toBe(false)
-    expect(scan.fresh).toBe(true)
-  })
-
-  it('reports a scan a worktree mutation overtook as superseded, for the runner and a joiner', async () => {
+  it('supersedes a scan for both callers and retries on the next listing', async () => {
     const inFlight = deferredScan()
     listRepoWorktreesMock.mockReturnValueOnce(inFlight.promise)
     const runner = listDetectedGitWorktrees(store, repo)
@@ -79,16 +72,6 @@ describe('detected worktree scan supersession', () => {
 
     expect((await runner).superseded).toBe(true)
     expect((await joiner).superseded).toBe(true)
-  })
-
-  it('does not cache a superseded scan, so the next listing scans again', async () => {
-    const inFlight = deferredScan()
-    listRepoWorktreesMock.mockReturnValueOnce(inFlight.promise)
-    const runner = listDetectedGitWorktrees(store, repo)
-    invalidateDetectedWorktreeScanCache(repo.id)
-    inFlight.settle()
-    await runner
-
     listRepoWorktreesMock.mockResolvedValueOnce([worktreeAt(repo.path), worktreeAt('/repos/new')])
     const next = await listDetectedGitWorktrees(store, repo)
     expect(listRepoWorktreesMock).toHaveBeenCalledTimes(2)

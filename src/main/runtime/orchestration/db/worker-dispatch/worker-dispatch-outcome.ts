@@ -1,9 +1,32 @@
-import type { WorkerDispatchRow } from '../../types'
+import type { WorkerDispatchRow } from '../orchestration-records'
 import { OrchestrationError } from '../../orchestration-error'
 import type { OrchestrationDb } from '../orchestration-db'
 import { transitionLifecycleWithDb } from '../lifecycle-transition'
 import { recordFailedStartDispatchIdentity } from '../worker-terminal/failed-start-dispatch-identity'
 import { DISPATCH_CIRCUIT_BREAK_FAILURES } from '../dispatch-context/dispatch-circuit-breaker'
+import { mergeWorkerLaunchObservation } from '../../workers/launch/worker-launch-observation'
+import { WORKER_DISPATCH_COLUMN_LIST } from '../row-column-lists'
+
+export function retainWorkerLaunchObservation(
+  this: OrchestrationDb,
+  dispatchId: string,
+  observation: unknown
+): void {
+  this.db.exec('BEGIN IMMEDIATE')
+  try {
+    const worker = this.getWorkerDispatch(dispatchId)
+    const options = worker && mergeWorkerLaunchObservation(worker.start_options, observation)
+    if (worker && options !== undefined && options !== worker.start_options) {
+      this.db
+        .prepare('UPDATE worker_dispatches SET start_options = ? WHERE dispatch_id = ?')
+        .run(options, dispatchId)
+    }
+    this.db.exec('COMMIT')
+  } catch (error) {
+    this.db.exec('ROLLBACK')
+    throw error
+  }
+}
 
 export function markWorkerDispatchReady(
   this: OrchestrationDb,
@@ -155,12 +178,16 @@ export function getWorkerDispatch(
   this: OrchestrationDb,
   dispatchId: string
 ): WorkerDispatchRow | undefined {
-  return this.db
-    .prepare('SELECT * FROM worker_dispatches WHERE dispatch_id = ?')
-    .get(dispatchId) as WorkerDispatchRow | undefined
+  // An explicit projection, so SyncDatabase keeps this hot statement compiled; `SELECT *` is never cached.
+  const row = this.db
+    .prepare(`SELECT ${WORKER_DISPATCH_COLUMN_LIST} FROM worker_dispatches WHERE dispatch_id = ?`)
+    .get(dispatchId)
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the column list is checked against WorkerDispatchRow, and projected-row-getters.test.ts verifies the returned row.
+  return row as WorkerDispatchRow | undefined
 }
 
 export type WorkerDispatchOutcomeMethods = {
+  retainWorkerLaunchObservation: typeof retainWorkerLaunchObservation
   markWorkerDispatchReady: typeof markWorkerDispatchReady
   failWorkerStart: typeof failWorkerStart
   markWorkerStartUnknown: typeof markWorkerStartUnknown
@@ -169,6 +196,7 @@ export type WorkerDispatchOutcomeMethods = {
 
 export function attachWorkerDispatchOutcome(ctor: { prototype: object }): void {
   Object.assign(ctor.prototype, {
+    retainWorkerLaunchObservation,
     markWorkerDispatchReady,
     failWorkerStart,
     markWorkerStartUnknown,

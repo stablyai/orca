@@ -1,15 +1,17 @@
 import { useTranslation } from 'react-i18next'
-import { useAppStore } from '@/store'
-import { useRepoMap, useAllWorktrees } from '@/store/selectors'
-import { localPreflightContextKey } from '@/lib/local-preflight-context-key'
-import { getLocalPreflightContext } from '@/lib/local-preflight-context'
+import { useRuntimeStatusByEnvironmentId } from '@/store/slices/runtime-status/views/use-runtime-status-view'
+import { useAppStore } from '@/store/index'
+import { useRepoMap } from '@/store/repos/use-repository-catalog'
+import { useAllWorktrees } from '@/store/slices/worktrees/listing/use-worktree-catalog'
+import { localPreflightContextKey } from '@/runtime/hosts/preflight/local-preflight-context-key'
+import { getLocalPreflightContext } from '@/runtime/hosts/preflight/local-preflight-context'
 import {
   getProviderRuntimeContextKey,
   isEnvironmentRuntimeContextKey
-} from '@/lib/provider-runtime-context'
+} from '@/runtime/hosts/observations/provider-runtime-context'
 import { useRef } from 'react'
-import { getScreenSubmitShortcutLabel } from '@/lib/screen-submit-shortcut'
-import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
+import { getScreenSubmitShortcutLabel } from '@/lib/keyboard/screen-submit-shortcut'
+import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
 
 export function useTaskPageStoreBindings() {
   useTranslation()
@@ -25,7 +27,7 @@ export function useTaskPageStoreBindings() {
   const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
   const sshTargetLabels = useAppStore((s) => s.sshTargetLabels)
   const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
-  const runtimeStatusByEnvironmentId = useAppStore((s) => s.runtimeStatusByEnvironmentId)
+  const runtimeStatusByEnvironmentId = useRuntimeStatusByEnvironmentId()
   const repoMap = useRepoMap()
   const allWorktrees = useAllWorktrees()
   const openModal = useAppStore((s) => s.openModal)
@@ -45,7 +47,6 @@ export function useTaskPageStoreBindings() {
   const selectLinearWorkspace = useAppStore((s) => s.selectLinearWorkspace)
   const searchLinearIssues = useAppStore((s) => s.searchLinearIssues)
   const listLinearIssues = useAppStore((s) => s.listLinearIssues)
-  const linearListInvalidationToken = useAppStore((s) => s.linearListInvalidationToken)
   const folderWorkspaces = useAppStore((s) => selectFolderWorkspaces(s))
   const invalidateLinearIssueLists = useAppStore((s) => s.invalidateLinearIssueLists)
   const getCachedLinearIssues = useAppStore((s) => s.getCachedLinearIssues)
@@ -122,7 +123,6 @@ export function useTaskPageStoreBindings() {
     selectLinearWorkspace,
     searchLinearIssues,
     listLinearIssues,
-    linearListInvalidationToken,
     folderWorkspaces,
     invalidateLinearIssueLists,
     getCachedLinearIssues,

@@ -1,10 +1,15 @@
-import { getSecretStore } from '../../shared/secret-store'
-import { readCredentialFileProtection } from '../credential-file-protection'
+import {
+  inCredentialFileOrder,
+  credentialFileExists,
+  stageCredentialFile
+} from '../credentials/credential-file-io'
+import { getSecretStore } from '../../shared/secure-storage/secret-store'
+import { readCredentialFileProtection } from '../credentials/credential-file-protection'
 import {
   classifyUnenvelopedCredential,
   type SecretAtRestProtection
-} from '../../shared/secret-at-rest-protection'
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+} from '../../shared/secure-storage/secret-at-rest-protection'
+import { mkdir, readFile, rm } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 
@@ -19,10 +24,10 @@ function getOrcaDir(): string {
   return join(homedir(), '.orca')
 }
 
-function ensureOrcaDir(): void {
+async function ensureOrcaDir(): Promise<void> {
   const dir = getOrcaDir()
-  if (!existsSync(dir)) {
-    mkdirSync(dir, { recursive: true })
+  if (!(await credentialFileExists(dir))) {
+    await mkdir(dir, { recursive: true })
   }
 }
 
@@ -30,13 +35,13 @@ export function getOpenAiKeyPath(): string {
   return join(getOrcaDir(), OPENAI_SPEECH_TOKEN_FILE)
 }
 
-function readLegacyJsonStoredOpenAiKey(): StoredOpenAiKey | null {
+async function readLegacyJsonStoredOpenAiKey(): Promise<StoredOpenAiKey | null> {
   const keyPath = getOpenAiKeyPath()
-  if (!existsSync(keyPath)) {
+  if (!(await credentialFileExists(keyPath))) {
     return null
   }
   try {
-    const parsed = JSON.parse(readFileSync(keyPath, 'utf8')) as Partial<StoredOpenAiKey>
+    const parsed: Partial<StoredOpenAiKey> = JSON.parse(await readFile(keyPath, 'utf8'))
     if (typeof parsed.encryptedKeyBase64 !== 'string' || parsed.encryptedKeyBase64 === '') {
       return null
     }
@@ -46,18 +51,20 @@ function readLegacyJsonStoredOpenAiKey(): StoredOpenAiKey | null {
   }
 }
 
-export function hasOpenAiSpeechApiKey(): boolean {
+export async function hasOpenAiSpeechApiKey(): Promise<boolean> {
   // Existence checks avoid macOS keychain prompts during startup/settings refresh.
-  return existsSync(getOpenAiKeyPath())
+  return inCredentialFileOrder(`${getOpenAiKeyPath()}.mutation`, () =>
+    credentialFileExists(getOpenAiKeyPath())
+  )
 }
 
 /** Check host decryption: orcad may not open a desktop safeStorage key even when its file exists. */
-export function canReadOpenAiSpeechApiKey(): boolean {
-  if (!hasOpenAiSpeechApiKey()) {
+export async function canReadOpenAiSpeechApiKey(): Promise<boolean> {
+  if (!(await hasOpenAiSpeechApiKey())) {
     return false
   }
   try {
-    readOpenAiSpeechApiKey()
+    await readOpenAiSpeechApiKey()
     return true
   } catch {
     return false
@@ -65,56 +72,62 @@ export function canReadOpenAiSpeechApiKey(): boolean {
 }
 
 /** Stored protection, or null when no key exists. */
-export function getOpenAiSpeechApiKeyProtection(): SecretAtRestProtection | null {
-  // The legacy JSON wrapper only ever held base64 ciphertext, so it is sealed by shape.
-  if (readLegacyJsonStoredOpenAiKey()) {
-    return 'sealed'
-  }
-  return readCredentialFileProtection(getOpenAiKeyPath())
+export async function getOpenAiSpeechApiKeyProtection(): Promise<SecretAtRestProtection | null> {
+  return inCredentialFileOrder(`${getOpenAiKeyPath()}.mutation`, async () => {
+    // The legacy JSON wrapper only ever held base64 ciphertext, so it is sealed by shape.
+    if (await readLegacyJsonStoredOpenAiKey()) {
+      return 'sealed'
+    }
+    return readCredentialFileProtection(getOpenAiKeyPath())
+  })
 }
 
-export function saveOpenAiSpeechApiKey(apiKey: string): void {
-  const trimmed = apiKey.trim()
-  if (!trimmed) {
-    throw new Error('OpenAI API key is required')
-  }
-  ensureOrcaDir()
-  if (getSecretStore().isEncryptionAvailable()) {
-    writeFileSync(getOpenAiKeyPath(), getSecretStore().encryptString(trimmed), { mode: 0o600 })
+export async function saveOpenAiSpeechApiKey(apiKey: string): Promise<void> {
+  return inCredentialFileOrder(`${getOpenAiKeyPath()}.mutation`, async () => {
+    const trimmed = apiKey.trim()
+    if (!trimmed) {
+      throw new Error('OpenAI API key is required')
+    }
+    await ensureOrcaDir()
+    if (getSecretStore().isEncryptionAvailable()) {
+      await stageCredentialFile(getOpenAiKeyPath(), getSecretStore().encryptString(trimmed))
+      cachedOpenAiSpeechApiKey = trimmed
+      return
+    }
+
+    console.warn('[speech] secret encryption unavailable — storing OpenAI speech key in plaintext')
+    await stageCredentialFile(getOpenAiKeyPath(), trimmed)
     cachedOpenAiSpeechApiKey = trimmed
-    return
-  }
-
-  console.warn('[speech] secret encryption unavailable — storing OpenAI speech key in plaintext')
-  writeFileSync(getOpenAiKeyPath(), trimmed, { encoding: 'utf8', mode: 0o600 })
-  cachedOpenAiSpeechApiKey = trimmed
+  })
 }
 
-export function readOpenAiSpeechApiKey(): string {
-  if (cachedOpenAiSpeechApiKey !== null) {
-    return cachedOpenAiSpeechApiKey
-  }
-
-  const keyPath = getOpenAiKeyPath()
-  if (!existsSync(keyPath)) {
-    throw new Error('OpenAI API key is not configured')
-  }
-  try {
-    const raw = readFileSync(keyPath)
-    const legacyJson = readLegacyJsonStoredOpenAiKey()
-    if (legacyJson) {
-      cachedOpenAiSpeechApiKey = getSecretStore().decryptString(
-        Buffer.from(legacyJson.encryptedKeyBase64, 'base64')
-      )
+export async function readOpenAiSpeechApiKey(): Promise<string> {
+  return inCredentialFileOrder(`${getOpenAiKeyPath()}.mutation`, async () => {
+    if (cachedOpenAiSpeechApiKey !== null) {
       return cachedOpenAiSpeechApiKey
     }
-    cachedOpenAiSpeechApiKey = getSecretStore().isEncryptionAvailable()
-      ? decryptOrLegacyPlaintext(raw)
-      : plaintextOnly(raw)
-    return cachedOpenAiSpeechApiKey
-  } catch {
-    throw new Error('OpenAI API key could not be decrypted')
-  }
+
+    const keyPath = getOpenAiKeyPath()
+    if (!(await credentialFileExists(keyPath))) {
+      throw new Error('OpenAI API key is not configured')
+    }
+    try {
+      const raw = await readFile(keyPath)
+      const legacyJson = await readLegacyJsonStoredOpenAiKey()
+      if (legacyJson) {
+        cachedOpenAiSpeechApiKey = getSecretStore().decryptString(
+          Buffer.from(legacyJson.encryptedKeyBase64, 'base64')
+        )
+        return cachedOpenAiSpeechApiKey
+      }
+      cachedOpenAiSpeechApiKey = getSecretStore().isEncryptionAvailable()
+        ? decryptOrLegacyPlaintext(raw)
+        : plaintextOnly(raw)
+      return cachedOpenAiSpeechApiKey
+    } catch {
+      throw new Error('OpenAI API key could not be decrypted')
+    }
+  })
 }
 
 // Without sealing, another store's ciphertext cannot be a usable key.
@@ -137,7 +150,9 @@ function decryptOrLegacyPlaintext(raw: Buffer): string {
   }
 }
 
-export function clearOpenAiSpeechApiKey(): void {
-  cachedOpenAiSpeechApiKey = null
-  rmSync(getOpenAiKeyPath(), { force: true })
+export async function clearOpenAiSpeechApiKey(): Promise<void> {
+  return inCredentialFileOrder(`${getOpenAiKeyPath()}.mutation`, async () => {
+    cachedOpenAiSpeechApiKey = null
+    await rm(getOpenAiKeyPath(), { force: true })
+  })
 }

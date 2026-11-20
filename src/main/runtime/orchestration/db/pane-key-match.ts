@@ -1,4 +1,4 @@
-import { parsePaneKey } from '../../../../shared/stable-pane-id'
+import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 
 // Leaf UUIDs survive pane break-out; exact match also supports legacy/unparseable keys.
 export function isEquivalentPaneKey(a: string, b: string): boolean {
@@ -28,6 +28,7 @@ export const DISPATCH_PANE_KEY_MATCH_SUFFIX_SQL =
   "substr(assignee_pane_key, instr(assignee_pane_key, ':') + 1)"
 export const REMOTE_ATTACHMENT_PANE_KEY_MATCH_SUFFIX_SQL =
   "substr(pane_key, instr(pane_key, ':') + 1)"
+export const WORKER_TERMINAL_PANE_KEY_MATCH_SUFFIX_SQL = REMOTE_ATTACHMENT_PANE_KEY_MATCH_SUFFIX_SQL
 
 export function paneKeyMatchSuffix(paneKey: string): string {
   const colon = paneKey.indexOf(':')

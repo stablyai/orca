@@ -1,20 +1,19 @@
-import { normalizeBrowserUrl } from '../browser/browser-url'
-import { captureMobileFileMutationOwnership } from '../files/mobile-file-mutation-ownership'
+import { normalizeBrowserUrl } from '../browser/pane-view/browser-url'
+import { translate } from '../i18n/mobile-i18n'
+import { captureMobileFileMutationOwnership } from '../files/mutation-ownership/mobile-file-mutation-ownership'
 import {
   browserGoBack,
   browserGoForward,
   browserReload
-} from '../browser/mobile-browser-command-operations'
-import { sourceFileOpenRun } from '../source-control/mobile-source-file-open-operations'
-import {
-  sessionBrowserTabCreate,
-  sessionMarkdownNoteCreate
-} from './mobile-session-launch-operations'
-import { interpretOrThrowRefusalMessage } from '../transport/rpc-refusal-message'
-import type { MobileBrowserNavigationMethod } from './MobileBrowserTabActionSheet'
-import { isFileExistsErrorMessage } from './mobile-session-route-helpers'
-import type { MobileSessionTab } from './mobile-session-route-types'
-import type { MobileSessionTerminalCreateActionsModel } from './use-mobile-session-terminal-create-actions'
+} from '../browser/page-interaction/mobile-browser-command-operations'
+import { sourceFileOpenRun } from '../files/session-documents/mobile-source-file-open-operations'
+import { sessionBrowserTabCreate } from '../browser/tab-navigation/mobile-session-browser-operations'
+import { sessionMarkdownNoteCreate } from '../files/session-documents/mobile-markdown-tab-operations'
+import { interpretOrThrowRefusalMessage } from '../transport/rpc/rpc-refusal-message'
+import type { MobileBrowserNavigationMethod } from './tabs/MobileBrowserTabActionSheet'
+import { isFileExistsErrorMessage } from '../files/mutation-ownership/file-exists-error'
+import type { MobileSessionTab } from './tabs/mobile-session-tabs'
+import type { MobileSessionTerminalCreateActionsModel } from '../terminal/session/creation/use-mobile-session-terminal-create-actions'
 
 const BROWSER_NAVIGATION_COMMANDS = {
   'browser.back': browserGoBack,
@@ -64,7 +63,13 @@ export function useMobileSessionContentCreateActions(
           if (isFileExistsErrorMessage(message) && attempt < 100) {
             continue
           }
-          throw new Error(message || 'Failed to create markdown note')
+          throw new Error(
+            message ||
+              translate(
+                'session.useContentCreateActions.noteCreateFailed',
+                'Failed to create markdown note'
+              )
+          )
         }
 
         const openResponse = await sourceFileOpenRun.request(
@@ -76,9 +81,20 @@ export function useMobileSessionContentCreateActions(
         scheduleDelayedAction(() => void fetchSessionTabs(), 300)
         return
       }
-      throw new Error('Unable to create untitled markdown note')
+      throw new Error(
+        translate(
+          'session.useContentCreateActions.untitledNoteCreateFailed',
+          'Unable to create untitled markdown note'
+        )
+      )
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to create markdown note'
+      const message =
+        err instanceof Error
+          ? err.message
+          : translate(
+              'session.useContentCreateActions.noteCreateFailed',
+              'Failed to create markdown note'
+            )
       setCreateError(message)
       showToast(message, 1800)
     } finally {
@@ -86,18 +102,24 @@ export function useMobileSessionContentCreateActions(
     }
   }
 
-  async function handleCreateBrowser(rawUrl = 'about:blank'): Promise<boolean> {
+  async function handleCreateBrowser(rawUrl = 'about:blank', profileId?: string): Promise<boolean> {
     if (!client || creatingBrowser) {
       return false
     }
     // Read capability via ref so pre-probe taps and old callbacks see the current host facts.
     if (browserScreencastSupportedRef.current !== true) {
-      showToast('Desktop update required for mobile browser streaming', 1600)
+      showToast(
+        translate(
+          'session.useContentCreateActions.browserStreamingUnavailable',
+          "This host can't stream browser tabs"
+        ),
+        1600
+      )
       return false
     }
     const url = normalizeBrowserUrl(rawUrl)
     if (!url) {
-      const message = 'Enter a valid URL'
+      const message = translate('session.useContentCreateActions.invalidUrl', 'Enter a valid URL')
       setCreateError(message)
       showToast(message, 1400)
       return false
@@ -111,7 +133,8 @@ export function useMobileSessionContentCreateActions(
         {
           worktree: `id:${worktreeId}`,
           url,
-          activate: true
+          activate: true,
+          ...(profileId ? { profileId } : {})
         },
         { timeoutMs: 30_000 }
       )
@@ -128,7 +151,13 @@ export function useMobileSessionContentCreateActions(
       scheduleDelayedAction(() => void fetchPendingBrowserSessionTabs(), 1200)
       return true
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to create browser'
+      const message =
+        err instanceof Error
+          ? err.message
+          : translate(
+              'session.useContentCreateActions.browserCreateFailed',
+              'Failed to create browser'
+            )
       setCreateError(message)
       showToast(message, 1800)
       return false
@@ -143,7 +172,13 @@ export function useMobileSessionContentCreateActions(
     method: MobileBrowserNavigationMethod
   ) {
     if (!client || !tab.browserPageId) {
-      showToast('Browser page is not available yet.', 1500)
+      showToast(
+        translate(
+          'session.useContentCreateActions.browserUnavailable',
+          'Browser page is not available yet.'
+        ),
+        1500
+      )
       return
     }
     try {
@@ -159,7 +194,13 @@ export function useMobileSessionContentCreateActions(
       interpretOrThrowRefusalMessage(() => command.interpret(response), '')
       scheduleDelayedAction(() => void fetchSessionTabs(), 250)
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Browser command failed'
+      const message =
+        err instanceof Error
+          ? err.message
+          : translate(
+              'session.useContentCreateActions.browserCommandFailed',
+              'Browser command failed'
+            )
       showToast(message, 1600)
     }
   }

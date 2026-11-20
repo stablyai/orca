@@ -35,8 +35,11 @@ export function parseGlibcVersion(output: string): GlibcVersion | null {
   return match ? { major: Number(match[1]), minor: Number(match[2]) } : null
 }
 
+/** The first probe, which answers on nearly every glibc or musl host; callers may run it early. */
+export const LINUX_LIBC_FIRST_PROBE = 'LC_ALL=C ldd --version 2>&1 || true'
+
 const PROBES = [
-  'LC_ALL=C ldd --version 2>&1 || true',
+  LINUX_LIBC_FIRST_PROBE,
   'LC_ALL=C getconf GNU_LIBC_VERSION 2>/dev/null || true',
   // Appliances may omit both tools; newer GNU loaders can report their own version.
   'for loader in /lib/ld-linux-x86-64.so.2 /lib64/ld-linux-x86-64.so.2 /lib/ld-linux-aarch64.so.1; do ' +
@@ -64,4 +67,20 @@ export async function probeLinuxLibc(
     }
   }
   throw new UnidentifiedHostLibcError()
+}
+
+let muslHost: boolean | undefined
+
+// Building a process report is slow and synchronous, and the libc can't change while running.
+export function isMuslHost(): boolean {
+  if (process.platform !== 'linux') {
+    return false
+  }
+  if (muslHost === undefined) {
+    // glibc builds report their runtime glibc version; musl builds have none.
+    const report: unknown = process.report?.getReport()
+    const header = report && typeof report === 'object' && 'header' in report ? report.header : null
+    muslHost = !(header && typeof header === 'object' && 'glibcVersionRuntime' in header)
+  }
+  return muslHost
 }

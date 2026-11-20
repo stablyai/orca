@@ -1,5 +1,5 @@
-name: Prepare Wayland clipboard helper
-description: Reuse the source-matched Ubuntu 20.04 helper, validating its architecture and glibc requirements every time.
+name: Prepare Linux desktop native helpers
+description: Reuse the source-matched Ubuntu 20.04 Wayland clipboard, provider exec, and journal lock builds, validating their architecture and glibc requirements every time.
 
 inputs:
   save-cache:
@@ -17,37 +17,53 @@ outputs:
 runs:
   using: composite
   steps:
-    - name: Resolve Wayland clipboard build identity
+    - name: Resolve Linux native helper build identity
       id: identity
       shell: bash
       run: |
         node --input-type=module <<'NODE'
         import { appendFileSync } from 'node:fs'
-        import { waylandClipboardFingerprint } from './config/scripts/build-wayland-clipboard.mjs'
-        const fingerprint = waylandClipboardFingerprint(process.cwd(), process.arch)
+        import { createHash } from 'node:crypto'
+        import { waylandClipboardFingerprint } from './config/scripts/native-build/linux/build-wayland-clipboard.mjs'
+        import { providerExecFingerprint } from './config/scripts/native-build/posix/build-provider-exec.mjs'
+        import { desktopJournalFileLockFingerprint } from './config/scripts/native-build/build-journal-file-lock.mjs'
+        const root = process.cwd()
+        const fingerprint = createHash('sha256')
+          .update(waylandClipboardFingerprint(root, process.arch))
+          .update(providerExecFingerprint(root, `linux-${process.arch}`, 'docker'))
+          .update(desktopJournalFileLockFingerprint(root, process.arch))
+          .digest('hex')
         // Immutable invalid hits need a version bump here before publishing their repair.
-        appendFileSync(process.env.GITHUB_OUTPUT, `key=wayland-clipboard-v1-${process.arch}-${fingerprint}\n`)
+        appendFileSync(process.env.GITHUB_OUTPUT, `key=linux-desktop-native-v1-${process.arch}-${fingerprint}\n`)
         NODE
 
-    - name: Restore Wayland clipboard helper
+    - name: Restore Linux native helpers
       id: cache
       uses: actions/cache/restore@v5
       continue-on-error: true
       with:
-        path: native/wayland-clipboard/.build
+        path: |
+          native/wayland-clipboard/.build
+          native/provider-exec/.build/linux-*
+          native/journal-file-lock/.build/x64
+          native/journal-file-lock/.build/arm64
         key: ${{ steps.identity.outputs.key }}
 
-    - name: Build or validate Wayland clipboard helper
+    - name: Build or validate Linux native helpers
       if: inputs.build != 'false'
       shell: bash
       env:
         CACHE_HIT: ${{ steps.cache.outputs.cache-hit }}
       run: bash "$GITHUB_ACTION_PATH/build-or-validate.sh"
 
-    - name: Save validated Wayland clipboard helper from main
+    - name: Save validated Linux native helpers from main
       if: inputs.build != 'false' && inputs.save-cache == 'true' && steps.cache.outputs.cache-hit != 'true' && github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
       uses: actions/cache/save@v5
       continue-on-error: true
       with:
-        path: native/wayland-clipboard/.build
+        path: |
+          native/wayland-clipboard/.build
+          native/provider-exec/.build/linux-*
+          native/journal-file-lock/.build/x64
+          native/journal-file-lock/.build/arm64
         key: ${{ steps.identity.outputs.key }}

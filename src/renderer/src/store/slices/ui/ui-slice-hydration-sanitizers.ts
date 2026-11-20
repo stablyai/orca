@@ -1,20 +1,24 @@
-import { normalizeExplorerDisplayRootByWorktree } from '../../../../../shared/file-explorer-display-root'
+import { isProjectGroupHookTrustKey } from '../../../../../shared/workspace-setup/hooks/workspace-hook-owner'
+import { normalizeExplorerDisplayRootByWorktree } from '../../../../../shared/file-listing/file-explorer-display-root'
 import type { AppState } from '../../types'
-import type { PersistedTrustedOrcaHooks } from '../../../../../shared/orca-yaml-hook-types'
-import type { PersistedUIState } from '../../../../../shared/persisted-ui-state-types'
+import type { PersistedTrustedOrcaHooks } from '../../../../../shared/workspace-setup/orca-yaml-hook-types'
+import type { PersistedUIState } from '../../../../../shared/orca-profiles/persisted-ui-state-types'
 import type {
+  ActivityBarPosition,
   TaskViewPresetId,
   TopLevelView,
-  VisibleWorkspaceHostIds,
-  StatusBarItem
-} from '../../../../../shared/ui-chrome-types'
-import type { WorkspaceCleanupDismissal } from '../../../../../shared/workspace-cleanup'
-import { WORKSPACE_CLEANUP_CLASSIFIER_VERSION } from '../../../../../shared/workspace-cleanup'
-import { isTopLevelView } from '../../../../../shared/top-level-view'
-import { AGENT_STATUS_HYDRATE_MAX_AGE_MS } from '../../../../../shared/agent-status-freshness'
+  VisibleWorkspaceHostIds
+} from '../../../../../shared/ui-chrome/ui-chrome-types'
+
+import {
+  type WorkspaceCleanupDismissal,
+  WORKSPACE_CLEANUP_CLASSIFIER_VERSION
+} from '../../../../../shared/workspace-cleanup/workspace-cleanup'
+import { isTopLevelView } from '../../../../../shared/ui-chrome/top-level-view'
+import { AGENT_STATUS_HYDRATE_MAX_AGE_MS } from '../../../../../shared/agent-status/contracts/agent-status-freshness'
 import { resolveVisibleWorkspaceHostIds } from '../../../../../shared/workspace-view/workspace-host-visibility'
-import { persistedUIValuesEqual } from '../../../../../shared/persisted-ui-equality'
-import { DEFAULT_STATUS_BAR_ITEMS } from '../../../../../shared/constants'
+import { persistedUIValuesEqual } from '../../../../../shared/collections/persisted-ui-equality'
+import '../../../../../shared/orca-profiles/constants'
 import type { UISlice } from './ui-slice-contract'
 
 const MIN_SIDEBAR_WIDTH = 220
@@ -70,7 +74,7 @@ export function hydrateTrustedOrcaHooks(
   }
   const next: PersistedTrustedOrcaHooks = {}
   for (const [repoId, entry] of Object.entries(sanitized)) {
-    if (validRepoIds.has(repoId)) {
+    if (validRepoIds.has(repoId) || isProjectGroupHookTrustKey(repoId)) {
       next[repoId] = entry
     }
   }
@@ -102,6 +106,11 @@ export function sanitizePersistedSidebarWidth(
   return Math.min(maxWidth, Math.max(MIN_SIDEBAR_WIDTH, width))
 }
 
+// Any other value would hide the activity bar entirely, since the layout renders only Top or Side.
+export function sanitizeActivityBarPosition(position: unknown): ActivityBarPosition {
+  return position === 'side' ? 'side' : 'top'
+}
+
 export function sanitizePaneKeyTimestampRecord(
   value: unknown,
   maxAgeMs: number = AGENT_STATUS_HYDRATE_MAX_AGE_MS
@@ -125,9 +134,20 @@ export function sanitizePaneKeyTimestampRecord(
 
 export const sanitizeAcknowledgedAgentsByPaneKey = sanitizePaneKeyTimestampRecord
 
-/** Cutoffs trail status receipt times; double the status TTL so pruning cannot resurrect a cleared entry still retained by main. */
+// Structured chat rows hydrate at any age, so cutoffs are never age-pruned; the newest clears bound growth instead.
+const ACTIVITY_CLEARED_AT_MAX_ENTRIES = 500
+
 export function sanitizeActivityClearedAtByPaneKey(value: unknown): Record<string, number> {
-  return sanitizePaneKeyTimestampRecord(value, 2 * AGENT_STATUS_HYDRATE_MAX_AGE_MS)
+  const valid = sanitizePaneKeyTimestampRecord(value, Number.POSITIVE_INFINITY)
+  const entries = Object.entries(valid)
+  if (entries.length <= ACTIVITY_CLEARED_AT_MAX_ENTRIES) {
+    return valid
+  }
+  return Object.fromEntries(
+    entries
+      .toSorted(([, left], [, right]) => right - left)
+      .slice(0, ACTIVITY_CLEARED_AT_MAX_ENTRIES)
+  )
 }
 
 export function sanitizeWorkspaceCleanupDismissals(
@@ -174,12 +194,24 @@ export function sanitizeHydratedActiveView(value: PersistedUIState['activeView']
   return value
 }
 
-export function hydratedUIPartialMatchesState(
-  state: AppState,
-  hydrated: Partial<UISlice>
-): boolean {
+/**
+ * Swaps each hydrated value that equals state's for state's own reference. Every write echoes the
+ * whole UI back, so unchanged fields must not wake their readers. Run it before capturing the
+ * write baseline so the writer's identity and JSON comparisons see kept fields as saved.
+ */
+export function keepUnchangedHydratedFields(state: AppState, hydrated: Partial<UISlice>): void {
+  const fields = hydrated as Record<string, unknown>
+  for (const [key, value] of Object.entries(fields)) {
+    const current = state[key as keyof AppState]
+    if (!Object.is(current, value) && persistedUIValuesEqual(current, value)) {
+      fields[key] = current
+    }
+  }
+}
+
+export function hydratedFieldsAreState(state: AppState, hydrated: Partial<UISlice>): boolean {
   return Object.entries(hydrated).every(([key, value]) =>
-    persistedUIValuesEqual(state[key as keyof AppState], value)
+    Object.is(state[key as keyof AppState], value)
   )
 }
 
@@ -217,18 +249,6 @@ export function presetToQuery(presetId: TaskViewPresetId | null): string {
   }
 }
 
-export function migrateStatusBarItems(items: readonly string[] | undefined): StatusBarItem[] {
-  const source = items ?? DEFAULT_STATUS_BAR_ITEMS
-  const out: string[] = []
-  for (const id of source) {
-    const mapped = id === 'memory' || id === 'sessions' ? 'resource-usage' : id
-    if (!out.includes(mapped)) {
-      out.push(mapped)
-    }
-  }
-  return out as StatusBarItem[]
-}
-
 export function hydrateUnexpectedSignoutDismissal(
   state: Pick<UISlice, 'unexpectedSignoutDismissedVersions'>,
   version: string | null | undefined
@@ -242,14 +262,19 @@ export function hydrateUnexpectedSignoutDismissal(
   }
 }
 
-/** Normalizes persisted explorer records before hydration, including malformed or absent legacy values. */
-export function sanitizeExplorerPreferences(
+/** Normalizes persisted per-worktree explorer and notification records before hydration, including malformed or absent legacy values. */
+export function sanitizePerWorktreePreferences(
   ui: PersistedUIState
-): Pick<AppState, 'explorerDisplayRootByWorktree' | 'showDotfilesByWorktree'> {
+): Pick<
+  AppState,
+  'explorerDisplayRootByWorktree' | 'showDotfilesByWorktree' | 'notificationsMutedByWorktree'
+> {
   return {
     explorerDisplayRootByWorktree: normalizeExplorerDisplayRootByWorktree(
       ui.explorerDisplayRootByWorktree
     ),
-    showDotfilesByWorktree: sanitizeShowDotfilesByWorktree(ui.showDotfilesByWorktree)
+    showDotfilesByWorktree: sanitizeShowDotfilesByWorktree(ui.showDotfilesByWorktree),
+    // Same persisted shape as the dotfile map: a per-worktree boolean opt-in record.
+    notificationsMutedByWorktree: sanitizeShowDotfilesByWorktree(ui.notificationsMutedByWorktree)
   }
 }

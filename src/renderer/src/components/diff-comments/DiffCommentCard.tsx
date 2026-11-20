@@ -1,10 +1,12 @@
-import { ImeTextarea } from '@/lib/ime-text-field'
+import { ImeTextarea } from '@/lib/text-input/ime/ime-text-field'
 import { CornerDownLeft, Pencil, Trash } from 'lucide-react'
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { Button } from '@/components/ui/button'
-import { getDiffCommentLineLabel } from '@/lib/diff-comment-compat'
+import { getDiffCommentLineMetaLabel } from './diff-comment-line-meta-label'
 import { useMountedRef } from '@/hooks/useMountedRef'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
+import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
 // Render note cards in per-zone React roots; keep persisted DiffComment names while UI says Note to distinguish PR review comments.
 
@@ -49,6 +51,9 @@ export function DiffCommentCard({
   onSubmitEdit,
   headerActions
 }: Props): React.JSX.Element {
+  const t = useTranslate()
+  // Zone cards live in separate React roots, so subscribe directly to language changes.
+  useUiLanguageRevision()
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(body)
   const [submitting, setSubmitting] = useState(false)
@@ -134,8 +139,13 @@ export function DiffCommentCard({
   const trimmedDraft = draft.trim()
   const canSubmit = !submitting && trimmedDraft.length > 0 && trimmedDraft !== body
   const lineLabel =
-    label === undefined ? getDiffCommentLineLabel({ lineNumber, startLine }).toLowerCase() : label
-  const metaText = [author || 'Note', lineLabel, createdAtLabel || (sentAt ? 'sent' : null)]
+    label === undefined ? getDiffCommentLineMetaLabel({ lineNumber, startLine }, t) : label
+  const metaText = [
+    author || t('auto.components.diff.comments.DiffCommentCard.noteAuthorFallback', 'Note'),
+    lineLabel,
+    createdAtLabel ||
+      (sentAt ? t('auto.components.diff.comments.DiffCommentCard.sentMeta', 'sent') : null)
+  ]
     .filter(Boolean)
     .join(' ')
 
@@ -182,21 +192,21 @@ export function DiffCommentCard({
                   <button
                     type="button"
                     className="orca-diff-comment-pill-btn"
-                    title={translate(
+                    title={t(
                       'auto.components.diff.comments.DiffCommentCard.508ee678a5',
                       'Open in browser'
                     )}
-                    aria-label={translate(
+                    aria-label={t(
                       'auto.components.diff.comments.DiffCommentCard.508ee678a5',
                       'Open in browser'
                     )}
                     onClick={(ev) => {
                       ev.preventDefault()
                       ev.stopPropagation()
-                      void window.api.shell.openUrl(url)
+                      openAppHttpLink(url, { event: ev })
                     }}
                   >
-                    {translate('auto.components.diff.comments.DiffCommentCard.6978871a3d', 'Open')}
+                    {t('auto.components.diff.comments.DiffCommentCard.6978871a3d', 'Open')}
                   </button>
                   {(onSubmitEdit || onDelete) && (
                     <span className="orca-diff-comment-pill-divider" />
@@ -208,11 +218,11 @@ export function DiffCommentCard({
                   <button
                     type="button"
                     className="orca-diff-comment-pill-btn"
-                    title={translate(
+                    title={t(
                       'auto.components.diff.comments.DiffCommentCard.cad3384faa',
                       'Edit note'
                     )}
-                    aria-label={translate(
+                    aria-label={t(
                       'auto.components.diff.comments.DiffCommentCard.cad3384faa',
                       'Edit note'
                     )}
@@ -231,11 +241,11 @@ export function DiffCommentCard({
                 <button
                   type="button"
                   className="orca-diff-comment-pill-btn orca-diff-comment-pill-btn-danger"
-                  title={translate(
+                  title={t(
                     'auto.components.diff.comments.DiffCommentCard.cce596969e',
                     'Delete note'
                   )}
-                  aria-label={translate(
+                  aria-label={t(
                     'auto.components.diff.comments.DiffCommentCard.cce596969e',
                     'Delete note'
                   )}
@@ -291,7 +301,7 @@ export function DiffCommentCard({
             />
             <div className="orca-diff-comment-popover-footer">
               <Button variant="ghost" size="sm" onClick={handleCancel} disabled={submitting}>
-                {translate('auto.components.diff.comments.DiffCommentCard.0203bed775', 'Cancel')}
+                {t('auto.components.diff.comments.DiffCommentCard.0203bed775', 'Cancel')}
               </Button>
               <Button
                 size="sm"
@@ -299,14 +309,11 @@ export function DiffCommentCard({
                 disabled={!canSubmit}
                 title={
                   submitting
-                    ? translate(
-                        'auto.components.diff.comments.DiffCommentCard.bb0a55f856',
-                        'Saving…'
-                      )
+                    ? t('auto.components.diff.comments.DiffCommentCard.bb0a55f856', 'Saving…')
                     : undefined
                 }
               >
-                {translate('auto.components.diff.comments.DiffCommentCard.109a791e7b', 'Save')}
+                {t('auto.components.diff.comments.DiffCommentCard.109a791e7b', 'Save')}
                 <CornerDownLeft className="ml-1 size-3 opacity-70" />
               </Button>
             </div>

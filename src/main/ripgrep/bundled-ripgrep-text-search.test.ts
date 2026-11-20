@@ -35,3 +35,31 @@ it('runs the bundled binary, bounds results and releases process ownership once'
     await rm(rootPath, { recursive: true, force: true })
   }
 })
+
+// Real rg must serialize over 64 MiB before the later ordinary match reaches the executor.
+it('skips an oversized record and keeps a later ordinary match', async () => {
+  const rootPath = await mkdtemp(join(tmpdir(), 'orca-search-record-continuation-'))
+  const release = vi.fn()
+  try {
+    await writeFile(join(rootPath, 'later-hit.txt'), `${'x '.repeat(1_300_000)}\nordinary x\n`)
+    const result = await runBundledRipgrepTextSearch({
+      rootPath,
+      resultRootPath: rootPath,
+      options: { rootPath, query: 'x' },
+      onSpawn: () => release
+    })
+    expect(result).toMatchObject({
+      totalMatches: 1,
+      truncated: true,
+      files: [
+        {
+          filePath: join(rootPath, 'later-hit.txt'),
+          matches: [{ line: 2, column: 10, lineContent: 'ordinary x' }]
+        }
+      ]
+    })
+    expect(release).toHaveBeenCalledOnce()
+  } finally {
+    await rm(rootPath, { recursive: true, force: true })
+  }
+}, 30_000)

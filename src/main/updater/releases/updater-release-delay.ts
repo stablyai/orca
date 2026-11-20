@@ -1,0 +1,79 @@
+import { compareVersions } from './updater-fallback'
+import { updateDelayDaysToMs } from '../../../shared/updater/update-delay'
+import type { DelayedUpdate } from '../../../shared/updater/update-status-types'
+import { AUTO_UPDATE_CHECK_INTERVAL_MS } from '../lifecycle/updater-state'
+
+// Absorbs clock skew between this host and GitHub's feed timestamps.
+const DELAYED_UPDATE_CLEAR_BUFFER_MS = 5 * 60 * 1000
+
+export type DatedReleaseTag = {
+  tag: string
+  version: string
+  /** Server-side time: Atom `updated` (never earlier than publication), or REST `published_at` past the feed. */
+  releasedAt: number | null
+}
+
+export type HeldRelease = DatedReleaseTag
+
+export type ReleaseDelayResult = {
+  /** Newest newer release still inside the delay window. */
+  heldRelease: HeldRelease | null
+  /** Whether a tag outside the probed candidates (stable fallback) has provably aged out. */
+  isTagOldEnough: (tag: string) => boolean
+}
+
+// Unknown dates fail closed: a delay exists to avoid unvetted releases.
+export function isReleaseOldEnough(entry: DatedReleaseTag, cutoff: number): boolean {
+  return entry.releasedAt !== null && entry.releasedAt <= cutoff
+}
+
+export function applyReleaseDelay(
+  candidates: DatedReleaseTag[],
+  allTags: DatedReleaseTag[],
+  currentVersion: string,
+  minReleaseAgeMs: number,
+  now: number
+): { eligible: DatedReleaseTag[]; releaseDelay: ReleaseDelayResult } {
+  const cutoff = now - minReleaseAgeMs
+  const isOldEnough = (entry: DatedReleaseTag): boolean => isReleaseOldEnough(entry, cutoff)
+  const held = candidates.find(
+    (entry) => compareVersions(entry.version, currentVersion) > 0 && !isOldEnough(entry)
+  )
+  return {
+    eligible: candidates.filter(isOldEnough),
+    releaseDelay: {
+      heldRelease: held ?? null,
+      isTagOldEnough: (tag) => {
+        const entry = allTags.find((candidate) => candidate.tag === tag)
+        return entry !== undefined && isOldEnough(entry)
+      }
+    }
+  }
+}
+
+export function toDelayedUpdate(
+  heldRelease: HeldRelease | null | undefined,
+  delayDays: number
+): DelayedUpdate | null {
+  if (!heldRelease || heldRelease.releasedAt === null) {
+    return null
+  }
+  return {
+    version: heldRelease.version,
+    releasedAt: new Date(heldRelease.releasedAt).toISOString(),
+    availableAt: new Date(heldRelease.releasedAt + updateDelayDaysToMs(delayDays)).toISOString(),
+    delayDays
+  }
+}
+
+/** Wake when a held release clears, unless the routine daily check comes first. */
+export function getDelayedUpdateWakeDelayMs(
+  delayedUpdate: DelayedUpdate,
+  now: number
+): number | null {
+  const untilClearedMs = Date.parse(delayedUpdate.availableAt) - now
+  if (untilClearedMs >= AUTO_UPDATE_CHECK_INTERVAL_MS) {
+    return null
+  }
+  return Math.max(untilClearedMs, 0) + DELAYED_UPDATE_CLEAR_BUFFER_MS
+}

@@ -18,7 +18,7 @@ function primaryErrcode(error: unknown): number | null {
   return typeof errcode === 'number' && Number.isFinite(errcode) ? errcode & 0xff : null
 }
 
-function isSqliteDriverError(error: unknown): boolean {
+export function isSqliteDriverError(error: unknown): boolean {
   return error instanceof Error && 'code' in error && error.code === 'ERR_SQLITE_ERROR'
 }
 
@@ -41,6 +41,29 @@ export function isTransientSqliteContention(error: unknown): boolean {
     return true
   }
   return CONTENTION_MESSAGE.test(errorText(error))
+}
+
+const SQLITE_NOMEM = 7
+const SQLITE_READONLY = 8
+const SQLITE_IOERR = 10
+const SQLITE_FULL = 13
+const STORAGE_ERRCODES = new Set([
+  SQLITE_BUSY,
+  SQLITE_LOCKED,
+  SQLITE_NOMEM,
+  SQLITE_READONLY,
+  SQLITE_IOERR,
+  SQLITE_FULL,
+  SQLITE_CANTOPEN
+])
+
+/**
+ * The database or its disk failed, not the row being written: every other row would fail too.
+ * Corruption is the caller's call: it may be one row's page or the whole file.
+ */
+export function isSqliteStorageFailure(error: unknown): boolean {
+  const errcode = primaryErrcode(error)
+  return (errcode !== null && STORAGE_ERRCODES.has(errcode)) || isTransientSqliteContention(error)
 }
 
 export type SqliteReadFailureKind =

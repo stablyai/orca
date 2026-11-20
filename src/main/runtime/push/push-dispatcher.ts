@@ -1,19 +1,18 @@
-import { reserveNotificationCooldown } from '../../../shared/notification-burst-cooldown'
+import { reserveNotificationCooldown } from '../../../shared/notifications/notification-burst-cooldown'
 // Send background push after socket fan-out without making sockets wait or fail on gateway results.
+import type { MobilePushRegistration } from '../../../shared/notifications/mobile-push-contract'
 import {
-  MOBILE_PUSH_SOURCES,
-  type MobilePushAgentState,
-  type MobilePushRegistration
-} from '../../../shared/mobile-push-contract'
-import type { MobileNotificationEvent } from '../runtime-mobile-notification-controller'
+  allowsMobilePushDelivery,
+  mobilePushAlertContent
+} from '../../../shared/notifications/mobile-push-alert'
+import type { MobileNotificationEvent } from './notifications/runtime-mobile-notification-controller'
 import type { PushGatewayClient, PushSendNotification } from './push-gateway-client'
 import { PushOutcomeCounters } from './push-outcome-counters'
+import type { MobilePushDeliveryMode } from './mobile-push-delivery-policy'
 
 const PUSH_RETRY_DELAY_MS = 2_000
 // Split requests at the gateway's per-send limit so extra paired phones still receive notifications.
 const MAX_REGISTRATIONS_PER_SEND = 20
-const PUSH_TITLE_MAX_LENGTH = 80
-const PUSH_BODY_MAX_LENGTH = 180
 
 export type PushDispatcherRegistry = {
   listDevices(): readonly { deviceId: string; pushRegistration?: MobilePushRegistration }[]
@@ -23,40 +22,12 @@ export type PushDispatcherRegistry = {
 type PushDispatcherOptions = {
   client: PushGatewayClient
   registry: PushDispatcherRegistry
+  deliveryMode?: MobilePushDeliveryMode
   /** Test seam: lets a suite drive the single retry without real time. */
   scheduleRetry?: (run: () => void, delayMs: number) => void
 }
 
 type PushTarget = { deviceId: string; registration: MobilePushRegistration }
-
-function clip(value: string, maxLength: number): string {
-  const normalized = value.replace(/\s+/g, ' ').trim()
-  return normalized.length <= maxLength ? normalized : `${normalized.slice(0, maxLength - 1)}…`
-}
-
-export function mapPushAgentState(
-  source: string,
-  state: string | undefined
-): MobilePushAgentState | null | undefined {
-  if (source !== 'agent-task-complete') {
-    return null
-  }
-  if (state === 'blocked' || state === 'waiting' || state === 'needs-input') {
-    return 'needs-input'
-  }
-  return state === undefined || state === 'done' || state === 'finished' ? 'finished' : undefined
-}
-
-function allowsPushDelivery(
-  registration: MobilePushRegistration,
-  event: MobileNotificationEvent
-): boolean {
-  return (
-    event.type === 'notification' &&
-    event.desktopAllowed !== false &&
-    (!registration.filter.onlyWhenDesktopAway || event.desktopAway !== false)
-  )
-}
 
 export class PushDispatcher {
   private readonly recentNotifications = new Map<string, number>()
@@ -64,11 +35,13 @@ export class PushDispatcher {
   private stopped = false
   private readonly client: PushGatewayClient
   private readonly registry: PushDispatcherRegistry
+  private readonly deliveryMode: MobilePushDeliveryMode
   private readonly scheduleRetry: (run: () => void, delayMs: number) => void
 
   constructor(options: PushDispatcherOptions) {
     this.client = options.client
     this.registry = options.registry
+    this.deliveryMode = options.deliveryMode ?? 'full'
     this.scheduleRetry =
       options.scheduleRetry ??
       ((run, delayMs) => {
@@ -87,7 +60,7 @@ export class PushDispatcher {
   }
 
   enqueue(event: MobileNotificationEvent): void {
-    if (this.stopped) {
+    if (this.stopped || this.deliveryMode === 'disabled') {
       return
     }
     try {
@@ -141,12 +114,8 @@ export class PushDispatcher {
         }
       }
     }
-    const source = MOBILE_PUSH_SOURCES.find((candidate) => candidate === event.source)
-    if (!source || event.notificationSeq === undefined || event.notificationEpoch === undefined) {
-      return null
-    }
-    const agentState = mapPushAgentState(source, event.agentState)
-    if (agentState === undefined) {
+    const content = mobilePushAlertContent(event)
+    if (!content) {
       return null
     }
     const targets = this.registry.listDevices().flatMap((device) => {
@@ -154,7 +123,7 @@ export class PushDispatcher {
       if (
         !registration ||
         registration.expiresAt <= Date.now() ||
-        !allowsPushDelivery(registration, event)
+        !allowsMobilePushDelivery(registration.filter, event)
       ) {
         return []
       }
@@ -179,12 +148,7 @@ export class PushDispatcher {
       notification: {
         expiresAt: Date.now() + 300_000,
         ...(event.notificationId ? { notificationId: event.notificationId } : {}),
-        notificationSeq: event.notificationSeq,
-        notificationEpoch: event.notificationEpoch,
-        source,
-        agentState,
-        title: clip(event.title, PUSH_TITLE_MAX_LENGTH),
-        body: clip(event.body, PUSH_BODY_MAX_LENGTH),
+        ...content,
         ...(event.worktreeId ? { worktreeId: event.worktreeId } : {}),
         ...(event.paneKey ? { paneKey: event.paneKey } : {}),
         ...(event.executionHost ? { executionHost: event.executionHost } : {})

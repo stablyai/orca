@@ -1,15 +1,16 @@
-import type { AgentStatus } from '../../../../shared/agent-detection'
-import type {
-  RuntimePtyWorktreeRecord,
-  RuntimeLeafRecord
-} from '../../runtime-terminal-state-records'
+import type { AgentStatus } from '../../../../shared/agent-status/title/agent-title-core'
+import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
 import { OrcaRuntimeWithGetUnpersistedTrackedTitleForPty } from './terminal-title-tracker'
-import type { TerminalTitleFactMeta } from '../../../../shared/terminal-output-side-effects'
-import { detectAgentStatusFromTitle } from '../../../../shared/agent-detection'
-import { terminalTitleBlocksExplicitAgentStatus } from '../../runtime-worktree-status-projection'
-import type { ClaudeTerminalEvidence } from '../../../../shared/claude-terminal-interrupt'
-import type { OrchestrationMailboxLeaf } from '../../orchestration/mailbox-owner'
-import type { PtyLaneMailboxTarget } from '../query/pty-terminal-summary'
+import type { TerminalTitleFactMeta } from '../../../../shared/terminal/output/terminal-output-side-effects'
+import { detectAgentStatusFromTitle } from '../../../../shared/agent-status/title/agent-title-status'
+import { terminalTitleBlocksExplicitAgentStatus } from '../../workspaces/process-listing/runtime-worktree-status-projection'
+import type { ClaudeTerminalEvidence } from '../../../../shared/agent-hook-listener/providers/claude/lifecycle/claude-terminal-interrupt'
+import { agentStatusTakesTypedInput } from '../../orchestration/mailbox/routing/mailbox-owner'
+import { hermesNativeTitleStatus } from '../../../../shared/agent-status/title/providers/hermes-terminal-title'
+import { jcodePaneTitleStatus } from '../../../../shared/agent-status/title/providers/jcode-terminal-title'
+
+/** Claude fires PermissionRequest just before it reports the block; older wait hooks belong to other prompts. */
+const PERMISSION_HOOK_LEAD_MS = 5_000
 
 export abstract class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWithGetUnpersistedTrackedTitleForPty {
   protected abstract collectPaneKeysForPty(ptyId: string): Set<string>
@@ -37,18 +38,13 @@ export abstract class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWit
     titleObservedAt: number,
     foregroundRefresh: Promise<boolean>
   ): void
-  protected abstract resolveTuiIdleWaiters(leaf: RuntimeLeafRecord): void
-  protected abstract checkDeliverySettledAndArmRecheck(leaf: {
-    tabId: string
-    leafId: string
-  }): boolean
-  protected abstract deliverPendingMessagesForLeaf(leaf: OrchestrationMailboxLeaf): void
-  protected abstract getPtyLaneMailboxTargetForPty(
-    pty: RuntimePtyWorktreeRecord | undefined
-  ): PtyLaneMailboxTarget | null
+  protected abstract deliverPendingMessagesForPty(ptyId: string): void
   protected abstract clearAgentPromptCorrelationForPty(ptyId: string): void
   protected abstract collectAgentStatusPaneKeysForPty(ptyId: string): Set<string>
-  protected abstract markPaneLiveTitlesDirty(): void
+  /** `ref` is the terminal whose title changed or the pane key whose start facts did. */
+  protected abstract markPaneLiveTitlesDirty(ref: string): void
+  /** A title moved a terminal agent to another status; worktree.ps rows show it without a hook row. */
+  protected abstract onTitleAgentStatusChanged(): void
 
   observeClaudeTerminalEvidence(ptyId: string, evidence: ClaudeTerminalEvidence): void {
     if (!this.onClaudeTerminalEvidence || this.ptysById.get(ptyId)?.connectionId) {
@@ -62,8 +58,11 @@ export abstract class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWit
   /** The PTY's agent status under this title: the program's own OSC 7501 activity while it
    *  reports one, else what the title glyph says. */
   protected classifyPtyTitleStatus(ptyId: string, rawTitle: string): AgentStatus | null {
+    const agent = this.getPaneTerminalAgent(ptyId)
     return (
       this.ptyTitleTrackersByPtyId.get(ptyId)?.programActivity ??
+      hermesNativeTitleStatus(rawTitle, agent) ??
+      jcodePaneTitleStatus(rawTitle, agent) ??
       detectAgentStatusFromTitle(rawTitle)
     )
   }
@@ -82,16 +81,16 @@ export abstract class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWit
       const { programAtRest: _ended, ...status } = pty.lastExplicitAgentStatus
       pty.lastExplicitAgentStatus = status
     }
-    if (entry.lastTitle) {
-      // A stale-spinner clear stands for the title it replaced, so a dead spinner is not revived.
-      const raw = pty?.titleDisplayClear?.title ?? entry.lastTitle.raw
-      const changed = this.applyTrackedPtyTitle(ptyId, raw, entry.lastTitle.normalized, undefined, {
-        statusOnly: true
-      })
-      // The chunk's session-tab fan-out carries the new status to mobile.
-      if (changed && entry.applyingChunk) {
-        entry.chunkTouchedSessionTabs = true
-      }
+    // A stale-spinner clear stands for the title it replaced, so a dead spinner is not revived.
+    // Programs that never set a title still report their status here.
+    const title = entry.lastTitle ?? { raw: '', normalized: '' }
+    const raw = pty?.titleDisplayClear?.title ?? title.raw
+    const changed = this.applyTrackedPtyTitle(ptyId, raw, title.normalized, undefined, {
+      statusOnly: true
+    })
+    // The chunk's session-tab fan-out carries the new status to mobile.
+    if (changed && entry.applyingChunk) {
+      entry.chunkTouchedSessionTabs = true
     }
   }
 
@@ -102,8 +101,9 @@ export abstract class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWit
     rawTitle: string,
     normalizedTitle: string,
     meta?: TerminalTitleFactMeta,
-    /** `statusOnly`: no title was observed, so title evidence, clocks and display stay as they are. */
-    { statusOnly = false }: { statusOnly?: boolean } = {}
+    /** `statusOnly`: no title was observed, so title evidence, clocks and display stay as they are.
+     *  `status`: the agent reported its status some other way, so the title is not classified. */
+    { statusOnly = false, status }: { statusOnly?: boolean; status?: AgentStatus } = {}
   ): boolean {
     if (meta?.staleWorkingTitleClear) {
       return this.applyStaleWorkingTitleClear(ptyId, rawTitle, normalizedTitle)
@@ -118,23 +118,28 @@ export abstract class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWit
       : identityOnlyTitle
         ? null
         : normalizedTitle
-    const agentStatus = identityOnlyTitle ? null : this.classifyPtyTitleStatus(ptyId, rawTitle)
+    const agentStatus =
+      status ?? (identityOnlyTitle ? null : this.classifyPtyTitleStatus(ptyId, rawTitle))
     // Why before retiring the clear: the lifecycle counts a turn from the status the clear showed.
     this.recordAgentPromptLifecycleState(ptyId, agentStatus)
     let ptyRecordChanged = false
-    let ptyIdleEdge = false
+    let ptyInputEdge = false
     const pty = this.ptysById.get(ptyId)
     if (pty) {
       const prevStatus = pty.lastAgentStatus
       const prevTitle = pty.lastOscTitle
-      // Same delivery edge as the leaf branch below: live idle, or an idle title that changed.
-      ptyIdleEdge =
-        agentStatus === 'idle' &&
-        (prevStatus !== 'idle' ||
+      // Mail goes to a terminal taking input, at rest or mid-turn, so offer it when the terminal starts
+      // taking input (first live status after seed/respawn included); idle titles re-offer upgrades (#12536).
+      ptyInputEdge =
+        agentStatusTakesTypedInput(agentStatus) &&
+        (prevStatus !== agentStatus ||
           !pty.lastAgentStatusObservedLive ||
-          (!statusOnly && prevTitle !== recordedTitle))
+          (agentStatus === 'idle' && !statusOnly && prevTitle !== recordedTitle))
       const observedAt = this.nextTitleObservationSequence()
       const observedAtEpochMs = identityOnlyTitle ? null : Date.now()
+      // A fresh title retires a stale-working display clear, so the row shows the agent again.
+      const retiresDisplayClear = !statusOnly && pty.titleDisplayClear != null
+      const retiredDisplayTitle = pty.titleDisplayClear?.title
       if (!statusOnly) {
         pty.titleDisplayClear = null
         pty.lastOscTitle = recordedTitle
@@ -146,12 +151,26 @@ export abstract class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWit
       if (prevStatus === 'working' && agentStatus === null) {
         this.confirmPtyAgentExit(ptyId, true)
       }
+      const titleBlocksHooks =
+        identityOnlyTitle || terminalTitleBlocksExplicitAgentStatus(recordedTitle)
+      if (titleBlocksHooks || prevStatus !== agentStatus) {
+        pty.permissionWaitHookedAfterEpochMs =
+          !titleBlocksHooks && agentStatus === 'permission' && observedAtEpochMs !== null
+            ? Math.max(
+                pty.lastAgentStatusRichInvalidatedAtEpochMs ?? 0,
+                pty.lastAgentStatusStartedAtEpochMs ?? 0,
+                observedAtEpochMs - PERMISSION_HOOK_LEAD_MS
+              )
+            : undefined
+      }
       if (prevStatus !== agentStatus) {
         pty.lastAgentStatusStartedAtEpochMs = observedAtEpochMs
       }
+      if (prevStatus !== agentStatus || retiresDisplayClear) {
+        this.onTitleAgentStatusChanged()
+      }
       if (
-        identityOnlyTitle ||
-        terminalTitleBlocksExplicitAgentStatus(recordedTitle) ||
+        titleBlocksHooks ||
         (prevStatus !== null && agentStatus !== null && prevStatus !== agentStatus)
       ) {
         pty.lastAgentStatusRichInvalidatedAtEpochMs = observedAtEpochMs ?? Date.now()
@@ -167,6 +186,8 @@ export abstract class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWit
       if (agentStatus === 'idle' && prevStatus !== 'permission' && ptyRecordChanged) {
         this.resolvePtyTuiIdleWaiters(pty, ptyId)
       }
+      // Retiring a display clear changes the shown title even when the native title and status repeat.
+      ptyRecordChanged ||= retiresDisplayClear && retiredDisplayTitle !== recordedTitle
       const shouldDelayMobileSnapshot =
         ptyRecordChanged &&
         this.shouldDelayPtyBackedMobileSnapshotForForegroundAgent(pty, normalizedTitle)
@@ -195,37 +216,15 @@ export abstract class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWit
     }
     for (const leaf of this.getLeavesForPty(ptyId)) {
       // Retain live titles for worktree.ps recomputation, including shell titles that clear stale working state (#1437).
-      const prevStatus = leaf.lastAgentStatus
-      const prevObservedLive = leaf.lastAgentStatusObservedLive
-      const leafTitleChanged = !statusOnly && leaf.lastOscTitle !== recordedTitle
       if (!statusOnly) {
         leaf.lastOscTitle = recordedTitle
         leaf.lastOscTitleAt = identityOnlyTitle ? null : this.nextTitleObservationSequence()
       }
-      // Non-agent titles clear sticky status; new waiters fall back to live title detection/polling.
       leaf.lastAgentStatus = agentStatus
       leaf.lastAgentStatusObservedLive = true
-      // Fast agents can skip working; accept transitions to idle except permission-to-idle. Also re-offer changed idle-to-idle evidence, never unchanged repaint.
-      if (
-        agentStatus === 'idle' &&
-        prevStatus !== 'permission' &&
-        (prevStatus !== agentStatus || leafTitleChanged)
-      ) {
-        this.resolveTuiIdleWaiters(leaf)
-      }
-      // First live idle after seed/respawn authorizes delivery; later explicit-ready titles must also re-offer idle-to-idle upgrades (#12536).
-      if (
-        agentStatus === 'idle' &&
-        (prevStatus !== 'idle' || !prevObservedLive || leafTitleChanged) &&
-        this.checkDeliverySettledAndArmRecheck(leaf)
-      ) {
-        this.deliverPendingMessagesForLeaf(leaf)
-      }
     }
-    // A pane no window publishes (headless serve) has no leaf above; its PTY is the mailbox target.
-    const lane = ptyIdleEdge ? this.getPtyLaneMailboxTargetForPty(pty) : null
-    if (lane && this.checkDeliverySettledAndArmRecheck(lane.leaf)) {
-      this.deliverPendingMessagesForLeaf(lane.leaf)
+    if (ptyInputEdge) {
+      this.deliverPendingMessagesForPty(ptyId)
     }
     return ptyRecordChanged
   }
@@ -251,6 +250,7 @@ export abstract class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWit
     if (nativeStatus === clearedStatus) {
       return previousTitle !== normalizedTitle
     }
+    this.onTitleAgentStatusChanged()
     const foregroundRefresh = this.ptyForegroundAgent.refresh(ptyId, observedAt)
     if (this.shouldDelayPtyBackedMobileSnapshotForForegroundAgent(pty, normalizedTitle)) {
       this.delayPtyBackedMobileSnapshotForForegroundAgent(ptyId, observedAt, foregroundRefresh)
@@ -269,6 +269,8 @@ export abstract class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWit
     this.openCodeRunLifetime.forgetPty(ptyId)
     this.mobileSessionTabsAgentStatusHeartbeat.removePty(ptyId)
     this.clientEvents.clearPtyTitleGate(ptyId)
+    // Its tracker may have held the pane's only shown title; the flush reads it after teardown.
+    this.markPaneLiveTitlesDirty(ptyId)
   }
 
   protected resetTrackedTerminalStateForProviderGeneration(ptyId: string): void {
@@ -311,7 +313,7 @@ export abstract class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWit
       leaf.waitBlockedAt = null
       leaf.tailWaitState = undefined
     }
-    this.markPaneLiveTitlesDirty()
+    this.markPaneLiveTitlesDirty(ptyId)
     this.reconcileAgentStatusForEndedProcessFn?.(this.collectAgentStatusPaneKeysForPty(ptyId))
     this.primeWaitBlockedBaselineFromSeededTail(ptyId)
   }
@@ -329,11 +331,8 @@ export abstract class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWit
       return
     }
     this.terminalSideEffectConsumerAvailable = nextAvailable
-    for (const [ptyId, entry] of this.ptyTitleTrackersByPtyId) {
+    for (const entry of this.ptyTitleTrackersByPtyId.values()) {
       entry.tracker.setTransientSideEffectScanningEnabled(nextAvailable)
-      entry.commandCodeDetector = nextAvailable
-        ? this.createTerminalSideEffectCommandCodeDetector(ptyId)
-        : null
     }
   }
 }

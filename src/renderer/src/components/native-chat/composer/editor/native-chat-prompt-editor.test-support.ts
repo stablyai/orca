@@ -1,0 +1,18 @@
+import { act } from '@testing-library/react'
+import type { Editor } from '@tiptap/react'
+import { promptText } from './native-chat-prompt-document'
+import { promptTextContent } from './native-chat-prompt-document-text'
+
+export function promptEditor(element: HTMLElement): Editor {
+  return (element as HTMLElement & { editor: Editor }).editor
+}
+
+export function promptValue(element: HTMLElement): string {
+  return promptText(promptEditor(element).state.doc)
+}
+
+export function changePrompt(element: HTMLElement, value: string): void {
+  act(() => {
+    promptEditor(element).commands.setContent(promptTextContent(value))
+  })
+}

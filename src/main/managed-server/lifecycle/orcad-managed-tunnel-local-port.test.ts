@@ -1,18 +1,19 @@
+import '../../../shared/remote-runtime/host-store/environment-store-worker-test-fixture'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { createServer, type Server } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { encodePairingOffer } from '../../../shared/pairing'
-import { addManagedOrcadEnvironment } from '../../../shared/runtime-environment-managed-orcad-store'
-import { resolveEnvironment } from '../../../shared/runtime-environment-store'
-import { getRuntimeSshAccess } from '../../../shared/runtime-environments'
-import type { SshTarget } from '../../../shared/ssh-types'
+import { encodePairingOffer } from '../../../shared/remote-runtime/pairing/pairing'
+import { addManagedOrcadEnvironment } from '../../../shared/remote-runtime/host-store/runtime-environment-managed-orcad-store'
+import { resolveEnvironment } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
+import { getRuntimeSshAccess } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
+import type { SshTarget } from '../../../shared/remote-runtime/ssh/ssh-types'
 import type { SshConnection } from '../../ssh/connection/ssh-connection'
 import type { SshConnectionManager } from '../../ssh/connection/ssh-connection-manager'
-import type { SshConnectionStore } from '../../ssh/connection/ssh-connection-store'
+import type { SshConnectionStore } from '../../ssh/targets/ssh-connection-store'
 import type { SshPortForwardManager } from '../../ssh/port-forwarding/ssh-port-forward'
-import { reserveLocalForwardPort } from '../../ssh/system-transport/system-ssh-forward-port-reservation'
+import { reserveLocalForwardPort } from '../../ssh/system-transport/forwarding/system-ssh-forward-port-reservation'
 import { OrcadManagedTunnelManager } from './orcad-managed-tunnel-manager'
 import { buildOnBindableLocalPort } from './orcad-managed-tunnel-local-port'
 import { setManagedOrcadPairingRepairedListener } from './orcad-managed-pairing-repaired-listener'
@@ -43,7 +44,7 @@ describe('managed tunnel on an unbindable saved local port', () => {
     // Stands in for a Windows excluded range or another app's listener on the saved port.
     occupied = await listen()
     savedPort = portOf(occupied)
-    addManagedOrcadEnvironment(userDataPath, {
+    await addManagedOrcadEnvironment(userDataPath, {
       id: 'environment-1',
       name: 'Builder',
       pairingCode: encodePairingOffer({
@@ -117,12 +118,12 @@ describe('managed tunnel on an unbindable saved local port', () => {
       } as unknown as SshPortForwardManager,
       ensureServing: vi.fn().mockResolvedValue({ state: 'serving' })
     })
-    const resolve = () => resolveEnvironment(userDataPath, 'environment-1')
+    const resolve = async () => await resolveEnvironment(userDataPath, 'environment-1')
     const retired = vi.fn()
     setManagedOrcadPairingRepairedListener(retired)
     const ensure = () =>
-      buildOnBindableLocalPort(userDataPath, 'environment-1', () =>
-        manager.ensure(resolve(), resolve)
+      buildOnBindableLocalPort(userDataPath, 'environment-1', async () =>
+        manager.ensure(await resolve(), resolve)
       )
     return { addForward, ensure, resolve, retired }
   }
@@ -135,11 +136,11 @@ describe('managed tunnel on an unbindable saved local port', () => {
     ]
   ])('moves to a free port and saves it with the same pairing when %s', async (_case, error) => {
     const { addForward, ensure, resolve, retired } = setup(error)
-    const before = resolve()
+    const before = await resolve()
 
     await ensure()
 
-    const moved = resolve()
+    const moved = await resolve()
     const movedPort = getRuntimeSshAccess(moved)?.localPort
     expect(movedPort).not.toBe(savedPort)
     expect(addForward).toHaveBeenLastCalledWith(
@@ -166,7 +167,7 @@ describe('managed tunnel on an unbindable saved local port', () => {
 
     await expect(Promise.all([ensure(), ensure(), ensure()])).resolves.toHaveLength(3)
 
-    expect(getRuntimeSshAccess(resolve())?.localPort).not.toBe(savedPort)
+    expect(getRuntimeSshAccess(await resolve())?.localPort).not.toBe(savedPort)
     expect(retired).toHaveBeenCalledOnce()
   })
 
@@ -175,7 +176,7 @@ describe('managed tunnel on an unbindable saved local port', () => {
 
     await expect(ensure()).rejects.toThrow('ssh exited')
 
-    expect(getRuntimeSshAccess(resolve())?.localPort).toBe(savedPort)
+    expect(getRuntimeSshAccess(await resolve())?.localPort).toBe(savedPort)
     expect(retired).not.toHaveBeenCalled()
   })
 })

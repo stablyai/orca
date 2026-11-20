@@ -1,45 +1,41 @@
 // @vitest-environment happy-dom
-import { expect, it, vi } from 'vitest'
-import { acquireWebviewsDragPassthrough } from '../host-guest/webview-drag-passthrough'
-import { webviewRegistry } from '../host-guest/webview-registry'
+import { afterEach, expect, it, vi } from 'vitest'
+
 import { attachDocPreviewWebview } from './doc-preview-webview-attach'
 
-function attach(previewId: string, container: HTMLDivElement) {
-  return attachDocPreviewWebview({
-    previewId,
-    container,
+afterEach(() => {
+  document.body.innerHTML = ''
+})
+
+it('shows loading for page documents only, not iframe or in-page navigations', () => {
+  const onLoadStarted = vi.fn()
+  const { webview, detach } = attachDocPreviewWebview({
+    previewId: 'preview-1',
+    container: document.body.appendChild(document.createElement('div')),
     url: 'orca-preview://grant/index.html',
     ariaLabel: 'HTML preview',
-    onLoadStarted: vi.fn(),
+    onLoadStarted,
     onLoadStopped: vi.fn(),
     onLoadFailed: vi.fn(),
     onNavigated: vi.fn(),
     onTitleUpdated: vi.fn(),
     onViewportMessage: vi.fn()
   })
-}
-
-it('restores pointer input when a drag ends after attaching a document preview', () => {
-  const container = document.createElement('div')
-  document.body.appendChild(container)
-  const append = vi.spyOn(container, 'appendChild')
-  append.mockImplementation((node) => {
-    expect((node as HTMLElement).style.pointerEvents).toBe('none')
-    return Node.prototype.appendChild.call(container, node)
-  })
-  const release = acquireWebviewsDragPassthrough()
-  const attached = attach('preview-drag', container)
-
-  try {
-    expect(webviewRegistry.get('preview-drag')).toBe(attached.webview)
-    expect(attached.webview.style.pointerEvents).toBe('none')
-    release()
-    expect(attached.webview.style.pointerEvents).toBe('')
-  } finally {
-    release()
-    attached.detach()
-    container.remove()
-    append.mockRestore()
+  const startNavigation = (isMainFrame: boolean, isInPlace: boolean): void => {
+    webview.dispatchEvent(
+      Object.assign(new Event('did-start-navigation'), { isMainFrame, isInPlace })
+    )
   }
-  expect(webviewRegistry.has('preview-drag')).toBe(false)
+
+  webview.dispatchEvent(new Event('did-start-loading'))
+  startNavigation(false, false)
+  startNavigation(true, true)
+  expect(onLoadStarted).not.toHaveBeenCalled()
+
+  startNavigation(true, false)
+  expect(onLoadStarted).toHaveBeenCalledTimes(1)
+
+  detach()
+  startNavigation(true, false)
+  expect(onLoadStarted).toHaveBeenCalledTimes(1)
 })

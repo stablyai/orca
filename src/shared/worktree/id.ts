@@ -1,8 +1,6 @@
-import { normalizeRuntimePathForComparison } from '../cross-platform-path'
-import { WORKTREE_ID_SEPARATOR } from '../pty-session-id-format'
-import type { Repo } from '../repo-types'
-
-export { WORKTREE_ID_SEPARATOR } from '../pty-session-id-format'
+import { normalizeRuntimePathForComparison } from '../file-access/cross-platform-path'
+import { WORKTREE_ID_SEPARATOR } from '../terminal/pty/lifecycle/pty-session-id-format'
+import type { Repo } from '../repository/repo-types'
 
 export type ParsedWorktreeId = {
   repoId: string
@@ -56,6 +54,26 @@ export function splitWorktreeId(worktreeId: string): ParsedWorktreeId | null {
   }
 }
 
+/** `worktreeId` with its path mapped; the repo id and a folder workspace's instance suffix stay. */
+export function rewriteWorktreeIdPath(
+  worktreeId: string,
+  mapPath: (path: string) => string
+): string {
+  const parsed = splitWorktreeId(worktreeId)
+  if (!parsed || !parsed.repoId || !parsed.worktreePath) {
+    return worktreeId
+  }
+  const suffixAt = parsed.worktreePath.lastIndexOf(FOLDER_WORKSPACE_INSTANCE_SEPARATOR)
+  const instanceId = parsed.worktreePath.slice(
+    suffixAt + FOLDER_WORKSPACE_INSTANCE_SEPARATOR.length
+  )
+  const suffix =
+    suffixAt > 0 && /^[0-9a-f-]{36}$/.test(instanceId) ? parsed.worktreePath.slice(suffixAt) : ''
+  const path = parsed.worktreePath.slice(0, parsed.worktreePath.length - suffix.length)
+  const mapped = mapPath(path)
+  return mapped === path ? worktreeId : `${parsed.repoId}${WORKTREE_ID_SEPARATOR}${mapped}${suffix}`
+}
+
 export function splitWorktreeIdForFilesystem(worktreeId: string): ParsedWorktreeId | null {
   const parsed = splitWorktreeId(worktreeId)
   if (!parsed) {
@@ -66,6 +84,16 @@ export function splitWorktreeIdForFilesystem(worktreeId: string): ParsedWorktree
     // Filesystem callers need the folder path without its workspace-session UUID suffix.
     worktreePath: parsed.worktreePath.replace(FOLDER_WORKSPACE_INSTANCE_SUFFIX, '')
   }
+}
+
+/** Folder-project workspaces on one directory differ only by instance suffix; they share the repo and cwd. */
+export function worktreeIdsShareCheckout(left: string, right: string): boolean {
+  return worktreeIdsEqual(checkoutWorktreeId(left), checkoutWorktreeId(right))
+}
+
+function checkoutWorktreeId(worktreeId: string): string {
+  const parsed = splitWorktreeIdForFilesystem(worktreeId)
+  return parsed ? composeWorktreeId(parsed.repoId, parsed.worktreePath) : worktreeId
 }
 
 export function getWorktreePathBasenameFromId(worktreeId: string): string | null {

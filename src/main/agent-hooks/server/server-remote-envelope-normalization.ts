@@ -1,9 +1,17 @@
-import { normalizeAgentProviderSession } from '../../../shared/agent-session-resume'
+import { normalizeAgentProviderSession } from '../../../shared/agent-session/lifecycle/agent-session-resume'
+import {
+  isTurnEndDisposition,
+  type HostTurnEndFacts
+} from '../../../shared/agent-status/contracts/agent-status-types'
+import { isTurnEndedAt } from '../../../shared/agent-hook-listener/state/agent-hook-turn-end-timing'
 import {
   normalizeClaudePromptId,
   normalizeGrokPromptId
 } from '../../../shared/agent-hook-listener/listener-limits'
-import { isAgentHookSource, type AgentHookSource } from '../../../shared/agent-hook-relay'
+import {
+  isAgentHookSource,
+  type AgentHookSource
+} from '../../../shared/agent-hook-listener/transport/agent-hook-relay'
 import {
   readClaudeSettledRequests,
   type ClaudeSettledRequest
@@ -24,6 +32,7 @@ export type RemoteAgentStatusEnvelope = {
   source?: unknown
   providerPromptId?: unknown
   grokPromptBoundary?: unknown
+  opensTurn?: unknown
   compactTrigger?: unknown
   toolUseId?: string
   claudeSettledRequests?: unknown
@@ -50,6 +59,9 @@ export type RemoteEnvelopeFields = {
   source?: AgentHookSource
   providerPromptId?: string
   grokPromptBoundary?: true
+  opensTurn?: true
+  /** The execution host's turn-end facts, validated. */
+  hostTurnEnd: HostTurnEndFacts
   compactTrigger?: 'manual' | 'auto'
   worktreeId?: string
   promptInteractionKey?: string
@@ -66,6 +78,9 @@ export function normalizeRemoteEnvelopeFields(envelope: {
   source?: unknown
   providerPromptId?: unknown
   grokPromptBoundary?: unknown
+  opensTurn?: unknown
+  turnEndedAt?: unknown
+  turnEndDisposition?: unknown
   compactTrigger?: unknown
   worktreeId?: string
   promptInteractionKey?: string
@@ -92,6 +107,16 @@ export function normalizeRemoteEnvelopeFields(envelope: {
           : undefined,
     grokPromptBoundary:
       source === 'grok' && envelope.grokPromptBoundary === true ? true : undefined,
+    opensTurn:
+      source === 'claude' && envelope.opensTurn === true && envelope.isReplay !== true
+        ? true
+        : undefined,
+    hostTurnEnd: {
+      ...(isTurnEndedAt(envelope.turnEndedAt) ? { turnEndedAt: envelope.turnEndedAt } : {}),
+      ...(isTurnEndDisposition(envelope.turnEndDisposition)
+        ? { turnEndDisposition: envelope.turnEndDisposition }
+        : {})
+    },
     compactTrigger:
       source === 'claude' &&
       (envelope.compactTrigger === 'manual' || envelope.compactTrigger === 'auto')
@@ -110,11 +135,15 @@ export function normalizeRemoteEnvelopeFields(envelope: {
       typeof envelope.toolUseId === 'string' && envelope.toolUseId.trim().length > 0
         ? envelope.toolUseId.trim()
         : undefined,
-    // Live hooks settle their own requests; retained settlements only repair replay gaps.
+    // Live hooks settle their own requests, except a batch end, which lists the requests it resolved; retained settlements repair replay gaps.
     claudeSettledRequests:
-      source === 'claude' && envelope.isReplay === true
-        ? readClaudeSettledRequests(envelope.claudeSettledRequests)
-        : undefined,
+      source !== 'claude'
+        ? undefined
+        : envelope.isReplay === true
+          ? readClaudeSettledRequests(envelope.claudeSettledRequests)
+          : envelope.hookEventName === 'PostToolBatch'
+            ? readClaudeSettledRequests(envelope.claudeSettledRequests, Number.POSITIVE_INFINITY)
+            : undefined,
     toolAgentId:
       typeof envelope.toolAgentId === 'string' && envelope.toolAgentId.trim().length > 0
         ? envelope.toolAgentId.trim()

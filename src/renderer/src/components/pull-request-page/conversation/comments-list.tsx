@@ -1,17 +1,21 @@
 import React from 'react'
 import { MessageSquare } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import {
   getPRCommentAudienceEmptyLabel,
   getPrCommentAudienceFilters
-} from '@/lib/pr-comment-audience-labels'
-import { getPRCommentGroupId, type PRCommentGroup } from '../../../../../shared/pr-comment-groups'
-import type { PRCommentAudienceFilter } from '../../../../../shared/pr-comment-audience'
-import type { GitHubOwnerRepo, GitHubPRFile } from '../../../../../shared/github/pull-request-types'
-import type { PRComment } from '../../../../../shared/github/comment-types'
-import type { TaskSourceContext } from '../../../../../shared/task-source-context'
+} from '@/lib/source-control/review/comments/pr-comment-audience-labels'
+import {
+  getPRCommentGroupId,
+  type PRCommentGroup
+} from '../../../../../shared/source-control/review-comments/pr-comment-groups'
+import type { PRCommentAudienceFilter } from '../../../../../shared/source-control/review-comments/pr-comment-audience'
+import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../../../shared/github/repositories/repository-identity'
+import type { GitHubPRFile } from '../../../../../shared/github/pull-requests/pull-request-types'
+import type { PRComment } from '../../../../../shared/github/comments/comment-types'
+import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 import type { MentionOption } from '../page-types'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { ConversationCommentGroup } from './comment-group'
 
 export function ConversationCommentsList({
@@ -57,12 +61,13 @@ export function ConversationCommentsList({
   onToggleReply: (commentId: number) => void
   onSubmitReply: (comment: PRComment, replyBody: string) => Promise<boolean>
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <>
       <div className="flex items-center gap-2 pt-1">
         <MessageSquare className="size-4 text-muted-foreground" />
         <span className="text-[13px] font-medium text-foreground">
-          {translate('auto.components.PullRequestPage.3463d10a63', 'Comments')}
+          {t('auto.components.PullRequestPage.3463d10a63', 'Comments')}
         </span>
         {comments.length > 0 && (
           <span className="rounded-full border border-border/50 bg-muted/30 px-1.5 py-0.5 text-[11px] tabular-nums text-muted-foreground">
@@ -96,11 +101,11 @@ export function ConversationCommentsList({
 
       {comments.length === 0 ? (
         <div className="rounded-lg border border-dashed border-border/50 px-3 py-6 text-left text-[13px] text-muted-foreground">
-          {translate('auto.components.PullRequestPage.d2d589556c', 'No comments yet.')}
+          {t('auto.components.PullRequestPage.d2d589556c', 'No comments yet.')}
         </div>
       ) : visibleComments.length === 0 ? (
         <div className="rounded-lg border border-dashed border-border/50 px-3 py-6 text-center text-[13px] text-muted-foreground">
-          {getPRCommentAudienceEmptyLabel(commentFilter)}
+          {getPRCommentAudienceEmptyLabel(commentFilter, t)}
         </div>
       ) : (
         <div className="flex min-w-0 flex-col gap-3">
@@ -111,6 +116,7 @@ export function ConversationCommentsList({
               repoPath={repoPath}
               repoId={repoId}
               sourceContext={sourceContext}
+              itemType={itemType}
               prNumber={prNumber}
               prRepo={prRepo}
               files={files}

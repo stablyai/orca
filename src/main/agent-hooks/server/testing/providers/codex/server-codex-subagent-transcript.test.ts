@@ -1,0 +1,135 @@
+import '../../memory-agent-identity-store.test-fixture'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { appendFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+
+import { AgentHookServer } from '../../../agent-hook-server'
+import { makePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
+
+const PANE_KEY = makePaneKey('tab-1', '11111111-1111-4111-8111-111111111111')
+const CHILD_ID = '019fa65f-3144-7151-9c02-cff7a28f316f'
+
+function line(record: unknown): string {
+  return `${JSON.stringify(record)}\n`
+}
+
+function spawnLine(threadId: string, agentPath: string): string {
+  return line({
+    type: 'event_msg',
+    payload: {
+      type: 'sub_agent_activity',
+      occurred_at_ms: 1234,
+      agent_thread_id: threadId,
+      agent_path: agentPath,
+      kind: 'started'
+    }
+  })
+}
+
+describe('AgentHookServer Codex subagent transcript polling', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({
+      toFake: ['Date', 'setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'performance']
+    })
+  })
+
+  const dirs: string[] = []
+
+  afterEach(() => {
+    for (const dir of dirs) {
+      rmSync(dir, { recursive: true, force: true })
+    }
+    dirs.length = 0
+    vi.useRealTimers()
+  })
+
+  // Nested CLIs inherit the pane key and must not tear down the owning Codex poll.
+  it('keeps polling when a nested non-codex hook lands on the same pane', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'agent-hook-codex-subagent-'))
+    dirs.push(dir)
+    const parentPath = join(dir, 'rollout-parent.jsonl')
+    const childPath = join(dir, `rollout-child-${CHILD_ID}.jsonl`)
+    writeFileSync(parentPath, spawnLine(CHILD_ID, '/root/pr_review'))
+    writeFileSync(childPath, line({ type: 'event_msg', payload: { type: 'task_started' } }))
+    const server = new AgentHookServer()
+    await server.start({ env: 'production' })
+    try {
+      const env = server.buildPtyEnv()
+      const post = (path: string, payload: unknown): Promise<Response> =>
+        fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}${path}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Connection: 'close',
+            'X-Orca-Agent-Hook-Token': env.ORCA_AGENT_HOOK_TOKEN
+          },
+          body: JSON.stringify({ paneKey: PANE_KEY, tabId: 'tab-1', worktreeId: 'wt-1', payload })
+        })
+
+      await post('/hook/codex', {
+        hook_event_name: 'PostToolUse',
+        session_id: 'root-session',
+        transcript_path: parentPath,
+        tool_name: 'collaborationspawn_agent'
+      })
+      expect(server.getStatusSnapshot()[0]?.subagents).toHaveLength(1)
+
+      const nested = await post('/hook/copilot', {
+        hook_event_name: 'Stop',
+        session_id: 'nested-session',
+        transcript_path: join(dir, 'nested-copilot-transcript.jsonl')
+      })
+      expect(nested.status).toBe(204)
+      expect(server.getStatusSnapshot()[0]?.agentType).toBe('codex')
+      expect(server.getStatusSnapshot()[0]?.subagents).toHaveLength(1)
+
+      appendFileSync(childPath, line({ type: 'event_msg', payload: { type: 'task_complete' } }))
+      await vi.advanceTimersByTimeAsync(1_000)
+      // The poll reads rollouts off the main thread, so its result lands after the tick.
+      await vi.waitFor(() => expect(server.getStatusSnapshot()[0]?.subagents).toBeUndefined())
+    } finally {
+      server.stop()
+    }
+  })
+
+  // Replay leaves a child's unresolved rollout to the poll, so replay must start one.
+  it('finishes a replayed Codex hook child that completed while Orca was closed', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'agent-hook-codex-replay-'))
+    dirs.push(dir)
+    const parentPath = join(dir, 'rollout-parent.jsonl')
+    writeFileSync(parentPath, spawnLine(CHILD_ID, '/root/pr_review'))
+    writeFileSync(
+      join(dir, `rollout-child-${CHILD_ID}.jsonl`),
+      line({ type: 'event_msg', payload: { type: 'task_started' } }) +
+        line({ type: 'event_msg', payload: { type: 'task_complete' } })
+    )
+    const spoolDir = join(dir, 'agent-hooks', 'spool')
+    mkdirSync(spoolDir, { recursive: true })
+    writeFileSync(
+      join(spoolDir, 'pane-replay.jsonl'),
+      `\n${JSON.stringify({
+        paneKey: PANE_KEY,
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        source: 'codex',
+        receivedAt: Date.now(),
+        payload: {
+          hook_event_name: 'PostToolUse',
+          session_id: 'root-session',
+          transcript_path: parentPath,
+          tool_name: 'collaborationspawn_agent'
+        }
+      })}\n`
+    )
+    const server = new AgentHookServer()
+    await server.start({ env: 'production', userDataPath: dir })
+    try {
+      expect(server.getStatusSnapshot()[0]?.subagents).toHaveLength(1)
+      await vi.advanceTimersByTimeAsync(1_000)
+      await vi.waitFor(() => expect(server.getStatusSnapshot()[0]?.subagents).toBeUndefined())
+    } finally {
+      server.stop()
+    }
+  })
+})

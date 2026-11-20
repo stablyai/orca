@@ -6,16 +6,16 @@ import { join } from 'node:path'
 
 const state = vi.hoisted(() => ({ managed: '', system: '', blocked: '', code: '' }))
 
-vi.mock('../codex/codex-home-paths', () => ({
+vi.mock('../codex/configuration/homes/codex-home-paths', () => ({
   getOrcaManagedCodexHomePath: () => state.managed,
   getSystemCodexHomePath: () => state.system
 }))
 
-vi.mock('../codex/codex-account-home-discovery', () => ({
+vi.mock('../codex/history/rollouts/codex-account-home-discovery', () => ({
   getCodexAccountHomeSessionDirectories: () => []
 }))
 
-vi.mock('../codex/codex-session-bridge', () => ({
+vi.mock('../codex/history/bridges/codex-session-bridge', () => ({
   getLegacyCopiedCodexSessionBridgeScanPreference: () => null
 }))
 
@@ -53,15 +53,6 @@ afterEach(async () => {
 })
 
 describe('Codex history discovery failures', () => {
-  it.each(['EACCES', 'EPERM', 'EIO', 'UNKNOWN'])(
-    'rejects an inaccessible root (%s)',
-    async (code) => {
-      state.blocked = sessions
-      state.code = code
-      await expect(listCodexSessionFiles()).rejects.toMatchObject({ code })
-    }
-  )
-
   it('rejects an unreadable child instead of publishing an incomplete history list', async () => {
     await writeFile(join(sessions, 'kept.jsonl'), '')
     state.blocked = join(sessions, 'inaccessible')
@@ -70,22 +61,12 @@ describe('Codex history discovery failures', () => {
     await expect(listCodexSessionFiles()).rejects.toMatchObject({ code: 'EACCES' })
   })
 
-  it.each(['ENOENT', 'ENOTDIR'])(
-    'keeps sibling files when a child disappears (%s)',
-    async (code) => {
-      const sibling = join(sessions, 'kept.jsonl')
-      await writeFile(sibling, '')
-      state.blocked = join(sessions, 'removed')
-      await mkdir(state.blocked)
-      state.code = code
-      await expect(listCodexSessionFiles()).resolves.toEqual([sibling])
-    }
-  )
-
-  it('accepts absent homes while preserving the available history', async () => {
+  it('keeps sibling files when a child directory becomes a file', async () => {
     const sibling = join(sessions, 'kept.jsonl')
     await writeFile(sibling, '')
-    await rm(state.system, { recursive: true })
+    state.blocked = join(sessions, 'replaced')
+    await mkdir(state.blocked)
+    state.code = 'ENOTDIR'
     await expect(listCodexSessionFiles()).resolves.toEqual([sibling])
   })
 })

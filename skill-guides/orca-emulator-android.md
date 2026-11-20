@@ -16,8 +16,8 @@ license: Apache-2.0
 
 ## Command surface
 
-The Android backend shells out to the Android SDK (`adb`, `emulator`, `avdmanager`) that
-Android Studio installs, so it runs on Windows, Linux, and macOS. Input uses
+The Android backend shells out to `adb`, plus the SDK `emulator` for AVDs, so it runs on
+Windows, Linux, and macOS. Input uses
 `adb shell input`, with no extra streaming server.
 
 `ORCA emulator --help` lists the wrapped verbs. Anything else goes through
@@ -35,11 +35,11 @@ drive the SDK and devices on the host that runs the Orca runtime, including a he
 
 ## Prerequisites
 
-- Android Studio or the Android SDK installed, with `ANDROID_HOME` or `ANDROID_SDK_ROOT`
-  set. Orca also checks the per-OS default location (`%LOCALAPPDATA%\Android\Sdk`,
-  `~/Library/Android/sdk`, `~/Android/Sdk`).
-- `adb` and `emulator` on the SDK path, plus at least one AVD (Android Studio ▸ Device
-  Manager) or a connected device with USB debugging.
+- `adb` from the Android SDK (`ANDROID_HOME`, `ANDROID_SDK_ROOT`, or the per-OS default
+  `%LOCALAPPDATA%\Android\Sdk`, `~/Library/Android/sdk`, `~/Android/Sdk`), or a standalone
+  `adb` on `PATH` such as a distro `android-tools` package.
+- A connected device with USB debugging, or at least one AVD (Android Studio ▸ Device
+  Manager). AVDs need the SDK `emulator` package; without it only running devices are listed.
 - A booted, adb-visible device before any input or capability command. A shutdown AVD is
   listed with `state: shutdown` and must be started first, by `ORCA emulator attach`,
   Android Studio, or `emulator @<avd>`.
@@ -58,7 +58,7 @@ device.
 | Attach / make active | `ORCA emulator attach <avd-name-or-serial> --json`                              | Given an AVD name, boots it first. Makes the device active for the worktree.                                              |
 | Single tap           | `ORCA emulator tap <x> <y> --json`                                              | Normalized 0..1 coordinates.                                                                                              |
 | Swipe / gesture      | `ORCA emulator gesture '<json>' --json`                                         | adb approximates the path by its endpoints, first point to last.                                                          |
-| Type text            | `ORCA emulator type "user@example.com" --json`                                  | US-ASCII, spaces handled, no newlines.                                                                                    |
+| Type text            | `ORCA emulator type "user@example.com" --json`                                  | Any text while attached; without a stream, US-ASCII on one line.                                                          |
 | Hardware button      | `ORCA emulator button back --json`                                              | `home`, `back`, `recents`, `power`, `volume_up`, `volume_down`.                                                           |
 | Rotate               | `ORCA emulator rotate landscape_left --json`                                    | Sets `user_rotation` and disables auto-rotate.                                                                            |
 | Install an APK       | `ORCA emulator install ./app-debug.apk --reinstall --json`                      | `--reinstall` passes `-r`.                                                                                                |
@@ -92,8 +92,11 @@ commands target it. Pass a selector only to override that or reach a second devi
 - All coordinates are normalized 0..1 with a top-left origin, never pixels. Orca scales them
   to the device's live resolution.
 - Prefer `tap` over `gesture` for a single tap.
-- `type` uses `adb shell input text`: US-ASCII only, spaces handled, newlines not. Use the
-  app UI directly for unicode-heavy input.
+- `type` goes over the attached emulator's stream: US keyboard text is typed as keys, and any
+  other text is pasted through the device clipboard (replacing it). Trailing newlines press Enter.
+  Chrome and WebView pages accept such a paste only within about 5 seconds of a tap, so `tap`
+  the field right before typing non-ASCII text there. Without a stream, `type` falls back to
+  `adb shell input text`, which takes US-ASCII on one line only.
 - `gesture` is a straight swipe between the first and last point, so it fits scrolling and
   swiping but not a true multi-touch path.
 - Run `kill` when you are done. A helper left running holds the device until Orca quits.
@@ -115,4 +118,4 @@ ORCA emulator kill --json
 ```
 
 See also: `orca-emulator` for iOS simulators, `orca-cli` for terminals, worktrees, and the
-built-in browser, and `computer-use` for desktop UI outside the emulator.
+built-in browser, and `orca-computer-use` for desktop UI outside the emulator.

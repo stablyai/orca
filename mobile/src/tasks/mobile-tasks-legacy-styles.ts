@@ -1,12 +1,13 @@
-import { mobileTasksChromeStyles } from './mobile-tasks-chrome-styles'
-import { mobileTasksListStyles } from './mobile-tasks-list-styles'
-import { mobileTasksProjectPickerStyles } from './mobile-tasks-project-picker-styles'
-import { mobileTasksDetailStyles } from './mobile-tasks-detail-styles'
-import { mobileTasksWorkspaceReviewStyles } from './mobile-tasks-workspace-review-styles'
-import { mobileTasksDiffCommentStyles } from './mobile-tasks-diff-comment-styles'
-import { mobileTasksComposerActionStyles } from './mobile-tasks-composer-action-styles'
+import { themedStyles } from '../theme/themed-styles'
+import { mobileTasksChromeStyles } from './screen/mobile-tasks-chrome-styles'
+import { mobileTasksListStyles } from './task-list/mobile-tasks-list-styles'
+import { mobileTasksProjectPickerStyles } from './project-board/mobile-tasks-project-picker-styles'
+import { mobileTasksDetailStyles } from './item-detail/mobile-tasks-detail-styles'
+import { mobileTasksWorkspaceReviewStyles } from './workspace-creation/mobile-tasks-workspace-review-styles'
+import { mobileTasksDiffCommentStyles } from './item-detail/mobile-tasks-diff-comment-styles'
+import { mobileTasksComposerActionStyles } from './workspace-creation/mobile-tasks-composer-action-styles'
 
-export const styles = {
+export const styles = themedStyles(() => ({
   ...mobileTasksChromeStyles,
   ...mobileTasksListStyles,
   ...mobileTasksProjectPickerStyles,
@@ -14,7 +15,7 @@ export const styles = {
   ...mobileTasksWorkspaceReviewStyles,
   ...mobileTasksDiffCommentStyles,
   ...mobileTasksComposerActionStyles
-}
+}))
 
 export function getPrSignalToneStyle(tone: 'neutral' | 'success' | 'warning' | 'danger') {
   if (tone === 'success') {

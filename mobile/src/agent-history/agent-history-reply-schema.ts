@@ -1,5 +1,5 @@
-import { z } from 'zod'
-import { salvagedOptional } from '../../../src/shared/zod-salvage'
+import * as z from 'zod'
+import { salvagedOptional, salvagingArray } from '../../../src/shared/validation/zod-salvage'
 
 // Schemas cover history/status and resume metadata from runtime RPC status, ai-vault, repo, folder-workspace and worktree-catalog methods; rows use shared AiVault types.
 
@@ -21,3 +21,8 @@ export const resumeRepoListSchema = z.looseObject({ repos: z.array(z.unknown()) 
 
 // Check enrichment containers only: call-site readAcceptedResumeList degrades unreadable members to empty, but bare string replies otherwise silently resolved targets to unknown.
 export const resumeMetadataListSchema = z.looseObject({})
+
+// Project scope reads only which project each repo belongs to; an unreadable row drops alone.
+export const agentHistoryProjectSetupsSchema = z.looseObject({
+  setups: salvagingArray(z.object({ projectId: z.string(), repoId: z.string(), path: z.string() }))
+})

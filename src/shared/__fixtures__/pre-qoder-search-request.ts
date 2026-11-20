@@ -1,5 +1,5 @@
 // Pre-Qoder b49abdb request parser and closed agent enum; keep independent of the current catalog.
-import { resolveSessionSearchLimit } from '../ai-vault-search-limit'
+import { resolveSessionSearchLimit } from '../ai-vault/search/ai-vault-search-limit'
 import { z } from 'zod'
 export const AI_VAULT_AGENTS = [
   'claude',
@@ -27,7 +27,7 @@ export const AI_VAULT_AGENTS = [
 ] as const
 const AI_VAULT_SCOPE_PATHS_MAX_COUNT = 64
 const AI_VAULT_SEARCH_SORTS = ['relevance', 'newest'] as const
-import { AiVaultSearchScopeIdentitySchema } from '../ai-vault-search-scope'
+import { AiVaultSearchScopeIdentitySchema } from '../ai-vault/search/ai-vault-search-scope'
 
 export const AiVaultSearchFiltersSchema = z.object({
   agents: z.array(z.enum(AI_VAULT_AGENTS)).optional(),

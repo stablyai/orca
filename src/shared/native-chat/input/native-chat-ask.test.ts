@@ -1,11 +1,23 @@
 import { describe, expect, it } from 'vitest'
 import {
+  isPendingNativeChatUserMessage,
+  nativeChatAnswerOperationPending,
+  isDeliveredNativeChatUserMessage
+} from './questions/native-chat-ask-answer'
+import { STRUCTURED_AGENT_SESSION_SUBMISSION_MISSING } from '../../agent-session/requests/structured-agent-session-send-evidence'
+import { projectStructuredAgentSessionMessages } from '../../agent-session/view/structured-agent-session-message-projection'
+import type { StructuredAgentSessionOptimisticMessage } from '../../agent-session/view/structured-agent-session-message-projection'
+import {
   NATIVE_CHAT_INTERRUPTED_STATUS_TEXT,
   type NativeChatBlock,
   type NativeChatMessage
-} from '../../native-chat-types'
-import { extractPendingAsk, parseAskFromStatus, resolveNativeChatAsk } from './native-chat-ask'
-import { nativeChatAskDismissKey } from '../../native-chat-ask-dismiss-key'
+} from '../native-chat-types'
+import {
+  extractPendingAsk,
+  aggregateAsyncQuestions,
+  scanPendingAsks,
+  createPendingAskScanner
+} from './native-chat-ask'
 
 function message(id: string, blocks: NativeChatBlock[]): NativeChatMessage {
   return { id, role: 'assistant', blocks, timestamp: 1, source: 'transcript' }
@@ -43,46 +55,13 @@ const QUESTIONS_INPUT = {
   questions: [{ question: 'Deploy?', options: [{ label: 'Yes' }, { label: 'No' }] }]
 }
 
-describe('nativeChatAskDismissKey', () => {
-  it('uses the full canonical prompt and stays stable across object instances', () => {
-    const first = parseAskFromStatus(JSON.stringify(QUESTIONS_INPUT))
-    const same = parseAskFromStatus(JSON.stringify(QUESTIONS_INPUT))
-    const changed = parseAskFromStatus(
-      JSON.stringify({ questions: [{ question: 'Deploy?', options: [{ label: 'Later' }] }] })
-    )
-
-    expect(nativeChatAskDismissKey(first)).toBe(nativeChatAskDismissKey(same))
-    expect(nativeChatAskDismissKey(first)).not.toBe(nativeChatAskDismissKey(changed))
-    expect(nativeChatAskDismissKey(null)).toBeNull()
-  })
-})
-
 describe('extractPendingAsk', () => {
-  it('recognizes an unregistered tool whose input matches the canonical questions shape', () => {
-    // Match live status’s arbitrary-tool canonical-shape fallback during transcript replay.
-    const pending = extractPendingAsk([message('m1', [call('CustomAskTool', QUESTIONS_INPUT)])])
-    expect(pending?.questions[0]?.question).toBe('Deploy?')
-  })
-
   it('resolves calls FIFO so a sibling result cannot clear a newer pending ask', () => {
     const pending = extractPendingAsk([
       message('m1', [
         call('Bash', { command: 'ls' }),
         call('AskUserQuestion', QUESTIONS_INPUT),
         // FIFO: this result answers the Bash call, not the ask.
-        result()
-      ])
-    ])
-    expect(pending?.questions[0]?.question).toBe('Deploy?')
-  })
-
-  it('keeps the newest ask when an older call receives its result', () => {
-    const first = { questions: [{ question: 'First?', options: [] }] }
-    const pending = extractPendingAsk([
-      message('m1', [
-        call('AskUserQuestion', first),
-        call('AskUserQuestion', QUESTIONS_INPUT),
-        // Resolves the FIRST ask (FIFO); the newer one stays pending.
         result()
       ])
     ])
@@ -100,33 +79,6 @@ describe('extractPendingAsk', () => {
     expect(pending).toBeNull()
   })
 
-  it('drops an ask abandoned by an interrupt', () => {
-    const pending = extractPendingAsk([
-      message('m1', [call('AskUserQuestion', QUESTIONS_INPUT)]),
-      interrupted('m2')
-    ])
-    expect(pending).toBeNull()
-  })
-
-  it('keeps an ask that is still awaiting its result after an earlier interrupt', () => {
-    const pending = extractPendingAsk([
-      message('m1', [call('Bash', { command: 'sleep 999' })]),
-      interrupted('m2'),
-      message('m3', [call('AskUserQuestion', QUESTIONS_INPUT)])
-    ])
-    expect(pending?.questions[0]?.question).toBe('Deploy?')
-  })
-
-  it('drops an ask the user typed past instead of answering', () => {
-    // Escaping a selector and sending a prompt can leave the ask without a result.
-    const pending = extractPendingAsk([
-      message('m1', [call('AskUserQuestion', QUESTIONS_INPUT)]),
-      userTurn('m2', 'never mind, do this instead'),
-      message('m3', [{ type: 'text', text: 'on it' }])
-    ])
-    expect(pending).toBeNull()
-  })
-
   it('does not strand an answered ask behind an orphan left by a plain-text interrupt', () => {
     // Claude can record interrupts as bare user turns without interruptedMessageId/status rows.
     const pending = extractPendingAsk([
@@ -137,94 +89,6 @@ describe('extractPendingAsk', () => {
     ])
     expect(pending).toBeNull()
   })
-
-  it('resolves an ask whose result arrives on its own tool-role turn', () => {
-    const pending = extractPendingAsk([
-      message('m1', [call('AskUserQuestion', QUESTIONS_INPUT)]),
-      toolTurn('m2')
-    ])
-    expect(pending).toBeNull()
-  })
-
-  it('ignores malformed question payloads', () => {
-    expect(
-      extractPendingAsk([
-        message('m1', [
-          call('AskUserQuestion', { questions: [] }),
-          call('AskUserQuestion', { questions: [{}] }),
-          call('AskUserQuestion', 'not-an-object')
-        ])
-      ])
-    ).toBeNull()
-  })
-})
-
-describe('parseAskFromStatus', () => {
-  it('preserves OMP checkbox questions from live status and transcript history', () => {
-    const input = {
-      questions: [
-        { id: 'q1', question: 'Pick', multi: true, options: [{ label: 'A' }, { label: 'B' }] }
-      ]
-    }
-    const prompt = parseAskFromStatus(JSON.stringify(input), 'ask')
-    expect(prompt?.questions[0]?.multiSelect).toBe(true)
-    expect(extractPendingAsk([message('m1', [call('ask', input)])])).toEqual(prompt)
-  })
-
-  it('preserves OpenCode question envelope multiple selection on live status and replay', () => {
-    const input = {
-      id: 'question',
-      sessionID: 'session',
-      questions: [
-        {
-          header: 'Choice',
-          question: 'Pick both?',
-          multiple: true,
-          options: [
-            { label: 'One', description: 'first' },
-            { label: 'Two', description: 'second' }
-          ]
-        }
-      ]
-    }
-    const prompt = parseAskFromStatus(JSON.stringify(input), 'AskUserQuestion')
-    expect(prompt?.questions[0]).toMatchObject({ multiSelect: true, header: 'Choice' })
-    expect(extractPendingAsk([message('m1', [call('question', input)])])).toEqual(prompt)
-  })
-  it('accepts the canonical shape from any tool name and rejects broken JSON', () => {
-    expect(
-      parseAskFromStatus(JSON.stringify(QUESTIONS_INPUT), 'SomeNewTool')?.questions
-    ).toHaveLength(1)
-    expect(parseAskFromStatus('{not json', 'AskUserQuestion')).toBeNull()
-    expect(parseAskFromStatus(null)).toBeNull()
-  })
-
-  it('parses string options into labels', () => {
-    const prompt = parseAskFromStatus(
-      JSON.stringify({ questions: [{ question: 'Pick', options: ['a', 'b'] }] })
-    )
-    expect(prompt?.questions[0]?.options.map((o) => o.label)).toEqual(['a', 'b'])
-  })
-})
-
-describe('resolveNativeChatAsk', () => {
-  const transcript = [message('m1', [call('AskUserQuestion', QUESTIONS_INPUT)])]
-
-  it('withholds transcript state until the read settles', () => {
-    expect(
-      resolveNativeChatAsk({ liveAsk: null, messages: transcript, transcriptSettled: false })
-    ).toBeNull()
-    expect(
-      resolveNativeChatAsk({ liveAsk: null, messages: transcript, transcriptSettled: true })
-    )?.toMatchObject(QUESTIONS_INPUT)
-  })
-
-  it('keeps a live ask authoritative while transcript history is unsettled', () => {
-    const liveAsk = { questions: [{ question: 'Live?', options: [], multiSelect: false }] }
-    expect(resolveNativeChatAsk({ liveAsk, messages: transcript, transcriptSettled: false })).toBe(
-      liveAsk
-    )
-  })
 })
 
 describe('async questions', () => {
@@ -232,29 +96,225 @@ describe('async questions', () => {
     type: 'tool-call',
     name: 'request_user_input_async',
     callId,
-    input: JSON.stringify({ questions: [{ title }] })
+    input: JSON.stringify({ questions: [{ title, options: ['Yes', 'No'] }] })
   })
   const userRow = (id: string, flags: Partial<NativeChatMessage> = {}): NativeChatMessage => ({
     ...message(id, [{ type: 'text', text: 'hi' }]),
     role: 'user',
     ...flags
   })
-  const titles = (messages: NativeChatMessage[]): string[] | undefined =>
-    extractPendingAsk(messages)?.questions.map((question) => question.question)
-
-  it('keeps every unanswered async question, once per call', () => {
-    const first = message('a', [asyncCall('call-a', 'A?'), result()])
-    expect(titles([first, first, message('b', [asyncCall('call-b', 'B?'), result()])])).toEqual([
-      'A?',
-      'B?'
+  it('addresses accepted calls independently of definition, provider IDs and unrelated blocks', () => {
+    const first = message('a', [
+      call('request_user_input_async', { questions: [{ title: 'A?' }, { title: 'B?' }] }),
+      asyncCall('call-c', 'C?'),
+      result()
     ])
+    const scan = scanPendingAsks([first, message('b', [asyncCall('call-c', 'duplicate')])])
+    expect(scan.contributors).toMatchObject([
+      {
+        sourceRowId: 'a',
+        callSlot: 0,
+        timestamp: 1,
+        responseMode: 'message',
+        questions: [{ question: 'A?' }, { question: 'B?' }]
+      },
+      { sourceRowId: 'a', callSlot: 1, questions: [{ question: 'C?' }] }
+    ])
+    expect(scan.contributors).toHaveLength(2)
+    const pending = aggregateAsyncQuestions(scan.contributors, 'host/session/epoch')!
+    const ids = pending.occurrenceIds!
+    expect(new Set(ids).size).toBe(2)
+    expect(
+      aggregateAsyncQuestions(
+        scan.contributors,
+        'host/session/epoch',
+        new Set([ids[0]!])
+      )?.questions.map((q) => q.question)
+    ).toEqual(['C?'])
+    expect(
+      aggregateAsyncQuestions(
+        scan.contributors,
+        'host/session/epoch',
+        new Set([ids[1]!])
+      )?.questions.map((q) => q.question)
+    ).toEqual(['A?', 'B?'])
+    const replay = scanPendingAsks([
+      {
+        ...first,
+        timestamp: null,
+        blocks: [
+          { type: 'text', text: 'prefix' },
+          call('Bash', {}),
+          call('request_user_input_async', { questions: [{ title: 'Edited?' }] }),
+          asyncCall('renumbered', 'C?')
+        ]
+      }
+    ])
+    expect(replay.contributors[0]?.timestamp).toBeNull()
+    expect(
+      aggregateAsyncQuestions(replay.contributors, 'host/session/epoch', new Set(ids))
+    ).toBeNull()
+    scanPendingAsks([message('later', [asyncCall('renumbered', 'A?')])])
+    const repeated = scanPendingAsks([
+      message('a', [call('request_user_input_async', { questions: [{ title: 'A?' }] })]),
+      message('a', [call('request_user_input_async', { questions: [{ title: 'A?' }] })])
+    ])
+    expect(repeated.contributors.map((c) => c.callSlot)).toEqual([0, 1])
   })
 
-  it('stays open until a user message reaches the agent', () => {
-    const asked = message('a', [asyncCall('call-a', 'A?'), result()])
-    expect(titles([asked, userRow('q', { queued: true }), userRow('u', { unsent: true })])).toEqual(
-      ['A?']
-    )
-    expect(extractPendingAsk([asked, userRow('sent')])).toBeNull()
+  it('keeps a surviving sibling addressed when a deduping prefix leaves the loaded window', () => {
+    const prefix = message('P', [asyncCall('A', 'QA')])
+    const row = message('R', [asyncCall('A', 'QA'), asyncCall('B', 'QB')])
+    const before = aggregateAsyncQuestions(scanPendingAsks([prefix, row]).contributors, 'source')!
+    const hidden = new Set([before.occurrenceIds![1]!])
+    const after = aggregateAsyncQuestions(scanPendingAsks([row]).contributors, 'source', hidden)!
+    expect(after.questions.map((q) => q.question)).toEqual(['QA'])
+    expect(after.occurrenceIds).not.toContain(before.occurrenceIds![1])
   })
+
+  it('exposes exactly the existing chronological interrupt without consuming call slots', () => {
+    const prefix = message('R1', [
+      call('Bash', {}),
+      asyncCall('X', 'Q1'),
+      call('AskUserQuestion', QUESTIONS_INPUT)
+    ])
+    const suffix = [
+      message('R2', [asyncCall('X', 'Q2'), result()]),
+      message('R1', [asyncCall('Y', 'Q3'), result()]),
+      message('blocking', [call('AskUserQuestion', QUESTIONS_INPUT), result()])
+    ]
+    const direct = createPendingAskScanner()
+    const emitted = direct.append(prefix)
+    direct.current()
+    expect(direct.current().blocking).not.toBeNull()
+    direct.interrupt()
+    direct.interrupt()
+    expect(direct.current()).toEqual({ blocking: null, contributors: [] })
+    for (const row of suffix) {
+      direct.append(row)
+    }
+    const fromRow = scanPendingAsks([prefix, interrupted('boundary'), ...suffix])
+    expect(fromRow.blocking).toBeNull()
+    expect(fromRow.contributors.map((c) => [c.sourceRowId, c.callSlot])).toEqual([
+      ['R2', 0],
+      ['R1', 1]
+    ])
+    expect(emitted.map((c) => c.questions[0]?.question)).toEqual(['Q1'])
+  })
+
+  it('keeps notice replay and dedupe separate from the blocking and human boundaries', () => {
+    const scanner = createPendingAskScanner()
+    scanner.append(
+      message('asked', [asyncCall('same-call', 'A?'), call('AskUserQuestion', QUESTIONS_INPUT)])
+    )
+    scanner.current()
+    expect(scanner.current().blocking).not.toBeNull()
+    const notice = userRow('notice', {
+      from: { kind: 'agent', senders: [], orchestration: null },
+      blocks: [{ type: 'text', text: 'Blue' }]
+    })
+    expect(isDeliveredNativeChatUserMessage(notice)).toBe(false)
+    scanner.append(notice)
+    expect(scanner.current().blocking).not.toBeNull()
+    expect(scanner.append(message('replay', [asyncCall('same-call', 'duplicate')]))).toEqual([])
+    scanner.append({ ...notice, id: 'legacy-human', from: undefined })
+    expect(scanner.current().contributors).toEqual([])
+    expect(scanner.append(message('new', [asyncCall('same-call', 'new question')]))).toHaveLength(1)
+  })
+
+  it('uses write index when a held answer and a newer question share a journal sequence', () => {
+    const first = {
+      ...message('first', [asyncCall('first', 'A?')]),
+      journalPosition: { sequence: 1, index: 0 }
+    }
+    const later = {
+      ...message('later', [asyncCall('later', 'A?')]),
+      journalPosition: { sequence: 2, index: 1 }
+    }
+    const held = userRow('answer', {
+      deliveryState: 'pending',
+      queuedMessageId: 'queue',
+      journalPosition: { sequence: 2, index: 0 },
+      blocks: [{ type: 'text', text: '> A?\n\nYes' }]
+    })
+    const result = scanPendingAsks([first, later, held])
+    expect(result.contributors.map((row) => row.sourceRowId)).toEqual(['later'])
+    expect(result.answerPending).toBeUndefined()
+  })
+
+  it('leaves questions available for unacknowledged composer previews, including revised existing rows', () => {
+    const first = {
+      ...message('first', [asyncCall('first', 'A?')]),
+      journalPosition: { sequence: 1, index: 0 }
+    }
+    const revised = {
+      ...message('revised', [asyncCall('revised', 'A?')]),
+      journalPosition: { sequence: 2, index: 0 }
+    }
+    const preview = userRow('preview', {
+      deliveryState: 'unknown',
+      queuedMessageId: 'queue',
+      blocks: [{ type: 'text', text: '> A?\n\nYes' }]
+    })
+    const scan = scanPendingAsks([first, revised, preview])
+    expect(scan.contributors.map((row) => row.sourceRowId)).toEqual(['first', 'revised'])
+    expect(scan.answerPending).toBeUndefined()
+    expect(
+      scanPendingAsks([
+        first,
+        revised,
+        { ...preview, deliveryState: 'pending', journalPosition: { sequence: 3, index: 0 } }
+      ]).contributors
+    ).toEqual([])
+  })
+})
+
+it('separates real operation and host evidence from echo placement', () => {
+  const echo: StructuredAgentSessionOptimisticMessage = {
+    clientMessageId: 'answer',
+    queuedAt: 1,
+    body: { kind: 'message', role: 'user', blocks: [] }
+  }
+  const operation = { clientMessageId: 'answer', inFlight: true }
+  const project = (entry = echo) => projectStructuredAgentSessionMessages([], [entry], [])
+  const positioned = { ...echo, afterSequence: 2 }
+  for (const entry of [echo, positioned]) {
+    const rows = project(entry)
+    expect(rows[0]?.deliveryState).toBe('unknown')
+    expect(nativeChatAnswerOperationPending(operation, rows)).toBe(true)
+    expect(nativeChatAnswerOperationPending({ ...operation, inFlight: false }, rows)).toBe(false)
+    expect(isDeliveredNativeChatUserMessage(rows[0]!)).toBe(false)
+  }
+  const missing = {
+    clientMessageId: 'answer',
+    fence: 1,
+    payloadFingerprint: 'answer',
+    dispatchState: 'unknown',
+    reason: STRUCTURED_AGENT_SESSION_SUBMISSION_MISSING,
+    providerItemId: null,
+    submittedAt: 1,
+    resolvedAt: null
+  } as const
+  const rows = projectStructuredAgentSessionMessages([], [positioned], [missing])
+  expect(rows[0]?.deliveryState).toBe('unknown')
+  expect(nativeChatAnswerOperationPending(operation, rows, [missing])).toBe(true)
+  const pending = { ...missing, dispatchState: 'pending', reason: null } as const
+  expect(nativeChatAnswerOperationPending({ ...operation, inFlight: false }, [], [pending])).toBe(
+    true
+  )
+  const acknowledged = projectStructuredAgentSessionMessages(
+    [],
+    [{ ...echo, phase: 'recorded' }],
+    [missing]
+  )
+  expect(acknowledged[0]?.deliveryState).toBe('pending')
+  expect(isPendingNativeChatUserMessage(acknowledged[0]!)).toBe(true)
+  expect(
+    nativeChatAnswerOperationPending({ ...operation, inFlight: false }, acknowledged, [missing])
+  ).toBe(true)
+  expect(
+    nativeChatAnswerOperationPending(operation, acknowledged, [
+      { ...pending, dispatchState: 'unknown' }
+    ])
+  ).toBe(false)
 })

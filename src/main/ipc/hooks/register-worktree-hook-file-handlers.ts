@@ -1,12 +1,19 @@
-import { getLocalProjectWorktreeGitOptions } from '../../project-runtime-git-options'
+import { getLocalProjectWorktreeGitOptions } from '../../workspaces/execution-host/project-runtime-git-options'
 import { ipcMain } from 'electron'
-import { getRepoDialableSshTargetId, type ExecutionHostId } from '../../../shared/execution-host'
-import { isFolderRepo } from '../../../shared/repo-kind'
-import { joinWorktreeRelativePath } from '../../runtime/runtime-relative-paths'
-import { readIssueCommand, writeIssueCommand } from '../../issue-command-file'
+import {
+  getRepoDialableSshTargetId,
+  type ExecutionHostId
+} from '../../../shared/execution-host/execution-host'
+import { isFolderRepo } from '../../../shared/repository/repo-kind'
+import { joinWorktreeRelativePath } from '../../runtime/files/paths/runtime-relative-paths'
+import {
+  readIssueCommandUnlessWslStopped,
+  writeIssueCommandUnlessWslStopped
+} from '../../workspace-hooks/issue-command-file'
+import { broadcastWhenWslDistroRunning } from '../preflight/preflight-wsl-refusal-retry'
 import { resolveRepoForExecutionHost } from '../worktrees/repo-host-ownership'
 import type { WorktreeIpcContext } from '../worktrees/worktree-ipc-context'
-import { assertWslMoveRepoWritable } from '../../persistence/moving-wsl-projects/wsl-move-scope-guard'
+import { assertWslMoveRepoWritable } from '../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
 
 /** Route private command overrides to the owning host without changing shared hook settings. */
 export function registerWorktreeHookFileHandlers(context: WorktreeIpcContext): void {
@@ -14,7 +21,7 @@ export function registerWorktreeHookFileHandlers(context: WorktreeIpcContext): v
 
   ipcMain.handle(
     'hooks:readIssueCommand',
-    async (_event, args: { repoId: string; hostId?: ExecutionHostId }) => {
+    async (_event, args: { repoId: string; hostId?: ExecutionHostId; wakeWslDistro?: boolean }) => {
       const repo = resolveRepoForExecutionHost(store, args.repoId, args.hostId)
       if (!repo || isFolderRepo(repo)) {
         return {
@@ -37,13 +44,25 @@ export function registerWorktreeHookFileHandlers(context: WorktreeIpcContext): v
           source: 'none' as const
         }
       }
-      return readIssueCommand(repo.path)
+      // Settings renders read this; only a launch (`wakeWslDistro`) may start a stopped distro.
+      const result = await readIssueCommandUnlessWslStopped(repo.path, {
+        wakeWslDistro: args.wakeWslDistro,
+        gitOptions: () => getLocalProjectWorktreeGitOptions(store, repo)
+      })
+      if (result.refusedWslDistro) {
+        // The Settings editor re-reads on this signal instead of staying read-only (#35778's pattern).
+        broadcastWhenWslDistroRunning(result.refusedWslDistro, `issue-command:${repo.id}`)
+      }
+      return result
     }
   )
 
   ipcMain.handle(
     'hooks:writeIssueCommand',
-    async (_event, args: { repoId: string; content: string; hostId?: ExecutionHostId }) => {
+    async (
+      _event,
+      args: { repoId: string; content: string; hostId?: ExecutionHostId; wakeWslDistro?: boolean }
+    ) => {
       const repo = resolveRepoForExecutionHost(store, args.repoId, args.hostId)
       if (!repo || isFolderRepo(repo)) {
         return
@@ -52,8 +71,11 @@ export function registerWorktreeHookFileHandlers(context: WorktreeIpcContext): v
       if (getRepoDialableSshTargetId(repo)) {
         throw new Error('Remote filesystem unavailable. Reconnect the SSH target before retrying.')
       }
-      await writeIssueCommand(repo.path, args.content, () =>
-        getLocalProjectWorktreeGitOptions(store, repo)
+      await writeIssueCommandUnlessWslStopped(
+        repo.path,
+        args.content,
+        () => getLocalProjectWorktreeGitOptions(store, repo),
+        { wakeWslDistro: args.wakeWslDistro }
       )
     }
   )

@@ -3,6 +3,7 @@ import { vi } from 'vitest'
 vi.mock('react-native', async () => {
   const React = await import('react')
   return {
+    ...(await import('../../test-support/react-native-motion-stub')).reactNativeMotionStub(),
     ActivityIndicator: 'ActivityIndicator',
     Image: 'Image',
     Platform: { OS: 'ios' },
@@ -27,8 +28,14 @@ vi.mock('react-native-gesture-handler', () => {
     runOnJS: () => GestureChain
     onStart: () => GestureChain
     onUpdate: () => GestureChain
+    onFinalize: () => GestureChain
   }
-  const chain: GestureChain = { runOnJS: () => chain, onStart: () => chain, onUpdate: () => chain }
+  const chain: GestureChain = {
+    runOnJS: () => chain,
+    onStart: () => chain,
+    onUpdate: () => chain,
+    onFinalize: () => chain
+  }
   return {
     Gesture: { Simultaneous: () => ({}), Native: () => ({}), Pinch: () => chain },
     GestureDetector: 'GestureDetector',
@@ -40,6 +47,8 @@ vi.mock('lucide-react-native', () =>
     [
       'ArrowDown',
       'ArrowUp',
+      'ListEnd',
+      'CornerDownRight',
       'ChevronDown',
       'ChevronUp',
       'ChevronsDownUp',
@@ -51,29 +60,56 @@ vi.mock('lucide-react-native', () =>
       'Square',
       'X',
       'Check',
-      'CircleHelp'
+      'CircleHelp',
+      // The automation mark's icon table is read when its module loads.
+      'Clock',
+      'Hourglass',
+      'Play',
+      'Webhook',
+      'Zap'
     ].map((x) => [x, x])
   )
 )
-vi.mock('../native-chat/transcript/MobileNativeChatMessage', () => ({
+vi.mock('../native-chat/transcript/messages/MobileNativeChatMessage', () => ({
   MobileNativeChatMessage: 'ChatMessage'
 }))
-vi.mock('../native-chat/transcript/MobileNativeChatRowOverlaysHost', () => ({
+vi.mock('../native-chat/transcript/message-actions/MobileNativeChatRowOverlaysHost', () => ({
   MobileNativeChatRowOverlaysHost: 'View'
 }))
 vi.mock('../native-chat/visual/MobileNativeChatVisual', () => ({
   useMobileNativeChatVisualRenderer: () => null
 }))
-vi.mock('../../platform/use-reduced-motion', () => ({ useReducedMotionEnabled: () => null }))
-vi.mock('../native-chat/transcript/MobileNativeChatLiveLine', () => ({
+vi.mock('../../platform/accessibility/use-reduced-motion', () => ({
+  useReducedMotionEnabled: () => null
+}))
+vi.mock('../native-chat/transcript/messages/MobileNativeChatLiveLine', () => ({
   MobileNativeChatLiveLine: 'LiveStatus'
 }))
-vi.mock('../native-chat/input/MobileNativeChatAsk', () => ({ MobileNativeChatAsk: 'ChatAsk' }))
-vi.mock('../native-chat/input/MobileNativeChatSessionOptionPickers', () => ({
+vi.mock('../native-chat/input/prompts/MobileNativeChatAsk', () => ({
+  MobileNativeChatAsk: 'ChatAsk'
+}))
+vi.mock('../native-chat/input/session-options/MobileNativeChatSessionOptionPickers', () => ({
   MobileNativeChatSessionOptionPickers: 'SessionOptions'
 }))
-vi.mock('../native-chat/composer/MobileNativeChatComposerMenu', () => ({
-  MobileNativeChatComposerMenu: 'Suggestions'
+vi.mock('../native-chat/mcp/MobileNativeChatMcpTray', () => ({
+  MobileNativeChatMcpTray: 'McpTray'
 }))
-vi.mock('../../components/ActionSheetModal', () => ({ ActionSheetModal: 'ActionSheetModal' }))
-vi.mock('../../components/MobileMarkdown', () => ({ MobileMarkdown: 'Markdown' }))
+vi.mock('../native-chat/usage/MobileNativeChatAccountUsageSheet', () => ({
+  MobileNativeChatAccountUsageSheet: 'AccountUsageSheet'
+}))
+vi.mock('../native-chat/composer/menus/MobileNativeChatComposerMenu', () => ({
+  MobileNativeChatComposerSuggestions: 'Suggestions'
+}))
+vi.mock('../../components/sheets/ActionSheetModal', () => ({
+  ActionSheetModal: 'ActionSheetModal'
+}))
+vi.mock('../../components/reorder/DragReorderList', () => ({ DragReorderList: 'DragReorderList' }))
+vi.mock('react-native-reanimated', async () => {
+  const { useRef } = await import('react')
+  return {
+    default: { ScrollView: 'ScrollView' },
+    useAnimatedRef: () => useRef(null),
+    useSharedValue: (value: unknown) => useRef({ value }).current
+  }
+})
+vi.mock('../../components/markdown/MobileMarkdown', () => ({ MobileMarkdown: 'Markdown' }))

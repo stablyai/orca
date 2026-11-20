@@ -1,7 +1,9 @@
-import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
-import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
+import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc/rpc-operation'
+import { rpcResultVariant } from '../transport/rpc/rpc-operation-result-reader'
+import { connectionHostStatusRead } from '../query/host-status-query'
 import {
   agentHistoryHostStatusSchema,
+  agentHistoryProjectSetupsSchema,
   agentHistorySessionScanSchema,
   resumeMetadataListSchema,
   resumeRepoListSchema
@@ -10,13 +12,30 @@ import {
 // History capability/scan reads run on open; resume workspace metadata waits for explicit user intent.
 
 // Keep status capability family separate from Tasks hydration: both raise host message via same reader, but fail different screen/barrier states.
-export const agentHistoryHostStatusRead = bindDeferredRpcOperation(
+const agentHistoryHostStatus = bindDeferredRpcOperation(
   defineRpcOperation({
     name: 'status.agent-history',
     method: 'status.get',
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
     read: rpcResultVariant('host-status', agentHistoryHostStatusSchema)
+  })
+)
+
+// The screen's aiVault capability is fixed for the desktop process's life, so the connection's status answers it.
+export const agentHistoryCapabilityRead = connectionHostStatusRead(agentHistoryHostStatus)
+
+// Live: resume quotes for the desktop's Windows shell setting, which can change while connected.
+export const agentHistoryHostStatusRead = connectionHostStatusRead(agentHistoryHostStatus, 'live')
+
+// Best-effort: a host that can't list setups leaves Project scoped to the active repo.
+export const agentHistoryProjectSetupsRead = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'projectHostSetup.agent-history-project-scope-or-skip',
+    method: 'projectHostSetup.list',
+    acceptance: 'success-result-or-skip',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('agent-history-project-setups', agentHistoryProjectSetupsSchema)
   })
 )
 

@@ -1,20 +1,35 @@
-import { Suspense, useRef } from 'react'
-import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
-import { translate } from '@/i18n/i18n'
-import Sidebar from '../components/Sidebar'
-import RightSidebar from '../components/right-sidebar'
+import { memo, Suspense, useCallback, useRef } from 'react'
+import { lazyWithRetry as lazy } from '@/app-shell/startup/lazy-with-retry'
+import { useTranslate } from '@/i18n/use-translate'
+import { useAppStore } from '@/store/index'
+import { usePluginViewCaptureStore } from '@/store/plugins/capture/plugin-view-capture'
+import { useBotShareReceiveRequest } from '@/components/bots/sharing/bot-share-receive-open'
+import { useHandToBotRequest } from '@/components/bots/hand-to-bot/hand-to-bot-open'
+import { pendingCreationOpensNativeChat } from '@/lib/workspace/creation/pending-worktree-creation'
+import { showsFloatingRightSidebarToggle } from '@/components/right-sidebar/visibility/right-sidebar-visibility'
+import Sidebar from '../components/sidebar/index'
+import { AppRail } from '../components/app-rail/AppRail'
+import RightSidebar from '../components/right-sidebar/RightSidebar'
 import { RecoverableRenderErrorBoundary } from '../components/error-boundaries/RecoverableRenderErrorBoundary'
-import { FloatingTerminalToggleButton } from '../components/floating-terminal/FloatingTerminalToggleButton'
-import { TerminalWorkbenchContainer } from '../components/TerminalWorkbenchContainer'
-import type { VirtualizedScrollAnchor } from '../hooks/useVirtualizedScrollAnchor'
-import { TitlebarLeftControls } from './TitlebarLeftControls'
-import { RightSidebarToggle, TitlebarMainStrip } from './TitlebarMainStrip'
-import type { AppChromeLayout } from './use-app-chrome-layout'
-import type { FloatingWorkspacePanelState } from './use-floating-workspace-panel'
+import { FloatingTerminalToggleButton } from '../components/floating-terminal/trigger/FloatingTerminalToggleButton'
+import { TerminalWorkbenchContainer } from '../components/terminal/workbench/TerminalWorkbenchContainer'
+import type { VirtualizedScrollAnchor } from '../lib/list-interaction/virtualized-scrolling/useVirtualizedScrollAnchor'
+import { TitlebarLeftControls } from './chrome/TitlebarLeftControls'
+import { AppShellLeftColumn } from './chrome/AppShellLeftColumn'
+import { RightSidebarToggle } from './chrome/RightSidebarToggle'
+import { TitlebarMainStrip } from './chrome/TitlebarMainStrip'
+import type { AppChromeLayout } from './chrome/use-app-chrome-layout'
+import type { FloatingWorkspacePanelState } from '../components/floating-terminal/workspace/use-floating-workspace-panel'
 
-const Landing = lazy(() => import('../components/Landing'))
+// Skips the shell render each workspace switch causes; its props only change on toggle.
+const MemoFloatingTerminalToggleButton = memo(FloatingTerminalToggleButton)
+
+const Landing = lazy(() => import('../components/onboarding/landing/Landing'))
 const WorktreeCreationPanel = lazy(
   () => import('../components/worktree-creation/WorktreeCreationPanel')
+)
+const PendingNativeChatCreation = lazy(
+  () => import('../components/worktree-creation/PendingNativeChatCreation')
 )
 const TaskPage = lazy(() => import('../components/task-page/TaskPage'))
 const AutomationsPage = lazy(() => import('../components/automations/AutomationsPage'))
@@ -24,7 +39,23 @@ const SkillsPage = lazy(() => import('../components/skills/SkillsPage'))
 const ArtifactsPage = lazy(() => import('../components/artifacts/ArtifactsPage'))
 const WorkspaceSpacePage = lazy(() => import('../components/workspace-space/WorkspaceSpacePage'))
 const MobilePage = lazy(() => import('../components/mobile/MobilePage'))
-const Terminal = lazy(() => import('../components/Terminal'))
+const HandToBotFlow = lazy(() =>
+  import('../components/bots/hand-to-bot/HandToBotFlow').then((module) => ({
+    default: module.HandToBotFlow
+  }))
+)
+const BotTemplatesDialog = lazy(() => import('../components/bots/templates/BotTemplatesDialog'))
+const BotShareReceiveFlow = lazy(() =>
+  import('../components/bots/sharing/BotShareReceiveFlow').then((module) => ({
+    default: module.BotShareReceiveFlow
+  }))
+)
+const GitHubInstallMount = lazy(() =>
+  import('../components/bots/github/GitHubInstallMount').then((module) => ({
+    default: module.GitHubInstallMount
+  }))
+)
+const Terminal = lazy(() => import('../components/terminal/workbench/Terminal'))
 
 type WorktreeSidebarScrollRefs = {
   scrollOffsetRef: React.MutableRefObject<number>
@@ -38,19 +69,20 @@ function WorktreeSidebar({
   layout: AppChromeLayout
   scrollRefs: WorktreeSidebarScrollRefs
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <RecoverableRenderErrorBoundary
       boundaryId="sidebar.worktrees"
       surface="sidebar"
       resetKey={layout.activeView}
-      title={translate('auto.App.1468601e7b', 'The workspace list hit an error.')}
+      title={t('auto.App.1468601e7b', 'The workspace list hit an error.')}
       description={
         layout.leftTitlebarChromeLayout.shouldMount
-          ? translate(
+          ? t(
               'auto.App.bdc71dddc9',
               'The active workspace remains open. Retry the list or switch views.'
             )
-          : translate(
+          : t(
               'auto.App.cba0fafda5',
               'The active page remains open. Retry the list or switch views.'
             )
@@ -64,8 +96,47 @@ function WorktreeSidebar({
   )
 }
 
+// A chat-bound creation shows the chat itself, usable before its worktree exists.
+function PendingCreationSurface(props: {
+  creationId: string
+  reserveCollapsedSidebarHeaderSpace: boolean
+}): React.JSX.Element {
+  const opensChat = useAppStore((s) => {
+    const entry = s.pendingWorktreeCreations[props.creationId]
+    return entry ? pendingCreationOpensNativeChat(entry) : false
+  })
+  return opensChat ? <PendingNativeChatCreation {...props} /> : <WorktreeCreationPanel {...props} />
+}
+
+function BotShareReceiveMount(): React.JSX.Element | null {
+  const request = useBotShareReceiveRequest()
+  return request ? (
+    <Suspense fallback={null}>
+      <BotShareReceiveFlow key={request.key} request={request} />
+    </Suspense>
+  ) : null
+}
+
+function BotTemplatesMount(): React.JSX.Element | null {
+  const open = useAppStore((s) => s.activeModal === 'bot-templates')
+  return open ? (
+    <Suspense fallback={null}>
+      <BotTemplatesDialog />
+    </Suspense>
+  ) : null
+}
+
+function HandToBotMount(): React.JSX.Element | null {
+  const request = useHandToBotRequest()
+  return request ? (
+    <Suspense fallback={null}>
+      <HandToBotFlow key={request.key} request={request} />
+    </Suspense>
+  ) : null
+}
+
 function ActivePage({ layout }: { layout: AppChromeLayout }): React.JSX.Element {
-  const { activeView, activeWorktreeId, activePendingCreationId, creationLayoutActive } = layout
+  const { activeView, hasActiveWorktree, activePendingCreationId, creationLayoutActive } = layout
   return (
     <>
       {activeView === 'settings' ? <Settings /> : null}
@@ -76,13 +147,21 @@ function ActivePage({ layout }: { layout: AppChromeLayout }): React.JSX.Element 
       {activeView === 'activity' ? <ActivityPrototypePage /> : null}
       {activeView === 'space' ? <WorkspaceSpacePage /> : null}
       {activeView === 'mobile' ? <MobilePage /> : null}
+      <BotShareReceiveMount />
+      <BotTemplatesMount />
+      <HandToBotMount />
+      <Suspense fallback={null}>
+        <GitHubInstallMount />
+      </Suspense>
       {activeView === 'terminal' && creationLayoutActive && activePendingCreationId ? (
-        <WorktreeCreationPanel
+        <PendingCreationSurface
           creationId={activePendingCreationId}
           reserveCollapsedSidebarHeaderSpace={layout.leftTitlebarChromeLayout.isFloating}
         />
       ) : null}
-      {activeView === 'terminal' && !activeWorktreeId && !creationLayoutActive ? <Landing /> : null}
+      {activeView === 'terminal' && !hasActiveWorktree && !creationLayoutActive ? (
+        <Landing />
+      ) : null}
     </>
   )
 }
@@ -91,6 +170,7 @@ export function AppWorkspaceShell(props: {
   layout: AppChromeLayout
   floatingWorkspace: FloatingWorkspacePanelState
 }): React.JSX.Element {
+  const t = useTranslate()
   const { layout, floatingWorkspace } = props
   const titlebarLeftControls = <TitlebarLeftControls layout={layout} />
   const titlebarMainStrip = <TitlebarMainStrip layout={layout} />
@@ -98,6 +178,13 @@ export function AppWorkspaceShell(props: {
   const scrollOffsetRef = useRef(0)
   const scrollAnchorRef = useRef<VirtualizedScrollAnchor>(null)
   const sidebarScrollRefs = { scrollOffsetRef, scrollAnchorRef }
+  const { setOpenWithFocus } = floatingWorkspace
+  // `orca plugin shot` captures the right sidebar, which the parked launcher floats over.
+  const capturingPluginShot = usePluginViewCaptureStore((s) => s.capturing)
+  const toggleFloatingWorkspace = useCallback(
+    () => setOpenWithFocus((open) => !open),
+    [setOpenWithFocus]
+  )
 
   return (
     // Avoid active-worktree reset keys that remount whole surfaces during wake.
@@ -105,8 +192,8 @@ export function AppWorkspaceShell(props: {
       boundaryId="app.workspace-shell"
       surface="workspace-shell"
       resetKey={layout.activeView}
-      title={translate('auto.App.df1d56bf87', 'The workspace shell hit an error.')}
-      description={translate(
+      title={t('auto.App.df1d56bf87', 'The workspace shell hit an error.')}
+      description={t(
         'auto.App.8504ddf267',
         'The app is still running. Retry the shell or use the menu to report the crash details.'
       )}
@@ -122,37 +209,17 @@ export function AppWorkspaceShell(props: {
             </div>
           ) : null}
           <div className="flex flex-row flex-1 min-h-0 overflow-hidden">
-            {layout.showSidebar ? (
-              layout.leftTitlebarChromeLayout.shouldMount ? (
-                /* Remove the collapsed header from flex layout so panes reclaim the left edge. */
-                <div
-                  className={`flex min-h-0 flex-col shrink-0${layout.sidebarOpen ? '' : ' relative w-0 overflow-visible'}`}
-                >
-                  <div
-                    // The floating header covers the center border; restore the seam and size to its own controls.
-                    className={`titlebar-left${
-                      layout.leftTitlebarChromeLayout.isFloating
-                        ? ' titlebar-left-floating absolute top-0 left-0 z-10 w-max border-r border-border'
-                        : ''
-                    }`}
-                    style={{
-                      // Why: custom sidebar appearances are scoped to the sidebar root; mirror those vars onto the header in the same left-column panel.
-                      ...(layout.sidebarOpen ? layout.leftSidebarStyle : undefined),
-                      // Why: size from the wrapper's live width so the header tracks in-flight drag resizes (persisted to Zustand only on mouseup).
-                      width: layout.sidebarOpen ? '100%' : undefined
-                    }}
-                  >
-                    {titlebarLeftControls}
-                  </div>
-                  {/* Keep a shrinkable flex viewport below the fixed header so the sidebar can scroll. */}
-                  <div className="flex min-h-0 flex-1">
-                    <WorktreeSidebar layout={layout} scrollRefs={sidebarScrollRefs} />
-                  </div>
-                </div>
-              ) : (
-                <WorktreeSidebar layout={layout} scrollRefs={sidebarScrollRefs} />
-              )
-            ) : null}
+            <AppShellLeftColumn
+              layout={layout}
+              titlebarLeftControls={titlebarLeftControls}
+              rail={
+                <AppRail
+                  listVisible={layout.showSidebar && layout.sidebarOpen}
+                  style={layout.leftSidebarStyle}
+                />
+              }
+              list={<WorktreeSidebar layout={layout} scrollRefs={sidebarScrollRefs} />}
+            />
             <div className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden">
               {/* Automations/artifacts own their headers; another titlebar would leave an empty stripe. */}
               {layout.stackedSidebarOpen &&
@@ -162,9 +229,9 @@ export function AppWorkspaceShell(props: {
               ) : null}
               <div className="relative flex flex-1 min-w-0 min-h-0 overflow-hidden">
                 {/* Match the open sidebar header’s alignment to prevent toggle jitter. */}
-                {layout.workspaceChromeActive && !layout.rightSidebarOpen && (
+                {showsFloatingRightSidebarToggle(layout) && (
                   <div
-                    className="absolute top-0 z-10 flex items-center h-[36px]"
+                    className="absolute top-0 z-10 flex h-(--app-header-height) items-center"
                     style={
                       {
                         // Why: --window-controls-width keeps the toggle clear of the fixed window-controls overlay (138px on custom chrome, 0px otherwise); no internal spacer — one would cover the pane-actions Ellipsis button with an unclickable div.
@@ -173,7 +240,7 @@ export function AppWorkspaceShell(props: {
                       } as React.CSSProperties
                     }
                   >
-                    {layout.showRightSidebarControls ? <RightSidebarToggle /> : null}
+                    <RightSidebarToggle />
                   </div>
                 )}
                 <div className="flex flex-1 min-w-0 min-h-0 flex-col">
@@ -184,11 +251,8 @@ export function AppWorkspaceShell(props: {
                           boundaryId="terminal.workbench"
                           surface="terminal-workbench"
                           resetKey="terminal"
-                          title={translate(
-                            'auto.App.5a9519aef0',
-                            'The workspace workbench hit an error.'
-                          )}
-                          description={translate(
+                          title={t('auto.App.5a9519aef0', 'The workspace workbench hit an error.')}
+                          description={t(
                             'auto.App.98d4ea2823',
                             'Terminal, browser, or editor rendering failed in this workspace. Retry to remount it.'
                           )}
@@ -203,8 +267,8 @@ export function AppWorkspaceShell(props: {
                       boundaryId={`page.${layout.activeView}`}
                       surface="page"
                       resetKey={layout.activeView}
-                      title={translate('auto.App.b7a714db1e', 'This page hit an error.')}
-                      description={translate(
+                      title={t('auto.App.b7a714db1e', 'This page hit an error.')}
+                      description={t(
                         'auto.App.03a14f6b5b',
                         'Retry the page or navigate to another Orca surface.'
                       )}
@@ -213,10 +277,10 @@ export function AppWorkspaceShell(props: {
                     </RecoverableRenderErrorBoundary>
                   </Suspense>
                 </div>
-                {floatingWorkspace.showToggleButton ? (
-                  <FloatingTerminalToggleButton
+                {floatingWorkspace.showToggleButton && !capturingPluginShot ? (
+                  <MemoFloatingTerminalToggleButton
                     open={floatingWorkspace.open}
-                    onToggle={() => floatingWorkspace.setOpenWithFocus((open) => !open)}
+                    onToggle={toggleFloatingWorkspace}
                   />
                 ) : null}
               </div>
@@ -233,8 +297,8 @@ export function AppWorkspaceShell(props: {
                 ? `${layout.rightSidebarTab}:${layout.rightSidebarExplorerView}`
                 : layout.rightSidebarTab
             }
-            title={translate('auto.App.ed6b168d00', 'The right sidebar hit an error.')}
-            description={translate(
+            title={t('auto.App.ed6b168d00', 'The right sidebar hit an error.')}
+            description={t(
               'auto.App.8d1e160ed1',
               'Retry the sidebar or switch tabs to reload this surface.'
             )}

@@ -1731,6 +1731,6 @@
     "baseline/src/shared/native-chat-tool-fold.ts": "9390ea63c8948a705da09e25366e72dc0087a331aa2a04d6571c61478d1d2543",
     "src/shared/native-chat-tool-fold.ts": "3d75ee82c5c09bc796caef4d5127d55b3d291c03d3090f10a204622188aaba4a",
     "src/shared/native-chat-tool-pairs.ts": "6be4c6ac899c275362658ac69478cd3b71dec97b0cd59520f71eb5e1dfc093b4",
-    "config/scripts/native-chat-tool-pairing-benchmark.mjs": "fa529dfb83db216bff9121240dccc7a8c7a1f5a88fb4c25e8a7c2abe8d65f062"
+    "config/scripts/performance/native-chat/native-chat-tool-pairing-benchmark.mjs": "fa529dfb83db216bff9121240dccc7a8c7a1f5a88fb4c25e8a7c2abe8d65f062"
   }
 }

@@ -1,0 +1,16 @@
+import { AGENT_SESSION_RESTART_CONTINUE_TIMEOUT_MS } from '../../../../../shared/agent-session/lifecycle/resume/agent-session-restart-continue-timeout'
+import { AGENT_SESSION_CONVERSATION_COMMAND_TIMEOUT_MS } from '../../../../../shared/agent-session/conversation-context/agent-session-conversation-command'
+
+export const STRUCTURED_AGENT_SESSION_METHOD_TIMEOUT_MS: ReadonlyMap<string, number> = new Map([
+  ['agentSession.conversationCommand', AGENT_SESSION_CONVERSATION_COMMAND_TIMEOUT_MS],
+  // The host may start an agent at rest before rewinding it, as it does for a command.
+  ['agentSession.rewind', 195_000],
+  // Waiting model catalogs can take Claude’s 60s listing plus 15s account switch and 5s login environment.
+  ['agentSession.modelCatalog', 90_000],
+  ['agentSession.sleepWorkspace', 120_000],
+  // A cold Codex read or a Claude sign-in finish (exchange, reconnect, re-read) can run long.
+  ['agentSession.mcp', 90_000],
+  ['agentSession.restartContinue', AGENT_SESSION_RESTART_CONTINUE_TIMEOUT_MS],
+  // The host's own launch continuation runs the same starts before it answers.
+  ['agentSession.restartLaunchSettled', AGENT_SESSION_RESTART_CONTINUE_TIMEOUT_MS]
+])

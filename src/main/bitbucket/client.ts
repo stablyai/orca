@@ -1,6 +1,10 @@
-import type { CheckStatus } from '../../shared/github/pull-request-types'
+import type {
+  CheckStatus,
+  ProviderCheckSummary
+} from '../../shared/github/pull-requests/pull-request-types'
 import {
   deriveBitbucketBuildStatus,
+  summarizeBitbucketBuildStatuses,
   mapBitbucketPullRequest,
   mapBitbucketPullRequestState,
   type BitbucketPullRequestInfo,
@@ -18,9 +22,8 @@ import { authHeaders, getEnvAuthConfig, hasAuth } from './bitbucket-auth-config'
 import { accountNameFromUser, fetchBitbucketUserResult } from './user-request'
 import {
   getStoredBitbucketCredentialError,
-  getStoredBitbucketMetadata,
   hasStoredBitbucketCredential,
-  loadStoredBitbucketSecret
+  loadStoredBitbucketCredential
 } from './credential-store'
 import { resolveBitbucketAuthConfig, storedAuthConfig } from './resolve-auth'
 
@@ -71,7 +74,7 @@ async function requestJson<T>(
   // A stale linked PR may 404 while the branch still has a review.
   notFoundIsNull = false
 ): Promise<T | null> {
-  const config = resolveBitbucketAuthConfig()
+  const config = await resolveBitbucketAuthConfig()
   // Anonymous private-repo 404s must not be mistaken for an absent PR.
   if (!hasAuth(config)) {
     if (throwOnFailure) {
@@ -121,15 +124,24 @@ function allStateFilter(): string {
 async function getBuildStatus(
   repo: BitbucketRepoRef,
   headSha: string | undefined
-): Promise<CheckStatus> {
+): Promise<{
+  status: CheckStatus
+  checksSummary?: ProviderCheckSummary
+}> {
   if (!headSha) {
-    return 'neutral'
+    return { status: 'neutral' }
   }
-  const data = await requestJson<{ values?: RawBitbucketBuildStatus[] }>(
-    `/repositories/${encodedRepoPath(repo)}/commit/${encodeURIComponent(headSha)}/statuses/build`,
+  const data = await requestJson<{ values?: RawBitbucketBuildStatus[]; next?: string }>(
+    `/repositories/${encodedRepoPath(repo)}/commit/${encodeURIComponent(headSha)}/statuses`,
     { searchParams: { pagelen: '100' } }
   )
-  return deriveBitbucketBuildStatus(data?.values ?? [])
+  const statuses = data?.values ?? []
+  return {
+    status: deriveBitbucketBuildStatus(statuses),
+    ...(data && Array.isArray(data.values) && !data.next
+      ? { checksSummary: summarizeBitbucketBuildStatuses(statuses) }
+      : {})
+  }
 }
 
 async function normalizePullRequest(
@@ -137,8 +149,8 @@ async function normalizePullRequest(
   raw: RawBitbucketPullRequest
 ): Promise<BitbucketPullRequestInfo | null> {
   const headSha = raw.source?.commit?.hash?.trim()
-  const status = await getBuildStatus(repo, headSha)
-  return mapBitbucketPullRequest(raw, status)
+  const { status, checksSummary } = await getBuildStatus(repo, headSha)
+  return mapBitbucketPullRequest(raw, status, checksSummary)
 }
 
 // Avoid keychain prompts: validate stored credentials only when the secret is already cached.
@@ -153,12 +165,11 @@ export async function getBitbucketAuthStatus(): Promise<BitbucketAuthStatus> {
       account: result.ok ? accountNameFromUser(result.user) : null
     }
   }
-  const metadata = getStoredBitbucketMetadata()
-  if (metadata && hasStoredBitbucketCredential()) {
+  const { metadata, secret: cached } = await loadStoredBitbucketCredential()
+  if (metadata && (await hasStoredBitbucketCredential())) {
     if (getStoredBitbucketCredentialError()) {
       return { configured: true, authenticated: false, account: metadata.account }
     }
-    const cached = loadStoredBitbucketSecret()
     if (!cached) {
       return { configured: true, authenticated: true, account: metadata.account }
     }

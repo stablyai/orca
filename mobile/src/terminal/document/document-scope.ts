@@ -1,6 +1,12 @@
-import { TerminalKittyKeyboardModeTracker } from '../../../../src/shared/terminal-kitty-keyboard-mode-tracker'
-import type { TerminalLaidOutCellBox } from '../terminal-cell-box'
+import { TerminalKittyKeyboardModeTracker } from '../../../../src/shared/terminal/protocol/input-modes/terminal-kitty-keyboard-mode-tracker'
+import type { TerminalLaidOutCellBox } from '../viewport/terminal-cell-box'
+import {
+  DEFAULT_TERMINAL_FONT_STYLE,
+  type TerminalFontStyle
+} from '../preferences/terminal-font-style'
 import { DEFAULT_TERMINAL_THEME } from '../terminal-webview-html/theme'
+import { DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT } from '../../../../src/shared/terminal/replay/terminal-scrollback-policy'
+import { TERMINAL_DEFAULT_WORD_SEPARATOR } from '../../../../src/shared/terminal/input/terminal-word-separator'
 import {
   createEngineTerminal,
   createEngineUnicode11Addon,
@@ -24,13 +30,11 @@ import type {
   TerminalDocumentWebglAddon,
   TerminalInitialOscLink
 } from './document-terminal-shape'
-import type { TerminalMouseGesture } from './mouse-click-drag'
-import type { TerminalTouchState } from './surface-touch-gestures'
-import type { TerminalTouchDispatch } from './tap-dispatch'
-import type { TerminalDocumentThemeMessage } from './terminal-theme'
+import type { TerminalMouseGesture } from './surface-input/mouse-click-drag'
+import type { TerminalTouchState } from './surface-input/surface-touch-gestures'
+import type { TerminalTouchDispatch } from './surface-input/tap-dispatch'
+import type { TerminalDocumentThemeMessage } from './engine/terminal-theme'
 
-export type * from './document-terminal-shape'
-export type { TerminalDocumentHost, TerminalDocumentHostSeams } from './document-host-seams'
 // Keep cross-module mutable state per document; module-private state stays local to its factory-emitted module.
 
 export type TerminalDocumentState = {
@@ -49,6 +53,9 @@ export type TerminalDocumentState = {
   defaultTheme: TerminalDocumentTheme
   terminalTheme: TerminalDocumentTheme
   terminalMinimumContrastRatio: number
+  // The desktop's Scrollback Rows and Word Separator settings, as the host reported them.
+  scrollbackRows: number
+  wordSeparator: string
   initialOscLinks: TerminalInitialOscLink[]
   initialOscLinkRowOffset: number
   lastEmittedModes: TerminalDocumentModes
@@ -64,7 +71,11 @@ export type TerminalDocumentState = {
   scrollIndicatorHideTimer: ReturnType<typeof setTimeout> | null
   handledMessageIds: number[]
   currentTextScale: number
+  // The family xterm draws with; a bundled font joins it only once loaded, so cells are never measured on a fallback.
   terminalFontFamily: string
+  terminalFontStyle: TerminalFontStyle
+  // Settles once the picked bundled face is drawn with; the first fit waits for it.
+  terminalFontLoad: Promise<void> | null
   firstDataPending: boolean
   reportedCellBox: TerminalLaidOutCellBox | null
   activeAltScreenSnapshot: boolean
@@ -95,10 +106,13 @@ export type TerminalDocumentState = {
   sel: TerminalDocumentSelection | null
   longPressTimer: ReturnType<typeof setTimeout> | null
   longPressOrigin: TerminalDocumentTouchOrigin | null
+  interactionActive: boolean
   tapCandidate: TerminalDocumentTapCandidate | null
   bottomRowBackdrop: string
   surface: HTMLElement | null
   pendingTerm: TerminalDocumentTerminal | null
+  // The anchor the pending replay will restore; null after a clear or an alternate-screen snapshot.
+  pendingReplayScrollAnchorRows: number | null
   committedTerm: TerminalDocumentTerminal | null
   provisionalTerm: TerminalDocumentTerminal | null
   committedSurface: HTMLElement | null
@@ -165,6 +179,8 @@ function createTerminalDocumentState(): TerminalDocumentState {
     defaultTheme: DEFAULT_TERMINAL_THEME,
     terminalTheme: DEFAULT_TERMINAL_THEME,
     terminalMinimumContrastRatio: 3,
+    scrollbackRows: DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT,
+    wordSeparator: TERMINAL_DEFAULT_WORD_SEPARATOR,
     initialOscLinks: [],
     initialOscLinkRowOffset: 0,
     lastEmittedModes: {
@@ -188,6 +204,8 @@ function createTerminalDocumentState(): TerminalDocumentState {
     handledMessageIds: [],
     currentTextScale: 1,
     terminalFontFamily: '',
+    terminalFontStyle: DEFAULT_TERMINAL_FONT_STYLE,
+    terminalFontLoad: null,
     firstDataPending: false,
     reportedCellBox: null,
     activeAltScreenSnapshot: false,
@@ -217,11 +235,13 @@ function createTerminalDocumentState(): TerminalDocumentState {
     sel: null,
     longPressTimer: null,
     longPressOrigin: null,
+    interactionActive: true,
     tapCandidate: null,
     wheelAccumDeltaY: 0,
     bottomRowBackdrop: '',
     surface: null,
     pendingTerm: null,
+    pendingReplayScrollAnchorRows: null,
     committedTerm: null,
     provisionalTerm: null,
     committedSurface: null,
@@ -250,6 +270,7 @@ function createTerminalDocumentState(): TerminalDocumentState {
     scheduledFrames: [],
     framesStopped: false,
     touchGesture: {
+      active: false,
       lastX: 0,
       lastY: 0,
       lastTime: 0,
