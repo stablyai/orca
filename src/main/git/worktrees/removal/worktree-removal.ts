@@ -28,7 +28,11 @@ import { listWorktreesStrict } from '../catalog/worktree-listing'
 import { isWorktreePathMissing } from '../../../workspaces/removal/worktree-removal-safety'
 import { runKeyedSerializedOperation } from '../../../../shared/concurrency/keyed-serialized-operations'
 import { canSpawnOnWorkerThread } from '../../../worker-thread-child-process/worker-thread-child-process'
-import { WorktreeRemovalIdentityUnverifiableError } from '../../../../shared/worktree/removal/worktree-checkout-identity'
+import {
+  WorktreeRemovalIdentityUnverifiableError,
+  WorktreeRemovalIncompleteError,
+  isWorktreeIdentityUnverifiable
+} from '../../../../shared/worktree/removal/worktree-checkout-identity'
 
 const branchCleanupQueueByRepo = new Map<string, Promise<void>>()
 
@@ -133,28 +137,35 @@ async function performRemoveWorktree(
             `Worktree path appeared during deletion: ${worktreePath}. Retry deletion.`
           )
         }
-        await gitExecFileAsync(
-          [
-            ...longPathArgs,
-            'worktree',
-            'remove',
-            ...(options.checkoutDeleteIdentity ? [] : ['--force']),
-            '--',
-            worktreePath
-          ],
-          {
-            ...finalizationOptions,
-            ...(options.checkoutDeleteIdentity
-              ? {
-                  spawnOnWorkerThread: true,
-                  worktreeCheckoutGuard: {
-                    identity: options.checkoutDeleteIdentity,
-                    checkoutRemoved: true as const
+        try {
+          await gitExecFileAsync(
+            [
+              ...longPathArgs,
+              'worktree',
+              'remove',
+              ...(options.checkoutDeleteIdentity ? [] : ['--force']),
+              '--',
+              worktreePath
+            ],
+            {
+              ...finalizationOptions,
+              ...(options.checkoutDeleteIdentity
+                ? {
+                    spawnOnWorkerThread: true,
+                    worktreeCheckoutGuard: {
+                      identity: options.checkoutDeleteIdentity,
+                      checkoutRemoved: true as const
+                    }
                   }
-                }
-              : {})
+                : {})
+            }
+          )
+        } catch (error) {
+          if (isWorktreeIdentityUnverifiable(error)) {
+            throw new WorktreeRemovalIncompleteError(error)
           }
-        )
+          throw error
+        }
       }
     } else {
       await gitExecFileAsync(args, execOptions)

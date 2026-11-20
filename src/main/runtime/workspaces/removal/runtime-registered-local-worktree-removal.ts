@@ -50,7 +50,14 @@ export function removeRuntimeRegisteredLocalWorktree(
     async (): Promise<RemoveWorktreeResult & { warning?: string }> => {
       args.expectation?.check()
       // Recheck after queue wait: another client may already have accepted this deletion.
-      if (waitForPendingWorktreeRemoval(args.target.id, undefined, args.requestedDeleteBranch)) {
+      if (
+        waitForPendingWorktreeRemoval(
+          args.target.id,
+          undefined,
+          args.requestedDeleteBranch,
+          args.expectation?.expected.instanceId
+        )
+      ) {
         args.expectation?.joined()
         await waitForWorktreeRemovalAcceptance(args.target.id)
         return { removing: true }

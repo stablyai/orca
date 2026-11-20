@@ -117,7 +117,8 @@ export function startBackgroundWorktreeRemoval(
   const pending = waitForPendingWorktreeRemoval(
     args.removal.worktreeId,
     undefined,
-    args.removal.deleteBranch
+    args.removal.deleteBranch,
+    args.removal.expectedInstanceId
   )
   if (pending) {
     return pending

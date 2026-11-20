@@ -1,5 +1,6 @@
 import { afterEach, expect, it, vi } from 'vitest'
-import { mkdtemp, mkdir, writeFile, rm, rename, readFile } from 'node:fs/promises'
+import { mkdtemp, mkdir, writeFile, rm, rename, readFile, lstat } from 'node:fs/promises'
+import * as identityFilesystem from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
@@ -14,6 +15,11 @@ import {
   WORKTREE_CHECKOUT_NONCE,
   WorktreeRemovalIncarnationChangedError
 } from '../../shared/worktree/removal/worktree-checkout-identity'
+import { failureLeftByGit } from '../workspaces/removal/worktree-removal-failure'
+
+vi.mock('node:fs/promises', async (original) => ({
+  ...(await original<typeof identityFilesystem>())
+}))
 
 const roots: string[] = []
 afterEach(async () => {
@@ -50,6 +56,46 @@ it('finishes an unchanged checkout walk after removing its own Git marker', asyn
   )
   expect(existsSync(f.checkout)).toBe(false)
 })
+it('keeps directory identity stable when a filesystem reports change time as birth time', async () => {
+  const f = await fixture()
+  const stats = await lstat(f.checkout, { bigint: true })
+  const changed = Object.assign(stats, { birthtimeNs: stats.birthtimeNs + 1n })
+  vi.spyOn(identityFilesystem, 'lstat').mockResolvedValueOnce(changed)
+  await expect(assertWorktreeCheckoutIdentity(f.expected)).resolves.toBeUndefined()
+})
+
+it.each(['EIO', 'EACCES'])(
+  'retains a retry after a post-deletion identity read fails with %s',
+  async (code) => {
+    const f = await fixture()
+    await rm(join(f.checkout, '.git'))
+    const readError = Object.assign(new Error('Identity read failed'), { code })
+    vi.spyOn(identityFilesystem, 'lstat').mockRejectedValueOnce(readError)
+    let failure: unknown
+    try {
+      await assertWorktreeCheckoutIdentity(f.expected, true)
+    } catch (error) {
+      failure = error
+    }
+    expect(failure).toBe(readError)
+    await expect(
+      failureLeftByGit(
+        {
+          worktreeId: 'repo::checkout',
+          repoId: 'repo',
+          repoPath: join(f.root, 'repo'),
+          worktreePath: f.checkout,
+          branch: 'feature',
+          head: 'abc',
+          deleteBranch: false,
+          force: false,
+          requestedAt: 1
+        },
+        failure
+      )
+    ).resolves.toMatchObject({ message: 'Identity read failed' })
+  }
+)
 it('refuses a recreated admin entry even when the checkout and Git pointer stay in place', async () => {
   const f = await fixture()
   await rm(f.admin, { recursive: true })

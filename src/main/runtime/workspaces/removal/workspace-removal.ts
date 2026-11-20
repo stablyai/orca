@@ -15,8 +15,7 @@ import {
 } from '../../../../shared/execution-host/execution-host'
 import {
   finishAcceptedWorktreeRemoval,
-  waitForWorktreeRemovalAcceptance,
-  waitForPendingWorktreeRemoval
+  waitForWorktreeRemovalAcceptance
 } from '../../../workspaces/removal/worktree-background-removal'
 import { preservedBranchCleanupScopeKey } from '../../../../shared/git/branches/preserved-branch-cleanup'
 import {
@@ -108,11 +107,9 @@ export abstract class OrcaRuntimeWithRemoveManagedWorktree extends RuntimeWorksp
       assertWslMoveWorkspaceWritable(store, removalTarget.id)
     }
     // Why: a retry or a second client asking while Git still deletes joins that removal.
-    if (expectation && waitForPendingWorktreeRemoval(removalTarget.id, cleanupHostId)) {
-      expectation.joined()
-    }
     const pending = this.joinPendingWorktreeRemoval(removalTarget.id, options)
     if (pending) {
+      expectation?.joined()
       await waitForWorktreeRemovalAcceptance(removalTarget.id, cleanupHostId)
       return options.waitForBackgroundRemoval ? await pending : { removing: true }
     }

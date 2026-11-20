@@ -5,6 +5,7 @@ import {
 import type { RemoveWorktreeResult } from '../../../shared/worktree/create-types'
 import type { WorktreeRemovalRecord } from './worktree-removal-records'
 import { pendingWorktreeRemovals } from './worktree-removal-table'
+import { WorktreeRemovalIncarnationChangedError } from '../../../shared/worktree/removal/worktree-checkout-identity'
 
 export type RemovalSettlement = {
   accepted: Promise<void>
@@ -53,12 +54,17 @@ export function waitForWorktreeRemovalAcceptance(
 export function waitForPendingWorktreeRemoval(
   worktreeId: string,
   hostId?: ExecutionHostId,
-  deleteBranch?: boolean
+  deleteBranch?: boolean,
+  expectedInstanceId?: string
 ): Promise<RemoveWorktreeResult> | undefined {
   if ((hostId ?? LOCAL_EXECUTION_HOST_ID) !== LOCAL_EXECUTION_HOST_ID) {
     return undefined
   }
-  assertAcceptedBranchChoice(pendingWorktreeRemovals.get(worktreeId), deleteBranch)
+  const record = pendingWorktreeRemovals.get(worktreeId)
+  if (record && expectedInstanceId && record.expectedInstanceId !== expectedInstanceId) {
+    throw new WorktreeRemovalIncarnationChangedError()
+  }
+  assertAcceptedBranchChoice(record, deleteBranch)
   return settlementsByWorktreeId.get(worktreeId)?.result
 }
 

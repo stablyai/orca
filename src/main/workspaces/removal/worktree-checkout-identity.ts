@@ -14,6 +14,7 @@ import {
   checkoutGitDirectory,
   assertCheckoutMetadata,
   assertCheckoutIdentityMatches,
+  rethrowCheckoutIdentityError,
   type WorktreeCheckoutIdentity
 } from '../../../shared/worktree/removal/worktree-checkout-identity'
 
@@ -123,7 +124,7 @@ export async function assertWorktreeCheckoutIdentity(
       }
     }
     assertCheckoutIdentityMatches(expected, await readIdentity(expected.root, expected.instanceId))
-  } catch {
-    throw new WorktreeRemovalIncarnationChangedError()
+  } catch (error) {
+    rethrowCheckoutIdentityError(error)
   }
 }

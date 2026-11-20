@@ -39,9 +39,18 @@ export class WorktreeRemovalIdentityUnverifiableError extends Error {
   }
 }
 
+export class WorktreeRemovalIncompleteError extends Error {
+  constructor(cause: unknown) {
+    super('The checkout was deleted, but Git cleanup could not finish. Retry deletion.', { cause })
+  }
+}
+
 /** Also through a removal owner's not-started wrapper, which keeps the refusal as its cause. */
 export function isWorktreeIdentityUnverifiable(error: unknown): boolean {
   for (let current = error, depth = 0; current instanceof Error && depth < 4; depth++) {
+    if (current instanceof WorktreeRemovalIncompleteError) {
+      return false
+    }
     if ('code' in current && current.code === 'ERR_ORCA_WORKTREE_IDENTITY_UNVERIFIABLE') {
       return true
     }
@@ -59,7 +68,19 @@ export function checkoutDirectoryKey(stats: BigIntStats): string {
   if (!stats.isDirectory() || stats.isSymbolicLink() || stats.ino === 0n) {
     throw new WorktreeRemovalIncarnationChangedError()
   }
-  return `${stats.dev}:${stats.ino}:${stats.birthtimeNs}`
+  return `${stats.dev}:${stats.ino}`
+}
+
+/** Missing identity metadata proves a mismatch; a failed read does not. */
+export function rethrowCheckoutIdentityError(error: unknown): never {
+  if (
+    error instanceof Error &&
+    'code' in error &&
+    (error.code === 'ENOENT' || error.code === 'ENOTDIR' || error.code === 'ELOOP')
+  ) {
+    throw new WorktreeRemovalIncarnationChangedError()
+  }
+  throw error
 }
 
 export function checkoutGitDirectory(root: string, text: string): string {

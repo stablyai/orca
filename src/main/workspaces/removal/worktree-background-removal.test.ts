@@ -70,6 +70,29 @@ describe('background worktree removal', () => {
     expect(isPending()).toBe(false)
   })
 
+  it('refuses to join a pending removal of another instance without replacing its settlement', async () => {
+    const first = deferred<Record<string, never>>()
+    const result = startBackgroundWorktreeRemoval({
+      removal: { ...removal, expectedInstanceId: 'A' },
+      run: () => first.promise,
+      publish: () => {}
+    })
+    expect(waitForPendingWorktreeRemoval(removal.worktreeId, undefined, true, 'A')).toBe(result)
+    expect(() =>
+      waitForPendingWorktreeRemoval(removal.worktreeId, undefined, true, 'B')
+    ).toThrowError(expect.objectContaining({ code: 'ERR_ORCA_WORKTREE_CHANGED' }))
+    expect(() =>
+      startBackgroundWorktreeRemoval({
+        removal: { ...removal, expectedInstanceId: 'B' },
+        run: async () => ({}),
+        publish: () => {}
+      })
+    ).toThrowError(expect.objectContaining({ code: 'ERR_ORCA_WORKTREE_CHANGED' }))
+    first.resolve({})
+    await expect(result).resolves.toEqual({})
+    await _settlePendingWorktreeRemovalsForTests()
+  })
+
   it('keeps the table consistent when publishing throws', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {})
     void startBackgroundWorktreeRemoval({

@@ -12,6 +12,7 @@ import {
   checkoutGitDirectory,
   assertCheckoutMetadata,
   assertCheckoutIdentityMatches,
+  rethrowCheckoutIdentityError,
   type WorktreeCheckoutSpawnGuard,
   type WorktreeCheckoutIdentity
 } from '../../shared/worktree/removal/worktree-checkout-identity'
@@ -61,8 +62,8 @@ export function assertWorktreeCheckoutIdentityBeforeSpawn(guard: WorktreeCheckou
       adminKey,
       nonce
     })
-  } catch {
-    throw new WorktreeRemovalIncarnationChangedError()
+  } catch (error) {
+    rethrowCheckoutIdentityError(error)
   }
 }
 
