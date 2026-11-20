@@ -2,6 +2,7 @@ import { join } from 'node:path'
 import type { AcpLaunchSpec } from '../acp/launch/acp-launch-contract'
 import { AUGGIE_ACP_DIALECT } from '../acp/acp-dialects/auggie-dialect'
 import { directoryAccountBinding } from '../acp/launch/acp-account-binding'
+import { deliverAppendSystemPromptInstructions } from '../acp/launch/acp-instructions'
 import { loadAuggieSkillRoots } from '../acp/launch/acp-skill-roots'
 import { agentSessionSetupFor } from '../../shared/agent-session/lifecycle/launch/agent-session-setup-commands'
 import type { StructuredAgentSessionHistory } from '../native-chat/conversation-adoption/structured-agent-cli-conversations'
@@ -35,6 +36,7 @@ export const AUGGIE_LAUNCH_SPEC: AcpLaunchSpec = {
     sessionFolderArgs: (folder) => ['--session-dir', folder]
   },
   skillRoots: loadAuggieSkillRoots,
+  instructions: deliverAppendSystemPromptInstructions,
   transcriptImport: null,
   sessionHistory: AUGGIE_SESSION_HISTORY,
   // No session/delete: a naming task's session would land in the user's Auggie history.

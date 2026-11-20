@@ -100,8 +100,9 @@ export const deliverOpenCodeInstructions: AcpInstructionsDelivery = async ({
   return content === null ? null : { env: { OPENCODE_CONFIG_CONTENT: content } }
 }
 
-// A path keeps the text out of the process list and clear of argument-length limits.
-export const deliverOmpInstructions: AcpInstructionsDelivery = async ({ file }) => ({
+// OMP and Auggie, both built on Pi, read the file; a path keeps the text out of the process list
+// and clear of argument-length limits.
+export const deliverAppendSystemPromptInstructions: AcpInstructionsDelivery = async ({ file }) => ({
   args: [`--append-system-prompt=${await file()}`]
 })
 
