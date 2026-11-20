@@ -83,14 +83,12 @@ describe('cursor restore after wrap-pending replay (BUG C, absolute-cursor harde
     emulator.dispose()
   })
 
-  it('leaves a wrap-pending source untouched so replay stays wrap-pending', async () => {
+  it('keeps a wrap-pending source wrap-pending after replay', async () => {
     const { terminal, addon } = createTerminal(10, 5)
     await write(terminal, '0123456789')
     // cursorX == cols marks pending wrap; a CUP would clamp and clear it.
     expect(terminal.buffer.active.cursorX).toBe(10)
-    const plain = addon.serialize()
-    expect(serializeWithAbsoluteCursor(addon, terminal)).toBe(plain)
-    const restored = await replay(plain)
+    const restored = await replay(serializeWithAbsoluteCursor(addon, terminal))
     await write(restored, 'Z')
     expect(visibleText(restored)[1]).toBe('Z')
   })
@@ -130,5 +128,80 @@ describe('cursor restore after wrap-pending replay (BUG C, absolute-cursor harde
     expect(restored.buffer.active.cursorY).toBe(source.y)
     expect(visibleText(restored)).toEqual(visibleText(terminal))
     expect(restored.buffer.active.length).toBe(terminal.buffer.active.length)
+  })
+})
+
+describe('pending-wrap cursor after replay (STA-16354)', () => {
+  // 10x8 grid, header rows 1-3, margins at rows 4-8; ten characters end row 8 with the wrap pending.
+  const HEADER = 'HEADER1\r\nHEADER2\r\nHEADER3'
+  const SCROLL_REGION_SOURCE = `${HEADER}\x1b[4;8r\x1b[8;1H0123456789`
+  const cases: { name: string; source: string; suffix: string }[] = [
+    {
+      name: 'inside a scroll region',
+      source: SCROLL_REGION_SOURCE,
+      suffix: '\r\nburst1\r\nburst2'
+    },
+    {
+      name: 'inside a scroll region with origin mode',
+      source: `${HEADER}\x1b[4;8r\x1b[?6h\x1b[5;1H0123456789`,
+      suffix: 'X\r\nburst1'
+    },
+    {
+      name: 'with a saved cursor',
+      source: `${HEADER}\x1b[6;3H\x1b7\x1b[8;1H0123456789`,
+      suffix: '\x1b8burst1'
+    },
+    {
+      name: 'on a row above the last written row',
+      source: '\x1b[3;1Hzzz\x1b[1;1Habcdefghij',
+      suffix: 'X'
+    },
+    {
+      name: 'on the alternate screen inside a scroll region',
+      source: `\x1b[?1049h${HEADER}\x1b[4;8r\x1b[8;1H0123456789`,
+      suffix: '\r\nburst1'
+    },
+    {
+      name: 'after a styled wide edge cell',
+      source: `${HEADER}\x1b[4;8r\x1b[8;1H01234567\x1b[1;31m界\x1b[0;32m`,
+      suffix: 'X'
+    }
+  ]
+
+  for (const { name, source, suffix } of cases) {
+    it(`continues output where the live terminal does ${name}`, async () => {
+      const emulator = new HeadlessEmulator({ cols: 10, rows: 8 })
+      expect(emulator.writeSync(source)).toBe(true)
+      const restored = await replay(emulator.getSnapshot().snapshotAnsi, 10, 8)
+      const { terminal: live } = createTerminal(10, 8)
+      await write(live, source)
+      expect(live.buffer.active.cursorX).toBe(10)
+
+      expect(restored.buffer.active.cursorX).toBe(10)
+      expect(restored.buffer.active.cursorY).toBe(live.buffer.active.cursorY)
+      await write(live, suffix)
+      await write(restored, suffix)
+      expect(visibleText(restored)).toEqual(visibleText(live))
+      expect(restored.buffer.active.cursorX).toBe(live.buffer.active.cursorX)
+      expect(restored.buffer.active.cursorY).toBe(live.buffer.active.cursorY)
+      emulator.dispose()
+    })
+  }
+
+  it('keeps the edge cell style and the live pen', async () => {
+    const source = `${HEADER}\x1b[4;8r\x1b[8;1H012345678\x1b[1;31mZ\x1b[0;32m`
+    const emulator = new HeadlessEmulator({ cols: 10, rows: 8 })
+    expect(emulator.writeSync(source)).toBe(true)
+    const restored = await replay(emulator.getSnapshot().snapshotAnsi, 10, 8)
+    await write(restored, 'X')
+    const edge = cellAt(restored, 6, 9)
+    expect(edge.getChars()).toBe('Z')
+    expect(!!edge.isBold()).toBe(true)
+    expect(edge.getFgColor()).toBe(1)
+    const next = cellAt(restored, 7, 0)
+    expect(next.getChars()).toBe('X')
+    expect(!!next.isBold()).toBe(false)
+    expect(next.getFgColor()).toBe(2)
+    emulator.dispose()
   })
 })
