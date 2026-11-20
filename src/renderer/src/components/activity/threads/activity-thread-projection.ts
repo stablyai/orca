@@ -218,6 +218,7 @@ function projectActivityEvents(inputs: ActivityThreadInputs): ActivityEventsBuil
       tabsByWorktree: storeData.tabsByWorktree,
       ptyIdsByTabId: storeData.ptyIdsByTabId,
       unifiedTabsByWorktree,
+      structuredTabsByPaneKey: storeData.structuredTabsByPaneKey,
       worktreeMap: storeData.worktreeMap,
       repoMap: storeData.repoMap,
       repos: storeData.repos,

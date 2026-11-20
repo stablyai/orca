@@ -1,5 +1,8 @@
 import type { AcceptedAgentStatuses } from '@/store/slices/agent-status/status-ownership/accepted-agent-statuses'
-import { getStructuredAgentSessionTabsByPaneKey } from '@/components/native-chat/session/status/structured-agent-session-tabs'
+import {
+  getStructuredAgentSessionTabsByPaneKey,
+  type StructuredTab
+} from '@/components/native-chat/session/status/structured-agent-session-tabs'
 import { parseAgentStatusPaneIdentity } from '../../../../../shared/agent-status/identity/agent-status-worktree-attribution'
 import { tabHasLivePty } from '../../../../../shared/workspace-layout/terminal-surfaces/tab-has-live-pty'
 import { activityLiveAgentState } from './activity-event-state'
@@ -41,6 +44,8 @@ export type BuildActivityEventsArgs = {
   tabsByWorktree: Record<string, TerminalTab[]>
   ptyIdsByTabId?: Record<string, string[]>
   unifiedTabsByWorktree?: Record<string, Tab[]>
+  /** Chats by pane key from the store's own tab map; a projected map would rebuild the shared chat list. */
+  structuredTabsByPaneKey?: ReadonlyMap<string, StructuredTab>
   worktreeMap: Map<string, Worktree>
   repoMap: Map<string, Repo>
   repos?: readonly Repo[]
@@ -121,9 +126,10 @@ export function buildActivityEvents(
   const buildLivePane = (paneKey: string, entry: AgentStatusEntry): PaneBuild | null => {
     const parsed = parseAgentStatusPaneIdentity(
       paneKey,
-      args.unifiedTabsByWorktree
-        ? getStructuredAgentSessionTabsByPaneKey(args.unifiedTabsByWorktree).get(paneKey)
-        : undefined
+      (
+        args.structuredTabsByPaneKey ??
+        getStructuredAgentSessionTabsByPaneKey(args.unifiedTabsByWorktree)
+      ).get(paneKey)
     )
     if (!parsed) {
       return null
