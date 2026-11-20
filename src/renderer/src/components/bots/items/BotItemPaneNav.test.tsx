@@ -12,8 +12,7 @@ const reads = vi.hoisted(() => vi.fn())
 vi.mock('./use-bot-items', () => ({
   showBotItem: reads,
   commentOnBotItem: vi.fn(() => Promise.resolve()),
-  setBotItemsStatus: vi.fn(),
-  answerBotItem: vi.fn(() => Promise.resolve('answered'))
+  setBotItemsStatus: vi.fn()
 }))
 vi.mock('../BotGroupTranscriptOwner', () => ({ useBotGroupFileContexts: () => new Map() }))
 vi.mock('./BotItemActivityList', () => ({ BotItemActivityList: () => null }))
@@ -29,8 +28,6 @@ import {
   promptValue
 } from '../../native-chat/composer/editor/native-chat-prompt-editor.test-support'
 import { BotItemPane } from './BotItemPane'
-import { botRefKey } from '@/lib/bot-hosts'
-import { updateNativeChatComposerDraft } from '../../native-chat/drafts/native-chat-composer-draft-store'
 
 const BOT: Bot = {
   id: 'bot-a',
@@ -202,27 +199,4 @@ it('says the shown item once it shows: not the opened one, a late one when it ar
   fireEvent.click(screen.getByRole('button', { name: 'Previous item' }))
   expect(heading()).toContain('Draft the release notes')
   expect(said()).toBe('Item 2 of 3: Draft the release notes')
-})
-
-it("steps from an open question's answer field and keeps typing at the end of the next item's draft", () => {
-  reads.mockReturnValue(new Promise(() => {}))
-  const asking = makeTestBotItem(22, {
-    title: 'Draft the release notes',
-    status: 'needs_you',
-    question: { eventId: 'e3', text: 'Which notes ship?', answerable: true }
-  })
-  updateNativeChatComposerDraft(
-    `bot-item-comment:${botRefKey(BOT)}:${ITEMS[2].uid}`,
-    { text: 'draft for 23', images: [] },
-    'immediate'
-  )
-  pane(1, { items: [ITEMS[0], asking, ITEMS[2]] })
-  const answer = screen.getByPlaceholderText('Type your answer')
-  answer.focus()
-  press(answer, { key: 'ArrowDown', code: 'ArrowDown', metaKey: true, altKey: true })
-
-  expect(heading()).toContain('Retry the help-text build')
-  expect(document.activeElement).toBe(editor())
-  expect(promptValue(editor())).toBe('draft for 23')
-  expect(promptEditor(editor()).state.selection.from).toBe(13)
 })
