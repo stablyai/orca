@@ -1,5 +1,5 @@
 import { waitForPromiseWithSignal } from '../../../shared/concurrency/abort-signal-reason'
-import { delimiter, isAbsolute, resolve as resolvePath } from 'node:path'
+import { delimiter, isAbsolute, posix, resolve as resolvePath, win32 } from 'node:path'
 import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import {
@@ -73,7 +73,8 @@ function resolveOverride(
   return command && plan
     ? {
         command,
-        prefixArgs: expandHomeArgs(plan.prefixArgs, options.homePath)
+        prefixArgs: expandHomeArgs(plan.prefixArgs, options.homePath),
+        program: plan.program
       }
     : null
 }
@@ -81,8 +82,8 @@ function resolveOverride(
 export type StructuredAgentCommand = {
   command: string
   prefixArgs: string[]
-  /** The user's Command setting as written; absent for the stock CLI. */
-  configured?: string
+  /** The name of the program the user's Command runs, never its arguments; absent for the stock CLI. */
+  configuredProgram?: string
 }
 
 /** Read live settings on every lookup; invalid explicit commands must refuse instead of launching stock CLI. */
@@ -139,7 +140,11 @@ export function resolveStructuredAgentCommand(
         )
       : refusal
   }
-  return { ...invocation, configured }
+  const { program, ...resolved } = invocation
+  return {
+    ...resolved,
+    configuredProgram: (platform === 'win32' ? win32 : posix).basename(program)
+  }
 }
 
 export type ProgramSearch<T> = {
