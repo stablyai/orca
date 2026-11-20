@@ -34,14 +34,12 @@ export async function ensureSenderRecords(
   }
 }
 
-/** `takenBy` fences the notice on the take it decided, `unread` on nobody having read it since;
- *  `once` picks the new rule's wording. */
+/** `takenBy` fences the notice on the take it decided; `once` picks the new rule's wording. */
 export type BotRequestTelling = {
   outcome: BotRequestOutcome
   why: BotRequestUnansweredWhy
   reason?: string
   takenBy?: string
-  unread?: true
   once?: boolean
 }
 
@@ -59,9 +57,7 @@ export function tellSender(
   const body = botRequestUnansweredText(record, telling.why, telling.reason, telling.once)
   const owed = () =>
     telling.takenBy === undefined
-      ? db.getBotRequestOutcome(request.id) === null &&
-        (!telling.unread ||
-          (!db.getMessageById(request.id)?.read && !db.getBotRequest(request.id)?.taken_session_id))
+      ? db.getBotRequestOutcome(request.id) === null
       : db.holdsBotRequestTake(request.id, telling.takenBy)
   const route = db.getPeerMailMessage(request.id)
   const conversation = route ? db.getPeerMailConversation(route.conversation_id) : undefined

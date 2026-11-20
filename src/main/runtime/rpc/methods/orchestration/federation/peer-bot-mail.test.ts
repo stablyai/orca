@@ -438,11 +438,15 @@ describe('mail to a bot on a paired server', () => {
     expect(filedAtNudge).toEqual({ route: true, rule: 1 })
   })
 
-  it('refuses the same question from the same turn again once it went unanswered', async () => {
-    await send({ type: 'question' })
-    const [first] = b.db.getUnreadMessages(DOCS_HOME)
-    b.db.recordBotRequestOutcome(first!.id, 'unanswered')
-    await send({ type: 'question' })
-    expect(b.db.getUnreadMessages(DOCS_HOME)).toHaveLength(1)
+  it('refuses the same question from the same turn again, by bot name or chat address', async () => {
+    for (const to of ['bot:Docs', DOCS_HOME]) {
+      await send({ type: 'question', to, subject: `Asked at ${to}` })
+      const first = b.db.getUnreadMessages(DOCS_HOME).find((mail) => mail.subject.endsWith(to))!
+      b.db.recordBotRequestOutcome(first.id, 'unanswered')
+      await expect(send({ type: 'question', to, subject: `Asked at ${to}` })).rejects.toThrow(
+        first.id
+      )
+    }
+    expect(b.db.getUnreadMessages(DOCS_HOME)).toHaveLength(2)
   })
 })

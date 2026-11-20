@@ -96,8 +96,32 @@ export async function deliverPeerMailToBot(
         }
       }
     )
-    return 'receipt' in routed ? 'delivered' : routed
+    if (!('receipt' in routed)) {
+      return routed
+    }
+    refuseRepeatedSend(runtime, routed.receipt)
+    return 'delivered'
   } finally {
     admitting.delete(params.messageId)
   }
+}
+
+/** The same send again was refused here: its sender hears so, never a delivery of mail that isn't. */
+function refuseRepeatedSend(runtime: OrcaRuntimeService, receipt: unknown): void {
+  if (typeof receipt !== 'object' || receipt === null || !('duplicate' in receipt)) {
+    return
+  }
+  const next = 'next' in receipt && typeof receipt.next === 'string' ? receipt.next : ''
+  const earlier =
+    'message' in receipt &&
+    typeof receipt.message === 'object' &&
+    receipt.message !== null &&
+    'id' in receipt.message
+      ? receipt.message.id
+      : null
+  throw new OrchestrationError(
+    'already_sent',
+    `${next}${typeof earlier === 'string' ? ` The earlier one is ${earlier} on ${runtime.readMachineName()}.` : ''}`,
+    { effectsApplied: false }
+  )
 }

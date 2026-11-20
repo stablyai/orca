@@ -130,21 +130,12 @@ describe('how a bot request ends', () => {
     db.noteBotRequestsChecked([id], sessionId)
   }
 
-  it('notes a post the chat makes after it was already told unanswered', async () => {
+  it('keeps a request already told unanswered when a later post lands in its thread', async () => {
     const id = request()
     checkedBy(id, 'docs-session')
     db.recordBotRequestOutcome(id, 'unanswered')
     await noteBotRequestPost(runtime, 'docs-session', 'slack:T1:C1:1712.1:1712.9')
-    expect(db.getBotRequestOutcome(id)).toBe('posted')
-  })
-
-  it('settles no checked request by a post that two of them could answer', async () => {
-    const first = request('handoff', 'a')
-    const second = request('handoff', 'b')
-    checkedBy(first, 'docs-session')
-    checkedBy(second, 'docs-session')
-    await noteBotRequestPost(runtime, 'docs-session', 'slack:T1:C1:1712.1:1712.9')
-    expect([db.getBotRequestOutcome(first), db.getBotRequestOutcome(second)]).toEqual([null, null])
+    expect(db.getBotRequestOutcome(id)).toBe('unanswered')
   })
 
   it('drops nothing a chat read while its senders were being found', async () => {
@@ -161,8 +152,7 @@ describe('how a bot request ends', () => {
 
   it('notes a post for a request the chat read with check, not just its prompts', async () => {
     const id = request()
-    db.db.prepare('UPDATE bot_requests SET debt_rule = 1 WHERE message_id = ?').run(id)
-    db.noteBotRequestsChecked([id], 'docs-session')
+    checkedBy(id, 'docs-session')
     await noteBotRequestPost(runtime, 'docs-session', 'slack:T1:C1:1712.1:1712.9')
     expect(db.getBotRequestOutcome(id)).toBe('posted')
   })

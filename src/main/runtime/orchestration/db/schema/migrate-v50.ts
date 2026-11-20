@@ -5,12 +5,7 @@ export function migrateV50(this: OrchestrationDb, current: number): void {
   if (current >= 50) {
     return
   }
-  for (const column of [
-    'debt_rule INTEGER',
-    'taken_session_id TEXT',
-    'taken_by TEXT',
-    'decided_session_id TEXT'
-  ]) {
+  for (const column of ['debt_rule INTEGER', 'taken_session_id TEXT', 'taken_by TEXT']) {
     if (!this.hasColumn('bot_requests', column.split(' ')[0])) {
       this.db.exec(`ALTER TABLE bot_requests ADD COLUMN ${column}`)
     }
@@ -22,6 +17,4 @@ export function migrateV50(this: OrchestrationDb, current: number): void {
 export const BOT_REQUEST_OPEN_TAKE_INDEX_SQL = `
 CREATE INDEX IF NOT EXISTS idx_bot_requests_open_take
   ON bot_requests(taken_session_id) WHERE taken_session_id IS NOT NULL AND debt_rule = 1;
-CREATE INDEX IF NOT EXISTS idx_bot_requests_decided_session
-  ON bot_requests(decided_session_id) WHERE decided_session_id IS NOT NULL;
 `

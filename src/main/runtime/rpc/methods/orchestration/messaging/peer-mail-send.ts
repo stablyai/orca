@@ -126,7 +126,8 @@ export async function sendPeerMail(args: {
     item: params.item,
     attachments,
     sender: peerMailSender(runtime, caller.address),
-    ...(toBot ? await peerSendKey(runtime, args.orchestrationCaller, to, type, params) : {})
+    // Keyed for any agent: a chat address can name a bot there too.
+    ...(await peerSendKey(runtime, args.orchestrationCaller, to, type, params))
   })
   return recordReceiptBeforeNudge(
     args.recordMutationReceipt,

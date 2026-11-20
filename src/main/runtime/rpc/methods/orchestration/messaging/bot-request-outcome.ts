@@ -20,6 +20,7 @@ import { botRequestRecord } from './bot-request-record'
 import { getStructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import type { TurnEndedVerdict } from '../../../../../native-chat/agent-session-wire/structured-agent-session-turn-context'
 import type { StructuredAgentSessionRequestFailure } from '../../../../../native-chat/agent-session-wire/observations/structured-agent-session-request-failures'
+import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../../../../shared/agent-session/identity/orca-session-address-prefix'
 import { readChatRequestError } from '../../../../orchestration/workers/turn-stops/chat-request-error-read'
 
 const ACTIVE_DISPATCH = new Set(['pending', 'dispatched'])
@@ -78,8 +79,8 @@ export function isBotAnswerTo(payload: string | null | undefined, requestId: str
 }
 
 /** After a post: when it went where the request it answers was asked, the request is answered there.
- *  The turn's own requests settle by thread; one the chat only took (by `check`, or told unanswered
- *  already) settles only when it alone was asked there, so a post never settles another's. */
+ *  Those are the turn's own and the ones the chat holds undecided (read by `check`); one already
+ *  decided stays decided, as only the chat's current work can be told apart by thread. */
 export async function noteBotRequestPost(
   runtime: OrcaRuntimeService,
   sessionId: string,
@@ -96,10 +97,11 @@ export async function noteBotRequestPost(
     const answerRef = record ? botRequestAnswerRef(record) : null
     return answerRef !== null && `${ref}:`.startsWith(`${answerRef}:`)
   }
-  const prompted = turn.requestIds.filter(askedHere)
-  const taken = db.listBotRequestsTakenBy(sessionId).filter(askedHere)
-  for (const requestId of prompted.length > 0 ? prompted : taken.length === 1 ? taken : []) {
-    db.recordBotRequestOutcome(requestId, 'posted')
+  const held = db.listOpenBotRequestTakes(sessionId).map((take) => take.message_id)
+  for (const requestId of new Set([...turn.requestIds, ...held])) {
+    if (askedHere(requestId)) {
+      db.recordBotRequestOutcome(requestId, 'posted')
+    }
   }
 }
 
@@ -174,7 +176,8 @@ async function continuesAfterUsageLimit(sessionId: string): Promise<boolean> {
   return (await host?.readUsageLimitContinue(sessionId))?.state === 'scheduled'
 }
 
-/** Requests a bot will never read: it was paused or deleted, or its Chat replaced. */
+/** Requests a bot will never read: it was paused or deleted, or its Chat replaced. Each is released
+ *  to its chat as read, and its sender told as that chat's take would be, retried until told. */
 export async function dropUnreadBotRequests(
   runtime: OrcaRuntimeService,
   botId: string,
@@ -184,17 +187,19 @@ export async function dropUnreadBotRequests(
 ): Promise<void> {
   try {
     const db = runtime.getOrchestrationDb()
-    const dropped = db
-      .listUnreadBotRequests(botId)
-      .map(({ message }) => message)
-      .filter((message) => !onlyTo || message.to_handle.endsWith(onlyTo))
-    await ensureSenderRecords(runtime, dropped)
-    for (const message of dropped) {
-      // Fenced on still unread: a delivery or check may read it while the senders are found.
-      if (tellSender(runtime, db, message, { outcome: 'dropped', why, unread: true })) {
-        db.markAsRead([message.id])
+    const holders = new Set<string>()
+    for (const { message } of db.listUnreadBotRequests(botId)) {
+      const holder = message.to_handle.startsWith(ORCA_SESSION_ADDRESS_PREFIX)
+        ? message.to_handle.slice(ORCA_SESSION_ADDRESS_PREFIX.length)
+        : message.to_handle
+      if (
+        (!onlyTo || message.to_handle.endsWith(onlyTo)) &&
+        db.releaseUnreadBotRequest(message.id, holder, why)
+      ) {
+        holders.add(holder)
       }
     }
+    await Promise.all([...holders].map((holder) => reconcileBotRequestTakes(runtime, holder)))
   } catch (error) {
     // The change itself stands; only the senders go untold.
     console.warn('[bots] could not tell senders of dropped bot requests', error)

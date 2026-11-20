@@ -1,7 +1,7 @@
 // Which chat took each agent question, until the question has an outcome. The chat's next rest
 // decides it: answered by then, or its asker is told once.
 import type { OrchestrationDb } from '../orchestration-db'
-import type { BotRequestRow } from './bot-request-store'
+import { withinSavepoint, type BotRequestRelease, type BotRequestRow } from './bot-request-store'
 
 /** Notes the chat that took a request, or the person who withdrew it unread. A request with an
  *  outcome is owed nothing, and a status asks for nothing, so neither is taken. */
@@ -9,7 +9,7 @@ export function takeBotRequest(
   this: OrchestrationDb,
   messageId: string,
   sessionId: string,
-  by: 'agent' | 'person'
+  by: 'agent' | BotRequestRelease
 ): boolean {
   return (
     this.db
@@ -20,6 +20,31 @@ export function takeBotRequest(
       )
       .run(sessionId, by, messageId, messageId).changes > 0
   )
+}
+
+/** A request its chat will never read is held as released, read, until its asker is told: the
+ *  release outlasts a sender that can't be verified yet, and a restart. False once anything read it. */
+export function releaseUnreadBotRequest(
+  this: OrchestrationDb,
+  messageId: string,
+  sessionId: string,
+  why: Exclude<BotRequestRelease, 'person'>
+): boolean {
+  return withinSavepoint(this, () => {
+    const released =
+      this.db
+        .prepare(
+          `UPDATE bot_requests SET taken_session_id = ?, taken_by = ?, debt_rule = 1
+            WHERE message_id = ? AND taken_session_id IS NULL
+              AND EXISTS (SELECT 1 FROM messages m WHERE m.id = ? AND m.read = 0)
+              AND NOT EXISTS (SELECT 1 FROM bot_request_outcomes o WHERE o.message_id = ?)`
+        )
+        .run(sessionId, why, messageId, messageId, messageId).changes > 0
+    if (released) {
+      this.markAsRead([messageId])
+    }
+    return released
+  })
 }
 
 /** Mail a `check` consumed: questions among it are taken by the checking chat, which the caller
@@ -102,22 +127,6 @@ export function adoptBotRequestDebtRule(this: OrchestrationDb, messageId: string
   return typeof row?.taken_session_id === 'string' ? row.taken_session_id : null
 }
 
-/** Requests this chat took, open or told unanswered: the ones a post of its own may settle. */
-export function listBotRequestsTakenBy(this: OrchestrationDb, sessionId: string): string[] {
-  return this.db
-    .prepare(
-      `SELECT r.message_id FROM bot_requests r INDEXED BY idx_bot_requests_open_take
-        WHERE r.taken_session_id = ? AND r.debt_rule = 1
-          AND NOT EXISTS (SELECT 1 FROM bot_request_outcomes o WHERE o.message_id = r.message_id)
-       UNION
-       SELECT r.message_id FROM bot_requests r INDEXED BY idx_bot_requests_decided_session
-        JOIN bot_request_outcomes o ON o.message_id = r.message_id AND o.outcome = 'unanswered'
-        WHERE r.decided_session_id = ?`
-    )
-    .all(sessionId, sessionId)
-    .flatMap(({ message_id }) => (typeof message_id === 'string' ? [message_id] : []))
-}
-
 /** Whether this chat still holds this request, with no outcome: the fence a notice commits under. */
 export function holdsBotRequestTake(
   this: OrchestrationDb,
@@ -136,9 +145,9 @@ export function holdsBotRequestTake(
 
 export type BotRequestTakeMethods = {
   takeBotRequest: typeof takeBotRequest
+  releaseUnreadBotRequest: typeof releaseUnreadBotRequest
   noteBotRequestsChecked: typeof noteBotRequestsChecked
   listOpenBotRequestTakes: typeof listOpenBotRequestTakes
-  listBotRequestsTakenBy: typeof listBotRequestsTakenBy
   listSessionsWithOpenBotRequestTakes: typeof listSessionsWithOpenBotRequestTakes
   listSessionsWithOpenBotRequestTakesFor: typeof listSessionsWithOpenBotRequestTakesFor
   adoptBotRequestDebtRule: typeof adoptBotRequestDebtRule
@@ -148,9 +157,9 @@ export type BotRequestTakeMethods = {
 export function attachBotRequestTakes(ctor: { prototype: object }): void {
   Object.assign(ctor.prototype, {
     takeBotRequest,
+    releaseUnreadBotRequest,
     noteBotRequestsChecked,
     listOpenBotRequestTakes,
-    listBotRequestsTakenBy,
     listSessionsWithOpenBotRequestTakes,
     listSessionsWithOpenBotRequestTakesFor,
     adoptBotRequestDebtRule,

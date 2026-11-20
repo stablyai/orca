@@ -19,10 +19,12 @@ CREATE TABLE IF NOT EXISTS bot_requests (
   send_key    TEXT,
   debt_rule   INTEGER,
   taken_session_id TEXT,
-  taken_by    TEXT,
-  decided_session_id TEXT
+  taken_by    TEXT
 );
 `
+
+/** Why a request was released before its chat read it. */
+export type BotRequestRelease = 'person' | 'paused' | 'deleted' | 'new-chat'
 
 export type BotRequestRow = {
   message_id: string
@@ -40,10 +42,9 @@ export type BotRequestRow = {
   debt_rule: number | null
   /** The chat that took it, until it has an outcome. */
   taken_session_id: string | null
-  /** 'agent': the chat read it; 'person': its owner withdrew it unread. */
-  taken_by: 'agent' | 'person' | null
-  /** The chat that held it when its outcome was recorded: a later post there still settles it. */
-  decided_session_id: string | null
+  /** 'agent': the chat read it; otherwise released unread: 'person' withdrew it, or its agent was
+   *  paused or deleted, or its Chat replaced. */
+  taken_by: 'agent' | BotRequestRelease | null
 }
 
 export type BotRequestAdmission =
@@ -85,7 +86,7 @@ export type BotRequestPeerLink = {
   senderLabel: string
 }
 
-function withinSavepoint<T>(db: OrchestrationDb, work: () => T): T {
+export function withinSavepoint<T>(db: OrchestrationDb, work: () => T): T {
   db.db.exec(`SAVEPOINT ${SAVEPOINT}`)
   try {
     const result = work()

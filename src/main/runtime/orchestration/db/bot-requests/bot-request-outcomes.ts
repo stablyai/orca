@@ -16,8 +16,7 @@ CREATE TABLE IF NOT EXISTS bot_request_outcomes (
 );
 `
 
-/** Records an outcome unless one stands; true when this one was recorded. A post where the asker
- *  asked still counts after Orca said there was no answer, so the asker never posts it twice. */
+/** Records an outcome unless one stands; true when this one was recorded. */
 export function recordBotRequestOutcome(
   this: OrchestrationDb,
   messageId: string,
@@ -25,13 +24,7 @@ export function recordBotRequestOutcome(
 ): boolean {
   const recorded =
     this.db
-      .prepare(
-        outcome === 'posted'
-          ? `INSERT INTO bot_request_outcomes (message_id, outcome) VALUES (?, ?)
-             ON CONFLICT(message_id) DO UPDATE SET outcome = excluded.outcome
-             WHERE outcome = 'unanswered'`
-          : 'INSERT OR IGNORE INTO bot_request_outcomes (message_id, outcome) VALUES (?, ?)'
-      )
+      .prepare('INSERT OR IGNORE INTO bot_request_outcomes (message_id, outcome) VALUES (?, ?)')
       .run(messageId, outcome).changes > 0
   clearBotRequestTake(this, messageId)
   return recorded
@@ -57,13 +50,12 @@ export function recordBotAnswer(
   return { posted: before === 'posted' }
 }
 
-/** A request with an outcome is owed nothing more, so the chat that took it no longer holds it;
- *  it is kept as the deciding chat, whose later post in the thread still settles it. */
+/** A request with an outcome is owed nothing more, so the chat that took it no longer holds it. */
 function clearBotRequestTake(db: OrchestrationDb, messageId: string): void {
   db.db
     .prepare(
       `UPDATE bot_requests
-          SET decided_session_id = taken_session_id, taken_session_id = NULL, taken_by = NULL
+          SET taken_session_id = NULL, taken_by = NULL
         WHERE message_id = ? AND taken_session_id IS NOT NULL`
     )
     .run(messageId)

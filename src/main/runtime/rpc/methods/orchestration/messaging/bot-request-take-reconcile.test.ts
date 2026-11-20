@@ -26,6 +26,8 @@ vi.mock('../../../../../bots/bot-session-tabs', () => ({
 const ASKER = 'orca_session_id:11111111-1111-4111-8111-111111111111'
 const CHAT = '22222222-2222-4222-8222-222222222222'
 const OTHER_CHAT = '33333333-3333-4333-8333-333333333333'
+// Retries are kept per chat across tests, so a test that leaves one owed uses a chat of its own.
+const RETRYING_CHAT = '55555555-5555-4555-8555-555555555555'
 
 const record: BotRequestRecord = {
   fromBotId: 'ranger',
@@ -237,14 +239,6 @@ describe('an agent question owes its asker one outcome', () => {
     })
   })
 
-  it('keeps a post where the asker asked as posted after the notice', async () => {
-    const id = ask()
-    take(id)
-    await reconcileBotRequestTakes(runtime, CHAT, reader)
-    expect(db.recordBotRequestOutcome(id, 'posted')).toBe(true)
-    expect(db.getBotRequestOutcome(id)).toBe('posted')
-  })
-
   it("queues a paired computer's notice with its outcome, once its way back is filed", async () => {
     const id = ask({ newRule: false })
     take(id)
@@ -336,5 +330,76 @@ describe('an agent question owes its asker one outcome', () => {
     }
     expect(db.listOpenBotRequestTakes(CHAT).map((row) => row.message_id)).toEqual([id])
     expect(woke).toEqual([CHAT])
+  })
+
+  it('tells nothing when a Continue starts the chat again while its offers are read', async () => {
+    const id = ask()
+    take(id)
+    // The continued turn starts, then the Continue's reservation completes, mid-decision.
+    reader.restartHolds = async () => {
+      rest = { kind: 'busy' }
+      return new Set()
+    }
+    try {
+      await reconcileBotRequestTakes(runtime, CHAT, reader)
+    } finally {
+      reader.restartHolds = async () => new Set(offered)
+    }
+    expect(notices()).toEqual([])
+    expect(db.getBotRequestOutcome(id)).toBeNull()
+  })
+
+  it("tells once an offer is dismissed while Orca's start decides the chat", async () => {
+    const id = ask()
+    take(id)
+    offered.add(CHAT)
+    let dismissed: Promise<void> | undefined
+    reader.readQuestionRest = async () => {
+      await Promise.resolve()
+      if (!dismissed) {
+        offered.clear()
+        dismissed = reconcileBotRequestTakes(runtime, CHAT, reader)
+      }
+      return rest
+    }
+    try {
+      await reconcileBotRequestTakesAtStartup(runtime, reader)
+      await dismissed
+    } finally {
+      reader.readQuestionRest = async () => rest
+    }
+    expect(db.getBotRequestOutcome(id)).toBe('unanswered')
+  })
+
+  it('reads no offers when every chat holding a question is busy', async () => {
+    const id = ask()
+    take(id)
+    rest = { kind: 'busy' }
+    reader.restartHolds = () => Promise.reject(new Error('capsule unreadable'))
+    try {
+      await reconcileBotRequestTakesAtStartup(runtime, reader)
+      await new Promise((resolve) => setImmediate(resolve))
+    } finally {
+      reader.restartHolds = async () => new Set(offered)
+    }
+    expect(db.getBotRequestOutcome(id)).toBeNull()
+  })
+
+  it('keeps its first retry when more edges arrive while a fact is unreadable', async () => {
+    vi.useFakeTimers()
+    try {
+      const id = ask()
+      take(id, RETRYING_CHAT)
+      rest = { kind: 'rest', outcome: 'failure' }
+      continues = null
+      for (let edge = 0; edge < 5; edge += 1) {
+        await reconcileBotRequestTakes(runtime, RETRYING_CHAT, reader)
+      }
+      continues = false
+      await vi.advanceTimersByTimeAsync(30_000)
+      expect(db.getBotRequestOutcome(id)).toBe('unanswered')
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })
