@@ -49,7 +49,8 @@ export class CodexSharedServerPool {
     handlers: CodexAppServerConnectionHandlers,
     options: CodexSharedServerOpenOptions
   ): Promise<CodexAppServerConnection> {
-    const spec = codexSharedServerSpec(launch, options.skillRoots)
+    const spec = await codexSharedServerSpec(launch, options.skillRoots)
+    this.ceiling.sampleIfStale()
     const server = this.serverWithRoom(spec.key) ?? this.startServer(spec)
     this.cancelIdleStop(server)
     // Reserved before the server is ready, so concurrent opens respect the cap.
@@ -94,7 +95,6 @@ export class CodexSharedServerPool {
     const group = this.servers.get(spec.key) ?? []
     group.push(server)
     this.servers.set(spec.key, group)
-    this.ceiling.watch()
     return server
   }
 
@@ -147,9 +147,6 @@ export class CodexSharedServerPool {
       this.servers.set(server.spec.key, remaining)
     } else {
       this.servers.delete(server.spec.key)
-    }
-    if (this.servers.size === 0) {
-      this.ceiling.unwatch()
     }
   }
 }

@@ -7,7 +7,8 @@ import type { CodexSharedServer } from './codex-shared-server'
 
 /** Above this a server takes no new chats and stops once its chats leave. */
 export const CODEX_SHARED_SERVER_MEMORY_CEILING_BYTES = 1.5 * 1024 * 1024 * 1024
-const SAMPLE_INTERVAL_MS = 60_000
+/** The ceiling only steers where new chats go, so it is sampled when a chat joins, at most this often. */
+const SAMPLE_MIN_AGE_MS = 60_000
 
 export type CodexSharedServerToolUsage = {
   sessionId: string
@@ -16,9 +17,9 @@ export type CodexSharedServerToolUsage = {
   memory: number
 }
 
-/** Samples only while shared servers exist: one host process sweep a minute. */
+/** No timer: a chat joining a pool triggers at most one host process sweep a minute. */
 export class CodexSharedServerMemoryCeiling {
-  private timer: ReturnType<typeof setInterval> | null = null
+  private lastSampleAt = Number.NEGATIVE_INFINITY
   private sampling = false
 
   constructor(
@@ -27,19 +28,17 @@ export class CodexSharedServerMemoryCeiling {
     private readonly ceilingBytes = CODEX_SHARED_SERVER_MEMORY_CEILING_BYTES
   ) {}
 
-  watch(): void {
-    if (this.timer) {
+  /** In the background: this join goes where the last sample said; later ones see this one. */
+  sampleIfStale(now = Date.now()): void {
+    if (
+      this.sampling ||
+      now - this.lastSampleAt < SAMPLE_MIN_AGE_MS ||
+      this.servers().length === 0
+    ) {
       return
     }
-    this.timer = setInterval(() => void this.sample(), SAMPLE_INTERVAL_MS)
-    this.timer.unref?.()
-  }
-
-  unwatch(): void {
-    if (this.timer) {
-      clearInterval(this.timer)
-      this.timer = null
-    }
+    this.lastSampleAt = now
+    void this.sample()
   }
 
   async sample(index?: ProcIndex): Promise<void> {

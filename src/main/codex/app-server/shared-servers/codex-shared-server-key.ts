@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { statSync } from 'node:fs'
+import { stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import {
   ORCA_AGENT_SESSION_ID_ENV,
@@ -26,19 +26,20 @@ export type CodexSharedServerSpec = {
 }
 
 /** Binary mtime is the drain generation: an upgraded Codex gets new servers; old ones drain. */
-function binaryGeneration(command: string): number | null {
+async function binaryGeneration(command: string): Promise<number | null> {
   try {
-    return statSync(command).mtimeMs
+    return (await stat(command)).mtimeMs
   } catch {
     return null
   }
 }
 
 /** Chats share a server only when the binary, flags, account home, base env and skill roots match. */
-export function codexSharedServerSpec(
+export async function codexSharedServerSpec(
   launch: CodexAppServerLaunch,
   skillRoots: readonly string[]
-): CodexSharedServerSpec {
+): Promise<CodexSharedServerSpec> {
+  const generation = await binaryGeneration(launch.command)
   const env = { ...launch.env }
   for (const key of PER_CHAT_ENV_KEYS) {
     delete env[key]
@@ -48,7 +49,7 @@ export function codexSharedServerSpec(
     .update(
       JSON.stringify({
         command: launch.command,
-        generation: binaryGeneration(launch.command),
+        generation,
         args: launch.args,
         env: Object.entries(env).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)),
         envToDelete,

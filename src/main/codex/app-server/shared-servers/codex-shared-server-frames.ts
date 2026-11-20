@@ -1,3 +1,4 @@
+import { isProviderRecord } from '../../../provider-process/provider-json-record'
 import type { CodexAppServerServerRequest } from '../codex-app-server-connection-types'
 
 export type CodexSharedServerFrame =
@@ -7,10 +8,10 @@ export type CodexSharedServerFrame =
 function field(value: unknown, ...path: readonly string[]): unknown {
   let current = value
   for (const key of path) {
-    if (typeof current !== 'object' || current === null) {
+    if (!isProviderRecord(current)) {
       return undefined
     }
-    current = (current as Record<string, unknown>)[key]
+    current = current[key]
   }
   return current
 }

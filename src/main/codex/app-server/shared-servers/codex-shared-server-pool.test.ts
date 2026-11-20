@@ -5,6 +5,7 @@ import type {
 } from '../codex-app-server-connection-types'
 import { CodexSharedServerPool } from './codex-shared-server-pool'
 import { CODEX_SHARED_LEASE_MAX_QUEUED_FRAMES } from './codex-shared-server-lease'
+import { codexOpenedThreadId } from './codex-shared-server-frames'
 
 type FakeServer = {
   pid: number
@@ -80,10 +81,9 @@ const launch = (home = '/home/a/.codex') => ({
 })
 
 async function startThread(connection: CodexAppServerConnection): Promise<string> {
-  const result = (await connection.request('thread/start', { cwd: '/work' })) as {
-    thread: { id: string }
-  }
-  return result.thread.id
+  const threadId = codexOpenedThreadId(await connection.request('thread/start', { cwd: '/work' }))
+  expect(threadId).not.toBeNull()
+  return threadId ?? ''
 }
 
 describe('shared Codex app-servers', () => {
