@@ -1,5 +1,5 @@
 // @protected-copy
-import { useCallback, useLayoutEffect, useRef, useState, type JSX } from 'react'
+import { memo, useCallback, useLayoutEffect, useRef, useState, type JSX } from 'react'
 import { Check, CircleAlert } from 'lucide-react'
 import { DialogDisclosure } from '@/components/ui/dialog-parts'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
@@ -8,6 +8,7 @@ import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { STATUS_COLORS } from '../../../../lib/source-control/paths/git-path-decoration'
 import { STATUS_LABELS } from '../../../../../../shared/git/status/git-status-labels'
 import type { Worktree } from '../../../../../../shared/worktree/types'
+import type { WorktreeAtRiskLocalFiles } from '../../../../../../shared/worktree/removal/at-risk-local-files'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import type { DeleteWorktreeLocalFilesState } from './use-delete-worktree-at-risk-local-files'
 import { DeleteWorktreeLocalFilesDetails } from './DeleteWorktreeLocalFilesHint'
@@ -68,6 +69,9 @@ export function deleteWorktreeLossLine(
 
 type StatusTone = 'checking' | 'clean' | 'warning'
 
+// size-3.5 chevron plus the trigger's gap-1.5.
+const CHEVRON_ROOM_PX = 20
+
 /** What deleting one workspace loses, as one fixed-height line; the files sit behind it. */
 export function DeleteWorktreeChangesSummary({
   worktree,
@@ -92,9 +96,11 @@ export function DeleteWorktreeChangesSummary({
   const noteRef = useRef<HTMLSpanElement>(null)
   // A long translation can clip the one fixed line; the full sentence then moves into the panel.
   const measureClipped = useCallback(() => {
-    setClipped(
-      [textRef.current, noteRef.current].some((el) => el != null && el.scrollWidth > el.clientWidth)
-    )
+    const spans = [textRef.current, noteRef.current].filter((el) => el != null)
+    const overflow = spans.reduce((total, el) => total + el.scrollWidth - el.clientWidth, 0)
+    // Inside the toggle, the chevron and its gap take room the plain line would have.
+    const chevronRoom = spans[0]?.closest('button') ? CHEVRON_ROOM_PX : 0
+    setClipped(overflow > chevronRoom)
   }, [])
   // Text changes don't fire ResizeObserver, so remeasure after every render too.
   useLayoutEffect(measureClipped)
@@ -105,10 +111,13 @@ export function DeleteWorktreeChangesSummary({
       }
       const observer = new ResizeObserver(measureClipped)
       observer.observe(row)
-      // A late web font changes text width without resizing the row.
+      // A font load or font setting change alters text width without resizing the row.
       document.fonts?.addEventListener('loadingdone', measureClipped)
+      const fontSetting = new MutationObserver(measureClipped)
+      fontSetting.observe(document.documentElement, { attributeFilter: ['style'] })
       return () => {
         observer.disconnect()
+        fontSetting.disconnect()
         document.fonts?.removeEventListener('loadingdone', measureClipped)
       }
     },
@@ -197,9 +206,11 @@ export function DeleteWorktreeChangesSummary({
       {stillChecking ? (
         <>
           <LoadingSpinner className="size-3 shrink-0 text-muted-foreground" />
-          {text === checkingLabel ? null : (
+          {changesChecking && text === checkingLabel ? null : (
             <span className="sr-only">
-              {t('components.workspace.delete.changes.checkingDetails', 'Checking…')}
+              {changesChecking
+                ? checkingLabel
+                : t('components.workspace.delete.ignoredFiles.checking', 'Checking ignored files…')}
             </span>
           )}
         </>
@@ -232,66 +243,86 @@ export function DeleteWorktreeChangesSummary({
           {clipped || !hasDetails ? (
             <p className="mb-2 font-sans text-[13px] text-foreground">{fullText}</p>
           ) : null}
-          {/* Only an open panel renders its rows, so focus changes on the closed line stay cheap. */}
-          {open && ignoredPaths.length > 0 && atRiskLocalFiles ? (
-            <DeleteWorktreeLocalFilesDetails files={atRiskLocalFiles} />
-          ) : null}
-          <ul className="min-w-0 space-y-0.5">
-            {(open ? changedFiles : []).map((file) => (
-              <li key={file.path} className="flex min-w-0 items-baseline gap-2">
-                <span
-                  className="w-3 shrink-0 font-semibold"
-                  style={{ color: STATUS_COLORS[file.status] }}
-                  aria-label={file.status}
-                >
-                  {STATUS_LABELS[file.status]}
-                </span>
-                <span className="min-w-0 break-all text-foreground">
-                  <DeleteWorktreeRelativePath path={file.path} />
-                  {file.hasUnresolvedConflict ? (
-                    <span className="ml-2 font-sans text-destructive">
-                      {t(
-                        'auto.components.sidebar.DeleteWorktreeDirtyChangeHint.unresolvedConflict',
-                        'Unresolved conflict'
-                      )}
-                    </span>
-                  ) : null}
-                </span>
-              </li>
-            ))}
-            {(open ? unsavedFiles : []).map((file) => (
-              <li key={file.id} className="flex min-w-0 items-baseline gap-2">
-                <span className="w-3 shrink-0" aria-hidden="true" />
-                <span className="min-w-0 break-all text-foreground" title={file.filePath}>
-                  {file.relativePath || file.filePath}{' '}
-                  <span className="font-sans text-muted-foreground">
-                    {t('worktree.delete.unsavedSuffix', '(unsaved)')}
-                  </span>
-                </span>
-              </li>
-            ))}
-          </ul>
-          {preview && preview.remainingPathCount > 0 ? (
-            <p className="mt-1 font-sans">
-              {t(
-                'auto.components.sidebar.DeleteWorktreeDirtyChangeHint.moreLoadedPaths',
-                'and {{count}} more loaded paths',
-                {
-                  count: preview.remainingPathCount,
-                  defaultValue_one: 'and {{count}} more loaded path'
-                }
-              )}
-            </p>
-          ) : null}
+          <DeleteWorktreeChangesFileList
+            preview={preview}
+            unsavedFiles={unsavedFiles}
+            atRiskLocalFiles={atRiskLocalFiles}
+          />
         </DialogDisclosure>
       ) : null}
       {expandable ? null : (
         <p className={`flex h-5 min-w-0 items-center gap-1.5 text-[13px] ${toneClassName}`}>
           {line}
-          {/* Holds the chevron's width so the text clips the same with or without the toggle. */}
-          <span aria-hidden="true" className="size-3.5 shrink-0" />
         </p>
       )}
     </div>
   )
 }
+
+/** Memoized so focus and status re-renders of the line never rebuild a long hidden list. */
+const DeleteWorktreeChangesFileList = memo(function DeleteWorktreeChangesFileList({
+  preview,
+  unsavedFiles,
+  atRiskLocalFiles
+}: {
+  preview: DeleteWorktreeDirtyChangePreview | undefined
+  unsavedFiles: readonly UnsavedFile[]
+  atRiskLocalFiles: WorktreeAtRiskLocalFiles | undefined
+}): JSX.Element {
+  const t = useTranslate()
+  const ignoredPaths = atRiskLocalFiles?.paths ?? atRiskLocalFiles?.samplePaths ?? []
+  return (
+    <>
+      {ignoredPaths.length > 0 && atRiskLocalFiles ? (
+        <DeleteWorktreeLocalFilesDetails files={atRiskLocalFiles} />
+      ) : null}
+      <ul className="min-w-0 space-y-0.5">
+        {(preview?.files ?? []).map((file) => (
+          <li key={file.path} className="flex min-w-0 items-baseline gap-2">
+            <span
+              className="w-3 shrink-0 font-semibold"
+              style={{ color: STATUS_COLORS[file.status] }}
+              aria-label={file.status}
+            >
+              {STATUS_LABELS[file.status]}
+            </span>
+            <span className="min-w-0 break-all text-foreground">
+              <DeleteWorktreeRelativePath path={file.path} />
+              {file.hasUnresolvedConflict ? (
+                <span className="ml-2 font-sans text-destructive">
+                  {t(
+                    'auto.components.sidebar.DeleteWorktreeDirtyChangeHint.unresolvedConflict',
+                    'Unresolved conflict'
+                  )}
+                </span>
+              ) : null}
+            </span>
+          </li>
+        ))}
+        {unsavedFiles.map((file) => (
+          <li key={file.id} className="flex min-w-0 items-baseline gap-2">
+            <span className="w-3 shrink-0" aria-hidden="true" />
+            <span className="min-w-0 break-all text-foreground" title={file.filePath}>
+              {file.relativePath || file.filePath}{' '}
+              <span className="font-sans text-muted-foreground">
+                {t('worktree.delete.unsavedSuffix', '(unsaved)')}
+              </span>
+            </span>
+          </li>
+        ))}
+      </ul>
+      {preview && preview.remainingPathCount > 0 ? (
+        <p className="mt-1 font-sans">
+          {t(
+            'auto.components.sidebar.DeleteWorktreeDirtyChangeHint.moreLoadedPaths',
+            'and {{count}} more loaded paths',
+            {
+              count: preview.remainingPathCount,
+              defaultValue_one: 'and {{count}} more loaded path'
+            }
+          )}
+        </p>
+      ) : null}
+    </>
+  )
+})
