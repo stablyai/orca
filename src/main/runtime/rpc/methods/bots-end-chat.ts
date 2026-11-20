@@ -50,17 +50,17 @@ async function callerRefusal(
   return (await ownerTypedLatest(context.runtime, caller)) ? null : { kind: 'not-owner' }
 }
 
-async function endChatFor(
-  params: BotChatEndParams,
-  context: RpcContext,
+/** The end op wired to this runtime, as `bots.endChat` runs it. */
+export async function runtimeBotChatEndDeps(
+  runtime: RpcContext['runtime'],
   bot: Bot,
+  chat: string,
   caller: string | undefined
-): Promise<BotChatEndResult> {
-  const { runtime } = context
+): Promise<BotChatEndDeps> {
   const host = await requireStructuredHost(runtime)
   const seam = () => runtime.getExternalConversationSeam()
   const store = () => runtime.requireStore()
-  const deps: BotChatEndDeps = {
+  return {
     host,
     runtime,
     lookUp: () => {
@@ -72,7 +72,7 @@ async function endChatFor(
           linkSource: (ids) => seam()?.chatLinkSource(ids) ?? null
         },
         bot,
-        params.chat
+        chat
       )
       return found.kind !== 'refused' && caller && found.target.lineage.includes(caller)
         ? { kind: 'refused', refusal: { kind: 'self' } }
@@ -91,7 +91,15 @@ async function endChatFor(
       ),
     redrive: (sessionId) => runtime.redriveStructuredSessionMail(sessionId)
   }
-  return endBotChat(deps, {
+}
+
+async function endChatFor(
+  params: BotChatEndParams,
+  context: RpcContext,
+  bot: Bot,
+  caller: string | undefined
+): Promise<BotChatEndResult> {
+  return endBotChat(await runtimeBotChatEndDeps(context.runtime, bot, params.chat, caller), {
     intent: params.intent,
     sessionId: params.chat.replace(/^chat:/, ''),
     ...(params.showing ? { showing: params.showing } : {})

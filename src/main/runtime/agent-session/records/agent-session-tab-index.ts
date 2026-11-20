@@ -1,9 +1,4 @@
-import { randomUUID } from 'node:crypto'
 import { agentSessionRefusalError } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
-
-// A process-wide epoch and counter: a showing's lifetime never repeats, even after a restart.
-const LIFETIME_EPOCH = randomUUID()
-let lastShow = 0
 import { structuredAgentSessionTabId } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 
 /** Tab membership defines visibility; tab and session ids form a one-to-one mapping. */
@@ -15,8 +10,6 @@ export class AgentSessionTabTable {
   private readonly background = new Set<string>()
   /** Bot chats a person ended: no tab, not in the background, and no turn starts until shown again. */
   private readonly ended = new Set<string>()
-  /** In memory only: which showing of each tab is current, so a close can name the one it saw. */
-  private readonly shows = new Map<string, number>()
   /** TEMPORARY, with `backfillBackgroundSessions`: set once chats from before the list are added. */
   backgroundBackfilled = false
 
@@ -65,21 +58,7 @@ export class AgentSessionTabTable {
     this.put(tabId ?? derived, sessionId)
   }
 
-  /** A new showing of a tab that is already listed, as an explicit show or reopen makes. */
-  renewShowing(sessionId: string): void {
-    if (this.tabBySession.has(sessionId)) {
-      this.shows.set(sessionId, ++lastShow)
-    }
-  }
-
-  /** The current showing of this session's tab; null when it has none. */
-  showingOf(sessionId: string): string | null {
-    const show = this.tabBySession.has(sessionId) ? this.shows.get(sessionId) : undefined
-    return show === undefined ? null : `${LIFETIME_EPOCH}:${show}`
-  }
-
   hide(sessionId: string): string | undefined {
-    this.shows.delete(sessionId)
     this.background.delete(sessionId)
     const tabId = this.tabBySession.get(sessionId)
     if (tabId !== undefined) {
@@ -121,10 +100,6 @@ export class AgentSessionTabTable {
   clone(): AgentSessionTabTable {
     const copy = new AgentSessionTabTable(this.sessionByTab, this.background, this.ended)
     copy.backgroundBackfilled = this.backgroundBackfilled
-    copy.shows.clear()
-    for (const [sessionId, show] of this.shows) {
-      copy.shows.set(sessionId, show)
-    }
     return copy
   }
 
@@ -152,7 +127,6 @@ export class AgentSessionTabTable {
     this.ended.delete(sessionId)
     this.sessionByTab.set(tabId, sessionId)
     this.tabBySession.set(sessionId, tabId)
-    this.shows.set(sessionId, ++lastShow)
   }
 }
 

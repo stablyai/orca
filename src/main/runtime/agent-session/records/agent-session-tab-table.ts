@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { AgentSessionRecordPublication } from './agent-session-record-publication'
 import { isAgentSessionSurfaceTabId } from '../../../../shared/agent-session/view/agent-session-surface-tab-id'
 import type { AgentSessionReserveRequest } from '../ownership/agent-session-reservation-admission'
@@ -110,7 +111,6 @@ export function setAgentSessionTabVisibility(
   )
   if (visible) {
     state.sessionTabs.show(sessionId, tabId)
-    state.sessionTabs.renewShowing(sessionId)
   } else if (end) {
     state.sessionTabs.end(sessionId)
   } else if (background) {
@@ -188,9 +188,19 @@ export abstract class AgentSessionRecordTabs extends AgentSessionRecordPublicati
   getSessionTabId = (sessionId: string): string | null =>
     this.transactions.state.sessionTabs?.tabIdFor(sessionId) ?? null
 
+  /** In memory only: each listed tab's current showing, renewed by every explicit show. */
+  private readonly showings = new Map<string, string>()
+
   /** Names the current showing of a session's tab, so a late close of an earlier one is told apart. */
-  getSessionTabShowing = (id: string): string | null =>
-    this.transactions.state.sessionTabs?.showingOf(id) ?? null
+  getSessionTabShowing = (id: string): string | null => {
+    if (!this.isSessionTabVisible(id)) {
+      this.showings.delete(id)
+      return null
+    }
+    const showing = this.showings.get(id) ?? randomUUID()
+    this.showings.set(id, showing)
+    return showing
+  }
 
   /** A bot chat a person ended, until it is shown or held in the background again. */
   isSessionEnded = (id: string): boolean =>
@@ -239,16 +249,25 @@ export abstract class AgentSessionRecordTabs extends AgentSessionRecordPublicati
       },
       check
     ).then((tab) => {
+      // Before any later write's check runs: a show is a new showing even of a listed tab.
+      if (visible) {
+        this.showings.set(sessionId, randomUUID())
+      } else {
+        this.showings.delete(sessionId)
+      }
       capture?.(tab)
     })
   }
 
   /** Publish the complete tab index in one write; a partial index would drop remaining chats on restart. */
   showSessionTabs(sessionIds: readonly string[]): Promise<void> {
+    const hidden = sessionIds.filter((id) => !this.isSessionTabVisible(id))
     return this.commitStoreCommand({
       kind: 'tabs-show',
       sessionIds,
       legacyTabIds: this.transactions.legacySessionTabIds
+    }).then(() => {
+      hidden.forEach((id) => this.showings.delete(id))
     })
   }
 }

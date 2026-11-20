@@ -46,27 +46,3 @@ describe('AgentSessionTabTable ended chats', () => {
     expect(restored.isEnded('c')).toBe(true)
   })
 })
-
-describe('AgentSessionTabTable showings', () => {
-  it('names a new showing when a tab returns under the same id', () => {
-    const table = new AgentSessionTabTable()
-    table.show('s1')
-    const first = table.showingOf('s1')
-    expect(first).not.toBeNull()
-
-    table.hide('s1')
-    expect(table.showingOf('s1')).toBeNull()
-    table.show('s1')
-    expect(table.showingOf('s1')).not.toBe(first)
-  })
-
-  it('renews an already listed tab on an explicit show and keeps it through a clone', () => {
-    const table = new AgentSessionTabTable()
-    table.show('s1')
-    const first = table.showingOf('s1')
-    expect(table.clone().showingOf('s1')).toBe(first)
-
-    table.renewShowing('s1')
-    expect(table.showingOf('s1')).not.toBe(first)
-  })
-})
