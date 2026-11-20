@@ -17864,10 +17864,6 @@
           "unreadCount_many": "{{count}} sin leer"
         },
         "ActivityThreadHoverCard": {
-          "workspace": "Espacio de trabajo",
-          "pathCopied": "Ruta copiada al portapapeles",
-          "copyPathFailed": "No se pudo copiar la ruta",
-          "copyPath": "Copiar ruta",
           "jumpToWorkspace": "Ir al espacio de trabajo"
         },
         "clearCompleted": {

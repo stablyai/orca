@@ -18143,10 +18143,6 @@
           "hideOtherClients": "Agenten anderer Clients ausblenden"
         },
         "ActivityThreadHoverCard": {
-          "pathCopied": "Pfad in die Zwischenablage kopiert",
-          "copyPathFailed": "Pfad konnte nicht kopiert werden",
-          "workspace": "Arbeitsbereich",
-          "copyPath": "Pfad kopieren",
           "jumpToWorkspace": "Zum Arbeitsbereich wechseln"
         },
         "ActivityThreadRow": {

@@ -18143,10 +18143,6 @@
           "standaloneTerminal": "Terminal autonome"
         },
         "ActivityThreadHoverCard": {
-          "pathCopied": "Chemin copié dans le presse-papiers",
-          "copyPathFailed": "Échec de la copie du chemin",
-          "workspace": "Espace de travail",
-          "copyPath": "Copier le chemin",
           "jumpToWorkspace": "Accéder à l'espace de travail"
         },
         "ActivityThreadContextMenu": {

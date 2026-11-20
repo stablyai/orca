@@ -18310,10 +18310,6 @@
           "standaloneTerminal": "スタンドアロンターミナル"
         },
         "ActivityThreadHoverCard": {
-          "pathCopied": "パスがクリップボードにコピーされました",
-          "copyPathFailed": "パスのコピーに失敗しました",
-          "workspace": "ワークスペース",
-          "copyPath": "パスをコピーする",
           "jumpToWorkspace": "ワークスペースにジャンプ"
         },
         "ActivityThreadContextMenu": {
