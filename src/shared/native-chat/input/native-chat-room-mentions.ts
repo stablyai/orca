@@ -6,6 +6,10 @@ export function nativeChatRoomNameMatches(name: string, query: string): boolean 
   return fold(name).includes(fold(query))
 }
 
+export function nativeChatRoomNameEquals(name: string, query: string): boolean {
+  return fold(name) === fold(query)
+}
+
 /** Room member names for an `@` query: names starting with it first, then any containing it. */
 export function rankNativeChatRoomMentions(names: readonly string[], query: string): string[] {
   const needle = fold(query)

@@ -183,9 +183,9 @@ const engBots: NativeChatBotChatRoom = {
   token: (value) => (value === 'runtime:air:off' ? '[Bot: Official](bot:off@air)' : undefined)
 }
 
-it('keeps `@` open past spaces while the words still name a bot, so a later one can be picked', () => {
+function mountSpaced() {
   const completeMention = vi.fn()
-  const { result, rerender } = renderHook(
+  const view = renderHook(
     ({ draft }: { draft: string }) =>
       useNativeChatComposerMentions(
         undefined,
@@ -196,12 +196,19 @@ it('keeps `@` open past spaces while the words still name a bot, so a later one 
     {
       wrapper: ({ children }: { children: ReactNode }) => (
         <NativeChatBotChatRoomContext.Provider value={engBots}>
-          {children}
+          <NativeChatBotChatPickerContext.Provider value={picker}>
+            {children}
+          </NativeChatBotChatPickerContext.Provider>
         </NativeChatBotChatRoomContext.Provider>
       ),
       initialProps: { draft: 'notify @eng - reviewer - o' }
     }
   )
+  return { ...view, completeMention }
+}
+
+it('keeps `@` open past spaces while the words still name a bot, so a later one can be picked', () => {
+  const { result, rerender, completeMention } = mountSpaced()
   expect(result.current.autocomplete).toEqual({
     mode: 'mention',
     query: 'eng - reviewer - o',
@@ -219,11 +226,50 @@ it('keeps `@` open past spaces while the words still name a bot, so a later one 
 
   for (const draft of ['notify @eng - reviewer please', 'notify @eng ', 'a@eng - rev', '@- x']) {
     rerender({ draft })
-    expect(result.current.autocomplete).toEqual(triggerOf(draft))
+    expect(result.current.autocomplete).toEqual({ mode: 'none' })
   }
   rerender({ draft: 'notify @eng - rev' })
   act(() => {
     expect(result.current.handleKey(key('Escape'), 0)).toBe(true)
   })
+  expect(result.current.autocomplete).toEqual({ mode: 'none' })
+})
+
+it('keeps a dismissal for the same trigger, then opens a newly typed spaced mention', () => {
+  const { result, rerender } = mountSpaced()
+  act(() => result.current.handleKey(key('Escape'), 0))
+  rerender({ draft: 'notify @eng - rev' })
+  expect(result.current.autocomplete).toEqual({ mode: 'none' })
+  rerender({ draft: '' })
+  rerender({ draft: 'notify @eng - reviewer - o' })
+  expect(result.current.autocomplete).toEqual({
+    mode: 'mention',
+    query: 'eng - reviewer - o',
+    triggerKey: '@:7'
+  })
+})
+
+it('closes after a completed multi-word name and a space while keeping partial names open', () => {
+  const { result, rerender } = mountSpaced()
+  rerender({ draft: 'notify @eng - ' })
+  expect(result.current.autocomplete).toEqual({
+    mode: 'mention',
+    query: 'eng - ',
+    triggerKey: '@:7'
+  })
+  rerender({ draft: 'notify @Eng - Reviewer ' })
+  expect(result.current.autocomplete).toEqual({ mode: 'none' })
+})
+
+it('returns from a spaced mention chat list on Escape and closes the bots on the next Escape', () => {
+  const { result } = mountSpaced()
+  act(() => result.current.handleKey(key('ArrowRight'), 0))
+  act(() => result.current.handleKey(key('Escape'), 0))
+  expect(result.current.autocomplete).toEqual({
+    mode: 'mention',
+    query: 'eng - reviewer - o',
+    triggerKey: '@:7'
+  })
+  act(() => result.current.handleKey(key('Escape'), 0))
   expect(result.current.autocomplete).toEqual({ mode: 'none' })
 })

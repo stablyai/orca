@@ -203,8 +203,9 @@ export function useNativeChatComposerMentions(
         }
         return false
       }
-      if (event.key === 'Escape' && spaced && !drill.open && !drill.parent) {
+      if (event.key === 'Escape' && spaced && !drill.open) {
         event.preventDefault()
+        drill.onKey(event, null)
         spaced.dismiss()
         return true
       }

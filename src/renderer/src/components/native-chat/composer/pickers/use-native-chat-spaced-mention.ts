@@ -1,5 +1,8 @@
 import { useCallback, useMemo, useState } from 'react'
-import { nativeChatRoomNameMatches } from '../../../../../../shared/native-chat/input/native-chat-room-mentions'
+import {
+  nativeChatRoomNameEquals,
+  nativeChatRoomNameMatches
+} from '../../../../../../shared/native-chat/input/native-chat-room-mentions'
 import type { NativeChatComposerRoom } from '../native-chat-composer-types'
 
 /** A member's name has spaces the `@` trigger can't hold: the text after `@` keeps the list open while
@@ -10,17 +13,24 @@ export function useSpacedMemberQuery(
   caret: number
 ): { query: string; from: number; dismiss: () => void } | null {
   const [dismissed, setDismissed] = useState<string | null>(null)
-  const found = room ? draft.slice(0, caret).match(/(?:^|\s)@(\S[^@\n]*)$/) : null
+  const found = draft.slice(0, caret).match(/(?:^|\s)@(\S[^@\n]*)$/)
   const query = found?.[1]
   const from = query === undefined ? -1 : caret - query.length - 1
   // Keyed by the text before the `@`, so Esc holds only for this `@`.
   const key = `${from}:${draft.slice(0, from)}`
+  if (dismissed !== null && dismissed !== key) {
+    setDismissed(null)
+  }
   // A word after the space, so a finished `@name ` still sends; letters, so `@- x` matches nothing.
   const named = useMemo(
     () =>
       query !== undefined &&
       /\s\S/.test(query) &&
       /[\p{L}\p{N}]/u.test(query) &&
+      !(
+        /\s$/.test(query) &&
+        room?.mentions.some((member) => nativeChatRoomNameEquals(member.name, query))
+      ) &&
       room?.mentions.some((member) => nativeChatRoomNameMatches(member.name, query)) === true,
     [room, query]
   )
