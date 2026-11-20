@@ -44,10 +44,12 @@ export function createServerSession({
   let idleTimer
   let killTimer
   let idleExpired = false
+  let generation = 0
   const queue = []
   const pending = new Set()
   // The current server's requests to the client, under wrapper ids so a late answer can't reach a newer server.
   const relayed = new Map()
+  const relayedByServerId = new Map()
   // What the running (or last) server has seen, so a new one can be brought to the same state.
   const documents = new Map()
   // Registrations the client holds for the current server, by id; withdrawn when that server stops.
@@ -98,9 +100,22 @@ export function createServerSession({
     }
   }
 
+  // Messages and exits from a server the session already gave up on are ignored.
   const launch = () => {
     state = 'starting'
-    server = startServer({ onMessage: fromServer, onExit })
+    const own = ++generation
+    server = startServer({
+      onMessage: (message) => own === generation && fromServer(message),
+      onExit: (code, signal) => own === generation && onExit(code, signal)
+    })
+  }
+
+  // A server that misses a deadline is treated as gone now, then killed for good if it lingers.
+  const retire = () => {
+    const stuck = server
+    stuck.kill()
+    setTimer(() => stuck.kill('SIGKILL'), SHUTDOWN_GRACE_MS)
+    onExit(null, 'SIGTERM')
   }
 
   const stop = () => {
@@ -108,17 +123,19 @@ export function createServerSession({
     state = 'stopping'
     shutdownId = `${SESSION_ID_PREFIX}${++nextId}`
     server.write({ jsonrpc: '2.0', id: shutdownId, method: 'shutdown' })
-    killTimer = setTimer(() => server?.kill(), SHUTDOWN_GRACE_MS)
+    killTimer = setTimer(retire, SHUTDOWN_GRACE_MS)
   }
 
-  // With requests still out, the stop waits for the last answer instead of checking again later.
+  // With requests still out, the stop waits for the last answer, or one more idle period at most.
   function onIdle() {
-    if (state === 'ready') {
-      if (pending.size > 0) {
-        idleExpired = true
-      } else {
-        stop()
-      }
+    if (state !== 'ready') {
+      return
+    }
+    if (pending.size === 0 || idleExpired) {
+      stop()
+    } else {
+      idleExpired = true
+      idleTimer = setTimer(onIdle, idleMs)
     }
   }
 
@@ -159,7 +176,7 @@ export function createServerSession({
     }
     replayId = `${SESSION_ID_PREFIX}${++nextId}`
     server.write({ ...initialize, id: replayId })
-    killTimer = setTimer(() => server?.kill(), RESTART_TIMEOUT_MS)
+    killTimer = setTimer(retire, RESTART_TIMEOUT_MS)
   }
 
   const finishReplay = () => {
@@ -171,9 +188,8 @@ export function createServerSession({
     }
     const initialFolders = initialize.params?.workspaceFolders ?? []
     if (folders) {
-      const added = [...folders.values()].filter(
-        ({ uri }) => !initialFolders.some((f) => f.uri === uri)
-      )
+      const initialUris = new Set(initialFolders.map(({ uri }) => uri))
+      const added = [...folders.values()].filter(({ uri }) => !initialUris.has(uri))
       const removed = initialFolders.filter(({ uri }) => !folders.has(uri))
       if (added.length > 0 || removed.length > 0) {
         server.write({
@@ -211,6 +227,7 @@ export function createServerSession({
       } else if (server && relayed.has(message.id)) {
         const { serverId, onAnswer } = relayed.get(message.id)
         relayed.delete(message.id)
+        relayedByServerId.delete(serverId)
         onAnswer?.()
         server.write({ ...message, id: serverId })
       }
@@ -267,6 +284,7 @@ export function createServerSession({
   const relayToClient = (message, onAnswer) => {
     const id = `${SESSION_ID_PREFIX}${++nextId}`
     relayed.set(id, { serverId: message.id, onAnswer })
+    relayedByServerId.set(message.id, id)
     toClient({ ...message, id })
   }
 
@@ -306,7 +324,7 @@ export function createServerSession({
     if (replayId !== null && message.id === replayId && !message.method) {
       if (message.error) {
         console.error(`agent-typescript-lsp: restart failed: ${message.error.message}`)
-        server.kill()
+        retire()
       } else {
         finishReplay()
       }
@@ -325,9 +343,7 @@ export function createServerSession({
     } else if (message.method && message.id !== undefined) {
       relayToClient(message)
     } else if (message.method === '$/cancelRequest') {
-      const relayedId = [...relayed].find(
-        ([, { serverId }]) => serverId === message.params?.id
-      )?.[0]
+      const relayedId = relayedByServerId.get(message.params?.id)
       if (relayedId !== undefined) {
         toClient({ ...message, params: { ...message.params, id: relayedId } })
       }
@@ -345,14 +361,20 @@ export function createServerSession({
   }
 
   function onExit(code, signal) {
+    generation++
     clearTimer(killTimer)
     clearTimer(idleTimer)
     const expected = state === 'stopping'
     const waking = state === 'starting' && replayId !== null
     server = null
     state = 'stopped'
+    // Requests the gone server never answered get an answer, so nothing waits on them.
+    for (const id of pending) {
+      toClient({ jsonrpc: '2.0', id, error: { code: REQUEST_FAILED, message: 'server stopped' } })
+    }
     pending.clear()
     relayed.clear()
+    relayedByServerId.clear()
     replayId = null
     shutdownId = null
     if (closed || !(expected || waking)) {
