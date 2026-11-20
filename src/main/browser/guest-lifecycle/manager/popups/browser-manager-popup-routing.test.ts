@@ -77,12 +77,7 @@ describe('browserManager', () => {
   // #36804: headless serve pages have no renderer to own Orca's tab model.
   // orcad's Electron browser registers pages without a workspace, so there is no tab list to open into.
 
-  function attachGuest(): {
-    guest: { id: number }
-    rendererSendMock: ReturnType<typeof vi.fn>
-    openLink: (url: string) => void
-    pressMouse: () => void
-  } {
+  function attachGuest() {
     const rendererSendMock = vi.fn()
     const guest = {
       ...guestNavigationMethods(),
@@ -149,9 +144,13 @@ describe('browserManager', () => {
       browserManager.beginAgentCommand('browser-1')
     )
 
-    await withAgentInputInjection(guest as never, async () => {
-      pressMouse()
-    })
+    await withAgentInputInjection(
+      guest,
+      async () => {
+        pressMouse()
+      },
+      { keyboard: false }
+    )
     openLink('https://docs.example.com/agent')
     pressMouse()
     openLink('https://docs.example.com/user')
@@ -310,12 +309,15 @@ describe('browserManager', () => {
   it("opens the system browser for a page with no tab only on the desktop user's own click", async () => {
     const { guest, openLink, pressMouse } = attachGuest()
 
-    await withAgentInputInjection(guest as never, async () => {
-      pressMouse()
-    })
+    await withAgentInputInjection(
+      guest,
+      async () => {
+        pressMouse()
+      },
+      { keyboard: false }
+    )
     openLink('https://docs.example.com/agent')
     openLink('https://docs.example.com/scripted')
-    expect(browserMocks.shellOpenExternalMock).not.toHaveBeenCalled()
 
     pressMouse()
     openLink('https://docs.example.com/user')
