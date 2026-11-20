@@ -22,10 +22,7 @@ type PasteTerminalClipboardDeps = {
   readClipboardText: (options?: ReadClipboardTextOptions) => Promise<string>
   saveClipboardImageAsTempFile: SaveClipboardImageAsTempFile
   copiedFiles?: TerminalClipboardCopiedFiles
-  pasteText: (
-    text: string,
-    options?: TerminalPasteTextOptions
-  ) => boolean | void | Promise<boolean | void>
+  pasteText: (text: string, options?: TerminalPasteTextOptions) => boolean | Promise<boolean>
   connectionId?: string | null
   runtimeEnvironmentId?: string | null
   protectedMultilineTextPasteOptions?: TerminalPasteTextOptions
@@ -88,7 +85,7 @@ export async function pasteTerminalClipboard({
       const result = await (protectedMultilineTextPasteOptions
         ? pasteText(text, protectedMultilineTextPasteOptions)
         : pasteText(text))
-      if (result === false) {
+      if (result !== true) {
         return { status: 'skipped', reason: 'text-paste-rejected' }
       }
       return { status: 'pasted', kind: 'text' }
@@ -108,7 +105,7 @@ export async function pasteTerminalClipboard({
       forceBracketedPaste: true,
       recoverImagePasteWebglAtlas: true
     })
-    if (result === false) {
+    if (result !== true) {
       return { status: 'skipped', reason: 'image-paste-rejected' }
     }
     if (!connectionId && !runtimeEnvironmentId) {

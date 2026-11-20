@@ -42,7 +42,10 @@ describe('terminal clipboard paste', () => {
       saveClipboardImageAsTempFile: vi
         .fn()
         .mockResolvedValue('/tmp/orca-paste-1760000000000-id.png'),
-      pasteText: (text, options) => pasteTerminalText(terminal, text, options)
+      pasteText: (text, options) => {
+        pasteTerminalText(terminal, text, options)
+        return true
+      }
     })
 
     expect(terminal.input).toHaveBeenCalledWith(

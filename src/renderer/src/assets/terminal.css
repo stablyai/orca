@@ -518,8 +518,8 @@
   contain: paint;
 }
 
-/* Offset titled terminals and subtract the same height to prevent clipping. */
-.pane[data-has-title] .xterm-container {
+/* Reserve the header row for titles and image chips. */
+.pane:is([data-has-title], [data-has-recent-images]) .xterm-container {
   margin-top: var(--orca-pane-title-height);
   height: calc(100% - var(--orca-pane-title-height) - var(--pane-padding-y, 4px));
 }
@@ -533,7 +533,7 @@
   z-index: 5;
 }
 
-.pane[data-has-title] .pane-top-banner {
+.pane:is([data-has-title], [data-has-recent-images]) .pane-top-banner {
   top: calc(var(--orca-pane-title-height) + var(--orca-pane-top-banner-offset, 0px));
 }
 
@@ -542,7 +542,7 @@
   height: calc(100% - 2 * var(--pane-padding-y, 4px) - var(--orca-pane-top-banner-height, 0px));
 }
 
-.pane[data-has-title]:has(> .pane-top-banner) .xterm-container {
+.pane:is([data-has-title], [data-has-recent-images]):has(> .pane-top-banner) .xterm-container {
   margin-top: calc(var(--orca-pane-title-height) + var(--orca-pane-top-banner-height, 0px));
   height: calc(
     100% - var(--orca-pane-title-height) - var(--orca-pane-top-banner-height, 0px) -

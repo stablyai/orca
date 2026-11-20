@@ -63,7 +63,7 @@ export function createTerminalPanePasteExecution(
     activeElementAtDispatch: Element | null,
     text: string,
     options?: TerminalPasteTextOptions
-  ): Promise<void> => {
+  ): Promise<boolean> => {
     const transport = paneTransportsRef.current.get(pane.id)
     const ptyId = transport?.getPtyId() ?? null
     const keyboardOwnedPaste =
@@ -96,7 +96,7 @@ export function createTerminalPanePasteExecution(
     })
     if (execution.status !== 'pasted') {
       setTerminalError(formatTerminalPasteExecutionError(execution.reason))
-      return
+      return false
     }
     if (text) {
       recordTerminalUserInputForLeaf(tabId, pane.leafId)
@@ -104,6 +104,7 @@ export function createTerminalPanePasteExecution(
     if (options?.recoverImagePasteWebglAtlas) {
       scheduleImagePasteWebglAtlasRecovery()
     }
+    return true
   }
 
   // Resolve per pane/PTY host: Windows Codex needs input-record newlines even beside other protocols.

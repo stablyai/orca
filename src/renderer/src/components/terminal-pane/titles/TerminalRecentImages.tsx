@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useState, useSyncExternalStore, type MouseEvent } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useState,
+  useSyncExternalStore,
+  type MouseEvent
+} from 'react'
 import type { Terminal } from '@xterm/xterm'
 import { Image as ImageIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -15,6 +22,7 @@ import { KEEPS_FOCUS_ATTRIBUTE } from '@/lib/overlay-interaction/focus-keeping-p
 import { basename } from '@/lib/path'
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager-types'
 import { useAppStore } from '@/store'
+import { filesystemPathToFileUri } from '../../../../../shared/file-links/file-uri-path'
 import { formatBytes } from '../../../../../shared/text/format-bytes'
 import { openDetectedFilePath } from '../links/files/terminal-file-open-routing'
 import {
@@ -35,14 +43,22 @@ export function TerminalRecentImages({
   ...location
 }: ImageLocation & { pane: ManagedPane }): React.JSX.Element | null {
   const enabled = useAppStore((state) => state.settings?.terminalDroppedImagesPreview !== false)
-  const { terminal } = pane
+  const { terminal, container } = pane
   const subscribe = useCallback(
     (listener: () => void) => subscribeToRecentTerminalImages(terminal, listener),
     [terminal]
   )
   const getSnapshot = useCallback(() => getRecentTerminalImages(terminal), [terminal])
   const images = useSyncExternalStore(subscribe, getSnapshot)
-  if (!enabled || images.length === 0) {
+  const showImages = enabled && images.length > 0
+  useLayoutEffect(() => {
+    if (!showImages) {
+      return
+    }
+    container.setAttribute('data-has-recent-images', '')
+    return () => container.removeAttribute('data-has-recent-images')
+  }, [container, showImages])
+  if (!showImages) {
     return null
   }
   return (
@@ -109,7 +125,13 @@ function TerminalImagePreview({
 }): React.JSX.Element {
   const t = useTranslate()
   const locale = useIntlLocale()
-  const src = useLocalImageSrc(image.path, image.path, null, undefined, chatImageAccess())
+  const src = useLocalImageSrc(
+    filesystemPathToFileUri(image.path),
+    image.path,
+    null,
+    undefined,
+    chatImageAccess()
+  )
   const [dimensions, setDimensions] = useState<string>()
   const [fileSize, setFileSize] = useState<number>()
   const extension = image.path.slice(image.path.lastIndexOf('.') + 1).toUpperCase()
