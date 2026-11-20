@@ -12,6 +12,7 @@ import {
   settle
 } from './connector-poll-client.test-fixture'
 import { FAKE_BOT, fakeSeam } from './fake-connector-seam.test-fixture'
+import { CONNECTOR_REHELLO_SPREAD_MS } from './connector-poll-control'
 
 const h = pollClientHarness()
 const { startClient, poll } = h
@@ -365,12 +366,27 @@ describe('ConnectorPollClient', () => {
     await settle()
     h.fake.forgetHello()
     poll([])
-    await settle()
+    await settle(CONNECTOR_REHELLO_SPREAD_MS)
     expect(h.fake.hellos).toHaveLength(2)
     expect(h.fake.events).toEqual([
       { kind: 'snapshot', conversations: [] },
       { kind: 'snapshot', conversations: [] }
     ])
+    client.stop()
+  })
+
+  it('says its first hello at once, and waits a random spread before a hello a 409 asked for', async () => {
+    const { client } = startClient()
+    await settle()
+    expect(h.fake.hellos).toHaveLength(1)
+    // As after a deploy that changed the cloud's features; random() is 0.5 here, so 30 s.
+    h.fake.answerPoll({ status: 409, body: { error: 'hello_required' } })
+    await settle(CONNECTOR_REHELLO_SPREAD_MS / 2 - 1_000)
+    expect(h.fake.hellos).toHaveLength(1)
+    expect(h.fake.requestsTo(CONNECTOR_PATHS.poll)).toHaveLength(1)
+    await settle(2_000)
+    expect(h.fake.hellos).toHaveLength(2)
+    expect(h.fake.requestsTo(CONNECTOR_PATHS.poll).at(-1)?.body).toMatchObject({ helloRev: 2 })
     client.stop()
   })
 

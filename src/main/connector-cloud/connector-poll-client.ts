@@ -28,7 +28,7 @@ import {
   type ConnectorBotPostBody,
   type ConnectorReplyBody
 } from './connector-replies'
-import { connectorPollRetryMs, obeyConnectorPollControl } from './connector-poll-control'
+import * as pollControl from './connector-poll-control'
 import { ConnectorOutboxSender } from './connector-outbox'
 import { ConnectorEventRequests } from './connector-event-requests'
 import { ConnectorClientSnapshots, type ConnectorClientHello } from './connector-snapshot-trace'
@@ -247,6 +247,11 @@ export class ConnectorPollClient {
       // if one said meanwhile did not already replace it.
       if (this.helloRev === helloRev && (polled.status === 409 || polled.status === null)) {
         this.helloRev = this.snapshots.drop(polled.status === 409 ? 'poll-409' : 'poll-failed')
+        // A 409 that dropped this hello waits a random spread first: a deploy may have asked many
+        // hosts at once. The first hello, and one a newer hello already answered, go at once.
+        if (polled.status === 409) {
+          return pollControl.waitRehelloSpread(this.random, this.stopped.signal)
+        }
       }
       return polled.status === 409 ? null : (connectorStop(polled) ?? this.backoff(polled))
     }
@@ -264,7 +269,7 @@ export class ConnectorPollClient {
     const msLeft = (expiresAt: number): number =>
       expiresAt - response.serverNow - (performance.now() - answeredAt)
     this.deliveries.deliverAll(response.deliveries, msLeft, outbox)
-    return obeyConnectorPollControl(response.control, this.random, this.stopped.signal)
+    return pollControl.obeyConnectorPollControl(response.control, this.random, this.stopped.signal)
   }
 
   private sayHello(): Promise<ConnectorFailure | null> {
@@ -323,12 +328,8 @@ export class ConnectorPollClient {
     this.eventRequests.watch()
   }
 
-  private async backoff(failure: ConnectorFailure): Promise<null> {
-    await delayUnlessAborted(
-      connectorPollRetryMs(this.failures++, failure, this.random),
-      this.stopped.signal
-    )
-    return null
+  private backoff(failure: ConnectorFailure): Promise<null> {
+    return pollControl.waitPollRetry(this.failures++, failure, this.random, this.stopped.signal)
   }
 
   private async post(

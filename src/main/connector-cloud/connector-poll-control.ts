@@ -11,6 +11,20 @@ export function connectorReconnectSpreadMs(random: () => number): number {
   return random() * CONNECTOR_RECONNECT_SPREAD_MS
 }
 
+// A deploy that changes the cloud's features answers hello_required to many hosts close together; each
+// waits up to this long before its new hello and snapshot, so they don't all land at once.
+export const CONNECTOR_REHELLO_SPREAD_MS = 60_000
+
+export function connectorRehelloSpreadMs(random: () => number): number {
+  return random() * CONNECTOR_REHELLO_SPREAD_MS
+}
+
+/** Waits out a 409's re-hello spread, or until `signal` aborts. */
+export async function waitRehelloSpread(random: () => number, signal: AbortSignal): Promise<null> {
+  await delayUnlessAborted(connectorRehelloSpreadMs(random), signal)
+  return null
+}
+
 /** A failed poll's wait: the first spreads like a drain's re-poll, later ones double as usual. */
 export function connectorPollRetryMs(
   failures: number,
@@ -20,6 +34,17 @@ export function connectorPollRetryMs(
   return failures === 0
     ? Math.max(connectorReconnectSpreadMs(random), failure.retryAfterMs ?? 0)
     : connectorRetryDelayMs(failures, failure, random)
+}
+
+/** Waits out a failed poll's wait, or until `signal` aborts. */
+export async function waitPollRetry(
+  failures: number,
+  failure: ConnectorFailure,
+  random: () => number,
+  signal: AbortSignal
+): Promise<null> {
+  await delayUnlessAborted(connectorPollRetryMs(failures, failure, random), signal)
+  return null
 }
 
 /** Waits out a poll answer's pause or reconnect spread; returns the cloud's stop reason, if it gave one. */
