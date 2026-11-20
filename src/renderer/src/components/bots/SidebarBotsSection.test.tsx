@@ -247,7 +247,7 @@ describe('SidebarBotsSection', () => {
     expect(mocks.openHomeTab).not.toHaveBeenCalled()
   })
 
-  it('leaves the folded header without its controls, so Tab cannot reach them', () => {
+  it('opens New bot from the crowded folded header while the section stays folded', () => {
     vi.stubGlobal('api', { ui: { set: vi.fn(() => Promise.resolve()) } })
     threeUnplacedBots()
     useAppStore.setState({ collapsedGroups: new Set(['bots']) })
@@ -266,6 +266,12 @@ describe('SidebarBotsSection', () => {
     expect(controls().every(Boolean)).toBe(true)
     fireEvent.click(screen.getByRole('button', { name: /^Collapse Bots,/ }))
     expect(controls()).toEqual([null, null, null])
+
+    fireEvent.click(screen.getByRole('button', { name: /^New bot$/ }))
+    expect(document.querySelector('[data-new-bot-dialog]')).not.toBeNull()
+    expect(
+      screen.getByRole('button', { name: /^Expand Bots,/ }).getAttribute('aria-expanded')
+    ).toBe('false')
   })
 
   it('keeps the + menu shut on unfold after a fold it never saw', () => {

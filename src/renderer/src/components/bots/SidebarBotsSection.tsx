@@ -46,6 +46,7 @@ import { BotSidebarOptionsMenu } from './BotSidebarOptionsMenu'
 import { useBotSidebarArrangement } from './use-bot-sidebar-arrangement'
 import { ImportBotDialog } from './ImportBotDialog'
 import { botErrorMessage } from './bot-presentation'
+import { BotCollapsedAction } from './BotCollapsedAction'
 import { BotCollapsedPreview, useBotPreviewFacts } from './BotCollapsedPreview'
 import { collapsedBotPreview } from '../../../../shared/bots/bot-collapsed-preview'
 import { openBotTemplates } from './templates/bot-templates-open'
@@ -86,6 +87,7 @@ export function SidebarBotsSection({
   const activeGroupId = activeRoomId ? findBotGroupRoom(groups, activeRoomId)?.group.id : null
   const deleteGroup = useBotGroupDelete()
   const [newBotOpen, setNewBotOpen] = useState(false)
+  const collapsedAddRef = useRef<HTMLButtonElement>(null)
   const [newMenuOpen, setNewMenuOpen] = useState(false)
   const openNewBot = (): void => {
     setNewMenuOpen(false)
@@ -169,7 +171,6 @@ export function SidebarBotsSection({
   })
   const listShown = !collapsed && entries.length > 0
   const reveal = useBotsSidebarReveal(listRef, listShown, savedEntries, search.endForReveal)
-  const newBotLabel = t('bots.section.newBot', 'New bot')
   const newLabel = t('bots.section.new', 'New bot or group')
 
   const toggleBots = (): void => {
@@ -217,7 +218,13 @@ export function SidebarBotsSection({
           ) : null
         }
         actions={
-          collapsed ? null : (
+          collapsed ? (
+            <BotCollapsedAction
+              showTemplates={facts.length <= 2}
+              onAddBot={openNewBot}
+              addButtonRef={collapsedAddRef}
+            />
+          ) : (
             <>
               {hasEntries ? (
                 <BotSidebarSearchButton
@@ -263,7 +270,7 @@ export function SidebarBotsSection({
                     >
                       <span className={BOT_MENU_ROW}>
                         <BotIcon className="size-3.5" />
-                        {newBotLabel}
+                        {t('bots.section.newBot', 'New bot')}
                       </span>
                     </DropdownMenuSubTrigger>
                     <DropdownMenuSubContent>
@@ -395,6 +402,7 @@ export function SidebarBotsSection({
       <NewBotDialog
         open={newBotOpen}
         onOpenChange={setNewBotOpen}
+        returnFocusTo={collapsedAddRef}
         onCreated={onOpenBot}
         onImport={() => setImportOpen(true)}
       />
