@@ -74,15 +74,25 @@ export const deliverAntigravityInstructions: AcpInstructionsDelivery = async ({ 
   takesSessionMeta: antigravityTakesSystemPrompt
 })
 
-/** 1.x: appended to the user's own inline instructions, never replacing them. 2.x ignores those, so
- *  they follow the user's own global AGENTS.md in a config folder that links the rest of theirs. */
-export const deliverOpenCodeInstructions: AcpInstructionsDelivery = async ({
-  text,
-  file,
-  emptyFolder,
-  env,
-  version
-}): Promise<AcpInstructionsLaunch | null> => {
+/** OpenCode 1.x and its forks: appended to the user's own inline instructions in `variable`, never
+ *  replacing them. */
+function inlineConfigInstructions(variable: string): AcpInstructionsDelivery {
+  return async ({ env, file }) => {
+    const content = withOpenCodeInstructionsFile(env[variable], await file())
+    return content === null ? null : { env: { [variable]: content } }
+  }
+}
+
+const deliverOpenCode1Instructions = inlineConfigInstructions('OPENCODE_CONFIG_CONTENT')
+export const deliverKiloInstructions = inlineConfigInstructions('KILO_CONFIG_CONTENT')
+export const deliverMimoInstructions = inlineConfigInstructions('MIMOCODE_CONFIG_CONTENT')
+
+/** 1.x: as its forks. 2.x ignores inline instructions, so they follow the user's own global
+ *  AGENTS.md in a config folder that links the rest of theirs. */
+export const deliverOpenCodeInstructions: AcpInstructionsDelivery = async (
+  input
+): Promise<AcpInstructionsLaunch | null> => {
+  const { text, emptyFolder, env, version } = input
   if (openCodeTakesConfigDirInstructions(version)) {
     const configDir = await emptyFolder()
     const release = () => removeTreeKeepingLinkTargets(configDir)
@@ -96,8 +106,7 @@ export const deliverOpenCodeInstructions: AcpInstructionsDelivery = async ({
     })
     return { env: { OPENCODE_CONFIG_DIR: configDir }, release }
   }
-  const content = withOpenCodeInstructionsFile(env.OPENCODE_CONFIG_CONTENT, await file())
-  return content === null ? null : { env: { OPENCODE_CONFIG_CONTENT: content } }
+  return deliverOpenCode1Instructions(input)
 }
 
 // OMP and Auggie, both built on Pi, read the file; a path keeps the text out of the process list

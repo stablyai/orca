@@ -2,6 +2,7 @@ import { join } from 'node:path'
 import type { AcpLaunchSpec } from '../acp/launch/acp-launch-contract'
 import { OPENCODE_ACP_DIALECT } from '../acp/acp-dialects/opencode-dialect'
 import { directoryAccountBinding } from '../acp/launch/acp-account-binding'
+import { deliverMimoInstructions } from '../acp/launch/acp-instructions'
 import {
   OPENCODE_MODEL_LISTING_ARGS,
   parseOpenCodeModelListing
@@ -41,6 +42,8 @@ export const MIMO_LAUNCH_SPEC: AcpLaunchSpec = {
     parse: parseMimoModelListing,
     listingNamesConfiguredModel: false
   },
+  // Kept with the session: a reopened conversation keeps the instructions it began with.
+  instructions: deliverMimoInstructions,
   compaction: true,
   transcriptImport: null,
   // Session History does not read MiMo's store, so no row links a chat to its terminal sessions.

@@ -47,7 +47,9 @@ const SPECS = {
   copilot: acpLaunchSpecFor('copilot')!,
   kimi: acpLaunchSpecFor('kimi')!,
   kiro: acpLaunchSpecFor('kiro')!,
-  goose: acpLaunchSpecFor('goose')!
+  goose: acpLaunchSpecFor('goose')!,
+  kilo: acpLaunchSpecFor('kilo')!,
+  'mimo-code': acpLaunchSpecFor('mimo-code')!
 }
 
 const ACCOUNT_HOMES: Record<keyof typeof SPECS, AgentSessionRecord['accountHome']> = {
@@ -60,7 +62,9 @@ const ACCOUNT_HOMES: Record<keyof typeof SPECS, AgentSessionRecord['accountHome'
   copilot: { variable: 'COPILOT_HOME', path: '/home/user/.copilot' },
   kimi: { variable: 'KIMI_CODE_HOME', path: '/home/user/.kimi-code' },
   kiro: { variable: 'KIRO_HOME', path: '/home/user/.kiro' },
-  goose: { variable: 'GOOSE_PATH_ROOT', path: '/home/user/.config/goose' }
+  goose: { variable: 'GOOSE_PATH_ROOT', path: '/home/user/.config/goose' },
+  kilo: { variable: 'XDG_DATA_HOME', path: '/home/user/.local/share' },
+  'mimo-code': { variable: 'XDG_DATA_HOME', path: '/home/user/.local/share' }
 }
 
 const PROBED_VERSIONS: Partial<Record<keyof typeof SPECS, string>> = {
@@ -70,7 +74,9 @@ const PROBED_VERSIONS: Partial<Record<keyof typeof SPECS, string>> = {
   copilot: '1.0.114',
   kimi: '2.7.2',
   kiro: '3.1.0',
-  goose: '1.60.2'
+  goose: '1.60.2',
+  kilo: '7.8.32',
+  'mimo-code': '0.1.17'
 }
 
 let dataDirectory = ''
@@ -155,6 +161,25 @@ describe('ACP launch: standing instructions', () => {
     expect(config.instructions[0]).toBe('/home/user/mine.md')
     await expectPrivateFile(config.instructions[1])
   })
+
+  it.each([
+    ['kilo', 'KILO_CONFIG_CONTENT'],
+    ['mimo-code', 'MIMOCODE_CONFIG_CONTENT']
+  ] as const)(
+    "adds them to the OpenCode fork %s's inline instructions after the user's own",
+    async (agent, variable) => {
+      const mine = JSON.stringify({ model: 'x/y', instructions: ['/home/user/mine.md'] })
+      const resolved = await launch(agent, {
+        instructions: PREAMBLE,
+        launchEnv: { [variable]: mine }
+      })
+      const config = JSON.parse(resolved.env[variable] ?? '')
+      expect(config).toMatchObject({ model: 'x/y' })
+      expect(config.instructions[0]).toBe('/home/user/mine.md')
+      await expectPrivateFile(config.instructions[1])
+      expect(resolved.env.OPENCODE_CONFIG_CONTENT).toBeUndefined()
+    }
+  )
 
   it("gives OpenCode 2.x them after the user's own global AGENTS.md, in a config folder linking the rest of theirs", async () => {
     const xdg = join(dataDirectory, 'opencode-xdg')
