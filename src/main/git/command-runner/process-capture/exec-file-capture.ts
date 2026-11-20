@@ -159,7 +159,7 @@ export function execFileCapture(
 
     const launch = async (): Promise<void> => {
       try {
-        useWorker = await capturesOnWorker(options.canStart)
+        useWorker = await capturesOnWorker(command, options)
         if (settled) {
           return
         }

@@ -27,9 +27,20 @@ type CaptureCallback = (
 ) => void
 
 /** Process creation blocks its calling loop (fork/exec; CreateProcessW for seconds under endpoint security, #11161, #27362).
- * A queued worker launch can't recheck canStart at creation, so a gated POSIX launch stays on main. */
-export async function capturesOnWorker(canStart: (() => boolean) | undefined): Promise<boolean> {
-  return (process.platform === 'win32' || !canStart) && whenSpawnWorkerReady()
+ * On POSIX, main keeps what only its launch does: canStart rechecked at creation, and a probed CLI selection run under its own name. */
+export async function capturesOnWorker(
+  command: string,
+  options: { canStart?: () => boolean; env?: NodeJS.ProcessEnv; cwd?: string | URL }
+): Promise<boolean> {
+  if (
+    process.platform !== 'win32' &&
+    (options.canStart ||
+      resolveSelectedLocalCommand(command, { env: options.env, cwd: workerCwd(options.cwd) }) !==
+        command)
+  ) {
+    return false
+  }
+  return whenSpawnWorkerReady()
 }
 
 function workerCwd(cwd: string | URL | undefined): string | undefined {
@@ -45,11 +56,7 @@ export function workerExecFile(
 ): WorkerThreadChildProcess {
   return spawnedExecFile(command, options, callback, () =>
     spawnProcessOnWorkerThread({
-      // As main's launch does: a probed CLI selection (gh/glab) wins over PATH order; Windows main has none.
-      program:
-        process.platform === 'win32'
-          ? command
-          : resolveSelectedLocalCommand(command, { env: options.env, cwd: workerCwd(options.cwd) }),
+      program: command,
       args,
       cwd: workerCwd(options.cwd),
       // The worker's env is a copy from its start; send main's current one (PATH refreshes after launch).
