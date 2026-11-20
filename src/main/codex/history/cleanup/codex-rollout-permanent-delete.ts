@@ -1,4 +1,4 @@
-import { lstat, realpath, rm, stat, unlink } from 'node:fs/promises'
+import { lstat, realpath, rm, stat } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import type { AiVaultAgent } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import { isPathInsideOrEqual } from '../../../../shared/file-access/cross-platform-path'
@@ -102,14 +102,15 @@ async function readNames(names: readonly RolloutName[]): Promise<NameState[]> {
 
 async function removeName(
   path: string,
-  protectedRoots: readonly ProtectedRoot[]
+  protectedRoots: readonly ProtectedRoot[],
+  references: CodexRolloutHistoryReferences
 ): Promise<boolean> {
   try {
     if (!(await isOutsideProtectedRoots(path, protectedRoots))) {
       return false
     }
     // Unlink only ever removes the name: never a folder, never a link's target.
-    await unlink(path)
+    await references.unlink(path)
     return true
   } catch (error) {
     if (isDefinitiveAbsence(error)) {
@@ -232,7 +233,7 @@ async function deleteRollout(
           return 'done'
         }
         // A name reached into the import folder stays: the user's copy survives there anyway.
-        if (await removeName(state.path, protectedRoots)) {
+        if (await removeName(state.path, protectedRoots, references)) {
           removed.push(state)
           deletedPaths.push(state.path)
         }
@@ -286,11 +287,13 @@ export async function deleteCodexRolloutsPermanently(
   const references = sweepReferences ?? createCodexRolloutHistoryReferences()
   try {
     // The first full read happens here, before any rollout is held from a resume.
-    await references.prepare((await listHomes()).homes).catch((error: unknown) => {
-      if (error instanceof Error && error.name === 'AbortError') {
-        throw error
-      }
-    })
+    await listHomes()
+      .then(({ homes }) => references.prepare(homes))
+      .catch((error: unknown) => {
+        if (error instanceof Error && error.name === 'AbortError') {
+          throw error
+        }
+      })
     let pending = [...targets]
     const waiting = new Map<string, RolloutTarget[]>()
     // A parent is retried once its last fork went, so a chain takes one attempt per link.

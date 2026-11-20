@@ -12,9 +12,13 @@ const HEAD_BYTES = 64 * 1024
 /** A header's base, cacheable once session metadata (or the first response) was read. */
 export type HeaderBase = { base: string | null; settled: boolean } | 'unreadable'
 
-function baseOf(record: Record<string, unknown>): string | null {
-  const base = asRecord(asRecord(record.payload)?.history_base)
-  return extractString(base?.thread_id)?.toLowerCase() ?? null
+/** A session_meta record's base; undefined when it isn't one Codex would parse as a header. */
+function baseOf(record: Record<string, unknown> | null): string | null | undefined {
+  const payload = record?.type === 'session_meta' ? asRecord(record.payload) : null
+  if (!payload) {
+    return undefined
+  }
+  return extractString(asRecord(payload.history_base)?.thread_id)?.toLowerCase() ?? null
 }
 
 /** Like Codex's metadata reader: lines before session_meta are skipped until a response item. */
@@ -28,8 +32,9 @@ async function streamHistoryBase(path: string): Promise<HeaderBase> {
       continue
     }
     const record = parseJsonObject(line)
-    if (record?.type === 'session_meta') {
-      return { base: baseOf(record), settled: true }
+    const base = baseOf(record)
+    if (base !== undefined) {
+      return { base, settled: true }
     }
     if (record?.type === 'response_item') {
       return { base: null, settled: true }
@@ -48,9 +53,9 @@ export async function readHistoryBase(path: string): Promise<HeaderBase> {
       const head = Buffer.allocUnsafe(HEAD_BYTES)
       const { bytesRead } = await handle.read(head, 0, HEAD_BYTES, 0).finally(() => handle.close())
       const end = head.subarray(0, bytesRead).indexOf(10)
-      const record = end > 0 ? parseJsonObject(head.subarray(0, end).toString('utf8')) : null
-      if (record?.type === 'session_meta') {
-        return { base: baseOf(record), settled: true }
+      const base = baseOf(end > 0 ? parseJsonObject(head.subarray(0, end).toString('utf8')) : null)
+      if (base !== undefined) {
+        return { base, settled: true }
       }
     }
     return await streamHistoryBase(path)
