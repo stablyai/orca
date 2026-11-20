@@ -49,7 +49,11 @@ import { DEFAULT_BOT_AVATAR_COLOR } from '../../../../shared/bots/bot-avatar-col
 import { botTemplate, type BotTemplateSkill } from '../../../../shared/bots/bot-templates'
 import { NewBotTemplateParts } from './NewBotTemplateParts'
 import type { BotCreateParams } from '../../../../shared/rpc-contract/bots-params'
-import { NewBotProposalFields, type NewBotProposalDraft } from './NewBotProposalFields'
+import {
+  NewBotProposalFields,
+  NewBotTakesOver,
+  type NewBotProposalDraft
+} from './NewBotProposalFields'
 import { NewBotPurposeField, PURPOSE_MAX_LENGTH } from './NewBotPurposeField'
 import { BotCreateButton } from './BotCreateButton'
 import { BARE_HEADING_CLASS, keyboardNavMarkerHandlers } from './new-bot-bare-fields'
@@ -59,7 +63,7 @@ type NewBotDraft = NewBotProposalDraft & { purpose: string }
 
 /** A template's identity box: what it watches, does and reports, one editable text. */
 const templateIdentity = (proposal: BotProposal | undefined): string | undefined =>
-  proposal && botTemplate(proposal.templateId) ? proposalIdentity(proposal) : undefined
+  (proposal && botTemplate(proposal.templateId) && proposalIdentity(proposal)) || undefined
 
 const draftOf = (proposal: BotProposal | undefined, purpose?: string): NewBotDraft => ({
   purpose: templateIdentity(proposal) ?? proposal?.purpose ?? purpose ?? '',
@@ -369,6 +373,7 @@ export function NewBotDialog({
               onSetupChange={agentSetup.setSetup}
               onAddHost={hosts ? undefined : setAddHostMode}
             />
+            {template ? <NewBotTakesOver worktrees={proposal?.worktrees} /> : null}
             {template ? (
               <NewBotTemplateParts
                 template={template}
