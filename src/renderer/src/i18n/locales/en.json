@@ -25962,7 +25962,6 @@
       "archive": "Archive",
       "delete": "Delete",
       "conversationActions": "Conversation actions",
-      "archivedMerged": "Merged and archived: {{name}}",
       "viewArchived": "View archived",
       "archiveFailed": "Could not archive: {{error}}",
       "archivedTitle": "Archived",

@@ -24336,7 +24336,6 @@
       "archive": "Archivar",
       "delete": "Eliminar",
       "conversationActions": "Acciones de la conversación",
-      "archivedMerged": "Mergeada y archivada: {{name}}",
       "viewArchived": "Ver archivadas",
       "archiveFailed": "No se pudo archivar: {{error}}",
       "archivedTitle": "Archivadas",

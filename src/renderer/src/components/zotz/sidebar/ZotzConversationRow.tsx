@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react'
+import React from 'react'
 import { Ban, GitPullRequest, Hourglass } from 'lucide-react'
 import { useNow } from '@/hooks/use-now'
 import { useAppStore } from '@/store/index'
@@ -13,17 +13,11 @@ import type {
   ZotzConversationStatus
 } from './zotz-project-conversations'
 import { ZotzWorkingRipple } from './ZotzWorkingRipple'
+import { ZotzBackgroundSonar } from './ZotzBackgroundSonar'
 import { useZotzWorktreePr } from '../pr-status/use-zotz-worktree-pr'
-import {
-  ZOTZ_PR_TONE_TEXT,
-  zotzPrStatusLabel,
-  zotzPrTone,
-  type ZotzPrStatusKind
-} from '../pr-status/zotz-pr-status'
-import { archiveZotzConversation } from './zotz-archive'
+import { ZOTZ_PR_TONE_TEXT, zotzPrStatusLabel, zotzPrTone } from '../pr-status/zotz-pr-status'
 import { ZotzPrStatusIcon } from '../pr-status/ZotzPrStatusIcon'
 import { minutesSince } from '../agent-queue/zotz-memory-format'
-import type { Worktree } from '../../../../../shared/worktree/types'
 
 function StatusMark({
   status,
@@ -44,8 +38,11 @@ function StatusMark({
       />
     )
   }
-  if (status && (status.state === 'working' || status.state === 'monitoring')) {
+  if (status?.state === 'working') {
     return <ZotzWorkingRipple />
+  }
+  if (status?.state === 'monitoring') {
+    return <ZotzBackgroundSonar />
   }
   if (status) {
     return (
@@ -62,30 +59,6 @@ function StatusMark({
     )
   }
   return <span aria-hidden className="size-1.5 rounded-full bg-worktree-sidebar-foreground/25" />
-}
-
-// Last PR state seen per worktree this session, so only a merge that happens now archives.
-const seenPrStatus = new Map<string, ZotzPrStatusKind>()
-
-/** Conductor archives a conversation once its PR merges; an already-merged PR at startup is left alone. */
-function useArchiveOnMerge(worktree: Worktree | null, status: ZotzPrStatusKind | null): void {
-  useEffect(() => {
-    if (!worktree || !status) {
-      return
-    }
-    const previous = seenPrStatus.get(worktree.id)
-    seenPrStatus.set(worktree.id, status)
-    if (
-      status === 'merged' &&
-      previous !== undefined &&
-      previous !== 'merged' &&
-      previous !== 'closed' &&
-      !worktree.isMainWorktree &&
-      !worktree.isArchived
-    ) {
-      void archiveZotzConversation(worktree, 'merged')
-    }
-  }, [worktree, status])
 }
 
 /** `+371 −28` against the branch base, once Source Control has measured it. */
@@ -126,7 +99,6 @@ export function ZotzConversationRow({
   const now = useNow(30_000, queuedSince !== null)
   const pr = useZotzWorktreePr(row.worktree, repo)
   const prTone = pr ? zotzPrTone(pr.status) : null
-  useArchiveOnMerge(row.worktree, pr?.status ?? null)
   const lastActivity = row.worktree?.lastActivityAt ?? 0
   return (
     <button

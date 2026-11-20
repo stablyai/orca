@@ -68,7 +68,7 @@ function conversationActions(worktree: Worktree, t: Translate): MenuAction[] {
     label: t('zotz.sidebar.archive', 'Archive'),
     icon: Archive,
     separatorBefore: true,
-    run: () => void archiveZotzConversation(worktree, 'user')
+    run: () => void archiveZotzConversation(worktree)
   })
   // The project's own checkout can be archived but never deleted; only its worktrees can.
   if (!worktree.isMainWorktree) {

@@ -671,3 +671,9 @@ Las fases 1, 2 y 3 se pueden trabajar en paralelo en worktrees separados.
 - **Memoria libre en macOS:** el limitador usaba el "free percentage" de `memory_pressure` (heredado de Orca), que cuenta como libre lo que el kernel recuperaría comprimiendo o paginando: con 10 GB en swap marcaba 15 GB libres de 24 cuando Monitor de Actividad dejaba ~8. Ahora toma el menor entre ese número y lo que queda fuera de "Memoria usada" (apps + wired + comprimida, de `vm_stat`), tanto para mostrar como para admitir agentes (`collectZotzHostMemory`). El monitor de recursos de Orca no cambia.
 - **Pendiente:** un agente lanzado desde la laptop en un servidor entra con prioridad `automation` (la más baja), porque el servidor solo reconoce `mobile`/`cli` como remotos.
 - **Riesgo abierto:** la laptop espera la respuesta de crear la terminal remota ~3 min (`REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS`); si el agente sigue en cola más tiempo, el pane se da por desconectado. Falta que una espera en cola no cuente como caída.
+
+### 2026-11-20 — Marca de segundo plano y sin archivar al hacer merge (`zotz/sonar-segundo-plano`)
+
+- **Marca propia para el segundo plano:** cuando el agente terminó y solo sigue un proceso en segundo plano (estado `monitoring`), la barra lateral mostraba la misma onda que con el agente trabajando. Ahora muestra `ZotzBackgroundSonar` (un punto con dos arcos de eco que pulsan). La onda queda solo para `working`, que siempre gana: si en la conversación el agente trabaja y además hay un proceso en segundo plano, se ve la onda.
+- **Se quita `useArchiveOnMerge`:** una conversación ya no se archiva sola al mergear su PR; solo Hugo la archiva desde el menú. También salió la cadena `zotz.sidebar.archivedMerged`. La limpieza automática de upstream (`workspaceCleanup`) sigue apagada por defecto y no se tocó.
+- Verificado con la fixture `ZotzWorkingRipple:backgroundOnly`; no se probó con un proceso real en segundo plano.
