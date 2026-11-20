@@ -70,6 +70,8 @@ export type BotItemCommentBoxHandle = {
   type: (text: string) => void
   /** Put `text` in the box in place of its words, to add to before sending. */
   fill: (text: string) => void
+  /** Names the question line a typed answer is for, keeping any draft after it. */
+  startLine: (text: string) => void
   /** Focus the box to answer the waiting question in your own words: it glows once, naming it. */
   answer: () => void
 }
@@ -229,6 +231,13 @@ export function BotItemCommentBox({
     node?.focus()
     node?.setSelectionRange(node.value.length, node.value.length)
   }
+  const fillBox = (next: string): void => {
+    setDraft(next)
+    if (input.current) {
+      input.current.value = next
+    }
+    caretToEnd()
+  }
   useImperativeHandle(ref, () => ({
     focus: () => input.current?.focus(),
     focusEnd: caretToEnd,
@@ -237,13 +246,11 @@ export function BotItemCommentBox({
       reply.show()
       composer.current?.focus({ caretAtEnd: true, glow: true })
     },
-    fill: (text) => {
-      setDraft(`${text} `)
-      if (input.current) {
-        input.current.value = `${text} `
-      }
-      caretToEnd()
-    }
+    startLine: (text) => {
+      // Ahead of what is already typed, so the draft stays.
+      fillBox(draft.trim() ? `${text} ${draft}` : `${text} `)
+    },
+    fill: (text) => fillBox(`${text} `)
   }))
   const images = attachments.imageAttachments
   // The thumbnails' order numbers their pills, as in chat.

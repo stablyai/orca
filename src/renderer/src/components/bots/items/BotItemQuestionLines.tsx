@@ -19,6 +19,8 @@ export type BotItemQuickReplyActions = {
   /** `questionId`: the ask it answers, so a reply that arrives after a new question is refused. */
   send: (text: string, questionId: string) => void
   edit: (text: string) => void
+  /** Type your answer to one later line: its words lead the comment box, ahead of any draft. */
+  startLine: (text: string) => void
   /** Type your answer: the comment box takes focus, glowing once. */
   type: () => void
 }
@@ -124,7 +126,7 @@ export function BotItemQuestionLines({
                       // The box replies to the first open line: a later line's words name theirs.
                       index === firstOpen || shape.decisions.length < 2
                         ? actions.type()
-                        : actions.edit(`${botItemQuestionLine(decision.question)} →`)
+                        : actions.startLine(`${botItemQuestionLine(decision.question)} →`)
                     }
                   >
                     <Pencil className="size-3 shrink-0" />

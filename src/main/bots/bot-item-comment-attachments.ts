@@ -73,6 +73,9 @@ export async function admitBotItemCommentAttachments(
   const local = deps.local ? [...paths, ...files.filter(isAgentInlineImagePath)] : paths
   // Refused before any image is copied into the store.
   assertImageCount(local)
+  if (deps.local) {
+    await assertLocalImagesFit(store, local)
+  }
   const [stored, storedFiles] = await Promise.all([
     deps.local ? Promise.all(local.map((path) => storedCopy(store, path))) : local,
     Promise.all(others.map((path) => storedCopy(store, path, true)))
@@ -150,11 +153,32 @@ async function admitImages(
     images.push({ path, name: stored.name, bytes: info.size })
   }
   if (total > AGENT_SESSION_MESSAGE_IMAGE_MAX_TOTAL_BYTES) {
-    throw refused(
-      `These images add up to ${Math.ceil(total / MB)} MB. A comment takes up to ${AGENT_SESSION_MESSAGE_IMAGE_MAX_TOTAL_BYTES / MB} MB.`
-    )
+    throw tooBig(total)
   }
   return images
+}
+
+function tooBig(total: number): BotItemError {
+  return refused(
+    `These images add up to ${Math.ceil(total / MB)} MB. A comment takes up to ${AGENT_SESSION_MESSAGE_IMAGE_MAX_TOTAL_BYTES / MB} MB.`
+  )
+}
+
+/** The images about to be copied in must fit the comment's total before any is copied. */
+async function assertLocalImagesFit(
+  store: NonNullable<BotItemCommentAttachmentDeps['store']>,
+  paths: readonly string[]
+): Promise<void> {
+  let total = 0
+  for (const path of new Set(paths)) {
+    if (!isAbsolute(path) || parseAgentSessionAttachmentStorePath(store.rootDir, path)) {
+      continue
+    }
+    total += (await stat(path).catch(() => null))?.size ?? 0
+  }
+  if (total > AGENT_SESSION_MESSAGE_IMAGE_MAX_TOTAL_BYTES) {
+    throw tooBig(total)
+  }
 }
 
 /** A local image (or with `anyKind`, any file) outside the store, copied in; a store path as it is. */

@@ -313,6 +313,19 @@ describe('bot items store', () => {
     expect(store.get(uid)?.status).toBe('working')
   })
 
+  it('takes a quick reply to a part-answered ask after the owner moved the item to Needs you', () => {
+    const store = open()
+    const uid = store.add(input({ title: 'Asking' }), owner).uid
+    store.set(uid, { status: 'needs_you', comment: 'First?' }, owner)
+    const ask = store.get(uid)?.questionEvent ?? -1
+    store.ownerComment(uid, 'Yes', { kind: 'owner' })
+    store.set(uid, { status: 'needs_you', comment: 'Parking this' }, { kind: 'owner' })
+
+    store.ownerComment(uid, 'Second answer', { kind: 'owner' }, [], undefined, undefined, ask)
+
+    expect(store.get(uid)?.status).toBe('working')
+  })
+
   it('closes with set: done like `done`, canceled only with a reason like `cancel`', () => {
     const store = open()
     const a = store.add(input({ title: 'A' }), owner).uid

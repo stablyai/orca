@@ -117,6 +117,25 @@ describe('BotAvatarSync', () => {
     expect(reads.count).toBe(1)
   })
 
+  it('sends the restored picture when a bot returns to its last sent one mid-send', async () => {
+    const { sync, call, list } = harness([{ id: 'bot-1', avatar: 'mascot:K2', slack: SLACK }])
+    sync.changed()
+    await vi.waitFor(() => expect(call).toHaveBeenCalledTimes(1))
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    const release: (() => void)[] = []
+    call.mockImplementationOnce(
+      () => new Promise((resolve) => release.push(() => resolve({ ok: true, value: undefined })))
+    )
+    list[0] = { ...list[0]!, avatar: 'mascot:A1' }
+    sync.changed()
+    await vi.waitFor(() => expect(call).toHaveBeenCalledTimes(2))
+    list[0] = { ...list[0]!, avatar: 'mascot:K2' }
+    sync.changed()
+    release[0]!()
+    await vi.waitFor(() => expect(call).toHaveBeenCalledTimes(3))
+    expect(call.mock.calls[2]?.[1]).toEqual({ v: 1, kind: 'mascot', id: 'K2' })
+  })
+
   it('sends one picture at a time per bot, ending on the latest', async () => {
     const { sync, call, list } = harness([{ avatar: 'mascot:K2', slack: SLACK }])
     let answer!: (value: unknown) => void

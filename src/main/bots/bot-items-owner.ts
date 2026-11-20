@@ -63,7 +63,9 @@ export class BotItemsOwner extends BotItemsWrites {
       if (
         questionEventId !== undefined &&
         item.status === 'needs_you' &&
-        item.questionEvent !== questionEventId
+        item.questionEvent !== null &&
+        item.questionEvent !== questionEventId &&
+        this.askedByBot(item.questionEvent)
       ) {
         throw new BotItemError(
           'item_changed',

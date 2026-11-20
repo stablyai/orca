@@ -35,6 +35,7 @@ export type LoopingAnimationClockDeps = {
   onLoopStart: (listener: (started: readonly LoopingAnimation[]) => void) => () => void
   /** A second tick in which something else on screen repainted. */
   onLabelRepaint: (listener: () => void) => () => void
+  dispose?: () => void
 }
 
 // Whether the pixels of this node are showing: not clipped by a scroller, not scrolled out of the window.
@@ -50,7 +51,10 @@ function isOnScreen(doc: Document, node: Node): boolean {
 
 // Elements the browser reports as scrolled or clipped out of view: their loops are left paused, so a
 // tick costs nothing for them. One not yet reported counts as showing.
-function trackHiddenTargets(): (animations: readonly LoopingAnimation[]) => LoopingAnimation[] {
+function trackHiddenTargets(): {
+  showing: (animations: readonly LoopingAnimation[]) => LoopingAnimation[]
+  stop: () => void
+} {
   const hidden = new WeakSet<Element>()
   const watched = new Set<Element>()
   const observer =
@@ -65,7 +69,7 @@ function trackHiddenTargets(): (animations: readonly LoopingAnimation[]) => Loop
           }
         })
       : null
-  return (animations) => {
+  const showing = (animations: readonly LoopingAnimation[]): LoopingAnimation[] => {
     const showing: LoopingAnimation[] = []
     const present = new Set<Element>()
     for (const animation of animations) {
@@ -91,12 +95,14 @@ function trackHiddenTargets(): (animations: readonly LoopingAnimation[]) => Loop
     }
     return showing
   }
+  return { showing, stop: () => observer?.disconnect() }
 }
 
 function documentDeps(doc: Document): LoopingAnimationClockDeps {
-  const showingOnly = trackHiddenTargets()
+  const hiddenTargets = trackHiddenTargets()
   return {
-    getAnimations: () => showingOnly(doc.getAnimations()),
+    getAnimations: () => hiddenTargets.showing(doc.getAnimations()),
+    dispose: hiddenTargets.stop,
     onLoopStart: (listener) => {
       const onStart = (event: AnimationEvent): void => {
         if (STEPS_PER_CYCLE.has(event.animationName) && event.target instanceof Element) {
@@ -175,5 +181,6 @@ export function installLoopingAnimationClock(
   return () => {
     stopRepaints()
     stopStarts()
+    deps.dispose?.()
   }
 }

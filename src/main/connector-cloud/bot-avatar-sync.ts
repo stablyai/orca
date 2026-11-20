@@ -21,8 +21,8 @@ const MAX_CONCURRENT_SENDS = 4
 export class BotAvatarSync {
   // Per bot, the avatar the cloud last took.
   private readonly sent = new Map<string, string>()
-  // One send per bot at a time, so an older picture never lands after a newer one.
-  private readonly sending = new Set<string>()
+  // One send per bot at a time, so an older picture never lands after a newer one; the picture in flight.
+  private readonly sending = new Map<string, string>()
   // Per bot, the avatar the cloud refused as an unknown bot, and until when it waits.
   private readonly refused = new Map<string, { avatar: string; waitMs: number; until: number }>()
   // Bots waiting for a send slot, each as last seen.
@@ -56,11 +56,20 @@ export class BotAvatarSync {
     }
     let waiting = false
     for (const bot of this.deps.bots.list()) {
-      if (!(bot.slack || bot.github) || !bot.avatar || this.sent.get(bot.id) === bot.avatar) {
+      if (!(bot.slack || bot.github) || !bot.avatar) {
+        this.queued.delete(bot.id)
         continue
       }
-      if (this.sending.has(bot.id)) {
-        this.changedWhileSending.add(bot.id)
+      const flying = this.sending.get(bot.id)
+      if (flying !== undefined) {
+        // Only a picture other than the one in flight needs a look once it lands.
+        if (flying !== bot.avatar) {
+          this.changedWhileSending.add(bot.id)
+        }
+        continue
+      }
+      if (this.sent.get(bot.id) === bot.avatar) {
+        this.queued.delete(bot.id)
         continue
       }
       const refused = this.refused.get(bot.id)
@@ -106,7 +115,7 @@ export class BotAvatarSync {
     if (!cloud) {
       return
     }
-    this.sending.add(bot.id)
+    this.sending.set(bot.id, avatar)
     const writes = this.writes
     let sent = false
     let refused = false

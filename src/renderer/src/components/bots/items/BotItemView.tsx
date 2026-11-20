@@ -239,6 +239,7 @@ export function BotItemBody({
         : {
             send: (text: string, questionId: string) => sendLatest(text, [], questionId),
             edit: (text: string) => comment.current?.fill(text),
+            startLine: (text: string) => comment.current?.startLine(text),
             type: () => comment.current?.answer()
           },
     [deleted, comment, sendLatest]

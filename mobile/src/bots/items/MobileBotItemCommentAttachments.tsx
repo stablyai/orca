@@ -138,9 +138,9 @@ function Viewer({
   // each render): a read that fails re-renders, and must not ask again until the viewer steps.
   const nearby = [index - 1, index, index + 1]
     .flatMap((near) => images[near]?.path ?? [])
-    .join('\n')
+    .join('\0')
   useEffect(() => {
-    for (const path of nearby ? nearby.split('\n') : []) {
+    for (const path of nearby ? nearby.split('\0') : []) {
       read(path)
     }
   }, [read, nearby])
