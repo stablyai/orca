@@ -74,8 +74,8 @@ export function applyDesktopRelayWrite(
         ownerChanges.set(tabId, wanted)
         continue
       }
-      liveTabs ??= tabIdsWithRows(session)
-      if (current === undefined && liveTabs.has(tabId)) {
+      // Main holds another id there: refuse without indexing rows, which only an empty key needs.
+      if (current === undefined && (liveTabs ??= tabIdsWithRows(session)).has(tabId)) {
         relayChanges.set(tabId, wanted)
         ownerChanges.set(tabId, wanted)
       } else {
