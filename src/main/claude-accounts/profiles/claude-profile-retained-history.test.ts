@@ -13,7 +13,8 @@ import {
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import type * as FsPromises from 'node:fs/promises'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   GUEST_MEASURE_HISTORY_SCRIPT,
   GUEST_REMOVE_KEEPING_HISTORY_SCRIPT,
@@ -21,8 +22,25 @@ import {
   removeClaudeProfileFolder
 } from './claude-profile-retained-history'
 
+// Runs a change right after a chosen directory is listed, as a concurrent writer would.
+const afterListing = vi.hoisted(() => new Map<string, () => void>())
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof FsPromises>()
+  return {
+    ...actual,
+    readdir: async (...args: Parameters<typeof actual.readdir>) => {
+      const listing = await actual.readdir(...args)
+      const change = afterListing.get(String(args[0]))
+      afterListing.delete(String(args[0]))
+      change?.()
+      return listing
+    }
+  }
+})
+
 const roots: string[] = []
 afterEach(() => {
+  afterListing.clear()
   for (const root of roots.splice(0)) {
     rmSync(root, { recursive: true, force: true })
   }
@@ -199,6 +217,45 @@ describe('Claude account retained history', () => {
       sharedHome: f.systemDefault
     })
     expect(existsSync(f.folder)).toBe(false)
+  })
+
+  it('keeps prompt history whose shared file was replaced after the removal began', async () => {
+    const f = fixture()
+    rmSync(join(f.home, 'history.jsonl'))
+    linkPromptHistory(f.systemDefault, f.home)
+    // Replaced once the keep rules are read: the old link now holds only this account's prompts.
+    afterListing.set(f.home, () => {
+      rmSync(join(f.systemDefault, 'history.jsonl'))
+      write(join(f.systemDefault, 'history.jsonl'), 'new shared\n')
+    })
+    await removeClaudeProfileFolder(f.folder, {
+      deleteRetainedHistory: false,
+      sharedHome: f.systemDefault
+    })
+    expect(readFileSync(join(f.home, 'history.jsonl'), 'utf8')).toBe('shared prompts\n')
+    expect(readFileSync(join(f.systemDefault, 'history.jsonl'), 'utf8')).toBe('new shared\n')
+  })
+
+  it('never walks into a folder swapped for an outside link after it was listed', async () => {
+    for (const deleteRetainedHistory of [false, true]) {
+      const f = fixture()
+      const outside = join(f.root, 'outside')
+      mkdirSync(join(outside, 'empty'), { recursive: true })
+      linkFolder(f.systemDefault, join(outside, 'link'))
+      // Kept history is pruned, removed folders are unlinked: both walk into listed subfolders.
+      const parent = join(f.home, deleteRetainedHistory ? 'plugins' : 'todos')
+      mkdirSync(join(parent, 'sub'))
+      afterListing.set(parent, () => {
+        rmSync(join(parent, 'sub'), { recursive: true })
+        linkFolder(outside, join(parent, 'sub'))
+      })
+      await removeClaudeProfileFolder(f.folder, {
+        deleteRetainedHistory,
+        sharedHome: f.systemDefault
+      })
+      expect(readdirSync(outside).sort()).toEqual(['empty', 'link'])
+      expect(existsSync(join(outside, 'link', 'history.jsonl'))).toBe(true)
+    }
   })
 
   // Windows ignores the mode, and root reads anything.

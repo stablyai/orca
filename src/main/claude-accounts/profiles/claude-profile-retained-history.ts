@@ -115,6 +115,20 @@ export async function measureRetainedClaudeHistory(
   return bytes
 }
 
+// Re-read just before deleting: a link listed earlier may since hold only this account's history.
+// A check then delete still leaves a tiny window; this only narrows it.
+async function isNowRetained(home: string, name: string, sharedHome: string): Promise<boolean> {
+  const path = join(home, name)
+  if (HISTORY_DIRS.includes(name)) {
+    return isRealDirectory(path)
+  }
+  if (name !== PROMPT_HISTORY) {
+    return false
+  }
+  const stats = await lstat(path).catch(() => null)
+  return stats?.isFile() === true && !(await isLinkedPromptHistory(home, sharedHome))
+}
+
 async function unlinkNestedLinks(dir: string): Promise<void> {
   // Re-check: a folder swapped for a link after its parent was listed must not be walked.
   if (!(await isRealDirectory(dir))) {
@@ -189,16 +203,12 @@ export async function removeClaudeProfileFolder(
     // Decided per entry as it is removed, so history a writer adds meanwhile is never swept up.
     for (const entry of await readdir(home, { withFileTypes: true })) {
       const path = join(home, entry.name)
-      // A history link that became a real folder after the listing is kept like one.
-      const nowRetained =
-        !options.deleteRetainedHistory &&
-        HISTORY_DIRS.includes(entry.name) &&
-        (await isRealDirectory(path))
-      if (!retained(entry) && !nowRetained) {
-        await removeWithoutFollowingLinks(path)
-      } else if (entry.isDirectory() || nowRetained) {
-        await pruneEmptyDirectories(path).catch(() => {})
-      }
+      const kept =
+        retained(entry) ||
+        (!options.deleteRetainedHistory &&
+          (await isNowRetained(home, entry.name, options.sharedHome)))
+      // Pruning skips anything that is not a real directory.
+      await (kept ? pruneEmptyDirectories(path).catch(() => {}) : removeWithoutFollowingLinks(path))
     }
   }
   for (const entry of await readdir(folder)) {

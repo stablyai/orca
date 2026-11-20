@@ -58,7 +58,7 @@ export const ACCOUNT_COMMAND_SPECS: CommandSpec[] = [
     path: ['account', 'rm'],
     aliases: [['account', 'remove']],
     destructive: true,
-    summary: 'Remove a managed agent account and its private data',
+    summary: 'Remove a managed agent account',
     usage:
       'orca account rm --agent claude|codex|opencode|devin|antigravity --account <id|email|label> [--json]',
     allowedFlags: [...LOCAL_COMMAND_FLAGS, 'agent', 'account'],

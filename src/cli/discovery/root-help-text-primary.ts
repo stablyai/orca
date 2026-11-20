@@ -27,7 +27,7 @@ export const ROOT_HELP_TEXT_PRIMARY = [
   '  account add               Add a managed agent account on this Orca host',
   '  account list              List managed agent accounts on this Orca host',
   '  account select            Select the account new agent launches use',
-  '  account rm                Remove a managed agent account and its private data',
+  '  account rm                Remove a managed agent account',
   '',
   'Skills:',
   '  skills installed          List installed skill selectors',
