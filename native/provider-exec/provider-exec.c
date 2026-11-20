@@ -212,6 +212,45 @@ static int env_fd(const char *name) {
     return (int)fd;
 }
 
+// libuv's lookup, not glibc execvp's: ENOEXEC fails rather than retrying under /bin/sh, so a
+// wrapped launch reports what a direct Node spawn would. Sets errno and returns on failure.
+static void exec_like_libuv(char *argv[]) {
+    const char *file = argv[0];
+    if (strchr(file, '/') != NULL) {
+        execv(file, argv);
+        return;
+    }
+    const char *path = getenv("PATH");
+    if (path == NULL) {
+        path = "/usr/bin:/bin";
+    }
+    size_t file_length = strlen(file);
+    int saw_eacces = 0;
+    for (const char *entry = path;; entry++) {
+        const char *end = strchr(entry, ':');
+        size_t entry_length = end != NULL ? (size_t)(end - entry) : strlen(entry);
+        char candidate[PATH_MAX];
+        // An empty entry means the current directory, as in execvp.
+        int length = entry_length == 0
+                         ? snprintf(candidate, sizeof candidate, "%s", file)
+                         : snprintf(candidate, sizeof candidate, "%.*s/%s", (int)entry_length,
+                                    entry, file);
+        if (length > 0 && (size_t)length < sizeof candidate && file_length < sizeof candidate) {
+            execv(candidate, argv);
+            if (errno == EACCES) {
+                saw_eacces = 1;
+            } else if (errno != ENOENT && errno != ENOTDIR) {
+                return;
+            }
+        }
+        if (end == NULL) {
+            break;
+        }
+        entry = end;
+    }
+    errno = saw_eacces ? EACCES : ENOENT;
+}
+
 // Fails closed: an unproven cleanup or a malformed NODE_CHANNEL_FD never execs. The optional
 // ORCA_EXEC_STATUS_FD stays close-on-exec, so its EOF means the exec succeeded; a failed exec
 // writes its errno there first, so the launcher can report what a direct spawn would have.
@@ -227,7 +266,7 @@ static int exec_without_inherited_fds(char *argv[]) {
         return EXIT_BOOTSTRAP;
     }
     unsetenv(EXEC_STATUS_FD_ENV);
-    execvp(argv[0], argv);
+    exec_like_libuv(argv);
     int error = errno;
     if (status_fd >= 0) {
         char frame[16];

@@ -1,6 +1,6 @@
 import { accessSync, constants, statSync } from 'node:fs'
 import { getSystemErrorName } from 'node:util'
-import type { ChildProcess, SpawnOptions, StdioOptions } from 'node:child_process'
+import { spawn, type ChildProcess, type SpawnOptions, type StdioOptions } from 'node:child_process'
 
 export const FD_CLOSING_EXEC_ARGS = ['--exec-without-inherited-fds', '--'] as const
 // The helper writes a failed exec's errno to this fd; a successful exec closes it.
@@ -72,11 +72,17 @@ export function fdClosingLaunch(
  * path, spawnargs), then 'close' with the negative errno, and no 'spawn' or 'exit'.
  */
 export function watchFdClosingExec<T extends ChildProcess>(child: T, launch: FdClosingLaunch): T {
+  const emitRaw = child.emit.bind(child)
+  const emit = (event: string | symbol, ...rest: unknown[]): boolean =>
+    event === 'error'
+      ? emitRaw(event, retargetSpawnError(rest[0], launch), ...rest.slice(1))
+      : emitRaw(event, ...rest)
   const status = child.stdio[launch.target.statusFd]
   if (!status) {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: forwards every event unchanged except naming the caller's program in a spawn error.
+    child.emit = emit as T['emit']
     return child
   }
-  const emit = child.emit.bind(child)
   const pending: [string | symbol, unknown[]][] = []
   let gate: 'held' | 'open' | 'failed' = 'held'
   let failure: NodeJS.ErrnoException | null = null
@@ -138,6 +144,39 @@ export function watchFdClosingExec<T extends ChildProcess>(child: T, launch: FdC
     startFlush()
   })
   return child
+}
+
+/** Linux: `spawn` with the child kept off this process's other fds (see `fdClosingLaunch`). */
+export function spawnWithoutInheritedFds(
+  file: string,
+  args: readonly string[],
+  options: SpawnOptions
+): ChildProcess {
+  const launch = options.shell ? null : fdClosingLaunch(file, args, options)
+  if (!launch) {
+    return spawn(file, [...args], options)
+  }
+  let child: ChildProcess
+  try {
+    child = spawn(launch.file, launch.args, { ...options, env: launch.env, stdio: launch.stdio })
+  } catch (error) {
+    throw retargetSpawnError(error, launch)
+  }
+  return watchFdClosingExec(child, launch)
+}
+
+/** A failure before the helper runs (e.g. a missing cwd) names the caller's program, as a direct spawn would. */
+export function retargetSpawnError(error: unknown, launch: FdClosingLaunch): unknown {
+  if (!(error instanceof Error) || !('path' in error) || error.path !== launch.file) {
+    return error
+  }
+  const code = 'code' in error && typeof error.code === 'string' ? error.code : 'UNKNOWN'
+  return Object.assign(error, {
+    message: `spawn ${launch.target.file} ${code}`,
+    syscall: `spawn ${launch.target.file}`,
+    path: launch.target.file,
+    spawnargs: [...launch.target.args]
+  })
 }
 
 function execError(errno: number, target: FdClosingLaunch['target']): NodeJS.ErrnoException {

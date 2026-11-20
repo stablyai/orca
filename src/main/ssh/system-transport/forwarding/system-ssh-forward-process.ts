@@ -40,7 +40,9 @@ export function spawnSystemSshPortForward(
   return spawnProcess({
     program: sshPath,
     args,
-    stdio: ['ignore', 'ignore', 'pipe']
+    stdio: ['ignore', 'ignore', 'pipe'],
+    // `-N` forwards outlive a crashed main; on Linux they must not hold main's Chromium sockets.
+    closeInheritedFds: true
   })
 }
 

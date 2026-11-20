@@ -69,7 +69,8 @@ export function spawnCodexBackfillRecoveryProcess(
       stdio: spec.stdio,
       windowsHide: true,
       env: spec.env,
-      detached: spec.detached
+      detached: spec.detached,
+      closeInheritedFds: spec.closeInheritedFds
     })
   )
   child.stdout.resume()

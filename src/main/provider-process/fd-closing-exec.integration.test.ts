@@ -83,9 +83,12 @@ describe.runIf(process.platform === 'linux')('fd-closing exec', () => {
     elf[loaderEnd - 1] = 'X'.charCodeAt(0)
     const missingLoader = join(dir, 'missing-loader')
     await writeFile(missingLoader, elf)
+    // No `#!`: Node's spawn rejects it; glibc execvp would have run it under /bin/sh.
+    const noShebang = join(dir, 'no-shebang')
+    await writeFile(noShebang, 'true\n')
     const busy = join(dir, 'busy')
     await writeFile(busy, await readFile('/bin/true'))
-    for (const file of [script, crlfScript, missingLoader, busy]) {
+    for (const file of [script, crlfScript, missingLoader, noShebang, busy]) {
       await chmod(file, 0o755)
     }
     // Held open for writing, so exec fails with ETXTBSY.
@@ -97,6 +100,7 @@ describe.runIf(process.platform === 'linux')('fd-closing exec', () => {
         [script, ['ENOENT']],
         [crlfScript, ['ENOENT']],
         [missingLoader, ['ENOENT']],
+        [noShebang, ['ENOEXEC']],
         [busy, ['ETXTBSY']]
       ] as const) {
         const child = spawnProcess({ program, closeInheritedFds: true, stdio: 'ignore' })
@@ -110,6 +114,18 @@ describe.runIf(process.platform === 'linux')('fd-closing exec', () => {
         expect([...codes, 'EACCES']).toContain(error.code)
         expect({ program, events, code }).toEqual({ program, events: ['error'], code: error.errno })
       }
+      // Fails before the helper runs, so the error must still name the program, not the helper.
+      const noCwd = spawnProcess({
+        program: '/bin/true',
+        cwd: join(dir, 'missing-cwd'),
+        closeInheritedFds: true,
+        stdio: 'ignore'
+      })
+      const [cwdError] = await once(noCwd, 'error')
+      expect({ path: cwdError.path, message: cwdError.message }).toEqual({
+        path: '/bin/true',
+        message: 'spawn /bin/true ENOENT'
+      })
       const wrapped = spawnProcess({
         program: '/bin/true',
         closeInheritedFds: true,

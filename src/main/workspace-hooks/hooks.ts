@@ -22,7 +22,7 @@ import {
   signalProcessTree
 } from '@orca/process-host/process-tree-termination'
 import { createOutputSink } from '@orca/process-host/bounded-output-sink'
-import { fdClosingLaunch, watchFdClosingExec } from '@orca/process-host/fd-closing-exec-launch'
+import { spawnWithoutInheritedFds } from '@orca/process-host/fd-closing-exec-launch'
 
 const HOOK_TIMEOUT = 120_000
 
@@ -266,19 +266,12 @@ export function runHook(
       // POSIX groups let signals reach descendants; Windows detached would create a new console.
       ...(process.platform === 'win32' ? {} : { detached: true })
     } satisfies SpawnOptions
-    // Linux: the `<shell> -c` argv Node's shell option builds, run without main's other fds.
-    const launch = shell ? fdClosingLaunch(shell, ['-c', script], spawnOptions) : null
     // exec ignores detached; spawn creates the process group needed for tree termination.
-    const child = launch
-      ? watchFdClosingExec(
-          spawn(launch.file, launch.args, {
-            ...spawnOptions,
-            env: launch.env,
-            stdio: launch.stdio
-          }),
-          launch
-        )
-      : spawn(script, { ...spawnOptions, shell })
+    // Linux runs the same `<shell> -c script` argv Node's shell option builds, without main's fds.
+    const child =
+      process.platform === 'linux' && shell
+        ? spawnWithoutInheritedFds(shell, ['-c', script], spawnOptions)
+        : spawn(script, { ...spawnOptions, shell })
     const stdout = createOutputSink(HOOK_OUTPUT_LIMIT_BYTES)
     const stderr = createOutputSink(HOOK_OUTPUT_LIMIT_BYTES)
     child.stdout?.on('data', (chunk: Buffer | string) => stdout.write(chunk))

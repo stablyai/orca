@@ -28,7 +28,7 @@ export async function resolveFdClosingExec(): Promise<string | undefined> {
   }
 }
 
-/** Synchronous, so no opted-in launch can start before it; each launch checks the helper exists. */
+/** Synchronous, so no opted-in launch can start before it; the first such launch checks the helper once. */
 export function installFdClosingExec(): void {
   if (process.platform === 'linux') {
     setFdClosingExec(resolveProviderExecPath('linux'))

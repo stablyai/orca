@@ -1,4 +1,5 @@
-import { spawn, type ChildProcess } from 'node:child_process'
+import type { ChildProcess } from 'node:child_process'
+import { spawnWithoutInheritedFds } from '@orca/process-host/fd-closing-exec-launch'
 import { isAbsolute, join } from 'node:path'
 import { app } from 'electron'
 import {
@@ -216,7 +217,8 @@ export function ensureVirtualDisplayForHeadlessServe(options: { isServeMode: boo
 function startVirtualDisplay(displayNumber: number): DisplayStart | 'unavailable' {
   const display = `:${displayNumber}`
   try {
-    xvfbProcess = spawn(
+    // Without main's fds, so a crashed main's Chromium children see it go and disconnect from Xvfb.
+    xvfbProcess = spawnWithoutInheritedFds(
       'Xvfb',
       [display, '-screen', '0', '1280x1024x24', '-nolisten', 'tcp', '-terminate'],
       {
