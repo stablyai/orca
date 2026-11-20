@@ -94,8 +94,8 @@ export class JournalLegacyProof {
     resumed: boolean
     whole: boolean
   } {
-    const { counts, resumed, whole, pages } = this.frontier
-    const measured = pages > 0 || (resumed && whole)
+    const { counts, resumed, whole, pages, copiesOnly } = this.frontier
+    const measured = !copiesOnly && (pages > 0 || (resumed && whole))
     return { counts: measured ? { ...counts } : null, resumed, whole }
   }
 

@@ -2,7 +2,10 @@ import { journalSqlSourceContent } from './journal-sql-failure'
 import { isJournalReaderReplyLimitFailure } from './journal-sql-reader-reply-limit'
 import { JournalLegacyRetentionError } from './journal-legacy-retention-error'
 import type { LegacyProofCursor, LegacyProofPage } from './journal-legacy-source-proof'
-import type { LegacyProofCounts } from './journal-legacy-retirement-state'
+import {
+  LEGACY_PROOF_COPIES_TABLE,
+  type LegacyProofCounts
+} from './journal-legacy-retirement-state'
 import type { JournalSqlReaderPool } from './journal-sql-reader-pool'
 import type { JournalSqlConversions } from './journal-sql-conversions'
 import type { JournalSqlOwner } from './journal-sql-owner'
@@ -20,6 +23,8 @@ export type LegacyProofFrontier = {
   resumed: boolean
   /** `counts` cover every page from the first, across launches when progress carried them. */
   whole: boolean
+  /** Began at the copies with nothing carried: its counts say nothing about the chats. */
+  copiesOnly: boolean
   /** Chats unconverted when this page was first read: a retry reads them back as converted. */
   unconverted: Set<string>
 }
@@ -47,6 +52,7 @@ export function createLegacyProofFrontier(
         },
     resumed,
     whole: !resumed || carried?.counts !== undefined,
+    copiesOnly: cursor.table >= LEGACY_PROOF_COPIES_TABLE && carried?.counts === undefined,
     unconverted: new Set()
   }
 }
@@ -203,7 +209,10 @@ export async function completeJournalLegacyProof(
     frontier.cursor = page.next
     frontier.page = undefined
     frontier.session = 0
-    if (frontier.cursor && ++frontier.pages % LEGACY_PROOF_PROGRESS_PAGES === 0) {
+    frontier.pages++
+    // After each copies page too: a converted copy leaves the original's mappings, so its count
+    // must be saved before a quit, or the resumed walk never sees it again.
+    if (frontier.cursor && (frontier.pages % LEGACY_PROOF_PROGRESS_PAGES === 0 || page.copies)) {
       await progress(frontier.cursor)
     }
   }

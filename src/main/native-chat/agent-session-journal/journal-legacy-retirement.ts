@@ -66,6 +66,8 @@ export class JournalLegacyRetirement {
   private firstAttemptAt: number | undefined
   // What the proof read this launch, so a failed attempt still reports the file's size.
   private observed: { proof: string; walBytes: string } | undefined
+  // The first finished walk this launch: a retry walks only from saved progress, so counts less.
+  private finishedWalk: JournalLegacyProof['walked'] | undefined
   // Removing the side files a removal cut short left, after the main file was gone.
   private leftovers = false
 
@@ -189,6 +191,7 @@ export class JournalLegacyRetirement {
           : { outcome: 'deferred', defer: later ? 'not_reconciled' : 'same_version' }
       )
     }
+    this.observed = observation
     // Proven before and held: a build that keeps the file reads that instead of walking again.
     const held = heldFor(saved.retirement, observation)
     if (held && !this.deletes) {
@@ -197,7 +200,6 @@ export class JournalLegacyRetirement {
     }
     await this.eligibility.present()
     await this.eligibility.check(this.filename, this.stopped.signal)
-    this.observed = observation
     this.proof.observe(observation)
     this.proof.resume(saved.retirement, observation)
     const started = performance.now()
@@ -211,7 +213,7 @@ export class JournalLegacyRetirement {
     if (!(await this.matches(observation))) {
       return this.later()
     }
-    const walked = this.proof.walked
+    const walked = (this.finishedWalk ??= this.proof.walked)
     const proven: LegacySourceHeld = {
       version: 2,
       phase: 'held',

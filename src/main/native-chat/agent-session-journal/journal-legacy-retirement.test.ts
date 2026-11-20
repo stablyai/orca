@@ -389,11 +389,10 @@ it('backs off, with no durable commit, while the source readers stay busy', asyn
   }
   // 1, 2 and 4 minute waits: four tries in ten minutes, never one per tick.
   expect(recycle.mock.calls.length).toBeLessThanOrEqual(4)
-  expect(
-    db
-      .prepare("SELECT 1 FROM agent_session_store_meta WHERE key='journal.legacy-retirement.v2'")
-      .get()
-  ).toBeUndefined()
+  const saved = db
+    .prepare("SELECT value FROM agent_session_store_meta WHERE key='journal.legacy-retirement.v2'")
+    .get()
+  expect(saved && JSON.parse(String(saved.value)).phase).not.toBe('retiring')
   expect(existsSync(filename)).toBe(true)
 })
 
