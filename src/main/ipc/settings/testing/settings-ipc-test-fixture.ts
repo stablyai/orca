@@ -1,3 +1,4 @@
+import '../../app-registry/testing/app-ipc-test-host'
 const sanitizeDirectoryMock: Mock = vi.hoisted(() => vi.fn())
 vi.mock('../../worktrees/floating-workspace-directory', () => ({
   sanitizeFloatingWorkspaceDirectorySetting: sanitizeDirectoryMock
