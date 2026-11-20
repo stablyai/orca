@@ -61,16 +61,15 @@ async function readUncachedLocalGitConfigSignature(repoPath: string): Promise<st
     return undefined
   }
   const signatures = await Promise.all([
-    readConfigPathSignatures(configPaths.commonConfigPath),
-    readConfigPathSignatures(configPaths.worktreeConfigPath),
-    // Conditional config can depend on the checkout's branch without any config file changing.
-    readConfigPathSignature(configPaths.headPath)
+    readConfigPathSignatures(configPaths.commonConfigPath, configPaths.headPath),
+    readConfigPathSignatures(configPaths.worktreeConfigPath, configPaths.headPath)
   ])
   return signatures.flat().join('\0')
 }
 
 async function readConfigPathSignatures(
   configPath: string,
+  headPath: string,
   visited = new Set<string>()
 ): Promise<string[]> {
   if (visited.has(configPath)) {
@@ -86,11 +85,16 @@ async function readConfigPathSignatures(
     return [ownSignature]
   }
 
-  const includedPaths = parseIncludedConfigPaths(configText, dirname(configPath))
-  const includedSignatures = await Promise.all(
-    includedPaths.map((includedPath) => readConfigPathSignatures(includedPath, visited))
+  const { paths: includedPaths, onBranch } = parseIncludedConfigPaths(
+    configText,
+    dirname(configPath)
   )
-  return [ownSignature, ...includedSignatures.flat()]
+  const includedSignatures = await Promise.all(
+    includedPaths.map((includedPath) => readConfigPathSignatures(includedPath, headPath, visited))
+  )
+  // HEAD contents distinguish branch switches even on filesystems with coarse timestamps.
+  const branchSignature = onBranch ? [await readFile(headPath, 'utf8')] : []
+  return [ownSignature, ...branchSignature, ...includedSignatures.flat()]
 }
 
 async function readConfigPathSignature(configPath: string): Promise<string> {
@@ -102,9 +106,13 @@ async function readConfigPathSignature(configPath: string): Promise<string> {
   }
 }
 
-function parseIncludedConfigPaths(configText: string, baseDir: string): string[] {
+function parseIncludedConfigPaths(
+  configText: string,
+  baseDir: string
+): { paths: string[]; onBranch: boolean } {
   const includedPaths: string[] = []
   let inIncludeSection = false
+  let onBranch = false
   for (const rawLine of configText.split(/\r?\n/)) {
     const line = rawLine.trim()
     if (!line || line.startsWith('#') || line.startsWith(';')) {
@@ -113,6 +121,7 @@ function parseIncludedConfigPaths(configText: string, baseDir: string): string[]
     const sectionName = parseConfigSectionName(line)
     if (sectionName) {
       inIncludeSection = sectionName === 'include' || sectionName.startsWith('includeif ')
+      onBranch ||= /^includeif\s+"onbranch:/.test(sectionName)
       continue
     }
     if (!inIncludeSection) {
@@ -123,7 +132,7 @@ function parseIncludedConfigPaths(configText: string, baseDir: string): string[]
       includedPaths.push(resolveIncludedConfigPath(includePath, baseDir))
     }
   }
-  return includedPaths
+  return { paths: includedPaths, onBranch }
 }
 
 function parseConfigSectionName(line: string): string | null {

@@ -69,3 +69,24 @@ describe('origin reads on repos without origin', () => {
     expect(await warmOriginReads(repos, 4)).toEqual(children)
   })
 })
+
+// An ordinary branch switch must preserve config-signed answers without rebuilding remote listings.
+it.each([190, 1900])(
+  'keeps remote listings warm across ordinary checkouts (N=%i)',
+  async (repos) => {
+    for (let index = 0; index < repos; index += 1) {
+      const repoPath = join(root, `checkout-${index}`)
+      await mkdir(join(repoPath, '.git'), { recursive: true })
+      await writeFile(join(repoPath, '.git', 'config'), '[remote "upstream"]\n  url = /x\n')
+      await writeFile(join(repoPath, '.git', 'HEAD'), 'ref: refs/heads/first\n')
+      await listCachedRemoteNames(repoPath)
+      await writeFile(join(repoPath, '.git', 'HEAD'), 'ref: refs/heads/other\n')
+      await listCachedRemoteNames(repoPath)
+      await expect(readRemoteUrl({ repoPath }, 'origin')).rejects.toThrow(/No such remote/)
+    }
+    const calls = gitExecFileAsyncMock.mock.calls.map(([args]) => args.join(' '))
+    expect(calls.filter((call) => call === 'remote')).toHaveLength(repos)
+    expect(calls.filter((call) => call.startsWith('remote get-url'))).toHaveLength(0)
+  },
+  30_000
+)

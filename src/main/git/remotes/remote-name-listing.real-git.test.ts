@@ -1,7 +1,7 @@
 import { execFile } from 'node:child_process'
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, rm, stat, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { isAbsolute, join } from 'node:path'
 import { promisify } from 'node:util'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 
@@ -60,7 +60,11 @@ it.each(['folder', 'linked worktree'])(
     }
     expect(await listCachedRemoteNames(repoPath)).toEqual([])
     expect(await isRemoteListedAbsent(repoPath, 'origin')).toBe(true)
+    const headPath = await git(repoPath, 'rev-parse', '--git-path', 'HEAD')
+    const absoluteHead = isAbsolute(headPath) ? headPath : join(repoPath, headPath)
+    const beforeHead = await stat(absoluteHead)
     await git(repoPath, 'checkout', '-b', 'with-remote')
+    await utimes(absoluteHead, beforeHead.atime, beforeHead.mtime)
     expect(await git(repoPath, 'remote', 'get-url', 'origin')).toBe(
       'https://gitlab.com/example/project.git'
     )
