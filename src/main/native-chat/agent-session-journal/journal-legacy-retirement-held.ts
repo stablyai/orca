@@ -39,10 +39,6 @@ export async function readRetirementState(
 // The saved records the cleanup reads back: when it may run, a WAL a cut-short removal left, the
 // held record a proof leaves in a build that keeps the file, and what an outcome says about a finished proof.
 
-/**
- * Absent means a release before this record copied the profile, which is always earlier; a copy
- * made without a known version waits only for the first launch that knows its own.
- */
 /** Time spent waiting (for idle, or pacing), so active time counts only the work. */
 export function legacyProofWaits(): {
   timed: <A extends unknown[], R>(wait: (...args: A) => Promise<R>) => (...args: A) => Promise<R>
@@ -64,6 +60,10 @@ export function legacyProofWaits(): {
   }
 }
 
+/**
+ * Absent means a release before this record copied the profile, which is always earlier; a copy
+ * made without a known version waits only for the first launch that knows its own.
+ */
 export function laterVersion(running: string, convertedBy: string | null): boolean {
   return (
     isValidAppVersion(running) &&
@@ -129,8 +129,7 @@ export function heldFor(
       record.phase !== 'held' ||
       record.layout !== LEGACY_PROOF_LAYOUT ||
       record.proof !== observation.proof ||
-      record.store !== observation.store ||
-      !isRecord(record.counts)
+      record.store !== observation.store
     ) {
       return null
     }
@@ -144,15 +143,17 @@ export function heldFor(
       layout: LEGACY_PROOF_LAYOUT,
       proof: observation.proof,
       store: observation.store,
-      counts: {
-        chats: count('chats'),
-        alreadyConverted: count('alreadyConverted'),
-        newlyConverted: count('newlyConverted'),
-        deletedHere: count('deletedHere'),
-        drafts: count('drafts'),
-        originals: count('originals'),
-        copies: count('copies')
-      },
+      counts: !isRecord(record.counts)
+        ? null
+        : {
+            chats: count('chats'),
+            alreadyConverted: count('alreadyConverted'),
+            newlyConverted: count('newlyConverted'),
+            deletedHere: count('deletedHere'),
+            drafts: count('drafts'),
+            originals: count('originals'),
+            copies: count('copies')
+          },
       whole: record.whole === true
     }
   } catch {

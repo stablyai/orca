@@ -89,13 +89,14 @@ export class JournalLegacyProof {
 
   /** What this run of the proof walked, and whether it picked up saved progress. */
   get walked(): {
-    counts: LegacyProofCounts
+    /** Null until a page finished or saved progress carried counts: nothing was measured yet. */
+    counts: LegacyProofCounts | null
     resumed: boolean
     whole: boolean
-    fromCopies: boolean
   } {
-    const { counts, resumed, whole, fromCopies } = this.frontier
-    return { counts: { ...counts }, resumed, whole, fromCopies }
+    const { counts, resumed, whole, pages } = this.frontier
+    const measured = pages > 0 || (resumed && whole)
+    return { counts: measured ? { ...counts } : null, resumed, whole }
   }
 
   /** Why this original was refused, once `refused` said so. */
@@ -198,7 +199,7 @@ export class JournalLegacyProof {
 function savedCursor(
   saved: string | null,
   observation: LegacyProofObservation
-): { cursor: LegacyProofCursor; counts?: LegacyProofCounts; fromCopies?: boolean } | null {
+): { cursor: LegacyProofCursor; counts?: LegacyProofCounts } | null {
   const proving = decodeLegacySourceProving(saved)
   if (proving) {
     if (proving.proof !== observation.proof || proving.store !== observation.store) {
@@ -208,8 +209,8 @@ function savedCursor(
     return proving.cursor.table >= LEGACY_PROOF_COPIES_TABLE
       ? {
           cursor: { table: LEGACY_PROOF_COPIES_TABLE, after: null },
-          // The copies are walked again from their first, so they're counted again from zero.
-          counts: proving.counts && { ...proving.counts, copies: 0 }
+          // Copies already converted are gone from the original's mappings, so their count stands.
+          counts: proving.counts
         }
       : { cursor: proving.cursor, counts: proving.counts }
   }
@@ -223,14 +224,13 @@ function savedCursor(
     typeof retiring === 'object' &&
     retiring !== null &&
     'phase' in retiring &&
-    (retiring.phase === 'retiring' || retiring.phase === 'held') &&
+    // Only a deletion cut short: a held proof is no standing permission, so a deleting build walks again.
+    retiring.phase === 'retiring' &&
     'layout' in retiring &&
     retiring.layout === LEGACY_PROOF_LAYOUT &&
     'proof' in retiring &&
     retiring.proof === observation.proof &&
     'store' in retiring &&
     retiring.store === observation.store
-  return proven
-    ? { cursor: { table: LEGACY_PROOF_COPIES_TABLE, after: null }, fromCopies: true }
-    : null
+  return proven ? { cursor: { table: LEGACY_PROOF_COPIES_TABLE, after: null } } : null
 }

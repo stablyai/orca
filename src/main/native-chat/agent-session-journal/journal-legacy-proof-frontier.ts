@@ -20,15 +20,13 @@ export type LegacyProofFrontier = {
   resumed: boolean
   /** `counts` cover every page from the first, across launches when progress carried them. */
   whole: boolean
-  /** Resumed at the copies from a finished proof, whose own record holds the counts. */
-  fromCopies: boolean
   /** Chats unconverted when this page was first read: a retry reads them back as converted. */
   unconverted: Set<string>
 }
 
 export function createLegacyProofFrontier(
   cursor: LegacyProofCursor = { table: 0, after: null },
-  carried?: { counts?: LegacyProofCounts; fromCopies?: boolean }
+  carried?: { counts?: LegacyProofCounts }
 ): LegacyProofFrontier {
   const resumed = cursor.table !== 0 || cursor.after !== null
   return {
@@ -49,7 +47,6 @@ export function createLegacyProofFrontier(
         },
     resumed,
     whole: !resumed || carried?.counts !== undefined,
-    fromCopies: carried?.fromCopies === true,
     unconverted: new Set()
   }
 }
@@ -182,11 +179,13 @@ export async function completeJournalLegacyProof(
       await rest(started)
       frontier.session++
       frontier.pending = false
+      // Each copy as it converts: a copies page read again after a failure holds only the rest.
+      if (page.copies) {
+        frontier.counts.copies++
+      }
     }
-    // Counted once the page is done, so a page read again after a failure isn't counted twice.
-    if (page.copies) {
-      frontier.counts.copies += page.copies.length
-    } else {
+    // Other pages are counted once done, so a page read again after a failure isn't counted twice.
+    if (!page.copies) {
       for (const chat of page.sessions) {
         const kind = !chat.convert
           ? chat.epoch === ''

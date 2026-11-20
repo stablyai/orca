@@ -64,6 +64,10 @@ export class JournalLegacyRetirement {
   private activeMs = 0
   private readonly waits = legacyProofWaits()
   private firstAttemptAt: number | undefined
+  // What the proof read this launch, so a failed attempt still reports the file's size.
+  private observed: { proof: string; walBytes: string } | undefined
+  // Removing the side files a removal cut short left, after the main file was gone.
+  private leftovers = false
 
   constructor(
     private readonly directory: string,
@@ -106,10 +110,15 @@ export class JournalLegacyRetirement {
       if (error instanceof JournalLegacyIneligibleError && !this.done) {
         this.done = true
         await this.outcome({ outcome: 'deferred', defer: 'unsupported_storage' }).catch(() => {})
+      } else if (this.leftovers) {
+        await this.outcome({ outcome: 'deferred', defer: 'leftover_files' }).catch(() => {})
       } else {
         const removing = this.proof.finished && this.deletes
         const failed = legacyProofFailureOutcome(error, this.proof.walked, removing)
-        await this.outcome({ ...failed, activeMs: this.activeMs }).catch(() => {})
+        const bytes = this.observed ? sourceBytes(this.observed) : null
+        await this.outcome({ ...failed, sourceBytes: bytes, activeMs: this.activeMs }).catch(
+          () => {}
+        )
       }
       this.later()
       const reason = error instanceof Error ? error.message : String(error)
@@ -139,7 +148,13 @@ export class JournalLegacyRetirement {
           this.done = true
           return this.outcome({ outcome: 'deferred', defer: 'leftover_files' })
         }
+        this.leftovers = true
         await removeLeftoverLegacyCompanions(this.filename, absorbedWal(saved.retirement))
+        // A WAL this store never proved absorbed stays, so the file isn't fully gone.
+        if (await legacyCompanionsPresent(this.filename)) {
+          this.done = true
+          return this.outcome({ outcome: 'deferred', defer: 'leftover_files' })
+        }
       }
       this.done = true
       return this.outcome({
@@ -182,6 +197,7 @@ export class JournalLegacyRetirement {
     }
     await this.eligibility.present()
     await this.eligibility.check(this.filename, this.stopped.signal)
+    this.observed = observation
     this.proof.observe(observation)
     this.proof.resume(saved.retirement, observation)
     const started = performance.now()
@@ -202,8 +218,8 @@ export class JournalLegacyRetirement {
       layout: LEGACY_PROOF_LAYOUT,
       proof: observation.proof,
       store: observation.store,
-      counts: held && walked.fromCopies ? held.counts : walked.counts,
-      whole: held && walked.fromCopies ? held.whole : walked.whole
+      counts: walked.counts,
+      whole: walked.whole
     }
     if (!this.deletes) {
       return this.hold(proven, observation)
@@ -214,6 +230,7 @@ export class JournalLegacyRetirement {
     }
     const signal = AbortSignal.any([recycled.signal, this.stopped.signal])
     let lease: Awaited<ReturnType<typeof acquireJournalLegacyFileLock>> | undefined
+    let removal: Partial<LegacyJournalRetirementOutcome> | undefined
     try {
       // One full-sync commit makes every converted row durable before the original goes.
       const destination = await legacyDestinationIdentity(journalDomainDatabasePath(this.directory))
@@ -246,14 +263,12 @@ export class JournalLegacyRetirement {
       if (!this.done) {
         this.later()
       }
-      await this.outcome(
-        provenOutcome(
-          this.done ? 'deleted' : 'delete_failed',
-          proven,
-          observation,
-          this.activeMs,
-          this.proof.walked.resumed
-        )
+      removal = provenOutcome(
+        this.done ? 'deleted' : 'delete_failed',
+        proven,
+        observation,
+        this.activeMs,
+        this.proof.walked.resumed
       )
     } finally {
       try {
@@ -263,6 +278,10 @@ export class JournalLegacyRetirement {
         this.readers.releaseSourceReaders(recycled)
       }
     }
+    // Reported once the lock and the reader gate are released: reporting waits on the writer.
+    if (removal) {
+      await this.outcome(removal)
+    }
   }
 
   /** The proof finished and this build keeps the file: saved, so later launches don't walk again. */
@@ -270,11 +289,16 @@ export class JournalLegacyRetirement {
     proven: LegacySourceHeld,
     observation: LegacyProofObservation & { walBytes: string }
   ): Promise<void> {
-    await this.writer.maintain({
-      kind: 'legacy-retirement-save',
-      value: JSON.stringify(proven),
-      durable: false
-    })
+    if (
+      (await this.writer.maintain({
+        kind: 'legacy-retirement-save',
+        value: JSON.stringify(proven),
+        durable: false
+      })) !== true
+    ) {
+      // Unsaved, the next launch would walk again; this one retries after the backoff.
+      return this.later()
+    }
     this.done = true
     await this.outcome(
       provenOutcome('proof_complete', proven, observation, this.activeMs, this.proof.walked.resumed)

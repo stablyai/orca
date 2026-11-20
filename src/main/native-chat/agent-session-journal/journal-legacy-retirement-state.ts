@@ -48,7 +48,7 @@ export type LegacyProofCounts = {
 
 /**
  * The proof of this original into this store finished, and this build keeps the file. A later
- * launch reads this instead of walking again; a build that deletes resumes at the copies.
+ * launch reads this instead of walking again; a build that deletes walks again in full.
  */
 export type LegacySourceHeld = {
   version: 2
@@ -56,7 +56,8 @@ export type LegacySourceHeld = {
   layout: typeof LEGACY_PROOF_LAYOUT
   proof: string
   store: string
-  counts: LegacyProofCounts
+  /** Null when nothing was measured: a walk resumed at the copies of a deletion cut short. */
+  counts: LegacyProofCounts | null
   /** The proof walked every page in one run rather than resuming saved progress. */
   whole: boolean
 }

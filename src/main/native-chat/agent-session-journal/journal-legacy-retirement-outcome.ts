@@ -200,7 +200,7 @@ export class LegacyJournalRetirementReporter {
  */
 export function legacyProofFailureOutcome(
   error: unknown,
-  { counts, resumed }: { counts: LegacyProofCounts; resumed: boolean },
+  { counts, resumed }: { counts: LegacyProofCounts | null; resumed: boolean },
   proven: boolean
 ): Partial<LegacyJournalRetirementOutcome> {
   const walked = { completeness: 'partial', counts, resumed } as const

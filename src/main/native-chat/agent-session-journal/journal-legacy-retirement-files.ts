@@ -39,12 +39,6 @@ async function legacyFileStat(filename: string): Promise<BigIntStats | undefined
   }
 }
 
-/**
- * A removal stopped after the main file leaves its WAL and SHM. Without a main file SQLite never
- * reads them. An empty WAL and a regular SHM go; a WAL holding frames goes only when it is the
- * one the retirement proved absorbed (`absorbedWal`, its size, inode and mtime). Anything else
- * stays.
- */
 /** A WAL or SHM file is still beside the original's name. */
 export async function legacyCompanionsPresent(filename: string): Promise<boolean> {
   for (const suffix of ['-wal', '-shm'] as const) {
@@ -55,6 +49,12 @@ export async function legacyCompanionsPresent(filename: string): Promise<boolean
   return false
 }
 
+/**
+ * A removal stopped after the main file leaves its WAL and SHM. Without a main file SQLite never
+ * reads them. An empty WAL and a regular SHM go; a WAL holding frames goes only when it is the
+ * one the retirement proved absorbed (`absorbedWal`, its size, inode and mtime). Anything else
+ * stays.
+ */
 export async function removeLeftoverLegacyCompanions(
   filename: string,
   absorbedWal?: { size: string; ino?: string; mtimeNs?: string }

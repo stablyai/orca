@@ -22,7 +22,7 @@ function recordEvents(): LegacyJournalRetirementEvent[] {
   return events
 }
 
-it('a build that keeps the file proves once and keeps it; a build that deletes resumes at the copies', async () => {
+it('a build that keeps the file proves once and keeps it; a build that deletes proves again in full', async () => {
   const events = recordEvents()
   const held = await profile()
   const read = held.readers.legacyProof
@@ -38,9 +38,9 @@ it('a build that keeps the file proves once and keeps it; a build that deletes r
   cursors.length = 0
   await held.launch('1.0.1', true, undefined, undefined, false).run()
   expect(cursors).toEqual([])
-  // A build that deletes resumes at the copies, then deletes.
+  // A held proof is no standing permission: a build that deletes walks from the start, then deletes.
   await held.launch('1.0.1', true, undefined, undefined, true).run()
-  expect(cursors[0]).toMatchObject({ table: 7, after: null, check: true })
+  expect(cursors[0]).toEqual({ table: 0, after: null })
   expect(companions(held.filename)).toEqual([])
   // Then the file is gone, and the store remembers deleting it.
   await held.launch('1.0.2', true, undefined, undefined, true).run()
@@ -181,6 +181,22 @@ it('reports every leftover shape an older build left behind, even an empty table
   await both.launch().run()
   expect(events).toMatchObject([
     { outcome: 'refused', reason: 'source-inventory', artifact: 'pause_table' },
-    { outcome: 'refused', reason: 'source-inventory', artifact: 'both' }
+    { outcome: 'refused', reason: 'source-inventory', artifact: 'both', chats_bucket: 'unknown' }
   ])
+})
+
+it('reports a deletion only once the source readers are released', async () => {
+  const deleted = await profile()
+  let released = false
+  deleted.readers.releaseSourceReaders = () => {
+    released = true
+  }
+  const seen: [string, boolean][] = []
+  setLegacyJournalRetirementHost({
+    report: async (event) => seen.push([event.outcome, released]) > 0
+  })
+  cleanup.push(() => setLegacyJournalRetirementHost(undefined))
+  vi.spyOn(console, 'warn').mockImplementation(() => {})
+  await deleted.launch().run()
+  expect(seen).toEqual([['deleted', true]])
 })
