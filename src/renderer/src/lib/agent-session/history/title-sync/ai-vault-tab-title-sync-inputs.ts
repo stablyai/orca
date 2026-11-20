@@ -6,7 +6,7 @@ import {
 import { getExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import type { AppState } from '@/store/types'
 import { readRecordChanges } from '@/store/record-transitions/keyed-record-change-reads'
-import { tabBucketsMatch } from '@/store/record-transitions/keyed-tab-bucket-match'
+import { keyedListsMatch } from '@/store/record-transitions/keyed-list-match'
 import { collectAiVaultTitleRequests } from './ai-vault-tab-title-requests'
 import { placedPanesEqual, titleRelevant } from './ai-vault-tab-title-placement-inputs'
 import type { AiVaultTitleRequestInputs } from './ai-vault-tab-title-request-inputs'
@@ -112,7 +112,7 @@ function terminalTabsEqual(
   previous: AiVaultTitleRequestInputs,
   includeStoredTitles: boolean
 ): boolean {
-  return tabBucketsMatch(
+  return keyedListsMatch(
     current.tabsByWorktree,
     previous.tabsByWorktree,
     (left, right) =>

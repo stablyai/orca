@@ -1,4 +1,4 @@
-import { tabBucketsMatch } from '@/store/record-transitions/keyed-tab-bucket-match'
+import { keyedListsMatch } from '@/store/record-transitions/keyed-list-match'
 import { isAgentTaskCompleteTrackingEnabledFromState as isAgentHookCompletionTrackingEnabled } from '@/components/terminal-pane/notifications/agent-task-complete-policy'
 
 type CompletionNotificationSettings = {
@@ -33,7 +33,7 @@ function terminalTabLivenessMatches(
   visitTab?: TabVisit
 ): boolean {
   // Key order counts: first-worktree-wins IDs make a reorder a liveness change even with reused arrays.
-  return tabBucketsMatch(current, previous, (currentTab, previousTab) => {
+  return keyedListsMatch(current, previous, (currentTab, previousTab) => {
     visitTab?.()
     return currentTab.id === previousTab.id && currentTab.ptyId === previousTab.ptyId
   })

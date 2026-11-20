@@ -112,8 +112,9 @@ function changedPaneTitleTabIds(state: AppState, previous: AppState): Iterable<s
   )
 }
 
-export function changedOwningPaneTitleRequests(state: AppState, previous: AppState): string[] {
-  const changed: string[] = []
+/** Request keys whose owning pane title changed; a set, so neither order nor duplicate owners matter. */
+export function changedOwningPaneTitleRequests(state: AppState, previous: AppState): Set<string> {
+  const changed = new Set<string>()
   // Only the retitled tabs' owners are read, so a title costs O(changed tabs), not O(all tabs).
   for (const tabId of changedPaneTitleTabIds(state, previous)) {
     for (const worktreeId of getTerminalTabOwnerWorktreeIds(state.tabsByWorktree, tabId)) {
@@ -136,7 +137,7 @@ export function changedOwningPaneTitleRequests(state: AppState, previous: AppSta
       const current = state.runtimePaneTitlesByTabId?.[tabId]?.[paneId] ?? ''
       const old = previous.runtimePaneTitlesByTabId?.[tabId]?.[paneId] ?? ''
       if (titleKey(current) !== titleKey(old)) {
-        changed.push(aiVaultTitleRequestKey(request))
+        changed.add(aiVaultTitleRequestKey(request))
       }
     }
   }

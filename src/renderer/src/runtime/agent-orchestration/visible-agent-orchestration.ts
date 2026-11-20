@@ -15,7 +15,7 @@ import {
   structuredAgentSessionTabId
 } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import type { AgentStatusOrchestrationContext } from '../../../../shared/agent-status/contracts/agent-status-types'
-import { tabBucketsMatch } from '@/store/record-transitions/keyed-tab-bucket-match'
+import { keyedListsMatch } from '@/store/record-transitions/keyed-list-match'
 import { orchestrationContextsEqual } from '@/store/slices/agent-status/orchestration/agent-status-orchestration-context'
 import {
   resolveStructuredAgentSessionOwner,
@@ -114,8 +114,8 @@ let terminalCache:
 // Why: only rows whose identity, host or pty changed can move provenance; title writes never do.
 function terminalProvenanceInputsMatch(state: TerminalInputs, previous: TerminalInputs): boolean {
   return (
-    tabBucketsMatch(state.ptyIdsByTabId, previous.ptyIdsByTabId, (a, b) => a === b) &&
-    tabBucketsMatch(
+    keyedListsMatch(state.ptyIdsByTabId, previous.ptyIdsByTabId, (a, b) => a === b) &&
+    keyedListsMatch(
       state.unifiedTabsByWorktree,
       previous.unifiedTabsByWorktree,
       (a, b) =>
@@ -124,7 +124,7 @@ function terminalProvenanceInputsMatch(state: TerminalInputs, previous: Terminal
         a.entityId === b.entityId &&
         a.executionHostId === b.executionHostId
     ) &&
-    tabBucketsMatch(
+    keyedListsMatch(
       state.tabsByWorktree,
       previous.tabsByWorktree,
       (a, b) => a.id === b.id && a.ptyId === b.ptyId

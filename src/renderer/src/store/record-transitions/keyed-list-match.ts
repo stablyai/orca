@@ -1,8 +1,8 @@
 import { readRecordChanges } from './keyed-record-change-reads'
 
-type Buckets<T> = Readonly<Record<string, readonly T[] | undefined>>
+type KeyedLists<T> = Readonly<Record<string, readonly T[] | undefined>>
 
-function bucketsMatch<T>(
+function listsMatch<T>(
   current: readonly T[] | undefined,
   previous: readonly T[] | undefined,
   rowsMatch: (current: T, previous: T) => boolean
@@ -22,13 +22,13 @@ function bucketsMatch<T>(
 }
 
 /**
- * Whether two tab-bucket maps hold the same workspace keys (in the same order unless `keyOrder` is
- * 'any') and every bucket's rows match index by index. Annotated writes compare only the buckets
- * they replaced; they never reorder surviving keys.
+ * Whether two keyed records of lists (tab buckets, pty ids by tab) hold the same keys (in the same
+ * order unless `keyOrder` is 'any') and every list matches index by index. Annotated writes compare
+ * only the lists they replaced; they never reorder surviving keys.
  */
-export function tabBucketsMatch<T>(
-  current: Buckets<T> | undefined,
-  previous: Buckets<T> | undefined,
+export function keyedListsMatch<T>(
+  current: KeyedLists<T> | undefined,
+  previous: KeyedLists<T> | undefined,
   rowsMatch: (current: T, previous: T) => boolean,
   /** 'any' matches by key, as a reader that never depends on workspace order would. */
   keyOrder: 'ordered' | 'any' = 'ordered'
@@ -47,25 +47,23 @@ export function tabBucketsMatch<T>(
     if (changes.added.length > 0 || changes.deleted.size > 0) {
       return false
     }
-    for (const workspaceId of changes.keys) {
-      if (!bucketsMatch(current[workspaceId], previous[workspaceId], rowsMatch)) {
+    for (const key of changes.keys) {
+      if (!listsMatch(current[key], previous[key], rowsMatch)) {
         return false
       }
     }
     return true
   }
-  const currentIds = Object.keys(current)
-  const previousIds = Object.keys(previous)
-  if (currentIds.length !== previousIds.length) {
+  const currentKeys = Object.keys(current)
+  const previousKeys = Object.keys(previous)
+  if (currentKeys.length !== previousKeys.length) {
     return false
   }
-  for (let index = 0; index < currentIds.length; index += 1) {
-    const workspaceId = currentIds[index]
+  for (let index = 0; index < currentKeys.length; index += 1) {
+    const key = currentKeys[index]
     if (
-      (keyOrder === 'ordered'
-        ? previousIds[index] !== workspaceId
-        : !Object.hasOwn(previous, workspaceId)) ||
-      !bucketsMatch(current[workspaceId], previous[workspaceId], rowsMatch)
+      (keyOrder === 'ordered' ? previousKeys[index] !== key : !Object.hasOwn(previous, key)) ||
+      !listsMatch(current[key], previous[key], rowsMatch)
     ) {
       return false
     }

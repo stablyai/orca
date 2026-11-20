@@ -1,4 +1,3 @@
-import type { StoreApi } from 'zustand'
 import { useAppStore } from '@/store/index'
 import type { AppState } from '@/store/types'
 import type { TerminalTab } from '../../../../../../shared/workspace-layout/terminal-tab-types'
@@ -56,17 +55,13 @@ function didSourcesChange(state: AppState, previous: AppState): boolean {
 }
 
 /** Calls `onAppear` once, as soon as a terminal running `agent` exists. Returns the unsubscribe. */
-export function whenAgentTerminalAppears(
-  agent: NoticeAgent,
-  onAppear: () => void,
-  store: Pick<StoreApi<AppState>, 'getState' | 'subscribe'> = useAppStore
-): () => void {
-  if (hasAgentTerminal(store.getState(), agent)) {
+export function whenAgentTerminalAppears(agent: NoticeAgent, onAppear: () => void): () => void {
+  if (hasAgentTerminal(useAppStore.getState(), agent)) {
     onAppear()
     return () => {}
   }
   // Why a filtered subscription: a selector would rescan every tab on each store write.
-  const unsubscribe = store.subscribe((state, previous) => {
+  const unsubscribe = useAppStore.subscribe((state, previous) => {
     if (didSourcesChange(state, previous) && hasAgentTerminal(state, agent, previous)) {
       unsubscribe()
       onAppear()

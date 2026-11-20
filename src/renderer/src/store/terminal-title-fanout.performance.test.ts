@@ -1,6 +1,6 @@
 import { afterEach, expect, it, vi } from 'vitest'
 import type { AppState } from './types'
-import { createTestStore, seedStore } from './testing/app-store-test-fixture'
+import { useAppStore } from './index'
 import { makeTab } from './terminals/testing/terminal-tab.test-fixture'
 import type { Tab } from '../../../shared/workspace-layout/tab-groups/tab-types'
 import { shouldSyncAgentHookCompletionForStoreUpdate } from '@/components/terminal-pane/agent-completion/hook-lane/agent-hook-completion-store-sync'
@@ -11,7 +11,7 @@ import { getRuntimeMobileSessionSyncKey } from '@/runtime/sync-runtime-graph/syn
 import { getTerminalTabOwners } from './terminals/ownership/terminal-tab-owner-index'
 import { selectVisibleAgentOrchestration } from '@/runtime/agent-orchestration/visible-agent-orchestration'
 
-// Perf contract (STA-16352): every terminal title change woke store subscribers that scanned every
+// Perf contract (#44954, STA-16352): every terminal title change woke store subscribers that scanned every
 // workspace's tab bucket, ~20 ms per title at 1,900 workspaces. A title change must read only its own
 // tab's bucket: no whole-map enumeration and no other workspace's bucket, at N and at 10N.
 
@@ -58,7 +58,7 @@ function unifiedTerminalTab(worktreeId: string, tabId: string): Tab {
 
 function scannedRowsPerTitleChange(workspaceCount: number): number {
   const reads: Reads = { count: 0, measuring: false }
-  const store = createTestStore()
+  const store = useAppStore
   const tabsByWorktree: AppState['tabsByWorktree'] = {}
   const unifiedTabsByWorktree: AppState['unifiedTabsByWorktree'] = {}
   for (let index = 0; index < workspaceCount; index += 1) {
@@ -68,7 +68,7 @@ function scannedRowsPerTitleChange(workspaceCount: number): number {
     const unifiedTab = unifiedTerminalTab(worktreeId, tab.id)
     unifiedTabsByWorktree[worktreeId] = [index === 0 ? unifiedTab : counted(unifiedTab, reads)]
   }
-  seedStore(store, { tabsByWorktree, unifiedTabsByWorktree, activeWorktreeId: 'wt-0' })
+  store.setState({ tabsByWorktree, unifiedTabsByWorktree, activeWorktreeId: 'wt-0' })
 
   const records = (state: AppState): unknown[] => [
     state.tabsByWorktree,
@@ -98,12 +98,12 @@ function scannedRowsPerTitleChange(workspaceCount: number): number {
   getTerminalTabOwners(store.getState().tabsByWorktree)
   let syncKey = getRuntimeMobileSessionSyncKey(store.getState())
   selectVisibleAgentOrchestration(store.getState())
-  store.subscribe((state, previous) => {
+  const stopMeasuring = store.subscribe((state, previous) => {
     watched = new Set([...records(state), ...records(previous)])
     reads.measuring = true
   })
-  whenAgentTerminalAppears('codex', () => {}, store)
-  store.subscribe((state, previous) => {
+  const stopPresence = whenAgentTerminalAppears('codex', () => {})
+  const stopSubscribers = store.subscribe((state, previous) => {
     shouldSyncAgentHookCompletionForStoreUpdate(state, previous)
     changedOwningPaneTitleRequests(state, previous)
     aiVaultTitleSyncInputsChanged(state, previous)
@@ -116,6 +116,9 @@ function scannedRowsPerTitleChange(workspaceCount: number): number {
   store.getState().setRuntimePaneTitle('tab-0', 1, 'build: step 2')
   store.getState().updateTabTitle('tab-0', 'build: step 2')
   expect(store.getState().tabsByWorktree['wt-0']?.[0]?.title).toBe('build: step 2')
+  stopMeasuring()
+  stopPresence()
+  stopSubscribers()
   return reads.count
 }
 
