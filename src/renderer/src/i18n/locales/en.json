@@ -27399,7 +27399,7 @@
       "description": "{{name}}'s Home Chat starts fresh on {{agent}}. The current conversation stays in history.",
       "kept": "Kept: soul, memory, automations, connectors",
       "notKept": "Not kept: the current conversation",
-      "threads": "Existing Slack threads stay on {{agent}}",
+      "threads": "Slack threads {{name}} already replied in keep their agent",
       "action": "Switch to {{agent}}"
     },
     "avatar": {

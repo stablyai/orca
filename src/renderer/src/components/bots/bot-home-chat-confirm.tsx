@@ -68,9 +68,11 @@ export function useConfirmBotAgentSwitch(): (
             </li>
             <li>{translate('bots.agentSwitch.notKept', 'Not kept: the current conversation')}</li>
             <li>
-              {translate('bots.agentSwitch.threads', 'Existing Slack threads stay on {{agent}}', {
-                agent: botAgentLabel(bot.agent)
-              })}
+              {translate(
+                'bots.agentSwitch.threads',
+                'Slack threads {{name}} already replied in keep their agent',
+                { name: bot.name }
+              )}
             </li>
           </ul>
         ),
