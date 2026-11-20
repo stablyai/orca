@@ -28,6 +28,10 @@ export async function judgeLegacyMailboxRows(
   agent: TuiAgent | undefined,
   onAgent?: (agent: TuiAgent, process?: MailboxAgentProcess) => void
 ): Promise<MailboxForeground> {
+  // Why: mail only narrows the daemon-era verdict, so a shell (even a script named for an agent) stays a shell.
+  if (verdict !== 'agent') {
+    return verdict
+  }
   const group = rows.find((row) => row.pid === rootPid)?.tpgid
   // Why agentOf: native installs exec a versioned binary (`…/claude/versions/2.1.0`) the bare recognizer misses.
   // Why one-shots count: ps flattens argv, so a prompt ending `--print` would read as one and hold mail forever.
@@ -42,7 +46,5 @@ export async function judgeLegacyMailboxRows(
     return 'agent'
   }
   // Why the old verdict otherwise: ps text can hide the agent (a space in its path), and holding on that never releases.
-  return verdict === 'agent' && otherProgram(findStoppedAgents(rows, group), agent) === 'non-shell'
-    ? 'non-shell'
-    : verdict
+  return otherProgram(findStoppedAgents(rows, group), agent) === 'non-shell' ? 'non-shell' : verdict
 }

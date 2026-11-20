@@ -97,4 +97,6 @@ it("an older daemon's rows name a resumed native install of the agent by its ver
     { ...rows[1], command: '/Users/Alice Smith/.local/share/claude/versions/2.1.316' }
   ]
   await expect(judgeLegacyMailboxRows(spaced, 100, 'agent', 'claude')).resolves.toBe('agent')
+  const wrapper = [rows[0], { ...rows[1], command: 'bash /home/me/bin/claude -p task' }]
+  await expect(judgeLegacyMailboxRows(wrapper, 100, 'shell', 'claude')).resolves.toBe('shell')
 })
