@@ -64,10 +64,12 @@ const DRIVER = `
 const { Worker } = require('node:worker_threads')
 const [crashWorker, filename, stateDirectory, first, burst] = process.argv.slice(2)
 const worker = new Worker(crashWorker, { workerData: { filename, stateDirectory } })
+let replies = 0
 worker.on('message', (response) => {
-  process.stdout.write(JSON.stringify({ type: response.type, id: response.id }) + '\\n')
+  require('node:fs').writeSync(1, JSON.stringify({ type: response.type, id: response.id }) + '\\n')
   if (response.type === 'ready') worker.postMessage(JSON.parse(first))
   if (response.id === 1) for (const request of JSON.parse(burst)) worker.postMessage(request)
+  if (++replies === 4) process.exit(0)
 })
 `
 
