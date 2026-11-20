@@ -50,11 +50,21 @@ export const ConnectorGitHubUsersResponse = z.object({
 })
 export type ConnectorGitHubUsersResponse = z.infer<typeof ConnectorGitHubUsersResponse>
 
-/** What `bots.github.users` answers the picker: people in the connected repositories first, by
- *  login with their real name as `handle`, then the cloud's exact-username match as `outside`. */
+/** What `bots.github.users` answers the picker. Each person says where they were found: `scope`
+ *  (the connected repositories or organizations, by login or real name `handle`), `outside` (an
+ *  exact-username match a complete search of the scope did not find), or `exact` (that match when
+ *  the scope could not be searched whole). An older host answers bare members with no `coverage`. */
 export type BotGitHubPeople = {
-  members: { id: string; name: string; handle?: string; outside?: boolean }[]
+  members: { id: string; name: string; handle?: string; found?: 'scope' | 'outside' | 'exact' }[]
   complete: boolean
+  coverage?: {
+    /** none: nothing connected to search; unavailable: gh gave nothing (missing, signed out,
+     *  offline, too slow); limited: part of the scope or of the matches was left out. */
+    local: 'full' | 'limited' | 'unavailable' | 'none'
+    exact: 'searched' | 'skipped' | 'failed'
+    /** The GitHub account the host's gh searched as, read in that same call; absent when unknown. */
+    searchedAs?: string
+  }
 }
 
 /** The desktop's own code for a cloud with GitHub off (every GitHub route answers 404). */

@@ -23,6 +23,7 @@ import type {
 import type { ConnectorConnectSource } from '../../../shared/connectors/connector-cloud-contract'
 import type { ConnectorConnectRedeem } from '../../../../cloud/packages/connector-contract/src/connect-messages'
 import { botHostTarget } from './bot-hosts'
+import type { GitHubPeopleScope } from '../../../shared/bots/github-people-scope'
 
 /** A trip's end: the linked account, or null when it ends at "Open Orca" and its deep link redeems. */
 export type ConnectorTripResult = BotSlackResult<ConnectorConnectRedeem | null>
@@ -90,7 +91,7 @@ export function botLinearCalls(hostId: ExecutionHostId) {
 export function botGitHubCalls(hostId: ExecutionHostId) {
   return {
     state: () => call<ConnectorGitHubState>(hostId, 'bots.github.state'),
-    users: (args: { query: string; scope?: { repositories: string[]; organizations: string[] } }) =>
+    users: (args: { query: string; scope?: GitHubPeopleScope }) =>
       call<BotGitHubPeople>(hostId, 'bots.github.users', args),
     unlink: () => call<undefined>(hostId, 'bots.github.unlink'),
     setDefaultBot: (args: { botId: string | null }) =>

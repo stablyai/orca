@@ -18,9 +18,18 @@ import { requestLine, useBotWhoCanAsk } from './use-bot-who-can-ask'
 
 /** complete is false when the service's people are too many to read whole. */
 export type BotWhoCanAskFound = {
-  /** `outside`: found only by an exact lookup, not among the people this connector works with. */
-  members: { id: string; name: string; handle?: string; avatarUrl?: string; outside?: boolean }[]
+  /** `group`: where a service that searches its people's scope first found them: `scoped` in that
+   *  scope, `outside` shown not to be in it; absent, unknown, under `peopleHeading`. */
+  members: {
+    id: string
+    name: string
+    handle?: string
+    avatarUrl?: string
+    group?: 'scoped' | 'outside'
+  }[]
   complete: boolean
+  /** What this search could not cover, shown in place of the generic incomplete line. */
+  note?: string
 }
 
 /** One connector's people: who is listed, how to find more, and what the card says around them. */
@@ -35,8 +44,12 @@ export type BotWhoCanAskService = {
   searchPlaceholder: string
   /** The picker's heading over found people, e.g. "People in Globex". */
   peopleHeading: string
+  /** The heading over `scoped` people, e.g. "People in your repositories". */
+  scopedHeading?: string
   /** The heading over `outside` people, kept apart so a stranger never reads as a teammate. */
   outsideHeading?: string
+  /** Muted beside each `outside` person, so one alone in the results still reads as a stranger. */
+  outsideTag?: string
   /** What an empty search says, naming the query and where it looked. */
   noMatch: (query: string) => { title: string; detail: string }
   /** Shown while the search box is empty and the service suggests nobody. */

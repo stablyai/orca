@@ -15,6 +15,8 @@ import { BotMemberAvatar, BotOwnerAvatar } from './bot-connector-people'
 import type { BotWhoCanAskFound, BotWhoCanAskService } from './BotWhoCanAskList'
 
 const SEARCH_DEBOUNCE_MS = 250
+// How close to a service's cap the picker starts showing it while people are ticked.
+const NEAR_CAP = 5
 
 type Search =
   | { status: 'loading' }
@@ -100,8 +102,11 @@ export function BotWhoCanAskPicker({
   const t = useTranslate()
   const [query, setQuery] = useState('')
   const [picked, setPicked] = useState<BotMember[]>([])
-  // A ticked person's real name, so a search by it still shows them once they scroll off.
-  const [pickedHandles, setPickedHandles] = useState<Readonly<Record<string, string>>>({})
+  // A ticked person's row label and real name, so they look the same and a search by their real
+  // name still shows them once they scroll off.
+  const [pickedLabels, setPickedLabels] = useState<
+    Readonly<Record<string, { label?: string; name?: string }>>
+  >({})
   const { search, retry } = useMemberSearch(service, query)
   const needle = query.trim().toLowerCase()
   const listed = service.listed(bot.members)
@@ -110,9 +115,10 @@ export function BotWhoCanAskPicker({
     bot.members.length + picked.length >= BOT_MAX_MEMBERS ||
     added.size + picked.length >= service.max
   const isPicked = (id: string): boolean => picked.some((entry) => entry.id === id)
-  const toggle = (member: BotMember, handle?: string): void => {
-    if (handle && pickedHandles[member.id] !== handle) {
-      setPickedHandles((current) => ({ ...current, [member.id]: handle }))
+  const toggle = (member: BotMember, label?: string, realName?: string): void => {
+    const known = pickedLabels[member.id]
+    if ((label || realName) && (known?.label !== label || known?.name !== realName)) {
+      setPickedLabels((current) => ({ ...current, [member.id]: { label, name: realName } }))
     }
     setPicked((current) =>
       isPicked(member.id) ? current.filter((entry) => entry.id !== member.id) : [...current, member]
@@ -131,10 +137,19 @@ export function BotWhoCanAskPicker({
     needle === '' && search.status === 'ready' && addable.length === 0
       ? service.idleHint
       : undefined
-  const teammates = service.outsideHeading ? addable.filter((person) => !person.outside) : addable
-  const outside = service.outsideHeading ? addable.filter((person) => person.outside) : []
+  // Grouped by where the service found them; a service that doesn't say lists everyone together.
+  const grouped = service.scopedHeading !== undefined || service.outsideHeading !== undefined
+  const scoped = grouped ? addable.filter((person) => person.group === 'scoped') : []
+  const outside = grouped ? addable.filter((person) => person.group === 'outside') : []
+  const unsorted = grouped ? addable.filter((person) => person.group === undefined) : addable
+  const note = search.status === 'ready' ? search.found.note : undefined
 
-  const pickRow = (member: BotMember, handle?: string): React.JSX.Element => {
+  /** `handle`: the muted text beside the name; `realName`: what else a search may match them by. */
+  const pickRow = (
+    member: BotMember,
+    handle?: string,
+    realName: string | undefined = handle
+  ): React.JSX.Element => {
     const on = isPicked(member.id)
     return (
       <CommandItem
@@ -142,7 +157,7 @@ export function BotWhoCanAskPicker({
         value={member.id}
         aria-checked={on}
         disabled={full && !on}
-        onSelect={() => toggle(member, handle)}
+        onSelect={() => toggle(member, handle, realName)}
       >
         <Checkbox checked={on} tabIndex={-1} aria-hidden className="pointer-events-none" />
         <span className="size-6 shrink-0">
@@ -157,17 +172,27 @@ export function BotWhoCanAskPicker({
   const offScreen = picked.filter(
     (member) =>
       !addable.some((person) => person.id === member.id) &&
-      (matches(member.name || member.id, needle) || matches(pickedHandles[member.id] ?? '', needle))
+      (matches(member.name || member.id, needle) ||
+        matches(pickedLabels[member.id]?.name ?? '', needle))
   )
   const selectedGroup =
     offScreen.length > 0 ? (
       <CommandGroup heading={t('bots.whoCanAsk.selectedHeading', 'Selected')}>
-        {offScreen.map((member) => pickRow(member, pickedHandles[member.id]))}
+        {offScreen.map((member) =>
+          pickRow(member, pickedLabels[member.id]?.label, pickedLabels[member.id]?.name)
+        )}
       </CommandGroup>
     ) : null
 
+  const noMatch =
+    !idle &&
+    search.status === 'ready' &&
+    addable.length === 0 &&
+    withAccess.length === 0 &&
+    !ownerShown
+  // A note on what the search couldn't cover replaces a hint or empty result's usual detail.
   const peopleGroup = idle ? (
-    <PickerNote title={idle.title} detail={idle.detail} />
+    <PickerNote title={idle.title} detail={note ?? idle.detail} />
   ) : search.status === 'failed' ? (
     <div role="alert" className="flex items-center gap-2 p-3 text-sm">
       <span className="min-w-0 flex-1 text-destructive">{search.error}</span>
@@ -181,19 +206,29 @@ export function BotWhoCanAskPicker({
     </p>
   ) : addable.length > 0 ? (
     <>
-      {teammates.length > 0 ? (
+      {scoped.length > 0 ? (
+        <CommandGroup heading={service.scopedHeading ?? service.peopleHeading}>
+          {scoped.map((person) => pickRow(asMember(person, service), person.handle))}
+        </CommandGroup>
+      ) : null}
+      {unsorted.length > 0 ? (
         <CommandGroup heading={service.peopleHeading}>
-          {teammates.map((person) => pickRow(asMember(person, service), person.handle))}
+          {unsorted.map((person) => pickRow(asMember(person, service), person.handle))}
         </CommandGroup>
       ) : null}
       {outside.length > 0 ? (
-        <CommandGroup heading={service.outsideHeading}>
-          {outside.map((person) => pickRow(asMember(person, service), person.handle))}
+        <CommandGroup heading={service.outsideHeading ?? service.peopleHeading}>
+          {outside.map((person) =>
+            pickRow(asMember(person, service), service.outsideTag ?? person.handle, person.handle)
+          )}
         </CommandGroup>
       ) : null}
     </>
-  ) : withAccess.length === 0 && !ownerShown ? (
-    <PickerNote {...service.noMatch(query.trim())} />
+  ) : noMatch ? (
+    <PickerNote
+      title={service.noMatch(query.trim()).title}
+      detail={note ?? service.noMatch(query.trim()).detail}
+    />
   ) : null
 
   const hasAccessLabel = t('bots.whoCanAsk.canAsk', 'Can ask')
@@ -240,13 +275,25 @@ export function BotWhoCanAskPicker({
         ) : null}
         {accessGroup}
       </CommandList>
-      <p className="px-3 pt-2 text-xs text-muted-foreground tabular-nums">
-        {t('bots.whoCanAsk.addedCount', '{{count}} of {{max}} added', {
-          count: added.size + picked.length,
-          max: service.max
-        })}
-      </p>
-      {search.status === 'ready' && !search.found.complete ? (
+      {picked.length === 0 ? (
+        <p className="px-3 py-2 text-xs text-muted-foreground tabular-nums">
+          {t('bots.whoCanAsk.addedCount', '{{count}} of {{max}} added', {
+            count: added.size,
+            max: service.max
+          })}
+        </p>
+      ) : added.size + picked.length >= service.max - NEAR_CAP ? (
+        // While picking, the footer counts the picks; the cap shows only once it is close.
+        <p className="px-3 py-2 text-xs text-muted-foreground tabular-nums">
+          {t('bots.whoCanAsk.nearCap', '{{count}} of {{max}}', {
+            count: added.size + picked.length,
+            max: service.max
+          })}
+        </p>
+      ) : null}
+      {note && !idle && !noMatch ? (
+        <p className="px-3 pb-2 text-xs text-muted-foreground">{note}</p>
+      ) : search.status === 'ready' && !search.found.complete ? (
         <p className="px-3 pb-2 text-xs text-muted-foreground">
           {t(
             'bots.whoCanAsk.incomplete',

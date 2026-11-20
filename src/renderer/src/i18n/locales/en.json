@@ -27234,6 +27234,7 @@
       "saving": "Saving…",
       "retry": "Try again",
       "addedCount": "{{count}} of {{max}} added",
+      "nearCap": "{{count}} of {{max}}",
       "addFailed": "Couldn’t add {{names}}.",
       "removeFailed": "Couldn’t remove the people you added.",
       "keptOnlyMe": "Removed {{names}}.",
@@ -27475,9 +27476,18 @@
         "inRepositories": "People in your repositories",
         "elsewhere": "Elsewhere on GitHub",
         "noPerson": "No one found for “{{query}}”",
-        "searchedWhere": "Searched your connected repositories, and GitHub for that exact username.",
+        "found": "People on GitHub",
+        "inReposAndOrgs": "People in your repos and orgs",
+        "notInRepos": "Not in your repos",
+        "notInReposOrOrgs": "Not in your repos or orgs",
+        "localUnavailable": "Couldn’t search your repos from this computer, so only exact GitHub usernames were checked.",
+        "localNone": "No repos to search yet, so only exact GitHub usernames were checked.",
+        "localLimited": "Not every repo or person was searched. Type more of the name to narrow it down.",
+        "exactFailed": "Couldn’t check exact GitHub usernames just now.",
+        "searchedAs": "Your repos were searched as @{{login}}, the GitHub CLI account on this computer.",
+        "checkedWhere": "Checked your repos and exact GitHub usernames.",
         "typeName": "Type a name or GitHub username",
-        "findHow": "Find people in your connected repositories by name, or anyone on GitHub by exact username."
+        "findHow": "Find teammates by name, or anyone by exact GitHub username."
       },
       "connection": {
         "description": "{{repos}} · signed in as @{{login}}",
