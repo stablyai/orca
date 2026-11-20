@@ -6,6 +6,7 @@ import { inFlightWindowsTreeKill } from './windows-tree-kill'
 
 import { createOutputSink } from './bounded-output-sink'
 import { createChildTerminationReporter } from './child-termination-reporter'
+import { launchByDefault } from './default-process-launch'
 
 import type { LaunchedProcess, ProcessSpec, ProcessResult } from './process-spec'
 import { DEFAULT_PROCESS_TIMEOUT_MS, DEFAULT_MAX_OUTPUT_BYTES } from './process-spec'
@@ -28,7 +29,7 @@ export function runProcess(
     let child: ChildProcess
     let launched: LaunchedProcess | null = null
     try {
-      launched = spec.launch?.(spec) ?? null
+      launched = spec.launch ? spec.launch(spec) : launchByDefault(spec, terminationReporter.report)
       child = launched?.child ?? spawnProcess(spec)
     } catch (error) {
       terminationReporter.report()

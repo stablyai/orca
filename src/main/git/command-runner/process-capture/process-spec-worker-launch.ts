@@ -8,9 +8,11 @@ import { windowsTreeKillFor } from '@orca/process-host/windows-tree-kill'
 import { recordSubprocessSpawn } from '../../../diagnostics/main-thread-churn-probe'
 import {
   canSpawnOnWorkerThread,
+  childSpawnerIsIsolated,
   isAbandonedWorkerChildError,
   spawnProcessOnWorkerThread
 } from '../../../worker-thread-child-process/worker-thread-child-process'
+import { endAbandonedGroup } from './abandoned-worker-group'
 import {
   killAbandonedWorkerChildTree,
   reportWhenAbandonedRootEnds
@@ -25,17 +27,28 @@ function isPlainPiped(spec: ProcessSpec): boolean {
   return piped && !spec.detached && !spec.windowsVerbatimArguments && !spec.serialization
 }
 
-/** runProcess `launch` for Windows, where CreateProcessW blocks its calling thread (#27362): a plain piped spec starts on the process worker. */
-export function launchProcessSpecOnWindowsWorker(
+/**
+ * runProcess `launch` that starts a plain piped spec on the process worker: on Windows because
+ * CreateProcessW blocks its calling thread (#27362); on Linux so the child starts from a utility
+ * process and holds none of main's Chromium sockets.
+ */
+export function launchProcessSpecOnWorker(
   spec: ProcessSpec,
   onWorkerLost: (() => void) | undefined,
   onTerminated: () => void,
   /** The caller holds no mutation fence: worker loss ends its lifetime without proof. */
   lifetimeEndsOnLoss = false
 ): LaunchedProcess | null {
-  if (process.platform !== 'win32' || !isPlainPiped(spec) || !canSpawnOnWorkerThread()) {
+  const linux = process.platform === 'linux' && childSpawnerIsIsolated()
+  if (
+    (process.platform !== 'win32' && !linux) ||
+    !isPlainPiped(spec) ||
+    !canSpawnOnWorkerThread()
+  ) {
     return null
   }
+  // Linux: a barrier needs the child to lead its own group, as spawnProcess would start it.
+  const ownsGroup = linux && spec.terminationBarrier === true
   const args = [...(spec.args ?? [])]
   const startedAt = performance.now()
   const child = spawnProcessOnWorkerThread({
@@ -43,7 +56,8 @@ export function launchProcessSpecOnWindowsWorker(
     args,
     cwd: spec.cwd,
     // The worker's env is a copy from its start; send main's current one.
-    env: spec.env ?? process.env
+    env: spec.env ?? process.env,
+    ...(ownsGroup ? { terminationBarrier: true as const } : {})
   })
   recordSubprocessSpawn(spec.program, args, performance.now() - startedAt)
   // runProcess keeps the head of each stream; past the cap, the rest stays on the worker.
@@ -63,6 +77,16 @@ export function launchProcessSpecOnWindowsWorker(
   const launched = child as unknown as ChildProcess
   child.on('error', (error) => {
     if (child.pid === undefined || !isAbandonedWorkerChildError(error)) {
+      return
+    }
+    if (ownsGroup) {
+      // The lost worker can no longer end the group; end it here by its pgid.
+      const ended = endAbandonedGroup(child, onWorkerLost)
+      if (lifetimeEndsOnLoss) {
+        onTerminated()
+        return
+      }
+      reportWhenAbandonedRootEnds(child.pid, ended, onTerminated)
       return
     }
     onWorkerLost?.()

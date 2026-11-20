@@ -130,8 +130,13 @@ function streamInSpan(
             if (!child.pid) {
               reportTermination()
             } else if (isAbandonedWorkerChildError(error)) {
-              // A streamed read holds only admission, which a lost worker returns.
-              endAbandonedWorkerChild(child, undefined, reportTermination, true)
+              if (groupTermination) {
+                // An owned group outlives its lost worker; end it here, which reports termination.
+                void groupTermination.stop()
+              } else {
+                // A streamed read holds only admission, which a lost worker returns.
+                endAbandonedWorkerChild(child, undefined, reportTermination, true)
+              }
             }
           })
         })

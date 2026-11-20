@@ -5,7 +5,7 @@ import { resolveSelectedLocalCommand } from '../../../ipc/command-path/command-p
 import type { WslProcessGroupTermination } from './wsl-process-group-termination'
 import { DEFAULT_GIT_MAX_BUFFER } from '../git-exec-options'
 import { createAbortError } from './abort-error'
-import { launchProcessSpecOnWindowsWorker } from './process-spec-worker-launch'
+import { launchProcessSpecOnWorker } from './process-spec-worker-launch'
 import type { ExecFileCaptureOptions } from './exec-file-capture'
 
 const GIT_TERMINATION_BARRIER_FALLBACK_TIMEOUT_MS = 2_147_000_000
@@ -59,10 +59,10 @@ export async function execFileCaptureToTermination(
     terminationBarrier: barrier,
     onChildTerminated: reportTerminated,
     ...(options.spawnOnWorkerThread === false
-      ? {}
+      ? { launch: () => null }
       : {
           launch: (spec: ProcessSpec) =>
-            launchProcessSpecOnWindowsWorker(
+            launchProcessSpecOnWorker(
               spec,
               options.onWorkerLost,
               reportTerminated,

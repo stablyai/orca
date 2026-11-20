@@ -29,7 +29,10 @@ function toErrorPayload(error: unknown): WorkerThreadChildErrorPayload {
   }
 }
 
-export function serveWorkerThreadChildProcesses(port: WorkerThreadChildPort): void {
+export function serveWorkerThreadChildProcesses(
+  port: WorkerThreadChildPort,
+  options: { closeInheritedFds?: boolean } = {}
+): void {
   const children = new Map<
     number,
     {
@@ -46,7 +49,11 @@ export function serveWorkerThreadChildProcesses(port: WorkerThreadChildPort): vo
   const spawnChild = ({ id, spec }: Extract<WorkerThreadChildRequest, { type: 'spawn' }>): void => {
     let child: ChildProcessWithoutNullStreams
     try {
-      child = spawnProcess({ ...spec, stdio: ['pipe', 'pipe', 'pipe'] })
+      child = spawnProcess({
+        ...spec,
+        stdio: ['pipe', 'pipe', 'pipe'],
+        ...(options.closeInheritedFds ? { closeInheritedFds: true } : {})
+      })
     } catch (error) {
       port.postMessage({ type: 'spawn-error', id, error: toErrorPayload(error) })
       return

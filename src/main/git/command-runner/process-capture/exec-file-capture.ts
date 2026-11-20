@@ -7,6 +7,7 @@ import { spawnNativeProcess } from '@orca/process-host/native-process-spawn'
 import { resolveSelectedLocalCommand } from '../../../ipc/command-path/command-path-resolver'
 import { createAbortError } from './abort-error'
 import { endAbandonedWorkerChild, killSpawnedCommandTree } from './spawned-command-tree-kill'
+import { endAbandonedGroup } from './abandoned-worker-group'
 import { DEFAULT_GIT_MAX_BUFFER } from '../git-exec-options'
 import type { GitAdmissionTier } from '../../../../shared/rpc-contract/source-control/git-admission-tier-params'
 
@@ -14,6 +15,7 @@ import { observeCapturedStderr, spawnedExecFile, workerExecFile } from './worker
 import { emptyExecFileOutput, isExecFileResultObject } from './exec-file-result-shape'
 import {
   canSpawnOnWorkerThread,
+  childSpawnerIsIsolated,
   isAbandonedWorkerChildError,
   isWorkerChildStdinWriteError,
   type WorkerThreadChildProcess
@@ -62,8 +64,9 @@ export function execFileCapture(
     let groupTermination: ReturnType<typeof createPosixGroupTermination> | undefined
     const ownedPosixGroup = options.ownedPosixGroup === true && process.platform !== 'win32'
     // Windows CreateProcessW can stall the calling loop for seconds under endpoint security (#11161, #27362).
+    // Linux: a utility-process spawner keeps main's Chromium sockets out of the child.
     const useWorker =
-      process.platform === 'win32'
+      process.platform === 'win32' || (process.platform === 'linux' && childSpawnerIsIsolated())
         ? options.spawnOnWorkerThread !== false && canSpawnOnWorkerThread()
         : options.spawnOnWorkerThread === true && process.platform === 'darwin'
     const callerOwnsDeadline = useWorker && process.platform === 'win32'
@@ -271,6 +274,9 @@ export function execFileCapture(
             reportChildTerminated,
             options.workerLossEndsLifetime === true || !options.onChildTerminated
           )
+        } else if (child && 'stopOwnedGroup' in child && isAbandonedWorkerChildError(error)) {
+          // The lost worker can no longer end the group; end it here so its lifetime still ends.
+          void endAbandonedGroup(child, options.onWorkerLost).then(reportChildTerminated)
         }
         if (!terminating) {
           finish(error)

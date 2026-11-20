@@ -317,16 +317,36 @@ function defaultWorkerFactory(): Worker {
 }
 
 let sharedHost: WorkerThreadChildProcessHost | null = null
+let isolatedFactory: WorkerThreadFactory | null = null
+
+/**
+ * Linux: spawn on a worker in a utility process instead of main. Chromium starts utility processes
+ * with a fresh fd table, so their children never hold main's Chromium sockets. Install before the
+ * first spawn.
+ */
+export function installIsolatedChildSpawner(factory: WorkerThreadFactory): void {
+  isolatedFactory = factory
+  // A host made before this keeps serving its own children and retires when they end.
+  sharedHost = null
+}
+
+/** True when children spawned through this module run outside main's process. */
+export function childSpawnerIsIsolated(): boolean {
+  return isolatedFactory !== null
+}
+
+function shared(): WorkerThreadChildProcessHost {
+  sharedHost ??= new WorkerThreadChildProcessHost(isolatedFactory ?? defaultWorkerFactory)
+  return sharedHost
+}
 
 export function spawnProcessOnWorkerThread(spec: WorkerThreadChildSpec): WorkerThreadChildProcess {
   // The worker has its own module state, so only main knows WSL was proven absent.
   assertWslNotLatchedAbsent(spec.program)
-  sharedHost ??= new WorkerThreadChildProcessHost(defaultWorkerFactory)
-  return sharedHost.spawn(spec)
+  return shared().spawn(spec)
 }
 
 /** True when a spawn now would reach a live worker; callers that must not fail can spawn locally instead. */
 export function canSpawnOnWorkerThread(): boolean {
-  sharedHost ??= new WorkerThreadChildProcessHost(defaultWorkerFactory)
-  return sharedHost.available()
+  return shared().available()
 }

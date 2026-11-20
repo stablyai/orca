@@ -39,6 +39,9 @@ export function killAbandonedWorkerChildTree(
   child: Pick<ChildProcess, 'pid' | 'exitCode' | 'signalCode' | 'kill'>
 ): Promise<boolean> {
   const pid = child.pid
+  if (process.platform === 'linux' && child instanceof WorkerThreadChildProcess) {
+    return killAbandonedLinuxWorkerChild(child)
+  }
   // An exited root's pid may be reused, so it is never killed; its exit is the evidence, even after a failed earlier kill.
   if (
     process.platform !== 'win32' ||
@@ -62,6 +65,23 @@ export function killAbandonedWorkerChildTree(
     workerTreeKills.set(child, kill)
   }
   return kill
+}
+
+/**
+ * Linux: the root a lost utility-process worker started is orphaned but still runs. End it by pid
+ * (it can't have been reused while it is running); false, so callers wait for the root to be gone.
+ */
+function killAbandonedLinuxWorkerChild(child: WorkerThreadChildProcess): Promise<boolean> {
+  const pid = child.pid
+  if (!pid || child.exitCode !== null || child.signalCode !== null) {
+    return Promise.resolve(true)
+  }
+  try {
+    process.kill(pid, 'SIGKILL')
+  } catch {
+    // Already gone; the root check that follows proves it.
+  }
+  return Promise.resolve(false)
 }
 
 const ABANDONED_ROOT_FIRST_CHECK_MS = 1_000
