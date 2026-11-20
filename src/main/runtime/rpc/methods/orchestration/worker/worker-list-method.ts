@@ -270,6 +270,8 @@ async function projectWorkerListPageWithFilteredSnapshot(
       taskId: row.taskId,
       runId: row.runId,
       workerState: row.workerState,
+      startedAt: row.startedAt,
+      effort: row.effort,
       dispatchStatus: row.dispatchStatus,
       agentTerminalHandle: row.agentTerminalHandle,
       terminalState: row.terminalState,

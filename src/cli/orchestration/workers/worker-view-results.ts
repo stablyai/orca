@@ -55,6 +55,8 @@ export type WorkerListResult = {
     taskId: string
     runId: string
     workerState: string
+    startedAt?: string
+    effort?: string | null
     dispatchStatus: string
     agentTerminalHandle: string | null
     terminalState: string | null

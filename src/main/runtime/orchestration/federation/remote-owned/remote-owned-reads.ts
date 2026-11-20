@@ -140,6 +140,7 @@ async function remoteWorkerListRow(
     taskId: record.task_id,
     runId: record.run_id,
     workerState: record.worker_state ?? record.status,
+    startedAt: record.created_at,
     dispatchStatus: record.status,
     agentTerminalHandle: null,
     terminalState: null,

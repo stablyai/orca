@@ -96,6 +96,8 @@ export function listWorkerTerminalResources(
   workerState: WorkerDispatchListState
   dispatchStatus: DispatchStatus
   workerStage: string | null
+  startedAt: string
+  effort: string | null
   agentTerminalHandle: string | null
   paneKey: string | null
   worktreeId: string | null
@@ -170,6 +172,9 @@ export function listWorkerTerminalResources(
                 ELSE COALESCE(r.pane_key, d.assignee_pane_key) END AS pane_key,
               COALESCE(w.worktree_id, r.worktree_id) AS worktree_id,
               w.stage AS worker_stage,
+              COALESCE(d.dispatched_at, d.created_at) AS started_at,
+              CASE WHEN json_valid(w.start_options)
+                THEN json_extract(w.start_options, '$.launch.effective.effort') END AS effective_effort,
               t.parent_id AS parent_task_id,
               d.task_id, d.run_id, d.status AS dispatch_status,
               d.termination_reason,
@@ -196,6 +201,8 @@ export function listWorkerTerminalResources(
     pane_key: string | null
     worktree_id: string | null
     worker_stage: string | null
+    started_at: string
+    effective_effort: unknown
     parent_task_id: string | null
     task_id: string
     run_id: string
@@ -229,6 +236,8 @@ export function listWorkerTerminalResources(
       workerState: row.worker_state,
       dispatchStatus: row.dispatch_status,
       workerStage: row.worker_stage,
+      startedAt: row.started_at,
+      effort: typeof row.effective_effort === 'string' ? row.effective_effort : null,
       agentTerminalHandle: row.agent_terminal_handle,
       paneKey: row.pane_key,
       worktreeId: row.worktree_id,
@@ -278,32 +287,21 @@ export function getWorkerTerminalOrderingKey(
     : null
 }
 
-export type WorkerTerminalListingMethods = {
-  allowWorkerTerminalAutoClose: typeof allowWorkerTerminalAutoClose
-  getWorkerAutoCloseState: typeof getWorkerAutoCloseState
-  keepWorkerTerminalOpen: typeof keepWorkerTerminalOpen
-  listWorkerTerminalReleaseBacklog: typeof listWorkerTerminalReleaseBacklog
-  listWorkerTerminalResources: typeof listWorkerTerminalResources
-  getWorkerTerminalListingSnapshot: typeof getWorkerTerminalListingSnapshot
-  getWorkerTerminalOrderingKey: typeof getWorkerTerminalOrderingKey
-  countWorkerTerminalInventory: typeof countWorkerTerminalInventory
-  getWorkerAttentionFacts: typeof getWorkerAttentionFacts
-  getWorkerAttentionFactsForDispatches: typeof getWorkerAttentionFactsForDispatches
-  listWorkerReportWaitCandidates: typeof listWorkerReportWaitCandidates
+const workerTerminalListingMethods = {
+  allowWorkerTerminalAutoClose,
+  getWorkerAutoCloseState,
+  keepWorkerTerminalOpen,
+  listWorkerTerminalReleaseBacklog,
+  listWorkerTerminalResources,
+  getWorkerTerminalListingSnapshot,
+  getWorkerTerminalOrderingKey,
+  countWorkerTerminalInventory,
+  getWorkerAttentionFacts,
+  getWorkerAttentionFactsForDispatches,
+  listWorkerReportWaitCandidates
 }
+export type WorkerTerminalListingMethods = typeof workerTerminalListingMethods
 
 export function attachWorkerTerminalListing(ctor: { prototype: object }): void {
-  Object.assign(ctor.prototype, {
-    allowWorkerTerminalAutoClose,
-    getWorkerAutoCloseState,
-    keepWorkerTerminalOpen,
-    listWorkerTerminalReleaseBacklog,
-    listWorkerTerminalResources,
-    getWorkerTerminalListingSnapshot,
-    getWorkerTerminalOrderingKey,
-    countWorkerTerminalInventory,
-    getWorkerAttentionFacts,
-    getWorkerAttentionFactsForDispatches,
-    listWorkerReportWaitCandidates
-  })
+  Object.assign(ctor.prototype, workerTerminalListingMethods)
 }
