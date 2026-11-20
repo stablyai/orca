@@ -16,6 +16,7 @@ import { listCodexSessionJsonlFilesIncrementally } from '../rollouts/codex-sessi
 import { linkCodexSessionFile, tryHardlinkCodexSessionFile } from '../rollouts/codex-session-link'
 import type { CodexSessionBridgeIncrementalOptions } from '../rollouts/codex-session-file-listing'
 import {
+  protectLegacySessionCopy,
   settleLegacySessionCopyName,
   swapLegacySessionCopy,
   type LegacySessionCopyReadBudget
@@ -23,7 +24,6 @@ import {
 import {
   legacySessionCopyMarkerPath,
   parseLegacyCopiedSessionMarker,
-  protectLegacySessionCopyMarker,
   type LegacyCopiedSessionMarker
 } from './codex-legacy-session-copy-marker'
 
@@ -119,9 +119,7 @@ export async function syncSystemCodexSessionsIntoManagedHomeIncrementally(
       if (hasLegacyCopies && existsSync(legacySessionCopyMarkerPath(managedHome, relativePath))) {
         // Past the read budget a copy waits for a later pass; only its marker is hidden from older builds.
         await (readBudget.exhausted
-          ? protectLegacySessionCopyMarker(managedHome, relativePath).catch((error: unknown) => {
-              console.warn('[codex-session-bridge] Could not protect a legacy copy marker:', error)
-            })
+          ? protectLegacySessionCopy({ managedHome, relativePath })
           : swapLegacySessionCopy({
               managedHome,
               relativePath,

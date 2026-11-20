@@ -18,6 +18,7 @@ import { tmpdir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 import type * as NodeFsPromises from 'node:fs/promises'
 import { syncSystemCodexSessionsIntoManagedHomeIncrementally } from './codex-session-bridge'
+import { protectLegacySessionCopy } from './codex-legacy-session-copy'
 import {
   prepareCodexAccountRestartResume,
   prepareLegacySharedCodexSessionResume
@@ -252,6 +253,35 @@ describe('legacy session copy swap', () => {
     expect(readFileSync(copyPath, 'utf-8')).toBe('{"rewritten":true}\n')
     // The name went back to what was moved; the attempt's aside name stays as a second name.
     expect(asides().map((path) => lstatSync(path).ino)).toEqual([lstatSync(copyPath).ino])
+  })
+
+  it('never links in a source rewritten in place after it was checked', async () => {
+    legacyCopy(OLD_TURNS + NEW_TURNS, OLD_TURNS)
+    const sourceFile = lstatSync(sourcePath).ino
+    renameHook.beforeAside = () => {
+      writeFileSync(sourcePath, '{"rewritten":true}\n{"turn":3}\n')
+    }
+
+    await bridgePass()
+
+    expect(lstatSync(sourcePath).ino).toBe(sourceFile)
+    expect(readFileSync(copyPath, 'utf-8')).toBe(OLD_TURNS)
+  })
+
+  it('protects a marker only once a running swap of its copy is done', async () => {
+    legacyCopy(OLD_TURNS + NEW_TURNS, OLD_TURNS)
+    let protecting: Promise<unknown> | null = null
+    renameHook.beforeAside = () => {
+      protecting = protectLegacySessionCopy({
+        managedHome: runtimeHome(),
+        relativePath: RELATIVE_PATH
+      })
+    }
+
+    await bridgePass()
+
+    expect(await protecting).toBe('swapped')
+    expect(existsSync(markerPath)).toBe(false)
   })
 
   it('gives the copy its name back when checking the moved file fails', async () => {

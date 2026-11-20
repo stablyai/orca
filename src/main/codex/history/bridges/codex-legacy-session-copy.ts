@@ -1,16 +1,18 @@
 import type { BigIntStats } from 'node:fs'
-import { link, lstat, open, readFile, rename, stat } from 'node:fs/promises'
+import { link, lstat, open, readFile, rename } from 'node:fs/promises'
 import { basename, dirname, join, normalize } from 'node:path'
 import { isDefinitiveAbsence } from '../../../../shared/errors/definitive-filesystem-absence'
 import { linkCodexRolloutUnlessHeld } from '../rollouts/codex-rollout-deletion-guard'
 import {
   legacySessionCopyMarkerPath,
   parseLegacyCopiedSessionMarker,
+  protectLegacySessionCopyMarker,
   protectMarker,
   writeMarker,
   type LegacyCopiedSessionMarker
 } from './codex-legacy-session-copy-marker'
 import { sourceStartsWithCopy } from './codex-legacy-session-copy-prefix'
+import { isCopyIdle, keepsThreadLocks } from './codex-legacy-session-copy-writer-locks'
 import {
   linkUnlessTaken,
   lstatIfPresent,
@@ -25,7 +27,6 @@ import {
 export const LEGACY_SESSION_COPY_ASIDE_SUFFIX = '.orca-legacy-copy'
 /** Attempts that each keep an aside name; past this a copy settles as kept. */
 export const LEGACY_SESSION_COPY_MAX_ASIDES = 16
-const UUID_PATTERN = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g
 
 /** `kept`: the copy holds bytes its source lacks, or its source can't be linked beside it, for good. */
 export type LegacySessionCopySwap = 'swapped' | 'kept' | 'deferred' | 'none'
@@ -53,11 +54,34 @@ export function swapLegacySessionCopy(args: {
   readBudget?: LegacySessionCopyReadBudget
 }): Promise<LegacySessionCopySwap> {
   const copyPath = join(args.managedHome, 'sessions', args.relativePath)
+  return runAloneForCopy(copyPath, () => swap(args, copyPath))
+}
+
+/**
+ * Hides a legacy copy's marker from older builds, never while a swap of the copy runs: a marker
+ * written from an earlier read would drop the aside the swap just recorded.
+ */
+export function protectLegacySessionCopy(args: {
+  managedHome: string
+  relativePath: string
+}): Promise<LegacySessionCopySwap> {
+  const copyPath = join(args.managedHome, 'sessions', args.relativePath)
+  return runAloneForCopy(copyPath, async () => {
+    await protectLegacySessionCopyMarker(args.managedHome, args.relativePath)
+    return 'none'
+  })
+}
+
+/** Every write of a copy's marker or names runs one at a time per copy. */
+function runAloneForCopy(
+  copyPath: string,
+  work: () => Promise<LegacySessionCopySwap>
+): Promise<LegacySessionCopySwap> {
   const running = swapsInFlight.get(copyPath)
   if (running) {
     return running
   }
-  const task = swap(args, copyPath)
+  const task = work()
     .catch((error: unknown) => {
       console.warn('[codex-session-bridge] Legacy session copy left in place:', copyPath, error)
       return 'deferred' as const
@@ -241,9 +265,15 @@ async function publishSourceOverCopy({
       await restoreName(asidePath, copyPath)
       return 'deferred'
     }
-    // The prefix check covered this source file; one put in its place since gets checked next pass.
+    // The prefix check covered this source as it was; one replaced or written since (an in-place
+    // rewrite keeps the file) gets checked again next pass.
     const currentSource = await lstatIfPresent(sourcePath)
-    if (!currentSource || !sameFile(currentSource, source)) {
+    if (
+      !currentSource ||
+      !sameFile(currentSource, source) ||
+      currentSource.ctimeNs !== source.ctimeNs ||
+      currentSource.size !== source.size
+    ) {
       await restoreName(asidePath, copyPath)
       return 'deferred'
     }
@@ -261,38 +291,6 @@ async function publishSourceOverCopy({
     }
     throw error
   }
-}
-
-/**
- * A Codex writing the copy runs with the copy's home as CODEX_HOME and holds the thread's lock
- * there; a home with no lock folder has had no Codex that keeps them, so nothing proves it idle.
- */
-async function isCopyIdle(args: { managedHome: string; relativePath: string }): Promise<boolean> {
-  if (!(await keepsThreadLocks(args.managedHome))) {
-    return false
-  }
-  const locks = join(args.managedHome, 'thread-writer-locks')
-  // A reverted thread's name carries its thread id and its rollout id: either can be the lock's.
-  const ids = basename(args.relativePath).toLowerCase().match(UUID_PATTERN) ?? []
-  if (ids.length === 0) {
-    return false
-  }
-  for (const id of ids) {
-    try {
-      await lstat(join(locks, `${id}.lock`))
-      return false
-    } catch (error) {
-      if (!isDefinitiveAbsence(error)) {
-        return false
-      }
-    }
-  }
-  return true
-}
-
-async function keepsThreadLocks(home: string): Promise<boolean> {
-  // A shared-history home links this folder into the store, so follow the link.
-  return (await stat(join(home, 'thread-writer-locks')).catch(() => null))?.isDirectory() === true
 }
 
 function isUnchangedCopy(current: BigIntStats, copy: BigIntStats): boolean {
