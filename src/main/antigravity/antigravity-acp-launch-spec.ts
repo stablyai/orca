@@ -4,7 +4,10 @@
 import { join, win32 } from 'node:path'
 import { homedir } from 'node:os'
 import type { AcpLaunchSpec } from '../acp/launch/acp-launch-contract'
-import { ANTIGRAVITY_ACP_DIALECT } from '../acp/acp-dialects/antigravity-dialect'
+import {
+  ANTIGRAVITY_ACP_DIALECT,
+  ANTIGRAVITY_ORCA_HOME_ACP_DIALECT
+} from '../acp/acp-dialects/antigravity-dialect'
 import {
   resumeInvocationFromOptions,
   type StructuredAgentSessionHistory
@@ -136,8 +139,7 @@ const ORCA_HOME_LAUNCH_SPEC = {
       : [],
   readsAntigravityChatAuth: true,
   scrubEnvironment: scrubAntigravityAcpEnvironment,
-  // Its credentials are Orca's settings, so a sign-in notice points there, not at `agy`.
-  dialect: { ...ANTIGRAVITY_ACP_DIALECT, signInAccount: 'managed' },
+  dialect: ANTIGRAVITY_ORCA_HOME_ACP_DIALECT,
   account: antigravityChatAccount,
   // `agy models` reads only agy's own home, so this home lists in a session Orca then removes.
   modelDiscovery: {

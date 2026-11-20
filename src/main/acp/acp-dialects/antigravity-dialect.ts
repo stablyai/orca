@@ -214,3 +214,16 @@ export const ANTIGRAVITY_ACP_DIALECT: AcpDialect = {
   signInAccount: 'system',
   familyEfforts
 }
+
+// agy answers "Authentication required" alone; on Orca's chat home that can be the Google login,
+// a gcloud login that no longer works or a rejected key, so the notice names each fix.
+const ORCA_HOME_SIGN_IN =
+  "agy couldn't sign in with this chat's sign-in method. With Google, sign agy in under Settings → Accounts → Antigravity; with gcloud, run `gcloud auth application-default login`; with a Gemini API key, check the key there."
+
+/** Chats on Orca's chat home: their credentials are Orca's settings, so sign-in points there. */
+export const ANTIGRAVITY_ORCA_HOME_ACP_DIALECT: AcpDialect = {
+  ...ANTIGRAVITY_ACP_DIALECT,
+  signInAccount: 'managed',
+  promptErrorDetail: (error) =>
+    error.code === -32000 ? ORCA_HOME_SIGN_IN : promptErrorDetail(error)
+}

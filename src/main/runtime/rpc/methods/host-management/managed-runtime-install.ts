@@ -22,7 +22,7 @@ import {
   type ManagedAgentCliId
 } from '../../../../managed-agent-cli/managed-agent-cli-registry'
 import { streamManagedRuntimeInstall } from './managed-runtime-install-stream'
-import { retireAntigravityServerLeftovers } from '../../../../antigravity/antigravity-server-retirement'
+import { scheduleAntigravityServerRetirement } from '../../../../antigravity/antigravity-server-retirement'
 import {
   managedCopyMayRun,
   noteManagedReleasesRead,
@@ -80,7 +80,7 @@ function agentCliInstallation(
 /** Each installation reclaims stale releases when created, so create them every launch, not only when a client asks. */
 export function reclaimManagedRuntimeReleasesAtLaunch(runtime: OrcaRuntimeService): void {
   provideManagedAgentDetection(runtime)
-  void retireAntigravityServerLeftovers(getProfileUserDataPath())
+  scheduleAntigravityServerRetirement(getProfileUserDataPath())
   for (const agent of MANAGED_AGENT_CLI_IDS) {
     try {
       installationOf(agent, runtime)
@@ -141,6 +141,12 @@ export const MANAGED_RUNTIME_INSTALL_METHODS = [
     params: ManagedRuntimeAgentParams,
     // Older clients name the program they showed; Orca's copy of the CLI is the only one now.
     handler: async ({ agent }, { runtime }) => {
+      // Switched off, Orca's copy would sit unused: chats need the person's own install.
+      if (isManagedAgentCli(agent) && !managedCopyMayRun(agent, runtime)) {
+        throw new Error(
+          `Orca's copy of ${managedAgentCli(agent).runtime.label} is switched off here. Install it yourself.`
+        )
+      }
       const installation = installationOf(agent, runtime)
       installation.install()
       return installation.status()

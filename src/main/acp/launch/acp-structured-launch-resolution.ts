@@ -1,5 +1,5 @@
 import { antigravityChatAuthEnvironment } from '../../antigravity/antigravity-chat-auth-environment'
-import { checkAcpLaunchVersion } from './acp-launch-version'
+import { checkAcpLaunchVersionOrCopy } from './acp-launch-version'
 import type { McpServer } from '../generated/acp-protocol.generated'
 import { withBotLaunchToolsEnv } from '../../bots/bot-launch-tools'
 import { acpBotMcpServers } from '../../bots/bot-tools-acp'
@@ -188,18 +188,18 @@ export function acpStructuredLaunchPart(
 ): StructuredAgentLaunchPartResolver<AcpStructuredLaunch> {
   return async (basis, identity) => {
     const { record } = basis
-    const { env, envToDelete, command, prefixArgs, spec, antigravityChatAuth } =
-      await resolveAcpLaunchInvocation(agentSpec, record.accountHome, {
-        resolveEnvironment: basis.baseEnvironment,
-        resolveLaunchEnv: () => basis.launchEnv(),
-        resolveCommandSettings: basis.commandSettings,
-        refreshEnvironmentAfterMiss: basis.refreshAfterMissingProgram,
-        resolveWorkingDirectory: basis.launchDirectory,
-        ...(deps.resolveCommand ? { resolveCommand: deps.resolveCommand } : {}),
-        ...(deps.homePath ? { homePath: deps.homePath } : {}),
-        ...(deps.inheritedEnv ? { inheritedEnv: deps.inheritedEnv } : {}),
-        dataDirectory: deps.dataDirectory
-      })
+    const resolved = await resolveAcpLaunchInvocation(agentSpec, record.accountHome, {
+      resolveEnvironment: basis.baseEnvironment,
+      resolveLaunchEnv: () => basis.launchEnv(),
+      resolveCommandSettings: basis.commandSettings,
+      refreshEnvironmentAfterMiss: basis.refreshAfterMissingProgram,
+      resolveWorkingDirectory: basis.launchDirectory,
+      ...(deps.resolveCommand ? { resolveCommand: deps.resolveCommand } : {}),
+      ...(deps.homePath ? { homePath: deps.homePath } : {}),
+      ...(deps.inheritedEnv ? { inheritedEnv: deps.inheritedEnv } : {}),
+      dataDirectory: deps.dataDirectory
+    })
+    const { env, envToDelete, spec, antigravityChatAuth } = resolved
     const cwd = await basis.launchDirectory()
     const visuals = spec.skillRoots || visualsByInstructions(spec) ? await basis.visuals() : null
     const linked = await basis.linkedSkills()
@@ -207,12 +207,14 @@ export function acpStructuredLaunchPart(
     const linkedRoot = linked.projects.length > 0 ? linked.root : null
     const roots = [...(visuals ? [visuals.skill] : []), ...(linkedRoot ? [linkedRoot] : [])]
     // PATH may have changed since chat creation.
-    const launchVersion = await checkAcpLaunchVersion(
+    const settled = await checkAcpLaunchVersionOrCopy(
       spec,
-      { command, prefixArgs, cwd, env },
+      { command: resolved.command, prefixArgs: resolved.prefixArgs, cwd, env },
       roots.length > 0,
-      deps.probeVersion
+      deps.probeVersion,
+      basis.commandSettings?.()
     )
+    const { command, prefixArgs, check: launchVersion } = settled
     if (launchVersion.status === 'tooOld') {
       throw AgentCliInstallationError.tooOld(spec.agent, launchVersion)
     }
