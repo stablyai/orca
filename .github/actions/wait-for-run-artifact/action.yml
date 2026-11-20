@@ -1,0 +1,66 @@
+name: Wait for run artifact to be listed
+description: >-
+  Polls this workflow run's artifact list until a just-uploaded artifact id
+  appears. SignPath's connector rejects an artifact GitHub does not list yet
+  ("no published artifact with id ..."), and the listing can lag finalize.
+
+inputs:
+  artifact-id:
+    description: Artifact id from the preceding actions/upload-artifact step.
+    required: true
+  github-token:
+    description: Token with actions:read on this repository.
+    required: false
+    default: ${{ github.token }}
+  timeout-seconds:
+    description: Fail if the artifact is still unlisted after this many seconds.
+    required: false
+    default: '120'
+
+runs:
+  using: composite
+  steps:
+    - name: Wait for artifact to be listed
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        ARTIFACT_ID: ${{ inputs.artifact-id }}
+        TIMEOUT_SECONDS: ${{ inputs.timeout-seconds }}
+      run: |
+        set -uo pipefail
+        if ! [[ "$ARTIFACT_ID" =~ ^[0-9]+$ ]]; then
+          echo "::error::wait-for-run-artifact needs a numeric artifact-id, got '$ARTIFACT_ID'."
+          exit 1
+        fi
+        deadline=$((SECONDS + TIMEOUT_SECONDS))
+        delay=2
+        sightings=0
+        last=''
+        while :; do
+          # Why: SignPath's lookup is run-scoped, so poll the run's artifact list rather than /artifacts/<id>.
+          if ids=$(gh api --paginate "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/artifacts?per_page=100" --jq '.artifacts[].id' 2>&1 | tr -d '\r'); then
+            if grep -qx "$ARTIFACT_ID" <<<"$ids"; then
+              sightings=$((sightings + 1))
+              # Why: two consecutive sightings guard against a single replica answering early.
+              if [ "$sightings" -ge 2 ]; then
+                echo "Artifact $ARTIFACT_ID is listed for run $GITHUB_RUN_ID."
+                exit 0
+              fi
+              delay=2
+            else
+              sightings=0
+              last="run lists $(grep -c . <<<"$ids") other artifact(s)"
+            fi
+          else
+            sightings=0
+            last="gh api failed: ${ids:0:300}"
+          fi
+          remaining=$((deadline - SECONDS))
+          if [ "$remaining" -le 0 ]; then
+            echo "::error::Artifact $ARTIFACT_ID was not listed for run $GITHUB_RUN_ID within ${TIMEOUT_SECONDS}s, so SignPath would reject it ($last)."
+            exit 1
+          fi
+          [ "$sightings" -eq 0 ] && echo "Artifact $ARTIFACT_ID not listed for run $GITHUB_RUN_ID yet ($last); retrying in ${delay}s."
+          sleep "$((delay < remaining ? delay : remaining))"
+          delay=$((delay * 2 > 15 ? 15 : delay * 2))
+        done

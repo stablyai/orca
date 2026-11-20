@@ -1072,7 +1072,7 @@ jobs:
           set -euo pipefail
           required=(.github/actions/install-mobile-dependencies/action.yml)
           if [ "$PLATFORM" = win ] && [ "$GITHUB_RUN_ATTEMPT" = 1 ]; then
-            required+=(.github/actions/install-signpath-module/action.yml)
+            required+=(.github/actions/install-signpath-module/action.yml .github/actions/wait-for-run-artifact/action.yml)
           fi
           missing=()
           for action_path in "${required[@]}"; do
@@ -1415,6 +1415,13 @@ jobs:
           RELEASE_MAC_BUILD_TAG: ${{ needs.cut.outputs.tag }}
           RELEASE_MAC_BUILD_WORKFLOW: release-mac-build.yml
 
+      # Why: SignPath rejects an artifact GitHub has finalized but not listed yet (v1.4.267).
+      - name: Wait for unsigned inner binaries to be listed
+        if: matrix.platform == 'win' && github.run_attempt == 1 && steps.mac-signing-gate.outcome == 'success' && steps.upload-unsigned-inner.outcome == 'success'
+        uses: ./.github/actions/wait-for-run-artifact
+        with:
+          artifact-id: ${{ steps.upload-unsigned-inner.outputs.artifact-id }}
+
       - name: Submit inner binaries signing request
         id: submit-inner-signing
         if: matrix.platform == 'win' && github.run_attempt == 1 && steps.mac-signing-gate.outcome == 'success' && steps.upload-unsigned-inner.outcome == 'success'
@@ -1629,6 +1636,12 @@ jobs:
           path: dist/orca-windows-setup.exe
           compression-level: 0
           if-no-files-found: error
+
+      - name: Wait for unsigned Windows installer to be listed
+        if: matrix.platform == 'win' && github.run_attempt == 1 && steps.mac-signing-gate.outcome == 'success' && steps.upload-unsigned-windows-installer.outcome == 'success'
+        uses: ./.github/actions/wait-for-run-artifact
+        with:
+          artifact-id: ${{ steps.upload-unsigned-windows-installer.outputs.artifact-id }}
 
       # Why: SignPath Foundation production certificates require manual review,
       # so the release job waits while the signing request is approved in UI.
