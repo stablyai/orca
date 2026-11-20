@@ -1,8 +1,17 @@
-import { Suspense, useState } from 'react'
+import { Suspense, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { Github, Image, Link2 } from 'lucide-react'
 import type { RepoIcon } from '../../../../../../shared/repository/appearance/repo-icon'
-import { faviconUrlFromWebsite } from '../../../../../../shared/repository/appearance/repo-icon'
+import {
+  faviconUrlFromWebsite,
+  MAX_REPO_ICON_UPLOAD_BYTES
+} from '../../../../../../shared/repository/appearance/repo-icon'
+import {
+  isRepoIconPickFailure,
+  type RepoIconPickPendingResult,
+  type RepoIconPickResult
+} from '../../../../../../shared/repository/appearance/repo-icon-pick-result'
+import { formatBytes } from '../../../../../../shared/text/format-bytes'
 import { Button } from '../../../ui/button'
 import { Input } from '../../../ui/input'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../../ui/tabs'
@@ -11,6 +20,7 @@ import { getRepoLucideIconOptions } from '../../../repo/repo-icon'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useTranslate } from '@/i18n/use-translate'
 import { lazyWithRetry } from '@/app-shell/startup/lazy-with-retry'
+import { RepositoryIconImageDialog } from './RepositoryIconImageDialog'
 import { repoIconPickFailureText } from './repo-icon-pick-failure-text'
 
 const RepositoryIconEmojiPicker = lazyWithRetry(
@@ -30,6 +40,21 @@ type RepositoryIconTabsProps = {
   onUseGitHubAvatar: () => void
 }
 
+// Module level: React Compiler can't lower try/finally inside a component.
+async function runRepoIconPick(
+  onResult: (result: RepoIconPickResult) => void,
+  onError: (error: unknown) => void,
+  onSettled: () => void
+): Promise<void> {
+  try {
+    onResult(await window.api.shell.pickRepoIconImage())
+  } catch (error) {
+    onError(error)
+  } finally {
+    onSettled()
+  }
+}
+
 export function RepositoryIconTabs({
   initialTab,
   selectedLucideName,
@@ -40,34 +65,59 @@ export function RepositoryIconTabs({
 }: RepositoryIconTabsProps): React.JSX.Element {
   const t = useTranslate()
   const [website, setWebsite] = useState('')
+  const [picking, setPicking] = useState(false)
+  const [pending, setPending] = useState<RepoIconPickPendingResult | null>(null)
   const mountedRef = useMountedRef()
+  const requestRef = useRef(0)
 
-  const handleUploadImage = async () => {
-    try {
-      const result = await window.api.shell.pickRepoIconImage()
-      if (!result || !mountedRef.current) {
-        return
+  const discardSelection = (): void => {
+    requestRef.current += 1
+    setPending(null)
+    setPicking(false)
+  }
+
+  const handlePickImage = async (): Promise<void> => {
+    const request = requestRef.current + 1
+    requestRef.current = request
+    setPicking(true)
+    await runRepoIconPick(
+      (result) => {
+        if (!mountedRef.current || request !== requestRef.current || !result) {
+          return
+        }
+        if (isRepoIconPickFailure(result)) {
+          toast.error(repoIconPickFailureText(result))
+          return
+        }
+        if (result.kind === 'direct') {
+          onSetIcon({
+            type: 'image',
+            src: result.dataUrl,
+            source: 'upload',
+            label: result.fileName
+          })
+          return
+        }
+        setPending(result)
+      },
+      (error) => {
+        if (request === requestRef.current) {
+          toast.error(
+            error instanceof Error
+              ? error.message
+              : t(
+                  'auto.components.settings.RepositoryIconPicker.868c5c9b56',
+                  'Failed to import repo icon'
+                )
+          )
+        }
+      },
+      () => {
+        if (request === requestRef.current) {
+          setPicking(false)
+        }
       }
-      if ('error' in result) {
-        toast.error(repoIconPickFailureText(result))
-        return
-      }
-      onSetIcon({
-        type: 'image',
-        src: result.dataUrl,
-        source: 'upload',
-        label: result.fileName
-      })
-    } catch (error) {
-      toast.error(
-        error instanceof Error
-          ? error.message
-          : t(
-              'auto.components.settings.RepositoryIconPicker.868c5c9b56',
-              'Failed to import repo icon'
-            )
-      )
-    }
+    )
   }
 
   const handleUseWebsiteFavicon = () => {
@@ -122,10 +172,11 @@ export function RepositoryIconTabs({
           variant="outline"
           size="sm"
           className="gap-2"
-          onClick={() => void handleUploadImage()}
+          disabled={picking}
+          onClick={() => void handlePickImage()}
         >
           <Image className="size-3.5" />
-          {t('auto.components.settings.RepositoryIconPicker.381b4844fd', 'Upload PNG')}
+          {t('settings.repository.iconPreview.upload', 'Upload PNG or JPEG')}
         </Button>
         <div className="flex gap-2">
           <Input
@@ -150,8 +201,9 @@ export function RepositoryIconTabs({
         </div>
         <p className="text-xs text-muted-foreground">
           {t(
-            'auto.components.settings.RepositoryIconPicker.fde066a63b',
-            'PNG uploads must be 256KB or smaller.'
+            'settings.repository.iconPreview.uploadHelp',
+            'PNG and JPEG uploads. Large images and JPEGs are converted to a PNG of {{limit}} or smaller.',
+            { limit: formatBytes(MAX_REPO_ICON_UPLOAD_BYTES) }
           )}
         </p>
       </TabsContent>
@@ -189,6 +241,20 @@ export function RepositoryIconTabs({
           <RepositoryIconEmojiPicker selectedEmoji={selectedEmoji} onSetIcon={onSetIcon} />
         </Suspense>
       </TabsContent>
+
+      <RepositoryIconImageDialog
+        key={pending?.token ?? 'idle'}
+        pending={pending}
+        onUse={(dataUrl, fileName) => {
+          onSetIcon({ type: 'image', src: dataUrl, source: 'upload', label: fileName })
+          discardSelection()
+        }}
+        onCancel={discardSelection}
+        onReselect={() => {
+          discardSelection()
+          void handlePickImage()
+        }}
+      />
     </Tabs>
   )
 }

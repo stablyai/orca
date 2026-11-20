@@ -44,6 +44,7 @@ export function createShellApi(): NonNullable<Partial<PreloadApi>['shell']> {
     pickAttachments: async () => holdBrowserAttachmentFiles(await pickBrowserFiles()),
     pickImage: () => Promise.resolve(null),
     pickRepoIconImage: () => Promise.resolve(null),
+    previewRepoIconImage: () => Promise.resolve(null),
     pickAudio: () => Promise.resolve(null),
     pickDirectory: () => Promise.resolve(null)
   }

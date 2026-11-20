@@ -786,8 +786,31 @@
     },
     "repository": {
       "iconPickErrors": {
-        "notPng": "Les icônes de dépôt doivent être des fichiers PNG.",
-        "tooLarge": "L’image de l’icône du dépôt doit faire 256 Ko maximum."
+        "notPng": "Choisissez une image PNG ou JPEG.",
+        "tooLarge": "L’image doit faire {{limit}} maximum.",
+        "dimensionsTooLarge": "Les dimensions de l’image sont trop grandes.",
+        "invalidImage": "Impossible de lire cette image.",
+        "cannotCompress": "Impossible de compresser cette image à {{limit}}."
+      },
+      "iconPreview": {
+        "upload": "Téléverser un PNG ou un JPEG",
+        "uploadHelp": "Import de PNG et JPEG. Les images volumineuses et les JPEG sont convertis en PNG de {{limit}} maximum.",
+        "prepareTitle": "Préparer l’icône du projet",
+        "previewTitle": "Aperçu de l’icône du projet",
+        "compressAction": "Compresser et prévisualiser",
+        "convertAction": "Convertir et prévisualiser",
+        "compressing": "Compression…",
+        "converting": "Conversion…",
+        "compressDescription": "Ce PNG dépasse {{limit}}. Compressez-le pour prévisualiser une copie plus petite.",
+        "compressJpegDescription": "Ce JPEG dépasse {{limit}}. Compressez-le pour prévisualiser un PNG plus petit.",
+        "convertDescription": "Les images JPEG sont converties en PNG avant de pouvoir être utilisées.",
+        "largePreview": "Grand aperçu",
+        "sidebarPreview": "Taille dans la barre latérale",
+        "originalSize": "Original : {{size}}",
+        "resultSize": "Résultat : {{size}}",
+        "use": "Utiliser cette icône",
+        "reselect": "Choisir à nouveau",
+        "cancel": "Annuler"
       }
     },
     "editorFormatOnSave": {
@@ -8543,10 +8566,8 @@
         "RepositoryIconPicker": {
           "2b7d27b93c": "Utiliser la couleur de dépôt {{value0}}",
           "useRepoIcon": "Utiliser l'icône de dépôt {{value0}}",
-          "fde066a63b": "Les PNG téléversés doivent peser 256 Ko au maximum.",
           "cc1286e263": "Favicon",
           "03ca1a4e9b": "example.com",
-          "381b4844fd": "Téléverser un PNG",
           "7da623abcc": "Utilisé par défaut — GitHub en fournit toujours un, même quand le propriétaire n'a pas défini d'image personnalisée.",
           "c490787d24": "Émoji",
           "b2d7fd2116": "Icône",

@@ -174,6 +174,7 @@ export function RepositoryIconPicker({
       <RepositoryIconColorSection badgeColor={repo.badgeColor} onBadgeColorChange={setBadgeColor} />
 
       <RepositoryIconTabs
+        key={repo.id}
         initialTab={initialTab}
         selectedLucideName={selectedLucideName}
         selectedEmoji={selectedEmoji}

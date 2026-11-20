@@ -2952,8 +2952,11 @@
     },
     "repository": {
       "iconPickErrors": {
-        "notPng": "Repo icons must be PNG files.",
-        "tooLarge": "Repo icon image must be 256KB or smaller."
+        "cannotCompress": "This image could not be compressed to {{limit}}.",
+        "dimensionsTooLarge": "Image dimensions are too large.",
+        "invalidImage": "This image could not be read.",
+        "notPng": "Choose a PNG or JPEG image.",
+        "tooLarge": "Image must be {{limit}} or smaller."
       }
     },
     "shortcuts": {

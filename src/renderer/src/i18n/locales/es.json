@@ -532,8 +532,31 @@
     },
     "repository": {
       "iconPickErrors": {
-        "notPng": "Los iconos del repositorio deben ser archivos PNG.",
-        "tooLarge": "La imagen del icono del repositorio debe tener un tamaño máximo de 256 KB."
+        "notPng": "Elige una imagen PNG o JPEG.",
+        "tooLarge": "La imagen debe ser de {{limit}} o menos.",
+        "dimensionsTooLarge": "Las dimensiones de la imagen son demasiado grandes.",
+        "invalidImage": "No se pudo leer esta imagen.",
+        "cannotCompress": "No se pudo comprimir esta imagen a {{limit}}."
+      },
+      "iconPreview": {
+        "upload": "Subir PNG o JPEG",
+        "uploadHelp": "Puedes subir PNG y JPEG. Las imágenes grandes y los JPEG se convierten en un PNG de {{limit}} o menos.",
+        "prepareTitle": "Preparar el icono del proyecto",
+        "previewTitle": "Vista previa del icono del proyecto",
+        "compressAction": "Comprimir y previsualizar",
+        "convertAction": "Convertir y previsualizar",
+        "compressing": "Comprimiendo…",
+        "converting": "Convirtiendo…",
+        "compressDescription": "Este PNG supera {{limit}}. Comprímelo para previsualizar una copia más pequeña.",
+        "compressJpegDescription": "Este JPEG supera {{limit}}. Comprímelo para previsualizar un PNG más pequeño.",
+        "convertDescription": "Las imágenes JPEG se convierten a PNG antes de poder usarlas.",
+        "largePreview": "Vista previa grande",
+        "sidebarPreview": "Tamaño en la barra lateral",
+        "originalSize": "Original: {{size}}",
+        "resultSize": "Resultado: {{size}}",
+        "use": "Usar este icono",
+        "reselect": "Volver a elegir",
+        "cancel": "Cancelar"
       }
     },
     "editorFormatOnSave": {
@@ -8232,10 +8255,8 @@
         "RepositoryIconPicker": {
           "2b7d27b93c": "Usar {{value0}} como color del repositorio",
           "useRepoIcon": "Usar {{value0}} como icono del repositorio",
-          "fde066a63b": "Las cargas PNG deben tener un tamaño de 256 KB o menos.",
           "cc1286e263": "Favicon",
           "03ca1a4e9b": "example.com",
-          "381b4844fd": "Subir PNG",
           "7da623abcc": "Se usa de forma predeterminada: GitHub siempre proporciona uno, incluso cuando el propietario no configuró una imagen personalizada.",
           "c490787d24": "Emoji",
           "b2d7fd2116": "Icono",

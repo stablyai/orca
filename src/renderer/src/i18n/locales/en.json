@@ -1453,8 +1453,31 @@
     },
     "repository": {
       "iconPickErrors": {
-        "notPng": "Repo icons must be PNG files.",
-        "tooLarge": "Repo icon image must be 256KB or smaller."
+        "notPng": "Choose a PNG or JPEG image.",
+        "tooLarge": "Image must be {{limit}} or smaller.",
+        "dimensionsTooLarge": "Image dimensions are too large.",
+        "invalidImage": "This image could not be read.",
+        "cannotCompress": "This image could not be compressed to {{limit}}."
+      },
+      "iconPreview": {
+        "upload": "Upload PNG or JPEG",
+        "uploadHelp": "PNG and JPEG uploads. Large images and JPEGs are converted to a PNG of {{limit}} or smaller.",
+        "prepareTitle": "Prepare project icon",
+        "previewTitle": "Preview project icon",
+        "compressAction": "Compress and preview",
+        "convertAction": "Convert and preview",
+        "compressing": "Compressing…",
+        "converting": "Converting…",
+        "compressDescription": "This PNG is larger than {{limit}}. Compress it to preview a smaller copy.",
+        "compressJpegDescription": "This JPEG is larger than {{limit}}. Compress it to preview a smaller PNG.",
+        "convertDescription": "JPEG images are converted to PNG before they can be used.",
+        "largePreview": "Large preview",
+        "sidebarPreview": "Sidebar size",
+        "originalSize": "Original: {{size}}",
+        "resultSize": "Result: {{size}}",
+        "use": "Use this icon",
+        "reselect": "Reselect",
+        "cancel": "Cancel"
       }
     },
     "bots": {
@@ -9835,10 +9858,8 @@
         "RepositoryIconPicker": {
           "2b7d27b93c": "Use {{value0}} repo color",
           "useRepoIcon": "Use {{value0}} repo icon",
-          "fde066a63b": "PNG uploads must be 256KB or smaller.",
           "cc1286e263": "Favicon",
           "03ca1a4e9b": "example.com",
-          "381b4844fd": "Upload PNG",
           "7da623abcc": "Used by default — GitHub always provides one, even when the owner hasn't set a custom image.",
           "c490787d24": "Emoji",
           "b2d7fd2116": "Icon",
