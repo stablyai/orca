@@ -210,7 +210,7 @@ describe('botItemAskAdvice', () => {
       comment: `Head 363e3235aa01. ${'Context. '.repeat(40)}Reply A or B.`
     })
     expect(advice?.codes).toEqual(['prose_choices', 'no_question', 'long_question', 'jargon'])
-    expect(advice?.tip).toContain('--ask and --option')
+    expect(advice?.tip).toContain('--option values after --ask')
   })
 
   it('reads only the first 8,000 characters', () => {
