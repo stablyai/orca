@@ -72,15 +72,20 @@ export function BotPictureButton({
           />
           {bot.slack ? (
             <p className="text-center text-xs text-muted-foreground">
-              {colors || outfits
+              {outfits
                 ? t(
                     'settings.bots.avatarSlackNote',
                     'Slack gets the picture, not the color or outfit.'
                   )
-                : t(
-                    'settings.bots.avatarSlackNotePicture',
-                    "Changes your bot's picture in Slack too."
-                  )}
+                : colors
+                  ? t(
+                      'settings.bots.avatarSlackNoteColor',
+                      'Slack gets the picture, not the color.'
+                    )
+                  : t(
+                      'settings.bots.avatarSlackNotePicture',
+                      "Changes your bot's picture in Slack too."
+                    )}
             </p>
           ) : null}
         </div>

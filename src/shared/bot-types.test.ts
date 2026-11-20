@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { makeTestBot } from '../main/bots/bot.test-fixture'
 import { gitHubMembersOf, normalizePersistedBots, withGitHubMembersTagged } from './bot-types'
-import { applyBotUpdates } from './rpc-contract/bots-params'
+import { applyBotUpdates, BotUpdate } from './rpc-contract/bots-params'
 import { BotGroupMessageSchema } from './bots/bot-group-schema'
 
 describe('GitHub people per org', () => {
@@ -41,6 +41,13 @@ describe('stored outfits', () => {
     const [loaded] = normalizePersistedBots(saved)
     expect(loaded?.avatarOutfit).toBe('aviator')
     expect(JSON.parse(JSON.stringify(loaded)).avatarOutfit).toBe('aviator')
+  })
+
+  it("takes a newer client's outfit on an edit, and refuses an id that isn't one", () => {
+    const edit = (avatarOutfit: string) =>
+      BotUpdate.safeParse({ botId: 'b1', updates: { avatarOutfit } })
+    expect(edit('aviator').success).toBe(true)
+    expect(edit('Bad Id!').success).toBe(false)
   })
 
   it("keeps a group turn's outfit a newer version added", () => {

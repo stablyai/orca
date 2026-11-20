@@ -36,7 +36,7 @@ type OutfitFile<T> = {
 const READ_RETRIES = 3
 const READ_RETRY_MS = 5000
 
-function outfitFiles<T>(
+export function outfitFiles<T>(
   readers: Record<string, () => Promise<T>>,
   pathOf: (outfit: BotAvatarOutfit) => string
 ): (outfit: BotAvatarOutfit) => OutfitFile<T> | null {
