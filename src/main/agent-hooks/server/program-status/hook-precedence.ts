@@ -85,6 +85,15 @@ export function programStatusHookYieldEndsAt(
   if (!sameAgent && previous.payload.state === 'done') {
     return undefined
   }
+  // agy's program row has no roster, so only its done may replace a row its subagents hold open.
+  if (
+    sameAgent &&
+    previous.payload.agentType === 'antigravity' &&
+    payload.state !== 'done' &&
+    isAgentStatusHeldOpenByChildWork(previous.payload)
+  ) {
+    return Infinity
+  }
   // agy reports no end for a backgrounded command that never exits, so its hold lapses after hook silence.
   if (
     payload.state === 'done' &&

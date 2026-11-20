@@ -272,3 +272,20 @@ it('ends the run on agy done after a subagent that finished before its first pol
   programDone()
   await vi.waitFor(() => expect(state()).toBe('done'), { timeout: 10000 })
 })
+
+it('keeps the subagent roster when agy reports working after a long hook-silent wait', async () => {
+  await parentStopsWhileSubagentRuns()
+  vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
+  vi.advanceTimersByTime(HOOK_SILENCE_BEFORE_PROGRAM_STATUS_FALLBACK_MS + 1)
+  server.ingestTerminalStatus({
+    paneKey: PANE,
+    tabId: 'tab-1',
+    worktreeId: 'wt-1',
+    connectionId: null,
+    fromProgramStatus: true,
+    payload: { prompt: '', state: 'working', agentType: 'antigravity' }
+  })
+  expect(server.getStatusSnapshot()[0]?.subagents?.map((subagent) => subagent.id)).toEqual([
+    'child'
+  ])
+})
