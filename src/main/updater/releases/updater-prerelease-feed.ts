@@ -19,7 +19,11 @@ const ATOM_FEED_URL = 'https://github.com/stablyai/orca/releases.atom'
 const MAX_MANIFEST_PROBE_CANDIDATES = 6
 // Releases past the feed don't change and newer ones come from Atom, so a list that settled the delay stays accurate.
 const OLDER_RELEASES_TTL_MS = 6 * 60 * 60 * 1000
-let olderReleasesCache: { tags: DatedReleaseTag[]; expiresAt: number } | null = null
+let olderReleasesCache: {
+  tags: DatedReleaseTag[]
+  expiresAt: number
+  exhaustive: boolean
+} | null = null
 
 // Atom includes stable and prerelease tags without channel filtering.
 const ENTRY_RE = /<entry>([\s\S]*?)<\/entry>/g
@@ -150,11 +154,13 @@ export async function fetchNewerReleaseTagsWithReadiness(
   }
   const now = options.now ?? Date.now()
   const cutoff = now - options.minReleaseAgeMs
-  // Newest-first lists settle the delay once they reach an aged-out release or our own version.
+  // Newest-first lists settle the delay at an aged-out newer release or our own release; an older
+  // line's recent maintenance release does not prove that history is complete.
   const settlesDelay = (list: ReleaseFeedTag[]): boolean =>
+    list.some(({ version }) => compareVersions(version, currentVersion) === 0) ||
     selectChannelCandidates(list, includePrerelease, options.releaseFilter).some(
       (entry) =>
-        isReleaseOldEnough(entry, cutoff) || compareVersions(entry.version, currentVersion) <= 0
+        isReleaseOldEnough(entry, cutoff) && compareVersions(entry.version, currentVersion) > 0
     )
   // Atom keeps only ~10 entries, so an aged-out release may predate it.
   const olderTags = settlesDelay(tags) ? null : await fetchOlderReleaseTags(settlesDelay, now)
@@ -193,7 +199,7 @@ async function fetchOlderReleaseTags(
   if (
     olderReleasesCache &&
     olderReleasesCache.expiresAt > now &&
-    settlesDelay(olderReleasesCache.tags)
+    (olderReleasesCache.exhaustive || settlesDelay(olderReleasesCache.tags))
   ) {
     return olderReleasesCache.tags
   }
@@ -202,7 +208,12 @@ async function fetchOlderReleaseTags(
       settlesDelay(listed.map(toDatedReleaseTag))
     )
     const tags = builds.map(toDatedReleaseTag)
-    olderReleasesCache = { tags, expiresAt: now + OLDER_RELEASES_TTL_MS }
+    // An unsettled list ran to the last page or the cap, so refetching within the TTL finds nothing more.
+    olderReleasesCache = {
+      tags,
+      expiresAt: now + OLDER_RELEASES_TTL_MS,
+      exhaustive: !settlesDelay(tags)
+    }
     return tags
   } catch {
     // Rate limits or outages keep the Atom-only result, which holds the update (fail closed).
