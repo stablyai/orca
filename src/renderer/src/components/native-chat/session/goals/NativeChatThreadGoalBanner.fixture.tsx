@@ -1,5 +1,6 @@
 import { defineFixture } from '../../../../component-fixtures/component-fixture'
 import { NativeChatThreadGoalBanner } from './NativeChatThreadGoalBanner'
+import { NativeChatGoalCheckNotice } from '../../messages/notices/NativeChatGoalCheckNotice'
 
 function goalFeedback(width: number, expanded: boolean) {
   return defineFixture({
@@ -45,3 +46,13 @@ export const collapsed = goalFeedback(720, false)
 export const expanded = goalFeedback(720, true)
 export const narrowCollapsed = goalFeedback(360, false)
 export const narrowExpanded = goalFeedback(360, true)
+
+export const endedGoalChecks = defineFixture({
+  width: 720,
+  render: () => (
+    <div className="native-chat-appearance bg-background p-3">
+      <NativeChatGoalCheckNotice text={'2\nNot satisfied: the verification is still pending.'} />
+    </div>
+  ),
+  interact: (frame: HTMLElement) => frame.querySelector<HTMLElement>('summary')?.click()
+})
