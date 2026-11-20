@@ -16,13 +16,7 @@ import { migrateLegacySharedAuthToPerAccountHome } from './legacy-shared-auth-mi
 import { normalizeCodexRuntimeSelection } from '../../account-management/runtime-selection'
 import { getSystemCodexHomePath } from '../../../codex/configuration/homes/codex-home-paths'
 import { CodexRuntimeHomePaths } from '../runtime-home-service-paths'
-import {
-  MAX_HISTORY_IMPORT_ATTEMPTS,
-  parseLegacyMigrationMarker,
-  publishKeptLegacyHistoriesIfAbsent,
-  trackLegacyHistoryImport,
-  type LegacyMigrationMarker
-} from './legacy-prompt-history-import'
+import { importKeptLegacyHistoriesOnce } from './legacy-prompt-history-import'
 
 export abstract class CodexRuntimeHomeLegacyMigration extends CodexRuntimeHomePaths {
   protected safeMigrateLegacySharedAuth(): void {
@@ -65,11 +59,8 @@ export abstract class CodexRuntimeHomeLegacyMigration extends CodexRuntimeHomePa
   }
 
   protected migrateLegacyManagedStateIfNeeded(): void {
-    const existingMarker = this.readMigrationMarker()
-    if (existingMarker) {
-      if (existingMarker.historyImportPending) {
-        void this.importKeptLegacyHistories(existingMarker)
-      }
+    if (existsSync(this.getMigrationMarkerPath())) {
+      void this.importKeptLegacyHistories()
       return
     }
 
@@ -84,56 +75,30 @@ export abstract class CodexRuntimeHomeLegacyMigration extends CodexRuntimeHomePa
     }
     // First and synchronously: nothing later (a failed session copy, an account removed while the
     // import runs) may leave a legacy history without a copy Orca keeps.
-    const keptAny = this.keepLegacyHistoriesAside(managedHomes)
+    this.keepLegacyHistoriesAside(managedHomes)
+    // Independent of the session copies below, so one that fails can't hold the import back.
+    void this.importKeptLegacyHistories()
     for (const { accountId, homePath } of managedHomes) {
       this.migrateLegacySessions(homePath, accountId)
     }
-    const marker: LegacyMigrationMarker = {
-      completedAt: Date.now(),
-      migratedHomeCount: managedHomes.length,
-      ...(keptAny ? { historyImportPending: true } : {})
-    }
+
     // Mark completion so later startups cannot replay stale managed-home state.
-    this.writeMigrationMarker(marker)
-    if (keptAny) {
-      void this.importKeptLegacyHistories(marker)
-    }
+    writeFileAtomically(
+      this.getMigrationMarkerPath(),
+      `${JSON.stringify({ completedAt: Date.now(), migratedHomeCount: managedHomes.length })}\n`
+    )
   }
 
   // Off the startup path (a large history takes tens of milliseconds), from Orca's kept copies only.
-  protected async importKeptLegacyHistories(marker: LegacyMigrationMarker): Promise<void> {
+  protected async importKeptLegacyHistories(): Promise<void> {
     try {
-      const outcome = await publishKeptLegacyHistoriesIfAbsent(
+      await importKeptLegacyHistoriesOnce(
         this.getKeptLegacyHistoryRoot(),
         join(this.getRuntimeHomePath(), 'history.jsonl')
       )
-      trackLegacyHistoryImport(outcome)
-      const attempts = (marker.historyImportAttempts ?? 0) + 1
-      if (outcome === 'failed' && attempts < MAX_HISTORY_IMPORT_ATTEMPTS) {
-        this.writeMigrationMarker({ ...marker, historyImportAttempts: attempts })
-        return
-      }
-      const { historyImportPending: _done, historyImportAttempts: _attempts, ...completed } = marker
-      this.writeMigrationMarker(completed)
     } catch (error) {
       console.warn('[codex-runtime-home] Failed to import legacy Codex prompt history:', error)
     }
-  }
-
-  protected readMigrationMarker(): LegacyMigrationMarker | null {
-    if (!existsSync(this.getMigrationMarkerPath())) {
-      return null
-    }
-    try {
-      return parseLegacyMigrationMarker(readFileSync(this.getMigrationMarkerPath(), 'utf-8'))
-    } catch {
-      // An unreadable marker still means the one-time migration ran.
-      return {}
-    }
-  }
-
-  protected writeMigrationMarker(marker: LegacyMigrationMarker): void {
-    writeFileAtomically(this.getMigrationMarkerPath(), `${JSON.stringify(marker)}\n`)
   }
 
   protected getKeptLegacyHistoryRoot(): string {
@@ -163,8 +128,7 @@ export abstract class CodexRuntimeHomeLegacyMigration extends CodexRuntimeHomePa
   /** Copies each account's legacy history under Orca's metadata, which no removal or cleanup reaches. */
   protected keepLegacyHistoriesAside(
     managedHomes: { accountId: string; homePath: string }[]
-  ): boolean {
-    let keptAny = false
+  ): void {
     let firstError: unknown = null
     for (const { accountId, homePath } of managedHomes) {
       const legacyHistoryPath = join(homePath, 'history.jsonl')
@@ -182,7 +146,6 @@ export abstract class CodexRuntimeHomeLegacyMigration extends CodexRuntimeHomePa
           accountId,
           readFileSync(legacyHistoryPath)
         )
-        keptAny = true
       } catch (error) {
         firstError ??= error
       }
@@ -190,7 +153,6 @@ export abstract class CodexRuntimeHomeLegacyMigration extends CodexRuntimeHomePa
     if (firstError) {
       throw firstError
     }
-    return keptAny
   }
 
   protected migrateLegacySessions(managedHomePath: string, accountId: string): void {

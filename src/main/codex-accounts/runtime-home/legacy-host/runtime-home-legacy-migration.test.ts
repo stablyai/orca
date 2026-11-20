@@ -10,7 +10,6 @@ import {
 } from 'node:fs'
 import { join } from 'node:path'
 import { createSettings } from '../runtime-home-settings-test-fixtures'
-import type { CodexManagedHomePath } from '../../managed-homes/codex-managed-home-path'
 import {
   createManagedAuth,
   createStore,
@@ -72,24 +71,26 @@ async function startService(): Promise<void> {
   await waitForMigrationMarker()
 }
 
-// Settled: the marker exists and no longer waits on the history import.
+// Settled: the marker exists and any kept history finished its import attempt.
 async function waitForMigrationMarker(): Promise<void> {
-  const markerPath = join(testState.userDataDir, 'codex-runtime-home', 'migration-v1.json')
+  const runtimeHome = join(testState.userDataDir, 'codex-runtime-home')
   await vi.waitFor(() => {
-    expect(existsSync(markerPath)).toBe(true)
-    expect(readFileSync(markerPath, 'utf-8')).not.toContain('"historyImportPending"')
+    expect(existsSync(join(runtimeHome, 'migration-v1.json'))).toBe(true)
+    const kept = join(runtimeHome, 'legacy-account-history')
+    if (existsSync(kept)) {
+      expect(readFileSync(join(kept, 'import-state.json'), 'utf-8')).toContain('"done":true')
+    }
   })
 }
 
 async function removeAccountHome(managedHomePath: string): Promise<void> {
   const { CodexManagedHomeLifecycle } =
     await import('../../managed-homes/codex-managed-home-lifecycle')
-  const paths = {
-    assert: async (candidate: string) => candidate,
-    getRoot: () => join(testState.userDataDir, 'codex-accounts')
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: safeRemove reads only these two members.
-  } as unknown as CodexManagedHomePath
-  await new CodexManagedHomeLifecycle(paths).safeRemove(managedHomePath, 'account-1')
+  const { CodexManagedHomePath } = await import('../../managed-homes/codex-managed-home-path')
+  await new CodexManagedHomeLifecycle(new CodexManagedHomePath()).safeRemove(
+    managedHomePath,
+    'account-1'
+  )
 }
 
 const fsHooks = vi.hoisted(() => ({ afterRead: new Map<string, () => void>() }))
@@ -182,6 +183,10 @@ describe('CodexRuntimeHomeService', () => {
     expect(existsSync(join(accountOneHome, 'history.jsonl'))).toBe(false)
     expect(readFileSync(archivedHistoryPath('account-1'), 'utf-8')).toBe('{"id":"a-1"}\n')
     expect(readFileSync(archivedHistoryPath('account-2'), 'utf-8')).toBe('{"id":"b-1"}\n')
+    await vi.waitFor(() => expect(trackedImportOutcomes()).toEqual(['imported']))
+    expect(readFileSync(join(getRuntimeCodexHomePath(), 'history.jsonl'), 'utf-8')).toBe(
+      '{"id":"a-1"}\n{"id":"b-1"}\n'
+    )
   })
 
   it('never writes an existing shared history and keeps the legacy one aside, even past account removal', async () => {

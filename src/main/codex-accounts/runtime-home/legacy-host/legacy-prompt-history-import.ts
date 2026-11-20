@@ -1,42 +1,61 @@
 import { randomUUID } from 'node:crypto'
-import { link, lstat, open, readFile, readdir, rm } from 'node:fs/promises'
+import { link, lstat, open, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { errnoCodeOrUnknown } from '../../../../shared/errors/errno-code'
 import { track } from '../../../telemetry/client'
 import type { CODEX_LEGACY_HISTORY_IMPORT_OUTCOMES } from '../../../../shared/telemetry/schemas/telemetry-codex-legacy-history-event-schemas'
 
-export type LegacyHistoryImportOutcome = (typeof CODEX_LEGACY_HISTORY_IMPORT_OUTCOMES)[number]
+type LegacyHistoryImportOutcome = (typeof CODEX_LEGACY_HISTORY_IMPORT_OUTCOMES)[number]
 
 /** Launches that try the import before it gives up; the kept copies stay either way. */
-export const MAX_HISTORY_IMPORT_ATTEMPTS = 3
+const MAX_IMPORT_ATTEMPTS = 3
+const IMPORT_STATE_FILE = 'import-state.json'
 
-export type LegacyMigrationMarker = {
-  completedAt?: number
-  migratedHomeCount?: number
-  /** Kept legacy histories still wait to seed a shared history that doesn't exist yet. */
-  historyImportPending?: true
-  historyImportAttempts?: number
+type ImportState = { done: boolean; attempts: number }
+
+async function readImportState(path: string): Promise<ImportState> {
+  try {
+    const parsed: unknown = JSON.parse(await readFile(path, 'utf-8'))
+    if (parsed && typeof parsed === 'object') {
+      return {
+        done: 'done' in parsed && parsed.done === true,
+        attempts: 'attempts' in parsed && typeof parsed.attempts === 'number' ? parsed.attempts : 0
+      }
+    }
+  } catch (error) {
+    if (errnoCodeOrUnknown(error) !== 'ENOENT') {
+      // Unreadable state never re-imports: the shared history may exist by now anyway.
+      return { done: true, attempts: 0 }
+    }
+  }
+  return { done: false, attempts: 0 }
 }
 
-export function parseLegacyMigrationMarker(text: string): LegacyMigrationMarker {
-  const parsed: unknown = JSON.parse(text)
-  if (!parsed || typeof parsed !== 'object') {
-    return {}
+/**
+ * Seeds a missing shared history from Orca's kept copies, once: each launch tries until the import
+ * settles or has failed three times. Nothing runs while there are no kept copies.
+ */
+export async function importKeptLegacyHistoriesOnce(
+  keptRoot: string,
+  runtimeHistoryPath: string
+): Promise<void> {
+  const statePath = join(keptRoot, IMPORT_STATE_FILE)
+  const state = await readImportState(statePath)
+  if (state.done) {
+    return
   }
-  const marker: LegacyMigrationMarker = {}
-  if ('completedAt' in parsed && typeof parsed.completedAt === 'number') {
-    marker.completedAt = parsed.completedAt
+  const keptPaths = await listKeptLegacyHistories(keptRoot)
+  if (keptPaths.length === 0) {
+    return
   }
-  if ('migratedHomeCount' in parsed && typeof parsed.migratedHomeCount === 'number') {
-    marker.migratedHomeCount = parsed.migratedHomeCount
+  const outcome = await publishKeptLegacyHistoriesIfAbsent(keptPaths, runtimeHistoryPath)
+  trackLegacyHistoryImport(outcome)
+  const attempts = state.attempts + 1
+  const next: ImportState = {
+    done: outcome !== 'failed' || attempts >= MAX_IMPORT_ATTEMPTS,
+    attempts
   }
-  if ('historyImportPending' in parsed && parsed.historyImportPending === true) {
-    marker.historyImportPending = true
-  }
-  if ('historyImportAttempts' in parsed && typeof parsed.historyImportAttempts === 'number') {
-    marker.historyImportAttempts = parsed.historyImportAttempts
-  }
-  return marker
+  await writeFile(statePath, `${JSON.stringify(next)}\n`, 'utf-8')
 }
 
 async function pathExists(path: string): Promise<boolean> {
@@ -79,8 +98,8 @@ function byName(left: { name: string }, right: { name: string }): number {
  * Codex may be appending to or trimming a shared history.jsonl that exists, so only a missing one is
  * created from Orca's kept copies, and never over one Codex creates meanwhile.
  */
-export async function publishKeptLegacyHistoriesIfAbsent(
-  keptRoot: string,
+async function publishKeptLegacyHistoriesIfAbsent(
+  keptPaths: readonly string[],
   runtimeHistoryPath: string
 ): Promise<LegacyHistoryImportOutcome> {
   try {
@@ -88,7 +107,7 @@ export async function publishKeptLegacyHistoriesIfAbsent(
       return 'skipped_existing'
     }
     const seenLines = new Set<string>()
-    for (const keptPath of await listKeptLegacyHistories(keptRoot)) {
+    for (const keptPath of keptPaths) {
       for (const line of (await readFile(keptPath, 'utf-8')).split('\n')) {
         if (line) {
           seenLines.add(line)
@@ -130,7 +149,7 @@ async function publishWithoutOverwrite(contents: string, targetPath: string): Pr
   }
 }
 
-export function trackLegacyHistoryImport(outcome: LegacyHistoryImportOutcome): void {
+function trackLegacyHistoryImport(outcome: LegacyHistoryImportOutcome): void {
   try {
     track('codex_legacy_history_import', {
       outcome,
