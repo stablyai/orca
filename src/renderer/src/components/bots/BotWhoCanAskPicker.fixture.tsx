@@ -1,93 +1,82 @@
 import { defineFixture } from '../../component-fixtures/component-fixture'
 import type { Bot } from '../../../../shared/bot-types'
-import type { BotGitHubPeople } from '../../../../shared/connector-bot-github-contract'
+import type {
+  BotGitHubRoster,
+  ConnectorGitHubUsersResponse
+} from '../../../../shared/connector-bot-github-contract'
+import type { BotSlackResult } from '../../../../shared/connector-bot-slack-contract'
 import type { BotWhoCanAskService } from './BotWhoCanAskList'
 import { BotWhoCanAskPicker } from './BotWhoCanAskPicker'
-import { gitHubWhoCanAskFound } from './github/github-who-can-ask-found'
+import { gitHubWhoCanAskSession } from './github/github-who-can-ask-session'
 
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: fixture bot with the fields the picker reads.
 const bot = { id: 'bot-1', hostId: 'local', name: 'Issue Triager', members: [] } as unknown as Bot
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the English default, as i18next answers with no catalog.
-const t = ((_key: string, fallback: string, values?: Record<string, string>) =>
-  fallback.replace(/\{\{(\w+)\}\}/g, (_m, name: string) => values?.[name] ?? '')) as never
+const t = ((_key: string, fallback: string, values?: Record<string, unknown>) =>
+  fallback.replace(/\{\{(\w+)\}\}/g, (_m, name: string) => String(values?.[name] ?? ''))) as never
 
 // Fictional people; ids are GitHub-shaped so the avatar falls back to initials offline.
-const team: BotGitHubPeople['members'] = [
-  { id: '1000001', name: 'mayaokafor', handle: 'Maya Okafor' },
-  { id: '1000002', name: 'dev-lindqvist', handle: 'Devon Lindqvist' },
-  { id: '1000003', name: 'rpatel-gh', handle: 'Ravi Patel' },
-  { id: '1000004', name: 'sam-yu', handle: 'Sam Yu' },
+const team = [
+  { id: '1000001', login: 'mayaokafor', name: 'Maya Okafor' },
+  { id: '1000002', login: 'dev-lindqvist', name: 'Devon Lindqvist' },
+  { id: '1000003', login: 'rpatel-gh', name: 'Ravi Patel' },
+  { id: '1000004', login: 'sam-yu', name: 'Sam Yu' },
   {
     id: '1000005',
-    name: 'alexandra-konstantinopoulou-dev',
-    handle: 'Alexandra Konstantinopoulou-Whitfield'
+    login: 'alexandra-konstantinopoulou-dev',
+    name: 'Alexandra Konstantinopoulou-Whitfield'
   }
 ]
-// Exact usernames that belong to someone the repos' search did not find.
+// Exact usernames that belong to someone outside the roster.
 const strangers: Record<string, string> = { maya: '1000009', jordan: '1000010' }
-const exactHit = (query: string) => {
+const users = async ({
+  query
+}: {
+  query: string
+}): Promise<BotSlackResult<ConnectorGitHubUsersResponse>> => {
   const id = strangers[query.toLowerCase()]
-  return id ? [{ id, name: query }] : []
+  return { ok: true, value: { members: id ? [{ id, name: query }] : [], complete: true } }
 }
-const teamMatching = (query: string) =>
-  team.filter((person) =>
-    `${person.name} ${person.handle ?? ''}`.toLowerCase().includes(query.toLowerCase())
-  )
-const isLogin = (query: string) => /^[A-Za-z0-9-]+$/.test(query)
+const readRoster = (more: Partial<Extract<BotGitHubRoster, { status: 'read' }>> = {}) =>
+  ({
+    status: 'read',
+    people: team,
+    from: { repositories: true, organizations: false },
+    complete: true,
+    cut: false,
+    ...more
+  }) satisfies BotGitHubRoster
 
-type Host = (query: string) => BotGitHubPeople
+type Roster = BotGitHubRoster
+const scope = { repositories: ['acme/web'], owners: [], more: false }
 
-// What the host answers in each situation, read by the real mapper.
-const searched =
-  (local: 'full' | 'limited', more: { narrowable?: boolean } = {}): Host =>
-  (query) => ({
-    members: [
-      ...teamMatching(query).map((person) => ({ ...person, found: 'scope' as const })),
-      ...exactHit(query).map((person) => ({
-        ...person,
-        found: local === 'full' ? ('outside' as const) : ('exact' as const)
-      }))
-    ],
-    complete: local === 'full',
-    coverage: { local, exact: isLogin(query) ? 'searched' : 'skipped', ...more }
-  })
-const ghUnavailable: Host = (query) => ({
-  members: exactHit(query).map((person) => ({ ...person, found: 'exact' as const })),
-  complete: false,
-  coverage: { local: 'unavailable', exact: isLogin(query) ? 'searched' : 'skipped' }
-})
-
-const make = (host: Host): BotWhoCanAskService => ({
-  listed: () => [],
-  stamp: { source: 'github' },
-  max: 50,
-  search: async (query) => ({
-    ok: true,
-    value: gitHubWhoCanAskFound(
-      host(query),
-      { query, ownerLogin: 'owner', withOrganizations: false },
-      t
+const make = (roster: Roster): BotWhoCanAskService => {
+  const begin = () =>
+    gitHubWhoCanAskSession(
+      { people: async () => ({ ok: true, value: roster }), users },
+      { scope, ownerLogin: 'owner', hostName: null, t }
     )
-  }),
-  errorMessage: (code) => code,
-  searchPlaceholder: 'Search by name or username',
-  peopleHeading: 'People on GitHub',
-  scopedHeading: 'Found in your repos',
-  outsideHeading: 'Elsewhere on GitHub',
-  outsideTag: 'Not found in your repos',
-  noMatch: (query) => ({
-    title: `No one found for “${query}”`,
-    detail: 'Searched your repos and exact usernames.'
-  }),
-  idleHint: { title: 'Find people', detail: 'Teammates by name, others by exact username.' },
-  ownerId: null,
-  ownerName: null,
-  kind: 'github',
-  connector: 'GitHub',
-  workspace: null,
-  outsiders: null,
-  notYet: ''
-})
+  return {
+    listed: () => [],
+    stamp: { source: 'github' },
+    max: 50,
+    search: (query) => begin()(query),
+    begin,
+    errorMessage: (code) => code,
+    searchPlaceholder: 'Search by name or username',
+    peopleHeading: 'People on GitHub',
+    outsideHeading: 'Elsewhere on GitHub',
+    noMatch: (query) => ({ title: `No one found for “${query}”`, detail: '' }),
+    idleHint: { title: 'Find people', detail: 'Teammates by name, others by exact username.' },
+    ownerId: null,
+    ownerName: null,
+    kind: 'github',
+    connector: 'GitHub',
+    workspace: null,
+    outsiders: null,
+    notYet: ''
+  }
+}
 
 const settle = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 600))
 
@@ -109,9 +98,9 @@ function tick(frame: HTMLElement, login: string): void {
 }
 
 // The Add popover is a fixed w-80 (320px) everywhere, so that is also its narrowest.
-const pickerOf = (host: Host) => () => (
+const pickerOf = (roster: Roster) => () => (
   <div className="w-80 rounded-md border border-border bg-popover">
-    <BotWhoCanAskPicker bot={bot} service={make(host)} owner="You" onPicked={() => {}} />
+    <BotWhoCanAskPicker bot={bot} service={make(roster)} owner="You" onPicked={() => {}} />
   </div>
 )
 const searching =
@@ -121,7 +110,8 @@ const searching =
     type(frame, query)
     await settle()
   }
-const full = searched('full')
+const full = readRoster()
+const unavailable: Roster = { status: 'unavailable' }
 
 /** An empty search suggests the people found in the connected repositories. */
 export const suggestions = defineFixture({ width: 340, render: pickerOf(full), interact: settle })
@@ -162,7 +152,7 @@ export const noMatchNarrow = defineFixture({
 /** Nobody to suggest: the empty box asks for a name. */
 export const idleHint = defineFixture({
   width: 340,
-  render: pickerOf(ghUnavailable),
+  render: pickerOf(unavailable),
   interact: settle
 })
 
@@ -188,27 +178,27 @@ export const longNameNarrow = defineFixture({
 /** gh couldn't search: the exact match is tagged, not called an outsider, and the note says why. */
 export const ghUnavailableExact = defineFixture({
   width: 340,
-  render: pickerOf(ghUnavailable),
+  render: pickerOf(unavailable),
   interact: searching('jordan')
 })
 
 /** gh couldn't search and the name isn't a username: nothing was searched, and it says so. */
 export const ghUnavailableNothingSearched = defineFixture({
   width: 340,
-  render: pickerOf(ghUnavailable),
+  render: pickerOf(unavailable),
   interact: searching('neil par')
 })
 
-/** A caps-hit search: results, with advice that typing more narrows them. */
-export const capsHit = defineFixture({
+/** A repo past the first 100 people: the list says it shows only those. */
+export const firstHundred = defineFixture({
   width: 340,
-  render: pickerOf(searched('limited', { narrowable: true })),
+  render: pickerOf(readRoster({ cut: true })),
   interact: searching('a')
 })
 
-/** Part of the scope wasn't searched (a cut roster): limited, without the typing advice. */
-export const scopeCut = defineFixture({
+/** A repo couldn't be read: the exact match is tagged, and the note says so. */
+export const partlyRead = defineFixture({
   width: 340,
-  render: pickerOf(searched('limited')),
+  render: pickerOf(readRoster({ complete: false })),
   interact: searching('maya')
 })

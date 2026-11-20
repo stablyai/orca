@@ -1,28 +1,27 @@
-// Who can ask › Add on GitHub: the one GraphQL call the host's gh runs per search, how its answer
-// is read source by source, and how the people found are ranked.
+// Who can ask › Add on GitHub: the one GraphQL call that reads the people of the connected
+// repositories and organizations, and how its answer is read source by source.
 import * as z from 'zod'
-import { GITHUB_ID_PATTERN, GITHUB_LOGIN_PATTERN } from '../../shared/connector-bot-github-contract'
+import {
+  GITHUB_ID_PATTERN,
+  GITHUB_LOGIN_PATTERN,
+  GITHUB_PEOPLE_PER_SOURCE
+} from '../../shared/connector-bot-github-contract'
 import {
   GITHUB_PEOPLE_MAX_OWNERS,
-  GITHUB_PEOPLE_MAX_REPOSITORIES
+  GITHUB_PEOPLE_MAX_REPOSITORIES,
+  type GitHubPeopleScope
 } from '../../shared/bots/github-people-scope'
+import type { GitHubPerson } from '../../shared/bots/github-people-rank'
 
-export type GitHubPerson = { id: string; login: string; name: string | null }
-
-const PER_REPOSITORY = 30
-const ORGANIZATION_MEMBERS = 100
-/** A personal account's own repositories searched, most recently pushed first. */
+/** A person's own repositories read when the app is on their whole account, most recent first. */
 const PERSONAL_REPOSITORIES = 5
-const PER_PERSONAL_REPOSITORY = 10
-export const MAX_GITHUB_PEOPLE = 30
-
 const REPOSITORY_NAME = /^[A-Za-z0-9._-]{1,100}$/
-const PERSON = 'nodes { databaseId login name } totalCount'
+const PEOPLE = `assignableUsers(first: ${GITHUB_PEOPLE_PER_SOURCE}) { totalCount nodes { databaseId login name } }`
 
 export type GitHubPeopleTarget = { repositories: [string, string][]; owners: string[] }
 
-/** The searchable part of a scope; anything dropped (malformed, over the caps) is reported. */
-export function targetOf(scope: { repositories: string[]; owners: string[] }): {
+/** The readable part of a scope; anything dropped (malformed, over the caps) is reported. */
+export function targetOf(scope: GitHubPeopleScope): {
   target: GitHubPeopleTarget
   dropped: boolean
 } {
@@ -44,36 +43,32 @@ export function targetOf(scope: { repositories: string[]; owners: string[] }): {
   return { target, dropped: kept < scope.repositories.length + scope.owners.length }
 }
 
-/** One call: the viewer (who gh searches as) and every source, so all results share that
- *  principal. Names travel as variables, never spliced into the text. */
-export function peopleQuery(
-  query: string,
-  target: GitHubPeopleTarget
-): { document: string; vars: Record<string, string> } {
-  const { repositories, owners } = target
-  // GraphQL rejects a declared variable no field uses; repositories and personal accounts use $q.
-  const usesQuery = repositories.length > 0 || owners.length > 0
-  const params: string[] = usesQuery ? ['$q: String!'] : []
-  const vars: Record<string, string> = usesQuery ? { q: query } : {}
+/** One call: the viewer (who gh reads as) and every source, so all people share that principal.
+ *  Names travel as variables, never spliced into the text. */
+export function rosterQuery(target: GitHubPeopleTarget): {
+  document: string
+  vars: Record<string, string>
+} {
+  const params: string[] = []
+  const vars: Record<string, string> = {}
   const fields: string[] = ['viewer { login }']
-  repositories.forEach(([owner, name], index) => {
+  target.repositories.forEach(([owner, name], index) => {
     params.push(`$ro${index}: String!`, `$rn${index}: String!`)
     vars[`ro${index}`] = owner
     vars[`rn${index}`] = name
-    fields.push(
-      `r${index}: repository(owner: $ro${index}, name: $rn${index}) { assignableUsers(query: $q, first: ${PER_REPOSITORY}) { ${PERSON} } }`
-    )
+    fields.push(`r${index}: repository(owner: $ro${index}, name: $rn${index}) { ${PEOPLE} }`)
   })
-  owners.forEach((login, index) => {
+  target.owners.forEach((login, index) => {
     params.push(`$a${index}: String!`)
     vars[`a${index}`] = login
     fields.push(
       `a${index}: repositoryOwner(login: $a${index}) { __typename ` +
-        `... on Organization { membersWithRole(first: ${ORGANIZATION_MEMBERS}) { ${PERSON} } } ` +
-        `... on User { repositories(first: ${PERSONAL_REPOSITORIES}, ownerAffiliations: OWNER, orderBy: {field: PUSHED_AT, direction: DESC}) { totalCount nodes { assignableUsers(query: $q, first: ${PER_PERSONAL_REPOSITORY}) { ${PERSON} } } } } }`
+        `... on Organization { membersWithRole(first: ${GITHUB_PEOPLE_PER_SOURCE}) { totalCount nodes { databaseId login name } } } ` +
+        `... on User { repositories(first: ${PERSONAL_REPOSITORIES}, ownerAffiliations: OWNER, orderBy: {field: PUSHED_AT, direction: DESC}) { totalCount nodes { ${PEOPLE} } } } }`
     )
   })
-  return { document: `query(${params.join(', ')}) { ${fields.join(' ')} }`, vars }
+  const head = params.length > 0 ? `query(${params.join(', ')})` : 'query'
+  return { document: `${head} { ${fields.join(' ')} }`, vars }
 }
 
 const RawPerson = z.object({
@@ -93,22 +88,21 @@ const Answer = z.object({
 })
 const Viewer = z.object({ login: z.string().regex(GITHUB_LOGIN_PATTERN) })
 
-/** What one call found, source by source. */
-export type PeopleRead = {
+/** What one call returned, source by source. */
+export type RosterRead = {
   people: GitHubPerson[]
-  /** Sources (a repository, an organization, a personal account) read successfully. */
+  /** Sources read: a repository's people, an organization's members, or a personal account
+   *  (its repository list, plus at least one of its repositories' people when it has any). */
   sourcesRead: number
-  /** Some source failed or lost entries (null or malformed nodes, a GraphQL error). */
+  from: { repositories: boolean; organizations: boolean }
+  /** A source failed or lost entries: a null or malformed source or node, a GraphQL error. */
   lossy: boolean
-  /** A source held more people than it returned for this query: typing more narrows it. */
-  matchesCapped: boolean
-  /** A source's population was cut regardless of the query (an organization's first
-   *  ORGANIZATION_MEMBERS, a person's first PERSONAL_REPOSITORIES repositories). */
-  scopeCut: boolean
+  /** A source stopped at its fixed size. */
+  cut: boolean
   viewer: string | null
 }
 
-export function readPeople(stdout: string, target: GitHubPeopleTarget): PeopleRead | null {
+export function readRoster(stdout: string, target: GitHubPeopleTarget): RosterRead | null {
   let raw: unknown
   try {
     raw = JSON.parse(stdout)
@@ -117,20 +111,19 @@ export function readPeople(stdout: string, target: GitHubPeopleTarget): PeopleRe
   }
   const answer = Answer.safeParse(raw)
   const data = answer.success ? answer.data.data : null
-  if (!data) {
+  if (!answer.success || !data) {
     return null
   }
-  const read: PeopleRead = {
+  const viewer = Viewer.safeParse(data.viewer)
+  const read: RosterRead = {
     people: [],
     sourcesRead: 0,
-    lossy: (answer.success && (answer.data.errors?.length ?? 0) > 0) || false,
-    matchesCapped: false,
-    scopeCut: false,
-    viewer: null
+    from: { repositories: false, organizations: false },
+    lossy: (answer.data.errors?.length ?? 0) > 0,
+    cut: false,
+    viewer: viewer.success ? viewer.data.login : null
   }
-  const viewer = Viewer.safeParse(data.viewer)
-  read.viewer = viewer.success ? viewer.data.login : null
-  const take = (connection: z.infer<typeof People>, onCut: 'matches' | 'scope'): void => {
+  const take = (connection: z.infer<typeof People>): void => {
     for (const node of connection.nodes) {
       const person = RawPerson.safeParse(node)
       const id = person.success ? String(person.data.databaseId) : ''
@@ -140,19 +133,14 @@ export function readPeople(stdout: string, target: GitHubPeopleTarget): PeopleRe
         read.lossy = true
       }
     }
-    if (connection.totalCount > connection.nodes.length) {
-      if (onCut === 'matches') {
-        read.matchesCapped = true
-      } else {
-        read.scopeCut = true
-      }
-    }
+    read.cut ||= connection.totalCount > connection.nodes.length
   }
   target.repositories.forEach((_repo, index) => {
     const source = RepositorySource.safeParse(data[`r${index}`])
     if (source.success) {
       read.sourcesRead += 1
-      take(source.data.assignableUsers, 'matches')
+      read.from.repositories = true
+      take(source.data.assignableUsers)
     } else {
       read.lossy = true
     }
@@ -163,58 +151,31 @@ export function readPeople(stdout: string, target: GitHubPeopleTarget): PeopleRe
     const personal = PersonalSource.safeParse(entry)
     if (organization.success) {
       read.sourcesRead += 1
-      // A fixed roster, filtered here: typing more doesn't bring in members past the first page.
-      take(organization.data.membersWithRole, 'scope')
-    } else if (personal.success) {
-      read.sourcesRead += 1
-      read.scopeCut ||=
-        personal.data.repositories.totalCount > personal.data.repositories.nodes.length
-      for (const repo of personal.data.repositories.nodes) {
-        const source = RepositorySource.safeParse(repo)
-        if (source.success) {
-          take(source.data.assignableUsers, 'matches')
-        } else {
-          read.lossy = true
-        }
-      }
-    } else {
+      read.from.organizations = true
+      take(organization.data.membersWithRole)
+      return
+    }
+    if (!personal.success) {
       read.lossy = true
+      return
+    }
+    const repositories = personal.data.repositories
+    read.cut ||= repositories.totalCount > repositories.nodes.length
+    let readable = 0
+    for (const repo of repositories.nodes) {
+      const source = RepositorySource.safeParse(repo)
+      if (source.success) {
+        readable += 1
+        take(source.data.assignableUsers)
+      } else {
+        read.lossy = true
+      }
+    }
+    // An account with no repositories was read whole; one whose repositories all failed was not.
+    if (repositories.nodes.length === 0 || readable > 0) {
+      read.sourcesRead += 1
+      read.from.repositories ||= readable > 0
     }
   })
   return read
-}
-
-// Lower is better: exact login, login prefix, a name word's prefix, then anywhere in either.
-function matchRank(person: GitHubPerson, needle: string): number {
-  const login = person.login.toLowerCase()
-  const name = person.name?.toLowerCase() ?? ''
-  if (needle === '' || login === needle) {
-    return 0
-  }
-  if (login.startsWith(needle)) {
-    return 1
-  }
-  if (name.startsWith(needle) || name.split(/\s+/).some((word) => word.startsWith(needle))) {
-    return 2
-  }
-  return login.includes(needle) || name.includes(needle) ? 3 : -1
-}
-
-/** Unique people matching `query`, best first; an empty query keeps everyone, by login. */
-export function rankGitHubPeople(people: GitHubPerson[], query: string): GitHubPerson[] {
-  const needle = query.trim().toLowerCase()
-  const byId = new Map<string, { person: GitHubPerson; rank: number }>()
-  for (const person of people) {
-    const rank = matchRank(person, needle)
-    if (rank >= 0 && !byId.has(person.id)) {
-      byId.set(person.id, { person, rank })
-    }
-  }
-  return [...byId.values()]
-    .sort(
-      (left, right) =>
-        left.rank - right.rank ||
-        left.person.login.toLowerCase().localeCompare(right.person.login.toLowerCase())
-    )
-    .map((entry) => entry.person)
 }

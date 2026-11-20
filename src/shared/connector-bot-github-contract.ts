@@ -50,27 +50,32 @@ export const ConnectorGitHubUsersResponse = z.object({
 })
 export type ConnectorGitHubUsersResponse = z.infer<typeof ConnectorGitHubUsersResponse>
 
-/** What `bots.github.users` answers the picker. Each person says where they were found: `scope`
- *  (by the search of the connected repositories and organizations, by login or real name `handle`),
- *  `outside` (an exact-username match a complete search of the scope did not find), or `exact`
- *  (that match when the scope was not searched whole). These are search results, not access: an
- *  organization roster or a repository's assignable users neither grant nor rule out access.
- *  An older host answers bare members with no `coverage`: only its exact lookup ran. */
-export type BotGitHubPeople = {
-  members: { id: string; name: string; handle?: string; found?: 'scope' | 'outside' | 'exact' }[]
-  complete: boolean
-  coverage?: {
-    /** full / limited: searched (limited: some sources or matches left out); unavailable: no
-     *  source could be read (gh missing, signed out, offline, too slow, replaced by a newer
-     *  search); none: nothing connected to search; skipped: the caller sent no scope. */
-    local: 'full' | 'limited' | 'unavailable' | 'none' | 'skipped'
-    exact: 'searched' | 'skipped' | 'failed'
-    /** Typing more of the name would bring in matches the search left out. */
-    narrowable?: boolean
-    /** The account the host's gh read every source as, from that same call; absent when unknown. */
-    searchedAs?: string
-  }
-}
+/** `bots.github.people`: the people the Add picker lists, read once per open through the host's own
+ *  gh and filtered as the owner types. These are who the chosen reads returned (repositories'
+ *  assignable users, organizations' members), not a statement about who has access. */
+export type BotGitHubRoster =
+  | {
+      status: 'read'
+      people: { id: string; login: string; name: string | null }[]
+      /** Which kinds of source were read and contributed: repositories (listed, or a person's own),
+       *  organizations (their member lists). */
+      from: { repositories: boolean; organizations: boolean }
+      /** Every chosen read came back whole: no source failed or lost entries. It does not mean
+       *  everyone who can reach those repositories was listed. */
+      complete: boolean
+      /** A read stopped at its fixed size (the first GITHUB_PEOPLE_PER_SOURCE people of a repository
+       *  or organization, a person's first repositories), whatever the owner types. */
+      cut: boolean
+      /** The GitHub account gh read every source as, from the same call; absent when unknown. */
+      searchedAs?: string
+    }
+  /** No source could be read: gh missing, signed out, offline, or past its deadline. */
+  | { status: 'unavailable' }
+  /** The host already has its limit of different reads waiting; asking again later works. */
+  | { status: 'busy' }
+
+/** People per repository or organization a roster read returns. */
+export const GITHUB_PEOPLE_PER_SOURCE = 100
 
 /** The desktop's own code for a cloud with GitHub off (every GitHub route answers 404). */
 export const BOT_GITHUB_OFF = 'github_off'

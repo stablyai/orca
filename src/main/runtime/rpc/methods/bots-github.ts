@@ -1,11 +1,12 @@
 // `bots.github.*`: the host account's GitHub link and installs, as this host's own Orca account.
 import {
   BotGitHubDefaultBot,
+  BotGitHubPeople,
   BotGitHubUsers
 } from '../../../../shared/rpc-contract/bots-connector-setup-params'
+import { gitHubPeopleRosters } from '../../../connector-cloud/github-people-roster'
 import { defineMethod } from '../core'
 import { withHostCloudClient } from './bots-slack'
-import { findGitHubPeople, gitHubPeopleSearch } from '../../../connector-cloud/github-people-search'
 
 export const BOT_GITHUB_METHODS = [
   defineMethod({
@@ -27,10 +28,16 @@ export const BOT_GITHUB_METHODS = [
     name: 'bots.github.users',
     permission: 'accounts-admin',
     params: BotGitHubUsers,
-    handler: async ({ query, scope }, context) =>
-      withHostCloudClient(context, (client) =>
-        findGitHubPeople((login) => client.githubUsers(login), query, scope, gitHubPeopleSearch())
-      )
+    handler: async ({ query }, context) =>
+      withHostCloudClient(context, (client) => client.githubUsers(query))
+  }),
+  defineMethod({
+    // The Add picker's people, read once per open through this host's own gh and filtered as the
+    // owner types; the exact-username lookup above still answers for anyone else on GitHub.
+    name: 'bots.github.people',
+    permission: 'accounts-admin',
+    params: BotGitHubPeople,
+    handler: async ({ scope }) => ({ ok: true, value: await gitHubPeopleRosters().read(scope) })
   }),
   defineMethod({
     name: 'bots.github.unlink',
