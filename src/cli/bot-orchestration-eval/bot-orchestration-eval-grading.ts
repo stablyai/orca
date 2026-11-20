@@ -201,7 +201,8 @@ export function noInventedLinks(known: string[]): TurnCheck {
     const links = [...turn.reply.matchAll(/github\.com\/([\w.-]+\/[\w.-]+)\/pull\/(\d+)/g)].map(
       (match) => `${match[1]}#${match[2]}`
     )
-    const bare = [...turn.reply.matchAll(/(?:^|[\s(])#(\d{2,})\b/g)].map((match) => match[1]!)
+    const withoutItemRefs = turn.reply.replace(/\bitem\s+#\d+\b/gi, '')
+    const bare = [...withoutItemRefs.matchAll(/(?:^|[\s(])#(\d{2,})\b/g)].map((match) => match[1]!)
     return [
       ...links.filter((ref) => !known.includes(ref)),
       ...bare.filter((number) => !known.some((ref) => ref.endsWith(`#${number}`)))

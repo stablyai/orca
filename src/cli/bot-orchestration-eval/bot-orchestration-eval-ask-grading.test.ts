@@ -56,6 +56,21 @@ describe('each independently delivered worker ask', () => {
     ).toEqual([])
   })
 
+  it('recognizes an explicit decision item while still checking PR references', () => {
+    expect(card(turn({ reply: `For item #41: ${CARD_ASK}` }))).toEqual([])
+    expect(card(turn({ reply: `For item #41 and PR #41230: ${CARD_ASK}` }))).toEqual([
+      'turn 1: reply: reply names PR 41230, which nothing reported'
+    ])
+  })
+
+  it('requires an affirmative delay for the spacing decision', () => {
+    const ask = (cost: string) => card(turn({ reply: CARD_ASK.replace('adds about a day', cost) }))
+    expect(ask('delays this by a day')).toEqual([])
+    expect(ask('does not delay this by a day')).toContain(
+      'turn 1: reply: ask leaves out fixing both costs a day'
+    )
+  })
+
   it('does not borrow context from another surface or another question', () => {
     expect(card(turn({ reply: CARD_ASK, asks: ['Proceed?'] }))).toContain(
       'turn 1: question 1: ask leaves out the clipped edge in narrow windows'
