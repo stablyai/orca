@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import {
   BROWSER_CLIENT_FILE_CHANNEL_MAX_ACTIVE_DOWNLOADS,
   BROWSER_CLIENT_FILE_CHANNEL_TRANSFER_MAX_BYTES,
@@ -34,6 +35,8 @@ type TransferSession = {
   workspaceId: string
   tempRelativePath: string
   pinnedExpectation: RuntimeFileMutationExpectation | null
+  /** Set once the first write created the temp file; cleanup never touches a file it did not create. */
+  ownsTempFile: boolean
   bytesWritten: number
   /** Set synchronously before queued cleanup. */
   canceled: boolean
@@ -179,6 +182,7 @@ export class BrowserClientDownloadTransferStore {
         contentBase64: input.contentBase64,
         append: session.bytesWritten > 0
       })
+      session.ownsTempFile = true
     } catch (error) {
       await this.release(session)
       throw error
@@ -233,8 +237,10 @@ export class BrowserClientDownloadTransferStore {
       browserPageId: input.browserPageId,
       pageHostGeneration: input.pageHostGeneration,
       workspaceId: input.workspaceId,
-      tempRelativePath: `${BROWSER_CLIENT_DOWNLOAD_WORKSPACE_DIRECTORY}/.incoming-${input.transferId}`,
+      // Server-generated so a client-chosen transfer id never names a file it did not create.
+      tempRelativePath: `${BROWSER_CLIENT_DOWNLOAD_WORKSPACE_DIRECTORY}/.incoming-${randomUUID()}`,
       pinnedExpectation: null,
+      ownsTempFile: false,
       bytesWritten: 0,
       canceled: false,
       operations: Promise.resolve(),
@@ -286,8 +292,7 @@ export class BrowserClientDownloadTransferStore {
   private async release(session: TransferSession): Promise<void> {
     const owned = this.sessions.get(session.key) === session
     this.settle(session)
-    // Nothing reached the workspace before an expectation was pinned.
-    if (!owned || !session.pinnedExpectation) {
+    if (!owned || !session.ownsTempFile || !session.pinnedExpectation) {
       return
     }
     try {
