@@ -1,12 +1,16 @@
 import type { JSX } from 'react'
 import { LayoutGrid } from 'lucide-react'
 import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
 import {
   addWorkspaceToGridViewAndShow,
   removeWorkspaceFromGridViewKeepingFocus
 } from '@/lib/workspace/grid-view/workspace-grid-view-actions'
-import { isWorkspaceGridViewFull } from '@/lib/workspace/grid-view/workspace-grid-view-membership'
+import {
+  isWorkspaceGridViewFull,
+  WORKSPACE_GRID_VIEW_MAX_MEMBERS
+} from '@/lib/workspace/grid-view/workspace-grid-view-membership'
 import { useAppStore } from '@/store'
 import { isKnownGridViewWorkspace } from '@/store/slices/workspace-grid-view/workspace-grid-view'
 
@@ -39,13 +43,30 @@ export function WorkspaceGridViewMenuItems({
       </DropdownMenuItem>
     )
   }
-  return (
+  const addItem = (
     <DropdownMenuItem
       onSelect={() => addWorkspaceToGridViewAndShow(workspaceId)}
       disabled={disabled || isFull}
+      className={isFull ? 'data-[disabled]:pointer-events-auto' : undefined}
     >
       <LayoutGrid className="size-3.5" />
       {t('auto.components.sidebar.WorktreeContextMenu.addToGridView', 'Add to Grid View')}
     </DropdownMenuItem>
+  )
+  if (!isFull) {
+    return addItem
+  }
+  // Why: a full grid only greys the item out, so the hover says why.
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>{addItem}</TooltipTrigger>
+      <TooltipContent side="right" sideOffset={8} className="max-w-[200px]">
+        {t(
+          'auto.components.sidebar.WorktreeContextMenu.gridViewFull',
+          'Grid View holds up to {{value0}} workspaces. Remove one to add another.',
+          { value0: WORKSPACE_GRID_VIEW_MAX_MEMBERS }
+        )}
+      </TooltipContent>
+    </Tooltip>
   )
 }

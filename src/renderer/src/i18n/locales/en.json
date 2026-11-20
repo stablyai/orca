@@ -7704,7 +7704,8 @@
           "muteNotifications": "Mute Notifications",
           "unmuteNotifications": "Unmute Notifications",
           "removeFromGridView": "Remove from Grid View",
-          "addToGridView": "Add to Grid View"
+          "addToGridView": "Add to Grid View",
+          "gridViewFull": "Grid View holds up to {{value0}} workspaces. Remove one to add another."
         },
         "WorktreeList": {
           "7a8b9c0d1e": "Update required",
