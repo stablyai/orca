@@ -3,7 +3,6 @@ import type { TerminalCreateOptions } from './terminal-create-options'
 import type { RuntimeTerminalCreate } from '../../../../shared/terminal/runtime/runtime-terminal-create-contract'
 import { randomUUID } from 'node:crypto'
 import { getRuntimeDesktopSurface } from '../../construction/runtime-desktop-surface'
-import type { IpcMainEvent } from 'electron'
 import { ownerSurfacing } from './terminal-presentation'
 import type { OrcaRuntimeWithCreateTerminal } from './terminal-create'
 import type { RuntimeTerminalPresentation } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
@@ -26,37 +25,20 @@ export async function createDesktopTerminal(
   }
   opts = applyRemoteViewerLaunchEnv(opts, opts.terminalImageViewerSupported)
   runtime.assertGraphReady()
-  const rendererWebContents = runtime.getAuthoritativeWindow(
-    NO_WORKSPACE_OR_WINDOW_MESSAGE
-  ).webContents
+  const windowId = runtime.getAuthoritativeWindowId(NO_WORKSPACE_OR_WINDOW_MESSAGE)
   const requestId = randomUUID()
-  const reply = await new Promise<{ tabId: string; title: string }>((resolve, reject) => {
-    const timer = setTimeout(() => {
-      getRuntimeDesktopSurface().removeIpcListener('terminal:tabCreateReply', handler)
-      reject(new Error('Terminal creation timed out'))
-    }, 10000)
-    const handler = (
-      event: IpcMainEvent,
-      response: {
-        requestId: string
-        tabId?: string
-        title?: string
-        error?: string
-      }
-    ): void => {
-      if (event.sender !== rendererWebContents || response.requestId !== requestId) {
-        return
-      }
-      clearTimeout(timer)
-      getRuntimeDesktopSurface().removeIpcListener('terminal:tabCreateReply', handler)
-      if (response.error) {
-        reject(new Error(response.error))
-      } else {
-        resolve({ tabId: response.tabId!, title: response.title ?? opts.title ?? '' })
-      }
-    }
-    getRuntimeDesktopSurface().onIpc('terminal:tabCreateReply', handler)
-    rendererWebContents.send('terminal:requestTabCreate', {
+  const response = await getRuntimeDesktopSurface().requestRenderer<{
+    requestId: string
+    tabId?: string
+    title?: string
+    error?: string
+  }>(windowId, {
+    requestId,
+    channel: 'terminal:requestTabCreate',
+    replyChannel: 'terminal:tabCreateReply',
+    timeoutMs: 10000,
+    timeoutMessage: 'Terminal creation timed out',
+    payload: {
       requestId,
       command: opts.command,
       cwd: opts.cwd,
@@ -72,8 +54,12 @@ export async function createDesktopTerminal(
       activate: presentation === 'focused',
       ...(presentation ? { presentation } : {}),
       ...ownerSurfacing(opts.surfaceOwner !== false)
-    })
+    }
   })
+  if (response.error) {
+    throw new Error(response.error)
+  }
+  const reply = { tabId: response.tabId!, title: response.title ?? opts.title ?? '' }
   const handle = await runtime.waitForTerminalHandle(reply.tabId)
   return {
     handle,

@@ -1,5 +1,4 @@
-import type { BrowserWindow, IpcMainInvokeEvent } from 'electron'
-import { getRuntimeDesktopSurface } from '../../runtime/construction/runtime-desktop-surface'
+import { BrowserWindow, type IpcMainInvokeEvent } from 'electron'
 import type { ResourceViewAdmission } from '../../../shared/diagnostics/resource-view-admission'
 
 export function isResourceWindowVisible(window: BrowserWindow | null): boolean {
@@ -12,7 +11,7 @@ export function assertResourceViewVisible(
 ): void {
   if (
     admission?.resourceManagerView &&
-    !getRuntimeDesktopSurface().isResourceViewVisible?.(event.sender)
+    !isResourceWindowVisible(BrowserWindow.fromWebContents(event.sender))
   ) {
     throw new Error('view_not_visible')
   }

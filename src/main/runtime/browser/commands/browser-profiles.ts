@@ -15,7 +15,7 @@ import { BrowserError } from '../../../browser/browser-error'
 import { browserSessionRegistry } from '../../../browser/sessions/profiles/browser-session-registry'
 import { browserManager } from '../../../browser/guest-lifecycle/manager/browser-manager'
 import { randomUUID } from 'node:crypto'
-import { ipcMain } from 'electron'
+import { getRuntimeDesktopSurface } from '../../construction/runtime-desktop-surface'
 import { waitForTabRegistration } from '../../../ipc/browser/browser-tab-registration-wait'
 import {
   detectInstalledBrowsers,
@@ -37,7 +37,7 @@ export class RuntimeBrowserProfiles {
   constructor(
     private readonly host: Pick<
       RuntimeBrowserCommandHost,
-      'getRuntimeId' | 'getAuthoritativeWindow' | 'getAvailableAuthoritativeWindow'
+      'getRuntimeId' | 'getAuthoritativeWindowId' | 'getAvailableAuthoritativeWindowId'
     > &
       BrowserClientPageOpeningHost,
     private readonly targets: Pick<
@@ -121,37 +121,27 @@ export class RuntimeBrowserProfiles {
       }
     }
 
-    const win = this.host.getAuthoritativeWindow()
+    const windowId = this.host.getAuthoritativeWindowId()
     const requestId = randomUUID()
-    await new Promise<void>((resolve, reject) => {
-      const timer = setTimeout(() => {
-        ipcMain.removeListener('browser:tabSetProfileReply', handler)
-        reject(new Error('Tab profile update timed out'))
-      }, 10_000)
-
-      const handler = (
-        _event: Electron.IpcMainEvent,
-        reply: { requestId: string; error?: string }
-      ): void => {
-        if (reply.requestId !== requestId) {
-          return
-        }
-        clearTimeout(timer)
-        ipcMain.removeListener('browser:tabSetProfileReply', handler)
-        if (reply.error) {
-          reject(new Error(reply.error))
-        } else {
-          resolve()
-        }
-      }
-      ipcMain.on('browser:tabSetProfileReply', handler)
-      win.webContents.send('browser:requestTabSetProfile', {
+    const reply = await getRuntimeDesktopSurface().requestRenderer<{
+      requestId: string
+      error?: string
+    }>(windowId, {
+      requestId,
+      channel: 'browser:requestTabSetProfile',
+      replyChannel: 'browser:tabSetProfileReply',
+      payload: {
         requestId,
         browserPageId,
         profileId: profile.id,
         sessionPartition: profile.partition
-      })
+      },
+      timeoutMs: 10_000,
+      timeoutMessage: 'Tab profile update timed out'
     })
+    if (reply.error) {
+      throw new Error(reply.error)
+    }
 
     // Profile changes remount the guest; wait until follow-up commands can use it.
     try {
