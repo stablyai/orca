@@ -121,7 +121,7 @@ export type CloudSource = { source: string; approveUrl?: string }
 
 /**
  * Each service's row, from the bot's links and what this computer is signed in to. `cloud`: Orca
- * Cloud's sources, when it answered; without them, the Slack app this computer set up stands.
+ * Cloud's sources, when it answered; a local app record alone does not confirm an install.
  */
 export function botConnectorServices(
   bot: Pick<Bot, 'slack' | 'slackApps' | 'linear' | 'linearWorkspaces' | 'github' | 'google'>,
@@ -131,7 +131,7 @@ export function botConnectorServices(
   const hasApp = botSlackApps(bot).length > 0
   const cloudSlack = cloud?.find((entry) => entry.source === 'slack')
   // A created app whose install Slack refused or nobody finished is not connected.
-  const slack = cloud ? cloudSlack !== undefined : hasApp
+  const slack = cloudSlack !== undefined
   return [
     {
       source: 'github',
@@ -156,7 +156,16 @@ export function botConnectorServices(
       tool: 'orca slack',
       actsAs: 'bot',
       signedIn: slack,
-      ...(slack ? {} : { gap: hasApp ? SLACK_NOT_INSTALLED : SLACK_NO_APP }),
+      ...(slack
+        ? {}
+        : {
+            gap:
+              hasApp && cloud === undefined
+                ? 'Orca Cloud could not check whether your Slack app is installed. Try again.'
+                : hasApp
+                  ? SLACK_NOT_INSTALLED
+                  : SLACK_NO_APP
+          }),
       wakes: slack,
       ...(cloudSlack?.approveUrl ? { approveUrl: cloudSlack.approveUrl } : {})
     },

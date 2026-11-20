@@ -22,6 +22,7 @@ import {
 } from '../connector-connect-parts'
 import { SlackOpenAppButton } from './SlackOpenAppButton'
 import { SlackConfigTokenForm } from './SlackConfigTokenForm'
+import { SlackSetupPrepare } from './SlackSetupPrepare'
 import { SlackTeamName } from './SlackWorkspacesSettings'
 import { BotHostSignInButton } from '../BotHostSignInButton'
 import { ConnectorSetupDialog, useSetupStepAside } from '../connector-setup-surface'
@@ -66,6 +67,7 @@ function BotSlackSetupFlow({
   // mounts this flow anew, which checks again before it waits again: that is not an end.
   const settled =
     step.kind === 'installed' ||
+    step.kind === 'prepare' ||
     step.kind === 'uncertain' ||
     step.kind === 'failed' ||
     step.kind === 'token' ||
@@ -147,6 +149,14 @@ function BotSlackSetupFlow({
           status
         )
       }
+      case 'prepare':
+        return (
+          <SlackSetupPrepare
+            update={step.update}
+            onContinue={() => void setUp(step.teamId)}
+            onClose={onClose}
+          />
+        )
       case 'pick':
         return (
           <ConnectorWorkspacePicker

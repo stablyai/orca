@@ -13,7 +13,7 @@ import {
 } from '@/lib/bot-slack-state'
 import { botSlackCalls } from '@/lib/bot-connector-host-calls'
 import { openBotHostPageOrSay } from '@/lib/bot-host-page'
-import type { Bot } from '../../../../../shared/bot-types'
+import { botSlackApps, type Bot } from '../../../../../shared/bot-types'
 import { connectorAddAccessLabel } from '../bot-connectors'
 import { useConnectorSetup } from '../ConnectorSetupDialogs'
 import { BotConnectorRow, type BotConnectorFix } from '../BotConnectorRow'
@@ -154,7 +154,7 @@ export function BotSlackCard({
   const team = view.status === 'ready' ? slackTeamState(view.slack, teamId) : null
   const installed = team?.state === 'installed' ? team : null
   // A workspace's row can also remove an app that was never installed.
-  const removable = installed ?? (teamId !== undefined && team && 'teamId' in team ? team : null)
+  const removeTeamId = teamId ?? installed?.teamId ?? botSlackApps(bot)[0]?.teamId
 
   const remove = async (): Promise<void> => {
     const confirmed = await confirm({
@@ -175,7 +175,7 @@ export function BotSlackCard({
     setRemoving(true)
     const result = await botSlackCalls(bot.hostId).remove({
       botId: bot.id,
-      teamId: removable?.teamId
+      teamId: removeTeamId
     })
     setRemoving(false)
     if (!result.ok) {
@@ -240,7 +240,7 @@ export function BotSlackCard({
           : null
       }
       remove={
-        removable
+        removeTeamId !== undefined
           ? {
               label: t('bots.connector.removeFrom', 'Remove from {{place}}…', {
                 place: face.workspace ?? 'Slack'

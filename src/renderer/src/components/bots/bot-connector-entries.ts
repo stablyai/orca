@@ -111,7 +111,7 @@ export function botConnectorEntries(
       return {
         workspace: face.workspace,
         // Can't check (signed in elsewhere aside) is not the owner's to fix.
-        needsOwner: face.next !== null && face.next !== 'retry',
+        needsOwner: face.next !== null && face.next !== 'retry' && face.next !== 'add',
         updateNeeded: face.next === 'update'
       }
     },

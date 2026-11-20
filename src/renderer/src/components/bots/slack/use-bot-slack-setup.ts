@@ -23,6 +23,7 @@ export type BotSlackSetupStep =
   | { kind: 'checking' }
   /** Another workspace for a bot already in Slack: one this computer's bots are in, or a new one. */
   | { kind: 'pick'; teamIds: string[] }
+  | { kind: 'prepare'; teamId: string; update: boolean }
   /**
    * `teamId`: the workspace whose token lapsed. `mine`: that token is this desktop's own Orca
    * account's, from a hand-off; the new one is saved there and the hand-off runs again.
@@ -205,7 +206,6 @@ export function useBotSlackSetup(
   )
 
   const start = useCallback(async () => {
-    const mount = mounted.current
     setStep({ kind: 'checking' })
     const view = await refreshBotSlack(bot)
     if (view.status !== 'ready') {
@@ -222,21 +222,19 @@ export function useBotSlackSetup(
       )
     }
     const slack = slackTeamState(view.slack, teamId)
+    const updating = slack.state === 'installed' && (slack.updateNeeded || slack.updateAvailable)
+    const opened =
+      'teamId' in slack ? openedSlackPages.get(openedKey(bot, slack.teamId)) : undefined
+    if (opened && (slack.state === 'created' || (slack.state === 'installed' && updating))) {
+      return setStep({ kind: 'waiting', teamId: slack.teamId, ...opened, copied: false })
+    }
     switch (slack.state) {
-      // An app whose manifest is out of date gets the new one, then Slack's page for the new scopes.
-      // One that only predates optional permissions is opened here for nothing else: the same path.
       case 'installed':
-        return slack.updateNeeded || slack.updateAvailable
-          ? await setUp(slack.teamId, mount)
+        return updating
+          ? setStep({ kind: 'prepare', teamId: slack.teamId, update: true })
           : setStep({ kind: 'installed', teamId: slack.teamId })
-      // The dialog opens on the owner's own click, so an app made earlier (or kept by a removal)
-      // goes straight on to Slack's install page with a fresh attempt.
-      case 'created': {
-        const opened = openedSlackPages.get(openedKey(bot, slack.teamId))
-        return opened
-          ? setStep({ kind: 'waiting', teamId: slack.teamId, ...opened, copied: false })
-          : await setUp(slack.teamId, mount)
-      }
+      case 'created':
+        return setStep({ kind: 'prepare', teamId: slack.teamId, update: false })
       case 'uncertain':
         return setStep({ kind: 'uncertain', teamId: slack.teamId })
       case 'grant_expired':
@@ -244,11 +242,11 @@ export function useBotSlackSetup(
       case 'not_created': {
         const knownTeam = teamId ?? knownSlackTeam(hostBots(bot), bot.id)
         return knownTeam
-          ? await setUp(knownTeam, mount)
+          ? setStep({ kind: 'prepare', teamId: knownTeam, update: false })
           : setStep({ kind: 'token', reconnect: false, error: null })
       }
     }
-  }, [bot, teamId, setUp])
+  }, [bot, teamId])
 
   const submitToken = useCallback(
     async (refreshToken: string) => {
