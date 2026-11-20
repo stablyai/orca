@@ -14,7 +14,6 @@ import {
   DEFAULT_BOT_AVATAR_COLOR
 } from '../../../../shared/bots/bot-avatar-color'
 import { BOT_AVATAR_ACCEPT } from './bot-avatar-intake'
-import { botMascotSrcs } from './bot-mascot-color'
 import { BotPictureIntakeLine, LineAction } from './BotPictureIntakeLine'
 import {
   useBotAvatarIntakeHost,
@@ -227,7 +226,6 @@ export function BotPicturePicker({
         ? CUSTOM_FACE
         : (PICKABLE_BOT_MASCOT_IDS[mascotIndex] ?? PICKABLE_BOT_MASCOT_IDS[0])
   const generating = currentKey === GENERATE_FACE
-  const srcs = botMascotSrcs(PICKABLE_BOT_MASCOT_IDS, color)
   const faces: BotPictureFace[] = order.map((key) =>
     key === GENERATE_FACE
       ? {
@@ -238,7 +236,7 @@ export function BotPicturePicker({
         }
       : key === CUSTOM_FACE
         ? { key, src: custom?.src ?? null, fallback: custom?.fallback ?? '' }
-        : { key, src: srcs[key], fallback: '' }
+        : { key, src: null, fallback: '', mascot: { id: key, color } }
   )
   // Every picture an intake takes, shared or not and even the same image again, leaves Generate and
   // wins the slot back from a picture made earlier.

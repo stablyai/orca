@@ -5,7 +5,9 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
+import type { BotMascotId } from '../../../../shared/bot-avatar'
 import { BotAvatarTile } from './BotAvatar'
+import { BotMascotBitmapTile } from './BotMascotBitmapTile'
 import { BotPictureVeil } from './BotPictureIntakeLine'
 
 const FACE_CLASS =
@@ -13,7 +15,14 @@ const FACE_CLASS =
 
 /** A picture, or a face that draws itself (Generate): interactive when current, a thumbnail beside it. */
 export type BotPictureFace =
-  | { key: string; src: string | null; fallback: string; render?: undefined }
+  | {
+      key: string
+      src: string | null
+      fallback: string
+      /** A mascot, drawn from its bitmap instead of `src`. */
+      mascot?: { id: BotMascotId; color: string | null }
+      render?: undefined
+    }
   | { key: string; render: (current: boolean) => React.ReactNode; label: string }
 
 // Neighbours sit this far from the center tile (112 px), drawn at 72 px.
@@ -156,6 +165,12 @@ export function BotPictureCarousel({
           >
             {face.render ? (
               face.render(false)
+            ) : face.mascot ? (
+              <BotMascotBitmapTile
+                id={face.mascot.id}
+                color={face.mascot.color}
+                className="size-28 rounded-xl"
+              />
             ) : (
               <BotAvatarTile
                 src={face.src}
