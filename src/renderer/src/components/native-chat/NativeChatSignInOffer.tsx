@@ -86,6 +86,32 @@ function useLocalSignInKey(): string {
   return useAppStore(localSignInKey)
 }
 
+async function tellOnceLinked(
+  openedAt: number,
+  answering: ReturnType<typeof useNativeChatOffer>
+): Promise<void> {
+  let signInChanged = false
+  const stopWatching = useAppStore.subscribe((state, previous) => {
+    if (localSignInKey(state) !== localSignInKey(previous)) {
+      signInChanged = true
+    }
+  })
+  const mark = Math.max(botHostLinkReadMark(), openedAt)
+  try {
+    await refreshBotHost(LOCAL_EXECUTION_HOST_ID)
+    if (
+      !signInChanged &&
+      !readOrcaCloudSignedOut() &&
+      botHostLinkReadSince(LOCAL_EXECUTION_HOST_ID, mark) &&
+      readBotHostConnectorStatus(LOCAL_EXECUTION_HOST_ID) === 'ok'
+    ) {
+      tellBot(answering)
+    }
+  } finally {
+    stopWatching()
+  }
+}
+
 /**
  * This computer's Sign in card. Signed out of Orca Cloud: one line with Sign in, which tells the bot once
  * this computer's link reads ok. Continue shows only once a read since the card opened, and since this
@@ -103,27 +129,12 @@ export function SignInOffer({ bot, offer, messageId }: SignInOfferProps): React.
   )
   const connector = useBotHostConnectorStatus(LOCAL_EXECUTION_HOST_ID)
   if (needsSignIn) {
-    // Signing in clears it only once a read sent after the sign-in lands and says ok: tell the bot then.
-    const tellOnceLinked = async (): Promise<void> => {
-      // Any sign-in change before the read lands voids it, even a sign-out and back into the same account.
-      let signInChanged = false
-      const stopWatching = useAppStore.subscribe((state, previous) => {
-        if (localSignInKey(state) !== localSignInKey(previous)) {
-          signInChanged = true
-        }
-      })
-      const mark = Math.max(botHostLinkReadMark(), link.mark)
-      await refreshBotHost(LOCAL_EXECUTION_HOST_ID).finally(stopWatching)
-      if (
-        !signInChanged &&
-        !readOrcaCloudSignedOut() &&
-        botHostLinkReadSince(LOCAL_EXECUTION_HOST_ID, mark) &&
-        readBotHostConnectorStatus(LOCAL_EXECUTION_HOST_ID) === 'ok'
-      ) {
-        tellBot(answering)
-      }
-    }
-    return <OrcaCloudSignInLine text={signInReason(offer)} onSignedIn={tellOnceLinked} />
+    return (
+      <OrcaCloudSignInLine
+        text={signInReason(offer)}
+        onSignedIn={() => tellOnceLinked(link.mark, answering)}
+      />
+    )
   }
   if (link.fresh && connector === 'ok') {
     return <SignedInRow answering={answering} />

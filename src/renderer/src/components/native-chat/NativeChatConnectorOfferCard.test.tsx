@@ -583,6 +583,63 @@ describe("this computer's Sign in card when its sign-in changes after a read sai
 })
 
 describe('signing this computer in from the chat while its sign-in changes again', () => {
+  it('does not claim an automatic reply for another account after the sign-in read', async () => {
+    const signedInAs = (userId: string) => ({
+      ...ORCA_CONNECTED,
+      cloud: { cloudProfileId: `c-${userId}`, userId, email: `${userId}@example.com`, linkedAt: 1 }
+    })
+    const initial = useAppStore.getState()
+    const update = mocks.updateBot.getMockImplementation()
+    const claims: (string | undefined)[] = []
+    mocks.updateBot.mockImplementation(async () => {
+      claims.push(useAppStore.getState().orcaProfileAuthStatus?.cloud?.userId)
+    })
+    const connect = vi.fn(async () => {
+      useAppStore.setState({ orcaProfileAuthStatus: signedInAs('u1') })
+      return {
+        status: 'connected' as const,
+        auth: signedInAs('u1'),
+        activeProfileId: 'p1',
+        profiles: []
+      }
+    })
+    useAppStore.setState({
+      orcaProfileAuthStatus: ORCA_SIGNED_OUT,
+      connectCurrentOrcaProfile: connect
+    })
+    mocks.bots = [makeTestBot({ slack: { appId: 'A1', teamId: 'T1' } })]
+    try {
+      render(
+        <NativeChatBotKickoffContext.Provider value={chatView}>
+          <NativeChatConnectorOfferCard
+            offer={{ botId: 'b1', source: 'slack', signIn: true }}
+            messageId="m1"
+            fallback="fallback line"
+          />
+        </NativeChatBotKickoffContext.Provider>
+      )
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0))
+      })
+      mocks.whileReading = () => {
+        mocks.whileReading = null
+        queueMicrotask(() =>
+          queueMicrotask(() => useAppStore.setState({ orcaProfileAuthStatus: signedInAs('u2') }))
+        )
+      }
+      fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
+      await waitFor(() => expect(connect).toHaveBeenCalledTimes(1))
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0))
+      })
+      expect(claims).toEqual(['u1'])
+    } finally {
+      mocks.updateBot.mockImplementation(update)
+      mocks.whileReading = null
+      useAppStore.setState(initial, true)
+    }
+  })
+
   it('tells the bot nothing when it signs out, another account signs in, or it signs out and back in, before the read lands', async () => {
     const signedInAs = (userId: string) => ({
       ...ORCA_CONNECTED,
