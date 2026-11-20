@@ -66,8 +66,12 @@ export abstract class OrcaRuntimeWithClaudeRunningPaneAccountMove extends OrcaRu
     change: ClaudeHostSelectionChange,
     heldPtyIds: ReadonlySet<string> = new Set()
   ): Promise<ClaudeHostRunningSessionsMove | undefined> {
-    this.claudeSelectionEpoch += 1
     const answered = answeredClaudeMove(this.askedClaudeMove, change)
+    // An answer to an Ask a later switch replaced moves nothing: its snapshots are stale.
+    if (change.answersAskFor !== undefined && !answered) {
+      return Promise.resolve(undefined)
+    }
+    this.claudeSelectionEpoch += 1
     const move = answered ?? change
     // A selection that moves nothing on the host (the same account again, a WSL lane) leaves the Ask open.
     if (answered || claudeHostAccountSwitch(change).movesHost) {

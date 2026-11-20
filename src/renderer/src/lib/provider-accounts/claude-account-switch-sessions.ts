@@ -251,9 +251,11 @@ export async function handleRunningClaudeSessionsAfterSwitch(args: {
   }
   if (policy === 'restart') {
     queueClaudeRestarts(sessions.onAccount.map((candidate) => candidate.ptyId))
-    const others = sessions.elsewhere.length + sessions.cantMove.length + (hostMove?.notMoved ?? 0)
+    const listed = sessions.elsewhere.length + sessions.cantMove.length
     const restarting = sessions.onAccount.length + (hostMove?.restarting ?? 0)
-    announceRestart(restarting, nextAccountLabel, others, () => openReview())
+    // The host's terminals have no rows here, so Review lists only this window's.
+    const review = listed > 0 ? () => openReview() : undefined
+    announceRestart(restarting, nextAccountLabel, listed + (hostMove?.notMoved ?? 0), review)
     return 'handled'
   }
   setPrompt({ id: generation, sessions, ...labels })
