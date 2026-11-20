@@ -66,6 +66,17 @@ const DEFAULT_RESULTS: Record<string, unknown> = {
     hostId: params.hostId ?? 'local',
     hidden: params.hidden
   }),
+  'host.list': {
+    hosts: [{ hostId: 'local', kind: 'local', name: 'This computer', connected: true }],
+    truncated: false
+  },
+  'host.addSshTarget': { hostId: 'ssh:mock-target' },
+  'host.connect': { connected: true },
+  'project.add': (params: { hostId?: string }) => ({
+    projectId: 'mock-project',
+    hostId: params.hostId?.startsWith('ssh:') ? 'runtime:mock-environment' : 'local',
+    created: true
+  }),
   'terminal.list': { terminals: [], truncated: false },
   'terminal.focus': { focused: true },
   'terminal.close': { closed: true },

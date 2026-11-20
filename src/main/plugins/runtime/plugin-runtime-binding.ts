@@ -12,7 +12,12 @@ import { installPluginResidentWorkerWarmer } from '../workers/worker-admission/p
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { pluginRuntimeRpc } from './plugin-runtime-rpc'
 import type { DispatcherOptions } from '../../runtime/rpc/dispatcher'
-import type { PluginRuntimeRpc } from '../workers/host-api/plugin-host-runtime-call'
+import type {
+  PluginEnvironmentRpc,
+  PluginRuntimeRpc
+} from '../workers/host-api/plugin-host-runtime-call'
+import { callRuntimeEnvironment } from '../../ipc/runtime-environments/requests/runtime-environment-transport-routing'
+import { getRuntimeEnvironmentRegistryRoot } from '../../ipc/runtime-environments/catalog/runtime-environment-registry-root'
 import {
   pluginTerminalTitle,
   projectPluginWorkspaceContext,
@@ -75,10 +80,12 @@ const WORKSPACE_CHANGE_DEBOUNCE_MS = 150
 export function pluginRuntimeDelegate(
   runtime: RuntimeDelegateSource,
   agentStatuses: () => readonly PluginAgentStatusRow[],
-  callRuntime?: PluginRuntimeRpc
+  callRuntime?: PluginRuntimeRpc,
+  callEnvironment?: PluginEnvironmentRpc
 ): PluginRuntimeDelegate {
   return {
     ...(callRuntime ? { callRuntime } : {}),
+    ...(callEnvironment ? { callEnvironment } : {}),
     resolveActiveWorktreeContext: () => runtime.resolveActiveWorktreeContext(),
     listTerminals: (...args) => runtime.listTerminals(...args),
     sendTerminal: (...args) => runtime.sendTerminal(...args),
@@ -88,6 +95,19 @@ export function pluginRuntimeDelegate(
   }
 }
 
+/** A paired Orca server's runtime, reached as the desktop's own Add Project reaches it. */
+const pluginEnvironmentRpc: PluginEnvironmentRpc = (environmentId, method, params, options) =>
+  callRuntimeEnvironment(
+    getRuntimeEnvironmentRegistryRoot(),
+    environmentId,
+    method,
+    params,
+    options.timeoutMs,
+    undefined,
+    undefined,
+    options.signal ? { signal: options.signal } : undefined
+  )
+
 /** Binds the plugin host to main's runtime: its delegate, and the hooks Orca's own code runs. */
 export function bindPluginRuntime(
   service: PluginService,
@@ -96,7 +116,12 @@ export function bindPluginRuntime(
   methods: DispatcherOptions['methods']
 ): PluginRuntimeDelegate {
   const statuses = () => hookServer.getStatusSnapshot()
-  const delegate = pluginRuntimeDelegate(runtime, statuses, pluginRuntimeRpc(runtime, methods))
+  const delegate = pluginRuntimeDelegate(
+    runtime,
+    statuses,
+    pluginRuntimeRpc(runtime, methods),
+    pluginEnvironmentRpc
+  )
   service.setRuntimeDelegate(delegate)
   installPluginHookRunner(service, runtime)
   installPluginOpenedTerminalPruning(service)

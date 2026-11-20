@@ -1585,7 +1585,8 @@
             "workspace:create",
             "automation:read",
             "automation:write",
-            "history:read"
+            "history:read",
+            "host:write"
           ],
           "description": "Capability granted on user consent.",
           "x-orca-since": "1.4.160",
@@ -1604,7 +1605,8 @@
             "workspace:create": "1.4.259",
             "automation:read": "1.4.259",
             "automation:write": "1.4.259",
-            "history:read": "1.4.259"
+            "history:read": "1.4.259",
+            "host:write": "1.4.270"
           }
         }
       },

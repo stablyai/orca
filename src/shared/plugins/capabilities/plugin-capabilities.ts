@@ -3,6 +3,7 @@ import { PLUGIN_ENUM_SINCE_KEY } from '../manifest/plugin-engine-floor-keys'
 import { PLUGIN_APPEARANCE_SINCE } from '../workers/plugin-host-api-appearance'
 import { PLUGIN_HOST_API_1_8_SINCE } from '../workers/plugin-host-api-1-8'
 import { PLUGIN_HOST_API_1_9_SINCE } from '../workers/plugin-host-api-1-9'
+import { PLUGIN_HOST_API_1_11_SINCE } from '../workers/plugin-host-api-1-11'
 import {
   pluginFieldDoc,
   PLUGIN_HOST_ACTIONS_SINCE,
@@ -28,7 +29,8 @@ export const PLUGIN_CAPABILITY_KINDS = [
   'workspace:create',
   'automation:read',
   'automation:write',
-  'history:read'
+  'history:read',
+  'host:write'
 ] as const
 
 export type PluginCapabilityKind = (typeof PLUGIN_CAPABILITY_KINDS)[number]
@@ -49,7 +51,8 @@ export const PLUGIN_CAPABILITY_SINCE: Record<PluginCapabilityKind, string> = {
   'workspace:create': PLUGIN_HOST_API_1_8_SINCE,
   'automation:read': PLUGIN_HOST_API_1_8_SINCE,
   'automation:write': PLUGIN_HOST_API_1_8_SINCE,
-  'history:read': PLUGIN_HOST_API_1_9_SINCE
+  'history:read': PLUGIN_HOST_API_1_9_SINCE,
+  'host:write': PLUGIN_HOST_API_1_11_SINCE
 }
 
 /** Format 1 capability names and what each now grants. `events:subscribe` split by event domain. */
@@ -79,7 +82,7 @@ export const PLUGIN_CAPABILITY_DESCRIPTIONS: Record<PluginCapabilityKind, string
   'workspace:read':
     'Read your projects and workspaces (names, branches, paths and agent status) and the terminals in them, and get notified when they change',
   'workspace:write':
-    'Open and rename your workspaces, hide projects from the sidebar or show them again, focus their terminals, open their files in Orca, and run its built-in commands',
+    'Open and rename your workspaces, add existing folders as projects, hide projects from the sidebar or show them again, focus their terminals, open their files in Orca, and run its built-in commands',
   'agent:read': 'Get notified when agent status changes',
   'agent:launch': 'Start and resume agents in your workspaces, local and SSH',
   'terminal:send':
@@ -97,7 +100,9 @@ export const PLUGIN_CAPABILITY_DESCRIPTIONS: Record<PluginCapabilityKind, string
   'automation:write':
     'Create automations that start agents in your projects on a schedule, even when the plugin is not running, and change or delete them (Orca asks you first for ones the plugin did not create, and before it changes what one with extra agent settings runs)',
   'history:read':
-    "Read the list of your past agent sessions on this computer, from the history files of the coding agents Orca supports, including running WSL distributions on Windows (not SSH or other machines, Antigravity IDE conversations or subagent transcripts): each session's title, which is often the start of its first message, agent, workspace, branch, times, and message and token counts; never the conversation itself"
+    "Read the list of your past agent sessions on this computer, from the history files of the coding agents Orca supports, including running WSL distributions on Windows (not SSH or other machines, Antigravity IDE conversations or subagent transcripts): each session's title, which is often the start of its first message, agent, workspace, branch, times, and message and token counts; never the conversation itself",
+  'host:write':
+    "Save SSH hosts in Orca, including a ProxyCommand Orca runs on this computer to reach them, and connect them, which sets up Orca's server on that machine"
 }
 
 /** Canonicalize order, duplicates and field order so equivalent grants preserve consent across manifest formatting changes. */
