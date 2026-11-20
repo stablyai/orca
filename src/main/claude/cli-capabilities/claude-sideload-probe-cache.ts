@@ -35,7 +35,7 @@ export function createClaudeSideloadProbe(deps: {
     const pending = (async (): Promise<ClaudeCliFlagFact> => {
       const release = await slots.acquire(0)
       let fact: ClaudeCliFlagFact = 'unknown'
-      let checkedAccount = true
+      let checkedAccount = false
       try {
         if (deps.refused(launch)) {
           fact = 'unsupported'

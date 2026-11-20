@@ -100,14 +100,28 @@ function launchContext(input: TerminalLaunch, requireDirectCommand = true): Clau
             ? extractLeadingEnvAssignments(outer.rest.slice(1))
             : undefined
         const rest = (inner ?? outer).rest
-        const executable = rest[0]?.replace(/[;&|].*$/, '')
         const prefixCount = parsed.tokens.length - rest.length
+        const span = parsed.spans[prefixCount]
+        const raw = span && startupCommand.slice(span.start, span.end)
+        const boundary = raw?.search(/[;&|<>]/) ?? -1
+        const beforeBoundary =
+          boundary >= 0 ? tokenizeStartupCommand(raw!.slice(0, boundary), input.shell) : undefined
+        const executable = beforeBoundary
+          ? beforeBoundary.ok &&
+            beforeBoundary.tokens.length === 1 &&
+            !beforeBoundary.spans.some((part) => part.divergesFromShell)
+            ? beforeBoundary.tokens[0]
+            : undefined
+          : rest[0]
         if (
           executable &&
           findClaudeExecutableIndex([executable], input.shell) === 0 &&
           !parsed.spans.slice(0, prefixCount).some((span) => span.divergesFromShell)
         ) {
           const assignments = { ...outer.env, ...inner?.env }
+          if (Object.values(assignments).some((value) => /[$`]|(?:^|:)~/.test(value))) {
+            return null
+          }
           Object.assign(env, assignments)
           if (input.wsl) {
             env.WSLENV =

@@ -315,3 +315,49 @@ it('does not attribute an earlier command account to Claude', () => {
   prepareClaudeTerminalSideload(launch, support)
   expect(launch.env.CLAUDE_CODE_PLUGIN_DIRS).toBe('')
 })
+
+it('retries preparation after an execution error without caching an inconclusive fact', async () => {
+  const { deps, support, run } = fixture()
+  run.mockRejectedValueOnce(new Error('binary temporarily unavailable'))
+  await prewarmClaudeTerminalSideload(input(), deps)
+  const launch = input()
+  await prewarmClaudeTerminalSideload(launch, deps)
+  prepareClaudeTerminalSideload(launch, support)
+  expect(launch.env.ORCA_CLAUDE_AGENT_VIEW_PLUGIN_DIR).toBeUndefined()
+})
+
+it('recognizes an unquoted compact redirect without treating a quoted executable as a shell operator', () => {
+  const { support } = fixture()
+  support.observeExit(
+    { command: '/bin/claude', cwd: '/project', env: input().env },
+    new Error(refusal)
+  )
+  const launch = {
+    ...input('/account/open'),
+    command: 'CLAUDE_CONFIG_DIR=/account/locked claude>log'
+  }
+  prepareClaudeTerminalSideload(launch, support)
+  expect(launch.env.CLAUDE_CODE_PLUGIN_DIRS).toBe('')
+  const quoted = {
+    ...input('/account/open'),
+    command: "CLAUDE_CONFIG_DIR=/account/locked '/tools/claude>other/bin'"
+  }
+  prepareClaudeTerminalSideload(quoted, support)
+  expect(quoted.env.ORCA_CLAUDE_AGENT_VIEW_PLUGIN_DIR).toBe('/orca/plugin')
+})
+
+it.each(['~/.locked', '$HOME/.locked'])(
+  'does not execute or borrow another account fact for unresolved shell path %s',
+  async (account) => {
+    const { deps, support, run } = fixture()
+    support.observeExit(
+      { command: '/bin/claude', cwd: '/project', env: input().env },
+      new Error(refusal)
+    )
+    const launch = { ...input(), command: `CLAUDE_CONFIG_DIR=${account} claude` }
+    await prewarmClaudeTerminalSideload(launch, deps)
+    prepareClaudeTerminalSideload(launch, support)
+    expect(run).not.toHaveBeenCalled()
+    expect(launch.env.ORCA_CLAUDE_AGENT_VIEW_PLUGIN_DIR).toBe('/orca/plugin')
+  }
+)
