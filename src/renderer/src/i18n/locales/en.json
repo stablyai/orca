@@ -1919,6 +1919,18 @@
       "stepFailed": "Orca could not finish this step.",
       "finishFailed": "Orca could not do that."
     },
+    "notifications": {
+      "perfNotices": {
+        "hiddenTabs": {
+          "label": "Hidden browser tabs",
+          "description": "Suggest Memory Saver when many hidden browser tabs stay loaded."
+        },
+        "search": {
+          "tabs": "tabs",
+          "memory": "memory"
+        }
+      }
+    },
     "automaticUpdates": {
       "saveFailed": "Could not save automatic updates.",
       "title": "Automatic updates",
@@ -29611,6 +29623,17 @@
     "title": "Some background work paused after crashing repeatedly",
     "description": "Claude chat recovery is off until you retry. Copy, rewind and Space scans resume when you start them again.",
     "retry": "Retry"
+  },
+  "perfNotices": {
+    "hiddenTabs": {
+      "title": "Save memory from inactive tabs",
+      "description_one": "You have {{count}} tab you haven't viewed in over {{hours}} hours. Turn on Memory Saver to free up its memory.",
+      "description_other": "You have {{count}} tabs you haven't viewed in over {{hours}} hours. Turn on Memory Saver to free up their memory.",
+      "descriptionOneHour_one": "You have {{count}} tab you haven't viewed in over an hour. Turn on Memory Saver to free up its memory.",
+      "descriptionOneHour_other": "You have {{count}} tabs you haven't viewed in over an hour. Turn on Memory Saver to free up their memory.",
+      "turnOnMemorySaver": "Turn on Memory Saver"
+    },
+    "dontShowAgain": "Don't show again"
   },
   "ui": {
     "monthCalendar": {
