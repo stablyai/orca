@@ -51,13 +51,18 @@ function pane(options: {
     pid: options.root,
     processNameIsSpawnFile: false,
     shellIsRootChild: options.shellIsRootChild,
+    outputChunks: 0,
     readForegroundGroup: () => options.foregroundGroup,
     getForegroundProcess: () => 'zsh'
   } as unknown as Session
 }
 
 /** Ten steady polls of a pane with no tracked agent, 15 s apart (the quiet-pane cadence). */
-async function pollQuietPane(session: Session, rows: ProcessTableRow[]): Promise<number> {
+async function pollQuietPane(
+  session: Session,
+  rows: ProcessTableRow[],
+  between: (poll: number) => void = () => {}
+): Promise<number> {
   tables.strict.mockReset().mockResolvedValue({ rows, capturedAgeMs: 0 })
   for (let poll = 0; poll < 10; poll++) {
     await inspectTerminalHostProcess({
@@ -68,6 +73,7 @@ async function pollQuietPane(session: Session, rows: ProcessTableRow[]): Promise
       authorityGeneration: 'generation-1',
       nextObservationEpoch: () => poll
     })
+    between(poll)
     vi.advanceTimersByTime(15_000)
   }
   return tables.strict.mock.calls.length
@@ -94,4 +100,20 @@ it('captures every poll while a command shares the shell group (job control off)
   const session = pane({ root: SHELL, shellIsRootChild: false, foregroundGroup: SHELL })
   const rows = [row(SHELL, 1, SHELL, '-zsh'), row(5151, SHELL, SHELL, 'codex')]
   expect(await pollQuietPane(session, rows)).toBe(10)
+})
+
+it('captures again on the next poll after the pane prints', async () => {
+  const session = pane({ root: SHELL, shellIsRootChild: false, foregroundGroup: SHELL })
+  // A command sharing the shell group (job control off) prints while it runs.
+  let capturesAfterNextPoll = 0
+  const printOnce = (poll: number): void => {
+    if (poll === 1) {
+      Object.assign(session, { outputChunks: 1 })
+    }
+    if (poll === 2) {
+      capturesAfterNextPoll = tables.strict.mock.calls.length
+    }
+  }
+  await pollQuietPane(session, [row(SHELL, 1, SHELL, '-zsh')], printOnce)
+  expect(capturesAfterNextPoll).toBe(2)
 })

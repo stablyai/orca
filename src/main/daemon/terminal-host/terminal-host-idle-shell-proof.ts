@@ -9,10 +9,10 @@ import type { ProcessTableRow } from '../../../shared/process-observation/tables
 import type { Session } from '../sessions/session'
 
 /** With job control off a command can share the shell's group, so a full capture re-proves the shell is alone.
- * A same-group run that starts and ends inside one window goes unseen by process polling (hooks still report it). */
+ * Any pane output also voids it, since a command sharing the group prints while it runs. */
 export const IDLE_SHELL_PROOF_MAX_AGE_MS = 60_000
 
-type IdleShellProof = { shellPid: number; provedAt: number }
+type IdleShellProof = { shellPid: number; provedAt: number; outputChunks: number }
 
 // Keyed by Session so a new session or recycled PID cannot inherit an old proof.
 const proofs = new WeakMap<Session, IdleShellProof>()
@@ -39,11 +39,13 @@ function groupSize(rows: readonly ProcessTableRow[], pgid: number): number {
   return sizes.get(pgid) ?? 0
 }
 
-/** Record, from a full capture taken capturedAgeMs ago, whether the pane's shell is alone in the foreground group. */
+/** Record, from a full capture taken capturedAgeMs ago, whether the pane's shell is alone in the foreground group.
+ * outputChunks is the pane's count read before the capture was requested. */
 export function rememberIdleShellProof(
   session: Session,
   rows: readonly ProcessTableRow[],
-  capturedAgeMs: number
+  capturedAgeMs: number,
+  outputChunks: number
 ): void {
   const index = getProcessTableIndex(rows)
   const shell = session.shellIsRootChild
@@ -55,7 +57,11 @@ export function rememberIdleShellProof(
     isShellProcess(commandName(shell)) &&
     groupSize(rows, shell.pid) === 1
   ) {
-    proofs.set(session, { shellPid: shell.pid, provedAt: monotonicNow() - capturedAgeMs })
+    proofs.set(session, {
+      shellPid: shell.pid,
+      provedAt: monotonicNow() - capturedAgeMs,
+      outputChunks
+    })
   } else {
     proofs.delete(session)
   }
@@ -64,7 +70,11 @@ export function rememberIdleShellProof(
 /** The shell's name while a recent full capture proved it alone and its group still owns the terminal. */
 export function readProvenIdleShell(session: Session): string | null {
   const proof = proofs.get(session)
-  if (!proof || monotonicNow() - proof.provedAt >= IDLE_SHELL_PROOF_MAX_AGE_MS) {
+  if (
+    !proof ||
+    monotonicNow() - proof.provedAt >= IDLE_SHELL_PROOF_MAX_AGE_MS ||
+    session.outputChunks !== proof.outputChunks
+  ) {
     return null
   }
   const name = session.getForegroundProcess({ rawFallback: true })

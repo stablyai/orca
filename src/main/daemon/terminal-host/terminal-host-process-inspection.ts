@@ -148,9 +148,10 @@ export async function inspectTerminalHostProcess(args: {
     evidence = unverifiableEvidence(args, session, 'windows_ssh_foreground_unavailable')
   } else {
     try {
+      const outputChunks = session.outputChunks
       const snapshot = await getStrictProcessTableSnapshotWithAge()
       if (process.platform === 'darwin' && !session.processNameIsSpawnFile) {
-        rememberIdleShellProof(session, snapshot.rows, snapshot.capturedAgeMs)
+        rememberIdleShellProof(session, snapshot.rows, snapshot.capturedAgeMs, outputChunks)
       }
       if (session.processNameIsSpawnFile) {
         const observed = resolveSpawnFileForegroundFromRows(snapshot.rows, session.pid)
