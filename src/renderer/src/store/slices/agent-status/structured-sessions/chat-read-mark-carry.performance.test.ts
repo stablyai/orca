@@ -21,15 +21,21 @@ function chatTab(id: string, entityId: string): Tab {
 }
 
 /** Counts every element read from the workspace's tab list. */
-function countedTabs(tabs: Tab[]): { tabs: Tab[]; reads: () => number } {
+function countedTabs(
+  tabs: Tab[],
+  onRead: () => void = () => {}
+): { tabs: Tab[]; reads: () => number } {
   let reads = 0
-  const counted = new Proxy(tabs, {
-    get(target, property, receiver) {
-      if (typeof property === 'string' && /^\d+$/.test(property)) {
+  const counted: Tab[] = []
+  tabs.forEach((tab, index) => {
+    Object.defineProperty(counted, index, {
+      enumerable: true,
+      get: () => {
         reads++
+        onRead()
+        return tab
       }
-      return Reflect.get(target, property, receiver)
-    }
+    })
   })
   return { tabs: counted, reads: () => reads }
 }
@@ -139,18 +145,11 @@ it('does no tab work for retitled or reordered tabs once every saved mark has mo
     }
     for (let update = 0; update < 50; update++) {
       // Each title change replaces the workspace's tab list.
-      const counted = new Proxy(
+      const counted = countedTabs(
         tabs.map((tab) => ({ ...tab, label: `Chat ${update}` })),
-        {
-          get(target, property, receiver) {
-            if (typeof property === 'string' && /^\d+$/.test(property)) {
-              reads++
-            }
-            return Reflect.get(target, property, receiver)
-          }
-        }
+        () => reads++
       )
-      state = { ...state, unifiedTabsByWorktree: { wt: counted } }
+      state = { ...state, unifiedTabsByWorktree: { wt: counted.tabs } }
       carryChatReadMarks(store, ['wt'])
     }
     expect(reads).toBe(0)
