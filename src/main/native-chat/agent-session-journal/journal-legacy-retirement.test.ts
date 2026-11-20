@@ -4,12 +4,14 @@ import Database from '../../sqlite/sync-database'
 import { journalDomainImportState } from './journal-domain-import-rows'
 import { initializeJournalDomainDatabase } from './database/journal-domain-database'
 import {
+  cleanup,
   continueInOlderOrca,
   fakeLease,
   olderOrcaChat,
   profile
 } from './journal-legacy-retirement.test-fixture'
 import { JournalLegacyIneligibleError } from './journal-legacy-retention-error'
+import { setLegacyJournalRetirementHost } from './journal-legacy-retirement-outcome'
 import { readLegacyProofSessions } from './journal-legacy-content-proof'
 
 function rename(filename: string, sessionId: string, name: string) {
@@ -352,9 +354,18 @@ it('finishes removing the absorbed WAL a removal left behind its main file, and 
   expect(existsSync(`${filename}-wal`)).toBe(true)
   save(retiring(wal.ino))
   // Finishing the removal deletes too, so it waits for permission like the first step.
+  const deferred: string[] = []
+  setLegacyJournalRetirementHost({
+    report: async (event) => deferred.push(`${event.defer} ${event.mode}`) > 0,
+    mode: async () => ({ mode: 'report', revision: 0 })
+  })
+  cleanup.push(() => setLegacyJournalRetirementHost(undefined))
   await launch('1.0.1', true, undefined, undefined, policy('off')).run()
   await launch('1.0.1', true, undefined, undefined, policy('report')).run()
+  await launch('1.0.1', true, undefined, undefined, policy('report')).run()
   expect(existsSync(`${filename}-wal`)).toBe(true)
+  // Waiting for permission is reported, once per mode.
+  expect(deferred).toEqual(['leftover_files off', 'leftover_files report'])
   await launch().run()
   expect(existsSync(`${filename}-wal`)).toBe(false)
 })

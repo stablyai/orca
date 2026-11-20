@@ -112,7 +112,7 @@ export class JournalLegacyRetirement {
       } else {
         const removing = this.proof.finished && this.policy.mode === 'enforce'
         const failed = legacyProofFailureOutcome(error, this.proof.walked, removing)
-        await this.outcome(failed).catch(() => {})
+        await this.outcome({ ...failed, activeMs: this.activeMs }).catch(() => {})
       }
       this.later()
       const reason = error instanceof Error ? error.message : String(error)

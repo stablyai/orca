@@ -64,6 +64,7 @@ export class JournalLegacyProof {
   forgetFinished(): void {
     if (this.proven) {
       this.descriptor = undefined
+      this.proven = false
     }
   }
 
