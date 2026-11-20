@@ -227,15 +227,6 @@ export function workspaceListenerObservations(
   return observationsByWorktree
 }
 
-export function reconcileAdvertisedUrls(
-  ports: readonly AttributedListeningPort[],
-  worktrees: readonly NormalizedWorkspacePortProbe[],
-  urlWatcher: Pick<AdvertisedUrlWatcher, 'reconcileWorkspaces'>
-): void {
-  // Invalidate disappeared/changed listeners before lazy lookup can pin a stale banner.
-  urlWatcher.reconcileWorkspaces(workspaceListenerObservations(ports, worktrees))
-}
-
 export function compareWorkspacePorts(a: WorkspacePort, b: WorkspacePort): number {
   const aRank = a.kind === 'workspace' ? 0 : a.kind === 'container' ? 1 : 2
   const bRank = b.kind === 'workspace' ? 0 : b.kind === 'container' ? 1 : 2

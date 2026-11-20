@@ -8,7 +8,6 @@ import {
   compareWorkspacePorts,
   enrichPort,
   resolveWorkspacePortProbes,
-  reconcileAdvertisedUrls,
   workspaceListenerObservations
 } from './local-workspace-port-attribution'
 import { scanPlatformListeningPorts } from './local-workspace-platform-port-scanner'
@@ -50,21 +49,20 @@ export async function scanWorkspacePorts(
       const { probes, complete } = resolved
       const attributedPorts = attributePortsToWorkspaces(scan.ports, probes)
       const canReconcile = scan.metadataAvailable && complete
+      const observations = workspaceListenerObservations(attributedPorts, probes)
       // Cached owners can miss a socket passed to a running process; only a full walk may bind or drop a printed URL.
       if (
         !freshOwners &&
         scan.ownersFromCache &&
-        urlWatcher.couldDropUrls(
-          workspaceListenerObservations(attributedPorts, probes),
-          canReconcile
-        )
+        urlWatcher.couldDropUrls(observations, canReconcile)
       ) {
         freshOwners = true
         continue
       }
       // Missing metadata cannot prove listener loss; eviction would discard URLs only PTY output can restore (#11161).
       if (canReconcile) {
-        reconcileAdvertisedUrls(attributedPorts, probes, urlWatcher)
+        // Invalidate disappeared/changed listeners before lazy lookup can pin a stale banner.
+        urlWatcher.reconcileWorkspaces(observations)
       }
       const ports = attributedPorts
         .map((port) => enrichPort(port, urlWatcher))

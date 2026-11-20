@@ -9,7 +9,8 @@ let previousInodes = new Set<number>()
 let previousPids: ReadonlySet<number> | undefined
 let scanSequence = 0
 let lastFullWalkScan = Number.NEGATIVE_INFINITY
-let lastPublishedScan = 0
+let cacheVersion = 0
+let lastPublishedFullWalkScan = 0
 
 /**
  * Map listener socket inodes to the pid holding them; a shared socket goes to the last holder in /proc order.
@@ -23,11 +24,13 @@ export async function resolveLinuxSocketOwners(
   const sequence = ++scanSequence
   // Overlapping scans replace the module state, so each call works from the state it started with.
   const cachedOwners = ownerPidByInode
+  const startVersion = cacheVersion
   const seenBefore = previousPids
   const knownInodes = previousInodes
   const owners = new Map<number, number>()
   if (inodes.size === 0) {
-    lastPublishedScan = sequence
+    cacheVersion += 1
+    lastPublishedFullWalkScan = sequence
     ownerPidByInode = new Map()
     previousInodes = new Set()
     return { owners, fullWalk: true }
@@ -96,12 +99,15 @@ export async function resolveLinuxSocketOwners(
         owners.set(inode, pid)
       }
     }
-    lastFullWalkScan = Math.max(lastFullWalkScan, sequence)
   }
 
-  // A scan that started later and finished first saw a newer /proc; an older result must not replace it.
-  if (sequence > lastPublishedScan) {
-    lastPublishedScan = sequence
+  // A full walk is authoritative unless a newer full walk already landed; a partial pass only extends the cache it started from.
+  if (fullWalk ? sequence > lastPublishedFullWalkScan : cacheVersion === startVersion) {
+    cacheVersion += 1
+    if (fullWalk) {
+      lastPublishedFullWalkScan = sequence
+      lastFullWalkScan = Math.max(lastFullWalkScan, sequence)
+    }
     ownerPidByInode = owners
     previousInodes = new Set(inodes)
     previousPids = new Set(pids)

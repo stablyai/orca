@@ -19,21 +19,30 @@ export function couldDropAdvertisedUrls(
   observations: ObservationsByWorktree,
   canReconcile: boolean
 ): boolean {
+  // Indexed lazily: only workspaces that have a printed URL pay for it.
   const pidsByPortByWorktree = new Map<string, Map<number, (number | undefined)[]>>()
-  for (const [worktreeId, listeners] of observations) {
-    const pidsByPort = new Map<number, (number | undefined)[]>()
-    for (const listener of listeners) {
-      const pids = pidsByPort.get(listener.port)
-      if (pids) {
-        pids.push(listener.pid)
-      } else {
-        pidsByPort.set(listener.port, [listener.pid])
-      }
+  const pidsByPortFor = (worktreeId: string): Map<number, (number | undefined)[]> | undefined => {
+    const listeners = observations.get(worktreeId)
+    if (!listeners) {
+      return undefined
     }
-    pidsByPortByWorktree.set(worktreeId, pidsByPort)
+    let pidsByPort = pidsByPortByWorktree.get(worktreeId)
+    if (!pidsByPort) {
+      pidsByPort = new Map()
+      for (const listener of listeners) {
+        const pids = pidsByPort.get(listener.port)
+        if (pids) {
+          pids.push(listener.pid)
+        } else {
+          pidsByPort.set(listener.port, [listener.pid])
+        }
+      }
+      pidsByPortByWorktree.set(worktreeId, pidsByPort)
+    }
+    return pidsByPort
   }
   for (const [key, entry] of cache) {
-    const pidsByPort = pidsByPortByWorktree.get(worktreeIdFromCacheKey(key, entry.port))
+    const pidsByPort = pidsByPortFor(worktreeIdFromCacheKey(key, entry.port))
     if (!pidsByPort) {
       continue
     }
