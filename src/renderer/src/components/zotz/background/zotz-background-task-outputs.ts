@@ -10,6 +10,8 @@ export type ZotzBackgroundTaskOutputs = {
   worktreeId: string | null
   /** Provider task id → where the provider writes that task's output. */
   outputFiles: ReadonlyMap<string, string>
+  /** What each tool call has printed so far, from the chat itself, for agents that write no output file. */
+  callOutputs: ZotzCallOutputs
   read: (worktreeId: string, filePath: string) => Promise<string>
 }
 
@@ -22,6 +24,41 @@ export function useZotzBackgroundTaskOutputs(): ZotzBackgroundTaskOutputs | null
   return useContext(ZotzBackgroundTaskOutputsContext)
 }
 
+export type ZotzCallOutputs = {
+  /** Tool call id → its latest output text. */
+  byCall: ReadonlyMap<string, string>
+  /** Provider task id → the tool call that launched it. */
+  callByTask: ReadonlyMap<string, string>
+}
+
+type Collected = {
+  outputFiles: Map<string, string>
+  byCall: Map<string, string>
+  callByTask: Map<string, string>
+}
+
+const CODEX_PRIMARY_COMMAND_PREFIX = 'codex-command:primary:'
+
+function codexCommandCallId(taskId: string): string | null {
+  if (!taskId.startsWith(CODEX_PRIMARY_COMMAND_PREFIX)) {
+    return null
+  }
+  try {
+    return decodeURIComponent(taskId.slice(CODEX_PRIMARY_COMMAND_PREFIX.length))
+  } catch {
+    return null
+  }
+}
+
+/** The shell's output as the chat shows it; null when no call in the transcript is linked to the task. */
+export function zotzTaskCallOutput(outputs: ZotzCallOutputs, taskId: string): string | null {
+  const callId = outputs.callByTask.get(taskId) ?? codexCommandCallId(taskId)
+  if (!callId) {
+    return null
+  }
+  return outputs.byCall.get(callId) ?? (outputs.callByTask.has(taskId) ? '' : null)
+}
+
 function isBlockList(value: unknown): value is NativeChatBlock[] {
   return (
     Array.isArray(value) &&
@@ -32,12 +69,19 @@ function isBlockList(value: unknown): value is NativeChatBlock[] {
   )
 }
 
-function collect(blocks: readonly NativeChatBlock[], into: Map<string, string>): void {
+function collect(blocks: readonly NativeChatBlock[], into: Collected): void {
   for (const block of blocks) {
     if (isBackgroundTaskBlock(block)) {
       if (block.outputFile) {
-        into.set(block.taskId, block.outputFile)
+        into.outputFiles.set(block.taskId, block.outputFile)
       }
+      if (block.parentToolUseId) {
+        into.callByTask.set(block.taskId, block.parentToolUseId)
+      }
+      continue
+    }
+    if (block.type === 'tool-result' && block.callId) {
+      into.byCall.set(block.callId, block.output)
       continue
     }
     // Task rows can sit inside a tool run's own blocks.
@@ -49,15 +93,21 @@ function collect(blocks: readonly NativeChatBlock[], into: Map<string, string>):
   }
 }
 
-/** Every task's latest output file in the chat's transcript, keyed by provider task id. */
-export function useZotzTaskOutputFiles(
-  messages: readonly NativeChatMessage[] | undefined
-): ReadonlyMap<string, string> {
+/** Every task's latest output file, plus each tool call's output, from the chat's transcript. */
+export function useZotzTaskOutputSources(messages: readonly NativeChatMessage[] | undefined): {
+  outputFiles: ReadonlyMap<string, string>
+  callOutputs: ZotzCallOutputs
+} {
   return useMemo(() => {
-    const outputFiles = new Map<string, string>()
-    for (const message of messages ?? []) {
-      collect(message.blocks, outputFiles)
+    const collected: Collected = {
+      outputFiles: new Map(),
+      byCall: new Map(),
+      callByTask: new Map()
     }
-    return outputFiles
+    for (const message of messages ?? []) {
+      collect(message.blocks, collected)
+    }
+    const { outputFiles, byCall, callByTask } = collected
+    return { outputFiles, callOutputs: { byCall, callByTask } }
   }, [messages])
 }
