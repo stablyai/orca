@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { link, lstat, open, readFile, readdir, rm } from 'node:fs/promises'
+import { link, lstat, open, readFile, readdir, rm, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { errnoCodeOrUnknown } from '../../../../shared/errors/errno-code'
 import { track } from '../../../telemetry/client'
@@ -61,9 +61,11 @@ async function listAccountHistories(accountsRoot: string): Promise<string[]> {
   const paths: string[] = []
   for (const account of accounts.filter((entry) => entry.isDirectory())) {
     const historyPath = join(accountsRoot, account.name, 'home', 'history.jsonl')
-    // Only a missing file means no history; any other error retries rather than skip an account.
-    const stats = await lstat(historyPath).catch((error: unknown) => {
-      if (errnoCodeOrUnknown(error) === 'ENOENT') {
+    // Followed through a link, as Codex reads it. Only an absent file (or no home folder) means no
+    // history; any other error retries rather than skip an account.
+    const stats = await stat(historyPath).catch((error: unknown) => {
+      const code = errnoCodeOrUnknown(error)
+      if (code === 'ENOENT' || code === 'ENOTDIR') {
         return null
       }
       throw error
