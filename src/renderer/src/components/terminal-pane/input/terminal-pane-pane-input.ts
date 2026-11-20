@@ -145,6 +145,7 @@ export function installTerminalPaneInputHandling(context: PaneInputContext): voi
     // The tracker only records DECSET 9001 on Windows, so other platforms never reach this.
     if (
       paneKittyKeyboardModesRef.current.get(pane.id)?.win32InputMode === true &&
+      !event.defaultPrevented &&
       isAltGrTextKey(event)
     ) {
       const record = encodeWin32InputRecordForAltGr(event)
