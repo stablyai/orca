@@ -5,8 +5,6 @@ import type { AgentSessionConversationView } from '../../../shared/agent-session
 import { isLegacyAgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import { MAX_AGENT_SESSION_PROVIDER_HANDLE_LINKS } from '../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
 import { structuredAgentSessionTabId } from '../../../shared/agent-session/view/structured-agent-session-projection'
-import { isAgentSessionSlotTabId } from '../../../shared/agent-session/view/agent-session-slot-tab-id'
-import { isReopenedChatTabId } from '../../../shared/agent-session/view/structured-agent-session-host-tab-id'
 import type { RuntimeNativeChatFileContext } from '../../../shared/native-chat/file-access/native-chat-file-context'
 import type { ExecutionHostId } from '../../../shared/execution-host/execution-host'
 import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
@@ -135,16 +133,6 @@ export async function resolveNativeChatMediaPath(
   return absolutePath ? { kind: 'matched', absolutePath } : NONE
 }
 
-/** The host's own tab for the chat, or a window's: its minted slot or the legacy id. */
-function namesChatTab(tabId: string, sessionId: string, sources: MediaSources): boolean {
-  const hostTabId = sources.getSessionTabId(sessionId)
-  return (
-    tabId === hostTabId ||
-    ((!hostTabId || !isReopenedChatTabId(hostTabId)) &&
-      (tabId === structuredAgentSessionTabId(sessionId) || isAgentSessionSlotTabId(tabId)))
-  )
-}
-
 function sourceFor(
   request: NativeChatMediaPathRequest,
   sources: MediaSources
@@ -158,7 +146,8 @@ function sourceFor(
       record.location.executionHostId !== request.executionHostId ||
       record.location.wslDistro ||
       !isLegacyAgentSessionAccountHome(record.accountHome) ||
-      !namesChatTab(context.tabId, record.sessionId, sources)
+      context.tabId !==
+        (sources.getSessionTabId(record.sessionId) ?? structuredAgentSessionTabId(record.sessionId))
     ) {
       return null
     }
