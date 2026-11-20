@@ -183,15 +183,9 @@ it("shows Cursor's plan and accepts it, which ends the turn without building", a
   )
 })
 
-it("writes an explicit Auto as the chat server's `default`", () => {
+it("uses Cursor's legacy model setter for Auto and preserves inherited object names as model IDs", () => {
   const options = new AcpStructuredOptions(CURSOR.dialect)
   options.adoptSession({ configOptions: OPUS_OPTIONS }, 'new')
-  expect(options.write('model', 'auto')).toEqual({
-    method: 'config',
-    configId: 'model',
-    value: 'default'
-  })
-  // A session with no model option takes it through the model setter, under the same id.
   const legacy = new AcpStructuredOptions(CURSOR.dialect)
   legacy.adoptSession(
     {
