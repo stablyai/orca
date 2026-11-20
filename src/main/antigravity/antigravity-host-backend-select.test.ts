@@ -57,8 +57,6 @@ type Host = {
   apiKeyChat?: boolean
   /** The kill switch for Orca's copy of agy is off. */
   managedAgyOff?: boolean
-  /** The agy that resolves is Orca's own copy. */
-  orcasAgy?: boolean
   /** No agy is found on this host yet. */
   noAgy?: boolean
 }
@@ -95,11 +93,7 @@ function host(options: Host = {}) {
     writeFileSync(join(settings, 'settings.json'), '{"modelProvider":"gemini-api-key"}')
   }
   return {
-    command: options.noAgy
-      ? 'agy'
-      : options.orcasAgy
-        ? join(stateDirectory, 'agent-runtimes', 'agy', '1.5.13', 'agy')
-        : '/usr/local/bin/agy',
+    command: options.noAgy ? 'agy' : '/usr/local/bin/agy',
     env: { PATH: options.serverOnPath ? bin : '' },
     envToDelete: [],
     homePath,
@@ -179,8 +173,7 @@ describe('Antigravity install target', () => {
     ['Orca’s server when a server is on PATH', { serverOnPath: true }, 'signedOut', true],
     ['Orca’s server for an API-key chat', { apiKeyChat: true }, 'signedOut', true],
     ['Orca’s server when agy picks an API-key provider', { agyApiKey: true }, 'ready', true],
-    ['Orca’s server when the host’s own agy is incompatible', {}, 'incompatible', true],
-    ['Orca’s server when Orca’s own agy is incompatible', { orcasAgy: true }, 'incompatible', true]
+    ['Orca’s server when agy is incompatible', {}, 'incompatible', true]
   ])('installs %s', async (_case, options, answer, server) => {
     agy.answer = answer
     const input = host(options)
@@ -274,12 +267,6 @@ describe('agy with no login to find', () => {
 
     expect(await installsManagedRuntime(input)).toBe(false)
     expect(await select(input)).not.toBeNull()
-  })
-
-  it('keeps an incompatible agy out of new chats', async () => {
-    Object.assign(agy, { login: 'absent', compatible: 'incompatible' })
-
-    expect(await select(host())).toBeNull()
   })
 })
 

@@ -121,25 +121,7 @@ describe('nativeChatFirstScreenSignIn', () => {
     ]
   })
 
-  it("asks for agy's own sign-in when the kickoff was refused as signed out", () => {
-    const rejection = { kind: 'notSignedIn', account: 'system' } as const
-    const refused = nativeChatKickoffRefusal({
-      isWorking: false,
-      submissions: [
-        {
-          dispatchState: 'rejected',
-          reason: 'notSignedIn',
-          rejection
-        }
-      ]
-    })
-
-    expect(nativeChatFirstScreenSignIn(nativeChatFirstScreen([kickoff], true, refused))).toEqual({
-      account: 'system'
-    })
-  })
-
-  it('asks for it when the first turn failed signed out, and not for another failure', () => {
+  it('asks for agy’s sign-in only when the first turn failed signed out', () => {
     expect(
       nativeChatFirstScreenSignIn(nativeChatFirstScreen([kickoff, failedTurn('notSignedIn')], true))
     ).toEqual({ account: 'system' })

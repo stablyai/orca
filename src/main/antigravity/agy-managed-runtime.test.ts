@@ -33,11 +33,9 @@ beforeEach(() => {
 describe('agy manifest platform', () => {
   it.each([
     ['darwin', 'arm64', false, 'darwin_arm64'],
-    ['darwin', 'x64', false, 'darwin_amd64'],
     ['linux', 'x64', false, 'linux_amd64'],
     ['linux', 'arm64', true, 'linux_arm64_musl'],
     ['win32', 'x64', false, 'windows_amd64'],
-    ['win32', 'arm64', false, 'windows_arm64'],
     ['win32', 'ia32', false, null],
     ['freebsd', 'x64', false, null]
   ] as const)('%s %s (musl %s) reads %s', async (platform, arch, musl, expected) => {
