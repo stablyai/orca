@@ -1,6 +1,6 @@
-import { Buffer } from 'node:buffer'
 import type { AzureDevOpsRepoRef } from './repository-ref'
 import { cancelUnreadResponseBody } from '../lib/unread-response-body'
+import { resolveAzureDevOpsCredentials } from './azure-devops-credentials'
 
 const REQUEST_TIMEOUT_MS = 5000
 // Newest first: older on-prem Servers reject newer versions with VssVersionOutOfRangeException.
@@ -61,22 +61,10 @@ export function recordAzureDevOpsApiVersionRejection(
   return true
 }
 
-type AzureDevOpsAuthConfig = {
-  apiBaseUrl: string | null
-  pat: string | null
-  accessToken: string | null
-  username: string | null
-}
-
 export type AzureDevOpsRequestOptions = {
   searchParams?: Record<string, string | number>
   timeoutMs?: number
   onResponse?: (response: Response) => void
-}
-
-function envValue(name: string): string | null {
-  const value = process.env[name]?.trim() ?? ''
-  return value.length > 0 ? value : null
 }
 
 export function normalizeAzureDevOpsApiBaseUrl(value: string): string {
@@ -86,28 +74,8 @@ export function normalizeAzureDevOpsApiBaseUrl(value: string): string {
     .replace(/\/_apis$/i, '')
 }
 
-export function getAzureDevOpsAuthConfig(): AzureDevOpsAuthConfig {
-  return {
-    apiBaseUrl: envValue('ORCA_AZURE_DEVOPS_API_BASE_URL'),
-    pat: envValue('ORCA_AZURE_DEVOPS_TOKEN') ?? envValue('ORCA_AZURE_DEVOPS_PAT'),
-    accessToken: envValue('ORCA_AZURE_DEVOPS_ACCESS_TOKEN'),
-    username: envValue('ORCA_AZURE_DEVOPS_USERNAME')
-  }
-}
-
-export function azureDevOpsTokenConfigured(config: AzureDevOpsAuthConfig): boolean {
-  return Boolean(config.pat || config.accessToken)
-}
-
-function authHeaders(config: AzureDevOpsAuthConfig): Record<string, string> {
-  if (config.accessToken) {
-    return { Authorization: `Bearer ${config.accessToken}` }
-  }
-  if (config.pat) {
-    const encoded = Buffer.from(`${config.username ?? ''}:${config.pat}`).toString('base64')
-    return { Authorization: `Basic ${encoded}` }
-  }
-  return {}
+export function getConfiguredAzureDevOpsApiBaseUrl(): string | null {
+  return process.env.ORCA_AZURE_DEVOPS_API_BASE_URL?.trim() || null
 }
 
 function isUrlPathAncestor(ancestor: string, descendant: string): boolean {
@@ -126,7 +94,7 @@ function isUrlPathAncestor(ancestor: string, descendant: string): boolean {
 }
 
 export function resolveAzureDevOpsGitApiBaseUrl(repo: AzureDevOpsRepoRef): string {
-  const configured = getAzureDevOpsAuthConfig().apiBaseUrl
+  const configured = getConfiguredAzureDevOpsApiBaseUrl()
   if (!configured) {
     return repo.apiBaseUrl
   }
@@ -158,19 +126,14 @@ export async function requestAzureDevOpsJsonAtBase<T>(
   // Creation preflight must distinguish lookup failure from an absent PR.
   throwOnFailure = false
 ): Promise<T | null> {
-  const config = getAzureDevOpsAuthConfig()
-  const doFetch = (url: URL): Promise<Response> =>
-    fetch(url, {
-      headers: {
-        Accept: 'application/json',
-        ...authHeaders(config)
-      },
-      signal: AbortSignal.timeout(options.timeoutMs ?? REQUEST_TIMEOUT_MS)
-    })
   try {
+    const { headers } = await resolveAzureDevOpsCredentials()
     for (let attempt = 1; ; attempt++) {
       const url = apiUrl(baseUrl, path, options.searchParams)
-      const response = await doFetch(url)
+      const response = await fetch(url, {
+        headers: { Accept: 'application/json', ...headers },
+        signal: AbortSignal.timeout(options.timeoutMs ?? REQUEST_TIMEOUT_MS)
+      })
       if (response.ok) {
         options.onResponse?.(response)
         return (await response.json()) as T

@@ -1,6 +1,5 @@
 import type { ExecutionHostId } from '../../shared/execution-host/execution-host'
 import { hostedReviewSshConnectionId } from '../source-control/hosted-review-execution-host'
-import { Buffer } from 'node:buffer'
 import type {
   CreateHostedReviewInput,
   CreateHostedReviewResult
@@ -20,46 +19,12 @@ import {
   recordAzureDevOpsApiVersionRejection,
   resolveAzureDevOpsGitApiBaseUrl
 } from './azure-devops-api-request'
+import { resolveAzureDevOpsCredentials } from './azure-devops-credentials'
 import { getAzureDevOpsPullRequestForBranch } from './client'
 import { mapAzureDevOpsPullRequest, type RawAzureDevOpsPullRequest } from './pull-request-mappers'
 import { getAzureDevOpsRepoRef, type AzureDevOpsRepoRef } from './repository-ref'
 
 const CREATE_REQUEST_TIMEOUT_MS = 60_000
-
-type AzureDevOpsCreateAuthConfig = {
-  pat: string | null
-  accessToken: string | null
-  username: string | null
-}
-
-function envValue(name: string): string | null {
-  const value = process.env[name]?.trim() ?? ''
-  return value.length > 0 ? value : null
-}
-
-function getAuthConfig(): AzureDevOpsCreateAuthConfig {
-  return {
-    pat: envValue('ORCA_AZURE_DEVOPS_TOKEN') ?? envValue('ORCA_AZURE_DEVOPS_PAT'),
-    accessToken: envValue('ORCA_AZURE_DEVOPS_ACCESS_TOKEN'),
-    username: envValue('ORCA_AZURE_DEVOPS_USERNAME')
-  }
-}
-
-export function isAzureDevOpsReviewCreationAuthenticated(): boolean {
-  const config = getAuthConfig()
-  return Boolean(config.pat || config.accessToken)
-}
-
-function authHeaders(config: AzureDevOpsCreateAuthConfig): Record<string, string> {
-  if (config.accessToken) {
-    return { Authorization: `Bearer ${config.accessToken}` }
-  }
-  if (config.pat) {
-    const encoded = Buffer.from(`${config.username ?? ''}:${config.pat}`).toString('base64')
-    return { Authorization: `Basic ${encoded}` }
-  }
-  return {}
-}
 
 function apiUrl(repo: AzureDevOpsRepoRef, path: string): URL {
   const baseUrl = resolveAzureDevOpsGitApiBaseUrl(repo)
@@ -231,6 +196,7 @@ export async function createAzureDevOpsPullRequest(
   }
 
   try {
+    const { headers } = await resolveAzureDevOpsCredentials()
     const raw = await requestCreatePullRequest(
       repo,
       `/_apis/git/repositories/${encodePathSegment(repo.repository)}/pullRequests`,
@@ -239,7 +205,7 @@ export async function createAzureDevOpsPullRequest(
         headers: {
           Accept: 'application/json',
           'Content-Type': 'application/json',
-          ...authHeaders(getAuthConfig())
+          ...headers
         },
         body: JSON.stringify(requestBody)
       }

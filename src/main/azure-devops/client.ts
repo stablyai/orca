@@ -14,12 +14,12 @@ import {
   type HostedReviewExecutionOptions
 } from '../source-control/hosted-review-git-options'
 import {
-  azureDevOpsTokenConfigured,
-  getAzureDevOpsAuthConfig,
+  getConfiguredAzureDevOpsApiBaseUrl,
   normalizeAzureDevOpsApiBaseUrl,
   requestAzureDevOpsJson,
   requestAzureDevOpsJsonAtBase
 } from './azure-devops-api-request'
+import { resolveAzureDevOpsCredentials } from './azure-devops-credentials'
 export { normalizeAzureDevOpsApiBaseUrl } from './azure-devops-api-request'
 
 export type AzureDevOpsAuthStatus = {
@@ -142,9 +142,9 @@ function sortPullRequestsForBranch(
 }
 
 export async function getAzureDevOpsAuthStatus(): Promise<AzureDevOpsAuthStatus> {
-  const config = getAzureDevOpsAuthConfig()
-  const baseUrl = config.apiBaseUrl ? normalizeAzureDevOpsApiBaseUrl(config.apiBaseUrl) : null
-  const hasToken = azureDevOpsTokenConfigured(config)
+  const configured = getConfiguredAzureDevOpsApiBaseUrl()
+  const baseUrl = configured ? normalizeAzureDevOpsApiBaseUrl(configured) : null
+  const { credentialAvailable: hasToken } = await resolveAzureDevOpsCredentials()
   if (!baseUrl && !hasToken) {
     return {
       configured: false,

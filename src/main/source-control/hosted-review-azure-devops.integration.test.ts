@@ -4,7 +4,9 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { requestAzureDevOpsJsonAtBase } from '../azure-devops/azure-devops-api-request'
+import { createAzureDevOpsPullRequest } from '../azure-devops/pull-request-creation'
 import { _resetAzureDevOpsRepoRefCache } from '../azure-devops/repository-ref'
 import { getHostedReviewForBranch } from './hosted-review'
 
@@ -25,13 +27,56 @@ function sendJson(res: ServerResponse, body: unknown): void {
 describe('Azure DevOps hosted review integration', () => {
   beforeEach(() => {
     process.env = { ...OLD_ENV, ORCA_AZURE_DEVOPS_TOKEN: 'local-pat' }
+    delete process.env.ORCA_AZURE_DEVOPS_ACCESS_TOKEN
     delete process.env.ORCA_AZURE_DEVOPS_API_BASE_URL
+    delete process.env.ORCA_AZURE_DEVOPS_USERNAME
     _resetAzureDevOpsRepoRefCache()
   })
 
   afterEach(() => {
     process.env = OLD_ENV
+    vi.unstubAllGlobals()
     _resetAzureDevOpsRepoRefCache()
+  })
+
+  it.each([
+    { accessToken: ' env-bearer ', authorization: 'Bearer env-bearer' },
+    { accessToken: ' ', authorization: 'Basic YWRhOmxvY2FsLXBhdA==' }
+  ])('uses $authorization for both REST reads and PR creation', async (testCase) => {
+    process.env.ORCA_AZURE_DEVOPS_ACCESS_TOKEN = testCase.accessToken
+    process.env.ORCA_AZURE_DEVOPS_USERNAME = ' ada '
+    process.env.ORCA_AZURE_DEVOPS_PAT = 'fallback-pat'
+    const repoPath = await mkdtemp(join(tmpdir(), 'orca-azure-review-'))
+    try {
+      await execFileAsync('git', ['init'], { cwd: repoPath })
+      await execFileAsync(
+        'git',
+        ['remote', 'add', 'origin', 'https://dev.azure.com/acme/Project/_git/repo'],
+        { cwd: repoPath }
+      )
+      const authorizations: Record<string, string | null> = {}
+      vi.stubGlobal('fetch', async (_url: URL, init: RequestInit) => {
+        authorizations[init.method ?? 'GET'] = new Headers(init.headers).get('authorization')
+        return Response.json({ pullRequestId: 31, title: 'Azure branch', status: 'active' })
+      })
+
+      await expect(
+        requestAzureDevOpsJsonAtBase(
+          'https://dev.azure.com/acme/Project',
+          '/_apis/git/repositories/repo/pullRequests/31'
+        )
+      ).resolves.toMatchObject({ pullRequestId: 31 })
+      await expect(
+        createAzureDevOpsPullRequest(
+          repoPath,
+          { provider: 'azure-devops', title: 'Azure branch', base: 'main', head: 'feature/azure' },
+          'local'
+        )
+      ).resolves.toMatchObject({ ok: true, number: 31 })
+      expect(authorizations).toEqual({ GET: testCase.authorization, POST: testCase.authorization })
+    } finally {
+      await rm(repoPath, { recursive: true, force: true })
+    }
   })
 
   it.each(['canceled', 'cancelled', 'failed'])(
