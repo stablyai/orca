@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Bot } from '../../../../shared/bot-types'
 import type { BotGroup } from '../../../../shared/bots/bot-group'
@@ -10,12 +10,14 @@ import { BotGroupMembersDialog } from './BotGroupMembersDialog'
 
 const mocks = vi.hoisted(() => ({
   bots: new Array<Bot>(),
+  openBotGroup: vi.fn(async (_group: BotGroup) => {}),
   rpc: vi.fn(async (_target: unknown, method: string, _params?: unknown) =>
-    method === 'bots.roster' ? { bots: [] } : { group: { id: 'g' } }
+    // A host answers with its own view of the group, which names itself `local`.
+    method === 'bots.roster' ? { bots: [] } : { group }
   )
 }))
 vi.mock('@/lib/bot-catalog', () => ({ useBots: () => mocks.bots }))
-vi.mock('@/lib/bot-group-catalog', () => ({ openBotGroup: vi.fn(async () => {}) }))
+vi.mock('@/lib/bot-group-catalog', () => ({ openBotGroup: mocks.openBotGroup }))
 vi.mock('@/lib/bot-group-list', () => ({ refreshBotGroups: vi.fn(async () => {}) }))
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
   callRuntimeRpc: (target: unknown, method: string, params?: unknown) =>
@@ -69,6 +71,7 @@ const button = (name: string) => screen.getByRole<HTMLButtonElement>('button', {
 afterEach(() => {
   cleanup()
   mocks.rpc.mockClear()
+  mocks.openBotGroup.mockClear()
 })
 
 describe('BotGroupMembersDialog', () => {
@@ -162,6 +165,24 @@ describe('BotGroupMembersDialog', () => {
       name: 'Crew',
       botIds: ['a', 'b', 'c']
     })
+  })
+
+  it("creates a paired server's group on that server and opens it there", async () => {
+    mocks.bots = [bot('w', 'Willow', 'runtime:ws'), bot('x', 'Hazel', 'runtime:ws')]
+    render(<BotGroupMembersDialog onClose={() => {}} />)
+    fireEvent.click(row('Willow'))
+    fireEvent.click(row('Hazel'))
+    fireEvent.change(screen.getByPlaceholderText('Name your group'), {
+      target: { value: 'Crew' }
+    })
+    fireEvent.click(button('Create'))
+    expect(mocks.rpc).toHaveBeenCalledWith(
+      { kind: 'environment', environmentId: 'ws' },
+      'bots.groups.create',
+      { name: 'Crew', botIds: ['w', 'x'] }
+    )
+    await waitFor(() => expect(mocks.openBotGroup).toHaveBeenCalled())
+    expect(mocks.openBotGroup.mock.calls[0][0].hostId).toBe('runtime:ws')
   })
 
   it("never shows another computer's bot with the same id as picked", () => {
