@@ -50,11 +50,9 @@ function postedFormAction(
   if (!(target instanceof HTMLFormElement)) {
     return null
   }
-  if (!lastSubmitterByForm.has(target)) {
-    if (window === window.top || reportedWithoutSubmit.has(target)) {
-      return null
-    }
-    reportedWithoutSubmit.add(target)
+  const withoutSubmit = !lastSubmitterByForm.has(target)
+  if (withoutSubmit && (window === window.top || reportedWithoutSubmit.has(target))) {
+    return null
   }
   const submitter = lastSubmitterByForm.get(target)
   lastSubmitterByForm.delete(target)
@@ -70,6 +68,9 @@ function postedFormAction(
     : formProperty(target, 'target')
   if (method !== 'post' || !targetsTopPage(formTarget.toLowerCase())) {
     return null
+  }
+  if (withoutSubmit) {
+    reportedWithoutSubmit.add(target)
   }
   return button?.hasAttribute('formaction') ? button.formAction : formProperty(target, 'action')
 }

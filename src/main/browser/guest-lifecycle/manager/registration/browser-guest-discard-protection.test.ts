@@ -463,6 +463,10 @@ it('lets a plain link to an earlier POST result be discarded', () => {
     // A link back to the result address loads it with GET.
     load('https://example.test/result', 'navigate')
     expect(readBrowserGuestDiscardProtection(guest).protection).toBe('discardable')
+    // Back twice reaches the original POST entry, still a POST result.
+    load('https://example.test/other', 'back_forward')
+    load('https://example.test/result', 'back_forward')
+    expect(readBrowserGuestDiscardProtection(guest).reason).toBe('post')
   } finally {
     stop()
   }
