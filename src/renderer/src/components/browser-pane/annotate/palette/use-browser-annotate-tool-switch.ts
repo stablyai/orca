@@ -123,7 +123,7 @@ export function useBrowserAnnotateToolSwitch({
       undoToastRef.current = null
     }
   }, [])
-  useEffect(() => {
+  useLayoutEffect(() => {
     return () => {
       transitionRef.current += 1
       cancelMarkup()

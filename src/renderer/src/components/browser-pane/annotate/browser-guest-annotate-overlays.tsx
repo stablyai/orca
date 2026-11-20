@@ -1,3 +1,4 @@
+import { useHeldGrabAction } from './palette/use-held-grab-action'
 import { useCallback, useEffect, useState } from 'react'
 import {
   interceptAnnotateEscape,
@@ -167,11 +168,11 @@ export function BrowserGuestAnnotateOverlays({
     currentUrl
   })
   const grabPicked = heldPayload !== null
-  const runPaletteGrabAction = (action: () => void): void => {
-    action()
-    // These handlers flag the right-click menu as handled; nothing from that menu is open here.
-    grabMenuActionTakenRef.current = false
-  }
+  const runPaletteGrabAction = useHeldGrabAction(
+    heldPayload,
+    toolSwitch.toolTargetId,
+    grabMenuActionTakenRef
+  )
   // Leaving the mode with the Send menu open must not leave its agent-target mode behind.
   const { annotationBannerSendOpen, handleAnnotationBannerSendOpenChange } = annotationSend
   useEffect(() => {

@@ -35,9 +35,6 @@ export abstract class BrowserManagerBindings extends BrowserManagerGrab {
         resolveRenderer: (tabId) =>
           resolveRendererWebContents(this.rendererWebContentsIdByTabId, tabId),
         hasActiveGrabOp: (tabId) => this.hasActiveGrabOp(tabId),
-        isGuestEditableFocused: (tabId) => this.isGuestEditableFocused(tabId),
-        markGuestFocusUnknown: (tabId) => this.markGuestFocusUnknown(tabId),
-        askPageHasField: (tabId) => this.askPageHasField(tabId),
         getKeybindings: () => this.settingsResolver?.().keybindings
       })
     )

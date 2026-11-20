@@ -1,12 +1,10 @@
+import { isAgentInjectingInput } from '../../../cdp/input/agent-input-injection'
+import { GrabNativeKeySession } from '../../../element-grab/grab-native-key-session'
+import { isPickedElementPresent } from '../../../element-grab/grab-picked-element'
 import { webContents } from 'electron'
 import { executeGrabScript } from '../../../element-grab/grab-guest-execution'
 import { buildGuestOverlayScript } from '../../../element-grab/grab-guest-script'
 import { buildGrabLabelAvoidScript } from '../../../element-grab/grab-guest-overlay-script'
-import {
-  GuestEditableWatch,
-  askGuestHasField,
-  isSelectorPresentInGuest
-} from '../../../element-grab/grab-guest-editable-watch'
 import { clampGrabPayload } from '../../../element-grab/browser-grab-payload'
 import { captureSelectionScreenshot as captureGrabSelectionScreenshot } from '../../../element-grab/browser-grab-screenshot'
 import {
@@ -53,44 +51,10 @@ function sendLabelAvoidArea(
 export abstract class BrowserManagerGrab extends BrowserManagerViewport {
   /** The annotate palette's footprint per page, re-sent to each newly armed picker. */
   private readonly grabLabelAvoidAreaByTabId = new Map<string, BrowserGrabLabelAvoidArea>()
-  /** Per page, the current pick's view of whether a page field has focus. */
-  private readonly editableWatchByTabId = new Map<string, GuestEditableWatch>()
-
-  /** True while a page field may have focus during a pick (unknown counts as true), so letters stay with it. */
-  isGuestEditableFocused(browserTabId: string): boolean {
-    return this.editableWatchByTabId.get(browserTabId)?.editable ?? true
-  }
-
-  /** A key that can move focus (Tab) reached the page; its field state is unknown until the page reports again. */
-  markGuestFocusUnknown(browserTabId: string): void {
-    this.editableWatchByTabId.get(browserTabId)?.markUnknown()
-  }
-
-  /** Asks the page now whether a field has focus; anything but a clear "no" counts as a field. */
-  askPageHasField(browserTabId: string): Promise<boolean> {
-    const guestId = this.webContentsIdByTabId.get(browserTabId)
-    const guest = guestId === undefined ? null : webContents.fromId(guestId)
-    return guest ? askGuestHasField(guest) : Promise.resolve(true)
-  }
-
+  /** Private preload key ownership for the current document and hosting renderer. */
+  private readonly nativeKeysByTabId = new Map<string, GrabNativeKeySession>()
   isGrabSelectorPresent(selector: string, guest: Electron.WebContents): Promise<boolean> {
-    return isSelectorPresentInGuest(guest, selector)
-  }
-
-  private stopEditableWatch(browserTabId: string): void {
-    this.editableWatchByTabId.get(browserTabId)?.stop()
-    this.editableWatchByTabId.delete(browserTabId)
-  }
-
-  private watchGuestEditable(browserTabId: string, guest: Electron.WebContents): void {
-    this.stopEditableWatch(browserTabId)
-    const watch = new GuestEditableWatch(guest, () => {
-      if (this.editableWatchByTabId.get(browserTabId) === watch) {
-        this.editableWatchByTabId.delete(browserTabId)
-      }
-    })
-    this.editableWatchByTabId.set(browserTabId, watch)
-    watch.start()
+    return isPickedElementPresent(guest, selector)
   }
 
   setGrabLabelAvoidArea(
@@ -141,10 +105,13 @@ export abstract class BrowserManagerGrab extends BrowserManagerViewport {
   async setGrabMode(
     browserTabId: string,
     enabled: boolean,
-    guest: Electron.WebContents
+    guest: Electron.WebContents,
+    host?: Electron.WebContents,
+    canDeliver?: () => boolean
   ): Promise<boolean> {
+    this.nativeKeysByTabId.get(browserTabId)?.stop()
+    this.nativeKeysByTabId.delete(browserTabId)
     if (!enabled) {
-      this.stopEditableWatch(browserTabId)
       this.cancelGrabOp(browserTabId, 'user')
       // Why always await a teardown, also right after cancelling a running pick: the page runs scripts in order, so
       // this settles only once the cancelled pick's own teardown has run too. Draw captures the page after this
@@ -159,7 +126,25 @@ export abstract class BrowserManagerGrab extends BrowserManagerViewport {
       sendLabelAvoidArea(guest, area)
     }
     if (armed) {
-      this.watchGuestEditable(browserTabId, guest)
+      if (host) {
+        const keys = new GrabNativeKeySession(
+          guest,
+          host,
+          browserTabId,
+          () => {
+            if (this.nativeKeysByTabId.get(browserTabId) === keys) {
+              this.nativeKeysByTabId.delete(browserTabId)
+            }
+          },
+          canDeliver
+        )
+        this.nativeKeysByTabId.set(browserTabId, keys)
+        if (!(await keys.setEnabled(!isAgentInjectingInput(guest)))) {
+          keys.stop()
+          this.nativeKeysByTabId.delete(browserTabId)
+          return false
+        }
+      }
     }
     return armed
   }
@@ -173,6 +158,10 @@ export abstract class BrowserManagerGrab extends BrowserManagerViewport {
   }
 
   cancelGrabOp(browserTabId: string, reason: BrowserGrabCancelReason): void {
+    if (reason === 'evicted' || reason === 'navigation') {
+      this.nativeKeysByTabId.get(browserTabId)?.stop()
+      this.grabLabelAvoidAreaByTabId.delete(browserTabId)
+    }
     this.grabSessionController.cancelGrabOp(browserTabId, reason)
   }
 

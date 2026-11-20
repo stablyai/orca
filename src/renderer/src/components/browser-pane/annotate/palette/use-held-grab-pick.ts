@@ -1,3 +1,4 @@
+import { installWindowVisibilityInterval } from '@/lib/window-activity/window-visibility-interval'
 import { useEffect, useRef, useState } from 'react'
 import type {
   BrowserGrabPayload,
@@ -32,8 +33,10 @@ export function useHeldGrabPick({
   currentUrl: string | undefined
 }): BrowserGrabPayload | null {
   const [held, setHeld] = useState<HeldPick | null>(null)
+  const lastPickerPickRef = useRef<BrowserGrabPayload | null>(null)
   const pickerPick = grab.state === 'confirming' && grabIntent === 'copy' ? grab.payload : null
-  if (pickerPick && pickerPick !== held?.payload) {
+  if (pickerPick && pickerPick !== lastPickerPickRef.current) {
+    lastPickerPickRef.current = pickerPick
     setHeld({ payload: pickerPick, owner })
   }
   if (held && (activeTool !== 'copy' || held.owner !== owner)) {
@@ -41,26 +44,44 @@ export function useHeldGrabPick({
   }
   const heldPayload = held && activeTool === 'copy' && held.owner === owner ? held.payload : null
 
-  // Only the URL's changes trigger it: the pick itself was just made on an element that is there.
   const checkedUrlRef = useRef(currentUrl)
-  useEffect(() => {
-    if (checkedUrlRef.current === currentUrl) {
-      return
-    }
+  const routeChangedRef = useRef(false)
+  if (checkedUrlRef.current !== currentUrl) {
     checkedUrlRef.current = currentUrl
-    if (!heldPayload) {
+    routeChangedRef.current = true
+  }
+  useEffect(() => {
+    if (!routeChangedRef.current || !heldPayload) {
       return
     }
     let current = true
-    void window.api.browser
-      .grabSelectorPresent({ browserPageId: pageId, selector: heldPayload.target.selector })
-      .then((present) => {
-        if (current && !present) {
-          setHeld((pick) => (pick?.payload === heldPayload ? null : pick))
-        }
-      })
+    let checking = false
+    const check = async (): Promise<void> => {
+      if (checking || !current) {
+        return
+      }
+      checking = true
+      const present = await window.api.browser
+        .grabSelectorPresent({ browserPageId: pageId, selectionId: heldPayload.page.capturedAt })
+        .catch(() => false)
+      checking = false
+      if (!current) {
+        return
+      }
+      if (!present) {
+        setHeld((pick) => (pick?.payload === heldPayload ? null : pick))
+      }
+    }
+    const stopChecking = installWindowVisibilityInterval({
+      run: () => {
+        void check()
+      },
+      intervalMs: 300,
+      slowWhileUnfocused: true
+    })
     return () => {
       current = false
+      stopChecking()
     }
   }, [currentUrl, heldPayload, pageId])
 

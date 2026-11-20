@@ -1,14 +1,17 @@
-import { app, BrowserWindow } from 'electron'
-import { BrowserManager } from '../../guest-lifecycle/manager/browser-manager'
+import { mkdirSync, readFileSync } from 'node:fs'
+import { createHash } from 'node:crypto'
+import { join } from 'node:path'
+import { app, BrowserWindow, webContents } from 'electron'
+import { applyBackgroundActivationPolicy } from '../../../window/activation/foreground-activation-policy'
 import { setupGrabShortcutForwarding } from '../../guest-lifecycle/input/shortcuts/browser-guest-grab-shortcuts'
-import { askGuestHasField } from '../grab-guest-editable-watch'
+import { withAgentInputInjection } from '../../cdp/input/agent-input-injection'
 
 const PAGE = `<!doctype html><meta charset="utf-8"><title>Keys</title>
-<input id="search"><button id="buy">Buy</button><div id="host"></div>
+<form id="form"><input id="search"></form><button id="buy">Buy</button><div id="host"></div>
 <script>
 const root = document.getElementById('host').attachShadow({ mode: 'open' });
 root.innerHTML = '<textarea id="note"></textarea>';
-window.__pageKeys = [];
+window.__pageKeys = []; window.__submits = 0; document.getElementById('form').addEventListener('submit', e => { e.preventDefault(); window.__submits++ });
 document.addEventListener('keydown', (e) => window.__pageKeys.push(e.key), true);
 </script>`
 
@@ -16,20 +19,68 @@ const wait = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(
 
 async function run(): Promise<void> {
   app.on('window-all-closed', () => {})
+  const isolatedHome = process.env.HOME
+  if (!isolatedHome) {
+    throw new Error('Missing isolated home')
+  }
+  for (const name of ['home', 'appData', 'userData'] as const) {
+    const path = name === 'home' ? isolatedHome : join(isolatedHome, name)
+    mkdirSync(path, { recursive: true })
+    app.setPath(name, path)
+  }
+  const { BrowserManager } = await import('../../guest-lifecycle/manager/browser-manager')
+  applyBackgroundActivationPolicy()
   await app.whenReady()
   const window = new BrowserWindow({
     show: false,
     width: 800,
     height: 600,
-    webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false }
+    webPreferences: {
+      sandbox: true,
+      contextIsolation: true,
+      webviewTag: true,
+      backgroundThrottling: false
+    }
   })
-  const page = window.webContents
-  await page.loadURL(`data:text/html,${encodeURIComponent(PAGE)}`)
-  page.focus()
+  window.webContents.on('will-attach-webview', (_event, preferences) => {
+    preferences.preload = process.env.ORCA_BROWSER_GUEST_PRELOAD
+    preferences.sandbox = true
+    preferences.contextIsolation = true
+    preferences.backgroundThrottling = false
+  })
+  const guestUrl = `data:text/html,${encodeURIComponent(PAGE)}`
+  const hostHtml = `<style>html,body{margin:0;width:100%;height:100%;overflow:hidden}webview{width:100%;height:100%}</style><webview id="page" src="${guestUrl}"></webview>`
+  await window.loadURL(`data:text/html,${encodeURIComponent(hostHtml)}`)
+  const deadline = Date.now() + 10_000
+  let guestId = 0
+  while (!guestId) {
+    guestId = await window.webContents.executeJavaScript(
+      `(() => { try { return document.getElementById('page').getWebContentsId() } catch { return 0 } })()`
+    )
+    if (Date.now() > deadline) {
+      throw new Error('Guest did not attach')
+    }
+    if (!guestId) {
+      await wait(20)
+    }
+  }
+  const page = webContents.fromId(guestId)
+  if (!page) {
+    throw new Error('Missing attached guest')
+  }
+  while (page.isLoading()) {
+    if (Date.now() > deadline) {
+      throw new Error('Guest did not load')
+    }
+    await wait(20)
+  }
   const manager = new BrowserManager()
   const forwarded: string[] = []
-  const holdMs: number[] = []
   const recorder = {
+    id: window.webContents.id,
+    on: window.webContents.on.bind(window.webContents),
+    off: window.webContents.off.bind(window.webContents),
+    isDestroyed: () => false,
     send: (_channel: string, args: { key: string }) => forwarded.push(args.key)
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the forwarder only calls send on the renderer, which this recorder implements.
@@ -38,16 +89,7 @@ async function run(): Promise<void> {
     browserTabId: 'page-1',
     guest: page,
     resolveRenderer: () => renderer,
-    hasActiveGrabOp: () => true,
-    isGuestEditableFocused: (tabId) => manager.isGuestEditableFocused(tabId),
-    markGuestFocusUnknown: (tabId) => manager.markGuestFocusUnknown(tabId),
-    // Timed: how long a held letter waits for the page's answer.
-    askPageHasField: async () => {
-      const started = performance.now()
-      const answer = await askGuestHasField(page)
-      holdMs.push(performance.now() - started)
-      return answer
-    }
+    hasActiveGrabOp: () => true
   })
   const evalPage = (code: string): Promise<unknown> => page.executeJavaScript(code)
   const press = async (key: string): Promise<void> => {
@@ -56,18 +98,10 @@ async function run(): Promise<void> {
     page.sendInputEvent({ type: 'keyUp', keyCode: key })
     await wait(80)
   }
-  const settleEditable = async (expected: boolean): Promise<boolean> => {
-    for (let i = 0; i < 50 && manager.isGuestEditableFocused('page-1') !== expected; i++) {
-      await wait(20)
-    }
-    return manager.isGuestEditableFocused('page-1')
-  }
-
   // A field focused before the pick stays focused when the picker arms.
   await evalPage(`document.getElementById('search').focus()`)
-  await manager.setGrabMode('page-1', true, page)
+  await manager.setGrabMode('page-1', true, page, renderer)
   const focusAfterArm = await evalPage(`document.activeElement && document.activeElement.id`)
-  const editableAtArm = await settleEditable(true)
   await press('c')
   await press('d')
   const searchValue = await evalPage(`document.getElementById('search').value`)
@@ -80,12 +114,21 @@ async function run(): Promise<void> {
     `document.getElementById('host').shadowRoot.getElementById('note').value`
   )
 
+  await evalPage(
+    `(() => { const host = document.createElement('div'); host.id = 'closed'; const input = document.createElement('input'); host.attachShadow({mode:'closed'}).append(input); document.body.append(host); window.__closedInput = input; input.focus() })()`
+  )
+  const beforeClosed = forwarded.length
+  await press('d')
+  const closedField = {
+    value: await evalPage('window.__closedInput.value'),
+    forwarded: forwarded.slice(beforeClosed)
+  }
+
   // Page script can't see or replace the tracker (it lives in an isolated world).
-  const trackerVisibleToPage = await evalPage(`typeof window.__orcaEditableWatch !== 'undefined'`)
+  const trackerVisibleToPage = await evalPage(`typeof window.__orcaGrabNativeKeys !== 'undefined'`)
 
   // Tab into a field, then a letter at once: Tab makes the state unknown, so the letter types into the field.
   await evalPage(`document.getElementById('buy').focus()`)
-  await settleEditable(false)
   const beforeTab = forwarded.length
   page.sendInputEvent({ type: 'keyDown', keyCode: 'Tab' })
   page.sendInputEvent({ type: 'keyUp', keyCode: 'Tab' })
@@ -97,7 +140,6 @@ async function run(): Promise<void> {
 
   // Script refocus into a field, then a letter right away.
   await evalPage(`document.getElementById('buy').focus()`)
-  await settleEditable(false)
   const beforeScript = forwarded.length
   await evalPage(
     `document.getElementById('search').value = ''; document.getElementById('search').focus()`
@@ -117,21 +159,23 @@ async function run(): Promise<void> {
   // More holds to time: ten letters right after a script focus into the field, ten off fields.
   for (let i = 0; i < 10; i++) {
     await evalPage(`document.getElementById('buy').focus()`)
-    await settleEditable(false)
     await evalPage(`document.getElementById('search').focus()`)
     await press('s')
     await evalPage(`document.getElementById('buy').focus()`)
-    await settleEditable(false)
     await press('g')
   }
 
   // Focus leaves the fields (Tab or script to a button): letters are tools again and the page never sees them.
   await evalPage(`document.getElementById('buy').focus(); window.__pageKeys = []`)
-  const editableOnButton = await settleEditable(false)
   const beforeButton = forwarded.length
   await press('a')
   const pageSawToolKey = await evalPage(`window.__pageKeys.includes('a')`)
   const forwardedOnButton = forwarded.slice(beforeButton)
+
+  await evalPage(`document.getElementById('buy').focus()`)
+  const beforeAgent = forwarded.length
+  await withAgentInputInjection(page, () => press('g'))
+  const agentForwarded = forwarded.slice(beforeAgent)
 
   // Alt pressed and released in the page during a pick: both edges reach the palette. (A key-up whose key-down
   // the page never saw is dropped before any handler, so the palette also releases when focus enters the page.)
@@ -142,31 +186,34 @@ async function run(): Promise<void> {
   const altEdges = forwarded.filter((key) => key.startsWith('alt'))
 
   await manager.setGrabMode('page-1', false, page)
-  const editableAfterOff = manager.isGuestEditableFocused('page-1')
 
   process.stdout.write(
     `${JSON.stringify({
       focusAfterArm,
-      editableAtArm,
       searchValue,
       forwardedWhileInField,
       trackerVisibleToPage,
       tabThenLetter,
       scriptFocusThenLetter,
       noteValue,
-      editableOnButton,
+      closedField,
       forwardedOnButton,
       pageSawToolKey,
       altEdges,
-      editableAfterOff,
-      holdMs: (() => {
-        const sorted = [...holdMs].sort((a, b) => a - b)
-        return {
-          count: sorted.length,
-          median: Math.round(sorted[Math.floor(sorted.length / 2)] ?? -1),
-          max: Math.round(sorted.at(-1) ?? -1)
-        }
-      })()
+      agentForwarded
+    })}\n`
+  )
+  process.stderr.write(
+    `[palette-proof] ${JSON.stringify({
+      pid: process.pid,
+      children: app.getAppMetrics().map((metric) => ({ pid: metric.pid, type: metric.type })),
+      home: app.getPath('home'),
+      appData: app.getPath('appData'),
+      userData: app.getPath('userData'),
+      mainBundleSha256: createHash('sha256').update(readFileSync(process.argv[1])).digest('hex'),
+      preloadBundleSha256: createHash('sha256')
+        .update(readFileSync(process.env.ORCA_BROWSER_GUEST_PRELOAD ?? ''))
+        .digest('hex')
     })}\n`
   )
   window.destroy()

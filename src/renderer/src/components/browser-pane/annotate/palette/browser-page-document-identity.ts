@@ -4,9 +4,12 @@
  * a held pick or the Undo offer. Every new document (navigation, reload) goes through a load, and each load start is
  * a new generation for the tools (see useBrowserAnnotateToolSwitch's documentReady).
  */
-export function browserPageDocumentIdentity(tab: { id: string; loading: boolean }): {
+export function browserPageDocumentIdentity(
+  tab: { id: string; loading: boolean },
+  generation: number
+): {
   documentKey: string
   documentReady: boolean
 } {
-  return { documentKey: tab.id, documentReady: !tab.loading }
+  return { documentKey: `${tab.id}\n${generation}`, documentReady: !tab.loading }
 }

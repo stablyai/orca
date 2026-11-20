@@ -16,13 +16,15 @@ function PalettePage({
   notes = 0,
   picked = false,
   ratio = 0.5,
-  hint = 'Click an element to add feedback for the agent.'
+  hint = 'Click an element to add feedback for the agent.',
+  waiting = false
 }: {
   initialTool: BrowserAnnotateTool
   notes?: number
   picked?: boolean
   ratio?: number
   hint?: string
+  waiting?: boolean
 }): React.JSX.Element {
   const boundsRef = useRef<HTMLDivElement>(null)
   const [tool, setTool] = useState(initialTool)
@@ -51,7 +53,8 @@ function PalettePage({
         onDone={noop}
         canPickElements
         showKeyHints
-        hint={tool === 'draw' ? '' : hint}
+        drawWaitingForPage={waiting}
+        hint={waiting ? 'Waiting for page…' : tool === 'draw' ? '' : hint}
         hintIsError={false}
         annotateActions={
           notes > 0
@@ -77,7 +80,7 @@ function PalettePage({
         onDrawSlotChange={setDrawSlot}
         onDrawDensityChange={setDrawDensity}
       />
-      {tool === 'draw' && drawSlot ? (
+      {tool === 'draw' && drawSlot && !waiting ? (
         <DrawSlotContent slot={drawSlot} density={drawDensity} />
       ) : null}
     </div>
@@ -161,4 +164,14 @@ export const drawNarrowest = defineFixture({
 export const annotateWithNotesNarrow = defineFixture({
   width: 420,
   render: () => <PalettePage initialTool="annotate" notes={3} hint="" />
+})
+
+export const waitingForPage = defineFixture({
+  width: 900,
+  render: () => <PalettePage initialTool="draw" waiting />
+})
+
+export const waitingForPageCompact = defineFixture({
+  width: 240,
+  render: () => <PalettePage initialTool="draw" waiting />
 })

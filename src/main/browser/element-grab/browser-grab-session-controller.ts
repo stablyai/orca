@@ -2,6 +2,7 @@ import type {
   BrowserGrabCancelReason,
   BrowserGrabResult
 } from '../../../shared/browser/element-grab/browser-grab-types'
+import { retainPickedElement } from './grab-picked-element'
 import { buildGuestOverlayScript } from './grab-guest-script'
 import { clampGrabPayload } from './browser-grab-payload'
 import { readDocPreviewGuestDocumentUrl } from '../document-preview/doc-preview-guest-policy'
@@ -123,6 +124,13 @@ export class BrowserGrabSessionController {
           const payload = clampGrabPayload(payloadSource, readDocPreviewGuestDocumentUrl(guest))
           if (!payload) {
             settleOnce({ opId, kind: 'error', reason: 'Guest returned invalid payload structure' })
+            return
+          }
+          if (settled) {
+            return
+          }
+          if (!(await retainPickedElement(guest, payload.page.capturedAt))) {
+            settleOnce({ opId, kind: 'cancelled', reason: 'user' })
             return
           }
           settleOnce({

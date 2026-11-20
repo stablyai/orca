@@ -1,3 +1,5 @@
+import { withTimeoutResult } from '../../../../../../shared/concurrency/promise-timeout-fallback'
+
 // Capture in the renderer from local webviews or streamed images so local and remote panes share markup delivery.
 
 // Reuse the frozen image as both overlay backdrop and compositor base.
@@ -20,7 +22,26 @@ export async function captureMarkupBaseImage(
   return captureFromImage(source.element)
 }
 
+const pendingWebviewCaptures = new WeakMap<Electron.WebviewTag, Promise<MarkupBaseImage>>()
+
 async function captureFromWebview(webview: Electron.WebviewTag): Promise<MarkupBaseImage> {
+  if (pendingWebviewCaptures.has(webview)) {
+    throw new Error('markup: capture already pending')
+  }
+  const pending = captureWebviewImage(webview)
+  pendingWebviewCaptures.set(webview, pending)
+  const release = (): void => {
+    pendingWebviewCaptures.delete(webview)
+  }
+  void pending.then(release, release)
+  const result = await withTimeoutResult(pending, 10_000)
+  if (!result.ok) {
+    throw new Error('markup: capture failed or stalled')
+  }
+  return result.value
+}
+
+async function captureWebviewImage(webview: Electron.WebviewTag): Promise<MarkupBaseImage> {
   const native = await webview.capturePage()
   if (native.isEmpty()) {
     throw new Error('markup: webview capturePage returned an empty image')

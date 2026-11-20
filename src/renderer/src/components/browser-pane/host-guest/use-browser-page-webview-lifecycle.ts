@@ -110,7 +110,9 @@ export function useBrowserPageWebviewLifecycle({
   onSetUrlRef: MutableRefObject<BrowserPageUrlSetter>
 }): {
   syncBrowserAnnotationViewportBridge: () => void
+  documentGeneration: number
 } {
+  const [documentGeneration, setDocumentGeneration] = useState(0)
   const [guestRecoveryGeneration, setGuestRecoveryGeneration] = useState(0)
   const guestRecoveryPendingRef = useRef(false)
   const validateVisibleGuestRegistrationRef = useRef<() => void>(() => {})
@@ -192,12 +194,18 @@ export function useBrowserPageWebviewLifecycle({
     })
   }, [browserTabId, browserTabUrlRef])
 
-  const invalidateBrowserAnnotationDocument = useCallback((): void => {
-    useAppStore.getState().invalidateBrowserPageAnnotationGeometry(browserTabId)
-    invalidatePendingCaptureRef.current()
-    pendingAnnotationPayloadRef.current = null
-    syncBrowserAnnotationViewportBridge()
-  }, [browserTabId, syncBrowserAnnotationViewportBridge])
+  const invalidateBrowserAnnotationDocument = useCallback(
+    (newDocument = false): void => {
+      useAppStore.getState().invalidateBrowserPageAnnotationGeometry(browserTabId)
+      if (newDocument) {
+        setDocumentGeneration((generation) => generation + 1)
+        invalidatePendingCaptureRef.current()
+        pendingAnnotationPayloadRef.current = null
+      }
+      syncBrowserAnnotationViewportBridge()
+    },
+    [browserTabId, syncBrowserAnnotationViewportBridge]
+  )
   const invalidateBrowserAnnotationDocumentRef = useRef(invalidateBrowserAnnotationDocument)
   useLayoutEffect(() => {
     invalidateBrowserAnnotationDocumentRef.current = invalidateBrowserAnnotationDocument
@@ -282,6 +290,7 @@ export function useBrowserPageWebviewLifecycle({
   ])
 
   return {
-    syncBrowserAnnotationViewportBridge
+    syncBrowserAnnotationViewportBridge,
+    documentGeneration
   }
 }

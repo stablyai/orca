@@ -1,3 +1,4 @@
+import { installBrowserGuestNativeToolKeys } from './browser/element-grab/browser-guest-native-tool-keys'
 import {
   installDocPreviewLinkInterception,
   PRELOAD_DOC_PREVIEW_LINK_CLICK_CHANNEL
@@ -15,6 +16,11 @@ const electron: {
 } = require('electron')
 const { ipcRenderer, webFrame } = electron
 if (process.isMainFrame) {
+  installBrowserGuestNativeToolKeys({
+    send: (channel, payload) => ipcRenderer.send(channel, payload),
+    on: (channel, listener) =>
+      ipcRenderer.on(channel, (_event, payload: unknown) => listener(payload))
+  })
   installBrowserGuestEditProtection({
     send: (channel, payload) => ipcRenderer.send(channel, payload),
     on: (channel, listener) =>

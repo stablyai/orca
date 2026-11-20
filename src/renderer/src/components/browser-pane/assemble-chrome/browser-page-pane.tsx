@@ -193,7 +193,7 @@ export function BrowserPagePane({
     addressBarInputRef,
     browserTabUrl: browserTab.url
   })
-  useBrowserPageWebviewLifecycle({
+  const { documentGeneration } = useBrowserPageWebviewLifecycle({
     browserTabId: browserTab.id,
     browserTabUrl: browserTab.url,
     browserTabLoading: browserTab.loading,
@@ -271,7 +271,7 @@ export function BrowserPagePane({
     canPickElements: !isBlankTab && !browserTab.loadError,
     toolTargetId: browserTab.id,
     // A load (navigation or reload) means a new document; a same-document URL change does not.
-    ...browserPageDocumentIdentity(browserTab)
+    ...browserPageDocumentIdentity(browserTab, documentGeneration)
   })
   useBrowserPageKeyboardShortcuts({
     browserTabId: browserTab.id,

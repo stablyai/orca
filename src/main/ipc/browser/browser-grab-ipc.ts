@@ -115,7 +115,13 @@ export function registerBrowserGrabHandlers(): void {
         if (!guest) {
           return args.enabled ? { ok: false, reason: 'not-ready' } : { ok: true }
         }
-        const success = await browserManager.setGrabMode(args.browserPageId, args.enabled, guest)
+        const success = await browserManager.setGrabMode(
+          args.browserPageId,
+          args.enabled,
+          guest,
+          event.sender,
+          () => browserManager.getAuthorizedGuest(args.browserPageId, event.sender.id) === guest
+        )
         if (!isCurrentIntent()) {
           return { ok: true }
         }
@@ -166,14 +172,14 @@ export function registerBrowserGrabHandlers(): void {
       if (
         !isTrustedBrowserRenderer(event.sender) ||
         typeof args?.browserPageId !== 'string' ||
-        typeof args.selector !== 'string' ||
-        args.selector.length === 0 ||
-        args.selector.length > GRAB_BUDGET.selectorMaxLength
+        typeof args.selectionId !== 'string' ||
+        args.selectionId.length === 0 ||
+        args.selectionId.length > GRAB_BUDGET.selectorMaxLength
       ) {
         return true
       }
       const guest = browserManager.getAuthorizedGuest(args.browserPageId, event.sender.id)
-      return guest ? browserManager.isGrabSelectorPresent(args.selector, guest) : true
+      return guest ? browserManager.isGrabSelectorPresent(args.selectionId, guest) : false
     }
   )
 

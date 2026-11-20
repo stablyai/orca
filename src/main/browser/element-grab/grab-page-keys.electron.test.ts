@@ -1,41 +1,57 @@
+import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
+import {
+  buildPopupIdentityProbe,
+  createPopupIdentityProbeRoot
+} from '../electron-fixtures/popup-identity-electron-probe'
 import { join } from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { afterAll, describe, expect, it } from 'vitest'
 import { runElectronFixture } from '../electron-fixtures/electron-fixture-run'
+
+const preloadRoot = createPopupIdentityProbeRoot()
+afterAll(() => rmSync(preloadRoot, { recursive: true, force: true }))
 
 describe('tool letters from a real page during a pick', () => {
   // Builds a fixture bundle and launches real Electron, which is slow on CI runners.
-  it('leaves typing to page fields (also in shadow roots) and takes letters only off them', async () => {
-    const result = await runElectronFixture(
-      join(import.meta.dirname, 'testing/grab-page-keys-electron-fixture.ts')
-    )
-    expect(result.timedOut).toBe(false)
-    expect(result.code, `${result.signal}\n${result.stdout}\n${result.stderr}`).toBe(0)
-    const output: unknown = result.output
-    const holdMs = output && typeof output === 'object' && 'holdMs' in output ? output.holdMs : null
-    process.stdout.write(
-      `idle field-query round-trip (not end-to-end input latency): ${JSON.stringify(holdMs)}\n`
-    )
-    expect(result.output).toEqual({
-      focusAfterArm: 'search',
-      editableAtArm: true,
-      searchValue: 'cd',
-      forwardedWhileInField: [],
-      trackerVisibleToPage: false,
-      tabThenLetter: { focused: 'host', forwarded: [] },
-      scriptFocusThenLetter: { value: 'sa', forwarded: [] },
-      noteValue: 'g',
-      editableOnButton: false,
-      forwardedOnButton: ['a'],
-      pageSawToolKey: false,
-      altEdges: ['alt-down', 'alt-up'],
-      // With the picker off nothing is known about the page: unknown counts as a field.
-      editableAfterOff: true,
-      // Recorded query samples are diagnostic; wall-clock latency is not a correctness assertion.
-      holdMs: {
-        count: expect.any(Number),
-        median: expect.any(Number),
-        max: expect.any(Number)
+  it.each(['browser-guest', 'doc-preview-link'])(
+    '%s: leaves typing to page fields (also in shadow roots) and takes letters only off them',
+    async (preloadName) => {
+      const runRoot = mkdtempSync(join(preloadRoot, 'run-'))
+      mkdirSync(join(runRoot, 'home'), { recursive: true })
+      await buildPopupIdentityProbe(
+        runRoot,
+        join(process.cwd(), `src/preload/${preloadName}.ts`),
+        'browser-guest-preload.cjs'
+      )
+      const result = await runElectronFixture(
+        join(import.meta.dirname, 'testing/grab-page-keys-electron-fixture.ts'),
+        {
+          ORCA_BROWSER_GUEST_PRELOAD: join(runRoot, 'browser-guest-preload.cjs'),
+          HOME: join(runRoot, 'home'),
+          XDG_CONFIG_HOME: join(runRoot, 'home', 'config')
+        }
+      )
+      for (const line of result.stderr
+        .split('\n')
+        .filter((line) => line.startsWith('[palette-proof]'))) {
+        process.stdout.write(`${line}\n`)
       }
-    })
-  }, 60_000)
+      expect(result.timedOut).toBe(false)
+      expect(result.code, `${result.signal}\n${result.stdout}\n${result.stderr}`).toBe(0)
+      expect(result.output).toEqual({
+        focusAfterArm: 'search',
+        searchValue: 'cd',
+        forwardedWhileInField: [],
+        trackerVisibleToPage: false,
+        tabThenLetter: { focused: 'host', forwarded: [] },
+        scriptFocusThenLetter: { value: 'sa', forwarded: [] },
+        noteValue: 'g',
+        closedField: { value: 'd', forwarded: [] },
+        forwardedOnButton: ['a'],
+        pageSawToolKey: false,
+        altEdges: ['alt-down', 'alt-up'],
+        agentForwarded: []
+      })
+    },
+    60_000
+  )
 })

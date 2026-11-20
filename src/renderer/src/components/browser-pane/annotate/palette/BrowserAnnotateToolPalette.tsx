@@ -93,6 +93,16 @@ export function BrowserAnnotateToolPalette({
   drawWaitingForPage?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
+  const waitingAnnouncementRef = useRef<HTMLSpanElement>(null)
+  const waitingMessage = t('browser.annotatePalette.waitingForPage', 'Waiting for page…')
+  // Populate after mount so direct entry into loading Draw announces too.
+  useEffect(() => {
+    const region = waitingAnnouncementRef.current
+    const message = drawWaitingForPage ? waitingMessage : ''
+    if (region && region.textContent !== message) {
+      region.textContent = message
+    }
+  }, [drawWaitingForPage, waitingMessage])
   const paletteRef = useRef<HTMLDivElement>(null)
   const toolRefs = useRef(new Map<BrowserAnnotateTool, HTMLButtonElement>())
   const labelProbeRef = useRef<HTMLSpanElement>(null)
@@ -399,9 +409,7 @@ export function BrowserAnnotateToolPalette({
           {hint}
         </div>
       ) : null}
-      <span className="sr-only" role="status" aria-live="polite">
-        {drawWaitingForPage ? t('browser.annotatePalette.waitingForPage', 'Waiting for page…') : ''}
-      </span>
+      <span ref={waitingAnnouncementRef} className="sr-only" role="status" aria-live="polite" />
       {/* Polite announcements: the active tool, and errors from the picker. */}
       <span className="sr-only" role="status" aria-live="polite">
         {hintIsError ? hint : activeLabel}
