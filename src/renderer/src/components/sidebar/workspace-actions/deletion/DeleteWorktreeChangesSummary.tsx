@@ -173,8 +173,9 @@ export function DeleteWorktreeChangesSummary({
   if (!tone) {
     return null
   }
+  const fullText = note ? `${text} · ${note}` : text
   const line = (
-    <>
+    <span className="flex min-w-0 items-center gap-1.5" title={fullText}>
       <span aria-hidden="true" className="flex size-3.5 shrink-0 items-center justify-center">
         {tone === 'checking' ? (
           <LoadingSpinner className="size-3.5 text-muted-foreground" />
@@ -184,26 +185,26 @@ export function DeleteWorktreeChangesSummary({
           <CircleAlert className="size-3.5" />
         )}
       </span>
-      <span ref={textRef} className="min-w-0 truncate" title={text}>
+      <span ref={textRef} className="min-w-0 truncate">
         {text}
       </span>
       {note ? (
         // The note gives way first so a narrow line keeps the loss sentence.
-        <span
-          ref={noteRef}
-          className="min-w-0 shrink-[1000] truncate text-muted-foreground"
-          title={note}
-        >
+        <span ref={noteRef} className="min-w-0 shrink-[1000] truncate text-muted-foreground">
           · {note}
         </span>
       ) : null}
       {stillChecking ? (
         <>
           <LoadingSpinner className="size-3 shrink-0 text-muted-foreground" />
-          {text === checkingLabel ? null : <span className="sr-only">{checkingLabel}</span>}
+          {text === checkingLabel ? null : (
+            <span className="sr-only">
+              {t('components.workspace.delete.changes.checkingDetails', 'Checking…')}
+            </span>
+          )}
         </>
       ) : null}
-    </>
+    </span>
   )
   const toneClassName =
     tone === 'warning'
@@ -229,15 +230,14 @@ export function DeleteWorktreeChangesSummary({
           onOpenChange={setOpen}
         >
           {clipped || !hasDetails ? (
-            <p className="mb-2 font-sans text-[13px] text-foreground">
-              {note ? `${text} · ${note}` : text}
-            </p>
+            <p className="mb-2 font-sans text-[13px] text-foreground">{fullText}</p>
           ) : null}
-          {ignoredPaths.length > 0 && atRiskLocalFiles ? (
+          {/* Only an open panel renders its rows, so focus changes on the closed line stay cheap. */}
+          {open && ignoredPaths.length > 0 && atRiskLocalFiles ? (
             <DeleteWorktreeLocalFilesDetails files={atRiskLocalFiles} />
           ) : null}
           <ul className="min-w-0 space-y-0.5">
-            {changedFiles.map((file) => (
+            {(open ? changedFiles : []).map((file) => (
               <li key={file.path} className="flex min-w-0 items-baseline gap-2">
                 <span
                   className="w-3 shrink-0 font-semibold"
@@ -259,7 +259,7 @@ export function DeleteWorktreeChangesSummary({
                 </span>
               </li>
             ))}
-            {unsavedFiles.map((file) => (
+            {(open ? unsavedFiles : []).map((file) => (
               <li key={file.id} className="flex min-w-0 items-baseline gap-2">
                 <span className="w-3 shrink-0" aria-hidden="true" />
                 <span className="min-w-0 break-all text-foreground" title={file.filePath}>
@@ -288,6 +288,8 @@ export function DeleteWorktreeChangesSummary({
       {expandable ? null : (
         <p className={`flex h-5 min-w-0 items-center gap-1.5 text-[13px] ${toneClassName}`}>
           {line}
+          {/* Holds the chevron's width so the text clips the same with or without the toggle. */}
+          <span aria-hidden="true" className="size-3.5 shrink-0" />
         </p>
       )}
     </div>
