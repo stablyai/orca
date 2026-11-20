@@ -1,4 +1,3 @@
-import type { BrowserWindow } from 'electron'
 import type { SshPortForwardManager } from '../../ssh/port-forwarding/ssh-port-forward'
 import type {
   DetectedPort,
@@ -21,18 +20,14 @@ import { getSshTargetRegistryStore } from '../../ssh/targets/ssh-target-registry
 import {
   connectionManager,
   currentRuntime,
-  getCurrentMainWindow,
   persistedStore,
   portForwardManager
 } from './ssh-ipc-context'
+import { sshDesktopHost } from '../../ssh/application/ssh-desktop-host'
 import { requestDesktopBrowserBridgeReconcile } from '../browser/desktop-browser-bridge-reconcile'
 import { listUnrestoredPortForwards } from './ssh-port-forward-unrestored'
 
-export function broadcastSshState(
-  getMainWindow: () => BrowserWindow | null,
-  targetId: string,
-  state: SshConnectionState
-): void {
+export function broadcastSshState(targetId: string, state: SshConnectionState): void {
   // The bridge serves claimed hosts, including owned ones whose state stays internal below.
   requestDesktopBrowserBridgeReconcile()
   const target = getSshTargetRegistryStore()?.getTarget(targetId)
@@ -42,10 +37,7 @@ export function broadcastSshState(
     return
   }
   const enrichedState = withSshRemotePlatform(targetId, state)
-  const win = getMainWindow()
-  if (win && !win.isDestroyed()) {
-    win.webContents.send('ssh:state-changed', { targetId, state: enrichedState })
-  }
+  sshDesktopHost().publish('ssh:state-changed', { targetId, state: enrichedState })
   // Paired clients lack local SSH IPC; publish runtime events to clear stale reconnect overlays.
   currentRuntime?.notifySshStateChanged?.(targetId, enrichedState)
 }
@@ -67,7 +59,7 @@ export function clearPublishedManagedServer(targetId: string): void {
   clearSshHostServerStatus(targetId)
   const state = connectionManager?.getState(targetId)
   if (state) {
-    broadcastSshState(getCurrentMainWindow, targetId, state)
+    broadcastSshState(targetId, state)
   }
 }
 
@@ -77,25 +69,16 @@ export function getPublicSshState(targetId: string): SshConnectionState | undefi
 }
 
 /** Settings, CLI and paired-client removals all publish this so the renderer drops the target's live state once. */
-export function broadcastSshTargetRemoved(
-  getMainWindow: () => BrowserWindow | null,
-  targetId: string
-): void {
-  const win = getMainWindow()
-  if (win && !win.isDestroyed()) {
-    win.webContents.send('ssh:target-removed', { targetId })
-  }
+export function broadcastSshTargetRemoved(targetId: string): void {
+  sshDesktopHost().publish('ssh:target-removed', { targetId })
 }
 
-export function broadcastPortForwards(
-  getMainWindow: () => BrowserWindow | null,
-  targetId: string
-): void {
-  const win = getMainWindow()
-  if (!win || win.isDestroyed()) {
+export function broadcastPortForwards(targetId: string): void {
+  // Enrichment walks every worktree; skip it when no window would receive it.
+  if (!portForwardManager || !sshDesktopHost().hasDocument()) {
     return
   }
-  win.webContents.send('ssh:port-forwards-changed', {
+  sshDesktopHost().publish('ssh:port-forwards-changed', {
     targetId,
     forwards: listForwardsEnriched(targetId),
     unrestored: listUnrestoredPortForwards(targetId)
@@ -103,7 +86,7 @@ export function broadcastPortForwards(
 }
 
 function listForwardsEnriched(targetId: string): ReturnType<SshPortForwardManager['listForwards']> {
-  const raw = portForwardManager!.listForwards(targetId)
+  const raw = portForwardManager?.listForwards(targetId) ?? []
   if (!persistedStore) {
     return raw
   }
