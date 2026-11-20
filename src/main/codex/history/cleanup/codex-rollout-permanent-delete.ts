@@ -126,16 +126,16 @@ async function deleteRollout(
     ) {
       return 'done'
     }
+    // The setting, rows and folder, asked once more before the fork check nearest the unlink.
+    if (!(await stillAllowed())) {
+      return 'done'
+    }
     // The checks above take a while: a fork Codex started meanwhile is in today's folders.
     if (!(await references.refresh(homes))) {
       return 'done'
     }
     if (await references.isReferenced(rolloutId)) {
       return { referencedId: rolloutId }
-    }
-    // The setting, rows and folder, asked once more nearest the unlink.
-    if (!(await stillAllowed())) {
-      return 'done'
     }
     const removed: NameState[] = []
     // Links first: removing a link's target first would read as the link having changed.

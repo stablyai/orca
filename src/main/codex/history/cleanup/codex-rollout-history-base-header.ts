@@ -52,6 +52,7 @@ function settleLine(line: string): { base: string | null } | undefined {
 /** Like Codex's metadata reader: lines before a header are skipped until a response item. */
 async function streamHistoryBase(path: string): Promise<HeaderBase> {
   let completeLines = false
+  let trailingComplete = true
   for await (const { line, terminated } of splitTranscriptStreamLines(
     readCodexRolloutBytes(path),
     SESSION_META_MAX_BYTES
@@ -61,9 +62,11 @@ async function streamHistoryBase(path: string): Promise<HeaderBase> {
       return { ...settled, settled: true }
     }
     completeLines ||= terminated
+    trailingComplete = terminated || !line.trim()
   }
   // Codex writes session_meta first, in one write: finished lines without it never become a fork.
-  return { base: null, settled: completeLines }
+  // A line still being written could be that header, so it settles nothing yet.
+  return { base: null, settled: completeLines && trailingComplete }
 }
 
 export async function readHistoryBase(path: string): Promise<HeaderBase> {

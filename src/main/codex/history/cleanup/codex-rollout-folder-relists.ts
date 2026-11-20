@@ -81,7 +81,7 @@ export function createCodexRolloutFolderRelists(signal?: AbortSignal): CodexRoll
     for (const folder of await foldersOf(roots, dates)) {
       const entry = await statUnlessAbsent(folder)
       // An unsettled stamp proves nothing: a later change in the same tick can share it.
-      if (entry === undefined || (entry && stamps.state(folder, entry.mtimeMs) !== 'current')) {
+      if (entry === undefined || (entry && stamps.state(folder, entry) !== 'current')) {
         return false
       }
     }
@@ -100,7 +100,7 @@ export function createCodexRolloutFolderRelists(signal?: AbortSignal): CodexRoll
       return () => {
         for (const { folder, statAt, entry } of stats) {
           if (entry) {
-            stamps.listed(folder, entry.mtimeMs, statAt)
+            stamps.listed(folder, entry, statAt)
           }
         }
       }
@@ -110,7 +110,7 @@ export function createCodexRolloutFolderRelists(signal?: AbortSignal): CodexRoll
       let wait = 0
       for (const folder of left > 0 ? folders : []) {
         const entry = await statUnlessAbsent(folder)
-        if (entry && stamps.state(folder, entry.mtimeMs) !== 'current') {
+        if (entry && stamps.state(folder, entry) !== 'current') {
           wait = Math.max(wait, stamps.unsettledFor(entry.mtimeMs))
         }
       }
@@ -122,7 +122,7 @@ export function createCodexRolloutFolderRelists(signal?: AbortSignal): CodexRoll
     relist: async (folder, list) => {
       const statAt = Date.now()
       const entry = await statUnlessAbsent(folder)
-      if (!entry || stamps.state(folder, entry.mtimeMs) === 'current') {
+      if (!entry || stamps.state(folder, entry) === 'current') {
         return entry !== undefined
       }
       if (left === 0) {
@@ -132,7 +132,7 @@ export function createCodexRolloutFolderRelists(signal?: AbortSignal): CodexRoll
       left -= 1
       const listed = await list(folder)
       if (listed) {
-        stamps.listed(folder, entry.mtimeMs, statAt)
+        stamps.listed(folder, entry, statAt)
       }
       return listed
     },

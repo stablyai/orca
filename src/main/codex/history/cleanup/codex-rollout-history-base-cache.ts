@@ -1,4 +1,4 @@
-import { readFile, rename, writeFile } from 'node:fs/promises'
+import { readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
 import { asRecord } from '../../../ai-vault/parsing/session-record-fields'
 
@@ -46,6 +46,9 @@ export async function loadCodexRolloutHistoryBaseCache(
       await writeFile(tmpPath, JSON.stringify({ version: 2, bases: [...bases] }), 'utf-8')
       await rename(tmpPath, cachePath)
     } catch (error) {
+      // Saved again on the next checkpoint or at the end; no copy is left behind meanwhile.
+      dirty = true
+      await rm(tmpPath, { force: true }).catch(() => undefined)
       console.warn('[workspace-cleanup] Could not save the Codex fork scan:', error)
     }
   }

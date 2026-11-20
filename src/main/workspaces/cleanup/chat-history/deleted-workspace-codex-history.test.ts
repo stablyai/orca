@@ -339,12 +339,14 @@ describe('deleteCodexRolloutsPermanently with a fork restored during the sweep',
         }
       })}\n`
       const fork = write(join(folder, NAME('2')), forkContents)
+      let restoredAt: string | null = null
 
       await deleteCodexRolloutsPermanently(
         [parent, fork].map((filePath) => ({ agent: 'codex', filePath })),
         async ({ filePath }) => {
           if (filePath === parent && !exists(fork) && !exists(`${fork}.zst`)) {
             // A backup restores the fork after it was deleted, before the parent is retried.
+            restoredAt = packed ? `${fork}.zst` : fork
             const restored = packed
               ? write(`${fork}.zst`, zstdCompressSync(forkContents))
               : write(fork, forkContents)
@@ -356,6 +358,8 @@ describe('deleteCodexRolloutsPermanently with a fork restored during the sweep',
       )
 
       vi.useRealTimers()
+      expect(restoredAt).not.toBeNull()
+      expect(exists(restoredAt!)).toBe(true)
       expect(exists(parent)).toBe(true)
     }
   )
