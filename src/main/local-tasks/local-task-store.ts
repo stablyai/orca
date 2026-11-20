@@ -28,6 +28,8 @@ const STATUS_CATEGORY: Record<string, LocalTaskStatusCategory> = {
   completed: 'done'
 }
 
+export const LOCAL_TASK_STATUSES = Object.keys(STATUS_CATEGORY)
+
 export function getLocalTasksFolder(): string {
   return process.env.ORCA_LOCAL_TASKS_DIR?.trim() || DEFAULT_FOLDER
 }
@@ -54,7 +56,7 @@ export async function listLocalTasks(): Promise<LocalTaskListResult> {
   return { folder, tasks: tasks.filter((task): task is LocalTask => task !== null) }
 }
 
-async function readLocalTask(filePath: string): Promise<LocalTask | null> {
+export async function readLocalTask(filePath: string): Promise<LocalTask | null> {
   try {
     const [text, info] = await Promise.all([readFile(filePath, 'utf8'), stat(filePath)])
     const { fields, body } = parseLocalTaskFile(text)
