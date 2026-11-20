@@ -1,32 +1,42 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { BotUpdateParams } from '../../../../../shared/rpc-contract/bots-params'
 
 export type BotLookUpdate = Pick<BotUpdateParams['updates'], 'avatarColor' | 'avatarOutfit'>
 
 // Per bot: the save on its way to the host and the latest picks waiting behind it, merged. Every editor of a
-// bot shares it, so a pick made after closing and reopening settings still lands last.
+// bot shares it, so a pick made after closing and reopening settings still lands last. Editors that are open
+// hear when nothing is left to send; one that closes stops listening.
 type LookSaves = {
   waiting: BotLookUpdate | null
   update: (look: BotLookUpdate) => Promise<unknown>
-  drained: Promise<void>
+  drained: Set<() => void>
 }
 
 const lookSaves = new Map<string, LookSaves>()
 
-/** Saves `look` after any save already on its way; resolves once nothing for this bot is left to send. */
+/** Saves `look` after any save already on its way; `onDrained` runs once nothing for this bot is left. */
 export function saveBotLook(
   key: string,
   look: BotLookUpdate,
-  update: (look: BotLookUpdate) => Promise<unknown>
-): Promise<void> {
+  update: (look: BotLookUpdate) => Promise<unknown>,
+  onDrained?: () => void
+): void {
   const running = lookSaves.get(key)
   if (running) {
     running.waiting = { ...running.waiting, ...look }
     running.update = update
-    return running.drained
+    if (onDrained) {
+      running.drained.add(onDrained)
+    }
+    return
   }
-  const saves: LookSaves = { waiting: look, update, drained: Promise.resolve() }
-  saves.drained = (async () => {
+  const saves: LookSaves = {
+    waiting: look,
+    update,
+    drained: new Set(onDrained ? [onDrained] : [])
+  }
+  lookSaves.set(key, saves)
+  void (async () => {
     while (saves.waiting) {
       const next = saves.waiting
       saves.waiting = null
@@ -34,9 +44,10 @@ export function saveBotLook(
       await saves.update(next).catch(() => undefined)
     }
     lookSaves.delete(key)
+    for (const listener of saves.drained) {
+      listener()
+    }
   })()
-  lookSaves.set(key, saves)
-  return saves.drained
 }
 
 /**
@@ -54,8 +65,23 @@ export function useBotLookSave(
     save: () => void
     look: BotLookUpdate
   } | null>(null)
-  // The drain this editor waits on, so it observes each one once however many picks join it.
-  const watched = useRef<Promise<void> | null>(null)
+  // One listener per editor, however many of its picks join a drain.
+  const drained = useRef(() => {
+    // Shown as saved once everything picked has landed, unless a newer pick is still waiting.
+    if (!timer.current) {
+      setPicked(null)
+    }
+  })
+  // A closed editor's last pick still saves (the close flush), with no one left to hear it land.
+  const open = useRef(true)
+  useEffect(() => {
+    const listener = drained.current
+    open.current = true
+    return () => {
+      open.current = false
+      lookSaves.get(key)?.drained.delete(listener)
+    }
+  }, [key])
   const pick = (change: BotLookUpdate): void => {
     const look = { ...timer.current?.look, ...change }
     setPicked((shown) => ({ ...shown, ...change }))
@@ -64,18 +90,7 @@ export function useBotLookSave(
     }
     const save = (): void => {
       timer.current = null
-      const drained = saveBotLook(key, look, update)
-      if (watched.current === drained) {
-        return
-      }
-      watched.current = drained
-      void drained.then(() => {
-        watched.current = null
-        // Shown as saved once everything picked has landed, unless a newer pick is still waiting.
-        if (!timer.current) {
-          setPicked(null)
-        }
-      })
+      saveBotLook(key, look, update, open.current ? drained.current : undefined)
     }
     timer.current = { timer: setTimeout(save, delayMs), save, look }
   }

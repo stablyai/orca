@@ -12,10 +12,12 @@ describe('saveBotLook', () => {
       sent.push(look)
       return sent.length === 1 ? first : Promise.resolve()
     }
-    const drained = saveBotLook('local:b1', { avatarColor: '#f4c4cf' }, update)
-    void saveBotLook('local:b1', { avatarOutfit: 'tie' }, update)
-    void saveBotLook('local:b1', { avatarColor: '#c5dfb5' }, update)
-    void saveBotLook('local:b1', { avatarOutfit: 'party' }, update)
+    const drained = new Promise<void>((resolve) => {
+      saveBotLook('local:b1', { avatarColor: '#f4c4cf' }, update, resolve)
+    })
+    saveBotLook('local:b1', { avatarOutfit: 'tie' }, update)
+    saveBotLook('local:b1', { avatarColor: '#c5dfb5' }, update)
+    saveBotLook('local:b1', { avatarOutfit: 'party' }, update)
     release()
     await drained
     expect(sent).toEqual([
