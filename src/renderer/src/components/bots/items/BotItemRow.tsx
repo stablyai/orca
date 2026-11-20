@@ -25,7 +25,7 @@ import { BotRowHoverCard } from '../BotPanelRow'
 import { BotItemNumberColumn } from './BotItemNumberColumn'
 import { BotItemRowFace } from './BotItemRowFace'
 import { BotItemStatusIcon } from './BotItemStatusIcon'
-import { BOT_ITEM_ROW_HOVER_ACTIONS } from './bot-item-row-hover-actions'
+import { BOT_ITEM_ROW_ACTION_OVERLAY } from './bot-item-row-hover-actions'
 import { BotItemSnoozeMenuItems, type BotItemSnoozing } from './BotItemSnooze'
 import { formatBotItemSnoozeTime } from './bot-item-snooze-time'
 
@@ -176,10 +176,11 @@ export function BotItemRow({
         </span>
       ) : null}
       {closed ? null : (
+        // Keep actions in the tab order so focus can move from the title to an action.
         <span
           className={cn(
-            BOT_ITEM_ROW_HOVER_ACTIONS,
-            'gap-0.5 has-[[aria-expanded=true]]:pointer-events-auto has-[[aria-expanded=true]]:opacity-100'
+            BOT_ITEM_ROW_ACTION_OVERLAY,
+            'pointer-events-none flex gap-0.5 opacity-0 group-has-[:focus-visible]/item:pointer-events-auto group-has-[:focus-visible]/item:opacity-100 group-hover/item:pointer-events-auto group-hover/item:opacity-100 has-[[aria-expanded=true]]:pointer-events-auto has-[[aria-expanded=true]]:opacity-100'
           )}
         >
           <Tooltip>
