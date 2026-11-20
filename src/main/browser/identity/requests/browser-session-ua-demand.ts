@@ -84,11 +84,8 @@ export function setBrowserGuestFrameUserAgentDemand(
   }
 }
 
-export function hasBrowserGuestFrameUserAgentDemand(
-  guestId: number,
-  frameTreeNodeId: number
-): boolean {
-  return guests.get(guestId)?.frames.has(frameTreeNodeId) === true
+export function getBrowserGuestFrameUserAgentDemand(guestId: number): ReadonlySet<number> {
+  return guests.get(guestId)?.frames ?? new Set<number>()
 }
 
 export function clearBrowserGuestUserAgentDemand(guestId: number): void {

@@ -40,11 +40,13 @@ export function createFormPostNavigationTracker(): {
       post = target === submitted || fromMemory
       submitted = null
     },
-    // A POST's redirect (Post/Redirect/Get) loads its target with GET; Electron doesn't report the
-    // status, and the method-keeping 307/308 are rare for form results.
+    // Electron doesn't report a redirect's status, so a 307/308 that keeps the POST can't be told
+    // from a Post/Redirect/Get; keeping the page beats restoring a POST result with GET.
     redirected: () => {
-      post = false
-      fromMemory = false
+      if (fromMemory) {
+        post = false
+        fromMemory = false
+      }
     },
     committed: (url, method) => {
       const isPost = method !== null ? method !== 'GET' : post

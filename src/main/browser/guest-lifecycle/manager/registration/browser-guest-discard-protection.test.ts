@@ -308,7 +308,7 @@ it('keeps a page an embedded form POSTed to the top from being discarded', () =>
   }
 })
 
-it('lets the page a form POST redirects to (Post/Redirect/Get) be discarded', () => {
+it('keeps the page a form POST redirects to, which a 307 or 308 loads with POST', () => {
   let url = 'https://example.test/login'
   const mainFrame = { frames: [], send: vi.fn<(channel: string, generation: string) => void>() }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: event fixture implements this policy's native surface.
@@ -352,7 +352,6 @@ it('lets the page a form POST redirects to (Post/Redirect/Get) be discarded', ()
       isMainFrame: true,
       isSameDocument: false
     })
-    // 303 to the dashboard, which loads with GET.
     guest.emit('did-redirect-navigation', {
       url: 'https://example.test/dashboard',
       isMainFrame: true
@@ -360,7 +359,7 @@ it('lets the page a form POST redirects to (Post/Redirect/Get) be discarded', ()
     url = 'https://example.test/dashboard'
     guest.emit('did-navigate', {}, url, 200, 'OK')
     settle()
-    expect(readBrowserGuestDiscardProtection(guest).protection).toBe('discardable')
+    expect(readBrowserGuestDiscardProtection(guest).reason).toBe('post')
   } finally {
     stop()
   }

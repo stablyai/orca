@@ -120,8 +120,10 @@ export abstract class BrowserManagerNavigation extends BrowserManagerVisibility 
   ): void {
     super.recordAppliedViewportOverride(browserTabId, guestWebContentsId, applied)
     const guest = webContents.fromId(guestWebContentsId)
-    if (guest && !guest.isDestroyed()) {
-      this.settleUserAgentDemand(guest, 'keep')
+    if (guest && !guest.isDestroyed() && isBrowserProcessUserAgentInitialized()) {
+      // A navigation still in flight keeps its destination's demand alongside the committed page's.
+      const url = this.getInFlightNavigationUrl(guest) ?? guest.getURL()
+      this.noteUserAgentDemand(guest, url, this.resolveGuestTabIdentity(guest, url))
     }
   }
 
