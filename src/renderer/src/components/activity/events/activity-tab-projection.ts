@@ -68,10 +68,14 @@ function projectActivityTabs(
     next[worktreeId] = projected
     changed ||= projected !== prior
   }
-  if (!changed && previous && Object.keys(previous).length === Object.keys(next).length) {
-    return previous
-  }
-  return next
+  // Later bucket patches keep this key order, so a reorder alone must still publish the new order.
+  return !changed && previous && sameKeyOrder(previous, next) ? previous : next
+}
+
+function sameKeyOrder(a: ActivityTabProjection, b: ActivityTabProjection): boolean {
+  const aKeys = Object.keys(a)
+  const bKeys = Object.keys(b)
+  return aKeys.length === bKeys.length && aKeys.every((key, index) => key === bKeys[index])
 }
 
 /**
