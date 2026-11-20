@@ -9,8 +9,8 @@ vi.mock('@/hooks/theme/usePrefersReducedMotion', () => ({
 
 import { useBotsTipPlayback } from './use-bots-tip-playback'
 
-// Guards PR #45017: the open card rendered at 30 fps for its whole life, and each render's garbage
-// grew the renderer's Blink heap by up to ~800 MB before a GC. It now renders only when a cue lands.
+// Guards PR #45017: the open card rendered at 30 fps for its whole life, leaving renderer garbage
+// between GCs. It now renders only when a cue lands.
 describe('feature tip card playback renders', () => {
   beforeEach(() => {
     vi.useFakeTimers({
