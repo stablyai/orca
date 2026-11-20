@@ -1,3 +1,10 @@
+import type { RemoveWorktreeResult } from '../../../shared/worktree/create-types'
+import {
+  withArchiveHookReport,
+  type ArchiveHookChoice,
+  type ArchiveHookDecision
+} from '../../../shared/worktree/removal/archive-hook-decision'
+import { decideArchiveHook } from '../../workspace-hooks/inherited-archive-hook-decision'
 import { folderWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
 import { projectGroupHookOwner } from '../../../shared/workspace-setup/hooks/workspace-hook-owner'
 import type { ArchiveHookOverride } from '../../../shared/worktree/removal/archive-hook-removal-gate'
@@ -14,6 +21,7 @@ import type { RuntimeProjectGroupDependencies } from './runtime-project-group-co
 
 export type FolderWorkspaceDeleteOptions = FolderWorkspaceMutationOptions & {
   runHooks?: boolean
+  archiveHooks?: ArchiveHookChoice
   allowFailedArchiveHook?: boolean
 }
 
@@ -21,7 +29,12 @@ export async function deleteFolderWorkspaceRow(
   deps: RuntimeProjectGroupDependencies,
   folderWorkspaceId: string,
   options: FolderWorkspaceDeleteOptions
-): Promise<{ deleted: boolean; archiveHookOverride?: ArchiveHookOverride }> {
+): Promise<
+  { deleted: boolean; archiveHookOverride?: ArchiveHookOverride } & Pick<
+    RemoveWorktreeResult,
+    'archiveHookRan' | 'archiveHook'
+  >
+> {
   const store = deps.getStore()
   if (!store?.removeFolderWorkspace) {
     throw new Error('runtime_unavailable')
@@ -39,23 +52,36 @@ export async function deleteFolderWorkspaceRow(
     | undefined
   let cleanupState: void | Promise<void> = undefined
   let archiveHookOverride: ArchiveHookOverride | undefined
+  let archiveHookRan = false
+  let archiveDecision: ArchiveHookDecision | undefined
   try {
     if (workspace) {
       const worktreeId = folderWorkspaceKey(folderWorkspaceId)
       const group = store
         .getProjectGroups?.()
         .find((entry) => entry.id === workspace.projectGroupId)
-      const owner = group && projectGroupHookOwner(group)
+      const owner = group ? (projectGroupHookOwner(group) ?? undefined) : undefined
+      archiveDecision = options.archiveHooks
+        ? await decideArchiveHook(options.archiveHooks, owner, () => ({
+            trust: store.getUI?.().trustedOrcaHooks,
+            repos: store.getRepos(),
+            hostQualifiedId: true
+          }))
+        : undefined
       if (owner) {
-        archiveHookOverride = await gateFolderWorkspaceRemovalOnArchiveHook({
+        const gated = await gateFolderWorkspaceRemovalOnArchiveHook({
           repo: owner,
           worktreeId,
           displayName: workspace.name,
           workspacePath: workspace.folderPath,
-          runArchive: options.runHooks === true,
+          runArchive: archiveDecision
+            ? archiveDecision.decision === 'run'
+            : options.runHooks === true,
           allowFailure: options.allowFailedArchiveHook === true,
           runtimeTarget: () => undefined
         })
+        archiveHookOverride = gated.override
+        archiveHookRan = gated.ran
       }
       // Mixed-host groups have no single PTY target; skip the sweep so forgetting still succeeds.
       let connectionId: string | null | undefined
@@ -95,7 +121,14 @@ export async function deleteFolderWorkspaceRow(
       }
     }
     await cleanupState
-    return { deleted, ...(archiveHookOverride ? { archiveHookOverride } : {}) }
+    return withArchiveHookReport(
+      {
+        deleted,
+        ...(archiveHookOverride ? { archiveHookOverride } : {}),
+        ...(archiveHookRan ? { archiveHookRan: true as const } : {})
+      },
+      archiveDecision
+    )
   } finally {
     await gate?.finish(false)
   }

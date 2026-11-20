@@ -11,9 +11,9 @@ import type { CommandHandler } from '../dispatch/dispatch'
 import { printHookWarning, printPreservedBranchWarning } from './worktree-removal-warnings'
 import { requestWorktreeRemoval } from './worktree-removal-request'
 import {
-  archiveHookSkipWarning,
+  archiveHookRequest,
   getArchiveHookChoice,
-  resolveArchiveHookDecision
+  printArchiveHookWarning
 } from './worktree-archive-hook-choice'
 import { removeIfFolderWorkspace, setIfFolderWorkspace } from './folder-workspace-mutations'
 import { formatWorktreeList, formatWorktreeShow } from './workspace-format'
@@ -272,25 +272,16 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
         'Orca cannot tell which host owns this workspace. Refresh projects and try again.'
       )
     }
-    const archiveHook = await resolveArchiveHookDecision(
-      client,
-      archiveChoice,
-      resolved.result.worktree.repoId
-    )
-    const removal = await requestWorktreeRemoval(client, {
+    const result = await requestWorktreeRemoval(client, {
       worktree,
       hostId,
       force: flags.get('force') === true,
       deleteBranch: flags.get('delete-branch') === true,
-      runHooks: archiveHook.decision === 'run',
+      ...archiveHookRequest(archiveChoice),
       // Archive failure waivers protect user data separately from --force's PTY-stop waiver.
       allowFailedArchiveHook: flags.get('allow-failed-archive-hook') === true
     })
-    const result = { ...removal, result: { ...removal.result, archiveHook } }
-    const skipWarning = archiveHookSkipWarning(archiveHook)
-    if (skipWarning && !json) {
-      console.error(`warning: ${skipWarning}`)
-    }
+    printArchiveHookWarning(archiveChoice, result.result.archiveHook, json)
     printHookWarning(result.result, json)
     printPreservedBranchWarning(result.result, json)
     printResult(result, json, (value) =>

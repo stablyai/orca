@@ -97,6 +97,7 @@ async function acceptRuntimeRegisteredLocalWorktreeRemoval(args: {
   let warning: string | undefined
   // Archive refusal precedes refresh, preflights, PTY stop and Git deletion; failure must leave them untouched (#19334).
   let archiveHookOverride: ArchiveHookOverride | undefined
+  let archiveHookRan = false
   if (
     hooks?.scripts.archive &&
     args.runHooks &&
@@ -110,6 +111,7 @@ async function acceptRuntimeRegisteredLocalWorktreeRemoval(args: {
       args.hasLocalOptions ? localOptions : undefined,
       { identity: { worktreeId: args.target.id } }
     )
+    archiveHookRan = true
     archiveHookOverride = gateWorktreeRemovalOnArchiveHook({
       worktreePath: canonicalPath,
       result,
@@ -194,6 +196,7 @@ async function acceptRuntimeRegisteredLocalWorktreeRemoval(args: {
     }
     const acceptedFields = {
       ...(archiveHookOverride ? { archiveHookOverride } : {}),
+      ...(archiveHookRan ? { archiveHookRan: true as const } : {}),
       ...(warning ? { warning } : {})
     }
     if (!background) {

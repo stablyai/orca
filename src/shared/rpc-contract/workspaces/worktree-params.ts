@@ -1,4 +1,5 @@
 import * as z from 'zod'
+import { ArchiveHookChoiceParam } from '../../worktree/removal/archive-hook-decision'
 import { normalizeExecutionHostId } from '../../execution-host/execution-host'
 import { CLIENT_PROVENANCE_SNAPSHOT_MAX } from '../../automations/ownership/automation-workspace-provenance'
 import { isTuiAgent } from '../../agent-launch/catalog/tui-agent-config'
@@ -239,6 +240,8 @@ export const WorktreeRemove = WorktreeSelector.extend({
   // Desktop force also means ordinary confirmed delete; PTY-stop waivers need their own field (#11960).
   allowUnverifiedPtyStop: OptionalBoolean,
   runHooks: OptionalBoolean,
+  // Overrides runHooks on hosts that know it; older hosts strip it and follow runHooks.
+  archiveHooks: ArchiveHookChoiceParam,
   // Waive failed-hook refusal explicitly and record it; independent of force and whether hooks run (#19334).
   allowFailedArchiveHook: OptionalBoolean,
   // Reply with Git's outcome instead of on acceptance; older hosts strip it and answer `removing: true` (#35135).

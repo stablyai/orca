@@ -1,5 +1,9 @@
 import type { RuntimeStatus } from '../../shared/remote-runtime/session-graph/runtime-session-contracts'
-import { getArchiveHookChoice } from './worktree-archive-hook-choice'
+import {
+  archiveHookRequest,
+  getArchiveHookChoice,
+  printArchiveHookWarning
+} from './worktree-archive-hook-choice'
 import type {
   RuntimeWorktreeRecord,
   RuntimeWorktreeRemoveResult,
@@ -10,10 +14,7 @@ import {
   FOLDER_WORKSPACE_UNIQUE_ID_MUTATION_RUNTIME_CAPABILITY,
   PROJECT_GROUP_FOLDER_ARCHIVE_RUNTIME_CAPABILITY
 } from '../../shared/remote-runtime/protocol/worktree-runtime-capabilities'
-import {
-  worktreeRemovalReplyTimeoutMs,
-  type ArchiveHookOverride
-} from '../../shared/worktree/removal/archive-hook-removal-gate'
+import { worktreeRemovalReplyTimeoutMs } from '../../shared/worktree/removal/archive-hook-removal-gate'
 import {
   folderIdOfSelector,
   folderWorkspaceKey
@@ -138,6 +139,7 @@ export async function removeIfFolderWorkspace(
     return false
   }
   const result = await removeFolderWorkspace(client, flags, folderId)
+  printArchiveHookWarning(getArchiveHookChoice(flags), result.result.archiveHook, json)
   printHookWarning(result.result, json)
   printResult(
     result,
@@ -153,17 +155,11 @@ async function removeFolderWorkspace(
   folderId: string
 ): Promise<RuntimeRpcSuccess<RuntimeWorktreeRemoveResult>> {
   refuseFolderFlags(flags, [['delete-branch', 'does not apply: a folder workspace has no branch.']])
-  // A group's Archive script can't be checked against approvals from the CLI yet, so only an explicit run runs it.
-  const runHooks = getArchiveHookChoice(flags) === 'run'
+  const archiveChoice = getArchiveHookChoice(flags)
+  const runsHooks = archiveChoice !== 'skip'
   const allowFailedArchiveHook = flags.get('allow-failed-archive-hook') === true
-  if (allowFailedArchiveHook && !runHooks) {
-    throw new RuntimeClientError(
-      'invalid_argument',
-      '--allow-failed-archive-hook requires --archive run for a folder workspace.'
-    )
-  }
   const status = await assertUniqueIdMutationSupported(client)
-  if (runHooks) {
+  if (archiveChoice === 'run') {
     if (!status.capabilities?.includes(PROJECT_GROUP_FOLDER_ARCHIVE_RUNTIME_CAPABILITY)) {
       throw new RuntimeClientError(
         'incompatible_runtime',
@@ -171,17 +167,17 @@ async function removeFolderWorkspace(
       )
     }
   }
-  const removal = await client.call<{
-    deleted: boolean
-    archiveHookOverride?: ArchiveHookOverride
-  }>(
+  const removal = await client.call<
+    { deleted: boolean } & Pick<RuntimeWorktreeRemoveResult, 'archiveHookOverride' | 'archiveHook'>
+  >(
     'folderWorkspace.delete',
     {
       folderWorkspaceId: folderId,
       requireUniqueId: true,
-      ...(runHooks ? { runHooks, allowFailedArchiveHook } : {})
+      ...archiveHookRequest(archiveChoice),
+      ...(runsHooks ? { allowFailedArchiveHook } : {})
     },
-    { timeoutMs: worktreeRemovalReplyTimeoutMs(runHooks) }
+    { timeoutMs: worktreeRemovalReplyTimeoutMs(runsHooks) }
   )
   if (!removal.result.deleted) {
     throw folderGone(folderId)
@@ -192,7 +188,8 @@ async function removeFolderWorkspace(
       removed: true,
       ...(removal.result.archiveHookOverride
         ? { archiveHookOverride: removal.result.archiveHookOverride }
-        : {})
+        : {}),
+      ...(removal.result.archiveHook ? { archiveHook: removal.result.archiveHook } : {})
     }
   }
 }

@@ -24,8 +24,6 @@ import { UnixSocketTransport } from '../../transports/unix-socket-transport'
 import { RpcDispatcher } from '../../dispatcher'
 import { WORKTREE_METHODS } from './worktree'
 import { STATUS_METHODS } from '../host-management/status'
-import { REPO_METHODS } from '../projects/repo'
-import { CLIENT_UI_METHODS } from '../client-state/client-ui'
 import { getDefaultUIState } from '../../../../../shared/orca-profiles/constants'
 import { hashOrcaHookContent } from '../../../../../shared/hashing/orca-hook-content-hash'
 import type { PersistedTrustedOrcaHooks } from '../../../../../shared/workspace-setup/orca-yaml-hook-types'
@@ -144,10 +142,7 @@ beforeEach(async () => {
   vi.spyOn(runtime, 'closeFileWatchersForRemoval').mockResolvedValue(undefined)
   vi.spyOn(runtime, 'stopPtysForDestructiveWorktreeRemoval').mockImplementation(stopped)
   vi.spyOn(runtime, 'notifyWorktreesChanged').mockImplementation(() => {})
-  dispatcher = new RpcDispatcher({
-    runtime,
-    methods: [...STATUS_METHODS, ...WORKTREE_METHODS, ...REPO_METHODS, ...CLIENT_UI_METHODS]
-  })
+  dispatcher = new RpcDispatcher({ runtime, methods: [...STATUS_METHODS, ...WORKTREE_METHODS] })
   const kind = process.platform === 'win32' ? 'named-pipe' : 'unix'
   const endpoint =
     process.platform === 'win32'
@@ -225,11 +220,11 @@ it('reports actual safe branch preservation when forced checkout removal cannot 
 })
 
 it.each([
-  { approved: false, archived: false },
-  { approved: true, archived: true }
+  { approved: false, report: { decision: 'skip', reason: 'not-approved', ran: false } },
+  { approved: true, report: { decision: 'run', reason: 'approved', ran: true } }
 ])(
   'runs the orca.yaml archive hook by default only when Orca approved it, approved=$approved',
-  async ({ approved, archived }) => {
+  async ({ approved, report }) => {
     const marker = join(directory, 'archived')
     const script = `echo archived > "${marker}"`
     await writeFile(join(repoPath, 'orca.yaml'), `scripts:\n  archive: |\n    ${script}\n`)
@@ -238,10 +233,17 @@ it.each([
         repo: { archive: { contentHash: hashOrcaHookContent(script), approvedAt: 1 } }
       }
     }
-    await main(['worktree', 'rm', '--worktree', `id:${id}`, '--force'], repoPath)
-    expect(process.exitCode).not.toBe(1)
+    process.exitCode = undefined
+    const output: string[] = []
+    vi.spyOn(process.stdout, 'write').mockImplementation(
+      (chunk: string | Uint8Array) => (output.push(String(chunk)), true)
+    )
+    await main(['worktree', 'rm', '--worktree', `id:${id}`, '--force', '--json'], repoPath)
+    vi.mocked(process.stdout.write).mockRestore()
+    expect(process.exitCode, output.join('')).not.toBe(1)
+    expect(JSON.parse(output.join('')).result.archiveHook).toEqual(report)
     await _settlePendingWorktreeRemovalsForTests()
     expect(existsSync(checkout)).toBe(false)
-    expect(existsSync(marker)).toBe(archived)
+    expect(existsSync(marker)).toBe(approved)
   }
 )

@@ -1,16 +1,9 @@
-import { z } from 'zod'
 import { getPresentStringFlag } from '../arguments/flags'
 import { RuntimeClientError } from '../runtime/connection/types'
-import type { RuntimeClient } from '../runtime/client'
-import { isOrcaHookTrusted } from '../../shared/workspace-setup/hooks/orca-hook-trust-entries'
-import type { PersistedTrustedOrcaHooks } from '../../shared/workspace-setup/orca-yaml-hook-types'
-
-export type ArchiveHookChoice = 'run' | 'skip' | 'inherit'
-
-/** Reported on `result.archiveHook`; `run` asks the host to run whatever archive script the repo has. */
-export type ArchiveHookDecision =
-  | { decision: 'run'; reason: 'requested' | 'approved' }
-  | { decision: 'skip'; reason: 'requested' | 'none' | 'not-approved' | 'unverifiable' }
+import type {
+  ArchiveHookChoice,
+  ArchiveHookReport
+} from '../../shared/worktree/removal/archive-hook-decision'
 
 export function getArchiveHookChoice(flags: Map<string, string | boolean>): ArchiveHookChoice {
   const archive = getPresentStringFlag(flags, 'archive')
@@ -34,61 +27,37 @@ export function getArchiveHookChoice(flags: Map<string, string | boolean>): Arch
   return choice
 }
 
-// archiveTrust: null means no orca.yaml archive script needs approval; absent (older host, SSH project) means unknown.
-const RepoArchiveHook = z.looseObject({
-  hooks: z
-    .looseObject({ scripts: z.looseObject({ archive: z.string().optional() }).optional() })
-    .nullable()
-    .optional(),
-  archiveTrust: z
-    .looseObject({ contentHash: z.string().min(1) })
-    .nullable()
-    .optional()
-})
-const UiTrust = z.looseObject({
-  ui: z.looseObject({ trustedOrcaHooks: z.record(z.string(), z.unknown()).optional() })
-})
-const RepoIds = z.looseObject({ repos: z.array(z.looseObject({ id: z.string() })) })
-
-/** Inherit runs the archive hook exactly when the desktop's Delete would run it without asking. */
-export async function resolveArchiveHookDecision(
-  client: RuntimeClient,
-  choice: ArchiveHookChoice,
-  repoId: string
-): Promise<ArchiveHookDecision> {
-  if (choice !== 'inherit') {
-    return { decision: choice, reason: 'requested' }
-  }
-  try {
-    const hooks = RepoArchiveHook.parse(
-      (await client.call('repo.hooks', { repo: `id:${repoId}` })).result
-    )
-    if (hooks.archiveTrust === undefined) {
-      return { decision: 'skip', reason: 'unverifiable' }
-    }
-    if (hooks.archiveTrust === null) {
-      return hooks.hooks?.scripts?.archive?.trim()
-        ? { decision: 'run', reason: 'approved' }
-        : { decision: 'skip', reason: 'none' }
-    }
-    const [ui, repoList] = await Promise.all([client.call('ui.get'), client.call('repo.list')])
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: trust readers ignore malformed entries.
-    const trust = (UiTrust.parse(ui.result).ui.trustedOrcaHooks ?? {}) as PersistedTrustedOrcaHooks
-    const repos = RepoIds.parse(repoList.result).repos
-    return isOrcaHookTrusted(trust, repos, repoId, 'archive', hooks.archiveTrust.contentHash)
-      ? { decision: 'run', reason: 'approved' }
-      : { decision: 'skip', reason: 'not-approved' }
-  } catch {
-    return { decision: 'skip', reason: 'unverifiable' }
-  }
+/** Older hosts drop `archiveHooks` and follow `runHooks`, which keeps their previous behavior. */
+export function archiveHookRequest(choice: ArchiveHookChoice): {
+  archiveHooks: ArchiveHookChoice
+  runHooks: boolean
+} {
+  return { archiveHooks: choice, runHooks: choice === 'run' }
 }
 
-export function archiveHookSkipWarning(decision: ArchiveHookDecision): string | undefined {
-  if (decision.reason === 'not-approved') {
-    return "The archive hook did not run: this version of the repository's orca.yaml script hasn't been approved in Orca. Pass --archive run to run it."
+export function printArchiveHookWarning(
+  choice: ArchiveHookChoice,
+  report: ArchiveHookReport | undefined,
+  json: boolean
+): void {
+  if (json) {
+    return
   }
-  if (decision.reason === 'unverifiable') {
-    return "No archive hook ran: Orca couldn't check whether this repository's hook is approved. Pass --archive run to run it."
+  if (!report) {
+    if (choice === 'inherit') {
+      console.error(
+        "warning: The host didn't report an archive hook decision (it may predate --archive); it runs the archive hook only with --archive run."
+      )
+    }
+    return
   }
-  return undefined
+  if (report.reason === 'not-approved') {
+    console.error(
+      "warning: The archive hook did not run: this version of the repository's orca.yaml script hasn't been approved in Orca. Pass --archive run to run it."
+    )
+  } else if (report.reason === 'unverifiable') {
+    console.error(
+      "warning: No archive hook ran: Orca can't check this workspace's hook approval on its host. Pass --archive run to run it."
+    )
+  }
 }

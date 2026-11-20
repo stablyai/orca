@@ -20,14 +20,14 @@ export async function gateFolderWorkspaceRemovalOnArchiveHook(args: {
   runArchive: boolean
   allowFailure: boolean
   runtimeTarget: () => HookRuntimeTarget | undefined
-}): Promise<ArchiveHookOverride | undefined> {
+}): Promise<{ ran: boolean; override?: ArchiveHookOverride }> {
   const { repo } = args
   if (!args.runArchive || !isRepoOnCatalogHost(repo)) {
-    return undefined
+    return { ran: false }
   }
   const hooks = getEffectiveHooks(repo)
   if (!hooks?.scripts.archive) {
-    return undefined
+    return { ran: false }
   }
   const result = await runHook('archive', repo.path, repo, repo.path, args.runtimeTarget(), {
     identity: {
@@ -37,11 +37,12 @@ export async function gateFolderWorkspaceRemovalOnArchiveHook(args: {
     },
     hooks
   })
-  return gateWorktreeRemovalOnArchiveHook({
+  const override = gateWorktreeRemovalOnArchiveHook({
     worktreePath: repo.path,
     result,
     allowFailure: args.allowFailure
   })
+  return { ran: true, ...(override ? { override } : {}) }
 }
 
 /** Runner files are per launch; drop this workspace's once its processes have stopped. */

@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { WORKTREE_REMOVE_BRANCH_POLICY_RUNTIME_CAPABILITY } from '../../shared/remote-runtime/protocol/worktree-runtime-capabilities'
 import type { RuntimeWorktreeRemoveResult } from '../../shared/worktree/catalog/runtime-worktree-contracts'
+import type { ArchiveHookChoice } from '../../shared/worktree/removal/archive-hook-decision'
 import { worktreeRemovalReplyTimeoutMs } from '../../shared/worktree/removal/archive-hook-removal-gate'
 import { RuntimeClientError } from '../runtime/connection/types'
 import type { RuntimeClient } from '../runtime/client'
@@ -12,6 +13,8 @@ export type WorktreeRemovalRequest = {
   force: boolean
   deleteBranch?: boolean
   runHooks: boolean
+  /** Hosts that know it decide from it; others follow runHooks. */
+  archiveHooks?: ArchiveHookChoice
   allowFailedArchiveHook: boolean
 }
 
@@ -30,7 +33,9 @@ export async function requestWorktreeRemoval(
   }
   try {
     return await client.call<RuntimeWorktreeRemoveResult>('worktree.rm', legacy, {
-      timeoutMs: worktreeRemovalReplyTimeoutMs(request.runHooks),
+      timeoutMs: worktreeRemovalReplyTimeoutMs(
+        request.archiveHooks ? request.archiveHooks !== 'skip' : request.runHooks
+      ),
       requestSelection: {
         paramsForStatus: (raw) => {
           const parsed = BranchPolicyStatus.safeParse(raw)

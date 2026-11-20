@@ -122,18 +122,19 @@ export async function removeOrphanOrFolderWorktree({
     throw new Error('Cannot delete the project root workspace. Remove the folder project instead.')
   }
   // Archive failure must refuse before watcher, PTY or metadata teardown (#19334).
-  const archiveHookOverride = await gateFolderWorkspaceRemovalOnArchiveHook({
-    repo,
-    worktreeId: removalTarget.id,
-    displayName:
-      (
-        readWorktreeMetaForRepo(store, removalTarget.id, repo) ??
-        store.getWorktreeMeta(removalTarget.id)
-      )?.displayName ?? repo.displayName,
-    runArchive: archive.runHooks,
-    allowFailure: archive.allowFailedArchiveHook,
-    runtimeTarget: () => getLocalProjectWorktreeGitOptions(store, repo)
-  })
+  const { ran: archiveHookRan, override: archiveHookOverride } =
+    await gateFolderWorkspaceRemovalOnArchiveHook({
+      repo,
+      worktreeId: removalTarget.id,
+      displayName:
+        (
+          readWorktreeMetaForRepo(store, removalTarget.id, repo) ??
+          store.getWorktreeMeta(removalTarget.id)
+        )?.displayName ?? repo.displayName,
+      runArchive: archive.runHooks,
+      allowFailure: archive.allowFailedArchiveHook,
+      runtimeTarget: () => getLocalProjectWorktreeGitOptions(store, repo)
+    })
   // Without --run-hooks, look at the folder only to warn, and never start its stopped WSL distro for that.
   const archiveSkipped =
     !archive.runHooks &&
@@ -161,6 +162,7 @@ export async function removeOrphanOrFolderWorktree({
     runtime.notifyWorktreesChanged(repo.id)
     return {
       ...(archiveHookOverride ? { archiveHookOverride } : {}),
+      ...(archiveHookRan ? { archiveHookRan: true as const } : {}),
       ...(archiveSkipped
         ? {
             warning:
