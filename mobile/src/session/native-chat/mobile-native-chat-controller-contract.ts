@@ -10,6 +10,7 @@ import type {
 } from '../../../../src/shared/native-chat/input/questions/native-chat-ask-answer'
 import type { AskPrompt } from '../../../../src/shared/native-chat/input/questions/native-chat-ask-types'
 import type { MobileChatPermission } from './input/prompts/mobile-native-chat-permission'
+import type { MobileNativeChatCollapsedPrompt } from './input/prompts/MobileNativeChatPromptStrip'
 import type { MobileChatQuestion } from './input/prompts/mobile-native-chat-question'
 import type {
   NativeChatLiveTurnIndicator,
@@ -32,6 +33,7 @@ import type { MobileNativeChatPendingMessage } from './transcript/sending/mobile
 import type { useMobileNativeChatSession } from './conversation/use-mobile-native-chat-session'
 import type { MobileNativeChatSessionOptionPickersProps } from './input/session-options/MobileNativeChatSessionOptionPickers'
 import type { MobileStructuredMcpPanel } from './mcp/use-mobile-structured-mcp-panel'
+import type { MobileStructuredAccountUsage } from './usage/use-mobile-structured-account-usage'
 import type { MobileNativeChatVisualSource } from './visual/mobile-native-chat-visual-read'
 import type { NativeChatContextUsageSummary } from '../../../../src/shared/native-chat/native-chat-context-usage-summary'
 import type { useMobileStructuredSessionCommands } from './composer/commands/use-mobile-structured-session-commands'
@@ -93,7 +95,7 @@ export type MobileNativeChatController = {
   // Collapse writes nothing to the terminal and frees Send.
   collapseNativeChatAsk: () => void
   collapseNativeChatPrompt?: () => void
-  nativeChatCollapsedPrompt: { title: string; expand: () => void } | null
+  nativeChatCollapsedPrompt: MobileNativeChatCollapsedPrompt | null
   handleNativeChatCancelPrompt?: (prompt?: {
     itemId: string
     expectedRevision: number
@@ -106,6 +108,7 @@ export type MobileNativeChatController = {
   nativeChatInterruptedContinue: MobileStructuredInterruptedContinue | null
   nativeChatThreadGoal: MobileStructuredThreadGoal | null
   nativeChatMcpPanel: MobileStructuredMcpPanel | null
+  nativeChatAccountUsage: MobileStructuredAccountUsage | null
   nativeChatRewind: AgentSessionRewindSurface | undefined
   nativeChatFilePaths: string[]
   loadNativeChatFiles: (query: string) => void
@@ -134,4 +137,6 @@ export type MobileNativeChatController = {
   /** The structured chat's options read on whether its agent forks; absent until it answers. */
   nativeChatForkSupport?: AgentSessionOptionsResult['forkSupport']
   nativeChatUsageLimit: MobileNativeChatUsageLimit | null
+  /** Rows whose failure no later successful turn resolved. */
+  nativeChatUnresolvedFailureRows: ReadonlySet<string>
 }

@@ -124,8 +124,14 @@ export function closeLocalPtyStartupQueryAuthority(id: string): number {
   return startupIngressByPty.get(id)?.closeQueryAuthority() ?? 0
 }
 
-export async function listLocalPtyProcesses(): Promise<PtyProcessInfo[]> {
-  return Array.from(ptyProcesses.entries()).map(([id, proc]) => ({
+export async function listLocalPtyProcesses(ptyIds?: readonly string[]): Promise<PtyProcessInfo[]> {
+  const entries = ptyIds
+    ? ptyIds.flatMap((id) => {
+        const proc = ptyProcesses.get(id)
+        return proc ? [[id, proc] as const] : []
+      })
+    : Array.from(ptyProcesses.entries())
+  return entries.map(([id, proc]) => ({
     id,
     ...(ptyIncarnations.get(id) ? { incarnationId: ptyIncarnations.get(id) } : {}),
     ...(proc.pid > 0 ? { rootProcessId: proc.pid } : {}),

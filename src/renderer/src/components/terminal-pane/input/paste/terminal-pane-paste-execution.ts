@@ -1,3 +1,4 @@
+import { recordRecentTerminalImage } from '../recent-terminal-images'
 import { useAppStore } from '../../../../store/index'
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager-types'
 import type { PtyTransport } from '../../pty-transport/pty-transport-types'
@@ -63,10 +64,10 @@ export function createTerminalPanePasteExecution(
     activeElementAtDispatch: Element | null,
     text: string,
     options?: TerminalPasteTextOptions
-  ): Promise<void> => {
+  ): Promise<boolean> => {
     // Pane chrome can hold focus while copy mode is open; its snapshot must not paste into the live PTY.
     if (paneHasTerminalCopyMode(pane)) {
-      return
+      return false
     }
     const transport = paneTransportsRef.current.get(pane.id)
     const ptyId = transport?.getPtyId() ?? null
@@ -100,7 +101,7 @@ export function createTerminalPanePasteExecution(
     })
     if (execution.status !== 'pasted') {
       setTerminalError(formatTerminalPasteExecutionError(execution.reason))
-      return
+      return false
     }
     if (text) {
       recordTerminalUserInputForLeaf(tabId, pane.leafId)
@@ -108,6 +109,7 @@ export function createTerminalPanePasteExecution(
     if (options?.recoverImagePasteWebglAtlas) {
       scheduleImagePasteWebglAtlasRecovery()
     }
+    return true
   }
 
   // Resolve per pane/PTY host: Windows Codex needs input-record newlines even beside other protocols.
@@ -163,6 +165,7 @@ export function createTerminalPanePasteExecution(
       copiedFiles: createPaneClipboardCopiedFiles(pane),
       connectionId,
       runtimeEnvironmentId,
+      onLocalImagePasted: (path) => recordRecentTerminalImage(pane.terminal, path, true),
       protectedMultilineTextPasteOptions: resolvePaneProtectedMultilinePasteOptions(pane),
       pasteText: (text, options) =>
         executePanePasteText(pane, source, activeElementAtDispatch, text, options),

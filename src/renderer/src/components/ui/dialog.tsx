@@ -68,6 +68,8 @@ const dialogContentSurfaceVariants = cva('', {
         'gap-0 bg-[color-mix(in_srgb,var(--foreground)_8%,var(--background))] p-0 dark:bg-[color-mix(in_srgb,var(--foreground)_16%,var(--background))]',
       /** Edge to edge, for an embedded panel that brings its own header and padding. */
       panel: 'gap-0 p-0',
+      /** `panel`, opaque: content scrolling under sticky headings (`bg-popover`) must not show through. */
+      'opaque-panel': 'gap-0 bg-popover p-0',
       /** Trust, consent and provenance decisions: host-owned tokens a plugin theme cannot restyle. */
       security: SECURITY_SURFACE_CLASS
     }
@@ -84,7 +86,7 @@ function DialogContentCloseButton({ variant }: { variant: 'close' | 'minimize' }
   const button = (
     <DialogPrimitive.Close
       data-slot="dialog-close"
-      className="absolute top-4 right-4 rounded-xs opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4"
+      className="absolute top-4 right-4 rounded-xs opacity-70 outline-none transition-[opacity,box-shadow] hover:opacity-100 focus-visible:opacity-100 focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4"
     >
       {variant === 'minimize' ? <Minus className="size-3.5" /> : <XIcon />}
       <span className="sr-only">{label}</span>
@@ -117,6 +119,7 @@ function DialogContent({
   surface,
   size,
   scrollable = false,
+  phoneSheet = false,
   busy = false,
   initialFocus,
   ...props
@@ -128,9 +131,11 @@ function DialogContent({
     closeButtonVariant?: 'close' | 'minimize'
     /** `compact` is a short confirmation's width, like the close prompts. `confirm`, `form` and
      *  `list` are the unified layout: one padding and type scale, footer with a start slot. */
-    size?: 'default' | 'compact' | UnifiedDialogSize
+    size?: 'default' | 'compact' | 'flush' | UnifiedDialogSize
     /** The whole dialog scrolls within the viewport instead of growing past it. */
     scrollable?: boolean
+    /** In a phone-width window it sits on the bottom edge, full width, as a bottom sheet. */
+    phoneSheet?: boolean
     /** Work is running: Esc, outside presses and `DialogCancel` cannot close the dialog. */
     busy?: boolean
     /** `cancel` starts focus on the `DialogCancel`, for destructive and trust decisions. */
@@ -148,7 +153,7 @@ function DialogContent({
         data-size={size}
         // Match dropdown surface/border/shadow tokens for dark-mode contrast; minmax(0,1fr) prevents long tokens from widening the grid and pushing footers outside.
         className={cn(
-          'fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] grid-cols-[minmax(0,1fr)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border border-black/14 bg-dialog-surface p-6 text-foreground shadow-[0_20px_60px_rgba(0,0,0,0.28),inset_0_1px_0_rgba(255,255,255,0.08)] duration-200 outline-none dark:border-white/14 dark:shadow-[0_24px_72px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.06)] data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 sm:max-w-lg data-[size=compact]:sm:max-w-sm',
+          'fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] grid-cols-[minmax(0,1fr)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border border-black/14 bg-dialog-surface p-6 text-foreground shadow-[0_20px_60px_rgba(0,0,0,0.28),inset_0_1px_0_rgba(255,255,255,0.08)] duration-200 outline-none dark:border-white/14 dark:shadow-[0_24px_72px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.06)] data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 sm:max-w-lg data-[size=compact]:sm:max-w-sm data-[size=flush]:gap-0 data-[size=flush]:p-0',
           unified &&
             cn(
               'gap-3 rounded-[10px] p-5 [&_[data-slot=checkbox][data-state=unchecked]]:border-muted-foreground',
@@ -156,6 +161,8 @@ function DialogContent({
             ),
           dialogContentSurfaceVariants({ surface }),
           scrollable && 'max-h-[calc(100vh-3rem)] overflow-y-auto scrollbar-sleek',
+          phoneSheet &&
+            'max-sm:top-auto max-sm:bottom-0 max-sm:left-0 max-sm:max-w-full max-sm:translate-x-0 max-sm:translate-y-0 max-sm:rounded-b-none',
           className
         )}
         {...props}
@@ -225,7 +232,7 @@ function DialogHeader({ className, ...props }: React.ComponentProps<'div'>) {
 
 // Why data-slot: a Radix checkbox is also a <button> and must keep its own box.
 const unifiedFooterButtonClass =
-  '[&>[data-slot=button]]:h-auto [&>[data-slot=button]]:min-h-8 [&>[data-slot=button]]:max-w-full [&>[data-slot=button]]:py-1.5 [&>[data-slot=button]]:text-center [&>[data-slot=button]]:whitespace-normal [&>[data-slot=button]]:[overflow-wrap:anywhere]'
+  '[&>[data-slot=button]]:h-auto [&>[data-slot=button]]:min-h-8 [&>[data-slot=button]]:text-[13px] [&>[data-slot=button]]:max-w-full [&>[data-slot=button]]:py-1.5 [&>[data-slot=button]]:text-center [&>[data-slot=button]]:whitespace-normal [&>[data-slot=button]]:[overflow-wrap:anywhere]'
 
 // Why: a ghost action's text lines up with the dialog's left edge, like the link-style extras.
 const unifiedFooterStartClass = 'has-[>[data-variant=ghost]:first-child]:-ml-3'

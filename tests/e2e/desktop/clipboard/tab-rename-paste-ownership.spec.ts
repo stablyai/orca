@@ -22,16 +22,6 @@ function editablePasteChord(): string {
   return process.platform === 'darwin' ? 'Meta+V' : 'Control+V'
 }
 
-function countOccurrences(value: string, needle: string): number {
-  let count = 0
-  let index = value.indexOf(needle)
-  while (index !== -1) {
-    count += 1
-    index = value.indexOf(needle, index + needle.length)
-  }
-  return count
-}
-
 async function getActiveTabTitle(page: Page, worktreeId: string): Promise<string> {
   const activeId = await getActiveTabId(page)
   expect(activeId).not.toBeNull()
@@ -76,7 +66,6 @@ test.describe('tab rename paste ownership', () => {
     await orcaPage.keyboard.press(editablePasteChord())
 
     await expect(renameInput).toHaveValue(payload)
-    expect(countOccurrences(await renameInput.inputValue(), payload)).toBe(1)
     expect((await readTerminalPtyWrites(electronApp)).join('')).not.toContain(payload)
 
     await renameInput.press('Escape')

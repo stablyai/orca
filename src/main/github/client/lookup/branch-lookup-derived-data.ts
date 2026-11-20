@@ -3,6 +3,7 @@ import type { ghRepoExecOptions } from '../../repositories/github-repository-ide
 import type { GitHubRepositoryIdentity as OwnerRepo } from '../../../../shared/github/repositories/repository-identity'
 import { hydrateGitHubPRStack } from '../../pull-requests/stacks/github-pr-stack'
 import { detectRepositoryMergeMetadata } from './../detect/repository-merge-metadata'
+import type { GitHubRepositoryMergeMetadata } from './../detect/repository-merge-metadata-cache'
 import { derivePullRequestMergeable, type PullRequestLookupData } from './pull-request-lookup-data'
 import { getCachedGitHubPRStackSummary } from './pr-stack-summary-cache'
 
@@ -19,7 +20,7 @@ export async function derivePRRefreshData(args: {
 }): Promise<{
   mergeable: ReturnType<typeof derivePullRequestMergeable>
   stack: PullRequestLookupData['stack']
-  stackMergeQueueRequired: boolean | null | undefined
+  stackMergeMetadata: GitHubRepositoryMergeMetadata | undefined
   conflictSummary: Awaited<ReturnType<typeof getPRConflictSummary>>
 }> {
   const { data, dataRepo, repoPath, connectionId, localGitOptions, ghOptions, executionScope } =
@@ -29,7 +30,7 @@ export async function derivePRRefreshData(args: {
     return {
       mergeable,
       stack: undefined,
-      stackMergeQueueRequired: undefined,
+      stackMergeMetadata: undefined,
       conflictSummary: undefined
     }
   }
@@ -57,16 +58,10 @@ export async function derivePRRefreshData(args: {
           executionScope
         )
       : data.stack
-  const stackMergeQueueRequired =
+  // A stack merges into its base branch, so that branch's queue and rules apply.
+  const stackMergeMetadata =
     stack && dataRepo
-      ? (
-          await detectRepositoryMergeMetadata(
-            dataRepo,
-            stack.baseRefName,
-            ghOptions,
-            executionScope
-          )
-        ).mergeQueueRequired
+      ? await detectRepositoryMergeMetadata(dataRepo, stack.baseRefName, ghOptions, executionScope)
       : undefined
   const conflictSummary =
     !connectionId &&
@@ -82,5 +77,5 @@ export async function derivePRRefreshData(args: {
           localGitOptions
         )
       : undefined
-  return { mergeable, stack, stackMergeQueueRequired, conflictSummary }
+  return { mergeable, stack, stackMergeMetadata, conflictSummary }
 }

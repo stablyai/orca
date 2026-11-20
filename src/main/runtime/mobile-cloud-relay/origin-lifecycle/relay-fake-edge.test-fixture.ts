@@ -232,3 +232,20 @@ export class FakeHostSession {
 export function closedOnServer(socket: WebSocket): Promise<number> {
   return new Promise((resolve) => socket.once('close', (code) => resolve(code)))
 }
+
+// Waits on loopback I/O with the fake clock held still: vi.waitFor advances it every poll and gives
+// up after 1s of wall time, so a slow CI runner fails it while the handshake is still in flight.
+export async function untilLoopback(check: () => void, timeoutMs = 10_000): Promise<void> {
+  const deadline = performance.now() + timeoutMs
+  for (;;) {
+    try {
+      check()
+      return
+    } catch (error) {
+      if (performance.now() > deadline) {
+        throw error
+      }
+    }
+    await new Promise<void>((resolve) => setImmediate(resolve))
+  }
+}

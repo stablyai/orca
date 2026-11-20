@@ -22,7 +22,7 @@ vi.mock('electron', () => ({
     port2 = {}
   }
 }))
-vi.mock('./backend-bootstrap', () => ({ capturedBootstrap: {} }))
+vi.mock('./backend-bootstrap', () => ({ capturedBootstrap: {}, sendBackendBootstrap: vi.fn() }))
 vi.mock('../../shared/backend/backend-port-rpc', () => ({
   BackendPortRpc: class {
     call = rig.call

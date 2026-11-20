@@ -156,10 +156,8 @@ const ACCOUNT_METHOD_DEFINITIONS = [
     name: 'accounts.selectClaude',
     permission: 'accounts-admin',
     params: SelectClaudeAccountParams,
-    handler: async (params, { runtime }) =>
-      runtime.selectClaudeAccount(params.accountId, {
-        movesRunningSessions: params.movesRunningSessions
-      })
+    handler: async ({ accountId, ...options }, { runtime }) =>
+      runtime.selectClaudeAccount(accountId, options)
   }),
   defineMethod({
     name: 'accounts.selectCodex',

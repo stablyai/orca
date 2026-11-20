@@ -1,4 +1,5 @@
 import { useAppStore } from '@/store'
+import { SharedLinksSettingsPane } from '../bots/SharedLinksSettingsPane'
 import { SessionHistorySettingsPane } from '../session-history/SessionHistorySettingsPane'
 import { ArtifactsSettingsPane } from '../artifacts/ArtifactsSettingsPane'
 import { AutomationsSettingsPane } from '../automations/AutomationsSettingsPane'
@@ -210,6 +211,26 @@ export function renderShareSkillsSettingsSection(
       searchEntries={navigation.getSectionSearchEntries('share-skills')}
     >
       {view.isSectionMounted('share-skills') ? <ShareSkillsSettingsPane /> : null}
+    </SettingsSection>
+  )
+}
+
+export function renderSharedLinksSettingsSection(
+  context: SettingsRenderContext,
+  t: Translate = translate
+): React.JSX.Element | null {
+  const { navigation, view } = context
+  if (!navigation.navSections.some((section) => section.id === 'shared-links')) {
+    return null
+  }
+  return (
+    <SettingsSection
+      id="shared-links"
+      title={t('settings.sharedLinks.title', 'Shared links')}
+      description={t('settings.sharedLinks.description', "Links you've published.")}
+      searchEntries={navigation.getSectionSearchEntries('shared-links')}
+    >
+      {view.isSectionMounted('shared-links') ? <SharedLinksSettingsPane /> : null}
     </SettingsSection>
   )
 }

@@ -20,6 +20,7 @@ import { loadWslMappedDriveAnswers } from '../wsl/filesystem/wsl-mapped-drive-an
 import { loadWslMoveFence } from '../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
 import { startWslMoveStartup } from '../persistence/moving-wsl-projects/startup/wsl-move-startup'
 import { startWslHostsPolicyLiveUpdates } from '../wsl/host-lifecycle/wsl-hosts-policy-live-update'
+import { startCodexHistoryCleanupPolicyLiveUpdates } from '../codex/history/cleanup-policy/codex-history-cleanup-policy-live-update'
 import { runPendingWslDriveUncConversions } from '../wsl/filesystem/wsl-drive-unc-conversion-startup'
 import { createProfileStateStoreForStartup } from '../persistence/profile-state/startup/profile-state-startup-authority'
 import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
@@ -39,9 +40,7 @@ import {
   suppressDevEducationForStore
 } from './profile-startup/dev-education-suppression'
 import { setBrowserNetworkProxySettingsResolver } from '../browser/sessions/proxy/browser-session-proxy'
-import { installDocPreviewProtocolHandler } from '../browser/document-preview/doc-preview-protocol'
-import { installMediaPreviewProtocolHandler } from '../media/media-preview-protocol'
-import { installJiraImageProtocolHandler } from '../jira/attachments/image-protocol'
+import { installPreviewProtocolHandlers } from './preview-protocol-handlers'
 import { registerDocPreviewGrantHandlers } from '../ipc/doc-preview-grant-ipc'
 import {
   initializeBrowserSessionsForApp,
@@ -114,6 +113,10 @@ export async function initializeReadyFoundation(): Promise<void> {
   }
   // Post-ready naming preserves packaged Keychain identity; dev already renamed before ready.
   app.setName(identity.appName)
+  // Older builds put an unread count on the dock icon; clear any that is still showing.
+  if (process.platform === 'darwin') {
+    app.dock?.setBadge('')
+  }
   updateGpuAccelerationAboutPanel()
   if (state.isServeMode) {
     // Profile loading can decrypt and hang; fence unreachable keychains first.
@@ -204,6 +207,9 @@ export async function initializeReadyFoundation(): Promise<void> {
   if (!state.isServeMode) {
     void state.initialProxyApplicationReady.then(startWslHostsPolicyLiveUpdates)
   }
+  void state.initialProxyApplicationReady.then(() =>
+    startCodexHistoryCleanupPolicyLiveUpdates(store)
+  )
   // Wait for profile-sidecar location, then defer potentially blocking OS-keyring probes past first paint (STA-5765).
   scheduleSecretProtectionGapReport({
     dataFile: profile.dataFile,
@@ -295,10 +301,7 @@ export async function initializeReadyFoundation(): Promise<void> {
   }
   // Install the proxy resolver before partitions materialize.
   setBrowserNetworkProxySettingsResolver(() => state.store!.getSettings())
-  // Protocol-scoped preview handlers must exist before webview attachment.
-  installMediaPreviewProtocolHandler()
-  installJiraImageProtocolHandler()
-  installDocPreviewProtocolHandler()
+  installPreviewProtocolHandlers()
   registerDocPreviewGrantHandlers()
   // Session setup needs the extension support decision before loading profiles.
   initializeBrowserExtensionSupport({

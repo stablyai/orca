@@ -147,4 +147,17 @@ describe('damaged saved conversation observations', () => {
     })
     expect(store.getConversation('session-beta')).toBeNull()
   })
+
+  it('reports a damaged chat only to the workspace it was observed in', async () => {
+    await establishOwner(await open())
+    await editPersistedTestAgentSessionStore(directory, (persisted) => {
+      Object.assign(persisted.records['session-alpha'].lease, { minimumNextFence: 'bad' })
+    })
+    const store = await open()
+    expect(store.listWorkspaceSessions(NATIVE)).toEqual({ sessionIds: [], hasUnreadable: true })
+    expect(store.listWorkspaceSessions({ ...NATIVE, workspaceId: 'workspace-2' })).toEqual({
+      sessionIds: [],
+      hasUnreadable: false
+    })
+  })
 })

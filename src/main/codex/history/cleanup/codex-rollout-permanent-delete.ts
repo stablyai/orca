@@ -7,6 +7,13 @@ import { isDefinitiveAbsence } from '../../../../shared/errors/definitive-filesy
 import { resolveOrcaManagedCodexHomePath } from '../../configuration/homes/codex-home-paths'
 import { codexDatedRolloutRelativePath } from '../resume/codex-session-resume-home'
 import { holdCodexRolloutForDeletion } from '../rollouts/codex-rollout-deletion-guard'
+import { forgetCodexHistoryDiskUsage } from '../disk-usage/codex-history-disk-usage'
+import {
+  isOutsideProtectedRoots,
+  resolveProtectedRoots,
+  type ProtectedRoot,
+  type RolloutHomes
+} from './codex-rollout-protected-roots'
 
 type RolloutTarget = { agent: AiVaultAgent; filePath: string }
 type DeleteResult = { deleted: number; failed: number; freedBytes: number }
@@ -118,8 +125,14 @@ async function readNames(names: readonly RolloutName[]): Promise<NameState[]> {
   return states
 }
 
-async function removeName(path: string): Promise<boolean> {
+async function removeName(
+  path: string,
+  protectedRoots: readonly ProtectedRoot[]
+): Promise<boolean> {
   try {
+    if (!(await isOutsideProtectedRoots(path, protectedRoots))) {
+      return false
+    }
     // Unlink only ever removes the name: never a folder, never a link's target.
     await unlink(path)
     return true
@@ -182,9 +195,18 @@ async function isOpenInCodex(homes: readonly string[], stem: string): Promise<bo
   return !keepsLocks
 }
 
+async function removeCopyMarker(
+  path: string,
+  protectedRoots: readonly ProtectedRoot[]
+): Promise<void> {
+  if (await isOutsideProtectedRoots(path, protectedRoots)) {
+    await rm(path, { force: true })
+  }
+}
+
 async function deleteRollout(
   target: RolloutTarget,
-  listHomes: () => Promise<readonly string[]>,
+  listHomes: () => Promise<RolloutHomes>,
   shouldDelete: (target: RolloutTarget) => Promise<boolean>,
   result: DeleteResult,
   deletedPaths: string[]
@@ -192,7 +214,8 @@ async function deleteRollout(
   const release = await holdCodexRolloutForDeletion(target.filePath)
   try {
     // Listed under the hold: an account added since the sweep began may already hold a link.
-    const homes = await listHomes()
+    const listed = await listHomes()
+    const { homes } = listed
     const stem = rolloutStem(homes, target.filePath)
     if (!stem) {
       result.failed += 1
@@ -202,6 +225,8 @@ async function deleteRollout(
     if (await isOpenInCodex(homes, stem)) {
       return
     }
+    // After the open check: a chat still open never reads the import folder (which can start WSL).
+    const protectedRoots = await resolveProtectedRoots(listed, stem)
     const found = await readNames(names)
     // Every name, every extension: a chat resumed or still written anywhere keeps them all.
     const checked = new Set<string>()
@@ -239,7 +264,8 @@ async function deleteRollout(
         if (state.version !== versions.get(name.path) || (await isOpenInCodex(homes, stem))) {
           return
         }
-        if (await removeName(state.path)) {
+        // A name reached into the import folder stays: the user's copy survives there anyway.
+        if (await removeName(state.path, protectedRoots)) {
           removed.push(state)
           deletedPaths.push(state.path)
         }
@@ -247,11 +273,15 @@ async function deleteRollout(
     } finally {
       result.freedBytes += freedBytesOf(removed)
     }
+    if (removed.length === 0) {
+      return
+    }
     result.deleted += 1
     // A name another process links meanwhile is a fresh candidate for the next sweep's full checks.
-    await rm(join(resolveOrcaManagedCodexHomePath(), '.orca-session-copies', `${stem}.json`), {
-      force: true
-    }).catch(() => undefined)
+    await removeCopyMarker(
+      join(resolveOrcaManagedCodexHomePath(), '.orca-session-copies', `${stem}.json`),
+      protectedRoots
+    ).catch(() => undefined)
   } catch (error) {
     console.warn('[workspace-cleanup] Failed to delete Codex rollout:', target.filePath, error)
     result.failed += 1
@@ -267,7 +297,7 @@ async function deleteRollout(
 export async function deleteCodexRolloutsPermanently(
   targets: readonly RolloutTarget[],
   shouldDelete: (target: RolloutTarget) => Promise<boolean>,
-  listHomes: () => Promise<readonly string[]>
+  listHomes: () => Promise<RolloutHomes>
 ): Promise<DeleteResult> {
   const result: DeleteResult = { deleted: 0, failed: 0, freedBytes: 0 }
   const deletedPaths: string[] = []
@@ -275,5 +305,8 @@ export async function deleteCodexRolloutsPermanently(
     await deleteRollout(target, listHomes, shouldDelete, result, deletedPaths)
   }
   await invalidateDeletedAiVaultSessionPaths(deletedPaths)
+  if (deletedPaths.length > 0) {
+    forgetCodexHistoryDiskUsage()
+  }
   return result
 }

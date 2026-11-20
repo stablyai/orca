@@ -1,4 +1,5 @@
 import type { SplitTerminalPaneDetail } from '@/constants/terminal'
+import type { RendererTerminalSplitRequest } from '../../../../../shared/workspace-layout/terminal-topology/renderer-terminal-split-request'
 import { requestBackgroundTerminalWorktreeMount } from '@/components/terminal/workspace-mounting/background-terminal-worktree-mount'
 import {
   dispatchTerminalPaneSplitRequest,
@@ -11,6 +12,9 @@ import type { AppState } from '../../../store/types'
 import { resolveBrowserSessionTabTarget } from '../browser/browser-session-tab-target'
 import { resolveWindowTabIdForHostTab } from '../session-tabs/host-session-tab-target'
 import { revealWorkspaceSurface } from '@/lib/workspace/activation/workspace-surface-reveal'
+import { activateAiVaultStructuredSession } from '@/lib/agent-session/open/activate-ai-vault-structured-session'
+import { isBotPage } from '@/components/bots/bot-workspace'
+import { structuredAgentSessionIdOfTab } from '../../../../../shared/agent-session/view/structured-agent-session-tab'
 import { focusTerminalInitiatedTab } from './terminal-command-state'
 import { applyRuntimePaneTitle } from './terminal-pane-title-ipc-bridge'
 import { isStructuredAgentSessionHostTabId } from '../../../../../shared/agent-session/view/structured-agent-session-host-tab-id'
@@ -39,8 +43,6 @@ function focusChatWhenListed(worktreeId: string, hostTabId: string): void {
     populated ? resolveWebSessionVisibleTabId(store, worktreeId) : undefined
   )
 }
-
-type RuntimeTerminalSplitRequest = SplitTerminalPaneDetail & { worktreeId?: string }
 
 type TerminalOwnershipEvidence = {
   owners: Set<string>
@@ -84,7 +86,7 @@ function collectTerminalOwnershipEvidence(
   return { owners, ambiguous }
 }
 
-function resolveSplitTargetWorktreeId(request: RuntimeTerminalSplitRequest): string | null {
+function resolveSplitTargetWorktreeId(request: RendererTerminalSplitRequest): string | null {
   const state = useAppStore.getState()
   const evidence = collectTerminalOwnershipEvidence(
     state.tabsByWorktree,
@@ -108,7 +110,7 @@ function resolveSplitTargetWorktreeId(request: RuntimeTerminalSplitRequest): str
   return evidence.owners.size === 1 ? [...evidence.owners][0]! : null
 }
 
-export function routeRuntimeTerminalSplitRequest(request: RuntimeTerminalSplitRequest): void {
+export function routeRuntimeTerminalSplitRequest(request: RendererTerminalSplitRequest): void {
   const worktreeId = resolveSplitTargetWorktreeId(request)
   if (!worktreeId) {
     return
@@ -119,6 +121,7 @@ export function routeRuntimeTerminalSplitRequest(request: RuntimeTerminalSplitRe
     paneRuntimeId: request.paneRuntimeId,
     direction: request.direction,
     command: request.command,
+    ...(request.env ? { env: request.env } : {}),
     sourceLeafId: request.sourceLeafId,
     telemetrySource: request.telemetrySource,
     newLeafId: request.newLeafId,
@@ -194,6 +197,15 @@ export function registerTerminalUiRoutingIpcBridge(unsubs: (() => void)[]): void
         return
       }
       if (!tab) {
+        const chatSessionId =
+          userInitiated && isBotPage(worktreeId) ? structuredAgentSessionIdOfTab(tabId) : null
+        if (chatSessionId) {
+          // A bot's thread or run chat has no tab here; it opens the way Session History opens one.
+          void activateAiVaultStructuredSession({
+            structuredSession: { sessionId: chatSessionId, workspaceId: worktreeId }
+          })
+          return
+        }
         if (userInitiated && isStructuredAgentSessionHostTabId(tabId)) {
           focusChatWhenListed(worktreeId, tabId)
           return

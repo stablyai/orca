@@ -74,7 +74,12 @@ describe('native chat skill editor', () => {
       input.insertFileReferences!(['/Users/abc/Downloads/test (1).csv', 'C:\\docs\\letter.pdf'])
     )
     const pills = [...container.querySelectorAll('[data-native-chat-file-reference]')]
-    expect(pills.map((pill) => pill.textContent)).toEqual(['test (1).csv', 'letter.pdf'])
+    // What each shows; a screen reader hears "File: …" from hidden text.
+    expect(pills.map((pill) => pill.querySelector('.truncate')?.textContent)).toEqual([
+      'test (1).csv',
+      'letter.pdf'
+    ])
+    expect(pills[0].querySelector('.sr-only')?.textContent).toBe('File: test (1).csv')
     expect(pills[0].getAttribute('title')).toBe('/Users/abc/Downloads/test (1).csv')
     const references = '@"/Users/abc/Downloads/test (1).csv" @C:\\docs\\letter.pdf '
     expect(input.value).toBe(`See ${references} please`)
@@ -88,13 +93,15 @@ describe('native chat skill editor', () => {
     expect(input.value).toBe(edited)
   })
 
-  it('deletes a skill atomically and restores it with undo', async () => {
+  it('steps over a skill pill, deletes it in one press and restores it with undo', async () => {
     const { input, editor, container } = setup('$rev')
     act(() => input.insertSkill!(0, 4, '$review'))
     act(() => {
-      input.setSelectionRange(0, 7)
-      editor.commands.deleteSelection()
+      editor.commands.setTextSelection(2)
     })
+    fireEvent.keyDown(editor.view.dom, { key: 'ArrowLeft' })
+    expect(editor.state.selection.from).toBe(1)
+    fireEvent.keyDown(editor.view.dom, { key: 'Delete' })
     expect(input.value).toBe(' ')
     expect(container.querySelector('[data-native-chat-skill]')).toBeNull()
     await act(async () => {

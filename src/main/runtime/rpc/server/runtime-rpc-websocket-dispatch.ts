@@ -16,6 +16,7 @@ import type { RpcBinarySender } from '../transports/rpc-binary-sender'
 import { limitRuntimeRpcReplySize } from './runtime-rpc-reply-size-limit'
 import { MOBILE_RPC_METHOD_ALLOWLIST } from './runtime-rpc-mobile-method-allowlist'
 import { MOBILE_RPC_METHOD_ROUTES } from './runtime-rpc-mobile-method-routing'
+import { isUntaggedTrackerCall, withDefaultScopeServer } from './runtime-rpc-mobile-tracker-methods'
 import { parseExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { WorktreeRemove } from '../../../../shared/rpc-contract/workspaces/worktree-params'
 
@@ -74,7 +75,7 @@ export class RuntimeRpcWebSocketDispatch extends RuntimeRpcMobileDevices {
       }
     }
     // Phone workspace tags cannot choose routing; only this Mac's table does.
-    if (target && MOBILE_RPC_METHOD_ROUTES.get(request.method) !== 'execution-host') {
+    if (target && MOBILE_RPC_METHOD_ROUTES.get(request.method) === 'paired-desktop') {
       return request
     }
     const local = target && this.mobileDesktopRelay?.localRequestFor(request, target.environmentId)
@@ -191,6 +192,10 @@ export class RuntimeRpcWebSocketDispatch extends RuntimeRpcMobileDevices {
           rawMessage
         )
       }
+      // A phone relayed in from another desktop already got that desktop's default host.
+      if (isUntaggedTrackerCall(request) && authenticatedSocket && !device.parentDeviceId) {
+        request = await withDefaultScopeServer(request, this.runtime, this.mobileRelayHostCatalog)
+      }
       const localRequest = this.relayMobileRequest(
         request,
         rawMessage,
@@ -278,7 +283,8 @@ export class RuntimeRpcWebSocketDispatch extends RuntimeRpcMobileDevices {
                 registerDeviceKey: (params) =>
                   registerSocketDeviceKey(this.deviceRegistry!, authenticatedSocket, params),
                 exchangePairingTicket: (params) =>
-                  exchangeSocketPairingTicket(this.deviceRegistry!, authenticatedSocket, params)
+                  exchangeSocketPairingTicket(this.deviceRegistry!, authenticatedSocket, params),
+                ...this.desktopAccountSelf(device, authenticatedSocket.connectionId)
               }
             : undefined,
         mobileRelayHosts: this.mobileRelayHostCatalog ?? undefined,
@@ -301,7 +307,10 @@ export class RuntimeRpcWebSocketDispatch extends RuntimeRpcMobileDevices {
             : undefined,
         delegatedMobileDevices:
           device.scope === 'runtime'
-            ? { sync: (phones) => this.syncDelegatedMobileDevices(device.deviceId, phones) }
+            ? {
+                sync: (phones) =>
+                  this.syncDelegatedMobileDevices(device.deviceId, phones, connectionId)
+              }
             : undefined,
         signal: abortRegistration?.signal,
         sendBinary,

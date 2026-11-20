@@ -6,6 +6,7 @@ import { ALL_RPC_METHODS } from '../methods/rpc-method-registry'
 import type { RpcTransport } from '../transport'
 import type { WebSocket } from 'ws'
 import type { DeviceRegistry } from './pairing/device-registry'
+import { RuntimeClientConnectionLog } from './runtime-rpc-client-connection-log'
 import type { E2EEKeypair } from './pairing/e2ee-keypair'
 import type { RuntimeHostDescriptor } from '../../../../shared/remote-runtime/host-status/runtime-host-descriptor'
 import type { UnpairedDeviceAuthThrottle } from '../mobile/unpaired-device-auth-throttle'
@@ -79,6 +80,7 @@ export class RuntimeRpcState {
   protected transports: RuntimeTransportMetadata[] = []
   protected metadataOwnershipWatch: RuntimeMetadataOwnershipWatch | null = null
   protected mobileSocketWiring: MobileSocketWiring | null = null
+  protected clientConnectionLog: RuntimeClientConnectionLog | null = null
   // Rebind swaps transports inside session wiring so captured relay sockets remain attached.
   protected detachWebSocketWiring: (() => void) | null = null
   protected mobileRelayPairingProvider: MobileRelayPairingProvider | null = null
@@ -94,6 +96,7 @@ export class RuntimeRpcState {
   protected mobileRelayPairingOfferQueue: Promise<void> = Promise.resolve()
   protected mobileRelayPairingOfferInFlight: {
     generation: number
+    createdByDeviceId: string | undefined
     address: string | null
     rotate: boolean
     request: Promise<MobilePairingOffer>
@@ -171,5 +174,12 @@ export class RuntimeRpcState {
       this.clientRequestsInFlight -= 1
       this.lastClientRequestAt = Date.now()
     })
+  }
+
+  /** One log per socket wiring: a relay close that lands after stop must not touch a later session's counts. */
+  protected startClientConnectionLog(): RuntimeClientConnectionLog {
+    this.clientConnectionLog?.close()
+    this.clientConnectionLog = new RuntimeClientConnectionLog()
+    return this.clientConnectionLog
   }
 }
