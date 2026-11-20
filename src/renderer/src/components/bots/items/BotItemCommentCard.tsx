@@ -102,7 +102,11 @@ export function BotItemCommentCard({
           name,
           time: format.format(event.at)
         })}
-        className="rounded-[10px] bg-foreground/[0.035] px-2 pb-2 pt-1.5 outline-none focus:ring-2 focus:ring-ring/50 dark:bg-foreground/[0.045]"
+        className={cn(
+          'rounded-[10px] bg-foreground/[0.035] px-2 pt-1.5 outline-none focus:ring-2 focus:ring-ring/50 dark:bg-foreground/[0.045]',
+          // A question's chips end the card: more room under them.
+          shape.decisions.length > 0 ? 'pb-3.5' : 'pb-2'
+        )}
       >
         <div className="mb-1 flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
           <Avatar bot={bot} event={event} name={name} />

@@ -270,7 +270,13 @@ function CommentCard({
   const shape = botItemQuestionShape(event.data)
   const text = stripSentImagePromptMarkers(shape.body, botItemCommentImages(event.data).length)
   return (
-    <View style={[styles.card, mine && styles.cardMine]}>
+    <View
+      style={[
+        styles.card,
+        mine && styles.cardMine,
+        shape.decisions.length > 0 && styles.cardAsking
+      ]}
+    >
       <View style={styles.cardHead}>
         <Text style={styles.author}>{botItemActorName(event, item, t)}</Text>
         <View style={styles.spacer} />
@@ -383,6 +389,8 @@ const styles = themedStyleSheet(() => ({
     backgroundColor: colors.sheetGroup
   },
   cardMine: { backgroundColor: colors.bgRaised },
+  // A question's chips end the card: more room under them.
+  cardAsking: { paddingBottom: spacing.lg + spacing.xxs },
   cardHead: {
     flexDirection: 'row',
     alignItems: 'center',

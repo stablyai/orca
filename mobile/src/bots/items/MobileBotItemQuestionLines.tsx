@@ -1,4 +1,4 @@
-// A Needs you comment's question footer on the phone, as on desktop: under a hairline, each question line
+// A Needs you comment's question footer on the phone, as on desktop: under the body, each question line
 // (an orange dot while the item waits on it) with its quick replies, and Type your answer. A quick reply
 // posts its words as the owner's comment; a long press puts them in the comment box to add to first.
 // Answered, the lines go muted and keep only the reply picked.
@@ -54,7 +54,7 @@ export function MobileBotItemQuestionLines({
 }) {
   const t = useMobileTranslation()
   return (
-    <View style={[styles.footer, shape.body.trim() ? styles.divided : null]}>
+    <View style={[styles.footer, shape.body.trim() ? styles.spaced : null]}>
       {shape.decisions.map((decision, index) => {
         const answer = answers[index] ?? null
         const open = waiting && !answer
@@ -114,12 +114,7 @@ export function MobileBotItemQuestionLines({
 
 const styles = themedStyleSheet(() => ({
   footer: { gap: spacing.md },
-  divided: {
-    marginTop: spacing.sm,
-    paddingTop: spacing.sm,
-    borderTopWidth: 1,
-    borderTopColor: colors.borderSubtle
-  },
+  spaced: { marginTop: spacing.lg },
   dot: {
     position: 'absolute',
     left: -12,
@@ -129,17 +124,17 @@ const styles = themedStyleSheet(() => ({
     borderRadius: 3,
     backgroundColor: colors.agentQuestion
   },
-  decision: { gap: 6 },
+  decision: { gap: spacing.md },
   question: { fontSize: 15, lineHeight: 21, fontWeight: '500', color: colors.textPrimary },
   muted: { color: colors.textMuted },
-  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   chip: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    minHeight: 32,
-    paddingHorizontal: 12,
-    paddingVertical: 5,
+    minHeight: 40,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
     borderRadius: radii.pill,
     borderWidth: 1,
     borderColor: colors.choiceBorder

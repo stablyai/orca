@@ -1,4 +1,4 @@
-// A Needs you comment's question footer: under the body and a hairline, each question line (`--ask`)
+// A Needs you comment's question footer: under the body, each question line (`--ask`)
 // with its quick replies. While the item waits on it, an orange dot marks each line, the one color on
 // the comment; a quick reply posts its words as the owner's comment, and Alt- or Shift-click puts them
 // in the comment box to add to first; Type your answer leads to the box. Answered, the lines go muted and keep only the reply picked.
@@ -22,7 +22,7 @@ export type BotItemQuickReplyActions = {
 }
 
 const CHIP =
-  'min-h-[26px] max-w-full rounded-[13px] border border-question-option-border px-2.5 py-[3px] text-left text-[12.5px] leading-[18px]'
+  'min-h-8 max-w-full rounded-2xl border border-question-option-border px-3.5 py-1.5 text-left text-[13px] leading-[18px]'
 
 function ChipWords({ reply }: { reply: BotItemQuickReply }): React.JSX.Element {
   const t = useTranslate()
@@ -58,7 +58,7 @@ export function BotItemQuestionLines({
   return (
     <div
       data-bot-item-question={waiting ? 'waiting' : 'closed'}
-      className={cn(shape.body.trim() && 'mt-2 border-t border-foreground/[0.09] pt-2')}
+      className={cn(shape.body.trim() && 'mt-4')}
     >
       <div className="space-y-3">
         {shape.decisions.map((decision, index) => {
@@ -85,7 +85,7 @@ export function BotItemQuestionLines({
                 <BotItemMarkdown text={decision.question} />
               </div>
               {open && actions && decision.replies.length > 0 ? (
-                <div className="mt-1.5 flex flex-wrap gap-[5px]">
+                <div className="mt-2.5 flex flex-wrap gap-2">
                   {decision.replies.map((reply) => (
                     <button
                       key={reply.label}
@@ -121,7 +121,7 @@ export function BotItemQuestionLines({
                   </button>
                 </div>
               ) : picks.length > 0 ? (
-                <div className="mt-1.5 flex flex-wrap gap-[5px]">
+                <div className="mt-2.5 flex flex-wrap gap-2">
                   {picks.map((pick) => (
                     <span
                       key={pick.label}
