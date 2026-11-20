@@ -63,11 +63,25 @@ export function getMailboxesWithPointerWork(
   return found
 }
 
+/** PTYs that may hold a staged pointer; a superset of disk, so title edges skip the release write for the rest. */
+export function readPendingPointerPtyIds(db: OrchestrationDb['db']): Set<string> {
+  return new Set(
+    db
+      .prepare(
+        `SELECT DISTINCT pointer_pty_id FROM messages
+         WHERE pointer_enter_pending > 0 AND pointer_pty_id IS NOT NULL`
+      )
+      .all()
+      .map((row) => String(row.pointer_pty_id))
+  )
+}
+
 export function stageMailboxPointerEnter(
   this: OrchestrationDb,
   ids: string[],
   target: MailboxPointerReservationTarget
 ): boolean {
+  this.pendingPointerPtyIds.add(target.ptyId)
   return (
     mutatePointerMessages(
       this,
@@ -183,6 +197,9 @@ export function releaseMailboxPointerEnter(
 }
 
 export function releasePendingMailboxPointerForPty(this: OrchestrationDb, ptyId: string): void {
+  if (!this.pendingPointerPtyIds.has(ptyId)) {
+    return
+  }
   this.db
     .prepare(
       `UPDATE messages
@@ -196,6 +213,7 @@ export function releasePendingMailboxPointerForPty(this: OrchestrationDb, ptyId:
        WHERE pointer_enter_pending > 0 AND pointer_pty_id = ?`
     )
     .run(MAILBOX_POINTER_RESERVED, ptyId)
+  this.pendingPointerPtyIds.delete(ptyId)
 }
 
 function mutatePointerMessages(
