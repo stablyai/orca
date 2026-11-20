@@ -71,6 +71,19 @@ afterEach(async () => {
 })
 
 describe('worktree removal against the real Git binary', () => {
+  it('keeps the checkout when the pre-delete check refuses', async () => {
+    await expect(
+      removeWorktree(repoPath, worktreePath, true, {
+        beforeCheckoutDelete: async () => {
+          throw new Error('different checkout')
+        }
+      })
+    ).rejects.toThrow('different checkout')
+
+    expect(existsSync(worktreePath)).toBe(true)
+    expect(await isRegistered(worktreePath)).toBe(true)
+  })
+
   it('preserves a branch whose only unmerged commit is empty', async () => {
     await git(['commit', '--allow-empty', '-qm', 'unique empty commit'], worktreePath)
     const head = (await git(['rev-parse', 'HEAD'], worktreePath)).trim()

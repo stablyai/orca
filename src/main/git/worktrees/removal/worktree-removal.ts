@@ -97,6 +97,7 @@ async function performRemoveWorktree(
     args.push('--force')
   }
   args.push(worktreePath)
+  await options.beforeCheckoutDelete?.()
   await runUnderWorktreeDeleteLimit(async () => {
     if (usesNativeWindowsRemoval(worktreePath, options)) {
       await removeWindowsCheckout(repoPath, worktreePath, force, {

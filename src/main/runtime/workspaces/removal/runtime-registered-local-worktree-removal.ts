@@ -245,7 +245,8 @@ export async function finishRuntimeLocalWorktreeRemoval(
   args: RuntimeLocalWorktreeRemovalFinishArgs,
   refreshed: GitWorktreeInfo,
   gate: { finish: (removed: boolean) => Promise<void> },
-  checkoutDeleteSignal?: AbortSignal
+  checkoutDeleteSignal?: AbortSignal,
+  beforeCheckoutDelete?: () => Promise<void>
 ): Promise<RemoveWorktreeResult> {
   const { repo, localOptions } = args
   const canonicalPath = refreshed.path
@@ -258,7 +259,8 @@ export async function finishRuntimeLocalWorktreeRemoval(
           ...(!args.deleteBranch ? { deleteBranch: args.deleteBranch } : {}),
           knownRemovedWorktree: refreshed,
           ...localOptions,
-          ...(checkoutDeleteSignal ? { checkoutDeleteSignal } : {})
+          ...(checkoutDeleteSignal ? { checkoutDeleteSignal } : {}),
+          ...(beforeCheckoutDelete ? { beforeCheckoutDelete } : {})
         }),
         refreshed.head
       )

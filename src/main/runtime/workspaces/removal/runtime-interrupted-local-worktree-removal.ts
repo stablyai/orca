@@ -188,7 +188,8 @@ async function finishInterruptedLocalWorktreeRemoval(
       branch: record.branch ? `refs/heads/${record.branch}` : '',
       head: record.head
     },
-    checkoutDeleteSignal: args.stopSignal
+    checkoutDeleteSignal: args.stopSignal,
+    beforeCheckoutDelete: () => assertCheckoutNotReplaced(record)
   }
   if (
     !native &&
@@ -244,7 +245,9 @@ async function finishInterruptedLocalWorktreeRemoval(
     throw error
   }
   if (deletable) {
-    return finishRuntimeLocalWorktreeRemoval(finishArgs, deletable, gate, args.stopSignal)
+    return finishRuntimeLocalWorktreeRemoval(finishArgs, deletable, gate, args.stopSignal, () =>
+      assertCheckoutNotReplaced(record)
+    )
   }
   let result: RemoveWorktreeResult
   let removed = false
