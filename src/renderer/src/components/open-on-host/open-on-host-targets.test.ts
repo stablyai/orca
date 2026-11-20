@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { ExecutionHostRegistryEntry } from '../../../../shared/execution-host/execution-host-registry-entry'
 import type { ProjectHostSetup } from '../../../../shared/project/project-types'
-import type { Repo } from '../../../../shared/repository/repo-types'
+import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import {
   listOpenOnHostTargets,
@@ -9,7 +9,8 @@ import {
   type OpenOnHostTargetsInput
 } from './open-on-host-targets'
 
-const t = ((_key: string, fallback: string) => fallback) as Translate
+// The real translator: en.json holds the same text as each call's fallback.
+const t: Translate = translate
 
 function runtimeHost(id: `runtime:${string}`, capabilities: string[]): ExecutionHostRegistryEntry {
   return {
@@ -41,7 +42,9 @@ const input: OpenOnHostTargetsInput = {
   projectId: 'project-1',
   sourceHostId: 'local',
   projectHostSetups: [setup],
-  eligibleRepos: [{ id: 'repo-1' } as Repo],
+  eligibleRepos: [
+    { id: 'repo-1', path: '/Users/me/orca', displayName: 'orca', badgeColor: '', addedAt: 0 }
+  ],
   hosts: [
     runtimeHost('runtime:devdesk', [
       ...baseCapabilities,

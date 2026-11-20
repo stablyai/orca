@@ -1,7 +1,7 @@
 import { toast } from 'sonner'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../../../shared/repository/repo-types'
-import type { Worktree } from '../../../../shared/worktree/types'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import { useAppStore } from '@/store'
 import {
   fetchRuntimeGit,
@@ -46,14 +46,14 @@ const setupProjectClone = vi.fn()
 
 const initialState = useAppStore.getState()
 
-const hostRepo = {
+const hostRepo: Repo = {
   id: 'devdesk-repo',
   path: '/home/me/orca',
   displayName: 'orca',
   executionHostId: 'runtime:devdesk',
   badgeColor: '',
   addedAt: 0
-} as Repo
+}
 
 const target: OpenOnHostTarget = {
   hostId: 'runtime:devdesk',
@@ -73,14 +73,14 @@ const target: OpenOnHostTarget = {
 }
 const cloneTarget: OpenOnHostTarget = { ...target, existingSetup: null }
 
-const sourceWorktree = {
+const sourceWorktree = makeWorktree({
   id: 'mac-repo::/Users/me/orca-ws/feature-x',
   repoId: 'mac-repo',
   path: '/Users/me/orca-ws/feature-x',
   branch: 'refs/heads/feature/x',
   head: 'aaa',
   hostId: 'local'
-} as Worktree
+})
 
 const readyPlan = {
   kind: 'ready',
