@@ -73,7 +73,7 @@ describe('Antigravity IDE history discovery', () => {
       } else {
         expect(session.resumeCommand).toContain('--prompt-interactive')
         expect(session.resumeCommand).not.toContain('--conversation')
-        expect(session.resumeCommand).toContain(session.filePath)
+        expect(session.resumeCommand).toContain(JSON.stringify(session.filePath))
       }
     }
   })
