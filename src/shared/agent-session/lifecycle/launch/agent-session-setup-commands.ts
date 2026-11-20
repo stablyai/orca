@@ -60,7 +60,8 @@ export const AGENT_SESSION_SETUP_COMMANDS = [
   {
     agent: 'kiro',
     loginCommand: ['kiro-cli', 'login'],
-    remoteLoginCommand: ['kiro-cli', 'login', '--use-device-flow']
+    remoteLoginCommand: ['kiro-cli', 'login', '--use-device-flow'],
+    installCommand: 'curl -fsSL https://cli.kiro.dev/install | bash'
   },
   // An `agy` login signs in only chats on agy (`system`); chats on Orca's server keep their own.
   {
