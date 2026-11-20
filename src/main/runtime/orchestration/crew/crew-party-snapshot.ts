@@ -187,7 +187,7 @@ export function buildCrewSnapshot(
       partyKey: JSON.stringify([deps.hostKey, target.address]),
       role,
       label: crewDisplayName(
-        deps.name(target, display.displayName || display.taskTitle || null, records),
+        deps.name(target, assignment && { dispatchId: assignment.id, taskTitle: title }, records),
         title,
         'Agent'
       )!,
