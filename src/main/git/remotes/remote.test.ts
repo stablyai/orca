@@ -85,7 +85,9 @@ describe('git remote operations', () => {
         successor = resolveConflict('/repo', 'file.txt', 'keep_file').catch(
           (error: unknown) => error
         )
-        await expect(resolveConflict('/other', 'file.txt', 'keep_file')).rejects.toBeInstanceOf(Error)
+        await expect(resolveConflict('/other', 'file.txt', 'keep_file')).rejects.toBeInstanceOf(
+          Error
+        )
         expect(await Promise.race([successor, Promise.resolve('writer still running')])).toBe(
           'writer still running'
         )
