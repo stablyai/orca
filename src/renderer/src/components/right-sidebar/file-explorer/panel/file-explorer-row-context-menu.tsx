@@ -1,7 +1,6 @@
 import { preventSecondaryMenuSelection } from '@/components/ui/prevent-secondary-menu-selection'
 import React, { useCallback } from 'react'
 import {
-  ClipboardPaste,
   Copy,
   Download,
   ExternalLink,
@@ -50,6 +49,7 @@ import {
 import { copyFileToOsClipboard, downloadRemoteFile } from './file-explorer-row-file-transfer'
 import { fileExplorerNodeTabRelativePath } from '../tree/file-explorer-directory-listing'
 import type { ClipboardPastePreview } from '../mutations/file-explorer-clipboard-import'
+import { FileExplorerPasteMenuItem } from './file-explorer-paste-menu-item'
 
 const isMac = navigator.userAgent.includes('Mac')
 
@@ -157,28 +157,11 @@ export function FileExplorerRowContextMenu({
       }}
     >
       {pastePreview ? (
-        <ContextMenuItem
+        <FileExplorerPasteMenuItem
+          preview={pastePreview}
           disabled={writesBlocked}
           onSelect={() => onPasteToDirectory(node.isDirectory ? node.path : undefined)}
-        >
-          <ClipboardPaste />
-          {t('auto.components.right.sidebar.FileExplorerPaste.paste', 'Paste')}
-          <span
-            className="ml-auto max-w-28 truncate text-muted-foreground"
-            title={
-              pastePreview.kind === 'image'
-                ? t(
-                    'auto.components.right.sidebar.FileExplorerPaste.clipboardImageTitle',
-                    'Clipboard image'
-                  )
-                : pastePreview.title
-            }
-          >
-            {pastePreview.kind === 'image'
-              ? t('auto.components.right.sidebar.FileExplorerPaste.clipboardImage', 'Image')
-              : pastePreview.label}
-          </span>
-        </ContextMenuItem>
+        />
       ) : null}
       <ContextMenuSeparator />
       <ContextMenuItem

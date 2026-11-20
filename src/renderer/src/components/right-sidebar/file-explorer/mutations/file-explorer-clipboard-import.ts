@@ -2,7 +2,7 @@ import { textOnlyLabelsCopiedFiles } from '../../../../../../shared/native-chat/
 import { basename } from '@/lib/path'
 
 export type ClipboardPastePreview =
-  | { kind: 'files'; label: string; title: string }
+  | { kind: 'files'; label: string; paths: string[] }
   | { kind: 'image' }
 
 export async function readClipboardPastePreview(): Promise<ClipboardPastePreview | null> {
@@ -25,11 +25,11 @@ export async function readClipboardPastePreview(): Promise<ClipboardPastePreview
 }
 
 function describeCopiedPaths(paths: string[]): ClipboardPastePreview {
-  const names = paths.map(basename)
+  const firstName = basename(paths[0])
   return {
     kind: 'files',
-    label: names.length === 1 ? names[0] : `${names[0]} +${names.length - 1}`,
-    title: names.join('\n')
+    label: paths.length === 1 ? firstName : `${firstName} +${paths.length - 1}`,
+    paths
   }
 }
 

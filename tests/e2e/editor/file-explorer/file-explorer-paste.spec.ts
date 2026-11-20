@@ -9,8 +9,6 @@ import { expect, type Locator, type Page } from '@stablyai/playwright-test'
 test.use({ seedTestRepo: false })
 test.skip(process.platform !== 'linux', 'File clipboard test writes Linux text/uri-list format')
 
-const PNG_BASE64 =
-  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4z8AAAAMBAQDJ/pLvAAAAAElFTkSuQmCC'
 const FILE_NAME = 'clipboard-source.txt'
 const CONTENT = 'pasted into the selected folder\n'
 const RECORDING = process.env.ORCA_E2E_RECORD_VIDEO === '1'
@@ -43,13 +41,15 @@ async function showVideoCursor(page: Page): Promise<void> {
 async function moveAndClick(
   page: Page,
   locator: Locator,
-  button: 'left' | 'right' = 'left'
+  button: 'left' | 'right' = 'left',
+  beforeClick?: () => Promise<void>,
+  offsetX?: number
 ): Promise<void> {
   const box = await locator.boundingBox()
   if (!box) {
     throw new Error('Cannot move the video cursor to an invisible element')
   }
-  const x = box.x + box.width / 2
+  const x = box.x + (offsetX ?? box.width / 2)
   const y = box.y + box.height / 2
   const steps = RECORDING ? 24 : 8
   // ast-grep-ignore: test-no-polling-loop -- paced cursor steps make the requested recording easy to follow.
@@ -69,6 +69,7 @@ async function moveAndClick(
     // ast-grep-ignore: test-no-real-time-wait -- recording-only pause lets the viewer track the target before the click.
     await page.waitForTimeout(450)
   }
+  await beforeClick?.()
   await page.mouse.click(x, y, { button, delay: RECORDING ? 650 : 0 })
   if (RECORDING) {
     // ast-grep-ignore: test-no-real-time-wait -- recording-only pause keeps the click result visible.
@@ -76,11 +77,24 @@ async function moveAndClick(
   }
 }
 
-async function rightClickPaste(page: Page, target: Locator): Promise<void> {
-  await moveAndClick(page, target, 'right')
+async function rightClickPaste(
+  page: Page,
+  target: Locator,
+  preview?: Locator,
+  screenshot?: string,
+  offsetX?: number
+): Promise<void> {
+  await moveAndClick(page, target, 'right', undefined, offsetX)
   const paste = page.getByRole('menuitem', { name: /^Paste(?:\s|$)/ })
   await expect(paste).toBeVisible()
-  await moveAndClick(page, paste)
+  await moveAndClick(page, paste, 'left', async () => {
+    if (preview) {
+      await expect(preview).toBeVisible()
+    }
+    if (screenshot) {
+      await page.screenshot({ path: screenshot, animations: 'disabled' })
+    }
+  })
 }
 
 test('pastes clipboard files and images through the explorer context menus', async ({
@@ -112,12 +126,18 @@ test('pastes clipboard files and images through the explorer context menus', asy
     await showVideoCursor(page)
   }
 
-  await electronApp.evaluate(({ clipboard, nativeImage }, image) => {
-    clipboard.writeImage(nativeImage.createFromBuffer(Buffer.from(image, 'base64')))
-  }, PNG_BASE64)
+  await electronApp.evaluate(({ clipboard, nativeImage }, icon) => {
+    clipboard.writeImage(nativeImage.createFromPath(icon).resize({ width: 128 }))
+  }, path.resolve('resources/icon.png'))
   await expect.poll(() => page.evaluate(() => window.api.ui.clipboardHasImage())).toBe(true)
 
-  await rightClickPaste(page, destinationRow)
+  const card = page.locator('[data-slot="hover-card-content"]')
+  await rightClickPaste(
+    page,
+    destinationRow,
+    card.getByRole('img'),
+    testInfo.outputPath('image-preview.png')
+  )
   await expect
     .poll(async () => {
       const files = await readdir(destination)
@@ -139,7 +159,12 @@ test('pastes clipboard files and images through the explorer context menus', asy
   await expect
     .poll(() => page.evaluate(() => window.api.ui.readClipboardFilePaths()))
     .toContain(sourceFile)
-  await rightClickPaste(page, destinationRow)
+  await rightClickPaste(
+    page,
+    destinationRow,
+    card.getByText(FILE_NAME),
+    testInfo.outputPath('file-preview.png')
+  )
   await expect
     .poll(() => readFile(path.join(destination, FILE_NAME), 'utf8').catch(() => null))
     .toBe(CONTENT)
@@ -152,5 +177,20 @@ test('pastes clipboard files and images through the explorer context menus', asy
   await expect
     .poll(() => readFile(path.join(workspace, FILE_NAME), 'utf8').catch(() => null))
     .toBe(CONTENT)
-  await expect(shell.getByRole('button', { name: FILE_NAME, exact: true })).toHaveCount(2)
+  const copies = shell.getByRole('button', { name: FILE_NAME, exact: true })
+  await expect(copies).toHaveCount(2)
+  await electronApp.evaluate(({ clipboard }) => clipboard.writeText('release-notes'))
+  await moveAndClick(page, copies.last(), 'right')
+  await moveAndClick(page, page.getByRole('menuitem', { name: /^Rename/ }))
+  const nameInput = shell.locator('input').filter({ visible: true }).last()
+  await expect(nameInput).toHaveValue(FILE_NAME)
+  await rightClickPaste(
+    page,
+    nameInput,
+    card.getByText('release-notes'),
+    testInfo.outputPath('text-preview.png'),
+    16
+  )
+  await expect(nameInput).toHaveValue('release-notes.txt')
+  await nameInput.press('Enter')
 })
