@@ -278,6 +278,15 @@ export class DaemonSessionOwnerResolver<T extends IPtyProvider> {
     epoch: number,
     replaceEstablishedRoutes = false
   ): OwnerInventory<T> {
+    // Every reader discards an outdated inventory, so indexing its rows would be wasted work.
+    if (epoch !== this.epoch) {
+      return {
+        candidatesBySessionId: new Map(),
+        complete: false,
+        epoch,
+        failure: entries.find((entry) => entry.failure)?.failure
+      }
+    }
     return indexDaemonOwnerInventory(
       entries,
       epoch,

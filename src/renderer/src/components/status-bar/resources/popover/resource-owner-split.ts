@@ -44,7 +44,9 @@ export function splitSnapshotByOwner(
 /** Agent processes no listed chat row accounts for, such as a server several chats share. */
 export function sharedAgentProcessUsage(
   snapshot: MemorySnapshot,
-  listed: readonly { worktrees: readonly { chats: readonly UsageValues[] }[] }[]
+  listed: readonly {
+    worktrees: readonly { chats: readonly UsageValues[]; hostLabel?: string }[]
+  }[]
 ): { cpu: number; memory: number } | null {
   const total = snapshot.agentProcesses
   if (!total) {
@@ -54,6 +56,10 @@ export function sharedAgentProcessUsage(
   let memory = total.memory
   for (const group of listed) {
     for (const worktree of group.worktrees) {
+      // A paired machine's chats are in its own total, not this snapshot's.
+      if (worktree.hostLabel !== undefined) {
+        continue
+      }
       for (const chat of worktree.chats) {
         cpu -= chat.cpu
         memory -= chat.memory

@@ -21,7 +21,6 @@ import type { getResourceMemoryMetricCopy } from './resource-memory-metric-copy'
 import { SharedAgentProcessesRow } from './resource-usage-chat-row'
 import { HostNoticeRow } from './resource-usage-host-notice-row'
 import type { RuntimeHostResourceNotice } from '../../host-connections/runtime-host-resources'
-import { sharedAgentProcessUsage } from './resource-owner-split'
 
 export function renderResourceUsagePopoverBody(
   {
@@ -39,6 +38,7 @@ export function renderResourceUsagePopoverBody(
     navigateToWorktree,
     navigateToTab,
     openChat,
+    sharedAgentUsage,
     deleteWorktree,
     handleKillSession,
     appCollapsed,
@@ -60,6 +60,7 @@ export function renderResourceUsagePopoverBody(
     navigateToWorktree: (worktreeId: string) => void
     navigateToTab: (tabId: string, paneKey: string | null) => void
     openChat: (worktreeId: string, agentSessionId: string) => void
+    sharedAgentUsage: { cpu: number; memory: number } | null
     deleteWorktree: (worktreeId: string) => void
     handleKillSession: (session: UnifiedSessionRow) => void
     appCollapsed: boolean
@@ -69,9 +70,6 @@ export function renderResourceUsagePopoverBody(
   },
   t: Translate = translate
 ): React.JSX.Element {
-  const sharedAgentUsage = resourceSnapshot
-    ? sharedAgentProcessUsage(resourceSnapshot, unifiedRepos)
-    : null
   const listsNothing =
     unifiedRepos.length === 0 && sharedAgentUsage === null && runtimeHostNotices.length === 0
   return (

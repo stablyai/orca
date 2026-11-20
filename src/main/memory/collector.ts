@@ -25,6 +25,7 @@ import {
   readAppMemoryHistory,
   readMemoryHistory,
   createProjectGroupNameLookup,
+  createRepoNameLookup,
   resolveWorktreeMemoryNames,
   sweepStaleMemoryHistory,
   type MemorySnapshotStore,
@@ -162,6 +163,7 @@ function chatOwnersByPid(): Map<number, AgentProcessOwner | null> {
 
 async function runSnapshot(store: MemorySnapshotStore): Promise<MemorySnapshot> {
   const projectGroupName = createProjectGroupNameLookup(store)
+  const repoName = createRepoNameLookup(store)
   const [processIndex, host] = await Promise.all([enumerateHostProcesses(), collectHostMemory()])
   const { hasPrivateMemory } = processIndex
   const appBuckets = bucketElectronMetrics(processIndex)
@@ -184,7 +186,7 @@ async function runSnapshot(store: MemorySnapshotStore): Promise<MemorySnapshot> 
     if (existing) {
       return existing
     }
-    const names = resolveWorktreeMemoryNames(worktreeId, store, projectGroupName)
+    const names = resolveWorktreeMemoryNames(worktreeId, store, projectGroupName, repoName)
     const bucket = createEmptyWorktreeMemoryBucket(
       worktreeId,
       names.worktreeName,

@@ -120,7 +120,7 @@ export function mergeSnapshotAndSessions(
       isRemote: row.isRemote,
       ...(row.hostLabel ? { hostLabel: row.hostLabel } : {}),
       sessions,
-      chats: row.readOnly ? [] : (wt.chats ?? []),
+      chats: wt.chats ?? [],
       browsers: []
     })
   }

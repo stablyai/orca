@@ -79,10 +79,24 @@ export function createProjectGroupNameLookup(store: MemorySnapshotStore): Projec
   }
 }
 
+/** Repo display names read once per repo per snapshot; the store's repo lookup scans the catalog. */
+export type RepoNameLookup = (repoId: string) => string | undefined
+
+export function createRepoNameLookup(store: MemorySnapshotStore): RepoNameLookup {
+  const names = new Map<string, string | undefined>()
+  return (repoId) => {
+    if (!names.has(repoId)) {
+      names.set(repoId, store.getRepo(repoId)?.displayName?.trim() || undefined)
+    }
+    return names.get(repoId)
+  }
+}
+
 export function resolveWorktreeMemoryNames(
   worktreeId: string,
   store: MemorySnapshotStore,
-  projectGroupName: ProjectGroupNameLookup = createProjectGroupNameLookup(store)
+  projectGroupName: ProjectGroupNameLookup = createProjectGroupNameLookup(store),
+  repoName: RepoNameLookup = createRepoNameLookup(store)
 ): {
   worktreeName: string
   repoId: string
@@ -105,12 +119,11 @@ export function resolveWorktreeMemoryNames(
   const worktreePath = parsed?.worktreePath ?? ''
   const fallbackName = worktreePath ? basename(worktreePath) : worktreeId
   const meta = store.getWorktreeMeta(worktreeId)
-  const repo = store.getRepo(repoId)
 
   return {
     worktreeName: meta?.displayName?.trim() || fallbackName,
     repoId,
-    repoName: repo?.displayName?.trim() || repoId || 'Unknown Repo'
+    repoName: repoName(repoId) || repoId || 'Unknown Repo'
   }
 }
 
