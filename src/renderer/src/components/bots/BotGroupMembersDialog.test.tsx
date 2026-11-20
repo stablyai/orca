@@ -179,4 +179,12 @@ describe('BotGroupMembersDialog', () => {
       botIds: ['a', 'b', 'c']
     })
   })
+
+  it("never shows another computer's bot with the same id as picked", () => {
+    mocks.bots = [bot('a', 'Fern'), bot('a', 'Willow', 'runtime:ws')]
+    render(<BotGroupMembersDialog onClose={() => {}} />)
+    fireEvent.click(row('Fern'))
+    expect(row('Fern').getAttribute('aria-checked')).toBe('true')
+    expect(row('Willow').getAttribute('aria-checked')).toBe('false')
+  })
 })

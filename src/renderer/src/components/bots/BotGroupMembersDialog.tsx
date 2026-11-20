@@ -18,10 +18,8 @@ import { openBotGroup } from '@/lib/bot-group-catalog'
 import { refreshBotGroups } from '@/lib/bot-group-list'
 import type { BotGroup } from '../../../../shared/bots/bot-group'
 import type { Bot } from '../../../../shared/bot-types'
-import {
-  getLocalExecutionHostLabel,
-  type ExecutionHostId
-} from '../../../../shared/execution-host/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
+import { getTranslatedExecutionHostLabel } from '@/runtime/hosts/display/execution-host-label'
 import { BotAvatar } from './BotAvatar'
 import { useBotPurposes } from './use-bot-purposes'
 import { BotNameSuggestion, takeSuggestionOnTab } from './BotNameSuggestion'
@@ -194,8 +192,9 @@ export function BotGroupMembersDialog({
                 key={botRefKey(bot)}
                 bot={bot}
                 purpose={purposes.get(botRefKey(bot)) ?? null}
-                on={selected.includes(bot.id)}
-                pop={popped === bot.id}
+                // Ids are unique only per computer: another computer's bot is never the picked one.
+                on={!elsewhere(bot) && selected.includes(bot.id)}
+                pop={!elsewhere(bot) && popped === bot.id}
                 disabled={saving || elsewhere(bot)}
                 describedBy={elsewhere(bot) ? 'bot-group-same-computer' : undefined}
                 showHost={manyHosts}
@@ -331,6 +330,7 @@ function MemberRow({
 
 /** The row's computer; only mounted when bots span more than one, so others don't subscribe. */
 function MemberHost({ hostId }: { hostId: ExecutionHostId }): React.JSX.Element {
-  const host = useBotHostLabel(hostId) ?? getLocalExecutionHostLabel()
+  const t = useTranslate()
+  const host = useBotHostLabel(hostId) ?? getTranslatedExecutionHostLabel(hostId, t)
   return <span className="max-w-32 shrink-0 truncate text-xs text-muted-foreground">{host}</span>
 }
