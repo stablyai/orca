@@ -26,6 +26,8 @@ export type CrewReadDependencies = {
   callerProjection?: (handle: string) => DispatchCreator
   maxDepth?: () => number
   statuses: readonly FleetAgentStatusEvidence[]
+  /** `statuses` minted for these panes alone; absent, a status wake rereads every row. */
+  statusesForPanes?: (panes: ReadonlySet<string>) => readonly FleetAgentStatusEvidence[]
   now?: number
   openIdentityRead?: () => CrewIdentityRead
   openRuntimeIdentityRead?: () => TerminalIdentityReadContext

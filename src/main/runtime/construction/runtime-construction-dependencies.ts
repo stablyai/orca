@@ -44,7 +44,8 @@ export type RuntimeConstructionDependencies = {
     paneKey: string,
     savedRecord?: SleepingAgentSessionRecord | null
   ) => ReturnType<typeof paneAgentIdentity>
-  getAgentStatusSnapshot?: () => AgentStatusIpcPayload[]
+  /** Every pane's status rows, or `paneKey`'s alone. */
+  getAgentStatusSnapshot?: (paneKey?: string) => AgentStatusIpcPayload[]
   getAgentStatusSnapshotForPane?: (paneKey: string) => AgentStatusIpcPayload[]
   getPublicAgentStatusSnapshotForPane?: (
     paneKey: string,

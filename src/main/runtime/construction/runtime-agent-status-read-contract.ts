@@ -12,7 +12,7 @@ export abstract class RuntimeAgentStatusReadContract {
     terminalHandle?: string | null
   ) => AgentStatusIpcPayload[]
 
-  abstract readonly getAgentStatusSnapshotFn: (() => AgentStatusIpcPayload[]) | null
+  abstract readonly getAgentStatusSnapshotFn: ((paneKey?: string) => AgentStatusIpcPayload[]) | null
 
   protected abstract getFreshExplicitAgentStatusForHandle(
     handle: string,

@@ -176,7 +176,8 @@ export type CrewRuntimeReaders = {
   getPaneKeyForTerminalHandle(handle: string, context?: TerminalIdentityReadContext): string | null
   getTerminalPaneKey(handle: string, context?: TerminalIdentityReadContext): string | null
   getOrchestrationFleetAgentStatusSnapshot(
-    context?: TerminalIdentityReadContext
+    context?: TerminalIdentityReadContext,
+    paneKeys?: ReadonlySet<string>
   ): CrewReadDependencies['statuses']
   createTerminalIdentityRawInputs(): TerminalIdentityRawInputs
   createTerminalIdentityReadContext(inputs?: TerminalIdentityRawInputs): TerminalIdentityReadContext
@@ -188,7 +189,7 @@ export function readCrewRuntimeInputs(
   db: OrchestrationDb | null,
   retainedDbExists: boolean,
   hostKey: string,
-  previous?: CrewReadDependencies
+  previous?: Pick<CrewReadDependencies, 'openRuntimeIdentityRead' | 'maxDepth'>
 ): CrewReadDependencies {
   const store = peekOpenedAgentSessionRecordStore()
   const openContext =
@@ -242,6 +243,8 @@ export function readCrewRuntimeInputs(
     name,
     get statuses() {
       return runtime.getOrchestrationFleetAgentStatusSnapshot(openContext())
-    }
+    },
+    statusesForPanes: (panes) =>
+      runtime.getOrchestrationFleetAgentStatusSnapshot(openContext(), panes)
   }
 }

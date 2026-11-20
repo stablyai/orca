@@ -10,6 +10,18 @@ export function agentHookRuntimeDeps(
   observedPaneIdentities: Pick<AgentStatusObservedPaneIdentities, 'read'>,
   getSettings: () => Parameters<typeof isAgentStatusHooksEnabled>[0]
 ) {
+  const liveStatusRows = (rows: ReturnType<AgentHookServer['getStatusSnapshot']>) =>
+    rows.flatMap((row) => {
+      if (row.structuredHost) {
+        return [row]
+      }
+      // Resume-only rows carry identity for recovery, never status.
+      if (row.providerSessionOnly) {
+        return []
+      }
+      const identity = server.paneAgentIdentity(row.paneKey)
+      return identity && !identity.ended ? [identity.status] : []
+    })
   return {
     // OSC-derived PTY status feeds the store read by worktree.ps and mobile projections.
     onTerminalAgentStatus: (event) => server.ingestTerminalStatus(event),
@@ -17,18 +29,12 @@ export function agentHookRuntimeDeps(
     onClaudeTerminalEvidence: (paneKey, evidence) =>
       server.observeClaudeTerminalEvidence(paneKey, evidence),
     getPaneAgentIdentity: (paneKey, savedRecord) => server.paneAgentIdentity(paneKey, savedRecord),
-    getAgentStatusSnapshot: () =>
-      server.getStatusSnapshot().flatMap((row) => {
-        if (row.structuredHost) {
-          return [row]
-        }
-        // Resume-only rows carry identity for recovery, never status.
-        if (row.providerSessionOnly) {
-          return []
-        }
-        const identity = server.paneAgentIdentity(row.paneKey)
-        return identity && !identity.ended ? [identity.status] : []
-      }),
+    getAgentStatusSnapshot: (paneKey?: string) =>
+      liveStatusRows(
+        paneKey === undefined
+          ? server.getStatusSnapshot()
+          : server.getStatusRowsForPaneOrHandle(paneKey)
+      ),
     getAgentStatusSnapshotForPane: (paneKey) => server.getStatusSnapshotForPane(paneKey),
     getPublicAgentStatusSnapshotForPane: (paneKey: string, terminalHandle?: string | null) =>
       server.getPublicStatusSnapshotForPane(paneKey, terminalHandle),

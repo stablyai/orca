@@ -28,16 +28,20 @@ export type SessionWorkerSubject = {
 /** Chat-mode workers' liveness for every fleet surface, from in-memory session records; undefined selects the terminal path. */
 export function createSessionWorkerLivenessReader(
   db: OrchestrationDb | null | undefined,
-  statuses: readonly FleetAgentStatusEvidence[],
+  /** Or the freshest row by observed pane, already indexed. */
+  statuses: readonly FleetAgentStatusEvidence[] | ReadonlyMap<string, FleetAgentStatusEvidence>,
   records: AgentSessionRecordReader | null = readAgentSessionRecordStore(),
   // A chat assignee's party, from the database unless a caller read its rows already.
   parties: SessionPartyReader | null | undefined = db
 ): (worker: SessionWorkerSubject) => FleetSessionObservation | undefined {
   const resolveSession = createLineageRunningSessionResolver(records)
-  let statusByPane: Map<string, FleetAgentStatusEvidence> | undefined
+  let statusByPane: ReadonlyMap<string, FleetAgentStatusEvidence> | undefined
   // A session's status row lives at its derived pane key, not the worker's minted one.
   const activityFor = (sessionId: string) => {
-    statusByPane ??= new Map(statuses.map((status) => [status.activity.paneKey, status]))
+    statusByPane ??=
+      'get' in statuses
+        ? statuses
+        : new Map(statuses.map((status) => [status.activity.paneKey, status]))
     return statusByPane.get(
       structuredAgentSessionPaneKey(structuredAgentSessionTabId(sessionId), sessionId)
     )

@@ -17,10 +17,6 @@ import type { AgentDetectionHost } from '../../../preflight/workspace-agent-dete
 import { resolveRuntimeAgentDetectionHost } from '../../workspaces/catalog/runtime-agent-detection-host'
 import type { RuntimeLeafRecord } from '../records/runtime-terminal-state-records'
 import { resolveRuntimeTerminalOrchestrationCliCommand } from '../../orchestration/workers/launch/orchestration-cli-command'
-import {
-  readAgentOrchestrationProjectionRecords,
-  readCapturedOrchestrationFleetAgentStatusSnapshot
-} from '../../orchestration/addressing/orchestration-fleet-agent-status-snapshot'
 import { resolveStructuredWorkerAuthority } from '../../orchestration/terminal-authority/structured-sessions/structured-worker-authority'
 import { matchesProcessIncarnation } from '../../orchestration/terminal-authority/release/worker-terminal-process-liveness'
 import { claimIdleShellPrompt } from '../input/idle-shell-prompt-claim'
@@ -264,34 +260,6 @@ export abstract class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends O
       },
       worktreeId,
       repoId
-    )
-  }
-
-  getOrchestrationFleetAgentStatusSnapshot(context?: TerminalIdentityReadContext) {
-    // One facts view per fleet read; per-pane raw lookups refreshed the facts source each pane.
-    const dependencies = context
-      ? this.agentOrchestrationDependencies({
-          paneOf: (pty) => context.paneOf(pty),
-          issueLeafHandle: (leaf) => this.issueHandle(leaf, context),
-          issuePtyHandle: (pty) => this.issuePtyHandle(pty, context),
-          getWorktreeId: (handle) => this.getTerminalWorktreeIdForHandle(handle, context),
-          getHandleForPaneKey: (pane) => this.getTerminalHandleForPaneKey(pane, context),
-          getPaneKey: (handle) => this.getPaneKeyForTerminalHandle(handle, context),
-          getDispatchAuthority: (handle) => this.getOrchestrationDispatchAuthority(handle, context),
-          getSessionRecords: () => readAgentOrchestrationProjectionRecords(context)
-        })
-      : this.agentOrchestrationDependencies()
-    return readCapturedOrchestrationFleetAgentStatusSnapshot(
-      {
-        getAgentStatusSnapshotFn: this.getAgentStatusSnapshotFn,
-        readObservedAgentStatusPaneIdentityFn: (pane) =>
-          this.readObservedAgentStatusPaneIdentityFn(pane),
-        getAgentStatusTerminalHandleForPaneKey: (pane) =>
-          this.getTerminalHandleForPaneKey(pane, context) ?? undefined,
-        getTerminalProcessIncarnation: (handle) =>
-          this.getTerminalProcessIncarnation(handle, context)
-      },
-      dependencies
     )
   }
 

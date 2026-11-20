@@ -2,13 +2,17 @@ import { isDeepStrictEqual } from 'node:util'
 import { createCrewRecipientInputs } from './crew-recipient-inputs'
 import { captureCrewIdentityInputs } from './crew-identity-inputs'
 import type { FleetDurableWorker } from '../../../../shared/orchestration/fleet/orchestration-fleet-projection'
-import { createFleetStatusIndex } from '../../../../shared/orchestration/fleet/orchestration-fleet-status-index'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status/contracts/agent-status-freshness'
 import { creatorFirstParent } from './crew-rules'
 import { createCrewPartyRegistry, type Party } from './crew-parties'
 import { readCrewAssignmentIds, readCrewAssignments, type CrewAssignmentRow } from './crew-query'
 import { createCrewSourceInputs } from './crew-source-inputs'
 import type { CrewReadDependencies } from './crew-read-dependencies'
+import { CrewStatusRows } from './crew-status-rows'
+import { crewShownBindings, type CrewRelevance } from './crew-changes'
+
+/** A host's captured inputs; its status rows live in `statuses`, which status wakes update in place. */
+export type CrewHostDeps = Omit<CrewReadDependencies, 'statuses'>
 
 export function createCrewHostDerivation(deps: CrewReadDependencies, capacity?: () => number) {
   const { statuses, ...sources } = captureCrewIdentityInputs(deps)
@@ -149,51 +153,54 @@ export function createCrewHostDerivation(deps: CrewReadDependencies, capacity?: 
     }
   }
   const sourceInputs = createCrewSourceInputs(deps.db, capacity)
-  return indexCrewStatuses(
-    {
-      registry,
-      sourceInputs,
-      recipientInputs: deps.db
-        ? createCrewRecipientInputs(
-            deps.db,
-            registry.records,
-            registry.commandCanonical,
-            sourceInputs.legacyOwner
-          )
-        : null,
-      deps: { ...sources, statuses, records: registry.records },
-      now,
-      expiresAt,
-      relations,
-      assignmentsById,
-      workersById: new Map(workers.map((worker) => [worker.dispatchId, worker]))
-    },
-    statuses
-  )
-}
-
-export function refreshCrewStatuses<
-  T extends {
-    deps: CrewReadDependencies
-    workersById: Map<string, FleetDurableWorker>
+  const hostDeps: CrewHostDeps = { ...sources, records: registry.records }
+  return {
+    registry,
+    sourceInputs,
+    recipientInputs: deps.db
+      ? createCrewRecipientInputs(
+          deps.db,
+          registry.records,
+          registry.commandCanonical,
+          sourceInputs.legacyOwner
+        )
+      : null,
+    deps: hostDeps,
+    now,
+    expiresAt,
+    relations,
+    assignmentsById,
+    workersById: new Map(workers.map((worker) => [worker.dispatchId, worker])),
+    statuses: new CrewStatusRows(statuses, workers)
   }
->(host: T, statuses: CrewReadDependencies['statuses']) {
-  // Each status read builds fresh evidence objects, so the host can keep them without a copy.
-  return indexCrewStatuses(host, statuses)
 }
 
-function indexCrewStatuses<
-  T extends { deps: CrewReadDependencies; workersById: Map<string, FleetDurableWorker> }
->(host: T, statuses: CrewReadDependencies['statuses']) {
-  const statusIndex = createFleetStatusIndex(statuses, [...host.workersById.values()])
-  const statusesByPane = new Map<string, (typeof statuses)[number]>()
-  for (const status of statuses) {
-    const prior = statusesByPane.get(status.activity.paneKey)
-    if (!prior || status.deliveredAt > prior.deliveredAt) {
-      statusesByPane.set(status.activity.paneKey, status)
+/** Rereads only `panes`' status rows, or every row when undefined; a row that moves a shown binding rebuilds. */
+export function refreshCrewStatuses(
+  previous: CrewHostDerivation,
+  deps: CrewReadDependencies,
+  panes: ReadonlySet<string> | undefined,
+  relevance: CrewRelevance | undefined,
+  rebuild: (deps: CrewReadDependencies) => CrewHostDerivation
+): CrewHostDerivation {
+  const sameShown = (before: CrewReadDependencies['statuses'], after: typeof before) =>
+    isDeepStrictEqual(crewShownBindings(before, relevance), crewShownBindings(after, relevance))
+  // Under a fresh identity capture any row may resolve differently: reread them all.
+  if (
+    panes &&
+    deps.statusesForPanes &&
+    deps.openRuntimeIdentityRead === previous.deps.openRuntimeIdentityRead
+  ) {
+    const after = deps.statusesForPanes(panes)
+    if (sameShown(previous.statuses.rowsOf(panes), after)) {
+      previous.statuses.replace(panes, after)
+      return previous
     }
   }
-  return { ...host, deps: { ...host.deps, statuses }, statusIndex, statusesByPane }
+  const { statuses, ...sources } = deps
+  return sameShown(previous.statuses.statuses, statuses)
+    ? { ...previous, statuses: new CrewStatusRows(statuses, [...previous.workersById.values()]) }
+    : rebuild({ ...sources, records: previous.deps.records, statuses })
 }
 
 /** Replaces assignment rows whose only change is their stage; null when any changed more, which needs a rebuild. */
@@ -255,7 +262,8 @@ export function patchCrewAssignmentStages(
     assignmentsById.set(id, row)
   }
   host.sourceInputs.replaceAssignments(changed.values())
-  return indexCrewStatuses({ ...host, relations, workersById, assignmentsById }, host.deps.statuses)
+  // A stage is no part of a worker's identity: the status index stands.
+  return { ...host, relations, workersById, assignmentsById }
 }
 
 function sameExceptStage(a: CrewAssignmentRow, b: CrewAssignmentRow): boolean {

@@ -12,7 +12,7 @@ import type { CrewAssignmentRow } from './crew-query'
 
 import type { Party } from './crew-parties'
 import { crewParentRelations } from './crew-parent-relations'
-import { createCrewHostDerivation } from './crew-host-derivation'
+import { createCrewHostDerivation, type CrewHostDeps } from './crew-host-derivation'
 import { statusForFleetWorker } from '../../../../shared/orchestration/fleet/orchestration-fleet-status-index'
 import {
   projectLiveness,
@@ -39,8 +39,8 @@ function preview(body: string): string {
 
 export function buildCrewSnapshot(
   address: string,
-  deps: CrewReadDependencies,
-  host = createCrewHostDerivation(deps),
+  deps: CrewHostDeps & Partial<Pick<CrewReadDependencies, 'statuses'>>,
+  host = createCrewHostDerivation({ ...deps, statuses: deps.statuses ?? [] }),
   /** Collects the panes, chats and dispatches the rows read, so unrelated wakes can be skipped. */
   relevance?: CrewRelevance
 ): OrchestrationCrewSnapshot {
@@ -58,7 +58,7 @@ export function buildCrewSnapshot(
   const { party, alias, addressOf, getParty, aliasesFor } = registry
   const records = host.deps.records
   const runningSession = createLineageRunningSessionResolver(records)
-  const observeSession = createSessionWorkerLivenessReader(db, host.deps.statuses, records)
+  const observeSession = createSessionWorkerLivenessReader(db, host.statuses.byPane, records)
   const hydrate = (addresses: string[], panes: string[] = []) => {
     const provenance = host.sourceInputs.provenance(addresses, panes)
     for (const family of [provenance.local, provenance.remote]) {
@@ -147,9 +147,9 @@ export function buildCrewSnapshot(
     const worker = assignment ? host.workersById.get(assignment.id) : undefined
     const evidence =
       worker && !target.orcaSessionId
-        ? statusForFleetWorker(worker, host.statusIndex)
+        ? statusForFleetWorker(worker, host.statuses.index)
         : target.paneKey
-          ? host.statusesByPane.get(target.paneKey)
+          ? host.statuses.byPane.get(target.paneKey)
           : undefined
     const bound =
       evidence &&

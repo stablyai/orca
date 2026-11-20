@@ -50,7 +50,7 @@ export function crewHostBuilder(listeners: () => number) {
     pending = undefined
     span.setAttribute('elapsedMs', Math.round(performance.now() - started))
     span.setAttribute('assignments', host.assignmentsById.size)
-    span.setAttribute('statuses', host.deps.statuses.length)
+    span.setAttribute('statuses', host.statuses.statuses.length)
     span.setAttribute('listeners', listeners())
     span.setAttribute('rebuilds', ++rebuilds)
     span.end()

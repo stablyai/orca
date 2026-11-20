@@ -1,18 +1,18 @@
-import { isDeepStrictEqual } from 'node:util'
 import {
   CrewRelevance,
   crewIdentityFingerprint,
-  crewShownBindings,
   type CrewFacet,
   type CrewInvalidation
 } from './crew-changes'
 import { buildCrewSnapshot } from './crew-party-snapshot'
+import { CrewStatusWakes } from './crew-status-rows'
 import { admitCrewWake, crewIdentityMoved, type CrewWakeSkips } from './crew-wake-admission'
 import type { CrewReadDependencies } from './crew-read-dependencies'
 import type { OrchestrationCrewSnapshot } from '../../../../shared/orchestration/orchestration-crew'
 import {
   patchCrewAssignmentStages,
   refreshCrewStatuses,
+  type CrewHostDeps,
   type CrewHostDerivation
 } from './crew-host-derivation'
 import {
@@ -49,6 +49,8 @@ export class CrewReadModel {
   private readonly dirty = new Set<CrewFacet>()
   private readonly trafficAddresses = new Set<string>()
   private broadTraffic = false
+  /** Status rows changed since the last read, admitted or skipped. */
+  private readonly statusWakes = new CrewStatusWakes(STALE_CAP)
   private unwatch: ((() => void) & { resume?: () => void }) | undefined
   private release: ReturnType<typeof setTimeout> | undefined
   /** Why a subscribe forced the next rebuild, for its trace. */
@@ -60,7 +62,7 @@ export class CrewReadModel {
   private readonly hosts = crewHostBuilder(() => this.listeners.size)
 
   constructor(
-    private readonly readDependencies: (previous?: CrewReadDependencies) => CrewReadDependencies,
+    private readonly readDependencies: (previous?: CrewHostDeps) => CrewReadDependencies,
     private readonly watch: (
       wake: (facets: CrewInvalidation) => void,
       relevance: () => CrewRelevance | null,
@@ -74,8 +76,9 @@ export class CrewReadModel {
   private readonly skips: CrewWakeSkips = {
     deferIdentity: null,
     identityMoved: () => this.identityMoved(),
-    status: () => {
+    status: (facets) => {
       this.skipped ??= 'status'
+      this.statusWakes.note(facets)
     },
     patch: (id) => this.patches.add(id),
     stale: (id) => (this.stale.size < STALE_CAP ? this.stale.add(id) : this.dirty.add('topology'))
@@ -100,6 +103,9 @@ export class CrewReadModel {
     }
     for (const id of facets.recordIds ?? []) {
       this.renamed.add(id)
+    }
+    if (facets.has('status')) {
+      this.statusWakes.note(facets)
     }
     if (facets.has('traffic')) {
       if (facets.trafficAddresses) {
@@ -184,6 +190,7 @@ export class CrewReadModel {
     this.unwatch?.()
     this.unwatch = this.host = this.relevance = this.identity = this.skipped = undefined
     this.broadTraffic = false
+    this.statusWakes.take()
     for (const kept of [this.partyRelevance, this.departed, this.stale, this.patches, this.dirty]) {
       kept.clear()
     }
@@ -248,6 +255,7 @@ export class CrewReadModel {
     const dirty = new Set(this.dirty)
     const renamed = new Set(this.renamed)
     const trafficAddresses = this.broadTraffic ? undefined : new Set(this.trafficAddresses)
+    const statusPanes = this.statusWakes.take()
     this.dirty.clear()
     this.renamed.clear()
     this.trafficAddresses.clear()
@@ -291,21 +299,10 @@ export class CrewReadModel {
       const deps = this.readDependencies(this.identitySkipped ? undefined : previous.deps)
       this.identitySkipped = false
       if (dirty.has('status')) {
-        const { statuses, ...sources } = deps
-        const relevance = this.relevance
         previous.registry.refreshRecordNames(deps.records, renamed)
-        this.host = isDeepStrictEqual(
-          crewShownBindings(previous.deps.statuses, relevance),
-          crewShownBindings(statuses, relevance)
+        this.host = refreshCrewStatuses(previous, deps, statusPanes, this.relevance, (inputs) =>
+          this.rebuilt(this.hosts.build('status-identity', inputs))
         )
-          ? refreshCrewStatuses(previous, statuses)
-          : this.rebuilt(
-              this.hosts.build('status-identity', {
-                ...sources,
-                records: previous.deps.records,
-                statuses
-              })
-            )
         if (this.skipped === 'status') {
           this.skipped = undefined
         }

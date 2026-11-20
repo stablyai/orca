@@ -1,12 +1,11 @@
 import { crewIdentityFingerprint, type CrewInvalidation, type CrewRelevance } from './crew-changes'
-import type { CrewReadDependencies } from './crew-read-dependencies'
 
 /** What admission records about a wake it skips, so a later read can still show what it changed. */
 export type CrewWakeSkips = {
   /** Nobody listens: a terminal record write is checked by the next read, not on every notice. */
   deferIdentity: (() => void) | null
   identityMoved: () => boolean
-  status: () => void
+  status: (facets: CrewInvalidation) => void
   /** A shown Dispatch whose own row changed: patched on the next read. */
   patch: (id: string) => void
   /** A Dispatch no row shows: a read that shows it later rebuilds. */
@@ -40,7 +39,7 @@ export function admitCrewWake(
     ) {
       return true
     }
-    skips.status()
+    skips.status(facets)
     return false
   }
   if (facetList.every((facet) => facet === 'traffic')) {
@@ -77,7 +76,7 @@ export function admitCrewWake(
 /** A terminal record write changes a crew only if one of its panes or handles now resolves differently. */
 export function crewIdentityMoved(
   relevance: CrewRelevance | undefined,
-  deps: CrewReadDependencies | undefined,
+  deps: Parameters<typeof crewIdentityFingerprint>[1] | undefined,
   identity: string | undefined
 ): boolean {
   if (!deps || !relevance || identity === undefined) {
