@@ -9,7 +9,7 @@ import {
   test
 } from '../../agents/session-fixtures/structured-claude-stub'
 import type { ExternalConversationLink } from '../../../../src/shared/connectors/external-conversation-link'
-import { structuredAgentSessionStatusPaneKey } from '../../../../src/shared/agent-session/view/structured-agent-session-tab'
+import { chatPaneKey } from '../../../../src/shared/agent-session/view/structured-agent-session-projection'
 
 test.skip(!SUPPORTED, 'the Claude stub wrapper is POSIX-only')
 
@@ -69,7 +69,7 @@ test('a bot link selects its conversation’s chat tab, and an unknown one says 
     externalId: 'T1:C1:1',
     sessionId,
     agent: 'claude',
-    paneKey: structuredAgentSessionStatusPaneKey(sessionId),
+    paneKey: chatPaneKey(sessionId),
     bot: { kind: 'bot', botId: 'bot_1' },
     createdAt: Date.now()
   }
