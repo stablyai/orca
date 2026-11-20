@@ -144,9 +144,11 @@ export function MobileNativeChatSessionOptionPickers({
     ? nativeChatModelPillLabel(model, say)
     : mobileSessionOptionSummaryValue(home)
   const permissionDeferred = permission ? mobileDeferredPermissionSummary(permission)?.full : null
+  const permissionReported = mobileReportedPermissionAccessibleValue(permission)
   const secondary = (model && nativeChatOptionValuesLabel(options, say)) || null
-  // The model pill shows permission only as a warning tint, so its name carries a deferred pick.
-  const modelValue = [primary, secondary, model && permissionDeferred].filter(Boolean).join(' ')
+  const modelValue = [primary, secondary, model && (permissionDeferred ?? permissionReported)]
+    .filter(Boolean)
+    .join(' ')
 
   const closePicker = (): void => onNavigate(null)
   const applyOption = (descriptor: SessionOptionDescriptor, value: SessionOptionValue): void => {
@@ -188,7 +190,7 @@ export function MobileNativeChatSessionOptionPickers({
         leading={controller.heldPick ? Clock : undefined}
         accessibleName={
           model
-            ? permissionColor && !permissionDeferred
+            ? permissionColor && !permissionDeferred && !permissionReported
               ? t(
                   'chat.sessionOptionPickers.modelFullAccessLabel',
                   'Model, {{value}}, full access',
@@ -199,11 +201,7 @@ export function MobileNativeChatSessionOptionPickers({
               : t('chat.sessionOptionPickers.modelLabel', 'Model, {{value}}', { value: modelValue })
             : t('chat.sessionOptionPickers.permissionsLabel', 'Permissions, {{value}}', {
                 value:
-                  permissionDeferred ??
-                  (home === permission
-                    ? mobileReportedPermissionAccessibleValue(permission)
-                    : null) ??
-                  primary
+                  permissionDeferred ?? (home === permission ? permissionReported : null) ?? primary
               })
         }
         disabled={!canOpen}
