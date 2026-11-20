@@ -175,7 +175,9 @@ export function BotAppsCatalog({
         preset={{
           name: app.id,
           title: app.name,
+          line: app.line,
           url: app.url,
+          variable: app.variable,
           logo: <BotAppBrandLogo app={app} size="lg" />
         }}
         onBack={back}

@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
 import type { Bot } from '../../../../../shared/bot-types'
 import type { BotOwnTool } from '../../../../../shared/bot-tools'
+import type { BotMcpAppUrlVariable } from '../../../../../shared/bots/bot-mcp-apps'
 import { LoadedEditor } from '../AddBotToolDialog'
 import { BotToolFinishSignIn } from '../BotToolFinishSignIn'
 import {
@@ -27,11 +28,14 @@ import {
   BotAppStepHeader,
   BotAppStepHeading
 } from './BotAppStepParts'
+import { BotAppUrlVariableForm } from './BotAppUrlVariableForm'
 
 const FORM_BODY = 'px-6 pt-1 pb-6'
 
 type CustomPhase =
   | { kind: 'edit' }
+  /** An app whose URL has a blank: its site or host, given before it is added. */
+  | { kind: 'variable'; app: BotMcpAppPreset; variable: BotMcpAppUrlVariable }
   | { kind: 'adding' }
   /** owned: Orca signs in (pasted back only when its host runs it); else the tool's agent CLI does. */
   | {
@@ -50,11 +54,19 @@ const urlLogo = (size: 'md' | 'lg') => (
 )
 
 /** An MCP app the catalog lists: added by its URL under its own name, no editor. */
-export type BotMcpAppPreset = { name: string; title: string; url: string; logo: React.ReactNode }
+export type BotMcpAppPreset = {
+  name: string
+  title: string
+  line: string
+  url: string
+  variable?: BotMcpAppUrlVariable
+  logo: React.ReactNode
+}
 
 /**
  * Add by URL: the bot's Tools editor, then the server's browser sign-in, waited for here. With a
- * preset (an MCP app from the catalog) the tool is added straight from its URL.
+ * preset (an MCP app from the catalog) the tool is added straight from its URL, once its site is
+ * given when its URL has a blank.
  */
 export function CustomAppStep({
   bot,
@@ -68,7 +80,13 @@ export function CustomAppStep({
   onClose: () => void
 }): React.JSX.Element {
   const t = useTranslate()
-  const [phase, setPhase] = useState<CustomPhase>({ kind: preset ? 'adding' : 'edit' })
+  const [phase, setPhase] = useState<CustomPhase>(
+    preset?.variable
+      ? { kind: 'variable', app: preset, variable: preset.variable }
+      : { kind: preset ? 'adding' : 'edit' }
+  )
+  // The URL last added, which Try again adds again.
+  const addedUrl = useRef(preset?.url ?? '')
   const attempts = useRef(0)
   const { hostId, id: botId } = bot
   const signIn = useCallback(
@@ -96,9 +114,10 @@ export function CustomAppStep({
     [signIn]
   )
   const add = useCallback(
-    (app: BotMcpAppPreset) => {
+    (app: BotMcpAppPreset, url: string) => {
+      addedUrl.current = url
       setPhase({ kind: 'adding' })
-      void addBotTool({ hostId, id: botId }, app.url, app.name).then(added, (error: unknown) =>
+      void addBotTool({ hostId, id: botId }, url, app.name).then(added, (error: unknown) =>
         setPhase({ kind: 'failed', name: app.name, owned: true, error: botToolErrorMessage(error) })
       )
     },
@@ -107,11 +126,11 @@ export function CustomAppStep({
   // Once per step: the parent redraws with a fresh preset object.
   const addStarted = useRef(false)
   useEffect(() => {
-    if (!preset || addStarted.current) {
+    if (!preset || preset.variable || addStarted.current) {
       return
     }
     addStarted.current = true
-    add(preset)
+    add(preset, preset.url)
   }, [add, preset])
   // Try again resumes where it failed, by whether the host has the tool: add it, or sign in to it.
   const retry = (name: string, owned: boolean): void => {
@@ -120,7 +139,7 @@ export function CustomAppStep({
         if (names.has(name)) {
           signIn(name, owned)
         } else if (preset) {
-          add(preset)
+          add(preset, addedUrl.current)
         } else {
           setPhase({ kind: 'edit' })
         }
@@ -140,6 +159,20 @@ export function CustomAppStep({
           title={t('bots.apps.mcp.adding', 'Adding {{app}}…', { app: preset?.title ?? '' })}
           line={null}
           actions={null}
+        />
+      </>
+    )
+  }
+  if (phase.kind === 'variable') {
+    const { app, variable } = phase
+    return (
+      <>
+        <BotAppStepHeader onBack={onBack} onClose={onClose} />
+        <BotAppUrlVariableForm
+          className={FORM_BODY}
+          app={app}
+          variable={variable}
+          onAdd={(url) => add(app, url)}
         />
       </>
     )

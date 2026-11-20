@@ -26262,7 +26262,10 @@
         "google": "以你的身份使用 Gmail、Calendar 和 Drive"
       },
       "mcp": {
-        "adding": "正在添加 {{app}}…"
+        "adding": "正在添加 {{app}}…",
+        "addTitle": "添加 {{app}}",
+        "advanced": "高级",
+        "hostInvalid": "请输入主机名，例如 {{example}}。"
       },
       "unsupported": "暂不支持此应用",
       "cantReach": "无法连接 {{app}}",

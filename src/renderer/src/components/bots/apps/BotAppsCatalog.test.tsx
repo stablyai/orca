@@ -168,6 +168,50 @@ describe('Add to <bot>', () => {
     expect(calls('bots.composio.connect')).toHaveLength(0)
   })
 
+  it('adds an app with sites at the picked site’s server, under the app’s own name', async () => {
+    answer({ ...tools, 'bots.tools.add': () => ({ tool: signInTool('datadog') }) })
+    open()
+    fireEvent.click(screen.getByRole('button', { name: /^Monitoring/ }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Add Datadog' }))
+
+    fireEvent.keyDown(await screen.findByRole('combobox', { name: 'Datadog site' }), {
+      key: 'ArrowDown'
+    })
+    fireEvent.click(await screen.findByRole('option', { name: /^EU/ }))
+    expect(calls('bots.tools.add')).toHaveLength(0)
+    fireEvent.click(screen.getByRole('button', { name: 'Add' }))
+
+    await waitFor(() => expect(calls('bots.tools.add')).toHaveLength(1))
+    expect(calls('bots.tools.add')[0]?.[2]).toEqual({
+      botId: 'bot-1',
+      source: 'https://mcp.datadoghq.eu/v1/mcp',
+      name: 'datadog'
+    })
+  })
+
+  it('adds GitLab at a typed self-managed host, refusing one that is not a host', async () => {
+    answer({ ...tools, 'bots.tools.add': () => ({ tool: signInTool('gitlab') }) })
+    open()
+    fireEvent.click(screen.getByRole('button', { name: /^Coding/ }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Add GitLab' }))
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Advanced' }))
+    const field = screen.getByLabelText('GitLab address (optional)')
+    fireEvent.change(field, { target: { value: 'gitlab acme' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Add' }))
+    expect(await screen.findByRole('alert')).toBeTruthy()
+    expect(calls('bots.tools.add')).toHaveLength(0)
+
+    fireEvent.change(field, { target: { value: 'https://GitLab.acme.dev/explore' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Add' }))
+    await waitFor(() => expect(calls('bots.tools.add')).toHaveLength(1))
+    expect(calls('bots.tools.add')[0]?.[2]).toEqual({
+      botId: 'bot-1',
+      source: 'https://gitlab.acme.dev/api/v4/mcp',
+      name: 'gitlab'
+    })
+  })
+
   it('retries an MCP app at the failed step without adding it twice', async () => {
     let added = false
     let adds = 0

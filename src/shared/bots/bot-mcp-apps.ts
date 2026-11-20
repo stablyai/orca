@@ -9,12 +9,58 @@ export type BotMcpApp = {
   name: string
   /** What the app does for the bot, before it is added. */
   line: string
+  /** With `variable`, a template whose `{key}` blank is filled on add. */
   url: string
+  variable?: BotMcpAppUrlVariable
   /** browser: the server answers 401 and the bot's CLI signs in in a browser. none: no sign-in. */
   signIn: 'browser' | 'none'
   category: BotAppCategory
   /** The same app's slugs in Composio's catalog, so the Add dialog lists it once. */
   composio?: readonly string[]
+}
+
+/**
+ * A blank in an app's URL, filled on add (the MCP registry's server.json URL variable). With
+ * `choices`, a site picked from a list; without, an optional host typed behind Advanced.
+ */
+export type BotMcpAppUrlVariable = {
+  /** The `{key}` blank in the app's `url`. */
+  key: string
+  label: string
+  /** What fills the blank until the user gives another value. */
+  default: string
+} & ({ choices: readonly BotMcpAppSite[] } | { placeholder: string; hint: string })
+
+/** `name` is the vendor's own name for the site; `value` fills the blank. */
+export type BotMcpAppSite = { name: string; place: string; value: string }
+
+/** The app's server URL with its blank filled by `value`, or by the default when none is given. */
+export function botMcpAppUrl(app: Pick<BotMcpApp, 'url' | 'variable'>, value?: string): string {
+  const variable = app.variable
+  return variable ? app.url.replace(`{${variable.key}}`, value || variable.default) : app.url
+}
+
+const HOST_LABEL = '[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?'
+const HOST_WITH_PORT = new RegExp(`^${HOST_LABEL}(?:\\.${HOST_LABEL})*(?::(\\d{1,5}))?$`)
+
+/**
+ * A typed host as the URL takes it: a pasted scheme and path dropped, lowercased. '' when empty;
+ * null when what is left is not a host name with an optional port.
+ */
+export function botMcpAppHost(input: string): string | null {
+  const host = input
+    .trim()
+    .replace(/^[a-z][a-z0-9+.-]*:\/\//i, '')
+    .split(/[/?#]/)[0]
+    .toLowerCase()
+  if (!host) {
+    return input.trim() ? null : ''
+  }
+  const match = host.length <= 253 ? HOST_WITH_PORT.exec(host) : null
+  if (!match || (match[1] !== undefined && (Number(match[1]) < 1 || Number(match[1]) > 65535))) {
+    return null
+  }
+  return host
 }
 
 export const BOT_MCP_APPS: readonly BotMcpApp[] = [
@@ -39,7 +85,22 @@ export const BOT_MCP_APPS: readonly BotMcpApp[] = [
     id: 'datadog',
     name: 'Datadog',
     line: 'Search logs, metrics and monitors',
-    url: 'https://mcp.datadoghq.com/v1/mcp',
+    url: 'https://mcp.{site}/v1/mcp',
+    // The US1-FED and US2-FED sites have no MCP server.
+    variable: {
+      key: 'site',
+      label: 'Datadog site',
+      default: 'datadoghq.com',
+      choices: [
+        { name: 'US1', place: 'US East', value: 'datadoghq.com' },
+        { name: 'US3', place: 'US West', value: 'us3.datadoghq.com' },
+        { name: 'US5', place: 'US Central', value: 'us5.datadoghq.com' },
+        { name: 'EU', place: 'Europe', value: 'datadoghq.eu' },
+        { name: 'AP1', place: 'Japan', value: 'ap1.datadoghq.com' },
+        { name: 'AP2', place: 'Australia', value: 'ap2.datadoghq.com' },
+        { name: 'UK1', place: 'United Kingdom', value: 'uk1.datadoghq.com' }
+      ]
+    },
     signIn: 'browser',
     category: 'monitoring'
   },
@@ -87,7 +148,15 @@ export const BOT_MCP_APPS: readonly BotMcpApp[] = [
     id: 'gitlab',
     name: 'GitLab',
     line: 'Read and update issues and merge requests',
-    url: 'https://gitlab.com/api/v4/mcp',
+    url: 'https://{host}/api/v4/mcp',
+    // Self-managed and Dedicated instances serve it at their own host.
+    variable: {
+      key: 'host',
+      label: 'GitLab address (optional)',
+      default: 'gitlab.com',
+      placeholder: 'gitlab.example.com',
+      hint: 'For self-managed or Dedicated. Leave empty for GitLab.com.'
+    },
     signIn: 'browser',
     category: 'coding'
   },
