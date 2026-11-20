@@ -270,6 +270,10 @@ export class WorkerThreadChildProcessHost {
     this.workerAnswered = true
     if (event.type === 'ready') {
       this.ready?.settle(true)
+      // Every launch that started this worker may have been cancelled while it loaded.
+      if (this.children.size === 0) {
+        this.host.scheduleIdleTeardown()
+      }
       return
     }
     const child = this.children.get(event.id)
