@@ -1,7 +1,7 @@
 import { getProcessOutputFields } from '../../shared/process-observation/process-output-field-scanner'
 import { parseProcAddress } from './local-workspace-port-address'
 
-export type ProcNetListener = { host: string; port: number; inode: number; uid: number }
+export type ProcNetListener = { host: string; port: number; inode: number }
 
 // Login accounts (local or directory) get uids from UID_MIN up; root and system services sit below.
 const FIRST_LOGIN_UID = 1000
@@ -40,7 +40,7 @@ export function parseProcNetTcp(content: string, ownUid: number | undefined): Pr
     ) {
       continue
     }
-    results.push({ ...parsed, inode, uid })
+    results.push({ ...parsed, inode })
   }
   return results
 }

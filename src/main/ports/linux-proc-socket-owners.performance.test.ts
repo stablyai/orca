@@ -94,7 +94,7 @@ describe('Linux listener owner lookup', () => {
     vi.restoreAllMocks()
   })
 
-  it('reads only the cached owner fds when no listener is new, and walks once without rereading them for a new one', async () => {
+  it('reads only the cached owner fds once no listener is new or newly missed', async () => {
     fakeProc.tcp = PROC_NET_HEADER + procNetRow('1F90', OWN_UID, 5001) + procNetRow('0016', 0, 6001)
     const expectedPort = {
       host: '127.0.0.1',
@@ -112,16 +112,21 @@ describe('Linux listener owner lookup', () => {
     expect(first.ports).toEqual([expectedPort, sshPort])
     expect(fakeProc.readdirPaths).toEqual(['/proc', '/proc/100/fd', '/proc/200/fd'])
 
+    // root's sshd socket gets one retry walk; the cached owner's fds are not read twice.
     fakeProc.readdirPaths = []
-    const second = await scanPlatformListeningPorts({})
-    expect(second.ports).toEqual([expectedPort, sshPort])
+    await scanPlatformListeningPorts({})
+    expect(fakeProc.readdirPaths).toEqual(['/proc/100/fd', '/proc', '/proc/200/fd'])
+
+    fakeProc.readdirPaths = []
+    const third = await scanPlatformListeningPorts({})
+    expect(third.ports).toEqual([expectedPort, sshPort])
     expect(fakeProc.readdirPaths).toEqual(['/proc/100/fd'])
 
     fakeProc.processes.get(200)!.fds.push('socket:[5002]')
     fakeProc.tcp += procNetRow('1F91', OWN_UID, 5002)
     fakeProc.readdirPaths = []
-    const third = await scanPlatformListeningPorts({})
-    expect(third.ports.map((port) => [port.port, port.pid])).toEqual([
+    const fourth = await scanPlatformListeningPorts({})
+    expect(fourth.ports.map((port) => [port.port, port.pid])).toEqual([
       [8080, 100],
       [22, undefined],
       [8081, 200]

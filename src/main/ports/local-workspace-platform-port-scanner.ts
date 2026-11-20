@@ -174,10 +174,10 @@ async function scanLinuxProcPorts(
     readProcNet('/proc/net/tcp6', ownUid)
   ])
   const sockets = [...tcp4, ...tcp6]
-  const inodeToPid = await resolveLinuxSocketOwners(sockets, {
-    ownUid,
-    fresh: options.requireMetadata
-  })
+  const inodeToPid = await resolveLinuxSocketOwners(
+    new Set(sockets.map((socket) => socket.inode)),
+    { ownUid, fresh: options.requireMetadata }
+  )
   // comm is read every scan so an exec in a listening process invalidates reused metadata.
   const processNames = new Map<number, string | undefined>()
   for (const pid of new Set(inodeToPid.values())) {

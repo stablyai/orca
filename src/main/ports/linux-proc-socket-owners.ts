@@ -1,66 +1,77 @@
 import { readFile, readdir, readlink, stat } from 'node:fs/promises'
 
-// Sockets we cannot attribute (root's or other users' services) are searched again on this cadence, not every scan.
-const UNREADABLE_RESEARCH_INTERVAL_SCANS = 10
+// A socket missed twice in a row (root's or other users' services) is searched again on this cadence, not every scan.
+const UNRESOLVED_RESEARCH_INTERVAL_SCANS = 10
 const SOCKET_LINK = /^socket:\[(\d+)\]$/
-const CAP_SYS_PTRACE_BIT = 19n
+const CAP_DAC_OVERRIDE = 1n
+const CAP_DAC_READ_SEARCH = 2n
+const CAP_SYS_PTRACE = 19n
 
-export type LinuxListenerSocket = { inode: number; uid: number }
+type UnresolvedSocket = { searchedAtScan: number; misses: number }
 
 let ownerPidByInode = new Map<number, number>()
-let unresolvedSearchedAtScan = new Map<number, number>()
+let unresolvedByInode = new Map<number, UnresolvedSocket>()
 let scanSequence = 0
 let canReadEveryFdTable: Promise<boolean> | undefined
 
 /** Map listener socket inodes to the pid holding them, walking all of /proc only when a socket is new or lost its owner. */
 export async function resolveLinuxSocketOwners(
-  sockets: readonly LinuxListenerSocket[],
+  inodes: ReadonlySet<number>,
   { ownUid, fresh }: { ownUid: number | undefined; fresh?: boolean }
 ): Promise<Map<number, number>> {
   scanSequence += 1
-  const inodes = new Set(sockets.map((socket) => socket.inode))
-  const readAll = await canReadAllFdTables(ownUid)
   const { owners, socketsByPid } = await verifyCachedOwners(inodes)
-  const needsWalk = sockets.some((socket) => {
-    if (owners.has(socket.inode)) {
+  const needsWalk = [...inodes].some((inode) => {
+    if (owners.has(inode)) {
       return false
     }
-    const searchedAt = unresolvedSearchedAtScan.get(socket.inode)
+    const unresolved = unresolvedByInode.get(inode)
     return (
       fresh ||
-      searchedAt === undefined ||
-      ownerPidByInode.has(socket.inode) ||
-      // A missed socket of our own (e.g. a fork race mid-walk) is retried next scan.
-      (!readAll && socket.uid === ownUid) ||
-      scanSequence - searchedAt >= UNREADABLE_RESEARCH_INTERVAL_SCANS
+      unresolved === undefined ||
+      // One immediate retry covers a socket handed to a fork while the last walk ran.
+      unresolved.misses < 2 ||
+      scanSequence - unresolved.searchedAtScan >= UNRESOLVED_RESEARCH_INTERVAL_SCANS
     )
   })
   if (needsWalk) {
-    const wanted = new Set([...inodes].filter((inode) => !owners.has(inode)))
-    await walkProcForOwners(wanted, readAll ? undefined : ownUid, socketsByPid, owners)
+    const readAll = await canReadAllFdTables(ownUid)
+    // Every socket is a candidate so a shared one goes to the last holder in /proc order, as before caching.
+    await walkProcForOwners(inodes, readAll ? undefined : ownUid, socketsByPid, owners)
   }
 
-  const nextUnresolved = new Map<number, number>()
+  const nextUnresolved = new Map<number, UnresolvedSocket>()
   for (const inode of inodes) {
-    if (!owners.has(inode)) {
-      const searchedAt = needsWalk ? scanSequence : unresolvedSearchedAtScan.get(inode)
-      nextUnresolved.set(inode, searchedAt ?? scanSequence)
+    if (owners.has(inode)) {
+      continue
     }
+    const previous = unresolvedByInode.get(inode)
+    nextUnresolved.set(
+      inode,
+      needsWalk || !previous
+        ? { searchedAtScan: scanSequence, misses: (previous?.misses ?? 0) + 1 }
+        : previous
+    )
   }
   ownerPidByInode = new Map(owners)
-  unresolvedSearchedAtScan = nextUnresolved
+  unresolvedByInode = nextUnresolved
   return owners
 }
 
-/** Without root or CAP_SYS_PTRACE, /proc/<pid>/fd is readable only for processes running as our uid. */
+/** /proc/<pid>/fd of another uid needs CAP_SYS_PTRACE plus a DAC bypass to list it; otherwise only our uid's are readable. */
 function canReadAllFdTables(ownUid: number | undefined): Promise<boolean> {
   if (ownUid === undefined || ownUid === 0) {
     return Promise.resolve(true)
   }
   canReadEveryFdTable ??= readFile('/proc/self/status', 'utf-8')
     .then((status) => {
-      const capEff = /^CapEff:\s*([0-9a-f]+)$/m.exec(status)?.[1]
-      return capEff !== undefined && ((BigInt(`0x${capEff}`) >> CAP_SYS_PTRACE_BIT) & 1n) === 1n
+      const capEffHex = /^CapEff:\s*([0-9a-f]+)$/m.exec(status)?.[1]
+      if (capEffHex === undefined) {
+        return false
+      }
+      const capEff = BigInt(`0x${capEffHex}`)
+      const has = (bit: bigint): boolean => ((capEff >> bit) & 1n) === 1n
+      return has(CAP_SYS_PTRACE) && (has(CAP_DAC_READ_SEARCH) || has(CAP_DAC_OVERRIDE))
     })
     .catch(() => false)
   return canReadEveryFdTable
@@ -69,9 +80,9 @@ function canReadAllFdTables(ownUid: number | undefined): Promise<boolean> {
 /** A cached pair is used only after re-reading that pid's fds, so pid reuse or a closed socket drops it. */
 async function verifyCachedOwners(
   inodes: ReadonlySet<number>
-): Promise<{ owners: Map<number, number>; socketsByPid: Map<number, number[]> }> {
+): Promise<{ owners: Map<number, number>; socketsByPid: Map<number, Set<number>> }> {
   const owners = new Map<number, number>()
-  const socketsByPid = new Map<number, number[]>()
+  const socketsByPid = new Map<number, Set<number>>()
   for (const inode of inodes) {
     const pid = ownerPidByInode.get(inode)
     if (pid === undefined) {
@@ -82,7 +93,7 @@ async function verifyCachedOwners(
       sockets = await readPidSockets(pid)
       socketsByPid.set(pid, sockets)
     }
-    if (sockets.includes(inode)) {
+    if (sockets.has(inode)) {
       owners.set(inode, pid)
     }
   }
@@ -93,7 +104,7 @@ async function verifyCachedOwners(
 async function walkProcForOwners(
   wanted: ReadonlySet<number>,
   onlyUid: number | undefined,
-  alreadyRead: ReadonlyMap<number, number[]>,
+  alreadyRead: ReadonlyMap<number, ReadonlySet<number>>,
   owners: Map<number, number>
 ): Promise<void> {
   let entries: string[]
@@ -124,14 +135,14 @@ async function walkProcForOwners(
   }
 }
 
-async function readPidSockets(pid: number): Promise<number[]> {
+async function readPidSockets(pid: number): Promise<Set<number>> {
   let fds: string[]
   try {
     fds = await readdir(`/proc/${pid}/fd`)
   } catch {
-    return []
+    return new Set()
   }
-  const inodes: number[] = []
+  const inodes = new Set<number>()
   for (const fd of fds) {
     let link: string
     try {
@@ -141,7 +152,7 @@ async function readPidSockets(pid: number): Promise<number[]> {
     }
     const match = SOCKET_LINK.exec(link)
     if (match) {
-      inodes.push(Number.parseInt(match[1], 10))
+      inodes.add(Number.parseInt(match[1], 10))
     }
   }
   return inodes
