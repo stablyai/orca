@@ -419,14 +419,21 @@ it('restores the saved inactive threshold when its edit is cancelled', async () 
 
 it('cancels a zero-delta activation when navigation retires its deferred preview', async () => {
   const pending = Promise.withResolvers<unknown>()
+  const sent = Promise.withResolvers<void>()
   const normal = runtime.getMockImplementation()!
-  runtime.mockImplementation((request) =>
-    request.method === 'workspaceCleanup.previewChange' ? pending.promise : normal(request)
-  )
+  runtime.mockImplementation((request) => {
+    if (request.method !== 'workspaceCleanup.previewChange') {
+      return normal(request)
+    }
+    sent.resolve()
+    return pending.promise
+  })
   renderWithProviders(<Harness />)
   const control = screen.getByRole('button', { name: 'Enable' })
   await waitFor(() => expect(control.getAttribute('aria-disabled')).toBe('false'))
   fireEvent.click(control)
+  // Unmount only once the preview is actually pending, as navigation would find it.
+  await act(() => sent.promise)
   cleanup()
   await act(async () => {
     pending.resolve({
