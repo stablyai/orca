@@ -4079,6 +4079,9 @@
       "waiting": "{{count}} workers waiting · oldest first",
       "countdown": "Claude denies it on its own in {{time}} if nobody answers.",
       "openWorker": "Open worker"
+    },
+    "messageTime": {
+      "yesterday": "Yesterday {{time}}"
     }
   },
   "sourceControl": {
@@ -5877,7 +5880,7 @@
       "loading": "Loading items…",
       "view": {
         "title": "Item",
-        "chatAndWhen": "{{chat}} · {{when}}",
+        "subWhere": "Item {{number}} · {{chat}}",
         "canceledNote": "Canceled:",
         "doneNote": "Done:",
         "links": "Links",
