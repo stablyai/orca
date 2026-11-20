@@ -48,8 +48,9 @@ function row(
     folder?: string
     parent?: string
     hostId?: string
-    /** A parent in another Orca store: its store, its workspace key, and how the link was made. */
-    elsewhere?: { store: string; key: string; origin?: string }
+    instance?: string
+    /** A parent in another Orca store: its store, its workspace key and instance, and how the link was made. */
+    elsewhere?: { store: string; key: string; instance?: string; origin?: string; capture?: string }
   } = {}
 ): RuntimeWorktreePsSummary {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: cleanup reads only these listing fields.
@@ -58,6 +59,7 @@ function row(
     worktreeId,
     repoId: worktreeId.split('::')[0],
     ...(lineage.hostId ? { hostId: lineage.hostId } : {}),
+    ...(lineage.instance ? { worktreeInstanceId: lineage.instance } : {}),
     path: worktreeId.split('::')[1],
     branch: 'refs/heads/feature',
     displayName: worktreeId,
@@ -74,9 +76,14 @@ function row(
           crossStoreParent: {
             parent: {
               installationId: lineage.elsewhere.store,
-              workspaceKey: lineage.elsewhere.key
+              workspaceKey: lineage.elsewhere.key,
+              instanceId: lineage.elsewhere.instance ?? 'parent-instance'
             },
-            origin: lineage.elsewhere.origin ?? 'manual'
+            origin: lineage.elsewhere.origin ?? 'manual',
+            capture: {
+              source: lineage.elsewhere.capture ?? 'manual-action',
+              confidence: 'explicit'
+            }
           }
         }
       : {})
@@ -131,7 +138,11 @@ function makeHost(
       if (!answer) {
         throw new Error('timed out')
       }
-      return { worktrees: answer, truncated: false }
+      return {
+        worktrees: answer,
+        truncated: false,
+        hostScope: { hostIds: ['local'], omittedHostIds: [] }
+      }
     })
   } as unknown as OrcaRuntimeService
   return { runtime, store }
@@ -239,35 +250,62 @@ describe('folder workspace cleanup group', () => {
     expect(host.runtime.removeManagedWorktree).not.toHaveBeenCalled()
   })
 
-  it('holds a worktree whose folder workspace is in another Orca store', async () => {
-    const runner = makeRunner([
-      row('repo-a::/r1', { elsewhere: { store: 'desktop', key: 'folder:F' } }),
-      // Nested under r1, so in the same folder.
-      row('repo-b::/r2', { parent: 'repo-a::/r1' }),
-      // A worker's checkout; its folder's other members don't hold it.
-      row('repo-a::/w1', {
-        elsewhere: { store: 'desktop', key: 'folder:F', origin: 'orchestration' }
-      })
-    ])
+  it('holds a worktree whose parent is in another Orca store', async () => {
+    const runner = makeRunner(
+      [
+        row('repo-a::/r1', { elsewhere: { store: 'desktop', key: 'folder:F' } }),
+        // Nested under r1, so in the same folder.
+        row('repo-b::/r2', { parent: 'repo-a::/r1' }),
+        // Its parent worktree there may be in a folder.
+        row('repo-a::/r3', { elsewhere: { store: 'desktop', key: 'worktree:repo-d::/d1' } }),
+        // Workers' checkouts and a bot's hand-overs aren't held by a folder's other members.
+        row('repo-a::/w1', {
+          elsewhere: { store: 'desktop', key: 'folder:F', origin: 'orchestration' }
+        }),
+        row('repo-c::/w2', { parent: 'repo-a::/r1' }),
+        row('repo-a::/h1', {
+          elsewhere: { store: 'desktop', key: 'folder:Bot', capture: 'bot-hand-over' }
+        })
+      ],
+      { parents: { 'repo-c::/w2': { parentWorktreeId: 'repo-a::/r1', origin: 'orchestration' } } }
+    )
     expect(await verdicts(runner)).toEqual({
       'repo-a::/r1': { action: 'keep', cause: 'folder-workspace-sibling', reason: 'merged' },
       'repo-b::/r2': { action: 'keep', cause: 'folder-workspace-sibling', reason: 'merged' },
-      'repo-a::/w1': { action: 'delete', reason: 'merged' }
+      'repo-a::/r3': { action: 'keep', cause: 'folder-workspace-sibling', reason: 'merged' },
+      'repo-a::/w1': { action: 'delete', reason: 'merged' },
+      'repo-c::/w2': { action: 'delete', reason: 'merged' },
+      'repo-a::/h1': { action: 'delete', reason: 'merged' }
     })
   })
 
   it("holds this store's folder while a paired server has a workspace in it", async () => {
     const runner = makeRunner(
-      [row('repo-a::/a1', { folder: 'F' }), row('repo-a::/g1', { folder: 'G' })],
+      [
+        row('repo-a::/a1', { folder: 'F' }),
+        row('repo-a::/g1', { folder: 'G', instance: 'g1-instance' }),
+        row('repo-a::/k1', { folder: 'K' })
+      ],
       {
         paired: {
-          'env-r': [row('repo-x::/x1', { elsewhere: { store: 'this-store', key: 'folder:F' } })]
+          'env-r': [
+            row('repo-x::/x1', { elsewhere: { store: 'this-store', key: 'folder:F' } }),
+            // Its parent g1 was renamed after the link was saved.
+            row('repo-x::/x2', {
+              elsewhere: {
+                store: 'this-store',
+                key: 'worktree:repo-a::/old',
+                instance: 'g1-instance'
+              }
+            })
+          ]
         }
       }
     )
     expect(await verdicts(runner)).toEqual({
       'repo-a::/a1': { action: 'keep', cause: 'folder-workspace-sibling', reason: 'merged' },
-      'repo-a::/g1': { action: 'delete', reason: 'merged' }
+      'repo-a::/g1': { action: 'keep', cause: 'folder-workspace-sibling', reason: 'merged' },
+      'repo-a::/k1': { action: 'delete', reason: 'merged' }
     })
   })
 

@@ -6,6 +6,8 @@ import { getCanonicalUserDataPath } from '../../persistence/loading-store/user-d
 import { toRuntimeExecutionHostId } from '../../../shared/execution-host/execution-host'
 import { composeWorktreeHostIdentity } from '../../../shared/worktree/host-qualified-identity'
 import type { RuntimeWorktreePsResult } from '../../../shared/worktree/catalog/runtime-worktree-contracts'
+import { hostScopeCensusIsComplete } from '../../../shared/execution-host/runtime-listing-host-scope'
+import { withTimeout } from '../../../shared/concurrency/promise-timeout-fallback'
 
 const PAIRED_READ_TIMEOUT_MS = 5_000
 const PAIRED_PS_LIMIT = 100_000
@@ -14,7 +16,7 @@ export type PairedFolderChildren = {
   /** False when a paired server didn't answer in full: any folder here may have members there. */
   complete: boolean
   /** Host identity of each paired workspace whose parent is in this store, and that parent. */
-  children: { identity: string; parentWorkspaceKey: string }[]
+  children: { identity: string; parentWorkspaceKey: string; parentInstanceId: string }[]
 }
 
 export type PairedFolderChildrenRuntime = Pick<
@@ -32,31 +34,44 @@ export async function readPairedFolderChildren(
   if (servers.length === 0) {
     return { complete: true, children: [] }
   }
-  // Without its own identity this store can't be anyone's cross-store parent.
+  // An unreadable identity can't tell this store's children from anyone else's.
   const own = await readCallerStoreInstallationId(
     runtime.getRuntimeId(),
     getCanonicalUserDataPath()
   ).catch(() => undefined)
   if (!own) {
-    return { complete: true, children: [] }
+    return { complete: false, children: [] }
   }
   const answers = await Promise.all(
     servers.map(({ environmentId }) =>
-      runtime
-        .callOrchestrationWorkerServer(
-          environmentId,
-          'worktree.ps',
-          { limit: PAIRED_PS_LIMIT },
-          PAIRED_READ_TIMEOUT_MS
-        )
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: `worktree.ps` answers RuntimeWorktreePsResult on every paired Orca; rows are read field by field below.
-        .then((result) => ({ environmentId, result: result as Partial<RuntimeWorktreePsResult> }))
-        .catch(() => null)
+      // The call's own timeout starts after it reaches the server; connecting (an SSH tunnel) can take longer.
+      withTimeout(
+        runtime
+          .callOrchestrationWorkerServer(
+            environmentId,
+            'worktree.ps',
+            { limit: PAIRED_PS_LIMIT },
+            PAIRED_READ_TIMEOUT_MS
+          )
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: `worktree.ps` answers RuntimeWorktreePsResult on every paired Orca; rows are read field by field below.
+          .then((result) => ({
+            environmentId,
+            result: result as Partial<RuntimeWorktreePsResult>
+          })),
+        PAIRED_READ_TIMEOUT_MS,
+        null
+      )
     )
   )
   const paired: PairedFolderChildren = { complete: true, children: [] }
   for (const answer of answers) {
-    if (!answer || answer.result.truncated !== false || !Array.isArray(answer.result.worktrees)) {
+    // A host it couldn't list (a failed repo scan, a dropped SSH host) may hold a child too.
+    if (
+      !answer ||
+      answer.result.truncated !== false ||
+      !hostScopeCensusIsComplete(answer.result.hostScope) ||
+      !Array.isArray(answer.result.worktrees)
+    ) {
       paired.complete = false
       continue
     }
@@ -66,7 +81,8 @@ export async function readPairedFolderChildren(
       if (parent?.installationId === own) {
         paired.children.push({
           identity: composeWorktreeHostIdentity(hostId, row.worktreeId),
-          parentWorkspaceKey: parent.workspaceKey
+          parentWorkspaceKey: parent.workspaceKey,
+          parentInstanceId: parent.instanceId
         })
       }
     }

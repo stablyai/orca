@@ -25,8 +25,13 @@ export function summaryIdentity(summary: RuntimeWorktreePsSummary): string {
   return composeWorktreeHostIdentity(summaryHostId(summary) ?? undefined, summary.worktreeId)
 }
 
-// A worker's own lineage; its folder's other members can't hold a disposable checkout.
-function isOrchestrationLineage(lineage: CrossStoreWorkspaceLineage): boolean {
+// A worker's lineage: a folder's other members don't hold a disposable checkout.
+function isOrchestrationLineage(
+  lineage: Pick<
+    CrossStoreWorkspaceLineage,
+    'origin' | 'orchestrationRunId' | 'taskId' | 'coordinatorHandle'
+  >
+): boolean {
   return (
     lineage.origin === 'orchestration' ||
     Boolean(lineage.orchestrationRunId || lineage.taskId || lineage.coordinatorHandle)
@@ -37,10 +42,11 @@ function isOrchestrationLineage(lineage: CrossStoreWorkspaceLineage): boolean {
  * Control lists, attached worktrees and their lineage children alike, on any host. A bot's home is
  * not one piece of work, so its workspaces stay independent.
  *
- * A folder in another Orca store keeps that link only in the child's store, so each side sees half:
- * a child here whose folder is elsewhere is always held, and this host's folders learn of children
- * in paired servers' stores from `readPairedFolderChildren`. A headless server can't reach the
- * other servers its clients pair, so children elsewhere of its own folders stay unseen. */
+ * A parent in another Orca store keeps that link only in the child's store, so each side sees half:
+ * a child here whose parent is elsewhere may be in a folder there, so it is held (workers and bot
+ * hand-overs aside), and this host's folders learn of children in paired servers' stores from
+ * `readPairedFolderChildren`. A headless server can't reach the other servers its clients pair, so
+ * children elsewhere of its own folders stay unseen. */
 export async function folderSiblingsByWorktree(
   store: RuntimeStore,
   summaries: readonly RuntimeWorktreePsSummary[],
@@ -56,8 +62,11 @@ export async function folderSiblingsByWorktree(
   // A listed row speaks for itself; one the listing lacks (its repo's scan failed) is read from its stored lineage.
   const folderOf = (hostId: ExecutionHostId | undefined, worktreeId: string): string | null => {
     const seen = new Set<string>()
+    let worker = false
     for (let id: string | null = worktreeId; id !== null && !seen.has(id);) {
       seen.add(id)
+      const edge = parentEdges[id]
+      worker ||= edge !== undefined && isOrchestrationLineage(edge)
       const row = byIdentity.get(composeWorktreeHostIdentity(hostId, id))
       // An archived ancestor hides its subtree from the folder.
       if (row?.isArchived) {
@@ -71,12 +80,13 @@ export async function folderSiblingsByWorktree(
       }
       const elsewhere = row?.crossStoreParent
       if (elsewhere) {
-        return parseWorkspaceKey(elsewhere.parent.workspaceKey)?.type === 'folder' &&
-          !isOrchestrationLineage(elsewhere)
-          ? `${elsewhere.parent.installationId}|${elsewhere.parent.workspaceKey}`
-          : null
+        return worker ||
+          isOrchestrationLineage(elsewhere) ||
+          elsewhere.capture.source === 'bot-hand-over'
+          ? null
+          : `${elsewhere.parent.installationId}|${elsewhere.parent.workspaceKey}`
       }
-      id = row ? row.parentWorktreeId : (parentEdges[id]?.parentWorktreeId ?? null)
+      id = row ? row.parentWorktreeId : (edge?.parentWorktreeId ?? null)
     }
     return null
   }
@@ -133,10 +143,17 @@ export async function folderSiblingsByWorktree(
   }
   if (localFolders.length > 0 && readPairedFolderChildren) {
     const paired = await readPairedFolderChildren()
-    for (const { identity, parentWorkspaceKey } of paired.children) {
+    // A renamed or moved parent keeps its instance, while the child's ref keeps its old key.
+    const byInstance = new Map(rows.map((row) => [row.worktreeInstanceId, row]))
+    for (const { identity, parentWorkspaceKey, parentInstanceId } of paired.children) {
       const parent = parseWorkspaceKey(parentWorkspaceKey)
+      const parentRow = byInstance.get(parentInstanceId)
       const folderKey =
-        parent?.type === 'worktree' ? folderOf(undefined, parent.worktreeId) : parentWorkspaceKey
+        parent?.type !== 'worktree'
+          ? parentWorkspaceKey
+          : parentRow
+            ? folderOf(summaryHostId(parentRow) ?? undefined, parentRow.worktreeId)
+            : folderOf(undefined, parent.worktreeId)
       if (folderKey && membersByFolder.has(folderKey)) {
         join(folderKey, identity)
       }
