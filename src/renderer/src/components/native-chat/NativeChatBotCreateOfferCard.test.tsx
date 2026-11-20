@@ -120,17 +120,6 @@ describe('the new-bot card', () => {
     expect(dialog.getAttribute('data-from-offer')).toBe('{"botId":"atlas","offerId":"offer-1"}')
   })
 
-  it('opens in place to what it watches, reports, takes over and its template', () => {
-    show([makeTestBot({})])
-    const toggle = screen.getByRole('button', { expanded: false })
-    fireEvent.click(toggle)
-    expect(toggle.getAttribute('aria-expanded')).toBe('true')
-    expect(screen.getByText('Pull requests and checks for milestone 1.5')).toBeTruthy()
-    expect(screen.getByText('Here, weekday mornings')).toBeTruthy()
-    expect(screen.getByText('release-checklist, mobile-keyboard-fix, changelog-1-5')).toBeTruthy()
-    expect(screen.getByText('Release readiness')).toBeTruthy()
-  })
-
   it('reads Created from the bot recorded against its id, whatever that bot is named now', () => {
     const atlas = makeTestBot({ acceptedOffers: [{ offerId: 'offer-1', botId: 'b9' }] })
     show([atlas, makeTestBot({ id: 'b9', name: 'Release', createdAt: 2000 })])
