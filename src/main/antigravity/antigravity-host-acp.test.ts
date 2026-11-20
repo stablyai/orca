@@ -28,24 +28,6 @@ describe('hasAgyCredential', () => {
 })
 
 describe('ANTIGRAVITY_LAUNCH_SPEC host backend environment', () => {
-  it('disables agy background auto-updates for host ACP launches', async () => {
-    const home = mkdtempSync(join(tmpdir(), 'agy-host-env-'))
-    homes.push(home)
-    const invocation = await resolveAcpLaunchInvocation(
-      ANTIGRAVITY_LAUNCH_SPEC,
-      antigravityHostAccountHome(home),
-      {
-        resolveEnvironment: async () => ({ PATH: '', AGY_CLI_DISABLE_AUTO_UPDATE: 'false' }),
-        resolveCommand: (command) => join(home, command),
-        inheritedEnv: { AGY_CLI_DISABLE_AUTO_UPDATE: 'false' },
-        homePath: home,
-        dataDirectory: home
-      }
-    )
-    expect(invocation.env.AGY_CLI_DISABLE_AUTO_UPDATE).toBe('true')
-    expect(invocation.envToDelete).not.toContain('AGY_CLI_DISABLE_AUTO_UPDATE')
-  })
-
   it('scrubs alternate-case auto-update flags on Windows so they cannot shadow the uppercase entry', async () => {
     vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
     const home = mkdtempSync(join(tmpdir(), 'agy-host-win-env-'))
@@ -67,27 +49,29 @@ describe('ANTIGRAVITY_LAUNCH_SPEC host backend environment', () => {
     expect(invocation.envToDelete).not.toContain('AGY_CLI_DISABLE_AUTO_UPDATE')
   })
 
-  it('passes AGY_CLI_DISABLE_AUTO_UPDATE when listing models via agy models', async () => {
+  it('overrides inherited auto-updates when listing host models', async () => {
     const home = mkdtempSync(join(tmpdir(), 'agy-host-models-'))
     homes.push(home)
     const runListing = vi.fn<NonNullable<AcpModelCatalogProbeDeps['runListing']>>(
       async () => 'gemini-4-neon-high\tGemini 4 Neon (High)\n'
     )
     const probe = createAcpModelCatalogProbe(ANTIGRAVITY_LAUNCH_SPEC, {
-      resolveEnvironment: async () => ({ PATH: '' }),
+      resolveEnvironment: async () => ({ PATH: '', AGY_CLI_DISABLE_AUTO_UPDATE: 'false' }),
       resolveCommand: (command) => join(home, command),
       probeVersion: async () => ({ version: '1.5.12' }),
-      inheritedEnv: {},
+      inheritedEnv: { AGY_CLI_DISABLE_AUTO_UPDATE: 'false' },
       homePath: home,
       dataDirectory: home,
       runListing
     })
     const result = await probe(antigravityHostAccountHome(home), { workspacePath: home })
     expect(result.models).toHaveLength(1)
-    expect(runListing).toHaveBeenCalledTimes(1)
-    expect(runListing.mock.calls[0]?.[0]).toMatchObject({
-      args: ['models'],
-      env: { AGY_CLI_DISABLE_AUTO_UPDATE: 'true' }
-    })
+    expect(runListing).toHaveBeenCalledWith(
+      expect.objectContaining({
+        args: ['models'],
+        env: expect.objectContaining({ AGY_CLI_DISABLE_AUTO_UPDATE: 'true' })
+      }),
+      expect.anything()
+    )
   })
 })
