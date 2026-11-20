@@ -84,7 +84,7 @@ describe('legacy session copy swap budget', () => {
     }
     // Copies already settled as kept, written since they were copied.
     for (let index = 0; index < n; index += 1) {
-      legacyCopy('21', n + 2 + index, undefined, true)
+      legacyCopy('20', n + 2 + index, undefined, true)
     }
 
     const pass = (): Promise<unknown> =>
