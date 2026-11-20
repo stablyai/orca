@@ -1,10 +1,13 @@
 // One item, in the list's place: a frozen header (title, status, links), then the description
 // (clamped), chat, done means and activity scrolling under it, and a comment box that wakes its chat.
 // BotItemPane holds it under the back row and sends typing from anywhere in it to the comment box.
+// Activity takes only the height it needs, so the box sits right under its last entry; while the
+// agent's question is open, its card takes the box's place.
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import { ExternalLink, House, MessageSquare } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
+import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
 import { selectFocusedTab } from '@/lib/focused-chat-workers'
@@ -28,6 +31,7 @@ import { NativeChatFileLinkExistenceContext } from '../../native-chat/links/acti
 import { NativeChatLinkClickContext } from '../../native-chat/links/actions/native-chat-link-click-context'
 import { useNativeChatLinkActions } from '../../native-chat/links/actions/use-native-chat-link-actions'
 import { BotItemActivityList } from './BotItemActivityList'
+import { BotItemAskSlot, useBotItemOpenAsk } from './BotItemAskSlot'
 import { BotItemCancelDialog } from './BotItemCancelDialog'
 import { BotItemClampedText } from './BotItemClampedText'
 import { BotItemCommentBox, type BotItemCommentBoxHandle } from './BotItemCommentBox'
@@ -138,11 +142,17 @@ export function BotItemBody({
   const pending = useBotItemPendingComments(bot, item.uid, view.events)
   // The header and comment box paint first; the Activity, the costly part, renders right after.
   const activityMounted = useDeferredValue(true, false)
+  const ask = useBotItemOpenAsk(bot, item, deleted)
   const { scrollRef, contentRef, scrollerProps, showJump, jumpToLatest } = useBotTranscriptFollow({
     itemCount: view.events.length + pending.shown.length,
     isWorking: false,
     isVisible: true
   })
+  // From the comment box or an open question's Reply: shown at once, then sent to the host.
+  const sendComment = (text: string, paths: readonly string[] = []): void => {
+    pending.send(text, paths, view.events.at(-1)?.id ?? item.lastEventId)
+    jumpToLatest()
+  }
   // Comment and description links open as in chat, from the bot's folder; the panel has no tab of
   // its own, so opens place beside the bot workspace's focused tab, as a click in that chat would.
   const sourceTabId = useAppStore(
@@ -177,6 +187,8 @@ export function BotItemBody({
       ref={pane}
       // Clicking the item's text focuses the pane, so typing after it still reaches the box.
       tabIndex={-1}
+      // The open question's card takes focus and number keys from anywhere in here, as in chat.
+      data-native-chat-prompt-scope=""
       className="flex min-h-0 flex-1 flex-col outline-none"
     >
       {notice}
@@ -184,14 +196,25 @@ export function BotItemBody({
       {/* Pasted-text and file pills open their preview from the bot's host; files drop anywhere here. */}
       <NativeChatMarkdownImageOwnerContext value={imageOwner}>
         <NativeChatTextAttachmentScope enabled>
-          <NativeChatPaneFileDropSurface className="flex min-h-0 flex-1 flex-col">
+          {/* A size container: the comment box caps its height to a share of this pane's (`cqh`). */}
+          <NativeChatPaneFileDropSurface className="flex min-h-0 flex-1 flex-col [container-type:size]">
             <NativeChatFileLinkExistenceContext value={fileContext?.existence ?? null}>
               <NativeChatLinkClickContext value={links.onLinkClick}>
-                <div className="relative flex min-h-0 flex-1 flex-col">
+                {/* The comment box stays at the bottom; an open question follows the last entry instead,
+                    with spare height below it rather than between. */}
+                <div
+                  className={cn(
+                    'relative flex min-h-0 flex-col',
+                    ask.shown ? 'flex-initial' : 'flex-1'
+                  )}
+                >
                   <div
                     ref={scrollRef}
                     {...scrollerProps}
-                    className="scrollbar-sleek min-h-0 flex-1 overflow-y-auto [overflow-anchor:none]"
+                    className={cn(
+                      'scrollbar-sleek min-h-0 overflow-y-auto [overflow-anchor:none]',
+                      ask.shown ? 'flex-initial' : 'flex-1'
+                    )}
                   >
                     <BotItemHeader
                       bot={bot}
@@ -249,6 +272,8 @@ export function BotItemBody({
                             item={item}
                             events={view.events}
                             pending={pending}
+                            askShown={ask.question !== null}
+                            onReplyToQuestion={deleted ? undefined : sendComment}
                           />
                         ) : null}
                       </section>
@@ -261,20 +286,28 @@ export function BotItemBody({
                   />
                   <NativeChatJumpToLatest visible={showJump} onJump={jumpToLatest} />
                 </div>
+                <BotItemAskSlot
+                  bot={bot}
+                  item={item}
+                  ask={ask}
+                  events={view.events}
+                  onReconcile={view.retry}
+                  commentRef={comment}
+                />
               </NativeChatLinkClickContext>
             </NativeChatFileLinkExistenceContext>
             <LinkActionPopover request={links.linkActionRequest} onClose={links.closeLinkActions} />
             {deleted ? null : (
-              <BotItemCommentBox
-                ref={comment}
-                bot={bot}
-                item={item}
-                attachTo={attachTo}
-                onSend={(text, paths) => {
-                  pending.send(text, paths, view.events.at(-1)?.id ?? item.lastEventId)
-                  jumpToLatest()
-                }}
-              />
+              <div hidden={ask.shown} className="contents">
+                <BotItemCommentBox
+                  ref={ask.shown ? undefined : comment}
+                  bot={bot}
+                  item={item}
+                  attachTo={attachTo}
+                  hidden={ask.shown}
+                  onSend={sendComment}
+                />
+              </div>
             )}
           </NativeChatPaneFileDropSurface>
         </NativeChatTextAttachmentScope>

@@ -172,27 +172,6 @@ function ownedShare(id: string, canonical: boolean): BotOwnedShare {
   }
 }
 
-it('publishes the reviewed candidate with the note on screen and copies the new link', async () => {
-  render(<BotShareFlow bot={bot} link={null} onClose={() => {}} />)
-  fireEvent.click(await screen.findByRole('button', { name: /Setup note/ }))
-  fireEvent.change(screen.getByRole('textbox', { name: 'Setup note' }), {
-    target: { value: 'Connect GitHub before the first run.' }
-  })
-  fireEvent.click(screen.getByRole('button', { name: 'Publish link' }))
-
-  expect(await screen.findByRole('button', { name: 'Copied' })).toBeDefined()
-  expect(clipboard).toHaveBeenCalledWith('https://x/s1')
-  expect(calls.rpc.map(({ method }) => method)).toEqual([
-    'bots.share.prepare',
-    'bots.share.publish'
-  ])
-  expect(calls.rpc[1]?.params).toEqual({
-    botId: 'bot-1',
-    candidateId: 'c1',
-    setupNote: 'Connect GitHub before the first run.'
-  })
-})
-
 it('never publishes a candidate built for other picks after a rebuild fails', async () => {
   calls.failMemory = true
   render(<BotShareFlow bot={bot} link={null} onClose={() => {}} />)
@@ -210,18 +189,14 @@ it('leads with Done when the link already serves the bot as it is', async () => 
   expect(screen.getByRole('button', { name: 'Update link' }).hasAttribute('disabled')).toBe(true)
 })
 
-it('offers Update link once the bot changed since the link was published', async () => {
-  render(<BotShareFlow bot={bot} link={link('older')} onClose={() => {}} />)
-
-  expect(await screen.findByText(/Bot changed since/)).toBeDefined()
-  expect(screen.getByRole('button', { name: 'Update link' }).hasAttribute('disabled')).toBe(false)
-})
-
 it('updates the link from the picks and note it was last published with', async () => {
   calls.last.value = { selection: { skills: [] }, setupNote: 'Connect Slack first.' }
-  render(<BotShareFlow bot={bot} link={link('older')} onClose={() => {}} />)
+  const previousLink = link('older')
+  const onClose = () => {}
+  const view = render(<BotShareFlow bot={bot} link={previousLink} onClose={onClose} />)
   // Update link is live only once the share's last picks are read back.
   await screen.findByText(/Bot changed since/)
+  view.rerender(<BotShareFlow bot={{ ...bot }} link={previousLink} onClose={onClose} />)
   fireEvent.click(screen.getByRole('button', { name: 'Update link' }))
 
   expect(await screen.findByText('Updated just now')).toBeDefined()
@@ -265,6 +240,7 @@ it('keeps the reviewed parts and setup note through sign-in and publishes that d
     ).toBe('true')
     fireEvent.click(await readyButton('Publish link'))
     expect(await screen.findByRole('button', { name: 'Copied' })).toBeDefined()
+    expect(clipboard).toHaveBeenCalledWith('https://x/s1')
     expect(calls.rpc.find(({ method }) => method === 'bots.share.publish')?.params).toEqual({
       botId: 'bot-1',
       candidateId: 'reviewed-memory',

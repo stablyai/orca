@@ -1,8 +1,8 @@
 // A comment in an item's Activity: one quiet surface for every author, with avatar, name and time, and
-// the text as Markdown. The bot's open question is the only outlined one. A recorded answer quotes its
-// question; the question's Answered leads back to it.
+// the text as Markdown. An agent's Needs you question is not drawn here: its row and card are chat's
+// question's. A reply to a question quotes it, and leads back to it.
 import { useContext } from 'react'
-import { Check, CornerDownRight } from 'lucide-react'
+import { CornerDownRight } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { uiDateTimeFormat } from '@/i18n/ui-intl-formatters'
 import { cn } from '@/lib/class-names'
@@ -20,8 +20,6 @@ import { botInitial } from '../../../../../shared/bots/bot-avatar-fallback'
 import { BotAvatar, BotAvatarTile } from '../BotAvatar'
 import { BotOwnerAvatar } from '../bot-connector-people'
 import { BotItemClampedText } from './BotItemClampedText'
-import { BotItemMarkdown } from './BotItemMarkdown'
-import { BotItemStatusIcon } from './BotItemStatusIcon'
 import type { BotItemActivityEntry } from '../../../../../shared/bots/bot-item-activity'
 import { botItemActorName } from '../../../../../shared/bots/bot-item-actor-name'
 
@@ -52,12 +50,9 @@ function Avatar({
   )
 }
 
-type CommentEntry = Pick<
-  Extract<BotItemActivityEntry, { kind: 'comment' }>,
-  'event' | 'question' | 'answer' | 'replyTo'
->
+type CommentEntry = Pick<Extract<BotItemActivityEntry, { kind: 'comment' }>, 'event' | 'replyTo'>
 
-/** Marks a card so a jump can find and focus it. */
+/** Marks a card (or a question's card) so a jump can find and focus it. */
 export const BOT_ITEM_COMMENT_ATTRIBUTE = 'data-bot-item-comment-id'
 
 export function BotItemCommentCard({
@@ -65,7 +60,9 @@ export function BotItemCommentCard({
   item,
   entry,
   onJump,
-  failed
+  failed,
+  textOverride,
+  jumpTarget = true
 }: {
   bot: Bot
   item: BotItem
@@ -74,14 +71,18 @@ export function BotItemCommentCard({
   onJump?: (eventId: string) => void
   /** A comment sent from the box that the host refused. */
   failed?: { retry: () => void; discard: () => void }
+  /** Words to show instead of the event's text (a question's context, without its decisions). */
+  textOverride?: string
+  /** False when another card (its question's) is where a jump to this event lands. */
+  jumpTarget?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
   const runtimeContext = useContext(NativeChatMarkdownImageOwnerContext)?.runtimeContext ?? null
-  const { event, question, answer, replyTo } = entry
+  const { event, replyTo } = entry
   const images = botItemCommentImages(event.data)
   // Its images show above the words, so the [Image #N] its send wrote go, as in chat's sent messages.
   const text = stripSentImagePromptMarkers(
-    typeof event.data.text === 'string' ? event.data.text : '',
+    textOverride ?? (typeof event.data.text === 'string' ? event.data.text : ''),
     images.length
   )
   const name = botItemActorName(event, item, t)
@@ -93,54 +94,19 @@ export function BotItemCommentCard({
     // column so the avatar and time sit on the event rows' glyph and time edges.
     <div className="relative -mx-2 my-1 rounded-[10px] bg-sidebar">
       <div
-        {...{ [BOT_ITEM_COMMENT_ATTRIBUTE]: event.id }}
+        {...(jumpTarget ? { [BOT_ITEM_COMMENT_ATTRIBUTE]: event.id } : {})}
         tabIndex={-1}
         role="article"
         aria-label={t('bots.items.activity.commentLabel', '{{name}}, {{time}}', {
           name,
           time: format.format(event.at)
         })}
-        className={cn(
-          'rounded-[10px] bg-foreground/[0.035] px-2 pb-2 pt-1.5 outline-none focus:ring-2 focus:ring-ring/50 dark:bg-foreground/[0.045]',
-          question === 'open' && 'ring-1 ring-inset ring-foreground/25'
-        )}
+        className="rounded-[10px] bg-foreground/[0.035] px-2 pb-2 pt-1.5 outline-none focus:ring-2 focus:ring-ring/50 dark:bg-foreground/[0.045]"
       >
         <div className="mb-1 flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
           <Avatar bot={bot} event={event} name={name} />
           <b className="shrink-0 text-[13px] font-medium text-foreground">{name}</b>
-          {question === 'open' ? <BotItemStatusIcon status="needs_you" /> : null}
-          {question ? (
-            <span className="min-w-0 truncate @max-[300px]:hidden">
-              {question === 'open'
-                ? t('bots.items.activity.asksYou', 'asks you')
-                : t('bots.items.activity.askedYou', 'asked you')}
-            </span>
-          ) : null}
-          <span className="ml-auto flex shrink-0 items-center gap-2 text-2xs tabular-nums">
-            {question === 'answered' ? (
-              answer && onJump ? (
-                <button
-                  type="button"
-                  className={cn('flex items-center gap-1', jump)}
-                  aria-label={t(
-                    'bots.items.activity.goToAnswer',
-                    'Answered at {{time}}. Go to the answer',
-                    { time: format.format(answer.at) }
-                  )}
-                  onClick={() => onJump(answer.eventId)}
-                >
-                  <Check className="size-3" />
-                  {t('bots.items.activity.answered', 'Answered')}
-                </button>
-              ) : (
-                <span className="flex items-center gap-1">
-                  <Check className="size-3" />
-                  {t('bots.items.activity.answered', 'Answered')}
-                </span>
-              )
-            ) : null}
-            {format.format(event.at)}
-          </span>
+          <span className="ml-auto shrink-0 text-2xs tabular-nums">{format.format(event.at)}</span>
         </div>
         {replyTo ? (
           <button
@@ -171,9 +137,7 @@ export function BotItemCommentCard({
             structured
             runtimeContext={runtimeContext}
             renderText={(shown) =>
-              !shown.trim() ? null : question === 'open' ? (
-                <BotItemMarkdown text={shown} />
-              ) : (
+              !shown.trim() ? null : (
                 // 8 lines of 19 px.
                 <BotItemClampedText text={shown} clampClassName="max-h-[152px]" fade />
               )

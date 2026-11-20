@@ -2,7 +2,6 @@ import { Copy, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { AgentIcon } from '@/components/agent/icons/AgentIcon'
 import { Button } from '@/components/ui/button'
-import { Separator } from '@/components/ui/separator'
 import { useTranslate } from '@/i18n/use-translate'
 import { agentCliProductName } from '@/components/agent-cli-update/agent-cli-product-name'
 import { AgentCliUpdateFailedChip } from '@/components/agent-cli-update/AgentCliUpdateFailedChip'
@@ -68,7 +67,7 @@ function AgentCliUpdateListRow({
     <div>
       <div className="flex h-9 items-center gap-2 rounded-md pr-1 pl-2">
         <AgentIcon agent={row.agent} size={14} />
-        <span className="truncate text-[13px]">{agentCliProductName(row.agent, t)}</span>
+        <span className="truncate text-[13px]">{agentCliProductName(row.agent, t, 'short')}</span>
         <span className="ml-auto flex shrink-0 items-center gap-1.5">
           {run?.phase === 'running' ? (
             <>
@@ -146,11 +145,25 @@ export function AgentCliUpdateList({
   const startable = rows.filter(agentCliUpdateStartable)
   return (
     <div className="flex flex-col p-1">
-      <div className="px-2 pt-1.5 pb-1 text-2xs font-medium text-muted-foreground">
-        {t('agentCliUpdate.heading', '{{count}} CLI updates available', {
-          count: rows.length,
-          defaultValue_one: '{{count}} CLI update available'
-        })}
+      {/* Same right inset as the rows, so Update all lines up with their buttons. */}
+      <div className="flex min-h-7 items-center gap-2 pr-1 pl-2">
+        <span className="text-2xs font-medium text-muted-foreground">
+          {t('agentCliUpdate.heading', '{{count}} CLI updates available', {
+            count: rows.length,
+            defaultValue_one: '{{count}} CLI update available'
+          })}
+        </span>
+        {startable.length > 1 ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="xs"
+            className="ml-auto"
+            onClick={onUpdateAll}
+          >
+            {t('agentCliUpdate.updateAll', 'Update all')}
+          </Button>
+        ) : null}
       </div>
       {groups.map((group) => (
         <div key={group.hostKey}>
@@ -162,16 +175,6 @@ export function AgentCliUpdateList({
           ))}
         </div>
       ))}
-      {startable.length > 1 ? (
-        <>
-          <Separator className="my-1" />
-          <div className="flex justify-end px-1 pb-0.5">
-            <Button type="button" variant="outline" size="xs" onClick={onUpdateAll}>
-              {t('agentCliUpdate.updateAll', 'Update all')}
-            </Button>
-          </div>
-        </>
-      ) : null}
     </div>
   )
 }

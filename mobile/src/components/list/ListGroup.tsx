@@ -138,7 +138,7 @@ type ListRowProps = {
   subtitleLines?: number
   /** Richer content under the title, e.g. usage bars or a coloured status line. */
   detail?: ReactNode
-  /** A slot for an icon or a status dot. */
+  /** A slot for an icon or a status dot, 24 pt wide or as wide as its content. */
   leading?: ReactNode
   /** The current value in grey, e.g. "This computer". */
   value?: string
@@ -281,7 +281,7 @@ const listRowStyles = themedStyleSheet(() => ({
   // A translucent wash: bgRaised matches sheetGroup in dark, so it would not show.
   pressed: { backgroundColor: colors.translucentFill },
   disabled: { opacity: feedback.disabledOpacity },
-  leading: { width: LIST_LEADING_SLOT, alignItems: 'center', justifyContent: 'center' },
+  leading: { minWidth: LIST_LEADING_SLOT, alignItems: 'center', justifyContent: 'center' },
   main: { flex: 1, minWidth: 0, gap: 2 },
   marked: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'flex-start' },
   marker: {

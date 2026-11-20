@@ -8,6 +8,8 @@ import {
   getDefaultSettings,
   getDefaultVoiceSettings
 } from '../../../../../shared/orca-profiles/constants'
+import { botRefKey } from '@/lib/bot-hosts'
+import { updateNativeChatComposerDraft } from '../../native-chat/drafts/native-chat-composer-draft-store'
 
 const item = makeTestBotItem(6, { title: 'Ship the share dialog' })
 const comment = (id: string, text: string, at: number): BotItemEvent => ({
@@ -160,4 +162,34 @@ export const snoozeMenu = defineFixture({
     sub?.click()
     await new Promise((resolve) => setTimeout(resolve, 160))
   }
+})
+
+// No open question: its card would take the comment box's place.
+const answering = makeTestBotItem(37, { title: 'Pick the share defaults' })
+const answeringView = {
+  ...snoozedView,
+  item: answering,
+  events: start.slice(0, 3)
+}
+
+// A short, narrow pane with a long answer and three images: the box gives way so Activity and Send stay.
+export const shortPaneLongAnswer = defineFixture({
+  width: 220,
+  setup: () =>
+    updateNativeChatComposerDraft(
+      `bot-item-comment:${botRefKey(fixtureCos)}:${answering.uid}`,
+      {
+        text: Array.from(
+          { length: 6 },
+          (_, index) => `Part ${index + 1}: a full sentence of answer.`
+        ).join('\n\n'),
+        images: ['a', 'b', 'c'].map((id) => ({ id, path: `/home/me/.orca/attachments/${id}.png` }))
+      },
+      'immediate'
+    ),
+  render: () => (
+    <div className="flex h-[414px] flex-col bg-sidebar">
+      <BotItemBody bot={fixtureCos} item={answering} view={answeringView} />
+    </div>
+  )
 })

@@ -1,7 +1,6 @@
 import { readFile } from 'node:fs/promises'
 import {
   classifyUnenvelopedCredential,
-  isMockKeychainCiphertext,
   type SecretAtRestProtection
 } from '../../shared/secure-storage/secret-at-rest-protection'
 
@@ -11,11 +10,7 @@ export async function readCredentialFileProtection(
 ): Promise<SecretAtRestProtection | null> {
   try {
     const raw = await readFile(path)
-    return raw.length === 0
-      ? null
-      : isMockKeychainCiphertext(raw)
-        ? 'plaintext'
-        : classifyUnenvelopedCredential(raw)
+    return raw.length === 0 ? null : classifyUnenvelopedCredential(raw)
   } catch {
     // Unreadable is a read-time error to surface elsewhere, not a protection claim.
     return null

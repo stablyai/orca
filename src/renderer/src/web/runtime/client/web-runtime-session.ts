@@ -57,7 +57,8 @@ export function readWebRuntimeStatusSnapshots(): RuntimeHostStatusSnapshot[] {
 }
 export async function observeWebRuntimeStatus(
   selector: string,
-  timeoutMs?: number
+  timeoutMs?: number,
+  force?: true
 ): Promise<RuntimeHostStatusResponse> {
   const environment = resolveEnvironment(selector)
   if (manuallyDisconnectedEnvironmentIds.has(environment.id)) {
@@ -65,7 +66,7 @@ export async function observeWebRuntimeStatus(
   }
   const existing = webRuntimeState.activeClient?.statusOwner
   if (existing) {
-    return existing.refresh({ timeoutMs, observeOnly: true })
+    return existing.refresh({ timeoutMs, observeOnly: true, ...(force ? { force } : {}) })
   }
   const transient = new WebRuntimeClient(getPreferredWebRuntimeConnection(environment), {
     reconnect: false,

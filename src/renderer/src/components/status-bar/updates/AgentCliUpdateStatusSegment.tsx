@@ -87,10 +87,10 @@ export function AgentCliUpdateStatusSegment({
         }
       : {
           icon: <Download className="size-3 text-muted-foreground" />,
-          label:
-            rows.length === 1
-              ? t('agentCliUpdate.statusOne', 'CLI update')
-              : t('agentCliUpdate.statusCount', '{{count}} CLI updates', { count: rows.length }),
+          label: t('agentCliUpdate.statusCount', '{{count}} CLI updates', {
+            count: rows.length,
+            defaultValue_one: '{{count}} CLI update'
+          }),
           tooltip: t('agentCliUpdate.statusTooltip', 'Newer agent CLI versions are out')
         }
 

@@ -44,7 +44,8 @@ import { OrcadMigrationBlobChunkRequestSchema } from '../orcad-migration/orcad-m
 import { OrcadMigrationSnapshotChunkRequestSchema } from '../orcad-migration/orcad-migration-scrollback'
 import {
   CrewSubscribeParams,
-  WorkerApprovalsSubscribeParams
+  WorkerApprovalsSubscribeParams,
+  WorkerApprovalsUnsubscribeParams
 } from '../orchestration/orchestration-crew'
 import { PeerRunCancelParams } from '../orchestration/remote-owned-wire'
 import {
@@ -515,7 +516,10 @@ import {
   GmailModifyParams,
   GmailSendParams
 } from './google-write-params'
-import { AgentCliUpdateRunParams } from './host-management/agent-cli-update-params'
+import {
+  AgentCliUpdateCheckParams,
+  AgentCliUpdateRunParams
+} from './host-management/agent-cli-update-params'
 import { EnvironmentDoctorParams } from './host-management/environment-doctor-params'
 import {
   ManagedRuntimeAgentParams,
@@ -1079,7 +1083,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'agent.show': AgentShowParams,
   'agentActivity.clear': AgentActivityClearParams,
   'agentActivity.setRead': AgentActivitySetReadParams,
-  'agentCliUpdate.check': null,
+  'agentCliUpdate.check': AgentCliUpdateCheckParams,
   'agentCliUpdate.run': AgentCliUpdateRunParams,
   'agentHooks.prepareCodexForWslPane': PrepareCodexForWslPaneParams,
   'agentSession.accountUsage': OptionsParams,
@@ -1851,6 +1855,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'orchestration.taskList': TaskListParams,
   'orchestration.workerAbandon': WorkerDispatchParams,
   'orchestration.workerApprovalsSubscribe': WorkerApprovalsSubscribeParams,
+  'orchestration.workerApprovalsUnsubscribe': WorkerApprovalsUnsubscribeParams,
   'orchestration.workerAutoClose': OrchestrationWorkerSubjectParams,
   'orchestration.workerChatTouch': OrchestrationWorkerSubjectParams,
   'orchestration.workerKeepOpen': OrchestrationWorkerKeepOpenParams,

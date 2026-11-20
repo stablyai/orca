@@ -6,7 +6,7 @@ import { nativeExecutableResolver } from '@orca/process-host/native-executable-r
 import { spawnNativeProcess } from '@orca/process-host/native-process-spawn'
 import { resolveSelectedLocalCommand } from '../../../ipc/command-path/command-path-resolver'
 import { createAbortError } from './abort-error'
-import { killAbandonedWorkerChildTree, killSpawnedCommandTree } from './spawned-command-tree-kill'
+import { endAbandonedWorkerChild, killSpawnedCommandTree } from './spawned-command-tree-kill'
 import { DEFAULT_GIT_MAX_BUFFER } from '../git-exec-options'
 import type { GitAdmissionTier } from '../../../../shared/rpc-contract/source-control/git-admission-tier-params'
 
@@ -23,7 +23,12 @@ export type ExecFileCaptureOptions = Omit<ExecFileOptions, 'timeout'> & {
   timeout?: number
   stdin?: string
   terminationBarrier?: boolean
+  /** Normal close or proven termination; mutation fences wait for this. */
   onChildTerminated?: () => void
+  /** The child's worker died before its end was proven: capacity such as Git admission may return, fences may not. */
+  onWorkerLost?: () => void
+  /** The caller holds no mutation fence, so a lost worker ends the child's lifetime without proof (implied without onChildTerminated). */
+  workerLossEndsLifetime?: boolean
   admissionTier?: GitAdmissionTier
   createTimeoutError?: () => Error
   /** Called once when the deadline — not an abort — is what ended the process. */
@@ -265,12 +270,15 @@ export function execFileCapture(
         if (useWorker && isWorkerChildStdinWriteError(error)) {
           return
         }
-        // A lost worker may have spawned a child whose PID never reached us; only close proves termination.
-        // Plain captures still release admission then: the worker's pipes closed with it, and nothing else would.
         if (!useWorker && !child?.pid) {
           reportChildTerminated()
         } else if (child && !ownedPosixGroup && isAbandonedWorkerChildError(error)) {
-          void killAbandonedWorkerChildTree(child).then(reportChildTerminated)
+          endAbandonedWorkerChild(
+            child,
+            options.onWorkerLost,
+            reportChildTerminated,
+            options.workerLossEndsLifetime === true || !options.onChildTerminated
+          )
         }
         if (!terminating) {
           finish(error)

@@ -9,10 +9,7 @@ import {
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { isUnreadableError } from '../../shared/secure-storage/secure-file'
-import {
-  encryptedCredentialProtection,
-  type SecretAtRestProtection
-} from '../../shared/secure-storage/secret-at-rest-protection'
+import type { SecretAtRestProtection } from '../../shared/secure-storage/secret-at-rest-protection'
 import { ApiKeyFileUnreadableError } from './api-key-file-unreadable-error'
 
 type EncryptedApiKeyFileStore = {
@@ -112,9 +109,7 @@ export function createEncryptedApiKeyFileStore({
     }
     try {
       const envelope = decodeApiKeyEnvelope(await readFile(path))
-      return envelope.kind === 'plaintext'
-        ? 'plaintext'
-        : encryptedCredentialProtection(envelope.payload)
+      return envelope.kind === 'plaintext' ? 'plaintext' : 'sealed'
     } catch {
       return null
     }

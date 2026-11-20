@@ -8,10 +8,7 @@ import { getSecretStore } from '../../shared/secure-storage/secret-store'
 import { readFile, rm } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import {
-  encryptedCredentialProtection,
-  type SecretAtRestProtection
-} from '../../shared/secure-storage/secret-at-rest-protection'
+import type { SecretAtRestProtection } from '../../shared/secure-storage/secret-at-rest-protection'
 
 const MINIMAX_COOKIE_FILE = 'minimax-session-cookie.enc'
 export const COOKIE_ENVELOPE_PREFIX = 'orca-minimax-cookie:v1:'
@@ -114,13 +111,9 @@ export async function getMiniMaxSessionCookieProtection(): Promise<SecretAtRestP
       const raw = await readFile(cookiePath)
       const envelope = decodeCookieEnvelope(raw)
       if (envelope) {
-        return envelope.kind === 'plaintext'
-          ? 'plaintext'
-          : encryptedCredentialProtection(envelope.payload)
+        return envelope.kind === 'plaintext' ? 'plaintext' : 'sealed'
       }
-      return looksLikeCookieHeader(raw.toString('utf8'))
-        ? 'plaintext'
-        : encryptedCredentialProtection(raw)
+      return looksLikeCookieHeader(raw.toString('utf8')) ? 'plaintext' : 'sealed'
     } catch {
       return null
     }

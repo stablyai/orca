@@ -245,12 +245,16 @@
       "removeHost": "Remove host",
       "saveHost": "Save host",
       "goBack": "Go back",
-      "help": "Change the display name or connection address. Leave the name empty to use the name the desktop reports. Address edits only switch where this phone connects — they do not re-pair. Use this when the same desktop is reachable at a different IP (for example home LAN vs Tailscale).",
+      "help": "Change the display name or connection address. Leave the name empty to use the name the host reports. Address edits only switch where this phone connects — they do not re-pair. Use this when the same host is reachable at a different IP (for example home LAN vs Tailscale).",
       "name": "Name",
       "hostNamePlaceholder": "Host name",
       "address": "Address",
       "addressHint": "Accepts IP, host:port, or ws:// / wss://. A wss:// URL without a port uses 443. Bare addresses keep the current port (or 6768).",
-      "connectionPreview": "Connects to {{endpoint}}"
+      "connectionPreview": "Connects to {{endpoint}}",
+      "updateStepsServiceManager": "This server can't update itself. Update Orca on it with its package manager if it came from a .deb or .rpm, otherwise through the service manager that starts it.",
+      "updateStepsSourceCheckout": "This is a development build. Update it from its source checkout.",
+      "updateStepsServer": "This server can't update itself. Update Orca on the server computer, then restart the server.",
+      "orcaVersion": "Orca version"
     }
   },
   "app": {
@@ -5034,7 +5038,7 @@
       "botNotFound": "Bot not found",
       "openOn": "Open {{name}} On",
       "pairTitle": "Pair a computer",
-      "pairRequired": "To open this link, pair this phone with a computer.",
+      "pairRequired": "To open this link, pair this phone with a computer, then open the link again.",
       "pairAction": "Pair a computer",
       "openFailed": "Couldn’t open this link",
       "ambiguous": "This bot is on {{names}}. Open the chat in Orca on the one you want.",
@@ -5079,12 +5083,12 @@
       "permissions": "Permissions",
       "permissionsDetail": "The starting permission for new sessions. Anything beyond it asks in the session.",
       "sameAsChats": "Same as chats",
-      "sameAsChatsDetail": "Starts like any new chat, from your chat permission setting.",
+      "sameAsChatsDetail": "Uses your chat permission setting.",
       "notifications": "Notifications",
       "needsPermission": "Needs permission",
-      "needsPermissionDetail": "When the bot or a worker needs your approval.",
+      "needsPermissionDetail": "When it or a worker needs your approval.",
       "taskComplete": "Task complete",
-      "taskCompleteDetail": "When a thread, automation or worker finishes.",
+      "taskCompleteDetail": "A thread, automation or worker finishes.",
       "couldNotFinish": "Couldn’t finish",
       "couldNotFinishDetail": "An automation run or worker fails.",
       "general": "General"
@@ -5159,7 +5163,7 @@
     },
     "lookAround": {
       "title": "Look around",
-      "detail": "Reads connected apps and projects to suggest next steps. Read-only.",
+      "detail": "Reads connected apps and projects to suggest next steps. Read-only. Each look uses your agent plan, and Orca must be running on the host.",
       "on": "Suggest next steps",
       "every": "How often",
       "weekdaysOnly": "Weekdays only",
@@ -5168,15 +5172,11 @@
       "lastLooked": "Last looked",
       "looking": "Looking…",
       "lookNow": "Look now",
-      "notYet": "The first look comes a few hours after your first conversation.",
-      "suggestions_one": "{{count}} suggestion",
-      "suggestions_other": "{{count}} suggestions",
+      "notYet": "Not yet",
       "focusPlaceholder": "PRs waiting on me, questions in #eng, issues due this week",
       "focusDetail": "Optional. Leave it empty and it looks for anything waiting on you.",
       "save": "Save",
-      "back": "Back to Settings",
-      "suggestions": "{{count}} suggestions",
-      "requirements": "Each look uses your agent plan. Orca must be running on the host."
+      "back": "Back to Settings"
     },
     "new": {
       "failed": "Couldn’t create the bot",
@@ -5253,7 +5253,8 @@
       "suggestThree": "{{a}}, {{b}} & {{c}}",
       "suggestMore": "{{a}}, {{b}} & {{count}} more",
       "pickOne": "Pick a bot",
-      "needsTwoBots": "Needs 2 bots on {{host}}"
+      "needsTwoBots": "Needs 2 bots on {{host}}",
+      "startAConversationWithThisGroupMentionBots": "Start a conversation with this group. Mention bots with @Name or @everyone."
     },
     "templates": {
       "title": "Bot templates",
@@ -5261,6 +5262,7 @@
       "blankLine": "Tell it what it’s for in its first chat.",
       "byOrca": "{{category}} · by Orca",
       "useTemplate": "Use template…",
+      "backToTemplates": "Back to templates",
       "firstChat": "What it does first",
       "needsSetup": "Needs setup",
       "comesWith": "Comes with",
@@ -5294,7 +5296,6 @@
       "turnedOff": "Turned off after 10 tidy-ups in a row failed.",
       "every": "How often",
       "lastTidied": "Last tidied",
-      "changes": "{{count}} changes",
       "never": "Not yet",
       "tidying": "Tidying…",
       "now": "Tidy now",
@@ -5485,7 +5486,6 @@
       },
       "comment": {
         "offline": "{{host}} is offline. Your comment is kept; Comment works again when it’s back.",
-        "answering": "Answering:",
         "label": "Comment",
         "add": "Add a comment…",
         "submit": "Comment"
@@ -5515,7 +5515,8 @@
       "retry": "Retry",
       "loading": "Loading items…",
       "view": {
-        "sub": "Item {{number}} · {{chat}} · {{when}}",
+        "title": "Item",
+        "chatAndWhen": "{{chat}} · {{when}}",
         "canceledNote": "Canceled:",
         "doneNote": "Done:",
         "links": "Links",
@@ -5607,7 +5608,10 @@
         "pickDay": "Snooze until which day?",
         "pickHour": "At what time?"
       },
-      "readFailedTitle": "Couldn’t load items"
+      "readFailedTitle": "Couldn’t load items",
+      "ask": {
+        "youAnswered": "You answered:"
+      }
     },
     "needs": {
       "permissionTool": "Permission · {{tool}}",

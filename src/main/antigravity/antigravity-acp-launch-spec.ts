@@ -1,6 +1,6 @@
 // Antigravity chats run Orca's managed ACP server, or the host's own `agy acp` when compatible.
 
-import { join } from 'node:path'
+import { join, win32 } from 'node:path'
 import { homedir } from 'node:os'
 import type { AcpLaunchSpec } from '../acp/launch/acp-launch-contract'
 import { ORCA_ACP_CLIENT_INFO } from '../acp/launch/acp-client-info'
@@ -114,11 +114,18 @@ const ANTIGRAVITY_MANAGED_LAUNCH_SPEC = {
   launchGate: ANTIGRAVITY_LAUNCH_GATE
 } satisfies AcpLaunchSpec
 
-// An inherited Gemini API key switches agy to key auth, which its models reject (401).
+// An inherited Gemini API key switches agy to key auth, which its models reject (401);
+// alternate-case updater flags on Windows would shadow the configured uppercase entry.
 function scrubAgyHostApiKeys(env: Record<string, string>, inherited: NodeJS.ProcessEnv): string[] {
   const removed = [...new Set([...Object.keys(env), ...Object.keys(inherited)])].filter((key) => {
     const normalized = process.platform === 'win32' ? key.toUpperCase() : key
-    return normalized === 'GEMINI_API_KEY' || normalized === 'GOOGLE_API_KEY'
+    const shadowsDisableAutoUpdate =
+      process.platform === 'win32' &&
+      normalized === 'AGY_CLI_DISABLE_AUTO_UPDATE' &&
+      key !== normalized
+    return (
+      shadowsDisableAutoUpdate || normalized === 'GEMINI_API_KEY' || normalized === 'GOOGLE_API_KEY'
+    )
   })
   for (const key of removed) {
     delete env[key]
@@ -131,7 +138,9 @@ const ANTIGRAVITY_HOST_LAUNCH_SPEC: AcpLaunchSpec = {
   ...ANTIGRAVITY_MANAGED_LAUNCH_SPEC,
   command: 'agy',
   args: ({ fullAccess }) => ['acp', ...(fullAccess ? [AGY_SKIP_PERMISSIONS_FLAG] : [])],
-  env: {},
+  // Match terminal and quota launches: a background updater steals focus on Windows (#27390)
+  // and can replace agy mid-probe.
+  env: { AGY_CLI_DISABLE_AUTO_UPDATE: 'true' },
   scrubEnvironment: scrubAgyHostApiKeys,
   authMethod: undefined,
   authMethodUnavailableMessage: undefined,
@@ -156,7 +165,23 @@ const ANTIGRAVITY_HOST_LAUNCH_SPEC: AcpLaunchSpec = {
     }
   },
   minimumVersions: [ANTIGRAVITY_HOST_ACP_MINIMUM_VERSION],
-  installDirectories: ({ homePath }) => [join(homePath, '.local', 'bin')],
+  installDirectories: ({ env, homePath }) => {
+    if (process.platform !== 'win32') {
+      return [join(homePath, '.local', 'bin')]
+    }
+    const localAppData = Object.entries(env)
+      .find(([key]) => key.toUpperCase() === 'LOCALAPPDATA')?.[1]
+      ?.trim()
+    return [
+      ...new Set([
+        ...(localAppData && win32.isAbsolute(localAppData)
+          ? [join(localAppData, 'agy', 'bin')]
+          : []),
+        join(homePath, 'AppData', 'Local', 'agy', 'bin'),
+        join(homePath, '.local', 'bin')
+      ])
+    ]
+  },
   managedRuntime: undefined,
   resolveSessionMeta: undefined,
   // agy has no full-access mode, so its launch flag grants it; plan approvals still reach the chat.
