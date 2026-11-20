@@ -4,12 +4,11 @@ export function isTrustedMainRendererSender(
   sender: WebContents,
   pinnedWebContentsId: number | null
 ): boolean {
-  if (pinnedWebContentsId != null) {
-    // The pinned ID belongs to the main window's contents, so getType() adds nothing here.
-    return sender.id === pinnedWebContentsId && !sender.isDestroyed()
-  }
   if (sender.isDestroyed() || sender.getType() !== 'window') {
     return false
+  }
+  if (pinnedWebContentsId != null) {
+    return sender.id === pinnedWebContentsId
   }
 
   const rendererUrl = process.env.ELECTRON_RENDERER_URL
