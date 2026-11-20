@@ -231,6 +231,7 @@ export function createLocalRepoRefMaintenanceTarget(
       }
       // Cancel admission only: killing a running pack can strand persistent per-ref locks.
       const watch = owner?.watchLock((held) => lock.setHeld(held))
+      let termination: Promise<void> | undefined
       try {
         await gitExecFileAsync([...PACK_REFS_ARGS], {
           cwd: args.repoPath,
@@ -239,9 +240,18 @@ export function createLocalRepoRefMaintenanceTarget(
           timeout: PACK_REFS_TIMEOUT_MS,
           admissionSignal,
           canStart,
-          ...(process.platform === 'win32' ? { terminationBarrier: true } : {})
+          ...(process.platform === 'win32'
+            ? {
+                observeChildTermination: (ended: Promise<void>) => {
+                  termination = ended
+                }
+              }
+            : {})
         })
       } finally {
+        if (termination) {
+          await termination
+        }
         watch?.stop()
         lock.setHeld(false)
         await owner?.release()

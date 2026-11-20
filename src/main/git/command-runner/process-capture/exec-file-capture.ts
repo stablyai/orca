@@ -88,11 +88,10 @@ export function execFileCapture(
     let timer: NodeJS.Timeout | null = null
     let terminationReported = false
     const reportChildTerminated = (): void => {
-      if (terminationReported) {
-        return
+      if (!terminationReported) {
+        terminationReported = true
+        options.onChildTerminated?.()
       }
-      terminationReported = true
-      options.onChildTerminated?.()
     }
     const cleanup = (): void => {
       if (timer) {
@@ -126,7 +125,6 @@ export function execFileCapture(
       }
       terminating = true
       if (!child) {
-        terminating = false
         reportChildTerminated()
         finish(error)
         return
@@ -141,16 +139,14 @@ export function execFileCapture(
         finish(error, output?.stdout, output?.stderr)
         return
       }
-      const killed = killSpawnedCommandTree(child)
-      if (useWorker && process.platform === 'win32') {
-        // A busy spawn worker must not hold the caller's deadline; close still owns termination proof.
-        finish(error)
-        return
-      }
-      void killed.then(() => {
+      void killSpawnedCommandTree(child).then(() => {
         terminating = false
         finish(error)
       })
+      // A busy spawn worker must not hold the caller's deadline; close still owns termination proof.
+      if (useWorker && process.platform === 'win32') {
+        finish(error)
+      }
     }
 
     const onAbort = (): void => stop(createAbortError())
