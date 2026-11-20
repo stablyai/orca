@@ -247,15 +247,41 @@ it('keeps a Swarm worker without a RUNNING phase listed', async () => {
   expect((await poll())?.payload.subagents?.map((child) => child.id)).toEqual(['worker'])
 })
 
-it('surfaces an unconfirmed child that waits on the user', async () => {
+it('shows a waiting child only once the root is proven its parent', async () => {
   transcript('helper')
   spawn()
   hook('helper', 'PreInvocation')
   hook('helper', 'PreToolUse', { toolCall: { name: 'ask_question', args: {} } })
+  expect((await poll())?.payload).toMatchObject({ state: 'working', subagents: undefined })
+  descriptor('helper')
   expect((await poll())?.payload).toMatchObject({
     state: 'waiting',
     subagents: [{ id: 'helper', state: 'waiting' }]
   })
+})
+
+it('retires a child verified after a background command already finished the root', async () => {
+  transcript('first')
+  transcript('second')
+  descriptor('first')
+  hook('root', 'PreToolUse', {
+    stepIdx: 5,
+    toolCall: { name: 'run_command', args: { CommandLine: 'long-task' } }
+  })
+  spawn()
+  spawn()
+  hook('first', 'PreInvocation')
+  hook('second', 'PreInvocation')
+  await poll()
+  hook('root', 'Stop', { fullyIdle: false })
+  hook('first', 'Stop', { fullyIdle: true })
+  expect(
+    hook('root', 'PostToolUse', { stepIdx: 5, toolCall: { name: 'run_command' } })?.payload.state
+  ).toBe('done')
+  descriptor('second')
+  expect((await poll())?.payload.subagents?.map((child) => child.id)).toEqual(['second'])
+  hook('second', 'Stop', { fullyIdle: true })
+  expect((await poll())?.payload.subagents).toBeUndefined()
 })
 
 it('ignores a child that wakes after the root finished', async () => {
