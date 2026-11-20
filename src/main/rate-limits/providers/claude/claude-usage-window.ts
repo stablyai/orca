@@ -91,12 +91,10 @@ export function isSameClaudeUsageWindow(
 }
 
 // Within one window usage grows; a lower value or older reset is an idle session's stale snapshot.
-// A pane's changed report is fresh, so a lower same-window value is a limit reset, not staleness.
 export function isStaleClaudeUsageWindow(
   previous: RateLimitWindow | null | undefined,
   incoming: RateLimitWindow,
-  now: number,
-  reportedChange = false
+  now: number
 ): boolean {
   if (!previous || previous.resetsAt === null || incoming.resetsAt === null) {
     return false
@@ -108,7 +106,6 @@ export function isStaleClaudeUsageWindow(
     return true
   }
   return (
-    !reportedChange &&
     isSameClaudeUsageReset(incoming.resetsAt, previous.resetsAt) &&
     incoming.usedPercent < previous.usedPercent
   )

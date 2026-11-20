@@ -9,25 +9,25 @@ type PaneReport = {
   weekly: RateLimitWindow | null
 }
 
-type FreshReport = { configDir: string | null; window: RateLimitWindow }
+type ResetWindow = { configDir: string | null; resetsAt: number }
 
 // Bounds memory to recently posting panes; an evicted pane needs one more post before changes count.
-export const MAX_TRACKED_CLAUDE_PANES = 64
+const MAX_TRACKED_CLAUDE_PANES = 64
 
 // A pane learns quota only from its own API responses, so a changed report is fresh even when lower.
 export class ClaudeLiveUsagePaneReports {
   private readonly lastByPane = new Map<string, PaneReport>()
-  private readonly freshByKind = new Map<ClaudeLiveUsageWindowKind, FreshReport>()
+  private readonly resetByKind = new Map<ClaudeLiveUsageWindowKind, ResetWindow>()
 
   hasChanged(
     paneKey: string,
     configDir: string | null,
     kind: ClaudeLiveUsageWindowKind,
-    incoming: RateLimitWindow | null
+    incoming: RateLimitWindow
   ): boolean {
     const last = this.lastByPane.get(paneKey)
     const previous = last?.configDir === configDir ? last[kind] : null
-    return Boolean(previous && incoming && !isSameClaudeUsageWindow(previous, incoming))
+    return Boolean(previous && !isSameClaudeUsageWindow(previous, incoming))
   }
 
   remember(
@@ -52,32 +52,23 @@ export class ClaudeLiveUsagePaneReports {
     }
   }
 
-  markFresh(
-    configDir: string | null,
-    kind: ClaudeLiveUsageWindowKind,
-    window: RateLimitWindow
-  ): void {
-    // Without a reset the window cannot be identified or expire, so it cannot pin anything.
-    if (window.resetsAt === null) {
-      return
-    }
-    this.freshByKind.set(kind, { configDir, window })
+  markReset(configDir: string | null, kind: ClaudeLiveUsageWindowKind, resetsAt: number): void {
+    this.resetByKind.set(kind, { configDir, resetsAt })
   }
 
-  // After a fresh report, first posts and unchanged repeats cannot replace it within its window.
-  isPinnedAgainst(
+  // After a reset, idle panes still hold the pre-reset value for the same window.
+  isResetWindow(
     configDir: string | null,
     kind: ClaudeLiveUsageWindowKind,
     incoming: RateLimitWindow,
     now: number
   ): boolean {
-    const fresh = this.freshByKind.get(kind)
-    if (!fresh || fresh.configDir !== configDir || fresh.window.resetsAt === null) {
-      return false
-    }
-    return (
-      fresh.window.resetsAt > now &&
-      isSameClaudeUsageReset(fresh.window.resetsAt, incoming.resetsAt)
+    const reset = this.resetByKind.get(kind)
+    return Boolean(
+      reset &&
+      reset.configDir === configDir &&
+      reset.resetsAt > now &&
+      isSameClaudeUsageReset(reset.resetsAt, incoming.resetsAt)
     )
   }
 }

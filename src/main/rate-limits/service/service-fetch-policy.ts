@@ -14,6 +14,7 @@ import type {
   RateLimitWindow
 } from '../../../shared/agent-usage/rate-limits/rate-limit-types'
 import {
+  isSameClaudeUsageReset,
   isSameClaudeUsageWindow,
   isStaleClaudeUsageWindow,
   mapClaudeUsageWindow
@@ -178,18 +179,22 @@ export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchT
       }
       const changed = paneKey !== null && paneReports.hasChanged(paneKey, configDir, kind, incoming)
       if (
-        paneKey !== null &&
         !changed &&
         !isSameClaudeUsageWindow(current ?? null, incoming) &&
-        paneReports.isPinnedAgainst(configDir, kind, incoming, now)
+        paneReports.isResetWindow(configDir, kind, incoming, now)
       ) {
         return null
       }
-      if (isStaleClaudeUsageWindow(current, incoming, now, changed)) {
-        return null
-      }
-      if (changed) {
-        paneReports.markFresh(configDir, kind, incoming)
+      if (isStaleClaudeUsageWindow(current, incoming, now)) {
+        // A pane's own drop within the window is a redeemed limit reset; an older window stays stale.
+        if (
+          !changed ||
+          incoming.resetsAt === null ||
+          !isSameClaudeUsageReset(current?.resetsAt ?? null, incoming.resetsAt)
+        ) {
+          return null
+        }
+        paneReports.markReset(configDir, kind, incoming.resetsAt)
       }
       return isSameClaudeUsageWindow(current ?? null, incoming) ? (current ?? null) : incoming
     }
