@@ -145,7 +145,8 @@ export class AcpStructuredOptions {
     if (this.resolvesConfig || this.picked.has(key) || this.unobservedCurrent.has(key)) {
       return false
     }
-    return value.length > 0 && this.currentValues()[key] === value
+    const native = (key === 'model' && this.dialect.chatModelIds?.[value]) || value
+    return value.length > 0 && this.currentValues()[key] === native
   }
 
   notePick(key: string): void {
