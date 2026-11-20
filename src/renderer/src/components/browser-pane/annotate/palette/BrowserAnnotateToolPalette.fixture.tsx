@@ -54,6 +54,7 @@ function PalettePage({
         canPickElements
         showKeyHints
         drawWaitingForPage={waiting}
+        drawHasActions={tool === 'draw' && !waiting}
         hint={waiting ? 'Waiting for page…' : tool === 'draw' ? '' : hint}
         hintIsError={false}
         annotateActions={

@@ -57,7 +57,8 @@ export function BrowserAnnotateToolPalette({
   onDrawDensityChange,
   labelAvoidFrameRef,
   unavailableReason,
-  drawWaitingForPage = false
+  drawWaitingForPage = false,
+  drawHasActions = false
 }: {
   /** The page area the palette floats over and may not leave. */
   boundsRef: RefObject<HTMLElement | null>
@@ -91,6 +92,7 @@ export function BrowserAnnotateToolPalette({
   /** Why the other tools can't be used right now (e.g. the page didn't load); shown as their tooltip. */
   unavailableReason?: string
   drawWaitingForPage?: boolean
+  drawHasActions?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
   const waitingAnnouncementRef = useRef<HTMLSpanElement>(null)
@@ -167,7 +169,8 @@ export function BrowserAnnotateToolPalette({
   const shortActions = fitLevel >= FIT_LEVEL_SHORT_ACTIONS
   const wrapActions = fitLevel >= FIT_LEVEL_WRAP
   const showHint = Boolean(hint) && fitLevel === 0 && !dragging && left !== null
-  const hasActions = activeTool !== 'annotate' || annotateActions !== null
+  const hasActions =
+    activeTool === 'draw' ? drawHasActions : activeTool === 'copy' || annotateActions !== null
   useGrabLabelAvoidArea({
     pageId: ownerPageId,
     frameRef: labelAvoidFrameRef,

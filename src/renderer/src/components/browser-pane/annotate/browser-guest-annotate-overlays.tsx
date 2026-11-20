@@ -87,7 +87,6 @@ export function BrowserGuestAnnotateOverlays({
   const [drawSlot, setDrawSlot] = useState<HTMLElement | null>(null)
   const [drawDensity, setDrawDensity] = useState<MarkupPaletteDensity>('full')
   const [notesRevealSignal, setNotesRevealSignal] = useState(0)
-  // While the mode is on, the notes list opens only from the palette's note count, so there is one notes surface.
   const [notesOpen, setNotesOpen] = useState(false)
   const notesPlacement = useNotesTrayPlacement(containerRef, notesOpen)
   const {
@@ -124,7 +123,6 @@ export function BrowserGuestAnnotateOverlays({
 
   const activeTool = toolSwitch.activeTool
   const drafts = useBrowserAnnotationDrafts(activeTool !== null)
-  // The list belongs to Annotate; Grab, Draw and leaving the mode close it.
   if (activeTool !== 'annotate' && notesOpen) {
     setNotesOpen(false)
   }
@@ -167,7 +165,6 @@ export function BrowserGuestAnnotateOverlays({
     pageId: toolSwitch.toolTargetId,
     currentUrl
   })
-  const grabPicked = heldPayload !== null
   const runPaletteGrabAction = useHeldGrabAction(
     heldPayload,
     toolSwitch.toolTargetId,
@@ -208,6 +205,7 @@ export function BrowserGuestAnnotateOverlays({
           unavailableReason={toolsUnavailableReason}
           showKeyHints={showPaletteKeyHints}
           drawWaitingForPage={toolSwitch.drawWaitingForPage}
+          drawHasActions={markup.baseImage !== null}
           hint={paletteHint.text}
           hintIsError={paletteHint.isError}
           annotateActions={
@@ -244,7 +242,7 @@ export function BrowserGuestAnnotateOverlays({
               : null
           }
           grabCopyDone={grabToast?.type === 'success'}
-          grabPicked={grabPicked}
+          grabPicked={heldPayload !== null}
           grabCanScreenshot={Boolean(
             heldPayload?.screenshot?.dataUrl?.startsWith('data:image/png;')
           )}
