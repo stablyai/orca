@@ -62,7 +62,8 @@ export abstract class CodexRuntimeHomeAuthCore extends CodexRuntimeHomeLegacyMig
     }
     const replaced = options
       ? writeFileAtomicallyIfUnchanged(runtimeAuthPath, options.expectedContents, contents, {
-          mode: 0o600
+          mode: 0o600,
+          credential: true
         })
       : (writeFileAtomically(runtimeAuthPath, contents, { mode: 0o600 }), true)
     if (!replaced) {
