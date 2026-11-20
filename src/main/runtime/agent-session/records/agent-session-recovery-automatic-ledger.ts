@@ -59,28 +59,50 @@ async function readLedger(capsulePath: string): Promise<AutomaticRestartLedger |
   }
 }
 
-function dropOldestTaken(taken: AutomaticRestartLedger['taken']): AutomaticRestartLedger['taken'] {
-  const entries = Object.entries(taken).flatMap(([sessionId, list]) =>
+function takenEntries(taken: AutomaticRestartLedger['taken']) {
+  return Object.entries(taken).flatMap(([sessionId, list]) =>
     list.map((entry) => ({ sessionId, entry }))
   )
-  entries.sort((a, b) => a.entry.at - b.entry.at)
+}
+
+/** Drops the oldest tenth; with `outsideWindowOnly`, never an entry that still counts toward the rate limit. */
+function dropOldestTaken(
+  taken: AutomaticRestartLedger['taken'],
+  outsideWindowOnly: boolean
+): AutomaticRestartLedger['taken'] {
+  const entries = takenEntries(taken).sort((a, b) => a.entry.at - b.entry.at)
+  const newest = entries.at(-1)?.entry.at ?? 0
+  const droppable = outsideWindowOnly
+    ? entries.filter(({ entry }) => newest - entry.at > AUTOMATIC_CONTINUATION_WINDOW_MS)
+    : entries
+  const dropped = new Set(droppable.slice(0, Math.ceil(droppable.length / 10)))
   const kept: AutomaticRestartLedger['taken'] = {}
-  for (const { sessionId, entry } of entries.slice(Math.ceil(entries.length / 10))) {
-    kept[sessionId] = [...(kept[sessionId] ?? []), entry]
+  for (const item of entries) {
+    if (!dropped.has(item)) {
+      kept[item.sessionId] = [...(kept[item.sessionId] ?? []), item.entry]
+    }
   }
   return kept
 }
 
-/** Offer ids can be 512 characters; shed the least harmful records first (old continuations, then dismissals, then passed-over offers) until the file fits well inside its read limit. */
+/** Offer ids can be 512 characters; shed the least harmful records first until the file fits well inside its read limit. Entries still inside the rate-limit window go last, so a crash loop stays bounded. */
 function fitLedgerToReadLimit(ledger: AutomaticRestartLedger): AutomaticRestartLedger {
   const fitted = { ...ledger }
-  while (Buffer.byteLength(JSON.stringify(fitted)) > MAX_LEDGER_BYTES / 2) {
-    if (Object.keys(fitted.taken).length > 0) {
-      fitted.taken = dropOldestTaken(fitted.taken)
+  const tooLarge = (): boolean => Buffer.byteLength(JSON.stringify(fitted)) > MAX_LEDGER_BYTES / 2
+  const oldTaken = (): boolean => {
+    const entries = takenEntries(fitted.taken)
+    const newest = Math.max(0, ...entries.map((item) => item.entry.at))
+    return entries.some(({ entry }) => newest - entry.at > AUTOMATIC_CONTINUATION_WINDOW_MS)
+  }
+  while (tooLarge()) {
+    if (oldTaken()) {
+      fitted.taken = dropOldestTaken(fitted.taken, true)
     } else if (fitted.dismissed.length > 0) {
       fitted.dismissed = fitted.dismissed.slice(Math.ceil(fitted.dismissed.length / 10))
     } else if (fitted.passed.length > 0) {
       fitted.passed = fitted.passed.slice(Math.ceil(fitted.passed.length / 10))
+    } else if (Object.keys(fitted.taken).length > 0) {
+      fitted.taken = dropOldestTaken(fitted.taken, false)
     } else {
       break
     }

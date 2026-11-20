@@ -145,7 +145,7 @@ it('sheds old continuation records before passed-over offers when the ledger is 
   const taken = Object.fromEntries(
     Array.from({ length: 1500 }, (_, index) => [
       `${index}`.padEnd(512, 's'),
-      [{ at: index, work: `turn:${'w'.repeat(500)}` }]
+      [{ at: index * 10 * 60_000, work: `turn:${'w'.repeat(500)}` }]
     ])
   )
   const path = join(directory, 'capsule.json')
@@ -158,4 +158,18 @@ it('sheds old continuation records before passed-over offers when the ledger is 
 
   const read = await automaticLedger.readAutomaticReservationLedger(path)
   expect(read?.passed).toEqual(['session-a:td:1'])
+})
+
+it('keeps a recent continuation when passed-over offers force the ledger to shrink', async () => {
+  const path = join(directory, 'capsule.json')
+  const passed = Array.from({ length: 1000 }, (_, index) => `${index}`.padEnd(512, 's'))
+
+  await automaticLedger.writeAutomaticRestartLedger(path, {
+    taken: { 'session-a': [{ at: 10, work: 'turn:t1' }] },
+    passed,
+    dismissed: []
+  })
+
+  const read = await automaticLedger.readAutomaticReservationLedger(path)
+  expect(read?.taken['session-a']).toEqual([{ at: 10, work: 'turn:t1' }])
 })
