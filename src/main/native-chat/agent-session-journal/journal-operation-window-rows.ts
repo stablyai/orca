@@ -87,7 +87,12 @@ export function readOperationWindowItems(
   // text, and sized at that head.
   const cutJson = shortenedJsonSql(projected, JOURNAL_READER_REPLY_BYTE_LIMIT)
   const cutSize = scope.db.prepare(`SELECT ${projectedStoredText} AS stored,
-      octet_length(${cutJson}) AS cut_bytes ${STORED_CUT_COLUMNS(projected)}
+      CASE WHEN ${projectedStoredText} = 0 THEN octet_length(${cutJson}) END AS cut_bytes
+    FROM journal_items WHERE session_id=? AND epoch=? AND item_id=?`)
+  // Only a stored row is read whole, and it holds at most 32 KiB of text.
+  const storedRow = scope.db.prepare(`SELECT ${projected} AS payload_json, output_blob,
+      octet_length(${projected}) AS projected_bytes,
+      octet_length(COALESCE(${projected}->'$.body.output', ${projected}->'$.body.patch')) AS text_field_bytes
     FROM journal_items WHERE session_id=? AND epoch=? AND item_id=?`)
   const cut: string[] = []
   const storedCut = new Map<string, AgentJournalRenderItem>()
@@ -97,15 +102,17 @@ export function readOperationWindowItems(
     if (row.bytes > WINDOW_BYTES || (total > WINDOW_BYTES && row.bytes > CUT_ROW_BYTES)) {
       const size = cutSize.get(...scope.prefix, row.itemId)
       let cutBytes = size?.cut_bytes
-      if (Number(size?.stored ?? 0) > 0) {
-        const read = scope.examined(size!)
+      const stored =
+        Number(size?.stored ?? 0) > 0 ? storedRow.get(...scope.prefix, row.itemId) : null
+      if (stored) {
+        const read = scope.examined(stored)
         const item = shortenJournalItemHead(
           scope.decode<AgentJournalRenderItem>(read.payload_json, read.output_blob)
         )
         storedCut.set(row.itemId, item)
         cutBytes =
-          Number(size!.projected_bytes) -
-          Number(size!.text_field_bytes) +
+          Number(stored.projected_bytes) -
+          Number(stored.text_field_bytes) +
           Buffer.byteLength(JSON.stringify(journalItemTextField(item)))
       } else {
         cut.push(row.itemId)
@@ -145,11 +152,6 @@ export function readOperationWindowItems(
       return scope.decode<AgentJournalRenderItem>(read.payload_json, read.output_blob)
     })
 }
-
-// What a stored cut row is sized from: its projected row and blob, and the text field it replaces.
-const STORED_CUT_COLUMNS = (projected: string) => `, ${projected} AS payload_json, output_blob,
-  octet_length(${projected}) AS projected_bytes,
-  octet_length(COALESCE(${projected}->'$.body.output', ${projected}->'$.body.patch')) AS text_field_bytes`
 
 function journalItemTextField(item: AgentJournalRenderItem): unknown {
   const body = item.body as { output?: unknown; patch?: unknown }
