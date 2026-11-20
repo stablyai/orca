@@ -18,6 +18,10 @@ export function buildRehydrateSequences(modes: TerminalModes): string {
   if (modes.modifyOtherKeys !== undefined) {
     seqs.push(`\x1b[>4;${modes.modifyOtherKeys}m`)
   }
+  // Renderer mirrors only adopt 9001 on Windows; xterm ignores it.
+  if (modes.win32InputMode) {
+    seqs.push('[?9001h')
+  }
   const trackingMode = modes.mouseTracking ? (modes.mouseTrackingMode ?? 'vt200') : 'none'
   switch (trackingMode) {
     case 'x10':

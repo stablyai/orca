@@ -10,4 +10,6 @@ export type TerminalModes = {
   kittyKeyboardFlags?: number
   /** XTMODKEYS level; absent until first set, including an explicit disable. */
   modifyOtherKeys?: number
+  /** DECSET 9001 (win32 input mode); present only while on. */
+  win32InputMode?: boolean
 }

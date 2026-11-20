@@ -99,7 +99,7 @@ export class TerminalKittyKeyboardModeTracker {
   resetForSnapshot(): void {
     // Older snapshots cannot restate modifyOtherKeys; clear dead-app state at shell/process boundaries instead.
     const modifyOtherKeys = this.modifyOtherKeysState
-    // Serialized snapshots never carry ?9001h, so a reattach keeps the live mode.
+    // Same-session reattach keeps the live mode; fresh trackers learn it from the rehydrate ?9001h.
     const win32InputMode = this.win32InputModeState
     this.reset()
     this.modifyOtherKeysState = modifyOtherKeys
