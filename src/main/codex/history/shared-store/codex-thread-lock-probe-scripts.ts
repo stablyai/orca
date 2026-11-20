@@ -40,7 +40,9 @@ if ((<STDIN> // '') =~ /^first/) { close($coordination[0]); print "released\\n";
 `
 
 const hex = (n: number): string => '[0-9a-fA-F]'.repeat(n)
-const SH_THREAD_LOCK_NAME = `${[8, 4, 4, 4, 12].map(hex).join('-')}.lock|${hex(32)}.lock`
+// Case-blind like THREAD_LOCK_NAME's /i.
+const lockSuffix = '.[lL][oO][cC][kK]'
+const SH_THREAD_LOCK_NAME = `${[8, 4, 4, 4, 12].map(hex).join('-')}${lockSuffix}|${hex(32)}${lockSuffix}`
 
 // PERL_PROBE in sh + flock(1) (util-linux or BusyBox, both flock(2)), for a Linux without perl.
 // Folder i's coordination is fd 3+i. A thread lock opens read-only so a vanished one isn't
