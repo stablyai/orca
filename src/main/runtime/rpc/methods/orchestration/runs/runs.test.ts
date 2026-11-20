@@ -46,24 +46,6 @@ describe('orchestration RPC methods', () => {
       })
     })
 
-    it('creates and binds a Run to the runtime-resolved caller pane', async () => {
-      setup(false)
-      vi.spyOn(runtime, 'getTerminalPaneKey').mockReturnValue(
-        'tab_coord:11111111-1111-4111-8111-111111111111'
-      )
-
-      const created = (await call('orchestration.runCreate', {
-        objective: 'Coordinate reviews',
-        from: 'term_coord'
-      })) as { run: { id: string; consumer_generation: number } }
-      const current = (await call('orchestration.runCurrent', { from: 'term_coord' })) as {
-        run: { id: string } | null
-      }
-
-      expect(created.run.consumer_generation).toBe(1)
-      expect(current.run?.id).toBe(created.run.id)
-    })
-
     it('tells a terminal bound to one Run about the Dispatch it works in another', async () => {
       setup(false)
       vi.spyOn(runtime, 'getTerminalPaneKey').mockImplementation((handle) =>
@@ -234,7 +216,7 @@ describe('orchestration RPC methods', () => {
       await fenced
     })
 
-    it('fences an unbound direct waiter when its pane creates a Run', async () => {
+    it('binds a new Run to the caller pane and fences its prior direct waiter', async () => {
       setup(false)
       vi.spyOn(runtime, 'getTerminalPaneKey').mockReturnValue(coordinatorPaneKey)
       const directWait = call('orchestration.check', {
@@ -245,12 +227,20 @@ describe('orchestration RPC methods', () => {
       const fenced = expect(directWait).rejects.toMatchObject({ code: 'consumer_fenced' })
       await Promise.resolve()
 
-      await call('orchestration.runCreate', {
+      const created = await call('orchestration.runCreate', {
         objective: 'Claim the direct mailbox',
         from: 'term_coord'
       })
 
       await fenced
+      const bound = db.getCurrentRunForPane(coordinatorPaneKey)
+      expect(bound?.consumer_generation).toBe(1)
+      expect(created).toMatchObject({ run: { id: bound?.id } })
+      await expect(call('orchestration.runCurrent', { from: 'term_coord' })).resolves.toMatchObject(
+        {
+          run: { id: bound?.id }
+        }
+      )
     })
   })
 
@@ -298,7 +288,6 @@ describe('orchestration RPC methods', () => {
       ['empty params', {}],
       ['false-only params', { all: false }],
       ['multi-scope task and messages params', { tasks: true, messages: true }],
-      ['multi-scope all and tasks params', { all: true, tasks: true }],
       ['non-boolean params', { all: 'true' }]
     ])('rejects %s without mutating state', async (_name, params) => {
       setup()

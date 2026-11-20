@@ -28,6 +28,8 @@ export type AcpInstructionsLaunch = {
   sessionMetaOnReopen?: true
   /** Whether the agent's `initialize` says it takes `sessionMeta`; a session it doesn't never opens. */
   takesSessionMeta?: (initialized: InitializeResponse) => boolean
+  /** An agent that doesn't take `sessionMeta` starts without it instead of refusing to start. */
+  sessionMetaOptional?: true
   /** Runs around `session/new` (never a reopen) in the session's folder; returns what undoes it. */
   aroundNewSession?: (cwd: string) => Promise<() => Promise<void>>
 }
