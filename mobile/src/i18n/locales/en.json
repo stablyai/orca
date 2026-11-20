@@ -2396,7 +2396,8 @@
       "shellCmd": "CMD Prompt",
       "shellGitBash": "Git Bash",
       "shellWsl": "WSL",
-      "terminalWithShell": "Terminal: {{shell}}"
+      "terminalWithShell": "Terminal: {{shell}}",
+      "more": "More"
     },
     "tabStrip": {
       "newTab": "New tab",
@@ -5319,7 +5320,14 @@
       "anyFallback": "On an event"
     },
     "chatStartFailed": "Couldn’t start the chat",
-    "newChatWith": "New chat with {{name}}",
+    "newHomeChat": {
+      "action": "New Home Chat",
+      "hint": "starts fresh",
+      "title": "Start a new Home Chat?",
+      "description": "{{name}} keeps its soul and memory, but not this conversation."
+    },
+    "sideChatsWith": "Side chats with {{name}}",
+    "newAgentChat": "New {{agent}} Chat",
     "upNext": {
       "title": "Suggestions",
       "looked": "Looked {{time}}",
