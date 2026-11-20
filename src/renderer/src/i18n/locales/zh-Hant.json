@@ -18657,7 +18657,6 @@
         "stoppedUpdate_other": "Orca 更新時有 {{count}} 個聊天已停止。",
         "stoppedRestart_other": "Orca 關閉時有 {{count}} 個聊天已停止。",
         "promptsNotResent": "恢復不會重新傳送你的提示。",
-        "promptsNotSent": "你的提示沒有被重新傳送。",
         "resume": "恢復",
         "details": "詳情",
         "close": "關閉",

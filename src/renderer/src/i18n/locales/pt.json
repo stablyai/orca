@@ -20371,7 +20371,6 @@
         "stoppedRestart_many": "{{count}} chats parados ao fechar o Orca.",
         "stoppedRestart_other": "{{count}} chats parados ao fechar o Orca.",
         "promptsNotResent": "Retomar não reenviará seus prompts.",
-        "promptsNotSent": "Seus prompts não foram reenviados.",
         "resume": "Retomar",
         "details": "Detalhes",
         "close": "Fechar",

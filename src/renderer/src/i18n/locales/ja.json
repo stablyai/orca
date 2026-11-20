@@ -19156,7 +19156,6 @@
         "stoppedUpdate_other": "アップデートで {{count}} 件のチャットが停止しました。",
         "stoppedRestart_other": "Orca の終了で {{count}} 件のチャットが停止しました。",
         "promptsNotResent": "再開してもプロンプトは再送信されません。",
-        "promptsNotSent": "プロンプトは再送信されていません。",
         "resume": "再開",
         "details": "詳細",
         "close": "閉じる",

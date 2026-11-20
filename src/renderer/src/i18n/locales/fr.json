@@ -18950,7 +18950,6 @@
         "stoppedRestart_many": "{{count}} chats arrêtés à la fermeture d’Orca.",
         "stoppedRestart_other": "{{count}} chats arrêtés à la fermeture d’Orca.",
         "promptsNotResent": "La reprise ne renverra pas vos prompts.",
-        "promptsNotSent": "Vos prompts n’ont pas été renvoyés.",
         "resume": "Reprendre",
         "details": "Détails",
         "close": "Fermer",

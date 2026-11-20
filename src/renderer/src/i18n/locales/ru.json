@@ -19491,7 +19491,6 @@
         "stoppedRestart_many": "{{count}} чатов остановлено при закрытии Orca.",
         "stoppedRestart_other": "{{count}} чата остановлено при закрытии Orca.",
         "promptsNotResent": "Ваши промпты не будут отправлены повторно.",
-        "promptsNotSent": "Ваши промпты не отправлялись повторно.",
         "resume": "Возобновить",
         "details": "Подробнее",
         "close": "Закрыть",
