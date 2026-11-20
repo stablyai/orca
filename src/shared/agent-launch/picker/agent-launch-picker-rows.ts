@@ -50,7 +50,7 @@ export type ChatUnavailableReason =
   | 'windows'
 
 export type NewTabAgentMenuRow =
-  /** `setup`: the agent isn't installed there, so starting the chat sets it up first. */
+  /** `setup`: the agent isn't installed there, so its chat opens with an offer to install it. */
   (
     | { kind: 'chat'; agent: TuiAgent; setup?: true }
     | { kind: 'chat-unavailable'; agent: TuiAgent; reason: ChatUnavailableReason }

@@ -289,7 +289,7 @@ export const newTabSubmenuCodex = defineFixture({
   }
 })
 
-/** Antigravity isn't installed, so its chat sets it up first. */
+/** Antigravity isn't installed, so its chat offers to install it. */
 export const newTabSetupChat = defineFixture({
   width: 320,
   render: () => (

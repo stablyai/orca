@@ -37,7 +37,7 @@ export function chatUnavailableLabel(
   }
 }
 
-/** What a row says beside its name: why its chat can't start, or that starting it installs the agent. */
+/** What a row says beside its name: why its chat can't start, or that the chat asks to install the agent. */
 export function rowStatusLabel(
   row: NewTabAgentMenuRow,
   t: Translate = translate
@@ -45,11 +45,11 @@ export function rowStatusLabel(
   return row.kind === 'chat-unavailable'
     ? chatUnavailableLabel(row.reason, t)
     : row.kind === 'chat' && row.setup
-      ? t('auto.components.tab.bar.QuickLaunchButton.chatInstallsOnStart', 'Installs on start')
+      ? t('auto.components.tab.bar.QuickLaunchButton.chatInstallRequired', 'Install required')
       : undefined
 }
 
-/** An agent's chat that installs the agent when started, for surfaces that list whole agents. */
+/** An agent's chat that offers to install the agent, for surfaces that list whole agents. */
 export function entrySetupLabel(
   entry: { rows: readonly NewTabAgentMenuRow[] },
   t: Translate = translate
