@@ -1,6 +1,3 @@
-import { useMemo } from 'react'
-import { readUiLanguageMemoInput } from '@/i18n/ui-language-memo-input'
-import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { Bot } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { useNow } from '@/lib/window-activity/use-now'
@@ -23,7 +20,10 @@ import { NativeChatMarkdown } from '../markdown/NativeChatMarkdown'
 import { NativeChatCodeBlock } from '../markdown/code/NativeChatCodeBlock'
 import { NativeChatEventRow } from '../messages/events/NativeChatEventRow'
 import { NativeChatEventOpenButton } from '../messages/events/NativeChatEventOpenButton'
-import { sayNativeChatSubagentGroupTranslated as say } from './native-chat-subagent-group-words-text'
+import {
+  sayNativeChatSubagentGroupTranslated as say,
+  sayNativeChatSubagentGroupWith
+} from './native-chat-subagent-group-words-text'
 import { sayNativeChatSessionOptionTranslated as sayOption } from '../session/options/controls/native-chat-session-option-labels-text'
 
 /** Leaf so the shared 1s clock re-renders only the digits, never the roster. */
@@ -128,12 +128,9 @@ export function NativeChatSubagentRun({
   disclosureId?: string
   onOpenSubagent?: (agentId: string) => void
 }): React.JSX.Element | null {
-  // Changes with the UI language and its catalogs, which `say` reads.
-  const languageRevision = useUiLanguageRevision()
-  const header = useMemo(() => {
-    readUiLanguageMemoInput(String(languageRevision))
-    return nativeChatSubagentGroupHeader(block.agents, say)
-  }, [block.agents, languageRevision])
+  // `t` changes with the UI language and its catalogs, so the derived words follow them.
+  const t = useTranslate()
+  const header = nativeChatSubagentGroupHeader(block.agents, sayNativeChatSubagentGroupWith(t))
   if (header.total === 0) {
     return null
   }
