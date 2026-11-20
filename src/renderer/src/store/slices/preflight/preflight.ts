@@ -6,6 +6,7 @@ import { localPreflightContextKey } from '@/runtime/hosts/preflight/local-prefli
 import type { StateCreator } from 'zustand'
 import type {
   PreflightRuntimeContext,
+  PreflightCheckOptions,
   PreflightStatus
 } from '../../../../../preload/api/preflight/preflight-api'
 import type { AppState } from '../../types'
@@ -19,12 +20,19 @@ export type PreflightSlice = {
   preflightStatusError: string | null
 
   /** `wakeWslDistro`: a user act (window focus, a click) that may start the focused workspace's stopped WSL distro. */
-  refreshPreflightStatus: (options?: { force?: boolean; wakeWslDistro?: boolean }) => Promise<void>
+  refreshPreflightStatus: (
+    options?: Pick<PreflightCheckOptions, 'force' | 'wakeWslDistro' | 'refreshAzureDevOps'>
+  ) => Promise<void>
   invalidatePreflightStatus: () => void
 }
 
 let nonForcedPreflightRequest: { key: string; promise: Promise<void> } | null = null
-let forcedPreflightRequest: { key: string; promise: Promise<void>; wake: boolean } | null = null
+let forcedPreflightRequest: {
+  key: string
+  promise: Promise<void>
+  wake: boolean
+  refreshAzureDevOps?: boolean
+} | null = null
 let latestPreflightRequestId = 0
 
 function getErrorMessage(error: unknown): string {
@@ -76,7 +84,8 @@ export const createPreflightSlice: StateCreator<AppState, [], [], PreflightSlice
   },
 
   refreshPreflightStatus: async (options) => {
-    const force = options?.force === true
+    const refreshAzureDevOps = options?.refreshAzureDevOps === true
+    const force = options?.force === true || refreshAzureDevOps
     const wake = options?.wakeWslDistro === true
     const context = getLocalPreflightContext(get())
     const contextKey = localPreflightContextKey(context)
@@ -90,7 +99,8 @@ export const createPreflightSlice: StateCreator<AppState, [], [], PreflightSlice
     if (
       force &&
       forcedPreflightRequest?.key === contextKey &&
-      (forcedPreflightRequest.wake || !wake)
+      (forcedPreflightRequest.wake || !wake) &&
+      (!refreshAzureDevOps || forcedPreflightRequest.refreshAzureDevOps)
     ) {
       return forcedPreflightRequest.promise
     }
@@ -100,6 +110,7 @@ export const createPreflightSlice: StateCreator<AppState, [], [], PreflightSlice
     // Why: the host the context key names: the focused workspace's owner, else the default scope host.
     const runtimeTarget = getActiveWorkspaceOwnerTarget(get()) ?? defaultScopeHost(get().settings)
     const preflightArgs = buildPreflightArgs(force, wake, context)
+    const azureDevOpsArgs = refreshAzureDevOps ? { refreshAzureDevOps } : undefined
     set({
       preflightStatus: contextChanged ? null : get().preflightStatus,
       preflightStatusChecked: contextChanged ? false : get().preflightStatusChecked,
@@ -110,9 +121,14 @@ export const createPreflightSlice: StateCreator<AppState, [], [], PreflightSlice
     const localPreflightCheck = window.api?.preflight?.check
     const request = (
       runtimeTarget.kind === 'environment'
-        ? callRuntimeRpc<PreflightStatus>(runtimeTarget, 'preflight.check', force ? { force } : {})
+        ? callRuntimeRpc<PreflightStatus>(runtimeTarget, 'preflight.check', {
+            ...(force ? { force } : {}),
+            ...azureDevOpsArgs
+          })
         : localPreflightCheck
-          ? localPreflightCheck(preflightArgs)
+          ? localPreflightCheck(
+              refreshAzureDevOps ? { ...preflightArgs, ...azureDevOpsArgs } : preflightArgs
+            )
           : Promise.reject(new Error('Desktop preflight API is unavailable.'))
     )
       .then((status) => {
@@ -150,7 +166,7 @@ export const createPreflightSlice: StateCreator<AppState, [], [], PreflightSlice
     if (!force) {
       nonForcedPreflightRequest = { key: contextKey, promise: request }
     } else {
-      forcedPreflightRequest = { key: contextKey, promise: request, wake }
+      forcedPreflightRequest = { key: contextKey, promise: request, wake, refreshAzureDevOps }
     }
 
     return request

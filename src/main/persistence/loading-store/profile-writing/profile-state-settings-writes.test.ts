@@ -117,6 +117,14 @@ function fixture() {
 }
 
 describe('selective SQLite settings persistence', () => {
+  it('retains the selected Azure DevOps method across unrelated settings writes and restart', async () => {
+    const state = fixture()
+    state.store.updateSettings({ azureDevOpsAuthMethod: 'azure-cli' })
+    state.store.updateSettings({ terminalFontSize: 28 })
+    await state.store.flushPendingOrThrowAsync()
+    expect(state.reopen().getSettings().azureDevOpsAuthMethod).toBe('azure-cli')
+  })
+
   it('keeps an explicit UI secret clear after an unavailable write and later settings save', async () => {
     const state = fixture()
     state.store.updateUI({ browserKagiSessionLink: 'original-link' })

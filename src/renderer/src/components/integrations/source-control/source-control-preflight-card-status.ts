@@ -73,7 +73,7 @@ export function usePreflightCardStatuses(
     !preflightStatusLoading &&
     preflightStatusChecked &&
     preflightCurrent &&
-    preflightStatusError !== null
+    (preflightStatusError !== null || (provider === 'azureDevOps' && !preflightStatus?.azureDevOps))
   const statusInput =
     !preflightStatusLoading && preflightStatusChecked && preflightCurrent && !unavailable
       ? preflightStatus
@@ -81,7 +81,11 @@ export function usePreflightCardStatuses(
 
   const refresh = (): void => {
     setRefreshing(true)
-    void refreshPreflightStatus({ force: true, wakeWslDistro: true }).finally(() => {
+    void refreshPreflightStatus({
+      force: true,
+      wakeWslDistro: true,
+      ...(provider === 'azureDevOps' ? { refreshAzureDevOps: true } : {})
+    }).finally(() => {
       if (mountedRef.current) {
         setRefreshing(false)
       }

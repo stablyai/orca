@@ -20,14 +20,6 @@ export type PreflightIntegrationStatuses = {
   giteaBaseUrl: string | null
 }
 
-type TokenApiPreflightStatus = {
-  configured: boolean
-  authenticated: boolean
-  account: string | null
-  baseUrl: string | null
-  tokenConfigured: boolean
-}
-
 type GiteaPreflightStatus = {
   configured: boolean
   authenticated: boolean
@@ -37,8 +29,19 @@ type GiteaPreflightStatus = {
 }
 
 export function tokenApiStatusFromPreflight(
-  status: TokenApiPreflightStatus | undefined
+  status: PreflightStatus['azureDevOps']
 ): AzureDevOpsStatus {
+  switch (status?.credentialState) {
+    case 'error':
+      return 'not-authenticated'
+    case 'authenticated':
+    case 'credential-ready':
+      return 'configured'
+    case 'not-configured':
+      return 'not-configured'
+    case undefined:
+      break
+  }
   if (!status?.configured) {
     return 'not-configured'
   }

@@ -195,6 +195,9 @@ export async function activateBackendRuntime(
     }
   })
   profileShutdown.paneGrids = runtime
+  const { installAzureDevOpsAuthSource } = await import('../azure-devops/azure-devops-credentials')
+  const { invalidatePreflightCache } = await import('../preflight/agent-detection')
+  registerCleanup(installAzureDevOpsAuthSource(profileStore, invalidatePreflightCache))
   profileShutdown.paintLedger = runtime
   runtime.beginStructuredAgentSessionStartupOpen(chatJournal.maintenanceAfter, chatJournal.open)
 

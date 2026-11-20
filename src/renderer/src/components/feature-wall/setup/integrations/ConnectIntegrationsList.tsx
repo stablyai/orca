@@ -1,9 +1,7 @@
 import { Fragment, useState } from 'react'
 import { Trans } from 'react-i18next'
-import {
-  AzureDevOpsIntegrationCard,
-  GiteaIntegrationCard
-} from '@/components/integrations/source-control/token-source-control-integration-cards'
+import { GiteaIntegrationCard } from '@/components/integrations/source-control/token-source-control-integration-cards'
+import { AzureDevOpsSettingsCard } from '@/components/settings/integrations/AzureDevOpsSettingsCard'
 import { BitbucketIntegrationCard } from '@/components/integrations/source-control/bitbucket-integration-card'
 import {
   GitHubIntegrationCard,
@@ -23,6 +21,11 @@ import {
 } from './use-integration-connection-status'
 import { i18n } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
+import { useAppStore } from '@/store'
+import { defaultScopeHost } from '@/runtime/hosts/selection/default-creation-host'
+import { getActiveWorkspaceOwnerTarget } from '@/lib/workspace/ownership/resolved-worktree-execution-host'
+import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 
 function TaskSourceNameList(props: { names: readonly string[] }): React.JSX.Element {
   const t = useTranslate()
@@ -49,6 +52,9 @@ export function ConnectIntegrationsList(): React.JSX.Element {
   const t = useTranslate()
   useIntegrationProviderStatusRefresh()
   const status = useIntegrationConnectionStatus()
+  const reviewEnvironmentId = useAppStore((s) =>
+    runtimeTargetEnvironmentId(getActiveWorkspaceOwnerTarget(s) ?? defaultScopeHost(s.settings))
+  )
   const [reviewReopened, setReviewReopened] = useState(false)
 
   const flow = deriveIntegrationFlowState({
@@ -107,7 +113,15 @@ export function ConnectIntegrationsList(): React.JSX.Element {
             <GitHubIntegrationCard />
             <GitLabIntegrationCard />
             <BitbucketIntegrationCard />
-            <AzureDevOpsIntegrationCard />
+            <AzureDevOpsSettingsCard
+              web={isWebClientLocation()}
+              hostScope={{
+                available: true,
+                target: reviewEnvironmentId
+                  ? { kind: 'environment', environmentId: reviewEnvironmentId }
+                  : { kind: 'local' }
+              }}
+            />
             <GiteaIntegrationCard />
           </IntegrationCardGroup>
         </IntegrationStep>

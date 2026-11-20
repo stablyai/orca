@@ -1,6 +1,5 @@
 import type { ExecutionHostId } from '../../shared/execution-host/execution-host'
 import { hostedReviewSshConnectionId } from '../source-control/hosted-review-execution-host'
-import { Buffer } from 'node:buffer'
 import type {
   CreateHostedReviewInput,
   CreateHostedReviewResult
@@ -16,53 +15,25 @@ import {
 import { readHostedPullRequestTemplate } from '../source-control/pull-request-template'
 import {
   AZURE_DEVOPS_MAX_REQUEST_ATTEMPTS,
+  assertAzureDevOpsCliEndpoint,
   azureDevOpsApiVersionForOrigin,
   recordAzureDevOpsApiVersionRejection,
   resolveAzureDevOpsGitApiBaseUrl
 } from './azure-devops-api-request'
+import {
+  assertAzureDevOpsCredentialsCurrent,
+  getAzureDevOpsAuthMethod,
+  invalidateAzureDevOpsCredentials,
+  resolveAzureDevOpsCredentials
+} from './azure-devops-credentials'
+import { AzureDevOpsAuthError } from './azure-cli-access-token'
 import { getAzureDevOpsPullRequestForBranch } from './client'
 import { mapAzureDevOpsPullRequest, type RawAzureDevOpsPullRequest } from './pull-request-mappers'
 import { getAzureDevOpsRepoRef, type AzureDevOpsRepoRef } from './repository-ref'
 
 const CREATE_REQUEST_TIMEOUT_MS = 60_000
 
-type AzureDevOpsCreateAuthConfig = {
-  pat: string | null
-  accessToken: string | null
-  username: string | null
-}
-
-function envValue(name: string): string | null {
-  const value = process.env[name]?.trim() ?? ''
-  return value.length > 0 ? value : null
-}
-
-function getAuthConfig(): AzureDevOpsCreateAuthConfig {
-  return {
-    pat: envValue('ORCA_AZURE_DEVOPS_TOKEN') ?? envValue('ORCA_AZURE_DEVOPS_PAT'),
-    accessToken: envValue('ORCA_AZURE_DEVOPS_ACCESS_TOKEN'),
-    username: envValue('ORCA_AZURE_DEVOPS_USERNAME')
-  }
-}
-
-export function isAzureDevOpsReviewCreationAuthenticated(): boolean {
-  const config = getAuthConfig()
-  return Boolean(config.pat || config.accessToken)
-}
-
-function authHeaders(config: AzureDevOpsCreateAuthConfig): Record<string, string> {
-  if (config.accessToken) {
-    return { Authorization: `Bearer ${config.accessToken}` }
-  }
-  if (config.pat) {
-    const encoded = Buffer.from(`${config.username ?? ''}:${config.pat}`).toString('base64')
-    return { Authorization: `Basic ${encoded}` }
-  }
-  return {}
-}
-
-function apiUrl(repo: AzureDevOpsRepoRef, path: string): URL {
-  const baseUrl = resolveAzureDevOpsGitApiBaseUrl(repo)
+function apiUrl(baseUrl: string, path: string): URL {
   const url = new URL(`${baseUrl.replace(/\/+$/, '')}${path}`)
   url.searchParams.set('api-version', azureDevOpsApiVersionForOrigin(url.origin))
   return url
@@ -74,15 +45,42 @@ async function requestCreatePullRequest(
   path: string,
   init: Omit<RequestInit, 'signal'>
 ): Promise<RawAzureDevOpsPullRequest> {
+  const baseUrl = resolveAzureDevOpsGitApiBaseUrl(repo)
+  if (getAzureDevOpsAuthMethod() === 'azure-cli') {
+    assertAzureDevOpsCliEndpoint(baseUrl)
+  }
+  const credentials = await resolveAzureDevOpsCredentials()
+  const cli = credentials.method === 'azure-cli' ? credentials : null
   for (let attempt = 1; ; attempt++) {
-    const url = apiUrl(repo, path)
+    const url = apiUrl(baseUrl, path)
+    assertAzureDevOpsCredentialsCurrent(credentials)
+    if (cli) {
+      assertAzureDevOpsCliEndpoint(url)
+    }
     try {
+      const headers = new Headers(init.headers)
+      for (const [name, value] of Object.entries(credentials.headers)) {
+        headers.set(name, value)
+      }
       return await requestHostedReviewJson<RawAzureDevOpsPullRequest>(
         url,
-        init,
+        {
+          ...init,
+          headers,
+          ...(cli ? { redirect: 'error' } : {})
+        },
         CREATE_REQUEST_TIMEOUT_MS
       )
     } catch (error) {
+      if (cli && error instanceof HostedReviewApiRequestError) {
+        if (error.status === 401) {
+          invalidateAzureDevOpsCredentials({ generation: cli.generation })
+          throw new AzureDevOpsAuthError('unauthorized')
+        }
+        if (error.status === 403) {
+          throw new AzureDevOpsAuthError('forbidden')
+        }
+      }
       if (
         attempt >= AZURE_DEVOPS_MAX_REQUEST_ATTEMPTS ||
         !(error instanceof HostedReviewApiRequestError) ||
@@ -107,9 +105,23 @@ function apiErrorMessage(error: unknown): string {
 }
 
 function classifyCreateError(error: unknown): CreateHostedReviewResult {
+  if (error instanceof AzureDevOpsAuthError) {
+    return {
+      ok: false,
+      code: 'auth_required',
+      error:
+        error.code === 'unsupported-endpoint'
+          ? 'Create PR failed: Azure CLI authentication requires Azure DevOps Services.'
+          : error.code === 'forbidden'
+            ? 'Create PR failed: the Azure CLI account does not have permission to create this pull request.'
+            : 'Create PR failed: check your Azure CLI sign-in and select Re-check in Settings > Integrations.',
+      reason: 'auth_required'
+    }
+  }
   const message = apiErrorMessage(error)
   if (message) {
-    console.warn('createAzureDevOpsPullRequest failed:', message)
+    const status = error instanceof HostedReviewApiRequestError ? error.status : null
+    console.warn('createAzureDevOpsPullRequest failed:', status ?? 'request failed')
   }
   const lower = message.toLowerCase()
   const status = error instanceof HostedReviewApiRequestError ? error.status : null
@@ -124,7 +136,9 @@ function classifyCreateError(error: unknown): CreateHostedReviewResult {
       ok: false,
       code: 'auth_required',
       error:
-        'Create PR failed: Azure DevOps is not authenticated. Next step: set ORCA_AZURE_DEVOPS_TOKEN in this environment.',
+        getAzureDevOpsAuthMethod() === 'azure-cli'
+          ? 'Create PR failed: check your Azure CLI sign-in and select Re-check in Settings > Integrations.'
+          : 'Create PR failed: Azure DevOps is not authenticated. Next step: set ORCA_AZURE_DEVOPS_TOKEN in this environment.',
       reason: 'auth_required'
     }
   }
@@ -238,8 +252,7 @@ export async function createAzureDevOpsPullRequest(
         method: 'POST',
         headers: {
           Accept: 'application/json',
-          'Content-Type': 'application/json',
-          ...authHeaders(getAuthConfig())
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify(requestBody)
       }

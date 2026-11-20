@@ -3224,14 +3224,8 @@
   "auto.components.settings.token.source.control.integration.cards.0613928cb3": {
     "ko": "이 런타임에서는 아직 Gitea 상태를 사용할 수 없습니다."
   },
-  "auto.components.settings.token.source.control.integration.cards.087feb92f1": {
-    "ko": ", 또는 설정"
-  },
   "auto.components.settings.token.source.control.integration.cards.0b5242f8a2": {
     "ko": "{{value0}} · PR 및 commit 상태"
-  },
-  "auto.components.settings.token.source.control.integration.cards.0eb50d5593": {
-    "ko": "Azure DevOps REST API 토큰을 통한 PR 및 빌드 상태입니다."
   },
   "auto.components.settings.token.source.control.integration.cards.0fa5629dad": {
     "ko": "PR 및 빌드 상태"
@@ -3245,14 +3239,8 @@
   "auto.components.settings.token.source.control.integration.cards.24ac1c69dc": {
     "ko": "이 런타임에서는 아직 Bitbucket 상태를 사용할 수 없습니다."
   },
-  "auto.components.settings.token.source.control.integration.cards.40f678df73": {
-    "ko": "Azure DevOps 자격 증명이 구성되어 있지만 인증할 수 없습니다. 토큰, API 기본 URL, repos 권한을 확인하고, 환경 변수가 변경되었다면 Orca를 다시 시작하세요."
-  },
   "auto.components.settings.token.source.control.integration.cards.52f75876be": {
     "ko": "감지된 repos의 PR 및 commit 상태"
-  },
-  "auto.components.settings.token.source.control.integration.cards.54636c65d4": {
-    "ko": "감지된 Azure Repos의 PR 및 빌드 상태"
   },
   "auto.components.settings.token.source.control.integration.cards.60708f23da": {
     "ko": "Orca가 원격에서 API URL을 추론할 수 없는 경우에만 사용하세요."
@@ -3266,17 +3254,8 @@
   "auto.components.settings.token.source.control.integration.cards.793a06e899": {
     "ko": "다시 확인"
   },
-  "auto.components.settings.token.source.control.integration.cards.7bd345e3f6": {
-    "ko": "Orca가 Git 원격에서 API 기본 URL을 추론할 수 없는 경우에만 사용하세요."
-  },
-  "auto.components.settings.token.source.control.integration.cards.b8a10b07c1": {
-    "ko": ". 설정하세요"
-  },
   "auto.components.settings.token.source.control.integration.cards.ea204f5e03": {
     "ko": "{{value0}} · PR 및 빌드 상태"
-  },
-  "auto.components.settings.token.source.control.integration.cards.f3f47dc7de": {
-    "ko": "이 런타임에서는 아직 Azure DevOps 상태를 사용할 수 없습니다."
   },
   "auto.components.settings.token.source.control.integration.cards.fcbe0469fd": {
     "ko": "공개 repos는 Git 원격에서 감지됩니다. 설정하세요"

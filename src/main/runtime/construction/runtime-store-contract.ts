@@ -193,6 +193,7 @@ export type RuntimeStore = {
     sourceControlGroupOrder?: GlobalSettings['sourceControlGroupOrder']
     sourceControlCompareAgainstUpstream?: GlobalSettings['sourceControlCompareAgainstUpstream']
     prAutoRefresh?: GlobalSettings['prAutoRefresh']
+    azureDevOpsAuthMethod?: GlobalSettings['azureDevOpsAuthMethod']
     diffShowWhitespace?: GlobalSettings['diffShowWhitespace']
     newTabMenuLayout?: GlobalSettings['newTabMenuLayout']
     floatingTerminalNewTabMenuLayout?: GlobalSettings['floatingTerminalNewTabMenuLayout']

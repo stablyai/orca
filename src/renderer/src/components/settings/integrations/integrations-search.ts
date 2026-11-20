@@ -119,8 +119,8 @@ export const getIntegrationsPaneSearchEntries = createLocalizedCatalog(() => [
       'Azure DevOps integration'
     ),
     description: translate(
-      'auto.components.settings.integrations.search.7b1f3984bb',
-      'Azure DevOps Repos authentication via token environment variables.'
+      'settings.azureDevOps.searchDescription',
+      'Azure DevOps Repos authentication via Azure CLI or token environment variables.'
     ),
     keywords: [
       ...translateSearchKeyword(
@@ -132,6 +132,7 @@ export const getIntegrationsPaneSearchEntries = createLocalizedCatalog(() => [
         'azure repos'
       ),
       ...translateSearchKeyword('auto.components.settings.integrations.search.03a7b275be', 'ado'),
+      ...translateSearchKeyword('settings.azureDevOps.cli', 'Azure CLI'),
       ...translateSearchKeyword(
         'auto.components.settings.integrations.search.c450244ad7',
         'integration'

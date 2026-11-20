@@ -48,6 +48,7 @@ export type RuntimeClientSettings = Pick<
   | 'sourceControlGroupOrder'
   | 'sourceControlCompareAgainstUpstream'
   | 'prAutoRefresh'
+  | 'azureDevOpsAuthMethod'
   | 'diffShowWhitespace'
   | 'newTabMenuLayout'
   | 'floatingTerminalNewTabMenuLayout'
@@ -107,6 +108,7 @@ export type RuntimeClientSettingsUpdate = Pick<
   | 'nativeChatCiResultLines'
   | 'workspaceCleanupPolicy'
   | 'prAutoRefresh'
+  | 'azureDevOpsAuthMethod'
   | 'newTabMenuLayout'
   | 'floatingTerminalNewTabMenuLayout'
 > & { hostNotifications?: Partial<HostNotificationSettings> }

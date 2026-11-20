@@ -1,5 +1,6 @@
 import type { ZCodeInteractiveCapability } from '../../../shared/agent-launch/installation/zcode-missing-tui'
 import type { ProjectExecutionRuntimeResolution } from '../../../shared/execution-host/project-execution-runtime'
+import type { AzureDevOpsAuthStatus } from '../../../shared/source-control/azure-devops-auth-types'
 import type {
   PathSource,
   ShellHydrationFailureReason
@@ -11,13 +12,7 @@ export type PreflightStatus = {
   /** Absent on payloads predating GitLab support. */
   glab?: { installed: boolean; authenticated: boolean }
   bitbucket?: { configured: boolean; authenticated: boolean; account: string | null }
-  azureDevOps?: {
-    configured: boolean
-    authenticated: boolean
-    account: string | null
-    baseUrl: string | null
-    tokenConfigured: boolean
-  }
+  azureDevOps?: AzureDevOpsAuthStatus
   gitea?: {
     configured: boolean
     authenticated: boolean
@@ -42,10 +37,14 @@ export type PreflightRuntimeContext = {
   projectRuntime?: ProjectExecutionRuntimeResolution
 }
 
+export type PreflightCheckOptions = PreflightRuntimeContext & {
+  force?: boolean
+  wakeWslDistro?: boolean
+  refreshAzureDevOps?: boolean
+}
+
 export type PreflightApi = {
-  check: (
-    args?: PreflightRuntimeContext & { force?: boolean; wakeWslDistro?: boolean }
-  ) => Promise<PreflightStatus>
+  check: (args?: PreflightCheckOptions) => Promise<PreflightStatus>
   /** Complete by default; background callers opt into host-owned enabled preferences. */
   detectAgents: (
     args?: PreflightRuntimeContext & {

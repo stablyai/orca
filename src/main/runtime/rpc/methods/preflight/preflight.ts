@@ -40,7 +40,7 @@ export const PREFLIGHT_METHODS = [
     name: 'preflight.check',
     permission: 'workspace',
     params: PreflightCheck,
-    handler: async (params) => runPreflightCheck(params.force)
+    handler: async (params) => runPreflightCheck(params.force, undefined, params.refreshAzureDevOps)
   }),
   defineMethod({
     name: 'preflight.detectAgents',

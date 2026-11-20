@@ -5,6 +5,7 @@ import { ArtifactsSettingsPane } from '../artifacts/ArtifactsSettingsPane'
 import { AutomationsSettingsPane } from '../automations/AutomationsSettingsPane'
 import { GeneralPane } from '../general/GeneralPane'
 import { IntegrationsPane } from '../integrations/IntegrationsPane'
+import { AzureDevOpsSettingsCard } from '../integrations/AzureDevOpsSettingsCard'
 import { MobileSettingsPane } from '../mobile/MobileSettingsPane'
 import { OrcaAccountSettingsPane } from '../accounts/orca/OrcaAccountSettingsPane'
 import { SettingsSetupGuidePane } from '../setup-guide/SettingsSetupGuidePane'
@@ -112,7 +113,7 @@ export function renderIntegrationsSettingsSection(
   context: SettingsRenderContext,
   t: Translate = translate
 ): React.JSX.Element {
-  const { navigation, view } = context
+  const { model, navigation, view } = context
   return (
     <SettingsSection
       id="integrations"
@@ -123,7 +124,13 @@ export function renderIntegrationsSettingsSection(
       )}
       searchEntries={navigation.getSectionSearchEntries('integrations')}
     >
-      {view.isSectionMounted('integrations') ? <IntegrationsPane /> : null}
+      {view.isSectionMounted('integrations') ? (
+        <IntegrationsPane
+          azureDevOps={
+            <AzureDevOpsSettingsCard hostScope={model.settingsHostScope} web={model.isWebClient} />
+          }
+        />
+      ) : null}
     </SettingsSection>
   )
 }
