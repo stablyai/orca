@@ -277,6 +277,7 @@ export function acpStructuredLaunchPart(
     const model = spec.launchesWithModel && !head ? record.options?.model : undefined
     const args = [
       ...spec.args({ fullAccess, pluginDirs: skill?.pluginDirs ?? [], model }),
+      ...(skill?.args ?? []),
       ...(instructions?.args ?? [])
     ]
     return {
