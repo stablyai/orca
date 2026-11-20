@@ -49,16 +49,16 @@ async function installMainWindowCoreServices(
     throw new Error('Main window closed while preparing services')
   }
   const store = state.store
-  const runtime = state.runtime
-  const stats = state.stats
-  const codexAccounts = state.codexAccounts
-  const claudeAccounts = state.claudeAccounts
-  const rateLimits = state.rateLimits
-  const automations = state.automations
-  const keybindings = state.keybindings
-  const codexRuntimeHome = state.codexRuntimeHome
-  const claudeRuntimeAuth = state.claudeRuntimeAuth
-  const orcaAccount = state.orcaAccount
+  const runtime = state.core.runtime
+  const stats = state.core.stats
+  const codexAccounts = state.core.codexAccounts
+  const claudeAccounts = state.core.claudeAccounts
+  const rateLimits = state.core.rateLimits
+  const automations = state.core.automations
+  const keybindings = state.core.keybindings
+  const codexRuntimeHome = state.core.codexRuntimeHome
+  const claudeRuntimeAuth = state.core.claudeRuntimeAuth
+  const orcaAccount = state.core.orcaAccount
   if (
     !store ||
     !runtime ||
@@ -109,17 +109,17 @@ async function installMainWindowCoreServices(
       },
       orcaAccount
     },
-    state.pluginService ?? undefined,
-    state.pluginMarketplaceService && state.pluginMarketplaceInstaller
+    state.core.pluginService ?? undefined,
+    state.core.pluginMarketplaceService && state.core.pluginMarketplaceInstaller
       ? {
-          marketplace: state.pluginMarketplaceService,
-          installer: state.pluginMarketplaceInstaller,
-          ...(state.pluginAutoUpdater ? { autoUpdater: state.pluginAutoUpdater } : {}),
-          ...(state.pluginInstallStatsService
-            ? { installStats: state.pluginInstallStatsService }
+          marketplace: state.core.pluginMarketplaceService,
+          installer: state.core.pluginMarketplaceInstaller,
+          ...(state.core.pluginAutoUpdater ? { autoUpdater: state.core.pluginAutoUpdater } : {}),
+          ...(state.core.pluginInstallStatsService
+            ? { installStats: state.core.pluginInstallStatsService }
             : {}),
-          ...(state.pluginUpdateReviewNotices
-            ? { reviewNotices: state.pluginUpdateReviewNotices }
+          ...(state.core.pluginUpdateReviewNotices
+            ? { reviewNotices: state.core.pluginUpdateReviewNotices }
             : {})
         }
       : undefined
