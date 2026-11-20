@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { pluginBridgeNameSchema } from '../workers/plugin-panel-bridge-protocol'
 import { PLUGIN_ENUM_SINCE_KEY } from '../manifest/plugin-engine-floor-keys'
 import { PLUGIN_APPEARANCE_SINCE } from '../workers/plugin-host-api-appearance'
 import { PLUGIN_HOST_API_1_8_SINCE } from '../workers/plugin-host-api-1-8'
@@ -11,7 +12,7 @@ import {
 } from '../manifest/plugin-schema-field-docs'
 
 /** Closed v0 capabilities fail unknown kinds instead of silently granting nothing. Consent binds capabilities and worker trust;
- * host boundaries enforce them across desktop, headless serve and relay. Scoped kinds remain future work. */
+ * host boundaries enforce them across desktop, headless serve and relay. */
 
 export const PLUGIN_CAPABILITY_KINDS = [
   'workspace:read',
@@ -28,7 +29,8 @@ export const PLUGIN_CAPABILITY_KINDS = [
   'workspace:create',
   'automation:read',
   'automation:write',
-  'history:read'
+  'history:read',
+  'cli:request'
 ] as const
 
 export type PluginCapabilityKind = (typeof PLUGIN_CAPABILITY_KINDS)[number]
@@ -49,7 +51,8 @@ export const PLUGIN_CAPABILITY_SINCE: Record<PluginCapabilityKind, string> = {
   'workspace:create': PLUGIN_HOST_API_1_8_SINCE,
   'automation:read': PLUGIN_HOST_API_1_8_SINCE,
   'automation:write': PLUGIN_HOST_API_1_8_SINCE,
-  'history:read': PLUGIN_HOST_API_1_9_SINCE
+  'history:read': PLUGIN_HOST_API_1_9_SINCE,
+  'cli:request': '1.4.267'
 }
 
 /** Format 1 capability names and what each now grants. `events:subscribe` split by event domain. */
@@ -60,16 +63,26 @@ export const PLUGIN_V1_CAPABILITY_ALIASES: ReadonlyMap<string, readonly PluginCa
     ['events:subscribe', ['workspace:read', 'agent:read']]
   ])
 
-// Strict object (not a bare enum) so scoped fields can be added per-kind later
-// without changing the manifest shape.
 export const pluginCapabilitySchema = z
   .object({
     kind: z.enum(PLUGIN_CAPABILITY_KINDS).meta({
       ...pluginFieldDoc('Capability granted on user consent.', PLUGIN_SCHEMA_SINCE_V1),
       [PLUGIN_ENUM_SINCE_KEY]: PLUGIN_CAPABILITY_SINCE
-    })
+    }),
+    handler: pluginBridgeNameSchema
+      .optional()
+      .meta(
+        pluginFieldDoc(
+          'Exact worker handler name. Required for cli:request and omitted for every other capability.',
+          PLUGIN_CAPABILITY_SINCE['cli:request']
+        )
+      )
   })
   .strict()
+  .refine((grant) => (grant.kind === 'cli:request') === (grant.handler !== undefined), {
+    path: ['handler'],
+    message: 'handler is required for cli:request and only allowed for that grant'
+  })
   .meta({ id: 'Capability', description: 'A host API the plugin may call once the user consents.' })
 
 export type PluginCapability = z.infer<typeof pluginCapabilitySchema>
@@ -97,7 +110,13 @@ export const PLUGIN_CAPABILITY_DESCRIPTIONS: Record<PluginCapabilityKind, string
   'automation:write':
     'Create automations that start agents in your projects on a schedule, even when the plugin is not running, and change or delete them (Orca asks you first for ones the plugin did not create, and before it changes what one with extra agent settings runs)',
   'history:read':
-    "Read the list of your past agent sessions on this computer, from the history files of the coding agents Orca supports, including running WSL distributions on Windows (not SSH or other machines, Antigravity IDE conversations or subagent transcripts): each session's title, which is often the start of its first message, agent, workspace, branch, times, and message and token counts; never the conversation itself"
+    "Read the list of your past agent sessions on this computer, from the history files of the coding agents Orca supports, including running WSL distributions on Windows (not SSH or other machines, Antigravity IDE conversations or subagent transcripts): each session's title, which is often the start of its first message, agent, workspace, branch, times, and message and token counts; never the conversation itself",
+  'cli:request': 'Let scripts and agents call this worker handler through the Orca CLI'
+}
+
+export function describePluginCapability(capability: PluginCapability): string {
+  const description = PLUGIN_CAPABILITY_DESCRIPTIONS[capability.kind]
+  return capability.handler ? `${description}: ${capability.handler}` : description
 }
 
 /** Canonicalize order, duplicates and field order so equivalent grants preserve consent across manifest formatting changes. */

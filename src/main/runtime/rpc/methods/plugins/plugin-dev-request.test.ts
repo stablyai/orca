@@ -5,7 +5,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { fingerprintPluginConsent } from '../../../../../shared/plugins/approval/plugin-consent-fingerprint'
 import { pluginManifestSchema } from '../../../../../shared/plugins/manifest/plugin-manifest'
 
-import { devFolderConsentIdentity } from '../../../../plugins/discovery/plugin-discovery'
+import { installPluginFromLocalPath } from '../../../../plugins/installation/plugin-install'
+import {
+  devFolderConsentIdentity,
+  getUserPluginsDir
+} from '../../../../plugins/discovery/plugin-discovery'
 import { PluginService } from '../../../../plugins/plugin-service'
 import type {
   PluginWorkerHandle,
@@ -42,10 +46,12 @@ const WORKER_MANIFEST = {
   capabilities: [{ kind: 'workspace:read' }]
 }
 
-function devRequest() {
-  const method = eraseRpcMethods(PLUGIN_DEV_REQUEST_METHODS)[0]
+function requestMethod(name: string) {
+  const method = eraseRpcMethods(PLUGIN_DEV_REQUEST_METHODS).find(
+    (candidate) => candidate.name === name
+  )
   if (!method || 'stream' in method) {
-    throw new Error('plugins.devRequest is missing')
+    throw new Error(`${name} is missing`)
   }
   return method
 }
@@ -62,7 +68,22 @@ async function realService(options: {
   roots.push(root)
   await writeFile(join(root, 'orca-plugin.json'), JSON.stringify(raw))
   await writeFile(join(root, 'worker.js'), 'export function activate() {}')
-  const consent = fingerprintPluginConsent(manifest, await devFolderConsentIdentity(root))
+  const userDataPath = await realpath(await mkdtemp(join(tmpdir(), 'orca-request-profile-')))
+  roots.push(userDataPath)
+  let consent = fingerprintPluginConsent(manifest, await devFolderConsentIdentity(root))
+  let pluginKey = 'samples.demo'
+  if (options.dev === false) {
+    const installed = await installPluginFromLocalPath({
+      pluginsDir: getUserPluginsDir(userDataPath),
+      sourcePath: root,
+      hostVersion: '1.4.267'
+    })
+    if (!installed.ok) {
+      throw new Error(installed.error)
+    }
+    consent = installed.consentFingerprint
+    pluginKey = installed.pluginKey
+  }
   const requestFromPanel = vi.fn(options.answer)
   const factory = vi.fn<PluginWorkerFactory>(async (): Promise<PluginWorkerHandle> => ({
     commands: [],
@@ -78,27 +99,65 @@ async function realService(options: {
     onExit: vi.fn()
   }))
   const service = new PluginService({
-    userDataPath: root,
-    hostVersion: '1.4.0',
+    userDataPath,
+    hostVersion: '1.4.267',
     isPluginSystemEnabled: () => true,
     getDisabledPlugins: () => [],
     getPluginConsents: (): Record<string, string> =>
-      options.approved === false ? {} : { 'samples.demo': consent },
+      options.approved === false ? {} : { [pluginKey]: consent },
     getDevPluginPaths: () => (options.dev === false ? [] : [root]),
     workerFactory: factory
   })
   services.push(service)
   await service.initialize()
   setPluginServiceForRpc(service, { applyConsent: vi.fn(), applyEnablement: vi.fn() })
-  return { root, factory, requestFromPanel }
+  return { pluginKey, factory }
 }
 
 describe('plugins.devRequest', () => {
   it('refuses an unapproved plugin without starting its worker', async () => {
     const { factory } = await realService({ answer: async () => null, approved: false })
     await expect(
-      devRequest().handler({ pluginKey: 'samples.demo', name: 'count' }, context)
+      requestMethod('plugins.devRequest').handler(
+        { pluginKey: 'samples.demo', name: 'count' },
+        context
+      )
     ).rejects.toThrow(/not approved and enabled/)
     expect(factory).not.toHaveBeenCalled()
+  })
+})
+
+describe('plugins.request', () => {
+  it('only dispatches the exact CLI handler approved for an installed plugin', async () => {
+    const { pluginKey, factory } = await realService({
+      dev: false,
+      raw: {
+        ...WORKER_MANIFEST,
+        engines: { orca: '>=1.4.267' },
+        capabilities: [{ kind: 'workspace:read' }, { kind: 'cli:request', handler: 'notes.list' }]
+      },
+      answer: async ({ name, input, panel }) => ({ name, input, caller: panel.contributionId })
+    })
+    const method = requestMethod('plugins.request')
+    await expect(
+      method.handler({ pluginKey, name: 'notes.list.private' }, context)
+    ).rejects.toThrow(/does not expose/)
+    await expect(
+      requestMethod('plugins.devRequest').handler(
+        { pluginKey, name: 'notes.list.private' },
+        context
+      )
+    ).rejects.toThrow(/installed plugin/)
+    await expect(
+      method.handler({ pluginKey, name: 'notes.list', input: 'x'.repeat(65537) }, context)
+    ).rejects.toThrow(/panel request limit/)
+    expect(factory).not.toHaveBeenCalled()
+    await expect(
+      method.handler({ pluginKey, name: 'notes.list', input: false }, context)
+    ).resolves.toEqual({
+      pluginKey,
+      name: 'notes.list',
+      result: { name: 'notes.list', input: false, caller: 'orca-cli' }
+    })
   })
 })

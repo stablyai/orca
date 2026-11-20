@@ -1,6 +1,7 @@
 import type { PluginManifest } from '../manifest/plugin-manifest'
 import {
   canonicalizeCapability,
+  type PluginCapability,
   type PluginCapabilityKind
 } from '../capabilities/plugin-capabilities'
 import {
@@ -100,18 +101,23 @@ function customEditorsGrow(installed: readonly unknown[], next: readonly unknown
 /** Each recipe's authority (id, checkout mode, commands) from its file; null when unreadable. */
 export type PluginVmRecipeIdentities = readonly string[] | null
 
+export function addedPluginCapabilities(
+  installed: readonly PluginCapability[],
+  next: readonly PluginCapability[]
+): PluginCapability[] {
+  const held = new Set(installed.map(canonicalizeCapability))
+  return next.filter((grant) => !held.has(canonicalizeCapability(grant)))
+}
+
 export function pluginUpdateAccessGrowth(
   installed: GrowthSubject,
   next: GrowthSubject,
   vmRecipes?: { installed: PluginVmRecipeIdentities; next: PluginVmRecipeIdentities }
 ): PluginUpdateAccessGrowth {
   // Why whole entries: a same-kind grant with a wider scope is still more access.
-  const held = new Set(installed.capabilities.map(canonicalizeCapability))
   const capabilities = [
     ...new Set(
-      next.capabilities
-        .filter((capability) => !held.has(canonicalizeCapability(capability)))
-        .map((capability) => capability.kind)
+      addedPluginCapabilities(installed.capabilities, next.capabilities).map((grant) => grant.kind)
     )
   ]
   const nextExecution = pluginExecutionProfile(next)

@@ -25,6 +25,7 @@
 - `ORCA plugin dev emit <dir|plugin-key> <event> [--data <json>] [--json]`: Fire a test event at a development plugin's worker and open panels
 - `ORCA plugin dev hook <dir|plugin-key> <hook> --data <json> [--json]`: Run a hook through a development plugin's worker and print what the chain decided
 - `ORCA plugin dev request <dir|plugin-key> <name> [--data <json>] [--panel <id>] [--timeout-ms <ms>] [--json]`: Call a development plugin's worker handler the way a panel's plugin.request does
+- `ORCA plugin request <plugin-key> <name> [--data <json>] [--timeout-ms <ms>] [--json]`: Call a handler an installed plugin exposes to the CLI
 - `ORCA plugin dev unload <dir|plugin-key> [--json]`: Remove a development folder from Orca
 - `ORCA plugin open <plugin-key> [--panel <id> | --editor <file>] [--json]`: Show a plugin's panel in Orca's right sidebar, or open a file in its editor
 - `ORCA plugin shot <plugin-key|dir> [--panel <id> | --editor <file> | --status-bar | --window] [--theme <light|dark>] [--width <px>] [--height <px>] [--act '<json>' [--in-place] | --scenario <name>] [--out <file.png>] [--json]`: Save a PNG of a plugin panel exactly as Orca draws it, to look at what you built

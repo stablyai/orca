@@ -24,6 +24,7 @@ ORCA plugin enable <plugin-key> [--approve <fingerprint>] --json
 ORCA plugin disable <plugin-key> --json
 ORCA plugin system on|off --json
 ORCA plugin restart <plugin-key> --json
+ORCA plugin request <plugin-key> <name> [--data <json>] [--timeout-ms <ms>] --json
 ORCA plugin open <plugin-key> [--panel <id> | --editor <file>] --json
 ORCA plugin shot <plugin-key> [--panel <id>] [--theme light|dark] [--width <px>] [--act '<json>'] [--out <file.png>] --json
 ORCA plugin shot <dir> --scenario <name> [--panel <id>] [--theme light|dark] [--width <px>] [--out <file.png>] --json
@@ -69,6 +70,9 @@ Exit codes: `0` ok, `1` error, `2` `plugin_invalid`, `3` `approval_required` or 
    `orca.panels.handle(name)` handler as a panel's `plugin.request` would and prints
    `{ pluginKey, name, result }`; a handler failure is `plugin_request_failed` with the worker's
    code in `error.data.requestCode`.
+   For an installed plugin, run `plugin request <plugin-key> <name>`. The author must declare
+   `{"kind":"cli:request","handler":"<name>"}` in the manifest's capabilities and the user
+   must approve it. The worker receives the synthetic panel id and contribution id `orca-cli`.
 5. See what you built: `plugin shot <plugin-key> --json` writes a PNG of a panel exactly as Orca
    draws it (default `.orca/shots/<plugin-key>-<panel>.png`, in the plugin folder when run inside
    one; `--width` applies to that capture only, and `--theme` too but only while Orca's window is

@@ -78,20 +78,25 @@ export const PluginDevEmitParams = z
 /** `orca plugin dev hook`: one hook through a development plugin's worker alone. */
 export const PluginDevHookParams = PluginDevEmitParams
 
+const pluginKeyParam = z.string().refine(isQualifiedPluginKey, 'invalid qualified plugin key')
+
+/** `orca plugin request`: one `plugin.request` to an installed plugin's worker. */
+export const PluginRequestParams = z.object({
+  pluginKey: pluginKeyParam,
+  name: pluginBridgeNameSchema,
+  input: z.json().optional(),
+  timeoutMs: z.number().int().min(1).max(PLUGIN_PANEL_REQUEST_MAX_TIMEOUT_MS).optional()
+})
+
 /** `orca plugin dev request`: one `plugin.request` to a development plugin's worker. */
-export const PluginDevRequestParams = z
-  .object({
-    path: devFolderPathParam.optional(),
-    pluginKey: z.string().refine(isQualifiedPluginKey, 'invalid qualified plugin key').optional(),
-    name: pluginBridgeNameSchema,
-    input: z.json().optional(),
-    /** The caller panel id the handler sees, so a test can target `orca.panels.post`. */
-    panel: pluginPanelCallerSchema.shape.id.optional(),
-    timeoutMs: z.number().int().min(1).max(PLUGIN_PANEL_REQUEST_MAX_TIMEOUT_MS).optional()
-  })
-  .refine((params) => (params.path === undefined) !== (params.pluginKey === undefined), {
-    message: 'pass exactly one of path or pluginKey'
-  })
+export const PluginDevRequestParams = PluginRequestParams.extend({
+  path: devFolderPathParam.optional(),
+  pluginKey: pluginKeyParam.optional(),
+  /** The caller panel id the handler sees, so a test can target `orca.panels.post`. */
+  panel: pluginPanelCallerSchema.shape.id.optional()
+}).refine((params) => (params.path === undefined) !== (params.pluginKey === undefined), {
+  message: 'pass exactly one of path or pluginKey'
+})
 
 export const PluginGetLogsParams = z.object({
   pluginKey: z.string().refine(isQualifiedPluginKey, 'invalid qualified plugin key'),
@@ -107,7 +112,6 @@ export const PluginRestartParams = z.object({
   pluginKey: z.string().refine(isQualifiedPluginKey, 'invalid qualified plugin key')
 })
 
-const pluginKeyParam = z.string().refine(isQualifiedPluginKey, 'invalid qualified plugin key')
 const contributionIdParam = z.string().min(1).max(128)
 
 /** `orca plugin open`: a panel (default: the first) or, with `filePath`, a file in its editor. */

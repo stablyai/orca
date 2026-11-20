@@ -1,6 +1,9 @@
 import { defineMethod } from '../../core'
-import { PluginDevRequestParams } from '../../../../../shared/rpc-contract/plugins/plugins-params'
-import { requestPluginDevPanelHandler } from '../../../../plugins/development/plugin-dev-panel-request'
+import {
+  PluginDevRequestParams,
+  PluginRequestParams
+} from '../../../../../shared/rpc-contract/plugins/plugins-params'
+import { requestPluginPanelHandler } from '../../../../plugins/cli/plugin-cli-request'
 import { requirePluginService } from './plugins'
 
 export const PLUGIN_DEV_REQUEST_METHODS = [
@@ -12,16 +15,35 @@ export const PLUGIN_DEV_REQUEST_METHODS = [
     handler: async (params, ctx) => {
       const service = requirePluginService()
       await service.whenReady()
-      return requestPluginDevPanelHandler({
+      return requestPluginPanelHandler({
         service,
-        target:
-          params.pluginKey !== undefined
-            ? { pluginKey: params.pluginKey }
-            : { path: params.path ?? '' },
+        target: {
+          dev:
+            params.pluginKey !== undefined
+              ? { pluginKey: params.pluginKey }
+              : { path: params.path ?? '' }
+        },
         name: params.name,
         input: params.input,
         panel: params.panel,
         timeoutMs: params.timeoutMs,
+        signal: ctx.signal
+      })
+    }
+  }),
+  defineMethod({
+    name: 'plugins.request',
+    permission: 'host-admin',
+    params: PluginRequestParams,
+    handler: async (params, ctx) => {
+      const service = requirePluginService()
+      await service.whenReady()
+      return requestPluginPanelHandler({
+        service,
+        name: params.name,
+        input: params.input,
+        timeoutMs: params.timeoutMs,
+        target: { installed: params.pluginKey },
         signal: ctx.signal
       })
     }

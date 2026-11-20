@@ -189,6 +189,12 @@ To call a worker's `orca.panels.handle(name, …)` handler without opening its p
 prints `{ pluginKey, name, result }`. A handler failure exits `1` with `plugin_request_failed` and
 the worker's code (`unknown_method`, `timeout`, ...) in `error.data.requestCode`.
 
+To let scripts and agents call a handler of the installed plugin, list it in `capabilities` as
+`{ "kind": "cli:request", "handler": "<name>" }`, one entry per handler (needs `engines.orca`
+`>=1.4.267`). The person approving the plugin sees each name, and adding one in an update asks
+again. `orca plugin request <plugin-key> <name> --data '<json>'` then calls it; the handler sees
+the caller id `orca-cli`. Any other name is refused before the worker starts.
+
 A worker's `main` is an ES module: `.js`/`.mjs`, or `.ts`/`.mts` with no build step (needs
 `engines.orca` `>=1.4.246`). Orca transpiles TypeScript files in your plugin folder as Node loads
 them, keeping line numbers, so stack traces point at your `.ts` lines; enums and parameter

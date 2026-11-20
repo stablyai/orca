@@ -2,7 +2,7 @@ import type { CommandSpec } from '../discovery/command-spec'
 import { CLI_GLOBAL_FLAGS as GLOBAL_FLAGS } from '../../shared/cli/cli-argument-boundary'
 
 /** `orca plugin dev hook`; listed in PLUGIN_RUNTIME_COMMAND_SPECS. */
-export const PLUGIN_DEV_HOOK_COMMAND_SPEC: CommandSpec = {
+const PLUGIN_DEV_HOOK_COMMAND_SPEC: CommandSpec = {
   path: ['plugin', 'dev', 'hook'],
   summary: "Run a hook through a development plugin's worker and print what the chain decided",
   usage: 'orca plugin dev hook <dir|plugin-key> <hook> --data <json> [--json]',
@@ -18,7 +18,7 @@ export const PLUGIN_DEV_HOOK_COMMAND_SPEC: CommandSpec = {
 }
 
 /** `orca plugin dev request`; listed in PLUGIN_RUNTIME_COMMAND_SPECS. */
-export const PLUGIN_DEV_REQUEST_COMMAND_SPEC: CommandSpec = {
+const PLUGIN_DEV_REQUEST_COMMAND_SPEC: CommandSpec = {
   path: ['plugin', 'dev', 'request'],
   summary: "Call a development plugin's worker handler the way a panel's plugin.request does",
   usage:
@@ -36,3 +36,23 @@ export const PLUGIN_DEV_REQUEST_COMMAND_SPEC: CommandSpec = {
     'orca plugin dev request acme.notes notes.list --json'
   ]
 }
+
+const PLUGIN_REQUEST_COMMAND_SPEC: CommandSpec = {
+  path: ['plugin', 'request'],
+  summary: 'Call a handler an installed plugin exposes to the CLI',
+  usage: 'orca plugin request <plugin-key> <name> [--data <json>] [--timeout-ms <ms>] [--json]',
+  allowedFlags: [...GLOBAL_FLAGS, 'plugin', 'name', 'data', 'timeout-ms'],
+  positionalArgs: ['plugin', 'name'],
+  notes: [
+    'The plugin must be installed, enabled and approved for this exact handler through a cli:request grant.',
+    'The worker receives the JSON input (null when omitted). The host waits up to --timeout-ms (default 30000, maximum 120000).',
+    "Prints `{ pluginKey, name, result }`. A handler error fails with `plugin_request_failed` and the worker's code in `requestCode`."
+  ],
+  examples: ['orca plugin request acme.notes notes.list --json']
+}
+
+export const PLUGIN_WORKER_CALL_SPECS = [
+  PLUGIN_DEV_HOOK_COMMAND_SPEC,
+  PLUGIN_DEV_REQUEST_COMMAND_SPEC,
+  PLUGIN_REQUEST_COMMAND_SPEC
+]

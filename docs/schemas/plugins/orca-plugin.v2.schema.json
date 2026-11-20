@@ -1585,7 +1585,8 @@
             "workspace:create",
             "automation:read",
             "automation:write",
-            "history:read"
+            "history:read",
+            "cli:request"
           ],
           "description": "Capability granted on user consent.",
           "x-orca-since": "1.4.160",
@@ -1604,8 +1605,15 @@
             "workspace:create": "1.4.259",
             "automation:read": "1.4.259",
             "automation:write": "1.4.259",
-            "history:read": "1.4.259"
+            "history:read": "1.4.259",
+            "cli:request": "1.4.267"
           }
+        },
+        "handler": {
+          "description": "Exact worker handler name. Required for cli:request and omitted for every other capability.",
+          "x-orca-since": "1.4.267",
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
         }
       },
       "required": [

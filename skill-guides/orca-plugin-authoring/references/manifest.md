@@ -198,7 +198,8 @@ An item in the status bar. Requires the `declarative` profile; a `trusted-worker
 
 A host API the plugin may call once the user consents.
 
-- `kind` (one of workspace:read, workspace:write, agent:read, agent:launch, terminal:send, terminal:read, notifications:show, storage:own, secrets:own, settings:own, appearance:write, workspace:create, automation:read, automation:write, history:read, required, since 1.4.160): Capability granted on user consent.
+- `kind` (one of workspace:read, workspace:write, agent:read, agent:launch, terminal:send, terminal:read, notifications:show, storage:own, secrets:own, settings:own, appearance:write, workspace:create, automation:read, automation:write, history:read, cli:request, required, since 1.4.160): Capability granted on user consent.
+- `handler` (string, since 1.4.267): Exact worker handler name. Required for cli:request and omitted for every other capability.
 
 ## Screenshot
 

@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import {
   canonicalizeCapability,
-  PLUGIN_CAPABILITY_DESCRIPTIONS,
+  describePluginCapability,
   type PluginCapability
 } from '../capabilities/plugin-capabilities'
 import {
@@ -130,7 +130,7 @@ export function pluginApprovalGrants(manifest: PluginManifest): PluginApprovalGr
     executionDescription: EXECUTION_DESCRIPTIONS[execution],
     capabilities: uniqueCapabilities(manifest.capabilities).map((capability) => ({
       kind: capability.kind,
-      description: PLUGIN_CAPABILITY_DESCRIPTIONS[capability.kind]
+      description: describePluginCapability(capability)
     })),
     contributions: pluginContributionSummary(manifest),
     ...withReplacements(manifest)

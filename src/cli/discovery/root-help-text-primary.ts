@@ -68,6 +68,7 @@ export const ROOT_HELP_TEXT_PRIMARY = [
   '  plugin disable            Disable a plugin',
   '  plugin system on|off      Turn plugins on or off for the Orca host',
   "  plugin restart            Restart a plugin's worker",
+  "  plugin request            Call an installed plugin's exposed worker handler",
   "  plugin open               Show a plugin's panel or editor in Orca",
   '  plugin shot               Save a PNG of a plugin panel as Orca draws it',
   '  plugin dev watch          Load a folder, stream its logs and reloads',

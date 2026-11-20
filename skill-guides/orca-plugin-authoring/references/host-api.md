@@ -194,6 +194,7 @@ List each in `contributes.hooks` (`{ "event", "onError"? }`; `main` and `trusted
 - `automation:read` (since 1.4.259): Read your automations: their names, prompts, agents, projects, workspaces and schedules
 - `automation:write` (since 1.4.259): Create automations that start agents in your projects on a schedule, even when the plugin is not running, and change or delete them (Orca asks you first for ones the plugin did not create, and before it changes what one with extra agent settings runs)
 - `history:read` (since 1.4.259): Read the list of your past agent sessions on this computer, from the history files of the coding agents Orca supports, including running WSL distributions on Windows (not SSH or other machines, Antigravity IDE conversations or subagent transcripts): each session's title, which is often the start of its first message, agent, workspace, branch, times, and message and token counts; never the conversation itself
+- `cli:request` (since 1.4.267): Let scripts and agents call this worker handler through the Orca CLI
 
 ## Errors
 

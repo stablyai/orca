@@ -9,7 +9,17 @@ const BOT_ITEM_TITLE_HELP = "--title <text>         The item's title"
 const AGENT_ID_FLAG_HELP =
   "--id <id>              The agent's orca_session_id: ID; also accepted positionally"
 
+const PLUGIN_REQUEST_FLAGS = {
+  name: '--name <name>          Worker handler name',
+  data: '--data <json>          JSON input for the handler'
+}
+
 const COMMAND_SCOPED_FLAG_HELP: Record<string, Record<string, string>> = {
+  'plugin request': {
+    ...PLUGIN_REQUEST_FLAGS,
+    plugin: '--plugin <key>         Qualified key of the installed plugin'
+  },
+  'plugin dev request': PLUGIN_REQUEST_FLAGS,
   'bot item add': {
     title: BOT_ITEM_TITLE_HELP,
     for: '--for bot:<name>       Make the item for another bot'

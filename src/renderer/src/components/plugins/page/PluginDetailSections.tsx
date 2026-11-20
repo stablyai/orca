@@ -112,7 +112,7 @@ export function PluginAccessSection({
             : null}
           {capabilities.map((capability) => (
             <DetailRow
-              key={capability.kind}
+              key={capability.description}
               icon={<Check />}
               title={pluginCapabilityDescription(capability.kind, capability.description, t)}
             />

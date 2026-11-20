@@ -44,7 +44,7 @@ export const PLUGIN_HANDLER_GROUPS: readonly HandlerGroup[] = [
   },
   {
     name: 'plugin-dev-request',
-    keys: ['plugin dev request'],
+    keys: ['plugin dev request', 'plugin request'],
     load: async () => (await import('./plugin-dev-request.js')).PLUGIN_DEV_REQUEST_HANDLERS
   },
   {

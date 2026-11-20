@@ -1,4 +1,4 @@
-import { PLUGIN_CAPABILITY_DESCRIPTIONS } from '../../../shared/plugins/capabilities/plugin-capabilities'
+import { describePluginCapability } from '../../../shared/plugins/capabilities/plugin-capabilities'
 import { needsReconsent } from '../../../shared/plugins/approval/plugin-consent-state'
 import { pluginPanelTabKey } from '../../../shared/plugins/frames/plugin-tab-key'
 import type { PluginLockfile } from '../../../shared/plugins/installation/plugin-install-lockfile'
@@ -187,7 +187,7 @@ export async function buildPluginList(
         bundled,
         capabilities: plugin.manifest.capabilities.map((capability) => ({
           kind: capability.kind,
-          description: PLUGIN_CAPABILITY_DESCRIPTIONS[capability.kind]
+          description: describePluginCapability(capability)
         })),
         panels: plugin.manifest.contributes.panels.map((panel) => ({
           id: panel.id,

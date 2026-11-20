@@ -1,4 +1,5 @@
 // @protected-copy
+import { describePluginCapability } from '../../../../../shared/plugins/capabilities/plugin-capabilities'
 import { Check, ChevronDown } from 'lucide-react'
 import type { PluginMarketplaceHostInstallPreview } from '../../../../../preload/api/plugins/plugin-host-api'
 import type { PluginManifest } from '../../../../../shared/plugins/manifest/plugin-manifest'
@@ -195,7 +196,7 @@ export function AllAccess({
       t
     ),
     ...reachablePluginCapabilities(preview.manifest.capabilities, execution).map((capability) =>
-      pluginCapabilityDescription(capability.kind, capability.kind, t)
+      pluginCapabilityDescription(capability.kind, describePluginCapability(capability), t)
     )
   ]
   return (

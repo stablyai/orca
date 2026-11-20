@@ -180,7 +180,11 @@ export function PluginInstallConsent({
             </p>
           ) : ready ? (
             capabilities.map((capability) => (
-              <p key={capability.kind} className="flex items-start gap-2" title={capability.kind}>
+              <p
+                key={capability.description}
+                className="flex items-start gap-2"
+                title={capability.kind}
+              >
                 <Check className="mt-1 size-4 shrink-0 text-muted-foreground" />
                 <span>
                   {pluginCapabilityDescription(capability.kind, capability.description, t)}

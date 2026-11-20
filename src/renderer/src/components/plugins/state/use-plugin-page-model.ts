@@ -1,3 +1,4 @@
+import { describePluginCapability } from '../../../../../shared/plugins/capabilities/plugin-capabilities'
 import { useEffect, useState } from 'react'
 import type {
   PluginMarketplaceHostInstallPreview,
@@ -136,14 +137,14 @@ export function usePluginPageModel({
     })
   }
 
-  // Why the summary first: install refuses a manifest that asks for anything else.
+  // A catalog lists capability kinds; only the verified manifest names each CLI handler.
   const capabilities = plugin
     ? plugin.capabilities
-    : (listing?.release?.capabilities?.map((kind) => ({ kind, description: kind })) ??
-      shownPreview?.manifest.capabilities.map((capability) => ({
+    : (shownPreview?.manifest.capabilities.map((capability) => ({
         kind: capability.kind,
-        description: capability.kind
+        description: describePluginCapability(capability)
       })) ??
+      listing?.release?.capabilities?.map((kind) => ({ kind, description: kind })) ??
       null)
 
   let shortcuts: PluginPageShortcut[] | null
