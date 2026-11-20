@@ -68,7 +68,7 @@ describe('installed agents for acquired folder workspaces', () => {
       listInstalledWorkspaceAgents(folderRuntime(null, 1), {
         worktreeId: 'folder:hub'
       })
-    ).rejects.toThrow('selector_ambiguous')
+    ).rejects.toMatchObject({ code: 'selector_ambiguous' })
   })
 
   it('retains the selected local folder project WSL preference', async () => {
