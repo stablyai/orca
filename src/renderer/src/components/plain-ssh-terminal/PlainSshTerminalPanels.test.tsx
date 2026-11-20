@@ -28,6 +28,7 @@ vi.mock('@/components/standalone-terminal/open-standalone-terminal', () => ({
       focus: () => {},
       onResize: () => ({ dispose: () => {} }),
       onScroll: () => ({ dispose: () => {} }),
+      onWriteParsed: () => ({ dispose: () => {} }),
       buffer: {
         active: { type: 'normal', baseY: 0 },
         onBufferChange: () => ({ dispose: () => {} })

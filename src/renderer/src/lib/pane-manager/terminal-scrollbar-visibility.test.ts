@@ -8,11 +8,13 @@ function createFakeTerminal(): {
   terminal: Terminal
   buffer: { type: 'normal' | 'alternate'; baseY: number }
   fire: () => void
+  fireWriteParsed: () => void
   widthWrites: () => number
 } {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: partial fake exposing only what the code under test reads
   const buffer = { type: 'normal' as 'normal' | 'alternate', baseY: 0 }
   const listeners: (() => void)[] = []
+  const writeParsedListeners: (() => void)[] = []
   let widthWrites = 0
   let scrollbar: { width?: number } | undefined = { width: 7 }
   const subscribe = (listener: () => void): { dispose: () => void } => {
@@ -23,6 +25,10 @@ function createFakeTerminal(): {
     buffer: { active: buffer, onBufferChange: subscribe },
     onScroll: subscribe,
     onResize: subscribe,
+    onWriteParsed: (listener: () => void): { dispose: () => void } => {
+      writeParsedListeners.push(listener)
+      return { dispose: () => {} }
+    },
     options: {
       get scrollbar() {
         return scrollbar
@@ -38,6 +44,7 @@ function createFakeTerminal(): {
     terminal,
     buffer,
     fire: () => listeners.forEach((listener) => listener()),
+    fireWriteParsed: () => writeParsedListeners.forEach((listener) => listener()),
     widthWrites: () => widthWrites
   }
 }
@@ -76,6 +83,20 @@ describe('applyTerminalScrollbarSettings', () => {
     buffer.type = 'normal'
     buffer.baseY = 0
     fire()
+    expect(has()).toBe(false)
+  })
+
+  it('turns the bar back off when a write erases the scrollback without scrolling or resizing', () => {
+    const { terminal, buffer, fire, fireWriteParsed } = createFakeTerminal()
+    const { container, has } = createFakeContainer()
+    applyTerminalScrollbarSettings(terminal, container, { terminalScrollbarAlwaysVisible: true })
+    buffer.baseY = 40
+    fire()
+    expect(has()).toBe(true)
+
+    // `clear` / `Clear-Host` send ED 3: baseY drops to 0 and no scroll, resize or buffer event fires.
+    buffer.baseY = 0
+    fireWriteParsed()
     expect(has()).toBe(false)
   })
 

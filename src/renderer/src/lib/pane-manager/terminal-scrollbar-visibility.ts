@@ -40,6 +40,9 @@ export function applyTerminalScrollbarSettings(
     terminal.onScroll(resync)
     terminal.onResize(resync)
     terminal.buffer.onBufferChange(resync)
+    // Erasing the scrollback (`clear`, `Clear-Host`: ED 3) fires none of the events above. The
+    // sync is a cheap comparison and toggleAttribute is a no-op when the value is unchanged.
+    terminal.onWriteParsed(resync)
   }
   state.enabled = settings?.terminalScrollbarAlwaysVisible === true
   state.container = container
