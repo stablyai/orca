@@ -16,6 +16,14 @@ type Prefix = readonly [sessionId: string, epoch: string]
 
 const WIRE_BYTES = JOURNAL_DOMAIN_ITEM_COLUMNS.indexOf('wire_bytes')
 
+/** SQL for the text a row's blob adds once read, given the item JSON as projected; needs `output_blob`. */
+export function journalStoredTextBytesSql(json: string): string {
+  const field = (name: string) =>
+    `CASE WHEN json_type(${json},'$.body.${name}.stored') IS NOT NULL
+      THEN json_extract(${json},'$.body.${name}.byteLength') END`
+  return `CASE WHEN output_blob IS NULL THEN 0 ELSE COALESCE(${field('output')},${field('patch')},0) END`
+}
+
 /** The one parse of a journal_items item column. */
 export function readJournalStoredItem<T extends AgentJournalRenderItem = AgentJournalRenderItem>(
   db: Database.Database,

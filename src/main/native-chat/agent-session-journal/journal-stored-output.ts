@@ -11,8 +11,8 @@ export const JOURNAL_STORED_OUTPUT_WRITES = true
 // Format 1: one zstd frame over the text as a JSON string literal, so lone surrogates survive.
 const FORMAT_ZSTD_JSON = 1
 const MIN_STORED_TEXT_BYTES = 512
-// Encoding and the read-back check run inside the writer transaction; larger text stays inline.
-export const MAX_STORED_TEXT_BYTES = 2 * 1024 * 1024
+// Larger text stays inline, where reads that excerpt or continue long output shorten it in SQL.
+export const MAX_STORED_TEXT_BYTES = 32 * 1024
 // Builds that predate stored outputs show this inline preview, as does this one if a blob is unreadable.
 const PREVIEW_HEAD_CHARS = 512
 const PREVIEW_TAIL_CHARS = 512

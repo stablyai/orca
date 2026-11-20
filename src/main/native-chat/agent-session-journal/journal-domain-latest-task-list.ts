@@ -1,4 +1,3 @@
-import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   normalizeNativeChatTaskList,
   type NativeChatTaskList
@@ -12,8 +11,10 @@ const NEWEST_TOOL_CALLS = 300
  *  from that turn's newest task-list call, never an earlier turn's. Read it when that newest call is
  *  the running turn's; a turn that has run no tool yet still answers with the turn before it. */
 export function readJournalDomainLatestTaskList(scope: JournalSqlScope): NativeChatTaskList | null {
+  // Only the call's name and input are read, never its output (which may be stored apart from the row).
   const rows = scope.db
-    .prepare(`SELECT payload_json,turn_item_id FROM journal_items
+    .prepare(`SELECT payload_json->>'$.body.name' AS name, payload_json->'$.body.input' AS input,
+      turn_item_id FROM journal_items
     WHERE session_id=? AND epoch=? AND hidden=0 AND root=1 AND kind='tool-call'
     ORDER BY sequence DESC,sequence_index DESC,ordinal DESC LIMIT ?`)
     .all(...scope.prefix, NEWEST_TOOL_CALLS)
@@ -22,9 +23,14 @@ export function readJournalDomainLatestTaskList(scope: JournalSqlScope): NativeC
     if (row.turn_item_id !== turn) {
       return null
     }
-    const { body } = scope.decode<AgentJournalRenderItem>(scope.examined(row).payload_json)
+    const { name, input } = scope.examined(row)
     const list =
-      body.kind === 'tool-call' ? normalizeNativeChatTaskList(body.name, body.input) : null
+      typeof name === 'string'
+        ? normalizeNativeChatTaskList(
+            name,
+            typeof input === 'string' ? scope.parse(input) : undefined
+          )
+        : null
     if (list) {
       return list
     }

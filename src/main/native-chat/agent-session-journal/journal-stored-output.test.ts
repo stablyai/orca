@@ -11,6 +11,7 @@ import {
 } from './journal-domain-item-presentation'
 import { compactJournalStoredOutputPage } from './journal-stored-output-compaction'
 import { measureJournalStoredRow } from './journal-stored-output-rows'
+import { readJournalDomainContinuation } from './journal-sql-continuation-context'
 import type * as StoredOutput from './journal-stored-output'
 
 const switches = vi.hoisted(() => ({ writes: true }))
@@ -26,7 +27,7 @@ vi.mock('./journal-stored-output', async (load) => {
 
 const target = { sessionId: 'chat', epoch: 'epoch' }
 // Past the 16 KiB client head, with text UTF-8 cannot carry unescaped (a lone surrogate).
-const OUTPUT = `${'a'.repeat(20_000)}é\ud800 tail ${'line\n'.repeat(4_000)}`
+const OUTPUT = `${'a'.repeat(20_000)}é\ud800 tail ${'line\n'.repeat(1_000)}`
 const databases: Database.Database[] = []
 afterEach(() => {
   switches.writes = true
@@ -61,7 +62,7 @@ function toolCall(
       callId: itemId,
       input: { command: 'cat big.log' },
       state,
-      output: { head: OUTPUT, byteLength: 40_011, digest: 'd', truncated: false }
+      output: { head: OUTPUT, byteLength: 25_011, digest: 'd', truncated: false }
     }
   }
 }
@@ -95,7 +96,7 @@ it('reads a saved tool output back whole, as the bounded client head, through re
   // A tool-output page counts a stored row at its full size, not its preview's.
   const row = db.prepare(`SELECT payload_json, output_blob FROM journal_items`).get()!
   expect(measureJournalStoredRow(db, [target.sessionId, target.epoch], row).bytes).toBeGreaterThan(
-    40_011
+    25_011
   )
 
   const [whole] = readTool(db)
@@ -110,7 +111,7 @@ it('reads a saved tool output back whole, as the bounded client head, through re
     callId: 'tool',
     input: { command: 'cat big.log' },
     state: 'completed',
-    output: { head: 'a'.repeat(16_384), byteLength: 40_011, digest: 'd', truncated: true }
+    output: { head: 'a'.repeat(16_384), byteLength: 25_011, digest: 'd', truncated: true }
   })
 
   expect(client.bytes).toBeGreaterThan(16_384)
@@ -131,7 +132,7 @@ it('reads a saved tool output back whole, as the bounded client head, through re
   const copy = readJournalDomainItemDetail(db, target, 'other')!.body
   expect(copy.kind === 'tool-call' && copy.output).toEqual({
     head: `${OUTPUT.slice(0, 512)}\n…\n${OUTPUT.slice(-512)}`,
-    byteLength: 40_011,
+    byteLength: 25_011,
     digest: 'd',
     truncated: true
   })
@@ -160,5 +161,26 @@ it('compacts inline rows written before the switch, leaving running calls inline
   expect(readTool(db).map((item) => item.body)).toMatchObject([
     { state: 'completed', output: { head: OUTPUT, truncated: false } },
     { state: 'running' }
+  ])
+})
+
+it('keeps an output too long to store whole inline, so an export still sends it as an excerpt', () => {
+  const db = chat()
+  const long = `${'b'.repeat(80_000)} end`
+  write(db, {
+    ...toolCall('long', 'completed'),
+    body: {
+      kind: 'tool-call',
+      name: 'Read',
+      callId: 'long',
+      input: {},
+      state: 'completed',
+      output: { head: long, byteLength: 80_004, digest: 'd', truncated: false }
+    }
+  })
+  expect(stored(db, 'long')!.blob).toBe(0)
+  const read = readJournalDomainContinuation(db, target, { kind: 'continuation-context' })
+  expect(read.kind === 'continuation-context' && read.context.continued).toMatchObject([
+    { itemId: 'long', field: 'output', bytes: 80_004 }
   ])
 })
