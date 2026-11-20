@@ -153,7 +153,7 @@ export class CodexAccountHistoryPasses {
         this.activePasses += 1
         this.startedPasses += 1
         try {
-          await this.runPass(key, accountHome, shared)
+          await this.runPass(key, accountHome, shared, options.forLaunch === true)
         } finally {
           this.activePasses -= 1
         }
@@ -193,7 +193,12 @@ export class CodexAccountHistoryPasses {
     return this.imports.importHistory(getSettings, options)
   }
 
-  private async runPass(key: string, accountHome: string, shared: boolean): Promise<void> {
+  private async runPass(
+    key: string,
+    accountHome: string,
+    shared: boolean,
+    forLaunch: boolean
+  ): Promise<void> {
     this.settledThisRun.delete(key)
     // Recorded in the trace log, so a home that never moves shows why.
     const outcome = await withSpan('codex-account-history.pass', async (span) => {
@@ -205,8 +210,12 @@ export class CodexAccountHistoryPasses {
     const moveOutcome = shared ? MOVE_OUTCOMES[outcome] : undefined
     if (moveOutcome) {
       this.moveReport.record(key, moveOutcome)
-      // Any pass can complete the listing: a retry, or a home a later launch added.
-      void this.moveReport.report(this.censusHomes)
+      // A retry, or a home a later launch added, can complete the listing. A launch's own pass and
+      // one with others still queued don't: the rest still hold a previous launch's outcomes.
+      const othersPending = this.censusHomes.some((home) => home !== key && this.requests.has(home))
+      if (!forLaunch && !othersPending) {
+        void this.moveReport.report(this.censusHomes)
+      }
     } else {
       this.moveReport.forget(key)
     }

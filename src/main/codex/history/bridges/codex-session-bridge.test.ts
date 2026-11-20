@@ -92,7 +92,10 @@ vi.mock('node:os', async () => {
     homedir: homedirMock
   }
 })
-import { syncSystemCodexSessionsIntoManagedHome } from './codex-session-bridge'
+import {
+  getNewerLegacyCopiedCodexSessionSource,
+  syncSystemCodexSessionsIntoManagedHome
+} from './codex-session-bridge'
 
 let fakeHomeDir: string
 let userDataDir: string
@@ -197,5 +200,27 @@ describe('syncSystemCodexSessionsIntoManagedHome', () => {
     syncSystemCodexSessionsIntoManagedHome()
 
     expect(readFileSync(runtimeSessionPath, 'utf-8')).toBe('{"turn":1}\n{"turn":2}\n')
+  })
+
+  it('resumes the source of an untouched old copy once the source has grown', async () => {
+    const relativeSessionPath = join('2026', '05', '27', 'rollout-legacy-grown.jsonl')
+    const systemSessionPath = join(getSystemCodexHomePath(), 'sessions', relativeSessionPath)
+    const runtimeSessionPath = join(getRuntimeCodexHomePath(), 'sessions', relativeSessionPath)
+    mkdirSync(dirname(systemSessionPath), { recursive: true })
+    mkdirSync(dirname(runtimeSessionPath), { recursive: true })
+    writeFileSync(systemSessionPath, '{"turn":1}\n', 'utf-8')
+    writeFileSync(runtimeSessionPath, '{"turn":1}\n', 'utf-8')
+    writeLegacyCopyMarker(relativeSessionPath, systemSessionPath, runtimeSessionPath)
+    expect(
+      await getNewerLegacyCopiedCodexSessionSource(runtimeSessionPath, getRuntimeCodexHomePath())
+    ).toBeNull()
+
+    writeFileSync(systemSessionPath, '{"turn":1}\n{"turn":2}\n', 'utf-8')
+    syncSystemCodexSessionsIntoManagedHome()
+
+    expect(readFileSync(runtimeSessionPath, 'utf-8')).toBe('{"turn":1}\n')
+    expect(
+      await getNewerLegacyCopiedCodexSessionSource(runtimeSessionPath, getRuntimeCodexHomePath())
+    ).toBe(systemSessionPath)
   })
 })

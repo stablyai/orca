@@ -1,9 +1,12 @@
+import { join } from 'node:path'
 import type { AgentProviderSessionMetadata } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { CodexAccountSelectionTarget } from '../../../../shared/agent-accounts/codex/codex-selection-lane'
 import {
+  codexDatedRolloutRelativePath,
   trustedCodexResumeHomes,
   type CodexSessionResumePreparation
 } from './codex-session-resume-home'
+import { getNewerLegacyCopiedCodexSessionSource } from '../bridges/codex-session-bridge'
 import { prepareCodexSessionResume } from './codex-session-resume-preparation'
 import {
   prepareCodexAccountRestartResume,
@@ -68,13 +71,26 @@ export function createCodexSessionResumeLaunchPreparation(deps: {
     const trustedHomes = trustedCodexResumeHomes(runtimeHome, systemHomePath)
     // Refuse unreadable selections before provenance matching can choose another account.
     const selectedAccountCodexHome = runtimeHome.resolveSelectedHostAccountCodexHomePathForResume()
+    const savedTranscriptPath = args.providerSession.transcriptPath
+    const sharedRuntimeCodexHomePath = getOrcaManagedCodexHomePath()
+    // Old copies are never linked any more: an untouched one whose source grew resumes the source.
+    const newerSource = savedTranscriptPath
+      ? await getNewerLegacyCopiedCodexSessionSource(
+          savedTranscriptPath,
+          sharedRuntimeCodexHomePath
+        )
+      : null
+    const transcriptPath =
+      newerSource && codexDatedRolloutRelativePath(join(systemHomePath, 'sessions'), newerSource)
+        ? newerSource
+        : savedTranscriptPath
     const preparation = await prepareCodexSessionResume({
       sessionId: args.providerSession.id,
-      transcriptPath: args.providerSession.transcriptPath,
+      transcriptPath,
       trustedCodexHomes: trustedHomes,
       getSelectedAccountCodexHome: () => selectedAccountCodexHome,
       systemCodexHomePath: systemHomePath,
-      sharedRuntimeCodexHomePath: getOrcaManagedCodexHomePath(),
+      sharedRuntimeCodexHomePath,
       resolveVerifiedResumeHome: async (sessionSource) => {
         let migrated = { useRealCodexHome: false }
         try {

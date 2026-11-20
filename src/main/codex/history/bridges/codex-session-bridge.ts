@@ -7,6 +7,7 @@ import {
   renameSync,
   rmSync
 } from 'node:fs'
+import { lstat, readFile } from 'node:fs/promises'
 import { dirname, isAbsolute, join, relative, sep } from 'node:path'
 import {
   getOrcaManagedCodexHomePath,
@@ -223,15 +224,49 @@ export function getLegacyCopiedCodexSessionBridgeScanPreference(
   }
 }
 
+/** The source of an untouched old copy whose source changed since: resume reads it, not the copy. */
+export async function getNewerLegacyCopiedCodexSessionSource(
+  sessionFilePath: string,
+  managedHomePath: string
+): Promise<string | null> {
+  const relativePath = relative(join(managedHomePath, 'sessions'), sessionFilePath)
+  if (relativePath === '' || relativePath.startsWith('..') || isAbsolute(relativePath)) {
+    return null
+  }
+  try {
+    const marker = parseLegacyCopiedSessionMarker(
+      await readFile(join(managedHomePath, '.orca-session-copies', `${relativePath}.json`), 'utf-8')
+    )
+    if (!marker) {
+      return null
+    }
+    const [target, source] = await Promise.all([lstat(sessionFilePath), lstat(marker.sourcePath)])
+    return fileStatsMatchMarker(target, marker, 'target') &&
+      !fileStatsMatchMarker(source, marker, 'source')
+      ? marker.sourcePath
+      : null
+  } catch {
+    return null
+  }
+}
+
 function getLegacySessionCopyMarkerPath(relativePath: string): string {
   return join(getOrcaManagedCodexHomePath(), '.orca-session-copies', `${relativePath}.json`)
 }
 
 function readLegacyCopiedSessionMarker(relativePath: string): LegacyCopiedSessionMarker | null {
   try {
-    const parsed: unknown = JSON.parse(
+    return parseLegacyCopiedSessionMarker(
       readFileSync(getLegacySessionCopyMarkerPath(relativePath), 'utf-8')
     )
+  } catch {
+    return null
+  }
+}
+
+function parseLegacyCopiedSessionMarker(text: string): LegacyCopiedSessionMarker | null {
+  try {
+    const parsed: unknown = JSON.parse(text)
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
       return null
     }
