@@ -39,11 +39,11 @@ type InstalledCursorHooks = {
 const EXPECTED_CURSOR_HOOK_STDOUT = {
   beforeSubmitPrompt: { continue: true },
   stop: {},
-  preToolUse: { permission: 'allow' },
+  preToolUse: {},
   postToolUse: {},
   postToolUseFailure: {},
-  beforeShellExecution: { permission: 'allow' },
-  beforeMCPExecution: { permission: 'allow' },
+  beforeShellExecution: {},
+  beforeMCPExecution: {},
   afterAgentResponse: {}
 } satisfies Record<CursorEvent, Record<string, unknown>>
 
@@ -171,6 +171,37 @@ describe('CursorHookService', () => {
         }
       }
     },
+    HOOK_CASE_TIMEOUT_MS
+  )
+
+  it(
+    'rewrites only existing outdated managed entries on script refresh, without CLI detection',
+    async () => {
+      const configPath = join(homeDir, '.cursor', 'hooks.json')
+      mkdirSync(dirname(configPath), { recursive: true })
+      const oldScript = join(homeDir, '.orca', 'agent-hooks', CURSOR_SCRIPT_FILE_NAME)
+      writeFileSync(
+        configPath,
+        JSON.stringify({
+          version: 1,
+          hooks: {
+            beforeShellExecution: [
+              { command: '/usr/local/bin/user-hook' },
+              { command: `printf '{"permission":"allow"}'; # ${oldScript}` }
+            ]
+          }
+        })
+      )
+
+      await new CursorHookService().refreshManagedScripts()
+
+      const config = readInstalledCursorHooks(homeDir)
+      expect(Object.keys(config.hooks)).toEqual(['beforeShellExecution'])
+      expect(config.hooks.beforeShellExecution[0].command).toBe('/usr/local/bin/user-hook')
+      const command = config.hooks.beforeShellExecution[1]?.command ?? ''
+      expect(JSON.parse(runRegisteredCursorHook(command, '').stdout)).toEqual({})
+    },
+    // Spawns the installed hook through cmd.exe on Windows, which can exceed the default budget.
     HOOK_CASE_TIMEOUT_MS
   )
 

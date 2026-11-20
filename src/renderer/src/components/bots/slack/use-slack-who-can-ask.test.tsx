@@ -31,12 +31,13 @@ vi.mock('@/lib/bot-catalog', () => ({
 vi.mock('@/store', () => {
   const state = {
     setContextualToursBlockingSurfaceVisible: vi.fn(),
-    settings: null
+    settings: null,
+    runtimeStatusByEnvironmentId: new Map()
   }
   return {
     useAppStore: Object.assign(
       (selector: (current: Record<string, unknown>) => unknown) => selector(state),
-      { getState: () => state }
+      { getState: () => state, subscribe: () => () => {} }
     )
   }
 })

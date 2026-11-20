@@ -4851,13 +4851,8 @@
           "resource": {
             "memory": {
               "metric": {
-                "workingSetDescription": "工作集 (WS) 的總和：目前駐留在 RAM 中的頁面。共用頁面可能會出現在多個行程中，Windows 已換出的記憶體不計入其中。",
-                "privateBytesDescription": "私有位元組總和：這些行程已提交的記憶體，無論目前駐留在記憶體中或已換出都會計入。主機會將其計入提交上限，因此當上方的工作集因分頁而縮小時，此數值仍會持續增加。",
-                "footprintDescription": "記憶體佔用總和，與 Activity Monitor 顯示的數值相同：各行程擁有的記憶體，包括圖形記憶體。行程間共用的記憶體分頁不會重複計算。",
-                "rssDescription": "駐留集大小 (RSS) 的總和。共用頁或別名對映頁可能會出現在多個行程中。",
                 "memColumn": "記憶體",
-                "memorySummary": "Σ 記憶體",
-                "privateSummary": "Σ 私有"
+                "memorySummary": "Σ 記憶體"
               }
             },
             "manager": {
@@ -12334,6 +12329,7 @@
         "CursorAccountsSection": {
           "source": {
             "keychain": "macOS 鑰匙圈（cursor-agent）",
+            "keyring": "Linux 鑰匙圈（cursor-agent）",
             "cli": "Cursor CLI 認證檔案",
             "desktop": "Cursor IDE"
           },
@@ -17090,8 +17086,6 @@
             "27d863542c": "瀏覽器註解",
             "e48569ac6d": "無法存取該網站。",
             "bbe8f15e83": "此窗格由使用中的執行環境伺服器呈現。",
-            "8b7e6d1f5a": "瀏覽器註解僅在本機瀏覽器分頁中可用。",
-            "deb5293610": "瀏覽器註解在遠端執行環境中無法使用",
             "90d021f2ad": "新增",
             "0cb3bd6221": "註解意圖",
             "532bac48c5": "描述代理程式應該在這裡改變什麼...",
@@ -22235,8 +22229,7 @@
     "refresh": "重新整理",
     "restartLocal": "重新啟動本機常駐程式",
     "killAllLocal": "結束所有本機工作階段",
-    "killFailed": "無法結束終端機。將保留上次觀察到的工作階段。",
-    "metricDetails": "指標詳細資訊"
+    "killFailed": "無法結束終端機。將保留上次觀察到的工作階段。"
   },
   "browserExtensions": {
     "permission": {

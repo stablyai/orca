@@ -17,7 +17,7 @@ export class RuntimeBrowserNavigation {
   constructor(
     private readonly host: Pick<
       RuntimeBrowserCommandHost,
-      'getAvailableAuthoritativeWindow' | 'notifyHeadlessBrowserSessionTabsChanged'
+      'getAvailableAuthoritativeWindowId' | 'notifyHeadlessBrowserSessionTabsChanged'
     >,
     private readonly targets: Pick<
       RuntimeBrowserCommandTargets,
@@ -49,7 +49,7 @@ export class RuntimeBrowserNavigation {
     if (pageId) {
       this.targets.notifyRendererNavigation(pageId, result.url, result.title)
     }
-    if (!this.host.getAvailableAuthoritativeWindow() && target.worktreeId) {
+    if (this.host.getAvailableAuthoritativeWindowId() === null && target.worktreeId) {
       this.host.notifyHeadlessBrowserSessionTabsChanged?.(target.worktreeId)
     }
     return result

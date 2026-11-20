@@ -95,7 +95,7 @@ describe('CdpWsProxy', () => {
     client.close()
   })
 
-  it('delivers screencast frames to the session that started the screencast', async () => {
+  it('delivers frames to the screencast owner and keeps painting until it stops', async () => {
     const client = await connect(endpoint)
     await attachPageSession(client, 1)
     await attachPageSession(client, 2)
@@ -123,29 +123,15 @@ describe('CdpWsProxy', () => {
       params: { timestamp: 1 },
       sessionId: 'orca-proxy-session'
     })
-    client.close()
-  })
-
-  it('keeps the guest painting from screencast start until stop', async () => {
-    const client = await connect(endpoint)
-    await attachPageSession(client, 1)
-
+    expect(holdPaint).toHaveBeenCalledOnce()
+    expect(releasePaint).not.toHaveBeenCalled()
     await sendAndReceive(client, {
-      id: 2,
-      method: 'Page.startScreencast',
-      params: {},
-      sessionId: 'orca-proxy-session'
-    })
-    const releasedWhileStreaming = releasePaint.mock.calls.length
-    await sendAndReceive(client, {
-      id: 3,
+      id: 4,
       method: 'Page.stopScreencast',
-      sessionId: 'orca-proxy-session'
+      sessionId: 'orca-proxy-session-2'
     })
 
-    expect(holdPaint).toHaveBeenCalledTimes(1)
-    expect(releasedWhileStreaming).toBe(0)
-    expect(releasePaint).toHaveBeenCalledTimes(1)
+    expect(releasePaint).toHaveBeenCalledOnce()
     client.close()
   })
 

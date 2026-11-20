@@ -28,8 +28,12 @@ export type AcpInstructionsLaunch = {
   sessionMetaOnReopen?: true
   /** Whether the agent's `initialize` says it takes `sessionMeta`; a session it doesn't never opens. */
   takesSessionMeta?: (initialized: InitializeResponse) => boolean
+  /** An agent that doesn't take `sessionMeta` starts without it instead of refusing to start. */
+  sessionMetaOptional?: true
   /** Runs around `session/new` (never a reopen) in the session's folder; returns what undoes it. */
   aroundNewSession?: (cwd: string) => Promise<() => Promise<void>>
+  /** Removes what this launch wrote once its child has exited or the launch is abandoned. */
+  release?: () => Promise<void>
 }
 
 export type AcpInstructionsDelivery = (input: {
@@ -81,8 +85,16 @@ export const deliverOpenCodeInstructions: AcpInstructionsDelivery = async ({
 }): Promise<AcpInstructionsLaunch | null> => {
   if (openCodeTakesConfigDirInstructions(version)) {
     const configDir = await emptyFolder()
-    await writeOpenCodeInstructionsConfigDir(configDir, openCodeSourceConfigDirectory(env), text)
-    return { env: { OPENCODE_CONFIG_DIR: configDir } }
+    const release = () => removeTreeKeepingLinkTargets(configDir)
+    await writeOpenCodeInstructionsConfigDir(
+      configDir,
+      openCodeSourceConfigDirectory(env),
+      text
+    ).catch(async (error: unknown) => {
+      await release()
+      throw error
+    })
+    return { env: { OPENCODE_CONFIG_DIR: configDir }, release }
   }
   const content = withOpenCodeInstructionsFile(env.OPENCODE_CONFIG_CONTENT, await file())
   return content === null ? null : { env: { OPENCODE_CONFIG_CONTENT: content } }

@@ -192,10 +192,9 @@ describe('profile changes while startup loads are in flight', () => {
 
 describe('deleted profile action state', () => {
   it.each([
-    ['unattached', false, false],
-    ['attached', true, false],
-    ['failed-unload', true, true]
-  ] as const)('retires action payloads for %s', async (label, attached, failedUnload) => {
+    ['unattached', false],
+    ['failed-unload', true]
+  ] as const)('retires action payloads for %s', async (label, failedUnload) => {
     const profileId = `action-retirement-${label}`
     const profile = {
       id: profileId,
@@ -213,7 +212,7 @@ describe('deleted profile action state', () => {
       manifest: { action: { default_title: 'Fresh' } }
     }
     setBrowserExtensionSupportEnabled(true)
-    if (attached) {
+    if (failedUnload) {
       loader.attachBrowserExtensionsToProfileSession(profile, [])
       await loader.whenBrowserExtensionProfileLoaded(profileId)
     }

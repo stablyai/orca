@@ -17,7 +17,7 @@ export function chatLive(row: AgentStatusIpcPayload | undefined): BotChatFacts['
 
 /** Unread as the desktop window's Agents list says; a host without a window says nothing. */
 export function chatReadUnread(verdict: AgentListVerdict | undefined): boolean {
-  return verdict?.listed === true && verdict.unread
+  return verdict?.unread === true
 }
 
 /** Automation runs with no chat of their own, each listed as a chat row like a run that has one. */

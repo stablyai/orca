@@ -278,6 +278,22 @@ describe('BotSlackSetupDialog', () => {
     expect(api.openUrl).toHaveBeenCalledOnce()
   })
 
+  it('updates an app that only predates optional permissions, and waits for them', async () => {
+    slackState({
+      state: 'installed',
+      teamId: 'T1',
+      appId: 'A1',
+      botUserId: 'UB',
+      installerUserId: 'U1',
+      updateAvailable: true
+    })
+    openDialog()
+
+    await screen.findByText('Waiting for Slack…')
+    expect(api.setUpApp).toHaveBeenCalledWith({ botId: 'bot-1', teamId: 'T1' })
+    expect(api.openUrl).toHaveBeenCalledOnce()
+  })
+
   it('opens Slack once per open while the bot is re-read and the update still waits', async () => {
     slackState({
       state: 'installed',

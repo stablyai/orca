@@ -5,6 +5,7 @@ import { translate } from '@/i18n/i18n'
 import { getAutomationRunRepoId } from '../../../../../shared/automations/history/automation-run-identity'
 import {
   isRunnableAutomationSchedule,
+  isValidAutomationSchedule,
   tryParseAutomationRrule
 } from '../../../../../shared/automations/scheduling/automation-schedule-parsing'
 import type { AutomationDraft } from './AutomationEditorDialog'
@@ -55,8 +56,9 @@ export function buildAutomationEditDraft(automation: Automation): AutomationDraf
         }
       : {}),
     eventsOnly: !scheduled,
+    // Why: a preset with a dropped part (e.g. INTERVAL=2) opens as the cadence that runs, but still warns (#45519).
     scheduleWarning:
-      schedule || hasCustomSchedule || !scheduled
+      !scheduled || hasCustomSchedule || (schedule && isValidAutomationSchedule(automation.rrule))
         ? null
         : translate(
             'auto.components.automations.editDraft.unsupportedSchedule',

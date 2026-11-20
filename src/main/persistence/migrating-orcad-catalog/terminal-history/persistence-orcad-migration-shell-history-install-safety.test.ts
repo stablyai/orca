@@ -26,7 +26,7 @@ import {
   receivedPath,
   stage
 } from './persistence-orcad-migration-shell-history-fixture'
-import { createStore, testState } from '../../persistence-test-harness'
+import { closeTestStores, createStore, testState } from '../../persistence-test-harness'
 
 vi.mock('electron', () => ({
   app: { getPath: () => testState.dir },
@@ -63,7 +63,8 @@ describe('installing moved shell history safely', () => {
     desktopHistory = mkdtempSync(join(tmpdir(), 'orca-desktop-history-'))
   })
 
-  afterEach(() => {
+  afterEach(async () => {
+    await closeTestStores()
     rmSync(testState.dir, { recursive: true, force: true })
     rmSync(desktopHistory, { recursive: true, force: true })
     rmSync(getHistoryRoot(), { recursive: true, force: true })

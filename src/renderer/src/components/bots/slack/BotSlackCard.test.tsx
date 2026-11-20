@@ -76,6 +76,16 @@ function openActions(): void {
 }
 
 describe('BotSlackCard', () => {
+  it('offers newer permissions in the menu without asking for them', async () => {
+    renderCard({ ...installed, updateAvailable: true })
+    await screen.findByText(/installed by/)
+    // Nothing is wrong, so no status and no button in the row.
+    expect(screen.queryByText('Update needed')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Update in Slack' })).toBeNull()
+    openActions()
+    expect(await screen.findByRole('menuitem', { name: 'Update Slack permissions…' })).toBeDefined()
+  })
+
   it('turns the status into one Update in Slack link when the app is out of date', async () => {
     renderCard({ ...installed, updateNeeded: true })
     expect(await screen.findByRole('button', { name: 'Update in Slack' })).toBeDefined()

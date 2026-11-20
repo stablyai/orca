@@ -16,6 +16,7 @@ import {
   useNativeChatViewportAlign,
   type NativeChatAlignEdge
 } from './use-native-chat-viewport-align'
+import { useNativeChatRetiredMeasurements } from './use-native-chat-retired-measurements'
 
 /** Overscan by row because chat rows vary widely in height and rendering cost. */
 export const NATIVE_CHAT_WINDOW_OVERSCAN = 6
@@ -23,8 +24,6 @@ export const NATIVE_CHAT_WINDOW_OVERSCAN = 6
 const FALLBACK_ROW_PX = 48
 /** Past this gap the DOM's offset is a write the virtualizer has yet to hear of. */
 const UNSEEN_SCROLL_PX = 1
-/** Compact retired measurement keys before capped-transcript churn accumulates material stale state. */
-export const MAX_RETIRED_NATIVE_CHAT_MEASUREMENTS = 512
 
 export type NativeChatTranscriptWindow = {
   virtualItems: VirtualItem[]
@@ -72,8 +71,6 @@ export function useNativeChatTranscriptWindow({
   const measuredScrollMargin = useRef(0)
   const [programmaticScrollMarks] = useState(createProgrammaticScrollMarks)
   const readerTakeoverFrameRef = useRef<number | null>(null)
-  const previousMeasurementKeysRef = useRef<ReadonlySet<string> | null>(null)
-  const retiredMeasurementCountRef = useRef(0)
   const pinned = useMemo(
     () => nativeChatPinnedRowIndexes({ count: slots.length, revealIndex, newRowsMarkerIndex }),
     [slots.length, revealIndex, newRowsMarkerIndex]
@@ -95,6 +92,7 @@ export function useNativeChatTranscriptWindow({
   )
 
   const scaledGapPx = NATIVE_CHAT_ROW_GAP_PX * typography.spacingScale
+  const [jumpDrawnAbovePx, setJumpDrawnAbovePx] = useState(0)
   // Keep offscreen sizes as estimates through reflows; ResizeObserver refreshes mounted rows.
   const virtualizer = useVirtualizer({
     count: slots.length,
@@ -105,6 +103,7 @@ export function useNativeChatTranscriptWindow({
     overscan: NATIVE_CHAT_WINDOW_OVERSCAN,
     gap: scaledGapPx,
     scrollMargin,
+    scrollPaddingStart: jumpDrawnAbovePx, // A jump's row drawn above its top lands by its first line.
     // A hidden pane has no boxes to measure; retain its last visible row sizes.
     useCachedMeasurements: !isVisible,
     anchorTo: 'end',
@@ -163,36 +162,7 @@ export function useNativeChatTranscriptWindow({
     return () => observer.disconnect()
   }, [readScrollMargin, scrollRef])
 
-  useLayoutEffect(() => {
-    const currentKeys = new Set(itemKeys)
-    const previousKeys = previousMeasurementKeysRef.current
-    previousMeasurementKeysRef.current = currentKeys
-    if (previousKeys !== null) {
-      for (const key of previousKeys) {
-        if (!currentKeys.has(key)) {
-          retiredMeasurementCountRef.current += 1
-        }
-      }
-    }
-    if (retiredMeasurementCountRef.current < MAX_RETIRED_NATIVE_CHAT_MEASUREMENTS) {
-      return
-    }
-
-    const retainedMeasurements = virtualizer
-      .takeSnapshot()
-      .filter((item) => typeof item.key === 'string' && currentKeys.has(item.key))
-    const scrollTop = scrollRef.current?.scrollTop
-    virtualizer.measure()
-    // Materialize the estimate-only layout before restoring retained sizes.
-    virtualizer.getTotalSize()
-    for (const item of retainedMeasurements) {
-      virtualizer.resizeItem(item.index, item.size)
-    }
-    if (scrollTop !== undefined) {
-      virtualizer.scrollToOffset(scrollTop)
-    }
-    retiredMeasurementCountRef.current = 0
-  }, [itemKeys, scrollRef, virtualizer])
+  useNativeChatRetiredMeasurements({ itemKeys, scrollRef, virtualizer })
 
   const sizerRef = useCallback(
     (node: HTMLDivElement | null) => {
@@ -215,7 +185,8 @@ export function useNativeChatTranscriptWindow({
     scrollRef,
     virtualizer,
     finishReaderTakeover,
-    programmaticScrollMarks
+    programmaticScrollMarks,
+    holdJumpDrawnAbove: setJumpDrawnAbovePx
   })
 
   // Compensate rows above the reader, excluding visible/first jump-target measurements, unseen scroll writes and backward-reader scrolling; preserve landed jumps.
