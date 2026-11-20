@@ -8,7 +8,13 @@ const SHUTDOWN_GRACE_MS = 5000
 const REQUEST_CANCELLED = -32800
 const REQUEST_FAILED = -32803
 // These carry no work for a stopped server; a new one rereads the disk anyway.
-const NON_WAKING = new Set(['$/cancelRequest', '$/setTrace', 'textDocument/didClose', 'exit', WATCHED_FILES])
+const NON_WAKING = new Set([
+  '$/cancelRequest',
+  '$/setTrace',
+  'textDocument/didClose',
+  'exit',
+  WATCHED_FILES
+])
 // Not agent activity: cancellations, and file events from a client that watches for itself.
 const NOT_ACTIVITY = new Set(['$/cancelRequest', WATCHED_FILES])
 
@@ -115,7 +121,11 @@ export function createServerSession({
       } else if (message.method === 'shutdown') {
         toClient({ jsonrpc: '2.0', id: message.id, result: null })
       } else if (message.id !== undefined) {
-        toClient({ jsonrpc: '2.0', id: message.id, error: { code: REQUEST_FAILED, message: reason } })
+        toClient({
+          jsonrpc: '2.0',
+          id: message.id,
+          error: { code: REQUEST_FAILED, message: reason }
+        })
       } else {
         track(message)
       }
@@ -182,7 +192,11 @@ export function createServerSession({
     const background = isBackgroundRequest(message)
     // A pull while a server is stopping waits for the next one; with nothing to wake it, it is answered as cancelled.
     if (background && state === 'stopped') {
-      toClient({ jsonrpc: '2.0', id: message.id, error: { code: REQUEST_CANCELLED, message: 'server stopped' } })
+      toClient({
+        jsonrpc: '2.0',
+        id: message.id,
+        error: { code: REQUEST_CANCELLED, message: 'server stopped' }
+      })
       return
     }
     if (state === 'stopped') {
@@ -268,7 +282,9 @@ export function createServerSession({
     } else if (message.method && message.id !== undefined) {
       relayToClient(message)
     } else if (message.method === '$/cancelRequest') {
-      const relayedId = [...relayed].find(([, { serverId }]) => serverId === message.params?.id)?.[0]
+      const relayedId = [...relayed].find(
+        ([, { serverId }]) => serverId === message.params?.id
+      )?.[0]
       if (relayedId !== undefined) {
         toClient({ ...message, params: { ...message.params, id: relayedId } })
       }
@@ -314,7 +330,9 @@ export function createServerSession({
       jsonrpc: '2.0',
       id: withdrawId,
       method: 'client/unregisterCapability',
-      params: { unregisterations: [...clientRegistrations].map(([id, { method }]) => ({ id, method })) }
+      params: {
+        unregisterations: [...clientRegistrations].map(([id, { method }]) => ({ id, method }))
+      }
     })
     clientRegistrations.clear()
     killTimer = setTimer(finishWithdraw, SHUTDOWN_GRACE_MS)
@@ -324,7 +342,8 @@ export function createServerSession({
     fromClient(message) {
       if (message.method === 'initialize' && !initialize) {
         // Replayed edits are applied in UTF-16 offsets, so offer no other encoding; the server reports its choice.
-        const { positionEncodings: _offered, ...general } = message.params?.capabilities?.general ?? {}
+        const { positionEncodings: _offered, ...general } =
+          message.params?.capabilities?.general ?? {}
         message = {
           ...message,
           params: { ...message.params, capabilities: { ...message.params?.capabilities, general } }
