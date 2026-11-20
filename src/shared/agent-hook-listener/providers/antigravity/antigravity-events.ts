@@ -208,8 +208,11 @@ export function normalizeAntigravityEvent(
     paneState.leadModel = resolvedModel ?? paneState.leadModel
     if (resolvedModel) {
       paneState.leadModelSince = undefined
+      paneState.leadModelFromStep = undefined
     } else if (resetsTurn) {
+      const steps = hookPayload.initialNumSteps
       paneState.leadModelSince = now
+      paneState.leadModelFromStep = typeof steps === 'number' ? steps : undefined
     }
   }
 

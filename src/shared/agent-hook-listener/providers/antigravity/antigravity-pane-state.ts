@@ -50,6 +50,8 @@ export type AntigravityPaneChildState = {
   leadModel?: string
   /** Start of an automatic-model turn whose transcript has not reported its model yet. */
   leadModelSince?: number
+  /** agy's step count when that turn began; its own transcript lines carry later step indices. */
+  leadModelFromStep?: number
   commands?: Set<number>
   children: Map<string, TrackedAntigravityChild>
   verifiedChildren: Set<string>

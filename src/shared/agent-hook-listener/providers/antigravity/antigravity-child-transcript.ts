@@ -55,8 +55,13 @@ export async function readAntigravityChildTranscriptTail(
       previous.modelAt = Number.isFinite(createdAt)
         ? createdAt + (wholeSecond ? 999 : 0)
         : undefined
+      previous.modelStep = typeof parsed.step_index === 'number' ? parsed.step_index : undefined
     }
-    previous.tail = { model: previous.model, modelAt: previous.modelAt }
+    previous.tail = {
+      model: previous.model,
+      modelAt: previous.modelAt,
+      modelStep: previous.modelStep
+    }
   }
   cache.transcripts.set(childTranscriptPath, previous)
   return previous.tail

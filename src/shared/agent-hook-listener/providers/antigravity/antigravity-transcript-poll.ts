@@ -63,6 +63,7 @@ export type AntigravityTranscriptPollReads = {
   }[]
   leadModel?: string
   leadModelAt?: number
+  leadModelStep?: number
   leadModelFence?: Pick<AntigravityPaneChildState, 'leadModel' | 'leadModelSince'>
 }
 export async function readAntigravityTranscriptPoll(
@@ -138,6 +139,7 @@ export async function readAntigravityTranscriptPoll(
       )
       result.leadModel = tail?.model
       result.leadModelAt = tail?.modelAt
+      result.leadModelStep = tail?.modelStep
       result.leadModelFence = fence
     } finally {
       batch.release()
@@ -163,14 +165,19 @@ export function pollAntigravityTranscriptStatus(
     fence.leadModelSince === pane.leadModelSince
   ) {
     // An automatic turn takes only a model recorded after it started; until then the last one stays.
+    // Step indices order turns exactly, whereas agy's whole-second stamps cannot.
+    const fromStep = pane.leadModelFromStep
     const current =
       pane.leadModelSince === undefined ||
-      (reads.leadModelAt ?? Number.NEGATIVE_INFINITY) >= pane.leadModelSince
+      (fromStep !== undefined && reads.leadModelStep !== undefined
+        ? reads.leadModelStep >= fromStep
+        : (reads.leadModelAt ?? Number.NEGATIVE_INFINITY) >= pane.leadModelSince)
     if (current || pane.leadModel === undefined) {
       pane.leadModel = reads.leadModel
     }
     if (current) {
       pane.leadModelSince = undefined
+      pane.leadModelFromStep = undefined
     }
   }
   const proven: string[] = []
