@@ -156,6 +156,14 @@ describe('Pi RPC extension UI', () => {
     ).toEqual(['above'])
   })
 
+  it('counts a widget’s embedded newlines against the line budget', async () => {
+    const test = await rig()
+    test.receive({ method: 'setWidget', widgetKey: 'flood', widgetLines: ['x\n'.repeat(250)] })
+
+    const [widget] = agentSessionExtensionStripRows(await test.rows()).widgets
+    expect(widget?.lines).toHaveLength(64)
+  })
+
   it('answers no request for the calls it cannot draw', async () => {
     const test = await rig()
     test.receive({ method: 'setTitle', title: 'pi - orca' })

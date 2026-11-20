@@ -37,6 +37,7 @@ function widgetText(value: unknown): string | undefined {
   }
   return value
     .filter((line): line is string => typeof line === 'string')
+    .flatMap((line) => line.split('\n'))
     .slice(0, MAX_WIDGET_LINES)
     .map(boundedLine)
     .join('\n')

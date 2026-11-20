@@ -59,7 +59,7 @@ import { useAppStore } from '@/store/index'
 import { structuredAgentLabel } from '@/lib/agent-session/launch/structured-agent-session-launch-label'
 import { useNativeChatStructuredComposerTransport } from '@/components/native-chat/composer/submit/use-native-chat-structured-composer-transport'
 import { NativeChatStructuredComposerTabStrips } from '@/components/native-chat/pane/actions/NativeChatStructuredComposerTabStrips'
-import { nativeChatStructuredComposerInput } from '@/components/native-chat/composer/NativeChatStructuredComposerInput'
+import { NativeChatStructuredComposerInput } from '@/components/native-chat/composer/NativeChatStructuredComposerInput'
 import { agentSessionExtensionStripRows } from '../../../../shared/agent-session/view/agent-session-extension-ui'
 import { nativeChatPaneHeader } from '@/components/native-chat/pane/actions/NativeChatPaneHeader'
 import { structuredAgentSessionReadFailureNotice } from '@/components/native-chat/messages/notices/structured-agent-session-read-failure-notice'
@@ -390,19 +390,20 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
                   />
                 )}
                 {subagents.statusBar}
-                {composerShown
-                  ? nativeChatStructuredComposerInput(props, {
-                      composerRef,
-                      paneKey,
-                      stopControls: bot.stopControls,
-                      queuedMessages: submits.queuedMessages,
-                      unavailableHint: install.unavailableHint,
-                      session,
-                      notices,
-                      transport,
-                      extensionUi
-                    })
-                  : null}
+                {composerShown ? (
+                  <NativeChatStructuredComposerInput
+                    ref={composerRef}
+                    pane={props}
+                    paneKey={paneKey}
+                    stopControls={bot.stopControls}
+                    queuedMessages={submits.queuedMessages}
+                    unavailableHint={install.unavailableHint}
+                    session={session}
+                    notices={notices}
+                    transport={transport}
+                    extensionUi={extensionUi}
+                  />
+                ) : null}
               </>
             )}
             {handOff.dialog}

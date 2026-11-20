@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import '@testing-library/jest-dom/vitest'
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, render, screen, within } from '@testing-library/react'
 import { afterEach, expect, it } from 'vitest'
 import type { AgentJournalRenderItem } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
 import {
@@ -31,15 +31,37 @@ it('draws a keyed widget’s lines beside the composer, on the side it asked for
   ])
   render(
     <>
-      <NativeChatComposerExtensionUi rows={rows} placement="above" />
-      <NativeChatComposerExtensionUi rows={rows} placement="below" />
+      <div data-testid="above">
+        <NativeChatComposerExtensionUi rows={rows} placement="above" />
+      </div>
+      <div data-testid="below">
+        <NativeChatComposerExtensionUi rows={rows} placement="below" />
+      </div>
     </>
   )
+  const above = screen.getByTestId('above')
+  const below = screen.getByTestId('below')
 
-  expect(screen.getByText(/\[ \] write tests/)).toBeVisible()
-  expect(screen.getAllByText('3 warnings')).toHaveLength(1)
-  // Each placement draws its own half, so no panel appears twice.
-  expect(screen.queryByText(/── Todos ──[\s\S]*3 warnings/)).not.toBeInTheDocument()
+  // Each placement draws its own half, so swapping them would move a panel to the wrong side.
+  expect(within(above).getByText(/\[ \] write tests/)).toBeVisible()
+  expect(within(above).queryByText('3 warnings')).toBeNull()
+  expect(within(below).getByText('3 warnings')).toBeVisible()
+  expect(within(below).queryByText(/\[ \] write tests/)).toBeNull()
+})
+
+it('holds a placement’s widgets in one bounded stack, so they cannot push the composer away', () => {
+  const rows = agentSessionExtensionStripRows(
+    [1, 2, 3, 4].map((n) =>
+      strip(`panel${n}`, AGENT_SESSION_EXTENSION_WIDGET_PRESENTATION, `panel ${n}\nline two`)
+    )
+  )
+  const { container } = render(<NativeChatComposerExtensionUi rows={rows} placement="above" />)
+
+  const stack = container.querySelector('[data-native-chat-extension-widgets]')
+  expect(stack).not.toBeNull()
+  for (const n of [1, 2, 3, 4]) {
+    expect(stack?.textContent).toContain(`panel ${n}`)
+  }
 })
 
 it('draws the extension’s status entries as one line above the composer', () => {

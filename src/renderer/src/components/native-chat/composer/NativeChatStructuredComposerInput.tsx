@@ -9,10 +9,23 @@ import type { NativeChatLiveSession } from '../session/terminal/read/native-chat
 import type { NativeChatStructuredViewProps } from '../native-chat-view-types'
 import type { useNativeChatBotHome } from '../NativeChatBotHomeScope'
 import type { useStructuredNativeChatSubmitReveal } from '../pane/actions/use-structured-native-chat-submit-reveal'
-import type { AgentSessionExtensionStripRows } from '../../../../../../shared/agent-session/view/agent-session-extension-ui'
+import type { AgentSessionExtensionStripRows } from '../../../../../shared/agent-session/view/agent-session-extension-ui'
 
-type StructuredComposerInputParts = {
-  composerRef: React.Ref<NativeChatComposerHandle>
+/** The chat's structured input, with the extension widgets it draws underneath it. */
+export function NativeChatStructuredComposerInput({
+  ref,
+  pane,
+  paneKey,
+  stopControls,
+  queuedMessages,
+  unavailableHint,
+  session,
+  notices,
+  transport,
+  extensionUi
+}: {
+  ref?: React.Ref<NativeChatComposerHandle>
+  pane: Pick<NativeChatStructuredViewProps, 'tabId' | 'agent' | 'sessionId'>
   paneKey: string
   stopControls: ReturnType<typeof useNativeChatBotHome>['stopControls']
   queuedMessages: ReturnType<typeof useStructuredNativeChatSubmitReveal>['queuedMessages']
@@ -21,30 +34,24 @@ type StructuredComposerInputParts = {
   notices: NativeChatComposerProps['notices']
   transport: NonNullable<NativeChatComposerProps['structuredTransport']>
   extensionUi: AgentSessionExtensionStripRows
-}
-
-/** The chat's structured input, with the extension widgets it draws underneath it. */
-export function nativeChatStructuredComposerInput(
-  pane: Pick<NativeChatStructuredViewProps, 'tabId' | 'agent' | 'sessionId'>,
-  parts: StructuredComposerInputParts
-): React.JSX.Element {
+}): React.JSX.Element {
   return (
     <>
       <NativeChatComposer
-        ref={parts.composerRef}
+        ref={ref}
         terminalTabId={pane.tabId}
-        paneKey={parts.paneKey}
+        paneKey={paneKey}
         draftScopeKey={structuredAgentSessionDraftScopeKey(pane.sessionId)}
         targetPtyId={null}
         agent={pane.agent}
-        {...parts.stopControls.composer}
-        unavailableHint={parts.unavailableHint}
-        steerHead={parts.stopControls.stopping ? undefined : parts.queuedMessages.steerHead}
-        structuredTransport={parts.transport}
-        notices={parts.notices}
-        recallSource={{ messages: parts.session.messages, withoutImageMarkers: true }}
+        {...stopControls.composer}
+        unavailableHint={unavailableHint}
+        steerHead={stopControls.stopping ? undefined : queuedMessages.steerHead}
+        structuredTransport={transport}
+        notices={notices}
+        recallSource={{ messages: session.messages, withoutImageMarkers: true }}
       />
-      <NativeChatComposerExtensionUi rows={parts.extensionUi} placement="below" />
+      <NativeChatComposerExtensionUi rows={extensionUi} placement="below" />
     </>
   )
 }

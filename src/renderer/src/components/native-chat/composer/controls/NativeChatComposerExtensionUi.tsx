@@ -20,9 +20,17 @@ export function NativeChatComposerExtensionUi({
   }
   return (
     <>
-      {widgets.map((widget) => (
-        <NativeChatExtensionWidget key={widget.itemId} widget={widget} />
-      ))}
+      {widgets.length === 0 ? null : (
+        // One capped stack per placement, so a child's panels can never push the composer out of the pane.
+        <div
+          className="scrollbar-sleek max-h-40 shrink-0 overflow-y-auto"
+          data-native-chat-extension-widgets=""
+        >
+          {widgets.map((widget) => (
+            <NativeChatExtensionWidget key={widget.itemId} widget={widget} />
+          ))}
+        </div>
+      )}
       {statuses.length === 0 ? null : (
         <NativeChatComposerTabStrip data-native-chat-extension-status="">
           {statuses.map((status) => (
@@ -43,10 +51,8 @@ function NativeChatExtensionWidget({
 }): React.JSX.Element {
   return (
     <NativeChatComposerTabStrip layout="stack" data-native-chat-extension-widget="">
-      <div className="scrollbar-sleek max-h-40 overflow-y-auto px-3 py-1">
-        <div className="font-mono text-chat-code whitespace-pre-wrap break-words text-muted-foreground">
-          {widget.lines.join('\n')}
-        </div>
+      <div className="px-3 py-1 font-mono text-chat-code whitespace-pre-wrap break-words text-muted-foreground">
+        {widget.lines.join('\n')}
       </div>
     </NativeChatComposerTabStrip>
   )
