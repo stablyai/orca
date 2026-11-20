@@ -22,6 +22,7 @@ import type { RuntimeDeviceGrant } from '../../callers/rpc-method-permission'
 import { validGrants } from './device-registry-row-validation'
 import {
   expiredPairingOffers,
+  isPendingPairingOffer,
   pendingPairingOffers,
   reusablePairingOffer,
   withoutExpiredUnboundOffers
@@ -37,7 +38,8 @@ import {
   type DeviceOrcaAccount,
   type DeviceKeyLookup,
   type PendingOfferOptions,
-  type TokenDeviceEntry
+  type TokenDeviceEntry,
+  withAuthorizedAncestry
 } from './device-entry'
 import type { MobilePushRegistration } from '../../../../../shared/notifications/mobile-push-contract'
 
@@ -49,19 +51,20 @@ export class DeviceRegistry extends DeviceRegistrySightings {
     grants: readonly RuntimeDeviceGrant[] = [],
     options: PendingOfferOptions = {}
   ): TokenDeviceEntry {
-    return this.createAndPersistDevice(this.devices, name, scope, pairingReach, grants, options)
+    return this.createAndPersistDevice(name, scope, pairingReach, grants, options)
   }
 
   private createAndPersistDevice(
-    existingDevices: DeviceEntry[],
     name: string,
     scope: DeviceScope,
     pairingReach: RuntimePairingReach,
     grants: readonly RuntimeDeviceGrant[],
-    options: PendingOfferOptions
+    options: PendingOfferOptions,
+    retain: (devices: DeviceEntry[]) => DeviceEntry[] = (devices) => devices
   ): TokenDeviceEntry {
-    const entry = mintTokenDevice(name, scope, pairingReach, grants, options)
-    const nextDevices = [...existingDevices, entry]
+    // The creator check refreshes from disk: read rows only after it, or stale ones save back.
+    const entry = mintTokenDevice(name, scope, pairingReach, grants, this.withLiveCreator(options))
+    const nextDevices = [...retain(this.devices), entry]
     // Credentials become valid only after durable persistence.
     this.devices = this.save(nextDevices)
     return entry
@@ -73,10 +76,11 @@ export class DeviceRegistry extends DeviceRegistrySightings {
     scope: DeviceScope = 'mobile',
     pairingReach: RuntimePairingReach = 'network',
     grants: readonly RuntimeDeviceGrant[] = [],
-    options: PendingOfferOptions = {}
+    requestedOptions: PendingOfferOptions = {}
   ): TokenDeviceEntry {
     // Never show a QR for an offer an admin removed on disk.
     this.adoptExternalEdits({ fresh: true })
+    const options = this.withLiveCreator(requestedOptions)
     // Relay-bound rows leave through the caller's discard, which queues the cloud revoke first.
     const live = withoutExpiredUnboundOffers(this.devices, this.seenDeviceIds)
     if (live !== this.devices) {
@@ -99,6 +103,14 @@ export class DeviceRegistry extends DeviceRegistrySightings {
     return this.addDevice(name, scope, pairingReach, grants, options)
   }
 
+  private withLiveCreator(options: PendingOfferOptions): PendingOfferOptions {
+    const { createdByDeviceId, ...rest } = options
+    return createdByDeviceId === undefined ||
+      this.listAuthorizedDevices().some((device) => device.deviceId === createdByDeviceId)
+      ? options
+      : rest
+  }
+
   private setPairingReach(
     existing: TokenDeviceEntry,
     pairingReach: RuntimePairingReach
@@ -116,9 +128,9 @@ export class DeviceRegistry extends DeviceRegistrySightings {
     options: PendingOfferOptions = {}
   ): TokenDeviceEntry {
     // Authentication marks seen before child sync, so pending runtime offers cannot have children.
-    const pending = new Set<DeviceEntry>(this.listPendingDevices(scope))
-    const retained = this.devices.filter((d) => !pending.has(d))
-    return this.createAndPersistDevice(retained, name, scope, pairingReach, grants, options)
+    const withoutPending = (devices: DeviceEntry[]): DeviceEntry[] =>
+      devices.filter((d) => !isPendingPairingOffer(d, scope, this.seenDeviceIds))
+    return this.createAndPersistDevice(name, scope, pairingReach, grants, options, withoutPending)
   }
 
   listDelegatedMobileDevices(parentDeviceId: string): DeviceEntry[] {
@@ -229,6 +241,12 @@ export class DeviceRegistry extends DeviceRegistrySightings {
 
   listDevices(): readonly DeviceEntry[] {
     return this.devices
+  }
+
+  /** The file as it is now, without rows whose authority an ancestor's removal revoked. */
+  listAuthorizedDevices(): readonly DeviceEntry[] {
+    this.adoptExternalEdits({ fresh: true })
+    return withAuthorizedAncestry(this.devices)
   }
 
   validateToken(token: string): DeviceEntry | null {

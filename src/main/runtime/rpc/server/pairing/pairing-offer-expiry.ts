@@ -20,9 +20,15 @@ export function pendingPairingOffers(
   scope: DeviceScope,
   seen: ReadonlySet<string>
 ): TokenDeviceEntry[] {
-  return devices.filter(
-    (d): d is TokenDeviceEntry => isPendingTokenRow(d) && d.scope === scope && !seen.has(d.deviceId)
-  )
+  return devices.filter((d): d is TokenDeviceEntry => isPendingPairingOffer(d, scope, seen))
+}
+
+export function isPendingPairingOffer(
+  device: DeviceEntry,
+  scope: DeviceScope,
+  seen: ReadonlySet<string>
+): device is TokenDeviceEntry {
+  return isPendingTokenRow(device) && device.scope === scope && !seen.has(device.deviceId)
 }
 
 /** Without a TTL only never-expiring offers are reused, so headless output never expires. */

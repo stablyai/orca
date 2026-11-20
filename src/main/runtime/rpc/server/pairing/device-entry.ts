@@ -141,7 +141,18 @@ export function isStillAuthenticated(
   )
 }
 
-// Forks and delegated phones lose authority with any ancestor pairing.
+/** Rows a device's authority derives from: revoking any one revokes it (and authorization, revoke
+ *  cascades and push eligibility all read this one list). */
+export function authorityParentIdsOf(device: DeviceEntry): (string | undefined)[] {
+  return [device.parentDeviceId, device.forkedFrom, device.createdByDeviceId]
+}
+
+/** Rows still authorized: every row its authority derives from is still paired. */
+export function withAuthorizedAncestry(devices: readonly DeviceEntry[]): DeviceEntry[] {
+  return devices.filter((device) => withPairedParent(device, devices) !== null)
+}
+
+// Forks, delegated and attributed phones lose authority with any ancestor pairing.
 function withPairedParent(
   device: DeviceEntry,
   devices: readonly DeviceEntry[],
@@ -151,7 +162,7 @@ function withPairedParent(
     return null
   }
   ancestors.add(device.deviceId)
-  const paired = [device.parentDeviceId, device.forkedFrom].every((parentId) => {
+  const paired = authorityParentIdsOf(device).every((parentId) => {
     if (parentId === undefined) {
       return true
     }

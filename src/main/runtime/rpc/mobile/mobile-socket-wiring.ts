@@ -178,10 +178,7 @@ export class MobileSocketWiring {
     message: MobileSocketPayload,
     metadata: MobileSocketTransportMetadata
   ): void {
-    const socket = this.authenticatedSockets.get(ws)
-    if (socket && !this.deviceRegistry.resolveAuthenticatedPrincipal(socket.device)) {
-      ws.close(4001, 'Unauthorized')
-      this.handleClose(ws)
+    if (this.authenticatedSockets.has(ws) && !this.isStillAuthorized(ws)) {
       return
     }
     let channel = this.channels.get(ws)
@@ -273,7 +270,17 @@ export class MobileSocketWiring {
       channel.onMessage((plaintext, reply, sendBinary) => {
         const socket = this.authenticatedSockets.get(ws)
         if (socket) {
-          this.onText(socket, plaintext, reply, sendBinary)
+          // Streams (terminal output) keep replying with no new request: gate each send too.
+          this.onText(
+            socket,
+            plaintext,
+            (response) => {
+              if (this.isStillAuthorized(ws)) {
+                reply(response)
+              }
+            },
+            (bytes, options) => this.isStillAuthorized(ws) && sendBinary(bytes, options)
+          )
         }
       })
       channel.onBinaryMessage((bytes) => {
@@ -285,6 +292,21 @@ export class MobileSocketWiring {
       this.channels.set(ws, channel)
     }
     channel.handleRawMessage(message)
+  }
+
+  /** The registry's verdict for this socket's credential, however it changed (a revoke, an edit on
+   *  disk, a revision bump); a socket that lost it is closed before anything more is sent. */
+  private isStillAuthorized(ws: WebSocket): boolean {
+    const socket = this.authenticatedSockets.get(ws)
+    if (!socket) {
+      return false
+    }
+    if (this.deviceRegistry.resolveAuthenticatedPrincipal(socket.device)) {
+      return true
+    }
+    ws.close(4001, 'Unauthorized')
+    this.handleClose(ws)
+    return false
   }
 
   private handleClose(ws: WebSocket): void {

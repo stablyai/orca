@@ -21,6 +21,8 @@ export function createHarness(options: {
   devices: { deviceId: string; pushRegistration?: MobilePushRegistration }[]
   results?: PushSendResult[]
   sendImpl?: () => Promise<never>
+  /** A real registry instead of `devices`. */
+  registry?: PushDispatcherRegistry
 }): {
   dispatcher: PushDispatcher
   sends: SendCall[]
@@ -47,8 +49,8 @@ export function createHarness(options: {
       }
     })
   } as unknown as PushGatewayClient
-  const registry: PushDispatcherRegistry = {
-    listDevices: () => options.devices,
+  const registry: PushDispatcherRegistry = options.registry ?? {
+    listAuthorizedDevices: () => options.devices,
     setPushRegistration: (deviceId, value) => {
       cleared.push(value === null ? deviceId : null)
       return true
