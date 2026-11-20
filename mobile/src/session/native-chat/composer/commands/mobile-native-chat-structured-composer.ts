@@ -6,6 +6,7 @@ import type { MobileStructuredAccountUsage } from '../../usage/use-mobile-struct
 
 export type MobileNativeChatStructuredComposer = {
   catalog: MobileComposerStructuredCatalog
+  catchingUp?: boolean
   onSlashMenuOpen: () => void
   onSlashMenuDemand?: (open: boolean) => void
   onAttachFiles?: () => void

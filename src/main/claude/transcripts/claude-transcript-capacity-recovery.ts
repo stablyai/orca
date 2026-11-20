@@ -76,6 +76,15 @@ export async function prepareClaudeTranscriptCapacityRecovery(
   }
   return {
     kind: 'replace',
+    // The window includes array punctuation; IDs appear again in the origin, outside the items.
+    reservedBytes:
+      prepared.retainedBytes +
+      ids.reduce((bytes, id) => bytes + Buffer.byteLength(JSON.stringify(id)) + 1, 0) +
+      Buffer.byteLength(
+        JSON.stringify({ providerHandle, noticeIdentity, sourceFrontier: prepared.sourceFrontier })
+      ) *
+        2 +
+      4096,
     operation: {
       kind: 'epoch-replace',
       reason: 'legacy_import',

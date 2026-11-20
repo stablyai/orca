@@ -20,6 +20,10 @@ export function nativeChatHostStatusCopy(t: Translate) {
       'chat.hostStatus.historyItemTooLarge',
       'This part of the chat was too large to show.'
     ),
+    'continued-outside-catching-up': t(
+      'chat.hostStatus.continuedOutsideCatchingUp',
+      'Catching up on turns made outside this chat…'
+    ),
     'continued-outside': t('chat.hostStatus.continuedOutside', 'Continued outside this chat.'),
     'continued-outside-rewound': t(
       'chat.hostStatus.continuedOutsideRewound',

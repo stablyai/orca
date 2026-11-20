@@ -23,7 +23,7 @@ afterEach(async () => {
   await closeClaudeCatchUpChats()
 })
 
-async function openWithBlockedRecovery() {
+async function openWithBlockedRecovery(outcome: 'success' | 'drop' | 'error' = 'success') {
   const c = await chat('batch')
   const claude = fakeClaude({ initSessionId: PROVIDER })
   const adapter = adapterAtPublishFor(claude, {
@@ -33,6 +33,13 @@ async function openWithBlockedRecovery() {
     cwd: c.cwd,
     claudeConfigDir: c.config
   })
+  if (outcome === 'drop') {
+    const replace = c.deferred.sink.tryReplaceHistory!.bind(c.deferred.sink)
+    vi.spyOn(c.deferred.sink, 'tryReplaceHistory').mockImplementationOnce((replacement) => {
+      Atomics.store(replacement.operation.guard.permit, 0, 0)
+      return replace(replacement)
+    })
+  }
   const blocked = Promise.withResolvers<AbortSignal>()
   const release = Promise.withResolvers<void>()
   const finished = Promise.withResolvers<transcriptCatchUp.ClaudeTranscriptCatchUpOutcome>()
@@ -41,6 +48,9 @@ async function openWithBlockedRecovery() {
     const prepared = await prepare(input)
     blocked.resolve(input.signal!)
     await release.promise
+    if (outcome === 'error') {
+      throw new Error('transcript read failed')
+    }
     return prepared
   })
   const catchUp = transcriptCatchUp.catchUpClaudeTranscript
@@ -70,7 +80,15 @@ async function openWithBlockedRecovery() {
     acquisitionGeneration: acquired.acquisitionGeneration,
     signal: new AbortController().signal
   })
-  return { ...c, adapter, opened, blocked: blocked.promise, release, finished: finished.promise }
+  return {
+    ...c,
+    claude,
+    adapter,
+    opened,
+    blocked: blocked.promise,
+    release,
+    finished: finished.promise
+  }
 }
 
 it('opens the chat while capacity recovery is blocked, then installs the recent history', async () => {
@@ -101,37 +119,48 @@ it('opens the chat while capacity recovery is blocked, then installs the recent 
   )
 })
 
-it.each(['dispatch', 'close'] as const)(
-  'drops blocked capacity recovery when a live %s follows open',
-  async (action) => {
-    const c = await openWithBlockedRecovery()
-    const signal = await c.blocked
+it.each(['success', 'drop', 'error'] as const)(
+  'holds sends until capacity recovery settles with %s',
+  async (outcome) => {
+    const c = await openWithBlockedRecovery(outcome)
+    await c.blocked
     await c.opened
-    await (action === 'dispatch'
-      ? expect(
-          c.adapter.dispatch({
-            sessionId: SESSION,
-            fence: 1,
-            clientMessageId: 'live-prompt',
-            body: {
-              kind: 'message',
-              role: 'user',
-              blocks: [{ type: 'text', text: 'Keep my live turn' }]
-            }
-          })
-        ).resolves.toMatchObject({ state: 'admitted' })
-      : c.adapter.closeAll())
-    expect(signal.aborted).toBe(true)
-    await c.deferred.sink.written?.()
-    const cursor = await c.journal.reads.physicalCursor()
+    expect(c.adapter.holdsDispatch(SESSION)).toBe('history-catch-up')
+    const sent = c.adapter.dispatch({
+      sessionId: SESSION,
+      fence: 1,
+      clientMessageId: 'live-prompt',
+      body: {
+        kind: 'message',
+        role: 'user',
+        blocks: [{ type: 'text', text: 'Keep my live turn' }]
+      }
+    })
+    expect(c.claude.connections[0]!.sent).toEqual([])
     c.release.resolve()
-    expect(await c.finished).toBe(false)
-    await c.deferred.sink.written?.()
-    expect(await c.journal.reads.physicalCursor()).toEqual(cursor)
-    expect(await c.items()).not.toContainEqual(
-      expect.objectContaining({
-        body: expect.objectContaining({ presentation: 'continued-outside-recent' })
-      })
-    )
+    expect(await c.finished).toBe(outcome === 'success')
+    await expect(sent).resolves.toMatchObject({ state: 'admitted' })
+    expect(c.adapter.holdsDispatch(SESSION)).toBe(false)
+    expect(
+      (await c.items()).some(
+        (item) =>
+          item.body.kind === 'status' && item.body.presentation === 'continued-outside-recent'
+      )
+    ).toBe(outcome === 'success')
   }
 )
+
+it('releases the recovery hold when the session closes and drops the replacement', async () => {
+  const c = await openWithBlockedRecovery()
+  const signal = await c.blocked
+  await c.opened
+  expect(c.adapter.holdsDispatch(SESSION)).toBe('history-catch-up')
+  await c.adapter.closeAll()
+  expect(signal.aborted).toBe(true)
+  expect(c.adapter.holdsDispatch(SESSION)).toBe(false)
+  const cursor = await c.journal.reads.physicalCursor()
+  c.release.resolve()
+  expect(await c.finished).toBe(false)
+  await c.deferred.sink.written?.()
+  expect(await c.journal.reads.physicalCursor()).toEqual(cursor)
+})

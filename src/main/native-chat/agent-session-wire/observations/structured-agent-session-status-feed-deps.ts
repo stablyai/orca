@@ -37,6 +37,7 @@ export type StatusFeedSession = {
 export type StructuredAgentSessionStatusFeedDeps = {
   sessions: ReadonlyMap<string, StatusFeedSession>
   starting?: (sessionId: string) => boolean
+  holdsDispatch?: (sessionId: string) => boolean | 'history-catch-up'
   getConversation: (sessionId: string) => AgentSessionConversationView | null
   listConversations?: () => AgentSessionConversationView[]
   /** Reading a closed chat reopens it; true keeps its existing row updating but adds no new one. */

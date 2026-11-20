@@ -265,8 +265,8 @@ export type StructuredAgentSessionAdapter = AdapterControls & {
     executionOptions?: AgentSessionExecutionOptions
     signal?: AbortSignal
   }): Promise<{ ok: true } | { ok: false; rejected: string }>
-  /** Derive unanswered retained work from the live child; false without one. */
-  holdsDispatch?(sessionId: string): boolean
+  /** Retain the child for unfinished work or a named input hold; false without one. */
+  holdsDispatch?(sessionId: string): boolean | 'history-catch-up'
   /** Fresh answer before an idle stop: provider-declared work keeps the child; undefined has none to ask. */
   confirmIdle?(sessionId: string): Promise<AgentSessionIdleConfirmation> | undefined
   /** The root turn the live child is running, null when idle; absent when the agent cannot say. */

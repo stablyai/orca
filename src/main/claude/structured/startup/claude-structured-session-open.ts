@@ -145,12 +145,20 @@ async function openStartingClaudeSession(
     current()
   }
   startup.open()
-  void recoverHistory?.().catch((error: unknown) => {
-    deps.logger?.warn('Claude transcript recovery failed', {
-      scope: 'claude-transcript-catch-up',
-      sessionId: request.sessionId,
-      error
-    })
-  })
+  if (recoverHistory) {
+    history.recovery = recoverHistory()
+      .catch((error: unknown) => {
+        deps.logger?.warn('Claude transcript recovery failed', {
+          scope: 'claude-transcript-catch-up',
+          sessionId: request.sessionId,
+          error
+        })
+      })
+      .finally(() => {
+        history.recovery = undefined
+        events?.publish()
+      })
+    events?.publish()
+  }
   return { ...result, link: session.link, newConversation: !resumesTranscript }
 }

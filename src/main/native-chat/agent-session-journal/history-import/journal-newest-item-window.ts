@@ -30,6 +30,7 @@ export function createNewestItemWindow(maxBytes: number) {
       reserved = value
       trim()
     },
+    retainedBytes: () => bytes + entries.size + 2,
     items: () => [...entries.values()].map(({ item }) => item)
   }
 }

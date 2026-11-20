@@ -26,6 +26,7 @@ export type PreparedLegacyImport =
       ok: true
       items: JournalReplacementItem[]
       sourceEmpty: boolean
+      retainedBytes?: number
       forkTipItemIds?: string[]
       sourceFrontier?: string
       sourceConsumedBytes?: number
@@ -47,11 +48,12 @@ type LegacyTranscriptCollectorFactory = (
 
 export async function prepareJsonlTranscriptImport(
   input: Parameters<typeof decodeJsonlReplacementItems>[0]
-): Promise<PreparedLegacyImport> {
+): Promise<
+  | (Extract<PreparedLegacyImport, { ok: true }> & { retainedBytes: number })
+  | Extract<PreparedLegacyImport, { ok: false }>
+> {
   try {
-    const { items, sourceEmpty, forkTipItemIds, sourceFrontier, sourceConsumedBytes } =
-      await decodeJsonlReplacementItems(input)
-    return { ok: true, items, sourceEmpty, forkTipItemIds, sourceFrontier, sourceConsumedBytes }
+    return { ok: true, ...(await decodeJsonlReplacementItems(input)) }
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err), cause: err }
   }
@@ -71,6 +73,7 @@ async function decodeJsonlReplacementItems(input: {
   createCollector?: LegacyTranscriptCollectorFactory
 }): Promise<{
   items: JournalReplacementItem[]
+  retainedBytes: number
   sourceEmpty: boolean
   forkTipItemIds: string[]
   sourceFrontier?: string
@@ -161,6 +164,7 @@ async function decodeJsonlReplacementItems(input: {
     const sourceEmpty = consumedBytes === 0 || !conversation
     return {
       items: retained.items(),
+      retainedBytes: retained.retainedBytes(),
       sourceEmpty,
       forkTipItemIds: forkTip.settledItems(),
       ...(input.transcriptAgent === 'claude'

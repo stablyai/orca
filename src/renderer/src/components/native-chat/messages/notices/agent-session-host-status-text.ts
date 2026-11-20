@@ -15,6 +15,11 @@ const HOST_STATUS_WORDS: Record<AgentSessionHostStatusPresentation, () => string
       'components.native-chat.notices.historyItemTooLarge',
       HOST_STATUS_COPY['history-item-too-large']
     ),
+  'continued-outside-catching-up': () =>
+    translate(
+      'components.native-chat.notices.continuedOutsideCatchingUp',
+      HOST_STATUS_COPY['continued-outside-catching-up']
+    ),
   'continued-outside': () =>
     translate(
       'components.native-chat.notices.continuedOutside',

@@ -6,6 +6,8 @@ export type StructuredAgentSessionHistoryReplacement = {
   operation: Omit<Extract<JournalWriterContextOperation, { kind: 'epoch-replace' }>, 'fence'> & {
     guard: NonNullable<Extract<JournalWriterContextOperation, { kind: 'epoch-replace' }>['guard']>
   }
+  /** Upper bound for the items, guard and replacement envelope. */
+  reservedBytes: number
   beforeRun: () => boolean
   onResolved: (outcome: 'committed' | 'dropped') => void
 }
@@ -13,10 +15,9 @@ export type StructuredAgentSessionHistoryReplacement = {
 export function createStructuredAgentSessionHistoryReplacement(
   queue: StructuredAgentSessionSinkQueue
 ): (replacement: StructuredAgentSessionHistoryReplacement) => StructuredAgentSessionSinkAdmission {
-  return ({ operation, beforeRun, onResolved }) => {
-    const bytes = Buffer.byteLength(JSON.stringify(operation), 'utf8') + 1024
+  return ({ operation, reservedBytes, beforeRun, onResolved }) => {
     return queue.submit({
-      bytes,
+      bytes: reservedBytes,
       run: async (bound) => {
         if (!beforeRun()) {
           onResolved('dropped')

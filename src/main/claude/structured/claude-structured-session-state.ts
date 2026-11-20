@@ -193,7 +193,12 @@ export type ClaudeSession = {
     /** The account home the child writes its transcript in, pinned at launch. */
     claudeConfigDir: string
     cwd: string
-    history: { leafUuid: string | null; covered: boolean; contextActivity: number }
+    history: {
+      leafUuid: string | null
+      covered: boolean
+      contextActivity: number
+      recovery?: Promise<void>
+    }
     onLateRefusal: (error: Error) => void
     startup: ClaudeStartupOutcome
   }

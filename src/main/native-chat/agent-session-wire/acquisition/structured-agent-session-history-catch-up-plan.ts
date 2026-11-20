@@ -15,6 +15,7 @@ export class HistoryCatchUpCapacityError extends Error {
 
 export type HistoryCatchUpReplacementPlan = {
   kind: 'replace'
+  reservedBytes: number
   operation: Omit<StructuredAgentSessionHistoryReplacement['operation'], 'guard'>
 }
 

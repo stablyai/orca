@@ -195,6 +195,9 @@
     }
   },
   "chat": {
+    "hostStatus": {
+      "continuedOutsideCatchingUp": "Catching up on turns made outside this chat…"
+    },
     "botCards": {
       "memory": {
         "added": "Added",

@@ -164,6 +164,7 @@ export async function runHistoryCatchUp<View extends HistoryCatchUpJournalView>(
       check()
       let resolved = false
       const admission = sink.tryReplaceHistory({
+        reservedBytes: plan.reservedBytes,
         operation: { ...plan.operation, guard: { expectedCursor, permit, deadline } },
         beforeRun,
         onResolved: (outcome) => {

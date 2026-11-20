@@ -103,7 +103,7 @@ export function createStructuredAgentSessionConversationDelivery(input: {
       return record !== null && deps.hasOpenDispatch?.(record) === true
     },
     providerHoldsDispatch: () =>
-      deps.adapter.holdsDispatch?.(sessionId) === true ||
+      Boolean(deps.adapter.holdsDispatch?.(sessionId)) ||
       [...(sessions.get(sessionId)?.child?.heldSends?.() ?? [])].some((id) => id !== continuingId)
   })
   const owesWork = async (sessionId: string, id: string): Promise<boolean> =>

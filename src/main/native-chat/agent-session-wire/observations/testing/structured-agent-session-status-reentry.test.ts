@@ -50,9 +50,14 @@ async function openJournal(): Promise<AgentSessionJournal> {
   return journal
 }
 
-async function createFeed() {
+async function createFeed(holdsDispatch?: () => boolean | 'history-catch-up') {
   const journal = await openJournal()
-  const session = indexedStatusFeedSession({ journal })
+  const session = indexedStatusFeedSession({
+    journal,
+    ...(holdsDispatch
+      ? { child: { fence: 1, generation: 'acquisition', phase: 'ready' as const } }
+      : {})
+  })
   const sessions = new Map<
     string,
     {
@@ -68,6 +73,7 @@ async function createFeed() {
   const feed = new StructuredAgentSessionStatusFeed({
     logger: createStructuredAgentSessionLogger(),
     sessions,
+    holdsDispatch,
     getConversation: () => null,
     now: () => 1_000,
     statusSink: () => statusSink
@@ -277,4 +283,13 @@ it('discards row-free authority changes before publishing an asynchronous observ
   })
   expect(projections.currentSql(journal, capture())).toBe(published)
   expect(projections.savedStop(journal, contextId)).toEqual({ value: latestStop })
+})
+
+it('publishes the shared startup phase while history holds input, then returns to ready', async () => {
+  let held = true
+  const { feed } = await createFeed(() => (held ? 'history-catch-up' : false))
+  expect(feed.readPublished(SESSION)?.hostExecutionPhase).toBe('catching-up')
+  held = false
+  await feed.publish(SESSION)
+  expect(feed.readPublished(SESSION)?.hostExecutionPhase).toBe('ready')
 })
