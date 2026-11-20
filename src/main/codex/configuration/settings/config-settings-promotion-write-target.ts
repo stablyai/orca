@@ -1,5 +1,5 @@
 import { lstatSync, readlinkSync, realpathSync } from 'node:fs'
-import { dirname, resolve } from 'node:path'
+import { basename, dirname, join, resolve } from 'node:path'
 import {
   observeResolvedFilePath,
   observeResolvedFilePathError
@@ -23,7 +23,23 @@ export function resolvePromotionWriteTarget(systemTomlPath: string): { path: str
     observeResolvedFilePathError('promotion-write', systemTomlPath, error)
     // Missing non-link targets are created owner-only at the requested path.
   }
-  return { path: observeResolvedFilePath('promotion-write', systemTomlPath, systemTomlPath) }
+  return {
+    path: observeResolvedFilePath(
+      'promotion-write',
+      systemTomlPath,
+      resolveThroughLinkedParent(systemTomlPath)
+    )
+  }
+}
+
+/** A linked parent folder decides where a new file lands, e.g. a host ~/.codex linked into WSL. */
+function resolveThroughLinkedParent(path: string): string {
+  try {
+    return join(realpathSync(dirname(path)), basename(path))
+  } catch (error) {
+    observeResolvedFilePathError('promotion-write', path, error)
+    return path
+  }
 }
 
 function resolveDanglingSymlinkTarget(linkPath: string): string {

@@ -246,6 +246,24 @@ describe('codex settings write-back promotion', () => {
   )
 
   it.skipIf(process.platform === 'win32')(
+    'does not create a config.toml in a WSL guest through a linked ~/.codex folder',
+    () => {
+      const guestCodexDir = join(tmpHome, 'guest-codex')
+      mkdirSync(guestCodexDir, { recursive: true })
+      symlinkSync(guestCodexDir, join(tmpHome, '.codex'))
+      promotionTestState.wslSystemConfigPath = join(realpathSync(guestCodexDir), 'config.toml')
+      simulateCodexSettingWrite('approval_policy', '"never"')
+      syncSystemConfigIntoManagedCodexHome()
+
+      simulateCodexSettingWrite('model', '"o4"')
+      syncSystemConfigIntoManagedCodexHome()
+
+      expect(existsSync(join(guestCodexDir, 'config.toml'))).toBe(false)
+      expect(readRuntimeConfig()).toContain('model = "o4"')
+    }
+  )
+
+  it.skipIf(process.platform === 'win32')(
     'preserves a dangling config.toml symlink and creates its target',
     () => {
       mkdirSync(join(tmpHome, '.codex'), { recursive: true })
