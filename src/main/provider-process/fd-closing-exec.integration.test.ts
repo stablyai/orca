@@ -74,10 +74,14 @@ describe.runIf(process.platform === 'linux')('fd-closing exec', () => {
     const dir = await mkdtemp(join(tmpdir(), 'orca-fd-closing-'))
     const script = join(dir, 'broken-interpreter')
     await writeFile(script, '#!/orca-fd-closing-missing-interpreter\n')
+    // Linux looks for an interpreter literally named `/bin/sh\r`.
+    const crlfScript = join(dir, 'crlf-interpreter')
+    await writeFile(crlfScript, '#!/bin/sh\r\ntrue\r\n')
     await chmod(script, 0o755)
+    await chmod(crlfScript, 0o755)
     setFdClosingExec(helper)
     try {
-      for (const program of ['orca-fd-closing-missing-program', script]) {
+      for (const program of ['orca-fd-closing-missing-program', script, crlfScript]) {
         const child = spawnProcess({ program, closeInheritedFds: true, stdio: 'ignore' })
         const [error] = await once(child, 'error')
         // A noexec tmpdir makes the direct spawn report EACCES; either way it's an error, not 127.

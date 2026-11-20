@@ -58,21 +58,25 @@ function wouldExec(file: string, options: Pick<SpawnOptions, 'cwd' | 'env'>): bo
   const inCwd = (path: string): string =>
     path.startsWith('/') || cwd === undefined ? path : `${cwd}/${path}`
   if (file.includes('/')) {
-    return isRunnable(inCwd(file))
+    return isRunnable(inCwd(file), inCwd)
   }
   const searchPath = (options.env ?? process.env).PATH ?? DEFAULT_SEARCH_PATH
   return searchPath
     .split(delimiter)
-    .some((directory) => isRunnable(inCwd(directory === '' ? file : `${directory}/${file}`)))
+    .some((directory) => isRunnable(inCwd(directory === '' ? file : `${directory}/${file}`), inCwd))
 }
 
 // A script runs only if its `#!` interpreter does; exec otherwise fails with ENOENT or EACCES.
-function isRunnable(path: string, depth = 0): boolean {
+// A relative interpreter resolves from the child's cwd, as the kernel resolves it.
+function isRunnable(path: string, inCwd: (path: string) => string, depth = 0): boolean {
   if (depth > INTERPRETER_MAX_DEPTH || !isExecutableFile(path)) {
     return false
   }
   const interpreter = shebangInterpreter(path)
-  return interpreter === null || isRunnable(interpreter, depth + 1)
+  if (interpreter === undefined) {
+    return false
+  }
+  return interpreter === null || isRunnable(inCwd(interpreter), inCwd, depth + 1)
 }
 
 function isExecutableFile(path: string): boolean {
@@ -84,7 +88,8 @@ function isExecutableFile(path: string): boolean {
   }
 }
 
-function shebangInterpreter(path: string): string | null {
+// undefined: unreadable, so exec's own check can't be predicted and the launch isn't wrapped.
+function shebangInterpreter(path: string): string | null | undefined {
   const head = Buffer.alloc(SHEBANG_MAX_BYTES)
   let length: number
   try {
@@ -95,10 +100,9 @@ function shebangInterpreter(path: string): string | null {
       closeSync(fd)
     }
   } catch {
-    // An execute-only file can't be read here; exec still decides.
-    return null
+    return undefined
   }
-  const text = head.subarray(0, length).toString('latin1')
+  const text = head.subarray(0, length).toString('utf8')
   // The kernel's parse: skip spaces and tabs, end at space, tab, newline or NUL; a CR stays.
   return text.startsWith('#!') ? (/^[ \t]*([^ \t\n\0]+)/.exec(text.slice(2))?.[1] ?? null) : null
 }
