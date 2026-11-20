@@ -27,7 +27,10 @@ vi.mock('../../startup/quit/app-relaunch', () => ({
   runBeforeRelaunchCleanup: async (cleanup?: () => Promise<void>) => cleanup?.()
 }))
 vi.mock('../../orca-profiles/profile-index-store', () => ({
-  getOrcaProfileListState: () => ({ activeProfileId: 'source', profiles: [] }),
+  getOrcaProfileListState: () => ({
+    activeProfileId: 'source',
+    profiles: [{ id: 'source' }, { id: 'target' }]
+  }),
   setActiveOrcaProfile: select,
   createLocalOrcaProfile: vi.fn()
 }))
@@ -110,5 +113,16 @@ describe('plain profile switch persistence', () => {
     await rejected
     expect(select).not.toHaveBeenCalled()
     expect(sender.send).not.toHaveBeenCalled()
+  })
+
+  it('rejects an unknown profile before arming restart', async () => {
+    const { store } = await createWorkerMaintenanceFixture()
+    registerOrcaProfileHandlers(store, orcaAccount)
+    prepare.mockClear()
+    const switchProfile = handlers.get('orcaProfiles:switch')
+    await expect(switchProfile?.({}, { profileId: 'missing' })).rejects.toThrow(
+      'unknown_orca_profile'
+    )
+    expect(prepare).not.toHaveBeenCalled()
   })
 })

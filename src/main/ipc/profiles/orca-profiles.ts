@@ -1,5 +1,5 @@
 import { setTimeout as delay } from 'node:timers/promises'
-import { ipcMain, type WebContents } from 'electron'
+import { BrowserWindow, ipcMain, type WebContents } from 'electron'
 import type { Store } from '../../persistence/loading-store/store'
 import {
   prepareAppRelaunch,
@@ -175,6 +175,10 @@ export function registerOrcaProfileHandlers(
         return { status: 'already-active' }
       }
 
+      if (!current.profiles.some((profile) => profile.id === profileId)) {
+        throw new Error('unknown_orca_profile')
+      }
+
       const selectProfile = (): void => {
         setActiveOrcaProfile(profileId)
       }
@@ -216,7 +220,13 @@ export function registerOrcaProfileHandlers(
         const restart = await prepareAppRelaunch('profile-transfer')
         let mustRestart = false
         try {
-          restart?.protectProfileMove()
+          if (restart) {
+            const window = BrowserWindow.fromWebContents(event.sender)
+            if (!window || window.webContents !== event.sender) {
+              throw new Error('active_source_orca_profile_move_requires_window')
+            }
+            restart.protectProfileMove(window)
+          }
           const result = await transferActiveProfileProject(
             args,
             getProfileUserDataPath(),

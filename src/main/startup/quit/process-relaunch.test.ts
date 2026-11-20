@@ -1,7 +1,7 @@
 import { EventEmitter } from 'node:events'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { electron, prepare, state, getAllWindows } = vi.hoisted(() => ({
+const { electron, prepare, state } = vi.hoisted(() => ({
   electron: {
     isPackaged: true,
     quit: vi.fn(),
@@ -9,14 +9,10 @@ const { electron, prepare, state, getAllWindows } = vi.hoisted(() => ({
     relaunch: vi.fn()
   },
   prepare: vi.fn(),
-  getAllWindows: vi.fn<() => { isDestroyed(): boolean; destroy(): void }[]>(() => []),
   state: { isQuitting: false }
 }))
 
-vi.mock('electron', () => ({
-  app: Object.assign(new EventEmitter(), electron),
-  BrowserWindow: { getAllWindows }
-}))
+vi.mock('electron', () => ({ app: Object.assign(new EventEmitter(), electron) }))
 vi.mock('../main-process-state', () => ({ mainProcessState: state }))
 vi.mock('../../updater/linux-package/appimage-runtime-identity', () => ({
   isEphemeralAppImageRuntime: () => electron.isPackaged
@@ -122,7 +118,13 @@ describe('process relaunch', () => {
     const replacement = launcher()
     prepare.mockResolvedValueOnce(replacement)
     const restart = await lifecycle.prepareProcessRelaunch()
-    restart?.protectProfileMove()
+    let desktopClosed = false
+    restart?.protectProfileMove({
+      isDestroyed: () => desktopClosed,
+      destroy: () => {
+        desktopClosed = true
+      }
+    })
 
     const event = {
       defaultPrevented: false,
@@ -134,15 +136,6 @@ describe('process relaunch', () => {
     expect(event.defaultPrevented).toBe(true)
     expect(replacement.commit).not.toHaveBeenCalled()
 
-    let desktopClosed = false
-    getAllWindows.mockReturnValueOnce([
-      {
-        isDestroyed: () => desktopClosed,
-        destroy: () => {
-          desktopClosed = true
-        }
-      }
-    ])
     electron.quit.mockImplementation(() => {
       app.emit('before-quit', { defaultPrevented: false })
       if (!desktopClosed) {
