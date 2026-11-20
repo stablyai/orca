@@ -64,7 +64,7 @@ export function isAntigravityHostAccountHome(home: AgentSessionAccountHome): boo
 }
 
 // Keyed by the binary's identity so an upgrade or reinstall is checked again.
-type HostCheck = { identity: string; answer: Promise<boolean>; retryAt?: number }
+type HostCheck = { identity: string; answer: Promise<boolean>; retryAt?: number; version?: string }
 const checks = new Map<string, HostCheck>()
 
 class IncompatibleHostAcp extends Error {}
@@ -72,6 +72,11 @@ class IncompatibleHostAcp extends Error {}
 /** After agy's login changes, the next check asks again instead of trusting the last answer. */
 export function forgetAntigravityHostAcpChecks(): void {
   checks.clear()
+}
+
+/** The version of the host's agy that last passed the check, for naming what chats run on. */
+export function readyAntigravityHostAcpVersion(): string | null {
+  return [...checks.values()].findLast((check) => check.version !== undefined)?.version ?? null
 }
 
 /** Whether `command acp` initializes as a compatible server that serves session requests. An
@@ -111,7 +116,10 @@ export async function antigravityHostAcpReady(
         await connection.listSessions({ cwd: folder })
       }
     ).then(
-      () => true,
+      (initialized) => {
+        check.version = initialized.agentInfo?.version
+        return true
+      },
       (error: unknown) => {
         // An exit before initialize answers is a binary rejecting the launch flag, not a lapse.
         if (

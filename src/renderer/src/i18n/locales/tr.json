@@ -21001,7 +21001,6 @@
       "cancelFailed": "Kurulum iptal edilemedi. Yeniden deneyin.",
       "install": "{{agent}} yükle",
       "installManaged": "Orca'nın kopyasını yükle",
-      "installed": "Yüklendi",
       "notInstalled": "Yüklü değil.",
       "progress": "{{agent}} indirmesi",
       "readFailed": "Bu ana makinede {{agent}} kontrol edilemedi. Yeniden deneniyor.",

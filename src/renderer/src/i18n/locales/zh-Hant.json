@@ -20533,7 +20533,6 @@
       "cancelFailed": "無法取消安裝。請再試一次。",
       "install": "安裝 {{agent}}",
       "installManaged": "安裝 Orca 提供的副本",
-      "installed": "已安裝",
       "notInstalled": "尚未安裝。",
       "progress": "{{agent}} 下載",
       "readFailed": "無法檢查此主機上的 {{agent}}。正在重試。",

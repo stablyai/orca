@@ -17,6 +17,7 @@ import type {
 import { localAccountRuntimeTargetKey } from '../../../../../../shared/agent-accounts/local-account-runtime'
 import { Button } from '../../../ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../../ui/tooltip'
+import { useAntigravityChatAuthDetection } from '@/runtime/provider-accounts/sign-in/antigravity-chat-auth-detection'
 import { ManagedRuntimeInstallRow } from '../../../managed-runtime/ManagedRuntimeInstallRow'
 import { antigravityChatSignInRunning } from '@/runtime/provider-accounts/sign-in/antigravity-chat-sign-in-status'
 import { AntigravityChatSignInRow } from '../../../provider-accounts/AntigravityChatSignInRow'
@@ -73,7 +74,12 @@ export function AntigravityAccountsSection({
   const wslDistro = target.wslDistro ?? null
   // Chats run on the host itself, never in a WSL distro.
   const chats = runtime !== 'wsl'
+  const agyVersion = useAntigravityChatAuthDetection(chats ? owner : null)?.agyVersion
   const chatRuntime = useManagedRuntimeInstall(owner, 'antigravity', chats)
+  const managedVersion =
+    chatRuntime.kind === 'active' && chatRuntime.snapshot.kind === 'known'
+      ? chatRuntime.snapshot.state.installedVersion
+      : null
   // A remote host's sign-in finishes from the address pasted back into its row.
   const chatSignIn = chats && chatRuntime.kind === 'active'
   const signIn = useAntigravityChatSignIn(chatSignIn ? owner : null)
@@ -222,14 +228,26 @@ export function AntigravityAccountsSection({
           title={logoTitle(t('accounts.antigravity.chatTitle', 'Antigravity Chat'))}
           description={
             state?.chatUsesAgy
-              ? t(
-                  'accounts.antigravity.chatDescriptionAgy',
-                  "agy is signed in here, so new chats use agy's account below. This sign-in is used when agy isn't."
-                )
-              : t(
-                  'accounts.antigravity.chatDescription',
-                  'Signs in through your browser, so Chat works without agy installed.'
-                )
+              ? agyVersion
+                ? t(
+                    'accounts.antigravity.chatDescriptionAgyVersion',
+                    "New chats run on your agy (v{{version}}) and its account below. This sign-in is used when agy isn't.",
+                    { version: agyVersion }
+                  )
+                : t(
+                    'accounts.antigravity.chatDescriptionAgy',
+                    "agy is signed in here, so new chats use agy's account below. This sign-in is used when agy isn't."
+                  )
+              : managedVersion
+                ? t(
+                    'accounts.antigravity.chatDescriptionManagedVersion',
+                    "New chats run on Orca's copy (v{{version}}), so Chat works without agy installed.",
+                    { version: managedVersion }
+                  )
+                : t(
+                    'accounts.antigravity.chatDescription',
+                    'Signs in through your browser, so Chat works without agy installed.'
+                  )
           }
         >
           {chatRows}

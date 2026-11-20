@@ -4,7 +4,8 @@ import type {
 } from '../../../../../shared/agent-accounts/antigravity/antigravity-account-types'
 import {
   forgetAntigravityHostAcpChecks,
-  isAntigravityHostAccountHome
+  isAntigravityHostAccountHome,
+  readyAntigravityHostAcpVersion
 } from '../../../../antigravity/antigravity-host-acp'
 import { getStructuredAgentSessionHost } from '../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { structuredAgentHostAlternativeReady } from '../../../agent-session/launch/structured-agent-launch-support'
@@ -30,6 +31,18 @@ export async function withAntigravityChatBackend(
     null
   )
   return chatUsesAgy === null ? state : { ...state, chatUsesAgy }
+}
+
+/** The version of the host's agy when new chats run on it, else null. */
+export async function antigravityChatAgyVersion(
+  runtime: OrcaRuntimeService
+): Promise<string | null> {
+  const usesAgy = await withTimeout<boolean | null>(
+    structuredAgentHostAlternativeReady('antigravity', runtime),
+    CHAT_BACKEND_WAIT_MS,
+    null
+  )
+  return usesAgy ? readyAntigravityHostAcpVersion() : null
 }
 
 /** A running `agy acp` may keep the login it started with, so idle chats on agy stop and resume on

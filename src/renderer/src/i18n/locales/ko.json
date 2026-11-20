@@ -20116,7 +20116,6 @@
       "cancelFailed": "설치를 취소하지 못했습니다. 다시 시도하세요.",
       "install": "{{agent}} 설치",
       "installManaged": "Orca 사본 설치",
-      "installed": "설치됨",
       "notInstalled": "설치되지 않았습니다.",
       "progress": "{{agent}} 다운로드",
       "readFailed": "이 호스트에서 {{agent}}을(를) 확인할 수 없습니다. 다시 시도하는 중입니다.",

@@ -16,6 +16,7 @@ import { antigravityChatAuthMethodLabel } from '@/components/provider-accounts/A
 import type { AntigravityChatAuthConfig } from '../../../../../shared/agent-accounts/antigravity/antigravity-chat-auth-config'
 import { useNativeChatAntigravityAuth } from './native-chat-antigravity-auth'
 import { antigravityChatAuthMenuItems } from './antigravity-chat-auth-choices'
+import { antigravityProgramLabel } from './antigravity-auth-words'
 
 type Method = AntigravityChatAuthConfig['method']
 
@@ -46,11 +47,17 @@ export function NativeChatAntigravityAuthChip({
   const items = antigravityChatAuthMenuItems(auth.detection, auth.keyAndAdc).filter(
     (item) => !onAgy || item.method !== 'oauth-personal'
   )
-  const label = onAgy
-    ? t('components.native-chat.antigravityAuth.agy', 'agy sign-in')
-    : (antigravityChatAuthMethodLabel(method ?? '', t) ?? '')
+  const program = antigravityProgramLabel(
+    auth.backend,
+    onAgy ? auth.detection?.agyVersion : auth.managedVersion,
+    t
+  )
+  const label = onAgy ? program : (antigravityChatAuthMethodLabel(method ?? '', t) ?? '')
   const project = method === 'agent-platform' ? auth.detection?.adc.project : null
   const shown = project ? `${label} · ${project}` : label
+  const signsInWith = onAgy
+    ? t('components.native-chat.antigravityAuth.agyItem', "agy's own login")
+    : shown
   const Icon = onAgy || !method ? SquareTerminal : ICONS[method]
   return (
     <DropdownMenu onOpenChange={(open) => open && auth.refresh()}>
@@ -64,12 +71,12 @@ export function NativeChatAntigravityAuthChip({
           aria-label={t(
             'components.native-chat.antigravityAuth.chipLabel',
             'Antigravity signs in with {{method}}. Change',
-            { method: shown }
+            { method: signsInWith }
           )}
           title={t(
             'components.native-chat.antigravityAuth.chipTitle',
             'Antigravity signs in with {{method}}',
-            { method: shown }
+            { method: signsInWith }
           )}
         >
           {auth.switching ? (
@@ -128,6 +135,9 @@ export function NativeChatAntigravityAuthChip({
           ))}
         </DropdownMenuRadioGroup>
         <DropdownMenuSeparator />
+        <p data-antigravity-program="" className="px-2 py-1.5 text-2xs text-muted-foreground">
+          {t('components.native-chat.antigravityAuth.runsOn', 'Runs on: {{program}}', { program })}
+        </p>
         <DropdownMenuItem onSelect={auth.openSettings}>
           <Settings2 className="size-3.5" aria-hidden />
           {t('components.native-chat.antigravityAuth.settings', 'Sign-in settings…')}

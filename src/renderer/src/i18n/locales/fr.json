@@ -20975,7 +20975,6 @@
       "cancelFailed": "Impossible d'annuler l'installation. Réessayez.",
       "install": "Installer {{agent}}",
       "installManaged": "Installer la copie d'Orca",
-      "installed": "Installé",
       "notInstalled": "Non installé.",
       "progress": "Téléchargement de {{agent}}",
       "readFailed": "Impossible de vérifier {{agent}} sur cet hôte. Nouvel essai en cours.",

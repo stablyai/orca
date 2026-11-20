@@ -20854,7 +20854,6 @@
       "cancelFailed": "Die Installation konnte nicht abgebrochen werden. Erneut versuchen.",
       "install": "{{agent}} installieren",
       "installManaged": "Orcas Version installieren",
-      "installed": "Installiert",
       "notInstalled": "Nicht installiert.",
       "progress": "Download von {{agent}}",
       "readFailed": "{{agent}} konnte auf diesem Host nicht überprüft werden. Erneuter Versuch.",

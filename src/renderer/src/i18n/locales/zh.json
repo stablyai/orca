@@ -21764,7 +21764,6 @@
       "cancelFailed": "无法取消安装，请重试",
       "install": "安装 {{agent}}",
       "installManaged": "安装 Orca 的副本",
-      "installed": "已安装",
       "notInstalled": "未安装",
       "progress": "{{agent}} 下载",
       "readFailed": "无法检查此主机上的 {{agent}}，正在重试",
