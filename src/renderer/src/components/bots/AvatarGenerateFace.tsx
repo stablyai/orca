@@ -16,7 +16,6 @@ import { AgentIconLabel } from '@/components/agent/agent-combobox-items'
 import { useTranslate } from '@/i18n/use-translate'
 import { getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
 import { cn } from '@/lib/class-names'
-import { installWindowVisibilityInterval } from '@/lib/window-activity/window-visibility-interval'
 import { MAX_AVATAR_DESCRIPTION_CHARS } from '../../../../shared/avatar-generation/avatar-generation-contract'
 import { BOT_EDIT_HINT } from './bot-edit-hint'
 import { FieldNoteLine, sameNote, type FieldNote } from './AvatarGenerateFieldNote'
@@ -62,21 +61,6 @@ export function useGenerateFace(onResult: (result: GeneratedAvatar) => void) {
 }
 
 export type GenerateFace = ReturnType<typeof useGenerateFace>
-
-function Elapsed({ since }: { since: number }): React.JSX.Element {
-  const [now, setNow] = useState(() => Date.now())
-  // A visible clock; hidden windows skip ticks and catch up when shown.
-  useEffect(
-    () => installWindowVisibilityInterval({ run: () => setNow(Date.now()), intervalMs: 1000 }),
-    []
-  )
-  const seconds = Math.max(0, Math.floor((now - since) / 1000))
-  return (
-    <span className="tabular-nums">
-      {Math.floor(seconds / 60)}:{String(seconds % 60).padStart(2, '0')}
-    </span>
-  )
-}
 
 /** The face beside the current one: the picture made, or the Generate entry. */
 export function GenerateFaceThumb({ face }: { face: GenerateFace }): React.JSX.Element {
@@ -135,31 +119,25 @@ export function GenerateFaceTile({ face }: { face: GenerateFace }): React.JSX.El
   const t = useTranslate()
   const { run } = face
   if (run.kind === 'running') {
-    const label = t('bots.avatar.generate.cancelRunning', 'Cancel generating')
     // Hover or focus swaps the spinner for an X and the word for Cancel, in the same spot.
     const AT_REST = 'group-hover/edit:hidden group-focus-visible/edit:hidden'
     const ON_HOVER = 'hidden group-hover/edit:inline group-focus-visible/edit:inline'
     return (
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <button type="button" aria-label={label} onClick={face.cancel} className={HINT_BUTTON}>
-            <PromptTile role="status">
-              <span className="flex size-6 items-center justify-center">
-                <LoadingSpinner className={cn('size-6', AT_REST)} />
-                <X className={cn('size-6', ON_HOVER)} strokeWidth={1.75} />
-              </span>
-              <span className={AT_REST}>{t('bots.avatar.generate.generating', 'Generating…')}</span>
-              <span className={ON_HOVER}>{t('bots.avatar.generate.cancel', 'Cancel')}</span>
-              <span className="text-[11px] text-muted-foreground">
-                <Elapsed since={run.startedAt} />
-              </span>
-            </PromptTile>
-          </button>
-        </TooltipTrigger>
-        <TooltipContent side="bottom" sideOffset={4}>
-          {label}
-        </TooltipContent>
-      </Tooltip>
+      <button
+        type="button"
+        aria-label={t('bots.avatar.generate.cancelRunning', 'Cancel generating')}
+        onClick={face.cancel}
+        className={HINT_BUTTON}
+      >
+        <PromptTile role="status">
+          <span className="flex size-6 items-center justify-center">
+            <LoadingSpinner className={cn('size-6', AT_REST)} />
+            <X className={cn('size-6', ON_HOVER)} strokeWidth={1.75} />
+          </span>
+          <span className={AT_REST}>{t('bots.avatar.generate.generating', 'Generating…')}</span>
+          <span className={ON_HOVER}>{t('bots.avatar.generate.cancel', 'Cancel')}</span>
+        </PromptTile>
+      </button>
     )
   }
   if (face.result) {

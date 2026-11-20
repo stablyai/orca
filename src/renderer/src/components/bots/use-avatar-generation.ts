@@ -17,7 +17,7 @@ import { avatarPngFromBlob } from './bot-avatar-intake'
 
 export type AvatarGenerationRun =
   | { kind: 'idle' }
-  | { kind: 'running'; agent: AvatarImageAgent; startedAt: number }
+  | { kind: 'running'; agent: AvatarImageAgent }
   | { kind: 'error'; failure: AvatarGenerationFailure; agent?: AvatarImageAgent }
 
 /** The last picture made: the square 512 px PNG an upload would save, and what it was asked for. */
@@ -116,7 +116,7 @@ export function useAvatarGeneration(onResult: (result: GeneratedAvatar) => void)
     const requestId = createNonSecureContextUuid()
     current.current = requestId
     rememberAgent(agent)
-    setRun({ kind: 'running', agent, startedAt: Date.now() })
+    setRun({ kind: 'running', agent })
     const fail = (failure: AvatarGenerationFailure): void => {
       if (current.current === requestId) {
         current.current = null
