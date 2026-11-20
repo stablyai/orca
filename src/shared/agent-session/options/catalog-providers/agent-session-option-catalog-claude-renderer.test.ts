@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { resolveAgentSessionOptionLaunch } from '../launch/agent-session-option-launch'
 import { getAgentSessionOptionCatalog } from '../agent-session-option-catalog'
-import { structuredAgentSessionOptionCatalog } from '../structured-agent-session-options'
+import { structuredAgentSessionOptionCatalog } from '../model-catalog/structured-agent-session-discovered-model'
 import { sourceControlActionOptions } from '../../../source-control/ai/recipes/source-control-action-options'
 import { analyzeAgentChoiceArgs } from '../../../agent-launch/choices/agent-choice-args'
 

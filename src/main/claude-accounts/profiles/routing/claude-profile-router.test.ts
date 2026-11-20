@@ -157,7 +157,7 @@ function claudeShellProbe(root: string): (env: Record<string, string>, rc?: stri
 }
 
 describe('ClaudeProfileRouter', () => {
-  it('runs an account with no login of its own on System default while that is signed in to it', async () => {
+  it('uses System default only while it matches an account without its own login', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
     const f = fixture()
     mkdirSync(f.home('a'), { recursive: true })
@@ -182,6 +182,16 @@ describe('ClaudeProfileRouter', () => {
     expect(readFileSync(f.router.pointerPath, 'utf8')).toBe('')
     expect(f.router.coveredBySystemDefault('a')).toBe(true)
 
+    signIn(f.userHome, 'b@example.test')
+    const anotherAccountLaunch = f.router.prepareLaunch()
+    await advanceRefreshDeadline(anotherAccountLaunch, 500)
+    await expect(anotherAccountLaunch).resolves.toMatchObject({ configDir: f.home('a') })
+    writeFileSync(join(f.userHome, '.claude.json'), '{}')
+    const signedOutLaunch = f.router.prepareLaunch()
+    await advanceRefreshDeadline(signedOutLaunch, 500)
+    await expect(signedOutLaunch).resolves.toMatchObject({ configDir: f.home('a') })
+
+    signIn(f.userHome, 'a@example.test')
     signIn(f.home('a'), 'a@example.test')
     const ownFolderLaunch = f.router.prepareLaunch()
     await advanceRefreshDeadline(ownFolderLaunch, 500)
@@ -193,28 +203,6 @@ describe('ClaudeProfileRouter', () => {
     expect(f.router.routedHome()).toBe(f.home('a'))
     expect(f.router.routedHome('identity')).toBe(f.home('a'))
     await expect(claudeRoutedHomeAsync(f.router)).resolves.toBe(f.home('a'))
-  })
-
-  it('keeps an account on its own folder when System default is signed in to another email, or out', async () => {
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
-    const f = fixture()
-    mkdirSync(f.home('a'), { recursive: true })
-    prepareClaudeProfileDirectory(
-      f.dataRoot,
-      describeClaudeProfile(f.dataRoot, 'a', {
-        executionHostId: 'local',
-        runtime: 'host'
-      }),
-      f.userHome
-    )()
-    signIn(f.userHome, 'b@example.test')
-    const anotherAccountLaunch = f.router.prepareLaunch()
-    await advanceRefreshDeadline(anotherAccountLaunch, 500)
-    await expect(anotherAccountLaunch).resolves.toMatchObject({ configDir: f.home('a') })
-    writeFileSync(join(f.userHome, '.claude.json'), '{}')
-    const signedOutLaunch = f.router.prepareLaunch()
-    await advanceRefreshDeadline(signedOutLaunch, 500)
-    await expect(signedOutLaunch).resolves.toMatchObject({ configDir: f.home('a') })
   })
 
   it('publishes the selected folder, System default as empty, and no file without accounts', async () => {

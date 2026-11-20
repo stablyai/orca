@@ -1,5 +1,10 @@
 import { randomUUID } from 'node:crypto'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
+import { AgentSessionAttachmentStore } from '../native-chat/agent-session-attachments/agent-session-attachment-store'
+import { setAgentSessionAttachmentStore } from '../native-chat/agent-session-attachments/agent-session-attachment-store-registry'
 import { fixture, groupNativeMocks } from './bot-group-native-runtime.test-fixture'
 import { BotGroupRuntime } from './bot-group-runtime'
 import { BotGroupStore } from './bot-group-store'
@@ -328,5 +333,49 @@ describe('persistent native group lifecycle', () => {
       assertBotGroupSessionAccess(runtime, 'bot-group-member-archived', { kind: 'desktop' })
     ).toThrow(/no longer/)
     expect(() => assertBotGroupOwner({ caller: { kind: 'local-cli' } })).toThrow(/human owner/)
+  })
+  it('claims a dropped image for every member and delivers it as an image block', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'orca-bot-group-images-'))
+    const store = new AgentSessionAttachmentStore(join(dir, 'agent-session-attachments'), {
+      hasSession: () => true
+    })
+    const claimed: string[] = []
+    setAgentSessionAttachmentStore(store, async (sessionId) => {
+      claimed.push(sessionId)
+    })
+    try {
+      const { groups } = fixture()
+      const group = await groups.create({ name: 'Review', botIds: ['bot-0', 'bot-1'] })
+      const dropped = join(dir, 'shot.png')
+      await writeFile(dropped, Buffer.alloc(12))
+
+      const sent = await groups.send(
+        {
+          groupId: group.id,
+          revision: group.revision,
+          messageId: randomUUID(),
+          text: '@Forge [Image #1]',
+          images: [dropped]
+        },
+        { local: true }
+      )
+      const stored = sent.images![0].path
+      expect(sent.images).toEqual([
+        {
+          path: expect.stringMatching(/agent-session-attachments[\\/][0-9a-f-]{36}[\\/]shot\.png$/),
+          name: 'shot.png',
+          bytes: 12
+        }
+      ])
+      expect(claimed).toEqual(group.members.map((member) => member.sessionId))
+      await vi.waitFor(() => expect(mocks.send).toHaveBeenCalledTimes(1))
+      expect(mocks.send.mock.calls[0][0].sessionId).toBe(group.members[1].sessionId)
+      expect(mocks.send.mock.calls[0][0].turn.body.blocks.slice(1)).toEqual([
+        { type: 'image-ref', path: stored }
+      ])
+    } finally {
+      setAgentSessionAttachmentStore(null)
+      await rm(dir, { recursive: true, force: true })
+    }
   })
 })

@@ -14,10 +14,13 @@ const mocks = vi.hoisted(() => ({
 }))
 vi.mock('./bot-chat-session', () => ({
   startBotSession: (...args: unknown[]) => mocks.create(...args),
-  botMessageBody: (text: string) => ({
+  botMessageBody: (text: string, options?: { images?: readonly { path: string }[] }) => ({
     kind: 'message',
     role: 'user',
-    blocks: [{ type: 'text', text }]
+    blocks: [
+      { type: 'text', text },
+      ...(options?.images ?? []).map(({ path }) => ({ type: 'image-ref' as const, path }))
+    ]
   }),
   requireStructuredHost: async () => ({
     // The whole snapshot answers each bounded read: it holds every row a window would.
@@ -94,6 +97,7 @@ export function fixture() {
     },
     deleteFolderWorkspace: homes.remove,
     updateFolderWorkspace: homes.update,
+    ensureStructuredAgentSessionHost: vi.fn(async () => {}),
     notifyBotGroupsChanged: vi.fn()
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: native adapters are mocked and this fixture supplies every runtime member reached by the group service.
