@@ -5,8 +5,8 @@ import type {
   AgentJournalRenderItem
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
 
-/** Off until builds that cannot read stored outputs are out of the downgrade window; reads always work. */
-export const JOURNAL_STORED_OUTPUT_WRITES = false
+/** On: every build back to the 1.4.263 store floor reads stored outputs. */
+export const JOURNAL_STORED_OUTPUT_WRITES = true
 
 // Format 1: one zstd frame over the text as a JSON string literal, so lone surrogates survive.
 const FORMAT_ZSTD_JSON = 1
