@@ -32,7 +32,7 @@ describe('Hermes context file', () => {
     expect(content).not.toContain('first text')
   })
 
-  it('leaves a symlink and its target alone', async () => {
+  it.skipIf(process.platform === 'win32')('leaves a symlink and its target alone', async () => {
     const target = join(dir, 'AGENTS.md')
     await writeFile(target, 'Important rules.\n')
     await symlink(target, join(dir, HERMES_CONTEXT_FILE))
@@ -41,7 +41,7 @@ describe('Hermes context file', () => {
     expect(await readFile(target, 'utf8')).toBe('Important rules.\n')
   })
 
-  it('leaves a dangling symlink alone', async () => {
+  it.skipIf(process.platform === 'win32')('leaves a dangling symlink alone', async () => {
     await symlink(join(dir, 'missing.md'), join(dir, HERMES_CONTEXT_FILE))
     await writeHermesContextFile(dir, 'text')
     expect((await lstat(join(dir, HERMES_CONTEXT_FILE))).isSymbolicLink()).toBe(true)

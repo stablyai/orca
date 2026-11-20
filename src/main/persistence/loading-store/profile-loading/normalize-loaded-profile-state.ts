@@ -60,9 +60,9 @@ export function normalizeLoadedProfileState(
   if (botsNewerAgents.length > 0 && parsed.bots?.length !== bots?.length) {
     markNeedsSave()
   }
-  if (bots !== undefined && parsed.botsPermissionDefaultMigrated !== true) {
+  if (allBots !== undefined && parsed.botsPermissionDefaultMigrated !== true) {
     // Old bots were created with Ask; later explicit Ask overrides must survive reloads.
-    for (const bot of bots) {
+    for (const bot of allBots) {
       if (bot.permissionMode === 'ask') {
         delete bot.permissionMode
       }
