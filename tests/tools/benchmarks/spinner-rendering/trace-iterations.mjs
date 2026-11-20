@@ -23,7 +23,9 @@ export async function traceIterations(cdp, outputPath, durationMs = 2200) {
   }
   writeFileSync(outputPath, json)
   if (dataLossOccurred) {
-    throw new Error(`Chromium dropped trace events; counts would be partial. Raw trace: ${outputPath}`)
+    throw new Error(
+      `Chromium dropped trace events; counts would be partial. Raw trace: ${outputPath}`
+    )
   }
   const events = JSON.parse(json).traceEvents
   // The stop request can land late on a busy event loop; rate over what the trace actually covers.
@@ -37,7 +39,9 @@ export async function traceIterations(cdp, outputPath, durationMs = 2200) {
   }
   const measuredMs = (last - first) / 1000
   if (!(measuredMs > 0)) {
-    throw new Error(`Trace has no timed events; rates would be meaningless. Raw trace: ${outputPath}`)
+    throw new Error(
+      `Trace has no timed events; rates would be meaningless. Raw trace: ${outputPath}`
+    )
   }
   const compositorThreads = new Set(
     events

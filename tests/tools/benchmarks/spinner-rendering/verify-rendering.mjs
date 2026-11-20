@@ -45,7 +45,7 @@ async function waitForScrollState(page, expectVisible) {
       const rect = ring.getBoundingClientRect()
       return rect.bottom > scroller.top && rect.top < scroller.bottom
     })
-    if ((visible.length > 0) !== wantVisible) {
+    if (visible.length > 0 !== wantVisible) {
       return false
     }
     return rings.every((ring) => {
