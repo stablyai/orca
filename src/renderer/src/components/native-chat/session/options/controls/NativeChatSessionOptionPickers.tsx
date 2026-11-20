@@ -1,11 +1,14 @@
 import { memo, useEffect, useRef, useState } from 'react'
 import { ChevronDown, SlidersHorizontal } from 'lucide-react'
+import { AgentIcon } from '@/components/agent/icons/AgentIcon'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
+import { agentTypeToIconAgent } from '../../../../../../../shared/agent-status/presentation/agent-type-icon-agent'
+import type { TerminalAgent } from '../../../../../../../shared/agent-status/identity/terminal-agent'
 import { sortNativeChatSessionOptions } from '../../../../../../../shared/native-chat/input/session-options/native-chat-session-option-snapshot'
 import {
   sessionOptionDispatchUnconfirmed,
@@ -38,6 +41,8 @@ export type NativeChatSessionOptionPickersProps = {
   pickerRequest?: NativeChatOptionPickerRequest | null
   /** Where focus lands after a visit that changed something; see `useNativeChatPickerFocusReturn`. */
   focusComposer?: () => void
+  /** The chat's agent, whose icon leads the model pill. */
+  agent?: string
 }
 
 /** A descriptor write in flight; its value shows until it settles. */
@@ -90,6 +95,7 @@ function PickerTrigger(props: {
   dispatched: boolean
   triggerRef: React.Ref<HTMLButtonElement>
   onKeyDown: React.KeyboardEventHandler<HTMLButtonElement>
+  agentIcon: TerminalAgent | null
 }): React.JSX.Element {
   const t = useTranslate()
   return (
@@ -120,6 +126,9 @@ function PickerTrigger(props: {
             }}
           >
             <span data-composer-label className="flex min-w-0 items-center gap-1">
+              {props.agentIcon ? (
+                <AgentIcon agent={props.agentIcon} className="size-3.5 shrink-0" />
+              ) : null}
               <span className="truncate text-chat-foreground">{props.modelLabel}</span>
               {props.optionsLabel ? <span className="shrink-0">{props.optionsLabel}</span> : null}
               <ChevronDown className="size-3" />
@@ -158,6 +167,7 @@ function SessionOptionPopover(props: {
   onSet: (descriptor: SessionOptionDescriptor, value: SessionOptionValue) => void
   onAction: (descriptor: SessionOptionDescriptor) => void
   focusComposer?: () => void
+  agent?: string
 }): React.JSX.Element {
   const t = useTranslate()
   const { model, options, pendingIds, demandModelCatalog } = props
@@ -258,6 +268,7 @@ function SessionOptionPopover(props: {
           sessionOptionDispatchUnconfirmed(model) || options.some(sessionOptionDispatchUnconfirmed)
         }
         triggerRef={focusReturn.triggerRef}
+        agentIcon={agentTypeToIconAgent(props.agent)}
         // Why: a popover trigger opens on Enter and Space only; a menu also takes ArrowDown.
         onKeyDown={(event) => {
           if (event.key === 'ArrowDown' && canOpen) {
@@ -350,7 +361,8 @@ function NativeChatSessionOptionPickersInner({
   snapshot,
   isWorking,
   pickerRequest,
-  focusComposer
+  focusComposer,
+  agent
 }: NativeChatSessionOptionPickersProps): React.JSX.Element | null {
   useUiLanguageRevision()
   const [pending, setPending] = useState<ReadonlyMap<string, PendingPick>>(() => new Map())
@@ -400,6 +412,7 @@ function NativeChatSessionOptionPickersInner({
           )
         }
         focusComposer={focusComposer}
+        agent={agent}
       />
     </div>
   )
