@@ -35,6 +35,7 @@ function workspaceTabs(worktreeId: string): Tab[] {
       id: `c-${worktreeId}`,
       entityId: `session-${worktreeId}`,
       contentType: 'agent-session',
+      agentSessionAgent: 'codex',
       label: 'Chat',
       sortOrder: 1
     }
@@ -58,6 +59,8 @@ function workForTitleWrite(workspaces: number): { hashes: number; sleepLookups: 
     tabs[`wt-${workspaces}-${index}`] = workspaceTabs(`wt-${workspaces}-${index}`)
   }
   getWorktreeIdsWithStructuredChat(tabs, sleptAt)
+  // The first pass visits every chat, which proves the fixtures are chats.
+  expect(sleepLookups).toBe(workspaces)
   const [terminal, chat] = tabs[`wt-${workspaces}-0`]
   const retitled = replaceTabBuckets(tabs, [
     [`wt-${workspaces}-0`, [{ ...terminal, label: 'vim' }, chat]]

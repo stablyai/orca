@@ -52,6 +52,7 @@ function unified(worktreeId: string, label: string): Tab[] {
       id: `chat-${worktreeId}`,
       entityId: `session-${worktreeId}`,
       contentType: 'agent-session',
+      agentSessionAgent: 'codex',
       label: 'Chat',
       sortOrder: 1
     })
