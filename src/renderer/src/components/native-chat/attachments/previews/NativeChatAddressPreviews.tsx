@@ -1,11 +1,11 @@
 import { lazy, Suspense, useState } from 'react'
 import { File, FileText, Image as ImageIcon, Music, ShieldAlert, Video, X } from 'lucide-react'
-import { LoadingSpinner } from '@/components/LoadingSpinner'
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { SecuritySurface } from '@/components/ui/security-surface'
-import MediaViewer from '@/components/editor/MediaViewer'
-import { formatBytes } from '@/components/status-bar/workspace-space-format'
+import MediaViewer from '@/components/editor/document-media/MediaViewer'
+import { formatBytes } from '../../../../../../shared/text/format-bytes'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import type {
@@ -14,7 +14,7 @@ import type {
 } from '../../../../../../shared/file-preview/chat-address-preview'
 import { addressPreviewErrorMessage } from './native-chat-address-preview-error'
 
-const PdfViewer = lazy(() => import('@/components/editor/PdfViewer'))
+const PdfViewer = lazy(() => import('@/components/editor/pdf/PdfViewer'))
 const PreviewMarkdown = lazy(() => import('./NativeChatAddressPreviewMarkdown'))
 type ReadyPreview = Extract<ChatAddressPreviewResult, { status: 'ready' }>
 type Props = {
@@ -148,7 +148,6 @@ function ReadyPreviewCard({
             src={result.url}
             mimeType={result.mimeType}
             filePath={label}
-            canOpenLocally={false}
           />
         </div>
       )}

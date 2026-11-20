@@ -4,8 +4,8 @@ import type {
   OrcadMigrationManifest
 } from '../../../../../shared/orcad-migration/orcad-migration-manifest'
 import { parseOrcadMigrationManifest } from '../../../../../shared/orcad-migration/orcad-migration-manifest-validation'
-import { advertisedOrcadMigrationDestinationCapabilities } from '../../../../orcad/orcad-migration-destination-capabilities'
-import { assertOrcadMigrationManifestDigest } from '../../../../orcad/orcad-migration-manifest-digest'
+import { advertisedOrcadMigrationDestinationCapabilities } from '../../../../orcad/migration/orcad-migration-destination-capabilities'
+import { assertOrcadMigrationManifestDigest } from '../../../../orcad/migration/orcad-migration-manifest-digest'
 import type { Store } from '../../../../persistence/loading-store/store'
 import type { OrcadMigrationDestinationCatalog } from '../orcad-migration-cutover-coordinator'
 

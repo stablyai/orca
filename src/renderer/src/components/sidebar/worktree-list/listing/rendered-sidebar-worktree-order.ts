@@ -5,12 +5,12 @@ import {
 import { selectSidebarLineageParentIdentities } from '@/store/slices/worktrees/metadata/cross-store-lineage-parents'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { AppState } from '@/store/types'
-import { getHostDisplayLabelOverrides } from '../../../../../../shared/host-setting-overrides'
+import { getHostDisplayLabelOverrides } from '../../../../../../shared/execution-host/host-setting-overrides'
 import {
   ALL_EXECUTION_HOSTS_SCOPE,
   getLocalExecutionHostLabel,
   getSettingsFocusedExecutionHostId
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import { getIndexedRepoMap } from '@/store/repos/repository-catalog-index'
 import { getIndexedWorktreeMap } from '@/store/slices/worktrees/listing/worktree-catalog-index'
 import { getProjectHostSetupProjectionFromState } from '@/store/projects/project-host-setup-selector'
@@ -25,18 +25,19 @@ import {
 import {
   addHostSectionRows,
   type HostSectionRow
-} from '../../../../../../shared/sidebar-list/host-section-rows'
-import { orderHostSectionOptions } from '../../../../../../shared/sidebar-list/host-section-order'
+} from '../../../../../../shared/sidebar-list/hosts/host-section-rows'
+import { orderHostSectionOptions } from '../../../../../../shared/sidebar-list/hosts/host-section-order'
 import { buildSidebarHostOptions } from '../controls/sidebar-host-options'
-import { getLogicalRepoOrderRankById } from '../../../../../../shared/project-section-order'
+import { getLogicalRepoOrderRankById } from '../../../../../../shared/sidebar-list/sections/project-section-order'
 import { getRenderedWorktreesInSidebarOrder } from '../navigation/worktree-sidebar-row-preference'
 import { selectWorktreeListReviewCacheInputs } from './review-cache-inputs'
 import {
   filterFolderWorkspacesForVisibleHosts,
   filterProjectGroupsForVisibleHosts,
   getVisibleSidebarHostIdSet
-} from '../../../../../../shared/sidebar-list/host-filtering'
+} from '../../../../../../shared/sidebar-list/hosts/host-filtering'
 import { selectWorkspaceBoardStatuses } from '@/store/workspaces/status/host-workspace-status-columns'
+import { indexHiddenProjects } from '../../../../../../shared/project/catalog/hidden-projects'
 
 const EMPTY_REPO_ID_SET: ReadonlySet<string> = Object.freeze(new Set<string>())
 const EMPTY_IMPORTED_BY_REPO: ReadonlyMap<string, ImportedWorktreesCardCandidate> = new Map()
@@ -106,7 +107,8 @@ export function computeRenderedSidebarRows(
     // Why no hostLabelById: it only feeds display-only host context labels, never row order.
     defaultHostId,
     pinnedDisplayPolicy,
-    filterRepoIds: state.filterRepoIds
+    filterRepoIds: state.filterRepoIds,
+    hiddenProjects: indexHiddenProjects(state.repos, defaultHostId)
   }).render(state.collapsedGroups)
 
   // Build the host registry only when sections may affect order; zero/one-host cases still safely no-op.

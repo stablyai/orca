@@ -12,7 +12,7 @@ import {
   openLocalRegularFile,
   readLocalFileBounded,
   readLocalFilePrefix
-} from '../ipc/filesystem/local-regular-file-read'
+} from '../filesystem/local-file-io/local-regular-file-read'
 import { assertRasterImagePreviewWithinLimits } from '../../shared/file-preview/raster-image-preview-limits'
 import {
   CHAT_PREVIEW_MAX_SOURCE_LENGTH,

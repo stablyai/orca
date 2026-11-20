@@ -12,11 +12,21 @@ export function browserProfileRpcFixture(executorRuntimeId: string, outerRuntime
     {
       getRuntimeId: () => executorRuntimeId,
       getAuthoritativeWindow: unavailable,
+      getAvailableAuthoritativeWindow: unavailable,
       getRuntimeBrowserPageRegistry: unavailable,
-      getBrowserHostLeaseRegistry: unavailable
+      getBrowserHostLeaseRegistry: unavailable,
+      getBrowserHostRequestRegistry: unavailable,
+      getAgentBrowserBridge: unavailable,
+      resolveBrowserWorkspace: unavailable,
+      resolveBrowserNetworkExecutionHost: unavailable
     },
     { requireAgentBrowserBridge: unavailable, resolveBrowserCommandTarget: async () => ({}) },
-    { describeBrowserTab: unavailable, resolveClientHostedBrowserPage: async () => undefined }
+    {
+      describeBrowserTab: unavailable,
+      describeClientHostedBrowserTab: unavailable,
+      resolveClientHostedBrowserPage: async () => undefined
+    },
+    { browserTabCreate: unavailable }
   )
   const runtime = new OrcaRuntimeService(null)
   vi.spyOn(runtime, 'getRuntimeId').mockReturnValue(outerRuntimeId)

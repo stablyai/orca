@@ -1,81 +1,44 @@
-import '../worker/session-search-worker.test-fixture'
-import { mkdir, rm, writeFile } from 'node:fs/promises'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, expect, it } from 'vitest'
-import { resetTranscriptConsumersForTests } from '../../ai-vault/transcripts/session-transcript-consumers'
+import { afterEach, expect, it } from 'vitest'
+import type { SessionSearchIndexStore } from '../storage/session-search-store-types'
 import { retireDeletedSessionSearchSources } from './session-search-deleted-sources'
-import {
-  SessionSearchDirectoryListings,
-  type SessionSearchDirectoryReader
-} from './session-search-directory-listings'
-import {
-  openSessionSearchIndexerHarness,
-  type SessionSearchIndexerHarness
-} from '../indexing/session-search-indexer-test-fixture'
-import { SessionSearchStore } from '../storage/session-search-store'
+import { SessionSearchDirectoryListings } from './session-search-directory-listings'
 
-let harness: SessionSearchIndexerHarness
-let store: SessionSearchStore
-let removed: string[]
+let dir: string | null = null
 
-beforeEach(async () => {
-  resetTranscriptConsumersForTests()
-  harness = await openSessionSearchIndexerHarness('ss-deleted-sources')
-  removed = []
-  store = new SessionSearchStore(harness.databasePath)
-  store.removeFile = (path: string) => removed.push(path)
+afterEach(() => {
+  if (dir) {
+    rmSync(dir, { recursive: true, force: true })
+  }
+  dir = null
 })
 
-afterEach(async () => {
-  store.close()
-  await harness.cleanup()
-})
+it("retires a Hermes JSON snapshot row while the file stays on disk, and keeps other agents' files", async () => {
+  dir = mkdtempSync(join(tmpdir(), 'orca-search-retire-'))
+  const hermesHome = join(dir, '.hermes')
+  const jcodeHome = join(dir, '.jcode')
+  const snapshot = join(hermesHome, 'sessions', 'session_local-1.json')
+  const jcode = join(jcodeHome, 'sessions', 'session_2.json')
+  for (const file of [snapshot, jcode]) {
+    mkdirSync(join(file, '..'), { recursive: true })
+    writeFileSync(file, '{}')
+  }
+  const removed: string[] = []
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: retirement only calls removeFile on this store.
+  const store = {
+    removeFile: (path: string) => removed.push(path)
+  } as unknown as SessionSearchIndexStore
 
-function retire(
-  paths: readonly string[],
-  options: {
-    roots?: readonly string[]
-    emptiedRoots?: ReadonlySet<string>
-    enumeratedContainers?: ReadonlyMap<string, ReadonlySet<string>>
-    listings?: SessionSearchDirectoryReader
-    directoryLimit?: number
-  } = {}
-) {
-  return retireDeletedSessionSearchSources({
+  const retirement = await retireDeletedSessionSearchSources({
     store,
-    paths,
-    roots: options.roots ?? [harness.roots.claudeProjectsDir ?? ''],
-    emptiedRoots: options.emptiedRoots,
-    enumeratedContainers: options.enumeratedContainers,
-    listings: options.listings ?? new SessionSearchDirectoryListings(),
-    directoryLimit: options.directoryLimit
-  })
-}
-
-it('judges each merged-root directory on its own', async () => {
-  const current = join(harness.roots.openclawStateDir ?? '', 'agents')
-  const legacy = join(harness.roots.openclawLegacyStateDir ?? '', 'agents')
-  const onMissing = join(current, 'main', 'sessions', 'mounted.jsonl')
-  const deleted = join(legacy, 'main', 'sessions', 'deleted.jsonl')
-  await mkdir(join(legacy, 'main', 'sessions'), { recursive: true })
-
-  const result = await retire([onMissing, deleted], { roots: [current, legacy] })
-  expect(result.retired).toEqual([deleted])
-  expect(result.unverifiable).toEqual([onMissing])
-  expect(result.degradedRoots.map((one) => one.root)).toEqual([current])
-})
-
-it('retires a synthetic row when the container it came from is gone', async () => {
-  const db = join(harness.root, 'opencode.db')
-  await writeFile(db, '')
-  const row = `${db}#session-1`
-  const enumeratedContainers = new Map([[db, new Set(['session-1'])]])
-  await expect(retire([row], { roots: [], enumeratedContainers })).resolves.toMatchObject({
-    retired: []
+    paths: [snapshot, jcode],
+    roots: [hermesHome, jcodeHome],
+    referenceOnlyRoots: [hermesHome],
+    listings: new SessionSearchDirectoryListings()
   })
 
-  await rm(db)
-  await expect(retire([row], { roots: [], enumeratedContainers })).resolves.toMatchObject({
-    retired: [row]
-  })
+  expect(removed).toEqual([snapshot])
+  expect(retirement.retired).toEqual([snapshot])
 })

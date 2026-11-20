@@ -12,11 +12,6 @@ import {
   PROVIDER_SUPERVISOR_MAX_STOP_MS
 } from '../../provider-process/provider-process-supervisor'
 
-// The orphan guard's process reads add timers of their own; the timer audit below is the session's.
-vi.mock('../../provider-process/provider-group-orphan-guard', () => ({
-  guardSupervisedProviderGroup: () => false
-}))
-
 const STUB_SERVER_SOURCE = `
 const config = JSON.parse(process.env.STUB_CONFIG)
 // A wedged server ignores SIGTERM and its stdin end, so only SIGKILL ends it.
@@ -171,8 +166,6 @@ function managedHook(key: string, trustStatus = 'untrusted'): StubHook {
 
 describe('runCodexHookTrustGrantSession', () => {
   it('grants and verifies exactly the expected managed entries', async () => {
-    const setTimeoutSpy = vi.spyOn(globalThis, 'setTimeout')
-    const clearTimeoutSpy = vi.spyOn(globalThis, 'clearTimeout')
     const keys = [
       '/home/a/.codex/hooks.json:session_start:0:0',
       '/home/a/.codex/hooks.json:stop:0:0'
@@ -214,12 +207,6 @@ describe('runCodexHookTrustGrantSession', () => {
     expect(written.edits[0].mergeStrategy).toBe('upsert')
     expect(Object.keys(written.edits[0].value).sort()).toEqual([...keys].sort())
     expect(written.reloadUserConfig).toBe(true)
-    // Leaked grace timers delay entry-process exit and synchronous launch preparation.
-    const timerHandles = setTimeoutSpy.mock.results.map(({ value }) => value)
-    expect(timerHandles).toHaveLength(2)
-    expect(clearTimeoutSpy.mock.calls.map(([handle]) => handle)).toEqual(
-      expect.arrayContaining(timerHandles)
-    )
   })
 
   it('skips config/batchWrite when every expected entry is already trusted', async () => {

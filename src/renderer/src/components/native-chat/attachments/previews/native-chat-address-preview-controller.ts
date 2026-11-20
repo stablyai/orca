@@ -1,4 +1,4 @@
-import { createNonSecureContextUuid } from '../../../../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid } from '../../../../../../shared/identifiers/non-secure-context-uuid'
 import {
   CHAT_ADDRESS_PREVIEW_CLIENT_ERROR,
   CHAT_ADDRESS_PREVIEW_LIMIT,

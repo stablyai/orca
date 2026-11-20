@@ -30,8 +30,8 @@ import {
   structuredAgentSessionTargetForHost
 } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 import type { OrchestrationCrewRow } from '../../../../../shared/orchestration/orchestration-crew'
-import type { AgentMessageSource } from '../../../../../shared/agent-session/agent-session-message-source'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { AgentMessageSource } from '../../../../../shared/agent-session/journal/agent-session-message-source'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 
 type Sender = AgentMessageSource['senders'][number]
 const opensInFlight = new Map<string, Promise<void>>()
@@ -111,7 +111,6 @@ async function openSender(
   name: string
 ): Promise<void> {
   const { party } = sender
-  const environmentId = host.kind === 'environment' ? host.environmentId : null
   // Mail identifies senders beyond old terminal handles; tasks carry no mail and resolve coordinators by address.
   const mail = source.orchestration?.message === 'mail-notice' ? source.orchestration.messages : []
   const messageIds = mail
@@ -152,13 +151,22 @@ async function openSender(
       toast.info(agentMessageSenderUnavailableText({ kind: 'replaced' }, name))
       return
     }
-    await focusTerminal(result.handle, environmentId, {
+    await focusTerminal(result.handle, terminalEnvironmentId(host, result), {
       lookupFailure: (failure) => showLookupFailure(failure, name)
     })
   }
 }
 
 type TerminalFocusFeedback = Parameters<typeof focusTerminal>[2]
+
+/** The server a located terminal runs on: the answering host, or the paired server this desktop's own
+ *  host says started it (a remote host's server ids name its own pairings, not this desktop's). */
+export function terminalEnvironmentId(
+  host: RuntimeClientTarget,
+  result: { environmentId?: string }
+): string | null {
+  return host.kind === 'environment' ? host.environmentId : (result.environmentId ?? null)
+}
 
 /** Opens an orchestration party by address on its host; a terminal worker Orca closed reopens there. */
 export async function openOrchestrationDispatch(
@@ -184,11 +192,7 @@ export async function openOrchestrationDispatch(
       feedback?.open
     )
     if (result.kind === 'terminal') {
-      await focusTerminal(
-        result.handle,
-        host.kind === 'environment' ? host.environmentId : null,
-        terminal
-      )
+      await focusTerminal(result.handle, terminalEnvironmentId(host, result), terminal)
     }
   } catch (error) {
     showLookupFailure(
@@ -228,12 +232,14 @@ export async function openOrchestrationCrewAgent(
               )
             ),
           gone: () => unavailable(structuredSessionOpenFeedbackText.gone()),
-          hostCannotOpen: () => unavailable(structuredSessionOpenFeedbackText.hostCannotOpen())
+          hostCannotOpen: () => unavailable(structuredSessionOpenFeedbackText.hostCannotOpen()),
+          notLocated: () => unavailable(structuredSessionOpenFeedbackText.notLocated())
         }
       : {
           unavailable: () => unavailable(structuredSessionOpenFeedbackText.unavailable()),
           hostCannotOpen: () => unavailable(structuredSessionOpenFeedbackText.hostCannotOpen()),
           gone: () => unavailable(structuredSessionOpenFeedbackText.gone()),
+          notLocated: () => unavailable(structuredSessionOpenFeedbackText.notLocated()),
           terminalGone: terminalExited
         }
   const environmentId = host.kind === 'environment' ? host.environmentId : null
@@ -277,7 +283,7 @@ export async function openOrchestrationCrewAgent(
       feedback
     )
     if (result.kind === 'terminal') {
-      await focusTerminal(result.handle, environmentId, terminalFeedback)
+      await focusTerminal(result.handle, terminalEnvironmentId(host, result), terminalFeedback)
     }
   } catch (error) {
     showLookupFailure(

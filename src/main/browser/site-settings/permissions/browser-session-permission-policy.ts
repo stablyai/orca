@@ -1,7 +1,7 @@
 import {
   type BrowserSitePermission,
   BROWSER_SITE_PERMISSIONS
-} from '../../../../shared/browser-site-permission'
+} from '../../../../shared/browser/site-settings/browser-site-permission'
 
 // Site prompts live in browser-site-permission-prompt.ts; other unlisted permissions are denied.
 const AUTO_GRANTED_BROWSER_PERMISSIONS = new Set([

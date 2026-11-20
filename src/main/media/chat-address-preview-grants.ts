@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import type { FileHandle } from 'node:fs/promises'
 import type { WebContents } from 'electron'
 import { CHAT_ADDRESS_PREVIEW_LIMIT } from '../../shared/file-preview/chat-address-preview'
-import { abortWhenRendererGone } from '../ipc/renderer-lifetime-abort'
+import { abortWhenRendererGone } from '../ipc/renderer-requests/renderer-lifetime-abort'
 import { isTrustedBrowserRenderer } from '../ipc/browser/browser-renderer-trust'
 import type { PreviewNetworkBudget } from './chat-address-preview-network'
 

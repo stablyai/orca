@@ -3,7 +3,7 @@ import { describe, it, expect, vi } from 'vitest'
 import {
   createWorkerMaintenanceFixture,
   maintenanceBarrier
-} from './loading-store/profile-state-maintenance-fixture'
+} from './loading-store/profile-writing/profile-state-maintenance-fixture'
 import type { ProfileStateWorkerAuthority } from './profile-state/profile-state-worker-authority'
 vi.mock('../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../telemetry/cohort-classifier', () => ({
@@ -18,17 +18,23 @@ function pauseCommit(authority: ProfileStateWorkerAuthority) {
   const started = maintenanceBarrier()
   const finish = maintenanceBarrier()
   let held = false
-  for (const name of ['writeSerializedDomains', 'writeCompleteSerializedDomains'] as const) {
-    const original = authority[name].bind(authority)
-    vi.spyOn(authority, name).mockImplementation(async (replacements) => {
-      if (!held) {
-        held = true
-        started.resolve()
-        await finish.promise
-      }
-      await original(replacements)
-    })
+  const holdFirst = async (): Promise<void> => {
+    if (!held) {
+      held = true
+      started.resolve()
+      await finish.promise
+    }
   }
+  const writeDomains = authority.writeSerializedDomains.bind(authority)
+  vi.spyOn(authority, 'writeSerializedDomains').mockImplementation(async (...args) => {
+    await holdFirst()
+    await writeDomains(...args)
+  })
+  const writeComplete = authority.writeCompleteSerializedDomains.bind(authority)
+  vi.spyOn(authority, 'writeCompleteSerializedDomains').mockImplementation(async (...args) => {
+    await holdFirst()
+    await writeComplete(...args)
+  })
   return { started: started.promise, release: finish.resolve }
 }
 

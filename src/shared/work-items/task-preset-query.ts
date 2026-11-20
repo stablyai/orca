@@ -1,4 +1,4 @@
-import type { TaskViewPresetId } from '../ui-chrome-types'
+import type { TaskViewPresetId } from '../ui-chrome/ui-chrome-types'
 
 /** Share preset queries across TaskPage fallbacks and openTaskPage prefetch so cache keys agree. */
 export function getTaskPresetQuery(presetId: TaskViewPresetId | null): string {

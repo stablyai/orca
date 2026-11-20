@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs'
+import { access } from 'node:fs/promises'
 import { win32 as pathWin32 } from 'node:path'
-import { WINDOWS_GIT_BASH_SHELL } from '../../../shared/windows-terminal-shell'
+import { WINDOWS_GIT_BASH_SHELL } from '../../../shared/shell/launch/windows-terminal-shell'
 
 type GitBashPathOptions = {
   env?: NodeJS.ProcessEnv
@@ -107,6 +108,26 @@ export function resolveGitBashPath(options: GitBashPathOptions = {}): string | n
 
 export function isGitBashAvailable(): boolean {
   return resolveGitBashPath() !== null
+}
+
+/** isGitBashAvailable without blocking the event loop, for reads a paired client makes. */
+export async function isGitBashAvailableAsync(): Promise<boolean> {
+  if (process.platform !== 'win32') {
+    return false
+  }
+  for (const candidate of getGitBashCandidatePaths()) {
+    if (isGitForWindowsBashPath(candidate) && (await pathExists(candidate))) {
+      return true
+    }
+  }
+  return false
+}
+
+function pathExists(path: string): Promise<boolean> {
+  return access(path).then(
+    () => true,
+    () => false
+  )
 }
 
 export function isGitForWindowsBashPath(shellPath: string): boolean {

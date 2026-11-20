@@ -6,6 +6,7 @@ import { useNativeChatTypedInsertion } from './use-native-chat-typed-insertion'
 import { useNativeChatAddressPreviews } from '../../attachments/previews/use-native-chat-address-previews'
 import { useNativeChatPastedTextFile } from '../../paste/use-native-chat-pasted-text-file'
 import type { NativeChatComposerInput } from './native-chat-composer-input'
+import { glowNativeChatComposer } from '../../native-chat-composer-glow'
 
 type UseNativeChatComposerHandleArgs = Parameters<typeof useNativeChatTypedInsertion>[0] &
   Omit<UseNativeChatComposerPasteArgs, 'insertTypedText'> & {
@@ -15,6 +16,8 @@ type UseNativeChatComposerHandleArgs = Parameters<typeof useNativeChatTypedInser
     addressPreviewsEnabled: boolean
     /** A structured chat's editor while it shows this scope, where a long paste saved as a file lands. */
     pastedTextEditor: (() => NativeChatComposerInput | null) | null
+    /** Text this long pastes as a "Pasted text" file; defaults to chat's. */
+    longPasteThreshold?: number
   }
 
 /** Typed and pasted insertion and its address previews share the composer lifetime. */
@@ -38,14 +41,42 @@ export function useNativeChatComposerHandle(
     enabled: addressPreviewsEnabled
   })
   const { onTextPasted } = addressPreviews
-  const { insertTypedText, appendText, acceptsText, insertPastedText, focus, contains } =
-    useNativeChatTypedInsertion({
-      textareaRef,
-      isComposing,
-      setDraft,
-      setCaret: args.setCaret,
-      setActiveSuggestion
-    })
+  const {
+    insertTypedText,
+    appendText: appendPlainText,
+    acceptsText,
+    insertPastedText,
+    focus: focusInput,
+    contains
+  } = useNativeChatTypedInsertion({
+    textareaRef,
+    isComposing,
+    setDraft,
+    setCaret: args.setCaret,
+    setActiveSuggestion
+  })
+
+  const { attachmentScopeKey } = args
+  const appendText = useCallback(
+    (text: string, options?: { glow?: boolean }): void => {
+      appendPlainText(text)
+      if (options?.glow && attachmentScopeKey) {
+        glowNativeChatComposer(attachmentScopeKey)
+      }
+    },
+    [appendPlainText, attachmentScopeKey]
+  )
+
+  const focus = useCallback(
+    (options?: { caretAtEnd?: boolean; glow?: boolean }): boolean => {
+      const focused = focusInput(options)
+      if (focused && options?.glow && attachmentScopeKey) {
+        glowNativeChatComposer(attachmentScopeKey)
+      }
+      return focused
+    },
+    [focusInput, attachmentScopeKey]
+  )
 
   const insertPreviewableText = useCallback(
     (text: string): boolean => {
@@ -63,7 +94,8 @@ export function useNativeChatComposerHandle(
     scopeEditor: args.attachmentScopeKey ? args.pastedTextEditor : null,
     resolveAttachmentOwner: args.resolveAttachmentOwner,
     insertTypedText: insertPreviewableText,
-    setNotice: args.setNotice
+    setNotice: args.setNotice,
+    longPasteThreshold: args.longPasteThreshold
   })
   const { handlePaste: handlePasteEvent, pasteFromClipboard } = useNativeChatComposerPaste({
     ...pasteArgs,

@@ -1,5 +1,5 @@
-import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
-import type { CommentMarkdownExtension } from '@/components/sidebar/CommentMarkdown'
+import CommentMarkdown from '@/components/comment-markdown/CommentMarkdown'
+import type { CommentMarkdownExtension } from '@/components/comment-markdown/CommentMarkdown'
 import { translate } from '@/i18n/i18n'
 
 // Override both images and links: the document renderer can upgrade GitHub links to media.

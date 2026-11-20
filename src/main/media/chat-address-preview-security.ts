@@ -7,7 +7,7 @@ import {
   isDeviceNamespacePath,
   isNetworkSharePath,
   isWindowsReservedDeviceName
-} from '../ipc/automatic-load-path-text'
+} from '../ipc/filesystem/access/automatic-load-path-text'
 
 export const CHAT_PREVIEW_MAX_SOURCE_LENGTH = 8192
 export const CHAT_PREVIEW_MAX_ID_LENGTH = 128

@@ -1,4 +1,4 @@
-import { LSOF_NONBLOCKING_ARGS } from '../../shared/lsof-nonblocking-args'
+import { LSOF_NONBLOCKING_ARGS } from '../../shared/process-observation/lsof-nonblocking-args'
 import { runPortScanCommand } from './port-scan-command-client'
 import type { ProcessMetadata } from './local-workspace-port-scan-state'
 

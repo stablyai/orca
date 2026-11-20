@@ -6,7 +6,7 @@ import {
   removeManagedRuntime
 } from '@/runtime/hosts/installation/managed-runtime-install-status'
 import type { ManagedRuntimeInstallObservation } from '@/runtime/hosts/installation/use-managed-runtime-install'
-import { LoadingSpinner } from '../LoadingSpinner'
+import { LoadingSpinner } from '../ui/LoadingSpinner'
 import { Button } from '../ui/button'
 import { Progress } from '../ui/progress'
 import {
@@ -27,6 +27,8 @@ export function ManagedRuntimeInstallRow(props: {
   /** A sign-in runs the installed server, so Install and Remove wait for it; Cancel does not. */
   signInRunning?: boolean
   buttonSize?: 'xs' | 'default'
+  /** False leaves out the ⋯ Reinstall/Remove menu, for rows that only prompt an install. */
+  menu?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
   const { observation, agentLabel } = props
@@ -130,7 +132,7 @@ export function ManagedRuntimeInstallRow(props: {
               {button.label}
             </Button>
           ) : null}
-          {install || remove ? (
+          {props.menu !== false && (install || remove) ? (
             <ManagedRuntimeActionsMenu
               agentLabel={agentLabel}
               host={subject.target}

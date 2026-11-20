@@ -1,17 +1,19 @@
 import { useRef, useState, useSyncExternalStore } from 'react'
-import { StyleSheet, View } from 'react-native'
+import { StyleSheet, View, type HostInstance } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { ChevronLeft, MoreHorizontal, PanelLeftOpen } from 'lucide-react-native'
+import { ChevronLeft, ListChecks, MoreHorizontal, PanelLeftOpen } from 'lucide-react-native'
+import { MobileBotAvatar } from '../bots/MobileBotAvatar'
 import { NavBar, NavBarRefreshLine } from '../components/nav-bar/NavBar'
 import { useRefreshHint } from '../query/refresh-hint'
 import { NavBarButton } from '../components/nav-bar/NavBarButton'
 import { MobileSessionHeaderMoreMenu } from './MobileSessionHeaderMoreMenu'
+import { MobileBotItemsStrip } from '../bots/items/MobileBotItemsStrip'
 import { MobileSourceControlButton } from './MobileSourceControlButton'
-import { MobileSessionTabStrip } from './tabs/MobileSessionTabStrip'
+import { MobileSessionTabBar } from './tabs/MobileSessionTabBar'
 import { MobileSessionTitleBlock } from './MobileSessionTitleBlock'
 import type { SessionTitleCard } from './tabs/use-session-title-card'
 import { styles } from './mobile-session-styles'
-import { spacing } from '../theme/mobile-theme'
+import { colors, spacing } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useHostSidebarReveal } from '../layout/host-sidebar-reveal'
@@ -44,6 +46,13 @@ export function MobileSessionHeader({
     connectionEscalated,
     terminalSummary,
     handlePanelTap,
+    routeBot,
+    botStatus,
+    itemsOnPhone,
+    botPanel,
+    openBotPanel,
+    sessionTabs,
+    activeSessionTabId,
     terminalResume,
     connState
   } = controller
@@ -53,18 +62,27 @@ export function MobileSessionHeader({
   const showRefreshLine = useRefreshHint(catchingUp && connState === 'connected')
   const layout = useResponsiveLayout()
   const [headerWidth, setHeaderWidth] = useState<number | null>(null)
-  const moreRef = useRef<View>(null)
+  const moreRef = useRef<HostInstance>(null)
   const revealSidebar = useHostSidebarReveal()
   const topChrome = useTopChromeSpace()
   const sideRail = useShellSideRail()
   // Why: a sideways phone is ~390pt tall, so the tabs share the top bar instead of taking a second row.
   const hasTabs = visibleTabs.length > 0
   const tabsInTopBar = (layout.isLandscapePhone || sideRail) && hasTabs
-  // Bar buttons otherwise leave less than two readable tabs on a narrow header.
+  // Bar buttons otherwise leave the tab bar too narrow to read on a narrow header.
   const actionsCollapsed = tabsInTopBar && (headerWidth ?? layout.width) < 600
-  const sourceControlInBar = !isFloatingWorkspaceRoute && !actionsCollapsed
+  // A bot's screen has no source control (its home isn't a repository): Items takes its place.
+  const itemsInBar = itemsOnPhone && routeBot !== null
+  const homeChatId = routeBot?.bot.chatSessionId
+  const activeTab = sessionTabs.find((tab) => tab.id === activeSessionTabId)
+  const onHomeChat =
+    homeChatId !== undefined &&
+    homeChatId !== null &&
+    activeTab?.type === 'agent-session' &&
+    activeTab.sessionId === homeChatId
+  const sourceControlInBar = !isFloatingWorkspaceRoute && !actionsCollapsed && !itemsInBar
   const tabStrip = hasTabs ? (
-    <MobileSessionTabStrip
+    <MobileSessionTabBar
       controller={controller}
       inTopBar={tabsInTopBar}
       actionsCollapsed={actionsCollapsed}
@@ -94,10 +112,15 @@ export function MobileSessionHeader({
   const titleBlock =
     !sideRail || !hasTabs || showConnectionRetry || connectionEscalated ? (
       <MobileSessionTitleBlock
-        title={worktreeName || t('session.header.terminalTitle', 'Terminal')}
+        title={
+          routeBot
+            ? routeBot.bot.name
+            : worktreeName || t('session.header.terminalTitle', 'Terminal')
+        }
+        leading={routeBot ? <MobileBotAvatar avatar={routeBot.avatar} size={18} /> : undefined}
         connState={presentedConnState}
         details={details}
-        meta={terminalSummary}
+        meta={botStatus && presentedConnState === 'connected' ? botStatus.line : terminalSummary}
         centered={!tabsInTopBar}
         showConnectionRetry={showConnectionRetry}
         onRetry={() => {
@@ -109,6 +132,21 @@ export function MobileSessionHeader({
     ) : null
   const trailing = (
     <>
+      {itemsInBar ? (
+        <NavBarButton
+          active={botPanel !== null}
+          accessibilityLabel={
+            routeBot.needsYou > 0
+              ? t('session.header.itemsNeedYou', 'Items, {{count}} need you', {
+                  count: routeBot.needsYou
+                })
+              : t('session.header.items', 'Items')
+          }
+          icon={ListChecks}
+          badge={{ count: routeBot.needsYou, color: colors.agentQuestion }}
+          onPress={() => openBotPanel({ tab: 'items' })}
+        />
+      ) : null}
       {sourceControlInBar ? (
         <MobileSourceControlButton
           hostId={hostId}
@@ -167,6 +205,12 @@ export function MobileSessionHeader({
             />
           )}
         </View>
+        {itemsInBar && onHomeChat ? (
+          <MobileBotItemsStrip
+            count={routeBot.needsYou}
+            onView={() => openBotPanel({ tab: 'items' })}
+          />
+        ) : null}
         {tabsInTopBar ? null : tabStrip}
         {showRefreshLine ? <NavBarRefreshLine /> : null}
       </SafeAreaView>

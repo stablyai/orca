@@ -1,6 +1,9 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import type { BrowserUserAgentMode } from '../../../../shared/browser-user-agent-mode'
+import {
+  DEFAULT_BROWSER_USER_AGENT_MODE,
+  type BrowserUserAgentMode
+} from '../../../../shared/browser/identity/browser-user-agent-mode'
 
 /** Read synchronously before Electron ready: worker identity uses a process-global default. */
 export const BROWSER_IDENTITY_MODE_FILE = 'browser-identity-mode.json'
@@ -23,7 +26,7 @@ type HealthyBrowserIdentityModeReadResult = {
 
 type UnhealthyBrowserIdentityModeReadResult = {
   state: 'corrupt' | 'future' | 'unreadable'
-  appliedMode: 'clean'
+  appliedMode: typeof DEFAULT_BROWSER_USER_AGENT_MODE
   configuredMode: null
   explicitSelection: null
   migrationNoticePending: null
@@ -50,7 +53,7 @@ function unhealthyResult(
 ): UnhealthyBrowserIdentityModeReadResult {
   return {
     state,
-    appliedMode: 'clean',
+    appliedMode: DEFAULT_BROWSER_USER_AGENT_MODE,
     configuredMode: null,
     explicitSelection: null,
     migrationNoticePending: null
@@ -80,10 +83,12 @@ function parseRecord(raw: string): BrowserIdentityModeReadResult {
   ) {
     return unhealthyResult('corrupt')
   }
+  // Only an explicit choice pins a mode; otherwise follow the current default.
+  const effectiveMode = explicitSelection ? mode : DEFAULT_BROWSER_USER_AGENT_MODE
   return {
     state: 'valid',
-    appliedMode: mode,
-    configuredMode: mode,
+    appliedMode: effectiveMode,
+    configuredMode: effectiveMode,
     explicitSelection,
     migrationNoticePending
   }
@@ -96,8 +101,8 @@ export function readBrowserIdentityModeRecord(userDataPath: string): BrowserIden
     if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
       return {
         state: 'missing',
-        appliedMode: 'clean',
-        configuredMode: 'clean',
+        appliedMode: DEFAULT_BROWSER_USER_AGENT_MODE,
+        configuredMode: DEFAULT_BROWSER_USER_AGENT_MODE,
         explicitSelection: false,
         migrationNoticePending: false
       }

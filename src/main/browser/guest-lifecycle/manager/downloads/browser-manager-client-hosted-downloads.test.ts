@@ -44,6 +44,7 @@ import {
 import { createBrowserClientPageGuestBinding } from '../../../client-pages/lifecycle/browser-client-page-guest-binding'
 import { resetBrowserRouteGuestPopupOwnership } from '../../../routing/guest-authority/browser-route-guest-popup-ownership'
 import {
+  guestNavigationMethods,
   createDownloadItem,
   getDownloadItemEventHandler,
   rendererWebContentsId,
@@ -176,8 +177,10 @@ describe('client-hosted downloads', () => {
 
 function createGuest(id: number) {
   return {
+    ...guestNavigationMethods(),
     id,
     isDestroyed: vi.fn(() => false),
+    isCrashed: vi.fn(() => false),
     isCurrentlyAudible: vi.fn(() => false),
     getType: vi.fn(() => 'webview'),
     setBackgroundThrottling: browserMocks.guestSetBackgroundThrottlingMock,

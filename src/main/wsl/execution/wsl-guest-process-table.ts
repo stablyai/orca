@@ -6,7 +6,7 @@ import {
   parseWslGuestPaneProcesses,
   WSL_GUEST_PANE_PROCESS_SCRIPT,
   type WslGuestProcessRow
-} from '../../persistence/moving-wsl-projects/wsl-move-guest-foreground'
+} from '../../persistence/moving-wsl-projects/quiescence/wsl-move-guest-foreground'
 import { runWslProcess } from './wsl-runner'
 import { blockedWslDistroForPath } from '../filesystem/wsl-unc-access-gate'
 

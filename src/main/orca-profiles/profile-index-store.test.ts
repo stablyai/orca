@@ -2,22 +2,23 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { installFakeAppEnvironment } from '../../../config/scripts/test-runtime/environment/vitest-host-ports-setup'
 import {
   existsSync,
+  linkSync,
   mkdtempSync,
   readFileSync,
   writeFileSync,
   mkdirSync,
   renameSync
 } from 'node:fs'
-import { removeTreeSync } from '../../shared/windows-transient-lock-removal'
+import { removeTreeSync } from '../../shared/file-write/windows-transient-lock-removal'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { openProfileStateDatabase } from '../persistence/profile-state/profile-state-database'
+import { openProfileStateDatabase } from '../persistence/profile-state/database/profile-state-database'
 import {
   createDefaultLocalOrcaProfile,
   DEFAULT_LOCAL_ORCA_PROFILE_ID,
   ORCA_PROFILE_INDEX_SCHEMA_VERSION,
   type OrcaProfileIndex
-} from '../../shared/orca-profiles'
+} from '../../shared/orca-profiles/orca-profiles'
 
 const testState = { dir: '' }
 
@@ -131,6 +132,17 @@ describe('profile index store', () => {
     expect(readFileSync(join(testState.dir, 'orca-data.json'), 'utf-8')).toContain('legacy')
   })
 
+  it('supersedes a sign-in still in flight before the switch is published', async () => {
+    const { createLocalOrcaProfile, setActiveOrcaProfile } = await loadProfileIndexStore()
+    const attempts = await import('./cloud-auth/profile-cloud-connect-attempts')
+    const created = createLocalOrcaProfile({ name: 'Work' })
+    const attempt = attempts.beginCloudConnectAttempt()
+
+    setActiveOrcaProfile(created.profile.id)
+
+    expect(attempts.isCloudConnectAttemptSuperseded(attempt)).toBe(true)
+  })
+
   const posixIt = process.platform === 'win32' ? it.skip : it
   posixIt('writes a fresh profile index when umask removes owner-write permission', async () => {
     const store = await loadProfileIndexStore()
@@ -188,5 +200,29 @@ describe('profile index store', () => {
 
     expect(() => store.ensureActiveOrcaProfile()).toThrow('Could not read active profile index')
     expect(readJson(indexPath)).toEqual(index)
+  })
+
+  it('replaces a hard-linked backup without mutating the unrelated inode', async () => {
+    const store = await loadProfileIndexStore()
+    const indexPath = (await import('./profile-storage-paths')).getOrcaProfileIndexPath()
+    const first = createDefaultLocalOrcaProfile(1)
+    const firstIndex: OrcaProfileIndex = {
+      schemaVersion: ORCA_PROFILE_INDEX_SCHEMA_VERSION,
+      activeProfileId: first.id,
+      profiles: [first]
+    }
+    store.writeProfileIndex(indexPath, firstIndex)
+
+    const unrelated = join(testState.dir, 'unrelated.json')
+    writeFileSync(unrelated, '{"preserve":true}', 'utf-8')
+    linkSync(unrelated, `${indexPath}.bak`)
+
+    const second = { ...first, name: 'Updated' }
+    const secondIndex: OrcaProfileIndex = { ...firstIndex, profiles: [second] }
+    store.writeProfileIndex(indexPath, secondIndex)
+
+    expect(readFileSync(unrelated, 'utf-8')).toBe('{"preserve":true}')
+    expect(readJson(`${indexPath}.bak`)).toEqual(firstIndex)
+    expect(readJson(indexPath)).toEqual(secondIndex)
   })
 })

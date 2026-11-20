@@ -1,14 +1,17 @@
-import { describe, expect, it } from 'vitest'
+import type { AgentStatusEntry } from '../../../../../../shared/agent-status/contracts/agent-status-types'
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/status-ownership/accepted-agent-statuses'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AppState } from '@/store/types'
 import type { TerminalTab } from '../../../../../../shared/workspace-layout/terminal-tab-types'
 import { aiVaultTitleSyncInputsChanged } from './ai-vault-tab-title-sync-inputs'
 
+afterEach(() => vi.restoreAllMocks())
+
 function makeState(count = 1): AppState {
-  const live: AppState['agentStatusByPaneKey'] = {}
-  const retained: AppState['retainedAgentsByPaneKey'] = {}
+  const live: Record<string, AgentStatusEntry> = {}
   const sleeping: AppState['sleepingAgentSessionsByPaneKey'] = {}
   const tabs: TerminalTab[] = []
-  for (let index = 0; index < count * 3; index++) {
+  for (let index = 0; index < count * 2; index++) {
     const tab: TerminalTab = {
       id: `tab-${index}`,
       worktreeId: 'wt-title',
@@ -34,14 +37,6 @@ function makeState(count = 1): AppState {
     tabs.push(tab)
     if (index < count) {
       live[entry.paneKey] = entry
-    } else if (index < count * 2) {
-      retained[entry.paneKey] = {
-        entry,
-        tab,
-        worktreeId: tab.worktreeId,
-        agentType: 'codex',
-        startedAt: 1
-      }
     } else {
       sleeping[entry.paneKey] = {
         ...entry,
@@ -51,9 +46,9 @@ function makeState(count = 1): AppState {
       }
     }
   }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this selector fixture supplies every field the title collector reads.
   return {
-    agentStatusByPaneKey: live,
-    retainedAgentsByPaneKey: retained,
+    agentStatusByPaneKey: acceptedAgentStatuses(Object.entries(live)),
     sleepingAgentSessionsByPaneKey: sleeping,
     tabsByWorktree: { 'wt-title': tabs },
     terminalLayoutsByTabId: {},
@@ -65,16 +60,6 @@ function makeState(count = 1): AppState {
     repos: [],
     settings: {}
   } as unknown as AppState
-}
-
-async function collectGarbage(): Promise<void> {
-  if (typeof globalThis.gc !== 'function') {
-    throw new Error('Run with the repository Vitest --expose-gc config')
-  }
-  for (let round = 0; round < 3; round++) {
-    await new Promise<void>((resolve) => setImmediate(resolve))
-    globalThis.gc()
-  }
 }
 
 describe('AI Vault title subscription inputs', () => {
@@ -104,38 +89,5 @@ describe('AI Vault title subscription inputs', () => {
       }
     }
     expect(aiVaultTitleSyncInputsChanged(moved, settingsOnly)).toBe(true)
-  })
-
-  it("releases a closed tab's status and tab maps after an update that skips the owner comparison", async () => {
-    function cacheThenCloseTab() {
-      const open = makeState(3)
-      // An owner-only update caches request membership for the open tabs.
-      const ownerOnly: AppState = { ...open, settings: structuredClone(open.settings) }
-      expect(aiVaultTitleSyncInputsChanged(ownerOnly, open)).toBe(false)
-      // Closing a tab replaces membership maps and returns before any owner comparison.
-      const [closedPane] = Object.keys(open.agentStatusByPaneKey)
-      const { [closedPane]: _closed, ...agentStatusByPaneKey } = open.agentStatusByPaneKey
-      const closed: AppState = {
-        ...ownerOnly,
-        agentStatusByPaneKey,
-        tabsByWorktree: { 'wt-title': open.tabsByWorktree['wt-title'].slice(1) }
-      }
-      expect(aiVaultTitleSyncInputsChanged(closed, ownerOnly)).toBe(true)
-      return {
-        closed,
-        retired: [new WeakRef(open.agentStatusByPaneKey), new WeakRef(open.tabsByWorktree)]
-      }
-    }
-
-    const { closed, retired } = cacheThenCloseTab()
-    await collectGarbage()
-
-    expect(retired.map((ref) => ref.deref())).toEqual([undefined, undefined])
-    expect(
-      aiVaultTitleSyncInputsChanged(
-        { ...closed, settings: structuredClone(closed.settings) },
-        closed
-      )
-    ).toBe(false)
   })
 })

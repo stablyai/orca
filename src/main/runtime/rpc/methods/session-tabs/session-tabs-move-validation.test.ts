@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from '../../../orca-runtime'
-import type { RuntimeMobileSessionTabsSnapshot } from '../../../../../shared/runtime-session-contracts'
+import type { RuntimeMobileSessionTabsSnapshot } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 
 function setMobileSessionSnapshot(
   runtime: OrcaRuntimeService,

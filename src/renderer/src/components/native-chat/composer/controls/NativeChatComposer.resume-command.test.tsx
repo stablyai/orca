@@ -2,14 +2,15 @@
 
 // @vitest-environment happy-dom
 
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/status-ownership/accepted-agent-statuses'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { useLayoutEffect, type RefObject } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createStructuredAgentSessionOptionsWriteOwner } from '../../../../../../shared/agent-session/options/structured-agent-session-options-write-owner'
-import { createStructuredSessionSelectionController } from '../../../../../../shared/agent-session/options/structured-agent-session-selection-operations'
+import { createStructuredAgentSessionOptionsWriteOwner } from '../../../../../../shared/agent-session/options/reconciliation/structured-agent-session-options-write-owner'
+import { createStructuredSessionSelectionController } from '../../../../../../shared/agent-session/options/selection/structured-agent-session-selection-operations'
 import { createStructuredAgentSessionOptionState } from '../../../../../../shared/agent-session/options/structured-agent-session-options'
-import { structuredAgentSessionSeedCatalog } from '../../../../../../shared/agent-session/options/structured-agent-session-seed-catalog'
-import type { NativeChatPickerItem } from '../../../../../../shared/native-chat/input/native-chat-picker-items'
+import { structuredAgentSessionSeedCatalog } from '../../../../../../shared/agent-session/options/model-catalog/structured-agent-session-seed-catalog'
+import type { NativeChatPickerItem } from '../../../../../../shared/native-chat/input/composer/native-chat-picker-items'
 import type { QueuedMessageInlineEditor } from '../../queue/editing/native-chat-queued-edit-session'
 import type { NativeChatStructuredComposerTransport } from '../submit/native-chat-structured-composer-transport'
 import type { AgentType } from '../../../../../../shared/agent-status/contracts/agent-status-types'
@@ -50,7 +51,7 @@ vi.mock('../../../../store/index', () => {
   const state = {
     dictationState: 'idle',
     settings: { voice: { enabled: false }, nativeChatSessionOptions: {} },
-    agentStatusByPaneKey: {},
+    agentStatusByPaneKey: acceptedAgentStatuses(),
     activeWorktreeId: 'wt-1',
     activeWorkspaceExecutionHostId: 'ssh:box',
     tabsByWorktree: { 'wt-1': [{ id: 'tab-1' }] },
@@ -115,6 +116,7 @@ vi.mock('../editor/use-native-chat-composer-keydown', () => ({
 }))
 
 import { NativeChatComposer } from '../NativeChatComposer'
+import { NativeChatSessionHistoryScopeContext } from '../../native-chat-session-history-scope'
 
 function renderStructuredChat(
   editSession?: QueuedMessageInlineEditor,
@@ -154,6 +156,62 @@ function renderStructuredChat(
   return { transport, rerender: () => view.rerender(chat()) }
 }
 
+describe('/resume in the native chat composer', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mocks.draft = '/resume'
+    mocks.imageAttachments = []
+    mocks.fieldProps = null
+    mocks.keyDownArgs = null
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: { git: { discoverCommitMessageModels: vi.fn(async () => ({ success: false })) } }
+    })
+  })
+  afterEach(() => cleanup())
+
+  it("opens a room's whole home-workspace history, with no chat agent to resume in place", () => {
+    mocks.draft = '/resume deploy'
+    const transport: NativeChatStructuredComposerTransport = {
+      capturePresentation: () => () => true,
+      send: vi.fn(() => true),
+      dispatchCommand: vi.fn(async () => ({ handled: false, accepted: false, error: null })),
+      optionsSurface: {
+        getSnapshot: () => [],
+        setOption: vi.fn(),
+        invokeAction: vi.fn(),
+        subscribe: () => () => {}
+      },
+      optionSnapshot: [],
+      onError: vi.fn(),
+      runtime: 'local',
+      sessionId: 'bot-group:group-1',
+      worktreeId: 'folder:room-home',
+      runtimeEnvironmentId: null
+    }
+    render(
+      <NativeChatSessionHistoryScopeContext.Provider value="workspace">
+        <NativeChatComposer
+          terminalTabId="room-tab"
+          paneKey="bot-group:group-1"
+          targetPtyId={null}
+          agent="claude"
+          structuredTransport={transport}
+        />
+      </NativeChatSessionHistoryScopeContext.Provider>
+    )
+    act(() => mocks.fieldProps?.onSend?.())
+
+    expect(mocks.openHistory).toHaveBeenCalledWith({
+      workspace: { worktreeId: 'folder:room-home' },
+      chatTabId: 'room-tab',
+      initialQuery: 'deploy',
+      alongside: true
+    })
+    expect(transport.send).not.toHaveBeenCalled()
+    expect(transport.dispatchCommand).not.toHaveBeenCalled()
+  })
+})
 const USAGE: CommandItem = {
   kind: 'command',
   id: 'command:usage',

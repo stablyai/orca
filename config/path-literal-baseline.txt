@@ -13,15 +13,13 @@ config/scripts/workflow/source-routing/pr-code-change-scope.mjs src/shared/agent
 config/scripts/workflow/source-routing/pr-code-change-scope.mjs src/shared/agent-session-record
 config/scripts/workflow/source-routing/pr-code-change-scope.mjs src/shared/agent-session-resume-marker
 config/scripts/workflow/source-routing/pr-code-change-scope.mjs src/shared/agent-session-turn-record
-config/scripts/workflow/source-routing/pr-layout-oracle-route.mjs src/main/runtime/old-session-tabs-stream/
-config/scripts/workflow/source-routing/pr-layout-oracle-route.mjs src/renderer/src/runtime/remote-workspace-frozen/
 config/tsconfig.node.json src/renderer/src/components/native-chat/native-chat-composer-primary-action.ts
 config/tsconfig.node.json src/renderer/src/components/native-chat/native-chat-resolution-receipt.ts
 config/tsconfig.node.json src/renderer/src/components/native-chat/structured-agent-question-projection.ts
-tests/e2e/capture-opencode-tui-repro.mjs src/cli/cmd/tui/ui/spinner
-tests/e2e/cross-version-wire/released-chat-writers.ts src/main/native-chat/agent-session-wire/structured-agent-session-event-sink.ts
+tests/e2e/terminal/performance/capture-opencode-tui-repro.mjs src/cli/cmd/tui/ui/spinner
+tests/e2e/cross-version-wire/chat-journals/released-chat-writers.ts src/main/native-chat/agent-session-wire/structured-agent-session-event-sink.ts
 # Released source trees retain this actual registry; the current registry is checked first.
-tests/e2e/cross-version-wire/release-module-locations.ts src/main/runtime/rpc/methods/index.ts
-tests/e2e/cross-version-wire/release-module-locations.ts src/renderer/src/runtime/remote-runtime-terminal-multiplexer.ts
-# Release tags with flat skill owners need the restored harness beside that actual source.
-.github/workflows/release-cut.yml src/main/skills/skill-provider-runtime-roots.test.ts
+tests/e2e/cross-version-wire/release-checkouts/release-module-locations.ts src/main/runtime/rpc/methods/index.ts
+tests/e2e/cross-version-wire/release-checkouts/release-module-locations.ts src/renderer/src/runtime/remote-runtime-terminal-multiplexer.ts
+# The rollback negative control restores this source from its fixed affected archive.
+config/scripts/runtime-verification/ephemeral-store/run-ephemeral-vm-runtime-store-rollback-repro.mjs src/shared/ephemeral-vm-runtime-store.ts

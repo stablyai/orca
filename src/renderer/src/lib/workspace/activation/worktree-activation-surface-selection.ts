@@ -2,8 +2,8 @@ import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-ag
 import type {
   WorktreeDefaultTabsLaunch,
   WorktreeSetupLaunch
-} from '../../../../../shared/worktree/launch-types'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
+} from '../../../../../shared/worktree/creation/launch-types'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import type { PendingSidebarWorktreeReveal } from '@/store/slices/ui/ui-slice-contract-core'
 import type { WorktreeStartupPayload } from '@/lib/workspace/creation/worktree-startup-payload'
 import type { IssueCommandLaunch } from '@/lib/workspace/activation/initial-surface/worktree-setup-issue-command-queue'

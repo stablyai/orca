@@ -24,6 +24,8 @@ import {
   routePathnameFromKey
 } from '../../mobile-web-app/mobile-web-app-route-manifest.mjs'
 import { MOBILE_WEB_PAGE_ROUTES } from './mobile-web-page-routes.mjs'
+import { reactNativeSvgWebPlugin } from './react-native-svg-web-plugin.mjs'
+import { packageBuildPlugin } from './one-package-build-plugin.mjs'
 import {
   ROUTE_ENTRY_NAMESPACE,
   entryStaticClosure,
@@ -96,6 +98,11 @@ export const MOBILE_WEB_APP_SHIMS = [
       options.plugins?.some((plugin) => plugin.name === HAIRLINE_PLUGIN_NAME) === true
   },
   {
+    // Point imports that would ship a second build (or an unused part) of a package at what the page already loads.
+    name: 'one-package-build',
+    appliesTo: (options) => options.plugins?.includes(packageBuildPlugin) === true
+  },
+  {
     // esbuild has no require.context, so the route tree is generated and injected.
     name: 'route-manifest',
     appliesTo: (options) =>
@@ -124,6 +131,7 @@ const PAGE_ASYNC_STORAGE_MODULE = join(
   'src',
   'mobile-web-shell',
   'bridge',
+  'page-storage',
   'page-async-storage.ts'
 )
 
@@ -235,6 +243,9 @@ export const lucideBarrelPlugin = {
   }
 }
 
+// Render checks bundle components on their own; share the page's module shims so they resolve alike.
+export const mobileWebRenderCheckPlugins = [lucideBarrelPlugin, reactNativeSvgWebPlugin]
+
 // react-native-web's own assignment, matched whole so an upgrade that moves it fails the build.
 const RNW_HAIRLINE_ASSIGNMENT = 'StyleSheet.hairlineWidth = 1;'
 // Round native hairline upward to 1/64 CSS px: WebKit floors exact 1/3 to 21/64 and paints nothing at 3×; 22/64 minimizes spill across rows.
@@ -286,6 +297,8 @@ export function mobileWebAppBuildOptions(
     // Pinned rather than defaulted, so the entry is found by name and not by elimination.
     entryNames: ENTRY_CHUNK_NAME,
     target: ['es2022'],
+    // Keep ESM tree shaking when a dependency also requires the same package.
+    mainFields: ['browser', 'module', 'main'],
     charset: 'utf8',
     legalComments: 'none',
     // Omit maps carrying absolute checkout paths; keep unhashed/unwritten metafile for output/import classification.
@@ -308,7 +321,9 @@ export function mobileWebAppBuildOptions(
         anchoredLazyModules
       ),
       lucideBarrelPlugin,
-      hairlineDevicePixelPlugin
+      reactNativeSvgWebPlugin,
+      hairlineDevicePixelPlugin,
+      packageBuildPlugin
     ],
     resolveExtensions: [
       '.web.tsx',

@@ -4,7 +4,7 @@ import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecy
 import type {
   AgentSessionResumeMarker,
   AgentSessionResumeTrigger
-} from '../../../../shared/agent-session/lifecycle/agent-session-resume-marker'
+} from '../../../../shared/agent-session/lifecycle/resume/agent-session-resume-marker'
 import type { AgentSessionRecoveryCapsule } from '../../../runtime/agent-session/records/agent-session-recovery-capsule'
 import { structuredAgentSessionWorkingAtStop } from '../termination/structured-agent-session-working-at-teardown'
 
@@ -58,12 +58,12 @@ export function createStructuredAgentSessionRestartWitnesses(deps: {
       clear()
       trigger = next
     },
-    beforeStop: (sessionId) => {
+    beforeStop: async (sessionId) => {
       stopping.delete(sessionId)
       if (trigger === null) {
         return
       }
-      const marker = structuredAgentSessionWorkingAtStop({
+      const marker = await structuredAgentSessionWorkingAtStop({
         sessionId,
         session: deps.sessions.get(sessionId),
         getRecord: deps.getRecord,

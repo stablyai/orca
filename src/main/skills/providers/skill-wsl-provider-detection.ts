@@ -1,4 +1,4 @@
-import { isSkillInstallProviderId } from '../../../shared/skill-install-providers'
+import { isSkillInstallProviderId } from '../../../shared/skills/installation/skill-install-providers'
 import {
   getTuiAgentDetectionProbeCommands,
   KNOWN_TUI_AGENT_DETECTION_COMMANDS,

@@ -1,4 +1,4 @@
-import { statusFeed } from './structured-agent-session-rpc-status.test-fixture'
+import { statusFeed, prepareStatusFeed } from './structured-agent-session-rpc-status.test-fixture'
 
 import {
   SESSION,
@@ -6,7 +6,7 @@ import {
   OPERATION,
   request
 } from './structured-agent-session-rpc-client.test-fixture'
-import { availableRevealWorkspace } from '../../../../session-tabs/structured-workspace-authority.test-fixture'
+import { availableRevealWorkspace } from '../../../../session-tabs/chat/structured-workspace-authority.test-fixture'
 import { EVERY_AGENT_CHAT } from '../../../../../../shared/native-chat/every-agent-chat.test-fixture'
 import { vi } from 'vitest'
 import type { StructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/host/structured-agent-session-host'
@@ -19,7 +19,7 @@ import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { RpcAnyMethodDeclaration, RpcContext, RpcResponse } from '../../../core'
 import { RpcDispatcher } from '../../../dispatcher'
 import { STRUCTURED_AGENT_SESSION_METHODS } from '../structured-agent-session'
-import { recordingStructuredAgentSessionLogger } from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-logger-test-support'
+import { recordingStructuredAgentSessionLogger } from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-logger.test-fixture'
 import { resetStructuredAgentSessionClosesBeforeCreateForTests } from '../creation/structured-agent-session-close-before-create'
 // Share one dispatcher harness; repopulate stable hostCalls/runtimeCalls objects per test so imports keep their identities.
 
@@ -180,6 +180,7 @@ export function dispatcher(
     registerSubscriptionCleanup: vi.fn(),
     cleanupSubscription: vi.fn(),
     cleanupSubscriptionsByPrefix: vi.fn(),
+    bots: { list: () => [] },
     ...runtimeCalls,
     ...runtimeOverrides
   }
@@ -214,6 +215,9 @@ export async function openStream(
   runtimeOverrides: Record<string, unknown> = {},
   methods?: readonly RpcAnyMethodDeclaration[]
 ): Promise<RpcResponse[]> {
+  if (method === 'agentSession.subscribeStatus') {
+    await prepareStatusFeed()
+  }
   const replies: RpcResponse[] = []
   await dispatcher(runtimeOverrides, methods).dispatchStreaming(
     request(method, params),

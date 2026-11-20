@@ -2,7 +2,7 @@ import { vi } from 'vitest'
 import type { AgentBrowserBridge } from '../../../browser/agent-browser/agent-browser-bridge'
 import type { RuntimeBrowserCommandHost } from '../commands/browser-command-contracts'
 import { RuntimeBrowserPageRegistry } from './runtime-browser-page-registry'
-import type { RendererPublicationThrottleTarget } from '../../../window/renderer-publication-throttle'
+import type { RendererPublicationThrottleTarget } from '../../../window/visibility/renderer-publication-throttle'
 
 // The part of the authoritative window a browser stream touches: its renderer's throttle lease target.
 export type AuthoritativeWindowDouble = {
@@ -10,9 +10,11 @@ export type AuthoritativeWindowDouble = {
 }
 
 // A guest the page stream keeps painting while it streams.
-export function createStreamedGuest(): RendererPublicationThrottleTarget {
+export function createStreamedGuest(): RendererPublicationThrottleTarget &
+  Pick<Electron.WebContents, 'isLoadingMainFrame'> {
   return {
     isDestroyed: () => false,
+    isLoadingMainFrame: () => false,
     setBackgroundThrottling: vi.fn(),
     capturePage: vi.fn(async () => null)
   }
@@ -26,6 +28,7 @@ export function createSinglePageBrowserCommandsHost(
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: page commands read only these bridge members.
   const bridge = {
     getRegisteredTabs: vi.fn(() => new Map([['page-1', 100]])),
+    getRegisteredPageWebContentsId: (page: string) => (page === 'page-1' ? 100 : undefined),
     getActivePageId: vi.fn(() => 'page-1'),
     tabList: vi.fn(() => ({
       tabs: [

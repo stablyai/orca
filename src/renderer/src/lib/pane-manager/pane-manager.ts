@@ -63,7 +63,7 @@ import {
 import { collectPaneRenderingDiagnostics } from './terminal-rendering/pane-rendering-diagnostics'
 import { applyPaneLayoutGeometry } from './pane-layout/pane-layout-geometry-apply'
 import type { TerminalPaneLayoutNode } from '../../../../shared/workspace-layout/terminal-tab-types'
-import { FIRST_PANE_ID } from '../../../../shared/pane-key'
+import { FIRST_PANE_ID } from '../../../../shared/workspace-layout/pane-key'
 
 export class PaneManager {
   private root: HTMLElement

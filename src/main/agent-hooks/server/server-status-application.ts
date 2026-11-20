@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto'
 
 import { getCohortAtEmit } from '../../telemetry/cohort-classifier'
 import { track } from '../../telemetry/client'
-import { isCommandCodeNewTurnWhileWorking } from '../../../shared/command-code-turn-boundary'
+import { isCommandCodeNewTurnWhileWorking } from '../../../shared/agent-status/output/command-code-turn-boundary'
 import { isNewTurnEvent } from '../../../shared/agent-hook-listener/provider-event-routing'
 import { reduceHostTurnEnd } from '../../../shared/agent-hook-listener/state/agent-hook-turn-end-timing'
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
@@ -14,7 +14,7 @@ import type {
 } from '../../../shared/agent-status/contracts/agent-status-observation'
 import { AGENT_STATUS_2A_CURRENT_PRODUCER_MODE } from '../../../shared/agent-status/transport/agent-status-legacy-adapter'
 import { mainAgentState } from '../../../shared/agent-status/lifecycle/main-agent-status'
-import { previousCodexTurnContext } from '../../../shared/agent-hook-listener/providers/codex-session-start'
+import { previousCodexTurnContext } from '../../../shared/agent-hook-listener/providers/codex/codex-session-start'
 import { admitLegacyAgentStatus } from '../../../shared/agent-hook-listener/listener-state'
 import type { EnrichedAgentHookEventPayload } from './server-types'
 import { agentTypeToPromptSentAgentKind } from './server-status-identity'
@@ -34,7 +34,7 @@ function resolveTurnStartedAt(
     payload.toolAgentId === undefined &&
     payload.isReplay !== true &&
     payload.providerSessionOnly !== true &&
-    isNewTurnEvent(payload.source, payload.hookEventName) &&
+    (payload.opensTurn === true || isNewTurnEvent(payload.source, payload.hookEventName)) &&
     !(
       payload.source === 'codex' &&
       payload.hookEventName === 'SessionStart' &&
@@ -86,7 +86,11 @@ export abstract class AgentHookServerStatusApplication extends AgentHookServerSt
         receivedAt: now,
         evidenceObservedAt: now,
         stateStartedAt,
-        observation: this.stampObservation(payload, 'osc', now)
+        observation: this.stampObservation(
+          payload,
+          previous.observation?.origin === 'launch' && !newRun ? 'launch' : 'osc',
+          now
+        )
       },
       mutationBefore ?? previous,
       this.cliWriterExecutionMatches,
@@ -136,7 +140,9 @@ export abstract class AgentHookServerStatusApplication extends AgentHookServerSt
     // Only live submissions open a new turn; cached starts restate historical context.
     if (
       !payload.isReplay &&
-      (payload.hookEventName === 'UserPromptSubmit' || payload.hasExplicitPrompt === true)
+      (payload.hookEventName === 'UserPromptSubmit' ||
+        payload.hasExplicitPrompt === true ||
+        payload.opensTurn === true)
     ) {
       this.activeHookTurnCompletedAtByPaneKey.delete(payload.paneKey)
     }
@@ -171,6 +177,7 @@ export abstract class AgentHookServerStatusApplication extends AgentHookServerSt
     const {
       stopHookActive: _stopHookActive,
       nativeTurnKey: _nativeTurnKey,
+      opensTurn: _opensTurn,
       turnEndedAt: _turnEndedAt,
       turnEndDisposition: _turnEndDisposition,
       hostTurn: _hostTurn,
@@ -295,7 +302,8 @@ export abstract class AgentHookServerStatusApplication extends AgentHookServerSt
       observedAt,
       // Use provider classifiers; boundary event names vary.
       boundary:
-        payload.source !== undefined && isNewTurnEvent(payload.source, payload.hookEventName),
+        payload.opensTurn === true ||
+        (payload.source !== undefined && isNewTurnEvent(payload.source, payload.hookEventName)),
       kind: payload.providerSessionOnly
         ? 'identity-only'
         : // Replay and OSC restate status rather than establish a fresh transition.

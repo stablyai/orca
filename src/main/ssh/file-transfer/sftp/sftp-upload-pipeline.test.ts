@@ -13,15 +13,11 @@ function uploadSession(options?: {
   heldWrite?: string
   confirmEnd?: boolean
 }) {
-  const contents = new Map<string, Map<number, Buffer>>()
-  const windows = new Map<string, number>()
   const opened: string[] = []
   const directories = new Set(['/remote'])
   const closes = new Map<string, () => void>()
   let rejectWrite: ((error: Error) => void) | undefined
   let stallCloses = options?.stalledCloses ?? false
-  let peakHandles = 0
-  let peakWindow = 0
   let ended = false
   const later = (callback: () => void): void => {
     setImmediate(() => {
@@ -44,20 +40,18 @@ function uploadSession(options?: {
           return
         }
         opened.push(path)
-        contents.set(path, new Map())
         cb(null, Buffer.from(path))
       }),
     fchmod: (_handle: Buffer, _mode: number, cb: (e: null) => void) => later(() => cb(null)),
     write: (
       handle: Buffer,
-      buffer: Buffer,
-      offset: number,
+      _buffer: Buffer,
+      _offset: number,
       length: number,
-      position: number,
+      _position: number,
       cb: (e: Error | null, n?: number) => void
     ) => {
       const path = handle.toString()
-      contents.get(path)?.set(position, Buffer.from(buffer.subarray(offset, offset + length)))
       if (path === options?.heldWrite) {
         rejectWrite = (error) => cb(error)
       } else {
@@ -85,27 +79,14 @@ function uploadSession(options?: {
     })
   })
   const sftp = Object.assign(session, {
-    createWriteStream: (path: string, streamOptions: WriteStreamOptions) => {
-      const stream = SFTP.prototype.createWriteStream.call(session, path, streamOptions)
-      windows.set(path, stream.writableHighWaterMark)
-      peakHandles = Math.max(peakHandles, windows.size)
-      peakWindow = Math.max(
-        peakWindow,
-        [...windows.values()].reduce((sum, size) => sum + size, 0)
-      )
-      stream.once('close', () => windows.delete(path))
-      return stream
-    }
+    createWriteStream: (path: string, streamOptions: WriteStreamOptions) =>
+      SFTP.prototype.createWriteStream.call(session, path, streamOptions)
   })
   return {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: ssh2's real WriteStream uses the session methods implemented above.
     sftp: sftp as unknown as SFTPWrapper,
-    contents,
-    windows,
     opened,
     closes,
-    peakHandles: () => peakHandles,
-    peakWindow: () => peakWindow,
     failWrite: (error: Error) => {
       if (!rejectWrite) {
         throw new Error('the held WRITE has not arrived')

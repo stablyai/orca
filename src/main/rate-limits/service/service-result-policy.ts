@@ -1,4 +1,7 @@
-import type { RateLimitWindow, ProviderRateLimits } from '../../../shared/rate-limit-types'
+import type {
+  RateLimitWindow,
+  ProviderRateLimits
+} from '../../../shared/agent-usage/rate-limits/rate-limit-types'
 import { RateLimitServiceFetchControl } from './service-fetch-control'
 import {
   LONG_STALE_THRESHOLD_MS,

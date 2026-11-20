@@ -7,7 +7,7 @@
  * error, which retires its binding and starts a fresh shell on the managed server. When the relay
  * can't be reached, the pane stays bound and reattaches once it can: loss of contact is never exit.
  */
-import type { LegacyRelayBridgeAttachResult } from '../../../../../../shared/legacy-relay-bridge-contract'
+import type { LegacyRelayBridgeAttachResult } from '../../../../../../shared/remote-runtime/relay/legacy-relay-bridge-contract'
 import type { PtyConnectResult, PtyTransport } from '../pty-transport-types'
 import type { RemoteRuntimeSnapshotRequestOptions } from '../../../../runtime/hosted-terminals/snapshots/remote-terminal-snapshot-contracts'
 import { SSH_SESSION_EXPIRED_ERROR } from '../host-ownership/ssh-session-gone-verdict'
@@ -236,14 +236,14 @@ export function createLegacyRelayBridgeTransport(ptyId: string, inner: PtyTransp
     ownsRecovery: () => (bridged() ? false : (inner.ownsRecovery?.() ?? false)),
     retryRecovery: () => (bridged() ? false : (inner.retryRecovery?.() ?? false)),
     reopenAfterHostReturned: () => !bridged() && (inner.reopenAfterHostReturned?.() ?? false),
-    setOutputPaused: (paused) => {
+    setOutputPaused: (paused, replayNeeded) => {
       if (!bridged()) {
         return inner.setOutputPaused?.(paused) ?? false
       }
       if (!api) {
         return false
       }
-      api.setOutputPaused({ ptyId, paused })
+      api.setOutputPaused({ ptyId, paused, ...(replayNeeded ? { replayNeeded } : {}) })
       return true
     },
     connect: (options) => {

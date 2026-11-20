@@ -1,16 +1,16 @@
 import {
   bindClaudeContextUsageCapture,
   type ClaudeContextUsageCaptureOptions
-} from '../../claude-context-usage'
+} from '../../context-usage/claude-context-usage'
 import type {
   StructuredAgentSessionEventSink,
   StructuredAgentSessionSinkAdmission
 } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import type { ClaudeStreamJsonConnection } from '../../claude-stream-json-connection'
-import type { ClaudeJournalTranslator } from '../../claude-journal-translator-contract'
+import type { ClaudeJournalTranslator } from './claude-journal-translator-contract'
 import { createClaudeJournalTranslator } from './claude-structured-journal-translation'
-import type { ClaudeInitProof } from '../claude-structured-init-proof'
-import type { ClaudeJournalBoundDelivery } from '../../claude-journal-bound-delivery'
+import type { ClaudeInitProof } from '../startup/claude-structured-init-proof'
+import type { ClaudeJournalBoundDelivery } from './claude-journal-bound-delivery'
 import type {
   ClaudeAcquisitionAttempt,
   ClaudeSession,
@@ -47,7 +47,9 @@ export function createClaudeSessionJournalTranslator(
         onBackgroundTaskJournalFailure: createClaudeJournalFailureHandler(failure),
         bindPromptItemId: (itemId, promptKey) =>
           attempt.prompts.bindJournalItemId(itemId, promptKey),
-        acceptStartupFailure
+        acceptStartupFailure,
+        steerAwaitingEcho: () =>
+          currentSession()?.dispatchWaiters.some((waiter) => waiter.steers) ?? false
       })
     : null
 }
