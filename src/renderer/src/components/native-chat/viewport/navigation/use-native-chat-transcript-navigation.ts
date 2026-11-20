@@ -127,6 +127,14 @@ export function useNativeChatNavigation({
           return 'landed'
         }
         const index = nativeChatSlotIndexOf(slots, target.id)
+        // A returning reader's row inside a collapsed turn is loaded but drawn by nothing; don't page for it.
+        if (
+          index < 0 &&
+          target.offset !== undefined &&
+          conversation.some((message) => message.id === target.id)
+        ) {
+          return 'stop'
+        }
         if (index < 0) {
           holdHistory()
           return 'page'
@@ -182,11 +190,32 @@ export function useNativeChatNavigation({
     },
     [beginNavigation, issue, nextRequestId, readerLeavesEnd]
   )
+  const restoring = useNativeChatReadingPosition({
+    positionKey: `${sessionKey}:${subagentId ?? ''}`,
+    isVisible,
+    ready,
+    scrollRef,
+    readerAtEnd,
+    messageIdAt: (index) => nativeChatSlotMessageIdFrom(slots, index),
+    jumpTo: ({ messageId, offset }, settled) =>
+      startHistoryJump({ kind: 'item', id: messageId, offset }, (result) => {
+        if (result === 'missing') {
+          releaseHistory()
+          if (subagentId === null) {
+            scrollToBottom()
+          } else {
+            startHistoryJump({ kind: 'subagent', agentId: subagentId })
+          }
+        }
+        settled(result)
+      })
+  })
   useEffect(() => {
-    if (subagentId !== null && isVisible) {
+    // A returning reader's own row lies past the subagent's spawn, so its restore pages far enough.
+    if (subagentId !== null && isVisible && !restoring()) {
       startHistoryJump({ kind: 'subagent', agentId: subagentId })
     }
-  }, [isVisible, startHistoryJump, subagentId])
+  }, [isVisible, restoring, startHistoryJump, subagentId])
   const linkTarget = useBotLinkItemTarget((state) => state.target)
   useEffect(() => {
     if (isVisible && ready && linkTarget && linkTarget.sessionId === sessionId) {
@@ -219,22 +248,6 @@ export function useNativeChatNavigation({
     releaseHistory,
     scrollToBottom
   ])
-  useNativeChatReadingPosition({
-    positionKey: `${sessionKey}:${subagentId ?? ''}`,
-    isVisible,
-    ready,
-    scrollRef,
-    readerAtEnd,
-    messageIdAt: (index) => nativeChatSlotMessageIdFrom(slots, index),
-    jumpTo: ({ messageId, offset }, settled) =>
-      startHistoryJump({ kind: 'item', id: messageId, offset }, (result) => {
-        if (result === 'missing') {
-          releaseHistory()
-          scrollToBottom()
-        }
-        settled(result)
-      })
-  })
   const jumpToLatest = useCallback(() => {
     beginNavigation()
     scrollToBottom()

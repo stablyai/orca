@@ -189,6 +189,20 @@ const StructuredAgentSessionPaneOverlayLayer = memo(
         releaseNativeChatComposerEditors(closed)
       }
     }, [ownedTabIds])
+    // A removed workspace unmounts this layer without a tab close; tabs gone from the store are closed.
+    useLayoutEffect(
+      () => () => {
+        const live = new Set(
+          (useAppStore.getState().unifiedTabsByWorktree[worktreeId] ?? []).map((tab) => tab.id)
+        )
+        const closed = new Set([...ownedTabIdsRef.current].filter((id) => !live.has(id)))
+        if (closed.size > 0) {
+          chatViewRetention.forget(closed)
+          releaseNativeChatComposerEditors(closed)
+        }
+      },
+      [worktreeId]
+    )
     // Why: only shown chats and a few recently shown ones stay mounted, so memory doesn't grow with chats visited.
     const retainedKey = useRetainedChatViewKey(ownedTabIds)
     const retainedTabIds = useMemo(() => new Set(retainedKey.split('\n')), [retainedKey])

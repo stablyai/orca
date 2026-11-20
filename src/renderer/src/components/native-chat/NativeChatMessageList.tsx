@@ -6,7 +6,7 @@ import { NativeChatNewRowsAnnouncement } from './viewport/new-rows/NativeChatNew
 import { useNativeChatNewRowsMarker } from './viewport/new-rows/native-chat-new-rows-marker'
 import { useNativeChatRowTypography } from './viewport/virtualization/use-native-chat-row-typography'
 import { withoutPullRequestEventRows } from '../../../../shared/native-chat/transcript/notices/native-chat-pull-request-event'
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useMemo, useRef } from 'react'
 import { useAppStore } from '@/store'
 import {
   nativeChatShowsCiResultLines,
@@ -35,6 +35,7 @@ import type { NativeChatTimedRow } from './conversation/slots/native-chat-timed-
 import { useNativeChatTranscriptWindow } from './viewport/virtualization/use-native-chat-transcript-window'
 import { useNativeChatHistoryRetention } from './viewport/history/use-native-chat-history-retention'
 import { useNativeChatSubagentScope } from './subagents/use-native-chat-subagent-scope'
+import { useReleasedViewState } from './pane/ownership/native-chat-released-view-state'
 import type { NativeChatSubagentView } from './subagents/native-chat-open-subagent'
 import type { StructuredAgentSubagentRoster } from '../../../../shared/agent-session/view/structured-agent-session-subagent-roster'
 import type { NativeChatTranscriptSlot } from './conversation/slots/native-chat-transcript-slots'
@@ -74,6 +75,7 @@ import { NativeChatBotHomeScope } from './NativeChatBotHomeScope'
 import type { NativeChatBotKickoffView } from './native-chat-bot-kickoff-view'
 
 const NO_SLOTS: readonly NativeChatTranscriptSlot[] = []
+const NO_EXPANDED_TURNS: ReadonlySet<string> = new Set()
 
 export function NativeChatMessageList({
   ref,
@@ -139,7 +141,10 @@ export function NativeChatMessageList({
   const receipts = useNativeChatQuestionReceipts(journalItems)
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const contentRef = useRef<HTMLDivElement | null>(null)
-  const [expandedTurnIds, setExpandedTurnIds] = useState<ReadonlySet<string>>(new Set())
+  const [expandedTurnIds, setExpandedTurnIds] = useReleasedViewState<ReadonlySet<string>>(
+    `expanded-turns:${session.agent}:${session.sessionId ?? ''}:${subagentView?.agentId ?? ''}`,
+    NO_EXPANDED_TURNS
+  )
   const toggleExpandedTurn = useCallback((turnKey: string) => {
     setExpandedTurnIds((current) => toggleNativeChatExpandedKey(current, turnKey))
   }, [])

@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef } from 'react'
+import { useCallback, useLayoutEffect, useRef } from 'react'
 
 // Why: a chat view released while hidden comes back where its reader left off, not at the end.
 const MAX_REMEMBERED = 256
@@ -46,9 +46,11 @@ export function useNativeChatReadingPosition({
   /** The message a transcript row shows, for rows of any kind. */
   messageIdAt: (index: number) => string | null
   jumpTo: (position: NativeChatReadingPosition, settled: (result: RestoreResult) => void) => void
-}): void {
+}): () => boolean {
   // A reveal of a view that stayed mounted already holds its offset; only a fresh mount restores.
   const freshMountRef = useRef(true)
+  // The restore in flight; an effect replay (StrictMode, a hide mid-restore) keeps the bookmark and retries it.
+  const restoringRef = useRef<NativeChatReadingPosition | null>(null)
   const latest = useRef({ readerAtEnd, jumpTo, messageIdAt })
   latest.current = { readerAtEnd, jumpTo, messageIdAt }
   useLayoutEffect(() => {
@@ -58,10 +60,11 @@ export function useNativeChatReadingPosition({
     let cancelled = false
     let frame = 0
     const position = freshMountRef.current ? remembered.get(positionKey) : undefined
-    freshMountRef.current = false
     if (position === undefined) {
+      freshMountRef.current = false
       remembered.delete(positionKey)
     } else {
+      restoringRef.current = position
       const attempt = (tries: number): void => {
         latest.current.jumpTo(position, (result) => {
           if (cancelled) {
@@ -72,6 +75,8 @@ export function useNativeChatReadingPosition({
             return
           }
           // Landed, gone, or the reader moved on: the bookmark has done its job.
+          restoringRef.current = null
+          freshMountRef.current = false
           if (remembered.get(positionKey) === position) {
             remembered.delete(positionKey)
           }
@@ -82,20 +87,24 @@ export function useNativeChatReadingPosition({
     return () => {
       cancelled = true
       cancelAnimationFrame(frame)
+      if (restoringRef.current !== null) {
+        restoringRef.current = null
+        return
+      }
       const container = scrollRef.current
       const next =
         container && !latest.current.readerAtEnd()
           ? readingPositionOf(container, latest.current.messageIdAt)
           : null
+      remembered.delete(positionKey)
       if (next === null) {
-        remembered.delete(positionKey)
         return
       }
-      remembered.delete(positionKey)
       remembered.set(positionKey, next)
       if (remembered.size > MAX_REMEMBERED) {
         remembered.delete(remembered.keys().next().value as string)
       }
     }
   }, [isVisible, ready, positionKey, scrollRef])
+  return useCallback(() => restoringRef.current !== null, [])
 }
