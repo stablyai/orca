@@ -1,6 +1,7 @@
 import { useMemo, useSyncExternalStore } from 'react'
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { Bell, File, FileText, Globe, Minus, Plus, SquareTerminal } from 'lucide-react-native'
+import { agentStatusGroup } from '../../agents/agent-list-rows'
 import { AgentStateDot } from '../../agents/presentation/AgentStateDot'
 import { MobileAgentIcon } from '../../components/icons/MobileAgentIcon'
 import { ListGroup } from '../../components/list/ListGroup'
@@ -149,6 +150,10 @@ export function MobileSessionTabsRecentBody({
               card.agentState && card.agentState !== 'idle' ? card.agentState : undefined
             const stateWord = badge ? agentStateLabel(badge) : null
             const unread = card.unread === true
+            const showUnreadBell =
+              unread &&
+              (!badge ||
+                (agentStatusGroup(badge) !== 'needs-you' && agentStatusGroup(badge) !== 'working'))
             const accessibilityLabel = [
               card.title,
               unread ? t('agents.list.unread', 'Unread') : null,
@@ -170,22 +175,22 @@ export function MobileSessionTabsRecentBody({
                 onPress={() => void handleSelectRecentSessionCard(card)}
               >
                 <View style={styles.tile}>
-                  {unread ? (
-                    <Bell
-                      size={17}
-                      color={colors.statusAmber}
-                      fill={colors.statusAmber}
-                      accessibilityLabel={t('agents.list.unread', 'Unread')}
-                    />
-                  ) : (
-                    <RecentCardIcon card={card} />
-                  )}
-                  {badge ? (
+                  <RecentCardIcon card={card} />
+                  {showUnreadBell || badge ? (
                     <View
                       testID={`recent-session-card-state-dot-${card.worktreeId}-${card.tabId}`}
                       style={styles.tileBadge}
                     >
-                      <AgentStateDot state={badge} />
+                      {showUnreadBell ? (
+                        <Bell
+                          size={10}
+                          color={colors.statusAmber}
+                          fill={colors.statusAmber}
+                          accessibilityLabel={t('agents.list.unread', 'Unread')}
+                        />
+                      ) : badge ? (
+                        <AgentStateDot state={badge} />
+                      ) : null}
                     </View>
                   ) : null}
                 </View>

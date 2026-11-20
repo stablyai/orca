@@ -1,6 +1,6 @@
 import { Fragment, useMemo, useRef, useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
-import { Plus, X } from 'lucide-react-native'
+import { Bell, Plus, X } from 'lucide-react-native'
 import { agentStatusGroup } from '../../agents/agent-list-rows'
 import { AgentStateDot } from '../../agents/presentation/AgentStateDot'
 import { BottomDrawer } from '../../components/bottom-drawer/BottomDrawer'
@@ -180,6 +180,9 @@ function MobileSessionTabsSheetContent({
   const renderRow = (row: MobileSessionTabRow) => {
     const current = row.tab.id === activeSessionTabId
     const badge = row.dotState && row.dotState !== 'idle' ? row.dotState : undefined
+    const showUnreadBell =
+      row.unread &&
+      (!badge || (agentStatusGroup(badge) !== 'needs-you' && agentStatusGroup(badge) !== 'working'))
     const time = current
       ? t('session.tabsSheet.open', 'Open')
       : row.timeAt !== null
@@ -223,10 +226,19 @@ function MobileSessionTabsSheetContent({
               <>
                 {current || pressed ? <View pointerEvents="none" style={styles.wash} /> : null}
                 <View style={styles.tile}>
-                  <MobileSessionTabMark row={row} size={17} />
-                  {badge ? (
+                  <MobileSessionTabMark row={{ ...row, unread: false }} size={17} />
+                  {showUnreadBell || badge ? (
                     <View style={styles.tileBadge}>
-                      <AgentStateDot state={badge} />
+                      {showUnreadBell ? (
+                        <Bell
+                          size={10}
+                          color={colors.statusAmber}
+                          fill={colors.statusAmber}
+                          accessibilityLabel={t('agents.list.unread', 'Unread')}
+                        />
+                      ) : badge ? (
+                        <AgentStateDot state={badge} />
+                      ) : null}
                     </View>
                   ) : null}
                 </View>
