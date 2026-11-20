@@ -60,9 +60,9 @@ export const NATIVE_CHAT_SUBAGENT_HEAD_PX = SUBAGENT_ROW_PX
 const STATUS_ROW_PX = 28
 const TURN_DIFF_PX = 28
 const RECEIPT_PX = 56
-/** How far assistant prose's controls hang below the row (`-mb-5`) when they may; a row that keeps
+/** How far assistant prose's controls hang below the row (`-mb-1`) when they may; a row that keeps
  *  them in flow is that much taller. */
-const AGENT_CONTROLS_OVERHANG_PX = 20
+const AGENT_CONTROLS_OVERHANG_PX = 4
 const ROW_MIN_PX = 24
 /** Charge internal gap-5 only; the virtualizer owns inter-row gaps, which would otherwise compound drift. */
 export const NATIVE_CHAT_ROW_GAP_PX = 20

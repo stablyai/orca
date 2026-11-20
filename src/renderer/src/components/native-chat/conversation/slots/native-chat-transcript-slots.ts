@@ -95,9 +95,9 @@ export type NativeChatMessageSlot = {
   /** This response is the newest one in the conversation. */
   latestResponse?: boolean
   /** Response controls under this row may hang into the gap below it: the row draws nothing after
-   *  its message, and what follows is the person's own right-aligned bubble or nothing. Absent when
-   *  something left-side follows (an agent's card, a notice, a task or subagent row, the turn's bar,
-   *  diff rollup or PR card), where the controls keep their own height. */
+   *  its message, and what follows opens the next turn (the person's bubble or an agent's card).
+   *  Absent when anything else follows (a notice, a task or subagent row, the turn's bar, diff
+   *  rollup or PR card), where the controls keep their own height. */
   actionsHang?: boolean
   turnDiff: NativeChatTurnDiff | undefined
   /** Pull requests this row's turn opened, drawn after it. */
