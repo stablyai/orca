@@ -311,6 +311,29 @@ describe('deleteCodexRolloutsPermanently with a fork archived during the sweep',
   })
 })
 
+describe('deleteCodexRolloutsPermanently across many Codex homes', () => {
+  it('deletes an unreferenced rollout when more homes have archives than one sweep re-lists', async () => {
+    root = mkdtempSync(join(tmpdir(), 'orca-codex-history-'))
+    vi.stubEnv('ORCA_USER_DATA_PATH', join(root, 'user-data'))
+    const homes = Array.from({ length: 30 }, (_, index) => join(root, `home-${index}`))
+    for (const home of homes) {
+      mkdirSync(join(home, 'thread-writer-locks'), { recursive: true })
+      mkdirSync(join(home, 'archived_sessions'), { recursive: true })
+      utimesSync(join(home, 'archived_sessions'), WRITTEN, WRITTEN)
+    }
+    const target = write(join(homes[0], ...DATED, NAME('1')), rollout('/gone'))
+
+    const result = await deleteCodexRolloutsPermanently(
+      [{ agent: 'codex', filePath: target }],
+      async () => true,
+      async () => ({ homes, protectedRoots: [] })
+    )
+
+    expect(exists(target)).toBe(false)
+    expect(result.deleted).toBe(1)
+  })
+})
+
 /** Dangling links count: they block the name for later links. */
 function exists(path: string): boolean {
   try {

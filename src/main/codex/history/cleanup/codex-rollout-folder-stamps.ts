@@ -3,9 +3,13 @@ const FOLDER_STAMP_SLACK_MS = 2000
 
 type Stamp = { mtimeMs: number; settled: boolean }
 
+/** Current: the last listing still shows every entry. Unsettled: listed too close to this stamp. */
+export type CodexRolloutFolderState = 'current' | 'unsettled' | 'changed'
+
 export type CodexRolloutFolderStamps = {
-  /** Whether the last listing of this folder still shows every entry. */
-  isCurrent(folder: string, mtimeMs: number): boolean
+  state(folder: string, mtimeMs: number): CodexRolloutFolderState
+  /** How long until a listing of a folder with this stamp would be settled. */
+  unsettledFor(mtimeMs: number): number
   /** `statAt`: when the stat taken before the listing ran. */
   listed(folder: string, mtimeMs: number, statAt: number): void
 }
@@ -14,10 +18,15 @@ export type CodexRolloutFolderStamps = {
 export function createCodexRolloutFolderStamps(): CodexRolloutFolderStamps {
   const stamps = new Map<string, Stamp>()
   return {
-    isCurrent: (folder, mtimeMs) => {
+    state: (folder, mtimeMs) => {
       const stamp = stamps.get(folder)
-      return stamp?.settled === true && stamp.mtimeMs === mtimeMs
+      return stamp?.mtimeMs !== mtimeMs ? 'changed' : stamp.settled ? 'current' : 'unsettled'
     },
+    unsettledFor: (mtimeMs) =>
+      Math.min(
+        FOLDER_STAMP_SLACK_MS + 1,
+        Math.max(0, mtimeMs + FOLDER_STAMP_SLACK_MS + 1 - Date.now())
+      ),
     listed: (folder, mtimeMs, statAt) => {
       // A change later in the same clock tick as that stat would leave the stamp as it was.
       stamps.set(folder, { mtimeMs, settled: statAt - mtimeMs > FOLDER_STAMP_SLACK_MS })

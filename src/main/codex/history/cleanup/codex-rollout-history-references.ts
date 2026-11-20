@@ -6,7 +6,14 @@ import { codexPhysicalRolloutId } from '../../../native-chat/transcript-history/
 import { readHistoryBase } from './codex-rollout-history-base-header'
 import { createCodexRolloutFolderStamps } from './codex-rollout-folder-stamps'
 import { isNamedOn, recentDates } from './codex-rollout-recent-dates'
-import { linksIntoWsl, lstatUnlessAbsent, statUnlessAbsent } from './codex-rollout-path-probes'
+import {
+  createNestedWslLinkProbe,
+  linksIntoWsl,
+  lstatUnlessAbsent,
+  statUnlessAbsent
+} from './codex-rollout-path-probes'
+import { createCodexRolloutArchiveRelists } from './codex-rollout-archive-relists'
+import { createCodexRolloutForkLinks } from './codex-rollout-fork-links'
 import {
   loadCodexRolloutHistoryBaseCache,
   type CodexRolloutHistoryBaseCache
@@ -15,7 +22,6 @@ import {
 // Codex creates a rollout empty and writes its header after collecting git info.
 const UNFINISHED_HEADER_GRACE_MS = 10 * 60 * 1000
 const PENDING_RETRY_MS = 5000
-const ARCHIVE_RELISTS_PER_SWEEP = 25
 
 /**
  * Which rollouts other rollouts read their history prefix from (`session_meta.history_base`); a
@@ -49,8 +55,7 @@ export function createCodexRolloutHistoryReferences(
   // A rollout listed but gone when read was moved (archived, unarchived) or deleted meanwhile.
   let moved = false
   const seen = new Set<string>()
-  const childrenByBase = new Map<string, Set<string>>()
-  const baseByChild = new Map<string, string>()
+  const forks = createCodexRolloutForkLinks()
   // Real sessions/archived_sessions folders read in full.
   const walkedRoots = new Set<string>()
   const stamps = createCodexRolloutFolderStamps()
@@ -59,20 +64,13 @@ export function createCodexRolloutHistoryReferences(
   // Read again on every pass; while any is left, no rollout is proven unreferenced.
   const pending = new Map<string, Pending>()
   let pendingRetriedAt = 0
-  let archiveRelistsLeft = ARCHIVE_RELISTS_PER_SWEEP
-  let archiveRelistsRefused = 0
+  const archiveRelists = createCodexRolloutArchiveRelists(stamps, signal)
   // Recently named rollout links with no target: a target can appear without a folder changing.
   const dangling = new Map<string, string>()
 
   const link = (rolloutId: string, base: string | null): void => {
     seen.add(rolloutId)
-    if (base === null || base === rolloutId) {
-      return
-    }
-    baseByChild.set(rolloutId, base)
-    const children = childrenByBase.get(base) ?? new Set<string>()
-    children.add(rolloutId)
-    childrenByBase.set(base, children)
+    forks.link(rolloutId, base)
   }
 
   /** False when this rollout's header can't be settled yet. */
@@ -215,26 +213,32 @@ export function createCodexRolloutHistoryReferences(
   }
 
   /** Lists a flat folder again only when its entries changed since the last listing. */
-  const relist = async (folder: string, visited: Set<string>, archive = false) => {
-    // A dated folder linked into WSL is skipped like any link below the roots.
-    if (await linksIntoWsl(folder)) {
+  const relist = async (
+    root: string,
+    parts: readonly string[],
+    visited: Set<string>,
+    linked: (root: string, parts: readonly string[]) => Promise<boolean>
+  ) => {
+    // A dated folder, or one it sits in, linked into WSL is skipped like any link below the roots.
+    if (await linked(root, parts)) {
       return true
     }
-    const statAt = Date.now()
-    const entry = await statUnlessAbsent(folder)
-    if (entry === undefined || entry === null) {
+    const folder = join(root, ...parts)
+    let statAt = Date.now()
+    let entry = await statUnlessAbsent(folder)
+    if (entry && stamps.state(folder, entry.mtimeMs) === 'current') {
+      return true
+    }
+    if (entry && parts.length === 0) {
+      if (!(await archiveRelists.admit(folder, entry.mtimeMs))) {
+        return false
+      }
+      statAt = Date.now()
+      entry = await statUnlessAbsent(folder)
+    }
+    if (!entry) {
       return entry === null
     }
-    if (stamps.isCurrent(folder, entry.mtimeMs)) {
-      return true
-    }
-    // Each deletion of an archived name changes this folder, and re-listing it is O(entries): past
-    // the cap, a candidate is kept for the next sweep instead of re-listing again.
-    if (archive && archiveRelistsLeft === 0) {
-      archiveRelistsRefused += 1
-      return false
-    }
-    archiveRelistsLeft -= archive ? 1 : 0
     const listed = await relistNames(folder, visited)
     if (listed) {
       stamps.listed(folder, entry.mtimeMs, statAt)
@@ -248,6 +252,7 @@ export function createCodexRolloutHistoryReferences(
       cache ??= await loadCodexRolloutHistoryBaseCache(cachePath)
       const visited = new Set<string>()
       const dates = recentDates()
+      const linked = createNestedWslLinkProbe()
       // A header still being written settles in seconds to minutes: retrying it for every candidate
       // in a burst would only repeat the same reads.
       if (Date.now() - pendingRetriedAt >= PENDING_RETRY_MS) {
@@ -281,17 +286,21 @@ export function createCodexRolloutHistoryReferences(
           }
           visited.add(root)
           if (!walkedRoots.has(root)) {
+            const statAt = Date.now()
+            const entry = await statUnlessAbsent(root)
             const walked = await walk(root, visited, true)
             complete &&= walked
             if (walked) {
               walkedRoots.add(root)
+              // The archive is re-listed as one flat folder: this walk was its listing.
+              if (entry && name !== 'sessions') {
+                stamps.listed(root, entry.mtimeMs, statAt)
+              }
             }
           } else if (recent) {
             // New rollouts land in today's dated folders; archiving moves them to the flat folder.
-            const folders =
-              name === 'sessions' ? dates.map((parts) => join(root, ...parts)) : [root]
-            for (const folder of folders) {
-              complete = (await relist(folder, visited, name !== 'sessions')) && complete
+            for (const parts of name === 'sessions' ? dates : [[]]) {
+              complete = (await relist(root, parts, visited, linked)) && complete
             }
           }
         }
@@ -321,25 +330,13 @@ export function createCodexRolloutHistoryReferences(
   return {
     prepare: (homes) => update(homes, false),
     refresh: (homes) => update(homes, true),
-    isReferenced: async (rolloutId) => (childrenByBase.get(rolloutId)?.size ?? 0) > 0,
+    isReferenced: async (rolloutId) => forks.isReferenced(rolloutId),
     forget: async (rolloutId) => {
       cache?.delete(rolloutId)
-      const base = baseByChild.get(rolloutId)
-      if (!base) {
-        return null
-      }
-      baseByChild.delete(rolloutId)
-      const children = childrenByBase.get(base)
-      children?.delete(rolloutId)
-      return children?.size === 0 ? base : null
+      return forks.forget(rolloutId)
     },
     save: async () => {
-      if (archiveRelistsRefused > 0) {
-        console.info(
-          `[workspace-cleanup] Kept ${archiveRelistsRefused} Codex rollouts for the next sweep: archive re-list cap reached`
-        )
-        archiveRelistsRefused = 0
-      }
+      archiveRelists.report()
       await cache?.save()
     }
   }

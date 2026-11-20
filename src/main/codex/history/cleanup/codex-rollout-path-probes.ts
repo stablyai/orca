@@ -1,5 +1,5 @@
 import { lstat, readlink, stat } from 'node:fs/promises'
-import { dirname, resolve } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { isDefinitiveAbsence } from '../../../../shared/errors/definitive-filesystem-absence'
 import { parseWslUncPath } from '../../../../shared/file-access/wsl-paths'
 
@@ -36,4 +36,23 @@ export async function linksIntoWsl(path: string): Promise<boolean> {
     .replace(/^\\\\[?.]\\UNC\\/i, '\\\\')
     .replace(/^\\\\[?.]\\/, '')
   return parseWslUncPath(resolve(dirname(path), plain)) !== null
+}
+
+/** Whether a folder below a real root, or a folder it sits in, links into WSL; probes once each. */
+export function createNestedWslLinkProbe(): (
+  root: string,
+  parts: readonly string[]
+) => Promise<boolean> {
+  const probes = new Map<string, Promise<boolean>>()
+  return async (root, parts) => {
+    for (let depth = 1; depth <= parts.length; depth++) {
+      const path = join(root, ...parts.slice(0, depth))
+      const probe = probes.get(path) ?? linksIntoWsl(path)
+      probes.set(path, probe)
+      if (await probe) {
+        return true
+      }
+    }
+    return false
+  }
 }
