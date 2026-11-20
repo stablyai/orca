@@ -249,15 +249,15 @@ export const dropdownBlankTerminalCurrent = defineFixture({
 })
 
 /** The + menu: hovering an agent row opens the same card, without tabs, over the prompt and Launch. */
-function NewTabMenu(): React.JSX.Element {
+function NewTabMenu({ entries = ENTRIES }: { entries?: AgentPickerEntry[] }): React.JSX.Element {
   return (
     <div className="min-h-[520px] bg-background p-4">
       <DropdownMenu open modal={false}>
         <DropdownMenuTrigger className="sr-only">+</DropdownMenuTrigger>
         <DropdownMenuContent align="start" className="w-64">
           <AgentLaunchPickerMenu
-            model={MODEL}
-            entries={ENTRIES}
+            model={entries === ENTRIES ? MODEL : menuModel(entries)}
+            entries={entries}
             hideSearch
             runLaunch={() => true}
           />
@@ -287,6 +287,23 @@ export const newTabSubmenuCodex = defineFixture({
     click('[aria-label="Configure Codex"]')
     await settle()
   }
+})
+
+/** Antigravity isn't installed, so its chat offers to install it. */
+export const newTabSetupChat = defineFixture({
+  width: 320,
+  render: () => (
+    <NewTabMenu
+      entries={[
+        ...ENTRIES.slice(0, 3),
+        {
+          ...entry('antigravity', 'Antigravity', ['chat']),
+          rows: [{ kind: 'chat', agent: 'antigravity', setup: true }],
+          defaultSurface: 'chat'
+        }
+      ]}
+    />
+  )
 })
 
 // Codex's widest effort row: every level it can advertise, then Fast.

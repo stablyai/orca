@@ -17595,6 +17595,7 @@
             "e518f544b1": "Nenhum agente detectado",
             "8dea9b5cdf": "Nenhum agente habilitado",
             "chatNotInstalled": "Não instalado",
+            "chatInstallRequired": "Instalação necessária",
             "chatNotOverSsh": "Chat indisponível via SSH",
             "chatNotInWsl": "Chat indisponível no WSL",
             "chatNotInSubfolder": "Chat indisponível em subpasta",
