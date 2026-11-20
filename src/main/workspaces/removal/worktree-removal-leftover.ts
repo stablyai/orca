@@ -15,7 +15,11 @@ import type { WorktreeRemovalRecord } from './worktree-removal-records'
 import { areWorktreePathsEqual } from '../../git/worktrees/catalog/worktree-path-comparison'
 import { CLIENT_REMOVAL_HOME } from './worktree-removal-home-guard'
 import { listWorktreesStrict as listUncachedWorktreesStrict } from '../../git/worktrees/catalog/worktree-listing'
-import { failedWorktreeRemovals, worktreeCheckoutExists } from './worktree-removal-table'
+import {
+  failedWorktreeRemovals,
+  persistWorktreeRemovalRecords,
+  worktreeCheckoutExists
+} from './worktree-removal-table'
 import { readCheckoutMarkerIdentity } from './worktree-removal-gitdir-identity'
 import { waitForWorktreeRemovalAcceptance } from './worktree-removal-settlement'
 import {
@@ -47,7 +51,8 @@ export function differentCheckoutAtPathError(worktreePath: string): Error {
 export async function assertLeftoverIsRecordedCheckout(
   record: Pick<WorktreeRemovalRecord, 'worktreePath' | 'gitdir'>
 ): Promise<void> {
-  if (record.gitdir && (await readCheckoutMarkerIdentity(record.worktreePath)) !== record.gitdir) {
+  // A record without identity (written before it existed) cannot prove this folder is the one accepted.
+  if (!record.gitdir || (await readCheckoutMarkerIdentity(record.worktreePath)) !== record.gitdir) {
     throw differentCheckoutAtPathError(record.worktreePath)
   }
 }
@@ -191,18 +196,26 @@ export async function retryFailedRemovalUnlessRegistered(
     return false
   }
   const failed = failedWorktreeRemovals.get(worktreeId)
-  if (failed && !usesNativeWindowsRemoval(worktreePath, localOptions)) {
-    if (
-      await assertUnregisteredLeftoverRemovable(
+  if (failed) {
+    const native = usesNativeWindowsRemoval(worktreePath, localOptions)
+    const leftover =
+      !native &&
+      (await assertUnregisteredLeftoverRemovable(
         failed.repoPath,
         failed.worktreePath,
         registeredWorktrees
-      )
-    ) {
-      await assertLeftoverIsRecordedCheckout(failed)
+      ))
+    try {
+      await (native
+        ? assertCheckoutNotReplaced(failed)
+        : leftover && assertLeftoverIsRecordedCheckout(failed))
+    } catch (error) {
+      // The recorded intent no longer describes this folder; the next delete starts fresh instead of looping on the refusal.
+      if (failedWorktreeRemovals.delete(worktreeId)) {
+        void persistWorktreeRemovalRecords()
+      }
+      throw error
     }
-  } else if (failed) {
-    await assertCheckoutNotReplaced(failed)
   }
   if (retry() === undefined) {
     return false

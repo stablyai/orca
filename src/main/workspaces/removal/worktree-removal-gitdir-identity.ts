@@ -6,7 +6,7 @@ function gitdirOfGitFile(contents: string): string | undefined {
   return match?.[1]?.trim() || undefined
 }
 
-/** The admin entry a checkout's `.git` file names plus that file's inode: Git reuses admin names, so the name alone cannot tell two checkouts at one path apart. */
+/** The admin entry a checkout's `.git` file names plus that file's inode (not the device, which can change across boots): Git reuses admin names, so the name alone cannot tell two checkouts at one path apart. */
 export async function readCheckoutMarkerIdentity(
   worktreePath: string
 ): Promise<string | undefined> {
@@ -14,7 +14,7 @@ export async function readCheckoutMarkerIdentity(
     const gitFile = join(worktreePath, '.git')
     const entry = await lstat(gitFile, { bigint: true })
     const gitdir = entry.isFile() ? gitdirOfGitFile(await readFile(gitFile, 'utf8')) : undefined
-    return gitdir ? `${gitdir}#${entry.dev}:${entry.ino}` : undefined
+    return gitdir ? `${gitdir}#${entry.ino}` : undefined
   } catch {
     return undefined
   }

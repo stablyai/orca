@@ -48,3 +48,11 @@ it('refuses a registered checkout whose marker changed, but not one whose marker
   await rm(join(worktreePath, '.git'))
   await expect(assertCheckoutNotReplaced({ worktreePath, gitdir })).resolves.toBeUndefined()
 })
+
+it('refuses a leftover whose record predates marker identity', async () => {
+  await acceptCheckout('feature')
+
+  await expect(
+    assertLeftoverIsRecordedCheckout({ worktreePath, gitdir: undefined })
+  ).rejects.toThrow('A different checkout is now at')
+})

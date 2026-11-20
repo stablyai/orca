@@ -37,6 +37,7 @@ import {
   resumeInterruptedWorktreeRemovals,
   retryFailedWorktreeRemoval,
   startBackgroundWorktreeRemoval,
+  markerIdentity as readCheckoutMarkerIdentity,
   waitForPendingWorktreeRemoval
 } from '../../../workspaces/removal/worktree-background-removal'
 import { withUnregisteredRemovalCheckouts } from '../../../workspaces/removal/worktree-removal-listing'
@@ -202,6 +203,7 @@ async function failInSession(): Promise<unknown> {
       repoId: repo.id,
       repoPath,
       worktree: { path: worktreePath, branch: 'refs/heads/feature', head: 'abc' },
+      gitdir: await readCheckoutMarkerIdentity(worktreePath),
       deleteBranch: true,
       force: true
     },
