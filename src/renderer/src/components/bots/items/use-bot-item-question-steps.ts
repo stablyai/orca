@@ -66,8 +66,6 @@ export type BotItemQuestionSteps = {
   current: number
   /** The lines to step through: those no comment answered yet, or only by order while held here. */
   lines: readonly number[]
-  /** Comments read by order on a line held here: shown as comments of their own. */
-  plain: ReadonlySet<string>
   go: (index: number) => void
   answer: (index: number, words: string) => void
 }
@@ -114,12 +112,6 @@ export function useBotItemQuestionSteps(
   const lines = shape.decisions.flatMap((_, index) =>
     !waiting?.answers[index] || (waiting.byOrder[index] && held[index]) ? [index] : []
   )
-  const plain = new Set(
-    lines.flatMap((index) => {
-      const taken = waiting?.answers[index]
-      return taken ? [taken.id] : []
-    })
-  )
   const firstOpen = lines.find((index) => !held[index]) ?? lines[0] ?? 0
   const current =
     chosen && chosen.askId === askId && lines.includes(chosen.index) ? chosen.index : firstOpen
@@ -140,7 +132,7 @@ export function useBotItemQuestionSteps(
   })
   const go = useLatestHandler((index: number) => setChosen({ askId, index }))
   // Read fresh each render, as the waiting ask is.
-  const steps = waiting ? { askId, shape, held, current, lines, plain, go, answer } : null
+  const steps = waiting ? { askId, shape, held, current, lines, go, answer } : null
   const quick = useLatestHandler((text: string) => {
     if (asked) {
       const { shape: own } = asked

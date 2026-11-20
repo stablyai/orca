@@ -57,7 +57,7 @@ function Avatar({
 
 type CommentEntry = Pick<
   Extract<BotItemActivityEntry, { kind: 'comment' }>,
-  'event' | 'replyTo' | 'answers'
+  'event' | 'replyTo' | 'answers' | 'byOrder'
 > & { waiting?: boolean }
 
 /** Marks a card so a jump can find and focus it. */
@@ -161,6 +161,7 @@ export function BotItemCommentCard({
               }
               waiting={waiting}
               answers={entry.answers}
+              byOrder={entry.byOrder}
               actions={quickReplies}
             />
           ) : null}

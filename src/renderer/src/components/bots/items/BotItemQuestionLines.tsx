@@ -35,6 +35,7 @@ export function BotItemQuestionLines({
   heldScope,
   waiting,
   answers = NO_ANSWERS,
+  byOrder,
   actions
 }: {
   shape: BotItemQuestionShape
@@ -46,6 +47,8 @@ export function BotItemQuestionLines({
   waiting: boolean
   /** Per line, the owner comment that answered it. */
   answers?: readonly (BotItemEvent | null)[]
+  /** Per line, answered only by a comment naming no line: that comment shows as itself. */
+  byOrder?: readonly boolean[]
   /** While it waits, what its quick replies do; absent where the item takes no comment. */
   actions?: BotItemQuickReplyActions
 }): React.JSX.Element {
@@ -56,8 +59,10 @@ export function BotItemQuestionLines({
   const stored = useBotItemHeldAnswers(heldScope ?? NO_HELD_SCOPE, shape)
   const sent = actions?.sent?.askId === askId ? actions.sent.answers : null
   const answered = shape.decisions.map((_, index) => {
-    // A line being stepped shows its held answer, even where a plain comment took it by order.
-    const answer = steps?.lines.includes(index) ? null : answers[index]
+    // A line being stepped shows its held answer; with several questions, a comment that named no
+    // line shows as itself, not as the line's answer.
+    const answer =
+      steps?.lines.includes(index) || (several && byOrder?.[index]) ? null : answers[index]
     return answer ? botItemAnswerWords(shape, index, answer.data) : (sent?.[index] ?? null)
   })
   if (waiting && several && steps && actions) {

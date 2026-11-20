@@ -218,3 +218,30 @@ it('gives a line a plain comment took by order to the comment that later names i
   ])
   expect(entries[1]).not.toHaveProperty('onAsk')
 })
+
+it('reads a held answer by the question it names, with or without a question mark', () => {
+  const first = { questions: [{ prompt: 'Deployment region', options: [{ label: 'EU' }] }] }
+  const again = { questions: [{ prompt: 'Ship it?', options: [{ label: 'Ship' }] }] }
+  const asks = [
+    event('e2', 'commented', 200, { text: 'copy', ask: first }),
+    event('e3', 'status', 200, { from: 'working', to: 'needs_you' }),
+    event('e5', 'commented', 300, { text: 'copy', ask: again }),
+    event('e6', 'status', 300, { from: 'needs_you', to: 'needs_you' })
+  ]
+  const item = makeTestBotItem(6, {
+    status: 'needs_you',
+    question: { eventId: 'e5', text: 'copy' }
+  })
+
+  const earlier = botItemActivity(item, [
+    ...asks,
+    owner('e7', 'commented', 400, { text: 'Deployment region → US' })
+  ])
+  const named = botItemActivity(item, [
+    ...asks,
+    owner('e7', 'commented', 400, { text: 'Ship it? → After legal review' })
+  ])
+
+  expect(earlier.find((entry) => entry.key === 'e5')).toMatchObject({ answers: [null] })
+  expect(named.find((entry) => entry.key === 'e5')).toMatchObject({ answers: [{ id: 'e7' }] })
+})

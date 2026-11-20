@@ -52,20 +52,23 @@ function recordedLines(data: Record<string, unknown>, count: number): number[] |
   })
 }
 
-/** Every line written as "Question → answer": answers to an ask's lines, so they never answer an
- *  ask that names none of them (answers held for an earlier ask, sent after the agent asked again). */
-function answersNamedQuestions(text: string): boolean {
+/** Every line answers a question the item's asks asked ("Question → answer"): such a comment never
+ *  answers a line by order (answers held for an earlier ask, sent after the agent asked again). */
+function answersAskedQuestions(text: string, asked: ReadonlySet<string>): boolean {
   const lines = text.split('\n').filter((line) => line.trim())
   return (
     lines.length > 0 &&
-    lines.every((line) => / → \S/.test(line)) &&
-    (lines.length > 1 || /\? → /.test(lines[0]!))
+    lines.every((line) => {
+      const head = line.split(' → ')[0]
+      return head !== undefined && head !== line && asked.has(head.trim())
+    })
   )
 }
 
 function answeredLines(
   entry: BotItemQuestionAnswers,
-  reply: BotItemEvent
+  reply: BotItemEvent,
+  asked: ReadonlySet<string>
 ): { lines: number[]; byOrder: boolean } {
   const { shape, answers, byOrder } = entry
   const recorded = recordedLines(reply.data, shape.decisions.length)
@@ -83,16 +86,14 @@ function answeredLines(
   if (picked !== -1) {
     return { lines: [picked], byOrder: false }
   }
-  // Several questions answered in one comment, a line each; or one quick reply edited before sending.
-  if (shape.decisions.length > 1) {
-    const named = botItemNamedAnswers(shape, text).flatMap((words, index) =>
-      words !== null && open(index) ? [index] : []
-    )
-    if (named.length > 0) {
-      return { lines: named, byOrder: false }
-    }
+  // Several questions answered in one comment, a line each; or a quick reply edited before sending.
+  const named = botItemNamedAnswers(shape, text).flatMap((words, index) =>
+    words !== null && open(index) ? [index] : []
+  )
+  if (named.length > 0) {
+    return { lines: named, byOrder: false }
   }
-  if (answersNamedQuestions(text)) {
+  if (answersAskedQuestions(text, asked)) {
     return { lines: [], byOrder: false }
   }
   const next = answers.indexOf(null)
@@ -106,6 +107,8 @@ export function botItemQuestionPairing(
   const questions = new Map<string, BotItemQuestionAnswers>()
   const replies = new Map<string, { questionId: string; decision: BotItemDecision }>()
   let current: { id: string; entry: BotItemQuestionAnswers } | null = null
+  // Every question line asked on the item so far.
+  const asked = new Set<string>()
   for (const event of events) {
     if (isClose(event) || isNewQuestion(event)) {
       // An ask's own Needs you move comes right after it, in the same write: its window stays open.
@@ -127,6 +130,9 @@ export function botItemQuestionPairing(
           waiting: false
         }
         questions.set(event.id, entry)
+        for (const decision of shape.decisions) {
+          asked.add(botItemQuestionLine(decision.question))
+        }
         current = { id: event.id, entry }
       }
       continue
@@ -135,7 +141,7 @@ export function botItemQuestionPairing(
       continue
     }
     const { shape, answers, byOrder } = current.entry
-    const { lines, byOrder: guessed } = answeredLines(current.entry, event)
+    const { lines, byOrder: guessed } = answeredLines(current.entry, event, asked)
     for (const line of lines) {
       const taken = answers[line]
       if (taken && byOrder[line]) {
