@@ -5,7 +5,10 @@ import { assertRuntimeEnvironmentCapability } from '@/runtime/rpc/compatibility/
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
 import { toRuntimeWorktreeSelector } from '@/runtime/rpc/targets/runtime-worktree-selector'
-import { runWorkspacePortScanForTarget } from './workspace-port-scan-client'
+import {
+  scanWorkspacePortsForTarget,
+  workspacePortRuntimeTargetKey
+} from './workspace-port-scan-requests'
 import { browserUrlForPort } from './workspace-port-urls'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/identifiers/non-secure-context-uuid'
 import { BROWSER_SCREENCAST_RUNTIME_CAPABILITY } from '../../../../shared/browser/runtime/browser-runtime-capabilities'
@@ -19,6 +22,7 @@ import type {
   WorkspacePortKillResult,
   WorkspacePortScanResult
 } from '../../../../shared/workspace/ports/workspace-ports'
+export { scanWorkspacePortsForTarget, workspacePortRuntimeTargetKey }
 import type { LocalhostWorktreeLabelRoute } from '../../../../shared/workspace/ports/localhost-worktree-labels'
 
 const WORKSPACE_PORT_STOP_SETTLE_MS = 500
@@ -230,10 +234,6 @@ export async function refreshWorkspacePortScanAfterStop(
   }
 }
 
-export function workspacePortRuntimeTargetKey(target: RuntimeClientTarget): string {
-  return target.kind === 'local' ? 'local' : `environment:${target.environmentId}`
-}
-
 export function workspacePortScanKeyForTarget(target: RuntimeClientTarget): string {
   return `${workspacePortRuntimeTargetKey(target)}:all`
 }
@@ -268,37 +268,6 @@ export function mergeWorkspacePortScans(
       ? { unavailableReason: unavailable.join('; ') }
       : {})
   }
-}
-
-const inFlightWorkspacePortScans = new Map<string, Promise<WorkspacePortScanResult>>()
-
-function workspacePortScanRequestKey(
-  target: RuntimeClientTarget,
-  repoId: string | undefined,
-  freshOwners: boolean
-): string {
-  return JSON.stringify([workspacePortRuntimeTargetKey(target), repoId ?? null, freshOwners])
-}
-
-export async function scanWorkspacePortsForTarget(
-  target: RuntimeClientTarget,
-  repoId?: string,
-  { freshOwners = false }: { freshOwners?: boolean } = {}
-): Promise<WorkspacePortScanResult> {
-  const key = workspacePortScanRequestKey(target, repoId, freshOwners)
-  const existing = inFlightWorkspacePortScans.get(key)
-  if (existing) {
-    return existing
-  }
-
-  // Coalesce same-tick surface refreshes to avoid duplicate lsof/netstat/RPC work.
-  const promise = runWorkspacePortScanForTarget(target, repoId, freshOwners).finally(() => {
-    if (inFlightWorkspacePortScans.get(key) === promise) {
-      inFlightWorkspacePortScans.delete(key)
-    }
-  })
-  inFlightWorkspacePortScans.set(key, promise)
-  return promise
 }
 
 export async function killWorkspacePortForTarget(
