@@ -125,6 +125,7 @@ function installWillQuitHandler(): void {
     // Final stats flush closes working sessions synchronously; quit supplies no terminating hook to preserve their duration.
     state.starNag?.stop()
     state.automations?.stop()
+    state.agentcookieSync?.stop()
     if (state.runtime) {
       getWorkspaceCleanupRunner(state.runtime)?.stop()
     }

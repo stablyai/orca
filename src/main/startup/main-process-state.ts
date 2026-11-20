@@ -18,6 +18,7 @@ import type { StarNagService } from '../star-nag/service'
 import type { AgentAwakeService } from '../power/agent-awake-service'
 import type { CrashReportStore } from '../crash-reporting/reports/crash-report-store'
 import type { AutomationService } from '../automations/automation-service'
+import type { AgentcookieSessionSync } from '../browser/cookies/sync/agentcookie-session-sync'
 import type { PluginService } from '../plugins/plugin-service'
 import type { PluginKillListService } from '../plugins/catalog/plugin-kill-list-service'
 import type { PluginInstallStatsService } from '../plugins/catalog/plugin-install-stats-service'
@@ -122,6 +123,8 @@ export const mainProcessState = {
   watcherShutdownPromise: null as Promise<void> | null,
   watcherShutdownDone: false,
   automations: null as AutomationService | null,
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: widens the null slot to the sync assigned at launch.
+  agentcookieSync: null as AgentcookieSessionSync | null,
   pluginService: null as PluginService | null,
   pluginKillListService: null as PluginKillListService | null,
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: widens the null initial value; assigned once plugins start.
