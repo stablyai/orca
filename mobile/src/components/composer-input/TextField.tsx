@@ -1,5 +1,7 @@
-import type { ReactNode, Ref } from 'react'
+import { useCallback, useRef, type ReactNode, type Ref } from 'react'
 import {
+  Pressable,
+  StyleSheet,
   Text,
   TextInput,
   View,
@@ -40,9 +42,36 @@ export function TextField({
 }: TextFieldProps): React.JSX.Element {
   useMobileColorScheme()
   const focus = useInputFocus({ onFocus, onBlur })
+  const ownInputRef = useRef<TextInputInstance>(null)
+  const bindInputRef = useCallback(
+    (node: TextInputInstance | null) => {
+      ownInputRef.current = node
+      if (typeof inputRef === 'function') {
+        const cleanup = inputRef(node)
+        if (typeof cleanup === 'function') {
+          return () => {
+            ownInputRef.current = null
+            cleanup()
+          }
+        }
+        return undefined
+      }
+      if (inputRef) {
+        inputRef.current = node
+      }
+      return undefined
+    },
+    [inputRef]
+  )
+  const focusInput = useCallback(() => {
+    if (!editable) {
+      return
+    }
+    ownInputRef.current?.focus()
+  }, [editable])
   const input = (
     <TextInput
-      ref={inputRef}
+      ref={bindInputRef}
       editable={editable}
       placeholderTextColor={colors.textMuted}
       selectionColor={colors.accentBlue}
@@ -56,12 +85,23 @@ export function TextField({
     <View
       style={[styles.field, focus.focused && styles.focused, !editable && styles.disabled, style]}
     >
-      {leading}
+      {editable ? (
+        <Pressable
+          accessible={false}
+          focusable={false}
+          tabIndex={-1}
+          onPress={focusInput}
+          style={StyleSheet.absoluteFill}
+        />
+      ) : null}
+      {leading != null ? <View pointerEvents="none">{leading}</View> : null}
       {label ? (
-        <View style={styles.labelledText}>
-          <Text style={styles.fieldLabel} numberOfLines={1}>
-            {label}
-          </Text>
+        <View style={styles.labelledText} pointerEvents="box-none">
+          <View pointerEvents="none">
+            <Text style={styles.fieldLabel} numberOfLines={1}>
+              {label}
+            </Text>
+          </View>
           {input}
         </View>
       ) : (
