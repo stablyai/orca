@@ -127,6 +127,11 @@ export function NotesSendMenu<TNote extends DiffCommentDeliverySnapshot>({
       ? t('components.native-chat.question.sending', 'Sending…')
       : (disabledTooltip ??
         t('auto.components.editor.NotesSendMenu.allNotesSent', 'All notes sent'))
+  const sendLabel = triggerLabel
+    ? t('auto.components.editor.NotesSendMenu.433928cd9f', 'Send {{value0}} to an agent', {
+        value0: triggerLabel
+      })
+    : enabledSendTooltip(t)
 
   const markDelivered = useCallback(
     (notes: readonly TNote[]) => {
@@ -221,15 +226,10 @@ export function NotesSendMenu<TNote extends DiffCommentDeliverySnapshot>({
                 triggerClassName
               )}
               disabled={!hasDeliverableNotes}
-              title={hasDeliverableNotes ? enabledSendTooltip(t) : disabledTitle}
               aria-label={
-                triggerLabel
-                  ? t(
-                      'auto.components.editor.NotesSendMenu.433928cd9f',
-                      'Send {{value0}} to an agent',
-                      { value0: triggerLabel }
-                    )
-                  : enabledSendTooltip(t)
+                !hasDeliverableNotes && disabledTitle
+                  ? `${sendLabel} — ${disabledTitle}`
+                  : sendLabel
               }
               onMouseDown={(event) => event.stopPropagation()}
               onClick={(event) => event.stopPropagation()}
