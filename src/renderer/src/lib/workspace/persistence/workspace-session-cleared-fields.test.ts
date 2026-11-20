@@ -8,9 +8,16 @@ import { applyWorkspaceSessionEntriesPatch } from '../../../../../shared/workspa
 import { WORKSPACE_SESSION_FIELD_OWNERSHIP } from '../../../../../shared/workspace-session/workspace-session-host-field-ownership'
 import type { WorkspaceSessionState } from '../../../../../shared/workspace-session/workspace-session-state-types'
 import { createSessionWriteSubscriber } from './session-write-subscriber'
-import { AcknowledgedWorkspaceSessionEntries } from './workspace-session-acknowledged-entries'
-import { patchWorkspaceSessionByHost, type SessionApi } from './workspace-session-host-persistence'
-import { SESSION_RELEVANT_FIELDS } from './workspace-session'
+import {
+  AcknowledgedWorkspaceSessionEntries,
+  windowAcknowledgedSessionEntries
+} from './workspace-session-acknowledged-entries'
+import {
+  buildWorkspaceSessionHostSnapshots,
+  patchWorkspaceSessionByHost,
+  type SessionApi
+} from './workspace-session-host-persistence'
+import { buildWorkspaceSessionPayload, SESSION_RELEVANT_FIELDS } from './workspace-session'
 import { buildWorkspaceSessionPatch } from './workspace-session-patch'
 
 const DEBOUNCE_MS = 150
@@ -54,7 +61,7 @@ function inMemoryMain() {
     }
     return found
   }
-  return { api, holding, rejectNext }
+  return { api, holding, partitions, rejectNext }
 }
 
 function sshState(status: 'connected' | 'disconnected') {
@@ -126,47 +133,77 @@ describe('session fields a window clears', () => {
       stop()
     }
   })
-  it('a relay that ends without any tab change still clears on its SSH partition, after a failed try', async () => {
-    const store = createTestStore()
-    const main = inMemoryMain()
-    const acknowledged = new AcknowledgedWorkspaceSessionEntries()
-    const stop = createSessionWriteSubscriber({
-      store,
-      debounceMs: DEBOUNCE_MS,
-      persist: ({ patch }) =>
-        patchWorkspaceSessionByHost(main.api, patch, store.getState(), acknowledged).written
-    })
+  it('a relay that ends without any tab change clears only its own id on the SSH partition, after a failed try', async () => {
+    const { store, main, stop } = dormantRelaySaved(new AcknowledgedWorkspaceSessionEntries())
     try {
-      // A dormant tab reconnects through its last known relay; only that record changes when it ends.
-      seedStore(store, {
-        repos: [SSH_REPO],
-        worktreesByRepo: {
-          [SSH_REPO.id]: [
-            makeWorktree({ id: WORKTREE_ID, repoId: SSH_REPO.id, path: '/remote/wt' })
-          ]
-        },
-        tabsByWorktree: {
-          [WORKTREE_ID]: [makeTab({ id: 'tab-a', worktreeId: WORKTREE_ID, ptyId: null })]
-        },
-        lastKnownRelayPtyIdByTabId: { 'tab-a': 'relay-a' },
-        workspaceSessionReady: true,
-        hydrationSucceeded: true
-      })
       await vi.advanceTimersByTimeAsync(DEBOUNCE_MS)
-      expect(main.holding(WORKTREE_ID).remoteSessionIdsByTabId).toEqual({ 'tab-a': 'relay-a' })
+      const hostId = getRepoExecutionHostId(SSH_REPO)
+      const saved = main.partitions.get(hostId)!
+      // Another window's tab on the same host saved its own relay id.
+      main.partitions.set(hostId, {
+        ...saved,
+        remoteSessionIdsByTabId: { ...saved.remoteSessionIdsByTabId, 'tab-b': 'relay-b' }
+      })
 
       // The SSH partition rejects the first clear; the next store wake retries it.
-      main.rejectNext.add(getRepoExecutionHostId(SSH_REPO))
+      main.rejectNext.add(hostId)
       store.setState({ lastKnownRelayPtyIdByTabId: {} })
       await vi.advanceTimersByTimeAsync(DEBOUNCE_MS)
-      expect(main.holding(WORKTREE_ID).remoteSessionIdsByTabId).toEqual({ 'tab-a': 'relay-a' })
+      expect(main.holding(WORKTREE_ID).remoteSessionIdsByTabId).toEqual({
+        'tab-a': 'relay-a',
+        'tab-b': 'relay-b'
+      })
       store.setState({ agentsFilterRepoIds: [] })
       await vi.advanceTimersByTimeAsync(DEBOUNCE_MS)
 
-      const restored = main.holding(WORKTREE_ID)
-      expect(restored.remoteSessionIdsByTabId).toEqual({})
+      expect(main.holding(WORKTREE_ID).remoteSessionIdsByTabId).toEqual({ 'tab-b': 'relay-b' })
     } finally {
       stop()
     }
   })
+
+  it('a relay that ends after a vetoed reload still clears', async () => {
+    const { store, main, stop } = dormantRelaySaved(windowAcknowledgedSessionEntries)
+    try {
+      await vi.advanceTimersByTimeAsync(DEBOUNCE_MS)
+      // Reload builds whole snapshots, then a dirty file vetoes unloading and the window stays.
+      buildWorkspaceSessionHostSnapshots(
+        buildWorkspaceSessionPayload(store.getState()),
+        store.getState()
+      )
+
+      store.setState({ lastKnownRelayPtyIdByTabId: {} })
+      await vi.advanceTimersByTimeAsync(DEBOUNCE_MS)
+
+      expect(main.holding(WORKTREE_ID).remoteSessionIdsByTabId).toEqual({})
+    } finally {
+      stop()
+      windowAcknowledgedSessionEntries.forget()
+    }
+  })
 })
+
+/** A dormant tab reconnects through its last known relay; only that record changes when it ends. */
+function dormantRelaySaved(acknowledged: AcknowledgedWorkspaceSessionEntries) {
+  const store = createTestStore()
+  const main = inMemoryMain()
+  const stop = createSessionWriteSubscriber({
+    store,
+    debounceMs: DEBOUNCE_MS,
+    persist: ({ patch }) =>
+      patchWorkspaceSessionByHost(main.api, patch, store.getState(), acknowledged).written
+  })
+  seedStore(store, {
+    repos: [SSH_REPO],
+    worktreesByRepo: {
+      [SSH_REPO.id]: [makeWorktree({ id: WORKTREE_ID, repoId: SSH_REPO.id, path: '/remote/wt' })]
+    },
+    tabsByWorktree: {
+      [WORKTREE_ID]: [makeTab({ id: 'tab-a', worktreeId: WORKTREE_ID, ptyId: null })]
+    },
+    lastKnownRelayPtyIdByTabId: { 'tab-a': 'relay-a' },
+    workspaceSessionReady: true,
+    hydrationSucceeded: true
+  })
+  return { store, main, stop }
+}

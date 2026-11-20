@@ -10,19 +10,25 @@ export type WorkspaceSessionEntriesDiff = {
   acknowledge: () => void
 }
 
+// Keyed fields other writers also save into, so a write must never replace them whole once this
+// window has saved keys there: restart reattaches the relay ids in remoteSessionIdsByTabId.
+const KEY_SCOPED_FIELDS: ReadonlySet<string> = new Set(['remoteSessionIdsByTabId'])
+
 function sameValue(previous: unknown, next: unknown): boolean {
   return previous === next || structuralValuesEqual(previous, next)
 }
 
 /** What main last acknowledged from this window, per host partition and field. A field main hasn't
- *  acknowledged goes whole; after that only the keys whose values changed travel. */
+ *  acknowledged goes whole (a key-scoped one goes as entries); after that only changed keys travel. */
 export class AcknowledgedWorkspaceSessionEntries {
   private readonly byHost = new Map<ExecutionHostId, Map<string, unknown>>()
   // A whole-session write replaces main's copy; an acknowledgement that started before it is stale.
   private generation = 0
-  // Hosts whose keyed field last took entries from this window. Unlike byHost it outlives a failed write,
-  // so a clear that main rejected still knows where to go; a whole-session write resets it.
-  private readonly entriesSentTo = new Map<string, Set<ExecutionHostId>>()
+  // Keys of a key-scoped field this window saved per host. Unlike byHost they outlive failed and
+  // whole-session writes, so a retried clear still removes only this window's keys.
+  private readonly ownedKeys = new Map<string, Map<ExecutionHostId, ReadonlySet<string>>>()
+
+  constructor(private readonly keyScopedFields: ReadonlySet<string> = KEY_SCOPED_FIELDS) {}
 
   diff(hostId: ExecutionHostId, slice: WorkspaceSessionPatch): WorkspaceSessionEntriesDiff {
     const acknowledged = this.byHost.get(hostId)
@@ -33,7 +39,14 @@ export class AcknowledgedWorkspaceSessionEntries {
     for (const field of fields) {
       const value = sliceFields[field]
       if (!acknowledged?.has(field)) {
-        Reflect.set(patch.fields, field, value)
+        const owned = this.ownedKeys.get(field)?.get(hostId)
+        if (owned && isWorkspaceSessionRecord(value)) {
+          // Another writer may hold keys in this field; whole would erase them.
+          const remove = [...owned].filter((key) => !Object.hasOwn(value, key))
+          Reflect.set(patch.entries, field, { set: { ...value }, remove })
+        } else {
+          Reflect.set(patch.fields, field, value)
+        }
         continue
       }
       const previous = acknowledged.get(field)
@@ -69,42 +82,53 @@ export class AcknowledgedWorkspaceSessionEntries {
         }
         for (const field of fields) {
           host.set(field, sliceFields[field])
-          this.noteEntriesSent(hostId, field, sliceFields[field])
+          this.noteOwnedKeys(hostId, field, sliceFields[field], false)
         }
       }
     }
   }
 
-  private noteEntriesSent(hostId: ExecutionHostId, field: string, value: unknown): void {
-    if (!isWorkspaceSessionRecord(value)) {
+  private noteOwnedKeys(
+    hostId: ExecutionHostId,
+    field: string,
+    value: unknown,
+    keep: boolean
+  ): void {
+    if (!this.keyScopedFields.has(field) || !isWorkspaceSessionRecord(value)) {
       return
     }
-    let hostIds = this.entriesSentTo.get(field)
-    let holdsEntries = false
-    for (const _key in value) {
-      holdsEntries = true
-      break
+    let byHost = this.ownedKeys.get(field)
+    const keys = new Set(keep ? byHost?.get(hostId) : undefined)
+    for (const key in value) {
+      keys.add(key)
     }
-    if (holdsEntries) {
-      hostIds ??= new Set()
-      this.entriesSentTo.set(field, hostIds)
-      hostIds.add(hostId)
+    if (keys.size > 0) {
+      byHost ??= new Map()
+      this.ownedKeys.set(field, byHost)
+      byHost.set(hostId, keys)
     } else {
-      hostIds?.delete(hostId)
+      byHost?.delete(hostId)
     }
   }
 
-  /** Hosts this window last sent entries of keyed `field` to, acknowledged or since rejected. */
+  /** A whole-session snapshot replaces main's copy but may be vetoed: own its keys as well. */
+  noteSnapshot(hostId: ExecutionHostId, slice: WorkspaceSessionPatch): void {
+    const sliceFields: Record<string, unknown> = slice
+    for (const field of this.keyScopedFields) {
+      this.noteOwnedKeys(hostId, field, sliceFields[field], true)
+    }
+  }
+
+  /** Hosts holding keys of key-scoped `field` that this window saved, acknowledged or since rejected. */
   hostsHoldingEntries(field: string): readonly ExecutionHostId[] {
-    const hostIds = this.entriesSentTo.get(field)
-    return hostIds ? [...hostIds] : []
+    const byHost = this.ownedKeys.get(field)
+    return byHost ? [...byHost.keys()] : []
   }
 
   /** Main's copy can't be assumed after a failed, fenced or whole-partition write: send whole fields. */
   forget(hostId?: ExecutionHostId, fields?: readonly string[]): void {
     if (hostId === undefined) {
       this.byHost.clear()
-      this.entriesSentTo.clear()
       this.generation += 1
     } else if (fields) {
       const host = this.byHost.get(hostId)
@@ -123,10 +147,10 @@ export class AcknowledgedWorkspaceSessionEntries {
         this.byHost.delete(hostId)
       }
     }
-    for (const sentTo of this.entriesSentTo.values()) {
-      for (const hostId of sentTo) {
+    for (const byHost of this.ownedKeys.values()) {
+      for (const hostId of byHost.keys()) {
         if (!hostIds.has(hostId)) {
-          sentTo.delete(hostId)
+          byHost.delete(hostId)
         }
       }
     }

@@ -304,9 +304,13 @@ export function buildWorkspaceSessionHostSnapshots(
   const slices = splitWorkspaceSessionForWrite(payload, state, 'replace')
   // They replace main's copy, including when the unload is vetoed and the window stays.
   windowAcknowledgedSessionEntries.forget()
+  const remote = nonLocalHostSessionEntries(slices)
+  for (const [hostId, hostState] of remote) {
+    windowAcknowledgedSessionEntries.noteSnapshot(hostId, hostState)
+  }
   return [
     { state: slices[LOCAL_EXECUTION_HOST_ID] ?? payload },
-    ...nonLocalHostSessionEntries(slices).map(([hostId, hostState]) => ({
+    ...remote.map(([hostId, hostState]) => ({
       state: hostState,
       hostId
     }))
