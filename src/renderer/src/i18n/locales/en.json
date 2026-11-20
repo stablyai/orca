@@ -23556,6 +23556,13 @@
           "unread": "Can’t read {{host}}’s Orca account. Update or reconnect {{host}}.",
           "signInThere": "Run `orca auth login` on {{host}} to sign it in."
         }
+      },
+      "hostScope": {
+        "updateHostToChange": "Update Orca on {{host}} to change this setting there.",
+        "updateFailed": "Couldn't update the setting on {{host}}."
+      },
+      "git": {
+        "branchPrefixHostGitUsername": "Git username on {{host}}"
       }
     },
     "agentChildRow": {
