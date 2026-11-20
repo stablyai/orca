@@ -1,3 +1,5 @@
+// @protected-copy scope=file
+// Picks a bot's permission, including for a bot made from someone else's link.
 // The bot's agent with its model, effort and permissions: the agent picker, chat only, keeping a setup.
 import { useCallback, useMemo, useState, type ComponentProps } from 'react'
 import { useTranslate } from '@/i18n/use-translate'
