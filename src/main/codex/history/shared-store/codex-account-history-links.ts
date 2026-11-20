@@ -14,8 +14,8 @@ import {
   LINKED_MANAGED_HOME_MARKER,
   MANAGED_HOME_MARKER
 } from '../../../codex-accounts/managed-homes/host-codex-managed-home-ownership'
+import { COORDINATION_LOCK } from './codex-thread-lock-probe-scripts'
 import {
-  COORDINATION_LOCK,
   holdsThreadLock,
   keepsThreadLock,
   moveIdleThreadLockFolder,
