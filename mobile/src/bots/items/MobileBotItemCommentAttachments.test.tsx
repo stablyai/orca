@@ -61,7 +61,7 @@ it('folds images past six to five and "+N", steps the viewer through them, and o
   await act(async () => grid.props.onLayout({ nativeEvent: { layout: { width: 300 } } }))
 
   const tiles = tree.root.findAll(
-    (node) => node.type === 'Pressable' && node.props.accessibilityRole === 'imagebutton'
+    (node) => String(node.type) === 'Pressable' && node.props.accessibilityRole === 'imagebutton'
   )
   expect(tiles.map((tile) => tile.props.accessibilityLabel)).toEqual([
     'shot-1.png',
@@ -71,18 +71,20 @@ it('folds images past six to five and "+N", steps the viewer through them, and o
     'shot-5.png'
   ])
   expect(
-    tree.root.findAll((node) => node.type === 'Text' && node.props.children === '+3')
+    tree.root.findAll((node) => String(node.type) === 'Text' && node.props.children === '+3')
   ).toHaveLength(1)
 
   await act(async () => tiles[4]!.props.onPress())
-  const viewer = () => tree.root.find((node) => node.type === 'Viewer')
+  const viewer = () => tree.root.find((node) => String(node.type) === 'Viewer')
   expect(viewer().props.label).toBe('shot-5.png')
   await act(async () => viewer().props.onNext())
   expect(viewer().props.label).toBe('shot-6.png')
 
   await act(async () =>
     tree.root
-      .find((node) => node.type === 'Pressable' && node.props.accessibilityLabel === 'run.log')
+      .find(
+        (node) => String(node.type) === 'Pressable' && node.props.accessibilityLabel === 'run.log'
+      )
       .props.onPress()
   )
   expect(onOpenFile).toHaveBeenCalledWith(`${STORE}/run.log`)
