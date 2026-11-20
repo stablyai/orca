@@ -745,7 +745,8 @@
         "waitingForSignIn": "正在等待登录…",
         "tools_one": "{{count}} 个工具",
         "tools_other": "{{count}} 个工具",
-        "off": "已关闭"
+        "off": "已关闭",
+        "notStarted": "尚未启动"
       },
       "title": "MCP 服务器",
       "notRunning": "MCP 服务器会在你发送下一条消息时连接",

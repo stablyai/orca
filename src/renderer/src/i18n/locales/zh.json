@@ -20861,7 +20861,8 @@
           "failed": "失败",
           "failedReason": "失败：{{error}}",
           "disabled": "已禁用",
-          "needsAuthAfterSend": "需要登录，发送一条消息即可在这里登录"
+          "needsAuthAfterSend": "需要登录，发送一条消息即可在这里登录",
+          "notStarted": "尚未启动"
         },
         "signIn": {
           "action": "登录",
@@ -21804,7 +21805,8 @@
           "notRemovable": "主工作区或文件夹项目",
           "projectOff": "此项目已关闭清理",
           "rulesOff": "未开启任何规则",
-          "withDetail": "{{cause}} · {{detail}}"
+          "withDetail": "{{cause}} · {{detail}}",
+          "folderWorkspaceSibling": "此工作区中的另一个仓库仍在使用中"
         },
         "trigger": {
           "startup": "启动时",
@@ -24795,7 +24797,9 @@
       "1524825c2c": "切换工作区看板",
       "d286d1ab85": "清除窗格标题",
       "tabNewBrowserSplitRight": "在右侧拆分窗格中新建浏览器标签页",
-      "5468defe61": "折叠/展开所有项目"
+      "5468defe61": "折叠/展开所有项目",
+      "botItemPrevious": "上一个条目",
+      "botItemNext": "下一个条目"
     },
     "group": {
       "global": "全局",
