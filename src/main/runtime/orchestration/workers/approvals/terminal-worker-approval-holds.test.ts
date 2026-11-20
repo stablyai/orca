@@ -1,3 +1,4 @@
+import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentHookEventPayload } from '../../../../../shared/agent-hook-listener/listener-event'
 import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
@@ -49,8 +50,9 @@ const record = (
   hookDecision: ClaudeToolRecord['hookDecision'] = null
 ): ClaudeToolRecord => ({ hookDecision, result })
 
-// A helper's calls are recorded only in its own transcript beside the session's.
-const helperTranscript = (helper: string) => `/t/session/subagents/agent-${helper}.jsonl`
+// A helper's calls are recorded only in its own transcript beside the session's, in host separators.
+const helperTranscript = (helper: string) =>
+  join('/t/session', 'subagents', `agent-${helper}.jsonl`)
 // The screen while a held helper prompt waits: Claude draws no dialog for it (probe 2026-11-19, 2.1.326).
 const LEAD_WAITING = ['⏺ Agent(Run rm check)', '✻ Waiting for 1 background agent to finish', '❯']
 

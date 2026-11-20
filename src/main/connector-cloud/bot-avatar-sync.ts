@@ -27,6 +27,8 @@ export class BotAvatarSync {
   private readonly refused = new Map<string, { avatar: string; waitMs: number; until: number }>()
   // Bots waiting for a send slot, each as last seen.
   private readonly queued = new Map<string, SyncedBot>()
+  // A picture changed while bots were off: the roster is read again once they are on.
+  private staleWhileOff = false
   // Bots a pass met while their send was in flight: their picture may have changed since.
   private readonly changedWhileSending = new Set<string>()
   // Bot writes so far, so a refusal that crossed one is not kept.
@@ -53,7 +55,7 @@ export class BotAvatarSync {
   private pass(): void {
     if (!this.deps.bots.enabled()) {
       // Queued sends resume when bots are enabled again.
-      if (this.queued.size > 0) {
+      if (this.queued.size > 0 || this.staleWhileOff) {
         this.retryLater()
       }
       if (this.sending.size > 0) {
@@ -66,6 +68,7 @@ export class BotAvatarSync {
       }
       return
     }
+    this.staleWhileOff = false
     let waiting = false
     const present = new Set<string>()
     for (const bot of this.deps.bots.list()) {
@@ -167,6 +170,7 @@ export class BotAvatarSync {
         if (this.deps.bots.enabled()) {
           this.pass()
         } else {
+          this.staleWhileOff = true
           this.retryLater()
         }
       }

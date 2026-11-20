@@ -309,7 +309,7 @@ it("keeps the comment box while the question waits, and posts a quick reply as t
     'Go ahead',
     [],
     expect.any(String),
-    'e2'
+    undefined
   )
   expect(screen.getByRole('textbox', { name: 'Comment' })).toBeTruthy()
 })

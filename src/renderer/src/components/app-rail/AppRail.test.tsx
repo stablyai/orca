@@ -1,11 +1,13 @@
 // @vitest-environment happy-dom
 
 import '@testing-library/jest-dom/vitest'
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { useAppStore } from '@/store'
 import { AppRail } from './AppRail'
+import { getDefaultSettings } from '../../../../shared/orca-profiles/constants'
 import { setWorkspaceListRegionPresent } from './workspace-list-region-presence'
 import {
   registerTitlebarSidebarToggle,
@@ -97,6 +99,16 @@ function railItems(): string[] {
   )
 }
 
+function showDestinations(tasks: boolean, automations: boolean): void {
+  useAppStore.setState({
+    settings: {
+      ...getDefaultSettings('/home/test'),
+      showTasksButton: tasks,
+      showAutomationsButton: automations
+    }
+  })
+}
+
 async function resizeTo(height: number): Promise<void> {
   toolbarHeight = height
   act(() => resizeCallbacks.forEach((callback) => callback()))
@@ -168,6 +180,7 @@ it('describes expansion only for workspaces content, pointing at the list only w
 })
 
 it('folds Help and Settings into More when the rail is too short for three buttons', async () => {
+  showDestinations(false, false)
   toolbarHeight = 108
   renderRail()
   expect(railItems()).toEqual(['workspaces', 'help', 'settings'])
@@ -271,4 +284,63 @@ it('names the landmark and its toolbar differently', () => {
   renderRail()
   expect(screen.getByRole('navigation', { name: 'App navigation' })).toBeInTheDocument()
   expect(screen.getByRole('toolbar', { name: 'App tools' })).toBeInTheDocument()
+})
+
+it('shows Tasks and Automations below Workspaces per their visibility settings', () => {
+  showDestinations(true, true)
+  renderRail()
+  expect(railItems()).toEqual(['workspaces', 'tasks', 'automations', 'help', 'settings'])
+  cleanup()
+  showDestinations(false, true)
+  renderRail()
+  expect(railItems()).toEqual(['workspaces', 'automations', 'help', 'settings'])
+})
+
+it('selects rail destinations by click and keyboard and updates the current page', async () => {
+  showDestinations(true, true)
+  renderRail()
+  const user = userEvent.setup()
+  const tasks = screen.getByRole('button', { name: 'Tasks' })
+  const automations = screen.getByRole('button', { name: 'Automations' })
+
+  await user.click(tasks)
+  expect(useAppStore.getState().activeView).toBe('tasks')
+  expect(tasks).toHaveAttribute('aria-current', 'page')
+
+  await user.keyboard('{ArrowDown}')
+  expect(automations).toHaveFocus()
+  await user.keyboard(' ')
+  expect(useAppStore.getState().activeView).toBe('automations')
+  expect(automations).toHaveAttribute('aria-current', 'page')
+  expect(tasks).not.toHaveAttribute('aria-current')
+})
+
+it('folds Tasks and Automations into More and opens them from there, with More current for a folded page', async () => {
+  showDestinations(true, true)
+  toolbarHeight = 144
+  renderRail()
+  expect(railItems()).toEqual(['workspaces', 'more', 'help', 'settings'])
+  const more = screen.getByRole('button', { name: 'More' })
+  act(() => more.focus())
+  fireEvent.keyDown(more, { key: 'Enter' })
+  const menu = await screen.findByRole('menu')
+  expect(
+    within(menu)
+      .getAllByRole('menuitem')
+      .map((item) => item.textContent)
+  ).toEqual(['Tasks', 'Automations'])
+  fireEvent.click(within(menu).getByRole('menuitem', { name: 'Automations' }))
+  expect(useAppStore.getState().activeView).toBe('automations')
+  expect(screen.getByRole('button', { name: 'More, Automations' })).toHaveAttribute(
+    'aria-current',
+    'page'
+  )
+})
+
+it('leaves an already-open destination as it is', () => {
+  showDestinations(true, true)
+  useAppStore.getState().openTaskPage({ taskSource: 'linear' })
+  renderRail()
+  fireEvent.click(screen.getByRole('button', { name: 'Tasks' }))
+  expect(useAppStore.getState().taskPageData).toEqual({ taskSource: 'linear' })
 })

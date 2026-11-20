@@ -1,13 +1,32 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { lstatSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { escapeRegex } from '../../../../shared/text/regex-escaping'
 import { upsertHookTrustEntries, type CodexTrustEntry } from './config-toml-trust'
+import type * as TomlAtomicWrite from '../../configuration/toml/config-toml-atomic-write'
 import { escapeTomlBasicString as escapeTomlString } from '../../configuration/toml/config-toml-syntax'
 import {
   createTrustConfigFixture,
   removeTrustConfigFixture
 } from './config-toml-trust-test-fixtures'
+
+const beforePublish = vi.hoisted(() => {
+  const state: { run: ((path: string) => void) | null } = { run: null }
+  return state
+})
+
+vi.mock('../../configuration/toml/config-toml-atomic-write', async (importOriginal) => {
+  const actual = await importOriginal<typeof TomlAtomicWrite>()
+  return {
+    ...actual,
+    writeTomlConfigAtomically: (...args: Parameters<typeof actual.writeTomlConfigAtomically>) => {
+      const run = beforePublish.run
+      beforePublish.run = null
+      run?.(args[0])
+      return actual.writeTomlConfigAtomically(...args)
+    }
+  }
+})
 
 let tmpDir: string
 let configPath: string
@@ -19,10 +38,31 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  beforePublish.run = null
   removeTrustConfigFixture(tmpDir)
 })
 
 describe('upsertHookTrustEntries', () => {
+  it('keeps a save that lands after Orca read the config and adds the approval on top of it', () => {
+    writeFileSync(configPath, 'model = "a"\n', 'utf-8')
+    beforePublish.run = (path) => writeFileSync(path, 'model = "b"\n', 'utf-8')
+
+    upsertHookTrustEntries(configPath, [
+      {
+        sourcePath: '/home/me/.codex/hooks.json',
+        eventLabel: 'stop',
+        groupIndex: 0,
+        handlerIndex: 0,
+        command: 'echo stop',
+        trustedHash: 'sha256:NEW'
+      }
+    ])
+
+    const written = readFileSync(configPath, 'utf-8')
+    expect(written.startsWith('model = "b"\n')).toBe(true)
+    expect(written).toContain('trusted_hash = "sha256:NEW"')
+  })
+
   it.each([
     {
       name: 'followed by another table',

@@ -93,7 +93,7 @@ describe('persistent native group lifecycle', () => {
     expect(told?.text).toBe('Scout told Forge')
   })
   it('fences durable peer continuations after removal and verifies the actual worker sender', async () => {
-    const { groups, mails, requests } = fixture()
+    const { groups, mails, requests, orchestration, startWorker } = fixture()
     let group = await groups.create({ name: 'Review', botIds: ['bot-0', 'bot-1'] })
     const [source, target] = group.members
     mails.set('peer', { id: 'peer', from_handle: source.sessionId, thread_id: null })
@@ -181,8 +181,10 @@ describe('persistent native group lifecycle', () => {
       messageId: randomUUID(),
       text: '@Forge start a worker'
     })
-    groups.store.bindWorker('owned-worker', work.turns[0].operationId)
-    mails.set('report', { id: 'report', from_handle: 'dispatch:owned-worker', thread_id: null })
+    const worker = startWorker('term_owned_worker')
+    groups.store.bindWorker(worker.dispatchId, work.turns[0].operationId)
+    const report = worker.send(target.sessionId, 'worker_done')
+    orchestration.completeDispatch(worker.dispatchId)
     groups.reserveMailTurn({
       ...input,
       operationId: 'verified-worker',
@@ -195,7 +197,7 @@ describe('persistent native group lifecycle', () => {
             message: 'mail-notice',
             mailbox: target.sessionId,
             dispatchId: null,
-            messages: [{ messageId: 'report', runId: 'run', from: 'dispatch:owned-worker' }]
+            messages: [{ messageId: report.id, runId: 'run', from: 'term_owned_worker' }]
           }
         }
       }
