@@ -1,4 +1,5 @@
 import { MESSAGE_TYPES, type MessagePriority, type MessageType } from '../db/orchestration-records'
+import { callerMailProvenance } from '../db/messages/message-orca-provenance'
 import type { OrchestrationDb } from '../db/orchestration-db'
 import { OrchestrationError } from '../orchestration-error'
 
@@ -70,6 +71,11 @@ export function importFederatedControlMessage(
   const recipient = `dispatch:${params.dispatchId}`
   const existing = db.getMessageById(params.messageId)
   if (existing) {
+    // A replay is compared with what the first import stored, after insert dropped any claimed provenance.
+    const stored =
+      message.payload == null
+        ? message.payload
+        : (callerMailProvenance({ from: message.from, payload: message.payload }) ?? null)
     if (
       existing.run_id !== attachment.home_run_id ||
       existing.to_handle !== recipient ||
@@ -79,7 +85,7 @@ export function importFederatedControlMessage(
       existing.type !== message.type ||
       existing.priority !== message.priority ||
       existing.thread_id !== message.threadId ||
-      existing.payload !== message.payload
+      existing.payload !== stored
     ) {
       throw new OrchestrationError(
         'request_mismatch',
