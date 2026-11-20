@@ -27694,7 +27694,7 @@
       "controlNone": "你添加的任何人都能通过 {{name}}，以你的身份在 {{computer}} 上工作：运行命令、打开和修改文件，以及使用你已连接的账号。",
       "controlOne": "{{person}} 可以通过 {{name}}，以你的身份在 {{computer}} 上工作：运行命令、打开和修改文件，以及使用你已连接的账号。",
       "controlMany": "他们可以通过 {{name}}，以你的身份在 {{computer}} 上工作：运行命令、打开和修改文件，以及使用你已连接的账号。",
-      "controlBrief": "他们可以在这里运行命令并使用你的账号。",
+      "controlBrief": "他们可以在这里以你的身份操作。",
       "reachHeading": "{{name}} 可以访问什么",
       "reachComputer": "你在 {{computer}} 上的文件、命令和账号",
       "reachComputerDetail": "以你的身份操作，范围由下方权限决定。",

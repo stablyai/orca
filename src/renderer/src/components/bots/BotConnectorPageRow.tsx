@@ -49,96 +49,101 @@ export function BotConnectorPageRow({
   }, [defaultOpen, page, rowKey])
   const { actions, name } = props
   const nameText = typeof name === 'string' ? name : botConnectorTitleText(name)
-  const body = (
-    // A row inside the page is not this connector.
-    <BotConnectorRowKey.Provider value={null}>
-      <BotConnectorPageSections.Provider value={shown}>
-        {props.children}
-      </BotConnectorPageSections.Provider>
-    </BotConnectorRowKey.Provider>
-  )
-  if (shown) {
-    return (
-      <div className="flex flex-col motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-right-2 motion-safe:duration-150">
-        <Button
-          ref={backButton}
-          variant="ghost"
-          size="xs"
-          className="-ml-1.5 self-start"
-          onClick={() => openBotConnectorPage(null)}
-        >
-          <ChevronLeft />
-          {t('settings.bots.connectors', 'Connectors')}
-        </Button>
-        <div className="flex items-start gap-3 pt-3 pb-1">
-          <span className="shrink-0 *:size-10!">
-            {props.logo ?? (
-              <span className="flex items-center justify-center rounded-lg bg-muted">
-                {props.icon}
-              </span>
-            )}
-          </span>
-          <div className="min-w-0 flex-1">
-            <h2 className="line-clamp-2 text-base leading-5 font-semibold break-words">
-              {nameText}
-            </h2>
-            <p className="mt-0.5 truncate text-xs text-muted-foreground">{props.description}</p>
-          </div>
-          <div className="flex shrink-0 items-center gap-1.5 pt-0.5">
-            {props.notice}
-            <RowFixOrStatus props={props} onOpen={open} />
-            {props.trailing}
-            {actions ? <BotConnectorMenu name={nameText} actions={actions} alwaysShown /> : null}
-          </div>
-        </div>
-        <div className="flex flex-col">{body}</div>
-      </div>
-    )
-  }
   return (
-    // Another connector's page shows: this row stays mounted for its dialogs.
-    <div hidden={page !== null} className="group">
-      <div className="group/header relative flex min-h-[52px] items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-accent/40">
-        {props.logo ?? (
-          <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted">
-            {props.icon}
-          </span>
-        )}
-        <div className="min-w-0 flex-1">
-          {/* Stretched over the row, so a click anywhere but the fix opens its page. */}
-          <button
-            ref={rowButton}
-            type="button"
-            onClick={open}
-            className="flex max-w-full min-w-0 text-left text-sm font-medium outline-none after:absolute after:inset-0 after:rounded-[inherit] focus-visible:after:ring-[3px] focus-visible:after:ring-ring/50"
+    <div
+      hidden={page !== null && !shown}
+      className={
+        shown
+          ? 'flex flex-col motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-right-2 motion-safe:duration-150'
+          : 'group'
+      }
+    >
+      {shown ? (
+        <>
+          <Button
+            ref={backButton}
+            variant="ghost"
+            size="xs"
+            className="-ml-1.5 self-start"
+            onClick={() => openBotConnectorPage(null)}
           >
-            <RowName name={name} />
-          </button>
-          {/* What needs the owner takes the line; its fix waits on the page. */}
-          {props.fix || props.status ? (
-            <p className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
-              {props.fix ? (
-                <AttentionDot />
-              ) : (
-                <span className={STATUS_DOT_CLASSES[props.status?.tone ?? 'neutral']} aria-hidden />
+            <ChevronLeft />
+            {t('settings.bots.connectors', 'Connectors')}
+          </Button>
+          <div className="flex items-start gap-3 pt-3 pb-1">
+            <span className="shrink-0 *:size-10!">
+              {props.logo ?? (
+                <span className="flex items-center justify-center rounded-lg bg-muted">
+                  {props.icon}
+                </span>
               )}
-              <span className="truncate">{props.fix?.label ?? props.status?.label}</span>
-            </p>
-          ) : (
-            <p className="truncate text-xs text-muted-foreground">{props.description}</p>
+            </span>
+            <div className="min-w-0 flex-1">
+              <h2 className="line-clamp-2 text-base leading-5 font-semibold break-words">
+                {nameText}
+              </h2>
+              <p className="mt-0.5 truncate text-xs text-muted-foreground">{props.description}</p>
+            </div>
+            <div className="flex shrink-0 items-center gap-1.5 pt-0.5">
+              {props.notice}
+              <RowFixOrStatus props={props} onOpen={open} />
+              {props.trailing}
+              {actions ? <BotConnectorMenu name={nameText} actions={actions} alwaysShown /> : null}
+            </div>
+          </div>
+        </>
+      ) : (
+        <div className="group/header relative flex min-h-[52px] items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-accent/40">
+          {props.logo ?? (
+            <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted">
+              {props.icon}
+            </span>
           )}
+          <div className="min-w-0 flex-1">
+            {/* Stretched over the row, so a click anywhere but the fix opens its page. */}
+            <button
+              ref={rowButton}
+              type="button"
+              onClick={open}
+              className="flex max-w-full min-w-0 text-left text-sm font-medium outline-none after:absolute after:inset-0 after:rounded-[inherit] focus-visible:after:ring-[3px] focus-visible:after:ring-ring/50"
+            >
+              <RowName name={name} />
+            </button>
+            {/* What needs the owner takes the line; its fix waits on the page. */}
+            {props.fix || props.status ? (
+              <p className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+                {props.fix ? (
+                  <AttentionDot />
+                ) : (
+                  <span
+                    className={STATUS_DOT_CLASSES[props.status?.tone ?? 'neutral']}
+                    aria-hidden
+                  />
+                )}
+                <span className="truncate">{props.fix?.label ?? props.status?.label}</span>
+              </p>
+            ) : (
+              <p className="truncate text-xs text-muted-foreground">{props.description}</p>
+            )}
+          </div>
+          {props.notice}
+          {props.checking ? (
+            <LoaderCircle className="size-4 shrink-0 animate-spin text-muted-foreground" />
+          ) : null}
+          {props.trailing}
+          <ChevronRight
+            aria-hidden
+            className="pointer-events-none size-4 shrink-0 text-muted-foreground group-hover/header:text-foreground"
+          />
         </div>
-        {props.notice}
-        {props.checking ? (
-          <LoaderCircle className="size-4 shrink-0 animate-spin text-muted-foreground" />
-        ) : null}
-        {props.trailing}
-        <ChevronRight
-          aria-hidden
-          className="pointer-events-none size-4 shrink-0 text-muted-foreground group-hover/header:text-foreground"
-        />
+      )}
+      <div hidden={!shown} className={shown ? 'flex flex-col' : undefined}>
+        <BotConnectorRowKey.Provider value={null}>
+          <BotConnectorPageSections.Provider value={true}>
+            {props.children}
+          </BotConnectorPageSections.Provider>
+        </BotConnectorRowKey.Provider>
       </div>
-      <div hidden>{body}</div>
     </div>
   )
 }

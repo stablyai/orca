@@ -139,8 +139,10 @@ function NoConnectors({ bot, onAdd }: { bot: Bot; onAdd: () => void }): React.JS
  */
 export function BotConnectorsSection({ bot }: { bot: Bot }): React.JSX.Element {
   const t = useTranslate()
-  const entries = useBotConnectorEntries(bot, 'apps')
   const webhooks = useWebhooksConnector(bot)
+  const entries = useBotConnectorEntries(bot, 'apps').filter(
+    (entry) => entry.kind !== 'webhooks' || webhooks === 'added'
+  )
   const openPage = useBotConnectorPage(bot)
   // A page whose connector is gone (removed, or another bot's) shows the list again.
   const page =
@@ -151,8 +153,6 @@ export function BotConnectorsSection({ bot }: { bot: Bot }): React.JSX.Element {
   const rows = entries.map((entry) => (
     <BotConnectorEntryRow key={botConnectorRowKey(bot, entry.key)} bot={bot} entry={entry} />
   ))
-  // The Webhooks row is always listed but shows only once a hook exists.
-  const empty = entries.every((entry) => entry.kind === 'webhooks') && webhooks !== 'added'
   const onKeyDown = (event: React.KeyboardEvent): void => {
     // Esc from within the page (not a menu or dialog it opened, which take their own) goes back.
     if (
@@ -170,7 +170,7 @@ export function BotConnectorsSection({ bot }: { bot: Bot }): React.JSX.Element {
     <AddConnectorButton
       bot={bot}
       trigger={(open) =>
-        empty ? (
+        entries.length === 0 ? (
           <section className="flex flex-col gap-0.5">
             <BotConnectorsHostNotice bot={bot} />
             <NoConnectors bot={bot} onAdd={open} />

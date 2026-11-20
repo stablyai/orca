@@ -27680,7 +27680,7 @@
       "controlNone": "Anyone you add can use {{name}} to work on {{computer}} as you: run commands, open and change files, and use your connected accounts.",
       "controlOne": "{{person}} can use {{name}} to work on {{computer}} as you: run commands, open and change files, and use your connected accounts.",
       "controlMany": "They can use {{name}} to work on {{computer}} as you: run commands, open and change files, and use your connected accounts.",
-      "controlBrief": "They can run commands and use your accounts here.",
+      "controlBrief": "They can act as you here.",
       "reachHeading": "What {{name}} can reach",
       "reachComputer": "Your files, commands and accounts on {{computer}}",
       "reachComputerDetail": "As you, as far as the permission below allows.",
