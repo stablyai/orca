@@ -182,6 +182,28 @@ it('never publishes a candidate built for other picks after a rebuild fails', as
   expect(screen.getByRole('button', { name: 'Publish link' }).hasAttribute('disabled')).toBe(true)
 })
 
+it('picks every memory file with Include memory, and All clears or picks them all', async () => {
+  render(<BotShareFlow bot={bot} link={null} onClose={() => {}} />)
+  fireEvent.click(await screen.findByRole('switch', { name: 'Include memory' }))
+  const all = screen.getByRole('switch', { name: 'All' })
+  const file = screen.getByRole('checkbox', { name: 'area-owners' })
+  expect(all.getAttribute('aria-checked')).toBe('true')
+  expect(file.getAttribute('aria-checked')).toBe('true')
+  expect(screen.getByText('1 of 1')).toBeDefined()
+
+  fireEvent.click(all)
+  expect(all.getAttribute('aria-checked')).toBe('false')
+  expect(file.getAttribute('aria-checked')).toBe('false')
+
+  // The whole line ticks its file, once.
+  fireEvent.click(screen.getByText('area-owners', { selector: 'span' }))
+  expect(file.getAttribute('aria-checked')).toBe('true')
+  expect(all.getAttribute('aria-checked')).toBe('true')
+
+  fireEvent.click(screen.getByRole('button', { name: 'Preview area-owners' }))
+  expect(await screen.findByRole('button', { name: 'Memory' })).toBeDefined()
+})
+
 it('leads with Done when the link already serves the bot as it is', async () => {
   render(<BotShareFlow bot={bot} link={link('digest')} onClose={() => {}} />)
 
@@ -221,7 +243,10 @@ it('keeps the reviewed parts and setup note through sign-in and publishes that d
     render(<BotSharingPage bot={bot} />)
     fireEvent.click(screen.getByRole('button', { name: 'Share bot…' }))
     fireEvent.click(await screen.findByRole('switch', { name: 'Include memory' }))
-    fireEvent.click(screen.getByRole('checkbox', { name: 'area-owners' }))
+    // Turning memory on picks every file; the list opens to leave some out.
+    expect(screen.getByRole('checkbox', { name: 'area-owners' }).getAttribute('aria-checked')).toBe(
+      'true'
+    )
     fireEvent.click(screen.getByRole('button', { name: 'Release notes' }))
     fireEvent.click(await screen.findByRole('button', { name: /Setup note/ }))
     fireEvent.change(screen.getByRole('textbox', { name: 'Setup note' }), {

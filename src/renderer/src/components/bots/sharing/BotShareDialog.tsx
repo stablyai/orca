@@ -237,7 +237,17 @@ export function BotShareDrillIn({
         <BotShareBack label={backLabel} onBack={onBack} />
       </div>
       <div>
-        <div className="text-sm leading-5 font-semibold">{pageTitle(page, t)}</div>
+        <div className="flex items-baseline gap-2 text-sm leading-5 font-semibold">
+          {pageTitle(page, t)}
+          {page.kind === 'list' && page.list === 'memory' ? (
+            <span className="text-xs font-normal tabular-nums text-muted-foreground">
+              {t('bots.share.countOf', '{{picked}} of {{all}}', {
+                picked: ctx.selection.memory?.length ?? 0,
+                all: ctx.candidate.available.memory.length
+              })}
+            </span>
+          ) : null}
+        </div>
         {page.kind === 'part' && page.detail ? (
           <div className="text-xs leading-4 text-muted-foreground">{page.detail}</div>
         ) : null}
