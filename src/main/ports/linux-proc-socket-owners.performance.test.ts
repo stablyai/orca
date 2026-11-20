@@ -2,7 +2,7 @@ import type * as FsPromises from 'node:fs/promises'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { scanPlatformListeningPorts } from './local-workspace-platform-port-scanner'
 
-// Guards the Linux port scan walking every process's fds on each pass (PR_NUMBER).
+// Guards the Linux port scan walking every process's fds on each pass (#45700).
 const PROC_NET_HEADER =
   '  sl  local_address rem_address   st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode\n'
 const procNetRow = (portHex: string, uid: number, inode: number): string =>
