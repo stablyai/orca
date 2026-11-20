@@ -7,7 +7,7 @@ import type {
   AvatarGenerationApi,
   AvatarImageAgentStatus
 } from '../../../../shared/avatar-generation/avatar-generation-contract'
-import { GenerateFaceLine, GenerateFaceTile, useGenerateFace } from './AvatarGenerateFace'
+import { GenerateField, GenerateFaceTile, useGenerateFace } from './AvatarGenerateFace'
 import type { GeneratedAvatar } from './use-avatar-generation'
 
 // The real crop draws on a canvas, which happy-dom lacks.
@@ -18,9 +18,7 @@ function Face({ onResult }: { onResult: (made: GeneratedAvatar) => void }): Reac
   return (
     <TooltipProvider>
       <GenerateFaceTile face={face} />
-      <GenerateFaceLine face={face}>
-        <span>upload line</span>
-      </GenerateFaceLine>
+      <GenerateField face={face} />
     </TooltipProvider>
   )
 }
@@ -44,6 +42,11 @@ const CODEX: AvatarImageAgentStatus = { agent: 'codex', status: 'ready' }
 const GROK: AvatarImageAgentStatus = { agent: 'grok', status: 'ready' }
 const IMAGE = { mimeType: 'image/png', base64: 'AAAA' }
 
+/** Whether the field is folded away (the description line shows in its place). */
+function folded(box: HTMLElement): boolean {
+  return box.closest('[aria-hidden="true"]') !== null
+}
+
 async function describeAndEnter(text: string): Promise<HTMLTextAreaElement> {
   const box = await screen.findByRole<HTMLTextAreaElement>('textbox', {
     name: 'Picture description'
@@ -59,31 +62,41 @@ describe('Generate face', () => {
   })
   afterEach(cleanup)
 
-  it('generates on Enter and shows the picture with its description under it', async () => {
+  it('generates on Enter and folds the field to the description under the picture', async () => {
     const generate = stubAgents([CODEX], async () => ({ ok: true, agent: 'codex', image: IMAGE }))
     const onResult = vi.fn()
     render(<Face onResult={onResult} />)
-    await describeAndEnter('a fox astronaut')
+    const box = await describeAndEnter('a fox astronaut')
+    expect(folded(box)).toBe(false)
     await screen.findByRole('button', { name: 'Edit description' })
+    expect(folded(box)).toBe(true)
     expect(generate).toHaveBeenCalledWith(
       expect.objectContaining({ description: 'a fox astronaut', agent: 'codex' })
     )
     expect(onResult).toHaveBeenCalledWith({ png: 'CROPPED', description: 'a fox astronaut' })
-    expect(screen.getByText('a fox astronaut')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'a fox astronaut' })).toBeTruthy()
   })
 
-  it('reopens the description selected from the picture, and Esc goes back to it', async () => {
+  it('reopens the field with the description selected from the picture, and Esc folds it', async () => {
     stubAgents([CODEX], async () => ({ ok: true, agent: 'codex', image: IMAGE }))
     render(<Face onResult={() => {}} />)
-    await describeAndEnter('a fox astronaut')
+    const box = await describeAndEnter('a fox astronaut')
     fireEvent.click(await screen.findByRole('button', { name: 'Edit description' }))
-    const box = screen.getByRole<HTMLTextAreaElement>('textbox', { name: 'Picture description' })
+    expect(folded(box)).toBe(false)
     await waitFor(() => expect(box.selectionEnd - box.selectionStart).toBe(15))
     fireEvent.keyDown(box, { key: 'Escape' })
-    expect(screen.getByRole('button', { name: 'Edit description' })).toBeTruthy()
+    expect(folded(box)).toBe(true)
   })
 
-  it('shows a usage limit under the face and keeps the description', async () => {
+  it('reopens the field from the description line too', async () => {
+    stubAgents([CODEX], async () => ({ ok: true, agent: 'codex', image: IMAGE }))
+    render(<Face onResult={() => {}} />)
+    const box = await describeAndEnter('a fox astronaut')
+    fireEvent.click(await screen.findByRole('button', { name: 'a fox astronaut' }))
+    expect(folded(box)).toBe(false)
+  })
+
+  it('shows a usage limit under the field and keeps the description', async () => {
     stubAgents([CODEX], async () => ({ ok: false, error: 'usage-limit', agent: 'codex' }))
     render(<Face onResult={() => {}} />)
     const box = await describeAndEnter('a fox astronaut')

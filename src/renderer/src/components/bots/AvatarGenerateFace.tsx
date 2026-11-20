@@ -1,4 +1,5 @@
-// The carousel's Generate face: a description box, then the run's progress, then the picture it made.
+// The carousel's Generate face (the prompt icon, the run's progress, then the picture it made) and
+// the description field that takes the swatch row's place under it.
 import React, { useEffect, useRef, useState } from 'react'
 import { ArrowUp, Check, CircleAlert, Pencil, Sparkles, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -21,6 +22,7 @@ import {
   type AvatarGenerationFailure
 } from '../../../../shared/avatar-generation/avatar-generation-contract'
 import { BOT_EDIT_HINT } from './bot-edit-hint'
+import { BotPictureRowFold } from './BotPictureRowFold'
 import { useAvatarGeneration, type GeneratedAvatar } from './use-avatar-generation'
 
 const TILE = 'size-28 rounded-xl'
@@ -29,9 +31,15 @@ const TILE = 'size-28 rounded-xl'
 export function useGenerateFace(onResult: (result: GeneratedAvatar) => void) {
   const generation = useAvatarGeneration(onResult)
   const [description, setDescription] = useState('')
-  // Editing reopens the description over a picture already made.
+  // Editing reopens the description field under a picture already made.
   const [editing, setEditing] = useState(false)
-  const showsResult = generation.result !== null && !editing && generation.run.kind === 'idle'
+  // Bumped to move focus into the field; `select` also selects its text for retyping.
+  const [focus, setFocus] = useState<{ count: number; select: boolean }>({
+    count: 0,
+    select: false
+  })
+  // The field folds to one line of description once a picture is made.
+  const folded = generation.result !== null && !editing && generation.run.kind === 'idle'
   return {
     ...generation,
     description,
@@ -41,7 +49,13 @@ export function useGenerateFace(onResult: (result: GeneratedAvatar) => void) {
     },
     editing,
     setEditing,
-    showsResult,
+    folded,
+    focus,
+    focusField: (select: boolean) => setFocus((now) => ({ count: now.count + 1, select })),
+    edit: () => {
+      setEditing(true)
+      setFocus((now) => ({ count: now.count + 1, select: true }))
+    },
     generate: () => {
       setEditing(false)
       generation.generate(description)
@@ -113,148 +127,47 @@ export function GenerateFaceThumb({ face }: { face: GenerateFace }): React.JSX.E
   return face.result ? (
     <img src={`data:image/png;base64,${face.result.png}`} alt="" className={TILE} />
   ) : (
+    <PromptTile />
+  )
+}
+
+function PromptTile({
+  role,
+  children
+}: {
+  role?: 'status'
+  children?: React.ReactNode
+}): React.JSX.Element {
+  return (
     <span
+      role={role}
       className={cn(
         TILE,
-        'flex items-center justify-center border-[1.5px] border-dashed border-foreground/40 bg-muted text-foreground'
+        'flex flex-col items-center justify-center gap-1.5 border-[1.5px] border-dashed border-foreground/40 bg-muted text-xs text-foreground'
       )}
     >
-      <Sparkles className="size-7" strokeWidth={1.5} />
+      {children ?? <Sparkles className="size-7" strokeWidth={1.5} />}
     </span>
   )
 }
 
-function AgentMenu({ face }: { face: GenerateFace }): React.JSX.Element | null {
-  const t = useTranslate()
-  const { agent, agents } = face
-  // One agent needs no choice; the progress line still names it.
-  if (!agent || agents.length < 2) {
-    return <span />
-  }
-  const label = getAgentLabel(agent)
-  return (
-    <DropdownMenu>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <DropdownMenuTrigger asChild>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-xs"
-              aria-label={t('bots.avatar.generate.agent', 'Generate with {{agent}}', {
-                agent: label
-              })}
-            >
-              <AgentIcon agent={agent} size={14} />
-            </Button>
-          </DropdownMenuTrigger>
-        </TooltipTrigger>
-        <TooltipContent side="bottom" sideOffset={4}>
-          {t('bots.avatar.generate.agent', 'Generate with {{agent}}', { agent: label })}
-        </TooltipContent>
-      </Tooltip>
-      <DropdownMenuContent align="start" className="min-w-36">
-        {agents.map((entry) => (
-          <DropdownMenuItem key={entry.agent} onSelect={() => face.selectAgent(entry.agent)}>
-            <Check
-              className={cn(
-                'size-4 shrink-0 text-foreground',
-                entry.agent === agent ? 'opacity-100' : 'opacity-0'
-              )}
-            />
-            <AgentIconLabel
-              icon={<AgentIcon agent={entry.agent} size={14} />}
-              label={getAgentLabel(entry.agent)}
-            />
-          </DropdownMenuItem>
-        ))}
-      </DropdownMenuContent>
-    </DropdownMenu>
-  )
-}
-
-function DescriptionBox({ face }: { face: GenerateFace }): React.JSX.Element {
-  const t = useTranslate()
-  const ref = useRef<HTMLTextAreaElement>(null)
-  // Shown for editing: focused with the old description selected, so typing replaces it.
-  useEffect(() => {
-    ref.current?.focus()
-    if (face.editing) {
-      ref.current?.select()
-    }
-  }, [face.editing])
-  const ready = face.description.trim().length > 0
-  return (
-    <span
-      className={cn(
-        TILE,
-        'flex flex-col overflow-hidden border border-input bg-background text-left focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50 dark:bg-input/30'
-      )}
-    >
-      <textarea
-        ref={ref}
-        value={face.description}
-        maxLength={MAX_AVATAR_DESCRIPTION_CHARS}
-        placeholder={t('bots.avatar.generate.placeholder', 'Describe a picture…')}
-        aria-label={t('bots.avatar.generate.describe', 'Picture description')}
-        onChange={(event) => face.setDescription(event.currentTarget.value)}
-        onKeyDown={(event) => {
-          // The carousel's own arrow keys must not move it while typing.
-          if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
-            event.stopPropagation()
-          }
-          if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
-            event.preventDefault()
-            face.generate()
-          }
-          // Esc leaves editing for the picture, not the popover.
-          if (event.key === 'Escape' && face.editing && face.result) {
-            event.preventDefault()
-            event.stopPropagation()
-            face.setEditing(false)
-          }
-        }}
-        className="scrollbar-sleek min-h-0 flex-1 resize-none bg-transparent px-2 pt-1.5 text-xs leading-snug text-foreground outline-none placeholder:text-muted-foreground"
-      />
-      <span className="flex h-6.5 items-center justify-between px-1 pb-1">
-        <AgentMenu face={face} />
-        <Button
-          type="button"
-          size="icon-xs"
-          disabled={!ready}
-          aria-label={t('bots.avatar.generate.button', 'Generate')}
-          onClick={face.generate}
-        >
-          <ArrowUp />
-        </Button>
-      </span>
-    </span>
-  )
-}
-
-/** The current face: progress, the picture made (hover to edit), or the description box. */
+/** The current face: progress, the picture made (hover to edit its description), or the prompt icon. */
 export function GenerateFaceTile({ face }: { face: GenerateFace }): React.JSX.Element {
   const t = useTranslate()
   if (face.run.kind === 'running') {
     return (
-      <span
-        role="status"
-        className={cn(
-          TILE,
-          'flex flex-col items-center justify-center gap-1.5 border-[1.5px] border-dashed border-foreground/40 bg-muted text-xs text-foreground'
-        )}
-      >
+      <PromptTile role="status">
         <LoadingSpinner className="size-6" />
         <Elapsed since={face.run.startedAt} />
-      </span>
+      </PromptTile>
     )
   }
-  if (face.showsResult && face.result) {
+  if (face.result) {
     return (
       <button
         type="button"
         aria-label={t('bots.avatar.generate.edit', 'Edit description')}
-        onClick={() => face.setEditing(true)}
+        onClick={face.edit}
         className={cn(
           TILE,
           'group/edit relative overflow-hidden outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50'
@@ -274,63 +187,186 @@ export function GenerateFaceTile({ face }: { face: GenerateFace }): React.JSX.El
       </button>
     )
   }
-  return <DescriptionBox face={face} />
+  return <PromptTile />
+}
+
+function AgentMenu({
+  face,
+  disabled
+}: {
+  face: GenerateFace
+  disabled: boolean
+}): React.JSX.Element {
+  const t = useTranslate()
+  const { agent, agents } = face
+  // One agent needs no choice; the progress line still names it.
+  if (!agent || agents.length < 2) {
+    return <span />
+  }
+  const label = getAgentLabel(agent)
+  return (
+    <DropdownMenu>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <DropdownMenuTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-xs"
+              disabled={disabled}
+              aria-label={t('bots.avatar.generate.agent', 'Generate with {{agent}}', {
+                agent: label
+              })}
+            >
+              <AgentIcon agent={agent} size={14} />
+            </Button>
+          </DropdownMenuTrigger>
+        </TooltipTrigger>
+        <TooltipContent side="bottom" sideOffset={4}>
+          {t('bots.avatar.generate.agent', 'Generate with {{agent}}', { agent: label })}
+        </TooltipContent>
+      </Tooltip>
+      <DropdownMenuContent align="start" className="min-w-36">
+        {agents.map((entry) => (
+          <DropdownMenuItem
+            key={entry.agent}
+            onSelect={() => {
+              face.selectAgent(entry.agent)
+              face.focusField(false)
+            }}
+          >
+            <Check
+              className={cn(
+                'size-4 shrink-0 text-foreground',
+                entry.agent === agent ? 'opacity-100' : 'opacity-0'
+              )}
+            />
+            <AgentIconLabel
+              icon={<AgentIcon agent={entry.agent} size={14} />}
+              label={getAgentLabel(entry.agent)}
+            />
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
+
+function DescriptionField({ face }: { face: GenerateFace }): React.JSX.Element {
+  const t = useTranslate()
+  const ref = useRef<HTMLTextAreaElement>(null)
+  const { count, select } = face.focus
+  useEffect(() => {
+    const box = ref.current
+    if (count === 0 || !box) {
+      return
+    }
+    // The field may still be folding open; it takes focus without scrolling the dialog.
+    box.focus({ preventScroll: true })
+    if (select) {
+      box.select()
+    } else {
+      box.setSelectionRange(box.value.length, box.value.length)
+    }
+  }, [count, select])
+  const running = face.run.kind === 'running'
+  const ready = face.description.trim().length > 0 && !running
+  return (
+    <div className="flex flex-col rounded-lg border border-input bg-background focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50 dark:bg-input/30">
+      <textarea
+        ref={ref}
+        value={face.description}
+        disabled={running}
+        maxLength={MAX_AVATAR_DESCRIPTION_CHARS}
+        placeholder={t('bots.avatar.generate.placeholder', 'Describe a picture…')}
+        aria-label={t('bots.avatar.generate.describe', 'Picture description')}
+        onChange={(event) => face.setDescription(event.currentTarget.value)}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
+            event.preventDefault()
+            if (ready) {
+              face.generate()
+            }
+          }
+          // Esc folds the field back under the picture, not the dialog around it.
+          if (event.key === 'Escape' && face.editing && face.result) {
+            event.preventDefault()
+            event.stopPropagation()
+            face.setEditing(false)
+          }
+        }}
+        // Two lines at rest, growing to six, then scrolling.
+        className="scrollbar-sleek block max-h-[122px] min-h-[46px] w-full resize-none bg-transparent px-2.5 pt-2 text-[13px] leading-[19px] text-foreground outline-none [field-sizing:content] placeholder:text-muted-foreground disabled:text-muted-foreground"
+      />
+      <div className="flex items-center justify-between px-1.5 pt-1 pb-1.5">
+        <AgentMenu face={face} disabled={running} />
+        <Button
+          type="button"
+          size="icon-xs"
+          disabled={!ready}
+          aria-label={t('bots.avatar.generate.button', 'Generate')}
+          onClick={face.generate}
+        >
+          <ArrowUp />
+        </Button>
+      </div>
+    </div>
+  )
 }
 
 /**
- * The caption line while the Generate face is current: progress with Cancel, an error, or the
- * description under the picture made; otherwise `children` (the upload line).
+ * What takes the swatch row's place while Generate is the current face: the description field
+ * with progress and Cancel or an error under it, folded to one line of description once a
+ * picture is made.
  */
-export function GenerateFaceLine({
-  face,
-  children
-}: {
-  face: GenerateFace
-  children: React.ReactNode
-}): React.JSX.Element {
+export function GenerateField({ face }: { face: GenerateFace }): React.JSX.Element {
   const t = useTranslate()
   const failureMessage = useFailureMessage()
   const { run } = face
-  if (run.kind === 'running') {
-    return (
-      <div className="mt-0.5 flex h-7 items-center justify-center gap-2 text-xs text-muted-foreground">
-        <span className="inline-flex items-center gap-1.5">
-          <LoadingSpinner className="size-3.5" />
-          {t('bots.avatar.generate.running', 'Generating with {{agent}}…', {
-            agent: getAgentLabel(run.agent)
-          })}
-        </span>
-        <Button type="button" variant="ghost" size="xs" onClick={face.cancel}>
-          <X />
-          {t('bots.avatar.generate.cancel', 'Cancel')}
-        </Button>
-      </div>
-    )
-  }
   const signedOut =
     run.kind === 'idle' &&
     face.agents.find((entry) => entry.agent === face.agent)?.status === 'signed-out'
-  if (run.kind === 'error' || (signedOut && !face.showsResult)) {
-    const agent = (run.kind === 'error' ? run.agent : undefined) ?? face.agent
-    return (
-      <p
-        role="alert"
-        className="mt-0.5 flex min-h-7 items-center justify-center gap-1.5 px-2 text-center text-xs text-destructive"
-      >
-        <CircleAlert className="size-3.5 shrink-0" />
-        {failureMessage(
-          run.kind === 'error' ? run.failure : 'signed-out',
-          agent ? getAgentLabel(agent) : ''
-        )}
-      </p>
-    )
-  }
-  if (face.showsResult && face.result) {
-    return (
-      <p className="mt-0.5 flex h-7 items-center justify-center px-2 text-xs text-muted-foreground">
-        <span className="truncate">{face.result.description}</span>
-      </p>
-    )
-  }
-  return <>{children}</>
+  const failure = run.kind === 'error' ? run.failure : signedOut ? 'signed-out' : null
+  const failureAgent = (run.kind === 'error' ? run.agent : undefined) ?? face.agent
+  return (
+    <>
+      <BotPictureRowFold open={face.folded}>
+        <p className="flex h-7 items-center justify-center px-2">
+          <button
+            type="button"
+            title={t('bots.avatar.generate.edit', 'Edit description')}
+            onClick={face.edit}
+            className="max-w-full cursor-text truncate rounded-sm text-xs text-muted-foreground outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
+          >
+            {face.result?.description}
+          </button>
+        </p>
+      </BotPictureRowFold>
+      <BotPictureRowFold open={!face.folded} className="px-1 pt-2 pb-1">
+        <DescriptionField face={face} />
+        {run.kind === 'running' ? (
+          <div className="mt-1 flex h-7 items-center justify-center gap-2 text-xs text-muted-foreground">
+            <span className="inline-flex items-center gap-1.5">
+              <LoadingSpinner className="size-3.5" />
+              {t('bots.avatar.generate.running', 'Generating with {{agent}}…', {
+                agent: getAgentLabel(run.agent)
+              })}
+            </span>
+            <Button type="button" variant="ghost" size="xs" onClick={face.cancel}>
+              <X />
+              {t('bots.avatar.generate.cancel', 'Cancel')}
+            </Button>
+          </div>
+        ) : failure ? (
+          <p
+            role="alert"
+            className="mt-1.5 flex items-start gap-1.5 px-0.5 text-xs leading-snug text-destructive"
+          >
+            <CircleAlert className="mt-px size-3.5 shrink-0" />
+            {failureMessage(failure, failureAgent ? getAgentLabel(failureAgent) : '')}
+          </p>
+        ) : null}
+      </BotPictureRowFold>
+    </>
+  )
 }

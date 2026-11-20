@@ -296,17 +296,24 @@ async function step(key: 'ArrowLeft' | 'ArrowRight'): Promise<void> {
   await settle(80)
 }
 
-// The Generate face sits just before mascot 1: step left until its description box shows.
+/** The description field, once Generate is the current face and the field has folded open. */
+function shownField(): HTMLTextAreaElement | null {
+  const box = document.querySelector<HTMLTextAreaElement>('textarea')
+  return box && !box.closest('[aria-hidden="true"]') ? box : null
+}
+
+// The Generate face sits just before mascot 1: step left until its description field shows.
 async function openGenerate(frame: HTMLElement, description?: string): Promise<void> {
   await openPicture(frame)
-  for (let tries = 0; tries < 25 && !document.querySelector('textarea'); tries += 1) {
+  for (let tries = 0; tries < 25 && !shownField(); tries += 1) {
     await step('ArrowLeft')
   }
-  await settle()
+  // The rows cross-fade over 300 ms.
+  await settle(400)
   if (description === undefined) {
     return
   }
-  const box = document.querySelector<HTMLTextAreaElement>('textarea')!
+  const box = shownField()!
   Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(
     box,
     description
@@ -382,7 +389,7 @@ export const generateAgentPicker = defineFixture({
 
 async function openGenerateAgainBox(): Promise<void> {
   document.querySelector<HTMLButtonElement>('button[aria-label="Edit description"]')?.click()
-  await settle()
+  await settle(400)
 }
 
 export const generateEditing = defineFixture({
@@ -409,5 +416,6 @@ export const generateBackToMascot = defineFixture({
   interact: async (frame) => {
     await openGenerate(frame, 'a friendly orange fox astronaut')
     await step('ArrowRight')
+    await settle(400)
   }
 })

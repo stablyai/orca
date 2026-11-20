@@ -19,11 +19,12 @@ import { BotPictureIntakeLine, LineAction } from './BotPictureIntakeLine'
 import { useBotAvatarIntake } from './use-bot-avatar-intake'
 import { BotPictureCarousel, type BotPictureFace } from './BotPictureCarousel'
 import {
-  GenerateFaceLine,
+  GenerateField,
   GenerateFaceThumb,
   GenerateFaceTile,
   useGenerateFace
 } from './AvatarGenerateFace'
+import { BotPictureRowFold } from './BotPictureRowFold'
 import {
   CUSTOM_FACE,
   GENERATE_FACE,
@@ -159,6 +160,8 @@ export function BotPicturePicker({
   const t = useTranslate()
   const rootRef = useRef<HTMLDivElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
+  // A click onto Generate puts the cursor in its field; arrow keys leave focus on the carousel.
+  const byPointer = useRef(false)
   const showingCustom = value.kind === 'custom' && custom !== null
   const mascotIndex = pictureMascotIndex(value, custom)
   // Generate is current while chosen, even before it holds a picture; selected is applied.
@@ -208,6 +211,9 @@ export function BotPicturePicker({
     }
     setOnGenerate(key === GENERATE_FACE)
     face.setEditing(false)
+    if (key === GENERATE_FACE && !face.result && byPointer.current) {
+      face.focusField(false)
+    }
     if (key === GENERATE_FACE) {
       // Its picture, if one was made, becomes the bot's picture again.
       if (face.result && generatedCustom) {
@@ -266,6 +272,12 @@ export function BotPicturePicker({
     <div
       ref={rootRef}
       data-dropping={(dropping && intake.outlinePicker) || undefined}
+      onPointerDownCapture={() => {
+        byPointer.current = true
+      }}
+      onKeyDownCapture={() => {
+        byPointer.current = false
+      }}
       className="relative before:pointer-events-none before:absolute before:-inset-x-2.5 before:-top-2.5 before:-bottom-1.5 before:hidden before:rounded-[14px] before:border-[1.5px] before:border-dashed before:border-foreground/35 data-dropping:before:block"
     >
       <BotPictureCarousel
@@ -284,11 +296,20 @@ export function BotPicturePicker({
         }
         onIndexChange={(index) => select(order[index])}
       />
-      {/* A color can't apply to a generated picture, so the row goes away there. */}
-      {onColorChange && !showingCustom && !generating ? (
-        <BotPictureColors color={color} onChange={onColorChange} />
+      {/* On Generate the description field takes the swatches' place; the rows cross-fade. */}
+      <BotPictureRowFold open={!generating}>
+        {onColorChange ? (
+          <BotPictureRowFold open={!showingCustom}>
+            <BotPictureColors color={color} onChange={onColorChange} />
+          </BotPictureRowFold>
+        ) : null}
+        {uploadLine}
+      </BotPictureRowFold>
+      {withGenerate ? (
+        <BotPictureRowFold open={generating}>
+          <GenerateField face={face} />
+        </BotPictureRowFold>
       ) : null}
-      {generating ? <GenerateFaceLine face={face}>{uploadLine}</GenerateFaceLine> : uploadLine}
       <input
         ref={fileRef}
         type="file"
