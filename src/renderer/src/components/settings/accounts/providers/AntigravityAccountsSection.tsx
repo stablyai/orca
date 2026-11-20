@@ -24,6 +24,11 @@ import {
   antigravityChatDescriptionText
 } from '../../../provider-accounts/antigravity-chat-description'
 import { AntigravityAgySignInButton } from '../../../provider-accounts/AntigravityAgySignInButton'
+import { useStructuredAgentSessionHostCapabilityState } from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-capability'
+import { ANTIGRAVITY_AGY_CHATS_RUNTIME_CAPABILITY } from '../../../../../../shared/remote-runtime/protocol/account-runtime-capabilities'
+
+// A cold `agy acp` initialize can take several seconds, longer on Windows.
+const AGY_CHECK_SETTLE_MS = 8_000
 import type { AntigravityChatAuthConfig } from '../../../../../../shared/agent-accounts/antigravity/antigravity-chat-auth-config'
 import { ChatUnavailableOnWindowsNote } from '../../../agent/launch-settings/AgentChatChoiceControls'
 import { structuredChatUnavailableOnPlatform } from '../../../../../../shared/agent-session/capabilities/structured-chat-platform-support'
@@ -108,6 +113,28 @@ export function AntigravityAccountsSection({
     }
   }, [ownerKind, environmentId, runtime, wslDistro])
 
+  // Hosts that run every chat on agy say so; one that doesn't may still run Orca's server.
+  const olderHost =
+    useStructuredAgentSessionHostCapabilityState(
+      owner,
+      ANTIGRAVITY_AGY_CHATS_RUNTIME_CAPABILITY
+    ) === 'unsupported'
+  // The rows don't wait for a cold agy check; once it has had time to answer, they read it again.
+  const agyUnanswered =
+    chats &&
+    state !== null &&
+    state.chatUsesAgy === undefined &&
+    state.chatAgySignedOut === undefined &&
+    (chatMethod === 'oauth-personal' || chatMethod === 'oauth-business')
+  const askedAgain = useRef(false)
+  useEffect(() => {
+    if (!agyUnanswered || askedAgain.current) {
+      return
+    }
+    askedAgain.current = true
+    const timer = setTimeout(() => void run('List'), AGY_CHECK_SETTLE_MS)
+    return () => clearTimeout(timer)
+  })
   // A method change moves new chats between agy's home and Orca's, which the rows' status follows.
   const seenMethod = useRef<AntigravityChatAuthConfig['method'] | null>(null)
   useEffect(() => {
@@ -222,7 +249,11 @@ export function AntigravityAccountsSection({
         ? null
         : Boolean(state?.chatUsesAgy || state?.chatAgySignedOut)
 
-  const chatDescription = antigravityChatDescription(state, chatRuntime, chatMethod)
+  const chatDescription = antigravityChatDescription(state, chatRuntime, chatMethod, olderHost)
+  const installed =
+    chatRuntime.kind === 'active' &&
+    chatRuntime.snapshot.kind === 'known' &&
+    chatRuntime.snapshot.state.source !== null
   // An older host still runs Orca's server, whose saved choices this client would misread.
   const chatRows =
     chats && chatRuntime.kind === 'active' ? (
@@ -231,7 +262,8 @@ export function AntigravityAccountsSection({
       ) : (
         <>
           <AntigravityChatAuthForm owner={owner} disabled={busy} onMethod={setChatMethod} />
-          {runtimeRow}
+          {/* Switched off, Orca's copy is never installed for chats; one already there can go. */}
+          {chatDescription === 'orcasAgyOff' && !installed ? null : runtimeRow}
         </>
       )
     ) : null

@@ -35,7 +35,6 @@ describe('what Settings says about Antigravity chats', () => {
       string
     ]
   >([
-    ['an older host still on the server', { program: 'server' }, null, 'olderHost'],
     ['no agy yet, even with a key saved', { source: null }, 'gemini-api-key', 'installAgy'],
     ["Orca's agy switched off", { updatesAutomatically: undefined }, null, 'orcasAgyOff'],
     ['a key or gcloud saved', {}, 'agent-platform', 'orcaHome'],
@@ -43,6 +42,20 @@ describe('what Settings says about Antigravity chats', () => {
     ['your own agy', { source: 'external' }, 'oauth-personal', 'agy']
   ])('%s', (_case, state, method, expected) => {
     expect(antigravityChatDescription(null, install(state), method)).toBe(expected)
+  })
+
+  it('treats a host without the agy-chats capability as older, whatever its install says', () => {
+    expect(antigravityChatDescription(null, install({}), 'oauth-personal', true)).toBe('olderHost')
+  })
+
+  it("never offers to install a copy of agy Orca won't run", () => {
+    expect(
+      antigravityChatDescription(
+        null,
+        install({ source: null, updatesAutomatically: undefined }),
+        null
+      )
+    ).toBe('orcasAgyOff')
   })
 
   it('warns that agy is signed out when chats use its login', () => {

@@ -24956,7 +24956,7 @@
       "addAccountHelp": "To add an account, run /logout in agy, sign in again, then Save it here.",
       "agySignIn": "agy's Google sign-in",
       "agySignInOption": "Google or Gemini Enterprise, signed in in agy",
-      "chatDescriptionOlderHost": "Update Orca on this host so its chats run on agy.",
+      "chatDescriptionOlderHost": "Update Orca on this host so its chats run on agy. Until then, its Antigravity sign-in is only in an Orca as old as the host.",
       "chatDescriptionOrcaHome": "Chats run on agy with the key or gcloud login below, apart from agy in the terminal.",
       "chatDescriptionOrcaAgyOff": "Orca's agy is switched off here. Install agy yourself to use Chat.",
       "apiKeyMissing": "No key yet. Chats signing in with a key won't start until you add one.",

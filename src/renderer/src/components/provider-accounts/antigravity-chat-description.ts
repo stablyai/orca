@@ -17,20 +17,21 @@ export type AntigravityChatDescription =
 export function antigravityChatDescription(
   state: Pick<AntigravityAccountState, 'chatAgySignedOut'> | null,
   runtime: ManagedRuntimeInstallObservation,
-  method: AntigravityChatAuthConfig['method'] | null
+  method: AntigravityChatAuthConfig['method'] | null,
+  /** The host lacks the agy-chats capability: it may still run Orca's server. */
+  olderHost = false
 ): AntigravityChatDescription {
+  if (olderHost) {
+    return 'olderHost'
+  }
   const install =
     runtime.kind === 'active' && runtime.snapshot.kind === 'known' ? runtime.snapshot.state : null
-  // Only hosts that run every chat on agy describe their install as agy's.
-  if (install && install.program !== 'cli') {
-    return 'olderHost'
+  // A copy Orca isn't keeping current is switched off: none runs, and none is installed for chats.
+  if (install && install.source !== 'external' && !install.updatesAutomatically) {
+    return 'orcasAgyOff'
   }
   if (install?.source === null) {
     return 'installAgy'
-  }
-  // A copy Orca isn't keeping current is switched off, and no chat runs it.
-  if (install?.source === 'managed' && !install.updatesAutomatically) {
-    return 'orcasAgyOff'
   }
   if (method === 'gemini-api-key' || method === 'agent-platform') {
     return 'orcaHome'
@@ -50,7 +51,7 @@ export function antigravityChatDescriptionText(
     case 'olderHost':
       return t(
         'accounts.antigravity.chatDescriptionOlderHost',
-        'Update Orca on this host so its chats run on agy.'
+        'Update Orca on this host so its chats run on agy. Until then, its Antigravity sign-in is only in an Orca as old as the host.'
       )
     case 'installAgy':
       return t(
