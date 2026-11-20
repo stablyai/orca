@@ -7,27 +7,26 @@ const MAC_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Electron'
 const LARGE_PAGE = { width: 4096 }
 
 const rebuilds: ManagedPaneInternal[][] = []
+const reattached: ManagedPaneInternal[][] = []
 const visibleTerminals = new Set<unknown>()
 const visibilityScans = { count: 0 }
 vi.mock('../pane-manager-registry', () => ({
   getVisiblePaneTerminals: () => {
     visibilityScans.count++
     return visibleTerminals
-  },
-  rebuildTerminalWebglRenderersForPanes: (panes: ReadonlySet<ManagedPaneInternal>) => {
-    rebuilds.push([...panes])
   }
 }))
 
 type AtlasModule = typeof AtlasMemoryRebuild
 
-function fakePane(atlasModule: AtlasModule, atlas: object, visible = true) {
+function fakePane(atlasModule: AtlasModule, atlas: object, visible = true, displayed = true) {
   const terminal = { modes: { synchronizedOutputMode: false } }
   if (visible) {
     visibleTerminals.add(terminal)
   }
   const pane = {
     terminal,
+    container: { getClientRects: () => (displayed ? [{}] : []) },
     webglAddon: { _renderer: { _charAtlas: atlas } }
   } as unknown as ManagedPaneInternal
   atlasModule.trackTerminalWebglAtlasPane(pane)
@@ -37,13 +36,19 @@ function fakePane(atlasModule: AtlasModule, atlas: object, visible = true) {
 async function loadModule(navigatorStub: { userAgent: string; maxTouchPoints?: number }) {
   vi.resetModules()
   vi.stubGlobal('navigator', navigatorStub)
-  return import('./terminal-webgl-atlas-memory-rebuild')
+  const atlas = await import('./terminal-webgl-atlas-memory-rebuild')
+  atlas.setTerminalWebglAtlasRebuilder((panes, shouldReattach) => {
+    rebuilds.push(panes)
+    reattached.push(panes.filter(shouldReattach))
+  })
+  return atlas
 }
 
 describe('terminal WebGL atlas-memory rebuild', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     rebuilds.length = 0
+    reattached.length = 0
     visibleTerminals.clear()
     visibilityScans.count = 0
   })
@@ -161,6 +166,32 @@ describe('terminal WebGL atlas-memory rebuild', () => {
     atlas.handleTerminalWebglAtlasPage(LARGE_PAGE, hidden.pane)
     await vi.advanceTimersByTimeAsync(0)
     expect(rebuilds).toEqual([[hidden.pane]])
+  })
+
+  it('reattaches only panes on screen', async () => {
+    const atlas = await loadModule({ userAgent: MAC_AGENT })
+    const grown = {}
+    const shown = fakePane(atlas, grown)
+    const hiddenTab = fakePane(atlas, grown, false)
+    const expandedSibling = fakePane(atlas, grown, true, false)
+    expandedSibling.terminal.modes.synchronizedOutputMode = true
+    shown.output()
+    atlas.handleTerminalWebglAtlasPage(LARGE_PAGE, shown.pane)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(rebuilds).toEqual([[shown.pane, hiddenTab.pane, expandedSibling.pane]])
+    expect(reattached).toEqual([[shown.pane]])
+  })
+
+  it('reattaches nothing while the window is hidden', async () => {
+    vi.stubGlobal('document', { visibilityState: 'hidden' })
+    const atlas = await loadModule({ userAgent: MAC_AGENT })
+    const shown = fakePane(atlas, {})
+    shown.terminal.modes.synchronizedOutputMode = true
+    shown.output()
+    atlas.handleTerminalWebglAtlasPage(LARGE_PAGE, shown.pane)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(rebuilds).toEqual([[shown.pane]])
+    expect(reattached).toEqual([[]])
   })
 
   it('ignores other page sizes, touch Apple devices and other platforms', async () => {

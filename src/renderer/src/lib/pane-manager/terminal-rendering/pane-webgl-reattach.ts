@@ -1,6 +1,7 @@
 import type { ManagedPaneInternal } from '../pane-manager-types'
 import { attachWebgl, clearTerminalWebglAttachBackoff, disposeWebgl } from './pane-webgl-renderer'
 import { canRetryPaneWebglAfterContextLoss } from './pane-webgl-context-loss-policy'
+import { setTerminalWebglAtlasRebuilder } from './terminal-webgl-atlas-memory-rebuild'
 
 export function clearPaneWebglContextLossForRetry(pane: ManagedPaneInternal): boolean {
   if (!pane.webglDisabledAfterContextLoss) {
@@ -41,7 +42,7 @@ export function rebuildAttachedWebgl(pane: ManagedPaneInternal): void {
 /** Detaches every renderer and returns the reattach step, so no pane can keep a shared atlas alive. */
 export function detachPanesWebglForRebuild(
   panes: Iterable<ManagedPaneInternal>,
-  options?: { reattachOnlyRendered?: boolean }
+  options?: { shouldReattach?: (pane: ManagedPaneInternal) => boolean }
 ): () => void {
   const reattach: ManagedPaneInternal[] = []
   for (const pane of panes) {
@@ -49,11 +50,14 @@ export function detachPanesWebglForRebuild(
       continue
     }
     disposeWebgl(pane)
-    // Retained hidden panes must drop their atlas too; resume reattaches them. Undisplayed panes (e.g. siblings of an expanded split) heal on their next fit.
-    const rendered = !options?.reattachOnlyRendered || pane.container.getClientRects().length > 0
-    if (!pane.webglAttachmentDeferred && rendered) {
+    // Retained hidden panes must drop their atlas too; resume reattaches them, and panes kept off screen heal on reveal or their next fit.
+    if (!pane.webglAttachmentDeferred && (options?.shouldReattach?.(pane) ?? true)) {
       reattach.push(pane)
     }
   }
   return () => reattach.forEach(reattachDetachedWebgl)
 }
+
+setTerminalWebglAtlasRebuilder((panes, shouldReattach) =>
+  detachPanesWebglForRebuild(panes, { shouldReattach })()
+)
