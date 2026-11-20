@@ -79,6 +79,18 @@ export type WorkspaceRowFactReader<Row> = {
   workspaceStatus: (row: Row) => string
 }
 
+/** "Hide by status" is a hard boundary: a hidden-status row stays out even as a visible child's ancestor. */
+export function isHiddenByWorkspaceStatus<Row>(
+  filters: Pick<WorkspaceRowFilters, 'hideWorkspacesByStatus' | 'hiddenWorkspaceStatusIds'>,
+  read: Pick<WorkspaceRowFactReader<Row>, 'workspaceStatus'>,
+  row: Row
+): boolean {
+  return (
+    filters.hideWorkspacesByStatus &&
+    filters.hiddenWorkspaceStatusIds.includes(read.workspaceStatus(row))
+  )
+}
+
 /** Exempt the main checkout from sleeping sweeps, including detached/offline mains that may be a project’s only entry point (#8873). */
 export function isSleepingSweepExempt(
   isMainWorktree: boolean,
