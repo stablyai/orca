@@ -66,6 +66,7 @@ export function HtmlDocPreview({
   }, [isActive])
   const reloadRef = useRef<(() => void) | null>(null)
   const [state, setState] = useState<PreviewState>('loading')
+  const [documentGeneration, setDocumentGeneration] = useState(0)
   const [failureReason, setFailureReason] = useState<DocPreviewFileFailureReason | null>(null)
   const [assetFailures, setAssetFailures] = useState<DocPreviewFileFailure[]>([])
   const [downloadBlocked, setDownloadBlocked] = useState(false)
@@ -132,6 +133,7 @@ export function HtmlDocPreview({
     elementTools,
     toolSwitch
   } = useDocPreviewGuestTools({
+    documentGeneration,
     previewId,
     worktreeId,
     grantId,
@@ -151,6 +153,7 @@ export function HtmlDocPreview({
     let unsubscribeExternalLinks: (() => void) | undefined
     let loadFailed = false
     const onLoadStarted = (): void => {
+      setDocumentGeneration((generation) => generation + 1)
       resetBrowserOverlayViewport()
       loadFailed = false
       setFailureReason(null)

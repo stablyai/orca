@@ -18,6 +18,7 @@ import type { BrowserChromeElementTools } from '@/components/browser-pane/assemb
 /** Use the stable browser page ID for annotations and tools so replacing the guest grant preserves both. */
 export function useDocPreviewGuestTools({
   previewId,
+  documentGeneration,
   worktreeId,
   grantId,
   webviewRef,
@@ -26,6 +27,7 @@ export function useDocPreviewGuestTools({
   isActive
 }: {
   previewId: string
+  documentGeneration: number
   worktreeId: string
   grantId: string | null
   webviewRef: MutableRefObject<Electron.WebviewTag | null>
@@ -104,7 +106,7 @@ export function useDocPreviewGuestTools({
     markup,
     canPickElements: toolsReady,
     toolTargetId,
-    documentKey: grantId ?? ''
+    documentKey: `${grantId ?? ''}\n${documentGeneration}`
   })
 
   useBrowserAnnotateKeys({
