@@ -1,7 +1,7 @@
 import { expect, it, vi } from 'vitest'
 import { stopBotShare } from './bot-share-stop'
 
-it('revokes the link even when the share list fails, keeping the picks', async () => {
+it('revokes the link and forgets the picks of the bot when the share list fails', async () => {
   const revokeShare = vi.fn(async () => ({ status: 'ok' as const, value: true }))
   const forget = vi.fn(async () => undefined)
   const result = await stopBotShare(
@@ -20,4 +20,5 @@ it('revokes the link even when the share list fails, keeping the picks', async (
   )
   expect(revokeShare).toHaveBeenCalledWith('share-1')
   expect(result).toEqual({ status: 'ok', value: true })
+  expect(forget).toHaveBeenCalledWith('bot-1')
 })
