@@ -12,18 +12,20 @@ import type { ExecutionHostId } from '../../../../shared/execution-host/executio
 import { botOfHomeWorkspace } from '../../../../shared/bots/bot-homes'
 import { isBotHomeTab } from '../../../../shared/bots/bot-home-tab'
 
-/** With `hostId`, a bot on that host wins, so the same workspace id on two hosts names each its own bot. */
+/** With `hostId`, only a bot on that host, so the same workspace id on two hosts never names the other's bot. */
 export function findBotByWorkspace(
   bots: readonly Bot[],
   workspaceId: string | null,
   hostId?: ExecutionHostId
 ): Bot | null {
-  const onHost = hostId
-    ? bots.find(
-        (bot) => bot.hostId === hostId && folderWorkspaceKey(bot.folderWorkspaceId) === workspaceId
-      )
-    : undefined
-  return onHost ?? botOfHomeWorkspace(bots, workspaceId)
+  if (!hostId) {
+    return botOfHomeWorkspace(bots, workspaceId)
+  }
+  return (
+    bots.find(
+      (bot) => bot.hostId === hostId && folderWorkspaceKey(bot.folderWorkspaceId) === workspaceId
+    ) ?? null
+  )
 }
 
 /** With bots off a home is a plain folder. */

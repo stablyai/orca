@@ -37,5 +37,7 @@ export function botHomeRuleApplies(
   bot: { hostId: ExecutionHostId } | null,
   statuses: RuntimeStatuses
 ): boolean {
-  return bot !== null && botHostHasCapability(bot.hostId, BOTS_HOME_PIN_RUNTIME_CAPABILITY, statuses)
+  return (
+    bot !== null && botHostHasCapability(bot.hostId, BOTS_HOME_PIN_RUNTIME_CAPABILITY, statuses)
+  )
 }

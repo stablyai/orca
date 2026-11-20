@@ -68,7 +68,10 @@ function placeBotHomeTabsOnce(store: StoreApi<AppState>): void {
       continue
     }
     // Its host publishes Home's place and pin; moving it here too would fight that host's snapshots.
-    if (bot.hostId !== LOCAL_EXECUTION_HOST_ID && botHomeRuleApplies(bot, runtimeStatusSubscriptionsFor(store).readStatuses())) {
+    if (
+      bot.hostId !== LOCAL_EXECUTION_HOST_ID &&
+      botHomeRuleApplies(bot, runtimeStatusSubscriptionsFor(store).readStatuses())
+    ) {
       continue
     }
     // A focused duplicate hands focus to Home only after Home's final move, which keeps the destination's selection.

@@ -96,6 +96,9 @@ export function useBotHostHas(hostId: ExecutionHostId, capability: string): bool
 
 /** Whether `bot`'s host keeps its Home pinned first, kept current as the server's status changes. */
 export function useBotHomeRuleApplies(bot: { hostId: ExecutionHostId } | null): boolean {
-  const has = useBotHostHas(bot?.hostId ?? LOCAL_EXECUTION_HOST_ID, BOTS_HOME_PIN_RUNTIME_CAPABILITY)
+  const has = useBotHostHas(
+    bot?.hostId ?? LOCAL_EXECUTION_HOST_ID,
+    BOTS_HOME_PIN_RUNTIME_CAPABILITY
+  )
   return bot !== null && has
 }

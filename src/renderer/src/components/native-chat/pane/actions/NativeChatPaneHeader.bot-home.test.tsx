@@ -24,15 +24,17 @@ const state = vi.hoisted(() => ({
 }))
 
 vi.mock('@/store', () => ({
-  useAppStore: Object.assign(
-    (
-      selector: (value: typeof state & { runtimeStatusByEnvironmentId: typeof servers }) => unknown
-    ) => selector({ ...state, runtimeStatusByEnvironmentId: servers }),
-    {
-      getState: () => sidebar
-    }
-  )
+  useAppStore: Object.assign((selector: (value: typeof state) => unknown) => selector(state), {
+    getState: () => sidebar
+  })
 }))
+vi.mock('@/lib/bot-host-status', async () => {
+  const { botHomeRuleApplies } = await import('@/lib/bot-host-capability')
+  return {
+    useBotHomeRuleApplies: (bot: Parameters<typeof botHomeRuleApplies>[0]) =>
+      botHomeRuleApplies(bot, servers)
+  }
+})
 vi.mock('../../../bots/bot-workspace', () => ({
   useBotForWorkspace: (workspaceId: string) =>
     workspaceId === 'folder:bot-home'

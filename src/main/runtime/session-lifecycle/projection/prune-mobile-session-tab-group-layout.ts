@@ -1,5 +1,4 @@
 import { rendererStatusReplica } from '../../session-graph/renderer-status-replica'
-import { botHomeSessionId, withBotHomePins } from '../../session-tabs/chat/bot-home-snapshot'
 import { selectFreshAgentRowForMobileTab } from '../../workspaces/process-listing/runtime-hook-agent-row-selection'
 import { OrcaRuntimeWithSavedConversationTitlePublication } from '../../session-tabs/chat/saved-conversation-title-publication'
 import type { TabGroupLayoutNode } from '../../../../shared/workspace-layout/tab-groups/tab-types'
@@ -14,7 +13,7 @@ import type {
 } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { mergeMobileSessionTabGroups } from './mobile-session-tab-merge'
 import { buildHeadlessMobileSessionTabGroups } from '../../terminal/surface/mobile-session-layout-projection'
-import { projectRuntimeMobileSessionTabs } from './runtime-mobile-session-projection'
+import { projectTabsWithBotHomePins } from './bot-home-pinned-projection'
 import { inlineRuntimeBrowserTabFavicons } from './browser-tab-favicon-data-urls'
 import type { RuntimeMobileSessionProjectionHost } from './runtime-mobile-session-projection-contract'
 import type { RuntimePtyWorktreeRecord } from '../../terminal/records/runtime-terminal-state-records'
@@ -94,9 +93,7 @@ export abstract class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends Or
       (sessionId) => this.structuredConversationTabName(snapshot.worktree, sessionId),
       structuredConversationForked
     )
-    const result = projectRuntimeMobileSessionTabs(snapshot, this.getMobileSessionProjectionHost())
-    const homeSessionId = botHomeSessionId(this.store, snapshot.worktree)
-    return homeSessionId ? withBotHomePins(result, homeSessionId) : result
+    return projectTabsWithBotHomePins(this.store, snapshot, this.getMobileSessionProjectionHost())
   }
 
   refreshStructuredConversationTabTitle(workspaceId: string, sessionId: string): void {
