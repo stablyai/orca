@@ -111,9 +111,12 @@ export class PaneManager {
     }
     // Atlas recovery must reach every manager (resetAndRefreshAllTerminalWebglAtlases explains shared generations).
     registerLivePaneManager(this, (only) =>
-      detachPanesWebglForRebuild(
-        only ? [...this.panes.values()].filter((pane) => only.has(pane)) : this.panes.values()
-      )
+      only
+        ? detachPanesWebglForRebuild(
+            [...this.panes.values()].filter((pane) => only.has(pane)),
+            { reattachOnlyRendered: true }
+          )
+        : detachPanesWebglForRebuild(this.panes.values())
     )
   }
 

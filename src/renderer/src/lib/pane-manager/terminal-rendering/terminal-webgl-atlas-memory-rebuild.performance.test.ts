@@ -8,8 +8,12 @@ const LARGE_PAGE = { width: 4096 }
 
 const rebuilds: ManagedPaneInternal[][] = []
 const visibleTerminals = new Set<unknown>()
+const visibilityScans = { count: 0 }
 vi.mock('../pane-manager-registry', () => ({
-  getVisiblePaneTerminals: () => visibleTerminals,
+  getVisiblePaneTerminals: () => {
+    visibilityScans.count++
+    return visibleTerminals
+  },
   rebuildTerminalWebglRenderersForPanes: (panes: ReadonlySet<ManagedPaneInternal>) => {
     rebuilds.push([...panes])
   }
@@ -41,6 +45,7 @@ describe('terminal WebGL atlas-memory rebuild', () => {
     vi.useFakeTimers()
     rebuilds.length = 0
     visibleTerminals.clear()
+    visibilityScans.count = 0
   })
   afterEach(() => {
     vi.useRealTimers()
@@ -105,26 +110,57 @@ describe('terminal WebGL atlas-memory rebuild', () => {
     expect(rebuilds).toHaveLength(1)
   })
 
-  it('waits for a visible synchronized-output frame without polling, ignoring hidden ones', async () => {
+  it('waits for a visible synchronized-output frame, retrying on its own a bounded number of times', async () => {
     const atlas = await loadModule({ userAgent: MAC_AGENT })
     const visible = fakePane(atlas, {})
     visible.terminal.modes.synchronizedOutputMode = true
     visible.output()
     atlas.handleTerminalWebglAtlasPage(LARGE_PAGE, visible.pane)
-    await vi.advanceTimersByTimeAsync(60_000)
+    await vi.advanceTimersByTimeAsync(120_000)
     expect(rebuilds).toHaveLength(0)
+    // One attempt plus six self-retries, then it waits for output.
+    expect(visibilityScans.count).toBe(7)
     expect(vi.getTimerCount()).toBe(0)
     visible.terminal.modes.synchronizedOutputMode = false
     visible.output()
     await vi.advanceTimersByTimeAsync(0)
     expect(rebuilds).toEqual([[visible.pane]])
+  })
 
+  it('catches a frame that closes without further output', async () => {
+    const atlas = await loadModule({ userAgent: MAC_AGENT })
+    const visible = fakePane(atlas, {})
+    visible.terminal.modes.synchronizedOutputMode = true
+    visible.output()
+    atlas.handleTerminalWebglAtlasPage(LARGE_PAGE, visible.pane)
+    await vi.advanceTimersByTimeAsync(0)
+    visible.terminal.modes.synchronizedOutputMode = false
+    await vi.advanceTimersByTimeAsync(10_000)
+    expect(rebuilds).toEqual([[visible.pane]])
+  })
+
+  it('keeps deferred attempts 10 s apart however many chunks arrive', async () => {
+    const atlas = await loadModule({ userAgent: MAC_AGENT })
+    const visible = fakePane(atlas, {})
+    visible.terminal.modes.synchronizedOutputMode = true
+    atlas.handleTerminalWebglAtlasPage(LARGE_PAGE, visible.pane)
+    for (let i = 0; i < 600; i++) {
+      visible.output()
+      await vi.advanceTimersByTimeAsync(100)
+    }
+    // 60 s of chunks every 100 ms: attempts at t = 0, 10, …, 60 s.
+    expect(visibilityScans.count).toBe(7)
+    expect(rebuilds).toHaveLength(0)
+  })
+
+  it('ignores a hidden pane mid synchronized-output frame', async () => {
+    const atlas = await loadModule({ userAgent: MAC_AGENT })
     const hidden = fakePane(atlas, {}, false)
     hidden.terminal.modes.synchronizedOutputMode = true
     hidden.output()
     atlas.handleTerminalWebglAtlasPage(LARGE_PAGE, hidden.pane)
-    await vi.advanceTimersByTimeAsync(10_000)
-    expect(rebuilds).toHaveLength(2)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(rebuilds).toEqual([[hidden.pane]])
   })
 
   it('ignores other page sizes, touch Apple devices and other platforms', async () => {

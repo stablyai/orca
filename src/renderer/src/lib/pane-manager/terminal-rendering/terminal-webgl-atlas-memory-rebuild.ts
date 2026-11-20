@@ -8,6 +8,8 @@ import {
 // A 4096² merged page means the shared atlas reached ~64 MiB; on Apple GPUs each context keeps its upload memory until the context is destroyed (GiBs across panes).
 const ATLAS_REBUILD_PAGE_SIZE = 4096
 const ATLAS_REBUILD_MIN_INTERVAL_MS = 10_000
+// A deferred atlas retries on its own this many times (one per interval), so a frame that closes without more output is still caught.
+const DEFERRED_REBUILD_MAX_RETRIES = 6
 // Only macOS was measured retaining it (desktop app and Mac browsers); elsewhere a mass context recreate risks the driver's context budget. Touch excludes iPadOS desktop-mode agents.
 const ATLAS_MEMORY_REBUILD_ENABLED =
   typeof navigator !== 'undefined' &&
@@ -17,7 +19,9 @@ const ATLAS_MEMORY_REBUILD_ENABLED =
 type XtermWebglAddonAtlasInternals = { _renderer?: { _charAtlas?: object } }
 
 let rebuildTimer: ReturnType<typeof setTimeout> | null = null
-let lastRebuildAt = Number.NEGATIVE_INFINITY
+// Successful or deferred, attempts stay an interval apart so per-chunk output can't drive repeated scans.
+let lastAttemptAt = Number.NEGATIVE_INFINITY
+let deferredRetries = 0
 // Per atlas, so one atlas's output never re-arms another; weak so a retired atlas is never kept alive.
 const atlasesWithLargePage = new WeakSet<object>()
 const atlasesWithOutput = new WeakSet<object>()
@@ -49,15 +53,18 @@ function rebuildDueAtlases(): void {
   if (owners.size === 0) {
     return
   }
-  // A new canvas paints straight from the buffer, so a visible pane mid synchronized-output (DEC 2026) frame would flash it half drawn; that atlas waits for its next output.
+  lastAttemptAt = Date.now()
+  // A new canvas paints straight from the buffer, so a visible pane mid synchronized-output (DEC 2026) frame would flash it half drawn; that atlas waits.
   const visibleTerminals = getVisiblePaneTerminals()
   const panes = new Set<ManagedPaneInternal>()
+  let deferred = false
   for (const [atlas, atlasPanes] of owners) {
     if (
       atlasPanes.some(
         (pane) => visibleTerminals.has(pane.terminal) && pane.terminal.modes.synchronizedOutputMode
       )
     ) {
+      deferred = true
       continue
     }
     // Normally retired by the rebuild; clearing also stops a surviving atlas from rebuilding again without new output.
@@ -67,10 +74,15 @@ function rebuildDueAtlases(): void {
       panes.add(pane)
     }
   }
+  if (deferred && deferredRetries < DEFERRED_REBUILD_MAX_RETRIES) {
+    deferredRetries++
+    scheduleRebuild()
+  } else if (!deferred) {
+    deferredRetries = 0
+  }
   if (panes.size === 0) {
     return
   }
-  lastRebuildAt = Date.now()
   recordTerminalWebglDiagnostic('webgl-renderer-rebuild', {
     panes: panes.size,
     reason: 'atlas-memory'
@@ -84,7 +96,7 @@ function scheduleRebuild(): void {
     return
   }
   // Also leaves xterm's atlas callback first; the rebuild disposes renderers mid-render.
-  const delay = Math.max(0, lastRebuildAt + ATLAS_REBUILD_MIN_INTERVAL_MS - Date.now())
+  const delay = Math.max(0, lastAttemptAt + ATLAS_REBUILD_MIN_INTERVAL_MS - Date.now())
   rebuildTimer = setTimeout(rebuildDueAtlases, delay)
 }
 
