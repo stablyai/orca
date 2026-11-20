@@ -329,6 +329,7 @@ describe('a profile whose last page closed', () => {
     }
     await attach()
     await loader.unloadBrowserExtensionsFromIdleProfile(resumed.id, () => {})
+    expect(idleKeptState.isBrowserExtensionStateKeptWhileIdle(resumed.id, ID)).toBe(true)
     mocks.emitWorkerStart.mockClear()
     await attach()
     expect(mocks.session.extensions.getExtension(ID)).not.toBeNull()
@@ -342,6 +343,8 @@ describe('a profile whose last page closed', () => {
     // Session storage empties on unload, so an extension that used it starts clean instead.
     idleKeptState.noteBrowserExtensionNeedsCleanStart(resumed.id, ID)
     await loader.unloadBrowserExtensionsFromIdleProfile(resumed.id, () => {})
+    // Its state can't come back, so the idle profile doesn't hold it.
+    expect(idleKeptState.isBrowserExtensionStateKeptWhileIdle(resumed.id, ID)).toBe(false)
     mocks.emitWorkerStart.mockClear()
     await attach()
     expect(mocks.emitWorkerStart).toHaveBeenCalledWith(

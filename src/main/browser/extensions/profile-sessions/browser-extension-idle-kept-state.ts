@@ -34,6 +34,15 @@ function addTo(map: Map<string, Set<string>>, profileId: string, extensionId: st
 /** The extension's next reattach in this profile starts it clean (see `cleanStartNeeded`). */
 export function noteBrowserExtensionNeedsCleanStart(profileId: string, extensionId: string): void {
   addTo(cleanStartNeeded, profileId, extensionId)
+  // Why: found during an idle unload; reopening would drop this state, so don't hold it meanwhile.
+  if (isBrowserExtensionStateKeptWhileIdle(profileId, extensionId)) {
+    dropKept(keptByProfileId, profileId, extensionId)
+    forgetSessionRules(profileId, extensionId)
+  }
+}
+
+function forgetSessionRules(profileId: string, extensionId: string): void {
+  getBrowserExtensionDnrStore().writeSessionRules(profileId, { id: extensionId, version: '' }, [])
 }
 
 /** Each load starts afresh: empty session storage, no native connections. */
@@ -53,7 +62,10 @@ function needsCleanStart(profileId: string, extensionId: string): boolean {
   )
 }
 
-/** Called as an idle unload begins, with the copies running then; later loads start clean. */
+/**
+ * Called as an idle unload begins, with the copies running then; later loads start clean, as do
+ * copies that already need a clean start, whose session rules go now.
+ */
 export function beginIdleUnload(
   profileId: string,
   extensions: readonly Pick<Electron.Extension, 'id'>[]
@@ -62,8 +74,10 @@ export function beginIdleUnload(
   const kept = new Map<string, number>()
   for (const { id } of extensions) {
     const time = installTime(id)
-    if (time !== undefined) {
+    if (time !== undefined && !needsCleanStart(profileId, id)) {
       kept.set(id, time)
+    } else {
+      forgetSessionRules(profileId, id)
     }
   }
   if (kept.size > 0) {
@@ -119,7 +133,7 @@ export function settleKeptStateOnAttach(
     reloaded.has(id) ? 'reload' : resumed.has(id) ? 'other' : 'startup'
   for (const id of enabled) {
     if (kindFor(id) === 'startup') {
-      getBrowserExtensionDnrStore().writeSessionRules(profileId, { id, version: '' }, [])
+      forgetSessionRules(profileId, id)
     }
   }
   return kindFor
