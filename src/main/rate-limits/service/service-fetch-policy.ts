@@ -14,20 +14,21 @@ import type {
   RateLimitWindow
 } from '../../../shared/agent-usage/rate-limits/rate-limit-types'
 import {
+  isSameClaudeUsageReset,
   isSameClaudeUsageWindow,
   isStaleClaudeUsageWindow,
   mapClaudeUsageWindow
 } from '../providers/claude/claude-usage-window'
 import { claudeOAuthUsageDisabledResult } from '../providers/claude/claude-usage-result'
 import {
-  ClaudeLiveUsagePaneReports,
+  ClaudeLiveUsageSessionReports,
   type ClaudeLiveUsageWindowKind
-} from '../providers/claude/claude-live-usage-pane-reports'
+} from '../providers/claude/claude-live-usage-session-reports'
 import { readUserClaudeConfigDir } from '../../claude-accounts/profiles/claude-profile-paths'
 import { getClaudeProfileRouter } from '../../claude-accounts/profiles/routing/claude-profile-installed-router'
 
 export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchTargets {
-  private readonly claudePaneReports = new ClaudeLiveUsagePaneReports()
+  private readonly claudeSessionReports = new ClaudeLiveUsageSessionReports()
 
   protected isClaudeOAuthUsageEnabled(): boolean {
     return this.claudeOAuthUsageEnabledResolver?.() ?? true
@@ -165,8 +166,8 @@ export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchT
     const previous = this.state.claude
     const now = Date.now()
     const configDir = snapshot.configDir
-    const paneKey = event.paneKey ?? null
-    const paneReports = this.claudePaneReports
+    const sessionId = event.sessionId ?? null
+    const sessionReports = this.claudeSessionReports
     // An idle session's older snapshot must not roll back newer account usage.
     const keepIfNewer = (
       kind: ClaudeLiveUsageWindowKind,
@@ -176,16 +177,19 @@ export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchT
       if (!incoming) {
         return null
       }
-      const reset = paneReports.recordReset(paneKey, configDir, kind, incoming)
+      const reset = sessionReports.recordReset(sessionId, configDir, kind, incoming)
       if (
         current &&
-        !paneReports.hasChanged(paneKey, configDir, kind, incoming) &&
+        !sessionReports.hasChanged(sessionId, configDir, kind, incoming) &&
         !isSameClaudeUsageWindow(current, incoming) &&
-        paneReports.isResetWindow(configDir, kind, incoming, now)
+        sessionReports.isResetWindow(configDir, kind, incoming, now)
       ) {
         return null
       }
-      if (!reset && isStaleClaudeUsageWindow(current, incoming, now)) {
+      if (
+        isStaleClaudeUsageWindow(current, incoming, now) &&
+        !(reset && isSameClaudeUsageReset(current?.resetsAt ?? null, incoming.resetsAt))
+      ) {
         return null
       }
       return isSameClaudeUsageWindow(current ?? null, incoming) ? (current ?? null) : incoming
@@ -194,8 +198,11 @@ export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchT
     const incomingWeekly = mapClaudeUsageWindow(event.sevenDay ?? undefined, 10080)
     const freshSession = keepIfNewer('session', incomingSession, previous?.session)
     const freshWeekly = keepIfNewer('weekly', incomingWeekly, previous?.weekly)
-    if (paneKey !== null) {
-      paneReports.remember(paneKey, configDir, { session: incomingSession, weekly: incomingWeekly })
+    if (sessionId !== null) {
+      sessionReports.remember(sessionId, configDir, {
+        session: incomingSession,
+        weekly: incomingWeekly
+      })
     }
     if (!freshSession && !freshWeekly) {
       return

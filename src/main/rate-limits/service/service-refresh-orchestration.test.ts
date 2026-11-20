@@ -350,7 +350,7 @@ describe('RateLimitService', () => {
     expect((await service.getState()).claude?.planType).toBeUndefined()
     expect((await service.getState()).claude?.usageMetadata?.readingAccount).toBeUndefined()
   })
-  it('shows a redeemed Claude limit reset while idle panes keep posting the old value', async () => {
+  it('shows a redeemed Claude limit reset while idle sessions keep posting the old value', async () => {
     mockFreshBackgroundProviderFetches()
     const service = new RateLimitService()
     service.setClaudeAuthPreparationResolver(async () => ({
@@ -360,11 +360,11 @@ describe('RateLimitService', () => {
     }))
     await service.refresh()
     const resetsAt = Date.parse('2100-01-01T00:00:00Z') / 1000
-    const post = (paneKey: string, usedPercentage: number) => {
+    const post = (sessionId: string, usedPercentage: number) => {
       const event = parseClaudeStatusLineBody({
-        paneKey,
         configDir: '/claude/a',
         payload: JSON.stringify({
+          session_id: sessionId,
           rate_limits: { five_hour: { used_percentage: usedPercentage, resets_at: resetsAt } }
         })
       })
@@ -374,22 +374,26 @@ describe('RateLimitService', () => {
     }
     const shown = async () => (await service.getState()).claude?.session?.usedPercent
 
-    post('tab-a:pane-a', 85)
-    post('tab-a:pane-a', 90)
-    post('tab-b:pane-b', 40)
+    post('session-a', 85)
+    post('session-a', 90)
+    post('session-b', 40)
     expect(await shown()).toBe(90)
-    post('tab-c:pane-c', 95)
+    post('session-c', 95)
     expect(await shown()).toBe(95)
-    // A late post from a pane whose own value rose is still an older reading, not a reset.
-    post('tab-b:pane-b', 50)
-    post('tab-d:pane-d', 97)
+    // A late post from a session whose own value rose is still an older reading, not a reset.
+    post('session-b', 50)
+    post('session-d', 97)
     expect(await shown()).toBe(97)
 
-    post('tab-a:pane-a', 7)
+    post('session-a', 7)
     expect(await shown()).toBe(7)
-    post('tab-c:pane-c', 95)
-    post('tab-e:pane-e', 60)
+    post('session-c', 95)
+    post('session-e', 60)
     expect(await shown()).toBe(7)
+    // Another session catching up to the same reset is not a second one.
+    post('session-a', 20)
+    post('session-c', 9)
+    expect(await shown()).toBe(20)
   })
   it('keeps the account on the usage read right after redeeming a Codex reset', async () => {
     mockFreshBackgroundProviderFetches()
