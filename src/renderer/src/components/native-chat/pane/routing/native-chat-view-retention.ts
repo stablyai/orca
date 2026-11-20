@@ -45,6 +45,12 @@ class ChatViewRecency {
 
 export const chatViewRecency = new ChatViewRecency()
 
-export function useRetainedChatViewIds(): readonly string[] {
-  return useSyncExternalStore(chatViewRecency.subscribe, chatViewRecency.snapshot)
+/** This layer's retained tabs as a stable key, so a switch elsewhere re-renders no other workspace's layer. */
+export function useRetainedChatViewKey(ownedTabIds: ReadonlySet<string>): string {
+  return useSyncExternalStore(chatViewRecency.subscribe, () =>
+    chatViewRecency
+      .snapshot()
+      .filter((id) => ownedTabIds.has(id))
+      .join('\n')
+  )
 }

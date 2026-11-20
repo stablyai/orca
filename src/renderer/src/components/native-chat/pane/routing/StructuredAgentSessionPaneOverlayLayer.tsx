@@ -15,7 +15,7 @@ import { NativeChatComposerEditorOwner } from '../../composer/editor/native-chat
 import { NativeChatHostOutageOwner } from '../../host-access/native-chat-host-outage-owner'
 import { NativeChatPaneLifetime } from '../ownership/native-chat-pane-lifetime'
 import { isStructuredTab } from '../../../../../../shared/agent-session/view/structured-agent-session-tab'
-import { chatViewRecency, useRetainedChatViewIds } from './native-chat-view-retention'
+import { chatViewRecency, useRetainedChatViewKey } from './native-chat-view-retention'
 
 type StructuredAgentSessionTab = Tab & {
   contentType: 'agent-session'
@@ -170,18 +170,22 @@ const StructuredAgentSessionPaneOverlayLayer = memo(
         chatViewRecency.reveal(shownKey.split('\n'))
       }
     }, [shownKey])
+    const ownedTabIds = useMemo(
+      () => new Set([...structuredTabs, ...roomTabs].map((tab) => tab.id)),
+      [structuredTabs, roomTabs]
+    )
     const ownedTabIdsRef = useRef<ReadonlySet<string>>(new Set())
     useLayoutEffect(() => {
-      const owned = new Set([...structuredTabs, ...roomTabs].map((tab) => tab.id))
-      const closed = new Set([...ownedTabIdsRef.current].filter((id) => !owned.has(id)))
-      ownedTabIdsRef.current = owned
+      const closed = new Set([...ownedTabIdsRef.current].filter((id) => !ownedTabIds.has(id)))
+      ownedTabIdsRef.current = ownedTabIds
       if (closed.size > 0) {
         chatViewRecency.forget(closed)
       }
-    }, [structuredTabs, roomTabs])
+    }, [ownedTabIds])
     // Why: only shown chats and a few recently shown ones stay mounted, so memory doesn't grow with chats visited.
-    const retainedTabIds = useRetainedChatViewIds()
-    const isMounted = (tab: Tab) => isShown(tab) || retainedTabIds.includes(tab.id)
+    const retainedKey = useRetainedChatViewKey(ownedTabIds)
+    const retainedTabIds = useMemo(() => new Set(retainedKey.split('\n')), [retainedKey])
+    const isMounted = (tab: Tab) => isShown(tab) || retainedTabIds.has(tab.id)
     const mountedTabs = structuredTabs.filter(isMounted)
 
     return (
