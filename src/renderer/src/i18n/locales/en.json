@@ -22060,7 +22060,8 @@
         "addOrg": "Add org",
         "addWorkspace": "Add workspace",
         "githubAsYou": "It can also work in GitHub as you, through your gh login.",
-        "linearAsYou": "It can also work in Linear as you, through your own Linear sign-in in Orca."
+        "linearAsYou": "It can also work in Linear as you, through your own Linear sign-in in Orca.",
+        "paused": "Paused until {{host}} signs in to Orca."
       },
       "toolAdded": {
         "removed": "Removed",

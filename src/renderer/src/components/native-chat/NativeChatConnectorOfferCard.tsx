@@ -28,7 +28,9 @@ import {
   NativeChatCardStatus
 } from './NativeChatCardFrame'
 import { NativeChatOfferActions, useNativeChatOffer } from './NativeChatOfferActions'
-import { OrcaCloudSignInLine } from '../bots/orca-cloud-sign-in'
+import { OrcaCloudSignInButton, OrcaCloudSignInLine } from '../bots/orca-cloud-sign-in'
+import { selectExecutionHostDisplayLabel } from '@/runtime/hosts/display/execution-host-display-label'
+import { useAppStore } from '@/store'
 import { BotHostSignInControl } from '../bots/BotConnectorsHostNotice'
 import { useBotHostLabel } from '../bots/use-bot-host-label'
 import { useBotHostOrcaAccount } from '@/lib/bot-host-orca-account'
@@ -114,6 +116,9 @@ function OfferCard({
     (wanted
       ? names.some((name) => name.toLowerCase() === wanted)
       : connectorAdded(bot, offer.source))
+  const hostStatus = useBotHostConnectorStatus(bot.hostId)
+  // Its events come through Orca Cloud, so they wait while the bot's host is signed out of it.
+  const paused = connected && offer.source !== 'google' && hostStatus === 'signed-out'
   const label = connector?.label ?? offer.source
   const footnote = offerFootnote(offer.source)
   const addsWorkspace = offer.workspace !== undefined && connectorAdded(bot, offer.source)
@@ -124,7 +129,7 @@ function OfferCard({
     : t('components.native-chat.connectorOffer.connectService', 'Connect {{service}}', {
         service: label
       })
-  const footer = connected ? (
+  const footer = paused ? undefined : connected ? (
     // Connected still adds access: GitHub repositories or organizations, or another workspace.
     offer.source === 'google' ? undefined : (
       <NativeChatCardActions>
@@ -149,7 +154,7 @@ function OfferCard({
       }
       heading={t('components.native-chat.connectorOffer.heading', 'Connect a service')}
       status={
-        connected ? (
+        connected && !paused ? (
           <NativeChatCardStatus tone="success">
             {t('components.native-chat.connectorOffer.connected', 'Connected')}
           </NativeChatCardStatus>
@@ -158,7 +163,9 @@ function OfferCard({
       title={offer.workspace ? `${label} · ${offer.workspace}` : label}
       footer={footer}
     >
-      {connected ? (
+      {paused ? (
+        <PausedLine bot={bot} />
+      ) : connected ? (
         names.length > 0 ? (
           <p className="text-xs text-muted-foreground">
             {t('components.native-chat.connectorOffer.connectedIn', 'Connected in {{places}}', {
@@ -174,6 +181,37 @@ function OfferCard({
       )}
       {setup.dialogs}
     </NativeChatCardFrame>
+  )
+}
+
+/** A connected service whose host is signed out of Orca: the line the phone shows, and that host's sign-in. */
+function PausedLine({ bot }: { bot: Bot }): React.JSX.Element {
+  const t = useTranslate()
+  const server = useBotHostLabel(bot.hostId)
+  const host = useAppStore((state) => server ?? selectExecutionHostDisplayLabel(state, bot.hostId))
+  return (
+    <div className="flex flex-col gap-1.5 text-xs text-muted-foreground">
+      <p>
+        {t(
+          'components.native-chat.connectorOffer.paused',
+          'Paused until {{host}} signs in to Orca.',
+          {
+            host
+          }
+        )}
+      </p>
+      {server ? (
+        <BotHostSignInControl
+          hostId={bot.hostId}
+          host={server}
+          bot={bot}
+          label={t('bots.host.signIn.start', 'Sign in on {{host}}', { host: server })}
+          firstSignIn
+        />
+      ) : bot.hostId === LOCAL_EXECUTION_HOST_ID ? (
+        <OrcaCloudSignInButton variant="outline" size="xs" className="self-start" />
+      ) : null}
+    </div>
   )
 }
 

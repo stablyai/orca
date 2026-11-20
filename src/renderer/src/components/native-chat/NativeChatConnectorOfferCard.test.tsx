@@ -4,11 +4,16 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Bot } from '../../../../shared/bot-types'
 
-const mocks = vi.hoisted(() => ({ bots: new Array<Bot>(), start: vi.fn(), updateBot: vi.fn() }))
+const mocks = vi.hoisted(() => ({
+  bots: new Array<Bot>(),
+  start: vi.fn(),
+  updateBot: vi.fn(),
+  hostStatus: undefined as string | undefined
+}))
 vi.mock('@/lib/bot-catalog', () => ({
   useBots: () => mocks.bots,
   updateBot: mocks.updateBot,
-  useBotHostConnectorStatus: () => undefined,
+  useBotHostConnectorStatus: () => mocks.hostStatus,
   useCardBot: (id: string) => ({
     bot: mocks.bots.find((bot: { id: string }) => bot.id === id) ?? null,
     ref: { hostId: 'local', id }
@@ -72,6 +77,7 @@ function show(bot: Bot, offer: { source: 'slack' | 'linear' | 'github'; workspac
 afterEach(() => {
   cleanup()
   mocks.start.mockClear()
+  mocks.hostStatus = undefined
 })
 
 describe('the Connect card', () => {
@@ -86,6 +92,13 @@ describe('the Connect card', () => {
     expect(screen.getByText('Connected in Acme')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Add another workspace' }))
     expect(mocks.start).toHaveBeenCalledWith('linear')
+  })
+
+  it('reads Paused, not Connected, while the bot’s host is signed out of Orca', () => {
+    mocks.hostStatus = 'signed-out'
+    show(makeTestBot({ id: 'b1', linear: acme, linearWorkspaces: [acme] }), { source: 'linear' })
+    expect(screen.getByText(/^Paused until .+ signs in to Orca\.$/)).toBeTruthy()
+    expect(screen.queryByText('Connected in Acme')).toBeNull()
   })
 
   it('still adds repositories or organizations once GitHub is connected', () => {
