@@ -128,10 +128,15 @@ function journal() {
   const chat = { journalReads: async () => f.reads }
   const read = (sequence: number) =>
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: endedTurn reads only journalReads.
-    endedTurn(chat as unknown as ConversationChat, turnRowsTarget.sessionId, 'provider-turn-target', {
-      epoch: turnRowsTarget.epoch,
-      sequence
-    })
+    endedTurn(
+      chat as unknown as ConversationChat,
+      turnRowsTarget.sessionId,
+      'provider-turn-target',
+      {
+        epoch: turnRowsTarget.epoch,
+        sequence
+      }
+    )
   return { f, read }
 }
 
@@ -176,7 +181,7 @@ it('gives a replied end its row, its opener and steered deliveries, and its own 
   expect(chatTurnFor('local', 'owner')(ended)).toEqual({})
 })
 
-it("gives a mirrored Orca-typed end its last words and failure, and acts for the owner", async () => {
+it('gives a mirrored Orca-typed end its last words and failure, and acts for the owner', async () => {
   const { f, read } = journal()
   f.send('typed', 100, user('typed in Orca'), { turnItemId: 'turn-target', via: 'start' })
   f.item('turn-target', 101, {
@@ -206,10 +211,16 @@ it('gives a failed adopted end the failure of a turn opened by a send queued tur
   const { f, read } = journal()
   // The card's first send, and the one that opened the turn though it was sent at sequence 48.
   f.send('first-try', 70, user('do it'), null, { queuedMessageId: 'card-1' })
-  f.send('queued', 100, user('do it'), { turnItemId: 'turn-target', via: 'start' }, {
-    queuedMessageId: 'card-1',
-    submittedSequence: 48
-  })
+  f.send(
+    'queued',
+    100,
+    user('do it'),
+    { turnItemId: 'turn-target', via: 'start' },
+    {
+      queuedMessageId: 'card-1',
+      submittedSequence: 48
+    }
+  )
   f.item('turn-target', 101, {
     kind: 'turn',
     turnId: 'provider-turn-target',
