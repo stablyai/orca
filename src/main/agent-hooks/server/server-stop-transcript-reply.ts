@@ -1,10 +1,5 @@
 import { stat } from 'node:fs/promises'
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
-import {
-  droidVerdictFields,
-  readDroidTurnVerdictAsync,
-  type DroidTurnVerdict
-} from '../../../shared/agent-hook-listener/providers/droid/droid-turn-outcome'
 import { readLastAssistantFromTranscriptAsync } from '../../../shared/agent-hook-listener/transcript-reader'
 import type { AgentHookSource } from '../../../shared/agent-hook-listener/transport/agent-hook-relay'
 import { normalizeAgentStatusPayload } from '../../../shared/agent-status/contracts/agent-status-types'
@@ -12,15 +7,8 @@ import { ASSISTANT_MESSAGE_RETRY_ATTEMPTS, ASSISTANT_MESSAGE_RETRY_MS } from './
 import { AgentHookServerStatusRetries } from './server-status-retries'
 import type { EnrichedAgentHookEventPayload, NormalizedLocalHook } from './server-types'
 
-/** The identity of one Stop's pending reply read, the transcript size its last scan saw, and what
- *  it found so far: a Droid Stop also waits for the turn verdict Droid appends after it. */
-type StopReplyClaim = {
-  readonly paneKey: string
-  scannedSize?: number
-  text?: string
-  textApplied?: boolean
-  verdict?: DroidTurnVerdict | null
-}
+/** The identity of one Stop's pending reply read, and the transcript size its last scan saw. */
+type StopReplyClaim = { readonly paneKey: string; scannedSize?: number }
 
 /** A Stop that came without its reply gets it from the transcript, read off the event loop. */
 export abstract class AgentHookServerStopTranscriptReply extends AgentHookServerStatusRetries {
@@ -127,8 +115,7 @@ export abstract class AgentHookServerStopTranscriptReply extends AgentHookServer
         ? row
         : undefined
     }
-    const awaitsVerdict = original.payload.agentType === 'droid'
-    const scan = async (): Promise<void> => {
+    const scan = async (): Promise<string | undefined> => {
       const size = await stat(transcriptPath).then(
         (stats) => stats.size,
         () => undefined
@@ -136,86 +123,64 @@ export abstract class AgentHookServerStopTranscriptReply extends AgentHookServer
       // A retry reads only lines reaching past its last scan's size, and nothing if the file hasn't grown.
       const previous = claim.scannedSize
       if (size !== undefined && size === previous) {
-        return
+        return undefined
       }
       claim.scannedSize = size
-      const keepReading = () => current() !== undefined
-      claim.text ??= await readLastAssistantFromTranscriptAsync(
+      return readLastAssistantFromTranscriptAsync(
         transcriptPath,
-        keepReading,
+        () => current() !== undefined,
         size !== undefined && previous !== undefined && size > previous ? previous : undefined,
         // A failed read saw nothing; the next retry reads in full even at the same size.
         () => {
           claim.scannedSize = undefined
         }
       )
-      if (awaitsVerdict && claim.verdict === undefined) {
-        claim.verdict = await readDroidTurnVerdictAsync(transcriptPath, keepReading, () => {
-          claim.scannedSize = undefined
-        })
-      }
     }
-    void scan().then(() => {
+    void scan().then((text) => {
       const row = current()
-      const { text, verdict } = claim
-      // The reply lands as soon as it is read; a Droid verdict read after it restates the same row.
-      const restated =
-        row && ((text && !claim.textApplied) || verdict)
-          ? this.restateStopRow(original, row, claim.textApplied ? undefined : text, verdict)
-          : undefined
-      claim.textApplied ||= text !== undefined
-      // Droid writes its verdict last, so once it is read no reply text can follow.
-      const pending = awaitsVerdict ? verdict === undefined : !text
-      if (row && pending && attempt < ASSISTANT_MESSAGE_RETRY_ATTEMPTS) {
-        // The text restate ends the claim like any row change; this Stop's verdict read goes on
-        // against the restated row.
-        this.stopReplyClaims.set(original.paneKey, claim)
+      if (!row || (!text && attempt >= ASSISTANT_MESSAGE_RETRY_ATTEMPTS)) {
+        if (this.stopReplyClaims.get(original.paneKey) === claim) {
+          this.stopReplyClaims.delete(original.paneKey)
+        }
+        return
+      }
+      if (!text) {
         // Stop can precede the transcript flush.
         super.clearAssistantMessageRetry(original.paneKey)
         const timer = setTimeout(() => {
           this.assistantMessageRetryTimers.delete(original.paneKey)
-          this.readStopTextFromTranscript(restated ?? original, transcriptPath, claim, attempt + 1)
+          this.readStopTextFromTranscript(original, transcriptPath, claim, attempt + 1)
         }, ASSISTANT_MESSAGE_RETRY_MS)
         timer.unref?.()
         this.assistantMessageRetryTimers.set(original.paneKey, timer)
         return
       }
-      if (this.stopReplyClaims.get(original.paneKey) === claim) {
-        this.stopReplyClaims.delete(original.paneKey)
-      }
-    })
-  }
-
-  private restateStopRow(
-    original: EnrichedAgentHookEventPayload,
-    row: AgentHookEventPayload,
-    text: string | undefined,
-    verdict: DroidTurnVerdict | null | undefined
-  ): EnrichedAgentHookEventPayload | undefined {
-    const payload = normalizeAgentStatusPayload({
-      ...row.payload,
-      ...(text ? { lastAssistantMessage: text, lastAssistantMessageIsToolOutput: undefined } : {}),
-      ...(verdict ? droidVerdictFields(verdict, original.stateStartedAt) : {})
-    })
-    if (!payload) {
-      return undefined
-    }
-    const tool = text ? this.state.lastToolByPaneKey.get(original.paneKey) : undefined
-    if (tool) {
-      // Later rebuilds of this turn's row read the snapshot, not the row.
-      this.state.lastToolByPaneKey.set(original.paneKey, {
-        ...tool,
-        lastAssistantMessage: payload.lastAssistantMessage,
+      this.stopReplyClaims.delete(original.paneKey)
+      const payload = normalizeAgentStatusPayload({
+        ...row.payload,
+        lastAssistantMessage: text,
         lastAssistantMessageIsToolOutput: undefined
       })
-    }
-    return this.applyRestatedStatus({
-      ...row,
-      payload,
-      // The whole reply answers the lead's turn; the row keeps only its capped preview.
-      ...(text ? { replyCandidate: text } : {}),
-      hookEventName: undefined,
-      hasExplicitPrompt: undefined
+      if (!payload) {
+        return
+      }
+      const tool = this.state.lastToolByPaneKey.get(original.paneKey)
+      if (tool) {
+        // Later rebuilds of this turn's row read the snapshot, not the row.
+        this.state.lastToolByPaneKey.set(original.paneKey, {
+          ...tool,
+          lastAssistantMessage: payload.lastAssistantMessage,
+          lastAssistantMessageIsToolOutput: undefined
+        })
+      }
+      this.applyRestatedStatus({
+        ...row,
+        payload,
+        // The whole reply answers the lead's turn; the row keeps only its capped preview.
+        replyCandidate: text,
+        hookEventName: undefined,
+        hasExplicitPrompt: undefined
+      })
     })
   }
 }
