@@ -260,6 +260,30 @@ describe('CodexRuntimeHomeService', () => {
     expect(readdirSync(join(keptPath, '..'))).toEqual(['history.jsonl'])
   })
 
+  it('sets the earlier kept copy aside when Codex trimmed the account history in between', async () => {
+    writeFileSync(join(getRuntimeCodexHomePath(), 'history.jsonl'), '{"id":"shared"}\n', 'utf-8')
+    const managedHomePath = writeHistory('account-1', '{"id":"A"}\n{"id":"B"}\n')
+    mkdirSync(join(managedHomePath, 'sessions', 'nested'), { recursive: true })
+    writeFileSync(join(managedHomePath, 'sessions', 'nested', 'rollout.jsonl'), '{}', 'utf-8')
+    mkdirSync(join(getRuntimeCodexHomePath(), 'sessions'), { recursive: true })
+    writeFileSync(join(getRuntimeCodexHomePath(), 'sessions', 'nested'), 'not a folder', 'utf-8')
+    await constructService()
+    await vi.waitFor(() => expect(trackedImportOutcomes()).toEqual(['skipped_existing']), {
+      timeout: WAIT_MS
+    })
+
+    writeFileSync(join(managedHomePath, 'history.jsonl'), '{"id":"B"}\n{"id":"C"}\n', 'utf-8')
+    vi.resetModules()
+    await constructService()
+    await removeAccountHome(managedHomePath)
+
+    const keptDir = join(archivedHistoryPath('account-1'), '..')
+    expect(readFileSync(archivedHistoryPath('account-1'), 'utf-8')).toBe('{"id":"B"}\n{"id":"C"}\n')
+    expect(readFileSync(join(keptDir, 'history.orca-legacy-account-1.jsonl'), 'utf-8')).toBe(
+      '{"id":"A"}\n{"id":"B"}\n'
+    )
+  })
+
   it('never keeps a copy through a linked folder', async () => {
     const managedHomePath = writeHistory('account-1', '{"id":"legacy-1"}\n')
     const elsewhere = join(testState.userDataDir, 'elsewhere')

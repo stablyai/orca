@@ -148,20 +148,48 @@ export abstract class CodexRuntimeHomeLegacyMigration extends CodexRuntimeHomePa
         }
         // Read once rather than copied (a copy of a file Codex trims mid-copy never finishes), then
         // published by rename: never partial, and a link at the name is replaced, not written through.
-        // Each unfinished launch refreshes Orca's one copy, so it holds what the account has now.
+        // Each unfinished launch refreshes the copy so it holds what the account has now.
         const keptPath = join(keptDir, 'history.jsonl')
-        writeFileDurableSync(
-          durableWriteTempPath(keptPath),
-          keptPath,
-          readFileSync(legacyHistoryPath),
-          0o600
-        )
+        const current = readFileSync(legacyHistoryPath)
+        this.setAsideKeptHistoryCodexTrimmed(keptPath, accountId, current)
+        writeFileDurableSync(durableWriteTempPath(keptPath), keptPath, current, 0o600)
       } catch (error) {
         firstError ??= error
       }
     }
     if (firstError) {
       throw firstError
+    }
+  }
+
+  // Codex trims history from the front; lines the earlier copy has and the account lost stay kept.
+  protected setAsideKeptHistoryCodexTrimmed(
+    keptPath: string,
+    accountId: string,
+    current: Buffer
+  ): void {
+    let previous: Buffer
+    try {
+      previous = readFileSync(keptPath)
+    } catch {
+      return
+    }
+    const currentLines = new Set(current.toString('utf-8').split('\n'))
+    if (
+      previous
+        .toString('utf-8')
+        .split('\n')
+        .every((line) => currentLines.has(line))
+    ) {
+      return
+    }
+    for (let attempt = 0; ; attempt++) {
+      const preservedPath = this.getPreservedLegacySessionPath(keptPath, accountId, attempt)
+      if (
+        this.copyLegacyFileWithoutOverwrite(keptPath, preservedPath, () => previous) !== 'conflict'
+      ) {
+        return
+      }
     }
   }
 

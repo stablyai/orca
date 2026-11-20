@@ -59,11 +59,18 @@ export async function importKeptLegacyHistoriesOnce(
   if (state.done) {
     return
   }
-  const keptPaths = await listKeptLegacyHistories(keptRoot)
-  if (keptPaths.length === 0) {
-    return
+  let keptPaths: string[]
+  let outcome: LegacyHistoryImportOutcome
+  try {
+    keptPaths = await listKeptLegacyHistories(keptRoot)
+    if (keptPaths.length === 0) {
+      return
+    }
+    outcome = await publishKeptLegacyHistoriesIfAbsent(keptPaths, runtimeHistoryPath)
+  } catch (error) {
+    console.warn('[codex-runtime-home] Failed to list kept legacy Codex prompt history:', error)
+    outcome = 'failed'
   }
-  const outcome = await publishKeptLegacyHistoriesIfAbsent(keptPaths, runtimeHistoryPath)
   trackLegacyHistoryImport(outcome)
   const attempts = state.attempts + 1
   const next: ImportState = {
