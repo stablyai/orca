@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { parseBotAvatar } from '../../../../shared/bot-avatar'
 import { BOT_MASCOT_URLS } from './bot-mascots'
@@ -590,6 +590,111 @@ describe('NewBotDialog Generate and an upload', () => {
       )
     }
   )
+
+  describe('a picture chosen while an older upload is still read', () => {
+    // A slow upload into the open picker; the tile and the saved avatar are checked after it lands.
+    async function slowUploadThen(choose: () => Promise<void> | void): Promise<{
+      shown: string | null
+      picture: () => string | null
+      submit: () => Promise<void>
+    }> {
+      const { picture, submit } = dialogRef.current ?? renderDialog()
+      chooseUpload()
+      await choose()
+      const shown = picture()
+      finishUpload('U0xPVw')
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      return { shown, picture, submit }
+    }
+    const dialogRef: { current: ReturnType<typeof renderDialog> | null } = { current: null }
+
+    beforeEach(() => {
+      stubGeneration()
+      mocks.createBot.mockResolvedValue(created)
+      mocks.uploadBotAvatar.mockResolvedValue(created)
+      dialogRef.current = null
+    })
+
+    it('keeps a mascot', async () => {
+      dialogRef.current = renderDialog()
+      dialogRef.current.openPicker()
+      await screen.findByRole('button', { name: 'Next picture' })
+      const { shown, picture, submit } = await slowUploadThen(() => {
+        fireEvent.click(screen.getByRole('button', { name: 'Next picture' }))
+      })
+
+      expect(shown).not.toBe('data:image/png;base64,U0xPVw')
+      expect(picture()).toBe(shown)
+      await submit()
+      expect(mocks.uploadBotAvatar).not.toHaveBeenCalled()
+    })
+
+    it('keeps an earlier upload chosen again', async () => {
+      dialogRef.current = renderDialog()
+      dialogRef.current.openPicker()
+      chooseUpload()
+      finishUpload('RUFSTA')
+      await waitFor(() => expect(dialogRef.current?.picture()).toBe('data:image/png;base64,RUFSTA'))
+      fireEvent.click(screen.getByRole('button', { name: 'Next picture' }))
+      const { picture, submit } = await slowUploadThen(() => {
+        fireEvent.click(screen.getByRole('button', { name: 'Previous picture' }))
+      })
+
+      expect(picture()).toBe('data:image/png;base64,RUFSTA')
+      await submit()
+      await waitFor(() =>
+        expect(mocks.uploadBotAvatar).toHaveBeenCalledWith(
+          expect.objectContaining({ id: 'bot-1' }),
+          'RUFSTA'
+        )
+      )
+    })
+
+    it('keeps a generated picture chosen again', async () => {
+      dialogRef.current = renderDialog()
+      dialogRef.current.openPicker()
+      fireEvent.click(await screen.findByRole('button', { name: 'Previous picture' }))
+      const box = await screen.findByRole('textbox', { name: 'Picture description' })
+      fireEvent.change(box, { target: { value: 'a fox' } })
+      fireEvent.keyDown(box, { key: 'Enter' })
+      finishGenerate()
+      await waitFor(() =>
+        expect(dialogRef.current?.picture()).toBe(`data:image/png;base64,${GENERATED}`)
+      )
+      fireEvent.click(screen.getByRole('button', { name: 'Next picture' }))
+      const { picture, submit } = await slowUploadThen(() => {
+        fireEvent.click(screen.getByRole('button', { name: 'Previous picture' }))
+      })
+
+      expect(picture()).toBe(`data:image/png;base64,${GENERATED}`)
+      await submit()
+      await waitFor(() =>
+        expect(mocks.uploadBotAvatar).toHaveBeenCalledWith(
+          expect.objectContaining({ id: 'bot-1' }),
+          GENERATED
+        )
+      )
+    })
+
+    it('still lands when only the empty Generate face was browsed', async () => {
+      dialogRef.current = renderDialog()
+      dialogRef.current.openPicker()
+      await screen.findByRole('button', { name: 'Previous picture' })
+      const { picture, submit } = await slowUploadThen(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Previous picture' }))
+        await screen.findByRole('textbox', { name: 'Picture description' })
+      })
+
+      await waitFor(() => expect(picture()).toBe('data:image/png;base64,U0xPVw'))
+      await submit()
+      await waitFor(() =>
+        expect(mocks.uploadBotAvatar).toHaveBeenCalledWith(
+          expect.objectContaining({ id: 'bot-1' }),
+          'U0xPVw'
+        )
+      )
+    })
+  })
 
   it('keeps the same image pasted again when it and an older Generate land in one render', async () => {
     stubGeneration()

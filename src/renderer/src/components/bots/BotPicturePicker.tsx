@@ -239,7 +239,10 @@ export function BotPicturePicker({
   const { line } = intake
   const dropping = line.kind === 'drop'
   const select = (key: PictureFaceKey | undefined): void => {
-    if (line.kind === 'error') {
+    // Choosing a picture is the newest action, so one still being read is dropped. Browsing onto an
+    // empty Generate face chooses nothing, and a picture still being read lands as usual.
+    const chooses = key !== undefined && (key !== GENERATE_FACE || face.result !== null)
+    if (chooses || line.kind === 'error') {
       intake.dismiss()
     }
     setOnGenerate(key === GENERATE_FACE)
