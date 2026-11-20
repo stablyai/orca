@@ -879,6 +879,7 @@
     "bots.share.memory",
     "bots.share.nothingFound",
     "bots.share.oneWarning",
+    "bots.share.previewFile",
     "bots.share.receive.ask",
     "bots.share.receive.askDetail",
     "bots.share.receive.askLine",
