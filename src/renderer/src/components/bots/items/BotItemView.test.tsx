@@ -389,20 +389,6 @@ function expectOnlyAnswerCalls(): void {
   expect(statusSet).not.toHaveBeenCalled()
 }
 
-it("says an older host can't record the answer, keeps the words, and writes nothing else", async () => {
-  answered.mockResolvedValueOnce('unsupported')
-  renderAt(askingItem(23))
-  typeAnswer('Ship B')
-  fireEvent.click(screen.getByRole('button', { name: /Submit/ }))
-  await act(() => new Promise((resolve) => setTimeout(resolve, 0)))
-
-  const notice = screen.getByRole('status')
-  expect(notice.textContent).toContain('can’t record answers yet, so nothing was sent')
-  expect(notice.textContent).toContain('Ship B')
-  expect(within(notice).queryByRole('button', { name: 'Put in the comment box' })).toBeNull()
-  expectOnlyAnswerCalls()
-})
-
 it("shows the bot's context in the card while the question's event is off the loaded page", () => {
   renderAt(
     askingItem(24, {
@@ -614,6 +600,11 @@ it('writes nothing on retries to an older host, before or after the question is 
   typeAnswer('Ship B')
   fireEvent.click(screen.getByRole('button', { name: /Submit/ }))
   await flush()
+  const notice = screen.getByRole('status')
+  expect(notice.textContent).toContain('can’t record answers yet, so nothing was sent')
+  expect(notice.textContent).toContain('Ship B')
+  expect(within(notice).queryByRole('button', { name: 'Put in the comment box' })).toBeNull()
+
   // The owner opens the card again and sends the same answer.
   fireEvent.click(screen.getByRole('button', { name: 'Expand' }))
   fireEvent.click(screen.getByRole('button', { name: /Submit/ }))
