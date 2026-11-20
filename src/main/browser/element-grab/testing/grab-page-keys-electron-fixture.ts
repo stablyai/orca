@@ -226,13 +226,7 @@ async function run(): Promise<void> {
     pageSawChord: await evalPage("window.__pageKeys.some(key=>key.toLowerCase()==='c')")
   }
 
-  const replacement = await verifyGrabSelectionReplacement(
-    page,
-    manager,
-    renderer,
-    forwarded,
-    press
-  )
+  const replacement = await verifyGrabSelectionReplacement(page, manager, forwarded, press)
   await manager.setGrabMode('page-1', true, page, renderer)
 
   await evalPage("document.getElementById('buy').focus();window.__pageKeys=[]")

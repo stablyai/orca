@@ -4,7 +4,6 @@ import type { BrowserManager } from '../../guest-lifecycle/manager/browser-manag
 export async function verifyGrabSelectionReplacement(
   page: WebContents,
   manager: BrowserManager,
-  renderer: WebContents,
   forwarded: string[],
   press: (key: string) => Promise<void>
 ) {
