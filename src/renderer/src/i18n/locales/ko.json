@@ -4359,13 +4359,8 @@
           "resource": {
             "memory": {
               "metric": {
-                "workingSetDescription": "합산된 워킹 세트(WS): 지금 RAM에 상주 중인 페이지입니다. 공유 페이지가 둘 이상의 프로세스에 나타날 수 있으며, Windows가 페이지 아웃한 메모리는 여기에 포함되지 않습니다.",
-                "privateBytesDescription": "합산된 프라이빗 바이트: 이 프로세스들이 커밋한 메모리로, 상주 여부와 관계없이 계산됩니다. 호스트가 커밋 한도에 반영하는 값이므로, 페이징으로 위의 워킹 세트가 줄어드는 동안에도 계속 늘어납니다.",
-                "footprintDescription": "합산된 메모리 사용 공간으로, 활성 상태 보기에 표시되는 값과 같습니다. 그래픽 메모리를 포함해 각 프로세스가 소유한 메모리이며, 프로세스 간에 공유되는 페이지는 중복으로 계산되지 않습니다.",
-                "rssDescription": "합산된 레지던트 세트 크기(RSS). 공유 또는 별칭된 페이지가 둘 이상의 프로세스에 나타날 수 있습니다.",
                 "memColumn": "메모리",
-                "memorySummary": "Σ 메모리",
-                "privateSummary": "Σ 프라이빗"
+                "memorySummary": "Σ 메모리"
               }
             },
             "manager": {
@@ -22257,8 +22252,7 @@
     "refresh": "새로 고침",
     "restartLocal": "로컬 데몬 다시 시작",
     "killAllLocal": "모든 로컬 세션 종료",
-    "killFailed": "터미널을 종료할 수 없습니다. 마지막으로 관찰된 세션이 유지됩니다.",
-    "metricDetails": "지표 세부 정보"
+    "killFailed": "터미널을 종료할 수 없습니다. 마지막으로 관찰된 세션이 유지됩니다."
   },
   "workspaceSpace": {
     "table": {
