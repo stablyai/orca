@@ -34,10 +34,12 @@ type PanZoomImageDialogProps = Omit<
   /** Shown instead of the image while it has no source or after it fails to load. */
   fallback?: React.ReactNode
   toolbarActions?: React.ReactNode
-  /** In a set of images: steps back or on, by the toolbar arrows or ← and →. Null at that end; both
+  /** In a set of images: steps back or on, by the edge arrows or the Left and Right keys. Null at that end; both
    *  omitted for a lone image, which shows no arrows. */
   onPrevious?: (() => void) | null
   onNext?: (() => void) | null
+  /** In a set of images: the shown image's place, for the "n / m" counter and the edge arrows. */
+  position?: { index: number; total: number }
 }
 
 async function copyImageAsPng(
@@ -76,6 +78,35 @@ function ToolbarButton({
   )
 }
 
+function EdgeButton({
+  side,
+  label,
+  children,
+  ...props
+}: React.ComponentProps<typeof Button> & {
+  side: 'left' | 'right'
+  label: string
+}): React.JSX.Element {
+  return (
+    <div
+      className={`absolute top-1/2 z-10 -translate-y-1/2 rounded-md bg-background shadow-xs ${
+        side === 'left' ? 'left-3' : 'right-3'
+      }`}
+    >
+      <Button
+        type="button"
+        variant="outline"
+        size="icon"
+        aria-label={label}
+        data-edge-button={side}
+        {...props}
+      >
+        {children}
+      </Button>
+    </div>
+  )
+}
+
 export function PanZoomImageDialog({
   open,
   onOpenChange,
@@ -88,6 +119,7 @@ export function PanZoomImageDialog({
   toolbarActions,
   onPrevious,
   onNext,
+  position,
   onCloseAutoFocus,
   onKeyDown,
   ...contentProps
@@ -110,6 +142,8 @@ export function PanZoomImageDialog({
             !event.ctrlKey
           ) {
             event.preventDefault()
+            // Keep the arrows from reaching the chat composer behind the dialog.
+            event.stopPropagation()
             step()
           }
         }}
@@ -154,6 +188,7 @@ export function PanZoomImageDialog({
           toolbarActions={toolbarActions}
           onPrevious={onPrevious}
           onNext={onNext}
+          position={position}
           onClose={() => onOpenChange(false)}
         />
       </DialogContent>
@@ -171,6 +206,7 @@ function PanZoomImageCanvas({
   toolbarActions,
   onPrevious,
   onNext,
+  position,
   onClose
 }: Pick<
   PanZoomImageDialogProps,
@@ -183,6 +219,7 @@ function PanZoomImageCanvas({
   | 'toolbarActions'
   | 'onPrevious'
   | 'onNext'
+  | 'position'
 > & { onClose: () => void }): React.JSX.Element {
   const t = useTranslate()
   const [loaded, setLoaded] = useState<{ src: string; size: PanZoomSize } | null>(null)
@@ -222,26 +259,15 @@ function PanZoomImageCanvas({
               {title}
             </span>
           ) : null}
+          {position && position.total > 1 ? (
+            <span
+              data-testid="pan-zoom-image-counter"
+              className="shrink-0 rounded-md border border-border bg-background px-2 py-1 text-sm tabular-nums text-muted-foreground shadow-xs"
+            >
+              {position.index + 1} / {position.total}
+            </span>
+          ) : null}
           <div className="pointer-events-auto ml-auto flex shrink-0 items-center gap-0.5 rounded-md border border-border bg-background p-0.5 shadow-xs">
-            {onPrevious !== undefined || onNext !== undefined ? (
-              <>
-                <ToolbarButton
-                  label={t('auto.components.editor.PanZoomImageDialog.previous', 'Previous image')}
-                  disabled={!onPrevious}
-                  onClick={() => onPrevious?.()}
-                >
-                  <ChevronLeft />
-                </ToolbarButton>
-                <ToolbarButton
-                  label={t('auto.components.editor.PanZoomImageDialog.next', 'Next image')}
-                  disabled={!onNext}
-                  onClick={() => onNext?.()}
-                >
-                  <ChevronRight />
-                </ToolbarButton>
-                <span aria-hidden className="mx-0.5 h-4 w-px bg-border" />
-              </>
-            ) : null}
             <ToolbarButton
               label={t('auto.components.editor.PanZoomImageDialog.zoomOut', 'Zoom out')}
               disabled={!panZoom.canZoomOut}
@@ -281,6 +307,26 @@ function PanZoomImageCanvas({
             </ToolbarButton>
           </div>
         </div>
+        {onPrevious !== undefined || onNext !== undefined ? (
+          <>
+            <EdgeButton
+              side="left"
+              label={t('auto.components.editor.PanZoomImageDialog.previous', 'Previous image')}
+              disabled={!onPrevious}
+              onClick={() => onPrevious?.()}
+            >
+              <ChevronLeft />
+            </EdgeButton>
+            <EdgeButton
+              side="right"
+              label={t('auto.components.editor.PanZoomImageDialog.next', 'Next image')}
+              disabled={!onNext}
+              onClick={() => onNext?.()}
+            >
+              <ChevronRight />
+            </EdgeButton>
+          </>
+        ) : null}
       </TooltipProvider>
     </>
   )

@@ -194,6 +194,7 @@ export function NativeChatImageViewer({
       showTitle
       onPrevious={step(-1)}
       onNext={step(1)}
+      position={index === null ? undefined : { index, total: blocks.length }}
       onInteractOutside={keepPreviewOpenForChatMenu}
       data-native-chat-copy-image-src={copyableNativeChatImageSrc(displaySrc)}
       fallback={<ImageLabelChip label={label} />}
