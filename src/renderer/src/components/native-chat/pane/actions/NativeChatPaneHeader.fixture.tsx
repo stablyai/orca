@@ -5,6 +5,9 @@ import { publishBots, readBots, setBotHostListing } from '@/lib/bot-catalog-snap
 import type { Bot } from '../../../../../../shared/bot-types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import type { Tab } from '../../../../../../shared/workspace-layout/tab-groups/tab-types'
+import { BOTS_HOME_PIN_RUNTIME_CAPABILITY } from '../../../../../../shared/bot-runtime-capabilities'
+import type { RuntimeEnvironmentStatus } from '../../../../../../shared/remote-runtime/host-status/runtime-host-status'
+import type { RuntimeStatus } from '../../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import TabBar from '../../../tab-bar/TabBar'
 import { NativeChatPaneHeader } from './NativeChatPaneHeader'
 
@@ -58,7 +61,23 @@ const bot: Bot = {
 }
 const noop = (): void => {}
 
-function homeScene(hostId: ExecutionHostId, width: number) {
+/** The paired server's verified status; an older one lacks the Home rule. */
+function serverStatus(older: boolean): RuntimeEnvironmentStatus {
+  const status: RuntimeStatus = {
+    runtimeId: 'fixture-server',
+    rendererGraphEpoch: 0,
+    graphStatus: 'ready',
+    authoritativeWindowId: null,
+    liveTabCount: 0,
+    liveLeafCount: 0,
+    capabilities: older ? [] : [BOTS_HOME_PIN_RUNTIME_CAPABILITY]
+  }
+  return { status, checkedAt: 1 }
+}
+
+/** `older`: a paired server from before the Home rule, which leaves its pages as they were. */
+function homeScene(hostId: ExecutionHostId, width: number, older = false) {
+  const ruled = hostId === 'local' || !older
   const tab: Tab & { contentType: 'agent-session' } = {
     id: 'fixture-home-tab',
     entityId: 'fixture-home',
@@ -72,12 +91,13 @@ function homeScene(hostId: ExecutionHostId, width: number) {
     color: null,
     sortOrder: 0,
     createdAt: 1,
-    isPinned: hostId === 'local'
+    isPinned: ruled
   }
   return defineFixture({
     width: width + 32,
     store: {
       workspaceSessionReady: true,
+      runtimeStatusByEnvironmentId: new Map([['fixture-server', serverStatus(older)]]),
       unifiedTabsByWorktree: { [HOME]: [tab] },
       groupsByWorktree: {
         [HOME]: [{ id: tab.groupId, worktreeId: HOME, activeTabId: tab.id, tabOrder: [tab.id] }]
@@ -104,7 +124,8 @@ function homeScene(hostId: ExecutionHostId, width: number) {
     render: () => (
       <div className="space-y-3" style={{ width }}>
         <div className="text-xs text-muted-foreground">
-          Atlas Assistant · {hostId === 'local' ? 'This computer' : 'Paired server'}
+          Atlas Assistant ·{' '}
+          {hostId === 'local' ? 'This computer' : older ? 'Older paired server' : 'Paired server'}
         </div>
         <DndContext>
           <div className="@container/tab-strip h-8 bg-card">
@@ -165,14 +186,15 @@ function homeScene(hostId: ExecutionHostId, width: number) {
       ) {
         throw new Error('Narrow Home fixture did not fully hide the banner at the breakpoint')
       }
-      if (hostId === PAIRED_HOST && banner) {
-        throw new Error('Paired Home fixture unexpectedly rendered a banner')
+      if (hostId === PAIRED_HOST && older === Boolean(banner)) {
+        throw new Error(`Paired Home fixture ${older ? 'rendered' : 'lost'} its banner`)
       }
       frame.querySelector<HTMLElement>('[data-home-fixture-measurement]')!.textContent =
-        `Pane ${width}px · header content ${containerWidth}px · banner ${banner ? 'hidden' : 'not rendered'}`
+        `Pane ${width}px · header content ${containerWidth}px · banner ${banner ? (getComputedStyle(banner).display === 'none' ? 'hidden' : 'shown') : 'not rendered'}`
     }
   })
 }
 
 export const localHomeHiddenAt260 = homeScene('local', 264)
 export const pairedHome = homeScene(PAIRED_HOST, 720)
+export const pairedHomeOlderServer = homeScene(PAIRED_HOST, 720, true)

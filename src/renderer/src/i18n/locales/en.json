@@ -1189,7 +1189,8 @@
       "undetectedCommandHint": "If the {{agent}} CLI is installed outside PATH, enter the full path to its executable on this host.",
       "agentActions": "{{agent}} actions",
       "defaultAutoBadge": "Default · Auto",
-      "newAgentsTitle": "New agents"
+      "newAgentsTitle": "New agents",
+      "defaultSurfaceServerDescription": "The default for agents {{host}} starts itself, such as from its CLI or orchestration workers. Agents you open from this computer follow This computer's choice."
     },
     "followSymlinkedDirectoriesKeywords": {
       "symlink": "symlink",
@@ -29322,6 +29323,7 @@
       },
       "ask": {
         "next": "Next question",
+        "notSentYet": "not sent yet",
         "previous": "Previous question",
         "recommended": "Recommended",
         "step": "{{n}} of {{total}}",

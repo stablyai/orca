@@ -8,6 +8,8 @@ import {
   type BotItemDecision,
   type BotItemQuestionShape
 } from './bot-item-ask'
+import { botItemCommentImages } from './bot-items'
+import { stripSentImagePromptMarkers } from '../native-chat/transcript/images/native-chat-sent-image-prompt-markers'
 
 /** The words after a line's "Question →", or null where `line` names another question. */
 function answerOn(decision: BotItemDecision, line: string): string | null {
@@ -69,5 +71,10 @@ export function botItemAnswerWords(
     return null
   }
   const text = typeof reply.text === 'string' ? reply.text.trim() : ''
-  return botItemNamedAnswers(shape, text)[index] ?? (text || null)
+  const words = botItemNamedAnswers(shape, text)[index] ?? (text || null)
+  // Its images show on its own card, so the [Image #N] its send wrote go; an image alone keeps its mark.
+  return (
+    words &&
+    (stripSentImagePromptMarkers(words, botItemCommentImages(reply).length).trim() || words)
+  )
 }
