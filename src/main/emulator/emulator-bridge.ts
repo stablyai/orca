@@ -270,22 +270,19 @@ export class EmulatorBridge {
   }
 
   async destroyAllSessions(): Promise<void> {
-    const promises: (Promise<unknown> | undefined)[] = []
-    for (const session of this.sessionRegistry.listSessions()) {
-      const backend = this.backendForKind(session.backend)
-      if (!backend) {
-        continue
-      }
-      const stop = (): Promise<unknown> =>
-        backend
-          .stopHelperForDevice(session.deviceUdid, { helperPid: session.pid })
+    await Promise.allSettled(
+      this.sessionRegistry.listSessions().map(async (session) => {
+        const backend = this.backendForKind(session.backend)
+        if (!session.managed) {
+          await backend?.restoreHardwareKeyboardLayout?.(session.deviceUdid)
+          return
+        }
+        await backend
+          ?.stopHelperForDevice(session.deviceUdid, { helperPid: session.pid })
           .catch(() => {})
-          .then(() => backend.shutdownDevice(session.deviceUdid).catch(() => {}))
-      promises.push(
-        session.managed ? stop() : backend.restoreHardwareKeyboardLayout?.(session.deviceUdid)
-      )
-    }
-    await Promise.allSettled(promises)
+        await backend?.shutdownDevice(session.deviceUdid).catch(() => {})
+      })
+    )
     this.sessionRegistry.clear()
   }
 

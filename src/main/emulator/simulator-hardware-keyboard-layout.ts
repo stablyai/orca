@@ -240,6 +240,8 @@ export class SimulatorHardwareKeyboardSync {
       await writeSimulatorKeyboards(udid, next)
       this.keyboards.set(udid, next)
     }
+    // Back on the user's own layouts, so a later change of theirs is no longer Orca's to undo.
+    state.rewritten = state.rewritten && hardwareLayout !== null
     state.synced = hardwareLayout !== null
     state.pasteKeyCode = state.synced ? await macKeyCodeTypingV(macLayoutId) : 'KeyV'
     state.macLayoutId = macLayoutId
