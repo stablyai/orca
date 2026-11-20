@@ -21,13 +21,16 @@ export function createAgentStatusTransactionOwner() {
         ])
       }
       const statuses = next.agentStatusByPaneKey
-      publishStatuses = statuses.prepare()
-      publishProjection = statuses.projection.prepare(
+      const preparedStatuses = statuses.prepare()
+      const preparedProjection = statuses.projection.prepare(
         next,
         statuses.changes(),
         statuses.refreshKeys,
         fullResync
       )
+      // Held only once both succeed, so a failed preparation retains nothing past its write.
+      publishStatuses = preparedStatuses
+      publishProjection = preparedProjection
       return statuses
     },
     commit(): void {
