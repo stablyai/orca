@@ -38,6 +38,7 @@ import { registerOnboardingHandlers } from '../onboarding'
 import { registerDashboardPopoutHandlers } from '../dashboard/dashboard-popout'
 import { registerWorkspaceSpaceWindowHandlers } from '../workspace-space/workspace-space-window'
 import { registerTerminalPreviewHandlers } from '../terminal-views/terminal-preview'
+import { registerTerminalPopoutHandlers } from '../terminal-views/terminal-popout'
 import { registerDeveloperPermissionHandlers } from '../developer-permissions/developer-permissions'
 import { registerComputerUsePermissionHandlers } from '../computer-use-permissions'
 import { setAgentBrowserBridgeRef, registerBrowserHandlers } from '../browser/browser'
@@ -79,6 +80,7 @@ import { registerUpdaterHandlers } from '../../updater/lifecycle/main-window-upd
 import { registerClipboardHandlers } from '../../window/clipboard/clipboard-ipc-handlers'
 import { setTrustedClipboardRendererWebContentsId } from '../../window/clipboard/clipboard-ipc-sender-trust'
 import { isDashboardPopoutRenderer } from '../../window/dashboard-popout-window'
+import { getTerminalPopoutPtyId } from '../../window/terminal-popout-window'
 import type { RateLimitService } from '../../rate-limits/service/rate-limit-service'
 import type { CodexAccountService } from '../../codex-accounts/service'
 import type { ClaudeAccountService } from '../../claude-accounts/service'
@@ -175,6 +177,7 @@ export async function registerCoreHandlers(
     registerDashboardPopoutHandlers(store, keybindings)
     registerWorkspaceSpaceWindowHandlers(store)
     registerTerminalPreviewHandlers(runtime)
+    registerTerminalPopoutHandlers(store, keybindings)
     registerDeveloperPermissionHandlers()
     // Diagnostics and telemetry register independent channels and keep separate data paths.
     registerDiagnosticsHandlers()
@@ -205,7 +208,10 @@ export async function registerCoreHandlers(
     registerShellHandlers(store)
     registerPetHandlers()
     registerSessionHandlers(store, runtime)
-    registerUIHandlers(store, { isDashboardPopoutRenderer })
+    registerUIHandlers(store, {
+      isPopoutRenderer: (sender) =>
+        isDashboardPopoutRenderer(sender) || getTerminalPopoutPtyId(sender) !== null
+    })
     registerEmulatorFrameStreamHandlers()
     registerEmulatorVideoStreamHandlers((id) =>
       runtime.getEmulatorBridge()?.getIosVideoStreamUrl(id)

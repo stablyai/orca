@@ -1,5 +1,5 @@
 import { useCallback, useMemo } from 'react'
-import { Maximize2, Minimize2, Minus } from 'lucide-react'
+import { Maximize2, Minimize2, Minus, SquareArrowOutUpRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { getAgentCatalog } from '@/lib/agent-catalog/agent-catalog'
@@ -16,8 +16,12 @@ import {
 } from '../../../../shared/agent-launch/catalog/tui-agent-selection'
 import { useTranslate } from '@/i18n/use-translate'
 import { useOptionalShortcutLabel } from '@/lib/keyboard/useShortcutLabel'
+import { isPairedWebClientWindow } from '@/app-shell/chrome/desktop-window-chrome'
+import { resolveChecksPanelTerminalPtyId } from '../right-sidebar/checks-panel/refresh/checks-panel-terminal-worktree'
 
 type FloatingTerminalWindowControlsProps = {
+  /** The floating group's active tab when it is a terminal. */
+  activeTabId: string | null
   maximized: boolean
   onToggleMaximized: () => void
   onMinimize: () => void
@@ -31,6 +35,7 @@ function withShortcutHint(label: string, shortcutLabel: string | null): string {
 }
 
 export function FloatingTerminalWindowControls({
+  activeTabId,
   maximized,
   onToggleMaximized,
   onMinimize
@@ -39,6 +44,11 @@ export function FloatingTerminalWindowControls({
   const defaultTuiAgent = useAppStore((s) => s.settings?.defaultTuiAgent ?? null)
   const setActiveTabForWorktree = useAppStore((s) => s.setActiveTabForWorktree)
   const activateTab = useAppStore((s) => s.activateTab)
+  const activePtyId = useAppStore(({ ptyIdsByTabId, terminalLayoutsByTabId }) =>
+    resolveChecksPanelTerminalPtyId({ activeTabId, ptyIdsByTabId, terminalLayoutsByTabId })
+  )
+  // A browser tab cannot open a second Orca window.
+  const popoutPtyId = isPairedWebClientWindow() ? null : activePtyId
   const maximizeShortcutLabel = useOptionalShortcutLabel('floatingWorkspace.maximize')
   const minimizeShortcutLabel = useOptionalShortcutLabel('floatingWorkspace.minimize')
 
@@ -83,6 +93,18 @@ export function FloatingTerminalWindowControls({
     focusTerminalTabSurface(result.surface.tabId)
   }, [activateTab, defaultAgent, setActiveTabForWorktree])
 
+  const openInSeparateWindow = useCallback(() => {
+    if (!popoutPtyId) {
+      return
+    }
+    void window.api.terminalPopout.open(popoutPtyId)
+    onMinimize()
+  }, [onMinimize, popoutPtyId])
+  const openInSeparateWindowLabel = t(
+    'auto.components.floating.terminal.FloatingTerminalWindowControls.openInSeparateWindow',
+    'Open in separate window'
+  )
+
   return (
     <div className="flex items-center gap-1 px-2" data-floating-terminal-no-drag>
       {defaultAgent ? (
@@ -109,6 +131,25 @@ export function FloatingTerminalWindowControls({
               'Open {{value0}} in floating workspace',
               { value0: defaultAgentLabel ?? defaultAgent }
             )}
+          </TooltipContent>
+        </Tooltip>
+      ) : null}
+      {popoutPtyId ? (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant="outline"
+              size="icon-xs"
+              className={controlButtonClassName}
+              aria-label={openInSeparateWindowLabel}
+              onClick={openInSeparateWindow}
+            >
+              <SquareArrowOutUpRight className="size-3.5" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" sideOffset={6}>
+            {openInSeparateWindowLabel}
           </TooltipContent>
         </Tooltip>
       ) : null}

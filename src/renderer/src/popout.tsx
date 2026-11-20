@@ -5,6 +5,7 @@ import './assets/main.css'
 
 import { StrictMode, useEffect } from 'react'
 import { DashboardPopoutRoot } from './components/dashboard-popout/DashboardPopoutRoot'
+import { TerminalPopoutRoot } from './components/terminal-popout/TerminalPopoutRoot'
 import { RecoverableRenderErrorBoundary } from './components/error-boundaries/RecoverableRenderErrorBoundary'
 import { installRendererCrashDiagnostics } from './diagnostics/crash-reporting/crash-diagnostics'
 import { recordRendererCrashBreadcrumb } from './diagnostics/crash-reporting/crash-breadcrumb-recorder'
@@ -32,6 +33,10 @@ import.meta.hot?.dispose(disposeLoopingAnimationClock)
 recordRendererCrashBreadcrumb('popout_bootstrap_started', { dev: import.meta.env.DEV })
 installRendererCrashDiagnostics('dashboard-popout')
 setReactCommitCascadeRendererSurface('dashboard-popout')
+
+// Main opens a terminal pop-out with ?surface=terminal&ptyId=…; anything else is the dashboard.
+const popoutParams = new URLSearchParams(window.location.search)
+const terminalPtyId = popoutParams.get('surface') === 'terminal' ? popoutParams.get('ptyId') : null
 
 function applyPopoutFonts(settings: GlobalSettings | null): void {
   document.documentElement.style.setProperty(
@@ -112,7 +117,7 @@ function PopoutRoot(): React.JSX.Element {
         'The dashboard could not finish rendering. Retry to remount it, or reopen it.'
       )}
     >
-      <DashboardPopoutRoot />
+      {terminalPtyId ? <TerminalPopoutRoot ptyId={terminalPtyId} /> : <DashboardPopoutRoot />}
     </RecoverableRenderErrorBoundary>
   )
 }

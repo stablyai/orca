@@ -34,3 +34,8 @@ export type TerminalPreviewApi = {
   unsubscribe: (ptyId: string) => Promise<void>
   onData: (callback: (payload: TerminalPreviewDataPayload) => void) => () => void
 }
+
+export type TerminalPopoutApi = {
+  /** Opens this PTY in its own window, or focuses the window already showing it. */
+  open: (ptyId: string) => Promise<void>
+}
