@@ -20,7 +20,7 @@ export async function resolveLinuxSocketOwners(
   scanSequence += 1
   const inodes = new Set(sockets.map((socket) => socket.inode))
   const readAll = await canReadAllFdTables(ownUid)
-  const owners = await verifyCachedOwners(inodes)
+  const { owners, socketsByPid } = await verifyCachedOwners(inodes)
   const needsWalk = sockets.some((socket) => {
     if (owners.has(socket.inode)) {
       return false
@@ -37,7 +37,7 @@ export async function resolveLinuxSocketOwners(
   })
   if (needsWalk) {
     const wanted = new Set([...inodes].filter((inode) => !owners.has(inode)))
-    await walkProcForOwners(wanted, readAll ? undefined : ownUid, owners)
+    await walkProcForOwners(wanted, readAll ? undefined : ownUid, socketsByPid, owners)
   }
 
   const nextUnresolved = new Map<number, number>()
@@ -67,34 +67,33 @@ function canReadAllFdTables(ownUid: number | undefined): Promise<boolean> {
 }
 
 /** A cached pair is used only after re-reading that pid's fds, so pid reuse or a closed socket drops it. */
-async function verifyCachedOwners(inodes: ReadonlySet<number>): Promise<Map<number, number>> {
-  const inodesByPid = new Map<number, Set<number>>()
+async function verifyCachedOwners(
+  inodes: ReadonlySet<number>
+): Promise<{ owners: Map<number, number>; socketsByPid: Map<number, number[]> }> {
+  const owners = new Map<number, number>()
+  const socketsByPid = new Map<number, number[]>()
   for (const inode of inodes) {
     const pid = ownerPidByInode.get(inode)
     if (pid === undefined) {
       continue
     }
-    const pidInodes = inodesByPid.get(pid) ?? new Set<number>()
-    pidInodes.add(inode)
-    inodesByPid.set(pid, pidInodes)
+    let sockets = socketsByPid.get(pid)
+    if (!sockets) {
+      sockets = await readPidSockets(pid)
+      socketsByPid.set(pid, sockets)
+    }
+    if (sockets.includes(inode)) {
+      owners.set(inode, pid)
+    }
   }
-  const owners = new Map<number, number>()
-  for (const [pid, pidInodes] of inodesByPid) {
-    const remaining = new Set(pidInodes)
-    await readPidSockets(pid, (inode) => {
-      if (remaining.delete(inode)) {
-        owners.set(inode, pid)
-      }
-      return remaining.size > 0
-    })
-  }
-  return owners
+  return { owners, socketsByPid }
 }
 
 /** Later pids overwrite earlier ones for a shared socket, as the uncached walk always did. */
 async function walkProcForOwners(
   wanted: ReadonlySet<number>,
   onlyUid: number | undefined,
+  alreadyRead: ReadonlyMap<number, number[]>,
   owners: Map<number, number>
 ): Promise<void> {
   let entries: string[]
@@ -117,23 +116,22 @@ async function walkProcForOwners(
       }
     }
     const pid = Number.parseInt(entry, 10)
-    await readPidSockets(pid, (inode) => {
+    for (const inode of alreadyRead.get(pid) ?? (await readPidSockets(pid))) {
       if (wanted.has(inode)) {
         owners.set(inode, pid)
       }
-      return true
-    })
+    }
   }
 }
 
-/** Calls `onSocket` for each socket fd until it returns false. */
-async function readPidSockets(pid: number, onSocket: (inode: number) => boolean): Promise<void> {
+async function readPidSockets(pid: number): Promise<number[]> {
   let fds: string[]
   try {
     fds = await readdir(`/proc/${pid}/fd`)
   } catch {
-    return
+    return []
   }
+  const inodes: number[] = []
   for (const fd of fds) {
     let link: string
     try {
@@ -142,8 +140,9 @@ async function readPidSockets(pid: number, onSocket: (inode: number) => boolean)
       continue
     }
     const match = SOCKET_LINK.exec(link)
-    if (match && !onSocket(Number.parseInt(match[1], 10))) {
-      return
+    if (match) {
+      inodes.push(Number.parseInt(match[1], 10))
     }
   }
+  return inodes
 }

@@ -94,7 +94,7 @@ describe('Linux listener owner lookup', () => {
     vi.restoreAllMocks()
   })
 
-  it('reads only the cached owner fds when no listener is new, and walks again for a new one', async () => {
+  it('reads only the cached owner fds when no listener is new, and walks once without rereading them for a new one', async () => {
     fakeProc.tcp = PROC_NET_HEADER + procNetRow('1F90', OWN_UID, 5001) + procNetRow('0016', 0, 6001)
     const expectedPort = {
       host: '127.0.0.1',
@@ -126,6 +126,6 @@ describe('Linux listener owner lookup', () => {
       [22, undefined],
       [8081, 200]
     ])
-    expect(fakeProc.readdirPaths).toEqual(['/proc/100/fd', '/proc', '/proc/100/fd', '/proc/200/fd'])
+    expect(fakeProc.readdirPaths).toEqual(['/proc/100/fd', '/proc', '/proc/200/fd'])
   })
 })
