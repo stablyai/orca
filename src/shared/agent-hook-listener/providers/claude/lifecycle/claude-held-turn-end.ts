@@ -103,18 +103,6 @@ export function claudeLeadTurnStart(
   if (event.eventAgentId !== undefined) {
     return {}
   }
-  const own =
-    previousLead?.waitingAgentId !== undefined ? previousLead.stateBeforeWait : previousLead
-  // An unclassified start this soon retracts the person's queued finish everywhere, so it carries that news.
-  const retractsPersonFinish =
-    event.opensTurn &&
-    event.eventName !== 'UserPromptSubmit' &&
-    own !== undefined &&
-    own.turnOrigin !== 'task-wakeup' &&
-    own.state === 'done' &&
-    own.outcome !== 'cancellation' &&
-    own.turnCompletedAt === undefined &&
-    Date.now() - own.stateStartedAt < AGENT_DONE_QUIET_MS
   if (event.isWaitingInducing) {
     return { turnOrigin: 'person' }
   }
@@ -122,6 +110,25 @@ export function claudeLeadTurnStart(
   if (!isPrompt && !event.opensTurn) {
     return {}
   }
+  const own =
+    previousLead?.waitingAgentId !== undefined ? previousLead.stateBeforeWait : previousLead
+  const heldEnd =
+    previousLead?.unclassifiedTurnCompletedAt !== undefined &&
+    previousLead.state === 'done' &&
+    claudePaneHasRunningChildWork(state, paneKey)
+      ? previousLead.unclassifiedTurnCompletedAt
+      : undefined
+  // An unclassified start this soon retracts the person's queued finish everywhere, so it carries that news.
+  const retractsPersonFinish =
+    heldEnd === undefined &&
+    event.opensTurn &&
+    !isPrompt &&
+    own !== undefined &&
+    own.turnOrigin !== 'task-wakeup' &&
+    own.state === 'done' &&
+    own.outcome !== 'cancellation' &&
+    own.turnCompletedAt === undefined &&
+    Date.now() - own.stateStartedAt < AGENT_DONE_QUIET_MS
   return {
     turnOrigin:
       previousLead?.untoldEnd || retractsPersonFinish
@@ -131,10 +138,6 @@ export function claudeLeadTurnStart(
           : event.isTaskWakeup
             ? 'task-wakeup'
             : 'person',
-    ...(previousLead?.unclassifiedTurnCompletedAt !== undefined &&
-    previousLead.state === 'done' &&
-    claudePaneHasRunningChildWork(state, paneKey)
-      ? { turnCompletedAt: previousLead.unclassifiedTurnCompletedAt }
-      : {})
+    ...(heldEnd !== undefined ? { turnCompletedAt: heldEnd } : {})
   }
 }

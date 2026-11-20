@@ -422,6 +422,29 @@ describe('Claude prompt event arriving after its turn', () => {
     ).toBeUndefined()
   })
 
+  it('keeps the wakeup quiet when its start already announces the person’s held end', () => {
+    const done = `<task-notification>\n<task-id>${SHELL.id}</task-id>\n<status>completed</status>`
+    claude({
+      hook_event_name: 'PostToolUse',
+      prompt_id: FIRST,
+      tool_name: 'Bash',
+      tool_input: { command: SHELL.command, run_in_background: true },
+      tool_response: { backgroundTaskId: SHELL.id }
+    })
+    claude({ hook_event_name: 'Stop', prompt_id: FIRST, background_tasks: [SHELL] })
+    const start = claude({
+      hook_event_name: 'PreToolUse',
+      prompt_id: SECOND,
+      tool_name: 'Bash',
+      tool_use_id: 'b'
+    })
+    expect(typeof start?.turnCompletedAt).toBe('number')
+    claude({ hook_event_name: 'UserPromptSubmit', prompt_id: SECOND, prompt: done })
+    expect(
+      claude({ hook_event_name: 'Stop', prompt_id: SECOND, background_tasks: [] })?.mainAgent
+    ).toMatchObject({ state: 'done', taskWakeup: true })
+  })
+
   describe('a turn whose Stop beats its prompt event while a shell runs', () => {
     function startWatching(): number | undefined {
       claude({ hook_event_name: 'UserPromptSubmit', prompt_id: FIRST, prompt: 'watch' })
