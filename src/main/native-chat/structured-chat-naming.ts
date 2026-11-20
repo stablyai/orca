@@ -25,8 +25,13 @@ import type {
   StructuredChatNamingFailure
 } from './agent-session-wire/host/structured-agent-session-host-types'
 import { neverThrowingStructuredAgentSessionLogger } from './agent-session-wire/host/structured-agent-session-logger'
+import { PrioritySemaphore } from '../../shared/concurrency/priority-semaphore'
 
 const GENERATION_RETRY_DELAYS_MS = [2000, 4000]
+// Each run starts an agent CLI from main; a launch burst must not start one per new chat at once.
+const MAX_GENERATIONS_RUNNING = 3
+const USER_REQUEST_PRIORITY = 0
+const AUTOMATIC_PRIORITY = 1
 const NAMING_ERROR_LIMIT = 1024
 const FAILURE_OUTPUT_ENTRIES = 32
 
@@ -46,6 +51,7 @@ export function createStructuredChatNamingHandler(deps: StructuredChatNamingDeps
   const failureOutputs = new Map<string, AgentGenerationFailureOutput>()
   const now = deps.now ?? Date.now
   const hostStartedAt = now()
+  const generations = new PrioritySemaphore(MAX_GENERATIONS_RUNNING)
   const logger = neverThrowingStructuredAgentSessionLogger(deps.logger)
   const warn = (sessionId: string, error: unknown) =>
     logger.warn('Chat name generation failed', {
@@ -84,7 +90,8 @@ export function createStructuredChatNamingHandler(deps: StructuredChatNamingDeps
         firstPrompt,
         request.record.conversationName ?? '',
         request.automatic ? GENERATION_RETRY_DELAYS_MS : [],
-        () => applicable(request)
+        () => applicable(request),
+        request.automatic ? AUTOMATIC_PRIORITY : USER_REQUEST_PRIORITY
       )
       const store = deps.getStore()
       if (name && store && applicable(request)) {
@@ -128,12 +135,18 @@ export function createStructuredChatNamingHandler(deps: StructuredChatNamingDeps
     firstPrompt: string,
     forName: string,
     retryDelays: readonly number[],
-    stillCurrent: () => boolean
+    stillCurrent: () => boolean,
+    priority: number
   ): Promise<string | null> {
     attempted.set(record.sessionId, contextId(record))
     for (let attempt = 0; stillCurrent(); attempt += 1) {
       let failure: NamingRunFailure
+      const release = await generations.acquire(priority)
       try {
+        // A chat named or renamed while this run waited for a slot starts no agent.
+        if (!stillCurrent()) {
+          return null
+        }
         const result = await deps.generate(record, firstPrompt, stillCurrent)
         if (!result) {
           return null
@@ -145,6 +158,8 @@ export function createStructuredChatNamingHandler(deps: StructuredChatNamingDeps
       } catch (error) {
         warn(record.sessionId, error)
         failure = chatNamingFailure('agentNotRun')
+      } finally {
+        release()
       }
       if (!stillCurrent()) {
         return null
