@@ -3,7 +3,7 @@ import { throwIfSignalAborted } from '../../../shared/concurrency/abort-signal-r
 import { runProcess } from '@orca/process-host'
 import { lstat, stat, readFile, realpath } from 'node:fs/promises'
 import { buildWslExecArgs } from '../../../shared/shell/wsl/wsl-login-shell-command'
-import { removeHostCheckout, removeHostTree } from '../../filesystem/host-tree-removal'
+import { removeHostTree, removeUnregisteredHostCheckout } from '../../filesystem/host-tree-removal'
 import {
   guestUncPath,
   resolveWslGuestPaths,
@@ -12,7 +12,6 @@ import {
 import { resolveWslInteropSpawnCwd } from '../../wsl/execution/wsl-interop-spawn-directory'
 import { describeWslProcessFailure } from '../../wsl/execution/wsl-process-failure'
 import type { WorktreeProofAccess } from './worktree-orphan-gitdir-proof'
-import { isWorktreePathMissing } from './worktree-removal-safety'
 
 export type LocalWorktreeFilesystemOptions = {
   wslDistro?: string
@@ -135,52 +134,35 @@ export function getLocalWorktreePathAccess(
   }
 }
 
+/** `markerLast` keeps `.git` until everything else is gone, so a failed delete still proves whose folder it is. */
 export async function removeLocalWorktreePath(
   targetPath: string,
   options: LocalWorktreeFilesystemOptions = {},
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  { markerLast = false }: { markerLast?: boolean } = {}
 ): Promise<void> {
   const distro = options.wslDistro?.trim()
   if (!shouldUseWslFilesystem(options) || !distro) {
     throwIfSignalAborted(signal)
-    await removeHostTree(targetPath, { signal })
+    await (markerLast
+      ? removeUnregisteredHostCheckout(targetPath, signal)
+      : removeHostTree(targetPath, { signal }))
     return
   }
 
   // Delete guest paths inside their distro; Windows Node cannot safely remove them.
-  await runWslCommand(
-    distro,
-    guestCommand(targetPath, (target) => `rm -rf -- ${target}`)
-  )
-}
-
-/** Delete a checkout Git no longer registers, `.git` last, so a failure keeps the link that proves whose folder it is. */
-export async function removeUnregisteredLocalCheckout(
-  targetPath: string,
-  options: LocalWorktreeFilesystemOptions = {},
-  signal?: AbortSignal
-): Promise<void> {
-  const distro = options.wslDistro?.trim()
-  if (!shouldUseWslFilesystem(options) || !distro) {
-    throwIfSignalAborted(signal)
-    // Like rm -rf, an already-missing folder is done.
-    if (!(await isWorktreePathMissing(targetPath))) {
-      await removeHostCheckout(targetPath, async () => true, signal)
-    }
-    return
-  }
   try {
     await runWslCommand(
       distro,
-      guestCommand(
-        targetPath,
-        (target) =>
-          `LC_ALL=C find ${target} -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf -- {} + && rm -f -- ${target}/.git && LC_ALL=C rmdir -- ${target}`
+      guestCommand(targetPath, (target) =>
+        markerLast
+          ? `LC_ALL=C find ${target} -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf -- {} + && rm -f -- ${target}/.git && LC_ALL=C rmdir -- ${target}`
+          : `rm -rf -- ${target}`
       )
     )
   } catch (error) {
     // Only a definitive "No such file" means done; permission errors must not read as removed.
-    if (!isWslMissingPathError(error)) {
+    if (!markerLast || !isWslMissingPathError(error)) {
       throw error
     }
   }

@@ -22,10 +22,6 @@ import {
   canSafelyRemoveOrphanedWorktreeDirectory,
   isDangerousWorktreeRemovalPath
 } from './worktree-removal-safety'
-import {
-  getLocalWorktreePathAccess,
-  toLocalWorktreeRuntimePaths
-} from './local-worktree-filesystem'
 
 /** Absent .git or a proven orphan marker can identify a leftover; live or foreign registrations cannot. */
 export async function isUnregisteredRemovalLeftover(
@@ -92,27 +88,17 @@ export async function assertUnregisteredCheckoutGone(
 /** A leftover folder whose `.git` still names this repo's removed worktree entry, so a retry may delete it. */
 export async function isProvenOrphanLeftover(
   repoPath: string,
-  worktreePath: string,
-  localOptions: LocalProjectWorktreeGitOptions
+  worktreePath: string
 ): Promise<boolean> {
+  // Recorded (retryable) removals are host-only; WSL deletes never run in the background.
   if (isDangerousWorktreeRemovalPath(worktreePath, repoPath, CLIENT_REMOVAL_HOME)) {
     return false
   }
-  const [runtimeTarget, runtimeRepo] = await toLocalWorktreeRuntimePaths(
-    [worktreePath, repoPath],
-    localOptions
-  )
-  const access = getLocalWorktreePathAccess(localOptions)
   // Recursive removal would follow a symlinked root into whatever it points at.
-  if (!isRealDirectory(await access.statPath(runtimeTarget).catch(() => null))) {
+  if (!isRealDirectory(await lstat(worktreePath).catch(() => null))) {
     return false
   }
-  return canSafelyRemoveOrphanedWorktreeDirectory(
-    runtimeTarget,
-    runtimeRepo,
-    CLIENT_REMOVAL_HOME,
-    access
-  )
+  return canSafelyRemoveOrphanedWorktreeDirectory(worktreePath, repoPath, CLIENT_REMOVAL_HOME)
 }
 
 /** lstat-style entry: a symlink never reads as a directory. */
@@ -134,14 +120,13 @@ function isRealDirectory(entry: unknown): boolean {
 export async function assertUnregisteredLeftoverRemovable(
   repoPath: string,
   worktreePath: string,
-  registeredWorktrees: readonly Pick<GitWorktreeInfo, 'path'>[],
-  localOptions: LocalProjectWorktreeGitOptions
+  registeredWorktrees: readonly Pick<GitWorktreeInfo, 'path'>[]
 ): Promise<boolean> {
   if (!(await worktreeCheckoutExists(worktreePath))) {
     return false
   }
   assertWorktreeDoesNotContainRegisteredWorktree(worktreePath, registeredWorktrees)
-  if (!(await isProvenOrphanLeftover(repoPath, worktreePath, localOptions))) {
+  if (!(await isProvenOrphanLeftover(repoPath, worktreePath))) {
     throw unregisteredFolderRefusal(worktreePath)
   }
   return true
@@ -163,7 +148,7 @@ export async function isLeftoverStillRemovable(
   if (current.some((worktree) => areWorktreePathsEqual(worktree.path, record.worktreePath))) {
     throw differentCheckoutAtPathError(record.worktreePath)
   }
-  return assertUnregisteredLeftoverRemovable(repoPath, record.worktreePath, current, localOptions)
+  return assertUnregisteredLeftoverRemovable(repoPath, record.worktreePath, current)
 }
 
 /** Registered paths use normal deletion; otherwise the folder must be gone or provably this repo's leftover. */
@@ -182,8 +167,7 @@ export async function retryFailedRemovalUnlessRegistered(
     await assertUnregisteredLeftoverRemovable(
       failed.repoPath,
       failed.worktreePath,
-      registeredWorktrees,
-      localOptions
+      registeredWorktrees
     )
   }
   if (retry() === undefined) {

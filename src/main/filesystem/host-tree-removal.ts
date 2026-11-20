@@ -107,6 +107,23 @@ async function namesExceptCheckoutMarker(root: string): Promise<string[]> {
   return kept
 }
 
+/** Delete a checkout Git no longer registers, `.git` last, so a failure keeps the link that proves whose folder it is. */
+export async function removeUnregisteredHostCheckout(
+  targetPath: string,
+  signal?: AbortSignal
+): Promise<void> {
+  try {
+    await lstat(toHostRemovalPath(targetPath))
+  } catch (error) {
+    // Like rm -rf, an already-missing folder is done.
+    if (getErrorCode(error) === 'ENOENT') {
+      return
+    }
+    throw error
+  }
+  await removeHostCheckout(targetPath, async () => true, signal)
+}
+
 export async function removeHostEmptyDirectory(targetPath: string): Promise<void> {
   const root = toHostRemovalPath(targetPath)
   try {

@@ -26,6 +26,7 @@ import {
 } from '../../../git/worktrees/removal/worktree-removal'
 import { getErrorCode } from '../../../git/worktrees/worktree-operation-options'
 import { areWorktreePathsEqual } from '../../../git/worktrees/catalog/worktree-path-comparison'
+import { removeUnregisteredHostCheckout } from '../../../filesystem/host-tree-removal'
 import { getLocalProjectWorktreeGitOptions } from '../../../workspaces/execution-host/project-runtime-git-options'
 import {
   findRegisteredDeletableWorktree,
@@ -45,7 +46,6 @@ import {
 import { removeStaleLocalWorktreeRegistration } from '../../../workspaces/removal/local-worktree-removal-recovery'
 import {
   getLocalWorktreePathAccess,
-  removeUnregisteredLocalCheckout,
   type LocalWorktreeFilesystemOptions
 } from '../../../workspaces/removal/local-worktree-filesystem'
 import type { WorktreeRemovalRecord } from '../../../workspaces/removal/worktree-removal-records'
@@ -207,12 +207,7 @@ async function finishInterruptedLocalWorktreeRemoval(
   const leftover =
     !native &&
     !deletable &&
-    (await assertUnregisteredLeftoverRemovable(
-      repo.path,
-      record.worktreePath,
-      worktrees,
-      localOptions
-    ))
+    (await assertUnregisteredLeftoverRemovable(repo.path, record.worktreePath, worktrees))
   if (leftover && !record.force) {
     throw new Error(ORPHANED_WORKTREE_DIRECTORY_MESSAGE)
   }
@@ -260,7 +255,7 @@ async function finishInterruptedLocalWorktreeRemoval(
         leftover &&
         (await isLeftoverStillRemovable(repo.path, record, localOptions, args.stopSignal))
       ) {
-        await removeUnregisteredLocalCheckout(record.worktreePath, localOptions, args.stopSignal)
+        await removeUnregisteredHostCheckout(record.worktreePath, args.stopSignal)
       }
       result = await finishUnregisteredWorktreeRemoval(
         repo.path,

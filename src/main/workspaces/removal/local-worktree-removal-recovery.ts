@@ -13,7 +13,7 @@ import {
   type GitWorktreeExecOptions
 } from '../../git/worktrees/worktree-operation-options'
 import { deleteBranchOfUnregisteredWorktree } from '../../git/worktrees/removal/worktree-removal'
-import { removeUnregisteredLocalCheckout } from './local-worktree-filesystem'
+import { removeLocalWorktreePath } from './local-worktree-filesystem'
 import { assertWorktreeDoesNotContainRegisteredWorktree } from './worktree-removal-safety'
 import { throwIfSignalAborted } from '../../../shared/concurrency/abort-signal-reason'
 
@@ -125,10 +125,11 @@ export async function recoverPartialLocalWorktreeRemoval(
   await args.closeWatcher(args.canonicalWorktreePath)
   throwIfSignalAborted(args.signal)
   try {
-    await removeUnregisteredLocalCheckout(
+    await removeLocalWorktreePath(
       args.canonicalWorktreePath,
       args.localWorktreeGitOptions,
-      args.signal
+      args.signal,
+      { markerLast: true }
     )
   } catch (error) {
     throwIfSignalAborted(args.signal)
