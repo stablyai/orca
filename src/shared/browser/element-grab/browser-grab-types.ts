@@ -224,7 +224,7 @@ export function parseGrabLabelAvoidArea(
 }
 
 /** Is the element a held pick was made on still in the page (after a same-document route change)? */
-export type BrowserGrabSelectorPresentArgs = {
+export type BrowserGrabPickedElementPresentArgs = {
   browserPageId: string
   selectionId: string
 }

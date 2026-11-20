@@ -10,7 +10,7 @@ import type {
   BrowserGrabResult,
   BrowserCancelGrabArgs,
   BrowserSetGrabLabelAvoidAreaArgs,
-  BrowserGrabSelectorPresentArgs,
+  BrowserGrabPickedElementPresentArgs,
   BrowserCaptureSelectionScreenshotArgs,
   BrowserCaptureSelectionScreenshotResult,
   BrowserExtractHoverArgs,
@@ -73,7 +73,7 @@ export function registerBrowserGrabHandlers(): void {
   ipcMain.removeHandler('browser:awaitGrabSelection')
   ipcMain.removeHandler('browser:cancelGrab')
   ipcMain.removeHandler('browser:setGrabLabelAvoidArea')
-  ipcMain.removeHandler('browser:grabSelectorPresent')
+  ipcMain.removeHandler('browser:grabPickedElementPresent')
   ipcMain.removeHandler('browser:captureSelectionScreenshot')
   ipcMain.removeHandler('browser:extractHoverPayload')
 
@@ -166,9 +166,9 @@ export function registerBrowserGrabHandlers(): void {
   )
 
   ipcMain.handle(
-    'browser:grabSelectorPresent',
-    async (event, args: BrowserGrabSelectorPresentArgs): Promise<boolean> => {
-      // Anything unexpected answers "present": the pick then stays, as before this check existed.
+    'browser:grabPickedElementPresent',
+    async (event, args: BrowserGrabPickedElementPresentArgs): Promise<boolean> => {
+      // Unavailable identity cannot authorize a held-pick action.
       if (
         !isTrustedBrowserRenderer(event.sender) ||
         typeof args?.browserPageId !== 'string' ||
@@ -176,10 +176,10 @@ export function registerBrowserGrabHandlers(): void {
         args.selectionId.length === 0 ||
         args.selectionId.length > GRAB_BUDGET.selectorMaxLength
       ) {
-        return true
+        return false
       }
       const guest = browserManager.getAuthorizedGuest(args.browserPageId, event.sender.id)
-      return guest ? browserManager.isGrabSelectorPresent(args.selectionId, guest) : false
+      return guest ? browserManager.isGrabPickedElementPresent(args.selectionId, guest) : false
     }
   )
 

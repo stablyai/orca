@@ -62,7 +62,10 @@ export function useHeldGrabPick({
       }
       checking = true
       const present = await window.api.browser
-        .grabSelectorPresent({ browserPageId: pageId, selectionId: heldPayload.page.capturedAt })
+        .grabPickedElementPresent({
+          browserPageId: pageId,
+          selectionId: heldPayload.page.capturedAt
+        })
         .catch(() => false)
       checking = false
       if (!current) {

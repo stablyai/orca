@@ -53,8 +53,8 @@ export abstract class BrowserManagerGrab extends BrowserManagerViewport {
   private readonly grabLabelAvoidAreaByTabId = new Map<string, BrowserGrabLabelAvoidArea>()
   /** Private preload key ownership for the current document and hosting renderer. */
   private readonly nativeKeysByTabId = new Map<string, GrabNativeKeySession>()
-  isGrabSelectorPresent(selector: string, guest: Electron.WebContents): Promise<boolean> {
-    return isPickedElementPresent(guest, selector)
+  isGrabPickedElementPresent(selectionId: string, guest: Electron.WebContents): Promise<boolean> {
+    return isPickedElementPresent(guest, selectionId)
   }
 
   setGrabLabelAvoidArea(

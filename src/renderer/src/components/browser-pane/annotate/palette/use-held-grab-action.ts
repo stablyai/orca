@@ -16,7 +16,7 @@ export function useHeldGrabAction(
       return
     }
     void window.api.browser
-      .grabSelectorPresent({ browserPageId: pageId, selectionId: payload.page.capturedAt })
+      .grabPickedElementPresent({ browserPageId: pageId, selectionId: payload.page.capturedAt })
       .then(
         (present) => {
           if (!present || livePayloadRef.current !== payload) {
