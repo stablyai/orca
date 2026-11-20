@@ -10,13 +10,10 @@ import type { LinkedConversation } from './external-conversation-links'
 import { conversationPane } from './external-conversation-types'
 import { promptAudience } from './external-conversation-prompt-audience'
 
-export type AdoptedTurn = { kept: { opener: AgentJournalRenderItem | null } | null }
-
 export class PromptTurns {
   // Bot chats whose current turn, which their conversation didn't ask for, it was shown to see its
-  // prompt: it hears that turn's state, never its words. Kept with the turn's opener, which says
-  // whom its end acts for; null after a restart, whose lost deliveries only the journal still shows.
-  readonly adopted = new Map<string, AdoptedTurn>()
+  // prompt: it hears that turn's state, never its words.
+  readonly adopted = new Set<string>()
   // Who raised each chat's shown prompt, read once per prompt and conversation.
   private readonly audiences = new Map<
     string,
@@ -55,7 +52,7 @@ export class PromptTurns {
       link.adoptedTurn &&
       this.deps.turnOpener(link.sessionId)?.itemId === link.adoptedTurn.itemId
     ) {
-      this.adopted.set(link.paneKey, { kept: null })
+      this.adopted.add(link.paneKey)
       this.deps.remember(link.paneKey, link.adoptedTurn.at)
       return true
     }
@@ -90,8 +87,8 @@ export class PromptTurns {
   private adoptFor(linked: LinkedConversation, tellStart: boolean): void {
     const { link } = linked
     const at = this.deps.turnOf(link.paneKey)
+    this.adopted.add(link.paneKey)
     const opener = this.deps.turnOpener(link.sessionId)
-    this.adopted.set(link.paneKey, { kept: { opener } })
     if (opener && at !== null) {
       this.deps.keepAdoptedTurn(linked, { itemId: opener.itemId, at })
     }
@@ -123,13 +120,6 @@ export class PromptTurns {
       audience
     })
     return audience
-  }
-
-  /** The chat's adopted turn, now ended. */
-  take(paneKey: string): AdoptedTurn | undefined {
-    const adopted = this.adopted.get(paneKey)
-    this.adopted.delete(paneKey)
-    return adopted
   }
 
   clear(): void {

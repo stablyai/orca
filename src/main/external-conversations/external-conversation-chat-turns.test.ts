@@ -286,25 +286,36 @@ describe('questions of a bot turn typed in Orca (10:27Z regression)', () => {
     expect(h.events).toEqual([])
   })
 
+  const steered = {
+    account: 'a',
+    conversation: { source: 'slack', externalId: 'T1:D7:U9' },
+    deliveryId: 'd1'
+  }
   it.each([
-    ['an Orca-typed opener', false, 'someone_else'],
-    ["another conversation's opener", true, undefined]
+    ['first adopted', false, 'success', [], 'someone_else'],
+    ['first adopted', false, 'failure', [steered], undefined],
+    ['first adopted', false, 'success', [steered], undefined],
+    ['re-adopted after a restart', true, 'success', [steered], undefined]
   ] as const)(
-    'names whom an adopted turn acts for from %s kept at adoption',
-    async (_, relinked, turnFor) => {
+    'reads whom a turn %s (restarted: %s, %s, stamps %j) acts for from its journal',
+    async (_, restarted, outcome, stamps, turnFor) => {
+      // The restart forgot any delivery steered in; only the journal's stamps still show it.
       const h = mailStartedBot('bot-chat')
-      if (relinked) {
-        h.relink()
-      }
-      const turns = h.create()
+      let turns = h.create()
       turns.observe(h.link.paneKey)
       turns.news({ kind: 'prompt', sessionId: SESSION })
+      if (restarted) {
+        h.restart()
+        turns = h.create()
+        expect(turns.hears(h.link)).toBe(true)
+        turns.adopt(h.link.paneKey)
+      }
       turns.news({
         kind: 'turn-ended',
         sessionId: SESSION,
-        outcome: 'success',
+        outcome,
         at: 600,
-        readTurn: async () => ({})
+        readTurn: async () => ({ ...(await h.end('Done.')()), stamps: [...stamps] })
       })
       await vi.waitFor(() =>
         expect(h.events.at(-1)).toMatchObject({ kind: 'turn-ended', origin: 'local' })
@@ -313,34 +324,6 @@ describe('questions of a bot turn typed in Orca (10:27Z regression)', () => {
       expect(ended?.kind === 'turn-ended' ? ended.turnFor : null).toBe(turnFor)
     }
   )
-
-  it('reads whom a turn re-adopted after a restart acts for from its journal, which keeps a steered delivery', async () => {
-    const h = mailStartedBot('bot-chat')
-    const turns = h.create()
-    turns.observe(h.link.paneKey)
-    turns.news({ kind: 'prompt', sessionId: SESSION })
-    h.restart()
-    const recreated = h.create()
-    expect(recreated.hears(h.link)).toBe(true)
-    recreated.adopt(h.link.paneKey)
-    const stamp = {
-      account: 'a',
-      conversation: { source: 'slack', externalId: 'T1:D7:U9' },
-      deliveryId: 'd1'
-    }
-    recreated.news({
-      kind: 'turn-ended',
-      sessionId: SESSION,
-      outcome: 'success',
-      at: 600,
-      readTurn: async () => ({ ...(await h.end('Done.')()), stamps: [stamp] })
-    })
-    await vi.waitFor(() =>
-      expect(h.events.at(-1)).toMatchObject({ kind: 'turn-ended', origin: 'local' })
-    )
-    const ended = h.events.at(-1)
-    expect(ended?.kind === 'turn-ended' ? ended.turnFor : null).toBeUndefined()
-  })
 
   it('keeps a relinked conversation’s prompt restricted even when its turn has a delivery stamp', () => {
     const h = mailStartedBot('bot-chat')

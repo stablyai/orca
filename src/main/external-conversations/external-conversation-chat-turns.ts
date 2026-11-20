@@ -280,7 +280,7 @@ export class ChatTurns {
     }
     this.startedAt.delete(paneKey)
     const heard = this.told.delete(paneKey) || origin === 'delivery'
-    const adopted = this.prompts.take(paneKey)
+    const adopted = this.prompts.adopted.delete(paneKey)
     if (linked.link.adoptedTurn) {
       this.deps.keepAdoptedTurn(linked, undefined)
     }
@@ -300,7 +300,7 @@ export class ChatTurns {
     // Someone in the thread spoke during it: the thread mirrors the chat, so it gets the answer
     // whatever opened the turn.
     if (adopted && !heard) {
-      return endAdoptedTurn(end, this.deps.promptsAudience, adopted.kept)
+      return endAdoptedTurn(end, this.deps.promptsAudience)
     }
     // A turn begun in Orca never reached the conversation, so its end doesn't either.
     if (shared && !heard) {
@@ -323,7 +323,7 @@ export class ChatTurns {
         // No one in the thread asked: a bot's turn Orca raised tells how it went, never what it said.
         if (linked.link.bot && promptRaisedBy(linked.link, turn.opener ?? null) === 'orca') {
           const read = { ...end, news: { ...news, readTurn: async () => turn } }
-          endAdoptedTurn(read, this.deps.promptsAudience, turn)
+          endAdoptedTurn(read, this.deps.promptsAudience)
         }
         return
       }
