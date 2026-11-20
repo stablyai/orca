@@ -37,6 +37,8 @@ type Props = {
   // Use option indices so Claude’s selector can navigate without pasting labels.
   onAnswer: (selections: AskAnswerSelection[], onCreated?: (id: string) => void) => Promise<boolean>
   onCancel?: () => Promise<boolean>
+  /** The footer's Cancel, named for what `onCancel` does there. */
+  cancelLabel?: string
   // Collapse writes nothing to the agent.
   onCollapse?: () => void
   /** Per question; structured prompts hide "Other…" where the provider takes no free text. */
@@ -63,6 +65,7 @@ export function MobileNativeChatAsk({
   answerSendSource,
   onAnswer,
   onCancel,
+  cancelLabel,
   onCollapse,
   allowOther,
   freeTextInputs,
@@ -287,6 +290,7 @@ export function MobileNativeChatAsk({
             key={`${optIndex}:${opt.label}`}
             label={opt.label}
             description={opt.description}
+            recommended={opt.recommended}
             preview={opt.preview}
             onPreview={() => {
               autoAdvance.cancel()
@@ -336,7 +340,7 @@ export function MobileNativeChatAsk({
             disabled={sending}
             hitSlop={8}
           >
-            <Text style={styles.cancelText}>{t('common.cancel', 'Cancel')}</Text>
+            <Text style={styles.cancelText}>{cancelLabel ?? t('common.cancel', 'Cancel')}</Text>
           </Pressable>
           {total > 1 ? (
             <Text style={styles.progress}>

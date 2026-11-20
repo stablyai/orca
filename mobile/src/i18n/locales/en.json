@@ -3218,6 +3218,7 @@
       "skip": "Skip",
       "step": "Step {{step}}",
       "other": "Other…",
+      "recommended": "Recommended",
       "answerPlaceholder": "Type your answer",
       "optionPreview": "{{option}} preview",
       "previewPosition": "{{current}} of {{total}}",
@@ -5523,6 +5524,7 @@
         "submit": "Comment",
         "reply": "Reply in your own words",
         "replyTo": "Reply to {{name}}…",
+        "replyingTo": "Replying to:",
         "showLess": "Show less",
         "fileOnComputer": "Open {{name}} on your computer."
       },
@@ -5647,7 +5649,7 @@
       "readFailedTitle": "Couldn’t load items",
       "ask": {
         "recommended": "Recommended",
-        "typeAnswer": "Type your answer"
+        "notNow": "Not now"
       }
     },
     "needs": {

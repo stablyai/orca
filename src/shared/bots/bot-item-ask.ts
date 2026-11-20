@@ -29,7 +29,7 @@ const QuestionSchema = z
     options: z.array(OptionSchema).max(L.options, `A decision takes up to ${L.options} options.`),
     /** Index into `options`. */
     recommended: z.number().int().min(0).optional(),
-    /** Accepted as v1.4.265 bots send it; quick replies post one at a time. */
+    /** Pick several: the phone's ask card sends every pick in one reply; desktop quick replies post one at a time. */
     multi: z.boolean().optional()
   })
   .refine(
@@ -94,8 +94,8 @@ export function botItemAskText(ask: BotItemAsk): string {
 
 export type BotItemQuickReply = { label: string; detail?: string; recommended: boolean }
 
-/** One question line of a Needs you comment, with its quick replies. */
-export type BotItemDecision = { question: string; replies: BotItemQuickReply[] }
+/** One question line of a Needs you comment, with its quick replies; `multi` takes several of them. */
+export type BotItemDecision = { question: string; replies: BotItemQuickReply[]; multi?: true }
 
 /** How a question comment reads: its body (`--comment`), then each question line (`--ask`) with its
  *  quick replies (`--option`). A comment with no ask is all body. */
@@ -114,7 +114,8 @@ export function botItemQuestionShape(data: Record<string, unknown>): BotItemQues
         label: option.label,
         ...(option.detail ? { detail: option.detail } : {}),
         recommended: question.recommended === index
-      }))
+      })),
+      ...(question.multi ? { multi: true as const } : {})
     }))
   }
 }
@@ -146,10 +147,43 @@ export function botItemPickedReplies(
       // A pick-several decision kept every pick.
       return decision.replies.filter((_, at) => picks.includes(at))
     }
-    return decision.replies.filter((option) =>
+    const quick = decision.replies.filter((option) =>
       lines.includes(botItemQuickReplyText(shape, decision, option))
     )
+    return quick.length > 0 || !decision.multi ? quick : multiPicks(shape, decision, lines)
   })
+}
+
+/** A pick-several line's picks sent as one answer, "A, B" (what botItemAnswersText writes for them). */
+function multiPicks(
+  shape: BotItemQuestionShape,
+  decision: BotItemDecision,
+  lines: readonly string[]
+): BotItemQuickReply[] {
+  const head = `${botItemQuestionLine(decision.question)} →`
+  const line = shape.decisions.length > 1 ? lines.find((at) => at.startsWith(head)) : lines[0]
+  const words = (line?.startsWith(head) ? line.slice(head.length).trim() : line) ?? ''
+  const picks = words ? labelRun(words, decision.replies) : null
+  return picks ? decision.replies.filter((option) => picks.includes(option)) : []
+}
+
+/** `words` as whole option labels joined by ", ", or null: a label may hold ", " itself. */
+function labelRun(
+  words: string,
+  options: readonly BotItemQuickReply[]
+): BotItemQuickReply[] | null {
+  for (const option of options) {
+    if (words === option.label) {
+      return [option]
+    }
+    const rest = words.startsWith(`${option.label}, `)
+      ? labelRun(words.slice(option.label.length + 2), options)
+      : null
+    if (rest) {
+      return [option, ...rest]
+    }
+  }
+  return null
 }
 
 /** The open question as views get it with the item, so the hover card never waits on its event's
