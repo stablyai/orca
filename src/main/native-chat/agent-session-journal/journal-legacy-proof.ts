@@ -8,6 +8,7 @@ import {
   decodeLegacySourceRefusal,
   LEGACY_PROOF_COPIES_TABLE,
   LEGACY_PROOF_LAYOUT,
+  LEGACY_SOURCE_INVENTORY,
   LEGACY_SOURCE_REFUSAL_POLICY,
   type LegacyProofCounts,
   type LegacySourceProving,
@@ -148,7 +149,8 @@ export class JournalLegacyProof {
           proof: observation.proof,
           store: observation.store,
           reason: error.reason,
-          ...(error.artifact ? { artifact: error.artifact } : {})
+          ...(error.artifact ? { artifact: error.artifact } : {}),
+          inventory: LEGACY_SOURCE_INVENTORY
         }
         await this.saveRefusal()
       }

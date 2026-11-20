@@ -13,6 +13,10 @@ import {
 import { JournalLegacyIneligibleError } from './journal-legacy-retention-error'
 import { setLegacyJournalRetirementHost } from './journal-legacy-retirement-outcome'
 import { readLegacyProofSessions } from './journal-legacy-content-proof'
+import { v1_4_219Journal } from './journal-legacy-v1-4-219.test-fixture'
+import { readJournalLegacySourceReceipt } from './database/journal-legacy-source-receipt'
+import { legacyDestinationMain } from './journal-legacy-retirement-files'
+import { journalDomainDatabasePath } from './database/journal-host-database'
 
 function rename(filename: string, sessionId: string, name: string) {
   const db = new Database(filename)
@@ -693,4 +697,135 @@ it('keeps a chat deleted here from a journal written before some queue columns e
   expect(JSON.stringify(original(older.db, 'unopened').queued)).toContain(
     'queued in an older journal'
   )
+})
+
+const savedRetirement = (db: Database.Database) =>
+  JSON.parse(
+    String(
+      db
+        .prepare(
+          "SELECT value FROM agent_session_store_meta WHERE key='journal.legacy-retirement.v2'"
+        )
+        .get()?.value ?? 'null'
+    )
+  )
+
+it('retires a journal v1.4.219 wrote, with or without its Stop pauses, upgraded or not', async () => {
+  const shapes = [
+    (filename: string) => v1_4_219Journal(filename, 'unopened', false),
+    (filename: string) => v1_4_219Journal(filename, 'unopened', true),
+    // A later build's writable open upgrades the rest of the file, never the pause table.
+    (filename: string) => {
+      v1_4_219Journal(filename, 'unopened', true)
+      olderOrcaChat(filename, 'continued-later')
+    }
+  ]
+  for (const original of shapes) {
+    const older = await profile({ original })
+    await older.launch().run()
+    expect(older.errors).toEqual([])
+    expect(companions(older.filename)).toEqual([])
+    expect(journalDomainImportState(older.db, 'unopened').state).toBe('ready')
+  }
+})
+
+it('keeps a journal whose pause table is not the one v1.4.219 created', async () => {
+  const reshaped = [
+    'ALTER TABLE queued_message_pauses ADD COLUMN body_json TEXT',
+    'ALTER TABLE queued_message_pauses DROP COLUMN recorded_at',
+    // The retired column belongs to the queue only.
+    'ALTER TABLE journal_rows ADD COLUMN source_json TEXT'
+  ]
+  for (const change of reshaped) {
+    const older = await profile({
+      original: (filename) => {
+        v1_4_219Journal(filename, 'unopened', true)
+        const db = new Database(filename)
+        db.exec(change)
+        db.close()
+      }
+    })
+    await older.launch().run()
+    expect(companions(older.filename)).toContain(older.filename)
+    expect(savedRetirement(older.db)).toMatchObject({
+      phase: 'refused',
+      reason: 'source-inventory'
+    })
+  }
+})
+
+it('retires a journal with the queue sender column, counting it against what a kept original holds', async () => {
+  const withSender = (sender: string) => async () => {
+    const older = await profile({
+      seed: (legacy) => legacy.exec('ALTER TABLE queued_messages ADD COLUMN source_json TEXT')
+    })
+    queue(older.filename, 'unopened', 'queued by an hourly build')
+    const legacy = new Database(older.filename)
+    legacy.prepare('UPDATE queued_messages SET source_json=?').run(sender)
+    legacy.close()
+    await initializeJournalDomainDatabase(older.root)
+    return older
+  }
+  const small = await withSender('{"v":1,"kind":"agent"}')()
+  await small.launch().run()
+  expect(small.errors).toEqual([])
+  expect(companions(small.filename)).toEqual([])
+
+  // Deleted here, so its waiting card would be kept as the original's version, sender and all.
+  const large = await withSender('x'.repeat(3 * 1024 * 1024))()
+  large.db.exec("DELETE FROM agent_session_records WHERE session_id='unopened'")
+  large.db.exec("DELETE FROM journal_chat_state WHERE session_id='unopened'")
+  await large.launch().run()
+  expect(companions(large.filename)).toContain(large.filename)
+  expect(savedRetirement(large.db)).toMatchObject({ phase: 'refused', reason: 'source-oversize' })
+})
+
+it('proves once more an inventory refusal saved before historical shapes were accepted', async () => {
+  const refusedAs = async (refusal: Record<string, unknown>) => {
+    const refused = await profile()
+    const proof = JSON.stringify(await readJournalLegacySourceReceipt(refused.filename))
+    const store = await legacyDestinationMain(journalDomainDatabasePath(refused.root))
+    refused.db
+      .prepare('INSERT OR REPLACE INTO agent_session_store_meta(key,value) VALUES(?,?)')
+      .run(
+        'journal.legacy-retirement.v2',
+        JSON.stringify({ version: 2, phase: 'refused', policy: 3, proof, store, ...refusal })
+      )
+    return refused
+  }
+  // As v1.4.265/266 saved them.
+  for (const reason of ['source-inventory', 'source-recovery']) {
+    const earlier = await refusedAs({ reason })
+    await earlier.launch().run()
+    expect(earlier.errors).toEqual([])
+    expect(companions(earlier.filename)).toEqual([])
+  }
+  // Saved under this inventory check, or for content: honoured without a proof.
+  for (const refusal of [
+    { reason: 'source-inventory', inventory: 2 },
+    { reason: 'source-oversize' }
+  ]) {
+    const kept = await refusedAs(refusal)
+    const legacyProof = vi.spyOn(kept.readers, 'legacyProof')
+    await kept.launch().run()
+    expect(legacyProof).not.toHaveBeenCalled()
+    expect(companions(kept.filename)).toContain(kept.filename)
+  }
+})
+
+it('saves a refusal older builds honour too', async () => {
+  const unknown = await profile({
+    seed: (legacy) => legacy.exec('CREATE TABLE written_by_a_newer_build (value TEXT)')
+  })
+  await unknown.launch().run()
+  expect(savedRetirement(unknown.db)).toMatchObject({
+    phase: 'refused',
+    policy: 3,
+    reason: 'source-inventory',
+    inventory: 2
+  })
+  const legacyProof = vi.spyOn(unknown.readers, 'legacyProof')
+  await unknown.launch().run()
+  expect(legacyProof).not.toHaveBeenCalled()
+  expect(companions(unknown.filename)).toContain(unknown.filename)
 })

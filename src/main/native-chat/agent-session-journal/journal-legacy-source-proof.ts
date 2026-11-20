@@ -7,6 +7,7 @@ import {
   type LegacySourceRefusalReason
 } from './journal-legacy-retention-error'
 import { legacySourceArtifacts } from './journal-legacy-source-artifacts'
+import { isRetiredSourceTable, legacySourceColumnsAccounted } from './journal-legacy-source-columns'
 import { readStoredQueuedMessageRow } from './queued-messages/queued-message-stored-row'
 import {
   readLegacyClaimsPage,
@@ -30,18 +31,6 @@ const CONTENT_TABLES: readonly string[] = [
   'journal_outcomes',
   'queued_messages'
 ]
-const SOURCE_COLUMNS: Readonly<Record<string, string>> = {
-  journal_sessions: 'session_id workspace_id epoch',
-  journal_rows: 'session_id epoch seq ts row_json',
-  journal_outcome_generations: 'generation session_id epoch',
-  journal_outcome_epochs: 'session_id epoch generation format through_seq prefix_seq',
-  journal_outcomes: 'generation seq field entry_key format ordinal value_json deleted',
-  queued_messages:
-    'session_id message_id position body_json fingerprint created_at host_instance state hold_reason returned_reason returned_rejection settled_at settled_by_op consumed_as carried_from queued_epoch queued_sequence options_json'
-}
-const PROFILE_COLUMNS = new Map(
-  JOURNAL_DOMAIN_PROFILE_TABLES.map(({ name, columns }) => [name, new Set<unknown>(columns)])
-)
 const RECOVERY_TABLES = ['journal_repairs', 'journal_imports', 'journal_set_aside']
 const COPIES = LEGACY_PROOF_COPIES_TABLE
 if (COPIES !== CONTENT_TABLES.length + 2) {
@@ -106,28 +95,23 @@ function readSourcePage(
     }
     const artifact = legacySourceArtifacts(db, tables)
     for (const table of tables) {
-      const columns =
-        PROFILE_COLUMNS.get(table) ??
-        (SOURCE_COLUMNS[table] ? new Set(SOURCE_COLUMNS[table]!.split(' ')) : undefined)
-      if (columns) {
-        const extra = db
-          .prepare(`PRAGMA table_info(${table})`)
-          .all()
-          .map((column) => String(column.name))
-          .filter((name) => !columns.has(name))
-        if (extra.length > 0) {
-          throw legacyInventoryRefusal(extra, artifact)
-        }
+      const quoted = `"${table.replaceAll('"', '""')}"`
+      const present = db
+        .prepare(`PRAGMA table_info(${quoted})`)
+        .all()
+        .map((column) => String(column.name))
+      if (!legacySourceColumnsAccounted(table, present)) {
+        throw legacyInventoryRefusal(present, artifact)
       }
 
       if (
         PROFILE_TABLES.has(table) ||
         CONTENT_TABLES.includes(table) ||
+        isRetiredSourceTable(table) ||
         table === 'journal_sessions'
       ) {
         continue
       }
-      const quoted = `"${table.replaceAll('"', '""')}"`
       // Per-chat import markers (#23613) were left behind when #26038 removed those imports. One
       // whose rows all landed in journal_rows, or whose epoch a later /clear replaced (its rows
       // were discarded then), records nothing the journal still holds.
