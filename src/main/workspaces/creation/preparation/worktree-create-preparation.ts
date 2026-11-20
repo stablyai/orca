@@ -9,6 +9,7 @@ import { mkdir } from 'node:fs/promises'
 import { posix, win32 } from 'node:path'
 import type { ProjectRuntimeResolutionStore } from '../../execution-host/local-project-runtime-resolution'
 import type { Repo } from '../../../../shared/repository/repo-types'
+import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import { isFolderRepo } from '../../../../shared/repository/repo-kind'
 import { isWindowsAbsolutePathLike } from '../../../../shared/file-access/cross-platform-path'
 import type {
@@ -92,6 +93,7 @@ export type WorktreePreparationStore = Omit<ProjectRuntimeResolutionStore, 'getS
     Parameters<typeof getWorktreePathSettings>[1],
     'workspaceDir' | 'nestWorkspaces'
   > &
+    Partial<Pick<GlobalSettings, 'experimentalCopyOnWriteCheckouts'>> &
     ReturnType<NonNullable<ProjectRuntimeResolutionStore['getSettings']>>
 }
 
@@ -115,7 +117,10 @@ async function prepareWorktreeCreateInBackground(
   if (getRepoRoutingConnectionId(repo) || isFolderRepo(repo)) {
     return
   }
-  const options = getLocalProjectWorktreeGitOptions(store, repo)
+  const options = {
+    ...getLocalProjectWorktreeGitOptions(store, repo),
+    copyOnWriteCheckout: store.getSettings().experimentalCopyOnWriteCheckouts === true
+  }
   // Resolve WSL homes asynchronously with createLocalWorktree's mirror distro and root key.
   const workspaceRoot = await computeWorkspaceRootAsync(
     repo.path,
