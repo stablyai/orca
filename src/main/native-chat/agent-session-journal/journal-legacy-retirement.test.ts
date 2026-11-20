@@ -841,3 +841,49 @@ it('saves a refusal older builds honour too', async () => {
   expect(legacyProof).not.toHaveBeenCalled()
   expect(companions(unknown.filename)).toContain(unknown.filename)
 })
+
+it('saves progress and deletion of a journal with a historical shape under a layout earlier builds reject', async () => {
+  // Earlier builds check inventory on the first page only: resuming this proof, they'd skip it.
+  const many = await profile({
+    original: (filename) => v1_4_219Journal(filename, 'unopened', true),
+    seed: (legacy) => {
+      const insert = legacy.prepare('INSERT INTO agent_session_records VALUES(?,?)')
+      for (let draft = 0; draft < 600; draft++) {
+        const id = `draft-${String(draft).padStart(3, '0')}`
+        insert.run(id, JSON.stringify({ sessionId: id }))
+      }
+    }
+  })
+  const read = many.readers.legacyProof
+  const cursors: Parameters<typeof read>[0][] = []
+  let stopAfter = 17
+  many.readers.legacyProof = async (cursor) => {
+    cursors.push(cursor)
+    if (cursors.length > stopAfter) {
+      throw new Error('Orca quit')
+    }
+    return read(cursor)
+  }
+  await many.launch().run()
+  expect(savedRetirement(many.db)).toMatchObject({ phase: 'proving', layout: 2 })
+
+  // This build resumes it, and a deletion that doesn't go through is saved the same way.
+  cursors.length = 0
+  stopAfter = Number.POSITIVE_INFINITY
+  const failing = async (filename: string) => ({
+    ...(await fakeLease(filename)),
+    retire: async () => false
+  })
+  await many.launch('1.0.1', true, failing).run()
+  expect(cursors[0]!.after).not.toBeNull()
+  expect(savedRetirement(many.db)).toMatchObject({ phase: 'retiring', layout: 2 })
+  cursors.length = 0
+  await many.launch().run()
+  expect(cursors[0]).toMatchObject({ table: 7, after: null, check: true })
+  expect(companions(many.filename)).toEqual([])
+
+  // A journal earlier builds accept keeps the layout they resume.
+  const plain = await profile()
+  await plain.launch('1.0.1', true, failing).run()
+  expect(savedRetirement(plain.db)).toMatchObject({ phase: 'retiring', layout: 1 })
+})
