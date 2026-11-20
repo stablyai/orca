@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, readFile, readdir, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -10,6 +10,7 @@ import {
   MOBILE_WEB_BUNDLE_DIR as defaultBundleDir,
   assertMobileWebBundleBuilt
 } from '../../desktop-distribution/runtime-verification/verify-packaged-mobile-web-bundle.cjs'
+import { MOBILE_WEB_BUNDLE_ENTRYPOINT, sha256Hex } from './mobile-web-bundle-manifest.mjs'
 
 const projectDir = fileURLToPath(new URL('../../../..', import.meta.url))
 const manifestContract = join(
@@ -36,7 +37,26 @@ export const MOBILE_WEB_APP_HOST_CATALOG_MAX_BYTES = 384 * 1024
 // manifest-contract.ts); routes are split and the entry is capped below, so no one asset nears 10 MiB.
 // 10.75 MiB: dropping duplicate package builds took the page to 10,815,616 bytes (2026-11-19). The fence
 // drops with it so those 198 KiB stay saved; the 446 KiB left is about what the phone parity round had.
-export const MOBILE_WEB_APP_BUNDLE_MAX_TOTAL_BYTES = 10.75 * 1024 * 1024
+// +128 KiB: outfit art, loaded on demand (assertOutfitSheetsOnDemand).
+export const MOBILE_WEB_APP_BUNDLE_MAX_TOTAL_BYTES = 10.875 * 1024 * 1024
+
+const OUTFIT_SHEET_DIR = join(projectDir, 'src', 'shared', 'bot-mascots', 'outfits')
+
+// Each outfit's sheet ships as its own image, fetched only when a picture wears that outfit: never
+// inlined in code, and never named by the page document, so a page with no outfits loads none of them.
+export async function assertOutfitSheetsOnDemand(manifest, bundleDir) {
+  const document = await readFile(join(bundleDir, MOBILE_WEB_BUNDLE_ENTRYPOINT), 'utf8')
+  const sheets = (await readdir(OUTFIT_SHEET_DIR)).filter((name) => name.endsWith('.webp'))
+  for (const name of sheets) {
+    const sha256 = sha256Hex(await readFile(join(OUTFIT_SHEET_DIR, name)))
+    if (!manifest.assets.some((asset) => asset.path === `assets/${sha256}.webp`)) {
+      fail(`outfit sheet ${name} is not its own image in the bundle, so it was inlined or dropped`)
+    }
+    if (document.includes(sha256)) {
+      fail(`the page document names outfit sheet ${name}, so it would load on first open`)
+    }
+  }
+}
 
 // Only these licensed terminal fonts have their own allowance; other fonts (KaTeX's) and code count.
 // The page fetches each only when the terminal draws with it, so none weighs on first open.
@@ -227,6 +247,7 @@ export async function verifyMobileWebAppBundle({ bundleDir = defaultBundleDir } 
         `${String(MOBILE_WEB_APP_BUNDLE_MAX_TOTAL_BYTES)}`
     )
   }
+  await assertOutfitSheetsOnDemand(manifest, bundleDir)
   // Read chunk/entry bounds and image count from fresh verified build: they are not manifest fields, while buildId binds on-disk bytes.
   const maxAssets = assertAssetCeilingFitsShell(
     first.routeKeys.length,
