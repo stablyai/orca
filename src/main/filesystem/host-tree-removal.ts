@@ -53,7 +53,7 @@ export async function removeHostCheckout(
         } else {
           markerGone = !(await authorize(true))
           if (!markerGone) {
-            const names = (await readdir(root)).filter((name) => name.toLowerCase() !== '.git')
+            const names = (await readdir(root)).filter((name) => !isCheckoutMarkerName(name))
             const results = await Promise.allSettled(
               names.map((name) => rm(join(root, name), { recursive: true, force: true }))
             )
@@ -88,6 +88,11 @@ export async function removeHostCheckout(
     }
     throw describeRemovalFailure(error)
   }
+}
+
+// Only Windows folds case; elsewhere `.GIT` is ordinary content that must not outlive the marker.
+function isCheckoutMarkerName(name: string): boolean {
+  return process.platform === 'win32' ? name.toLowerCase() === '.git' : name === '.git'
 }
 
 export async function removeHostEmptyDirectory(targetPath: string): Promise<void> {

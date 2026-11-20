@@ -101,11 +101,31 @@ export async function isProvenOrphanLeftover(
     [worktreePath, repoPath],
     localOptions
   )
+  const access = getLocalWorktreePathAccess(localOptions)
+  // Recursive removal would follow a symlinked root into whatever it points at.
+  if (!isRealDirectory(await access.statPath(runtimeTarget).catch(() => null))) {
+    return false
+  }
   return canSafelyRemoveOrphanedWorktreeDirectory(
     runtimeTarget,
     runtimeRepo,
     CLIENT_REMOVAL_HOME,
-    getLocalWorktreePathAccess(localOptions)
+    access
+  )
+}
+
+/** lstat-style entry: a symlink never reads as a directory. */
+function isRealDirectory(entry: unknown): boolean {
+  if (!entry || typeof entry !== 'object') {
+    return false
+  }
+  if ('type' in entry) {
+    return entry.type === 'directory'
+  }
+  return (
+    'isDirectory' in entry &&
+    typeof entry.isDirectory === 'function' &&
+    entry.isDirectory() === true
   )
 }
 

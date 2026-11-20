@@ -26,7 +26,10 @@ import {
 } from '../../../git/worktrees/removal/worktree-removal'
 import { getErrorCode } from '../../../git/worktrees/worktree-operation-options'
 import { areWorktreePathsEqual } from '../../../git/worktrees/catalog/worktree-path-comparison'
-import { getLocalProjectWorktreeGitOptions } from '../../../workspaces/execution-host/project-runtime-git-options'
+import {
+  getLocalProjectWorktreeGitOptions,
+  type LocalProjectWorktreeGitOptions
+} from '../../../workspaces/execution-host/project-runtime-git-options'
 import {
   findRegisteredDeletableWorktree,
   ORPHANED_WORKTREE_DIRECTORY_MESSAGE
@@ -34,11 +37,10 @@ import {
 import {
   assertUnregisteredCheckoutGone,
   assertUnregisteredLeftoverRemovable,
-  isProvenOrphanLeftover,
   isRecordedCheckout,
   differentCheckoutAtPathError
 } from '../../../workspaces/removal/worktree-removal-leftover'
-import { unregisteredFolderRefusal } from '../../../../shared/worktree/removal/removal'
+import { listWorktreesStrict as listUncachedWorktreesStrict } from '../../../git/worktrees/catalog/worktree-listing'
 import {
   CLIENT_REMOVAL_HOME,
   getPathOps
@@ -256,11 +258,8 @@ async function finishInterruptedLocalWorktreeRemoval(
         localOptions
       )
     } else {
-      if (leftover) {
-        // Re-prove after teardown waits; only this repo's orphaned checkout is deleted.
-        if (!(await isProvenOrphanLeftover(repo.path, record.worktreePath, localOptions))) {
-          throw unregisteredFolderRefusal(record.worktreePath)
-        }
+      // Teardown awaited: re-read Git so a checkout registered at or inside the folder since survives.
+      if (leftover && (await isLeftoverStillRemovable(repo.path, record, localOptions))) {
         await removeUnregisteredLocalCheckout(record.worktreePath, localOptions, args.stopSignal)
       }
       result = await finishUnregisteredWorktreeRemoval(
@@ -281,6 +280,18 @@ async function finishInterruptedLocalWorktreeRemoval(
   // after the purge — and the Codex pretrust deletion inside it — landed.
   await args.finishRemoval(result, true, record.head)
   return result
+}
+
+async function isLeftoverStillRemovable(
+  repoPath: string,
+  record: WorktreeRemovalRecord,
+  localOptions: LocalProjectWorktreeGitOptions
+): Promise<boolean> {
+  const current = await listUncachedWorktreesStrict(repoPath, localOptions)
+  if (current.some((worktree) => areWorktreePathsEqual(worktree.path, record.worktreePath))) {
+    throw differentCheckoutAtPathError(record.worktreePath)
+  }
+  return assertUnregisteredLeftoverRemovable(repoPath, record.worktreePath, current, localOptions)
 }
 
 /** A checkout folder still on disk whose `.git` link is gone. */

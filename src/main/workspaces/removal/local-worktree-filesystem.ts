@@ -12,6 +12,7 @@ import {
 import { resolveWslInteropSpawnCwd } from '../../wsl/execution/wsl-interop-spawn-directory'
 import { describeWslProcessFailure } from '../../wsl/execution/wsl-process-failure'
 import type { WorktreeProofAccess } from './worktree-orphan-gitdir-proof'
+import { isWorktreePathMissing } from './worktree-removal-safety'
 
 export type LocalWorktreeFilesystemOptions = {
   wslDistro?: string
@@ -162,7 +163,10 @@ export async function removeUnregisteredLocalCheckout(
   const distro = options.wslDistro?.trim()
   if (!shouldUseWslFilesystem(options) || !distro) {
     throwIfSignalAborted(signal)
-    await removeHostCheckout(targetPath, async () => true, signal)
+    // Like rm -rf, an already-missing folder is done.
+    if (!(await isWorktreePathMissing(targetPath))) {
+      await removeHostCheckout(targetPath, async () => true, signal)
+    }
     return
   }
   await runWslCommand(
@@ -170,7 +174,7 @@ export async function removeUnregisteredLocalCheckout(
     guestCommand(
       targetPath,
       (target) =>
-        `find ${target} -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf -- {} + && rm -f -- ${target}/.git && rmdir -- ${target}`
+        `if [ -e ${target} ] || [ -L ${target} ]; then find ${target} -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf -- {} + && rm -f -- ${target}/.git && rmdir -- ${target}; fi`
     )
   )
 }
