@@ -58,7 +58,7 @@ export function collectNativeRegistrations(root = process.cwd()) {
     }
     const channels = []
     const visit = (node) => {
-      // Element access (ipcMain['handle']) counts too; a computed method name is reported as unresolved.
+      // Element access (ipcMain['handle']) counts too; a called computed method is reported as unresolved.
       const method = ts.isPropertyAccessExpression(node)
         ? node.name.text
         : ts.isElementAccessExpression(node)
@@ -69,7 +69,10 @@ export function collectNativeRegistrations(root = process.cwd()) {
       if (
         method !== undefined &&
         receivers.has(node.expression.getText(tree)) &&
-        (REGISTRATION_METHODS.has(method) || method.startsWith('computed:'))
+        (REGISTRATION_METHODS.has(method) ||
+          (method.startsWith('computed:') &&
+            ts.isCallExpression(node.parent) &&
+            node.parent.expression === node))
       ) {
         const call = node.parent
         const argument =
