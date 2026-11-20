@@ -16042,7 +16042,6 @@
           },
           "useEmulatorScreenKeyboard": {
             "pasteTooLarge": "Der einzufügende Text ist für die Tastatureingabe des Emulators zu groß.",
-            "unsupportedPasteText": "Beim Einfügen über die Emulator-Tastatur wird nur Text im US-Tastaturlayout unterstützt.",
             "pasteTargetUnavailable": "Das Einfügen über die Emulator-Tastatur ist fehlgeschlagen, weil das Gerät nicht bereit ist."
           }
         }

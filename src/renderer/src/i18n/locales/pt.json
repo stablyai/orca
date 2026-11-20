@@ -18641,7 +18641,6 @@
           },
           "useEmulatorScreenKeyboard": {
             "pasteTooLarge": "A colagem é muito grande para a entrada de teclado do emulador.",
-            "unsupportedPasteText": "A colagem do teclado do emulador só suporta texto de teclado americano (US).",
             "pasteTargetUnavailable": "A colagem do teclado do emulador falhou porque o dispositivo não está pronto."
           }
         }

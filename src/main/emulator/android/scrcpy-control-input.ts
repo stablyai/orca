@@ -1,7 +1,10 @@
 import { androidButtonKeycode, normalizedToDevicePixels } from './android-input-mapping'
+import { planEmulatorTextInput } from '../emulator-text-input-plan'
 import {
   encodeInjectKeycode,
   encodeInjectText,
+  encodeSetClipboard,
+  SCRCPY_CLIPBOARD_TEXT_MAX_BYTES,
   encodeInjectTouchEvent,
   splitScrcpyInjectText,
   type ScrcpyTouchAction
@@ -96,8 +99,29 @@ export async function sendScrcpyGesture(
   return true
 }
 
-export function sendScrcpyText(control: ScrcpyControlTarget, text: string): boolean {
-  return splitScrcpyInjectText(text).every((chunk) => control.sendControl(encodeInjectText(chunk)))
+/**
+ * INJECT_TEXT types only characters the device's virtual keyboard has keys for (ş, Chinese and
+ * emoji are dropped), so other text, and every paste, goes through the device clipboard.
+ */
+export function sendScrcpyText(
+  control: ScrcpyControlTarget,
+  text: string,
+  options: { paste?: boolean } = {}
+): boolean {
+  const plan = planEmulatorTextInput(text, { paste: options.paste === true, usKeys: true })
+  if (plan.kind === 'keys') {
+    return splitScrcpyInjectText(text).every((chunk) =>
+      control.sendControl(encodeInjectText(chunk))
+    )
+  }
+  if (Buffer.byteLength(plan.text, 'utf8') > SCRCPY_CLIPBOARD_TEXT_MAX_BYTES) {
+    return false
+  }
+  const pasted = !plan.text || control.sendControl(encodeSetClipboard(plan.text, true))
+  return (
+    pasted &&
+    Array.from({ length: plan.enterCount }).every(() => sendScrcpyButton(control, 'enter'))
+  )
 }
 
 export function sendScrcpyButton(

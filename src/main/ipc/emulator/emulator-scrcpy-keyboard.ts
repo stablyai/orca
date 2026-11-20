@@ -3,7 +3,7 @@ import { scrcpyVideoRegistry } from '../../emulator/scrcpy-video-registry'
 import { sendScrcpyButton, sendScrcpyText } from '../../emulator/android/scrcpy-control-input'
 
 type ScrcpyKeyboardInput =
-  | { deviceId: string; text: string }
+  | { deviceId: string; text: string; paste: boolean }
   | { deviceId: string; key: string; shift: boolean }
 
 function parseScrcpyKeyboardInput(value: unknown): ScrcpyKeyboardInput | null {
@@ -15,7 +15,7 @@ function parseScrcpyKeyboardInput(value: unknown): ScrcpyKeyboardInput | null {
     return null
   }
   if ('text' in value && typeof value.text === 'string') {
-    return { deviceId, text: value.text }
+    return { deviceId, text: value.text, paste: 'paste' in value && value.paste === true }
   }
   if ('key' in value && typeof value.key === 'string') {
     return { deviceId, key: value.key, shift: 'shift' in value && value.shift === true }
@@ -38,7 +38,7 @@ export function registerEmulatorScrcpyKeyboardHandler(): void {
     }
     try {
       return 'text' in input
-        ? sendScrcpyText(control, input.text)
+        ? sendScrcpyText(control, input.text, { paste: input.paste })
         : sendScrcpyButton(control, input.key, { shift: input.shift })
     } catch {
       // Unknown key names throw from the keycode table.

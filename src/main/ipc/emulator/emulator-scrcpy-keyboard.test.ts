@@ -55,4 +55,26 @@ describe('emulator:scrcpyKeyboard', () => {
 
     expect(sendControl).not.toHaveBeenCalled()
   })
+
+  it('pastes text scrcpy cannot type through the device clipboard, and types US text as before', () => {
+    const decode = (message: Buffer) => ({
+      type: message.readUInt8(0),
+      text: message.subarray(message.readUInt8(0) === 9 ? 14 : 5).toString('utf8')
+    })
+
+    expect(sendKeyboard({ deviceId: 'serial-1', text: 'a;' })).toBe(true)
+    // Turkish ş and Chinese have no virtual-keyboard key, so INJECT_TEXT would drop them.
+    expect(sendKeyboard({ deviceId: 'serial-1', text: 'ş' })).toBe(true)
+    expect(sendKeyboard({ deviceId: 'serial-1', text: 'Grüße\n中文', paste: true })).toBe(true)
+
+    expect(sendControl.mock.calls.map(([message]) => decode(message))).toEqual([
+      { type: 1, text: 'a;' }, // INJECT_TEXT
+      { type: 9, text: 'ş' }, // SET_CLIPBOARD with paste
+      { type: 9, text: 'Grüße\n中文' }
+    ])
+    const paste = sendControl.mock.calls[1][0]
+    expect(paste.readBigUInt64BE(1)).toBe(0n) // no clipboard acknowledgement requested
+    expect(paste.readUInt8(9)).toBe(1) // paste after setting the clipboard
+    expect(paste.readUInt32BE(10)).toBe(2) // UTF-8 bytes of ş
+  })
 })

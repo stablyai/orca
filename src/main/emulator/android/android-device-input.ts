@@ -49,10 +49,10 @@ export class AndroidDeviceInput {
     )
   }
 
-  async type(deviceId: string, text: string): Promise<void> {
+  async type(deviceId: string, text: string, paste = false): Promise<void> {
     await this.route(
       deviceId,
-      (control) => sendScrcpyText(control, text),
+      (control) => sendScrcpyText(control, text, { paste }),
       (sdk, serial) => androidTypeText(this.deps.runner, sdk, serial, text)
     )
   }
