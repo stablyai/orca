@@ -1,9 +1,9 @@
 import {
   publishToDocuments,
   registerAppHandler,
-  appDocumentFor
+  appWindowFor
 } from '../app-registry/app-handler-registry'
-import type { AppDocument } from '../app-registry/app-handler-registry'
+
 import type { Store } from '../../persistence/loading-store/store'
 import { relaunchApp, type AppRelaunchReason } from '../../startup/quit/app-relaunch'
 import { quitProcess } from '../../startup/quit/process-quit-request'
@@ -132,9 +132,9 @@ async function runBeforeProfileRelaunch(
 
 type ProfileRelaunchReason = Extract<AppRelaunchReason, `profile-${string}`>
 
-function scheduleProfileRelaunch(reason: ProfileRelaunchReason, sender: AppDocument): void {
+function scheduleProfileRelaunch(reason: ProfileRelaunchReason, sender: AppWindow): void {
   if (!sender.isDestroyed()) {
-    publishToDocuments('app:restart-committed', undefined, sender.caller)
+    publishToDocuments('app:restart-committed', undefined, { sourceId: sender.id })
   }
   setTimeout(() => {
     relaunchApp(reason)
@@ -184,7 +184,7 @@ export function registerOrcaProfileHandlers(
       setActiveOrcaProfile(profileId)
       await runBeforeProfileRelaunch(options.onBeforeRelaunch)
 
-      scheduleProfileRelaunch('profile-switch', appDocumentFor(event))
+      scheduleProfileRelaunch('profile-switch', appWindowFor(event))
 
       return { status: 'relaunching' }
     }
@@ -209,7 +209,7 @@ export function registerOrcaProfileHandlers(
           store,
           async () => {
             await runBeforeProfileRelaunch(options.onBeforeRelaunch)
-            scheduleProfileRelaunch('profile-transfer', appDocumentFor(event))
+            scheduleProfileRelaunch('profile-transfer', appWindowFor(event))
           }
         )
         if (result.status === 'transferred') {
@@ -218,7 +218,7 @@ export function registerOrcaProfileHandlers(
             setActiveOrcaProfile(args.targetProfileId)
           } finally {
             // The source has already changed and its writer cannot resume.
-            scheduleProfileRelaunch('profile-transfer', appDocumentFor(event))
+            scheduleProfileRelaunch('profile-transfer', appWindowFor(event))
           }
           return { ...result, willRelaunch: true }
         }

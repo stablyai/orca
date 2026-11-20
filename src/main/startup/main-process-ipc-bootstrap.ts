@@ -4,7 +4,7 @@ import {
   appDocumentFor
 } from '../ipc/app-registry/app-handler-registry'
 import { installElectronAppIpc } from '../ipc/app-registry/electron-app-ipc'
-import { isTrustedUIRenderer } from '../ipc/ui'
+import { isTrustedUIRenderer, getTrustedUIRendererWebContents } from '../ipc/ui'
 import { isDashboardPopoutRenderer } from '../window/dashboard-popout-window'
 import { isWorkspaceSpaceWindowRenderer } from '../window/workspace-space-window'
 import { readSessionWorkers } from '../runtime/rpc/methods/orchestration/worker/session-workers-method'
@@ -27,14 +27,16 @@ import {
 import { subscribeAgentSessionUploadRemoval } from '../native-chat/agent-session-attachments/agent-session-attachment-store-registry'
 
 export function registerMainProcessIpcHandlers(): void {
-  installElectronAppIpc((sender) =>
-    isTrustedUIRenderer(sender)
-      ? 'main'
-      : isDashboardPopoutRenderer(sender)
-        ? 'dashboard-popout'
-        : isWorkspaceSpaceWindowRenderer(sender)
-          ? 'workspace-space'
-          : 'document'
+  installElectronAppIpc(
+    (sender) =>
+      isTrustedUIRenderer(sender)
+        ? 'main'
+        : isDashboardPopoutRenderer(sender)
+          ? 'dashboard-popout'
+          : isWorkspaceSpaceWindowRenderer(sender)
+            ? 'workspace-space'
+            : 'document',
+    (sender) => getTrustedUIRendererWebContents() === sender
   )
   registerAppHandler('app:awaitFirstWindowStartupServices', async () => {
     await Promise.all([

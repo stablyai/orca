@@ -1,5 +1,6 @@
 import {
   appDocumentFor,
+  isCurrentAppDocument,
   removeAppHandler,
   registerAppHandler
 } from '../app-registry/app-handler-registry'
@@ -242,6 +243,9 @@ export async function registerWslHostHandlers(args: WslHostHandlerArgs): Promise
   const handle: typeof registerAppHandler = (channel, listener) =>
     registerAppHandler(channel, async (...params) => {
       await ready
+      if (!isCurrentAppDocument(params[0])) {
+        throw new Error('Application IPC document has retired')
+      }
       return listener(...params)
     })
   handle('wslHosts:listDistros', () => wsl.listDistros())

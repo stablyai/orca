@@ -9,11 +9,17 @@ export const RENDERER_GONE_MESSAGE = 'The window that started this upload went a
 const RENDERER_GONE_EVENTS = ['destroyed', 'render-process-gone', 'did-navigate'] as const
 
 /** Bind main-process work to its requesting renderer; dispose in finally to release WebContents listeners. */
-export function abortWhenRendererGone(sender: FanoutEventSource): {
+export function abortWhenRendererGone(
+  sender: FanoutEventSource & { isDestroyed?: () => boolean }
+): {
   signal: AbortSignal
   dispose: () => void
 } {
   const controller = new AbortController()
+  if (sender.isDestroyed?.()) {
+    controller.abort(new Error(RENDERER_GONE_MESSAGE))
+    return { signal: controller.signal, dispose: () => {} }
+  }
   // Shared fan-out: concurrent lifetimes on one renderer add one native listener per event, not one each.
   const dispose = addFanoutListeners(sender, RENDERER_GONE_EVENTS, () => {
     dispose()

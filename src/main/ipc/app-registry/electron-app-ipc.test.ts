@@ -1,7 +1,8 @@
 import { EventEmitter } from 'node:events'
 import { expect, it, vi } from 'vitest'
 
-const { handlers, snapshotRequested } = vi.hoisted(() => ({
+const { handlers, snapshotRequested, sources } = vi.hoisted(() => ({
+  sources: new Map<number, Renderer>(),
   handlers: new Map<string, (...args: any[]) => unknown>(),
   snapshotRequested: vi.fn()
 }))
@@ -17,7 +18,7 @@ vi.mock('electron', () => ({
     fromWebContents: (sender: { id: number }) => ({ id: sender.id + 10 }),
     getAllWindows: () => []
   },
-  webContents: { fromId: () => null }
+  webContents: { fromId: (id: number) => sources.get(id) }
 }))
 vi.mock('../../window/dashboard-popout-window', () => ({
   createOrFocusDashboardPopout: vi.fn(),
@@ -50,6 +51,7 @@ class Renderer extends EventEmitter {
   send = vi.fn()
   constructor(readonly id: number) {
     super()
+    sources.set(id, this)
   }
   isDestroyed(): boolean {
     return false
@@ -95,4 +97,40 @@ it('admits only the popout document and fences its retired generation', () => {
   expect(successor.documentId).not.toBe(retired.documentId)
   publishToDocuments('dashboard:snapshot', { current: true }, successor)
   expect(popout.send).toHaveBeenCalledWith('dashboard:snapshot', { current: true })
+})
+
+it('refuses preview grants resumed after retirement and revokes successor previews on close', async () => {
+  const { mintPreviewUrl, previewGrantForSender } =
+    await import('../../media/preview-grant-registry')
+  installElectronAppIpc(() => 'main')
+  const renderer = new Renderer(3)
+  const authorization = Promise.withResolvers<void>()
+  registerAppHandler('fs:readFile', async (caller) => {
+    await authorization.promise
+    return mintPreviewUrl(
+      appDocumentFor(caller),
+      { filePath: '/workspace/movie.mp4' },
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: minting retains the store without reading it.
+      {} as never,
+      { kind: 'video', mimeType: 'video/mp4' }
+    )
+  })
+  const read = handlers.get('fs:readFile')!
+  const pending = Promise.resolve(read({ sender: renderer, senderFrame: renderer.mainFrame }))
+  renderer.mainFrame = { parent: null, detached: false }
+  renderer.emit('did-navigate')
+  authorization.resolve()
+  await expect(pending).rejects.toThrow('Preview document has retired')
+  const current = await read({ sender: renderer, senderFrame: renderer.mainFrame })
+  if (
+    !current ||
+    typeof current !== 'object' ||
+    !('mediaUrl' in current) ||
+    typeof current.mediaUrl !== 'string'
+  ) {
+    throw new Error('Expected a preview URL')
+  }
+  expect(previewGrantForSender(current.mediaUrl, 3)?.grant.mimeType).toBe('video/mp4')
+  renderer.emit('destroyed')
+  expect(previewGrantForSender(current.mediaUrl, 3)).toBeNull()
 })

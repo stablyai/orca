@@ -52,7 +52,7 @@ const REMOTE_STAT_REUSE_MS = 1_000
 export const grants = new Map<string, PreviewGrant>()
 const senders = new Map<number, Map<string, string>>()
 
-export type PreviewSender = FanoutEventSource & { readonly id: number }
+export type PreviewSender = FanoutEventSource & { readonly id: number; isDestroyed?: () => boolean }
 
 export function mintPreviewUrl(
   sender: PreviewSender,
@@ -62,6 +62,9 @@ export function mintPreviewUrl(
   snapshot?: RemotePreviewFileSnapshot,
   size?: number
 ): PreviewUrl {
+  if (sender.isDestroyed?.()) {
+    throw new Error('Preview document has retired')
+  }
   const { mimeType } = preview
   let owned = senders.get(sender.id)
   if (!owned) {

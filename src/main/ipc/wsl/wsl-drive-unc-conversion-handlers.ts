@@ -84,7 +84,9 @@ export function registerWslDriveUncConversionHandlers(
           readWorktreeLinks,
           restart: () => {
             if (!appDocumentFor(event).isDestroyed()) {
-              publishToDocuments('app:restart-committed', undefined, appDocumentFor(event).caller)
+              publishToDocuments('app:restart-committed', undefined, {
+                sourceId: appDocumentFor(event).id
+              })
             }
             // Quit, not exit: the window and the store flush the slept panes on the way out.
             setTimeout(() => {

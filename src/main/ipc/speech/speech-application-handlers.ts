@@ -1,7 +1,7 @@
 import {
   publishToDocuments,
   registerAppHandler,
-  appDocumentFor
+  appWindowFor
 } from '../app-registry/app-handler-registry'
 
 import { dictationTermsFor } from '../../../shared/speech/dictation/dictation-dictionary'
@@ -112,13 +112,17 @@ export function registerSpeechApplicationHandlers(
 
   registerAppHandler('speech:downloadModel', async (event, modelId: string) => {
     const manager = getSpeechModelManager(store)
-    const document = appDocumentFor(event)
+    const document = appWindowFor(event)
     if (event.windowId === null) {
       return
     }
     const clearProgressCallback = manager.setProgressCallback((id, progress) => {
       if (!document.isDestroyed()) {
-        publishToDocuments('speech:downloadProgress', { modelId: id, progress }, event)
+        publishToDocuments(
+          'speech:downloadProgress',
+          { modelId: id, progress },
+          { sourceId: document.id }
+        )
       }
     })
     // Scope process-wide model progress callbacks to the download/window lifetime to avoid retaining stale windows.

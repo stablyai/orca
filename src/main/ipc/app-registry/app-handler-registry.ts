@@ -4,12 +4,13 @@ import type { FanoutEventSource } from '../../runtime/events/event-listener-fano
 
 export type { AppCaller, AppDocumentTarget }
 
-export type AppDocument = FanoutEventSource & {
+export type AppWindow = FanoutEventSource & {
   readonly id: number
-  readonly caller: AppCaller
   isDestroyed(): boolean
   once(event: string, listener: (...args: any[]) => void): unknown
 }
+
+export type AppDocument = AppWindow & { readonly caller: AppCaller }
 
 // Handler argument tuples remain owned by each family's existing contract.
 export type AppHandler = (caller: AppCaller, ...args: any[]) => unknown
@@ -19,6 +20,8 @@ export type AppIpcHost = {
   on(channel: AppChannel, listener: AppHandler): void
   removeHandler(channel: AppChannel): void
   removeAllListeners(channel: AppChannel): void
+  window(caller: AppCaller): AppWindow
+  isRegisteredMain(caller: AppCaller): boolean
   document(caller: AppCaller): AppDocument
   publish(channel: string, payload: unknown, target: AppDocumentTarget): void
   flushDocumentStorage(caller: AppCaller): void
@@ -72,4 +75,12 @@ export function publishToDocuments(
 
 export function flushAppDocumentStorage(caller: AppCaller): void {
   appIpcHost().flushDocumentStorage(caller)
+}
+
+export function appWindowFor(caller: AppCaller): AppWindow {
+  return appIpcHost().window(caller)
+}
+
+export function isRegisteredMainAppCaller(caller: AppCaller): boolean {
+  return appIpcHost().isRegisteredMain(caller)
 }

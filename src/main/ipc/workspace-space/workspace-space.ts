@@ -2,7 +2,7 @@ import {
   publishToDocuments,
   removeAppHandler,
   registerAppHandler,
-  appDocumentFor
+  appWindowFor
 } from '../app-registry/app-handler-registry'
 
 import type { Store } from '../../persistence/loading-store/store'
@@ -76,7 +76,7 @@ export function registerWorkspaceSpaceHandlers(store: Store): void {
             return
           }
           lastProgressSentAt = now
-          if (!appDocumentFor(event).isDestroyed()) {
+          if (!appWindowFor(event).isDestroyed()) {
             const completedMeasurements = pendingMeasurements
             pendingMeasurements = []
             publishToDocuments(
@@ -85,7 +85,7 @@ export function registerWorkspaceSpaceHandlers(store: Store): void {
                 ...progress,
                 ...(completedMeasurements.length > 0 ? { completedMeasurements } : {})
               },
-              event
+              { sourceId: appWindowFor(event).id }
             )
           }
         }

@@ -11,6 +11,7 @@ import {
   setAppIpcHost,
   type AppCaller,
   type AppDocument,
+  type AppWindow,
   type AppHandler,
   type AppIpcHost
 } from './app-handler-registry'
@@ -23,12 +24,15 @@ type Document = {
 }
 
 export function createElectronAppIpcHost(
-  roleFor: (sender: WebContents) => AppDocumentRole
+  roleFor: (sender: WebContents) => AppDocumentRole,
+  isRegisteredMainFor: (sender: WebContents) => boolean = () => false
 ): AppIpcHost {
   const documents = new Map<string, Document>()
   const current = new WeakMap<WebContents, Document>()
   const callers = new WeakMap<AppCaller, AppDocument>()
   const observed = new WeakSet<WebContents>()
+  const windows = new WeakMap<WebContents, AppWindow>()
+  const sources = new WeakMap<AppDocument, WebContents>()
   let nextDocumentId = 1
 
   const retire = (sender: WebContents, event: string): void => {
@@ -72,6 +76,7 @@ export function createElectronAppIpcHost(
       removeListener: (event, listener) => events.removeListener(event, listener)
     }
     const owned: Document = { sender, frame: sender.mainFrame, events, document }
+    sources.set(document, sender)
     current.set(sender, owned)
     documents.set(caller.documentId, owned)
     return owned
@@ -106,6 +111,29 @@ export function createElectronAppIpcHost(
     removeHandler: (channel) => ipcMain.removeHandler(channel),
     removeAllListeners: (channel) => {
       ipcMain.removeAllListeners(channel)
+    },
+    window: (caller) => {
+      const document = callers.get(caller) ?? documents.get(caller.documentId)?.document
+      const source = document && sources.get(document)
+      if (!source) {
+        throw new Error('Application window has closed')
+      }
+      let window = windows.get(source)
+      if (!window) {
+        window = {
+          id: source.id,
+          isDestroyed: () => source.isDestroyed(),
+          on: (event, listener) => source.on(event, listener),
+          once: (event, listener) => source.once(event, listener),
+          removeListener: (event, listener) => source.removeListener(event, listener)
+        }
+        windows.set(source, window)
+      }
+      return window
+    },
+    isRegisteredMain: (caller) => {
+      const owned = documents.get(caller.documentId)
+      return !!owned && !owned.document.isDestroyed() && isRegisteredMainFor(owned.sender)
     },
     document: (caller) => {
       const document = callers.get(caller) ?? documents.get(caller.documentId)?.document
@@ -160,6 +188,9 @@ export function createElectronAppIpcHost(
   }
 }
 
-export function installElectronAppIpc(roleFor: (sender: WebContents) => AppDocumentRole): void {
-  setAppIpcHost(createElectronAppIpcHost(roleFor))
+export function installElectronAppIpc(
+  roleFor: (sender: WebContents) => AppDocumentRole,
+  isRegisteredMainFor: (sender: WebContents) => boolean = () => false
+): void {
+  setAppIpcHost(createElectronAppIpcHost(roleFor, isRegisteredMainFor))
 }
