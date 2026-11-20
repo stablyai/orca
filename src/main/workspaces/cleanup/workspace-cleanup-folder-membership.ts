@@ -4,7 +4,8 @@ import { composeWorktreeHostIdentity } from '../../../shared/worktree/host-quali
 import { isWorktreeRetiredByRemoval } from '../../../shared/worktree/removal/removal-visibility'
 import {
   folderWorkspaceKey,
-  parseWorkspaceKey
+  parseWorkspaceKey,
+  worktreeWorkspaceKey
 } from '../../../shared/workspace/identity/workspace-scope'
 import {
   LOCAL_EXECUTION_HOST_ID,
@@ -32,46 +33,72 @@ export function folderSiblingsByWorktree(
   const botHomes = new Set(
     (store.getBots?.() ?? []).map((bot) => folderWorkspaceKey(bot.folderWorkspaceId))
   )
-  const byIdentity = new Map(summaries.map((summary) => [summaryIdentity(summary), summary]))
-  // An archived ancestor hides its subtree from the folder; a retired one passes its children up.
-  const folderOf = (summary: RuntimeWorktreePsSummary): string | null => {
-    const visited = new Set<RuntimeWorktreePsSummary>()
-    let row: RuntimeWorktreePsSummary | undefined = summary
-    while (row && !row.isArchived && !visited.has(row)) {
-      if (row.workspaceLineage) {
-        const folderKey = row.workspaceLineage.parentWorkspaceKey
+  const folderEdges = store.getAllWorkspaceLineage?.() ?? {}
+  const parentEdges = store.getAllWorktreeLineage?.() ?? {}
+  const rows = summaries.filter((summary) => summary.workspaceKind !== 'folder-workspace')
+  const byIdentity = new Map(rows.map((row) => [summaryIdentity(row), row]))
+  // A listed row speaks for itself; one the listing lacks (its repo's scan failed) is read from its stored lineage.
+  const folderOf = (hostId: ExecutionHostId | undefined, worktreeId: string): string | null => {
+    const seen = new Set<string>()
+    for (let id: string | null = worktreeId; id !== null && !seen.has(id);) {
+      seen.add(id)
+      const row = byIdentity.get(composeWorktreeHostIdentity(hostId, id))
+      // An archived ancestor hides its subtree from the folder.
+      if (row?.isArchived) {
+        return null
+      }
+      const folderKey = row
+        ? row.workspaceLineage?.parentWorkspaceKey
+        : folderEdges[worktreeWorkspaceKey(id)]?.parentWorkspaceKey
+      if (folderKey) {
         return botHomes.has(folderKey) ? null : folderKey
       }
-      visited.add(row)
-      row = row.parentWorktreeId
-        ? byIdentity.get(
-            composeWorktreeHostIdentity(summaryHostId(row) ?? undefined, row.parentWorktreeId)
-          )
-        : undefined
+      id = row ? row.parentWorktreeId : (parentEdges[id]?.parentWorktreeId ?? null)
     }
     return null
   }
   const folderByMember = new Map<RuntimeWorktreePsSummary, string>()
   const membersByFolder = new Map<string, string[]>()
-  for (const summary of summaries) {
-    const folderKey =
-      summary.workspaceKind === 'folder-workspace' || isWorktreeRetiredByRemoval(summary)
-        ? null
-        : folderOf(summary)
+  const join = (folderKey: string, identity: string): void => {
+    const members = membersByFolder.get(folderKey) ?? []
+    members.push(identity)
+    membersByFolder.set(folderKey, members)
+  }
+  for (const row of rows) {
+    // A row retired by removal is leaving; its children still list under the folder.
+    const folderKey = isWorktreeRetiredByRemoval(row)
+      ? null
+      : folderOf(summaryHostId(row) ?? undefined, row.worktreeId)
     if (folderKey) {
-      folderByMember.set(summary, folderKey)
-      const members = membersByFolder.get(folderKey) ?? []
-      members.push(summaryIdentity(summary))
-      membersByFolder.set(folderKey, members)
+      folderByMember.set(row, folderKey)
+      join(folderKey, summaryIdentity(row))
     }
   }
-  // A child the folder records but the listing lacks (its repo's scan failed) has no verdict, so it holds the group.
-  const listed = new Set(summaries.map((summary) => summary.worktreeId))
-  for (const edge of Object.values(store.getAllWorkspaceLineage?.() ?? {})) {
+  // A recorded worktree no listed row stands for has no verdict here, so it holds its folder's group.
+  const recorded = new Map<string, string | null | undefined>()
+  for (const edge of Object.values(folderEdges)) {
     const child = parseWorkspaceKey(edge.childWorkspaceKey)
-    const members = membersByFolder.get(edge.parentWorkspaceKey)
-    if (members && child?.type === 'worktree' && !listed.has(child.worktreeId)) {
-      members.push(composeWorktreeHostIdentity(undefined, child.worktreeId))
+    if (child?.type === 'worktree') {
+      recorded.set(child.worktreeId, edge.childInstanceId)
+    }
+  }
+  for (const [worktreeId, lineage] of Object.entries(parentEdges)) {
+    if (!recorded.has(worktreeId)) {
+      recorded.set(worktreeId, lineage.worktreeInstanceId)
+    }
+  }
+  const rowsById = Map.groupBy(rows, (row) => row.worktreeId)
+  for (const [worktreeId, instanceId] of recorded) {
+    const listed = rowsById
+      .get(worktreeId)
+      ?.some(
+        (row) => !instanceId || !row.worktreeInstanceId || row.worktreeInstanceId === instanceId
+      )
+    // An archived checkout is gone from disk on purpose, so it has nothing to hold.
+    const archived = store.getWorktreeMeta(worktreeId)?.archivedCheckout
+    const folderKey = listed || archived ? null : folderOf(undefined, worktreeId)
+    if (folderKey && membersByFolder.has(folderKey)) {
+      join(folderKey, composeWorktreeHostIdentity(undefined, worktreeId))
     }
   }
   return (summary) => {

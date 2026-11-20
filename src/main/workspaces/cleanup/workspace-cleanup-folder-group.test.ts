@@ -60,7 +60,11 @@ function row(
 
 function makeHost(
   rows: RuntimeWorktreePsSummary[],
-  recorded: { lineage?: Record<string, unknown>; botHomes?: string[] } = {}
+  recorded: {
+    lineage?: Record<string, unknown>
+    parents?: Record<string, unknown>
+    botHomes?: string[]
+  } = {}
 ): {
   runtime: OrcaRuntimeService
   store: RuntimeStore
@@ -77,7 +81,9 @@ function makeHost(
     getRepos: () => repos,
     getSettings: () => ({ workspaceCleanupPolicy: RULES }),
     getWorkspaceSession: () => undefined,
+    getWorktreeMeta: () => undefined,
     getAllWorkspaceLineage: () => recorded.lineage ?? {},
+    getAllWorktreeLineage: () => recorded.parents ?? {},
     getBots: () => (recorded.botHomes ?? []).map((folderWorkspaceId) => ({ folderWorkspaceId }))
   } as unknown as RuntimeStore
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the evidence read uses only these runtime members.
@@ -142,11 +148,15 @@ describe('folder workspace cleanup group', () => {
         row('repo-b::/b1', { folder: 'F', hostId: 'ssh:remote' }),
         row('repo-a::/h1', { folder: 'H' })
       ],
-      // Its repo's scan failed, so the listing lacks it.
+      // h1's lineage child h2 is missing: its repo's scan failed.
       {
         lineage: {
-          x: { childWorkspaceKey: 'worktree:repo-c::/h2', parentWorkspaceKey: 'folder:H' }
-        }
+          'worktree:repo-a::/h1': {
+            childWorkspaceKey: 'worktree:repo-a::/h1',
+            parentWorkspaceKey: 'folder:H'
+          }
+        },
+        parents: { 'repo-c::/h2': { parentWorktreeId: 'repo-a::/h1' } }
       }
     )
     expect(await verdicts(runner)).toEqual({
@@ -180,7 +190,7 @@ describe('folder workspace cleanup group', () => {
       ...host,
       globalRules: () => RULES,
       workspace: scanned.find((workspace) => workspace.ref.worktreeId === 'repo-a::/a1')!,
-      now: () => Date.now()
+      now: () => Date.UTC(2026, 10, 19)
     })
 
     expect(outcome).toEqual({
