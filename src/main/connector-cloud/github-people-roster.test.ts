@@ -48,14 +48,23 @@ describe('reading the people of the connected repositories', () => {
   it('is unavailable when no source was read, the viewer alone included', async () => {
     for (const stdout of ['', 'not json', json({ viewer: { login: 'o' } }), json({ r0: null })]) {
       const rosters = new GitHubPeopleRosters(ran(stdout))
-      expect(await rosters.read(repos('a/b'), 'owner')).toEqual({ status: 'unavailable' })
+      expect(await rosters.read(repos('a/b'), 'owner')).toEqual({
+        status: 'unavailable',
+        spent: true
+      })
     }
     // Nothing readable in the scope: no gh call at all.
     const run = vi.fn<RosterRun>()
-    expect(await new GitHubPeopleRosters(run).read(repos('not a repo'), 'owner')).toEqual({
-      status: 'unavailable'
+    // Nothing readable: no gh ran, nothing spent, and a later valid request still reads.
+    const rosters = new GitHubPeopleRosters(run)
+    expect(await rosters.read(repos('not a repo'), 'owner')).toEqual({
+      status: 'unavailable',
+      spent: false
     })
     expect(run).not.toHaveBeenCalled()
+    run.mockResolvedValue(json({ r0: users() }))
+    expect((await rosters.read(repos('a/b'), 'owner')).status).toBe('read')
+    expect(run).toHaveBeenCalledOnce()
   })
 })
 
@@ -160,15 +169,21 @@ describe('one roster read per app run', () => {
   it('never runs gh again after a failed read, whatever the failure', async () => {
     const run = ran('')
     const rosters = new GitHubPeopleRosters(run)
-    expect(await rosters.read(repos('a/b'), 'owner')).toEqual({ status: 'unavailable' })
-    expect(await rosters.read(repos('a/b'), 'owner')).toEqual({ status: 'unavailable' })
+    expect(await rosters.read(repos('a/b'), 'owner')).toEqual({
+      status: 'unavailable',
+      spent: true
+    })
+    expect(await rosters.read(repos('a/b'), 'owner')).toEqual({
+      status: 'unavailable',
+      spent: true
+    })
     expect(run).toHaveBeenCalledOnce()
     // A run that throws (gh missing included) proves no more than one that answered empty.
     const throwing = vi.fn<RosterRun>(async () => {
       throw Object.assign(new Error('spawn gh ENOENT'), { code: 'ENOENT', syscall: 'spawn gh' })
     })
     const other = new GitHubPeopleRosters(throwing)
-    expect(await other.read(repos('a/b'), 'owner')).toEqual({ status: 'unavailable' })
+    expect(await other.read(repos('a/b'), 'owner')).toEqual({ status: 'unavailable', spent: true })
     await other.read(repos('c/d'), 'other')
     expect(throwing).toHaveBeenCalledOnce()
   })

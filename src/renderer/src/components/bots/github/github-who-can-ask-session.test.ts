@@ -140,7 +140,7 @@ describe('one Add picker open on GitHub', () => {
 
     const unreadable = gitHubWhoCanAskSession(
       {
-        people: async () => ({ ok: true, value: { status: 'unavailable' } }),
+        people: async () => ({ ok: true, value: { status: 'unavailable', spent: true } }),
         users: async () => failed
       },
       { scope, ownerLogin: 'owner', producer: 'local', t }

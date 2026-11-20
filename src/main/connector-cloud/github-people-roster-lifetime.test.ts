@@ -59,12 +59,18 @@ describe('the one roster read per app run, on the real gh runner', () => {
     expect(signalMock).toHaveBeenCalled()
     // The group is still reported alive: the caller gets its answer anyway...
     await vi.advanceTimersByTimeAsync(5 * 60_000)
-    expect(await slow).toEqual({ status: 'unavailable' })
+    expect(await slow).toEqual({ status: 'unavailable', spent: true })
     // ...and no later request, for any scope, starts a second child, before or after it closes.
-    expect(await rosters.read(repos('c/d'), 'owner')).toEqual({ status: 'unavailable' })
+    expect(await rosters.read(repos('c/d'), 'owner')).toEqual({
+      status: 'unavailable',
+      spent: true
+    })
     close(first, 1)
     await vi.advanceTimersByTimeAsync(0)
-    expect(await rosters.read(repos('e/f'), 'owner')).toEqual({ status: 'unavailable' })
+    expect(await rosters.read(repos('e/f'), 'owner')).toEqual({
+      status: 'unavailable',
+      spent: true
+    })
     expect(spawnMock).toHaveBeenCalledOnce()
   })
 
@@ -84,9 +90,12 @@ describe('the one roster read per app run, on the real gh runner', () => {
     const rosters = new GitHubPeopleRosters()
     const failed = rosters.read(repos('a/b'), 'owner')
     await vi.advanceTimersByTimeAsync(0)
-    expect(await failed).toEqual({ status: 'unavailable' })
+    expect(await failed).toEqual({ status: 'unavailable', spent: true })
     const attempts = spawnMock.mock.calls.length
-    expect(await rosters.read(repos('a/b'), 'owner')).toEqual({ status: 'unavailable' })
+    expect(await rosters.read(repos('a/b'), 'owner')).toEqual({
+      status: 'unavailable',
+      spent: true
+    })
     expect(spawnMock).toHaveBeenCalledTimes(attempts)
   })
 })

@@ -123,7 +123,7 @@ const searching =
     await settle()
   }
 const full = readRoster()
-const unavailable: Roster = { status: 'unavailable' }
+const unavailable: Roster = { status: 'unavailable', spent: true }
 
 /** An empty search suggests the people found in the connected repositories. */
 export const suggestions = defineFixture({ width: 340, render: pickerOf(full), interact: settle })
@@ -319,4 +319,11 @@ export const exactFailedRetry = defineFixture({
     usersFail = true
     await searching('maya')(frame)
   }
+})
+
+/** The scope held nothing readable: nothing was spent, and no gh advice. */
+export const noReadable = defineFixture({
+  width: 340,
+  render: pickerOf({ status: 'unavailable', spent: false }),
+  interact: searching('neil par')
 })

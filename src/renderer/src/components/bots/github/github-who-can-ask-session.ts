@@ -78,8 +78,8 @@ export function gitHubWhoCanAskSession(
           : // The call itself failing (the host unreachable) leaves this session without a list;
             // the next open asks the host again, which keeps to its one read per app run.
             calls.people({ scope, owner: ownerLogin }).then(
-              (result): GitHubRosterState => (result.ok ? result.value : { status: 'unavailable' }),
-              (): GitHubRosterState => ({ status: 'unavailable' })
+              (result): GitHubRosterState => (result.ok ? result.value : { status: 'unreached' }),
+              (): GitHubRosterState => ({ status: 'unreached' })
             )
     ).then((state) => {
       settled = state
