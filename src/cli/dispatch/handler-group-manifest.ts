@@ -4,6 +4,7 @@ import { BOT_HANDLER_GROUPS } from '../bots/bot-handler-groups'
 import { BROWSER_HANDLER_GROUPS } from '../browser/browser-handler-groups'
 import { JIRA_HANDLER_GROUP } from '../jira/jira-handler-group'
 import { LINEAR_HANDLER_GROUP } from '../linear/linear-handler-group'
+import { LOCAL_TASKS_HANDLER_GROUP } from '../local-tasks/local-tasks-handler-group'
 import { REFERENCE_HANDLER_GROUP } from '../references/reference-handler-group'
 import { SERVE_PAIRING_HANDLER_GROUPS } from '../server/serve-pairing-handler-groups'
 import { PLUGIN_HANDLER_GROUPS } from '../plugins/plugin-handler-groups'
@@ -20,6 +21,7 @@ export type HandlerGroup = {
 export const HANDLER_GROUPS: readonly HandlerGroup[] = [
   JIRA_HANDLER_GROUP,
   LINEAR_HANDLER_GROUP,
+  LOCAL_TASKS_HANDLER_GROUP,
   REFERENCE_HANDLER_GROUP,
   {
     name: 'core',
