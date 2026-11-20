@@ -68,18 +68,20 @@ function assembleTranscript(
     return { assembler, baseSignature, baseMessages, transcript, assembledMessages }
   }
   const applied = committed.transcript
-  if (baseMessages === committed.baseMessages) {
+  if (
+    baseMessages === committed.baseMessages &&
+    transcript.length >= applied.length &&
+    sharesPrefix(transcript, applied, applied.length)
+  ) {
     // A discarded render must not mutate the last committed assembler.
     const assembler = cloneAssembler(committed.assembler)
     const assembledMessages =
-      transcript.length >= applied.length && sharesPrefix(transcript, applied, applied.length)
-        ? transcript.length > applied.length
-          ? applyAppends(assembler, transcript.slice(applied.length))
-          : assembler.messages
-        : resetAssembler(assembler, transcript)
+      transcript.length > applied.length
+        ? applyAppends(assembler, transcript.slice(applied.length))
+        : assembler.messages
     return { assembler, baseSignature, baseMessages, transcript, assembledMessages }
   }
-  // A re-sent latest window keeps the held rows before it, so only the rows after them re-merge.
+  // A re-sent window or a cleared live tail keeps the held rows before it, so only later rows re-merge.
   const keep = sharedPrefixLength(transcript, applied)
   const rewound = keep > 0 ? rewindAssembler(committed.assembler, applied, keep) : null
   const assembler = rewound ?? createIncrementalAssembler()

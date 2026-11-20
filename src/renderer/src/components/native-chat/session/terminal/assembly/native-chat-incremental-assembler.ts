@@ -131,15 +131,23 @@ export function applyAppends(
   }
 
   const sizeBefore = assembler.byId.size
+  const merged: NativeChatMessage[] = []
   for (const message of incoming) {
-    mergeOne(assembler.byId, assembler.byTurn, message)
+    // A live tail republishes rows already merged; the same object merges as a no-op.
+    if (assembler.byId.get(message.id) !== message) {
+      mergeOne(assembler.byId, assembler.byTurn, message)
+      merged.push(message)
+    }
+  }
+  if (merged.length === 0) {
+    return assembler.messages
   }
 
   // Map growth below batch size means collisions/removals may have moved existing sort positions.
-  const grewByBatch = assembler.byId.size === sizeBefore + incoming.length
-  if (grewByBatch && isTailAppend(assembler.messages, incoming)) {
+  const grewByBatch = assembler.byId.size === sizeBefore + merged.length
+  if (grewByBatch && isTailAppend(assembler.messages, merged)) {
     // Sort only the new tail and preserve existing row identities.
-    const tail = [...sortForImageNormalization(incoming)]
+    const tail = [...sortForImageNormalization(merged)]
     assembler.messages = [...assembler.messages, ...tail]
     return assembler.messages
   }

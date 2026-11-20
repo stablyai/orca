@@ -5,7 +5,7 @@ import type { NativeChatMessage } from '../../../../../../../shared/native-chat/
 import type * as SessionAssembler from './native-chat-session-assembler'
 import { useNativeChatAssembledMessages } from './use-native-chat-assembled-messages'
 
-const merges = vi.hoisted(() => ({ count: 0 }))
+const merges = vi.hoisted(() => ({ count: 0, sorted: 0 }))
 
 vi.mock('./native-chat-session-assembler', async (importOriginal) => {
   const actual = await importOriginal<typeof SessionAssembler>()
@@ -14,6 +14,10 @@ vi.mock('./native-chat-session-assembler', async (importOriginal) => {
     mergeOne: (...args: Parameters<typeof actual.mergeOne>) => {
       merges.count += 1
       actual.mergeOne(...args)
+    },
+    sortForImageNormalization: (messages: readonly NativeChatMessage[]) => {
+      merges.sorted += messages.length
+      return actual.sortForImageNormalization(messages)
     }
   }
 })
@@ -79,5 +83,40 @@ it('re-merges only the re-sent window after the live tail repeated held rows', (
   expect(assembled).toHaveLength(2001)
   expect(assembled[0]).toBe(held[0])
   expect(assembled[2000]!.blocks).toEqual([{ type: 'text', text: 'rewritten' }])
+  view.unmount()
+})
+
+function mountAfterResentWindow() {
+  const held = rows(0, 2000)
+  const view = mountHeld(held)
+  const window = [...rows(1700, 1999), row(1999, 'rewritten')]
+  const base = [...held.slice(0, 1700), ...window]
+  view.rerender({ baseMessages: base, appended: [] })
+  merges.count = 0
+  merges.sorted = 0
+  return { view, base, window }
+}
+
+it('merges and sorts only new rows when the live tail repeats the re-sent window', () => {
+  const { view, base, window } = mountAfterResentWindow()
+
+  // The live tail restarts from the window, so its first append repeats every window row.
+  view.rerender({ baseMessages: base, appended: [...window, row(2000)] })
+
+  expect(merges.count).toBe(1)
+  expect(merges.sorted).toBe(1)
+  expect(view.result.current.assembledMessages).toHaveLength(2001)
+  view.unmount()
+})
+
+it('re-merges nothing when an unchanged window clears a tail that only repeated held rows', () => {
+  const { view, base, window } = mountAfterResentWindow()
+  view.rerender({ baseMessages: base, appended: [...window] })
+
+  view.rerender({ baseMessages: base, appended: [] })
+
+  expect(merges.count).toBe(0)
+  expect(merges.sorted).toBe(0)
+  expect(view.result.current.assembledMessages).toHaveLength(2000)
   view.unmount()
 })
