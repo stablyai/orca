@@ -28,6 +28,8 @@ export const SERVICES_APP_CHANNELS = [
   'ephemeralVm:resumeWorkspace',
   'ephemeralVm:stopCleanup',
   'ephemeralVm:suspendWorkspace',
+  'memory:countHiddenBrowserPages',
+  'memory:readPerfNoticeSignals',
   'orcaProfiles:authStatus',
   'orcaProfiles:cancelSignIn',
   'orcaProfiles:connectCurrent',

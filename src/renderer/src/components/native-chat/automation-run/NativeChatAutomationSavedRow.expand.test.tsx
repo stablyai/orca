@@ -212,7 +212,7 @@ describe('an automation card opened in place', () => {
       { kind: 'local' }
     )
 
-    fireEvent.click(screen.getByRole('button', { name: 'Open full page' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Open page' }))
     expect(host.openBotAutomation).toHaveBeenCalledWith('auto-1', null)
   })
 
@@ -222,7 +222,7 @@ describe('an automation card opened in place', () => {
     fireEvent.click(toggleOf('Slack triage'))
     expect(await screen.findByText('This automation was deleted')).toBeVisible()
     expect(screen.queryByRole('button', { name: 'Run now' })).toBeNull()
-    expect(screen.queryByRole('button', { name: 'Open full page' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Open page' })).toBeNull()
   })
 
   it('re-reads when automations change, and not while closed', async () => {

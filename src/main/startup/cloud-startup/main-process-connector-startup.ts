@@ -3,6 +3,7 @@ import type { ConnectorCloud } from '../../connector-cloud/connector-cloud'
 import { installConnectorHost } from '../../connector-cloud/connector-host-install'
 import { registerGoogleSetupHandlers } from '../../ipc/google-setup'
 import { registerSlackHandOffHandlers } from '../../ipc/slack-hand-off'
+import { registerAvatarGenerationHandlers } from '../../avatar-generation/avatar-generation-ipc'
 import { browserManager } from '../../browser/guest-lifecycle/manager/browser-manager'
 import { getGoogleConnect } from '../../google/google-connect'
 import {
@@ -41,6 +42,7 @@ export function installMainProcessConnectorCloud(serve: boolean): void {
   powerMonitor.on('resume', host.refreshLinearLogins)
   registerGoogleSetupHandlers()
   registerSlackHandOffHandlers(() => runtime.getConnectorCloud())
+  registerAvatarGenerationHandlers(() => runtime.getCommitMessageAgentEnvironmentResolvers())
   browserManager.setStandingDownloadClaim(
     googleSetupKeyDownloadClaim({
       runs: () => googleSetupRuns().list(),

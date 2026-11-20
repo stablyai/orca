@@ -21,6 +21,7 @@ import {
   ConnectorWorkspacePicker,
   connectorSetupFor
 } from '../connector-connect-parts'
+import { SlackOpenAppButton } from './SlackOpenAppButton'
 import { SlackConfigTokenForm } from './SlackConfigTokenForm'
 import { SlackTeamName } from './SlackWorkspacesSettings'
 import { BotHostSignInButton } from '../BotHostSignInButton'
@@ -154,7 +155,7 @@ function BotSlackSetupFlow({
             }))}
             another={
               <Button variant="ghost" onClick={pasteToken}>
-                {t('bots.slack.setup.another', 'Connect another Slack workspace')}
+                {t('bots.slack.setup.another', 'Connect another workspace')}
               </Button>
             }
           />
@@ -329,6 +330,7 @@ function BotSlackSetupFlow({
               <BotSlackPostAs bot={bot} slack={installedState} setupState={step.setupState} />
             ) : null}
             <DialogFooter>
+              <SlackOpenAppButton bot={bot} slack={installedState} onOpenedInOrca={onClose} />
               <Button autoFocus onClick={onClose}>
                 {t('bots.slack.setup.done', 'Done')}
               </Button>

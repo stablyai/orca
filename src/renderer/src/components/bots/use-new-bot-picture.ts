@@ -28,6 +28,9 @@ export type NewBotPicture = {
   custom: BotPictureCustom | null
   onChange: (value: BotPictureValue) => void
   onUpload: (png: string, after: number) => void
+  /** A picture taken by paste, drop or upload: it replaces the custom one in place, or lands beside the
+   *  mascot shown. */
+  placeUpload: (png: string) => void
   /** The mascot's tile color; null is its own sky blue. */
   color: string | null
   /** Absent when the host can't store a color. */
@@ -77,6 +80,13 @@ export function useNewBotPicture(
     onChange: setValue,
     onUpload: (png, after) => {
       setUpload({ png, after })
+      setValue({ kind: 'custom' })
+    },
+    placeUpload: (png) => {
+      setUpload({
+        png,
+        after: showingUpload && upload ? upload.after : pictureMascotIndex(value, custom)
+      })
       setValue({ kind: 'custom' })
     },
     color,

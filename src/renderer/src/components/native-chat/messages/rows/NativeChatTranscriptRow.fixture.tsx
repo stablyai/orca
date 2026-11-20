@@ -47,23 +47,39 @@ const messages: NativeChatMessage[] = [
   text('answer', 'assistant', 'The greeting now includes the name.')
 ]
 
-const session: NativeChatLiveSession = {
-  messages,
-  agent: 'claude',
-  sessionId: 'fixture',
-  status: 'ready',
-  readPhase: 'ready',
-  hasMore: false,
-  loadingEarlier: false,
-  olderHistoryGeneration: 0,
-  loadEarlier: async () => 'applied'
+function sessionOf(rows: NativeChatMessage[]): NativeChatLiveSession {
+  return {
+    messages: rows,
+    agent: 'claude',
+    sessionId: 'fixture',
+    status: 'ready',
+    readPhase: 'ready',
+    hasMore: false,
+    loadingEarlier: false,
+    olderHistoryGeneration: 0,
+    loadEarlier: async () => 'applied'
+  }
 }
 
 export const responseActionsGap = defineFixture({
   width: 560,
   render: () => (
     <div className="flex h-[520px] flex-col">
-      <NativeChatMessageList session={session} isWorking={false} expandSignal={false} />
+      <NativeChatMessageList session={sessionOf(messages)} isWorking={false} expandSignal={false} />
+    </div>
+  )
+})
+
+// The latest response keeps its controls shown, so they sit above a worker's card that just arrived.
+export const latestResponseActionsAboveUpdate = defineFixture({
+  width: 560,
+  render: () => (
+    <div className="flex h-[280px] flex-col">
+      <NativeChatMessageList
+        session={sessionOf(messages.slice(0, 3))}
+        isWorking={false}
+        expandSignal={false}
+      />
     </div>
   )
 })

@@ -20,21 +20,6 @@ export function reportedDispatch(
     : undefined
 }
 
-/** The paired server's Dispatch an imported message came from, as the server's check found it. */
-export function importedRemoteDispatchId(
-  db: OrchestrationDb,
-  messageId: string
-): string | undefined {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT of one TEXT column.
-  const row = db.db
-    .prepare(
-      `SELECT p.dispatch_id FROM message_dispatch_provenance p
-       JOIN remote_dispatches r ON r.dispatch_id = p.dispatch_id WHERE p.message_id = ?`
-    )
-    .get(messageId) as { dispatch_id: string } | undefined
-  return row?.dispatch_id
-}
-
 /** A paired server's worker, named only by a Dispatch the import recorded for this sender's own mail,
  *  or by its own `dispatch:` address, which this Orca writes on mail it files about that Dispatch. */
 export function reportedRemoteDispatch(

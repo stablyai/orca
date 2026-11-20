@@ -311,7 +311,7 @@ function ServerNotice({
                     { host, name }
                   )
                 )}
-            {signInButton(t('bots.host.signIn.start', 'Sign {{host}} in to Orca', { host }))}
+            {signInButton(t('bots.host.signIn.start', 'Sign in on {{host}}', { host }))}
             {bot && lead ? null : (
               <p>
                 {t(

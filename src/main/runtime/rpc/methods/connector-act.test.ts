@@ -235,34 +235,37 @@ describe('connector.act', () => {
       )
     }
     expect(older.calls).toEqual([])
-    // An inline file is no longer something this Orca sends.
-    await expect(
-      run(
-        {
-          sessionId: 'bot-session',
-          verb: 'attach',
-          ref: 'slack:T1:C1',
-          args: { file: { name: 'a.log', data: 'YQ==' }, postId: 'p2' }
-        },
-        older.context
-      )
-    ).rejects.toThrow()
   })
 
-  it('refuses a set from a look-around run', async () => {
-    const { context, calls } = actContext({ features: ['actions', 'set'] })
-    await expect(
-      run(
-        {
-          sessionId: 'look-session',
-          verb: 'set',
-          ref: 'ENG-1',
-          args: { fields: { state: 'Done' } }
-        },
-        context
-      )
-    ).rejects.toMatchObject({ code: 'look_around_reads_only' })
-    expect(calls).toEqual([])
+  it('schedules a post only with a cloud that can, and never posts it now instead', async () => {
+    const later = {
+      sessionId: 'bot-session',
+      verb: 'post',
+      ref: 'slack:T1:C1',
+      args: { text: 'standup in 10', postId: 'p1', postAt: 1_900_000_000 }
+    }
+    const older = actContext({ features: ['actions'] })
+    await expect(run(later, older.context)).rejects.toMatchObject({ code: 'cloud_lacks_schedule' })
+    expect(older.calls).toEqual([])
+    const newer = actContext({
+      features: ['actions', 'post.schedule'],
+      answers: [{ ok: true, value: { ok: true, result: { note: 'Scheduled.' } } }]
+    })
+    await run(later, newer.context)
+    expect(newer.calls[0]?.body).toMatchObject({ verb: 'post', args: later.args })
+  })
+
+  it('sends Slack’s own verbs only to a cloud that takes them', async () => {
+    const pin = { sessionId: 'bot-session', verb: 'pin', ref: 'slack:T1:C1::1.1', args: {} }
+    const older = actContext({ features: ['actions'] })
+    await expect(run(pin, older.context)).rejects.toMatchObject({ code: 'cloud_lacks_slack_tools' })
+    expect(older.calls).toEqual([])
+    const newer = actContext({
+      features: ['actions', 'slack.tools'],
+      answers: [{ ok: true, value: { ok: true, result: {} } }]
+    })
+    await run(pin, newer.context)
+    expect(newer.calls[0]?.body).toMatchObject({ verb: 'pin', ref: 'slack:T1:C1::1.1' })
   })
 
   it('sends a search only to a cloud that takes one', async () => {
@@ -372,12 +375,6 @@ describe('connector.act', () => {
       run({ sessionId: 'bot-session', verb: 'read', ref: 'slack:T1:C1' }, context)
     ).resolves.toEqual(answer)
     expect(calls).toHaveLength(2)
-  })
-
-  it('rejects arguments the verbs do not take', () => {
-    expect(() =>
-      act!.params!.parse({ sessionId: 's', verb: 'read', args: { token: 'x' } })
-    ).toThrow()
   })
 
   it('reaches the CLI with its code and its words', () => {

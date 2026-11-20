@@ -273,7 +273,6 @@
 3 src/main/ipc/filesystem/watcher-process/parcel-watcher-entry-path.ts
 1 src/main/ipc/filesystem/watcher-process/root-paths/watcher-event-root-path-rewrite.ts
 1 src/main/ipc/filesystem/watcher-process/supervision/parcel-watcher-supervisor-subscribe.ts
-1 src/main/ipc/keyboard/macos-keyboard-layout-snapshot.ts
 1 src/main/ipc/notifications/notification-authorization-status.ts
 1 src/main/ipc/pty/host-env/spawn-pane-env.ts
 1 src/main/ipc/ssh/ssh-connect-flow.ts
@@ -423,7 +422,7 @@
 1 src/main/providers/shell-launch/macos/login-session-pty-probe.ts
 3 src/main/providers/shell-launch/macos/tcc-login-shell.ts
 3 src/main/providers/shell-launch/windows/powershell-executable.ts
-2 src/main/providers/shell-launch/windows/windows-interactive-login-spawn.ts
+1 src/main/providers/shell-launch/windows/windows-interactive-login-spawn.ts
 2 src/main/providers/working-directory/validation.ts
 4 src/main/pty/history/fish-history-session.ts
 4 src/main/pty/history/terminal-history-deletion.ts

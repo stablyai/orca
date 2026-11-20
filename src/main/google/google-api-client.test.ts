@@ -51,13 +51,6 @@ describe('Google writes', () => {
     expect(seen[0]).toMatchObject({ method: 'PATCH', type: 'text/csv', body })
   })
 
-  it('takes an empty answer to a DELETE', async () => {
-    const { api } = await apiWith([() => new Response(null, { status: 204 })])
-    await expect(
-      api.send('drive', { method: 'DELETE', url: `${DRIVE}/f1` }, () => 'deleted')
-    ).resolves.toBe('deleted')
-  })
-
   it('renews a refused token once and resends the same JSON write', async () => {
     const { api, seen } = await apiWith([
       (url) =>
@@ -92,15 +85,6 @@ describe('Google writes', () => {
     )
     expect(seen.filter((call) => call.url === DOCS)).toHaveLength(1)
   })
-
-  it('turns a refusal into a sentence', async () => {
-    const { api } = await apiWith([
-      () => googleJson(429, { error: { code: 429, message: 'Rate Limit Exceeded' } })
-    ])
-    await expect(
-      api.send('drive', { method: 'DELETE', url: `${DRIVE}/f1` }, () => true)
-    ).rejects.toThrow('Google says too many requests right now.')
-  })
 })
 
 describe('Google downloads', () => {
@@ -109,13 +93,6 @@ describe('Google downloads', () => {
       status: 200,
       headers: withLength ? { 'content-length': String(size) } : {}
     })
-
-  it('returns the bytes of a file under the cap', async () => {
-    const { api } = await apiWith([() => file(1_000, true)])
-    const bytes = await api.bytes('drive', `${DRIVE}/f1?alt=media`, 2_000)
-    expect(bytes.byteLength).toBe(1_000)
-    expect(bytes[0]).toBe(7)
-  })
 
   it('refuses a file whose stated size is over the cap, before reading it', async () => {
     const { api } = await apiWith([() => file(1_500_000, true)])

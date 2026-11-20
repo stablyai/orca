@@ -46,7 +46,7 @@ export function WorkspaceSpaceWorktreeMenuItems({
       </Item>
       <Item variant="destructive" disabled={!canDelete} onSelect={onDelete}>
         <Trash2 className="size-3.5" />
-        {t('auto.components.status.bar.WorkspaceSpaceManagerPanel.792a214457', 'Delete workspace')}
+        {t('auto.components.status.bar.WorkspaceSpaceManagerPanel.792a214457', 'Delete')}
       </Item>
       {!canDelete ? (
         <div className="max-w-64 px-2 py-1.5 text-xs text-muted-foreground">

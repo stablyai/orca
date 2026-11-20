@@ -1,7 +1,6 @@
 // Hover or keyboard focus swaps the age for Done, Snooze, and More on open items.
 import { useId } from 'react'
 import { Check, CircleCheck, CircleSlash, Clock, MoreHorizontal } from 'lucide-react'
-import CommentMarkdown from '@/components/comment-markdown/CommentMarkdown'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import {
@@ -21,6 +20,7 @@ import {
   type BotItem
 } from '../../../../../shared/bots/bot-items'
 import type { Bot } from '../../../../../shared/bot-types'
+import { botItemQuestionLine } from '../../../../../shared/bots/bot-item-ask'
 import { BotRowHoverCard } from '../BotPanelRow'
 import { BotItemNumberColumn } from './BotItemNumberColumn'
 import { BotItemRowFace } from './BotItemRowFace'
@@ -67,7 +67,7 @@ export function BotItemRow({
   const doneLabel = t('bots.items.row.done', 'Done')
   const snoozeLabel = t('bots.items.snooze.menu', 'Snooze')
   // Needs you's question shows in the row's hover card; the row stays one line like the others.
-  const question = !stale && !snoozed && item.status === 'needs_you' ? item.question?.text : null
+  const question = !stale && !snoozed && item.status === 'needs_you' ? item.question : null
   const questionId = useId()
   const checkbox = selecting || selected
   const { rowRef, triggerRef, ...menu } = useMenuPointerExitClose<
@@ -104,17 +104,7 @@ export function BotItemRow({
       </span>
       {face ? <BotItemRowFace bot={face} /> : null}
       <BotRowHoverCard
-        card={
-          question ? (
-            <>
-              <p className="font-medium text-foreground">{item.title}</p>
-              <CommentMarkdown
-                content={question}
-                className="mt-1 text-xs leading-4 text-muted-foreground"
-              />
-            </>
-          ) : null
-        }
+        card={question ? <BotItemQuestionCard title={item.title} question={question} /> : null}
       >
         <button
           type="button"
@@ -172,7 +162,7 @@ export function BotItemRow({
       </BotRowHoverCard>
       {question ? (
         <span id={questionId} hidden>
-          {question}
+          {question.text}
         </span>
       ) : null}
       {closed ? null : (
@@ -240,5 +230,47 @@ export function BotItemRow({
         </span>
       )}
     </div>
+  )
+}
+
+/** The row's hover card while it needs you: the title, one line of the bot's words, then each question
+ *  line with its quick replies (read-only here; they answer on the item). */
+function BotItemQuestionCard({
+  title,
+  question
+}: {
+  title: string
+  question: NonNullable<BotItem['question']>
+}): React.JSX.Element {
+  const t = useTranslate()
+  // A host before question lines sends only the words.
+  const gist = question.gist ?? botItemQuestionLine(question.text)
+  return (
+    <>
+      <p className="font-medium text-foreground">{title}</p>
+      {gist ? <p className="mt-1 truncate text-muted-foreground">{gist}</p> : null}
+      {question.decisions?.map((decision) => (
+        <div key={decision.question} className="mt-2">
+          <p className="text-foreground">{botItemQuestionLine(decision.question)}</p>
+          {decision.replies.length > 0 ? (
+            <div className="mt-1.5 flex flex-wrap gap-1">
+              {decision.replies.map((reply) => (
+                <span
+                  key={reply.label}
+                  className="rounded-[10px] border border-question-option-border px-2 py-0.5 text-[11.5px] leading-4 text-foreground"
+                >
+                  {reply.label}
+                  {reply.recommended ? (
+                    <span className="ml-[5px] whitespace-nowrap text-[10.5px] text-muted-foreground">
+                      {t('bots.items.ask.recommended', 'Recommended')}
+                    </span>
+                  ) : null}
+                </span>
+              ))}
+            </div>
+          ) : null}
+        </div>
+      ))}
+    </>
   )
 }
