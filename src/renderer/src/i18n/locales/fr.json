@@ -12471,7 +12471,8 @@
           "source": {
             "cli": "Fichier d'authentification du CLI Cursor",
             "desktop": "Cursor IDE",
-            "keychain": "Trousseau macOS (cursor-agent)"
+            "keychain": "Trousseau macOS (cursor-agent)",
+            "keyring": "Trousseau Linux (cursor-agent)"
           },
           "staleUsage": "Dernière utilisation connue — la dernière actualisation a échoué : {{reason}}",
           "subtitle": "Affiche l'utilisation de votre forfait Cursor à partir de la connexion déjà présente sur cet ordinateur. Orca se contente de la lire — il ne modifie jamais votre connexion Cursor.",

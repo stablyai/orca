@@ -11920,7 +11920,8 @@
           "source": {
             "cli": "Cursor CLI 인증 파일",
             "desktop": "Cursor IDE",
-            "keychain": "macOS 키체인(cursor-agent)"
+            "keychain": "macOS 키체인(cursor-agent)",
+            "keyring": "Linux 키링(cursor-agent)"
           },
           "staleUsage": "마지막으로 확인된 사용량 — 최신 새로고침이 실패했습니다: {{reason}}",
           "subtitle": "이 컴퓨터에 이미 있는 로그인에서 Cursor 플랜 사용량을 보여줍니다. Orca는 읽기만 하며 Cursor 로그인을 변경하지 않습니다.",

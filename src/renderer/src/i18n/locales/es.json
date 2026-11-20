@@ -11941,7 +11941,8 @@
           "source": {
             "cli": "Archivo de autenticación de Cursor CLI",
             "desktop": "IDE de Cursor",
-            "keychain": "Llavero de macOS (cursor-agent)"
+            "keychain": "Llavero de macOS (cursor-agent)",
+            "keyring": "Llavero de Linux (cursor-agent)"
           },
           "staleUsage": "Último uso conocido — falló la actualización más reciente: {{reason}}",
           "subtitle": "Muestra tu uso del plan de Cursor a partir del inicio de sesión que ya está en este equipo. Orca solo lo lee — nunca modifica tu inicio de sesión de Cursor.",
