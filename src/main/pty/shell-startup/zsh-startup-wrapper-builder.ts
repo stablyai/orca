@@ -14,6 +14,7 @@ import {
   getZshShellReadyMarkerRegistrationBlock,
   SHELL_STARTUP_IDENTITY_MARKER_BLOCK,
   ZSH_FEATURE_CHANNEL_BLOCK,
+  ZSH_STARTUP_COMMAND_CLAIM_BLOCK,
   ZSH_USER_ZSHENV_SOURCE_BLOCK,
   ZSH_ZDOTDIR_HANDBACK_BLOCK
 } from './shell-templates'
@@ -170,6 +171,7 @@ export function buildZshStartupHook(spec: ZshStartupHookSpec): string {
     SHELL_STARTUP_IDENTITY_MARKER_BLOCK,
     spec.osc133CommandMarkers ? ZSH_OSC133_FUNCTION_BLOCK : null,
     ZSH_CWD_REPORT_BLOCK,
+    spec.startupCommandDelivery ? ZSH_STARTUP_COMMAND_CLAIM_BLOCK : null,
     ZSH_DEFERRED_LINE_INIT_BLOCK,
     buildDeferredInit(spec),
     ZSH_USER_ZSHENV_SOURCE_BLOCK

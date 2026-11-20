@@ -16,6 +16,7 @@ export type TerminalHostOptions = {
     envToDelete?: string[]
     command?: string
     startupCommandDelivery?: StartupCommandDelivery
+    shellReadySupported?: boolean
     launchAgent?: TuiAgent
     shellOverride?: string
     terminalShellArgs?: string[]

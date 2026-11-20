@@ -32,6 +32,11 @@ import {
 } from '../../providers/shell-launch/windows/shell-args'
 import { resolveUnixShellPath } from '../../providers/local-pty/local-pty-executable-spawn'
 import { selectShellStartupFeatures } from '../../pty/shell-startup/shell-startup-features'
+import {
+  POSIX_SHELL_STARTUP_CLAIM_ENV,
+  POSIX_SHELL_STARTUP_COMMAND_ENV
+} from '../../pty/shell-startup/posix-shell-startup-command'
+import type { ShellWrapperStartupCandidate } from './shell-wrapper-startup-claim'
 import { parseWslPath } from '../../wsl/filesystem/unc-path-access'
 import { addWslEnvKeys } from '../../../shared/shell/wsl/wsl-env'
 import {
@@ -55,18 +60,23 @@ export type PtyShellLaunchPlan = {
   spawnCwd: string
   validationCwd: string
   startupCommandDeliveredInShellArgs: boolean
+  /** Set when the zsh wrapper can run the command from its first prompt, so nothing is typed ahead of the user. */
+  shellWrapperStartupCandidate: ShellWrapperStartupCandidate | null
   windowsFallbackAttempts: WindowsShellSpawnAttempt[]
   startupAgentRecognition: RecognizedAgentProcess | null
 }
 
 export function createPtyShellLaunchPlan(
   opts: PtySubprocessOptions,
-  env: Record<string, string>
+  env: Record<string, string>,
+  /** Created by the caller; without it the command keeps typed delivery. */
+  startupClaimPath: string | null = null
 ): PtyShellLaunchPlan {
   const resolvedWslContext = resolveWslSessionContext(opts)
   let shellPath = resolvedWslContext ? 'wsl.exe' : opts.shellOverride || resolvePtyShellPath(env)
   let shellArgs: string[]
   let startupCommandDeliveredInShellArgs = false
+  let shellWrapperStartupCandidate: ShellWrapperStartupCandidate | null = null
   let windowsFallbackAttempts: WindowsShellSpawnAttempt[] = []
   const startupAgentRecognition = recognizeAgentProcessFromCommandLine(opts.command)
   const requestedCwd = opts.cwd || resolveSafePtyDefaultCwd()
@@ -206,6 +216,8 @@ export function createPtyShellLaunchPlan(
     }
     const waitsForShellReady = Boolean(opts.command)
     delete env.ORCA_SHELL_FEATURES
+    delete env[POSIX_SHELL_STARTUP_COMMAND_ENV]
+    delete env[POSIX_SHELL_STARTUP_CLAIM_ENV]
     const userShellArgs = !opts.command && !opts.launchAgent ? opts.terminalShellArgs : undefined
     const shellLaunch = getShellLaunchConfig(
       shellPath,
@@ -224,6 +236,19 @@ export function createPtyShellLaunchPlan(
     )
     Object.assign(env, shellLaunch.env)
     shellArgs = userShellArgs ?? shellLaunch.args ?? ['-l']
+    if (
+      opts.command &&
+      startupClaimPath &&
+      opts.shellReadySupported === true &&
+      zshWrapperCanRunStartupCommand(shellPath, shellLaunch)
+    ) {
+      shellWrapperStartupCandidate = {
+        command: opts.command,
+        shellPath,
+        orcaBuiltLine: opts.launchAgent !== undefined,
+        claimPath: startupClaimPath
+      }
+    }
   }
 
   seedPowerlevel10kWizardEnv(env, { envToDelete: opts.envToDelete })
@@ -242,7 +267,19 @@ export function createPtyShellLaunchPlan(
     spawnCwd,
     validationCwd,
     startupCommandDeliveredInShellArgs,
+    shellWrapperStartupCandidate,
     windowsFallbackAttempts,
     startupAgentRecognition
   }
+}
+
+function zshWrapperCanRunStartupCommand(
+  shellPath: string,
+  launch: ReturnType<typeof getShellLaunchConfig>
+): boolean {
+  return (
+    pathWin32.basename(shellPath).toLowerCase() === 'zsh' &&
+    launch.supportsReadyMarker &&
+    launch.env.ZDOTDIR !== undefined
+  )
 }

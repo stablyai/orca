@@ -16,6 +16,8 @@ import { basename } from 'node:path'
 import type { ShellReadyState } from '../protocol/daemon-rpc-contract'
 
 const SHELL_READY_TIMEOUT_MS = 15_000
+// The wrapper claims right after its marker; a hook that execs a new shell first leaves the claim to the host.
+const POST_READY_STARTUP_CLAIM_GRACE_MS = 3_000
 
 export type SessionShellReadyBarrierDeps = {
   sessionId: string
@@ -26,8 +28,17 @@ export type SessionShellReadyBarrierDeps = {
   installDeviceAttributesFilter(): void
   releaseDeviceAttributesFilter(): void
   acceptStartupIngress(data: string): void
+  startupCommandFallback?: StartupCommandFallback
   /** Use an injected file-log sink because detached daemon stdio is ignored. */
   reportReadinessEvent?(event: string, details: Record<string, unknown>): void
+}
+
+/** A wrapper-run startup command, typed after timeout only if the wrapper has not claimed it. */
+export type StartupCommandFallback = {
+  claim(): Promise<boolean>
+  build(): Promise<string>
+  /** Drops the launch builder so a settled fallback no longer pins the create request. */
+  release(): void
 }
 
 /** Strip startup markers and hold startup commands until shell readiness resolves. */
@@ -37,12 +48,16 @@ export class SessionShellReadyBarrier {
   private readyTimer: ReturnType<typeof setTimeout> | null = null
   private releaseDeviceAttributesResponder: (() => void) | null = null
   private preReadyStdinQueue: string[] = []
+  private startupCommandFallback: StartupCommandFallback | null = null
+  private writesClosed = false
+  private startupCommandFallbackTimer: ReturnType<typeof setTimeout> | null = null
   private readonly postReadyFlushGate: PostReadyFlushGate
 
   constructor(private readonly deps: SessionShellReadyBarrierDeps) {
     if (deps.shellReadySupported) {
       this._state = 'pending'
       this.scanState = createShellStartupOutputScanState()
+      this.startupCommandFallback = deps.startupCommandFallback ?? null
       // Answer startup DA1 locally so shells waiting for it can reach their ready marker.
       this.releaseDeviceAttributesResponder = installDeviceAttributesResponder({
         parser: deps.responderParser,
@@ -126,7 +141,16 @@ export class SessionShellReadyBarrier {
   }
 
   clearPendingWrites(): void {
+    this.writesClosed = true
     this.preReadyStdinQueue = []
+    if (this.startupCommandFallbackTimer) {
+      clearTimeout(this.startupCommandFallbackTimer)
+      this.startupCommandFallbackTimer = null
+    }
+    // Claiming also removes the claim file once no shell can take it.
+    void this.startupCommandFallback?.claim()
+    this.startupCommandFallback?.release()
+    this.startupCommandFallback = null
     this.postReadyFlushGate.clear()
   }
 
@@ -144,6 +168,12 @@ export class SessionShellReadyBarrier {
     this._state = 'ready'
     this.scanState = null
     this.clearReadyTimer()
+    if (this.startupCommandFallback) {
+      this.startupCommandFallbackTimer = setTimeout(() => {
+        this.startupCommandFallbackTimer = null
+        this.runStartupCommandFallback()
+      }, POST_READY_STARTUP_CLAIM_GRACE_MS)
+    }
     if (this.preReadyStdinQueue.length === 0) {
       return
     }
@@ -176,6 +206,24 @@ export class SessionShellReadyBarrier {
     this.releaseDeviceAttributes()
     this.releaseHeldBytes()
     this.flushPreReadyQueue()
+    this.runStartupCommandFallback()
+  }
+
+  // Types the launch only when the claim proves the shell wrapper never ran it.
+  private runStartupCommandFallback(): void {
+    const fallback = this.startupCommandFallback
+    this.startupCommandFallback = null
+    void fallback
+      ?.claim()
+      .then(async (won) => {
+        if (won && !this.writesClosed) {
+          const line = await fallback.build()
+          if (!this.writesClosed) {
+            this.deps.subprocess.write(line)
+          }
+        }
+      })
+      .finally(() => fallback.release())
   }
 
   private flushPreReadyQueue(): void {

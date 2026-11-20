@@ -9,6 +9,7 @@ import {
   seedPowerlevel10kWizardEnv
 } from '../../pty/shell-startup/powerlevel10k-wizard-env'
 import {
+  POSIX_SHELL_STARTUP_CLAIM_ENV,
   POSIX_SHELL_STARTUP_COMMAND_ENV,
   supportsPosixShellStartupCommand
 } from '../../pty/shell-startup/posix-shell-startup-command'
@@ -98,6 +99,7 @@ export function finalizeLocalPtySpawnEnvironment(args: {
     // Only this shell launch config may choose Orca-owned features.
     delete env.ORCA_SHELL_FEATURES
     delete env[POSIX_SHELL_STARTUP_COMMAND_ENV]
+    delete env[POSIX_SHELL_STARTUP_CLAIM_ENV]
     const userShellArgs = !spawn.command && !spawn.launchAgent ? spawn.terminalShellArgs : undefined
     // Capture before launch config prefixes XDG_DATA_DIRS.
     const fishLaunch = {

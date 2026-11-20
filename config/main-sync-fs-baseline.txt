@@ -590,7 +590,7 @@
 2 src/shared/secure-storage/windows-security-addon.ts
 5 src/shared/shell/command-resolution/cli-fs-reads.ts
 3 src/shared/shell/launch/cli-runtime-pairing-inputs.ts
-5 src/shared/shell/launch/startup-command-staging.ts
+2 src/shared/shell/launch/startup-command-staging.ts
 3 src/shared/source-scan/source-tree-scan.ts
 2 src/shared/speech/native-recognizer/speech-recognizer-package.ts
 1 src/shared/terminal/pty/native-process/pty-process-ceiling-state.ts

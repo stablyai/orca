@@ -4,7 +4,14 @@ import type { SubprocessHandle } from '../sessions/session-subprocess-handle'
 import { normalizePtySize } from '../protocol/daemon-pty-size'
 import { TerminalAttachCanceledError } from '../protocol/daemon-errors'
 import { createDaemonPtyEnvironment } from './spawn-environment'
-import { createPtyShellLaunchPlan } from './shell-launch-plan'
+import { createPtyShellLaunchPlan, type PtyShellLaunchPlan } from './shell-launch-plan'
+import { discardStagedStartupCommandAsync } from '../../../shared/shell/launch/startup-command-staging'
+import {
+  createShellWrapperStartupClaim,
+  stageShellWrapperStartup,
+  takeShellWrapperStartupClaim,
+  type ShellWrapperStartup
+} from './shell-wrapper-startup-claim'
 import { spawnNativeDaemonPty, type SpawnedDaemonPty } from './native-pty-spawn'
 import {
   formatPtySpawnError,
@@ -27,6 +34,8 @@ export type PtySubprocessOptions = {
   envToDelete?: string[]
   command?: string
   startupCommandDelivery?: StartupCommandDelivery
+  /** The session will hold a readiness barrier, so the wrapper may run the command itself. */
+  shellReadySupported?: boolean
   launchAgent?: TuiAgent
   shellOverride?: string
   /** Unix interactive profile args are ignored for command and agent launches. */
@@ -66,10 +75,24 @@ export async function checkPtySpawnHealth(): Promise<void> {
 /** Plan first so validation uses the host or WSL cwd that spawn will actually use. */
 export async function createPtySubprocess(opts: PtySubprocessOptions): Promise<SubprocessHandle> {
   const work = new TerminalCreationWork()
+  let launch: PtyShellLaunchPlan | undefined
+  let startupClaimPath: string | null = null
+  let shellWrapperStartup: ShellWrapperStartup | null = null
   try {
     const size = normalizePtySize(opts.cols, opts.rows)
     const env = createDaemonPtyEnvironment(opts)
-    const launch = createPtyShellLaunchPlan(opts, env)
+    // Only a wrapped zsh can use it; the plan decides, and an unused claim is removed below.
+    startupClaimPath =
+      opts.command && opts.shellReadySupported === true && process.platform !== 'win32'
+        ? await createShellWrapperStartupClaim()
+        : null
+    launch = createPtyShellLaunchPlan(opts, env, startupClaimPath)
+    shellWrapperStartup = launch.shellWrapperStartupCandidate
+      ? await stageShellWrapperStartup(launch.shellWrapperStartupCandidate, env)
+      : null
+    if (startupClaimPath && !shellWrapperStartup) {
+      void takeShellWrapperStartupClaim(startupClaimPath)
+    }
 
     await preflightPtySpawn({
       validationCwd: launch.validationCwd,
@@ -118,6 +141,7 @@ export async function createPtySubprocess(opts: PtySubprocessOptions): Promise<S
       env,
       startupCommandDeliveredInShellArgs:
         spawned.startupCommandDeliveredInShellArgs ?? launch.startupCommandDeliveredInShellArgs,
+      ...(shellWrapperStartup ? { shellWrapperStartup } : {}),
       reportsChildExitStatus: spawned.reportsChildExitStatus,
       requestedCwd: opts.cwd,
       sessionId: opts.sessionId,
@@ -125,6 +149,15 @@ export async function createPtySubprocess(opts: PtySubprocessOptions): Promise<S
       // Claimed here, synchronously with the handle's own subscription, so no event falls between.
       ...(spawned.claimStartupEvents ? { startupEvents: spawned.claimStartupEvents() } : {})
     })
+  } catch (error) {
+    // No shell will source a staged launch script whose spawn failed.
+    if (shellWrapperStartup) {
+      void discardStagedStartupCommandAsync(shellWrapperStartup.staging)
+    }
+    if (startupClaimPath) {
+      void takeShellWrapperStartupClaim(startupClaimPath)
+    }
+    throw error
   } finally {
     await work.finish()
     opts.onCreationDisposition?.(await work.completion)

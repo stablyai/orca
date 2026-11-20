@@ -1,7 +1,8 @@
 /** Stage long/multiline launches on the PTY host: ready markers may precede raw mode, so MAX_CANON truncates long lines
  * (1024 bytes on macOS), and raw newlines submit early in bash 3.2. Self-delete scripts before starting the agent. */
 import { randomBytes } from 'node:crypto'
-import { readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { rmSync, writeFileSync } from 'node:fs'
+import { readdir, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
@@ -79,48 +80,82 @@ function stagedScriptLine(shellName: string | null, quotedPath: string): string 
 
 let staleSweepStarted = false
 
-export function stageStartupCommand(args: {
+type StageStartupCommandArgs = {
   command: string
   shellPath: string | undefined
   orcaBuiltLine?: boolean
   platform?: NodeJS.Platform
   directory?: string
-}): StartupCommandStaging {
+}
+
+type StartupCommandStagingPlan =
+  | { staged: false; result: StartupCommandStaging }
+  | { staged: true; scriptPath: string; content: string; result: StartupCommandStaging }
+
+function planStartupCommandStaging(args: StageStartupCommandArgs): StartupCommandStagingPlan {
   const platform = args.platform ?? process.platform
   if (!shouldStageStartupCommand({ ...args, platform })) {
-    return { command: args.command, delivery: 'typed' }
+    return { staged: false, result: { command: args.command, delivery: 'typed' } }
   }
   const directory = args.directory ?? tmpdir()
   if (!staleSweepStarted) {
     staleSweepStarted = true
     // Crash cleanup must not delay launch.
-    setTimeout(() => sweepStaleStagedStartupCommands({ directory }), 0).unref?.()
+    setTimeout(() => void sweepStaleStagedStartupCommands({ directory }), 0).unref?.()
   }
-  const shellName = stagingShellName(args.shellPath)
   const scriptPath = join(
     directory,
     `${STAGED_STARTUP_COMMAND_PREFIX}${randomBytes(8).toString('hex')}.sh`
   )
   const quotedPath = quoteStartupArg(scriptPath, 'posix')
-  try {
+  return {
+    staged: true,
+    scriptPath,
     // Unlink before the agent starts; the shell continues reading its open file.
-    writeFileSync(
-      scriptPath,
-      `command rm -f -- ${quotedPath}\n${stripSubmitTerminator(args.command)}\n`,
-      { mode: 0o600, flag: 'wx' }
-    )
-  } catch (error) {
-    return {
-      command: args.command,
-      delivery: 'typed-after-stage-failed',
-      failure: error instanceof Error ? error.message : String(error)
+    content: `command rm -f -- ${quotedPath}\n${stripSubmitTerminator(args.command)}\n`,
+    result: {
+      command: stagedScriptLine(stagingShellName(args.shellPath), quotedPath),
+      delivery: 'staged',
+      scriptPath
     }
   }
+}
+
+function stagingFailed(command: string, error: unknown): StartupCommandStaging {
   return {
-    command: stagedScriptLine(shellName, quotedPath),
-    delivery: 'staged',
-    scriptPath
+    command,
+    delivery: 'typed-after-stage-failed',
+    failure: error instanceof Error ? error.message : String(error)
   }
+}
+
+export function stageStartupCommand(args: StageStartupCommandArgs): StartupCommandStaging {
+  const plan = planStartupCommandStaging(args)
+  if (!plan.staged) {
+    return plan.result
+  }
+  try {
+    writeFileSync(plan.scriptPath, plan.content, { mode: 0o600, flag: 'wx' })
+  } catch (error) {
+    return stagingFailed(args.command, error)
+  }
+  return plan.result
+}
+
+/** Same as stageStartupCommand, for callers that must not block their event loop. */
+export async function stageStartupCommandAsync(
+  args: StageStartupCommandArgs
+): Promise<StartupCommandStaging> {
+  const plan = planStartupCommandStaging(args)
+  if (!plan.staged) {
+    return plan.result
+  }
+  try {
+    await writeFile(plan.scriptPath, plan.content, { mode: 0o600, flag: 'wx' })
+  } catch (error) {
+    return stagingFailed(args.command, error)
+  }
+  return plan.result
 }
 
 /** Explain fallback because the full typed line may leave the shell awaiting more input. */
@@ -132,6 +167,16 @@ export function startupStagingFailureNotice(staging: StartupCommandStaging): str
     .map((char) => (char < ' ' || char === '\x7f' ? ' ' : char))
     .join('')
   return `\r\n[orca] Could not stage the launch command (${reason}); typed it in full. If the shell shows quote> or waits for more input, press Ctrl-C and launch again.\r\n`
+}
+
+export async function discardStagedStartupCommandAsync(
+  staging: StartupCommandStaging | undefined
+): Promise<void> {
+  if (!staging?.scriptPath) {
+    return
+  }
+  // The age-gated sweep is the fallback.
+  await rm(staging.scriptPath, { force: true }).catch(() => {})
 }
 
 export function discardStagedStartupCommand(staging: StartupCommandStaging | undefined): void {
@@ -146,12 +191,15 @@ export function discardStagedStartupCommand(staging: StartupCommandStaging | und
 }
 
 /** Age-gate crash cleanup so another instance’s fresh launch survives. */
-export function sweepStaleStagedStartupCommands(args: { directory?: string; now?: number }): void {
+export async function sweepStaleStagedStartupCommands(args: {
+  directory?: string
+  now?: number
+}): Promise<void> {
   const directory = args.directory ?? tmpdir()
   const now = args.now ?? Date.now()
   let names: string[]
   try {
-    names = readdirSync(directory)
+    names = await readdir(directory)
   } catch {
     return
   }
@@ -161,8 +209,8 @@ export function sweepStaleStagedStartupCommands(args: { directory?: string; now?
     }
     const path = join(directory, name)
     try {
-      if (now - statSync(path).mtimeMs > STAGED_STARTUP_COMMAND_STALE_MS) {
-        rmSync(path, { force: true })
+      if (now - (await stat(path)).mtimeMs > STAGED_STARTUP_COMMAND_STALE_MS) {
+        await rm(path, { force: true })
       }
     } catch {
       // Raced another instance's sweep.

@@ -2,10 +2,9 @@ import { terminalStartError } from '../../../shared/terminal/pty/lifecycle/termi
 import type { PtyCreationDisposition } from '../../../shared/terminal/pty/lifecycle/pty-creation-disposition'
 import type { SubprocessHandle } from '../sessions/session-subprocess-handle'
 import type { WslGuestRoot } from '../../../shared/shell/wsl/wsl-guest-root-marker'
-import { buildStartupCommandSubmission } from '../../../shared/shell/launch/startup-command-submission'
 import {
+  discardStagedStartupCommandAsync,
   stageStartupCommand,
-  startupStagingFailureNotice,
   type StartupCommandStaging
 } from '../../../shared/shell/launch/startup-command-staging'
 import { resolvePtyOwnerBackend } from '../../../shared/terminal/pty/lifecycle/pty-owner-backend'
@@ -17,6 +16,12 @@ import {
   terminalSessionExitCode
 } from './terminal-host-returned-process'
 import { shellPathSupportsPtyStartupBarrier } from '../shell-readiness/shell-ready'
+import { createStartupCommandFallback } from '../pty-subprocess/shell-wrapper-startup-claim'
+import {
+  buildStartupSubmission,
+  submitStagedStartupCommand,
+  type StartupSubmissionInputs
+} from './terminal-host-startup-submission'
 import type { InternalCreateOrAttachOptions } from './terminal-host-agent-session-claim'
 import type { CreateOrAttachResult } from './terminal-host-create-contract'
 import { resolveDaemonSessionScrollbackRows } from '../sessions/daemon-session-scrollback-window'
@@ -53,6 +58,7 @@ export async function spawnAndPublishSession(
   let lowerReported = false
   let physical: ReturnType<typeof observeReturnedTerminalProcess>
   let subprocess: SubprocessHandle
+  const staging: { current?: StartupCommandStaging } = {}
   try {
     subprocess = await deps.spawnSubprocess({
       onCreationDisposition: (disposition) => {
@@ -67,6 +73,7 @@ export async function spawnAndPublishSession(
       envToDelete: opts.envToDelete,
       command: opts.command,
       startupCommandDelivery: opts.startupCommandDelivery,
+      ...(opts.shellReadySupported ? { shellReadySupported: true } : {}),
       ...(opts.launchAgent ? { launchAgent: opts.launchAgent } : {}),
       shellOverride: opts.shellOverride,
       terminalShellArgs: opts.terminalShellArgs,
@@ -76,6 +83,8 @@ export async function spawnAndPublishSession(
       assertCreateAllowed: deps.assertCreateAllowed,
       ...(opts.cancelSignal ? { cancelSignal: opts.cancelSignal } : {})
     })
+    // Claim the wrapper's staged script now so every later failure path still unlinks it.
+    staging.current = subprocess.shellWrapperStartup?.staging
     // External implementations returning a handle have transferred an actual resource.
     physical = observeReturnedTerminalProcess(subprocess, opts.sessionId, deps.spawnGate)
     if (!lowerReported) {
@@ -96,7 +105,6 @@ export async function spawnAndPublishSession(
     throw error
   }
 
-  const staging: { current?: StartupCommandStaging } = {}
   // Reconcile fallback-shell capability or its first command could remain queued until timeout.
   const shellReadySupported =
     (opts.shellReadySupported ?? false) &&
@@ -107,6 +115,16 @@ export async function spawnAndPublishSession(
   let recordRoot = (root: WslGuestRoot): void => {
     heldRoot = root
   }
+  const wrapperStartup = opts.command ? subprocess.shellWrapperStartup : undefined
+  const wrapperCommand = opts.command
+  // A profile that execs another shell never reaches the wrapper; type the line only if the wrapper never claimed it.
+  const startupCommandFallback =
+    wrapperStartup && wrapperCommand
+      ? createStartupCommandFallback(wrapperStartup.claimPath, () => {
+          void discardStagedStartupCommandAsync(wrapperStartup.staging)
+          return buildSubmission(wrapperCommand)
+        })
+      : undefined
   const session = new Session({
     sessionId: opts.sessionId,
     cols: size.cols,
@@ -120,6 +138,7 @@ export async function spawnAndPublishSession(
       wslDistro
     }),
     shellReadySupported,
+    ...(startupCommandFallback ? { startupCommandFallback } : {}),
     scrollback: resolveDaemonSessionScrollbackRows(),
     historySeedChunks: opts.historySeedChunks,
     ...(opts.startupIngress ? { startupIngress: opts.startupIngress } : {}),
@@ -183,8 +202,13 @@ export async function spawnAndPublishSession(
   const token = session.attachClient(opts.streamClient)
   attachSessionInputViewer(session, opts.streamClient)
 
+  // The wrapper runs the command at its first prompt (or first precmd without zle), so nothing is typed
+  // ahead of the user and early keystrokes queue for the agent.
+  const startupCommandByWrapper = wrapperStartup !== undefined
   const startupCommandWritten =
-    Boolean(opts.command) && !subprocess.startupCommandDeliveredInShellArgs
+    Boolean(opts.command) &&
+    !subprocess.startupCommandDeliveredInShellArgs &&
+    !startupCommandByWrapper
   // Distinguish absent from undelivered commands; log only length because command text may contain credentials.
   try {
     deps.reportReadinessEvent?.('startup-command-delivery', {
@@ -193,35 +217,32 @@ export async function spawnAndPublishSession(
       hasCommand: Boolean(opts.command),
       commandLength: opts.command?.length ?? 0,
       viaShellArgs: subprocess.startupCommandDeliveredInShellArgs === true,
+      viaShellWrapper: startupCommandByWrapper,
       queuedByShellReadyBarrier: shellReadySupported
     })
   } catch {
     // Diagnostics must never turn a live PTY into a failed create.
   }
+  // Module-level builder with explicit inputs: closures here share this scope with session-lifetime callbacks.
+  const submission: StartupSubmissionInputs = {
+    staging,
+    session,
+    shellPath: subprocess.shellPath,
+    orcaBuiltLine: opts.launchAgent !== undefined,
+    shellReadySupported,
+    sessionId: opts.sessionId,
+    reportReadinessEvent: deps.reportReadinessEvent
+  }
+  const buildSubmission = (command: string): Promise<string> =>
+    buildStartupSubmission(command, submission)
   if (startupCommandWritten && opts.command) {
-    staging.current = stageStartupCommand({
+    // Staged synchronously so the command reserves its barrier slot before any ready marker is read.
+    const staged = stageStartupCommand({
       command: opts.command,
       shellPath: subprocess.shellPath,
       orcaBuiltLine: opts.launchAgent !== undefined
     })
-    const notice = startupStagingFailureNotice(staging.current)
-    if (notice) {
-      session.startupIngress.accept(notice)
-      try {
-        deps.reportReadinessEvent?.('startup-command-stage-failed', {
-          sessionId: opts.sessionId,
-          reason: staging.current.failure
-        })
-      } catch {
-        // Diagnostics must never turn a live PTY into a failed create.
-      }
-    }
-    // Why: only Orca-wrapped shells advertise the paste-safe startup barrier.
-    session.writeStartupCommand(
-      buildStartupCommandSubmission(staging.current.command, {
-        bracketedPasteSafe: shellReadySupported
-      })
-    )
+    session.writeStartupCommand(submitStagedStartupCommand(staged, submission))
   }
 
   return {
