@@ -297,9 +297,20 @@ export function activityThreadRowCopy(
 
 /** The row names what its group header doesn't: the project chip, the workspace, or both. */
 export function activityThreadRowIdentity(
-  thread: Pick<AgentPaneThread, 'repo'>,
+  thread: Pick<AgentPaneThread, 'repo' | 'worktree'>,
   groupBy: ActivityGroupBy
 ): { showProject: boolean; showWorkspace: boolean } {
   const showProject = thread.repo !== null && groupBy !== 'project'
-  return { showProject, showWorkspace: groupBy !== 'worktree' || !showProject }
+  // Why: the worktree group header shows the raw display name, which can be empty.
+  const headerNamesWorkspace =
+    groupBy === 'worktree' && Boolean(thread.worktree.displayName?.trim())
+  // Why: a folder workspace without a custom name falls back to the project name.
+  const repeatsProject =
+    showProject &&
+    normalizeScanLabel(getActivityThreadWorkspaceTitle(thread.worktree)) ===
+      normalizeScanLabel(thread.repo?.displayName ?? '')
+  return {
+    showProject,
+    showWorkspace: !showProject || !(headerNamesWorkspace || repeatsProject)
+  }
 }

@@ -19,6 +19,7 @@ import { MetadataActionIcon } from '../../sidebar/workspace-card/metadata/Worktr
 import { EventTime, ThreadAgentStateIndicator } from '../thread-list/activity-thread-controls'
 import {
   activityThreadRowCopy,
+  activityThreadRowIdentity,
   threadAgentStateLabel
 } from '../threads/activity-thread-presentation'
 import type { AgentPaneThread } from '../threads/activity-thread-types'
@@ -65,6 +66,7 @@ export function ActivityThreadHoverCardSummary({
     return getTranslatedExecutionHostLabel(executionHostId)
   }, [executionHostId, hostLabelOverrides, parsedHost, runtimeEnvironments, sshTargetLabels])
   const { taskTitle, needsAttention, workspaceLabel } = activityThreadRowCopy(thread, t)
+  const { showWorkspace } = activityThreadRowIdentity(thread, 'none')
 
   const isKnownWorktree = useAppStore((s) =>
     Boolean(s.getKnownWorktreeById(worktree.id, executionHostId))
@@ -93,9 +95,11 @@ export function ActivityThreadHoverCardSummary({
         {/* Why: wrap rather than truncate, so long project and workspace names stay readable. */}
         <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 text-[12px] font-medium text-muted-foreground">
           {repo ? <ProjectChip repo={repo} className="max-w-full" /> : null}
-          <span className="min-w-0 max-w-full truncate" title={workspaceLabel}>
-            {workspaceLabel}
-          </span>
+          {showWorkspace ? (
+            <span className="min-w-0 max-w-full truncate" title={workspaceLabel}>
+              {workspaceLabel}
+            </span>
+          ) : null}
           {remoteHostLabel ? (
             <>
               <span className="text-muted-foreground/40">•</span>
