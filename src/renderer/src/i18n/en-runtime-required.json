@@ -1707,10 +1707,6 @@
     "slack": {
       "postAs": {
         "line": "When you reply to a Slack thread from Orca, it posts as <picker>{{name}}</picker>"
-      },
-      "setup": {
-        "prepare": "Continue to create or update this bot’s Slack app, then approve it in Slack.",
-        "continue": "Continue setup"
       }
     },
     "upNext": {

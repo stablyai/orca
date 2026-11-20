@@ -71,8 +71,8 @@ export class ConnectorCloud {
   }
 
   /** The signed-in Orca account the connector acts as, or null. */
-  signedInAccount(): string | null {
-    return this.activeAccount()
+  signedInAccount(includeFenced = false): string | null {
+    return includeFenced ? this.options.account() : this.activeAccount()
   }
 
   private noteAccount(): void {

@@ -160,7 +160,7 @@ export function BotSlackCard({
     const confirmed = await confirm({
       title: t('bots.slack.connection.removeFromTitle', 'Remove {{name}} from {{place}}?', {
         name: bot.name,
-        place: face.workspace ?? 'Slack'
+        place: face.workspace ?? removeTeamId ?? 'Slack'
       }),
       description: t(
         'bots.slack.connection.removeNote',
@@ -243,7 +243,7 @@ export function BotSlackCard({
         removeTeamId !== undefined
           ? {
               label: t('bots.connector.removeFrom', 'Remove from {{place}}…', {
-                place: face.workspace ?? 'Slack'
+                place: face.workspace ?? removeTeamId ?? 'Slack'
               }),
               onSelect: () => void remove(),
               disabled: removing

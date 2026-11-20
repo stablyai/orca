@@ -166,7 +166,7 @@ describe('BotSlackCard', () => {
     await screen.findByRole('button', { name: /^(Finish setup|Add to Slack)$/ })
     openActions()
     expect(screen.queryByRole('menuitem', { name: 'Slack app settings' })).toBeNull()
-    fireEvent.click(await screen.findByRole('menuitem', { name: 'Remove from Slack…' }))
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Remove from T05…' }))
     await waitFor(() => expect(api.remove).toHaveBeenCalledWith({ botId: 'bot-1', teamId: 'T05' }))
   })
 

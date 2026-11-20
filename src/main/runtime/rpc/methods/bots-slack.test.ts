@@ -10,6 +10,10 @@ const mocks = vi.hoisted(() => {
 
 // The bot an update function is given, with one Slack workspace.
 const inT1 = { slack: { appId: 'A1', teamId: 'T1' } }
+const createdIn = (teamId: string) => ({
+  ok: true,
+  value: { state: 'created', appId: 'A1', teamId }
+})
 const editedFrom = (bot: Parameters<typeof nextSlackApps>[0]): unknown => {
   const [, edit] = mocks.update.mock.lastCall ?? []
   return typeof edit === 'function' ? edit(bot) : edit
@@ -105,6 +109,7 @@ describe('bots.slack', () => {
 
   it('clears the bot’s app once it is removed from Slack, in one workspace or all', async () => {
     const both = { slackApps: [...nextSlackApps(inT1, { set: { appId: 'A2', teamId: 'T2' } })] }
+    mocks.call.mockResolvedValueOnce(createdIn('T2'))
     mocks.call.mockResolvedValueOnce({ ok: true, value: undefined })
     await invoke('bots.slack.remove', { botId: 'bot-1', teamId: 'T2' })
     expect(mocks.call.mock.lastCall?.[0]).toMatch(/\/slack\?team=T2$/)
@@ -137,6 +142,7 @@ describe('bots.slack', () => {
     'token_revoked',
     'account_inactive'
   ])('forgets only the requested workspace when removal reports %s', async (error) => {
+    mocks.call.mockResolvedValueOnce(createdIn('T1'))
     mocks.call.mockResolvedValueOnce({ ok: false, status: 409, error })
     expect(await invoke('bots.slack.remove', { botId: 'bot-1', teamId: 'T1' })).toEqual({
       ok: true,
@@ -153,6 +159,7 @@ describe('bots.slack', () => {
   it.each(['cloud_unreachable', 'signed_out', 'slack_unavailable', 'invalid_auth'])(
     'keeps the local app when removal cannot confirm it stopped: %s',
     async (error) => {
+      mocks.call.mockResolvedValueOnce(createdIn('T1'))
       mocks.call.mockResolvedValueOnce({ ok: false, status: 503, error })
       expect(await invoke('bots.slack.remove', { botId: 'bot-1', teamId: 'T1' })).toEqual({
         ok: false,
@@ -163,6 +170,7 @@ describe('bots.slack', () => {
   )
 
   it('keeps the current account’s apps when removal answers after an account switch', async () => {
+    mocks.call.mockResolvedValueOnce(createdIn('T1'))
     mocks.call.mockImplementationOnce(async () => {
       mocks.account = 'acct-2'
       return { ok: true, value: undefined }
@@ -172,6 +180,39 @@ describe('bots.slack', () => {
       error: 'account_changed'
     })
     expect(mocks.update).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    { state: 'not_created' } as const,
+    {
+      state: 'installed',
+      teamId: 'T1',
+      appId: 'A1',
+      botUserId: 'U1',
+      installerUserId: 'U2'
+    } as const
+  ])(
+    'forgets an absent workspace without disconnecting another on an older service: %o',
+    async (state) => {
+      mocks.call.mockResolvedValueOnce({ ok: true, value: state })
+      expect(await invoke('bots.slack.remove', { botId: 'bot-1', teamId: 'T2' })).toEqual({
+        ok: true,
+        value: undefined
+      })
+      expect(mocks.call.mock.calls.map((call) => call[3]?.method)).toEqual(['GET'])
+      expect(
+        editedFrom({
+          slack: inT1.slack,
+          slackApps: [inT1.slack, { appId: 'A2', teamId: 'T2' }]
+        })
+      ).toEqual({ slackApps: [inT1.slack] })
+    }
+  )
+
+  it('leaves an already removed workspace unchanged inside the serialized edit', async () => {
+    mocks.call.mockResolvedValueOnce({ ok: true, value: { state: 'not_created' } })
+    await invoke('bots.slack.remove', { botId: 'bot-1', teamId: 'T2' })
+    expect(editedFrom(inT1)).toBeNull()
   })
 
   it('takes nothing that is not a configuration refresh token', () => {

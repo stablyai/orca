@@ -320,6 +320,14 @@ describe('BotController', () => {
     expect((await removed).members).toEqual([lee])
   })
 
+  it('preserves a queued change when a later edit is already satisfied', async () => {
+    const bot = await bots.create({ name: 'Reviewer' })
+    const changed = bots.update(bot.id, { paused: true })
+    const unchanged = bots.update(bot.id, (saved) => (saved.paused ? null : { paused: true }))
+    expect(await unchanged).toBe(await changed)
+    expect(store.getBots().find((saved) => saved.id === bot.id)?.paused).toBe(true)
+  })
+
   it('keeps the home folder on delete unless asked', async () => {
     const bot = await bots.create({ name: 'Reviewer' })
     const folder = join(botsRoot(), 'reviewer')

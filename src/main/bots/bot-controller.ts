@@ -204,11 +204,17 @@ export class BotController {
   }
 
   /** A function reads the bot as saved, inside the queue, so a concurrent edit is not lost. */
-  update(botId: string, edit: BotHostUpdates | ((bot: Bot) => BotHostUpdates)): Promise<Bot> {
+  update(
+    botId: string,
+    edit: BotHostUpdates | ((bot: Bot) => BotHostUpdates | null)
+  ): Promise<Bot> {
     return this.serialize(async () => {
       const store = this.requireStore()
       const bot = this.requireBot(store, botId)
       const updates = typeof edit === 'function' ? edit(bot) : edit
+      if (updates === null) {
+        return bot
+      }
       if (updates.name !== undefined) {
         assertBotNameFree(store.getBots(), updates.name, botId)
       }

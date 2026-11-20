@@ -51,7 +51,17 @@ async function recordSlack(
   change: Parameters<typeof nextSlackApps>[1]
 ): Promise<void> {
   try {
-    await runtime.bots.update(botId, (bot) => ({ slackApps: nextSlackApps(bot, change) }))
+    await runtime.bots.update(botId, (bot) => {
+      if (
+        'remove' in change &&
+        !botSlackApps(bot).some(
+          (app) => change.remove === undefined || app.teamId === change.remove
+        )
+      ) {
+        return null
+      }
+      return { slackApps: nextSlackApps(bot, change) }
+    })
   } catch (error) {
     console.error('Failed to record the bot’s Slack app:', error)
   }
@@ -144,11 +154,21 @@ export const BOT_SLACK_METHODS = [
     params: BotSlackBot,
     handler: async ({ botId, teamId }, context) => {
       const cloud = context.runtime.getConnectorCloud()
-      const account = cloud?.signedInAccount() ?? null
-      const removed = await withHostCloudClient(context, (client) =>
-        client.removeSlackApp(botId, teamId)
-      )
-      if ((cloud?.signedInAccount() ?? null) !== account) {
+      const account = cloud?.signedInAccount(true) ?? null
+      const removed = await withHostCloudClient(context, async (client) => {
+        if (teamId !== undefined) {
+          const state = await client.slackState(botId, teamId)
+          if (!state.ok) {
+            return state
+          }
+          // An older service ignores the workspace selector; never remove its other workspace.
+          if (state.value.state === 'not_created' || state.value.teamId !== teamId) {
+            return { ok: true as const, value: undefined }
+          }
+        }
+        return client.removeSlackApp(botId, teamId)
+      })
+      if ((cloud?.signedInAccount(true) ?? null) !== account) {
         return { ok: false as const, error: CONNECT_ACCOUNT_CHANGED }
       }
       // Older services can refuse removal when the app or its install is already gone.
@@ -162,9 +182,7 @@ export const BOT_SLACK_METHODS = [
           'account_inactive'
         ].includes(removed.error)
       ) {
-        await context.runtime.bots.update(botId, (bot) => ({
-          slackApps: nextSlackApps(bot, { remove: teamId })
-        }))
+        await recordSlack(context.runtime, botId, { remove: teamId })
         return { ok: true as const, value: undefined }
       }
       return removed

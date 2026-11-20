@@ -59,7 +59,7 @@ describe('orca bot connectors', () => {
     ).toContain("Slack: `orca slack`, as Scout. Not connected. Your Slack app isn't installed.")
     expect(slack([{ source: 'slack' }])).toMatchObject({ signedIn: true, wakes: true })
     // An app record alone cannot confirm an install.
-    expect(slack()).toMatchObject({ signedIn: false, wakes: false })
+    expect(slack()).toMatchObject({ signedIn: false, wakes: false, connectionUnknown: true })
   })
 
   it('adds a Google row with each account’s services, or the one step that is missing', () => {
