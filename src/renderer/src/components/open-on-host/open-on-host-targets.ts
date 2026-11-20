@@ -47,24 +47,38 @@ export function listOpenOnHostTargets(
     eligibleRepos,
     hosts
   })) {
-    const parsed = parseExecutionHostId(option.hostId)
     const host = hostById.get(option.hostId)
+    const rpcHostId = getRuntimeHostId(option.hostId, host)
+    const parsed = rpcHostId ? parseExecutionHostId(rpcHostId) : null
     if (
+      !rpcHostId ||
       parsed?.kind !== 'runtime' ||
       option.hostId === sourceHostId ||
+      rpcHostId === sourceHostId ||
       host?.aliasHostIds?.includes(sourceHostId)
     ) {
       continue
     }
     targets.push({
-      hostId: option.hostId,
+      hostId: rpcHostId,
       environmentId: parsed.environmentId,
       label: option.label,
       existingSetup: option.kind === 'ready' ? option : null,
-      disabledReason: getDisabledReason(option, host, input, t)
+      disabledReason: getDisabledReason(option, hostById.get(rpcHostId), input, t)
     })
   }
   return targets
+}
+
+// Why: a managed server on the SSH relay shows as its ssh: row; RPCs still go to the runtime: alias.
+function getRuntimeHostId(
+  hostId: ExecutionHostId,
+  host: ExecutionHostRegistryEntry | undefined
+): ExecutionHostId | undefined {
+  if (parseExecutionHostId(hostId)?.kind === 'runtime') {
+    return hostId
+  }
+  return host?.aliasHostIds?.find((alias) => parseExecutionHostId(alias)?.kind === 'runtime')
 }
 
 function getDisabledReason(
