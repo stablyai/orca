@@ -33,8 +33,6 @@ type RelayHostState = Pick<
   | 'contestedHostWorkspaceSessions'
   | 'folderWorkspaces'
   | 'projectGroups'
-  | 'restoredRuntimeHostIdByWorkspaceSessionKey'
-  | 'contestedPrimaryHostBySessionKey'
 >
 
 let probedApi: DesktopRelayApi | null = null
@@ -150,8 +148,6 @@ function routedRelayHosts(state: RelayHostState): RelayWriteContext['routes'] {
     routed ??= new Set([
       ...routedSessionHostIds(state, {}),
       ...nonLocalHostSessionEntries(state.contestedHostWorkspaceSessions ?? {}).map(([id]) => id),
-      ...Object.values(state.restoredRuntimeHostIdByWorkspaceSessionKey ?? {}),
-      ...Object.values(state.contestedPrimaryHostBySessionKey ?? {}),
       ...unreadHostIds
     ])
     return routed.has(hostId)
