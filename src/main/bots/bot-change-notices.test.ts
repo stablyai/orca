@@ -8,7 +8,11 @@ import {
   followAgentPhasesForBots,
   followWorktreeLifecycleForBots
 } from './bot-change-notices'
-import { botChangeBotIds, botChangeConcerns } from '../../shared/bots/bot-change-scope'
+import {
+  botChangeBotIds,
+  botChangeConcerns,
+  botChangeItemUids
+} from '../../shared/bots/bot-change-scope'
 
 vi.mock('../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../telemetry/cohort-classifier', () => ({ getCohortAtEmit: vi.fn(() => ({})) }))
@@ -113,6 +117,27 @@ describe('BotChangeNotices', () => {
     notices.changed({ botIds: ['bot-a'], kinds: ['items'] })
     await vi.advanceTimersByTimeAsync(0)
     expect(emit.mock.calls).toEqual([[{ botIds: ['bot-a'], kinds: ['items'] }]])
+  })
+
+  it("names each bot's changed items while every change of them named them", () => {
+    const emit = vi.fn()
+    const notices = new BotChangeNotices({ emit, hasBots: () => true })
+    notices.changed({ botIds: ['bot-a'], kinds: ['items'], itemUids: { 'bot-a': ['i1'] } })
+    notices.changed({
+      botIds: ['bot-a', 'bot-b'],
+      kinds: ['items'],
+      itemUids: { 'bot-a': ['i2'], 'bot-b': ['i3'] }
+    })
+    notices.changed({ botIds: ['bot-b'], kinds: ['items'] })
+    vi.advanceTimersByTime(0)
+    const notice = emit.mock.calls[0]![0]
+    expect(notice.itemUids).toEqual({ 'bot-a': ['i1', 'i2'] })
+    expect(botChangeItemUids(notice, 'bot-a', ['items', 'workers'])).toEqual(['i1', 'i2'])
+    expect(botChangeItemUids(notice, 'bot-b', ['items', 'workers'])).toBeNull()
+    // Another kind the list reads changed too: it reads whole.
+    expect(
+      botChangeItemUids({ ...notice, kinds: ['items', 'workers'] }, 'bot-a', ['items', 'workers'])
+    ).toBeNull()
   })
 
   it('stays quiet on a host without bots', () => {

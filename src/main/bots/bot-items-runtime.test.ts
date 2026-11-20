@@ -242,14 +242,16 @@ describe('bot items host', () => {
     await store.link(uid, [{ kind: 'dispatch', ref: 'ctx_1' }], owner)
     await heartbeats(host, 'ctx_2', 1)
 
-    expect(fake.notified).toEqual([{ botIds: ['bot-a'], kinds: ['items'] }])
+    expect(fake.notified).toEqual([
+      { botIds: ['bot-a'], kinds: ['items'], itemUids: { 'bot-a': [uid] } }
+    ])
   })
 
   it('re-reads a linked item on a Dispatch change in a fresh runtime, before any write', async () => {
     const first = fakeHost()
     host = first.host
     const links = [{ kind: 'dispatch' as const, ref: 'ctx_1' }]
-    await host.store().add(item({ status: 'working', links }), owner)
+    const { uid } = await host.store().add(item({ status: 'working', links }), owner)
     host.dispose()
     closeBotsDbStores()
 
@@ -258,7 +260,9 @@ describe('bot items host', () => {
     host.store()
     await heartbeats(host, 'ctx_1', 1)
 
-    expect(fake.notified).toEqual([{ botIds: ['bot-a'], kinds: ['items'] }])
+    expect(fake.notified).toEqual([
+      { botIds: ['bot-a'], kinds: ['items'], itemUids: { 'bot-a': [uid] } }
+    ])
   })
 })
 
