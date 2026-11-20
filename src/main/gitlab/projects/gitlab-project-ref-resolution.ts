@@ -94,7 +94,11 @@ export async function getProjectRefForRemoteWithSignature(
   const configSignature = await initialSignature
   const cached = projectRefCache.get(cacheKey)
   if (cached) {
-    if (cached.expiresAt > Date.now() && cached.configSignature === configSignature) {
+    if (
+      cached.expiresAt > Date.now() &&
+      (configSignature !== undefined || (!connectionId && !localGitOptions.wslDistro)) &&
+      cached.configSignature === configSignature
+    ) {
       return cached.value
     }
     projectRefCache.delete(cacheKey)
