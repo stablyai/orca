@@ -31,16 +31,24 @@ export function keepGapRecoveryScreen(
   if (kept && sameStream(kept, frame) && kept.seq >= frame.seq) {
     return
   }
+  // Dropped once its parse starts, so the captured ANSI it closes over is not held beside the projection.
+  let parse: typeof read | undefined = read
   let projection: Promise<RuntimeTerminalProjection | null> | undefined
   recovery.keptScreen = {
     generation: frame.generation,
     anchorRevision: frame.anchorRevision,
     seq: frame.seq,
     capturedAt: frame.capturedAt,
-    read: () =>
-      (projection ??= Promise.resolve()
-        .then(read)
-        .catch(() => null))
+    read: () => {
+      if (!projection) {
+        const run = parse
+        parse = undefined
+        projection = Promise.resolve()
+          .then(() => run?.() ?? null)
+          .catch(() => null)
+      }
+      return projection
+    }
   }
 }
 
