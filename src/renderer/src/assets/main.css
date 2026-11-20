@@ -2207,9 +2207,9 @@ html.native-shell .app-layout {
   animation: agent-spinner-rotate 86400s steps(1036800, end) infinite;
 }
 
-/* 24 steps/second on the rings' clock: a smooth spin made the GPU present every refresh; these steps land on the rings' frames. */
+/* The rings' cadence and clock: a smooth spin made the GPU present every refresh; these steps land on the rings' frames. */
 .loading-spinner {
-  animation: agent-spinner-rotate 86400s steps(2073600, end) infinite;
+  animation: agent-spinner-rotate 86400s steps(1036800, end) infinite;
 }
 
 /* Offscreen subtrees pause their loops; spinners drop their animation instead so reveal re-anchors phase. */
