@@ -1,3 +1,4 @@
+import type { PipelineTask } from '../../pipeline/pipeline-task'
 import type { PipelineConfig, PipelineStageStatus } from './pipeline-config'
 
 export type PipelineEvent = {
@@ -5,17 +6,24 @@ export type PipelineEvent = {
 }
 
 export type PipelineRun = {
-  issueId: string
+  taskId: string
+  task?: PipelineTask
   stages: Record<string, PipelineStageStatus>
   completed: boolean
 }
 
-export function createPipelineRun(config: PipelineConfig, issueId: string): PipelineRun {
+export function createPipelineRun(
+  config: PipelineConfig,
+  taskOrId: string | PipelineTask
+): PipelineRun {
   const stages: Record<string, PipelineStageStatus> = {}
   for (const stage of config.stages) {
     stages[stage.id] = stage.id === config.initial ? 'active' : 'idle'
   }
-  return { issueId, stages, completed: false }
+  if (typeof taskOrId === 'string') {
+    return { taskId: taskOrId, stages, completed: false }
+  }
+  return { taskId: taskOrId.id, task: taskOrId, stages, completed: false }
 }
 
 export function advancePipelineRun(
@@ -33,8 +41,8 @@ export function advancePipelineRun(
   }
   const stages = { ...run.stages, [active.id]: transition.markCurrent ?? 'pass' }
   if (transition.goto === null) {
-    return { issueId: run.issueId, stages, completed: true }
+    return { ...run, stages, completed: true }
   }
   stages[transition.goto] = 'active'
-  return { issueId: run.issueId, stages, completed: false }
+  return { ...run, stages, completed: false }
 }

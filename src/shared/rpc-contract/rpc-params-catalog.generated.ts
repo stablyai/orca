@@ -405,7 +405,13 @@ import {
 import { BindableAccounts, ValidateAccountBinding } from './github/github-account-binding-params'
 import { UploadGitHubAttachment } from './github/github-attachment-params'
 import { CreateIssue, Issue, IssueComment, UpdateIssue } from './github/github-issue-params'
-import { GetPipelineConfig } from './github/github-pipeline-params'
+import {
+  GetPipelineConfig,
+  RunPipelineCheckGate,
+  RunPipelineCiWatch,
+  RunPipelineMerge,
+  RunPipelineReview
+} from './github/github-pipeline-params'
 import {
   ClearProjectItemField,
   GithubProjectListAccessibleParams,
@@ -1872,7 +1878,11 @@ export const RPC_PARAMS_BY_METHOD = {
   'pairing.getEndpoints': PairingGetEndpointsParamsSchema,
   'pairing.provisionRelay': PairingProvisionRelayParamsSchema,
   'pairing.registerDeviceKey': RegisterDeviceKeyParamsSchema,
+  'pipeline.ci.watch': RunPipelineCiWatch,
   'pipeline.config.get': GetPipelineConfig,
+  'pipeline.gate.checkChanged': RunPipelineCheckGate,
+  'pipeline.pr.merge': RunPipelineMerge,
+  'pipeline.review.run': RunPipelineReview,
   'plugins.catalogAdd': PluginCatalogAddParams,
   'plugins.catalogList': null,
   'plugins.catalogRemove': PluginCatalogRemoveParams,

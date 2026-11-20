@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
+  createGithubIssuePipelineTask,
+  createLinearTicketPipelineTask,
+  createPromptPipelineTask,
+  derivePipelineTaskTriageEvent
+} from '../../pipeline/pipeline-task'
+import {
   DEFAULT_PIPELINE_CONFIG,
   parsePipelineConfigText,
   validatePipelineConfig,
@@ -18,20 +24,20 @@ const CUSTOM: PipelineConfig = {
 
 describe('pipeline-run', () => {
   it('starts at the configured initial stage', () => {
-    expect(createPipelineRun(CUSTOM, 'issue-1')).toEqual({
-      issueId: 'issue-1',
+    expect(createPipelineRun(CUSTOM, 'task-1')).toEqual({
+      taskId: 'task-1',
       stages: { triage: 'active', merge: 'idle' },
       completed: false
     })
   })
 
   it('runs a custom two-stage pipeline to completion', () => {
-    let run = createPipelineRun(CUSTOM, 'issue-1')
+    let run = createPipelineRun(CUSTOM, 'task-1')
     run = advancePipelineRun(CUSTOM, run, { type: 'triaged:auto' })
     expect(run.stages).toEqual({ triage: 'pass', merge: 'active' })
     run = advancePipelineRun(CUSTOM, run, { type: 'merged' })
     expect(run).toEqual({
-      issueId: 'issue-1',
+      taskId: 'task-1',
       stages: { triage: 'pass', merge: 'pass' },
       completed: true
     })
@@ -80,5 +86,42 @@ describe('pipeline-run', () => {
     expect(() => parsePipelineConfigText('{"version":1,"initial":"a","stages":[]}')).toThrow(
       'at least one stage'
     )
+  })
+
+  it('creates runs and derives triage events across prompt, github issue, and linear sources', () => {
+    const promptTask = createPromptPipelineTask('Fix flaky worktree cleanup\nExtra details', {
+      id: 'prompt-1',
+      createdAt: 100
+    })
+    expect(promptTask.title).toBe('Fix flaky worktree cleanup')
+    expect(derivePipelineTaskTriageEvent(promptTask)).toBe('triaged:auto')
+    expect(derivePipelineTaskTriageEvent(promptTask, { requireApproval: true })).toBe(
+      'triaged:manual'
+    )
+
+    const issueTask = createGithubIssuePipelineTask(
+      'acme/orca',
+      {
+        number: 42,
+        title: 'Add linear sync',
+        state: 'open',
+        url: 'https://github.com/acme/orca/issues/42',
+        labels: ['feature']
+      },
+      { createdAt: 200 }
+    )
+    expect(derivePipelineTaskTriageEvent(issueTask)).toBe('triaged:manual')
+
+    const linearTask = createLinearTicketPipelineTask(
+      { identifier: 'ORC-12', title: 'Fix crash on startup' },
+      { createdAt: 300 }
+    )
+    const run = advancePipelineRun(
+      DEFAULT_PIPELINE_CONFIG,
+      createPipelineRun(DEFAULT_PIPELINE_CONFIG, linearTask),
+      { type: derivePipelineTaskTriageEvent(linearTask) }
+    )
+    expect(run.taskId).toBe('linear:ORC-12')
+    expect(run.stages).toMatchObject({ triage: 'pass', fix: 'active' })
   })
 })

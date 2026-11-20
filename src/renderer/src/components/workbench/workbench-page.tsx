@@ -1,26 +1,33 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { CalendarDays, FileCode2, KanbanSquare, MessageSquareText } from 'lucide-react'
 import { Card } from '../ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs'
 import { useTranslate } from '@/i18n/use-translate'
-import { DEFAULT_PIPELINE_CONFIG } from '../../../../shared/github/issue-flow/pipeline-config'
-import { createPipelineRun } from '../../../../shared/github/issue-flow/pipeline-run'
-import { WorkbenchAutomationBar, type AutomationStageState } from './workbench-automation-bar'
+import { createGithubIssuePipelineTask } from '../../../../shared/pipeline/pipeline-task'
+import { useWorkbenchPipeline } from './use-workbench-pipeline'
+import { WorkbenchAutomationBar } from './workbench-automation-bar'
+import { WorkbenchDialoguePanel } from './workbench-dialogue-panel'
 import { WorkbenchKanbanPanel } from './workbench-kanban-panel'
 import { WorkbenchSchedulePanel } from './workbench-schedule-panel'
 
 export default function WorkbenchPage(): React.JSX.Element {
   const t = useTranslate()
-  const [tab, setTab] = useState('schedule')
-  const [run] = useState(() => createPipelineRun(DEFAULT_PIPELINE_CONFIG, 'issue-1'))
-  const stages = useMemo<readonly AutomationStageState[]>(
-    () =>
-      DEFAULT_PIPELINE_CONFIG.stages.map((stage) => ({
-        id: stage.id,
-        status: run.stages[stage.id]
-      })),
-    [run]
-  )
+  const [tab, setTab] = useState('dialogue')
+  const {
+    entries,
+    activeEntry,
+    stages,
+    hasRepo,
+    repoId,
+    startTask,
+    selectTask,
+    dispatchEvent,
+    runCheckGate,
+    runReview,
+    runCiWatch,
+    runMerge,
+    openWorktree
+  } = useWorkbenchPipeline()
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-2 overflow-hidden bg-background p-3">
@@ -48,15 +55,32 @@ export default function WorkbenchPage(): React.JSX.Element {
           <WorkbenchSchedulePanel />
         </TabsContent>
         <TabsContent value="kanban" className="flex min-h-0 flex-1 flex-col">
-          <WorkbenchKanbanPanel />
+          <WorkbenchKanbanPanel
+            onStartIssue={
+              repoId
+                ? (issue) => {
+                    const task = createGithubIssuePipelineTask(repoId, issue)
+                    setTab('dialogue')
+                    void startTask(task)
+                  }
+                : undefined
+            }
+          />
         </TabsContent>
         <TabsContent value="dialogue" className="flex min-h-0 flex-1 flex-col">
-          <Card className="p-3 text-sm text-muted-foreground">
-            {t(
-              'auto.components.workbench.dialogue.hint',
-              'Dialogue reuses the existing NativeChat session in the workspace.'
-            )}
-          </Card>
+          <WorkbenchDialoguePanel
+            entries={entries}
+            activeTaskId={activeEntry?.task.id ?? null}
+            hasRepo={hasRepo}
+            onStartTask={startTask}
+            onSelectTask={selectTask}
+            onDispatchEvent={dispatchEvent}
+            onRunCheckGate={runCheckGate}
+            onRunReview={runReview}
+            onRunCiWatch={runCiWatch}
+            onRunMerge={runMerge}
+            onOpenWorktree={openWorktree}
+          />
         </TabsContent>
         <TabsContent value="editor" className="flex min-h-0 flex-1 flex-col">
           <Card className="p-3 text-sm text-muted-foreground">

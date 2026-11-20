@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { RefreshCw } from 'lucide-react'
+import { Play, RefreshCw } from 'lucide-react'
 import { Badge } from '../ui/badge'
 import { Button } from '../ui/button'
 import { Card } from '../ui/card'
@@ -8,9 +8,14 @@ import {
   groupIssuesByKanbanColumn,
   WORKBENCH_KANBAN_COLUMNS
 } from '../../../../shared/github/issue-flow/issue-kanban'
+import type { IssueInfo } from '../../../../shared/github/pull-requests/pull-request-types'
 import { useWorkbenchKanbanIssues } from './use-workbench-kanban-issues'
 
-export function WorkbenchKanbanPanel(): React.JSX.Element {
+export function WorkbenchKanbanPanel({
+  onStartIssue
+}: {
+  onStartIssue?: (issue: IssueInfo) => void
+}): React.JSX.Element {
   const t = useTranslate()
   const { issues, loading, error, reload, hasRepo } = useWorkbenchKanbanIssues()
   const columns = useMemo(() => groupIssuesByKanbanColumn(issues), [issues])
@@ -41,9 +46,22 @@ export function WorkbenchKanbanPanel(): React.JSX.Element {
               </span>
               {columns[column].map((issue) => (
                 <div key={`${issue.url}#${issue.number}`} className="rounded-md border p-2 text-sm">
-                  <span className="block truncate">
-                    #{issue.number} {issue.title}
-                  </span>
+                  <div className="flex items-start justify-between gap-1.5">
+                    <span className="min-w-0 truncate">
+                      #{issue.number} {issue.title}
+                    </span>
+                    {onStartIssue ? (
+                      <Button
+                        variant="ghost"
+                        size="xs"
+                        className="shrink-0"
+                        onClick={() => onStartIssue(issue)}
+                      >
+                        <Play className="size-3" />
+                        {t('auto.components.workbench.kanban.start', 'Start')}
+                      </Button>
+                    ) : null}
+                  </div>
                   {issue.labels.length > 0 ? (
                     <span className="mt-1 flex flex-wrap gap-1">
                       {issue.labels.slice(0, 3).map((label) => (
