@@ -141,9 +141,7 @@ export function buildNewTabAgentMenuRows(args: {
     ...orderAgentLaunchPickerAgents(defaultAgent, runnable).map((agent) => ({
       kind: 'chat' as const,
       agent,
-      ...(args.detectedOnHost !== null &&
-      !args.detectedOnHost.includes(agent) &&
-      !chatProgramInstalled(args.chatProgram(agent))
+      ...(!args.detectedOnHost?.includes(agent) && !chatProgramInstalled(args.chatProgram(agent))
         ? { setup: true as const }
         : {})
     })),

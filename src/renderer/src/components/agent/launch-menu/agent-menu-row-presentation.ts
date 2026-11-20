@@ -37,6 +37,18 @@ export function chatUnavailableLabel(
   }
 }
 
+/** What a row says beside its name: why its chat can't start, or that starting it installs the agent. */
+export function rowStatusLabel(
+  row: NewTabAgentMenuRow,
+  t: Translate = translate
+): string | undefined {
+  return row.kind === 'chat-unavailable'
+    ? chatUnavailableLabel(row.reason, t)
+    : row.kind === 'chat' && row.setup
+      ? chatUnavailableLabel('not-installed', t)
+      : undefined
+}
+
 export function rowTitle(row: NewTabAgentMenuRow, label: string, t: Translate = translate): string {
   return row.kind === 'chat'
     ? t('auto.components.tab.bar.QuickLaunchButton.startChat', 'Start a chat with {{value0}}', {

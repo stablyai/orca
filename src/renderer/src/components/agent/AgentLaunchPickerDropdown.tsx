@@ -333,6 +333,11 @@ function AgentLaunchOpenAs({
         primary={entry.defaultSurface}
         onSelect={onChoose}
       />
+      {entry.rows.some((row) => row.kind === 'chat' && row.setup) ? (
+        <span className="ml-auto text-xs text-muted-foreground">
+          {chatUnavailableLabel('not-installed', t)}
+        </span>
+      ) : null}
     </div>
   )
 }
