@@ -112,7 +112,8 @@ function patchedTabIndexes(
     return null
   }
   const terminal = replacedBuckets(args.tabsByWorktree, previous.tabsByWorktree)
-  const unified = terminal && replacedBuckets(args.unifiedTabsByWorktree, previous.unifiedTabsByWorktree)
+  const unified =
+    terminal && replacedBuckets(args.unifiedTabsByWorktree, previous.unifiedTabsByWorktree)
   if (
     !terminal ||
     !unified ||

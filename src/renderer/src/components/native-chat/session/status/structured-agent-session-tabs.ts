@@ -208,9 +208,7 @@ export function getStructuredAgentSessionTabsByPaneKey(
   if (cached) {
     return cached
   }
-  const result = new Map(
-    structuredTabs.map((tab) => [structuredTabPaneKey(tab), tab])
-  )
+  const result = new Map(structuredTabs.map((tab) => [structuredTabPaneKey(tab), tab]))
   paneTabs.set(structuredTabs, result)
   return result
 }

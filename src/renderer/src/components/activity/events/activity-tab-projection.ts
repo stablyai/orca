@@ -42,7 +42,8 @@ function projectActivityTabBucket(tabs: readonly Tab[], prior: Tab[] | undefined
     const priorTab = prior?.[index]
     if (
       priorTab &&
-      (priorTab === tab || (tab.contentType === 'terminal' && activityTabFieldsEqual(priorTab, tab)))
+      (priorTab === tab ||
+        (tab.contentType === 'terminal' && activityTabFieldsEqual(priorTab, tab)))
     ) {
       return priorTab
     }

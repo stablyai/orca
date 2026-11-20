@@ -67,6 +67,7 @@ function paneBuildInputs(args: BuildActivityEventsArgs, t: Translate | undefined
     args.tabsByWorktree,
     args.ptyIdsByTabId,
     args.unifiedTabsByWorktree,
+    args.structuredTabsByPaneKey,
     args.worktreeMap,
     args.repoMap,
     args.repos,

@@ -125,13 +125,17 @@ export type TabBucketChange<T extends TerminalTab | Tab> = {
   after: readonly T[]
 }
 
-/** Whether a replaced bucket kept every tab's id and kind in place, so no context changes owner. */
+/**
+ * Whether a replaced bucket kept every tab's id and kind in place with no id repeated, so each
+ * id's winning occurrence and owner stay where they were.
+ */
 export function keepsActivityTabIdentities<T extends TerminalTab | Tab>({
   before,
   after
 }: TabBucketChange<T>): boolean {
   return (
     before.length === after.length &&
+    new Set(after.map((tab) => tab.id)).size === after.length &&
     before.every(
       (tab, index) =>
         tab.id === after[index].id &&
@@ -155,9 +159,13 @@ export function patchActivityTabIndexes(
   const updates: [string, ActivityTabContext][] = []
   for (const { worktreeId, before, after } of terminalChanges) {
     after.forEach((tab, index) => {
-      // Last bucket wins a duplicate id; only the entry this bucket placed moves to the new tab.
+      // A later bucket may hold the same id and win; only the entry this bucket placed moves.
       const entry = context.get(tab.id)
-      if (tab !== before[index] && entry?.worktreeId === worktreeId && entry.tab === before[index]) {
+      if (
+        tab !== before[index] &&
+        entry?.worktreeId === worktreeId &&
+        entry.tab === before[index]
+      ) {
         updates.push([tab.id, { worktreeId, tab }])
       }
     })
