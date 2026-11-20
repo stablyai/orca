@@ -80,19 +80,21 @@ describe('remote terminal paused-output drop notice', () => {
 
   async function subscribeClient() {
     const data: string[] = []
+    const recovery: string[] = []
     const onPausedOutputDropped = vi.fn()
     const stream = await getRemoteRuntimeTerminalMultiplexer('env-1').subscribeTerminal({
       terminal: 'terminal-1',
       client: { id: 'desktop-1', type: 'desktop' },
       callbacks: {
         onData: (chunk) => data.push(chunk),
-        onSnapshot: () => {},
-        onPausedOutputDropped
+        onSnapshot: (snapshot) => recovery.push(snapshot),
+        onPausedOutputDropped,
+        onOutputGapRecovered: () => recovery.push('gap recovered')
       }
     })
     await Promise.resolve()
     await Promise.resolve()
-    return { data, onPausedOutputDropped, stream }
+    return { data, onPausedOutputDropped, recovery, stream }
   }
 
   // Why: the reveal snapshot covers the announced gap, so a later real loss must still resync.
@@ -110,5 +112,22 @@ describe('remote terminal paused-output drop notice', () => {
 
     expect(data).toEqual(['before'])
     expect(snapshotRequests.some((request) => request.requestId === undefined)).toBe(true)
+  })
+
+  it('signals a gap only when a pushed recovery snapshot finishes with authoritative content', async () => {
+    hostCapabilities = { outputPause: 1, outputPauseDropNotice: 1 }
+    const { recovery } = await subscribeClient()
+    send(TerminalStreamOpcode.SnapshotStart, encodeTerminalStreamJson({ seq: 30 }))
+    send(TerminalStreamOpcode.SnapshotChunk, encodeTerminalStreamText('incomplete'))
+    expect(recovery).toEqual([''])
+
+    send(TerminalStreamOpcode.SnapshotStart, encodeTerminalStreamJson({ seq: 32, truncated: true }))
+    send(TerminalStreamOpcode.SnapshotEnd, new Uint8Array())
+    expect(recovery).toEqual([''])
+
+    send(TerminalStreamOpcode.SnapshotStart, encodeTerminalStreamJson({ seq: 40 }))
+    send(TerminalStreamOpcode.SnapshotChunk, encodeTerminalStreamText('patch'))
+    send(TerminalStreamOpcode.SnapshotEnd, new Uint8Array())
+    expect(recovery).toEqual(['', 'gap recovered', '\x1b[?2026l\x1b[2J\x1b[3J\x1b[Hpatch'])
   })
 })

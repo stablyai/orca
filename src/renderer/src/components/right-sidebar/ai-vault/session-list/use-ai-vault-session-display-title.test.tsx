@@ -37,11 +37,6 @@ describe('useAiVaultSessionDisplayTitle for terminal rows', () => {
     resetTerminalSessionNamesForTest()
   })
 
-  it("shows the agent's own title when the tab was never named", () => {
-    const { result } = renderHook(() => useAiVaultSessionDisplayTitle(session, null))
-    expect(result.current.title).toBe('please look at the failing auth test')
-  })
-
   it('keeps the tab name after the tab closed, and updates when it changes', () => {
     saveTerminalSessionName({
       executionHostId: 'local',

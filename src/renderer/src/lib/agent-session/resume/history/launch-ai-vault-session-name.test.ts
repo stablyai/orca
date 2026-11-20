@@ -13,7 +13,7 @@ const mocks = vi.hoisted(() => {
     },
     hostId: initialHostId(),
     runtimeActive: false,
-    createWebRuntimeSessionTerminal: vi.fn(),
+    createWebRuntimeSessionTerminalResult: vi.fn(),
     setWebRuntimeTabProps: vi.fn()
   }
 })
@@ -32,8 +32,8 @@ vi.mock('@/lib/workspace/ownership/worktree-runtime-owner', () => ({
 vi.mock('@/runtime/web-session-tabs-sync/identity/web-runtime-session-environment', () => ({
   isWebRuntimeSessionActive: () => mocks.runtimeActive
 }))
-vi.mock('@/runtime/hosted-terminals/creation/web-runtime-terminal-creation', () => ({
-  createWebRuntimeSessionTerminal: mocks.createWebRuntimeSessionTerminal
+vi.mock('@/runtime/hosted-terminals/creation/web-runtime-terminal-create-operation', () => ({
+  createWebRuntimeSessionTerminalResult: mocks.createWebRuntimeSessionTerminalResult
 }))
 vi.mock('@/runtime/hosted-terminals/actions/web-runtime-tab-properties', () => ({
   setWebRuntimeTabProps: mocks.setWebRuntimeTabProps
@@ -75,16 +75,13 @@ describe('resume names the new tab after the session', () => {
     })
   })
 
-  it('leaves forks and unnamed sessions alone', () => {
+  it('leaves forks, unnamed sessions and sessions on unknown hosts without a title', () => {
     launchAiVaultSessionInNewTab({ ...resume, providerSession: undefined })
     launchAiVaultSessionInNewTab({
       ...resume,
       providerSession: { key: 'session_id', id: 's2' }
     })
-    expect(mocks.store.setTabCustomTitle).not.toHaveBeenCalled()
-  })
 
-  it('does not use a name when the target host is unknown', () => {
     mocks.hostId = null
     launchAiVaultSessionInNewTab(resume)
     expect(mocks.store.setTabCustomTitle).not.toHaveBeenCalled()
@@ -92,9 +89,9 @@ describe('resume names the new tab after the session', () => {
 
   it('names a paired host tab by the id this client will mirror it under', async () => {
     mocks.runtimeActive = true
-    mocks.createWebRuntimeSessionTerminal.mockResolvedValue({
-      status: 'created',
-      mirroredTabId: 'web-terminal:T'
+    mocks.createWebRuntimeSessionTerminalResult.mockResolvedValue({
+      outcome: { status: 'created' },
+      hostTabId: 'T::L'
     })
     const launch = launchAiVaultSessionInNewTab(resume)
     expect(launch.tabId).toBeNull()
@@ -103,7 +100,7 @@ describe('resume names the new tab after the session', () => {
     }
     expect(mocks.setWebRuntimeTabProps).toHaveBeenCalledWith({
       worktreeId: 'wt-1',
-      tabId: 'web-terminal:T',
+      tabId: 'web-terminal-T',
       customTitle: 'Fix auth bug'
     })
   })

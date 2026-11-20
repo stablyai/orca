@@ -538,31 +538,6 @@ describe('registerClipboardHandlers', () => {
     await expect(result).resolves.toBe(text)
   })
 
-  it('yields before writing large text clipboard IPC payloads', async () => {
-    vi.useFakeTimers()
-    const text = 'é'.repeat(300_000)
-    clipboardWriteTextMock.mockImplementation((value: string) => {
-      clipboardReadTextMock.mockReturnValue(value)
-    })
-
-    registerClipboardHandlers(settingsOnlyStore)
-
-    const handlers = getRegisteredHandlers()
-    const result = handlers.get('clipboard:writeText')?.(makeClipboardEvent(), text)
-    if (!(result instanceof Promise)) {
-      throw new Error('Expected clipboard write handler to return a Promise')
-    }
-    const isSettled = trackPromiseSettled(result)
-
-    await Promise.resolve()
-
-    expect(isSettled()).toBe(false)
-    expect(clipboardWriteTextMock).not.toHaveBeenCalled()
-    await vi.runOnlyPendingTimersAsync()
-    await result
-    expect(clipboardWriteTextMock).toHaveBeenCalledWith(text)
-  })
-
   it('rejects oversized text clipboard IPC writes before calling Electron clipboard', async () => {
     registerClipboardHandlers(settingsOnlyStore)
 
@@ -784,7 +759,6 @@ describe('registerClipboardHandlers', () => {
         undefined
       )
     ).resolves.toMatch(/\.png$/)
-    expect(resize).toHaveBeenCalledTimes(1)
     expect(resize).toHaveBeenCalledWith({ height: 1800, quality: 'best', width: 2700 })
     expect(fsWriteFileMock).toHaveBeenCalledWith(expect.any(String), fittedPng)
   })

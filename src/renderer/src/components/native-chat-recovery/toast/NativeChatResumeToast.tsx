@@ -16,6 +16,8 @@ export type NativeChatResumeToastProps = {
   defaultExpanded?: boolean
   onResume: (sessionIds: readonly string[]) => void
   onRowAction: (action: ResumeFailureAction, sessionId: string) => void
+  /** Opening the list keeps the report until it is closed. */
+  onDetailsOpened?: () => void
   /** Local only: deletes the durable offer. A server's chats can only be hidden by closing. */
   onDismissAll?: () => void
   onOpenSettings: () => void
@@ -137,6 +139,7 @@ export function NativeChatResumeToast({
   defaultExpanded = false,
   onResume,
   onRowAction,
+  onDetailsOpened,
   onDismissAll,
   onOpenSettings,
   onClose
@@ -200,7 +203,12 @@ export function NativeChatResumeToast({
               className={showResume ? undefined : '-ml-2'}
               aria-expanded={expanded}
               aria-controls={listId}
-              onClick={() => setExpanded((open) => !open)}
+              onClick={() => {
+                if (!expanded) {
+                  onDetailsOpened?.()
+                }
+                setExpanded(!expanded)
+              }}
             >
               {t('auto.components.NativeChatResumeToast.details', 'Details')}
             </Button>

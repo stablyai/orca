@@ -184,6 +184,9 @@ export function createPtyShellLaunchPlan(
       if (env[ORCA_HERMES_STARTUP_QUERY_ENV] !== undefined) {
         addWslEnvKeys(env, [ORCA_HERMES_STARTUP_QUERY_ENV])
       }
+      if (opts.env?.KITTY_WINDOW_ID !== undefined && env.KITTY_WINDOW_ID !== undefined) {
+        addWslEnvKeys(env, ['KITTY_WINDOW_ID/u'])
+      }
     } else if (codexHomeWslInfo || isWslCodexHomeForHost(env.CODEX_HOME)) {
       delete env.CODEX_HOME
       delete env.ORCA_CODEX_HOME

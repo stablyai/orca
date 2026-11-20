@@ -5,6 +5,7 @@ import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-r
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { WorktreeSleepResumeRecorder } from '../../terminal/stop/worktree-sleep-resume-records'
 import type { AgentProviderSessionMetadata } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
+import type { AgentSessionResumeClaim } from './agent-session-resume-claims'
 
 export type AgentPaneRestartRefusal =
   /** Not a live terminal of this host's own (an SSH relay or another server's pane). */
@@ -57,6 +58,8 @@ export abstract class OrcaRuntimeWithRestartAgentPaneInPlace extends OrcaRuntime
       return { ok: false, reason: 'busy' }
     }
     this.agentPaneRestartsByPaneKey.add(paneKey)
+    let held: AgentSessionResumeClaim | null = null
+    let dispatched = false
     try {
       // Resolved before the stop, so nothing after it can leave the pane without its agent.
       const resume = await this.resolveTerminalWorkspaceLaunchScope(`id:${pty.worktreeId}`)
@@ -77,6 +80,7 @@ export abstract class OrcaRuntimeWithRestartAgentPaneInPlace extends OrcaRuntime
       if (!claim) {
         return { ok: false, reason: 'busy' }
       }
+      held = claim
       const refuse = (reason: AgentPaneRestartRefusal): AgentPaneRestartResult => {
         claim.settleFailure(false)
         return { ok: false, reason }
@@ -123,7 +127,6 @@ export abstract class OrcaRuntimeWithRestartAgentPaneInPlace extends OrcaRuntime
       if (!this.terminalViewSubscribers.everyRemoteViewFollowsHostRespawn(ptyId)) {
         return refuse('viewer_cannot_follow')
       }
-      let dispatched = false
       let stopped = false
       // Left as a slept pane is: its next view starts it afresh and resumes the conversation.
       const failedStart = async (): Promise<AgentPaneRestartResult> => {
@@ -203,6 +206,8 @@ export abstract class OrcaRuntimeWithRestartAgentPaneInPlace extends OrcaRuntime
         return stopped ? await failedStart() : { ok: false, reason: 'stop_failed' }
       }
     } catch (error) {
+      // A throw outside the stop and create must not leave the conversation held with no terminal.
+      held?.settleFailure(dispatched, error)
       console.warn('[runtime] could not restart an agent pane in place', { ptyId, error })
       return { ok: false, reason: 'create_failed' }
     } finally {

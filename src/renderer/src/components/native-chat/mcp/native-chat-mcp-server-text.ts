@@ -51,6 +51,8 @@ export function mcpServerStatusLine(server: AgentSessionMcpServer, t: Translate)
         : t('components.native-chat.mcp.status.failed', 'Failed')
     case 'disabled':
       return t('components.native-chat.mcp.status.disabled', 'Disabled')
+    case 'not-started':
+      return t('components.native-chat.mcp.status.notStarted', 'Not started')
   }
 }
 
