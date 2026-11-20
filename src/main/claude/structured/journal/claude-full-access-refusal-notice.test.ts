@@ -82,7 +82,7 @@ function launch(sessionId: string, facts: Launch, acquisition = '1') {
 const FULL_ACCESS = { permissionMode: 'bypassPermissions' }
 
 describe('a Full access chat whose Claude refuses bypass', () => {
-  it('gets one warning per chat once its fallback is applied, across turns and restarts', () => {
+  it('gets one warning per process once its fallback is applied, and a new one after a restart', () => {
     const opened = {
       launchIntent: FULL_ACCESS,
       firstRootInit: { permissionMode: 'default' },
@@ -96,14 +96,36 @@ describe('a Full access chat whose Claude refuses bypass', () => {
     first.init('auto')
     expect(first.warnings()).toHaveLength(1)
 
-    // A restart that finds the chat as it started writes the same journal row, not another.
-    const restarted = launch('refused-chat', opened, '2')
+    // The first row may be far up the chat, so a restart repeats it at the bottom.
+    const restarted = launch('refused-chat', opened, '1')
     restarted.session.appliedInputOptions.set('buildPermissionMode', 'auto')
     restarted.init('auto')
     restarted.init('auto')
-    expect([...first.ids, ...restarted.ids]).toEqual([
-      'full-access-refused:claude:settings:auto',
-      'full-access-refused:claude:settings:auto'
+    expect(restarted.ids).toEqual([expect.stringMatching(/:settings:auto$/)])
+    expect(restarted.ids[0]).not.toBe(first.ids[0])
+  })
+
+  it('names Approve for me in a new row when a restart finds the chat back in it', () => {
+    const opened = {
+      launchIntent: FULL_ACCESS,
+      firstRootInit: { permissionMode: 'default' },
+      bypassDisabled: true
+    }
+    const first = launch('recovered-chat', opened)
+    first.session.appliedInputOptions.set('buildPermissionMode', 'auto')
+    first.init('auto')
+    Object.assign(first.session, { autoUnsettled: { kind: 'time', retryAt: 0 } })
+    first.session.appliedInputOptions.set('buildPermissionMode', 'default')
+    first.init('default')
+
+    const restarted = launch('recovered-chat', opened, '1')
+    restarted.session.appliedInputOptions.set('buildPermissionMode', 'auto')
+    restarted.init('auto')
+    expect(first.ids).not.toContain(restarted.ids[0])
+    expect(restarted.warnings()).toEqual([
+      expect.objectContaining({
+        text: "Claude's settings turn off Full access (permissions.disableBypassPermissionsMode), so Claude uses Approve for me instead."
+      })
     ])
   })
 
@@ -131,10 +153,10 @@ describe('a Full access chat whose Claude refuses bypass', () => {
     toAskForNow()
     moved.init('default')
     expect(moved.ids).toEqual([
-      'full-access-refused:claude:settings:auto',
-      expect.stringMatching(/:settings:auto->settings:ask:auto-for-now#/),
-      expect.stringMatching(/:settings:ask:auto-for-now->settings:auto#/),
-      expect.stringMatching(/:settings:auto->settings:ask:auto-for-now#/)
+      expect.stringMatching(/^full-access-refused:claude:[\w-]+:1:settings:auto$/),
+      expect.stringMatching(/:2:settings:ask:auto-for-now$/),
+      expect.stringMatching(/:3:settings:auto$/),
+      expect.stringMatching(/:4:settings:ask:auto-for-now$/)
     ])
     // A repeated change is a new row where it happens, not a revision of the old one.
     expect(moved.ids[3]).not.toBe(moved.ids[1])

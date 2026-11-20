@@ -166,10 +166,10 @@ export type ClaudeSession = {
   bypassAccepted?: boolean
   /** Why Claude refused a bypass switch, where one told; a settings read or start says settings. */
   bypassRefusal?: ClaudeBypassRefusal
-  /** The Full access refusal warning this process last wrote, so each change gets one row. */
+  /** The Full access refusal warning this process last wrote; a change gets a new row. */
   fullAccessRefusalNoticeId?: string
-  /** How many times this process's warning changed, so each change is its own row. */
-  fullAccessRefusalNoticeChanges?: number
+  /** This process's warning rows: a random id and a count, so each is a new row at the bottom. */
+  fullAccessRefusalNotices?: { process: string; count: number }
   /** Counts permission mode requests, so a fallback written after Claude answers never lands
    *  over a newer request. */
   permissionModeRequests?: number

@@ -1,5 +1,6 @@
 // The once-per-mode warning a Full access chat gets when Claude runs it in another mode.
 
+import { randomUUID } from 'node:crypto'
 import type { AgentJournalStatusItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalTurnScope } from '../../../../shared/agent-session/journal/agent-session-journal-turn-scope'
 import { AGENT_SESSION_TURN_NOTICE_PRESENTATION } from '../../../../shared/agent-session/journal/agent-session-turn-notice'
@@ -17,12 +18,7 @@ import {
 type ClaudeNoticeFacts = ClaudeBypassFacts &
   Partial<Pick<ClaudeSession, 'appliedInputOptions' | 'reportedOptions'>>
 
-export type ClaudeFullAccessRefusalNotice = {
-  id: string
-  /** Which change of this process's warning, absent for its first. */
-  change?: number
-  body: AgentJournalStatusItem
-}
+export type ClaudeFullAccessRefusalNotice = { id: string; body: AgentJournalStatusItem }
 
 /** The chat's permission mode for the fallback Claude accepted. */
 function claudeFallbackChoice(applied: string): string {
@@ -93,12 +89,12 @@ function claudeFullAccessRefusalRow(
   }
 }
 
-/** The warning this chat is due when it differs from the last one this process wrote. A first
- *  warning keeps one journal identity, so a relaunch that finds the chat as it started revises
- *  that row instead of adding another; each later change is a new row where it happens. */
+/** The warning this chat is due when it differs from the last one this process wrote. Every
+ *  warning is a new row at the bottom, never a revision of an earlier one, so the newest row
+ *  always names the mode Claude runs now; a new process repeats it there. */
 export function claimClaudeFullAccessRefusalNotice(
   session: ClaudeNoticeFacts &
-    Pick<ClaudeSession, 'fullAccessRefusalNoticeId' | 'fullAccessRefusalNoticeChanges'>
+    Pick<ClaudeSession, 'fullAccessRefusalNoticeId' | 'fullAccessRefusalNotices'>
 ): ClaudeFullAccessRefusalNotice | null {
   const id = claudeFullAccessRefusalNoticeId(session)
   const applied = session.appliedInputOptions?.get('buildPermissionMode')
@@ -107,28 +103,25 @@ export function claimClaudeFullAccessRefusalNotice(
     return null
   }
   session.fullAccessRefusalNoticeId = id
-  const body = claudeFullAccessRefusalRow(session, applied)
-  if (previous === undefined) {
-    return { id, body }
+  const notices = (session.fullAccessRefusalNotices ??= { process: randomUUID(), count: 0 })
+  notices.count += 1
+  return {
+    id: `${notices.process}:${notices.count}:${id}`,
+    body: claudeFullAccessRefusalRow(session, applied)
   }
-  const change = (session.fullAccessRefusalNoticeChanges ?? 0) + 1
-  session.fullAccessRefusalNoticeChanges = change
-  return { id: `${previous}->${id}`, change, body }
 }
 
 /** Checked on every root frame; writes only the warning the chat is due. */
 export function journalClaudeFullAccessRefusal(
   deps: Pick<ClaudeJournalTranslatorDeps, 'sink' | 'fullAccessRefusalNotice'>,
-  idPrefix: string,
   turnScope: AgentJournalTurnScope
 ): void {
   const notice = deps.fullAccessRefusalNotice?.()
   if (!notice) {
     return
   }
-  const change = notice.change === undefined ? '' : `#${idPrefix}:${notice.change}`
   deps.sink.appendItem(
-    { provider: 'orca', clientMessageId: `full-access-refused:claude:${notice.id}${change}` },
+    { provider: 'orca', clientMessageId: `full-access-refused:claude:${notice.id}` },
     notice.body,
     { turnScope }
   )
