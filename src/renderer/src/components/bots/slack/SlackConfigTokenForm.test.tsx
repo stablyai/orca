@@ -61,6 +61,21 @@ describe('SlackConfigTokenForm', () => {
     expect(onSubmit).not.toHaveBeenCalled()
   })
 
+  it('drops a read still pending when another token is pasted', async () => {
+    let resolve: (text: string) => void = () => {}
+    const { onSubmit, readClipboardText } = shown('')
+    readClipboardText.mockReturnValue(new Promise<string>((done) => (resolve = done)))
+    fireEvent.click(screen.getByRole('button', { name: /Get config token/ }))
+    fireEvent.focus(window)
+    fireEvent.paste(screen.getByLabelText('Configuration refresh token'), {
+      clipboardData: { getData: () => REFRESH }
+    })
+    resolve('xoxe-older-example')
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(onSubmit.mock.calls).toEqual([[REFRESH]])
+  })
+
   it('drops a read still pending when the form closes', async () => {
     let resolve: (text: string) => void = () => {}
     const { onSubmit, readClipboardText } = shown('')

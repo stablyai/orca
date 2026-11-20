@@ -53,8 +53,12 @@ export function SlackConfigTokenForm({
   const trimmed = token.trim()
   // Set once Slack's page is opened from here: the token copied there is taken on the way back.
   const awaitingCopy = useRef(false)
+  // Counts clipboard reads, so one still pending when a later one starts, a token is sent, or the
+  // form closes, is dropped.
+  const reads = useRef(0)
   const send = (value: string): void => {
     awaitingCopy.current = false
+    reads.current++
     setAccessPasted(false)
     setToken('')
     onSubmit(value)
@@ -70,8 +74,6 @@ export function SlackConfigTokenForm({
     return kind !== null
   }
 
-  // Counts clipboard reads, so one still pending when a later one starts, or the form closes, is dropped.
-  const reads = useRef(0)
   useEffect(
     () => () => {
       reads.current++
