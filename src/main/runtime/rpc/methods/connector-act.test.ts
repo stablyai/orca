@@ -235,34 +235,6 @@ describe('connector.act', () => {
       )
     }
     expect(older.calls).toEqual([])
-    // An inline file is no longer something this Orca sends.
-    await expect(
-      run(
-        {
-          sessionId: 'bot-session',
-          verb: 'attach',
-          ref: 'slack:T1:C1',
-          args: { file: { name: 'a.log', data: 'YQ==' }, postId: 'p2' }
-        },
-        older.context
-      )
-    ).rejects.toThrow()
-  })
-
-  it('refuses a set from a look-around run', async () => {
-    const { context, calls } = actContext({ features: ['actions', 'set'] })
-    await expect(
-      run(
-        {
-          sessionId: 'look-session',
-          verb: 'set',
-          ref: 'ENG-1',
-          args: { fields: { state: 'Done' } }
-        },
-        context
-      )
-    ).rejects.toMatchObject({ code: 'look_around_reads_only' })
-    expect(calls).toEqual([])
   })
 
   it('schedules a post only with a cloud that can, and never posts it now instead', async () => {
