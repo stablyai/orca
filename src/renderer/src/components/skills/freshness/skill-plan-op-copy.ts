@@ -10,6 +10,7 @@ import type {
 import {
   bundledSkillInstallAgents,
   bundledSkillOutcomeText,
+  isBundledSkillFileInUse,
   summarizeBundledSkillPlan,
   type BundledSkillPlanState,
   type BundledSkillResultSummary
@@ -148,7 +149,12 @@ export function skillOutcomeText(outcome: BundledSkillOutcome, t: Translate = tr
     case 'No change':
       return t('auto.components.skills.skillPlanOpCopy.keep', 'No change')
     case 'Needs attention':
-      return t('auto.components.skills.skillPlanOpCopy.needsAttention', 'Needs attention')
+      return outcome.ops.some(isBundledSkillFileInUse)
+        ? t(
+            'auto.components.skills.skillPlanOpCopy.fileInUse',
+            'Needs attention · SKILL.md is in use or locked. Close the program using it, then update again.'
+          )
+        : t('auto.components.skills.skillPlanOpCopy.needsAttention', 'Needs attention')
   }
 }
 

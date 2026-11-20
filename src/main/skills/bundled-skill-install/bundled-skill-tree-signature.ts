@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
 import { join } from 'node:path'
 import type { BundledSkillFilesystem } from './bundled-skill-filesystem'
+import { bundledSkillFileSiblingKind } from './bundled-skill-folder-swap'
 
 export async function bundledSkillTreeSignature(
   filesystem: BundledSkillFilesystem,
@@ -27,7 +28,13 @@ export async function bundledSkillTreeSignature(
             .digest('hex')
       hash.update(digest)
     } else if (stats.kind === 'directory') {
-      const names = requireRead(await filesystem.listEntries(current)).map((entry) => entry.name)
+      // Classification ignores Orca's own SKILL.md siblings, so writing or cleaning one is no change.
+      const names = requireRead(await filesystem.listEntries(current))
+        .filter(
+          (entry) =>
+            !(relative === '.' && entry.kind === 'file' && bundledSkillFileSiblingKind(entry.name))
+        )
+        .map((entry) => entry.name)
       for (const name of names.sort()) {
         await visit(join(current, name), `${relative}/${name}`)
       }

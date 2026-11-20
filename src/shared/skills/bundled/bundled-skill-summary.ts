@@ -5,6 +5,7 @@ import {
   type BundledSkillLeaveReason,
   type BundledSkillOp,
   type BundledSkillOpKind,
+  type BundledSkillOpOutcome,
   type BundledSkillOutcome,
   type BundledSkillPlan,
   type BundledSkillPlanEntry
@@ -232,6 +233,24 @@ export type BundledSkillOutcomeText =
   | 'Needs attention'
 
 // Leaving another owner’s folder is reported without failure.
+const FILE_IN_USE_CODES = new Set(['EPERM', 'EACCES', 'EBUSY'])
+
+/** Windows refuses to move a SKILL.md another program holds open without delete sharing. */
+export function isBundledSkillFileInUse(
+  op: Pick<BundledSkillOpOutcome, 'kind' | 'status' | 'error' | 'strandedPath'>
+): boolean {
+  // A stranded outcome did replace SKILL.md; its failure is the edit Orca could not back up.
+  return (
+    op.kind === 'update' &&
+    op.status === 'failed' &&
+    !op.strandedPath &&
+    FILE_IN_USE_CODES.has(op.error ?? '')
+  )
+}
+
+export const BUNDLED_SKILL_FILE_IN_USE_TEXT =
+  'SKILL.md is in use or locked, so it was not changed. Close the program using it, then update again.'
+
 const DONE_TEXT: Readonly<Record<BundledSkillOpKind, BundledSkillOutcomeText | null>> = {
   keep: null,
   leave: null,

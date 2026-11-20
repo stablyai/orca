@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { readFile, writeFile } from 'node:fs/promises'
+import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { bundledSkillNudgeEntries } from '../../../shared/skills/bundled/bundled-skill-summary'
@@ -10,7 +10,6 @@ import {
 } from './bundled-skill-filesystem'
 import {
   autoUpdateInstalledBundledSkills,
-  installBundledSkills,
   previewBundledSkillInstall
 } from './bundled-skill-installation'
 import {
@@ -41,20 +40,6 @@ function input(home: SkillHome, filesystem: BundledSkillFilesystem = nativeBundl
 
 async function readSkill(home: SkillHome, root: 'shared' | 'claude', name: string) {
   return readFile(join(skillPath(home, root, name), 'SKILL.md'), 'utf8').catch(() => 'missing')
-}
-
-/** An editor holding SKILL.md open saves into the folder the swap just moved aside. */
-function lateWriterFilesystem(home: SkillHome): BundledSkillFilesystem {
-  const target = skillPath(home, 'shared', 'alpha')
-  return {
-    ...nativeBundledSkillFilesystem,
-    rename: async (source, destination) => {
-      await nativeBundledSkillFilesystem.rename(source, destination)
-      if (source === target && basename(destination).startsWith('.alpha.orca-old')) {
-        await writeFile(join(destination, 'SKILL.md'), text('alpha', 'late edit'))
-      }
-    }
-  }
 }
 
 describe('per-skill silent update of unedited Orca copies', () => {
@@ -94,17 +79,31 @@ describe('per-skill silent update of unedited Orca copies', () => {
     expect(remaining.map((entry) => entry.name)).toEqual(['bravo', 'charlie'])
   })
 
-  it('keeps the edited location of a skill while updating its unedited one', async () => {
+  it('updates SKILL.md beside files the user added and keeps an edited SKILL.md', async () => {
     const home = await makeSkillHome()
+    const sidecar = join(skillPath(home, 'shared', 'alpha'), 'agents', 'openai.yaml')
     await writeCopy(skillPath(home, 'shared', 'alpha'), text('alpha', 'old'))
-    await writeCopy(skillPath(home, 'claude', 'alpha'), text('alpha', 'old'), { 'notes.md': 'x' })
+    await mkdir(dirname(sidecar))
+    await writeFile(sidecar, 'interface:\n  display_name: Alpha\n')
+    await writeCopy(skillPath(home, 'claude', 'alpha'), text('alpha', 'mine'), { 'notes.md': 'x' })
 
     await autoUpdateInstalledBundledSkills({ ...input(home), names: ['alpha'] })
 
     expect(await readSkill(home, 'shared', 'alpha')).toBe(text('alpha', 'new'))
-    expect(await readSkill(home, 'claude', 'alpha')).toBe(text('alpha', 'old'))
+    expect(await readFile(sidecar, 'utf8')).toBe('interface:\n  display_name: Alpha\n')
+    expect((await readdir(skillPath(home, 'shared', 'alpha'))).sort()).toEqual([
+      'SKILL.md',
+      'agents'
+    ])
+    expect(await readSkill(home, 'claude', 'alpha')).toBe(text('alpha', 'mine'))
+    const remaining = bundledSkillNudgeEntries(await previewBundledSkillInstall(input(home)))
+    expect(remaining.flatMap((entry) => entry.ops.map((op) => [op.kind, op.reason]))).toEqual([
+      ['keep', undefined],
+      ['leave', 'edited']
+    ])
   })
 
+  // Windows refuses to rename over a SKILL.md an editor holds open.
   it('leaves only the skill whose silent update failed for the prompt', async () => {
     const home = await makeSkillHome()
     for (const name of NAMES) {
@@ -113,7 +112,7 @@ describe('per-skill silent update of unedited Orca copies', () => {
     const failBravo: BundledSkillFilesystem = {
       ...nativeBundledSkillFilesystem,
       rename: async (source, target) => {
-        if ([source, target].some((path) => basename(path) === 'bravo')) {
+        if (basename(dirname(target)) === 'bravo') {
           throw Object.assign(new Error('denied'), { code: 'EPERM' })
         }
         return nativeBundledSkillFilesystem.rename(source, target)
@@ -131,44 +130,8 @@ describe('per-skill silent update of unedited Orca copies', () => {
       ['charlie', 'done']
     ])
     expect(await readSkill(home, 'shared', 'bravo')).toBe(text('bravo', 'old'))
+    expect(await readdir(skillPath(home, 'shared', 'bravo'))).toEqual(['SKILL.md'])
     const remaining = bundledSkillNudgeEntries(await previewBundledSkillInstall(input(home)))
     expect(remaining.map((entry) => entry.name)).toEqual(['bravo'])
-  })
-
-  it('reports where unpreservable edits remain and never deletes them', async () => {
-    const home = await makeSkillHome()
-    await writeCopy(skillPath(home, 'shared', 'alpha'), text('alpha', 'old'))
-    // The shared backup directory refuses writes, as when it is not writable by this user.
-    const unwritableBackups = (filesystem: BundledSkillFilesystem): BundledSkillFilesystem => ({
-      ...filesystem,
-      moveToBackup: async () => {
-        throw Object.assign(new Error('denied'), { code: 'EACCES' })
-      }
-    })
-
-    const result = await autoUpdateInstalledBundledSkills({
-      ...input(home, unwritableBackups(lateWriterFilesystem(home))),
-      names: ['alpha']
-    })
-
-    const outcome = result.skills[0]?.ops[0]
-    expect(outcome).toMatchObject({ status: 'failed', error: 'EACCES' })
-    const stranded = outcome?.strandedPath ?? ''
-    expect(basename(stranded)).toMatch(/^\.alpha\.orca-old/u)
-    expect(await readFile(join(stranded, 'SKILL.md'), 'utf8')).toBe(text('alpha', 'late edit'))
-    expect(await readSkill(home, 'shared', 'alpha')).toBe(text('alpha', 'new'))
-
-    const plan = await previewBundledSkillInstall(input(home))
-    expect(plan.skills[0]?.ops[0]?.cleanup).toEqual([
-      expect.objectContaining({ path: stranded, action: 'backup' })
-    ])
-    expect(bundledSkillNudgeEntries(plan).map((entry) => entry.name)).toEqual(['alpha'])
-
-    // Settling that cleanup while backups stay unwritable must leave the edit in place.
-    await installBundledSkills(
-      input(home, unwritableBackups(nativeBundledSkillFilesystem)),
-      plan.planDigest
-    )
-    expect(await readFile(join(stranded, 'SKILL.md'), 'utf8')).toBe(text('alpha', 'late edit'))
   })
 })

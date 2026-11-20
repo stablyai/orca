@@ -33,17 +33,22 @@ export async function planFormerSkillPlacements(
       return false
     }
     const target = await classifyBundledSkillPath(filesystem, realPath, source, digest)
-    return target.folderClass === 'current' || target.folderClass === 'released'
+    return target.wholeFolderClass === 'current' || target.wholeFolderClass === 'released'
   }
   for (const name of source.aliases ?? []) {
     const path = join(root.path, name)
     const keys = stateKeysFor(path, join(root.realPath, name))
-    const classified = await classifyBundledSkillPath(filesystem, path, source, digest)
-    const { observed } = classified
+    // Former placements are retired whole, so anything beside SKILL.md keeps them the user's.
+    const { wholeFolderClass: folderClass, observed } = await classifyBundledSkillPath(
+      filesystem,
+      path,
+      source,
+      digest
+    )
     if (observed.kind === 'absent') {
       continue
     }
-    let owned = classified.folderClass === 'released' || classified.folderClass === 'current'
+    let owned = folderClass === 'released' || folderClass === 'current'
     const forwarding =
       observed.kind === 'link' &&
       bundledSkillPathKey(resolve(root.realPath, observed.target)) ===
@@ -63,7 +68,7 @@ export async function planFormerSkillPlacements(
     if (cloud) {
       owned = false
     }
-    installed ||= owned || (!cloud && classified.folderClass === 'edited')
+    installed ||= owned || (!cloud && folderClass === 'edited')
     const reason = (await hasPendingCloudTransaction(stateDirectory, keys))
       ? 'busy'
       : owned && !(await filesystem.canWrite(root.realPath))
@@ -81,7 +86,7 @@ export async function planFormerSkillPlacements(
           reason ??
           (observed.kind === 'unreadable'
             ? 'unreadable'
-            : classified.folderClass !== 'edited'
+            : folderClass !== 'edited'
               ? 'other'
               : // A build from before the rename recorded these bytes under the former name.
                 !cloud &&

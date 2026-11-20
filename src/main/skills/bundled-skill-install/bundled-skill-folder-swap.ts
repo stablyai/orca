@@ -6,8 +6,11 @@ import { randomUUID } from 'node:crypto'
 import { basename, dirname, join } from 'node:path'
 
 import type { BundledSkillFilesystem } from './bundled-skill-filesystem'
+import { filesystemErrorCode } from './bundled-skill-filesystem-error'
 
 export type BundledSkillFile = { path: string; text: string }
+
+const SKILL_FILE = 'SKILL.md'
 
 /** Thrown when a path no longer holds what the plan observed; nothing was moved. */
 export class BundledSkillChangedError extends Error {
@@ -62,7 +65,7 @@ export function bundledSkillBackupPath(homeDirectory: string, name: string): str
   return join(homeDirectory, '.agents', '.orca-skill-backups', `${name}-${utc}-${randomUUID()}`)
 }
 
-/** The installer's only delete: it refuses anything but its own stage and old siblings. */
+/** The installer's only delete: it refuses anything but its own stage and old siblings, including SKILL.md's stage. */
 export async function removeBundledSkillSibling(
   filesystem: BundledSkillFilesystem,
   path: string
@@ -112,29 +115,60 @@ export async function putBundledSkillFolder(
   }
 }
 
-/** POSIX cannot replace a nonempty directory atomically; an interrupted two-rename update leaves .orca-old for the next plan to restore. Return old copy for rechecking. */
-export async function swapBundledSkillFolder(
+const FILE_SIBLING = /^\.SKILL\.md\.orca-(stage|old)-[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/u
+
+/** Exactly the names updateBundledSkillFile writes, so a user's look-alike file is never hidden or deleted. */
+export function bundledSkillFileSiblingKind(entryName: string): 'stage' | 'old' | null {
+  const kind = FILE_SIBLING.exec(entryName)?.[1]
+  return kind === 'stage' || kind === 'old' ? kind : null
+}
+
+/**
+ * Replaces only SKILL.md; every other entry is the user's and stays untouched. Moving SKILL.md
+ * aside first captures whatever an editor last saved there, even by its own rename, and the new
+ * file goes in by hard link, which refuses to overwrite a SKILL.md an editor recreated meanwhile.
+ * Returns the moved-aside file for the caller to settle. A crash between the two steps leaves
+ * only the moved-aside file, which the next plan restores.
+ */
+export async function updateBundledSkillFile(
   filesystem: BundledSkillFilesystem,
-  target: string,
-  files: readonly BundledSkillFile[],
+  folder: string,
+  text: string,
   verify: () => Promise<boolean>
 ): Promise<string> {
-  const staged = await stage(filesystem, target, files)
+  const target = join(folder, SKILL_FILE)
+  const staged = siblingPath(target, BUNDLED_SKILL_STAGE_MARKER)
   const old = siblingPath(target, BUNDLED_SKILL_OLD_MARKER)
+  const isMissing = async (path: string) => (await filesystem.stat(path))?.kind === 'missing'
   try {
-    await requireUnchanged(verify, target)
+    await filesystem.writeFile(staged, text)
+    await requireUnchanged(verify, folder)
     await filesystem.rename(target, old)
   } catch (error) {
+    // A move that reported failure but happened is undone, so SKILL.md never goes missing.
+    if ((await isMissing(target)) && !(await isMissing(old))) {
+      await filesystem.rename(old, target).catch(() => undefined)
+    }
     await removeBundledSkillSibling(filesystem, staged).catch(() => undefined)
     throw error
   }
   try {
-    await filesystem.rename(staged, target)
+    await filesystem.linkFile(staged, target).catch(async (error: unknown) => {
+      if (filesystemErrorCode(error) === 'EEXIST') {
+        throw new BundledSkillChangedError(target)
+      }
+      // No hard links here: a rename can only overwrite a save from this instant.
+      await filesystem.rename(staged, target)
+    })
   } catch (error) {
-    await filesystem.rename(old, target).catch(() => undefined)
+    if (await isMissing(target)) {
+      await filesystem.rename(old, target).catch(() => undefined)
+    }
     await removeBundledSkillSibling(filesystem, staged).catch(() => undefined)
+    // An editor's new SKILL.md stays; the moved-aside copy is the next plan's to settle.
     throw error
   }
+  await removeBundledSkillSibling(filesystem, staged).catch(() => undefined)
   return old
 }
 

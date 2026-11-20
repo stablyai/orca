@@ -1,4 +1,4 @@
-import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises'
+import { mkdir, readdir, readFile, rename, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 
@@ -7,6 +7,7 @@ import {
   type BundledSkillFilesystem
 } from './bundled-skill-filesystem'
 import { installBundledSkills, previewBundledSkillInstall } from './bundled-skill-installation'
+import { isBundledSkillFileInUse } from '../../../shared/skills/bundled/bundled-skill-summary'
 import {
   linkDirectory,
   leftoverSiblings,
@@ -59,6 +60,7 @@ function crashingFilesystem(crashAt: number): BundledSkillFilesystem {
   return {
     ...nativeBundledSkillFilesystem,
     writeFolder: guard(nativeBundledSkillFilesystem.writeFolder),
+    writeFile: guard(nativeBundledSkillFilesystem.writeFile),
     ensureDirectory: guard(nativeBundledSkillFilesystem.ensureDirectory),
     remove: guard(nativeBundledSkillFilesystem.remove),
     createLink: guard(nativeBundledSkillFilesystem.createLink),
@@ -102,38 +104,118 @@ describe('interrupted swaps', () => {
     expect(await leftoverSiblings(home.shared)).toEqual([])
   })
 
-  it('restores the old copy when the crash left the target missing', async () => {
+  it.each([
+    ['writing the stage', 'write', { kind: 'update', cleanup: ['delete'] }],
+    ['moving SKILL.md aside', 'aside', { kind: 'update', cleanup: ['delete'] }],
+    // SKILL.md is missing: its moved-aside copy is restored and the stage dropped.
+    ['between the two moves', 'gap', { kind: 'restore', cleanup: ['delete'] }],
+    // The new SKILL.md is in; the moved-aside shipped copy and the stage are Orca's to delete.
+    ['after placing the new SKILL.md', 'place', { kind: 'keep', cleanup: ['delete', 'delete'] }]
+  ] as const)(
+    'recovers an update that died %s and keeps the files beside SKILL.md',
+    async (_, at, recovery) => {
+      const home = await makeSkillHome()
+      const input = await npxShared(home)
+      const sidecar = join(home.shared, 'agents', 'openai.yaml')
+      await mkdir(dirname(sidecar))
+      await writeFile(sidecar, 'mine\n')
+      const plan = await previewBundledSkillInstall(input)
+      expect(sharedOp(plan)).toEqual({ kind: 'update', cleanup: [] })
+      let dead = false
+      const die = () => {
+        dead = true
+        throw Object.assign(new Error('crashed'), { code: 'ECRASH' })
+      }
+      const alive =
+        <A extends unknown[]>(write: (...args: A) => Promise<void>) =>
+        async (...args: A) =>
+          dead ? die() : write(...args)
+      const filesystem: BundledSkillFilesystem = {
+        ...nativeBundledSkillFilesystem,
+        writeFile: async (path, text) => {
+          if (at !== 'write') {
+            return nativeBundledSkillFilesystem.writeFile(path, text)
+          }
+          // A partial stage, as when the process dies mid-write.
+          await nativeBundledSkillFilesystem.writeFile(path, text.slice(0, 5))
+          die()
+        },
+        rename: async (source, target) => {
+          if (dead || at === 'aside') {
+            die()
+          }
+          await nativeBundledSkillFilesystem.rename(source, target)
+        },
+        linkFile: async (existing, path) => {
+          if (dead || at === 'gap') {
+            die()
+          }
+          await nativeBundledSkillFilesystem.linkFile(existing, path)
+          die()
+        },
+        remove: alive(nativeBundledSkillFilesystem.remove)
+      }
+      await installBundledSkills({ ...input, filesystem }, plan.planDigest)
+      expect(await readFile(sidecar, 'utf8')).toBe('mine\n')
+
+      expect(sharedOp(await previewBundledSkillInstall(input))).toEqual(recovery)
+      await previewAndInstall(input)
+      if (at === 'gap') {
+        expect(await readFile(join(home.shared, 'SKILL.md'), 'utf8')).toBe(OLD_TEXT)
+        await previewAndInstall(input)
+      }
+      expect(await readFile(join(home.shared, 'SKILL.md'), 'utf8')).toBe(NEW_TEXT)
+      expect((await readdir(home.shared)).sort()).toEqual(['SKILL.md', 'agents'])
+      expect(await readFile(sidecar, 'utf8')).toBe('mine\n')
+    }
+  )
+
+  it('cleans a stray stage beside a SKILL.md the user has since edited', async () => {
     const home = await makeSkillHome()
-    const { input, recovery } = await crashThenRecover(home, 2)
-    expect(await snapshot(home.shared)).toBe('missing')
-    expect(sharedOp(recovery)).toEqual({ kind: 'restore', cleanup: ['delete'] })
+    const edited = `---\nname: ${NAME}\n---\nmine\n`
+    await writeCopy(home.shared, edited)
+    const stray = join(home.shared, '.SKILL.md.orca-stage-0b8f4a52-6c1e-4d7a-9f3b-2a5c8e1d7f60')
+    await writeFile(stray, 'partial')
+    const input = serviceInput(home, { agents: [] })
+    expect(sharedOp(await previewBundledSkillInstall(input))).toEqual({
+      kind: 'leave',
+      cleanup: ['delete']
+    })
+    await previewAndInstall(input)
+    expect(await snapshot(home.shared)).toBe(`dir[SKILL.md]:${edited}`)
+  })
+
+  it('restores an older build’s moved-aside copy when the target is missing', async () => {
+    const home = await makeSkillHome()
+    const input = await npxShared(home)
+    await rename(home.shared, join(dirname(home.shared), `.${NAME}.orca-old-1`))
+    expect(sharedOp(await previewBundledSkillInstall(input))).toEqual({
+      kind: 'restore',
+      cleanup: []
+    })
     await previewAndInstall(input)
     expect(await snapshot(home.shared)).toBe(`dir[SKILL.md]:${OLD_TEXT}`)
-    expect(sharedOp(await previewBundledSkillInstall(input)).kind).toBe('update')
     await previewAndInstall(input)
     expect(await snapshot(home.shared)).toBe(`dir[SKILL.md]:${NEW_TEXT}`)
     expect(await leftoverSiblings(home.shared)).toEqual([])
   })
 
-  it('deletes the released old copy once the new one is in', async () => {
+  it('deletes an older build’s released old copy but backs one up with other files', async () => {
     const home = await makeSkillHome()
-    // The old copy is removed on the third step; inject failure in remove, not rename.
     const input = await npxShared(home)
-    const plan = await previewBundledSkillInstall(input)
-    const filesystem: BundledSkillFilesystem = {
-      ...nativeBundledSkillFilesystem,
-      remove: async () => {
-        throw Object.assign(new Error('crashed'), { code: 'ECRASH' })
-      }
-    }
-    await installBundledSkills({ ...input, filesystem }, plan.planDigest)
-    expect(await snapshot(home.shared)).toBe(`dir[SKILL.md]:${NEW_TEXT}`)
+    await writeCopy(join(dirname(home.shared), `.${NAME}.orca-old-1`), OLD_TEXT)
+    await writeCopy(join(dirname(home.shared), `.${NAME}.orca-old-2`), OLD_TEXT, {
+      'notes.md': 'mine'
+    })
     expect(sharedOp(await previewBundledSkillInstall(input))).toEqual({
-      kind: 'keep',
-      cleanup: ['delete']
+      kind: 'update',
+      cleanup: ['delete', 'backup']
     })
     await previewAndInstall(input)
     expect(await leftoverSiblings(home.shared)).toEqual([])
+    const backups = join(home.home, '.agents', '.orca-skill-backups')
+    const [kept] = await readdir(backups)
+    expect(await readFile(join(backups, kept, 'notes.md'), 'utf8')).toBe('mine')
   })
 
   it('never loses the user’s copy when Replace dies after the backup move', async () => {
@@ -202,8 +284,8 @@ describe('the disk changing under a plan', () => {
     const plan = await previewBundledSkillInstall(input)
     const filesystem: BundledSkillFilesystem = {
       ...nativeBundledSkillFilesystem,
-      writeFolder: async (path, files) => {
-        await nativeBundledSkillFilesystem.writeFolder(path, files)
+      writeFile: async (path, text) => {
+        await nativeBundledSkillFilesystem.writeFile(path, text)
         await writeFile(join(home.shared, 'SKILL.md'), 'raced\n')
       }
     }
@@ -215,10 +297,88 @@ describe('the disk changing under a plan', () => {
     ])
     expect(await readFile(join(home.shared, 'SKILL.md'), 'utf8')).toBe('raced\n')
     expect(await snapshot(home.cursor)).toBe('missing')
-    expect(await leftoverSiblings(home.shared)).toEqual([])
+    expect(await readdir(home.shared)).toEqual(['SKILL.md'])
   })
 
-  it('backs up an old copy a racing writer changed instead of deleting it', async () => {
+  it('updates a forced copy with extra files and a stray stage', async () => {
+    const home = await makeSkillHome()
+    const input = { ...(await npxShared(home)), force: [home.shared, home.claude] }
+    const sidecar = join(home.shared, 'agents', 'openai.yaml')
+    await mkdir(dirname(sidecar))
+    await writeFile(sidecar, 'mine\n')
+    await writeFile(
+      join(home.shared, '.SKILL.md.orca-stage-0b8f4a52-6c1e-4d7a-9f3b-2a5c8e1d7f60'),
+      'x'
+    )
+    const { result } = await previewAndInstall(input)
+    expect(result.skills[0].ops.map((op) => [op.kind, op.status])).toEqual([
+      ['update', 'done'],
+      ['keep', 'done']
+    ])
+    expect(await readFile(join(home.shared, 'SKILL.md'), 'utf8')).toBe(NEW_TEXT)
+    expect((await readdir(home.shared)).sort()).toEqual(['SKILL.md', 'agents'])
+  })
+
+  it('backs up an edit that lands in the replaced SKILL.md instead of losing it', async () => {
+    const home = await makeSkillHome()
+    const input = await npxShared(home)
+    const plan = await previewBundledSkillInstall(input)
+    const filesystem: BundledSkillFilesystem = {
+      ...nativeBundledSkillFilesystem,
+      rename: async (source, target) => {
+        await nativeBundledSkillFilesystem.rename(source, target)
+        // An editor holding the old SKILL.md open saves after it moved aside.
+        await writeFile(target, 'raced\n')
+      }
+    }
+    const result = await installBundledSkills({ ...input, filesystem }, plan.planDigest)
+    const backup = result.skills[0].ops[0].backupPath ?? ''
+    expect(await readFile(backup, 'utf8')).toBe('raced\n')
+    expect(await snapshot(home.shared)).toBe(`dir[SKILL.md]:${NEW_TEXT}`)
+  })
+
+  it('backs up an editor’s atomic save that lands just before SKILL.md moves aside', async () => {
+    const home = await makeSkillHome()
+    const input = await npxShared(home)
+    const plan = await previewBundledSkillInstall(input)
+    const skill = join(home.shared, 'SKILL.md')
+    const filesystem: BundledSkillFilesystem = {
+      ...nativeBundledSkillFilesystem,
+      rename: async (source, target) => {
+        if (source === skill) {
+          await writeFile(`${skill}.tmp`, 'saved\n')
+          await rename(`${skill}.tmp`, skill)
+        }
+        await nativeBundledSkillFilesystem.rename(source, target)
+      }
+    }
+    const result = await installBundledSkills({ ...input, filesystem }, plan.planDigest)
+    expect(await readFile(result.skills[0].ops[0].backupPath ?? '', 'utf8')).toBe('saved\n')
+    expect(await snapshot(home.shared)).toBe(`dir[SKILL.md]:${NEW_TEXT}`)
+  })
+
+  it('keeps an editor’s SKILL.md saved while the old one was aside', async () => {
+    const home = await makeSkillHome()
+    const input = await npxShared(home)
+    const plan = await previewBundledSkillInstall(input)
+    const skill = join(home.shared, 'SKILL.md')
+    const filesystem: BundledSkillFilesystem = {
+      ...nativeBundledSkillFilesystem,
+      linkFile: async (existing, path) => {
+        if (path === skill) {
+          await writeFile(skill, 'saved\n')
+        }
+        await nativeBundledSkillFilesystem.linkFile(existing, path)
+      }
+    }
+    const result = await installBundledSkills({ ...input, filesystem }, plan.planDigest)
+    expect(result.skills[0].ops[0].status).toBe('changed')
+    expect(await readFile(skill, 'utf8')).toBe('saved\n')
+    // The moved-aside shipped copy is cleaned by the next plan.
+    expect(sharedOp(await previewBundledSkillInstall(input)).cleanup).toEqual(['delete'])
+  })
+
+  it('puts SKILL.md back when moving it aside reports failure after it moved', async () => {
     const home = await makeSkillHome()
     const input = await npxShared(home)
     const plan = await previewBundledSkillInstall(input)
@@ -227,13 +387,47 @@ describe('the disk changing under a plan', () => {
       rename: async (source, target) => {
         await nativeBundledSkillFilesystem.rename(source, target)
         if (target.includes('.orca-old-')) {
-          await writeFile(join(target, 'SKILL.md'), 'raced\n')
+          throw Object.assign(new Error('lost reply'), { code: 'EIO' })
         }
       }
     }
     const result = await installBundledSkills({ ...input, filesystem }, plan.planDigest)
-    const backup = result.skills[0].ops[0].backupPath ?? ''
-    expect(await readFile(join(backup, 'SKILL.md'), 'utf8')).toBe('raced\n')
-    expect(await snapshot(home.shared)).toBe(`dir[SKILL.md]:${NEW_TEXT}`)
+    expect(result.skills[0].ops[0]).toMatchObject({ status: 'failed', error: 'EIO' })
+    expect(await snapshot(home.shared)).toBe(`dir[SKILL.md]:${OLD_TEXT}`)
+  })
+
+  it('reports a stranded edit as updated, not as a file in use', async () => {
+    const home = await makeSkillHome()
+    const input = await npxShared(home)
+    const plan = await previewBundledSkillInstall(input)
+    const filesystem: BundledSkillFilesystem = {
+      ...nativeBundledSkillFilesystem,
+      rename: async (source, target) => {
+        await nativeBundledSkillFilesystem.rename(source, target)
+        await writeFile(target, 'raced\n')
+      },
+      ensureDirectory: async () => {
+        throw Object.assign(new Error('denied'), { code: 'EACCES' })
+      }
+    }
+    const result = await installBundledSkills({ ...input, filesystem }, plan.planDigest)
+    const [op] = result.skills[0].ops
+    expect(op).toMatchObject({ status: 'failed', error: 'EACCES' })
+    expect(await readFile(op.strandedPath ?? '', 'utf8')).toBe('raced\n')
+    expect(await readFile(join(home.shared, 'SKILL.md'), 'utf8')).toBe(NEW_TEXT)
+    expect(isBundledSkillFileInUse(op)).toBe(false)
+  })
+
+  it('backs up an older build’s old copy holding an unsettled replaced SKILL.md', async () => {
+    const home = await makeSkillHome()
+    const input = await npxShared(home)
+    const legacy = join(dirname(home.shared), `.${NAME}.orca-old-1`)
+    await writeCopy(legacy, OLD_TEXT, {
+      '.SKILL.md.orca-old-0b8f4a52-6c1e-4d7a-9f3b-2a5c8e1d7f60': 'mine\n'
+    })
+    expect(sharedOp(await previewBundledSkillInstall(input))).toEqual({
+      kind: 'update',
+      cleanup: ['backup']
+    })
   })
 })
