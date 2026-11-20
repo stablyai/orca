@@ -7,6 +7,8 @@ import {
   consumeCodexRateLimitResetCredit,
   fetchCodexRateLimits
 } from '../providers/codex/codex-fetcher'
+import { fetchGrokRateLimits } from '../providers/grok/grok-fetcher'
+import { readGrokAuthSession } from '../providers/grok/grok-auth'
 import {
   deferred,
   flushMicrotasks,
@@ -68,7 +70,8 @@ vi.mock('../providers/cursor/cursor-auth', () => ({
 }))
 
 vi.mock('../providers/grok/grok-auth', () => ({
-  readGrokAuthSession: vi.fn(() => ({ status: 'missing' }))
+  readGrokAuthSession: vi.fn(() => ({ status: 'missing' })),
+  readGrokAuthSessionAsync: vi.fn(async () => readGrokAuthSession())
 }))
 
 vi.mock('../../minimax/minimax-cookie-store', () => ({
@@ -309,6 +312,41 @@ describe('RateLimitService', () => {
       })
     }
   )
+
+  it('publishes Grok usage when a background auth refresh queues behind a Claude read', async () => {
+    vi.useFakeTimers()
+    const service = new RateLimitService()
+    const claudeReading = deferred<ProviderRateLimits>()
+    vi.mocked(readGrokAuthSession).mockReturnValue({
+      status: 'ok',
+      session: {
+        accessToken: 'token',
+        userId: null,
+        email: null,
+        teamId: null,
+        expiresAtMs: Date.now() + 305_000,
+        oidcClientId: null
+      }
+    })
+    vi.mocked(fetchActiveClaudeRateLimits).mockReturnValueOnce(claudeReading.promise)
+    vi.mocked(fetchGrokRateLimits).mockImplementation(async () => okProvider('grok', 42))
+    try {
+      service.start({ fetchImmediately: false })
+      const reading = service.refreshClaudeForTarget()
+      await vi.advanceTimersByTimeAsync(5_000)
+      expect(service.getState().grok?.status).toBeUndefined()
+      claudeReading.resolve(okProvider('claude', 20))
+      await reading
+      expect(service.getState().grok).toMatchObject({
+        status: 'ok',
+        session: { usedPercent: 42 }
+      })
+    } finally {
+      service.stop()
+      vi.useRealTimers()
+    }
+  })
+
   it('keeps the read plan and its account on live posts only from that same login', async () => {
     mockFreshBackgroundProviderFetches()
     const service = new RateLimitService()

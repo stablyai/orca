@@ -1168,7 +1168,6 @@
 1 src/main/rate-limits/providers/cursor/cursor-fetcher.ts
 1 src/main/rate-limits/providers/gemini/gemini-oauth-sources.ts
 2 src/main/rate-limits/providers/gemini/gemini-usage-fetcher.ts
-1 src/main/rate-limits/providers/grok/grok-fetcher.ts
 1 src/main/rate-limits/providers/muse/muse-usage-fetcher.ts
 3 src/main/rate-limits/providers/opencode-go/opencode-go-api-key-source.ts
 1 src/main/rate-limits/providers/opencode-go/opencode-go-usage-source-selection.ts
@@ -1177,10 +1176,10 @@
 2 src/main/rate-limits/service/rate-limit-service.ts
 1 src/main/rate-limits/service/service-fetch-targets.ts
 1 src/main/rate-limits/service/service-full-cycle-application.ts
-7 src/main/rate-limits/service/service-full-cycle-preparation.ts
+6 src/main/rate-limits/service/service-full-cycle-preparation.ts
 1 src/main/rate-limits/service/service-inactive-accounts.ts
 1 src/main/rate-limits/service/service-muse-usage-fetch.ts
-3 src/main/rate-limits/service/service-provider-cycles.ts
+2 src/main/rate-limits/service/service-provider-cycles.ts
 1 src/main/rate-limits/service/service-state.ts
 2 src/main/remote-policies/release-asset-policy-live-update.ts
 4 src/main/ripgrep/bundled-ripgrep-path.ts
