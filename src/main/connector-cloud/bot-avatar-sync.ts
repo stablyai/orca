@@ -1,5 +1,6 @@
-// A bot's picture becomes its Slack app's icon: the cloud gets the picture of each bot with an app
-// whenever it differs from the one last sent, and sets the icon itself.
+// A bot's picture becomes its Slack app's icon, and the picture the cloud's own pages show (GitHub's
+// choose page): the cloud gets the picture of each bot with a Slack app or a GitHub link whenever it
+// differs from the one last sent, and sets the icon itself.
 import { parseBotAvatar } from '../../shared/bot-avatar'
 import type { Bot } from '../../shared/bot-types'
 import type { ConnectorBotAvatarRequest } from '../../shared/connector-bot-slack-contract'
@@ -7,7 +8,7 @@ import type { BotController } from '../bots/bot-controller'
 import { botsCloudClient } from './bots-cloud-client'
 import type { ConnectorCloud } from './connector-cloud'
 
-type SyncedBot = Pick<Bot, 'id' | 'avatar' | 'slack'>
+type SyncedBot = Pick<Bot, 'id' | 'avatar' | 'slack' | 'github'>
 
 // A failed send tries again after this, unless a bot write retries it first.
 const RETRY_MS = 60_000
@@ -35,7 +36,7 @@ export class BotAvatarSync {
     }
     for (const bot of this.deps.bots.list()) {
       if (
-        bot.slack &&
+        (bot.slack || bot.github) &&
         bot.avatar &&
         this.sent.get(bot.id) !== bot.avatar &&
         !this.sending.has(bot.id)
