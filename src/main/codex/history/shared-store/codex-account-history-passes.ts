@@ -6,7 +6,6 @@ import {
   getOrcaUserDataPath,
   getSystemCodexHomePath
 } from '../../configuration/homes/codex-home-paths'
-import { checkThenCleanUpCodexHistory } from './codex-account-history-cleanup-sweep'
 import {
   hasIncompleteHostCodexIndexHeal,
   isCodexAccountHistoryWorkStopping,
@@ -20,11 +19,25 @@ import {
 
 import { CodexHistoryPassRequests } from './codex-history-pass-queue'
 import { WRITER_LOCKS } from './codex-thread-writer-locks'
+import {
+  CodexHistoryMoveReport,
+  type CodexHistoryMoveOutcome
+} from '../../../telemetry/codex-history-move-telemetry'
 import { isLinkedDirectory } from '../../../filesystem/merged-directory-link'
 
 const BUSY_RETRY_MS = 5 * 60_000
 // Retries start outside any pass's trace, so each is its own trace instead of nesting forever.
 const inRootContext = AsyncLocalStorage.snapshot()
+
+// Pass outcomes of a home that should be shared, as the move telemetry counts them.
+const MOVE_OUTCOMES: Record<string, CodexHistoryMoveOutcome> = {
+  shared: 'moved',
+  busy: 'busy',
+  'no-helper': 'no_lock_helper',
+  private: 'refused',
+  incomplete: 'incomplete',
+  failed: 'failed'
+}
 
 const INDEX_PENDING_DIR = (): string =>
   join(getOrcaUserDataPath(), 'codex-account-history', 'index-pending')
@@ -35,11 +48,31 @@ const INDEX_PENDING_DIR = (): string =>
  * an older one still queued. A home settled in a mode this run skips later passes.
  */
 export class CodexAccountHistoryPasses {
+  constructor(
+    private readonly homes: {
+      /** The host homes that should be shared now; null while sharing is off. */
+      sharedHomes: () => string[] | null
+      wslHomeCount: () => number
+    }
+  ) {}
+
+  private readonly moveReport = new CodexHistoryMoveReport({
+    sharedHomeKeys: () => this.sharedHomeKeys(),
+    wslHomeCount: () => this.homes.wslHomeCount(),
+    markerPath: () => join(getOrcaUserDataPath(), 'codex-account-history', 'move-status-sent.json')
+  })
+
   /**
    * Whether a busy home should still be shared, asked when its retry's pass starts: the setting
    * and the account may both have changed since it was found busy, or while the retry was queued.
    */
-  constructor(private readonly isStillShared: (accountHome: string) => boolean) {}
+  private isStillShared(accountHome: string): boolean {
+    return this.sharedHomeKeys()?.includes(normalizeRuntimePathForComparison(accountHome)) ?? false
+  }
+
+  private sharedHomeKeys(): string[] | null {
+    return this.homes.sharedHomes()?.map((home) => normalizeRuntimePathForComparison(home)) ?? null
+  }
 
   private readonly requests = new CodexHistoryPassRequests()
   private readonly settledThisRun = new Map<string, boolean>()
@@ -48,9 +81,6 @@ export class CodexAccountHistoryPasses {
   private readonly lockFolderFailedAt = new Map<string, number>()
   private readonly busyRetries = new Map<string, ReturnType<typeof setTimeout>>()
   private activePasses = 0
-  // Homes whose left-behind rollouts still await a content check, checked once no pass runs.
-  private readonly owedChecks = new Map<string, { accountHome: string }>()
-  private checking = false
   // When each import folder last finished a pass this run.
   private readonly imports = new CodexHistoryImportRunner({
     indexPendingDir: INDEX_PENDING_DIR,
@@ -70,7 +100,6 @@ export class CodexAccountHistoryPasses {
       requestHostCodexIndexHeal(INDEX_PENDING_DIR(), getSystemCodexHomePath(), this.passProgress),
     imported: () => {
       requestHostCodexIndexHeal(INDEX_PENDING_DIR(), getSystemCodexHomePath(), this.passProgress)
-      this.checkOwed()
     }
   })
   private startedPasses = 0
@@ -122,7 +151,6 @@ export class CodexAccountHistoryPasses {
         }
         // Index once no pass is moving files.
         requestHostCodexIndexHeal(INDEX_PENDING_DIR(), getSystemCodexHomePath(), this.passProgress)
-        this.checkOwed()
       }
     )
   }
@@ -138,10 +166,16 @@ export class CodexAccountHistoryPasses {
   private async runPass(key: string, accountHome: string, shared: boolean): Promise<void> {
     this.settledThisRun.delete(key)
     // Recorded in the trace log, so a home that never moves shows why.
-    await withSpan('codex-account-history.pass', async (span) => {
+    const outcome = await withSpan('codex-account-history.pass', async (span) => {
       span.setAttribute('account', basename(dirname(accountHome)))
-      span.setAttribute('outcome', await this.passOutcome(key, accountHome, shared))
+      const result = await this.passOutcome(key, accountHome, shared)
+      span.setAttribute('outcome', result)
+      return result
     })
+    const moveOutcome = shared ? MOVE_OUTCOMES[outcome] : undefined
+    if (moveOutcome) {
+      void this.moveReport.record(key, moveOutcome)
+    }
   }
 
   private async passOutcome(key: string, accountHome: string, shared: boolean): Promise<string> {
@@ -171,9 +205,6 @@ export class CodexAccountHistoryPasses {
       })
       if (result === 'shared') {
         this.settledThisRun.set(key, true)
-      }
-      if (result === 'shared' || result === 'incomplete') {
-        this.owedChecks.set(key, { accountHome })
       }
       if (result === 'busy') {
         this.retryWhenIdle(key, accountHome)
@@ -221,42 +252,5 @@ export class CodexAccountHistoryPasses {
     )
     timer.unref?.()
     this.busyRetries.set(key, timer)
-  }
-
-  // Hashing and deleting must not delay a launch: a starting pass stops them after one file.
-  private checkOwed(): void {
-    if (this.checking || this.activePasses > 0 || isCodexAccountHistoryWorkStopping()) {
-      return
-    }
-    const next = this.owedChecks.entries().next()
-    if (next.done) {
-      return
-    }
-    const [key, request] = next.value
-    // A pass that finished meanwhile owes a fresh check; only this run's request is settled.
-    const settle = (): void => {
-      if (this.owedChecks.get(key) === request) {
-        this.owedChecks.delete(key)
-      }
-    }
-    this.checking = true
-    void checkThenCleanUpCodexHistory({
-      accountHome: request.accountHome,
-      storeHome: getSystemCodexHomePath(),
-      shouldStop: () => this.activePasses > 0 || isCodexAccountHistoryWorkStopping()
-    })
-      .then((finished) => {
-        if (finished) {
-          settle()
-        }
-      })
-      .catch((error: unknown) => {
-        settle()
-        console.warn('[codex-account-history] Checking left-behind history failed:', error)
-      })
-      .finally(() => {
-        this.checking = false
-        this.checkOwed()
-      })
   }
 }

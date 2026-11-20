@@ -30,14 +30,13 @@ import { CodexRuntimeHomeSync } from '../runtime-home-service-sync'
 import type { CodexHomeLaunchOptions } from '../runtime-home-service-types'
 
 export abstract class CodexRuntimeHomeManagedHome extends CodexRuntimeHomeSync {
-  private readonly accountHistoryPasses = new CodexAccountHistoryPasses((home) => {
-    const key = normalizeRuntimePathForComparison(home)
-    return (
-      isCodexHistorySharedAcrossAccounts(this.store.getSettings()) &&
-      this.getManagedHostAccountHomesForSessionDiscovery().some(
-        (candidate) => normalizeRuntimePathForComparison(candidate) === key
-      )
-    )
+  private readonly accountHistoryPasses = new CodexAccountHistoryPasses({
+    sharedHomes: () =>
+      isCodexHistorySharedAcrossAccounts(this.store.getSettings())
+        ? this.getManagedHostAccountHomesForSessionDiscovery()
+        : null,
+    wslHomeCount: () =>
+      this.store.getSettings().codexManagedAccounts.filter(this.getWslManagedHomePath, this).length
   })
   private readonly wslAccountHistory = new WslCodexAccountHistoryLaunches()
 
