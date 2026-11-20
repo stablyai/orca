@@ -90,9 +90,13 @@ describe('CodexRuntimeHomeService', () => {
     ).toEqual({ authJson: refreshedAuth })
   })
 
-  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)(
-    'keeps a refreshed mirror login while ~/.codex/auth.json cannot be read',
-    async () => {
+  // A managed account's provenance stays after switching back to the system default.
+  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0).each([
+    { provenance: 'system default', managed: false },
+    { provenance: 'a managed account', managed: true }
+  ])(
+    'keeps a refreshed mirror login while ~/.codex/auth.json cannot be read ($provenance)',
+    async ({ managed }) => {
       const runtimeAuthPath = getRuntimeCodexAuthPath()
       const systemAuth = createCodexAuthJson('system@example.com', 'acct-system', 'system-old')
       const refreshedAuth = createCodexAuthJson(
@@ -105,6 +109,13 @@ describe('CodexRuntimeHomeService', () => {
       const { CodexRuntimeHomeService } = await import('../../runtime-home-service')
       const service = new CodexRuntimeHomeService(store as never)
       writeFileSync(runtimeAuthPath, refreshedAuth, 'utf-8')
+      if (managed) {
+        writeFileSync(
+          getSharedRuntimeAuthProvenancePath(),
+          `${JSON.stringify({ owner: 'managed', accountId: 'account-1' })}\n`,
+          'utf-8'
+        )
+      }
 
       const systemHome = join(testState.fakeHomeDir, '.codex')
       chmodSync(systemHome, 0o000)

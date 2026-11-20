@@ -34,9 +34,15 @@ export abstract class CodexRuntimeHomeAuthSync extends CodexRuntimeHomeLaunch {
       const runtimeAuth = readFileSync(runtimeAuthPath, 'utf-8')
       const provenanceStatus = this.resolveSharedRuntimeAuthProvenanceStatus()
       const provenance = provenanceStatus.kind === 'committed' ? provenanceStatus.provenance : null
+      const systemDefaultAuthExists = existsSync(systemDefaultAuthPath)
+      // The runtime copy may hold the only refreshed token: unreadable is no logout, so capture
+      // nothing and keep it until ~/.codex/auth.json reads again.
+      if (!systemDefaultAuthExists && !this.systemDefaultAuthIsGone()) {
+        return
+      }
       if (provenance?.owner === 'managed') {
         this.captureSystemDefaultSnapshot({ force: true })
-        if (!existsSync(systemDefaultAuthPath)) {
+        if (!systemDefaultAuthExists) {
           this.clearRuntimeAuthAfterSystemDefaultLogout(runtimeAuthPath)
           return
         }
@@ -49,11 +55,7 @@ export abstract class CodexRuntimeHomeAuthSync extends CodexRuntimeHomeLaunch {
         ownershipProven: systemDefaultOwnershipProven,
         mirroredAuthJson: mirroredSystemDefaultAuth
       } = this.resolveSystemDefaultMirrorClaim(runtimeAuth, provenanceStatus)
-      if (!existsSync(systemDefaultAuthPath)) {
-        // The runtime copy may hold the only refreshed token: delete it only on a real logout.
-        if (!this.systemDefaultAuthIsGone()) {
-          return
-        }
+      if (!systemDefaultAuthExists) {
         if (mirroredSystemDefaultAuth !== null && runtimeAuth === mirroredSystemDefaultAuth) {
           this.clearRuntimeAuthAfterSystemDefaultLogout(runtimeAuthPath)
           return
@@ -128,6 +130,9 @@ export abstract class CodexRuntimeHomeAuthSync extends CodexRuntimeHomeLaunch {
               ? (this.lastWrittenAuthJson ?? snapshot?.authJson)
               : undefined
         if (systemAuth === null) {
+          if (!this.systemDefaultAuthIsGone()) {
+            return
+          }
           if (
             provenanceStatus.kind === 'committed' &&
             provenanceStatus.provenance.owner === 'system-default' &&
