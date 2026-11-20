@@ -19,16 +19,6 @@ vi.mock('../../../../../../shared/hashing/sha256', async (importOriginal) => {
   }
 })
 
-let chatReads = 0
-function counted(tab: Tab): Tab {
-  return new Proxy(tab, {
-    get(target, key, receiver) {
-      chatReads++
-      return Reflect.get(target, key, receiver)
-    }
-  })
-}
-
 function workspaceTabs(worktreeId: string): Tab[] {
   const base = { groupId: 'g', worktreeId, customLabel: null, color: null, createdAt: 1 }
   return [
@@ -40,38 +30,47 @@ function workspaceTabs(worktreeId: string): Tab[] {
       label: 'shell',
       sortOrder: 0
     },
-    counted({
+    {
       ...base,
       id: `c-${worktreeId}`,
       entityId: `session-${worktreeId}`,
       contentType: 'agent-session',
       label: 'Chat',
       sortOrder: 1
-    })
+    }
   ]
 }
 
-function workForTitleWrite(workspaces: number): { hashes: number; chatReads: number } {
+function workForTitleWrite(workspaces: number): { hashes: number; sleepLookups: number } {
+  let sleepLookups = 0
+  // Each scanned chat looks itself up here, so this counts chats a pass visits.
+  const sleptAt = new Proxy(
+    {},
+    {
+      get(target, key, receiver) {
+        sleepLookups++
+        return Reflect.get(target, key, receiver)
+      }
+    }
+  )
   const tabs: Record<string, Tab[]> = {}
   for (let index = 0; index < workspaces; index++) {
     tabs[`wt-${workspaces}-${index}`] = workspaceTabs(`wt-${workspaces}-${index}`)
   }
-  getWorktreeIdsWithStructuredChat(tabs)
+  getWorktreeIdsWithStructuredChat(tabs, sleptAt)
   const [terminal, chat] = tabs[`wt-${workspaces}-0`]
   const retitled = replaceTabBuckets(tabs, [
     [`wt-${workspaces}-0`, [{ ...terminal, label: 'vim' }, chat]]
   ])
   hashes.count = 0
-  chatReads = 0
+  sleepLookups = 0
   // No chat is marked asleep, so none rests its workspace.
-  expect(getWorktreeIdsWithStructuredChat(retitled).size).toBe(0)
-  return { hashes: hashes.count, chatReads }
+  expect(getWorktreeIdsWithStructuredChat(retitled, sleptAt).size).toBe(0)
+  return { hashes: hashes.count, sleepLookups }
 }
 
 it('a terminal title write rescans and hashes no chat, at N and 10N chats', () => {
   for (const chats of [2_500, 25_000]) {
-    const work = workForTitleWrite(chats)
-    expect(work.hashes).toBe(0)
-    expect(work.chatReads).toBeLessThan(10)
+    expect(workForTitleWrite(chats)).toEqual({ hashes: 0, sleepLookups: 0 })
   }
 })
