@@ -33,6 +33,9 @@ type OutfitFile<T> = {
   subscribe: (listener: () => void) => () => void
 }
 
+const READ_RETRIES = 3
+const READ_RETRY_MS = 5000
+
 function outfitFiles<T>(
   readers: Record<string, () => Promise<T>>,
   pathOf: (outfit: BotAvatarOutfit) => string
@@ -47,6 +50,31 @@ function outfitFiles<T>(
     if (known) {
       return known
     }
+    let failures = 0
+    const load = (): void => {
+      file.reading = true
+      read().then(
+        (value) => {
+          file.value = value
+          for (const waiting of file.listeners) {
+            waiting()
+          }
+        },
+        // A failed read is tried again while pictures still wait on it, a few times, and by the next
+        // picture that wears the outfit.
+        () => {
+          file.reading = false
+          failures += 1
+          if (failures <= READ_RETRIES) {
+            setTimeout(() => {
+              if (file.listeners.size > 0 && file.value === undefined && !file.reading) {
+                load()
+              }
+            }, READ_RETRY_MS)
+          }
+        }
+      )
+    }
     const file: OutfitFile<T> = {
       value: undefined,
       reading: false,
@@ -54,19 +82,7 @@ function outfitFiles<T>(
       subscribe: (listener) => {
         file.listeners.add(listener)
         if (file.value === undefined && !file.reading) {
-          file.reading = true
-          read().then(
-            (value) => {
-              file.value = value
-              for (const waiting of file.listeners) {
-                waiting()
-              }
-            },
-            // A failed read is tried again by the next picture that wears the outfit.
-            () => {
-              file.reading = false
-            }
-          )
+          load()
         }
         return () => file.listeners.delete(listener)
       }
