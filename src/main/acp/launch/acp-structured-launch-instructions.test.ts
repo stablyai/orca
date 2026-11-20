@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, stat } from 'node:fs/promises'
+import { mkdtemp, readFile, readdir, rm, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
@@ -58,6 +58,7 @@ function launch(
     instructions?: string | null
     launchEnv?: Record<string, string>
     spec?: AcpLaunchSpec
+    workspacePath?: string
   } = {}
 ) {
   const record: AgentSessionRecord = {
@@ -69,7 +70,7 @@ function launch(
   const resolve = createAcpStructuredLaunchResolver(options.spec ?? SPECS[agent], {
     store: { getRecord: () => record, pinLaunchDirectory: vi.fn() },
     savedSession: { hasProviderTurn: async () => false },
-    resolveWorkspacePath: async () => '/home/user/.orca/bots/zorblax',
+    resolveWorkspacePath: async () => options.workspacePath ?? '/home/user/.orca/bots/zorblax',
     resolveEnvironment: async () => ({ PATH: '/usr/bin', HOME: '/home/user' }),
     resolveLaunchEnv: () => options.launchEnv ?? {},
     resolveCommand: (command) => `/resolved/${command}`,
@@ -137,10 +138,23 @@ describe('ACP launch: standing instructions', () => {
   })
 
   it('gives Cursor them as a rule in its folder while its new session opens', async () => {
-    const resolved = await launch('cursor', { instructions: PREAMBLE })
-    expect(resolved.aroundNewSession).toBeTypeOf('function')
-    expect(resolved.args).toEqual((await launch('cursor')).args)
-    expect(resolved.sessionMeta).toBeUndefined()
+    const workspacePath = await mkdtemp(join(dataDirectory, 'cursor-workspace-'))
+    const resolved = await launch('cursor', { instructions: PREAMBLE, workspacePath })
+    expect(resolved.cwd).toBe(workspacePath)
+    const undo = await resolved.aroundNewSession?.(resolved.cwd)
+    try {
+      const path = join(workspacePath, '.cursor', 'rules', 'orca-standing-instructions.mdc')
+      const lines = (await readFile(path, 'utf8')).split('\n')
+      expect(lines[0]).toBe('---')
+      expect(lines).toContain('alwaysApply: true')
+      expect(lines.slice(-3)).toEqual(['---', PREAMBLE, ''])
+      if (process.platform !== 'win32') {
+        expect((await stat(path)).mode & 0o777).toBe(0o600)
+      }
+    } finally {
+      await undo?.()
+    }
+    expect(await readdir(workspacePath)).toEqual([])
   })
 
   it('refuses to start an agent that has no way to take them', async () => {
