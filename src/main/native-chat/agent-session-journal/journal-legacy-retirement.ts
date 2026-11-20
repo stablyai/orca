@@ -310,8 +310,8 @@ export class JournalLegacyRetirement {
         durable: false
       })) !== true
     ) {
-      // Unsaved, the next launch would walk again; this one retries after the backoff.
-      return this.later()
+      // Reported and retried like one that threw: unsaved, the next launch would walk again.
+      throw new Error('legacy retirement hold was not acknowledged')
     }
     this.done = true
     await this.outcome(provenOutcome('proof_complete', proven, observation, this.activeMs, resumed))

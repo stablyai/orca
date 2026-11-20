@@ -230,7 +230,9 @@ export function legacyProofFailureOutcome(
           outcome: 'refused',
           reason: error.reason,
           artifact: error.artifact ?? 'unknown',
-          ...walked
+          ...walked,
+          // A saved refusal keeps no counts, so later launches can't repeat these: not keyed on.
+          cumulative: false
         }
       : { outcome: 'proving', error: 'pending', ...walked }
   }

@@ -242,7 +242,7 @@ it('reports a later launch of the same outcome again when the walk got further',
   ])
 })
 
-it('reports a held save that fails, and keeps the file until a later save goes through', async () => {
+it("reports a held save the store doesn't acknowledge, and keeps the file until a later save goes through", async () => {
   const events = recordEvents()
   const held = await profile()
   const maintain = held.writer.maintain.bind(held.writer)
@@ -267,4 +267,37 @@ it('reports a held save that fails, and keeps the file until a later save goes t
   expect(companions(held.filename)).toContain(held.filename)
   expect(events.map((event) => event.outcome)).toEqual(['proving', 'proof_complete'])
   expect(held.errors).toHaveLength(1)
+})
+
+it('reports a refusal found partway through the walk once, not again when a later launch reads it', async () => {
+  const events = recordEvents()
+  const orphan = await profile({
+    seed: (legacy) => {
+      const insert = legacy.prepare('INSERT INTO agent_session_records VALUES(?,?)')
+      for (let draft = 0; draft < 40; draft++) {
+        const id = `draft-${String(draft).padStart(3, '0')}`
+        insert.run(id, JSON.stringify({ sessionId: id }))
+      }
+    }
+  })
+  const read = orphan.readers.legacyProof
+  let calls = 0
+  orphan.readers.legacyProof = async (cursor) => {
+    if (++calls === 3) {
+      return {
+        next: null,
+        sessions: [],
+        retained: 'legacy source has orphan rows',
+        reason: 'source-orphan'
+      }
+    }
+    return read(cursor)
+  }
+  await orphan.launch('1.0.1', true, undefined, undefined, false).run()
+  orphan.readers.legacyProof = read
+  await orphan.launch('1.0.1', true, undefined, undefined, false).run()
+  expect(events.map((event) => [event.outcome, event.reason])).toEqual([
+    ['refused', 'source-orphan']
+  ])
+  expect(companions(orphan.filename)).toContain(orphan.filename)
 })
