@@ -21,7 +21,6 @@ import {
 import { KEEPS_FOCUS_ATTRIBUTE } from '@/lib/overlay-interaction/focus-keeping-press'
 import { basename } from '@/lib/path'
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager-types'
-import { useAppStore } from '@/store'
 import { filesystemPathToFileUri } from '../../../../../shared/file-links/file-uri-path'
 import { formatBytes } from '../../../../../shared/text/format-bytes'
 import { openDetectedFilePath } from '../links/files/terminal-file-open-routing'
@@ -38,11 +37,16 @@ const keepFocusProps = {
   onMouseDown: (event: MouseEvent) => event.preventDefault()
 }
 
-export function TerminalRecentImages({
+export function TerminalPaneRecentImages({
   pane,
+  enabled,
+  renderHeader,
   ...location
-}: ImageLocation & { pane: ManagedPane }): React.JSX.Element | null {
-  const enabled = useAppStore((state) => state.settings?.terminalDroppedImagesPreview !== false)
+}: ImageLocation & {
+  pane: ManagedPane
+  enabled: boolean
+  renderHeader: (chips: React.JSX.Element | null) => React.JSX.Element | null
+}): React.JSX.Element | null {
   const { terminal, container } = pane
   const subscribe = useCallback(
     (listener: () => void) => subscribeToRecentTerminalImages(terminal, listener),
@@ -51,6 +55,7 @@ export function TerminalRecentImages({
   const getSnapshot = useCallback(() => getRecentTerminalImages(terminal), [terminal])
   const images = useSyncExternalStore(subscribe, getSnapshot)
   const showImages = enabled && images.length > 0
+  // Keep the grid inset when the visible tab group loses focus and hides its header controls.
   useLayoutEffect(() => {
     if (!showImages) {
       return
@@ -58,16 +63,14 @@ export function TerminalRecentImages({
     container.setAttribute('data-has-recent-images', '')
     return () => container.removeAttribute('data-has-recent-images')
   }, [container, showImages])
-  if (!showImages) {
-    return null
-  }
-  return (
+  const chips = showImages ? (
     <div className="pane-title-recent-images scrollbar-none ml-auto flex min-w-0 items-center gap-1 self-center overflow-x-auto rounded-md bg-(--orca-pane-title-bg)">
       {images.map((item) => (
         <TerminalImageChip key={item.path} image={item} terminal={terminal} location={location} />
       ))}
     </div>
-  )
+  ) : null
+  return renderHeader(chips)
 }
 
 function TerminalImageChip({
