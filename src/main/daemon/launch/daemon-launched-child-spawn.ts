@@ -16,7 +16,7 @@ import {
 } from '../executable-host/linux/daemon-appimage-generation-launch'
 import { daemonLogArgs } from './daemon-launch-paths'
 import { TERMINAL_SPAWN_ADMISSION_ARG } from '../admission/terminal-spawn-admission-mode'
-import { FD_CLOSING_EXEC_ARGS } from './daemon-fd-closing-exec'
+import { FD_CLOSING_EXEC_ARGS } from '@orca/process-host/fd-closing-exec-launch'
 
 // Idle terminal polling churns short-lived strings; uncapped, V8 grows the young generation to 64 MB semispaces (~120 MB resident).
 export const DAEMON_V8_FLAGS = ['--max-semi-space-size=4'] as const

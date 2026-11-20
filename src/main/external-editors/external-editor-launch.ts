@@ -7,6 +7,7 @@ import { parseWslUncPath } from '../../shared/file-access/wsl-paths'
 import { isVsCodeLauncherExecutable } from '../../shared/editor/launch/remote-ssh-editor-launcher'
 import { resolveCliCommand } from '../../shared/shell/command-resolution/node-cli-command-resolution'
 import { envWithoutAppImageRuntime } from '../pty/shell-startup/appimage-terminal-env'
+import { resolveFdClosingExec } from '../provider-process/fd-closing-exec'
 import {
   getLauncherBaseName,
   hasMatchingOuterQuotes,
@@ -236,17 +237,22 @@ export function resolveExternalEditorExecutable(
     : resolveEditorCliCommand(trimmed, platform, fileExists)
 }
 
-function startExternalEditorProcess(launchSpec: ExternalEditorLaunchSpec): ChildProcess {
+function startExternalEditorProcess(
+  launchSpec: ExternalEditorLaunchSpec,
+  fdClosingExec: string | undefined
+): ChildProcess {
   const detachedOptions = {
     detached: true,
     stdio: 'ignore',
     // AppImage exports ARGV0, APPDIR, and mount PATH entries that editor shells must not inherit.
     env: process.platform === 'linux' ? envWithoutAppImageRuntime(process.env) : undefined
   } as const
+  // An editor can outlive main indefinitely; it must not keep a crashed main's children alive.
+  const hostOptions = { ...detachedOptions, fdClosingExec }
   if (launchSpec.kind === 'shell') {
     const { spawnCmd, spawnArgs, hideWindowsConsole } = launchSpec
     return hideWindowsConsole
-      ? spawnProcess({ program: spawnCmd, args: spawnArgs, ...detachedOptions })
+      ? spawnProcess({ program: spawnCmd, args: spawnArgs, ...hostOptions })
       : spawn(spawnCmd, spawnArgs, { ...detachedOptions, windowsHide: false })
   }
   if (launchSpec.hideWindowsConsole && !launchSpec.detachedGui) {
@@ -254,7 +260,7 @@ function startExternalEditorProcess(launchSpec: ExternalEditorLaunchSpec): Child
     return spawnProcess({
       program: launchSpec.spawnCmd,
       args: launchSpec.spawnArgs,
-      ...detachedOptions
+      ...hostOptions
     })
   }
   const { spawnCmd, spawnArgs } = getSpawnArgsForWindows(
@@ -268,12 +274,13 @@ function startExternalEditorProcess(launchSpec: ExternalEditorLaunchSpec): Child
     // process-host hides consoles; Windows terminal editors need a visible console.
     return spawn(spawnCmd, spawnArgs, { ...detachedOptions, windowsHide: false })
   }
-  return spawnProcess({ program: spawnCmd, args: spawnArgs, ...detachedOptions })
+  return spawnProcess({ program: spawnCmd, args: spawnArgs, ...hostOptions })
 }
 
 export async function launchExternalEditor(launchSpec: ExternalEditorLaunchSpec): Promise<void> {
+  const fdClosingExec = await resolveFdClosingExec()
   await new Promise<void>((resolvePromise, rejectPromise) => {
-    const child = startExternalEditorProcess(launchSpec)
+    const child = startExternalEditorProcess(launchSpec, fdClosingExec)
     let settled = false
     function cleanup(): void {
       child.off('error', onError)
