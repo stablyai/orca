@@ -69,11 +69,19 @@ export function withHeldOlderHistory(
   if (inTail < 0 || !nativeChatLiveTailJoinsBase(agent, base, liveTail)) {
     return window
   }
-  // A joined tail overlaps the base up to its last row, so only later rows are new.
+  // A joined tail overlaps the base up to its last transcript row; siblings sharing that row are new only if unheld.
   const baseEnd = nativeChatHistoryCursor(agent, base.at(-1))!
-  const tail = liveTail
-    .slice(0, inTail)
-    .filter((message) => (nativeChatHistoryCursor(agent, message) ?? -1) > baseEnd)
+  const lastRowIds = new Set<string>()
+  for (let i = base.length - 1; i >= 0; i--) {
+    if (nativeChatHistoryCursor(agent, base[i]) !== baseEnd) {
+      break
+    }
+    lastRowIds.add(base[i]!.id)
+  }
+  const tail = liveTail.slice(0, inTail).filter((message) => {
+    const at = nativeChatHistoryCursor(agent, message)
+    return at === undefined || at > baseEnd || (at === baseEnd && !lastRowIds.has(message.id))
+  })
   return [...base, ...tail, ...window]
 }
 

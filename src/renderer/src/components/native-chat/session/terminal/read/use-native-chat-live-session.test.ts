@@ -412,6 +412,31 @@ describe('useNativeChatLiveSession — transport routing', () => {
     const ids = latest?.messages.map((m) => m.id) ?? []
     expect(ids.slice(0, 3)).toEqual(['older-0', 'older-1', 'held-0'])
     expect(ids.slice(301, 304)).toEqual(['held-299', 'live-0', 'live-1'])
+    expect(ids).toHaveLength(603)
+    expect(new Set(ids).size).toBe(603)
+  })
+
+  it('resets to a re-sent window that proves nothing older exists', async () => {
+    const transport = Object.assign(getMockTransport('env-1'), { pagesByCursor: true })
+    const at = (id: string, offset: number) => ({ ...assistant(id, 't'), transcriptOrder: offset })
+    const held = Array.from({ length: 300 }, (_unused, n) => at(`held-${n}`, 1000 + n))
+    await render({ paneKey: PANE, agent: AGENT, sessionId: SESSION, runtimeEnvironmentId: 'env-1' })
+    await act(async () => transport.emit({ type: 'snapshot', messages: held, hasMore: true }))
+    transport.readSession.mockResolvedValueOnce({
+      messages: [at('older-0', 10), at('older-1', 20)],
+      hasMore: true,
+      beforeOffset: 10
+    })
+    await act(async () => {
+      await latest?.loadEarlier()
+    })
+
+    await act(async () =>
+      transport.emit({ type: 'replacement', messages: held.slice(1), hasMore: false })
+    )
+
+    expect(latest?.messages[0]?.id).toBe('held-1')
+    expect(latest?.hasMore).toBe(false)
   })
 
   it('rereads when appends evict the live overlap while a cursor page is in flight', async () => {
