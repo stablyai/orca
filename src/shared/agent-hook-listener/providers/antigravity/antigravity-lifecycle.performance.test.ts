@@ -12,6 +12,7 @@ import {
 } from './antigravity-pane-state'
 import { readAntigravityChildTranscriptTail } from './antigravity-child-transcript'
 import {
+  hasAntigravityPollWork,
   pollAntigravityTranscriptStatus,
   readAntigravityTranscriptPoll
 } from './antigravity-transcript-poll'
@@ -208,5 +209,42 @@ it.each([100, 1000])(
     } finally {
       rmSync(dir, { recursive: true, force: true })
     }
+  }
+)
+
+it.each([100, 1000])(
+  'admits no root-model polls for %s automatic panes until each root has a conversation id',
+  (panes) => {
+    const state = createHookListenerState()
+    const polling = (): number => {
+      let count = 0
+      for (let i = 0; i < panes; i++) {
+        const event = { paneKey: `pane-${i}`, connectionId: null, payload: { state: 'working' } }
+        if (hasAntigravityPollWork(state, event as AgentHookEventPayload)) {
+          count++
+        }
+      }
+      return count
+    }
+    const hook = (i: number, extra: Record<string, unknown>) => ({
+      lastUserInput: 'Task',
+      modelName: 'auto',
+      transcriptPath: `/brain/root-${i}/.system_generated/logs/transcript.jsonl`,
+      ...extra
+    })
+    for (let i = 0; i < panes; i++) {
+      normalizeAntigravityEvent(state, 'PreInvocation', 'Task', `pane-${i}`, hook(i, {}), 'root')
+    }
+    expect(polling()).toBe(0)
+    for (let i = 0; i < panes; i++) {
+      const payload = hook(i, { conversationId: `root-${i}` })
+      normalizeAntigravityEvent(state, 'PreInvocation', 'Task', `pane-${i}`, payload, 'root')
+    }
+    expect(polling()).toBe(panes)
+    for (let i = 0; i < panes; i++) {
+      const payload = hook(i, { conversationId: `root-${i}`, fullyIdle: true })
+      normalizeAntigravityEvent(state, 'Stop', '', `pane-${i}`, payload, 'root')
+    }
+    expect(polling()).toBe(0)
   }
 )
