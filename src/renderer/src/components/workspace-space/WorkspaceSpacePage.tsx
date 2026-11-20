@@ -1,7 +1,7 @@
 import { ArrowLeft } from 'lucide-react'
 import { Button } from '../ui/button'
-import { WorkspaceSpaceManagerPanel } from '../status-bar/WorkspaceSpaceManagerPanel'
-import { useAppStore } from '../../store'
+import { WorkspaceSpaceManagerPanel } from '../status-bar/workspace-storage/WorkspaceSpaceManagerPanel'
+import { useAppStore } from '../../store/index'
 import { useTranslate } from '@/i18n/use-translate'
 
 export default function WorkspaceSpacePage(): React.JSX.Element {

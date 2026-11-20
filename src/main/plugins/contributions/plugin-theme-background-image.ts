@@ -4,11 +4,9 @@ import type {
   PluginThemeBackgroundArtifact
 } from '../../../shared/plugins/artifacts/plugin-theme-background'
 import { pluginInstalledImageUrl } from '../../../shared/plugins/images/plugin-image-url'
-import {
-  PLUGIN_THEME_MAX_BYTES,
-  readContainedPluginArtifactText
-} from '../plugin-artifact-validation'
-import type { ValidDiscoveredPlugin } from '../plugin-discovery'
+import { PLUGIN_THEME_MAX_BYTES } from '../artifacts/plugin-artifact-validation'
+import { readContainedPluginArtifactText } from '../artifacts/plugin-contained-artifact'
+import type { ValidDiscoveredPlugin } from '../discovery/plugin-discovery'
 
 const THEME_BACKGROUND_SLOT = /^theme-(0|[1-9]\d{0,2})(-video)?$/
 

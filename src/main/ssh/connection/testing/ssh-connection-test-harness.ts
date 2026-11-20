@@ -4,7 +4,7 @@ import type { SshConnection } from '../ssh-connection'
 import type { MockSystemCommandChannel, MockSystemSshProcess } from './ssh-connection-test-fixtures'
 import type { SshResolvedConfig } from '../../config/ssh-g-config-resolution'
 import type { SystemSshBuildArgsOptions } from '../../system-transport/system-ssh-args'
-import type { SshTarget } from '../../../../shared/ssh-types'
+import type { SshTarget } from '../../../../shared/remote-runtime/ssh/ssh-types'
 import type * as SystemSshArgs from '../../system-transport/system-ssh-args'
 import type * as SystemSshCommand from '../../system-transport/system-ssh-command'
 import type * as SystemSshFileBinaryTransfer from '../../system-transport/file-transfer/system-ssh-file-binary-transfer'
@@ -27,7 +27,13 @@ export const removeControlSocketPathMock = vi.fn<(socketPath: string) => void>()
 export const spawnSystemSshMock =
   vi.fn<(target: SshTarget, options?: SystemSshBuildArgsOptions) => MockSystemSshProcess>()
 export const spawnSystemSshCommandMock =
-  vi.fn<(target: SshTarget, command: string, options?: unknown) => MockSystemCommandChannel>()
+  vi.fn<
+    (
+      target: SshTarget,
+      command: string,
+      options?: SystemSshCommand.SystemSshCommandOptions
+    ) => MockSystemCommandChannel | SystemSshCommand.SystemSshCommandChannel
+  >()
 export const downloadFileViaSystemSshMock = vi.fn<(...args: unknown[]) => Promise<void>>()
 export const uploadDirectoryViaSystemSshMock = vi.fn<(...args: unknown[]) => Promise<void>>()
 export const uploadFileViaSystemSshMock = vi.fn<(...args: unknown[]) => Promise<void>>()

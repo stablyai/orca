@@ -13,13 +13,13 @@ const access = vi.hoisted(() => ({
   stat: vi.fn(),
   handleStat: vi.fn()
 }))
-vi.mock('../native-chat/wsl-transcript-fs-access', () => ({
+vi.mock('../native-chat/transcript-filesystem/wsl-transcript-fs-access', () => ({
   WSL_TRANSCRIPT_READ_CHUNK_BYTES: 1024 * 1024,
   openTranscriptFile: access.open,
   readTranscriptFile: access.read,
   closeTranscriptHandle: access.close
 }))
-vi.mock('../native-chat/wsl-transcript-fs-snapshot', () => ({
+vi.mock('../native-chat/transcript-filesystem/wsl-transcript-fs-snapshot', () => ({
   wslGatedBigIntStat: access.stat,
   wslGatedHandleStat: access.handleStat
 }))

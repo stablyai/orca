@@ -9,8 +9,8 @@ import {
   type EditorFileSavedDetail,
   type EditorPathMutationTarget
 } from '../autosave/editor-autosave'
-import type { DiffContent, FileContent } from '../editor-panel-content-types'
-import { isReloadableSingleFileDiffTab } from '../editor-panel-diff-reload'
+import type { DiffContent, FileContent } from '../loading/editor-panel-content-types'
+import { isReloadableSingleFileDiffTab } from '../loading/editor-panel-diff-reload'
 import { createEditorWatcherReloadCoalescer } from './editor-watcher-reload-coalescer'
 import { markFileChangedOnDisk } from './editor-changed-on-disk-mark'
 import { hasRecentSelfWrite } from './editor-self-write-registry'

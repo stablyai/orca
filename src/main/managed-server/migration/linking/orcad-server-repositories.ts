@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import type { CatalogRequestOptions } from '../catalog/orcad-migration-request'
 import { listServerRows } from '../catalog/orcad-server-catalog-rows'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 
 // repo.list returns full stored rows; omitted host fields identify server-local repos.
 const ServerRepositoriesSchema = z.object({

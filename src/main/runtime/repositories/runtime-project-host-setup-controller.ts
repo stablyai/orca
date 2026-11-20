@@ -11,15 +11,15 @@ import type {
   ProjectHostSetupUpdateArgs,
   ProjectHostSetupUpdateResult,
   ProjectUpdateArgs
-} from '../../../shared/project-types'
-import type { Repo } from '../../../shared/repo-types'
+} from '../../../shared/project/project-types'
+import type { Repo } from '../../../shared/repository/repo-types'
 import {
   getRepoExecutionHostId,
   getSshTargetIdForExecutionHost,
   parseExecutionHostId,
   type ExecutionHostId
-} from '../../../shared/execution-host'
-import { getProjectHostSetupForRepo } from '../../../shared/project-host-setup-lookup'
+} from '../../../shared/execution-host/execution-host'
+import { getProjectHostSetupForRepo } from '../../../shared/project/host-setup/project-host-setup-lookup'
 import {
   linkImportedFolderToProject,
   type RepositoryMetadataOwner
@@ -40,7 +40,7 @@ import {
   assertWslMoveHostSetupIdWritable,
   assertWslMoveHostSetupWritable,
   assertWslMoveReposWritable
-} from '../../persistence/moving-wsl-projects/wsl-move-scope-guard'
+} from '../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
 import { runtimeVisibleProjectHostSetups } from '../workspaces/catalog/runtime-visible-catalog'
 import { assertNoProjectWorktreeCreate } from '../../workspaces/creation/worktree-create-in-flight'
 import { releaseWorktreeCreatePreparationsForRepo } from '../../workspaces/creation/preparation/worktree-create-preparation-project-removal'
@@ -48,7 +48,7 @@ import {
   findProjectHostSetup,
   SERVER_SSH_PROJECT_ADD_UNAVAILABLE_MESSAGE,
   type ProjectHostSetupTarget
-} from '../../../shared/project-host-setup-target'
+} from '../../../shared/project/host-setup/project-host-setup-target'
 
 type RuntimeProjectHostSetupDependencies = RepositoryMetadataOwner & {
   getStore: () => RuntimeStore | null

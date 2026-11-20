@@ -63,6 +63,7 @@ export function bindRegisterPaneSerializer(session: ConnectPanePtySession): void
       },
       {
         clear: () => {
+          session.deps.invalidateRetainedInlineScrollback(session.pane.leafId)
           session.clearHiddenOutputRestoreState()
           discardTerminalOutput(session.pane.terminal)
           clearTerminalScrollbackAndFollowOutput(session.pane.terminal)

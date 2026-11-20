@@ -3,18 +3,18 @@ import {
   getRepoSshConnectionId,
   LOCAL_EXECUTION_HOST_ID,
   type ExecutionHostId
-} from '../../../shared/execution-host'
-import type { Repo } from '../../../shared/repo-types'
-import type { RepoHostTarget } from '../../../shared/repo-host-identity'
-import { githubAvatarIcon, type RepoIcon } from '../../../shared/repo-icon'
+} from '../../../shared/execution-host/execution-host'
+import type { Repo } from '../../../shared/repository/repo-types'
+import type { RepoHostTarget } from '../../../shared/repository/repo-host-identity'
+import { githubAvatarIcon, type RepoIcon } from '../../../shared/repository/appearance/repo-icon'
 import { isUnresolvedSshHostAlias } from '../../../shared/git/remotes/git-remote-host-alias'
-import { getProjectProviderIdentity } from '../../../shared/project-host-setup-projection'
+import { getProjectProviderIdentity } from '../../../shared/project/host-setup/project-host-setup-projection'
 import { getStoredRepoExecutionHostId } from '../execution-host/repo-execution-host'
 import { probeGitRemoteIdentity } from './repo-git-remote-identity'
 import { getProjectRuntimeReadGitOptions } from '../execution-host/project-runtime-git-options'
-import { isLocalGitRuntimeRouterInstalled } from '../../git/command-runner/local-git-runtime-route'
+import { isLocalGitRuntimeRouterInstalled } from '../../git/command-runner/host-routing/local-git-runtime-route'
 import type { ProjectRuntimeResolutionStore } from '../execution-host/local-project-runtime-resolution'
-import { isWslMoveRepoBlocked } from '../../persistence/moving-wsl-projects/wsl-move-background-backoff'
+import { isWslMoveRepoBlocked } from '../../persistence/moving-wsl-projects/orchestration/wsl-move-background-backoff'
 import { blockedWslDistroForPath, wslDistroForPath } from '../../wsl/filesystem/wsl-unc-access-gate'
 
 const NO_IDENTITY_RETRY_TTL_MS = 5 * 60 * 1000

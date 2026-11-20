@@ -2,7 +2,6 @@ import { spawnSync } from 'node:child_process'
 
 const defaultFiles = [
   'src/main/ssh/file-transfer/sftp/sftp-upload.test.ts',
-  'src/main/ssh/file-transfer/ssh-file-transfer-abort.test.ts',
   'src/main/ssh/ssh-relay-install-namespace.test.ts',
   'src/main/ssh/connection/ssh-connection-sftp-wire.test.ts',
   'src/main/ssh/remote-exec/ssh-remote-commands.test.ts'

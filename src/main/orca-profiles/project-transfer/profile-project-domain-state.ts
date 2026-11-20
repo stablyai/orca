@@ -1,16 +1,16 @@
-import { ProfileStateLegacyDocumentRefresh } from '../../persistence/profile-state/profile-state-legacy-document-refresh'
+import { ProfileStateLegacyDocumentRefresh } from '../../persistence/profile-state/document-parts/profile-state-legacy-document-refresh'
 import {
   openProfileStateDatabase,
   openProfileStateDatabaseReadOnly
-} from '../../persistence/profile-state/profile-state-database'
-import '../../persistence/profile-state/profile-state-documents'
-import { readProfileStateDocuments } from '../../persistence/profile-state/profile-state-document-reader'
-import { readProfileStateRevision } from '../../persistence/profile-state/profile-state-revision'
-import type { ProfileStateParsedDocument } from '../../persistence/profile-state/profile-state-document-validation'
-import { writeProfileStateDomains } from '../../persistence/profile-state/profile-state-domain-writes'
-import { withProfileStateReadSnapshot } from '../../persistence/profile-state/profile-state-read-snapshot'
+} from '../../persistence/profile-state/database/profile-state-database'
+import '../../persistence/profile-state/documents/profile-state-documents'
+import { readProfileStateDocuments } from '../../persistence/profile-state/documents/profile-state-document-reader'
+import { readProfileStateRevision } from '../../persistence/profile-state/database/profile-state-revision'
+import type { ProfileStateParsedDocument } from '../../persistence/profile-state/documents/profile-state-document-validation'
+import { writeProfileStateDomains } from '../../persistence/profile-state/documents/profile-state-domain-writes'
+import { withProfileStateReadSnapshot } from '../../persistence/profile-state/database/profile-state-read-snapshot'
 import { getOrcaProfileStateDatabaseFile } from '../profile-storage-paths'
-import { ensureProfileStateAuthorityMarker } from '../../persistence/profile-state/profile-state-authority-marker'
+import { ensureProfileStateAuthorityMarker } from '../../persistence/profile-state/database/profile-state-authority-marker'
 import {
   normalizeProfileProjectState,
   profileStateStorage,

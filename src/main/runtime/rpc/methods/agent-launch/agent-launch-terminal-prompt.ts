@@ -3,7 +3,7 @@
 
 import { randomUUID } from 'node:crypto'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
-import type { RuntimeTerminalWait } from '../../../../../shared/runtime-terminal-contracts'
+import type { RuntimeTerminalWait } from '../../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import { isAgentPromptStalledError } from '../../../terminal/input/agent-prompt-submission-verification'
 import {
   waitForLaunchedAgentComposer,
@@ -70,25 +70,6 @@ async function waitThroughBlockingPrompts(
     await clock.sleep(BLOCKED_RECHECK_MS)
     assertAgentPromptRequestActive(signal)
   }
-}
-
-/** A freshly started agent's readiness, as a launch prompt waits for it, blocking prompts included. */
-export function waitForStartedAgentReady(
-  runtime: LaunchedAgentReadinessRuntime,
-  handle: string,
-  agent: TuiAgent,
-  signal?: AbortSignal,
-  terminalCreation?: TerminalReadinessCreation
-): Promise<RuntimeTerminalWait | undefined> {
-  return waitThroughBlockingPrompts(
-    runtime,
-    handle,
-    agent,
-    true,
-    REAL_CLOCK,
-    signal,
-    terminalCreation
-  )
 }
 
 /** Report whether text reached the pane without failing an already-running launch.

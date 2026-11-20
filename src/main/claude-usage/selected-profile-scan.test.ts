@@ -13,7 +13,8 @@ vi.mock('../usage/scan-worker/usage-scan-worker-spawn', () => ({
   splitUsageCacheFileViaWorker: vi.fn()
 }))
 
-import { ClaudeUsageStore, initClaudeUsagePath } from './store'
+import { createTestUsageStoreHost } from '../usage/usage-store-host-test-fixture'
+import { ClaudeUsageStore } from './store'
 
 let store: ClaudeUsageStore | undefined
 
@@ -27,12 +28,11 @@ afterEach(async () => {
 
 it('resolves the current profile roots for each worker scan', async () => {
   fixture.userData = mkdtempSync(join(tmpdir(), 'orca-selected-profile-scan-'))
-  initClaudeUsagePath()
   let selected = ['selected/projects', 'selected/transcripts']
-  store = new ClaudeUsageStore(
-    { getRepos: () => [], getAllWorktreeMeta: () => ({}) },
-    async () => selected
-  )
+  store = new ClaudeUsageStore({
+    ...createTestUsageStoreHost({ userDataPath: fixture.userData }),
+    claudeProfileDirs: async () => selected
+  })
   await store.setEnabled(true)
   await store.refresh(true)
   expect(fixture.scan).toHaveBeenLastCalledWith([], expect.objectContaining({ reuse: false }), [

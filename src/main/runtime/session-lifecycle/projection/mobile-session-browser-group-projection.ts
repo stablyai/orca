@@ -1,9 +1,9 @@
 import type {
   RuntimeMobileSessionTabGroup,
   RuntimeMobileSessionTabsSnapshot
-} from '../../../../shared/runtime-session-contracts'
-import type { RuntimeMobileSessionSnapshotTab } from '../../../../shared/runtime-mobile-session-tab-contracts'
-import { retireMobileSessionTabSelection } from '../../session-tabs/mobile-session-tab-selection'
+} from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import type { RuntimeMobileSessionSnapshotTab } from '../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
+import { retireMobileSessionTabSelection } from '../../session-tabs/layout/mobile-session-tab-selection'
 
 // Terminal-only rebuilds drop browser ids; restore their prior group, assigning only new browsers to target/first group.
 export function appendBrowserTabOrder(

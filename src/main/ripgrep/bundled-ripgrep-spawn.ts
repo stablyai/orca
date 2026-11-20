@@ -1,4 +1,4 @@
-import { wslAwareSpawn } from '../git/runner'
+import { wslAwareSpawn } from '../git/command-runner/host-routing/wsl-aware-spawn'
 import { bundledRipgrepCommand, bundledRipgrepWslSpawnOptions } from './bundled-ripgrep-path'
 import { RIPGREP_MISSING_CWD_EXIT_CODE } from '../../shared/ripgrep/ripgrep-process-availability'
 

@@ -1,26 +1,34 @@
+import { findHookRepo, hookRepoOwnerHostId } from './hook-owner-resolution'
+import { projectGroupHookTrustKey } from '../../../../shared/workspace-setup/hooks/workspace-hook-owner'
 import type { AppState } from '@/store/types'
-import type { OrcaHooks } from '../../../../shared/orca-yaml-hook-types'
-import { resolveHookCommandSourcePolicy } from '../../../../shared/hook-command-source-policy'
-import { getSetupTrustContent } from '../../../../shared/orca-hook-setup-config'
-import {
-  canUseRepoWideTrust,
-  isOrcaHookContentApproved
-} from '../../../../shared/orca-hook-trust-entries'
+import type { OrcaHooks } from '../../../../shared/workspace-setup/orca-yaml-hook-types'
+import { resolveHookCommandSourcePolicy } from '../../../../shared/workspace-setup/hooks/hook-command-source-policy'
+import { getSetupTrustContent } from '../../../../shared/workspace-setup/hooks/orca-hook-setup-config'
 import { hashOrcaHookScript } from './orca-hook-trust'
-import type { OrcaHookTrustKind } from '../../../../shared/orca-hook-trust-entries'
+import type { OrcaHookTrustKind } from '../../../../shared/workspace-setup/hooks/orca-hook-trust-entries'
 import { getVmRecipeTrustContent } from './vm-recipe-trust-content'
+import type { SetupHooksCreateSource } from '../../../../shared/worktree/setup-hooks-create-source'
 import { getIssueCommandTrustContent, isUserOwnedIssueCommand } from './issue-command-trust-content'
 import {
   checkRuntimeHooks,
+  checkRuntimeGroupHooks,
   readRuntimeIssueCommand,
   type IssueCommandReadResult
 } from '@/runtime/repo-hooks/runtime-hooks-client'
-import { MODAL_DISMISSED_KEY } from '@/store/slices/ui/modal-slot-dismissal'
+import {
+  confirmScriptContent,
+  isDesktopHookRepoTrusted,
+  SKIP,
+  RUN_ANY,
+  type HookTrustApproval,
+  type HookTrustContext,
+  type SkippedSetupReview
+} from './hook-script-confirmation'
+export type { HookTrustApproval, SkippedSetupReview } from './hook-script-confirmation'
 import {
   getRepoExecutionHostId,
-  toRuntimeExecutionHostId,
   type ExecutionHostId
-} from '../../../../shared/execution-host'
+} from '../../../../shared/execution-host/execution-host'
 
 const NEVER_CANCEL_TRUST_CHECK = (): boolean => false
 
@@ -37,117 +45,13 @@ export function __resetTrustPromptChainForTests(): void {
   trustPromptChain = Promise.resolve()
 }
 
-function findHookRepo(state: AppState, repoId: string, hostId?: ExecutionHostId) {
-  return hostId
-    ? state.repos.find((repo) => repo.id === repoId && getRepoExecutionHostId(repo) === hostId)
-    : state.repos.find((repo) => repo.id === repoId)
-}
-
-/** Inspect on the captured runtime owner, then explicit host, then repo owner; never substitute focused host, including server-owned SSH repos. */
-function hookRepoOwnerHostId(
-  state: AppState,
-  repoId: string,
-  hostId?: ExecutionHostId,
-  runtimeOwnerEnvironmentId?: string | null
-): ExecutionHostId {
-  const ownerEnvironmentId = runtimeOwnerEnvironmentId?.trim()
-  if (ownerEnvironmentId) {
-    return toRuntimeExecutionHostId(ownerEnvironmentId)
-  }
-  const rows = hostId ? [] : state.repos.filter((entry) => entry.id === repoId)
-  // Why: with the id on two hosts, trusting one row's script could run the other's unseen.
-  if (rows.length > 1) {
-    throw new Error('The project exists on more than one host.')
-  }
-  const repo = rows[0] ?? null
-  const ownerHostId = hostId ?? (repo ? getRepoExecutionHostId(repo) : null)
-  if (!ownerHostId) {
-    throw new Error('The project host is unknown.')
-  }
-  return ownerHostId
-}
-
-/** A run carries the approved content's hash (empty content included) unless the whole repo is trusted. */
-export type HookTrustApproval = { decision: 'run' | 'skip'; approvedContentHash?: string }
-
-const SKIP: HookTrustApproval = { decision: 'skip' }
-const RUN_ANY: HookTrustApproval = { decision: 'run' }
-
-async function confirmScriptContent(
-  state: AppState,
-  repoId: string,
-  scriptKind: OrcaHookTrustKind,
-  scriptContent: string,
-  hostId?: ExecutionHostId,
-  isCancelled: () => boolean = NEVER_CANCEL_TRUST_CHECK,
-  signal?: AbortSignal,
-  skippedSetupReview?: SkippedSetupReview
-): Promise<HookTrustApproval> {
-  if (isCancelled() || signal?.aborted) {
-    return SKIP
-  }
-  if (canUseRepoWideTrust(state.trustedOrcaHooks, state.repos, repoId)) {
-    return RUN_ANY
-  }
-
-  const contentHash = await hashOrcaHookScript(scriptContent)
-  if (isCancelled() || signal?.aborted) {
-    return SKIP
-  }
-  const approved: HookTrustApproval = { decision: 'run', approvedContentHash: contentHash }
-  const existingHash = state.trustedOrcaHooks[repoId]?.[scriptKind]?.contentHash
-  if (
-    !scriptContent ||
-    isOrcaHookContentApproved(state.trustedOrcaHooks, repoId, scriptKind, contentHash)
-  ) {
-    return approved
-  }
-
-  const repo = findHookRepo(state, repoId, hostId)
-  const repoName = repo?.displayName ?? 'this repository'
-  const previouslyApproved = Boolean(existingHash)
-
-  const decision = await new Promise<'run' | 'skip'>((resolve) => {
-    let settled = false
-    const settle = (decision: 'run' | 'skip'): void => {
-      if (settled) {
-        return
-      }
-      settled = true
-      signal?.removeEventListener('abort', cancel)
-      resolve(decision)
-    }
-    const cancel = (): void => {
-      // Eviction settles first, so an abort can only close this prompt.
-      if (settled) {
-        return
-      }
-      settle('skip')
-      state.closeModal()
-    }
-    signal?.addEventListener('abort', cancel, { once: true })
-    state.openModal('confirm-orca-yaml-hooks', {
-      repoId,
-      repoName,
-      scriptKind,
-      scriptContent,
-      contentHash,
-      previouslyApproved,
-      ...(skippedSetupReview ? { skippedSetupReview } : {}),
-      onResolve: settle,
-      // Why: eviction must fail closed without stranding the singleton trust queue.
-      [MODAL_DISMISSED_KEY]: () => settle('skip')
-    })
-  })
-  return decision === 'run' ? approved : SKIP
-}
-
 async function confirmIssueCommandReadResult(
   state: AppState,
   repoId: string,
   hostId: ExecutionHostId,
   result: IssueCommandReadResult,
-  isCancelled: () => boolean = NEVER_CANCEL_TRUST_CHECK
+  isCancelled: () => boolean = NEVER_CANCEL_TRUST_CHECK,
+  context: HookTrustContext = 'workspace'
 ): Promise<'run' | 'skip'> {
   if (isCancelled()) {
     return 'skip'
@@ -164,7 +68,10 @@ async function confirmIssueCommandReadResult(
     'issueCommand',
     getIssueCommandTrustContent(result),
     hostId,
-    isCancelled
+    isCancelled,
+    undefined,
+    undefined,
+    context
   )
   return approval.decision
 }
@@ -180,12 +87,20 @@ function confirmRuntimeIssueCommandRead(
   repoId: string,
   hostId: ExecutionHostId,
   result: IssueCommandReadResult,
-  isCancelled: () => boolean = NEVER_CANCEL_TRUST_CHECK
+  isCancelled: () => boolean = NEVER_CANCEL_TRUST_CHECK,
+  context: HookTrustContext = 'workspace'
 ): Promise<ConfirmedRuntimeIssueCommand> {
   return enqueueTrustPrompt(async () => ({
     result,
     template: getIssueCommandTrustContent(result),
-    trustDecision: await confirmIssueCommandReadResult(state, repoId, hostId, result, isCancelled)
+    trustDecision: await confirmIssueCommandReadResult(
+      state,
+      repoId,
+      hostId,
+      result,
+      isCancelled,
+      context
+    )
   }))
 }
 
@@ -193,7 +108,8 @@ export async function readAndConfirmRuntimeIssueCommand(
   state: AppState,
   repoId: string,
   hostId: ExecutionHostId,
-  isCancelled: () => boolean = NEVER_CANCEL_TRUST_CHECK
+  isCancelled: () => boolean = NEVER_CANCEL_TRUST_CHECK,
+  context: HookTrustContext = 'workspace'
 ): Promise<ConfirmedRuntimeIssueCommand> {
   let result: IssueCommandReadResult
   try {
@@ -211,7 +127,7 @@ export async function readAndConfirmRuntimeIssueCommand(
       source: 'none'
     }
   }
-  return confirmRuntimeIssueCommandRead(state, repoId, hostId, result, isCancelled)
+  return confirmRuntimeIssueCommandRead(state, repoId, hostId, result, isCancelled, context)
 }
 
 export async function ensureHooksConfirmed(
@@ -220,19 +136,17 @@ export async function ensureHooksConfirmed(
   return (await ensureHooksApproved(...args)).decision
 }
 
-/** Which skipped setup the user is reviewing; picks the dialog copy. */
-export type SkippedSetupReview = 'created-branch' | 'automation'
-
 /**
  * Re-prompt with setup content that a create or automation run skipped because it differs from
- * what was approved. Approving adds it to the repo's approved setup history.
+ * what was approved. Always trust approves the repo; Run once leaves trust unchanged.
  */
 export function confirmCreatedWorktreeSetupContent(
   getState: () => AppState,
   repoId: string,
   scriptContent: string,
   hostId?: ExecutionHostId,
-  review: SkippedSetupReview = 'created-branch'
+  review: SkippedSetupReview = 'created-branch',
+  context: HookTrustContext = review === 'automation' ? 'automation' : 'workspace'
 ): Promise<HookTrustApproval> {
   return enqueueTrustPrompt(async () => {
     const approval = await confirmScriptContent(
@@ -243,7 +157,8 @@ export function confirmCreatedWorktreeSetupContent(
       hostId,
       undefined,
       undefined,
-      review
+      review,
+      context
     )
     // Repo-wide trust approves any content, but the host runs only content it can match.
     return approval.decision === 'run' && approval.approvedContentHash === undefined
@@ -260,14 +175,17 @@ export async function ensureHooksApproved(
   hostId?: ExecutionHostId,
   runtimeOwnerEnvironmentId?: string | null,
   isCancelled: () => boolean = NEVER_CANCEL_TRUST_CHECK,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  /** Setup for a create: read orca.yaml at the ref it checks out, not the project checkout. */
+  createSource?: SetupHooksCreateSource,
+  context: HookTrustContext = 'workspace'
 ): Promise<HookTrustApproval> {
   return enqueueTrustPrompt(async () => {
     if (isCancelled() || signal?.aborted) {
       return SKIP
     }
     const state = typeof stateOrGetter === 'function' ? stateOrGetter() : stateOrGetter
-    if (canUseRepoWideTrust(state.trustedOrcaHooks, state.repos, repoId)) {
+    if (isDesktopHookRepoTrusted(state, repoId, context)) {
       return RUN_ANY
     }
 
@@ -303,10 +221,16 @@ export async function ensureHooksApproved(
         if (sourcePolicy === 'local-only') {
           return RUN_ANY
         }
-        const result = await checkRuntimeHooks(
-          hookRepoOwnerHostId(state, repoId, hostId, runtimeOwnerEnvironmentId),
-          repoId
+        const group = state.projectGroups.find(
+          (entry) => projectGroupHookTrustKey(entry) === repoId
         )
+        const result = group
+          ? await checkRuntimeGroupHooks(getRepoExecutionHostId(group), group.id)
+          : await checkRuntimeHooks(
+              hookRepoOwnerHostId(state, repoId, hostId, runtimeOwnerEnvironmentId),
+              repoId,
+              scriptKind === 'setup' && createSource ? { createSource } : {}
+            )
         if (result.status === 'error') {
           return SKIP
         }
@@ -330,7 +254,9 @@ export async function ensureHooksApproved(
       scriptContent,
       hostId,
       isCancelled,
-      signal
+      signal,
+      undefined,
+      context
     )
   })
 }

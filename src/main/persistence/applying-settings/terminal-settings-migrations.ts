@@ -1,6 +1,7 @@
 import { homedir } from 'node:os'
-import type { GlobalSettings, OrcaWorkspaceLayout } from '../../../shared/global-settings-types'
-import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
+import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
+import type { OrcaWorkspaceLayout } from '../../../shared/worktree/paths/orca-workspace-layout'
+import { normalizeRuntimePathForComparison } from '../../../shared/file-access/cross-platform-path'
 import {
   legacyTerminalScrollbackBytesToRows,
   normalizeDesktopTerminalScrollbackRows
@@ -12,7 +13,7 @@ import {
   normalizeTuiAgentEnvRecord
 } from '../../../shared/agent-launch/choices/tui-agent-launch-defaults'
 import { expandLeadingHomePath } from '../../filesystem/home-path-expansion'
-import { normalizeWorkspaceDirInput } from '../../../shared/worktree/workspace-dir-input'
+import { normalizeWorkspaceDirInput } from '../../../shared/worktree/paths/workspace-dir-input'
 
 /** A raw ~ or padded absolute path resolves inside each repo (#34944, STA-14308); normalize at the store boundary. */
 export function normalizeWorkspaceDirSetting(

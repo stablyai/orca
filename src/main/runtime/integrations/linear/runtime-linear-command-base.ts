@@ -1,5 +1,5 @@
-import type { RuntimeClientEvent } from '../../../../shared/runtime-client-events'
-import type { RuntimeTerminalShow } from '../../../../shared/runtime-terminal-contracts'
+import type { RuntimeClientEvent } from '../../../../shared/remote-runtime/session-graph/runtime-client-events'
+import type { RuntimeTerminalShow } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import type { ResolvedWorktree } from '../../workspaces/catalog/runtime-worktree-path-identity'
 
 import { RuntimeLinearBrowseCommands } from './runtime-linear-browse-commands'
@@ -10,7 +10,14 @@ export type RuntimeLinearCommandPorts = {
   resolveWorkspaceSelector: (selector: string) => Promise<ResolvedWorktree>
   listResolvedWorktrees: () => Promise<ResolvedWorktree[]>
   setWorktreeMeta: (
-    worktree: Pick<ResolvedWorktree, 'id' | 'hostId'>,
+    worktree: Pick<
+      ResolvedWorktree,
+      | 'id'
+      | 'hostId'
+      | 'linkedLinearIssue'
+      | 'linkedLinearIssueWorkspaceId'
+      | 'linkedLinearIssueOrganizationUrlKey'
+    >,
     meta: {
       linkedLinearIssueWorkspaceId: string
       linkedLinearIssueOrganizationUrlKey: string | null
@@ -42,7 +49,14 @@ export class RuntimeLinearCommandBase extends RuntimeLinearBrowseCommands {
   }
 
   protected setWorktreeMeta(
-    worktree: Pick<ResolvedWorktree, 'id' | 'hostId'>,
+    worktree: Pick<
+      ResolvedWorktree,
+      | 'id'
+      | 'hostId'
+      | 'linkedLinearIssue'
+      | 'linkedLinearIssueWorkspaceId'
+      | 'linkedLinearIssueOrganizationUrlKey'
+    >,
     meta: {
       linkedLinearIssueWorkspaceId: string
       linkedLinearIssueOrganizationUrlKey: string | null

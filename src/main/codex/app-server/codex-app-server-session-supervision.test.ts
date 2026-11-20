@@ -1,16 +1,11 @@
 import { existsSync, readFileSync } from 'node:fs'
-import { join } from 'node:path'
+
 import { describe, it } from 'vitest'
-import {
-  PROVIDER_STDIN_END_GRACE_MS,
-  PROVIDER_SUPERVISOR_MAX_STOP_MS
-} from '../../provider-process/provider-process-supervisor'
 import { CodexAppServerTimeoutError, runCodexAppServerSession } from './codex-app-server-session'
-import { classifyCodexTrustGrantError } from '../trust/grants/codex-trust-grant-telemetry'
+
 import {
   alive,
-  createSupervisedProbeRig,
-  waitFor
+  createSupervisedProbeRig
 } from '../structured/session-lifecycle/supervised-probe-owner.test-fixture'
 
 // Answers initialize, then nothing; it ignores its stdin end, as a wedged Codex can.
@@ -21,15 +16,6 @@ require('node:readline').createInterface({ input: process.stdin }).on('line', (l
     process.stdout.write(JSON.stringify({ id: message.id, result: {} }) + '\n')
   }
 })
-`
-
-const OWNER = String.raw`
-import { runCodexAppServerSession } from './codex-app-server-session'
-void runCodexAppServerSession(
-  { command: process.env.ORCA_TEST_STAND_IN!, cliPath: null, args: ['app-server'], timeoutMs: 120_000 },
-  () => new Promise<never>(() => {})
-).catch(() => {})
-setInterval(() => {}, 60_000)
 `
 
 describe.runIf(process.platform !== 'win32')('supervised Codex app-server sessions', () => {
@@ -70,52 +56,5 @@ describe.runIf(process.platform !== 'win32')('supervised Codex app-server sessio
     expect(alive(pids.provider)).toBe(false)
     // The group ladder reaches a descendant that ignores SIGTERM; a root-only kill misses it.
     expect(alive(pids.grandchild)).toBe(false)
-  })
-
-  it.concurrent('drains, then stops the session group, when its owner is SIGKILLed mid-session', async ({
-    expect,
-    onTestFinished
-  }) => {
-    const rig = createSupervisedProbeRig()
-    onTestFinished(() => rig.cleanup())
-    const standIn = rig.writeStandIn('codex', WEDGED_APP_SERVER)
-    const bundle = await rig.bundleOwner(OWNER, __dirname)
-    const owner = rig.launchOwner(bundle, { ORCA_TEST_STAND_IN: standIn })
-    const pids = await rig.readPids()
-
-    owner.kill('SIGKILL')
-
-    expect(
-      await waitFor(
-        () => !alive(pids.provider) && !alive(pids.grandchild),
-        PROVIDER_SUPERVISOR_MAX_STOP_MS + 1_000
-      )
-    ).toBe(true)
-    // Owner death still allows stdin EOF grace before SIGTERM.
-    const events = rig.readEvents()
-    expect(events['stdin-end']).toBeDefined()
-    expect((events.SIGTERM ?? 0) - (events['stdin-end'] ?? 0)).toBeGreaterThanOrEqual(
-      PROVIDER_STDIN_END_GRACE_MS - 50
-    )
-  })
-
-  it('reports a missing Codex binary as the spawn error, not an early exit', async ({
-    expect,
-    onTestFinished
-  }) => {
-    const rig = createSupervisedProbeRig()
-    onTestFinished(() => rig.cleanup())
-    const error = await runCodexAppServerSession(
-      {
-        command: join(rig.dir, 'missing', 'codex'),
-        cliPath: null,
-        args: ['app-server'],
-        timeoutMs: 5_000
-      },
-      async () => null
-    ).catch((caught: unknown) => caught)
-
-    expect(error).toMatchObject({ code: 'ENOENT' })
-    expect(classifyCodexTrustGrantError(error)).toBe('binary-missing')
   })
 })

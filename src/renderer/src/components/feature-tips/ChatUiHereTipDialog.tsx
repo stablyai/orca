@@ -1,19 +1,15 @@
 import { useRef, type JSX } from 'react'
-import type { FeatureTip } from '../../../../shared/feature-tips'
+import type { FeatureTip } from '../../../../shared/feature-education/feature-tips'
 import { DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { useTranslate } from '@/i18n/use-translate'
 import { ChatUiHereFeatureTipVisual } from './ChatUiHereFeatureTipVisual'
 import { getChatUiHereVariantCopy, type ShownChatUiLaunchTipVariant } from './chat-ui-here-copy'
 import { FeatureTipActions } from './FeatureTipActions'
 import {
+  FEATURE_TIP_BUTTONS_ON_CARD_EDGE,
   FeatureTipDialogFrame,
-  FeatureTipEyebrow,
   FeatureTipSettingsLine
 } from './FeatureTipDialogFrame'
-
-// Side by side, the outer edge of the primary button's 3px focus ring sits on the bottom of the
-// visual's centered 22rem card; the column is the frame less its 1px borders.
-const BUTTONS_ON_CARD_EDGE = 'md:pb-[calc((min(27rem,100vh-2rem)-2px-22rem)/2+3px)]'
 
 export function ChatUiHereTipDialog({
   open,
@@ -48,11 +44,10 @@ export function ChatUiHereTipDialog({
         primaryButtonRef.current?.focus({ preventScroll: true })
       }}
       visual={<ChatUiHereFeatureTipVisual />}
-      copyClassName={BUTTONS_ON_CARD_EDGE}
+      copyClassName={FEATURE_TIP_BUTTONS_ON_CARD_EDGE}
     >
       <DialogHeader className="text-left">
         <div>
-          <FeatureTipEyebrow label={t('featureTips.eyebrowNew', 'New')} />
           <DialogTitle size="display">
             {t('featureTips.chatUiHere.title', 'Chat UI is here')}
           </DialogTitle>

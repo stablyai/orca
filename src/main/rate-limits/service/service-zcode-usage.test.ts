@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { readZcodeUsageCredentials } from '../providers/zcode/zcode-usage-credentials'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { ProviderRateLimits } from '../../../shared/rate-limit-types'
+import type { ProviderRateLimits } from '../../../shared/agent-usage/rate-limits/rate-limit-types'
 import { RateLimitService } from './rate-limit-service'
 import { fetchActiveClaudeRateLimits } from '../providers/claude/claude-active-usage-fetch'
 import { fetchCodexRateLimits } from '../providers/codex/codex-fetcher'
@@ -103,7 +103,7 @@ describe('RateLimitService zcode plan credentials', () => {
       .mockImplementationOnce(() => secondZcode.promise)
 
     const firstRefresh = service.refresh()
-    await vi.waitFor(() => expect(service.getState().claude?.status).toBe('ok'))
+    await vi.waitFor(async () => expect((await service.getState()).claude?.status).toBe('ok'))
 
     service.invalidateZcodeCredentialState()
     const queuedRefresh = service.refresh()
@@ -112,14 +112,14 @@ describe('RateLimitService zcode plan credentials', () => {
     firstZcode.resolve(okProvider('zcode', 50, Date.now()))
     await vi.waitFor(() => expect(fetchZcodeRateLimits).toHaveBeenCalledTimes(2))
 
-    expect(service.getState().zcode?.status).toBe('fetching')
-    expect(service.getState().zcode?.session).toBeNull()
+    expect((await service.getState()).zcode?.status).toBe('fetching')
+    expect((await service.getState()).zcode?.session).toBeNull()
 
     secondZcode.resolve(okProvider('zcode', 10, Date.now()))
     await firstRefresh
     await queuedRefresh
 
-    const state = service.getState()
+    const state = await service.getState()
     expect(fetchZcodeRateLimits).toHaveBeenCalledTimes(2)
     expect(state.zcode?.session?.usedPercent).toBe(10)
   })
@@ -149,8 +149,8 @@ describe('RateLimitService zcode plan credentials', () => {
       cpSync(join(fixtures, 'zai-other'), join(home, '.zcode', 'v2'), { recursive: true })
       claude.resolve(okProvider('claude', 7))
       await refreshing
-      expect(service.getState().zcode?.status).toBe('unavailable')
-      expect(service.getState().zcode?.session).toBeNull()
+      expect((await service.getState()).zcode?.status).toBe('unavailable')
+      expect((await service.getState()).zcode?.session).toBeNull()
     } finally {
       vi.unstubAllEnvs()
       rmSync(home, { recursive: true, force: true })

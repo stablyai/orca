@@ -1,5 +1,5 @@
 import type { AgentJournalItemBody } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import { CODEX_COLLAB_ROW_AGENTS_KEY } from '../../../../shared/codex-collab-agent-tools'
+import { CODEX_COLLAB_ROW_AGENTS_KEY } from '../../../../shared/agent-hook-listener/providers/codex/codex-collab-agent-tools'
 import { journalPayload } from '../../../native-chat/agent-session-journal/item-lifecycle/journal-payload-bounds'
 import {
   codexCollabHelperLabel,

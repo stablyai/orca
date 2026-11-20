@@ -1,4 +1,4 @@
-import type { PtySpawnOutcome } from '../spawn-outcome'
+import type { PtySpawnOutcome } from '../spawn/spawn-outcome'
 import type { PaneSpawnReservation } from '../pane/spawn-reservation'
 import type { PaneSpawnOperation } from '../pane/pane-spawn-operation'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
@@ -8,11 +8,11 @@ import type {
 } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { ProjectExecutionRuntimeResolution } from '../../../../shared/execution-host/project-execution-runtime'
 import type { StartupCommandDelivery } from '../../../../shared/agent-launch/startup/codex-startup-delivery'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import type { TerminalStartupCwdMissingDirFallback } from '../../../../shared/shell/launch/terminal-startup-cwd'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
 import type { Store } from '../../../persistence/loading-store/store'
-import type { PtySpawnResult } from '../../../providers/pty-provider-contract'
+import type { PtySpawnResult } from '../../../providers/pty/spawn-result'
 import type {
   CodexHomePtySpawnedLifecycleArgs,
   GetSelectedCodexHomePath,
@@ -22,7 +22,7 @@ import type {
 import type { StablePaneOwner } from '../pane/stable-owner'
 import type { ReplacedPaneOwner } from '../pane/replaced-pane-owner'
 import type { ResolvedPtyHost } from '../provider/registry'
-import type { PtySpawnCodexResumeDeps } from '../spawn-host-env'
+import type { PtySpawnCodexResumeDeps } from '../host-env/spawn-host-env'
 
 export type PtySpawnIpcArgs = {
   cols: number

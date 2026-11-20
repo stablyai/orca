@@ -7,8 +7,11 @@
  */
 import type { WslMovePreview, WslMoveResult } from '../../../shared/wsl-move/wsl-move-driver-types'
 import type { WslMoveUseLocallyResult } from '../../../shared/wsl-move/wsl-moved-project'
-import type { WslMoveOrchestratorPorts } from './wsl-move-orchestrator-ports'
-import { readWslMoveFinishedMove, runWslMoveOrchestratorStep } from './wsl-move-orchestrator-step'
+import type { WslMoveOrchestratorPorts } from './orchestration/wsl-move-orchestrator-ports'
+import {
+  readWslMoveFinishedMove,
+  runWslMoveOrchestratorStep
+} from './orchestration/wsl-move-orchestrator-step'
 import { wslMoveJournalKey } from '../../../shared/wsl-move/wsl-move-cutover'
 import type {
   WslMoveOrchestratorDeclineCause,
@@ -20,13 +23,13 @@ import {
   newWslMoveOrchestratorRecord,
   sameWslMoveOrchestratorRecord,
   wslMoveOrchestratorTimerDelay
-} from './wsl-move-orchestrator-transitions'
+} from './orchestration/wsl-move-orchestrator-transitions'
 import {
   applyWslMoveHostAddedByUser,
   applyWslMoveReleasedByUser,
   applyWslMoveUserAction,
   settleWslMoveOrchestratorRecord
-} from './wsl-move-orchestrator-external-transitions'
+} from './orchestration/wsl-move-orchestrator-external-transitions'
 
 /** A project opened again within this window does not read the running distros again. */
 export const WSL_MOVE_ORCHESTRATOR_PROJECT_OPENED_THROTTLE_MS = 60_000
@@ -69,7 +72,9 @@ export class WslMoveOrchestrator {
     for (const [key, record] of this.records) {
       this.scheduleFor(key, record)
     }
-    this.prune()
+    void this.prune().catch((error: unknown) =>
+      console.warn('[wsl-move] Could not prune inactive moves', error)
+    )
   }
 
   list(): WslMoveOrchestratorRecord[] {
@@ -161,29 +166,34 @@ export class WslMoveOrchestrator {
    * "Use on this computer again" ran for the distro, or the user removed its host: park it until
    * the user adds the host or presses Retry.
    */
-  releasedByUser(distro: string, cause: WslMoveOrchestratorDeclineCause): void {
+  async releasedByUser(distro: string, cause: WslMoveOrchestratorDeclineCause): Promise<void> {
     const key = wslMoveJournalKey(distro)
     this.commit(
       key,
       'user',
       applyWslMoveReleasedByUser(this.recordFor(key, distro), this.ports.now(), cause)
     )
-    this.prune()
+    await this.prune()
   }
 
   /**
    * Drops records of distros with neither a WSL host nor bridge projects left: nothing can wake
    * them, and the status line would describe a distro the user no longer has.
    */
-  prune(): void {
+  async prune(): Promise<void> {
     let changed = false
     for (const [key, record] of this.records) {
-      if (
-        !this.busy.has(key) &&
-        record.state.kind !== 'moving' &&
-        !recordsUserChoice(record) &&
-        !this.ports.isDistroInUse(record.distro)
-      ) {
+      if (this.disposed) {
+        return
+      }
+      if (this.busy.has(key) || record.state.kind === 'moving' || recordsUserChoice(record)) {
+        continue
+      }
+      const inUse = await this.ports.isDistroInUse(record.distro)
+      if (this.disposed) {
+        return
+      }
+      if (!inUse && this.records.get(key) === record && !this.busy.has(key)) {
         this.records.delete(key)
         this.timers.get(key)?.()
         this.timers.delete(key)

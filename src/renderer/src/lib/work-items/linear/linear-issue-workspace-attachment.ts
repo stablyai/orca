@@ -1,3 +1,4 @@
+import { isWorktreeRetiredByRemoval } from '../../../../../shared/worktree/removal/removal-visibility'
 import type { LinearIssue } from '../../../../../shared/linear/issue-types'
 import { getWorkspaceAttachments } from '../../../../../shared/workspace-attachments/workspace-attachments'
 import type { Worktree } from '../../../../../shared/worktree/types'
@@ -96,6 +97,7 @@ export function findLinearIssueWorkspaceAttachment(
     worktrees.filter(
       (worktree) =>
         !worktree.isArchived &&
+        !isWorktreeRetiredByRemoval(worktree) &&
         getWorkspaceAttachments(worktree).some(
           (item) =>
             item.provider === 'linear' &&
@@ -112,7 +114,7 @@ export function buildLinearIssueWorkspaceAttachmentIndex(
 ): LinearIssueWorkspaceAttachmentIndex {
   const index = new Map<string, Worktree[]>()
   for (const worktree of worktrees) {
-    if (worktree.isArchived) {
+    if (worktree.isArchived || isWorktreeRetiredByRemoval(worktree)) {
       continue
     }
     const identifiers = new Set(

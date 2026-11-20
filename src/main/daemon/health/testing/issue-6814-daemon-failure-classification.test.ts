@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
 import { DaemonServer } from '../../server/daemon-server'
 import { checkDaemonHealth } from '../daemon-health'
-import { createNdjsonParser } from '../../../../shared/main-process-ndjson-framer'
+import { createNdjsonParser } from '../../../../shared/json-stream/main-process-ndjson-framer'
 import type { SubprocessHandle } from '../../sessions/session-subprocess-handle'
 
 const scheduleHealthEntryTimeout = setTimeout

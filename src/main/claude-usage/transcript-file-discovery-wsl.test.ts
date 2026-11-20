@@ -4,8 +4,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({ readdir: vi.fn(), gatedReaddir: vi.fn() }))
 vi.mock('node:fs/promises', () => ({ readdir: mocks.readdir }))
-vi.mock('../native-chat/wsl-transcript-fs-access', () => ({ wslGatedReaddir: mocks.gatedReaddir }))
-vi.mock('../claude-accounts/claude-profile-installed-router', () => ({
+vi.mock('../native-chat/transcript-filesystem/wsl-transcript-fs-access', () => ({
+  wslGatedReaddir: mocks.gatedReaddir
+}))
+vi.mock('../claude-accounts/profiles/routing/claude-profile-installed-router', () => ({
   claudeProfileHistoryDirs: () => []
 }))
 const ROOT = String.raw`\\wsl.localhost\Ubuntu\home\ada\.claude-alt\projects`

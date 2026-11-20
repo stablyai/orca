@@ -6,11 +6,14 @@ import { ORCHESTRATION_CONTRACT_VERSION } from '../../../../../../shared/orchest
 import { OrcaRuntimeService } from '../../../../orca-runtime'
 import { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import { generateId } from '../../../../orchestration/db/generated-id'
+import { createRootDispatch } from '../../../../orchestration/db/root-dispatch-test-fixture'
+import { escalateWorkerFailure } from '../../../../orchestration/workers/reports/worker-failure-escalation'
 import { RpcDispatcher } from '../../../dispatcher'
 import type { RpcResponse } from '../../../core'
 import { ORCHESTRATION_METHODS } from '../orchestration'
 
 const WORKER_PANE = 'tab_w:11111111-1111-4111-8111-111111111111'
+const OTHER_PANE = 'tab_o:22222222-2222-4222-8222-222222222222'
 const PAIRED = {
   authenticatedCallerFingerprint: 'fingerprint_a',
   pairedDeviceId: 'device_a',
@@ -30,7 +33,8 @@ describe('a paired Orca coordinating its Run on this server', () => {
     db = new OrchestrationDb(join(dir, 'b.db'))
     runtime = new OrcaRuntimeService(null)
     const panes: Record<string, string> = {
-      term_w: WORKER_PANE
+      term_w: WORKER_PANE,
+      term_o: OTHER_PANE
     }
     vi.spyOn(runtime, 'getTerminalPaneKey').mockImplementation((handle) => panes[handle] ?? null)
     vi.spyOn(runtime, 'getLiveTerminalPaneKey').mockImplementation(
@@ -89,9 +93,64 @@ describe('a paired Orca coordinating its Run on this server', () => {
     )
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the pull's result schema; a refusal reads as an empty page.
     return (response.ok ? response.result : { items: [] }) as {
-      items: { conversationId: string; kind: string }[]
+      items: { conversationId: string; kind: string; payload: string }[]
     }
   }
+
+  it("creates a new-child under the paired Orca's own workspace on its machine", async () => {
+    const parent = {
+      installationId: 'install_a',
+      workspaceKey: 'worktree:repo_a::/a/home',
+      instanceId: 'instance_a'
+    }
+    vi.spyOn(runtime, 'validateOrchestrationAgentLauncher').mockImplementation(() => {})
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: placement reads only the repo's kind and hooks.
+    vi.spyOn(runtime, 'showRepo').mockResolvedValue({ id: 'repo_b', kind: 'git' } as never)
+    const create = vi
+      .spyOn(runtime, 'createManagedWorktree')
+      .mockRejectedValue(new Error('stop after placement'))
+
+    await peerCall('orchestration.workerStart', {
+      from: 'term_coord',
+      spec: 'investigate',
+      worktree: 'new-child',
+      repo: 'id:repo_b',
+      agent: 'claude',
+      crossStoreParent: parent
+    })
+
+    expect(create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        repoSelector: 'id:repo_b',
+        lineage: { crossStoreParent: parent, crossStoreParentInferredFrom: 'orchestration-context' }
+      })
+    )
+  })
+
+  it("reads another Run's work here by its Run, as its pairing already can, but cannot change it", async () => {
+    await peerCall('orchestration.runCurrent', {})
+    const localRun = db.createRun({
+      objective: 'local',
+      coordinatorHandle: 'term_l',
+      coordinatorPaneKey: null
+    })
+    const localTask = db.createTask({ spec: 'local work', runId: localRun.id })
+    const localWork = createRootDispatch(db, localTask.id, 'term_o', OTHER_PANE)
+
+    const list = await peerCall('orchestration.workerList', { run: localRun.id, paginate: true })
+    const show = await peerCall('orchestration.workerShow', { dispatch: localWork.id })
+    const keepOpen = await peerCall('orchestration.workerKeepOpen', {
+      terminal: 'term_o',
+      keep: true
+    })
+
+    expect(list.ok ? list.result : list.error).toMatchObject({
+      workers: [{ dispatchId: localWork.id }],
+      page: { total: 1 }
+    })
+    expect(show.ok ? undefined : show.error).toBeUndefined()
+    expect(keepOpen.ok ? undefined : keepOpen.error.code).toBe('forbidden')
+  })
 
   it('gives every conversation a share of each pull, so an unimportable head starves no other', async () => {
     const stuck = conversationId
@@ -114,6 +173,20 @@ describe('a paired Orca coordinating its Run on this server', () => {
     expect(items.items.filter((item) => item.conversationId === other)).toEqual([
       expect.objectContaining({ kind: 'worker_mail' })
     ])
+  })
+
+  it('leaves out the conversations a pull holds back, and returns the others', async () => {
+    const held = conversationId
+    const other = generateId('peerconv')
+    await peerCall('orchestration.runCurrent', {})
+    await peerCall('orchestration.runCurrent', {}, { conversation: other })
+    for (const conversation of [held, other]) {
+      const runId = db.getPeerRunForConversation(conversation)!.run_id
+      db.insertMessage({ from: 'term_w', to: `run:${runId}`, subject: 'mail', runId })
+    }
+
+    const items = await pull('pull', { holdBack: [held] })
+    expect(items.items.map((item) => item.conversationId)).toEqual([other])
   })
 
   it('rotates the page when more conversations are pending than it holds, so none starves', async () => {
@@ -153,5 +226,25 @@ describe('a paired Orca coordinating its Run on this server', () => {
     db.transitionLifecycle({ entity: 'worker', id: dispatch.id, from: 'starting', to: 'ready' })
 
     expect((await waiting).items).toEqual([expect.objectContaining({ kind: 'worker_state' })])
+  })
+
+  it('sends home the Dispatch of a report this server files about its worker', async () => {
+    await peerCall('orchestration.runCurrent', {})
+    const task = db.createTask({ spec: 'peer work', runId: peerRunId() })
+    const dispatch = createRootDispatch(db, task.id, 'term_w', WORKER_PANE)
+    escalateWorkerFailure(
+      db,
+      dispatch,
+      {
+        id: 'msg_lost',
+        from: 'term_w',
+        describe: () => ({ subject: 'Worker lost without reporting', body: 'lost' }),
+        payload: {}
+      },
+      () => {}
+    )
+
+    const mail = (await pull('pull')).items.find((item) => item.kind === 'worker_mail')
+    expect(JSON.parse(mail!.payload)).toMatchObject({ dispatchId: dispatch.id, taskId: task.id })
   })
 })

@@ -1,14 +1,14 @@
 import { open } from 'node:fs/promises'
 import { Readable } from 'node:stream'
-import { isWslUncPath } from '../../../../shared/wsl-paths'
+import { isWslUncPath } from '../../../../shared/file-access/wsl-paths'
 import {
   closeTranscriptHandle,
   openTranscriptFile,
   readTranscriptFile,
   WSL_TRANSCRIPT_READ_CHUNK_BYTES
-} from '../../../native-chat/wsl-transcript-fs-access'
-import { wslGatedHandleStat } from '../../../native-chat/wsl-transcript-fs-snapshot'
-import type { TranscriptBigIntStat } from '../../../native-chat/wsl-transcript-fs-process-protocol'
+} from '../../../native-chat/transcript-filesystem/wsl-transcript-fs-access'
+import { wslGatedHandleStat } from '../../../native-chat/transcript-filesystem/wsl-transcript-fs-snapshot'
+import type { TranscriptBigIntStat } from '../../../native-chat/transcript-filesystem/process/wsl-transcript-fs-process-protocol'
 
 export type JsonlFileHandle = {
   stat(options: { bigint: true }): Promise<TranscriptBigIntStat>

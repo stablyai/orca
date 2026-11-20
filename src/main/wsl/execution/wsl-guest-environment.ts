@@ -2,7 +2,7 @@ import { runProcess } from '@orca/process-host'
 import {
   buildWslCapturedLoginShellCommand,
   buildWslExecArgs
-} from '../../../shared/wsl-login-shell-command'
+} from '../../../shared/shell/wsl/wsl-login-shell-command'
 import { resolveWslExecutablePath } from './wsl-executable-path'
 import { resolveWslInteropSpawnCwd } from './wsl-interop-spawn-directory'
 

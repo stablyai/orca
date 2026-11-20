@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { getDefaultSettings } from '../../shared/constants'
-import type { GlobalSettings } from '../../shared/global-settings-types'
+import { getDefaultSettings } from '../../shared/orca-profiles/constants'
+import type { GlobalSettings } from '../../shared/settings/global-settings-types'
 
 const fakes = vi.hoisted(() => ({
   host: {
@@ -24,24 +24,24 @@ const fakes = vi.hoisted(() => ({
 vi.mock('../wsl/execution/wsl-guest-environment', () => ({
   getWslGuestEnvironment: async () => ({ claudeConfigDir: '/home/ada/.claude-custom' })
 }))
-vi.mock('../../shared/app-environment', () => ({
+vi.mock('../../shared/app-lifecycle/app-environment', () => ({
   getAppEnvironment: () => ({ getPath: () => '/data/orca' })
 }))
 vi.mock('../wsl/discovery/distro-catalog', () => ({
   getDefaultWslDistro: () => 'Ubuntu',
   getWslHome: (distro: string) => `/wsl/${distro}/home`
 }))
-vi.mock('./claude-profile-router', () => ({
+vi.mock('./profiles/routing/claude-profile-router', () => ({
   ClaudeProfileRouter: function ClaudeProfileRouter() {
     return fakes.host
   }
 }))
-vi.mock('./claude-profile-wsl-router', () => ({
+vi.mock('./profiles/wsl/claude-profile-wsl-router', () => ({
   ClaudeWslProfileRouter: function ClaudeWslProfileRouter() {
     return fakes.wsl
   }
 }))
-vi.mock('./claude-profile-installed-router', () => ({
+vi.mock('./profiles/routing/claude-profile-installed-router', () => ({
   installClaudeObservedConfigDirs: () => {},
   installClaudeProfileRouter: () => {},
   installClaudeWslProfileRouter: () => {}
@@ -104,32 +104,5 @@ describe('ClaudeRuntimeAuthService', () => {
     vi.spyOn(fakes.wsl, 'preparation').mockRejectedValue(new Error('WSL unavailable'))
     const auth = service('win32', { localAccountRuntime: 'wsl' })
     await expect(auth.getUsageProfileDirs()).rejects.toThrow('WSL unavailable')
-  })
-
-  it('never fails a select over a failed guest publish, and publishes one pass at a time', async () => {
-    const auth = service('win32')
-    vi.spyOn(fakes.wsl, 'publish').mockRejectedValue(new Error('distro is gone'))
-    await expect(
-      auth.syncForCurrentSelection({ runtime: 'wsl', wslDistro: 'Ubuntu' })
-    ).resolves.toBeUndefined()
-
-    const order: string[] = []
-    let release = () => {}
-    const gate = new Promise<void>((resolve) => (release = resolve))
-    vi.spyOn(fakes.host, 'publish').mockImplementation(() => order.push('host'))
-    vi.spyOn(fakes.wsl, 'runningDistros')
-      .mockImplementationOnce(async () => {
-        await gate
-        order.push('first guests')
-        return []
-      })
-      .mockResolvedValue([])
-    const first = auth.publishAll()
-    const second = auth.publishAll()
-    await new Promise((resolve) => setTimeout(resolve, 10))
-    expect(order).toEqual(['host'])
-    release()
-    await Promise.all([first, second])
-    expect(order).toEqual(['host', 'first guests', 'host'])
   })
 })

@@ -1,3 +1,4 @@
+import { availableParallelism } from 'node:os'
 import { defaultExclude, mergeConfig } from 'vitest/config'
 import original from '../mobile/vitest.config.ts'
 
@@ -5,14 +6,11 @@ import original from '../mobile/vitest.config.ts'
 const nodeFiles = [
   'scripts/check-tests-typecheck-incremental-cache.test.ts',
   'src/mock-server-key-pair.test.ts',
-  'src/mobile-release/prepare-android-release-script.test.ts',
   'src/navigation/query-string-named-exports.test.ts',
-  'src/components/mobile-markdown-parser-progress.test.ts',
-  'src/components/rich-markdown/native-document-bundle.test.ts',
   'src/terminal/document/native-document-bundle.test.ts',
   'src/transport/encryption/mobile-e2ee-v2-client-session.test.ts',
   'src/transport/encryption/mobile-e2ee-v2-physical-channel.test.ts',
-  'src/test-support/rpc-recording/family-recordings.test.ts'
+  'src/test-support/rpc-recording/goldens/family-recordings.test.ts'
 ]
 
 const config = mergeConfig(original, { cacheDir: process.env.ORCA_MOBILE_CI_CACHE_DIR })
@@ -25,7 +23,8 @@ export default {
     isolate: true,
     ...(process.versions.bun
       ? {
-          maxWorkers: 3,
+          // The Node role holds one core; more Bun workers than the rest starve timed tests on 2-core runners.
+          maxWorkers: Math.max(1, Math.min(3, availableParallelism() - 1)),
           exclude: [...(config.test?.exclude ?? defaultExclude), ...nodeFiles]
         }
       : { maxWorkers: 1, include: nodeFiles })

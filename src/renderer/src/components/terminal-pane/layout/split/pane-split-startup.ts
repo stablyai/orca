@@ -1,10 +1,9 @@
 import type { PtyPaneStartup } from '../../pty-connection/startup/pty-pane-startup'
 
-export type SplitStartupPayload = { command: string; env?: Record<string, string> }
+type SplitStartupPayload = Pick<NonNullable<PtyPaneStartup>, 'command' | 'env'>
 
 export function splitPaneWithOneShotStartup<TPane>(
-  // Why the union: pane deps hold a full PtyPaneStartup, whose command is optional (#39852).
-  deps: { startup?: SplitStartupPayload | PtyPaneStartup | null },
+  deps: { startup?: PtyPaneStartup },
   startup: SplitStartupPayload,
   splitPane: () => TPane
 ): TPane {

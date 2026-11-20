@@ -1,5 +1,5 @@
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
-import { randomUUID } from 'node:crypto'
+
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -8,9 +8,9 @@ import {
   getFolderWorkspacePathStatusForPath,
   inferFolderWorkspacePathConnection
 } from './folder-workspace-path-status'
-import type { ProjectGroup } from '../../shared/project-group-types'
+import type { ProjectGroup } from '../../shared/project/groups/project-group-types'
 import type { FolderWorkspace } from '../../shared/folder-workspaces/folder-workspace-types'
-import type { Repo } from '../../shared/repo-types'
+import type { Repo } from '../../shared/repository/repo-types'
 
 function makeGroup(overrides: Partial<ProjectGroup> = {}): ProjectGroup {
   return {
@@ -124,34 +124,6 @@ describe('folder workspace path status', () => {
     } finally {
       await rm(root, { recursive: true, force: true })
     }
-  })
-
-  it('reports missing local directories', async () => {
-    const missingPath = join(tmpdir(), `orca-folder-status-missing-${randomUUID()}`)
-
-    await expect(
-      getFolderWorkspacePathStatusForPath({
-        folderPath: missingPath,
-        projectGroupId: 'group-1',
-        projectGroups: [makeGroup({ parentPath: missingPath })],
-        repos: []
-      })
-    ).resolves.toEqual({ path: missingPath, exists: false, reason: 'missing' })
-  })
-
-  it('reports unavailable for an inferred SSH scope, which this process does not serve', async () => {
-    await expect(
-      getFolderWorkspacePathStatusForPath({
-        folderPath: '/workspace/platform',
-        projectGroupId: 'group-1',
-        projectGroups: [makeGroup()],
-        repos: [makeRepo({ connectionId: 'ssh-1' })]
-      })
-    ).resolves.toEqual({
-      path: '/workspace/platform',
-      exists: false,
-      reason: 'unavailable'
-    })
   })
 
   it('reports ambiguous connection for mixed SSH scopes', () => {

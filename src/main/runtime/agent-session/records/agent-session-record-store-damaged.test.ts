@@ -1,5 +1,5 @@
 import { listStructuredProviderSessionOwnership } from '../../../native-chat/agent-session-wire/host/structured-provider-session-ownership'
-import { findConflictingStructuredAdoption } from '../../../native-chat/structured-agent-session-history-adoption'
+import { findConflictingStructuredAdoption } from '../../../native-chat/conversation-adoption/structured-agent-session-history-adoption'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -9,14 +9,12 @@ import type {
   AgentSessionProcessIdentity,
   AgentSessionRecord
 } from '../../../../shared/agent-session/lifecycle/agent-session-record'
-import type { AgentSessionProviderHandleLink } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle'
-import { claudeProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import type { AgentSessionProviderHandleLink } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
+import { claudeProviderHandle } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import type { AgentSessionRecordStore } from './agent-session-record-store'
 import type { AgentSessionReserveRequest } from '../ownership/agent-session-reservation-admission'
-import {
-  editPersistedTestAgentSessionStore,
-  openTestAgentSessionRecordStore
-} from './agent-session-record-store-test-harness'
+import { openTestAgentSessionRecordStore } from './agent-session-record-store-test-harness'
+import { editPersistedTestAgentSessionStore } from './agent-session-record-store-persistence.test-fixture'
 import { closeTestJournalHostDatabases } from '../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 
 const NOW = 1_800_000_000_000
@@ -148,5 +146,18 @@ describe('damaged saved conversation observations', () => {
       }
     })
     expect(store.getConversation('session-beta')).toBeNull()
+  })
+
+  it('reports a damaged chat only to the workspace it was observed in', async () => {
+    await establishOwner(await open())
+    await editPersistedTestAgentSessionStore(directory, (persisted) => {
+      Object.assign(persisted.records['session-alpha'].lease, { minimumNextFence: 'bad' })
+    })
+    const store = await open()
+    expect(store.listWorkspaceSessions(NATIVE)).toEqual({ sessionIds: [], hasUnreadable: true })
+    expect(store.listWorkspaceSessions({ ...NATIVE, workspaceId: 'workspace-2' })).toEqual({
+      sessionIds: [],
+      hasUnreadable: false
+    })
   })
 })

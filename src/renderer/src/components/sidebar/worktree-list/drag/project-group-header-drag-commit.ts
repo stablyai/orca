@@ -1,13 +1,15 @@
-import { getProjectGroupTabOrderUpdatesForSidebarDrop } from './project-group-header-drop'
+import {
+  getProjectGroupTabOrderUpdatesForSidebarDrop,
+  type ProjectGroupHeaderDragItem
+} from './project-group-header-drop'
 import type { ProjectGroupHeaderDragSession } from './project-group-header-drag-contract'
-import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import type { RootProjectHeaderDrag } from './root-project-header-drop'
 
 export function commitProjectGroupHeaderDragDrop(
   args: RootProjectHeaderDrag & {
     session: ProjectGroupHeaderDragSession
     sidebarDropIndex: number
-    projectGroupById: ReadonlyMap<string, ProjectGroup>
+    projectGroupById: ReadonlyMap<string, ProjectGroupHeaderDragItem>
     onCommitProjectGroupTabOrder: (groupId: string, tabOrder: number) => void
   }
 ): void {

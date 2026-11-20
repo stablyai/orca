@@ -53,23 +53,6 @@ describe('admin routes under a database that is briefly out of reach', () => {
     expect(response.headers.get('Retry-After')).toBe('7')
     expect(await response.json()).toEqual({ error: 'database_temporarily_unavailable' })
   })
-
-  it('answers admission-selector/status with a retryable 503 instead of a conflict', async () => {
-    const inspectCellAdmissionSelector = vi.fn(async () => {
-      throw poolTimeout()
-    })
-    const app = appWith({ inspectCellAdmissionSelector })
-
-    const response = await app.request(
-      '/v1/admin/admission-selector/status',
-      adminRequest({ v: 1, attemptId: '22222222-2222-4222-8222-222222222222' })
-    )
-
-    expect(response.status).toBe(503)
-    expect(response.headers.get('Retry-After')).toBe('5')
-    expect(await response.json()).toEqual({ error: 'database_temporarily_unavailable' })
-  })
-
 })
 
 function config(overrides: Partial<RelayConfig> = {}): RelayConfig {

@@ -6,24 +6,24 @@ import type {
   WorkerTerminalRetainedReason
 } from '../terminal-authority/release/worker-terminal-ownership'
 import {
-  captureWorkerOutputArchive,
+  captureWorkerOutputReference,
   releaseCommitFieldsForCapturedArchive,
   releaseCommitFieldsForStoredArchive,
   summarizeWorkerOutputArchive
 } from '../workers/archives/worker-output-archive'
 import type { WorkerTerminalReleaseRuntime } from '../terminal-authority/release/worker-terminal-release-runtime'
-import { readRemoteAttachmentArchive } from './remote-attachment-archive-read'
-import { WorkerTerminalReleaseSingleFlight } from '../../rpc/methods/orchestration/worker/worker-terminal-release-single-flight'
+import { readRemoteAttachmentOutputIfAvailable } from './remote-attachment-archive-read'
+import { WorkerTerminalReleaseSingleFlight } from '../../rpc/methods/orchestration/worker/release/worker-terminal-release-single-flight'
 import { yieldAutoReleaseToWorkingAgent } from '../terminal-authority/release/worker-terminal-auto-release-working-yield'
-import { archiveSummary } from '../../rpc/methods/orchestration/worker/worker-terminal-resource-presentation'
-import type { WorkerReleaseReceipt } from '../../rpc/methods/orchestration/worker/worker-release-completion'
-import { releaseUnknownRecovery } from '../../rpc/methods/orchestration/worker/worker-release-unknown-recovery'
-import { orchestrationTimestampToMs } from '../../rpc/methods/orchestration/worker/worker-output'
+import { archiveSummary } from '../../rpc/methods/orchestration/worker/release/worker-terminal-resource-presentation'
+import type { WorkerReleaseReceipt } from '../../rpc/methods/orchestration/worker/release/worker-release-completion'
+import { releaseUnknownRecovery } from '../../rpc/methods/orchestration/worker/release/worker-release-unknown-recovery'
+import { orchestrationTimestampToMs } from '../../rpc/methods/orchestration/worker/output/worker-output'
 import type { inspectRemoteAttachment } from './federation-attachment-observation'
 import {
   classifyWorkerTerminalCloseError,
   TRANSIENT_WORKER_RELEASE_RECOVERY
-} from '../../rpc/methods/orchestration/worker/worker-release-close-error'
+} from '../../rpc/methods/orchestration/worker/release/worker-release-close-error'
 
 type RemoteAttachmentReleaseArgs = {
   runtime: WorkerTerminalReleaseRuntime
@@ -70,7 +70,7 @@ async function requestRemoteAttachmentRelease(
     }
   }
   if (attachment.stage === 'released') {
-    const archived = await readRemoteAttachmentArchive({
+    const archived = await readRemoteAttachmentOutputIfAvailable({
       runtime,
       attachment,
       liveness: 'exited'
@@ -127,7 +127,7 @@ async function completeRemoteAttachmentRelease(
     }
     const retained = db.revertWorkerTerminalReleaseToRetained(resource.id, 'identity_unproven')
     const output = storedArchive
-      ? await readRemoteAttachmentArchive({
+      ? await readRemoteAttachmentOutputIfAvailable({
           runtime,
           attachment,
           liveness: observation.status === 'exited' ? 'exited' : 'unverifiable'
@@ -155,9 +155,8 @@ async function completeRemoteAttachmentRelease(
     const archive = storedArchive
       ? releaseCommitFieldsForStoredArchive(storedArchive)
       : releaseCommitFieldsForCapturedArchive(
-          await captureWorkerOutputArchive({
+          captureWorkerOutputReference({
             runtime,
-            dispatchId: attachment.dispatch_id,
             terminalHandle: observation.terminal.handle,
             attachedAtMs: orchestrationTimestampToMs(attachment.created_at)
           })
@@ -169,10 +168,8 @@ async function completeRemoteAttachmentRelease(
       ...archive
     })
     if (isStillReleasing(committed)) {
-      output = await readRemoteAttachmentArchive({ runtime, attachment, liveness })
-      if (!output) {
-        throw new Error('The execution host could not reopen the committed worker output archive.')
-      }
+      // A worker with no readable original still releases; its receipt carries no output.
+      output = await readRemoteAttachmentOutputIfAvailable({ runtime, attachment, liveness })
     }
   } catch (error) {
     const retained = db.revertWorkerTerminalReleaseToRetained(resource.id, 'identity_unproven')
@@ -192,7 +189,7 @@ async function completeRemoteAttachmentRelease(
     : !remoteAttachmentLeaseIsCurrent(runtime, attachment, observation, current)
       ? db.revertWorkerTerminalReleaseToRetained(resource.id, 'identity_unproven')
       : yieldAutoReleaseToWorkingAgent(runtime, current)
-  if (!isStillReleasing(releasing) || !output) {
+  if (!isStillReleasing(releasing)) {
     return {
       dispatchId: attachment.dispatch_id,
       state: 'retained',
@@ -214,10 +211,14 @@ async function completeRemoteAttachmentRelease(
         lastError: reason,
         recovery: releaseUnknownRecovery(attachment.dispatch_id),
         archive: archiveSummary(db.markWorkerTerminalReleaseUnknown(resource.id, reason)),
-        output: projectArchivedOutputLiveness(
-          output,
-          close.ptyStopVerdict === 'live' ? 'live' : 'unverifiable'
-        )
+        ...(output
+          ? {
+              output: projectArchivedOutputLiveness(
+                output,
+                close.ptyStopVerdict === 'live' ? 'live' : 'unverifiable'
+              )
+            }
+          : {})
       }
     }
   } catch (error) {
@@ -237,7 +238,7 @@ async function completeRemoteAttachmentRelease(
             ? releasing
             : db.markWorkerTerminalReleaseUnknown(resource.id, closeError.reason)
         ),
-        output: projectArchivedOutputLiveness(output, 'unverifiable')
+        ...(output ? { output: projectArchivedOutputLiveness(output, 'unverifiable') } : {})
       }
     }
   }
@@ -252,7 +253,7 @@ async function completeRemoteAttachmentRelease(
     processAction:
       observation.status === 'exited' ? 'closed_exited_terminal' : 'closed_agent_terminal',
     archive: archiveSummary(released),
-    output: projectArchivedOutputLiveness(output, 'exited')
+    ...(output ? { output: projectArchivedOutputLiveness(output, 'exited') } : {})
   }
 }
 

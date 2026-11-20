@@ -1,4 +1,4 @@
-import { engineDictationLanguage } from '../../shared/dictation-language'
+import { engineDictationLanguage } from '../../shared/speech/models/dictation-language'
 import { getCatalogModel, isLocalSpeechModel } from './model-catalog'
 import { spawnSttEngine } from './stt-session-start'
 import {

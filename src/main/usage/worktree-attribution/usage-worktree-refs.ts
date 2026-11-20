@@ -1,4 +1,4 @@
-import type { Repo } from '../../../shared/repo-types'
+import type { Repo } from '../../../shared/repository/repo-types'
 import type { UsageWorktreeRef } from './usage-worktree-metadata'
 import type { UsageScanWorktreeRef } from '../provider-lifecycle/usage-provider-contract'
 
@@ -21,7 +21,7 @@ export function getUsageWorktreeFingerprint(
 }
 
 export function createWorktreeRefs(
-  repos: Repo[],
+  repos: readonly Pick<Repo, 'id'>[],
   worktreesByRepo: Map<string, { path: string; worktreeId: string; displayName: string }[]>
 ): UsageScanWorktreeRef[] {
   const refs: UsageScanWorktreeRef[] = []

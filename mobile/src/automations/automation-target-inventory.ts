@@ -1,7 +1,10 @@
 import * as z from 'zod'
 import { AutomationDraftValidationError } from './automation-error'
 import { getRepoMainWorktreeId } from '../../../src/shared/worktree/id'
-import { getRepoExecutionHostId, parseExecutionHostId } from '../../../src/shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  parseExecutionHostId
+} from '../../../src/shared/execution-host/execution-host'
 import {
   createRepoRowExecutionHostLookup,
   resolveWorktreeExecutionHost
@@ -11,7 +14,7 @@ import { buildWorkspaceRunContext } from '../../../src/shared/work-items/task-so
 import {
   PREFLIGHT_HOST_QUALIFIED_RUNTIME_CAPABILITY,
   PREFLIGHT_WORKSPACE_SCOPED_RUNTIME_CAPABILITY
-} from '../../../src/shared/preflight-runtime-capabilities'
+} from '../../../src/shared/remote-runtime/protocol/preflight-runtime-capabilities'
 import { hostStatusProbe } from '../transport/connection/host-status-probe-operations'
 import { readHostStatusReply } from '../query/host-status-query'
 import { newTabRepoListRead } from '../session/agent-launch/mobile-runtime-repo-operations'
@@ -20,9 +23,9 @@ import {
   preflightRefreshAgentsRead
 } from '../session/agent-launch/mobile-agent-detection-operations'
 import { buildMobileNewTabAgentOptions } from '../session/agent-launch/mobile-new-tab-agent-options'
+import { agentLaunchPolicyRead } from '../session/agent-launch/mobile-new-tab-settings-operations'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import {
-  automationAgentSettingsRead,
   automationWorkspacesRead,
   automationProjectsRead,
   automationSetupsRead,
@@ -181,13 +184,13 @@ export async function loadAutomationAgents(
       )
     }
     const [settingsReply, detectedReply] = await Promise.all([
-      automationAgentSettingsRead.request(client),
+      agentLaunchPolicyRead.request(client),
       refresh
         ? preflightRefreshAgentsRead.request(client, params)
         : preflightDetectAgentsRead.request(client, params)
     ])
     requireCurrent()
-    const settings = automationAgentSettingsRead.interpret(settingsReply).settings
+    const settings = agentLaunchPolicyRead.interpret(settingsReply).settings
     const detected = refresh
       ? preflightRefreshAgentsRead.interpret(detectedReply)
       : preflightDetectAgentsRead.interpret(detectedReply)

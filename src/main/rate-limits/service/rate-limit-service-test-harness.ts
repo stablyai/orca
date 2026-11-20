@@ -1,6 +1,6 @@
 import { EventEmitter } from 'node:events'
 import { vi, type Mock } from 'vitest'
-import type { ProviderRateLimits } from '../../../shared/rate-limit-types'
+import type { ProviderRateLimits } from '../../../shared/agent-usage/rate-limits/rate-limit-types'
 import type { RateLimitService } from './rate-limit-service'
 import { fetchCodexRateLimits } from '../providers/codex/codex-fetcher'
 import { fetchGeminiRateLimits } from '../providers/gemini/gemini-usage-fetcher'
@@ -111,7 +111,7 @@ export function resetRateLimitProviderMocks(): void {
   vi.mocked(fetchZcodeRateLimits).mockResolvedValue(unavailableProvider('zcode'))
   vi.mocked(fetchAntigravityRateLimits).mockResolvedValue(unavailableProvider('antigravity'))
   vi.mocked(fetchMuseRateLimits).mockResolvedValue(unavailableProvider('muse'))
-  vi.mocked(hasMiniMaxSessionCookie).mockReturnValue(false)
+  vi.mocked(hasMiniMaxSessionCookie).mockResolvedValue(false)
   vi.mocked(readGrokAuthSession).mockReturnValue({ status: 'missing' })
   vi.mocked(readCursorAuthSession).mockResolvedValue({ status: 'missing' })
 }

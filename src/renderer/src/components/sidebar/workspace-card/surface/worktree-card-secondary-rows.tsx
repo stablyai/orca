@@ -1,6 +1,6 @@
 import React from 'react'
 
-import { LinearAgentSkillSetupPrompt } from '../../LinearAgentSkillSetupPrompt'
+import { LinearAgentSkillSetupPrompt } from '../../../skills/setup/LinearAgentSkillSetupPrompt'
 import WorktreeCardAgents from '../activity/WorktreeCardAgents'
 import {
   WorktreeCardDeleteFailed,
@@ -27,8 +27,6 @@ export function WorktreeCardSecondaryRows({
     onLineageToggle,
     remoteBranchConflict,
     showInlineAgentList,
-    agentActivityDisplayMode,
-    compactInlineAgentRows,
     showLineageChildChip,
     lineageChildAriaLabel,
     childWorkspaceShortLabel,
@@ -63,7 +61,7 @@ export function WorktreeCardSecondaryRows({
       {showInlineAgentList && (
         <WorktreeCardAgents
           worktreeId={worktree.id}
-          agents={agentActivityDisplayMode === 'compact' ? compactInlineAgentRows : undefined}
+          executionHostId={worktree.hostId}
           className={hasMetaRow || remoteBranchConflict ? 'mt-0' : '-mt-1'}
         />
       )}

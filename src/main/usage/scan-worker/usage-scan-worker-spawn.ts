@@ -1,4 +1,3 @@
-import { claudeProfileTranscriptDirs } from '../../claude-usage/transcript-file-discovery'
 import { existsSync } from 'node:fs'
 import type { Worker } from 'node:worker_threads'
 import { spawnWorkerThread } from '../../worker-threads/worker-thread-spawn'
@@ -37,7 +36,7 @@ function defaultWorkerFactory(): Worker {
   if (!existsSync(workerPath)) {
     throw new Error(`Usage scan worker entry not found: ${workerPath}`)
   }
-  return spawnWorkerThread(workerPath)
+  return spawnWorkerThread(workerPath, { name: 'orca-usage-scan' })
 }
 
 let sharedClient: UsageScanWorkerClient | null = null
@@ -50,7 +49,7 @@ function getSharedClient(): UsageScanWorkerClient {
 export function scanClaudeUsageFilesViaWorker(
   worktrees: UsageScanWorktreeRef[],
   sourceCache: UsageSourceCacheRef,
-  profileDirs = claudeProfileTranscriptDirs()
+  profileDirs: string[]
 ): Promise<{
   sessions: ClaudeUsageSession[]
   dailyAggregates: ClaudeUsageDailyAggregate[]
@@ -98,4 +97,10 @@ export function splitUsageCacheFileViaWorker(
   request: UsageCacheSplitRequest
 ): Promise<UsageCacheSplitResult> {
   return getSharedClient().splitCacheFile(request)
+}
+
+export async function stopUsageScanWorker(): Promise<void> {
+  const client = sharedClient
+  sharedClient = null
+  await client?.dispose()
 }

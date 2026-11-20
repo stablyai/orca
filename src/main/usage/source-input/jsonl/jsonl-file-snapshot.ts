@@ -1,6 +1,6 @@
 import type { BigIntStats } from 'node:fs'
 import type { Readable } from 'node:stream'
-import { wslGatedBigIntStat } from '../../../native-chat/wsl-transcript-fs-snapshot'
+import { wslGatedBigIntStat } from '../../../native-chat/transcript-filesystem/wsl-transcript-fs-snapshot'
 import type { JsonlFileHandle } from './jsonl-file-access'
 
 const SNAPSHOT_FIELDS = ['dev', 'ino', 'size', 'mtimeMs', 'ctimeMs'] as const

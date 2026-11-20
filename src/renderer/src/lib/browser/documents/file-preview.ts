@@ -1,4 +1,4 @@
-import { browserPageDocLocationsEqual } from '../../../../../shared/browser-page-doc-location'
+import { browserPageDocLocationsEqual } from '../../../../../shared/browser/workspaces/browser-page-doc-location'
 import { openPlannedFileBrowserLink } from './file-preview-link-open'
 import type { FileBrowserLinkTarget } from './file-preview-link-open'
 import { toast } from 'sonner'
@@ -17,8 +17,8 @@ import {
   twinFileBrowserUnsupportedMessage
 } from '@/lib/browser/documents/workspace-file-browser-open-target'
 import { useAppStore } from '@/store/index'
-import { findSiblingGroupId } from '../../../../../shared/workspace-layout/tab-group-layout-tree'
-import '../../../../../shared/constants'
+import { findSiblingGroupId } from '../../../../../shared/workspace-layout/tab-groups/tab-group-layout-tree'
+import '../../../../../shared/orca-profiles/constants'
 import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/browser/browser-blank-page'
 import {
   selectFolderWorkspaces,

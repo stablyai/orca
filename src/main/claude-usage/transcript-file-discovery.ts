@@ -1,10 +1,10 @@
-import { claudeProfileHistoryDirs } from '../claude-accounts/claude-profile-installed-router'
+import { claudeProfileHistoryDirs } from '../claude-accounts/profiles/routing/claude-profile-installed-router'
 import { homedir } from 'node:os'
 import { join, win32 } from 'node:path'
 import { readdir } from 'node:fs/promises'
-import { isDefinitiveAbsence } from '../../shared/definitive-filesystem-absence'
-import { isWslUncPath } from '../../shared/wsl-paths'
-import { wslGatedReaddir } from '../native-chat/wsl-transcript-fs-access'
+import { isDefinitiveAbsence } from '../../shared/errors/definitive-filesystem-absence'
+import { isWslUncPath } from '../../shared/file-access/wsl-paths'
+import { wslGatedReaddir } from '../native-chat/transcript-filesystem/wsl-transcript-fs-access'
 
 const CLAUDE_PROJECTS_DIR = join(homedir(), '.claude', 'projects')
 const CLAUDE_TRANSCRIPTS_DIR = join(homedir(), '.claude', 'transcripts')

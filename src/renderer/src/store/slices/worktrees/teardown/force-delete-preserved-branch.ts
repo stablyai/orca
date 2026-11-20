@@ -1,5 +1,5 @@
 import type { WorktreeSlice } from '../worktree-slice-contract'
-import { parseExecutionHostId } from '../../../../../../shared/execution-host'
+import { parseExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
