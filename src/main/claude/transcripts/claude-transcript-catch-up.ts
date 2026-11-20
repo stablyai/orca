@@ -173,7 +173,8 @@ export async function catchUpClaudeTranscript(input: {
               agent: 'claude',
               unit: 'claude-entry',
               providerHandle,
-              ids
+              ids,
+              sourceFrontier: prepared.sourceFrontier
             },
             items: [
               {
@@ -192,13 +193,16 @@ export async function catchUpClaudeTranscript(input: {
         planned.covered && copy?.kind === 'native_copy'
           ? (copy.ids.at(-1) ?? input.leafUuid)
           : input.leafUuid
-      const leafUuid = input.leafUuid
+      const sourceFrontier =
+        planned.covered && copy?.kind === 'native_copy' ? copy.sourceFrontier : undefined
+      const leafUuid = sourceFrontier ? copiedLeaf : input.leafUuid
       let leafAbsent = leafUuid === '' && !!planned.covered
       let tail = leafAbsent
         ? null
         : await readClaudeTranscriptTail({
             filePath,
             leafUuid,
+            sourceFrontier,
             check,
             onLeafAbsent: () => {
               leafAbsent = true

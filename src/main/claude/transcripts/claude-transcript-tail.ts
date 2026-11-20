@@ -19,6 +19,7 @@ export type ClaudeTranscriptTail = {
 export async function readClaudeTranscriptTail(input: {
   filePath: string
   leafUuid: string
+  sourceFrontier?: string
   maxBytes?: number
   check: () => void
   onLeafAbsent?: () => void
@@ -60,7 +61,7 @@ export async function readClaudeTranscriptTail(input: {
         pieces.push(chunk.subarray(index + 1, end))
         end = index
         const row = endLine()
-        if (row?.uuid === input.leafUuid) {
+        if (row?.uuid === (input.sourceFrontier ?? input.leafUuid)) {
           return found()
         }
         if (row) {
@@ -69,7 +70,7 @@ export async function readClaudeTranscriptTail(input: {
       }
       pieces.push(chunk.subarray(0, end))
     }
-    if (endLine()?.uuid === input.leafUuid) {
+    if (endLine()?.uuid === (input.sourceFrontier ?? input.leafUuid)) {
       return found()
     }
     input.onLeafAbsent?.()

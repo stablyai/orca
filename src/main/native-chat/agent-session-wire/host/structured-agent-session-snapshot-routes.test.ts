@@ -103,31 +103,44 @@ async function snapshotFixture() {
   return { journal, live, retired, saved, failure: failure.promise, paused: () => paused }
 }
 
-it("holds reading across an epoch replacement and resumes only on the new epoch's facts", async () => {
-  const { journal, live, retired, paused } = await snapshotFixture()
-  const replaced = journal.write({
-    kind: 'epoch-replace',
-    reason: 'handle_forked',
-    fence: 0,
-    items: []
-  })
-  // Reading pauses in the tick the replacement reaches the writer.
-  expect(paused()).toBe(true)
-  await replaced
-  await live.sink.snapshotCurrent?.()
+it.each([false, true])(
+  "holds reading across an epoch replacement and resumes only on the new epoch's facts (guarded: %s)",
+  async (guarded) => {
+    const { journal, live, retired, paused } = await snapshotFixture()
+    const expectedCursor = await journal.reads.physicalCursor()
+    const replaced = journal.write({
+      kind: 'epoch-replace',
+      ...(guarded
+        ? {
+            guard: {
+              expectedCursor,
+              permit: new Int32Array(new SharedArrayBuffer(4)).fill(1),
+              deadline: Date.now() + 30_000
+            }
+          }
+        : {}),
+      reason: 'handle_forked',
+      fence: 0,
+      items: []
+    })
+    // Reading pauses in the tick the replacement reaches the writer.
+    expect(paused()).toBe(true)
+    await replaced
+    await live.sink.snapshotCurrent?.()
 
-  expect(live.sink.journalSnapshot?.()).toEqual({
-    canonicalByToolUse: [],
-    attemptByAgent: [],
-    parents: [],
-    backgrounds: [],
-    subagents: [],
-    threadGoal: { goal: null, row: null }
-  })
-  expect(paused()).toBe(false)
-  expect(retired.sink.journalSnapshot?.()).toBeNull()
-  live.close()
-})
+    expect(live.sink.journalSnapshot?.()).toEqual({
+      canonicalByToolUse: [],
+      attemptByAgent: [],
+      parents: [],
+      backgrounds: [],
+      subagents: [],
+      threadGoal: { goal: null, row: null }
+    })
+    expect(paused()).toBe(false)
+    expect(retired.sink.journalSnapshot?.()).toBeNull()
+    live.close()
+  }
+)
 
 it('rereads the retained facts after a replacement rolls back before allowing translation', async () => {
   const { journal, live, saved, paused } = await snapshotFixture()

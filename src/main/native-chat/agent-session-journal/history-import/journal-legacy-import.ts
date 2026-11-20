@@ -58,7 +58,13 @@ export type LegacyImportResult =
   | { ok: false; error: string }
 
 type PreparedLegacyImport =
-  | { ok: true; items: JournalReplacementItem[]; sourceEmpty: boolean; forkTipItemIds?: string[] }
+  | {
+      ok: true
+      items: JournalReplacementItem[]
+      sourceEmpty: boolean
+      forkTipItemIds?: string[]
+      sourceFrontier?: string
+    }
   // cause keeps a typed adoption refusal for the caller.
   | { ok: false; error: string; cause?: unknown }
 
@@ -120,7 +126,7 @@ export async function prepareLegacyTranscriptImport(input: {
   }
 
   try {
-    const { items, sourceEmpty, forkTipItemIds } = await decodeReplacementItems({
+    const { items, sourceEmpty, forkTipItemIds, sourceFrontier } = await decodeReplacementItems({
       filePath,
       transcriptAgent,
       agent: input.agent,
@@ -133,7 +139,7 @@ export async function prepareLegacyTranscriptImport(input: {
       decodedMessageIdentities: options.decodedMessageIdentities,
       limits
     })
-    return { ok: true, items, sourceEmpty, forkTipItemIds }
+    return { ok: true, items, sourceEmpty, forkTipItemIds, sourceFrontier }
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err), cause: err }
   }
@@ -197,7 +203,12 @@ async function decodeReplacementItems(input: {
   codexSessionsDirs?: string[]
   signal?: AbortSignal
   limits: JournalPayloadLimits
-}): Promise<{ items: JournalReplacementItem[]; sourceEmpty: boolean; forkTipItemIds: string[] }> {
+}): Promise<{
+  items: JournalReplacementItem[]
+  sourceEmpty: boolean
+  forkTipItemIds: string[]
+  sourceFrontier?: string
+}> {
   const source = input.source
     ? adoptedTranscriptSourceObserver({
         agent: input.agent,
@@ -225,6 +236,7 @@ async function decodeReplacementItems(input: {
       : null
   const forkTip = createImportedForkTip()
   let lineIndex = 0
+  let sourceFrontier: string | undefined
   // A Claude file of metadata alone is one nothing was sent in; an undecodable turn still counts.
   let conversation = input.transcriptAgent !== 'claude'
   try {
@@ -247,6 +259,11 @@ async function decodeReplacementItems(input: {
           pi.record(line, fallbackId, currentLineIndex)
           return null
         }
+        const claudeIdentity =
+          input.transcriptAgent === 'claude' ? tracker.identify(line, currentLineIndex) : null
+        if (claudeIdentity?.provider === 'claude') {
+          sourceFrontier = claudeIdentity.uuid
+        }
         const message = TRANSCRIPT_DECODERS[input.transcriptAgent](line, fallbackId)
         conversation ||= !!message || mayBeClaudeConversationRecord(line)
         if (message) {
@@ -258,7 +275,7 @@ async function decodeReplacementItems(input: {
                   sessionId: input.sessionId,
                   recordId: recordId ?? message.id
                 }
-              : tracker.identify(line, currentLineIndex)
+              : (claudeIdentity ?? tracker.identify(line, currentLineIndex))
           retained.push(toItem(message, identity))
         }
         if (input.transcriptAgent === 'omp') {
@@ -281,7 +298,12 @@ async function decodeReplacementItems(input: {
       await pi.project(retained.push)
     }
     const sourceEmpty = consumedBytes === 0 || !conversation
-    return { items: retained.items(), sourceEmpty, forkTipItemIds: forkTip.settledItems() }
+    return {
+      items: retained.items(),
+      sourceEmpty,
+      forkTipItemIds: forkTip.settledItems(),
+      sourceFrontier
+    }
   } finally {
     pi?.close()
   }

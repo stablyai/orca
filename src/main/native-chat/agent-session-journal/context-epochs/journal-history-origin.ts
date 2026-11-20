@@ -20,7 +20,8 @@ const nativeCopyOrigin = z.object({
   providerHandle: handle,
   unit: z.enum(['codex-turn', 'claude-entry', 'acp-user-message']),
   agent: text,
-  ids: z.array(text)
+  ids: z.array(text),
+  sourceFrontier: text.optional()
 })
 const origin = z.discriminatedUnion('kind', [legacyOrigin, nativeCopyOrigin])
 export type NativeCopyCoverage = Pick<z.infer<typeof nativeCopyOrigin>, 'unit' | 'ids'>
@@ -52,16 +53,14 @@ export function sameJournalConversation(a: unknown, b: unknown): boolean {
 
 export function journalHistoryOrigin(row: JournalEpochRow): JournalHistoryOrigin | null {
   const raw =
-    row.historyOrigin !== undefined
-      ? row.historyOrigin
-      : row.reason === 'legacy_import'
-        ? {
-            version: 1,
-            kind: 'legacy_import',
-            providerHandle: row.providerHandle,
-            importedAt: row.ts
-          }
-        : row.historyOrigin
+    row.reason === 'legacy_import'
+      ? {
+          version: 1,
+          kind: 'legacy_import',
+          providerHandle: row.providerHandle,
+          importedAt: row.ts
+        }
+      : row.historyOrigin
   return raw === undefined ? null : { providerHandle: row.providerHandle, raw }
 }
 

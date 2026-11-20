@@ -153,20 +153,21 @@ export function replaceJournalDomainContext(
       throw new Error('journal context replacement omitted its provider handle')
     }
     const previous = head.historyOrigin
-    const historyOrigin = journalHistoryOrigin({
-      kind: 'epoch',
-      ...journalRowBase(target.epoch, removalSequence, fence, savedAt),
-      reason:
-        operation.reason === 'legacy_import' && !operation.items.length
-          ? 'session_created'
-          : operation.reason,
-      providerHandle,
-      ...(operation.historyOrigin !== undefined
-        ? { historyOrigin: operation.historyOrigin }
-        : previous && sameJournalConversation(previous.providerHandle, providerHandle)
-          ? { historyOrigin: previous.raw }
-          : {})
-    })
+    const historyOrigin =
+      operation.historyOrigin !== undefined
+        ? { providerHandle, raw: operation.historyOrigin }
+        : journalHistoryOrigin({
+            kind: 'epoch',
+            ...journalRowBase(target.epoch, removalSequence, fence, savedAt),
+            reason:
+              operation.reason === 'legacy_import' && !operation.items.length
+                ? 'session_created'
+                : operation.reason,
+            providerHandle,
+            ...(previous && sameJournalConversation(previous.providerHandle, providerHandle)
+              ? { historyOrigin: previous.raw }
+              : {})
+          })
     // A new context in the same physical epoch: its public identity changes, its rows do not move.
     db.prepare(`UPDATE journal_chat_state SET context_boundary=?, derived_turn_item_id=NULL, history_origin_json=?
       WHERE session_id=? AND epoch=? AND epoch IS NOT NULL`).run(
