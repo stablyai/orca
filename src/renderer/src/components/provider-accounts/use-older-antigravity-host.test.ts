@@ -2,7 +2,10 @@
 import { afterEach, expect, it, vi } from 'vitest'
 import { cleanup, renderHook } from '@testing-library/react'
 
-const capability = vi.hoisted(() => ({ state: 'unknown', asked: [] as string[] }))
+const capability = vi.hoisted((): { state: string; asked: string[] } => ({
+  state: 'unknown',
+  asked: []
+}))
 vi.mock('@/runtime/native-chat/host-capabilities/structured-agent-session-host-capability', () => ({
   useStructuredAgentSessionHostCapabilityState: (_host: unknown, name: string) => {
     capability.asked.push(name)

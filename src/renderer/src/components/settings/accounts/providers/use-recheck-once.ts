@@ -5,7 +5,9 @@ import { useEffect, useRef } from 'react'
  *  later. Leaving the waiting state before the delay cancels it, and a later wait arms it again. */
 export function useRecheckOnce(waiting: boolean, delayMs: number, recheck: () => boolean): void {
   const latest = useRef(recheck)
-  latest.current = recheck
+  useEffect(() => {
+    latest.current = recheck
+  })
   const done = useRef(false)
   useEffect(() => {
     if (!waiting || done.current) {
