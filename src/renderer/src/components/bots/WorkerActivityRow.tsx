@@ -101,7 +101,7 @@ export function WorkerActivityRow(props: WorkerActivityRowProps): React.JSX.Elem
     <HoverCard openDelay={400} closeDelay={100} {...placement.root}>
       <div
         className={cn(
-          'group/worker flex w-full min-w-0 items-start gap-1 rounded-sm hover:bg-accent',
+          'group/worker flex w-full min-w-0 items-start gap-1 rounded-sm hover:bg-accent has-[[data-state=open]]:bg-accent',
           props.nested && 'relative'
         )}
       >
