@@ -69,7 +69,6 @@ function normalizeColdChildAntigravityEvent(
     state: stateName,
     prompt: resolvePrompt(state, paneKey, effectivePrompt, { resetOnNewTurn: resetsTurn }),
     agentType: 'antigravity',
-    model: normalizeAntigravityModel(readFirstString(hookPayload, ['modelName', 'model'])),
     toolName: snapshot.toolName,
     toolInput: snapshot.toolInput,
     interactivePrompt: snapshot.interactivePrompt,
