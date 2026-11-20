@@ -77,12 +77,14 @@ it('disconnects when a peer acknowledges a still-running request', async () => {
   pending.resolve(null)
 })
 it('releases a shared cancel signal from every call it settles', async () => {
-  const { client, server } = pair(async (_method, params) => params)
+  const { client, server } = pair(async (method, params) =>
+    method === 'hang' ? new Promise(() => {}) : params
+  )
   const shared = new AbortController()
   for (let i = 0; i < 40; i++) {
     await expect(client.call('echo', i, shared.signal)).resolves.toBe(i)
   }
-  const stuck = client.call('echo', 'late', shared.signal)
+  const stuck = client.call('hang', undefined, shared.signal)
   const rejected = expect(stuck).rejects.toThrow()
   server.close()
   await rejected
