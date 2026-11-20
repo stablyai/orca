@@ -1,0 +1,44 @@
+# Worker teardown
+
+A worker has three distinct endings. Keep them apart, and act only on proof:
+silence, a timeout, or `unverifiable` liveness is still "in progress", never an
+ending.
+
+## Settled: the Task has a verdict
+
+- `worker_done` settles the Dispatch and its Task: `succeeded` completes both,
+  `failed` fails both. A reported failure is a conclusion; never mark it
+  completed.
+- A process exit settles without a report: Orca observes the PTY exit, fails
+  the Dispatch, and mails the coordinator in the same transaction. A
+  deliberate pane close is `lost`; any other end is `exited`. A remote
+  worker's unreported exit reaches the Run home through the stop relay.
+- Three failed starts in one `--retry-of` chain circuit-break the Dispatch and
+  fail the Task; see [Recovery and cleanup](recovery-and-cleanup.md).
+
+## Ended: the session is dormant, not destroyed
+
+A finished worker auto-closes only while its agent rests; a working or
+needs-you worker keeps its terminal. `--keep-open` (or `worker-keep-open`)
+holds one for the user. A closed session is not a destroyed one: the records
+persist, and `send` reopens the worker through its stored resume session.
+Auto-close and keep-open never change the Task's verdict.
+
+## Destroyed: the process is proven gone
+
+- `worker-stop` kills the owned PTY but settles only on a confirmed kill;
+  otherwise the receipt is `stop_unknown`. A later observed exit settles it,
+  and restart recovery reconciles pending stops. Inspect `worker-show` before
+  acting again.
+- `worker-release` archives the output and closes the exact owned terminal.
+  `release_pending` means the terminal is not rediscovered yet or its host is
+  briefly unreachable; recovery retries after the next inventory. On
+  `release_unknown`, inspect `worker-show` and retry `worker-release` with a
+  fresh request ID; never substitute a broad `terminal close`.
+- `worker-abandon` fences and settles the assignment while retaining
+  possibly-live resources. It is not a kill and proves no exit.
+- The settled-worker sweep releases only on a proven process exit; a live or
+  unverifiable process keeps its terminal.
+
+`ORCA orchestration worker-list --run <run_id> --include-remote` gives each
+worker's liveness (`live`, `exited`, `unverifiable`) and `next`; follow it.

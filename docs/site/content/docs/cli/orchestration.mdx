@@ -192,6 +192,10 @@ orca orchestration reset --all
 
 `reset` affects runtime-global orchestration state. Do not run it while another coordinator is active unless that is the intended cleanup.
 
+## When a worker ends
+
+A worker has three distinct endings. **Settled** — the Task has a verdict: `worker_done` (`succeeded` completes, `failed` fails), or an observed process exit, which fails the Dispatch and mails the coordinator (`exited`, or `lost` when a person closed the pane). **Ended** — the session is dormant, not destroyed: finished workers auto-close only while the agent rests, kept-open workers stay for the user, records persist, and `send` reopens a closed worker through its stored resume session. **Destroyed** — the process is proven gone: `worker-stop` settles only on a confirmed kill (`stop_unknown` otherwise), `worker-release` archives and closes the exact owned terminal (`release_pending` retries after the next inventory; on `release_unknown`, inspect `worker-show` and retry with a fresh request ID), and the sweep releases only proven exits. Silence, a timeout, or unverifiable liveness is never an ending, and `worker-abandon` fences an assignment without proving exit. The full guide's `references/worker-teardown.md` states the contract and state glossary.
+
 ## Choosing the right command
 
 Use `orca orchestration send` for a one-way message to another agent. For ordinary mail, a chat receives the whole message with its sender header (a message too large for one chat message gets a note to run `orca orchestration check` instead), Orca never types your words into a terminal agent's input (it reads mail through `check`), and the receipt means the mail was stored, not read. A send to a finished worker's `dispatch:<id>` can instead start a follow-up Task, whose body the worker gets as its task; the receipt says which. Use `orca terminal send` for shells, dev servers and REPLs, never to message an agent.

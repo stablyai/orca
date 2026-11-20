@@ -127,5 +127,6 @@ assignment does not prove its agent stopped.
 | Child worktrees, SSH, WSL, a connected server  | `references/placement-and-remote.md` |
 | Group messages                                 | `references/messaging-and-gates.md`  |
 | A failed or unknown worker; retry, stop, reset | `references/recovery-and-cleanup.md` |
+| How a worker ends: settled, ended, destroyed   | `references/worker-teardown.md`      |
 | Several independent workers at once            | `references/parallel-start.md`       |
 | Custom argv or terminal layout                 | `references/low-level-topology.md`   |
