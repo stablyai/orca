@@ -69,6 +69,9 @@ export function finalizeWindowsLocalPtySpawnEnvironment(args: {
       // Import the custom query variable so the WSL startup wrapper can consume it.
       addWslEnvKeys(env, [ORCA_HERMES_STARTUP_QUERY_ENV])
     }
+    if (spawn.env?.KITTY_WINDOW_ID !== undefined && env.KITTY_WINDOW_ID !== undefined) {
+      addWslEnvKeys(env, ['KITTY_WINDOW_ID/u'])
+    }
   } else if (codexHomeWslInfo || isWslCodexHomeForHost(env.CODEX_HOME)) {
     // Windows cannot use guest Codex paths; clear the alias too or shell-ready would restore it.
     delete env.CODEX_HOME

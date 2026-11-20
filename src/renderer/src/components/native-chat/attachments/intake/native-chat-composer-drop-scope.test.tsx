@@ -55,6 +55,8 @@ vi.mock('electron', () => ({
 }))
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), loading: vi.fn(), dismiss: vi.fn() } }))
 vi.mock('@/i18n/i18n', () => ({
+  // The composer's agent logos load the agent catalog, whose labels read the language.
+  i18n: { language: 'en' },
   translate: (_key: string, fallback: string, values?: Record<string, unknown>) =>
     fallback.replace(/\{\{(\w+)\}\}/g, (_match, name: string) => String(values?.[name]))
 }))

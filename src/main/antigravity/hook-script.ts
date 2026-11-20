@@ -6,7 +6,6 @@ import {
   buildPosixHookSpoolLines,
   buildWindowsHookEnvironmentGuardLines
 } from '../agent-hooks/installation/scripts/hook-stdin-contract'
-import { ANTIGRAVITY_PRE_TOOL_USE_DECISION } from './hook-events'
 
 export function getManagedScript(
   target: 'local' | 'posix' = 'local',
@@ -19,9 +18,7 @@ export function getManagedScript(
       'setlocal DisableDelayedExpansion',
       'if /I "%ORCA_ANTIGRAVITY_EVENT%"=="Stop" (',
       '  echo {"decision":""}',
-      ') else if /I "%ORCA_ANTIGRAVITY_EVENT%"=="PreToolUse" (',
-      `  echo ${ANTIGRAVITY_PRE_TOOL_USE_DECISION}`,
-      ') else (',
+      ') else if /I not "%ORCA_ANTIGRAVITY_EVENT%"=="PreToolUse" (',
       '  echo {}',
       ')',
       'if defined ORCA_AGENT_HOOK_ENDPOINT if exist "%ORCA_AGENT_HOOK_ENDPOINT%" call "%ORCA_AGENT_HOOK_ENDPOINT%" 2>nul',
@@ -41,7 +38,6 @@ export function getManagedScript(
     '    printf \'{"decision":""}\\n\'',
     '    ;;',
     '  PreToolUse)',
-    `    printf '${ANTIGRAVITY_PRE_TOOL_USE_DECISION}\\n'`,
     '    ;;',
     '  *)',
     '    printf "{}\\n"',
@@ -91,9 +87,7 @@ export function getWindowsWrapperScript(eventName: string): string {
     ')',
     'if /I "%ORCA_ANTIGRAVITY_EVENT%"=="Stop" (',
     '  echo {"decision":""}',
-    ') else if /I "%ORCA_ANTIGRAVITY_EVENT%"=="PreToolUse" (',
-    `  echo ${ANTIGRAVITY_PRE_TOOL_USE_DECISION}`,
-    ') else (',
+    ') else if /I not "%ORCA_ANTIGRAVITY_EVENT%"=="PreToolUse" (',
     '  echo {}',
     ')',
     ...buildWindowsHookEnvironmentGuardLines(),

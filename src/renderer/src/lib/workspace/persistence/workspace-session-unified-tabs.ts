@@ -225,11 +225,14 @@ export function editorPlacementsInContentOwners(
   const movedTabs: Tab[] = []
   const moved = new Set<string>()
   const targets = new Set<string>()
-  const usedGroupIds = new Set(
-    Object.entries(groupsByWorkspace).flatMap(([id, groups]) =>
-      sourceWorkspaceIds?.has(id) ? [] : groups.map((group) => group.id)
-    )
-  )
+  // Only a scoped rebuild reuses a moved tab's group id, so only it pays to index the fleet's groups.
+  const usedGroupIds = sourceWorkspaceIds
+    ? new Set(
+        Object.entries(groupsByWorkspace).flatMap(([id, groups]) =>
+          sourceWorkspaceIds.has(id) ? [] : groups.map((group) => group.id)
+        )
+      )
+    : null
   for (const [workspaceId, tabs] of Object.entries(sourceTabs)) {
     if (sourceWorkspaceIds && !sourceWorkspaceIds.has(workspaceId)) {
       continue
@@ -241,7 +244,8 @@ export function editorPlacementsInContentOwners(
     // Keep the live array when nothing moved so saves can tell the workspace is unchanged.
     sourceTabs[workspaceId] = kept.length === tabs.length ? tabs : kept
   }
-  const existingPlacements = editorPlacementIndex(sourceTabs)
+  // Indexed on the first foreign edit tab; a save with none skips the fleet-wide walk.
+  let existingPlacements: ReturnType<typeof editorPlacementIndex> | null = null
   for (const [workspaceId, tabs] of Object.entries(tabsByWorkspace)) {
     if (sourceWorkspaceIds && !sourceWorkspaceIds.has(workspaceId)) {
       continue
@@ -252,6 +256,7 @@ export function editorPlacementsInContentOwners(
         continue
       }
       const owner = file.worktreeId
+      existingPlacements ??= editorPlacementIndex(sourceTabs)
       if (existingPlacements.workspacesByEntityId.get(file.id)?.has(owner)) {
         continue
       }
@@ -266,10 +271,8 @@ export function editorPlacementsInContentOwners(
       }
       const groupId =
         sourceGroups[owner]?.[0]?.id ??
-        (sourceWorkspaceIds && !usedGroupIds.has(tab.groupId)
-          ? tab.groupId
-          : `restored-editor:${owner}`)
-      usedGroupIds.add(groupId)
+        (usedGroupIds && !usedGroupIds.has(tab.groupId) ? tab.groupId : `restored-editor:${owner}`)
+      usedGroupIds?.add(groupId)
       const movedTab = {
         ...tab,
         worktreeId: owner,

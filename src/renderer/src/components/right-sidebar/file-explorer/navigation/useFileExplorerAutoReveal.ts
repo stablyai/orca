@@ -12,6 +12,7 @@ type UseFileExplorerAutoRevealParams = {
   displayRootPath?: string | null
   pendingExplorerReveal: { worktreeId: string; filePath: string; requestId: number } | null
   openFiles: OpenFile[]
+  hasNameFilterQuery: boolean
   rowProjection: FileExplorerRowProjection
   setSelectedPath: (path: string | null) => void
   virtualizer: Virtualizer<HTMLDivElement, Element>
@@ -25,6 +26,7 @@ export function useFileExplorerAutoReveal({
   displayRootPath = worktreePath,
   pendingExplorerReveal,
   openFiles,
+  hasNameFilterQuery,
   rowProjection,
   setSelectedPath,
   virtualizer
@@ -44,6 +46,12 @@ export function useFileExplorerAutoReveal({
 
   useEffect(() => {
     if (activeFileId === prevActiveFileIdRef.current) {
+      return
+    }
+    // Why: while the tree is hidden, leave the file unhandled so it is revealed when the tree is shown,
+    // unless a kept name filter would be cleared by that reveal.
+    if (!worktreePath && !hasNameFilterQuery) {
+      prevActiveFileIdRef.current = null
       return
     }
     prevActiveFileIdRef.current = activeFileId
@@ -100,6 +108,7 @@ export function useFileExplorerAutoReveal({
     displayRootPath,
     pendingExplorerReveal,
     openFiles,
+    hasNameFilterQuery,
     rowProjection,
     setSelectedPath,
     virtualizer

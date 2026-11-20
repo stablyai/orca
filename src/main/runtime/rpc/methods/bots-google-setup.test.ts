@@ -129,6 +129,7 @@ describe('bots.googleSetup', () => {
       ok: true,
       result: { run: { botId: 'ivy', mode: 'guide-here' } }
     })
+    expect(offers).toEqual([])
     expect(
       await dispatcher.dispatch(
         request('bots.googleSetup.read', { botToken: 'ivy-token', callerSessionId: 'ivy-chat' })
@@ -399,20 +400,12 @@ describe("a bot's Google setup start when Google's app is already here", () => {
     expect(store.runs?.get('ivy')).toBeNull()
   })
 
-  it.each([
-    ['nobody signed in', []],
-    ['only a sign-in Google ended', [{ ...signedIn, status: 'reconnect' }]]
-  ])('offers the card to a bot with Google on but %s', async (_case, accounts) => {
+  it('offers the card when a bot has Google on and the account needs to reconnect', async () => {
     bot.google = true
     google.client = { clientId: 'c1' }
-    google.accounts = accounts
+    google.accounts = [{ ...signedIn, status: 'reconnect' }]
     expect(await start()).toMatchObject({ ok: true, result: { routed: 'offer' } })
     expect(offered()).toEqual([['ivy-chat', { botId: 'ivy', source: 'google' }]])
-  })
-
-  it('starts the full setup when there is no Google app here', async () => {
-    expect(await start()).toMatchObject({ ok: true, result: { run: { botId: 'ivy' } } })
-    expect(offers).toEqual([])
   })
 
   it('resumes a running setup rather than routing it, so a retry after sign-in keeps its checks', async () => {

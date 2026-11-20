@@ -1,7 +1,7 @@
-// The item view's comment box: chat's prompt editor and attachment pieces in a small box. Like the chat
-// composer, Enter sends and Shift+Enter adds a line; images paste, drop or attach as thumbnails with an
-// "Image #N" pill at the caret, other files as `@path` pills. Uploads go to the item's chat on the bot's
-// host, which then holds them as its own.
+// The item view's comment box: chat's prompt editor and attachment pieces, the text on top and its tools
+// below, sized for a multi-part answer. Like the chat composer, Enter sends and Shift+Enter adds a line;
+// images paste, drop or attach as thumbnails with an "Image #N" pill at the caret, other files as `@path`
+// pills. Uploads go to the item's chat on the bot's host, which then holds them as its own.
 import {
   useCallback,
   useImperativeHandle,
@@ -49,7 +49,9 @@ import { imageReferencesToPromptMarkers } from '../../../../../shared/native-cha
 import type { Bot } from '../../../../../shared/bot-types'
 import { BOT_ITEM_LIMITS, type BotItem } from '../../../../../shared/bots/bot-items'
 import { botRefKey } from '@/lib/bot-hosts'
-import { useClearOfFloatingTrigger } from './use-clear-of-floating-trigger'
+import { useKeepFloatingTerminalTriggerClear } from '../../floating-terminal/trigger/floating-terminal-trigger-keep-clear'
+import { BOT_ITEM_TOOL_ROW_TOUCH_FIT } from './BotItemStepper'
+import { cn } from '@/lib/class-names'
 import {
   useBotItemCommentAttachments,
   type BotItemCommentAttachTarget
@@ -57,6 +59,8 @@ import {
 
 export type BotItemCommentBoxHandle = {
   focus: () => void
+  /** Focus the box with the caret after its text, as when coming back to a draft. */
+  focusEnd: () => void
   /** Focus the box and type `text` at its caret. */
   type: (text: string) => void
 }
@@ -72,6 +76,7 @@ export function BotItemCommentBox({
   attachTo,
   onSend,
   hidden = false,
+  nav,
   ref
 }: {
   bot: Bot
@@ -82,6 +87,8 @@ export function BotItemCommentBox({
   onSend: (text: string, paths: readonly string[]) => void
   /** Behind the open question's card: files dropped on the pane are not taken into its hidden draft. */
   hidden?: boolean
+  /** The item pane's previous / next arrows, between the attach and mic buttons. */
+  nav?: React.ReactNode
   ref?: Ref<BotItemCommentBoxHandle>
 }): React.JSX.Element {
   const t = useTranslate()
@@ -93,7 +100,7 @@ export function BotItemCommentBox({
   const box = useRef<HTMLDivElement | null>(null)
   const input = useRef<NativeChatComposerInput | null>(null)
   const composer = useRef<NativeChatComposerHandle | null>(null)
-  const lift = useClearOfFloatingTrigger(box)
+  useKeepFloatingTerminalTriggerClear(box)
   const dictation = useNativeChatDictation(input, false)
   const access = useBotItemCommentAttachments(bot, item, attachTo)
   const [activeSuggestion, setActiveSuggestion] = useState(0)
@@ -206,6 +213,11 @@ export function BotItemCommentBox({
 
   useImperativeHandle(ref, () => ({
     focus: () => input.current?.focus(),
+    focusEnd: () => {
+      const node = input.current
+      node?.focus()
+      node?.setSelectionRange(node.value.length, node.value.length)
+    },
     type: (typed) => void composer.current?.insertTypedText(typed)
   }))
 
@@ -310,12 +322,12 @@ export function BotItemCommentBox({
   }
   return (
     // Click-to-focus for the padding; the editor itself stays the keyboard target.
+    // Text on top at full width, its tools in a row below; the same 12 px inset on every side.
     <div
       ref={box}
       data-native-chat-composer-scope={scopeKey}
       onClick={focusAtEnd}
-      className="mx-3 mb-3 mt-2 shrink-0 cursor-text rounded-[10px] border border-border bg-background p-1.5 focus-within:border-foreground/20"
-      style={lift > 0 ? { marginBottom: 12 + lift } : undefined}
+      className="mx-3 mb-3 mt-2 flex shrink-0 cursor-text flex-col rounded-[10px] border border-border bg-background p-3 focus-within:border-foreground/20"
     >
       {mentions.autocomplete.mode === 'mention' ? (
         <NativeChatMentionMenu
@@ -325,10 +337,12 @@ export function BotItemCommentBox({
           onChoose={mentions.chooseMention}
         />
       ) : null}
-      <NativeChatComposerNotices notices={notices} className="mb-1.5 px-1" />
+      <NativeChatComposerNotices notices={notices} className="mb-2" />
       {images.length > 0 ? (
-        // Two rows of chips, then they scroll, so the text and send button stay reachable.
-        <div className="scrollbar-sleek mb-1 flex max-h-[128px] flex-wrap gap-2 overflow-y-auto px-1 pt-1">
+        // Two rows of chips (fewer in a short pane), then they scroll, so the text and send button stay
+        // reachable. The scroller clips, so it leaves room for each chip's focus ring and, top and right,
+        // its remove button; the negative margin keeps the chips on the text's left edge.
+        <div className="scrollbar-sleek -ml-0.5 mb-1.5 flex max-h-[min(128px,14cqh)] flex-wrap gap-2 overflow-y-auto pb-0.5 pl-0.5 pr-2 pt-2">
           {images.map((attachment, index) => (
             <NativeChatImageAttachmentPreview
               key={attachment.id}
@@ -340,39 +354,40 @@ export function BotItemCommentBox({
           ))}
         </div>
       ) : null}
-      <div className="flex items-end gap-1">
+      <NativeChatPromptEditor
+        key={scopeKey}
+        scopeKey={scopeKey}
+        imageRow={imageRow}
+        inputRef={input}
+        isComposing={ime.isComposing}
+        initialValue={draft}
+        disabled={false}
+        aria-label={t('bots.items.comment.label', 'Comment')}
+        aria-expanded={mentions.autocomplete.mode !== 'none'}
+        aria-controls={mentions.autocomplete.mode !== 'none' ? picker.listboxId : undefined}
+        placeholder={t('bots.items.comment.add', 'Add a comment…')}
+        onChange={editorChange}
+        onSelect={editorSelect}
+        onPasteCapture={editorPaste}
+        onKeyDownCapture={editorKeyDown}
+        onCompositionStart={editorCompositionStart}
+        onCompositionEnd={editorCompositionEnd}
+        onBlur={editorBlur}
+        // Room for a multi-part answer: 4 lines of 19 px at rest, growing to 12 lines, then it scrolls.
+        // In a short pane both give way (`cqh` is the item pane's height), so the activity above stays
+        // in view and the send stays on screen.
+        className="scrollbar-sleek block max-h-[min(228px,25cqh)] min-h-[min(76px,12cqh)] w-full overflow-y-auto bg-transparent text-[13px] leading-[19px] text-foreground outline-none"
+      />
+      {/* The send circle sets the row's height; the ghost buttons overhang it, so their glyphs sit on
+          the text's left edge and level with the send. */}
+      <div className={cn('mt-2 flex items-center gap-1', nav ? BOT_ITEM_TOOL_ROW_TOUCH_FIT : null)}>
         {access.session ? (
-          <NativeChatAttachButton onAttach={fileDrops.pickAttachments} />
-        ) : (
-          <span className="w-1" />
-        )}
-        {/* The editor styles its own element; this wrapper takes the row's width. */}
-        <div className="min-w-0 flex-1">
-          <NativeChatPromptEditor
-            key={scopeKey}
-            scopeKey={scopeKey}
-            imageRow={imageRow}
-            inputRef={input}
-            isComposing={ime.isComposing}
-            initialValue={draft}
-            disabled={false}
-            aria-label={t('bots.items.comment.label', 'Comment')}
-            aria-expanded={mentions.autocomplete.mode !== 'none'}
-            aria-controls={mentions.autocomplete.mode !== 'none' ? picker.listboxId : undefined}
-            placeholder={t('bots.items.comment.add', 'Add a comment…')}
-            onChange={editorChange}
-            onSelect={editorSelect}
-            onPasteCapture={editorPaste}
-            onKeyDownCapture={editorKeyDown}
-            onCompositionStart={editorCompositionStart}
-            onCompositionEnd={editorCompositionEnd}
-            onBlur={editorBlur}
-            // 8 lines of 19 px, then it scrolls.
-            className="scrollbar-sleek my-1.5 block max-h-[152px] min-h-[19px] w-full overflow-y-auto bg-transparent text-[13px] leading-[19px] text-foreground outline-none"
-          />
-        </div>
-        {/* Centred in the + button's row height, so it sits level with the + and the last line. */}
-        <div className="flex h-8 shrink-0 items-center gap-1 pointer-coarse:h-11">
+          <span className="-my-1 -ml-2 flex">
+            <NativeChatAttachButton onAttach={fileDrops.pickAttachments} />
+          </span>
+        ) : null}
+        {nav}
+        <span className={cn('-my-1 flex', nav ? null : 'ml-auto')}>
           <NativeChatDictationButton
             disabled={dictation.dictationDisabled}
             isDictating={dictation.isDictating}
@@ -381,15 +396,15 @@ export function BotItemCommentBox({
             onHoldStart={dictation.startHoldDictation}
             onHoldEnd={dictation.stopHoldDictation}
           />
-          <NativeChatComposerPrimaryButton
-            size="compact"
-            aria-label={t('bots.items.comment.submit', 'Comment')}
-            disabled={empty || pending}
-            onClick={send}
-          >
-            <ArrowUp className="size-3.5" />
-          </NativeChatComposerPrimaryButton>
-        </div>
+        </span>
+        <NativeChatComposerPrimaryButton
+          size="compact"
+          aria-label={t('bots.items.comment.submit', 'Comment')}
+          disabled={empty || pending}
+          onClick={send}
+        >
+          <ArrowUp className="size-3.5" />
+        </NativeChatComposerPrimaryButton>
       </div>
     </div>
   )

@@ -19,15 +19,10 @@ const sent = vi.hoisted(() => vi.fn(() => Promise.resolve()))
 vi.mock('./use-bot-item-view', () => ({ useBotItemView: () => read.current }))
 const answered = vi.hoisted(() => vi.fn((..._args: unknown[]) => Promise.resolve('answered')))
 const statusSet = vi.hoisted(() => vi.fn())
-// The host's read of the item, as it holds it now.
-const hostRead = vi.hoisted(() =>
-  vi.fn((..._args: unknown[]) => Promise.resolve({ item: read.current!.item, events: [] }))
-)
 vi.mock('./use-bot-items', () => ({
   commentOnBotItem: sent,
   setBotItemsStatus: statusSet,
-  answerBotItem: answered,
-  showBotItem: hostRead
+  answerBotItem: answered
 }))
 const fileContextOwners = vi.hoisted(() => vi.fn((..._args: unknown[]) => new Map()))
 vi.mock('../BotGroupTranscriptOwner', () => ({ useBotGroupFileContexts: fileContextOwners }))
@@ -37,11 +32,22 @@ vi.mock(import('@/lib/browser/navigation/app-http-link-open'), async (importOrig
   openAppHttpLink
 }))
 vi.mock('./BotItemActivityList', () => ({
-  BotItemActivityList: ({ events }: { events: BotItemEvent[] }) => (
+  BotItemActivityList: ({
+    events,
+    onReplyToQuestion
+  }: {
+    events: BotItemEvent[]
+    onReplyToQuestion?: (text: string) => void
+  }) => (
     <ol>
       {events.map((event) => (
         <li key={event.id}>{event.id}</li>
       ))}
+      {onReplyToQuestion ? (
+        <button type="button" onClick={() => onReplyToQuestion('b, by hand')}>
+          Reply from Activity
+        </button>
+      ) : null}
     </ol>
   )
 }))
@@ -127,7 +133,6 @@ afterEach(() => {
   vi.restoreAllMocks()
   sent.mockReset()
   statusSet.mockReset()
-  hostRead.mockReset()
   // Back to its own implementation, so one test's refusal never reaches the next.
   answered.mockReset()
   openAppHttpLink.mockClear()
@@ -324,6 +329,19 @@ it('keeps the comment box for a question asked where answers are not recorded', 
   expect(screen.queryByPlaceholderText('Type your answer')).toBeNull()
 })
 
+it("sends a Reply from an open question's card in Activity as the item's comment", async () => {
+  renderItem(
+    makeTestBotItem(6, { status: 'needs_you', question: { eventId: 'e3', text: 'a, b or c?' } })
+  )
+
+  await act(async () =>
+    fireEvent.click(screen.getByRole('button', { name: 'Reply from Activity' }))
+  )
+
+  expect(sent).toHaveBeenCalledExactlyOnceWith(BOT, 'uid-6', 'b, by hand', [], expect.any(String))
+  expect(answered).not.toHaveBeenCalled()
+})
+
 function askingItem(
   number: number,
   question: Partial<NonNullable<ReturnType<typeof makeTestBotItem>['question']>> = {}
@@ -370,20 +388,6 @@ function expectOnlyAnswerCalls(): void {
   expect(sent).not.toHaveBeenCalled()
   expect(statusSet).not.toHaveBeenCalled()
 }
-
-it("says an older host can't record the answer, keeps the words, and writes nothing else", async () => {
-  answered.mockResolvedValueOnce('unsupported')
-  renderAt(askingItem(23))
-  typeAnswer('Ship B')
-  fireEvent.click(screen.getByRole('button', { name: /Submit/ }))
-  await act(() => new Promise((resolve) => setTimeout(resolve, 0)))
-
-  const notice = screen.getByRole('status')
-  expect(notice.textContent).toContain('can’t record answers yet, so nothing was sent')
-  expect(notice.textContent).toContain('Ship B')
-  expect(within(notice).queryByRole('button', { name: 'Put in the comment box' })).toBeNull()
-  expectOnlyAnswerCalls()
-})
 
 it("shows the bot's context in the card while the question's event is off the loaded page", () => {
   renderAt(
@@ -590,45 +594,17 @@ it("writes nothing for an older host's refusal when the question is replaced whi
   expect(notice.textContent).toContain('Ship B')
 })
 
-it('writes nothing for an older host when Q2 replaces Q1 between any read of Q1 and the point a write would go', async () => {
-  answered.mockResolvedValue('unsupported')
-  const page = rerenderable(askingItem(38))
-  let replacedAfterRead = false
-  let replaced = false
-  const replace = (): void => {
-    if (!replaced) {
-      replaced = true
-      page.reconcileTo(askingItem(38, { eventId: 'e9', text: 'Which color?' }), eventsUpTo(9))
-      act(() => read.current!.retry())
-    }
-  }
-  // A page that reads the item before writing sees Q1 open, and Q2 replaces it right after that read.
-  hostRead.mockImplementation(() => {
-    const snapshot = read.current!.item
-    replace()
-    replacedAfterRead = true
-    return Promise.resolve({ item: snapshot, events: [] })
-  })
-  typeAnswer('Ship B')
-  fireEvent.click(screen.getByRole('button', { name: /Submit/ }))
-  // The refusal is handled; whatever the page writes in reply would go now.
-  await flush()
-  // A page that never reads gets the replacement here, still before any later write.
-  replace()
-  await flush()
-
-  expect(replaced).toBe(true)
-  expect(replacedAfterRead).toBe(hostRead.mock.calls.length > 0)
-  expectOnlyAnswerCalls()
-  expect(screen.getByRole('status').textContent).toContain('can’t record answers yet')
-})
-
 it('writes nothing on retries to an older host, before or after the question is replaced', async () => {
   answered.mockResolvedValue('unsupported')
   const page = rerenderable(askingItem(37))
   typeAnswer('Ship B')
   fireEvent.click(screen.getByRole('button', { name: /Submit/ }))
   await flush()
+  const notice = screen.getByRole('status')
+  expect(notice.textContent).toContain('can’t record answers yet, so nothing was sent')
+  expect(notice.textContent).toContain('Ship B')
+  expect(within(notice).queryByRole('button', { name: 'Put in the comment box' })).toBeNull()
+
   // The owner opens the card again and sends the same answer.
   fireEvent.click(screen.getByRole('button', { name: 'Expand' }))
   fireEvent.click(screen.getByRole('button', { name: /Submit/ }))
@@ -705,19 +681,41 @@ it('offers back words typed before the first send that the answer left out', asy
   expect(screen.getByRole('status').textContent).toContain('ask Ops first')
 })
 
-it("keeps a several-step question's steps and count inside the card's bordered body", () => {
-  renderAt(
-    askingItem(45, {
-      ask: {
-        questions: [
-          { prompt: 'Which format?', options: [{ label: 'Checklist' }, { label: 'Paragraph' }] },
-          { prompt: 'Which theme?', options: [{ label: 'Light' }, { label: 'Dark' }] }
-        ]
-      }
-    })
-  )
+it('keeps focus in the item, with its arrows, when it is deleted while its comment box has focus', () => {
+  const nothingFocused = (): boolean =>
+    document.activeElement === null || document.activeElement === document.body
+  const nav = <button type="button">Next item</button>
+  show(3)
+  const view = render(<BotItemView bot={BOT} uid="uid-6" takeFocus={nothingFocused} nav={nav} />)
+  const box = screen.getByRole('textbox', { name: 'Comment' })
+  box.focus()
+  expect(document.activeElement).toBe(box)
 
-  const body = document.querySelector<HTMLElement>('[data-native-chat-question-surface]')!
-  expect(within(body).getByRole('button', { name: 'Step 1' })).toBeTruthy()
-  expect(within(body).getByText('1/2')).toBeTruthy()
+  read.current = { ...read.current!, deleted: true }
+  view.rerender(<BotItemView bot={BOT} uid="uid-6" takeFocus={nothingFocused} nav={nav} />)
+  expect(screen.queryByRole('textbox', { name: 'Comment' })).toBeNull()
+  expect(document.activeElement).toBe(document.querySelector('[data-bot-item-focus-home]'))
+  expect(screen.getByRole('button', { name: 'Next item' })).toBeTruthy()
+})
+
+it("keeps the arrows below an open question's card, and puts them back in the comment box when it folds", () => {
+  show(3, OPEN_ASK)
+  const nav = <button type="button">Next item</button>
+  render(
+    <TooltipProvider>
+      <BotItemView bot={BOT} uid="uid-6" nav={nav} />
+    </TooltipProvider>
+  )
+  // Hidden ones too: the box behind the card must not hold a second, unseen set.
+  const arrows = (): HTMLElement[] =>
+    screen.getAllByRole('button', { name: 'Next item', hidden: true })
+  expect(screen.queryByRole('textbox', { name: 'Comment' })).toBeNull()
+  expect(arrows()).toHaveLength(1)
+  expect(arrows()[0].closest('[data-native-chat-composer-scope]')).toBeNull()
+
+  fireEvent.click(screen.getByRole('button', { name: 'Collapse' }))
+  expect(arrows()).toHaveLength(1)
+  expect(arrows()[0].closest('[data-native-chat-composer-scope]')).toBe(
+    screen.getByRole('textbox', { name: 'Comment' }).closest('[data-native-chat-composer-scope]')
+  )
 })

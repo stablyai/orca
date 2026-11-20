@@ -191,9 +191,12 @@ it('leads with Done when the link already serves the bot as it is', async () => 
 
 it('updates the link from the picks and note it was last published with', async () => {
   calls.last.value = { selection: { skills: [] }, setupNote: 'Connect Slack first.' }
-  render(<BotShareFlow bot={bot} link={link('older')} onClose={() => {}} />)
+  const previousLink = link('older')
+  const onClose = () => {}
+  const view = render(<BotShareFlow bot={bot} link={previousLink} onClose={onClose} />)
   // Update link is live only once the share's last picks are read back.
   await screen.findByText(/Bot changed since/)
+  view.rerender(<BotShareFlow bot={{ ...bot }} link={previousLink} onClose={onClose} />)
   fireEvent.click(screen.getByRole('button', { name: 'Update link' }))
 
   expect(await screen.findByText('Updated just now')).toBeDefined()

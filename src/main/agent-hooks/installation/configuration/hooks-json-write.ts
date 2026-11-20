@@ -10,6 +10,7 @@ import { dirname, join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { resolveHooksJsonWritePath } from './hook-config-write-path'
 import { writeRollingFileBackup } from '../../../filesystem/rolling-file-backup'
+import { assertGuardedFileCurrent } from '../../../filesystem/concurrent-file-edit-guard'
 
 export function writeHooksJson(
   configPath: string,
@@ -50,10 +51,13 @@ export function writeHooksJson(
       // Preserve requested permissions even with a stricter process umask.
       chmodSync(tmpPath, existingMode)
     }
+    // A rejected update must not rotate the backup first.
+    assertGuardedFileCurrent(writePath)
     // Keep one prior version for recovery from a bad merge.
     if (existsSync(writePath)) {
       writeRollingFileBackup(writePath, `${writePath}.bak`)
     }
+    assertGuardedFileCurrent(writePath)
     renameSync(tmpPath, writePath)
     observeFilePublication(writePath, serialized)
   } finally {

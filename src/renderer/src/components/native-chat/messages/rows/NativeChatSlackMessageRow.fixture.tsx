@@ -4,6 +4,7 @@ import { storedConnectorAsker } from '../../../../../../shared/connector-message
 import type { ConnectorAsker } from '../../../../../../shared/connectors/connector-cloud-contract'
 import { projectStructuredItemToNativeChat } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
 import { MessageRow } from './NativeChatMessageRow'
+import { NativeChatSlackPeopleContext } from '../../native-chat-markdown-mentions'
 
 const ASKER: ConnectorAsker = {
   userId: 'U0SAM',
@@ -41,3 +42,35 @@ function SlackMessage(): React.JSX.Element {
 }
 
 export const slackMarkup = defineFixture({ width: 640, render: () => <SlackMessage /> })
+
+function AgentReply(): React.JSX.Element {
+  const message = projectStructuredItemToNativeChat({
+    itemId: 'agent-reply',
+    sequence: 2,
+    revision: 0,
+    observedAt: 0,
+    body: {
+      kind: 'message',
+      role: 'assistant',
+      blocks: [
+        {
+          type: 'text',
+          text:
+            '<@U0SAM> The limit of about 5 is per channel. <!here> ask <@U0ANN|Ann Park> or ' +
+            '<@U0ZED>; the raw form stays in code: `<@U0SAM>`'
+        }
+      ]
+    }
+  })
+  return (
+    <NativeChatSlackPeopleContext value={new Map([['U0SAM', 'Sam Lee']])}>
+      <div className="native-chat-appearance p-4">
+        {message ? (
+          <MessageRow message={message} expandSignal={false} onScrollMessageToTop={() => {}} />
+        ) : null}
+      </div>
+    </NativeChatSlackPeopleContext>
+  )
+}
+
+export const agentReplyMentions = defineFixture({ width: 640, render: () => <AgentReply /> })

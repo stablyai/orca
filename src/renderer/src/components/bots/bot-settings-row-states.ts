@@ -105,11 +105,6 @@ export function toolsLine(
   if (!tools) {
     return null
   }
-  if ('unsupported' in tools) {
-    return translate('bots.settingsPage.toolsInAgent', 'Set up in {{agent}}', {
-      agent: agentLabel
-    })
-  }
   const own = tools.own.map((tool) => botToolTitle(tool.name))
   const inherited = tools.inherited.length
   if (own.length === 0) {

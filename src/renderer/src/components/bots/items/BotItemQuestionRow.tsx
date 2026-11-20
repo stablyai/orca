@@ -2,7 +2,7 @@
 // then the recorded answer ("You answered: …") or that none came. Open, its answerable card sits in the
 // comment box's place, so here it is only chat's "Awaiting user input" line when later entries follow
 // it; a question this page can't answer in a card (an older host) shows here in the open look instead,
-// and the comment box below takes the reply.
+// with its own Reply, which sends a comment as the comment box below does.
 import { Check } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { uiDateTimeFormat } from '@/i18n/ui-intl-formatters'
@@ -26,6 +26,7 @@ import {
 } from './BotItemAskLook'
 import { BotItemClampedText } from './BotItemClampedText'
 import { BOT_ITEM_COMMENT_ATTRIBUTE } from './BotItemCommentCard'
+import { BotItemQuestionReply } from './BotItemQuestionReply'
 
 const TIME = { hour: 'numeric', minute: '2-digit' } as const
 
@@ -64,7 +65,8 @@ export function BotItemQuestionCard({
   event,
   state,
   answer,
-  onJump
+  onJump,
+  reply
 }: {
   item: BotItem
   event: BotItemEvent
@@ -73,6 +75,8 @@ export function BotItemQuestionCard({
   answer?: BotItemEvent
   /** Scrolls to and focuses another comment (a reply that answered), by its event id. */
   onJump?: (eventId: string) => void
+  /** While open, its Reply: `key` keeps the words per question, `send` sends them as a comment. */
+  reply?: { key: string; send: (text: string) => void }
 }): React.JSX.Element {
   const t = useTranslate()
   const open = state === 'open'
@@ -81,6 +85,7 @@ export function BotItemQuestionCard({
   const lines = recorded ? botItemAnswerLines(ask, recorded.answers) : []
   const decisions = ask ? ask.questions.map((question) => question.prompt) : [textOf(event)]
   const time = uiDateTimeFormat(TIME).format(answer?.at ?? event.at)
+  const asker = botItemActorName(event, item, t)
   return (
     // Opaque under the card, so the Activity rail never shows through its dimmed fill.
     <div className="relative my-2 rounded-[14px] bg-sidebar">
@@ -98,9 +103,7 @@ export function BotItemQuestionCard({
       >
         <div className="flex min-w-0 items-center gap-2 text-2xs text-muted-foreground">
           {open ? <BotItemWaitingFlag /> : null}
-          <span className={cn('min-w-0 truncate', open && 'ml-auto')}>
-            {botItemActorName(event, item, t)}
-          </span>
+          <span className={cn('min-w-0 truncate', open && 'ml-auto')}>{asker}</span>
           <span className={cn('shrink-0 tabular-nums', !open && 'ml-auto')}>
             {uiDateTimeFormat(TIME).format(event.at)}
           </span>
@@ -112,7 +115,11 @@ export function BotItemQuestionCard({
             {lines[index] ? <AnsweredLine answer={lines[index].answer} /> : null}
           </div>
         ))}
-        {open ? null : lines.length > 0 ? (
+        {open ? (
+          reply ? (
+            <BotItemQuestionReply draftKey={reply.key} asker={asker} onSend={reply.send} />
+          ) : null
+        ) : lines.length > 0 ? (
           <p className="text-2xs tabular-nums text-muted-foreground">{time}</p>
         ) : (
           <p className="flex items-center gap-1.5 text-xs text-muted-foreground">

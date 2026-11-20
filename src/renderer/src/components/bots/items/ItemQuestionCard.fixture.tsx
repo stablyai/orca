@@ -188,3 +188,42 @@ export const folded = defineFixture({
     input.focus()
   }
 })
+
+// A question asked where the page can't answer it in its own card (an older host): it stays in Activity,
+// later notes follow it, and its Reply sends a comment.
+const plainAsk =
+  'The preview check is blocked. Options: (a) retry the check later; (b) name another reviewer; (c) stop here and review the first change alone. Reply a, b or c.'
+const plainItem: BotItem = { ...open, question: { eventId: 'e2', text: plainAsk } }
+const plainEvents: BotItemEvent[] = [
+  events[0]!,
+  { id: 'e2', kind: 'commented', actor, data: { text: plainAsk }, at },
+  { id: 'e3', kind: 'status', actor, data: { from: 'working', to: 'needs_you' }, at },
+  {
+    id: 'e4',
+    kind: 'commented',
+    actor,
+    data: { text: 'The first change passed its checks. Waiting on the choice above.' },
+    at: at + 600_000
+  }
+]
+export const plainAskReply = defineFixture({
+  width: 380,
+  setup,
+  render: () => <ItemPage item={plainItem} activity={plainEvents} />
+})
+
+export const plainAskReplyOpen = defineFixture({
+  width: 380,
+  setup,
+  render: () => <ItemPage item={plainItem} activity={plainEvents} />,
+  interact: async (frame) => {
+    const reply = Array.from(frame.querySelectorAll<HTMLButtonElement>('button')).find(
+      (button) => button.textContent === 'Reply'
+    )
+    if (!reply) {
+      throw new Error('The open question has no Reply')
+    }
+    reply.click()
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+  }
+})

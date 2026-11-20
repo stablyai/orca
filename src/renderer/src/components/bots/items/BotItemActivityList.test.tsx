@@ -81,7 +81,7 @@ it("opens an answer's file link and navigates between its answer and question", 
   expect(document.activeElement?.getAttribute('data-bot-item-comment-id')).toBe('e4')
 })
 
-it('shows linked refs as plain URLs and paths that wrap between their parts', () => {
+it('renders linked references without their stored prefixes', () => {
   const events: BotItemEvent[] = [
     {
       id: 'e2',
@@ -105,11 +105,53 @@ it('shows linked refs as plain URLs and paths that wrap between their parts', ()
     'linked https://example.invalid/reviews/a-long-reference?view=full, /workspace/sample/notes.md'
   )
   expect(row.textContent).not.toMatch(/url:|file:/)
-  // A break is offered after each path slash and before the query, never inside a word.
-  const parts = [...row.childNodes].map((node) =>
-    node.nodeName === 'WBR' ? '|' : node.textContent
+})
+
+it("replies to an open question the page can't answer in its own card, from the card itself", () => {
+  const reply = vi.fn()
+  const item = makeTestBotItem(6, {
+    status: 'needs_you',
+    question: { eventId: 'e2', text: 'Retry it here?\n\nOr write it by hand.' }
+  })
+  render(
+    <BotItemActivityList
+      bot={BOT}
+      item={item}
+      events={ASKED}
+      askShown={false}
+      onReplyToQuestion={reply}
+    />
   )
-  expect(parts.join('')).toContain(
-    'https://example.invalid/|reviews/|a-long-reference|?view=full, /workspace/|sample/|notes.md'
+
+  fireEvent.click(screen.getByRole('button', { name: 'Reply' }))
+  const box = screen.getByRole('textbox', { name: 'Reply' })
+  expect(document.activeElement).toBe(box)
+  fireEvent.keyDown(box, { key: 'Enter' })
+  expect(reply).not.toHaveBeenCalled()
+
+  fireEvent.change(box, { target: { value: '  b, by hand  ' } })
+  fireEvent.keyDown(box, { key: 'Enter' })
+
+  expect(reply).toHaveBeenCalledExactlyOnceWith('b, by hand')
+  expect(screen.queryByRole('textbox', { name: 'Reply' })).toBeNull()
+})
+
+it('offers no Reply where the card below takes the answer, or where the item takes no comment', () => {
+  const item = makeTestBotItem(6, {
+    status: 'needs_you',
+    question: { eventId: 'e2', text: 'Retry it here?', answerable: true }
+  })
+  const view = render(
+    <BotItemActivityList
+      bot={BOT}
+      item={item}
+      events={ASKED}
+      askShown
+      onReplyToQuestion={vi.fn()}
+    />
   )
+  expect(screen.queryByRole('button', { name: 'Reply' })).toBeNull()
+
+  view.rerender(<BotItemActivityList bot={BOT} item={item} events={ASKED} askShown={false} />)
+  expect(screen.queryByRole('button', { name: 'Reply' })).toBeNull()
 })

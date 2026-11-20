@@ -29,7 +29,10 @@ import {
 } from '../model-catalog/structured-agent-model-catalog-discovery'
 import { resolveStructuredAgentCommand } from '../../../native-chat/agent-launch/structured-agent-command-resolution'
 import { getProfileUserDataPath } from '../../../orca-profiles/profile-storage-paths'
-import { managedAgentCli } from '../../../managed-agent-cli/managed-agent-cli-registry'
+import {
+  isManagedAgentCli,
+  managedAgentCli
+} from '../../../managed-agent-cli/managed-agent-cli-registry'
 import type {
   StructuredAgentAccountHomeRequest,
   StructuredAgentChatProgram,
@@ -43,7 +46,7 @@ export type StructuredAgentRuntimeCatalogEntry =
 
 // Why the host's data folder: a start runs Orca's installed release before PATH.
 function acpChatProgram(spec: AcpLaunchSpec): StructuredAgentChatProgram {
-  const { managedRuntime } = spec
+  const { agent, managedRuntime } = spec
   return {
     resolve: (shellEnv, commandSettings) => {
       const env = { ...shellEnv, ...spec.env }
@@ -51,6 +54,8 @@ function acpChatProgram(spec: AcpLaunchSpec): StructuredAgentChatProgram {
       return { ...resolveAcpLaunchCommand(spec, env, options), env }
     },
     ...(managedRuntime ? { installable: () => managedRuntime.pin() !== null } : {}),
+    // Hosts without the user's own install can install Orca's copy.
+    ...(isManagedAgentCli(agent) ? { installable: () => managedAgentCli(agent).available() } : {}),
     ...(spec.hostBackend
       ? {
           hostAlternative: async (shellEnv, settings) =>

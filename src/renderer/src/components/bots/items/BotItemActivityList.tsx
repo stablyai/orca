@@ -14,6 +14,7 @@ import {
 } from 'lucide-react'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { uiDateTimeFormat } from '@/i18n/ui-intl-formatters'
+import { botRefKey } from '@/lib/bot-hosts'
 import type { Bot } from '../../../../../shared/bot-types'
 import {
   BOT_ITEM_STATUSES,
@@ -253,7 +254,8 @@ export function BotItemActivityList({
   item,
   events,
   pending,
-  askShown
+  askShown,
+  onReplyToQuestion
 }: {
   bot: Bot
   item: BotItem
@@ -262,6 +264,8 @@ export function BotItemActivityList({
   pending?: BotItemPendingComments
   /** The open question's card is below Activity, taking its answer. */
   askShown: boolean
+  /** Sends a comment, as the comment box does; absent where the item takes none (deleted). */
+  onReplyToQuestion?: (text: string) => void
 }): React.JSX.Element {
   const t = useTranslate()
   const entries = botItemActivity(item, events)
@@ -316,6 +320,14 @@ export function BotItemActivityList({
                     state={entry.question}
                     answer={entry.answer}
                     onJump={jump}
+                    reply={
+                      entry.question === 'open' && onReplyToQuestion
+                        ? {
+                            key: `${botRefKey(bot)}:${item.uid}:${entry.event.id}`,
+                            send: onReplyToQuestion
+                          }
+                        : undefined
+                    }
                   />
                 ) : entry === last ? null : (
                   <div className="relative flex min-w-0 items-start gap-2">

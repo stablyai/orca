@@ -90,6 +90,8 @@ function installWillQuitHandler(): void {
     }
     // Include pane grids still inside their write burst in final save.
     const paneGridFlush = state.runtime?.flushPaneGrids() ?? null
+    // Before the daemon detaches: the next run reads quiet agents' retained frames from it.
+    const paintLedgerSave = state.runtime?.saveReattachedPaintLedger() ?? null
     // A renderer can veto before-quit; push must survive until quit is committed.
     markHostShuttingDown()
     state.profileShutdownCheckpoint ??= beginProfileShutdownCheckpoint(state.store, paneGridFlush)
@@ -225,9 +227,10 @@ function installWillQuitHandler(): void {
     // Removal writers and pending pane grids must settle before the profile freezes.
     const finalSaves = Promise.all([
       paneGridFlush,
+      paintLedgerSave,
       removalQuiescence,
       state.profileShutdownCheckpoint.catch(() => {})
-    ]).then(([, stopped]) => beginSshShutdownAndFinalSave(stopped))
+    ]).then(([, , stopped]) => beginSshShutdownAndFinalSave(stopped))
     const sshShutdown = Promise.resolve(finalSaves).then((saves) => saves.sshShutdown)
     const storeFlush = Promise.resolve(finalSaves).then((saves) => saves.storeFlush)
     const watcherShutdown = Promise.resolve(finalSaves).then((saves) => saves.watcherShutdown)

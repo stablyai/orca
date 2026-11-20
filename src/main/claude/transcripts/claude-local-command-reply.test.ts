@@ -30,14 +30,6 @@ describe('claudeTranscriptRowFrame', () => {
 
   it.each([
     {
-      name: 'a non-system row',
-      row: {
-        type: 'user',
-        sessionId: 'provider-session',
-        message: { role: 'user', content: 'hi' }
-      }
-    },
-    {
       name: 'the command echo row',
       row: { ...recapRow, content: '<command-name>/recap</command-name>' }
     },

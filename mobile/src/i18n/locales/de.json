@@ -941,12 +941,10 @@
       "dismissDrawer": "Bereich schließen"
     },
     "newWorkspaceSetupScriptField": {
-      "hooks": "HOOKS",
       "label": "Einrichtungsskript",
-      "run": "Ausführen",
-      "runSetupCommand": "Einrichtungsbefehl ausführen",
+      "runSetup": "Einrichtung ausführen",
       "skip": "Überspringen",
-      "waitForSetup": "Vor dem Start des Agenten auf den Abschluss der Einrichtung warten",
+      "startAgentAfterSetup": "Agent nach der Einrichtung starten",
       "waitForSetupSaveFailed": "Das Startverhalten bei der Einrichtung konnte nicht gespeichert werden."
     },
     "newWorkspaceSshConnectionField": {
@@ -1605,10 +1603,8 @@
   "host": {
     "edit": {
       "address": "Adresse",
-      "addressHint": "Akzeptiert IP-Adressen, host:port oder ws:// / wss://. Eine URL mit wss:// verwendet ohne Portangabe 443. Bei Adressen ohne Protokoll- und Portangabe bleibt der aktuelle Port erhalten (oder 6768).",
       "connectionPreview": "Verbindet mit {{endpoint}}",
       "goBack": "Zurück navigieren",
-      "help": "Anzeigenamen oder Verbindungsadresse ändern. Das Namensfeld leer lassen, um den vom Desktop gemeldeten Namen zu verwenden. Eine Adressänderung ändert nur das Verbindungsziel dieses Smartphones – es wird keine neue Kopplung hergestellt. Nützlich, wenn derselbe Desktop unter einer anderen IP-Adresse erreichbar ist (z. B. im Heim-LAN statt über Tailscale).",
       "hostNamePlaceholder": "Host-Name",
       "hostRemoved": "Dieser Host wurde von diesem Smartphone entfernt.",
       "loadFailed": "Host konnte nicht geladen werden.",
@@ -4380,7 +4376,7 @@
   "bots": {
     "link": {
       "pairTitle": "Computer koppeln",
-      "pairRequired": "Kopple dieses Telefon mit einem Computer, um diesen Link zu öffnen.",
+      "pairRequired": "Kopple dieses Telefon mit einem Computer, um diesen Link zu öffnen, und öffne den Link dann erneut.",
       "pairAction": "Computer koppeln",
       "openFailed": "Link konnte nicht geöffnet werden",
       "ambiguous": "Dieser Bot ist auf {{names}}. Öffne den Chat in Orca auf dem gewünschten Computer.",
