@@ -106,8 +106,8 @@ export class ClaudeOwedNotificationExpiryTimers {
       !releaseClaudeUnclassifiedTurnEnd(this.state, paneKey, lead) &&
       (owedDeadline ?? Infinity) > Date.now()
     ) {
-      // Only private evidence retired: nothing public changed, so wait for the owed deadline.
-      this.rearmIfDue(paneKey, publish)
+      // Only private evidence retired: nothing public changed, so wait for the owed deadline, even one passed since.
+      this.arm(paneKey, publish)
       return
     }
     const row = this.state.lastStatusByPaneKey.get(paneKey)
