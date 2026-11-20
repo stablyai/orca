@@ -237,13 +237,14 @@ function absorbChat(
   attempt: { claimsOnly: boolean; adopting: boolean }
 ): void {
   const claims = missingJournalLegacyClaims(db, id, adoption.claims.get(id) ?? [])
+  const failure = readJournalLegacyFailure(db, id)
   const write = (keep: () => void) =>
     runJournalTransaction(db, () => {
       insertJournalLegacyClaims(db, id, claims)
       clearJournalLegacyClaimFailure(db, id)
       keep()
     })
-  const claimsOnly = (failure = readJournalLegacyFailure(db, id)) => {
+  const claimsOnly = () => {
     attempt.claimsOnly = true
     if (claims.length > 0) {
       if (!failure?.claims || failure.claims !== journalLegacyClaimsFingerprint(claims)) {
@@ -262,13 +263,12 @@ function absorbChat(
   }
   const shown = readMeta(db, journalLegacyChatRevisionKey(id))
   if (revision === shown) {
-    const failure = readJournalLegacyFailure(db, id)
     if (failure?.claims && failure.claims === journalLegacyClaimsFingerprint(claims)) {
       return
     }
     // A refused adoption retries when its refused claims change; history-only failures stay held.
     if (!failure?.claims || !failure.adoption) {
-      claimsOnly(failure)
+      claimsOnly()
       return
     }
   }
