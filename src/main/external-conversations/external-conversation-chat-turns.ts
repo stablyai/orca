@@ -269,16 +269,14 @@ export class ChatTurns {
       }
       return
     }
-    // The turn's identity is fixed now; its message is read from the journal after.
-    // Read in the same tick as its end's turn id, so both name one turn.
+    // Read with the end's turn id in one tick so both name one turn; its message is read later.
     const origin = this.deps.chatTurnOrigin(news.sessionId, this.turnOf(paneKey))
     const ended = {
       kind: 'turn-ended' as const,
       ...at,
       turnId: this.turnOf(paneKey),
       stopReason: news.outcome,
-      at: news.at,
-      ...chatTurnFor(origin, this.deps.actsForOf?.(news.sessionId))
+      at: news.at
     }
     this.startedAt.delete(paneKey)
     const heard = this.told.delete(paneKey) || origin === 'delivery'
@@ -291,6 +289,7 @@ export class ChatTurns {
       news,
       agent: linked.link.agent,
       emit: this.deps.emit,
+      turnFor: chatTurnFor(origin, this.deps.actsForOf?.(news.sessionId)),
       workersChecked: () => this.workers.check(paneKey, 'turn-ended'),
       current: () => generation === this.generation
     }
@@ -335,6 +334,7 @@ export class ChatTurns {
       // Owner words steered in and posted to the thread go before the answer.
       ;(mirrored ? mirrored.release : this.deps.emit)({
         ...ended,
+        ...end.turnFor(turn),
         origin: reported ? 'delivery' : origin,
         ...(message && !quiet(message) ? { lastAssistantMessage: message } : {}),
         ...(news.outcome === 'failure'

@@ -24,6 +24,7 @@ it("keeps a failed turn's reason on its state-only end, which the cloud stores f
     },
     agent: 'claude',
     emit,
+    turnFor: () => ({}),
     workersChecked: async () => undefined,
     current: () => true
   }

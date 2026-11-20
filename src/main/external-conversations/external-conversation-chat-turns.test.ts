@@ -4,6 +4,9 @@ import type { ConnectorWorkLink } from '../../shared/connector-work-link-contrac
 import type { ExternalConversationLink } from '../../shared/connectors/external-conversation-link'
 import { chatPaneKey } from './external-conversation-chat'
 import { ChatTurns } from './external-conversation-chat-turns'
+import { ChatDeliveries } from './external-conversation-chat-delivery'
+import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
+import type { AgentJournalRenderItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import type { ConversationEvent } from './external-conversation-events'
 
 const SESSION = 'session-1'
@@ -391,5 +394,73 @@ describe('an Orca-typed turn in a chat that posts to its Slack thread', () => {
     const events = slackThread(() => null)
     await new Promise((resolve) => setTimeout(resolve, 0))
     expect(events.some((event) => event.kind === 'turn-ended' && event.mirror)).toBe(false)
+  })
+})
+
+describe('a turn its conversation heard across a host restart', () => {
+  const link: ExternalConversationLink = {
+    source: 'slack',
+    externalId: 'T1:C9:1792.9:U5',
+    sessionId: SESSION,
+    agent: 'claude',
+    paneKey: chatPaneKey(SESSION),
+    bot: { kind: 'bot', botId: 'b1' },
+    createdAt: 0
+  }
+  const queuedDelivery = {
+    kind: 'message' as const,
+    role: 'user' as const,
+    blocks: [],
+    origin: 'connector' as const,
+    connectorConversation: { source: 'slack', externalId: link.externalId }
+  }
+
+  async function turnForAfterRestart(opener: AgentJournalRenderItem['body']) {
+    // The restarted host remembers no delivery; only the chat's journal survived.
+    const deliveries = new ChatDeliveries(() => {})
+    const events: ConversationEvent[] = []
+    const turns = new ChatTurns({
+      promptsAudience: () => true,
+      turnOpener: () => null,
+      keepAdoptedTurn: () => {},
+      readHookRow: () =>
+        ({ structuredHost: 'owned', state: 'working', stateStartedAt: 3 }) as AgentStatusIpcPayload,
+      pendingPrompt: () => null,
+      chatTurnOrigin: (sessionId, turnAt) => deliveries.origin(sessionId, turnAt),
+      chatTurnDelivered: (sessionId) => deliveries.pending(sessionId),
+      chatTurnDelivery: (sessionId, turnAt) => deliveries.started(sessionId, turnAt),
+      chatTurnWaiting: (sessionId) => deliveries.waiting(sessionId),
+      runningTurnReported: () => false,
+      workLinks: async () => [],
+      workerActivities: async () => null,
+      actsForOf: () => 'owner',
+      linkedFor: () => ({ link, workspace: { worktreeId: 'wt', sshHostId: null } }),
+      emit: (event) => events.push(event),
+      setTimer: () => ({ cancel: () => {} }),
+      now: () => 0
+    })
+    // The watch's snapshot adopts the turn the queued message started.
+    turns.adopt(link.paneKey)
+    turns.news({
+      kind: 'turn-ended',
+      sessionId: SESSION,
+      outcome: 'success',
+      at: 5,
+      readTurn: async () => ({
+        lastAssistantMessage: 'Done.',
+        opener: { itemId: 'm1', revision: 0, sequence: 1, observedAt: 1, body: opener }
+      })
+    })
+    await vi.waitFor(() => expect(events).toHaveLength(1))
+    const [ended] = events
+    return ended?.kind === 'turn-ended' ? ended.turnFor : null
+  }
+
+  it('leaves a queued delivery’s turn to the cloud, never acting for the owner', async () => {
+    expect(await turnForAfterRestart(queuedDelivery)).toBeUndefined()
+  })
+
+  it('still says the owner for a turn the journal shows the owner typed', async () => {
+    expect(await turnForAfterRestart({ kind: 'message', role: 'user', blocks: [] })).toBe('owner')
   })
 })

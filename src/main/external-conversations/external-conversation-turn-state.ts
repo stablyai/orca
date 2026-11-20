@@ -6,6 +6,7 @@ import type {
   ConnectorTurnFor,
   ConnectorTurnOrigin
 } from '../../shared/connectors/connector-cloud-contract'
+import type { EndedChatTurn } from './external-conversation-ended-turn'
 
 /** The lead agent's own state; background work can keep the combined row working across turns. */
 export function leadOf(row: AgentStatusIpcPayload): {
@@ -40,10 +41,26 @@ export function conversationWorking(row: AgentStatusIpcPayload | null): boolean 
 
 /** Whom an ended chat turn acts for, as its final post tells Orca Cloud: none for a delivery's turn,
  *  whose person the cloud reads from its own record; else the owner only when Orca recorded that the
- *  conversation acts for them (bot-turn-for.ts says why). */
+ *  conversation acts for them (bot-turn-for.ts says why). A delivery is remembered only until a
+ *  restart, so a "local" turn also needs its journal to show Orca began it; unproven, it says none. */
 export function chatTurnFor(
   origin: ConnectorTurnOrigin,
   actsFor: ConnectorActsFor | undefined
-): { turnFor?: ConnectorTurnFor } {
-  return origin === 'delivery' ? {} : { turnFor: actsFor === 'owner' ? 'owner' : 'someone_else' }
+): (turn: Pick<EndedChatTurn, 'opener' | 'stamps'>) => { turnFor?: ConnectorTurnFor } {
+  return (turn) =>
+    origin === 'delivery' || !journalShowsLocalTurn(turn)
+      ? {}
+      : { turnFor: actsFor === 'owner' ? 'owner' : 'someone_else' }
+}
+
+/** A message no connector sent opened the turn, and it answered no delivery. */
+function journalShowsLocalTurn({ opener, stamps }: Pick<EndedChatTurn, 'opener' | 'stamps'>) {
+  const body = opener?.body
+  return (
+    body?.kind === 'message' &&
+    body.origin !== 'connector' &&
+    !body.connectorDelivery &&
+    !body.connectorConversation &&
+    !stamps?.length
+  )
 }
