@@ -55,16 +55,44 @@ function claudeEffortWithChoices(choices: typeof EXTENDED_EFFORT_CHOICES): Catal
   }
 }
 
+// Why: Claude's fullscreen renderer runs on the alternate screen, where the pane has no scrollback,
+// scrollbar or terminal search. Orca users can pick the renderer per launch without changing the
+// global `tui` in ~/.claude/settings.json. Unset (the picker's Default) sends nothing, so the user's
+// own setting still applies; `/tui` is not used mid-session because it rewrites that file.
+const CLAUDE_RENDERER: CatalogOption = {
+  id: 'renderer',
+  label: 'Renderer',
+  description:
+    'Inline keeps the terminal scrollback, scrollbar and search; fullscreen is needed for the diff panel.',
+  // No category: unlike Fast mode it does not depend on the model, so it shows without a picked model.
+  kind: {
+    type: 'select',
+    choices: [
+      { value: 'default', label: 'Inline' },
+      { value: 'fullscreen', label: 'Fullscreen' }
+    ],
+    defaultValue: 'default'
+  },
+  apply: agentChoiceCliApply(
+    'claude',
+    [{ kind: 'settings', names: ['--settings'], key: 'tui', lift: 'merged-json' }],
+    '--settings'
+  )
+}
+
 export function createClaudeCatalogOptions(args: {
   effortLevelIds: readonly string[]
   supportsFastMode?: boolean
+  /** Terminal launches only: structured chats have no terminal renderer. */
+  terminal?: boolean
 }): CatalogOption[] {
   const effortChoices = EXTENDED_EFFORT_CHOICES.filter((choice) =>
     args.effortLevelIds.includes(choice.value)
   )
   return [
     ...(effortChoices.length > 0 ? [claudeEffortWithChoices(effortChoices)] : []),
-    ...(args.supportsFastMode ? [CLAUDE_FAST_MODE] : [])
+    ...(args.supportsFastMode ? [CLAUDE_FAST_MODE] : []),
+    ...(args.terminal ? [CLAUDE_RENDERER] : [])
   ]
 }
 
@@ -77,7 +105,8 @@ function parseClaudeCatalogModels(stdout: string): CatalogModel[] {
       ...(model.resolvedModel ? { resolvedModel: model.resolvedModel } : {}),
       options: createClaudeCatalogOptions({
         effortLevelIds: model.effortLevels,
-        supportsFastMode: model.supportsFastMode
+        supportsFastMode: model.supportsFastMode,
+        terminal: true
       })
     }
   })
@@ -106,26 +135,26 @@ export const CLAUDE_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
       id: 'fable',
       label: 'Fable',
       description: 'Most capable for the hardest, longest-running tasks',
-      options: [claudeEffort(true)]
+      options: [claudeEffort(true), CLAUDE_RENDERER]
     },
     {
       id: 'opus',
       label: 'Opus',
       description: 'Best for everyday, complex tasks',
-      options: [claudeEffort(true), CLAUDE_FAST_MODE]
+      options: [claudeEffort(true), CLAUDE_FAST_MODE, CLAUDE_RENDERER]
     },
     {
       id: 'sonnet',
       label: 'Sonnet',
       description: 'Efficient for routine tasks',
       isDefault: true,
-      options: [claudeEffort(true)]
+      options: [claudeEffort(true), CLAUDE_RENDERER]
     },
     {
       id: 'haiku',
       label: 'Haiku',
       description: 'Fastest for quick answers',
-      options: []
+      options: [CLAUDE_RENDERER]
     }
   ],
   modelApply: {
@@ -148,7 +177,7 @@ export const CLAUDE_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
       detectAgentInteraction: 'claude-model-switch-confirmation'
     }
   },
-  unknownModelOptions: [claudeEffort(true), CLAUDE_FAST_MODE],
+  unknownModelOptions: [claudeEffort(true), CLAUDE_FAST_MODE, CLAUDE_RENDERER],
   listModels: {
     command: `echo '${CLAUDE_MODEL_LIST_STDIN.trim()}' | claude ${CLAUDE_MODEL_LIST_ARGS.join(' ')}`,
     parse: parseClaudeCatalogModels

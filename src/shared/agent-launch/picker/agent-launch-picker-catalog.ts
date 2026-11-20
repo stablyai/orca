@@ -73,7 +73,8 @@ export function agentPickerEntryOptions(
     options = createClaudeCatalogOptions({
       effortLevelIds: live.efforts.map((choice) => choice.value),
       supportsFastMode:
-        live.supportsFastMode === true && entry.catalog.fastModeSupport?.supported !== false
+        live.supportsFastMode === true && entry.catalog.fastModeSupport?.supported !== false,
+      terminal: surface === 'terminal'
     })
   }
   if (surface === 'chat' || entry.agent === 'codex') {
