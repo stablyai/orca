@@ -4,7 +4,7 @@
 # Prune: node config/scripts/static-analysis/ratchets/runtime-lifecycle/check-main-blocking-helper-ratchet.mjs --prune
 1 src/main/acp/conversation-copy/acp-conversation-copies.ts
 3 src/main/acp/conversation-copy/acp-conversation-copy.ts
-5 src/main/acp/launch/acp-launch-command.ts
+3 src/main/acp/launch/acp-launch-command.ts
 2 src/main/acp/launch/acp-private-temp.ts
 1 src/main/acp/launch/acp-structured-launch-resolution.ts
 1 src/main/acp/process/acp-agent-connection.ts
@@ -72,9 +72,7 @@
 1 src/main/ai-vault/session-titles/session-title-resolver.ts
 1 src/main/ai-vault/transcripts/session-transcript-reader.ts
 4 src/main/amp/hook-service.ts
-1 src/main/antigravity/antigravity-acp-launch-spec.ts
 1 src/main/antigravity/antigravity-chat-sign-in.ts
-2 src/main/antigravity/antigravity-host-acp.ts
 8 src/main/antigravity/hook-service.ts
 1 src/main/antigravity/native-account-host.ts
 3 src/main/antigravity/native-account-launch.ts
@@ -1141,7 +1139,7 @@
 1 src/main/runtime/agent-session/environment/structured-agent-account-home.ts
 2 src/main/runtime/agent-session/environment/structured-session-child-env.ts
 2 src/main/runtime/agent-session/installation/runtime-structured-agent-host.ts
-6 src/main/runtime/agent-session/installation/structured-agent-runtime-metadata.ts
+3 src/main/runtime/agent-session/installation/structured-agent-runtime-metadata.ts
 2 src/main/runtime/agent-session/installation/structured-agent-runtime-registrations.ts
 1 src/main/runtime/agent-session/installation/structured-agent-session-host-assembly.ts
 1 src/main/runtime/agent-session/installation/structured-agent-session-runtime-teardown.ts

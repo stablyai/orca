@@ -1,4 +1,4 @@
-// New bot's picture: one tile with a pencil; a click opens the picker in a popover. An image pasted
+// New bot's picture: one tile with a pencil, the name beside it; a click opens the picker in a popover. An image pasted
 // or dropped anywhere in the dialog is taken too, into the dialog's one intake, which the popover's
 // picker shares: a decode outlives the popover, and the newest picture wins across both.
 import React, { useEffect, useRef, useState } from 'react'
@@ -17,11 +17,14 @@ const DIALOG_PADDING_PX = 20
 
 export function NewBotPictureButton({
   picture,
-  intake
+  intake,
+  children
 }: {
   picture: NewBotPicture
   /** The dialog's intake, which places a picture with `picture.placeUpload`. */
   intake: BotAvatarIntake
+  /** The name field, on the picture's row and centred on it. */
+  children: React.ReactNode
 }): React.JSX.Element {
   const t = useTranslate()
   const errorMessage = useIntakeErrorMessage()
@@ -81,13 +84,16 @@ export function NewBotPictureButton({
           </div>
         </PopoverContent>
       </Popover>
-      <div aria-live="polite" className="min-w-0 text-xs">
-        {line.kind === 'error' ? (
-          <span role="alert" className="inline-flex items-center gap-1.5 text-destructive">
-            <CircleAlert className="size-3.5 shrink-0" />
-            {errorMessage(line.error)}
-          </span>
-        ) : null}
+      <div className="min-w-0 flex-1">
+        {children}
+        <div aria-live="polite" className="text-xs">
+          {line.kind === 'error' ? (
+            <span role="alert" className="mt-1 inline-flex items-center gap-1.5 text-destructive">
+              <CircleAlert className="size-3.5 shrink-0" />
+              {errorMessage(line.error)}
+            </span>
+          ) : null}
+        </div>
       </div>
     </div>
   )

@@ -34,7 +34,8 @@ export function useBotSetupInstall(
 ): { install: NativeChatInstallSlotInstall | null; signIn: NativeChatSignInStripState | null } {
   const target = botTarget(bot)
   const hostProgram = useStructuredAgentSessionHostProgram(bot.chatSessionId ?? '', target)
-  const observation = useManagedRuntimeInstall(target, bot.agent, shown && !hostProgram)
+  // A bot on the host program follows it too: Orca's copy of agy may be what it needs installed.
+  const observation = useManagedRuntimeInstall(target, bot.agent, shown)
   const slot = nativeChatInstallSlotState(observation, 'strip', hostProgram)
   const install = shown && slot.kind === 'install' ? slot : null
   const state =
@@ -47,6 +48,7 @@ export function useBotSetupInstall(
   // Same rule as the chat's own strip: only Orca's copy of Antigravity takes Orca's sign-in.
   const signsIn =
     bot.agent === 'antigravity' &&
+    !hostProgram &&
     installed &&
     observation.kind === 'active' &&
     antigravityOrcaRuntimeSignsIn(observation)

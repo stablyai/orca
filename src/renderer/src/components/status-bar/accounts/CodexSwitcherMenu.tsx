@@ -22,15 +22,11 @@ import type { OwnerUsageRateLimits } from '../usage/use-owner-usage-rate-limits'
 export function CodexSwitcherMenu({
   codex,
   ownerUsage,
-  compact,
-  iconOnly,
   asSubmenu = false,
   triggerContent
 }: {
   codex: ProviderRateLimits
   ownerUsage: OwnerUsageRateLimits
-  compact: boolean
-  iconOnly: boolean
   asSubmenu?: boolean
   triggerContent?: React.ReactNode
 }): React.JSX.Element {
@@ -134,8 +130,6 @@ export function CodexSwitcherMenu({
   return (
     <ProviderDetailsMenu
       provider={codex}
-      compact={compact}
-      iconOnly={iconOnly}
       asSubmenu={asSubmenu}
       triggerContent={triggerContent}
       ariaLabel={t(

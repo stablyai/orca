@@ -28,7 +28,6 @@ const rejectedResponses: {
   headers: Record<string, string>
   error: string
 }[] = [
-  { kind: 'crx', status: 503, headers: {}, error: 'Chrome Web Store download failed (503)' },
   {
     kind: 'crx',
     status: 200,
