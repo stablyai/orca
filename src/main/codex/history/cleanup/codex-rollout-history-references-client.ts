@@ -99,8 +99,8 @@ export function createCodexRolloutHistoryReferencesClient(
     refresh: async (homes) => (await call({ op: 'refresh', homes })) === true,
     // Anything but a plain false keeps the rollout.
     isReferenced: async (rolloutId) => (await call({ op: 'isReferenced', rolloutId })) !== false,
-    forget: async (rolloutId) => {
-      const freed = await call({ op: 'forget', rolloutId })
+    forget: async (rolloutId, paths) => {
+      const freed = await call({ op: 'forget', rolloutId, paths })
       return typeof freed === 'string' ? freed : null
     },
     save: async () => {

@@ -319,14 +319,14 @@ describe('deleteCodexRolloutsPermanently with a fork restored during the sweep',
     mkdirSync(join(home, 'thread-writer-locks'), { recursive: true })
     vi.useFakeTimers({ toFake: ['Date'] })
     vi.setSystemTime(new Date(2026, 10, 20, 12))
-    const today = join(home, 'sessions', '2026', '11', '20')
-    const parent = write(join(today, NAME('1')), rollout('/gone'))
+    // An old dated folder: a refresh re-lists only today's, so the restored name itself is checked.
+    const folder = join(home, ...DATED)
+    const parent = write(join(folder, NAME('1')), rollout('/gone'))
     const forkContents = `${JSON.stringify({
       type: 'session_meta',
       payload: { cwd: '/gone', history_base: { thread_id: '00000001-0000-4000-8000-000000000000' } }
     })}\n`
-    const fork = write(join(today, NAME('2')), forkContents)
-    utimesSync(today, WRITTEN, WRITTEN)
+    const fork = write(join(folder, NAME('2')), forkContents)
 
     await deleteCodexRolloutsPermanently(
       [parent, fork].map((filePath) => ({ agent: 'codex', filePath })),

@@ -1,7 +1,8 @@
 /** Messages between the sweep and the worker holding its Codex fork index. */
 export type CodexRolloutReferencesRequest =
   | { id: number; op: 'prepare' | 'refresh'; homes: readonly string[] }
-  | { id: number; op: 'isReferenced' | 'forget'; rolloutId: string }
+  | { id: number; op: 'isReferenced'; rolloutId: string }
+  | { id: number; op: 'forget'; rolloutId: string; paths: readonly string[] }
   | { id: number; op: 'save' }
   | { op: 'abort' }
 

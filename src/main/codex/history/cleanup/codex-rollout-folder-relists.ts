@@ -18,8 +18,8 @@ export type CodexRolloutFolderRelists = {
    */
   settle(roots: readonly CodexRolloutRoot[], dates: readonly string[][]): Promise<string[]>
   /**
-   * Whether no folder settle names changed since its listing: a fork written into one already read,
-   * while later files were still being read, would otherwise go unseen. Call it last.
+   * Whether every folder settle names is still current: a fork written into one already read, while
+   * later files were still being read, would otherwise go unseen. Call it last.
    */
   unchanged(roots: readonly CodexRolloutRoot[], dates: readonly string[][]): Promise<boolean>
   /** Lists a folder again when it changed; false past the cap, which keeps the candidate. */
@@ -82,7 +82,8 @@ export function createCodexRolloutFolderRelists(signal?: AbortSignal): CodexRoll
     unchanged: async (roots, dates) => {
       for (const folder of await foldersOf(roots, dates)) {
         const entry = await statUnlessAbsent(folder)
-        if (entry === undefined || (entry && stamps.state(folder, entry.mtimeMs) === 'changed')) {
+        // An unsettled stamp proves nothing on a coarse filesystem: a later change can share it.
+        if (entry === undefined || (entry && stamps.state(folder, entry.mtimeMs) !== 'current')) {
           return false
         }
       }

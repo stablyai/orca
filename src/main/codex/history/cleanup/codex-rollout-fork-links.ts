@@ -1,6 +1,7 @@
 export type CodexRolloutForkLinks = {
   link(rolloutId: string, base: string | null): void
   isReferenced(rolloutId: string): boolean
+  baseOf(rolloutId: string): string | null
   /** Drops a deleted rollout; returns the parent it was the last fork of, if any. */
   forget(rolloutId: string): string | null
 }
@@ -20,6 +21,7 @@ export function createCodexRolloutForkLinks(): CodexRolloutForkLinks {
       childrenByBase.set(base, children)
     },
     isReferenced: (rolloutId) => (childrenByBase.get(rolloutId)?.size ?? 0) > 0,
+    baseOf: (rolloutId) => baseByChild.get(rolloutId) ?? null,
     forget: (rolloutId) => {
       const base = baseByChild.get(rolloutId)
       if (!base) {

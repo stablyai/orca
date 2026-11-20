@@ -32,7 +32,7 @@ async function run(request: Exclude<CodexRolloutReferencesRequest, { op: 'abort'
     case 'isReferenced':
       return references.isReferenced(request.rolloutId)
     case 'forget':
-      return references.forget(request.rolloutId)
+      return references.forget(request.rolloutId, request.paths)
     case 'save':
       await references.save()
       return undefined

@@ -160,7 +160,10 @@ async function deleteRollout(
     result.deleted += 1
     // A name left (in the import folder) still reads its own parent.
     if ((await readNames(names)).length === 0) {
-      const freed = await references.forget(rolloutId)
+      const freed = await references.forget(
+        rolloutId,
+        removed.map((state) => state.path)
+      )
       if (freed) {
         released.push(freed)
       }

@@ -32,9 +32,10 @@ export type CodexRolloutHistoryReferences = {
    * changed. False when anything couldn't be read, so no rollout is proven unreferenced.
    */
   refresh(homes: readonly string[]): Promise<boolean>
+  /** Also reads again any deleted fork of it that came back under a name it was deleted from. */
   isReferenced(rolloutId: string): Promise<boolean>
-  /** Drops a deleted rollout; returns the parent it was the last fork of, if any. */
-  forget(rolloutId: string): Promise<string | null>
+  /** Drops a deleted rollout (`paths`: its names); returns the parent it was the last fork of. */
+  forget(rolloutId: string, paths: readonly string[]): Promise<string | null>
   save(): Promise<void>
 }
 
@@ -52,7 +53,11 @@ export function createCodexRolloutHistoryReferences(
   // A rollout listed but gone when read was moved (archived, unarchived) or deleted meanwhile.
   let moved = false
   const seen = new Set<string>()
+  // Old rollouts with no header to read: re-listing a folder doesn't read them again.
+  const headerless = new Set<string>()
   const forks = createCodexRolloutForkLinks()
+  // Each parent's deleted forks by name: a backup can put one back anywhere, even in an old folder.
+  const deletedForks = new Map<string, { rolloutId: string; path: string }[]>()
   // Real sessions/archived_sessions folders read in full.
   const walkedRoots = new Set<string>()
   // Each re-listed folder's names when last listed.
@@ -93,7 +98,11 @@ export function createCodexRolloutHistoryReferences(
       }
       // A header still being written may name a base. An old one never will, and Codex's own
       // reference scan skips a rollout it can't read: it isn't cached, so a later sweep retries.
-      return Date.now() - entry.mtimeMs >= UNFINISHED_HEADER_GRACE_MS
+      const old = Date.now() - entry.mtimeMs >= UNFINISHED_HEADER_GRACE_MS
+      if (old) {
+        headerless.add(rolloutId)
+      }
+      return old
     }
     link(rolloutId, header.base)
     await cache!.set(rolloutId, header.base)
@@ -190,7 +199,7 @@ export function createCodexRolloutHistoryReferences(
     for (const name of names) {
       const rolloutId = codexPhysicalRolloutId(name)
       // A rollout name is skipped once read: a forgotten one restored under its name is read again.
-      if (rolloutId ? seen.has(rolloutId) : known?.has(name)) {
+      if (rolloutId ? seen.has(rolloutId) || headerless.has(rolloutId) : known?.has(name)) {
         continue
       }
       signal?.throwIfAborted()
@@ -289,10 +298,28 @@ export function createCodexRolloutHistoryReferences(
   return {
     prepare: (homes) => update(homes, false),
     refresh: (homes) => update(homes, true),
-    isReferenced: async (rolloutId) => forks.isReferenced(rolloutId),
-    forget: async (rolloutId) => {
+    isReferenced: async (rolloutId) => {
+      for (const fork of deletedForks.get(rolloutId) ?? []) {
+        const entry = await lstatUnlessAbsent(fork.path)
+        // Can't tell: it may be back.
+        if (entry === undefined) {
+          return true
+        }
+        if (entry !== null && !(await visitRollout(fork.path, fork.rolloutId))) {
+          return true
+        }
+      }
+      return forks.isReferenced(rolloutId)
+    },
+    forget: async (rolloutId, paths) => {
       cache?.delete(rolloutId)
       seen.delete(rolloutId)
+      headerless.delete(rolloutId)
+      const base = forks.baseOf(rolloutId)
+      if (base) {
+        const deleted = paths.map((path) => ({ rolloutId, path }))
+        deletedForks.set(base, [...(deletedForks.get(base) ?? []), ...deleted])
+      }
       return forks.forget(rolloutId)
     },
     save: async () => {
