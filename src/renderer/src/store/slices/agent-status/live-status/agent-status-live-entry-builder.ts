@@ -222,6 +222,11 @@ export function buildAgentStatusLiveEntry(
     ...(metadata?.terminalResumeEligible === false
       ? { terminalResumeEligible: false as const }
       : {}),
+    // A status that reuses the pane's session keeps that session's tmux host.
+    ...(metadata?.executionHost === 'shared' ||
+    (!metadata?.providerSession && providerSession && existing?.executionHost === 'shared')
+      ? { executionHost: 'shared' as const }
+      : {}),
     ...(promptInteractionKey ? { promptInteractionKey } : {}),
     ...(payload.restoredUnconfirmed ? { restoredUnconfirmed: true } : {}),
     ...(payload.paneSleep ? { paneSleep: payload.paneSleep } : {}),

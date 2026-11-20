@@ -2831,47 +2831,15 @@
         "9b40d7b018": "複製"
       },
       "NativeChatResumeOnRestartModal": {
-        "serverTitle": "{{machine}} 已重新啟動",
-        "serverBody": "當 {{machine}} 上的 Orca 重新啟動時，這些聊天仍在進行中。恢復後會將每個聊天還原到中斷處，並請代理程式繼續執行。原先輸入的提示詞不會重新傳送。",
-        "serverDismiss": "關閉",
-        "serverResumeAll": "恢復 {{machine}} 上全部 {{count}} 個聊天",
-        "title": "恢復中斷的聊天？",
-        "body": "Orca 關閉時，這些聊天仍在進行中。恢復後會將每個聊天連同完整上下文還原到中斷處，並請代理程式先確認中斷前正在處理的工作，再繼續執行。您原先輸入的提示詞不會重新傳送。",
-        "updateBody": "Orca 安裝更新時，這些聊天仍在進行中。恢復後會將每個聊天連同完整上下文還原到中斷處，並請代理程式先確認中斷前正在處理的工作，再繼續執行。您原先輸入的提示詞不會重新傳送。",
-        "resuming": "正在恢復…",
-        "untitled": "無標題聊天",
-        "listLabel": "將恢復的聊天",
-        "dontAskAgain": "不再詢問（自動恢復）",
-        "dontAskAgainHint": "您可以在「設定」→「聊天」→「行為」中關閉此功能。",
-        "selectAgent": "在 {{value2}} 中恢復 {{value0}} 聊天「{{value1}}」",
-        "dismissAll": "全部關閉",
-        "viewChats": "檢視聊天",
-        "review": "檢查",
         "activityUnnamed": "未命名",
         "activityApproval": "等待您的核准：{{value0}}",
         "activityQuestion": "等待您的回答：{{value0}}",
         "activityMidReply": "中斷前正在回覆",
         "activitySubagentOne": "子代理程式執行中：{{value0}}",
         "activityMonitorOne": "正在監控：{{value0}}",
-        "selectWorkspace": "選擇 {{value0}} 中的全部聊天",
         "workspaceSelectedCount": "{{value0}}/{{value1}}",
-        "selectAll": "選擇全部聊天",
-        "selectAllLabel": "選擇全部",
-        "selectedCount": "已選擇 {{value0}}/{{value1}}",
-        "selectProject": "選擇 {{value0}} 中的全部聊天",
         "collapseNode": "摺疊 {{value0}}",
         "expandNode": "展開 {{value0}}",
-        "selectMachine": "選擇 {{value0}} 上的全部聊天",
-        "sshHost": "SSH",
-        "done": "完成",
-        "resultListLabel": "本次恢復的聊天",
-        "resumeChats_one": "恢復 {{count}} 個聊天",
-        "resumeChats_other": "恢復 {{count}} 個聊天",
-        "serverResumeHereCount_other": "恢復在此啟動的 {{count}} 個聊天",
-        "continuedCount_other": "已恢復 {{count}} 個聊天",
-        "notContinuedCount_other": "{{count}} 個聊天無法恢復",
-        "notConfirmedCount_other": "無法確認 {{count}} 個聊天是否已恢復",
-        "notConfirmedOtherCount_other": "無法確認其他 {{count}} 個聊天是否已恢復",
         "activitySubagentCount_other": "{{count}} 個子代理程式正在執行",
         "activityMonitorCount_other": "正在監控 {{count}} 個背景工作"
       },
@@ -4516,7 +4484,6 @@
             "27a74f91f0": "目前沒有任何行程正在執行",
             "298f4be7f2": "CPU",
             "2aa2de6cb9": "名稱",
-            "1fedf94eae": "CPU 總負載。高於 100% 的值意味著多個核心同時工作。",
             "e7cf14ec78": "終端機工作階段不可用。該清單可能已過時。",
             "93b0de3c21": "重新啟動",
             "f85af9cda6": "資源快照和終端機工作階段不可用。",
@@ -4897,8 +4864,6 @@
                 "copy": {
                   "terminalSessionCount_one": "{{count}} 個終端機工作階段",
                   "terminalSessionCount_other": "{{count}} 個終端機工作階段",
-                  "memoryUnavailable": "記憶體資訊不可用",
-                  "tooltipSummary": "資源管理員 - {{memory}} - {{sessions}}",
                   "spaceScanReady": "空間掃描已就緒",
                   "sessionsGroupedByWorkspace": "終端機工作階段依工作區分組。",
                   "noTerminalSessions": "暫無終端機工作階段。",
@@ -6255,7 +6220,6 @@
         },
         "SidebarWorkspaceOptionsMenu": {
           "hosts": "主機",
-          "showSection": "顯示",
           "allHostsDetail": "顯示所有主機",
           "configuredSshHost": "已設定 SSH",
           "projectSshHost": "專案 SSH",
@@ -6305,7 +6269,6 @@
           "219ebf1961": "分支名稱",
           "folderPathIdentity": "分支 / 資料夾路徑",
           "cli": "Orca CLI",
-          "workspaceOptions": "工作區選項",
           "optionsActiveFilters_other": "工作區選項（{{count}} 個篩選條件已啟用）",
           "optionsFilterCount_other": "工作區選項（{{count}} 個篩選條件）"
         },
@@ -7511,9 +7474,9 @@
           "8fbe1f37c1": "環境",
           "2d133152fa": "無預設環境",
           "3f1bdf3cb4": "環境文字過長，無法安全解析。",
-          "codexSessionSource": "要匯入的 Codex 主目錄",
-          "codexSessionSourceInfo": "關於匯入 Codex 歷史記錄",
-          "codexSessionSourceTooltip": "Orca 在隔離的主目錄中執行 Codex。將此項指向您現有的 Codex 主目錄以匯入工作階段歷史記錄。留空則使用 ~/.codex。",
+          "codexSessionSource": "從此處匯入 Codex 對話",
+          "codexSessionSourceInfo": "關於匯入 Codex 對話",
+          "codexSessionSourceTooltip": "在帳號之間共用歷史記錄時，Orca 會將此 Codex 主目錄中的對話複製到 ~/.codex，讓 /resume 列出它們。對話複製後在此資料夾中新增的內容不會出現在副本中。",
           "noAgentsDetected": "未偵測到代理程式。若已安裝代理程式，可能是偵測作業逾時。",
           "9f30095d49": "代理程式權限"
         },
@@ -7986,7 +7949,7 @@
           "8a52ca1d02": "發行說明",
           "d89806cc89": "已準備好安裝。",
           "a6b37929dc": "版本",
-          "8311da27ba": "可用。按一下「下載更新」進行下載。",
+          "8311da27ba": "可用。",
           "02dc082e70": "無法開始更新下載。",
           "ceb579abaf": "檢查應用程式更新並安裝較新的 Orca 版本。",
           "bd79d412f0": "更新檢查失敗。 {{value0}}",
@@ -13386,10 +13349,8 @@
             "f61af83316": "新增資料夾",
             "37c875d827": "新檔案",
             "b3e288bf41": "無法下載「{{value0}}」。",
-            "f729bcd97d": "無法下載資料夾「{{value0}}」。",
             "1a3df04ae1": "開啟",
             "bce4d4e44f": "已下載「{{value0}}」",
-            "a4029c996b": "已下載資料夾「{{value0}}」",
             "e26010014a": "被 .gitignore 忽略",
             "a06551beee": "Enter",
             "66a29dde82": "複製相對路徑",
@@ -18533,26 +18494,6 @@
         "3d8e5f1b9c": "透過不公開列出的連結分享技能，並在你使用的任何電腦安裝。",
         "c5b3e8a17d": "登入 Orca"
       },
-      "NativeChatResumeOutcomeRow": {
-        "openChat": "開啟聊天",
-        "retry": "重試",
-        "dismiss": "關閉",
-        "unconfirmed": "無法確認聊天已恢復",
-        "failed": "無法恢復",
-        "statusFor": "{{value0}}：{{value1}}",
-        "dismissChat": "關閉 {{value1}} 中的「{{value0}}」",
-        "toResume": "若要恢復："
-      },
-      "NativeChatResumeFailureGuidance": {
-        "unconfirmed": "Orca 無法確認「繼續」訊息已送達。請開啟聊天進行檢查，確認後再傳送其他訊息。",
-        "superseded": "請開啟聊天並回覆。重新啟動後隨即有新的工作傳入此聊天，因此 Orca 未傳送「繼續」訊息。",
-        "conflict": "此聊天已在另一個 Orca 視窗或終端機中開啟。請在那裡關閉後重試。",
-        "ownershipUnknown": "此聊天尚未準備好恢復。請稍等片刻後重試。",
-        "notAttached": "聊天未能重新連線。請重試，或將其開啟以開始新的輪次。",
-        "dispatchRejected": "代理程式拒絕了「繼續」訊息。請開啟聊天並自行傳送一則。",
-        "unsupported": "此聊天無法由 Orca 恢復。請將其開啟以檢視停止位置。",
-        "fallback": "Orca 無法恢復此聊天。請將其開啟以手動繼續。"
-      },
       "web": {
         "preloadApi": {
           "cursorAccounts": {
@@ -18563,39 +18504,6 @@
             "claudeWslDefaultUnavailable": "將 WSL 帳戶切換回系統預設的功能僅可在桌面應用程式中使用。"
           }
         }
-      },
-      "NativeChatResumeRunPanel": {
-        "description": "每個聊天都會帶著完整上下文恢復，並被要求檢查它停在了哪裡。你可以關閉此視窗，狀態列會繼續顯示進度。",
-        "finished": "Orca 關閉時這些聊天正在工作。Orca 已將每個聊天恢復到停止的位置並保留完整上下文，並讓代理程式在繼續之前先檢查它之前在做什麼。你自己的提示詞沒有被重新傳送。",
-        "finishedUpdate": "Orca 安裝更新時這些聊天正在工作。Orca 已將每個聊天恢復到停止的位置並保留完整上下文，並讓代理程式在繼續之前先檢查它之前在做什麼。你自己的提示詞沒有被重新傳送。",
-        "finishedPartial": "Orca 關閉時這些聊天正在工作。Orca 恢復的聊天已回到停止的位置並保留完整上下文，並被要求在繼續之前先檢查之前在做什麼。你自己的提示詞沒有被重新傳送。請在清單中檢視仍需處理或可以恢復的聊天。",
-        "finishedPartialUpdate": "Orca 安裝更新時這些聊天正在工作。Orca 恢復的聊天已回到停止的位置並保留完整上下文，並被要求在繼續之前先檢查之前在做什麼。你自己的提示詞沒有被重新傳送。請在清單中檢視仍需處理或可以恢復的聊天。",
-        "resumedOfTotal_other": "已恢復 {{resumed}}/{{count}} 個聊天",
-        "resumingCount_other": "正在恢復 {{count}} 個聊天"
-      },
-      "NativeChatResumeRunStatusIcon": {
-        "waitingForReply": "等待回覆",
-        "starting": "正在啟動",
-        "waitingToStart": "等待啟動",
-        "inFlight": "{{value0}} · {{value1}}",
-        "resumed": "已恢復"
-      },
-      "NativeChatResumeRunSummary": {
-        "done": "已完成 {{value0}}/{{value1}}",
-        "starting": "{{value0}} 個正在啟動",
-        "waitingForReply": "{{value0}} 個等待回覆",
-        "waitingToStart": "{{value0}} 個等待啟動",
-        "all": "全部",
-        "inProgress": "進行中",
-        "resumed": "已恢復",
-        "attention": "需要處理",
-        "running": "正在執行 {{value0}}",
-        "filter": "顯示聊天"
-      },
-      "NativeChatResumeAutoNote": {
-        "resuming": "重新啟動後正在自動恢復。",
-        "resumed": "重新啟動後已自動恢復。",
-        "changeInSettings": "在設定中更改"
       },
       "TaskPageJiraSavedFilters": {
         "6c381858a1": "已儲存的篩選器",
@@ -18737,6 +18645,46 @@
         "setting-global-off": "已在代理程式設定中關閉資料夾信任，因此代理程式一律會詢問。",
         "keyword-trust": "信任",
         "keyword-hooks": "鉤子"
+      },
+      "NativeChatResumeToast": {
+        "resumingOn_other": "正在恢復 {{machine}} 上的 {{count}} 個聊天…",
+        "resuming_other": "正在恢復 {{count}} 個聊天…",
+        "resumedOn_other": "已恢復 {{machine}} 上的 {{count}} 個聊天。",
+        "resumedUpdate_other": "更新後已恢復 {{count}} 個聊天。",
+        "resumedRestart_other": "重新啟動後已恢復 {{count}} 個聊天。",
+        "partial_other": "已恢復 {{total}} 個聊天中的 {{resumed}} 個。{{count}} 個需要你處理。",
+        "stoppedOn_other": "{{machine}} 上有 {{count}} 個聊天已停止。",
+        "stoppedUpdate_other": "Orca 更新時有 {{count}} 個聊天已停止。",
+        "stoppedRestart_other": "Orca 關閉時有 {{count}} 個聊天已停止。",
+        "promptsNotResent": "恢復不會重新傳送你的提示。",
+        "promptsNotSent": "你的提示沒有被重新傳送。",
+        "resume": "恢復",
+        "details": "詳情",
+        "close": "關閉",
+        "listLabel": "聊天",
+        "untitled": "無標題聊天",
+        "willAsk": "Orca 會要求聊天繼續。排隊中的訊息可能會被傳送。",
+        "asked": "Orca 已要求聊天繼續。排隊中的訊息可能會被傳送。",
+        "resumedAutomatically": "已自動恢復。",
+        "changeInSettings": "在設定中變更",
+        "dismissAll": "全部忽略",
+        "open": "開啟",
+        "dismiss": "忽略",
+        "retry": "重試",
+        "stateResumed": "已恢復",
+        "stateNeedsYou": "需要你處理",
+        "stateResuming": "正在恢復",
+        "stateStopped": "已停止"
+      },
+      "NativeChatResumeFailureGuidance": {
+        "fallbackShort": "無法恢復。",
+        "unconfirmedShort": "無法確認已繼續。",
+        "supersededShort": "重新啟動後有新的工作。",
+        "conflictShort": "已在其他視窗或終端機中開啟。",
+        "ownershipUnknownShort": "尚未準備好恢復。",
+        "notAttachedShort": "未重新連線。",
+        "dispatchRejectedShort": "代理拒絕繼續。",
+        "unsupportedShort": "Orca 無法恢復此聊天。"
       }
     },
     "i18n": {
@@ -18947,7 +18895,6 @@
         "sendAgainToTryOnceMore": "請重新傳送您的訊息，再試一次。",
         "couldNotStart": "{{agent}} 無法啟動。",
         "couldNotRestart": "{{agent}} 無法重新啟動。",
-        "cliTooOld": "{{agent}} {{installedVersion}} 版本過舊，無法用於聊天。請更新至 {{minimumVersion}} 或較新版本。",
         "startTimedOut": "{{agent}} 啟動時間過長（{{seconds}} 秒後仍未回應 {{method}}）。",
         "startTimedOutKeepsHappening": "如果此問題持續發生，執行此聊天的電腦可能負載過高。",
         "notSignedIn": "{{agent}} 尚未登入。",
@@ -18987,6 +18934,7 @@
         "providerUnavailable": "{{agent}} 因服務忙碌而無法回覆。請選擇其他模型，或稍候片刻後重新傳送。",
         "providerSafetyStopped": "{{agent}} 在安全檢查後停止了此次回覆。請檢查您的請求後重新傳送。",
         "providerResponseFailed": "{{agent}} 未能完成此回覆。開啟詳細資料以取得更多資訊。",
+        "providerResponseFailedQuoted": "{{agent}} 未能完成此回覆：{{detail}}。",
         "selectedModel": "所選模型",
         "providerRejected": "{{agent}} 未接受此訊息。",
         "providerRejectedQuoted": "{{agent}} 未接受此訊息：{{detail}}。",
@@ -19557,7 +19505,7 @@
       "rewind": {
         "unsupported": "此聊天無法返回到更早的訊息。",
         "historyNotPaginated": "此舊版 Codex 聊天無法返回到更早的訊息。請開始新聊天以使用「回溯到此處」。",
-        "busy": "當代理程式閒置且此聊天中沒有等待您處理的內容時可用。",
+        "busy": "聊天閒置時可用",
         "staleEpoch": "對話已發生變化。請檢視最新訊息後重試。",
         "invalidTarget": "對話無法返回到此訊息。未做任何更改。",
         "historyLimit": "此對話過長，無法回溯。未做任何更改。",
@@ -19590,14 +19538,7 @@
         "unreported": "此工作階段無法提供上下文用量。"
       },
       "agentMessage": {
-        "messageFrom": "訊息來自",
         "unnamedSender": "一個代理程式",
-        "messageFromCoordinator": "來自協調者的訊息",
-        "startedWorker": "已啟動工作代理程式",
-        "handedOffToAgent": "已交接給代理程式",
-        "startedAgent": "已啟動代理程式",
-        "taskFromCoordinator": "來自協調者的任務",
-        "updateFromWorker": "來自工作代理程式的更新",
         "senderReplaced": "{{name}} 已不在其終端機中執行；目前有另一個代理程式在該終端機中執行。如有需要，請從側邊欄開啟該終端機。",
         "senderAmbiguous": "Orca 無法判斷 {{name}} 在哪個終端機中執行。請從側邊欄開啟終端機。",
         "senderNotRunning": "{{name}} 已停止執行。請從側邊欄啟動新的代理程式以繼續其工作。",
@@ -19708,9 +19649,6 @@
         "continue": "繼續",
         "failed": "無法繼續此聊天。請重試，或傳送一則訊息。",
         "explanation": "繼續後，代理程式會先檢查其上一步是否已完成。"
-      },
-      "antigravitySignIn": {
-        "sentence": "Antigravity 尚未登入。請前往 <settings>設定 → 帳戶 → Antigravity</settings> 登入，再重新傳送訊息。"
       },
       "claudeSignIn": {
         "signingIn": "正在登入…"
@@ -20826,16 +20764,17 @@
   },
   "featureTips": {
     "voice": {
-      "demoPrompt": "審查這份差異的邊界情況，並為發現的問題新增測試。",
-      "startDictation": "開始聽寫",
-      "agentPromptTitle": "代理程式提示詞",
-      "listening": "正在聆聽…",
       "unassignedInstruction": "在聚焦的窗格中使用語音聽寫前，請先設定聽寫快速鍵。",
       "shortcutInstruction": "將焦點移至終端機、編輯器或代理程式提示詞輸入框，然後按 <shortcut/> 開始語音聽寫。再按一次 <shortcut/> 即可停止。",
       "changeInSettings": "隨時在<link>設定 → 語音</link>中變更模型、聽寫模式或快速鍵。",
       "title": "在任何窗格中聽寫",
       "description": "在任何已聚焦的窗格中開始語音聽寫，再次使用快速鍵即可停止。",
-      "cta": "設定語音聽寫"
+      "cta": "設定語音聽寫",
+      "demoFirstPhrase": "在小螢幕上，結帳按鈕會蓋住頁尾。",
+      "demoSecondPhrase": "能加個測試嗎？",
+      "demoUserPrompt": "加上付款徽標",
+      "demoTabTitle": "結帳頁尾",
+      "demoReply": "已在結帳頁尾加上付款徽標。"
     },
     "sessionSearch": {
       "enableFailed": "無法開啟工作階段搜尋。請重試。",
@@ -21678,7 +21617,11 @@
         "sharedOne": "由於另一個窗格開啟了相同對話，1 個 Claude 工作階段會保留在 {{previous}}。重新啟動可能會重新開啟另一個窗格的對話。",
         "sharedOther": "由於另一個窗格開啟了相同對話，{{count}} 個 Claude 工作階段會保留在 {{previous}}。重新啟動可能會重新開啟另一個窗格的對話。",
         "strandedOne": "1 個 Claude 工作階段可能仍在 {{previous}} 上。請手動重新啟動以切換。",
-        "strandedOther": "{{count}} 個 Claude 工作階段可能仍在 {{previous}} 上。請手動重新啟動以切換。"
+        "strandedOther": "{{count}} 個 Claude 工作階段可能仍在 {{previous}} 上。請手動重新啟動以切換。",
+        "hostAskOne": "1 個 Claude 工作階段仍在 {{previous}} 上。",
+        "hostAskOther": "{{count}} 個 Claude 工作階段仍在 {{previous}} 上。",
+        "hostAskDescription": "重新啟動會停止進行中的工作。",
+        "hostAskRestart": "重新啟動"
       },
       "oauthUsage": {
         "title": "Claude 用量輪詢",
@@ -21745,11 +21688,9 @@
     },
     "nestedRemoval": {
       "refreshFailed": "無法重新整理工作區清單",
-      "review": "連同巢狀工作樹一起刪除…",
       "description": "這將永久刪除「{{name}}」、下面列出的每個巢狀工作樹及其中的所有檔案（包括未提交的更改）。它們的終端機和代理程式將被停止。",
       "detached": "分離 HEAD",
       "loading": "正在檢查巢狀工作樹…",
-      "order": "巢狀工作樹會先被刪除。如果其中一個失敗，刪除將停止並保留父工作樹。分支遵循您現有的刪除設定。",
       "cancel": "取消",
       "retry": "重新檢查",
       "deleting": "正在刪除…",
@@ -21777,12 +21718,10 @@
       "forceDelete": "強制刪除",
       "alwaysForceDelete": "始終強制刪除",
       "batchTitle": "要刪除 {{count}} 個工作區嗎？",
-      "batchVerb": "刪除 {{count}} 個工作區",
       "withChildrenTitle_one": "要刪除 {{name}} 和 {{count}} 個子工作區嗎？",
       "withChildrenTitle_other": "要刪除 {{name}} 和 {{count}} 個子工作區嗎？",
       "allVerb": "全部刪除",
       "singleTitle": "要刪除 {{name}} 嗎？",
-      "singleVerb": "刪除工作區",
       "forceExplanation": "存在變更，Git 無法刪除此工作樹。強制刪除仍會移除這些變更。",
       "errorDetails": "詳細資訊",
       "changesIncomplete": "部分變更未能完整檢查。"
@@ -21876,9 +21815,7 @@
     "updateFailed": "無法更新專案欄位"
   },
   "mediaPreview": {
-    "unavailable": "無法播放此媒體檔案。檔案可能不可用或使用了不支援的編解碼器。",
-    "openFailed": "無法在預設應用程式中開啟此檔案。",
-    "openDefault": "在預設應用程式中開啟"
+    "unavailable": "無法播放此媒體檔案。檔案可能不可用或使用了不支援的編解碼器。"
   },
   "workspace": {
     "branchChoice": {
@@ -22361,7 +22298,7 @@
   },
   "keybindings": {
     "title": {
-      "worktreePalette": "切換工作樹",
+      "worktreePalette": "全域搜尋",
       "worktreeNavigateUp": "上一個工作樹",
       "worktreeNavigateDown": "下一個工作樹",
       "workspaceCreate": "建立工作樹",
@@ -22473,6 +22410,9 @@
       "45347db2a3": "分頁導覽",
       "aab2837fa5": "快速指令",
       "3492a954c8": "終端機窗格"
+    },
+    "searchKeyword": {
+      "worktreePaletteFormerTitle": "切換工作樹"
     }
   },
   "gpuFallback": {
@@ -23348,8 +23288,7 @@
     },
     "upcoming": {
       "tidyNightAfter": "每晚 {{from}} 之後，或這台電腦喚醒後",
-      "tidyWeekAfter": "每週一次，{{from}} 之後，或這台電腦喚醒後",
-      "lookDueNow": "現在到期 · {{every}}"
+      "tidyWeekAfter": "每週一次，{{from}} 之後，或這台電腦喚醒後"
     },
     "palette": {
       "placeholder": "搜尋機器人、聊天、終端機、工作區、任務、設定和操作...",

@@ -2891,52 +2891,15 @@
         "9b40d7b018": "Kopieren"
       },
       "NativeChatResumeOnRestartModal": {
-        "serverTitle": "{{machine}} wurde neu gestartet",
-        "serverBody": "Diese Chats waren aktiv, als Orca auf {{machine}} neu gestartet wurde. Beim Fortsetzen wird jeder Chat an der Stelle wiederhergestellt, an der er unterbrochen wurde, und der Agent wird zum Fortfahren aufgefordert. Der ursprüngliche Prompt wird nicht erneut gesendet.",
-        "serverDismiss": "Verwerfen",
-        "serverResumeAll": "Alle {{count}} auf {{machine}} fortsetzen",
-        "title": "Unterbrochene Chats fortsetzen?",
-        "body": "Diese Chats waren aktiv, als Orca geschlossen wurde. Beim Fortsetzen wird jeder Chat mit seinem vollständigen Kontext an der Stelle wiederhergestellt, an der er unterbrochen wurde. Der Agent wird aufgefordert, vor dem Fortfahren seine bisherige Tätigkeit zu prüfen. Der ursprüngliche Prompt wird nicht erneut gesendet.",
-        "updateBody": "Diese Chats waren aktiv, als Orca ein Update installiert hat. Beim Fortsetzen wird jeder Chat mit seinem vollständigen Kontext an der Stelle wiederhergestellt, an der er unterbrochen wurde. Der Agent wird aufgefordert, vor dem Fortfahren seine bisherige Tätigkeit zu prüfen. Der ursprüngliche Prompt wird nicht erneut gesendet.",
-        "resuming": "Wird fortgesetzt…",
-        "untitled": "Unbenannter Chat",
-        "listLabel": "Chats, die fortgesetzt würden",
-        "dontAskAgain": "Nicht erneut fragen (automatisch fortsetzen)",
-        "dontAskAgainHint": "Lässt sich unter Einstellungen → Chat → Verhalten deaktivieren.",
-        "selectAgent": "{{value0}}-Chat „{{value1}}“ in {{value2}} fortsetzen",
-        "dismissAll": "Alle verwerfen",
-        "viewChats": "Chats anzeigen",
-        "review": "Prüfen",
         "activityUnnamed": "unbenannt",
         "activityApproval": "Wartet auf Genehmigung: {{value0}}",
         "activityQuestion": "Wartet auf Antwort: {{value0}}",
         "activityMidReply": "Wurde während einer Antwort unterbrochen",
         "activitySubagentOne": "Unteragent aktiv: {{value0}}",
         "activityMonitorOne": "Wird überwacht: {{value0}}",
-        "selectWorkspace": "Alle Chats in {{value0}} auswählen",
         "workspaceSelectedCount": "{{value0}} von {{value1}}",
-        "selectAll": "Alle Chats auswählen",
-        "selectAllLabel": "Alle auswählen",
-        "selectedCount": "{{value0}} von {{value1}} ausgewählt",
-        "selectProject": "Alle Chats in {{value0}} auswählen",
         "collapseNode": "{{value0}} einklappen",
         "expandNode": "{{value0}} ausklappen",
-        "selectMachine": "Alle Chats auf {{value0}} auswählen",
-        "sshHost": "SSH",
-        "done": "Abschließen",
-        "resultListLabel": "Chats dieses Fortsetzungsvorgangs",
-        "resumeChats_one": "{{count}} Chat fortsetzen",
-        "resumeChats_other": "{{count}} Chats fortsetzen",
-        "serverResumeHereCount_one": "{{count}} hier gestarteten Chat fortsetzen",
-        "serverResumeHereCount_other": "{{count}} hier gestartete Chats fortsetzen",
-        "continuedCount_one": "{{count}} Chat fortgesetzt",
-        "continuedCount_other": "{{count}} Chats fortgesetzt",
-        "notContinuedCount_one": "{{count}} Chat konnte nicht fortgesetzt werden",
-        "notContinuedCount_other": "{{count}} Chats konnten nicht fortgesetzt werden",
-        "notConfirmedCount_one": "Fortsetzung von {{count}} Chat konnte nicht bestätigt werden",
-        "notConfirmedCount_other": "Fortsetzung von {{count}} Chats konnte nicht bestätigt werden",
-        "notConfirmedOtherCount_one": "Fortsetzung von {{count}} weiteren Chat konnte nicht bestätigt werden",
-        "notConfirmedOtherCount_other": "Fortsetzung von {{count}} weiteren Chats konnte nicht bestätigt werden",
         "activitySubagentCount_one": "{{count}} Unteragent läuft",
         "activitySubagentCount_other": "{{count}} Unteragenten laufen",
         "activityMonitorCount_one": "{{count}} Hintergrundaufgabe wird überwacht",
@@ -4605,7 +4568,6 @@
             "27a74f91f0": "Derzeit ist nichts aktiv",
             "298f4be7f2": "CPU",
             "2aa2de6cb9": "Name",
-            "1fedf94eae": "Gesamte CPU-Auslastung. Werte über 100% bedeuten, dass mehrere Kerne gleichzeitig arbeiten.",
             "e7cf14ec78": "Terminal-Sitzungen sind nicht verfügbar. Die Liste ist möglicherweise veraltet.",
             "93b0de3c21": "Neu starten",
             "f85af9cda6": "Momentaufnahmen der Ressourcennutzung und Terminal-Sitzungen sind nicht verfügbar.",
@@ -4997,8 +4959,6 @@
                 "copy": {
                   "terminalSessionCount_one": "{{count}} Terminal-Sitzung",
                   "terminalSessionCount_other": "{{count}} Terminal-Sitzungen",
-                  "memoryUnavailable": "Speicher nicht verfügbar",
-                  "tooltipSummary": "Ressourcenverwaltung - {{memory}} - {{sessions}}",
                   "spaceScanReady": "Speicherplatz-Scan bereit",
                   "sessionsGroupedByWorkspace": "Terminal-Sitzungen sind nach Arbeitsbereich gruppiert.",
                   "noTerminalSessions": "Noch keine Terminal-Sitzungen.",
@@ -6418,7 +6378,6 @@
         },
         "SidebarWorkspaceOptionsMenu": {
           "hosts": "Hosts",
-          "showSection": "Anzeigen",
           "allHostsDetail": "Alle Hosts anzeigen",
           "configuredSshHost": "Konfigurierter SSH-Host",
           "projectSshHost": "Projekt-SSH-Host",
@@ -6468,7 +6427,6 @@
           "219ebf1961": "Branch-Name",
           "folderPathIdentity": "Branch / Ordnerpfad",
           "cli": "Orca CLI",
-          "workspaceOptions": "Arbeitsbereichsoptionen",
           "optionsActiveFilters_one": "Arbeitsbereichsoptionen ({{count}} Filter aktiv)",
           "optionsActiveFilters_other": "Arbeitsbereichsoptionen ({{count}} Filter aktiv)",
           "optionsFilterCount_one": "Arbeitsbereichsoptionen ({{count}} Filter)",
@@ -7692,9 +7650,9 @@
           "8fbe1f37c1": "Umgebung",
           "2d133152fa": "Keine Standardumgebung",
           "3f1bdf3cb4": "Der Umgebungstext ist zu groß, um sicher analysiert zu werden.",
-          "codexSessionSource": "Codex-Home-Verzeichnis für den Import",
-          "codexSessionSourceInfo": "Informationen zum Import des Codex-Verlaufs",
-          "codexSessionSourceTooltip": "Orca führt Codex in einem isolierten Home-Verzeichnis aus. Hier das vorhandene Codex-Home-Verzeichnis angeben, um dessen Sitzungsverlauf zu importieren. Bei leerem Feld wird ~/.codex verwendet.",
+          "codexSessionSource": "Codex-Unterhaltungen importieren aus",
+          "codexSessionSourceInfo": "Informationen zum Import von Codex-Unterhaltungen",
+          "codexSessionSourceTooltip": "Solange der Verlauf kontoübergreifend geteilt wird, kopiert Orca die Unterhaltungen dieses Codex-Home-Verzeichnisses nach ~/.codex, damit /resume sie anzeigt. Beiträge, die nach dem Kopieren in diesem Ordner hinzukommen, erreichen die Kopie nicht.",
           "noAgentsDetected": "Keine Agenten erkannt. Falls einer installiert ist, hat die Erkennung möglicherweise das Zeitlimit überschritten.",
           "9f30095d49": "Agentenberechtigungen"
         },
@@ -8167,7 +8125,7 @@
           "8a52ca1d02": "Versionshinweise",
           "d89806cc89": "ist zur Installation bereit.",
           "a6b37929dc": "Version",
-          "8311da27ba": "ist verfügbar. Zum Herunterladen „Update herunterladen“ anklicken.",
+          "8311da27ba": "ist verfügbar.",
           "02dc082e70": "Der Update-Download konnte nicht gestartet werden.",
           "ceb579abaf": "Nach App-Updates suchen und eine neuere Orca-Version installieren.",
           "bd79d412f0": "Suche nach Updates fehlgeschlagen. {{value0}}",
@@ -13568,10 +13526,8 @@
             "f61af83316": "Ordner erstellen",
             "37c875d827": "Datei erstellen",
             "b3e288bf41": "„{{value0}}“ konnte nicht heruntergeladen werden.",
-            "f729bcd97d": "Der Ordner „{{value0}}“ konnte nicht heruntergeladen werden.",
             "1a3df04ae1": "Öffnen",
             "bce4d4e44f": "„{{value0}}“ heruntergeladen",
-            "a4029c996b": "Ordner „{{value0}}“ heruntergeladen",
             "e26010014a": "Durch .gitignore ignoriert",
             "a06551beee": "Enter",
             "66a29dde82": "Relativen Pfad kopieren",
@@ -17331,7 +17287,7 @@
             "734e4343ec": "Browser-Anmerkungen entfernen",
             "95af781091": "Feedback an einen Agenten senden",
             "ac39b9366b": "Senden",
-            "366bf5d62c": "Neuen Tab öffnen",
+            "366bf5d62c": "Neuer Tab",
             "781d6459ad": "Erneut versuchen",
             "2fdca7df09": "Ausblenden",
             "0f41bf80c7": "Im Standardbrowser öffnen",
@@ -18790,26 +18746,6 @@
         "3d8e5f1b9c": "Skills über einen nicht gelisteten Link teilen und auf allen verwendeten Computern installieren.",
         "c5b3e8a17d": "Bei Orca anmelden"
       },
-      "NativeChatResumeOutcomeRow": {
-        "openChat": "Chat öffnen",
-        "retry": "Erneut versuchen",
-        "dismiss": "Ausblenden",
-        "unconfirmed": "Die Fortsetzung des Chats konnte nicht bestätigt werden",
-        "failed": "Fortsetzen fehlgeschlagen",
-        "statusFor": "{{value0}}: {{value1}}",
-        "dismissChat": "„{{value0}}“ in {{value1}} ausblenden",
-        "toResume": "Zum Fortsetzen:"
-      },
-      "NativeChatResumeFailureGuidance": {
-        "unconfirmed": "Orca konnte die Zustellung der Nachricht „Fortsetzen“ nicht bestätigen. Den Chat öffnen und prüfen, bevor eine weitere Nachricht gesendet wird.",
-        "superseded": "Den Chat öffnen und antworten. Direkt nach dem Neustart kam darin neue Arbeit an, daher hat Orca seine Nachricht „Fortsetzen“ nicht gesendet.",
-        "conflict": "Dieser Chat ist in einem anderen Orca-Fenster oder Terminal geöffnet. Dort schließen und erneut versuchen.",
-        "ownershipUnknown": "Dieser Chat ist noch nicht zum Fortsetzen bereit. Einen Moment warten und erneut versuchen.",
-        "notAttached": "Der Chat wurde nicht erneut verbunden. Erneut versuchen oder den Chat öffnen, um eine neue Runde zu starten.",
-        "dispatchRejected": "Der Agent hat die Nachricht „Fortsetzen“ abgelehnt. Den Chat öffnen und selbst eine Nachricht senden.",
-        "unsupported": "Dieser Chat kann von Orca nicht fortgesetzt werden. Den Chat öffnen, um zu sehen, wo er aufgehört hat.",
-        "fallback": "Orca konnte diesen Chat nicht fortsetzen. Den Chat öffnen, um manuell fortzufahren."
-      },
       "web": {
         "preloadApi": {
           "cursorAccounts": {
@@ -18820,41 +18756,6 @@
             "claudeWslDefaultUnavailable": "Das Zurücksetzen einer WSL-Umgebung auf den Systemstandard ist nur in der Desktop-App möglich."
           }
         }
-      },
-      "NativeChatResumeRunPanel": {
-        "description": "Jeder Chat wird mit seinem vollständigen Kontext wiederhergestellt und aufgefordert, zu prüfen, wo er aufgehört hat. Dieses Panel kann geschlossen werden; der Fortschritt wird in der Statusleiste angezeigt.",
-        "finished": "Diese Chats waren aktiv, als Orca geschlossen wurde. Orca hat jeden Chat mit seinem vollständigen Kontext an der Stelle wiederhergestellt, an der er aufgehört hatte, und den Agenten gebeten, vor dem Fortfahren die zuletzt ausgeführte Aufgabe zu prüfen. Eigene Prompts wurden nicht erneut gesendet.",
-        "finishedUpdate": "Diese Chats waren aktiv, als Orca ein Update installierte. Orca hat jeden Chat mit seinem vollständigen Kontext an der Stelle wiederhergestellt, an der er aufgehört hatte, und den Agenten gebeten, vor dem Fortfahren die zuletzt ausgeführte Aufgabe zu prüfen. Eigene Prompts wurden nicht erneut gesendet.",
-        "finishedPartial": "Diese Chats waren aktiv, als Orca geschlossen wurde. Die von Orca fortgesetzten Chats wurden mit ihrem vollständigen Kontext an der Stelle wiederhergestellt, an der sie aufgehört hatten, und aufgefordert, vor dem Fortfahren die zuletzt ausgeführte Aufgabe zu prüfen. Eigene Prompts wurden nicht erneut gesendet. In der Liste prüfen, welche Chats noch Aufmerksamkeit benötigen oder fortgesetzt werden können.",
-        "finishedPartialUpdate": "Diese Chats waren aktiv, als Orca ein Update installierte. Die von Orca fortgesetzten Chats wurden mit ihrem vollständigen Kontext an der Stelle wiederhergestellt, an der sie aufgehört hatten, und aufgefordert, vor dem Fortfahren die zuletzt ausgeführte Aufgabe zu prüfen. Eigene Prompts wurden nicht erneut gesendet. In der Liste prüfen, welche Chats noch Aufmerksamkeit benötigen oder fortgesetzt werden können.",
-        "resumedOfTotal_one": "{{resumed}} von {{count}} Chat fortgesetzt",
-        "resumedOfTotal_other": "{{resumed}} von {{count}} Chats fortgesetzt",
-        "resumingCount_one": "{{count}} Chat wird fortgesetzt",
-        "resumingCount_other": "{{count}} Chats werden fortgesetzt"
-      },
-      "NativeChatResumeRunStatusIcon": {
-        "waitingForReply": "Warten auf eine Antwort",
-        "starting": "Wird gestartet",
-        "waitingToStart": "Warten auf den Start",
-        "inFlight": "{{value0}} · {{value1}}",
-        "resumed": "Fortgesetzt"
-      },
-      "NativeChatResumeRunSummary": {
-        "done": "{{value0}} von {{value1}} fertig",
-        "starting": "Beim Start: {{value0}}",
-        "waitingForReply": "Warten auf eine Antwort: {{value0}}",
-        "waitingToStart": "Warten auf den Start: {{value0}}",
-        "all": "Alle",
-        "inProgress": "In Bearbeitung",
-        "resumed": "Fortgesetzt",
-        "attention": "Eingabe erforderlich",
-        "running": "Aktiv: {{value0}}",
-        "filter": "Chats anzeigen"
-      },
-      "NativeChatResumeAutoNote": {
-        "resuming": "Wird nach dem Neustart automatisch fortgesetzt.",
-        "resumed": "Nach dem Neustart automatisch fortgesetzt.",
-        "changeInSettings": "In den Einstellungen ändern"
       },
       "TaskPageJiraSavedFilters": {
         "6c381858a1": "Gespeicherte Filter",
@@ -19000,6 +18901,55 @@
         "setting-global-off": "Das Ordnervertrauen ist in den Agenten-Einstellungen ausgeschaltet, daher fragen Agenten immer nach.",
         "keyword-trust": "vertrauen",
         "keyword-hooks": "Hooks"
+      },
+      "NativeChatResumeToast": {
+        "resumingOn_one": "{{count}} Chat auf {{machine}} wird fortgesetzt…",
+        "resumingOn_other": "{{count}} Chats auf {{machine}} werden fortgesetzt…",
+        "resuming_one": "{{count}} Chat wird fortgesetzt…",
+        "resuming_other": "{{count}} Chats werden fortgesetzt…",
+        "resumedOn_one": "{{count}} Chat auf {{machine}} fortgesetzt.",
+        "resumedOn_other": "{{count}} Chats auf {{machine}} fortgesetzt.",
+        "resumedUpdate_one": "{{count}} Chat nach dem Update fortgesetzt.",
+        "resumedUpdate_other": "{{count}} Chats nach dem Update fortgesetzt.",
+        "resumedRestart_one": "{{count}} Chat nach dem Neustart fortgesetzt.",
+        "resumedRestart_other": "{{count}} Chats nach dem Neustart fortgesetzt.",
+        "partial_one": "{{resumed}} von {{total}} Chats fortgesetzt. {{count}} braucht dich.",
+        "partial_other": "{{resumed}} von {{total}} Chats fortgesetzt. {{count}} brauchen dich.",
+        "stoppedOn_one": "{{count}} Chat auf {{machine}} angehalten.",
+        "stoppedOn_other": "{{count}} Chats auf {{machine}} angehalten.",
+        "stoppedUpdate_one": "{{count}} Chat beim Orca-Update angehalten.",
+        "stoppedUpdate_other": "{{count}} Chats beim Orca-Update angehalten.",
+        "stoppedRestart_one": "{{count}} Chat beim Beenden von Orca angehalten.",
+        "stoppedRestart_other": "{{count}} Chats beim Beenden von Orca angehalten.",
+        "promptsNotResent": "Deine Prompts werden nicht erneut gesendet.",
+        "promptsNotSent": "Deine Prompts wurden nicht erneut gesendet.",
+        "resume": "Fortsetzen",
+        "details": "Details",
+        "close": "Schließen",
+        "listLabel": "Chats",
+        "untitled": "Chat ohne Titel",
+        "willAsk": "Orca bittet die Chats, fortzufahren. Wartende Nachrichten werden evtl. gesendet.",
+        "asked": "Orca hat die Chats gebeten, fortzufahren. Wartende Nachrichten werden evtl. gesendet.",
+        "resumedAutomatically": "Automatisch fortgesetzt.",
+        "changeInSettings": "In den Einstellungen ändern",
+        "dismissAll": "Alle verwerfen",
+        "open": "Öffnen",
+        "dismiss": "Verwerfen",
+        "retry": "Wiederholen",
+        "stateResumed": "Fortgesetzt",
+        "stateNeedsYou": "Braucht dich",
+        "stateResuming": "Wird fortgesetzt",
+        "stateStopped": "Angehalten"
+      },
+      "NativeChatResumeFailureGuidance": {
+        "fallbackShort": "Nicht fortgesetzt.",
+        "unconfirmedShort": "Fortsetzen nicht bestätigt.",
+        "supersededShort": "Nach dem Neustart kam neue Arbeit.",
+        "conflictShort": "In einem anderen Fenster oder Terminal offen.",
+        "ownershipUnknownShort": "Noch nicht bereit.",
+        "notAttachedShort": "Keine Verbindung.",
+        "dispatchRejectedShort": "Der Agent hat abgelehnt.",
+        "unsupportedShort": "Orca kann ihn nicht fortsetzen."
       }
     },
     "i18n": {
@@ -19210,7 +19160,6 @@
         "sendAgainToTryOnceMore": "Die Nachricht erneut senden, um es noch einmal zu versuchen.",
         "couldNotStart": "{{agent}} konnte nicht gestartet werden.",
         "couldNotRestart": "{{agent}} konnte nicht neu gestartet werden.",
-        "cliTooOld": "{{agent}} {{installedVersion}} ist zu alt für Chats. Auf {{minimumVersion}} oder neuer aktualisieren.",
         "startTimedOut": "{{agent}} hat zu lange zum Starten gebraucht (keine Antwort auf {{method}} nach {{seconds}}s).",
         "startTimedOutKeepsHappening": "Wenn dies wiederholt auftritt, ist der Computer, auf dem dieser Chat läuft, möglicherweise überlastet.",
         "notSignedIn": "{{agent}} ist nicht angemeldet.",
@@ -19247,6 +19196,7 @@
         "providerUnavailable": "{{agent}} konnte nicht antworten, weil der Dienst ausgelastet ist. Wähle ein anderes Modell oder warte kurz und sende erneut.",
         "providerSafetyStopped": "{{agent}} hat diese Antwort nach einer Sicherheitsprüfung gestoppt. Überprüfe deine Anfrage und sende sie erneut.",
         "providerResponseFailed": "{{agent}} konnte diese Antwort nicht abschließen. Öffnen Sie die Details für weitere Informationen.",
+        "providerResponseFailedQuoted": "{{agent}} konnte diese Antwort nicht abschließen: {{detail}}.",
         "modelUnavailable": "{{agent}} konnte {{detail}} nicht verwenden. Ein anderes Modell auswählen und erneut senden.",
         "selectedModel": "das ausgewählte Modell",
         "providerRejected": "{{agent}} hat diese Nachricht nicht angenommen.",
@@ -19866,7 +19816,7 @@
       "rewind": {
         "unsupported": "Dieser Chat kann nicht zu einer früheren Nachricht zurückgesetzt werden.",
         "historyNotPaginated": "Dieser ältere Codex-Chat kann nicht zu einer früheren Nachricht zurückgesetzt werden. Einen neuen Chat starten, um „Bis hierher zurücksetzen“ zu verwenden.",
-        "busy": "Verfügbar, sobald der Agent inaktiv ist und im Chat keine Aktion mehr aussteht.",
+        "busy": "Verfügbar, wenn der Chat inaktiv ist",
         "staleEpoch": "Das Gespräch hat sich geändert. Die neuesten Nachrichten prüfen und erneut versuchen.",
         "invalidTarget": "Das Gespräch kann nicht zu dieser Nachricht zurückgesetzt werden. Es wurde nichts geändert.",
         "historyLimit": "Dieses Gespräch ist zu lang, um darin zurückzugehen. Es wurde nichts geändert.",
@@ -19899,14 +19849,7 @@
         "unreported": "Die Kontextnutzung ist für diese Sitzung nicht verfügbar."
       },
       "agentMessage": {
-        "messageFrom": "Nachricht von",
         "unnamedSender": "einem Agenten",
-        "messageFromCoordinator": "Nachricht vom Koordinator",
-        "startedWorker": "Worker gestartet",
-        "handedOffToAgent": "An Agenten übergeben",
-        "startedAgent": "Agent gestartet",
-        "taskFromCoordinator": "Aufgabe vom Koordinator",
-        "updateFromWorker": "Aktualisierung vom Worker",
         "senderReplaced": "{{name}} läuft nicht mehr in seinem Terminal; dort läuft jetzt ein anderer Agent. Öffne das Terminal bei Bedarf über die Seitenleiste.",
         "senderAmbiguous": "Orca kann nicht feststellen, in welchem Terminal {{name}} läuft. Öffne es über die Seitenleiste.",
         "senderNotRunning": "{{name}} läuft nicht mehr. Starte einen neuen Agenten über die Seitenleiste, um die Arbeit fortzusetzen.",
@@ -20020,9 +19963,6 @@
         "continue": "Fortfahren",
         "failed": "Dieser Chat konnte nicht fortgesetzt werden. Erneut versuchen oder eine Nachricht senden.",
         "explanation": "Beim Fortfahren prüft der Agent zuerst, ob sein letzter Schritt abgeschlossen wurde."
-      },
-      "antigravitySignIn": {
-        "sentence": "Antigravity ist nicht angemeldet. Unter <settings>Einstellungen → Konten → Antigravity</settings> anmelden. Danach die Nachricht erneut senden."
       },
       "claudeSignIn": {
         "signingIn": "Anmeldung läuft…"
@@ -21146,16 +21086,17 @@
   },
   "featureTips": {
     "voice": {
-      "demoPrompt": "Diesen Diff auf Sonderfälle prüfen und Tests für alle gefundenen Fälle hinzufügen.",
-      "startDictation": "Diktat starten",
-      "agentPromptTitle": "Agenten-Prompt",
-      "listening": "Warte auf Spracheingabe…",
       "unassignedInstruction": "Vor dem Diktieren in einem fokussierten Bereich ein Tastenkürzel für das Diktat zuweisen.",
       "shortcutInstruction": "Ein Terminal, einen Editor oder einen Agenten-Prompt fokussieren und <shortcut/> drücken, um das Diktat zu starten. Zum Beenden erneut <shortcut/> drücken.",
       "changeInSettings": "Modell, Diktatmodus oder Tastenkürzel jederzeit unter <link>Einstellungen → Spracheingabe</link> ändern.",
       "title": "In jedem Bereich diktieren",
       "description": "Das Diktat in einem fokussierten Bereich starten und mit demselben Tastenkürzel wieder beenden.",
-      "cta": "Sprachdiktat einrichten"
+      "cta": "Sprachdiktat einrichten",
+      "demoFirstPhrase": "Der Checkout-Button überdeckt auf kleinen Bildschirmen den Footer.",
+      "demoSecondPhrase": "Und einen Test dazu?",
+      "demoUserPrompt": "Zahlungslogos einbauen",
+      "demoTabTitle": "Checkout-Footer",
+      "demoReply": "Zahlungslogos im Checkout-Footer ergänzt."
     },
     "sessionSearch": {
       "enableFailed": "Die Sitzungssuche konnte nicht aktiviert werden. Erneut versuchen.",
@@ -22007,7 +21948,11 @@
         "sharedOne": "1 Claude-Sitzung bleibt auf {{previous}}, weil dieselbe Unterhaltung in einem anderen Bereich geöffnet ist. Ein Neustart könnte die Unterhaltung des anderen Bereichs erneut öffnen.",
         "sharedOther": "{{count}} Claude-Sitzungen bleiben auf {{previous}}, weil dieselbe Unterhaltung in einem anderen Bereich geöffnet ist. Ein Neustart könnte die Unterhaltung des anderen Bereichs erneut öffnen.",
         "strandedOne": "1 Claude-Sitzung läuft möglicherweise noch auf {{previous}}. Starte sie manuell neu, um zu wechseln.",
-        "strandedOther": "{{count}} Claude-Sitzungen laufen möglicherweise noch auf {{previous}}. Starte sie manuell neu, um zu wechseln."
+        "strandedOther": "{{count}} Claude-Sitzungen laufen möglicherweise noch auf {{previous}}. Starte sie manuell neu, um zu wechseln.",
+        "hostAskOne": "1 Claude-Sitzung läuft noch auf {{previous}}.",
+        "hostAskOther": "{{count}} Claude-Sitzungen laufen noch auf {{previous}}.",
+        "hostAskDescription": "Ein Neustart beendet laufende Arbeit.",
+        "hostAskRestart": "Neu starten"
       },
       "oauthUsage": {
         "title": "Claude-Nutzungsabfrage",
@@ -22071,11 +22016,9 @@
   "worktree": {
     "nestedRemoval": {
       "refreshFailed": "Die Liste der Arbeitsbereiche konnte nicht aktualisiert werden",
-      "review": "Mit verschachtelten Worktrees löschen…",
       "description": "Dadurch werden „{{name}}“, alle unten aufgeführten verschachtelten Worktrees und alle darin enthaltenen Dateien einschließlich nicht committeter Änderungen endgültig gelöscht. Ihre Terminals und Agenten werden gestoppt.",
       "detached": "Losgelöster HEAD",
       "loading": "Verschachtelte Worktrees werden überprüft…",
-      "order": "Verschachtelte Worktrees werden zuerst gelöscht. Schlägt ein Löschvorgang fehl, wird das Löschen gestoppt und der übergeordnete Arbeitsbereich beibehalten. Für Branches gelten die bestehenden Löscheinstellungen.",
       "cancel": "Abbrechen",
       "retry": "Erneut überprüfen",
       "deleting": "Wird gelöscht…",
@@ -22106,12 +22049,10 @@
       "forceDelete": "Löschen erzwingen",
       "alwaysForceDelete": "Löschen immer erzwingen",
       "batchTitle": "{{count}} Arbeitsbereiche löschen?",
-      "batchVerb": "{{count}} Arbeitsbereiche löschen",
       "withChildrenTitle_one": "{{name}} und {{count}} untergeordneten Arbeitsbereich löschen?",
       "withChildrenTitle_other": "{{name}} und {{count}} untergeordnete Arbeitsbereiche löschen?",
       "allVerb": "Alle löschen",
       "singleTitle": "{{name}} löschen?",
-      "singleVerb": "Arbeitsbereich löschen",
       "forceExplanation": "Git konnte ihn wegen vorhandener Änderungen nicht löschen. Erzwungenes Löschen entfernt diese Änderungen trotzdem.",
       "errorDetails": "Details",
       "changesIncomplete": "Einige Änderungen konnten nicht vollständig geprüft werden."
@@ -22206,9 +22147,7 @@
     "updateFailed": "Projektfeld konnte nicht aktualisiert werden"
   },
   "mediaPreview": {
-    "unavailable": "Diese Mediendatei kann nicht wiedergegeben werden. Die Datei ist möglicherweise nicht verfügbar oder verwendet einen nicht unterstützten Codec.",
-    "openFailed": "Diese Datei konnte nicht in der Standard-App geöffnet werden.",
-    "openDefault": "In Standard-App öffnen"
+    "unavailable": "Diese Mediendatei kann nicht wiedergegeben werden. Die Datei ist möglicherweise nicht verfügbar oder verwendet einen nicht unterstützten Codec."
   },
   "workspace": {
     "branchChoice": {
@@ -22855,7 +22794,7 @@
   },
   "keybindings": {
     "title": {
-      "worktreePalette": "Worktree wechseln",
+      "worktreePalette": "Alles durchsuchen",
       "worktreeNavigateUp": "Zum vorherigen Worktree wechseln",
       "worktreeNavigateDown": "Zum nächsten Worktree wechseln",
       "workspaceCreate": "Worktree erstellen",
@@ -22967,6 +22906,9 @@
       "45347db2a3": "Tab-Navigation",
       "aab2837fa5": "Schnellbefehle",
       "3492a954c8": "Terminal-Bereiche"
+    },
+    "searchKeyword": {
+      "worktreePaletteFormerTitle": "Worktree wechseln"
     }
   },
   "gpuFallback": {
@@ -23685,8 +23627,7 @@
     },
     "upcoming": {
       "tidyNightAfter": "Jede Nacht ab {{from}} oder sobald dieser Computer wach ist",
-      "tidyWeekAfter": "Einmal pro Woche ab {{from}} oder sobald dieser Computer wach ist",
-      "lookDueNow": "Jetzt fällig · {{every}}"
+      "tidyWeekAfter": "Einmal pro Woche ab {{from}} oder sobald dieser Computer wach ist"
     },
     "palette": {
       "placeholder": "Bots, Chats, Terminals, Arbeitsbereiche, Aufgaben, Einstellungen und Aktionen suchen…",

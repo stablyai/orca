@@ -6,7 +6,6 @@ import {
 import { useTerminalViewportRefit } from '../../viewport/terminal-viewport-refit'
 import { removeCustomKey, type CustomKey } from '../../key-input/terminal-custom-keys'
 import { useWorkspaceExecutionHost } from '../../../navigation/workspace-execution-host'
-import { writeLastVisitedWorktree } from '../../../worktree/navigation/last-visited-worktree-by-host'
 import { getMobileTerminalTabHostAgentIdentity } from '../../../session/tabs/mobile-terminal-tab-agent'
 import {
   buildRecentSessionCardFromTab,
@@ -14,35 +13,25 @@ import {
   reconcileRecentSessionCardsForWorktree,
   recordRecentSessionCardVisit
 } from '../../../session/recent-session-cards'
-import { resolveTabStripScrollOffset } from '../../../session/tabs/tab-strip-scroll'
+import { writeLastVisitedWorktree } from '../../../worktree/navigation/last-visited-worktree-by-host'
 import type { MobileSessionLifecycleModel } from '../../../session/use-mobile-session-lifecycle'
 
-const EMPTY_SESSION_TABS: MobileSessionLifecycleModel['sessionTabs'] = []
-
-/**
- * Exactly the fields this hook reads, so the whole lifecycle model still fits and a test can build
- * one. Most of them are forwarded to the viewport refit; the rest are named where they are used.
- */
 export type MobileSessionKeyboardScope = Pick<
   MobileSessionLifecycleModel,
   | 'activeHandleRef'
+  | 'activeSessionTabId'
   | 'visibleTerminalHandlesRef'
   | 'terminalPaneViewportsRef'
-  | 'activeSessionTabId'
   | 'clientRef'
   | 'connState'
   | 'deviceTokenRef'
   | 'hostId'
   | 'router'
+  | 'sessionTabs'
   | 'setCustomKeys'
   | 'setShowCustomKeyModal'
   | 'showNativeChatRef'
   | 'subscribeToTerminal'
-  | 'tabLayoutsRef'
-  | 'tabStripContentWidthRef'
-  | 'tabStripOffsetRef'
-  | 'tabStripRef'
-  | 'tabStripViewportWidthRef'
   | 'terminalFrameRef'
   | 'terminalRefs'
   | 'terminals'
@@ -52,26 +41,21 @@ export type MobileSessionKeyboardScope = Pick<
   | 'viewportMeasuredRef'
   | 'viewportRef'
   | 'worktreeId'
-> &
-  Partial<Pick<MobileSessionLifecycleModel, 'sessionTabs' | 'worktreeName'>>
+  | 'worktreeName'
+>
 
 export function useMobileSessionKeyboardState(scope: MobileSessionKeyboardScope) {
   const {
     hostId,
     worktreeId,
     worktreeName,
-    sessionTabs = EMPTY_SESSION_TABS,
     router,
     connState,
+    sessionTabs,
+    activeSessionTabId,
     terminals,
     terminalTextScale,
     terminalFontStyle,
-    activeSessionTabId,
-    tabStripRef,
-    tabStripOffsetRef,
-    tabStripViewportWidthRef,
-    tabStripContentWidthRef,
-    tabLayoutsRef,
     setCustomKeys,
     setShowCustomKeyModal,
     deviceTokenRef,
@@ -119,55 +103,6 @@ export function useMobileSessionKeyboardState(scope: MobileSessionKeyboardScope)
     )
   }, [notifyKeyboardVisibility])
 
-  const heldTabStripRevealRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const cancelHeldTabStripReveal = useCallback(() => {
-    if (heldTabStripRevealRef.current) {
-      clearTimeout(heldTabStripRevealRef.current)
-      heldTabStripRevealRef.current = null
-    }
-  }, [])
-  useEffect(() => cancelHeldTabStripReveal, [cancelHeldTabStripReveal])
-  // Hold strip movement through double-tap detection so its second tap reaches the same tab.
-  const holdTabStripReveal = useCallback(
-    (offset: number, delayMs: number) => {
-      cancelHeldTabStripReveal()
-      heldTabStripRevealRef.current = setTimeout(() => {
-        heldTabStripRevealRef.current = null
-        if (offset !== tabStripOffsetRef.current) {
-          tabStripOffsetRef.current = offset
-          tabStripRef.current?.scrollTo({ x: offset, animated: true })
-        }
-      }, delayMs)
-    },
-    [cancelHeldTabStripReveal]
-  )
-
-  const scrollActiveTabIntoView = useCallback((tabId: string | null, animated: boolean) => {
-    if (!tabId || heldTabStripRevealRef.current) {
-      return
-    }
-    const layout = tabLayoutsRef.current.get(tabId)
-    if (!layout) {
-      return
-    }
-    const nextOffset = resolveTabStripScrollOffset({
-      tabX: layout.x,
-      tabWidth: layout.width,
-      viewportWidth: tabStripViewportWidthRef.current,
-      contentWidth: tabStripContentWidthRef.current,
-      currentOffset: tabStripOffsetRef.current
-    })
-    if (nextOffset !== tabStripOffsetRef.current) {
-      tabStripOffsetRef.current = nextOffset
-      tabStripRef.current?.scrollTo({ x: nextOffset, animated })
-    }
-  }, [])
-
-  useEffect(() => {
-    const id = requestAnimationFrame(() => scrollActiveTabIntoView(activeSessionTabId, true))
-    return () => cancelAnimationFrame(id)
-  }, [activeSessionTabId, scrollActiveTabIntoView])
-
   const executionHost = useWorkspaceExecutionHost()
   useEffect(() => {
     if (hostId && worktreeId) {
@@ -185,12 +120,7 @@ export function useMobileSessionKeyboardState(scope: MobileSessionKeyboardScope)
       return
     }
     if (sessionTabs.length > 0) {
-      reconcileRecentSessionCardsForWorktree({
-        hostId,
-        worktreeId,
-        liveTabs: sessionTabs,
-        activeTabId: activeSessionTabId
-      })
+      reconcileRecentSessionCardsForWorktree({ hostId, worktreeId, liveTabs: sessionTabs })
     }
     if (!activeSessionTabId) {
       return
@@ -200,7 +130,7 @@ export function useMobileSessionKeyboardState(scope: MobileSessionKeyboardScope)
       return
     }
     const hostAgentIdentity = getMobileTerminalTabHostAgentIdentity(activeTab, terminals)
-    // Why: status receipts rewrite sessionTabs without a new visit.
+    // Status receipts rewrite sessionTabs without a new user visit.
     const recordedKey = [
       hostId,
       worktreeId,
@@ -241,9 +171,6 @@ export function useMobileSessionKeyboardState(scope: MobileSessionKeyboardScope)
     notifyTerminalFrameWidth,
     notifyKeyboardVisibility,
     notifyTerminalCellBoxChange,
-    scrollActiveTabIntoView,
-    holdTabStripReveal,
-    cancelHeldTabStripReveal,
     handleDeleteCustomKey,
     handleManageShortcuts
   }

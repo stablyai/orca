@@ -15,6 +15,8 @@ export class UsageLimitColdCuts {
   private readonly cuts = new Map<string, HostUsageLimitCut | null>()
   /** Pass of each chat's last failed history read; failed reads wait behind unread chats. */
   private readonly failures = new Map<string, number>()
+  /** Chats whose sweep read threw, so each failure is logged once rather than every pass. */
+  private readonly sweepFailures = new Set<string>()
   private passes = 0
 
   constructor(private readonly deps: Deps) {}
@@ -36,6 +38,25 @@ export class UsageLimitColdCuts {
       this.cuts.set(id, await this.deps.readSavedCut(id))
     }
     return this.cuts.get(id) ?? null
+  }
+
+  /** One chat that can't be read (a corrupt journal) is skipped this pass instead of failing it. */
+  async readForSweep(id: string): Promise<HostUsageLimitCut | null | 'unreadable'> {
+    try {
+      const cut = await this.read(id)
+      this.sweepFailures.delete(id)
+      return cut
+    } catch (error) {
+      if (!this.sweepFailures.has(id)) {
+        this.sweepFailures.add(id)
+        this.deps.logger.warn('usage-limit continue could not read a chat', {
+          scope: 'usage-limit-continue',
+          sessionId: id,
+          error
+        })
+      }
+      return 'unreadable'
+    }
   }
 
   /** At most three history reads per pass; a read that throws stays retryable without starving others. */
@@ -68,15 +89,23 @@ export class UsageLimitColdCuts {
         }
       }
     }
+    // Loaded chats are still swept while hidden; logging their failure once must survive that.
+    for (const id of this.sweepFailures) {
+      if (!shown.has(id) && !this.deps.sessions.has(id)) {
+        this.sweepFailures.delete(id)
+      }
+    }
   }
 
   forget(id: string): void {
     this.cuts.delete(id)
     this.failures.delete(id)
+    this.sweepFailures.delete(id)
   }
 
   clear(): void {
     this.cuts.clear()
     this.failures.clear()
+    this.sweepFailures.clear()
   }
 }

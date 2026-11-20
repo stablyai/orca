@@ -32,7 +32,6 @@ type Props = {
   /** What a screen reader hears for a title that is not plain text. */
   titleAccessibilityLabel?: string
   message?: string
-  children?: ReactNode
   actions: ActionSheetAction[]
   onClose: () => void
   /** Runs once the sheet has slid away, after any closeBeforePress action. */
@@ -132,7 +131,6 @@ export function ActionSheetModal({
   title,
   titleAccessibilityLabel,
   message,
-  children,
   actions,
   onClose,
   onAfterClose
@@ -168,9 +166,7 @@ export function ActionSheetModal({
         message={message}
         actions={sequencedActions}
         onClose={onClose}
-      >
-        {children}
-      </ActionSheetContent>
+      />
     </BottomDrawer>
   )
 }

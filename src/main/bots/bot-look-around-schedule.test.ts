@@ -52,6 +52,90 @@ describe('Look around hours', () => {
     expect(lookAroundDueAt(setting, state, at(26, 17, 25), false)).toBe(at(26, 16))
   })
 
+  it('holds looks until a usage limit that ended the last one resets, then catches the slot up', () => {
+    const state = armed(at(20, 9))
+    const limited = endRun(
+      beginRun(state, 'run-1', at(26, 12, 1)),
+      'run-1',
+      at(26, 12, 2),
+      'unfinished',
+      true,
+      false,
+      { resetsAt: at(26, 17) }
+    )
+    expect(lookAroundDueAt(setting, limited, at(26, 16, 1))).toBeNull()
+    expect(lookAroundNextAt(setting, limited, at(26, 16, 1))).toBe(at(26, 17))
+    expect(lookAroundDueAt(setting, limited, at(26, 17, 1))).toBe(at(26, 16))
+  })
+
+  it('retries the slot a usage limit cut short once it resets, or after an hour when its reset is unknown', () => {
+    const state = armed(at(20, 9))
+    const limitedAt = (resetsAt?: number) =>
+      endRun(
+        beginRun(state, 'run-16', at(26, 16, 1)),
+        'run-16',
+        at(26, 16, 2),
+        'unfinished',
+        true,
+        false,
+        resetsAt === undefined ? {} : { resetsAt }
+      )
+    const known = limitedAt(at(26, 16, 30))
+    expect(lookAroundDueAt(setting, known, at(26, 16, 20))).toBeNull()
+    expect(lookAroundDueAt(setting, known, at(26, 16, 31))).toBe(at(26, 16))
+    const unknown = limitedAt()
+    expect(lookAroundDueAt(setting, unknown, at(26, 16, 50))).toBeNull()
+    expect(lookAroundDueAt(setting, unknown, at(26, 17, 3))).toBe(at(26, 16))
+  })
+
+  it('names the retry after a usage limit as Next look when the reset comes before the retry spacing', () => {
+    const limited = endRun(
+      beginRun(armed(at(20, 9)), 'run-16', at(26, 16, 1)),
+      'run-16',
+      at(26, 16, 2),
+      'unfinished',
+      true,
+      false,
+      { resetsAt: at(26, 16, 5) }
+    )
+    expect(lookAroundNextAt(setting, limited, at(26, 16, 3))).toBe(at(26, 16, 17))
+    // Still the retry once the reset has passed.
+    expect(lookAroundNextAt(setting, limited, at(26, 16, 6))).toBe(at(26, 16, 17))
+  })
+
+  it('names the next slot as Next look when it comes before the retry of an owed one', () => {
+    const limited = endRun(
+      beginRun(armed(at(20, 9)), 'run-16', at(26, 19, 50)),
+      'run-16',
+      at(26, 19, 56),
+      'unfinished',
+      true,
+      false,
+      { resetsAt: at(26, 19, 58) }
+    )
+    expect(lookAroundNextAt(setting, limited, at(26, 19, 57))).toBe(at(26, 20))
+  })
+
+  it('keeps a usage limit hold when a later look fails to start', () => {
+    const limited = endRun(
+      beginRun(armed(at(20, 9)), 'run-12', at(26, 12, 1)),
+      'run-12',
+      at(26, 12, 2),
+      'unfinished',
+      true,
+      false,
+      { resetsAt: at(26, 19) }
+    )
+    const failedStart = endRun(
+      beginRun(limited, 'now-1', at(26, 14)),
+      'now-1',
+      at(26, 14),
+      'no start'
+    )
+    expect(lookAroundDueAt(setting, failedStart, at(26, 16, 1))).toBeNull()
+    expect(lookAroundDueAt(setting, failedStart, at(26, 19, 1))).toBe(at(26, 16))
+  })
+
   it('never catches up a slot from before Look around was turned back on', () => {
     const state = armed(at(20, 9))
     const back = { ...setting, since: at(26, 13) }

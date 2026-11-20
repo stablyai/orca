@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { Globe } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
+import { useRuntimeHostStatusSelector } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { useAppStore } from '@/store'
 import { readBrowserClientHostId } from '@/runtime/browser/client-hosting/browser-client-host-identity'
 import { runtimeHostConnectionStateForEntry } from '@/runtime/hosts/connections/runtime-host-connection-state'
@@ -42,9 +43,8 @@ export function ClientHostedBrowserUnavailableNotice({
       : null
   })
   // Why: a runtime known to have no browser of its own (orcad) cannot take the page back.
-  const runtimeCanHostPage = useAppStore((s) => {
-    const capabilities =
-      s.runtimeStatusByEnvironmentId.get(runtimeEnvironmentId)?.status?.capabilities
+  const runtimeCanHostPage = useRuntimeHostStatusSelector(runtimeEnvironmentId, (entry) => {
+    const capabilities = entry?.status?.capabilities
     return !capabilities || capabilities.includes(BROWSER_SCREENCAST_RUNTIME_CAPABILITY)
   })
   const ownHostClientId = readBrowserClientHostId()

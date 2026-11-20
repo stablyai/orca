@@ -1,56 +1,43 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { View, Text, ScrollView, Pressable, StyleSheet } from 'react-native'
-import { File, FileText, Globe, History, Plus, SquareTerminal } from 'lucide-react-native'
-import { triggerMediumImpact } from '../../platform/haptics'
+import { Pressable, ScrollView, Text, View, type ScrollViewInstance } from 'react-native'
+import { Plus } from 'lucide-react-native'
+import { triggerMediumImpact } from '../../platform/haptics/haptics'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
-import { MobileAgentIcon } from '../../components/MobileAgentIcon'
-import { AgentStateDot } from '../../components/AgentStateDot'
-import { ArrivalFade } from '../../components/ArrivalFade'
-import { useReducedMotionEnabled } from '../../platform/use-reduced-motion'
+import { AgentStateDot } from '../../agents/presentation/AgentStateDot'
+import { ArrivalFade } from '../../components/motion/ArrivalFade'
+import { useReducedMotionEnabled } from '../../platform/accessibility/use-reduced-motion'
 import { useNow } from '../../hooks/use-now'
-import { agentStateLabel, type AgentDotState } from '../../worktree/agent-row-display'
-import {
-  getMobileTerminalTabHostAgentIdentity,
-  getMobileSessionTabTitle,
-  resolveMobileTerminalTabAgentId
-} from '../../terminal/session/mobile-terminal-tab-agent'
-import {
-  clearLatchedUnreadTabKeys,
-  hasPendingWorktreeUnreadForTabCompletion
-} from '../tab-completion-state'
-import {
-  isMobileSessionTabUnreadBeforeView,
-  latchInitialActiveTabUnread,
-  resolveMobileSessionTabDotState,
-  seedUnreadWorktreeSessionTabs
-} from '../mobile-session-tab-unread'
-import { subscribeCatalogWorktreesForTabStatus } from '../session-tab-catalog-agent-status'
-import { colors, spacing } from '../../theme/mobile-theme'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
-import { NavBarButton } from '../../components/nav-bar/NavBarButton'
+import { agentStateLabel, type AgentDotState } from '../../worktree/agent-lineage/agent-row-display'
 import {
   resolveTabStripEdgeHint,
   resolveTabStripHiddenTabs,
+  resolveTabStripScrollOffset,
   resolveTabStripTapOffset,
   type TabStripHiddenTabs
-} from './tab-strip-scroll'
-import { styles } from '../mobile-session-styles'
-import { useKeyboardPersistingTaps } from '../../platform/keyboard-persisting-taps'
+} from '../../components/controls/tab-strip-scroll'
+import { colors } from '../../theme/mobile-theme'
+import { mobileSessionTabStripStyles as styles } from './mobile-session-tab-strip-styles'
+import { useKeyboardPersistingTaps } from '../../platform/keyboard/keyboard-persisting-taps'
+import { buildMobileSessionTabSummary, isForkedChatTab } from './mobile-session-tab-rows'
+import { MobileSessionTabCountButton } from './MobileSessionTabCountButton'
+import { MobileSessionTabMark } from './MobileSessionTabMark'
+import { MobileSessionTabsSheet } from './MobileSessionTabsSheet'
+import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { MobileForkMarkedName } from '../fork/MobileForkMarkedName'
+import { mobileForkAccessibleName } from '../fork/mobile-fork-marked-name'
 import type { MobileSessionController } from '../use-mobile-session-controller'
 
 const DOUBLE_TAP_RENAME_MS = 300
 
-// A tab drawn before it had any agent state (a strip from the phone's store) fades its dot in when one lands.
-function SessionTabAgentDot({ state }: { state: AgentDotState | undefined }) {
-  const [startedEmpty] = useState(state === undefined)
-  if (startedEmpty) {
-    return <ArrivingSessionTabAgentDot state={state} />
+function StripTabDot({ tabId, state }: { tabId: string; state: AgentDotState | undefined }) {
+  const [startedEmpty] = useState({ tabId, empty: state === undefined })
+  if (startedEmpty.tabId === tabId && startedEmpty.empty) {
+    return <ArrivingStripTabDot state={state} />
   }
   return state && state !== 'idle' ? <AgentStateDot state={state} /> : null
 }
 
-// Mounted with the bare tab, so the motion preference is read before the dot arrives.
-function ArrivingSessionTabAgentDot({ state }: { state: AgentDotState | undefined }) {
+function ArrivingStripTabDot({ state }: { state: AgentDotState | undefined }) {
   const reducedMotion = useReducedMotionEnabled()
   if (!state || state === 'idle') {
     return null
@@ -62,6 +49,7 @@ function ArrivingSessionTabAgentDot({ state }: { state: AgentDotState | undefine
   )
 }
 
+/** Narrow horizontally scrollable tab strip paired with the `[N]` switcher sheet and New Tab cell. */
 export function MobileSessionTabStrip({
   controller,
   inTopBar,
@@ -75,270 +63,213 @@ export function MobileSessionTabStrip({
   const t = useMobileTranslation()
   const {
     activeSessionTabId,
-    activeSessionTabIdRef,
-    tabStripRef,
-    tabStripOffsetRef,
-    tabStripViewportWidthRef,
-    tabStripContentWidthRef,
-    tabLayoutsRef,
     connState,
     createTabBusy,
     handleOpenNewTab,
-    showRecentSessionCardsAction,
     showRecentSessionCards,
     setShowRecentSessionCards,
-    scrollActiveTabIntoView,
-    holdTabStripReveal,
-    cancelHeldTabStripReveal,
     switchSessionTab,
     openSessionTabActionSheetAfterKeyboardDismiss,
     setRenameTarget,
-    activeHandleRef,
     visibleTabs,
     terminals
   } = controller
-  const tabBarKeepsKeyboard = useKeyboardPersistingTaps('handled')
+
+  const keepsKeyboard = useKeyboardPersistingTaps('handled')
+  const scrollRef = useRef<ScrollViewInstance>(null)
+  const offsetRef = useRef(0)
+  const viewportWidthRef = useRef(0)
+  const contentWidthRef = useRef(0)
+  const tabLayoutsRef = useRef(new Map<string, { x: number; width: number }>())
+  const holdTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const lastTabTapRef = useRef<{ id: string; at: number } | null>(null)
-  const visitUnreadRef = useRef<{
-    worktreeId: string | null | undefined
-    userSwitchedTab: boolean
-    checkedActiveTabIds: Set<string>
-    latchedUnreadTabId: string | null
-  }>({
-    worktreeId: undefined,
-    userSwitchedTab: false,
-    checkedActiveTabIds: new Set(),
-    latchedUnreadTabId: null
-  })
-  if (visitUnreadRef.current.worktreeId !== controller.worktreeId) {
-    if (visitUnreadRef.current.latchedUnreadTabId) {
-      clearLatchedUnreadTabKeys()
-    }
-    visitUnreadRef.current = {
-      worktreeId: controller.worktreeId,
-      userSwitchedTab: false,
-      checkedActiveTabIds: new Set(),
-      latchedUnreadTabId: null
-    }
-  }
-  useEffect(
-    () => () => {
-      if (visitUnreadRef.current.latchedUnreadTabId) {
-        clearLatchedUnreadTabKeys()
-      }
-    },
-    []
-  )
+  const activeTabIdRef = useRef(activeSessionTabId)
+  activeTabIdRef.current = activeSessionTabId
+
   const now = useNow(60_000)
-  const [catalogRevision, setCatalogRevision] = useState(0)
-  const [visitEpoch, setVisitEpoch] = useState(0)
-  useEffect(
-    () => subscribeCatalogWorktreesForTabStatus(() => setCatalogRevision((rev) => rev + 1)),
-    []
+  const rows = useMemo(
+    () =>
+      visibleTabs.map((tab) => {
+        const summary = buildMobileSessionTabSummary(tab, terminals, now)
+        return summary.unread && tab.id === activeSessionTabId
+          ? { ...summary, unread: false }
+          : summary
+      }),
+    [visibleTabs, terminals, now, activeSessionTabId]
   )
   const tabStates = useMemo(() => {
-    void catalogRevision
-    void visitEpoch
     const states = new Map<string, AgentDotState>()
-    const visit = visitUnreadRef.current
-    if (
-      visit.latchedUnreadTabId !== null &&
-      activeSessionTabId !== null &&
-      activeSessionTabId !== visit.latchedUnreadTabId
-    ) {
-      visit.userSwitchedTab = true
-      visit.latchedUnreadTabId = null
-      clearLatchedUnreadTabKeys()
-    }
-    if (visibleTabs.length > 0 && hasPendingWorktreeUnreadForTabCompletion(controller.worktreeId)) {
-      seedUnreadWorktreeSessionTabs(controller.worktreeId, visibleTabs, now)
-    }
-    for (const tab of visibleTabs) {
-      const tabId = tab.id
-      const isActive = tabId === activeSessionTabId
-      let state: AgentDotState | undefined
-      if (
-        isActive &&
-        !visit.userSwitchedTab &&
-        !visit.latchedUnreadTabId &&
-        !visit.checkedActiveTabIds.has(tabId)
-      ) {
-        const unreadBeforeView = isMobileSessionTabUnreadBeforeView(tab, now, tabId)
-        state = resolveMobileSessionTabDotState(tab, now, { isActiveOnScreen: true, tabId })
-        if (unreadBeforeView) {
-          visit.latchedUnreadTabId = tabId
-          visit.checkedActiveTabIds.add(tabId)
-          latchInitialActiveTabUnread(tab, tabId)
-        } else if (state !== undefined) {
-          visit.checkedActiveTabIds.add(tabId)
-        }
-      } else {
-        state = resolveMobileSessionTabDotState(tab, now, { isActiveOnScreen: isActive, tabId })
-      }
-      if (!visit.userSwitchedTab && visit.latchedUnreadTabId === tabId) {
-        if (state === 'done') {
-          states.set(tabId, 'unread')
-        } else {
-          visit.latchedUnreadTabId = null
-          clearLatchedUnreadTabKeys()
-          if (state) {
-            states.set(tabId, state)
-          }
-        }
-      } else if (state) {
-        states.set(tabId, state)
+    for (const row of rows) {
+      if (row.dotState) {
+        states.set(row.tab.id, row.dotState)
       }
     }
     return states
-  }, [visibleTabs, now, activeSessionTabId, catalogRevision, controller.worktreeId, visitEpoch])
-  const tabLabels = useMemo(
-    () =>
-      visibleTabs.map((tab) => {
-        const identity = getMobileTerminalTabHostAgentIdentity(tab, terminals)
-        return {
-          title: getMobileSessionTabTitle(tab, identity),
-          agentId:
-            tab.type === 'agent-session'
-              ? tab.agent
-              : tab.type === 'terminal'
-                ? resolveMobileTerminalTabAgentId(tab, identity)
-                : null
-        }
-      }),
-    [visibleTabs, terminals, t]
-  )
+  }, [rows])
+
   const [hiddenTabs, setHiddenTabs] = useState<TabStripHiddenTabs>({ left: [], right: [] })
-  const refreshHiddenTabs = () => {
+  const refreshHiddenTabs = useCallback(() => {
     const next = resolveTabStripHiddenTabs({
       layouts: tabLayoutsRef.current,
-      viewportWidth: tabStripViewportWidthRef.current,
-      currentOffset: tabStripOffsetRef.current
+      viewportWidth: viewportWidthRef.current,
+      currentOffset: offsetRef.current
     })
-    // Why: scroll fires every frame; re-render only when a tab crosses an edge.
     setHiddenTabs((prev) =>
       prev.left.join('\n') === next.left.join('\n') &&
       prev.right.join('\n') === next.right.join('\n')
         ? prev
         : next
     )
-  }
+  }, [])
+
+  const scrollActiveTabIntoView = useCallback((tabId: string | null, animated: boolean) => {
+    if (!tabId || holdTimerRef.current !== null) {
+      return
+    }
+    const layout = tabLayoutsRef.current.get(tabId)
+    if (!layout) {
+      return
+    }
+    const nextOffset = resolveTabStripScrollOffset({
+      tabX: layout.x,
+      tabWidth: layout.width,
+      viewportWidth: viewportWidthRef.current,
+      contentWidth: contentWidthRef.current,
+      currentOffset: offsetRef.current
+    })
+    if (Math.abs(nextOffset - offsetRef.current) > 0.5) {
+      offsetRef.current = nextOffset
+      scrollRef.current?.scrollTo({ x: nextOffset, animated })
+    }
+  }, [])
+
+  const cancelHeldReveal = useCallback(() => {
+    if (holdTimerRef.current !== null) {
+      clearTimeout(holdTimerRef.current)
+      holdTimerRef.current = null
+    }
+  }, [])
+
+  const holdReveal = useCallback(
+    (targetOffset: number, durationMs: number) => {
+      cancelHeldReveal()
+      offsetRef.current = targetOffset
+      scrollRef.current?.scrollTo({ x: targetOffset, animated: true })
+      holdTimerRef.current = setTimeout(() => {
+        holdTimerRef.current = null
+        scrollActiveTabIntoView(activeTabIdRef.current, true)
+      }, durationMs)
+    },
+    [cancelHeldReveal, scrollActiveTabIntoView]
+  )
+
+  useEffect(() => cancelHeldReveal, [cancelHeldReveal])
+  useEffect(() => {
+    scrollActiveTabIntoView(activeSessionTabId, true)
+  }, [activeSessionTabId, scrollActiveTabIntoView])
+
   const leftHint = resolveTabStripEdgeHint(hiddenTabs.left, tabStates)
   const rightHint = resolveTabStripEdgeHint(hiddenTabs.right, tabStates)
+
   const pressTab = useCallback(
-    (t: (typeof visibleTabs)[number]) => {
-      visitUnreadRef.current.userSwitchedTab = true
-      visitUnreadRef.current.latchedUnreadTabId = null
-      clearLatchedUnreadTabKeys()
-      setVisitEpoch((epoch) => epoch + 1)
+    (tab: (typeof visibleTabs)[number]) => {
       const at = Date.now()
       const lastTap = lastTabTapRef.current
-      lastTabTapRef.current = { id: t.id, at }
+      lastTabTapRef.current = { id: tab.id, at }
       if (
-        lastTap?.id === t.id &&
+        lastTap?.id === tab.id &&
         at - lastTap.at < DOUBLE_TAP_RENAME_MS &&
-        t.type === 'terminal' &&
-        typeof t.terminal === 'string'
+        tab.type === 'terminal' &&
+        typeof tab.terminal === 'string'
       ) {
-        lastTabTapRef.current = null
-        triggerMediumImpact()
-        setRenameTarget({
-          handle: t.terminal,
-          title: t.title,
-          isActive: t.terminal === activeHandleRef.current
-        })
-        // The first tap's held reveal still runs once the window closes.
-        return
+        const terminal = terminals.find((item) => item.handle === tab.terminal)
+        if (terminal) {
+          lastTabTapRef.current = null
+          triggerMediumImpact()
+          setRenameTarget(terminal)
+          return
+        }
       }
-      cancelHeldTabStripReveal()
+      cancelHeldReveal()
       const nextOffset = resolveTabStripTapOffset({
-        tabId: t.id,
+        tabId: tab.id,
         tabs: visibleTabs,
         layouts: tabLayoutsRef.current,
-        viewportWidth: tabStripViewportWidthRef.current,
-        contentWidth: tabStripContentWidthRef.current,
-        currentOffset: tabStripOffsetRef.current
+        viewportWidth: viewportWidthRef.current,
+        contentWidth: contentWidthRef.current,
+        currentOffset: offsetRef.current
       })
-      if (nextOffset !== tabStripOffsetRef.current) {
-        holdTabStripReveal(nextOffset, DOUBLE_TAP_RENAME_MS)
+      if (nextOffset !== offsetRef.current) {
+        holdReveal(nextOffset, DOUBLE_TAP_RENAME_MS)
       }
-      switchSessionTab(t)
+      switchSessionTab(tab)
     },
-    [
-      activeHandleRef,
-      cancelHeldTabStripReveal,
-      holdTabStripReveal,
-      setRenameTarget,
-      switchSessionTab,
-      tabLayoutsRef,
-      tabStripContentWidthRef,
-      tabStripOffsetRef,
-      tabStripRef,
-      tabStripViewportWidthRef,
-      visibleTabs
-    ]
+    [cancelHeldReveal, holdReveal, setRenameTarget, switchSessionTab, terminals, visibleTabs]
   )
-  const attachTabStrip = useCallback(
-    (view: ScrollView | null) => {
-      if (view) {
-        tabStripOffsetRef.current = 0
-        tabStripViewportWidthRef.current = 0
-        tabStripContentWidthRef.current = 0
-        tabLayoutsRef.current.clear()
-      }
-      tabStripRef.current = view
-    },
-    [
-      tabStripRef,
-      tabStripOffsetRef,
-      tabStripViewportWidthRef,
-      tabStripContentWidthRef,
-      tabLayoutsRef
-    ]
+
+  const attachTabStrip = useCallback((view: ScrollViewInstance | null) => {
+    if (view) {
+      offsetRef.current = 0
+      viewportWidthRef.current = 0
+      contentWidthRef.current = 0
+      tabLayoutsRef.current.clear()
+    }
+    scrollRef.current = view
+  }, [])
+
+  const createDisabled = createTabBusy || connState !== 'connected'
+  const anyUnread = rows.some((row) => row.unread)
+  const othersNeedYou = rows.some(
+    (row) => row.tab.id !== activeSessionTabId && row.group === 'needs-you'
   )
+  const showNewTab = !actionsCollapsed
+
   return (
-    <View ref={tabBarKeepsKeyboard} style={inTopBar ? styles.tabBarInTopBar : styles.tabBar}>
+    <View ref={keepsKeyboard} style={inTopBar ? styles.barInTopBar : styles.bar}>
       {/* Why: tab taps must register on first press with the keyboard open instead of being eaten by dismissal (#5106). */}
-      <View style={styles.tabScrollFrame}>
+      <View style={styles.scrollFrame}>
         <ScrollView
           ref={attachTabStrip}
           horizontal
           showsHorizontalScrollIndicator={false}
-          style={[styles.tabScroll, inTopBar && styles.tabScrollInTopBar]}
-          contentContainerStyle={[styles.tabContent, inTopBar && styles.tabContentInTopBar]}
+          style={[styles.scroll, inTopBar && styles.scrollInTopBar]}
+          contentContainerStyle={[styles.scrollContent, inTopBar && styles.scrollContentInTopBar]}
           keyboardShouldPersistTaps="handled"
           scrollEventThrottle={16}
-          onScrollBeginDrag={cancelHeldTabStripReveal}
+          onScrollBeginDrag={cancelHeldReveal}
           onScroll={(e) => {
-            tabStripOffsetRef.current = e.nativeEvent.contentOffset.x
+            offsetRef.current = e.nativeEvent.contentOffset.x
             refreshHiddenTabs()
           }}
           onLayout={(e) => {
-            tabStripViewportWidthRef.current = e.nativeEvent.layout.width
-            scrollActiveTabIntoView(activeSessionTabIdRef.current, false)
+            viewportWidthRef.current = e.nativeEvent.layout.width
+            scrollActiveTabIntoView(activeTabIdRef.current, false)
             refreshHiddenTabs()
           }}
           onContentSizeChange={(width) => {
-            tabStripContentWidthRef.current = width
-            scrollActiveTabIntoView(activeSessionTabIdRef.current, false)
+            contentWidthRef.current = width
+            scrollActiveTabIntoView(activeTabIdRef.current, false)
             refreshHiddenTabs()
           }}
         >
-          {visibleTabs.map((tab, index) => {
-            const tabState = tabStates.get(tab.id)
-            const { title, agentId } = tabLabels[index]
+          {rows.map((row, index) => {
+            const { tab, title } = row
+            const isActive = tab.id === activeSessionTabId
+            const status = row.dotState && row.dotState !== 'idle' ? row.dotState : undefined
+            const baseLabel = isForkedChatTab(tab) ? mobileForkAccessibleName(title) : title
             return (
               <Pressable
                 key={tab.id}
                 style={({ pressed }) => [
                   styles.tab,
                   index === 0 && !inTopBar && styles.tabFirst,
-                  tab.id === activeSessionTabId && styles.tabActive,
+                  isActive && styles.tabActive,
                   pressed && styles.tabPressed
                 ]}
                 onLayout={(e) => {
                   const { x, width } = e.nativeEvent.layout
                   tabLayoutsRef.current.set(tab.id, { x, width })
-                  if (tab.id === activeSessionTabIdRef.current) {
+                  if (tab.id === activeTabIdRef.current) {
                     scrollActiveTabIntoView(tab.id, false)
                   }
                   refreshHiddenTabs()
@@ -346,14 +277,14 @@ export function MobileSessionTabStrip({
                 onPress={() => pressTab(tab)}
                 accessibilityRole="tab"
                 accessibilityLabel={
-                  tabState && tabState !== 'idle'
+                  status
                     ? t('session.tabStrip.tabStatus', '{{title}}, {{status}}', {
-                        title,
-                        status: agentStateLabel(tabState)
+                        title: baseLabel,
+                        status: agentStateLabel(status)
                       })
-                    : title
+                    : baseLabel
                 }
-                accessibilityState={{ selected: tab.id === activeSessionTabId }}
+                accessibilityState={{ selected: isActive }}
                 onLongPress={() => {
                   triggerMediumImpact()
                   openSessionTabActionSheetAfterKeyboardDismiss(tab)
@@ -361,36 +292,15 @@ export function MobileSessionTabStrip({
                 delayLongPress={400}
               >
                 <View style={styles.tabLabelRow}>
-                  <SessionTabAgentDot state={tabState} />
+                  <StripTabDot tabId={tab.id} state={row.dotState} />
                   <View style={styles.tabIcon}>
-                    {tab.type === 'browser' && (
-                      <Globe size={13} color={colors.textSecondary} strokeWidth={2.1} />
-                    )}
-                    {tab.type === 'markdown' && (
-                      <FileText size={13} color={colors.textSecondary} strokeWidth={2.1} />
-                    )}
-                    {tab.type === 'file' && (
-                      <File size={13} color={colors.textSecondary} strokeWidth={2.1} />
-                    )}
-                    {tab.type === 'agent-session' && agentId ? (
-                      <MobileAgentIcon agentId={agentId} size={13} />
-                    ) : null}
-                    {tab.type === 'terminal' &&
-                      (agentId ? (
-                        <MobileAgentIcon agentId={agentId} size={13} />
-                      ) : (
-                        <SquareTerminal
-                          size={13}
-                          color={colors.textSecondary}
-                          strokeWidth={2.1}
-                        />
-                      ))}
+                    <MobileSessionTabMark row={row} size={13} />
                   </View>
                   <Text
-                    style={[styles.tabText, tab.id === activeSessionTabId && styles.tabTextActive]}
+                    style={[styles.tabText, isActive && styles.tabTextActive]}
                     numberOfLines={1}
                   >
-                    {title}
+                    {isForkedChatTab(tab) ? <MobileForkMarkedName name={title} /> : title}
                   </Text>
                 </View>
               </Pressable>
@@ -398,46 +308,50 @@ export function MobileSessionTabStrip({
           })}
         </ScrollView>
         {leftHint ? (
-          <View pointerEvents="none" style={[styles.tabEdgeHint, styles.tabEdgeHintLeft]}>
+          <View pointerEvents="none" style={[styles.edgeHint, styles.edgeHintLeft]}>
             <AgentStateDot state={leftHint} />
           </View>
         ) : null}
         {rightHint ? (
-          <View pointerEvents="none" style={[styles.tabEdgeHint, styles.tabEdgeHintRight]}>
+          <View pointerEvents="none" style={[styles.edgeHint, styles.edgeHintRight]}>
             <AgentStateDot state={rightHint} />
           </View>
         ) : null}
       </View>
-      {/* Terminal layout and Quick commands live in the header's ⋯ menu. */}
-      {!actionsCollapsed ? (
-        <View style={newTabStyles.slot}>
-          <NavBarButton
-            disabled={createTabBusy || connState !== 'connected'}
-            onPress={handleOpenNewTab}
-            accessibilityLabel={t('session.tabStrip.newTab', 'New tab')}
-            icon={Plus}
-          />
-          {showRecentSessionCardsAction ? (
-            <NavBarButton
-              active={Boolean(showRecentSessionCards)}
-              onPress={() => setShowRecentSessionCards(true)}
-              accessibilityLabel={t('recentSessionCardsSectionTitle', 'Recently Used')}
-              icon={History}
-            />
-          ) : null}
-        </View>
+      <MobileSessionTabCountButton
+        count={rows.length}
+        anyUnread={anyUnread}
+        othersNeedYou={othersNeedYou}
+        active={showRecentSessionCards}
+        leadingBorder
+        isLastCell={!showNewTab && !inTopBar}
+        onPress={() => setShowRecentSessionCards(true)}
+      />
+      {showNewTab ? (
+        <Pressable
+          style={({ pressed }) => [
+            styles.sideCell,
+            !inTopBar && styles.lastCell,
+            pressed && styles.cellPressed,
+            createDisabled && styles.cellDisabled
+          ]}
+          disabled={createDisabled}
+          onPress={handleOpenNewTab}
+          accessibilityRole="button"
+          accessibilityLabel={t('session.tabStrip.newTab', 'New tab')}
+          accessibilityState={{ disabled: createDisabled }}
+        >
+          <Plus size={18} color={colors.textPrimary} strokeWidth={2.2} />
+        </Pressable>
       ) : null}
+      <MobileSessionTabsSheet
+        controller={controller}
+        tabs={rows}
+        visible={showRecentSessionCards}
+        initialScope="recent"
+        stickyScope={false}
+        onClose={() => setShowRecentSessionCards(false)}
+      />
     </View>
   )
 }
-
-// The right inset matches the nav bar's, so the + lines up with the ⋯ above it.
-const newTabStyles = StyleSheet.create({
-  slot: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingLeft: spacing.sm,
-    paddingRight: spacing.md
-  }
-})

@@ -27,7 +27,6 @@ import { useNativeImageActions } from '../platform/image-actions/native-image-ac
 import { processDeviceStore } from '../device-store/device-store'
 import { serveDeviceStoreVerb } from './native-capabilities/device-store-verb-server'
 import { BRIDGE_STORE_VERB } from './bridge/native-capabilities/bridge-store-verb'
-import { useAppLeavesForeground } from './session/use-app-leaves-foreground'
 import { useShellPageBack } from './routing/use-shell-page-back'
 import { useShellStackPop } from './routing/use-shell-stack-pop'
 import { usePageLocationOnFold } from './page-geometry/page-location-on-fold'
@@ -38,7 +37,7 @@ import { usePageHostSnapshot } from './host-gates/use-page-host-snapshot'
 import { useReportedHostAreaServing } from './host-gates/host-area-serving'
 import { isHostRouteOf } from './routing/page-route-policy'
 import { isStandaloneSessionHref } from '../navigation/host-stack-navigation'
-import { hrefQuery, nativeSessionReturn, nativeStackReturn } from './routing/native-stack-return'
+import { nativeSessionReturn, nativeStackReturn } from './routing/native-stack-return'
 import { useResponsiveLayout } from '../layout/responsive-layout'
 import {
   storageReadParamsSchema,
@@ -119,6 +118,7 @@ export function MobileWebShellScreen({
     reportPageReady,
     reportPagePainted,
     reportPageBackClaim,
+    reportSwapSafe,
     pageReady,
     pageFrame,
     backClaimed,
@@ -191,10 +191,9 @@ export function MobileWebShellScreen({
     // Return to an existing screen rather than pushing a duplicate over the live one.
     const rootState = navigationContainer.getRootState()
     // A pane request goes to the session's existing entry, whose spent paneKey no longer equals the href's.
-    const paneKey = hrefQuery(href).get('paneKey')
-    const session = rootState && paneKey ? nativeSessionReturn(rootState, href) : null
-    if (session && paneKey) {
-      const { target, source, count, routeKey } = session
+    const session = rootState ? nativeSessionReturn(rootState, href) : null
+    if (session) {
+      const { target, source, count, routeKey, params } = session
       if (count > 0) {
         navigation.dispatch({ type: 'POP', payload: { count }, target, source })
       }
@@ -202,7 +201,7 @@ export function MobileWebShellScreen({
         type: 'SET_PARAMS',
         target,
         source: routeKey,
-        payload: { params: { paneKey } }
+        payload: { params }
       })
       return
     }
@@ -286,6 +285,8 @@ export function MobileWebShellScreen({
         ? holdPageLocation(href, ownsHostArea)
         : onPageLocation(href)
     },
+    // A newer build swaps in only on a resume where the page has nothing to lose (no draft, upload or open sheet).
+    onPageSwapSafe: reportSwapSafe,
     onTerminalKeyRailClaim: keyRail.reportClaim,
     onRouteParamClear: openTarget.onRouteParamClear,
     onRouteRefused: (issue) => {
@@ -313,7 +314,6 @@ export function MobileWebShellScreen({
     // The stream survives dropped frames; keep a count because diagnostics print only once per host.
     onBinaryFramesDropped: reportDroppedBinaryFrames
   })
-  useAppLeavesForeground(bridge.sendAppInactive)
 
   // paneKey changes keep the session mounted; the host deduplicates routes and preserves in-flight frames.
   useShellPageStorageRefresh(refreshStorage, bridge.publishStorage)

@@ -59,7 +59,8 @@
       "messages_many": "{{count}} messages",
       "messages_one": "{{count}} message",
       "messages_other": "{{count}} messages",
-      "resumeSession": "Reprendre la session d'agent"
+      "resumeSession": "Reprendre la session d'agent",
+      "continueInCli": "Continuer en CLI"
     },
     "useAgentHistoryState": {
       "hostUnreachable": "Impossible de joindre l'hôte",
@@ -169,11 +170,13 @@
       "invalidUrl": "Saisissez une URL valide."
     },
     "paneView": {
-      "dialogTitle": "Boîte de dialogue du navigateur",
       "forward": "Suivant",
       "keyboardPlaceholder": "Saisir du texte sur la page…",
       "reload": "Recharger",
-      "sendText": "Envoyer le texte au navigateur"
+      "sendText": "Envoyer le texte au navigateur",
+      "dialogTitleWithOrigin": "{{origin}} indique",
+      "dialogTitleNoOrigin": "Cette page indique",
+      "dialogAnswer": "Réponse"
     },
     "pointerModifiers": {
       "clickModifier": "Modificateur de clic {{key}}"
@@ -186,6 +189,20 @@
     "viewModeSwitch": {
       "mobileView": "Afficher la version mobile du site",
       "webView": "Afficher la version pour ordinateur du site"
+    },
+    "loadFailure": {
+      "retry": "Réessayer",
+      "connectionNotSecure": "La connexion n'est pas sécurisée",
+      "certificateNameMismatch": "Le certificat ne correspond pas à {{value0}}.",
+      "certificateDateInvalid": "Le certificat de {{value0}} n'est pas valide à la date et à l'heure actuelles.",
+      "certificateAuthorityInvalid": "Orca ne fait pas confiance à l'autorité qui a émis le certificat de {{value0}}.",
+      "certificateVerificationFailed": "Orca n'a pas pu vérifier le certificat de {{value0}}.",
+      "proceedUnsafe": "Continuer quand même (non sécurisé)",
+      "connecting": "Connexion…",
+      "certificateChallengeExpired": "Cette approbation de certificat a expiré. Rechargez la page pour en demander une nouvelle.",
+      "certificateChallengeChanged": "La demande de certificat a changé. Rechargez la page et examinez le nouvel avertissement.",
+      "certificateProceedFailed": "Orca n'a pas pu approuver cette demande de certificat. Rechargez la page et réessayez.",
+      "certificateChallengeUnavailable": "Cette demande de certificat n'est plus disponible. Rechargez la page pour en demander une nouvelle."
     }
   },
   "chat": {
@@ -219,7 +236,8 @@
     "contextUsage": {
       "label": "Contexte : {{used}} tokens sur {{window}}, {{percent}} % utilisés",
       "title": "Contexte",
-      "estimated": "Estimation basée sur la dernière réponse."
+      "estimated": "Estimation basée sur la dernière réponse.",
+      "deferredNote": "Chargé à la demande. Non compté dans le total utilisé."
     },
     "composerAttachments": {
       "attachedImage": "Image jointe",
@@ -637,10 +655,6 @@
       "imageTooLarge": "Image trop volumineuse pour être jointe",
       "permissionDenied": "Accès aux photos refusé"
     },
-    "agentMessage": {
-      "handedOffToAgent": "Confié à un agent",
-      "startedAgent": "Agent démarré"
-    },
     "textAttachmentPreview": {
       "unreadableReply": "La réponse de la pièce jointe est illisible. Réessayez.",
       "incompleteReply": "La pièce jointe a changé ou sa réponse était incomplète. Fermez-la et réessayez.",
@@ -688,7 +702,7 @@
       "confirm": "Revenir",
       "unsupported": "Ce chat ne peut pas revenir à un message antérieur.",
       "historyNotPaginated": "Ce chat Codex plus ancien ne peut pas revenir à un message antérieur. Démarrez un nouveau chat pour utiliser « Revenir ici ».",
-      "busy": "Disponible une fois que l'agent est inactif et que plus rien dans ce chat n'attend votre action.",
+      "busy": "Disponible lorsque le chat est inactif",
       "staleEpoch": "La conversation a changé. Examinez les derniers messages et réessayez.",
       "invalidTarget": "La conversation ne peut pas revenir à ce message. Rien n'a été modifié.",
       "historyLimit": "Cette conversation est trop longue pour y revenir. Rien n'a été modifié.",
@@ -965,11 +979,11 @@
       "dismissDrawer": "Fermer le panneau"
     },
     "newWorkspaceSetupScriptField": {
-      "hooks": "HOOKS",
       "label": "Script de setup",
-      "run": "Exécuter",
-      "runSetupCommand": "Exécuter la commande de setup",
-      "skip": "Ignorer"
+      "runSetup": "Exécuter le setup",
+      "skip": "Ignorer",
+      "startAgentAfterSetup": "Démarrer l'agent après le setup",
+      "waitForSetupSaveFailed": "Échec de l'enregistrement du comportement de démarrage de la configuration."
     },
     "newWorkspaceSshConnectionField": {
       "connect": "Se connecter",
@@ -1630,10 +1644,8 @@
   "host": {
     "edit": {
       "address": "Adresse",
-      "addressHint": "Accepte une adresse IP, host:port ou ws:// / wss://. Une URL wss:// sans port utilise le port 443. Une adresse seule conserve le port actuel (ou 6768).",
       "connectionPreview": "Connexion à {{endpoint}}",
       "goBack": "Précédent",
-      "help": "Modifiez le nom affiché ou l'adresse de connexion. Laissez le nom vide pour utiliser celui indiqué par l'ordinateur. Modifier l'adresse change uniquement l'adresse à laquelle ce téléphone se connecte, sans nouvel appairage. Utilisez cette option si le même ordinateur est accessible à une autre adresse IP (par exemple, via le LAN domestique ou Tailscale).",
       "hostNamePlaceholder": "Nom de l'hôte",
       "hostRemoved": "Cet hôte a été supprimé de ce téléphone.",
       "loadFailed": "Impossible de charger l'hôte.",
@@ -1674,7 +1686,12 @@
       "removeHostMessage": "Supprimer « {{name}} » ? Vous pourrez l'appairer à nouveau plus tard.",
       "sleep": "Mettre en veille",
       "unpin": "Désépingler",
-      "rename": "Renommer"
+      "rename": "Renommer",
+      "markRead": "Marquer comme lu",
+      "markUnread": "Marquer comme non lu",
+      "muteNotifications": "Désactiver les notifications",
+      "unmuteNotifications": "Réactiver les notifications",
+      "moveToStatus": "Déplacer vers le statut"
     },
     "workspaceDetailsSheet": {
       "checksFailing": "Vérifications : en échec",
@@ -2267,6 +2284,7 @@
       "providerUnavailable": "{{agent}} n’a pas pu répondre car le service est occupé. Choisissez un autre modèle ou patientez un peu, puis renvoyez le message.",
       "providerSafetyStopped": "{{agent}} a arrêté cette réponse après un contrôle de sécurité. Vérifiez votre demande et renvoyez-la.",
       "providerResponseFailed": "{{agent}} n’a pas pu terminer cette réponse. Ouvrez les détails pour en savoir plus.",
+      "providerResponseFailedQuoted": "{{agent}} n’a pas pu terminer cette réponse : {{detail}}.",
       "selectedModel": "le modèle sélectionné",
       "providerRejected": "{{agent}} n'a pas accepté ce message.",
       "providerRejectedQuoted": "{{agent}} n'a pas accepté ce message : {{detail}}.",
@@ -2341,7 +2359,9 @@
       "fileExplorer": "Explorateur de fichiers",
       "sourceControl": "Contrôle de code source",
       "newTab": "Nouvel onglet",
-      "quickCommands": "Commandes rapides"
+      "quickCommands": "Commandes rapides",
+      "switchToSingleTabBar": "Passer à la barre d’onglet pleine largeur",
+      "switchToCompactTabStrip": "Passer à la barre d’onglets compacte"
     },
     "headerMoreActionsSheet": {
       "agentHistory": "Historique des agents",
@@ -2529,6 +2549,11 @@
       "sendReviewNotes": "Envoyer les notes de revue",
       "shortcut": "Raccourci",
       "terminal": "Terminal",
+      "terminalWithShell": "Terminal: {{shell}}",
+      "shellPowerShell": "PowerShell",
+      "shellCmd": "Invite CMD",
+      "shellGitBash": "Git Bash",
+      "shellWsl": "WSL",
       "terminalName": "Nom du terminal",
       "unsavedMarkdown": "Modifications Markdown non enregistrées",
       "urlPrompt": "Saisissez une URL ou laissez le champ vide pour un nouvel onglet.",
@@ -2549,7 +2574,8 @@
     "tabStrip": {
       "checkingCapabilities": "Vérification des fonctionnalités de l'ordinateur — réessayez dans un instant",
       "newTab": "Nouvel onglet",
-      "quickCommandsUpdateRequired": "Mettez à jour Orca sur l'ordinateur pour utiliser les commandes rapides"
+      "quickCommandsUpdateRequired": "Mettez à jour Orca sur l'ordinateur pour utiliser les commandes rapides",
+      "tabStatus": "{{title}}, {{status}}"
     },
     "terminalActionSheetActions": {
       "clearTerminal": "Effacer le terminal",
@@ -2849,6 +2875,22 @@
     },
     "nativeChatView": {
       "linkedMessageMissing": "Ce message est introuvable."
+    },
+    "browserProfile": {
+      "default": "Par défaut"
+    },
+    "recentSessionCards": {
+      "decreaseLimit": "Diminuer la limite des cartes récentes",
+      "increaseLimit": "Augmenter la limite des cartes récentes",
+      "cardClosed": "La carte a été fermée",
+      "waitingForHost": "En attente de l’hôte…",
+      "workspaceGone": "L’espace de travail n’existe plus",
+      "cardClosedOpeningWorkspace": "Carte fermée ; ouverture de l’espace de travail"
+    },
+    "tabsSheet": {
+      "recentCaption": "Récents entre espaces",
+      "recentSegment": "Récents",
+      "workspaceSegment": "Cet espace ({{count}})"
     }
   },
   "settings": {
@@ -3021,6 +3063,17 @@
       "download": "Télécharger pour ce téléphone",
       "downloadSize": "Environ {{size}} Mo",
       "phoneChecking": "Vérification…"
+    },
+    "nativeChat": {
+      "recentlyUsed": "RÉCEMMENT UTILISÉS",
+      "recentlyUsedFooter": "Personnalisez la barre d’onglets et le nombre d’onglets récents affichés (7 par défaut).",
+      "compactTabStrip": "Barre d’onglets compacte",
+      "compactTabStripOn": "Onglets étroits défilants dans la barre supérieure",
+      "compactTabStripOff": "Un seul onglet actif pleine largeur en haut",
+      "maxRecentItems": "Max. d’éléments récents",
+      "cardsUnit": "cartes",
+      "decreaseMaxRecent": "Diminuer le max. d’éléments récents",
+      "increaseMaxRecent": "Augmenter le max. d’éléments récents"
     }
   },
   "sourceControl": {
@@ -4452,7 +4505,7 @@
   "bots": {
     "link": {
       "pairTitle": "Jumeler un ordinateur",
-      "pairRequired": "Pour ouvrir ce lien, jumelez ce téléphone à un ordinateur.",
+      "pairRequired": "Pour ouvrir ce lien, jumelez ce téléphone à un ordinateur, puis rouvrez le lien.",
       "pairAction": "Jumeler un ordinateur",
       "openFailed": "Impossible d’ouvrir ce lien",
       "ambiguous": "Ce bot se trouve sur {{names}}. Ouvrez la conversation dans Orca sur l’ordinateur de votre choix.",
@@ -4465,5 +4518,7 @@
       "unreachableSingle": "Impossible de joindre {{name}}. Vérifiez qu’Orca y est ouvert, puis réessayez.",
       "workspaceDeleted": "L’espace de travail de cette conversation a été supprimé sur {{name}}."
     }
-  }
+  },
+  "recentSessionCardsSectionTitle": "Récemment utilisés",
+  "recentSessionCardsEmpty": "Aucune autre carte récente pour l’instant"
 }

@@ -1,6 +1,12 @@
 import { useCallback } from 'react'
 import type { LayoutChangeEvent } from 'react-native'
 import { Bot } from 'lucide-react-native'
+import {
+  type ActivePanel,
+  resolvePanelAction,
+  shouldShowSessionHeaderChecksAction,
+  panelRouteDescriptor
+} from './session-panel-host'
 import type { ActionSheetAction } from '../components/sheets/ActionSheetModal'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import {
@@ -8,14 +14,8 @@ import {
   workspaceRouteHref,
   workspaceRouteParams
 } from '../navigation/workspace-execution-host'
-import {
-  type ActivePanel,
-  resolvePanelAction,
-  shouldShowSessionHeaderChecksAction,
-  panelRouteDescriptor
-} from './session-panel-host'
-import type { MobileSessionPresentationModel } from './use-mobile-session-presentation'
 import { useRecentSessionCardMenu } from './use-recent-session-card-menu'
+import type { MobileSessionPresentationModel } from './use-mobile-session-presentation'
 
 export function useMobileSessionPanelRouteActions(scope: MobileSessionPresentationModel) {
   const t = useMobileTranslation()
@@ -27,7 +27,6 @@ export function useMobileSessionPanelRouteActions(scope: MobileSessionPresentati
     isFloatingWorkspaceRoute,
     router,
     worktreeName,
-    showToast,
     activePanel,
     setActivePanel,
     setSessionContentRowWidth,
@@ -48,7 +47,8 @@ export function useMobileSessionPanelRouteActions(scope: MobileSessionPresentati
     handleCreateTerminal,
     setCreateError,
     setShowQuickCommands,
-    quickCommandsSupported
+    quickCommandsSupported,
+    showToast
   } = scope
   const agentStatusRow = (errorHint: string): ActionSheetAction | null =>
     createTabAgentLoadState === 'loading'
@@ -167,8 +167,6 @@ export function useMobileSessionPanelRouteActions(scope: MobileSessionPresentati
     hostedChecksSupported: prIsGithubRepo
   })
   const showRecentSessionCardsAction = !isFloatingWorkspaceRoute
-  const showHeaderMoreButton =
-    showRecentSessionCardsAction || showAgentSessionHistoryAction || showChecksAction
   const { recentSessionCards, jumpingRecentCardKey, handleSelectRecentSessionCard } =
     useRecentSessionCardMenu(scope)
   const createTabBusy = creating || creatingBrowser || creatingMarkdown
@@ -206,7 +204,6 @@ export function useMobileSessionPanelRouteActions(scope: MobileSessionPresentati
     recentSessionCards,
     jumpingRecentCardKey,
     handleSelectRecentSessionCard,
-    showHeaderMoreButton,
     createTabBusy,
     handleOpenNewTab,
     handleOpenQuickCommands

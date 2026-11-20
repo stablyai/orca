@@ -1,3 +1,4 @@
+import type { ProfileStateDomainPatch } from '../../profile-state/documents/profile-state-domain-patches'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -12,6 +13,7 @@ import type {
 } from './profile-state-authority'
 import { Store } from '../store'
 import { toSshExecutionHostId } from '../../../../shared/execution-host/execution-host'
+import { profileStateWriterPatching } from '../../profile-state/documents/profile-state-patched-domains'
 
 export function deferred<T>() {
   let resolve!: (value: T) => void
@@ -58,15 +60,37 @@ export class DelayedAuthority implements AsyncProfileStateAuthority {
     const captured = Buffer.from(payload)
     await this.dispatch(() => this.inner.writeSerializedState(captured), true)
   }
-  async writeSerializedDomains(replacements: readonly ProfileStateDomainReplacement[]) {
+  async writeSerializedDomains(
+    replacements: readonly ProfileStateDomainReplacement[],
+    patches?: readonly ProfileStateDomainPatch[]
+  ) {
     const captured = structuredClone(replacements)
+    const capturedPatches = patches && structuredClone(patches)
     this.captures.push([...captured])
-    await this.dispatch(() => this.inner.writeSerializedDomains(captured), true)
+    await this.dispatch(
+      () =>
+        this.inner.writeSerializedDomains(captured, {
+          patches: capturedPatches,
+          patching: profileStateWriterPatching
+        }),
+      true
+    )
   }
-  async writeCompleteSerializedDomains(replacements: readonly ProfileStateDomainReplacement[]) {
+  async writeCompleteSerializedDomains(
+    replacements: readonly ProfileStateDomainReplacement[],
+    patches?: readonly ProfileStateDomainPatch[]
+  ) {
     const captured = structuredClone(replacements)
+    const capturedPatches = patches && structuredClone(patches)
     this.captures.push([...captured])
-    await this.dispatch(() => this.inner.writeCompleteSerializedDomains(captured), true)
+    await this.dispatch(
+      () =>
+        this.inner.writeCompleteSerializedDomains(captured, {
+          patches: capturedPatches,
+          patching: profileStateWriterPatching
+        }),
+      true
+    )
   }
   async writeSerializedAutomationRuns(
     replacements: readonly ProfileStateDomainReplacement[],

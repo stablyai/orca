@@ -65,10 +65,15 @@ export function readLastVisitedWorktreeOnHost(
   return record?.hostId === hostId ? { worktreeId: record.worktreeId } : null
 }
 
-function extractRecentCardFields(raw: string | null): {
-  recentCards?: unknown[]
+type MirroredRecentCardExtras = {
   recentCardsMaxDisplay?: number
-} {
+  tabBarMode?: 'classic-strip' | 'single-tab'
+  tabsSheetScope?: 'recent' | 'workspace'
+}
+
+function extractRecentCardFields(
+  raw: string | null
+): { recentCards?: unknown[] } & MirroredRecentCardExtras {
   if (!raw) {
     return {}
   }
@@ -86,9 +91,19 @@ function extractRecentCardFields(raw: string | null): {
       Number.isFinite(parsed.recentCardsMaxDisplay)
         ? parsed.recentCardsMaxDisplay
         : undefined
+    const tabBarMode =
+      parsed.tabBarMode === 'classic-strip' || parsed.tabBarMode === 'single-tab'
+        ? parsed.tabBarMode
+        : undefined
+    const tabsSheetScope =
+      parsed.tabsSheetScope === 'recent' || parsed.tabsSheetScope === 'workspace'
+        ? parsed.tabsSheetScope
+        : undefined
     return {
       ...(recentCards ? { recentCards } : {}),
-      ...(recentCardsMaxDisplay !== undefined ? { recentCardsMaxDisplay } : {})
+      ...(recentCardsMaxDisplay !== undefined ? { recentCardsMaxDisplay } : {}),
+      ...(tabBarMode ? { tabBarMode } : {}),
+      ...(tabsSheetScope ? { tabsSheetScope } : {})
     }
   } catch {
     return {}
@@ -99,7 +114,7 @@ function extractRecentCardFields(raw: string | null): {
 export function withRecentCards(
   raw: string | null,
   cards: readonly unknown[],
-  extras?: { recentCardsMaxDisplay?: number }
+  extras?: MirroredRecentCardExtras
 ): string | null {
   if (!raw || readLastVisitedWorktreeRecord(raw) === null) {
     return null
@@ -123,6 +138,16 @@ export function withRecentCards(
       } else {
         delete next.recentCardsMaxDisplay
       }
+      if (extras?.tabBarMode !== undefined) {
+        next.tabBarMode = extras.tabBarMode
+      } else {
+        delete next.tabBarMode
+      }
+      if (extras?.tabsSheetScope !== undefined) {
+        next.tabsSheetScope = extras.tabsSheetScope
+      } else {
+        delete next.tabsSheetScope
+      }
       return JSON.stringify(next)
     }
     let value = build()
@@ -136,7 +161,6 @@ export function withRecentCards(
   }
 }
 
-/** The stored value with `record` as the latest visit and its host's entry. */
 export function withLastVisitedWorktree(
   raw: string | null,
   record: LastVisitedWorktreeRecord & { executionHost?: ExecutionHostId }
@@ -159,6 +183,10 @@ export function withLastVisitedWorktree(
       ...(trimmedCards && trimmedCards.length > 0 ? { recentCards: trimmedCards } : {}),
       ...(recentFields.recentCardsMaxDisplay !== undefined
         ? { recentCardsMaxDisplay: recentFields.recentCardsMaxDisplay }
+        : {}),
+      ...(recentFields.tabBarMode !== undefined ? { tabBarMode: recentFields.tabBarMode } : {}),
+      ...(recentFields.tabsSheetScope !== undefined
+        ? { tabsSheetScope: recentFields.tabsSheetScope }
         : {})
     })
   let value = serialize()
@@ -221,7 +249,7 @@ export function writeLastVisitedWorktree(
 
 export function writeRecentCardsToLastVisitedWorktree(
   cards: readonly unknown[],
-  extras?: { recentCardsMaxDisplay?: number }
+  extras?: MirroredRecentCardExtras
 ): Promise<void> {
   writeChain = writeChain
     .then(() => readMirroredKeyOrStore(LAST_VISITED_WORKTREE_STORAGE_KEY).catch(() => null))

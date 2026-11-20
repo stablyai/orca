@@ -31,35 +31,7 @@ afterEach(() => {
 })
 
 describe('createBotHostRead', () => {
-  it('says why nothing landed: an older host without the method, or a failed read, until one lands', async () => {
-    const read = createBotHostRead<{ chats: unknown[] }>(
-      'bots.chatTree',
-      (result: never) => result,
-      'failed',
-      BOT_WORK_KINDS
-    )
-    const bot = { hostId: 'local' as const, id: 'bot-s' }
-    const key = botRefKey(bot)
-    const stop = read.subscribe(bot, vi.fn())
-    vi.spyOn(console, 'error').mockImplementation(() => undefined)
-    expect(read.state(key)).toBe('loading')
-    mocks.answers.set('bot-s', new Error('method_not_found'))
-    read.request(bot)
-    await flush()
-    expect(read.state(key)).toBe('unsupported')
-    mocks.answers.set('bot-s', new Error('connection reset'))
-    read.request(bot)
-    await flush()
-    expect(read.state(key)).toBe('failed')
-    mocks.answers.set('bot-s', { chats: [] })
-    read.request(bot)
-    await flush()
-    expect(read.state(key)).toBe('ready')
-    stop()
-    vi.restoreAllMocks()
-  })
-
-  it('keeps a landed value through a failed re-read, and says the re-read failed until one lands', async () => {
+  it('reports initial read errors and preserves the last good value through a failed refresh', async () => {
     const read = createBotHostRead<{ items: string[] }>(
       'bots.items.owner.list',
       (result: never) => result,
@@ -70,9 +42,15 @@ describe('createBotHostRead', () => {
     const key = botRefKey(bot)
     const stop = read.subscribe(bot, vi.fn())
     vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    expect(read.state(key)).toBe('loading')
+    mocks.answers.set('bot-r', new Error('connection reset'))
+    read.request(bot)
+    await flush()
+    expect(read.state(key)).toBe('failed')
     mocks.answers.set('bot-r', { items: ['a'] })
     read.request(bot)
     await flush()
+    expect(read.state(key)).toBe('ready')
     expect(read.refreshFailed(key)).toBe(false)
     mocks.answers.set('bot-r', new Error('connection reset'))
     read.request(bot)
@@ -82,6 +60,7 @@ describe('createBotHostRead', () => {
     mocks.answers.set('bot-r', { items: ['a', 'b'] })
     read.request(bot)
     await flush()
+    expect(read.snapshot(key)).toEqual({ items: ['a', 'b'] })
     expect(read.refreshFailed(key)).toBe(false)
     stop()
     vi.restoreAllMocks()

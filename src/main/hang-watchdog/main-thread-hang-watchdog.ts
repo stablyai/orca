@@ -6,9 +6,11 @@ import { hangDetectionMarkerPath } from './hang-detection-marker'
 import { resolveHangWatchdogWorkerPath } from './hang-watchdog-worker-path'
 import { getTraceFilePath, resolveObservabilityConsent } from '../observability'
 import { nativeHangCaptureDirectory } from './native-hang-capture-store'
+import { recordRecoveredMainThreadStall } from './recovered-stall-trace'
 import {
   HANG_WATCHDOG_CHECK_INTERVAL_MS,
   HANG_WATCHDOG_HEARTBEAT_INTERVAL_MS,
+  HANG_WATCHDOG_STALL_MS,
   HANG_WATCHDOG_TIMEOUT_MS,
   type HangWatchdogWorkerData,
   type HangWatchdogToMainMessage,
@@ -54,6 +56,7 @@ export function installMainThreadHangWatchdog(options: {
       osVersion: os.version()
     },
     timeoutMs: positiveTiming(process.env.ORCA_HANG_WATCHDOG_TIMEOUT_MS, HANG_WATCHDOG_TIMEOUT_MS),
+    stallMs: positiveTiming(process.env.ORCA_HANG_WATCHDOG_STALL_MS, HANG_WATCHDOG_STALL_MS),
     checkIntervalMs: positiveTiming(
       process.env.ORCA_HANG_WATCHDOG_CHECK_INTERVAL_MS,
       HANG_WATCHDOG_CHECK_INTERVAL_MS
@@ -87,6 +90,12 @@ export function installMainThreadHangWatchdog(options: {
       message.token.length <= 80
     ) {
       setImmediate(() => postMessage({ type: 'capture-drain-ack', token: message.token }))
+    } else if (
+      message?.type === 'stall-recovered' &&
+      Number.isFinite(message.unresponsiveMs) &&
+      Number.isFinite(message.endedAt)
+    ) {
+      recordRecoveredMainThreadStall(message)
     }
   })
   const powerEvents: NodeJS.EventEmitter = powerMonitor

@@ -6,6 +6,7 @@ import {
   Folder,
   GitBranch,
   History,
+  LayoutList,
   ListChecks,
   Plus,
   SquareChevronRight
@@ -18,6 +19,7 @@ import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { MobileSessionController } from './use-mobile-session-controller'
 import { MobileSessionBotActionsContext } from './mobile-session-bot-actions-context'
+import { useMobileSessionTabBarMode } from './tabs/use-mobile-session-tab-bar-mode'
 
 type Props = {
   controller: MobileSessionController
@@ -30,6 +32,7 @@ export function MobileSessionHeaderMoreMenu({ controller, anchorRef, actionsColl
   useMobileColorScheme()
   const t = useMobileTranslation()
   const {
+    isFolderWorkspaceRoute,
     isFloatingWorkspaceRoute,
     showHeaderMoreActions,
     setShowHeaderMoreActions,
@@ -52,6 +55,7 @@ export function MobileSessionHeaderMoreMenu({ controller, anchorRef, actionsColl
     handleOpenQuickCommands,
     itemsOnPhone
   } = controller
+  const { mode: tabBarMode, toggleMode: toggleTabBarMode } = useMobileSessionTabBarMode()
   const botActions = useContext(MobileSessionBotActionsContext)
   const tabActionsDisabled = createTabBusy || connState !== 'connected'
   const panels: ActionSheetAction[] = [
@@ -105,14 +109,19 @@ export function MobileSessionHeaderMoreMenu({ controller, anchorRef, actionsColl
           }
         ]
       : []),
-    {
-      id: 'quickCommands',
-      label: t('session.header.quickCommands', 'Quick commands'),
-      icon: SquareChevronRight,
-      disabled: tabActionsDisabled,
-      closeBeforePress: true,
-      onPress: handleOpenQuickCommands
-    }
+    // Desktop hides quick commands where there is no repo to run them in.
+    ...(!isFolderWorkspaceRoute && !isFloatingWorkspaceRoute
+      ? [
+          {
+            id: 'quickCommands',
+            label: t('session.header.quickCommands', 'Quick commands'),
+            icon: SquareChevronRight,
+            disabled: tabActionsDisabled,
+            closeBeforePress: true,
+            onPress: handleOpenQuickCommands
+          }
+        ]
+      : [])
   ]
   const textSizeSheet = showNativeChat
     ? 'chat'
@@ -141,10 +150,21 @@ export function MobileSessionHeaderMoreMenu({ controller, anchorRef, actionsColl
             onPress: () => setTextSizeSheet(textSizeSheet)
           }
         ]
-      : [])
+      : []),
+    {
+      id: 'tabBarMode',
+      label:
+        tabBarMode === 'classic-strip'
+          ? t('session.header.switchToSingleTabBar', 'Switch to full-width tab bar')
+          : t('session.header.switchToCompactTabStrip', 'Switch to compact tab strip'),
+      icon: LayoutList,
+      closeBeforePress: true,
+      onPress: () => {
+        toggleTabBarMode()
+      }
+    }
   ]
-  const recentlyUsedVisible =
-    showRecentSessionCardsAction && (actionsCollapsed || (visibleTabs?.length ?? 0) === 0)
+  const recentlyUsedVisible = showRecentSessionCardsAction && (visibleTabs?.length ?? 0) === 0
   const tabs: ActionSheetAction[] = [
     ...(recentlyUsedVisible
       ? [

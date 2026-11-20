@@ -26,7 +26,10 @@ async function apiWith(routes: FakeRoute[]) {
     },
     ...routes
   ])
-  return { api: google.client.googleApi(undefined, { http: fake.http, now: () => NOW }), seen }
+  return {
+    api: await google.client.googleApi(undefined, { http: fake.http, now: () => NOW }),
+    seen
+  }
 }
 
 const DOCS = 'https://docs.googleapis.com/v1/documents'
@@ -37,16 +40,6 @@ const readId = (body: unknown) =>
     : null
 
 describe('Google writes', () => {
-  it('sends a JSON body with its method and reads the answer', async () => {
-    const { api, seen } = await apiWith([() => googleJson(200, { id: 'doc-1' })])
-    await expect(
-      api.send('docs', { method: 'POST', url: DOCS, json: { title: 'Plan' } }, readId)
-    ).resolves.toBe('doc-1')
-    expect(seen).toEqual([
-      { method: 'POST', url: DOCS, type: 'application/json', body: '{"title":"Plan"}' }
-    ])
-  })
-
   it('sends a raw body with its own content type', async () => {
     const { api, seen } = await apiWith([() => googleJson(200, { id: 'f1' })])
     const body = new TextEncoder().encode('a,b\n1,2')
@@ -65,7 +58,7 @@ describe('Google writes', () => {
     ).resolves.toBe('deleted')
   })
 
-  it('renews a refused token once and sends the write again', async () => {
+  it('renews a refused token once and resends the same JSON write', async () => {
     const { api, seen } = await apiWith([
       (url) =>
         url.hostname === 'oauth2.googleapis.com'
@@ -76,10 +69,14 @@ describe('Google writes', () => {
           ? googleJson(401, { error: { code: 401 } })
           : googleJson(200, { id: 'doc-1' })
     ])
-    await expect(api.send('docs', { method: 'POST', url: DOCS, json: {} }, readId)).resolves.toBe(
-      'doc-1'
+    await expect(
+      api.send('docs', { method: 'POST', url: DOCS, json: { title: 'Plan' } }, readId)
+    ).resolves.toBe('doc-1')
+    const write = { method: 'POST', url: DOCS, type: 'application/json', body: '{"title":"Plan"}' }
+    expect(seen.filter((call) => call.url === DOCS)).toEqual([write, write])
+    expect(seen.filter((call) => call.url === 'https://oauth2.googleapis.com/token')).toHaveLength(
+      1
     )
-    expect(seen.filter((call) => call.url === DOCS)).toHaveLength(2)
   })
 
   it("says the account's own reason when renewal fails, instead of retrying with nothing", async () => {

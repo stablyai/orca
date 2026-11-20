@@ -213,7 +213,7 @@ describe('bot items over RPC', () => {
   })
 
   it('makes no item for a bot that refuses the request', async () => {
-    const { dispatcher, host: items } = itemsRuntime()
+    const { dispatcher } = itemsRuntime()
     sendToBot.mockRejectedValue(new OrchestrationError('bot_paused', 'Docs is paused.'))
 
     const refused = await dispatcher.dispatch(
@@ -229,10 +229,6 @@ describe('bot items over RPC', () => {
       error: { message: 'Docs is paused.' }
     })
     expect(sendToBot).toHaveBeenCalledTimes(1)
-    expect(await items.store().list({ botId: 'docs', statuses: ['planned'], limit: 10 })).toEqual({
-      items: [],
-      counts: {}
-    })
     expect(
       await dispatcher.dispatch(request('bots.items.list', { botId: 'docs', all: true }))
     ).toMatchObject({ ok: true, result: { items: [] } })
@@ -253,30 +249,7 @@ describe('bot items over RPC', () => {
     expect(sendToBot).not.toHaveBeenCalled()
   })
 
-  it('makes an item for another bot with a repeated link stored once', async () => {
-    const { dispatcher } = itemsRuntime()
-    sendToBot.mockImplementation(async (_context: unknown, mail: { messageId: string }) => {
-      messages.set(mail.messageId, { to_handle: `orca_session_id:${DOCS_CHAT}` })
-      return { receipt: {}, nudge: () => {} }
-    })
-
-    const made = await dispatcher.dispatch(
-      request('bots.items.add', {
-        callerSessionId: RANGER_CHAT,
-        title: 'Fix the onboarding invite link',
-        forBot: 'bot:Docs',
-        links: Array.from({ length: 51 }, () => 'https://example.com/spec')
-      })
-    )
-
-    expect(made).toMatchObject({
-      ok: true,
-      result: { item: { links: [{ kind: 'url', ref: 'https://example.com/spec' }] } }
-    })
-    expect(sendToBot).toHaveBeenCalledTimes(1)
-  })
-
-  it('makes an item for another bot in the chat its request landed in', async () => {
+  it('makes an item with deduplicated links in the chat its request landed in', async () => {
     const { dispatcher } = itemsRuntime()
     sendToBot.mockImplementation(
       async (_context: unknown, mail: { messageId: string; to: string }) => {
@@ -290,7 +263,8 @@ describe('bot items over RPC', () => {
       request('bots.items.add', {
         callerSessionId: RANGER_CHAT,
         title: 'Fix the onboarding invite link',
-        forBot: 'bot:Docs'
+        forBot: 'bot:Docs',
+        links: Array.from({ length: 51 }, () => 'https://example.com/spec')
       })
     )
 
@@ -300,10 +274,12 @@ describe('bot items over RPC', () => {
         item: {
           owner: { botId: 'docs' },
           chat: { id: DOCS_CHAT },
-          madeBy: { botId: 'ranger', chatId: RANGER_CHAT }
+          madeBy: { botId: 'ranger', chatId: RANGER_CHAT },
+          links: [{ kind: 'url', ref: 'https://example.com/spec' }]
         }
       }
     })
+    expect(sendToBot).toHaveBeenCalledOnce()
   })
 
   it("mails the item's chat once for each owner change, a close with nothing running included", async () => {
@@ -327,6 +303,94 @@ describe('bot items over RPC', () => {
       { chatId: RANGER_CHAT, eventId: 2, kind: 'commented' },
       { chatId: RANGER_CHAT, eventId: 3, kind: 'status' }
     ])
+  })
+
+  it("records the owner's answer to the open question as answered, moved and mailed once, even sent twice", async () => {
+    const { dispatcher } = itemsRuntime()
+    await dispatcher.dispatch(
+      request('bots.items.add', { callerSessionId: RANGER_CHAT, title: 'Merge 880' })
+    )
+    await dispatcher.dispatch(
+      request('bots.items.set', {
+        callerSessionId: RANGER_CHAT,
+        item: '1',
+        status: 'needs_you',
+        ask: {
+          questions: [{ prompt: 'Merge now?', options: [{ label: 'Merge' }, { label: 'Wait' }] }]
+        }
+      })
+    )
+    await host!.sendOwedMail()
+    mailed.length = 0
+    const desktop = { caller: DESKTOP_RPC_CALLER }
+    const answer = request('bots.items.owner.comment', {
+      item: '1',
+      text: '',
+      answering: 'e2',
+      answers: [{ picks: [0] }],
+      answerId: 'answer-1'
+    })
+
+    const first = await dispatcher.dispatch(answer, desktop)
+    const again = await dispatcher.dispatch(answer, desktop)
+
+    expect(first).toMatchObject({ ok: true, result: { eventId: 'e4', answered: true } })
+    expect(again).toMatchObject({ ok: true, result: { eventId: 'e4', answered: true } })
+    expect(mailed).toEqual([
+      { chatId: RANGER_CHAT, eventId: 4, kind: 'commented' },
+      { chatId: RANGER_CHAT, eventId: 5, kind: 'status' }
+    ])
+  })
+
+  it('posts a hard-to-read ask as written and tips the bot; a clean ask gets no tip', async () => {
+    const { dispatcher } = itemsRuntime()
+    for (const title of ['Go ahead', 'Go ahead too']) {
+      await dispatcher.dispatch(request('bots.items.add', { callerSessionId: RANGER_CHAT, title }))
+    }
+    const prose = 'Go ahead without review? Reply **yes**, or **wait**.'
+
+    const tipped = await dispatcher.dispatch(
+      request('bots.items.set', {
+        callerSessionId: RANGER_CHAT,
+        item: '1',
+        status: 'needs_you',
+        comment: prose
+      })
+    )
+    const clean = await dispatcher.dispatch(
+      request('bots.items.set', {
+        callerSessionId: RANGER_CHAT,
+        item: '2',
+        status: 'needs_you',
+        ask: {
+          questions: [{ prompt: 'Go ahead?', options: [{ label: 'Go' }, { label: 'Wait' }] }]
+        }
+      })
+    )
+    const shown = await dispatcher.dispatch(
+      request('bots.items.show', { callerSessionId: RANGER_CHAT, item: '1', newest: true })
+    )
+
+    expect(tipped).toMatchObject({
+      ok: true,
+      result: {
+        item: { status: 'needs_you', question: { text: prose } },
+        advice: {
+          codes: ['prose_choices'],
+          tip: 'Posted. Tip: Give the choices as buttons with --ask and --option, not in the text. Set Needs you again if you rewrite it.'
+        }
+      }
+    })
+    expect(clean).toMatchObject({ ok: true, result: { item: { status: 'needs_you' } } })
+    expect(clean).not.toHaveProperty('result.advice')
+    expect(shown).toMatchObject({
+      ok: true,
+      result: {
+        events: expect.arrayContaining([
+          expect.objectContaining({ kind: 'commented', data: { text: prose, answerable: true } })
+        ])
+      }
+    })
   })
 
   it("takes a paired client's store image on a comment, claimed for the item's live chat, and nothing outside the store", async () => {

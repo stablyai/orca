@@ -22,6 +22,7 @@ import {
 } from '@/components/provider-accounts/antigravity-chat-runtime-sign-in-policy'
 import { useStructuredAgentSessionHostProgram } from '../session/status/structured-agent-session-status-hooks'
 import type { NativeChatStructuredViewProps } from '../native-chat-view-types'
+import type { NativeChatAntigravityAuthTarget } from '../antigravity-auth/native-chat-antigravity-auth'
 
 export type NativeChatInstallSlotState =
   | { kind: 'none' }
@@ -49,6 +50,8 @@ export function useNativeChatInstallSlot(
   signIn: NativeChatSignInStripState | null
   sendBlockedReason: string | null
   unavailableHint: string | undefined
+  /** How this Antigravity chat signs in on its host; null for every other chat. */
+  antigravityAuth: NativeChatAntigravityAuthTarget | null
 } {
   const t = useTranslate()
   const hostProgram = useStructuredAgentSessionHostProgram(props.sessionId, props.target)
@@ -80,7 +83,12 @@ export function useNativeChatInstallSlot(
     slot,
     signIn,
     sendBlockedReason: unavailableHint ?? installSlotSendBlockedReason(slot, agentLabel, t),
-    unavailableHint
+    unavailableHint,
+    antigravityAuth: signsIn
+      ? { host: props.target, backend: 'managed' }
+      : props.agent === 'antigravity' && props.isVisible && hostProgram
+        ? { host: props.target, backend: 'agy' }
+        : null
   }
 }
 

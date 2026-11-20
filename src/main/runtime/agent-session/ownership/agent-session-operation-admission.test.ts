@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
   agentSessionOperationKey,
-  agentSessionOperationExpiry,
   pruneAgentSessionOperationRows,
   type AgentSessionOperationRow
 } from '../../../../shared/agent-session/lifecycle/operations/agent-session-operation-ledger'
@@ -73,12 +72,12 @@ it('expires the compatibility success row from host time even for a far-future i
     operationIdScope: 'global',
     outcome: { status: 'succeeded', sessionId: 'chat' }
   })
-  const expiresAt = agentSessionOperationExpiry(NOW, NOW)
   expect(state.operations.get(agentSessionOperationKey('client', operationId))).toMatchObject({
     recordedAt: NOW,
-    expiresAt,
     outcome: { status: 'succeeded' }
   })
-  expect(pruneAgentSessionOperationRows(state.operations, expiresAt - 1).size).toBe(1)
-  expect(pruneAgentSessionOperationRows(state.operations, expiresAt).size).toBe(0)
+  expect(pruneAgentSessionOperationRows(state.operations, NOW).size).toBe(1)
+  expect(pruneAgentSessionOperationRows(state.operations, NOW + 2 * 24 * 60 * 60 * 1000).size).toBe(
+    0
+  )
 })

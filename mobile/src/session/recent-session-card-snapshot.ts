@@ -1,27 +1,15 @@
-import type { AgentStatusEntry } from '../../../src/shared/agent-status/contracts/agent-status-types'
-import { agentDotState, type AgentDotState } from '../worktree/agent-row-display'
-import type { MobileSessionTab, MobileSessionTabType } from './mobile-session-route-types'
+import { UNPUBLISHED_WORKTREE_PUBLICATION_EPOCH } from '../../../src/shared/remote-runtime/session-graph/runtime-session-contracts'
+import type {
+  AgentStatusEntry,
+  AgentStatusState
+} from '../../../src/shared/agent-status/contracts/agent-status-types'
+import { agentDotState, type AgentDotState } from '../worktree/agent-lineage/agent-row-display'
+import { mobileSessionTabDotState } from './tabs/mobile-session-tab-rows'
+import type { MobileSessionTab, MobileSessionTabType } from './tabs/mobile-session-tabs'
 import {
-  buildTabCompletionKeys,
   getMobileSessionTabTitle,
-  resolveMobileTerminalTabAgentId,
-  resolveRawSessionTabDotState,
-  resolveTabDoneStamp,
-  resolveTrackedTabCompletionState
-} from './mobile-terminal-tab-agent'
-import { reconcileTerminalAgentStatusWithCatalog } from './session-tab-catalog-agent-status'
-
-export type LiveRecentCardTab = {
-  id: string
-  terminal?: string | null
-  sessionId?: string | null
-  isActive?: boolean
-  type?: MobileSessionTab['type']
-  agentStatus?: (AgentStatusEntry & { restoredUnconfirmed?: boolean }) | null
-  chatStatus?: Extract<MobileSessionTab, { type: 'agent-session' }>['chatStatus'] | null
-  agentState?: AgentDotState | null
-  doneStamp?: number
-}
+  resolveMobileTerminalTabAgentId
+} from './tabs/mobile-terminal-tab-agent'
 
 export type RecentSessionCardSnapshot = {
   hostId: string
@@ -38,10 +26,48 @@ export type RecentSessionCardSnapshot = {
   lastVisitedAt: number
 }
 
+export type LiveRecentCardTab = {
+  id: string
+  terminal?: string | null
+  sessionId?: string | null
+  isActive?: boolean
+  type?: MobileSessionTab['type']
+  agentState?: AgentDotState | null
+  agentStatus?: (AgentStatusEntry & { restoredUnconfirmed?: boolean }) | null
+  chatStatus?: Extract<MobileSessionTab, { type: 'agent-session' }>['chatStatus'] | null
+}
+
+const VALID_AGENT_DOT_STATES: readonly AgentDotState[] = [
+  'working',
+  'monitoring',
+  'blocked',
+  'waiting',
+  'done',
+  'interrupted',
+  'failed',
+  'unconfirmed',
+  'unverifiable',
+  'permission'
+]
+
+export function parseAgentDotState(raw: unknown): AgentDotState | undefined {
+  return typeof raw === 'string' ? VALID_AGENT_DOT_STATES.find((state) => state === raw) : undefined
+}
+
+const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null
+
+function parseStatusState(v: unknown): AgentStatusState | null {
+  return v === 'working' || v === 'blocked' || v === 'waiting' || v === 'done' ? v : null
+}
+
+export function isUnpublishedSnapshot(snapshot: unknown): boolean {
+  return isRecord(snapshot) && snapshot.publicationEpoch === UNPUBLISHED_WORKTREE_PUBLICATION_EPOCH
+}
+
 export function resolveLiveTabDotState(
   tab: LiveRecentCardTab | undefined,
   fallbackState: AgentDotState | undefined,
-  options?: { card?: RecentSessionCardSnapshot; isActiveOnScreen?: boolean }
+  now = Date.now()
 ): AgentDotState | undefined {
   if (
     !tab ||
@@ -52,40 +78,23 @@ export function resolveLiveTabDotState(
   ) {
     return fallbackState
   }
-  const rawState =
-    tab.agentState !== undefined
-      ? (tab.agentState ?? undefined)
-      : tab.type
-        ? resolveRawSessionTabDotState(tab)
-        : undefined
-  const isActiveOnScreen = options?.isActiveOnScreen ?? tab.isActive
-  if (isActiveOnScreen === true && rawState === 'done') {
-    return 'done'
+  if (tab.agentState !== undefined) {
+    return tab.agentState && tab.agentState !== 'idle' ? tab.agentState : undefined
   }
-  const resolved = resolveTrackedTabCompletionState({
-    keys: buildTabCompletionKeys({
-      id: tab.id || options?.card?.tabId,
-      terminal: tab.terminal ?? options?.card?.terminalHandle,
-      paneKey: tab.agentStatus?.paneKey,
-      sessionId: tab.sessionId ?? options?.card?.sessionId
-    }),
-    rawState,
-    doneStamp: tab.doneStamp ?? resolveTabDoneStamp(tab),
-    isActiveOnScreen,
-    previousCardState: fallbackState
-  })
-  return resolved && resolved !== 'idle' ? resolved : undefined
+  let dot: AgentDotState | undefined
+  if (tab.type === 'terminal' && tab.agentStatus && !tab.agentStatus.restoredUnconfirmed) {
+    dot = agentDotState(tab.agentStatus, now)
+  } else if (tab.type === 'agent-session' && tab.chatStatus) {
+    dot = agentDotState(tab.chatStatus, now)
+  }
+  return dot && dot !== 'idle' ? dot : undefined
 }
 
 export function syncRecentCardWithLiveTab(
   card: RecentSessionCardSnapshot,
-  tab: LiveRecentCardTab | undefined,
-  options?: { isActiveOnScreen?: boolean }
+  tab: LiveRecentCardTab | undefined
 ): RecentSessionCardSnapshot {
-  const nextState = resolveLiveTabDotState(tab, card.agentState, {
-    card,
-    isActiveOnScreen: options?.isActiveOnScreen
-  })
+  const nextState = resolveLiveTabDotState(tab, card.agentState)
   if (card.agentState === nextState) {
     return card
   }
@@ -93,118 +102,72 @@ export function syncRecentCardWithLiveTab(
   return nextState ? { ...rest, agentState: nextState } : rest
 }
 
-function resolveSnapshotSessionTabDotState(
+function resolveSnapshotItemDotState(
   item: Record<string, unknown>,
-  now = Date.now(),
-  options?: { worktreeId?: string; worktrees?: readonly unknown[] }
-): { agentState: AgentDotState | null; doneStamp?: number } {
-  if (item.type === 'terminal') {
-    const status = reconcileTerminalAgentStatusWithCatalog(item.agentStatus, {
-      worktreeId: options?.worktreeId,
-      worktrees: options?.worktrees,
-      tabId: typeof item.id === 'string' ? item.id : null,
-      parentTabId: typeof item.parentTabId === 'string' ? item.parentTabId : null,
-      leafId: typeof item.leafId === 'string' ? item.leafId : null,
-      now
-    })
-    if (!status) {
-      return { agentState: null }
-    }
-    if (status.restoredUnconfirmed === true) {
-      return { agentState: 'idle' }
-    }
-    return {
-      agentState: agentDotState({ ...status, mirroredEvidenceReceivedAt: now }, now),
-      doneStamp: status.stateStartedAt ?? status.updatedAt
-    }
+  now: number
+): AgentDotState | null {
+  const raw =
+    item.type === 'terminal'
+      ? item.agentStatus
+      : item.type === 'agent-session'
+        ? item.chatStatus
+        : null
+  if (!isRecord(raw)) {
+    return null
   }
-  const raw = item.type === 'agent-session' ? item.chatStatus : null
-  if (
-    typeof raw !== 'object' ||
-    raw === null ||
-    !('state' in raw) ||
-    typeof raw.state !== 'string' ||
-    !('updatedAt' in raw) ||
-    typeof raw.updatedAt !== 'number'
-  ) {
-    return { agentState: null }
+  if (item.type === 'terminal' && raw.restoredUnconfirmed === true) {
+    return 'idle'
   }
-  if (
-    raw.state !== 'working' &&
-    raw.state !== 'blocked' &&
-    raw.state !== 'waiting' &&
-    raw.state !== 'done'
-  ) {
-    return { agentState: 'idle' }
+  const state = parseStatusState(raw.state)
+  if (!state || typeof raw.updatedAt !== 'number') {
+    return item.type === 'agent-session' && typeof raw.state === 'string' ? 'idle' : null
   }
-  const doneStamp =
-    'stateStartedAt' in raw && typeof raw.stateStartedAt === 'number'
-      ? raw.stateStartedAt
-      : 'evidenceObservedAt' in raw && typeof raw.evidenceObservedAt === 'number'
-        ? raw.evidenceObservedAt
-        : raw.updatedAt
-  return {
-    agentState: agentDotState(
-      {
-        state: raw.state,
-        updatedAt: raw.updatedAt,
-        mirroredEvidenceReceivedAt: now,
-        workingMode:
-          'workingMode' in raw && raw.workingMode === 'monitoring' ? 'monitoring' : undefined,
-        interrupted:
-          'interrupted' in raw && typeof raw.interrupted === 'boolean' ? raw.interrupted : undefined
-      },
-      now
-    ),
-    doneStamp
-  }
+  return agentDotState(
+    {
+      state,
+      updatedAt: raw.updatedAt,
+      ...(raw.workingMode === 'monitoring' ? { workingMode: 'monitoring' as const } : {}),
+      ...(typeof raw.interrupted === 'boolean' ? { interrupted: raw.interrupted } : {}),
+      ...(raw.hasLivePty === true ? { hasLivePty: true as const } : {}),
+      ...(typeof raw.evidenceObservedAt === 'number'
+        ? { evidenceObservedAt: raw.evidenceObservedAt }
+        : {}),
+      ...(typeof raw.mirroredEvidenceReceivedAt === 'number'
+        ? { mirroredEvidenceReceivedAt: raw.mirroredEvidenceReceivedAt }
+        : {})
+    },
+    now
+  )
 }
 
 export function recentCardSnapshotTabs(
   value: unknown,
-  options?: { worktreeId?: string; worktrees?: readonly unknown[] }
+  now = Date.now()
 ):
   | {
       id: string
       terminal?: string | null
       sessionId?: string | null
       agentState?: AgentDotState | null
-      doneStamp?: number
     }[]
   | null {
-  if (
-    typeof value !== 'object' ||
-    value === null ||
-    !('tabs' in value) ||
-    !Array.isArray(value.tabs)
-  ) {
+  if (!isRecord(value) || !Array.isArray(value.tabs)) {
     return null
   }
   return value.tabs.flatMap((item) => {
-    if (
-      typeof item !== 'object' ||
-      item === null ||
-      !('id' in item) ||
-      typeof item.id !== 'string' ||
-      item.id.length === 0
-    ) {
+    if (!isRecord(item) || typeof item.id !== 'string' || item.id.length === 0) {
       return []
     }
-    const { agentState, doneStamp } = resolveSnapshotSessionTabDotState(item, Date.now(), options)
+    const agentState = resolveSnapshotItemDotState(item, now)
     const sessionId =
-      'sessionId' in item && typeof item.sessionId === 'string' && item.sessionId.length > 0
-        ? item.sessionId
-        : undefined
+      typeof item.sessionId === 'string' && item.sessionId.length > 0 ? item.sessionId : undefined
     return [
       {
         id: item.id,
         terminal:
-          'terminal' in item && (typeof item.terminal === 'string' || item.terminal === null)
-            ? item.terminal
-            : undefined,
+          typeof item.terminal === 'string' || item.terminal === null ? item.terminal : undefined,
         ...(sessionId ? { sessionId } : {}),
-        agentState,
-        ...(doneStamp !== undefined ? { doneStamp } : {})
+        agentState
       }
     ]
   })
@@ -226,7 +189,7 @@ export function buildRecentSessionCardFromTab(p: {
       : t.type === 'terminal'
         ? resolveMobileTerminalTabAgentId(t, hostAgentIdentity)
         : undefined
-  const rawState = resolveRawSessionTabDotState(t, now)
+  const rawState = mobileSessionTabDotState(t, now)
   const agentState = rawState && rawState !== 'idle' ? rawState : undefined
   const leafId = t.type === 'terminal' && t.leafId ? t.leafId : undefined
   const terminalHandle = t.type === 'terminal' && t.terminal ? t.terminal : undefined

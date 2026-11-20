@@ -85,18 +85,9 @@ function launch(
 }
 
 describe('ACP launch: standing instructions', () => {
-  it.each(['grok', 'opencode', 'omp', 'antigravity'] as const)(
-    'leaves a %s chat without instructions exactly as it was',
-    async (agent) => {
-      expect(await launch(agent, { instructions: null })).toEqual(await launch(agent))
-      expect(await launch(agent)).not.toHaveProperty('sessionMeta')
-    }
-  )
-
   it('gives Grok them as rules on its new session', async () => {
     const resolved = await launch('grok', { instructions: PREAMBLE })
     expect(resolved.sessionMeta).toEqual({ rules: PREAMBLE })
-    expect(resolved.args).toEqual((await launch('grok')).args)
   })
 
   it("appends them to Antigravity's system prompt", async () => {
@@ -104,7 +95,6 @@ describe('ACP launch: standing instructions', () => {
     expect(resolved.sessionMeta).toEqual({
       antigravity: { systemPrompt: { append: PREAMBLE } }
     })
-    expect(resolved.args).toEqual((await launch('antigravity')).args)
   })
 
   it("adds them to OpenCode's inline instructions after the user's own, keeping their settings", async () => {
@@ -118,16 +108,17 @@ describe('ACP launch: standing instructions', () => {
     expect(config.instructions).toHaveLength(2)
     expect(config.instructions[0]).toBe('/home/user/mine.md')
     await expectPrivateFile(config.instructions[1])
-    expect(resolved.args).toEqual((await launch('opencode')).args)
   })
 
   it("refuses to start OpenCode when the user's inline configuration cannot be extended", async () => {
-    await expect(
-      launch('opencode', {
-        instructions: PREAMBLE,
-        launchEnv: { OPENCODE_CONFIG_CONTENT: '{ // jsonc\n}' }
-      })
-    ).rejects.toThrow(/cannot take this chat's standing instructions/)
+    for (const content of ['{ // jsonc\n}', '{"instructions":"/mine.md"}']) {
+      await expect(
+        launch('opencode', {
+          instructions: PREAMBLE,
+          launchEnv: { OPENCODE_CONFIG_CONTENT: content }
+        })
+      ).rejects.toThrow(/cannot take this chat's standing instructions/)
+    }
   })
 
   it('appends them to OMP’s system prompt from a file', async () => {

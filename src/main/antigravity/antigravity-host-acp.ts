@@ -9,7 +9,6 @@ import {
   isLegacyAgentSessionAccountHome,
   type AgentSessionAccountHome
 } from '../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
-import { ANTIGRAVITY_ACP_HOME } from '../../shared/agent-session/lifecycle/provider-handles/antigravity-session-origin'
 import {
   compareAppVersions,
   isValidAppVersion
@@ -66,6 +65,11 @@ type HostCheck = { identity: string; answer: Promise<boolean>; retryAt?: number 
 const checks = new Map<string, HostCheck>()
 
 class IncompatibleHostAcp extends Error {}
+
+/** After agy's login changes, the next check asks again instead of trusting the last answer. */
+export function forgetAntigravityHostAcpChecks(): void {
+  checks.clear()
+}
 
 /** Whether `command acp` initializes as a compatible server that serves session requests. An
  *  incompatible binary is not asked again; a sign-in can lapse or a hung agy recover, so any other
@@ -139,12 +143,6 @@ export async function agyUsesApiKey(homePath: string): Promise<boolean> {
     // Settings agy may read differently than JSON.parse could select a provider.
     return true
   }
-}
-
-/** Whether Orca's own Chat holds the managed server's personal sign-in token. */
-export async function hasManagedAntigravityChatSignIn(managedHome: string): Promise<boolean> {
-  const token = join(managedHome, ANTIGRAVITY_ACP_HOME, 'acp_token.json')
-  return (await stat(token).catch(() => null)) !== null
 }
 
 /** Whether agy itself may be signed in on this host; an unreadable store counts as signed out. */

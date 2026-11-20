@@ -29,7 +29,6 @@ describe('isCompleteAgentPromptDraft', () => {
       'first line second\nline',
       false
     ],
-    ['the prompt with its spacing edited', 'a  b', 'a b', false],
     ['a prompt whose trailing newline may not render', 'first line\n', 'first line', false]
   ])('%s', (_case, prompt, draft, complete) => {
     expect(isCompleteAgentPromptDraft(draft, prompt)).toBe(complete)

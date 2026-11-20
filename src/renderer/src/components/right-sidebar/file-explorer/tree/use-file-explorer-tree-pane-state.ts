@@ -12,7 +12,7 @@ import type { TreeNode } from './file-explorer-types'
 import {
   buildFolderStatusMap,
   buildStatusMap
-} from '../../../../lib/source-control/paths/git-path-decoration'
+} from '../../../../../../shared/git/status/git-path-decoration'
 import { useFileDeletion } from '../mutations/useFileDeletion'
 import { useFileExplorerDragDrop } from '../mutations/useFileExplorerDragDrop'
 import { useFileExplorerHandlers } from '../mutations/useFileExplorerHandlers'
@@ -43,6 +43,7 @@ type UseFileExplorerTreePaneStateParams = {
   activeFileId: string | null
   openFiles: OpenFile[]
   hasNameFilter: boolean
+  hasNameFilterQuery: boolean
   setNameFilterQuery: Dispatch<SetStateAction<string>>
   handleToggleNameFilterDir: (worktreeId: string, dirPath: string) => void
   tree: ReturnType<typeof useFileExplorerTree>
@@ -57,7 +58,6 @@ type UseFileExplorerTreePaneStateParams = {
 type UseFileExplorerTreePaneStateResult = {
   scrollRef: RefObject<HTMLDivElement | null>
   runtimeDownloadContext: RuntimeFileOperationArgs | null
-  supportsFolderDownload: boolean
   canOpenWorkspaceFileBrowserForPath: ReturnType<typeof useWorkspaceFileBrowserActionPredicate>
   statusByRelativePath: ReturnType<typeof buildStatusMap>
   folderStatusByRelativePath: ReturnType<typeof buildFolderStatusMap>
@@ -83,6 +83,7 @@ export function useFileExplorerTreePaneState({
   activeFileId,
   openFiles,
   hasNameFilter,
+  hasNameFilterQuery,
   setNameFilterQuery,
   handleToggleNameFilterDir,
   tree,
@@ -127,12 +128,6 @@ export function useFileExplorerTreePaneState({
   const scrollRef = useRef<HTMLDivElement>(null)
   const canOpenWorkspaceFileBrowserForPath =
     useWorkspaceFileBrowserActionPredicate(activeWorktreeId)
-  const supportsFolderDownload = useAppStore((s) => {
-    const connectionId = activeRepo?.connectionId
-    return connectionId
-      ? s.sshConnectionStates.get(connectionId)?.supportsFolderDownload === true
-      : false
-  })
   const ownerRuntimeEnvironmentId = useAppStore((s) =>
     runtimeEnvironmentIdOrLocalUnlessTwin(s, activeWorktreeId)
   )
@@ -250,9 +245,11 @@ export function useFileExplorerTreePaneState({
     rootCache,
     loadDir,
     loadMoreDir,
+    selectedPath: selection.selectedPath,
     setSelectedPath: setSingleSelectedPath,
     activeFileId,
-    openFiles
+    openFiles,
+    hasNameFilterQuery
   })
 
   useFileExplorerLoadMore({
@@ -301,7 +298,6 @@ export function useFileExplorerTreePaneState({
   return {
     scrollRef,
     runtimeDownloadContext,
-    supportsFolderDownload,
     canOpenWorkspaceFileBrowserForPath,
     statusByRelativePath,
     folderStatusByRelativePath,

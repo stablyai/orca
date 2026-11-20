@@ -7,14 +7,15 @@ import {
   flattenAgentRowLineage,
   type AgentRowNode
 } from '../agent-row-lineage'
-import { resolveHostAgentRowDotState } from '../../../session/catalog-worktree-unread-status'
 import {
   collapsedChildrenSignalState,
+  hidesUnreadAgent,
   isDisclosureOpen,
   partitionIdleChildren,
   toggleDisclosure
 } from '../agent-child-disclosure'
-import type { AgentDotState } from '../agent-row-display'
+import { agentDotState } from '../agent-row-display'
+import type { AgentListStatus as AgentDotState } from '../../../../../src/shared/agent-status/presentation/agent-list-status'
 import { WorktreeAgentChildToggle, WorktreeAgentIdleGroupRow } from './WorktreeAgentChildDisclosure'
 import { WorktreeAgentRow } from './WorktreeAgentRow'
 import { WorktreeAgentSummary } from './WorktreeAgentSummary'
@@ -94,20 +95,25 @@ export function WorktreeAgentList({
     ...node.children.map((child): ChildItem => ({
       kind: 'agent',
       key: child.row.paneKey,
-      dotState: resolveHostAgentRowDotState(child.row, now),
+      dotState: agentDotState(child.row, now),
       node: child
     }))
   ]
   // A waiting grandchild must still light a collapsed ancestor; flattenAgentRowLineage already breaks cycles.
-  const descendantItemsOf = (node: AgentRowNode): ChildItem[] =>
-    childItemsOf(node).flatMap((child) =>
-      child.kind === 'agent' ? [child, ...descendantItemsOf(child.node)] : [child]
+  const withDescendants = (items: readonly ChildItem[]): ChildItem[] =>
+    items.flatMap((child) =>
+      child.kind === 'agent' ? [child, ...withDescendants(childItemsOf(child.node))] : [child]
     )
+  const descendantItemsOf = (node: AgentRowNode): ChildItem[] => withDescendants(childItemsOf(node))
+  const hidesUnread = (hidden: readonly ChildItem[]): boolean =>
+    hidesUnreadAgent(hidden.flatMap((item) => (item.kind === 'agent' ? [item.node.row] : [])))
 
   const renderNode = (node: AgentRowNode): ReactNode => {
     const parentKey = node.row.paneKey
     const children = childItemsOf(node)
     const childrenExpanded = isDisclosureOpen(parentDisclosureKey(parentKey))
+    const hiddenDescendants =
+      children.length > 0 && !childrenExpanded ? descendantItemsOf(node) : null
     const renderChild = (child: ChildItem): ReactNode =>
       child.kind === 'subagent' ? renderSubagent(node, child.childRow) : renderNode(child.node)
     const { activeChildren, idleChildren } = partitionIdleChildren(children)
@@ -128,10 +134,9 @@ export function WorktreeAgentList({
                 count={children.length}
                 expanded={childrenExpanded}
                 signalState={
-                  childrenExpanded
-                    ? undefined
-                    : collapsedChildrenSignalState(descendantItemsOf(node))
+                  hiddenDescendants ? collapsedChildrenSignalState(hiddenDescendants) : undefined
                 }
+                unread={hiddenDescendants ? hidesUnread(hiddenDescendants) : false}
                 onToggle={() => toggle(parentDisclosureKey(parentKey))}
               />
             ) : undefined
@@ -145,6 +150,7 @@ export function WorktreeAgentList({
                 count={idleChildren.length}
                 depth={node.depth + 1}
                 expanded={idleExpanded}
+                unread={!idleExpanded && hidesUnread(withDescendants(idleChildren))}
                 onToggle={() => toggle(idleDisclosureKey(parentKey))}
               />
             ) : null}
@@ -161,6 +167,7 @@ export function WorktreeAgentList({
         <WorktreeAgentSummary
           agents={summaryAgents}
           expanded={expanded}
+          unread={hidesUnreadAgent(agents)}
           now={now}
           onToggle={() => setExpanded((value) => !value)}
         />

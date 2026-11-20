@@ -1,13 +1,16 @@
 import { memo, useMemo } from 'react'
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native'
-import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { File, FileText, Globe, Minus, Plus, SquareTerminal } from 'lucide-react-native'
-import { AgentStateDot } from '../components/AgentStateDot'
-import { MobileAgentIcon } from '../components/MobileAgentIcon'
+import { AgentStateDot } from '../agents/presentation/AgentStateDot'
 import { BottomDrawer } from '../components/bottom-drawer/BottomDrawer'
+import { MobileAgentIcon } from '../components/icons/MobileAgentIcon'
 import { useNow } from '../hooks/use-now'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
-import { agentStateLabel, formatTimeAgo } from '../worktree/agent-row-display'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { agentStateLabel, formatTimeAgo } from '../worktree/agent-lineage/agent-row-display'
+import { getWorktreeLabel } from '../worktree/row-presentation/worktree-label'
 import {
   getRecentSessionCardsMaxDisplaySync,
   MAX_RECENT_SESSION_CARDS_LIMIT,
@@ -15,7 +18,7 @@ import {
   setRecentSessionCardsMaxDisplay,
   type RecentSessionCardRecord
 } from './recent-session-cards'
-import { getWorktreeLabel } from './worktree-label'
+import type { MobileSessionController } from './use-mobile-session-controller'
 
 export type RecentSessionCardsSectionProps = {
   cards: readonly RecentSessionCardRecord[]
@@ -34,9 +37,7 @@ export type RecentSessionCardsSheetProps = RecentSessionCardsSectionProps & {
 
 export const MAX_RECENT_CARD_WORKSPACE_LABEL_CHARS = 16
 
-function recentCardKey(card: RecentSessionCardRecord): string {
-  return `${card.worktreeId}:${card.tabId}`
-}
+const recentCardKey = (card: RecentSessionCardRecord) => `${card.worktreeId}:${card.tabId}`
 
 export function formatWorkspaceBadgeLabel(label: string): string {
   if (label.length <= MAX_RECENT_CARD_WORKSPACE_LABEL_CHARS) {
@@ -51,13 +52,13 @@ export function formatWorkspaceBadgeLabel(label: string): string {
       .map((segment) => segment[0])
       .join('/')
     const suffix = label.slice(slashIndex + 1)
-    const compactCandidate = `${prefix}/${suffix}`
-    if (compactCandidate.length <= MAX_RECENT_CARD_WORKSPACE_LABEL_CHARS) {
-      return compactCandidate
+    const compact = `${prefix}/${suffix}`
+    if (compact.length <= MAX_RECENT_CARD_WORKSPACE_LABEL_CHARS) {
+      return compact
     }
-    const remainingTailChars = MAX_RECENT_CARD_WORKSPACE_LABEL_CHARS - prefix.length - 2
-    if (remainingTailChars > 0) {
-      return `${prefix}/…${suffix.slice(-remainingTailChars)}`
+    const tailChars = MAX_RECENT_CARD_WORKSPACE_LABEL_CHARS - prefix.length - 2
+    if (tailChars > 0) {
+      return `${prefix}/…${suffix.slice(-tailChars)}`
     }
   }
   return `…${label.slice(-(MAX_RECENT_CARD_WORKSPACE_LABEL_CHARS - 1))}`
@@ -99,10 +100,10 @@ const RecentSessionCardRow = memo(function RecentSessionCardRow({
   const workspaceLabel = getWorktreeLabel(card.worktreeName, card.worktreeId)
   const badgeLabel = formatWorkspaceBadgeLabel(workspaceLabel)
   const timeAgo = formatTimeAgo(card.lastVisitedAt, now)
-  const stateLabel =
+  const stateWord =
     card.agentState && card.agentState !== 'idle' ? agentStateLabel(card.agentState) : null
-  const accessibilityLabel = stateLabel
-    ? `${card.title}, ${stateLabel}, ${workspaceLabel}, ${timeAgo}`
+  const accessibilityLabel = stateWord
+    ? `${card.title}, ${stateWord}, ${workspaceLabel}, ${timeAgo}`
     : `${card.title}, ${workspaceLabel}, ${timeAgo}`
   return (
     <View>
@@ -166,6 +167,7 @@ export const RecentSessionCardsSection = memo(function RecentSessionCardsSection
   onChangeMaxDisplay,
   onSelectCard
 }: RecentSessionCardsSectionProps) {
+  useMobileColorScheme()
   const t = useMobileTranslation()
   const effectiveMaxDisplay = maxDisplay ?? getRecentSessionCardsMaxDisplaySync()
   const handleUpdateMaxDisplay = onChangeMaxDisplay ?? setRecentSessionCardsMaxDisplay
@@ -262,36 +264,39 @@ export const RecentSessionCardsSection = memo(function RecentSessionCardsSection
   )
 })
 
-export function RecentSessionCardsSheet({
-  visible,
-  cards,
-  jumpingCardKey,
-  currentWorktreeId,
-  currentTabId,
-  maxDisplay,
-  onChangeMaxDisplay,
-  onSelectCard,
-  onClose
-}: RecentSessionCardsSheetProps) {
+export function RecentSessionCardsSheet(props: RecentSessionCardsSheetProps) {
+  const { visible, onClose, ...sectionProps } = props
   return (
     <BottomDrawer visible={visible} onClose={onClose} dragContentToDismiss>
-      <RecentSessionCardsSection
-        cards={cards}
-        jumpingCardKey={jumpingCardKey}
-        currentWorktreeId={currentWorktreeId}
-        currentTabId={currentTabId}
-        maxDisplay={maxDisplay}
-        onChangeMaxDisplay={onChangeMaxDisplay}
-        onSelectCard={onSelectCard}
-      />
+      <RecentSessionCardsSection {...sectionProps} />
     </BottomDrawer>
   )
 }
 
-const styles = StyleSheet.create({
-  section: {
-    marginBottom: spacing.md
-  },
+export function MobileSessionRecentCardsSheet({
+  controller
+}: {
+  controller: MobileSessionController
+}) {
+  return (
+    <RecentSessionCardsSheet
+      visible={Boolean(
+        controller.showRecentSessionCards &&
+        controller.showRecentSessionCardsAction &&
+        controller.visibleTabs.length === 0
+      )}
+      cards={controller.recentSessionCards ?? []}
+      jumpingCardKey={controller.jumpingRecentCardKey ?? null}
+      currentWorktreeId={controller.worktreeId}
+      currentTabId={controller.activeSessionTabId}
+      onSelectCard={controller.handleSelectRecentSessionCard}
+      onClose={() => controller.setShowRecentSessionCards(false)}
+    />
+  )
+}
+
+const styles = themedStyleSheet(() => ({
+  section: { marginBottom: spacing.md },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -299,11 +304,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xs,
     paddingBottom: spacing.sm
   },
-  title: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: colors.textMuted
-  },
+  title: { fontSize: 13, fontWeight: '500', color: colors.textMuted },
   limitStepper: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -320,12 +321,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center'
   },
-  limitStepButtonPressed: {
-    backgroundColor: colors.bgRaised
-  },
-  limitStepButtonDisabled: {
-    opacity: 0.35
-  },
+  limitStepButtonPressed: { backgroundColor: colors.bgRaised },
+  limitStepButtonDisabled: { opacity: 0.35 },
   limitValueText: {
     minWidth: 18,
     fontSize: 12,
@@ -333,11 +330,7 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     textAlign: 'center'
   },
-  panel: {
-    backgroundColor: colors.bgPanel,
-    borderRadius: radii.surface,
-    overflow: 'hidden'
-  },
+  panel: { backgroundColor: colors.bgPanel, borderRadius: radii.surface, overflow: 'hidden' },
   emptyText: {
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
@@ -357,24 +350,10 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm + 2,
     paddingHorizontal: spacing.md + 2
   },
-  rowPressed: {
-    backgroundColor: colors.bgRaised
-  },
-  textBlock: {
-    flex: 1,
-    minWidth: 0
-  },
-  cardTitle: {
-    fontSize: typography.bodySize,
-    fontWeight: '500',
-    color: colors.textPrimary
-  },
-  metaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: 2
-  },
+  rowPressed: { backgroundColor: colors.bgRaised },
+  textBlock: { flex: 1, minWidth: 0 },
+  cardTitle: { fontSize: typography.bodySize, fontWeight: '500', color: colors.textPrimary },
+  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 },
   workspaceBadge: {
     flexShrink: 1,
     maxWidth: 132,
@@ -385,19 +364,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 5,
     paddingVertical: 1
   },
-  workspaceBadgeText: {
-    flexShrink: 1,
-    fontSize: typography.metaSize,
-    color: colors.textSecondary
-  },
-  workspaceBadgeTextCurrent: {
-    color: colors.accentBlue,
-    fontWeight: '600'
-  },
+  workspaceBadgeText: { flexShrink: 1, fontSize: typography.metaSize, color: colors.textSecondary },
+  workspaceBadgeTextCurrent: { color: colors.accentBlue, fontWeight: '600' },
   timeText: {
     flexShrink: 0,
     fontSize: typography.metaSize,
     color: colors.textMuted,
     textAlign: 'right'
   }
-})
+}))

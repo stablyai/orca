@@ -1,21 +1,20 @@
 import { agentNoUpdateLabel } from '../../../../../src/shared/agent-status/presentation/agent-row-decay-state'
 import { MobileForkMarkedName } from '../../../session/fork/MobileForkMarkedName'
 import { mobileForkAccessibleName } from '../../../session/fork/mobile-fork-marked-name'
-import { memo, useEffect, useState, type ReactNode } from 'react'
+import { memo, type ReactNode } from 'react'
+import { Bell } from 'lucide-react-native'
+import { listedAgentVerdict } from '../../../agents/agent-list-rows'
+import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { Pressable, Text, View } from 'react-native'
 import type { RuntimeWorktreeAgentRow } from '../../../../../src/shared/worktree/catalog/runtime-worktree-contracts'
 import { withoutNativeChatVisualDirectiveLines } from '../../../../../src/shared/native-chat/visuals/native-chat-visual-directive'
-import {
-  reconcileWorktreeAgentRowWithSessionDone,
-  resolveHostAgentRowDotState,
-  subscribeTabCompletionState
-} from '../../../session/catalog-worktree-unread-status'
 import { colors, spacing, pressedStyle } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import {
   agentDisplayForkedLead,
   agentDisplayLabel,
+  agentDotState,
   agentRowTimeAt,
   formatTimeAgo
 } from '../agent-row-display'
@@ -52,38 +51,36 @@ function WorktreeAgentRowComponent({
   trailing
 }: Props) {
   useMobileColorScheme()
-  const [, setCompletionRev] = useState(0)
-  useEffect(() => subscribeTabCompletionState(() => setCompletionRev((rev) => rev + 1)), [])
-  const effectiveAgent = reconcileWorktreeAgentRowWithSessionDone(agent)
-  const dotState = childRow?.displayState ?? resolveHostAgentRowDotState(effectiveAgent, now)
+  const t = useMobileTranslation()
+  const dotState = childRow?.displayState ?? agentDotState(agent, now)
   // Visuals render only in transcript; row keeps surrounding prose and treats visual-only reply as empty.
-  const reply = effectiveAgent.lastAssistantMessage
+  const reply = agent.lastAssistantMessage
   const label = agentDisplayLabel(
     reply
-      ? { ...effectiveAgent, lastAssistantMessage: withoutNativeChatVisualDirectiveLines(reply) }
-      : effectiveAgent,
+      ? { ...agent, lastAssistantMessage: withoutNativeChatVisualDirectiveLines(reply) }
+      : agent,
     now
   )
   const forkedLead = agentDisplayForkedLead(agent, label)
   const childText = childRow ? mobileAgentChildRowText(childRow, now) : null
-  const timeAt = childRow ? childRow.firstObservedAt : agentRowTimeAt(effectiveAgent)
+  const timeAt = childRow ? childRow.firstObservedAt : agentRowTimeAt(agent)
   // Like desktop, a silent row reports how long since its last update, not when its turn began.
   const ts =
     childRow && timeAt <= 0
       ? ''
       : !childRow && dotState === 'unverifiable'
-        ? agentNoUpdateLabel(effectiveAgent, now)
+        ? agentNoUpdateLabel(agent, now)
         : formatTimeAgo(timeAt, now)
 
   const content = (
     <View style={[styles.row, { paddingLeft: depth * AGENT_ROW_INDENT_PER_DEPTH }]}>
       <AgentStateDot state={dotState} />
       {/* Use desktop-style agent identity logo instead of two-letter code. */}
-      {!childRow && effectiveAgent.agentType ? (
-        <MobileAgentIcon agentId={effectiveAgent.agentType} size={13} />
+      {!childRow && agent.agentType ? (
+        <MobileAgentIcon agentId={agent.agentType} size={13} />
       ) : null}
       <Text
-        style={[styles.label, (unvisited || dotState === 'unread') && styles.labelUnvisited]}
+        style={[styles.label, unvisited && styles.labelUnvisited]}
         numberOfLines={1}
         accessibilityLabel={
           !childText && forkedLead
@@ -105,6 +102,14 @@ function WorktreeAgentRowComponent({
           label
         )}
       </Text>
+      {!childRow && listedAgentVerdict(agent)?.unread ? (
+        <Bell
+          size={12}
+          color={colors.statusAmber}
+          fill={colors.statusAmber}
+          accessibilityLabel={t('agents.list.unread', 'Unread')}
+        />
+      ) : null}
       {trailing}
       <Text style={styles.time}>{ts}</Text>
     </View>

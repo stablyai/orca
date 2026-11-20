@@ -196,36 +196,31 @@ describe('BotChatTreeIndex', () => {
     r.expectSameAsFullBuild()
   })
 
-  it.each([10, 100])(
-    'tells only the bot whose kept chat tab closed or reopened, of %i bots',
-    async (botCount) => {
-      const r = await rig(undefined, botCount - 2)
-      await r.store.setSessionTabVisibility('chat-bot-a-2', true)
-      await r.store.setSessionTabVisibility('chat-elsewhere', true)
-      r.notices.splice(0)
-      await r.store.setSessionTabVisibility('chat-bot-a-2', false)
-      expect(r.notices.splice(0)).toEqual([{ botIds: ['bot-a'], kinds: ['chats'] }])
-      expect(r.index.base(botA).chats.get('chat-bot-a-2')?.closed).toBe(true)
-      // A tab in no bot's home tells no bot.
-      await r.store.setSessionTabVisibility('chat-elsewhere', false)
-      await r.store.setSessionTabVisibility('chat-elsewhere', true)
-      expect(r.notices.splice(0)).toEqual([])
-      await r.store.setSessionTabVisibility('chat-bot-a-2', true)
-      expect(r.notices.splice(0)).toEqual([{ botIds: ['bot-a'], kinds: ['chats'] }])
-      expect(r.index.base(botA).chats.get('chat-bot-a-2')?.closed).toBe(false)
-      r.expectSameAsFullBuild()
-    }
-  )
-
-  it('tells no bot of a commit its chats do not show, such as a lease renewal', async () => {
-    const r = await rig()
-    await r.renew('chat-bot-a-2')
-    expect(r.notices).toEqual([])
+  it('tells only the bot whose kept chat tab closed or reopened', async () => {
+    const botCount = 10
+    const r = await rig(undefined, botCount - 2)
+    await r.store.setSessionTabVisibility('chat-bot-a-2', true)
+    await r.store.setSessionTabVisibility('chat-elsewhere', true)
+    r.notices.splice(0)
+    await r.store.setSessionTabVisibility('chat-bot-a-2', false)
+    expect(r.notices.splice(0)).toEqual([{ botIds: ['bot-a'], kinds: ['chats'] }])
+    expect(r.index.base(botA).chats.get('chat-bot-a-2')?.closed).toBe(true)
+    // A tab in no bot's home tells no bot.
+    await r.store.setSessionTabVisibility('chat-elsewhere', false)
+    await r.store.setSessionTabVisibility('chat-elsewhere', true)
+    expect(r.notices.splice(0)).toEqual([])
+    await r.store.setSessionTabVisibility('chat-bot-a-2', true)
+    expect(r.notices.splice(0)).toEqual([{ botIds: ['bot-a'], kinds: ['chats'] }])
+    expect(r.index.base(botA).chats.get('chat-bot-a-2')?.closed).toBe(false)
     r.expectSameAsFullBuild()
   })
 
-  it('tells no bot of a chat outside every bot home', async () => {
+  it('publishes no notice for a lease renewal or commits outside bot homes', async () => {
     const r = await rig()
+    await r.renew('chat-bot-a-2')
+    expect(r.notices.splice(0)).toEqual([])
+    r.expectSameAsFullBuild()
+
     await r.put('chat-elsewhere', 'workspace-elsewhere', 'Renamed')
     await r.put('chat-new-elsewhere-1', 'workspace-elsewhere', 'New')
     expect(r.notices).toEqual([])

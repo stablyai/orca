@@ -20,7 +20,7 @@ import { useReducedMotionEnabled } from '../../platform/accessibility/use-reduce
 import { useKeyboardPersistingTaps } from '../../platform/keyboard/keyboard-persisting-taps'
 import { useNow } from '../../hooks/use-now'
 import { agentStateLabel, type AgentDotState } from '../../worktree/agent-lineage/agent-row-display'
-import { colors, feedback, radii, spacing } from '../../theme/mobile-theme'
+import { colors, feedback, spacing } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import {
@@ -28,6 +28,7 @@ import {
   isForkedChatTab,
   type MobileSessionTabSummary
 } from './mobile-session-tab-rows'
+import { MobileSessionTabCountButton } from './MobileSessionTabCountButton'
 import { MobileSessionTabMark } from './MobileSessionTabMark'
 import { MobileSessionTabsSheet } from './MobileSessionTabsSheet'
 import { MobileForkMarkedName } from '../fork/MobileForkMarkedName'
@@ -83,6 +84,8 @@ export function MobileSessionTabBar({
     handleOpenNewTab,
     switchSessionTab,
     openSessionTabActionSheetAfterKeyboardDismiss,
+    showRecentSessionCards,
+    setShowRecentSessionCards,
     visibleTabs,
     terminals
   } = controller
@@ -90,8 +93,15 @@ export function MobileSessionTabBar({
   const keepsKeyboard = useKeyboardPersistingTaps('handled')
   const now = useNow(60_000)
   const rows = useMemo(
-    () => visibleTabs.map((tab) => buildMobileSessionTabSummary(tab, terminals, now)),
-    [visibleTabs, terminals, now]
+    () =>
+      visibleTabs.map((tab) => {
+        const summary = buildMobileSessionTabSummary(tab, terminals, now)
+        // The tab on screen is being read (useMarkViewedAgentRead), so it never rings.
+        return summary.unread && tab.id === activeSessionTabId
+          ? { ...summary, unread: false }
+          : summary
+      }),
+    [visibleTabs, terminals, now, activeSessionTabId]
   )
   const activeIndex = rows.findIndex((row) => row.tab.id === activeSessionTabId)
   const active: MobileSessionTabSummary | undefined = rows[activeIndex]
@@ -100,7 +110,6 @@ export function MobileSessionTabBar({
   const othersNeedYou = rows.some(
     (row) => row.tab.id !== activeSessionTabId && row.group === 'needs-you'
   )
-  const [sheetOpen, setSheetOpen] = useState(false)
 
   const reducedMotion = useDrawerReducedMotion()
   const offset = useSharedValue(0)
@@ -173,12 +182,7 @@ export function MobileSessionTabBar({
   ]
     .filter(Boolean)
     .join(', ')
-  const countAccessibilityLabel = [
-    countLabel,
-    othersNeedYou ? t('session.tabBar.anotherNeedsYou', 'another tab needs you') : null
-  ]
-    .filter(Boolean)
-    .join(', ')
+  const anyUnread = rows.some((row) => row.unread)
   const createDisabled = createTabBusy || connState !== 'connected'
   const openTabActions = () => {
     // The click a drag release produces on the web belongs to the drag.
@@ -246,22 +250,14 @@ export function MobileSessionTabBar({
           </Pressable>
         </View>
       </GestureDetector>
-      <Pressable
-        style={({ pressed }) => [
-          styles.sideCell,
-          actionsCollapsed && !inTopBar && styles.lastCell,
-          pressed && styles.cellPressed
-        ]}
-        onPress={() => setSheetOpen(true)}
-        accessibilityRole="button"
-        accessibilityLabel={countAccessibilityLabel}
-        accessibilityHint={t('session.tabBar.hint', 'Shows all tabs')}
-      >
-        <View style={styles.countBox}>
-          <Text style={styles.countText}>{rows.length}</Text>
-        </View>
-        {othersNeedYou ? <View style={styles.alert} /> : null}
-      </Pressable>
+      <MobileSessionTabCountButton
+        count={rows.length}
+        anyUnread={anyUnread}
+        othersNeedYou={othersNeedYou}
+        active={showRecentSessionCards}
+        isLastCell={actionsCollapsed && !inTopBar}
+        onPress={() => setShowRecentSessionCards(true)}
+      />
       {/* A collapsed bar's + lives in the header's ⋯ menu. */}
       {!actionsCollapsed ? (
         <Pressable
@@ -283,8 +279,8 @@ export function MobileSessionTabBar({
       <MobileSessionTabsSheet
         controller={controller}
         tabs={rows}
-        visible={sheetOpen}
-        onClose={() => setSheetOpen(false)}
+        visible={showRecentSessionCards}
+        onClose={() => setShowRecentSessionCards(false)}
       />
     </View>
   )
@@ -347,33 +343,5 @@ const styles = themedStyleSheet(() => ({
   // At the screen edge; in the top bar the hairline stays to part the cells from the round buttons.
   lastCell: { borderRightWidth: 0 },
   cellPressed: { backgroundColor: colors.translucentFill },
-  cellDisabled: { opacity: feedback.disabledOpacity },
-  countBox: {
-    minWidth: 19,
-    height: 19,
-    paddingHorizontal: 3,
-    borderRadius: 6,
-    borderWidth: 1.8,
-    borderColor: colors.textPrimary,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  countText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: colors.textPrimary,
-    fontVariant: ['tabular-nums']
-  },
-  // Another tab needs you: a red dot on the count's corner, ringed in the bar's colour.
-  alert: {
-    position: 'absolute',
-    top: 8,
-    right: 9,
-    width: 9,
-    height: 9,
-    borderRadius: radii.pill,
-    backgroundColor: colors.statusRed,
-    borderWidth: 2,
-    borderColor: colors.bgPanel
-  }
+  cellDisabled: { opacity: feedback.disabledOpacity }
 }))

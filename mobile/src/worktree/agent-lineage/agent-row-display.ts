@@ -6,8 +6,8 @@ import { getAgentRowPrimaryText } from '../../../../src/shared/agent-status/pres
 import type { AgentListStatus } from '../../../../src/shared/agent-status/presentation/agent-list-status'
 import { translate } from '../../i18n/mobile-i18n'
 
-// Desktop AgentStateDot vocabulary, plus session-tab unread (not an Agents-list status).
-export type AgentDotState = AgentListStatus | 'unread'
+// Desktop AgentStateDot's vocabulary.
+export type AgentDotState = AgentListStatus
 
 // A session tab's AgentStatusEntry leaves `interrupted` optional; worktree rows always send it.
 type AgentRowVerdictSource = Pick<RuntimeWorktreeAgentRow, 'state' | 'mainAgent'> & {
@@ -19,7 +19,7 @@ export function agentDotState(
     Pick<RuntimeWorktreeAgentRow, 'workingMode' | 'hasLivePty'> &
     Parameters<typeof isAgentStatusFresh>[0],
   now: number
-): Exclude<AgentDotState, 'unread'> {
+): AgentDotState {
   const mark = agentVerdictDisplayMark(row)
   if (mark) {
     return mark
@@ -54,8 +54,6 @@ export function agentStateLabel(state: AgentDotState): string {
       return translate('worktree.agentRowDisplay.failed', 'Failed')
     case 'unconfirmed':
       return translate('worktree.agentRowDisplay.unconfirmed', 'Couldn’t confirm')
-    case 'unread':
-      return translate('worktree.agentRowDisplay.unread', 'Unread')
     case 'done':
       return translate('worktree.agentRowDisplay.done', 'Done')
     case 'idle':

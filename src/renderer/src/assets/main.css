@@ -103,6 +103,8 @@
   --color-agent-question: var(--agent-question);
   --color-agent-working: var(--agent-working);
   --color-agent-question-text: var(--agent-question-text);
+  --color-item-ask-open: var(--item-ask-open);
+  --color-item-ask-open-text: var(--item-ask-open-text);
   --color-question-card-border: var(--question-card-border);
   --color-question-option-border: var(--question-option-border);
   --color-chat-focus-ring: var(--chat-focus-ring);
@@ -284,6 +286,9 @@
   --agent-working: var(--color-yellow-500);
   /* Legible weight for text/glyphs on a tinted --agent-question surface. */
   --agent-question-text: var(--color-orange-700);
+  /* An item's open ask, waiting on the owner: its rim, tint and flag. Amber means only that. */
+  --item-ask-open: var(--color-amber-500);
+  --item-ask-open-text: var(--color-amber-700);
   /* Answer card edge and the outline shared by its option tiles, badges, answer field and Skip. */
   --question-card-border-mix: 14%;
   --question-option-border-mix: 16%;
@@ -410,6 +415,7 @@
   --ai-action-accent: var(--color-violet-400);
   --agent-question: var(--color-orange-500);
   --agent-question-text: var(--color-orange-300);
+  --item-ask-open-text: var(--color-amber-400);
   --question-card-border-mix: 16%;
   --question-option-border-mix: 12%;
   --unread: var(--color-blue-400);
@@ -2215,6 +2221,48 @@ html.native-shell .app-layout {
   .agent-working-spinner {
     animation: none;
   }
+}
+
+/* A quiet turn that just settled: its rows fade (300 ms), then their space and the gap close (280 ms). */
+@keyframes native-chat-quiet-turn-leave {
+  0% {
+    opacity: 1;
+    grid-template-rows: 1fr;
+    margin-top: 0;
+    margin-bottom: 0;
+    animation-timing-function: ease;
+  }
+  52% {
+    opacity: 0;
+    grid-template-rows: 1fr;
+    margin-top: 0;
+    margin-bottom: 0;
+    animation-timing-function: cubic-bezier(0.2, 0, 0, 1);
+  }
+  100% {
+    opacity: 0;
+    grid-template-rows: 0fr;
+    margin-top: var(--native-chat-quiet-leave-top, 0);
+    margin-bottom: var(--native-chat-quiet-leave-bottom, 0);
+  }
+}
+
+.native-chat-quiet-turn-leave {
+  display: grid;
+  animation: native-chat-quiet-turn-leave 580ms linear forwards;
+}
+
+/* The gap that closes with it: a row's own (gap-5), or the transcript's between rows. */
+.native-chat-quiet-turn-leave[data-gap='above'] {
+  --native-chat-quiet-leave-top: -1.25rem;
+}
+
+.native-chat-quiet-turn-leave[data-gap='below'] {
+  --native-chat-quiet-leave-bottom: -1.25rem;
+}
+
+.native-chat-quiet-turn-leave[data-gap='row'] {
+  --native-chat-quiet-leave-top: calc(-20px * var(--chat-estimated-spacing-scale, 1));
 }
 
 /* Why: keyframes run when the content mounts already in its final state. */

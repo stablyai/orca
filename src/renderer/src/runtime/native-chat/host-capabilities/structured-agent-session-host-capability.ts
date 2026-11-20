@@ -1,8 +1,8 @@
 import {
   useAppStateViewActive,
-  useAppViewExternalStore,
-  useAppStateValue
+  useAppViewExternalStore
 } from '@/store/retained-views/app-state-view'
+import { useRuntimeHostStatusViewSelector } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { AGENT_SESSION_PERMISSION_OWN_RUNTIME_CAPABILITY } from '../../../../../shared/agent-session/options/permissions/agent-session-permission-modes-capability'
 import type { StructuredAgentSessionHostCapabilityState } from '../../../../../shared/agent-session/capabilities/structured-agent-session-host-capability'
 import { useEffect, useState } from 'react'
@@ -42,18 +42,17 @@ export function useStructuredAgentSessionOwnPermissionState(
   const capability = AGENT_SESSION_PERMISSION_OWN_RUNTIME_CAPABILITY
   const environmentId = target?.kind === 'environment' ? target.environmentId : null
   // Select the verdict, not the map: unrelated host flips must not rerender every chat.
-  const remote = useAppStateValue((state): StructuredAgentSessionHostCapabilityState => {
-    if (environmentId === null) {
-      return 'unknown'
+  const remote = useRuntimeHostStatusViewSelector(
+    environmentId,
+    (entry): StructuredAgentSessionHostCapabilityState => {
+      const status = isRuntimeHostContactRevoked(entry) ? null : lastVerifiedRuntimeStatus(entry)
+      return status
+        ? status.capabilities?.includes(capability)
+          ? 'supported'
+          : 'unsupported'
+        : 'unknown'
     }
-    const entry = state.runtimeStatusByEnvironmentId.get(environmentId)
-    const status = isRuntimeHostContactRevoked(entry) ? null : lastVerifiedRuntimeStatus(entry)
-    return status
-      ? status.capabilities?.includes(capability)
-        ? 'supported'
-        : 'unsupported'
-      : 'unknown'
-  })
+  )
   const local = useAppViewExternalStore(
     subscribeLocalRuntimeCapabilityObservation,
     () => localCapabilityState(capability),
@@ -84,17 +83,17 @@ export function useStructuredAgentSessionHostCapabilityState(
     state: target?.kind === 'local' ? localCapabilityState(capability) : 'unknown'
   }))
   const environmentId = target?.kind === 'environment' ? target.environmentId : null
-  const current = useAppStateValue((state): StructuredAgentSessionHostCapabilityState => {
-    const status =
-      environmentId === null || !requireCurrentContact
-        ? null
-        : state.runtimeStatusByEnvironmentId.get(environmentId)?.status
-    return !status
-      ? 'unknown'
-      : status.capabilities?.includes(capability)
-        ? 'supported'
-        : 'unsupported'
-  })
+  const current = useRuntimeHostStatusViewSelector(
+    requireCurrentContact ? environmentId : null,
+    (entry): StructuredAgentSessionHostCapabilityState => {
+      const status = entry?.status
+      return !status
+        ? 'unknown'
+        : status.capabilities?.includes(capability)
+          ? 'supported'
+          : 'unsupported'
+    }
+  )
   useEffect(() => {
     if (environmentId === null || requireCurrentContact) {
       return

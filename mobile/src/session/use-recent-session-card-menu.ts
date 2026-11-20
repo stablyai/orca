@@ -1,27 +1,18 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { getCachedWorktrees, setCachedWorktrees } from '../cache/worktree-cache'
 import { BOTTOM_DRAWER_SHOW_DURATION_MS } from '../components/bottom-drawer/bottom-drawer-constants'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import {
   useWorkspaceExecutionHost,
   workspaceRouteHref
 } from '../navigation/workspace-execution-host'
-import { triggerError, triggerSuccess } from '../platform/haptics'
-import { worktreeCatalogRead } from '../worktree/worktree-catalog-operations'
-import { sessionTabsListRead } from './mobile-session-read-operations'
+import { triggerError, triggerSuccess } from '../platform/haptics/haptics'
+import { worktreeCatalogRead } from '../worktree/catalog/worktree-catalog-operations'
+import { sessionTabsListRead } from './tabs/mobile-session-tab-read-operations'
 import {
   activateMobileSessionTab,
   setPendingCrossWorktreeTabTarget
-} from './mobile-session-tab-activation'
-import {
-  recentCardSnapshotTabs,
-  subscribeCatalogWorktreesForTabStatus
-} from './mobile-terminal-tab-agent'
-import {
-  isUnpublishedSnapshot,
-  recentCardWorktrees,
-  type RecentCardWorktree
-} from './session-tab-catalog-agent-status'
+} from './tabs/mobile-session-tab-activation'
+import { isUnpublishedSnapshot, recentCardSnapshotTabs } from './recent-session-card-snapshot'
 import {
   getVisibleRecentSessionCards,
   readAllRecentSessionCardsSync,
@@ -34,6 +25,28 @@ import type { MobileSessionPresentationModel } from './use-mobile-session-presen
 
 const EMPTY_RECENT_SESSION_CARDS: readonly RecentSessionCardRecord[] = []
 const POLL_INTERVAL_MS = 2500
+
+type RecentCardWorktree = {
+  worktreeId: string
+  displayName?: string
+  isArchived?: boolean
+}
+
+const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null
+
+function toRecentCardWorktrees(rows: readonly unknown[] | undefined): RecentCardWorktree[] {
+  return (rows ?? []).flatMap((row) =>
+    isRecord(row) && typeof row.worktreeId === 'string' && row.worktreeId.length > 0
+      ? [
+          {
+            worktreeId: row.worktreeId,
+            displayName: typeof row.displayName === 'string' ? row.displayName : undefined,
+            isArchived: typeof row.isArchived === 'boolean' ? row.isArchived : undefined
+          }
+        ]
+      : []
+  )
+}
 
 function sameRecentCardWorktrees(
   prev: readonly RecentCardWorktree[],
@@ -74,46 +87,29 @@ export function useRecentSessionCardMenu(scope: MobileSessionPresentationModel) 
   const jumpLockRef = useRef(false)
   const recentCardsPollInFlightRef = useRef(false)
   const [recentCardsRevision, setRecentCardsRevision] = useState(0)
+  const [recentCardsWorktrees, setRecentCardsWorktrees] = useState<readonly RecentCardWorktree[]>(
+    []
+  )
+
   useEffect(() => {
     if (!isRecentCardsOpen) {
       return
     }
-    const bump = () => setRecentCardsRevision((rev) => rev + 1)
-    const unsubCards = subscribeRecentSessionCards(bump)
-    const unsubCatalog = subscribeCatalogWorktreesForTabStatus(bump)
-    return () => {
-      unsubCards()
-      unsubCatalog()
-    }
+    return subscribeRecentSessionCards(() => setRecentCardsRevision((rev) => rev + 1))
   }, [isRecentCardsOpen])
-  const [recentCardsWorktrees, setRecentCardsWorktrees] = useState<readonly RecentCardWorktree[]>(
-    () => recentCardWorktrees(getCachedWorktrees(hostId) ?? undefined)
-  )
+
   useEffect(() => {
     if (!isRecentCardsOpen || !client || connState !== 'connected') {
       return
     }
     let cancelled = false
     const pollRecentCards = async () => {
-      let catalogRows: readonly unknown[] | undefined = getCachedWorktrees(hostId) ?? undefined
-      const cachedNext = recentCardWorktrees(catalogRows)
-      if (cachedNext.length > 0) {
-        setRecentCardsWorktrees((prev) =>
-          sameRecentCardWorktrees(prev, cachedNext) ? prev : cachedNext
-        )
-      }
       try {
         const reply = await worktreeCatalogRead.request(client, { limit: 10000 })
         const catalog = !cancelled ? worktreeCatalogRead.interpret(reply) : null
         if (catalog?.accepted && Array.isArray(catalog.value.worktrees)) {
-          catalogRows = catalog.value.worktrees
-          const next = recentCardWorktrees(catalogRows)
-          if (hostId && !sameRecentCardWorktrees(cachedNext, next)) {
-            setCachedWorktrees(hostId, catalog.value.worktrees, { proven: true })
-          }
-          if (next.length > 0) {
-            setRecentCardsWorktrees((prev) => (sameRecentCardWorktrees(prev, next) ? prev : next))
-          }
+          const next = toRecentCardWorktrees(catalog.value.worktrees)
+          setRecentCardsWorktrees((prev) => (sameRecentCardWorktrees(prev, next) ? prev : next))
         }
       } catch {
         // A refused catalog leaves the cached rows in place.
@@ -138,15 +134,14 @@ export function useRecentSessionCardMenu(scope: MobileSessionPresentationModel) 
           const snapshot = !cancelled && reply.ok ? sessionTabsListRead.interpret(reply) : null
           const liveTabs =
             snapshot !== null && !isUnpublishedSnapshot(snapshot)
-              ? recentCardSnapshotTabs(snapshot, { worktreeId: targetId, worktrees: catalogRows })
+              ? recentCardSnapshotTabs(snapshot)
               : null
           if (liveTabs !== null) {
             reconcileRecentSessionCardsForWorktree({
               hostId,
               worktreeId: targetId,
               liveTabs,
-              allowEmpty: true,
-              activeTabId: targetId === worktreeId ? activeSessionTabId : null
+              allowEmpty: true
             })
           }
         })
@@ -181,18 +176,17 @@ export function useRecentSessionCardMenu(scope: MobileSessionPresentationModel) 
     sessionTabs.length,
     worktreeId
   ])
+
   const recentSessionCards = useMemo(() => {
     if (!isRecentCardsOpen) {
       return EMPTY_RECENT_SESSION_CARDS
     }
     void recentCardsRevision
-    const cached = recentCardWorktrees(getCachedWorktrees(hostId) ?? undefined)
-    const liveWorktrees = cached.length > 0 ? cached : recentCardsWorktrees
     return getVisibleRecentSessionCards({
       hostId,
       currentWorktreeId: worktreeId,
       currentTabId: activeSessionTabId,
-      liveWorktrees,
+      liveWorktrees: recentCardsWorktrees,
       currentWorktreeTabs: sessionTabs
     })
   }, [
@@ -204,10 +198,12 @@ export function useRecentSessionCardMenu(scope: MobileSessionPresentationModel) 
     sessionTabs,
     worktreeId
   ])
+
   const closeRecentCardSheets = () => {
     setShowRecentSessionCards(false)
     setShowHeaderMoreActions(false)
   }
+
   const handleSelectRecentSessionCard = async (card: RecentSessionCardRecord) => {
     if (jumpingRecentCardKey !== null || jumpLockRef.current) {
       return
@@ -296,5 +292,6 @@ export function useRecentSessionCardMenu(scope: MobileSessionPresentationModel) 
       setJumpingRecentCardKey(null)
     }
   }
+
   return { recentSessionCards, jumpingRecentCardKey, handleSelectRecentSessionCard }
 }

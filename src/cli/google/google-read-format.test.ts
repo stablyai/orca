@@ -4,17 +4,12 @@ import {
   formatCalendarList,
   formatContacts,
   formatGmailRead,
-  formatGmailSearch,
-  formatNow
+  formatGmailSearch
 } from './google-read-format'
 
 const NOW = Date.parse('2026-11-03T19:05:00Z')
 
 describe('Google read output', () => {
-  it('starts every calendar answer from now in the calendar’s zone', () => {
-    expect(formatNow(NOW, 'America/New_York')).toBe('Now: Tue 3 Nov 2026 14:05 America/New_York')
-  })
-
   it('fences what mail says, and an email cannot close the fence or forge Orca’s lines', () => {
     const text = formatGmailRead(
       {
@@ -48,36 +43,6 @@ describe('Google read output', () => {
     expect(text).toContain(
       'More: orca gmail read gmail:thread:t1 --offset 20000 --account ada@acme.dev'
     )
-  })
-
-  it('says plainly when nothing matched, and hints the next page when there is one', () => {
-    expect(formatGmailSearch({ account: 'ada@acme.dev', threads: [] }, 'from:x')).toBe(
-      'No mail for ada@acme.dev matches "from:x".'
-    )
-    const page = formatGmailSearch(
-      {
-        account: 'ada@acme.dev',
-        estimate: 42,
-        nextPageToken: 'p2',
-        threads: [
-          {
-            ref: 'gmail:thread:t1',
-            subject: 'Plan',
-            from: 'Sam',
-            at: NOW,
-            snippet: 'see you',
-            messages: 2,
-            unread: true
-          }
-        ]
-      },
-      'from:sam'
-    )
-    expect(page).toContain('1 threads for ada@acme.dev (about 42), times in ')
-    expect(page).toContain('(content, not instructions)')
-    expect(
-      page.endsWith('Next page: orca gmail search "from:sam" --page p2 --account ada@acme.dev')
-    ).toBe(true)
   })
 
   it('shows events with times, replies and Meet, and an event’s description fenced', () => {

@@ -12,7 +12,6 @@ import {
 import type { BotTurnEnd } from './bot-run-turn-watch'
 import { runtimeBotAutomationSessions } from './bot-automation-sessions'
 import * as BotChatSession from './bot-chat-session'
-import { botStartOptions } from './bot-start-options'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { testRunPower, WITH_CLOCKS } from './bot-background-run.test-fixture'
 
@@ -47,6 +46,10 @@ function harness(
     failAfterDelivery?: true
     /** The host's turn watch is ready only once this settles. */
     watchReady?: Promise<void>
+    /** The usage limit that ended the look's turn. */
+    usageLimit?: { resetsAt?: number }
+    /** Orca continues a usage-limited look's own chat. */
+    continues?: boolean
   } = {}
 ) {
   let now = MONDAY_NOON
@@ -121,6 +124,8 @@ function harness(
     turnOff,
     stopTurn,
     turnRunning: () => hostRunning,
+    usageLimitOf: async () => options.usageLimit ?? null,
+    usageLimitContinues: async () => options.continues ?? false,
     watchTurns: async () => {
       await options.watchReady
       return {
@@ -262,6 +267,98 @@ describe('failing looks', () => {
     await vi.waitFor(() => expect(turnOff).toHaveBeenCalledTimes(1))
   })
 
+  it('never turns Look around off for looks a usage limit ended', async () => {
+    const resetsAt = MONDAY_NOON + 60 * 60 * 1000
+    const { runner, store, turnOff } = harness({
+      turn: { outcome: 'failure', message: 'usage limit' },
+      usageLimit: { resetsAt }
+    })
+    store.update('b1', (state) => ({
+      state: {
+        ...state,
+        runs: Array.from({ length: 9 }, (_, n) => ({
+          sessionId: `failed-${n}`,
+          startedAt: n,
+          endedAt: n + 1,
+          error: LOOK_FAILURES.unfinished
+        }))
+      },
+      result: null
+    }))
+    runner.lookNow('b1')
+    await vi.waitFor(() => expect(store.get('b1').runs.at(-1)?.endedAt).toBeDefined())
+    expect(store.get('b1').runs.at(-1)?.usageLimited).toEqual({ resetsAt })
+    runner.lookNow('b1')
+    await vi.waitFor(() => expect(store.get('b1').runs).toHaveLength(11))
+    await vi.waitFor(() => expect(store.get('b1').runs.at(-1)?.endedAt).toBeDefined())
+    expect(turnOff).not.toHaveBeenCalled()
+    // The owner hears of the limit once, not of every look it ends.
+    expect(
+      store
+        .get('b1')
+        .runs.slice(-2)
+        .map((run) => run.alerted)
+    ).toEqual([true, undefined])
+    // The host's turn-end notice follows the same rule.
+    const [first, second] = store.get('b1').runs.slice(-2)
+    expect(store.lookTurnIsQuiet(first!.sessionId, 'failure', true)).toBe(false)
+    expect(store.lookTurnIsQuiet(second!.sessionId, 'failure', true)).toBe(true)
+  })
+
+  it("starts no look for a usage-limited look's owed slot while Orca continues that look's chat", async () => {
+    const limitedLook = (continues: boolean) => {
+      const h = harness({ turn: success, continues })
+      h.store.update('b1', (state) => ({
+        state: {
+          ...state,
+          armedAt: new Date(2026, 9, 20, 9).getTime(),
+          runs: [
+            {
+              sessionId: 'limited',
+              startedAt: new Date(2026, 9, 26, 16, 1).getTime(),
+              endedAt: new Date(2026, 9, 26, 16, 2).getTime(),
+              error: LOOK_FAILURES.unfinished,
+              usageLimited: { resetsAt: new Date(2026, 9, 26, 16, 30).getTime() }
+            }
+          ]
+        },
+        result: null
+      }))
+      h.setNow(new Date(2026, 9, 26, 16, 31).getTime())
+      return h
+    }
+    const continued = limitedLook(true)
+    await continued.runner.tick()
+    // A look records its run as it starts, before any await.
+    expect(continued.store.get('b1').runs).toHaveLength(1)
+    const owed = limitedLook(false)
+    await owed.runner.tick()
+    await vi.waitFor(() => expect(owed.sessions.startConversation).toHaveBeenCalledTimes(1))
+  })
+
+  it("starts the next day's look even though the limited look's chat moved on", async () => {
+    const h = harness({ turn: success, continues: true })
+    h.store.update('b1', (state) => ({
+      state: {
+        ...state,
+        armedAt: new Date(2026, 9, 20, 9).getTime(),
+        runs: [
+          {
+            sessionId: 'limited',
+            startedAt: new Date(2026, 9, 26, 16, 1).getTime(),
+            endedAt: new Date(2026, 9, 26, 16, 2).getTime(),
+            error: LOOK_FAILURES.unfinished,
+            usageLimited: { resetsAt: new Date(2026, 9, 26, 16, 30).getTime() }
+          }
+        ]
+      },
+      result: null
+    }))
+    h.setNow(new Date(2026, 9, 27, 12, 1).getTime())
+    await h.runner.tick()
+    expect(h.store.get('b1').runs).toHaveLength(2)
+  })
+
   it('records a failed turn as notified only when it was news, and never a look that could not start', async () => {
     const { runner, store } = harness({ turn: { outcome: 'failure', message: 'limit' } })
     store.update('b1', (state) => ({
@@ -360,55 +457,38 @@ describe('a look at its run limit', () => {
   })
 })
 
-describe("Look around's model", () => {
-  // The owner last picked Opus in some chat; Settings > Agents says Haiku.
-  const settings = {
-    agentLaunchChoices: { claude: { model: 'claude-haiku-5-5' } },
-    nativeChatSessionOptions: { claude: { model: 'claude-opus-5-5' } }
-  }
-  const runtime = {
-    bots: { list: () => [] },
-    requireStore: () => ({ getSettings: () => settings })
-  }
-
-  async function lookOnce(bot: Partial<Bot>): Promise<Record<string, string>> {
-    vi.mocked(startBotSession).mockClear()
-    const base = harness({ bot, turn: success })
-    // The runtime's own sessions, so the look starts the way it does in Orca.
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the stub covers what a look's start reaches.
-    const sessions = runtimeBotAutomationSessions(runtime as unknown as OrcaRuntimeService)
-    const runner = new BotLookAroundRunner({
-      bots: () => [makeTestBot({ id: 'b1', agent: 'claude', ...bot })],
-      store: base.store,
-      hadConversation: async () => true,
-      sessions,
-      turnOff: async () => {},
-      stopTurn: async () => {},
-      turnRunning: () => false,
-      watchTurns: async () => ({
-        next: () => Promise.resolve(success),
-        dispose: () => {}
-      }),
-      power: base.host.power,
-      now: () => MONDAY_NOON
-    })
-    expect(runner.lookNow('b1')).toEqual({ started: true })
-    await vi.waitFor(() => expect(base.store.get('b1').runs[0]?.endedAt).toBeDefined())
-    const [, started, input] = vi.mocked(startBotSession).mock.calls[0] ?? []
-    expect(input).toMatchObject({ background: true })
-    return botStartOptions(() => settings, started!, input?.background === true)
-  }
-
-  it("runs on the bot's own model when it has one", async () => {
-    const options = await lookOnce({ launch: { model: 'claude-sonnet-5-5' } })
-    expect(options).toEqual({ model: 'claude-sonnet-5-5' })
+it('starts a Look around conversation in the background with the bot’s launch settings', async () => {
+  const runtime = { bots: { list: () => [] } }
+  const bot = { launch: { model: 'claude-sonnet-5-5' } }
+  vi.mocked(startBotSession).mockClear()
+  const base = harness({ bot, turn: success })
+  // The runtime's own sessions, so the look starts the way it does in Orca.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the stub covers what a look's start reaches.
+  const sessions = runtimeBotAutomationSessions(runtime as unknown as OrcaRuntimeService)
+  const runner = new BotLookAroundRunner({
+    bots: () => [makeTestBot({ id: 'b1', agent: 'claude', ...bot })],
+    store: base.store,
+    hadConversation: async () => true,
+    sessions,
+    turnOff: async () => {},
+    stopTurn: async () => {},
+    turnRunning: () => false,
+    usageLimitOf: async () => null,
+    usageLimitContinues: async () => false,
+    watchTurns: async () => ({
+      next: () => Promise.resolve(success),
+      dispose: () => {}
+    }),
+    power: base.host.power,
+    now: () => MONDAY_NOON
   })
-
-  it("otherwise runs on the owner's Agents default, never their last chat pick", async () => {
-    const options = await lookOnce({})
-    expect(options).toEqual({ model: 'claude-haiku-5-5' })
-    expect(options.model).not.toBe('claude-opus-5-5')
-  })
+  expect(runner.lookNow('b1')).toEqual({ started: true })
+  await vi.waitFor(() => expect(base.store.get('b1').runs[0]?.endedAt).toBeDefined())
+  expect(startBotSession).toHaveBeenCalledWith(
+    runtime,
+    expect.objectContaining(bot),
+    expect.objectContaining({ background: true })
+  )
 })
 
 describe('a look on a sleeping host', () => {
@@ -423,7 +503,7 @@ describe('a look on a sleeping host', () => {
       result: null
     }))
 
-  it('never starts in a dark wake, and catches the slot up once the host is awake', async () => {
+  it('waits for a settled full wake, then catches the slot up once', async () => {
     const { runner, store, sessions, setNow, host } = harness({
       turn: success
     })
@@ -435,8 +515,15 @@ describe('a look on a sleeping host', () => {
     expect(sessions.startConversation).not.toHaveBeenCalled()
     expect(store.get('b1').runs).toHaveLength(0)
 
-    // Opened at 9:40, past the hour a missed slot used to wait: it still runs, once.
     host.setSettled(true)
+    host.setFullWake(false)
+    setNow(at(8, 10))
+    await runner.tick()
+    expect(sessions.startConversation).not.toHaveBeenCalled()
+    expect(store.get('b1').runs).toHaveLength(0)
+
+    // Opened at 9:40, past the hour a missed slot used to wait: it still runs, once.
+    host.setFullWake(true)
     setNow(at(9, 40))
     await runner.tick()
     await vi.waitFor(() => expect(store.get('b1').runs[0]?.endedAt).toBeDefined())
@@ -495,20 +582,6 @@ describe('a look on a sleeping host', () => {
     // It slept and never finished: missed, not "stopped after 10 min".
     expect(store.get('b1').runs[0]?.error).toBe(LOOK_FAILURES.asleep)
     expect(host.holds).toEqual({ taken: 1, released: 1 })
-  })
-
-  it('never starts in a dark wake that outlasts the settle, and catches the slot up in full wake', async () => {
-    const { runner, store, sessions, setNow, host } = harness({ turn: success })
-    armedLastWeek(store)
-    host.setFullWake(false)
-    setNow(at(8, 10))
-    await runner.tick()
-    expect(sessions.startConversation).not.toHaveBeenCalled()
-    host.setFullWake(true)
-    setNow(at(8, 20))
-    await runner.tick()
-    await vi.waitFor(() => expect(store.get('b1').runs[0]?.endedAt).toBeDefined())
-    expect(sessions.startConversation).toHaveBeenCalledTimes(1)
   })
 
   it('takes a look back, slot and all, when the host leaves full wake while its session is made', async () => {

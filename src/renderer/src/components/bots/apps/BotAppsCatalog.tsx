@@ -1,11 +1,10 @@
 // Add to <bot>'s body: the rail, the search and the list it filters, or the step an Add opened.
-import React, { useCallback, useRef, useState } from 'react'
+import React, { useCallback, useDeferredValue, useRef, useState } from 'react'
 import { Search } from 'lucide-react'
 import { toast } from 'sonner'
 import { Input } from '@/components/ui/input'
 import { useTranslate } from '@/i18n/use-translate'
 import type { Bot } from '../../../../../shared/bot-types'
-import { botToolsSupported } from '../../../../../shared/bot-tools'
 import { COMPOSIO_PAGES } from '../../../../../shared/composio/composio-apps'
 import { composioAppName } from '../../../../../shared/composio/composio-curated-apps'
 import { type BotConnector, useBotConnectorState } from '../bot-connectors'
@@ -31,6 +30,7 @@ import {
   type BotDirectApp
 } from './bot-app-catalog'
 import { BotAppBrandLogo } from './BotAppBrandLogo'
+import { BotAppCategoryIcon } from './BotAppCategoryIcon'
 import { BotAppCaption } from './BotAppRow'
 import { BotAppStepHeader } from './BotAppStepParts'
 import { ComposioAccountStep, WebhooksStep } from './BotAppSteps'
@@ -82,19 +82,18 @@ export function BotAppsCatalog({
   const composio = useComposioBot(bot)
   const [view, setView] = useState<BotAppsView>('all')
   const [query, setQuery] = useState('')
+  // Let the dialog and its search field paint before mounting the catalog rows.
+  const showApps = useDeferredValue(true, false)
   const searchRef = useRef<HTMLInputElement>(null)
   const close = useCallback(() => onOpenChange(false), [onOpenChange])
   const manage = onManage
-  const toolsOn = botToolsSupported(bot.agent)
   const webhooks = state.catalog.find((connector) => connector.id === 'webhooks')
   // Which apps the bot has, from its tools alone: no check starts its servers.
-  const toolApps = botToolApps(useBotTools(toolsOn ? bot : null, 'none').view)
-  // A connector shows once it can be added, or once the bot has it; an MCP app wherever tools work.
+  const toolApps = botToolApps(useBotTools(bot, 'none').view)
+  // A connector shows once it can be added, or once the bot has it; an MCP app always.
   const direct: DirectRow[] = DIRECT_APPS.flatMap((app): DirectRow[] => {
     if (app.route === 'mcp') {
-      return toolsOn
-        ? [{ app, name: app.name, added: toolApps.some((entry) => entry.app?.id === app.id) }]
-        : []
+      return [{ app, name: app.name, added: toolApps.some((entry) => entry.app?.id === app.id) }]
     }
     const connector = state.catalog.find((entry) => entry.id === app.connector)
     if (!connector) {
@@ -261,11 +260,11 @@ export function BotAppsCatalog({
         searchRef.current?.focus()
       }}
       onSearchAll={searchAll}
-      onAddByUrl={toolsOn ? () => setStep({ kind: 'custom' }) : null}
+      onAddByUrl={() => setStep({ kind: 'custom' })}
     />
   )
 
-  const list = ((): React.ReactNode => {
+  const renderList = (): React.ReactNode => {
     const composioSection = (alone: boolean) => (
       <ComposioSection
         view={composio}
@@ -310,7 +309,7 @@ export function BotAppsCatalog({
                 matchesAppQuery(query, row.name, directAppLine(row.app))
             )
       const where = view === 'all' || view === 'composio' ? 'all' : view
-      const composioGroup = toolsOn ? (
+      const composioGroup = (
         <ComposioSearchGroup
           bot={bot}
           query={query}
@@ -319,10 +318,7 @@ export function BotAppsCatalog({
           divided={hits.length > 0}
           empty={noMatch(where)}
         />
-      ) : null
-      if (hits.length === 0 && !composioGroup) {
-        return noMatch(where)
-      }
+      )
       return (
         <>
           {hits.length > 0 ? (
@@ -341,18 +337,21 @@ export function BotAppsCatalog({
     const shown = view === 'all' ? categories : categories.filter((c) => c.category === view)
     return (
       <>
-        {shown.map(({ category, count }) => (
+        {shown.map(({ category }) => (
           <section key={category} aria-label={botAppCategoryName(category)}>
-            <BotAppCaption title={botAppCategoryName(category)} count={count} />
+            <BotAppCaption
+              icon={<BotAppCategoryIcon category={category} />}
+              title={botAppCategoryName(category)}
+            />
             <ul className="flex flex-col">
               {direct.filter((row) => row.app.category === category).map(directRow)}
             </ul>
           </section>
         ))}
-        {view === 'all' && toolsOn ? composioSection(shown.length === 0) : null}
+        {view === 'all' ? composioSection(shown.length === 0) : null}
       </>
     )
-  })()
+  }
 
   const railProps: BotAppsRailProps = {
     bot,
@@ -363,8 +362,8 @@ export function BotAppsCatalog({
     },
     mineCount,
     categories,
-    composio: toolsOn,
-    onAddByUrl: toolsOn ? () => setStep({ kind: 'custom' }) : null,
+    composio: true,
+    onAddByUrl: () => setStep({ kind: 'custom' }),
     onWebhooks: webhooks && state.available(webhooks) ? () => setStep({ kind: 'webhooks' }) : null
   }
   const searchLabel =
@@ -394,8 +393,11 @@ export function BotAppsCatalog({
           </div>
           <BotAppsRailMenu {...railProps} />
         </div>
-        <div className="scrollbar-sleek min-h-0 flex-1 overflow-y-auto px-3 pt-0.5 pb-3.5">
-          {list}
+        <div
+          aria-busy={!showApps}
+          className="scrollbar-sleek min-h-0 flex-1 overflow-y-auto px-3 pt-0.5 pb-3.5"
+        >
+          {showApps ? renderList() : null}
         </div>
       </div>
     </div>

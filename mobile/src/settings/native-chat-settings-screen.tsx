@@ -1,8 +1,8 @@
 import { useRouter } from 'expo-router'
-import { Minus, Plus } from 'lucide-react-native'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useSyncExternalStore } from 'react'
 import { Platform, Pressable, Text, View } from 'react-native'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
+import { Minus, Plus } from 'lucide-react-native'
 import { ListRow } from '../components/list/ListGroup'
 import { MobileSegmentedControl } from '../components/controls/MobileSegmentedControl'
 import { MobileSwitch } from '../components/controls/MobileSwitch'
@@ -24,6 +24,7 @@ import {
   setRecentSessionCardsMaxDisplay,
   subscribeRecentSessionCards
 } from '../session/recent-session-cards'
+import { useMobileSessionTabBarMode } from '../session/tabs/use-mobile-session-tab-bar-mode'
 import { useMobileDefaultSessionViewPreference } from '../session/use-mobile-default-session-view-preference'
 import { colors, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
@@ -72,18 +73,18 @@ export default function NativeChatSettingsScreen({ onBack }: { onBack?: () => vo
 
   const { defaultView, setDefaultView } = useMobileDefaultSessionViewPreference()
   const chatDefault = defaultView === 'chat'
-  const [recentMaxDisplay, setRecentMaxDisplay] = useState(() =>
-    getRecentSessionCardsMaxDisplaySync()
+  const label = t('settings.nativeChatSettingsScreen.openInChatUi', 'Open sessions in Chat UI')
+  const { mode: tabBarMode, setMode: setTabBarMode } = useMobileSessionTabBarMode()
+  const recentMaxDisplay = useSyncExternalStore(
+    subscribeRecentSessionCards,
+    getRecentSessionCardsMaxDisplaySync,
+    getRecentSessionCardsMaxDisplaySync
   )
   useEffect(() => {
     void hydrateRecentSessionCards().catch(() => {})
-    return subscribeRecentSessionCards(() =>
-      setRecentMaxDisplay(getRecentSessionCardsMaxDisplaySync())
-    )
   }, [])
   const canDecreaseRecent = recentMaxDisplay > MIN_RECENT_SESSION_CARDS_DISPLAY
   const canIncreaseRecent = recentMaxDisplay < MAX_RECENT_SESSION_CARDS_LIMIT
-  const label = t('settings.nativeChatSettingsScreen.openInChatUi', 'Open sessions in Chat UI')
 
   // The slider's gesture needs a root here, as Terminal settings has.
   return (
@@ -176,8 +177,33 @@ export default function NativeChatSettingsScreen({ onBack }: { onBack?: () => vo
 
         <SettingsSection
           title={t('settings.nativeChat.recentlyUsed', 'RECENTLY USED')}
-          footer="Customize how many recently visited cards appear in the session menu (default 7)."
+          footer={t(
+            'settings.nativeChat.recentlyUsedFooter',
+            'Customize the tab bar layout and how many recent tabs appear (default 7).'
+          )}
         >
+          <ListRow
+            key="tabBarMode"
+            title={t('settings.nativeChat.compactTabStrip', 'Compact tab strip')}
+            subtitle={
+              tabBarMode === 'classic-strip'
+                ? t(
+                    'settings.nativeChat.compactTabStripOn',
+                    'Narrow scrollable tabs in the top bar'
+                  )
+                : t(
+                    'settings.nativeChat.compactTabStripOff',
+                    'Single full-width active tab in the top bar'
+                  )
+            }
+            accessory={
+              <MobileSwitch
+                accessibilityLabel={t('settings.nativeChat.compactTabStrip', 'Compact tab strip')}
+                value={tabBarMode === 'classic-strip'}
+                onValueChange={(next) => setTabBarMode(next ? 'classic-strip' : 'single-tab')}
+              />
+            }
+          />
           <ListRow
             key="maxRecentItems"
             title={t('settings.nativeChat.maxRecentItems', 'Max recent items')}

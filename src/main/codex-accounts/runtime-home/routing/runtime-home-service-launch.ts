@@ -2,6 +2,8 @@ import { resolveHostCodexSessionSourceHome } from '../../../codex/history/rollou
 import { startSystemCodexSessionBridgeInBackground } from '../../../codex/history/bridges/codex-session-bridge'
 import { isCodexHistorySharedAcrossAccounts } from './codex-history-sharing'
 import {
+  getOrcaManagedCodexHomePath,
+  getSystemCodexHomePath,
   resolveOrcaManagedCodexHomePath,
   syncSystemCodexResourcesIntoManagedHome
 } from '../../../codex/configuration/homes/codex-home-paths'
@@ -69,7 +71,10 @@ export abstract class CodexRuntimeHomeLaunch extends CodexRuntimeHomeRouting {
     this.syncForCurrentSelection(target, launchEnv)
     syncSystemCodexResourcesIntoManagedHome()
     if (options?.deferConfigSync) {
-      options.deferConfigSync(() => syncSystemConfigIntoManagedCodexHome())
+      options.deferConfigSync({
+        runtimeHomePath: getOrcaManagedCodexHomePath(),
+        systemHomePath: getSystemCodexHomePath()
+      })
     } else {
       syncSystemConfigIntoManagedCodexHome()
     }
@@ -125,10 +130,11 @@ export abstract class CodexRuntimeHomeLaunch extends CodexRuntimeHomeRouting {
         if (!accountHome || `${accountHome}\0${shared}` === prepared) {
           break
         }
-        await this.prepareAccountHistory(accountHome)
+        await this.prepareAccountHistory(accountHome, { forLaunch: true })
         prepared = `${accountHome}\0${shared}`
       }
       this.prepareAllAccountHistoryInBackground()
+      this.importCodexHistoryInBackground()
       return this.prepareForCodexLaunch(target, launchEnv, options)
     }
     const wslTarget = this.resolveWslDefaultTarget(target)

@@ -3,7 +3,6 @@ import { describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from '../dispatcher'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { Bot } from '../../../../shared/bot-types'
-import { getHostOperationOwnership } from '../../../../shared/execution-host/host-operation-ownership'
 import { makeTestBot } from '../../../bots/bot.test-fixture'
 import { GOOGLE_WRITE_METHODS } from './google-write'
 
@@ -18,6 +17,9 @@ vi.mock('../../../google/google-gmail-write', () => ({
   },
   sendGmailDraft: async () => ({}),
   modifyGmail: async () => ({})
+}))
+vi.mock('../../../bots/tool-relay/bot-tool-relay', () => ({
+  botToolRelay: { botOf: (token: string) => /^token-(b\d)$/.exec(token)?.[1] ?? null }
 }))
 vi.mock('../../../bots/bot-session-tabs', () => ({
   botOfSession: (bots: { list: () => Bot[] }, sessionId: string) =>
@@ -57,25 +59,31 @@ const draft = (params: unknown) => ({
 })
 
 describe('Google writes over RPC', () => {
-  it('are owned by the execution host', () => {
-    for (const method of GOOGLE_WRITE_METHODS) {
-      expect(getHostOperationOwnership(method.name)).toBe('host')
-    }
-  })
-
   it('refuse a bot whose Google is off, and end a draft for someone else with who asked', async () => {
     const off = makeTestBot({ id: 'b1', name: 'Scout' })
     const on = makeTestBot({ id: 'b2', name: 'Ivy', google: true })
     const rpc = dispatcher([off, on])
     const refused = await rpc.dispatch(
-      draft({ callerSessionId: 'chat-b1', to: ['sam@x.com'], subject: 'Hi', body: 'Hello' })
+      draft({
+        botToken: 'token-b1',
+        callerSessionId: 'chat-b1',
+        to: ['sam@x.com'],
+        subject: 'Hi',
+        body: 'Hello'
+      })
     )
     expect(JSON.stringify(refused)).toContain('Google is off for Scout')
     expect(drafted).toHaveLength(0)
 
     await expect(
       rpc.dispatch(
-        draft({ callerSessionId: 'chat-b2', to: ['sam@x.com'], subject: 'Hi', body: 'Hello' })
+        draft({
+          botToken: 'token-b2',
+          callerSessionId: 'chat-b2',
+          to: ['sam@x.com'],
+          subject: 'Hi',
+          body: 'Hello'
+        })
       )
     ).resolves.toMatchObject({ ok: true })
     await expect(

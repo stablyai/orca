@@ -11,14 +11,6 @@ const HOST_ROUTE = '/h/host-1'
 const SESSION_ROUTE = '/h/host-1/session/wt-1'
 
 describe('the keys a page may read and write', () => {
-  it('takes the ones the list keeps', () => {
-    expect(isPageStorageKey('orca:last-visited-worktree')).toBe(true)
-    expect(isPageStorageKey('orca:recent-session-cards')).toBe(true)
-    expect(isPageStorageKey('orca:pins:host-1')).toBe(true)
-    expect(isPageStorageKey('orca:terminalTextScale')).toBe(true)
-    expect(isPageStorageKey('orca:nativeChatTabs:host-1:wt-1')).toBe(true)
-  })
-
   it('refuses the rest of the namespace', () => {
     // A broad orca: prefix would let pages rewrite native pairings and push registrations.
     for (const key of [

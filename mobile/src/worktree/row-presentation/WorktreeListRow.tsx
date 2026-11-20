@@ -1,11 +1,8 @@
-import { memo, useEffect, useState } from 'react'
+import { memo } from 'react'
 import { Bell, ChevronDown, ChevronRight, GitBranch } from 'lucide-react-native'
 import { Pressable, Text, View } from 'react-native'
 import type { MobileRenderableRepoIcon } from '../../host-screen/host-screen-reply-schema'
-import { useNow, useSharedNow } from '../../hooks/use-now'
 import { triggerMediumImpact } from '../../platform/haptics/haptics'
-import { resolveHostWorktreeRowStatus } from '../../session/catalog-worktree-unread-status'
-import { subscribeTabCompletionState } from '../../session/tab-completion-state'
 import { colors, spacing } from '../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
@@ -26,6 +23,7 @@ import { MobileBotWorkerLine } from '../../bots/MobileBotChatRows'
 import { botWorkspaceLineAgent } from '../../../../src/shared/bots/bot-sidebar-workspaces'
 import { BotLineAgentLogos } from './BotLineAgentLogos'
 import { agentDotState } from '../agent-lineage/agent-row-display'
+import { useNow } from '../../hooks/use-now'
 import { BotLineAgentMore } from './BotLineAgentMore'
 import { AgentSpinner } from '../../agents/presentation/AgentSpinner'
 import { HostContextPill } from './HostContextPill'
@@ -69,7 +67,7 @@ function WorktreeListRowComponent({
   hideRepo = false,
   cardDetails,
   agentActivityDisplayMode,
-  status: propStatus,
+  status: rowStatus,
   onPress,
   onAgentPress,
   statusLive,
@@ -78,18 +76,11 @@ function WorktreeListRowComponent({
   unsavedName
 }: Props) {
   useMobileColorScheme()
-  // Upstream dropped the parent `now` prop; agent rows share this clock for unread freshness.
-  const now = useSharedNow(30_000)
-  const [, setCompletionRev] = useState(0)
-  useEffect(() => subscribeTabCompletionState(() => setCompletionRev((rev) => rev + 1)), [])
-  const rowStatus =
-    propStatus === null ? null : resolveHostWorktreeRowStatus(item, propStatus, now)
-  const isUnread = rowStatus?.unread ?? Boolean(item.unread)
   const t = useMobileTranslation()
   // Only a bot's worker line reads the clock here; other rows leave ticking to their agent list.
-  const botNow = useNow(30_000, Boolean(view.botWorkspace))
+  const now = useNow(30_000, Boolean(view.botWorkspace))
   // A bot worker line shows its own agents' state.
-  const status = view.botFacts?.status ?? propStatus
+  const status = view.botFacts?.status ?? rowStatus
   const isFolderWorkspace = item.workspaceKind === 'folder-workspace'
   const folderMeta =
     item.comment?.trim() || item.path || t('components.worktreeListRow.folder', 'Folder')
@@ -123,7 +114,7 @@ function WorktreeListRowComponent({
         (item.agents ?? []).map((agent) => ({
           agentType: agent.agentType,
           subagent: false,
-          state: agentDotState(agent, botNow)
+          state: agentDotState(agent, now)
         }))
       )
     : null
@@ -181,8 +172,8 @@ function WorktreeListRowComponent({
       delayLongPress={400}
     >
       <View style={styles.indicatorCol}>
-        <AgentSpinner status={rowStatus?.status ?? null} workingMode={item.workingMode} />
-        {isUnread && (
+        <AgentSpinner status={status} workingMode={item.workingMode} />
+        {item.unread && (
           <Bell
             size={10}
             color={colors.statusAmber}
@@ -225,7 +216,7 @@ function WorktreeListRowComponent({
           <Text
             style={[
               styles.worktreeName,
-              isUnread && styles.worktreeNameUnread,
+              item.unread && styles.worktreeNameUnread,
               isReadOnly && styles.textReadOnly
             ]}
             numberOfLines={1}
@@ -294,7 +285,7 @@ function WorktreeListRowComponent({
         {!view.botWorkspace && cardDetails.inlineAgents && item.agents && item.agents.length > 0 ? (
           <WorktreeAgentList
             agents={item.agents}
-            unvisited={isUnread}
+            unvisited={item.unread}
             statusLive={statusLive}
             isReadOnly={isReadOnly}
             onAgentPress={onAgentPress ? (paneKey) => onAgentPress(item, paneKey) : undefined}

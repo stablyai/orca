@@ -12,6 +12,7 @@ import {
   getCredentialError,
   getLegacyWorkspace,
   getWorkspaceFile,
+  inWorkspaceRegistryOrder,
   getWorkspaceState,
   resolveWorkspaceId,
   upsertWorkspace,
@@ -43,27 +44,28 @@ export type LinearClientForWorkspace = {
 export const LINEAR_PUBLIC_FILE_URL_EXPIRY_SECONDS = 60 * 60
 
 // User-initiated Linear actions may decrypt credentials and trigger keychain prompts.
-export function getClient(workspaceId?: string | null): LinearClient | null {
-  const resolved = resolveWorkspaceId(workspaceId)
-  const credential = resolved ? loadCredential(resolved) : null
+export async function getClient(workspaceId?: string | null): Promise<LinearClient | null> {
+  const resolved = await resolveWorkspaceId(workspaceId)
+  const credential = resolved ? await loadCredential(resolved) : null
   return credential ? createLinearClient(credential) : null
 }
 
-export function getClients(
+export async function getClients(
   workspaceId?: LinearWorkspaceSelection | null,
   signal?: AbortSignal
-): LinearClientForWorkspace[] {
-  const state = getWorkspaceState()
+): Promise<LinearClientForWorkspace[]> {
+  const state = await getWorkspaceState()
   const isAllSelection = workspaceId === 'all'
+  const selectedId = isAllSelection ? null : await resolveWorkspaceId(workspaceId)
   const selectedWorkspaces = isAllSelection
     ? state.workspaces
-    : state.workspaces.filter((workspace) => workspace.id === resolveWorkspaceId(workspaceId))
+    : state.workspaces.filter((workspace) => workspace.id === selectedId)
 
   const clients: LinearClientForWorkspace[] = []
   for (const workspace of selectedWorkspaces) {
     let credential: LinearCredential | null
     try {
-      credential = loadCredential(workspace.id)
+      credential = await loadCredential(workspace.id)
     } catch (error) {
       // All-workspace reads skip recorded decrypt failures; explicit selections rethrow for immediate recovery.
       if (isAllSelection && error instanceof CredentialDecryptionError) {
@@ -111,18 +113,20 @@ export async function connect(
     const org = await me.organization
     const workspace = workspaceFromLinearData(me, org)
 
-    saveWorkspaceToken(workspace.id, apiKey)
-    const legacyWorkspace = getLegacyWorkspace()
-    if (
-      legacyWorkspace &&
-      legacyWorkspace.organizationName === workspace.organizationName &&
-      legacyWorkspace.email === workspace.email
-    ) {
-      clearTokenFile(LEGACY_WORKSPACE_ID)
-      clearLegacyViewerOnDisk()
-      forgetLegacyViewer()
-    }
-    upsertWorkspace(workspace, { select: true })
+    await inWorkspaceRegistryOrder(async (upsert) => {
+      await saveWorkspaceToken(workspace.id, apiKey)
+      const legacyWorkspace = await getLegacyWorkspace()
+      if (
+        legacyWorkspace &&
+        legacyWorkspace.organizationName === workspace.organizationName &&
+        legacyWorkspace.email === workspace.email
+      ) {
+        await clearTokenFile(LEGACY_WORKSPACE_ID)
+        clearLegacyViewerOnDisk()
+        forgetLegacyViewer()
+      }
+      await upsert(workspace, { select: true })
+    })
     return { ok: true, viewer: workspace, workspace }
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to validate API key'
@@ -130,12 +134,14 @@ export async function connect(
   }
 }
 
-export function disconnect(workspaceId?: string): void {
-  clearToken(workspaceId)
+export async function disconnect(workspaceId?: string): Promise<void> {
+  await clearToken(workspaceId)
 }
 
-export function selectWorkspace(workspaceId: LinearWorkspaceSelection): LinearConnectionStatus {
-  const state = getWorkspaceState()
+export async function selectWorkspace(
+  workspaceId: LinearWorkspaceSelection
+): Promise<LinearConnectionStatus> {
+  const state = await getWorkspaceState()
   if (
     workspaceId !== 'all' &&
     !state.workspaces.some((workspace) => workspace.id === workspaceId)
@@ -143,18 +149,20 @@ export function selectWorkspace(workspaceId: LinearWorkspaceSelection): LinearCo
     return getStatus()
   }
 
-  const file = getWorkspaceFile()
-  writeWorkspaceFile({
-    version: 1,
-    activeWorkspaceId: workspaceId === 'all' ? file.activeWorkspaceId : workspaceId,
-    selectedWorkspaceId: workspaceId,
-    workspaces: file.workspaces
+  await inWorkspaceRegistryOrder(async () => {
+    const file = await getWorkspaceFile()
+    await writeWorkspaceFile({
+      version: 1,
+      activeWorkspaceId: workspaceId === 'all' ? file.activeWorkspaceId : workspaceId,
+      selectedWorkspaceId: workspaceId,
+      workspaces: file.workspaces
+    })
   })
   return getStatus()
 }
 
-export function getStatus(): LinearConnectionStatus {
-  const state = getWorkspaceState()
+export async function getStatus(): Promise<LinearConnectionStatus> {
+  const state = await getWorkspaceState()
   const selectedWorkspace =
     state.selectedWorkspaceId && state.selectedWorkspaceId !== 'all'
       ? state.workspaces.find((workspace) => workspace.id === state.selectedWorkspaceId)
@@ -165,15 +173,16 @@ export function getStatus(): LinearConnectionStatus {
     state.workspaces[0] ??
     null
 
-  const credentialError = state.workspaces
-    .map((workspace) => getCredentialError(workspace.id))
-    .find((message) => message !== undefined)
-  // Host-wide protection must report any plaintext workspace, even when the active one is sealed.
-  const credentialProtection = state.workspaces.some(
-    (workspace) => getWorkspaceTokenProtection(workspace.id) === 'plaintext'
-  )
-    ? 'plaintext'
-    : null
+  const credentialError = (
+    await Promise.all(state.workspaces.map((workspace) => getCredentialError(workspace.id)))
+  ).find((message) => message !== undefined)
+  let credentialProtection: 'plaintext' | null = null
+  for (const workspace of state.workspaces) {
+    if ((await getWorkspaceTokenProtection(workspace.id)) === 'plaintext') {
+      credentialProtection = 'plaintext'
+      break
+    }
+  }
 
   return {
     connected: state.workspaces.length > 0,
@@ -191,13 +200,13 @@ export async function testConnection(
 ): Promise<
   { ok: true; viewer: LinearViewer; workspace: LinearWorkspace } | { ok: false; error: string }
 > {
-  const resolvedWorkspaceId = resolveWorkspaceId(workspaceId)
+  const resolvedWorkspaceId = await resolveWorkspaceId(workspaceId)
   if (!resolvedWorkspaceId) {
     return taskProviderFailure('linear.noApiKey', 'No API key stored.')
   }
   let credential: LinearCredential | null
   try {
-    credential = loadCredential(resolvedWorkspaceId)
+    credential = await loadCredential(resolvedWorkspaceId)
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Test failed'
     return { ok: false, error: message }
@@ -212,17 +221,17 @@ export async function testConnection(
     const org = await me.organization
     const workspace = workspaceFromLinearData(me, org)
     if (!('apiKey' in credential)) {
-      upsertWorkspace(workspace, { select: true })
+      await upsertWorkspace(workspace, { select: true })
     } else if (resolvedWorkspaceId === LEGACY_WORKSPACE_ID) {
-      replaceLegacyWorkspace(workspace, credential.apiKey)
+      await replaceLegacyWorkspace(workspace, credential.apiKey)
     } else {
-      saveWorkspaceToken(workspace.id, credential.apiKey)
-      upsertWorkspace(workspace, { select: true })
+      await saveWorkspaceToken(workspace.id, credential.apiKey)
+      await upsertWorkspace(workspace, { select: true })
     }
     return { ok: true, viewer: workspace, workspace }
   } catch (error) {
     if (isAuthError(error)) {
-      clearToken(resolvedWorkspaceId)
+      await clearToken(resolvedWorkspaceId)
     }
     const message = error instanceof Error ? error.message : 'Test failed'
     return { ok: false, error: message }
@@ -230,7 +239,7 @@ export async function testConnection(
 }
 
 // Warm metadata at startup without decrypting credentials or triggering keychain prompts.
-export function initLinearToken(): void {
-  getWorkspaceFile()
+export async function initLinearToken(): Promise<void> {
+  await getWorkspaceFile()
   getLegacyViewer()
 }

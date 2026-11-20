@@ -4,6 +4,12 @@ import { fixtureCos } from '../../../component-fixtures/fixture-bot-panel'
 import { makeTestBotItem } from '../../../../../shared/bots/bot-item.test-fixture'
 import type { BotItemEvent } from '../../../../../shared/bots/bot-items'
 import { BotItemBody } from './BotItemView'
+import {
+  getDefaultSettings,
+  getDefaultVoiceSettings
+} from '../../../../../shared/orca-profiles/constants'
+import { botRefKey } from '@/lib/bot-hosts'
+import { updateNativeChatComposerDraft } from '../../native-chat/drafts/native-chat-composer-draft-store'
 
 const item = makeTestBotItem(6, { title: 'Ship the share dialog' })
 const comment = (id: string, text: string, at: number): BotItemEvent => ({
@@ -35,6 +41,7 @@ function Reader(): React.JSX.Element {
         view={{
           item,
           events,
+          eventsRead: true,
           hasEarlier: false,
           failed: false,
           deleted: false,
@@ -48,6 +55,29 @@ function Reader(): React.JSX.Element {
 
 // A reader scrolled up while earlier activity lands above them.
 export const reader = defineFixture({ width: 360, render: () => <Reader /> })
+
+const defaults = getDefaultSettings('/home/fixture')
+
+// Scrolled up from the end in the panel, with dictation on: the jump pill, the fade, and the mic.
+export const scrolledUp = defineFixture({
+  width: 360,
+  store: { settings: { ...defaults, voice: { ...getDefaultVoiceSettings(), enabled: true } } },
+  render: () => (
+    <div className="bg-sidebar">
+      <Reader />
+    </div>
+  ),
+  interact: async (frame) => {
+    const scroller = frame.querySelector<HTMLElement>('.overflow-y-auto')
+    if (!scroller) {
+      return
+    }
+    scroller.dispatchEvent(new WheelEvent('wheel', { deltaY: -400, bubbles: true }))
+    scroller.scrollTop = scroller.scrollHeight / 3
+    scroller.dispatchEvent(new Event('scroll'))
+    await new Promise((resolve) => setTimeout(resolve, 300))
+  }
+})
 
 const numbered = makeTestBotItem(35, {
   title: 'Show item numbers in lists',
@@ -65,6 +95,7 @@ export const header = defineFixture({
         view={{
           item: numbered,
           events: start.slice(0, 1),
+          eventsRead: true,
           hasEarlier: false,
           failed: false,
           deleted: false,
@@ -93,6 +124,7 @@ const snoozedView = {
       at: Date.now() - 5 * 60_000
     }
   ],
+  eventsRead: true,
   hasEarlier: false,
   failed: false,
   deleted: false,
@@ -130,4 +162,34 @@ export const snoozeMenu = defineFixture({
     sub?.click()
     await new Promise((resolve) => setTimeout(resolve, 160))
   }
+})
+
+// No open question: its card would take the comment box's place.
+const answering = makeTestBotItem(37, { title: 'Pick the share defaults' })
+const answeringView = {
+  ...snoozedView,
+  item: answering,
+  events: start.slice(0, 3)
+}
+
+// A short, narrow pane with a long answer and three images: the box gives way so Activity and Send stay.
+export const shortPaneLongAnswer = defineFixture({
+  width: 220,
+  setup: () =>
+    updateNativeChatComposerDraft(
+      `bot-item-comment:${botRefKey(fixtureCos)}:${answering.uid}`,
+      {
+        text: Array.from(
+          { length: 6 },
+          (_, index) => `Part ${index + 1}: a full sentence of answer.`
+        ).join('\n\n'),
+        images: ['a', 'b', 'c'].map((id) => ({ id, path: `/home/me/.orca/attachments/${id}.png` }))
+      },
+      'immediate'
+    ),
+  render: () => (
+    <div className="flex h-[414px] flex-col bg-sidebar">
+      <BotItemBody bot={fixtureCos} item={answering} view={answeringView} />
+    </div>
+  )
 })

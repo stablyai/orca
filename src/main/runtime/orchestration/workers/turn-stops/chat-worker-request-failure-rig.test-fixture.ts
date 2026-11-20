@@ -31,6 +31,7 @@ import '../../db/dispatch-row-writer'
 import '../../db/attempt-outcome-projection'
 import { createRootDispatch } from '../../db/root-dispatch-test-fixture'
 import { escalateChatWorkerError } from './chat-worker-error-escalation'
+import { reportChatWorkerProviderDeath } from './chat-worker-provider-death'
 
 export const SESSION = testOrcaSessionId('7e3b9d15-2c4a-4f86-a0b1-5c9e2d7f3b64')
 const journals: AgentSessionJournal[] = []
@@ -106,6 +107,12 @@ export async function rig(
     sessions,
     capturePendingOutput,
     wordsContext: () => ({ agentName: 'Codex', retryControl: true }),
+    onIdleDeath: (death) =>
+      reportChatWorkerProviderDeath(death, {
+        getDb: () => db,
+        notify,
+        isWaitingForMail: () => false
+      }),
     onFailure: (failure) => {
       const capturedGate = readGate
       const read = failure.read

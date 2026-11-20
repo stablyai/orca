@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store/index'
 import {
@@ -8,6 +8,7 @@ import {
 import { useNativeChatHostSetup } from '../../host-access/native-chat-host-setup'
 import { useNativeChatAvailabilityNotice } from './use-native-chat-availability-notice'
 import { structuredSessionNotices } from './native-chat-structured-session-notices'
+import { structuredAgentSessionHostPlace } from '../../pane/ownership/use-structured-agent-session-host-label'
 import type { NativeChatStructuredViewProps } from '../../native-chat-view-types'
 import type { useNativeChatProvisionalLaunch } from '../../host-access/use-native-chat-provisional-launch'
 import type { useStructuredNativeChatSubmitReveal } from '../../pane/actions/use-structured-native-chat-submit-reveal'
@@ -88,6 +89,7 @@ export function useNativeChatStructuredPaneNotices({
           : undefined,
     failure: provisionalLaunch.failure,
     startFailures,
+    journalItems: controller.journalItems,
     onRechecked
   })
   const availability = useNativeChatAvailabilityNotice({
@@ -110,6 +112,11 @@ export function useNativeChatStructuredPaneNotices({
     {
       launch: installing ? { ...launch, lifecycle: null } : launch,
       agentLabel,
+      hostName: structuredAgentSessionHostPlace(
+        continuation.view.remoteHost,
+        continuation.view.hostLabel,
+        t
+      ),
       // Said once: on the pane when the failure took it, else in the composer's notices.
       sessionError:
         viewState.kind === 'error' || !readFailure ? controller.error : readFailure.text,
@@ -126,5 +133,10 @@ export function useNativeChatStructuredPaneNotices({
   if (hostNotice) {
     notices.push(hostNotice)
   }
-  return { setup, notices }
+  // One Sign in on screen: while the composer's notice or Antigravity's sign-in strip has it,
+  // transcript rows only say what wasn't sent.
+  const signInInComposer =
+    install.signIn !== null || notices.some((notice) => notice.signIn !== undefined)
+  const rowSetup = useMemo(() => ({ ...setup, signInInComposer }), [setup, signInInComposer])
+  return { setup: rowSetup, notices }
 }

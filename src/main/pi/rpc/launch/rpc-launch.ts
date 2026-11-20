@@ -12,6 +12,7 @@ import type { AgentCliVersionCheck } from '../../../agent-launch/preflight/agent
 import { AgentCliInstallationError } from '../../../native-chat/agent-launch/agent-cli-installation-error'
 import type { PiBackgroundWorkLaunch } from '../background-work/rpc-background-work-bridge'
 import { PI_BACKGROUND_WORK_DIR_ENV } from '../background-work/rpc-background-work-bridge-source'
+import { PI_BOT_TOOLS_ENV } from '../../../bots/bot-tools-pi'
 
 export type PiRpcLaunchOptions = {
   command: string
@@ -31,6 +32,8 @@ export type PiRpcLaunchOptions = {
   tools?: PiToolLimit
   /** Orca's background-work bridge for this launch; absent when it could not be prepared. */
   backgroundWork?: PiBackgroundWorkLaunch
+  /** The extension that registers a bot's own tools, and the servers it reads; absent: none. */
+  botTools?: { extension: string; servers: string }
 }
 
 const CALLER_ENV_TO_DELETE = [
@@ -175,6 +178,7 @@ export function buildPiRpcLaunch(options: PiRpcLaunchOptions): ProviderProcessLa
       ...(options.tools === 'read' ? ['--tools', PI_READ_TOOLS.join(','), '--no-mcp'] : []),
       ...(options.tools === 'none' ? ['--no-tools', '--no-mcp'] : []),
       ...(options.backgroundWork ? ['--extension', options.backgroundWork.extension] : []),
+      ...(options.botTools ? ['--extension', options.botTools.extension] : []),
       ...(options.sessionFile ? ['--session', options.sessionFile] : []),
       ...(options.forkFile ? ['--fork', options.forkFile] : [])
     ],
@@ -182,7 +186,8 @@ export function buildPiRpcLaunch(options: PiRpcLaunchOptions): ProviderProcessLa
       ...options.env,
       ...(options.backgroundWork
         ? { [PI_BACKGROUND_WORK_DIR_ENV]: options.backgroundWork.directory }
-        : {})
+        : {}),
+      ...(options.botTools ? { [PI_BOT_TOOLS_ENV]: options.botTools.servers } : {})
     },
     envToDelete: [...(options.envToDelete ?? [])]
   }

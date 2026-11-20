@@ -3,7 +3,6 @@ import { useQueryClient } from '@tanstack/react-query'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../src/shared/sidebar-list/feed/sidebar-inputs-switch'
 import type { useRouter } from 'expo-router'
 import { floatingWorkspaceSessionPath } from '../../session/floating-workspace'
-import { syncUnreadWorktreeForTabStatus } from '../../session/session-tab-catalog-agent-status'
 import { holdSessionLeave } from '../../session/session-leave-guard'
 import { savePinnedIds } from '../../storage/preferences'
 import type { useForgetHostClient } from '../../transport/connection/host-client-hooks'
@@ -27,6 +26,7 @@ import type { Worktree } from '../../worktree/workspace-list/workspace-list-type
 import { worktreeActivate, worktreePinWrite, worktreeSleep } from '../host-screen-operations'
 import type { HostScreenState } from '../use-host-screen-state'
 import { useHostWorktreeDelete } from './use-host-worktree-delete'
+import { useHostWorktreeRowWrites } from './use-host-worktree-row-writes'
 import { useHostMutation, type HostMutationPhase } from '../../query/host-mutation'
 import { workspaceRename } from './workspace-rename-mutation'
 
@@ -165,13 +165,29 @@ export function useHostWorktreeActions(args: {
 
   const putWorktreeToSleep = useCallback(
     (item: Worktree) => {
-      if (!client) {
+      // Slept at the row's owner, as desktop does; the paired desktop would sleep its own same-id row.
+      const rowClient = clientForRow(item)
+      if (!rowClient) {
         return
       }
-      setSleptIds((prev) => new Set(prev).add(getWorktreeRowIdentity(item)))
-      void worktreeSleep.request(client, { worktree: `id:${item.worktreeId}` }).catch(() => null)
+      const identity = getWorktreeRowIdentity(item)
+      setSleptIds((prev) => new Set(prev).add(identity))
+      void worktreeSleep
+        .request(rowClient, { worktree: `id:${item.worktreeId}` })
+        .then((reply) => worktreeSleep.interpret(reply).accepted)
+        .catch(() => false)
+        .then((accepted) => {
+          // A refused sleep must not leave the row drawn asleep.
+          if (!accepted) {
+            setSleptIds((prev) => {
+              const next = new Set(prev)
+              next.delete(identity)
+              return next
+            })
+          }
+        })
     },
-    [client, setSleptIds]
+    [clientForRow, setSleptIds]
   )
 
   const workspaceRenameWrite = useHostMutation(workspaceRename, { hostId: hostId ?? '', client })
@@ -194,6 +210,7 @@ export function useHostWorktreeActions(args: {
   )
 
   const worktreeDelete = useHostWorktreeDelete({ client, clientForRow, fetchWorktrees, state })
+  const rowWrites = useHostWorktreeRowWrites({ clientForRow, state })
 
   const handleRemoveHost = useCallback(async () => {
     if (!hostId) {
@@ -257,9 +274,6 @@ export function useHostWorktreeActions(args: {
       const pane = paneKey ? `&paneKey=${encodeURIComponent(paneKey)}` : ''
       const target = `/h/${encodeURIComponent(hostId ?? '')}/session/${encodeURIComponent(item.worktreeId)}?name=${encodeURIComponent(item.displayName || item.repo)}${executionHost}${pane}`
       navigateFromHostList(target, Boolean(paneKey), () => {
-        if (item.unread) {
-          syncUnreadWorktreeForTabStatus(item)
-        }
         // Record this phone’s visit before navigation; a session opened in another page cannot publish its stored write back here.
         if (!ORCA_SIDEBAR_INPUTS_IS_MAIN) {
           setOptimisticActiveWorktreeIdentity(getWorktreeRowIdentity(item))
@@ -296,6 +310,7 @@ export function useHostWorktreeActions(args: {
 
   return {
     ...worktreeDelete,
+    ...rowWrites,
     handleRemoveHost,
     leaveHost,
     navigateFromHostList,

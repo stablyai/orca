@@ -3,29 +3,54 @@ import {
   readMirroredKeyOrStore,
   readMirroredStorage
 } from '../storage/mirrored-storage-keys'
-import { PAGE_STORAGE_MAX_VALUE_CHARS } from '../mobile-web-shell/page-storage-keys'
-import { LAST_VISITED_WORKTREE_STORAGE_KEY } from '../worktree/last-visited-worktree-repo'
-import { writeRecentCardsToLastVisitedWorktree } from '../worktree/last-visited-worktree-by-host'
-import type { MobileSessionTabType } from './mobile-session-route-types'
+import { PAGE_STORAGE_MAX_VALUE_CHARS } from '../mobile-web-shell/page-storage/page-storage-keys'
+import { LAST_VISITED_WORKTREE_STORAGE_KEY } from '../worktree/navigation/last-visited-worktree-repo'
+import { writeRecentCardsToLastVisitedWorktree } from '../worktree/navigation/last-visited-worktree-by-host'
+import {
+  DEFAULT_MOBILE_SESSION_TAB_BAR_MODE,
+  DEFAULT_MOBILE_SESSION_TABS_SHEET_SCOPE,
+  getCachedMobileSessionTabBarMode,
+  getCachedMobileSessionTabsSheetScope,
+  hydrateSessionTabPreferencesFromRaw,
+  resetMobileSessionTabBarModeForTests,
+  serializeRecentSessionCardsPayload,
+  setCachedMobileSessionTabBarMode,
+  setCachedMobileSessionTabsSheetScope,
+  type MobileSessionTabBarMode,
+  type MobileSessionTabsSheetScope
+} from './tabs/mobile-session-tab-bar-mode'
 import {
   buildRecentSessionCardFromTab,
-  clearTabCompletionTrackerForTests,
-  parseAgentDotState,
   syncRecentCardWithLiveTab,
   type LiveRecentCardTab,
   type RecentSessionCardSnapshot
-} from './mobile-terminal-tab-agent'
+} from './recent-session-card-snapshot'
+import {
+  MAX_RECENT_SESSION_CARDS_DISPLAY,
+  MAX_RECENT_SESSION_CARDS_LIMIT,
+  MIN_RECENT_SESSION_CARDS_DISPLAY,
+  clampRecentSessionCardsLimit,
+  parseRecentSessionCards,
+  parseRecentSessionCardsMaxDisplay
+} from './recent-session-card-serialization'
 
-export { buildRecentSessionCardFromTab }
+export { buildRecentSessionCardFromTab, parseRecentSessionCards }
+export {
+  MAX_RECENT_SESSION_CARDS_DISPLAY,
+  MAX_RECENT_SESSION_CARDS_LIMIT,
+  MIN_RECENT_SESSION_CARDS_DISPLAY
+}
 export type RecentSessionCardRecord = RecentSessionCardSnapshot
+export {
+  DEFAULT_MOBILE_SESSION_TAB_BAR_MODE,
+  DEFAULT_MOBILE_SESSION_TABS_SHEET_SCOPE,
+  type MobileSessionTabBarMode,
+  type MobileSessionTabsSheetScope
+}
 export const RECENT_SESSION_CARDS_STORAGE_KEY = 'orca:recent-session-cards'
-export const MIN_RECENT_SESSION_CARDS_DISPLAY = 1
-export const MAX_RECENT_SESSION_CARDS_DISPLAY = 7
-export const MAX_RECENT_SESSION_CARDS_LIMIT = 20
 export const MAX_RECENT_SESSION_CARDS_STORED = 20
 const MAX_TOTAL = 40
 const M_KEYS = [RECENT_SESSION_CARDS_STORAGE_KEY, LAST_VISITED_WORKTREE_STORAGE_KEY] as const
-const TAB_TYPES = new Set<string>(['terminal', 'markdown', 'file', 'browser', 'agent-session'])
 
 type Cards = RecentSessionCardRecord[]
 type ReadonlyCards = readonly RecentSessionCardRecord[]
@@ -44,7 +69,6 @@ export const subscribeRecentSessionCards = (l: () => void): (() => void) => (
 )
 
 const notify = () => listeners.forEach((l) => l())
-const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null
 const str = (v: unknown): string | undefined =>
   typeof v === 'string' && v.length > 0 ? v : undefined
 const cardKey = (c: RecentSessionCardRecord): string => `${c.hostId}\0${c.worktreeId}\0${c.tabId}`
@@ -58,77 +82,37 @@ const removalDrops = (i: RecentSessionCardRecord, r: PendingRemoval): boolean =>
     (r.handle !== undefined && i.terminalHandle === r.handle))
 const withoutPendingRemovals = (cards: ReadonlyCards): Cards =>
   cards.filter((i) => !pendingRemovals.some((r) => removalDrops(i, r)))
-const clampLimit = (n: number): number =>
-  Math.min(
-    MAX_RECENT_SESSION_CARDS_LIMIT,
-    Math.max(MIN_RECENT_SESSION_CARDS_DISPLAY, Math.round(n))
-  )
 
-function parseJson(raw: string | null | undefined): unknown {
-  try {
-    return raw ? JSON.parse(raw) : null
-  } catch {
-    return null
-  }
+export const getMobileSessionTabBarModeSync = getCachedMobileSessionTabBarMode
+export const getMobileSessionTabsSheetScopeSync = getCachedMobileSessionTabsSheetScope
+
+export function setMobileSessionTabBarMode(mode: MobileSessionTabBarMode): MobileSessionTabBarMode {
+  setCachedMobileSessionTabBarMode(mode)
+  persistCards(readAllRecentSessionCardsSync())
+  return mode
 }
 
-function parseMaxDisplay(raw: string | null | undefined): number | null {
-  const p = parseJson(raw)
-  const v = isRecord(p) ? (p.maxDisplay ?? p.recentCardsMaxDisplay) : null
-  return typeof v === 'number' && Number.isFinite(v) ? clampLimit(v) : null
+export function setMobileSessionTabsSheetScope(
+  scope: MobileSessionTabsSheetScope
+): MobileSessionTabsSheetScope {
+  setCachedMobileSessionTabsSheetScope(scope)
+  persistCards(readAllRecentSessionCardsSync())
+  return scope
 }
 
 export function getRecentSessionCardsMaxDisplaySync(): number {
   const m = maxDisplayMemory === null ? readMirroredStorage(M_KEYS) : null
   maxDisplayMemory ??=
-    parseMaxDisplay(m?.[RECENT_SESSION_CARDS_STORAGE_KEY]) ??
-    parseMaxDisplay(m?.[LAST_VISITED_WORKTREE_STORAGE_KEY])
+    parseRecentSessionCardsMaxDisplay(m?.[RECENT_SESSION_CARDS_STORAGE_KEY]) ??
+    parseRecentSessionCardsMaxDisplay(m?.[LAST_VISITED_WORKTREE_STORAGE_KEY])
   return maxDisplayMemory ?? MAX_RECENT_SESSION_CARDS_DISPLAY
 }
 
 export function setRecentSessionCardsMaxDisplay(limit: number): number {
   const current = readAllRecentSessionCardsSync()
-  maxDisplayMemory = clampLimit(limit)
+  maxDisplayMemory = clampRecentSessionCardsLimit(limit)
   persistCards(current)
   return maxDisplayMemory
-}
-
-function parseCard(v: unknown): RecentSessionCardRecord | null {
-  if (!isRecord(v) || typeof v.tabType !== 'string' || !TAB_TYPES.has(v.tabType)) {
-    return null
-  }
-  const [h, w, id, t] = [str(v.hostId), str(v.worktreeId), str(v.tabId), str(v.title)]
-  if (!h || !w || !id || !t || !Number.isFinite(v.lastVisitedAt)) {
-    return null
-  }
-  const [leaf, hdl] = [str(v.leafId), str(v.terminalHandle)]
-  const [sid, aid, st] = [str(v.sessionId), str(v.agentId), parseAgentDotState(v.agentState)]
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: guarded by TAB_TYPES.has(v.tabType) above.
-  const tabType = v.tabType as MobileSessionTabType
-  const base = { hostId: h, worktreeId: w, worktreeName: str(v.worktreeName) ?? '', tabId: id }
-  const rest = { title: t, tabType, lastVisitedAt: Number(v.lastVisitedAt) }
-  const opt = Object.assign({}, leaf && { leafId: leaf }, hdl && { terminalHandle: hdl })
-  return Object.assign(
-    base,
-    rest,
-    opt,
-    sid && { sessionId: sid },
-    aid && { agentId: aid },
-    st && { agentState: st }
-  )
-}
-
-export function parseRecentSessionCards(raw: string | null | undefined): Cards {
-  const p = parseJson(raw)
-  const arr = Array.isArray(p)
-    ? p
-    : isRecord(p) && Array.isArray(p.recentCards)
-      ? p.recentCards
-      : []
-  return arr.flatMap((i) => {
-    const c = parseCard(i)
-    return c ? [c] : []
-  })
 }
 
 function capCards(cards: ReadonlyCards): Cards {
@@ -171,8 +155,10 @@ export function readAllRecentSessionCardsSync(): Cards {
 
 export async function hydrateRecentSessionCards(): Promise<Cards> {
   const [dRaw, lRaw] = await Promise.all(M_KEYS.map((k) => readMirroredKeyOrStore(k)))
-  const storedLimit = parseMaxDisplay(dRaw) ?? parseMaxDisplay(lRaw)
+  const storedLimit =
+    parseRecentSessionCardsMaxDisplay(dRaw) ?? parseRecentSessionCardsMaxDisplay(lRaw)
   maxDisplayMemory ??= storedLimit
+  const storedPrefs = hydrateSessionTabPreferencesFromRaw(dRaw, lRaw)
   const merged = mergeByRecency(parseRecentSessionCards(dRaw), parseRecentSessionCards(lRaw))
   const stored = capCards(withoutPendingRemovals(merged))
   pendingRemovals.length = 0
@@ -184,7 +170,7 @@ export async function hydrateRecentSessionCards(): Promise<Cards> {
   }
   hydrated = true
   memory = stored.length > 0 ? stored : memory
-  if (stored.length > 0 || storedLimit !== null) {
+  if (stored.length > 0 || storedLimit !== null || storedPrefs) {
     notify()
   }
   return stored.slice()
@@ -192,24 +178,32 @@ export async function hydrateRecentSessionCards(): Promise<Cards> {
 
 function persistCards(next: Cards): Cards {
   const maxDisplay = getRecentSessionCardsMaxDisplaySync()
-  const custom = maxDisplay !== MAX_RECENT_SESSION_CARDS_DISPLAY
+  const tabBarMode = getCachedMobileSessionTabBarMode()
+  const tabsSheetScope = getCachedMobileSessionTabsSheetScope()
   const dedicatedCards = next.slice()
-  const serializeDedicated = () =>
-    custom
-      ? JSON.stringify({ recentCards: dedicatedCards, maxDisplay })
-      : JSON.stringify(dedicatedCards)
+  const serialize = () =>
+    serializeRecentSessionCardsPayload(
+      dedicatedCards,
+      maxDisplay,
+      MAX_RECENT_SESSION_CARDS_DISPLAY,
+      tabBarMode,
+      tabsSheetScope
+    )
   memory = next
   notify()
-  let dRaw = serializeDedicated()
+  let dRaw = serialize()
   while (dedicatedCards.length > 0 && dRaw.length > PAGE_STORAGE_MAX_VALUE_CHARS) {
     dedicatedCards.pop()
-    dRaw = serializeDedicated()
+    dRaw = serialize()
   }
   void persistMirrored(RECENT_SESSION_CARDS_STORAGE_KEY, dRaw).catch(() => {})
-  void writeRecentCardsToLastVisitedWorktree(
-    next,
-    custom ? { recentCardsMaxDisplay: maxDisplay } : undefined
-  )
+  void writeRecentCardsToLastVisitedWorktree(next, {
+    ...(maxDisplay !== MAX_RECENT_SESSION_CARDS_DISPLAY
+      ? { recentCardsMaxDisplay: maxDisplay }
+      : {}),
+    ...(tabBarMode !== DEFAULT_MOBILE_SESSION_TAB_BAR_MODE ? { tabBarMode } : {}),
+    ...(tabsSheetScope !== DEFAULT_MOBILE_SESSION_TABS_SHEET_SCOPE ? { tabsSheetScope } : {})
+  })
   return next
 }
 
@@ -255,7 +249,6 @@ export function reconcileRecentSessionCardsForWorktree(p: {
   worktreeId: string
   liveTabs: readonly LiveRecentCardTab[]
   allowEmpty?: boolean
-  activeTabId?: string | null
 }): Cards {
   const current = readAllRecentSessionCardsSync()
   if (!p.hostId || !p.worktreeId || (!p.liveTabs.length && !p.allowEmpty)) {
@@ -267,9 +260,7 @@ export function reconcileRecentSessionCardsForWorktree(p: {
       return [i]
     }
     const match = p.liveTabs.find((t) => matchesTab(i, t))
-    const isActiveOnScreen =
-      p.activeTabId !== undefined ? p.activeTabId !== null && i.tabId === p.activeTabId : undefined
-    const updated = match ? syncRecentCardWithLiveTab(i, match, { isActiveOnScreen }) : null
+    const updated = match ? syncRecentCardWithLiveTab(i, match) : null
     changed ||= updated !== i
     return updated ? [updated] : []
   })
@@ -279,9 +270,9 @@ export function reconcileRecentSessionCardsForWorktree(p: {
 export const clearRecentSessionCardsForTests = (): void => {
   memory = null
   maxDisplayMemory = null
+  resetMobileSessionTabBarModeForTests()
   hydrated = false
   pendingRemovals.length = 0
-  clearTabCompletionTrackerForTests()
 }
 
 export function getVisibleRecentSessionCards(p: {
@@ -309,7 +300,7 @@ export function getVisibleRecentSessionCards(p: {
     .map((i) => {
       const match =
         i.worktreeId === p.currentWorktreeId ? tabs?.find((t) => matchesTab(i, t)) : undefined
-      const synced = syncRecentCardWithLiveTab(i, match, { isActiveOnScreen: false })
+      const synced = syncRecentCardWithLiveTab(i, match)
       return {
         ...synced,
         worktreeName: live?.get(i.worktreeId)?.displayName || synced.worktreeName

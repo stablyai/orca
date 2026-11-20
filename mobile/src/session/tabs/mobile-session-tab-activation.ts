@@ -1,4 +1,6 @@
 import type { TabActivationIntent } from '../../../../src/shared/workspace-layout/tab-groups/tab-activation-intent'
+import type { MobileSessionTab } from './mobile-session-tabs'
+import type { PendingSessionSelection } from './pending-session-selection'
 import '../../transport/connection/stable-logical-rpc-client'
 import { LogicalClientCutoverError } from '../../transport/connection/logical-client-cutover-error'
 import { sessionTabActivate } from './mobile-session-tab-write-operations'
@@ -115,6 +117,41 @@ export function consumePendingCrossWorktreeTabTarget(
   const target = pendingCrossWorktreeTabTarget
   pendingCrossWorktreeTabTarget = null
   return target
+}
+
+export function resolveCrossWorktreePendingSelection(
+  worktree: string,
+  tabs: readonly MobileSessionTab[]
+): { kind: 'terminal'; handle: string; tabId: string } | { kind: 'tab'; tabId: string } | null {
+  const target = consumePendingCrossWorktreeTabTarget(worktree)
+  if (!target) {
+    return null
+  }
+  const matched = tabs.find(
+    (tab) =>
+      tab.id === target.tabId ||
+      (tab.type === 'terminal' &&
+        Boolean(target.terminalHandle) &&
+        tab.terminal === target.terminalHandle)
+  )
+  if (!matched) {
+    return null
+  }
+  if (matched.type === 'terminal' && typeof matched.terminal === 'string' && matched.terminal) {
+    return { kind: 'terminal', handle: matched.terminal, tabId: matched.id }
+  }
+  return { kind: 'tab', tabId: matched.id }
+}
+
+export function applyPendingCrossWorktreeSelection(
+  worktree: string,
+  tabs: readonly MobileSessionTab[],
+  pendingSelectionRef: { current: PendingSessionSelection | null }
+): void {
+  const crossTarget = resolveCrossWorktreePendingSelection(worktree, tabs)
+  if (crossTarget) {
+    pendingSelectionRef.current = crossTarget
+  }
 }
 
 export function activateMobileSessionTab(

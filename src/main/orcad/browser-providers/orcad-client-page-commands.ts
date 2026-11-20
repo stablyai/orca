@@ -21,7 +21,11 @@ import {
   hasPairedPageHost,
   openBrowserUrlOnClient
 } from '../../runtime/browser/client-pages/browser-client-page-opening'
-import { opensOnPairedDesktop } from '../../runtime/browser/client-pages/server-agent-tab-placement'
+import {
+  opensOnPairedDesktop,
+  pairedDesktopTabMismatch
+} from '../../runtime/browser/client-pages/server-agent-tab-placement'
+import { hiddenEngineTabRefusal } from './orcad-hidden-engine-refusal'
 import { cloneBrowserClientPage } from '../../runtime/browser/client-pages/browser-client-page-clone'
 import {
   BrowserClientPageQueries,
@@ -193,20 +197,29 @@ function createTab(
     }
     return created
   }
-  // Engine tabs reach no client, so this host's own agents open on a paired desktop when one can host.
+  // Engine tabs reach no client: this host's own agents get one only by asking (--headless).
+  const refuseEngine =
+    hasEngine && !(params?.placement || caller?.pairedDeviceId || caller?.opensPageLink)
+  const engineOr = (mismatch: string | null): (() => Promise<unknown>) =>
+    refuseEngine ? () => Promise.reject(hiddenEngineTabRefusal(mismatch)) : createOnEngine
   // The engine keeps profiles orcad cannot describe to a desktop.
-  const engineOnlyProfile =
-    hasEngine && params?.profileId !== undefined && params.profileId !== DEFAULT_BROWSER_PROFILE_ID
-  if (!engineOnlyProfile && opensOnPairedDesktop(host, params, caller, hasEngine)) {
+  if (hasEngine && params?.profileId && params.profileId !== DEFAULT_BROWSER_PROFILE_ID) {
+    return engineOr(`Browser profile ${params.profileId} exists only in this host's own browser.`)()
+  }
+  const mismatch = pairedDesktopTabMismatch(params)
+  // An older desktop can't be asked, but one already hosting here can still take the tab.
+  const asked = opensOnPairedDesktop(host, params, caller, hasEngine)
+  if (asked || (refuseEngine && mismatch === null && hasPairedPageHost(host))) {
+    const fallback = engineOr(null)
     return createBrowserPageOnPairedHost(
       host,
       params ?? {},
       orcadBrowserProfileId(params?.profileId),
-      hasEngine ? async () => requireCreatedPage(await createOnEngine()) : undefined,
+      hasEngine && asked ? async () => requireCreatedPage(await fallback()) : undefined,
       caller?.signal
     )
   }
-  return createOnEngine()
+  return engineOr(mismatch)()
 }
 
 function requireCreatedPage(value: unknown): { browserPageId: string } {

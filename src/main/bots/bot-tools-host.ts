@@ -36,23 +36,36 @@ import { resolveBotToolInput } from './bot-tool-details'
 import { claudeBotToolProblems } from './bot-tools-claude-check'
 import { redactBotToolProblems } from './bot-tool-redaction'
 import { cliWithLaunchTools, withRelayProblems, type BotLaunchTools } from './bot-launch-tools'
+import type { BotAgent } from '../../shared/bot-types'
 import { readBotToolOAuth, withSavedBotToolHeaders } from './bot-tool-credentials'
 
-/** The agent CLI a bot's turns run, as the host would launch it now. */
-export type BotToolsCli = {
+type BotToolsFolder = {
   botId: string
-  agent: 'claude' | 'codex'
   folder: string
   /** Claude: a folder of Orca's own where the CLI keeps the bot's servers to sign them in. */
   signInFolder: string
+  /** The home folders of this host's other bots on the same agent, which may share a sign-in. */
+  otherBotFolders: readonly string[]
+}
+
+/** The agent CLI a Claude Code or Codex bot's turns run, as the host would launch it now. */
+export type BotToolsCli = BotToolsFolder & {
+  agent: 'claude' | 'codex'
   command: string
   prefixArgs: string[]
   env: Record<string, string>
   /** Claude: its config dir when not the default; Codex: its CODEX_HOME. */
   accountHome: string | null
-  /** The home folders of this host's other bots on the same agent, which may share a sign-in. */
-  otherBotFolders: readonly string[]
 }
+
+/** A bot's tools on this host. Only Claude Code and Codex have a CLI Orca checks and signs them in
+ *  through; another agent's tools are its folder's file, delivered at launch. */
+export type BotToolsHome =
+  | BotToolsCli
+  | (BotToolsFolder & { agent: Exclude<BotAgent, BotToolsCli['agent']> })
+
+export const hasBotToolsCli = (home: BotToolsHome): home is BotToolsCli =>
+  home.agent === 'claude' || home.agent === 'codex'
 
 const StartedThread = z.object({ thread: z.object({ id: z.string() }) })
 
@@ -112,16 +125,19 @@ export async function codexThread(
   return id
 }
 
-/** The tools the bot gets from its owner's own Claude Code or Codex config. */
-export async function inheritedTools(cli: BotToolsCli): Promise<BotInheritedTool[]> {
+/** The tools the bot gets from its owner's own Claude Code or Codex config; none read for another agent. */
+export async function inheritedTools(cli: BotToolsHome): Promise<BotInheritedTool[]> {
   if (cli.agent === 'claude') {
     return await readClaudeInheritedTools(cli.accountHome)
+  }
+  if (cli.agent !== 'codex') {
+    return []
   }
   const names = cli.accountHome ? await readCodexInheritedToolNames(cli.accountHome) : []
   return names.map((name) => ({ name }))
 }
 
-export async function listBotTools(cli: BotToolsCli): Promise<BotTools> {
+export async function listBotTools(cli: BotToolsHome): Promise<BotTools> {
   const [servers, inherited] = await Promise.all([
     readBotToolServers(cli.folder),
     inheritedTools(cli)
@@ -177,7 +193,7 @@ export async function claudeSignInFolder(
  * the URL servers, so no command is started; `signal` stops the check and closes its session.
  */
 export async function botToolProblems(
-  cli: BotToolsCli,
+  cli: BotToolsHome,
   { remote = false, signal }: { remote?: boolean; signal?: AbortSignal } = {}
 ): Promise<Record<string, BotToolProblem>> {
   // A tool Orca signs in to has its state from Orca's own store; checking it would start it.
@@ -186,7 +202,8 @@ export async function botToolProblems(
       (!remote || 'url' in server) &&
       !('url' in server && server.credential && readBotToolOAuth(cli.folder, server.credential))
   )
-  if (servers.length === 0) {
+  // Another agent has no CLI check, so its rows show no problem, as a Claude or Codex row it confirmed.
+  if (servers.length === 0 || !hasBotToolsCli(cli)) {
     return {}
   }
   signal?.throwIfAborted()
@@ -226,7 +243,7 @@ export async function botToolProblems(
 
 /** A name the bot or its owner already uses would merge into, or shadow, the other server. */
 export async function botToolNameTaken(
-  cli: BotToolsCli,
+  cli: BotToolsHome,
   name: string,
   editingName?: string
 ): Promise<string | null> {
@@ -244,7 +261,7 @@ export async function botToolNameTaken(
 }
 
 export async function addBotTool(
-  cli: BotToolsCli,
+  cli: BotToolsHome,
   server: BotToolServer,
   credentials?: ReadonlyMap<string, BotToolNewCredential>
 ): Promise<void> {
@@ -267,7 +284,7 @@ export async function addBotTool(
 }
 
 export async function updateBotTool(
-  cli: BotToolsCli,
+  cli: BotToolsHome,
   name: string,
   version: string,
   input: BotToolInput

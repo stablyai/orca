@@ -18,11 +18,9 @@ import { resolveBottomDrawerFillHeight } from './bottom-drawer-fill-height'
 import { resolveBottomDrawerKeyboardInset } from './bottom-drawer-keyboard-inset'
 import { AutoHeight } from '../motion/AutoHeight'
 import {
-  attachWebScrollDragToDismiss,
   bottomDrawerOffset,
   bottomDrawerScrim,
-  bottomDrawerTravel,
-  type WebScrollableTarget
+  bottomDrawerTravel
 } from './bottom-drawer-drag-motion'
 import { bottomDrawerStyles as styles } from './bottom-drawer-styles'
 import {
@@ -42,38 +40,6 @@ import { useDrawerReducedMotion } from './bottom-drawer-constants'
 
 // The grabber row above the content: its padding plus the 5 pt bar.
 const HANDLE_AREA_HEIGHT = spacing.sm + 5 + spacing.md
-
-function hasScrollableNode(value: unknown): value is { getScrollableNode: () => unknown } {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    'getScrollableNode' in value &&
-    typeof value.getScrollableNode === 'function'
-  )
-}
-
-function isWebScrollableTarget(value: unknown): value is WebScrollableTarget {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    'scrollTop' in value &&
-    typeof value.scrollTop === 'number' &&
-    'addEventListener' in value &&
-    typeof value.addEventListener === 'function' &&
-    'removeEventListener' in value &&
-    typeof value.removeEventListener === 'function'
-  )
-}
-
-function resolveWebScrollableTarget(scrollView: ScrollView | null): WebScrollableTarget | null {
-  if (!scrollView) {
-    return null
-  }
-  const candidate: unknown = hasScrollableNode(scrollView)
-    ? scrollView.getScrollableNode()
-    : scrollView
-  return isWebScrollableTarget(candidate) ? candidate : null
-}
 
 export type MountedBottomDrawerProps = {
   visible: boolean
@@ -241,32 +207,6 @@ export function MountedBottomDrawer({
   const { scrollHandler, scrollGesture, handlePanGesture, contentPanGesture } = useBottomDrawerDrag(
     { ...motion, sheetHeight, screenHeight, scrollOffsetY, onDismiss: onClose, dismissible }
   )
-
-  useEffect(() => {
-    if (
-      Platform.OS !== 'web' ||
-      !visible ||
-      !interactive ||
-      !dismissible ||
-      !contentScrollable ||
-      !dragContentToDismiss
-    ) {
-      return
-    }
-    const scroller = resolveWebScrollableTarget(scrollRef.current)
-    if (!scroller) {
-      return
-    }
-    return attachWebScrollDragToDismiss(scroller, scrollOffsetY)
-  }, [
-    contentScrollable,
-    dismissible,
-    dragContentToDismiss,
-    interactive,
-    scrollOffsetY,
-    visible,
-    windowEpoch
-  ])
 
   const drawerStyle = useAnimatedStyle(() => {
     // Fill layout already shrinks/lifts via inset and marginBottom; subtracting keyboardOffset again hides dock under keys.

@@ -1,4 +1,9 @@
-import { applyActiveTerminalHandle } from '../active-terminal-handle'
+import {
+  followTerminalRows,
+  keepsTerminalPaneVisible,
+  withReplacedTerminalHandles,
+  type TerminalRowHandles
+} from '../../terminal/session/pane-layout/mobile-terminal-pane-layout'
 import { orphanedMarkdownDraftTabs } from '../../files/session-documents/orphaned-markdown-draft-tabs'
 import {
   pendingSelectionHandle,
@@ -25,7 +30,7 @@ import { getActiveTabIdForHandle } from './terminal-tab-selection'
 import { resolveActiveSessionTab } from './active-session-tab'
 import {
   activateMobileSessionTab,
-  consumePendingCrossWorktreeTabTarget
+  applyPendingCrossWorktreeSelection
 } from './mobile-session-tab-activation'
 import { releaseTerminalCreateLock } from '../../terminal/session/creation/terminal-create-lock'
 import { withSessionTabStatusReceipts } from './mobile-session-tab-status-clock'
@@ -68,9 +73,11 @@ export function useMobileSessionTabApplication(scope: MobileSessionTerminalListM
     lastKnownTerminalCountRef,
     clientRef,
     creatingTerminalRef,
-    setCreating
+    setCreating,
+    setSplitTerminalHandles
   } = scope
   const draftOwnershipRef = useRef<DraftTabOwnership | null>(null)
+  const terminalRowHandlesRef = useRef<TerminalRowHandles>(new Map())
   const applySessionTabs = useCallback(
     (result: SessionTabsResult): SessionTabsApplyOutcome<MobileSessionTab> => {
       const diagnostics = terminalDiagnosticsRef.current
@@ -144,6 +151,11 @@ export function useMobileSessionTabApplication(scope: MobileSessionTerminalListM
       }
       sessionTabsRef.current = nextTabs
       initialSessionAutoCreateRef.current.sawSessionTabs ||= nextTabs.length > 0
+      const terminalRows = followTerminalRows(terminalRowHandlesRef.current, nextTabs)
+      terminalRowHandlesRef.current = terminalRows.handles
+      if (terminalRows.replaced.size > 0) {
+        setSplitTerminalHandles((pair) => withReplacedTerminalHandles(pair, terminalRows.replaced))
+      }
       // Avoid identical snapshot state updates that would tear down and replay subscriptions.
       setSessionTabs((prev) => (mobileSessionTabsEqual(prev, nextTabs) ? prev : nextTabs))
       const terminalTabs = getTerminalRecordsFromSessionTabs(nextTabs)
@@ -191,23 +203,7 @@ export function useMobileSessionTabApplication(scope: MobileSessionTerminalListM
           }).catch(() => {})
         }
       }
-      const crossWorktreeTarget =
-        nextTabs.length > 0 ? consumePendingCrossWorktreeTabTarget(result.worktree) : null
-      if (crossWorktreeTarget) {
-        const targetTab = nextTabs.find(
-          (tab) =>
-            tab.id === crossWorktreeTarget.tabId ||
-            (tab.type === 'terminal' &&
-              Boolean(crossWorktreeTarget.terminalHandle) &&
-              tab.terminal === crossWorktreeTarget.terminalHandle)
-        )
-        if (targetTab) {
-          pendingSelectionRef.current =
-            targetTab.type === 'terminal' && typeof targetTab.terminal === 'string'
-              ? { kind: 'terminal', handle: targetTab.terminal, tabId: targetTab.id }
-              : { kind: 'tab', tabId: targetTab.id }
-        }
-      }
+      applyPendingCrossWorktreeSelection(result.worktree, nextTabs, pendingSelectionRef)
       const pendingActiveSessionTabId = pendingSelectionTabId(pendingSelectionRef.current)
       const pendingActiveTerminalHandle = pendingSelectionHandle(pendingSelectionRef.current)
       const resolved = resolveActiveSessionTab(nextTabs, {
@@ -271,17 +267,27 @@ export function useMobileSessionTabApplication(scope: MobileSessionTerminalListM
       activeSessionTabTypeRef.current = active?.type ?? null
       activeSessionTabIdRef.current = active?.id ?? null
       setActiveSessionTabId(active?.id ?? null)
-      applyActiveTerminalHandle({
-        active,
-        activeHandleRef,
-        visible: visibleTerminalHandlesRef?.current,
-        setActiveHandle,
-        subscribe: subscribeToTerminal,
-        unsubscribe: unsubscribeTerminal
-      })
+      if (active) {
+        // Transient empty snapshots may omit a live terminal; only explicit successful close clears it.
+        const nextHandle =
+          active.type === 'terminal' && typeof active.terminal === 'string' ? active.terminal : null
+        const previous = activeHandleRef.current
+        if (
+          previous &&
+          previous !== nextHandle &&
+          !keepsTerminalPaneVisible(previous, visibleTerminalHandlesRef?.current)
+        ) {
+          unsubscribeTerminal(previous)
+        }
+        activeHandleRef.current = nextHandle
+        setActiveHandle(nextHandle)
+        if (nextHandle) {
+          subscribeToTerminal(nextHandle)
+        }
+      }
       return outcome
     },
-    [hostId, worktreeId, subscribeToTerminal, unsubscribeTerminal]
+    [hostId, worktreeId, subscribeToTerminal, unsubscribeTerminal, setSplitTerminalHandles]
   )
   return {
     applySessionTabs

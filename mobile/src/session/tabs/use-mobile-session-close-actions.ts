@@ -10,10 +10,10 @@ import {
 } from '../../terminal/session/mobile-session-terminal-operations'
 import type { MobileSessionTab } from './mobile-session-tabs'
 import type { TerminalRecord as Terminal } from '../../terminal/session/inventory/mobile-terminal-records'
-import { removeRecentSessionCard } from '../recent-session-cards'
 import type { MobileSessionContentCreateActionsModel } from '../use-mobile-session-content-create-actions'
 import { mobileNativeChatScopeKey } from '../native-chat/conversation/mobile-native-chat-scope-key'
 import { closeMobileNativeChatTabDraft } from '../native-chat/composer/drafts/mobile-native-chat-draft-store'
+import { removeRecentSessionCard } from '../recent-session-cards'
 import {
   defineHostMutation,
   useHostMutation,

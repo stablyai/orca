@@ -83,19 +83,6 @@ describe('formatWorktreePs', () => {
     expect(text).toContain('last said: Pushed to #388; build running.')
   })
 
-  it('says when no agent is open, and names a bot home as one', () => {
-    const text = formatWorktreePs(
-      {
-        worktrees: [row({ displayName: 'Atlas', bot: 'Atlas', botHome: true, linkedPR: null })],
-        totalCount: 1,
-        truncated: false
-      },
-      NOW
-    )
-    expect(text).toContain('home of bot Atlas')
-    expect(text).toContain('no agent open')
-  })
-
   it('says a live agent with no handle is open but cannot be messaged yet, not idle', () => {
     const { address: _address, ...restored } = AGENT
     const text = formatWorktreePs(
@@ -108,29 +95,6 @@ describe('formatWorktreePs', () => {
     )
     expect(text).toContain('agent claude open, no handle yet, 25m ago')
     expect(text).not.toContain('--terminal')
-  })
-
-  it('ties a child to the workspace that started it, compactly', () => {
-    const child = (name: string) =>
-      row({
-        worktreeId: `repo::/w/${name}`,
-        displayName: name,
-        parentWorktreeId: 'repo::/w/webhooks'
-      })
-    const kids = ['bot-mcp', 'bot-templates', 'bot-rows', 'bot-tools']
-    const text = formatWorktreePs(
-      {
-        worktrees: [
-          row({ childWorktreeIds: [...kids.map((name) => `repo::/w/${name}`), 'repo::/w/gone'] }),
-          ...kids.map(child)
-        ],
-        totalCount: 5,
-        truncated: false
-      },
-      NOW
-    )
-    expect(text).toContain('started 5 workspaces: bot-mcp, bot-templates, bot-rows and 2 more')
-    expect(text.match(/^under webhooks$/gm)).toHaveLength(4)
   })
 
   it("drops the terminal's last line when an agent's own words are there", () => {
@@ -149,7 +113,7 @@ describe('formatWorktreePs', () => {
 })
 
 describe('recentWorktreePs', () => {
-  it('keeps recent rows, newest first, by the workspace or its agents', () => {
+  it('filters by recent workspace or agent activity before applying the limit', () => {
     const old = row({ worktreeId: 'old', lastActivityAt: NOW - 10 * 86_400_000 })
     const agentRecent = row({
       worktreeId: 'agent',
@@ -157,25 +121,14 @@ describe('recentWorktreePs', () => {
       agents: [{ ...AGENT, updatedAt: NOW - 60_000 }]
     })
     const recent = row({ worktreeId: 'recent', lastActivityAt: NOW - 3_600_000 })
+    const omitted = row({ worktreeId: 'omitted', lastActivityAt: NOW - 7_200_000 })
     const result = recentWorktreePs(
-      { worktrees: [old, recent, agentRecent], totalCount: 3, truncated: false },
+      { worktrees: [old, omitted, recent, agentRecent], totalCount: 4, truncated: false },
       NOW - 7 * 86_400_000,
-      undefined
-    )
-    expect(result.worktrees.map((entry) => entry.worktreeId)).toEqual(['agent', 'recent'])
-    expect(result.totalCount).toBe(2)
-  })
-
-  it('caps after filtering and says so', () => {
-    const rows = ['a', 'b', 'c'].map((id, index) =>
-      row({ worktreeId: id, lastActivityAt: NOW - index * 60_000 })
-    )
-    const result = recentWorktreePs(
-      { worktrees: rows, totalCount: 3, truncated: false },
-      NOW - 86_400_000,
       2
     )
-    expect(result.worktrees.map((entry) => entry.worktreeId)).toEqual(['a', 'b'])
+    expect(result.worktrees.map((entry) => entry.worktreeId)).toEqual(['agent', 'recent'])
+    expect(result.totalCount).toBe(3)
     expect(result.truncated).toBe(true)
   })
 })

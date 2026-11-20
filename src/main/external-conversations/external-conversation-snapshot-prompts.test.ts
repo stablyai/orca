@@ -208,6 +208,8 @@ describe('a reconnect while a shown prompt is still pending', () => {
 
     expect(entry).toMatchObject({
       paneKey: PANE,
+      working: false,
+      turnId: null,
       prompt: { kind: 'approval', promptId: asked.itemId },
       trace: { prompt: 'restated', standing: 'unknown' }
     })
@@ -235,16 +237,6 @@ describe('a reconnect while a shown prompt is still pending', () => {
       prompt: { promptId: asked.itemId },
       trace: { prompt: 'restated' }
     })
-  })
-
-  it('restates the prompt itself, never a turn or work', async () => {
-    const asked = await askedFromThread()
-    asked.swap.install(null)
-
-    const entry = asked.reconnect()
-
-    expect(entry?.working).toBe(false)
-    expect(entry?.turnId).toBeNull()
   })
 
   it('drops the prompt once the chat proves it over', async () => {
