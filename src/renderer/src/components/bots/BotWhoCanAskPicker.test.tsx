@@ -9,23 +9,28 @@ import { BotWhoCanAskPicker } from './BotWhoCanAskPicker'
 const bot = { id: 'bot-1', hostId: 'local', name: 'Atlas', members: [] } as unknown as Bot
 
 const teammates: BotWhoCanAskFound['members'] = [
-  { id: '2', name: 'brennanb2025', handle: 'Brennan Benson' },
-  { id: '5', name: 'Jinwoo-H', handle: 'Jinwoo Hong' }
+  { id: '2', name: 'brennanb2025', handle: 'Brennan Benson', group: 'scoped' },
+  { id: '5', name: 'Jinwoo-H', handle: 'Jinwoo Hong', group: 'scoped' }
 ]
 
-function service(found: (query: string) => BotWhoCanAskFound['members']): BotWhoCanAskService {
+function service(
+  found: (query: string) => BotWhoCanAskFound['members'],
+  note?: string
+): BotWhoCanAskService {
   return {
     listed: () => [],
     stamp: { source: 'github' },
     max: 50,
     search: vi.fn(async (query: string) => ({
       ok: true as const,
-      value: { members: found(query), complete: true }
+      value: { members: found(query), complete: true, ...(note ? { note } : {}) }
     })),
     errorMessage: (code) => code,
     searchPlaceholder: 'Search by name or username',
-    peopleHeading: 'People in your repositories',
+    peopleHeading: 'People on GitHub',
+    scopedHeading: 'People in your repositories',
     outsideHeading: 'Elsewhere on GitHub',
+    outsideTag: 'Not in your repos',
     noMatch: (query) => ({ title: `No one found for ${query}`, detail: '' }),
     idleHint: { title: 'Type a name or GitHub username', detail: '' },
     ownerId: null,
@@ -59,7 +64,7 @@ describe('Who can ask › Add on GitHub', () => {
   it('keeps a stranger with that exact username apart from teammates', async () => {
     const found = (query: string) =>
       query === 'brennan'
-        ? [teammates[0], { id: '9', name: 'brennan', outside: true }]
+        ? [teammates[0], { id: '9', name: 'brennan', group: 'outside' as const }]
         : matching(query)
     render(<BotWhoCanAskPicker bot={bot} service={service(found)} owner="You" onPicked={vi.fn()} />)
     fireEvent.change(screen.getByPlaceholderText('Search by name or username'), {
@@ -89,5 +94,35 @@ describe('Who can ask › Add on GitHub', () => {
       target: { value: 'hong' }
     })
     expect(await screen.findByText('Jinwoo-H')).toBeTruthy()
+  })
+
+  it('lists people with no known source under the neutral heading, never as teammates', async () => {
+    // An older host answers bare members: nothing says they are in the owner's repositories.
+    const legacy = () => [{ id: '9', name: 'brennan' }]
+    render(
+      <BotWhoCanAskPicker bot={bot} service={service(legacy)} owner="You" onPicked={vi.fn()} />
+    )
+    const heading = await screen.findByText('People on GitHub')
+    expect(heading.closest('[cmdk-group]')?.textContent).toContain('brennan')
+    expect(screen.queryByText('People in your repositories')).toBeNull()
+    expect(screen.queryByText('Not in your repos')).toBeNull()
+  })
+
+  it('says what the search could not cover instead of claiming no one exists', async () => {
+    const note =
+      'Couldn’t search your repos from this computer, so only exact GitHub usernames were checked.'
+    render(
+      <BotWhoCanAskPicker
+        bot={bot}
+        service={service(() => [], note)}
+        owner="You"
+        onPicked={vi.fn()}
+      />
+    )
+    fireEvent.change(screen.getByPlaceholderText('Search by name or username'), {
+      target: { value: 'neil par' }
+    })
+    expect(await screen.findByText('No one found for neil par')).toBeTruthy()
+    expect(screen.getByText(note)).toBeTruthy()
   })
 })

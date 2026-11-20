@@ -5,7 +5,7 @@ import {
 } from '../../../../shared/rpc-contract/bots-connector-setup-params'
 import { defineMethod } from '../core'
 import { withHostCloudClient } from './bots-slack'
-import { findGitHubPeople } from '../../../connector-cloud/github-people-search'
+import { findGitHubPeople, gitHubPeopleSearch } from '../../../connector-cloud/github-people-search'
 
 export const BOT_GITHUB_METHODS = [
   defineMethod({
@@ -29,7 +29,7 @@ export const BOT_GITHUB_METHODS = [
     params: BotGitHubUsers,
     handler: async ({ query, scope }, context) =>
       withHostCloudClient(context, (client) =>
-        findGitHubPeople((login) => client.githubUsers(login), query, scope)
+        findGitHubPeople((login) => client.githubUsers(login), query, scope, gitHubPeopleSearch())
       )
   }),
   defineMethod({
