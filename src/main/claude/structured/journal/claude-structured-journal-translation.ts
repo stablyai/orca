@@ -176,7 +176,6 @@ export function createClaudeJournalTranslator(
       if (isRootClaudeFrame(event.message)) {
         if (event.message.type === 'system' && event.message.subtype === 'init') {
           turn.observeProviderCycleStart()
-          journalClaudeFullAccessRefusal(deps, fallbackId, turnScope())
         } else if (
           event.startsTurn === true ||
           event.message.type === 'assistant' ||
@@ -188,6 +187,8 @@ export function createClaudeJournalTranslator(
             event.message.is_api_error_message !== true ||
             event.startedSend != null
         }
+        // Checked on every root frame: an approved plan settles the fallback without a new init.
+        journalClaudeFullAccessRefusal(deps, fallbackId, turnScope())
       }
     }
     if (event.type === 'message' && absorbClaudeCommandFrame(messageContext, event.message)) {

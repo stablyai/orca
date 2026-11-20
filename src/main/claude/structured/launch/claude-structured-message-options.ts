@@ -2,6 +2,7 @@ import { setTimeout as delay } from 'node:timers/promises'
 import { claudeBuildPermissionMode } from '../permissions/claude-plan-approval-mode'
 import {
   claudeBypassRefused,
+  claudeInPlan,
   claudeOwesFullAccessFallback,
   setClaudeAllowedPermissionMode
 } from '../permissions/claude-full-access-refusal'
@@ -73,18 +74,24 @@ export async function applyClaudeMessageOptions(
         signal
       )
       session.appliedInputOptions.set('interactionMode', 'plan')
-    } else if (claudeBypassRefused(session)) {
-      await applyClaudeFullAccessFallback(session, timeoutMs, signal, true)
-      session.appliedInputOptions.set('interactionMode', options.interactionMode)
     } else {
+      const leavingPlan = claudeInPlan(session)
       const mode = await waitForPromiseWithSignal(
         setClaudeAllowedPermissionMode(session, claudeBuildPermissionMode(session), {
           timeoutMs
+        }).catch((error: unknown) => {
+          // Outside Plan a refused Full access chat runs as Claude stands; the next send asks again.
+          if (leavingPlan || !claudeBypassRefused(session)) {
+            throw error
+          }
+          return null
         }),
         signal
       )
       session.appliedInputOptions.set('interactionMode', options.interactionMode)
-      session.appliedInputOptions.set('buildPermissionMode', mode)
+      if (mode !== null) {
+        session.appliedInputOptions.set('buildPermissionMode', mode)
+      }
     }
   } else {
     await applyClaudeFullAccessFallback(session, timeoutMs, signal)
@@ -100,8 +107,7 @@ const CLAUDE_STARTUP_SETTINGS_WAIT_MS = 5_000
 export async function applyClaudeFullAccessFallback(
   session: ClaudeSession,
   timeoutMs: number | undefined,
-  signal: AbortSignal | undefined,
-  buildPicked = false
+  signal: AbortSignal | undefined
 ): Promise<void> {
   if (
     session.launchIntent?.permissionMode === 'bypassPermissions' &&
@@ -117,7 +123,7 @@ export async function applyClaudeFullAccessFallback(
       signal
     )
   }
-  if (!buildPicked && !claudeOwesFullAccessFallback(session)) {
+  if (!claudeOwesFullAccessFallback(session)) {
     return
   }
   const mode = await waitForPromiseWithSignal(

@@ -55,7 +55,6 @@ export function createClaudeSessionJournalTranslator(
         acceptStartupFailure,
         fullAccessRefusalNotice: () => {
           const session = currentSession()
-          // Held until the fallback is applied, so the row names the mode the chat keeps.
           return session &&
             claudeFullAccessRefusalNoticeDue(session) &&
             claimClaudeFullAccessRefusalNotice(failure.sessionId)

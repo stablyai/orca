@@ -56,7 +56,7 @@ export function claudeBypassRefused(session: ClaudeBypassFacts): boolean {
 }
 
 /** Where Claude refuses bypass, Approve for me, or Ask where its settings turn that off too. */
-export function claudeAllowedPermissionMode(
+function claudeAllowedPermissionMode(
   session: ClaudeBypassFacts,
   mode: PermissionMode
 ): PermissionMode {
@@ -175,8 +175,8 @@ export async function setClaudeAllowedPermissionMode(
   if (applied !== null && (lastRefusal === null || autoForNow)) {
     return applied
   }
-  if (autoForNow && applied === null) {
-    // Auto that worked earlier is refused for now: Ask until a later send asks again.
+  if (autoForNow && applied === null && mode === 'bypassPermissions') {
+    // The fallback's auto that worked earlier is refused for now: Ask until a later send asks again.
     await session.connection.setPermissionMode('default', options)
     return 'default'
   }
@@ -191,29 +191,38 @@ export async function setClaudeAllowedPermissionMode(
   return setClaudeAllowedPermissionMode(session, mode, options, refused)
 }
 
-/** A refused Full access chat outside Plan whose fallback no build switch has applied yet. */
-export function claudeOwesFullAccessFallback(
-  session: ClaudeBypassFacts &
-    Pick<ClaudeSession, 'appliedInputOptions' | 'reportedOptions'> &
-    Partial<Pick<ClaudeSession, 'orderedPermissionMode' | 'autoUnsettled'>>
-): boolean {
+type ClaudeModeFacts = Pick<ClaudeSession, 'appliedInputOptions' | 'reportedOptions'> &
+  Partial<Pick<ClaudeSession, 'orderedPermissionMode'>>
+
+/** Plan as chosen or as Claude runs it, in wire order where known. */
+export function claudeInPlan(session: ClaudeModeFacts): boolean {
   const running = session.orderedPermissionMode
     ? session.orderedPermissionMode()
     : session.reportedOptions.reportedPermissionMode
+  return session.appliedInputOptions.get('interactionMode') === 'plan' || running === 'plan'
+}
+
+/** A refused Full access chat outside Plan whose fallback no build switch has applied yet. */
+export function claudeOwesFullAccessFallback(
+  session: ClaudeBypassFacts & ClaudeModeFacts
+): boolean {
   return (
     claudeBypassRefused(session) &&
     (!session.appliedInputOptions.has('buildPermissionMode') || session.autoUnsettled === true) &&
-    session.appliedInputOptions.get('interactionMode') !== 'plan' &&
-    running !== 'plan'
+    !claudeInPlan(session)
   )
 }
 
-/** The warning waits for a first fallback attempt, Plan exit included, so it names a mode
- *  Claude accepted. */
+/** The warning waits for a fallback Claude settled on, Plan exit included, so it names the mode
+ *  the chat keeps rather than Ask while auto is refused only for now. */
 export function claudeFullAccessRefusalNoticeDue(
   session: ClaudeBypassFacts & Pick<ClaudeSession, 'appliedInputOptions'>
 ): boolean {
-  return claudeBypassRefused(session) && session.appliedInputOptions.has('buildPermissionMode')
+  return (
+    claudeBypassRefused(session) &&
+    session.appliedInputOptions.has('buildPermissionMode') &&
+    session.autoUnsettled !== true
+  )
 }
 
 const MAX_ANNOUNCED = 1_000
@@ -270,7 +279,7 @@ export function claudeFullAccessRefusalRow(
   }
 }
 
-/** One warning row on the first root init after Claude's refusal is known. */
+/** One warning row on the first root frame after Claude's fallback is settled. */
 export function journalClaudeFullAccessRefusal(
   deps: Pick<ClaudeJournalTranslatorDeps, 'sink' | 'fullAccessRefusalNotice'>,
   idPrefix: string,

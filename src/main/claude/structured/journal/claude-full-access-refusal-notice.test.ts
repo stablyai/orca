@@ -10,7 +10,10 @@ import { ClaudePromptRegistry } from '../permissions/claude-prompt-registry'
 import { createClaudeInitProof } from '../startup/claude-structured-init-proof'
 import { createClaudeSessionJournalTranslator } from './claude-structured-session-journal-control'
 
-type Launch = Pick<ClaudeSession, 'launchIntent' | 'firstRootInit' | 'bypassDisabled'> & {
+type Launch = Pick<
+  ClaudeSession,
+  'launchIntent' | 'firstRootInit' | 'bypassDisabled' | 'autoUnsettled'
+> & {
   running?: string
 }
 
@@ -55,8 +58,20 @@ function launch(sessionId: string, facts: Launch) {
         uuid: `init-${permissionMode}`
       }
     })
+  const status = () =>
+    translator?.handle({
+      type: 'message',
+      sessionId,
+      message: {
+        type: 'system',
+        subtype: 'status',
+        status: null,
+        session_id: 'claude-session',
+        uuid: `status-${sessionId}`
+      }
+    })
   const warnings = () => bodies.filter((body) => body.kind === 'status' && body.tone === 'warning')
-  return { init, warnings, session }
+  return { init, status, warnings, session }
 }
 
 const FULL_ACCESS = { permissionMode: 'bypassPermissions' }
@@ -78,7 +93,7 @@ describe('a Full access chat whose Claude refuses bypass', () => {
     expect(restarted.warnings()).toHaveLength(0)
   })
 
-  it('is warned after a Plan start once leaving Plan applied the fallback', () => {
+  it('is warned after a Plan start once leaving Plan applied the fallback, within the turn', () => {
     const planStart = launch('plan-chat', {
       launchIntent: FULL_ACCESS,
       firstRootInit: { permissionMode: 'plan' },
@@ -88,8 +103,27 @@ describe('a Full access chat whose Claude refuses bypass', () => {
     planStart.init('plan')
     expect(planStart.warnings()).toHaveLength(0)
     planStart.session.appliedInputOptions.set('buildPermissionMode', 'auto')
-    planStart.init('auto')
+    planStart.status()
     expect(planStart.warnings()).toHaveLength(1)
+  })
+
+  it('waits while Claude refuses auto only for now', () => {
+    const unsettled = launch('unsettled-chat', {
+      launchIntent: FULL_ACCESS,
+      firstRootInit: { permissionMode: 'default' },
+      autoUnsettled: true
+    })
+    unsettled.session.appliedInputOptions.set('buildPermissionMode', 'default')
+    unsettled.init('default')
+    expect(unsettled.warnings()).toHaveLength(0)
+    unsettled.session.autoUnsettled = false
+    unsettled.session.appliedInputOptions.set('buildPermissionMode', 'auto')
+    unsettled.status()
+    expect(unsettled.warnings()).toEqual([
+      expect.objectContaining({
+        text: "Claude's settings turn off Full access (permissions.disableBypassPermissionsMode), so Claude uses Approve for me instead."
+      })
+    ])
   })
 
   it('stays quiet when Claude allows Full access or the chat never asked for it', () => {

@@ -1,11 +1,7 @@
 import type { PermissionMode, PermissionResult } from '@anthropic-ai/claude-agent-sdk'
 import type { ClaudePendingPrompt } from './claude-prompt-registry'
 import type { ClaudeSession } from '../claude-structured-session-state'
-import {
-  claudeAllowedPermissionMode,
-  claudeBypassRefused,
-  setClaudeAllowedPermissionMode
-} from './claude-full-access-refusal'
+import { claudeBypassRefused, setClaudeAllowedPermissionMode } from './claude-full-access-refusal'
 
 /** This process's requested mode, else its first init's; anything else asks for each edit. */
 export function claudePlanApprovalMode(
@@ -25,22 +21,25 @@ export function claudePlanApprovalMode(
   }
 }
 
-/** Keep a provider's startup restriction until an approved plan successfully restores the requested policy. */
+/** Keep a provider's startup restriction until an approved plan successfully restores the requested
+ *  policy. A refused Full access chat asks for Full access each time, so Claude's answer picks the
+ *  fallback rather than an earlier one that was only for now. */
 export function claudeBuildPermissionMode(
   session: Pick<ClaudeSession, 'launchIntent' | 'firstRootInit' | 'appliedInputOptions'> &
-    Partial<Pick<ClaudeSession, 'bypassDisabled' | 'autoDisabled'>>
+    Partial<Pick<ClaudeSession, 'bypassDisabled'>>
 ): PermissionMode {
+  if (claudeBypassRefused(session)) {
+    return claudePlanApprovalMode(session)
+  }
   const opened = session.firstRootInit?.permissionMode
-  const built = claudePlanApprovalMode({
+  return claudePlanApprovalMode({
     launchIntent: {
       permissionMode:
         session.appliedInputOptions.get('buildPermissionMode') ??
-        // A refused Full access start opened in Claude's own fallback, not the chat's choice.
-        (opened !== 'plan' && !claudeBypassRefused(session) ? opened : undefined) ??
+        (opened !== 'plan' ? opened : undefined) ??
         session.launchIntent?.permissionMode
     }
   })
-  return claudeAllowedPermissionMode(session, built)
 }
 
 function logPlanExitFailure(error: unknown): void {

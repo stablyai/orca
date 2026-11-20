@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
-import { leaveClaudePlanModeOnApproval } from './claude-plan-approval-mode'
+import {
+  claudeBuildPermissionMode,
+  leaveClaudePlanModeOnApproval
+} from './claude-plan-approval-mode'
 import { setClaudeAllowedPermissionMode } from './claude-full-access-refusal'
 
 const BYPASS_REFUSAL =
@@ -13,6 +16,36 @@ function claude(refuses: string[]) {
       ? Promise.reject(new Error(mode === 'auto' ? AUTO_REFUSAL : BYPASS_REFUSAL))
       : Promise.resolve()
   )
+}
+
+/** A Claude that refuses auto for a reason that can pass, until it is available. */
+function autoForNow() {
+  const auto = {
+    available: false,
+    setPermissionMode: vi.fn((mode: string) =>
+      mode === 'auto' && !auto.available
+        ? Promise.reject(
+            new Error(
+              'Cannot set permission mode to auto: auto mode is not available for this model',
+              {
+                cause: { errorCode: 'auto_mode_model' }
+              }
+            )
+          )
+        : Promise.resolve()
+    )
+  }
+  return auto
+}
+
+/** A send's build switch, as the chat's message options apply it. */
+async function send(
+  session: Parameters<typeof claudeBuildPermissionMode>[0] &
+    Parameters<typeof setClaudeAllowedPermissionMode>[0]
+): Promise<string> {
+  const mode = await setClaudeAllowedPermissionMode(session, claudeBuildPermissionMode(session))
+  session.appliedInputOptions.set('buildPermissionMode', mode)
+  return mode
 }
 
 async function approvePlan(
@@ -128,32 +161,31 @@ describe('leaving Plan mode after an approved plan', () => {
     expect(setPermissionMode).toHaveBeenCalledTimes(1)
   })
 
-  it('asks for auto again after Claude refused it only for now', async () => {
-    let unknownYet = true
-    const setPermissionMode = vi.fn((mode: string) =>
-      mode === 'auto' && unknownYet
-        ? Promise.reject(
-            new Error(
-              'Cannot set permission mode to auto: auto mode availability is not known yet · ask again'
-            )
-          )
-        : Promise.resolve()
-    )
-    const session: {
-      launchIntent: { permissionMode: string }
-      firstRootInit: { permissionMode: string }
-      bypassDisabled: boolean
-      autoDisabled?: boolean
-      connection: { setPermissionMode: typeof setPermissionMode }
-    } = {
+  it('asks for auto again on each send after Claude refused it only for now', async () => {
+    const auto = autoForNow()
+    const session = {
       launchIntent: { permissionMode: 'bypassPermissions' },
       firstRootInit: { permissionMode: 'default' },
       bypassDisabled: true,
-      connection: { setPermissionMode }
+      appliedInputOptions: new Map<string, string>(),
+      connection: { setPermissionMode: auto.setPermissionMode }
     }
-    expect(await setClaudeAllowedPermissionMode(session, 'bypassPermissions')).toBe('default')
-    expect(session.autoDisabled).toBeUndefined()
-    unknownYet = false
-    expect(await setClaudeAllowedPermissionMode(session, 'bypassPermissions')).toBe('auto')
+    expect(await send(session)).toBe('default')
+    expect(await send(session)).toBe('default')
+    auto.available = true
+    expect(await send(session)).toBe('auto')
+  })
+
+  it('keeps asking for Approve for me when the chat chose it and Claude refused it only for now', async () => {
+    const auto = autoForNow()
+    const session = {
+      launchIntent: { permissionMode: 'auto' },
+      firstRootInit: { permissionMode: 'auto' },
+      appliedInputOptions: new Map<string, string>(),
+      connection: { setPermissionMode: auto.setPermissionMode }
+    }
+    await expect(send(session)).rejects.toThrow('auto mode is not available for this model')
+    auto.available = true
+    expect(await send(session)).toBe('auto')
   })
 })
