@@ -164,6 +164,7 @@ async function drain(): Promise<void> {
   )
   const close = pending.find((request) => request.command.type === 'close')
   const database = db
+  let retried = false
   if (writes.length > 0 && database && batch && commands) {
     const context: JournalSqlWriteContext = {
       database,
@@ -177,12 +178,11 @@ async function drain(): Promise<void> {
             JSON.stringify(legacyDestinationIdentity(workerData.filename)))
     }
     let { responses, rolledBack } = await runWrites(context, batch, writes, urgent)
-    // A whole-transaction failure (a full disk) reruns each chat's write alone, so only its cause fails.
+    // A whole-transaction failure (a full disk) sends each write back alone, so only its cause fails.
     if (rolledBack && writes.length > 1) {
+      queue.retryAlone(writes)
+      retried = true
       responses = []
-      for (const request of writes) {
-        responses.push(...(await runWrites(context, batch, [request], urgent)).responses)
-      }
     }
     const runMs = performance.now() - startedAt - gate.ms
     const walFrames = checkpoint?.log ?? 0
@@ -202,7 +202,7 @@ async function drain(): Promise<void> {
     }
     gate.ms = 0
   }
-  for (const request of pending) {
+  for (const request of retried ? [] : pending) {
     clock.forget(request.id)
   }
   if (close) {
