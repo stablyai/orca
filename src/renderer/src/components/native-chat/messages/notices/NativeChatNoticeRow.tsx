@@ -61,7 +61,7 @@ import { structuredAgentSessionHostPlace } from '../../pane/ownership/use-struct
 import { sayAgentSessionFailureTranslated } from './agent-session-failure-words-text'
 import { NativeChatTranscriptSignInNotice } from '../../host-access/NativeChatSignInRow'
 import { nativeChatSignInHostWords } from '../../host-access/native-chat-sign-in-notice'
-import { NativeChatAntigravityAuthRecovery } from '../../antigravity-auth/NativeChatAntigravityAuthRecovery'
+import { NativeChatNoticeAuthRecovery } from '../../antigravity-auth/NativeChatAntigravityAuthRecovery'
 
 const HOST_STATUS_WORDS: Record<AgentSessionHostStatusPresentation, () => string> = {
   'history-repaired': () =>
@@ -319,33 +319,18 @@ export function NativeChatNoticeRow({
             )
           : (agentSessionRestartNoteText(block.text, t) ?? agentSessionGoalControlWords(block.text))
   const failureDetail = agentSessionFailureDetailText(failure)
-  const authRecovery = block.orcaStop === undefined && (
-    <NativeChatAntigravityAuthRecovery
-      agentName={agentName}
-      failureKind={failure?.kind}
-      account={failure?.account}
-      problem={
-        failure !== undefined ||
-        (look.kind === 'line' && (look.tone === 'error' || look.tone === 'warning'))
-      }
-      text={[block.text, failureDetail].filter(Boolean).join('\n')}
-    />
-  )
   if (block.orcaStop === undefined && failure?.kind === 'usageLimitReached') {
     return (
-      <div className="space-y-2">
-        <NativeChatUsageLimitRow
-          block={block}
-          failure={failure}
-          agentName={agentName}
-          detail={failureDetail?.trim() ? failureDetail : undefined}
-          active={
-            block.usageLimitTurnItemId !== undefined &&
-            block.usageLimitTurnItemId === orcaStopView.usageLimitTurnItemId
-          }
-        />
-        {authRecovery}
-      </div>
+      <NativeChatUsageLimitRow
+        block={block}
+        failure={failure}
+        agentName={agentName}
+        detail={failureDetail?.trim() ? failureDetail : undefined}
+        active={
+          block.usageLimitTurnItemId !== undefined &&
+          block.usageLimitTurnItemId === orcaStopView.usageLimitTurnItemId
+        }
+      />
     )
   }
   const detail = failureDetail?.trim() !== text.trim() ? failureDetail : undefined
@@ -382,7 +367,7 @@ export function NativeChatNoticeRow({
         ) : null}
       </div>
       <NativeChatSetupButton failureKind={block.failure?.kind} rowId={messageId} />
-      {resolved ? null : authRecovery}
+      {resolved ? null : <NativeChatNoticeAuthRecovery block={block} agentName={agentName} />}
       {details}
     </div>
   )

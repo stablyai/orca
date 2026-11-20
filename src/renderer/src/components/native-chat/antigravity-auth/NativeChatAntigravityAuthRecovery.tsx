@@ -1,6 +1,10 @@
 import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
 import { agentSessionSetupFor } from '../../../../../shared/agent-session/lifecycle/launch/agent-session-setup-commands'
+import { agentSessionFailureDetailText } from '../../../../../shared/agent-session/failures/agent-session-failure-quoted-detail'
+import { readWholeAgentSessionFailureFact } from '../../../../../shared/agent-session/failures/agent-session-failure'
+import type { NativeChatTextBlock } from '../../../../../shared/native-chat/native-chat-types'
+import { nativeChatNoticeLook } from '../../../../../shared/native-chat/transcript/notices/native-chat-notice'
 import { useNativeChatAntigravityAuth } from './native-chat-antigravity-auth'
 import {
   antigravityAuthFailureReason,
@@ -21,6 +25,35 @@ const GOOGLE_ONLY: ReadonlySet<AntigravityAuthFailureReason> = new Set([
 ])
 // The row already says these in its own words.
 const ROW_SAYS_IT: ReadonlySet<AntigravityAuthFailureReason> = new Set(['signedOut', 'usageLimit'])
+
+/** A transcript notice's offer: Orca's own stop rows never offer one. */
+export function NativeChatNoticeAuthRecovery({
+  block,
+  agentName
+}: {
+  block: NativeChatTextBlock
+  agentName: string | undefined
+}): React.JSX.Element | null {
+  if (block.orcaStop !== undefined) {
+    return null
+  }
+  const failure = readWholeAgentSessionFailureFact(block.failure)
+  const look = nativeChatNoticeLook(block)
+  return (
+    <NativeChatAntigravityAuthRecovery
+      agentName={agentName}
+      failureKind={failure?.kind}
+      account={failure?.account}
+      problem={
+        failure !== undefined ||
+        (look.kind === 'line' && (look.tone === 'error' || look.tone === 'warning'))
+      }
+      text={[block.text, agentSessionFailureDetailText(failure), block.providerFrame?.payload?.head]
+        .filter(Boolean)
+        .join('\n')}
+    />
+  )
+}
 
 /** Under an Antigravity failure another sign-in method gets around: says why, offers the switch. */
 export function NativeChatAntigravityAuthRecovery({
