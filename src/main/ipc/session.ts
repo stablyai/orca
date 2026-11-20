@@ -120,8 +120,13 @@ export function registerSessionHandlers(store: Store, runtime: OrcaRuntimeServic
       relays && !ORCA_LAYOUT_OWNER_IS_MAIN
         ? relayApplier([relayHostId])(relayHostId, relays, { ...stored, ...save })
         : null
-    const relayStatus =
-      applied && (applied.refused ? 'refused' : applied.patch ? 'applied' : 'unchanged')
+    const relayStatus: WorkspaceSessionEntriesPatchResult['relays'] = !applied
+      ? undefined
+      : applied.refused
+        ? 'refused'
+        : applied.patch
+          ? 'applied'
+          : 'unchanged'
     const withRelays = relayStatus ? { relays: relayStatus } : {}
     if (!ORCA_LAYOUT_OWNER_IS_MAIN && isNoopWindowSessionPatch(stored, save)) {
       if (applied?.patch) {

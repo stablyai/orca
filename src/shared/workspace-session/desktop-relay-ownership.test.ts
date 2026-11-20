@@ -9,9 +9,10 @@ import type { WorkspaceSessionState } from './workspace-session-state-types'
 
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the relay rules read tab ids and the two relay fields.
 const partition = (fields: Partial<WorkspaceSessionState>) => fields as WorkspaceSessionState
-// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the relay rules read tab ids only.
-const rows = (...ids: string[]) =>
-  ({ 'repo::/w': ids.map((id) => ({ id })) }) as WorkspaceSessionState['tabsByWorktree']
+const rows = (...ids: string[]): WorkspaceSessionState['tabsByWorktree'] => ({
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the relay rules read tab ids only.
+  'repo::/w': ids.map((id) => ({ id })) as WorkspaceSessionState['tabsByWorktree'][string]
+})
 const withTabs = (...ids: string[]) => partition({ tabsByWorktree: rows(...ids) })
 
 function save(
