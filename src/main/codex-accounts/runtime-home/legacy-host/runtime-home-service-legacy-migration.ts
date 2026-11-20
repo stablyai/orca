@@ -24,6 +24,8 @@ import {
   type LegacyHistoryState
 } from './legacy-history-migration'
 
+type LegacySessionConflict = { legacyFilePath: string; runtimeFilePath: string; accountId: string }
+
 type LegacyMigrationMarker = { completedAt: number; migratedHomeCount: number }
 
 export abstract class CodexRuntimeHomeLegacyMigration extends CodexRuntimeHomePaths {
@@ -93,20 +95,36 @@ export abstract class CodexRuntimeHomeLegacyMigration extends CodexRuntimeHomePa
     }
   }
 
+  /**
+   * Copies the sessions, then keeps each one that conflicts with a runtime file beside it, then
+   * marks the migration done. The conflict copies wait until every account's sessions copied: a
+   * pass that fails adds none, so disk stays flat while a failure persists, and the pass that
+   * succeeds keeps each conflict's latest bytes.
+   */
   protected migrateLegacySessionsAndMarkDone(
     historyStatePath: string,
     state: LegacyHistoryState
   ): void {
-    // A retry never adds a second preserved copy, so disk stays flat while a failure persists.
-    const retry = (state.sessionPassAttempts ?? 0) > 0
     const managedHomes = this.getLegacyManagedHomes()
     try {
+      const conflicts: LegacySessionConflict[] = []
       for (const managedHomePath of managedHomes) {
         const accountId = parse(relative(this.getManagedAccountsRoot(), managedHomePath)).dir.split(
           /[\\/]/
         )[0]
         if (accountId) {
-          this.migrateLegacySessions(managedHomePath, accountId, retry)
+          this.migrateLegacySessions(managedHomePath, accountId, conflicts)
+        }
+      }
+      for (const conflict of conflicts) {
+        const preserved = this.preserveLegacySessionConflict(conflict)
+        if (preserved.copied) {
+          this.appendMigrationDiagnostic({
+            type: 'session-conflict',
+            accountId: conflict.accountId,
+            runtimeFilePath: conflict.runtimeFilePath,
+            preservedPath: preserved.path
+          })
         }
       }
     } catch (error) {
@@ -148,7 +166,12 @@ export abstract class CodexRuntimeHomeLegacyMigration extends CodexRuntimeHomePa
     return managedHomes.sort()
   }
 
-  protected migrateLegacySessions(managedHomePath: string, accountId: string, retry = false): void {
+  // Copies each session into a free runtime name; one whose name holds other bytes is collected.
+  protected migrateLegacySessions(
+    managedHomePath: string,
+    accountId: string,
+    conflicts: LegacySessionConflict[] = []
+  ): void {
     const legacySessionsRoot = join(managedHomePath, 'sessions')
     if (!existsSync(legacySessionsRoot)) {
       return
@@ -160,47 +183,31 @@ export abstract class CodexRuntimeHomeLegacyMigration extends CodexRuntimeHomePa
       const relativePath = relative(legacySessionsRoot, legacyFilePath)
       const runtimeFilePath = join(runtimeSessionsRoot, relativePath)
       mkdirSync(dirname(runtimeFilePath), { recursive: true })
-      const copy = this.copyLegacyFilePreservingConflicts(
-        legacyFilePath,
-        runtimeFilePath,
-        accountId,
-        retry
-      )
-      if (copy.preserved) {
-        this.appendMigrationDiagnostic({
-          type: 'session-conflict',
-          accountId,
-          runtimeFilePath,
-          preservedPath: copy.path
-        })
+      let legacyContents: Buffer | null = null
+      const readLegacy = (): Buffer => (legacyContents ??= readFileSync(legacyFilePath))
+      if (
+        this.copyLegacyFileWithoutOverwrite(legacyFilePath, runtimeFilePath, readLegacy) ===
+        'conflict'
+      ) {
+        conflicts.push({ legacyFilePath, runtimeFilePath, accountId })
       }
     }
   }
 
-  /**
-   * Copies to `targetPath` unless it already holds these bytes; when it holds others, copies beside
-   * it under the next free preserved name. A retry stops at a taken preserved name instead: an
-   * earlier attempt already kept a copy, and the source stays in its account home. Returns where
-   * the legacy bytes now are.
-   */
-  protected copyLegacyFilePreservingConflicts(
-    legacyFilePath: string,
-    targetPath: string,
-    accountId: string,
-    retry = false
-  ): { path: string; preserved: boolean } {
+  // Copies beside the runtime file under the next free preserved name, or stops at one already
+  // holding these bytes. Never replaces or writes through a name.
+  protected preserveLegacySessionConflict(conflict: LegacySessionConflict): {
+    path: string
+    copied: boolean
+  } {
+    const { legacyFilePath, runtimeFilePath, accountId } = conflict
     let legacyContents: Buffer | null = null
     const readLegacy = (): Buffer => (legacyContents ??= readFileSync(legacyFilePath))
-    if (
-      this.copyLegacyFileWithoutOverwrite(legacyFilePath, targetPath, readLegacy) !== 'conflict'
-    ) {
-      return { path: targetPath, preserved: false }
-    }
     for (let attempt = 0; ; attempt++) {
-      const preservedPath = this.getPreservedLegacySessionPath(targetPath, accountId, attempt)
-      const result = this.copyLegacyFileWithoutOverwrite(legacyFilePath, preservedPath, readLegacy)
-      if (result !== 'conflict' || retry) {
-        return { path: preservedPath, preserved: result === 'copied' }
+      const path = this.getPreservedLegacySessionPath(runtimeFilePath, accountId, attempt)
+      const result = this.copyLegacyFileWithoutOverwrite(legacyFilePath, path, readLegacy)
+      if (result !== 'conflict') {
+        return { path, copied: result === 'copied' }
       }
     }
   }

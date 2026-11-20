@@ -270,7 +270,7 @@ describe('CodexRuntimeHomeService', () => {
     expect(existsSync(migrationMarkerPath())).toBe(false)
   })
 
-  it('adds no second preserved copy when a retried session pass meets a changed session', async () => {
+  it('keeps no conflict copy while a session pass fails, then the latest bytes once it succeeds', async () => {
     const runtimeSessionsDir = join(getRuntimeCodexHomePath(), 'sessions')
     mkdirSync(runtimeSessionsDir, { recursive: true })
     writeFileSync(join(runtimeSessionsDir, 'session.json'), '{"runtime":1}', 'utf-8')
@@ -281,15 +281,19 @@ describe('CodexRuntimeHomeService', () => {
     await constructService()
     await waitForImportOutcomes(['imported'])
     writeFileSync(join(managedHomePath, 'sessions', 'session.json'), '{"legacy":2}', 'utf-8')
-
     vi.resetModules()
     await constructService()
 
-    expect(readdirSync(runtimeSessionsDir).sort()).toEqual([
-      'nested',
-      'session.json',
-      'session.orca-legacy-account-1.json'
-    ])
+    expect(readdirSync(runtimeSessionsDir).sort()).toEqual(['nested', 'session.json'])
+
+    rmSync(join(runtimeSessionsDir, 'nested'))
+    vi.resetModules()
+    await constructService()
+
+    expect(
+      readFileSync(join(runtimeSessionsDir, 'session.orca-legacy-account-1.json'), 'utf-8')
+    ).toBe('{"legacy":2}')
+    expect(existsSync(migrationMarkerPath())).toBe(true)
   })
 
   it('removes the copy an interrupted import left behind', async () => {
