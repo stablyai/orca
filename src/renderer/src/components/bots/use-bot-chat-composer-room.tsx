@@ -34,10 +34,11 @@ import { botMentionServer } from './bot-mention-server'
 
 /** `@` lists the owner's bots above files, each with what it is for, sent as `[Bot: <name>](bot:<id>)`
  *  so the host tells the agent how to ask them; in a bot's own chat that bot comes first, for its other
- *  chats, where chats can be picked. A chat on this computer lists its paired servers' bots too, after
- *  its own, with the server's pill, named `(bot:<id>@<server>)`, which this computer reaches with
- *  `--on`; a server that is down dims its bots in place. A chat on a server lists only that server's.
- *  Paused bots show but can't be picked. */
+ *  chats, where chats can be picked. Every chat lists this computer's and its paired servers' bots too,
+ *  after its own host's, with the host's pill; a server's are named `(bot:<id>@<server>)`, which this
+ *  computer reaches with `--on`, and a server that is down dims its bots in place; a server's chat
+ *  can't reach other hosts yet, so it names theirs without asking them. Paused bots show but can't be
+ *  picked. */
 export function useBotChatComposerRoom(
   workspaceId: string | undefined,
   hostId: ExecutionHostId | null,
