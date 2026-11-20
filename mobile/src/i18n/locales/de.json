@@ -2020,6 +2020,8 @@
       "sendFailed": "Befehl zum Fortsetzen konnte nicht gesendet werden."
     },
     "aiVaultResumePreparation": {
+      "openInChat": "Diese Unterhaltung mit {{agent}} ist in einem Chat geöffnet. Den Sitzungsverlauf aktualisieren, um sie zu öffnen.",
+      "ownershipUnknown": "Orca konnte nicht bestätigen, wem diese {{agent}}-Unterhaltung gehört. Den Sitzungsverlauf aktualisieren und erneut versuchen.",
       "prepareFailed": "Diese ältere Codex-Sitzung konnte nicht vorbereitet werden. Erneut versuchen, die Sitzung fortzusetzen."
     },
     "backgroundTask": {

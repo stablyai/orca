@@ -1,10 +1,13 @@
-import type { AiVaultSession } from '../../../src/shared/ai-vault/contracts/ai-vault-types'
 import {
-  isAiVaultPrepareSessionResumeUnavailableError,
-  isLegacySharedCodexHome,
-  isPerAccountManagedCodexHome
+  aiVaultAgentLabel,
+  type AiVaultSession
+} from '../../../src/shared/ai-vault/contracts/ai-vault-types'
+import {
+  aiVaultSessionAfterResumePreparation,
+  aiVaultSessionNeedsResumePreparation,
+  aiVaultTerminalResumeRequest,
+  isAiVaultPrepareSessionResumeUnavailableError
 } from '../../../src/shared/ai-vault/resume/ai-vault-resume-preparation'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../src/shared/execution-host/execution-host'
 import { aiVaultResumePreparationRun } from './mobile-ai-vault-resume-operations'
 import type { UnvalidatedRpcRequestPort } from '../transport/rpc/unvalidated-rpc-request-port'
 import { translate } from '../i18n/mobile-i18n'
@@ -13,29 +16,20 @@ import { translate } from '../i18n/mobile-i18n'
 // on the reconnect waiter for the full reconnect budget, pinning the spinner.
 export const RESUME_RPC_TIMEOUT_MS = 30_000
 
+/** Every terminal resume asks the host first, as desktop does: it refuses a conversation a chat now holds. */
 export async function prepareMobileAiVaultSessionResume(
   client: UnvalidatedRpcRequestPort,
   session: AiVaultSession
 ): Promise<AiVaultSession> {
-  // Why: per-account repinning runs on the serving host, whose account
-  // selection only applies to that host's own ("local") sessions.
-  const needsAccountRepin =
-    isPerAccountManagedCodexHome(session.codexHome) &&
-    (!session.executionHostId || session.executionHostId === LOCAL_EXECUTION_HOST_ID)
-  if (
-    session.agent !== 'codex' ||
-    (!isLegacySharedCodexHome(session.codexHome) && !needsAccountRepin)
-  ) {
-    return session
-  }
   const response = await aiVaultResumePreparationRun.request(
     client,
-    {
+    aiVaultTerminalResumeRequest({
       agent: session.agent,
+      ...(session.sessionId ? { sessionId: session.sessionId } : {}),
       filePath: session.filePath,
       codexHome: session.codexHome,
       executionHostId: session.executionHostId
-    },
+    }),
     { timeoutMs: RESUME_RPC_TIMEOUT_MS }
   )
   if (!response.ok) {
@@ -43,21 +37,42 @@ export async function prepareMobileAiVaultSessionResume(
       // Why: older hosts cannot prepare, but their shared home still supports the legacy resume path.
       return session
     }
-    throw new Error(
-      response.error?.message ||
-        translate(
-          'session.aiVaultResumePreparation.prepareFailed',
-          'Could not prepare this legacy Codex session. Retry resume.'
-        )
-    )
+    throw new Error(resumeRefusalMessage(response.error, session.agent))
+  }
+  // Why: old resumes kept the recorded home for sessions that need no readying.
+  if (!aiVaultSessionNeedsResumePreparation(session)) {
+    return session
   }
   const result = aiVaultResumePreparationRun.interpret(response)
-  if (result?.useRealCodexHome === true) {
-    return { ...session, codexHome: null }
+  return aiVaultSessionAfterResumePreparation(session, {
+    useRealCodexHome: result?.useRealCodexHome === true,
+    substituteCodexHome: result?.substituteCodexHome
+  })
+}
+
+function resumeRefusalMessage(
+  error: { code: string; message: string },
+  agent: AiVaultSession['agent']
+): string {
+  if (error.code === 'agent_session_conflict') {
+    return translate(
+      'session.aiVaultResumePreparation.openInChat',
+      'This {{agent}} conversation is open in a chat. Refresh Session History to open it.',
+      { agent: aiVaultAgentLabel(agent) }
+    )
   }
-  // Why: older hosts never send a repin home, so absence keeps the session's own home.
-  if (result?.substituteCodexHome) {
-    return { ...session, codexHome: result.substituteCodexHome }
+  if (error.code === 'agent_session_ownership_unknown') {
+    return translate(
+      'session.aiVaultResumePreparation.ownershipUnknown',
+      'Orca could not confirm who owns this {{agent}} conversation. Refresh Session History and try again.',
+      { agent: aiVaultAgentLabel(agent) }
+    )
   }
-  return session
+  return (
+    error.message ||
+    translate(
+      'session.aiVaultResumePreparation.prepareFailed',
+      'Could not prepare this legacy Codex session. Retry resume.'
+    )
+  )
 }

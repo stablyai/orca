@@ -2077,6 +2077,8 @@
       "sendFailed": "Impossible d'envoyer la commande de reprise"
     },
     "aiVaultResumePreparation": {
+      "openInChat": "Cette conversation {{agent}} est ouverte dans un chat. Actualisez l'historique des sessions pour l'ouvrir.",
+      "ownershipUnknown": "Orca n'a pas pu confirmer à qui appartient cette conversation {{agent}}. Actualisez l'historique des sessions et réessayez.",
       "prepareFailed": "Impossible de préparer cette ancienne session Codex. Réessayez de la reprendre."
     },
     "backgroundTask": {

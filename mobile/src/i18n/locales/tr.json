@@ -2020,6 +2020,8 @@
       "sendFailed": "Sürdürme komutu gönderilemedi"
     },
     "aiVaultResumePreparation": {
+      "openInChat": "Bu {{agent}} konuşması bir sohbette açık. Açmak için Oturum Geçmişi'ni yenileyin.",
+      "ownershipUnknown": "Orca, bu {{agent}} konuşmasının kime ait olduğunu doğrulayamadı. Oturum Geçmişi'ni yenileyip tekrar deneyin.",
       "prepareFailed": "Bu eski Codex oturumu hazırlanamadı. Oturumu sürdürmeyi yeniden deneyin."
     },
     "backgroundTask": {

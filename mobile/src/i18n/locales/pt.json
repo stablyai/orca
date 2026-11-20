@@ -2421,6 +2421,8 @@
       "sendFailed": "Falha ao enviar comando de retomada"
     },
     "aiVaultResumePreparation": {
+      "openInChat": "Esta conversa de {{agent}} está aberta em um chat. Atualize o Histórico de sessões para abri-la.",
+      "ownershipUnknown": "O Orca não conseguiu confirmar quem é o proprietário desta conversa de {{agent}}. Atualize o Histórico de sessões e tente novamente.",
       "prepareFailed": "Não foi possível preparar esta sessão legada do Codex. Tente retomar novamente."
     },
     "backgroundTask": {
