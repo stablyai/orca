@@ -2,20 +2,37 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   closeSync,
   existsSync,
-  linkSync,
   lstatSync,
   mkdirSync,
   mkdtempSync,
   openSync,
   readFileSync,
+  renameSync,
   rmSync,
+  truncateSync,
   writeFileSync,
   writeSync
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
+import type * as NodeFsPromises from 'node:fs/promises'
 import { syncSystemCodexSessionsIntoManagedHomeIncrementally } from './codex-session-bridge'
 import { prepareLegacySharedCodexSessionResume } from '../resume/codex-legacy-session-resume'
+
+const renameHook = vi.hoisted(() => ({ beforeAside: null as (() => void) | null }))
+
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof NodeFsPromises>()
+  return {
+    ...actual,
+    rename: async (from: string, to: string) => {
+      if (String(to).endsWith('.orca-legacy-copy')) {
+        renameHook.beforeAside?.()
+      }
+      return actual.rename(from, to)
+    }
+  }
+})
 
 const THREAD_ID = '0199a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b'
 const RELATIVE_PATH = join('2026', '05', '20', `rollout-2026-05-20T10-00-00-${THREAD_ID}.jsonl`)
@@ -66,8 +83,9 @@ beforeEach(() => {
   sourcePath = join(systemHome, 'sessions', RELATIVE_PATH)
   copyPath = join(runtimeHome(), 'sessions', RELATIVE_PATH)
   markerPath = join(runtimeHome(), '.orca-session-copies', `${RELATIVE_PATH}.json`)
-  // A Codex that keeps thread-writer locks, with none held.
-  mkdirSync(join(systemHome, 'thread-writer-locks'), { recursive: true })
+  renameHook.beforeAside = null
+  // A Codex that keeps thread-writer locks ran in the copy's home, and holds none now.
+  mkdirSync(join(runtimeHome(), 'thread-writer-locks'), { recursive: true })
 })
 
 afterEach(() => {
@@ -101,31 +119,91 @@ describe('legacy session copy swap', () => {
 
     expect(readFileSync(copyPath, 'utf-8')).toBe(OLD_TURNS)
     expect(lstatSync(copyPath).ino).not.toBe(lstatSync(sourcePath).ino)
-    expect(existsSync(markerPath)).toBe(false)
-    expect(existsSync(`${markerPath}.kept`)).toBe(true)
     expect(existsSync(`${copyPath}.orca-legacy-copy`)).toBe(false)
+    // Older builds match the source by its exact path, so they skip this marker too.
+    const kept = JSON.parse(readFileSync(markerPath, 'utf-8'))
+    expect(kept.kept).toBe(true)
+    expect(kept.sourcePath).not.toBe(sourcePath)
+    expect(lstatSync(kept.sourcePath).ino).toBe(lstatSync(sourcePath).ino)
   })
 
-  it('leaves a copy alone while a Codex holds its thread lock', async () => {
+  it('lets later copies through when an earlier copy can never be linked', async () => {
+    const blockedRelative = join(
+      '2026',
+      '05',
+      '19',
+      `rollout-2026-05-19T10-00-00-${THREAD_ID}.jsonl`
+    )
+    const blockedSource = join(systemHome, 'sessions', blockedRelative)
+    const blockedCopy = join(runtimeHome(), 'sessions', blockedRelative)
+    writeFile(blockedSource, OLD_TURNS)
+    writeFile(blockedCopy, OLD_TURNS)
+    // As large as a whole pass may read, with its aside name held by an unrelated file.
+    truncateSync(blockedCopy, 64 * 1024 * 1024)
+    truncateSync(blockedSource, 64 * 1024 * 1024)
+    writeFile(`${blockedCopy}.orca-legacy-copy`, 'unrelated')
+    const blocked = lstatSync(blockedCopy)
+    writeFile(
+      join(runtimeHome(), '.orca-session-copies', `${blockedRelative}.json`),
+      JSON.stringify({
+        sourcePath: blockedSource,
+        sourceSize: blocked.size,
+        sourceMtimeMs: lstatSync(blockedSource).mtimeMs,
+        targetSize: blocked.size,
+        targetMtimeMs: blocked.mtimeMs
+      })
+    )
     legacyCopy(OLD_TURNS + NEW_TURNS, OLD_TURNS)
-    writeFile(join(systemHome, 'thread-writer-locks', `${THREAD_ID}.lock`), '')
+
+    await bridgePass()
+
+    expect(lstatSync(copyPath).ino).toBe(lstatSync(sourcePath).ino)
+    expect(lstatSync(blockedCopy).ino).not.toBe(lstatSync(blockedSource).ino)
+  })
+
+  it('leaves a copy alone while a Codex holds its thread lock, and hides it from older builds', async () => {
+    legacyCopy(OLD_TURNS + NEW_TURNS, OLD_TURNS)
+    writeFile(join(runtimeHome(), 'thread-writer-locks', `${THREAD_ID}.lock`), '')
 
     await bridgePass()
 
     expect(lstatSync(copyPath).ino).not.toBe(lstatSync(sourcePath).ino)
-    expect(existsSync(markerPath)).toBe(true)
+    // Older builds match the source by its exact path and would swap this copy destructively.
+    expect(JSON.parse(readFileSync(markerPath, 'utf-8')).sourcePath).not.toBe(sourcePath)
   })
 
-  it('finishes a swap that stopped after linking both spare names', async () => {
+  it('takes no proof of an idle copy from the source home', async () => {
+    rmSync(join(runtimeHome(), 'thread-writer-locks'), { recursive: true })
+    mkdirSync(join(systemHome, 'thread-writer-locks'), { recursive: true })
     legacyCopy(OLD_TURNS + NEW_TURNS, OLD_TURNS)
-    linkSync(copyPath, `${copyPath}.orca-legacy-copy`)
-    linkSync(sourcePath, `${copyPath}.orca-legacy-link`)
+
+    await bridgePass()
+
+    expect(lstatSync(copyPath).ino).not.toBe(lstatSync(sourcePath).ino)
+    expect(readFileSync(copyPath, 'utf-8')).toBe(OLD_TURNS)
+  })
+
+  it('never renames over a rollout that replaced the copy in the last moment', async () => {
+    legacyCopy(OLD_TURNS + NEW_TURNS, OLD_TURNS)
+    renameHook.beforeAside = () => {
+      writeFileSync(`${copyPath}.new`, '{"rewritten":true}\n')
+      renameSync(`${copyPath}.new`, copyPath)
+    }
+
+    await bridgePass()
+
+    expect(readFileSync(copyPath, 'utf-8')).toBe('{"rewritten":true}\n')
+    expect(existsSync(`${copyPath}.orca-legacy-copy`)).toBe(false)
+  })
+
+  it('finishes a swap that stopped after moving the copy aside', async () => {
+    legacyCopy(OLD_TURNS + NEW_TURNS, OLD_TURNS)
+    renameSync(copyPath, `${copyPath}.orca-legacy-copy`)
 
     await bridgePass()
 
     expect(lstatSync(copyPath).ino).toBe(lstatSync(sourcePath).ino)
     expect(readFileSync(`${copyPath}.orca-legacy-copy`, 'utf-8')).toBe(OLD_TURNS)
-    expect(existsSync(`${copyPath}.orca-legacy-link`)).toBe(false)
     expect(existsSync(markerPath)).toBe(false)
   })
 

@@ -7,7 +7,7 @@ import {
   renameSync,
   rmSync
 } from 'node:fs'
-import { dirname, isAbsolute, join, relative, sep } from 'node:path'
+import { dirname, isAbsolute, join, normalize, relative, sep } from 'node:path'
 import {
   getOrcaManagedCodexHomePath,
   getSystemCodexHomePath
@@ -15,12 +15,12 @@ import {
 import { listCodexSessionJsonlFilesIncrementally } from '../rollouts/codex-session-file-listing'
 import { linkCodexSessionFile, tryHardlinkCodexSessionFile } from '../rollouts/codex-session-link'
 import type { CodexSessionBridgeIncrementalOptions } from '../rollouts/codex-session-file-listing'
+import { swapLegacySessionCopy } from './codex-legacy-session-copy'
 import {
   legacySessionCopyMarkerPath,
   parseLegacyCopiedSessionMarker,
-  swapLegacySessionCopy,
   type LegacyCopiedSessionMarker
-} from './codex-legacy-session-copy'
+} from './codex-legacy-session-copy-marker'
 
 // Legacy copies a background pass may read to check them against their sources.
 const LEGACY_COPY_READ_BUDGET_BYTES = 64 * 1024 * 1024
@@ -199,7 +199,8 @@ export function getLegacyCopiedCodexSessionBridgeScanPreference(
   } catch {}
 
   return {
-    sourcePath: marker.sourcePath,
+    // Kept markers spell the source with `/./`; skip-byte lookups key on the listed spelling.
+    sourcePath: normalize(marker.sourcePath),
     // Legacy copies share a prefix with their source; scan one full log until they become linked.
     preferManagedCopy: !targetMatchesMarker || sourceMatchesMarker,
     sourceSkipBytes: !targetMatchesMarker && !sourceMatchesMarker ? marker.sourceSize : null

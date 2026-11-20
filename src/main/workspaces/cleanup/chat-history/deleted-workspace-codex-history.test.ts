@@ -86,7 +86,6 @@ describe('sweepDeletedWorkspaceChatHistory with Codex rollouts', () => {
         join(managed, ...DATED, `${NAME('1')}.orca-legacy-copy`),
         rollout(gone, [gone])
       )
-      const keptMarker = write(`${marker}.kept`, '{}')
 
       // Codex compressed the account's copy, breaking the link, and that copy was resumed in `live`.
       const resumed = write(join(system, ...DATED, NAME('2')), rollout(gone, [gone]))
@@ -181,7 +180,6 @@ describe('sweepDeletedWorkspaceChatHistory with Codex rollouts', () => {
           join(managed, ...DATED, `${NAME('1')}.zst`),
           marker,
           aside,
-          keptMarker,
           packedOnly,
           packedLink,
           reverted
