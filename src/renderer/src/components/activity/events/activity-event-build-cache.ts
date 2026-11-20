@@ -20,6 +20,7 @@ import {
   type ActivityTabHostIndex
 } from './activity-event-builder-context'
 import type { BuildActivityEventsArgs } from './activity-event-builder'
+import { KeyedRebuildPlan } from '../../../../../shared/collections/keyed-rebuild-plan'
 
 type ActivityTabInputs = Pick<
   BuildActivityEventsArgs,
@@ -44,13 +45,29 @@ type PaneActivityCacheEntry = {
   rowEntry: AgentStatusEntry
 }
 
+export type PaneBuild = {
+  events: ActivityEvent[]
+  live: ActivityLiveAgentSnapshot | null
+  rowEntry: AgentStatusEntry
+}
+
 export type ActivityEventBuildCache = {
   panes: Map<string, PaneActivityCacheEntry>
   tabs?: ActivityTabIndexes
+  /** Each accepted status's last outcome; null when it had no tab to attribute. */
+  live: Map<string, { entry: AgentStatusEntry; build: PaneBuild | null }>
+  plan: KeyedRebuildPlan
 }
 
 export function createActivityEventBuildCache(): ActivityEventBuildCache {
-  return { panes: new Map() }
+  return { panes: new Map(), live: new Map(), plan: new KeyedRebuildPlan() }
+}
+
+export function resetActivityEventBuildCache(cache: ActivityEventBuildCache): void {
+  cache.panes.clear()
+  cache.tabs = undefined
+  cache.live.clear()
+  cache.plan.reset()
 }
 
 export function resolveActivityTabIndexes(
@@ -106,7 +123,7 @@ export function resolvePaneBuild(
   request: PaneBuildRequest,
   cache: ActivityEventBuildCache | undefined,
   seenCacheKeys: Set<string> | null
-): { events: ActivityEvent[]; live: ActivityLiveAgentSnapshot | null; rowEntry: AgentStatusEntry } {
+): PaneBuild {
   seenCacheKeys?.add(request.cacheKey)
   const cached = cache?.panes.get(request.cacheKey)
   const inputsUnchanged =

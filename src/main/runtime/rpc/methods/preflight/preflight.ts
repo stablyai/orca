@@ -40,7 +40,7 @@ export const PREFLIGHT_METHODS = [
     name: 'preflight.check',
     permission: 'workspace',
     params: PreflightCheck,
-    handler: async (params) => runPreflightCheck(params.force)
+    handler: (params) => runPreflightCheck(params.force)
   }),
   defineMethod({
     name: 'preflight.detectAgents',

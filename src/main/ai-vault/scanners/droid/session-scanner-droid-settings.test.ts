@@ -91,8 +91,8 @@ async function scanDroid(
 }
 
 describe('droid settings sidecar', () => {
-  it('reads model and own token usage from the settings sidecar', async () => {
-    const { scanOptions, settingsPath } = await writeDroidSession()
+  it('reads model and own token usage and refreshes them after a turn', async () => {
+    const { scanOptions, transcriptPath, settingsPath } = await writeDroidSession()
     await writeSettings(settingsPath, {
       model: 'claude-opus-5-5',
       tokenUsage: {
@@ -107,19 +107,12 @@ describe('droid settings sidecar', () => {
       inclusiveTokenUsage: { inputTokens: 1_000_000 }
     })
 
-    const session = await scanDroid(scanOptions)
-
-    expect(session?.model).toBe('claude-opus-5-5')
-    expect(session?.totalTokens).toBe(100)
-  })
-
-  it('refreshes tokens when the transcript changes after a turn', async () => {
-    const { scanOptions, transcriptPath, settingsPath } = await writeDroidSession()
-    await writeSettings(settingsPath, { model: 'm1', tokenUsage: { inputTokens: 1 } })
-    await scanDroid(scanOptions)
+    const before = await scanDroid(scanOptions)
+    expect(before?.model).toBe('claude-opus-5-5')
+    expect(before?.totalTokens).toBe(100)
 
     await writeSettings(settingsPath, {
-      model: 'm1',
+      model: 'changed-model',
       tokenUsage: { inputTokens: 2, outputTokens: 3 }
     })
     await appendFile(
@@ -130,7 +123,7 @@ describe('droid settings sidecar', () => {
     await utimes(transcriptPath, later, later)
     const session = await scanDroid(scanOptions)
 
-    expect(session?.model).toBe('m1')
+    expect(session?.model).toBe('changed-model')
     expect(session?.totalTokens).toBe(5)
   })
 

@@ -941,12 +941,10 @@
       "dismissDrawer": "Alt paneli kapat"
     },
     "newWorkspaceSetupScriptField": {
-      "hooks": "HOOK'LAR",
       "label": "Kurulum betiği",
-      "run": "Çalıştır",
-      "runSetupCommand": "Kurulum komutunu çalıştır",
+      "runSetup": "Kurulumu çalıştır",
       "skip": "Atla",
-      "waitForSetup": "Ajanı başlatmadan önce setup'ın tamamlanmasını bekle",
+      "startAgentAfterSetup": "Ajanı kurulumdan sonra başlat",
       "waitForSetupSaveFailed": "Kurulum başlangıç davranışı kaydedilemedi."
     },
     "newWorkspaceSshConnectionField": {
@@ -1605,10 +1603,8 @@
   "host": {
     "edit": {
       "address": "Adres",
-      "addressHint": "IP, host:port veya ws:// / wss:// kabul edilir. Bağlantı noktası belirtilmeyen wss:// URL'lerinde 443 kullanılır. Yalnızca adres girilirse mevcut bağlantı noktası (veya 6768) korunur.",
       "connectionPreview": "Bağlanılacak adres: {{endpoint}}",
       "goBack": "Geri git",
-      "help": "Görünen adı veya bağlantı adresini değiştirin. Sunucunun bildirdiği adı kullanmak için ad alanını boş bırakın. Adres değişikliği yalnızca bu telefonun bağlandığı yeri değiştirir; yeniden eşleştirme yapmaz. Aynı sunucuya farklı bir IP adresinden erişilebildiğinde bunu kullanın (örneğin evdeki LAN veya Tailscale üzerinden).",
       "hostNamePlaceholder": "Sunucu adı",
       "hostRemoved": "Bu sunucu bu telefondan kaldırıldı.",
       "loadFailed": "Sunucu yüklenemedi.",
