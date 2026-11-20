@@ -63,6 +63,9 @@ async function readBoundedJsonRecord(
     if (cached?.mtimeMs === stats.mtimeMs && cached.size === stats.size) {
       return cached.parsed ?? undefined
     }
+    if (!wanted()) {
+      return undefined
+    }
     const { buffer, stats: readStats } = await readNodeFileWithinLimit(
       filePath,
       BRAIN_METADATA_MAX_BYTES,
@@ -114,13 +117,15 @@ export async function readAntigravityChildMetadata(
 }
 export async function readAntigravitySwarmMembers(
   brain: string,
-  cache: AntigravityBrainCache
+  cache: AntigravityBrainCache,
+  wanted: () => boolean = () => true
 ): Promise<ReadonlyMap<string, AntigravityChildMetadata> | undefined> {
   const record = await readBoundedJsonRecord(
     join(brain, '.system_generated', 'swarm', 'members.json'),
-    cache
+    cache,
+    wanted
   )
-  if (!record || !isRecord(record.members)) {
+  if (!record || !isRecord(record.members) || !wanted()) {
     return undefined
   }
   if (cache.swarm?.record === record) {

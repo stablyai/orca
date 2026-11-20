@@ -6,11 +6,13 @@ import { AgentHookServer } from '../../../agent-hook-server'
 import { makePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
 import { buildBody, postHookEvent } from '../../server.test-fixtures'
 import type * as BrainMetadata from '../../../../../../shared/agent-hook-listener/providers/antigravity/antigravity-brain-metadata'
+import type * as BoundedFileReader from '../../../../../../shared/file-content/node-bounded-file-reader'
 
 const reads = vi.hoisted(() => ({
   members: 0,
   finished: 0,
   descriptors: 0,
+  files: 0,
   released: Promise.resolve(),
   release: (): void => {}
 }))
@@ -40,6 +42,20 @@ vi.mock(
   }
 )
 
+vi.mock(
+  '../../../../../../shared/file-content/node-bounded-file-reader',
+  async (importOriginal) => {
+    const actual = await importOriginal<typeof BoundedFileReader>()
+    return {
+      ...actual,
+      readNodeFileWithinLimit: (...args: Parameters<typeof actual.readNodeFileWithinLimit>) => {
+        reads.files++
+        return actual.readNodeFileWithinLimit(...args)
+      }
+    }
+  }
+)
+
 let dir: string
 let server: AgentHookServer
 
@@ -47,6 +63,7 @@ beforeEach(async () => {
   reads.members = 0
   reads.finished = 0
   reads.descriptors = 0
+  reads.files = 0
   reads.released = new Promise((resolve) => (reads.release = resolve))
   dir = mkdtempSync(join(tmpdir(), 'orca-agy-poll-teardown-'))
   server = new AgentHookServer()
@@ -67,6 +84,11 @@ it.each([10, 100])(
       const overrides = { paneKey: makePaneKey(`tab-${i}`, leaf), tabId: `tab-${i}` }
       const logs = join(dir, `root-${i}`, '.system_generated', 'logs')
       mkdirSync(logs, { recursive: true })
+      mkdirSync(join(dir, `root-${i}`, '.system_generated', 'swarm'))
+      writeFileSync(
+        join(dir, `root-${i}`, '.system_generated', 'swarm', 'members.json'),
+        JSON.stringify({ members: {} })
+      )
       const transcriptPath = join(logs, 'transcript.jsonl')
       writeFileSync(
         transcriptPath,
@@ -88,6 +110,6 @@ it.each([10, 100])(
     reads.release()
     await vi.waitFor(() => expect(reads.finished).toBe(panes), { timeout: 10000 })
     await vi.advanceTimersByTimeAsync(30_000)
-    expect(reads).toMatchObject({ members: panes, descriptors: 0 })
+    expect(reads).toMatchObject({ members: panes, descriptors: 0, files: 0 })
   }
 )

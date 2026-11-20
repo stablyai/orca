@@ -68,7 +68,9 @@ export async function readAntigravityTranscriptPoll(
     child,
     revision: child.revision
   }))
-  const members = candidates.length ? await readAntigravitySwarmMembers(brain, cache) : undefined
+  const members = candidates.length
+    ? await readAntigravitySwarmMembers(brain, cache, wanted)
+    : undefined
   for (const { child, revision } of candidates) {
     const current = (): boolean =>
       wanted() && pane.children.get(child.id) === child && child.revision === revision

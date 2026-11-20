@@ -14,7 +14,7 @@ import {
 // Why: an open stalled by an on-access scan holds a libuv thread (4 by default); leave one free for other file work.
 const MAX_CONCURRENT_ROLLOUT_READS = 3
 let rolloutReadsInFlight = 0
-const rolloutReadQueue: (() => void)[] = []
+const rolloutReadQueue: { batch: RolloutReadBatch; grant: (granted: boolean) => void }[] = []
 
 // Why: buffers live until their poll or hook applies them; cap what all pending batches hold so many queued panes cannot pile up megabytes each.
 const MAX_HELD_ROLLOUT_BYTES = 16 * 1024 * 1024
@@ -85,15 +85,23 @@ async function withRolloutReadSlot<T>(
   if (rolloutReadsInFlight < MAX_CONCURRENT_ROLLOUT_READS) {
     rolloutReadsInFlight += 1
   } else {
+    // Stalled slots must not pin abandoned waiters, so each new waiter drops them first.
+    for (let index = rolloutReadQueue.length - 1; index >= 0; index--) {
+      if (!rolloutReadQueue[index].batch.wanted()) {
+        rolloutReadQueue.splice(index, 1)[0].grant(false)
+      }
+    }
     // A freed slot passes straight to the oldest waiter, so the count never overshoots.
-    await new Promise<void>((resolve) => rolloutReadQueue.push(resolve))
+    if (!(await new Promise<boolean>((grant) => rolloutReadQueue.push({ batch, grant })))) {
+      return unwanted
+    }
   }
   try {
     return batch.wanted() ? await run() : unwanted
   } finally {
     const next = rolloutReadQueue.shift()
     if (next) {
-      next()
+      next.grant(true)
     } else {
       rolloutReadsInFlight -= 1
     }
