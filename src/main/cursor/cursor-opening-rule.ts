@@ -3,10 +3,12 @@
 // (checked live on 2026.06.02 and 2026.11.19). So the rule exists only while a session opens.
 
 import { randomUUID } from 'node:crypto'
-import { mkdir, rename, rm, rmdir, stat, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, rename, rm, rmdir, stat, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
 export const CURSOR_OPENING_RULE_FILE = 'orca-standing-instructions.mdc'
+
+const RULE_MARKER = "description: Orca's standing instructions for this chat"
 
 /** Opens in one folder wait for each other, so a session never reads another's rule. */
 const opening = new Map<string, Promise<void>>()
@@ -16,6 +18,11 @@ async function exists(path: string): Promise<boolean> {
     () => true,
     () => false
   )
+}
+
+async function isUserFile(path: string): Promise<boolean> {
+  const existing = await readFile(path, 'utf8').catch(() => null)
+  return existing !== null && !existing.includes(RULE_MARKER)
 }
 
 /** Writes `text` as an always-applied rule in `cwd` and returns what removes it, along with any
@@ -37,19 +44,21 @@ export async function placeCursorOpeningRule(
   }
   const cursorDir = join(cwd, '.cursor')
   const rulesDir = join(cursorDir, 'rules')
-  const path = join(rulesDir, CURSOR_OPENING_RULE_FILE)
+  let path = join(rulesDir, CURSOR_OPENING_RULE_FILE)
   try {
     const made = [
       ...((await exists(cursorDir)) ? [] : [cursorDir]),
       ...((await exists(rulesDir)) ? [] : [rulesDir])
     ]
     await mkdir(rulesDir, { recursive: true })
+    // A file the user wrote under this name is theirs: this chat's rule goes beside it.
+    if (await isUserFile(path)) {
+      path = join(rulesDir, `orca-standing-instructions-${randomUUID()}.mdc`)
+    }
     const staged = `${path}.${randomUUID()}`
-    await writeFile(
-      staged,
-      `---\ndescription: Orca's standing instructions for this chat\nalwaysApply: true\n---\n${text}\n`,
-      { mode: 0o600 }
-    )
+    await writeFile(staged, `---\n${RULE_MARKER}\nalwaysApply: true\n---\n${text}\n`, {
+      mode: 0o600
+    })
     await rename(staged, path)
     return async () => {
       try {

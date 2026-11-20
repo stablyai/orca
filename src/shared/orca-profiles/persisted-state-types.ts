@@ -120,6 +120,8 @@ export type PersistedState = {
   automationRuns: AutomationRun[]
   /** Absent until the first bot is created, so profiles without bots save unchanged. */
   bots?: Bot[]
+  /** Bots on agents an older build cannot read, kept apart so a rollback's save leaves them be. */
+  botsNewerAgents?: Bot[]
   /** Legacy forced 'ask' defaults have been removed; preserve later explicit overrides. */
   botsPermissionDefaultMigrated?: true
   /** Catalogs an orcad imported, so a retried commit returns the same receipt. */

@@ -849,6 +849,25 @@ describe('BotController', () => {
     ])
   })
 
+  it('saves bots on newer agents apart, so an older build rewriting bots leaves them', async () => {
+    const saved = await bots.create({ name: 'Reviewer' })
+    store.saveBot({ ...saved, id: 'cursor-bot', agent: 'cursor' })
+    store.flush()
+    await closeTestStores()
+
+    const persisted = readPersistedState()
+    expect(persisted.bots?.map((bot) => bot.id)).toEqual([saved.id])
+    expect(persisted.botsNewerAgents?.map((bot) => bot.id)).toEqual(['cursor-bot'])
+
+    // A save from before the key existed keeps `botsNewerAgents` as an unknown field.
+    writeDataFile({ ...persisted, bots: persisted.bots })
+    expect(
+      createStore()
+        .getBots()
+        .map((bot) => bot.id)
+    ).toEqual([saved.id, 'cursor-bot'])
+  })
+
   it('loads legacy bots with no Chat or Linear link', async () => {
     const {
       chatSessionId: _chat,

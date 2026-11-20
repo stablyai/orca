@@ -103,6 +103,7 @@ export const PERSISTED_STATE_DISPOSITIONS = {
     62,
     "A bot's hidden project group is never offered for a move; the bot stays with its host."
   ),
+  botsNewerAgents: notApplicableDisposition(62, 'Bots on newer agents; same as bots.'),
   botsPermissionDefaultMigrated: notApplicableDisposition(
     62,
     'A one-time migration marker for bots.'

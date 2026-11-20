@@ -23,6 +23,17 @@ describe('Cursor opening rule', () => {
     expect(await readdir(join(home, '.cursor', 'rules'))).toEqual(['mine.mdc'])
   })
 
+  it('keeps a user rule saved under the same name and removes only its own', async () => {
+    await mkdir(join(home, '.cursor', 'rules'), { recursive: true })
+    await writeFile(rulePath(), 'my own rule')
+    const undo = await placeCursorOpeningRule(home, 'You are Zorblax.')
+    expect(await readFile(rulePath(), 'utf8')).toBe('my own rule')
+    expect(await readdir(join(home, '.cursor', 'rules'))).toHaveLength(2)
+    await undo()
+    expect(await readFile(rulePath(), 'utf8')).toBe('my own rule')
+    expect(await readdir(join(home, '.cursor', 'rules'))).toHaveLength(1)
+  })
+
   it('holds a second open in the same folder until the first is undone', async () => {
     const first = await placeCursorOpeningRule(home, 'first')
     let secondPlaced = false
