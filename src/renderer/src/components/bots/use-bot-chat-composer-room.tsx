@@ -118,7 +118,7 @@ export function BotChatRoom({
   children: ReactNode
 }): React.JSX.Element {
   const workspaceId = useNativeChatTabOwnerWorktreeId(tabId)
-  // The visual owner names the host the chat's agent runs on; only that host's bots can be asked.
+  // The visual owner names the host the chat's agent runs on; only that host's bots' chats can be picked.
   const target = useContext(NativeChatVisualOwnerContext)?.target
   const hostId = target ? getRuntimeTargetHostId(target) : null
   const self = useBotForWorkspace(workspaceId ?? null)
