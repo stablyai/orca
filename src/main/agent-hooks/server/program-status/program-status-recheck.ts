@@ -4,6 +4,7 @@ import { markAntigravityDoneRetried } from './hook-precedence'
 import type { PaneTimers } from './pane-timers'
 import type { HookListenerState } from '../../../../shared/agent-hook-listener/listener-state'
 import type { AgentHookSource } from '../../../../shared/agent-hook-listener/transport/agent-hook-relay'
+import { getOrCreateAntigravityPaneState } from '../../../../shared/agent-hook-listener/providers/antigravity/antigravity-pane-state'
 
 function antigravityTurn(row: AgentHookEventPayload | undefined) {
   return row
@@ -101,5 +102,50 @@ export function discardAntigravityDone(
       applied.payload.mainAgent?.state !== 'done')
   ) {
     rechecks.cancel(applied.paneKey)
+  }
+}
+
+export function reconcileRelayedAntigravityDone(
+  state: HookListenerState,
+  rechecks: PaneTimers,
+  previous: AgentHookEventPayload | undefined,
+  applied: AgentHookEventPayload | undefined
+): void {
+  if (
+    !applied?.connectionId ||
+    applied.payload.agentType !== 'antigravity' ||
+    applied === previous
+  ) {
+    return
+  }
+  if (applied.payload.state === 'done') {
+    state.antigravityChildWorkByPaneKey.delete(applied.paneKey)
+    return
+  }
+  const pane = getOrCreateAntigravityPaneState(state, applied.paneKey)
+  const sameTurn =
+    previous?.connectionId === applied.connectionId &&
+    previous.providerSession?.id === applied.providerSession?.id &&
+    previous.launchToken === applied.launchToken &&
+    previous.hostTurn?.owner === applied.hostTurn?.owner &&
+    previous.hostTurn?.currentTurnKey === applied.hostTurn?.currentTurnKey
+  if (!sameTurn || applied.hasExplicitPrompt || applied.payload.mainAgent?.state !== 'done') {
+    pane.helpersIdleAt = undefined
+  }
+  const now = Date.now()
+  if (!sameTurn || applied.hookEventName !== undefined || pane.leadObservedAt === undefined) {
+    pane.leadObservedAt = now
+  }
+  if (applied.payload.subagents?.length) {
+    pane.helpersIdleAt = undefined
+  } else if (
+    sameTurn &&
+    previous?.payload.subagents?.length &&
+    applied.payload.mainAgent?.state === 'done'
+  ) {
+    pane.helpersIdleAt = now
+  }
+  if (pane.helpersIdleAt !== undefined) {
+    rechecks.wake(applied.paneKey)
   }
 }

@@ -27,6 +27,7 @@ import {
   type RemoteAgentStatusEnvelope
 } from './server-remote-envelope-normalization'
 import { AgentHookServerIngestStructuredChildren } from './server-ingest-structured-children'
+import { reconcileRelayedAntigravityDone } from './program-status/program-status-recheck'
 
 export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestStructuredChildren {
   /** Call as each relay link starts, before its first envelope. */
@@ -292,7 +293,8 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
       payload: normalizedPayload
     }
     this.recordCurrentAuthorityObservation(event)
-    this.applyNormalizedStatus(
+    const previous = this.state.lastStatusByPaneKey.get(paneKey)
+    const applied = this.applyNormalizedStatus(
       event,
       applyClaudeBackgroundWork
         ? () => {
@@ -306,5 +308,6 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
       'hook',
       typeof age === 'number' ? Math.max(0, Date.now() - age) : undefined
     )
+    reconcileRelayedAntigravityDone(this.state, this.hookSilenceRechecks, previous, applied)
   }
 }

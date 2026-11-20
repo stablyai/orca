@@ -168,3 +168,51 @@ it('discards a refused done when the program reports new work', async () => {
   await vi.advanceTimersByTimeAsync(4001)
   expect(state()).toBe('working')
 })
+
+it('reoffers one relayed done after the final verified child disappears', async () => {
+  const connectionId = 'ssh-agy'
+  const leadStartedAt = Date.now()
+  server.beginRemoteRelaySession(connectionId)
+  const report = (ids: string[], hookEventName?: string): void => {
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        source: 'antigravity',
+        providerSession: { key: 'conversation_id', id: 'remote-root' },
+        agentPresence: { agent: 'antigravity', session: 'remote-root' },
+        hookEventName,
+        payload: {
+          prompt: 'remote job',
+          state: 'working',
+          agentType: 'antigravity',
+          mainAgent: { state: 'done', stateStartedAt: leadStartedAt },
+          subagents: ids.map((id) => ({ id, state: 'working', startedAt: 1, description: id }))
+        }
+      },
+      connectionId
+    )
+  }
+  report(['a', 'b'], 'Stop')
+  expect(server.getStatusSnapshot()[0]?.subagents).toHaveLength(2)
+  vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
+  server.ingestTerminalStatus({
+    paneKey: PANE,
+    tabId: 'tab-1',
+    worktreeId: 'wt-1',
+    connectionId,
+    fromProgramStatus: true,
+    payload: { prompt: '', state: 'done', agentType: 'antigravity' }
+  })
+  await vi.advanceTimersByTimeAsync(4001)
+  report(['b'])
+  await vi.advanceTimersByTimeAsync(4001)
+  expect(state()).toBe('working')
+  report([])
+  await vi.advanceTimersByTimeAsync(1000)
+  report([])
+  expect(state()).toBe('working')
+  await vi.advanceTimersByTimeAsync(1001)
+  expect(state()).toBe('done')
+})
