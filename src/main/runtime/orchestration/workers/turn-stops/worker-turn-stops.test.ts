@@ -298,6 +298,37 @@ describe('terminal worker turn stops', () => {
     await vi.waitFor(() => expect(ctx.mail()).toHaveLength(1))
     expect(ctx.mail()[0].body).toContain('Do you want to proceed?')
   })
+  it.each(['screen-unavailable', 'screen-stale'] as const)(
+    'waits for the current grid instead of an older dialog in a %s read',
+    async (source) => {
+      const ctx = setup()
+      const current = {
+        row: hookRow({ agentType: 'claude', state: 'working', stateStartedAt: 100 })
+      }
+      // A rebuilding screen answers with transcript or an older frame; its footer belongs to a prompt already answered.
+      const transcript = {
+        ...screen([' Allow the earlier fetch?', ' ❯ 1. Yes', ' Esc to cancel · Tab to amend']),
+        source
+      }
+      const dialog = screen([
+        ' Bash command',
+        ' │ git push --force',
+        ' Do you want to proceed?',
+        ' ❯ 1. Yes',
+        '   2. No',
+        ' Esc to cancel · Tab to amend'
+      ])
+      const reads = [transcript, dialog]
+      const stops = terminal(ctx, current, {
+        readScreen: async () => reads.shift() ?? dialog
+      })
+      current.row = hookRow({ agentType: 'claude', state: 'waiting', stateStartedAt: 300 })
+      stops.observe(moved('working', 'needs-you'))
+      await vi.waitFor(() => expect(ctx.mail()).toHaveLength(1))
+      expect(ctx.mail()[0].body).toContain('git push --force')
+      expect(ctx.mail()[0].body).not.toContain('Allow the earlier fetch?')
+    }
+  )
 })
 
 describe('chat worker turn stops', () => {

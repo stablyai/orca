@@ -10,4 +10,6 @@ export type TerminalModes = {
   kittyKeyboardFlags?: number
   /** XTMODKEYS level; absent until first set, including an explicit disable. */
   modifyOtherKeys?: number
+  /** A synchronized-output (DEC 2026) frame is open; absent when closed or unknown. */
+  synchronizedOutput?: boolean
 }

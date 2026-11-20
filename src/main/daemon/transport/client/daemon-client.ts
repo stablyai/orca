@@ -1,7 +1,6 @@
 import type { Socket } from 'node:net'
 import { readDaemonClientToken } from './daemon-client-token'
 import { randomUUID } from 'node:crypto'
-import { encodeNdjson } from '../../../../shared/json-stream/main-process-ndjson-framer'
 import { PROTOCOL_VERSION } from '../../protocol/daemon-protocol-version'
 import { NOTIFY_PREFIX } from '../../protocol/daemon-rpc-contract'
 import { DaemonConnectionLostError, DaemonProtocolError } from '../../protocol/daemon-errors'
@@ -22,7 +21,7 @@ import {
   attachControlResponseReader,
   attachStreamEventReader
 } from './daemon-client-ndjson-readers'
-import { writeNotifyWithSettlement } from './daemon-client-notify-settlement'
+import { writeNotify, writeNotifyWithSettlement } from './daemon-client-notify-settlement'
 import { requestDaemonRpc } from './daemon-client-rpc-request'
 
 const CONNECT_TIMEOUT_MS = 5000
@@ -231,14 +230,21 @@ export class DaemonClient {
     }
 
     const id = `${NOTIFY_PREFIX}${++this.requestCounter}`
-    const msg = { id, type, ...(payload !== undefined ? { payload } : {}) }
-    try {
-      this.controlSocket.write(encodeNdjson(msg))
-      return true
-    } catch {
-      // Notifications are best-effort; an oversized payload must not tear down the caller.
-      return false
+    return writeNotify(this.controlSocket, id, type, payload)
+  }
+
+  /** Gap recovery's snapshot; see DaemonRecoveryCredit. */
+  requestRecoverySnapshot<T>(sessionId: string, payload: unknown, signal?: AbortSignal) {
+    if (!this.connected || !this.controlSocket) {
+      // Why: an unsent request must not leave a charge for the next connection.
+      return this.request<T>('getSnapshot', payload, REQUEST_TIMEOUT_MS, signal)
     }
+    return this.pendingRequests.recoveryCredit.send(
+      sessionId,
+      this.requestCounter + 1,
+      () => this.request<T>('getSnapshot', payload, REQUEST_TIMEOUT_MS, signal),
+      () => this.request('ping', undefined, NOTIFY_SETTLEMENT_TIMEOUT_MS)
+    )
   }
 
   async notifyWithSettlement(

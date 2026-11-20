@@ -16,17 +16,28 @@ const DURABLE_HISTORY_OVERLAY_DEADLINE_MS = 5_000
 export abstract class DaemonPtyBufferSnapshots extends DaemonPtySessionControl {
   async getBufferSnapshot(
     id: string,
-    opts: { scrollbackRows?: number } = {}
+    opts: { scrollbackRows?: number; signal?: AbortSignal; recovery?: true } = {}
   ): Promise<PtyProviderBufferSnapshot | null> {
     if (!this.supportsAuthoritativeBufferSnapshots) {
       return null
     }
     try {
       const scrollbackRows = normalizeDesktopTerminalSnapshotRows(opts.scrollbackRows)
-      const result = await this.client.request<GetSnapshotResult>('getSnapshot', {
+      const payload = {
         sessionId: id,
         ...(scrollbackRows !== undefined ? { scrollbackRows } : {})
-      })
+      }
+      const result = opts.recovery
+        ? await this.client.requestRecoverySnapshot<GetSnapshotResult>(id, payload, opts.signal)
+        : await this.client.request<GetSnapshotResult>(
+            'getSnapshot',
+            payload,
+            undefined,
+            opts.signal
+          )
+      if (!result) {
+        return null
+      }
       const snapshot = result.snapshot
       // Older v19 snapshots lack the absolute sequence needed to reconcile data queued on the other socket.
       if (!snapshot || typeof snapshot.outputSequence !== 'number') {
@@ -55,6 +66,8 @@ export abstract class DaemonPtyBufferSnapshots extends DaemonPtySessionControl {
       data: snapshot.rehydrateSequences + snapshot.snapshotAnsi,
       frameRestoreAnsi: snapshot.frameRestoreAnsi,
       scrollbackAnsi: snapshot.scrollbackAnsi,
+      scrollbackLines: snapshot.scrollbackLines,
+      synchronizedOutput: snapshot.modes.synchronizedOutput,
       cols: snapshot.cols,
       rows: snapshot.rows,
       cwd: snapshot.cwd,

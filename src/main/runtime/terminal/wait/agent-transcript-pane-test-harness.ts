@@ -4,6 +4,7 @@ import { OrcaRuntimeService } from '../../orca-runtime'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { TerminalProcessInspection as PtyProcessInspection } from '../../../../shared/terminal/pty/lifecycle/terminal-process-inspection'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
+import type { RuntimePtyController } from '../lifecycle/runtime-pty-controller-contract'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import { committingSpawn, registerBoundPty } from '../layout/bind-first-pane.test-fixture'
 
@@ -32,6 +33,7 @@ export type TranscriptPaneOptions = {
   paneRootPid?: number
   onShellForegroundProof?: () => void
   onWrite?: (data: string) => void
+  serializeProviderBuffer?: RuntimePtyController['serializeProviderBuffer']
 }
 
 function transcriptLayoutStore(): RuntimeStore {
@@ -127,6 +129,9 @@ export async function createTranscriptPane(
             }
           ]
         }
+      : {}),
+    ...(options.serializeProviderBuffer
+      ? { serializeProviderBuffer: options.serializeProviderBuffer }
       : {}),
     ...(options.shellForegroundProven !== undefined
       ? {

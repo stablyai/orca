@@ -8,6 +8,7 @@ import {
   decodeDaemonResponseError
 } from '../../protocol/daemon-errors'
 import type { RpcResponse } from '../../protocol/daemon-rpc-contract'
+import { DaemonRecoveryCredit } from './daemon-client-recovery-credit'
 
 import { addNodePtyRecoveryHint } from '../../pty-subprocess/node-pty-error-hints'
 
@@ -19,6 +20,8 @@ export type PendingRequest = {
 
 export class DaemonPendingRequests {
   private requests = new Map<string, PendingRequest>()
+  /** Every reply passes `settle`, matched or not, and `rejectAll` ends the connection's debts. */
+  readonly recoveryCredit = new DaemonRecoveryCredit()
 
   get size(): number {
     return this.requests.size
@@ -33,6 +36,7 @@ export class DaemonPendingRequests {
   }
 
   settle(response: RpcResponse): void {
+    this.recoveryCredit.observeReply(response.id)
     if (response.id) {
       const pending = this.requests.get(response.id)
       if (pending) {
@@ -57,6 +61,7 @@ export class DaemonPendingRequests {
 
   // Keep transport failures distinct from refusal replies: only the former may tear down shared sockets.
   rejectAll(reason: string): void {
+    this.recoveryCredit.reset()
     for (const [id, pending] of this.requests) {
       pending.cancelDeadline()
       pending.reject(new DaemonConnectionLostError(reason))

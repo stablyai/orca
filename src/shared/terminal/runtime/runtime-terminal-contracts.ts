@@ -216,7 +216,9 @@ export type RuntimeTerminalRead = {
   nextCursor: string | null
   latestCursor?: string
   returnedLineCount?: number
-  source?: 'stream' | 'screen' | 'screen-unavailable'
+  source?: 'stream' | 'screen' | 'screen-stale' | 'screen-unavailable'
+  /** With screen-stale: when that last known frame was captured (epoch ms); output has landed since. */
+  screenCapturedAt?: number
   /** UI-only composer text, excluded from `tail`. */
   draft?: string
 }

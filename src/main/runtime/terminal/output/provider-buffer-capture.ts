@@ -1,4 +1,5 @@
 import type {
+  GapScreenIdentity,
   RuntimeHeadlessTerminal,
   RuntimeVisibleTerminalState
 } from '../records/runtime-terminal-state-records'
@@ -21,6 +22,7 @@ import {
 } from '../view/orca-runtime-terminal-projection'
 import { VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS } from './provider-snapshot-budget'
 import { isNativeWindowsConptyPty } from './terminal-model-query-authority'
+import { keepLandedGapScreen } from './gap-recovery-screen'
 
 export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaRuntimeWithSerializeTerminalBufferFromAvailableState {
   protected abstract readVisibleTerminalState(
@@ -29,6 +31,7 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
   protected abstract readRendererVisibleSnapshotLines(
     ptyId: string
   ): Promise<RuntimeTerminalProjection>
+  protected abstract gapScreenStream(ptyId: string): GapScreenIdentity
   protected abstract readWholeScreenModel(
     ptyId: string | null | undefined
   ): RuntimeHeadlessTerminal | null
@@ -40,9 +43,11 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
 
   protected async captureProviderTerminalBuffer(
     ptyId: string,
-    opts: { scrollbackRows?: number },
+    opts: { scrollbackRows?: number; signal?: AbortSignal; recovery?: true },
     generation: number
   ): Promise<PtyProviderBufferSnapshot | null> {
+    const providerOwnedScreenAtStart = this.providerSnapshotPreferredPtys.has(ptyId)
+    const stream = { ...this.gapScreenStream(ptyId), capturedAt: Date.now() }
     const liveModeTracker = new TerminalKittyKeyboardModeTracker()
     let liveModeTrackers = this.providerModeSnapshotScansByPtyId.get(ptyId)
     if (!liveModeTrackers) {
@@ -77,7 +82,10 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
         if (liveModeTracker.hasObservedAlternateScreenSwitch) {
           modeTracker.scan(liveModeTracker.isAlternateScreen ? '\x1b[?1049h' : '\x1b[?1049l')
         }
-        this.providerModeTrackersByPtyId.set(ptyId, modeTracker)
+        // A trusted model that took the screen back during this capture already parses every chunk's mode.
+        if (!providerOwnedScreenAtStart || !this.readWholeScreenModel(ptyId)) {
+          this.providerModeTrackersByPtyId.set(ptyId, modeTracker)
+        }
         effectiveAlternateScreen = modeTracker.isAlternateScreen
       }
       const providerOffset = this.providerSequenceOffsetByPtyId.get(ptyId) ?? 0
@@ -90,6 +98,18 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
       })
       if (liveModeTracker.hasObservedAlternateScreenSwitch) {
         this.providerSnapshotsWithLiveModeTransition.add(reconciledSnapshot)
+      }
+      // A recovery frame of an unchanged stream is correct at its seq even when it cannot rebuild.
+      if (
+        opts.recovery &&
+        this.providerSequenceAnchorRevisions.get(ptyId) === stream.anchorRevision
+      ) {
+        keepLandedGapScreen(
+          this.headlessTerminals.get(ptyId)?.gapReseed,
+          reconciledSnapshot,
+          stream,
+          (frame) => this.parseVisibleSnapshot(frame)
+        )
       }
       return reconciledSnapshot
     } catch {
@@ -187,16 +207,23 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
     limit: number | undefined,
     providerSnapshot: RuntimeProviderSnapshotReadOptions
   ): Promise<RuntimeTerminalRead> {
+    const state = this.readWholeScreenModel(ptyId)
+    const recovering = Boolean(this.headlessTerminals.get(ptyId)?.gapReseed)
     const projection = await this.readRenderedTerminalTailLines(ptyId, limit, providerSnapshot)
+    const lineLimit = terminalReadLimit(limit, DEFAULT_TERMINAL_READ_LIMIT)
+    const limited =
+      read.limited || Boolean(state?.recoveredHistoryCut && projection.lines.length < lineLimit)
     return projection.lines.length > 0
       ? buildVisibleSnapshotReadFallback(
-          read,
+          { ...read, limited },
           projection.lines,
           limit,
           projection.draft,
           projection.tailRows
         )
-      : read
+      : recovering || this.headlessTerminals.get(ptyId)?.gapReseed
+        ? buildVisibleSnapshotReadFallback({ ...read, limited: true }, [], limit)
+        : read
   }
 
   private async readRenderedTerminalTailLines(
@@ -217,8 +244,9 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
     }
     const generation = this.getPtyLifecycleGeneration(ptyId)
     await state.writeChain
+    // The same model can turn untrusted while the read waited: a gap keeps it rather than replacing it.
     if (
-      this.headlessTerminals.get(ptyId) !== state ||
+      this.readWholeScreenModel(ptyId) !== state ||
       this.getPtyLifecycleGeneration(ptyId) !== generation
     ) {
       return { lines: [] }

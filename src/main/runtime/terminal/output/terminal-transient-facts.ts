@@ -23,6 +23,7 @@ import type { TerminalTitleFactMeta } from '../../../../shared/terminal/output/t
 
 export abstract class OrcaRuntimeWithEmitDaemonPtyTransientFact extends OrcaRuntimeWithScheduleWaitBlockedCheck {
   protected abstract retirePtyAgentLaunchAuthority(ptyId: string, confirmedExit?: boolean): void
+  protected abstract reseedHeadlessTerminalAfterDataGap(ptyId: string): void
 
   /** A transient fact the daemon detected while it held scan authority —
    *  emitted through the same fact channel as byte-scanned facts. Arrives
@@ -51,7 +52,7 @@ export abstract class OrcaRuntimeWithEmitDaemonPtyTransientFact extends OrcaRunt
     }
   }
 
-  /** Output gaps reset every cross-chunk parser carry and the headless mirror; rebuild from delivered suffix or snapshot instead of parsing discontinuous escapes. */
+  /** Output gaps reset every cross-chunk parser carry and reseed the headless mirror from the provider snapshot instead of parsing discontinuous escapes. */
   notePtyDataGap(ptyId: string, droppedChars = 0): void {
     if (droppedChars > 0) {
       // Why: the daemon snapshot's seq counts bytes its monitoring stream
@@ -73,7 +74,7 @@ export abstract class OrcaRuntimeWithEmitDaemonPtyTransientFact extends OrcaRunt
     this.oscTitleScanTailByPtyId.delete(ptyId)
     this.osc7ScanTailByPtyId.delete(ptyId)
     this.agentStatusOscProcessorsByPtyId.delete(ptyId)
-    this.disposeHeadlessTerminal(ptyId)
+    this.reseedHeadlessTerminalAfterDataGap(ptyId)
   }
 
   /** Record one derived side-effect fact: batched per chunk while applying

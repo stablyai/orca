@@ -216,7 +216,7 @@ export type RuntimePtyController = {
   /** Authoritative provider-owned snapshot for restored PTYs with no mounted renderer. */
   serializeProviderBuffer?(
     ptyId: string,
-    opts?: { scrollbackRows?: number }
+    opts?: { scrollbackRows?: number; signal?: AbortSignal; recovery?: true }
   ): Promise<PtyProviderBufferSnapshot | null>
   // Probe renderer authority before hydration (docs/mobile-prefer-renderer-scrollback.md).
   hasRendererSerializer?(ptyId: string): boolean

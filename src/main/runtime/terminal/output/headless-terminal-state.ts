@@ -1,5 +1,7 @@
 import { OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer } from './headless-terminal-hydration'
 import type { RuntimeHeadlessTerminal } from '../records/runtime-terminal-state-records'
+import type { PtyProviderBufferSnapshot } from '../../../providers/pty/provider-contract'
+import { stopGapJournal } from './gap-recovery-journal'
 import { HeadlessEmulator } from '../../../daemon/emulation/headless-emulator'
 import { shouldForwardHeadlessTerminalQueryReply } from './headless-terminal-query-reply-policy'
 import { isNativeWindowsConptyPty } from './terminal-model-query-authority'
@@ -118,6 +120,41 @@ export abstract class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends Orca
     return state
   }
 
+  /** Paint a provider snapshot at its captured grid, then return to the model's; false when the model was replaced meanwhile. */
+  protected async writeProviderSnapshotScreen(
+    ptyId: string,
+    state: RuntimeHeadlessTerminal,
+    snapshot: PtyProviderBufferSnapshot
+  ): Promise<boolean> {
+    const data = `${snapshot.scrollbackAnsi ?? ''}${snapshot.data}`
+    // Why: a newer live OSC 7 can arrive while the snapshot is in flight;
+    // only seed metadata while no post-correction CWD has won the race.
+    if (!this.terminalCwdByPtyId.has(ptyId)) {
+      this.recordOsc7MetadataForPty(ptyId, data)
+    }
+    const grid = state.emulator.getAppliedSize()
+    if (grid.cols !== snapshot.cols || grid.rows !== snapshot.rows) {
+      state.emulator.resize(snapshot.cols, snapshot.rows)
+    }
+    await state.emulator.write(data)
+    if (this.headlessTerminals.get(ptyId) !== state) {
+      return false
+    }
+    if (grid.cols !== snapshot.cols || grid.rows !== snapshot.rows) {
+      state.emulator.resize(grid.cols, grid.rows)
+    }
+    if (snapshot.cwd !== undefined) {
+      state.emulator.setCwd(snapshot.cwd)
+      if (!this.terminalCwdByPtyId.has(ptyId) && snapshot.cwd?.trim()) {
+        this.terminalCwdByPtyId.set(ptyId, snapshot.cwd)
+      }
+    }
+    if (snapshot.oscLinks !== undefined) {
+      state.emulator.setRestoredOscLinks(snapshot.oscLinks)
+    }
+    return true
+  }
+
   protected replaceHeadlessTerminalAfterExecutionContextChange(
     ptyId: string,
     retryLateSeed = true
@@ -126,6 +163,7 @@ export abstract class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends Orca
     this.providerSnapshotPreferredPtys.add(ptyId)
     const dims = this.getTerminalSize(ptyId) ?? { cols: 80, rows: 24 }
     const state = this.createPtyHeadlessTerminalState(ptyId, dims)
+    state.awaitingContextSeed = true
     this.headlessTerminals.set(ptyId, state)
     const generation = this.getPtyLifecycleGeneration(ptyId)
     let seedTimedOut = false
@@ -161,24 +199,8 @@ export abstract class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends Orca
           })
           return
         }
-        const data = `${snapshot.scrollbackAnsi ?? ''}${snapshot.data}`
-        // Why: a newer live OSC 7 can arrive while the snapshot is in flight;
-        // only seed metadata while no post-correction CWD has won the race.
-        if (!this.terminalCwdByPtyId.has(ptyId)) {
-          this.recordOsc7MetadataForPty(ptyId, data)
-        }
-        await state.emulator.write(data)
-        if (this.headlessTerminals.get(ptyId) !== state) {
+        if (!(await this.writeProviderSnapshotScreen(ptyId, state, snapshot))) {
           return
-        }
-        if (snapshot.cwd !== undefined) {
-          state.emulator.setCwd(snapshot.cwd)
-          if (!this.terminalCwdByPtyId.has(ptyId) && snapshot.cwd?.trim()) {
-            this.terminalCwdByPtyId.set(ptyId, snapshot.cwd)
-          }
-        }
-        if (snapshot.oscLinks !== undefined) {
-          state.emulator.setRestoredOscLinks(snapshot.oscLinks)
         }
         state.ownership.seedOwner(snapshot.terminalOwner, {
           alternateScreen: state.emulator.isAlternateScreen
@@ -186,10 +208,18 @@ export abstract class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends Orca
         state.outputSequence = snapshot.seq
         seeded = true
       })
+      .then(() => {
+        state.awaitingContextSeed = false
+        // Observers parked on the blank model check it once it shows something: the seed, or live output since.
+        if ((seeded || state.outputSequence > 0) && this.headlessTerminals.get(ptyId) === state) {
+          this.observeHeadlessChunk(ptyId, state, '', Date.now())
+        }
+      })
       .catch(() => {
         // Best-effort: live bytes already chain behind this replacement state.
       })
       .finally(() => {
+        state.awaitingContextSeed = false
         // An unseeded model stays partial, so readers keep preferring the provider; a retry also dropped the bytes its predecessor held.
         if (
           this.headlessTerminals.get(ptyId) === state &&
@@ -204,6 +234,10 @@ export abstract class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends Orca
     const state = this.headlessTerminals.get(ptyId)
     if (!state) {
       return
+    }
+    if (state.gapReseed) {
+      // Journaled bytes straddling a resize cannot be replayed at one grid; the next capture starts after it.
+      stopGapJournal(state.gapReseed)
     }
     const unpainted = state.unrepaintedReflowGrid
     // Why: a PTY resize off the reflowed grid makes the TUI repaint; an echo of it does not.
@@ -225,6 +259,23 @@ export abstract class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends Orca
   resizeHeadlessTerminalToPtyGrid(ptyId: string, cols: number, rows: number): void {
     if (cols > 0 && rows > 0) {
       this.resizeHeadlessTerminal(ptyId, cols, rows)
+    }
+  }
+
+  protected clearHeadlessReflowAfterRepaint(
+    ptyId: string,
+    state: RuntimeHeadlessTerminal,
+    snapshot: PtyProviderBufferSnapshot
+  ): void {
+    const liveGrid = this.getTerminalSize(ptyId)
+    const appliedGrid = state.emulator.getAppliedSize()
+    if (
+      liveGrid?.cols === snapshot.cols &&
+      liveGrid.rows === snapshot.rows &&
+      appliedGrid.cols === snapshot.cols &&
+      appliedGrid.rows === snapshot.rows
+    ) {
+      state.unrepaintedReflowGrid = undefined
     }
   }
 
@@ -252,8 +303,15 @@ export abstract class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends Orca
     if (!state) {
       return
     }
+    if (state.gapReseed) {
+      // A capture from before the clear must not restore its history.
+      stopGapJournal(state.gapReseed)
+    }
     // Queue clears after earlier output so it cannot repopulate cleared mobile scrollback.
-    state.writeChain = state.writeChain.then(() => state.emulator.clearScrollback())
+    state.writeChain = state.writeChain.then(() => {
+      state.emulator.clearScrollback()
+      state.recoveredHistoryCut = false
+    })
     await state.writeChain
   }
 
@@ -265,6 +323,10 @@ export abstract class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends Orca
     const state = this.headlessTerminals.get(ptyId)
     if (!state) {
       return
+    }
+    if (state.gapReseed) {
+      // A rebuild from bytes before this ground would undo it; the next capture starts after it.
+      stopGapJournal(state.gapReseed)
     }
     // Why on the chain: the ground must land after every PTY chunk already queued.
     const completion = state.writeChain.then(async () => {

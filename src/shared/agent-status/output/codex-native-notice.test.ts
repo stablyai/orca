@@ -16,4 +16,45 @@ describe('Codex capacity candidate bounds', () => {
     expect(tracker.observe('⚠ Selected model is ', readScreen)).toBe(false)
     expect(tracker.observe('at capacity. Please try a different model.', readScreen)).toBe(true)
   })
+
+  it('keeps a notice seen while the screen is untrusted past any noise, dated from its first piece', () => {
+    const tracker = createCodexCapacityNoticeTracker()
+    const readScreen = () => [`■ ${CODEX_CAPACITY_MESSAGE}`, '›']
+    expect(tracker.observe('■ Selected model is ', readScreen, () => false, 3, false)).toBe(false)
+    expect(
+      tracker.observe(
+        'at capacity. Please try a different model.',
+        readScreen,
+        () => false,
+        4,
+        false
+      )
+    ).toBe(false)
+    for (let i = 0; i < 8_193; i++) {
+      tracker.observe('\x1b[0m', readScreen, () => false, 5, false)
+    }
+    expect(tracker.observe('', readScreen, () => false, 9)).toBe(true)
+    expect(tracker.pendingAt).toBe(3)
+  })
+
+  it('dates a notice held only by synchronized output from its confirmation', () => {
+    const tracker = createCodexCapacityNoticeTracker()
+    const readScreen = () => [`■ ${CODEX_CAPACITY_MESSAGE}`, '›']
+    let synchronized = true
+    expect(tracker.observe(`■ ${CODEX_CAPACITY_MESSAGE}`, readScreen, () => synchronized, 3)).toBe(
+      false
+    )
+    synchronized = false
+    expect(tracker.observe('', readScreen, () => synchronized, 7)).toBe(true)
+    expect(tracker.pendingAt).toBe(7)
+  })
+
+  it('keeps the arrival time of a notice pending when a gap untrusts the screen', () => {
+    const tracker = createCodexCapacityNoticeTracker()
+    const readScreen = () => [`■ ${CODEX_CAPACITY_MESSAGE}`, '›']
+    expect(tracker.observe(`■ ${CODEX_CAPACITY_MESSAGE}`, readScreen, () => true, 3)).toBe(false)
+    tracker.resetAfterGap()
+    expect(tracker.observe('', readScreen, () => false, 9)).toBe(true)
+    expect(tracker.pendingAt).toBe(3)
+  })
 })

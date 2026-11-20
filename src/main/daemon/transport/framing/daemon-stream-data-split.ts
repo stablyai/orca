@@ -227,6 +227,17 @@ export function writeStreamDataEvents(
     }
     chunks = splitOversizedStreamDataForNdjson(sessionId, data, maxLineBytes)
   } else {
+    // Stamped frames usually fit one line: encode once instead of sizing then re-encoding.
+    const line = encodeStreamDataEvent(
+      sessionId,
+      data,
+      explicitRawLength === 0 ? 0 : data.length,
+      seq
+    )
+    if (Buffer.byteLength(line, 'utf8') <= maxLineBytes) {
+      streamSocket.write(line)
+      return
+    }
     chunks = splitStreamDataForNdjson(
       sessionId,
       data,

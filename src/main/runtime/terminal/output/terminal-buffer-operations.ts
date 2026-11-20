@@ -87,7 +87,7 @@ export abstract class OrcaRuntimeWithSerializeMainTerminalBuffer extends OrcaRun
   ): RuntimeHeadlessTerminal
   protected abstract applySeededAgentStatus(ptyId: string, title: string): void
 
-  serializeMainTerminalBuffer(
+  async serializeMainTerminalBuffer(
     ptyId: string,
     opts: { scrollbackRows?: number } = {}
   ): Promise<{
@@ -130,10 +130,11 @@ export abstract class OrcaRuntimeWithSerializeMainTerminalBuffer extends OrcaRun
     if (restoredSnapshot) {
       return restoredSnapshot
     }
-    const headlessSnapshot = await this.serializeHeadlessTerminalBuffer(ptyId, {
-      ...opts,
-      includeEmpty: true
-    })
+    if (this.headlessTerminals.get(ptyId)?.gapReseed) {
+      // The provider already declined above, and the hidden renderer missed the dropped output.
+      return null
+    }
+    const headlessSnapshot = await this.serializeMainTerminalBuffer(ptyId, opts)
     if (headlessSnapshot) {
       return headlessSnapshot
     }

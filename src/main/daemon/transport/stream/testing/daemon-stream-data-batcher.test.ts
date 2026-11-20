@@ -136,6 +136,22 @@ describe('DaemonStreamDataBatcher', () => {
     }
   })
 
+  it('stamps each bulk slice with the stream position after that slice', () => {
+    vi.useFakeTimers()
+    try {
+      const { batcher, streamSocket } = createBatcher()
+      batcher.enqueue('client-1', 'session-bulk', 'a'.repeat(3 * 64 * 1024), { seq: 200_000 })
+      vi.advanceTimersByTime(2)
+      const seqs = streamSocket.write.mock.calls
+        .map(([line]): { payload?: { data?: string; seq?: number } } => JSON.parse(String(line)))
+        .filter((message) => (message.payload?.data ?? '') !== '')
+        .map((message) => message.payload?.seq)
+      expect(seqs).toEqual([68_928, 134_464, 200_000])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('keep-tail drops a droppable session over the cap and delivers a gap before the kept tail', () => {
     vi.useFakeTimers()
     try {

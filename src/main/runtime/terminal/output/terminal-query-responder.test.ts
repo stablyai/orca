@@ -20,6 +20,7 @@ import type {
   TerminalViewRgb
 } from '../../../../shared/terminal/protocol/queries/terminal-view-attributes'
 import type { TerminalInputKind } from '../../../../shared/terminal/input/terminal-input-kind'
+import type { PtyProviderBufferSnapshot } from '../../../providers/pty/provider-contract'
 
 const QUERY_BATCH = '\x1b[c\x1b]11;?\x07\x1b[?996n'
 
@@ -56,7 +57,12 @@ const store = {
 
 type RendererBufferStub = { data: string; cols: number; rows: number }
 
-function createResponderRuntime(opts: { rendererBuffer?: RendererBufferStub } = {}) {
+function createResponderRuntime(
+  opts: {
+    rendererBuffer?: RendererBufferStub
+    serializeProviderBuffer?: () => Promise<PtyProviderBufferSnapshot | null>
+  } = {}
+) {
   const runtime = new OrcaRuntimeService(store)
   const replies: { ptyId: string; data: string }[] = []
   const inputKinds: TerminalInputKind[] = []
@@ -70,6 +76,9 @@ function createResponderRuntime(opts: { rendererBuffer?: RendererBufferStub } = 
     getForegroundProcess: async () => null,
     getSize: () => ({ cols: 80, rows: 24 }),
     resize: () => true,
+    ...(opts.serializeProviderBuffer
+      ? { serializeProviderBuffer: opts.serializeProviderBuffer }
+      : {}),
     ...(opts.rendererBuffer
       ? {
           hasRendererSerializer: () => true,
@@ -384,5 +393,40 @@ describe('per-PTY OSC color SET layering', () => {
     await settle(runtime, 'pty-clear')
 
     expect(replies.map((reply) => reply.data)).toEqual(['\x1b]11;rgb:1010/2020/3030\x1b\\'])
+  })
+})
+
+describe('dropped output', () => {
+  it('answers queries once, live, while the screen waits for and rebuilds from a snapshot', async () => {
+    let land: ((snapshot: PtyProviderBufferSnapshot) => void) | undefined
+    const { runtime, replies } = createResponderRuntime({
+      serializeProviderBuffer: () =>
+        new Promise((resolve) => {
+          land = resolve
+        })
+    })
+    markHiddenRendererPty('pty-gap')
+    // A stamped daemon stream: recovery places snapshots only in one.
+    runtime.synchronizePtyOutputSequenceFromProvider('pty-gap', {
+      value: 0,
+      generation: 'continued'
+    })
+    runtime.anchorProviderSequence('pty-gap', 0, 0)
+    runtime.onPtyData('pty-gap', 'before\r\n', 1)
+    runtime.notePtyDataGap('pty-gap', 4)
+    await vi.waitFor(() => expect(land).toBeDefined())
+    // Seq 12 -> 15, journaled after the capture was asked for.
+    runtime.onPtyData('pty-gap', '\x1b[c', 2)
+    await vi.waitFor(() => expect(replies.map((reply) => reply.data)).toEqual(['\x1b[?1;2c']))
+    expect(await runtime.serializeHiddenOutputRecoveryBuffer('pty-gap')).toBeNull()
+
+    land?.({ data: 'after', cols: 80, rows: 24, seq: 12, source: 'headless' })
+    await vi.waitFor(async () => {
+      expect(await runtime.serializeHiddenOutputRecoveryBuffer('pty-gap')).not.toBeNull()
+    })
+    runtime.onPtyData('pty-gap', '\x1b[c', 3)
+    await settle(runtime, 'pty-gap')
+    // The rebuild replays the first query silently; only the new one is answered.
+    expect(replies).toHaveLength(2)
   })
 })

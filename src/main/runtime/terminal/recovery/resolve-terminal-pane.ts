@@ -202,13 +202,13 @@ export abstract class OrcaRuntimeWithResolveTerminalPane extends OrcaRuntimeWith
     if (pty) {
       const worktreesById = await this.getResolvedWorktreeMap()
       const summary = this.buildPtyTerminalSummary(pty.pty, worktreesById)
-      const preview = await this.visibleSnapshotPreview(pty.pty.ptyId, summary.preview)
+      const shown = await this.visibleSnapshotPreview(pty.pty.ptyId, summary.preview)
       this.assertLiveTerminalHandleTargetsPty(handle, pty.pty.ptyId)
       const agentWait = await this.getTerminalInteractiveWait(handle)
       const recorded = this.paneOfPty(pty.pty)
       return {
         ...summary,
-        preview,
+        preview: shown.isStale() ? summary.preview : shown.preview,
         tabId: recorded.tabId ?? pty.record.tabId,
         leafId: parsePaneKey(recorded.paneKey ?? '')?.leafId ?? pty.record.leafId,
         paneRuntimeId: -1,
@@ -222,9 +222,9 @@ export abstract class OrcaRuntimeWithResolveTerminalPane extends OrcaRuntimeWith
     this.assertStableReadyGraph(graphEpoch)
     const { leaf } = this.getLiveLeafForHandle(handle)
     const summary = this.buildTerminalSummary(leaf, worktreesById)
-    const preview = leaf.ptyId
+    const shown = leaf.ptyId
       ? await this.visibleSnapshotPreview(leaf.ptyId, summary.preview)
-      : summary.preview
+      : { preview: summary.preview, isStale: () => false }
     this.assertStableReadyGraph(graphEpoch)
     if (leaf.ptyId) {
       this.assertLiveTerminalHandleTargetsPty(handle, leaf.ptyId)
@@ -232,7 +232,7 @@ export abstract class OrcaRuntimeWithResolveTerminalPane extends OrcaRuntimeWith
     const agentWait = await this.getTerminalInteractiveWait(handle)
     return {
       ...summary,
-      preview,
+      preview: shown.isStale() ? summary.preview : shown.preview,
       paneRuntimeId: leaf.paneRuntimeId,
       ptyId: leaf.ptyId,
       rendererGraphEpoch: this.rendererGraphEpoch,
@@ -299,19 +299,24 @@ export abstract class OrcaRuntimeWithResolveTerminalPane extends OrcaRuntimeWith
     read: RuntimeTerminalRead,
     opts: { limit?: number } = {}
   ): Promise<RuntimeTerminalRead> {
-    const visibleState = await this.readVisibleTerminalState(ptyId)
-    const projection =
-      visibleState ??
-      (await this.readProviderTerminalTailLines(ptyId, opts.limit, { visibleScreenOnly: true }))
-    if (projection.lines.length === 0) {
+    const projection = await this.readScreenProjection(ptyId, opts.limit)
+    // A kept frame can be a correct blank grid; elsewhere an empty projection means none was read.
+    if (!projection || (projection.lines.length === 0 && !('capturedAt' in projection))) {
       return { ...read, source: 'screen-unavailable' }
     }
-    return buildVisibleSnapshotReadFallback(
+    const screen = buildVisibleSnapshotReadFallback(
       read,
       projection.lines,
       opts.limit,
       projection.draft,
       projection.tailRows
     )
+    // A rebuilding screen's kept frame: current only while no output has landed after it.
+    if (!('capturedAt' in projection) || this.getPtyOutputSequence(ptyId) <= projection.seq) {
+      return screen
+    }
+    // An older frame's composer text is no evidence of the draft now (mobile sizes its clear from it).
+    const { draft: _staleDraft, ...stale } = screen
+    return { ...stale, source: 'screen-stale', screenCapturedAt: projection.capturedAt }
   }
 }

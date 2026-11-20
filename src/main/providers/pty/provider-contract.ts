@@ -28,6 +28,7 @@ export type PtyProviderBufferSnapshot = {
   frameRestoreAnsi?: string
   /** Authoritative normal buffer captured beside an alternate-screen frame. */
   scrollbackAnsi?: string
+  scrollbackLines?: number
   cols: number
   rows: number
   cwd?: string | null
@@ -41,6 +42,8 @@ export type PtyProviderBufferSnapshot = {
   kittyKeyboardFlags?: number
   /** Ordered ownership evidence proven at this snapshot's `seq`. */
   terminalOwner?: TerminalOwner
+  /** The snapshot's screen is part of a synchronized-output frame still being drawn. */
+  synchronizedOutput?: boolean
 }
 
 export type PtySpawnOptions = {
@@ -157,7 +160,7 @@ export type IPtyProvider = {
   /** Authoritative provider model snapshot after monitoring-stream gaps; optional for other providers. */
   getBufferSnapshot?: (
     id: string,
-    opts?: { scrollbackRows?: number }
+    opts?: { scrollbackRows?: number; signal?: AbortSignal; recovery?: true }
   ) => Promise<PtyProviderBufferSnapshot | null>
   /** Whether this exact PTY can return a sequence-safe provider snapshot. */
   canProvideAuthoritativeBufferSnapshot?: (id: string) => boolean
