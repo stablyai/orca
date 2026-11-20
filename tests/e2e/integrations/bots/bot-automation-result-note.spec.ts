@@ -99,7 +99,7 @@ test.describe('bot automation result notes', () => {
       .getByText('Home Chat', { exact: true })
       .click()
     const chat = page.locator('[data-native-chat-root="true"]')
-    const note = chat.getByRole('button', { name: /Morning digest\. Finished/ })
+    const note = chat.getByRole('button', { name: /Morning digest · Finished/ })
     await expect(note).toBeVisible({ timeout: 30_000 })
     await note.click()
     await expect(chat.getByText(/hasn't read this yet/)).toBeVisible()
