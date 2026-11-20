@@ -128,16 +128,11 @@ describe('Generate face', () => {
     expect(slot()).toBe('data:image/png;base64,T0xE')
     expect(screen.getByRole('button', { name: 'Your image' })).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Edit description' }))
-    await describeAndEnter('a fox astronaut')
-    await screen.findByRole('button', { name: 'a fox astronaut' })
-    expect(slot()).toBe('data:image/png;base64,CROPPED')
-  })
-
-  it('reopens the field from the description line too', async () => {
-    stubAgents([CODEX], async () => ({ ok: true, agent: 'codex', image: IMAGE }))
-    render(<Face onResult={() => true} />)
     const box = await describeAndEnter('a fox astronaut')
-    fireEvent.click(await screen.findByRole('button', { name: 'a fox astronaut' }))
+    const caption = await screen.findByRole('button', { name: 'a fox astronaut' })
+    expect(slot()).toBe('data:image/png;base64,CROPPED')
+
+    fireEvent.click(caption)
     expect(folded(box)).toBe(false)
   })
 

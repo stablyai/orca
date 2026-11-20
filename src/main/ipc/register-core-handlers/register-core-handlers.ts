@@ -7,6 +7,7 @@ import { registerCliHandlers } from '../cli'
 import { registerOrcaUninstallHandlers } from '../orca-uninstall'
 import { registerPreflightHandlers } from '../preflight/preflight'
 import type { Store } from '../../persistence/loading-store/store'
+import { resolveDesktopAuthorizedPath } from '../filesystem/access/local-file-access-resolution'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import type { StatsCollector } from '../../stats/collector'
 import { registerFilesystemHandlers } from '../filesystem/filesystem'
@@ -265,7 +266,7 @@ export async function registerCoreHandlers(
       deleteRuntimeAiVaultSession(getRuntimeEnvironmentRegistryRoot(), environmentId, args)
     )
     registerNativeChatHandlers()
-    registerClipboardHandlers(store, {
+    registerClipboardHandlers((path) => resolveDesktopAuthorizedPath(path, store), {
       localChatAttachmentStore: async () => {
         await ensureStructuredAgentSessionHostUnlessRefused(() =>
           runtime.ensureStructuredAgentSessionHost()
@@ -273,7 +274,7 @@ export async function registerCoreHandlers(
         return getAgentSessionAttachmentStore()
       }
     })
-    registerUpdaterHandlers(store)
+    registerUpdaterHandlers()
     registerSpeechHandlers(store, commitMessageAgentEnv)
     void hostsReady.catch((error: unknown) =>
       console.warn('[startup] Host initialization failed:', error)

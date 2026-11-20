@@ -307,7 +307,7 @@
 1 src/main/codex/configuration/shared-server/codex-shared-server-fix.ts
 3 src/main/codex/configuration/shared-server/codex-shared-server-pane.ts
 2 src/main/codex/configuration/shared-server/codex-shared-server-probe.ts
-6 src/main/codex/configuration/toml/config-toml-atomic-write.ts
+7 src/main/codex/configuration/toml/config-toml-atomic-write.ts # compare-before-publish re-read of config.toml so a save made after Orca read it is never overwritten (moved here from the worker-only trust transaction)
 4 src/main/codex/configuration/toml/config-toml-runtime-owned-sections.ts
 9 src/main/codex/history/backfill/codex-session-backfill-marker.ts
 6 src/main/codex/history/backfill/codex-session-backfill.ts
@@ -341,7 +341,7 @@
 1 src/main/codex/hooks/installation/codex-wsl-hook-install-plan.ts
 2 src/main/codex/hooks/installation/hook-service.ts
 4 src/main/codex/hooks/reconciliation/codex-account-home-hook.ts
-13 src/main/codex/hooks/reconciliation/codex-hook-legacy-cleanup.ts
+14 src/main/codex/hooks/reconciliation/codex-hook-legacy-cleanup.ts # legacy profile delete re-reads the file right before unlinking so a newer save is never deleted
 4 src/main/codex/hooks/reconciliation/codex-hook-reconcile.ts
 8 src/main/codex/hooks/reconciliation/codex-hook-status.ts
 12 src/main/codex/hooks/reconciliation/codex-real-home-hook-install.ts
@@ -371,7 +371,7 @@
 15 src/main/codex/trust/hooks/hook-trust-promotion.ts
 1 src/main/codex/trust/identity/codex-trust-identity.ts
 1 src/main/codex/trust/toml/config-toml-project-trust.ts
-23 src/main/codex/trust/toml/config-toml-trust.ts
+18 src/main/codex/trust/toml/config-toml-trust.ts
 6 src/main/command-code/hook-service.ts
 7 src/main/composio/composio-bot-tool.ts
 5 src/main/composio/composio-bots.ts
@@ -511,11 +511,11 @@
 3 src/main/ephemeral-vm/workspace-suspend.ts
 8 src/main/external-editors/external-editor-launch.ts
 1 src/main/external-editors/remote-ssh-editor-launch.ts
-28 src/main/filesystem/atomic-file-publication.ts
+24 src/main/filesystem/atomic-file-publication.ts
 5 src/main/filesystem/durable-file-write.ts
 2 src/main/filesystem/local-file-io/filesystem-path-containment.ts
 7 src/main/filesystem/owner-only-durable-file-write.ts # Windows only: the addon load (realpathSync, once per process) and a sync DACL read per staged file, plus a second after a failed check; I/O is async
-2 src/main/filesystem/rolling-file-backup.ts
+4 src/main/filesystem/rolling-file-backup.ts # stageRollingFileBackup + commit (same sync copy and rename); the staged-copy rmSync moved into removeFileWithWindowsRetry so Windows AV locks are retried
 1 src/main/foreign-sqlite-readers/foreign-sqlite-reader-entry-path.ts
 5 src/main/foreign-sqlite-readers/foreign-sqlite-reader-spawn.ts
 6 src/main/gemini/hook-service.ts
@@ -663,7 +663,7 @@
 1 src/main/ipc/pty/runtime/spawn-options.ts
 1 src/main/ipc/pty/spawn/spawn-begin.ts
 1 src/main/ipc/pty/spawn/spawn-options-assembly.ts
-16 src/main/ipc/register-core-handlers/register-core-handlers.ts
+17 src/main/ipc/register-core-handlers/register-core-handlers.ts # clipboard path authorization moved here from window/clipboard/clipboard-ipc-handlers.ts
 1 src/main/ipc/register-core-handlers/runtime-host-handler-registration.ts
 5 src/main/ipc/repos.ts
 1 src/main/ipc/repos/local-repo-registration.ts
@@ -1390,6 +1390,7 @@
 1 src/main/startup/main-window/main-process-i18n-menu.ts
 15 src/main/startup/main-window/main-window-controller.ts
 4 src/main/startup/main-window/main-window-core-services.ts
+1 src/main/startup/native-setting-subscriptions.ts # HTTP/1 marker write moved here from main-process-ready-foundation.ts (settings change only)
 3 src/main/startup/network-compatibility/http1-compatibility-marker.ts
 9 src/main/startup/network-compatibility/http1-compatibility-profile-state.ts
 1 src/main/startup/plugin-startup/main-process-plugin-rpc.ts
@@ -1456,7 +1457,6 @@
 1 src/main/webhooks/webhook-call-runs.ts
 3 src/main/webhooks/webhook-host-ledger.ts
 8 src/main/window/attach-main-window-services.ts
-1 src/main/window/clipboard/clipboard-ipc-handlers.ts
 2 src/main/window/createMainWindow.ts # superseded-session unlink on a rare memory-only sign-in or rotation stays ordered with the sync saves, sign-out and quit flush (#44285)
 3 src/main/window/desktop-integration/app-icon.ts
 1 src/main/window/desktop-integration/custom-app-icon.ts
