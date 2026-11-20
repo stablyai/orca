@@ -24,6 +24,8 @@ export type BotItemsClosedPages = {
   loadMore: (() => Promise<BotItemsClosedPage>) | null
   /** Every Closed item the list counts is loaded. */
   ended: boolean
+  /** The last activity of the loaded end, while more Closed pages remain. */
+  endAt: number | null
 }
 
 export type BotItemsClosedPage = { items: readonly BotItem[]; more: boolean }
@@ -88,14 +90,22 @@ function joins(pages: Pages, from: BotItemsRead, to: BotItemsRead): boolean {
   })
 }
 
-/** Every Closed item `read` counts is loaded or in it, when the loaded pages say they reach the end. */
+/** When the loaded pages say they reach the end, the Closed items shown are exactly those `read`
+ *  counts (none missing below the end, none deleted since). */
 function countsMet(pages: Pages, read: BotItemsRead): boolean {
   if (pages.cursor !== null) {
     return true
   }
-  const uids = new Set(pages.items.map((item) => item.uid))
-  read.items.forEach((item) => isClosed(item) && uids.add(item.uid))
-  return uids.size >= (read.counts.done ?? 0) + (read.counts.canceled ?? 0)
+  const closed = new Set(pages.items.map((item) => item.uid))
+  for (const item of read.items) {
+    // The read's copy says where the item is now: a reopened one is no longer Closed.
+    if (isClosed(item)) {
+      closed.add(item.uid)
+    } else {
+      closed.delete(item.uid)
+    }
+  }
+  return closed.size === (read.counts.done ?? 0) + (read.counts.canceled ?? 0)
 }
 
 /** Loaded pages carried from the read they continued (`from`) to a newer one (`to`): `from`'s Closed
@@ -177,6 +187,7 @@ export function useBotItemsClosedPages(
   return {
     items,
     loadMore: cursor ? loadMore : null,
-    ended: read !== null && cursor === null
+    ended: read !== null && cursor === null,
+    endAt: cursorPlace(cursor)?.at ?? null
   }
 }

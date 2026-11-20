@@ -28,6 +28,8 @@ export type BotItemsShownList = {
   loadMoreClosed: (() => Promise<BotItemsClosedPage>) | null
   /** Every Closed item this list counts is loaded. */
   closedEnded: boolean
+  /** The last activity of the loaded Closed end, while more pages remain. */
+  closedEndAt: number | null
 }
 
 export function useBotItemsShownList(
@@ -60,6 +62,7 @@ export function useBotItemsShownList(
         ? groups.closed.length
         : (read.counts.done ?? 0) + (read.counts.canceled ?? 0),
     loadMoreClosed: filter.needsYou ? null : closedPages.loadMore,
-    closedEnded: filter.needsYou || closedPages.ended
+    closedEnded: filter.needsYou || closedPages.ended,
+    closedEndAt: filter.needsYou ? null : closedPages.endAt
   }
 }

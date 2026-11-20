@@ -153,10 +153,15 @@ export function botGroupNeedsYouOutside(counts: {
 }
 
 /** A member's loaded Closed items as the filter shows them, and whether it has more pages. */
-function memberClosed(read: MemberRead): { closed: BotItem[]; more: boolean } {
+function memberClosed(read: MemberRead): {
+  closed: BotItem[]
+  more: boolean
+  endAt: number | null
+} {
   return {
     closed: read.list.shown.filter((item) => item.status === 'done' || item.status === 'canceled'),
-    more: !read.list.closedEnded
+    more: !read.list.closedEnded,
+    endAt: read.list.closedEndAt
   }
 }
 
@@ -258,7 +263,7 @@ export function useBotGroupItems(
             return closed
           }
           const page = await read.list.loadMoreClosed()
-          return { closed: [...closed.closed, ...page.items], more: page.more }
+          return { closed: [...closed.closed, ...page.items], more: page.more, endAt: null }
         })
       )
       for (const item of members.flatMap((member) => member.closed)) {

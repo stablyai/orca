@@ -50,5 +50,16 @@ export function mergeNamedBotItems(
       ? previous
       : { ...previous, seenEventId: named.seenEventId }
   }
-  return { ...previous, items: [...items, ...added], counts, seenEventId: named.seenEventId }
+  // In the host's order (open, then Closed; each newest activity first), as a whole read has them.
+  const ordered = [...items, ...added].sort(
+    (a, b) =>
+      Number(isClosedItem(a)) - Number(isClosedItem(b)) ||
+      b.lastActivityAt - a.lastActivityAt ||
+      b.number - a.number
+  )
+  return { ...previous, items: ordered, counts, seenEventId: named.seenEventId }
+}
+
+function isClosedItem(item: BotItem): boolean {
+  return item.status === 'done' || item.status === 'canceled'
 }

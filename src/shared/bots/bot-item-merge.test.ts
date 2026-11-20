@@ -19,10 +19,11 @@ describe('mergeNamedBotItems', () => {
 
     const merged = mergeNamedBotItems(previous, named, ['u1', 'u2', 'u4'])
 
+    // In the host's order: newest activity first, then highest number.
     expect(merged.items.map((item) => [item.uid, item.title])).toEqual([
-      ['u1', 'Renamed'],
+      ['u4', 'Item 4'],
       ['u3', 'Item 3'],
-      ['u4', 'Item 4']
+      ['u1', 'Renamed']
     ])
     expect(merged.items[1]).toBe(three)
     expect(mergeNamedBotItems(previous, { ...named, items: [one, two] }, ['u1', 'u2'])).toBe(
