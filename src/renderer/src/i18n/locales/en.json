@@ -6034,13 +6034,8 @@
           "resource": {
             "memory": {
               "metric": {
-                "workingSetDescription": "Summed working set (WS): pages resident in RAM right now. Shared pages can appear in more than one process, and memory Windows has paged out is not counted here.",
-                "privateBytesDescription": "Summed private bytes: memory these processes have committed, counted whether it is resident or paged out. This is what the host charges against its commit limit, so it keeps rising while the working set above shrinks under paging.",
-                "footprintDescription": "Summed memory footprint, the same figure Activity Monitor shows: memory each process owns, including graphics memory. Pages shared between processes are not counted twice.",
-                "rssDescription": "Summed resident set size (RSS). Shared or aliased pages can appear in more than one process.",
                 "memColumn": "Mem",
-                "memorySummary": "Σ Memory",
-                "privateSummary": "Σ Private"
+                "memorySummary": "Σ Memory"
               }
             },
             "manager": {
@@ -25879,12 +25874,10 @@
     "restartLocal": "Restart local daemon",
     "killAllLocal": "Kill all local sessions",
     "killFailed": "The terminal could not be ended. Last-observed sessions are retained.",
-    "metricDetails": "Metric details",
     "owner": {
       "orca": "Orca",
       "agents": "Agents",
       "otherTerminals": "Other terminals",
-      "description": "Orca is the app. Agents are terminals running an agent; Other terminals are the rest you run in Orca. The bar shows each one's share of their combined memory.",
       "privateBytes": "Committed by Orca and terminals"
     }
   },

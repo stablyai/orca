@@ -3745,13 +3745,8 @@
           "resource": {
             "memory": {
               "metric": {
-                "workingSetDescription": "Working set somado (WS): páginas residentes na RAM agora. Páginas compartilhadas podem aparecer em mais de um processo, e a memória que o Windows paginou para o disco não é contada aqui.",
-                "privateBytesDescription": "Bytes privados somados: memória que esses processos comprometeram, contada esteja ela residente ou paginada para o disco. É isso que o host cobra contra seu limite de comprometimento, então continua subindo enquanto o working set acima diminui sob paginação.",
-                "footprintDescription": "Pegada de memória somada, o mesmo valor que o Monitor de Atividade mostra: a memória de cada processo, incluindo memória gráfica. Páginas compartilhadas entre processos não são contadas duas vezes.",
-                "rssDescription": "Tamanho do conjunto residente somado (RSS). Páginas compartilhadas ou com alias podem aparecer em mais de um processo.",
                 "memColumn": "Mem.",
-                "memorySummary": "Σ Memória",
-                "privateSummary": "Σ Privada"
+                "memorySummary": "Σ Memória"
               }
             },
             "manager": {
@@ -23558,8 +23553,7 @@
     "openToObserve": "Abra Recursos para observar as sessões de terminal.",
     "killAllLocal": "Encerrar todas as sessões locais",
     "ptys": "PTYs",
-    "restartLocal": "Reiniciar daemon local",
-    "metricDetails": "Detalhes das métricas"
+    "restartLocal": "Reiniciar daemon local"
   },
   "browserTab": {
     "agentDriving": "Um agente está usando esta página",
