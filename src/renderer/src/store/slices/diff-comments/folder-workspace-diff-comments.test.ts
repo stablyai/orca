@@ -2,11 +2,11 @@ import { selectDiffCommentView, type DiffCommentOwner } from './diff-comment-own
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { create } from 'zustand'
 import type { AppState } from '../../types'
-import type { DiffComment } from '../../../../../shared/diff-comment-types'
+import type { DiffComment } from '../../../../../shared/file-review/diff-comment-types'
 import type { FolderWorkspace } from '../../../../../shared/folder-workspaces/folder-workspace-types'
-import type { ProjectGroup } from '../../../../../shared/project-group-types'
-import { folderWorkspaceKey } from '../../../../../shared/workspace-scope'
-import { SELF_LOCAL_AUTHORITY } from '../../../../../shared/host-authority'
+import type { ProjectGroup } from '../../../../../shared/project/groups/project-group-types'
+import { folderWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
+import { SELF_LOCAL_AUTHORITY } from '../../../../../shared/execution-host/host-authority'
 import {
   createCompatibleRuntimeStatusResponseIfNeeded,
   type RuntimeEnvironmentCallRequest

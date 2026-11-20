@@ -2,7 +2,7 @@ import { copyFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { getAppEnvironment, setAppEnvironment } from '../../shared/app-environment'
+import { getAppEnvironment, setAppEnvironment } from '../../shared/app-lifecycle/app-environment'
 import { bundledRipgrepBinaryName } from '../../shared/ripgrep/bundled-ripgrep'
 import { bundledRipgrepCommand, resetBundledRipgrepPathCacheForTests } from './bundled-ripgrep-path'
 import { spawnBundledRipgrep } from './bundled-ripgrep-spawn'

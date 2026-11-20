@@ -3,7 +3,7 @@ import Link from '@tiptap/extension-link'
 import {
   findProseUrlEnd,
   splitAtProseUrlTerminators
-} from '../../../../../../shared/prose-url-boundary'
+} from '../../../../../../shared/text/prose-url-boundary'
 
 function isFileUri(href: unknown): href is string {
   return typeof href === 'string' && /^file:/i.test(href.trim())

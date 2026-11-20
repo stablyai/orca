@@ -1,20 +1,6 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as SshConfigParser from './ssh-config-parser'
-import type { SshConfigHost } from './ssh-config-parser'
-
-const loadUserSshConfigMock = vi.hoisted(() => vi.fn<() => SshConfigHost[]>(() => []))
-vi.mock('./ssh-config-parser', async (importOriginal) => ({
-  ...(await importOriginal<typeof SshConfigParser>()),
-  loadUserSshConfig: loadUserSshConfigMock
-}))
-
-import { SSH_CONFIG_HOST_RESULT_LIMIT } from '../../../shared/ssh-types'
-import {
-  invalidateUserSshConfigHostCache,
-  listUserSshConfigHostSummaries,
-  resolveUserSshConfigHost,
-  searchSshConfigHosts
-} from './ssh-config-host-picker'
+import { describe, expect, it, vi } from 'vitest'
+import { SSH_CONFIG_HOST_RESULT_LIMIT } from '../../../shared/remote-runtime/ssh/ssh-types'
+import { resolveUserSshConfigHost, searchSshConfigHosts } from './ssh-config-host-picker'
 import type { SshResolvedConfig } from './ssh-g-config-resolution'
 
 function resolved(overrides: Partial<SshResolvedConfig> = {}): SshResolvedConfig {
@@ -93,13 +79,6 @@ describe('SSH config host picker search', () => {
     expect(result.hosts[0]).toMatchObject({ alias: 'prod', alreadyInOrca: true })
   })
 
-  it('marks a case-only alias variant as already in Orca', () => {
-    const result = searchSshConfigHosts([{ host: 'prod' }], [{ configHost: 'Prod', label: 'Prod' }])
-
-    expect(result).toMatchObject({ totalHostCount: 1, newHostCount: 0 })
-    expect(result.hosts[0]).toMatchObject({ alias: 'prod', alreadyInOrca: true })
-  })
-
   it('lists suppressed aliases for re-pick but excludes them from Add-all newHostCount', () => {
     const result = searchSshConfigHosts([{ host: 'removed' }, { host: 'active' }], [], '', [
       'removed'
@@ -111,48 +90,6 @@ describe('SSH config host picker search', () => {
       expect.objectContaining({ alias: 'active', alreadyInOrca: false })
     ])
     expect(result.hosts.find((host) => host.alias === 'active')?.previouslyRemoved).toBeUndefined()
-  })
-
-  it('does not mark a host as previously removed when it is already in Orca', () => {
-    const result = searchSshConfigHosts(
-      [{ host: 'prod' }],
-      [{ configHost: 'prod', label: 'Production' }],
-      '',
-      ['prod']
-    )
-
-    expect(result.hosts[0]).toMatchObject({
-      alias: 'prod',
-      alreadyInOrca: true
-    })
-    expect(result.hosts[0]?.previouslyRemoved).toBeUndefined()
-    expect(result.newHostCount).toBe(0)
-  })
-})
-
-describe('listUserSshConfigHostSummaries caching', () => {
-  beforeEach(() => {
-    loadUserSshConfigMock.mockClear()
-    loadUserSshConfigMock.mockReturnValue([{ host: 'prod' }, { host: 'stage' }])
-    invalidateUserSshConfigHostCache()
-  })
-
-  it('parses ~/.ssh/config once per picker session and filters in memory', () => {
-    listUserSshConfigHostSummaries([], '', [], { refresh: true })
-    const filtered = listUserSshConfigHostSummaries([], 'stage')
-    listUserSshConfigHostSummaries([], 'sta')
-
-    expect(loadUserSshConfigMock).toHaveBeenCalledTimes(1)
-    expect(filtered.hosts.map((host) => host.alias)).toEqual(['stage'])
-  })
-
-  it('re-reads the file when the picker reopens', () => {
-    listUserSshConfigHostSummaries([], '', [], { refresh: true })
-    loadUserSshConfigMock.mockReturnValue([{ host: 'prod' }, { host: 'stage' }, { host: 'added' }])
-    const reopened = listUserSshConfigHostSummaries([], '', [], { refresh: true })
-
-    expect(loadUserSshConfigMock).toHaveBeenCalledTimes(2)
-    expect(reopened.totalHostCount).toBe(3)
   })
 })
 

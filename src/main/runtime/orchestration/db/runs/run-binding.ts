@@ -3,7 +3,7 @@ import { OrchestrationError } from '../../orchestration-error'
 import { LEGACY_CONTRACT_VERSION } from '../contract-constants'
 import { isEquivalentPaneKey } from '../pane-key-match'
 import type { OrchestrationDb } from '../orchestration-db'
-import type { OrcaSessionId } from '../../../../../shared/orca-session-address'
+import type { OrcaSessionId } from '../../../../../shared/agent-session/identity/orca-session-address'
 import { findCallerWorkerDispatches, workerRunBindingRefusal } from './worker-run-binding'
 import {
   mailboxAddressOf,
@@ -34,6 +34,10 @@ export function bindRun(
     paneKey: params.coordinatorPaneKey,
     orcaSessionId: params.coordinatorOrcaSessionId ?? null
   }
+  // Why: the mailboxes this call actually changed; a call that changed none notifies no one.
+  const changed = new Set<string>()
+  let movedLegacyMail = false
+  const runMailbox = `run:${params.runId}`
   this.db.exec('BEGIN IMMEDIATE')
   try {
     const run = this.getRunRaw(params.runId)
@@ -148,7 +152,9 @@ export function bindRun(
         }
       )
     }
-    this.unbindOtherRunsForCoordinator(coordinator, params.runId)
+    for (const address of this.unbindOtherRunsForCoordinator(coordinator, params.runId)) {
+      changed.add(address)
+    }
     for (const address of new Set([
       mailboxAddressOf(runCoordinatorKey(run)),
       mailboxAddressOf(coordinator)
@@ -156,8 +162,10 @@ export function bindRun(
       if (address === null) {
         continue
       }
-      this.rememberRunCoordinatorHandle(params.runId, address)
-      this.routeAllUnreadDirectMessagesToRunMailbox(params.runId, address)
+      const remembered = this.rememberRunCoordinatorHandle(params.runId, address)
+      if (this.routeAllUnreadDirectMessagesToRunMailbox(params.runId, address) > 0 || remembered) {
+        changed.add(runMailbox).add(address)
+      }
     }
     if (
       (params.takeoverLegacy && !takeoverAlreadyApplied) ||
@@ -190,12 +198,32 @@ export function bindRun(
           coordinator.orcaSessionId,
           params.runId
         )
+      changed.add(runMailbox)
       this.fenceUnacknowledgedMailboxDeliveries(`run:${params.runId}`)
+      const previous = runCoordinatorKey(run)
+      if (
+        previous.orcaSessionId !== coordinator.orcaSessionId ||
+        previous.terminalHandle !== coordinator.terminalHandle
+      ) {
+        // A pointer the old coordinator was handed points the new one at nothing: unread mail
+        // it never took is pointed at again. Cards still in a chat move by their own custody.
+        this.db
+          .prepare(
+            `UPDATE messages
+             SET delivered_at = NULL, pointer_pty_id = NULL, pointer_process_incarnation = NULL
+             WHERE to_handle = ? AND read = 0 AND delivery_contract = 'current_delivery'
+               AND delivered_at IS NOT NULL AND pointer_enter_pending = 0
+               AND id NOT IN (SELECT message_id FROM structured_mail_sends WHERE mailbox_handle = ?)`
+          )
+          .run(`run:${params.runId}`, `run:${params.runId}`)
+      }
       if (params.takeoverLegacy || replacesLegacyCoordinator) {
         this.promoteLegacyCoordinatorMailForTakeover(params.runId, retainedCoordinatorHandle)
+        movedLegacyMail = true
       }
     } else if (runCoordinatorKey(run).orcaSessionId !== coordinator.orcaSessionId) {
       // Same consumer: backfill the session id omitted by an older writer.
+      changed.add(runMailbox)
       this.db
         .prepare(
           `UPDATE runs SET coordinator_orca_session_id = ?,
@@ -208,6 +236,14 @@ export function bindRun(
   } catch (error) {
     this.db.exec('ROLLBACK')
     throw error
+  }
+  if (movedLegacyMail) {
+    // Legacy takeover moves mail between handles this call does not enumerate.
+    this.crewChanges.notify(new Set(['topology']))
+  } else if (changed.size > 0) {
+    this.crewChanges.notify(
+      Object.assign(new Set(['topology'] as const), { trafficAddresses: changed })
+    )
   }
   return this.getRun(params.runId)
 }

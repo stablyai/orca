@@ -1,13 +1,11 @@
+import type { LocalScrollbackSnapshots } from '@/runtime/hosted-terminals/hydration/host-terminal-scrollback-hydration'
 import type { HttpLinkActionDestinations as TerminalHttpLinkActionDestinations } from '@/lib/browser/navigation/http-link-destinations'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { useAppStore } from '@/store/index'
 import { getConnectionId } from '@/lib/workspace/ownership/connection-context'
 import { httpLinkActionDestinationsFor } from '@/lib/browser/navigation/http-link-destinations'
 import '@/lib/browser/workspace/workspace-browser-tab-open'
-import {
-  canOpenWorkspaceBrowserTabOnRuntime,
-  canOpenWorkspaceBrowserTabOnSsh
-} from '@/lib/browser/workspace/workspace-browser-route-eligibility'
+import { canOpenRemoteLinkInWorkspaceBrowser } from '@/lib/browser/workspace/workspace-browser-route-eligibility'
 import { resolvePaneWslDistro } from '../host-state/terminal-pane-wsl-distro'
 import {
   resolveTerminalHttpLinkSourceOwner,
@@ -28,12 +26,11 @@ import type { UseTerminalPaneLifecycleDeps } from './terminal-pane-lifecycle-typ
 import type { TerminalPaneLifecycleRefs } from './use-terminal-pane-lifecycle-refs'
 import { fitAndFocusPanes, fitPanes } from '../viewport/mounted-pane-fit'
 import { registerRuntimeTerminalTab } from '@/runtime/hosted-terminals/mounted-surfaces/mounted-terminal-tab-registry'
-import { normalizeTerminalLayoutSnapshot } from '../layout/terminal-layout-normalization'
 import { applyTerminalAppearance } from '../appearance/terminal-appearance'
 import { terminalLinkClickBehaviorFor } from '../links/gestures/terminal-link-click-behavior'
 import { createTerminalPanePtyDeps } from './terminal-pane-pty-deps'
 import type { DeferredSplitPaneHandoffHandle } from '../layout/split/deferred-split-pane-handoff'
-import { hydrateTerminalScrollbackRefs } from '../snapshots/terminal-scrollback-ref-hydration'
+import { prepareTerminalPaneScrollback } from './terminal-pane-mount-scrollback'
 import { resolvePaneLinkCwd } from '../links/pane-link-cwd'
 import { resolveQueuedInitialCwd } from './queued-initial-cwd'
 import { resolveTerminalHomePathFromEnv } from './terminal-home-path'
@@ -59,7 +56,10 @@ export type TerminalPaneMountPreparation = {
     paneId: number
   ) => ReturnType<typeof resolveTerminalHttpLinkSourceOwner>
   canOpenOwnedBrowserForPane: (paneId: number) => boolean
-  getHttpLinkActionDestinations: (paneId: number) => TerminalHttpLinkActionDestinations
+  getHttpLinkActionDestinations: (
+    paneId: number,
+    url?: string
+  ) => TerminalHttpLinkActionDestinations
   getLinkActionContext: (paneId: number) => TerminalLinkActionContext | null
   linkDeps: LinkHandlerDeps
   queueResizeAll: (focusActive: boolean) => void
@@ -75,7 +75,9 @@ export type TerminalPaneMountPreparation = {
 export function prepareTerminalPaneMount(
   deps: UseTerminalPaneLifecycleDeps,
   refs: TerminalPaneLifecycleRefs,
-  mountFollowsTerminalPark: boolean
+  mountFollowsTerminalPark: boolean,
+  snapshots: LocalScrollbackSnapshots = {},
+  retainedInlineLayout?: UseTerminalPaneLifecycleDeps['initialLayoutRef']['current']
 ): TerminalPaneMountPreparation | null {
   const { containerRef, expandedStyleSnapshotRef, paneTransportsRef, panePtyBindingsRef } = deps
   const container = containerRef.current
@@ -110,29 +112,21 @@ export function prepareTerminalPaneMount(
     paneId: number
   ): ReturnType<typeof resolveTerminalHttpLinkSourceOwner> =>
     resolveTerminalHttpLinkSourceOwner(paneTransports.get(paneId))
-  const canOpenOwnedBrowserForPane = (paneId: number): boolean => {
-    const sourceOwner = getHttpLinkSourceOwnerForPane(paneId)
-    if (sourceOwner.kind === 'runtime') {
-      return canOpenWorkspaceBrowserTabOnRuntime(
-        useAppStore.getState(),
-        deps.worktreeId,
-        sourceOwner.runtimeEnvironmentId
-      )
-    }
-    return (
-      sourceOwner.kind === 'ssh' &&
-      canOpenWorkspaceBrowserTabOnSsh(
-        useAppStore.getState(),
-        deps.worktreeId,
-        sourceOwner.connectionId
-      )
+  const canOpenOwnedBrowserForPane = (paneId: number): boolean =>
+    canOpenRemoteLinkInWorkspaceBrowser(
+      useAppStore.getState(),
+      deps.worktreeId,
+      getHttpLinkSourceOwnerForPane(paneId)
     )
-  }
-  const getHttpLinkActionDestinations = (paneId: number): TerminalHttpLinkActionDestinations =>
+  const getHttpLinkActionDestinations = (
+    paneId: number,
+    url?: string
+  ): TerminalHttpLinkActionDestinations =>
     httpLinkActionDestinationsFor(
       deps.settingsRef.current,
       getHttpLinkSourceOwnerForPane(paneId),
-      canOpenOwnedBrowserForPane(paneId)
+      canOpenOwnedBrowserForPane(paneId),
+      url
     )
   const getLinkActionContext = (paneId: number): TerminalLinkActionContext | null => {
     const plainClickBehavior = terminalLinkClickBehaviorFor(deps.settingsRef.current)
@@ -212,16 +206,11 @@ export function prepareTerminalPaneMount(
   const syncPaneLayoutRevision = (): void => {
     deps.setPaneLayoutRevision((revision) => revision + 1)
   }
-  const normalizedInitialLayout = normalizeTerminalLayoutSnapshot(deps.initialLayoutRef.current)
-  if (normalizedInitialLayout.changed) {
-    deps.initialLayoutRef.current = normalizedInitialLayout.snapshot
-    useAppStore.getState().setTabLayout(deps.tabId, normalizedInitialLayout.snapshot)
-  }
-  const initialLayoutHadBuffers = Boolean(deps.initialLayoutRef.current.buffersByLeafId)
-  const hydratedInitialScrollback = hydrateTerminalScrollbackRefs(deps.initialLayoutRef.current)
-  if (hydratedInitialScrollback.hydrated) {
-    deps.initialLayoutRef.current = hydratedInitialScrollback.layout
-  }
+  const initialLayoutHadBuffers = prepareTerminalPaneScrollback(
+    deps,
+    snapshots,
+    retainedInlineLayout
+  )
   // Numeric IDs die with the mount; durable tab/leaf keys let remounts reclaim deferred handles.
   const deferredSplitHandoffs = new Map<number, DeferredSplitPaneHandoffHandle>()
   const ptyDeps = createTerminalPanePtyDeps({

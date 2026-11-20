@@ -68,6 +68,8 @@
 .pane-divider::after {
   content: '';
   position: absolute;
+  /* The line extends into perpendicular dividers for the visual join; the parent divider owns those hits. */
+  pointer-events: none;
   border-radius: 1px;
   background: var(--orca-terminal-divider-color, transparent);
   transition: background 100ms ease;
@@ -351,6 +353,16 @@
   outline-offset: 1px;
 }
 
+.pane-title-text:has(~ .pane-title-recent-images) {
+  flex: 1 0 min(50%, calc(var(--spacing) * 32));
+}
+
+.pane-title-drag-handle:has(+ .pane-title-recent-images) {
+  position: static;
+  flex-shrink: 0;
+  transform: none;
+}
+
 .pane-title-bar[data-chromeless] {
   background: transparent;
   border-bottom: none;
@@ -358,7 +370,7 @@
   pointer-events: none;
 }
 
-.pane-title-bar[data-chromeless] .pane-title-actions {
+.pane-title-bar[data-chromeless] :is(.pane-title-actions, .pane-title-recent-images) {
   pointer-events: auto;
 }
 
@@ -404,7 +416,7 @@
     color 120ms ease;
 }
 
-.pane-title-actions {
+:is(.pane-title-actions, .pane-title-recent-images) {
   position: relative;
   z-index: 3;
 }
@@ -506,8 +518,8 @@
   contain: paint;
 }
 
-/* Offset titled terminals and subtract the same height to prevent clipping. */
-.pane[data-has-title] .xterm-container {
+/* Reserve the header row for titles and image chips. */
+.pane:is([data-has-title], [data-has-recent-images]) .xterm-container {
   margin-top: var(--orca-pane-title-height);
   height: calc(100% - var(--orca-pane-title-height) - var(--pane-padding-y, 4px));
 }
@@ -521,7 +533,7 @@
   z-index: 5;
 }
 
-.pane[data-has-title] .pane-top-banner {
+.pane:is([data-has-title], [data-has-recent-images]) .pane-top-banner {
   top: calc(var(--orca-pane-title-height) + var(--orca-pane-top-banner-offset, 0px));
 }
 
@@ -530,7 +542,7 @@
   height: calc(100% - 2 * var(--pane-padding-y, 4px) - var(--orca-pane-top-banner-height, 0px));
 }
 
-.pane[data-has-title]:has(> .pane-top-banner) .xterm-container {
+.pane:is([data-has-title], [data-has-recent-images]):has(> .pane-top-banner) .xterm-container {
   margin-top: calc(var(--orca-pane-title-height) + var(--orca-pane-top-banner-height, 0px));
   height: calc(
     100% - var(--orca-pane-title-height) - var(--orca-pane-top-banner-height, 0px) -

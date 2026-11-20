@@ -6,7 +6,7 @@ import type {
   OrcaCloudCapabilities,
   OrcaCloudOrgSummary,
   OrcaProfileCloudSummary
-} from '../../../shared/orca-profiles'
+} from '../../../shared/orca-profiles/orca-profiles'
 
 const {
   beginOrcaCloudPkceFlowMock,
@@ -47,6 +47,9 @@ import {
   getCurrentOrcaProfileAuthStatus,
   signOutCurrentOrcaProfile
 } from './profile-cloud-service'
+
+// The PKCE flow is mocked, so no browser opens.
+const openNoBrowser = async (): Promise<void> => {}
 
 const cloud: OrcaProfileCloudSummary = {
   cloudProfileId: 'cloud-profile-1',
@@ -102,7 +105,7 @@ describe('Orca cloud sign-out vs newer connect', () => {
   })
 
   it('keeps a newer connect that finishes while sign-out is still revoking', async () => {
-    await expect(connectCurrentOrcaProfile(userDataPath)).resolves.toMatchObject({
+    await expect(connectCurrentOrcaProfile(userDataPath, openNoBrowser)).resolves.toMatchObject({
       status: 'connected'
     })
     let finishRevoke!: () => void
@@ -120,7 +123,7 @@ describe('Orca cloud sign-out vs newer connect', () => {
       organizations,
       capabilities
     })
-    await expect(connectCurrentOrcaProfile(userDataPath)).resolves.toMatchObject({
+    await expect(connectCurrentOrcaProfile(userDataPath, openNoBrowser)).resolves.toMatchObject({
       status: 'connected'
     })
     expect(getCurrentOrcaProfileAuthStatus(userDataPath).cloud?.email).toBe('ada@example.com')

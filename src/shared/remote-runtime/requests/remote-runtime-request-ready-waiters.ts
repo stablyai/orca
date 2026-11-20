@@ -1,4 +1,4 @@
-import { abortSignalReason } from '../../abort-signal-reason'
+import { abortSignalReason } from '../../concurrency/abort-signal-reason'
 
 export type RemoteRuntimeRequestReadyWaiter = {
   resolve: () => void

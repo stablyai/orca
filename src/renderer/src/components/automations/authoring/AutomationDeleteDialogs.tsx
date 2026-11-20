@@ -48,9 +48,7 @@ export function AutomationDeleteDialog({
         }}
       >
         <DialogHeader>
-          <DialogTitle className="text-sm">
-            {t('auto.components.automations.AutomationsPage.080dcb5fbb', 'Delete Automation')}
-          </DialogTitle>
+          <DialogTitle size="compact">{t('common.delete', 'Delete')}</DialogTitle>
           <DialogDescription className="text-xs">
             <Trans
               i18n={i18n}
@@ -141,12 +139,7 @@ export function ExternalAutomationDeleteDialog({
         }}
       >
         <DialogHeader>
-          <DialogTitle className="text-sm">
-            {t(
-              'auto.components.automations.AutomationsPage.9adfab2596',
-              'Delete External Automation'
-            )}
-          </DialogTitle>
+          <DialogTitle size="compact">{t('common.delete', 'Delete')}</DialogTitle>
           <DialogDescription className="text-xs">
             <Trans
               i18n={i18n}

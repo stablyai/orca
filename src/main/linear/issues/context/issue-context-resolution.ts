@@ -1,0 +1,321 @@
+import type { LinearSearchResult } from '../../../../shared/linear/agent-result-types'
+import { clampLinearSearchLimit } from '../../../../shared/linear/agent-access'
+import type { LinearWorkspace } from '../../../../shared/linear/workspace-types'
+import { acquire, release } from '../../requests/linear-request-concurrency'
+import { clearToken } from '../../accounts/linear-token-store'
+import {
+  getClients,
+  getPublicFileUrlClient,
+  getStatus,
+  isAuthError,
+  type LinearClientForWorkspace
+} from '../../accounts/linear-account-client'
+import { ISSUE_QUERY, SEARCH_QUERY, mapIssue, pickSearchIssue } from './issue-context-graphql'
+import type { RawIssueResponse } from './issue-context-graphql'
+import { LinearAgentAccessError, linearError, toLinearAccessError } from './linear-access-errors'
+import { linearNotConnectedError } from './linear-not-connected-error'
+import { getFanoutClientEntries, workspaceFailure } from './workspace-read-fanout'
+import type { WorkspaceReadFailure } from './workspace-read-fanout'
+import { sumSearchTotals, type WorkspaceSearchResult } from './linear-search-totals'
+import {
+  ambiguousWorkspace,
+  resolveWorkspaceSelector,
+  unknownWorkspace
+} from './workspace-selector-resolution'
+
+export type ResolvedIssue = {
+  issue: ReturnType<typeof mapIssue>
+  workspace: LinearWorkspace
+}
+
+export async function searchLinearIssuesForAgents(args: {
+  query: string
+  limit?: number
+  workspaceId?: (string & {}) | 'all'
+}): Promise<LinearSearchResult> {
+  const limit = clampLinearSearchLimit(args.limit)
+  const workspaceId = await resolveSearchWorkspaceId(args.workspaceId)
+  const { entries, failures: entryFailures } = await (workspaceId === 'all'
+    ? getFanoutClientEntries()
+    : getExplicitClientEntries(workspaceId))
+  if (entries.length === 0) {
+    await throwIfExplicitWorkspaceHasConnectedAlternatives(workspaceId)
+    if (entryFailures[0]) {
+      throw entryFailures[0].error
+    }
+    throw linearNotConnectedError()
+  }
+
+  const perWorkspace = await readSearchWorkspaces(
+    entries,
+    args.query,
+    limit + 1,
+    workspaceId,
+    entryFailures
+  )
+  const merged = perWorkspace.results
+    .flatMap((result) => result.issues)
+    .sort((left, right) => Date.parse(right.updatedAt ?? '') - Date.parse(left.updatedAt ?? ''))
+  const limited = merged.slice(0, limit)
+  const limitReached = merged.length > limit
+  return {
+    issues: limited,
+    truncated: limitReached,
+    meta: {
+      query: args.query,
+      workspaceId,
+      limit,
+      returned: limited.length,
+      ...(perWorkspace.total !== undefined ? { total: perWorkspace.total } : {}),
+      limitReached,
+      partial: perWorkspace.failures.length > 0,
+      workspaceErrors: perWorkspace.failures.map(({ workspace, code, message }) => ({
+        workspace,
+        code,
+        message
+      }))
+    }
+  }
+}
+
+export async function resolveIssue(
+  identifier: string,
+  selectors: { workspaceId?: string | null; organizationUrlKey?: string | null },
+  signal?: AbortSignal
+): Promise<ResolvedIssue> {
+  const workspace = resolveWorkspaceSelector(selectors, await getConnectedWorkspaces())
+  const selection = workspace?.id ?? selectors.workspaceId ?? 'all'
+  const { entries, failures: entryFailures } =
+    selection === 'all'
+      ? await getFanoutClientEntries(signal)
+      : await getExplicitClientEntries(selection, signal)
+  if (entries.length === 0) {
+    await throwIfExplicitWorkspaceHasConnectedAlternatives(selection)
+    if (entryFailures[0]) {
+      throw entryFailures[0].error
+    }
+    throw linearNotConnectedError()
+  }
+
+  const results = await readIssueWorkspaces(entries, identifier, selection, entryFailures, signal)
+
+  if (results.length === 0) {
+    throw linearError('linear_issue_not_found', `Linear issue ${identifier} was not found.`)
+  }
+  if (results.length > 1) {
+    throw ambiguousWorkspace(
+      results.map((result) => result.workspace),
+      identifier
+    )
+  }
+  return results[0]
+}
+
+export const getConnectedWorkspaces = async (): Promise<LinearWorkspace[]> =>
+  (await getStatus()).workspaces ?? []
+
+export async function getRequiredEntry(
+  workspaceId: string,
+  signal?: AbortSignal
+): Promise<LinearClientForWorkspace> {
+  const entry = (await getClients(workspaceId, signal))[0]
+  if (!entry) {
+    throw linearNotConnectedError()
+  }
+  return entry
+}
+
+async function getExplicitClientEntries(
+  workspaceId?: string,
+  signal?: AbortSignal
+): Promise<{
+  entries: LinearClientForWorkspace[]
+  failures: WorkspaceReadFailure[]
+}> {
+  try {
+    return { entries: await getClients(workspaceId, signal), failures: [] }
+  } catch (error) {
+    if (error instanceof LinearAgentAccessError) {
+      throw error
+    }
+    throw toLinearAccessError(error)
+  }
+}
+
+async function resolveSearchWorkspaceId(
+  workspaceId?: (string & {}) | 'all'
+): Promise<(string & {}) | 'all' | undefined> {
+  if (!workspaceId || workspaceId === 'all') {
+    return workspaceId
+  }
+  const workspaces = await getConnectedWorkspaces()
+  return resolveWorkspaceSelector({ workspaceId }, workspaces)?.id ?? workspaceId
+}
+
+async function throwIfExplicitWorkspaceHasConnectedAlternatives(
+  workspaceId?: (string & {}) | 'all'
+): Promise<void> {
+  if (!workspaceId || workspaceId === 'all') {
+    return
+  }
+  try {
+    if ((await getClients('all')).length > 0) {
+      throw unknownWorkspace(workspaceId)
+    }
+  } catch (error) {
+    if (error instanceof LinearAgentAccessError && error.code === 'linear_invalid_workspace') {
+      throw error
+    }
+  }
+}
+
+export async function withLinearRead<T>(
+  entry: LinearClientForWorkspace,
+  read: () => Promise<T>,
+  selection?: (string & {}) | 'all',
+  signal?: AbortSignal
+): Promise<T> {
+  void selection
+  await acquire(signal)
+  try {
+    signal?.throwIfAborted()
+    return await read()
+  } catch (error) {
+    if (isAuthError(error)) {
+      await clearToken(entry.workspace.id)
+      throw linearError('linear_auth_expired', 'Linear authentication expired.', {
+        nextSteps: ['Reconnect Linear from Orca settings.']
+      })
+    }
+    throw toLinearAccessError(error)
+  } finally {
+    release()
+  }
+}
+
+async function readIssueWorkspace(
+  entry: LinearClientForWorkspace,
+  identifier: string,
+  signal?: AbortSignal
+): Promise<ResolvedIssue | null> {
+  const response = await withLinearRead(
+    entry,
+    async () => {
+      const client = getPublicFileUrlClient(entry, signal)
+      const raw = await client.client.rawRequest<RawIssueResponse, Record<string, unknown>>(
+        ISSUE_QUERY,
+        { id: identifier }
+      )
+      return raw.data?.issue ?? null
+    },
+    undefined,
+    signal
+  )
+  return response ? { issue: mapIssue(response), workspace: entry.workspace } : null
+}
+
+async function readIssueWorkspaces(
+  entries: LinearClientForWorkspace[],
+  identifier: string,
+  selection: (string & {}) | 'all',
+  initialFailures: WorkspaceReadFailure[] = [],
+  signal?: AbortSignal
+): Promise<ResolvedIssue[]> {
+  if (selection !== 'all') {
+    const selected = await readIssueWorkspace(entries[0], identifier, signal)
+    return selected ? [selected] : []
+  }
+
+  const settled = await Promise.allSettled(
+    entries.map((entry) => readIssueWorkspace(entry, identifier, signal))
+  )
+  const results: ResolvedIssue[] = []
+  const failures: LinearAgentAccessError[] = initialFailures.map((failure) => failure.error)
+
+  for (const result of settled) {
+    if (result.status === 'fulfilled') {
+      if (result.value) {
+        results.push(result.value)
+      }
+      continue
+    }
+    if (result.reason instanceof LinearAgentAccessError) {
+      failures.push(result.reason)
+    }
+    console.warn('[linear] agent issue read failed:', result.reason)
+  }
+
+  if (results.length === 0 && failures[0]) {
+    throw failures[0]
+  }
+  return results
+}
+
+async function readSearchWorkspace(
+  entry: LinearClientForWorkspace,
+  query: string,
+  limit: number,
+  workspaceId?: (string & {}) | 'all'
+): Promise<WorkspaceSearchResult> {
+  const response = await withLinearRead(
+    entry,
+    async () => {
+      const raw = await entry.client.client.rawRequest<RawIssueResponse, Record<string, unknown>>(
+        SEARCH_QUERY,
+        { term: query, first: limit }
+      )
+      return raw.data?.searchIssues
+    },
+    workspaceId
+  )
+  return {
+    issues: (response?.nodes ?? []).map((issue) => ({
+      ...pickSearchIssue(mapIssue(issue)),
+      workspace: {
+        id: entry.workspace.id,
+        name: entry.workspace.organizationName
+      }
+    })),
+    totalCount: typeof response?.totalCount === 'number' ? response.totalCount : undefined
+  }
+}
+
+async function readSearchWorkspaces(
+  entries: LinearClientForWorkspace[],
+  query: string,
+  limit: number,
+  workspaceId?: (string & {}) | 'all',
+  initialFailures: WorkspaceReadFailure[] = []
+): Promise<{
+  results: WorkspaceSearchResult[]
+  failures: WorkspaceReadFailure[]
+  total?: number
+}> {
+  if (workspaceId && workspaceId !== 'all') {
+    const results = [await readSearchWorkspace(entries[0], query, limit, workspaceId)]
+    return { results, failures: [], total: sumSearchTotals(results, 1) }
+  }
+
+  const settled = await Promise.allSettled(
+    entries.map(async (entry) => readSearchWorkspace(entry, query, limit, workspaceId))
+  )
+  const attemptedWorkspaceCount = entries.length + initialFailures.length
+  const results: WorkspaceSearchResult[] = []
+  const failures: WorkspaceReadFailure[] = [...initialFailures]
+  for (let index = 0; index < settled.length; index += 1) {
+    const result = settled[index]
+    if (result.status === 'fulfilled') {
+      results.push(result.value)
+      continue
+    }
+    if (result.reason instanceof LinearAgentAccessError) {
+      failures.push(workspaceFailure(entries[index].workspace, result.reason))
+    }
+    console.warn('[linear] agent search failed:', result.reason)
+  }
+
+  if (results.length === 0 && failures.length === attemptedWorkspaceCount && failures[0]) {
+    throw failures[0].error
+  }
+  return { results, failures, total: sumSearchTotals(results, attemptedWorkspaceCount) }
+}

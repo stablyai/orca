@@ -1,6 +1,9 @@
 import { readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import SyncDatabase from '../../../sqlite/sync-database'
+import { parseWslUncPath, toWindowsWslPath } from '../../../../shared/file-access/wsl-paths'
+import { readAgentStateFileSync } from '../../configuration/agent-state-file-reader'
+import { readCodexConfiguredSqliteHome } from '../../configuration/toml/config-toml-shared-sqlite-home'
 
 const STATE_DB_FILE_PATTERN = /^state_(\d+)\.sqlite$/
 
@@ -32,8 +35,27 @@ export function findNewestCodexStateDbPath(codexHomePath: string): string | null
   return newest ? join(codexHomePath, newest.name) : null
 }
 
+// Codex's own order: the home's config, then CODEX_SQLITE_HOME, then the home itself. A shared
+// account home keeps its databases in the history store.
+function resolveCodexSqliteHome(codexHomePath: string): string {
+  let config = ''
+  try {
+    config = readAgentStateFileSync(join(codexHomePath, 'config.toml'))
+  } catch {
+    // No readable config: Codex uses its defaults too.
+  }
+  const configured = readCodexConfiguredSqliteHome(config) ?? process.env.CODEX_SQLITE_HOME?.trim()
+  if (!configured) {
+    return codexHomePath
+  }
+  const wslHome = parseWslUncPath(codexHomePath)
+  return wslHome && configured.startsWith('/')
+    ? toWindowsWslPath(configured, wslHome.distro)
+    : configured
+}
+
 export function readCodexStateDbBackfillStatus(codexHomePath: string): CodexStateDbBackfillStatus {
-  const stateDbPath = findNewestCodexStateDbPath(codexHomePath)
+  const stateDbPath = findNewestCodexStateDbPath(resolveCodexSqliteHome(codexHomePath))
   if (!stateDbPath) {
     return { kind: 'missing' }
   }
@@ -61,34 +83,6 @@ export function readCodexStateDbBackfillStatus(codexHomePath: string): CodexStat
       stateDbPath,
       error: error instanceof Error ? error.message : String(error)
     }
-  } finally {
-    try {
-      db?.close()
-    } catch {
-      // A close failure cannot change the read-only result already collected.
-    }
-  }
-}
-
-/** Null means the database is absent or unreadable. */
-export function readIndexedCodexThreadIds(codexHomePath: string): Set<string> | null {
-  const stateDbPath = findNewestCodexStateDbPath(codexHomePath)
-  if (!stateDbPath) {
-    return null
-  }
-  let db: SyncDatabase | null = null
-  try {
-    db = new SyncDatabase(stateDbPath, { readonly: true, fileMustExist: true })
-    const ids = new Set<string>()
-    for (const row of db.prepare('SELECT id FROM threads').all()) {
-      if (typeof row.id === 'string') {
-        ids.add(row.id.toLowerCase())
-      }
-    }
-    return ids
-  } catch (error) {
-    console.warn('[codex-state-db] Failed to read indexed Codex threads:', error)
-    return null
   } finally {
     try {
       db?.close()

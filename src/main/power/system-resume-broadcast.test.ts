@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   clearCrashBreadcrumbsForTest,
   getCrashBreadcrumbSnapshot
-} from '../crash-reporting/crash-breadcrumb-store'
+} from '../crash-reporting/breadcrumbs/crash-breadcrumb-store'
 import { registerSystemResumeBroadcast } from './system-resume-broadcast'
 
 vi.mock('electron', () => ({
@@ -33,10 +33,6 @@ function createResumeSource() {
     fireSuspend: () => listeners.get('suspend')?.(),
     fireResume: () => listeners.get('resume')?.()
   }
-}
-
-function breadcrumbNames(): string[] {
-  return getCrashBreadcrumbSnapshot().map((breadcrumb) => breadcrumb.name)
 }
 
 function createWindow(destroyed = false): {
@@ -86,27 +82,7 @@ describe('registerSystemResumeBroadcast', () => {
     })
   })
 
-  it('ignores sleeps too short to open a gap, keeping ring slots for real evidence', () => {
-    const { source, fireSuspend, fireResume } = createResumeSource()
-    const clock = { value: 0 }
-    registerSystemResumeBroadcast({
-      resumeSource: source,
-      getWindows: () => [],
-      now: () => clock.value
-    })
-
-    // Sub-heartbeat cycles must not evict the 30-entry breadcrumb ring.
-    for (let cycle = 0; cycle < 20; cycle++) {
-      fireSuspend()
-      clock.value += 2_000
-      fireResume()
-      clock.value += 30_000
-    }
-
-    expect(breadcrumbNames()).toEqual([])
-  })
-
-  it('measures each reportable sleep independently across repeated cycles', () => {
+  it('records each reportable sleep separately and ignores a short sleep', () => {
     const { source, fireSuspend, fireResume } = createResumeSource()
     const clock = { value: 0 }
     registerSystemResumeBroadcast({
@@ -119,6 +95,10 @@ describe('registerSystemResumeBroadcast', () => {
     clock.value += 5 * 60_000
     fireResume()
     clock.value += 60_000
+    fireSuspend()
+    clock.value += 2_000
+    fireResume()
+    clock.value += 30_000
     fireSuspend()
     clock.value += 2 * 60_000
     fireResume()

@@ -12,23 +12,23 @@ import type { Store } from '../../loading-store/store'
 import {
   listWslMoveCutoverChain,
   listWslMoveCutovers
-} from '../../moving-wsl-projects/wsl-move-cutover-journal'
-import { runWslMoveDesktopRewritePass } from '../../moving-wsl-projects/wsl-move-desktop-rewrite'
+} from '../../moving-wsl-projects/cutover-recovery/wsl-move-cutover-journal'
+import { runWslMoveDesktopRewritePass } from '../../moving-wsl-projects/desktop-state/wsl-move-desktop-rewrite'
 import {
   registerWslMoveDesktopRewriteStore,
   resetWslMoveDesktopRewriteStoresForTests,
   setWslMoveDesktopRewriteRegistryCompleteForTests
-} from '../../moving-wsl-projects/wsl-move-desktop-rewrite-stores'
-import { resolveWslMoveFence } from '../../moving-wsl-projects/wsl-move-fence'
+} from '../../moving-wsl-projects/desktop-state/wsl-move-desktop-rewrite-stores'
+import { resolveWslMoveFence } from '../../moving-wsl-projects/quiescence/wsl-move-fence'
 import {
   listWslMoveOwedHostAborts,
   settleWslMoveOwedHostAborts
-} from '../../moving-wsl-projects/wsl-move-owed-host-aborts'
+} from '../../moving-wsl-projects/cutover-recovery/wsl-move-owed-host-aborts'
 import {
   recoverInterruptedWslMoves,
   resetWslMoveToZero
-} from '../../moving-wsl-projects/wsl-move-reset'
-import { runWslMoveRetentionPass } from '../../moving-wsl-projects/wsl-move-retention'
+} from '../../moving-wsl-projects/cutover-recovery/wsl-move-reset'
+import { runWslMoveRetentionPass } from '../../moving-wsl-projects/cutover-recovery/wsl-move-retention'
 import { createWslMoveWorld, type WslMoveWorld } from './wsl-move-driver-world'
 import {
   createWslMoveKillSwitch,
@@ -106,9 +106,9 @@ export function createWslMoveKillRig(): WslMoveRig {
   world.deps.quiesce = {
     sleepWorkspaces: async (ids) => (at('sleep'), quiesce.sleepWorkspaces(ids)),
     livePtyIds: quiesce.livePtyIds,
-    captureRestoreHints: async (panes, distro) => (
+    captureRestoreHints: async (panes, distro, mappedDrives) => (
       at('restore-hints'),
-      quiesce.captureRestoreHints(panes, distro)
+      quiesce.captureRestoreHints(panes, distro, mappedDrives)
     ),
     proveExited: async (scope) => (at('prove-exited'), quiesce.proveExited(scope))
   }

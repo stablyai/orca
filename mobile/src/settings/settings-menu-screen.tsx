@@ -55,7 +55,7 @@ export function SettingsMenuSections({
             label: t('settings.menuScreen.privacyPolicy', 'Privacy Policy'),
             icon: Shield,
             external: true,
-            onPress: () => void openExternal('https://www.onorca.dev/privacy')
+            onPress: () => void openExternal('https://orca.dev/privacy')
           },
           {
             id: 'support',

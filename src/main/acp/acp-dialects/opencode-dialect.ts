@@ -76,6 +76,19 @@ function promptFailure(error: AcpAgentError, at: number) {
   }
 }
 
+// OpenCode 2.x refuses a session/load outside the session's folder with exactly this data.
+const otherFolderRefusalSchema = z.strictObject({ sessionId: z.string(), cwd: z.string() })
+
+function sessionInOtherFolder(error: AcpAgentError, sessionId: string, cwd: string): boolean {
+  const data = otherFolderRefusalSchema.safeParse(error.data)
+  return (
+    error.code === -32602 &&
+    data.success &&
+    data.data.sessionId === sessionId &&
+    data.data.cwd === cwd
+  )
+}
+
 function normalizeToolUpdate(update: ToolCallUpdate): ToolCallUpdate {
   const parsed = commandRawOutputSchema.safeParse(update.rawOutput)
   if (!parsed.success) {
@@ -111,7 +124,10 @@ export const OPENCODE_ACP_DIALECT: AcpDialect = {
     supported: (initialized) => initialized.agentCapabilities?.sessionCapabilities?.close != null
   },
   effortChangesModel: true,
+  interactionModes: { default: 'build', plan: 'plan' },
+  linksFileMentions: true,
   normalizeToolUpdate,
   notification: openCodeChildUpdate,
-  promptFailure
+  promptFailure,
+  sessionInOtherFolder
 }

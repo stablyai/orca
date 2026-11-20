@@ -1,17 +1,19 @@
 import { useEffect } from 'react'
+import type { MobileSessionItemLink } from './mobile-session-item-target'
 import { useMobileSessionDictation } from './use-mobile-session-dictation'
 import { useMobileNativeChatController } from './native-chat/use-mobile-native-chat-controller'
-import { useMobileNativeChatReadability } from './native-chat/transcript/use-mobile-native-chat-readability'
-import { useMobileNativeChatInputLease } from './native-chat/composer/use-mobile-native-chat-input-lease'
-import { useMobileNativeChatSendError } from './native-chat/composer/use-mobile-native-chat-send-error'
-import { mobileNativeChatScopeKey } from './native-chat/mobile-native-chat-scope-key'
-import { mobileNativeChatOverlayInputLockReason } from './native-chat/mobile-native-chat-overlay-lock-reason'
+import { useMobileNativeChatReadability } from './native-chat/transcript/viewport/use-mobile-native-chat-readability'
+import { useMobileNativeChatInputLease } from './native-chat/composer/field/use-mobile-native-chat-input-lease'
+import { useMobileNativeChatSendError } from './native-chat/composer/delivery/use-mobile-native-chat-send-error'
+import { mobileNativeChatScopeKey } from './native-chat/conversation/mobile-native-chat-scope-key'
+import { mobileNativeChatOverlayInputLockReason } from './native-chat/status/mobile-native-chat-overlay-lock-reason'
 import { useMobileSendCompletionGeneration } from './use-mobile-send-completion-generation'
 import type { MobileSessionFeedbackCapabilitiesModel } from './use-mobile-session-feedback-capabilities'
 
 export function useMobileSessionNativeChatDictation(
   scope: MobileSessionFeedbackCapabilitiesModel,
-  sendLiveTerminalInput: (handle: string, bytes: string) => Promise<boolean>
+  sendLiveTerminalInput: (handle: string, bytes: string) => Promise<boolean>,
+  itemLink?: MobileSessionItemLink
 ) {
   const {
     hostId,
@@ -47,6 +49,7 @@ export function useMobileSessionNativeChatDictation(
     connected: connState === 'connected'
   })
   const nativeChatController = useMobileNativeChatController({
+    itemLink,
     client,
     pairedHostClient,
     hostId,

@@ -4,27 +4,36 @@ import { observeStructuredWorker } from '../../orchestration/terminal-authority/
 import { OrcaRuntimeWithApplyMobileDisplayMode } from './terminal-display-mode'
 import { addListenerToMap } from './terminal-listener-map'
 import { notifyRuntimeListeners } from '../../events/runtime-listener-delivery'
-import { withTimeoutResult } from '../../../../shared/promise-timeout-fallback'
+import { withTimeoutResult } from '../../../../shared/concurrency/promise-timeout-fallback'
 
 import {
   type TerminalExitCause,
   describeTerminalExitCause,
   isDeliberateTerminalExit
 } from '../../../../shared/terminal/pty/lifecycle/terminal-exit-cause'
+import { terminalLastOutput } from '../output/tail/terminal-tail-read'
 import { DEFAULT_TERMINAL_LIST_LIMIT } from '../query/terminal-list-limit'
 import { PTY_CONTROLLER_LIST_TIMEOUT_MS } from '../lifecycle/pty-controller-inventory-budget'
 import type {
   RuntimeTerminalListResult,
   RuntimeTerminalOrphanAdoptionRequest,
   RuntimeTerminalOrphanAdoptionResult
-} from '../../../../shared/runtime-terminal-contracts'
-import { classifyWorkerTerminalProcessIncarnation } from '../../orchestration/terminal-authority/release/worker-terminal-process-liveness'
+} from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
+import {
+  classifyIndexedWorkerTerminalProcessIncarnation,
+  indexWorkerTerminalProcesses,
+  type WorkerTerminalProcessIndex
+} from '../../orchestration/terminal-authority/release/worker-terminal-process-liveness'
 import { parseWorkerTerminalHostScope } from '../../../../shared/orchestration/workers/worker-terminal-host-scope'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
-import { escalateWorkerFailure } from '../../orchestration/workers/reports/worker-failure-escalation'
-import { dispatchReportMailbox } from '../../orchestration/workers/reports/dispatch-report-mailbox'
-import { reportWorkerTurnStop } from '../../orchestration/workers/turn-stops/worker-turn-stop-report'
-import { LOCAL_EXECUTION_HOST_ID, toSshExecutionHostId } from '../../../../shared/execution-host'
+import {
+  reportWorkerTurnStop,
+  type WorkerTurnStop
+} from '../../orchestration/workers/turn-stops/worker-turn-stop-report'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  toSshExecutionHostId
+} from '../../../../shared/execution-host/execution-host'
 import type { OrchestrationDb } from '../../orchestration/db/orchestration-db'
 
 export abstract class OrcaRuntimeWithSubscribeToTerminalResize extends OrcaRuntimeWithApplyMobileDisplayMode {
@@ -56,39 +65,48 @@ export abstract class OrcaRuntimeWithSubscribeToTerminalResize extends OrcaRunti
   protected failActiveDispatchOnExit(
     handle: string,
     paneKey: string | null,
-    exitCode: number,
-    cause: TerminalExitCause
+    cause: TerminalExitCause,
+    lastOutput?: string
   ): void {
     const errorContext = describeTerminalExitCause(cause)
-    const settledLocally = this.failActiveDispatchAndEscalate(handle, paneKey ?? undefined, {
+    // A person closing the pane leaves the task unowned; any other end is the agent's exit.
+    const stop = isDeliberateTerminalExit(cause)
+      ? { reason: 'lost' as const, cause: 'it was closed in Orca' }
+      : { reason: 'exited' as const, cause: errorContext }
+    const settledLocally = this.failActiveDispatchAndReport(handle, paneKey ?? undefined, {
       error: errorContext,
       options: { workerProcessExited: true, terminationReason: cause.kind },
       processExited: true,
-      // Escalate unexpected exits on the next coordinator check even before its circuit breaker trips.
-      escalate: !isDeliberateTerminalExit(cause),
-      describe: (task, outcome) => ({
-        subject: `Agent exited unexpectedly (${errorContext})`,
-        body: `Worker ${handle} stopped while running task ${task}. ${errorContext}.${outcome}`
-      }),
-      payload: { exitCode, exitCause: cause }
+      stop: { ...stop, lastOutput }
     })
     if (!settledLocally && paneKey) {
-      this.reportRemoteWorkerExit(handle, paneKey, errorContext)
+      this.reportRemoteWorkerExit(handle, paneKey, { ...stop, lastOutput })
     }
   }
 
+  /** The PTY's last lines, read while its record exists: an exit prunes it before any async read. */
+  protected readPtyLastOutput(ptyId: string | null | undefined): string | undefined {
+    return terminalLastOutput(ptyId ? this.ptysById.get(ptyId) : undefined)
+  }
+
   /** A paired server's worker has no local Dispatch; any exit it did not report reaches the Run home through the stop relay. */
-  private reportRemoteWorkerExit(handle: string, paneKey: string, exitCause: string): void {
+  private reportRemoteWorkerExit(
+    handle: string,
+    paneKey: string,
+    stop: Pick<WorkerTurnStop, 'reason' | 'cause' | 'lastOutput'>
+  ): void {
     const db = this._orchestrationDb
     const attachment = db?.findActiveRemoteAttachmentForPane(paneKey)
-    const processIncarnation = this.getTerminalProcessIncarnation(handle)
+    // The coordinator's own worker-stop closes the terminal before it settles the attachment.
     if (
       !db ||
       !attachment ||
+      attachment.state === 'stopping' ||
+      attachment.state === 'stop_unknown' ||
       !db.isRemoteAttachmentProcessCurrent({
         dispatchId: attachment.dispatch_id,
         paneKey,
-        processIncarnation
+        processIncarnation: this.getTerminalProcessIncarnation(handle)
       })
     ) {
       return
@@ -96,13 +114,7 @@ export abstract class OrcaRuntimeWithSubscribeToTerminalResize extends OrcaRunti
     reportWorkerTurnStop(
       db,
       { kind: 'remote', attachment },
-      {
-        from: handle,
-        stopKey: `exit:${processIncarnation}`,
-        reason: 'exited',
-        lastOutput: undefined,
-        exitCause
-      },
+      { from: handle, ...stop },
       this.workerTurnStopReportDeps
     )
   }
@@ -125,17 +137,16 @@ export abstract class OrcaRuntimeWithSubscribeToTerminalResize extends OrcaRunti
       surfaces.some(
         ({ handle, paneKey }) =>
           handle !== undefined &&
-          this.failActiveDispatchAndEscalate(handle, paneKey, {
+          this.failActiveDispatchAndReport(handle, paneKey, {
             error: reason,
             // The terminal and worktree stay up for inspection; workerProcessExited bypasses the active-worker guard for this dead session.
             options: { workerProcessExited: true, workerStage: 'agent_session_lost' },
             processExited: false,
-            escalate: true,
-            describe: (task, outcome) => ({
-              subject: 'Agent session lost',
-              body: `Worker ${handle} can no longer run task ${task}: ${reason}. Its terminal is still open for inspection.${outcome}`
-            }),
-            payload: { reason }
+            stop: {
+              reason: 'lost',
+              cause: `${reason}; its terminal is still open for inspection`,
+              lastOutput: this.readPtyLastOutput(ptyId)
+            }
           })
       )
     } catch (error) {
@@ -144,16 +155,14 @@ export abstract class OrcaRuntimeWithSubscribeToTerminalResize extends OrcaRunti
   }
 
   /** Returns whether the surface had an active dispatch. */
-  private failActiveDispatchAndEscalate(
+  private failActiveDispatchAndReport(
     handle: string,
     paneKey: string | undefined,
     failure: {
       error: string
       options: Parameters<OrchestrationDb['failDispatch']>[2]
       processExited: boolean
-      escalate: boolean
-      describe: (task: string, outcome: string) => { subject: string; body: string }
-      payload: Record<string, unknown>
+      stop: Pick<WorkerTurnStop, 'reason' | 'cause' | 'lastOutput'>
     }
   ): boolean {
     const db = this._orchestrationDb
@@ -170,33 +179,20 @@ export abstract class OrcaRuntimeWithSubscribeToTerminalResize extends OrcaRunti
       }
       return true
     }
-    const settled = db.failDispatch(dispatch.id, failure.error, failure.options)
-    if (!failure.escalate) {
+    const settled = db.failDispatch(dispatch.id, failure.error, failure.options)?.status
+    // A stop asked for earlier (unconfirmed, or by a runtime before a restart) settles the Dispatch as failed, but sends no mail: the coordinator asked for it.
+    if (stopping?.state === 'stopping' || stopping?.state === 'stop_unknown') {
       return true
     }
-    escalateWorkerFailure(
+    reportWorkerTurnStop(
       db,
-      dispatch,
+      { kind: 'local', dispatch },
       {
         from: handle,
-        mailbox: () => dispatchReportMailbox(db, dispatch),
-        describe: (task) =>
-          failure.describe(
-            task,
-            settled?.status === 'circuit_broken'
-              ? ' This task has now failed too many times, so it will not be retried automatically.'
-              : settled?.status === 'failed'
-                ? ' The task is ready to be dispatched again.'
-                : ''
-          ),
-        payload: {
-          taskId: dispatch.task_id,
-          dispatchId: dispatch.id,
-          ...failure.payload,
-          handle
-        }
+        ...failure.stop,
+        ...(settled === 'failed' || settled === 'circuit_broken' ? { settled } : {})
       },
-      (to, type) => this.notifyMessageArrived(to, type)
+      this.workerTurnStopReportDeps
     )
     return true
   }
@@ -213,9 +209,11 @@ export abstract class OrcaRuntimeWithSubscribeToTerminalResize extends OrcaRunti
     return this.terminalList.list(worktreeSelector, limit, opts)
   }
 
+  /** `inventories`, shared across one sweep's calls, lists each host once instead of once per call. */
   async inspectTerminalProcessIncarnationLiveness(
     processIncarnation: string,
-    serializedHostScope: string | null
+    serializedHostScope: string | null,
+    inventories?: Map<string, Promise<WorkerTerminalProcessIndex | null>>
   ): Promise<'live' | 'exited' | 'unverifiable'> {
     const structuredSessionId = sessionIdFromStructuredWorkerIncarnation(processIncarnation)
     if (structuredSessionId) {
@@ -223,21 +221,24 @@ export abstract class OrcaRuntimeWithSubscribeToTerminalResize extends OrcaRunti
       return observeStructuredWorker({ sessionId: structuredSessionId }).status
     }
     const hostScope = parseWorkerTerminalHostScope(serializedHostScope)
-    if (!hostScope || !this.ptyController?.listProcesses) {
+    const controller = this.ptyController
+    if (!hostScope || !controller?.listProcesses) {
       return 'unverifiable'
     }
-    const listed = await withTimeoutResult(
-      this.ptyController.listProcesses(
-        hostScope.kind === 'ssh'
-          ? toSshExecutionHostId(hostScope.targetId)
-          : LOCAL_EXECUTION_HOST_ID
-      ),
-      PTY_CONTROLLER_LIST_TIMEOUT_MS
-    )
-    if (!listed.ok) {
-      return 'unverifiable'
+    const hostId =
+      hostScope.kind === 'ssh' ? toSshExecutionHostId(hostScope.targetId) : LOCAL_EXECUTION_HOST_ID
+    let listing = inventories?.get(hostId)
+    if (!listing) {
+      listing = withTimeoutResult(
+        controller.listProcesses(hostId),
+        PTY_CONTROLLER_LIST_TIMEOUT_MS
+      ).then((listed) => (listed.ok ? indexWorkerTerminalProcesses(listed.value) : null))
+      inventories?.set(hostId, listing)
     }
-    return classifyWorkerTerminalProcessIncarnation(processIncarnation, listed.value)
+    const index = await listing
+    return index
+      ? classifyIndexedWorkerTerminalProcessIncarnation(processIncarnation, index)
+      : 'unverifiable'
   }
 
   protected getTerminalTopologyRevision(worktreeId: string): number {

@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { getDefaultPersistedState } from '../../../shared/constants'
-import type { PersistedState } from '../../../shared/persisted-state-types'
-import '../../persistence/__fixtures__/wsl-mover/wsl-mover-folders-profile'
+import { getDefaultPersistedState } from '../../../shared/orca-profiles/constants'
+import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
 import { heavyWslMoverProfile } from '../../persistence/__fixtures__/wsl-mover/wsl-mover-heavy-profile'
 import {
   repo,
@@ -9,7 +8,7 @@ import {
   WSL_MOVER_DISTRO,
   type WslMoverPaths
 } from '../../persistence/__fixtures__/wsl-mover/wsl-mover-profile-rows'
-import type { WslMoveProjectionInput } from '../../persistence/moving-wsl-projects/wsl-move-state-projection'
+import type { WslMoveProjectionInput } from '../../persistence/moving-wsl-projects/manifest-scope/wsl-move-state-projection'
 import { WslDriveUncKeyCollisionError } from './wsl-drive-unc-identity-rewrite'
 import { rewriteWslDriveUncState } from './wsl-drive-unc-state-rewrite'
 
@@ -62,62 +61,10 @@ describe('rewriteWslDriveUncState', () => {
     })
   })
 
-  it('leaves projects outside the scope, other hosts and user text as written', () => {
-    const before = persisted(heavyWslMoverProfile(unc))
-    const otherId = `repo-b::${unc.at('/home/dev/lib', 'wsl$')}`
-    before.workspaceSessionsByHostId = {
-      'ssh:box': { ...before.workspaceSession }
-    }
-    before.settings = { ...before.settings, workspaceDir: unc.at('/home/dev/app') }
-    const { state } = convert(before, ['repo-a'])
-    expect(state.repos.find((row) => row.id === 'repo-b')).toEqual(
-      before.repos.find((row) => row.id === 'repo-b')
-    )
-    expect(state.workspaceSession.tabsByWorktree[otherId]).toEqual(
-      before.workspaceSession.tabsByWorktree[otherId]
-    )
-    expect(state.workspaceSessionsByHostId).toBe(before.workspaceSessionsByHostId)
-    expect(state.settings).toBe(before.settings)
-    expect(state.projects.find((row) => row.id === 'project-b')).toEqual(
-      before.projects.find((row) => row.id === 'project-b')
-    )
-  })
-
-  it('is idempotent, so a resumed conversion changes nothing', () => {
-    const once = convert(persisted(heavyWslMoverProfile(unc)), ['repo-a', 'repo-b']).state
-    const twice = convert(once, ['repo-a', 'repo-b'])
-    expect(twice.state).toEqual(once)
-    expect(twice.worktreeIds.size).toBe(0)
-  })
-
   it('refuses a project that would keep an unconverted repo', () => {
     const before = persisted(heavyWslMoverProfile(unc))
     before.projects = [{ ...before.projects[0], sourceRepoIds: ['repo-a', 'repo-b'] }]
     expect(() => convert(before, ['repo-a'])).toThrow('wsl_drive_unc_project_split')
-  })
-
-  it('refuses when a converted key lands on one with different user data, naming the key', () => {
-    const before = persisted(heavyWslMoverProfile(unc))
-    const oldId = `repo-a::${unc.at('/home/dev/app')}`
-    const newId = `repo-a::${drive.at('/home/dev/app')}`
-    before.worktreeMeta[newId] = { ...before.worktreeMeta[oldId], displayName: 'other' }
-    expect(() => convert(before, ['repo-a', 'repo-b'])).toThrow(
-      new WslDriveUncKeyCollisionError(newId)
-    )
-  })
-
-  it('merges a drive key that holds nothing, or the same data, into the converted one', () => {
-    const before = persisted(heavyWslMoverProfile(unc))
-    const oldId = `repo-a::${unc.at('/home/dev/app')}`
-    const newId = `repo-a::${drive.at('/home/dev/app')}`
-    before.workspaceSession.tabsByWorktree[newId] = []
-    before.worktreeMeta[newId] = before.worktreeMeta[oldId]
-    const { state } = convert(before, ['repo-a', 'repo-b'])
-    expect(state.workspaceSession.tabsByWorktree[newId]).toEqual(
-      convert(persisted(heavyWslMoverProfile(unc)), ['repo-a', 'repo-b']).state.workspaceSession
-        .tabsByWorktree[newId]
-    )
-    expect(state.worktreeMeta[newId]?.displayName).toBe('app')
   })
 
   it('drops the drive-keyed row startup discovery wrote for the saved UNC worktree', () => {

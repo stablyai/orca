@@ -1,5 +1,4 @@
-// Upstream packaging bug: @xterm/addon-ligatures declares a missing module
-// entry. config/patches/@xterm__addon-ligatures* keeps the runtime import valid.
+// Upstream @xterm/addon-ligatures's module entry imports node:diagnostics_channel; config/patches and the Vite alias pin it to lib/addon-ligatures.js.
 import { LigaturesAddon } from '@xterm/addon-ligatures'
 import type { Terminal } from '@xterm/xterm'
 

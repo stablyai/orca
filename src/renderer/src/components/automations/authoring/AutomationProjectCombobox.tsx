@@ -1,18 +1,19 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Check, ChevronRight, ChevronsUpDown, FolderPlus } from 'lucide-react'
+import { Check, ChevronsUpDown, FolderPlus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Command, CommandInput, CommandList } from '@/components/ui/command'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import RepoBadgeLabel from '@/components/repo/RepoBadgeLabel'
 import { useAppStore } from '@/store/index'
-import { isGitRepoKind } from '../../../../../shared/repo-kind'
-import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
+import { isGitRepoKind } from '../../../../../shared/repository/repo-kind'
+import { getRepoExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { isRepoSearchQueryTooLarge, searchRepos } from '@/lib/workspace/catalog/repo-search'
 import { cn } from '@/lib/class-names'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useTranslate } from '@/i18n/use-translate'
-import { projectHostCountLabel } from '@/components/project-host-count-label'
-import type { Repo } from '../../../../../shared/repo-types'
+import { projectHostCountLabel } from '@/components/host-picker/project-host-count-label'
+import type { Repo } from '../../../../../shared/repository/repo-types'
+import type { Bot } from '../../../../../shared/bot-types'
 import {
   getAutomationProjectGroupForRepo,
   getAutomationProjectGroups,
@@ -20,6 +21,9 @@ import {
   hasMultipleAutomationProjectHosts,
   getAutomationProjectSelectedSource
 } from './automation-project-groups'
+import { AutomationProjectHostMenu } from './AutomationProjectHostMenu'
+import { BotAvatar } from '@/components/bots/BotAvatar'
+import { botTargetLabel } from './automation-bot-target-label'
 
 type AutomationProjectComboboxProps = {
   repos: readonly Repo[]
@@ -30,7 +34,13 @@ type AutomationProjectComboboxProps = {
   triggerClassName?: string
   getRepoHostLabel?: (repo: Repo) => string | null | undefined
   allowAddProject?: boolean
+  /** Bots offered as targets beside projects; choosing one runs the automation as that bot. */
+  bots?: readonly Pick<Bot, 'id' | 'name' | 'avatar' | 'hostId'>[]
+  selectedBotId?: string | null
+  onBotChange?: (botId: string) => void
 }
+
+const NO_BOTS: readonly Pick<Bot, 'id' | 'name' | 'avatar' | 'hostId'>[] = []
 
 export default function AutomationProjectCombobox({
   repos,
@@ -40,7 +50,10 @@ export default function AutomationProjectCombobox({
   placeholder = 'Select project',
   triggerClassName,
   getRepoHostLabel,
-  allowAddProject = true
+  allowAddProject = true,
+  bots = NO_BOTS,
+  selectedBotId = null,
+  onBotChange
 }: AutomationProjectComboboxProps): React.JSX.Element {
   const t = useTranslate()
   const [open, setOpen] = useState(false)
@@ -69,9 +82,9 @@ export default function AutomationProjectCombobox({
     recordedProject && !repos.some((repo) => repo.id === recordedProject.id)
       ? recordedProject
       : null
-  const selectedRepo = selectedGroup
-    ? getAutomationProjectSelectedSource(selectedGroup, value)
-    : null
+  const selectedBot = bots.find((bot) => bot.id === selectedBotId) ?? null
+  const selectedRepo =
+    !selectedBot && selectedGroup ? getAutomationProjectSelectedSource(selectedGroup, value) : null
   const showHostLabels = useMemo(() => hasMultipleAutomationProjectHosts(repos), [repos])
   const filteredGroups = useMemo(() => {
     if (isRepoSearchQueryTooLarge(query)) {
@@ -83,6 +96,10 @@ export default function AutomationProjectCombobox({
     }
     return groups.filter((group) => searchRepos(group.sources, trimmed).length > 0)
   }, [groups, query])
+  const filteredBots = useMemo(() => {
+    const needle = query.trim().toLowerCase()
+    return needle ? bots.filter((bot) => bot.name.toLowerCase().includes(needle)) : bots
+  }, [bots, query])
 
   const cancelFocusFrame = useCallback((): void => {
     if (focusFrameRef.current !== null) {
@@ -171,6 +188,11 @@ export default function AutomationProjectCombobox({
     [onValueChange, resetHostMenuHover]
   )
 
+  const handleSelectBot = (botId: string): void => {
+    onBotChange?.(botId)
+    handleOpenChange(false)
+  }
+
   const handleAddFolder = useCallback(async () => {
     if (isAdding) {
       return
@@ -207,7 +229,12 @@ export default function AutomationProjectCombobox({
             triggerClassName
           )}
         >
-          {recordedChoice?.id === value ? (
+          {selectedBot ? (
+            <span className="inline-flex min-w-0 items-center gap-1.5">
+              <BotAvatar bot={selectedBot} className="size-4 rounded-[4px] text-3xs" />
+              <span className="truncate">{botTargetLabel(selectedBot.name)}</span>
+            </span>
+          ) : recordedChoice?.id === value ? (
             recordedChoice.label
           ) : selectedRepo ? (
             <span className="inline-flex min-w-0 items-center gap-1.5">
@@ -252,7 +279,7 @@ export default function AutomationProjectCombobox({
                 {recordedChoice.label}
               </button>
             ) : null}
-            {filteredGroups.length === 0 && !recordedChoice ? (
+            {filteredGroups.length === 0 && filteredBots.length === 0 && !recordedChoice ? (
               <div className="px-3 py-6 text-center text-xs text-muted-foreground">
                 {t(
                   'auto.components.automations.AutomationProjectCombobox.empty',
@@ -309,75 +336,48 @@ export default function AutomationProjectCombobox({
                     </div>
                   </button>
                   {hasHostMenu ? (
-                    <Popover
+                    <AutomationProjectHostMenu
+                      sources={group.sources}
+                      selectedSourceId={selectedSource.id}
                       open={hostMenuProjectKey === group.projectKey}
                       onOpenChange={(nextOpen) =>
                         setHostMenuProjectKey(nextOpen ? group.projectKey : null)
                       }
-                    >
-                      <PopoverTrigger asChild>
-                        <button
-                          type="button"
-                          title={t(
-                            'auto.components.automations.AutomationProjectCombobox.chooseHost',
-                            'Choose automation host'
-                          )}
-                          onClick={(event) => {
-                            event.preventDefault()
-                            event.stopPropagation()
-                          }}
-                          onMouseDown={(event) => event.preventDefault()}
-                          className="flex w-7 shrink-0 items-center justify-center text-muted-foreground"
-                        >
-                          <ChevronRight className="size-3.5" />
-                        </button>
-                      </PopoverTrigger>
-                      <PopoverContent
-                        side="right"
-                        align="start"
-                        sideOffset={6}
-                        className="w-[min(260px,calc(100vw-1rem))] p-1"
-                        onMouseEnter={() => setHostMenuHover(group.projectKey, 'content', true)}
-                        onMouseLeave={() => setHostMenuHover(group.projectKey, 'content', false)}
-                      >
-                        <div className="py-1">
-                          {group.sources.map((source) => {
-                            const sourceHostLabel = showHostLabels
-                              ? getRepoHostLabel?.(source)
-                              : null
-                            const sourceSelected = source.id === selectedSource.id
-                            return (
-                              <button
-                                key={source.id}
-                                type="button"
-                                onMouseDown={(event) => event.preventDefault()}
-                                onClick={() => handleSelect(source.id)}
-                                className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-xs transition-colors hover:bg-accent hover:text-accent-foreground"
-                              >
-                                <Check
-                                  className={cn(
-                                    'size-3 text-muted-foreground',
-                                    sourceSelected ? 'opacity-70' : 'opacity-0'
-                                  )}
-                                />
-                                <div className="min-w-0 flex-1">
-                                  <div className="truncate text-xs">
-                                    {sourceHostLabel ?? getRepoExecutionHostId(source)}
-                                  </div>
-                                  <p className="mt-0.5 truncate text-[10px] text-muted-foreground">
-                                    {source.path}
-                                  </p>
-                                </div>
-                              </button>
-                            )
-                          })}
-                        </div>
-                      </PopoverContent>
-                    </Popover>
+                      onHoverChange={(hovered) =>
+                        setHostMenuHover(group.projectKey, 'content', hovered)
+                      }
+                      hostLabelOf={(source) =>
+                        (showHostLabels ? getRepoHostLabel?.(source) : null) ??
+                        getRepoExecutionHostId(source)
+                      }
+                      onSelect={handleSelect}
+                    />
                   ) : null}
                 </div>
               )
             })}
+            {filteredBots.map((bot) => (
+              <button
+                key={bot.id}
+                type="button"
+                onClick={() => handleSelectBot(bot.id)}
+                onMouseDown={(event) => event.preventDefault()}
+                onMouseEnter={() => setCommandValue(bot.id)}
+                className={cn(
+                  'flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs transition-colors hover:bg-accent hover:text-accent-foreground',
+                  commandValue === bot.id && 'bg-accent text-accent-foreground'
+                )}
+              >
+                <Check
+                  className={cn(
+                    'size-3 text-foreground',
+                    bot.id === selectedBotId ? 'opacity-100' : 'opacity-0'
+                  )}
+                />
+                <BotAvatar bot={bot} className="size-4 rounded-[4px] text-3xs" />
+                <span className="truncate">{botTargetLabel(bot.name)}</span>
+              </button>
+            ))}
           </CommandList>
           {allowAddProject ? (
             <div className="border-t border-border">

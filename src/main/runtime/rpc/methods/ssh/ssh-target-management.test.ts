@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from '../../dispatcher'
 import type { RpcRequest } from '../../core'
-import type { RpcCallerScope } from '../../rpc-caller-scope'
+import type { RpcCallerScope } from '../../callers/rpc-caller-scope'
 import { OrcaRuntimeService } from '../../../orca-runtime'
-import { SSH_EDITABLE_TARGET_FIELDS } from '../../../../../shared/ssh-target-management'
+import { SSH_EDITABLE_TARGET_FIELDS } from '../../../../../shared/remote-runtime/ssh/ssh-target-management'
 import { SSH_METHODS } from './ssh'
 
 const mocks = vi.hoisted(() => ({

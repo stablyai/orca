@@ -86,6 +86,12 @@ export function getCleanupRequest(
         : subscription.params
     return { method: 'session.tabs.unsubscribe', params }
   }
+  if (subscription.method === 'orchestration.workerApprovalsSubscribe') {
+    return cleanupBySubscriptionId(
+      'orchestration.workerApprovalsUnsubscribe',
+      subscription.requestId
+    )
+  }
   if (subscription.method === 'session.tabs.subscribeAll') {
     return {
       method: 'session.tabs.unsubscribeAll',

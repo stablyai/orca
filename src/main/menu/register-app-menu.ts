@@ -1,11 +1,8 @@
 import { BrowserWindow, Menu, app } from 'electron'
-import {
-  formatKeybindingList,
-  getEffectiveKeybindingsForAction,
-  type KeybindingActionId,
-  type KeybindingOverrides
-} from '../../shared/keybindings'
-import type { UpdateCheckOptions } from '../../shared/update-status-types'
+import { formatKeybindingList } from '../../shared/keybindings/formatting'
+import { getEffectiveKeybindingsForAction } from '../../shared/keybindings/effective'
+import type { KeybindingActionId, KeybindingOverrides } from '../../shared/keybindings/types'
+import type { UpdateCheckOptions } from '../../shared/updater/update-status-types'
 import { translateMain } from '../i18n/main-i18n'
 import { createAppMenuSelectionItem, resolveNativeEditTarget } from './app-menu-selection-item'
 import { createAppMenuQuitItems, type AppMenuQuitHandlers } from './app-menu-quit-item'
@@ -29,6 +26,7 @@ export function getNextDefaultOnAppearanceSettingValue(current: boolean | undefi
 
 type RegisterAppMenuOptions = AppMenuQuitHandlers & {
   onOpenSettings: () => void
+  onOpenWorktreePalette: (window?: Electron.BaseWindow | null) => void
   onOpenSetupGuide: (window?: Electron.BaseWindow | null) => void
   onOpenFeatureTour: (window?: Electron.BaseWindow | null) => void
   onOpenCrashReport: (window?: Electron.BaseWindow | null) => void
@@ -50,6 +48,7 @@ type RegisterAppMenuOptions = AppMenuQuitHandlers & {
 function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
   const {
     onOpenSettings,
+    onOpenWorktreePalette,
     onOpenSetupGuide,
     onOpenFeatureTour,
     onOpenCrashReport,
@@ -266,7 +265,8 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
       { type: 'separator' },
       {
         // Native accelerators would bypass the renderer's overlay mutual-exclusion handling.
-        label: `${translateMain('menu.openWorktreePalette', 'Open Worktree Palette')}\t${shortcutLabel('worktree.palette')}`
+        label: `${translateMain('menu.openWorktreePalette', 'Open Worktree Palette')}\t${shortcutLabel('worktree.palette')}`,
+        click: (_menuItem, window) => onOpenWorktreePalette(window)
       },
       { type: 'separator' },
       labeledAppMenuRole('togglefullscreen', 'menu.toggleFullScreen', 'Toggle Full Screen'),

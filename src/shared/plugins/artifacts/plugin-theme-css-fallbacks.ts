@@ -44,18 +44,18 @@ const PLUGIN_APP_THEME_CSS_FALLBACKS: Record<
   // At the default chat contrast setting.
   '--chat-canvas': { light: ['--background'], dark: { mixForeground: 5 } },
   '--chat-foreground': {
-    light: { mixForeground: 82, into: '--chat-canvas' },
-    dark: { mixForeground: 78, into: '--chat-canvas' }
+    light: { mixForeground: 88, into: '--chat-canvas' },
+    dark: { mixForeground: 88, into: '--chat-canvas' }
   },
   '--chat-foreground-strong': {
-    light: { mixForeground: 92, into: '--chat-canvas' },
-    dark: { mixForeground: 90, into: '--chat-canvas' }
+    light: { mixForeground: 98, into: '--chat-canvas' },
+    dark: { mixForeground: 98, into: '--chat-canvas' }
   },
   '--chat-user-message': {
     light: { mixForeground: 4, into: '--chat-canvas' },
     dark: { mixForeground: 7, into: '--chat-canvas' }
   },
-  '--chat-bold-foreground': ['--chat-foreground-strong'],
+  '--chat-bold-foreground': ['--chat-foreground'],
   '--chat-muted-foreground': {
     light: ['--muted-foreground'],
     dark: { tint: '--muted-foreground', percent: 83, into: '--chat-canvas' }
@@ -74,7 +74,9 @@ const PLUGIN_APP_THEME_CSS_FALLBACKS: Record<
     light: { tint: '--text-link', percent: 30, into: '--chat-canvas' },
     dark: { tint: '--text-link', percent: 40, into: '--chat-canvas' }
   },
-  '--chat-selection-foreground': ['--foreground']
+  '--chat-selection-foreground': ['--foreground'],
+  // Monaco paints this one, not main.css (plugin-monaco-theme.ts).
+  '--editor-selection': { tint: '--ring', percent: 30 }
 }
 
 export function pluginAppThemeCssFallback(

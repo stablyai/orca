@@ -10,7 +10,7 @@ import { cn } from '../../../lib/class-names'
 import { Badge } from '../../ui/badge'
 import { Button } from '../../ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../ui/tooltip'
-import { TruncatedSidebarLabel } from '../../sidebar/truncated-sidebar-label'
+import { TruncatedSidebarLabel } from '../../ui/truncated-sidebar-label'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { ShortcutBindingSubRow } from './ShortcutBindingSubRow'
 import { ShortcutRecorderButton } from './ShortcutRecorderButton'
@@ -79,14 +79,17 @@ export function ShortcutCommandBlock({
     'Press a shortcut, or double-tap a modifier (e.g. {{value0}}). Esc cancels.',
     { value0: doubleTapHint }
   )
-  const helperMessage = error
+  // A rejected chord keeps the recorder listening, so pair the error with a retry hint.
+  const recordingHint = isRecording
     ? error
-    : isRecording
-      ? recordingMessage
-      : warnings.length > 0
-        ? warnings.join(' ')
-        : ''
-  const helperTone = error || (!isRecording && warnings.length > 0) ? 'error' : 'muted'
+      ? t(
+          'auto.components.settings.ShortcutCommandBlock.retryAfterError',
+          'Press another shortcut, or Esc to cancel.'
+        )
+      : recordingMessage
+    : ''
+  const warningMessage = !error && !isRecording ? warnings.join(' ') : ''
+  const helperTone = error || warningMessage ? 'error' : 'muted'
 
   const recorderFor = (binding: string | null, index: number): React.JSX.Element => (
     <ShortcutRecorderButton
@@ -118,7 +121,7 @@ export function ShortcutCommandBlock({
       forceVisible
       className="group/shortcut flex max-w-none flex-col"
     >
-      <div className="flex min-h-9 items-center gap-3 rounded-md px-2 py-1 transition-colors hover:bg-accent/40 focus-within:bg-accent/40">
+      <div className="-mx-2 flex min-h-9 items-center gap-3 rounded-md px-2 py-1 transition-colors hover:bg-accent/40 focus-within:bg-accent/40">
         <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1">
           <TruncatedSidebarLabel
             text={item.title}
@@ -291,7 +294,7 @@ export function ShortcutCommandBlock({
         </div>
       </div>
 
-      {helperMessage ? (
+      {error || recordingHint || warningMessage ? (
         <span
           className={cn(
             'block whitespace-normal px-2 text-[11px] leading-4',
@@ -299,7 +302,12 @@ export function ShortcutCommandBlock({
           )}
           aria-live="polite"
         >
-          {helperMessage}
+          {/* Separate nodes so ending recording keeps the error text (and a selection on it) mounted. */}
+          {error ? <span>{error}</span> : null}
+          {recordingHint ? (
+            <span className={error ? 'ms-1' : undefined}>{recordingHint}</span>
+          ) : null}
+          {warningMessage}
         </span>
       ) : null}
 

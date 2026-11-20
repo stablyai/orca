@@ -11,7 +11,7 @@ import {
 } from './automation-target-inventory'
 import { Switch, Text, View } from 'react-native'
 import { formatAutomationSchedule } from './automation-schedule-label'
-import { mobileTuiAgentLabel } from '../tasks/mobile-tui-agents'
+import { mobileTuiAgentLabel } from '../agents/mobile-tui-agents'
 import type { MobileAutomationRow } from './automation-reply-schema'
 import { AutomationButton, AutomationMetadata } from './AutomationControls'
 import { automationDate } from './automation-run-presentation'

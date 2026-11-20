@@ -15,13 +15,13 @@ when requesting a child of the current workspace.
 
 ```text
 # Child of the current worktree.
-ORCA orchestration worker-start --task <task_id> --worktree new-child --agent codex --setup run
+ORCA orchestration worker-start --task <task_id> --worktree new-child --agent <agent> --setup run
 
 # On a connected server, nested under your workspace; the Run stays on yours.
-ORCA orchestration worker-start --task <task_id> --on <server> --worktree new-child --repo <exact_remote_repo_selector> --name <name> --agent codex --setup run
+ORCA orchestration worker-start --task <task_id> --on <server> --worktree new-child --repo <exact_remote_repo_selector> --name <name> --agent <agent> --setup run
 
 # On a connected server, with no parent.
-ORCA orchestration worker-start --task <task_id> --on <server> --worktree new-top-level --repo <exact_remote_repo_selector> --name <name> --agent codex --setup run
+ORCA orchestration worker-start --task <task_id> --on <server> --worktree new-top-level --repo <exact_remote_repo_selector> --name <name> --agent <agent> --setup run
 ```
 
 With `--on`, both `new-child` and `new-top-level` need `--repo` naming a
@@ -42,11 +42,19 @@ To message an agent that already runs on a paired server, send with `--on`,
 using the same server names as `worker-start --on`:
 
 ```bash
-ORCA orchestration send --on <server> --to <term_…|orca_session_id:…> --subject "<text>" --body "<text>"
+ORCA orchestration send --on <server> --to <term_…|orca_session_id:…|bot:<name>> --type status|handoff|question|dispatch|merge_ready --subject "<text>" --body "<text>"
 ```
 
+`--on` carries ordinary mail only. `escalation`, `decision_gate`, `worker_done`
+and `heartbeat` belong to a Dispatch: send them without `--on`, from that
+Dispatch, as you would on one computer.
+
+A bot there takes only `status`, `handoff` or `question`, plus
+`--chat <id|new>` and `--item <n>` as it does on its own computer, and treats
+the request as its owner's.
+
 Your own Orca carries the mail and keeps the conversation. Replies come back to
-your own `check`, and they wake you like local mail. The other agent answers
+your own mailbox and wake you like local mail. The other agent answers
 with a plain `reply --id <msg_id> --body <text>`; no flag is needed on either
 side. Mail from another server names its sender as `<sender> on <server name>`.
 

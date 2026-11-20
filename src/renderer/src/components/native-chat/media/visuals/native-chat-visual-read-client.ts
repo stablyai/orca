@@ -1,12 +1,12 @@
 // Revalidate every mount against the owner host; cache revisions to spare bytes, never failures.
 
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
-import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import {
   AGENT_SESSION_VISUAL_READ_ERRORS,
   type AgentSessionReadVisualResult,
   type AgentSessionVisualReadError
-} from '../../../../../../shared/rpc-contract/agent-session-visual-params'
+} from '../../../../../../shared/rpc-contract/structured-agent-session/agent-session-visual-params'
 
 export type NativeChatVisualIdentity = {
   target: RuntimeClientTarget

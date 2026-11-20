@@ -1,5 +1,5 @@
 import { OrcaRuntimeWithCloseMobileRowInMainLayout } from './close-mobile-row-in-main-layout'
-import type { RuntimeMobileSessionTerminalTab } from '../../../../shared/runtime-mobile-session-tab-contracts'
+import type { RuntimeMobileSessionTerminalTab } from '../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
 import {
   adjudicateAbsentMobileSessionTabClose,
   resolveMobileSessionLifecycleCloseContext,
@@ -14,12 +14,12 @@ import {
 } from './mobile-session-tab-close-outcome'
 import { getRuntimeBrowserPageRegistry } from '../../browser/client-pages/runtime-browser-page-registry'
 import type { RuntimeEdgeCommandSurface } from '../../construction/runtime-edge-command-controller'
-import { rendererPublicationThrottle } from '../../../window/renderer-publication-throttle'
-import { retireHeadlessMobileSessionEditorTab } from '../../session-tabs/headless-editor-tabs'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
-import { closeMobileStructuredSessionPresentation } from '../../session-tabs/structured-session-tab-presentation'
-import type { OrcaRuntimeWithCloseStructuredAgentSessionTab as ChatPresentation } from '../../session-tabs/structured-session-tab-close'
+import { rendererPublicationThrottle } from '../../../window/visibility/renderer-publication-throttle'
+import { retireHeadlessMobileSessionEditorTab } from '../../session-tabs/restoration/headless-editor-tabs'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
+import { closeMobileStructuredSessionPresentation } from '../../session-tabs/chat/structured-session-tab-presentation'
+import type { OrcaRuntimeWithCloseStructuredAgentSessionTab as ChatPresentation } from '../../session-tabs/chat/structured-session-tab-close'
 
 export abstract class OrcaRuntimeWithCloseMobileSessionTab extends OrcaRuntimeWithCloseMobileRowInMainLayout {
   abstract retireStructuredAgentSessionTabFromSnapshot(
@@ -47,14 +47,14 @@ export abstract class OrcaRuntimeWithCloseMobileSessionTab extends OrcaRuntimeWi
     tabId: string,
     options: MobileSessionTabCloseOptions = {}
   ): Promise<MobileSessionTabCloseOutcome> {
-    const graphEpoch = options.clientNavigationId ? this.captureReadyGraphEpoch() : null
+    const graphFence = options.clientNavigationId ? this.captureRendererGraphFence() : undefined
     const explicitWorktreeId = this.getExplicitSessionWorktreeIdSelector(worktreeSelector)
     const worktreeId =
       explicitWorktreeId ?? (await this.resolveWorkspaceSelector(worktreeSelector)).id
     this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktreeId)
     const observedPtyIds = await this.refreshMobileSessionPtyRecords()
-    if (graphEpoch !== null) {
-      this.assertStableReadyGraph(graphEpoch)
+    if (graphFence !== undefined) {
+      this.assertRendererGraphFence(graphFence)
     }
     this.restoreLivePairedRendererSessionOwnedMobileTerminals(worktreeId)
     const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
