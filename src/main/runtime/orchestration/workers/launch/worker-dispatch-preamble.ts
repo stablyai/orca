@@ -93,6 +93,7 @@ export function buildDispatchPreamble(params: PreambleParams): string {
   })
 
   // Use one-line recipes across POSIX/PowerShell/cmd; fence comments and use plain reasons to avoid misleading Chat rendering (STA-8200).
+  // Why: "not done yet" is not a failure. An unblocked worker keeps working (#45187).
   const header = `You are working inside Orca, a multi-agent IDE. You are a dispatched worker.
 ${dispatchIdentityLines(params)}
 
@@ -112,11 +113,13 @@ ${checkLines({ chat, unreadMail: params.unreadMail, cli, workerHandle: params.wo
   # Blocked, and the coordinator must act before you can continue:
   ${cli} orchestration send --from ${params.workerHandle} --type escalation --subject "Blocked: <reason>" --body "<details>" --task-id ${params.taskId} --dispatch-id ${params.dispatchId}
 
-  # Finish: send exactly once. --body is three sentences: what you did, what
-  # you found, what is left. Use --outcome failed if the work is not done;
-  # never hide failure in prose. Add --files-modified or --report-path only
-  # with real values. You are done when it confirms; if it fails, follow the
-  # recovery it prints.
+  # Finish: send exactly once, when the task is complete or you cannot
+  # continue. If work remains and nothing blocks you, keep working; do not
+  # report it as failed. Use --outcome failed only when you tried and the
+  # task cannot be completed, and say why. Never hide a real failure in
+  # prose. --body is three sentences: what you did, what you found, what is
+  # left. Add --files-modified or --report-path only with real values. You
+  # are done when it confirms; if it fails, follow the recovery it prints.
   ${cli} orchestration send --from ${params.workerHandle} --type worker_done --subject "<short status>" --body "<3-sentence summary: what you did, what you found, what's left>" --task-id ${params.taskId} --dispatch-id ${params.dispatchId} --outcome succeeded
 \`\`\`
 
