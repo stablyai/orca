@@ -29,9 +29,9 @@ export async function importPreparedFileExplorerPaths(
     getShownScope: () => { worktreeId: string | null; displayRootPath: string | null }
     t: Translate
   }
-): Promise<number> {
+): Promise<string[]> {
   if (paths.length === 0) {
-    return 0
+    return []
   }
   const { destinationDir, guard } = destination
   guard.assertCurrent()
@@ -83,5 +83,5 @@ export async function importPreparedFileExplorerPaths(
       { description: describeSharedDropSkipReason(skipped) }
     )
   }
-  return imported.length
+  return imported.map((result) => result.destPath)
 }

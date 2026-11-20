@@ -143,13 +143,14 @@ test('pastes clipboard files and images through the explorer context menus', asy
   await expect
     .poll(() => readFile(path.join(destination, FILE_NAME), 'utf8').catch(() => null))
     .toBe(CONTENT)
+  await expect(page.getByText(path.join(destination, FILE_NAME), { exact: true })).toBeVisible()
   await expect.poll(() => readdir(destination)).toHaveLength(2)
   await expect(shell.getByRole('button', { name: FILE_NAME, exact: true })).toBeVisible()
+  await page.screenshot({ path: testInfo.outputPath('after.png') })
 
   await rightClickPaste(page, shell.locator('[data-slot="scroll-area-viewport"]'))
   await expect
     .poll(() => readFile(path.join(workspace, FILE_NAME), 'utf8').catch(() => null))
     .toBe(CONTENT)
   await expect(shell.getByRole('button', { name: FILE_NAME, exact: true })).toHaveCount(2)
-  await page.screenshot({ path: testInfo.outputPath('after.png') })
 })

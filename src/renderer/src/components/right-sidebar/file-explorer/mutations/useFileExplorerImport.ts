@@ -84,7 +84,7 @@ export function useFileExplorerImport({
     (
       paths: string[],
       destination: Exclude<FileExplorerDropDestination, { error: unknown }>
-    ): Promise<number> => {
+    ): Promise<string[]> => {
       return importPreparedFileExplorerPaths(paths, destination, {
         refreshDir,
         setSelectedPath,
@@ -140,19 +140,19 @@ export function useFileExplorerImport({
             const message = getNativeFileDropRejectionMessage(failure)
             toast.error(message.title, { description: message.description })
           }
-          const importedCount = await importPreparedPaths(prepared.paths, destination)
-          if (importedCount > 0) {
+          const importedPaths = await importPreparedPaths(prepared.paths, destination)
+          if (importedPaths.length > 0) {
             toast.success(
               t(
                 'auto.components.right.sidebar.useFileExplorerImport.pasteSuccess',
-                importedCount === 1 ? 'Pasted {{count}} item' : 'Pasted {{count}} items',
+                importedPaths.length === 1 ? 'Pasted {{count}} item' : 'Pasted {{count}} items',
                 {
-                  count: importedCount,
+                  count: importedPaths.length,
                   defaultValue_one: 'Pasted {{count}} item'
                 }
               ),
               {
-                description: destination.destinationDir
+                description: importedPaths.join('\n')
               }
             )
           }
