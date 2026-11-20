@@ -163,7 +163,10 @@ export async function fetchNewerReleaseTagsWithReadiness(
         isReleaseOldEnough(entry, cutoff) && compareVersions(entry.version, currentVersion) > 0
     )
   // Atom keeps only ~10 entries, so an aged-out release may predate it.
-  const olderTags = settlesDelay(tags) ? null : await fetchOlderReleaseTags(settlesDelay, now)
+  // Judge REST pages through the merge so Atom's later `updated` time wins, as it does below.
+  const olderTags = settlesDelay(tags)
+    ? null
+    : await fetchOlderReleaseTags((older) => settlesDelay(mergeReleaseTags(tags, older)), now)
   const allTags = olderTags ? mergeReleaseTags(tags, olderTags) : tags
   const { eligible, releaseDelay } = applyReleaseDelay(
     selectChannelCandidates(allTags, includePrerelease, options.releaseFilter),

@@ -15,11 +15,12 @@ vi.mock('./updater-release-api-token', () => ({
   rejectReleaseApiToken: vi.fn()
 }))
 
-function respondWithReleasesApi(releases: { tag: string; publishedAt: string }[]): void {
+function respondWithReleasesApi(...pages: { tag: string; publishedAt: string }[][]): void {
   const atomImplementation = netFetchMock.getMockImplementation()
   netFetchMock.mockImplementation((url: string, init?: { method?: string }) => {
     if (url.startsWith('https://api.github.com/repos/stablyai/orca/releases')) {
-      const payload = releases.map(({ tag, publishedAt }) => ({
+      const page = Number(new URL(url).searchParams.get('page') ?? '1')
+      const payload = (pages[page - 1] ?? []).map(({ tag, publishedAt }) => ({
         tag_name: tag,
         published_at: publishedAt,
         assets: ['latest.yml', 'latest-mac.yml', 'latest-linux.yml'].map((name) => ({ name }))
@@ -158,6 +159,27 @@ describe('fetchNewerReleaseTagsWithReadiness update delay', () => {
     const result = await fetchNewerReleaseTagsWithReadiness('1.4.248', 1, delay)
     expect(result.tags).toEqual(['v1.4.250'])
     expect(result.releaseDelay?.heldRelease?.tag).toBe('v1.4.266')
+  })
+
+  it('keeps paging when only REST, not the Atom feed, dates a release past the delay', async () => {
+    respondWithAtom(['v1.4.276', 'v1.4.257'], [], [], [], {
+      'v1.4.276': daysAgo(0),
+      'v1.4.257': daysAgo(1)
+    })
+    const youngReleases = Array.from({ length: 19 }, (_, index) => ({
+      tag: `v1.4.${276 - index}`,
+      publishedAt: daysAgo(0)
+    }))
+    respondWithReleasesApi(
+      [...youngReleases, { tag: 'v1.4.257', publishedAt: daysAgo(8) }],
+      [
+        { tag: 'v1.4.250', publishedAt: daysAgo(9) },
+        { tag: 'v1.4.249', publishedAt: daysAgo(10) }
+      ]
+    )
+    const { fetchNewerReleaseTagsWithReadiness } = await import('./updater-prerelease-feed')
+    const result = await fetchNewerReleaseTagsWithReadiness('1.4.248', 1, delay)
+    expect(result.tags).toEqual(['v1.4.250'])
   })
 
   it('fails closed for releases without a feed timestamp', async () => {
