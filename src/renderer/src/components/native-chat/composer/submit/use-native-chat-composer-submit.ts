@@ -134,7 +134,17 @@ export function useNativeChatComposerSubmit(args: {
           setEntered(true)
         }
       },
-    [agent, caret, draft, setCaret, setDraft, setEntered, structuredTransport, textareaRef, threadGoal]
+    [
+      agent,
+      caret,
+      draft,
+      setCaret,
+      setDraft,
+      setEntered,
+      structuredTransport,
+      textareaRef,
+      threadGoal
+    ]
   )
 
   // Native goals keep the ordinary sender's paste admission and clearing; host goals clear only an unchanged draft.

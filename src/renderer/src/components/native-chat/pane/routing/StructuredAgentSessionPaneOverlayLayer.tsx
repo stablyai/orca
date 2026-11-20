@@ -23,10 +23,7 @@ import {
   openNativeChatViewTabs,
   releaseNativeChatViewTabs
 } from '../ownership/native-chat-view-memory'
-import {
-  chatViewRetention,
-  useRetainedChatViewKey
-} from './native-chat-view-retention'
+import { chatViewRetention, useRetainedChatViewKey } from './native-chat-view-retention'
 
 type StructuredAgentSessionTab = Tab & {
   contentType: 'agent-session'
@@ -75,26 +72,26 @@ const StructuredAgentSessionOverlaySlot = memo(function StructuredAgentSessionOv
       onFocusOwningGroup={onFocusOwningGroup}
     >
       <NativeChatViewTabContext value={viewTab}>
-      <NativeChatPaneLifetime key={`${owner}:${tab.entityId}`} isVisible={effectsConnected}>
-        <NativeChatHostOutageOwner target={target}>
-          <NativeChatComposerEditorOwner viewTab={viewTab}>
-            <ActivityPortalContainer visible={isActive}>
-              <Activity mode={effectsConnected ? 'visible' : 'hidden'}>
-                <NativeChatView
-                  mode="structured"
-                  tabId={tab.id}
-                  groupId={groupId}
-                  sessionId={tab.entityId}
-                  agent={tab.agentSessionAgent}
-                  isVisible={isActive}
-                  isFocusedGroup={isFocusedGroup}
-                  target={target}
-                />
-              </Activity>
-            </ActivityPortalContainer>
-          </NativeChatComposerEditorOwner>
-        </NativeChatHostOutageOwner>
-      </NativeChatPaneLifetime>
+        <NativeChatPaneLifetime key={`${owner}:${tab.entityId}`} isVisible={effectsConnected}>
+          <NativeChatHostOutageOwner target={target}>
+            <NativeChatComposerEditorOwner viewTab={viewTab}>
+              <ActivityPortalContainer visible={isActive}>
+                <Activity mode={effectsConnected ? 'visible' : 'hidden'}>
+                  <NativeChatView
+                    mode="structured"
+                    tabId={tab.id}
+                    groupId={groupId}
+                    sessionId={tab.entityId}
+                    agent={tab.agentSessionAgent}
+                    isVisible={isActive}
+                    isFocusedGroup={isFocusedGroup}
+                    target={target}
+                  />
+                </Activity>
+              </ActivityPortalContainer>
+            </NativeChatComposerEditorOwner>
+          </NativeChatHostOutageOwner>
+        </NativeChatPaneLifetime>
       </NativeChatViewTabContext>
     </RetainedPaneHost>
   )
@@ -187,7 +184,10 @@ const StructuredAgentSessionPaneOverlayLayer = memo(
       chatViewRetention.show(layerId, shownKey ? shownKey.split('\n') : [])
     }, [layerId, shownKey])
     useLayoutEffect(() => () => chatViewRetention.show(layerId, []), [layerId])
-    const ownedTabIds = useMemo(() => new Set(structuredTabs.map((tab) => tab.id)), [structuredTabs])
+    const ownedTabIds = useMemo(
+      () => new Set(structuredTabs.map((tab) => tab.id)),
+      [structuredTabs]
+    )
     const ownedTabIdsRef = useRef<ReadonlySet<string>>(new Set())
     useLayoutEffect(() => {
       const closed = new Set([...ownedTabIdsRef.current].filter((id) => !ownedTabIds.has(id)))
