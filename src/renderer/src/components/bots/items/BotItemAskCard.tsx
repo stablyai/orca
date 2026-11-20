@@ -85,6 +85,11 @@ export function BotItemAskCard({
 
   useImperativeHandle(ref, () => ({
     focus: () => field.current?.focus(),
+    focusEnd: () => {
+      const node = field.current
+      node?.focus()
+      node?.setSelectionRange(node.value.length, node.value.length)
+    },
     type: (text) => {
       const node = field.current
       if (!node) {
