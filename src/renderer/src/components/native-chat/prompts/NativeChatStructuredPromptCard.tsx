@@ -45,6 +45,7 @@ export function NativeChatStructuredPromptCard({
         <div hidden={collapsed} inert={collapsed} className="contents">
           <NativeChatStructuredQuestionCard
             questions={questions}
+            memoryKey={`${prompt.itemId}:${prompt.revision}`}
             onAnswer={(response) => void promptResponse.respond(prompt, response)}
             isSubmitting={promptResponse.holds(prompt)}
             onCancel={onCancel}

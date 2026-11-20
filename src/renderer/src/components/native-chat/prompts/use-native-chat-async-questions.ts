@@ -1,5 +1,16 @@
 import { useNativeChatPaneLifetimeEffect } from '../pane/ownership/native-chat-pane-lifetime'
-import { useCallback, useLayoutEffect, useMemo, useRef, useSyncExternalStore } from 'react'
+import {
+  useCallback,
+  useContext,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useSyncExternalStore
+} from 'react'
+import {
+  isNativeChatViewTabOpen,
+  NativeChatViewTabContext
+} from '../pane/ownership/native-chat-view-memory'
 import {
   aggregateAsyncQuestions,
   newestShownAsyncQuestionRow,
@@ -40,8 +51,17 @@ export function useNativeChatAsyncQuestions({
       active.current = null
     }
   }, [owner])
+  const viewTab = useContext(NativeChatViewTabContext)
+  // A released view of an open tab keeps its skips; closing the tab sweeps them with the tab's other dismissals.
   useNativeChatPaneLifetimeEffect(
-    useCallback(() => () => dismissals.forgetAsync(scopeKey), [scopeKey])
+    useCallback(
+      () => () => {
+        if (!viewTab || !isNativeChatViewTabOpen(viewTab)) {
+          dismissals.forgetAsync(scopeKey)
+        }
+      },
+      [scopeKey, viewTab]
+    )
   )
   const hidden = useSyncExternalStore(dismissals.subscribe, () => dismissals.readAsync(scopeKey))
   const scan = useMemo(() => (settled ? scanPendingAsks(messages) : null), [messages, settled])

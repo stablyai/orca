@@ -1,6 +1,4 @@
-import { useCallback, useContext, useSyncExternalStore } from 'react'
-import { useNativeChatPaneLifetimeEffect } from '../ownership/native-chat-pane-lifetime'
-import { NativeChatViewTabContext } from '../ownership/native-chat-view-memory'
+import { useCallback, useSyncExternalStore } from 'react'
 
 // Why: a hidden chat view holds its transcript DOM, fibers and editor; keeping every visited one grows memory with use.
 export const RETAINED_HIDDEN_CHAT_VIEWS = 3
@@ -107,13 +105,5 @@ export function useRetainedChatViewKey(ownedTabIds: ReadonlySet<string>): string
   )
   return useSyncExternalStore(subscribe, () =>
     [...ownedTabIds].filter((id) => chatViewRetention.isRetained(id)).join('\n')
-  )
-}
-
-/** Keeps this chat's view mounted while it owns live work that unmounting would end (an open queued edit). */
-export function useHoldChatViewMounted(held: boolean): void {
-  const tabId = useContext(NativeChatViewTabContext)?.tabId ?? null
-  useNativeChatPaneLifetimeEffect(
-    useCallback(() => (held && tabId ? chatViewRetention.hold(tabId) : undefined), [held, tabId])
   )
 }

@@ -43,10 +43,12 @@ export function readNativeChatViewMemory<T>(tab: NativeChatViewTab, key: string)
 }
 
 /** Writes after the tab closed are dropped, so a late settlement can't recreate a closed tab's record. */
+/** With `keepNewest`, keys sharing this key's prefix (up to its last ':') beyond the newest few are dropped. */
 export function writeNativeChatViewMemory(
   tab: NativeChatViewTab,
   key: string,
-  value: unknown
+  value: unknown,
+  keepNewest?: number
 ): void {
   const record = records.get(tab.tabId)
   if (value === undefined) {
@@ -56,11 +58,23 @@ export function writeNativeChatViewMemory(
   } else if (!openTabs.has(tab.tabId) || record?.get(key) === value) {
     return
   } else if (record) {
+    record.delete(key)
     record.set(key, value)
+    if (keepNewest !== undefined) {
+      dropOldestBeyond(record, key, keepNewest)
+    }
   } else {
     records.set(tab.tabId, new Map([[key, value]]))
   }
   listeners.get(tab.tabId)?.forEach((listener) => listener())
+}
+
+function dropOldestBeyond(record: Map<string, unknown>, key: string, keep: number): void {
+  const prefix = key.slice(0, key.indexOf(':') + 1)
+  const group = [...record.keys()].filter((entry) => entry.startsWith(prefix))
+  for (const stale of group.slice(0, Math.max(0, group.length - keep))) {
+    record.delete(stale)
+  }
 }
 
 function subscribeToTab(tabId: string, listener: () => void): () => void {
@@ -115,7 +129,10 @@ export function useNativeChatViewState<T>(
 }
 
 /** A tab-kept value read once when the view mounts; without a key or a tab, nothing is kept. */
-export function useNativeChatViewMemory<T>(key: string | undefined): {
+export function useNativeChatViewMemory<T>(
+  key: string | undefined,
+  keepNewest?: number
+): {
   saved: T | undefined
   write: (value: T | undefined) => void
 } {
@@ -126,10 +143,10 @@ export function useNativeChatViewMemory<T>(key: string | undefined): {
   const write = useCallback(
     (value: T | undefined) => {
       if (tab && key !== undefined) {
-        writeNativeChatViewMemory(tab, key, value)
+        writeNativeChatViewMemory(tab, key, value, keepNewest)
       }
     },
-    [tab, key]
+    [tab, key, keepNewest]
   )
   return { saved, write }
 }

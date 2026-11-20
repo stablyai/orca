@@ -1,7 +1,6 @@
 import { ImeTextarea } from '@/lib/text-input/ime/ime-text-field'
 import { useEffect, useRef, useState, type RefObject } from 'react'
 import { useNativeChatViewMemory } from '../pane/ownership/native-chat-view-memory'
-import { useHoldChatViewMounted } from '../pane/routing/native-chat-view-retention'
 import { Check, Pencil } from 'lucide-react'
 import { cn } from '@/lib/class-names'
 import { translate } from '@/i18n/i18n'
@@ -57,6 +56,9 @@ export type NativeChatQuestionCardProps = {
 }
 
 type QuestionCardMemory = { index: number; selections: number[][]; otherText: string[] }
+// Answered forms are never told they're done; keeping only the newest few bounds them per chat.
+const QUESTION_FORMS = 'question-form:'
+const MAX_KEPT_QUESTION_FORMS = 4
 
 // Reserve a non-option index so single-select holds either an option or typed text.
 const TYPED_ANSWER = -1
@@ -87,7 +89,10 @@ export function NativeChatQuestionCard({
   const t = useTranslate()
   const cardRef = useRef<HTMLDivElement>(null)
   const autoAdvance = useNativeChatQuestionAutoAdvance(isSubmitting || isCancelling)
-  const memory = useNativeChatViewMemory<QuestionCardMemory>(memoryKey)
+  const memory = useNativeChatViewMemory<QuestionCardMemory>(
+    memoryKey === undefined ? undefined : `${QUESTION_FORMS}${memoryKey}`,
+    MAX_KEPT_QUESTION_FORMS
+  )
   const [index, setIndex] = useState(() => memory.saved?.index ?? 0)
   useNativeChatPromptCardFocus(cardRef, shouldFocus, index)
   // Use indices because labels can repeat and the agent commits numbered rows.
@@ -103,12 +108,6 @@ export function NativeChatQuestionCard({
   useReportNativeChatQuestionDraft(draft, selections, otherText)
   const { write: remember } = memory
   useEffect(() => remember({ index, selections, otherText }), [remember, index, selections, otherText])
-  // Without a prompt identity the answer can't be kept by key; keep the chat mounted while one is started.
-  useHoldChatViewMounted(
-    memoryKey === undefined &&
-      (selections.some((picked) => picked.length > 0) ||
-        otherText.some((text, qi) => text !== (freeTextInputs?.[qi]?.initialValue ?? '')))
-  )
 
   const total = prompt.questions.length
   const isLast = index === total - 1
