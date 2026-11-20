@@ -110,6 +110,36 @@ describe('file paths wrapped inside terminal table cells', () => {
     expect(fileLinksAt(rows, 2, 's:42:10')).toContainEqual(reading)
   })
 
+  it('joins .ts when a dotted basename reaches the cell border', () => {
+    const head = ' src/components/widget.test'
+    const widths = [head.length, 8]
+    const rows = [framedRow([head, ' notes '], widths), framedRow([' .ts', ' more '], widths)]
+
+    const reading = { pathText: 'src/components/widget.test.ts', line: null, column: null }
+    expect(fileLinksAt(rows, 1, 'src/components')).toContainEqual(reading)
+    expect(fileLinksAt(rows, 2, '.ts')).toContainEqual(reading)
+  })
+
+  it('joins a markdown extension split on a full cell', () => {
+    const head = ' docs/guide.mark'
+    const widths = [head.length, 8]
+    const rows = [framedRow([head, ' notes '], widths), framedRow([' down', ' more '], widths)]
+
+    const reading = { pathText: 'docs/guide.markdown', line: null, column: null }
+    expect(fileLinksAt(rows, 1, 'docs/guide')).toContainEqual(reading)
+    expect(fileLinksAt(rows, 2, 'down')).toContainEqual(reading)
+  })
+
+  it('keeps :line:col after a dotted basename that reaches the cell border', () => {
+    const head = ' src/components/widget.test'
+    const widths = [head.length, 8]
+    const rows = [framedRow([head, ' notes '], widths), framedRow([' :42:10', ' more '], widths)]
+
+    const reading = { pathText: 'src/components/widget.test', line: 42, column: 10 }
+    expect(fileLinksAt(rows, 1, 'widget.test')).toContainEqual(reading)
+    expect(fileLinksAt(rows, 2, ':42:10')).toContainEqual(reading)
+  })
+
   it('stops a wrapped cell at a horizontal rule', () => {
     const widths = [45, 8]
     const wrapped =
@@ -171,6 +201,70 @@ describe('file paths wrapped inside terminal table cells', () => {
       { pathText: 'src/app.ts', line: null, column: null }
     ])
     expect(fileLinksAt(mapRows, 2, '.map')).toEqual([])
+
+    const paddedFile = ' src/foo.ts '
+    const noteRows = [
+      framedRow([paddedFile, ' notes '], [paddedFile.length, 7]),
+      framedRow([' notes ', ' more '], [paddedFile.length, 7])
+    ]
+    expect(fileLinksAt(noteRows, 1, 'src/foo.ts')).toEqual([
+      { pathText: 'src/foo.ts', line: null, column: null }
+    ])
+    expect(fileLinksAt(noteRows, 2, 'notes')).toEqual([])
+
+    const paddedExtension = ' src/components/widget.test '
+    const paddedExtensionRows = [
+      framedRow([paddedExtension, ' notes '], [paddedExtension.length, 8]),
+      framedRow([' .ts ', ' more '], [paddedExtension.length, 8])
+    ]
+    expect(fileLinksAt(paddedExtensionRows, 1, 'widget.test')).toEqual([
+      { pathText: 'src/components/widget.test', line: null, column: null }
+    ])
+    expect(fileLinksAt(paddedExtensionRows, 2, '.ts')).toEqual([])
+  })
+
+  it('does not join a border-hugging filename onto the next row', () => {
+    const head = ' src/foo.ts'
+    const widths = [head.length, 8]
+    const pathRows = [
+      framedRow([head, ' notes '], widths),
+      framedRow([' src/bar.ts', ' more '], widths)
+    ]
+    expect(fileLinksAt(pathRows, 1, 'src/foo.ts')).toEqual([
+      { pathText: 'src/foo.ts', line: null, column: null }
+    ])
+    expect(fileLinksAt(pathRows, 2, 'src/bar.ts')).toEqual([
+      { pathText: 'src/bar.ts', line: null, column: null }
+    ])
+
+    const proseRows = [
+      framedRow([head, ' notes '], widths),
+      framedRow([' nextword', ' later '], widths)
+    ]
+    expect(fileLinksAt(proseRows, 1, 'src/foo.ts')).toEqual([
+      { pathText: 'src/foo.ts', line: null, column: null }
+    ])
+    expect(fileLinksAt(proseRows, 2, 'nextword')).toEqual([])
+
+    const shortWordRows = [
+      framedRow([head, ' notes '], widths),
+      framedRow([' more', ' later '], widths)
+    ]
+    expect(fileLinksAt(shortWordRows, 1, 'src/foo.ts')).toEqual([
+      { pathText: 'src/foo.ts', line: null, column: null }
+    ])
+    expect(fileLinksAt(shortWordRows, 2, 'more')).toEqual([])
+
+    const longHead = ' src/components/foo.ts'
+    const longWidths = [longHead.length, 8]
+    const descriptionRows = [
+      framedRow([longHead, ' notes '], longWidths),
+      framedRow([' description', ' later '], longWidths)
+    ]
+    expect(fileLinksAt(descriptionRows, 1, 'src/components')).toEqual([
+      { pathText: 'src/components/foo.ts', line: null, column: null }
+    ])
+    expect(fileLinksAt(descriptionRows, 2, 'description')).toEqual([])
   })
 
   it('keeps a short table cell and an unframed path on one row', () => {

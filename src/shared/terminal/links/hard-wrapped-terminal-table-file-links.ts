@@ -9,6 +9,9 @@ const TABLE_PATH_FRAGMENT_CHAR = /[\p{L}\p{N}\p{M}._~@%+=:,/\\()[\]-]/u
 // A cell this full is a hard wrap. Matches framed HTTP links, and still allows one padding space.
 const MIN_TABLE_PATH_FILL_RATIO = 0.8
 const MAX_TABLE_PATH_ROWS = 20
+// A full cell may finish these. Other tails longer than four characters are the next row's word.
+const BORDER_WRAPPED_LONG_EXTENSIONS = new Set(['markdown'])
+const DOTTED_EXTENSION_CONTINUATION = /^\.[\p{L}\p{N}]+(?::\d+(?::\d+)?)?$/u
 
 type TranslatedLine = ReturnType<typeof translateLineWithColumns>
 
@@ -52,8 +55,9 @@ function fileExtensionSuffix(text: string): string | null {
 }
 
 // Once joined text ends in a file extension, only allow an unambiguous continuation of
-// that token (`:line[:col]`, `/subpath`, or a split extension tail like `.t` + `s:42:10`),
-// never a separate row's path (`src/bar.ts`, `README.md`, `.map`) or flag (`-v`).
+// that token (`:line[:col]`, `/subpath`, a split tail like `.t` + `s:42:10`, a border-cut
+// `.ts` after `widget.test`, or `.mark` + `down`). Never a separate row's path
+// (`src/bar.ts`, `README.md`), a padded `.map`, or a prose tail (`nextword`).
 function canContinueAfterFileExtension(
   ext: string,
   fragment: string,
@@ -62,12 +66,21 @@ function canContinueAfterFileExtension(
   if (/^:\d+(?::\d+)?$/.test(fragment) || /^[\\/]/.test(fragment)) {
     return true
   }
+  // The border cut before the real extension (`widget.test` + `.ts`). Padding means it ended.
+  if (!prevHasTrailingPadding && DOTTED_EXTENSION_CONTINUATION.test(fragment)) {
+    return true
+  }
   const tailMatch = /^([\p{L}\p{N}]+)(?::\d+(?::\d+)?)?$/u.exec(fragment)
   if (!tailMatch) {
     return false
   }
   const tail = tailMatch[1] ?? ''
-  return (ext.length === 1 || !prevHasTrailingPadding) && ext.length + tail.length <= 4
+  const combinedLength = ext.length + tail.length
+  if ((ext.length === 1 || !prevHasTrailingPadding) && combinedLength <= 4) {
+    return true
+  }
+  // `.markdown` is past the four-character split. A full cell may finish it; a padded name may not.
+  return !prevHasTrailingPadding && BORDER_WRAPPED_LONG_EXTENSIONS.has(`${ext}${tail}`)
 }
 
 function sliceHasTrailingPadding(
@@ -246,7 +259,7 @@ function candidateForCell(
       break
     }
     const fragment = row.translated.text.slice(nextSlice.start, nextSlice.end)
-    // A finished name must not swallow the next row's own file, flag, or sibling extension.
+    // A padded name must not swallow the next row's own file, flag, or sibling extension.
     const ext = fileExtensionSuffix(text)
     if (ext !== null && !canContinueAfterFileExtension(ext, fragment, prevHasTrailingPadding)) {
       break
