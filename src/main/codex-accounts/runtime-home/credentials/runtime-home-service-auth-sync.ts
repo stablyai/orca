@@ -157,9 +157,7 @@ export abstract class CodexRuntimeHomeAuthSync extends CodexRuntimeHomeLaunch {
         ) {
           const replaced = this.writeRuntimeAuth(
             systemAuth,
-            {
-              owner: 'system-default'
-            },
+            { owner: 'system-default' },
             { expectedContents: null }
           )
           if (replaced) {
