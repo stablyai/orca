@@ -23,6 +23,7 @@ import { NativeChatMarkdownImageLinkContext } from '../media/images/NativeChatMa
 import { NativeChatDeferredMarkdownImage } from '../media/images/NativeChatDeferredMarkdownImage'
 import { remarkNativeChatFileDestinations } from './native-chat-markdown-file-destinations'
 import { remarkNativeChatListItemNumbers } from './native-chat-markdown-list-item-numbers'
+import { piEmphasisMarkdown } from './pi-emphasis-markdown'
 import { NativeChatLinkPeek } from '../links/previews/NativeChatLinkPeek'
 import {
   createNativeChatMentionExtension,
@@ -63,6 +64,7 @@ type NativeChatMarkdownProps = Omit<
   rowKey?: string
   /** The content is a Slack message's drawn form: its mention links draw as mentions. */
   slackMentions?: boolean
+  piEmphasis?: boolean
 }
 
 const NO_NAMES: readonly string[] = []
@@ -194,6 +196,7 @@ export function NativeChatMarkdown({
   content,
   variant,
   slackMentions = false,
+  piEmphasis = false,
   ...props
 }: NativeChatMarkdownProps): React.JSX.Element {
   const onLinkClick = useNativeChatLinkClick()
@@ -206,17 +209,35 @@ export function NativeChatMarkdown({
   const slackPeople = slackMentions ? null : chatSlackPeople
   const extension = useMemo(
     () =>
-      variant === 'document'
-        ? createNativeChatImageExtension(
-            visualExtension,
-            onLinkClick,
-            mentionNames,
-            everyone,
-            slackMentions,
-            slackPeople
-          )
-        : withFileDestinations(visualExtension, mentionNames, everyone, slackMentions, slackPeople),
-    [everyone, mentionNames, onLinkClick, slackMentions, slackPeople, variant, visualExtension]
+      piEmphasisMarkdown(
+        variant === 'document'
+          ? createNativeChatImageExtension(
+              visualExtension,
+              onLinkClick,
+              mentionNames,
+              everyone,
+              slackMentions,
+              slackPeople
+            )
+          : withFileDestinations(
+              visualExtension,
+              mentionNames,
+              everyone,
+              slackMentions,
+              slackPeople
+            ),
+        piEmphasis
+      ),
+    [
+      everyone,
+      mentionNames,
+      onLinkClick,
+      piEmphasis,
+      slackMentions,
+      slackPeople,
+      variant,
+      visualExtension
+    ]
   )
   const fileLinkExists = useNativeChatFileLinkExists(
     linkifyFilePaths && onLinkClick !== undefined,

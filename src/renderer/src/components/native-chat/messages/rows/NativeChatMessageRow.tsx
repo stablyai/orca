@@ -1,4 +1,5 @@
 import { memo, useRef } from 'react'
+import type { AgentType } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import type { AgentSessionAccountKind } from '../../../../../../shared/agent-session/failures/agent-session-availability'
 import type { NativeChatRewindSurface } from '../actions/use-native-chat-rewind-host'
 import type { NativeChatForkRowAction } from '../actions/use-native-chat-fork'
@@ -57,6 +58,7 @@ export type NativeChatDeliveryNotice =
 
 export type MessageRowProps = {
   message: NativeChatMessage
+  agent?: AgentType
   agentName?: string
   previousTodoWrite?: NativeChatToolCallBlock
   previousUpdatePlan?: NativeChatToolCallBlock

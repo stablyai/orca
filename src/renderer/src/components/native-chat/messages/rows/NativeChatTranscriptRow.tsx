@@ -2,7 +2,11 @@ import type { BotChatIdentity } from '../../../bots/use-bot-chat-identity'
 import { memo, useContext } from 'react'
 import { cn } from '@/lib/class-names'
 import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
-import { MessageRow, type NativeChatDeliveryNotice } from './NativeChatMessageRow'
+import {
+  MessageRow,
+  type MessageRowProps,
+  type NativeChatDeliveryNotice
+} from './NativeChatMessageRow'
 import { NativeChatResolutionReceipt } from '../../prompts/NativeChatResolutionReceipt'
 import { NativeChatWorkingStatus } from '../../conversation/turns/NativeChatWorkingStatus'
 import { NativeChatQuietTurnLeave } from '../../conversation/turns/NativeChatQuietTurnLeave'
@@ -28,6 +32,7 @@ import type { NativeChatNewRowsMarkerState } from '../../viewport/new-rows/nativ
 /** Memoize shared context so unchanged rows keep their props during transcript updates. */
 export type NativeChatTranscriptRowContext = {
   turnBot?: BotChatIdentity | null
+  agent?: MessageRowProps['agent']
   agentName?: string
   /** The prompts the host says still wait on the person; absent from an older host. */
   actionablePromptIds?: readonly string[] | undefined
@@ -147,6 +152,7 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
       ) : (
         <MessageRow
           message={message}
+          agent={context.agent}
           agentName={context.agentName}
           previousTodoWrite={predecessors?.todowrite}
           previousUpdatePlan={predecessors?.update_plan}

@@ -1,0 +1,30 @@
+[data-pi-emphasis-tone] {
+  display: inline-block;
+  border-radius: 9999px;
+  padding-inline: calc(var(--spacing) * 1.5);
+  font-size: var(--text-xs);
+  font-weight: var(--font-weight-medium);
+  white-space: nowrap;
+  background: var(--muted);
+  color: var(--foreground);
+}
+
+[data-pi-emphasis-tone='success'] {
+  background: var(--status-success-background);
+  color: var(--status-success);
+}
+
+[data-pi-emphasis-tone='warning'] {
+  background: var(--status-warning-background);
+  color: var(--status-warning-text);
+}
+
+[data-pi-emphasis-tone='danger'] {
+  background: var(--destructive);
+  color: var(--destructive-foreground);
+}
+
+[data-pi-emphasis-tone='accent'] {
+  background: var(--accent);
+  color: var(--accent-foreground);
+}

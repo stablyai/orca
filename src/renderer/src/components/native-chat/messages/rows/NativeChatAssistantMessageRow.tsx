@@ -116,6 +116,7 @@ export function NativeChatAssistantMessageRow({
           linkifyFilePaths
           {...(isSystem ? {} : NATIVE_CHAT_QUOTE_SOURCE_PROPS)}
           visualMessageId={message.role === 'assistant' ? message.id : undefined}
+          piEmphasis={message.role === 'assistant' && props.agent === 'pi'}
           // Only the live turn’s prose frontier can be mid-sentence; structured rows have no per-row streaming flag.
           streaming={streaming}
         />
