@@ -1,30 +1,12 @@
 import {
+  mergeTranscriptRanges,
   transcriptDigestHex,
   type TranscriptByteRange
 } from '../../../../../../../shared/native-chat/transcript/transcript-byte-range'
 
-function mergeRanges(ranges: readonly TranscriptByteRange[]): TranscriptByteRange[] {
-  const merged: TranscriptByteRange[] = []
-  for (const range of ranges.toSorted((a, b) => a.start - b.start || b.end - a.end)) {
-    const last = merged.at(-1)
-    if (last && range.end <= last.end) {
-      continue
-    }
-    if (last?.end === range.start) {
-      merged[merged.length - 1] = {
-        start: last.start,
-        end: range.end,
-        digest: transcriptDigestHex(BigInt(`0x${last.digest}`) + BigInt(`0x${range.digest}`))
-      }
-    } else {
-      merged.push(range)
-    }
-  }
-  return merged
-}
-
 type VerificationOptions<T> = {
   visible: () => boolean
+  olderSpan: () => { start: number; end: number } | undefined
   verify?: (ranges: TranscriptByteRange[], signal: AbortSignal) => Promise<boolean[] | null>
   reread: (signal: AbortSignal) => Promise<T>
   apply: (result: T | undefined) => TranscriptByteRange[] | undefined
@@ -33,7 +15,7 @@ type VerificationOptions<T> = {
 export class NativeChatHeldHistoryVerify<T> {
   private ranges: TranscriptByteRange[] = []
   private window: TranscriptByteRange[] = []
-  private unverified = false
+  private unsupported = false
   private generation = 0
   private revision = 0
   private pending = false
@@ -42,11 +24,14 @@ export class NativeChatHeldHistoryVerify<T> {
 
   constructor(private readonly options: VerificationOptions<T>) {}
 
+  get supported(): boolean {
+    return !!this.options.verify && !this.unsupported
+  }
+
   reset(ranges?: TranscriptByteRange[]): void {
     this.clear()
-    this.ranges = mergeRanges(ranges ?? [])
+    this.ranges = mergeTranscriptRanges(ranges ?? [])
     this.window = this.ranges
-    this.unverified = ranges === undefined
   }
 
   reread(ranges?: TranscriptByteRange[]): void {
@@ -58,8 +43,7 @@ export class NativeChatHeldHistoryVerify<T> {
   }
 
   prepend(ranges?: TranscriptByteRange[]): void {
-    this.ranges = mergeRanges([...(ranges ?? []), ...this.ranges])
-    this.unverified ||= ranges === undefined
+    this.ranges = mergeTranscriptRanges([...(ranges ?? []), ...this.ranges])
     this.revision++
     if (this.running) {
       this.schedule()
@@ -67,9 +51,8 @@ export class NativeChatHeldHistoryVerify<T> {
   }
 
   append(ranges?: TranscriptByteRange[]): void {
-    this.ranges = mergeRanges([...this.ranges, ...(ranges ?? [])])
-    this.window = mergeRanges([...this.window, ...(ranges ?? [])])
-    this.unverified ||= ranges === undefined
+    this.ranges = mergeTranscriptRanges([...this.ranges, ...(ranges ?? [])])
+    this.window = mergeTranscriptRanges([...this.window, ...(ranges ?? [])])
   }
 
   replacement(ranges: TranscriptByteRange[] | undefined, kept: boolean): void {
@@ -98,16 +81,10 @@ export class NativeChatHeldHistoryVerify<T> {
         }
       }
     }
-    if (keepWholeProof) {
-      this.unverified ||= !ranges?.every((range) =>
-        this.ranges.some((held) => held.start <= range.start && held.end >= range.end)
-      )
-    } else {
-      this.ranges = mergeRanges([...prefix, ...(ranges ?? [])])
-      this.unverified ||= prefix.length === 0
+    if (first !== undefined && !keepWholeProof) {
+      this.ranges = mergeTranscriptRanges([...prefix, ...(ranges ?? [])])
     }
-    this.window = mergeRanges(ranges ?? [])
-    this.unverified ||= ranges === undefined || first === undefined
+    this.window = mergeTranscriptRanges(ranges ?? [])
     this.revision++
     this.schedule()
   }
@@ -123,7 +100,6 @@ export class NativeChatHeldHistoryVerify<T> {
     this.running?.abort()
     this.ranges = []
     this.window = []
-    this.unverified = false
   }
 
   private schedule(): void {
@@ -154,31 +130,49 @@ export class NativeChatHeldHistoryVerify<T> {
       this.revision === revision &&
       this.options.visible()
     try {
-      let matched = false
-      if (!this.unverified && this.ranges.length > 0 && this.options.verify) {
-        try {
-          const result = await this.options.verify(this.ranges, controller.signal)
-          matched = result !== null && result.length === this.ranges.length && result.every(Boolean)
-        } catch {
-          if (controller.signal.aborted) {
-            return
-          }
+      if (!this.supported) {
+        if (current()) {
+          this.reread(this.options.apply(undefined))
         }
-      }
-      if (matched || !current()) {
         return
       }
-      let result: T | undefined
-      try {
-        result = await this.options.reread(controller.signal)
-      } catch {
-        if (controller.signal.aborted) {
+      const span = this.options.olderSpan()
+      if (!span || span.start >= span.end) {
+        return
+      }
+      const ranges = this.ranges.filter((range) => range.start < span.end && range.end > span.start)
+      let coveredTo = span.start
+      for (const range of ranges) {
+        if (range.start > coveredTo) {
+          break
+        }
+        coveredTo = Math.max(coveredTo, range.end)
+      }
+      if (coveredTo >= span.end && this.options.verify) {
+        const result = await this.options.verify(ranges, controller.signal)
+        if (controller.signal.aborted || this.generation !== generation) {
+          return
+        }
+        if (result === null) {
+          this.unsupported = true
+          if (current()) {
+            this.reread(this.options.apply(undefined))
+          }
+          return
+        }
+        if (result.length === ranges.length && result.every(Boolean)) {
           return
         }
       }
+      if (!current()) {
+        return
+      }
+      const result = await this.options.reread(controller.signal)
       if (current()) {
         this.reread(this.options.apply(result))
       }
+    } catch {
+      // A transient failure leaves held rows available for the next replacement.
     } finally {
       if (this.running === controller) {
         this.running = undefined

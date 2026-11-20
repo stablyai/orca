@@ -464,7 +464,7 @@ describe('useNativeChatLiveSession — transport routing', () => {
     }
   })
 
-  it('keeps paged-in history when the host re-sends the latest window', async () => {
+  it('resets paged-in history when a host without verification re-sends the window', async () => {
     const transport = Object.assign(getMockTransport('env-1'), { pagesByCursor: true })
     const at = (id: string, offset: number) => ({ ...assistant(id, 't'), transcriptOrder: offset })
     const held = Array.from({ length: 300 }, (_unused, n) => at(`held-${n}`, 1000 + n))
@@ -484,13 +484,16 @@ describe('useNativeChatLiveSession — transport routing', () => {
       transport.emit({ type: 'replacement', messages: [...held.slice(1), reply], hasMore: true })
     )
 
-    expect(latest?.messages.slice(0, 3).map((m) => m.id)).toEqual(['older-0', 'older-1', 'held-0'])
+    expect(latest?.messages.slice(0, 3).map((m) => m.id)).toEqual(['held-1', 'held-2', 'held-3'])
     expect(latest?.messages.at(-1)?.id).toBe('reply')
     expect(latest?.hasMore).toBe(true)
   })
 
   it('keeps paged-in history when the re-sent window starts inside the live tail', async () => {
-    const transport = Object.assign(getMockTransport('env-1'), { pagesByCursor: true })
+    const transport = Object.assign(getMockTransport('env-1'), {
+      pagesByCursor: true,
+      verifyTranscriptRanges: vi.fn().mockResolvedValue([true])
+    })
     const at = (id: string, offset: number) => ({ ...assistant(id, 't'), transcriptOrder: offset })
     const held = Array.from({ length: 300 }, (_unused, n) => at(`held-${n}`, 1000 + n))
     await render({ paneKey: PANE, agent: AGENT, sessionId: SESSION, runtimeEnvironmentId: 'env-1' })

@@ -1,0 +1,70 @@
+import { appendFile, mkdtemp, rm, stat, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  mergeTranscriptRanges,
+  type TranscriptByteRange
+} from '../../../shared/native-chat/transcript/transcript-byte-range'
+import {
+  readNativeChatTranscriptTailFile,
+  type NativeChatLineDecoder
+} from '../transcript-tail-reader'
+import {
+  createIncrementalTranscriptState,
+  readIncrementalTranscriptMessages
+} from './transcript-incremental-reader'
+import { verifyTranscriptRanges } from './transcript-range-verifier'
+
+// PR #45168: non-message append lines must not fragment held-history verification into repeated reads.
+describe.each([10_000, 100_000])('transcript range continuity at %i messages', (count) => {
+  beforeEach(() => vi.useFakeTimers({ toFake: ['Date'] }))
+  afterEach(() => vi.useRealTimers())
+
+  it('keeps snapshot and twenty mixed append bursts in one verifiable range', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'native-chat-continuity-'))
+    const file = join(directory, 'session.jsonl')
+    const decode: NativeChatLineDecoder = (line, id) =>
+      line === '{"message":true}'
+        ? {
+            id,
+            role: 'user',
+            blocks: [{ type: 'text', text: 'held message' }],
+            timestamp: 1,
+            source: 'transcript'
+          }
+        : null
+    try {
+      await writeFile(file, '{"message":true}\n{}\n{}\n{}\n'.repeat(count))
+      const snapshot = await readNativeChatTranscriptTailFile(file, count, decode)
+      const state = createIncrementalTranscriptState()
+      state.offset = snapshot.consumedTo
+      state.pendingStart = snapshot.consumedTo
+      const ranges: TranscriptByteRange[] = [...(snapshot.ranges ?? [])]
+      for (let burst = 0; burst < 20; burst++) {
+        const lines = Array.from({ length: 5 + (burst % 8) * 5 }, (_, index) =>
+          index % 4 === 0 ? '{"message":true}\n' : '{}\n'
+        )
+        await appendFile(file, lines.join(''))
+        await readIncrementalTranscriptMessages(
+          file,
+          state,
+          decode,
+          (_messages, batchRanges) => ranges.push(...(batchRanges ?? [])),
+          undefined,
+          undefined,
+          undefined,
+          true,
+          (appendRanges) => ranges.push(...appendRanges)
+        )
+      }
+      const merged = mergeTranscriptRanges(ranges)
+      expect(merged).toHaveLength(1)
+      expect(merged[0]?.start).toBe(0)
+      expect(merged[0]?.end).toBe((await stat(file)).size)
+      expect(await verifyTranscriptRanges(file, merged)).toEqual([true])
+    } finally {
+      await rm(directory, { recursive: true, force: true })
+    }
+  })
+})

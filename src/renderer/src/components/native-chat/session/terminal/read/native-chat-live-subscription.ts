@@ -17,6 +17,7 @@ import type { ReadState } from './native-chat-live-session-contract'
 import type { NativeChatSessionTransport } from './native-chat-session-transport'
 import type { useNativeChatTranscriptLifecycle } from './use-native-chat-transcript-lifecycle'
 import { NativeChatHeldHistoryVerify } from './native-chat-held-history-verify'
+import { rereadNativeChatHeldHistory } from './native-chat-held-history-reread'
 import { createNativeChatReadRetryTimer } from './native-chat-read-retry-timer'
 import { openNativeChatTranscriptStream } from './native-chat-stream-teardown'
 import { takeNativeChatOpenWake } from '../../../pane/routing/native-chat-open-wake'
@@ -117,6 +118,12 @@ export function subscribeNativeChatLiveSession({
   let windowHasMore = false
   const verifier = new NativeChatHeldHistoryVerify<NativeChatReadSessionResult>({
     visible: () => !cancelled && latestEnabled.current,
+    olderSpan: () => {
+      const held = heldRef.current
+      const start = held.phase === 'ready' ? held.messages[0]?.transcriptOrder : undefined
+      const end = windowMessages[0]?.transcriptOrder
+      return start !== undefined && end !== undefined ? { start, end } : undefined
+    },
     verify: transport.verifyTranscriptRanges
       ? (ranges, signal) =>
           transport.verifyTranscriptRanges!(
@@ -127,7 +134,7 @@ export function subscribeNativeChatLiveSession({
             signal
           )
       : undefined,
-    reread: () => {
+    reread: (signal) => {
       const held = heldRef.current
       const messages = held.phase === 'ready' ? held.messages : []
       const ids = new Set(messages.map((message) => message.id))
@@ -138,11 +145,14 @@ export function subscribeNativeChatLiveSession({
         }
         ids.add(message.id)
       }
-      return transport.readSession(
+      return rereadNativeChatHeldHistory(
+        transport,
         agent,
         activeSessionId,
-        Math.max(count, limitRef.current),
-        transcriptPath ?? undefined
+        transcriptPath ?? undefined,
+        count,
+        limitRef.current,
+        signal
       )
     },
     apply: (result) => {
@@ -246,7 +256,9 @@ export function subscribeNativeChatLiveSession({
         const more = frame.hasMore || messages !== frame.messages
         const tail = appendMergerRef.current.list
         // A reread of the latest window keeps paged-in history instead of shrinking the reader's view.
-        const base = withHeldOlderHistory(agent, heldRef.current, tail, messages, more)
+        const base = verifier.supported
+          ? withHeldOlderHistory(agent, heldRef.current, tail, messages, more)
+          : messages
         windowMessages = messages
         windowHasMore = more
         verifier.replacement(

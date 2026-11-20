@@ -2,25 +2,22 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatMessage } from '../../../../../../../shared/native-chat/native-chat-types'
 import { withHeldOlderHistory } from '../../../viewport/history/native-chat-pagination'
 import { NativeChatHeldHistoryVerify } from './native-chat-held-history-verify'
+import { rereadNativeChatHeldHistory } from './native-chat-held-history-reread'
+import type { NativeChatSessionTransport } from './native-chat-session-transport'
+import type { NativeChatReadSessionResult } from '../../../../../../../preload/api/native-chat/native-chat-api'
+import type { TranscriptByteRange } from '../../../../../../../shared/native-chat/transcript/transcript-byte-range'
 
 // PR #45168: retained history must not multiply filesystem work during replacement bursts.
-describe.each([10_000, 100_000])('held-history verification at %i rows', (count) => {
+describe.each([
+  { count: 10_000, reads: 5, firstCursor: 8_000 },
+  { count: 100_000, reads: 50, firstCursor: 98_000 }
+])('held-history verification at $count rows', ({ count, reads, firstCursor }) => {
   beforeEach(() => vi.useFakeTimers())
   afterEach(() => vi.useRealTimers())
 
   function history(
-    verify: (
-      ranges: { start: number; end: number; digest: string }[],
-      signal: AbortSignal
-    ) => Promise<boolean[]>
+    verify?: (ranges: TranscriptByteRange[], signal: AbortSignal) => Promise<boolean[] | null>
   ) {
-    const readSession = vi.fn().mockResolvedValue(undefined)
-    const scheduler = new NativeChatHeldHistoryVerify({
-      visible: () => true,
-      verify,
-      reread: readSession,
-      apply: () => undefined
-    })
     const held: NativeChatMessage[] = Array.from({ length: count }, (_, n) => ({
       id: `row-${n}`,
       role: 'user',
@@ -31,19 +28,47 @@ describe.each([10_000, 100_000])('held-history verification at %i rows', (count)
     }))
     const windowRows = held.slice(-300)
     const window = [{ start: count - 300, end: count, digest: '0000000000000300' }]
+    const readSession = vi.fn<NativeChatSessionTransport['readSession']>(
+      async (_agent, _sessionId, _limit, _path, options) => {
+        const end = options?.beforeOffset ?? count
+        const start = Math.max(0, end - 2_000)
+        return {
+          messages: held.slice(start, end),
+          ranges: [{ start, end, digest: '0000000000000100' }],
+          hasMore: start > 0
+        }
+      }
+    )
+    const transport: NativeChatSessionTransport = { readSession, subscribe: () => () => {} }
+    let current = held
+    const apply = vi.fn((result: NativeChatReadSessionResult | undefined) => {
+      current = result && 'messages' in result ? result.messages : windowRows
+      return result && 'messages' in result ? result.ranges : undefined
+    })
+    const scheduler = new NativeChatHeldHistoryVerify({
+      visible: () => true,
+      olderSpan: () => ({ start: current[0]!.transcriptOrder!, end: count - 300 }),
+      verify,
+      reread: (signal) =>
+        rereadNativeChatHeldHistory(transport, 'claude', 'session', undefined, count, 300, signal),
+      apply
+    })
     scheduler.reset(window)
     scheduler.prepend([{ start: 0, end: count - 300, digest: '0000000000000200' }])
-    const replace = (): void => {
-      const base = withHeldOlderHistory(
-        'claude',
-        { phase: 'ready', messages: held },
-        [],
-        windowRows,
-        true
-      )
-      scheduler.replacement(window, base !== windowRows)
+    const replace = (withRanges = true): void => {
+      const base = scheduler.supported
+        ? withHeldOlderHistory(
+            'claude',
+            { phase: 'ready', messages: current },
+            [],
+            windowRows,
+            true
+          )
+        : windowRows
+      current = base
+      scheduler.replacement(withRanges ? window : undefined, base !== windowRows)
     }
-    return { scheduler, replace, readSession }
+    return { scheduler, replace, readSession, apply, held, current: () => current, windowRows }
   }
 
   it('verifies once after fifty replacements go quiet', async () => {
@@ -61,6 +86,79 @@ describe.each([10_000, 100_000])('held-history verification at %i rows', (count)
       scheduler.clear()
     }
   })
+
+  it('repairs a mismatch with one EOF read and backward pages to the held depth', async () => {
+    const verify = vi.fn().mockResolvedValue([false])
+    const { scheduler, replace, readSession, apply, current } = history(verify)
+    try {
+      replace()
+      await vi.advanceTimersByTimeAsync(1_000)
+      expect(verify).toHaveBeenCalledTimes(1)
+      expect(readSession).toHaveBeenCalledTimes(reads)
+      expect(readSession).toHaveBeenNthCalledWith(
+        1,
+        'claude',
+        'session',
+        count,
+        undefined,
+        undefined
+      )
+      expect(readSession).toHaveBeenNthCalledWith(2, 'claude', 'session', count, undefined, {
+        beforeOffset: firstCursor
+      })
+      expect(readSession).toHaveBeenLastCalledWith('claude', 'session', count, undefined, {
+        beforeOffset: 2_000
+      })
+      expect(apply).toHaveBeenCalledTimes(1)
+      expect(current()).toHaveLength(count)
+      expect(current()[0]?.id).toBe('row-0')
+    } finally {
+      scheduler.clear()
+    }
+  })
+
+  it('coalesces reconnect windows without ranges into one matching verification', async () => {
+    const verify = vi.fn().mockResolvedValue([true])
+    const { scheduler, replace, readSession, held, current } = history(verify)
+    try {
+      for (let i = 0; i < 50; i++) {
+        replace(false)
+        await vi.advanceTimersByTimeAsync(10)
+      }
+      await vi.advanceTimersByTimeAsync(1_000)
+      expect(verify).toHaveBeenCalledTimes(1)
+      expect(readSession).toHaveBeenCalledTimes(0)
+      expect(current()).toBe(held)
+    } finally {
+      scheduler.clear()
+    }
+  })
+
+  it.each(['absent', 'unsupported'])(
+    'resets %s verification to the window without rereading',
+    async (kind) => {
+      const verify = vi.fn().mockResolvedValue(null)
+      const { scheduler, replace, readSession, current, windowRows } = history(
+        kind === 'absent' ? undefined : verify
+      )
+      try {
+        replace()
+        await vi.advanceTimersByTimeAsync(1_000)
+        expect(current()).toBe(windowRows)
+        verify.mockClear()
+        for (let i = 0; i < 50; i++) {
+          replace()
+          await vi.advanceTimersByTimeAsync(10)
+        }
+        await vi.advanceTimersByTimeAsync(1_000)
+        expect(verify).toHaveBeenCalledTimes(0)
+        expect(readSession).toHaveBeenCalledTimes(0)
+        expect(current()).toBe(windowRows)
+      } finally {
+        scheduler.clear()
+      }
+    }
+  )
 
   it('allows one running verification and one follow-up', async () => {
     let active = 0
