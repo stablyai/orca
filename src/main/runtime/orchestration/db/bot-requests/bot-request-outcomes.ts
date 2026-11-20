@@ -79,11 +79,61 @@ export function listUnreadBotRequests(
   })
 }
 
+/** Requests to an agent awaiting an answer that were read from these mailboxes and still have no
+ *  outcome. Walks the agent's requests, far fewer than the mail its chats read. */
+export function listReadOpenBotRequests(
+  this: OrchestrationDb,
+  toBotId: string,
+  mailboxes: string[]
+): string[] {
+  if (mailboxes.length === 0) {
+    return []
+  }
+  return this.db
+    .prepare(
+      `SELECT m.id FROM bot_requests r
+       CROSS JOIN messages m ON m.id = r.message_id
+       LEFT JOIN bot_request_outcomes o ON o.message_id = r.message_id
+       WHERE r.to_bot_id = ? AND r.purpose != 'status' AND o.message_id IS NULL AND m.read = 1
+         AND m.to_handle IN (${mailboxes.map(() => '?').join(', ')})
+       ORDER BY m.sequence`
+    )
+    .all(toBotId, ...mailboxes)
+    .flatMap((row) =>
+      typeof row === 'object' && row !== null && 'id' in row && typeof row.id === 'string'
+        ? [row.id]
+        : []
+    )
+}
+
+/** Whether the chat started a worker once this request reached it that is still open: its report
+ *  wakes the chat again, still on the request. */
+export function isBotRequestHeldByWorker(
+  this: OrchestrationDb,
+  orcaSessionId: string,
+  messageId: string
+): boolean {
+  return (
+    this.db
+      .prepare(
+        `SELECT 1 FROM messages m
+         JOIN dispatch_contexts d ON d.creator_orca_session_id = ?
+           AND d.status IN ('pending', 'dispatched')
+           AND d.created_at >= COALESCE(m.delivered_at, m.created_at)
+         WHERE m.id = ?
+         LIMIT 1`
+      )
+      .get(orcaSessionId, messageId) !== undefined
+  )
+}
+
 export type BotRequestOutcomeMethods = {
   recordBotRequestOutcome: typeof recordBotRequestOutcome
   recordBotAnswer: typeof recordBotAnswer
   getBotRequestOutcome: typeof getBotRequestOutcome
   listUnreadBotRequests: typeof listUnreadBotRequests
+  listReadOpenBotRequests: typeof listReadOpenBotRequests
+  isBotRequestHeldByWorker: typeof isBotRequestHeldByWorker
 }
 
 export function attachBotRequestOutcomes(ctor: { prototype: object }): void {
@@ -91,6 +141,8 @@ export function attachBotRequestOutcomes(ctor: { prototype: object }): void {
     recordBotRequestOutcome,
     recordBotAnswer,
     getBotRequestOutcome,
-    listUnreadBotRequests
+    listUnreadBotRequests,
+    listReadOpenBotRequests,
+    isBotRequestHeldByWorker
   })
 }

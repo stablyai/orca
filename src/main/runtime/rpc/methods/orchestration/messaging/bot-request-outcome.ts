@@ -31,8 +31,9 @@ import type { TurnEndedVerdict } from '../../../../../native-chat/agent-session-
 import type { StructuredAgentSessionRequestFailure } from '../../../../../native-chat/agent-session-wire/observations/structured-agent-session-request-failures'
 import { readChatRequestError } from '../../../../orchestration/workers/turn-stops/chat-request-error-read'
 import { readAgentSessionRecordStore } from '../../../../orchestration/addressing/session-lineage/structured-session-lineage'
-
-const ACTIVE_DISPATCH = new Set(['pending', 'dispatched'])
+import { canonicalOrcaSessionId } from '../../../../orchestration/addressing/session-lineage/canonical-orca-session-id'
+import { isOrcaSessionId } from '../../../../../../shared/agent-session/identity/orca-session-address'
+import { orcaSessionMailboxes } from '../../../../orchestration/addressing/orca-session-mailboxes'
 
 /** The payload a reply to a request carries: what the sender does with the answer. */
 export function botAnswerPayload(db: OrchestrationDb, original: MessageRow): string | undefined {
@@ -137,25 +138,32 @@ async function settleBotRequests(
   reason?: string
 ): Promise<void> {
   // Every chat's turn ends here; only a bot's can be on a request.
-  if (!botOfSession(runtime.bots, sessionId)) {
+  const bot = botOfSession(runtime.bots, sessionId)
+  if (!bot) {
     return
   }
   const db = runtime.getOrchestrationDb()
+  const chat = isOrcaSessionId(sessionId) ? canonicalOrcaSessionId(sessionId) : null
+  // Read before any await, so mail the next turn takes is not read yet. Earlier turns' requests come
+  // too: one held for a worker is no longer the newest turn's once another turn starts.
+  const earlier =
+    chat && why === 'ended'
+      ? db.listReadOpenBotRequests(bot.id, orcaSessionMailboxes(db, chat))
+      : []
   const { turn } = await readBotTurn(runtime, db, sessionId)
-  const open = turn.requestIds.filter((id) => db.getBotRequestOutcome(id) === null)
-  if (open.length === 0) {
+  const open = [...new Set([...turn.requestIds, ...earlier])].flatMap((id) => {
+    const message = db.getBotRequestOutcome(id) === null ? db.getMessageById(id) : undefined
+    return message ? [message] : []
+  })
+  // A worker the chat started after a request arrived may still answer it, and its report wakes the
+  // chat again; workers already running when it arrived do not hold it.
+  const messages = open.filter((message) => !chat || !db.isBotRequestHeldByWorker(chat, message.id))
+  if (messages.length === 0) {
     return
   }
-  // Its workers' reports wake it again, still on these requests.
-  const working = db
-    .listDispatchIdsCreatedBySession(sessionId, 50)
-    .some((id) => ACTIVE_DISPATCH.has(db.getDispatchContextById(id)?.status ?? ''))
-  const messages = working ? [] : open.map((id) => db.getMessageById(id))
   await ensureSenderRecords(runtime, messages)
   for (const message of messages) {
-    if (message) {
-      tellSender(runtime, db, message, 'unanswered', why, reason)
-    }
+    tellSender(runtime, db, message, 'unanswered', why, reason)
   }
 }
 
