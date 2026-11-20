@@ -1,7 +1,7 @@
 import type { WebglAddon } from '@xterm/addon-webgl'
 import type { ManagedPaneInternal } from '../pane-manager-types'
 import { recordTerminalWebglDiagnostic } from '../../../../../shared/terminal/diagnostics/terminal-webgl-diagnostics'
-import { getLivePaneCensus, rebuildAllTerminalWebglRenderers } from '../pane-manager-registry'
+import { getLivePaneCensus } from '../pane-manager-registry'
 import {
   getTerminalWebglAutoDecision,
   resetTerminalWebglAutoDecision
@@ -27,6 +27,7 @@ import {
   setTerminalWebglAddonLoadHandlers
 } from './terminal-webgl-addon-loader'
 import { watchTerminalSymbolsFontLoad } from './terminal-symbols-font'
+import { handleTerminalWebglAtlasPage } from './terminal-webgl-atlas-memory-rebuild'
 
 export const ENABLE_WEBGL_RENDERER = true
 let suggestedRendererType: 'dom' | undefined
@@ -45,34 +46,6 @@ type XtermWebglAddonInternals = {
 }
 
 const panesAwaitingWebglAddon = new Set<ManagedPaneInternal>()
-
-// A 4096² merged page means the shared atlas reached ~64 MiB; GL memory each pane's context accrued uploading it is freed only with the context (GiBs across panes).
-const ATLAS_REBUILD_PAGE_SIZE = 4096
-let atlasRebuildTimer: ReturnType<typeof setTimeout> | null = null
-let atlasRebuildRepaintPending = false
-
-function scheduleAtlasMemoryRebuild(): void {
-  if (atlasRebuildTimer !== null || atlasRebuildRepaintPending) {
-    return
-  }
-  // Leave xterm's atlas callback first; the rebuild disposes renderers mid-render.
-  atlasRebuildTimer = setTimeout(() => {
-    atlasRebuildTimer = null
-    // A dense screen can refill the fresh atlas past 4096² on repaint alone; only later output may re-arm, or static content would rebuild forever.
-    atlasRebuildRepaintPending = true
-    rebuildAllTerminalWebglRenderers('atlas-memory')
-    if (typeof globalThis.requestAnimationFrame !== 'function') {
-      atlasRebuildRepaintPending = false
-      return
-    }
-    // xterm repaints on the next frame; re-arm after it.
-    globalThis.requestAnimationFrame(() =>
-      globalThis.requestAnimationFrame(() => {
-        atlasRebuildRepaintPending = false
-      })
-    )
-  }, 0)
-}
 
 setTerminalWebglAddonLoadHandlers({
   onLoaded: () => {
@@ -304,11 +277,7 @@ export function attachWebgl(pane: ManagedPaneInternal): void {
       pane.webglDisabledAfterContextLoss = true
       disposeWebgl(pane, { refreshDimensions: true })
     })
-    addon.onAddTextureAtlasCanvas((page) => {
-      if (page.width >= ATLAS_REBUILD_PAGE_SIZE) {
-        scheduleAtlasMemoryRebuild()
-      }
-    })
+    addon.onAddTextureAtlasCanvas((page) => handleTerminalWebglAtlasPage(page, pane.terminal))
     pane.terminal.loadAddon(addon)
     pane.webglAddon = addon
     const canvas = getXtermWebglCanvas(addon)
