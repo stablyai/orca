@@ -100,6 +100,7 @@ export function getUndeliveredUnreadMessages(
     params.push(Math.max(1, Math.floor(options.limit)))
   }
   return exposeMessageListTimestamps(
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT * FROM messages yields MessageRow columns.
     this.db
       .prepare(
         // Why INDEXED BY: retained uncertain claims share the inbox; this index leaves them out.
@@ -107,7 +108,6 @@ export function getUndeliveredUnreadMessages(
          WHERE ${conditions.join(' AND ')}
          ORDER BY sequence${limitSql}`
       )
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT * FROM messages yields MessageRow columns.
       .all(...params) as MessageRow[]
   )
 }
