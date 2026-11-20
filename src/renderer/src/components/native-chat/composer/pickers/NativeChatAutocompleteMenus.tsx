@@ -312,14 +312,17 @@ export const NativeChatMentionMenu = memo(function NativeChatMentionMenu({
           ? t('components.native-chat.composer.filesLoadFailed', "Couldn't load files")
           : nativeChatMentionEmptyText(room !== null && !room.withFiles)
 
-  // This chat's crew agents lead, then a bot's chat lists the other bots, then files, each under its heading.
+  // The room's bots lead, then this chat's crew agents, then files, each under its heading.
   const agentValues = new Set(room?.agents?.map(nativeChatMentionValue))
-  const agents = files.findIndex((value) => !agentValues.has(value))
-  const agentCount = agents === -1 ? files.length : agents
-  const bots = room?.withFiles
-    ? files.slice(agentCount).filter((value) => memberOf(value)).length
-    : 0
+  const leading = (from: number, matches: (value: string) => boolean) => {
+    const end = files.findIndex((value, index) => index >= from && !matches(value))
+    return (end === -1 ? files.length : end) - from
+  }
+  const bots = room ? leading(0, (value) => !agentValues.has(value) && Boolean(memberOf(value))) : 0
+  const agentCount = leading(bots, (value) => agentValues.has(value))
+  const listed = bots + agentCount
   const grouped = room?.withFiles === true && bots + room.unavailable.length > 0
+  const botsHeaded = grouped || (bots > 0 && agentCount > 0)
   const headed = grouped || agentCount > 0
   const option = (path: string, index: number) => {
     const member = room ? memberOf(path) : undefined
@@ -371,20 +374,18 @@ export const NativeChatMentionMenu = memo(function NativeChatMentionMenu({
 
   return (
     <PickerListbox id={listboxId}>
-      {agentCount > 0 ? <PickerGroupHeading kind="agents" /> : null}
-      <div className="flex flex-col gap-0.5">{files.slice(0, agentCount).map(option)}</div>
-      {grouped ? <PickerGroupHeading kind="bots" /> : null}
+      {botsHeaded ? <PickerGroupHeading kind="bots" /> : null}
       <div className="flex flex-col gap-0.5" onPointerLeave={() => setHovered(null)}>
-        {files
-          .slice(agentCount, agentCount + bots)
-          .map((path, index) => option(path, index + agentCount))}
+        {files.slice(0, bots).map(option)}
       </div>
       {grouped ? <NativeChatUnavailableMentions room={room} /> : null}
-      {headed && files.length > agentCount + bots ? <PickerGroupHeading kind="files" /> : null}
+      {agentCount > 0 ? <PickerGroupHeading kind="agents" /> : null}
       <div className="flex flex-col gap-0.5">
-        {files
-          .slice(agentCount + bots)
-          .map((path, index) => option(path, index + agentCount + bots))}
+        {files.slice(bots, listed).map((path, index) => option(path, index + bots))}
+      </div>
+      {headed && files.length > listed ? <PickerGroupHeading kind="files" /> : null}
+      <div className="flex flex-col gap-0.5">
+        {files.slice(listed).map((path, index) => option(path, index + listed))}
       </div>
       {statusText ? (
         <PickerStatus>

@@ -1,4 +1,4 @@
-// The `@` list in a coordinator chat: its crew's agents above its bots and files.
+// The `@` list in a coordinator chat: its bots above its crew's agents, then files.
 import { defineFixture } from '../../../../component-fixtures/component-fixture'
 import { BotAvatarTile } from '../../../bots/BotAvatar'
 import { nativeChatAppearanceStyle } from '../../appearance/native-chat-appearance-style'
@@ -64,7 +64,7 @@ const bots = [
 
 const room = { replies: null, mentions: bots, withFiles: true, unavailable: [], agents }
 
-export const agentsAboveBots = defineFixture({
+export const botsAboveAgents = defineFixture({
   width: 560,
   render: () => (
     <div
@@ -76,8 +76,8 @@ export const agentsAboveBots = defineFixture({
           <NativeChatMentionMenu
             mention={{
               files: [
-                ...agents.map(nativeChatMentionValue),
                 ...bots.map(nativeChatMentionValue),
+                ...agents.map(nativeChatMentionValue),
                 'src/auth/session.ts'
               ],
               loading: false,

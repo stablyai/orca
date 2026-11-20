@@ -121,18 +121,18 @@ export function useNativeChatComposerMentions(
     [ranked, room]
   )
   const mentionFiles = useMemo<NativeChatMentionFiles>(() => {
-    // This chat's crew agents lead the list, above its bots.
+    // The room's bots lead the list, above this chat's crew agents.
     if (!room) {
       return agents.length > 0
         ? { ...workspaceFiles, files: [...agents, ...workspaceFiles.files] }
         : workspaceFiles
     }
     if (room.withFiles) {
-      return { ...workspaceFiles, files: [...agents, ...pickable, ...workspaceFiles.files] }
+      return { ...workspaceFiles, files: [...pickable, ...agents, ...workspaceFiles.files] }
     }
     return query === null
       ? NO_MATCHES
-      : { files: [...agents, ...pickable], loading: false, failed: false }
+      : { files: [...pickable, ...agents], loading: false, failed: false }
   }, [room, query, agents, pickable, workspaceFiles])
   const botIdOf = useCallback((value: string) => memberOf(room, value)?.id ?? null, [room])
   const chooseMention = useCallback(
