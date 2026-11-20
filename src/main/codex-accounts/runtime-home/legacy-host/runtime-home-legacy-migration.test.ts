@@ -106,11 +106,26 @@ async function removeAccountHome(managedHomePath: string): Promise<void> {
 }
 
 const fsHooks = vi.hoisted(
-  (): { afterRead: Map<string, () => void>; linkError: NodeJS.ErrnoException | null } => ({
+  (): {
+    afterRead: Map<string, () => void>
+    linkError: NodeJS.ErrnoException | null
+    failedCopies: Set<string>
+  } => ({
     afterRead: new Map(),
-    linkError: null
+    linkError: null,
+    failedCopies: new Set()
   })
 )
+vi.mock(import('node:fs'), async (importOriginal) => {
+  const actual = await importOriginal()
+  const copyFileSync = (...args: Parameters<typeof actual.copyFileSync>): void => {
+    if (fsHooks.failedCopies.has(String(args[1]))) {
+      throw Object.assign(new Error('copy failed'), { code: 'EIO' })
+    }
+    actual.copyFileSync(...args)
+  }
+  return { ...actual, default: { ...actual, copyFileSync }, copyFileSync }
+})
 vi.mock(import('node:fs/promises'), async (importOriginal) => {
   const actual = await importOriginal()
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: forwards every overload unchanged.
@@ -144,6 +159,7 @@ describe('CodexRuntimeHomeService', () => {
   afterEach(() => {
     fsHooks.afterRead.clear()
     fsHooks.linkError = null
+    fsHooks.failedCopies.clear()
     trackMock.mockClear()
     teardownRuntimeHomeTest()
   })
@@ -294,6 +310,24 @@ describe('CodexRuntimeHomeService', () => {
       readFileSync(join(runtimeSessionsDir, 'session.orca-legacy-account-1.json'), 'utf-8')
     ).toBe('{"legacy":2}')
     expect(existsSync(migrationMarkerPath())).toBe(true)
+  })
+
+  it('leaves no conflict copy behind when keeping another conflict fails', async () => {
+    const runtimeSessionsDir = join(getRuntimeCodexHomePath(), 'sessions')
+    mkdirSync(runtimeSessionsDir, { recursive: true })
+    writeFileSync(join(runtimeSessionsDir, 'a.json'), '{"runtime":"a"}', 'utf-8')
+    writeFileSync(join(runtimeSessionsDir, 'b.json'), '{"runtime":"b"}', 'utf-8')
+    const managedHomePath = writeHistory('account-1', '{"id":"a-1"}\n')
+    mkdirSync(join(managedHomePath, 'sessions'), { recursive: true })
+    writeFileSync(join(managedHomePath, 'sessions', 'a.json'), '{"legacy":"a"}', 'utf-8')
+    writeFileSync(join(managedHomePath, 'sessions', 'b.json'), '{"legacy":"b"}', 'utf-8')
+    fsHooks.failedCopies.add(join(runtimeSessionsDir, 'b.orca-legacy-account-1.json'))
+
+    await constructService()
+    await waitForImportOutcomes(['imported'])
+
+    expect(readdirSync(runtimeSessionsDir).sort()).toEqual(['a.json', 'b.json'])
+    expect(existsSync(migrationMarkerPath())).toBe(false)
   })
 
   it('removes the copy an interrupted import left behind', async () => {
