@@ -39,7 +39,7 @@ export function NativeChatAntigravityAuthChip({
   const auth = useNativeChatAntigravityAuth()
   const method = auth?.detection?.method
   const onAgy = auth?.backend === 'agy'
-  if (!auth || (!method && !onAgy)) {
+  if (!auth || (!method && !onAgy) || (onAgy && auth.programPending)) {
     return null
   }
   // On the host's agy, agy's own login serves this chat whatever Google method is saved; another
@@ -49,8 +49,10 @@ export function NativeChatAntigravityAuthChip({
   )
   // The host's current version; a chat started before an upgrade runs the older one until it restarts.
   const program = antigravityProgramLabel(
-    auth.backend,
-    onAgy ? auth.detection?.agyVersion : auth.managedVersion,
+    onAgy && auth.orcasAgy ? 'orcasAgy' : auth.backend,
+    onAgy
+      ? (auth.detection?.agyVersion ?? (auth.orcasAgy ? auth.managedVersion : null))
+      : auth.managedVersion,
     t
   )
   const label = onAgy ? program : (antigravityChatAuthMethodLabel(method ?? '', t) ?? '')

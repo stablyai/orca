@@ -58,6 +58,9 @@ export const ConnectorBotSlackState = z.discriminatedUnion('state', [
     installerName: z.string().optional(),
     // The app's manifest predates this cloud's: setting it up again adds the new scopes and events.
     updateNeeded: z.literal(true).optional(),
+    // The app works as it is, yet predates permissions this cloud's manifest asks for: setting it up
+    // again grants them. Offered, never asked for.
+    updateAvailable: z.literal(true).optional(),
     // What messages typed at the bot's computer post as here, and a change waiting on the Slack
     // approval of whoever set it up; an older cloud leaves them out (no choice to offer).
     postAs: z.enum(['person', 'computer']).optional(),

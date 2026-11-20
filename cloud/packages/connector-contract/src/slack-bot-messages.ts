@@ -43,7 +43,10 @@ export const ConnectorBotSlackStateSchema = z.discriminatedUnion('state', [
     teamName: z.string().optional(),
     installerName: z.string().optional(),
     // The app's manifest predates this cloud's: setting it up again adds the new scopes and events.
-    updateNeeded: z.literal(true).optional()
+    updateNeeded: z.literal(true).optional(),
+    // The app works as it is, yet predates optional scopes this cloud's manifest asks for: setting it
+    // up again grants them. Offered, never asked for.
+    updateAvailable: z.literal(true).optional()
   })
 ])
 

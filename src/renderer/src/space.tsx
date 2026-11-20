@@ -19,14 +19,11 @@ import { getOrCreateRendererRoot } from './app-shell/startup/react-renderer-root
 import { I18nProvider } from './i18n/I18nProvider'
 import { useAppStore } from './store/index'
 import { installBodyOverlayAttributes } from './lib/overlay-interaction/body-overlay-attributes'
-import { installLoopingAnimationClock } from './lib/window-activity/looping-animation-clock'
 import { useReduceVisualEffects } from './hooks/theme/use-reduce-visual-effects'
 import { registerBackgroundWorkerPausedIpcBridge } from './hooks/ipc-events/native-app/background-worker-paused-ipc-bridge'
 
 const disposeBodyOverlayAttributes = installBodyOverlayAttributes()
 import.meta.hot?.dispose(disposeBodyOverlayAttributes)
-const disposeLoopingAnimationClock = installLoopingAnimationClock()
-import.meta.hot?.dispose(disposeLoopingAnimationClock)
 // Why before settings arrive: the window otherwise paints without a light or dark mode.
 applyDocumentTheme('system', { disableTransitions: false })
 

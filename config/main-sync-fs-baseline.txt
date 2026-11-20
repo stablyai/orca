@@ -22,7 +22,6 @@
 2 src/main/ai-vault/scanners/opencode/reader-transport/session-scanner-opencode-sqlite-worker-spawn.ts
 8 src/main/amp/hook-service.ts
 2 src/main/amp/managed-plugin-install-status.ts
-1 src/main/antigravity/antigravity-host-acp.ts
 2 src/main/antigravity/native-credential-backend.ts
 3 src/main/antigravity/native-file-credentials.ts
 3 src/main/artifacts/artifact-create-intent-store.ts
@@ -32,7 +31,6 @@
 1 src/main/bots/bot-look-around-store.ts
 1 src/main/bots/bot-tool-credentials.ts
 1 src/main/bots/bot-tool-secret-scrub.ts
-1 src/main/bots/bot-tools-claude.ts
 1 src/main/bots/bot-tools-host.ts
 2 src/main/bots/bot-work-runtime.ts
 1 src/main/bots/bot-work-store.ts

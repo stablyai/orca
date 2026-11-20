@@ -48,6 +48,10 @@ export type SortableTabProps = {
   closable?: boolean
   /** 'content' fits the title like editor and browser tabs, as the Home chat; 'terminal' reserves 300px for a title that keeps changing. */
   sizing?: 'content' | 'terminal'
+  /** False for a bot's side chats: only its Home holds the left. A pinned one can still be unpinned. */
+  canPin?: boolean
+  /** A bot's Home: marked so it reads as the one chat that stays first. */
+  isBotHome?: boolean
   /** False for a bot's chats, which stay native chats. */
   canContinueInTerminal?: boolean
   /** Shown in place of the agent's icon, as a bot's picture on its chats. */

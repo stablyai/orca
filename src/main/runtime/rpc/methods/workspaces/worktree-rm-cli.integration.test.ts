@@ -1,3 +1,4 @@
+// @orca-isolated-worker: The real CLI and Git worker need a fresh module environment.
 import { execFile } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { mkdir, mkdtemp, realpath, writeFile } from 'node:fs/promises'

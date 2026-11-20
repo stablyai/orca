@@ -50,7 +50,7 @@ export function fillJournalConnectorReplies(
   now: number
 ): number {
   const fill = db.prepare(`UPDATE journal_connector_replies SET outcome=?,answer_delivery_id=?,
-    turn_item_id=?,prose=?,failure_json=?,links_json=?,filled_at=?
+    turn_item_id=?,prose=?,failure_json=?,links_json=?,took_ms=?,filled_at=?
     WHERE account=? AND delivery_id=? AND outcome IS NULL`)
   let filled = 0
   for (const row of fills) {
@@ -62,6 +62,7 @@ export function fillJournalConnectorReplies(
         row.prose ?? null,
         row.failure === undefined ? null : JSON.stringify(row.failure),
         row.links?.length ? JSON.stringify(row.links) : null,
+        row.tookMs ?? null,
         now,
         row.account,
         row.deliveryId
@@ -175,6 +176,9 @@ export function readJournalConnectorReplies(
                 ? {}
                 : { failure: JSON.parse(String(row.failure_json)) }),
               ...(row.links_json === null ? {} : { links: JSON.parse(String(row.links_json)) }),
+              ...(row.took_ms === null || row.took_ms === undefined
+                ? {}
+                : { tookMs: Number(row.took_ms) }),
               filledAt: Number(row.filled_at)
             }
           })
