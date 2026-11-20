@@ -178,6 +178,8 @@ export type AgentStatusPayload = {
   mainAgent?: AgentMainAgentStatus
   /** The execution host awaits a launched Claude task’s wake-up or its finishing turn. */
   claudeTaskWakeupPending?: 'notification' | 'finishing-turn'
+  /** The execution host still waits for an agy subagent spawn to prove its child. */
+  antigravitySpawnPending?: true
 }
 
 /** Parsing always supplies prompt (empty if omitted); optional tool/assistant fields distinguish no update from explicit clearing. */
@@ -210,7 +212,8 @@ export function pickParsedAgentStatusPayload(
     ...(row.mainAgent !== undefined ? { mainAgent: row.mainAgent } : {}),
     ...(row.claudeTaskWakeupPending !== undefined
       ? { claudeTaskWakeupPending: row.claudeTaskWakeupPending }
-      : {})
+      : {}),
+    ...(row.antigravitySpawnPending ? { antigravitySpawnPending: true as const } : {})
   }
 }
 
@@ -322,6 +325,11 @@ function normalizeAgentStatusObject(parsed: unknown): ParsedAgentStatusPayload |
     (obj.claudeTaskWakeupPending === 'notification' ||
       obj.claudeTaskWakeupPending === 'finishing-turn')
       ? { claudeTaskWakeupPending: obj.claudeTaskWakeupPending }
+      : {}),
+    ...(obj.agentType === 'antigravity' &&
+    state === 'working' &&
+    obj.antigravitySpawnPending === true
+      ? { antigravitySpawnPending: true as const }
       : {})
   }
 }

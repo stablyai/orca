@@ -339,3 +339,15 @@ it('releases the parent when agy reports the spawn failed', () => {
   })
   expect(hook('root', 'Stop', { fullyIdle: false })?.payload.state).toBe('done')
 })
+
+it('counts only a swarm add as a spawn that holds the parent', async () => {
+  transcript('child')
+  descriptor('child')
+  spawn()
+  hook('child', 'PreInvocation')
+  await poll()
+  const swarm = (action: string) =>
+    hook('root', 'PreToolUse', { toolCall: { name: 'swarm', args: { action } } })?.payload
+  expect(swarm('status')?.antigravitySpawnPending).toBeUndefined()
+  expect(swarm('add')?.antigravitySpawnPending).toBe(true)
+})

@@ -49,6 +49,7 @@ export function buildAntigravityFoldedStatusPayload(
     lastAssistantMessage: snapshot?.lastAssistantMessage,
     lastAssistantMessageIsToolOutput: snapshot?.lastAssistantMessageIsToolOutput,
     subagents: subagents.length > 0 ? subagents : undefined,
+    antigravitySpawnPending: paneState.pendingHelperSpawns !== undefined ? true : undefined,
     mainAgent: { state: leadState, stateStartedAt: leadStateStartedAt }
   })
 }

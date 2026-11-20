@@ -104,7 +104,8 @@ export function transcriptPollUpdate<T extends AgentHookEventPayload>(
       polled.payload.state !== original.payload.state ||
       polled.payload.workingMode !== original.payload.workingMode ||
       polled.payload.model !== original.payload.model ||
-      polled.payload.mainAgent?.state !== original.payload.mainAgent?.state
+      polled.payload.mainAgent?.state !== original.payload.mainAgent?.state ||
+      polled.payload.antigravitySpawnPending !== original.payload.antigravitySpawnPending
     if (!changed) {
       return undefined
     }

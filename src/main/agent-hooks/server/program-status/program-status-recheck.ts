@@ -147,11 +147,12 @@ export function reconcileRelayedAntigravityDone(
   if (!sameTurn || applied.hookEventName !== undefined || pane.leadObservedAt === undefined) {
     pane.leadObservedAt = now
   }
-  if (applied.payload.subagents?.length) {
+  // A pending spawn holds the run; its settling ends child work like a subagent leaving the row.
+  if (applied.payload.subagents?.length || applied.payload.antigravitySpawnPending) {
     pane.helpersIdleAt = undefined
   } else if (
     sameTurn &&
-    previous?.payload.subagents?.length &&
+    (previous?.payload.subagents?.length || previous?.payload.antigravitySpawnPending) &&
     applied.payload.mainAgent?.state === 'done'
   ) {
     pane.helpersIdleAt = now

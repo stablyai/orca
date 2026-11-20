@@ -20,7 +20,7 @@ import { extractToolFields, isNewTurnEvent } from '../../provider-event-routing'
 import { readLastUserPromptFromTranscript } from '../../transcript-lines'
 import {
   isAntigravityFeedbackTool,
-  isAntigravityHelperSpawnTool,
+  isAntigravityHelperSpawnCall,
   isAntigravityStopStillBusy,
   isAntigravitySubagentTool,
   isRecognizedAntigravityEvent,
@@ -154,7 +154,8 @@ export function normalizeAntigravityEvent(
   const paneState = getOrCreateAntigravityPaneState(state, paneKey)
   paneState.leadObservedAt = now
   paneState.rootStoppedIdle = undefined
-  const toolName = readAntigravityToolCall(hookPayload).toolName
+  const { toolName, toolInputSource } = readAntigravityToolCall(hookPayload)
+  const spawnsHelpers = isAntigravityHelperSpawnCall(toolName, toolInputSource)
   const brainDir = resolveAntigravityBrainDirectory(hookPayload, transcriptPath)
   if (
     conversationId &&
@@ -185,11 +186,11 @@ export function normalizeAntigravityEvent(
   ) {
     paneState.discoversChildren = true
   }
-  if (eventName === 'PreToolUse' && isAntigravityHelperSpawnTool(toolName)) {
+  if (eventName === 'PreToolUse' && spawnsHelpers) {
     paneState.pendingHelperSpawns = (paneState.pendingHelperSpawns ?? 0) + 1
   } else if (
     eventName === 'PostToolUse' &&
-    isAntigravityHelperSpawnTool(toolName) &&
+    spawnsHelpers &&
     readFirstString(hookPayload, ['error'])
   ) {
     settleAntigravityHelperSpawn(paneState)

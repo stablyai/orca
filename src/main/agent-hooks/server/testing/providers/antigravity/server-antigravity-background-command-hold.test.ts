@@ -275,6 +275,8 @@ it('ends the run on agy done after a subagent that finished before its first pol
 
 it('keeps the subagent roster when agy reports working after a long hook-silent wait', async () => {
   await parentStopsWhileSubagentRuns()
+  await agyHook('PreToolUse', { ...child, toolCall: { name: 'ask_question', args: {} } })
+  expect(state()).toBe('waiting')
   vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
   vi.advanceTimersByTime(HOOK_SILENCE_BEFORE_PROGRAM_STATUS_FALLBACK_MS + 1)
   server.ingestTerminalStatus({
@@ -288,4 +290,69 @@ it('keeps the subagent roster when agy reports working after a long hook-silent 
   expect(server.getStatusSnapshot()[0]?.subagents?.map((subagent) => subagent.id)).toEqual([
     'child'
   ])
+})
+
+it('keeps a woken subagent from settling a newer spawn', async () => {
+  const transcriptPath = brainWithChildDescriptor()
+  await agyHook('PreInvocation', { transcriptPath })
+  await agyHook('PreToolUse', { ...subagentCall, transcriptPath })
+  await agyHook('PreInvocation', child)
+  await vi.waitFor(() => expect(server.getStatusSnapshot()[0]?.subagents).toHaveLength(1), {
+    timeout: 10000
+  })
+  await subagentIdleStop()
+  await agyHook('PreToolUse', { ...subagentCall, stepIdx: 3, transcriptPath })
+  await agyHook('Stop', { fullyIdle: false, terminationReason: 'NO_TOOL_CALL', transcriptPath })
+  await agyHook('PreInvocation', child)
+  await vi.waitFor(() => expect(server.getStatusSnapshot()[0]?.subagents).toHaveLength(1), {
+    timeout: 10000
+  })
+  vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
+  await subagentIdleStop()
+  programDone()
+  await vi.advanceTimersByTimeAsync(ANTIGRAVITY_PARENT_WAKE_GRACE_MS * 3)
+  expect(state()).toBe('working')
+})
+
+it('holds a relayed done while the remote host reports a pending spawn', async () => {
+  const connectionId = 'ssh-agy'
+  const leadStartedAt = Date.now()
+  server.beginRemoteRelaySession(connectionId)
+  const report = (ids: string[], spawnPending?: true): void => {
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        source: 'antigravity',
+        providerSession: { key: 'conversation_id', id: 'remote-root' },
+        agentPresence: { agent: 'antigravity', session: 'remote-root' },
+        payload: {
+          prompt: 'remote job',
+          state: 'working',
+          agentType: 'antigravity',
+          mainAgent: { state: 'done', stateStartedAt: leadStartedAt },
+          subagents: ids.map((id) => ({ id, state: 'working', startedAt: 1, description: id })),
+          ...(spawnPending ? { antigravitySpawnPending: spawnPending } : {})
+        }
+      },
+      connectionId
+    )
+  }
+  report(['a'], true)
+  vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
+  server.ingestTerminalStatus({
+    paneKey: PANE,
+    tabId: 'tab-1',
+    worktreeId: 'wt-1',
+    connectionId,
+    fromProgramStatus: true,
+    payload: { prompt: '', state: 'done', agentType: 'antigravity' }
+  })
+  report([], true)
+  await vi.advanceTimersByTimeAsync(ANTIGRAVITY_PARENT_WAKE_GRACE_MS * 3)
+  expect(state()).toBe('working')
+  report([])
+  await vi.advanceTimersByTimeAsync(ANTIGRAVITY_PARENT_WAKE_GRACE_MS * 3)
+  expect(state()).toBe('done')
 })
