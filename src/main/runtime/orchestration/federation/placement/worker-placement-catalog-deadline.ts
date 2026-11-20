@@ -6,10 +6,12 @@ import { OrchestrationError } from '../../orchestration-error'
 import { observeEnvironmentStoreReads } from '../../../../../shared/remote-runtime/host-store/runtime-environment-store-read-observation'
 import { environmentStoreWriteCount } from '../../../../../shared/remote-runtime/host-store/runtime-environment-store-worker-client'
 
-export type PairingObservation = Awaited<
-  ReturnType<typeof observeEnvironmentStoreReads<OrchestrationWorkerServer>>
-> & { registryRevision: number }
+type RegistryObservation<T> = Awaited<ReturnType<typeof observeEnvironmentStoreReads<T>>> & {
+  registryRevision: number
+}
+export type PairingObservation = RegistryObservation<OrchestrationWorkerServer>
 type RegistryServers = readonly { environmentId: string; name: string }[]
+type ListResult = RegistryObservation<RegistryServers | undefined> | { error: unknown }
 
 export class CatalogDeadline {
   private readonly expiresAt: number
@@ -20,13 +22,7 @@ export class CatalogDeadline {
   constructor(milliseconds = Infinity) {
     this.expiresAt = Date.now() + milliseconds
     if (Number.isFinite(milliseconds)) {
-      this.timer = setTimeout(() => {
-        this.expired = true
-        for (const listener of this.listeners) {
-          listener()
-        }
-        this.listeners.clear()
-      }, milliseconds)
+      this.timer = setTimeout(() => this.close(), milliseconds)
     }
   }
 
@@ -41,6 +37,10 @@ export class CatalogDeadline {
 
   close(): void {
     clearTimeout(this.timer)
+    this.expired = true
+    for (const listener of this.listeners) {
+      listener()
+    }
     this.listeners.clear()
   }
 }
@@ -113,9 +113,7 @@ class CatalogOwnerReadSlots<T> {
 export class CatalogOwnerRegistry {
   private revision = 0
   private readonly observations = new Map<string, PairingObservation>()
-  private readonly lists = new CatalogOwnerReadSlots<
-    { servers: RegistryServers } | { error: unknown }
-  >()
+  private readonly lists = new CatalogOwnerReadSlots<ListResult>()
   private readonly pairings = new CatalogOwnerReadSlots<PairingObservation>()
 
   constructor(private readonly transport: OrchestrationEnvironmentTransport) {}
@@ -125,11 +123,22 @@ export class CatalogOwnerRegistry {
     this.observations.clear()
   }
 
-  isCurrent(observation: PairingObservation | undefined): observation is PairingObservation {
+  private currentProof<T>(observation: RegistryObservation<T>): boolean {
     return (
-      !!observation?.current &&
+      observation.current &&
       observation.registryRevision === this.revision &&
       observation.generation === environmentStoreWriteCount()
+    )
+  }
+
+  isCurrent(
+    observation: PairingObservation | undefined,
+    environmentId?: string
+  ): observation is PairingObservation {
+    return (
+      !!observation &&
+      this.currentProof(observation) &&
+      (environmentId === undefined || environmentId === observation.value.environmentId)
     )
   }
 
@@ -138,18 +147,24 @@ export class CatalogOwnerRegistry {
     return this.isCurrent(observation) ? observation : undefined
   }
 
-  async list(deadline: CatalogDeadline): Promise<RegistryServers> {
-    const result = await this.lists.read('registry', deadline, async () => {
-      try {
-        return { servers: (await this.transport.list?.()) ?? [] }
-      } catch (error) {
-        return { error }
-      }
-    })
-    if (result && 'servers' in result) {
-      return result.servers
+  async list(deadline: CatalogDeadline): Promise<ListResult | undefined> {
+    const read = () =>
+      this.lists.read('registry', deadline, async () => {
+        try {
+          return await this.observe(async () => await this.transport.list?.())
+        } catch (error) {
+          return { error }
+        }
+      })
+    const first = await read()
+    return first && 'value' in first && !this.currentProof(first) ? await read() : first
+  }
+
+  currentServers(result: ListResult | undefined): RegistryServers {
+    if (result && 'value' in result && Array.isArray(result.value) && this.currentProof(result)) {
+      return result.value
     }
-    if (result?.error instanceof OrchestrationError) {
+    if (result && 'error' in result && result.error instanceof OrchestrationError) {
       throw result.error
     }
     throw new OrchestrationError(
@@ -159,21 +174,26 @@ export class CatalogOwnerRegistry {
     )
   }
 
+  private async observe<T>(read: () => Promise<T>): Promise<RegistryObservation<T>> {
+    const registryRevision = this.revision
+    return {
+      ...(await observeEnvironmentStoreReads(read, environmentStoreWriteCount)),
+      registryRevision
+    }
+  }
+
   resolve(
     environmentId: string,
     deadline: CatalogDeadline
   ): Promise<PairingObservation | undefined> {
     return this.pairings.read(environmentId, deadline, async () => {
-      const registryRevision = this.revision
-      const observation = {
-        ...(await observeEnvironmentStoreReads(
-          async () => await this.transport.resolve(environmentId),
-          environmentStoreWriteCount
-        )),
-        registryRevision
-      }
-      if (this.isCurrent(observation)) {
+      const observation = await this.observe(
+        async () => await this.transport.resolve(environmentId)
+      )
+      if (this.isCurrent(observation, environmentId)) {
         this.observations.set(environmentId, observation)
+      } else {
+        this.observations.delete(environmentId)
       }
       return observation
     })

@@ -40,7 +40,7 @@ export async function readWorkerPlacementCatalog(
         }
         const result = readPlacementCatalogList(response.result, key)
         return result.ok
-          ? { kind: 'rows' as const, rows: result.rows }
+          ? { kind: 'rows' as const, rows: result.rows, runtimeId: response._meta?.runtimeId }
           : { kind: 'failed' as const, reason: result.reason }
       } catch {
         return { kind: 'failed' as const, reason: 'no_answer' as const }
@@ -52,7 +52,10 @@ export async function readWorkerPlacementCatalog(
     return { kind: 'unsupported' }
   }
   const catalog =
-    repos.kind === 'rows' && setups.kind === 'rows'
+    repos.kind === 'rows' &&
+    setups.kind === 'rows' &&
+    repos.runtimeId === setups.runtimeId &&
+    repos.runtimeId?.trim()
       ? reducePlacementCatalog(repos.rows, setups.rows)
       : null
   if (catalog) {

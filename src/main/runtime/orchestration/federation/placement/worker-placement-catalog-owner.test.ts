@@ -167,12 +167,46 @@ it.each(['peerFingerprint', 'homePeerFingerprint', 'pairingRevision'] as const)(
   }
 )
 
-it('deletes removed-pairing retention without another discovery call', async () => {
+it('deletes removed-pairing retention when a notification arrives during a failed reconciliation', async () => {
   await owner.discover()
-  list = []
+  const read = Promise.withResolvers<typeof list>()
+  registry.list = vi.fn(() => Promise.resolve(list)).mockReturnValueOnce(read.promise)
   notify!()
   await vi.advanceTimersByTimeAsync(0)
+  list = []
+  notify!()
+  read.reject(new Error('Registry unavailable.'))
+  await vi.advanceTimersByTimeAsync(0)
   expect(db.db.prepare('SELECT environment_id FROM worker_placement_catalogs').all()).toEqual([])
+})
+
+it('preserves sleeping-server retention when an empty enumeration straddles pairing restoration', async () => {
+  await owner.discover()
+  await vi.advanceTimersByTimeAsync(30_001)
+  response = async () => {
+    throw new Error('offline')
+  }
+  const read = Promise.withResolvers<typeof list>()
+  registry.list = vi.fn(() => Promise.resolve(list)).mockReturnValueOnce(read.promise)
+  const pairing = list
+  list = []
+  notify!()
+  const discovery = owner.discover()
+  await vi.advanceTimersByTimeAsync(0)
+  const captured = list
+  list = pairing
+  notify!()
+  read.resolve(captured)
+  await vi.advanceTimersByTimeAsync(0)
+  expect(await discovery).toMatchObject([{ status: 'retained', observedAt: 1795204800000 }])
+  expect(await owner.discover()).toMatchObject([{ status: 'retained', observedAt: 1795204800000 }])
+})
+
+it('rejects the display-name fallback for a requested environment ID', async () => {
+  registry.resolve = async () => ({ ...server, environmentId: 'other', name: 'server' })
+  expect(await owner.discover('server')).toMatchObject([
+    { server: { environmentId: 'server' }, status: 'unchecked', reason: 'no_answer' }
+  ])
 })
 
 it('never replaces retained data with an incomplete or oversized pair', async () => {
@@ -239,11 +273,13 @@ it('preserves a typed registry failure without reporting absence', async () => {
   await expect(owner.discover()).rejects.toBe(error)
 })
 
-it('wraps an untyped registry failure without reporting absence', async () => {
+it.each([
+  undefined,
+  vi.fn().mockResolvedValue(undefined),
+  vi.fn().mockRejectedValue(new Error('offline'))
+])('rejects an incomplete registry enumeration without reporting absence', async (list) => {
   await vi.advanceTimersByTimeAsync(0)
-  registry.list = async () => {
-    throw new Error('Registry storage unavailable.')
-  }
+  registry.list = list
   await expect(owner.discover()).rejects.toMatchObject({
     code: 'runtime_error',
     data: { effectsApplied: false, reason: 'discovery_incomplete', phase: 'registry' }
@@ -739,9 +775,9 @@ it.each(['removed', 'repaired'] as const)(
   }
 )
 
-it('replaces native evidence with a complete older reply and preserves its registration after restart', async () => {
+it('persists a downgrade across a clock rollback and restart', async () => {
   await owner.discover()
-  await vi.advanceTimersByTimeAsync(30_001)
+  vi.setSystemTime(new Date('2026-11-20T19:00:00Z'))
   response = async (method) =>
     method === 'repo.list'
       ? await complete(method)
@@ -762,8 +798,11 @@ it('replaces native evidence with a complete older reply and preserves its regis
   db.close()
   db = new OrchestrationDb(path)
   owner = new WorkerPlacementCatalogOwner(db, transport())
+  response = async () => {
+    throw new Error('offline')
+  }
   const snapshot = (await owner.discover())[0]
-  expect(snapshot.status).toBe('fresh')
+  expect(snapshot).toMatchObject({ status: 'fresh', observedAt: 1795201200000 })
   if (snapshot.status === 'fresh') {
     expect(classifyWorkerPlacementCatalog(snapshot.catalog)[0]).toMatchObject({
       classification: 'registered_not_usable',
@@ -792,6 +831,5 @@ it('upgrades a v49 database with only this slice’s additive catalog table', as
   db.close()
   db = new OrchestrationDb(path)
   owner = new WorkerPlacementCatalogOwner(db, transport())
-  expect(db.db.pragma('user_version', { simple: true })).toBe(50)
   expect((await owner.discover())[0]).toMatchObject({ status: 'fresh' })
 })

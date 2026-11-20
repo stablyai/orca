@@ -30,19 +30,21 @@ export function classifyWorkerPlacementCatalog(
       hostReason ??
       (setup.setupState !== 'ready'
         ? 'not_ready'
-        : !setup.repoId || repo === undefined
+        : !setup.repoId || !setup.path || repo === undefined
           ? 'no_checkout'
           : repo === null
             ? 'duplicate_repo_id'
-            : setup.kind === 'folder' || repo.kind === 'folder'
-              ? 'folder'
-              : !isOriginalRepoOnCatalogHost(repo)
-                ? repo.executionHostId?.startsWith('runtime:')
-                  ? 'other_runtime'
-                  : 'ssh_host'
-                : setup.workerExecutionTarget?.kind !== 'native'
-                  ? 'unsupported_target'
-                  : null)
+            : !repo.path
+              ? 'no_checkout'
+              : setup.kind === 'folder' || repo.kind === 'folder'
+                ? 'folder'
+                : !isOriginalRepoOnCatalogHost(repo)
+                  ? repo.executionHostId?.startsWith('runtime:')
+                    ? 'other_runtime'
+                    : 'ssh_host'
+                  : setup.workerExecutionTarget?.kind !== 'native'
+                    ? 'unsupported_target'
+                    : null)
     return {
       setup,
       classification: hostReason ? 'other_host' : reason ? 'registered_not_usable' : 'usable',

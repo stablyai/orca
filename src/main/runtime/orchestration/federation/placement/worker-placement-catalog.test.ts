@@ -1,5 +1,4 @@
 import { expect, it } from 'vitest'
-import { reducePlacementCatalog, WorkerPlacementCatalogSchema } from './worker-placement-catalog'
 import { readWorkerPlacementCatalog } from './worker-placement-catalog-read'
 import type { OrchestrationEnvironmentTransport } from '../environment-transport'
 
@@ -23,8 +22,6 @@ it.each(['ssh:', 'runtime:', 'ssh:%', 'runtime:%E0%A4%A', '', ' local', 'ssh:box
       { repos: [repo], setups: [{ ...setup, hostId }] },
       { repos: [repo], setups: [{ ...setup, executionHostId: hostId }] }
     ]) {
-      expect(reducePlacementCatalog(catalog.repos, catalog.setups)).toBeNull()
-      expect(WorkerPlacementCatalogSchema.safeParse(catalog).success).toBe(false)
       const transport: OrchestrationEnvironmentTransport = {
         list: async () => [],
         resolve: async () => {

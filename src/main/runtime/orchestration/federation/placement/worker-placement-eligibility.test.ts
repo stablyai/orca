@@ -67,6 +67,17 @@ it('counts repo twins before host filtering and preserves independent usable che
 })
 
 it.each([
+  { repoPath: '', setupPath: '/repo' },
+  { repoPath: '/repo', setupPath: '' }
+])('requires both checkout paths: $repoPath, $setupPath', ({ repoPath, setupPath }) => {
+  const [result] = classifyWorkerPlacementCatalog({
+    repos: [{ ...repo, path: repoPath }],
+    setups: [{ ...setup, path: setupPath }]
+  })
+  expect(result.explicitStart).toEqual({ usable: false, reason: 'no_checkout' })
+})
+
+it.each([
   { name: 'legacy absent repo host', repoHost: {}, setupHost: {}, reason: null },
   {
     name: 'legacy null repo host',

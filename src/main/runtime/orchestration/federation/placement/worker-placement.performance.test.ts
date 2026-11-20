@@ -23,7 +23,7 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-// #45148 F4: terminal catalog authority must stop socket preparation instead of busy-retrying.
+// PR #45948 F4: terminal catalog authority must stop socket preparation instead of busy-retrying.
 it.each(['disposed', 'hard-deadline', 'stale-proof'] as const)(
   'bounds actual transport preparation and pairing reads for %s catalog authority',
   async (phase) => {
@@ -103,7 +103,7 @@ it.each(['disposed', 'hard-deadline', 'stale-proof'] as const)(
   }
 )
 
-// #45148: overlapping discovery and unresponsive peers must not multiply reads or catalog scans.
+// PR #45948: overlapping discovery of unresponsive peers must share the outstanding catalog RPCs.
 it('shares one list pair per server across concurrent discoveries and keeps timed-out work in its slot', async () => {
   vi.useFakeTimers()
   const db = new OrchestrationDb(':memory:')
@@ -136,6 +136,7 @@ it('shares one list pair per server across concurrent discoveries and keeps time
   }
 })
 
+// PR #45948 F2: stalled registry or pairing reads used to multiply across discovery deadlines.
 it.each(['registry', 'initial pairing', 'validation', 'snapshot validation'] as const)(
   'bounds stalled %s work across concurrent and repeated discovery deadlines',
   async (phase) => {
@@ -220,6 +221,7 @@ it.each(['registry', 'initial pairing', 'validation', 'snapshot validation'] as 
   }
 )
 
+// PR #45948 F2: each unknown ID used to allocate its own stalled pairing read.
 it('does not allocate pairing reads for concurrent queries naming unregistered environments', async () => {
   vi.useFakeTimers()
   const db = new OrchestrationDb(':memory:')
@@ -229,6 +231,7 @@ it('does not allocate pairing reads for concurrent queries naming unregistered e
   const owner = new WorkerPlacementCatalogOwner(db, { list, resolve, call })
   try {
     const pending = Array.from({ length: 100 }, (_, index) => owner.discover(`missing-${index}`))
+    await vi.advanceTimersByTimeAsync(5_000)
     expect((await Promise.all(pending)).every((answer) => answer[0].status === 'unchecked')).toBe(
       true
     )
@@ -240,7 +243,40 @@ it('does not allocate pairing reads for concurrent queries naming unregistered e
   }
 })
 
-// #45148 F3: watcher invalidation must fence stale proof without replacing stalled operation slots.
+// PR #45948 F5: a notification burst during a failed enumeration owes one follow-up, even if that fails too.
+it('coalesces notifications during failed registry reconciliation', async () => {
+  vi.useFakeTimers()
+  const db = new OrchestrationDb(':memory:')
+  const first = Promise.withResolvers<[]>()
+  const list = vi
+    .fn<NonNullable<OrchestrationEnvironmentTransport['list']>>()
+    .mockReturnValueOnce(first.promise)
+    .mockRejectedValueOnce(new Error('Registry unavailable'))
+    .mockImplementation(() => new Promise(() => {}))
+  let notify!: () => void
+  new WorkerPlacementCatalogOwner(db, {
+    list,
+    resolve: vi.fn(),
+    call: vi.fn(),
+    onCatalogChanged: (listener) => {
+      notify = listener
+      return () => {}
+    }
+  })
+  try {
+    await vi.advanceTimersByTimeAsync(0)
+    for (let i = 0; i < 100; i++) {
+      notify()
+    }
+    first.reject(new Error('Registry read failed'))
+    await vi.advanceTimersByTimeAsync(0)
+    expect(list).toHaveBeenCalledTimes(2)
+  } finally {
+    db.close()
+  }
+})
+
+// PR #45948 F3: watcher invalidation must fence stale proof without replacing stalled operation slots.
 it.each(['registry', 'pairing', 'catalog'] as const)(
   'keeps stalled %s work bounded across external registry notifications',
   async (phase) => {
@@ -302,6 +338,7 @@ it.each(['registry', 'pairing', 'catalog'] as const)(
   }
 )
 
+// PR #45948: per-setup launch resolution repeated the same work for every checkout of a shared project.
 it('indexes a full-size shared project once and resolves a shared worktree scope once', () => {
   const resolve = vi.spyOn(resolution, 'resolveLocalWorkspaceRuntime')
   const repos = Array.from({ length: 5_000 }, (_, index) =>
