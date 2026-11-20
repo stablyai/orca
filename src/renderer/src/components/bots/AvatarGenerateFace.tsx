@@ -165,7 +165,7 @@ export function GenerateFaceTile({ face }: { face: GenerateFace }): React.JSX.El
             {t('bots.avatar.generate.cancel', 'Cancel')}
           </span>
           {/* The status names the work once; a per-second count would be re-read every tick. */}
-          <span aria-hidden className="relative -mt-1 tabular-nums">
+          <span aria-hidden className="relative -mt-1 text-foreground/70 tabular-nums">
             <ElapsedTime startedAt={run.startedAt} />
           </span>
         </PromptTile>
