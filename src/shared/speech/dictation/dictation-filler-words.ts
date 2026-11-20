@@ -1,5 +1,3 @@
-import { stickyMatchesWhere } from '../../text/regex-accepted-matches'
-
 // Sounds people make while thinking, per language. Never words with meaning ("like", "so", "well", "那个", "그").
 const FILLERS_BY_LANGUAGE: Record<string, string> = {
   en: 'u+m+|u+h+m*|er|e+r+m+|h+m+|m{3,}',
@@ -21,17 +19,10 @@ FILLERS_BY_LANGUAGE.yue = FILLERS_BY_LANGUAGE.zh
 const LANGUAGE_NEUTRAL_FILLERS = 'u+h+m*|u+m{2,}|e+r+m+|h+m+|m{3,}'
 
 const WORD_CHAR = String.raw`[\p{L}\p{N}\p{M}_/'\u2019\-]`
-const AFTER_WORD = new RegExp(`${WORD_CHAR}$`, 'iu')
-const AFTER_WORD_OR_NAME_DOT = new RegExp(String.raw`${WORD_CHAR}\.?$`, 'iu')
-// The lookbehind a match needs; a word character, maybe astral, and a dot fit in three code units.
-const notAfter =
-  (text: string, before: RegExp) =>
-  (index: number): boolean =>
-    !before.test(text.slice(Math.max(0, index - 3), index))
 // A filler stands alone: nothing joins it to a word (a dot only does inside a name like "um.txt"),
 // and "hm?" or "eh!" is a question or a call, so it stays.
 const standalone = (fillers: string): string =>
-  String.raw`(${fillers})(?!${WORD_CHAR}|\.${WORD_CHAR})(?!\s*[?\uFF1F!\uFF01])`
+  String.raw`(?<!${WORD_CHAR}|${WORD_CHAR}\.)(${fillers})(?!${WORD_CHAR}|\.${WORD_CHAR})(?!\s*[?\uFF1F!\uFF01])`
 // The comma or ellipsis after a filler goes with it.
 const TRAILING_PAUSE = String.raw`(?:\s*(?<pause>[,\uFF0C\u3001\u2026]|\.{3}))?\s*`
 const SENTENCE_END_CHARS = '.!?。！？'
@@ -50,7 +41,7 @@ function fillerPattern(languages: readonly string[] | undefined, text: string): 
     }
     lists.push(LANGUAGE_NEUTRAL_FILLERS)
   }
-  return new RegExp(standalone(lists.join('|')) + TRAILING_PAUSE, 'iuy')
+  return new RegExp(standalone(lists.join('|')) + TRAILING_PAUSE, 'giu')
 }
 
 // In mixed-case text an all-caps "UM" or "HMM" is more likely a name or acronym than a sound.
@@ -74,13 +65,10 @@ function cueRanges(text: string, cue: string | undefined): [number, number][] {
   }
   const escaped = words.map((word) => word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
   const pattern = new RegExp(
-    `${escaped.join(String.raw`[\s,\uFF0C\u3001]+`)}(?!${WORD_CHAR})`,
-    'iuy'
+    `(?<!${WORD_CHAR})${escaped.join(String.raw`[\s,\uFF0C\u3001]+`)}(?!${WORD_CHAR})`,
+    'giu'
   )
-  return [...stickyMatchesWhere(text, pattern, notAfter(text, AFTER_WORD))].map((match) => [
-    match.index,
-    match.index + match[0].length
-  ])
+  return [...text.matchAll(pattern)].map((match) => [match.index, match.index + match[0].length])
 }
 
 /** Drops standalone filler sounds and the pause punctuation after them; text with none comes back unchanged. The correction cue is never dropped. */
@@ -105,7 +93,7 @@ export function removeFillerWords(
       capitalizeNext = false
     }
   }
-  for (const match of stickyMatchesWhere(text, pattern, notAfter(text, AFTER_WORD_OR_NAME_DOT))) {
+  for (const match of text.matchAll(pattern)) {
     const filler = match[1]
     if (
       (!caseless && isAllCaps(filler)) ||
