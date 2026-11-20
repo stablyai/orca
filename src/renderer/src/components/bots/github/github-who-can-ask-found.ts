@@ -38,7 +38,8 @@ function cutLine(
 ): string | null {
   const kinds = [cut.people, cut.members, cut.repositories].filter(Boolean).length
   if (kinds > 1) {
-    return t('bots.github.whoCanAsk.partlyRead', 'Large repos and orgs were only partly read.')
+    // Kinds differ (a repo's people, an org's members, a person's repos): say it neutrally.
+    return t('bots.github.whoCanAsk.partlyRead', 'Some lists were only partly read.')
   }
   return cut.people
     ? t('bots.github.whoCanAsk.firstPerRepo', 'Showing the first {{count}} people per repo.', {
@@ -110,18 +111,35 @@ export function gitHubWhoCanAskAnswer(
       ? t('bots.github.whoCanAsk.loading', 'Still loading your repos.')
       : roster.status === 'unavailable'
         ? // Which computer goes unsaid: naming a remote one would not fit one line.
-          t('bots.github.whoCanAsk.unavailable', 'Couldn’t read repos.')
-        : roster.status === 'busy'
-          ? t('bots.github.whoCanAsk.busy', 'Repo list is busy. Reopen to try again.')
-          : roster.status === 'none'
-            ? t('bots.github.whoCanAsk.localNone', 'No repos connected.')
-            : null
+          roster.retry === 'reopen'
+          ? t('bots.github.whoCanAsk.unavailableReopen', 'Couldn’t read repos. Reopen to retry.')
+          : t(
+              'bots.github.whoCanAsk.unavailableRestart',
+              'Couldn’t read repos. Restart Orca to retry.'
+            )
+        : roster.status === 'none'
+          ? t('bots.github.whoCanAsk.localNone', 'No repos connected.')
+          : null
   // Still loading isn't "only": the roster is on its way.
+  // The retry lines already explain the missing list, and a third sentence would wrap.
   const exactOnly =
-    !read && roster.status !== 'loading' && exact?.ok
+    (roster.status === 'none' || roster.status === 'skipped') && exact?.ok
       ? t('bots.github.whoCanAsk.exactOnly', 'Exact usernames only.')
       : null
   const limits = [
+    // A host reads its list once per app run; a reused one says when it was read.
+    read?.reused
+      ? t(
+          'bots.github.whoCanAsk.readEarlier',
+          'Repo list from {{time}}. Restart Orca to refresh.',
+          {
+            time: new Date(read.readAt).toLocaleTimeString([], {
+              hour: 'numeric',
+              minute: '2-digit'
+            })
+          }
+        )
+      : null,
     read && !read.complete
       ? t('bots.github.whoCanAsk.notRead', 'Some repos or members couldn’t be read.')
       : null,
@@ -131,7 +149,8 @@ export function gitHubWhoCanAskAnswer(
       ? t('bots.github.whoCanAsk.keepTyping', 'Keep typing to narrow.')
       : null,
     exact && !exact.ok
-      ? t('bots.github.whoCanAsk.exactFailed', 'Couldn’t check GitHub usernames.')
+      ? // Reopening starts a fresh session, which asks again; this one doesn't retry on its own.
+        t('bots.github.whoCanAsk.exactFailed', 'Username check failed. Reopen to retry.')
       : null,
     read?.searchedAs && ownerLogin && read.searchedAs.toLowerCase() !== ownerLogin.toLowerCase()
       ? t('bots.github.whoCanAsk.searchedAs', 'Repos read as @{{login}}.', {
@@ -169,9 +188,9 @@ export function gitHubWhoCanAskAnswer(
             title: t('bots.github.whoCanAsk.couldNotSearch', 'Couldn’t search for “{{query}}”', {
               query
             }),
-            // Busy already says what to do; the exact-username hint would push it past one line.
+            // The retry line already says what to do; the exact-username hint would wrap it.
             detail:
-              roster.status === 'busy' && rosterLine
+              roster.status === 'unavailable' && rosterLine
                 ? rosterLine
                 : [rosterLine, t('bots.github.whoCanAsk.tryExact', 'Try an exact username.')]
                     .filter(Boolean)

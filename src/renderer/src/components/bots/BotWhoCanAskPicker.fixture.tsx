@@ -45,6 +45,9 @@ const readRoster = (more: Partial<Extract<BotGitHubRoster, { status: 'read' }>> 
     complete: true,
     omitted: false,
     cut: { people: false, members: false, repositories: false },
+    // 2:05 PM local time on a fixed day, so the shot is stable.
+    readAt: new Date(2026, 10, 19, 14, 5).getTime(),
+    reused: false,
     ...more
   }) satisfies BotGitHubRoster
 
@@ -119,7 +122,7 @@ const searching =
     await settle()
   }
 const full = readRoster()
-const unavailable: Roster = { status: 'unavailable' }
+const unavailable: Roster = { status: 'unavailable', retry: 'restart' }
 
 /** An empty search suggests the people found in the connected repositories. */
 export const suggestions = defineFixture({ width: 340, render: pickerOf(full), interact: settle })
@@ -231,10 +234,17 @@ export const rosterLoadingExact = defineFixture({
   }
 })
 
-/** Another read holds the host's gh: busy, and how to ask again. */
-export const busy = defineFixture({
+/** A list read earlier this app run, reused: says when, and how to refresh it. */
+export const reusedList = defineFixture({
   width: 340,
-  render: pickerOf({ status: 'busy' }),
+  render: pickerOf(readRoster({ reused: true })),
+  interact: searching('maya')
+})
+
+/** No gh child was started (gh missing): the next open tries again. */
+export const unavailableReopen = defineFixture({
+  width: 340,
+  render: pickerOf({ status: 'unavailable', retry: 'reopen' }),
   interact: searching('neil par')
 })
 

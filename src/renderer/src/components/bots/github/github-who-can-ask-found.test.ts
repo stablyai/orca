@@ -19,6 +19,8 @@ const read = (more: Partial<Read> = {}): BotGitHubRoster => ({
   complete: true,
   omitted: false,
   cut: noCut,
+  readAt: new Date(2026, 10, 19, 14, 5).getTime(),
+  reused: false,
   ...more
 })
 type Exact = BotSlackResult<ConnectorGitHubUsersResponse>
@@ -80,7 +82,11 @@ describe('the GitHub picker’s reading of a search', () => {
       'Only your 5 latest repos were read.'
     )
     expect(note({ cut: { people: true, members: true, repositories: false } })).toBe(
-      'Large repos and orgs were only partly read.'
+      'Some lists were only partly read.'
+    )
+    // A repo's people and a person's repos, no org at all: the line names no org.
+    expect(note({ cut: { people: true, members: false, repositories: true } })).toBe(
+      'Some lists were only partly read.'
     )
     expect(note({ omitted: true })).toBe('Not every connected repo was read.')
     // Only the shown-list cap is helped by typing.
@@ -107,15 +113,16 @@ describe('the GitHub picker’s reading of a search', () => {
     ])
     // A failed exact lookup waits for the roster rather than failing the whole search.
     expect(value(answer(loading, failed)).note).toBe(
-      'Still loading your repos. Couldn’t check GitHub usernames.'
+      'Still loading your repos. Username check failed. Reopen to retry.'
     )
   })
 
   it('fails only when nothing could look, and always when GitHub is off', () => {
-    expect(answer({ status: 'unavailable' }, failed)).toEqual(failed)
+    expect(answer({ status: 'unavailable', retry: 'restart' }, failed)).toEqual(failed)
     expect(answer(read(), off)).toEqual(off)
     expect(answer(loading, off)).toEqual(off)
-    expect(value(answer(read(), failed)).note).toBe('Couldn’t check GitHub usernames.')
+    // The failed lookup says how to recover: a new open is a new session, which asks again.
+    expect(value(answer(read(), failed)).note).toBe('Username check failed. Reopen to retry.')
   })
 
   it('says only what a settled empty search looked at', () => {
@@ -126,14 +133,21 @@ describe('the GitHub picker’s reading of a search', () => {
       detail: 'Searched your repos and exact usernames.'
     })
     expect(empty(read(), null, 'neil par')?.detail).toBe('Searched your repos.')
-    expect(empty({ status: 'unavailable' }, none)?.detail).toBe(
-      'Couldn’t read repos. Exact usernames only.'
+    expect(empty({ status: 'unavailable', retry: 'restart' }, none)?.detail).toBe(
+      'Couldn’t read repos. Restart Orca to retry.'
     )
-    expect(empty({ status: 'busy' }, null, 'neil par')).toEqual({
+    expect(empty({ status: 'unavailable', retry: 'reopen' }, null, 'neil par')).toEqual({
       title: 'Couldn’t search for “neil par”',
-      detail: 'Repo list is busy. Reopen to try again.'
+      detail: 'Couldn’t read repos. Reopen to retry.'
     })
     expect(empty({ status: 'skipped' }, null, 'neil par')?.detail).toBe('Try an exact username.')
+  })
+
+  it('says when a reused list was read, and how to refresh it', () => {
+    expect(value(answer(read({ reused: true }), none)).note).toMatch(
+      /^Repo list from 2:05\s?PM\. Restart Orca to refresh\.$/
+    )
+    expect(value(answer(read(), none)).note).toBeUndefined()
   })
 
   it('names a different gh account, and not the same one', () => {

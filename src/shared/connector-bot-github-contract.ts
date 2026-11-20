@@ -70,14 +70,17 @@ export type BotGitHubRoster =
        *  GITHUB_PEOPLE_PER_SOURCE people, an organization's first GITHUB_PEOPLE_PER_SOURCE
        *  members, a person's first GITHUB_PERSONAL_REPOSITORIES repositories. */
       cut: { people: boolean; members: boolean; repositories: boolean }
+      /** When the read ran (epoch ms). */
+      readAt: number
+      /** This answer is an earlier read reused: a host reads once per app run. */
+      reused: boolean
       /** The GitHub account gh read every source as, from the same call; absent when unknown. */
       searchedAs?: string
     }
-  /** No source could be read: gh missing, signed out, offline, or past its deadline. */
-  | { status: 'unavailable' }
-  /** Another read holds this host's gh and this one waited its turn without getting it (or the
-   *  queue was full); opening the picker again asks again. */
-  | { status: 'busy' }
+  /** No source could be read. `reopen`: no gh child was started (gh missing, a spawn error), so
+   *  the next picker open tries again. `restart`: a gh child ran, and none runs again for this
+   *  list until the app restarts. */
+  | { status: 'unavailable'; retry: 'reopen' | 'restart' }
 
 /** People per repository or organization a roster read returns. */
 export const GITHUB_PEOPLE_PER_SOURCE = 100
