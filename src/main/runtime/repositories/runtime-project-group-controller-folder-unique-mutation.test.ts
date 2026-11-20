@@ -113,6 +113,22 @@ it('refuses to delete a folder workspace whose open file holds an unsaved draft'
   expect(deps.state.folderWorkspaces.map((row) => row.id)).toEqual(['hub-a'])
 })
 
+it('keeps the folder workspace when a draft lands during teardown', async () => {
+  const deps = createController([folderRow({})], () => {
+    deps.state.workspaceSession = {
+      ...deps.state.workspaceSession,
+      openFilesByWorktree: {
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only the draft field is read.
+        'folder:hub-a': [{ filePath: '/f/a.md', dirtyDraftContent: 'late' } as never]
+      }
+    }
+  })
+  await expect(deps.controller.deleteFolderWorkspace('hub-a', {})).rejects.toThrow(
+    /Unsaved editor changes/
+  )
+  expect(deps.state.folderWorkspaces.map((row) => row.id)).toEqual(['hub-a'])
+})
+
 function archiveGroup(root: string, exitCode: number): ProjectGroup {
   return {
     id: 'group-1',
