@@ -1,6 +1,7 @@
 import { expect, it, vi } from 'vitest'
 import { replaceTabBuckets } from '@/store/record-transitions/keyed-record-transitions'
 import type { Tab } from '../../../../../../shared/workspace-layout/tab-groups/tab-types'
+import { makeStructuredChatTab, makeUnifiedTab } from '@/store/slices/tabs/tab-group.test-fixture'
 import { getWorktreeIdsWithStructuredChat } from './visible-worktree-activity-inputs'
 import type * as Sha256Module from '../../../../../../shared/hashing/sha256'
 
@@ -20,25 +21,9 @@ vi.mock('../../../../../../shared/hashing/sha256', async (importOriginal) => {
 })
 
 function workspaceTabs(worktreeId: string): Tab[] {
-  const base = { groupId: 'g', worktreeId, customLabel: null, color: null, createdAt: 1 }
   return [
-    {
-      ...base,
-      id: `t-${worktreeId}`,
-      entityId: `term-${worktreeId}`,
-      contentType: 'terminal',
-      label: 'shell',
-      sortOrder: 0
-    },
-    {
-      ...base,
-      id: `c-${worktreeId}`,
-      entityId: `session-${worktreeId}`,
-      contentType: 'agent-session',
-      agentSessionAgent: 'codex',
-      label: 'Chat',
-      sortOrder: 1
-    }
+    makeUnifiedTab({ id: `t-${worktreeId}`, worktreeId, groupId: 'g' }),
+    makeStructuredChatTab({ id: `c-${worktreeId}`, worktreeId, entityId: `session-${worktreeId}` })
   ]
 }
 

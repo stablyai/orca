@@ -1,30 +1,14 @@
 import { expect, it } from 'vitest'
 import { replaceTabBuckets } from '@/store/record-transitions/keyed-record-transitions'
-import type { Tab } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
+import { makeStructuredChatTab, makeUnifiedTab } from '@/store/slices/tabs/tab-group.test-fixture'
 import { advanceActivityTabs } from './activity-tab-projection'
 import { resolveActivityTabIndexes } from './activity-event-build-cache'
 
-function tab(worktreeId: string, id: string, fields: Partial<Tab>): Tab {
-  return {
-    id,
-    entityId: id,
-    groupId: 'g',
-    worktreeId,
-    contentType: 'terminal',
-    label: 'shell',
-    customLabel: null,
-    color: null,
-    sortOrder: 0,
-    createdAt: 1,
-    ...fields
-  }
-}
-
 const chat = (worktreeId: string) =>
-  tab(worktreeId, 'dup', { contentType: 'agent-session', agentSessionAgent: 'codex', label: 'Chat' })
+  makeStructuredChatTab({ id: 'dup', worktreeId, entityId: 'session-dup' })
 
 it('a title write after a workspace reorder keeps the full rebuild owner of a shared chat id', () => {
-  const terminal = tab('B', 'term-b', { entityId: 'term-b' })
+  const terminal = makeUnifiedTab({ id: 'term-b', worktreeId: 'B', groupId: 'g' })
   const first = { A: [chat('A')], B: [chat('B'), terminal] }
   const projected = advanceActivityTabs(first, null, null)
   const [chatA] = first.A

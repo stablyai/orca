@@ -3,6 +3,8 @@ import { replaceTabBuckets } from '@/store/record-transitions/keyed-record-trans
 import type { StructuredChatTabNames } from '@/runtime/native-chat/naming/structured-chat-tab-name'
 import type { Tab } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { TerminalTab } from '../../../../../shared/workspace-layout/terminal-tab-types'
+import { makeStructuredChatTab, makeUnifiedTab } from '@/store/slices/tabs/tab-group.test-fixture'
+import { makeTerminalTab } from '@/store/terminals/testing/terminal-row.test-fixture'
 import { advanceActivityTabs, type ActivityTabProjection } from './activity-tab-projection'
 import {
   createActivityEventBuildCache,
@@ -23,39 +25,31 @@ function counted<T extends object>(row: T): T {
 }
 
 function terminal(worktreeId: string, title: string): TerminalTab {
-  return counted({
-    id: `term-${worktreeId}`,
-    ptyId: `pty-${worktreeId}`,
-    worktreeId,
-    title,
-    customTitle: null,
-    color: null,
-    sortOrder: 0,
-    createdAt: 1
-  })
+  return counted(
+    makeTerminalTab({ id: `term-${worktreeId}`, worktreeId, ptyId: `pty-${worktreeId}`, title })
+  )
 }
 
 function unified(worktreeId: string, label: string): Tab[] {
-  const base = { groupId: 'g', worktreeId, customLabel: null, color: null, createdAt: 1 }
   return [
-    counted({
-      ...base,
-      id: `unified-${worktreeId}`,
-      entityId: `term-${worktreeId}`,
-      contentType: 'terminal',
-      label,
-      sortOrder: 0,
-      executionHostId: 'local'
-    }),
-    counted({
-      ...base,
-      id: `chat-${worktreeId}`,
-      entityId: `session-${worktreeId}`,
-      contentType: 'agent-session',
-      agentSessionAgent: 'codex',
-      label: 'Chat',
-      sortOrder: 1
-    })
+    counted(
+      makeUnifiedTab({
+        id: `unified-${worktreeId}`,
+        worktreeId,
+        groupId: 'g',
+        entityId: `term-${worktreeId}`,
+        label,
+        executionHostId: 'local'
+      })
+    ),
+    counted(
+      makeStructuredChatTab({
+        id: `chat-${worktreeId}`,
+        worktreeId,
+        entityId: `session-${worktreeId}`,
+        sortOrder: 1
+      })
+    )
   ]
 }
 
