@@ -9,7 +9,7 @@ import {
   writeFileSync
 } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { basename, join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AiVaultSession } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import type { RuntimeStore } from '../../../runtime/construction/runtime-store-contract'
@@ -17,12 +17,23 @@ import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecy
 import { agentSessionRecordFixture } from '../../../native-chat/testing/agent-session-record-test-fixture'
 import {
   sweepDeletedWorkspaceChatHistory,
+  type ChatHistorySweepDeps,
   type ChatHistoryTarget
 } from './deleted-workspace-chat-history'
+import {
+  folderIdentityOf,
+  readDeletedWorkspaceFolderRecords,
+  readWorkspaceFolderBeforeDeletion,
+  recordDeletedWorkspaceFolder
+} from './deleted-workspace-folder-records'
 
 const NOW = Date.parse('2026-11-16T12:00:00.000Z')
 const DAY_AGO = '2026-11-15T12:00:00.000Z'
 const TEN_MINUTES_AGO = '2026-11-16T11:50:00.000Z'
+const TWO_DAYS_AGO = '2026-11-14T12:00:00.000Z'
+const CREATED_AT = Date.parse('2026-11-01T12:00:00.000Z')
+// Just after the day-old transcripts were last written.
+const DELETED_AT = Date.parse('2026-11-15T13:00:00.000Z')
 
 let root = ''
 
@@ -39,7 +50,25 @@ afterEach(() => {
   }
 })
 
-/** A day-old transcript on disk; `lastCwd` is where it was last resumed. */
+const profileDirectory = (): string => join(root, 'profile')
+
+/** What Orca writes when it deletes a workspace folder: the folder must already be gone. */
+async function recordDeleted(
+  path: string,
+  { createdAt = CREATED_AT, deletedAt = DELETED_AT } = {}
+): Promise<void> {
+  const parentId = await folderIdentityOf(dirname(path))
+  if (parentId) {
+    mkdirSync(profileDirectory(), { recursive: true })
+    await recordDeletedWorkspaceFolder(
+      profileDirectory(),
+      { path, parentId, name: basename(path), createdAt },
+      deletedAt
+    )
+  }
+}
+
+/** A day-old transcript started two days ago; `lastCwd` is where it was last resumed. */
 function session(
   name: string,
   cwd: string,
@@ -63,6 +92,7 @@ function session(
     sessionId: name,
     cwd,
     filePath,
+    createdAt: TWO_DAYS_AGO,
     modifiedAt: DAY_AGO,
     ...overrides
   } as AiVaultSession
@@ -81,6 +111,44 @@ function nativeChat(
     ...overrides,
     location: { workspaceId: `app::${path}`, workspaceKind: 'git-worktree', ...location }
   })
+}
+
+/** Repo `app` with nested workspaces under `<root>/workspaces`. */
+function appStore(
+  folderWorkspaces: { folderPath: string }[] = [],
+  workspaceDir = join(root, 'workspaces')
+): RuntimeStore {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the sweep reads only these store methods
+  return {
+    getProfileStorageDirectory: profileDirectory,
+    getSettings: () => ({ workspaceDir, nestWorkspaces: true, workspaceDirHistory: [] }),
+    getRepos: () => [
+      {
+        id: 'app',
+        path: join(root, 'repos', 'app'),
+        displayName: 'app',
+        badgeColor: '',
+        addedAt: 0
+      }
+    ],
+    getAllWorktreeMeta: () => ({}),
+    getFolderWorkspaces: () => folderWorkspaces
+  } as unknown as RuntimeStore
+}
+
+/** Deletes each transcript the sweep still wants, as the real delete does. */
+function recordingDelete(deleted: ChatHistoryTarget[]): ChatHistorySweepDeps['deleteSessions'] {
+  return async (targets, shouldDelete) => {
+    let count = 0
+    for (const target of targets) {
+      if (await shouldDelete(target)) {
+        rmSync(target.filePath, { force: true })
+        deleted.push(target)
+        count += 1
+      }
+    }
+    return { deleted: count, failed: 0, freedBytes: 0 }
+  }
 }
 
 describe('sweepDeletedWorkspaceChatHistory', () => {
@@ -114,6 +182,7 @@ describe('sweepDeletedWorkspaceChatHistory', () => {
       const archivedDuringScan: Record<string, object> = {}
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the sweep reads only these store methods
       const store = {
+        getProfileStorageDirectory: profileDirectory,
         getSettings: () => ({
           workspaceDir: workspaces,
           nestWorkspaces: true,
@@ -186,6 +255,31 @@ describe('sweepDeletedWorkspaceChatHistory', () => {
         ]
       } as unknown as RuntimeStore
       const deleted: ChatHistoryTarget[] = []
+      // Orca deleted every gone folder here; the other checks still keep what isn't the workspace's.
+      for (const path of [
+        ...[
+          'gone',
+          'gone-two',
+          'gone-three',
+          'gone-five',
+          'gone-six',
+          'gone-seven',
+          'linked-gone',
+          'archived',
+          'archived-mid-scan',
+          'old-name',
+          'team',
+          'folder-workspace',
+          'spaced'
+        ].map((name) => join(appWorkspaces, name)),
+        join(workspaces, 'api', 'old-package'),
+        join(workspaces, 'tools', 'old'),
+        join(workspaces, 'docs', 'packages'),
+        join(root, 'repos', 'sibling', 'old-tool'),
+        join(root, 'repos', 'sibling', 'website')
+      ]) {
+        await recordDeleted(path)
+      }
 
       // A subagent of this chat still writes from a live workspace; deleting the chat would take it too.
       const withLiveSubagent = session('live-subagent.jsonl', join(appWorkspaces, 'gone-five'))
@@ -310,8 +404,10 @@ describe('sweepDeletedWorkspaceChatHistory', () => {
         symlinkSync(target, join(root, `link-${hop}`))
       }
       const deleted: ChatHistoryTarget[] = []
+      await recordDeleted(join(workspaces, 'app', 'gone'))
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the sweep reads only these store methods
       const store = {
+        getProfileStorageDirectory: profileDirectory,
         getSettings: () => ({
           workspaceDir: workspaces,
           nestWorkspaces: true,
@@ -346,46 +442,180 @@ describe('sweepDeletedWorkspaceChatHistory', () => {
     }
   )
 
-  it('keeps the history of a deleted folder under a listed home folder, which can hold folders Orca never made', async () => {
+  it('under a listed home folder, deletes only the history of a workspace Orca recorded deleting, never a folder the user made beside it', async () => {
     root = mkdtempSync(join(tmpdir(), 'orca-chat-history-'))
     home.path = root
-    const workspaces = join(root, 'workspaces')
-    mkdirSync(join(workspaces, 'app'), { recursive: true })
+    const appWorkspaces = join(root, 'workspaces', 'app')
+    mkdirSync(appWorkspaces, { recursive: true })
     mkdirSync(join(root, 'repos', 'app'), { recursive: true })
+    await recordDeleted(join(appWorkspaces, 'feature'))
     const deleted: ChatHistoryTarget[] = []
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the sweep reads only these store methods
-    const store = {
-      getSettings: () => ({
-        workspaceDir: workspaces,
-        nestWorkspaces: true,
-        workspaceDirHistory: []
-      }),
-      getRepos: () => [
-        {
-          id: 'app',
-          path: join(root, 'repos', 'app'),
-          displayName: 'app',
-          badgeColor: '',
-          addedAt: 0
-        }
-      ],
-      getAllWorktreeMeta: () => ({}),
-      // Fresh profiles list home as a project.
-      getFolderWorkspaces: () => [{ folderPath: root }]
-    } as unknown as RuntimeStore
+    const forgotten: string[] = []
 
     await sweepDeletedWorkspaceChatHistory({
-      store,
+      store: appStore([{ folderPath: root }]),
       now: NOW,
-      // A folder the user made and deleted, never an Orca workspace.
-      listSessions: async () => [session('scratch.jsonl', join(workspaces, 'app', 'scratch'))],
+      listSessions: async () => [
+        session('feature.jsonl', join(appWorkspaces, 'feature')),
+        // A folder the user made next to the workspace and later removed: Orca never deleted it.
+        session('scratch.jsonl', join(appWorkspaces, 'scratch'))
+      ],
+      listNativeChats: () => [
+        nativeChat('native-feature', join(appWorkspaces, 'feature')),
+        nativeChat('native-scratch', join(appWorkspaces, 'scratch'))
+      ],
+      forgetNativeChats: async (chats, shouldForget) => {
+        for (const chat of chats) {
+          if (await shouldForget(chat)) {
+            forgotten.push(chat.sessionId)
+          }
+        }
+        return { deleted: forgotten.length, failed: 0, freedBytes: 0 }
+      },
       isEnabled: () => true,
-      deleteSessions: async (targets) => {
-        deleted.push(...targets)
-        return { deleted: targets.length, failed: 0, freedBytes: 0 }
-      }
+      deleteSessions: recordingDelete(deleted)
+    })
+
+    expect(deleted.map((target) => basename(target.filePath))).toEqual(['feature.jsonl'])
+    expect(forgotten).toEqual(['native-feature'])
+  })
+
+  // Creating symlinks needs a privilege ordinary Windows CI lacks.
+  it.skipIf(process.platform === 'win32')(
+    'matches a recorded folder through a symlinked workspace folder and a trailing slash, but only by its exact name',
+    async () => {
+      root = mkdtempSync(join(tmpdir(), 'orca-chat-history-'))
+      mkdirSync(join(root, 'real', 'app', 'feature'), { recursive: true })
+      mkdirSync(join(root, 'repos', 'app'), { recursive: true })
+      symlinkSync(join(root, 'real'), join(root, 'workspaces'))
+      const linked = join(root, 'workspaces', 'app', 'feature')
+      // What a removal reads first, as Orca spells the path.
+      const folder = await readWorkspaceFolderBeforeDeletion(`${linked}/`)
+      mkdirSync(profileDirectory(), { recursive: true })
+      // A delete that left the folder behind records nothing.
+      await recordDeletedWorkspaceFolder(profileDirectory(), folder!, DELETED_AT)
+      expect(await readDeletedWorkspaceFolderRecords(profileDirectory())).toEqual([])
+      rmSync(join(root, 'real', 'app', 'feature'), { recursive: true })
+      await recordDeletedWorkspaceFolder(
+        profileDirectory(),
+        { ...folder!, createdAt: CREATED_AT },
+        DELETED_AT
+      )
+      const deleted: ChatHistoryTarget[] = []
+
+      await sweepDeletedWorkspaceChatHistory({
+        store: appStore(),
+        now: NOW,
+        listSessions: async () => [
+          // Agents record the physical folder.
+          session('physical.jsonl', join(realpathSync(root), 'real', 'app', 'feature', 'web')),
+          // Another spelling is another folder on a case-sensitive disk: never proven Orca's.
+          session('other-case.jsonl', join(root, 'real', 'app', 'Feature'))
+        ],
+        isEnabled: () => true,
+        deleteSessions: recordingDelete(deleted)
+      })
+
+      expect(deleted.map((target) => basename(target.filePath))).toEqual(['physical.jsonl'])
+    }
+  )
+
+  it('keeps chats begun or active after Orca deleted the folder, and forgets a folder that came back', async () => {
+    root = mkdtempSync(join(tmpdir(), 'orca-chat-history-'))
+    const appWorkspaces = join(root, 'workspaces', 'app')
+    mkdirSync(appWorkspaces, { recursive: true })
+    mkdirSync(join(root, 'repos', 'app'), { recursive: true })
+    const feature = join(appWorkspaces, 'feature')
+    await recordDeleted(feature)
+    const deleted: ChatHistoryTarget[] = []
+    const sweep = (sessions: AiVaultSession[]) =>
+      sweepDeletedWorkspaceChatHistory({
+        store: appStore(),
+        now: NOW,
+        listSessions: async () => sessions,
+        isEnabled: () => true,
+        deleteSessions: recordingDelete(deleted)
+      })
+
+    // The user re-created the folder and removed it again before any sweep saw it.
+    const writtenLater = session('written-later.jsonl', feature)
+    const laterWrite = new Date(DELETED_AT + 60 * 60 * 1000)
+    utimesSync(writtenLater.filePath, laterWrite, laterWrite)
+    await sweep([
+      session('workspace.jsonl', feature),
+      session('started-later.jsonl', feature, { createdAt: '2026-11-15T14:00:00.000Z' }),
+      session('started-before.jsonl', feature, { createdAt: '2026-10-01T12:00:00.000Z' }),
+      session('no-start.jsonl', feature, { createdAt: null }),
+      writtenLater
+    ])
+    expect(deleted.map((target) => basename(target.filePath))).toEqual(['workspace.jsonl'])
+
+    // Seen back on disk, the record no longer proves anything, even once the folder is gone again.
+    mkdirSync(feature)
+    await sweep([session('back.jsonl', feature)])
+    rmSync(feature, { recursive: true })
+    await sweep([session('gone-again.jsonl', feature)])
+    expect(deleted.map((target) => basename(target.filePath))).toEqual(['workspace.jsonl'])
+    expect(await readDeletedWorkspaceFolderRecords(profileDirectory())).toEqual([])
+  })
+
+  it.each([
+    ['an older format', { version: 0, folders: [{ path: 'FEATURE', deletedAt: 1 }] }],
+    ['a newer format', { version: 2, folders: [{ path: 'FEATURE', deletedAt: 1 }] }],
+    [
+      'entries missing fields',
+      { version: 1, folders: [{ path: 'FEATURE', name: 'feature', deletedAt: DELETED_AT }] }
+    ],
+    ['a damaged file', null]
+  ])('deletes nothing from records in %s', async (_name, contents) => {
+    root = mkdtempSync(join(tmpdir(), 'orca-chat-history-'))
+    const appWorkspaces = join(root, 'workspaces', 'app')
+    mkdirSync(appWorkspaces, { recursive: true })
+    mkdirSync(join(root, 'repos', 'app'), { recursive: true })
+    const feature = join(appWorkspaces, 'feature')
+    mkdirSync(profileDirectory(), { recursive: true })
+    writeFileSync(
+      join(profileDirectory(), 'orca-deleted-workspace-folders.json'),
+      contents === null
+        ? '{"version":1,"fol'
+        : JSON.stringify(contents).replaceAll('FEATURE', feature)
+    )
+    const deleted: ChatHistoryTarget[] = []
+
+    await sweepDeletedWorkspaceChatHistory({
+      store: appStore(),
+      now: NOW,
+      listSessions: async () => [session('feature.jsonl', feature)],
+      isEnabled: () => true,
+      deleteSessions: recordingDelete(deleted)
     })
 
     expect(deleted).toEqual([])
+  })
+
+  it("after a restart, two sweeps at once delete a recorded workspace's chat once", async () => {
+    root = mkdtempSync(join(tmpdir(), 'orca-chat-history-'))
+    const appWorkspaces = join(root, 'workspaces', 'app')
+    mkdirSync(appWorkspaces, { recursive: true })
+    mkdirSync(join(root, 'repos', 'app'), { recursive: true })
+    await recordDeleted(join(appWorkspaces, 'feature'))
+    const sessions = [session('feature.jsonl', join(appWorkspaces, 'feature'))]
+    // A new process reads the records from disk alone.
+    vi.resetModules()
+    const restarted = await import('./deleted-workspace-chat-history')
+    const deleted: ChatHistoryTarget[] = []
+    const sweep = () =>
+      restarted.sweepDeletedWorkspaceChatHistory({
+        store: appStore(),
+        now: NOW,
+        listSessions: async () => sessions,
+        isEnabled: () => true,
+        deleteSessions: recordingDelete(deleted)
+      })
+
+    const results = await Promise.all([sweep(), sweep()])
+
+    expect(deleted.map((target) => basename(target.filePath))).toEqual(['feature.jsonl'])
+    expect(results.reduce((total, result) => total + result.deleted, 0)).toBe(1)
   })
 })

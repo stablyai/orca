@@ -128,7 +128,7 @@ export function DeleteAgentHistoryWithWorkspaceSetting({
           }
           checked={enabled}
           disabled={setting.state !== 'ready' || !hostScope.available}
-          // Turning it on deletes history from workspaces deleted before now, so it asks first.
+          // Turning it on can delete history of workspaces Orca already deleted, so it asks first.
           onChange={() => (enabled ? void update(false) : setConfirming(true))}
           ariaLabel={search.title}
         />
@@ -145,7 +145,7 @@ export function DeleteAgentHistoryWithWorkspaceSetting({
             <DialogDescription>
               {t(
                 'components.settings.agents.deleteHistoryWithWorkspace.confirmDescription',
-                "Orca will delete Orca, Claude Code and Codex chats from workspaces that no longer exist, including ones deleted before today. Chats from workspaces you still have are kept. Deleted chats can't be recovered."
+                "Orca will delete Orca, Claude Code and Codex chats from workspaces Orca deletes. Workspaces you still have, folders Orca didn't create, and workspaces deleted by an earlier version of Orca keep their chats. Deleted chats can't be recovered."
               )}
             </DialogDescription>
           </DialogHeader>

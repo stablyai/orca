@@ -1,3 +1,4 @@
+import { homedir } from 'node:os'
 import { lstat, readdir, readlink, realpath, stat } from 'node:fs/promises'
 import { basename, dirname, isAbsolute, join, sep } from 'node:path'
 import type { RuntimeStore } from '../../../runtime/construction/runtime-store-contract'
@@ -8,6 +9,7 @@ import { buildKnownOrcaWorkspaceLayouts } from '../../../../shared/worktree/visi
 import { isPathAbsentError } from '../../../filesystem/local-file-io/filesystem-path-containment'
 import { readAllWorktreeMetaForHost } from '../../../persistence/host-qualified-worktree-meta'
 import { listWorkspaceCleanupOwnedRepos } from '../workspace-cleanup-run-evidence'
+import { folderIdentityOf } from './deleted-workspace-folder-records'
 
 // Folders are compared by filesystem identity, so symlinks, case and Unicode spellings are the OS's call.
 type Identity = string
@@ -20,13 +22,7 @@ async function provenIdentityOf(path: string): Promise<Identity | null | undefin
   )
 }
 
-async function identityOf(path: string): Promise<Identity | null> {
-  // Bigint: NTFS file ids exceed 2^53 and would round together; inode 0 means no identity.
-  return stat(path, { bigint: true }).then(
-    (stats) => (stats.isDirectory() && stats.ino !== 0n ? `${stats.dev}:${stats.ino}` : null),
-    () => null
-  )
-}
+const identityOf = folderIdentityOf
 
 /** Whether the path exists: a permission or I/O error is `unknown`, never absence. */
 async function presence(path: string): Promise<'present' | 'missing' | 'unknown'> {
@@ -68,6 +64,11 @@ const foldName = (name: string): string =>
 
 export function goneFolderKey(folder: GoneFolder): string {
   return `${folder.ancestorId}/${foldName(folder.name)}`
+}
+
+/** Byte-exact: only the very folder Orca recorded deleting is its own; another spelling is kept. */
+export function exactGoneFolderKey(folder: GoneFolder): string {
+  return `${folder.ancestorId}/${folder.name}`
 }
 
 /** What Orca still lists: checkouts, folder projects, workspaces and renamed workspaces' earlier paths. */
@@ -182,6 +183,9 @@ export async function readListedFolders(store: RuntimeStore): Promise<ListedFold
     }
     return proven
   }
+  // Fresh profiles list the home folder, which holds every workspace root. Deleted-folder records,
+  // not location, prove which gone folders were Orca's, so home alone doesn't block them.
+  const homeId = await identityOf(homedir())
   for (const listedPath of new Set(listedPaths(store))) {
     const { targets, complete } = await linkTargets(listedPath)
     listed.complete &&= complete
@@ -190,7 +194,7 @@ export async function readListedFolders(store: RuntimeStore): Promise<ListedFold
     }
     for (const path of targets) {
       const id = await cachedIdentity(path)
-      if (id) {
+      if (id && id !== homeId) {
         listed.present.add(id)
       }
       // Byte-exact walk up: each existing ancestor claims the name the path continues with.

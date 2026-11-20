@@ -21,6 +21,11 @@ export function setWorktreeRemovalRecordsDirectory(directory: string | null): vo
   recordsDirectory = directory
 }
 
+/** This host's profile folder, once its removal records are loaded; null before startup and after quit. */
+export function worktreeRemovalRecordsDirectory(): string | null {
+  return recordsDirectory
+}
+
 export function closeWorktreeRemovalRecords(): Promise<void> {
   const directory = recordsDirectory
   recordsDirectory = null

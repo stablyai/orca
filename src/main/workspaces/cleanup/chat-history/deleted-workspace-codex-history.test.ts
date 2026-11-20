@@ -17,6 +17,7 @@ import type { AiVaultSession } from '../../../../shared/ai-vault/contracts/ai-va
 import type { RuntimeStore } from '../../../runtime/construction/runtime-store-contract'
 import { deleteCodexRolloutsPermanently } from '../../../codex/history/cleanup/codex-rollout-permanent-delete'
 import { sweepDeletedWorkspaceChatHistory } from './deleted-workspace-chat-history'
+import { folderIdentityOf, recordDeletedWorkspaceFolder } from './deleted-workspace-folder-records'
 
 // Fixed and long past: the sweep's own idle check reads the clock, and these files are older than any run.
 const WRITTEN = new Date('2026-01-01T12:00:00.000Z')
@@ -120,8 +121,22 @@ describe('sweepDeletedWorkspaceChatHistory with Codex rollouts', () => {
         statSync(sharedPacked).size +
         statSync(sharedArchived).size +
         statSync(reverted).size
+      // Orca deleted `gone`, an hour after these rollouts were last written.
+      const profile = join(root, 'profile')
+      mkdirSync(profile)
+      await recordDeletedWorkspaceFolder(
+        profile,
+        {
+          path: gone,
+          parentId: (await folderIdentityOf(appWorkspaces))!,
+          name: 'gone',
+          createdAt: WRITTEN.getTime() - 24 * 60 * 60 * 1000
+        },
+        WRITTEN.getTime() + 60 * 60 * 1000
+      )
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the sweep reads only these store methods
       const store = {
+        getProfileStorageDirectory: () => profile,
         getSettings: () => ({
           workspaceDir: join(root, 'workspaces'),
           nestWorkspaces: true,
@@ -149,6 +164,7 @@ describe('sweepDeletedWorkspaceChatHistory with Codex rollouts', () => {
             sessionId: filePath,
             cwd: gone,
             filePath,
+            createdAt: new Date(WRITTEN.getTime() - 60 * 60 * 1000).toISOString(),
             modifiedAt: WRITTEN.toISOString()
           }) as AiVaultSession
       )

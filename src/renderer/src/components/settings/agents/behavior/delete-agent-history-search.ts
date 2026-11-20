@@ -9,7 +9,7 @@ export const getDeleteAgentHistorySearchEntry = createLocalizedCatalog(() => ({
   ),
   description: translate(
     'components.settings.agents.deleteHistoryWithWorkspace.description',
-    "Orca, Claude Code and Codex chats from deleted workspaces are removed automatically to free disk space. They can't be recovered."
+    "Orca, Claude Code and Codex chats from workspaces Orca deletes are removed automatically to free disk space. They can't be recovered."
   ),
   keywords: [
     ...translateSearchKeyword('components.settings.agents.deleteHistoryWithWorkspace.chat', 'chat'),

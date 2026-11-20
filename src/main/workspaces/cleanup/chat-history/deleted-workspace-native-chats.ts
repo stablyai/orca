@@ -46,7 +46,8 @@ export function listHostNativeChats(): AgentSessionRecord[] {
  */
 export async function forgetHostNativeChats(
   chats: readonly AgentSessionRecord[],
-  shouldForget: (chat: AgentSessionRecord) => Promise<boolean>
+  shouldForget: (chat: AgentSessionRecord) => Promise<boolean>,
+  idleBefore: () => number
 ): Promise<ChatHistorySweepResult> {
   const result: ChatHistorySweepResult = { deleted: 0, failed: 0, freedBytes: 0 }
   for (const chat of [...chats].sort((left, right) => right.createdAt - left.createdAt)) {
@@ -68,7 +69,7 @@ export async function forgetHostNativeChats(
         }
         const tabShown = host.isSessionTabVisible(sessionId)
         const deleted = await host.deps.store.forgetIdleChat(
-          { sessionId, location, idleBefore: Date.now() - WORKSPACE_CLEANUP_RULE_GRACE_MS },
+          { sessionId, location, idleBefore: idleBefore() },
           () => shouldForget(chat)
         )
         if (deleted && tabShown) {

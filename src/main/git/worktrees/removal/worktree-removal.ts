@@ -27,6 +27,11 @@ import { removeWindowsCheckout, usesNativeWindowsRemoval } from './windows-workt
 import { listWorktreesStrict } from '../catalog/worktree-listing'
 import { isWorktreePathMissing } from '../../../workspaces/removal/worktree-removal-safety'
 import { runKeyedSerializedOperation } from '../../../../shared/concurrency/keyed-serialized-operations'
+import { worktreeRemovalRecordsDirectory } from '../../../workspaces/removal/worktree-removal-table'
+import {
+  readWorkspaceFolderBeforeDeletion,
+  recordDeletedWorkspaceFolder
+} from '../../../workspaces/cleanup/chat-history/deleted-workspace-folder-records'
 
 const branchCleanupQueueByRepo = new Map<string, Promise<void>>()
 
@@ -48,13 +53,21 @@ export async function removeWorktree(
       }
     }
   })
+  // A WSL checkout's history is that distro's; its folders can't be read here without booting it.
+  const recordsDirectory =
+    options.wslDistro || parseWslPath(worktreePath) ? null : worktreeRemovalRecordsDirectory()
+  const folder = recordsDirectory ? await readWorkspaceFolderBeforeDeletion(worktreePath) : null
   try {
     // Wait out ref packing before deleting branches; concurrent pruning can finish safely.
-    return await withRepoRefMaintenancePaused('worktree-remove', () =>
+    const result = await withRepoRefMaintenancePaused('worktree-remove', () =>
       runWithGitReadCacheInvalidation(() =>
         performRemoveWorktree(repoPath, worktreePath, force, options)
       )
     )
+    if (recordsDirectory && folder) {
+      await recordDeletedWorkspaceFolder(recordsDirectory, folder)
+    }
+    return result
   } finally {
     await Promise.all(writers)
     invalidateWslLinkedWorktreeGitRouting(worktreePath)
