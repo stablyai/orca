@@ -144,6 +144,8 @@ const STATIC_TITLE_COPY = {
   'terminal.setTitle': () => translate('keybindings.title.128cce6e6d', 'Set title…'),
   'chat.find': () => translate('keybindings.title.chatFind', 'Find in chat'),
   'botItem.back': () => translate('keybindings.title.botItemBack', 'Back to items'),
+  'botItem.previous': () => translate('keybindings.title.botItemPrevious', 'Previous item'),
+  'botItem.next': () => translate('keybindings.title.botItemNext', 'Next item'),
   'terminal.toggleNativeChat': () =>
     translate('keybindings.title.terminalToggleNativeChat', 'Switch between Chat UI and terminal'),
   'sidebar.childWorkspaces.toggle': () =>

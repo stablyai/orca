@@ -76,7 +76,7 @@ export function TerminalSessionStateSaveFailureDialog({
             <Button type="button" size="sm" onClick={onOpenSpaceAnalyzer}>
               {t(
                 'auto.components.terminal.pane.TerminalSessionStateSaveFailureDialog.6bee0c8f17',
-                'Open Disk Space Analyzer'
+                'Disk Space Analyzer'
               )}
             </Button>
           )}

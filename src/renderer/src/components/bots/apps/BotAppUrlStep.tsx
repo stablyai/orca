@@ -377,7 +377,7 @@ function ToolSignIn({
             <BotToolFinishSignIn bot={bot} name={phase.name} />
           ) : phase.owned ? null : (
             <Button variant="link" size="inlineText" onClick={() => onPaste(true)}>
-              {t('bots.apps.paste.title', 'Signing in on another computer?')}
+              {t('bots.apps.paste.remoteSignIn', 'Remote sign-in')}
             </Button>
           )
         }

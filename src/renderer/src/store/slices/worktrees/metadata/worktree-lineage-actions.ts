@@ -19,7 +19,7 @@ import {
 import { hostRouteForWorktreeOwner } from '../listing/worktree-owner-target'
 import { callRuntimeRpc } from '../../../../runtime/rpc/calls/runtime-rpc-call'
 import { toRuntimeWorktreeSelector } from '../../../../runtime/rpc/targets/runtime-worktree-selector'
-import { buildCrossStoreParentRef } from './cross-store-parent-ref'
+import { buildCrossStoreParentRef, isBotHomeParent } from './cross-store-parent-ref'
 
 // Why: this runs inside a catch, so letting the refresh reject would replace the failure it recovers from.
 async function refreshWorktreeLineageBestEffort(
@@ -153,6 +153,7 @@ export function createAssignCrossStoreWorktreeParent(
             {
               worktree: toRuntimeWorktreeSelector(child.id),
               crossStoreParent,
+              ...(isBotHomeParent(get(), parent) ? { crossStoreParentIsBotHome: true } : {}),
               ...(options?.ifParentWorkspace !== undefined
                 ? { ifParentWorkspace: options.ifParentWorkspace }
                 : {})

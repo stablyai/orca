@@ -169,7 +169,9 @@
     "build:release:javascript": "pnpm run build:cli && pnpm run build:electron-vite && pnpm run verify:built-skills-cli && pnpm run build:web-from-renderer && pnpm run build:mobile-web",
     "build:release:javascript:parallel": "pnpm run build:cli && pnpm run build:electron-vite:parallel && pnpm run verify:built-skills-cli && pnpm run build:web-from-renderer && pnpm run build:mobile-web",
     "build:release:host": "pnpm run build:wsl-guest && pnpm run build:native && pnpm run verify:computer-native && pnpm run verify:built-skills-cli",
-    "build:release:parallel": "pnpm run build:wsl-guest && pnpm run build:native && pnpm run verify:computer-native && pnpm run build:cli && pnpm run build:electron-vite:parallel && pnpm run verify:built-skills-cli && pnpm run build:web-from-renderer && pnpm run build:mobile-web",
+    "build:release:parallel": "pnpm run build:wsl-guest && pnpm run build:native && pnpm run verify:computer-native && pnpm run build:cli && pnpm run \"/^build:release-overlap:/\"",
+    "build:release-overlap:app": "pnpm run build:electron-vite:parallel && pnpm run verify:built-skills-cli && pnpm run build:web-from-renderer",
+    "build:release-overlap:mobile-web": "pnpm run build:mobile-web",
     "postinstall": "node config/scripts/workspace-package-build/build-workspace-packages.mjs && node config/scripts/native-build/node-addons/rebuild-native-deps.mjs",
     "rebuild:electron": "node config/scripts/native-build/node-addons/rebuild-native-deps.mjs",
     "reclaim-space": "node config/scripts/worktree-storage/reclaim-worktree-space.mjs",
@@ -268,7 +270,7 @@
     "@modelcontextprotocol/sdk": "1.32.1",
     "@monaco-editor/react": "^4.7.0",
     "@noble/hashes": "1.8.0",
-    "@oxlint/plugins": "1.89.0",
+    "@oxlint/plugins": "1.94.0",
     "@playwright/test": "^1.64.1",
     "@sanity/diff-match-patch": "^3.2.1",
     "@shadcn/lint": "~0.2.5",
@@ -346,11 +348,11 @@
     "monaco-editor": "^0.55.1",
     "node-gyp": "12.4.0",
     "oxc-transform-react": "~0.152.0",
-    "oxfmt": "^0.74.0",
-    "oxlint": "^1.91.0",
+    "oxfmt": "^0.79.0",
+    "oxlint": "^1.94.0",
     "oxlint-plugin-anti-slop": "github:dmmulroy/anti-slop#c44ef22ca116d0ba62a3ff663a0bd13a3f3fa40b",
     "oxlint-plugin-react-doctor": "0.9.14",
-    "oxlint-tsgolint": "7.0.2005",
+    "oxlint-tsgolint": "7.0.2007",
     "pdfjs-dist": "^6.3.289",
     "playwright-core": "1.64.1",
     "pngjs": "^7.0.0",
@@ -387,7 +389,7 @@
     "unified": "^11.0.5",
     "unist-util-visit-parents": "6.0.2",
     "vite": "^8.3.6",
-    "vitest": "5.0.5",
+    "vitest": "5.1.0",
     "vscode-oniguruma": "^2.0.1",
     "zustand": "^5.1.0"
   },
@@ -418,7 +420,7 @@
   "engines": {
     "node": "24"
   },
-  "packageManager": "pnpm@12.14.0+sha512.c18ba6d87993d3d164cb5e8948f32b2c06ee854487e06cd8d86781342fb3e5bb4634367034711e86802baa9c37bea906ce1929ad08d70884c97d801df13389a6",
+  "packageManager": "pnpm@12.18.0+sha512.9d7882d5dc82147ecfc4e062aa34834e0ad0296710a1837a1115ae012127d36b7109e321ac1598a1dd0a65597681b1e99917e12ed0d749eae91187943363beb3",
   "reactDoctor": {
     "ignore": {
       "overrides": [

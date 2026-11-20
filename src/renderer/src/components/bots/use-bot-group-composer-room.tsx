@@ -32,7 +32,11 @@ export function useBotGroupComposerRoom(
     group ? botGroupSingleRecipient(readNativeChatDraftCache(draftScope), group, bots) : null
   )
   const memberBots = useMemo(
-    () => bots.filter((bot) => group?.members.some((member) => member.botId === bot.id)),
+    () =>
+      bots.filter(
+        (bot) =>
+          bot.hostId === group?.hostId && group.members.some((member) => member.botId === bot.id)
+      ),
     [bots, group]
   )
   // Keyed by the names so transcript markdown keeps its extension across transcript polls.

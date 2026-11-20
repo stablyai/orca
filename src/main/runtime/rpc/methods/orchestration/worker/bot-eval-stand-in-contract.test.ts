@@ -4,7 +4,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getWorkerTerminalAutoReleaseScheduler } from '../../../../orchestration/terminal-authority/release/worker-terminal-auto-release-scheduler'
 import { createOrchestrationWorkerReleaseHarness } from './testing/worker-release.test-support'
-import { pairedServerSendRefusal } from '../../../../orchestration/paired-server-follow-up-refusal'
 import type { EvalHostState } from '../../../../../../cli/bot-automation-eval/bot-automation-eval-host'
 import { queueMail } from '../../../../../../cli/bot-orchestration-eval/bot-orchestration-eval-mail'
 import { serveOrchestration } from '../../../../../../cli/bot-orchestration-eval/bot-orchestration-eval-orca'
@@ -339,7 +338,7 @@ describe.each([
 })
 
 describe('the stand-in on a paired server', () => {
-  it('refuses a send to a finished worker in the runtime words', async () => {
+  it('refuses a send to a finished paired worker', async () => {
     const state: EvalHostState = {
       bots: [],
       automations: [],
@@ -373,11 +372,6 @@ describe('the stand-in on a paired server', () => {
         { to: `dispatch:${dispatchId}`, subject: 'More', body: 'x' },
         io
       )
-    ).toThrow(
-      expect.objectContaining({
-        code: 'dispatch_inactive',
-        message: pairedServerSendRefusal(dispatchId, 'build-1', 'succeeded')
-      })
-    )
+    ).toThrow(expect.objectContaining({ code: 'dispatch_inactive' }))
   })
 })

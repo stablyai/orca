@@ -5,8 +5,7 @@ import type { WindowsHostInteractiveLoginSpawn } from '../providers/shell-launch
 import type {
   CodexManagedAccount,
   CodexManagedAccountSummary,
-  CodexRateLimitAccountsState,
-  CodexSystemDefaultIdentity
+  CodexRateLimitAccountsState
 } from '../../shared/agent-accounts/managed-account-types'
 import type { CodexRateLimitResetResult } from '../../shared/agent-usage/rate-limits/rate-limit-types'
 import type { CodexResetCreditExpectedScope } from '../../shared/agent-accounts/codex/codex-reset-credit-scope'
@@ -112,7 +111,8 @@ export class CodexAccountService {
       runtimeHome,
       configMirror: this.configMirror,
       lifecycle,
-      resolveSystemDefault: () => this.resolveSystemDefaultIdentity(),
+      resolveSystemDefault: async () =>
+        this.identity.resolveSystemDefault(await this.configMirror.readHostModelProvider()),
       readIdentityFromHostHome: (path, accountId) =>
         this.identity.readFromTrustedHome(
           this.managedHomePaths.assertHostOwnership(path, accountId)
@@ -146,7 +146,7 @@ export class CodexAccountService {
     return next
   }
 
-  listAccounts(): CodexRateLimitAccountsState {
+  listAccounts(): Promise<CodexRateLimitAccountsState> {
     return this.selection.list()
   }
 
@@ -230,7 +230,10 @@ export class CodexAccountService {
 
   // Outside the mutation queue: a pending sign-in can hold it for minutes, and this
   // synchronous write touches no state a queued account change reads.
-  renameAccount(accountId: string, displayName: string | null): CodexRateLimitAccountsState {
+  renameAccount(
+    accountId: string,
+    displayName: string | null
+  ): Promise<CodexRateLimitAccountsState> {
     const before = this.store.getSettings().managedAccountDisplayNames
     const state = this.selection.rename(accountId, displayName)
     // Account streams otherwise republish only on usage changes; an unchanged name writes nothing.
@@ -274,12 +277,8 @@ export class CodexAccountService {
     return this.resetCredits.consumeCurrent()
   }
 
-  private getSnapshot(): CodexRateLimitAccountsState {
+  private getSnapshot(): Promise<CodexRateLimitAccountsState> {
     return this.selection.snapshot()
-  }
-
-  private resolveSystemDefaultIdentity(): CodexSystemDefaultIdentity {
-    return this.identity.resolveSystemDefault(this.configMirror.readHostModelProvider())
   }
 
   private readIdentityFromHome(
