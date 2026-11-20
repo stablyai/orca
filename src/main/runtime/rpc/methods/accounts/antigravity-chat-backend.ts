@@ -45,7 +45,8 @@ export function restartIdleAgyChats(target: AntigravityAccountTarget): void {
     return
   }
   for (const id of host.loadedSessionIds()) {
-    const home = host.sessionAgent(id) === 'antigravity' ? host.childAccountHome(id) : undefined
+    const home =
+      host.sessionAgent(id) === 'antigravity' ? host.childAccountHome(id, true) : undefined
     if (home && isAntigravityHostAccountHome(home)) {
       void host.releaseIdleSession(id, true).catch((error: unknown) => {
         console.warn('[antigravity] an idle chat kept the previous account:', error)
