@@ -145,6 +145,7 @@ function writeStep(
           JSON.stringify({
             settlementId: step.settlementId,
             mutations: resolution.mutations,
+            ...(resolution.historyOrigin ? { historyOrigin: resolution.historyOrigin } : {}),
             ...(resolution.expectedItems.length ? { expectedItems: resolution.expectedItems } : {})
           }),
           'utf8'
@@ -199,6 +200,15 @@ function writeStep(
       savedAt,
       command.facts?.stopSettle
     )
+    if (resolution.kind === 'history-catch-up' && resolution.historyOrigin) {
+      const { historyOrigin } = resolution
+      db.prepare(`UPDATE journal_chat_state SET history_origin_json=?
+        WHERE session_id=? AND epoch=?`).run(
+        JSON.stringify({ providerHandle: historyOrigin.providerHandle, raw: historyOrigin }),
+        target.sessionId,
+        target.epoch
+      )
+    }
     return { commit, outcome: { kind: 'committed', wrote: commit.coordinates.length > 0 } }
   }
   let identity

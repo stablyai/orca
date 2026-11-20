@@ -78,7 +78,8 @@ const WINDOW_RAW_MAX_BYTES = 64 * 1024 * 1024
 export async function readClaudeTranscriptWindow(input: {
   filePath: string
   check: () => void
-  visit?: (row: Record<string, unknown>) => void
+  maxBytes?: number
+  visit?: (row: Record<string, unknown>) => boolean
 }): Promise<{
   rows: Record<string, unknown>[]
   bytesRead: number
@@ -88,13 +89,16 @@ export async function readClaudeTranscriptWindow(input: {
 }> {
   const newestFirst: Record<string, unknown>[] = []
   const result = await visitClaudeTranscriptTail(
-    { ...input, maxBytes: input.visit ? WINDOW_RAW_MAX_BYTES : CLAUDE_TRANSCRIPT_WINDOW_MAX_BYTES },
+    {
+      ...input,
+      maxBytes:
+        input.maxBytes ?? (input.visit ? WINDOW_RAW_MAX_BYTES : CLAUDE_TRANSCRIPT_WINDOW_MAX_BYTES)
+    },
     (row) => {
       if (input.visit) {
-        input.visit(row)
-      } else {
-        newestFirst.push(row)
+        return input.visit(row)
       }
+      newestFirst.push(row)
       return false
     }
   )

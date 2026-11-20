@@ -71,6 +71,7 @@ async function decodeJsonlReplacementItems(input: {
   limits?: JournalPayloadLimits
   createCollector?: LegacyTranscriptCollectorFactory
   boundedClaude?: true
+  maxBytes?: number
 }): Promise<{
   items: JournalReplacementItem[]
   retainedBytes: number

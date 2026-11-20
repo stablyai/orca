@@ -212,6 +212,7 @@ export async function runHistoryCatchUp<View extends HistoryCatchUpJournalView>(
             expectedCursor,
             expectedItems: plan.expectedItems ?? [],
             mutations: plan.mutations,
+            historyOrigin: plan.historyOrigin,
             permit,
             deadline
           }

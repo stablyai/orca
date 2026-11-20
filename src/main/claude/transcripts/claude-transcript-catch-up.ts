@@ -50,6 +50,7 @@ export async function catchUpClaudeTranscript(input: {
   signal?: AbortSignal
   assertCurrent?: () => void
   timeoutMs?: number
+  maxBytes?: number
   mode?: 'recovery'
   logger?: StructuredAgentSessionLogger
 }): Promise<ClaudeTranscriptCatchUpOutcome> {
@@ -133,11 +134,11 @@ export async function catchUpClaudeTranscript(input: {
           const newestUuid = await readClaudeTranscriptFrontier({
             filePath,
             consumedBytes: size,
-            maxBytes: CLAUDE_TRANSCRIPT_WINDOW_MAX_BYTES,
+            maxBytes: input.maxBytes ?? CLAUDE_TRANSCRIPT_WINDOW_MAX_BYTES,
             check
           })
           check()
-          if (newestUuid !== undefined && newestUuid === sourceFrontier) {
+          if (newestUuid === sourceFrontier) {
             complete = true
             return createHistoryCatchUpBatch().finish('claude-history-unchanged', [
               planned.physicalCursor,
@@ -154,6 +155,7 @@ export async function catchUpClaudeTranscript(input: {
             filePath,
             leafUuid: input.leafUuid,
             chainBoundaries,
+            maxBytes: input.maxBytes,
             check,
             onLeafAbsent: () => {
               leafAbsent = true
@@ -166,6 +168,7 @@ export async function catchUpClaudeTranscript(input: {
           filePath,
           leafUuid: sourceFrontier,
           chainBoundaries,
+          maxBytes: input.maxBytes,
           check,
           onLeafAbsent: () => {
             leafAbsent = true
@@ -175,7 +178,12 @@ export async function catchUpClaudeTranscript(input: {
       }
       // Ordinary copy receipts can still bridge from their last imported leaf.
       if (!tail && !leafAbsent && !sourceFrontier && copiedLeaf !== input.leafUuid) {
-        tail = await readClaudeTranscriptTail({ filePath, leafUuid: copiedLeaf, check })
+        tail = await readClaudeTranscriptTail({
+          filePath,
+          leafUuid: copiedLeaf,
+          maxBytes: input.maxBytes,
+          check
+        })
         check()
       }
       if (!tail && !(leafAbsent && planned.covered)) {

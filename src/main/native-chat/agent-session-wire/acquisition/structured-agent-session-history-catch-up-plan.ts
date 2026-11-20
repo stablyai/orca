@@ -3,6 +3,7 @@ import { agentJournalItemKey } from '../../../../shared/agent-session/journal/ag
 import type { JournalLifecycleIdentityMutationInput } from '../../agent-session-journal/writing/journal-lifecycle-mutation'
 import type { AgentJournalCursor } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { StructuredAgentSessionHistoryReplacement } from '../journal-ingress/structured-agent-session-history-replacement'
+import type { NativeCopyOrigin } from '../../agent-session-journal/context-epochs/journal-history-origin'
 
 export const HISTORY_CATCH_UP_MAX_OPERATIONS = 1_024
 export const HISTORY_CATCH_UP_MAX_BYTES = 16 * 1024 * 1024
@@ -33,6 +34,7 @@ export type HistoryCatchUpPlan = {
   reservedBytes: number
   expectedItems?: readonly ExpectedHistoryItem[]
   expectedCursor?: AgentJournalCursor
+  historyOrigin?: NativeCopyOrigin
 }
 
 /** Stage the whole bounded plan before any sink admission. */
@@ -86,10 +88,19 @@ export function createHistoryCatchUpBatch() {
       expectedItems.push(item)
     },
     /** Digest imported identity so retries share one settlement ID. */
-    finish(settlementPrefix: string, digestOf: unknown): HistoryCatchUpPlan {
-      const expectations = expectedItems.length ? { expectedItems: [...expectedItems] } : {}
+    finish(
+      settlementPrefix: string,
+      digestOf: unknown,
+      historyOrigin?: NativeCopyOrigin
+    ): HistoryCatchUpPlan {
+      const expectations = {
+        ...(expectedItems.length ? { expectedItems: [...expectedItems] } : {}),
+        ...(historyOrigin ? { historyOrigin } : {})
+      }
       const content = expectedItems.length ? [digestOf, expectedItems, mutations] : digestOf
-      const digest = createHash('sha256').update(JSON.stringify(content)).digest('hex')
+      const digest = createHash('sha256')
+        .update(JSON.stringify(historyOrigin ? [content, historyOrigin] : content))
+        .digest('hex')
       const settlementId = `${settlementPrefix}:${digest}`
       // Include batch-envelope cost and the transition’s publication byte.
       const reservedBytes =

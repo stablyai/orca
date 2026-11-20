@@ -1,5 +1,10 @@
 import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
+import type { AgentJournalItemIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
+import {
+  usableJournalHistoryOrigin,
+  type NativeCopyOrigin
+} from '../../native-chat/agent-session-journal/context-epochs/journal-history-origin'
 import { prepareJsonlTranscriptImport } from '../../native-chat/agent-session-journal/history-import/journal-jsonl-import'
 import { journalLifecycleItemMutation } from '../../native-chat/agent-session-journal/writing/journal-lifecycle-mutation'
 import {
@@ -18,6 +23,7 @@ export async function prepareClaudeTranscriptCapacityRecovery(
     leafUuid: string
     filePath: string
     physicalCursor: AgentJournalCursor
+    maxBytes?: number
   },
   {
     history,
@@ -26,9 +32,9 @@ export async function prepareClaudeTranscriptCapacityRecovery(
     warn
   }: Pick<HistoryCatchUpContext<unknown>, 'history' | 'signal' | 'check' | 'warn'>
 ): Promise<HistoryCatchUpPlan | HistoryCatchUpReplacementPlan> {
-  const noticeIdentity = {
-    provider: 'legacy' as const,
-    agent: 'claude' as const,
+  const noticeIdentity: AgentJournalItemIdentity = {
+    provider: 'legacy',
+    agent: 'claude',
     sessionId: input.sessionId,
     recordId: continuedOutsideRecordId(`capacity:${input.providerSessionId}:${input.leafUuid}`)
   }
@@ -38,6 +44,7 @@ export async function prepareClaudeTranscriptCapacityRecovery(
     transcriptAgent: 'claude',
     sessionId: input.providerSessionId,
     filePath: input.filePath,
+    maxBytes: input.maxBytes,
     signal
   })
   check()
@@ -48,6 +55,7 @@ export async function prepareClaudeTranscriptCapacityRecovery(
     const notices = await history.reads.historyItems([noticeKey])
     const notice = notices.find(({ key }) => key === noticeKey)
     if (
+      prepared.ok ||
       notice?.item?.body.kind !== 'status' ||
       notice.item.body.presentation !== 'continued-outside-unloaded'
     ) {
@@ -65,16 +73,41 @@ export async function prepareClaudeTranscriptCapacityRecovery(
         batch.push(mutation)
       }
     }
-    return batch.finish('claude-history-unloaded', input.physicalCursor)
+    const previous = usableJournalHistoryOrigin(await history.reads.historyOrigin())
+    const ids =
+      previous?.kind === 'native_copy' &&
+      previous.agent === 'claude' &&
+      previous.unit === 'claude-entry' &&
+      previous.providerHandle.kind === 'claude' &&
+      previous.providerHandle.sessionId === input.providerSessionId
+        ? previous.ids
+        : []
+    const historyOrigin: NativeCopyOrigin | undefined = prepared.ok
+      ? {
+          version: 1,
+          kind: 'native_copy',
+          agent: 'claude',
+          unit: 'claude-entry',
+          providerHandle: {
+            kind: 'claude',
+            sessionId: input.providerSessionId,
+            leafUuid: input.leafUuid || null
+          },
+          ids,
+          sourceFrontier: prepared.sourceFrontier,
+          sourceConsumedBytes: prepared.sourceConsumedBytes
+        }
+      : undefined
+    return batch.finish('claude-history-unloaded', input.physicalCursor, historyOrigin)
   }
   const ids = prepared.items.flatMap((item) =>
     item.identity.provider === 'claude' ? [item.identity.uuid] : []
   )
   const providerHandle = {
-    kind: 'claude' as const,
+    kind: 'claude',
     sessionId: input.providerSessionId,
     leafUuid: ids.at(-1) ?? null
-  }
+  } satisfies NativeCopyOrigin['providerHandle']
   return {
     kind: 'replace',
     // The window includes array punctuation; IDs appear again in the origin, outside the items.

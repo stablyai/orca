@@ -32,6 +32,7 @@ export async function importClaudeTranscript(input: {
   limits: JournalPayloadLimits
   retainedBytes: number
   bounded?: true
+  maxBytes?: number
   decodedMessageIdentities?: true
 }): Promise<{
   items: JournalReplacementItem[]
@@ -91,11 +92,13 @@ export async function importClaudeTranscript(input: {
     const read = await readClaudeTranscriptWindow({
       filePath: input.filePath,
       check,
+      maxBytes: input.maxBytes,
       visit: (row) => {
         if (sourceFrontier === undefined && typeof row.uuid === 'string' && row.uuid) {
           sourceFrontier = row.uuid
         }
         keep(row, -1, '#-1')
+        return window.complete()
       }
     })
     sourceConsumedBytes = read.consumedBytes
