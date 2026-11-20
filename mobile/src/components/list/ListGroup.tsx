@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } fro
 import { Check, ChevronDown, ChevronRight } from 'lucide-react-native'
 import { DisclosureChevron } from './DisclosureChevron'
 import { triggerSelection } from '../../platform/haptics/haptics'
-import { colors, feedback, radii, spacing } from '../../theme/mobile-theme'
+import { colors, feedback, radii, spacing, typography } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 
@@ -132,6 +132,8 @@ type ListRowProps = {
   /** The title is a sentence (a fact, a message) and wraps rather than cutting off. */
   wrapTitle?: boolean
   subtitle?: string
+  /** The subtitle is code, e.g. a command, and is set in the monospace face. */
+  subtitleMono?: boolean
   /** A muted mark in a fixed-width column before the title, e.g. an item's `#35`. */
   marker?: string
   /** Lines the subtitle may take before it cuts; two by default. */
@@ -166,6 +168,7 @@ export function ListRow({
   title,
   wrapTitle = false,
   subtitle,
+  subtitleMono = false,
   marker,
   subtitleLines = 2,
   detail,
@@ -205,7 +208,10 @@ export function ListRow({
         {title}
       </Text>
       {subtitle !== undefined ? (
-        <Text style={listRowStyles.subtitle} numberOfLines={subtitleLines}>
+        <Text
+          style={[listRowStyles.subtitle, subtitleMono && listRowStyles.subtitleMono]}
+          numberOfLines={subtitleLines}
+        >
           {subtitle}
         </Text>
       ) : null}
@@ -295,6 +301,7 @@ const listRowStyles = themedStyleSheet(() => ({
   titleStrong: { fontWeight: '700' },
   titleDestructive: { color: colors.statusRed },
   subtitle: { fontSize: 13, color: colors.textSecondary },
+  subtitleMono: { fontFamily: typography.monoFamily },
   value: { fontSize: 15, color: colors.textSecondary, flexShrink: 1, maxWidth: 180 },
   checkSpace: { width: 17 }
 }))

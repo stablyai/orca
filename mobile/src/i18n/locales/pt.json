@@ -1047,12 +1047,10 @@
       "dismissDrawer": "Fechar painel inferior"
     },
     "newWorkspaceSetupScriptField": {
-      "hooks": "HOOKS",
       "label": "Script de configuração",
-      "run": "Executar",
-      "runSetupCommand": "Executar comando de configuração",
+      "runSetup": "Executar configuração",
       "skip": "Pular",
-      "waitForSetup": "Esperar a configuração terminar antes de iniciar o agente",
+      "startAgentAfterSetup": "Iniciar o agente após a configuração",
       "waitForSetupSaveFailed": "Falha ao salvar o comportamento de inicialização da configuração."
     },
     "newWorkspaceSshConnectionField": {

@@ -1350,11 +1350,9 @@
     },
     "newWorkspaceSetupScriptField": {
       "label": "Setup script",
-      "hooks": "HOOKS",
-      "run": "Run",
       "skip": "Skip",
-      "runSetupCommand": "Run setup command",
-      "waitForSetup": "Wait for setup to complete before starting agent",
+      "runSetup": "Run setup",
+      "startAgentAfterSetup": "Start agent after setup",
       "waitForSetupSaveFailed": "Failed to save setup startup behavior."
     },
     "newWorkspaceSshConnectionField": {

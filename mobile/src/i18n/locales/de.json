@@ -941,12 +941,10 @@
       "dismissDrawer": "Bereich schließen"
     },
     "newWorkspaceSetupScriptField": {
-      "hooks": "HOOKS",
       "label": "Einrichtungsskript",
-      "run": "Ausführen",
-      "runSetupCommand": "Einrichtungsbefehl ausführen",
+      "runSetup": "Einrichtung ausführen",
       "skip": "Überspringen",
-      "waitForSetup": "Vor dem Start des Agenten auf den Abschluss der Einrichtung warten",
+      "startAgentAfterSetup": "Agent nach der Einrichtung starten",
       "waitForSetupSaveFailed": "Das Startverhalten bei der Einrichtung konnte nicht gespeichert werden."
     },
     "newWorkspaceSshConnectionField": {
