@@ -1,4 +1,5 @@
 import type { Bot } from '../bot-types'
+import { replaceImageReferences } from '../native-chat/attachments/native-chat-image-reference'
 import type { BotGroup } from './bot-group-schema'
 
 type Room = Pick<BotGroup, 'members' | 'replyMode'>
@@ -137,8 +138,9 @@ export function botGroupDraftAudience(
   group: Room,
   bots: readonly Named[]
 ): { ids: string[]; addressed: boolean } | 'invalid' {
-  const mentions = roomMentions(draft, group, bots).filter(
-    (mention) => !(mention.match === 'none' && mention.end === draft.length)
+  const prose = replaceImageReferences(draft, () => '')
+  const mentions = roomMentions(prose, group, bots).filter(
+    (mention) => !(mention.match === 'none' && mention.end === prose.length)
   )
   if (
     mentions.some(

@@ -9,8 +9,25 @@ type ComposerProps = {
   onChangeText: (text: string) => void
   onSend: (text: string) => Promise<boolean>
 }
-type Harness = { composer: ComposerProps | null; sends: { text: string }[]; reject: boolean }
-const h = vi.hoisted((): Harness => ({ composer: null, sends: [], reject: false }))
+type RenderedMessage = {
+  id: string
+  role: string
+  blocks: readonly { type: string; text?: string; path?: string; alt?: string }[]
+}
+type Harness = {
+  composer: ComposerProps | null
+  sends: { text: string }[]
+  messages: RenderedMessage[]
+  transcriptMessages: unknown[]
+  reject: boolean
+}
+const h = vi.hoisted((): Harness => ({
+  composer: null,
+  sends: [],
+  messages: [],
+  transcriptMessages: [],
+  reject: false
+}))
 vi.mock('react-native', () => ({
   Text: 'Text',
   View: 'View',
@@ -55,7 +72,10 @@ vi.mock('../session/native-chat/input/prompts/MobileNativeChatQuestion', () => (
   MobileNativeChatQuestion: () => null
 }))
 vi.mock('../session/native-chat/transcript/messages/MobileNativeChatMessage', () => ({
-  MobileNativeChatMessage: () => null
+  MobileNativeChatMessage: ({ message }: { message: RenderedMessage }) => {
+    h.messages.push(message)
+    return null
+  }
 }))
 vi.mock('../session/native-chat/composer/MobileNativeChatComposer', () => ({
   MobileNativeChatComposer: (props: ComposerProps) => {
@@ -70,7 +90,7 @@ vi.mock('./use-mobile-bot-group-transcript', () => ({
   useMobileBotGroupTranscript: () => ({
     data: {
       group: { id: 'g', name: 'Room', revision: 1, members: [], replyMode: { kind: 'all' } },
-      messages: [],
+      messages: h.transcriptMessages,
       hasEarlier: false
     },
     bots: [],
@@ -113,6 +133,8 @@ function composer(): ComposerProps {
 afterEach(async () => {
   await act(async () => view?.unmount())
   h.sends.length = 0
+  h.messages.length = 0
+  h.transcriptMessages = []
   h.reject = false
   closeMobileNativeChatTabDraft('group:host:g')
 })
@@ -143,4 +165,30 @@ it('keeps an unsent group draft across leaving and reopening the room', async ()
   await act(async () => view?.unmount())
   await mount()
   expect(composer().value).toBe('Unsent thought')
+})
+
+it('renders owner image attachments as image-ref blocks in the mobile group transcript', async () => {
+  h.transcriptMessages = [
+    {
+      id: 'msg-img',
+      groupId: 'g',
+      sequence: 1,
+      author: { kind: 'owner' },
+      text: 'Check [Image #1]',
+      images: [{ path: '/store/u1/shot.png', name: 'shot.png', bytes: 42 }],
+      createdAt: 1,
+      turns: []
+    }
+  ]
+  await mount()
+  expect(h.messages).toEqual([
+    expect.objectContaining({
+      id: 'msg-img',
+      role: 'user',
+      blocks: [
+        { type: 'text', text: 'Check [Image #1]' },
+        { type: 'image-ref', path: '/store/u1/shot.png', alt: 'shot.png' }
+      ]
+    })
+  ])
 })

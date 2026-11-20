@@ -3,9 +3,11 @@ import { forwardRef, useContext, useImperativeHandle, type ReactNode } from 'rea
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type * as HttpLinkRoutingModule from '@/lib/browser/navigation/http-link-routing'
+import type * as BotHostsModule from '@/lib/bot-hosts'
 import type * as WorkspaceRecordSelectorsModule from '@/store/workspaces/catalog/workspace-record-fields'
 import type * as TerminalFileOpenRoutingModule from '@/components/terminal-pane/links/files/terminal-file-open-routing'
 import type { NativeChatComposerHandle } from '../native-chat/composer/native-chat-composer-types'
+import type { NativeChatStructuredComposerTransport } from '../native-chat/composer/submit/native-chat-structured-composer-transport'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { BotGroupChat } from './BotGroupChat'
 import { NativeChatSessionHistoryScopeContext } from '../native-chat/native-chat-session-history-scope'
@@ -13,12 +15,29 @@ import { NativeChatSessionHistoryScopeContext } from '../native-chat/native-chat
 type ComposerSeen = { scope: string; worktreeId: string | null | undefined }
 const mocks = vi.hoisted(() => {
   const typed: string[] = []
-  const seen: { composer: ComposerSeen | null } = { composer: null }
-  return { openHttpLink: vi.fn(), openDetectedFilePath: vi.fn(), typed, focused: 0, seen }
+  const seen: {
+    composer: ComposerSeen | null
+    transport: NativeChatStructuredComposerTransport | undefined
+  } = { composer: null, transport: undefined }
+  return {
+    openHttpLink: vi.fn(),
+    openDetectedFilePath: vi.fn(),
+    callBotRpc: vi.fn(),
+    typed,
+    focused: 0,
+    seen
+  }
 })
 
 const fixtures = vi.hoisted(() => {
-  const group = {
+  const group: {
+    id: string
+    hostId: string
+    name: string
+    revision: number
+    folderWorkspaceId: string
+    members: { botId: string; sessionId: string }[]
+  } = {
     id: 'group-1',
     hostId: 'local',
     name: 'Room',
@@ -26,6 +45,50 @@ const fixtures = vi.hoisted(() => {
     folderWorkspaceId: 'room-home',
     members: []
   }
+  const messages: {
+    id: string
+    author: { kind: 'owner' }
+    text: string
+    images?: { path: string; name: string; bytes: number }[]
+    createdAt: number
+    turns: unknown[]
+  }[] = [
+    {
+      id: 'message-1',
+      author: { kind: 'owner' },
+      text: 'See https://example.com/docs for details',
+      createdAt: 1,
+      turns: [
+        {
+          operationId: 'operation-1',
+          botId: 'bot-a',
+          botName: 'A',
+          avatar: null,
+          agent: 'claude',
+          sessionId: 'session-a',
+          frozenItems: [
+            {
+              itemId: 'member-report',
+              revision: 1,
+              sequence: 1,
+              observedAt: 1,
+              turnScope: { kind: 'turn', turnItemId: 'turn' },
+              body: {
+                kind: 'message',
+                role: 'assistant',
+                blocks: [
+                  {
+                    type: 'text',
+                    text: 'Wrote [the report](report.html). ![Chart](chart.png)'
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
   return {
     folders: [
       { id: 'room-home', folderPath: '/rooms/room-1' },
@@ -36,43 +99,7 @@ const fixtures = vi.hoisted(() => {
     transcript: {
       data: {
         group,
-        messages: [
-          {
-            id: 'message-1',
-            author: { kind: 'owner' },
-            text: 'See https://example.com/docs for details',
-            createdAt: 1,
-            turns: [
-              {
-                operationId: 'operation-1',
-                botId: 'bot-a',
-                botName: 'A',
-                avatar: null,
-                agent: 'claude',
-                sessionId: 'session-a',
-                frozenItems: [
-                  {
-                    itemId: 'member-report',
-                    revision: 1,
-                    sequence: 1,
-                    observedAt: 1,
-                    turnScope: { kind: 'turn', turnItemId: 'turn' },
-                    body: {
-                      kind: 'message',
-                      role: 'assistant',
-                      blocks: [
-                        {
-                          type: 'text',
-                          text: 'Wrote [the report](report.html). ![Chart](chart.png)'
-                        }
-                      ]
-                    }
-                  }
-                ]
-              }
-            ]
-          }
-        ],
+        messages,
         hasEarlier: false
       },
       apply: () => {},
@@ -81,6 +108,10 @@ const fixtures = vi.hoisted(() => {
   }
 })
 
+vi.mock('@/lib/bot-hosts', async (importOriginal) => ({
+  ...(await importOriginal<typeof BotHostsModule>()),
+  callBotRpc: mocks.callBotRpc
+}))
 vi.mock('@/lib/browser/navigation/http-link-routing', async (importOriginal) => ({
   ...(await importOriginal<typeof HttpLinkRoutingModule>()),
   openHttpLink: mocks.openHttpLink
@@ -123,12 +154,13 @@ vi.mock('@/components/ui/popover', () => ({
 vi.mock('../native-chat/composer/NativeChatComposer', () => ({
   NativeChatComposer: forwardRef<
     NativeChatComposerHandle,
-    { structuredTransport?: { worktreeId?: string | null } }
+    { structuredTransport?: NativeChatStructuredComposerTransport }
   >(function Composer(props, ref) {
     mocks.seen.composer = {
       scope: useContext(NativeChatSessionHistoryScopeContext),
       worktreeId: props.structuredTransport?.worktreeId
     }
+    mocks.seen.transport = props.structuredTransport
     useImperativeHandle(ref, () => ({
       insertAgentReferences: () => false,
       focus: () => {
@@ -152,6 +184,7 @@ vi.mock('../native-chat/composer/NativeChatComposer', () => ({
 beforeEach(() => {
   mocks.openHttpLink.mockReset()
   mocks.openDetectedFilePath.mockReset()
+  mocks.callBotRpc.mockReset()
   mocks.typed.length = 0
   mocks.focused = 0
 })
@@ -270,5 +303,77 @@ it("right-click on an owner message or a member's reply offers Copy message, as 
   } finally {
     turns.length = 0
     vi.unstubAllGlobals()
+  }
+})
+
+it('accepts and sends image attachments for a group with members and renders sent owner images', async () => {
+  const originalMembers = fixtures.groups[0].members
+  const originalMessages = fixtures.transcript.data.messages
+  fixtures.groups[0].members = [{ botId: 'bot-a', sessionId: 'bot-group-member-a' }]
+  fixtures.transcript.data.messages = [
+    {
+      id: 'message-img',
+      author: { kind: 'owner' },
+      text: 'Look at [Image #1]',
+      images: [{ path: '/store/u1/shot.png', name: 'shot.png', bytes: 42 }],
+      createdAt: 2,
+      turns: []
+    }
+  ]
+  mocks.callBotRpc.mockResolvedValue({
+    message: {
+      id: 'sent-1',
+      groupId: 'group-1',
+      sequence: 2,
+      author: { kind: 'owner' },
+      text: '[Image #1]',
+      images: [{ path: '/store/u1/shot.png', name: 'shot.png', bytes: 42 }],
+      createdAt: 3,
+      turns: []
+    }
+  })
+  try {
+    renderRoom()
+    const transport = mocks.seen.transport
+    expect(transport?.acceptsImages).toBe(true)
+    expect(transport?.sessionId).toBe('bot-group-member-a')
+    expect(transport?.runtime).toBe('local')
+
+    await act(async () => {
+      const ok = await transport?.send('[Image #1]', [{ id: '1', path: '/store/u1/shot.png' }])
+      expect(ok).toBe(true)
+    })
+    expect(mocks.callBotRpc).toHaveBeenCalledWith(
+      fixtures.groups[0],
+      'bots.groups.send',
+      expect.objectContaining({
+        groupId: 'group-1',
+        text: '[Image #1]',
+        images: ['/store/u1/shot.png']
+      })
+    )
+    expect(screen.getByText('Look at')).toBeTruthy()
+    expect(screen.getByTitle('shot.png')).toBeTruthy()
+  } finally {
+    fixtures.groups[0].members = originalMembers
+    fixtures.transcript.data.messages = originalMessages
+  }
+})
+
+it('disables image attachments on a paired server that lacks bots.group-attachments.v1', () => {
+  const originalHostId = fixtures.groups[0].hostId
+  const originalMembers = fixtures.groups[0].members
+  fixtures.groups[0].hostId = 'runtime:env-legacy'
+  fixtures.groups[0].members = [{ botId: 'bot-a', sessionId: 'bot-group-member-a' }]
+  try {
+    renderRoom()
+    const transport = mocks.seen.transport
+    expect(transport?.runtime).toBe('remote')
+    expect(transport?.runtimeEnvironmentId).toBe('env-legacy')
+    expect(transport?.acceptsImages).toBe(false)
+    expect(transport?.sessionPending).toBe(true)
+  } finally {
+    fixtures.groups[0].hostId = originalHostId
+    fixtures.groups[0].members = originalMembers
   }
 })

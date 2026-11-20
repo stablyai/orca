@@ -1,5 +1,11 @@
 import { randomUUID } from 'node:crypto'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
+import type { AgentJournalMessageItem } from '../../shared/agent-session/journal/agent-session-journal-types'
+import { AgentSessionAttachmentStore } from '../native-chat/agent-session-attachments/agent-session-attachment-store'
+import { setAgentSessionAttachmentStore } from '../native-chat/agent-session-attachments/agent-session-attachment-store-registry'
 import { fixture, groupNativeMocks } from './bot-group-native-runtime.test-fixture'
 import { BotGroupRuntime } from './bot-group-runtime'
 import { BotGroupStore } from './bot-group-store'
@@ -328,5 +334,138 @@ describe('persistent native group lifecycle', () => {
       assertBotGroupSessionAccess(runtime, 'bot-group-member-archived', { kind: 'desktop' })
     ).toThrow(/no longer/)
     expect(() => assertBotGroupOwner({ caller: { kind: 'local-cli' } })).toThrow(/human owner/)
+  })
+  it('admits and claims group images across members, delivers image-ref blocks, and summarizes image-only posts', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'orca-bot-group-images-'))
+    const store = new AgentSessionAttachmentStore(join(dir, 'agent-session-attachments'), {
+      hasSession: () => true
+    })
+    const claims: { sessionId: string; body: AgentJournalMessageItem }[] = []
+    setAgentSessionAttachmentStore(store, async (sessionId, body) => {
+      claims.push({ sessionId, body })
+    })
+    try {
+      const { groups } = fixture()
+      const group = await groups.create({ name: 'Review', botIds: ['bot-0', 'bot-1'] })
+      const dropped = join(dir, 'shot.png')
+      await writeFile(dropped, Buffer.alloc(12))
+
+      const firstId = randomUUID()
+      const first = await groups.send(
+        {
+          groupId: group.id,
+          revision: group.revision,
+          messageId: firstId,
+          text: '[Image #1]',
+          images: [dropped]
+        },
+        { local: true }
+      )
+      expect(first.images).toHaveLength(1)
+      expect(first.images?.[0].name).toBe('shot.png')
+      expect(first.images?.[0].bytes).toBe(12)
+      expect(first.images?.[0].path.startsWith(store.rootDir)).toBe(true)
+      expect(claims.map((claim) => claim.sessionId)).toEqual(
+        group.members.map((member) => member.sessionId)
+      )
+      expect(groups.store.listing().find((item) => item.id === group.id)?.latest?.text).toBe(
+        'shot.png'
+      )
+
+      await vi.waitFor(() => expect(mocks.send).toHaveBeenCalledTimes(1))
+      const firstDelivery = mocks.send.mock.calls[0][0]
+      expect(firstDelivery.sessionId).toBe(group.members[0].sessionId)
+      expect(firstDelivery.turn.body.blocks).toEqual([
+        expect.objectContaining({ type: 'text' }),
+        { type: 'image-ref', path: first.images![0].path }
+      ])
+
+      // Replay with the same messageId and dropped image is idempotent; a different image fails.
+      await expect(
+        groups.send(
+          {
+            groupId: group.id,
+            revision: group.revision,
+            messageId: firstId,
+            text: '[Image #1]',
+            images: [dropped]
+          },
+          { local: true }
+        )
+      ).resolves.toEqual(first)
+      const uploadId = '0b6f8a52-4a3e-4c4e-9a59-1d5d1f2b8c01'
+      await mkdir(join(store.rootDir, uploadId), { recursive: true })
+      const storedFollowUp = join(store.rootDir, uploadId, 'diff.png')
+      await writeFile(storedFollowUp, Buffer.alloc(9))
+      await expect(
+        groups.send(
+          {
+            groupId: group.id,
+            revision: group.revision,
+            messageId: firstId,
+            text: '[Image #1]',
+            images: [storedFollowUp]
+          },
+          { local: true }
+        )
+      ).rejects.toThrow(/identity/)
+
+      // Follow-up post to Forge carries its own image block plus the earlier image in quoted room history.
+      await groups.send(
+        {
+          groupId: group.id,
+          revision: group.revision,
+          messageId: randomUUID(),
+          text: '[Image #1] @Forge compare this',
+          images: [storedFollowUp]
+        },
+        { local: false }
+      )
+      await vi.waitFor(() => expect(mocks.send).toHaveBeenCalledTimes(2))
+      const secondDelivery = mocks.send.mock.calls[1][0]
+      expect(secondDelivery.sessionId).toBe(group.members[1].sessionId)
+      expect(secondDelivery.turn.body.blocks).toEqual([
+        expect.objectContaining({ type: 'text' }),
+        { type: 'image-ref', path: storedFollowUp }
+      ])
+      expect(secondDelivery.turn.body.blocks[0].text).toContain(
+        JSON.stringify(first.images![0].path)
+      )
+    } finally {
+      setAgentSessionAttachmentStore(null)
+      await rm(dir, { recursive: true, force: true })
+    }
+  })
+  it('refuses non-store image paths from paired clients without claiming or delivering', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'orca-bot-group-paired-'))
+    const store = new AgentSessionAttachmentStore(join(dir, 'agent-session-attachments'), {
+      hasSession: () => true
+    })
+    const claim = vi.fn(async () => {})
+    setAgentSessionAttachmentStore(store, claim)
+    try {
+      const { groups } = fixture()
+      const group = await groups.create({ name: 'Review', botIds: ['bot-0'] })
+      const outside = join(dir, 'secret.png')
+      await writeFile(outside, Buffer.alloc(4))
+
+      await expect(
+        groups.send(
+          {
+            groupId: group.id,
+            revision: group.revision,
+            messageId: randomUUID(),
+            text: 'check',
+            images: [outside]
+          },
+          { local: false }
+        )
+      ).rejects.toThrow('Only pasted or attached images can go in a group message.')
+      expect(claim).not.toHaveBeenCalled()
+      expect(mocks.send).not.toHaveBeenCalled()
+    } finally {
+      setAgentSessionAttachmentStore(null)
+      await rm(dir, { recursive: true, force: true })
+    }
   })
 })

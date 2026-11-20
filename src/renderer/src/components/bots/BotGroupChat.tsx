@@ -1,4 +1,3 @@
-import { folderWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import { botTarget, callBotRpc } from '@/lib/bot-hosts'
 import { botGroupReplyDraft } from '../../../../shared/bots/bot-group-mentions'
 import { BotGroupTranscriptOwner, useBotGroupFileContexts } from './BotGroupTranscriptOwner'
@@ -6,7 +5,6 @@ import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
-import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/identifiers/non-secure-context-uuid'
 import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
 import { useBots } from '@/lib/bot-catalog'
@@ -14,6 +12,7 @@ import { useBotGroups } from '@/lib/bot-group-list'
 import { useBotGroupTranscript } from './use-bot-group-transcript'
 import { useBotGroupRoomRead } from './use-bot-group-room-read'
 import {
+  botGroupOwnerMessageBlocks,
   botGroupRoom,
   findBotGroupRoom,
   type BotGroupMessage,
@@ -21,6 +20,7 @@ import {
 } from '../../../../shared/bots/bot-group'
 import { NativeChatComposer } from '../native-chat/composer/NativeChatComposer'
 import { useBotGroupComposerRoom } from './use-bot-group-composer-room'
+import { useBotGroupComposerTransport } from './use-bot-group-composer-transport'
 import { useBotTranscriptFollow } from './use-bot-transcript-follow'
 import { NativeChatMentionNamesContext } from '../native-chat/native-chat-markdown-mentions'
 import { BotGroupPeerRequestLine } from './BotGroupPeerRequestLine'
@@ -39,16 +39,9 @@ import {
   readNativeChatDraftCache,
   writeNativeChatDraftCache
 } from '../native-chat/drafts/native-chat-draft-views'
-import type { NativeChatStructuredComposerTransport } from '../native-chat/composer/submit/native-chat-structured-composer-transport'
 import type { NativeChatComposerHandle } from '../native-chat/composer/native-chat-composer-types'
 
 const EMPTY_MESSAGES: BotGroupMessage[] = []
-const NO_OPTIONS: NativeChatStructuredComposerTransport['optionsSurface'] = {
-  getSnapshot: () => [],
-  subscribe: () => () => {},
-  setOption: async () => ({ snapshot: [] }),
-  invokeAction: async () => ({ snapshot: [] })
-}
 
 export function BotGroupChat({
   roomId,
@@ -77,7 +70,6 @@ export function BotGroupChat({
   const bots = useBots()
 
   const [error, setError] = useState<string | null>(null)
-  const [sending, setSending] = useState(false)
   const [sessions, setSessions] = useState<ReadonlyMap<string, BotGroupSession>>(() => new Map())
   const report = useCallback(
     (sessionId: string, session: BotGroupSession | null) =>
@@ -157,7 +149,7 @@ export function BotGroupChat({
                   {
                     id: message.id,
                     role: 'user',
-                    blocks: [{ type: 'text', text: message.text }],
+                    blocks: botGroupOwnerMessageBlocks(message),
                     timestamp: message.createdAt,
                     source: 'transcript'
                   }
@@ -238,61 +230,22 @@ export function BotGroupChat({
     [roomId, group, bots]
   )
 
-  const transport: NativeChatStructuredComposerTransport = {
-    runtime: 'local',
-    sessionId: `bot-group:${roomId}`,
-    runtimeEnvironmentId: null,
-    capturePresentation: chosen?.capturePresentation ?? (() => () => true),
-    acceptsImages: false,
-    worktreeId: group && folderWorkspaceKey(group.folderWorkspaceId),
-    optionsSurface: chosen?.optionSurface ?? NO_OPTIONS,
-    optionSnapshot: chosen?.optionSnapshot ?? [],
-    sendOut: sending,
-    send: async (text, attachments) => {
-      if (!group || sending) {
-        return false
-      }
-      if (attachments.length) {
-        setError('Group messages currently support text only.')
-        return false
-      }
-      setSending(true)
-      try {
-        const { message } = await callBotRpc<{ message: BotGroupMessage }>(
-          group,
-          'bots.groups.send',
-          {
-            groupId: group.id,
-            threadId,
-            revision: group.revision,
-            messageId: createBrowserUuid(),
-            text
-          }
-        )
-        apply({ kind: 'sent', message })
-        follow.jumpToLatest()
-        setError(null)
-        return true
-      } catch (error) {
-        setError(error instanceof Error ? error.message : String(error))
-        return false
-      } finally {
-        setSending(false)
-      }
+  const { jumpToLatest } = follow
+  const onSent = useCallback(
+    (message: BotGroupMessage) => {
+      apply({ kind: 'sent', message })
+      jumpToLatest()
     },
-    dispatchCommand: async (text) =>
-      text.startsWith('/')
-        ? {
-            handled: true,
-            accepted: false,
-            error: t(
-              'bots.groups.useEachBotSNativeSessionForCommands',
-              'Use each bot’s native session for commands.'
-            )
-          }
-        : { handled: false, accepted: false, error: null },
+    [apply, jumpToLatest]
+  )
+  const transport = useBotGroupComposerTransport({
+    roomId,
+    threadId,
+    group,
+    chosen,
+    onSent,
     onError: setError
-  }
+  })
   return (
     <NativeChatSurface surface={surface} working={working} data-bot-group={group?.id}>
       {group
@@ -348,6 +301,8 @@ export function BotGroupChat({
                       <MessageRow
                         message={ownerRows.get(message.id)!}
                         expandSignal={false}
+                        structuredAttachments
+                        runtimeContext={roomContext?.runtimeContext ?? null}
                         onScrollMessageToTop={follow.scrollMessageToTop}
                       />
                     ) : (
