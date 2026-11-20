@@ -17,6 +17,7 @@ import {
   type GitStageWorktreeScopeReceipt
 } from '../../../../shared/git/paths/git-stage-worktree-scope'
 import { findExistingWorktreeSymlinkPaths } from '../../worktrees/content-paths/worktree-symlink-detection'
+import { findContainingSubmodule, listSubmodulePaths } from '../submodules/submodule-paths'
 import { checkIgnoredPaths } from '../ignores/check-ignored-paths'
 import { redoWriteForDriveCheckoutSuspects } from '../drive-checkout/drive-checkout-suspect-writes'
 import { runWithGitWorktreeOperationLock } from '../../../../shared/git/worktrees/git-worktree-operation-lock'
@@ -150,12 +151,7 @@ export async function stageWorktreeChanges(
   try {
     const gitOptions = gitOptionsForWorktree(worktreePath, options)
     // Exclude unignored shared links from add --all; excluding an ignored path makes add exit 1.
-    const sharedLinks =
-      scope === 'all' && options.sharedLinkPaths && options.sharedLinkPaths.length > 0
-        ? await findExistingWorktreeSymlinkPaths(worktreePath, options.sharedLinkPaths, {
-            wslDistro: options.wslDistro
-          })
-        : []
+    const sharedLinks = await existingSharedLinksForStageAll(worktreePath, scope, options)
     const ignoredLinks = new Set(await checkIgnoredPaths(worktreePath, sharedLinks, options))
     const excludedUntrackedPaths = sharedLinks.filter((link) => !ignoredLinks.has(link))
     const receipt = await stageGitWorktreeScope(
@@ -169,6 +165,24 @@ export async function stageWorktreeChanges(
   } finally {
     invalidateGitReadCaches()
   }
+}
+
+// A shared link inside a submodule is never staged here, and naming it to git fails the whole call.
+async function existingSharedLinksForStageAll(
+  worktreePath: string,
+  scope: GitStageWorktreeScope,
+  options: GitRuntimeOptions & { sharedLinkPaths?: readonly string[] }
+): Promise<string[]> {
+  if (scope !== 'all' || !options.sharedLinkPaths || options.sharedLinkPaths.length === 0) {
+    return []
+  }
+  const links = await findExistingWorktreeSymlinkPaths(worktreePath, options.sharedLinkPaths, {
+    wslDistro: options.wslDistro
+  })
+  const submodulePaths = await listSubmodulePaths(worktreePath, options)
+  return submodulePaths.length === 0
+    ? links
+    : links.filter((link) => findContainingSubmodule(submodulePaths, link) === null)
 }
 
 // Use stdin to avoid argv limits and repeated index writes.
