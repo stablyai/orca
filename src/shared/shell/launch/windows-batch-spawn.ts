@@ -2,10 +2,17 @@ import { win32 } from 'node:path'
 
 /** Full path to cmd.exe for GUI and service-launched processes. */
 export function getCmdExePath(): string {
-  return (
-    process.env.ComSpec ||
-    win32.join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'cmd.exe')
-  )
+  const comSpec = process.env.ComSpec?.trim() || process.env.COMSPEC?.trim()
+  if (comSpec) {
+    return comSpec
+  }
+  const systemRoot =
+    process.env.SystemRoot?.trim() ||
+    process.env.SYSTEMROOT?.trim() ||
+    process.env.windir?.trim() ||
+    process.env.WINDIR?.trim() ||
+    'C:\\Windows'
+  return win32.join(systemRoot, 'System32', 'cmd.exe')
 }
 
 export function isWindowsBatchScript(commandPath: string): boolean {
