@@ -212,6 +212,23 @@ function DescriptionField({ face }: { face: GenerateFace }): React.JSX.Element {
   const t = useTranslate()
   const ref = useRef<HTMLTextAreaElement>(null)
   const { count, select } = face.focus
+  const foldsOnEscape = face.editing && face.result !== null
+  const { setEditing } = face
+  useEffect(() => {
+    if (!foldsOnEscape) {
+      return
+    }
+    // Esc folds the field back under the picture. Dialogs and popovers dismiss on a document
+    // capture listener, so this runs earlier, on window, and marks the key handled.
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape' && event.target === ref.current) {
+        event.preventDefault()
+        setEditing(false)
+      }
+    }
+    window.addEventListener('keydown', onKeyDown, true)
+    return () => window.removeEventListener('keydown', onKeyDown, true)
+  }, [foldsOnEscape, setEditing])
   useEffect(() => {
     const box = ref.current
     if (count === 0 || !box) {
@@ -243,12 +260,6 @@ function DescriptionField({ face }: { face: GenerateFace }): React.JSX.Element {
             if (ready) {
               face.generate()
             }
-          }
-          // Esc folds the field back under the picture, not the dialog around it.
-          if (event.key === 'Escape' && face.editing && face.result) {
-            event.preventDefault()
-            event.stopPropagation()
-            face.setEditing(false)
           }
         }}
         // Two lines at rest, growing to six, then scrolling.

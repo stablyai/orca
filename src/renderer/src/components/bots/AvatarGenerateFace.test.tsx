@@ -2,6 +2,7 @@
 
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import type {
   AvatarGenerationApi,
@@ -77,15 +78,24 @@ describe('Generate face', () => {
     expect(screen.getByRole('button', { name: 'a fox astronaut' })).toBeTruthy()
   })
 
-  it('reopens the field with the description selected from the picture, and Esc folds it', async () => {
+  it('reopens the field with the description selected, and Esc folds it without closing the dialog', async () => {
     stubAgents([CODEX], async () => ({ ok: true, agent: 'codex', image: IMAGE }))
-    render(<Face onResult={() => {}} />)
+    const onOpenChange = vi.fn()
+    render(
+      <Dialog open onOpenChange={onOpenChange}>
+        <DialogContent>
+          <DialogTitle>New</DialogTitle>
+          <Face onResult={() => {}} />
+        </DialogContent>
+      </Dialog>
+    )
     const box = await describeAndEnter('a fox astronaut')
     fireEvent.click(await screen.findByRole('button', { name: 'Edit description' }))
     expect(folded(box)).toBe(false)
     await waitFor(() => expect(box.selectionEnd - box.selectionStart).toBe(15))
     fireEvent.keyDown(box, { key: 'Escape' })
     expect(folded(box)).toBe(true)
+    expect(onOpenChange).not.toHaveBeenCalled()
   })
 
   it('reopens the field from the description line too', async () => {
