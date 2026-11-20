@@ -176,6 +176,7 @@ export function BotAppsCatalog({
           name: app.id,
           title: app.name,
           url: app.url,
+          sites: app.sites,
           logo: <BotAppBrandLogo app={app} size="lg" />
         }}
         onBack={back}
