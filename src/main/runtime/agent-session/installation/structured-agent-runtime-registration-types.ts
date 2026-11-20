@@ -119,7 +119,9 @@ export type StructuredAgentChatProgram = {
   /** Whether a new chat would run a compatible program the host already has instead. */
   hostAlternative?: (
     env: Record<string, string>,
-    settings: AcpHostBackendSettings
+    settings: AcpHostBackendSettings,
+    /** The program must also take a bot's standing instructions; personal chats need not. */
+    needsStandingInstructions?: boolean
   ) => Promise<boolean>
   /** Whether no release Orca can install runs here, so chats start only on `hostAlternative`. */
   onlyHostAlternative?: () => boolean

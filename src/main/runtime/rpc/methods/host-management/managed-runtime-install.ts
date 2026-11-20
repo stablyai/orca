@@ -77,7 +77,8 @@ function acpInstallation(agent: string, runtime: OrcaRuntimeService): ManagedRun
   }
   // New chats start on a ready host program (e.g. the user's agy) instead, so it needs no install.
   const findExternal = async (): Promise<boolean> =>
-    (await findExternalCommand()) || (await structuredAgentHostAlternativeReady(agent, runtime))
+    (await findExternalCommand()) ||
+    (await structuredAgentHostAlternativeReady(agent, runtime, true))
   const { launchGate } = spec
   const managedRuntime = spec.managedRuntime
   // Chats, starts, copies, sign-ins and children not proven gone all hold the gate's fence.
