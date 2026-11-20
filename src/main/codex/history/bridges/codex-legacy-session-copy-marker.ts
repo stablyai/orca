@@ -1,5 +1,6 @@
 import { readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { basename, dirname, join, normalize, sep } from 'node:path'
+import { z } from 'zod'
 
 export type LegacyCopiedSessionMarker = {
   sourcePath: string
@@ -19,6 +20,18 @@ export function legacySessionCopyMarkerPath(managedHome: string, relativePath: s
   return join(managedHome, '.orca-session-copies', `${relativePath}.json`)
 }
 
+// Optional fields fall back to absent, so a marker an older build wrote stays readable.
+const markerSchema = z.object({
+  sourcePath: z.string(),
+  sourceSize: z.number(),
+  sourceMtimeMs: z.number(),
+  targetSize: z.number(),
+  targetMtimeMs: z.number(),
+  kept: z.literal(true).optional().catch(undefined),
+  verified: z.string().optional().catch(undefined),
+  aside: z.string().optional().catch(undefined)
+})
+
 export function parseLegacyCopiedSessionMarker(text: string): LegacyCopiedSessionMarker | null {
   let fields: unknown
   try {
@@ -26,39 +39,16 @@ export function parseLegacyCopiedSessionMarker(text: string): LegacyCopiedSessio
   } catch {
     return null
   }
-  if (!fields || typeof fields !== 'object' || Array.isArray(fields)) {
+  const parsed = markerSchema.safeParse(fields)
+  if (!parsed.success) {
     return null
   }
-  const field = (key: keyof LegacyCopiedSessionMarker): unknown => Reflect.get(fields, key)
-  const [sourcePath, sourceSize, sourceMtimeMs, targetSize, targetMtimeMs, kept, verified, aside] =
-    [
-      field('sourcePath'),
-      field('sourceSize'),
-      field('sourceMtimeMs'),
-      field('targetSize'),
-      field('targetMtimeMs'),
-      field('kept'),
-      field('verified'),
-      field('aside')
-    ]
-  if (
-    typeof sourcePath !== 'string' ||
-    typeof sourceSize !== 'number' ||
-    typeof sourceMtimeMs !== 'number' ||
-    typeof targetSize !== 'number' ||
-    typeof targetMtimeMs !== 'number'
-  ) {
-    return null
-  }
+  const { kept, verified, aside, ...marker } = parsed.data
   return {
-    sourcePath,
-    sourceSize,
-    sourceMtimeMs,
-    targetSize,
-    targetMtimeMs,
-    ...(kept === true ? { kept } : {}),
-    ...(typeof verified === 'string' ? { verified } : {}),
-    ...(typeof aside === 'string' ? { aside } : {})
+    ...marker,
+    ...(kept ? { kept } : {}),
+    ...(verified !== undefined ? { verified } : {}),
+    ...(aside !== undefined ? { aside } : {})
   }
 }
 

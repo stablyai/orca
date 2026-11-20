@@ -11,22 +11,18 @@ vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof NodeFsPromises>()
   return {
     ...actual,
-    lstat: new Proxy(actual.lstat, {
-      apply(target, thisArg, args: unknown[]) {
-        if (String(args[0]).endsWith('.jsonl')) {
-          markerReads.transcriptStats += 1
-        }
-        return Reflect.apply(target, thisArg, args)
+    lstat: (...args: Parameters<typeof actual.lstat>) => {
+      if (String(args[0]).endsWith('.jsonl')) {
+        markerReads.transcriptStats += 1
       }
-    }),
-    readFile: new Proxy(actual.readFile, {
-      apply(target, thisArg, args: unknown[]) {
-        if (String(args[0]).includes('.orca-session-copies')) {
-          markerReads.count += 1
-        }
-        return Reflect.apply(target, thisArg, args)
+      return actual.lstat(...args)
+    },
+    readFile: (...args: Parameters<typeof actual.readFile>) => {
+      if (String(args[0]).includes('.orca-session-copies')) {
+        markerReads.count += 1
       }
-    })
+      return actual.readFile(...args)
+    }
   }
 })
 
