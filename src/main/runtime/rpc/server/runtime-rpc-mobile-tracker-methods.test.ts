@@ -15,8 +15,8 @@ describe('phone tracker routing', () => {
   })
 
   it('still answers other tracker calls, status included, on this desktop when the relay is not ready', async () => {
-    expect(
-      await withDefaultScopeServer({ method: 'linear.listIssues' }, runtime, notReady)
-    ).toEqual({ method: 'linear.listIssues' })
+    for (const method of ['linear.listIssues', 'linear.status']) {
+      expect(await withDefaultScopeServer({ method }, runtime, notReady)).toEqual({ method })
+    }
   })
 })

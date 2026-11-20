@@ -35,12 +35,9 @@ export const DEFAULT_SCOPE_HOST_METHODS = [
   'linear.updateIssue'
 ] as const
 
-/** Calls that store the phone's tracker account: they must not move hosts when the relay flips. */
-const ACCOUNT_SETUP_METHODS: readonly string[] = [
-  'linear.connect',
-  'linear.status',
-  'linear.selectWorkspace'
-]
+/** Untagged calls (older phones) that store the tracker account: they must not move hosts when the relay flips.
+ *  Newer phones tag these with the host they bound when setup started. */
+const ACCOUNT_SETUP_METHODS: readonly string[] = ['linear.connect', 'linear.selectWorkspace']
 
 // Structural, not RpcRequest: the CLI typecheck reaches this file, and core.ts would pull in all of main.
 type TrackerCall = { method: string; executionHost?: unknown }
