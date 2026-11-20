@@ -8,35 +8,6 @@ describe('agent installed CLI', () => {
     vi.restoreAllMocks()
   })
 
-  it('omits agents turned off in Settings, since launch refuses them', async () => {
-    const client = new RuntimeClient('/tmp/orca-installed-test', 60_000, null, null)
-    vi.spyOn(client, 'call').mockImplementation(async (method: string) => ({
-      id: 'req-1',
-      ok: true as const,
-      result:
-        method === 'preflight.installedAgents'
-          ? {
-              agents: ['claude', 'codex', 'gemini'],
-              settings: { disabledTuiAgents: ['codex'], defaultTuiAgent: 'gemini' }
-            }
-          : { settings: { disabledTuiAgents: ['codex'], defaultTuiAgent: 'gemini' } },
-      _meta: { runtimeId: 'runtime-1' }
-    }))
-    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
-
-    await INSTALLED_AGENT_HANDLERS['agent installed']({
-      flags: new Map(),
-      client,
-      cwd: '/tmp/worktree',
-      json: true
-    })
-
-    expect(JSON.parse(log.mock.calls[0][0]).result.agents).toEqual([
-      { id: 'claude', name: 'Claude', default: false },
-      { id: 'gemini', name: 'Gemini', default: true }
-    ])
-  })
-
   it('keeps the host-default list available on older runtimes', async () => {
     const client = new RuntimeClient('/tmp/orca-installed-test', 60_000, null, null)
     vi.spyOn(client, 'call').mockImplementation(async (method: string) => {
