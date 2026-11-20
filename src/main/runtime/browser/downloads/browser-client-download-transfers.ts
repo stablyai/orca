@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import {
   BROWSER_CLIENT_FILE_CHANNEL_MAX_ACTIVE_DOWNLOADS,
   BROWSER_CLIENT_FILE_CHANNEL_TRANSFER_MAX_BYTES,
@@ -15,8 +16,8 @@ export const BROWSER_CLIENT_DOWNLOAD_WORKSPACE_DIRECTORY = '.orca/browser-downlo
 
 type TransferMutation = { workspaceId: string; expectation: RuntimeFileMutationExpectation }
 export type BrowserClientDownloadTransferDependencies = {
-  /** Pins the workspace's current host and creates the directory there. */
-  prepareDirectory(workspaceId: string, directory: string): Promise<RuntimeFileMutationExpectation>
+  /** Pins the workspace's current host for the whole transfer; chunk writes create the download folder. */
+  pinWorkspaceHost(workspaceId: string): Promise<RuntimeFileMutationExpectation>
   writeChunk(
     input: TransferMutation & { relativePath: string; contentBase64: string; append: boolean }
   ): Promise<void>
@@ -168,10 +169,7 @@ export class BrowserClientDownloadTransferStore {
     let expectation = session.pinnedExpectation
     try {
       if (!expectation) {
-        expectation = await this.dependencies.prepareDirectory(
-          session.workspaceId,
-          BROWSER_CLIENT_DOWNLOAD_WORKSPACE_DIRECTORY
-        )
+        expectation = await this.dependencies.pinWorkspaceHost(session.workspaceId)
         session.pinnedExpectation = expectation
         this.assertLive(session)
       }
@@ -236,7 +234,8 @@ export class BrowserClientDownloadTransferStore {
       browserPageId: input.browserPageId,
       pageHostGeneration: input.pageHostGeneration,
       workspaceId: input.workspaceId,
-      tempRelativePath: `${BROWSER_CLIENT_DOWNLOAD_WORKSPACE_DIRECTORY}/.incoming-${input.transferId}`,
+      // The client's id must not name files in a reused folder.
+      tempRelativePath: `${BROWSER_CLIENT_DOWNLOAD_WORKSPACE_DIRECTORY}/.incoming-${randomUUID()}`,
       pinnedExpectation: null,
       bytesWritten: 0,
       canceled: false,
