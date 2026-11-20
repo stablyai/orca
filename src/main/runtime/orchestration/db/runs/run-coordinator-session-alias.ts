@@ -75,23 +75,55 @@ export function staleChatCoordinatorAliasSql(aliasRow: string): string {
 }
 
 /**
- * Index structured worker incarnations on `dispatch_contexts` and stamp pre-upgrade session aliases
- * before pruning stale chat rows. A worker who lost a Run before upgrade is proven by any active
- * Run it still coordinates, its creation Dispatch/resource row, or a message it sent in that Run
- * under its `structworker_*` handle and session pane key; the stamp keeps that alias after
- * settled-run retirement deletes those rows. A chat that shares `first_bound_at` with the worker
- * handle has none of those proofs. (If a worker's origin Run was already retired pre-upgrade —
- * which only happens once that worker is no longer live — and no other Run or message references
- * it, the 3-column pre-upgrade table holds no link between the handle and session rows.)
+ * Proof that the `structworker_*` handle this Run remembers belongs to the session being stamped.
+ * `proofSql` is correlated on `remembered_worker`.
  */
-export function installCoordinatorSessionAliasIndexes(db: Database.Database): void {
+function rememberedStructuredWorkerProofSql(proofSql: string): string {
+  return `EXISTS (
+    SELECT 1 FROM run_coordinator_handles AS remembered_worker
+    WHERE remembered_worker.run_id = run_coordinator_handles.run_id
+      AND remembered_worker.terminal_handle GLOB ${STRUCTURED_WORKER_HANDLE_GLOB_SQL}
+      AND (${proofSql})
+  )`
+}
+
+/** A removed dispatch's JSON pairs one handle column with that worker's session id. */
+function removedDispatchPairSql(
+  handleKey: 'assigneeHandle' | 'creatorHandle',
+  sessionKey: 'assigneeOrcaSessionId' | 'creatorOrcaSessionId',
+  sessionIdSql: string
+): string {
+  // Unary `+` strips TEXT column affinity from `remembered_worker.terminal_handle` so SQLite
+  // matches both keys of the no-affinity `json_extract(...)` expression index instead of scanning.
+  return `EXISTS (
+    SELECT 1 FROM removed_orchestration_work
+    WHERE kind = 'dispatch'
+      AND json_extract(record, '$.${handleKey}') = +remembered_worker.terminal_handle
+      AND json_extract(record, '$.${sessionKey}') = ${sessionIdSql}
+  )`
+}
+
+/** Backfill statement stamping pre-upgrade structured-worker session aliases from surviving proofs. */
+export function coordinatorSessionAliasBackfillSql(): string {
   const sessionId = orcaSessionIdOfAddressSql('run_coordinator_handles.terminal_handle')
-  const panePrefix = `'${STRUCTURED_SESSION_TAB_PREFIX}' || ${sessionId} || ':*'`
-  db.exec(`
-    CREATE INDEX IF NOT EXISTS idx_dispatch_structured_process_incarnation
-      ON dispatch_contexts(process_incarnation)
-      WHERE process_incarnation GLOB ${INCARNATION_GLOB};
-    UPDATE run_coordinator_handles
+  const panePrefix = `'${STRUCTURED_SESSION_TAB_PREFIX}' || ${sessionId} || ':'`
+  const incarnation = `'${STRUCTURED_WORKER_INCARNATION_PREFIX}' || ${sessionId}`
+  const survivingProof = rememberedStructuredWorkerProofSql(`
+    EXISTS (
+      SELECT 1 FROM messages
+      WHERE messages.from_handle = remembered_worker.terminal_handle
+        AND messages.from_handle GLOB ${STRUCTURED_WORKER_HANDLE_GLOB_SQL}
+        AND messages.sender_pane_key IS NOT NULL
+        AND substr(messages.sender_pane_key, 1, length(${panePrefix})) = ${panePrefix}
+    ) OR EXISTS (
+      SELECT 1 FROM tasks
+      WHERE tasks.created_by_terminal_handle = remembered_worker.terminal_handle
+        AND tasks.created_by_terminal_handle GLOB ${STRUCTURED_WORKER_HANDLE_GLOB_SQL}
+        AND tasks.created_by_process_incarnation = ${incarnation}
+        AND tasks.created_by_process_incarnation GLOB ${INCARNATION_GLOB}
+    ) OR ${removedDispatchPairSql('assigneeHandle', 'assigneeOrcaSessionId', sessionId)}
+      OR ${removedDispatchPairSql('creatorHandle', 'creatorOrcaSessionId', sessionId)}`)
+  return `UPDATE run_coordinator_handles
     SET is_structured_worker = 1
     WHERE is_structured_worker = 0
       AND terminal_handle GLOB ${SESSION_ADDRESS_GLOB}
@@ -104,13 +136,55 @@ export function installCoordinatorSessionAliasIndexes(db: Database.Database): vo
             AND ${currentRunCoordinatorSessionAddressSql('runs')} = run_coordinator_handles.terminal_handle
         )
         OR ${structuredWorkerEvidenceSql('run_coordinator_handles.terminal_handle')}
-        OR EXISTS (
-          SELECT 1 FROM messages
-          WHERE messages.run_id = run_coordinator_handles.run_id
-            AND messages.from_handle GLOB ${STRUCTURED_WORKER_HANDLE_GLOB_SQL}
-            AND messages.sender_pane_key GLOB ${panePrefix}
-        )
-      );
+        OR ${survivingProof}
+      )`
+}
+
+/**
+ * Index proofs and stamp pre-upgrade session aliases before pruning stale chat rows. A worker who
+ * lost a Run before upgrade is proven by any active Run it still coordinates, its creation Dispatch
+ * or resource row, or any message — a heartbeat included — sent under its `structworker_*` handle
+ * with a pane key prefixed by `structured-agent-session-<id>:`. That message may sit on another Run.
+ * The handle still has to be one this Run remembers, so the pane key identifies the session and the
+ * handle identifies which Run it coordinated. The prefix compare is literal, so a session id cannot
+ * act as a GLOB wildcard. `idx_messages_crew_from` omits heartbeats, so worker sends use
+ * `idx_messages_structured_worker_sender_pane`.
+ *
+ * A surviving task pairs `created_by_terminal_handle` with `created_by_process_incarnation`. A
+ * removed dispatch record pairs `assigneeHandle`/`assigneeOrcaSessionId` or
+ * `creatorHandle`/`creatorOrcaSessionId`. `createTables` creates both tables, and migrate has added
+ * the task columns, before this runs. Deliveries, mail sends, and pointer rows name a session id for
+ * chats and workers alike, so they cannot mark one as a worker. Once every proof is gone, the
+ * 3-column alias table cannot finish the link: `first_bound_at` is whole seconds, and a stale chat
+ * can share that second with the worker handle. Guessing would keep the chat alias (#45666), so a
+ * takeover with no surviving proof is pruned.
+ */
+export function installCoordinatorSessionAliasIndexes(db: Database.Database): void {
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_dispatch_structured_process_incarnation
+      ON dispatch_contexts(process_incarnation)
+      WHERE process_incarnation GLOB ${INCARNATION_GLOB};
+    CREATE INDEX IF NOT EXISTS idx_messages_structured_worker_sender_pane
+      ON messages(from_handle, sender_pane_key)
+      WHERE from_handle GLOB ${STRUCTURED_WORKER_HANDLE_GLOB_SQL}
+        AND sender_pane_key IS NOT NULL;
+    CREATE INDEX IF NOT EXISTS idx_tasks_structured_worker_creator
+      ON tasks(created_by_terminal_handle, created_by_process_incarnation)
+      WHERE created_by_terminal_handle GLOB ${STRUCTURED_WORKER_HANDLE_GLOB_SQL}
+        AND created_by_process_incarnation GLOB ${INCARNATION_GLOB};
+    CREATE INDEX IF NOT EXISTS idx_removed_dispatch_assignee_session
+      ON removed_orchestration_work(
+        json_extract(record, '$.assigneeHandle'),
+        json_extract(record, '$.assigneeOrcaSessionId')
+      )
+      WHERE kind = 'dispatch';
+    CREATE INDEX IF NOT EXISTS idx_removed_dispatch_creator_session
+      ON removed_orchestration_work(
+        json_extract(record, '$.creatorHandle'),
+        json_extract(record, '$.creatorOrcaSessionId')
+      )
+      WHERE kind = 'dispatch';
+    ${coordinatorSessionAliasBackfillSql()};
   `)
 }
 
