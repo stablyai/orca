@@ -88,20 +88,33 @@ export async function syncSystemCodexSessionsIntoManagedHomeIncrementally(
     summary.scannedFiles += 1
     const relativePath = relative(systemSessionsRoot, systemSessionFilePath)
     const managedSessionFilePath = join(managedSessionsRoot, relativePath)
-    let bridged = bridgeSystemCodexSessionFile(
-      systemSessionFilePath,
-      managedSessionFilePath,
-      relativePath,
-      hasLegacyCopies ? legacySessionCopyMarkerPath(managedHome, relativePath) : undefined
-    )
-    if (bridged === 'moved-aside') {
-      await settleLegacySessionCopyName({ managedHome, relativePath })
+    let bridged: boolean | 'existing' | 'missing'
+    let mayBeMovedAside = hasLegacyCopies
+    do {
       bridged = bridgeSystemCodexSessionFile(
         systemSessionFilePath,
         managedSessionFilePath,
-        relativePath
+        relativePath,
+        mayBeMovedAside
       )
-    }
+      if (bridged === 'missing') {
+        mayBeMovedAside = false
+        const restored = await settleLegacySessionCopyName({ managedHome, relativePath }).then(
+          () => true,
+          (error: unknown) => {
+            console.warn(
+              '[codex-session-bridge] Could not restore a legacy copy moved aside:',
+              error
+            )
+            return false
+          }
+        )
+        // Left for a later pass rather than linking the source over a copy that may be aside.
+        if (!restored) {
+          bridged = false
+        }
+      }
+    } while (bridged === 'missing')
     if (bridged === 'existing') {
       if (hasLegacyCopies && existsSync(legacySessionCopyMarkerPath(managedHome, relativePath))) {
         // Past the read budget a copy waits for a later pass; only its marker is hidden from older builds.
@@ -127,8 +140,8 @@ function bridgeSystemCodexSessionFile(
   systemSessionFilePath: string,
   managedSessionFilePath: string,
   relativePath: string,
-  movedAsideMarkerPath?: string
-): boolean | 'existing' | 'moved-aside' {
+  mayBeMovedAside = false
+): boolean | 'existing' | 'missing' {
   if (existsSync(managedSessionFilePath)) {
     return (
       replaceSymlinkSessionBridgeWithHardlink(
@@ -138,9 +151,9 @@ function bridgeSystemCodexSessionFile(
       ) || 'existing'
     )
   }
-  // A swap stopped with the copy moved aside: linking the source here would hide the copy's bytes.
-  if (movedAsideMarkerPath && existsSync(movedAsideMarkerPath)) {
-    return 'moved-aside'
+  // A swap may have stopped with the copy moved aside: linking the source here would hide its bytes.
+  if (mayBeMovedAside) {
+    return 'missing'
   }
   mkdirSync(dirname(managedSessionFilePath), { recursive: true })
   return linkSystemCodexSessionFile(systemSessionFilePath, managedSessionFilePath, relativePath)
