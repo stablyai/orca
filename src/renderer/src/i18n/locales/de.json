@@ -1195,6 +1195,31 @@
         "notLoaded": "Kein Agent lädt ihn"
       }
     },
+    "customRelay": {
+      "title": "Eigener Relay-Server",
+      "description": "Wählen Sie die Cloud-Authentifizierungs- und Relay-Server für diesen Desktop. Melden Sie sich nach einer Änderung erneut an.",
+      "enabled": "Eigenen Server verwenden",
+      "authUrl": "URL des Authentifizierungsservers",
+      "clientId": "Client-ID",
+      "relayUrl": "URL des Relay-Directors",
+      "validation": "Verwenden Sie HTTPS-URLs und eine nicht leere Client-ID. Die Relay-URL muss ein Ursprung ohne Pfad sein. URLs dürfen keine Zugangsdaten, Abfragen oder Fragmente enthalten. HTTP ist nur für localhost, 127.0.0.1 oder [::1] in nicht paketierten Builds zulässig.",
+      "environment": "Umgebungsvariablen haben Vorrang vor gespeicherten Einstellungen. Der Verbindungstest prüft die hier eingegebenen URLs.",
+      "testing": "Verbindung wird geprüft…",
+      "test": "Verbindung testen",
+      "apply": "Änderungen anwenden",
+      "reset": "Auf Standard zurücksetzen",
+      "authSuccess": "Authentifizierungsserver: verbunden",
+      "authFailure": "Authentifizierungsserver: Verbindung fehlgeschlagen",
+      "relaySuccess": "Relay-Director: verbunden",
+      "relayFailure": "Relay-Director: Verbindung fehlgeschlagen",
+      "invalid": "Geben Sie gültige Server-URLs und eine Client-ID ein.",
+      "error": "Die Anfrage konnte nicht abgeschlossen werden. Prüfen Sie die Servereinstellungen und versuchen Sie es erneut.",
+      "confirmTitle": "Cloud-Server wechseln?",
+      "confirmDescription": "Sie werden abgemeldet und bestehende mobile Relay-Kopplungen werden getrennt. Koppeln Sie die Geräte nach der Anmeldung am gewählten Server erneut. Rein lokale Kopplungen bleiben erhalten.",
+      "cancel": "Abbrechen",
+      "saving": "Server werden gewechselt…",
+      "confirm": "Server wechseln"
+    },
     "automaticUpdates": {
       "title": "Automatische Updates",
       "description": "Bei unterstützten Desktop-Installationen lädt Orca verfügbare Updates bei der regulären Prüfung herunter und startet zur Installation automatisch neu.",

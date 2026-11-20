@@ -8,6 +8,7 @@ import {
 } from '../../../../shared/secure-storage/secure-file'
 
 export type RelayDeviceBinding = {
+  relayDirectorUrl?: string
   relayHostId: string
   relayDeviceId: string
   ownerIdentityKey: string
@@ -27,6 +28,7 @@ function isItem(value: unknown): value is RelayRevokeOutboxItem {
   }
   const item = value as Partial<RelayRevokeOutboxItem>
   return (
+    (item.relayDirectorUrl === undefined || typeof item.relayDirectorUrl === 'string') &&
     typeof item.reqId === 'string' &&
     typeof item.relayHostId === 'string' &&
     typeof item.relayDeviceId === 'string' &&
@@ -52,6 +54,7 @@ export class RelayRevokeOutbox {
   enqueue(binding: RelayDeviceBinding): RelayRevokeOutboxItem {
     const existing = this.items.find(
       (item) =>
+        item.relayDirectorUrl === binding.relayDirectorUrl &&
         item.relayHostId === binding.relayHostId &&
         item.relayDeviceId === binding.relayDeviceId &&
         item.ownerIdentityKey === binding.ownerIdentityKey
@@ -66,9 +69,28 @@ export class RelayRevokeOutbox {
     return item
   }
 
-  pendingFor(ownerIdentityKey: string, relayHostId: string): readonly RelayRevokeOutboxItem[] {
+  hasUnscopedBindings(): boolean {
+    return this.outboxUnreadable || this.items.some((item) => !item.relayDirectorUrl)
+  }
+
+  bindUnscopedTo(relayDirectorUrl: string): void {
+    const next = this.items.map((item) =>
+      item.relayDirectorUrl ? item : { ...item, relayDirectorUrl }
+    )
+    this.save(next)
+    this.items = next
+  }
+
+  pendingFor(
+    ownerIdentityKey: string,
+    relayHostId: string,
+    relayDirectorUrl?: string
+  ): readonly RelayRevokeOutboxItem[] {
     return this.items.filter(
-      (item) => item.ownerIdentityKey === ownerIdentityKey && item.relayHostId === relayHostId
+      (item) =>
+        item.ownerIdentityKey === ownerIdentityKey &&
+        item.relayHostId === relayHostId &&
+        (!relayDirectorUrl || !item.relayDirectorUrl || item.relayDirectorUrl === relayDirectorUrl)
     )
   }
 

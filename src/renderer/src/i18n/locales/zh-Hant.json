@@ -1137,6 +1137,31 @@
     "sharedLinks": {
       "keywordBots": "機器人"
     },
+    "customRelay": {
+      "title": "自訂中繼伺服器",
+      "description": "選擇此桌面端使用的雲端驗證和中繼伺服器。套用變更後請登入。",
+      "enabled": "使用自訂伺服器",
+      "authUrl": "驗證伺服器 URL",
+      "clientId": "用戶端 ID",
+      "relayUrl": "中繼調度器 URL",
+      "validation": "請使用 HTTPS URL 和非空的用戶端 ID。中繼 URL 必須是不含路徑的來源。URL 不可包含憑證、查詢或片段。僅在未封裝的組建中允許對 localhost、127.0.0.1 或 [::1] 使用 HTTP。",
+      "environment": "環境變數優先於已儲存的設定。連線測試會檢查此處輸入的 URL。",
+      "testing": "正在測試連線…",
+      "test": "測試連線",
+      "apply": "套用變更",
+      "reset": "還原預設值",
+      "authSuccess": "驗證伺服器：已連線",
+      "authFailure": "驗證伺服器：連線失敗",
+      "relaySuccess": "中繼調度器：已連線",
+      "relayFailure": "中繼調度器：連線失敗",
+      "invalid": "請輸入有效的伺服器 URL 和用戶端 ID。",
+      "error": "無法完成要求。請檢查伺服器設定後再試。",
+      "confirmTitle": "切換雲端伺服器？",
+      "confirmDescription": "這將登出並中斷現有的行動端中繼配對。登入所選伺服器後，請重新配對這些裝置。僅本機配對將予以保留。",
+      "cancel": "取消",
+      "saving": "正在切換伺服器…",
+      "confirm": "切換伺服器"
+    },
     "voice": {
       "cleanup": {
         "recipeDescription": "在輸入前整理聽寫文字。"

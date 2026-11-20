@@ -84,10 +84,25 @@ export const getMobileSidebarShortcutSearchEntry = createLocalizedCatalog(
   })
 )
 
+export const getCustomRelayServerSearchEntry = createLocalizedCatalog((): SettingsSearchEntry => ({
+  title: translate('settings.customRelay.title', 'Custom relay server'),
+  description: translate(
+    'settings.customRelay.description',
+    'Choose the cloud auth and relay servers used by this desktop. Sign in after applying a change.'
+  ),
+  keywords: [
+    ...(getMobileOverviewSearchEntry().keywords ?? []),
+    translate('settings.customRelay.authUrl', 'Auth server URL'),
+    translate('settings.customRelay.clientId', 'Client ID'),
+    translate('settings.customRelay.relayUrl', 'Relay director URL')
+  ]
+}))
+
 export const getMobileSettingsPaneSearchEntries = createLocalizedCatalog(
   (): SettingsSearchEntry[] => [
     getMobileOverviewSearchEntry(),
     getMobileSidebarShortcutSearchEntry(),
+    getCustomRelayServerSearchEntry(),
     ...getMobilePaneSearchEntries()
   ]
 )

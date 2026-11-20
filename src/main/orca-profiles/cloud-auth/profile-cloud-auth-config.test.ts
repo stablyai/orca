@@ -11,6 +11,7 @@ import {
 const DEV_OVERRIDES = {
   ORCA_CLOUD_API_URL: 'http://127.0.0.1:8787',
   ORCA_CLOUD_CLIENT_ID: 'local-client',
+  ORCA_RELAY_URL: 'http://127.0.0.1:9000',
   ORCA_CLOUD_DEV_AUTH: '1',
   ORCA_CLOUD_ALLOW_PLAINTEXT_SESSION: '1'
 }
@@ -56,4 +57,88 @@ describe('Orca cloud auth config read from the installed app environment', () =>
     expect(isOrcaCloudDevAuthEnabled(DEV_OVERRIDES)).toBe(true)
     expect(getOrcaCloudAuthConfig({})).toMatchObject({ configured: false })
   })
+})
+
+it('resolves environment overrides before the enabled saved server and production defaults', () => {
+  const saved = {
+    enabled: true,
+    authServerUrl: 'https://auth.example.test',
+    clientId: 'self-hosted',
+    relayDirectorUrl: 'https://relay.example.test'
+  }
+  expect(getOrcaCloudAuthConfig({}, true, saved)).toMatchObject({
+    configured: true,
+    config: {
+      apiBaseUrl: 'https://auth.example.test',
+      clientId: 'self-hosted',
+      relayDirectorUrl: 'https://relay.example.test'
+    }
+  })
+  expect(
+    getOrcaCloudAuthConfig(
+      {
+        ORCA_CLOUD_API_URL: 'https://env.example.test',
+        ORCA_CLOUD_CLIENT_ID: 'environment',
+        ORCA_RELAY_URL: 'https://env-relay.example.test'
+      },
+      true,
+      saved
+    )
+  ).toMatchObject({
+    configured: true,
+    config: {
+      apiBaseUrl: 'https://env.example.test',
+      clientId: 'environment',
+      relayDirectorUrl: 'https://env-relay.example.test'
+    }
+  })
+  expect(getOrcaCloudAuthConfig({}, true, { ...saved, enabled: false })).toMatchObject({
+    configured: true,
+    config: {
+      apiBaseUrl: 'https://login.onorca.dev',
+      clientId: 'orca-desktop',
+      relayDirectorUrl: 'https://relay.onorca.dev'
+    }
+  })
+})
+
+it('requires a complete environment server triple and never fills missing fields from saved settings', () => {
+  const saved = {
+    enabled: true,
+    authServerUrl: 'https://custom-auth.example.test',
+    clientId: 'custom-client',
+    relayDirectorUrl: 'https://custom-relay.example.test'
+  }
+  expect(
+    getOrcaCloudAuthConfig({ ORCA_RELAY_URL: 'https://relay.onorca.dev' }, true, saved)
+  ).toMatchObject({ configured: false })
+  expect(
+    getOrcaCloudAuthConfig({ ORCA_CLOUD_API_URL: 'https://env-auth.example.test' }, false, saved)
+  ).toMatchObject({ configured: false })
+  expect(
+    getOrcaCloudAuthConfig(
+      { ORCA_CLOUD_API_URL: 'https://env-auth.example.test', ORCA_CLOUD_CLIENT_ID: 'env-client' },
+      true,
+      saved
+    )
+  ).toMatchObject({ configured: false })
+  expect(
+    getOrcaCloudAuthConfig(
+      {
+        ORCA_CLOUD_API_URL: 'https://env-auth.example.test',
+        ORCA_CLOUD_CLIENT_ID: 'env-client',
+        ORCA_RELAY_URL: 'https://env-relay.example.test'
+      },
+      false,
+      saved
+    )
+  ).toMatchObject({
+    configured: true,
+    config: {
+      apiBaseUrl: 'https://env-auth.example.test',
+      clientId: 'env-client',
+      relayDirectorUrl: 'https://env-relay.example.test'
+    }
+  })
+  expect(getOrcaCloudAuthConfig({}, false, undefined)).toMatchObject({ configured: false })
 })

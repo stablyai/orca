@@ -1,3 +1,4 @@
+import { DEFAULT_CLOUD_SERVER } from '../../../../../shared/settings/custom-cloud-server'
 import type { PreloadApi } from '../../../../../preload/api-types'
 import {
   DEFAULT_LOCAL_ORCA_PROFILE_ID,
@@ -16,6 +17,17 @@ export function createWebOrcaProfilesApi(): Partial<PreloadApi> {
     })
   return {
     orcaProfiles: {
+      cloudServerSettings: async () => ({
+        settings: DEFAULT_CLOUD_SERVER,
+        allowLoopbackHttp: false,
+        environmentOverrides: false
+      }),
+      testCloudServer: async () => {
+        throw new Error('desktop_only')
+      },
+      switchCloudServer: async () => {
+        throw new Error('desktop_only')
+      },
       list: () =>
         Promise.resolve({
           activeProfileId: DEFAULT_LOCAL_ORCA_PROFILE_ID,
