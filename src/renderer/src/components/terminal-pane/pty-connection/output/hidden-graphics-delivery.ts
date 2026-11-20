@@ -4,12 +4,13 @@ import { useAppStore } from '@/store/index'
 import { resolveTerminalInlineImagesEnabled } from '../../../../../../shared/terminal/images/terminal-inline-images-settings'
 import type { RendererPtyVisibilityClaimOwner } from '../../pty-transport/delivery/pty-renderer-delivery-claims'
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
+import { shouldWritePtyOutputForeground } from './foreground-output-visibility'
 
 const MAX_HIDDEN_GRAPHICS_RETAINERS = 2
 const hiddenGraphicsRetainers = new Set<RendererPtyVisibilityClaimOwner>()
 const deliveryByOwner = new WeakMap<
   RendererPtyVisibilityClaimOwner,
-  { ptyId: string; hidden: boolean; retain: boolean }
+  { ptyId: string; hidden: boolean; retain: boolean; gap?: true }
 >()
 
 export function syncHiddenGraphicsDelivery(
@@ -17,7 +18,8 @@ export function syncHiddenGraphicsDelivery(
   terminal: Terminal,
   ptyId: string | null,
   hidden: boolean,
-  canRetain: boolean
+  canRetain: boolean,
+  restoring = false
 ): boolean {
   if (ptyId === null) {
     hiddenGraphicsRetainers.delete(owner)
@@ -35,17 +37,20 @@ export function syncHiddenGraphicsDelivery(
   }
   hiddenGraphicsRetainers.delete(owner)
   // Keep the previous decision through reveal while hidden-tagged output is still in flight.
+  // Pending Kitty decode and uploads without placed tiles are outside this storage check.
   const retain =
     canRetain &&
     (hidden
-      ? (!previous || previous.ptyId === ptyId) &&
+      ? !restoring &&
+        (!previous || previous.ptyId === ptyId) &&
         hiddenGraphicsRetainers.size < MAX_HIDDEN_GRAPHICS_RETAINERS &&
         terminalHasStoredInlineImages(terminal)
       : retainsHiddenGraphics(owner, ptyId))
   if (hidden && retain) {
     hiddenGraphicsRetainers.add(owner)
   }
-  deliveryByOwner.set(owner, { ptyId, hidden, retain })
+  const gap = (!hidden || restoring) && previous?.ptyId === ptyId ? previous.gap : undefined
+  deliveryByOwner.set(owner, { ptyId, hidden, retain, gap })
   return hidden && retain
 }
 
@@ -55,6 +60,14 @@ export function retainsHiddenGraphics(
 ): boolean {
   const delivery = deliveryByOwner.get(owner)
   return delivery?.ptyId === ptyId && delivery.retain
+}
+
+export function hasHiddenGraphicsOutputGap(
+  owner: RendererPtyVisibilityClaimOwner,
+  ptyId: string | null
+): boolean {
+  const delivery = deliveryByOwner.get(owner)
+  return delivery?.ptyId === ptyId && delivery.gap === true
 }
 
 export function bindHiddenGraphicsDelivery(session: ConnectPanePtySession): {
@@ -69,16 +82,43 @@ export function bindHiddenGraphicsDelivery(session: ConnectPanePtySession): {
   let unsubscribe: (() => void) | undefined
   const terminal = session.pane.terminal
   const owner = session.transport
+  session.revokeHiddenGraphicsAfterGap = (ptyId: string): boolean => {
+    const delivery = deliveryByOwner.get(owner)
+    if (
+      delivery?.ptyId !== ptyId ||
+      !delivery.hidden ||
+      !delivery.retain ||
+      shouldWritePtyOutputForeground(session.deps.isVisibleRef.current)
+    ) {
+      return false
+    }
+    delivery.gap = true
+    delivery.retain = false
+    hiddenGraphicsRetainers.delete(owner)
+    session.skippedQueryCarry = null
+    session.syncHiddenRendererPtyDelivery(ptyId === session.legacyRelayBridgePtyId)
+    return true
+  }
   return {
     sync(ptyId, hidden, usesTransportGate, usesMainGate) {
       const settings = useAppStore.getState().settings
+      const restoring =
+        session.hiddenOutputRestorePtyId === ptyId &&
+        (session.hiddenOutputRestoreNeeded || session.hiddenOutputRestoreInFlight !== null)
       const canRetain =
         resolveTerminalInlineImagesEnabled(settings?.terminalInlineImages) &&
         (usesTransportGate ||
           (usesMainGate &&
             settings?.terminalHiddenDeliveryGate !== false &&
             settings?.terminalMainSideEffectAuthority !== false))
-      const retaining = syncHiddenGraphicsDelivery(owner, terminal, ptyId, hidden, canRetain)
+      const retaining = syncHiddenGraphicsDelivery(
+        owner,
+        terminal,
+        ptyId,
+        hidden,
+        canRetain,
+        restoring
+      )
       if (retaining) {
         unsubscribe ??= useAppStore.subscribe((current, previous) => {
           if (

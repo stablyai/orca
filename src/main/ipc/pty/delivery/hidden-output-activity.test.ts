@@ -78,4 +78,29 @@ describe('hidden PTY output activity', () => {
       ['pty:data', { id: PTY_ID, data: '\x1b[6n', droppedOutput: true }]
     ])
   })
+
+  it('delivers the pending-cap query when a hidden claim stops retaining graphics', () => {
+    vi.useFakeTimers()
+    const send = vi.fn()
+    const session = createPtyIpcSession({ mainWindow: rendererWindow(send) })
+    wirePtyIpcSession(session)
+    session.rendererPtyDispatcherReady = true
+    rendererVisibilityKnownPtys.add(PTY_ID)
+    updateHiddenRendererPtyClaim(session, { id: PTY_ID, hidden: true, retainGraphics: true })
+
+    const burst = `${'x'.repeat(2 * 1024 * 1024 + 1)}\x1b[6n`
+    acceptPtyDataForRenderer(session, { id: PTY_ID, data: burst }, burst.length)
+    expect(send).toHaveBeenCalledWith('pty:modelRestoreNeeded', {
+      id: PTY_ID,
+      reason: 'pending-cap',
+      markerSeq: burst.length
+    })
+    updateHiddenRendererPtyClaim(session, { id: PTY_ID, hidden: true })
+    acceptPtyDataForRenderer(session, { id: PTY_ID, data: 'dropped\x1b[c' }, burst.length + 10)
+    vi.runOnlyPendingTimers()
+
+    expect(send.mock.calls.filter(([channel]) => channel === 'pty:data')).toEqual([
+      ['pty:data', { id: PTY_ID, data: '\x1b[6n', droppedOutput: true }]
+    ])
+  })
 })

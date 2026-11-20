@@ -1,17 +1,11 @@
-import * as unhideCoverage from '../output-restore/hidden-unhide-snapshot-coverage'
 import { isRemoteRuntimePtyId } from '../../../../../../shared/remote-runtime/remote-runtime-pty-id'
-import { recordTerminalFreezeBreadcrumb } from '../../render-health/diagnostics/terminal-freeze-breadcrumbs'
-import { redactPtyIdForDiagnostics } from '../../../../../../shared/terminal/pty/diagnostics/pty-delivery-diagnostics'
 import {
   terminalRewriteOutputRenderRefreshDecision,
   terminalRewriteOutputPrefersRenderRefresh,
   windowsEastAsianOutputPrefersRenderRefresh
 } from '@/lib/pane-manager/terminal-rendering/terminal-complex-script'
-import { RESET_AFTER_BYTE_GAP } from '../../../../../../shared/terminal/protocol/input-modes/terminal-mode-reset-profiles'
 import { recordTerminalOutput } from '@/lib/pane-manager/terminal-scroll/pane-scroll'
 import { ensureArabicShapingJoinerForText } from '@/lib/pane-manager/terminal-rendering/terminal-arabic-shaping-joiner'
-import { registerPtyModelRestoreNeededHandler } from '../../pty-transport/delivery/pty-model-restore-channel'
-import type { PtyModelRestoreNeededEvent } from '../../../../../../shared/terminal/replay/pty-model-restore-marker'
 import {
   acquireHiddenRendererPtyDeliveryClaim,
   declareRendererPtyDeliveryVisible
@@ -29,6 +23,7 @@ import {
 import { shouldWritePtyOutputForeground } from './foreground-output-visibility'
 import { syncRemoteOutputCadence } from './remote-output-cadence'
 import { bindHiddenGraphicsDelivery } from './hidden-graphics-delivery'
+import { bindModelRestoreNeededSubscription } from './model-restore-needed-subscription'
 
 import { terminalInputEchoAllowanceMs } from './terminal-input-echo-delay'
 
@@ -53,66 +48,7 @@ export function bindForegroundOutputRefresh(session: ConnectPanePtySession): voi
     }, HIDDEN_OUTPUT_RESTORE_FLOOD_SUPPRESS_MS)
   }
 
-  // Why: main reports dropped renderer-bound bytes out-of-band, routed per PTY by pty-model-restore-channel.ts.
-  function handleModelRestoreNeededMarker(event: PtyModelRestoreNeededEvent): void {
-    if (session.disposed) {
-      return
-    }
-    const episode = typeof event.hiddenDropEpisode === 'number' ? event.hiddenDropEpisode : null
-    const previousDropEpisode = session.hiddenOutputRestoreLatestDropEpisode
-    // Ignore only repeats of the disclosed gap episode; unknown markers may prove new loss and must recover.
-    const disclosed = session.hiddenOutputRestoreDisclosedGap
-    if (
-      episode !== null &&
-      disclosed !== null &&
-      disclosed.ptyId === session.transport.getPtyId() &&
-      disclosed.episode === episode
-    ) {
-      return
-    }
-    if (episode !== null) {
-      session.hiddenOutputRestoreLatestDropEpisode = episode
-    }
-    recordTerminalFreezeBreadcrumb('restore-marker', {
-      id: redactPtyIdForDiagnostics(session.transport.getPtyId() ?? '')
-    })
-    // Why: dropped bytes invalidate cross-chunk carry — a partial OSC-9999 prefix spanning the gap would corrupt the next live chunk.
-    session.transport.resetCrossChunkParserState?.()
-    // Why gated (rc.7.perf loop): on a visible pane these markers come from our own restore starving ACKs; re-arming per marker kept the fetch loop alive all flood, so defer to one post-flood repaint.
-    if (session.isForegroundRestoreBackpressureContext()) {
-      unhideCoverage.handleUnhideRestoreBackpressure(session, event, previousDropEpisode)
-      return
-    }
-    // Ground the pen at the proven gap: lost resets can leak bold into later cells (STA-4042). Skip flood markers because snapshot replay already grounds them.
-    session.streamPosition.invalidate({ grounded: true })
-    session.writePtyOutputToXterm(RESET_AFTER_BYTE_GAP, true)
-    // Capture restore state before marking synchronously starts one; a mid-restore drop needs a newer snapshot.
-    const restoreWasInFlight = session.hiddenOutputRestoreInFlight !== null
-    session.markHiddenOutputRestoreNeeded()
-    if (restoreWasInFlight) {
-      session.hiddenOutputRestoreFreshSnapshotNeeded = true
-    }
-  }
-
-  function syncModelRestoreNeededSubscription(ptyId: string | null): void {
-    if (session.modelRestoreSubscribedPtyId === ptyId) {
-      return
-    }
-    session.unregisterModelRestoreNeeded?.()
-    session.unregisterModelRestoreNeeded = null
-    // Marker bookkeeping is per PTY stream, like the restore state itself.
-    session.hiddenOutputRestoreLatestDropEpisode = null
-    session.hiddenOutputRestoreDisclosedGap = null
-    session.modelRestoreSubscribedPtyId = ptyId
-    // Only streams through local main have markers; remote-runtime transports are unaffected.
-    if (ptyId && !isRemoteRuntimePtyId(ptyId)) {
-      session.unregisterModelRestoreNeeded = registerPtyModelRestoreNeededHandler(
-        ptyId,
-        handleModelRestoreNeededMarker,
-        () => session.agentCompletionCoordinator.observeOutputActivity()
-      )
-    }
-  }
+  const syncModelRestoreNeededSubscription = bindModelRestoreNeededSubscription(session)
 
   session.handleRemoteOutputPauseChanged = (paused, supported, dropsReported): void => {
     const ptyId = session.transport.getPtyId()
@@ -161,7 +97,7 @@ export function bindForegroundOutputRefresh(session: ConnectPanePtySession): voi
 
   let claimRetainsGraphics = false
   const hiddenGraphics = bindHiddenGraphicsDelivery(session)
-  session.syncHiddenRendererPtyDelivery = (): void => {
+  session.syncHiddenRendererPtyDelivery = (relayReplayNeeded = false): void => {
     const ptyId = session.transport.getPtyId()
     const shouldHide =
       !session.disposed && !shouldWritePtyOutputForeground(session.deps.isVisibleRef.current)
@@ -186,7 +122,11 @@ export function bindForegroundOutputRefresh(session: ConnectPanePtySession): voi
       session.hiddenDeliverySyncedPtyId = null
     }
     if (transportGate) {
-      session.transport.setOutputPaused?.(shouldHide && !retain)
+      if (relayReplayNeeded) {
+        session.transport.setOutputPaused?.(true, true)
+      } else {
+        session.transport.setOutputPaused?.(shouldHide && !retain)
+      }
       return
     }
     if (!ptyId || !mainGate) {
