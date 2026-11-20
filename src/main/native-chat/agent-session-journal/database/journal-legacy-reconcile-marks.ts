@@ -4,7 +4,8 @@ import {
   journalLegacyCopySourceKey,
   journalLegacyFailureKey,
   journalLegacyPendingCopyKey,
-  recordJournalLegacyChatRevision
+  recordJournalLegacyChatRevision,
+  readJournalLegacyFailure
 } from './journal-legacy-source'
 
 /** A converted chat with no revision to compare whose original moved; compared in the background. */
@@ -16,6 +17,8 @@ export type JournalLegacyFailure = {
   sessionId: string
   revision: string | undefined
   error: unknown
+  /** Missing claims accounted as refused; null clears an earlier custody refusal. */
+  claims?: string | null
 }
 
 /** Absorbed with its error: retried only when the older Orca writes this chat again. */
@@ -23,14 +26,21 @@ export function recordJournalLegacyFailure(
   db: Database.Database,
   failure: JournalLegacyFailure
 ): void {
-  console.warn('[agent-session-journal] keeping an older Orca chat failed', failure.error)
+  const previous = readJournalLegacyFailure(db, failure.sessionId)
   if (failure.revision !== undefined) {
     recordJournalLegacyChatRevision(db, failure.sessionId, failure.revision)
   }
   writeMeta(
     db,
     journalLegacyFailureKey(failure.sessionId),
-    JSON.stringify({ revision: failure.revision ?? null, error: failureMessage(failure.error) })
+    JSON.stringify({
+      revision: failure.revision ?? previous?.revision ?? null,
+      error:
+        failure.revision === undefined && previous?.revision !== null && previous !== undefined
+          ? previous.error
+          : failureMessage(failure.error),
+      claims: failure.claims === undefined ? previous?.claims : (failure.claims ?? undefined)
+    })
   )
   deleteMeta(db, `${JOURNAL_LEGACY_COPY_DUE}${failure.sessionId}`)
 }

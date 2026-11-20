@@ -1,7 +1,6 @@
 import type Database from '../../../sqlite/sync-database'
 import {
   journalLegacyCopySourceKey,
-  journalLegacyFailureKey,
   journalLegacyPendingCopyKey,
   recordJournalLegacyChatRevision,
   settleJournalLegacyCopy
@@ -11,7 +10,8 @@ import {
   deleteMeta,
   JOURNAL_LEGACY_COPY_DUE,
   revisionHoldsHistory,
-  writeMeta
+  writeMeta,
+  recordJournalLegacyFailure
 } from './journal-legacy-reconcile-marks'
 
 /**
@@ -47,7 +47,7 @@ export function recordJournalLegacyCopyFailure(
       .prepare('SELECT 1 FROM agent_session_store_meta WHERE key=?')
       .get(journalLegacyCopySourceKey(copyId))
   ) {
-    writeMeta(db, journalLegacyFailureKey(copyId), JSON.stringify({ revision: null, error }))
+    recordJournalLegacyFailure(db, { sessionId: copyId, revision: undefined, error })
   }
 }
 
