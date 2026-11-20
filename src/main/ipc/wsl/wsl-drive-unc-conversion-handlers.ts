@@ -2,7 +2,8 @@ import {
   publishToDocuments,
   removeAppHandler,
   registerAppHandler,
-  appDocumentFor
+  appDocumentFor,
+  appWindowFor
 } from '../app-registry/app-handler-registry'
 import type { AppCaller } from '../app-registry/app-handler-registry'
 /**
