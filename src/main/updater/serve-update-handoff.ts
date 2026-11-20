@@ -27,17 +27,19 @@ function getConfiguredHandoffPath(): string | null {
 }
 
 // Read once and cleared so agents and nested `orca serve` launches do not inherit the claim.
+const appImageRelaunchTarget = process.env[SERVE_APPIMAGE_RELAUNCH_ENV]
+delete process.env[SERVE_APPIMAGE_RELAUNCH_ENV]
+// electron-updater replaces APPIMAGE; only the file the supervisor watches leads to a restart.
 const isAppImageRelaunchSupervised =
   process.platform === 'linux' &&
-  process.env[SERVE_APPIMAGE_RELAUNCH_ENV] === '1' &&
-  Boolean(process.env.APPIMAGE)
-delete process.env[SERVE_APPIMAGE_RELAUNCH_ENV]
+  Boolean(appImageRelaunchTarget) &&
+  appImageRelaunchTarget === process.env.APPIMAGE
 
 export function hasServeUpdateSupervisor(): boolean {
-  if (process.platform === 'linux') {
-    return isAppImageRelaunchSupervised
-  }
-  return process.platform === 'darwin' && getConfiguredHandoffPath() !== null
+  return (
+    isAppImageRelaunchSupervised ||
+    (process.platform === 'darwin' && getConfiguredHandoffPath() !== null)
+  )
 }
 
 export function requestServeUpdateHandoff(targetVersion: string): boolean {

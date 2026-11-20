@@ -10,6 +10,7 @@ import {
 } from '../../../../shared/desktop-distribution/appimage/appimage-cache-identity'
 import {
   APPIMAGE_SETTLE_MS,
+  appImageRelaunchTarget,
   createSupervisedAppImageUpdate,
   inspectAppImageBuild,
   resolveAppImageBuildWatch,
@@ -146,5 +147,17 @@ describe('supervised serve and a replaced AppImage', () => {
     await make().restart(() => false)
     make({ runningKey: candidateKey! })
     await expect(readFile(attemptPath, 'utf8')).rejects.toThrow()
+  })
+})
+
+describe('appImageRelaunchTarget', () => {
+  it.each([
+    ['/tmp/.mount_OrcaX/orca-ide', '/opt/apps/Orca.AppImage', '/opt/apps/Orca.AppImage'],
+    // electron-updater would install the update under a new name the watch never sees.
+    ['/tmp/.mount_OrcaX/orca-ide', '/opt/apps/Orca-1.4.265.AppImage', null],
+    // Extract-and-run cannot execute the replaced file directly.
+    ['/tmp/appimage_extracted_abc/orca-ide', '/opt/apps/Orca.AppImage', null]
+  ])('for %s serving %s offers %s', (executable, appImagePath, expected) => {
+    expect(appImageRelaunchTarget(executable, appImagePath)).toBe(expected)
   })
 })

@@ -84,11 +84,13 @@ describe('serve update handoff', () => {
   })
 
   it.runIf(process.platform === 'linux').each([
-    { relaunch: '1', appImage: '/opt/apps/Orca.AppImage', supervised: true },
-    { relaunch: undefined, appImage: '/opt/apps/Orca.AppImage', supervised: false },
-    { relaunch: '1', appImage: undefined, supervised: false }
+    { relaunch: '/opt/apps/Orca.AppImage', appImage: '/opt/apps/Orca.AppImage', supervised: true },
+    { relaunch: '', appImage: '/opt/apps/Orca.AppImage', supervised: false },
+    // The updater would replace a file the supervisor does not watch.
+    { relaunch: '/opt/apps/Orca.AppImage', appImage: '/home/me/Orca.AppImage', supervised: false },
+    { relaunch: '/opt/apps/Orca.AppImage', appImage: undefined, supervised: false }
   ])(
-    'treats a Linux serve as supervised only under an AppImage relaunch supervisor (%o)',
+    'treats a Linux serve as supervised only when the updater replaces the watched AppImage (%o)',
     async ({ relaunch, appImage, supervised }) => {
       vi.stubEnv(SERVE_APPIMAGE_RELAUNCH_ENV, relaunch)
       vi.stubEnv('APPIMAGE', appImage)

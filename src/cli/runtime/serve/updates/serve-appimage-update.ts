@@ -1,6 +1,6 @@
 /** AppImage swaps leave running copies stale; re-exec at the same PID to preserve service tracking. */
 import { readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
-import { dirname, isAbsolute, join, resolve } from 'node:path'
+import { basename, dirname, isAbsolute, join, resolve } from 'node:path'
 import { runProcess } from '@orca/process-host'
 import {
   readAppImageSourceOfNamespace,
@@ -10,6 +10,7 @@ import {
 import type { SupervisedAppImageUpdate } from '../supervision/serve-supervised-service'
 import { SERVE_SUPERVISOR_APP_ROOT_ENV } from '../supervision/serve-supervisor-relocation'
 import { SERVE_APPIMAGE_RELAUNCH_ENV } from '../../../../shared/remote-runtime/serve-supervisor/serve-update-handoff'
+import { appImageEphemeralRootOf } from '../../../../shared/desktop-distribution/appimage/appimage-ephemeral-root'
 
 /** A file this recently written may still be mid-copy; executing half an AppImage fails. */
 export const APPIMAGE_SETTLE_MS = 2_000
@@ -48,15 +49,22 @@ export function resolveAppImageBuildWatch(
   return appImagePath && runningKey ? { appImagePath, runningKey } : null
 }
 
-/** Tells a supervised serve child that its supervisor restarts from the AppImage once it is replaced. */
+/** Always set, so a value inherited from an Orca server cannot claim a watch this supervisor lacks. */
 export function withServeAppImageRelaunch(
   env: NodeJS.ProcessEnv,
-  executable: string,
-  supervise: boolean
+  relaunchTarget: string | null
 ): NodeJS.ProcessEnv {
-  return supervise && resolveAppImageBuildWatch(executable)
-    ? { ...env, [SERVE_APPIMAGE_RELAUNCH_ENV]: '1' }
-    : env
+  return { ...env, [SERVE_APPIMAGE_RELAUNCH_ENV]: relaunchTarget ?? '' }
+}
+
+/** The AppImage an update may replace in place for this supervisor to restart from; null keeps updates manual. */
+export function appImageRelaunchTarget(executable: string, appImagePath: string): string | null {
+  // Extract-and-run means no FUSE: the replaced file could not be executed directly.
+  if (appImageEphemeralRootOf(executable)?.kind === 'extract') {
+    return null
+  }
+  // electron-updater installs a versioned name beside the old file, outside this watch.
+  return /\d+\.\d+\.\d+/.test(basename(appImagePath)) ? null : appImagePath
 }
 
 /** A missing or unreadable file keeps the running build: only a present, settled new file counts. */
@@ -231,19 +239,22 @@ export function supervisedAppImageUpdate(
 ): SupervisedAppImageUpdate | null {
   const watch = resolveAppImageBuildWatch(executable)
   return watch
-    ? createSupervisedAppImageUpdate({
-        watch,
-        attemptPath: serveAppImageAttemptPath(userDataPath),
-        force,
-        argv: process.argv,
-        env: process.env,
-        execve: (file, args, env) => {
-          if (!process.execve) {
-            throw new Error('this runtime cannot replace its own process')
-          }
-          process.execve(file, args, env)
-        },
-        log: (line) => process.stderr.write(`${line}\n`)
-      })
+    ? {
+        relaunchTarget: appImageRelaunchTarget(executable, watch.appImagePath),
+        ...createSupervisedAppImageUpdate({
+          watch,
+          attemptPath: serveAppImageAttemptPath(userDataPath),
+          force,
+          argv: process.argv,
+          env: process.env,
+          execve: (file, args, env) => {
+            if (!process.execve) {
+              throw new Error('this runtime cannot replace its own process')
+            }
+            process.execve(file, args, env)
+          },
+          log: (line) => process.stderr.write(`${line}\n`)
+        })
+      }
     : null
 }

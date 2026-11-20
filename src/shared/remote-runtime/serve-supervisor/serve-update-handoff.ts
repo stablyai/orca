@@ -1,7 +1,7 @@
 import { join } from 'node:path'
 
 export const SERVE_UPDATE_HANDOFF_PATH_ENV = 'ORCA_SERVE_UPDATE_HANDOFF_PATH'
-// Set by a Linux supervisor that restarts from its AppImage once that file is replaced.
+// The AppImage a Linux supervisor restarts from once replaced; empty when it watches none.
 export const SERVE_APPIMAGE_RELAUNCH_ENV = 'ORCA_SERVE_APPIMAGE_RELAUNCH'
 export const SERVE_UPDATE_HANDOFF_FILE = 'serve-update-handoff.json'
 

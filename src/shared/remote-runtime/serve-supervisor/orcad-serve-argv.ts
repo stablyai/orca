@@ -15,6 +15,8 @@ export type ServeOrcaAppArgs = {
   force?: boolean
   /** Restart the server under a service manager instead of exiting with it; never inferred. */
   supervise?: boolean
+  /** The AppImage the supervisor restarts from once replaced, set only while it watches; never a flag. */
+  appImageRelaunchTarget?: string | null
 }
 
 /** Serialize optional serve flags for either the CLI or Electron's internal argv form. */

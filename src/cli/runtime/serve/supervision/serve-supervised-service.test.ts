@@ -68,6 +68,7 @@ describe('superviseServeService', () => {
         return 0
       },
       appImageUpdate: {
+        relaunchTarget: '/opt/apps/Orca.AppImage',
         inspect: () => (replaced ? 'superseded' : 'current'),
         restart: async () => {
           restarts.push('restart')
@@ -85,5 +86,33 @@ describe('superviseServeService', () => {
 
     expect(restarts).toEqual(['restart'])
     expect(readServeSupervisorBrake(userDataPath)?.failures ?? []).toEqual([])
+  })
+
+  it('stops offering the relaunch target once a restart fails', async () => {
+    let stop = (): void => undefined
+    const targets: (string | null)[] = []
+    const h = harness({
+      userDataPath,
+      runOnce: async (target) => {
+        targets.push(target)
+        if (targets.length > 1) {
+          stop()
+        }
+        return 0
+      },
+      appImageUpdate: {
+        relaunchTarget: '/opt/apps/Orca.AppImage',
+        inspect: () => (targets.length > 0 ? 'superseded' : 'current'),
+        restart: async () => 'the new AppImage does not run here'
+      },
+      onStopSignal: (listener) => {
+        stop = listener
+        return () => undefined
+      }
+    })
+
+    await superviseServeService(h.options)
+
+    expect(targets).toEqual(['/opt/apps/Orca.AppImage', null])
   })
 })
