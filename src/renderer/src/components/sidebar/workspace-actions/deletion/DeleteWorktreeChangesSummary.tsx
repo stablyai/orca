@@ -101,29 +101,41 @@ export function DeleteWorktreeChangesSummary({
   const changesChecking = changeCount === undefined && checkState === 'checking'
   const changesFailed = changeCount === undefined && checkState === 'unavailable'
   const ignoredChecking = localFilesState?.status === 'checking'
-  // Show the Git result as soon as it lands; a trailing spinner covers the ignored-files scan.
-  const [tone, text]: [StatusTone, string] | [null, null] = changesFailed
-    ? [
-        'warning',
-        t('components.workspace.delete.changes.unavailable', 'Changes could not be checked')
-      ]
-    : loss
-      ? ['warning', loss]
-      : changesChecking || (ignoredChecking && checkState !== 'complete')
-        ? ['checking', t('components.workspace.delete.changes.checking', 'Checking for changes…')]
-        : checkState === 'complete'
-          ? ['clean', t('components.workspace.delete.changes.none', 'No uncommitted changes')]
-          : [null, null]
-  const stillChecking = tone !== 'checking' && (changesChecking || ignoredChecking)
   const ignoredUnchecked =
     localFilesState?.status === 'unsupported' ||
     (atRiskLocalFiles !== undefined && atRiskLocalFiles.count === 0 && !atRiskLocalFiles.complete)
-  const ignoredUncheckedLabel = ignoredUnchecked
-    ? t('components.workspace.delete.ignoredFiles.unavailable', 'Ignored files not checked')
-    : null
+  const checkingLabel = t('components.workspace.delete.changes.checking', 'Checking for changes…')
+  const failedLabel = t(
+    'components.workspace.delete.changes.unavailable',
+    'Changes could not be checked'
+  )
+  // Show the Git result as soon as it lands; a trailing spinner covers the ignored-files scan.
+  const [tone, text]: [StatusTone, string] | [null, null] = loss
+    ? ['warning', loss]
+    : changesFailed
+      ? ['warning', failedLabel]
+      : changesChecking || (ignoredChecking && checkState !== 'complete')
+        ? ['checking', checkingLabel]
+        : checkState === 'complete'
+          ? [
+              ignoredUnchecked ? 'warning' : 'clean',
+              t('components.workspace.delete.changes.none', 'No uncommitted changes')
+            ]
+          : [null, null]
+  const stillChecking = tone !== 'checking' && (changesChecking || ignoredChecking)
+  // Secondary facts stay on the collapsed line so a failed check never hides a known loss.
+  const note =
+    loss && changesFailed
+      ? failedLabel
+      : ignoredUnchecked
+        ? t('components.workspace.delete.ignoredFiles.unavailable', 'Ignored files not checked')
+        : null
   const changedFiles = preview?.files ?? []
   const ignoredPaths = atRiskLocalFiles?.paths ?? atRiskLocalFiles?.samplePaths ?? []
-  const hasDetails = changedFiles.length > 0 || unsavedFiles.length > 0 || ignoredPaths.length > 0
+  // Opening waits for every scan so late results never resize an open list.
+  const hasDetails =
+    !stillChecking &&
+    (changedFiles.length > 0 || unsavedFiles.length > 0 || ignoredPaths.length > 0)
   if (!tone) {
     return null
   }
@@ -141,13 +153,16 @@ export function DeleteWorktreeChangesSummary({
       <span className="min-w-0 truncate" title={text}>
         {text}
       </span>
-      {ignoredUncheckedLabel && !hasDetails ? (
-        <span className="min-w-0 shrink truncate text-muted-foreground">
-          · {ignoredUncheckedLabel}
+      {note ? (
+        <span className="min-w-0 shrink truncate text-muted-foreground" title={note}>
+          · {note}
         </span>
       ) : null}
       {stillChecking ? (
-        <LoadingSpinner className="size-3 shrink-0 text-muted-foreground" />
+        <>
+          <LoadingSpinner className="size-3 shrink-0 text-muted-foreground" />
+          <span className="sr-only">{checkingLabel}</span>
+        </>
       ) : null}
     </>
   )
@@ -164,9 +179,6 @@ export function DeleteWorktreeChangesSummary({
           chevron="trailing"
           triggerClassName={`h-5 max-w-full min-w-0 gap-1.5 ${toneClassName}`}
         >
-          {ignoredUncheckedLabel ? (
-            <p className="mb-2 font-sans text-muted-foreground">{ignoredUncheckedLabel}</p>
-          ) : null}
           {ignoredPaths.length > 0 && atRiskLocalFiles ? (
             <DeleteWorktreeLocalFilesDetails files={atRiskLocalFiles} />
           ) : null}

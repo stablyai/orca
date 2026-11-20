@@ -161,12 +161,12 @@ function dialogFixture(
         : options.statusPending
           ? () => new Promise<never>(() => {})
           : options.statusReadFailed
-          ? async () => ({
-              entries: [],
-              conflictOperation: 'unknown',
-              readError: 'fatal: not a git repository'
-            })
-          : defaultGitStatus
+            ? async () => ({
+                entries: [],
+                conflictOperation: 'unknown',
+                readError: 'fatal: not a git repository'
+              })
+            : defaultGitStatus
       window.api.git.atRiskLocalFiles = () => {
         if (options.localFiles === 'pending') {
           return new Promise(() => {})

@@ -332,7 +332,7 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
         {isMainWorktree ? null : (
           // Keep file checks from moving the footer: one fixed status line. Only the user can expand it.
           <div
-            className={`scrollbar-sleek flex min-w-0 flex-col ${hasTargetList ? 'h-48 max-h-[50vh] gap-3 overflow-y-auto' : 'has-[button[aria-expanded=true]]:max-h-[50vh] has-[button[aria-expanded=true]]:overflow-y-auto'}`}
+            className={`scrollbar-sleek flex min-w-0 flex-col ${hasTargetList ? 'h-48 max-h-[50vh] gap-3 overflow-y-auto' : 'h-5 has-[button[aria-expanded=true]]:h-auto has-[button[aria-expanded=true]]:max-h-[50vh] has-[button[aria-expanded=true]]:overflow-y-auto'}`}
           >
             {isBatchDelete ? (
               <DeleteWorktreeTargetPreview
