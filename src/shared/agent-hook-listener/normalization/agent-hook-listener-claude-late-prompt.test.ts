@@ -299,7 +299,7 @@ describe('Claude prompt event arriving after its turn', () => {
   })
 
   describe('a turn whose Stop beats its prompt event while a shell runs', () => {
-    function startWatching() {
+    function startWatching(): number | undefined {
       claude({ hook_event_name: 'UserPromptSubmit', prompt_id: FIRST, prompt: 'watch' })
       claude({
         hook_event_name: 'PostToolUse',
@@ -317,16 +317,17 @@ describe('Claude prompt event arriving after its turn', () => {
       })
       expect(wakeEnd).toMatchObject({ state: 'working', workingMode: 'monitoring' })
       expect(wakeEnd?.turnCompletedAt).toBeUndefined()
+      return first?.turnCompletedAt
     }
 
-    it('never announces the wakeup as a finished turn', () => {
-      startWatching()
+    it('never announces the wakeup as a finished turn of its own', () => {
+      const personEnd = startWatching()
       const late = claude({
         hook_event_name: 'UserPromptSubmit',
         prompt_id: SECOND,
         prompt: `<task-notification>\n<task-id>${SHELL.id}</task-id>\n<event>tick</event>`
       })
-      expect(late?.turnCompletedAt).toBeUndefined()
+      expect(late?.turnCompletedAt).toBe(personEnd)
     })
 
     it('announces a person’s turn once its prompt event arrives', () => {
