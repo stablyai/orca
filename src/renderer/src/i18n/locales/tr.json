@@ -12626,6 +12626,7 @@
         "CursorAccountsSection": {
           "source": {
             "keychain": "macOS Anahtar Zinciri (cursor-agent)",
+            "keyring": "Linux Anahtarlığı (cursor-agent)",
             "cli": "Cursor CLI kimlik doğrulama dosyası",
             "desktop": "Cursor IDE"
           },
@@ -17466,8 +17467,6 @@
             "27d863542c": "Tarayıcı ek açıklamaları",
             "e48569ac6d": "Bu siteye ulaşılamadı.",
             "bbe8f15e83": "Bu bölme, aktif çalışma zamanı sunucusundan görüntüleniyor.",
-            "8b7e6d1f5a": "Tarayıcı ek açıklamaları yalnızca yerel tarayıcı sekmelerinde kullanılabilir.",
-            "deb5293610": "Tarayıcı ek açıklamaları uzak çalışma zamanında kullanılamıyor",
             "90d021f2ad": "Ekle",
             "0cb3bd6221": "Ek açıklama amacı",
             "532bac48c5": "Ajanın burada neyi değiştirmesi gerektiğini açıklayın...",
@@ -19301,7 +19300,8 @@
       "install": {
         "checking": "{{agent}} ajanının bu ana makinede hazır olup olmadığı denetleniyor…",
         "cliInstall": "Yükle",
-        "cliRecheck": "Yeniden kontrol et"
+        "cliRecheck": "Yeniden kontrol et",
+        "openAgentSettings": "Ayarları aç"
       },
       "reasoning": "Akıl yürütme",
       "failureWords": {
@@ -19335,6 +19335,7 @@
         "claudeAccountFolderMissing": "Seçilen Claude hesabının klasörü bulunamıyor. O hesapta yeniden oturum açın veya başka bir hesap seçin.",
         "claudeAccountSetupFailed": "Seçilen Claude hesabı ayarlanamadı. Yeniden deneyin veya başka bir hesap seçin.",
         "agentCommandNotRunnable": "Ayarlar → Ajanlar bölümündeki {{agent}} Komut ayarı, Orca'nın bulabileceği bir program yolu veya adı olmalı; argüman ya da değişken içermemelidir. Değiştirin veya sıfırlayın.",
+        "agentCommandFailed": "Ayarlar → Ajanlar bölümündeki {{agent}} Komut ayarı {{agent}} uygulamasını başlatmadı: {{detail}}. Değiştirin veya sıfırlayın.",
         "runtimeNotInstalled": "Bu sohbetin çalıştığı bilgisayarda {{agent}} yüklü değil. Orca'nın güncel bir sürümünde sohbet içinden yükleyin.",
         "fullAccessAsRoot": "{{agent}}, root olarak çalışırken Tam erişim iznini kullanmaz. Bu sohbeti çalıştıran bilgisayarda Ayarlar → Ajanlar bölümünden {{agent}} için başka bir izin seçin, ardından yeni bir sohbet başlatın.",
         "launchPreparationFailed": "Orca, bu sohbeti çalıştıran bilgisayarda {{agent}} başlatmayı hazırlayamadı.",

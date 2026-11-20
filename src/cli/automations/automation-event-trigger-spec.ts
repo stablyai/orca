@@ -308,7 +308,7 @@ export function formatAutomationTriggerOptions(
       : []),
     ...(bot?.cloudSignedOut
       ? [
-          `This computer is signed out of Orca, and Slack, GitHub, Linear and webhook events reach ${bot.name} through Orca Cloud: before saving one, run \`orca bot connectors --offer <source>\` so your owner sees a Sign in line in this chat, and save it once they say they're signed in.`
+          `This computer is signed out of Orca, and Slack, GitHub, Linear and webhook events reach ${bot.name} through Orca Cloud: before saving one, run \`orca bot connectors --offer <source>\` so your owner sees a Sign in line in this chat, and save it once they say they're signed in. On a server with no Orca window, \`orca auth login\` on it signs it in.`
         ]
       : []),
     ...sources,

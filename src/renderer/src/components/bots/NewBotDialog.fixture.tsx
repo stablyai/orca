@@ -99,17 +99,32 @@ export const proposalLongPurpose = defineFixture({
 
 // Review shots at a 340 and a 480 px dialog. The dialog is fixed, so it portals into a transformed box
 // that wide (plus its 1rem margins) instead of the page's wide viewport.
-function Stage({ width }: { width: 340 | 480 }): React.JSX.Element {
+function Stage({
+  width,
+  nudge,
+  proposal,
+  height = 620
+}: {
+  width: 340 | 480
+  nudge?: boolean
+  proposal?: BotProposal
+  height?: number
+}): React.JSX.Element {
   const [box, setBox] = useState<HTMLElement | null>(null)
   return (
     <div
       ref={setBox}
-      className="relative h-[620px] translate-x-0 bg-background"
-      style={{ width: width + 32 }}
+      className="relative translate-x-0 bg-background"
+      style={{ width: width + 32, height }}
     >
       {box ? (
         <PortalContainerContext.Provider value={box}>
-          <NewBotDialog open onOpenChange={() => {}} />
+          <NewBotDialog
+            open
+            onOpenChange={() => {}}
+            onImport={nudge ? () => {} : undefined}
+            proposal={proposal}
+          />
         </PortalContainerContext.Provider>
       ) : null}
     </div>
@@ -133,6 +148,33 @@ const seeded = (computer?: string) => (): void => {
       hostSettingOverrides: computer ? { local: { displayLabel: computer } } : {}
     }
   }))
+}
+
+// A Hermes bot on this computer, so the first-bot import nudge shows.
+const HERMES_SOURCES = [
+  {
+    app: 'hermes',
+    home: '~/.hermes',
+    bots: [{ agent: 'atlas', name: 'Atlas', path: '~/.hermes/atlas', absolutePath: '/x/atlas' }]
+  }
+]
+
+const withNudge = (): void => {
+  seeded()()
+  try {
+    localStorage.removeItem('orca.bots.import-nudge-dismissed')
+  } catch {
+    // The nudge stays hidden; the shot shows it missing.
+  }
+  const runtime = window.api.runtime
+  const call = runtime.call.bind(runtime)
+  Reflect.set(window.api, 'runtime', {
+    ...runtime,
+    call: async (request: Parameters<typeof call>[0]) =>
+      request.method === 'bots.import.sources'
+        ? { ok: true, result: { sources: HERMES_SOURCES } }
+        : call(request)
+  })
 }
 
 const named = (name: string, identity: string) => async (): Promise<void> => {
@@ -169,6 +211,16 @@ const LONGEST = named(
   ].join('\n')
 )
 
+export const nudge340 = defineFixture({
+  width: 372,
+  setup: withNudge,
+  render: () => <Stage width={340} nudge />
+})
+export const nudge480 = defineFixture({
+  width: 512,
+  setup: withNudge,
+  render: () => <Stage width={480} nudge />
+})
 export const empty340 = defineFixture(review(340))
 export const empty480 = defineFixture(review(480))
 export const filled340 = defineFixture({ ...review(340), interact: FILLED })
@@ -184,4 +236,52 @@ export const computerMenu340 = defineFixture({
 export const computerMenu480 = defineFixture({
   ...review(480, LONG_COMPUTER),
   interact: openComputerMenu
+})
+
+// From a template: PR review (1 skill, 1 automation, GitHub) and Security check, the most parts.
+const fromTemplate = (id: string, name?: string) => {
+  const found = BOT_TEMPLATES.find((entry) => entry.id === id)
+  return found ? templateProposal(found, name ? { name } : {}) : undefined
+}
+const templateReview = (width: 340 | 480, id: string, name?: string) => ({
+  width: width + 32,
+  setup: seeded(),
+  render: () => <Stage width={width} height={1100} proposal={fromTemplate(id, name)} />
+})
+const openChip = (label: RegExp) => async (): Promise<void> => {
+  const chip = [...document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')].find(
+    (button) => label.test(button.textContent ?? '')
+  )
+  chip?.click()
+  await new Promise((resolve) => setTimeout(resolve, 300))
+}
+const skillOff = async (): Promise<void> => {
+  await openChip(/skill/)()
+  document.querySelector<HTMLButtonElement>('[role="switch"]')?.click()
+  await new Promise((resolve) => setTimeout(resolve, 100))
+}
+const LONG_TEMPLATE_NAME = 'Pull request review for the Platform Team monorepo'
+
+export const prReview340 = defineFixture(templateReview(340, 'pr-review'))
+export const prReview480 = defineFixture(templateReview(480, 'pr-review'))
+export const largest340 = defineFixture(templateReview(340, 'security-check'))
+export const largest480 = defineFixture(templateReview(480, 'security-check'))
+export const manyApps340 = defineFixture(templateReview(340, 'meeting-prep'))
+export const longName340 = defineFixture(templateReview(340, 'pr-review', LONG_TEMPLATE_NAME))
+export const longName480 = defineFixture(templateReview(480, 'pr-review', LONG_TEMPLATE_NAME))
+export const skillsOpen340 = defineFixture({
+  ...templateReview(340, 'pr-review'),
+  interact: openChip(/skill/)
+})
+export const skillOff340 = defineFixture({
+  ...templateReview(340, 'pr-review'),
+  interact: skillOff
+})
+export const appsOpen340 = defineFixture({
+  ...templateReview(340, 'meeting-prep'),
+  interact: openChip(/apps|GitHub|Google/)
+})
+export const schedulesOpen480 = defineFixture({
+  ...templateReview(480, 'email-digest'),
+  interact: openChip(/schedule/)
 })

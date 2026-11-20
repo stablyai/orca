@@ -43,7 +43,7 @@ function recoloredSrc(id: BotMascotId, color: string): string {
 }
 
 /** Each mascot's picture on `color`; the bundled SVG on the default color. */
-export function botMascotSrcs(
+function botMascotSrcs(
   ids: readonly BotMascotId[],
   color: string | null | undefined
 ): Record<BotMascotId, string> {

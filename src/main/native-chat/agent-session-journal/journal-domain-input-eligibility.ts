@@ -86,7 +86,8 @@ export function selectJournalEligibleQueueCard(
   facts: JournalSqlQueueFacts,
   allowSteer: boolean,
   resolved?: Omit<ReturnType<typeof journalDomainInputEligibility>, 'work'>,
-  childAcceptsInput = true
+  childAcceptsInput = true,
+  mailJoinsTurn = true
 ): JournalDomainQueuePick & { steer: boolean; command: boolean } {
   const state = resolved ?? journalDomainInputEligibility(scope, authority)
   const none = { kind: 'selected' as const, card: null, steer: false, command: false }
@@ -109,7 +110,8 @@ export function selectJournalEligibleQueueCard(
         steer,
         automatic: true,
         mail: facts.mail,
-        mailOnly
+        mailOnly,
+        mailJoinsTurn
       },
       state.context.inputHead
     ),

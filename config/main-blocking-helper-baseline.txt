@@ -4,11 +4,11 @@
 # Prune: node config/scripts/static-analysis/ratchets/runtime-lifecycle/check-main-blocking-helper-ratchet.mjs --prune
 1 src/main/acp/conversation-copy/acp-conversation-copies.ts
 3 src/main/acp/conversation-copy/acp-conversation-copy.ts
-5 src/main/acp/launch/acp-launch-command.ts
+3 src/main/acp/launch/acp-launch-command.ts
 2 src/main/acp/launch/acp-private-temp.ts
+1 src/main/acp/launch/acp-structured-launch-preparation.ts # moved from acp-structured-acquire.ts with the private-temp connect call
 1 src/main/acp/launch/acp-structured-launch-resolution.ts
 1 src/main/acp/process/acp-agent-connection.ts
-1 src/main/acp/session/acp-structured-acquire.ts
 1 src/main/acp/text-task/acp-text-task.ts
 1 src/main/agent-hooks/first-work/first-work-generation-target.ts
 1 src/main/agent-hooks/installation/bare-shell-plugin-agent-presence.ts
@@ -72,9 +72,7 @@
 1 src/main/ai-vault/session-titles/session-title-resolver.ts
 1 src/main/ai-vault/transcripts/session-transcript-reader.ts
 4 src/main/amp/hook-service.ts
-1 src/main/antigravity/antigravity-acp-launch-spec.ts
 1 src/main/antigravity/antigravity-chat-sign-in.ts
-2 src/main/antigravity/antigravity-host-acp.ts
 8 src/main/antigravity/hook-service.ts
 1 src/main/antigravity/native-account-host.ts
 3 src/main/antigravity/native-account-launch.ts
@@ -388,6 +386,9 @@
 7 src/main/connector-cloud/connector-token-mint.ts
 1 src/main/connector-cloud/connector-turn-outbox-file.ts # Windows only: the addon load (realpathSync, once per process) and a sync DACL read per staged file, plus a second after a failed check; I/O is async
 6 src/main/copilot/hook-service.ts
+6 src/main/core-desktop/desktop-core-composition.ts # moved unchanged from main-process-ready-runtime.ts (one-shot startup composition)
+1 src/main/core-desktop/desktop-core-shutdown.ts # moved unchanged from main-process-quit.ts (one-shot quit metadata clear)
+2 src/main/core-desktop/renderer-shutdown-checkpoint-service.ts # moved unchanged from ipc/renderer-shutdown-checkpoint.ts (unload staging drift report)
 4 src/main/crash-reporting/capture/appimage-crashpad-handler-exit.ts
 1 src/main/crash-reporting/capture/crashpad-capture.ts
 2 src/main/crash-reporting/process-exits/process-gone-diagnostics.ts
@@ -574,7 +575,7 @@
 2 src/main/host/deferred-secret-protection-report.ts
 1 src/main/host/electron-speech-services.ts
 1 src/main/host/secret-protection-report.ts
-14 src/main/index.ts
+13 src/main/index.ts
 2 src/main/ipc/accounts/codex-accounts.ts
 1 src/main/ipc/accounts/codex-config-sync.ts
 1 src/main/ipc/accounts/cursor-accounts.ts
@@ -582,7 +583,7 @@
 3 src/main/ipc/accounts/zcode-plan-credentials.ts
 1 src/main/ipc/ai-vault/ai-vault-search.ts
 1 src/main/ipc/ai-vault/ai-vault-subagent-list.ts
-5 src/main/ipc/app.ts
+4 src/main/ipc/app.ts
 1 src/main/ipc/automations.ts
 3 src/main/ipc/browser/browser-client-host-cookie-import-ipc.ts
 1 src/main/ipc/browser/browser-extensions.ts
@@ -664,7 +665,6 @@
 1 src/main/ipc/pty/spawn/spawn-options-assembly.ts
 17 src/main/ipc/register-core-handlers/register-core-handlers.ts # clipboard path authorization moved here from window/clipboard/clipboard-ipc-handlers.ts
 1 src/main/ipc/register-core-handlers/runtime-host-handler-registration.ts
-2 src/main/ipc/renderer-shutdown-checkpoint.ts
 5 src/main/ipc/repos.ts
 1 src/main/ipc/repos/local-repo-registration.ts
 1 src/main/ipc/repos/nested-repo-import-handler.ts
@@ -785,7 +785,7 @@
 5 src/main/native-chat/agent-session-journal/database/journal-domain-migrations.ts # tail table create at store open (one-shot startup); worker-only: +2 create the retired-epoch pending table in a transaction on the journal SQL worker
 3 src/main/native-chat/agent-session-journal/database/journal-host-database.ts
 1 src/main/native-chat/agent-session-journal/durable-rows/journal-row-table.ts
-2 src/main/native-chat/agent-session-journal/history-import/adopted-transcript-source.ts
+3 src/main/native-chat/agent-session-journal/history-import/adopted-transcript-source.ts # +1: Continue in Chat UI's pre-close folder check reuses validateAdoptedOpenCodeSource; its only sync step is the worker entry existsSync when the shared OpenCode SQLite worker first spawns
 1 src/main/native-chat/agent-session-journal/history-import/journal-hermes-import.ts
 5 src/main/native-chat/agent-session-journal/history-import/journal-legacy-import.ts
 1 src/main/native-chat/agent-session-journal/journal-domain-import-discard.ts
@@ -1141,7 +1141,7 @@
 1 src/main/runtime/agent-session/environment/structured-agent-account-home.ts
 2 src/main/runtime/agent-session/environment/structured-session-child-env.ts
 2 src/main/runtime/agent-session/installation/runtime-structured-agent-host.ts
-6 src/main/runtime/agent-session/installation/structured-agent-runtime-metadata.ts
+3 src/main/runtime/agent-session/installation/structured-agent-runtime-metadata.ts
 2 src/main/runtime/agent-session/installation/structured-agent-runtime-registrations.ts
 1 src/main/runtime/agent-session/installation/structured-agent-session-host-assembly.ts
 1 src/main/runtime/agent-session/installation/structured-agent-session-runtime-teardown.ts
@@ -1274,6 +1274,7 @@
 2 src/main/runtime/session-construction/agent-session/get-agent-session-execution-namespace.ts
 3 src/main/runtime/session-lifecycle/projection/restored-pane-materialize.ts
 1 src/main/runtime/session-tabs/chat/structured-session-create-support.ts
+1 src/main/runtime/session-tabs/chat/structured-session-resume-folder-check.ts # per Continue in Chat UI click: assertAdoptedTranscriptFolder, whose only sync step is the OpenCode SQLite worker entry existsSync on first spawn
 1 src/main/runtime/sidebar-inputs/sidebar-inputs-feed-domains.ts
 1 src/main/runtime/speech/runtime-mobile-dictation-controller.ts
 2 src/main/runtime/speech/runtime-mobile-speech-catalog.ts
@@ -1383,7 +1384,7 @@
 1 src/main/startup/main-process-preflight-failure.ts
 25 src/main/startup/main-process-preflight.ts
 15 src/main/startup/main-process-ready-foundation.ts
-7 src/main/startup/main-process-ready-runtime.ts
+3 src/main/startup/main-process-ready-runtime.ts
 4 src/main/startup/main-process-ready.ts
 1 src/main/startup/main-window/main-process-i18n-menu.ts
 15 src/main/startup/main-window/main-window-controller.ts
@@ -1397,7 +1398,7 @@
 5 src/main/startup/profile-startup/profile-state-recovery-preflight.ts
 2 src/main/startup/profile-startup/single-instance-lock.ts
 12 src/main/startup/pty-startup/main-process-pty-startup.ts
-2 src/main/startup/quit/main-process-quit.ts # superseded-session unlink on a rare memory-only sign-in or rotation stays ordered with the sync saves, sign-out and quit flush (#44285)
+1 src/main/startup/quit/main-process-quit.ts # superseded-session unlink on a rare memory-only sign-in or rotation stays ordered with the sync saves, sign-out and quit flush (#44285)
 15 src/main/startup/runtime-startup/main-process-runtime-launch.ts
 4 src/main/startup/runtime-startup/main-process-runtime-service.ts
 1 src/main/startup/serve-launch/headless-serve-ssh-registration.ts

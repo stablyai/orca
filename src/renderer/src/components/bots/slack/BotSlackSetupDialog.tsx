@@ -10,6 +10,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
 import { isMac } from '@/app-shell/chrome/app-window-chrome'
 import { botSlackApps, type Bot } from '../../../../../shared/bot-types'
+import { signedOutHere } from '../bot-host-copy'
 import { BOT_SLACK_DESKTOP_ERRORS } from '../../../../../shared/connector-bot-slack-contract'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host/execution-host'
 import { botSlackErrorMessage } from './bot-slack-copy'
@@ -21,6 +22,7 @@ import {
   ConnectorWorkspacePicker,
   connectorSetupFor
 } from '../connector-connect-parts'
+import { SlackOpenAppButton } from './SlackOpenAppButton'
 import { SlackConfigTokenForm } from './SlackConfigTokenForm'
 import { SlackTeamName } from './SlackWorkspacesSettings'
 import { BotHostSignInButton } from '../BotHostSignInButton'
@@ -75,8 +77,9 @@ function BotSlackSetupFlow({
   const [checkedSlack, setCheckedSlack] = useState(false)
   const checkboxId = useId()
 
-  // The cloud said signed out (a sign-in that lapsed while open): the same ask, then setup again.
-  if (step.kind === 'failed' && step.code === BOT_SLACK_DESKTOP_ERRORS.signedOut) {
+  // This computer's sign-in lapsed while open: the same ask, then setup again. A server's failed
+  // step signs in that server instead.
+  if (step.kind === 'failed' && signedOutHere(step, hostName)) {
     return (
       <OrcaCloudSignInDialogBody
         title={title}
@@ -329,6 +332,7 @@ function BotSlackSetupFlow({
               <BotSlackPostAs bot={bot} slack={installedState} setupState={step.setupState} />
             ) : null}
             <DialogFooter>
+              <SlackOpenAppButton bot={bot} slack={installedState} onOpenedInOrca={onClose} />
               <Button autoFocus onClick={onClose}>
                 {t('bots.slack.setup.done', 'Done')}
               </Button>

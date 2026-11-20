@@ -4,10 +4,18 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Bot } from '../../../../shared/bot-types'
 
-const mocks = vi.hoisted(() => ({ bots: new Array<Bot>(), start: vi.fn(), updateBot: vi.fn() }))
+const mocks = vi.hoisted(
+  (): {
+    bots: Bot[]
+    start: ReturnType<typeof vi.fn>
+    updateBot: ReturnType<typeof vi.fn>
+    hostStatus?: string
+  } => ({ bots: [], start: vi.fn(), updateBot: vi.fn() })
+)
 vi.mock('@/lib/bot-catalog', () => ({
   useBots: () => mocks.bots,
   updateBot: mocks.updateBot,
+  useBotHostConnectorStatus: () => mocks.hostStatus,
   useCardBot: (id: string) => ({
     bot: mocks.bots.find((bot: { id: string }) => bot.id === id) ?? null,
     ref: { hostId: 'local', id }
@@ -71,12 +79,13 @@ function show(bot: Bot, offer: { source: 'slack' | 'linear' | 'github'; workspac
 afterEach(() => {
   cleanup()
   mocks.start.mockClear()
+  mocks.hostStatus = undefined
 })
 
 describe('the Connect card', () => {
   it('connects through the same setup as Add connector', () => {
     show(makeTestBot({ id: 'b1' }), { source: 'linear' })
-    fireEvent.click(screen.getByRole('button', { name: 'Connect' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Connect Linear' }))
     expect(mocks.start).toHaveBeenCalledWith('linear')
   })
 
@@ -85,6 +94,13 @@ describe('the Connect card', () => {
     expect(screen.getByText('Connected in Acme')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Add another workspace' }))
     expect(mocks.start).toHaveBeenCalledWith('linear')
+  })
+
+  it('reads Paused, not Connected, while the bot’s host is signed out of Orca', () => {
+    mocks.hostStatus = 'signed-out'
+    show(makeTestBot({ id: 'b1', linear: acme, linearWorkspaces: [acme] }), { source: 'linear' })
+    expect(screen.getByText(/^Paused until .+ signs in to Orca\.$/)).toBeTruthy()
+    expect(screen.queryByText('Connected in Acme')).toBeNull()
   })
 
   it('still adds repositories or organizations once GitHub is connected', () => {
@@ -147,7 +163,7 @@ describe('the Sign in card for a host signed out of Orca', () => {
     }
   })
 
-  it("leaves a paired server's sign-in to the server: its line, no check and no Continue", () => {
+  it("keeps a paired server's own line while it hasn't said its sign-in: no check and no Continue", () => {
     const initial = useAppStore.getState()
     useAppStore.setState({ orcaProfileAuthStatus: ORCA_CONNECTED })
     mocks.bots = [

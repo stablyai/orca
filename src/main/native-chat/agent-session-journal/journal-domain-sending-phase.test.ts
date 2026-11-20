@@ -6,6 +6,7 @@ import {
 } from './journal-domain-lifecycle.test-fixture'
 import { applyJournalDomainDispatch } from './journal-domain-dispatch'
 import { JournalSqlScope } from './journal-sql-scope'
+import { readJournalSqlInput } from './journal-sql-input-reads'
 import {
   journalDomainEnteredInputs,
   journalDomainSendingInputs
@@ -193,19 +194,23 @@ it.each([false, true])(
     runJournalTransaction(f.db, () => finishJournalDomainImport(f.db, imported))
     f.reopen()
     const scope = new JournalSqlScope(f.db, 'chat', 'epoch')
+    const submissions = ['A', 'B', 'C'].map((clientMessageId) => ({ clientMessageId }))
     expect(
-      [...journalDomainSendingInputs(scope)].map((send) => send.clientMessageId).sort()
-    ).toEqual(['A', 'B', 'C'])
-    expect(
-      [...journalDomainEnteredInputs(scope)].map((send) => send.clientMessageId).sort()
-    ).toEqual(['A', 'B', 'C'])
-    expect(
-      f.db
-        .prepare(
-          `SELECT message_id FROM journal_submission_attempts WHERE current=1 ORDER BY ordinal,message_id`
-        )
-        .all()
-        .map((row) => row.message_id)
-    ).toEqual(['A', 'B', 'C'])
+      readJournalSqlInput(scope, {
+        kind: 'batch',
+        reads: [
+          { kind: 'sending-submissions' },
+          { kind: 'entered-submissions' },
+          { kind: 'pending-submissions' }
+        ]
+      })
+    ).toMatchObject({
+      kind: 'batch',
+      results: [
+        { kind: 'sending-submissions', submissions },
+        { kind: 'entered-submissions', submissions },
+        { kind: 'pending-submissions', submissions }
+      ]
+    })
   }
 )

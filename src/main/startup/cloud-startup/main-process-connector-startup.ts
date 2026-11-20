@@ -24,10 +24,10 @@ import { mainProcessState as state } from '../main-process-state'
  * Created before the window exists, so its sign-in and sign-out hooks always find it.
  */
 export function installMainProcessConnectorCloud(serve: boolean): void {
-  if (!state.runtime || !state.store) {
+  if (!state.core.runtime || !state.store) {
     return
   }
-  const runtime = state.runtime
+  const runtime = state.core.runtime
   const userDataPath = getProfileUserDataPath()
   const host = installConnectorHost({
     runtime,
@@ -64,12 +64,12 @@ export function installMainProcessConnectorCloud(serve: boolean): void {
 
 /** This process's connector, for the startup, auth and quit hooks. */
 export function mainProcessConnectorCloud(): ConnectorCloud | null {
-  return state.runtime?.getConnectorCloud() ?? null
+  return state.core.runtime?.getConnectorCloud() ?? null
 }
 
 /** Quit and relaunch: the relay host and the connector stop taking cloud work before teardown. */
 export function fenceMainProcessCloudOnQuit(): void {
-  state.relayHost?.fence()
+  state.core.relayHost?.fence()
   mainProcessConnectorCloud()?.fence()
 }
 
