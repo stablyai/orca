@@ -128,3 +128,15 @@ it('on a host that takes request ids, a Retry resends the same id and the read m
   })
   expect(view.result.current.shown).toEqual([])
 })
+
+it('sends a quick reply with its question and drops it once the host says the question was replaced', async () => {
+  sent.mockRejectedValueOnce(
+    Object.assign(new Error('Item 6 has a new question.'), { code: 'item_changed' })
+  )
+  const view = mount('uid-7', LOCAL)
+
+  await act(async () => view.result.current.send('Yes', [], 'e8', 'e5'))
+
+  expect(sent).toHaveBeenLastCalledWith(LOCAL, 'uid-7', 'Yes', [], expect.any(String), 'e5')
+  expect(view.result.current.shown).toEqual([])
+})

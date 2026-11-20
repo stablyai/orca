@@ -90,6 +90,7 @@ function trackHiddenTargets(): {
     for (const target of watched) {
       if (!present.has(target)) {
         watched.delete(target)
+        hidden.delete(target)
         observer?.unobserve(target)
       }
     }

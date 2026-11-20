@@ -143,7 +143,7 @@ function Viewer({
     for (const path of nearby ? nearby.split('\0') : []) {
       read(path)
     }
-  }, [read, nearby])
+  }, [read, index, nearby])
   // Shown until the next image's bytes arrive, so a step never closes the viewer.
   const [shown, setShown] = useState<string | null>(null)
   const fresh = reads.uris[image.path]

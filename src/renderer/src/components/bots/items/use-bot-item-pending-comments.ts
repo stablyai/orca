@@ -17,6 +17,7 @@ import {
   type BotItemEvent
 } from '../../../../../shared/bots/bot-items'
 import type { RuntimeCapability } from '../../../../../shared/remote-runtime/protocol/protocol-version'
+import { translate } from '@/i18n/i18n'
 import { botErrorMessage } from '../bot-presentation'
 import { commentOnBotItem } from './use-bot-items'
 
@@ -87,6 +88,10 @@ function update(key: string, id: string, change: Partial<BotItemPendingComment> 
   )
 }
 
+function hostCode(error: unknown): unknown {
+  return typeof error === 'object' && error !== null && 'code' in error ? error.code : undefined
+}
+
 function deliver(bot: BotRef, uid: string, key: string, entry: BotItemPendingComment): void {
   const { id } = entry.event
   const queued = (queues.get(key) ?? Promise.resolve())
@@ -107,8 +112,17 @@ function deliver(bot: BotRef, uid: string, key: string, entry: BotItemPendingCom
         update(key, id, eventId ? { eventId, failed: false } : null)
       },
       (error: unknown) => {
-        toast.error(botErrorMessage(error))
-        update(key, id, { failed: true })
+        // A reply to a replaced question would fail the same way again: it goes, and the new question shows.
+        const replaced = entry.questionId !== null && hostCode(error) === 'item_changed'
+        toast.error(
+          replaced
+            ? translate(
+                'bots.items.ask.replaced',
+                'The agent asked a new question. Read it, then reply.'
+              )
+            : botErrorMessage(error)
+        )
+        update(key, id, replaced ? null : { failed: true })
       }
     )
   queues.set(key, queued)
