@@ -4,6 +4,8 @@ import {
   mkdirSync,
   mkdtempSync,
   readdirSync,
+  readFileSync,
+  readlinkSync,
   realpathSync,
   rmSync,
   symlinkSync,
@@ -12,7 +14,7 @@ import {
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { botOwnSkillsView, syncBotOwnSkills } from './bot-own-skills'
+import { botOwnSkillsView, linkBotOwnSkills } from './bot-own-skills'
 
 const dirs: string[] = []
 afterEach(() => {
@@ -37,57 +39,41 @@ const linkTarget = (path: string): string | null =>
   lstatSync(path, { throwIfNoEntry: false })?.isSymbolicLink() ? realpathSync(path) : null
 
 describe("a bot's own skills", () => {
-  it('links each skill into both agent folders and removes only the links it made', async () => {
+  it('links each skill into both agent folders and removes nothing when it goes', async () => {
     const home = scratch()
     const deploy = writeSkill(join(home, 'skills'), 'deploy')
-    await syncBotOwnSkills(home)
+    await linkBotOwnSkills(home)
 
     expect(linkTarget(join(home, '.claude/skills/deploy'))).toBe(deploy)
     expect(linkTarget(join(home, '.agents/skills/deploy'))).toBe(deploy)
 
     rmSync(deploy, { recursive: true })
-    await syncBotOwnSkills(home)
-    expect(readdirSync(join(home, '.claude/skills'))).toEqual([])
-    expect(readdirSync(join(home, '.agents/skills'))).toEqual([])
-  })
-
-  it('never removes or takes over a link the owner made, even one into skills/', async () => {
-    const home = scratch()
-    const outside = scratch()
-    const deploy = writeSkill(join(home, 'skills'), 'deploy')
-    writeSkill(join(home, 'skills'), 'notes')
-    mkdirSync(join(home, '.claude/skills'), { recursive: true })
-    mkdirSync(join(home, '.agents/skills'), { recursive: true })
-    symlinkSync(deploy, join(home, '.claude/skills/personal-deploy'))
-    symlinkSync(deploy, join(home, '.agents/skills/deploy'))
-    symlinkSync(writeSkill(outside, 'notes'), join(home, '.claude/skills/notes'))
-    writeSkill(join(home, '.claude/skills'), 'legacy')
-
-    await syncBotOwnSkills(home)
-    rmSync(deploy, { recursive: true })
-    await syncBotOwnSkills(home)
-
-    // The owner's alias and same-name link stay, though their skill is gone.
-    expect(lstatSync(join(home, '.claude/skills/personal-deploy')).isSymbolicLink()).toBe(true)
+    await linkBotOwnSkills(home)
+    expect(lstatSync(join(home, '.claude/skills/deploy')).isSymbolicLink()).toBe(true)
     expect(lstatSync(join(home, '.agents/skills/deploy')).isSymbolicLink()).toBe(true)
-    expect(linkTarget(join(home, '.claude/skills/notes'))).toBe(join(outside, 'notes'))
-    expect(lstatSync(join(home, '.claude/skills/legacy')).isDirectory()).toBe(true)
-    expect(linkTarget(join(home, '.agents/skills/notes'))).toBe(join(home, 'skills/notes'))
-    expect(existsSync(join(home, '.claude/skills/deploy'))).toBe(false)
   })
 
-  it('leaves a link it made alone once the owner points it somewhere else', async () => {
+  it('leaves whatever already holds a name as it is', async () => {
     const home = scratch()
     const outside = scratch()
-    const deploy = writeSkill(join(home, 'skills'), 'deploy')
-    await syncBotOwnSkills(home)
-    rmSync(join(home, '.claude/skills/deploy'))
-    symlinkSync(writeSkill(outside, 'mine'), join(home, '.claude/skills/deploy'))
+    for (const name of ['file', 'folder', 'link', 'dangling', 'alias-target']) {
+      writeSkill(join(home, 'skills'), name)
+    }
+    mkdirSync(join(home, '.claude/skills/folder'), { recursive: true })
+    writeFileSync(join(home, '.claude/skills/file'), 'mine\n')
+    symlinkSync(writeSkill(outside, 'mine'), join(home, '.claude/skills/link'))
+    symlinkSync(join(outside, 'gone'), join(home, '.claude/skills/dangling'))
 
-    rmSync(deploy, { recursive: true })
-    await syncBotOwnSkills(home)
+    await linkBotOwnSkills(home)
 
-    expect(linkTarget(join(home, '.claude/skills/deploy'))).toBe(join(outside, 'mine'))
+    expect(readFileSync(join(home, '.claude/skills/file'), 'utf8')).toBe('mine\n')
+    expect(lstatSync(join(home, '.claude/skills/folder')).isDirectory()).toBe(true)
+    expect(readdirSync(join(home, '.claude/skills/folder'))).toEqual([])
+    expect(linkTarget(join(home, '.claude/skills/link'))).toBe(join(outside, 'mine'))
+    expect(readlinkSync(join(home, '.claude/skills/dangling'))).toBe(join(outside, 'gone'))
+    expect(linkTarget(join(home, '.claude/skills/alias-target'))).toBe(
+      join(home, 'skills/alias-target')
+    )
   })
 
   it('links nothing that leads out of the home', async () => {
@@ -95,27 +81,36 @@ describe("a bot's own skills", () => {
     const outside = scratch()
     mkdirSync(join(home, 'skills'))
     symlinkSync(writeSkill(outside, 'external'), join(home, 'skills/external'))
-    await syncBotOwnSkills(home)
+    await linkBotOwnSkills(home)
     expect(existsSync(join(home, '.claude'))).toBe(false)
     expect((await botOwnSkillsView(home)).skills).toEqual([])
 
     const linkedRoot = scratch()
     writeSkill(join(outside, 'root'), 'elsewhere')
     symlinkSync(join(outside, 'root'), join(linkedRoot, 'skills'))
-    await syncBotOwnSkills(linkedRoot)
+    await linkBotOwnSkills(linkedRoot)
     expect(existsSync(join(linkedRoot, '.claude'))).toBe(false)
   })
 
-  it('lists an older bot’s agent-only skills and opens their folder', async () => {
+  it('shows a skill both agent folders reach once, loaded by both', async () => {
     const home = scratch()
-    writeSkill(join(home, '.agents/skills'), 'triage')
-
-    await syncBotOwnSkills(home)
+    const triage = writeSkill(join(home, '.agents/skills'), 'triage')
+    mkdirSync(join(home, '.claude/skills'), { recursive: true })
+    symlinkSync(triage, join(home, '.claude/skills/triage'))
+    writeSkill(join(home, '.claude/skills'), 'tone')
 
     expect(await botOwnSkillsView(home)).toEqual({
-      skillsDir: join(home, '.agents/skills'),
+      skillsDir: join(home, '.claude/skills'),
       skills: [],
-      agentOnly: [{ name: 'triage', description: 'triage d', only: 'agents' }]
+      agentOnly: [
+        {
+          name: 'tone',
+          description: 'tone d',
+          folder: join(home, '.claude/skills/tone'),
+          loadedBy: ['claude']
+        },
+        { name: 'triage', description: 'triage d', folder: triage, loadedBy: ['claude', 'agents'] }
+      ]
     })
   })
 })

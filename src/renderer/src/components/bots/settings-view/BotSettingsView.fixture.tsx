@@ -112,7 +112,11 @@ function stub(bot: Bot = builder): void {
             own: {
               skillsDir: '/Users/owner/.orca/bots/release-notes/skills',
               skills: [
-                { name: 'release-notes-style', description: 'House style for release notes' }
+                {
+                  name: 'release-notes-style',
+                  description: 'House style for release notes',
+                  folder: '/Users/owner/.orca/bots/release-notes/skills/release-notes-style'
+                }
               ],
               agentOnly: []
             }

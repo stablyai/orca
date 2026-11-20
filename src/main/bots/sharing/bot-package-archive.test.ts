@@ -286,8 +286,26 @@ describe('what a bot export may read', () => {
     expect(shareable.leftOut).toContainEqual({
       kind: 'skill',
       name: 'changelog-style',
-      why: 'duplicate'
+      why: 'duplicate',
+      from: '.claude/skills/changelog-style'
     })
+  })
+
+  it('shares a skill Claude reaches only through a link to the other agent folder', async () => {
+    const home = join(root, 'home')
+    await writeHome(home)
+    await rm(join(home, '.claude/skills/changelog-style'), { recursive: true })
+    await mkdir(join(home, '.agents/skills/triage'), { recursive: true })
+    await writeFile(
+      join(home, '.agents/skills/triage/SKILL.md'),
+      '---\nname: triage\ndescription: Sort issues\n---\n'
+    )
+    await symlink(join(home, '.agents/skills/triage'), join(home, '.claude/skills/triage'))
+    for (const agent of ['claude', 'codex'] as const) {
+      const shareable = await readBotShareable({ bot: { ...bot, agent }, home, automations: [] })
+      expect(shareable.skills.map((skill) => skill.homePath)).toEqual(['.agents/skills/triage'])
+      expect(shareable.leftOut.filter((entry) => entry.kind === 'skill')).toEqual([])
+    }
   })
 
   it('treats a folder on another Windows drive as outside', () => {

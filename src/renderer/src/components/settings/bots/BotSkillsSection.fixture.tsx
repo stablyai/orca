@@ -40,8 +40,21 @@ const REPOS = [
 /** A template bot's own skill, and one an older version left in Claude's folder. */
 const OWN: BotOwnSkillsView = {
   skillsDir: '/Users/owner/.orca/bots/pr-review/skills',
-  skills: [{ name: 'pr-review-checklist', description: 'What to check on every pull request' }],
-  agentOnly: [{ name: 'house-style', description: 'Our review tone', only: 'claude' }]
+  skills: [
+    {
+      name: 'pr-review-checklist',
+      description: 'What to check on every pull request',
+      folder: '/Users/owner/.orca/bots/pr-review/skills/pr-review-checklist'
+    }
+  ],
+  agentOnly: [
+    {
+      name: 'house-style',
+      description: 'Our review tone',
+      folder: '/Users/owner/.orca/bots/pr-review/.claude/skills/house-style',
+      loadedBy: ['claude']
+    }
+  ]
 }
 
 const VIEWS: Record<string, BotSkillProjectView> = {

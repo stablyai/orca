@@ -258,6 +258,8 @@ export type BotShareLeftOut = {
   kind: 'skill' | 'tool' | 'automation' | 'memory' | 'avatar'
   name: string
   why: string
+  /** Where in the home it is, when another part shares its name (a skill in two folders). */
+  from?: string
 }
 
 export type BotShareFlag = {

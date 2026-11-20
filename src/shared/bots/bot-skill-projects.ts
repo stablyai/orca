@@ -16,8 +16,15 @@ export type BotSkillProjectView = {
 export type BotOwnSkillsView = {
   /** What Open folder shows: skills/, or for an older bot with none there, the agent folder its skills are in. */
   skillsDir: string
-  skills: { name: string; description: string | null }[]
-  agentOnly: { name: string; description: string | null; only: BotAgentSkillsFolder }[]
+  /** `folder`: the skill's real folder, which tells two skills of one name apart. */
+  skills: { name: string; description: string | null; folder: string }[]
+  /** Skills in the agents' own folders, one per real folder, with each agent folder that loads it. */
+  agentOnly: {
+    name: string
+    description: string | null
+    folder: string
+    loadedBy: BotAgentSkillsFolder[]
+  }[]
 }
 
 /** Agents that skip the linked skill folders Orca loads project skills from, so their bots get a list instead. */

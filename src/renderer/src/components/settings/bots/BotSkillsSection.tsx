@@ -142,7 +142,7 @@ function ProjectRow(props: {
       status={null}
       trailing={null}
     >
-      <SkillList skills={skills} />
+      <SkillList skills={skills.map((skill) => ({ ...skill, id: skill.name }))} />
       <FolderLine folder={skillsDir} hostId={bot.hostId}>
         <RemoveButton onRemove={onRemove} />
       </FolderLine>
@@ -150,8 +150,12 @@ function ProjectRow(props: {
   )
 }
 
-function onlyLabel(only: BotAgentSkillsFolder): string {
-  return only === 'claude'
+/** Which agents load a skill kept in their own folders; none when both folders reach it. */
+function loadedByLabel(loadedBy: readonly BotAgentSkillsFolder[]): string | undefined {
+  if (loadedBy.includes('claude') && loadedBy.includes('agents')) {
+    return undefined
+  }
+  return loadedBy.includes('claude')
     ? translate('settings.bots.skills.claudeOnly', 'Claude only')
     : translate('settings.bots.skills.notClaude', 'Not for Claude')
 }
@@ -178,8 +182,12 @@ function OwnSkillsRow({
     )
   }
   const skills: ListedSkill[] = [
-    ...own.skills,
-    ...own.agentOnly.map((skill) => ({ ...skill, label: onlyLabel(skill.only) }))
+    ...own.skills.map((skill) => ({ ...skill, id: skill.folder })),
+    ...own.agentOnly.map((skill) => ({
+      ...skill,
+      id: skill.folder,
+      label: loadedByLabel(skill.loadedBy)
+    }))
   ]
   if (skills.length === 0) {
     return (

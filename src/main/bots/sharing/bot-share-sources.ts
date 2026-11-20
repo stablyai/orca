@@ -15,17 +15,14 @@ import { soulDescription } from '../../../shared/bot-soul'
 import type { BotToolServer } from '../../../shared/bot-tools'
 import { botLinearWorkspaces, botSlackApps, type Bot } from '../../../shared/bot-types'
 import {
-  BOT_AGENT_SKILLS_FOLDERS,
-  BOT_OWN_SKILLS_FOLDER,
-  type BotAgentSkillsFolder,
   BOT_PACKAGE_PURPOSE_MAX,
   botPackageResults,
   type BotPackageConnector,
   type BotPackageV1,
   type BotShareLeftOut
 } from '../../../shared/bots/bot-package'
-import { ownPath, validPartName, within, type Home } from './bot-share-own-path'
-import { readBotOwnSkills } from '../bot-own-skills'
+import { ownPath, validPartName, type Home } from './bot-share-own-path'
+import { readShareSkills, type BotShareSkill } from './bot-share-skills'
 import { botToolCredentialHeaderNames } from '../bot-tool-credentials'
 import { botToolsPath, readBotToolServers } from '../bot-tools-file'
 import { landingLine } from './bot-package-transport'
@@ -37,8 +34,7 @@ export type BotShareable = {
   purpose: string
   avatar: BotPackageV1['avatar']
   avatarImage: Buffer | null
-  /** `homePath`: the skill's folder from the bot home, '/'-separated, for opening its files. */
-  skills: { name: string; description: string; directory: string; homePath: string }[]
+  skills: BotShareSkill[]
   tools: BotPackageV1['tools']
   schedules: (BotPackageV1['schedules'][number] & { automationId: string })[]
   eventSuggestions: (BotPackageV1['eventSuggestions'][number] & { automationId: string })[]
@@ -59,54 +55,6 @@ function shareableToolUrl(url: string): string {
   parsed.search = ''
   parsed.hash = ''
   return parsed.toString()
-}
-
-/** skills/ first, then the folder the bot's own agent loads, then the other: a name in two places
- *  shares the version the bot uses, and the other copy is listed as left out. */
-async function readSkills(
-  bot: Bot,
-  home: Home,
-  leftOut: BotShareable['leftOut']
-): Promise<BotShareable['skills']> {
-  const own = await readBotOwnSkills(home.path)
-  const agentFirst: BotAgentSkillsFolder[] =
-    bot.agent === 'claude' ? ['claude', 'agents'] : ['agents', 'claude']
-  const sources = [
-    { folder: BOT_OWN_SKILLS_FOLDER, skills: own.skills },
-    ...agentFirst.map((only) => ({
-      folder: BOT_AGENT_SKILLS_FOLDERS[only],
-      skills: own.agentOnly.filter((skill) => skill.only === only)
-    }))
-  ]
-  const skills: BotShareable['skills'] = []
-  for (const source of sources) {
-    if (source.skills.length === 0) {
-      continue
-    }
-    const root = await ownPath(home, ...source.folder.split('/'))
-    if (root === null || root === 'linked') {
-      leftOut.push({ kind: 'skill', name: source.folder, why: 'linked' })
-      continue
-    }
-    for (const skill of source.skills) {
-      if (!validPartName(skill.name)) {
-        leftOut.push({ kind: 'skill', name: skill.name, why: 'name' })
-      } else if (!within(root.own, skill.folder)) {
-        // A link to a folder outside the home's skills: the owner's, not the bot's.
-        leftOut.push({ kind: 'skill', name: skill.name, why: 'outside-home' })
-      } else if (skills.some((entry) => entry.name === skill.name)) {
-        leftOut.push({ kind: 'skill', name: skill.name, why: 'duplicate' })
-      } else {
-        skills.push({
-          name: skill.name,
-          description: skill.description,
-          directory: skill.folder,
-          homePath: relative(home.real, skill.folder).split(sep).join('/')
-        })
-      }
-    }
-  }
-  return skills.sort((left, right) => left.name.localeCompare(right.name, 'en-US'))
 }
 
 function readTools(
@@ -298,7 +246,7 @@ export async function readBotShareable(input: {
   const soul = await readFile(soulPath.own, 'utf8')
   const automationParts = readAutomations(input.bot, input.automations, leftOut)
   const [skills, servers, memory, avatar] = await Promise.all([
-    readSkills(input.bot, home, leftOut),
+    readShareSkills(input.bot, home, leftOut),
     readOwnToolServers(home, leftOut),
     readMemory(home, leftOut),
     readAvatar(input.bot, home, leftOut)

@@ -40,7 +40,8 @@ export function PlainRow(props: {
   )
 }
 
-export type ListedSkill = { name: string; description: string | null; label?: string }
+/** `id` tells two skills of one name apart. */
+export type ListedSkill = { id: string; name: string; description: string | null; label?: string }
 
 export function SkillList({ skills }: { skills: readonly ListedSkill[] }): React.JSX.Element {
   const t = useTranslate()
@@ -48,7 +49,7 @@ export function SkillList({ skills }: { skills: readonly ListedSkill[] }): React
     <>
       <ul className="flex flex-col gap-0.5">
         {skills.slice(0, SHOWN_SKILLS).map((skill) => (
-          <li key={skill.name} className="flex h-7 min-w-0 items-center gap-2 text-sm">
+          <li key={skill.id} className="flex h-7 min-w-0 items-center gap-2 text-sm">
             <span className="shrink-0 font-mono text-xs">{skill.name}</span>
             {skill.label ? <Badge variant="referenceLabel">{skill.label}</Badge> : null}
             {skill.description ? (

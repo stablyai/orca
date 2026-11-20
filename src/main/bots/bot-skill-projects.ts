@@ -154,7 +154,7 @@ const syncing = new Map<string, Promise<unknown>>()
 
 /** One scan-and-sync per folder at a time, in call order, so an older scan never lands over a
  *  newer one's links. */
-export function serialized<T>(folder: string, run: () => Promise<T>): Promise<T> {
+function serialized<T>(folder: string, run: () => Promise<T>): Promise<T> {
   const next = (syncing.get(folder) ?? Promise.resolve()).catch(() => {}).then(run)
   syncing.set(folder, next)
   return next.finally(() => {
