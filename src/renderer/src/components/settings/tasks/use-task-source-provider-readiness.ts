@@ -11,6 +11,7 @@ import { localPreflightContextKey } from '@/runtime/hosts/preflight/local-prefli
 import { getProviderRuntimeContextKey } from '@/runtime/hosts/observations/provider-runtime-context'
 import { useAppStore } from '@/store/index'
 import type { TaskProvider } from '../../../../../shared/work-items/task-providers'
+import { isGiteaTaskSourceConfigured } from '@/lib/gitea-review-configured'
 import type { TaskProviderReadiness } from './task-source-setup-state'
 
 export function useTaskSourceProviderReadiness(
@@ -57,6 +58,7 @@ export function useTaskSourceProviderReadiness(
     reviewReadyForConnection &&
     preflightStatus?.glab?.installed === true &&
     preflightStatus.glab.authenticated === true
+  const giteaConnected = reviewReadyForConnection && isGiteaTaskSourceConfigured(preflightStatus)
   const jiraChecking = jiraStatusContextKey !== providerRuntimeContextKey || !jiraStatusChecked
   const jiraConnected = !jiraChecking && jiraStatus.connected === true
   const linearChecking =
@@ -79,6 +81,12 @@ export function useTaskSourceProviderReadiness(
         unavailable: reviewUnavailable,
         visible: visible.has('gitlab')
       },
+      gitea: {
+        connected: giteaConnected,
+        checking: reviewChecking,
+        unavailable: reviewUnavailable,
+        visible: visible.has('gitea')
+      },
       linear: {
         connected: linearConnected,
         checking: linearChecking,
@@ -96,6 +104,7 @@ export function useTaskSourceProviderReadiness(
   }, [
     githubConnected,
     gitlabConnected,
+    giteaConnected,
     jiraChecking,
     jiraConnected,
     linearChecking,

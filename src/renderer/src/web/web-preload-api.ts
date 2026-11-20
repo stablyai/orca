@@ -23,6 +23,7 @@ import { createGitApi } from './preload-api/git/web-git-api'
 import { createWebGithubCacheApi } from './preload-api/github/web-github-cache-api'
 import { createGitHubApi } from './preload-api/github/web-github-api'
 import { createGitLabApi } from './preload-api/gitlab/web-gitlab-api'
+import { createGiteaApi } from './preload-api/gitea/web-gitea-api'
 import {
   createComputerUsePermissionsApi,
   createDeveloperPermissionsApi,
@@ -101,6 +102,7 @@ function createWebPreloadApi(): Omit<Partial<PreloadApi>, 'settings' | 'plugins'
     emulator: createEmulatorApi(),
     gh: createGitHubApi(),
     gl: createGitLabApi(),
+    gitea: createGiteaApi(),
     hostedReview: createRuntimeNamespaceApi('hostedReview'),
     linear: createRuntimeNamespaceApi('linear'),
     jira: createWebJiraApi(),

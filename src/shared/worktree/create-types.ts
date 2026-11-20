@@ -128,6 +128,7 @@ export type CreateWorktreeArgs = {
   linkedBitbucketPR?: number | null
   linkedAzureDevOpsPR?: number | null
   linkedGiteaPR?: number | null
+  linkedGiteaIssue?: number | null
   linkedWorkItem?: WorkspaceLinkedItem | null
   linkedItems?: WorkspaceAttachment[]
   linkedTaskSourceContext?: TaskSourceContext | null

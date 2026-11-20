@@ -20523,6 +20523,39 @@
         "stateNeedsYou": "Needs you",
         "stateResuming": "Resuming",
         "stateStopped": "Stopped"
+      },
+      "GiteaItemDialog": {
+        "retryUnsupported": "Gitea does not support retrying a single job.",
+        "workItemDetail": "Gitea work item detail",
+        "openInGitea": "Open in Gitea",
+        "titleRequired": "Title is required.",
+        "closedPr": "Closed PR #{{value0}}",
+        "reopenedPr": "Reopened PR #{{value0}}",
+        "mergedPr": "Merged PR #{{value0}}"
+      },
+      "gitea": {
+        "gitea": {
+          "rate": {
+            "limit": {
+              "display": {
+                "budgetScopePrefix": "Budget scope",
+                "description": "Orca uses REST through the Gitea CLI (gt).",
+                "envTokenOnly": "gt CLI not installed; using {{value0}}.",
+                "loading": "Loading Gitea API budget...",
+                "noHeaders": "This Gitea host did not return rate-limit headers.",
+                "refresh": "Refresh Gitea API budget",
+                "remainingOfLimit": "{{remaining}} of {{limit}} left, resets in {{reset}}",
+                "rest": "REST API",
+                "teaMissing": "gt CLI is not installed.",
+                "teaSignedIn": "gt CLI is signed in.",
+                "teaSignedInHost": "gt CLI signed in to {{value0}}.",
+                "teaSignedOut": "gt CLI is not signed in. Run gt auth login.",
+                "title": "Gitea API Budget",
+                "unavailable": "Gitea API budget is unavailable."
+              }
+            }
+          }
+        }
       }
     },
     "i18n": {
@@ -29537,6 +29570,30 @@
     "monthCalendar": {
       "previous": "Previous month",
       "next": "Next month"
+    }
+  },
+  "gitea": {
+    "gitea": {
+      "rate": {
+        "limit": {
+          "display": {
+            "budgetScopePrefix": "Budget scope",
+            "description": "Orca uses REST through the Gitea CLI (gt).",
+            "envTokenOnly": "gt CLI not installed; using {{value0}}.",
+            "loading": "Loading Gitea API budget...",
+            "noHeaders": "This Gitea host did not return rate-limit headers.",
+            "refresh": "Refresh Gitea API budget",
+            "remainingOfLimit": "{{remaining}} of {{limit}} left, resets in {{reset}}",
+            "rest": "REST API",
+            "teaMissing": "gt CLI is not installed.",
+            "teaSignedIn": "gt CLI is signed in.",
+            "teaSignedInHost": "gt CLI signed in to {{value0}}.",
+            "teaSignedOut": "gt CLI is not signed in. Run gt auth login.",
+            "title": "Gitea API Budget",
+            "unavailable": "Gitea API budget is unavailable."
+          }
+        }
+      }
     }
   }
 }

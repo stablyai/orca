@@ -1,3 +1,4 @@
+import { isGiteaTaskSourceConfigured } from '@/lib/gitea-review-configured'
 import type { TaskPageStoreBindingsModel } from './use-task-page-store-bindings'
 import { useMemo, useState, useRef, useEffect, useCallback } from 'react'
 import {
@@ -133,6 +134,7 @@ export function useTaskPageRepoSelection(model: TaskPageStoreBindingsModel) {
         preferredVisibleTaskProviders,
         {
           gitlabInstalled: preflightStatusCurrent && preflightStatus?.glab?.installed === true,
+          giteaConfigured: preflightStatusCurrent && isGiteaTaskSourceConfigured(preflightStatus),
           linearConnected: linearConnected === true
         },
         defaultTaskSource
@@ -142,7 +144,7 @@ export function useTaskPageRepoSelection(model: TaskPageStoreBindingsModel) {
       linearConnected,
       preferredVisibleTaskProviders,
       preflightStatusCurrent,
-      preflightStatus?.glab?.installed
+      preflightStatus
     ]
   )
   const sourceOptions = getSourceOptions()

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Github, Gitlab } from 'lucide-react'
+import { Github, Gitlab, Coffee } from 'lucide-react'
 import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 
 import {
@@ -68,6 +68,18 @@ const PROVIDER_META: Record<
       )
     },
     Icon: ({ className }) => <Gitlab className={className} />
+  },
+  gitea: {
+    get label() {
+      return translate('auto.components.settings.TasksPane.giteaLabel', 'Gitea')
+    },
+    get description() {
+      return translate(
+        'auto.components.settings.TasksPane.giteaDescription',
+        'Browse Gitea issues and pull requests and start workspaces from them.'
+      )
+    },
+    Icon: ({ className }) => <Coffee className={className} />
   },
   linear: {
     get label() {

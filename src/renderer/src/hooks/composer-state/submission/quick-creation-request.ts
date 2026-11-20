@@ -44,6 +44,8 @@ export type QuickCreationRequestInput = {
   workspaceStatus: WorktreeCreationRequest['workspaceStatus']
   linkedGitLabMR: number | null
   linkedGitLabIssue: number | null
+  linkedGiteaPR: number | null
+  linkedGiteaIssue: number | null
   includeGitLabLinks: boolean
   startup: WorktreeCreationRequest['startup']
   issueCommand?: WorktreeCreationRequest['issueCommand']
@@ -121,6 +123,12 @@ export function buildQuickCreationRequest(
       : {}),
     ...(input.includeGitLabLinks && input.linkedGitLabIssue != null
       ? { linkedGitLabIssue: input.linkedGitLabIssue }
+      : {}),
+    ...(input.includeGitLabLinks && input.linkedGiteaPR != null
+      ? { linkedGiteaPR: input.linkedGiteaPR }
+      : {}),
+    ...(input.includeGitLabLinks && input.linkedGiteaIssue != null
+      ? { linkedGiteaIssue: input.linkedGiteaIssue }
       : {}),
     ...(input.startup ? { startup: input.startup } : {}),
     ...(input.hookPreparation ? { hookPreparation: input.hookPreparation } : {}),

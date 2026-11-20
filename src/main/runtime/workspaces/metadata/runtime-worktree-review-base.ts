@@ -4,6 +4,10 @@ import {
   type RuntimeGitHubWorktreeBaseArgs
 } from '../../integrations/github/runtime-github-worktree-base'
 import {
+  resolveRuntimeGiteaWorktreeBase,
+  type RuntimeGiteaWorktreeBaseArgs
+} from '../../integrations/gitea/runtime-gitea-worktree-base'
+import {
   resolveRuntimeGitLabWorktreeBase,
   type RuntimeGitLabWorktreeBaseArgs
 } from '../../integrations/gitlab/runtime-gitlab-worktree-base'
@@ -14,6 +18,17 @@ export abstract class RuntimeWorktreeReviewBase extends RuntimeRemoteFetchOperat
     args: RuntimeGitHubWorktreeBaseArgs
   ): Promise<GitHubPrStartPoint | { error: string }> {
     return resolveRuntimeGitHubWorktreeBase(args, {
+      store: this.store ? this.requireStore() : null,
+      resolveRepo: (selector) => this.resolveRepoSelector(selector)
+    })
+  }
+
+  async resolveManagedGiteaPrBase(
+    args: RuntimeGiteaWorktreeBaseArgs
+  ): Promise<
+    { baseBranch: string; compareBaseRef?: string; pushTarget?: GitPushTarget } | { error: string }
+  > {
+    return resolveRuntimeGiteaWorktreeBase(args, {
       store: this.store ? this.requireStore() : null,
       resolveRepo: (selector) => this.resolveRepoSelector(selector)
     })

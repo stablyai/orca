@@ -10,6 +10,7 @@ import { selectChecksPanelReview } from './checks-panel-review'
 import type { HostedReviewInfo as ChecksPanelReview } from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import { isGitLabChecksPanelReview } from '../review-data/gitlab-review-client'
 import { clearPendingPRCommentAiAck } from '../comments/pr-comments-ai-launch-ack'
+import { isGiteaChecksPanelReview } from '../review-data/gitea-review-client'
 import {
   buildGitHubPRRefreshStateClearToken,
   getGitHubPRRefreshStateExpiryAt
@@ -238,6 +239,8 @@ export function useChecksPanelContextState(model: ChecksPanelContextStateInput) 
   })
   const activeGitLabReview = isGitLabChecksPanelReview(activeReview) ? activeReview : null
   const isGitLabReviewContext = Boolean(activeGitLabReview || linkedGitLabMR !== null)
+  const activeGiteaReview = isGiteaChecksPanelReview(activeReview) ? activeReview : null
+  const isGiteaReviewContext = Boolean(activeGiteaReview || linkedGiteaPR !== null)
   const activeConflictReview = activeReview?.mergeable === 'CONFLICTING' ? activeReview : null
   const prRefreshState = useAppStore((s) =>
     prCacheKey
@@ -349,6 +352,8 @@ export function useChecksPanelContextState(model: ChecksPanelContextStateInput) 
     activeReview,
     activeGitLabReview,
     isGitLabReviewContext,
+    activeGiteaReview,
+    isGiteaReviewContext,
     activeConflictReview,
     prRefreshState,
     rawPRRefreshState,

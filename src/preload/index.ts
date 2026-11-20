@@ -30,6 +30,7 @@ import { exportApi } from './api/document-preview/export-bridge'
 import { ghApi } from './api/github/gh-bridge'
 import { hostedReviewApi } from './api/hosted-review/hosted-review-bridge'
 import { glApi } from './api/gitlab/gitlab'
+import { giteaApi } from './api/gitea/gitea'
 import { bitbucketApi } from './api/hosted-review/bitbucket-bridge'
 import { linearApi } from './api/work-items/linear-bridge'
 import { jiraApi } from './api/work-items/jira-bridge'
@@ -139,6 +140,7 @@ const api = {
   gh: ghApi,
   hostedReview: hostedReviewApi,
   gl: glApi,
+  gitea: giteaApi,
   bitbucket: bitbucketApi,
   linear: linearApi,
   jira: jiraApi,

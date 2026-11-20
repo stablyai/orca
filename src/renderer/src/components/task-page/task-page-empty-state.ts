@@ -1,7 +1,7 @@
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 
-export type RepoBackedTaskEmptyStateProvider = 'github' | 'gitlab'
+export type RepoBackedTaskEmptyStateProvider = 'github' | 'gitlab' | 'gitea'
 
 export type RepoBackedTaskEmptyState = {
   title: string
@@ -13,6 +13,7 @@ export function getRepoBackedTaskEmptyState(
     provider: RepoBackedTaskEmptyStateProvider
     selectedRepoCount: number
     gitlabView?: 'issues' | 'mrs' | 'todos'
+    giteaView?: 'issues' | 'prs' | 'notifications'
   },
   t: Translate = translate
 ): RepoBackedTaskEmptyState {
@@ -38,6 +39,41 @@ export function getRepoBackedTaskEmptyState(
         'auto.components.taskPageEmptyState.changeQueryDescription',
         'Change the query or clear it.'
       )
+    }
+  }
+  if (args.provider === 'gitea') {
+    switch (args.giteaView) {
+      case 'issues':
+        return {
+          title: translate(
+            'auto.components.taskPageEmptyState.noGiteaIssuesTitle',
+            'No Gitea issues'
+          ),
+          description: translate(
+            'auto.components.taskPageEmptyState.noGiteaIssuesDescription',
+            'No Gitea issues match this filter.'
+          )
+        }
+      case 'prs':
+        return {
+          title: translate(
+            'auto.components.taskPageEmptyState.noGiteaPrsTitle',
+            'No Gitea pull requests'
+          ),
+          description: translate(
+            'auto.components.taskPageEmptyState.noGiteaPrsDescription',
+            'No Gitea pull requests match this filter.'
+          )
+        }
+      case 'notifications':
+      case undefined:
+        return {
+          title: translate('auto.components.taskPageEmptyState.noGiteaWorkTitle', 'No Gitea work'),
+          description: translate(
+            'auto.components.taskPageEmptyState.noGiteaWorkDescription',
+            'No Gitea work matches this filter.'
+          )
+        }
     }
   }
   switch (args.gitlabView) {

@@ -302,7 +302,7 @@ export function GitLabDescriptionTab({ item, state, detailsEditing, reviewAction
         </div>
       ) : details?.body ? (
         <div>
-          {isMR && details ? (
+          {(isMR || state.forge.canEditIssues) && details ? (
             <div className="mb-3 flex justify-end">
               <Button
                 type="button"
@@ -324,7 +324,7 @@ export function GitLabDescriptionTab({ item, state, detailsEditing, reviewAction
         </div>
       ) : (
         <div>
-          {isMR && details ? (
+          {(isMR || state.forge.canEditIssues) && details ? (
             <div className="mb-3 flex justify-end">
               <Button
                 type="button"

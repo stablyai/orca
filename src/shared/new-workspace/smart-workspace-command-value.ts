@@ -3,6 +3,7 @@ export type SmartWorkspaceCommandRowKind =
   | 'create-branch'
   | 'github'
   | 'gitlab'
+  | 'gitea'
   | 'branch'
   | 'linear'
   | 'jira'
@@ -13,7 +14,7 @@ export type SmartWorkspaceCommandRow = {
   value: string
 }
 
-export type SmartWorkspaceSourceIntent = 'github' | 'gitlab' | 'linear' | 'jira' | null
+export type SmartWorkspaceSourceIntent = 'github' | 'gitlab' | 'gitea' | 'linear' | 'jira' | null
 
 export function resolveSmartWorkspaceCommandValue({
   currentValue,
@@ -48,6 +49,11 @@ export function resolveSmartWorkspaceCommandValue({
     const gitlabRow = rows.find((row) => row.kind === 'gitlab')
     if (gitlabRow) {
       return gitlabRow.value
+    }
+  } else if (sourceIntent === 'gitea') {
+    const giteaRow = rows.find((row) => row.kind === 'gitea')
+    if (giteaRow) {
+      return giteaRow.value
     }
   } else if (sourceIntent === 'linear') {
     const linearRow = rows.find((row) => row.kind === 'linear')

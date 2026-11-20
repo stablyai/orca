@@ -7,6 +7,11 @@ vi.mock('../git/command-runner/git-exec-file', async (importOriginal) => ({
     stderr: ''
   }))
 }))
+vi.mock('../git/command-runner/gt-exec-file', () => ({
+  gtExecFileAsync: vi.fn(async () => {
+    throw new Error('gt is not installed')
+  })
+}))
 vi.mock('../source-control/pull-request-template', () => ({
   readHostedPullRequestTemplate: vi.fn(async () => '')
 }))

@@ -83,6 +83,9 @@ export function getCheckDetailsPromptKey(check: PRCheckDetail, index: number): s
   if (check.gitlabJobId) {
     return `gitlab-job:${check.gitlabJobId}:${check.name}`
   }
+  if (check.giteaJobId) {
+    return `gitea-job:${check.giteaJobId}:${check.name}`
+  }
   if (check.url) {
     return `url:${check.url}:${check.name}`
   }

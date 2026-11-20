@@ -61,7 +61,7 @@ export function HostedReviewHeaderLink({
   const className =
     'shrink-0 border-0 bg-transparent p-0 text-left font-medium leading-none text-foreground underline decoration-border underline-offset-2 opacity-80 hover:text-foreground hover:decoration-foreground'
 
-  if (review.provider === 'github' || review.provider === 'gitlab') {
+  if (review.provider === 'github' || review.provider === 'gitlab' || review.provider === 'gitea') {
     return (
       <button
         type="button"

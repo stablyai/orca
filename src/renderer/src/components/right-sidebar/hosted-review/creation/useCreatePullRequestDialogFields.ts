@@ -88,7 +88,9 @@ export function useCreatePullRequestDialogFields({
   const currentEligibilityKey =
     open && eligibility ? `${repoId}:${worktreeId ?? worktreePath}:${branch}` : null
   const jiraIssueKey =
-    eligibility?.provider === 'github' || eligibility?.provider === 'gitlab'
+    eligibility?.provider === 'github' ||
+    eligibility?.provider === 'gitlab' ||
+    eligibility?.provider === 'gitea'
       ? getWorkspaceJiraIssueKey(workspace)
       : null
   const seedText = resolveCreateReviewSeedText({ branch, eligibility, jiraIssueKey })

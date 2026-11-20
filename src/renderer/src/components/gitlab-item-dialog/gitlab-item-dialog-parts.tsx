@@ -195,7 +195,8 @@ export function PipelineJobRow({
   traceState,
   retrying,
   onToggleTrace,
-  onRetry
+  onRetry,
+  canRetryJobs = true
 }: {
   job: GitLabPipelineJob
   expanded: boolean
@@ -203,10 +204,12 @@ export function PipelineJobRow({
   retrying: boolean
   onToggleTrace: (job: GitLabPipelineJob) => void
   onRetry: (job: GitLabPipelineJob) => void
+  canRetryJobs?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
   const allowedFailure = job.status === 'failed' && job.allowFailure === true
-  const canRetry = job.id > 0 && ['failed', 'canceled', 'cancelled'].includes(job.status)
+  const canRetry =
+    canRetryJobs && job.id > 0 && ['failed', 'canceled', 'cancelled'].includes(job.status)
   return (
     <div className="rounded-md">
       <div className="grid w-full grid-cols-[minmax(0,2fr)_minmax(0,1fr)_160px_64px_96px] items-center gap-3 px-3 py-2 text-left text-sm hover:bg-muted/40">

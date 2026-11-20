@@ -9,6 +9,7 @@ import type { SettingsHostScope } from '../host-scope/settings-host-scope'
 import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import { PRAutoRefreshSetting } from './PRAutoRefreshSetting'
 import { prAutoRefreshMatchesSearch } from './pr-auto-refresh-search'
+import { GiteaRateLimitPanel } from '../../gitea/gitea-rate-limit-display'
 
 type GitProviderApiBudgetPaneProps = {
   settingsSearchQuery?: string
@@ -89,6 +90,27 @@ export function GitProviderApiBudgetPane({
         className="space-y-3 py-3"
       >
         <GitLabRateLimitPanel target={target} />
+      </SearchableSetting>
+    ) : null,
+    matchesSettingsSearch(searchQuery, {
+      title: t('auto.components.gitea.gitea.rate.limit.display.title', 'Gitea API Budget'),
+      description: t(
+        'auto.components.settings.GitPane.giteaBudgetDescription',
+        'Current Gitea CLI REST rate-limit headers and gt login status.'
+      ),
+      keywords: ['gitea', 'gt', 'rate limit', 'api budget']
+    }) ? (
+      <SearchableSetting
+        key="gitea-api-budget"
+        title={t('auto.components.gitea.gitea.rate.limit.display.title', 'Gitea API Budget')}
+        description={t(
+          'auto.components.settings.GitPane.giteaBudgetDescription',
+          'Current Gitea CLI REST rate-limit headers and gt login status.'
+        )}
+        keywords={['gitea', 'gt', 'rate limit', 'api budget']}
+        className="space-y-3"
+      >
+        <GiteaRateLimitPanel target={target} />
       </SearchableSetting>
     ) : null
   ].filter(Boolean)

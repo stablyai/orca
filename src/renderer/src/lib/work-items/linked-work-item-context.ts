@@ -57,7 +57,7 @@ function formatDraftContextBlock(value: string): string {
 }
 
 export type LinearLaunchContextArgs = {
-  provider?: TaskProvider
+  provider?: TaskProvider | 'gitea'
   identifier: string | undefined
   title?: string
   url?: string
@@ -66,7 +66,7 @@ export type LinearLaunchContextArgs = {
 function isLinearWorkItemReference(
   args:
     | {
-        provider?: TaskProvider
+        provider?: TaskProvider | 'gitea'
         linearIdentifier?: string
         linkedContext?: LinkedWorkItemContext
       }
@@ -147,7 +147,7 @@ function capLinkedContextSourceLines(args: { sourceLines: string; fixedChars: nu
 }
 
 export function getLaunchableWorkItemDraftContent(args: {
-  provider?: TaskProvider
+  provider?: TaskProvider | 'gitea'
   pasteContent?: string
   url: string
   title?: string
@@ -173,7 +173,7 @@ export function resolveQuickCreateLinkedWorkItemPrompt(
   linkedWorkItem:
     | (Pick<
         {
-          provider?: TaskProvider
+          provider?: TaskProvider | 'gitea'
           number: number
           url: string
           title?: string

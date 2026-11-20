@@ -122,7 +122,9 @@ export function useSourceControlPullRequestGeneration({
         connectionId: copy ? copy.connectionId : sourceControlConnectionId(scope, activeWorktreeId),
         ownerHostId: copy?.hostId ?? null,
         jiraIssueKey:
-          (hostedReviewCreateProvider === 'github' || hostedReviewCreateProvider === 'gitlab') &&
+          (hostedReviewCreateProvider === 'github' ||
+            hostedReviewCreateProvider === 'gitlab' ||
+            hostedReviewCreateProvider === 'gitea') &&
           activeWorktreeId
             ? getWorkspaceJiraIssueKey(
                 useAppStore

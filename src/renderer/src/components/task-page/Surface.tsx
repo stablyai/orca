@@ -5,6 +5,7 @@ import { TaskPageLinearProjectDialog } from './linear/creation/ProjectDialog'
 import { TaskPageLinearIssueDialog } from './linear/creation/IssueDialog'
 import { TaskPageJiraIssueDialog } from './jira/creation/IssueDialog'
 import { TaskPageGitLabDialog } from './gitlab/Dialog'
+import { TaskPageGiteaDialog } from './gitea/Dialog'
 import { TaskPageLinearConnectDialog } from './linear/ConnectDialog'
 import { TaskPageJiraConnectDialog } from './jira/ConnectDialog'
 export function TaskPageSurface({
@@ -25,6 +26,8 @@ export function TaskPageSurface({
       <TaskPageJiraIssueDialog model={model} />
 
       <TaskPageGitLabDialog model={model} />
+
+      <TaskPageGiteaDialog model={model} />
 
       <TaskPageLinearConnectDialog model={model} />
 

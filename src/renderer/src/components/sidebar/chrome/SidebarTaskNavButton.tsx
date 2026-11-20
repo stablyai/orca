@@ -16,6 +16,7 @@ import { useRepoMap } from '@/store/repos/use-repository-catalog'
 import { useTranslate } from '@/i18n/use-translate'
 import { isGitRepoKind } from '../../../../../shared/repository/repo-kind'
 import { getTaskPresetQuery } from '../../../../../shared/work-items/task-preset-query'
+import { isGiteaTaskSourceConfigured } from '@/lib/gitea-review-configured'
 import {
   normalizeVisibleTaskProviders,
   restoreAvailableDefaultTaskProvider,
@@ -90,6 +91,7 @@ export function SidebarTaskNavButton(): React.JSX.Element | null {
         preferredVisibleTaskProviders,
         {
           gitlabInstalled: preflightStatusCurrent && preflightStatus?.glab?.installed === true,
+          giteaConfigured: preflightStatusCurrent && isGiteaTaskSourceConfigured(preflightStatus),
           linearConnected: linearStatus.connected === true
         },
         defaultTaskSource
@@ -99,7 +101,7 @@ export function SidebarTaskNavButton(): React.JSX.Element | null {
       linearStatus.connected,
       preferredVisibleTaskProviders,
       preflightStatusCurrent,
-      preflightStatus?.glab?.installed
+      preflightStatus
     ]
   )
   const resolvedDefaultTaskSource = React.useMemo(

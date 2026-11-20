@@ -18,6 +18,7 @@ type TargetChangeActionsInput = Pick<
   | 'setForkPushWarning'
   | 'setLinkedGitLabIssue'
   | 'setLinkedGitLabMR'
+  | 'clearLinkedGiteaItems'
   | 'setLinkedIssue'
   | 'setLinkedPR'
   | 'setLinkedTaskSourceContext'
@@ -70,6 +71,7 @@ export function useTargetChangeActions(input: TargetChangeActionsInput) {
     setForkPushWarning,
     setLinkedGitLabIssue,
     setLinkedGitLabMR,
+    clearLinkedGiteaItems,
     setLinkedIssue,
     setLinkedPR,
     setLinkedTaskSourceContext,
@@ -144,6 +146,7 @@ export function useTargetChangeActions(input: TargetChangeActionsInput) {
         setLinkedPR(null)
         setLinkedGitLabIssue(null)
         setLinkedGitLabMR(null)
+        clearLinkedGiteaItems()
         // Keep workspace-scoped Jira/Linear sources while changing their implementation repo; repo-scoped sources reset.
         if (linkedWorkItem && !shouldPreserveWorkspaceSourceOnRepoChange(linkedWorkItem)) {
           setLinkedWorkItem(null)
@@ -183,6 +186,7 @@ export function useTargetChangeActions(input: TargetChangeActionsInput) {
       setForkPushWarning,
       setLinkedGitLabIssue,
       setLinkedGitLabMR,
+      clearLinkedGiteaItems,
       setLinkedIssue,
       setLinkedPR,
       setLinkedTaskSourceContext,
@@ -218,6 +222,7 @@ export function useTargetChangeActions(input: TargetChangeActionsInput) {
       setLinkedPR(null)
       setLinkedGitLabIssue(null)
       setLinkedGitLabMR(null)
+      clearLinkedGiteaItems()
     },
     [
       folderSourceRepos,
@@ -225,6 +230,7 @@ export function useTargetChangeActions(input: TargetChangeActionsInput) {
       setRepoId,
       setLinkedGitLabIssue,
       setLinkedGitLabMR,
+      clearLinkedGiteaItems,
       setLinkedIssue,
       setLinkedPR,
       setLinkedTaskSourceContext,

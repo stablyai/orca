@@ -1,8 +1,6 @@
 import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
 import { cn } from '@/lib/class-names'
-import TaskProjectSourceCombobox from '@/components/task-page/source-selection/task-project-source-combobox'
-import { normalizeTaskRepoSelection } from '../../../../../shared/work-items/task-repo-selection'
-import { toast } from 'sonner'
+import { TaskPageProjectSourcePicker } from '../task-page-project-source-picker'
 import { useTranslate } from '@/i18n/use-translate'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { Button } from '@/components/ui/button'
@@ -42,15 +40,8 @@ export function TaskPageGitLabFilters({
 }): React.JSX.Element | null {
   const t = useTranslate()
   const {
-    updateSettings,
-    eligibleRepos,
-    repoSelection,
-    setRepoSelection,
-    taskPickerGroups,
-    taskPickerRepos,
     gitLabIssueFilters,
     gitLabMRFilters,
-    getTaskPickerRepoHostLabel,
     setGitlabFilter,
     gitlabLoading,
     setGitlabRefreshNonce,
@@ -90,36 +81,7 @@ export function TaskPageGitLabFilters({
             )
           })}
         </div>
-        <div className="min-w-0 w-full sm:w-[200px]">
-          <TaskProjectSourceCombobox
-            groups={taskPickerGroups}
-            selected={repoSelection}
-            getRepoHostLabel={getTaskPickerRepoHostLabel}
-            onChange={(next) => {
-              const normalized = normalizeTaskRepoSelection(eligibleRepos, next)
-              setRepoSelection(normalized)
-              void updateSettings({
-                defaultRepoSelection: [...normalized]
-              }).catch(() => {
-                toast.error(
-                  t('auto.components.TaskPage.dfd72673e7', 'Failed to save project selection.')
-                )
-              })
-            }}
-            onSelectAll={() => {
-              const allIds = new Set(taskPickerRepos.map((r) => r.id))
-              setRepoSelection(allIds)
-              void updateSettings({
-                defaultRepoSelection: null
-              }).catch(() => {
-                toast.error(
-                  t('auto.components.TaskPage.dfd72673e7', 'Failed to save project selection.')
-                )
-              })
-            }}
-            triggerClassName="h-8 w-full rounded-md border border-border/50 bg-muted/50 px-2 text-xs font-medium shadow-sm transition hover:bg-muted/50 focus:ring-2 focus:ring-ring/20 focus:outline-none"
-          />
-        </div>
+        <TaskPageProjectSourcePicker model={model} />
       </div>
       <div
         className="min-w-0 rounded-md rounded-b-none border border-border/50 bg-muted/50 px-3 pt-2 pb-0 shadow-sm"

@@ -14,6 +14,7 @@ import { registerFilesystemHandlers } from '../filesystem/filesystem'
 import type { CommitMessageAgentEnvironmentResolvers } from '../../text-generation/execution/commit-message-agent-environment'
 import { registerFilesystemWatcherHandlers } from '../filesystem/watchers/filesystem-watcher-handlers'
 import { registerGitHubHandlers } from '../source-control/github'
+import { registerGiteaHandlers } from '../source-control/gitea'
 import { registerGitLabHandlers } from '../source-control/gitlab'
 import { registerHostedReviewHandlers } from '../source-control/hosted-review'
 import { registerLinearHandlers } from '../linear/register-handlers'
@@ -157,6 +158,7 @@ export async function registerCoreHandlers(
     registerRateLimitHandlers(rateLimits, codexAccounts)
     registerGitHubHandlers(store, stats, runtime)
     registerGitLabHandlers(store)
+    registerGiteaHandlers(store)
     registerHostedReviewHandlers(store, stats)
     registerLinearHandlers()
     registerJiraHandlers()

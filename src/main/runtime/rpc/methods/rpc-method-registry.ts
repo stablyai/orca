@@ -44,6 +44,7 @@ import { FILE_METHODS } from './files/files'
 import { GIT_METHODS } from './source-control/git/git'
 import { GITHUB_METHODS } from './source-control/github/github'
 import { GITLAB_METHODS } from './source-control/gitlab/gitlab'
+import { GITEA_METHODS } from './source-control/gitea/gitea'
 import { HOSTED_REVIEW_METHODS } from './source-control/reviews/hosted-review'
 import { LINEAR_METHODS } from './integrations/linear/linear'
 import { LINEAR_AGENT_ACCESS_METHODS } from './integrations/linear/linear-agent-access'
@@ -219,6 +220,7 @@ const SERVICE_RPC_METHODS = [
   ...GIT_METHODS,
   ...GITHUB_METHODS,
   ...GITLAB_METHODS,
+  ...GITEA_METHODS,
   ...HOSTED_REVIEW_METHODS,
   ...LINEAR_METHODS,
   ...LINEAR_AGENT_ACCESS_METHODS,

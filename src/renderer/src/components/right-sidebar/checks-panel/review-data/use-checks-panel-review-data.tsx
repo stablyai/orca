@@ -2,6 +2,7 @@ import { getRepoExecutionHostId } from '../../../../../../shared/execution-host/
 import { useCallback, useEffect } from 'react'
 import { checksPanelAsyncResultKey } from '../refresh/checks-panel-async-result-key'
 import { loadGitLabJobLogDetails } from '@/runtime/repository-gitlab/gitlab-job-trace-client'
+import { loadGiteaJobLogDetails } from '@/runtime/repository-gitea/gitea-job-trace-client'
 import { checksPanelLoadErrorMessage } from './checks-panel-forge-owner'
 import { forgeOwnerHostIdForWorkspace } from '@/runtime/source-control/forge/forge-credential-target'
 import type { PRCheckDetail } from '../../../../../../shared/github/checks/check-types'
@@ -126,6 +127,14 @@ export function useChecksPanelReviewData(model: ChecksPanelReviewDataInput) {
     (check: PRCheckDetail) => {
       if (!repo) {
         return Promise.resolve(null)
+      }
+      if (check.giteaJobId) {
+        return loadGiteaJobLogDetails({
+          repoPath: repo.path,
+          repoId: repo.id,
+          repoOwnerExecutionHostId: forgeOwnerHostIdForWorkspace(repo, activeWorktree),
+          check
+        })
       }
       if (check.gitlabJobId) {
         return loadGitLabJobLogDetails({

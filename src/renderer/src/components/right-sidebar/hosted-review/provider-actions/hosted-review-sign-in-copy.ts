@@ -8,11 +8,15 @@ import {
 } from '@/i18n/hosted-review-localized-copy'
 
 // Commands and variable names stay untranslated.
-const SIGN_IN_COMMANDS = { github: 'gh auth login', gitlab: 'glab auth login' } as const
-const SIGN_IN_VARIABLES = {
-  'azure-devops': 'ORCA_AZURE_DEVOPS_TOKEN',
-  gitea: 'ORCA_GITEA_TOKEN'
+const SIGN_IN_COMMANDS = {
+  github: 'gh auth login',
+  gitlab: 'glab auth login'
 } as const
+const SIGN_IN_VARIABLES = {
+  'azure-devops': 'ORCA_AZURE_DEVOPS_TOKEN'
+} as const
+const GITEA_SIGN_IN_COMMAND = 'gt auth login'
+const GITEA_TOKEN_VARIABLE = 'ORCA_GITEA_TOKEN'
 
 export function authRequiredDetail(
   provider: SupportedHostedReviewCopyProvider,
@@ -30,6 +34,17 @@ export function authRequiredDetail(
       'sourceControl.createReviewFailure.authRequiredCommand',
       '{{providerName}} is not authenticated. Next step: run {{command}} in this environment.',
       { providerName: copy.providerName, command: SIGN_IN_COMMANDS[provider] }
+    )
+  }
+  if (provider === 'gitea') {
+    return t(
+      'sourceControl.createReviewFailure.authRequiredGitea',
+      '{{providerName}} is not authenticated. Next step: run {{command}} or set {{variable}} in this environment.',
+      {
+        providerName: copy.providerName,
+        command: GITEA_SIGN_IN_COMMAND,
+        variable: GITEA_TOKEN_VARIABLE
+      }
     )
   }
   return t(
@@ -56,6 +71,13 @@ export function hostedReviewSignInHint(
       'sourceControl.createReviewFailure.signInHintCommand',
       'Run {{command}} in this environment',
       { command: SIGN_IN_COMMANDS[supported] }
+    )
+  }
+  if (supported === 'gitea') {
+    return t(
+      'sourceControl.createReviewFailure.signInHintGitea',
+      'Run {{command}} or set {{variable}} in this environment',
+      { command: GITEA_SIGN_IN_COMMAND, variable: GITEA_TOKEN_VARIABLE }
     )
   }
   return t(
