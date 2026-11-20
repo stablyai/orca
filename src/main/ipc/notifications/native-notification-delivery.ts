@@ -19,6 +19,10 @@ import {
 } from './native-notification-lifecycle'
 import { recordNotificationDeliveryOutcome } from './notification-permission-probe'
 import { getTrustedUIRendererWindow } from '../ui'
+import {
+  closeDesktopNotification,
+  showDesktopNotification
+} from '../../notifications/desktop-notification'
 
 export function deliverNativeNotification(
   args: NotificationDispatchRequest,
@@ -35,7 +39,7 @@ export function deliverNativeNotification(
   if (args.notificationId) {
     const previous = activeNotificationsById.get(args.notificationId)
     if (previous) {
-      previous.notification.close()
+      closeDesktopNotification(previous.notification)
       previous.release()
     }
   }
@@ -120,7 +124,7 @@ export function deliverNativeNotification(
   const displayConfirmation = args.requireDisplayConfirmation
     ? waitForNotificationDisplay(notification)
     : null
-  notification.show()
+  showDesktopNotification(notification)
 
   if (displayConfirmation) {
     return displayConfirmation.then((displayed) => {

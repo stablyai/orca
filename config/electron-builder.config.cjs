@@ -197,6 +197,7 @@ const commonExtraResources = [
 const debElectronRuntimeDependencies = [
   'libgtk-3-0',
   'libnotify4',
+  'libglib2.0-bin',
   'libnss3',
   'libxss1',
   'libxtst6',

@@ -1,4 +1,5 @@
 import type { Notification } from 'electron'
+import { closeDesktopNotification } from '../../notifications/desktop-notification'
 
 const NOTIFICATION_DISPLAY_CONFIRMATION_TIMEOUT_MS = 2500
 const NOTIFICATION_RELEASE_FALLBACK_MS = 5 * 60 * 1000
@@ -50,7 +51,7 @@ export function retainNotificationUntilRelease(
       const oldest = retainedHistoryNotifications.entries().next().value
       if (oldest) {
         // Remove the toast too, so history never contains a target whose handler we discarded.
-        oldest[0].close()
+        closeDesktopNotification(oldest[0])
         oldest[1]()
       }
     }
@@ -72,6 +73,7 @@ export function waitForNotificationDisplay(notification: Notification): Promise<
     function cleanup(): void {
       notification.removeListener('show', onShow)
       notification.removeListener('failed', onFailed)
+      notification.removeListener('close', onFailed)
       if (timer) {
         clearTimeout(timer)
         timer = null
@@ -97,6 +99,7 @@ export function waitForNotificationDisplay(notification: Notification): Promise<
 
     notification.once('show', onShow)
     notification.once('failed', onFailed)
+    notification.once('close', onFailed)
     timer = setTimeout(() => settle(false), NOTIFICATION_DISPLAY_CONFIRMATION_TIMEOUT_MS)
   })
 }
