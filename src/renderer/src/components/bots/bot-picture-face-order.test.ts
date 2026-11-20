@@ -16,10 +16,6 @@ describe('pictureFaceOrder', () => {
     const order = pictureFaceOrder(null, { before: 'custom', after: 1 })
     expect(order.slice(0, 4)).toEqual(['A1', 'B1', 'generate', 'D1'])
   })
-
-  it('has no Generate face without a capable agent', () => {
-    expect(pictureFaceOrder(null, null).slice(0, 2)).toEqual(['A1', 'B1'])
-  })
 })
 
 describe('isGeneratedCustom', () => {

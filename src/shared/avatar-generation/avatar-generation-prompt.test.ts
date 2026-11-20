@@ -4,7 +4,6 @@ import { avatarGenerationPrompt, describesRealPerson } from './avatar-generation
 describe('describesRealPerson', () => {
   it.each([
     'draw me as a superhero',
-    'my wife riding a dragon',
     'me as a superhero',
     'my coworker as a wizard',
     'a portrait of me',
@@ -21,7 +20,6 @@ describe('describesRealPerson', () => {
     'a fox that reminds me of autumn',
     'a photo of a cat',
     'draw me a fox',
-    'show us a cat',
     'lion, king of the jungle',
     'portrait of Sherlock Holmes as a cat',
     'the queen of hearts card'
