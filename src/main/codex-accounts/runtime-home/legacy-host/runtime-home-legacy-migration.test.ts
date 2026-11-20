@@ -53,7 +53,7 @@ function archivedHistoryPath(accountId: string): string {
   return join(
     testState.userDataDir,
     'codex-runtime-home',
-    'legacy-history-not-imported',
+    'legacy-account-history',
     accountId,
     'history.jsonl'
   )
@@ -154,7 +154,24 @@ describe('CodexRuntimeHomeService', () => {
       '{"id":"a-1"}\n{"id":"both"}\n{"id":"b-1"}\n'
     )
     expect(trackedImportOutcomes()).toEqual(['imported'])
-    expect(existsSync(archivedHistoryPath('account-1'))).toBe(false)
+  })
+
+  it('keeps every legacy history aside before startup returns, even when a session copy fails', async () => {
+    const accountOneHome = writeHistory('account-1', '{"id":"a-1"}\n')
+    const accountTwoHome = writeHistory('account-2', '{"id":"b-1"}\n')
+    mkdirSync(join(accountTwoHome, 'sessions', 'nested'), { recursive: true })
+    writeFileSync(join(accountTwoHome, 'sessions', 'nested', 'rollout.jsonl'), '{}', 'utf-8')
+    mkdirSync(join(getRuntimeCodexHomePath(), 'sessions'), { recursive: true })
+    // A file where account 2's session folder must go: its session copy throws.
+    writeFileSync(join(getRuntimeCodexHomePath(), 'sessions', 'nested'), 'not a folder', 'utf-8')
+    const { CodexRuntimeHomeService } = await import('../../runtime-home-service')
+
+    new CodexRuntimeHomeService(createStore(createSettings()) as never)
+    await removeAccountHome(accountOneHome)
+
+    expect(existsSync(join(accountOneHome, 'history.jsonl'))).toBe(false)
+    expect(readFileSync(archivedHistoryPath('account-1'), 'utf-8')).toBe('{"id":"a-1"}\n')
+    expect(readFileSync(archivedHistoryPath('account-2'), 'utf-8')).toBe('{"id":"b-1"}\n')
   })
 
   it('never writes an existing shared history and keeps the legacy one aside, even past account removal', async () => {
@@ -178,8 +195,8 @@ describe('CodexRuntimeHomeService', () => {
 
   it('leaves a shared history Codex creates during the import as it is', async () => {
     const runtimeHistoryPath = join(getRuntimeCodexHomePath(), 'history.jsonl')
-    const managedHomePath = writeHistory('account-1', '{"id":"legacy-1"}\n')
-    fsHooks.afterRead.set(join(managedHomePath, 'history.jsonl'), () =>
+    writeHistory('account-1', '{"id":"legacy-1"}\n')
+    fsHooks.afterRead.set(archivedHistoryPath('account-1'), () =>
       writeFileSync(runtimeHistoryPath, '{"id":"codex-new"}\n', 'utf-8')
     )
 
