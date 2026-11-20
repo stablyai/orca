@@ -4,13 +4,15 @@ import {
 } from '../../../shared/shell/command-resolution/command-token-scanner'
 import { isShellProcess } from '../../../shared/agent-status/process/shell-process-detection'
 import { monotonicNow } from '../../../shared/concurrency/deadline-settle-notifier'
+import { countLibprocProcessGroup } from '../../../shared/process-observation/darwin/libproc-addon'
 import { getProcessTableIndex } from '../../../shared/process-observation/tables/process-table-index'
 import type { ProcessTableRow } from '../../../shared/process-observation/tables/process-table-snapshot'
 import type { Session } from '../sessions/session'
 
-/** With job control off a command can share the shell's group, so a full capture re-proves the shell is alone.
- * Any pane output also voids it, since a command sharing the group prints while it runs. */
+/** A full capture re-proves the shell is alone this often; every poll in between re-counts its group exactly. */
 export const IDLE_SHELL_PROOF_MAX_AGE_MS = 60_000
+// Each group count walks the kernel's process list on this thread; past this rate the shared capture is cheaper.
+const GROUP_COUNTS_PER_SECOND = 50
 
 type IdleShellProof = { shellPid: number; provedAt: number; outputChunks: number }
 
@@ -40,18 +42,20 @@ function groupSize(rows: readonly ProcessTableRow[], pgid: number): number {
 }
 
 /** Record, from a full capture taken capturedAgeMs ago, whether the pane's shell is alone in the foreground group.
- * outputChunks is the pane's count read before the capture was requested. */
+ * The output count must have been read (at countedAt) before the capture began, or output could predate the rows. */
 export function rememberIdleShellProof(
   session: Session,
   rows: readonly ProcessTableRow[],
   capturedAgeMs: number,
-  outputChunks: number
+  output: { chunks: number; countedAt: number }
 ): void {
+  const capturedAt = monotonicNow() - capturedAgeMs
   const index = getProcessTableIndex(rows)
   const shell = session.shellIsRootChild
     ? index.childrenByPpid.get(session.pid)?.find((row) => row.pid === row.pgid)
     : index.byPid.get(session.pid)
   if (
+    capturedAt >= output.countedAt &&
     shell !== undefined &&
     shell.tpgid === shell.pid &&
     isShellProcess(commandName(shell)) &&
@@ -59,26 +63,41 @@ export function rememberIdleShellProof(
   ) {
     proofs.set(session, {
       shellPid: shell.pid,
-      provedAt: monotonicNow() - capturedAgeMs,
-      outputChunks
+      provedAt: capturedAt,
+      outputChunks: output.chunks
     })
   } else {
     proofs.delete(session)
   }
 }
 
-/** The shell's name while a recent full capture proved it alone and its group still owns the terminal. */
+let groupCountWindowStart = Number.NEGATIVE_INFINITY
+let groupCountsInWindow = 0
+
+function takeGroupCount(now: number): boolean {
+  if (now - groupCountWindowStart >= 1_000) {
+    groupCountWindowStart = now
+    groupCountsInWindow = 0
+  }
+  groupCountsInWindow += 1
+  return groupCountsInWindow <= GROUP_COUNTS_PER_SECOND
+}
+
+/** The shell's name while a recent full capture proved it alone, its group still owns the terminal, and the group
+ * still holds only the shell (job control off lets a silent command join it). */
 export function readProvenIdleShell(session: Session): string | null {
   const proof = proofs.get(session)
+  const now = monotonicNow()
   if (
     !proof ||
-    monotonicNow() - proof.provedAt >= IDLE_SHELL_PROOF_MAX_AGE_MS ||
+    now - proof.provedAt >= IDLE_SHELL_PROOF_MAX_AGE_MS ||
     session.outputChunks !== proof.outputChunks
   ) {
     return null
   }
   const name = session.getForegroundProcess({ rawFallback: true })
-  return name && isShellProcess(name) && session.readForegroundGroup() === proof.shellPid
-    ? name
-    : null
+  if (!name || !isShellProcess(name) || session.readForegroundGroup() !== proof.shellPid) {
+    return null
+  }
+  return takeGroupCount(now) && countLibprocProcessGroup(proof.shellPid) === 1 ? name : null
 }

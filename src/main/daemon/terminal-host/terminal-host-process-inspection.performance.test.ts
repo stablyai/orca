@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { setLibprocAddonForTests } from '../../../shared/process-observation/darwin/libproc-addon'
 import type { ProcessTableRow } from '../../../shared/process-observation/tables/process-table-snapshot'
 import type { Session } from '../sessions/session'
 import { inspectTerminalHostProcess } from './terminal-host-process-inspection'
@@ -22,8 +23,14 @@ vi.mock(
 
 const platform = process.platform
 const SHELL = 4242
+let shellGroupMembers = 1
 
 beforeEach(() => {
+  shellGroupMembers = 1
+  setLibprocAddonForTests({
+    readProcessTable: async () => null,
+    countProcessGroup: (pgid) => (pgid === SHELL ? shellGroupMembers : 0)
+  })
   Object.defineProperty(process, 'platform', { value: 'darwin' })
   vi.useFakeTimers()
   vi.setSystemTime(0)
@@ -31,6 +38,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  setLibprocAddonForTests(undefined)
   vi.useRealTimers()
   Object.defineProperty(process, 'platform', { value: platform })
 })
@@ -116,4 +124,25 @@ it('captures again on the next poll after the pane prints', async () => {
   }
   await pollQuietPane(session, [row(SHELL, 1, SHELL, '-zsh')], printOnce)
   expect(capturesAfterNextPoll).toBe(2)
+})
+
+it('captures again on the next poll after a silent command joins the shell group', async () => {
+  const session = pane({ root: SHELL, shellIsRootChild: false, foregroundGroup: SHELL })
+  let capturesAfterNextPoll = 0
+  const joinSilently = (poll: number): void => {
+    if (poll === 1) {
+      shellGroupMembers = 2
+    }
+    if (poll === 2) {
+      capturesAfterNextPoll = tables.strict.mock.calls.length
+    }
+  }
+  await pollQuietPane(session, [row(SHELL, 1, SHELL, '-zsh')], joinSilently)
+  expect(capturesAfterNextPoll).toBe(2)
+})
+
+it('captures every poll when this pty.node cannot count a group', async () => {
+  setLibprocAddonForTests({ readProcessTable: async () => null })
+  const session = pane({ root: SHELL, shellIsRootChild: false, foregroundGroup: SHELL })
+  expect(await pollQuietPane(session, [row(SHELL, 1, SHELL, '-zsh')])).toBe(10)
 })

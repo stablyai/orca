@@ -19,6 +19,7 @@ import {
 } from './terminal-host-steady-state-anchor'
 import { SessionNotFoundError } from '../protocol/daemon-errors'
 import { readProvenIdleShell, rememberIdleShellProof } from './terminal-host-idle-shell-proof'
+import { monotonicNow } from '../../../shared/concurrency/deadline-settle-notifier'
 import {
   steadyPollJudgesByJobMembership,
   type PtyProcessInspectionOptions
@@ -148,10 +149,10 @@ export async function inspectTerminalHostProcess(args: {
     evidence = unverifiableEvidence(args, session, 'windows_ssh_foreground_unavailable')
   } else {
     try {
-      const outputChunks = session.outputChunks
+      const output = { chunks: session.outputChunks, countedAt: monotonicNow() }
       const snapshot = await getStrictProcessTableSnapshotWithAge()
       if (process.platform === 'darwin' && !session.processNameIsSpawnFile) {
-        rememberIdleShellProof(session, snapshot.rows, snapshot.capturedAgeMs, outputChunks)
+        rememberIdleShellProof(session, snapshot.rows, snapshot.capturedAgeMs, output)
       }
       if (session.processNameIsSpawnFile) {
         const observed = resolveSpawnFileForegroundFromRows(snapshot.rows, session.pid)
