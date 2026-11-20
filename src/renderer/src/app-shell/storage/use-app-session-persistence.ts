@@ -15,6 +15,7 @@ import {
   buildWorkspaceSessionHostSnapshots,
   patchWorkspaceSessionByHost
 } from '../../lib/workspace/persistence/workspace-session-host-persistence'
+import { patchWorkspaceSessionEntriesByHost } from '../../lib/workspace/persistence/workspace-session-keyed-host-write'
 import {
   desktopRelaysSupported,
   forgetAcknowledgedDesktopRelays,
@@ -60,15 +61,23 @@ export function useAppSessionPersistence(): void {
     return createSessionWriteSubscriber({
       store: useAppStore,
       onPersistError: (error) => console.warn('[session] Session patch failed:', error),
-      persist: ({ patch }) => {
+      persist: ({ patch, fields }) => {
         // Route each host’s workspace slice to its own partition.
         return patchWorkspaceSessionByHost(
           window.api.session,
           patch,
           useAppStore.getState(),
-          windowAcknowledgedSessionEntries
+          windowAcknowledgedSessionEntries,
+          fields
         ).written
-      }
+      },
+      persistKeyed: (write) =>
+        patchWorkspaceSessionEntriesByHost(
+          window.api.session,
+          write,
+          useAppStore.getState(),
+          windowAcknowledgedSessionEntries
+        )?.written ?? null
     })
   }, [])
 

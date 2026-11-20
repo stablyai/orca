@@ -1,5 +1,5 @@
 import { parseExecutionHostId } from '../../../../../shared/execution-host/execution-host'
-import { buildHostIdByWorktreeId } from '@/lib/workspace/persistence/workspace-session-host-persistence'
+import { buildHostIdByWorktreeId } from '@/lib/workspace/persistence/workspace-session-host-routing'
 import type { HostIdByWorktreeId } from '@/lib/workspace/persistence/workspace-session-host-split'
 import type { AppState } from '@/store/types'
 

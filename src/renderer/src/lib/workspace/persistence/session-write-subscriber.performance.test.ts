@@ -6,9 +6,11 @@ import * as structuralEquality from '../../../../../shared/collections/structura
 import { createSessionWriteSubscriber } from './session-write-subscriber'
 import { AcknowledgedWorkspaceSessionEntries } from './workspace-session-acknowledged-entries'
 import { patchWorkspaceSessionByHost, type SessionApi } from './workspace-session-host-persistence'
+import { patchWorkspaceSessionEntriesByHost } from './workspace-session-keyed-host-write'
+import { sessionRoutingFor } from './workspace-session-host-routing'
 
-// Perf contract: one background title change rebuilt every workspace's saved tabs and layouts with new
-// identities, so the write deep-compared the whole fleet against what main held. Counts deep compares.
+// Perf contract: one background title change rebuilt and routed every workspace's saved tabs and layouts,
+// so the write walked and deep-compared the whole fleet. Counts deep compares and keys routed to a host.
 
 const DEBOUNCE_MS = 150
 const OVER_CAP_TAB_IDS = new Set(['tab-0-b', 'tab-1-b'])
@@ -28,14 +30,20 @@ const sessionApi: SessionApi = {
   patchEntries: async () => ({ status: 'applied' })
 }
 
-async function deepComparesForOneTitleChange(size: number): Promise<number> {
+async function workForOneTitleChange(
+  size: number
+): Promise<{ deepCompares: number; routedKeys: number }> {
   const store = createTestStore()
   const acknowledged = new AcknowledgedWorkspaceSessionEntries()
   const stop = createSessionWriteSubscriber({
     store,
     debounceMs: DEBOUNCE_MS,
-    persist: ({ patch }) =>
-      patchWorkspaceSessionByHost(sessionApi, patch, store.getState(), acknowledged).written
+    persist: ({ patch, fields }) =>
+      patchWorkspaceSessionByHost(sessionApi, patch, store.getState(), acknowledged, fields)
+        .written,
+    persistKeyed: (write) =>
+      patchWorkspaceSessionEntriesByHost(sessionApi, write, store.getState(), acknowledged)
+        ?.written ?? null
   })
   try {
     const worktrees = Array.from({ length: size }, (_, index) =>
@@ -82,17 +90,22 @@ async function deepComparesForOneTitleChange(size: number): Promise<number> {
     await vi.advanceTimersByTimeAsync(DEBOUNCE_MS)
 
     const deepCompares = vi.spyOn(structuralEquality, 'structuralValuesEqual')
+    const routedKeys = vi.spyOn(sessionRoutingFor(store.getState()), 'hostIdByWorktreeId')
     store.getState().updateTabTitle('tab-3-b', 'Renamed by agent')
     await vi.advanceTimersByTimeAsync(DEBOUNCE_MS)
-    const count = deepCompares.mock.calls.length
+    const work = {
+      deepCompares: deepCompares.mock.calls.length,
+      routedKeys: routedKeys.mock.calls.length
+    }
     deepCompares.mockRestore()
-    return count
+    routedKeys.mockRestore()
+    return work
   } finally {
     stop()
   }
 }
 
-it('one title change deep-compares only the retitled workspace’s entries at N and 10N', async () => {
-  expect(await deepComparesForOneTitleChange(20)).toBe(4)
-  expect(await deepComparesForOneTitleChange(200)).toBe(4)
+it('one title change compares and routes only the retitled workspace’s entries at N and 10N', async () => {
+  expect(await workForOneTitleChange(20)).toEqual({ deepCompares: 3, routedKeys: 5 })
+  expect(await workForOneTitleChange(200)).toEqual({ deepCompares: 3, routedKeys: 5 })
 })

@@ -14,12 +14,44 @@ function keepWhenUnfiltered<T>(source: T[], filtered: T[]): T[] {
   return filtered.length === source.length ? source : filtered
 }
 
+type StagedBrowserPages = Pick<
+  StagedBrowserTabSnapshotFields,
+  'browserPagesByWorkspace' | 'remoteBrowserPageHandlesByPageId'
+>
+
+function isStagedBrowserWorkspace(snapshot: StagedBrowserPages, workspaceId: string): boolean {
+  const handles = snapshot.remoteBrowserPageHandlesByPageId ?? {}
+  const pages = snapshot.browserPagesByWorkspace[workspaceId] ?? []
+  return pages.some((page) => handles[page.id]?.staged === true)
+}
+
+type UnifiedTabs = StagedBrowserTabSnapshotFields['unifiedTabsByWorktree'][string]
+
+function withoutStagedBrowserUnifiedTabs(
+  tabs: UnifiedTabs,
+  isStaged: (workspaceId: string) => boolean
+): UnifiedTabs {
+  return keepWhenUnfiltered(
+    tabs,
+    tabs.filter((tab) => !(tab.contentType === 'browser' && isStaged(tab.entityId)))
+  )
+}
+
+/** One workspace's unified tabs as `withoutStagedBrowserTabs` saves them. */
+export function unifiedTabsWithoutStagedBrowsers(
+  snapshot: StagedBrowserPages,
+  tabs: UnifiedTabs
+): UnifiedTabs {
+  return withoutStagedBrowserUnifiedTabs(tabs, (workspaceId) =>
+    isStagedBrowserWorkspace(snapshot, workspaceId)
+  )
+}
+
 /** Drop unpublished optimistic browser tabs on restore; their page IDs have no host owner and would resurrect invalid workspaces. */
 export function withoutStagedBrowserTabs<T extends StagedBrowserTabSnapshotFields>(snapshot: T): T {
-  const handles = snapshot.remoteBrowserPageHandlesByPageId ?? {}
   const stagedWorkspaceIds = new Set<string>()
-  for (const [workspaceId, pages] of Object.entries(snapshot.browserPagesByWorkspace)) {
-    if (pages.some((page) => handles[page.id]?.staged === true)) {
+  for (const workspaceId of Object.keys(snapshot.browserPagesByWorkspace)) {
+    if (isStagedBrowserWorkspace(snapshot, workspaceId)) {
       stagedWorkspaceIds.add(workspaceId)
     }
   }
@@ -54,12 +86,7 @@ export function withoutStagedBrowserTabs<T extends StagedBrowserTabSnapshotField
     unifiedTabsByWorktree: Object.fromEntries(
       Object.entries(snapshot.unifiedTabsByWorktree).map(([worktreeId, tabs]) => [
         worktreeId,
-        keepWhenUnfiltered(
-          tabs,
-          tabs.filter(
-            (tab) => !(tab.contentType === 'browser' && stagedWorkspaceIds.has(tab.entityId))
-          )
-        )
+        withoutStagedBrowserUnifiedTabs(tabs, (workspaceId) => stagedWorkspaceIds.has(workspaceId))
       ])
     )
   }
