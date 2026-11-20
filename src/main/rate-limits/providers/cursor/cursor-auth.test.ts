@@ -108,18 +108,13 @@ describe('Cursor Linux keyring session', () => {
     expect(runProcess).toHaveBeenCalledTimes(2)
   })
 
-  it('reports a locked keyring instead of a missing sign-in', async () => {
-    vi.mocked(runProcess).mockResolvedValueOnce(lockedItem)
-
-    const result = await readWithAuthFile({ storedIn: 'os-secret-store' })
-
-    expect(result).toEqual({ status: 'error', error: lockedError })
-  })
-
   it('reuses a failed keyring read until cursor-agent rewrites auth.json', async () => {
     vi.mocked(runProcess).mockResolvedValueOnce(lockedItem).mockResolvedValueOnce(keyringItem(jwt))
 
-    await readWithAuthFile({ storedIn: 'os-secret-store' })
+    expect(await readWithAuthFile({ storedIn: 'os-secret-store' })).toEqual({
+      status: 'error',
+      error: lockedError
+    })
     // KeePassXC's unlock-before-search dialog must not reappear on each background refresh.
     expect(await readAgain()).toEqual({ status: 'error', error: lockedError })
     expect(runProcess).toHaveBeenCalledTimes(1)
