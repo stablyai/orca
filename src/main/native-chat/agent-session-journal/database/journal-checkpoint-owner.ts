@@ -281,8 +281,9 @@ export class JournalCheckpointOwner {
 
   private check(): void {
     this.pending = ++this.nextRequest
+    const replies = this.replies()
     this.send({ type: 'check', id: this.pending, generation: this.generation, force: this.gated() })
-    this.armDeadline()
+    this.armDeadline(false, replies)
   }
 
   private acknowledge(): void {
@@ -290,8 +291,9 @@ export class JournalCheckpointOwner {
       return
     }
     this.truncate.acknowledged = true
+    const replies = this.replies()
     this.send({ type: 'truncate', truncateId: this.truncate.id })
-    this.armDeadline()
+    this.armDeadline(false, replies)
   }
 
   private send(message: unknown): void {
@@ -354,6 +356,10 @@ export class JournalCheckpointOwner {
         if (this.checkAgain) {
           this.checkAgain = false
           this.request()
+        }
+        // Parked writes now wait on the worker's own retries, so a silent worker must still be caught.
+        if (this.deadline === undefined && this.gated()) {
+          this.armDeadline()
         }
       }
       this.wake()
@@ -475,14 +481,18 @@ export class JournalCheckpointOwner {
     }
   }
 
-  private armDeadline(force = false): void {
+  private replies(): number {
+    return this.current ? Atomics.load(this.current.liveness, JOURNAL_CHECKPOINT_REPLIES) : 0
+  }
+
+  /** `replies` is the count before the request was posted, so a reply still in flight reads as alive. */
+  private armDeadline(force = false, replies = this.replies()): void {
     if (this.stopped && !force) {
       return
     }
     this.clearDeadline()
-    const attached = this.current
-    if (attached) {
-      attached.replies = Atomics.load(attached.liveness, JOURNAL_CHECKPOINT_REPLIES)
+    if (this.current) {
+      this.current.replies = replies
     }
     this.deadline = setTimeout(() => this.expired(), this.options.timeoutMs ?? HEALTH_TIMEOUT_MS)
     this.deadline.unref()
