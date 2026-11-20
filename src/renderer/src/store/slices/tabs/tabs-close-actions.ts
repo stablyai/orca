@@ -129,12 +129,12 @@ export function createTabsCloseActions(
       const closeHere = (): void =>
         settleAttentionRemovedBy(set, get, () =>
           set((current) => {
-            const nextTabs = (current.unifiedTabsByWorktree[worktreeId] ?? []).filter((item) => {
-              if (item.id === tabId) {
-                retireRemovedNativeChatTabs([item], [])
-              }
-              return item.id !== tabId
-            })
+            const currentTabs = current.unifiedTabsByWorktree[worktreeId] ?? []
+            const nextTabs = currentTabs.filter((item) => item.id !== tabId)
+            retireRemovedNativeChatTabs(
+              currentTabs.filter((item) => item.id === tabId),
+              nextTabs
+            )
             // Bulk closes bypass terminals.closeTab, so clear entity-keyed unread markers here too.
             const nextUnreadTerminalTabs = terminalEntityId
               ? omitRecordKeys(current.unreadTerminalTabs, [terminalEntityId])
