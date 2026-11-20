@@ -14,6 +14,7 @@ import { countActiveWorkspaceFilters } from '../../../../../../shared/workspace-
 import { useShallow } from 'zustand/react/shallow'
 import { selectSidebarFilterState, sidebarWorkspaceRowFilters } from './sidebar-filter-actions'
 import SidebarRepositoryFilterSection from './SidebarRepositoryFilterSection'
+import { useProjectFilterEntries } from './use-project-filter-entries'
 import { WorkspaceFilterOptionRow } from './workspace-filter-option-row'
 import {
   getSidebarHostVisibilityLabel,
@@ -46,14 +47,19 @@ export function useWorkspaceOptionsFilterBadge(): {
 } {
   const filterState = useAppStore(useShallow(selectSidebarFilterState))
   const repos = useAppStore((s) => s.repos)
+  const listedRepos = useMemo(() => withoutHiddenRepos(repos), [repos])
+  const projectEntries = useProjectFilterEntries(listedRepos)
   const activeFilterCount = useMemo(
     () =>
       countActiveWorkspaceFilters(
         sidebarWorkspaceRowFilters(filterState),
-        // A filter id with no listed copy filters nothing, so it does not count.
-        withoutHiddenRepos(repos).map((repo) => repo.id)
+        // One selected checkout id per selected project: a project counts once however many hosts it spans.
+        projectEntries.flatMap(
+          (entry) =>
+            entry.repoIds.find((repoId) => filterState.filterRepoIds.includes(repoId)) ?? []
+        )
       ),
-    [filterState, repos]
+    [filterState, projectEntries]
   )
   return {
     hasAnyFilter: activeFilterCount > 0,

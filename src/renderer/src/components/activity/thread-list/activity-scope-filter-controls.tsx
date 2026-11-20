@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useMemo } from 'react'
 import { useAppStore } from '@/store'
 import { DropdownMenuCheckboxItem, DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { useTranslate } from '@/i18n/use-translate'
@@ -9,6 +9,8 @@ import {
   shouldShowHostScopeControls
 } from '@/components/sidebar/worktree-list/controls/sidebar-host-options'
 import { useSidebarHostScopeOptions } from '@/components/sidebar/worktree-list/controls/use-sidebar-host-scope-options'
+import { useProjectFilterEntries } from '@/components/sidebar/worktree-list/controls/use-project-filter-entries'
+import { isProjectFilterEntrySelected } from '../../../../../shared/sidebar-list/sections/project-filter-entries'
 
 /** Persisted Agents scope is separate from workspace navigation filters; the parent owns the Filters label/separator. */
 export function ActivityScopeFilterMenuItems(): React.JSX.Element {
@@ -110,12 +112,23 @@ export function ActivityScopeFilterMenuItems(): React.JSX.Element {
 
 /** Count persisted filters, including stale repo IDs, so hidden agents stay discoverable and resettable. */
 export function useActivityScopeFilterCount(): number {
-  return useAppStore(
+  const repos = useAppStore((state) => state.repos)
+  const filterRepoIds = useAppStore((state) => state.agentsFilterRepoIds)
+  const projectEntries = useProjectFilterEntries(repos)
+  const otherFilterCount = useAppStore(
     (state) =>
       (state.agentsVisibleHostIds !== null ? 1 : 0) +
-      state.agentsFilterRepoIds.length +
       (state.agentsHideWorkspacesFromOtherDevices ? 1 : 0) +
       (state.agentsHideAutomationGeneratedWorkspaces ? 1 : 0) +
       (state.agentsHideCliCreatedWorkspaces ? 1 : 0)
   )
+  // A project counts once however many hosts its checkouts span; ids no project owns still count.
+  const projectFilterCount = useMemo(() => {
+    const ownedRepoIds = new Set(projectEntries.flatMap((entry) => entry.repoIds))
+    return (
+      projectEntries.filter((entry) => isProjectFilterEntrySelected(entry, filterRepoIds)).length +
+      filterRepoIds.filter((repoId) => !ownedRepoIds.has(repoId)).length
+    )
+  }, [projectEntries, filterRepoIds])
+  return otherFilterCount + projectFilterCount
 }
