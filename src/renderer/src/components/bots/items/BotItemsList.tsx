@@ -1,9 +1,10 @@
 // A bot's items in groups: Needs you (led by Orca's asks) and In progress open; Planned, Snoozed, Stale
 // and Closed folded. Each shows five rows, then Show N more. Checked rows get the floating pill; Stale's header
 // cancels them all. Asks have no checkbox, so selection and ranges never reach them.
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
+import { VirtualizedList } from '@/components/ui/virtualized-list'
 import { useTranslate } from '@/i18n/use-translate'
 import { useLatestHandler } from '@/lib/use-latest-handler'
 import type { Bot } from '../../../../../shared/bot-types'
@@ -34,6 +35,18 @@ import type { BotNeedView } from '../use-bot-now'
 import { useBotItemSnoozing, type BotItemSnoozing } from './BotItemSnooze'
 
 const foldId = (id: BotItemGroupId): BotPanelFoldId => `items-${id}`
+
+/** Back's row: focused and scrolled to. Back is a command, not navigation: Esc would otherwise draw
+ *  Chromium's keyboard ring here. */
+function focusBackRow(row: HTMLElement | null | undefined): void {
+  row
+    ?.querySelector<HTMLElement>('[data-bot-item-open]')
+    ?.focus({ preventScroll: true, focusVisible: false })
+  row?.scrollIntoView({ block: 'nearest' })
+}
+const rowKey = (item: BotItem): string => item.uid
+/** A one-line row with its gap; rows measure themselves once shown. */
+const BOT_ITEM_ROW_HEIGHT_PX = 30
 
 /** A group's members' items in one list: each row acts on its own bot and shows its face. */
 export type BotItemsListMembers = {
@@ -71,6 +84,8 @@ export type BotItemsListProps = {
   offline?: boolean
   /** Takes focus when a focused Needs you row leaves and no other row has a control. */
   focusFallback?: React.RefObject<HTMLElement | null>
+  /** The panel's scroller, which a long group windows its rows against. */
+  scroller?: HTMLDivElement | null
 }
 
 const NO_ASKS: BotNeedsYouAsks = { needs: [], stoppedForSignIn: [], itemOf: () => null }
@@ -115,7 +130,7 @@ export function BotItemsList(props: BotItemsListProps): React.JSX.Element {
   const selectedItems = ordered.filter((item) => selected.has(item.uid))
   const snoozing = useBotItemSnoozing(botOf, () => setSelected(new Set()))
 
-  const select = (item: BotItem, on: boolean, range: boolean): void => {
+  const select = useLatestHandler((item: BotItem, on: boolean, range: boolean): void => {
     setSelected((current) => {
       const next = new Set(current)
       const from = anchor ? ordered.findIndex((entry) => entry.uid === anchor) : -1
@@ -128,7 +143,7 @@ export function BotItemsList(props: BotItemsListProps): React.JSX.Element {
       return next
     })
     setAnchor(item.uid)
-  }
+  })
 
   const move = async (items: readonly BotItem[], to: BotItemStatus, reason?: string) => {
     try {
@@ -148,7 +163,7 @@ export function BotItemsList(props: BotItemsListProps): React.JSX.Element {
     }
   }
 
-  const act = (item: BotItem, action: BotItemRowAction): void => {
+  const act = useLatestHandler((item: BotItem, action: BotItemRowAction): void => {
     if (action.kind === 'open') {
       onOpen(item)
     } else if (action.kind === 'done') {
@@ -156,7 +171,7 @@ export function BotItemsList(props: BotItemsListProps): React.JSX.Element {
     } else {
       setCanceling([item])
     }
-  }
+  })
 
   const staleReason =
     props.staleDays === null
@@ -223,7 +238,8 @@ function BotItemGroup({
   staleReason,
   asks = NO_ASKS,
   offline = false,
-  focusFallback
+  focusFallback,
+  scroller = null
 }: BotItemsListProps & {
   id: BotItemGroupId
   owner: ListOwner
@@ -246,26 +262,32 @@ function BotItemGroup({
   )
   const [shown, setShown] = useState(Math.max(BOT_ITEM_GROUP_ROWS, focusIndex + 1))
   const section = useRef<HTMLElement | null>(null)
-  const focusing = useRef(focusIndex >= 0)
+  // Kept mounted in a windowed group until it has focus.
+  const [focusing, setFocusing] = useState(focusIndex >= 0)
   const unfold = useLatestHandler(() => setOpen(true))
+  // Needs you's rows are all mounted; other groups' rows focus themselves as they mount (`focusRow`).
   useEffect(() => {
-    if (!focusing.current) {
+    if (!focusing) {
       return
     }
     if (!open) {
       unfold()
       return
     }
-    focusing.current = false
-    const row = section.current?.querySelector<HTMLElement>(
-      `[data-bot-item="${items[focusIndex]?.number}"]`
+    if (id !== 'needs_you') {
+      return
+    }
+    setFocusing(false)
+    focusBackRow(
+      section.current?.querySelector<HTMLElement>(`[data-bot-item="${items[focusIndex]?.number}"]`)
     )
-    // Back is a command, not navigation: Esc would otherwise draw Chromium's keyboard ring here.
-    row
-      ?.querySelector<HTMLElement>('[data-bot-item-open]')
-      ?.focus({ preventScroll: true, focusVisible: false })
-    row?.scrollIntoView({ block: 'nearest' })
-  }, [open, unfold, items, focusIndex])
+  }, [focusing, open, unfold, id, items, focusIndex])
+  const focusRow = useCallback((node: HTMLElement | null) => {
+    if (node) {
+      focusBackRow(node)
+      setFocusing(false)
+    }
+  }, [])
   const [confirming, setConfirming] = useState(false)
   const [reading, setReading] = useState(false)
   const needsYou = id === 'needs_you'
@@ -288,8 +310,8 @@ function BotItemGroup({
       selected={selected.has(item.uid)}
       selecting={selected.size > 0}
       now={now}
-      onSelect={(on, range) => onSelect(item, on, range)}
-      onAction={(action) => onAction(item, action)}
+      onSelect={onSelect}
+      onAction={onAction}
       face={owner.faces ? owner.botOf(item) : null}
       place={owner.placeOf(item)}
     />
@@ -377,7 +399,24 @@ function BotItemGroup({
         />
       ) : open ? (
         <>
-          {items.slice(0, shown).map(row)}
+          <div className="-mb-0.5 flex flex-col">
+            {/* Windowed past a few dozen rows: Show more reveals the group, mounting what's in view. */}
+            <VirtualizedList
+              rows={items.slice(0, shown)}
+              getRowKey={rowKey}
+              renderRow={(item) => (
+                <div
+                  className="pb-0.5"
+                  ref={focusing && item.uid === items[focusIndex]?.uid ? focusRow : undefined}
+                >
+                  {row(item)}
+                </div>
+              )}
+              scrollElement={scroller}
+              estimateRowHeightPx={BOT_ITEM_ROW_HEIGHT_PX}
+              activeRowKey={focusing ? items[focusIndex]?.uid : undefined}
+            />
+          </div>
           {more > 0 ? (
             <button
               type="button"

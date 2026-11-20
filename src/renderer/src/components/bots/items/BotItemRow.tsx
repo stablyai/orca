@@ -1,5 +1,5 @@
 // Hover or keyboard focus swaps the age for Done, Snooze, and More on open items.
-import { useId } from 'react'
+import { memo, useId } from 'react'
 import { Check, CircleCheck, CircleSlash, Clock, MoreHorizontal } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -31,7 +31,9 @@ import { formatBotItemSnoozeTime } from './bot-item-snooze-time'
 
 export type BotItemRowAction = { kind: 'open' } | { kind: 'done' } | { kind: 'cancel' }
 
-export function BotItemRow({
+/** Memoized: an update re-renders only the rows whose item or flags changed, so its handlers take the
+ *  item and stay the same across the list's renders. */
+export const BotItemRow = memo(function BotItemRow({
   item,
   stale,
   snoozed = false,
@@ -55,8 +57,8 @@ export function BotItemRow({
   /** Some row is checked: every row shows its checkbox. */
   selecting: boolean
   now: number
-  onSelect: (selected: boolean, range: boolean) => void
-  onAction: (action: BotItemRowAction) => void
+  onSelect: (item: BotItem, selected: boolean, range: boolean) => void
+  onAction: (item: BotItem, action: BotItemRowAction) => void
   /** Its bot, in a group's merged list. */
   face?: Bot | null
   /** Its chat's name, when the list shows chats beyond the one it is about. */
@@ -98,7 +100,7 @@ export function BotItemRow({
           className={cn('size-3.5', !checkbox && 'hidden group-hover/check:flex')}
           onClick={(event) => {
             event.preventDefault()
-            onSelect(!selected, event.shiftKey)
+            onSelect(item, !selected, event.shiftKey)
           }}
         />
       </span>
@@ -112,7 +114,7 @@ export function BotItemRow({
           title={question ? undefined : item.title}
           aria-describedby={question ? questionId : undefined}
           className="min-w-0 flex-1 cursor-pointer rounded-sm text-left focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-          onClick={() => onAction({ kind: 'open' })}
+          onClick={() => onAction(item, { kind: 'open' })}
         >
           <span className="flex min-w-0 items-start">
             <BotItemNumberColumn number={item.number} />
@@ -179,7 +181,7 @@ export function BotItemRow({
                 variant="ghost-on-accent"
                 size="icon-xs"
                 aria-label={doneLabel}
-                onClick={() => onAction({ kind: 'done' })}
+                onClick={() => onAction(item, { kind: 'done' })}
               >
                 <Check className="size-3.5" />
               </Button>
@@ -216,12 +218,12 @@ export function BotItemRow({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" {...menu.contentProps}>
-              <DropdownMenuItem onSelect={() => onAction({ kind: 'done' })}>
+              <DropdownMenuItem onSelect={() => onAction(item, { kind: 'done' })}>
                 <CircleCheck />
                 {t('bots.items.menu.done', 'Done')}
               </DropdownMenuItem>
               <BotItemSnoozeMenuItems items={[item]} snoozing={snoozing} />
-              <DropdownMenuItem onSelect={() => onAction({ kind: 'cancel' })}>
+              <DropdownMenuItem onSelect={() => onAction(item, { kind: 'cancel' })}>
                 <CircleSlash />
                 {t('bots.items.menu.cancel', 'Cancel…')}
               </DropdownMenuItem>
@@ -231,7 +233,7 @@ export function BotItemRow({
       )}
     </div>
   )
-}
+})
 
 /** The row's hover card while it needs you: the title, one line of the bot's words, then each question
  *  line with its quick replies (read-only here; they answer on the item). */

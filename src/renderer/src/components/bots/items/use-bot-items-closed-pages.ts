@@ -4,6 +4,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { BotRef } from '@/lib/bot-hosts'
 import type { BotItem } from '../../../../../shared/bots/bot-items'
+import { reuseEqualJson } from '../../../../../shared/reuse-equal-json'
 import { readMoreClosedItems, useStableBotItemChats, type BotItemsRead } from './use-bot-items'
 
 type Pages = {
@@ -55,7 +56,14 @@ export function useBotItemsClosedPages(
         cursor = next.nextClosedCursor ?? null
       }
       if (generation.current === mine) {
-        setPages({ base: read, chats, depth, items, cursor })
+        // The pages read again keep their unchanged items' identity.
+        setPages((prev) => ({
+          base: read,
+          chats,
+          depth,
+          items: prev?.chats === chats ? reuseEqualJson(prev.items, items) : items,
+          cursor
+        }))
       }
     })().catch((error: unknown) => {
       console.warn('[bots] items: reading Closed pages again failed', error)

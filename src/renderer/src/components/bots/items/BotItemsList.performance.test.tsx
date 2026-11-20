@@ -1,0 +1,124 @@
+// @vitest-environment happy-dom
+// Perf contract (bot Home panel items list): a shown group mounted every row (900 rows for 10 visible
+// at 600 open items), and every item update re-rendered every mounted row. Rows mounted stay near what
+// the panel shows, and one changed item re-renders one row.
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { useMemo, useState } from 'react'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { TooltipProvider } from '@/components/ui/tooltip'
+import type { Bot } from '../../../../../shared/bot-types'
+import type { BotItem } from '../../../../../shared/bots/bot-items'
+import { groupBotItems } from '../../../../../shared/bots/bot-item-groups'
+import { makeTestBotItem } from '../../../../../shared/bots/bot-item.test-fixture'
+import { reuseEqualJson } from '../../../../../shared/reuse-equal-json'
+
+const rowRenders = vi.hoisted(() => new Map<number, number>())
+
+vi.mock('./use-bot-items', () => ({ setBotItemsStatus: vi.fn() }))
+vi.mock('./BotItemNumberColumn', () => ({
+  // Rendered once per row render: counts which rows rendered.
+  BotItemNumberColumn: ({ number }: { number: number }) => {
+    rowRenders.set(number, (rowRenders.get(number) ?? 0) + 1)
+    return <span>#{number}</span>
+  }
+}))
+
+import { BotItemsList } from './BotItemsList'
+
+const BOT: Bot = {
+  id: 'bot-a',
+  name: 'Bot builder',
+  hostId: 'local',
+  folder: 'bot-builder',
+  folderWorkspaceId: 'w1',
+  agent: 'codex',
+  avatar: null,
+  paused: false,
+  permissionMode: 'ask',
+  notifications: { needsPermission: true, taskComplete: true, couldNotFinish: true },
+  members: [],
+  slack: null,
+  chatSessionId: null,
+  linear: null,
+  github: null,
+  createdAt: 1,
+  updatedAt: 1
+}
+const NOW = Date.parse('2026-11-20T12:00:00Z')
+const OPEN = 600
+const ROW_PX = 30
+const PANEL_PX = 400
+
+function Panel({ items }: { items: readonly BotItem[] }): React.JSX.Element {
+  const [scroller, setScroller] = useState<HTMLDivElement | null>(null)
+  const groups = useMemo(() => groupBotItems(items, null, NOW, 'e10'), [items])
+  return (
+    <div ref={setScroller} data-testid="scroller" style={{ height: PANEL_PX, overflowY: 'auto' }}>
+      <BotItemsList
+        bot={BOT}
+        groups={groups}
+        seenEventId="e10"
+        closedTotal={0}
+        onMoreClosed={null}
+        staleDays={null}
+        now={NOW}
+        onOpen={() => {}}
+        scroller={scroller}
+      />
+    </div>
+  )
+}
+
+/** The host's answer as the read gets it: fresh objects, newest activity first. */
+function hostAnswer(changed: { number: number; title: string } | null): BotItem[] {
+  const items = Array.from({ length: OPEN }, (_, index) =>
+    makeTestBotItem(index + 1, { status: 'planned', lastActivityAt: NOW - (index + 1) * 1000 })
+  )
+  if (changed) {
+    const item = items[changed.number - 1]!
+    items[changed.number - 1] = { ...item, title: changed.title, lastActivityAt: NOW }
+  }
+  return JSON.parse(JSON.stringify(items)) as BotItem[]
+}
+
+beforeEach(() => {
+  vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockReturnValue(PANEL_PX)
+  vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockReturnValue(320)
+  vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue(
+    new DOMRect(0, 0, 320, ROW_PX)
+  )
+})
+
+afterEach(() => {
+  cleanup()
+  localStorage.clear()
+  rowRenders.clear()
+  vi.restoreAllMocks()
+})
+
+async function showWholePlannedGroup(items: readonly BotItem[]) {
+  const view = render(<Panel items={items} />, { wrapper: TooltipProvider })
+  fireEvent.click(screen.getByRole('button', { name: /^Planned/ }))
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: `Show ${OPEN - 5} more` }))
+  })
+  return view
+}
+
+it('mounts about what the panel shows of a 600-row group, not every row', async () => {
+  await showWholePlannedGroup(hostAnswer(null))
+  const mounted = document.querySelectorAll('[data-bot-item]').length
+  // 400 px of 30 px rows, plus the window's overscan on each side.
+  expect(mounted).toBeGreaterThan(0)
+  expect(mounted).toBeLessThanOrEqual(40)
+})
+
+it('re-renders only the changed row when an update moves it to the top', async () => {
+  const first = hostAnswer(null)
+  const view = await showWholePlannedGroup(first)
+  rowRenders.clear()
+  // Item 300 gets a comment: the host's next answer is all-new objects, and it now sorts first.
+  const next = reuseEqualJson(first, hostAnswer({ number: 300, title: 'Item 300, updated' }))
+  view.rerender(<Panel items={next} />)
+  expect([...rowRenders.entries()]).toEqual([[300, 1]])
+})

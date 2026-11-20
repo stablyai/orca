@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react'
+import React, { useCallback, useMemo, useState } from 'react'
 import { useAppStore } from '@/store'
 import { botRefKey } from '@/lib/bot-hosts'
 import { useBotHostOffline } from '@/lib/bot-host-views'
@@ -133,6 +133,12 @@ function BotActivityTab({ bot }: { bot: Bot }): React.JSX.Element {
     setReturnTo(left ? botItemWalkReturnRow(left.walk, left.uid, listed) : null)
   }
   const scroll = React.useRef<HTMLDivElement | null>(null)
+  // State as well as a ref: long item groups window against it once it's attached.
+  const [scroller, setScroller] = useState<HTMLDivElement | null>(null)
+  const scrollRef = useCallback((node: HTMLDivElement | null) => {
+    scroll.current = node
+    setScroller(node)
+  }, [])
   const automationRows = useMemo(
     () => botAutomationCardRows(bot, activity, clock),
     [bot, activity, clock]
@@ -181,7 +187,7 @@ function BotActivityTab({ bot }: { bot: Bot }): React.JSX.Element {
   }
   return (
     <div
-      ref={scroll}
+      ref={scrollRef}
       tabIndex={-1}
       // The bot row's hover card moves focus here when it opens the bot's Home.
       data-bot-home-panel=""
@@ -226,6 +232,7 @@ function BotActivityTab({ bot }: { bot: Bot }): React.JSX.Element {
           asks={asks}
           offline={offline}
           focusFallback={scroll}
+          scroller={scroller}
         />
         <BotUpcomingSection
           bot={bot}

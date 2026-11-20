@@ -9,16 +9,43 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return proto === Object.prototype || proto === null
 }
 
+function uidOf(value: unknown): string | null {
+  return isPlainObject(value) && typeof value.uid === 'string' ? value.uid : null
+}
+
+/** A list of records that each carry a `uid` (items) pairs by it, so a reordered record keeps its identity. */
+function previousByUid(previous: readonly unknown[], next: readonly unknown[]): Map<string, unknown> | null {
+  if (previous.length === 0 || !next.every((item) => uidOf(item) !== null)) {
+    return null
+  }
+  const byUid = new Map<string, unknown>()
+  for (const item of previous) {
+    const uid = uidOf(item)
+    if (uid === null) {
+      return null
+    }
+    byUid.set(uid, item)
+  }
+  return byUid
+}
+
 /** `next`, with every part equal to `previous`'s part at the same place replaced by that part; `previous`
- *  itself when the two are equal. Arrays match by index, objects by key. */
+ *  itself when the two are equal. Arrays match by index, or by `uid` when every element has one; objects
+ *  by key. */
 export function reuseEqualJson<T>(previous: unknown, next: T): T {
   if (Object.is(previous, next)) {
     return next
   }
   if (Array.isArray(previous) && Array.isArray(next)) {
     let same = previous.length === next.length
+    const byUid = previousByUid(previous, next)
     const merged = next.map((item: unknown, index) => {
-      const kept = index < previous.length ? reuseEqualJson(previous[index], item) : item
+      const match = byUid
+        ? byUid.get(uidOf(item)!)
+        : index < previous.length
+          ? previous[index]
+          : undefined
+      const kept = match === undefined ? item : reuseEqualJson(match, item)
       same &&= kept === previous[index]
       return kept
     })
