@@ -242,6 +242,15 @@ export function AntigravityAccountsSection({
         )
   }
 
+  // Chats on agy's own home share this login; a saved key or gcloud keeps new chats apart.
+  const chatsUseAgyLogin = !chats
+    ? null
+    : chatMethod !== null
+      ? chatMethod === 'oauth-personal' || chatMethod === 'oauth-business'
+      : state?.chatUsesAgy === undefined && state?.chatAgySignedOut === undefined
+        ? null
+        : Boolean(state?.chatUsesAgy || state?.chatAgySignedOut)
+
   const chatRows =
     chats && chatRuntime.kind === 'active' ? (
       <>
@@ -268,12 +277,12 @@ export function AntigravityAccountsSection({
                 'accounts.antigravity.terminalDescriptionWindows',
                 "Uses agy's own saved accounts. Switching applies to the host default agy credential."
               )
-            : state?.chatUsesAgy === undefined && state?.chatAgySignedOut === undefined
+            : chatsUseAgyLogin === null
               ? t(
                   'accounts.antigravity.terminalDescription',
                   "Uses agy's own saved accounts. Switching applies to new agy sessions."
                 )
-              : state?.chatUsesAgy || state?.chatAgySignedOut
+              : chatsUseAgyLogin
                 ? t(
                     'accounts.antigravity.terminalDescriptionChats',
                     "Uses agy's own saved accounts. Switching applies to new agy sessions and to Antigravity chats."
