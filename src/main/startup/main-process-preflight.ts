@@ -104,6 +104,7 @@ import {
   handleMainProcessPreflightFailure
 } from './main-process-preflight-failure'
 import { ensureWindowsAppDataPath } from './windows-startup/windows-app-data-path'
+import { isWindowsPortablePackage } from '../updater/linux-package/linux-update-package-type'
 
 export type MainProcessPreflightOptions = {
   focusExistingWindow: (request: { background?: boolean }) => void
@@ -123,7 +124,10 @@ export function runMainProcessPreflight(options: MainProcessPreflightOptions): b
 function initializeMainProcessPreflight(options: MainProcessPreflightOptions): boolean {
   const isDev = !app.isPackaged
   // Resolve Windows appData before recovery/instance-lock steps can read userData.
-  ensureWindowsAppDataPath(app)
+  ensureWindowsAppDataPath(app, process.env, process.platform, {
+    isPortable: isWindowsPortablePackage(),
+    execPath: process.execPath
+  })
   if (runProfileStateRecoveryPreflight()) {
     return false
   }

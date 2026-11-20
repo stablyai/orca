@@ -8,6 +8,17 @@ export type LinuxPackageType = LinuxRootPackageType | 'non-root' | 'unusable'
 
 let cachedPackageType: LinuxPackageType | undefined
 let cachedExternallyManaged: boolean | undefined
+let cachedWindowsPortable: boolean | undefined
+
+function readResourcesPackageTypeFile(
+  resourcesPath: string
+): { ok: true; value: string } | { ok: false; code: string | undefined } {
+  try {
+    return { ok: true, value: readFileSync(path.join(resourcesPath, 'package-type'), 'utf8').trim() }
+  } catch (error) {
+    return { ok: false, code: (error as NodeJS.ErrnoException)?.code }
+  }
+}
 
 function warnMarkerUnusable(detail: string): void {
   console.warn(`[updater] linux package-type marker unusable: ${detail}`)
@@ -67,22 +78,15 @@ function readPackageTypeMarker(): LinuxPackageType {
     warnMarkerUnusable('resourcesPath unavailable')
     return 'unusable'
   }
-  let raw: string
-  try {
-    raw = readFileSync(path.join(resourcesPath, 'package-type'), 'utf8')
-  } catch (error) {
-    if (
-      (error as NodeJS.ErrnoException)?.code === 'ENOENT' &&
-      hasLegacyAppImageRuntimeIdentity(resourcesPath)
-    ) {
+  const marker = readResourcesPackageTypeFile(resourcesPath)
+  if (!marker.ok) {
+    if (marker.code === 'ENOENT' && hasLegacyAppImageRuntimeIdentity(resourcesPath)) {
       return 'non-root'
     }
-    warnMarkerUnusable(
-      (error as NodeJS.ErrnoException)?.code === 'ENOENT' ? 'marker missing' : 'marker unreadable'
-    )
+    warnMarkerUnusable(marker.code === 'ENOENT' ? 'marker missing' : 'marker unreadable')
     return 'unusable'
   }
-  const value = raw.trim()
+  const value = marker.value
   if (value === 'deb' || value === 'rpm') {
     return value
   }
@@ -91,6 +95,24 @@ function readPackageTypeMarker(): LinuxPackageType {
   }
   warnMarkerUnusable('marker is not AppImage, deb, or rpm')
   return 'unusable'
+}
+
+/** True only for packaged Windows builds carrying `resources/package-type` = `portable`. */
+export function isWindowsPortablePackage(): boolean {
+  if (cachedWindowsPortable === undefined) {
+    if (process.platform !== 'win32' || !app.isPackaged) {
+      cachedWindowsPortable = false
+    } else {
+      const resourcesPath = process.resourcesPath
+      if (typeof resourcesPath !== 'string' || resourcesPath.length === 0) {
+        cachedWindowsPortable = false
+      } else {
+        const marker = readResourcesPackageTypeFile(resourcesPath)
+        cachedWindowsPortable = marker.ok && marker.value === 'portable'
+      }
+    }
+  }
+  return cachedWindowsPortable
 }
 
 /** Packaged Linux builds require a valid marker, except legacy AppImages with a missing marker. */
