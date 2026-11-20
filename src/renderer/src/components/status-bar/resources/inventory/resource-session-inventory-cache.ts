@@ -13,6 +13,7 @@ import {
 
 const COOLDOWN_MS = 100
 const EXIT_PUBLICATION_MS = 50
+const ERROR_RETRY_MS = 2_000
 
 /** One request survives view epochs, but only its dispatching epoch may publish it. */
 export class ResourceSessionInventoryCache {
@@ -182,6 +183,11 @@ export class ResourceSessionInventoryCache {
       .catch((error: unknown) => {
         if (this.active && epoch === this.epoch && !isResourceViewInactive(error)) {
           this.publish({ sessionsError: true })
+          // Lifecycle events alone may never come again; keep checking so a recovered daemon clears the warning.
+          this.timer ??= setTimeout(() => {
+            this.timer = null
+            void this.refresh()
+          }, ERROR_RETRY_MS)
         }
       })
       .finally(() => {

@@ -21,7 +21,8 @@ export function splitSnapshotByOwner(
   agentPaneKeys: { has(paneKey: string): boolean }
 ): ResourceOwnerSplit {
   const daemonById = new Map(daemonSessions.map((session) => [session.id, session]))
-  const agents = { memory: 0 }
+  // Chat agents run outside terminals, so they have no session row of their own.
+  const agents = { memory: snapshot.agentProcesses?.memory ?? 0 }
   const yourProcesses = { memory: 0 }
   for (const worktree of snapshot.worktrees) {
     for (const session of worktree.sessions) {
