@@ -139,6 +139,7 @@ describe('getBotListedWorktreeIdentities', () => {
         hideAutomationGeneratedWorkspaces: false,
         hideCliCreatedWorkspaces: false,
         hideDetachedHeadWorkspaces: false,
+        hideDoneWorkspaces: false,
         hideWorkspacesFromOtherDevices: false,
         pairedDeviceIdsByEnvironment: new Map(),
         repoMap: new Map(),
