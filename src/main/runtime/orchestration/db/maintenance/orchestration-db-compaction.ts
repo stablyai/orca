@@ -183,10 +183,9 @@ export class OrchestrationDbCompaction {
     }
   }
 
-  /** Moves with any commit to the file since the observer opened. */
+  /** Moves with any commit to the file, by any connection, since the observer opened. */
   private stamp(): string {
-    const observed = Number(this.observer?.pragma('data_version', { simple: true }))
-    return `${observed}:${readFileState(this.orchestrationDb.db).othersVersion}`
+    return String(this.observer?.pragma('data_version', { simple: true }))
   }
 
   private async dropCopy(): Promise<void> {
@@ -274,7 +273,8 @@ export class OrchestrationDbCompaction {
 
   /**
    * At the end of a clean quit: swaps the copy in when the file is unchanged since it was taken. `detach`
-   * cuts the runtime off the database; the swap then holds it alone and closes it.
+   * cuts the runtime off the database; the swap then closes the runtime's connection, so a reference kept
+   * across an await fails rather than writing after the check.
    */
   async swapAtQuit(detach: () => void): Promise<OrchestrationDbSwap> {
     // Kept set until the end: detaching stops maintenance, whose stop drops an unready copy.
@@ -283,16 +283,13 @@ export class OrchestrationDbCompaction {
       return { kind: 'none' }
     }
     const started = performance.now()
-    const { db } = this.orchestrationDb
-    let open = true
-    const closeDb = (): void => {
-      if (open) {
-        open = false
-        this.orchestrationDb.close()
-      }
+    let lock: Database.Database | undefined
+    const closeLock = (): void => {
+      lock?.close()
+      lock = undefined
     }
     const giveUp = async (kind: 'busy' | 'stale'): Promise<OrchestrationDbSwap> => {
-      closeDb()
+      closeLock()
       await this.dropCopy()
       return { kind }
     }
@@ -306,23 +303,28 @@ export class OrchestrationDbCompaction {
       // From here on nothing else in this process can reach the file.
       refuseOrchestrationDbWritesForReplacement(this.filename)
       detach()
-      // Read, then closed so the lock can be had; after it, only other connections' commits move.
-      const observed = Number(this.observer?.pragma('data_version', { simple: true }))
+      this.orchestrationDb.close()
+      // Its data_version, read before the observer's last read, counts every commit after it.
+      lock = new Database(this.filename, { fileMustExist: true })
+      const others = Number(lock.pragma('data_version', { simple: true }))
+      const observed = this.stamp()
       this.observer?.close()
       this.observer = undefined
+      if (observed !== ready.stamp) {
+        return await giveUp('stale')
+      }
       try {
         // Refused while any other connection, in any process, has the file open (after a short wait for an
         // exiting checkpoint thread); once held, it keeps every other one out.
         // The checkpoint leaves an empty WAL, so nothing of the old file can be replayed onto the copy.
-        db.exec(
+        lock.exec(
           `PRAGMA busy_timeout = ${LOCK_WAIT_MS}; PRAGMA locking_mode = EXCLUSIVE; BEGIN EXCLUSIVE; COMMIT;
            PRAGMA wal_checkpoint(TRUNCATE)`
         )
       } catch {
         return await giveUp('busy')
       }
-      // Under the lock: any commit since the copy, by any connection, shows here.
-      if (`${observed}:${readFileState(db).othersVersion}` !== ready.stamp) {
+      if (Number(lock.pragma('data_version', { simple: true })) !== others) {
         return await giveUp('stale')
       }
       // The second name keeps the old file's blocks alive, so the rename doesn't wait for them to be freed.
@@ -332,11 +334,11 @@ export class OrchestrationDbCompaction {
       )
       // Elsewhere under the lock; Windows can't rename over an open file, and fails if it was reopened.
       if (process.platform === 'win32') {
-        closeDb()
+        closeLock()
       }
       await rename(this.copyPath, this.filename)
       this.ready = undefined
-      closeDb()
+      closeLock()
       await syncDirectory(dirname(this.filename))
       await removeQuietly(this.attemptsPath)
       if (kept) {
@@ -349,7 +351,7 @@ export class OrchestrationDbCompaction {
         ms: Math.round(performance.now() - started)
       }
     } catch (error) {
-      closeDb()
+      closeLock()
       await this.dropCopy()
       return { kind: 'failed', error: String(error) }
     }

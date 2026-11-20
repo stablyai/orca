@@ -125,4 +125,25 @@ describe('OrchestrationDbCompaction', () => {
     expect((await compaction.swapAtQuit(() => {})).kind).toBe('compacted')
     expect(inspect(file).autoVacuum).toBe(2)
   })
+
+  it('refuses a write through a kept reference while the swap is under way', async () => {
+    const file = legacyDatabase()
+    const { orchestration, compaction } = await copiedWhileQuiet(file)
+    let late: unknown = 'not attempted'
+
+    const result = await compaction.swapAtQuit(() => {
+      // As a caller that kept the connection across an await would write.
+      setImmediate(() => {
+        try {
+          late = orchestration.createTask({ runId: 'run_legacy_local', spec: 'during the swap' })
+        } catch (error) {
+          late = error
+        }
+      })
+    })
+
+    expect(result.kind).toBe('compacted')
+    expect(late).toBeInstanceOf(Error)
+    expect(inspect(file)).toEqual({ autoVacuum: 2, integrity: 'ok', tasks: 1 })
+  })
 })
