@@ -78,4 +78,17 @@ describe.runIf(process.platform === 'darwin')('cloneWorktreeCheckoutFiles', () =
     expect(existsSync(join(target, 'secret.env'))).toBe(false)
     expect(git(target, 'status', '--porcelain', '--ignored')).toBe('')
   })
+
+  it('leaves the checkout to Git when a bare core.autocrlf enables conversion', async () => {
+    // A key without a value is true to Git.
+    writeFileSync(join(repo, '.git/config'), '[core]\n\tautocrlf\n', { flag: 'a' })
+    await cloneWorktreeCheckoutFiles({
+      repoPath: repo,
+      worktreePath: target,
+      commit: 'HEAD',
+      options: { copyOnWriteCheckout: true }
+    })
+
+    expect(existsSync(join(target, 'src/same.txt'))).toBe(false)
+  })
 })

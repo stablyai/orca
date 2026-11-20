@@ -103,16 +103,16 @@ async function runTool(context: CloneContext, binary: string, args: string[]): P
 
 async function configConvertsCheckout(context: CloneContext): Promise<boolean> {
   const read = (key: string): Promise<string> =>
-    runGit(context, ['config', '--default=', '--get', key]).then(({ stdout }) =>
-      stdout.trim().toLowerCase()
+    // bool-or-str makes a bare key read as true, as Git treats it.
+    runGit(context, ['config', '--type=bool-or-str', '--default=', '--get', key]).then(
+      ({ stdout }) => stdout.trim().toLowerCase()
     )
   const [autocrlf, eol, sparse] = await Promise.all([
     read('core.autocrlf'),
     read('core.eol'),
     read('core.sparseCheckout')
   ])
-  const enabled = (value: string): boolean => ['true', 'yes', 'on', '1'].includes(value)
-  return enabled(autocrlf) || eol === 'crlf' || enabled(sparse)
+  return autocrlf === 'true' || eol === 'crlf' || sparse === 'true'
 }
 
 async function listTrackedFiles(context: CloneContext): Promise<TrackedFile[]> {
