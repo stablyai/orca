@@ -233,3 +233,38 @@ it('keeps a root command monitoring after its child finishes', async () => {
     hook('root', 'PostToolUse', { stepIdx: 4, toolCall: { name: 'run_command' } })?.payload.state
   ).toBe('done')
 })
+
+it('keeps a Swarm worker without a RUNNING phase listed', async () => {
+  transcript('worker')
+  const swarm = join(dir, 'root', '.system_generated', 'swarm')
+  mkdirSync(swarm, { recursive: true })
+  writeFileSync(
+    join(swarm, 'members.json'),
+    JSON.stringify({ members: { worker: { conversation_id: 'worker', phase: 'STARTING' } } })
+  )
+  hook('root', 'PreToolUse', { toolCall: { name: 'swarm' } })
+  hook('worker', 'PreInvocation')
+  expect((await poll())?.payload.subagents?.map((child) => child.id)).toEqual(['worker'])
+})
+
+it('surfaces an unconfirmed child that waits on the user', async () => {
+  transcript('helper')
+  spawn()
+  hook('helper', 'PreInvocation')
+  hook('helper', 'PreToolUse', { toolCall: { name: 'ask_question', args: {} } })
+  expect((await poll())?.payload).toMatchObject({
+    state: 'waiting',
+    subagents: [{ id: 'helper', state: 'waiting' }]
+  })
+})
+
+it('ignores a child that wakes after the root finished', async () => {
+  transcript('child')
+  descriptor('child')
+  spawn()
+  hook('child', 'PreInvocation')
+  await poll()
+  expect(hook('root', 'Stop', { fullyIdle: true })?.payload.state).toBe('done')
+  expect(hook('child', 'PreInvocation')).toBeNull()
+  expect((await poll())?.payload.state ?? row.payload.state).toBe('done')
+})

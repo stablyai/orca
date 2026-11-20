@@ -111,6 +111,10 @@ export function normalizeAntigravityEvent(
     conversationId !== existingPaneState.rootConversationId &&
     isAntigravityInSessionChildHook(state, paneKey, hookPayload, origin)
   ) {
+    // After the root's final idle Stop nothing would end a reopened row, so late child hooks stay ignored.
+    if (state.antigravityCompletedTranscriptByPaneKey.has(paneKey)) {
+      return null
+    }
     recordAntigravityChildHook(existingPaneState, conversationId, eventName, hookPayload, now)
     return null
   }

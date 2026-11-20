@@ -40,17 +40,12 @@ export function resolveAntigravityBrainDirectory(
   hookPayload: Record<string, unknown>,
   transcriptPath: string | undefined
 ): string | undefined {
-  const artifactDir = readPathFromKeys(hookPayload, [
-    'artifactDirectoryPath',
-    'artifact_directory_path'
-  ])
-  if (artifactDir) {
-    return artifactDir
+  // Child descriptors and transcripts are addressed relative to <brain>/<conversationId>, which the
+  // transcript path pins; the artifact directory is only a fallback when no transcript is reported.
+  if (transcriptPath && TRANSCRIPT_SUFFIX_RE.test(transcriptPath)) {
+    return transcriptPath.replace(TRANSCRIPT_SUFFIX_RE, '') || undefined
   }
-  if (!transcriptPath || !TRANSCRIPT_SUFFIX_RE.test(transcriptPath)) {
-    return undefined
-  }
-  return transcriptPath.replace(TRANSCRIPT_SUFFIX_RE, '') || undefined
+  return readPathFromKeys(hookPayload, ['artifactDirectoryPath', 'artifact_directory_path'])
 }
 export function normalizeAntigravityModel(raw: unknown): string | undefined {
   const normalized = normalizeOptionalField(raw, AGENT_MODEL_MAX_LENGTH)
@@ -143,10 +138,11 @@ export async function readAntigravitySwarmMembers(
       description: name,
       agentType: 'Swarm Worker',
       model: normalizeAntigravityModel(raw.applied_model) ?? normalizeAntigravityModel(raw.model),
+      // Matches agy's own swarm view: a missing or transitional phase is still a live worker.
       killed:
         raw.killed === true ||
         (raw.desired_state ?? raw.desiredState) === 'KILLED' ||
-        raw.phase !== 'RUNNING'
+        raw.phase === 'KILLED'
     })
   }
   cache.swarm = { record, members }

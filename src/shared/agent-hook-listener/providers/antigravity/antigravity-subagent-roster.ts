@@ -12,7 +12,8 @@ export function reconcileAntigravityActiveSubagents(
 ): AgentSubagentSnapshot[] {
   const snapshots: AgentSubagentSnapshot[] = []
   for (const child of pane.children.values()) {
-    if (!pane.verifiedChildren.has(child.id)) {
+    // An unconfirmed child still surfaces when it waits on the user, so its question is never hidden.
+    if (!pane.verifiedChildren.has(child.id) && child.state !== 'waiting') {
       continue
     }
     snapshots.push({
