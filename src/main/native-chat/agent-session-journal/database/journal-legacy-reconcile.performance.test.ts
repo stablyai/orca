@@ -27,18 +27,16 @@ function reads(db: Database.Database, counted: (sql: string, key: unknown) => bo
   const prepare = db.prepare.bind(db)
   vi.spyOn(db, 'prepare').mockImplementation((sql) => {
     const statement = prepare(sql)
-    return new Proxy(statement, {
-      get(target, property) {
-        if (property === 'get') {
-          return (...parameters: Parameters<typeof statement.get>) => {
-            total += Number(counted(sql, parameters[0]))
-            return target.get(...parameters)
-          }
-        }
-        const value = Reflect.get(target, property)
-        return typeof value === 'function' ? value.bind(target) : value
-      }
-    })
+    return {
+      get: (...parameters: Parameters<typeof statement.get>) => {
+        total += Number(counted(sql, parameters[0]))
+        return statement.get(...parameters)
+      },
+      all: statement.all.bind(statement),
+      run: statement.run.bind(statement),
+      iterate: statement.iterate.bind(statement),
+      setReadBigInts: statement.setReadBigInts.bind(statement)
+    }
   })
   return {
     total: () => total,
