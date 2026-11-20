@@ -184,12 +184,20 @@ export function createServerSession({
     state = 'stopped'
     server = null
     replayId = null
+    let exit = false
     for (const message of queue.splice(0)) {
-      if (message.id !== undefined) {
+      if (message.method === 'exit') {
+        exit = true
+      } else if (message.method === 'shutdown') {
+        toClient({ jsonrpc: '2.0', id: message.id, result: null })
+      } else if (message.id !== undefined) {
         toClient({ jsonrpc: '2.0', id: message.id, error: { code: REQUEST_FAILED, message: reason } })
       } else {
         track(message)
       }
+    }
+    if (exit) {
+      onEnd(0)
     }
   }
 
@@ -236,11 +244,13 @@ export function createServerSession({
     const { method } = message
     if (!method) {
       // Answers go to the server that asked, even mid-start: it may wait on them before finishing initialize.
-      if (message.id === withdrawId) {
+      if (withdrawId !== null && message.id === withdrawId) {
         finishWithdraw()
       } else if (server && relayed.has(message.id)) {
-        server.write({ ...message, id: relayed.get(message.id) })
+        const { serverId, onAnswer } = relayed.get(message.id)
         relayed.delete(message.id)
+        onAnswer?.()
+        server.write({ ...message, id: serverId })
       }
       return
     }
@@ -274,9 +284,9 @@ export function createServerSession({
 
   const answerServer = (id) => server.write({ jsonrpc: '2.0', id, result: null })
 
-  const relayToClient = (message) => {
+  const relayToClient = (message, onAnswer) => {
     const id = `${SESSION_ID_PREFIX}${++nextId}`
-    relayed.set(id, message.id)
+    relayed.set(id, { serverId: message.id, onAnswer })
     toClient({ ...message, id })
   }
 
@@ -303,26 +313,34 @@ export function createServerSession({
     // The protocol spells this field "unregisterations".
     const forwarded = []
     for (const unregistration of message.params?.unregisterations ?? []) {
-      if (!watchRegistrations.delete(unregistration.id) && clientRegistrations.delete(unregistration.id)) {
+      if (!watchRegistrations.delete(unregistration.id) && clientRegistrations.has(unregistration.id)) {
         forwarded.push(unregistration)
       }
     }
+    if (watchRegistrations.size === 0) {
+      stopWatching()
+    }
     if (forwarded.length > 0) {
-      relayToClient({ ...message, params: { unregisterations: forwarded } })
+      // Still the client's until it answers, so a stop in between withdraws them too.
+      relayToClient({ ...message, params: { unregisterations: forwarded } }, () => {
+        for (const { id } of forwarded) {
+          clientRegistrations.delete(id)
+        }
+      })
     } else {
       answerServer(message.id)
     }
   }
 
   function fromServer(message) {
-    if (message.id === replayId && !message.method) {
+    if (replayId !== null && message.id === replayId && !message.method) {
       if (message.error) {
         console.error(`agent-typescript-lsp: restart failed: ${message.error.message}`)
         server.kill()
       } else {
         finishReplay()
       }
-    } else if (message.id === shutdownId && !message.method) {
+    } else if (shutdownId !== null && message.id === shutdownId && !message.method) {
       shutdownId = null
       server.write({ jsonrpc: '2.0', method: 'exit' })
     } else if (!message.method && pending.delete(message.id)) {
@@ -336,6 +354,11 @@ export function createServerSession({
       onUnregister(message)
     } else if (message.method && message.id !== undefined) {
       relayToClient(message)
+    } else if (message.method === '$/cancelRequest') {
+      const relayedId = [...relayed].find(([, { serverId }]) => serverId === message.params?.id)?.[0]
+      if (relayedId !== undefined) {
+        toClient({ ...message, params: { ...message.params, id: relayedId } })
+      }
     } else {
       toClient(message)
     }

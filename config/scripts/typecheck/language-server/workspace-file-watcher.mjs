@@ -1,11 +1,14 @@
 import { realpathSync, unwatchFile, watchFile } from 'node:fs'
 import { join } from 'node:path'
-import { buildParcelWatcherIgnoreOptions } from '../../../../src/main/ipc/filesystem/watchers/filesystem-watcher-ignore.ts'
+import {
+  WATCHER_IGNORE_DIRS,
+  buildParcelWatcherIgnoreOptions
+} from '../../../../src/main/ipc/filesystem/watchers/filesystem-watcher-ignore.ts'
 
-// Excluded at any depth; installs are caught by watchInstalls instead.
-const NESTED_IGNORED_DIRS = ['.git', 'node_modules']
-// Build output only at the root: tracked source lives in nested folders named build/ and dist/.
-const ROOT_IGNORED_DIRS = ['out', 'dist', 'build', 'coverage', '.cache']
+// Orca's usual exclusions at any depth, except build/ and dist/, which hold tracked source below the root.
+const NESTED_IGNORED_DIRS = WATCHER_IGNORE_DIRS.filter((dir) => dir !== 'dist' && dir !== 'build')
+// The OS drops these paths before delivery; FSEvents takes at most eight. Installs are caught by watchInstalls.
+const ROOT_IGNORED_PATHS = ['.git', 'node_modules', 'out', 'dist', 'build', 'coverage', 'release']
 const INSTALL_POLL_MS = 2000
 
 function logWatchError(error) {
@@ -22,8 +25,7 @@ export function watchWorkspace(root, onEvents, onFailed) {
   } catch {}
   // The OS reports real paths; the server's watch globs use the root it was given.
   const toRootPath = (path) => (realRoot === root || !path.startsWith(realRoot) ? path : root + path.slice(realRoot.length))
-  const options = buildParcelWatcherIgnoreOptions(NESTED_IGNORED_DIRS)
-  options.ignore = [...(options.ignore ?? []), ...ROOT_IGNORED_DIRS]
+  const options = { ...buildParcelWatcherIgnoreOptions(NESTED_IGNORED_DIRS), ignore: ROOT_IGNORED_PATHS }
   import('@parcel/watcher')
     .then((watcher) =>
       watcher.subscribe(

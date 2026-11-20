@@ -75,6 +75,7 @@ export function createDiagnosticsBridge({
   const versions = new Map()
   const timers = new Map()
   const inFlight = new Map()
+  const ownRequests = new WeakSet()
 
   const pull = (uri) => {
     timers.delete(uri)
@@ -83,12 +84,14 @@ export function createDiagnosticsBridge({
     }
     const id = `${BRIDGE_ID_PREFIX}${++nextId}`
     inFlight.set(id, { uri, version: versions.get(uri) })
-    toServer({
+    const request = {
       jsonrpc: '2.0',
       id,
       method: 'textDocument/diagnostic',
       params: { textDocument: { uri } }
-    })
+    }
+    ownRequests.add(request)
+    toServer(request)
   }
   const schedule = (uri) => {
     clearTimer(timers.get(uri))
@@ -99,6 +102,8 @@ export function createDiagnosticsBridge({
   }
 
   return {
+    // Pulls the bridge makes itself, as opposed to requests it forwards for the client.
+    isOwnRequest: (message) => ownRequests.has(message),
     fromClient(message) {
       const { method, params } = message
       if (method === 'initialize') {
@@ -202,10 +207,7 @@ function runLanguageServer() {
     idleMs: Number(process.env.ORCA_TYPESCRIPT_LSP_IDLE_MINUTES ?? IDLE_MINUTES) * 60_000,
     watchWorkspace,
     watchInstalls,
-    isBackgroundRequest: (message) =>
-      message.method === 'textDocument/diagnostic' &&
-      typeof message.id === 'string' &&
-      message.id.startsWith(BRIDGE_ID_PREFIX),
+    isBackgroundRequest: (message) => bridge.isOwnRequest(message),
     toClient: (message) => bridge.fromServer(message),
     onEnd: (code) => process.exit(code),
     startServer: ({ onMessage, onExit }) => {
