@@ -2,6 +2,7 @@
 
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import type { BotItem } from '../../../../../shared/bots/bot-items'
 import { makeTestBotItem } from '../../../../../shared/bots/bot-item.test-fixture'
 import { BotItemRow } from './BotItemRow'
@@ -23,7 +24,8 @@ function rowText(item: BotItem): string {
       now={0}
       onSelect={() => {}}
       onAction={() => {}}
-    />
+    />,
+    { wrapper: TooltipProvider }
   )
   return container.querySelector('[data-bot-item-open]')?.textContent ?? ''
 }
@@ -53,7 +55,8 @@ function renderMenuRow(): { trigger: HTMLElement; menuOpen: () => boolean } {
       now={0}
       onSelect={() => {}}
       onAction={() => {}}
-    />
+    />,
+    { wrapper: TooltipProvider }
   )
   // Row 0–300 × 0–28, ⋯ at its right edge, menu 4px below the ⋯ and aligned to its end.
   vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {

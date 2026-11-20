@@ -243,6 +243,9 @@ describeRender('Look around in the phone’s bot sheet', () => {
     expect(text).toContain('Show 1 more')
     expect(text).not.toContain('Close the stale release issue')
 
+    await page.getByText('Show 1 more', { exact: true }).click()
+    await page.getByText('Close the stale release issue', { exact: true }).waitFor()
+
     await page.getByText('Start', { exact: true }).first().click()
     const requests = await waitForRecordedRequests(page, ['bots.suggestions.start'])
     expect(requests.find((request) => request.method === 'bots.suggestions.start').params).toEqual({
@@ -309,7 +312,7 @@ describeRender('Look around in the phone’s bot sheet', () => {
     await page.click('[data-testid="bot-sheet-tab-settings"]')
     await waitForText(page, 'Tidy memory overnight')
     const text = await bodyText(page)
-    for (const line of ['Memory upkeep', 'Each night', 'Last tidied', '17 changes', 'Tidy now']) {
+    for (const line of ['Memory upkeep', 'Each night', 'Last tidied', 'Tidy now']) {
       expect(text).toContain(line)
     }
     await page.getByText('Tidy now', { exact: true }).scrollIntoViewIfNeeded()

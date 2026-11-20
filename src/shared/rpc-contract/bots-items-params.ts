@@ -1,5 +1,6 @@
 import * as z from 'zod'
-import { BOT_ITEM_STATUSES } from '../bots/bot-items'
+import { BOT_ITEM_COMMENT_FILE_MAX_COUNT, BOT_ITEM_STATUSES } from '../bots/bot-items'
+import { BotItemAskSchema } from '../bots/bot-item-ask'
 import { AGENT_SESSION_MESSAGE_IMAGE_MAX_COUNT } from '../agent-session/agent-session-attachments'
 import {
   OptionalBoolean,
@@ -14,6 +15,11 @@ import {
 
 const Caller = { callerSessionId: OptionalString, retryRequest: OptionalString }
 const Item = requiredString('Name the item by its number.')
+/** `--file`: absolute paths on the bot's host, copied into the item chat's attachment store. */
+const Files = z
+  .array(z.string().min(1).max(4096))
+  .max(AGENT_SESSION_MESSAGE_IMAGE_MAX_COUNT + BOT_ITEM_COMMENT_FILE_MAX_COUNT)
+  .optional()
 /** A group's rooms and threads hold one session per member, and keep each one a member left. */
 const BOT_ITEM_LIST_CHATS_MAX = 5_000
 
@@ -40,15 +46,22 @@ export const BotItemsSet = z.object({
   note: OptionalString,
   /** With `--status canceled`, which needs it. */
   reason: OptionalString,
-  /** With any `--status`, written as a comment; with needs-you, the question for the owner. */
-  comment: OptionalString
+  /** With any `--status`, written as a comment. With `ask`, a readable copy of it that this host does not keep. */
+  comment: OptionalString,
+  /** With needs-you: the comment's body (`--comment`), its question lines (`--ask`) and quick replies (`--option`). */
+  ask: BotItemAskSchema.optional(),
+  /** Attached to the comment `comment` or `ask` writes. */
+  files: Files
 })
 
-export const BotItemsComment = z.object({
-  ...Caller,
-  item: Item,
-  text: requiredString('Missing --text')
-})
+export const BotItemsComment = z
+  .object({
+    ...Caller,
+    item: Item,
+    text: z.string(),
+    files: Files
+  })
+  .refine((value) => value.text.trim() || value.files?.length, 'Missing --text or --file')
 
 export const BotItemsDone = z.object({ ...Caller, item: Item, note: OptionalString })
 

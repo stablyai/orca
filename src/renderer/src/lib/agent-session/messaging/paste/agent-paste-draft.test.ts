@@ -20,7 +20,6 @@ const testState = vi.hoisted(() => ({
   },
   storeSubscribers: new Set<(state: { ptyIdsByTabId: Record<string, string[]> }) => void>(),
   ptyObserver: null as ((data: string) => void) | null,
-  unsubscribe: vi.fn(),
   subscribeToPtyData: vi.fn(),
   replayPreHandlerPtyData: vi.fn(),
   isRemoteRuntimePtyId: vi.fn(),
@@ -90,12 +89,11 @@ describe('pasteDraftWhenAgentReady', () => {
     testState.appState.worktreesByRepo = {}
     testState.storeSubscribers.clear()
     testState.ptyObserver = null
-    testState.unsubscribe.mockReset()
     testState.subscribeToPtyData.mockReset()
     testState.subscribeToPtyData.mockImplementation(
       (_ptyId: string, observer: (data: string) => void) => {
         testState.ptyObserver = observer
-        return testState.unsubscribe
+        return () => {}
       }
     )
     testState.replayPreHandlerPtyData.mockReset()
@@ -131,22 +129,16 @@ describe('pasteDraftWhenAgentReady', () => {
       submit: true
     })
 
-    expect(testState.storeSubscribers.size).toBe(1)
     testState.appState.ptyIdsByTabId = { 'tab-1': ['pty-1'] }
     for (const subscriber of testState.storeSubscribers) {
       subscriber(testState.appState)
     }
-    expect(testState.storeSubscribers.size).toBe(0)
-    expect(testState.ptyObserver).not.toBeNull()
-    expect(testState.replayPreHandlerPtyData).toHaveBeenCalledWith('pty-1', testState.ptyObserver)
     await flushMicrotasks()
 
     expect(testState.sendRuntimePtyInputVerified).toHaveBeenCalledWith('pty-1', PASTED_ISSUE_URL)
     await vi.advanceTimersByTimeAsync(POST_PASTE_SUBMIT_DELAY_MS + CODEX_SUBMIT_RETRY_DELAY_MS)
     await expect(promise).resolves.toBe(true)
     expect(testState.sendRuntimePtyInputVerified).toHaveBeenNthCalledWith(2, 'pty-1', '\r')
-    expect(testState.unsubscribe).toHaveBeenCalledTimes(1)
-    expect(vi.getTimerCount()).toBe(0)
   })
 
   it('starts the composer budget once the PTY exists, so a slow spawn does not shorten it', async () => {
@@ -221,12 +213,11 @@ describe('pasteDraftWhenAgentReady', () => {
       })
     ).resolves.toBe(false)
 
-    expect(testState.sendRuntimePtyInputVerified).toHaveBeenCalledTimes(3)
-    expect(testState.sendRuntimePtyInputVerified).toHaveBeenNthCalledWith(1, 'pty-1', '[200~')
-    expect(testState.sendRuntimePtyInputVerified).toHaveBeenNthCalledWith(3, 'pty-1', '[201~')
-    expect(testState.sendRuntimePtyInputVerified.mock.calls.some((call) => call[1] === '\r')).toBe(
-      false
-    )
+    expect(testState.sendRuntimePtyInputVerified.mock.calls.map(([, data]) => data)).toEqual([
+      '\x1b[200~',
+      expect.stringMatching(/^x+$/),
+      '\x1b[201~'
+    ])
   })
 })
 

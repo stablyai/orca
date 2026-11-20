@@ -11,7 +11,6 @@ import {
   MobileSegmentedControl,
   type MobileSegment
 } from '../components/controls/MobileSegmentedControl'
-import { BottomSearchBar } from '../components/nav-bar/BottomSearchBar'
 import { NavBar } from '../components/nav-bar/NavBar'
 import { NavBarButton } from '../components/nav-bar/NavBarButton'
 import { useWorkspaceClient } from '../worktree/execution-hosts/use-workspace-client'
@@ -24,7 +23,10 @@ import {
   readMobileRuntimeTerminalWindowsShell,
   resumeAiVaultSessionInTerminal
 } from './ai-vault-resume-launch'
-import { prepareMobileAiVaultSessionResume } from './ai-vault-resume-preparation'
+import {
+  aiVaultResumeRefusalText,
+  prepareMobileAiVaultSessionResume
+} from './ai-vault-resume-preparation'
 import { triggerError, triggerSuccess } from '../platform/haptics/haptics'
 import * as AiVault from '../../../src/shared/ai-vault/contracts/ai-vault-types'
 import { useMobileAgentHistoryState } from './use-mobile-agent-history-state'
@@ -48,7 +50,11 @@ import {
   AgentHistoryResumeNotice,
   AgentHistoryScanNotices
 } from './AgentHistoryNotices'
-import { AgentHistoryViewControls } from './AgentHistoryViewControls'
+import {
+  AGENT_HISTORY_DEFAULT_SORT,
+  AgentHistoryBottomBar,
+  agentHistoryShowsEveryAgent
+} from './AgentHistoryBottomBar'
 import { useAgentHistoryRestartOffer } from './use-agent-history-restart-offer'
 import { TransientToast, useTransientToast } from '../components/feedback/TransientToast'
 import { useNow } from '../hooks/use-now'
@@ -98,9 +104,8 @@ function MobileAgentSessionHistoryPanelContent({
     connState
   )
   const [query, setQuery] = useState('')
-  // Desktop History's defaults: every agent, most recently updated first.
   const [agents, setAgents] = useState<readonly AiVault.AiVaultAgent[]>(AiVault.AI_VAULT_AGENTS)
-  const [sort, setSort] = useState<AiVault.AiVaultSort>('updated')
+  const [sort, setSort] = useState<AiVault.AiVaultSort>(AGENT_HISTORY_DEFAULT_SORT)
   const [searchBarHeight, setSearchBarHeight] = useState(0)
   const insets = useSafeAreaInsets()
   const [resumingSessionId, setResumingSessionId] = useState<string | null>(null)
@@ -263,7 +268,7 @@ function MobileAgentSessionHistoryPanelContent({
         triggerError()
         setResumeMessage(
           err instanceof Error
-            ? err.message
+            ? (aiVaultResumeRefusalText(err.message, session.agent) ?? err.message)
             : t('agentHistory.panel.resumeFailed', 'Failed to resume session.')
         )
       } finally {
@@ -309,22 +314,13 @@ function MobileAgentSessionHistoryPanelContent({
           }
           accessory={
             screenState.kind === 'ready' ? (
-              <View>
-                <MobileSegmentedControl
-                  segments={scopeSegments(t)}
-                  selected={scope}
-                  onSelect={onSelectScope}
-                  fill
-                  style={styles.scopeTabs}
-                />
-                <AgentHistoryViewControls
-                  sessions={sessions}
-                  agents={agents}
-                  sort={sort}
-                  onAgentsChange={setAgents}
-                  onSortChange={setSort}
-                />
-              </View>
+              <MobileSegmentedControl
+                segments={scopeSegments(t)}
+                selected={scope}
+                onSelect={onSelectScope}
+                fill
+                style={styles.scopeTabs}
+              />
             ) : null
           }
         />
@@ -352,17 +348,21 @@ function MobileAgentSessionHistoryPanelContent({
         <>
           <AgentHistoryInterruptedNotice offer={restartOffer} />
           <AgentHistoryScanNotices sessions={sessions} issues={issues} />
-          {resumeMessage ? (
-            <AgentHistoryResumeNotice
-              message={resumeMessage}
-              onDismiss={() => setResumeMessage(null)}
-            />
-          ) : null}
+          <AgentHistoryResumeNotice
+            message={resumeMessage}
+            onDismiss={() => setResumeMessage(null)}
+          />
           {sections.length === 0 ? (
             query ? (
               <MobileNoMatchState
                 message={t('agentHistory.panel.noSearchResults', 'No sessions match your search.')}
                 onClear={() => setQuery('')}
+                bottomInset={searchBarHeight}
+              />
+            ) : !agentHistoryShowsEveryAgent(agents) ? (
+              <MobileNoMatchState
+                onClear={() => setAgents(AiVault.AI_VAULT_AGENTS)}
+                clearLabel={t('agentHistory.panel.showAllAgents', 'Show all agents')}
                 bottomInset={searchBarHeight}
               />
             ) : (
@@ -388,12 +388,16 @@ function MobileAgentSessionHistoryPanelContent({
               bottomPadding={searchBarHeight}
             />
           )}
-          <BottomSearchBar
-            value={query}
-            onChangeText={setQuery}
-            placeholder={t('agentHistory.panel.placeholder', 'Search sessions, repo:, path:')}
+          <AgentHistoryBottomBar
+            query={query}
+            onQueryChange={setQuery}
             bottomInset={insets.bottom}
             onCoveredHeightChange={setSearchBarHeight}
+            sessions={sessions}
+            agents={agents}
+            sort={sort}
+            onAgentsChange={setAgents}
+            onSortChange={setSort}
           />
         </>
       )}

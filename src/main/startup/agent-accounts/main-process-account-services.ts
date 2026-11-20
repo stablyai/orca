@@ -16,7 +16,7 @@ import { installOrcaServerSignIn, OrcaServerSignIn } from '../../orca-profiles/o
 import { GoogleConnect, installGoogleConnect } from '../../google/google-connect'
 import { setBotToolSignInBrowser } from '../../bots/tool-oauth/bot-tool-sign-in-flows'
 
-export function initializeMainProcessAccountServices(): void {
+export async function initializeMainProcessAccountServices(): Promise<void> {
   const store = state.store
   if (!store || !state.claudeUsage || !state.codexUsage) {
     throw new Error('Usage stores must be initialized before account services')
@@ -32,6 +32,17 @@ export function initializeMainProcessAccountServices(): void {
   })
   state.rateLimits = services.rateLimits
   state.codexRuntimeHome = services.codexRuntimeHome
+  // Saving the field rewrites it even unchanged; only a new host folder or sharing switch counts.
+  const importSetting = (): string =>
+    `${store.getSettings().codexSessionSourceHome?.host ?? ''}\0${store.getSettings().codexShareHistoryAcrossAccounts}`
+  let lastImportSetting = importSetting()
+  store.onSettingsChanged(() => {
+    const next = importSetting()
+    if (next !== lastImportSetting) {
+      lastImportSetting = next
+      services.codexRuntimeHome.importCodexHistoryInBackground({ settingChanged: true })
+    }
+  })
   state.codexAccounts = services.codexAccounts
   state.claudeRuntimeAuth = services.claudeRuntimeAuth
   state.claudeAccounts = services.claudeAccounts
@@ -43,7 +54,7 @@ export function initializeMainProcessAccountServices(): void {
   // Defer shared-home migration; compatibility launches re-arm non-destructive scans for new rollouts (#4444, #8612, #12480).
   state.codexSessionMigration.scheduleInitialRun()
   installProviderAccountCatalogWarmup(store)
-  store.migrateLegacyOpenCodeGoApiKey({
+  await store.migrateLegacyOpenCodeGoApiKey({
     has: hasOpenCodeGoApiKey,
     read: readOpenCodeGoApiKey,
     save: saveOpenCodeGoApiKey

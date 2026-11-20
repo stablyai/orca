@@ -30,7 +30,8 @@ export function Harness({
   workingStartedAt,
   thinking,
   lineYields,
-  scopeKey = 'host\0worktree\0tab-a'
+  scopeKey = 'host\0worktree\0tab-a',
+  showsTurnDiffs
 }: {
   messages: readonly NativeChatMessage[]
   enabled: boolean
@@ -41,6 +42,7 @@ export function Harness({
   thinking?: boolean
   lineYields?: boolean
   scopeKey?: string
+  showsTurnDiffs?: boolean
 }): React.JSX.Element {
   const disclosure = useMobileNativeChatTurnDisclosure({
     messages,
@@ -51,7 +53,8 @@ export function Harness({
     workingStartedAt,
     thinking,
     lineYields,
-    scopeKey
+    scopeKey,
+    showsTurnDiffs
   })
   return createElement(Result, { disclosure })
 }

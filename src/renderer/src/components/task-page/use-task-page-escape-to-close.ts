@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
+import { hasVisibleOverlay } from '@/lib/overlay-interaction/visible-overlay'
 
 /** Esc closes the Tasks page unless a modal, menu, or focused field should own it. */
 export function useTaskPageEscapeToClose(blocked: boolean, closeTaskPage: () => void): void {
@@ -18,11 +19,7 @@ export function useTaskPageEscapeToClose(blocked: boolean, closeTaskPage: () => 
       }
 
       // Why: open menus/popovers/selects own Esc; capture-phase leave would steal it from Radix.
-      if (
-        document.querySelector(
-          '[data-slot="dropdown-menu-content"], [data-slot="popover-content"], [data-slot="select-content"], [role="menu"]'
-        )
-      ) {
+      if (hasVisibleOverlay()) {
         return
       }
 

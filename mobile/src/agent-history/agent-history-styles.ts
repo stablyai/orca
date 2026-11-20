@@ -20,13 +20,6 @@ export const styles = themedStyleSheet(() => ({
     marginTop: spacing.sm,
     backgroundColor: colors.bgPanel
   },
-  viewControls: {
-    flexGrow: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.md
-  },
   separator: {
     height: StyleSheet.hairlineWidth,
     marginLeft: LIST_LEADING_INSET,

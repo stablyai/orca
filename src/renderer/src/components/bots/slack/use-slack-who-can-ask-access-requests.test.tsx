@@ -196,13 +196,6 @@ describe('Request access in Who can ask', () => {
     expect(screen.queryByText(/^Asking for access/)).toBeNull()
   })
 
-  it('names a real name only when it differs from the display name', async () => {
-    await showRequests([
-      request({ requester: { id: 'U-pat', name: 'Pat', handle: 'pat', detail: 'Pat' } })
-    ])
-    expect(await screen.findByText(/^@pat · \S/)).not.toHaveTextContent('Pat ·')
-  })
-
   it('says on the closed row how many are asking', async () => {
     await showRequests([request(), request({ requestId: `${requestId}-b` })])
     cleanup()

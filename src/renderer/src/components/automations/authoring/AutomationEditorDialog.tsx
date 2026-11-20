@@ -1,6 +1,6 @@
 import type { AutomationAuthorityRef } from '../../../../../shared/automations/ownership/automation-owner-ref'
 import React from 'react'
-import { useAppStore } from '@/store/index'
+import { useAppStoreWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { selectAgentLaunchRouteView } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
 import { useChatProgramFacts } from '@/lib/agent-session/launch/inventory/host-chat-program-acquisition'
 import {
@@ -186,7 +186,7 @@ export function AutomationEditorDialog({
   }
   const launchWorkspace = automationLaunchWorkspace(draft, destination?.resolution)
   useChatProgramFacts(launchWorkspace, open)
-  const routeState = useAppStore(selectAgentLaunchRouteView)
+  const routeState = useAppStoreWithHostStatuses(selectAgentLaunchRouteView)
   const chatSupported = automationChatSupport(routeState, draft, launchWorkspace)
   const surface = automationDraftSurface(draft, settings, chatSupported)
   const visibleAgents = React.useMemo(() => {

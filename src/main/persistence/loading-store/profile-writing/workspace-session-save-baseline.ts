@@ -4,7 +4,7 @@ import type {
   ProfileStateDomainPatchOperation
 } from '../../profile-state/documents/profile-state-domain-patches'
 
-/** One saved value; container keys are re-read on every save, so in-place key edits show up. */
+/** One saved value; container keys are re-read on every save. Published sessions are replaced, never edited. */
 type SavedNode = { value: unknown; keys?: string[]; children?: SavedNode[]; json?: string }
 
 export type WorkspaceSessionSaveCandidate = {

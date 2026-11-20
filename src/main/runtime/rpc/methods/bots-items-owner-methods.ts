@@ -143,7 +143,7 @@ const COMMENT = defineMethod({
     }
     // Admitted and claimed for the item's chat before the event: a failed write leaves only a claim
     // that chat already prunes, and a retry re-claims the same uploads.
-    const images = await admitBotItemCommentAttachments(
+    const { images } = await admitBotItemCommentAttachments(
       {
         store: getAgentSessionAttachmentStore(),
         // This host's own window: a dropped on-disk image is copied in; a paired client sends store paths.
