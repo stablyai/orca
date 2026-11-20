@@ -82,6 +82,10 @@ const {
 } = require('./scripts/runtime-verification/skills-cli/verify-skills-cli-runtime.cjs')
 const { assertNotDarkBuild } = require('./dark-build-switches.cjs')
 const {
+  getWindowsInstallerArtifactName,
+  getWindowsUpdateChannelPublishOptions
+} = require('./windows-package-architecture.cjs')
+const {
   verifyStaticAppImagePackage
 } = require('./scripts/desktop-distribution/appimage/static-appimage-package-contract.cjs')
 const {
@@ -658,7 +662,7 @@ module.exports = {
     ]
   },
   nsis: {
-    artifactName: 'orca-windows-setup.${ext}',
+    artifactName: getWindowsInstallerArtifactName(),
     shortcutName: '${productName}',
     uninstallDisplayName: '${productName}',
     createDesktopShortcut: 'always',
@@ -855,7 +859,8 @@ module.exports = {
     owner: 'stablyai',
     repo: devChannelRepo ?? 'orca',
     // Keep main-repo releases draft until release-cut verifies all assets; early --publish always would expose missing Windows installers.
-    releaseType: devChannelRepo ? 'prerelease' : 'draft'
+    releaseType: devChannelRepo ? 'prerelease' : 'draft',
+    ...getWindowsUpdateChannelPublishOptions()
   }
 }
 
