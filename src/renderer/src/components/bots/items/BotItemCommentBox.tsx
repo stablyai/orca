@@ -98,6 +98,7 @@ function BotItemCommentField({
   nav,
   question,
   onShowQuestion,
+  describedBy,
   ref
 }: {
   bot: Bot
@@ -115,6 +116,8 @@ function BotItemCommentField({
   onShowQuestion?: (eventId: string) => void
   /** The item pane's previous / next arrows, between the attach and mic buttons. */
   nav?: React.ReactNode
+  /** The Activity entry this comment would answer, read with the box once Reply led there. */
+  describedBy?: string
   ref?: Ref<BotItemCommentBoxHandle>
 }): React.JSX.Element {
   const t = useTranslate()
@@ -400,6 +403,7 @@ function BotItemCommentField({
               initialValue={draft}
               disabled={false}
               aria-label={t('bots.items.comment.label', 'Comment')}
+              aria-describedby={describedBy}
               aria-expanded={mentions.autocomplete.mode !== 'none'}
               aria-controls={mentions.autocomplete.mode !== 'none' ? picker.listboxId : undefined}
               placeholder={reply.placeholder}

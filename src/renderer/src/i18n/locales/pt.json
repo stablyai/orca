@@ -25353,7 +25353,10 @@
         "lastItem": "Último item",
         "previous": "Item anterior",
         "next": "Próximo item",
-        "subWhere": "Item {{number}} · {{chat}}"
+        "linkCount": "{{count}} links",
+        "reply": "Responder",
+        "replyAbove": "Responder, acima",
+        "replyBelow": "Responder, abaixo"
       },
       "activity": {
         "linked": "vinculou {{links}}",

@@ -1,4 +1,4 @@
-// One item, in the list's place: a frozen header (title, status, links), then the description
+// One item, in the list's place: a frozen header (title, status, links, Reply), then the description
 // (clamped), chat, done means and activity scrolling under it, and a comment box that wakes its chat.
 // BotItemPane holds it under the back row and sends typing from anywhere in it to the comment box.
 // The comment box always stays at the bottom: a reply to the agent's question is a comment, typed there
@@ -38,6 +38,7 @@ import { BotItemCommentBox, type BotItemCommentBoxHandle } from './BotItemCommen
 import { NativeChatSelectionQuote } from '../../native-chat/selection-quotes/NativeChatSelectionQuote'
 import { revealBotItemComment } from './bot-item-comment-reveal'
 import { BotItemHeader } from './BotItemHeader'
+import { useBotItemNeedsYouJump } from './BotItemReplyJump'
 import { setBotItemsStatus } from './use-bot-items'
 import { useBotItemSnoozing } from './BotItemSnooze'
 import { useBotItemView, type BotItemViewRead } from './use-bot-item-view'
@@ -278,10 +279,16 @@ export function BotItemBody({
       loadEarlier()
     }
   }, [questionUnread, hasEarlier, earliest, loadEarlier])
+  const answering = pending.shown.some(({ failed }) => !failed)
   const waitingOn =
-    waitingLine && !pending.shown.some(({ failed }) => !failed)
-      ? { ...waitingLine, asker: item.owner.name ?? bot.name }
-      : null
+    waitingLine && !answering ? { ...waitingLine, asker: item.owner.name ?? bot.name } : null
+  const needsYou = useBotItemNeedsYouJump({
+    eligible: item.status === 'needs_you' && !deleted && !answering,
+    activityShown: view.eventsRead && activityMounted,
+    loadingTarget: questionUnread && hasEarlier && !view.failed,
+    scrollRef,
+    comment
+  })
   const links = useNativeChatLinkActions(fileContext?.fileLinkContext ?? null, pane, {
     sessionId: null,
     isVisible: true
@@ -317,6 +324,8 @@ export function BotItemBody({
                       onStatus={(to) => notes.move([item], to)}
                       snoozing={snoozing}
                       scrollRef={scrollRef}
+                      reply={needsYou.reply}
+                      onHeight={needsYou.setHeaderHeight}
                     />
                     <div ref={contentRef} className="flex flex-col gap-4 px-3.5 pt-2">
                       {item.description ? (
@@ -359,13 +368,14 @@ export function BotItemBody({
                           </Button>
                         ) : null}
                         {/* From the list's row, the Activity shows once read: never a false "No comments". */}
-                        {view.eventsRead && activityMounted ? (
+                        {activityShown ? (
                           <BotItemActivityList
                             bot={bot}
                             item={item}
                             events={view.events}
                             pending={pending}
                             quickReplies={quickReplies}
+                            needsYou={needsYou.mark}
                           />
                         ) : null}
                       </section>
@@ -376,7 +386,10 @@ export function BotItemBody({
                     aria-hidden
                     className="pointer-events-none absolute inset-x-0 bottom-0 h-4 bg-linear-to-b from-transparent to-sidebar"
                   />
-                  <NativeChatJumpToLatest visible={showJump} onJump={jumpToLatest} />
+                  <NativeChatJumpToLatest
+                    visible={showJump && !needsYou.pointsDown}
+                    onJump={jumpToLatest}
+                  />
                 </div>
               </NativeChatLinkClickContext>
             </NativeChatFileLinkExistenceContext>
@@ -392,6 +405,7 @@ export function BotItemBody({
                 attachTo={attachTo}
                 nav={nav}
                 question={waitingOn}
+                describedBy={needsYou.describedBy}
                 onShowQuestion={(eventId) =>
                   revealBotItemComment(scrollRef.current, eventId, 'flash')
                 }

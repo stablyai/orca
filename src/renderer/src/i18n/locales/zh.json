@@ -27775,14 +27775,15 @@
         "activity": "活动",
         "canceledNote": "已取消：",
         "doneNote": "已完成：",
-        "links": "链接",
         "showLess": "收起",
         "showMore": "展开",
-        "subWhere": "事项 {{number}} · {{chat}}",
+        "linkCount": "{{count}} 个链接",
+        "reply": "回复",
+        "replyAbove": "回复上方的问题",
+        "replyBelow": "回复下方的问题",
         "showEarlier": "显示更早的",
         "place": "{{index}} / {{total}}",
         "deleted": "此事项已被删除",
-        "moreLinks": "还有 {{count}} 个链接",
         "loading": "正在加载事项…"
       },
       "activity": {
