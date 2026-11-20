@@ -41,7 +41,7 @@ export async function scanWorkspacePorts(
   }
 
   try {
-    let freshOwners = false
+    let freshOwners = options.freshOwners === true
     let resolved: Awaited<ReturnType<typeof resolveWorkspacePortProbes>> | undefined
     for (;;) {
       const scan = await scanPlatformListeningPorts({ ...options, freshOwners })

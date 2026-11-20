@@ -198,4 +198,21 @@ describe('Linux listener owner lookup', () => {
     }
     expect(watcher.lookup(worktree.id, 8080)?.origin).toBe('https://dev.example.test:8080')
   })
+
+  it('moves a handed-off listener to its workspace on manual Refresh', async () => {
+    const worktree = { id: 'repo::/repo', repoId: 'repo', displayName: 'main', path: '/repo' }
+    const watcher = new AdvertisedUrlWatcher()
+    fakeProc.tcp = PROC_NET_HEADER + procNetRow('1F90', OWN_UID, 5001)
+    fakeProc.processes = new Map([
+      [100, { uid: OWN_UID, comm: 'sup', cmdline: 'sup', cwd: '/home', fds: ['socket:[5001]'] }],
+      [200, { uid: OWN_UID, comm: 'node', cmdline: 'node', cwd: '/repo', fds: [] }]
+    ])
+    await scanWorkspacePorts([worktree], watcher)
+    fakeProc.processes.get(200)!.fds.push('socket:[5001]')
+
+    const refreshed = await scanWorkspacePorts([worktree], watcher, { freshOwners: true })
+    expect(refreshed.ports.map((port) => [port.port, port.pid, port.kind])).toEqual([
+      [8080, 200, 'workspace']
+    ])
+  })
 })

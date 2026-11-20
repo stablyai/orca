@@ -1,6 +1,5 @@
 import {
   cacheKey,
-  observedListenersByPort,
   scanStateChanged,
   shouldReplace,
   worktreeIdFromCacheKey,
@@ -20,22 +19,20 @@ export function couldDropAdvertisedUrls(
   observations: ObservationsByWorktree,
   canReconcile: boolean
 ): boolean {
-  const observedByWorktree = new Map(
-    [...observations].map(([id, listeners]) => [id, observedListenersByPort(listeners)])
-  )
   for (const [key, entry] of cache) {
-    const observedByPort = observedByWorktree.get(worktreeIdFromCacheKey(key, entry.port))
-    if (!observedByPort) {
+    const listeners = observations.get(worktreeIdFromCacheKey(key, entry.port))
+    if (!listeners) {
       continue
     }
-    if (!observedByPort.has(entry.port)) {
-      if (canReconcile) {
-        return true
-      }
-      continue
-    }
-    const pid = observedByPort.get(entry.port)
-    if (pid !== undefined && entry.validatedListenerPid !== pid) {
+    // Each listener is looked up by its own pid, so every pid on the port must already match.
+    const onPort = listeners.filter((listener) => listener.port === entry.port)
+    if (
+      onPort.length === 0
+        ? canReconcile
+        : onPort.some(
+            (listener) => listener.pid !== undefined && listener.pid !== entry.validatedListenerPid
+          )
+    ) {
       return true
     }
   }
