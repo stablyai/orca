@@ -142,7 +142,7 @@ export const STRUCTURED_AGENT_SESSION_REVEAL_METHODS = [
             publication = surface
           },
           activate: params.navigation !== 'caller',
-          ...(params.navigation ? { navigation: params.navigation } : {})
+          reopen: true
         })
         check()
         if (
