@@ -111,12 +111,14 @@ describe('ACP launch: standing instructions', () => {
   })
 
   it("refuses to start OpenCode when the user's inline configuration cannot be extended", async () => {
-    await expect(
-      launch('opencode', {
-        instructions: PREAMBLE,
-        launchEnv: { OPENCODE_CONFIG_CONTENT: '{ // jsonc\n}' }
-      })
-    ).rejects.toThrow(/cannot take this chat's standing instructions/)
+    for (const content of ['{ // jsonc\n}', '{"instructions":"/mine.md"}']) {
+      await expect(
+        launch('opencode', {
+          instructions: PREAMBLE,
+          launchEnv: { OPENCODE_CONFIG_CONTENT: content }
+        })
+      ).rejects.toThrow(/cannot take this chat's standing instructions/)
+    }
   })
 
   it('appends them to OMP’s system prompt from a file', async () => {

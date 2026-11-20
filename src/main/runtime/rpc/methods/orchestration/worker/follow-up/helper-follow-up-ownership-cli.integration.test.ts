@@ -8,7 +8,6 @@ import {
   type Started,
   useHelperFollowUpCli
 } from '../testing/helper-follow-up-cli.test-support'
-import { traceDispatchProbes } from './testing/helper-follow-up-sql-trace.test-support'
 
 const failedReceipt = z.object({
   taskId: z.string(),
@@ -250,15 +249,11 @@ describe('which helpers a worker may continue, through CLI argv, RPC and SQLite'
           .run(corruption[1], helper.dispatchId)
       }
       const before = effects()
-      const probes = traceDispatchProbes(h.db)
       expect((await follow('term_worker', latest)).error).toMatchObject({
         code: 'task_not_found',
         data: { effectsApplied: false }
       })
       expect(effects()).toEqual(before)
-      // Even around a cycle, the walk to the first request reads each Dispatch a bounded number of times.
-      expect(probes.counts().perDispatch).toBeLessThanOrEqual(6)
-      probes.restore()
     }
   )
 

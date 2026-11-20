@@ -21214,6 +21214,7 @@
         },
         "imageUnavailable": "Preview unavailable",
         "botFor": "For: {{detail}}",
+        "agents": "Agents",
         "bots": "Bots",
         "files": "Files",
         "skillPillLabel": "Skill: {{name}}",
@@ -21407,7 +21408,12 @@
         "stateUnverifiableCount": "{{value0}} with status unavailable",
         "stateWaitingCount": "{{value0}} waiting",
         "stateWorkingCount": "{{value0}} working",
-        "openAgent": "Open {{value0}}"
+        "openAgent": "Open {{value0}}",
+        "needsAttention_one": "{{count}} needs attention",
+        "needsAttention_other": "{{count}} need attention",
+        "workerBadge": "Worker",
+        "subagentBadge": "Subagent",
+        "nameInMessage": "Add {{name}} to message"
       },
       "jumpToLatest": "Jump to latest",
       "newRowsAnnouncement": "New messages arrived while you were away",
@@ -22208,6 +22214,7 @@
           "failed": "Failed",
           "failedReason": "Failed: {{error}}",
           "disabled": "Disabled",
+          "notStarted": "Not started",
           "needsAuthAfterSend": "Needs sign-in. Send a message to sign in here."
         },
         "signIn": {
@@ -22458,6 +22465,44 @@
         "signsInClaudeAccount": "Signs in this Claude account",
         "runsCommand": "Runs {{command}} in a terminal",
         "thenSlashCommand": "Sign in, then type {{slashCommand}}."
+      },
+      "antigravityAuth": {
+        "chipLabel": "Antigravity signs in with {{method}}. Change",
+        "chipTitle": "Antigravity signs in with {{method}}",
+        "menuTitle": "Antigravity signs in with",
+        "detected": "Detected",
+        "settings": "Sign-in settings…",
+        "switched": "Antigravity now uses {{method}}.",
+        "switchFailed": "Orca couldn't change how Antigravity signs in. Try again.",
+        "confirmTitle": "Switch to {{method}}?",
+        "confirmBody": "Antigravity chats running on this host restart. A reply in progress stops; your conversations stay.",
+        "cancel": "Cancel",
+        "confirm": "Switch",
+        "otherWays": "You can sign in with an API key or gcloud instead.",
+        "moreOptions": "More options…",
+        "useApiKey": "Use your Gemini API key",
+        "useGcloud": "Use gcloud ({{project}})",
+        "useGoogle": "Use your Google sign-in",
+        "apiKeyFromEnvironment": "Found GEMINI_API_KEY in your environment",
+        "apiKeySaved": "Saved in Orca",
+        "gcloudFound": "Found your gcloud login (Application Default Credentials)",
+        "googleFound": "You signed in with Google on this host before",
+        "askApiKeyEnvironment": "Use the Gemini API key found in your environment instead?",
+        "askApiKeySaved": "Use the Gemini API key saved in Orca instead?",
+        "askGcloud": "Use your gcloud login (project {{project}}) instead?",
+        "askGoogle": "Use your Google sign-in instead?",
+        "noSubscription": "This Google account has no Antigravity subscription.",
+        "ineligible": "This Google account can't use Antigravity.",
+        "signedOut": "Antigravity isn't signed in.",
+        "refused": "Google refused this chat's credentials.",
+        "usageLimit": "This sign-in reached its usage limit.",
+        "foundLead": "Orca found credentials on this host you can use instead:",
+        "signInGoogle": "Sign in with Google",
+        "useKeyOrGcloud": "Use an API key or gcloud instead",
+        "agy": "agy sign-in",
+        "agyItem": "agy's own login",
+        "agyHint": "This chat runs the Antigravity CLI on this host. Another method applies to new chats.",
+        "confirmSignIn": "Sign in with Google?"
       }
     },
     "tab": {
@@ -23263,6 +23308,7 @@
           "archiveUnavailable": "Archive not available",
           "archiveScript": "Has an archive script",
           "removing": "Already being removed",
+          "folderWorkspaceSibling": "Another repository in this workspace is still in use",
           "waiting": "Waiting",
           "notRemovable": "Main workspace or folder project",
           "projectOff": "Cleanup off for this project",
@@ -23419,6 +23465,15 @@
           "diskSpace": "disk space",
           "cleanup": "cleanup",
           "chatHistory": "delete chat history"
+        }
+      },
+      "notifications": {
+        "server": {
+          "fallbackHost": "this server",
+          "updateFailed": "Couldn't update notifications on {{host}}.",
+          "unsupported": "Update Orca on {{host}} to change its notifications here.",
+          "enabledDescription": "Alerts {{host}} sends for its agents and terminals, including pushes to your phones.",
+          "sectionDescription": "Alerts {{host}} sends for its agents and terminals."
         }
       }
     },
@@ -23590,17 +23645,19 @@
       "openChat": "Open its chat",
       "copiedAddress": "Copied {{name}}'s address",
       "copyAddress": "Copy address",
-      "showDetails": "Show {{name}}'s task and latest message",
+      "showDetails": "Show {{name}}'s task and reply",
       "task": "Task",
-      "asksYou": "Asks you",
       "openFailed": "{{name}}: {{detail}}",
       "chatUnavailable": "This host cannot open the chat. Try again.",
       "terminalExited": "This terminal has exited.",
       "openOnHost": "Open this agent on {{host}}.",
       "cannotLocate": "This host cannot locate this agent. Try again.",
-      "latest": "Latest",
-      "to": "To",
-      "from": "From"
+      "reply": "Reply",
+      "noReply": "No reply yet",
+      "taskFailed": "Failed",
+      "youPreview": "You: {{preview}}",
+      "composerUnavailable": "The message box can't take a mention now",
+      "mentionTip": "Mention {{name}}"
     },
     "orchestration": {
       "workerAutoClose": {
@@ -24578,6 +24635,13 @@
     "delete": "Delete"
   },
   "terminal": {
+    "recentImages": {
+      "pasted": "Pasted image",
+      "open": "Open preview",
+      "copyPath": "Copy path",
+      "setting": "Pasted and dropped image previews",
+      "settingDescription": "Show recent local images in the pane header after you paste or drop them."
+    },
     "sessionSaveFailure": {
       "title": "Could not save terminal session",
       "capacity": "The device saving this terminal reported full storage or an exceeded storage quota. Free space on that device, then try again.",
@@ -24814,6 +24878,22 @@
       "fd47b5a5dd": "Antigravity accounts",
       "personalOption": "Your personal Google AI plan",
       "enterpriseOption": "Your organization's license",
+      "apiKeyOption": "A key from Google AI Studio",
+      "agentPlatformOption": "Your gcloud login (ADC)",
+      "apiKey": "Gemini API key",
+      "agentPlatform": "Google Agent Platform",
+      "projectFromGcloud": "From gcloud",
+      "locationGlobal": "global",
+      "adcHint": "Optional. Orca uses your gcloud project and the global location. Run gcloud auth application-default login once first.",
+      "apiKeySaveFailed": "Orca couldn't save the key. Try again.",
+      "apiKeySaved": "Key saved on this host, encrypted.",
+      "apiKeyFromEnvironment": "Using GEMINI_API_KEY from your environment. Paste a key to use a different one.",
+      "apiKeyLabel": "Gemini API key",
+      "apiKeyPlaceholder": "Paste your API key",
+      "apiKeySave": "Save",
+      "apiKeyReplace": "Replace key",
+      "apiKeyRemove": "Remove",
+      "apiKeyGet": "Get a key from Google AI Studio",
       "location": "Location",
       "enterpriseFieldsShort": "Enter a project and location.",
       "chatUseMethod": "Sign in again to use {{method}}",
@@ -24833,9 +24913,12 @@
       "runtime": "Runtime",
       "chatTitle": "Antigravity Chat",
       "chatDescription": "Signs in through your browser, so Chat works without agy installed.",
+      "chatDescriptionAgy": "agy is signed in here, so new chats use agy's account below. This sign-in is used when agy isn't.",
       "terminalTitle": "agy in the terminal",
       "terminalDescriptionWindows": "Uses agy's own saved accounts. Switching applies to the host default agy credential.",
       "terminalDescription": "Uses agy's own saved accounts. Switching applies to new agy sessions.",
+      "terminalDescriptionChats": "Uses agy's own saved accounts. Switching applies to new agy sessions and to Antigravity chats.",
+      "terminalDescriptionNoChats": "Uses agy's own saved accounts. Switching applies to new agy sessions, not to Antigravity chats.",
       "addAccountHelp": "To add an account, run /logout in agy, sign in again, then Save it here."
     },
     "claude": {
@@ -24892,6 +24975,10 @@
         "sharedOther": "{{count}} Claude sessions stay on {{previous}} because another pane has the same conversation open. Restarting could reopen the other pane's conversation.",
         "strandedOne": "1 Claude session may still be on {{previous}}. Restart it manually to switch.",
         "strandedOther": "{{count}} Claude sessions may still be on {{previous}}. Restart them manually to switch.",
+        "hostAskOne": "1 Claude session is still on {{previous}}.",
+        "hostAskOther": "{{count}} Claude sessions are still on {{previous}}.",
+        "hostAskDescription": "Restarting stops any work in progress.",
+        "hostAskRestart": "Restart",
         "notMovedOne": "1 other session wasn't moved.",
         "notMovedOther": "{{count}} other sessions weren't moved.",
         "review": "Review",
@@ -25928,7 +26015,9 @@
       "e9da9f872a": "Send review notes to agent",
       "1524825c2c": "Toggle workspace board",
       "d286d1ab85": "Clear pane title",
-      "botItemBack": "Back to items"
+      "botItemBack": "Back to items",
+      "botItemPrevious": "Previous item",
+      "botItemNext": "Next item"
     },
     "group": {
       "global": "Global",
@@ -26867,7 +26956,8 @@
       "waitingCount": "Waiting on {{count}} events",
       "settings": "Bot settings…",
       "hostDisconnected": "{{host}} disconnected",
-      "disconnected": "Disconnected"
+      "disconnected": "Disconnected",
+      "runsOn": "Runs on {{host}}"
     },
     "new": {
       "agentClaude": "Claude Code",
@@ -27848,6 +27938,7 @@
       "picked": "{{count}} picked",
       "filter": "Filter bots",
       "pickTwo": "Pick 2 or more bots",
+      "sameComputer": "Bots in a group must be on the same computer.",
       "nameIt": "Name the group",
       "suggestTwo": "{{a}} & {{b}}",
       "suggestThree": "{{a}}, {{b}} & {{c}}",
@@ -29075,6 +29166,12 @@
         "next": "Next item",
         "previous": "Previous item",
         "place": "{{index}} / {{total}}",
+        "placeOf": "{{index}} of {{total}}",
+        "navigation": "Item {{index}} of {{total}}",
+        "loadingNext": "Loading next item",
+        "shown": "Item {{index}} of {{total}}: {{title}}",
+        "firstItem": "First item",
+        "lastItem": "Last item",
         "deleted": "This item was deleted.",
         "moreLinks": "{{count}} more links"
       },
@@ -29119,7 +29216,11 @@
         "dismiss": "Dismiss",
         "commentNotAnswer": "A comment, with any files, goes to the bot and moves this item to In progress, but isn’t recorded as your answer. Expand the question to answer it.",
         "uncertain": "This question closed while your answer was being sent, and no reply came, so it may not have gone. Check Activity; your answer is kept here.",
-        "oursEditedAfter": "Your answer was recorded. Words of yours it didn’t include are kept here."
+        "oursEditedAfter": "Your answer was recorded. Words of yours it didn’t include are kept here.",
+        "reply": "Reply",
+        "replyPlaceholder": "Reply to {{name}}…",
+        "cancelReply": "Cancel",
+        "sendReply": "Send"
       }
     },
     "search": {
@@ -29147,6 +29248,20 @@
       "continuesShort": "Continues {{time}}",
       "hitShort": "Hit limit",
       "stoppedCount": "{{count}} stopped"
+    },
+    "hover": {
+      "asksQuestion": "Waiting for your answer",
+      "wantsApproval": "Wants your approval",
+      "signIn": "Needs you to sign in",
+      "access": "Asked for access",
+      "needsYouHeading_one": "1 thing needs you",
+      "needsYouHeading_other": "{{count}} things need you",
+      "moreAsks_one": "+{{count}} more ask",
+      "moreAsks_other": "+{{count}} more asks",
+      "itemsNeedYou_one": "{{count}} item it flagged for you",
+      "itemsNeedYou_other": "{{count}} items it flagged for you",
+      "review": "Review",
+      "openHome": "Open {{name}}’s Home"
     }
   },
   "plugins": {

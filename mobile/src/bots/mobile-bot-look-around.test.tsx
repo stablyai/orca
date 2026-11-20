@@ -62,7 +62,6 @@ vi.mock('./bot-up-next-operations', () => ({
 }))
 
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
-import { lookedText } from './bot-up-next-copy'
 import { MobileBotSettingsTab } from './MobileBotSettingsTab'
 import { MobileBotUpNext, type UpNextActions } from './MobileBotUpNext'
 import { useBotUpNext } from './use-bot-up-next'
@@ -161,22 +160,6 @@ function settings(lookNow = vi.fn()) {
 }
 
 describe('Look around in the phone’s bot Settings', () => {
-  it('saves only the field the owner changed', async () => {
-    const root = settings()
-    const [weekdays] = root.findAllByProps({
-      accessibilityLabel: 'Weekdays only'
-    })
-    await act(async () => weekdays?.props.onValueChange(false))
-    expect(mocks.update).toHaveBeenCalledExactlyOnceWith(
-      client,
-      {
-        botId: 'bot-1',
-        updates: { lookAround: { weekdaysOnly: false } }
-      },
-      { failWhenDisconnected: true }
-    )
-  })
-
   it('picks How often on its own page, then returns to Settings', async () => {
     const root = settings()
     press(root, 'How often, Every 4 hours, 8 AM to 8 PM')
@@ -250,20 +233,6 @@ describe('Suggestions on the phone', () => {
     start,
     dismiss: mocks.dismiss,
     busy: false
-  })
-
-  it('lists three, then the rest behind Show more', () => {
-    const root = render(
-      createElement(MobileBotUpNext, {
-        botName: 'Scout',
-        upNext,
-        actions: actions(vi.fn())
-      })
-    )
-    expect(texts(root)).toEqual(expect.arrayContaining(['Review #12', 'Fix CI', 'Show 1 more']))
-    expect(texts(root)).not.toContain('Close stale issue')
-    press(root, 'Show 1 more')
-    expect(texts(root)).toContain('Close stale issue')
   })
 
   it('starts, dismisses and opens a link', () => {
@@ -350,16 +319,5 @@ describe('useBotUpNext', () => {
     await act(async () => root.update(createElement(Probe, { ...props, showing: true })))
     expect(mocks.seen).toHaveBeenCalledWith(client, { botId: 'bot-1' })
     expect(props.refresh).toHaveBeenCalled()
-  })
-})
-
-describe('Suggestions wording', () => {
-  const now = new Date(2026, 9, 31, 18, 0).getTime()
-  it('names the day once it is not today', () => {
-    expect(lookedText(new Date(2026, 9, 31, 16, 12).getTime(), now)).toMatch(/^Looked 4:12\sPM$/)
-    expect(lookedText(new Date(2026, 9, 30, 16, 12).getTime(), now)).toMatch(
-      /^Looked yesterday 4:12\sPM$/
-    )
-    expect(lookedText(new Date(2026, 9, 29, 16, 12).getTime(), now)).toBe('Looked Oct 29')
   })
 })

@@ -220,10 +220,17 @@ export function AntigravityAccountsSection({
       {chatRows ? (
         <SettingsGroup
           title={logoTitle(t('accounts.antigravity.chatTitle', 'Antigravity Chat'))}
-          description={t(
-            'accounts.antigravity.chatDescription',
-            'Signs in through your browser, so Chat works without agy installed.'
-          )}
+          description={
+            state?.chatUsesAgy
+              ? t(
+                  'accounts.antigravity.chatDescriptionAgy',
+                  "agy is signed in here, so new chats use agy's account below. This sign-in is used when agy isn't."
+                )
+              : t(
+                  'accounts.antigravity.chatDescription',
+                  'Signs in through your browser, so Chat works without agy installed.'
+                )
+          }
         >
           {chatRows}
         </SettingsGroup>
@@ -236,10 +243,20 @@ export function AntigravityAccountsSection({
                 'accounts.antigravity.terminalDescriptionWindows',
                 "Uses agy's own saved accounts. Switching applies to the host default agy credential."
               )
-            : t(
-                'accounts.antigravity.terminalDescription',
-                "Uses agy's own saved accounts. Switching applies to new agy sessions."
-              )
+            : state?.chatUsesAgy === undefined
+              ? t(
+                  'accounts.antigravity.terminalDescription',
+                  "Uses agy's own saved accounts. Switching applies to new agy sessions."
+                )
+              : state.chatUsesAgy
+                ? t(
+                    'accounts.antigravity.terminalDescriptionChats',
+                    "Uses agy's own saved accounts. Switching applies to new agy sessions and to Antigravity chats."
+                  )
+                : t(
+                    'accounts.antigravity.terminalDescriptionNoChats',
+                    "Uses agy's own saved accounts. Switching applies to new agy sessions, not to Antigravity chats."
+                  )
         }
         action={
           <Tooltip>

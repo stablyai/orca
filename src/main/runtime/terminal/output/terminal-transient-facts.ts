@@ -16,6 +16,7 @@ import {
   type TitleDisplayClear
 } from '../../workspaces/process-listing/runtime-worktree-status-projection'
 import type {
+  CommandCodeComposerState,
   RuntimeLeafRecord,
   RuntimePtyWorktreeRecord
 } from '../records/runtime-terminal-state-records'
@@ -23,6 +24,7 @@ import type { TerminalTitleFactMeta } from '../../../../shared/terminal/output/t
 
 export abstract class OrcaRuntimeWithEmitDaemonPtyTransientFact extends OrcaRuntimeWithScheduleWaitBlockedCheck {
   protected abstract retirePtyAgentLaunchAuthority(ptyId: string, confirmedExit?: boolean): void
+  protected abstract setCommandCodeComposer(ptyId: string, state: CommandCodeComposerState): void
 
   /** A transient fact the daemon detected while it held scan authority —
    *  emitted through the same fact channel as byte-scanned facts. Arrives
@@ -34,6 +36,7 @@ export abstract class OrcaRuntimeWithEmitDaemonPtyTransientFact extends OrcaRunt
         return
       case 'command-finished':
         this.retirePtyAgentLaunchAuthority(ptyId, true)
+        this.setCommandCodeComposer(ptyId, 'exited')
         this.recordTerminalSideEffectFact(ptyId, {
           kind: 'command-finished',
           exitCode: fact.exitCode

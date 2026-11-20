@@ -99,9 +99,13 @@ export const EXECUTION_HOST_METHODS = [
   'files.stat',
   'files.statTerminalArtifact',
   'files.writeTerminalArtifact',
+  // A folder row's Delete removes the Orca workspace on its host, as desktop's Remove Workspace does.
+  'folderWorkspace.delete',
   'folderWorkspace.list',
   'git.abortMerge',
   'git.abortRebase',
+  // Read-only: the delete confirm names ignored files (.env) that removing the worktree would lose.
+  'git.atRiskLocalFiles',
   'git.branchCompare',
   'git.branchDiff',
   'git.bulkStage',
@@ -202,6 +206,10 @@ export const EXECUTION_HOST_METHODS = [
   // Sender cards resolve on the host that owns the orchestration records.
   'orchestration.partyLocation',
   'orchestration.partyOpen',
+  // A coordinator chat's worker prompts wait on the host that runs its workers.
+  'orchestration.workerApprovalsSubscribe',
+  'orchestration.workerApprovalsUnsubscribe',
+  'orchestration.approvalAnswer',
   // The worker's own host keeps it open and owns its countdown; older phones still report typing and viewing.
   'orchestration.workerTerminalUserInput',
   'orchestration.workerChatTouch',

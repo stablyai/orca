@@ -11,10 +11,11 @@ import {
 } from '../../new-workspace/creation/setup-hook-trust'
 import { triggerError, triggerSuccess } from '../../platform/haptics/haptics'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
-import { buildWorktreeRemoveRequest } from './worktree-remove-request'
+import { folderIdOfSelector } from '../../../../src/shared/workspace/identity/workspace-scope'
+import { requestWorktreeRemove } from './worktree-remove-request'
 import { removeWorktreeRow } from '../../worktree/row-presentation/worktree-host-row-identity'
 import type { Worktree } from '../../worktree/workspace-list/workspace-list-types'
-import { worktreeArchiveHookTrustRead, worktreeRemove } from '../host-screen-operations'
+import { worktreeArchiveHookTrustRead } from '../host-screen-operations'
 import type { HostScreenState } from '../use-host-screen-state'
 
 type ArchiveHookDecision =
@@ -56,6 +57,10 @@ async function decideArchiveHookRun(
   }
 ): Promise<ArchiveHookDecision> {
   const { repoId } = args.item
+  // A folder's Archive script belongs to its project group, which repo.hooks cannot read.
+  if (folderIdOfSelector(args.item.worktreeId) !== undefined) {
+    return { kind: 'skip' }
+  }
   try {
     const hooks = worktreeArchiveHookTrustRead.interpret(
       await worktreeArchiveHookTrustRead.request(args.rowClient, { repo: `id:${repoId}` })
@@ -149,26 +154,23 @@ export function useHostWorktreeDelete(args: {
     ) => {
       hideRow(item)
       try {
-        const request = buildWorktreeRemoveRequest(item, hooks)
-        const reply = await worktreeRemove.request(clients.rowClient, request.params, {
-          timeoutMs: request.timeoutMs
-        })
-        if (worktreeRemove.interpret(reply).accepted) {
+        const result = await requestWorktreeRemove(clients.rowClient, item, hooks)
+        if (result.accepted) {
           triggerSuccess()
         } else {
           triggerError()
           restoreRow(item)
-          if (!reply.ok && reply.error.code === ARCHIVE_HOOK_FAILED_REMOVAL_CODE) {
+          if (result.refusal?.code === ARCHIVE_HOOK_FAILED_REMOVAL_CODE) {
             setArchiveHookFailure({
               rowClient: clients.rowClient,
               desktopClient: clients.desktopClient,
               item,
-              message: reply.error.message,
+              message: result.refusal.message,
               ...(approvedArchiveHash ? { approvedArchiveHash } : {})
             })
-          } else if (!reply.ok && item.recipeEnvironment) {
+          } else if (result.refusal && item.recipeEnvironment) {
             // Say why: the desktop may have removed the checkout but not destroyed the environment.
-            setActionError(reply.error.message)
+            setActionError(result.refusal.message)
           }
         }
         void fetchWorktrees()
