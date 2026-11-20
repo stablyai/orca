@@ -183,7 +183,7 @@ describe('switching annotate tools', () => {
     const { result } = renderBrowserTools(makeMarkup())
     act(() => result.current.grabAnnotations.startGrabIntent('copy'))
     await pickElement()
-    await waitFor(() => expect(result.current.grab.state).toBe('awaiting'))
+    await waitFor(() => expect(result.current.grab.state).toBe('confirming'))
 
     act(() => result.current.tools.selectTool('annotate'))
 
