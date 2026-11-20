@@ -18,8 +18,19 @@ const rolloutReadQueue: { batch: RolloutReadBatch; grant: (granted: boolean) => 
 const MIN_ROLLOUT_QUEUE_PRUNE_LENGTH = 16
 let rolloutQueuePruneLength = MIN_ROLLOUT_QUEUE_PRUNE_LENGTH
 
+let releaseQueued = false
+
+/** One prune per turn however many owners retire, run after their teardown so their wanted checks fail. */
+export function queueAbandonedRolloutReadRelease(): void {
+  if (!releaseQueued) {
+    releaseQueued = true
+    queueMicrotask(releaseAbandonedRolloutReads)
+  }
+}
+
 /** Settles queued reads whose callers gave up; stalled slots would otherwise hold them and their polls. */
-export function releaseAbandonedRolloutReads(): void {
+function releaseAbandonedRolloutReads(): void {
+  releaseQueued = false
   let kept = 0
   for (const waiter of rolloutReadQueue) {
     if (waiter.batch.wanted()) {

@@ -4,7 +4,7 @@ import {
   type TranscriptNativeWatcher
 } from './transcript-native-watcher'
 import { isWslUncPath } from '../../file-access/wsl-paths'
-import { releaseAbandonedRolloutReads } from '../providers/codex/codex-rollout-async-reads'
+import { queueAbandonedRolloutReadRelease } from '../providers/codex/codex-rollout-async-reads'
 
 const ROOT_RECONCILIATION_MS = 5_000
 
@@ -158,16 +158,15 @@ export class AgentTranscriptPollScheduler<T> {
     this.entries.delete(key)
     // A read that never settles must not stall the pane's next poll forever.
     if (this.inFlight.delete(key)) {
-      queueMicrotask(releaseAbandonedRolloutReads)
+      queueAbandonedRolloutReadRelease()
     }
     this.deadlines.clear(key)
     entry.watcher?.dispose()
   }
 
   clearAll(): void {
-    // After the caller's teardown finishes, the abandoned reads' wanted checks fail.
     if (this.inFlight.size > 0) {
-      queueMicrotask(releaseAbandonedRolloutReads)
+      queueAbandonedRolloutReadRelease()
     }
     this.inFlight.clear()
     this.deadlines.clearAll()

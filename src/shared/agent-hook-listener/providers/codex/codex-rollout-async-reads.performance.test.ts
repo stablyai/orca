@@ -85,3 +85,37 @@ it.each([100, 1000])(
     await expect(queued[waiters - 1]).resolves.toBe(7)
   }
 )
+
+it.each([100, 1000])(
+  'prunes the queue once when %s polls retire one by one behind stalled slots',
+  async (panes) => {
+    const stalled = stallEveryReadSlot()
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] })
+    const retired = new Set<string>()
+    let checks = 0
+    const scheduler = new AgentTranscriptPollScheduler<string>(1000, async (key) => {
+      await rolloutFileSizeAsync(
+        key,
+        new RolloutReadBatch(() => {
+          checks++
+          return !retired.has(key)
+        })
+      )
+    })
+    for (let index = 0; index < 2 * panes; index++) {
+      scheduler.schedule(`pane-${index}`, `pane-${index}`)
+    }
+    await vi.advanceTimersByTimeAsync(1000)
+
+    checks = 0
+    for (let index = 0; index < panes; index++) {
+      retired.add(`pane-${index}`)
+      scheduler.clear(`pane-${index}`)
+    }
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(checks).toBe(2 * panes)
+    vi.useRealTimers()
+    await drain(stalled)
+  }
+)
