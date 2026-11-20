@@ -10,7 +10,7 @@ import {
   parseGitCheckIgnorePaths,
   splitGitCheckIgnorePathsByStdinBytes
 } from '../../../../shared/git/paths/git-check-ignore-stdio'
-import { findContainingSubmodule, listSubmodulePaths } from '../submodules/submodule-paths'
+import { findContainingSubmodule, listIndexedSubmodulePaths } from '../submodules/submodule-paths'
 
 type GitExecError = Error & { stdout?: string; code?: number | string }
 
@@ -45,7 +45,7 @@ export async function checkIgnoredPaths(
   }
   // Git refuses any pathspec under a submodule ("is in submodule"), which would fail the whole
   // caller. Such a path is never one `add --all` would stage here, so only the rest is checked.
-  const submodulePaths = await listSubmodulePaths(worktreePath, options)
+  const submodulePaths = await listIndexedSubmodulePaths(worktreePath, relativePaths, options)
   const checkedPaths =
     submodulePaths.length === 0
       ? relativePaths

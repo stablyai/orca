@@ -199,4 +199,27 @@ describe('stageWorktreeChanges', () => {
 
     expect(names(repo, ['diff', '--cached', '--name-only'])).toEqual(['new.txt'])
   })
+
+  it('still excludes a shared link under a stale .gitmodules declaration', async () => {
+    // Git decides "in submodule" from indexed gitlinks; a stale declaration names a plain directory.
+    const repo = await createRepo()
+    const gitmodules = '[submodule "stale"]\n\tpath = vendor\n'
+    await mkdir(path.join(repo, 'vendor'))
+    await writeFile(path.join(repo, '.gitmodules'), gitmodules)
+    git(repo, ['add', '.gitmodules'])
+    git(repo, ['commit', '-q', '-m', 'stale declaration'])
+    const outside = await mkdtemp(path.join(tmpdir(), 'orca-stale-vendor-'))
+    tempRoots.push(outside)
+    await writeFile(path.join(outside, 'keep.txt'), 'keep\n')
+    await symlink(
+      outside,
+      path.join(repo, 'vendor', 'shared-assets'),
+      process.platform === 'win32' ? 'junction' : undefined
+    )
+    await writeFile(path.join(repo, 'new.txt'), 'new\n')
+
+    await stageWorktreeChanges(repo, 'all', { sharedLinkPaths: ['vendor/shared-assets'] })
+
+    expect(names(repo, ['diff', '--cached', '--name-only'])).toEqual(['new.txt'])
+  })
 })

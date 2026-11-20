@@ -17,7 +17,7 @@ import {
   type GitStageWorktreeScopeReceipt
 } from '../../../../shared/git/paths/git-stage-worktree-scope'
 import { findExistingWorktreeSymlinkPaths } from '../../worktrees/content-paths/worktree-symlink-detection'
-import { findContainingSubmodule, listSubmodulePaths } from '../submodules/submodule-paths'
+import { findContainingSubmodule, listIndexedSubmodulePaths } from '../submodules/submodule-paths'
 import { checkIgnoredPaths } from '../ignores/check-ignored-paths'
 import { redoWriteForDriveCheckoutSuspects } from '../drive-checkout/drive-checkout-suspect-writes'
 import { runWithGitWorktreeOperationLock } from '../../../../shared/git/worktrees/git-worktree-operation-lock'
@@ -179,7 +179,7 @@ async function existingSharedLinksForStageAll(
   const links = await findExistingWorktreeSymlinkPaths(worktreePath, options.sharedLinkPaths, {
     wslDistro: options.wslDistro
   })
-  const submodulePaths = await listSubmodulePaths(worktreePath, options)
+  const submodulePaths = await listIndexedSubmodulePaths(worktreePath, links, options)
   return submodulePaths.length === 0
     ? links
     : links.filter((link) => findContainingSubmodule(submodulePaths, link) === null)

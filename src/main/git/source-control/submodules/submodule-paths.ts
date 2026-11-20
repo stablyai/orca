@@ -127,6 +127,53 @@ export async function listSubmodulePaths(
   return paths
 }
 
+/**
+ * Submodule paths Git's index records among `relativePaths` and their ancestors. Git rejects a
+ * pathspec as "in submodule" only for an indexed gitlink (mode 160000), while `.gitmodules` can
+ * still declare a path that is an ordinary directory again, so declarations must not decide this.
+ */
+export async function listIndexedSubmodulePaths(
+  worktreePath: string,
+  relativePaths: readonly string[],
+  options: GitRuntimeOptions = {}
+): Promise<string[]> {
+  const candidates = new Set<string>()
+  for (const rawPath of relativePaths) {
+    const segments = rawPath
+      .replace(/\\/g, '/')
+      .split('/')
+      .filter((segment) => segment !== '' && segment !== '.')
+    let candidate = ''
+    for (const segment of segments) {
+      candidate = candidate ? `${candidate}/${segment}` : segment
+      candidates.add(candidate)
+    }
+  }
+  if (candidates.size === 0) {
+    return []
+  }
+  try {
+    const { stdout } = await gitExecFileAsync(['ls-files', '--stage', '-z', '--', ...candidates], {
+      ...gitOptionsForWorktree(worktreePath, options),
+      env: gitOptionalLocksDisabledEnv()
+    })
+    const paths = new Set<string>()
+    for (const record of iterateNulDelimitedFields(stdout)) {
+      const metadataEnd = record.indexOf('\t')
+      if (metadataEnd === -1 || record.slice(0, metadataEnd).split(' ')[0] !== '160000') {
+        continue
+      }
+      const submodulePath = record.slice(metadataEnd + 1).replace(/\/+$/, '')
+      if (submodulePath) {
+        paths.add(submodulePath)
+      }
+    }
+    return [...paths]
+  } catch {
+    return []
+  }
+}
+
 export function findContainingSubmodule(submodulePaths: string[], filePath: string): string | null {
   const normalized = filePath.replace(/\\/g, '/').replace(/\/+$/, '')
   let best: string | null = null
