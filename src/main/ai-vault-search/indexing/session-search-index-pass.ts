@@ -1,3 +1,7 @@
+import {
+  createAntigravityWorkspaceResolver,
+  readLocalAntigravityHistory
+} from '../../ai-vault/scanners/antigravity/session-scanner-antigravity-history'
 import { throwIfAiVaultScanCancelled } from '../../ai-vault/scan-lifecycle/ai-vault-scan-cancellation'
 import {
   createSessionParseStats,
@@ -18,6 +22,10 @@ import type {
   SessionSearchIndexStore
 } from '../storage/session-search-store-types'
 
+// Older cursors prove byte coverage, not workspace enrichment or readable conversation content.
+type AntigravitySnapshot = 'content' | 'empty' | 'suppressed'
+const verifiedAntigravity = new WeakMap<SessionSearchIndexStore, Map<string, AntigravitySnapshot>>()
+
 export type SessionSearchIndexPassOptions = {
   signal?: AbortSignal
   /** Snapshot of indexed rows; a missing key means the path has no row. */
@@ -33,6 +41,16 @@ export async function runSessionSearchIndexPass(
   options: SessionSearchIndexPassOptions
 ): Promise<{ stats: SessionParseStats; outOfTime: boolean; left: number; retired: string[] }> {
   const stats = createSessionParseStats()
+  const workspaceResolver = createAntigravityWorkspaceResolver((path) =>
+    readLocalAntigravityHistory(path, options.signal)
+  )
+  const verified = verifiedAntigravity.get(store) ?? new Map<string, AntigravitySnapshot>()
+  verifiedAntigravity.set(store, verified)
+  for (const path of verified.keys()) {
+    if (!options.rows.has(path)) {
+      verified.delete(path)
+    }
+  }
   const cutoffMs = store.retentionCutoff
   const acceptsReads = () => store.acceptingReads !== false
   let read = 0
@@ -50,6 +68,19 @@ export async function runSessionSearchIndexPass(
     let due = false
     let admitted = false
     const aliases = physicalSessionCandidates(choice)
+    const paired = choice.agent === 'antigravity' && aliases.length === 2
+    const retireSibling = (position: number) => {
+      const sibling = aliases[1 - position].file.path
+      const row = options.rows.get(sibling)
+      if (
+        row &&
+        verified.get(sibling) !== 'suppressed' &&
+        !(row.state === 'failed' && row.sizeBytes === null)
+      ) {
+        store.removeFile(sibling)
+        retired.push(sibling)
+      }
+    }
     for (const [position, candidate] of aliases.entries()) {
       throwIfAiVaultScanCancelled(options.signal)
       if (!acceptsReads()) {
@@ -58,13 +89,29 @@ export async function runSessionSearchIndexPass(
       const path = candidate.file.path
       const row = options.rows.get(path)
       const cursor = row ? store.indexedFile(path, fileIdentity(candidate.file)) : null
-      const decision = sessionSearchReadDecision({ candidate, row, cursor, cutoffMs })
+      let decision = sessionSearchReadDecision({ candidate, row, cursor, cutoffMs })
+      const current =
+        row?.state === 'current' &&
+        cursor !== null &&
+        (cutoffMs === null || candidate.file.mtimeMs >= cutoffMs)
+      if (
+        decision === 'skip' &&
+        current &&
+        candidate.agent === 'antigravity' &&
+        (!verified.has(path) || (paired && position === 0 && verified.get(path) === 'empty'))
+      ) {
+        decision = 'whole'
+      }
       if (decision === 'skip') {
-        if (
-          (cutoffMs === null || candidate.file.mtimeMs >= cutoffMs) &&
-          row?.state === 'current' &&
-          cursor !== null
-        ) {
+        if (current) {
+          if (paired) {
+            if (deferred || verified.get(path) !== 'content') {
+              continue
+            }
+            deferred = false
+            retireSibling(position)
+            break
+          }
           deferred = false
           // Later sweeps finish a large first cleanup; the preferred copy stays current.
           const copies = choice.outrankedCopies
@@ -102,15 +149,24 @@ export async function runSessionSearchIndexPass(
       }
       admitted = true
       read += 1
+      let hasMessages = false
       try {
-        await parseAgentSessionFileCached(
+        const session = await parseAgentSessionFileCached(
           candidate,
           process.platform,
           stats,
           decision,
           options.signal,
-          true
+          async (session) => {
+            if (paired && position === 0 && session.messageCount === 0) {
+              return null
+            }
+            return candidate.antigravityHistoryPath
+              ? workspaceResolver.enrich(session, candidate.antigravityHistoryPath)
+              : session
+          }
         )
+        hasMessages = (session?.messageCount ?? 0) > 0
       } catch (error) {
         throwIfAiVaultScanCancelled(options.signal)
         console.warn(
@@ -126,6 +182,24 @@ export async function runSessionSearchIndexPass(
       // Consumer/store failures cannot authorize reading another physical alias.
       try {
         await store.flush?.()
+        if (candidate.agent === 'antigravity') {
+          const covered = store.coversTranscript(candidate)
+          if (covered) {
+            verified.set(
+              path,
+              hasMessages ? 'content' : paired && position === 0 ? 'suppressed' : 'empty'
+            )
+          }
+          if (paired) {
+            if (!hasMessages) {
+              continue
+            }
+            if (!covered) {
+              break
+            }
+            retireSibling(position)
+          }
+        }
       } catch (error) {
         throwIfAiVaultScanCancelled(options.signal)
         console.warn(
