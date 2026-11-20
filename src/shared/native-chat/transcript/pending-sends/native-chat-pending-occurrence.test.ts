@@ -341,3 +341,65 @@ it('reconciles an original filename that contains the source-context prefix', ()
   expect(pendingSendsAsMessages(pending, transcript)).toEqual([])
   expect(prunePendingSends(pending, transcript)).toEqual([])
 })
+
+it.each(['', 'look'])(
+  'reconciles glued multi-image paths with mixed fitted sources and caption %s',
+  (text) => {
+    const pending: NativeChatPendingSend[] = [
+      {
+        id: 'mixed',
+        text,
+        imagePaths: ['/repo/a.png', '/repo/b.png'],
+        deliveredImagePaths: ['/temp/a.png', '/repo/b.png'],
+        sentAt: 100,
+        afterMessageId: 'boundary'
+      }
+    ]
+    const row = `/temp/a.png/repo/b.png ${text ? `${text}\n\n` : ''}[Image source file: "/repo/a.png"; attached viewing copy: "/temp/a.png"\nImage source file: "/repo/b.png"; attached viewing copy: "/repo/b.png"]`
+    const transcript = [
+      message('boundary', 'assistant', 'ready', 90),
+      message('images', 'user', row, 120),
+      message('reply', 'assistant', 'done', 130)
+    ]
+    expect(pendingSendsAsMessages(pending, transcript)).toEqual([])
+    expect(prunePendingSends(pending, transcript)).toEqual([])
+  }
+)
+
+it('keeps a copied source note literal beside an unrelated pathless image', () => {
+  const text = '[Image source file: "/repo/rejected.png"; attached viewing copy: "/temp/view.png"]'
+  const pending: NativeChatPendingSend[] = [
+    {
+      id: 'failed',
+      text: '',
+      imagePaths: ['/repo/rejected.png'],
+      deliveredImagePaths: ['/temp/view.png'],
+      delivery: 'rejected',
+      sentAt: 100,
+      afterMessageId: 'boundary'
+    },
+    {
+      id: 'human',
+      text,
+      imagePaths: ['/repo/small.png'],
+      deliveredImagePaths: ['/repo/small.png'],
+      sentAt: 110,
+      afterMessageId: 'boundary'
+    }
+  ]
+  const transcript: NativeChatMessage[] = [
+    message('boundary', 'assistant', 'ready', 90),
+    {
+      ...message('literal', 'user', text, 120),
+      blocks: [
+        { type: 'image-ref', url: 'data:image/png;base64,abc' },
+        { type: 'text', text }
+      ]
+    },
+    message('reply', 'assistant', 'done', 130)
+  ]
+  expect(prunePendingSends(pending, transcript).map((entry) => entry.id)).toEqual(['failed'])
+  expect(pendingSendsAsMessages(pending, transcript).map((row) => row.id)).toEqual([
+    'pending:failed'
+  ])
+})

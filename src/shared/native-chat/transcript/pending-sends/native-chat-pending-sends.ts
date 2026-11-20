@@ -195,13 +195,17 @@ export function prunePendingSends<T extends NativeChatPendingSend>(
   const claimedImageRows = carriedImageRowClaims(pending)
   const carriedClaimCount = claimedImageRows.size
   const exactKeep = pending.map((entry) => {
+    if (entry.delivery === 'rejected' && entry.imagePaths?.length) {
+      return true
+    }
     const contentKey = nativeChatPendingContentKey(entry)
     const key = nativeChatPendingMatchKey(entry)
     const available =
       advancedNativeChatUserContentCounts(
         messagesAfterPendingBoundary(messages, entry),
         entry.imagePaths,
-        entry.deliveredImagePaths
+        entry.deliveredImagePaths,
+        entry.text
       ).get(contentKey) ?? 0
     const used = consumed.get(key) ?? 0
     const occurrence = nativeChatPendingOccurrence(entry, used)
@@ -215,6 +219,9 @@ export function prunePendingSends<T extends NativeChatPendingSend>(
     gluedCandidateRows(messages, stillOpen, advancedNativeChatUserRows)
   )
   const next = pending.filter((entry, index) => {
+    if (entry.delivery === 'rejected' && entry.imagePaths?.length) {
+      return true
+    }
     if (!exactKeep[index]) {
       return false
     }
@@ -243,13 +250,17 @@ export function visibleNativeChatPendingSends<T extends NativeChatPendingSend>(
   const consumed = new Map<string, number>()
   const claimedImageRows = carriedImageRowClaims(pending)
   const exactVisible = pending.map((entry) => {
+    if (entry.delivery === 'rejected' && entry.imagePaths?.length) {
+      return true
+    }
     const contentKey = nativeChatPendingContentKey(entry)
     const key = nativeChatPendingMatchKey(entry)
     const represented =
       matchingNativeChatUserContentCounts(
         messagesAfterPendingBoundary(existingMessages, entry),
         entry.imagePaths,
-        entry.deliveredImagePaths
+        entry.deliveredImagePaths,
+        entry.text
       ).get(contentKey) ?? 0
     const used = consumed.get(key) ?? 0
     const occurrence = nativeChatPendingOccurrence(entry, used)
@@ -266,6 +277,9 @@ export function visibleNativeChatPendingSends<T extends NativeChatPendingSend>(
     gluedCandidateRows(existingMessages, stillVisible, matchingNativeChatUserRows)
   )
   return pending.filter((entry, index) => {
+    if (entry.delivery === 'rejected' && entry.imagePaths?.length) {
+      return true
+    }
     if (!exactVisible[index]) {
       return false
     }

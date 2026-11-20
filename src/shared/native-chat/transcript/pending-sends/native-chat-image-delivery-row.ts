@@ -17,6 +17,7 @@ const imageDeliveryRows = new WeakMap<
   NativeChatMessage['blocks'],
   {
     text: string
+    literal: string
     paths: string[]
     original: string[]
     prefixes: string[]
@@ -35,13 +36,15 @@ export function imageDeliveryRow(message: NativeChatMessage) {
   const candidate = readAgentImageSourceContext(text)
   const images = message.blocks.filter(isImageRefBlock)
   const textPrefix = normalizeNativeChatUserText(candidate.text)
-  const deliveredPrefix = candidate.delivered.map(normalizeNativeChatUserText).join(' ')
+  const deliveredPrefixes = pendingImagePrefixes([], candidate.delivered)
   const hasImageEvidence =
     (images.length === candidate.delivered.length &&
       images.length > 0 &&
       images.every((image, index) => !image.path || image.path === candidate.delivered[index])) ||
-    (deliveredPrefix.length > 0 &&
-      (textPrefix === deliveredPrefix || textPrefix.startsWith(`${deliveredPrefix} `)))
+    deliveredPrefixes.some(
+      (prefix) =>
+        prefix.length > 0 && (textPrefix === prefix || textPrefix.startsWith(`${prefix} `))
+    )
   const context = hasImageEvidence ? candidate : { text, original: [], delivered: [] }
   const sources = new Map(context.delivered.map((path, index) => [path, context.original[index]]))
   const paths = message.blocks
@@ -51,6 +54,7 @@ export function imageDeliveryRow(message: NativeChatMessage) {
     .map((path) => sources.get(path) ?? path)
   const row = {
     text: normalizeNativeChatUserText(context.text),
+    literal: normalizeNativeChatUserText(text),
     paths,
     original: context.original,
     prefixes: context.original.length

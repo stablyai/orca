@@ -35,12 +35,16 @@ function nativeChatUserMessageContentKey(
   message: NativeChatMessage,
   sentImagePaths: readonly string[] | undefined,
   deliveredImagePaths: readonly string[] | undefined,
-  prefixes: readonly string[]
+  prefixes: readonly string[],
+  literal: string
 ): string | null {
   if (message.role !== 'user') {
     return null
   }
   const row = imageDeliveryRow(message)
+  if (literal && row.literal === literal) {
+    return `text:${literal}`
+  }
   let text = row.text
   const paths = sentImagePaths?.filter(Boolean) ?? []
   for (const prefix of row.prefixes.length ? row.prefixes : prefixes) {
@@ -72,16 +76,19 @@ function nativeChatUserMessageContentKey(
 export function matchingNativeChatUserContentCounts(
   messages: readonly NativeChatMessage[],
   sentImagePaths?: readonly string[],
-  deliveredImagePaths?: readonly string[]
+  deliveredImagePaths?: readonly string[],
+  pendingText?: string
 ): Map<string, number> {
   const prefixes = pendingImagePrefixes(sentImagePaths, deliveredImagePaths)
+  const literal = normalizeNativeChatPendingText(pendingText ?? '')
   const counts = new Map<string, number>()
   for (const message of messages) {
     const key = nativeChatUserMessageContentKey(
       message,
       sentImagePaths,
       deliveredImagePaths,
-      prefixes
+      prefixes,
+      literal
     )
     if (key) {
       counts.set(key, (counts.get(key) ?? 0) + 1)
@@ -93,9 +100,11 @@ export function matchingNativeChatUserContentCounts(
 export function advancedNativeChatUserContentCounts(
   messages: readonly NativeChatMessage[],
   sentImagePaths?: readonly string[],
-  deliveredImagePaths?: readonly string[]
+  deliveredImagePaths?: readonly string[],
+  pendingText?: string
 ): Map<string, number> {
   const prefixes = pendingImagePrefixes(sentImagePaths, deliveredImagePaths)
+  const literal = normalizeNativeChatPendingText(pendingText ?? '')
   const advanced = new Map<string, number>()
   const waiting = new Map<string, number>()
   for (const message of messages) {
@@ -104,7 +113,8 @@ export function advancedNativeChatUserContentCounts(
         message,
         sentImagePaths,
         deliveredImagePaths,
-        prefixes
+        prefixes,
+        literal
       )
       if (key) {
         waiting.set(key, (waiting.get(key) ?? 0) + 1)
