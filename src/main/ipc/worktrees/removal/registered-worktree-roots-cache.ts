@@ -1,5 +1,8 @@
 import { resolve } from 'node:path'
-import { findRegisteredWorktreeRootAsync } from './registered-worktree-root-match'
+import {
+  createRegisteredRootScan,
+  findRegisteredWorktreeRootAsync
+} from './registered-worktree-root-match'
 import type { Repo } from '../../../../shared/repository/repo-types'
 import type { RegisteredWorktreeRootStore as Store } from './registered-worktree-root-store'
 import {
@@ -268,8 +271,13 @@ export async function isRegisteredWorktreePathAsync(
 ): Promise<boolean> {
   synchronizeOwners(store)
   const generation = invalidationGeneration
-  for (const root of registeredWorktreeRoots) {
+  const roots = createRegisteredRootScan(registeredWorktreeRoots)
+  for (let item = roots.next(); !item.done; item = roots.next()) {
+    const root = item.value
     const contained = isDescendantOrEqualAsync(targetPath, root)
+    if (typeof contained !== 'boolean') {
+      roots.pin()
+    }
     if (typeof contained === 'boolean' ? contained : await contained) {
       synchronizeOwners(store)
       return generation === invalidationGeneration && registeredWorktreeRoots.has(root)
