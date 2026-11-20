@@ -16,7 +16,8 @@ import { considerAdvertisedUrl } from './advertised-url-cache-update'
 import {
   couldDropAdvertisedUrls,
   lookupBestAdvertisedUrl,
-  shouldEvictAdvertisedUrlAfterScan
+  shouldEvictAdvertisedUrlAfterScan,
+  type ObservationsByWorktree
 } from './advertised-url-reconciliation'
 import { ownRetainedString } from '../../shared/text/own-retained-string'
 
@@ -236,10 +237,8 @@ export class AdvertisedUrlWatcher {
     this.reconcileObservedWorkspaces(new Map(worktreeIds.map((id) => [id, observedByPort])))
   }
 
-  couldDropUrls(
-    observations: ReadonlyMap<string, readonly AdvertisedUrlListenerObservation[]>
-  ): boolean {
-    return couldDropAdvertisedUrls(this.cache, observations)
+  couldDropUrls(observations: ObservationsByWorktree, canReconcile: boolean): boolean {
+    return couldDropAdvertisedUrls(this.cache, observations, canReconcile)
   }
 
   reconcileWorkspaces(

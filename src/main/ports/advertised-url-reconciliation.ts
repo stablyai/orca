@@ -9,10 +9,16 @@ import {
 } from './advertised-url-parsing'
 import type { AdvertisedUrl, AdvertisedUrlListenerObservation } from './advertised-url-watcher'
 
-/** Whether a scan with these observations could drop a printed URL: its listener is absent or changed pid. */
+export type ObservationsByWorktree = ReadonlyMap<
+  string,
+  readonly AdvertisedUrlListenerObservation[]
+>
+
+/** Whether a scan with these observations would bind a printed URL to a pid, or drop it (absent listener when it can reconcile, or changed pid). */
 export function couldDropAdvertisedUrls(
   cache: ReadonlyMap<CacheKey, AdvertisedUrl>,
-  observations: ReadonlyMap<string, readonly AdvertisedUrlListenerObservation[]>
+  observations: ObservationsByWorktree,
+  canReconcile: boolean
 ): boolean {
   const observedByWorktree = new Map(
     [...observations].map(([id, listeners]) => [id, observedListenersByPort(listeners)])
@@ -23,14 +29,13 @@ export function couldDropAdvertisedUrls(
       continue
     }
     if (!observedByPort.has(entry.port)) {
-      return true
+      if (canReconcile) {
+        return true
+      }
+      continue
     }
     const pid = observedByPort.get(entry.port)
-    if (
-      entry.validatedListenerPid !== undefined &&
-      pid !== undefined &&
-      entry.validatedListenerPid !== pid
-    ) {
+    if (pid !== undefined && entry.validatedListenerPid !== pid) {
       return true
     }
   }

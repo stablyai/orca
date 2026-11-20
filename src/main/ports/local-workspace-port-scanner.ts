@@ -49,17 +49,21 @@ export async function scanWorkspacePorts(
       resolved ??= await resolveWorkspacePortProbes(worktrees, options.requireMetadata)
       const { probes, complete } = resolved
       const attributedPorts = attributePortsToWorkspaces(scan.ports, probes)
-      // Cached owners can miss a socket passed to a running process; only a full walk may drop a printed URL.
+      const canReconcile = scan.metadataAvailable && complete
+      // Cached owners can miss a socket passed to a running process; only a full walk may bind or drop a printed URL.
       if (
         !freshOwners &&
         scan.ownersFromCache &&
-        urlWatcher.couldDropUrls(workspaceListenerObservations(attributedPorts, probes))
+        urlWatcher.couldDropUrls(
+          workspaceListenerObservations(attributedPorts, probes),
+          canReconcile
+        )
       ) {
         freshOwners = true
         continue
       }
       // Missing metadata cannot prove listener loss; eviction would discard URLs only PTY output can restore (#11161).
-      if (scan.metadataAvailable && complete) {
+      if (canReconcile) {
         reconcileAdvertisedUrls(attributedPorts, probes, urlWatcher)
       }
       const ports = attributedPorts
