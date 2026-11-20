@@ -1,6 +1,7 @@
 import { afterEach, expect, it, vi } from 'vitest'
 import type { PtyProviderBufferSnapshot } from '../../../providers/pty/provider-contract'
 import { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal/protocol/input-modes/terminal-kitty-keyboard-mode-tracker'
+import { HeadlessEmulator } from '../../../daemon/emulation/headless-emulator'
 import { anchorStream, createRuntime, grid, headlessOf } from './headless-recovery-test-harness'
 
 afterEach(() => {
@@ -210,6 +211,60 @@ it.each([10, 100])(
           expect(shown.preview).toBe('raw tail')
         }
       }
+      expect(readerCaptures).toBe(0)
+    } finally {
+      await Promise.all(ptyIds.map((ptyId) => runtime.onPtyExit(ptyId, 0)))
+    }
+  },
+  30_000
+)
+
+// A rebuilding screen answers from its kept frame: parsed once, never recaptured per read (#43889).
+it.each([10, 100])(
+  'answers %i rebuilding screens from their kept frames without recapturing or reparsing',
+  async (count) => {
+    const runtime = createRuntime()
+    const ptyIds = Array.from({ length: count }, (_, index) => `pty-kept-${index}`)
+    let recoveryCaptures = 0
+    let readerCaptures = 0
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null,
+      getSize: () => grid,
+      serializeProviderBuffer: (_ptyId, opts): Promise<PtyProviderBufferSnapshot> => {
+        if (opts?.recovery) {
+          recoveryCaptures += 1
+        } else {
+          readerCaptures += 1
+        }
+        // After the pre-gap frame but before the journal: kept, yet each rebuild fails and frees its slot.
+        return Promise.resolve({
+          data: '\x1b[H\x1b[2Jkept',
+          ...grid,
+          seq: 5,
+          source: 'headless'
+        })
+      }
+    })
+    vi.useFakeTimers({ toFake: ['setTimeout'] })
+    try {
+      for (const ptyId of ptyIds) {
+        // A fresh stream: the model owns its screen until the gap.
+        runtime.synchronizePtyOutputSequenceFromProvider(ptyId, { value: 0, generation: 'reset' })
+        runtime.anchorProviderSequence(ptyId, 0, 0)
+        runtime.onPtyData(ptyId, 'before\r\n', 1)
+        runtime.notePtyDataGap(ptyId, 9)
+      }
+      await vi.waitFor(() => expect(recoveryCaptures).toBeGreaterThanOrEqual(count))
+      const parses = vi.spyOn(HeadlessEmulator.prototype, 'dispose')
+      for (let round = 0; round < 10; round += 1) {
+        for (const ptyId of ptyIds) {
+          const screen = await headlessOf(runtime).readScreenProjection(ptyId)
+          expect(screen?.lines).toEqual(['kept'])
+        }
+      }
+      expect(parses).toHaveBeenCalledTimes(count)
       expect(readerCaptures).toBe(0)
     } finally {
       await Promise.all(ptyIds.map((ptyId) => runtime.onPtyExit(ptyId, 0)))

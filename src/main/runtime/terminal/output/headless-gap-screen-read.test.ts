@@ -54,7 +54,7 @@ it('answers a screen read at once from the last frame before the gap while a bus
 
 it('answers a landed recovery frame that cannot rebuild yet as the current screen', async () => {
   // Ahead of the output parsed here, so the rebuild waits for bytes that never arrive.
-  const { runtime, handle } = await recoveringPane({ seq: 5 })
+  const { runtime, handle } = await recoveringPane({ seq: 1_000 })
   try {
     const read = await vi.waitFor(async () => {
       const screen = await runtime.readTerminal(handle, { screen: true })
@@ -69,7 +69,7 @@ it('answers a landed recovery frame that cannot rebuild yet as the current scree
 })
 
 it('keeps the last whole frame when the landed recovery frame is half-drawn', async () => {
-  const { runtime, handle } = await recoveringPane({ seq: 5, synchronizedOutput: true })
+  const { runtime, handle } = await recoveringPane({ seq: 1_000, synchronizedOutput: true })
   try {
     // Every microtask has run: the landed frame was offered before this read.
     await new Promise((resolve) => setImmediate(resolve))
