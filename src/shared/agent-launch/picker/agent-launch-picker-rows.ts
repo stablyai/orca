@@ -62,6 +62,11 @@ export function agentMenuRowSupportsChat(row: NewTabAgentMenuRow): boolean {
   return row.kind === 'chat' || (row.kind === 'cli' && row.chat === true)
 }
 
+/** Launches the agent as it is on the host now: not a chat that installs it first, not an unavailable one. */
+export function agentMenuRowReady(row: NewTabAgentMenuRow): boolean {
+  return row.kind === 'cli' || row.kind === 'terminal' || (row.kind === 'chat' && !row.setup)
+}
+
 export type NewTabAgentMenuSettings = NativeChatDefaultSettings &
   Partial<Pick<GlobalSettings, 'defaultTuiAgent' | 'disabledTuiAgents'>>
 
