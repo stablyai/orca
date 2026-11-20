@@ -61,7 +61,7 @@ export class RuntimeClient {
   readonly userDataPath: string
   private remote: Promise<PairedRuntimeConnection | null> | undefined
   private readonly resolveRemote: () => Promise<PairedRuntimeConnection | null>
-  private readonly remoteSelected: boolean
+  readonly remoteSelected: boolean
   readonly environmentSelector: string | null
   private readonly originalArgs: readonly string[] | undefined
   private readonly remoteCompat: RemoteRuntimeCompatGate

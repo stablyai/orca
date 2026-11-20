@@ -75,7 +75,9 @@ export async function resolveArchiveHookRequest(
   }
   throw new RuntimeClientError(
     ARCHIVE_HOOK_UNDECIDED_CODE,
-    "Orca couldn't tell whether this workspace's archive hook is approved: the Orca app that holds hook approvals isn't reachable from this host, or the hook couldn't be read. Nothing was deleted. Pass --archive run to run the hook, or --archive skip to delete without it."
+    client.remoteSelected
+      ? "This workspace's archive hook may need approval, and Orca can't check hook approvals on a remote host yet. Nothing was deleted. Pass --archive run to run the hook, or --archive skip to delete without it."
+      : "Orca couldn't tell whether this workspace's archive hook is approved: the Orca app that holds hook approvals isn't reachable from this host, or the hook couldn't be read. Nothing was deleted. Pass --archive run to run the hook, or --archive skip to delete without it."
   )
 }
 
