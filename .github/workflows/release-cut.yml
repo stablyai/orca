@@ -1619,11 +1619,18 @@ jobs:
         if: matrix.platform == 'win' && github.run_attempt == 1 && steps.restore-signed-inner.outcome == 'success'
         shell: pwsh
         run: |
-          node config/scripts/desktop-distribution/windows/package-windows-portable.mjs --unpacked-dir dist/win-unpacked --out-dir dist
+          $scriptPath = 'config/scripts/desktop-distribution/windows/package-windows-portable.mjs'
+          if (-not (Test-Path -LiteralPath $scriptPath -PathType Leaf)) {
+            "has_portable=false" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+            Write-Host "::notice::Cut ref predates $scriptPath; skipping Windows portable archive packaging."
+            exit 0
+          }
+          node $scriptPath --unpacked-dir dist/win-unpacked --out-dir dist
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           if (-not (Test-Path 'dist/orca-windows-x64-portable.zip') -or -not (Test-Path 'dist/orca-windows-x64-portable.zip.sha256')) {
             throw 'package-windows-portable.mjs did not produce dist/orca-windows-x64-portable.zip and .sha256'
           }
+          "has_portable=true" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
       # ── End Windows inner-binary signing ───────────────────────────────
       - name: Upload unsigned Windows installer for SignPath
@@ -1998,7 +2005,7 @@ jobs:
           timeout_minutes: 10
           max_attempts: 3
           retry_wait_seconds: 30
-          command: gh release upload "${{ needs.cut.outputs.tag }}" "dist/orca-windows-setup.exe" "dist/orca-windows-setup.exe.blockmap" "dist/latest.yml" "dist/orca-windows-x64-portable.zip" "dist/orca-windows-x64-portable.zip.sha256" --clobber --repo "${{ github.repository }}"
+          command: gh release upload "${{ needs.cut.outputs.tag }}" "dist/orca-windows-setup.exe" "dist/orca-windows-setup.exe.blockmap" "dist/latest.yml" ${{ steps.package-windows-portable.outputs.has_portable == 'true' && '"dist/orca-windows-x64-portable.zip" "dist/orca-windows-x64-portable.zip.sha256" ' || '' }}--clobber --repo "${{ github.repository }}"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
