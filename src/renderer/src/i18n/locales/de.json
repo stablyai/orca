@@ -4336,6 +4336,7 @@
             "terminalListNeedsServerUpdate": "Orca auf diesem Server aktualisieren, um Terminal-Agenten aufzulisten",
             "terminalListFailed": "Terminal-Agenten für diesen Arbeitsbereich konnten nicht aufgelistet werden",
             "chatNotInstalled": "Nicht installiert",
+            "chatInstallRequired": "Installation erforderlich",
             "chatNotOverSsh": "Kein Chat über SSH",
             "chatNotInWsl": "Kein Chat in WSL",
             "chatNotInSubfolder": "Kein Chat in einem Unterordner",
@@ -12509,6 +12510,7 @@
         "CursorAccountsSection": {
           "source": {
             "keychain": "macOS-Schlüsselbund (cursor-agent)",
+            "keyring": "Linux-Schlüsselbund (cursor-agent)",
             "cli": "Authentifizierungsdatei der Cursor-CLI",
             "desktop": "Cursor IDE"
           },
@@ -18142,10 +18144,6 @@
           "hideOtherClients": "Agenten anderer Clients ausblenden"
         },
         "ActivityThreadHoverCard": {
-          "pathCopied": "Pfad in die Zwischenablage kopiert",
-          "copyPathFailed": "Pfad konnte nicht kopiert werden",
-          "workspace": "Arbeitsbereich",
-          "copyPath": "Pfad kopieren",
           "jumpToWorkspace": "Zum Arbeitsbereich wechseln"
         },
         "ActivityThreadRow": {
@@ -18930,7 +18928,6 @@
         "stoppedRestart_one": "{{count}} Chat beim Beenden von Orca angehalten.",
         "stoppedRestart_other": "{{count}} Chats beim Beenden von Orca angehalten.",
         "promptsNotResent": "Deine Prompts werden nicht erneut gesendet.",
-        "promptsNotSent": "Deine Prompts wurden nicht erneut gesendet.",
         "resume": "Fortsetzen",
         "details": "Details",
         "close": "Schließen",
@@ -19156,7 +19153,8 @@
       "install": {
         "checking": "Es wird geprüft, ob {{agent}} auf diesem Host bereit ist…",
         "cliInstall": "Installieren",
-        "cliRecheck": "Erneut prüfen"
+        "cliRecheck": "Erneut prüfen",
+        "openAgentSettings": "Einstellungen öffnen"
       },
       "reasoning": "Denkprozess",
       "failureWords": {
@@ -19190,6 +19188,7 @@
         "claudeAccountFolderMissing": "Der Ordner des ausgewählten Claude-Kontos fehlt. Erneut bei diesem Konto anmelden oder ein anderes Konto auswählen.",
         "claudeAccountSetupFailed": "Das ausgewählte Claude-Konto konnte nicht eingerichtet werden. Erneut versuchen oder ein anderes Konto auswählen.",
         "agentCommandNotRunnable": "Der Befehl für {{agent}} unter Einstellungen → Agenten muss ein Programmpfad oder -name sein, den Orca finden kann, ohne Argumente oder Variablen. Den Befehl ändern oder zurücksetzen.",
+        "agentCommandFailed": "Der Befehl für {{agent}} unter Einstellungen → Agenten hat {{agent}} nicht gestartet: {{detail}}. Den Befehl ändern oder zurücksetzen.",
         "runtimeNotInstalled": "{{agent}} ist auf dem Computer, auf dem dieser Chat läuft, nicht installiert. Die Installation über den Chat in einer aktuellen Orca-Version durchführen.",
         "fullAccessAsRoot": "{{agent}} verwendet keinen Vollzugriff, solange die Ausführung als root erfolgt. Unter Einstellungen → Agenten für den Computer, auf dem dieser Chat läuft, eine andere Berechtigung für {{agent}} auswählen und anschließend einen neuen Chat starten.",
         "launchPreparationFailed": "Orca konnte den Start von {{agent}} auf dem Computer, auf dem dieser Chat läuft, nicht vorbereiten.",
@@ -20858,7 +20857,6 @@
       "cancelFailed": "Die Installation konnte nicht abgebrochen werden. Erneut versuchen.",
       "install": "{{agent}} installieren",
       "installManaged": "Orcas Version installieren",
-      "installed": "Installiert",
       "notInstalled": "Nicht installiert.",
       "progress": "Download von {{agent}}",
       "readFailed": "{{agent}} konnte auf diesem Host nicht überprüft werden. Erneuter Versuch.",
@@ -23653,7 +23651,6 @@
       "chip": "Bots",
       "chipLabel": "Bots, alles anzeigen",
       "searchEverything": "Überall nach „{{text}}“ suchen",
-      "searchBotsFor": "Bots nach „{{text}}“ durchsuchen",
       "noMatch": "Keine Bots passen zu „{{text}}“",
       "noBotsYet": "Noch keine Bots",
       "filtersPaused": "Filter gelten für Arbeitsbereiche, nicht für Bots",
@@ -23669,7 +23666,7 @@
       "browse": "Vorlagen durchsuchen"
     },
     "new": {
-      "fromTemplate": "Vorlage verwenden"
+      "fromTemplate": "Vorlage"
     },
     "apps": {
       "paste": {

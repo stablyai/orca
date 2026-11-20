@@ -3835,6 +3835,7 @@
             "e518f544b1": "No se detectaron agentes",
             "8dea9b5cdf": "No hay agentes habilitados",
             "chatNotInstalled": "No instalado",
+            "chatInstallRequired": "Requiere instalación",
             "startChat": "Iniciar un chat con {{value0}}",
             "chatNotInSubfolder": "Chat no disponible en subcarpetas",
             "chatNotOverSsh": "Chat no disponible por SSH",
@@ -11940,7 +11941,8 @@
           "source": {
             "cli": "Archivo de autenticación de Cursor CLI",
             "desktop": "IDE de Cursor",
-            "keychain": "Llavero de macOS (cursor-agent)"
+            "keychain": "Llavero de macOS (cursor-agent)",
+            "keyring": "Llavero de Linux (cursor-agent)"
           },
           "staleUsage": "Último uso conocido — falló la actualización más reciente: {{reason}}",
           "subtitle": "Muestra tu uso del plan de Cursor a partir del inicio de sesión que ya está en este equipo. Orca solo lo lee — nunca modifica tu inicio de sesión de Cursor.",
@@ -17863,10 +17865,6 @@
           "unreadCount_many": "{{count}} sin leer"
         },
         "ActivityThreadHoverCard": {
-          "workspace": "Espacio de trabajo",
-          "pathCopied": "Ruta copiada al portapapeles",
-          "copyPathFailed": "No se pudo copiar la ruta",
-          "copyPath": "Copiar ruta",
           "jumpToWorkspace": "Ir al espacio de trabajo"
         },
         "clearCompleted": {
@@ -18693,7 +18691,6 @@
         "stoppedRestart_many": "{{count}} chats detenidos al cerrar Orca.",
         "stoppedRestart_other": "{{count}} chats detenidos al cerrar Orca.",
         "promptsNotResent": "Al reanudar, no se reenviarán tus prompts.",
-        "promptsNotSent": "Tus prompts no se reenviaron.",
         "resume": "Reanudar",
         "details": "Detalles",
         "close": "Cerrar",
@@ -18855,7 +18852,8 @@
       "install": {
         "checking": "Comprobando si {{agent}} está listo en este host…",
         "cliInstall": "Instalar",
-        "cliRecheck": "Verificar de nuevo"
+        "cliRecheck": "Verificar de nuevo",
+        "openAgentSettings": "Abrir ajustes"
       },
       "reasoning": "Razonamiento",
       "contextMenu": {
@@ -18896,6 +18894,7 @@
         "claudeAccountFolderMissing": "Falta la carpeta de la cuenta de Claude seleccionada. Vuelva a iniciar sesión en ella o elija otra cuenta.",
         "claudeAccountSetupFailed": "No se pudo configurar la cuenta de Claude seleccionada. Vuelva a intentarlo o elija otra cuenta.",
         "agentCommandNotRunnable": "El Comando de {{agent}} en Ajustes → Agentes debe empezar con un programa que Orca pueda encontrar. No se admiten variables, tuberías ni otra sintaxis de shell; usa el ajuste Entorno para las variables. Cámbialo o restablécelo.",
+        "agentCommandFailed": "El Comando de {{agent}} en Ajustes → Agentes no inició {{agent}}: {{detail}}. Cámbialo o restablécelo.",
         "runtimeNotInstalled": "{{agent}} no está instalado en el equipo que ejecuta este chat. Instálelo desde el chat en una versión actual de Orca.",
         "fullAccessAsRoot": "{{agent}} no usará Acceso total mientras se ejecute como root. Elija otro permiso para {{agent}} en Configuración → Agentes para el equipo que ejecuta este chat y luego inicie un chat nuevo.",
         "launchPreparationFailed": "Orca no pudo preparar el inicio de {{agent}} en el equipo que ejecuta este chat.",
@@ -20708,7 +20707,6 @@
       "cancelFailed": "No se pudo cancelar la instalación. Inténtalo de nuevo.",
       "install": "Instalar {{agent}}",
       "installManaged": "Instalar la copia de Orca",
-      "installed": "Instalado",
       "notInstalled": "No instalado.",
       "progress": "Descarga de {{agent}}",
       "readFailed": "No se pudo comprobar {{agent}} en este host. Reintentando.",
@@ -24213,7 +24211,6 @@
       "chip": "Bots",
       "chipLabel": "Bots, mostrar todo",
       "searchEverything": "Buscar en todo «{{text}}»",
-      "searchBotsFor": "Buscar bots con «{{text}}»",
       "noMatch": "Ningún bot coincide con «{{text}}»",
       "noBotsYet": "Aún no hay bots",
       "filtersPaused": "Los filtros se aplican a espacios de trabajo, no a bots",
@@ -24230,7 +24227,7 @@
       "browse": "Explorar plantillas"
     },
     "new": {
-      "fromTemplate": "Usar plantilla"
+      "fromTemplate": "Plantilla"
     },
     "googleSetup": {
       "otherAccount": "Cambiar de cuenta"

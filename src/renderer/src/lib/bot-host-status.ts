@@ -1,6 +1,9 @@
 // What a bot host says of itself: its computer name and the capabilities its Orca has.
-import { useAppStore } from '@/store'
 import { useRuntimeHostStatusSelector } from '@/store/slices/runtime-status/views/use-runtime-status-view'
+import {
+  readRuntimeStatuses,
+  type RuntimeStatuses
+} from '@/store/slices/runtime-status/views/runtime-status-owner'
 import type { AppState } from '@/store/types'
 import {
   parseRoutableExecutionHostId,
@@ -17,25 +20,26 @@ import type { RuntimeStatus } from '../../../shared/remote-runtime/session-graph
 /** A paired server's last verified status; null for this app's own runtime, or before it is known. */
 function pairedStatus(
   hostId: ExecutionHostId,
-  state: Pick<AppState, 'runtimeStatusByEnvironmentId'> = useAppStore.getState()
+  statuses: RuntimeStatuses = readRuntimeStatuses()
 ): RuntimeStatus | null {
   const parsed = parseRoutableExecutionHostId(hostId)
   if (parsed?.kind !== 'runtime') {
     return null
   }
-  const entry = state.runtimeStatusByEnvironmentId?.get(parsed.environmentId)
+  const entry = statuses.get(parsed.environmentId)
   return lastVerifiedRuntimeStatus(entry) ?? null
 }
 
 export function botHostMachineName(
   hostId: ExecutionHostId,
-  state: Pick<AppState, 'runtimeStatusByEnvironmentId' | 'runtimeEnvironments'>
+  state: Pick<AppState, 'runtimeEnvironments'>,
+  statuses: RuntimeStatuses
 ): string | null {
   const parsed = parseRoutableExecutionHostId(hostId)
   if (parsed?.kind !== 'runtime') {
     return null
   }
-  const entry = state.runtimeStatusByEnvironmentId?.get(parsed.environmentId)
+  const entry = statuses.get(parsed.environmentId)
   const environment = state.runtimeEnvironments?.find((item) => item.id === parsed.environmentId)
   if (
     !environment ||
@@ -62,12 +66,12 @@ export async function readBotHostStatus(
 export function botHostHas(
   hostId: ExecutionHostId,
   capability: string,
-  state?: Pick<AppState, 'runtimeStatusByEnvironmentId'>
+  statuses?: RuntimeStatuses
 ): boolean {
   if (parseRoutableExecutionHostId(hostId)?.kind === 'local') {
     return true
   }
-  return pairedStatus(hostId, state)?.capabilities?.includes(capability) === true
+  return pairedStatus(hostId, statuses)?.capabilities?.includes(capability) === true
 }
 
 function runtimeEnvironmentId(hostId: ExecutionHostId): string | null {

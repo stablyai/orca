@@ -1,5 +1,6 @@
 import { BrowserWindow, Notification, ipcMain, powerMonitor } from 'electron'
 import { readDesktopAwayState } from '../../notifications/desktop-away-state'
+import { closeDesktopNotification } from '../../notifications/desktop-notification'
 import type { Store } from '../../persistence/loading-store/store'
 import type {
   NotificationAttentionAcknowledgement,
@@ -104,7 +105,7 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
     for (const entry of entries) {
       const native = activeNotificationsById.get(entry.id)
       if (native) {
-        native.notification.close()
+        closeDesktopNotification(native.notification)
         native.release()
         dismissed += 1
       }

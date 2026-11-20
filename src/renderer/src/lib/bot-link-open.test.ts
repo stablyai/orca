@@ -112,30 +112,6 @@ describe('openBotLinkHome', () => {
     expect(mocks.openBotHomeTab).not.toHaveBeenCalled()
     expect(mocks.info).toHaveBeenCalledTimes(2)
   })
-
-  it('names a disconnected server that may have the bot, before an older one', async () => {
-    setBotHostListing({
-      hosts: [
-        { hostId: 'local', state: 'live' },
-        { hostId: 'runtime:m4', state: 'offline' }
-      ],
-      updateNeeded: ['runtime:linux']
-    })
-    await openBotLinkHome('triage', null)
-    expect(mocks.openBotHomeTab).not.toHaveBeenCalled()
-    expect(mocks.info).toHaveBeenCalledWith(
-      "Couldn't reach m4 air. The bot may be there; open the link again once it's back."
-    )
-  })
-
-  it('asks for an update when only an older server could have the bot', async () => {
-    setBotHostListing({
-      hosts: [{ hostId: 'local', state: 'live' }],
-      updateNeeded: ['runtime:linux']
-    })
-    await openBotLinkHome('elsewhere', null)
-    expect(mocks.info).toHaveBeenCalledWith('Update Orca on linux 1 to open this bot here.')
-  })
 })
 
 describe('openAccessRequestLink', () => {

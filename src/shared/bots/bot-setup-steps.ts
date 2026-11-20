@@ -3,6 +3,7 @@
 // the agent's words instead of a step that looks done while nothing happens.
 import type { NativeChatMessage } from '../native-chat/native-chat-types'
 import { agentSessionFailureDetailText } from '../agent-session/failures/agent-session-failure-quoted-detail'
+import type { AgentSessionAccountKind } from '../agent-session/failures/agent-session-availability'
 
 export type BotSetupStepState = 'pending' | 'running' | 'done' | 'failed'
 
@@ -10,8 +11,15 @@ export type BotSetupStepState = 'pending' | 'running' | 'done' | 'failed'
  *  `providerDetail`: the agent's own words behind a failure, such as why its CLI exited. */
 export type BotSetupStep = { state: BotSetupStepState; detail?: string; providerDetail?: string }
 
-/** Why the host refused the kickoff before any turn opened, with the agent's own words when it has them. */
-export type BotSetupRefusal = { reason: string; providerDetail?: string }
+/** Why the host refused the kickoff before any turn opened, with the agent's own words when it has
+ *  them; `notSignedIn` names the account a refusal for a missing sign-in is about. */
+export type BotSetupRefusal = {
+  reason: string
+  providerDetail?: string
+  /** The refusal's failure kind, which picks the action that fixes it. */
+  kind?: string
+  notSignedIn?: { account?: AgentSessionAccountKind }
+}
 
 type Problem = { detail?: string; providerDetail?: string }
 
