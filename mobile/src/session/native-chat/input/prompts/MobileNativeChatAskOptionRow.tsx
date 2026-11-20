@@ -5,10 +5,12 @@ import { colors, radii, spacing, typography, pressedStyle } from '../../../../th
 import { ASK_CHOICE_RADIUS } from './MobileNativeChatAsk.styles'
 import { themedStyleSheet } from '../../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
+import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 
 export function MobileNativeChatAskOptionRow({
   label,
   description,
+  recommended,
   preview,
   onPreview,
   selected,
@@ -18,6 +20,7 @@ export function MobileNativeChatAskOptionRow({
 }: {
   label: string
   description?: string
+  recommended?: boolean
   /** Read-only inspection is separate from choosing the option. */
   preview?: string
   onPreview?: () => void
@@ -27,6 +30,7 @@ export function MobileNativeChatAskOptionRow({
   onPress: () => void
 }): React.JSX.Element {
   useMobileColorScheme()
+  const t = useMobileTranslation()
   const hasPreview = Boolean(preview && onPreview)
   const row = (
     <Pressable
@@ -52,7 +56,15 @@ export function MobileNativeChatAskOptionRow({
         {selected ? <Check size={12} color={colors.bgBase} strokeWidth={3} /> : null}
       </View>
       <View style={styles.optionBody}>
-        <Text style={styles.optionLabel}>{label}</Text>
+        <Text style={styles.optionLabel}>
+          {label}
+          {recommended ? (
+            <Text style={styles.recommended}>
+              {'  '}
+              {t('chat.ask.recommended', 'Recommended')}
+            </Text>
+          ) : null}
+        </Text>
         {description ? (
           <Text style={styles.optionDescription} numberOfLines={3}>
             {description}
@@ -121,6 +133,11 @@ const styles = themedStyleSheet(() => ({
     color: colors.textPrimary,
     fontSize: typography.bodySize,
     fontWeight: '600'
+  },
+  recommended: {
+    color: colors.textMuted,
+    fontSize: typography.metaSize,
+    fontWeight: '400'
   },
   optionDescription: {
     color: colors.textSecondary,
