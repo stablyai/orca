@@ -88,10 +88,7 @@ export function AgentSessionMapDetail({
           >
             <ul className="space-y-1.5">
               {node.requests.map((request) => (
-                <li
-                  key={`${request.kind}-${request.ts}`}
-                  className="flex items-start gap-1.5 text-xs"
-                >
+                <li key={request.itemId} className="flex items-start gap-1.5 text-xs">
                   {request.kind === 'question' ? (
                     <MessageSquare size={12} className="mt-0.5 shrink-0 text-muted-foreground" />
                   ) : (

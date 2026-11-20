@@ -61,6 +61,8 @@ export type AgentMapRequestResolution = (typeof AGENT_MAP_REQUEST_RESOLUTIONS)[n
 
 /** A question or approval the node raised: pending until its resolution dates. */
 export type AgentMapRequest = {
+  /** Journal itemId; stable row identity for list keys (ts alone collides). */
+  itemId: string
   kind: AgentMapRequestKind
   ts: number
   resolution: AgentMapRequestResolution
@@ -98,6 +100,8 @@ export type AgentMapNode = {
   subagentSettlement?: AgentMapSubagentSettlement
   /** The node's newest status row text, when it reports one. */
   lastStatusText?: string
+  /** When that status row was observed; the playhead hides it for earlier views. */
+  lastStatusTs?: number
 }
 
 export type AgentMapEdge = {

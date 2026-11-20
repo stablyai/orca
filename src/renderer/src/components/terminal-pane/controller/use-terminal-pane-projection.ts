@@ -119,8 +119,10 @@ export function useTerminalPaneProjection(controller: TerminalPaneMobileControll
     activePane,
     managedPanes
   })
-  // The map is a rendering of the same session chat shows, so it gates on the same leaf rule.
-  const contextMenuCanShowAgentMap = contextMenuCanToggleChat
+  // The map is a rendering of the same session chat shows, so it gates on the same
+  // leaf rule — except the exit: a tab already in map mode must always offer the
+  // way back, even when chat eligibility drops out.
+  const contextMenuCanShowAgentMap = contextMenuCanToggleChat || effectiveMapViewMode
   const contextMenuIsMapView = effectiveMapViewMode
   const handleContextMenuToggleAgentMap = useCallback(() => {
     // Map is its own view; toggling it off returns to the raw terminal. The chat toggle

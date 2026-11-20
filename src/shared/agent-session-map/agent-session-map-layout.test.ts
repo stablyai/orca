@@ -81,10 +81,24 @@ describe('layoutAgentMap', () => {
     const nodes = [node('root', 'main'), ...ids.slice(1).map((id) => node(id))]
     const edges = ids.slice(1).map((id) => ({ from: 'root', to: id, spawnedAt: 0 }))
     const layout = layoutAgentMap(map(nodes, edges), 600)
-    // Node boxes (168x56 around each center) must stay inside the canvas.
+    // A wide tree grows the canvas past the requested width instead of squeezing
+    // nodes together; every box (168 wide around each center) stays inside it.
+    expect(layout.width).toBeGreaterThan(600)
     for (const position of layout.positions.values()) {
       expect(position.x - 168 / 2).toBeGreaterThanOrEqual(0)
-      expect(position.x + 168 / 2).toBeLessThanOrEqual(600)
+      expect(position.x + 168 / 2).toBeLessThanOrEqual(layout.width)
+    }
+  })
+
+  it('keeps natural sibling spacing when the tree is wider than the viewport', () => {
+    const ids = ['root', 'a', 'b', 'c', 'd', 'e']
+    const nodes = [node('root', 'main'), ...ids.slice(1).map((id) => node(id))]
+    const edges = ids.slice(1).map((id) => ({ from: 'root', to: id, spawnedAt: 0 }))
+    const layout = layoutAgentMap(map(nodes, edges), 600)
+    // Scale 1: siblings stay exactly one slot (176) apart, never closer than a box.
+    const childXs = ids.slice(1).map((id) => pos(layout, id).x)
+    for (let i = 1; i < childXs.length; i++) {
+      expect(childXs[i] - childXs[i - 1]).toBe(176)
     }
   })
 

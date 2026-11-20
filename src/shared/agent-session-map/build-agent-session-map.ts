@@ -73,6 +73,7 @@ export function buildAgentSessionMap(journal: readonly AgentJournalRenderItem[])
       case 'status': {
         if (item.body.text !== undefined) {
           node.lastStatusText = item.body.text
+          node.lastStatusTs = item.observedAt
         }
         break
       }
@@ -92,6 +93,24 @@ export function buildAgentSessionMap(journal: readonly AgentJournalRenderItem[])
     }
   }
 
+  // A subagent-only window leaves the root with no rows of its own; inherit the
+  // session's observed span so it never reads as epoch 0.
+  const root = map.nodes.get(AGENT_MAP_ROOT_ID)
+  if (root !== undefined && root.firstTs === 0) {
+    let first = Number.POSITIVE_INFINITY
+    let last = 0
+    for (const node of map.nodes.values()) {
+      if (node.id === AGENT_MAP_ROOT_ID) {
+        continue
+      }
+      first = Math.min(first, node.firstTs)
+      last = Math.max(last, node.lastTs)
+    }
+    if (Number.isFinite(first)) {
+      root.firstTs = first
+      root.lastTs = last
+    }
+  }
   const nodes = map.spawnOrder.flatMap((id) => {
     const node = map.nodes.get(id)
     return node === undefined ? [] : [finalizeNode(node)]

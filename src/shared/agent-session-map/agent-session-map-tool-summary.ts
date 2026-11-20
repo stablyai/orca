@@ -16,6 +16,14 @@ function firstString(value: unknown): string | null {
       }
     }
   }
+  if (typeof value === 'object' && value !== null) {
+    for (const entry of Object.values(value)) {
+      const found = firstString(entry)
+      if (found !== null) {
+        return found
+      }
+    }
+  }
   return null
 }
 

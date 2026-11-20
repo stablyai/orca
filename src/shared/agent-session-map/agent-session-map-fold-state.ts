@@ -30,6 +30,7 @@ export type MutableNode = {
   lastPromptText?: string
   lastPromptTs?: number
   lastStatusText?: string
+  lastStatusTs?: number
 }
 
 export type MutableMap = {
@@ -120,6 +121,11 @@ export function finalizeNode(node: MutableNode): AgentMapNode {
             ...(entry.settledAt === undefined ? {} : { settledAt: entry.settledAt })
           }
         }),
-    ...(node.lastStatusText === undefined ? {} : { lastStatusText: node.lastStatusText })
+    ...(node.lastStatusText === undefined
+      ? {}
+      : {
+          lastStatusText: node.lastStatusText,
+          ...(node.lastStatusTs === undefined ? {} : { lastStatusTs: node.lastStatusTs })
+        })
   }
 }

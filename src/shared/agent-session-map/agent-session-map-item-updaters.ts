@@ -52,20 +52,28 @@ export function upsertToolCall(
   const existing = node.toolCalls.get(callId)
   const summary = agentSessionMapToolSummary(body.name, body.input)
   if (!existing) {
+    const durationMs = body.durationMs
+    const hasDuration =
+      typeof durationMs === 'number' && Number.isFinite(durationMs) && durationMs >= 0
+    // In-place revision means a call first seen as terminal lost its running row:
+    // backdate the start from the provider's own duration.
+    const startTs =
+      body.state !== 'running' && hasDuration ? item.observedAt - durationMs : item.observedAt
     const call: AgentMapToolCall = {
       callId,
       name: body.name,
       summary,
       state: body.state,
-      startTs: item.observedAt
+      startTs
     }
     if (body.state !== 'running') {
       call.endTs = item.observedAt
+      call.durationMs = hasDuration ? durationMs : 0
     }
     node.toolCalls.set(callId, call)
     pushEvent(
       map,
-      item.observedAt,
+      startTs,
       item.sequence,
       'tool-start',
       node.id,
@@ -174,6 +182,7 @@ export function upsertRequest(
       : undefined
   if (!existing) {
     const request: AgentMapRequest = {
+      itemId: item.itemId,
       kind,
       ts: item.observedAt,
       resolution,

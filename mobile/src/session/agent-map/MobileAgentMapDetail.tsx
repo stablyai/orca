@@ -75,7 +75,7 @@ export function MobileAgentMapDetail(args: {
             })}
           >
             {node.requests.map((request) => (
-              <Text key={`${request.kind}-${request.ts}`} style={styles.bodyText}>
+              <Text key={request.itemId} style={styles.bodyText}>
                 {request.kind === 'question' ? '?' : '✓'}{' '}
                 {request.detail ??
                   (request.kind === 'question'
@@ -196,6 +196,10 @@ function Section({
   )
 }
 
+// The mobile typography module exposes the mono family for file paths and tool names.
+// themedStyleSheet runs its factory eagerly at module load, so this must precede it.
+const typographyMono = typography.monoFamily
+
 const styles = themedStyleSheet(() => ({
   sheet: {
     position: 'absolute',
@@ -283,6 +287,3 @@ const styles = themedStyleSheet(() => ({
   toolDuration: { color: colors.textMuted, fontSize: 11, marginLeft: 'auto' },
   fileRow: { color: colors.textPrimary, fontSize: 12, fontFamily: typographyMono, marginBottom: 3 }
 }))
-
-// The mobile typography module exposes the mono family for file paths and tool names.
-const typographyMono = typography.monoFamily

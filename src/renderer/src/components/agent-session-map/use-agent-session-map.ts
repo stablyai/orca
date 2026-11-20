@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
 import { buildAgentSessionMap } from '../../../../shared/agent-session-map/build-agent-session-map'
@@ -34,10 +34,27 @@ export function useAgentSessionMap(args: { tabId: string; paneKey: string; isVis
     target,
     isVisible: hasSession && isVisible
   })
+  const { state, loadOlder, loadingOlder, retainHistory } = read
+
+  // The map is a whole-session overview, so it needs the full journal, not the
+  // initial 300-row window: page back to the start while visible and retain the
+  // history so the shared read owner does not trim it.
+  useEffect(() => {
+    if (!hasSession || !isVisible || state.status !== 'ready') {
+      return undefined
+    }
+    return retainHistory()
+  }, [hasSession, isVisible, state.status, retainHistory])
+  useEffect(() => {
+    if (!hasSession || !isVisible || state.status !== 'ready' || !state.hasOlder || loadingOlder) {
+      return
+    }
+    void loadOlder()
+  }, [hasSession, isVisible, state, loadingOlder, loadOlder])
 
   const map = useMemo(
-    () => (hasSession ? buildAgentSessionMap(read.state.items) : null),
-    [hasSession, read.state.items]
+    () => (hasSession ? buildAgentSessionMap(state.items) : null),
+    [hasSession, state.items]
   )
   return { map, sessionId }
 }
