@@ -854,6 +854,10 @@
           "syntax": "syntax"
         }
       },
+      "tilingWindowMode": {
+        "title": "Tiling window manager mode",
+        "description": "Hide the minimize and maximize buttons and bring workspace tabs to the top edge. Move and resize the window with your window manager."
+      },
       "reduceVisualEffects": {
         "description": "Turn off blur behind dialogs and menus, and window translucency after a restart. Helps remote desktops and machines without a GPU.",
         "keywords": {
