@@ -84,7 +84,9 @@ const BotGroupTurnSchema = z.object({
 export const BotGroupMessageImageSchema = z.object({
   path: z.string().min(1),
   name: z.string().min(1),
-  bytes: z.number().int().nonnegative()
+  bytes: z.number().int().nonnegative(),
+  /** SHA-256 digest of the original local path when a desktop drop was copied into the store, for exact replay checks. */
+  sourceDigest: z.string().min(1).optional()
 })
 
 export const BotGroupMessageSchema = z.object({

@@ -357,7 +357,7 @@ describe('persistent native group lifecycle', () => {
           revision: group.revision,
           messageId: firstId,
           text: '[Image #1]',
-          images: [dropped]
+          images: [dropped, dropped]
         },
         { local: true }
       )
@@ -380,7 +380,8 @@ describe('persistent native group lifecycle', () => {
         { type: 'image-ref', path: first.images![0].path }
       ])
 
-      // Replay with the same messageId and dropped image is idempotent; a different image fails.
+      // Replay with the same messageId and dropped image (including duplicates) is idempotent;
+      // a different source path with the same filename or a different store image fails.
       await expect(
         groups.send(
           {
@@ -388,11 +389,27 @@ describe('persistent native group lifecycle', () => {
             revision: group.revision,
             messageId: firstId,
             text: '[Image #1]',
-            images: [dropped]
+            images: [dropped, dropped]
           },
           { local: true }
         )
       ).resolves.toEqual(first)
+      const otherDir = join(dir, 'other')
+      await mkdir(otherDir, { recursive: true })
+      const sameNameOtherPath = join(otherDir, 'shot.png')
+      await writeFile(sameNameOtherPath, Buffer.alloc(12))
+      await expect(
+        groups.send(
+          {
+            groupId: group.id,
+            revision: group.revision,
+            messageId: firstId,
+            text: '[Image #1]',
+            images: [sameNameOtherPath]
+          },
+          { local: true }
+        )
+      ).rejects.toThrow(/identity/)
       const uploadId = '0b6f8a52-4a3e-4c4e-9a59-1d5d1f2b8c01'
       await mkdir(join(store.rootDir, uploadId), { recursive: true })
       const storedFollowUp = join(store.rootDir, uploadId, 'diff.png')

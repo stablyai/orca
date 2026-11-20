@@ -1,15 +1,12 @@
 // A group post's chat attachments, admitted on the group's host as chat and item comments admit
 // theirs: images live in this host's attachment store under chat's limits, and every referenced
 // upload is claimed for each current room member so it outlives individual turns and sweeps with the room.
-import { basename } from 'node:path'
-import { sanitizeAgentSessionAttachmentName } from '../../shared/agent-session/agent-session-attachments'
+import { createHash } from 'node:crypto'
+import { AGENT_SESSION_MESSAGE_IMAGE_MAX_COUNT } from '../../shared/agent-session/agent-session-attachments'
 import type { AgentJournalMessageItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import type { BotGroupMessage, BotGroupMessageImage } from '../../shared/bots/bot-group'
 import { stripSentImagePromptMarkers } from '../../shared/native-chat/transcript/images/native-chat-sent-image-prompt-markers'
-import {
-  agentSessionAttachmentReferences,
-  parseAgentSessionAttachmentStorePath
-} from '../native-chat/agent-session-attachments/agent-session-attachment-references'
+import { agentSessionAttachmentReferences } from '../native-chat/agent-session-attachments/agent-session-attachment-references'
 import type { AgentSessionAttachmentClaimer } from '../native-chat/agent-session-attachments/agent-session-attachment-store-registry'
 import {
   admitStoredAttachmentImages,
@@ -34,6 +31,10 @@ export type BotGroupAttachmentDeps = {
   memberSessionIds: readonly string[]
 }
 
+function pathDigest(path: string): string {
+  return createHash('sha256').update(path).digest('hex')
+}
+
 /** Validates, copies (when local), and claims every upload a group message names. */
 export async function admitBotGroupMessageAttachments(
   deps: BotGroupAttachmentDeps,
@@ -49,10 +50,27 @@ export async function admitBotGroupMessageAttachments(
     }
     return []
   }
+  if (paths.length > AGENT_SESSION_MESSAGE_IMAGE_MAX_COUNT) {
+    throw refused(`Group messages take up to ${AGENT_SESSION_MESSAGE_IMAGE_MAX_COUNT} images.`)
+  }
+  const uniquePaths = [...new Set(paths)]
+  const copiedFrom = new Map<string, string>()
   const stored = deps.local
-    ? await Promise.all(paths.map((path) => copyLocalAttachmentToStore(store, path, refused)))
-    : paths
-  const images = await admitStoredAttachmentImages(store, stored, GROUP_IMAGE_LABELS, refused)
+    ? await Promise.all(
+        uniquePaths.map(async (sourcePath) => {
+          const destPath = await copyLocalAttachmentToStore(store, sourcePath, refused)
+          if (destPath !== sourcePath) {
+            copiedFrom.set(destPath, pathDigest(sourcePath))
+          }
+          return destPath
+        })
+      )
+    : uniquePaths
+  const admitted = await admitStoredAttachmentImages(store, stored, GROUP_IMAGE_LABELS, refused)
+  const images: BotGroupMessageImage[] = admitted.map((image) => {
+    const sourceDigest = copiedFrom.get(image.path)
+    return sourceDigest ? { ...image, sourceDigest } : image
+  })
   const body: AgentJournalMessageItem = {
     kind: 'message',
     role: 'user',
@@ -75,11 +93,11 @@ export async function admitBotGroupMessageAttachments(
   return images
 }
 
-/** Matches a replayed messageId's requested image paths against what was admitted on the first send. */
+/** Matches a replayed messageId's requested paths against the admitted store paths or original source digests. */
 export function sameBotGroupImages(
   existing: readonly BotGroupMessageImage[] | undefined,
   requested: readonly string[] | undefined,
-  options: { local: boolean; storeRootDir?: string | null }
+  local: boolean
 ): boolean {
   const stored = existing ?? []
   const uniqueRequested = [...new Set(requested ?? [])]
@@ -88,16 +106,10 @@ export function sameBotGroupImages(
   }
   return stored.every((image, index) => {
     const candidate = uniqueRequested[index]
-    if (image.path === candidate) {
-      return true
-    }
-    if (!options.local) {
-      return false
-    }
-    const inStore =
-      options.storeRootDir != null &&
-      parseAgentSessionAttachmentStorePath(options.storeRootDir, candidate) !== null
-    return !inStore && sanitizeAgentSessionAttachmentName(basename(candidate)) === image.name
+    return (
+      image.path === candidate ||
+      (local && image.sourceDigest !== undefined && image.sourceDigest === pathDigest(candidate))
+    )
   })
 }
 

@@ -45,10 +45,7 @@ export async function sendBotGroupMessage(
         existing.groupId !== input.groupId ||
         existing.threadId !== input.threadId ||
         existing.text !== input.text ||
-        !sameBotGroupImages(existing.images, input.images, {
-          local,
-          storeRootDir: getAgentSessionAttachmentStore()?.rootDir
-        })
+        !sameBotGroupImages(existing.images, input.images, local)
       ) {
         throw new Error('Message identity was already used.')
       }

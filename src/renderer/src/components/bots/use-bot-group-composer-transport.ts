@@ -20,6 +20,44 @@ const NO_OPTIONS: NativeChatStructuredComposerTransport['optionsSurface'] = {
   invokeAction: async () => ({ snapshot: [] })
 }
 
+async function sendBotGroupPost({
+  group,
+  threadId,
+  text,
+  images,
+  setSending,
+  onSent,
+  onError
+}: {
+  group: BotGroup
+  threadId: string | undefined
+  text: string
+  images: readonly string[]
+  setSending: (sending: boolean) => void
+  onSent: (message: BotGroupMessage) => void
+  onError: (error: string | null) => void
+}): Promise<boolean> {
+  setSending(true)
+  try {
+    const { message } = await callBotRpc<{ message: BotGroupMessage }>(group, 'bots.groups.send', {
+      groupId: group.id,
+      threadId,
+      revision: group.revision,
+      messageId: createBrowserUuid(),
+      text,
+      ...(images.length > 0 ? { images } : {})
+    })
+    onSent(message)
+    onError(null)
+    return true
+  } catch (error) {
+    onError(error instanceof Error ? error.message : String(error))
+    return false
+  } finally {
+    setSending(false)
+  }
+}
+
 export function useBotGroupComposerTransport({
   roomId,
   threadId,
@@ -76,30 +114,15 @@ export function useBotGroupComposerTransport({
         onError(hostTooOldNotice)
         return false
       }
-      setSending(true)
-      try {
-        const images = attachments.map(({ path }) => path)
-        const { message } = await callBotRpc<{ message: BotGroupMessage }>(
-          group,
-          'bots.groups.send',
-          {
-            groupId: group.id,
-            threadId,
-            revision: group.revision,
-            messageId: createBrowserUuid(),
-            text,
-            ...(images.length > 0 ? { images } : {})
-          }
-        )
-        onSent(message)
-        onError(null)
-        return true
-      } catch (error) {
-        onError(error instanceof Error ? error.message : String(error))
-        return false
-      } finally {
-        setSending(false)
-      }
+      return sendBotGroupPost({
+        group,
+        threadId,
+        text,
+        images: attachments.map(({ path }) => path),
+        setSending,
+        onSent,
+        onError
+      })
     },
     dispatchCommand: async (text) =>
       text.startsWith('/')
