@@ -110,7 +110,9 @@ export async function resolveBrowserPageReference(
 /** Maps a copied terminal tab id to its terminal handle; handles and other values pass through. */
 export async function resolveTerminalReference(
   client: RuntimeClient,
-  terminal: string
+  terminal: string,
+  /** The flag the caller read the value from, so recovery steps name the flag to retry with. */
+  flag: '--terminal' | '--to' = '--terminal'
 ): Promise<string> {
   if (!TAB_ID_RE.test(terminal)) {
     return terminal
@@ -134,7 +136,7 @@ export async function resolveTerminalReference(
   // A split tab holds several terminals; picking one would act on a pane the user did not mean.
   throw new RuntimeClientError(
     'invalid_argument',
-    `Tab ${terminal} holds ${panes.length} terminals. Pass one of their handles as --terminal. Nothing was sent.`,
-    { nextSteps: handles.map((handle) => `--terminal ${handle}`) }
+    `Tab ${terminal} holds ${panes.length} terminals. Pass one of their handles as ${flag}. Nothing was sent.`,
+    { nextSteps: handles.map((handle) => `${flag} ${handle}`) }
   )
 }

@@ -271,5 +271,5 @@ async function resolveRecipientReference(
   const chatSession = await resolveChatSessionReference(client, to)
   return chatSession
     ? `${ORCA_SESSION_ADDRESS_PREFIX}${chatSession}`
-    : await resolveTerminalReference(client, to)
+    : await resolveTerminalReference(client, to, '--to')
 }

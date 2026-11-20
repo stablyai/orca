@@ -55,6 +55,31 @@ it('sends to the terminal a copied tab id names on this Orca', async () => {
   expect(await send(TAB)).toMatchObject({ to: 'term_local' })
 })
 
+it('names --to in the recovery steps for a split tab', async () => {
+  callMock.mockReset().mockImplementation(async (method: string) =>
+    method === 'session.tabs.listAll'
+      ? {
+          result: {
+            snapshots: [
+              {
+                worktree: 'repo::/w',
+                tabs: [
+                  { type: 'terminal', id: `${TAB}::a`, parentTabId: TAB, terminal: 'term_a' },
+                  { type: 'terminal', id: `${TAB}::b`, parentTabId: TAB, terminal: 'term_b' }
+                ]
+              }
+            ]
+          }
+        }
+      : { result: { message: { id: 'msg_1' } } }
+  )
+  await expect(send(TAB)).rejects.toMatchObject({
+    code: 'invalid_argument',
+    data: { nextSteps: ['--to term_a', '--to term_b'] }
+  })
+  expect(callMock.mock.calls.some(([method]) => method === 'orchestration.send')).toBe(false)
+})
+
 it('does not map a copied tab id against this Orca when --on names another server', async () => {
   respond()
   expect(await send(TAB, 'devB')).toMatchObject({ to: TAB })
