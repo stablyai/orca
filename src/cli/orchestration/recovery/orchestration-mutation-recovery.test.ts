@@ -118,4 +118,27 @@ describe('orchestration mutation recovery', () => {
     })
     expect(result.message).toContain('--retry-request request_slow')
   })
+
+  it('keeps plain Windows cmd tokens unquoted while still quoting spaces, =, and percent signs', () => {
+    const rendered = renderCommand(
+      [
+        'orca-dev',
+        'orchestration',
+        'send',
+        '--on',
+        'devB',
+        '--subject',
+        'two words',
+        '--note=100% safe',
+        '--retry-request',
+        'request_slow'
+      ],
+      'win32',
+      { ComSpec: 'C:\\Windows\\System32\\cmd.exe' }
+    )
+
+    expect(rendered).toBe(
+      'orca-dev orchestration send --on devB --subject "two words" "--note=100"^%" safe" --retry-request request_slow'
+    )
+  })
 })
