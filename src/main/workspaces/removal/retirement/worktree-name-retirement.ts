@@ -17,7 +17,7 @@ import {
   computeRemoteWorktreePath,
   computeWorktreePathAsync,
   getWorktreePathSettings,
-  hasRepoWorktreeBasePath
+  hasConfiguredWorktreeLocation
 } from '../../../ipc/worktrees/paths/worktree-logic'
 import { worktreePathComparisonKey } from '../../catalog/worktree-path-comparison-key'
 import {
@@ -60,7 +60,10 @@ export function hasRetiredNameRegistryStore<
     typeof store.mergeRetiredWorktreeNames === 'function'
   )
 }
-type RetirementPathSettings = Pick<GlobalSettings, 'nestWorkspaces' | 'workspaceDir'> & {
+type RetirementPathSettings = Pick<
+  GlobalSettings,
+  'nestWorkspaces' | 'workspaceDir' | 'hostSettingOverrides'
+> & {
   wslMirrorDistro?: string
 }
 
@@ -92,7 +95,7 @@ async function getRetirementProbePath(
   const pathSettings = getWorktreePathSettings(repo, settings)
   return repo.connectionId
     ? computeRemoteWorktreePath(RETIREMENT_PROBE_NAME, repo.path, pathSettings, {
-        useConfiguredAbsolutePath: hasRepoWorktreeBasePath(repo)
+        useConfiguredAbsolutePath: hasConfiguredWorktreeLocation(repo, settings)
       })
     : computeWorktreePathAsync(RETIREMENT_PROBE_NAME, repo.path, pathSettings)
 }
@@ -107,7 +110,7 @@ export function getRemoteRetirementNamespaceKey(
   }
   const pathSettings = getWorktreePathSettings(repo, settings)
   const probePath = computeRemoteWorktreePath(RETIREMENT_PROBE_NAME, repo.path, pathSettings, {
-    useConfiguredAbsolutePath: hasRepoWorktreeBasePath(repo)
+    useConfiguredAbsolutePath: hasConfiguredWorktreeLocation(repo, settings)
   })
   return retirementNamespaceKey(retirementHostIdentity(repo, lookupSshTarget), probePath)
 }

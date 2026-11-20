@@ -13,8 +13,13 @@ import {
 import { splitWorktreeId } from '../../../../shared/worktree/id'
 import { getWslHome, getWslHomeAsync } from '../../../wsl/discovery/distro-catalog'
 import { parseWslPath } from '../../../wsl/filesystem/unc-path-access'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host/execution-host'
+import { getHostSettingOverride } from '../../../../shared/execution-host/host-setting-overrides'
 
-type WorktreeBasePathRepo = Pick<Repo, 'path' | 'worktreeBasePath'>
+type WorktreeBasePathRepo = Pick<
+  Repo,
+  'path' | 'worktreeBasePath' | 'executionHostId' | 'connectionId'
+>
 
 export { sanitizeWorktreeName, sanitizeWorktreeBranchName } from './worktree-name-sanitization'
 
@@ -199,6 +204,17 @@ export function hasRepoWorktreeBasePath(repo: Pick<Repo, 'worktreeBasePath'>): b
   return getRepoWorktreeBasePath(repo) !== undefined
 }
 
+/** A per-project location or a host Workspace Directory is an explicit root, not the client default. */
+export function hasConfiguredWorktreeLocation(
+  repo: WorktreeBasePathRepo,
+  settings: WorktreePathSettings
+): boolean {
+  return (
+    getRepoWorktreeBasePath(repo) !== undefined ||
+    getHostDefaultWorktreeLocation(repo, settings) !== undefined
+  )
+}
+
 function getRuntimePathOps(
   repoPath: string,
   workspaceDir: string
@@ -219,15 +235,23 @@ function isWorkspaceDirRelativeToRepo(repoPath: string, workspaceDir: string): b
   return !getRuntimePathOps(repoPath, workspaceDir).isAbsolute(workspaceDir)
 }
 
+function getHostDefaultWorktreeLocation(
+  repo: WorktreeBasePathRepo,
+  settings: WorktreePathSettings
+): string | undefined {
+  return getHostSettingOverride(settings, getRepoExecutionHostId(repo), 'defaultWorktreeLocation')
+}
+
 function getEffectiveWorktreeBasePath(
   repo: WorktreeBasePathRepo,
   settings: WorktreePathSettings
 ): string {
   const basePath = getRepoWorktreeBasePath(repo)
-  if (basePath === undefined) {
-    return settings.workspaceDir
+  if (basePath !== undefined) {
+    return resolveWslRepoWorktreeBasePath(repo.path, basePath)
   }
-  return resolveWslRepoWorktreeBasePath(repo.path, basePath)
+  // Per-host Workspace Directory outranks the client default. A remote host cannot reuse a desktop path.
+  return getHostDefaultWorktreeLocation(repo, settings) ?? settings.workspaceDir
 }
 
 function getRepoWorktreeBasePath(repo: Pick<Repo, 'worktreeBasePath'>): string | undefined {
