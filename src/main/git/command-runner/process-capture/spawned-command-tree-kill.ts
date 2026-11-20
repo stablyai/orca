@@ -1,6 +1,6 @@
 import { spawn, type ChildProcess } from 'node:child_process'
 import { windowsSystem32Binary } from '@orca/process-host/windows-system-binary'
-import { forceTerminateProcessTree } from '@orca/process-host/process-tree-termination'
+import { endAbandonedWorkerGroup } from './abandoned-worker-group-termination'
 import { admitSelfInitiatedTreeKill } from '../../../pty/process-retirement/own-chromium-tree-kill-guard'
 import {
   canSpawnOnWorkerThread,
@@ -122,44 +122,6 @@ export function endAbandonedWorkerChild(
     return
   }
   reportWhenAbandonedRootEnds(child.pid, killed, onTerminated)
-}
-
-const ABANDONED_GROUP_ATTEMPTS = 5
-
-/** A dead worker can't stop or reap its owned POSIX group, so main ends it; the unreaped root keeps the group id reserved until its exit was reported. */
-function endAbandonedWorkerGroup(
-  child: WorkerThreadChildProcess,
-  onWorkerLost: (() => void) | undefined,
-  onTerminated: () => void,
-  lifetimeEndsOnLoss: boolean
-): void {
-  onWorkerLost?.()
-  const rootExited = child.exitCode !== null || child.signalCode !== null
-  // An exited root not being stopped ends its lifetime as a normal close would; a stop still needs the group gone.
-  if (child.ownedGroupTerminated || (rootExited && !child.ownedGroupStopping)) {
-    onTerminated()
-    return
-  }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the group kill reads only pid, exitCode, signalCode and kill, which the stand-in carries.
-  const group = child as unknown as ChildProcess
-  const attempt = (retryMs: number, left: number): void => {
-    void forceTerminateProcessTree(group)
-      .catch(() => false)
-      .then((ended) => {
-        // Bounded: every member already got SIGKILL, so a survivor is inside a syscall and runs no more user code.
-        if (ended || left === 1) {
-          if (!lifetimeEndsOnLoss) {
-            onTerminated()
-          }
-          return
-        }
-        setTimeout(() => attempt(retryMs * 2, left - 1), retryMs).unref?.()
-      })
-  }
-  attempt(ABANDONED_ROOT_FIRST_CHECK_MS, ABANDONED_GROUP_ATTEMPTS)
-  if (lifetimeEndsOnLoss) {
-    onTerminated()
-  }
 }
 
 /** Resolves once the stop is done; a stopped child's own close still reports its termination. */

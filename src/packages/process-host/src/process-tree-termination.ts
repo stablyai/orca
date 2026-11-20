@@ -78,6 +78,15 @@ function taskkillTree(
   return waitForWindowsTreeKill(startWindowsTreeKill(child, rootPid, () => killRoot(child, signal)))
 }
 
+/** One process-table read: true only when the group is gone or every member is a zombie; a failed read proves nothing. */
+export async function posixProcessGroupQuiet(processGroupId: number): Promise<boolean> {
+  if (!processGroupExists(processGroupId)) {
+    return true
+  }
+  const states = await readPosixProcessGroupStates(processGroupId)
+  return states !== null && states.every((state) => state.startsWith('Z'))
+}
+
 async function waitForPosixProcessGroupQuiescence(processGroupId: number): Promise<boolean> {
   const deadline = Date.now() + SUBPROCESS_TIMEOUT_MS
   while (true) {
