@@ -446,47 +446,71 @@ describe('Claude prompt event arriving after its turn', () => {
   })
 
   it('announces a wakeup the person joins after it carried their held end', () => {
-    const second = { ...SHELL, id: 'c9second', command: 'sleep 20' }
-    const done = `<task-notification>\n<task-id>${SHELL.id}</task-id>\n<status>completed</status>`
-    for (const task of [SHELL, second]) {
-      claude({
-        hook_event_name: 'PostToolUse',
-        prompt_id: FIRST,
-        tool_name: 'Bash',
-        tool_input: { command: task.command, run_in_background: true },
-        tool_response: { backgroundTaskId: task.id }
+    vi.useFakeTimers()
+    try {
+      const second = { ...SHELL, id: 'c9second', command: 'sleep 20' }
+      const done = `<task-notification>\n<task-id>${SHELL.id}</task-id>\n<status>completed</status>`
+      for (const task of [SHELL, second]) {
+        claude({
+          hook_event_name: 'PostToolUse',
+          prompt_id: FIRST,
+          tool_name: 'Bash',
+          tool_input: { command: task.command, run_in_background: true },
+          tool_response: { backgroundTaskId: task.id }
+        })
+      }
+      claude({ hook_event_name: 'Stop', prompt_id: FIRST, background_tasks: [SHELL, second] })
+      vi.advanceTimersByTime(10)
+      const held = claude({
+        hook_event_name: 'Stop',
+        prompt_id: SECOND,
+        background_tasks: [second]
       })
+      expect(typeof held?.turnCompletedAt).toBe('number')
+      claude({ hook_event_name: 'UserPromptSubmit', prompt_id: SECOND, prompt: done })
+      const joined = claude({
+        hook_event_name: 'UserPromptSubmit',
+        prompt_id: SECOND,
+        prompt: 'hi'
+      })
+      expect(joined?.turnCompletedAt).toBeGreaterThan(held?.turnCompletedAt ?? Infinity)
+    } finally {
+      vi.useRealTimers()
     }
-    claude({ hook_event_name: 'Stop', prompt_id: FIRST, background_tasks: [SHELL, second] })
-    const held = claude({ hook_event_name: 'Stop', prompt_id: SECOND, background_tasks: [second] })
-    expect(typeof held?.turnCompletedAt).toBe('number')
-    claude({ hook_event_name: 'UserPromptSubmit', prompt_id: SECOND, prompt: done })
-    const joined = claude({ hook_event_name: 'UserPromptSubmit', prompt_id: SECOND, prompt: 'hi' })
-    expect(joined?.turnCompletedAt).toBeGreaterThan(held?.turnCompletedAt ?? Infinity)
   })
 
   it('never announces a cancelled wakeup the person joins late', () => {
-    const second = { ...SHELL, id: 'c9second', command: 'sleep 20' }
-    const done = `<task-notification>\n<task-id>${SHELL.id}</task-id>\n<status>completed</status>`
-    for (const task of [SHELL, second]) {
-      claude({
-        hook_event_name: 'PostToolUse',
-        prompt_id: FIRST,
-        tool_name: 'Bash',
-        tool_input: { command: task.command, run_in_background: true },
-        tool_response: { backgroundTaskId: task.id }
+    vi.useFakeTimers()
+    try {
+      const second = { ...SHELL, id: 'c9second', command: 'sleep 20' }
+      const done = `<task-notification>\n<task-id>${SHELL.id}</task-id>\n<status>completed</status>`
+      for (const task of [SHELL, second]) {
+        claude({
+          hook_event_name: 'PostToolUse',
+          prompt_id: FIRST,
+          tool_name: 'Bash',
+          tool_input: { command: task.command, run_in_background: true },
+          tool_response: { backgroundTaskId: task.id }
+        })
+      }
+      claude({ hook_event_name: 'Stop', prompt_id: FIRST, background_tasks: [SHELL, second] })
+      vi.advanceTimersByTime(10)
+      const held = claude({
+        hook_event_name: 'Stop',
+        prompt_id: SECOND,
+        background_tasks: [second],
+        is_interrupt: true
       })
+      claude({ hook_event_name: 'UserPromptSubmit', prompt_id: SECOND, prompt: done })
+      const joined = claude({
+        hook_event_name: 'UserPromptSubmit',
+        prompt_id: SECOND,
+        prompt: 'hi'
+      })
+      expect(joined?.turnCompletedAt).toBe(held?.turnCompletedAt)
+    } finally {
+      vi.useRealTimers()
     }
-    claude({ hook_event_name: 'Stop', prompt_id: FIRST, background_tasks: [SHELL, second] })
-    const held = claude({
-      hook_event_name: 'Stop',
-      prompt_id: SECOND,
-      background_tasks: [second],
-      is_interrupt: true
-    })
-    claude({ hook_event_name: 'UserPromptSubmit', prompt_id: SECOND, prompt: done })
-    const joined = claude({ hook_event_name: 'UserPromptSubmit', prompt_id: SECOND, prompt: 'hi' })
-    expect(joined?.turnCompletedAt).toBe(held?.turnCompletedAt)
   })
 
   it('keeps a wakeup quiet when Claude repeats its Stop', () => {

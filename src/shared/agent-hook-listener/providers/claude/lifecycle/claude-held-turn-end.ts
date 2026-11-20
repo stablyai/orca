@@ -71,16 +71,18 @@ export function releaseClaudeUnclassifiedTurnEnd(
   state: HookListenerState,
   paneKey: string,
   lead: ClaudeLeadTurnState
-): void {
+): boolean {
   const heldEnd = lead.unclassifiedTurnCompletedAt
   lead.unclassifiedTurnCompletedAt = undefined
   if (
-    heldEnd !== undefined &&
-    lead.state === 'done' &&
-    claudePaneHasRunningChildWork(state, paneKey)
+    heldEnd === undefined ||
+    lead.state !== 'done' ||
+    !claudePaneHasRunningChildWork(state, paneKey)
   ) {
-    lead.turnCompletedAt = heldEnd
+    return false
   }
+  lead.turnCompletedAt = heldEnd
+  return true
 }
 
 /**
@@ -99,7 +101,7 @@ export function claudeLeadTurnStart(
     isWaitingInducing: boolean
   },
   previousLead: ClaudeLeadTurnState | undefined
-): Pick<ClaudeLeadTurnState, 'turnOrigin' | 'turnCompletedAt' | 'stateStartedAt'> {
+): Pick<ClaudeLeadTurnState, 'turnOrigin' | 'turnCompletedAt'> & { stateStartedAt?: number } {
   if (event.eventAgentId !== undefined) {
     return {}
   }

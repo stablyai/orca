@@ -241,6 +241,7 @@ describe('TerminalAgentPhonePush on a windowless host', () => {
     }
     working(undefined)
     working(2_000)
+    host.advance(5_000)
     working(2_000, true)
     working(3_000)
     host.advance(5_000)
