@@ -3,6 +3,7 @@ import { useLayoutEffect, useRef, useState, type RefObject } from 'react'
 export const BOT_ITEM_CHIPS_ATTRIBUTE = 'data-bot-item-chips'
 
 const GAP_PX = 6
+const FIT_MARGIN_PX = 1
 
 function px(value: string): number {
   return Number.parseFloat(value) || 0
@@ -22,17 +23,23 @@ function shouldStack(
   root: HTMLElement,
   label: HTMLElement,
   tag: HTMLElement,
-  stacked: boolean
+  stacked: boolean,
+  rowWidth: number
 ): boolean {
   const button = root.closest('button')
-  const row = root.closest<HTMLElement>(`[${BOT_ITEM_CHIPS_ATTRIBUTE}]`)
-  if (!button || !row || row.clientWidth === 0) {
+  if (!button || rowWidth === 0) {
     return stacked
   }
   if (!stacked) {
-    return label.offsetHeight > px(getComputedStyle(label).lineHeight) * 1.5
+    return label.getBoundingClientRect().height > px(getComputedStyle(label).lineHeight) * 1.5
   }
-  return label.offsetWidth + GAP_PX + tag.offsetWidth > row.clientWidth - chrome(button)
+  return (
+    label.getBoundingClientRect().width +
+      GAP_PX +
+      tag.getBoundingClientRect().width +
+      FIT_MARGIN_PX >
+    rowWidth - chrome(button)
+  )
 }
 
 // Shrink the filled pill to its label after Recommended wraps; CSS wrap alone keeps it full-width.
@@ -52,9 +59,17 @@ export function useBotItemChipStacked(enabled: boolean): {
     if (!enabled || !node || !row) {
       return
     }
+    let measuredWidth: number | undefined
     const measure = (): void => {
-      if (label.current && tag.current) {
-        setStacked((was) => shouldStack(node, label.current!, tag.current!, was))
+      const width = row.getBoundingClientRect().width
+      if (width === measuredWidth) {
+        return
+      }
+      measuredWidth = width
+      const labelNode = label.current
+      const tagNode = tag.current
+      if (labelNode && tagNode) {
+        setStacked((was) => shouldStack(node, labelNode, tagNode, was, width))
       }
     }
     measure()
