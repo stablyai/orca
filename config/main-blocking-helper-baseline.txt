@@ -93,6 +93,7 @@
 1 src/main/automations/external-managers/scoped-external-automations.ts
 1 src/main/automations/launch/automation-run-setup-skip.ts
 2 src/main/automations/runtime-automation-service.ts
+1 src/main/avatar-generation/avatar-generation-ipc.ts # per Generate click: the agent env prep commit-message generation shares; its sync read is a shell rc lookup for GROK_HOME only when it is unset
 5 src/main/backend/backend-entry.ts
 11 src/main/backend/core-runtime-activation.ts
 2 src/main/backend/core-runtime.ts
@@ -581,7 +582,7 @@
 3 src/main/ipc/accounts/zcode-plan-credentials.ts
 1 src/main/ipc/ai-vault/ai-vault-search.ts
 1 src/main/ipc/ai-vault/ai-vault-subagent-list.ts
-6 src/main/ipc/app.ts
+5 src/main/ipc/app.ts
 1 src/main/ipc/automations.ts
 3 src/main/ipc/browser/browser-client-host-cookie-import-ipc.ts
 1 src/main/ipc/browser/browser-extensions.ts
@@ -628,7 +629,6 @@
 1 src/main/ipc/filesystem/watchers/wsl-watcher-spawn.ts
 3 src/main/ipc/hooks/register-worktree-hook-check-handler.ts
 2 src/main/ipc/hooks/register-worktree-hook-file-handlers.ts
-1 src/main/ipc/keyboard/macos-keyboard-layout-snapshot.ts
 1 src/main/ipc/linear/register-handlers.ts
 1 src/main/ipc/native-chat.ts
 7 src/main/ipc/notebook.ts

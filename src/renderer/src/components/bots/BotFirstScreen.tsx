@@ -16,6 +16,7 @@ import { useNativeChatVisualOwner } from '../native-chat/media/visuals/native-ch
 import { useBotForWorkspace } from './bot-workspace'
 import { BotAvatar } from './BotAvatar'
 import { StepIcon } from '../worktree-creation/WorktreeSetupSteps'
+import { NativeChatDetailsDisclosure } from '../native-chat/messages/diagnostics/NativeChatProviderDetails'
 import { useStructuredAgentSessionHostExecutionPhase } from '../native-chat/session/status/structured-agent-session-status-hooks'
 
 /** Shown by name; more are counted. */
@@ -245,6 +246,15 @@ function BotSetupSteps({
               <p className="ml-5.5 line-clamp-3 break-words text-xs text-muted-foreground">
                 {step.detail}
               </p>
+            ) : null}
+            {step.providerDetail ? (
+              <div className="ml-4">
+                <NativeChatDetailsDisclosure
+                  summary={t('components.native-chat.notices.details', 'Details')}
+                >
+                  {step.providerDetail}
+                </NativeChatDetailsDisclosure>
+              </div>
             ) : null}
           </li>
         ))}

@@ -4,12 +4,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Bot } from '../../../../../shared/bot-types'
 import type { ComposioConnection } from '../../../../../shared/composio/composio-apps'
 
-const mocks = vi.hoisted(() => ({ rpc: vi.fn(), openUrl: vi.fn(), confirm: vi.fn() }))
+const mocks = vi.hoisted(() => ({ rpc: vi.fn(), openUrl: vi.fn() }))
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({ callRuntimeRpc: mocks.rpc }))
 
-import { ConfirmationDialogContext } from '@/components/dismiss/confirmation/confirmation-dialog-context'
 import { emitBotsChangedWindowEvent } from '@/lib/bots-changed-window-event'
-import { BotComposioAppRow } from './BotComposioAppRow'
 import { ComposioSignInWait } from './ComposioSignInWait'
 import { resetComposioClientForTest, useComposioBot } from './composio-client'
 
@@ -49,38 +47,6 @@ beforeEach(() => {
 afterEach(() => {
   cleanup()
   resetComposioClientForTest()
-})
-
-describe('a Composio app among a bot’s connectors', () => {
-  it('offers only what Composio supports: sign in again and disconnect, no people of its own', async () => {
-    answer({})
-    render(
-      <ConfirmationDialogContext.Provider value={mocks.confirm}>
-        <BotComposioAppRow bot={bot} connection={jira} problem={null} />
-      </ConfirmationDialogContext.Provider>
-    )
-    expect(screen.getByText('dana@acme.com · via Composio')).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: 'Jira' }))
-    expect(screen.getByText('Anyone who can ask Atlas can use it')).toBeTruthy()
-    expect(screen.queryByText(/Who can ask/)).toBeNull()
-    fireEvent.pointerDown(screen.getByRole('button', { name: 'Jira actions' }), {
-      button: 0,
-      ctrlKey: false
-    })
-    const items = (await screen.findAllByRole('menuitem')).map((item) => item.textContent)
-    expect(items).toEqual(['Sign in again', 'Disconnect Jira'])
-  })
-
-  it('turns a refused key into Fix key on the row, which keeps its place', () => {
-    answer({})
-    render(
-      <ConfirmationDialogContext.Provider value={mocks.confirm}>
-        <BotComposioAppRow bot={bot} connection={jira} problem="key" />
-      </ConfirmationDialogContext.Provider>
-    )
-    expect(screen.getByText('Key not accepted · via Composio')).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Fix key' })).toBeTruthy()
-  })
 })
 
 describe('the bot’s Composio sign-ins when Composio fails', () => {

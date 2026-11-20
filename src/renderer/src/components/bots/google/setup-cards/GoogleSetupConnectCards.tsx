@@ -208,7 +208,7 @@ export function GoogleSetupConnectedCard({
             size="inlineText"
             onClick={() => shareGoogleApp(botTarget(bot), google?.client?.projectId)}
           >
-            {t('bots.googleSetup.connected.share', 'Share setup with teammates')}
+            {t('bots.googleSetup.connected.share', 'Share setup')}
           </Button>
         ) : null}
       </div>

@@ -94,7 +94,7 @@
     "revealFiltered": {
       "title": "Gizli çalışma alanı gösterilsin mi?",
       "description": "Etkin çalışma alanı kenar çubuğunda gizli. Bu işlem yalnızca onu gizleyen filtreleri ayarlar.",
-      "confirm": "Filtreleri ayarla ve göster",
+      "confirm": "Ayarla ve göster",
       "cancel": "Filtreleri koru"
     },
     "revealCurrent": {
@@ -371,7 +371,7 @@
       "errorDescription": "Bu çalışma alanındaki sayfalar SSH sunucusu üzerinden açılır, ancak yönlendirme ayarlanamadı.",
       "retry": "Yeniden dene",
       "tryAnyway": "Yine de dene",
-      "browseLocally": "Bunun yerine bu cihazdan gezin",
+      "browseLocally": "Yerelde gezin",
       "forwardingBlockedTitle": "SSH sunucusu tarayıcı trafiğini engelliyor",
       "sshUnavailableTitle": "SSH bağlantısı kullanılamıyor",
       "forwardingBlockedDescription": "Bu sunucu, üzerinden gezinmenin gerektirdiği TCP yönlendirmeyi reddediyor (genellikle sshd yapılandırmasında “AllowTcpForwarding no”). Yönetici ile iletişime geçip yönlendirmeye izin vermesini isteyin veya bunun yerine bu cihazdan gezinin.",
@@ -440,7 +440,7 @@
       "openWebStoreFailed": "Chrome Web Store açılamadı."
     },
     "history": {
-      "clear": "Tarama geçmişini temizle",
+      "clear": "Geçmişi temizle",
       "clearAllTime": "Tüm zamanlar",
       "clearLastHour": "Son saat",
       "clearRange": "Temizlenecek zaman aralığı",
@@ -825,7 +825,7 @@
           "add": "Ekle",
           "adding": "Ekleniyor…",
           "added": "{{name}} eklendi",
-          "browse": "Chrome Web Store'a göz at",
+          "browse": "Chrome Web Store",
           "openFailed": "Chrome Web Store'a göz atmak için bir çalışma alanı açın."
         }
       }
@@ -2313,8 +2313,8 @@
         "e30a5470c9": "Görüşme",
         "3fdf777817": "GitHub'da aç",
         "c43fe79ee0": "GitHub bağlantısını kopyala",
-        "0caac1a18f": "PR'dan çalışma alanı başlat",
-        "0ab4664a8b": "Sorundan çalışma alanı başlat",
+        "0caac1a18f": "Çalışma alanı başlat",
+        "0ab4664a8b": "Çalışma alanı başlat",
         "36182aa57f": "Yeni çalışma alanı başlat",
         "fe6ff12dc2": "Diğer sorun çalışma alanı işlemleri",
         "726db41722": "Çalışma alanını aç",
@@ -2687,7 +2687,7 @@
         "someoneUpdatedIssue": "Birisi sorunu güncelledi · {{time}}"
       },
       "LinearItemDrawer": {
-        "04008e6c46": "Sorundan çalışma alanı başlat",
+        "04008e6c46": "Çalışma alanı başlat",
         "a4fcc57522": "Henüz yorum yok.",
         "fde849b2b6": "Yorumlar",
         "9dc54172db": "Kapat · Esc",
@@ -2837,7 +2837,7 @@
         "161d91ef02": "Yorumu gönder",
         "d2030fc8cd": "Yorum ekleyin…",
         "1208347ac0": "Yorum eklenemedi",
-        "61452f2143": "Sorundan çalışma alanı başlat",
+        "61452f2143": "Çalışma alanı başlat",
         "14c9fc70ed": "+ Atanan kişi",
         "bc215fea4d": "+ Etiket",
         "b936cc51a4": "Kapatıldı",
@@ -3376,7 +3376,7 @@
         "05ad78a6d1": "Orca v{{value0}} hazır.",
         "318d3b4bc7": "Güncellemeyi kapat",
         "9abc59f814": "Güncelleme Mevcut",
-        "aad383aecc": "Tüm sürüm notlarını okuyun",
+        "aad383aecc": "Sürüm notları",
         "b1d867f4fb": "Güncelleme sırasında terminal oturumlarınız kesintiye uğramayacak.",
         "09a55c39b5": "Kuruluyor...",
         "ea2a41adbe": "En son sürümü kullanıyorsunuz.",
@@ -4183,7 +4183,7 @@
             "openInThisGroupRefused": "{{value0}} bu grupta açılamadı"
           },
           "TerminalSessionStateSaveFailureDialog": {
-            "6bee0c8f17": "Disk Alanı Analizörünü Aç",
+            "6bee0c8f17": "Disk alanı analizi",
             "ae20d0ffc2": "Kapat",
             "38c282a2c4": "Analizör buradan doğrudan açılır. Daha sonra sol alttaki araç kutusu menüsünden Alan Analizörü'nü seçerek de açabilirsiniz."
           },
@@ -4844,7 +4844,7 @@
             "09960d86bd": "Tarandı",
             "eee5240810": "Çalışma alanları silindi",
             "9afc97f9a3": "Çalışma alanı silindi",
-            "792a214457": "Çalışma alanını sil",
+            "792a214457": "Sil",
             "a998501630": "Zorla",
             "9155381019": "Seyrek",
             "f39d291997": "Seç",
@@ -5831,7 +5831,7 @@
           "releaseNotesVersion": "Sürüm notları",
           "releaseNotesOptional": "Sürüm notları ekleyin (isteğe bağlı)",
           "releaseNotesFirst": "Bu sürümü açıklayın",
-          "manageLinks": "Bu bağlantıyı Ayarlar'da yönetin veya iptal edin",
+          "manageLinks": "Bağlantıyı yönet",
           "noExecutableContent": "Betik veya çalıştırılabilir dosya yok",
           "newVersionDescriptionPlain": "Mevcut bağlantıya yeni bir sürüm ekler.",
           "accessSummaryPlain": "Listelenmemiş bağlantı; sahip olan herkes bunu yükleyebilir.",
@@ -5931,8 +5931,8 @@
           "cancel": "İptal",
           "confirmRemove": "Kaldırmayı onayla",
           "remove": "Kaldır",
-          "discardEditsRemove": "Düzenlemelerimi sil ve kaldır",
-          "discardEdits": "Düzenlemelerimi sil ve yeniden yükle",
+          "discardEditsRemove": "Değişiklikleri at ve kaldır",
+          "discardEdits": "Değişiklikleri at ve yeniden yükle",
           "titleMore": "{{name}} +{{count}}",
           "scopeWorkspace": "Bu çalışma alanı",
           "scopeGlobal": "Her yerde",
@@ -6085,7 +6085,7 @@
           "fb33359f69": "Bu repolar gruplandırılsın mı?",
           "d75170194e": "Bu projeler birbiriyle ilişkiliyse bunu seçin; bir monorepo ya da yalnızca ilişkili repolar kümesi olabilir. Orca bunları gruplandırır ve üst klasörden çalışmanıza olanak tanır.",
           "39d51212cc": "Grup adı",
-          "aa0247680d": "Hayır, ayrı ayrı içe aktar",
+          "aa0247680d": "Ayrı içe aktar",
           "a0bc4d1f8e": "Evet, grup olarak içe aktar",
           "24eda6c8b2": "Taranıyor... {{value0}}",
           "6149d5203f": "Repo seçilmedi. Git özellikleri olmadan düzenleyici, terminal ve arama kullanmak için bunun yerine üst klasörü açın.",
@@ -6103,7 +6103,7 @@
           "91b93a90a4": "Projeyi SSH sunucusunda aç",
           "007651bdf9": "Bir dizine gidin ve seçmek için Seç'e tıklayın.",
           "dd3ff65486": "Uzak dosya sistemine göz at",
-          "36d427bb66": "SSH sunucusunda proje ekle",
+          "36d427bb66": "SSH projesi ekle",
           "35831a7312": "Ekleniyor..."
         },
         "AddRepoServerStartStep": {
@@ -6115,7 +6115,7 @@
           "867692f505": "Sunucu yolu",
           "423b5d3d31": "Seçili sunucuda zaten var olan bir Git reposu veya klasör ekleyin.",
           "3d0c035483": "Sunucu projesini aç",
-          "438493f214": "Ya da bir sunucu yolunu elle girin",
+          "438493f214": "Ana makine yolunu gir",
           "6b9958492a": "Birçok repoyu aynı anda mı içe aktarmak istiyorsunuz? Üst klasöre göz atın.",
           "d40d751517": "Yeni repo veya klasör",
           "a81ffa0a99": "Sunucuda oluştur",
@@ -6217,7 +6217,7 @@
           "moreChildren_one": "+{{count}} tane daha"
         },
         "ImportedWorktreesVisibilityLine": {
-          "b7a87dc32f": "Worktree listesinde göster",
+          "b7a87dc32f": "Çalışma ağacını göster",
           "ad99f4eea9": "Gizli tut",
           "9f4f14e821": "Bunu daha sonra proje menüsünden değiştirebilirsiniz.",
           "b47ba1a9d2": "{{value0}} önizlemesi",
@@ -6813,7 +6813,7 @@
           "tryDifferentSearch": "Farklı bir ad veya yol deneyin.",
           "disableSource": "Worktree'lerini tek tek yönetmek için bir kaynağı devre dışı bırakın.",
           "appearWhenDetected": "Orca yeni worktree'ler algıladığında burada görünecekler.",
-          "openGlobalSettings": "Genel Ayarlar'da Yönet",
+          "openGlobalSettings": "Genel ayarlar",
           "globalSettingsSources": "Bu kaynakların, burada geçersiz kılabileceğiniz genel bir ayarı vardır:",
           "searchHiddenPlaceholder_other": "{{count}} worktree içinde ara…",
           "searchHiddenPlaceholder_one": "{{count}} worktree içinde ara…"
@@ -7130,7 +7130,7 @@
           "a4c2d8f1b0": "Harici worktree'ler gizlensin mi?",
           "6e91b3c4d2": "Harici worktree'ler, daha sonra oluşturulanlar da dahil olmak üzere {{value0}} için artık kenar çubuğunda veya bu listede gösterilmeyecek.",
           "1f8a5d9e73": "Bunu daha sonra proje ayarlarından tekrar açabilirsiniz.",
-          "8c0b2e7a41": "Orca Dışı worktree ayarlarını aç",
+          "8c0b2e7a41": "Çalışma ağacı ayarları",
           "5d1c9f0a82": "İptal",
           "3b7e4a1c96": "Harici worktree'leri gizle"
         },
@@ -7197,7 +7197,7 @@
           "sshConfigPickerBack": "Geri",
           "fillFromSshConfig": "~/.ssh/config'den doldur…",
           "sshConfigPickerAddingAll": "Host'lar ekleniyor…",
-          "sshConfigPickerAddAll": "Tüm {{value0}} öğesini Orca'ya ekle",
+          "sshConfigPickerAddAll": "Tümünü ekle ({{value0}})",
           "sshConfigPickerNoNewHosts": "Eklenecek yeni host yok",
           "sshConfigPickerAddAllEmpty": "Tümünü Orca'ya ekle",
           "identityFileFromConfigHint": "Kasıtlı olarak boş bırakıldı: Orca, ~/.ssh/config'in {{value0}} için çözümlediği her anahtarı kullanır. Yalnızca o anahtarı kullanmak için bir yol yazın.",
@@ -7527,7 +7527,7 @@
           "SetupGuideModal": {
             "3598a3ca0c": "Orca'yı paralel ajan çalışması için kullanışlı hale getiren temel iş akışlarını tamamlayın.",
             "48a9e5ef2d": "Başlarken",
-            "f3b5ffb2a6": "Kontrol listesini kenar çubuğundan gizle"
+            "f3b5ffb2a6": "Kontrol listesini gizle"
           },
           "SetupGuideProgressRing": {
             "dac3a4724a": "{{value1}} kurulum adımından {{value0}} tanesi tamamlandı"
@@ -7723,7 +7723,7 @@
           "retrySetup": "Yeniden dene",
           "installing": "Yükleniyor…",
           "hostUnavailable": "Orca bu çalışma alanının makinesine henüz beceri yükleyemiyor.",
-          "replaceWithOrcaCopy": "Orca'nın kopyasıyla değiştir",
+          "replaceWithOrcaCopy": "Orca sürümüyle değiştir",
           "copyCommandAria": "Komutu kopyala",
           "ed197f59a2": "Komutu kopyala",
           "failedToCopyCommand": "Komut kopyalanamadı.",
@@ -7914,7 +7914,7 @@
           "a602d43069": "{{value0}} kopyalandı."
         },
         "BrowserUsePane": {
-          "67d9a53f47": "Ayrı girişler için profilleri yönetin",
+          "67d9a53f47": "Profilleri yönet",
           "112f70adc4": "Son içe aktarma: {{value0}}",
           "72d4815523": "Ajanların kimlik doğrulaması gereken sayfalara erişebilmesi için mevcut girişlerinizi Orca'ya taşıyın. Varsayılan profile aktarır.",
           "af8c83ed61": "Ajanların girişlerinizi yeniden kullanabilmesi için Chrome, Edge veya diğer tarayıcılardan çerezleri içe aktarın.",
@@ -9307,7 +9307,7 @@
           "connectionCheckUnavailable": "Orca bu bağlantıyı kontrol edemedi. Tekrar deneyin veya kurulum ayrıntıları için Entegrasyonlar'ı açın.",
           "retryConnection": "Tekrar dene",
           "openIntegrations": "Entegrasyonlar",
-          "connectInIntegrations": "Entegrasyonlar'da kur",
+          "connectInIntegrations": "Entegrasyonları aç",
           "connectJiraTitle": "Jira bağlantısı kur",
           "connectJiraDescription": "API belirteci veya PAT ile bir Jira Cloud sitesi veya kendi barındırdığınız bir örnek ekleyin.",
           "manageJira": "Anahtarları yönet",
@@ -11927,7 +11927,7 @@
           "anywhereDescription": "Telefon mobil veri veya herhangi bir Wi-Fi üzerinde olabilir. Yalnızca Relay için oturum açma gerekir.",
           "relayUnavailable": "Orca Relay bu sürümde kullanılamıyor. LAN kullanın.",
           "signIn": "Relay için oturum aç",
-          "signInAgain": "Relay için yeniden oturum aç",
+          "signInAgain": "Tekrar oturum aç",
           "localTitle": "LAN",
           "localDescription": "Telefon bu Wi-Fi'de olmalı veya Tailscale üzerinden bağlanmalıdır. Hesap gerekmez.",
           "retrying": "Yeniden deneniyor",
@@ -11986,18 +11986,18 @@
           "updating": "Sunucular güncelleniyor…",
           "serverCountOne": "1 eşleştirilmiş sunucu",
           "fdd271abf0": "Uzak Orca Sunucuları",
-          "e4e5937469": "Sunucu Güncellemelerini Kontrol Et"
+          "e4e5937469": "Güncellemeleri Kontrol Et"
         },
         "RemoteServerUpdateDialog": {
           "versionUnavailable": "Sürüm kullanılamıyor",
           "restartingHelp": "Yeni sürümde yeniden bağlanacak yedek sunucu bekleniyor.",
           "retry": "Yeniden dene",
-          "update": "Bu sunucuyu güncelle",
+          "update": "Sunucuyu güncelle",
           "description": "Eşleştirilmiş sunucuları gözden geçirin ve desteklenen kurulumları bu Orca istemcisinden güncelleyin.",
           "restartWarning": "Güncelleme bu sunucuları yeniden başlatır. {{value0}} ve {{value1}} kısa süreliğine bağlantıyı kaybedebilir.",
           "checking": "Eşleştirilmiş sunucular kontrol ediliyor…",
           "empty": "Eşleştirilmiş Uzak Orca Sunucusu yok.",
-          "updateAll": "{{value0}} sunucunun tümünü güncelle",
+          "updateAll": "Tümünü güncelle ({{value0}})",
           "noUpdates": "Tüm sunucular güncel.",
           "downloadProgress": "{{value0}} indirme ilerlemesi",
           "liveTabOne": "1 canlı sekme",
@@ -12335,7 +12335,7 @@
           "differentServerHelp": "Bu eşleştirme bağlantısı başka bir sunucuya ait. Bağlantıyı yeniden eşleştirdiğiniz sunucuda oluşturun.",
           "loopbackRecoveryTunnel": "Diğer bilgisayarda Bu bilgisayarı paylaş bölümünü açın ve Tailscale veya LAN adresiyle Başka bir cihaz için bağlantı oluşturun. SSH tüneli üzerinden erişiyorsanız aşağıdaki seçeneği açın.",
           "sshTunnelReach": "Bu adrese bir SSH tüneli üzerinden erişiyorum",
-          "addServerWithTunnel": "Tünel kullanarak sunucu ekle",
+          "addServerWithTunnel": "Tünel üzerinden ekle",
           "addServer": "Sunucu ekle",
           "nameLabel": "Ad",
           "optional": "(isteğe bağlı)",
@@ -12583,7 +12583,7 @@
               "notConfigured": "Bir Atlassian API belirteci veya erişim belirteciyle bir Bitbucket Cloud hesabı bağlayın. ORCA_BITBUCKET_* ortam değişkenleri de çalışır ve önceliklidir.",
               "disconnectFailed": "Kaydedilen Bitbucket kimlik bilgisi kaldırılamadı.",
               "statusLoadFailed": "Kaydedilen bir Bitbucket kimlik bilgisi kontrol edilemedi.",
-              "replaceCredentials": "Kimlik bilgisi ekle veya değiştir",
+              "replaceCredentials": "Kimlik bilgilerini yönet",
               "credentialName": "Bitbucket kimlik bilginiz"
             }
           }
@@ -12652,7 +12652,7 @@
         },
         "sshManagedHostRemove": {
           "descriptionServerHost": "Orca {{label}} üzerinde çalışıyor. Uzak Orca sunucuları bölümünde {{label}} satırındaki ⋯ menüsünü açın ve Orca'yı sunucudan kaldırmak için Durdur… seçeneğini, sunucu artık yoksa Unut… seçeneğini seçin. Ardından bu SSH sunucusunu kaldırabilirsiniz.",
-          "2ca95e9fd7": "Uzak Orca Sunucuları'nı aç"
+          "2ca95e9fd7": "Uzak sunucuları yönet"
         },
         "managedServers": {
           "row": {
@@ -12890,7 +12890,7 @@
           "title": "Sunucudaki sürümü koru",
           "description": "Bu ana makine Orca sunucusunu olduğu gibi kullanmaya devam eder. Orca'nın eski sürümünün burada eklediği veya değiştirdiği öğeler taşınmaz; temizlenene kadar yalnızca bu bilgisayarın kayıtlı ayarlarında kalır.",
           "cancel": "İptal",
-          "confirm": "Sunucudaki sürümü koru"
+          "confirm": "Sunucu sürümünü koru"
         },
         "moveAnyway": {
           "action": "Yine de taşı…",
@@ -12924,7 +12924,7 @@
           "add": "WSL dağıtımı ekle",
           "connect": "Bağlan",
           "forceUpdate": "Güncellemeyi zorla",
-          "turnOn": "Deneysel bölümünde etkinleştir",
+          "turnOn": "Deneysel ayarları aç",
           "chip": "WSL"
         },
         "restartServer": {
@@ -13083,7 +13083,8 @@
           "settingUpInBackground": "{{name}} üzerinde Orca arka planda kuruluyor. Hazır olduğunda listede görünecek.",
           "setUpOnSshHost": "Bir SSH sunucusuna Orca kur",
           "setUp": "Kur",
-          "overYourSsh": "SSH bağlantınız üzerinden"
+          "overYourSsh": "SSH bağlantınız üzerinden",
+          "installViaSsh": "SSH üzerinden yükle"
         },
         "sshBulkRemove": {
           "removedCount": "{{count}} kaldırıldı",
@@ -13135,7 +13136,7 @@
         "recoverServer": {
           "checking": "Kilit kontrol ediliyor…",
           "cancel": "İptal",
-          "confirm": "Kilidi temizle ve yeniden başlat",
+          "confirm": "Kilidi kaldır ve yeniden başlat",
           "host": "Sunucu",
           "lockBoot": "Yazıldığı açılış",
           "currentBoot": "Mevcut açılış",
@@ -14933,7 +14934,7 @@
           },
           "GitHistoryCommitFiles": {
             "b2c3d4e5f6": "Bu commit'te dosya değişikliği yok",
-            "c3d4e5f6a7": "Tüm değişiklikleri birlikte aç"
+            "c3d4e5f6a7": "Tüm Değişiklikleri Aç"
           },
           "GitHistoryRow": {
             "2f9c41ab07": "{{value0}} commit'indeki dosyaları göster: {{value1}}",
@@ -15484,7 +15485,7 @@
           "pairThisMac": "Bu Mac'i eşleştirin.",
           "pairThisPc": "Bu PC'yi eşleştirin.",
           "pairThisComputer": "Bu bilgisayarı eşleştirin.",
-          "directAddressDisclosure": "Daha hızlı bir yerel yol da kullanın",
+          "directAddressDisclosure": "Yerel bağlantı",
           "directAddressHint": "İsteğe bağlı. Telefonunuzun yakındayken kullanması gereken Wi-Fi veya Tailscale adresini seçin; genellikle Relay'den daha hızlıdır. Uzaktayken Relay yine çalışır.",
           "androidHelp": {
             "guide": "Kurulum kılavuzu"
@@ -16093,6 +16094,14 @@
             "5c3aee22c0": "Komutu kopyala",
             "5eca672aac": "Beceri kurulum komutunu kopyala",
             "b8ad063571": "Beceri kurulum komutu kopyalandı."
+          },
+          "feature": {
+            "tip": {
+              "copy": {
+                "91e2719807": "Oturum aramasını etkinleştir",
+                "24aaad376f": "Dikteyi kur"
+              }
+            }
           }
         }
       },
@@ -16168,7 +16177,7 @@
             "6d950431d2": "Gizle",
             "ebceac65a4": "Kur",
             "installSkillPrompt": "Ajanların bu simülatörü kullanmasını istediğinizde Orca CLI becerisini yükleyin.",
-            "3f003507f4": "Ayarlar'da tam kurulumu aç"
+            "3f003507f4": "Kurulumu aç"
           },
           "MobileEmulatorAgentSetupGuideSteps": {
             "21f5687c07": "Orca CLI becerisi",
@@ -18700,7 +18709,7 @@
           "loadMoreFailed": "Daha fazla artifact yüklenemedi.",
           "publishingOff": "Yayınlama kapalı",
           "publishingOffCopy": "Bu cihazda henüz genel bir artifact bağlantısı oluşturabilecek bir şey yok. Ayarlar → Artifact'ler'den yayınlamaya izin verin, ardından açık bir HTML veya Markdown dosyasından paylaşın ya da ajanınızdan isteyin.",
-          "openArtifactsSettings": "Ayarlar → Artifact'ler'i Aç",
+          "openArtifactsSettings": "Yapıt ayarları",
           "retry": "Yeniden dene",
           "reconnectHeading": "Orca'da yeniden oturum açın",
           "reconnectCopy": "Hesabınız üzerinden paylaşılan artifact'leri görüntülemek ve yönetmek için yeniden oturum açın.",
@@ -18932,7 +18941,7 @@
         "cancel": "İptal"
       },
       "plainSshTerminal": {
-        "open": "Yalın SSH terminali aç",
+        "open": "Düz SSH terminali",
         "unmanaged": "Yalın SSH — yönetilmiyor. Burası bir Orca çalışma alanı değil: buradaki ajanlar ve sekmeler izlenmez ve bu terminal geri yüklenmez. Terminali kapatmak SSH oturumunu sonlandırır.",
         "ended": "ssh {{code}} koduyla sonlandı. Okumayı bitirdiğinizde bu pencereyi kapatın.",
         "title": "Yalın SSH · {{host}}",
@@ -20319,13 +20328,19 @@
         "many_other": "{{count}} pull request oluşturuldu"
       },
       "splitRight": "Sağa Böl",
-      "splitDown": "Aşağı Böl"
+      "splitDown": "Aşağı Böl",
+      "automationSaved": {
+        "openFullPage": "Sayfayı aç"
+      },
+      "usageLimitActions": {
+        "handOff": "Ajana devret"
+      }
     },
     "tab": {
       "bar": {
         "SortableTabContextMenu": {
-          "switchToTerminalView": "Terminal ajanıyla devam et",
-          "switchToChatView": "Sohbet arayüzünde devam et",
+          "switchToTerminalView": "Terminalde devam et",
+          "switchToChatView": "Sohbette devam et",
           "allowAutoClose": "Otomatik Kapatmaya İzin Ver"
         },
         "BrowserTab": {
@@ -20623,7 +20638,7 @@
     },
     "agentSessionContinuation": {
       "preparingContext": "Kayıtlı sohbet bağlamı hazırlanıyor…",
-      "handOffToAnotherAgent": "Başka bir ajana devret",
+      "handOffToAnotherAgent": "Ajana devret",
       "untitledSession": "Mevcut oturum",
       "agent": "Ajan",
       "selectAgent": "Bir Ajan seçin",
@@ -21114,7 +21129,7 @@
           "stopAgentInWorkspaceTitle": "“{{name}}” içindeki ajan durdurulsun mu?",
           "stopRunningCommandTitle": "Çalışan komut durdurulsun mu?",
           "agentWorkStops": "Mevcut çalışması durur ve devam etmez.",
-          "sleepWorkspaceInstead": "Bunun yerine çalışma alanını uyut",
+          "sleepWorkspaceInstead": "Çalışma alanını uyut",
           "stopAgentSentence": "Ajanı durdur",
           "stopAndClose": "Durdur ve kapat"
         }
@@ -21233,7 +21248,7 @@
       "changeInSettings": "Modeli, dikte modunu veya kısayolu istediğiniz zaman <link>Ayarlar → Ses</link> bölümünde değiştirin.",
       "title": "Herhangi bir bölmede sesli yazın",
       "description": "Odaklanmış bir bölmede sesli yazmayı başlatın, ardından durdurmak için aynı kısayolu tekrar kullanın.",
-      "cta": "Sesli yazmayı ayarla",
+      "cta": "Dikteyi kur",
       "demoFirstPhrase": "Küçük ekranlarda ödeme düğmesi altbilgiyle çakışıyor.",
       "demoSecondPhrase": "Bir test ekler misin?",
       "demoUserPrompt": "Ödeme rozetleri ekle",
@@ -21286,7 +21301,7 @@
       "changeInSettings": "İstediğiniz zaman <link>Ayarlar → Ajan Oturumu Arama</link> bölümünde değiştirin veya kapatın.",
       "title": "Tüm ajan oturumlarında arayın",
       "description": "Geçmiş konuşmaları içlerinde söylenenlere göre bulun ve ajanın kaldığı yerden devam edin.",
-      "cta": "Oturum aramasını aç"
+      "cta": "Oturum aramasını etkinleştir"
     },
     "eyebrowNew": "Yeni",
     "eyebrowTip": "İpucu",
@@ -21770,7 +21785,7 @@
       "openInSidebar": "Kenar çubuğunda aç",
       "openInSidebarCopy": "Hatırladığınızı yazın veya bir ajana sorun: “giriş zaman aşımını düzelttiğimiz oturumu bul.”",
       "open": "Aç",
-      "enableOnAll": "Tüm bilgisayarlarda etkinleştir"
+      "enableOnAll": "Her yerde etkinleştir"
     },
     "dialog": {
       "select": "Seç",
@@ -21783,7 +21798,7 @@
     "antigravityIdeToCli": "IDE → CLI",
     "antigravity2ToCli": "2.0 → CLI",
     "continueInCli": "CLI'de Devam Et",
-    "continueInCliNewTab": "Yeni Sekmede CLI'de Devam Et",
+    "continueInCliNewTab": "CLI sekmesinde devam et",
     "subagents": {
       "loading": "Alt ajanlar yükleniyor…",
       "loadError": "Tüm alt ajanlar yüklenemedi.",
@@ -21917,7 +21932,7 @@
       "confirmTitle": "Terminal arka plan hizmeti yeniden başlatılsın mı?",
       "confirmBody": "Yeniden başlatma, {{sessions}} içindeki tüm süreçleri sonlandırır. Sürdürme desteği olan ajanlar daha sonra sürdürülebilir; kabuklar ve diğer işler ise yeniden başlatılmalıdır. Bunu ajanlarınız boşta olduğunda yapın.",
       "cancel": "İptal",
-      "confirm": "Yeniden başlat ve süreçleri sonlandır",
+      "confirm": "Yeniden başlat ve işlemleri sonlandır",
       "count_one": "Çalışan {{count}} terminal",
       "count_other": "Çalışan {{count}} terminal"
     },
@@ -22026,7 +22041,8 @@
       "settingsSaveFailed": "Orca Antigravity oturum açma ayarlarınızı kaydedemedi. Tekrar deneyin.",
       "lastReading": "{{reading}} · Okunma zamanı: {{time}}",
       "noReading": "Kullanım bilinmiyor: henüz okunmadı",
-      "fd47b5a5dd": "Antigravity Hesapları"
+      "fd47b5a5dd": "Antigravity Hesapları",
+      "apiKeyGet": "API anahtarı al"
     },
     "claude": {
       "added": "Hesap eklendi. Başlatacağınız bir sonraki Claude'da kullanmak için bu hesabı seçin.",
@@ -22105,7 +22121,7 @@
     "managedData": {
       "description": "Orca ana makinesindeki bir terminalde bu komutu çalıştırarak hesap ekleyin. Seçim, o ana makinede açıkça başlatılan yeni ajanlar için geçerlidir; doğrudan SSH aktarması ve Windows ana makinesindeki WSL başlatmaları kendi kimlik bilgilerini kullanır.",
       "copied": "Kopyalandı",
-      "add": "Hesap ekleme komutunu kopyala",
+      "add": "Kurulum komutunu kopyala",
       "refresh": "Hesapları yenile",
       "upgrade": "Hesaplar görünmüyorsa Orca ana makinesini güncelleyin veya yeniden başlatın.",
       "system": "Sistem varsayılanı",
@@ -22585,7 +22601,7 @@
       "actions": "İşlemler"
     },
     "breakdown": {
-      "viewAll": "Daha fazla klasör ayrıntısı göster"
+      "viewAll": "Klasör ayrıntıları"
     },
     "compact": {
       "linkedAndUnavailable": "Bağlı worktree'lerde {{value0}} · {{value1}} kullanılamıyor",
@@ -22766,7 +22782,7 @@
     }
   },
   "quitAndStopAllSessions": {
-    "confirm": "Oturumları durdur ve çık",
+    "confirm": "Durdur ve çık",
     "cancel": "İptal",
     "title": "Tamamen çık",
     "message": "Tüm terminal oturumları durdurulup Orca'dan çıkılsın mı?",
@@ -22898,14 +22914,14 @@
   },
   "gpuFallback": {
     "recoveredLaunch": {
-      "keepSafeButton": "Güvenli grafik modunu koru",
+      "keepSafeButton": "Güvenli modda kal",
       "tryHardwareButton": "Donanım hızlandırmayı dene",
       "title": "Güvenli grafik modu etkin",
       "message": "Orca güvenli grafik modunda yeniden açıldı.",
       "detail": "Tekrarlanan grafik çökmelerinin ardından güvenli grafik modu etkinleştirildi. Kararlılık için bu modu kullanmaya devam edin veya yeniden başlatıp donanım hızlandırmayı tekrar deneyin."
     },
     "restartPrompt": {
-      "restartButton": "Güvenli grafik modunda yeniden başlat",
+      "restartButton": "Güvenli modda yeniden başlat",
       "keepRunningButton": "Çalışmaya devam et",
       "title": "Orca güvenli grafik modunda yeniden başlatılsın mı?",
       "message": "Orca'nın grafik işlemi art arda çöktü.",
@@ -23219,8 +23235,8 @@
     "blockers": {
       "title": "Bu projeler taşınmadan önce",
       "inProjects": "Şu projelerde: {{names}}",
-      "skipOne": "{{name}} projesini bu taşımanın dışında bırak",
-      "skipMany": "Bu {{n}} projeyi bu taşımanın dışında bırak"
+      "skipOne": "{{name}} projesini atla",
+      "skipMany": "{{n}} projeyi atla"
     },
     "title": "Projeleri {{distro}} ana makinesine taşı",
     "loading": "{{distro}} içindeki projeler kontrol ediliyor…",
@@ -23424,7 +23440,7 @@
       "approved": "Kurulum onaylandı. Bu otomasyonun sonraki çalıştırmaları onu çalıştıracak.",
       "skippedSinceApproved": "Dalının orca.yaml kurulum komutları değiştiği için bu çalıştırmada kurulum çalışmadı. Komutlar o zamandan beri onaylandı; sonraki çalıştırmalar onları çalıştıracak.",
       "skippedReview": "Kurulum çalışmadı: bu çalıştırmanın dalındaki orca.yaml kurulum komutları bu otomasyon için onaylananlardan farklı. Sonraki çalıştırmalarda kurulumun çalışması için onları inceleyin.",
-      "reviewAction": "Kurulumu incele ve onayla",
+      "reviewAction": "Kurulumu incele",
       "listSkipped": "Kurulum atlandı",
       "listSkippedTitle": "Dalının orca.yaml kurulum komutları değiştiği için son çalıştırma kurulumu atladı. Eylemler menüsünden inceleyin."
     }
@@ -23794,6 +23810,14 @@
     },
     "templates": {
       "browse": "Şablonlara göz at"
+    },
+    "new": {
+      "fromTemplate": "Şablon kullan"
+    },
+    "apps": {
+      "paste": {
+        "remoteSignIn": "Uzaktan oturum açma"
+      }
     }
   },
   "agentPicker": {

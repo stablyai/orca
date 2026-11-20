@@ -124,10 +124,7 @@ export function BrowserUseCookieImportStep({
               onClick={onConfigureMoreBrowsers}
               className="text-[11px] text-muted-foreground underline underline-offset-2 hover:text-foreground"
             >
-              {t(
-                'auto.components.settings.BrowserUsePane.67d9a53f47',
-                'Manage profiles for separate logins'
-              )}
+              {t('auto.components.settings.BrowserUsePane.67d9a53f47', 'Manage profiles')}
             </button>
           ) : null}
         </div>

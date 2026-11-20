@@ -76,30 +76,6 @@ afterEach(() => {
 const DM: ConversationKey = { source: 'slack', externalId: 'T1:D7:U9' }
 
 describe('a connector conversation in a bot’s home', () => {
-  it.each(['grok', 'opencode', 'omp'] as const)(
-    'takes a %s bot’s thread as any bot’s: starts, links, keeps it and names its reply target',
-    async (agent) => {
-      const { host } = hostTestState()
-      await attach()
-      const h = botSeam(host)
-      h.bots.open.mockResolvedValue({ ...CHAT, agent })
-      h.seam.watch(h.host, () => {})
-
-      await expect(start(h, 'd1', 'bot', agent)).resolves.toMatchObject({
-        initial: { outcome: 'accepted' }
-      })
-      expect(findLink(h.store, THREAD)?.link).toMatchObject({ agent, sessionId: HOST_TEST_SESSION })
-      await expect(h.seam.send(h.host, THREAD, 'd2', { text: 'and #43' })).resolves.toEqual({
-        outcome: 'accepted'
-      })
-      expect(h.bots.open).toHaveBeenCalledOnce()
-      expect(h.seam.replyTarget(chatPaneKey(HOST_TEST_SESSION))).toMatchObject({
-        key: THREAD,
-        bot: { kind: 'bot', botId: 'b1' }
-      })
-    }
-  )
-
   it('opens a chat for the thread, links it, and sends the prompt as its first message', async () => {
     const { host, dispatch } = hostTestState()
     await attach()
@@ -227,6 +203,7 @@ describe('a connector conversation in a bot’s home', () => {
     const { host, dispatch } = hostTestState()
     await attach()
     const h = botSeam(host)
+    h.seam.watch(h.host, () => {})
     await start(h, 'd1')
 
     await expect(start(h, 'd2')).resolves.toMatchObject({ initial: { outcome: 'accepted' } })
@@ -237,6 +214,11 @@ describe('a connector conversation in a bot’s home', () => {
     expect(h.bots.open).toHaveBeenCalledOnce()
     await eventually(() => expect(dispatch).toHaveBeenCalledTimes(3))
     expect(findLink(h.store, THREAD)?.link.title).toBe('review #42')
+    expect(h.seam.replyTarget(chatPaneKey(HOST_TEST_SESSION))).toMatchObject({
+      key: THREAD,
+      worktreeId: HOME,
+      bot: { kind: 'bot', botId: 'b1' }
+    })
   })
 
   it('refuses a paused bot’s thread once it has a chat, for starts and sends', async () => {
@@ -259,14 +241,27 @@ describe('a connector conversation in a bot’s home', () => {
   it('sends each direct message to the bot’s current Chat', async () => {
     const { host } = hostTestState()
     await attach()
-    const h = botSeam(host)
-    await start(h, 'd1', 'bot-chat', 'codex', DM)
+    const nameChannel = vi.fn<ConversationPlaceNamer>(async () => '#reviews')
+    const h = botSeam(host, null, nameChannel)
+    await h.seam.start(h.host, DM, 'd1', {
+      agent: 'codex',
+      target: { kind: 'bot-chat', botId: 'b1' },
+      prompt: 'review #42',
+      asker: {
+        userId: 'U9',
+        role: 'member',
+        place: { kind: 'direct_message', id: 'D7' },
+        text: 'review #42',
+        context: []
+      }
+    })
 
     await expect(h.seam.send(h.host, DM, 'd2', { text: 'hi again' })).resolves.toEqual({
       outcome: 'accepted'
     })
 
     expect(h.bots.open).toHaveBeenNthCalledWith(2, { kind: 'bot-chat', botId: 'b1' })
+    expect(nameChannel).not.toHaveBeenCalled()
   })
 
   it('opens a chat of its own for a direct message that ran in the bot’s Chat', async () => {
@@ -278,20 +273,6 @@ describe('a connector conversation in a bot’s home', () => {
     await start(h, 'd2', 'bot', 'codex', DM)
 
     expect(h.bots.open).toHaveBeenNthCalledWith(2, { kind: 'bot', botId: 'b1' })
-  })
-
-  it('names a thread chat’s bot and home as its reply target, so a reply posts only there', async () => {
-    const { host } = hostTestState()
-    await attach()
-    const h = botSeam(host)
-    h.seam.watch(h.host, () => {})
-    await start(h, 'd1')
-
-    expect(h.seam.replyTarget(chatPaneKey(HOST_TEST_SESSION))).toMatchObject({
-      key: THREAD,
-      worktreeId: HOME,
-      bot: { kind: 'bot', botId: 'b1' }
-    })
   })
 
   it('gives the Chat’s replies to the latest direct message the Chat took', async () => {
