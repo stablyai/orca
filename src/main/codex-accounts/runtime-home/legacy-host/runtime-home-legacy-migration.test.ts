@@ -225,16 +225,17 @@ describe('CodexRuntimeHomeService', () => {
     expect(trackedImportOutcomes()).toEqual(['skipped_existing'])
   })
 
-  it('creates the shared history where hard links are refused', async () => {
-    writeHistory('account-1', '{"id":"legacy-1"}\n')
+  it('writes no shared history where hard links are refused, and keeps the account history', async () => {
+    const managedHomePath = writeHistory('account-1', '{"id":"legacy-1"}\n')
     fsHooks.linkError = Object.assign(new Error('no hard links'), { code: 'ENOTSUP' })
 
     await startService()
 
-    expect(readFileSync(join(getRuntimeCodexHomePath(), 'history.jsonl'), 'utf-8')).toBe(
+    expect(existsSync(join(getRuntimeCodexHomePath(), 'history.jsonl'))).toBe(false)
+    expect(trackedImportOutcomes()).toEqual(['skipped_no_hard_links'])
+    expect(readFileSync(join(managedHomePath, 'history.jsonl'), 'utf-8')).toBe(
       '{"id":"legacy-1"}\n'
     )
-    expect(trackedImportOutcomes()).toEqual(['imported'])
   })
 
   it('retries a failed import on the next launch', async () => {

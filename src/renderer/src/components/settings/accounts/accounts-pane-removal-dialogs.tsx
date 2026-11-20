@@ -57,7 +57,7 @@ export function renderAccountsRemovalDialogs(
               </span>
               {t(
                 'settings.accounts.codexRemoveHome',
-                "Orca deletes this account's Codex folder on {{host}}, including its sign-in, MCP logins and any Codex history stored only in that folder. This cannot be undone. If it is selected, the next Codex you start uses System default.",
+                "Orca deletes this account's sign-in and MCP logins on {{host}}. Its Codex history, sessions and prompts, stays in the account's folder. This cannot be undone. If it is selected, the next Codex you start uses System default.",
                 { host: accountRuntimeSentenceLabel }
               )}
             </DialogDescription>

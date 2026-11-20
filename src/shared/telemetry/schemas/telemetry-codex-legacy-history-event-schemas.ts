@@ -5,6 +5,7 @@ export const CODEX_LEGACY_HISTORY_IMPORT_OUTCOMES = [
   'imported',
   'skipped_existing',
   'nothing_to_import',
+  'skipped_no_hard_links',
   'failed'
 ] as const
 

@@ -87,11 +87,15 @@ export abstract class CodexRuntimeHomeLegacyMigration extends CodexRuntimeHomePa
       if (!imported) {
         return
       }
-      // Mark completion so later startups cannot replay stale managed-home state.
-      writeFileAtomically(
-        this.getMigrationMarkerPath(),
-        `${JSON.stringify({ completedAt: Date.now(), migratedHomeCount: managedHomes.length })}\n`
-      )
+      try {
+        // Mark completion so later startups cannot replay stale managed-home state.
+        writeFileAtomically(
+          this.getMigrationMarkerPath(),
+          `${JSON.stringify({ completedAt: Date.now(), migratedHomeCount: managedHomes.length })}\n`
+        )
+      } catch (error) {
+        console.warn('[codex-runtime-home] Failed to mark legacy Codex migration complete:', error)
+      }
     })
   }
 

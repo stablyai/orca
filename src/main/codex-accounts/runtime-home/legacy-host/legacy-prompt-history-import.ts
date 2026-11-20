@@ -77,13 +77,16 @@ async function publishLegacyHistoriesIfAbsent(
   if (seenLines.size === 0) {
     return 'nothing_to_import'
   }
-  const contents = `${[...seenLines].join('\n')}\n`
-  return (await publishWithoutOverwrite(contents, runtimeHistoryPath))
-    ? 'imported'
-    : 'skipped_existing'
+  return publishWithoutOverwrite(`${[...seenLines].join('\n')}\n`, runtimeHistoryPath)
 }
 
-async function publishWithoutOverwrite(contents: string, targetPath: string): Promise<boolean> {
+// exFAT, FAT32 and some network or FUSE mounts refuse hard links.
+const HARD_LINK_UNSUPPORTED = new Set(['EPERM', 'ENOTSUP', 'EOPNOTSUPP', 'ENOSYS', 'EXDEV'])
+
+async function publishWithoutOverwrite(
+  contents: string,
+  targetPath: string
+): Promise<LegacyHistoryImportOutcome> {
   const tmpPath = `${targetPath}.${process.pid}.${randomUUID()}.tmp`
   try {
     const handle = await open(tmpPath, 'wx', 0o600)
@@ -95,45 +98,21 @@ async function publishWithoutOverwrite(contents: string, targetPath: string): Pr
     }
     // A hard link publishes only into a free name: one Codex created meanwhile stays as it is.
     await link(tmpPath, targetPath)
-    return true
+    return 'imported'
   } catch (error) {
     const code = errnoCodeOrUnknown(error)
     if (code === 'EEXIST') {
-      return false
+      return 'skipped_existing'
     }
-    if (!HARD_LINK_UNSUPPORTED.has(code)) {
-      throw error
+    // No safe way to publish without replacing: every other way leaves a name Codex can append
+    // into mid-write. The account histories stay in their homes, so nothing is lost.
+    if (HARD_LINK_UNSUPPORTED.has(code)) {
+      return 'skipped_no_hard_links'
     }
-    return appendIntoNewFile(contents, targetPath)
+    throw error
   } finally {
     await rm(tmpPath, { force: true })
   }
-}
-
-// exFAT, FAT32 and some network or FUSE mounts refuse hard links.
-const HARD_LINK_UNSUPPORTED = new Set(['EPERM', 'ENOTSUP', 'EOPNOTSUPP', 'ENOSYS', 'EXDEV'])
-
-/**
- * Without hard links: exclusive create still never touches an existing file, and append mode puts
- * Orca's single write and any Codex append to the new file one after the other, never over it.
- */
-async function appendIntoNewFile(contents: string, targetPath: string): Promise<boolean> {
-  let handle: Awaited<ReturnType<typeof open>>
-  try {
-    handle = await open(targetPath, 'ax', 0o600)
-  } catch (error) {
-    if (errnoCodeOrUnknown(error) === 'EEXIST') {
-      return false
-    }
-    throw error
-  }
-  try {
-    await handle.writeFile(contents, 'utf-8')
-    await handle.sync()
-  } finally {
-    await handle.close()
-  }
-  return true
 }
 
 function trackLegacyHistoryImport(outcome: LegacyHistoryImportOutcome): void {
