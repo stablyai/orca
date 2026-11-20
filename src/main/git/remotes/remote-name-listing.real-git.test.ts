@@ -36,7 +36,7 @@ afterEach(async () => {
 it.each(['folder', 'linked worktree'])(
   'refreshes branch-conditional remotes immediately in a %s',
   async (kind) => {
-    await git(root, 'init', '-b', 'without-remote')
+    await git(root, 'init', '-b', 'nope-remote')
     await git(
       root,
       '-c',
@@ -56,7 +56,7 @@ it.each(['folder', 'linked worktree'])(
     let repoPath = root
     if (kind === 'linked worktree') {
       repoPath = join(root, 'checkout')
-      await git(root, 'worktree', 'add', '-b', 'other-branch', repoPath)
+      await git(root, 'worktree', 'add', '-b', 'else-remote', repoPath)
     }
     expect(await listCachedRemoteNames(repoPath)).toEqual([])
     expect(await isRemoteListedAbsent(repoPath, 'origin')).toBe(true)
@@ -70,7 +70,7 @@ it.each(['folder', 'linked worktree'])(
     )
     expect(await isRemoteListedAbsent(repoPath, 'origin')).toBe(false)
     expect(await listCachedRemoteNames(repoPath)).toEqual(['origin'])
-    await git(repoPath, 'checkout', kind === 'folder' ? 'without-remote' : 'other-branch')
+    await git(repoPath, 'checkout', kind === 'folder' ? 'nope-remote' : 'else-remote')
     expect(await listCachedRemoteNames(repoPath)).toEqual([])
   }
 )
