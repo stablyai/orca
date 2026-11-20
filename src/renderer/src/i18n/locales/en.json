@@ -27678,6 +27678,7 @@
       "titleOne": "Give {{person}} access to {{name}}?",
       "titleMany": "Give {{count}} people access to {{name}}?",
       "confirm": "Give access",
+      "reject": "Reject",
       "confirmWarning": "They’ll act as you on {{computer}}.",
       "confirmComputer": "Run commands and change files",
       "confirmNoApprovals": "Acts without asking first",
