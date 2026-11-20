@@ -12,7 +12,7 @@ import type { WebhookSummary } from '../../../../../shared/rpc-contract/webhooks
 import { BotConnectorRowFrame } from '../BotConnectorRow'
 import type { BotConnectorTitle } from '../bot-connector-titles'
 import { BotHowToAsk, HOW_TO_ASK_ESCAPED } from '../BotHowToAsk'
-import { BotConnectorCaption } from '../bot-connector-people'
+import { BotConnectorSection } from '../bot-connector-people'
 import { askBotInChat } from './ask-bot-in-chat'
 import { useBotWebhooks, WEBHOOK_AGO_TICK_MS } from './use-webhook-data'
 import { webhookSetUpDraft } from './use-webhooks-connector'
@@ -83,17 +83,18 @@ export function BotWebhooksCard({
       // Hooks are paused and deleted one by one inside, so the menu stays empty.
       actions={{}}
     >
-      <BotConnectorCaption title={t('bots.webhooks.howToCall', 'How to call')} />
-      <p className="mb-4 text-xs leading-5 text-muted-foreground">
-        <BotHowToAsk
-          text={t(
-            'bots.webhooks.howToCallText',
-            'Any tool or script can POST to a hook’s URL. Each hook starts one automation, and its results go wherever that automation sends them. To add one, tell {{bot}} <code>Set up a webhook that…</code>',
-            { bot: bot.name, ...HOW_TO_ASK_ESCAPED }
-          )}
-        />
-      </p>
-      <BotConnectorCaption
+      <BotConnectorSection title={t('bots.webhooks.howToCall', 'How to call')}>
+        <p className="mb-4 text-xs leading-5 text-muted-foreground">
+          <BotHowToAsk
+            text={t(
+              'bots.webhooks.howToCallText',
+              'Any tool or script can POST to a hook’s URL. Each hook starts one automation, and its results go wherever that automation sends them. To add one, tell {{bot}} <code>Set up a webhook that…</code>',
+              { bot: bot.name, ...HOW_TO_ASK_ESCAPED }
+            )}
+          />
+        </p>
+      </BotConnectorSection>
+      <BotConnectorSection
         title={t('bots.webhooks.hooks', 'Hooks')}
         count={hooks.length}
         action={
@@ -102,17 +103,18 @@ export function BotWebhooksCard({
             {t('bots.webhooks.addInChat', 'Add in chat')}
           </Button>
         }
-      />
-      {hooks.map((hook) => (
-        <WebhookHookRow
-          key={hook.hookId}
-          target={botTarget(bot)}
-          summary={hook}
-          refreshError={read.refreshError}
-          bot={bot}
-          defaultOpen={hooks.length === 1}
-        />
-      ))}
+      >
+        {hooks.map((hook) => (
+          <WebhookHookRow
+            key={hook.hookId}
+            target={botTarget(bot)}
+            summary={hook}
+            refreshError={read.refreshError}
+            bot={bot}
+            defaultOpen={hooks.length === 1}
+          />
+        ))}
+      </BotConnectorSection>
     </BotConnectorRowFrame>
   )
 }
