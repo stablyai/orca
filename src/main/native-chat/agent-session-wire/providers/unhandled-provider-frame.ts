@@ -4,7 +4,7 @@ import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../shared/agent-session/jou
 import { CLAUDE_LOCAL_COMMAND_OUTPUT_FRAME_KIND } from '../../../../shared/native-chat/transcript/notices/native-chat-provider-frame-summary'
 import {
   boundPayload,
-  journalPayload,
+  CODEX_AUTO_REVIEW_DENIAL_FRAME_LIMITS,
   PROVIDER_FRAME_PAYLOAD_LIMITS,
   type JournalPayloadLimits
 } from '../../agent-session-journal/item-lifecycle/journal-payload-bounds'
@@ -173,8 +173,10 @@ export function unhandledProviderFrameJournalItem(
       ? readCodexAutoReviewDenial(payload)
       : null
   const serialized = serializeProviderPayload(payload)
-  // Approve once replays the whole review, so an approvable denial is kept unclipped.
-  const bounded = denial?.event ? journalPayload(serialized) : boundPayload(serialized, limits)
+  const bounded = boundPayload(
+    serialized,
+    denial?.event ? CODEX_AUTO_REVIEW_DENIAL_FRAME_LIMITS : limits
+  )
   const compaction =
     provider === 'codex' && (method === 'thread/compacted' || method === 'item:contextCompaction')
   const noticeTone =
