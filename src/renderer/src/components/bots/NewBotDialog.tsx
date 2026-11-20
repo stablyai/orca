@@ -307,18 +307,19 @@ export function NewBotDialog({
               />
             ) : null}
             <div className="space-y-3 pt-1">
-              <NewBotPictureButton picture={picture} intake={intake} />
-              <ImeInput
-                ref={nameRef}
-                className={BARE_HEADING_CLASS}
-                aria-label={t('bots.new.name', 'Name')}
-                autoComplete="off"
-                spellCheck={false}
-                value={name}
-                maxLength={BOT_NAME_MAX_LENGTH}
-                placeholder={t('bots.new.name', 'Name')}
-                onChange={(event) => setName(event.target.value)}
-              />
+              <NewBotPictureButton picture={picture} intake={intake}>
+                <ImeInput
+                  ref={nameRef}
+                  className={BARE_HEADING_CLASS}
+                  aria-label={t('bots.new.name', 'Name')}
+                  autoComplete="off"
+                  spellCheck={false}
+                  value={name}
+                  maxLength={BOT_NAME_MAX_LENGTH}
+                  placeholder={t('bots.new.name', 'Name')}
+                  onChange={(event) => setName(event.target.value)}
+                />
+              </NewBotPictureButton>
               <NewBotPurposeField
                 value={draft.purpose}
                 onChange={(purpose) => setDraft({ ...draft, purpose })}

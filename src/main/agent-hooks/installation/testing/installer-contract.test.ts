@@ -103,18 +103,18 @@ const paneEnv = { ...process.env, ORCA_PANE_KEY: 'tab-1:leaf-1' }
 
 describe('wrapPosixHookCommand', () => {
   it.skipIf(process.platform === 'win32')(
-    'executes a script whose path contains a single quote literally',
+    'executes a quoted path literally and propagates the script exit code',
     () => {
       const scriptPath = join(tmpDir, "with'quote", 'hook.sh')
       mkdirSync(join(tmpDir, "with'quote"))
-      writeFileSync(scriptPath, "#!/bin/sh\nprintf 'quoted-path\n'\n", { mode: 0o755 })
+      writeFileSync(scriptPath, "#!/bin/sh\nprintf 'quoted-path\n'\nexit 7\n", { mode: 0o755 })
       const result = runProcessSync({
         program: '/bin/sh',
         args: ['-c', wrapPosixHookCommand(scriptPath)],
         env: paneEnv,
         timeoutMs: 5000
       })
-      expect(result.code).toBe(0)
+      expect(result.code).toBe(7)
       expect(result.stdout).toBe('quoted-path\n')
       expect(result.stderr).toBe('')
     }
@@ -153,24 +153,6 @@ describe('wrapPosixHookCommand', () => {
       })
       expect(result.code).toBe(0)
       expect(result.stdout).toBe('{"a":"b"}\n')
-    }
-  )
-
-  // 4d618795 replaced && … || true to preserve failing script exit codes; guard against swallowing them again.
-  it.skipIf(process.platform === 'win32')(
-    'propagates the script exit code when the script runs and fails',
-    () => {
-      const scriptPath = join(tmpDir, 'fails.sh')
-      writeFileSync(scriptPath, '#!/bin/sh\nexit 7\n', 'utf-8')
-      chmodSync(scriptPath, 0o755)
-      const cmd = wrapPosixHookCommand(scriptPath)
-      const result = runProcessSync({
-        program: '/bin/sh',
-        args: ['-c', cmd],
-        env: paneEnv,
-        timeoutMs: 5000
-      })
-      expect(result.code).toBe(7)
     }
   )
 })

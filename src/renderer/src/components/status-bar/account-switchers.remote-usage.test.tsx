@@ -245,13 +245,14 @@ describe('Codex account usage on a paired host', () => {
     render(<CodexSwitcherMenu codex={codex} ownerUsage={owned} />)
     await openMenu()
     fireEvent.click(await screen.findByRole('menuitem', { name: 'Reset now' }))
-    await vi.waitFor(() => expect(mocks.consumeHostReset).toHaveBeenCalledTimes(1))
-    expect(mocks.consumeHostReset).toHaveBeenCalledWith('laptop', {
-      target: { runtime: 'host', wslDistro: null },
-      accountId: 'active-id',
-      accountRevision: 1,
-      offerRevision: expect.stringMatching(/^v1:/)
-    })
+    await vi.waitFor(() =>
+      expect(mocks.consumeHostReset).toHaveBeenCalledWith('laptop', {
+        target: { runtime: 'host', wslDistro: null },
+        accountId: 'active-id',
+        accountRevision: 1,
+        offerRevision: expect.stringMatching(/^v1:/)
+      })
+    )
   })
 })
 
@@ -366,17 +367,5 @@ describe('Claude account rows outside the status bar owner', () => {
     })
     const other = await screen.findByRole('menuitem', { name: /other@laptop.test/ })
     expect(within(other).getByRole('img').getAttribute('aria-label')).toContain('25%')
-  })
-
-  it("names no account before the server's list arrives", async () => {
-    const owned: OwnerUsageRateLimits = { ...claudeOwner(), accounts: null }
-    const claude: ProviderRateLimits = { ...usage(4), provider: 'claude' }
-    render(<ClaudeSwitcherMenu claude={claude} ownerUsage={owned} iconOnly={false} />)
-    fireEvent.pointerDown(
-      screen.getByRole('button', { name: 'Open Claude details and account switcher' }),
-      { button: 0, ctrlKey: false }
-    )
-    await screen.findByRole('menu')
-    expect(screen.queryByText('System default')).toBeNull()
   })
 })

@@ -1,3 +1,4 @@
+import { useAppStoreWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import type { BundledSkillPlan } from '../../../../../shared/skills/bundled/bundled-skill-plan'
 import { bundledSkillSetupAttentionMessage } from '@/components/skills/setup/bundled-skill-setup-result-copy'
 import {
@@ -22,7 +23,6 @@ import {
   INSTALLED_AGENT_SKILLS_REFRESHED_EVENT
 } from '../discovery/installed-agent-skills-change-event'
 import { useActiveProjectSkillRuntime } from '../runtime/useActiveProjectSkillRuntime'
-import { useAppStore } from '@/store/index'
 import { getManagedOrcadSshTargetId } from '../../../../../shared/execution-host/managed-orcad-execution-host'
 
 /** `unknown`: the owning host's check failed. */
@@ -46,11 +46,11 @@ export function useBundledSkillInstallAction(
   const activeTarget = useActiveProjectSkillRuntime().bundledSkillTarget
   const target = options.target === undefined ? activeTarget : options.target
   const targetKey = target ? bundledSkillTargetKey(target) : null
-  const unavailable = useAppStore((state) => {
+  const unavailable = useAppStoreWithHostStatuses((state, statuses) => {
     if (target?.kind !== 'environment') {
       return null
     }
-    const snapshot = state.runtimeStatusByEnvironmentId.get(target.environmentId)?.snapshot
+    const snapshot = statuses.get(target.environmentId)?.snapshot
     if (!snapshot?.retired && snapshot?.transport !== 'disconnected') {
       return null
     }
