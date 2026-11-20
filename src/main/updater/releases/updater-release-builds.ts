@@ -153,10 +153,10 @@ function parseReleaseEntry(
   }
 }
 
-// REST exposes older builds the short Atom feed omits; use only for explicit picker requests.
-export async function listReleaseBuilds(
+// REST exposes older builds the short Atom feed omits; use only for explicit picker requests and update-delay gaps.
+async function fetchRepoReleaseBuilds(
   channel: ReleaseChannel,
-  platform: NodeJS.Platform = process.platform
+  platform: NodeJS.Platform
 ): Promise<ReleaseBuild[]> {
   const repo = getReleaseRepoForChannel(channel)
   // Skip a known-exhausted token bucket and try the separate per-IP quota.
@@ -187,11 +187,24 @@ export async function listReleaseBuilds(
   if (!Array.isArray(payload)) {
     throw new UpdaterCodedError('releaseListUnreadable', { channel })
   }
-  const builds = payload
+  return payload
     .map((entry) => parseReleaseEntry(entry as GitHubReleaseEntry, repo, platform))
     .filter((build): build is ReleaseBuild => build !== null)
-    .filter((build) => build.channel === channel)
-  return sortReleaseBuildsNewestFirst(builds)
+}
+
+export async function listReleaseBuilds(
+  channel: ReleaseChannel,
+  platform: NodeJS.Platform = process.platform
+): Promise<ReleaseBuild[]> {
+  const builds = await fetchRepoReleaseBuilds(channel, platform)
+  return sortReleaseBuildsNewestFirst(builds.filter((build) => build.channel === channel))
+}
+
+/** Stable and rc builds share the main repo, so one request covers both channels. */
+export function listMainRepoReleaseBuilds(
+  platform: NodeJS.Platform = process.platform
+): Promise<ReleaseBuild[]> {
+  return fetchRepoReleaseBuilds('stable', platform)
 }
 
 export type ResolvedTargetBuild = {

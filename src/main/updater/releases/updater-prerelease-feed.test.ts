@@ -10,6 +10,31 @@ vi.mock('electron', () => ({
   net: { fetch: netFetchMock, request: netRequestMock }
 }))
 
+vi.mock('./updater-release-api-token', () => ({
+  resolveReleaseApiToken: () => Promise.resolve(null),
+  rejectReleaseApiToken: vi.fn()
+}))
+
+function respondWithReleasesApi(releases: { tag: string; publishedAt: string }[]): void {
+  const atomImplementation = netFetchMock.getMockImplementation()
+  netFetchMock.mockImplementation((url: string, init?: { method?: string }) => {
+    if (url.startsWith('https://api.github.com/repos/stablyai/orca/releases')) {
+      const payload = releases.map(({ tag, publishedAt }) => ({
+        tag_name: tag,
+        published_at: publishedAt,
+        assets: ['latest.yml', 'latest-mac.yml', 'latest-linux.yml'].map((name) => ({ name }))
+      }))
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        headers: new Headers(),
+        json: () => Promise.resolve(payload)
+      })
+    }
+    return atomImplementation?.(url, init)
+  })
+}
+
 function buildAtomFeed(tags: string[], updatedAt: Record<string, string> = {}): string {
   const entries = tags
     .map(
@@ -109,6 +134,23 @@ describe('fetchNewerReleaseTagsWithReadiness update delay', () => {
       version: '1.4.3',
       releasedAt: NOW - DAY_MS
     })
+  })
+
+  it('offers an aged-out release that has already dropped off the short Atom feed', async () => {
+    respondWithAtom(['v1.4.266', 'v1.4.265'], [], [], [], {
+      'v1.4.266': daysAgo(0),
+      'v1.4.265': daysAgo(1)
+    })
+    respondWithReleasesApi([
+      { tag: 'v1.4.266', publishedAt: daysAgo(0) },
+      { tag: 'v1.4.265', publishedAt: daysAgo(1) },
+      { tag: 'v1.4.250', publishedAt: daysAgo(8) },
+      { tag: 'v1.4.249', publishedAt: daysAgo(9) }
+    ])
+    const { fetchNewerReleaseTagsWithReadiness } = await import('./updater-prerelease-feed')
+    const result = await fetchNewerReleaseTagsWithReadiness('1.4.248', 1, delay)
+    expect(result.tags).toEqual(['v1.4.250'])
+    expect(result.releaseDelay?.heldRelease?.tag).toBe('v1.4.266')
   })
 
   it('fails closed for releases without a feed timestamp', async () => {

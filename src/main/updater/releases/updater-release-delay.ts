@@ -9,7 +9,7 @@ const DELAYED_UPDATE_CLEAR_BUFFER_MS = 5 * 60 * 1000
 export type DatedReleaseTag = {
   tag: string
   version: string
-  /** GitHub's Atom entry `updated` time: server-side and never earlier than publication. */
+  /** Server-side time: Atom `updated` (never earlier than publication), or REST `published_at` past the feed. */
   releasedAt: number | null
 }
 

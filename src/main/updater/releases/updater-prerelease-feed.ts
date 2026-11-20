@@ -11,9 +11,17 @@ import {
   type DatedReleaseTag,
   type ReleaseDelayResult
 } from './updater-release-delay'
+import { listMainRepoReleaseBuilds } from './updater-release-builds'
+import { ReleaseBuildListCache } from './updater-release-build-cache'
 
 const ATOM_FEED_URL = 'https://github.com/stablyai/orca/releases.atom'
 const MAX_MANIFEST_PROBE_CANDIDATES = 6
+// Releases past the feed don't change and newer ones come from Atom, so a long-lived copy stays accurate.
+const MAIN_REPO_BUILDS_TTL_MS = 6 * 60 * 60 * 1000
+const mainRepoBuildCache = new ReleaseBuildListCache(
+  () => listMainRepoReleaseBuilds(),
+  MAIN_REPO_BUILDS_TTL_MS
+)
 
 // Atom includes stable and prerelease tags without channel filtering.
 const ENTRY_RE = /<entry>([\s\S]*?)<\/entry>/g
@@ -138,27 +146,84 @@ export async function fetchNewerReleaseTagsWithReadiness(
     return { tags: [], state: 'unavailable', unavailableReason: 'feed' }
   }
 
-  // Perf builds require explicit opt-in, even when semver considers them newer.
-  const channelCandidates =
-    options.releaseFilter === 'perf'
-      ? tags.filter(({ tag }) => isPerfPrereleaseTag(tag))
-      : includePrerelease
-        ? tags.filter(({ tag }) => !isPerfPrereleaseTag(tag))
-        : tags.filter(({ version }) => !isPrereleaseVersion(version))
+  const channelCandidates = selectChannelCandidates(tags, includePrerelease, options.releaseFilter)
   if (!options.minReleaseAgeMs || options.minReleaseAgeMs <= 0) {
     return resolveNewerReleaseTags(channelCandidates, currentVersion, maxTags)
   }
-  const { eligible, releaseDelay } = applyReleaseDelay(
+  const now = options.now ?? Date.now()
+  let delayed = applyReleaseDelay(
     channelCandidates,
     tags,
     currentVersion,
     options.minReleaseAgeMs,
-    options.now ?? Date.now()
+    now
   )
-  return {
-    ...(await resolveNewerReleaseTags(eligible, currentVersion, maxTags)),
-    releaseDelay
+  if (feedMayOmitEligibleRelease(channelCandidates, delayed.eligible, currentVersion)) {
+    const restTags = await fetchMainRepoReleaseTags()
+    if (restTags) {
+      const mergedTags = mergeReleaseTags(tags, restTags)
+      delayed = applyReleaseDelay(
+        selectChannelCandidates(mergedTags, includePrerelease, options.releaseFilter),
+        mergedTags,
+        currentVersion,
+        options.minReleaseAgeMs,
+        now
+      )
+    }
   }
+  return {
+    ...(await resolveNewerReleaseTags(delayed.eligible, currentVersion, maxTags)),
+    releaseDelay: delayed.releaseDelay
+  }
+}
+
+// Perf builds require explicit opt-in, even when semver considers them newer.
+function selectChannelCandidates(
+  tags: ReleaseFeedTag[],
+  includePrerelease: boolean,
+  releaseFilter: FetchNewerReleaseTagOptions['releaseFilter']
+): ReleaseFeedTag[] {
+  if (releaseFilter === 'perf') {
+    return tags.filter(({ tag }) => isPerfPrereleaseTag(tag))
+  }
+  return includePrerelease
+    ? tags.filter(({ tag }) => !isPerfPrereleaseTag(tag))
+    : tags.filter(({ version }) => !isPrereleaseVersion(version))
+}
+
+// Atom keeps only ~10 entries; unless it reaches our version or an aged-out release, an eligible one may predate it.
+function feedMayOmitEligibleRelease(
+  candidates: ReleaseFeedTag[],
+  eligible: ReleaseFeedTag[],
+  currentVersion: string
+): boolean {
+  return (
+    eligible.length === 0 &&
+    candidates.every(({ version }) => compareVersions(version, currentVersion) > 0)
+  )
+}
+
+async function fetchMainRepoReleaseTags(): Promise<ReleaseFeedTag[] | null> {
+  try {
+    const builds = await mainRepoBuildCache.list('stable')
+    return builds.map(({ tag, version, publishedAt }) => {
+      const releasedAt = publishedAt ? Date.parse(publishedAt) : Number.NaN
+      return { tag, version, releasedAt: Number.isNaN(releasedAt) ? null : releasedAt }
+    })
+  } catch {
+    // Rate limits or outages keep the Atom-only result, which holds the update (fail closed).
+    return null
+  }
+}
+
+function mergeReleaseTags(
+  feedTags: ReleaseFeedTag[],
+  restTags: ReleaseFeedTag[]
+): ReleaseFeedTag[] {
+  const feedTagNames = new Set(feedTags.map(({ tag }) => tag))
+  return [...feedTags, ...restTags.filter(({ tag }) => !feedTagNames.has(tag))].sort(
+    (left, right) => compareVersions(right.version, left.version)
+  )
 }
 
 async function resolveNewerReleaseTags(
