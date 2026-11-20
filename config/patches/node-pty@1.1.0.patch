@@ -635,7 +635,7 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..381d59e11bf158d269335c8231b407fc
  
    for (; count < 3; count++) {
      low_fds[count] = posix_openpt(O_RDWR);
-@@ -706,84 +841,513 @@ pty_posix_spawn(char** argv, char** env,
+@@ -706,84 +841,499 @@ pty_posix_spawn(char** argv, char** env,
                POSIX_SPAWN_SETSID;
    *master = posix_openpt(O_RDWR);
    if (*master == -1) {
@@ -1154,26 +1154,12 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..381d59e11bf158d269335c8231b407fc
 +Napi::Value OrcaReadProcessPath(const Napi::CallbackInfo& info) {
 +  return orca_queue_path_worker(info, false);
 +}
-+
-+// Members of one process group, read synchronously (KERN_PROC_PGRP); -1 when the kernel would not say.
-+Napi::Value OrcaCountProcessGroup(const Napi::CallbackInfo& info) {
-+  Napi::Env env = info.Env();
-+  if (info.Length() != 1 || !info[0].IsNumber()) {
-+    throw Napi::TypeError::New(env, "Usage: countProcessGroup(pgid)");
-+  }
-+  int pgid = info[0].As<Napi::Number>().Int32Value();
-+  std::vector<struct kinfo_proc> procs;
-+  if (pgid <= 0 || !orca_read_kinfo(KERN_PROC_PGRP, pgid, &procs)) {
-+    return Napi::Number::New(env, -1);
-+  }
-+  return Napi::Number::New(env, (double)procs.size());
-+}
 +#endif
 +
  /**
   * Init
   */
-@@ -793,6 +1357,12 @@ Napi::Object init(Napi::Env env, Napi::Object exports) {
+@@ -793,6 +1343,11 @@ Napi::Object init(Napi::Env env, Napi::Object exports) {
    exports.Set("open",    Napi::Function::New(env, PtyOpen));
    exports.Set("resize",  Napi::Function::New(env, PtyResize));
    exports.Set("process", Napi::Function::New(env, PtyGetProc));
@@ -1181,7 +1167,6 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..381d59e11bf158d269335c8231b407fc
 +  exports.Set("readProcessTable", Napi::Function::New(env, OrcaProcessTableAsync));
 +  exports.Set("readProcessCwd", Napi::Function::New(env, OrcaReadProcessCwd));
 +  exports.Set("readProcessPath", Napi::Function::New(env, OrcaReadProcessPath));
-+  exports.Set("countProcessGroup", Napi::Function::New(env, OrcaCountProcessGroup));
 +#endif
    return exports;
  }
@@ -2320,7 +2305,7 @@ diff --git a/src/worker/conoutSocketWorker.ts b/src/worker/conoutSocketWorker.ts
 diff --git a/src/unix/pty.cc b/src/unix/pty.cc
 --- a/src/unix/pty.cc
 +++ b/src/unix/pty.cc
-@@ -1351,7 +1351,19 @@
+@@ -1337,7 +1337,19 @@
   * Init
   */
 -

@@ -19,7 +19,6 @@ import {
 } from './terminal-host-steady-state-anchor'
 import { SessionNotFoundError } from '../protocol/daemon-errors'
 import { readProvenIdleShell, rememberIdleShellProof } from './terminal-host-idle-shell-proof'
-import { monotonicNow } from '../../../shared/concurrency/deadline-settle-notifier'
 import {
   steadyPollJudgesByJobMembership,
   type PtyProcessInspectionOptions
@@ -109,7 +108,7 @@ export async function inspectTerminalHostProcess(args: {
     process.platform === 'darwin' &&
     !session.processNameIsSpawnFile
   ) {
-    const shell = readProvenIdleShell(session)
+    const shell = await readProvenIdleShell(session)
     if (shell !== null) {
       args.onTier?.('cheap')
       return { foregroundProcess: shell, hasChildProcesses: false }
@@ -149,10 +148,10 @@ export async function inspectTerminalHostProcess(args: {
     evidence = unverifiableEvidence(args, session, 'windows_ssh_foreground_unavailable')
   } else {
     try {
-      const output = { chunks: session.outputChunks, countedAt: monotonicNow() }
+      const outputChunks = session.outputChunks
       const snapshot = await getStrictProcessTableSnapshotWithAge()
       if (process.platform === 'darwin' && !session.processNameIsSpawnFile) {
-        rememberIdleShellProof(session, snapshot.rows, snapshot.capturedAgeMs, output)
+        rememberIdleShellProof(session, snapshot.rows, snapshot.capturedAgeMs, outputChunks)
       }
       if (session.processNameIsSpawnFile) {
         const observed = resolveSpawnFileForegroundFromRows(snapshot.rows, session.pid)

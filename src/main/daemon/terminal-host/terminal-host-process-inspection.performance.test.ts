@@ -1,5 +1,9 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { setLibprocAddonForTests } from '../../../shared/process-observation/darwin/libproc-addon'
+import { resetDarwinProcessGroupSizesForTests } from '../../../shared/process-observation/darwin/darwin-process-group-sizes'
+import {
+  setLibprocAddonForTests,
+  type LibprocProcessRow
+} from '../../../shared/process-observation/darwin/libproc-addon'
 import type { ProcessTableRow } from '../../../shared/process-observation/tables/process-table-snapshot'
 import type { Session } from '../sessions/session'
 import { inspectTerminalHostProcess } from './terminal-host-process-inspection'
@@ -24,12 +28,32 @@ vi.mock(
 const platform = process.platform
 const SHELL = 4242
 let shellGroupMembers = 1
+const groupReads = vi.fn()
+
+function kinfo(pid: number, pgid: number): LibprocProcessRow {
+  return {
+    pid,
+    ppid: 1,
+    pgid,
+    tpgid: pgid,
+    tdev: 1,
+    status: 3,
+    flags: 0,
+    sessionLeader: false,
+    startSec: 0,
+    comm: 'zsh'
+  }
+}
 
 beforeEach(() => {
   shellGroupMembers = 1
+  groupReads.mockReset()
+  resetDarwinProcessGroupSizesForTests()
   setLibprocAddonForTests({
-    readProcessTable: async () => null,
-    countProcessGroup: (pgid) => (pgid === SHELL ? shellGroupMembers : 0)
+    readProcessTable: async (query) => {
+      groupReads(query)
+      return Array.from({ length: shellGroupMembers }, (_, i) => kinfo(SHELL + i, SHELL))
+    }
   })
   Object.defineProperty(process, 'platform', { value: 'darwin' })
   vi.useFakeTimers()
@@ -141,8 +165,48 @@ it('captures again on the next poll after a silent command joins the shell group
   expect(capturesAfterNextPoll).toBe(2)
 })
 
-it('captures every poll when this pty.node cannot count a group', async () => {
+it('captures every poll when the native reader cannot read groups', async () => {
   setLibprocAddonForTests({ readProcessTable: async () => null })
   const session = pane({ root: SHELL, shellIsRootChild: false, foregroundGroup: SHELL })
   expect(await pollQuietPane(session, [row(SHELL, 1, SHELL, '-zsh')])).toBe(10)
+})
+
+it('shares one group read per round however many idle panes poll in it', async () => {
+  async function pollRounds(panes: number): Promise<{ captures: number; groupReads: number }> {
+    resetDarwinProcessGroupSizesForTests()
+    groupReads.mockReset()
+    const shells = Array.from({ length: panes }, (_, i) => 10_000 + i)
+    const sessions = shells.map((pid) =>
+      pane({ root: pid, shellIsRootChild: false, foregroundGroup: pid })
+    )
+    const rows = shells.map((pid) => ({ ...row(pid, 1, pid, '-zsh'), tpgid: pid }))
+    setLibprocAddonForTests({
+      readProcessTable: async (query) => {
+        groupReads(query)
+        return shells.map((pid) => kinfo(pid, pid))
+      }
+    })
+    // One capture serves the whole round, already 200 ms old when later panes join it.
+    tables.strict.mockReset().mockResolvedValue({ rows, capturedAgeMs: 200 })
+    for (let round = 0; round < 10; round++) {
+      await Promise.all(
+        sessions.map((session, i) =>
+          inspectTerminalHostProcess({
+            sessionId: `pane-${i}`,
+            session,
+            steadyState: true,
+            jobMembershipOnly: true,
+            authorityGeneration: 'generation-1',
+            nextObservationEpoch: () => round
+          })
+        )
+      )
+      vi.advanceTimersByTime(15_000)
+    }
+    return { captures: tables.strict.mock.calls.length, groupReads: groupReads.mock.calls.length }
+  }
+  // Each pane re-proves once a minute (3 of 10 rounds); the other 7 rounds share one kinfo-only read each.
+  expect(await pollRounds(30)).toEqual({ captures: 90, groupReads: 7 })
+  expect(await pollRounds(300)).toEqual({ captures: 900, groupReads: 7 })
+  expect(groupReads).toHaveBeenCalledWith({ command: false })
 })

@@ -48,8 +48,6 @@ export type LibprocAddon = {
    * Absent from a #35987 pty.node, which still reads the table: cwd and path then come from lsof. */
   readProcessCwd?: (pid: number) => Promise<string | null>
   readProcessPath?: (pid: number) => Promise<string | null>
-  /** Members of one process group (KERN_PROC_PGRP), synchronous; -1 when unreadable. Absent from older pty.node. */
-  countProcessGroup?: (pgid: number) => number
 }
 
 const requireFromHere = createRequire(__filename)
@@ -104,12 +102,6 @@ export function loadLibprocAddon(): LibprocAddon | null {
     console.warn('[process-table] node-pty lacks the libproc reader; falling back to ps and lsof')
   }
   return cachedAddon
-}
-
-/** How many processes are in a group, or null when this pty.node cannot say. */
-export function countLibprocProcessGroup(pgid: number): number | null {
-  const count = loadLibprocAddon()?.countProcessGroup?.(pgid)
-  return typeof count === 'number' && count >= 0 ? count : null
 }
 
 export function setLibprocAddonForTests(addon: LibprocAddon | null | undefined): void {
