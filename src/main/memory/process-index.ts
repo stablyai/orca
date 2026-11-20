@@ -17,11 +17,15 @@ export type ProcRow = {
   name?: string
   /** Creation time in 100 ns ticks (Windows CIM only); orders a parent before its children. */
   startTicks?: bigint
+  /** Process group (Unix sweeps without names); ties an orphan to the group it was started in. */
+  pgid?: number
 }
 
 export type ProcIndex = {
   byPid: Map<number, ProcRow>
   childrenOf: Map<number, number[]>
+  /** Processes init adopted, by the process group they kept; absent without group data. */
+  orphansByGroup?: Map<number, number[]>
   /** Missing commit counters must not look like measured zero. */
   hasPrivateMemory: boolean
   memoryMetric: ProcessMemoryMetric
@@ -35,8 +39,17 @@ export function buildProcessIndex(
 ): ProcIndex {
   const byPid = new Map<number, ProcRow>()
   const childrenOf = new Map<number, number[]>()
+  const orphansByGroup = new Map<number, number[]>()
   let hasPrivateMemory = false
   for (const row of rows) {
+    if (row.ppid === 1 && row.pgid !== undefined && row.pgid !== row.pid) {
+      const orphans = orphansByGroup.get(row.pgid)
+      if (orphans) {
+        orphans.push(row.pid)
+      } else {
+        orphansByGroup.set(row.pgid, [row.pid])
+      }
+    }
     const footprint = footprints?.get(row.pid)
     if (footprint !== undefined) {
       row.memory = footprint
@@ -53,18 +66,21 @@ export function buildProcessIndex(
   return {
     byPid,
     childrenOf,
+    orphansByGroup,
     hasPrivateMemory,
     memoryMetric: footprints ? 'footprint' : fallbackMetric
   }
 }
 
-export function parsePsOutput(stdout: string, withName = false): ProcRow[] {
+/** `withGroup` reads a fifth `pgid` column; it never combines with the trailing name column. */
+export function parsePsOutput(stdout: string, withName = false, withGroup = false): ProcRow[] {
   const rows: ProcRow[] = []
   for (const line of iterateProcessOutputLines(stdout)) {
-    const fields = getProcessOutputFields(line, 4)
-    if (fields.length < 4) {
+    const fields = getProcessOutputFields(line, withGroup ? 5 : 4)
+    if (fields.length < (withGroup ? 5 : 4)) {
       continue
     }
+    const pgid = withGroup ? Number.parseInt(fields[4], 10) : Number.NaN
     const pid = Number.parseInt(fields[0], 10)
     const ppid = Number.parseInt(fields[1], 10)
     const cpu = Number.parseFloat(fields[2])
@@ -78,7 +94,8 @@ export function parsePsOutput(stdout: string, withName = false): ProcRow[] {
       ppid,
       cpu: Number.isFinite(cpu) && cpu > 0 ? cpu : 0,
       memory: Number.isFinite(rssKb) && rssKb > 0 ? rssKb * 1024 : 0,
-      ...(name ? { name } : {})
+      ...(name ? { name } : {}),
+      ...(Number.isSafeInteger(pgid) && pgid > 0 ? { pgid } : {})
     })
   }
   return rows

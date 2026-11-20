@@ -39,7 +39,9 @@ describe('agent memory registrations', () => {
     const live = launch(9_200_000)
     await settle()
 
-    expect(listAgentProcessRoots()).toEqual([{ pid: 9_200_000, agentSessionId: null }])
+    expect(listAgentProcessRoots()).toEqual([
+      { pid: 9_200_000, agentPid: 9_200_000, agentSessionId: null }
+    ])
     live.emit('close', null, null)
     expect(listAgentProcessRoots()).toEqual([])
   })

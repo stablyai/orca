@@ -11,7 +11,7 @@ import { listRegisteredPtys } from './pty-registry'
 import { collectHostMemory } from './host-memory'
 import { getLocalDaemonPid } from './local-daemon-pid'
 import { enumerateHostProcesses } from './host-process-index'
-import { claimProcessTree, claimPtyProcessTrees } from './pty-process-trees'
+import { claimOrphanedGroup, claimProcessTree, claimPtyProcessTrees } from './pty-process-trees'
 import { listAgentProcessRoots, readAgentProcessChat } from './agent-process-registry'
 import type { ProcIndex, ProcRow } from './process-index'
 import {
@@ -156,9 +156,13 @@ async function runSnapshot(store: MemorySnapshotStore): Promise<MemorySnapshot> 
   const appBuckets = bucketElectronMetrics(processIndex)
   const claimed = new Set<number>()
   const ptyTrees = claimPtyProcessTrees(processIndex, listRegisteredPtys(), claimed)
+  // The agent leads its own session and group; what it backgrounds keeps that group once orphaned.
   const agentTrees = listAgentProcessRoots().map((root) => ({
     ...root,
-    rows: claimProcessTree(processIndex, root.pid, claimed)
+    rows: [
+      ...claimProcessTree(processIndex, root.pid, claimed),
+      ...claimOrphanedGroup(processIndex, root.agentPid, claimed)
+    ]
   }))
 
   const orphan = createEmptyWorktreeMemoryBucket(
