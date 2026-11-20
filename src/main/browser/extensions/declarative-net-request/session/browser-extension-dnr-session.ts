@@ -302,6 +302,21 @@ export function attachBrowserExtensionDnr(
   session.extensions.getAllExtensions().forEach(add)
 }
 
+/** A resumed extension that couldn't get all its state back starts clean: its onStartup re-adds these. */
+export async function clearBrowserExtensionDnrSessionRules(
+  session: Electron.Session,
+  extensionId: string
+): Promise<void> {
+  const rules = runtimes.get(session)?.extensions.get(extensionId)?.rules
+  // Why wait first: the rules restored at load are only listed once that load ran.
+  await rules?.enqueue(() => undefined)
+  await rules?.updateRules(
+    'session',
+    rules.getRules('session').map((rule) => rule.id),
+    []
+  )
+}
+
 /** Startup waits for an extension's rules with its other restored state. */
 export function whenBrowserExtensionDnrLoaded(session: Electron.Session): Promise<void> {
   return runtimes.get(session)?.whenRulesLoaded() ?? Promise.resolve()

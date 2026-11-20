@@ -127,9 +127,6 @@ export function installBrowserExtensionStorageRelay(
     }
     if (context === 'worker') {
       deliver(areaName, changes)
-      if (areaName === 'session') {
-        noteSessionUse()
-      }
     } else {
       void bridge.call(relayNamespace, 'report', [areaName, changes])
     }
@@ -174,6 +171,10 @@ export function installBrowserExtensionStorageRelay(
         const keys = keysOf(args)
         if (keys === undefined) {
           return native.call(area, ...input)
+        }
+        // Why before the write: a report sent after it could miss an unload already underway.
+        if (areaName === 'session') {
+          noteSessionUse()
         }
         // Why all three now: Chromium runs an area's calls in order, so the reads bracket exactly
         // this write, and the write copies its arguments at call time as Chrome's does.

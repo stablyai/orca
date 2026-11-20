@@ -92,16 +92,17 @@ export class DnrExtensionRules {
         ? this.manifestRulesets.filter((ruleset) => state.enabledRulesetIds?.includes(ruleset.id))
         : this.manifestRulesets.filter((ruleset) => ruleset.enabled)
       await this.enableStaticWithinLimits(wanted)
-      await this.restoreScoped('dynamic', readableRules(state.dynamicRules))
-      await this.restoreScoped(
-        'session',
+      await this.restoreScoped('dynamic', () => readableRules(state.dynamicRules))
+      await this.restoreScoped('session', () =>
         getBrowserExtensionDnrStore().readSessionRules(this.host.profileId, this.extension)
       )
     })
   }
 
-  private async restoreScoped(scope: DnrRuleScope, rules: DnrRule[]): Promise<void> {
-    if (rules.length === 0 || this.unloaded) {
+  // Why read lazily: reading session rules drops another version's, possibly this one's replacement.
+  private async restoreScoped(scope: DnrRuleScope, read: () => DnrRule[]): Promise<void> {
+    const rules = this.unloaded ? [] : read()
+    if (rules.length === 0) {
       return
     }
     const result = await buildDnrRules(rules, this.extension.id, { kind: scope }, 'warn')

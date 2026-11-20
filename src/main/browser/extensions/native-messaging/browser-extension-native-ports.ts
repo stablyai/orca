@@ -1,6 +1,7 @@
 import { app, BrowserWindow, webFrameMain } from 'electron'
 import { getChromeExtensionOrigin } from '../../../../shared/browser/extensions/browser-extension-url'
 import { getHostSessionState } from '../api-runtime/browser-extension-contexts'
+import { noteBrowserExtensionNeedsCleanStart } from '../profile-sessions/browser-extension-idle-kept-state'
 import {
   BrowserExtensionApiError,
   type BrowserExtensionCaller
@@ -132,9 +133,16 @@ function observeSession(sess: Electron.Session): void {
   }
   observedSessions.add(sess)
   // Disable, removal, reload and profile deletion all unload the extension from the session.
-  sess.extensions.on('extension-unloaded', (_event, extension) =>
-    closeNativePortsWhere((port) => port.session === sess && port.extensionId === extension.id)
-  )
+  sess.extensions.on('extension-unloaded', (_event, extension) => {
+    const profileId = getHostSessionState(sess)?.browserProfileId
+    const owned = (port: NativePort): boolean =>
+      port.session === sess && port.extensionId === extension.id
+    // Why: the extension gets no disconnect event, so only a clean start reconnects it.
+    if (profileId && [...ports.values()].some(owned)) {
+      noteBrowserExtensionNeedsCleanStart(profileId, extension.id)
+    }
+    closeNativePortsWhere(owned)
+  })
   sess.serviceWorkers.on('running-status-changed', ({ versionId, runningStatus }) => {
     if (runningStatus === 'stopped') {
       closeNativePortsWhere(

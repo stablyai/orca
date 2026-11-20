@@ -15,10 +15,11 @@ const idleUnloadedProfileIds = new Set<string>()
 /** Profile → extensions reloaded while it was idle; they get onInstalled(update) on reattach. */
 const reloadedWhileIdle = new Map<string, Set<string>>()
 /**
- * Profile → extensions that used chrome.storage.session since they loaded. Unloading empties that
- * area and it can't be put back, so these start clean, with onStartup, instead of resuming.
+ * Profile → extensions whose session can't resume: they used chrome.storage.session (unloading
+ * empties it), lost an open native messaging connection, or had a call refused as they unloaded.
+ * They start clean, with onStartup, instead.
  */
-const sessionStorageUsers = new Map<string, Set<string>>()
+const cleanStartNeeded = new Map<string, Set<string>>()
 const dropListeners = new Set<(profileId: string, extensionId: string) => void>()
 
 function installTime(extensionId: string): number | undefined {
@@ -29,27 +30,24 @@ function addTo(map: Map<string, Set<string>>, profileId: string, extensionId: st
   map.set(profileId, (map.get(profileId) ?? new Set<string>()).add(extensionId))
 }
 
-/** A page or worker wrote chrome.storage.session, or opened it to content scripts. */
-export function noteBrowserExtensionSessionStorageUsed(
-  profileId: string,
-  extensionId: string
-): void {
-  addTo(sessionStorageUsers, profileId, extensionId)
+/** The extension's next reattach in this profile starts it clean (see `cleanStartNeeded`). */
+export function noteBrowserExtensionNeedsCleanStart(profileId: string, extensionId: string): void {
+  addTo(cleanStartNeeded, profileId, extensionId)
 }
 
-/** Each load starts with an empty chrome.storage.session. */
-export function forgetBrowserExtensionSessionStorageUse(profileId: string, extensionId: string) {
-  sessionStorageUsers.get(profileId)?.delete(extensionId)
+/** Each load starts afresh: empty session storage, no native connections. */
+export function forgetBrowserExtensionCleanStartNeed(profileId: string, extensionId: string) {
+  cleanStartNeeded.get(profileId)?.delete(extensionId)
 }
 
 /**
  * Offscreen documents write storage without Orca's relay, so their use can't be seen; an extension
  * that may open one is treated as a session storage user.
  */
-function usedSessionStorage(profileId: string, extensionId: string): boolean {
+function needsCleanStart(profileId: string, extensionId: string): boolean {
   const permissions = getBrowserExtensionInstallStore().get(extensionId)?.permissions ?? []
   return (
-    sessionStorageUsers.get(profileId)?.has(extensionId) === true ||
+    cleanStartNeeded.get(profileId)?.has(extensionId) === true ||
     (permissions.includes('offscreen') && permissions.includes('storage'))
   )
 }
@@ -72,6 +70,11 @@ export function beginIdleUnload(
   }
 }
 
+/** A resumed extension's load has not claimed its kept state yet. */
+export function isBrowserExtensionResuming(profileId: string, extensionId: string): boolean {
+  return awaitingByProfileId.get(profileId)?.has(extensionId) === true
+}
+
 /** Unload listeners skip forgetting the session state of an extension kept here. */
 export function isBrowserExtensionStateKeptWhileIdle(
   profileId: string,
@@ -89,8 +92,8 @@ export function onBrowserExtensionIdleStateDropped(
 
 /**
  * Before an attach loads anything. An extension resumes, with its kept state and no lifecycle
- * event, only if the same copy ran when the profile went idle and it never used
- * chrome.storage.session. Any other starts clean: kept state and session rules go, and onStartup
+ * event, only if the same copy ran when the profile went idle and nothing it held was lost (see
+ * `cleanStartNeeded`). Any other starts clean: kept state and session rules go, and onStartup
  * fires, so it is never left with partial state and no signal. One reloaded while idle gets
  * onInstalled(update) instead.
  */
@@ -102,7 +105,7 @@ export function settleKeptStateOnAttach(
   dropKept(
     keptByProfileId,
     profileId,
-    (id, time) => !enabled.has(id) || installTime(id) !== time || usedSessionStorage(profileId, id)
+    (id, time) => !enabled.has(id) || installTime(id) !== time || needsCleanStart(profileId, id)
   )
   const resumed = keptByProfileId.get(profileId) ?? new Map<string, number>()
   keptByProfileId.delete(profileId)
@@ -143,12 +146,12 @@ export function noteBrowserExtensionReloadedWhileIdle(
   extensionId: string,
   detachedProfileIds: readonly string[]
 ): void {
+  dropBrowserExtensionIdleState({ extensionId })
   for (const profileId of detachedProfileIds) {
     if (idleUnloadedProfileIds.has(profileId)) {
       addTo(reloadedWhileIdle, profileId, extensionId)
     }
   }
-  dropBrowserExtensionIdleState({ extensionId })
 }
 
 /**
@@ -165,11 +168,18 @@ export function dropBrowserExtensionIdleState(scope: {
   if (profileId === undefined && extensionId === undefined) {
     idleUnloadedProfileIds.clear()
     reloadedWhileIdle.clear()
-    sessionStorageUsers.clear()
+    cleanStartNeeded.clear()
   } else if (profileId !== undefined && scope.forgetProfile) {
     idleUnloadedProfileIds.delete(profileId)
     reloadedWhileIdle.delete(profileId)
-    sessionStorageUsers.delete(profileId)
+    cleanStartNeeded.delete(profileId)
+  } else if (extensionId !== undefined && profileId === undefined) {
+    // Reload or uninstall: what the old copy left per profile goes with it.
+    for (const byProfile of [reloadedWhileIdle, cleanStartNeeded]) {
+      for (const ids of byProfile.values()) {
+        ids.delete(extensionId)
+      }
+    }
   }
   for (const map of [keptByProfileId, awaitingByProfileId]) {
     for (const id of profileId === undefined ? [...map.keys()] : [profileId]) {

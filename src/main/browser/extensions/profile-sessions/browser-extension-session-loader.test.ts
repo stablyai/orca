@@ -339,7 +339,7 @@ describe('a profile whose last page closed', () => {
       []
     )
     // Session storage empties on unload, so an extension that used it starts clean instead.
-    idleKeptState.noteBrowserExtensionSessionStorageUsed(resumed.id, ID)
+    idleKeptState.noteBrowserExtensionNeedsCleanStart(resumed.id, ID)
     await loader.unloadBrowserExtensionsFromIdleProfile(resumed.id, () => {})
     mocks.emitWorkerStart.mockClear()
     await attach()

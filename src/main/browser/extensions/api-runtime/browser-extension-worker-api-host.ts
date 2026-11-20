@@ -1,4 +1,5 @@
 import { randomBytes } from 'node:crypto'
+import { noteBrowserExtensionNeedsCleanStart } from '../profile-sessions/browser-extension-idle-kept-state'
 import {
   getChromeExtensionOrigin,
   parseChromeExtensionUrl
@@ -136,6 +137,8 @@ export async function handleBrowserExtensionWorkerRequest(
   const lifetime = getBrowserExtensionContextSignal(state, extension.id)
   const text = await readBoundedText(request)
   if (lifetime.aborted || getHostSessionState(sess) !== state) {
+    // Why: a call cut off by the unload may have changed state the reattach can't see.
+    noteBrowserExtensionNeedsCleanStart(state.browserProfileId, extension.id)
     return refuse(403)
   }
   if (text === null) {

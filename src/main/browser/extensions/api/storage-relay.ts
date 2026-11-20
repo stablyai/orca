@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { emitBrowserExtensionEvent } from '../api-runtime/browser-extension-api-host'
-import { noteBrowserExtensionSessionStorageUsed } from '../profile-sessions/browser-extension-idle-kept-state'
+import { noteBrowserExtensionNeedsCleanStart } from '../profile-sessions/browser-extension-idle-kept-state'
 import {
   defineBrowserExtensionMethod,
   registerBrowserExtensionNamespace
@@ -27,7 +27,7 @@ export function registerStorageRelayNamespace(): void {
         z.tuple([z.enum(['local', 'session']), changesSchema]),
         (caller, areaName, changes) => {
           if (areaName === 'session') {
-            noteBrowserExtensionSessionStorageUsed(caller.browserProfileId, caller.extension.id)
+            noteBrowserExtensionNeedsCleanStart(caller.browserProfileId, caller.extension.id)
           }
           // Why only noted: a worker delivers its own changes; it reports only its first session use.
           if (caller.fromWorker || Object.keys(changes).length === 0) {

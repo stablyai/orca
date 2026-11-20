@@ -19,13 +19,13 @@ import {
 } from '../declarative-net-request/session/browser-extension-dnr-session'
 import { setBrowserExtensionSessionHooks } from './browser-extension-session-loader'
 import {
-  claimBrowserExtensionIdleState,
-  forgetBrowserExtensionSessionStorageUse,
+  forgetBrowserExtensionCleanStartNeed,
   isBrowserExtensionStateKeptWhileIdle
 } from './browser-extension-idle-kept-state'
 import {
   forgetBrowserExtensionSessionState,
-  installBrowserExtensionIdleResume
+  installBrowserExtensionIdleResume,
+  settleBrowserExtensionResume
 } from './browser-extension-idle-resume'
 import { closeBrowserExtensionSidePanelsForExtension } from '../side-panel/browser-extension-side-panel-host'
 import {
@@ -73,7 +73,7 @@ export function installBrowserExtensionSessionServices(): void {
       if (!servedSessions.has(sess)) {
         servedSessions.add(sess)
         sess.extensions.on('extension-loaded', (_event, extension) =>
-          forgetBrowserExtensionSessionStorageUse(profileId, extension.id)
+          forgetBrowserExtensionCleanStartNeed(profileId, extension.id)
         )
         sess.extensions.on('extension-unloaded', (_event, extension) => {
           forgetBrowserExtensionContentScriptRestore(sess, extension.id)
@@ -106,16 +106,20 @@ export function installBrowserExtensionSessionServices(): void {
     },
     detached: stopObservingBrowserExtensionWebRequests,
     loaded: async (sess, profileId, extension) => {
-      claimBrowserExtensionIdleState(profileId, extension.id)
-      await Promise.all([
-        restoreBrowserExtensionContentScripts(
-          sess,
-          profileId,
-          extension,
-          CONTENT_SCRIPT_RESTORE_TIMEOUT_MS
-        ),
-        whenBrowserExtensionDnrLoaded(sess)
-      ])
+      await settleBrowserExtensionResume(
+        sess,
+        profileId,
+        extension,
+        Promise.all([
+          restoreBrowserExtensionContentScripts(
+            sess,
+            profileId,
+            extension,
+            CONTENT_SCRIPT_RESTORE_TIMEOUT_MS
+          ),
+          whenBrowserExtensionDnrLoaded(sess)
+        ])
+      )
     }
   })
 }
