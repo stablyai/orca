@@ -1,11 +1,13 @@
 import { EventEmitter } from 'node:events'
 import { createHash } from 'node:crypto'
 import { existsSync } from 'node:fs'
+import { readdir, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { MessageChannel, Worker, type MessagePort } from 'node:worker_threads'
 import { runProcess } from '@orca/process-host'
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
 import {
+  PROCESS_LAUNCHER_LOST_CODE,
   WORKER_CHILD_ABANDONED_CODE,
   WorkerThreadChildProcessHost,
   type WorkerThreadChildProcess
@@ -311,3 +313,56 @@ describe('WorkerThreadChildProcessHost on a real worker thread', () => {
     30_000
   )
 })
+
+async function sleepChildrenOfThisProcess(): Promise<number[]> {
+  const pids: number[] = []
+  for (const entry of await readdir('/proc')) {
+    const stat = await readFile(`/proc/${entry}/stat`, 'utf8').catch(() => '')
+    const tail = stat.slice(stat.lastIndexOf(')') + 2).split(' ')
+    if (stat.includes('(sleep)') && Number(tail[1]) === process.pid && tail[0] !== 'Z') {
+      pids.push(Number(entry))
+    }
+  }
+  return pids
+}
+
+describe.runIf(process.platform === 'linux')(
+  'WorkerThreadChildProcessHost in another process',
+  () => {
+    it('ends a child whose pid never arrived before reporting the lost launcher', async () => {
+      let transport: EventEmitter | undefined
+      const host = new WorkerThreadChildProcessHost(
+        () => {
+          const { port1, port2 } = new MessageChannel()
+          openPorts.push(port1, port2)
+          serveWorkerThreadChildProcesses(port2)
+          const emitter = new EventEmitter()
+          transport = emitter
+          // The launcher dies with everything but 'ready' still unsent: main never hears the pid.
+          port1.on('message', (message: { type: string }) => {
+            if (message.type === 'ready') {
+              emitter.emit('message', message)
+            }
+          })
+          return Object.assign(emitter, {
+            postMessage: (message: unknown) => port1.postMessage(message),
+            unref: () => port1.unref(),
+            terminate: async () => 0
+          })
+        },
+        { tagSpawns: true }
+      )
+      const child = host.spawn({ program: '/bin/sleep', args: ['300'] })
+      const failure = new Promise<Error>((resolve) => child.once('error', resolve))
+      const closed = waitForClose(child)
+      while ((await sleepChildrenOfThisProcess()).length === 0) {
+        await new Promise((resolve) => setTimeout(resolve, 20))
+      }
+      expect(child.pid).toBeUndefined()
+      transport?.emit('exit', 1)
+      await expect(failure).resolves.toMatchObject({ code: PROCESS_LAUNCHER_LOST_CODE })
+      await expect(closed).resolves.toEqual([null, 'SIGKILL'])
+      expect(await sleepChildrenOfThisProcess()).toEqual([])
+    })
+  }
+)

@@ -1,15 +1,20 @@
-import { EventEmitter } from 'node:events'
+import { randomUUID } from 'node:crypto'
 import type { Worker } from 'node:worker_threads'
 import { assertWslNotLatchedAbsent } from '@orca/process-host/wsl-not-installed-latch'
 import { spawnWorkerThread } from '../worker-threads/worker-thread-spawn'
 import { LazyWorkerThreadHost } from '../worker-threads/lazy-worker-thread-host'
+import { endLostSpawns, SPAWN_KEY_ENV } from './lost-spawn-processes'
+import {
+  PROCESS_LAUNCHER_LOST_CODE,
+  WORKER_CHILD_ABANDONED_CODE,
+  WorkerThreadChildProcess
+} from './worker-thread-child-process-stand-in'
 import type { WorkerThreadFactory } from '../worker-threads/worker-thread-transport'
 import {
   currentWorkerEntryLayout,
   resolveWorkerThreadEntryPath
 } from '../worker-threads/worker-thread-entry-path'
 import type {
-  WorkerThreadChildErrorPayload,
   WorkerThreadChildEvent,
   WorkerThreadChildRequest,
   WorkerThreadChildSpec
@@ -21,155 +26,14 @@ import type {
 export const IDLE_TEARDOWN_MS = 2 * 60_000
 
 const WORKER_ENTRY_FILENAME = 'worker-thread-child-process-entry.js'
-// Node reports a negative errno as the exit code of a child that never started.
-const SPAWN_FAILED_EXIT_CODE = -1
 
-/** False when the child is no longer reachable through a live worker. */
-type SendRequest = (request: WorkerThreadChildRequest) => boolean
-
-function toError(payload: WorkerThreadChildErrorPayload): Error {
-  const { message, ...fields } = payload
-  return Object.assign(new Error(message), fields)
-}
-
-/** Error code for a child whose worker died: its pipes closed with the worker, but no close event will arrive. */
-export const WORKER_CHILD_ABANDONED_CODE = 'ERR_ORCA_WORKER_CHILD_ABANDONED'
-
-export function isAbandonedWorkerChildError(error: unknown): boolean {
-  return typeof error === 'object' && error !== null && 'code' in error
-    ? error.code === WORKER_CHILD_ABANDONED_CODE
-    : false
-}
-
-/** The worker forwards stdin pipe failures as child errors; a capture leaves those to the exit status, as main's stdin end does. */
-export function isWorkerChildStdinWriteError(error: unknown): boolean {
-  return typeof error === 'object' && error !== null && 'syscall' in error
-    ? error.syscall === 'write'
-    : false
-}
-
-/** Stdin pipe failures reach its 'error' listeners, as on a native pipe; without one they surface as child 'error' events. */
-class WorkerThreadChildStdin extends EventEmitter {
-  constructor(
-    private readonly id: number,
-    private readonly send: SendRequest
-  ) {
-    super()
-  }
-
-  write(data: string | Uint8Array): boolean {
-    this.send({ type: 'stdin-write', id: this.id, data })
-    return true
-  }
-
-  end(data?: string | Uint8Array): void {
-    if (data !== undefined && data.length > 0) {
-      this.write(data)
-    }
-    this.send({ type: 'stdin-end', id: this.id })
-  }
-}
-
-/** Main-thread stand-in for a piped ChildProcess whose real process lives on the worker. */
-export class WorkerThreadChildProcess extends EventEmitter {
-  ownedGroupStopping = false
-  ownedGroupTerminated = false
-  closed = false
-  pid: number | undefined = undefined
-  exitCode: number | null = null
-  signalCode: NodeJS.Signals | null = null
-  readonly stdin: WorkerThreadChildStdin
-  readonly stdout = new EventEmitter()
-  readonly stderr = new EventEmitter()
-
-  constructor(
-    readonly id: number,
-    private readonly send: SendRequest
-  ) {
-    super()
-    this.stdin = new WorkerThreadChildStdin(id, send)
-  }
-
-  kill(signal?: NodeJS.Signals): boolean {
-    if (this.closed) {
-      return false
-    }
-    const exited = this.exitCode !== null || this.signalCode !== null
-    // After exit the worker still retires pipes a descendant may hold, as execFile's kill does.
-    return this.send({ type: 'kill', id: this.id, signal }) && !exited
-  }
-
-  /** The reader is done with one stream, or both; later output stays on the worker instead of crossing to this thread. */
-  discardOutput(stream?: 'stdout' | 'stderr'): void {
-    if (!this.closed) {
-      this.send({ type: 'discard-output', id: this.id, ...(stream ? { stream } : {}) })
-    }
-  }
-
-  /** Withdraws a launch the worker has not started yet; no effect once it has. */
-  cancelPendingSpawn(): void {
-    if (!this.closed && this.pid === undefined) {
-      this.send({ type: 'cancel-spawn', id: this.id })
-    }
-  }
-
-  stopOwnedGroup(): void {
-    this.ownedGroupStopping = true
-    this.send({ type: 'stop-owned-group', id: this.id })
-  }
-
-  receive(event: Exclude<WorkerThreadChildEvent, { type: 'ready' }>): void {
-    switch (event.type) {
-      case 'group-terminated':
-        this.ownedGroupTerminated = true
-        this.emit('group-terminated')
-        return
-      case 'spawn':
-        this.pid = event.pid
-        this.emit('spawn')
-        return
-      case 'stdout':
-      case 'stderr':
-        try {
-          this[event.type].emit(
-            'data',
-            Buffer.from(event.chunk.buffer, event.chunk.byteOffset, event.chunk.byteLength)
-          )
-        } finally {
-          this.send({ type: 'output-consumed', id: this.id, bytes: event.chunk.byteLength })
-        }
-        return
-      case 'error':
-        if (isWorkerChildStdinWriteError(event.error) && this.stdin.listenerCount('error') > 0) {
-          this.stdin.emit('error', toError(event.error))
-          return
-        }
-        this.emitErrorIfObserved(event.error)
-        return
-      case 'spawn-error':
-        this.emit('group-terminated')
-        this.emitErrorIfObserved(event.error)
-        this.receive({ type: 'exit', id: this.id, code: SPAWN_FAILED_EXIT_CODE, signal: null })
-        this.receive({ type: 'close', id: this.id, code: SPAWN_FAILED_EXIT_CODE, signal: null })
-        return
-      case 'exit':
-        this.exitCode = event.code
-        this.signalCode = event.signal
-        this.emit('exit', event.code, event.signal)
-        return
-      case 'close':
-        this.closed = true
-        this.emit('close', event.code, event.signal)
-    }
-  }
-
-  // Ignore unobserved late errors after caller detach or EventEmitter would throw fatally into main.
-  private emitErrorIfObserved(payload: WorkerThreadChildErrorPayload): void {
-    if (this.listenerCount('error') > 0) {
-      this.emit('error', toError(payload))
-    }
-  }
-}
+export {
+  isAbandonedWorkerChildError,
+  isWorkerChildStdinWriteError,
+  PROCESS_LAUNCHER_LOST_CODE,
+  WORKER_CHILD_ABANDONED_CODE,
+  WorkerThreadChildProcess
+} from './worker-thread-child-process-stand-in'
 
 export class WorkerThreadChildProcessHost {
   private readonly host: LazyWorkerThreadHost<WorkerThreadChildEvent>
@@ -180,7 +44,11 @@ export class WorkerThreadChildProcessHost {
   // A worker that dies before answering anything is broken here (e.g. an unloadable chunk); stop offering it.
   private failedToStart = false
 
-  constructor(factory: WorkerThreadFactory) {
+  /** Spawn key per in-flight child: set when the worker runs in another process (see endLostSpawns). */
+  private readonly spawnKeys: Map<number, string> | null
+
+  constructor(factory: WorkerThreadFactory, options: { tagSpawns?: boolean } = {}) {
+    this.spawnKeys = options.tagSpawns ? new Map() : null
     this.host = new LazyWorkerThreadHost<WorkerThreadChildEvent>({
       factory,
       idleTeardownMs: IDLE_TEARDOWN_MS,
@@ -227,7 +95,8 @@ export class WorkerThreadChildProcessHost {
     if (this.ensureWorker()) {
       this.host.clearIdleTimer()
       this.children.set(id, child)
-      if (this.post({ type: 'spawn', id, spec })) {
+      const tagged = this.tagged(id, spec)
+      if (this.post({ type: 'spawn', id, spec: tagged })) {
         return child
       }
       this.forget(id)
@@ -277,11 +146,54 @@ export class WorkerThreadChildProcessHost {
     }
   }
 
+  private tagged(id: number, spec: WorkerThreadChildSpec): WorkerThreadChildSpec {
+    if (!this.spawnKeys) {
+      return spec
+    }
+    const key = randomUUID()
+    this.spawnKeys.set(id, key)
+    return { ...spec, env: { ...(spec.env ?? process.env), [SPAWN_KEY_ENV]: key } }
+  }
+
   private forget(id: number): void {
     this.children.delete(id)
+    this.spawnKeys?.delete(id)
     if (this.children.size === 0) {
       this.host.scheduleIdleTeardown()
     }
+  }
+
+  /**
+   * The worker ran in another process, so a pid or exit it posted may never have arrived. Its
+   * children are found by spawn key and ended first; only then does each hear an error and close,
+   * so admission, fences and output readers release exactly as for a finished child.
+   */
+  private endLost(abandoned: readonly WorkerThreadChildProcess[], message: string): void {
+    const keys = new Map<WorkerThreadChildProcess, string>()
+    for (const child of abandoned) {
+      const key = this.spawnKeys?.get(child.id)
+      this.spawnKeys?.delete(child.id)
+      if (key) {
+        keys.set(child, key)
+      }
+    }
+    void endLostSpawns([...keys.values()]).then((started) => {
+      for (const child of abandoned) {
+        const key = keys.get(child)
+        const error = { message, code: PROCESS_LAUNCHER_LOST_CODE }
+        if (child.pid === undefined && (!key || !started.has(key))) {
+          child.receive({ type: 'spawn-error', id: child.id, error })
+          continue
+        }
+        // Every process carrying its key is gone, so its owned group is too.
+        child.receive({ type: 'group-terminated', id: child.id })
+        if (!child.closed) {
+          child.receive({ type: 'error', id: child.id, error })
+          child.receive({ type: 'exit', id: child.id, code: null, signal: 'SIGKILL' })
+          child.receive({ type: 'close', id: child.id, code: null, signal: 'SIGKILL' })
+        }
+      }
+    })
   }
 
   // Worker death closes stdin for graceful stop but proves no child exit; omit close so drain windows/home locks still expire normally.
@@ -295,6 +207,10 @@ export class WorkerThreadChildProcessHost {
     const abandoned = [...this.children.values()]
     this.children.clear()
     this.host.destroy()
+    if (this.spawnKeys) {
+      this.endLost(abandoned, message)
+      return
+    }
     // The worker posts a pid in the turn it creates the process and its messages arrive before 'exit',
     // so a child without one was never created (queued, or the worker was not ready): it fails to start.
     for (const child of abandoned) {
@@ -336,7 +252,9 @@ export function childSpawnerIsIsolated(): boolean {
 }
 
 function shared(): WorkerThreadChildProcessHost {
-  sharedHost ??= new WorkerThreadChildProcessHost(isolatedFactory ?? defaultWorkerFactory)
+  sharedHost ??= isolatedFactory
+    ? new WorkerThreadChildProcessHost(isolatedFactory, { tagSpawns: true })
+    : new WorkerThreadChildProcessHost(defaultWorkerFactory)
   return sharedHost
 }
 

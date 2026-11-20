@@ -16,7 +16,11 @@ export function spawnGitStreamChild(
   command: ResolvedCommand,
   args: string[],
   spawnOptions: GitSpawnOptions
-): { child: ChildProcess | WorkerThreadChildProcess; ownedGroupChild: ChildProcess | null } {
+): {
+  child: ChildProcess | WorkerThreadChildProcess
+  ownedGroupChild: ChildProcess | null
+  workerOwnsGroup?: true
+} {
   if (
     process.platform === 'linux' &&
     !command.wsl &&
@@ -34,9 +38,8 @@ export function spawnGitStreamChild(
     })
     child.stdin.end()
     recordSubprocessSpawn(command.binary, command.args, performance.now() - spawnStartedAt)
-    // It leads its own group, which main signals by pgid like a native owned child.
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: group termination reads only pid, kill and close from the child.
-    return { child, ownedGroupChild: child as unknown as ChildProcess }
+    // It leads its own group, which the worker stops; a stop sent before the pid arrives waits for it.
+    return { child, ownedGroupChild: null, workerOwnsGroup: true }
   }
   if (process.platform !== 'win32' && !command.wsl) {
     const child = spawnNativeProcess(

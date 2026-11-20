@@ -7,7 +7,6 @@ import { spawnNativeProcess } from '@orca/process-host/native-process-spawn'
 import { resolveSelectedLocalCommand } from '../../../ipc/command-path/command-path-resolver'
 import { createAbortError } from './abort-error'
 import { endAbandonedWorkerChild, killSpawnedCommandTree } from './spawned-command-tree-kill'
-import { endAbandonedGroup } from './abandoned-worker-group'
 import { DEFAULT_GIT_MAX_BUFFER } from '../git-exec-options'
 import type { GitAdmissionTier } from '../../../../shared/rpc-contract/source-control/git-admission-tier-params'
 
@@ -274,9 +273,6 @@ export function execFileCapture(
             reportChildTerminated,
             options.workerLossEndsLifetime === true || !options.onChildTerminated
           )
-        } else if (child && 'stopOwnedGroup' in child && isAbandonedWorkerChildError(error)) {
-          // The lost worker can no longer end the group; end it here so its lifetime still ends.
-          void endAbandonedGroup(child, options.onWorkerLost).then(reportChildTerminated)
         }
         if (!terminating) {
           finish(error)

@@ -24,6 +24,7 @@ import { getLogsDirectory } from '../observability/logs-directory'
 import { setHeavyWorkerHost } from '../utility-worker-host/heavy-worker-spawn'
 import { HEAVY_WORKER_HOST_NAME } from '../utility-worker-host/heavy-worker-host-name'
 import { CHILD_SPAWNER_HOST_NAME } from '../utility-worker-host/child-spawner-host-name'
+import { UTILITY_WORKER_NO_HEAP_SAMPLING_ARG } from '../utility-worker-host/utility-worker-host-protocol'
 import { installIsolatedChildSpawner } from '../worker-thread-child-process/worker-thread-child-process'
 import { resolveProviderExecPath } from '../provider-process/provider-process-supervisor'
 import { setDefaultProcessLaunch } from '@orca/process-host/default-process-launch'
@@ -136,7 +137,11 @@ export function installElectronChildSpawnerHost(): void {
           inProcessWorkerData && typeof workerData === 'object'
             ? { ...workerData, ...inProcessWorkerData }
             : workerData
-      })
+      }),
+    undefined,
+    undefined,
+    undefined,
+    [UTILITY_WORKER_NO_HEAP_SAMPLING_ARG]
   )
   installIsolatedChildSpawner(() =>
     host.spawn({
@@ -151,6 +156,6 @@ export function installElectronChildSpawnerHost(): void {
   )
   // Every runProcess without its own launch (git probes, gh, ps, lsof...) starts there too.
   setDefaultProcessLaunch((spec, onTerminated) =>
-    launchProcessSpecOnWorker(spec, undefined, onTerminated, !spec.onChildTerminated)
+    launchProcessSpecOnWorker(spec, undefined, onTerminated, !spec.onChildTerminated, true)
   )
 }

@@ -83,3 +83,6 @@ export type UtilityWorkerPort<Incoming> = {
   start(): void
   close(): void
 }
+
+/** Host entry argument: skip heap sampling, for a host whose workers hold no data of their own. */
+export const UTILITY_WORKER_NO_HEAP_SAMPLING_ARG = '--orca-no-heap-sampling'

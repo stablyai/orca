@@ -107,7 +107,11 @@ function streamInSpan(
           wslDistro: options.wslDistro,
           windowsHide: true
         }
-        const { child, ownedGroupChild } = spawnGitStreamChild(command, args, spawnOptions)
+        const { child, ownedGroupChild, workerOwnsGroup } = spawnGitStreamChild(
+          command,
+          args,
+          spawnOptions
+        )
         let stopping = false
         let groupTermination: ReturnType<typeof createPosixGroupTermination> | undefined
         let terminationReported = false
@@ -122,6 +126,13 @@ function streamInSpan(
           if (ownedGroupChild) {
             groupTermination = createPosixGroupTermination(ownedGroupChild, reportTermination)
             ownedGroupChild.once('close', groupTermination.close)
+          } else if (workerOwnsGroup) {
+            child.once('group-terminated', reportTermination)
+            child.once('close', () => {
+              if (!stopping) {
+                reportTermination()
+              }
+            })
           } else {
             child.once('close', reportTermination)
           }
@@ -130,13 +141,8 @@ function streamInSpan(
             if (!child.pid) {
               reportTermination()
             } else if (isAbandonedWorkerChildError(error)) {
-              if (groupTermination) {
-                // An owned group outlives its lost worker; end it here, which reports termination.
-                void groupTermination.stop()
-              } else {
-                // A streamed read holds only admission, which a lost worker returns.
-                endAbandonedWorkerChild(child, undefined, reportTermination, true)
-              }
+              // A streamed read holds only admission, which a lost worker returns.
+              endAbandonedWorkerChild(child, undefined, reportTermination, true)
             }
           })
         })
@@ -152,6 +158,8 @@ function streamInSpan(
           stopping = true
           if (groupTermination) {
             void groupTermination.stop()
+          } else if (workerOwnsGroup && 'stopOwnedGroup' in child) {
+            child.stopOwnedGroup()
           } else {
             void killSpawnedCommandTree(child)
           }

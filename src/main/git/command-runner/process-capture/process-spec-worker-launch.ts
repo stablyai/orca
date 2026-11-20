@@ -12,7 +12,6 @@ import {
   isAbandonedWorkerChildError,
   spawnProcessOnWorkerThread
 } from '../../../worker-thread-child-process/worker-thread-child-process'
-import { endAbandonedGroup } from './abandoned-worker-group'
 import {
   killAbandonedWorkerChildTree,
   reportWhenAbandonedRootEnds
@@ -37,7 +36,9 @@ export function launchProcessSpecOnWorker(
   onWorkerLost: (() => void) | undefined,
   onTerminated: () => void,
   /** The caller holds no mutation fence: worker loss ends its lifetime without proof. */
-  lifetimeEndsOnLoss = false
+  lifetimeEndsOnLoss = false,
+  /** runProcess may keep the tail or watch every stderr chunk, so forward all output. */
+  forwardAllOutput = false
 ): LaunchedProcess | null {
   const linux = process.platform === 'linux' && childSpawnerIsIsolated()
   if (
@@ -62,7 +63,7 @@ export function launchProcessSpecOnWorker(
   recordSubprocessSpawn(spec.program, args, performance.now() - startedAt)
   // runProcess keeps the head of each stream; past the cap, the rest stays on the worker.
   const cap = spec.maxOutputBytes ?? DEFAULT_MAX_OUTPUT_BYTES
-  for (const stream of ['stdout', 'stderr'] as const) {
+  for (const stream of forwardAllOutput ? [] : (['stdout', 'stderr'] as const)) {
     let received = 0
     const onData = (chunk: Buffer): void => {
       received += chunk.byteLength
@@ -77,16 +78,6 @@ export function launchProcessSpecOnWorker(
   const launched = child as unknown as ChildProcess
   child.on('error', (error) => {
     if (child.pid === undefined || !isAbandonedWorkerChildError(error)) {
-      return
-    }
-    if (ownsGroup) {
-      // The lost worker can no longer end the group; end it here by its pgid.
-      const ended = endAbandonedGroup(child, onWorkerLost)
-      if (lifetimeEndsOnLoss) {
-        onTerminated()
-        return
-      }
-      reportWhenAbandonedRootEnds(child.pid, ended, onTerminated)
       return
     }
     onWorkerLost?.()
