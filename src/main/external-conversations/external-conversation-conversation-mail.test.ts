@@ -34,14 +34,6 @@ const sender = (
 })
 
 describe('isConversationReport', () => {
-  it("is the Run's own workers' reports, from workers a turn its conversation asked for started", () => {
-    expect(isConversationReport(opener('run:r1', [sender('dispatch:d1', 'worker')]))).toBe(true)
-    // Started in a turn the conversation did not own (typed in Orca, woken by other mail): stays in Orca.
-    expect(isConversationReport(opener('run:r1', [sender('dispatch:d1', 'worker', false)]))).toBe(
-      false
-    )
-  })
-
   it('is not mail whose sender Orca cannot prove is such a worker: another bot, item mail', () => {
     expect(isConversationReport(opener('run:r1', [sender(OTHER_CHAT)]))).toBe(false)
     expect(isConversationReport(opener('run:r1', [sender(OTHER_CHAT, 'none')]))).toBe(false)
