@@ -40,9 +40,9 @@ function createDiffEditorDouble() {
     onDidContentSizeChange: () => ({ dispose: () => {} }),
     onDidChangeModel: () => ({ dispose: () => {} })
   }
-  const restoreViewState = vi.fn(() => {
+  const restoreViewState = (): void => {
     scrollTop = topOfLine(100)
-  })
+  }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the double implements every diff editor method the restore helper calls.
   const diffEditor = {
     getOriginalEditor: () => originalEditor,
@@ -68,7 +68,6 @@ function createDiffEditorDouble() {
   return {
     diffEditor,
     container,
-    restoreViewState,
     fireCursor: cursor.fire,
     fireDispose: () => disposed.fire(),
     getScrollTop: () => scrollTop,
@@ -108,17 +107,20 @@ describe('restoreDiffViewStateWhileLayoutSettles', () => {
 
   const runFrames = (): void => frames.splice(0).forEach((frame) => frame(0))
 
-  it('re-applies the cached state when the mount layout shift moves the restored view', async () => {
+  it('restores after layout drift only within the window started by the first restore', async () => {
     const double = createDiffEditorDouble()
     restoreDiffViewStateWhileLayoutSettles(double.diffEditor, savedViewState)
+    vi.advanceTimersByTime(1000)
     runFrames()
-    await double.changeHeight()
-    expect(double.restoreViewState).toHaveBeenCalledTimes(1)
+    expect(double.getScrollTop()).toBe(42_000)
 
+    vi.advanceTimersByTime(999)
     await double.shrinkZonesAndClampScroll()
-
     expect(double.getScrollTop()).toBe(3_000)
-    expect(double.restoreViewState).toHaveBeenCalledTimes(2)
+
+    vi.advanceTimersByTime(1)
+    await double.shrinkZonesAndClampScroll()
+    expect(double.getScrollTop()).toBe(0)
   })
 
   it.each([
@@ -133,12 +135,6 @@ describe('restoreDiffViewStateWhileLayoutSettles', () => {
       (double: ReturnType<typeof createDiffEditorDouble>) => {
         double.fireCursor({ source: 'api' })
       }
-    ],
-    [
-      'the window timing out',
-      () => {
-        vi.advanceTimersByTime(1000)
-      }
     ]
   ])('leaves the view alone after %s', async (_label, endWindow) => {
     const double = createDiffEditorDouble()
@@ -151,18 +147,6 @@ describe('restoreDiffViewStateWhileLayoutSettles', () => {
     expect(double.getScrollTop()).toBe(0)
   })
 
-  it('starts the settle window at the first restore, not at mount', async () => {
-    const double = createDiffEditorDouble()
-    restoreDiffViewStateWhileLayoutSettles(double.diffEditor, savedViewState)
-    vi.advanceTimersByTime(1000)
-    runFrames()
-    vi.advanceTimersByTime(999)
-
-    await double.shrinkZonesAndClampScroll()
-
-    expect(double.getScrollTop()).toBe(3_000)
-  })
-
   it('keeps the note position when note navigation ends the window after the restore', async () => {
     const double = createDiffEditorDouble()
     const restoreHandle = restoreDiffViewStateWhileLayoutSettles(double.diffEditor, savedViewState)
@@ -173,7 +157,6 @@ describe('restoreDiffViewStateWhileLayoutSettles', () => {
     await double.changeHeight()
 
     expect(double.getScrollTop()).toBe(5_000)
-    expect(double.restoreViewState).toHaveBeenCalledTimes(1)
   })
 
   it('still applies the first restore when disposed early for note navigation', async () => {
@@ -193,6 +176,6 @@ describe('restoreDiffViewStateWhileLayoutSettles', () => {
     double.fireDispose()
     runFrames()
 
-    expect(double.restoreViewState).not.toHaveBeenCalled()
+    expect(double.getScrollTop()).toBe(0)
   })
 })

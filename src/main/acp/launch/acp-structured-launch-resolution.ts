@@ -73,6 +73,7 @@ export type AcpStructuredLaunch = StructuredAgentCommand & {
   takesSessionMeta?: AcpInstructionsLaunch['takesSessionMeta']
   sessionMetaOptional?: true
   aroundNewSession?: AcpInstructionsLaunch['aroundNewSession']
+  release?: AcpInstructionsLaunch['release']
   /** The bot's own tools, opened with each session; absent: none. */
   mcpServers?: McpServer[]
   /** The saved model the launch line carries. */
@@ -250,7 +251,10 @@ export function acpStructuredLaunchPart(
     const instructions = delivered.launch
     const visualsLoaded = skillLoaded ?? (delivered.visuals ? visuals : null)
     const fullAccess = basis.permissionMode === 'full-access'
-    const tools = await basis.toolServers()
+    const tools = await basis.toolServers().catch(async (error: unknown) => {
+      await instructions?.release?.().catch(() => undefined)
+      throw error
+    })
     const mcpServers = acpBotMcpServers(tools)
     // A managed release's receipt names its version; other programs answer the check.
     const launchedVersion = version ?? launchVersion.version
@@ -281,6 +285,7 @@ export function acpStructuredLaunchPart(
         ...(instructions?.aroundNewSession
           ? { aroundNewSession: instructions.aroundNewSession }
           : {}),
+        ...(instructions?.release ? { release: instructions.release } : {}),
         ...(mcpServers.length > 0 ? { mcpServers } : {}),
         ...(model ? { launchModel: model } : {}),
         ...(launchedVersion ? { version: launchedVersion } : {}),

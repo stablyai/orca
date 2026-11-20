@@ -9,7 +9,6 @@ import type {
 } from '../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import { providerTimelineSink } from '../../native-chat/agent-session-timeline/provider-timeline-plan'
 import { providerSpawnedProcessIdentity } from '../../provider-process/provider-spawned-process-identity'
-import { acpPrivateTempConnect } from '../launch/acp-private-temp'
 import { acpClientInfo } from '../launch/acp-client-info'
 import * as childState from './children/acp-structured-child'
 import type { AcpSessionEvent } from '../protocol/acp-session-events'
@@ -18,7 +17,10 @@ import { acpAgentName } from './acp-structured-agent-definitions'
 import { AcpStructuredLane } from '../journal/acp-structured-lane'
 import { acpLaneChildWorkDelivery } from '../journal/acp-lane-child-work-delivery'
 import { NO_ACP_CHILD_STOPS } from '../turns/acp-structured-child-stop'
-import { prepareAcpStructuredLaunch } from '../launch/acp-structured-launch-preparation'
+import {
+  acpLaunchConnect,
+  prepareAcpStructuredLaunch
+} from '../launch/acp-structured-launch-preparation'
 import { acpProcessEnvironment } from '../launch/acp-structured-launch-resolution'
 import { AcpStructuredOptions } from '../options/acp-structured-options'
 import { acpAnswersRequests, acpLaunchPermission } from '../launch/acp-launch-permission-modes'
@@ -91,9 +93,7 @@ export async function acquireAcpStructuredSession(input: {
     }
   }
   // Keep the last abort check and spawn synchronous when no temp directory is needed.
-  const connect = spec.privateTempDirectory
-    ? await acpPrivateTempConnect(deps, closedBeforeSpawn)
-    : deps.connect
+  const connect = await acpLaunchConnect(deps, launch, closedBeforeSpawn)
   const connection = connect(
     {
       command: launch.command,
