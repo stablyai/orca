@@ -24,6 +24,7 @@ import { federatedMessageNamesOnlyHome } from '../workers/reports/dispatch-repor
 import { workerReportRefusal } from '../workers/reports/worker-report-admission'
 import { isEquivalentPaneKey } from '../db/pane-key-match'
 import type { CrewReadDependencies } from './crew-read-dependencies'
+import type { CrewRelevance } from './crew-changes'
 
 function preview(body: string): string {
   // One extra UTF-16 unit distinguishes a full ASCII preview from a longer body.
@@ -39,7 +40,9 @@ function preview(body: string): string {
 export function buildCrewSnapshot(
   address: string,
   deps: CrewReadDependencies,
-  host = createCrewHostDerivation(deps)
+  host = createCrewHostDerivation(deps),
+  /** Collects the panes, chats and dispatches the rows read, so unrelated wakes can be skipped. */
+  relevance?: CrewRelevance
 ): OrchestrationCrewSnapshot {
   deps = { ...host.deps, now: deps.now }
   const db = deps.db
@@ -107,6 +110,7 @@ export function buildCrewSnapshot(
     }
   }
   const selfAliases = () => aliasesFor(self.address)
+  relevance?.addSelf(self, selfAliases(), remoteAttachment?.id)
   const traffic = host.sourceInputs.traffic(selfAliases(), now)
   const questions = host.sourceInputs.questions(selfAliases())
   hydrate([
@@ -159,6 +163,21 @@ export function buildCrewSnapshot(
     const session = isStructuredWorkerHandle(worker?.agentTerminalHandle)
       ? observeSession(worker!)
       : undefined
+    if (relevance) {
+      relevance.addParty(target)
+      relevance.addPane(worker?.paneKey)
+      relevance.addPane(target.terminalHandle ? deps.paneForHandle(target.terminalHandle) : null)
+      for (const id of [
+        target.orcaSessionId,
+        live?.kind === 'here' ? live.sessionId : null,
+        worker?.agentTerminalHandle
+      ]) {
+        if (id) {
+          relevance.sessions.add(id)
+        }
+      }
+      relevance.addAssignment(assignment)
+    }
     const fresh = session
       ? sessionActivityEvidence(session)
       : bound && projectLiveness({ resource: null }, evidence, now).verdict === 'live'
@@ -249,13 +268,16 @@ export function buildCrewSnapshot(
       row = decorate(target, 'peer', undefined, sendAddress)
       snapshot.sections.talkingWith.push(row)
     }
+    const line = {
+      preview: preview(message.body),
+      at: message.created_at,
+      sequence: message.sequence
+    }
     if (!row.latest || message.sequence > row.latest.sequence) {
-      row.latest = {
-        direction: message.direction,
-        preview: preview(message.body),
-        at: message.created_at,
-        sequence: message.sequence
-      }
+      row.latest = { direction: message.direction, ...line }
+    }
+    if (message.direction === 'from' && (!row.reply || message.sequence > row.reply.sequence)) {
+      row.reply = line
     }
   }
   for (const [address, { target, question }] of attention) {

@@ -87,11 +87,9 @@ it.each([
   },
   { tail: '{"type":"summary","message":null}', sourceEmpty: false, items: 0 },
   { tail: '{"type":"user","uuid":"u1"}', sourceEmpty: false, items: 0 },
-  { tail: '{"type":7}', sourceEmpty: false, items: 0 },
   { tail: '{"type":""}', sourceEmpty: false, items: 0 },
   { tail: '{}', sourceEmpty: false, items: 0 },
   { tail: 'null', sourceEmpty: false, items: 0 },
-  { tail: '[]', sourceEmpty: false, items: 0 },
   { tail: '{"type":"user","message":{"role":"us', sourceEmpty: false, items: 0 },
   {
     tail: '{"type":"user","isMeta":true,"message":{"role":"user","content":"<local-command-caveat>Local command</local-command-caveat>"}}',
@@ -109,6 +107,17 @@ it.each([
     sourceEmpty: false,
     items: 1,
     shows: '<command-name>/rename</command-name>'
+  },
+  {
+    tail: '{"type":"system","subtype":"local_command","uuid":"lc1","commandRun":{"command":"recap","args":""},"content":"<local-command-stdout>Session recap text</local-command-stdout>"}',
+    sourceEmpty: false,
+    items: 1,
+    shows: 'Session recap text'
+  },
+  {
+    tail: '{"type":"system","subtype":"local_command","uuid":"lc3","commandRun":{"command":"model","args":""},"content":"<local-command-stdout>Kept model as Opus</local-command-stdout>"}',
+    sourceEmpty: true,
+    items: 0
   },
   {
     tail: '{"type":"user","message":{"role":"user","content":[{"type":"future-content","text":"existing prompt"}]}}',

@@ -33,6 +33,18 @@ export function resolveAgentRowState(
     : entry.state
 }
 
+/** The instant after which resolveAgentRowState(entry, now, ·) decays, or undefined when it never changes with time. */
+export function agentRowStateDecaysAfter(
+  entry: DecayInput & Parameters<typeof isAgentStatusFresh>[0]
+): number | undefined {
+  const canDecay =
+    entry.state === 'working' || entry.state === 'blocked' || entry.state === 'waiting'
+  // Unconfirmed restores are never fresh and host-owned rows are always fresh.
+  return canDecay && entry.restoredUnconfirmed !== true && entry.structuredHostOwned !== true
+    ? agentStatusEvidenceObservedAt(entry) + AGENT_STATUS_STALE_AFTER_MS
+    : undefined
+}
+
 /** Coarse `34m` / `2h` / `3d` duration, floored so it never overstates the gap. */
 export function formatCompactDuration(deltaMs: number): string {
   const minutes = Math.max(0, Math.floor(deltaMs / 60_000))

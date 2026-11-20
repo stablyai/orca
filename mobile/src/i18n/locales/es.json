@@ -59,7 +59,8 @@
       "messages_many": "{{count}} mensajes",
       "messages_one": "{{count}} mensaje",
       "messages_other": "{{count}} mensajes",
-      "resumeSession": "Reanudar sesión de agente"
+      "resumeSession": "Reanudar sesión de agente",
+      "continueInCli": "Continuar en la CLI"
     },
     "useAgentHistoryState": {
       "hostUnreachable": "No se pudo contactar con el host",
@@ -169,11 +170,13 @@
       "invalidUrl": "Introduce una URL válida."
     },
     "paneView": {
-      "dialogTitle": "Diálogo del navegador",
       "forward": "Adelante",
       "keyboardPlaceholder": "Escribe en la página…",
       "reload": "Recargar",
-      "sendText": "Enviar texto al navegador"
+      "sendText": "Enviar texto al navegador",
+      "dialogTitleWithOrigin": "{{origin}} dice",
+      "dialogTitleNoOrigin": "Esta página dice",
+      "dialogAnswer": "Respuesta"
     },
     "pointerModifiers": {
       "clickModifier": "Modificador {{key}} para clics"
@@ -186,6 +189,20 @@
     "viewModeSwitch": {
       "mobileView": "Mostrar vista móvil del sitio web",
       "webView": "Mostrar vista de escritorio del sitio web"
+    },
+    "loadFailure": {
+      "retry": "Reintentar",
+      "connectionNotSecure": "La conexión no es segura",
+      "certificateNameMismatch": "El certificado no coincide con {{value0}}.",
+      "certificateDateInvalid": "El certificado de {{value0}} no es válido en la fecha y hora actuales.",
+      "certificateAuthorityInvalid": "Orca no confía en la autoridad que emitió el certificado de {{value0}}.",
+      "certificateVerificationFailed": "Orca no pudo verificar el certificado de {{value0}}.",
+      "proceedUnsafe": "Continuar (no seguro)",
+      "connecting": "Conectando…",
+      "certificateChallengeExpired": "Esta aprobación de certificado caducó. Vuelve a intentarlo con la página para solicitar una nueva.",
+      "certificateChallengeChanged": "La solicitud de certificado cambió. Vuelve a intentarlo con la página y revisa la nueva advertencia.",
+      "certificateProceedFailed": "Orca no pudo aprobar esta solicitud de certificado. Vuelve a intentarlo con la página e inténtalo de nuevo.",
+      "certificateChallengeUnavailable": "Esta solicitud de certificado ya no está disponible. Vuelve a intentarlo con la página para solicitar una nueva."
     }
   },
   "chat": {
@@ -219,7 +236,8 @@
     "contextUsage": {
       "label": "Contexto: {{used}} de {{window}} tokens, {{percent}} % usados",
       "title": "Contexto",
-      "estimated": "Estimado a partir de la última respuesta."
+      "estimated": "Estimado a partir de la última respuesta.",
+      "deferredNote": "Se cargan cuando se necesitan. No cuentan en el total usado."
     },
     "composerAttachments": {
       "attachedImage": "Imagen adjunta",
@@ -637,10 +655,6 @@
       "imageTooLarge": "Imagen demasiado grande para adjuntarla",
       "permissionDenied": "Permiso de acceso a las fotos denegado"
     },
-    "agentMessage": {
-      "handedOffToAgent": "Entregado a un agente",
-      "startedAgent": "Agente iniciado"
-    },
     "textAttachmentPreview": {
       "unreadableReply": "La respuesta del adjunto no se puede leer. Inténtalo de nuevo.",
       "incompleteReply": "El adjunto cambió o su respuesta estaba incompleta. Ciérralo e inténtalo de nuevo.",
@@ -688,7 +702,7 @@
       "confirm": "Rebobinar",
       "unsupported": "Este chat no puede volver a un mensaje anterior.",
       "historyNotPaginated": "Este chat de Codex más antiguo no puede volver a un mensaje anterior. Inicia un chat nuevo para usar Rebobinar hasta aquí.",
-      "busy": "Disponible cuando el agente esté inactivo y nada en este chat esté esperándote.",
+      "busy": "Disponible cuando el chat esté inactivo",
       "staleEpoch": "La conversación cambió. Revisa los últimos mensajes e inténtalo de nuevo.",
       "invalidTarget": "La conversación no puede volver a este mensaje. No se cambió nada.",
       "historyLimit": "Esta conversación es demasiado larga para retroceder en ella. No se cambió nada.",
@@ -965,11 +979,11 @@
       "dismissDrawer": "Cerrar panel"
     },
     "newWorkspaceSetupScriptField": {
-      "hooks": "HOOKS",
       "label": "Script de configuración",
-      "run": "Ejecutar",
-      "runSetupCommand": "Ejecutar comando de configuración",
-      "skip": "Omitir"
+      "runSetup": "Ejecutar configuración",
+      "skip": "Omitir",
+      "startAgentAfterSetup": "Iniciar el agente tras la configuración",
+      "waitForSetupSaveFailed": "Error al guardar el comportamiento de inicio"
     },
     "newWorkspaceSshConnectionField": {
       "connect": "Conectar",
@@ -1174,6 +1188,9 @@
       "composer": {
         "planMode": "Planificar",
         "exitPlanMode": "Salir del modo de planificación"
+      },
+      "goal": {
+        "sentAsGoal": "Enviado como objetivo"
       }
     }
   },
@@ -1627,10 +1644,8 @@
   "host": {
     "edit": {
       "address": "Dirección",
-      "addressHint": "Acepta IP, host:port o ws:// / wss://. Una URL wss:// sin puerto usa el puerto 443. Las direcciones sin protocolo ni puerto conservan el puerto actual (o 6768).",
       "connectionPreview": "Se conecta a {{endpoint}}",
       "goBack": "Volver",
-      "help": "Cambia el nombre que se muestra o la dirección de conexión. Deja el nombre vacío para usar el que indica el escritorio. Cambiar la dirección solo modifica adónde se conecta este teléfono; no se repite el emparejamiento. Usa esta opción cuando el mismo escritorio sea accesible desde otra IP (por ejemplo, la LAN de casa o Tailscale).",
       "hostNamePlaceholder": "Nombre del host",
       "hostRemoved": "Este host se eliminó de este teléfono.",
       "loadFailed": "No se pudo cargar el host.",
@@ -1671,7 +1686,12 @@
       "removeHostMessage": "¿Eliminar \"{{name}}\"? Puedes volver a emparejarlo más tarde.",
       "sleep": "Suspender",
       "unpin": "Desanclar",
-      "rename": "Cambiar nombre"
+      "rename": "Cambiar nombre",
+      "markRead": "Marcar como leído",
+      "markUnread": "Marcar como no leído",
+      "muteNotifications": "Silenciar notificaciones",
+      "unmuteNotifications": "Reactivar notificaciones",
+      "moveToStatus": "Mover al estado"
     },
     "workspaceDetailsSheet": {
       "checksFailing": "Checks: fallidos",
@@ -2263,6 +2283,7 @@
       "providerUnavailable": "{{agent}} no pudo responder porque el servicio está ocupado. Elige otro modelo o espera un poco y vuelve a enviar el mensaje.",
       "providerSafetyStopped": "{{agent}} detuvo esta respuesta tras una comprobación de seguridad. Revisa tu solicitud y vuelve a enviarla.",
       "providerResponseFailed": "{{agent}} no pudo terminar esta respuesta. Abre los detalles para obtener más información.",
+      "providerResponseFailedQuoted": "{{agent}} no pudo terminar esta respuesta: {{detail}}.",
       "selectedModel": "el modelo seleccionado",
       "providerRejected": "{{agent}} no aceptó este mensaje.",
       "providerRejectedQuoted": "{{agent}} no aceptó este mensaje: {{detail}}.",
@@ -2526,6 +2547,11 @@
       "sendReviewNotes": "Enviar notas de revisión",
       "shortcut": "Atajo",
       "terminal": "Terminal",
+      "terminalWithShell": "Terminal: {{shell}}",
+      "shellPowerShell": "PowerShell",
+      "shellCmd": "CMD Prompt",
+      "shellGitBash": "Git Bash",
+      "shellWsl": "WSL",
       "terminalName": "Nombre de la terminal",
       "unsavedMarkdown": "Cambios en Markdown sin guardar",
       "urlPrompt": "Introduce una URL o deja el campo en blanco para abrir una pestaña nueva.",
@@ -2713,7 +2739,7 @@
       "disconnected": "No se pudo pegar (sin conexión)",
       "imageTooLarge": "Imagen demasiado grande para pegarla",
       "pasteFailed": "No se pudo pegar",
-      "pasteTooLarge": "Contenido demasiado grande para pegarlo (máx. 256 KiB)",
+      "pasteTooLarge": "El contenido pegado es demasiado grande.",
       "terminalChanged": "Pegado cancelado (se cambió de terminal)"
     },
     "worktreeLabel": {
@@ -2843,6 +2869,12 @@
     "structuredOpen": {
       "worktreeDeleted": "El worktree se eliminó.",
       "folderWorkspaceRemoved": "Se quitó el espacio de trabajo de carpeta."
+    },
+    "nativeChatView": {
+      "linkedMessageMissing": "No se pudo encontrar ese mensaje."
+    },
+    "browserProfile": {
+      "default": "Predeterminado"
     }
   },
   "settings": {
@@ -4441,6 +4473,23 @@
           }
         }
       }
+    }
+  },
+  "bots": {
+    "link": {
+      "pairTitle": "Vincular un ordenador",
+      "pairRequired": "Para abrir este enlace, vincula este teléfono con un ordenador y vuelve a abrir el enlace.",
+      "pairAction": "Vincular un ordenador",
+      "openFailed": "No se pudo abrir este enlace",
+      "ambiguous": "Este bot está en {{names}}. Abre el chat en Orca en el ordenador que quieras.",
+      "computer": "tu ordenador",
+      "updateNeeded": "Actualiza Orca en {{names}} para abrir este enlace.",
+      "unreachable": "No se pudo conectar con {{names}}. Asegúrate de que Orca esté abierto en uno de ellos e inténtalo de nuevo.",
+      "missing": "Ninguno de tus ordenadores vinculados tiene este bot.",
+      "offline": "{{name}} está desconectado. Vuelve a abrir el enlace cuando se conecte.",
+      "chatOpenFailed": "{{name}} no pudo abrir este chat. Vuelve a intentar el enlace.",
+      "unreachableSingle": "No se pudo conectar con {{name}}. Asegúrate de que Orca esté abierto allí e inténtalo de nuevo.",
+      "workspaceDeleted": "El espacio de trabajo de este chat se eliminó en {{name}}."
     }
   }
 }

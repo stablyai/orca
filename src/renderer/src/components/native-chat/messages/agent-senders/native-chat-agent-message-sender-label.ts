@@ -3,6 +3,10 @@ import {
   selectAgentSenderAssociation
 } from '@/runtime/native-chat/agent-senders/agent-sender-associations'
 import { useMemo } from 'react'
+import {
+  useLeasedSenderSelector,
+  useStableSenderTarget
+} from './native-chat-agent-message-sender-source'
 import { agentMessageSenderLabel } from '../../../../../../shared/agent-session/view/messages/agent-message-presentation'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
@@ -23,10 +27,8 @@ import type { AppState } from '@/store/types'
 import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { AgentMessageSender } from '../../../../../../shared/agent-session/journal/agent-session-message-source'
 import type { Tab } from '../../../../../../shared/workspace-layout/tab-groups/tab-types'
-import {
-  useLeasedSenderSelector,
-  useStableSenderTarget
-} from './native-chat-agent-message-sender-source'
+import { useBotForWorkspace } from '@/components/bots/bot-workspace'
+import type { Bot } from '../../../../../../shared/bot-types'
 
 export function unnamedSenderLabel(t: Translate = translate): string {
   return t('components.native-chat.agentMessage.unnamedSender', 'an agent')
@@ -103,45 +105,89 @@ export function agentMessageSenderOwner(
       : null
 }
 
-type LabelSource = { host: string | null; tab?: Tab; sessionId?: string }
+type LabelSource = { host: string | null; tab?: Tab; sessionId?: string; worktreeId: string | null }
 const NO_ROWS: readonly [] = []
 
 /** The chat a label names its sender by; the same object until its host, tab or session moves. */
 function labelSourceSelector(
-  party: AgentMessageSender['party'],
+  party: AgentMessageSender['party'] | undefined,
   chatWorktreeId: string | null,
   target: RuntimeClientTarget | undefined,
   dispatchId: string | undefined
 ): (state: AppState) => LabelSource {
-  const identity: AgentMessageSender = { party, name: null }
-  const { address, orcaSessionId } = party
-  let previous: LabelSource = { host: null }
+  const identity = party ? { party, name: null } : undefined
+  const { address, orcaSessionId } = party ?? {}
+  let previous: LabelSource = { host: null, worktreeId: null }
   return (state) => {
     const owner = agentMessageSenderOwner(state, chatWorktreeId, target)
-    const association = owner
-      ? selectAgentSenderAssociation(state, owner, identity, dispatchId)
-      : undefined
+    const association =
+      owner && identity
+        ? selectAgentSenderAssociation(state, owner, identity, dispatchId)
+        : undefined
     const legacyTab =
       owner &&
       orcaSessionId &&
+      address !== undefined &&
       !address.startsWith('dispatch:') &&
       !hasAgentSenderPublication(state, owner)
         ? findAgentMessageSenderChatTab(state, orcaSessionId, owner)
         : undefined
+    const sessionId = association?.sessionId ?? legacyTab?.entityId
     const next = {
       host: association?.host ?? owner,
       tab: association?.tab ?? legacyTab,
-      sessionId: association?.sessionId ?? legacyTab?.entityId
+      sessionId,
+      worktreeId: sessionId ? (association?.worktreeId ?? legacyTab?.worktreeId ?? null) : null
     }
     if (
       next.host !== previous.host ||
       next.tab !== previous.tab ||
-      next.sessionId !== previous.sessionId
+      next.sessionId !== previous.sessionId ||
+      next.worktreeId !== previous.worktreeId
     ) {
       previous = next
     }
     return previous
   }
+}
+
+function useAgentMessageSenderChat(
+  sender: AgentMessageSender | undefined,
+  chatWorktreeId: string | null,
+  target?: RuntimeClientTarget,
+  dispatchId?: string
+): LabelSource {
+  const { address, orcaSessionId, terminalHandle } = sender?.party ?? {}
+  const stableTarget = useStableSenderTarget(target)
+  const select = useMemo(
+    () =>
+      labelSourceSelector(
+        address !== undefined
+          ? {
+              address,
+              orcaSessionId: orcaSessionId ?? null,
+              terminalHandle: terminalHandle ?? null
+            }
+          : undefined,
+        chatWorktreeId,
+        stableTarget,
+        dispatchId
+      ),
+    [address, orcaSessionId, terminalHandle, chatWorktreeId, stableTarget, dispatchId]
+  )
+  return useLeasedSenderSelector(NO_ROWS, select)
+}
+
+/** The bot whose home the sender's chat is in; null for any other sender. */
+export function useAgentMessageSenderBot(
+  sender: AgentMessageSender | undefined,
+  chatWorktreeId: string | null,
+  target?: RuntimeClientTarget,
+  dispatchId?: string
+): Bot | null {
+  return useBotForWorkspace(
+    useAgentMessageSenderChat(sender, chatWorktreeId, target, dispatchId).worktreeId
+  )
 }
 
 /** Live chat names follow the sender's chat on the receiving chat's host; CLI names stay as recorded. */
@@ -152,26 +198,17 @@ export function useAgentMessageSenderLabel(
   dispatchId?: string
 ): string {
   const t = useTranslate()
-  const { address, orcaSessionId, terminalHandle } = sender.party
-  const stableTarget = useStableSenderTarget(target)
-  const select = useMemo(
-    () =>
-      labelSourceSelector(
-        { address, orcaSessionId, terminalHandle },
-        chatWorktreeId,
-        stableTarget,
-        dispatchId
-      ),
-    [address, orcaSessionId, terminalHandle, chatWorktreeId, stableTarget, dispatchId]
-  )
-  const { host, tab, sessionId } = useLeasedSenderSelector(NO_ROWS, select)
-  const conversationName = useStructuredConversationName(host, sessionId)
+  const chat = useAgentMessageSenderChat(sender, chatWorktreeId, target, dispatchId)
+  const bot = useBotForWorkspace(chat.worktreeId)
+  const conversationName = useStructuredConversationName(chat.host, chat.sessionId)
   return agentMessageSenderLabel({
-    localChat: Boolean(sessionId),
-    customLabel: tab?.customLabel,
+    localChat: Boolean(chat.sessionId),
+    // A paired server's bot is not in this computer's catalog; its host's saved name says so.
+    botName: bot?.name ?? (sender.bot ? sender.name : null),
+    customLabel: chat.tab?.customLabel,
     conversationName,
     snapshotName: sender.name,
-    tabLabel: tab?.label,
+    tabLabel: chat.tab?.label,
     fallback: unnamedSenderLabel(t)
   })
 }

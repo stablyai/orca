@@ -264,10 +264,11 @@ export const createRuntimeStatusSlice: (
 
   ...createRuntimeEnvironmentStatusRetention(set, get),
 
-  refreshRuntimeEnvironmentStatus: (environmentId, timeoutMs = 10_000) =>
+  refreshRuntimeEnvironmentStatus: (environmentId, timeoutMs = 10_000, options) =>
     refreshRuntimeEnvironmentStatus(
       environmentId,
       timeoutMs,
+      options?.force === true,
       (entry) => {
         get().setRuntimeEnvironmentStatus(environmentId, entry)
         if (entry.status) {

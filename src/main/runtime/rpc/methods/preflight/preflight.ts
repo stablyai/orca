@@ -22,7 +22,7 @@ import {
 } from '../../../../../shared/rpc-contract/preflight/preflight-params'
 
 /** This host's command overrides, so a configured CLI outside PATH is listed like a detected one. */
-function hostDetectionOptions(
+export function hostDetectionOptions(
   runtime: OrcaRuntimeService
 ): InstalledAgentDetectionOptions | undefined {
   try {
@@ -40,7 +40,7 @@ export const PREFLIGHT_METHODS = [
     name: 'preflight.check',
     permission: 'workspace',
     params: PreflightCheck,
-    handler: async (params) => runPreflightCheck(params.force)
+    handler: (params) => runPreflightCheck(params.force)
   }),
   defineMethod({
     name: 'preflight.detectAgents',

@@ -57,7 +57,8 @@
       "currentWorktree": "現在のワークツリー",
       "messages_one": "{{count}} 件のメッセージ",
       "messages_other": "{{count}} 件のメッセージ",
-      "resumeSession": "Agent セッションを再開"
+      "resumeSession": "Agent セッションを再開",
+      "continueInCli": "CLIで続行"
     },
     "useAgentHistoryState": {
       "hostUnreachable": "ホストに接続できません",
@@ -165,11 +166,13 @@
       "invalidUrl": "有効な URL を入力してください。"
     },
     "paneView": {
-      "dialogTitle": "ブラウザのダイアログ",
       "forward": "進む",
       "keyboardPlaceholder": "ページに入力…",
       "reload": "リロード",
-      "sendText": "ブラウザにテキストを送信"
+      "sendText": "ブラウザにテキストを送信",
+      "dialogTitleWithOrigin": "{{origin}} の内容",
+      "dialogTitleNoOrigin": "このページの内容",
+      "dialogAnswer": "回答"
     },
     "pointerModifiers": {
       "clickModifier": "クリック時の修飾キー {{key}}"
@@ -182,6 +185,20 @@
     "viewModeSwitch": {
       "mobileView": "ウェブサイトのモバイル表示に切り替え",
       "webView": "ウェブサイトのデスクトップ表示に切り替え"
+    },
+    "loadFailure": {
+      "retry": "再試行",
+      "connectionNotSecure": "接続は安全ではありません",
+      "certificateNameMismatch": "証明書が {{value0}} と一致しません。",
+      "certificateDateInvalid": "{{value0}} の証明書は現在の日時では有効ではありません。",
+      "certificateAuthorityInvalid": "Orca は {{value0}} の証明書を発行した認証局を信頼していません。",
+      "certificateVerificationFailed": "Orca は {{value0}} の証明書を検証できませんでした。",
+      "proceedUnsafe": "続行（安全ではない）",
+      "connecting": "接続中…",
+      "certificateChallengeExpired": "この証明書の承認は期限切れです。ページを再試行して、承認をもう一度リクエストしてください。",
+      "certificateChallengeChanged": "証明書のリクエストが変更されました。ページを再試行して、警告の内容を改めて確認してください。",
+      "certificateProceedFailed": "Orca はこの証明書のリクエストを承認できませんでした。ページを再試行して、もう一度お試しください。",
+      "certificateChallengeUnavailable": "この証明書のリクエストは利用できなくなりました。ページを再試行して、もう一度リクエストしてください。"
     }
   },
   "chat": {
@@ -215,7 +232,8 @@
     "contextUsage": {
       "label": "コンテキスト {{used}} / {{window}} トークン、{{percent}}% 使用済み",
       "title": "コンテキスト",
-      "estimated": "最後の応答から推定。"
+      "estimated": "最後の応答から推定。",
+      "deferredNote": "必要時に読み込まれます。使用量には含まれません。"
     },
     "composerAttachments": {
       "attachedImage": "添付画像",
@@ -598,10 +616,6 @@
       "imageTooLarge": "画像が大きすぎて添付できません。",
       "permissionDenied": "写真へのアクセスが拒否されました。"
     },
-    "agentMessage": {
-      "handedOffToAgent": "Agentに引き継ぎました",
-      "startedAgent": "Agentを開始しました"
-    },
     "textAttachmentPreview": {
       "unreadableReply": "添付ファイルの応答を読み取れません。もう一度お試しください。",
       "incompleteReply": "添付ファイルが変更されたか、応答が不完全でした。閉じてもう一度お試しください。",
@@ -649,7 +663,7 @@
       "confirm": "巻き戻す",
       "unsupported": "このチャットは以前のメッセージに戻れません。",
       "historyNotPaginated": "この古い Codex チャットは以前のメッセージに戻れません。「ここに巻き戻す」を使用するには、新規チャットを開始してください。",
-      "busy": "Agent がアイドル状態になり、このチャットであなたの対応を待つものがなくなると利用できます。",
+      "busy": "チャットがアイドル状態のときに利用できます",
       "staleEpoch": "会話が変更されました。最新のメッセージを確認して、もう一度お試しください。",
       "invalidTarget": "会話をこのメッセージに戻すことはできません。何も変更されていません。",
       "historyLimit": "この会話は長すぎて巻き戻せません。何も変更されていません。",
@@ -923,11 +937,11 @@
       "dismissDrawer": "ドロワーを閉じる"
     },
     "newWorkspaceSetupScriptField": {
-      "hooks": "フック",
       "label": "セットアップスクリプト",
-      "run": "実行",
-      "runSetupCommand": "セットアップコマンドを実行",
-      "skip": "スキップ"
+      "runSetup": "セットアップを実行",
+      "skip": "スキップ",
+      "startAgentAfterSetup": "セットアップ後に Agent を開始",
+      "waitForSetupSaveFailed": "セットアップ時の起動設定を保存できませんでした。"
     },
     "newWorkspaceSshConnectionField": {
       "connect": "接続",
@@ -1131,6 +1145,9 @@
       "composer": {
         "planMode": "プラン",
         "exitPlanMode": "プランモードを終了"
+      },
+      "goal": {
+        "sentAsGoal": "ゴールとして送信されました"
       }
     }
   },
@@ -1582,10 +1599,8 @@
   "host": {
     "edit": {
       "address": "アドレス",
-      "addressHint": "IP、host:port、ws:// / wss:// を使用できます。ポートを省略した wss:// URL は 443 を使用します。アドレスのみの場合は、現在のポート（未設定の場合は 6768）を引き継ぎます。",
       "connectionPreview": "{{endpoint}} に接続します",
       "goBack": "戻る",
-      "help": "表示名や接続先アドレスを変更できます。名前を空欄にすると、デスクトップから取得した名前を使用します。アドレスを編集しても、このスマートフォンの接続先が変わるだけで、再ペアリングは行われません。同じデスクトップに別の IP で接続できる場合（自宅の LAN と Tailscale の切り替えなど）に使用してください。",
       "hostNamePlaceholder": "ホスト名",
       "hostRemoved": "このホストはこのスマートフォンから削除されました。",
       "loadFailed": "ホストの読み込みに失敗しました。",
@@ -1626,7 +1641,12 @@
       "removeHostMessage": "「{{name}}」を削除しますか？後で再度ペアリングできます。",
       "sleep": "スリープ",
       "unpin": "固定を解除する",
-      "rename": "名前を変更"
+      "rename": "名前を変更",
+      "markRead": "既読マークを付ける",
+      "markUnread": "未読としてマークする",
+      "muteNotifications": "通知をミュート",
+      "unmuteNotifications": "通知のミュートを解除",
+      "moveToStatus": "ステータスに移動"
     },
     "workspaceDetailsSheet": {
       "checksFailing": "チェック：失敗",
@@ -2191,6 +2211,7 @@
       "providerUnavailable": "サービスが混雑しているため、{{agent}} は応答できませんでした。別のモデルを選ぶか、しばらく待ってから再送してください。",
       "providerSafetyStopped": "{{agent}} は安全確認の後、この応答を停止しました。リクエストを見直して再送してください。",
       "providerResponseFailed": "{{agent}} はこの応答を完了できませんでした。詳細を開いて確認してください。",
+      "providerResponseFailedQuoted": "{{agent}} はこの応答を完了できませんでした: {{detail}}。",
       "selectedModel": "選択されたモデル",
       "providerRejected": "{{agent}} はこのメッセージを受け付けませんでした。",
       "providerRejectedQuoted": "{{agent}} はこのメッセージを受け付けませんでした: {{detail}}。",
@@ -2452,6 +2473,11 @@
       "sendReviewNotes": "レビューメモを送信",
       "shortcut": "ショートカット",
       "terminal": "ターミナル",
+      "terminalWithShell": "ターミナル: {{shell}}",
+      "shellPowerShell": "PowerShell",
+      "shellCmd": "CMDプロンプト",
+      "shellGitBash": "Git Bash",
+      "shellWsl": "WSL",
       "terminalName": "ターミナル名",
       "unsavedMarkdown": "Markdown の未保存の変更",
       "urlPrompt": "URL を入力してください。空欄のままにすると新規タブが開きます。",
@@ -2639,7 +2665,7 @@
       "disconnected": "貼り付けに失敗しました（接続が切れています）。",
       "imageTooLarge": "画像が大きすぎるため貼り付けできません。",
       "pasteFailed": "貼り付けに失敗しました。",
-      "pasteTooLarge": "貼り付けるデータが大きすぎます（最大 256 KiB）。",
+      "pasteTooLarge": "貼り付け内容が大きすぎます。",
       "terminalChanged": "貼り付けをキャンセルしました（ターミナルが変更されました）。"
     },
     "worktreeLabel": {
@@ -2769,6 +2795,13 @@
     "structuredOpen": {
       "worktreeDeleted": "ワークツリーは削除されました。",
       "folderWorkspaceRemoved": "フォルダーワークスペースは削除されました。"
+    },
+    "nativeChatView": {
+      "linkedMessageMissing": "そのメッセージが見つかりませんでした。"
+    },
+    "browserProfile": {
+      "title": "プロファイル",
+      "default": "デフォルト"
     }
   },
   "settings": {
@@ -4421,6 +4454,23 @@
           "opencodeInvalidWorkspaceId": "ワークスペース ID の形式が無効です"
         }
       }
+    }
+  },
+  "bots": {
+    "link": {
+      "pairTitle": "コンピュータをペアリング",
+      "pairRequired": "このリンクを開くには、このスマートフォンをコンピュータとペアリングしてから、もう一度リンクを開いてください。",
+      "pairAction": "コンピュータをペアリング",
+      "openFailed": "このリンクを開けませんでした",
+      "ambiguous": "このボットは{{names}}にあります。使用するコンピュータのOrcaでチャットを開いてください。",
+      "computer": "お使いのコンピュータ",
+      "updateNeeded": "このリンクを開くには、{{names}}のOrcaを更新してください。",
+      "unreachable": "{{names}}に接続できませんでした。いずれかでOrcaが起動していることを確認し、もう一度お試しください。",
+      "missing": "ペアリング済みのコンピュータにこのボットがありません。",
+      "offline": "{{name}}はオフラインです。オンラインに戻ったらリンクを開き直してください。",
+      "chatOpenFailed": "{{name}}でこのチャットを開けませんでした。リンクをもう一度お試しください。",
+      "unreachableSingle": "{{name}}に接続できませんでした。そのコンピュータでOrcaが起動していることを確認し、もう一度お試しください。",
+      "workspaceDeleted": "このチャットのワークスペースは{{name}}で削除されました。"
     }
   }
 }

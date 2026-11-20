@@ -77,6 +77,7 @@ export type GlobalSettings = GlobalSettingsBase & {
   editorAutoSave: boolean
   /** Days a release must be public before Orca offers it; absent/0 offers releases immediately. */
   updateDelayDays?: number
+  automaticUpdates?: boolean
   editorAutoSaveDelayMs: number
   editorMinimapEnabled: boolean
   /** Inline git blame after the cursor line; the status-bar item is separate. */
@@ -116,6 +117,7 @@ export type GlobalSettings = GlobalSettingsBase & {
   terminalLigatures: 'auto' | 'on' | 'off'
   /** Enable SIXEL/iTerm2/Kitty via lazy @xterm/addon-image; image canvas/storage allocates only after a pane receives an image. */
   terminalInlineImages: boolean
+  terminalDroppedImagesPreview?: boolean
   terminalCursorStyle: 'bar' | 'block' | 'underline'
   /** One-shot migration guard for moving inherited cursor defaults to block. */
   terminalCursorStyleDefaultedToBlock?: boolean

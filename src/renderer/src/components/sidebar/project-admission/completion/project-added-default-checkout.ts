@@ -135,13 +135,11 @@ export async function openProjectDefaultCheckout({
   repoId,
   source,
   selectedPath,
-  setHideDefaultBranchWorkspace,
   executionHostId
 }: {
   repoId: string
   source: AddRepoDefaultCheckoutHandoffSource
   selectedPath?: string
-  setHideDefaultBranchWorkspace: (value: boolean) => void
   executionHostId?: ExecutionHostId
 }): Promise<void> {
   let defaultCheckout = getProjectDefaultCheckout(
@@ -158,11 +156,6 @@ export async function openProjectDefaultCheckout({
   }
 
   if (defaultCheckout) {
-    // Onboarding must reveal its default checkout even when the normal sidebar preference hides it.
-    const state = useAppStore.getState()
-    if (state.hideDefaultBranchWorkspace) {
-      setHideDefaultBranchWorkspace(false)
-    }
     track('add_repo_default_checkout_handoff', {
       source,
       result: 'opened_default_checkout',
@@ -191,14 +184,12 @@ export async function finishProjectAddWithDefaultCheckout({
   source,
   selectedPath,
   closeModal,
-  setHideDefaultBranchWorkspace,
   executionHostId
 }: {
   repoId: string
   source: AddRepoDefaultCheckoutHandoffSource
   selectedPath?: string
   closeModal: () => void
-  setHideDefaultBranchWorkspace: (value: boolean) => void
   executionHostId?: ExecutionHostId
 }): Promise<void> {
   await markOnboardingProjectAdded('addedRepo')
@@ -207,7 +198,6 @@ export async function finishProjectAddWithDefaultCheckout({
     repoId,
     source,
     selectedPath,
-    executionHostId,
-    setHideDefaultBranchWorkspace
+    executionHostId
   })
 }

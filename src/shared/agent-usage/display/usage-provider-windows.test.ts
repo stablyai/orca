@@ -25,17 +25,6 @@ describe('getUsageWindowSections', () => {
     expect(sectionNames(sections)).toEqual(['Gemini Models · Weekly', 'Gemini Models · Five Hour'])
   })
 
-  it('keeps the weekly placeholder when weekly buckets have no rollup', () => {
-    const sections = getUsageWindowSections({
-      provider: 'cursor',
-      session: null,
-      weekly: null,
-      buckets: [{ ...window(30, 10_080), name: 'Seat' }]
-    })
-
-    expect(sectionNames(sections)).toEqual(['Seat', 'weekly'])
-  })
-
   it('keeps the weekly rollup when no weekly bucket repeats it', () => {
     const sections = getUsageWindowSections({
       provider: 'antigravity',

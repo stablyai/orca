@@ -5,6 +5,7 @@ import type { VoiceSettings } from '../../../../shared/speech/speech-types'
 import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { WorkspaceCleanupRules } from '../../../../shared/workspace-cleanup/workspace-cleanup-policy'
 import type { SourceControlAiActionDefaults } from '../../../../shared/source-control/ai/recipes/source-control-ai-actions'
+import type { HostNotificationSettings } from '../../../../shared/notifications/notification-settings-types'
 import type { NativeChatDefaultSettings } from '../../../../shared/agent-launch/choices/structured-native-chat-launch-route'
 
 export type RuntimeClientSettings = Pick<
@@ -20,6 +21,8 @@ export type RuntimeClientSettings = Pick<
   | 'deleteChatHistoryWithWorkspace'
   | 'claudeSubagentNavigationEnabled'
   | 'terminalCopyTrimsGutter'
+  | 'terminalScrollbackRows'
+  | 'terminalWordSeparator'
   | 'defaultTaskSource'
   | 'defaultTaskViewPreset'
   | 'visibleTaskProviders'
@@ -57,10 +60,16 @@ export type RuntimeClientSettings = Pick<
   nativeChatDefaults: NativeChatDefaultSettings | null
   /** Models directory and microphone stay host-private. */
   voice: Pick<VoiceSettings, 'enabled' | 'sttModel'>
+  /** Not `notifications`: older paired browsers merge that key over their own switches. */
+  hostNotifications: HostNotificationSettings
 }
 
-/** The saved per-action launch recipes (agent, prompt template, agent args), already migrated. */
-export type RuntimeClientSourceControlAi = { actions: SourceControlAiActionDefaults }
+/** The Source Control AI switch and saved per-action launch recipes (agent, prompt template, agent args), already migrated. */
+export type RuntimeClientSourceControlAi = {
+  /** Absent on older hosts, which read as on. */
+  enabled: boolean
+  actions: SourceControlAiActionDefaults
+}
 
 /** Safe paired projection: host labels only; filesystem defaults stay host-private. */
 export type RuntimeHostDisplayLabelOverrides = Partial<
@@ -71,7 +80,7 @@ export type RuntimeClientSettingsUpdate = Pick<
   Partial<GlobalSettings>,
   | 'agentStatusHooksEnabled'
   | 'claudeSubagentNavigationEnabled'
-  | 'experimentalConnectors'
+  | 'botsEnabled'
   | 'defaultTuiAgent'
   | 'disabledTuiAgents'
   | 'agentDefaultArgs'
@@ -94,8 +103,10 @@ export type RuntimeClientSettingsUpdate = Pick<
   | 'machineName'
   | 'nativeChatPermissionMode'
   | 'nativeChatAutoContinueAfterUsageLimit'
+  | 'nativeChatQueueFollowUps'
+  | 'nativeChatCiResultLines'
   | 'workspaceCleanupPolicy'
   | 'prAutoRefresh'
   | 'newTabMenuLayout'
   | 'floatingTerminalNewTabMenuLayout'
->
+> & { hostNotifications?: Partial<HostNotificationSettings> }

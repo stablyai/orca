@@ -4,6 +4,8 @@ import { findSqliteRuntimeTests } from './vitest-sqlite-runtime-scan.mjs'
 const NODE_RUNTIME_INCLUDE = [
   // Exercises a real peer reset through Node's native Socket.setTypeOfService.
   'src/main/network/best-effort-socket-type-of-service.test.ts',
+  // The Node host closes only its own copy of a shared socket; Bun's destroy shuts it down.
+  'src/main/provider-process/hosted-provider-launch.integration.test.ts',
   // Relays nested worker_threads through Node's serializer, as Electron's utility process does.
   'src/main/utility-worker-host/utility-worker-host.test.ts',
   'config/scripts/ci/workflow-contracts/cloud-security-history-workflow.test.mjs',
@@ -11,15 +13,18 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/ssh/remote-exec/ssh-remote-commands.test.ts',
   'src/packages/process-host/src/run-process.test.ts',
   'tests/e2e/agents/settings/cursor-quota-transport.unit.test.ts',
-  'tests/e2e/desktop/electron-fixtures/electron-process-shutdown.unit.test.ts',
   // The parse cache persists through node:sqlite.
   'src/main/ai-vault/parse-cache/session-parse-cache-persistence.test.ts',
   'src/main/ai-vault/scope/session-scanner-scope-walk.test.ts',
   // The forced-probe handoff race opens only under V8's promise scheduling, which Electron main uses.
   'src/main/github/api/rate-limit.test.ts',
   // Electron main bridges streams with Node's implementation.
+  // The relay's backpressure rides on Node's fetch; Bun's fetch reads a body ahead of its reader.
+  'src/main/bots/tool-relay/bot-tool-relay.test.ts',
   'src/main/browser/extensions/native-messaging/browser-extension-native-host-process-backpressure.test.ts',
   'src/main/daemon/providers/lifecycle/testing/daemon-init-provider-installation.test.ts',
+  // A failed write must surface as Node's async stream 'error', as on Electron main's stdio.
+  'src/main/startup/process-failure/main-process-error-guards.test.ts',
   'src/renderer/src/components/terminal-pane/pty-transport/input/pty-input-write-queue.test.ts',
   // Asserts payloads are collected; Bun's GC scans the stack conservatively and may keep one alive.
   'src/shared/network/websocket/ws-inbound-message-queue.test.ts',
@@ -40,6 +45,7 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-background-stop-unreadable.test.ts',
 
   'src/main/runtime/construction/orca-runtime.test.ts',
+  'src/main/runtime/terminal/stop/worktree-sleep-resume-recording.test.ts',
   'src/main/runtime/client/settings/runtime-client-agent-launch-settings-durability.test.ts',
   'src/cli/**/*.test.ts',
   'src/main/persistence/**/*.test.ts',

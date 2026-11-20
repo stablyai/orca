@@ -81,6 +81,10 @@ export function acpSessionUpdate(
     case 'tool_call':
     case 'tool_call_update': {
       const { tools, dialect, backgroundTasks, subagents } = context
+      const backgrounded = tools.backgroundTask(update, dialect, at)
+      if (backgrounded) {
+        return backgroundTasks.translate([backgrounded], join.join)
+      }
       const events = tools.translate(update, dialect, join.join)
       const tool = events[0]
       const body = tool && 'body' in tool && tool.body?.kind === 'tool-call' ? tool.body : null
