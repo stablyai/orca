@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto'
-import { chmodSync, lstatSync, rmSync, type Stats } from 'node:fs'
+import { chmodSync, lstatSync, type Stats } from 'node:fs'
 import {
   copyFileWithWindowsRetry,
+  removeFileWithWindowsRetry,
   renameFileWithWindowsRetry
 } from '../../shared/file-write/windows-retry-file-operations'
 
@@ -36,19 +37,19 @@ export function stageRollingFileBackup(
   }
 
   const tempPath = `${backupPath}.${process.pid}.${randomUUID()}.tmp`
-  const discard = (): void => rmSync(tempPath, { force: true })
+  const discard = (): void => removeFileWithWindowsRetry(tempPath)
+  // Why: Windows refuses to rename over a read-only file. On Windows the owner write bit is the
+  // read-only attribute; ACLs are untouched.
+  const makeWritable = (path: string): void => {
+    if (process.platform === 'win32') {
+      chmodSync(path, 0o666)
+    }
+  }
   try {
     // A fresh inode avoids hard-link mutation; rename preserves the old backup on failure.
     copyFileWithWindowsRetry(sourcePath, tempPath)
-    if (process.platform === 'win32') {
-      // Why: copyFile keeps a read-only attribute, and Windows refuses to rename over a read-only file.
-      // On Windows the owner write bit is the read-only attribute; ACLs are untouched.
-      for (const path of isReplaceableReadOnlyBackup(existing)
-        ? [tempPath, backupPath]
-        : [tempPath]) {
-        chmodSync(path, 0o666)
-      }
-    }
+    // copyFile keeps the source's read-only attribute.
+    makeWritable(tempPath)
   } catch (error) {
     discard()
     throw error
@@ -56,6 +57,10 @@ export function stageRollingFileBackup(
   return {
     commit: () => {
       try {
+        // Only now: a discarded stage leaves the previous backup's attribute as it was.
+        if (isReplaceableReadOnlyBackup(existing)) {
+          makeWritable(backupPath)
+        }
         renameFileWithWindowsRetry(tempPath, backupPath)
       } finally {
         discard()
