@@ -38,6 +38,8 @@ const user = (text: string, deliveryId: string): AgentJournalMessageItem => ({
 
 // Fixed past every earlier send, so the target rows are byte-identical at any N.
 const TARGET_SEQUENCE = 100_000
+/** The turn end's read position, past every row the chat holds. */
+const END = TARGET_SEQUENCE + 100
 
 /** `earlier` accepted sends, each opening its own finished turn, then the target turn. */
 function chat(earlier: number) {
@@ -125,7 +127,7 @@ function chat(earlier: number) {
 
 function attributionWork(earlier: number) {
   const scope = new JournalSqlScope(chat(earlier), target.sessionId, target.epoch)
-  const attribution = readJournalDomainTurnAttribution(scope, 'provider-turn-target')
+  const attribution = readJournalDomainTurnAttribution(scope, 'provider-turn-target', END)
   expect(attribution.stamps?.map((stamp) => stamp.deliveryId)).toEqual([
     'delivery-open',
     'delivery-steered'
@@ -153,11 +155,12 @@ it('finds the steered sends through their index, without a scan or sort', () => 
   })
   readJournalDomainTurnAttribution(
     new JournalSqlScope(db, target.sessionId, target.epoch),
-    'provider-turn-target'
+    'provider-turn-target',
+    END
   )
   expect(steered).toHaveLength(1)
   const plan = prepare(`EXPLAIN QUERY PLAN ${steered[0]}`)
-    .all(target.sessionId, target.epoch, 'turn-target', 65)
+    .all(target.sessionId, target.epoch, 'turn-target')
     .map((step) => String(step.detail))
   expect(plan.join('\n')).toContain('USING INDEX journal_submission_steer')
   expect(plan.join('\n')).not.toMatch(/TEMP B-TREE|^SCAN journal_submission_attempts$/m)

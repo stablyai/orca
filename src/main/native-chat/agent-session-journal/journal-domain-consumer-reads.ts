@@ -46,7 +46,7 @@ export type JournalConsumerRead =
   /** Automation-result notes since the last clear, with the sends that read them. */
   | { kind: 'automation-result-notes' }
   | { kind: 'operation-window'; anchors: JournalOperationWindowAnchors }
-  | { kind: 'turn-attribution'; turnId: string }
+  | { kind: 'turn-attribution'; turnId: string; through: number }
   | { kind: 'prompt-item'; end: 'first' | 'last' }
   | { kind: 'latest-task-list' }
   | { kind: 'run-mentions'; runId: string }
@@ -87,7 +87,7 @@ export function readJournalDomainConsumer(
   if (operation.kind === 'turn-attribution') {
     return {
       kind: operation.kind,
-      attribution: readJournalDomainTurnAttribution(scope, operation.turnId)
+      attribution: readJournalDomainTurnAttribution(scope, operation.turnId, operation.through)
     }
   }
   if (operation.kind === 'first-submitted-prompt') {

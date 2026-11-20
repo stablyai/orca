@@ -103,10 +103,11 @@ function chat() {
       normalizedHandOff: false
     })
   }
-  const read = (turnId: string) =>
+  const read = (turnId: string, through = 900) =>
     readJournalDomainTurnAttribution(
       new JournalSqlScope(db, target.sessionId, target.epoch),
-      turnId
+      turnId,
+      through
     )
   return { item, alias, send, read }
 }
@@ -168,4 +169,22 @@ it('proves nothing for a turn the journal does not hold', () => {
     opener: null,
     stamps: null
   })
+})
+
+it('counts no send written after the turn ended, as the turn end read it', () => {
+  const f = chat()
+  f.item('orca:open', 10, user('open'))
+  f.item('turn-1', 11, {
+    kind: 'turn',
+    turnId: 'provider-turn-1',
+    state: 'completed',
+    userItemId: 'orca:open'
+  })
+  f.send('late', 20, user('after the end', 'delivery-late'), {
+    turnItemId: 'turn-1',
+    via: 'steer'
+  })
+
+  expect(deliveryIds(f.read('provider-turn-1', 12).stamps)).toEqual([])
+  expect(deliveryIds(f.read('provider-turn-1', 20).stamps)).toEqual(['delivery-late'])
 })

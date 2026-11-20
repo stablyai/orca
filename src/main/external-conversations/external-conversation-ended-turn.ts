@@ -88,7 +88,7 @@ export async function endedTurnAttribution(
   const read = cursor
     ? await chat
         .journalReads(sessionId)
-        .then((reads) => reads.turnAttribution(turnId))
+        .then((reads) => reads.turnAttribution(turnId, cursor.sequence))
         .catch(() => null)
     : null
   if (

@@ -23,13 +23,17 @@ export type JournalTurnAttribution = {
 
 /** A turn's row, opener and steered sends, each found by index: work is the turn's own rows (every
  *  send steered into it, all needed to prove none was a delivery), never the chat's send history (an
- *  operation window scans every current send). */
+ *  operation window scans every current send). `through`: the sequence its end was read at; a row
+ *  written later is not the ended turn's. */
 export function readJournalDomainTurnAttribution(
   scope: JournalSqlScope,
-  turnId: string
+  turnId: string,
+  through: number
 ): JournalTurnAttribution {
   const cursor = journalDomainContextHead(scope.db, scope)
-  const row = turnRow(scope, turnId)
+  const ended = (item: AgentJournalRenderItem | null) =>
+    item && item.sequence <= through ? item : null
+  const row = ended(turnRow(scope, turnId, through))
   if (!row) {
     return { cursor, turnItemId: null, opener: null, stamps: null }
   }
@@ -39,10 +43,12 @@ export function readJournalDomainTurnAttribution(
       ? row
       : null
     : turn.userItemId
-      ? journalVisibleItem(
-          scope.db,
-          scope.prefix,
-          journalCanonicalItemId(scope.db, scope.prefix)(turn.userItemId)
+      ? ended(
+          journalVisibleItem(
+            scope.db,
+            scope.prefix,
+            journalCanonicalItemId(scope.db, scope.prefix)(turn.userItemId)
+          )
         )
       : null
   const sends = scope.db
@@ -55,7 +61,7 @@ export function readJournalDomainTurnAttribution(
   )
   const items = submissions.flatMap((submission) => {
     const key = agentJournalSubmissionKey(submission.clientMessageId)
-    const item = journalVisibleItem(scope.db, scope.prefix, key)
+    const item = ended(journalVisibleItem(scope.db, scope.prefix, key))
     return item ? [item] : []
   })
   return {
@@ -67,12 +73,16 @@ export function readJournalDomainTurnAttribution(
 }
 
 /** The turn's own root row: its lifecycle record by turn id, else the item the id names. */
-function turnRow(scope: JournalSqlScope, turnId: string): AgentJournalRenderItem | null {
+function turnRow(
+  scope: JournalSqlScope,
+  turnId: string,
+  through: number
+): AgentJournalRenderItem | null {
   const named = scope.db
     .prepare(`SELECT item_id FROM journal_items INDEXED BY journal_items_named_turn
-    WHERE session_id=? AND epoch=? AND turn_id=? AND hidden=0 AND root=1
+    WHERE session_id=? AND epoch=? AND turn_id=? AND hidden=0 AND root=1 AND sequence<=?
     ORDER BY sequence DESC, sequence_index DESC, ordinal DESC LIMIT 1`)
-    .get(...scope.prefix, turnId)
+    .get(...scope.prefix, turnId, through)
   const item = journalVisibleItem(scope.db, scope.prefix, named ? String(named.item_id) : turnId)
   return item && isRootAgentJournalItem(item) ? item : null
 }
