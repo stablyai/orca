@@ -35,6 +35,7 @@ import type { OrcaRuntimeService } from '../../orca-runtime'
 import { googleSetupKeyRefusedLine } from '../../../google/google-setup-key-download'
 import { noWindowAnswersGoogleCards } from '../../../google/google-card-reach'
 import { defineMethod, InvalidArgumentError, type RpcContext } from '../core'
+import { requireSetupPageInAgentWorkspace } from '../../../google/google-setup-page-binding'
 import { postConnectorOffer } from './bots-connector-offer'
 import { isAgentRpcCaller } from '../callers/rpc-caller-identity'
 
@@ -289,6 +290,7 @@ export const GOOGLE_SETUP_METHODS = [
           throw error
         }
       }
+      await requireSetupPageInAgentWorkspace(context.runtime, botId, params.change)
       const { prev, run } = applied(botId, actor, params.change)
       writeGoogleSetupCards(chatOf(context.runtime, botId), prev, run)
       return withBlocker(context, botId, run)

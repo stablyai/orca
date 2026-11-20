@@ -105,6 +105,43 @@ describe('BrowserClientDownloadRelay', () => {
     }
   })
 
+  it('tells the page host what started a download as it starts, before any byte', async () => {
+    const calls: { method: string; params: Record<string, unknown> }[] = []
+    const transport = negotiatedTransport((method, params) => {
+      calls.push({ method, params: params as Record<string, unknown> })
+      return method.endsWith('begin')
+        ? { accepted: true, claimed: true }
+        : { accepted: true, workspaceRelativePath: 'Google setup in Orca' }
+    })
+    const relay = new BrowserClientDownloadRelay({
+      stagingRoot: '/tmp/staging',
+      hostLabel: 'build-box',
+      transport,
+      resolvePage: () => page,
+      filesystem: memoryFilesystem(Buffer.from('{}')).filesystem
+    })
+    const route = remoteRoute(
+      relay.route({
+        guestWebContentsId: 7,
+        filename: 'client_secret_1.json',
+        documentUrl: 'https://console.cloud.google.com/auth/clients?project=p'
+      })
+    )
+    expect(calls.map((call) => call.method)).toEqual(['browser.clientHost.fileChannel.begin'])
+    expect(calls[0].params).toMatchObject({
+      browserPageId: 'page-1',
+      pageHostGeneration: 3,
+      transferId: route.transferId,
+      filename: 'client_secret_1.json',
+      documentUrl: 'https://console.cloud.google.com/auth/clients?project=p'
+    })
+    await route.complete('client_secret_1.json')
+    expect(calls.slice(1).map((call) => call.method)).toEqual([
+      'browser.clientHost.fileChannel.write',
+      'browser.clientHost.fileChannel.write'
+    ])
+  })
+
   it('stops the commit and never sends the final chunk once the transfer is aborted', async () => {
     const writes: { final: boolean }[] = []
     const aborts: unknown[] = []
@@ -113,6 +150,9 @@ describe('BrowserClientDownloadRelay', () => {
       if (method.endsWith('abort')) {
         aborts.push(params)
         return { released: true }
+      }
+      if (method.endsWith('begin')) {
+        return { accepted: true, claimed: false }
       }
       writes.push(params as { final: boolean })
       void route?.abort()

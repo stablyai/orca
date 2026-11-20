@@ -1,4 +1,5 @@
 import { powerMonitor } from 'electron'
+import { join } from 'node:path'
 import type { ConnectorCloud } from '../../connector-cloud/connector-cloud'
 import { installConnectorHost } from '../../connector-cloud/connector-host-install'
 import { registerGoogleSetupHandlers } from '../../ipc/google-setup'
@@ -27,7 +28,11 @@ export function installMainProcessConnectorCloud(serve: boolean): void {
     isFenced: () => state.isQuitting
   })
   // `orca serve` runs agents too, with its own offscreen browser or a paired desktop's.
-  installGoogleSetupHostWatch(runtime, browserManager)
+  installGoogleSetupHostWatch(runtime, {
+    setStandingDownloadClaim: (resolver) => browserManager.setStandingDownloadClaim(resolver),
+    getWorktreeIdForTab: (id) => browserManager.getWorktreeIdForTab(id),
+    keyStagingDir: join(userDataPath, 'google-setup-keys')
+  })
   if (serve) {
     return
   }

@@ -10,7 +10,10 @@ import {
 } from '../../../../../../shared/execution-host/execution-host'
 import { hasRuntimeRpcErrorCode } from '../../../../../../shared/remote-runtime/rpc/runtime-rpc-error-code'
 import type { Bot } from '../../../../../../shared/bot-types'
-import type { GOOGLE_SETUP_STARTED_FROM } from '../../../../../../shared/rpc-contract/google-setup-params'
+import type {
+  GOOGLE_SETUP_STARTED_FROM,
+  GoogleSetupKeyCandidate
+} from '../../../../../../shared/rpc-contract/google-setup-params'
 import type {
   GoogleSetupCard,
   GoogleSetupRun
@@ -75,7 +78,10 @@ type SetupCall =
       method: 'bots.googleSetup.answer'
       params: { botId: string; card: GoogleSetupCard; values: string[] }
     }
-  | { method: 'bots.googleSetup.importHostKey'; params: { botId: string } }
+  | {
+      method: 'bots.googleSetup.importHostKey'
+      params: { botId: string; file?: { name: string; id: string } }
+    }
 
 async function call<T extends Snapshot>(bot: BotRef, { method, params }: SetupCall): Promise<T> {
   const key = botRefKey(bot)
@@ -179,21 +185,29 @@ export async function answerGoogleSetup(
   })
 }
 
-/** Import file for a bot on another host: that host imports a key its Orca browser saved in the bot's
- *  home and no claim took. False when it has none, or predates the lookup, so this computer picks. */
-export async function importGoogleSetupKeyOnHost(bot: BotRef): Promise<boolean> {
+export type HostKeyImport =
+  | { found: true }
+  | { found: false; candidates: GoogleSetupKeyCandidate[] }
+
+/** Import file for a bot on another host: that host imports the key its Orca browser saved in the
+ *  bot's home, or lists the files to pick from (`file` is the pick). Null for a local bot, or a host
+ *  that predates it, so this computer picks. */
+export async function importGoogleSetupKeyOnHost(
+  bot: BotRef,
+  file?: GoogleSetupKeyCandidate
+): Promise<HostKeyImport | null> {
   if (bot.hostId === LOCAL_EXECUTION_HOST_ID) {
-    return false
+    return null
   }
   try {
-    const reply = await call<Snapshot & { found: boolean }>(bot, {
+    const reply = await call<Snapshot & HostKeyImport>(bot, {
       method: 'bots.googleSetup.importHostKey',
-      params: { botId: bot.id }
+      params: { botId: bot.id, ...(file ? { file: { name: file.name, id: file.id } } : {}) }
     })
-    return reply.found
+    return reply.found ? { found: true } : { found: false, candidates: reply.candidates ?? [] }
   } catch (error) {
     if (hasRuntimeRpcErrorCode(error, 'method_not_found')) {
-      return false
+      return null
     }
     throw error
   }

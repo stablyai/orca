@@ -27,6 +27,7 @@ import { hasPairedPageHost } from './browser-client-page-opening'
 import { resolveRemoteCliBrowserScopeSelector } from '../../desktop-browser-bridge/remote-cli-browser-scope'
 import type { RpcContext } from '../../rpc/core'
 import { OrcaRuntimeWithTransitionGraphReloadToTerminalState } from '../../session-graph/session-graph-authority'
+import { browserManager } from '../../../browser/guest-lifecycle/manager/browser-manager'
 
 export abstract class OrcaRuntimeWithBrowserWorkspaceRouting extends OrcaRuntimeWithTransitionGraphReloadToTerminalState {
   async actOnClientPageInitialization(
@@ -56,6 +57,23 @@ export abstract class OrcaRuntimeWithBrowserWorkspaceRouting extends OrcaRuntime
     })
     // This UI action acknowledges accepted intent; the command owns load completion.
     void completion.catch(() => {})
+  }
+
+  /** The workspace a browser command acts in, known before it runs: its page's, else the one it
+   *  names; null when it names neither (it then acts on whatever tab is in front). */
+  async browserCommandWorkspaceId(params: unknown): Promise<string | null> {
+    const { page, worktree } = (params ?? {}) as { page?: unknown; worktree?: unknown }
+    if (typeof page === 'string' && page.length > 0) {
+      return (
+        getRuntimeBrowserPageRegistry(this).getPage(page)?.workspaceId ??
+        browserManager.getWorktreeIdForTab(page) ??
+        null
+      )
+    }
+    if (typeof worktree === 'string' && worktree.length > 0 && worktree !== 'all') {
+      return (await this.resolveBrowserWorkspace(worktree)).id
+    }
+    return null
   }
 
   /** Resolve the current host key; native/WSL runtime ids and SSH provider epochs expire on restart. Missing workspaces are gone; reconnect/repair is temporary and never authorizes page retirement. */

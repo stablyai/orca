@@ -41,7 +41,10 @@ function environment(input: {
   transport.bind({
     fileChannelNegotiated: true,
     fileChannelAvailability: 'negotiated',
-    sendFileChannelRequest: async (_method, params) => {
+    sendFileChannelRequest: async (method, params) => {
+      if (method.endsWith('begin')) {
+        return { ok: true, result: { accepted: true, claimed: false }, _meta: {} } as never
+      }
       writes.push({
         browserPageId: (params as { browserPageId: string }).browserPageId,
         hostLabel: input.environmentId

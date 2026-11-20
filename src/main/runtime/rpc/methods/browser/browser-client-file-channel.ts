@@ -1,5 +1,6 @@
 import {
   BrowserClientFileChannelAbortParams,
+  BrowserClientFileChannelBeginParams,
   BrowserClientFileChannelReadParams,
   BrowserClientFileChannelWriteParams
 } from '../../../../../shared/browser/client-hosting/browser-client-file-channel-protocol'
@@ -8,8 +9,12 @@ import { BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY } from '../../../../../shared/br
 import { getBrowserClientDownloadTransferStore } from '../../../browser/downloads/browser-client-download-transfer-store'
 import { getBrowserHostLeaseRegistry } from '../../../browser-host/leases/browser-host-lease-registry-instance'
 import { getRuntimeBrowserPageRegistry } from '../../../browser/client-pages/runtime-browser-page-registry'
-import { clientPageKnownUrls } from '../../../browser/client-pages/client-page-known-urls'
-import { offerCommittedBrowserDownload } from '../../../browser/downloads/browser-client-download-claim'
+import {
+  abortClaimedClientDownload,
+  beginClientDownload,
+  writeClaimedClientDownload
+} from '../../../browser/downloads/client-download-claims'
+import { recordClientDownloadCommit } from '../../../browser/downloads/client-download-provenance'
 import { defineMethod, type RpcContext } from '../../core'
 
 type FileChannelAuthorityParams = {
@@ -91,11 +96,31 @@ export const BROWSER_CLIENT_FILE_CHANNEL_METHODS = [
     }
   }),
   defineMethod({
+    name: 'browser.clientHost.fileChannel.begin',
+    permission: 'workspace',
+    params: BrowserClientFileChannelBeginParams,
+    handler: (params, context) => {
+      const page = requireFileChannelPage(params, context)
+      const claimed = beginClientDownload(params.transferId, {
+        browserPageId: page.browserPageId,
+        workspaceId: page.workspaceId,
+        pageHostGeneration: params.pageHostGeneration,
+        filename: params.filename,
+        documentUrl: params.documentUrl
+      })
+      return { accepted: true as const, claimed }
+    }
+  }),
+  defineMethod({
     name: 'browser.clientHost.fileChannel.write',
     permission: 'workspace',
     params: BrowserClientFileChannelWriteParams,
     handler: async (params, context) => {
       const page = requireFileChannelPage(params, context)
+      const claimed = writeClaimedClientDownload(params)
+      if (claimed) {
+        return { accepted: true as const, ...claimed }
+      }
       const commit = await getBrowserClientDownloadTransferStore(context.runtime).accept({
         transferId: params.transferId,
         browserPageId: params.browserPageId,
@@ -110,13 +135,12 @@ export const BROWSER_CLIENT_FILE_CHANNEL_METHODS = [
       if (!commit) {
         return { accepted: true as const }
       }
-      // Not awaited: a slow import must not hold the client's transfer open.
-      void offerCommittedBrowserDownload(
-        context.runtime,
-        page,
-        clientPageKnownUrls(getRuntimeBrowserPageRegistry(context.runtime), page.browserPageId),
-        commit
-      )
+      recordClientDownloadCommit({
+        workspaceId: page.workspaceId,
+        browserPageId: page.browserPageId,
+        workspaceRelativePath: commit.workspaceRelativePath,
+        committedAt: Date.now()
+      })
       return { accepted: true as const, workspaceRelativePath: commit.workspaceRelativePath }
     }
   }),
@@ -126,6 +150,9 @@ export const BROWSER_CLIENT_FILE_CHANNEL_METHODS = [
     params: BrowserClientFileChannelAbortParams,
     handler: async (params, context) => {
       requireFileChannelPage(params, context)
+      if (abortClaimedClientDownload(params.browserPageId, params.transferId)) {
+        return { released: true }
+      }
       const released = await getBrowserClientDownloadTransferStore(context.runtime).abort({
         transferId: params.transferId,
         browserPageId: params.browserPageId

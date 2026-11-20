@@ -16,6 +16,7 @@ import {
 } from '../../../../../../shared/google/google-setup-run'
 import { GoogleBrandingLinks } from '../GoogleBrandingLinks'
 import { googleConsoleStepUrl } from '../../../../../../shared/google/google-console-setup'
+import type { GoogleSetupKeyCandidate } from '../../../../../../shared/rpc-contract/google-setup-params'
 import { importGoogleApp, openInMyBrowser, refreshGoogle } from '../google-connect-client'
 import { googleKeyRefusalHeadline, googleStepNotes } from '../google-copy'
 import { useGoogleClientFile } from '../use-google-client-file'
@@ -65,16 +66,18 @@ function useSetupKeyCapture(
 /** For a key Orca didn't pick up (saved elsewhere, or the download went missed): import it by hand. */
 function KeyImport({ bot }: { bot: BotRef }): React.JSX.Element {
   const t = useTranslate()
-  const file = useGoogleClientFile((text) => saveKey(bot, text), {
-    // A bot on another host: its browser's download is there, so that host looks first.
-    tryHost: async () => {
-      const found = await importGoogleSetupKeyOnHost(bot)
-      if (found) {
-        await refreshGoogle(botTarget(bot))
-      }
-      return found
+  // Files on the bot's host that it can't tell apart: the owner picks one.
+  const [candidates, setCandidates] = useState<GoogleSetupKeyCandidate[]>([])
+  const fromHost = async (picked?: GoogleSetupKeyCandidate): Promise<boolean> => {
+    const reply = await importGoogleSetupKeyOnHost(bot, picked)
+    setCandidates(reply && !reply.found ? reply.candidates : [])
+    if (reply?.found) {
+      await refreshGoogle(botTarget(bot))
     }
-  })
+    return reply !== null && (reply.found || reply.candidates.length > 0)
+  }
+  // A bot on another host: its browser's download is there, so that host looks first.
+  const file = useGoogleClientFile((text) => saveKey(bot, text), { tryHost: () => fromHost() })
   return (
     <div className="mt-2 text-xs text-muted-foreground">
       {t('bots.googleSetup.keyMissed', 'Downloaded the key and Orca didn’t pick it up?')}{' '}
@@ -86,6 +89,26 @@ function KeyImport({ bot }: { bot: BotRef }): React.JSX.Element {
       >
         {t('bots.google.importSetupFile', 'Import file')}
       </Button>
+      {candidates.length > 0 ? (
+        <div className="mt-1 flex flex-col items-start">
+          {t('bots.googleSetup.pickHostKey', 'Pick the key file to import:')}
+          {candidates.map((candidate) => (
+            <Button
+              key={candidate.id}
+              variant="link"
+              size="inlineText"
+              disabled={file.busy}
+              onClick={() =>
+                void fromHost(candidate).catch((error: unknown) =>
+                  toast.error(error instanceof Error ? error.message : String(error))
+                )
+              }
+            >
+              {candidate.name}
+            </Button>
+          ))}
+        </div>
+      ) : null}
       {file.error ? (
         <p role="alert" className="mt-1 text-destructive">
           {file.error}

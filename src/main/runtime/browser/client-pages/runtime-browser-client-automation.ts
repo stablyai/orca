@@ -10,8 +10,6 @@ import {
   readableBrowserClientPageRefusal
 } from './browser-client-page-refusal-copy'
 import { browserExpectedUrlMismatchError } from '../../../browser/cdp/input/browser-expected-page-url'
-import { isPageTextWithheld } from '../../../browser/agent-browser/agent-browser-withheld-page-text'
-import { clientPageKnownUrls, rememberClientPageReportedUrl } from './client-page-known-urls'
 import type { BrowserHostLeaseRegistry } from '../../browser-host/leases/browser-host-lease-registry'
 import type {
   RuntimeBrowserClientPage,
@@ -132,27 +130,7 @@ async function runOnClientPage(
       ? browserExpectedUrlMismatchError(result.expectedUrlMismatch)
       : browserClientPageRefusal(result.errorCode, result.errorMessage)
   }
-  return { handled: true, result: withoutWithheldPageText(result.value, page, options.pages) }
-}
-
-/** The client read the page for its effects; this host owns the agent, so it decides what it sees. */
-function withoutWithheldPageText(
-  value: unknown,
-  page: RuntimeBrowserClientPage,
-  pages: RuntimeBrowserPageRegistry
-): unknown {
-  const { browserPageId } = page
-  const urls = [page.url, ...clientPageKnownUrls(pages, browserPageId)]
-  rememberClientPageReportedUrl(browserPageId, value)
-  if (!isRecord(value) || !isRecord(value.effects) || value.effects.page === undefined) {
-    return value
-  }
-  urls.push(...clientPageKnownUrls(pages, browserPageId))
-  if (!urls.some((url) => isPageTextWithheld({ browserPageId, url }))) {
-    return value
-  }
-  const { page: _withheld, ...effects } = value.effects
-  return { ...value, effects }
+  return { handled: true, result: result.value }
 }
 
 async function resolveTargetPage(

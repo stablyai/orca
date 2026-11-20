@@ -10,6 +10,7 @@ import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { Bot } from '../../../../shared/bot-types'
 import { makeTestBot } from '../../../bots/bot.test-fixture'
 import { GoogleSetupRuns } from '../../../google/google-setup-runs'
+import { registerGoogleCardRenderer } from '../../../google/google-card-reach'
 import { DESKTOP_RPC_CALLER, LOCAL_CLI_RPC_CALLER } from '../callers/rpc-caller-identity'
 
 const dir = mkdtempSync(join(tmpdir(), 'orca-google-setup-rpc-'))
@@ -427,12 +428,26 @@ describe("a bot's Google setup start when Google's app is already here", () => {
     expect(offers).toEqual([])
   })
 
-  it('on a server with a paired desktop that can open the sign-in page, posts the card', async () => {
+  it('on a server with a paired desktop that can open the sign-in page and draws the card, posts it', async () => {
+    headless = true
+    getBrowserHostRequestRegistry(service).register({ pairedDeviceId: 'desk', emit: () => {} })
+    const unregister = registerGoogleCardRenderer()
+    try {
+      google.client = { clientId: 'c1' }
+      google.accounts = [{ ...signedIn, status: 'reconnect' }]
+      expect(await start()).toMatchObject({ ok: true, result: { routed: 'offer' } })
+      expect(offered()).toEqual([['ivy-chat', { botId: 'ivy', source: 'google' }]])
+    } finally {
+      unregister()
+    }
+  })
+
+  it('on a server whose paired desktop can open the page but not draw the card, posts none', async () => {
     headless = true
     getBrowserHostRequestRegistry(service).register({ pairedDeviceId: 'desk', emit: () => {} })
     google.client = { clientId: 'c1' }
     google.accounts = [{ ...signedIn, status: 'reconnect' }]
-    expect(await start()).toMatchObject({ ok: true, result: { routed: 'offer' } })
-    expect(offered()).toEqual([['ivy-chat', { botId: 'ivy', source: 'google' }]])
+    await start()
+    expect(offered()).toEqual([])
   })
 })

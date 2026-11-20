@@ -1,10 +1,17 @@
-import { existsSync } from 'node:fs'
+import { existsSync, mkdtempSync } from 'node:fs'
 import { writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import type { StandingDownloadClaim } from '../browser/guest-lifecycle/manager/downloads/browser-manager-download-creation'
 import type { GoogleSetupRun } from '../../shared/google/google-setup-run'
 import {
-  googleSetupCommittedKeyClaim,
+  beginClientDownload,
+  setClientDownloadClaimant,
+  writeClaimedClientDownload
+} from '../runtime/browser/downloads/client-download-claims'
+import {
+  googleSetupClientDownloadClaimant,
   googleSetupKeyDownloadClaim,
   googleSetupWithholdsPageText
 } from './google-setup-key-download'
@@ -33,14 +40,21 @@ const desktopKey = (projectId = 'example-project-123') =>
     }
   })
 
+const IVY_HOME = 'folder:ivy-home'
+
 function setup(runs: GoogleSetupRun[]) {
   const deps = {
     runs: () => runs,
+    botWorkspace: (botId: string) => (botId === 'ivy' ? IVY_HOME : 'folder:other-home'),
     importKey: vi.fn(),
     keyArrived: vi.fn(async () => {}),
     keyRefused: vi.fn(async () => {})
   }
-  return { claim: googleSetupKeyDownloadClaim(deps), deps }
+  const claim = googleSetupKeyDownloadClaim(deps, {
+    stagingDir: join(mkdtempSync(join(tmpdir(), 'orca-key-test-')), 'staging'),
+    workspaceOfPage: (id) => (id === 'setup-page' ? IVY_HOME : 'folder:other-home')
+  })
+  return { claim, deps }
 }
 
 const KEY = {
@@ -85,6 +99,9 @@ describe('the Google key downloaded on a setup page', () => {
       claim({ ...KEY, documentUrl: 'https://console.cloud.google.com/home/dashboard' })
     ).toBeNull()
     expect(setup([run({ steps: { client: { status: 'done', at: 2 } } })]).claim(KEY)).toBeNull()
+    // The page is another agent's tab, or two runs name it: nobody's claim.
+    expect(setup([run({ botId: 'rex' })]).claim(KEY)).toBeNull()
+    expect(setup([run(), run({ id: 'run-2', botId: 'rex' })]).claim(KEY)).toBeNull()
   })
 
   it('cleans up refused downloads before reporting them and accepts a matching key on retry', async () => {
@@ -143,49 +160,54 @@ describe('the Google key downloaded on a setup page', () => {
   })
 })
 
-describe("the Google key a paired client's browser saved on this host", () => {
-  it('imports it once any known address is the client page, and always removes the file', async () => {
-    const deps = {
-      runs: () => [run()],
-      importKey: vi.fn(),
-      keyArrived: vi.fn(async () => {}),
-      keyRefused: vi.fn(async () => {})
-    }
-    const claim = googleSetupCommittedKeyClaim(deps)
-    const file = (text: string) => ({
-      read: vi.fn(async () => text),
-      remove: vi.fn(async () => {})
+describe("a paired desktop's key download, claimed as it begins", () => {
+  const start = {
+    browserPageId: 'setup-page',
+    workspaceId: IVY_HOME,
+    pageHostGeneration: 4,
+    filename: 'client_secret_123.json',
+    documentUrl: KEY.documentUrl
+  }
+  const send = (transferId: string, text: string) => {
+    const chunk = { browserPageId: 'setup-page', transferId, pageHostGeneration: 4 }
+    expect(
+      writeClaimedClientDownload({
+        ...chunk,
+        contentBase64: Buffer.from(text).toString('base64'),
+        offset: 0,
+        final: false
+      })
+    ).toEqual({})
+    return writeClaimedClientDownload({
+      ...chunk,
+      contentBase64: '',
+      offset: Buffer.byteLength(text),
+      final: true
     })
-    // The page record lags while the pane is unwatched; the agent's last reported address counts.
-    const saved = {
-      browserPageId: 'setup-page',
-      filename: 'client_secret_123 (1).json',
-      urls: ['http://127.0.0.1:3000/start', KEY.documentUrl],
-      startedAt: 5
+  }
+
+  it('imports it for the run waiting when it began, and only for that run', async () => {
+    const runs = [run()]
+    const { deps } = setup(runs)
+    setClientDownloadClaimant(googleSetupClientDownloadClaimant(deps))
+    try {
+      expect(beginClientDownload('t1', { ...start, workspaceId: 'folder:other-home' })).toBe(false)
+      expect(beginClientDownload('t1', { ...start, filename: 'report.csv' })).toBe(false)
+
+      expect(beginClientDownload('t1', start)).toBe(true)
+      expect(send('t1', desktopKey())).toEqual({ workspaceRelativePath: 'Google setup in Orca' })
+      await vi.waitFor(() => expect(deps.keyArrived).toHaveBeenCalledWith('ivy'))
+      expect(deps.importKey).toHaveBeenCalledExactlyOnceWith(desktopKey())
+
+      // Started over while the desktop was still downloading: the new run never gets this key.
+      expect(beginClientDownload('t2', start)).toBe(true)
+      runs[0] = run({ id: 'run-2', projectId: undefined })
+      send('t2', desktopKey())
+      await new Promise((resolve) => setTimeout(resolve, 10))
+      expect(deps.importKey).toHaveBeenCalledOnce()
+      expect(deps.keyArrived).toHaveBeenCalledOnce()
+    } finally {
+      setClientDownloadClaimant(null)
     }
-    const key = file(desktopKey())
-    expect(await claim({ ...saved, ...key })).toBe(true)
-    expect(deps.importKey).toHaveBeenCalledExactlyOnceWith(desktopKey())
-    expect(deps.keyArrived).toHaveBeenCalledWith('ivy')
-    expect(key.remove).toHaveBeenCalledOnce()
-
-    const wrong = file(desktopKey('someone-else'))
-    expect(await claim({ ...saved, ...wrong })).toBe(true)
-    expect(deps.keyRefused).toHaveBeenCalledOnce()
-    expect(wrong.remove).toHaveBeenCalledOnce()
-
-    const elsewhere = file(desktopKey())
-    expect(await claim({ ...saved, urls: ['http://127.0.0.1:3000/start'], ...elsewhere })).toBe(
-      false
-    )
-    expect(elsewhere.read).not.toHaveBeenCalled()
-    expect(elsewhere.remove).not.toHaveBeenCalled()
-
-    // Begun before this run started (the setup was started over meanwhile): deleted, not imported.
-    const earlier = file(desktopKey())
-    expect(await claim({ ...saved, startedAt: 0, ...earlier })).toBe(true)
-    expect(earlier.read).not.toHaveBeenCalled()
-    expect(earlier.remove).toHaveBeenCalledOnce()
-    expect(deps.importKey).toHaveBeenCalledOnce()
   })
 })

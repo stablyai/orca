@@ -1,7 +1,8 @@
 // Google setup for a managed agent on a headless paired server, its tab on the paired desktop: the
-// tab opens despite --split, the client secret stays out of the agent's click effects, and the key
-// the desktop downloads is imported on the server and removed from the agent's home.
-import { existsSync, mkdirSync, readdirSync } from 'node:fs'
+// tab opens despite --split, from the client step on nothing of the page reaches the agent (even
+// after the owner moves the page), and the key the desktop downloads is imported on the server
+// without ever landing in the agent's workspace.
+import { existsSync, readdirSync } from 'node:fs'
 import { createServer, type Server } from 'node:http'
 import path from 'node:path'
 import { expect } from '@stablyai/playwright-test'
@@ -119,38 +120,42 @@ test('a server agent sets Google up through the paired desktop browser', async (
       owner.call('bots.googleSetup.write', { botId: bot.id, change })
     await setUp({ action: 'start', mode: 'do-it-for-me', browserPageId })
     await setUp({ action: 'set', projectId: PROJECT })
-    await setUp({ action: 'step', step: 'client', status: 'active' })
 
-    const agentClick = async (element: string) =>
+    const agent = async (method: string, params: Record<string, unknown>) =>
       JSON.stringify(
-        (
-          await host.client.call(
-            'browser.click',
-            { page: browserPageId, element },
-            { timeoutMs: 60_000 }
-          )
-        ).result
+        (await host.client.call(method, { page: browserPageId, ...params }, { timeoutMs: 60_000 }))
+          .result
       )
-    const agentGoto = (url: string) =>
-      host.client.call('browser.goto', { page: browserPageId, url }, { timeoutMs: 60_000 })
 
-    // Control: off the client page, the same click's effects carry the page lines.
-    await agentGoto(BRANDING_URL)
-    const control = await agentClick('#create')
+    // Control, before the client step: the same click's effects carry the page lines.
+    await agent('browser.goto', { url: BRANDING_URL })
+    const control = await agent('browser.click', { element: '#create' })
     expect(control).toContain('"page"')
     expect(control).toContain(SECRET)
 
-    // On the setup's client page the server withholds them, though the desktop ran the click.
-    await agentGoto(CLIENTS_URL)
-    const created = await agentClick('#create')
-    expect(created).toContain('"effects"')
-    expect(created).not.toContain('"page"')
-    expect(created).not.toContain(SECRET)
+    // The client step begins; the owner (not the agent) takes the desktop pane to the client page,
+    // so this server never hears the address.
+    await setUp({ action: 'step', step: 'client', status: 'active' })
+    await client.app.evaluate(
+      ({ webContents }, { from, to }) =>
+        webContents
+          .getAllWebContents()
+          .find((c) => c.getURL() === from)!
+          .loadURL(to),
+      { from: BRANDING_URL, to: CLIENTS_URL }
+    )
+    // The agent's Create opens the dialog without changing the address: still nothing comes back.
+    expect(JSON.parse(await agent('browser.click', { element: '#create' }))).toEqual({
+      withheld: true,
+      message: expect.any(String)
+    })
+    await expect(agent('browser.snapshot', {})).rejects.toThrow(/may show a secret/)
 
-    // Until #45853 lands, a remote download needs the home's .orca folder to exist already.
-    mkdirSync(path.join(host.userDataDir, 'bots', bot.folder, '.orca'), { recursive: true })
-    // Download JSON: the desktop streams it to the server, which imports it and deletes the file.
-    expect(await agentClick('#download')).not.toContain(SECRET)
+    // The reference's Download JSON action, exactly: the desktop says what started the download,
+    // and the server imports the key from memory, never from the agent's workspace.
+    expect(
+      await agent('browser.find', { locator: 'text', value: 'Download JSON', action: 'click' })
+    ).not.toContain(SECRET)
     await expect
       .poll(
         async () =>
