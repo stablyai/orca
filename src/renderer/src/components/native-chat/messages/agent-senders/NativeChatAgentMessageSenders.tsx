@@ -142,12 +142,12 @@ export function NativeChatAgentMessageSenderNames({
   target?: RuntimeClientTarget
   dispatchId?: string
 }): React.JSX.Element {
-  // The message's Dispatch is its one sender's; mail from several opens each sender by its own address.
-  const openDispatchId = shown.length > 1 ? undefined : dispatchId
+  // The message's Dispatch is its one sender's; mail from several names and opens each by its own address.
+  const senderDispatchId = shown.length > 1 ? undefined : dispatchId
   return (
     <>
       {shown.map((sender, index) => (
-        // A name keeps its comma and host; it wraps to the next line rather than shrink below 6rem.
+        // A name keeps its comma and host; among several it wraps rather than shrink below 6rem.
         <span
           key={sender.party.address}
           className="flex min-w-0 max-w-fit grow basis-24 items-center gap-1"
@@ -157,8 +157,7 @@ export function NativeChatAgentMessageSenderNames({
             sender={sender}
             chatWorktreeId={chatWorktreeId}
             target={target}
-            dispatchId={dispatchId}
-            openDispatchId={openDispatchId}
+            dispatchId={senderDispatchId}
           />
           {sender.host ? (
             <WorktreeHostContextBadge label={sender.host} className="inline-flex shrink-0" />
@@ -179,19 +178,17 @@ function SenderChip({
   sender,
   chatWorktreeId,
   target,
-  dispatchId,
-  openDispatchId
+  dispatchId
 }: {
   from: AgentMessageSource
   sender: AgentMessageSender
   chatWorktreeId: string | null
   target?: RuntimeClientTarget
   dispatchId?: string
-  openDispatchId?: string
 }): React.JSX.Element {
   const t = useTranslate()
   const label = useAgentMessageSenderLabel(sender, chatWorktreeId, target, dispatchId)
-  const opens = useAgentMessageSenderOpens(sender, chatWorktreeId, target, openDispatchId)
+  const opens = useAgentMessageSenderOpens(sender, chatWorktreeId, target, dispatchId)
   if (!opens || !chatWorktreeId) {
     return (
       <span className="min-w-0 truncate text-chat-foreground" title={label}>
@@ -206,7 +203,7 @@ function SenderChip({
       title={label}
       className={cn(NATIVE_CHAT_INLINE_CHIP, 'min-w-0')}
       onClick={() =>
-        void openAgentMessageSender(from, sender, chatWorktreeId, target, openDispatchId, label)
+        void openAgentMessageSender(from, sender, chatWorktreeId, target, dispatchId, label)
       }
     >
       <span className="min-w-0 max-w-60 truncate">{label}</span>
