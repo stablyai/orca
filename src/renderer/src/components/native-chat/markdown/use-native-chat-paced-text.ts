@@ -1,12 +1,4 @@
-import {
-  useCallback,
-  useContext,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState
-} from 'react'
+import { useCallback, useContext, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import {
   isDocumentRangeSelected,
   watchDocumentRange
@@ -26,6 +18,8 @@ const WORD_FADE_MS = 300
 
 /** Text arrives every 60 ms; stepping faster would parse and draw the reply again between arrivals. */
 const ARRIVAL_STEP_MS = 60
+/** A reply that renders slowly (one long document) leaves most of the thread to typing and scrolling. */
+const REVEAL_BUSY_SHARE = 1 / 4
 
 export type NativeChatPacedText = {
   text: string
@@ -63,23 +57,9 @@ export function useNativeChatPacedText(
   })
   // Recorded as text is shown, so only words shown in the last fade window are elements. Holds
   // still while a range is selected, so the selection keeps its nodes.
-  // A reply that renders slowly (one long document) is stepped no more than a third of the time,
-  // so typing and scrolling still get the thread between its renders.
-  const renderMs = useRef(0)
-  const steppedAt = useRef<number | null>(null)
-  const frames = useMemo(
-    () => nativeChatRevealStepFrames(() => Math.max(ARRIVAL_STEP_MS, 2 * renderMs.current)),
-    []
-  )
-  useLayoutEffect(() => {
-    if (steppedAt.current !== null) {
-      renderMs.current = performance.now() - steppedAt.current
-      steppedAt.current = null
-    }
-  })
+  const [frames] = useState(() => nativeChatRevealStepFrames(ARRIVAL_STEP_MS, REVEAL_BUSY_SHARE))
   const setShown = useCallback((length: number): void => {
     const now = performance.now()
-    steppedAt.current = now
     const history = samples.current
     history.push({ at: now, length })
     while (history.length > 1 && history[1]!.at <= now - WORD_FADE_MS) {
@@ -110,7 +90,10 @@ export function useNativeChatPacedText(
       reducedMotion,
       performance.now()
     )
-    setShown(pace.current.shown)
+    // While text is still to reveal, only the frame clock steps it, so arrivals don't add renders.
+    if (reducedMotion || pace.current.shown >= text.length) {
+      setShown(pace.current.shown)
+    }
     reveals?.drawn.set(rowKey, pace.current)
   }, [text, streaming, reducedMotion, reveals, rowKey, setShown])
 
