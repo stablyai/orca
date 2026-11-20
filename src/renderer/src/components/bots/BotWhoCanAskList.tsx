@@ -32,6 +32,8 @@ export type BotWhoCanAskFound = {
   complete: boolean
   /** What this search could not cover, shown in place of the generic incomplete line. */
   note?: string
+  /** What an empty result says, when the search knows better than the service's `noMatch`. */
+  empty?: { title: string; detail: string }
 }
 
 /** One connector's people: who is listed, how to find more, and what the card says around them. */

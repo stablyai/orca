@@ -51,18 +51,23 @@ export const ConnectorGitHubUsersResponse = z.object({
 export type ConnectorGitHubUsersResponse = z.infer<typeof ConnectorGitHubUsersResponse>
 
 /** What `bots.github.users` answers the picker. Each person says where they were found: `scope`
- *  (the connected repositories or organizations, by login or real name `handle`), `outside` (an
- *  exact-username match a complete search of the scope did not find), or `exact` (that match when
- *  the scope could not be searched whole). An older host answers bare members with no `coverage`. */
+ *  (by the search of the connected repositories and organizations, by login or real name `handle`),
+ *  `outside` (an exact-username match a complete search of the scope did not find), or `exact`
+ *  (that match when the scope was not searched whole). These are search results, not access: an
+ *  organization roster or a repository's assignable users neither grant nor rule out access.
+ *  An older host answers bare members with no `coverage`: only its exact lookup ran. */
 export type BotGitHubPeople = {
   members: { id: string; name: string; handle?: string; found?: 'scope' | 'outside' | 'exact' }[]
   complete: boolean
   coverage?: {
-    /** none: nothing connected to search; unavailable: gh gave nothing (missing, signed out,
-     *  offline, too slow); limited: part of the scope or of the matches was left out. */
-    local: 'full' | 'limited' | 'unavailable' | 'none'
+    /** full / limited: searched (limited: some sources or matches left out); unavailable: no
+     *  source could be read (gh missing, signed out, offline, too slow, replaced by a newer
+     *  search); none: nothing connected to search; skipped: the caller sent no scope. */
+    local: 'full' | 'limited' | 'unavailable' | 'none' | 'skipped'
     exact: 'searched' | 'skipped' | 'failed'
-    /** The GitHub account the host's gh searched as, read in that same call; absent when unknown. */
+    /** Typing more of the name would bring in matches the search left out. */
+    narrowable?: boolean
+    /** The account the host's gh read every source as, from that same call; absent when unknown. */
     searchedAs?: string
   }
 }

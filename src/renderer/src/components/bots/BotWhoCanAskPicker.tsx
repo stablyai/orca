@@ -239,8 +239,12 @@ export function BotWhoCanAskPicker({
     </>
   ) : noMatch ? (
     <PickerNote
-      title={service.noMatch(query.trim()).title}
-      detail={note ?? service.noMatch(query.trim()).detail}
+      {...(search.status === 'ready' && search.found.empty
+        ? search.found.empty
+        : {
+            title: service.noMatch(query.trim()).title,
+            detail: note ?? service.noMatch(query.trim()).detail
+          })}
     />
   ) : null
 
