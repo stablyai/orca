@@ -235,7 +235,10 @@ describe('ACP launch: standing instructions', () => {
     expect(resolved.cwd).toBe(workspacePath)
     const undo = await resolved.aroundNewSession?.(resolved.cwd)
     try {
-      const path = join(workspacePath, '.cursor', 'rules', 'orca-standing-instructions.mdc')
+      const rules = join(workspacePath, '.cursor', 'rules')
+      const [name] = await readdir(rules)
+      expect(name).toMatch(/^orca-standing-instructions-.+\.mdc$/)
+      const path = join(rules, name)
       const lines = (await readFile(path, 'utf8')).split('\n')
       expect(lines[0]).toBe('---')
       expect(lines).toContain('alwaysApply: true')
