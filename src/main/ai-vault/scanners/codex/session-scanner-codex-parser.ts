@@ -78,6 +78,8 @@ type CodexSessionParseState = {
   previousTotals: CodexUsageSnapshot | null
   // Non-user origin excludes worker and internal transcripts stored alongside user sessions.
   nonUserOrigin: CodexNonUserOrigin | null
+  // Renamed App tasks are unparented subagents. Keep one only when session_index names it.
+  indexTitleRequired: boolean
   sawSessionMeta: boolean
   historyMode: string | null
   // Metadata titles outrank raw prompts; the name index wins at finalization.
@@ -96,6 +98,7 @@ function createCodexParseState(
     }),
     previousTotals: null,
     nonUserOrigin: null,
+    indexTitleRequired: false,
     sawSessionMeta: false,
     historyMode: null,
     titleSource: null
@@ -108,6 +111,14 @@ function cloneCodexParseState(state: CodexSessionParseState): CodexSessionParseS
     accumulator: cloneSessionAccumulator(state.accumulator)
   }
 }
+function isCodexUnparentedSubagent(origin: CodexNonUserOrigin): boolean {
+  return (
+    origin.source === null &&
+    origin.parentage === null &&
+    origin.threadSource?.toLowerCase() === 'subagent'
+  )
+}
+
 function consumeCodexRecordLine(state: CodexSessionParseState, line: string): void {
   if (state.nonUserOrigin) {
     return
@@ -122,10 +133,14 @@ function consumeCodexRecordLine(state: CodexSessionParseState, line: string): vo
   const payload = asRecord(record.payload)
   // Forks may copy parent metadata later; the first session_meta defines this thread.
   if (record.type === 'session_meta' && payload && !state.sawSessionMeta) {
-    state.nonUserOrigin = readCodexNonUserOrigin(payload)
-    if (state.nonUserOrigin) {
+    const origin = readCodexNonUserOrigin(payload)
+    // A renamed Codex App task is thread_source=subagent with no spawn parent.
+    // Its name lives in session_index.jsonl, so finish parsing and decide at finalize.
+    if (origin && !isCodexUnparentedSubagent(origin)) {
+      state.nonUserOrigin = origin
       return
     }
+    state.indexTitleRequired = origin !== null
     state.sawSessionMeta = true
     state.historyMode = extractString(payload.history_mode)
     const sessionId = extractString(payload.id)
@@ -231,8 +246,9 @@ async function finalizeCodexParseState(
   // Recheck the signature-cached index: a title can arrive after the transcript stops growing.
   let titleKind: AiVaultSessionTitleKind =
     snapshot.titleSource === 'meta' && snapshot.accumulator.title ? 'named' : 'fallback'
+  let indexedTitle: string | null | undefined = null
   if (snapshot.sawSessionMeta) {
-    const indexedTitle = await waitForAiVaultScan(
+    indexedTitle = await waitForAiVaultScan(
       Promise.resolve(args.titleReader?.(snapshot.accumulator.sessionId)),
       args.signal
     )
@@ -240,6 +256,9 @@ async function finalizeCodexParseState(
       snapshot.accumulator.title = indexedTitle
       titleKind = 'named'
     }
+  }
+  if (snapshot.indexTitleRequired && !indexedTitle) {
+    return null
   }
   return finalizeSession(snapshot.accumulator, platform, {
     titleKind,
