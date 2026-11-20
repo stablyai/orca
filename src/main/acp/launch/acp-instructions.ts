@@ -1,7 +1,7 @@
 // ACP has no standard channel for standing instructions; each agent takes them its own way.
 
 import { randomUUID } from 'node:crypto'
-import { lstat, mkdir, readdir, rename, rm, rmdir, unlink, writeFile } from 'node:fs/promises'
+import { lstat, mkdir, readdir, rename, rm, rmdir, stat, unlink, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { z } from 'zod'
 import { nativeChatScratchFolderName } from '../../native-chat/conversation-files/native-chat-scratch-folder'
@@ -191,6 +191,22 @@ async function removeTreeKeepingLinkTargets(path: string): Promise<void> {
   await rmdir(path).catch(() => undefined)
 }
 
+/** Keeps the newest earlier folder of the chat, which a child still winding down may read; removes the rest. */
+async function pruneEarlierLaunchFolders(root: string, prefix: string): Promise<void> {
+  const earlier = await Promise.all(
+    (await readdir(root).catch(() => []))
+      .filter((name) => name.startsWith(prefix))
+      .map(async (name) => ({
+        path: join(root, name),
+        modified: (await stat(join(root, name)).catch(() => null))?.mtimeMs ?? 0
+      }))
+  )
+  earlier.sort((a, b) => b.modified - a.modified)
+  for (const { path } of earlier.slice(1)) {
+    await removeTreeKeepingLinkTargets(path)
+  }
+}
+
 const clearedFolders = new Map<string, Promise<void>>()
 
 /** A new folder per launch, so a child still running from an earlier one keeps reading its own.
@@ -206,7 +222,9 @@ export async function makeAcpInstructionsFolder(
     clearedFolders.set(root, clearing)
   }
   await clearing
-  const path = join(root, `${nativeChatScratchFolderName(sessionId)}-${randomUUID()}`)
+  const prefix = `${nativeChatScratchFolderName(sessionId)}-`
+  await pruneEarlierLaunchFolders(root, prefix)
+  const path = join(root, `${prefix}${randomUUID()}`)
   await mkdir(path, { recursive: true, mode: 0o700 })
   return path
 }

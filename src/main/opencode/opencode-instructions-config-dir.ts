@@ -58,14 +58,24 @@ export async function writeOpenCodeInstructionsConfigDir(
 ): Promise<void> {
   let own: string | null = null
   if (await isDirectory(source)) {
-    for (const name of await readdir(source)) {
-      if (name === GLOBAL_INSTRUCTIONS_FILE) {
-        own = await readFile(join(source, name), 'utf8').catch(() => null)
-        continue
+    // Case-folded: on a case-insensitive volume `agents.md` is AGENTS.md, and a link to it would send our write into the user's file.
+    const names = await readdir(source)
+    const isGlobalFile = (name: string): boolean =>
+      name.toLowerCase() === GLOBAL_INSTRUCTIONS_FILE.toLowerCase()
+    const globalName =
+      names.find((name) => name === GLOBAL_INSTRUCTIONS_FILE) ?? names.find(isGlobalFile)
+    if (globalName !== undefined) {
+      own = await readFile(join(source, globalName), 'utf8').catch(() => null)
+    }
+    for (const name of names) {
+      if (!isGlobalFile(name)) {
+        await linkEntry(join(source, name), join(folder, name))
       }
-      await linkEntry(join(source, name), join(folder, name))
     }
   }
   const combined = [own?.trim(), text].filter((part) => part).join('\n\n')
-  await writeFile(join(folder, GLOBAL_INSTRUCTIONS_FILE), `${combined}\n`, { mode: 0o600 })
+  await writeFile(join(folder, GLOBAL_INSTRUCTIONS_FILE), `${combined}\n`, {
+    mode: 0o600,
+    flag: 'wx'
+  })
 }
