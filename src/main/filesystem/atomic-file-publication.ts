@@ -5,7 +5,7 @@ import {
   observeFilePublication
 } from './file-content-observation'
 import { randomUUID } from 'node:crypto'
-import { linkSync, rmSync, writeFileSync } from 'node:fs'
+import { linkSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { grantDirAcl } from '../windows/windows-directory-acl'
 import { isPermissionError } from './permission-errors'
@@ -120,8 +120,25 @@ function restoreMovedFileWithoutOverwrite(sourcePath: string, targetPath: string
   if (!existsSync(sourcePath)) {
     return
   }
-  publishFileWithoutOverwrite(sourcePath, targetPath)
-  rmSync(sourcePath, { force: true })
+  releaseHeldFile(sourcePath, targetPath)
+}
+
+/**
+ * Puts a held file back, or drops it when the target already has its bytes. A target recreated
+ * meanwhile with other bytes (a writer that found no file) keeps the held one beside it: it can be
+ * the user's only copy of their settings or sign-in.
+ */
+function releaseHeldFile(heldPath: string, targetPath: string): void {
+  if (
+    publishFileWithoutOverwrite(heldPath, targetPath) ||
+    nodeFileContentsEqualSync(targetPath, readFileSync(heldPath))
+  ) {
+    rmSync(heldPath, { force: true })
+    return
+  }
+  const keptPath = `${targetPath}.orca-kept-${randomUUID()}`
+  renameFileWithWindowsRetry(heldPath, keptPath)
+  console.warn('[atomic-file] Kept a conflicting earlier version beside', targetPath, keptPath)
 }
 
 export function getGuardedOperationHeldPath(targetPath: string): string {
@@ -132,8 +149,7 @@ function recoverInterruptedGuardedOperation(heldPath: string, targetPath: string
   if (!existsSync(heldPath)) {
     return
   }
-  publishFileWithoutOverwrite(heldPath, targetPath)
-  rmSync(heldPath, { force: true })
+  releaseHeldFile(heldPath, targetPath)
 }
 
 function attemptGuardedAtomicWrite(
@@ -164,7 +180,7 @@ function attemptGuardedAtomicWrite(
       return false
     }
     if (!publishFileWithoutOverwrite(tmpPath, targetPath)) {
-      rmSync(heldPath, { force: true })
+      releaseHeldFile(heldPath, targetPath)
       return false
     }
     rmSync(heldPath, { force: true })

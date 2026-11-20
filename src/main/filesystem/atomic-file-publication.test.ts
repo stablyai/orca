@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import type * as NodeFs from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -86,6 +86,26 @@ describe('writeFileAtomically', () => {
       expect(writeFileAtomicallyIfUnchanged(target, 'baseline', 'next')).toBe(true)
       expect(readFileSync(target, 'utf-8')).toBe('next')
       expect(existsSync(held)).toBe(false)
+    } finally {
+      cleanup()
+    }
+  })
+
+  it('keeps interrupted held bytes when a writer recreated the target meanwhile', () => {
+    setup()
+    try {
+      const target = join(dir, 'config.toml')
+      writeFileSync(`${target}.orca-guarded`, 'model = "o5"\n[profiles.work]\n')
+      // A writer that found no file wrote only its own key.
+      writeFileSync(target, 'approval = "never"\n')
+
+      expect(writeFileAtomicallyIfUnchanged(target, 'approval = "never"\n', 'next')).toBe(true)
+      expect(readFileSync(target, 'utf-8')).toBe('next')
+      expect(
+        readdirSync(dir)
+          .filter((name) => name !== 'config.toml')
+          .map((name) => readFileSync(join(dir, name), 'utf-8'))
+      ).toEqual(['model = "o5"\n[profiles.work]\n'])
     } finally {
       cleanup()
     }
