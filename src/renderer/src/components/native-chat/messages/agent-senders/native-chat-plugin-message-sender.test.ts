@@ -33,8 +33,16 @@ describe('pluginMessageSender', () => {
     })
   })
 
-  it('leaves a disabled plugin and a bare handle unnamed', () => {
+  it('keeps the name and icon of a plugin whose worker errored', () => {
+    expect(pluginMessageSender([installed('errored')], 'plugin:acme.inbox')).toEqual({
+      name: 'Acme Inbox',
+      iconUrl: ICON
+    })
+  })
+
+  it('leaves a disabled or pending plugin and a bare handle unnamed', () => {
     expect(pluginMessageSender([installed('disabled')], 'plugin:acme.inbox')).toBeUndefined()
+    expect(pluginMessageSender([installed('pending')], 'plugin:acme.inbox')).toBeUndefined()
     expect(pluginMessageSender([installed('running')], 'acme.inbox')).toBeUndefined()
   })
 })

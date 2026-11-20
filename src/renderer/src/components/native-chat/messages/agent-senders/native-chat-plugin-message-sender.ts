@@ -12,14 +12,20 @@ export type PluginMessageSender = { name: string; iconUrl?: string }
 
 const NO_PLUGINS: readonly PluginHostListEntry[] = []
 
-/** The enabled plugin a `plugin:<key>` sender address names, as its card shows it. */
+/**
+ * The enabled plugin a `plugin:<key>` sender address names, as its card shows it. An errored
+ * plugin is still installed and consented, so its mail keeps its name and icon.
+ */
 export function pluginMessageSender(
   plugins: readonly PluginHostListEntry[],
   address: string
 ): PluginMessageSender | undefined {
   const key = pluginSenderKey(address)
   const plugin = key
-    ? plugins.find((candidate) => candidate.pluginKey === key && isLivePlugin(candidate))
+    ? plugins.find(
+        (candidate) =>
+          candidate.pluginKey === key && (isLivePlugin(candidate) || candidate.status === 'errored')
+      )
     : undefined
   if (!plugin) {
     return undefined
