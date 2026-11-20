@@ -4,7 +4,7 @@ import {
   invalidateFileObservation,
   observeFilePublication
 } from './file-content-observation'
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { linkSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { grantDirAcl } from '../windows/windows-directory-acl'
@@ -154,9 +154,11 @@ function restoreMovedFileWithoutOverwrite(
     drop()
     return
   }
+  let held: Buffer | null = null
   let matches = false
   try {
-    matches = nodeFileContentsEqualSync(targetPath, readFileSync(sourcePath))
+    held = readFileSync(sourcePath)
+    matches = nodeFileContentsEqualSync(targetPath, held)
   } catch {
     // An unreadable or vanished target proves nothing: keep the held bytes.
   }
@@ -164,7 +166,13 @@ function restoreMovedFileWithoutOverwrite(
     drop()
     return
   }
-  const keptPath = `${targetPath}.orca-kept-${randomUUID()}`
+  // Named by content: a conflict that repeats with the same bytes finds its copy already kept.
+  const name = held ? createHash('sha256').update(held).digest('hex').slice(0, 16) : randomUUID()
+  const keptPath = `${targetPath}.orca-kept-${name}`
+  if (held && existsSync(keptPath)) {
+    drop()
+    return
+  }
   try {
     // A rename needs no free space and never widens who can read the file.
     renameFileWithWindowsRetry(sourcePath, keptPath)

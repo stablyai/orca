@@ -111,6 +111,21 @@ describe('writeFileAtomically', () => {
     }
   })
 
+  it('keeps one copy when the same conflict repeats', () => {
+    setup()
+    try {
+      const target = join(dir, 'config.toml')
+      for (const next of ['first', 'second']) {
+        writeFileSync(`${target}.orca-guarded`, 'model = "o5"\n')
+        writeFileSync(target, 'approval = "never"\n')
+        expect(writeFileAtomicallyIfUnchanged(target, 'approval = "never"\n', next)).toBe(true)
+      }
+      expect(readdirSync(dir).filter((name) => name.includes('.orca-kept-'))).toHaveLength(1)
+    } finally {
+      cleanup()
+    }
+  })
+
   it('drops an interrupted held credential instead of keeping it beside a recreated target', () => {
     setup()
     try {
