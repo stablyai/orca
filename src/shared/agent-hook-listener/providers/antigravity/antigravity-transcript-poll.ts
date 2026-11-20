@@ -49,7 +49,8 @@ export type AntigravityTranscriptPollReads = {
 }
 export async function readAntigravityTranscriptPoll(
   state: HookListenerState,
-  paneKey: string
+  paneKey: string,
+  live: () => boolean = () => true
 ): Promise<AntigravityTranscriptPollReads | undefined> {
   const pane = state.antigravityChildWorkByPaneKey.get(paneKey)
   if (!pane) {
@@ -57,7 +58,7 @@ export async function readAntigravityTranscriptPoll(
   }
   const cache = pane.brainCache
   const wanted = (): boolean =>
-    state.antigravityChildWorkByPaneKey.get(paneKey) === pane && pane.brainCache === cache
+    live() && state.antigravityChildWorkByPaneKey.get(paneKey) === pane && pane.brainCache === cache
   const result: AntigravityTranscriptPollReads = { pane, cache, children: [] }
   const brain = pane.rootBrainDir
   if (!brain) {

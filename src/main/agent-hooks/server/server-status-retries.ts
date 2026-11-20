@@ -180,18 +180,24 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
       return
     }
     // Why: rollout reads stay off the main thread (#43539); the next tick waits for this one.
-    return withHookTranscriptPoll(this.state, paneKey, poll.source, (reads) => {
-      // A hook that replaced the row mid-read owns the pane's poll now; its reads still apply.
-      const current = this.transcriptPollScheduler.peek(paneKey)
-      const owner = this.ownsTranscriptPoll(paneKey, poll)
-        ? poll
-        : current?.source === poll.source && this.ownsTranscriptPoll(paneKey, current)
-          ? current
-          : undefined
-      if (owner) {
-        this.applyTranscriptPoll(paneKey, owner, reads)
-      }
-    })
+    return withHookTranscriptPoll(
+      this.state,
+      paneKey,
+      poll.source,
+      (reads) => {
+        // A hook that replaced the row mid-read owns the pane's poll now; its reads still apply.
+        const current = this.transcriptPollScheduler.peek(paneKey)
+        const owner = this.ownsTranscriptPoll(paneKey, poll)
+          ? poll
+          : current?.source === poll.source && this.ownsTranscriptPoll(paneKey, current)
+            ? current
+            : undefined
+        if (owner) {
+          this.applyTranscriptPoll(paneKey, owner, reads)
+        }
+      },
+      () => Boolean(this.server) && this.statusHooksEnabled
+    )
   }
 
   // Recheck ownership at callback time; newer events supersede this payload even if children remain.

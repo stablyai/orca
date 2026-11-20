@@ -22,12 +22,13 @@ export async function withHookTranscriptPoll(
   state: HookListenerState,
   paneKey: string,
   source: 'codex' | 'antigravity',
-  consume: (reads: HookTranscriptPollReads) => void
+  consume: (reads: HookTranscriptPollReads) => void,
+  live?: () => boolean
 ): Promise<void> {
   const reads =
     source === 'codex'
       ? { codex: await readCodexTranscriptPoll(state, paneKey) }
-      : { antigravity: await readAntigravityTranscriptPoll(state, paneKey) }
+      : { antigravity: await readAntigravityTranscriptPoll(state, paneKey, live) }
   try {
     consume(reads)
   } finally {
