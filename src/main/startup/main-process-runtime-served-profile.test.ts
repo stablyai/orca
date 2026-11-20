@@ -4,7 +4,12 @@ const fixture = vi.hoisted(() => {
   const store = { getSettings: () => ({}) }
   return {
     store,
-    compose: vi.fn(async () => {}),
+    compose: vi.fn(
+      async (
+        _core: unknown,
+        _deps: { store: unknown; native: { servedOrcaProfileId(): string | undefined } }
+      ) => {}
+    ),
     state: {
       store,
       core: {},
@@ -31,11 +36,8 @@ describe('desktop core composition', () => {
   it("serves the startup profile's store and names that same profile", async () => {
     await initializeReadyRuntimeServices()
 
-    const [, deps] = (fixture.compose.mock.calls[0] ?? []) as unknown as [
-      unknown,
-      { store: unknown; native: { servedOrcaProfileId(): string | undefined } }
-    ]
-    expect(deps.store).toBe(fixture.store)
-    expect(deps.native.servedOrcaProfileId()).toBe('served-profile')
+    const deps = fixture.compose.mock.calls[0]?.[1]
+    expect(deps?.store).toBe(fixture.store)
+    expect(deps?.native.servedOrcaProfileId()).toBe('served-profile')
   })
 })

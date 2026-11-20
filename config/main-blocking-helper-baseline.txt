@@ -394,6 +394,9 @@
 7 src/main/connector-cloud/connector-token-mint.ts
 1 src/main/connector-cloud/connector-turn-outbox-file.ts # Windows only: the addon load (realpathSync, once per process) and a sync DACL read per staged file, plus a second after a failed check; I/O is async
 6 src/main/copilot/hook-service.ts
+6 src/main/core-desktop/desktop-core-composition.ts # moved unchanged from main-process-ready-runtime.ts (one-shot startup composition)
+1 src/main/core-desktop/desktop-core-shutdown.ts # moved unchanged from main-process-quit.ts (one-shot quit metadata clear)
+2 src/main/core-desktop/renderer-shutdown-checkpoint-service.ts # moved unchanged from ipc/renderer-shutdown-checkpoint.ts (unload staging drift report)
 4 src/main/crash-reporting/capture/appimage-crashpad-handler-exit.ts
 1 src/main/crash-reporting/capture/crashpad-capture.ts
 2 src/main/crash-reporting/process-exits/process-gone-diagnostics.ts
@@ -589,7 +592,7 @@
 2 src/main/host/deferred-secret-protection-report.ts
 1 src/main/host/electron-speech-services.ts
 1 src/main/host/secret-protection-report.ts
-14 src/main/index.ts
+13 src/main/index.ts
 2 src/main/ipc/accounts/codex-accounts.ts
 1 src/main/ipc/accounts/codex-config-sync.ts
 1 src/main/ipc/accounts/cursor-accounts.ts
@@ -598,7 +601,7 @@
 3 src/main/ipc/accounts/zcode-plan-credentials.ts
 1 src/main/ipc/ai-vault/ai-vault-search.ts
 1 src/main/ipc/ai-vault/ai-vault-subagent-list.ts
-6 src/main/ipc/app.ts
+5 src/main/ipc/app.ts
 1 src/main/ipc/automations.ts
 3 src/main/ipc/browser/browser-client-host-cookie-import-ipc.ts
 1 src/main/ipc/browser/browser-extensions.ts
@@ -687,7 +690,6 @@
 1 src/main/ipc/pty/spawn/spawn-options-assembly.ts
 17 src/main/ipc/register-core-handlers/register-core-handlers.ts
 1 src/main/ipc/register-core-handlers/runtime-host-handler-registration.ts
-2 src/main/ipc/renderer-shutdown-checkpoint.ts
 5 src/main/ipc/repos.ts
 1 src/main/ipc/repos/local-repo-registration.ts
 1 src/main/ipc/repos/nested-repo-import-handler.ts
@@ -1445,7 +1447,7 @@
 1 src/main/startup/main-process-preflight-failure.ts
 25 src/main/startup/main-process-preflight.ts
 15 src/main/startup/main-process-ready-foundation.ts
-7 src/main/startup/main-process-ready-runtime.ts
+3 src/main/startup/main-process-ready-runtime.ts
 4 src/main/startup/main-process-ready.ts
 1 src/main/startup/main-window/main-process-i18n-menu.ts
 15 src/main/startup/main-window/main-window-controller.ts
@@ -1458,7 +1460,7 @@
 5 src/main/startup/profile-startup/profile-state-recovery-preflight.ts
 2 src/main/startup/profile-startup/single-instance-lock.ts
 12 src/main/startup/pty-startup/main-process-pty-startup.ts
-2 src/main/startup/quit/main-process-quit.ts # superseded-session unlink on a rare memory-only sign-in or rotation stays ordered with the sync saves, sign-out and quit flush (#44285)
+1 src/main/startup/quit/main-process-quit.ts # superseded-session unlink on a rare memory-only sign-in or rotation stays ordered with the sync saves, sign-out and quit flush (#44285)
 15 src/main/startup/runtime-startup/main-process-runtime-launch.ts
 4 src/main/startup/runtime-startup/main-process-runtime-service.ts
 1 src/main/startup/serve-launch/headless-serve-ssh-registration.ts
