@@ -197,20 +197,16 @@ describe('web settings preload API', () => {
     })
   })
 
-  it('does not present a browser-stored Azure DevOps method as supported by an older host', async () => {
+  it('does not read or write an Azure DevOps method on behalf of an older host', async () => {
+    const call = vi.fn(async (method: string): Promise<RuntimeRpcResponse<unknown>> => ({
+      id: method,
+      ok: true,
+      result: { settings: {} },
+      _meta: { runtimeId: 'legacy-runtime' }
+    }))
     vi.doMock('../../runtime/client/web-runtime-client', () => ({
       WebRuntimeClient: class {
-        call(method: string): Promise<RuntimeRpcResponse<unknown>> {
-          if (method !== 'settings.get') {
-            throw new Error(`Unexpected RPC: ${method}`)
-          }
-          return Promise.resolve({
-            id: method,
-            ok: true,
-            result: { settings: {} },
-            _meta: { runtimeId: 'legacy-runtime' }
-          })
-        }
+        call = call
 
         close(): void {}
       }
@@ -225,7 +221,8 @@ describe('web settings preload API', () => {
     expect((await globals.window.api.settings.get()).azureDevOpsAuthMethod).toBeUndefined()
     await expect(
       globals.window.api.settings.set({ azureDevOpsAuthMethod: 'azure-cli' })
-    ).rejects.toThrow('Azure DevOps authentication settings are unavailable on this host')
+    ).rejects.toBeInstanceOf(Error)
+    expect(call.mock.calls.map(([method]) => method)).not.toContain('settings.update')
     expect(JSON.parse(globals.storage.getItem('orca.web.settings.v1') ?? '{}')).not.toHaveProperty(
       'azureDevOpsAuthMethod'
     )

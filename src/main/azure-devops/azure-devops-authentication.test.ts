@@ -58,25 +58,25 @@ it('uses the CLI identity for REST reads and creation even with an environment P
 })
 
 it('rejects a custom destination without sending an authenticated request', async () => {
-  vi.mocked(acquireAzureCliAccessToken).mockRejectedValue(
-    new AzureDevOpsAuthError('login-required')
-  )
-  vi.stubGlobal('fetch', () => {
-    throw new Error('unexpected network request')
-  })
+  const fetchRequest = vi.fn(async () => Response.json({ pullRequestId: 31 }))
+  vi.stubGlobal('fetch', fetchRequest)
 
   await expect(
     requestAzureDevOpsJsonAtBase('https://dev.azure.com.example.test', pull, {}, true)
   ).rejects.toMatchObject({ code: 'unsupported-endpoint' })
+  expect(fetchRequest).not.toHaveBeenCalled()
 })
 
-it('preserves API version negotiation for a legacy cloud organization', async () => {
+it('retains the CLI identity when a legacy cloud organization negotiates an older API version', async () => {
   const legacyBase = 'https://bounded.visualstudio.com/Project'
-  vi.stubGlobal('fetch', async (url: URL) =>
-    url.searchParams.get('api-version') === '5.1'
+  vi.stubGlobal('fetch', async (url: URL, init: RequestInit) => {
+    if (new Headers(init.headers).get('authorization') !== 'Bearer cli-token-a') {
+      return new Response(null, { status: 403 })
+    }
+    return url.searchParams.get('api-version') === '5.1'
       ? Response.json({ pullRequestId: 31 })
       : Response.json({ typeKey: 'VssVersionOutOfRangeException' }, { status: 400 })
-  )
+  })
   await expect(requestAzureDevOpsJsonAtBase(legacyBase, pull, {}, true)).resolves.toEqual({
     pullRequestId: 31
   })
@@ -123,9 +123,16 @@ it('distinguishes a CLI token from verified organization access', async () => {
     authenticated: false
   })
   vi.stubEnv('ORCA_AZURE_DEVOPS_API_BASE_URL', base)
-  vi.stubGlobal('fetch', async () =>
-    Response.json({ authenticatedUser: { uniqueName: 'ada@example.test' } })
-  )
+  vi.stubGlobal('fetch', async (url: URL, init: RequestInit) => {
+    if (
+      url.origin !== 'https://dev.azure.com' ||
+      url.pathname !== '/acme/Project/_apis/connectionData' ||
+      new Headers(init.headers).get('authorization') !== 'Bearer cli-token-a'
+    ) {
+      return new Response(null, { status: 404 })
+    }
+    return Response.json({ authenticatedUser: { uniqueName: 'ada@example.test' } })
+  })
   const status = await getAzureDevOpsAuthStatus()
   expect(status).toMatchObject({
     credentialState: 'authenticated',
@@ -145,6 +152,8 @@ it('surfaces a CLI login failure instead of falling back to the environment PAT'
   vi.mocked(acquireAzureCliAccessToken).mockRejectedValue(
     new AzureDevOpsAuthError('login-required')
   )
+  const fetchRequest = vi.fn(async () => Response.json({ pullRequestId: 31, title: 'Review' }))
+  vi.stubGlobal('fetch', fetchRequest)
   await expect(getAzureDevOpsAuthStatus()).resolves.toMatchObject({
     credentialState: 'error',
     errorCode: 'login-required',
@@ -155,4 +164,5 @@ it('surfaces a CLI login failure instead of falling back to the environment PAT'
     ok: false,
     code: 'auth_required'
   })
+  expect(fetchRequest).not.toHaveBeenCalled()
 })

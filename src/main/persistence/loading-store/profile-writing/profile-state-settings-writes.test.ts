@@ -117,12 +117,16 @@ function fixture() {
 }
 
 describe('selective SQLite settings persistence', () => {
-  it('retains the selected Azure DevOps method across unrelated settings writes and restart', async () => {
+  it('stores the environment method when a settings write contains an unknown Azure DevOps method', async () => {
     const state = fixture()
     state.store.updateSettings({ azureDevOpsAuthMethod: 'azure-cli' })
-    state.store.updateSettings({ terminalFontSize: 28 })
+    state.store.flushOrThrow()
+    // @ts-expect-error Exercise a settings write from a caller with a newer method.
+    state.store.updateSettings({ azureDevOpsAuthMethod: 'automatic' })
     await state.store.flushPendingOrThrowAsync()
-    expect(state.reopen().getSettings().azureDevOpsAuthMethod).toBe('azure-cli')
+    expect(state.read().state).toMatchObject({
+      settings: { azureDevOpsAuthMethod: 'environment' }
+    })
   })
 
   it('keeps an explicit UI secret clear after an unavailable write and later settings save', async () => {
