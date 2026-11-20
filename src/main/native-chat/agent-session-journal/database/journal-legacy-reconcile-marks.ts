@@ -44,7 +44,9 @@ export function recordJournalLegacyFailure(
       adoption: failure.revision === undefined ? previous?.adoption : failure.adoption
     })
   )
-  deleteMeta(db, `${JOURNAL_LEGACY_COPY_DUE}${failure.sessionId}`)
+  if (failure.claims !== 'pending') {
+    deleteMeta(db, `${JOURNAL_LEGACY_COPY_DUE}${failure.sessionId}`)
+  }
 }
 
 export function failureMessage(error: unknown): string {

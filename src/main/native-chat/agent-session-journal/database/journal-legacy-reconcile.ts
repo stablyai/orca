@@ -204,7 +204,7 @@ function absorbChats(
             recordJournalLegacyFailure(db, failure)
           }
           const { stranded } = pass.forced.get(id) ?? {}
-          if (stranded !== undefined) {
+          if (stranded !== undefined && claims !== 'pending') {
             settleJournalLegacyCopy(db, stranded)
           }
         })
