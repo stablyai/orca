@@ -1,0 +1,85 @@
+{
+  "goldenFormatVersion": 6,
+  "operation": "aiVault.resume-preparation",
+  "family": "aiVault.resume-preparation",
+  "namedDeltas": [],
+  "values": {
+    "03f0f92fed19": {
+      "name": "aiVault.prepareSessionResume#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"aiVault.prepareSessionResume\",\"params\":{\"agent\":\"claude\",\"sessionId\":\"claude-session-1\",\"filePath\":\"/sessions/claude-session-1.jsonl\",\"codexHome\":null,\"executionHostId\":\"local\"}}"
+    },
+    "84c5ee8520ac": {
+      "failure": "agent_session_conflict",
+      "prepared": "unprepared"
+    },
+    "c9ed30140304": {
+      "name": "aiVault.prepareSessionResume#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "aiVault.prepareSessionResume"
+        },
+        {
+          "name": "params",
+          "value": {
+            "agent": "claude",
+            "codexHome": {
+              "$rpc": "null"
+            },
+            "executionHostId": "local",
+            "filePath": "/sessions/claude-session-1.jsonl",
+            "sessionId": "claude-session-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "agent_session_conflict",
+            "message": "agent_session_conflict"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "de4906d43307": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "agent_session_conflict",
+        "isRpcDeliveryUnknown": false
+      }
+    }
+  },
+  "recording": {
+    "scenario": "aivault-resume-prepare-chat-owned",
+    "checkpoints": [
+      {
+        "id": "refused-before-launch",
+        "observation": {
+          "sender": ["c9ed30140304"],
+          "payloads": ["03f0f92fed19"],
+          "settlements": {
+            "claude": "de4906d43307"
+          },
+          "state": "84c5ee8520ac",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

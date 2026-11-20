@@ -42,7 +42,7 @@ export function useRetiredAgentPickerDrafts(
       return
     }
     const state = useAppStore.getState()
-    // Built only for drafts that name a workspace or repo; a floating picker (a bot's) scans none.
+    // Built only for drafts that name a workspace or repo; a new bot's picker names neither.
     let workspaces: Set<string> | undefined
     let repos: Set<string> | undefined
     const hasWorkspace = (id: string) =>

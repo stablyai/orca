@@ -4,11 +4,11 @@
 # Prune: node config/scripts/static-analysis/ratchets/runtime-lifecycle/check-main-blocking-helper-ratchet.mjs --prune
 1 src/main/acp/conversation-copy/acp-conversation-copies.ts
 3 src/main/acp/conversation-copy/acp-conversation-copy.ts
-5 src/main/acp/launch/acp-launch-command.ts
+3 src/main/acp/launch/acp-launch-command.ts
 2 src/main/acp/launch/acp-private-temp.ts
+1 src/main/acp/launch/acp-structured-launch-preparation.ts # moved from acp-structured-acquire.ts with the private-temp connect call
 1 src/main/acp/launch/acp-structured-launch-resolution.ts
 1 src/main/acp/process/acp-agent-connection.ts
-1 src/main/acp/session/acp-structured-acquire.ts
 1 src/main/acp/text-task/acp-text-task.ts
 1 src/main/agent-hooks/first-work/first-work-generation-target.ts
 1 src/main/agent-hooks/installation/bare-shell-plugin-agent-presence.ts
@@ -72,9 +72,7 @@
 1 src/main/ai-vault/session-titles/session-title-resolver.ts
 1 src/main/ai-vault/transcripts/session-transcript-reader.ts
 4 src/main/amp/hook-service.ts
-1 src/main/antigravity/antigravity-acp-launch-spec.ts
 1 src/main/antigravity/antigravity-chat-sign-in.ts
-2 src/main/antigravity/antigravity-host-acp.ts
 8 src/main/antigravity/hook-service.ts
 1 src/main/antigravity/native-account-host.ts
 3 src/main/antigravity/native-account-launch.ts
@@ -785,7 +783,7 @@
 5 src/main/native-chat/agent-session-journal/database/journal-domain-migrations.ts # tail table create at store open (one-shot startup); worker-only: +2 create the retired-epoch pending table in a transaction on the journal SQL worker
 3 src/main/native-chat/agent-session-journal/database/journal-host-database.ts
 1 src/main/native-chat/agent-session-journal/durable-rows/journal-row-table.ts
-2 src/main/native-chat/agent-session-journal/history-import/adopted-transcript-source.ts
+3 src/main/native-chat/agent-session-journal/history-import/adopted-transcript-source.ts # +1: Continue in Chat UI's pre-close folder check reuses validateAdoptedOpenCodeSource; its only sync step is the worker entry existsSync when the shared OpenCode SQLite worker first spawns
 1 src/main/native-chat/agent-session-journal/history-import/journal-hermes-import.ts
 5 src/main/native-chat/agent-session-journal/history-import/journal-legacy-import.ts
 1 src/main/native-chat/agent-session-journal/journal-domain-import-discard.ts
@@ -1141,7 +1139,7 @@
 1 src/main/runtime/agent-session/environment/structured-agent-account-home.ts
 2 src/main/runtime/agent-session/environment/structured-session-child-env.ts
 2 src/main/runtime/agent-session/installation/runtime-structured-agent-host.ts
-6 src/main/runtime/agent-session/installation/structured-agent-runtime-metadata.ts
+3 src/main/runtime/agent-session/installation/structured-agent-runtime-metadata.ts
 2 src/main/runtime/agent-session/installation/structured-agent-runtime-registrations.ts
 1 src/main/runtime/agent-session/installation/structured-agent-session-host-assembly.ts
 1 src/main/runtime/agent-session/installation/structured-agent-session-runtime-teardown.ts
@@ -1274,6 +1272,7 @@
 2 src/main/runtime/session-construction/agent-session/get-agent-session-execution-namespace.ts
 3 src/main/runtime/session-lifecycle/projection/restored-pane-materialize.ts
 1 src/main/runtime/session-tabs/chat/structured-session-create-support.ts
+1 src/main/runtime/session-tabs/chat/structured-session-resume-folder-check.ts # per Continue in Chat UI click: assertAdoptedTranscriptFolder, whose only sync step is the OpenCode SQLite worker entry existsSync on first spawn
 1 src/main/runtime/sidebar-inputs/sidebar-inputs-feed-domains.ts
 1 src/main/runtime/speech/runtime-mobile-dictation-controller.ts
 2 src/main/runtime/speech/runtime-mobile-speech-catalog.ts

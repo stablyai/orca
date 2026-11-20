@@ -158,7 +158,7 @@ describe.runIf(process.platform === 'darwin')('macOS quit guard ordering', () =>
     expect(install).toHaveBeenCalledOnce()
   })
 
-  it('vetoes a quit during install preflight before previously registered startup services shut down', () => {
+  it('holds startup services through quit preflight and allows the native install shutdown', () => {
     const shutdown = vi.fn()
     appMock.on('before-quit', (event) => {
       if (!event.defaultPrevented) {
@@ -168,29 +168,23 @@ describe.runIf(process.platform === 'darwin')('macOS quit guard ordering', () =>
     registerGuard(true)
     handleMacInstallerReady(true, vi.fn(), vi.fn())
     setMacInstallPreflightInProgress(true)
-    const event = quitEvent()
+    const preflightQuit = quitEvent()
+    appMock.emit('before-quit', preflightQuit)
+    expect(preflightQuit.defaultPrevented).toBe(true)
 
-    appMock.emit('before-quit', event)
-
-    expect(event.defaultPrevented).toBe(true)
-    expect(shutdown).not.toHaveBeenCalled()
-  })
-
-  it('vetoes duplicate quits through cleanup and allows the native install shutdown', () => {
-    registerGuard(true)
-    handleMacInstallerReady(true, vi.fn(), vi.fn())
-    setMacInstallPreflightInProgress(true)
     markMacQuitAndInstallInFlight()
     for (let attempt = 0; attempt < 2; attempt++) {
       const event = quitEvent()
       appMock.emit('before-quit', event)
       expect(event.defaultPrevented).toBe(true)
     }
+    expect(shutdown).not.toHaveBeenCalled()
 
     setMacInstallPreflightInProgress(false)
     const nativeQuit = quitEvent()
     appMock.emit('before-quit', nativeQuit)
     expect(nativeQuit.defaultPrevented).toBe(false)
+    expect(shutdown).toHaveBeenCalledOnce()
   })
 
   it('allows both ordinary quit passes after refusal and vetoes a new install attempt', () => {

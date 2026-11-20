@@ -12471,7 +12471,8 @@
           "source": {
             "cli": "Fichier d'authentification du CLI Cursor",
             "desktop": "Cursor IDE",
-            "keychain": "Trousseau macOS (cursor-agent)"
+            "keychain": "Trousseau macOS (cursor-agent)",
+            "keyring": "Trousseau Linux (cursor-agent)"
           },
           "staleUsage": "Dernière utilisation connue — la dernière actualisation a échoué : {{reason}}",
           "subtitle": "Affiche l'utilisation de votre forfait Cursor à partir de la connexion déjà présente sur cet ordinateur. Orca se contente de la lire — il ne modifie jamais votre connexion Cursor.",
@@ -17317,8 +17318,6 @@
             "27d863542c": "Annotations du navigateur",
             "e48569ac6d": "Impossible d'accéder à ce site.",
             "bbe8f15e83": "Ce volet est rendu depuis le serveur runtime actif.",
-            "8b7e6d1f5a": "Les annotations du navigateur ne sont disponibles que dans les onglets locaux.",
-            "deb5293610": "Annotations du navigateur indisponibles dans un runtime distant",
             "90d021f2ad": "Ajouter",
             "0cb3bd6221": "Intention d'annotation",
             "532bac48c5": "Décrivez ce que l'agent doit modifier ici...",
@@ -19122,7 +19121,8 @@
       "install": {
         "checking": "Vérification que {{agent}} est prêt sur cet hôte…",
         "cliInstall": "Installer",
-        "cliRecheck": "Revérifier"
+        "cliRecheck": "Revérifier",
+        "openAgentSettings": "Ouvrir les réglages"
       },
       "reasoning": "Raisonnement",
       "contextMenu": {
@@ -19163,6 +19163,7 @@
         "claudeAccountFolderMissing": "Le dossier du compte Claude sélectionné est introuvable. Reconnectez-vous à ce compte ou choisissez-en un autre.",
         "claudeAccountSetupFailed": "Le compte Claude sélectionné n'a pas pu être configuré. Réessayez ou choisissez un autre compte.",
         "agentCommandNotRunnable": "La Commande de {{agent}} dans Réglages → Agents doit commencer par un programme qu’Orca peut trouver. Les variables, tubes et autres syntaxes shell ne sont pas pris en charge ; utilisez le réglage Environnement pour les variables. Modifiez-la ou réinitialisez-la.",
+        "agentCommandFailed": "La Commande de {{agent}} dans Réglages → Agents n’a pas lancé {{agent}} : {{detail}}. Modifiez-la ou réinitialisez-la.",
         "runtimeNotInstalled": "{{agent}} n'est pas installé sur l'ordinateur qui exécute ce chat. Installez-le depuis le chat dans une version récente d'Orca.",
         "fullAccessAsRoot": "{{agent}} n'utilisera pas l'Accès complet tant qu'il s'exécute en tant que root. Choisissez une autre autorisation pour {{agent}} dans Paramètres → Agents pour l'ordinateur qui exécute ce chat, puis démarrez un nouveau chat.",
         "launchPreparationFailed": "Orca n'a pas pu préparer le démarrage de {{agent}} sur l'ordinateur qui exécute ce chat.",

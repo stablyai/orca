@@ -84,22 +84,6 @@ describe('a saved automation in the chat that saved it', () => {
     )
   })
 
-  it('writes an updated card on an edit', async () => {
-    const { rpc } = dispatcher()
-    await rpc.dispatch(
-      call('automation.update', {
-        id: 'auto-1',
-        updates: { name: 'Morning digest' },
-        callerSessionId: 'chat-1'
-      })
-    )
-    await vi.waitFor(() => expect(host.appendAgentStart).toHaveBeenCalledOnce())
-    expect(host.appendAgentStart.mock.calls[0]?.[1]).toMatchObject({
-      change: 'updated',
-      automation: { id: 'auto-1', updatedAt: 1_600 }
-    })
-  })
-
   // A Slack, Linear or GitHub-linked chat is an Orca chat: it shows its own card, and Home gets no copy.
   it("writes a thread conversation's saves only into that chat, never the bot's Chat", async () => {
     const { rpc } = dispatcher()
@@ -121,20 +105,19 @@ describe('a saved automation in the chat that saved it', () => {
       ],
       [
         expect.objectContaining({ sessionId: 'thread-1' }),
-        expect.objectContaining({ change: 'updated' })
+        expect.objectContaining({
+          change: 'updated',
+          automation: expect.objectContaining({
+            id: 'auto-1',
+            updatedAt: 1_600
+          })
+        })
       ],
       [
         expect.objectContaining({ sessionId: 'chat-1' }),
         expect.objectContaining({ change: 'created' })
       ]
     ])
-  })
-
-  it("writes only into the calling chat when it isn't a thread's", async () => {
-    const { rpc } = dispatcher()
-    await rpc.dispatch(call('automation.create', { ...CREATE, callerSessionId: 'chat-1' }))
-    await vi.waitFor(() => expect(host.appendAgentStart).toHaveBeenCalledOnce())
-    expect(host.appendAgentStart.mock.calls[0]?.[0]).toMatchObject({ sessionId: 'chat-1' })
   })
 
   it('writes nothing outside a chat, for a chat on another host, or for a paired client', async () => {
