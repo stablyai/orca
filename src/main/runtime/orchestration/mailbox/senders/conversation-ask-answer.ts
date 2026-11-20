@@ -1,9 +1,11 @@
 // Mail answering a request a chat sent another bot while its conversation's turn ran: the answer, or
-// the notice that none came, finishes that ask, so it goes back where the ask came from.
+// the notice that none came, finishes that ask, so it goes back where the ask came from. So does
+// item mail carrying the owner's answer to a question the chat asked during such a turn.
 import type { OrchestrationDb } from '../../db/orchestration-db'
 import type { MessageRow } from '../../db/orchestration-records'
 import { canonicalOrcaSessionId } from '../../addressing/session-lineage/canonical-orca-session-id'
 import { isOrcaSessionId } from '../../../../../shared/agent-session/identity/orca-session-address'
+import { BOT_ITEM_MAIL_SENDER } from '../../../../../shared/bots/bot-item-note-runs'
 
 /** The request a reply answers: its answer payload names it, else its thread is it. */
 function answeredRequestId(
@@ -34,12 +36,35 @@ const sameSession = (a: string, b: string): boolean =>
     isOrcaSessionId(b) &&
     canonicalOrcaSessionId(a) === canonicalOrcaSessionId(b))
 
-/** Whether this mail answers a request the reading chat sent from a turn its conversation owned. */
+/** The chat that asked the item question this mail answers, as Orca wrote it; only Orca's item mail. */
+function itemAnswerAskedIn(message: Pick<MessageRow, 'from_handle' | 'payload'>): string | null {
+  if (message.from_handle !== BOT_ITEM_MAIL_SENDER || !message.payload) {
+    return null
+  }
+  try {
+    const payload: unknown = JSON.parse(message.payload)
+    return typeof payload === 'object' &&
+      payload !== null &&
+      'askedInConversation' in payload &&
+      typeof payload.askedInConversation === 'string'
+      ? payload.askedInConversation
+      : null
+  } catch {
+    return null
+  }
+}
+
+/** Whether this mail answers a request, or an item question, the reading chat sent from a turn its
+ *  conversation owned. */
 export function answersConversationAsk(
   db: OrchestrationDb | null,
-  message: Pick<MessageRow, 'id' | 'payload'> & { thread_id?: string | null },
+  message: Pick<MessageRow, 'id' | 'from_handle' | 'payload'> & { thread_id?: string | null },
   readerSessionId: string | undefined
 ): boolean {
+  const itemAsker = itemAnswerAskedIn(message)
+  if (itemAsker !== null) {
+    return Boolean(readerSessionId && sameSession(itemAsker, readerSessionId))
+  }
   const requestId = answeredRequestId(message)
   if (!db || !readerSessionId || !requestId || requestId === message.id) {
     return false

@@ -43,6 +43,17 @@ function noteBy(
   return { kind: 'chat', chatId: chat.id, title: chat.title, ...home }
 }
 
+/** The chat whose conversation's turn asked the question the owner's comment in this write answers. */
+function answerAskedIn(owed: BotItemMail): string | null {
+  for (const { event } of owed.changes) {
+    const asked = event.data.askedInConversation
+    if (event.kind === 'commented' && event.actor.kind === 'owner' && typeof asked === 'string') {
+      return asked
+    }
+  }
+  return null
+}
+
 /** Stores the event's mail unless it is there already; true once nothing is owed. */
 export async function sendBotItemMail(
   runtime: OrcaRuntimeService,
@@ -59,7 +70,13 @@ export async function sendBotItemMail(
   if (!mail || !bot) {
     return true
   }
-  const chat = await botChatTakingMail(runtime, bot, owed.chatId)
+  // The owner's answer to a question a conversation's turn asked goes to the chat that asked, which
+  // answers in that conversation; gone, it goes where any other item mail does.
+  const asker = answerAskedIn(owed)
+  const askingChat = asker
+    ? await botChatTakingMail(runtime, bot, runtime.botItems.chatRootOf(asker))
+    : null
+  const chat = askingChat ?? (await botChatTakingMail(runtime, bot, owed.chatId))
   const sessionId = chat?.sessionId ?? (await runtimeBotChats(runtime).ensure(bot.id))
   const to = `orca_session_id:${sessionId}`
   const images = botItemMailImages(owed.changes)
@@ -71,7 +88,8 @@ export async function sendBotItemMail(
       kind: event.kind
     })),
     // Delivered as the chat's image blocks, as chat sends a pasted image.
-    ...(images.length > 0 ? { images } : {})
+    ...(images.length > 0 ? { images } : {}),
+    ...(askingChat && asker ? { askedInConversation: asker } : {})
   })
   db.insertMessage({
     id,

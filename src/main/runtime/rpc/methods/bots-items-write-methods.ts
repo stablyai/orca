@@ -17,6 +17,7 @@ import { BotItemError } from '../../../bots/bot-item-error'
 import { assertBotItemSetInput } from '../../../bots/bot-items-edits'
 import { assertBotItemOwnerWrite } from '../../../bots/bot-items-tables'
 import { commentAsMaker } from './bots-items-maker-comment'
+import { askedInConversation } from './orchestration/messaging/bot-request-record'
 import { parseItemLink, resolveItem, writeResult, writerOf } from './bots-items-write-support'
 
 const ADD = defineMethod({
@@ -53,7 +54,20 @@ const SET = defineMethod({
       comment = attached.text
     }
     const images = attached.images.length > 0 ? attached.images : undefined
-    const changes = { title, description, doneMeans, status, note, reason, comment, ask, images }
+    // Asked while its conversation's turn ran, the owner's answer goes back to that conversation.
+    const asked = ask ? askedInConversation(context.runtime, { sessionId: writer.sessionId }) : {}
+    const changes = {
+      title,
+      description,
+      doneMeans,
+      status,
+      note,
+      reason,
+      comment,
+      ask,
+      images,
+      ...asked
+    }
     const defined = Object.fromEntries(
       Object.entries(changes).filter(([, value]) => value !== undefined)
     )

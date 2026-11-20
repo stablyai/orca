@@ -106,7 +106,13 @@ export class BotItemsEdits extends BotItemsReads {
     const images = changes.images?.length ? { images: changes.images } : {}
     const commentData =
       commentText !== undefined || changes.ask
-        ? { ...botItemCommentData(commentText, changes.ask), ...images }
+        ? {
+            ...botItemCommentData(commentText, changes.ask),
+            ...images,
+            ...(changes.ask && changes.askedInConversation
+              ? { askedInConversation: changes.askedInConversation }
+              : {})
+          }
         : undefined
     // Asking again while already Needs you is a new question; Needs you again with nothing to say is no change.
     const status =

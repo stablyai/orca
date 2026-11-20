@@ -56,8 +56,9 @@ export async function readEndedChatTurnOpener(
 
 /** Mail a turn opens as its conversation's own ask, as Orca proved when it delivered it: reports to
  *  the Run the chat coordinates from workers its conversation's turns started, and answers to requests
- *  those turns sent other bots, and the runs of waits those turns made. Any other mail (another bot's
- *  own mail, item mail, a worker an Orca-raised turn started) answers in Orca. */
+ *  those turns sent other bots, the owner's answers to item questions those turns asked, and the runs
+ *  of waits those turns made. Any other mail (another bot's own mail, other item mail, a worker an
+ *  Orca-raised turn started) answers in Orca. */
 export function isConversationReport(body: AgentJournalRenderItem['body']): boolean {
   if (body.kind !== 'message') {
     return false

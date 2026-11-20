@@ -12,11 +12,11 @@ vi.mock('../../../bots/bot-item-chat-notes', async (importOriginal) => ({
   appendBotItemNote: notes.append
 }))
 
-// `closed`: the item's chat takes no mail, so it lands in Home Chat.
-const mailbox = vi.hoisted(() => ({ closed: false }))
+// `closed`: the item's chat takes no mail, so it lands in Home Chat. `gone`: chats that no longer exist.
+const mailbox = vi.hoisted(() => ({ closed: false, gone: new Set<string>() }))
 vi.mock('./bots-chats', () => ({
   botChatTakingMail: async (_runtime: unknown, _bot: unknown, chatId: string) =>
-    mailbox.closed ? null : { sessionId: chatId }
+    mailbox.closed || mailbox.gone.has(chatId) ? null : { sessionId: chatId }
 }))
 vi.mock('../../../bots/bot-chat-session', () => ({
   runtimeBotChats: () => ({ ensure: async () => 'home-chat' })
@@ -29,6 +29,7 @@ afterEach(() => {
   dbs.splice(0).forEach((db) => db.close())
   notes.append.mockClear()
   mailbox.closed = false
+  mailbox.gone.clear()
 })
 
 const item: BotItemRecord = {
@@ -53,7 +54,10 @@ const item: BotItemRecord = {
   closedAt: null
 }
 
-function owed(actor: BotItemActor = { kind: 'owner' }): BotItemMail {
+function owed(
+  actor: BotItemActor = { kind: 'owner' },
+  answer: Record<string, unknown> = {}
+): BotItemMail {
   const event = (id: number, kind: string, data: Record<string, unknown>) => ({
     id,
     itemUid: item.uid,
@@ -67,7 +71,7 @@ function owed(actor: BotItemActor = { kind: 'owner' }): BotItemMail {
     ownerBotId: 'ranger',
     chatId: CHAT,
     changes: [
-      { event: event(11, 'commented', { text: 'Use the short link' }), item },
+      { event: event(11, 'commented', { text: 'Use the short link', ...answer }), item },
       { event: event(12, 'status', { from: 'needs_you', to: 'working' }), item }
     ]
   }
@@ -156,5 +160,27 @@ describe('item mail', () => {
       ]
     })
     expect(notified).toEqual([`orca_session_id:${CHAT}`])
+  })
+})
+
+describe("the owner's answer to a question a conversation's turn asked", () => {
+  const ASKER = '6a5b4c3d-2e1f-4a0b-8c9d-0e1f2a3b4c5d'
+  const answer = { answers: 'e9', askedInConversation: ASKER }
+
+  it('goes to the chat that asked, naming it, and to the item chat once that chat is gone', async () => {
+    const db = new OrchestrationDb(':memory:')
+    dbs.push(db)
+    await sendBotItemMail(runtimeOf(db, {}), owed(undefined, answer))
+    const sent = db.getMessageById('msg_item_e11')
+    expect(sent?.to_handle).toBe(`orca_session_id:${ASKER}`)
+    expect(JSON.parse(String(sent?.payload))).toMatchObject({ askedInConversation: ASKER })
+
+    mailbox.gone.add(ASKER)
+    const fallback = new OrchestrationDb(':memory:')
+    dbs.push(fallback)
+    await sendBotItemMail(runtimeOf(fallback, {}), owed(undefined, answer))
+    const rerouted = fallback.getMessageById('msg_item_e11')
+    expect(rerouted?.to_handle).toBe(`orca_session_id:${CHAT}`)
+    expect(JSON.parse(String(rerouted?.payload))).not.toHaveProperty('askedInConversation')
   })
 })
