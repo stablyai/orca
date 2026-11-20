@@ -24,9 +24,13 @@ import { useTranslate } from '@/i18n/use-translate'
 import { installOsFileDropCancellationGuard } from '../lib/files/drop/os-file-drop-cancellation-guard'
 import { installBodyOverlayAttributes } from '../lib/overlay-interaction/body-overlay-attributes'
 import { installAppKeyboardRouter } from '../lib/keyboard/app-keyboard-router'
+import { installLoopingAnimationClock } from '../lib/window-activity/looping-animation-clock'
 
 const disposeOsFileDropGuard = installOsFileDropCancellationGuard()
 import.meta.hot?.dispose(disposeOsFileDropGuard)
+// Spinners and pulses sit paused in main.css: without the clock they never turn in the paired web app.
+const disposeLoopingAnimationClock = installLoopingAnimationClock()
+import.meta.hot?.dispose(disposeLoopingAnimationClock)
 const disposeBodyOverlayAttributes = installBodyOverlayAttributes()
 import.meta.hot?.dispose(disposeBodyOverlayAttributes)
 installAppKeyboardRouter()

@@ -49,7 +49,7 @@ it('shows a sent comment until its event arrives and keeps a refused comment for
 
   sent.mockResolvedValueOnce({ eventId: 'e10' })
   await act(async () => reopened.result.current.retry(refused!.event.id))
-  expect(sent).toHaveBeenLastCalledWith(BOT, 'uid-6', 'Again', [], undefined)
+  expect(sent).toHaveBeenLastCalledWith(BOT, 'uid-6', 'Again', [], undefined, undefined)
   expect(reopened.result.current.shown[0]?.failed).toBe(false)
 })
 

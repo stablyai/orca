@@ -71,6 +71,8 @@ export async function admitBotItemCommentAttachments(
     throw refused(`Comments take up to ${BOT_ITEM_COMMENT_FILE_MAX_COUNT} files besides images.`)
   }
   const local = deps.local ? [...paths, ...files.filter(isAgentInlineImagePath)] : paths
+  // Refused before any image is copied into the store.
+  assertImageCount(local)
   const [stored, storedFiles] = await Promise.all([
     deps.local ? Promise.all(local.map((path) => storedCopy(store, path))) : local,
     Promise.all(others.map((path) => storedCopy(store, path, true)))
@@ -113,13 +115,17 @@ export async function admitBotItemCommentAttachments(
   return { text, images }
 }
 
+function assertImageCount(paths: readonly string[]): void {
+  if (paths.length > AGENT_SESSION_MESSAGE_IMAGE_MAX_COUNT) {
+    throw refused(`Comments take up to ${AGENT_SESSION_MESSAGE_IMAGE_MAX_COUNT} images.`)
+  }
+}
+
 async function admitImages(
   store: NonNullable<BotItemCommentAttachmentDeps['store']>,
   paths: readonly string[]
 ): Promise<BotItemCommentImage[]> {
-  if (paths.length > AGENT_SESSION_MESSAGE_IMAGE_MAX_COUNT) {
-    throw refused(`Comments take up to ${AGENT_SESSION_MESSAGE_IMAGE_MAX_COUNT} images.`)
-  }
+  assertImageCount(paths)
   const root = paths.length > 0 ? await realpath(store.rootDir).catch(() => null) : null
   const images: BotItemCommentImage[] = []
   let total = 0

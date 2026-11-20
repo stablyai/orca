@@ -297,6 +297,22 @@ describe('bot items store', () => {
     ])
   })
 
+  it('refuses a quick reply aimed at a question the agent has since replaced', () => {
+    const store = open()
+    const uid = store.add(input({ title: 'Asking' }), owner).uid
+    store.set(uid, { status: 'needs_you', comment: 'First?' }, owner)
+    const first = store.get(uid)?.questionEvent
+    store.set(uid, { status: 'needs_you', comment: 'Second?' }, owner)
+
+    expect(() =>
+      store.ownerComment(uid, 'Yes', { kind: 'owner' }, [], undefined, undefined, first ?? -1)
+    ).toThrow(/new question/)
+    expect(store.get(uid)?.status).toBe('needs_you')
+    const second = store.get(uid)?.questionEvent ?? -1
+    store.ownerComment(uid, 'Yes', { kind: 'owner' }, [], undefined, undefined, second)
+    expect(store.get(uid)?.status).toBe('working')
+  })
+
   it('closes with set: done like `done`, canceled only with a reason like `cancel`', () => {
     const store = open()
     const a = store.add(input({ title: 'A' }), owner).uid

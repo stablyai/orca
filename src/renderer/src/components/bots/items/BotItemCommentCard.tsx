@@ -149,6 +149,7 @@ export function BotItemCommentCard({
           {shape.decisions.length > 0 ? (
             <BotItemQuestionLines
               shape={shape}
+              questionId={event.id}
               waiting={waiting}
               answers={entry.answers}
               actions={quickReplies}

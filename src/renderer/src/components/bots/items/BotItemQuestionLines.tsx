@@ -7,6 +7,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import {
   botItemPickedReplies,
+  botItemQuestionLine,
   botItemQuickReplyText,
   type BotItemQuestionShape,
   type BotItemQuickReply
@@ -15,7 +16,8 @@ import type { BotItemEvent } from '../../../../../shared/bots/bot-items'
 import { BotItemMarkdown } from './BotItemMarkdown'
 
 export type BotItemQuickReplyActions = {
-  send: (text: string) => void
+  /** `questionId`: the ask it answers, so a reply that arrives after a new question is refused. */
+  send: (text: string, questionId: string) => void
   edit: (text: string) => void
   /** Type your answer: the comment box takes focus, glowing once. */
   type: () => void
@@ -42,11 +44,14 @@ const NO_ANSWERS: readonly (BotItemEvent | null)[] = []
 
 export function BotItemQuestionLines({
   shape,
+  questionId,
   waiting,
   answers = NO_ANSWERS,
   actions
 }: {
   shape: BotItemQuestionShape
+  /** The ask's event id. */
+  questionId: string
   /** The item waits on this question now. */
   waiting: boolean
   /** Per line, the owner comment that answered it: that line closes and keeps only its pick. */
@@ -55,6 +60,7 @@ export function BotItemQuestionLines({
   actions?: BotItemQuickReplyActions
 }): React.JSX.Element {
   const t = useTranslate()
+  const firstOpen = shape.decisions.findIndex((_, at) => !answers[at])
   return (
     <div
       data-bot-item-question={waiting ? 'waiting' : 'closed'}
@@ -100,7 +106,7 @@ export function BotItemQuestionLines({
                         if (event.altKey || event.shiftKey) {
                           actions.edit(text)
                         } else {
-                          actions.send(text)
+                          actions.send(text, questionId)
                         }
                       }}
                     >
@@ -114,7 +120,12 @@ export function BotItemQuestionLines({
                       CHIP,
                       'flex items-center gap-1.5 text-muted-foreground outline-none hover:bg-foreground/5 focus-visible:ring-2 focus-visible:ring-ring/50'
                     )}
-                    onClick={actions.type}
+                    onClick={() =>
+                      // The box replies to the first open line: a later line's words name theirs.
+                      index === firstOpen || shape.decisions.length < 2
+                        ? actions.type()
+                        : actions.edit(`${botItemQuestionLine(decision.question)} →`)
+                    }
                   >
                     <Pencil className="size-3 shrink-0" />
                     {t('bots.items.ask.typeAnswer', 'Type your answer')}

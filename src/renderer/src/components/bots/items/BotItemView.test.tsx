@@ -43,7 +43,7 @@ vi.mock('./BotItemActivityList', () => ({
       ))}
       {quickReplies ? (
         <>
-          <button type="button" onClick={() => quickReplies.send('Go ahead')}>
+          <button type="button" onClick={() => quickReplies.send('Go ahead', 'e3')}>
             Quick reply
           </button>
           <button type="button" onClick={() => quickReplies.edit('Go ahead')}>
@@ -175,7 +175,7 @@ it('scrolls to the end after a comment is sent', async () => {
     fireEvent.keyDown(box, { key: 'Enter' })
   })
 
-  expect(sent).toHaveBeenCalledWith(BOT, 'uid-6', 'Ship it', [], expect.any(String))
+  expect(sent).toHaveBeenCalledWith(BOT, 'uid-6', 'Ship it', [], expect.any(String), undefined)
   expect(scroller().scrollTop).toBe(CONTENT)
 })
 
@@ -198,7 +198,8 @@ it('focuses the comment box from its card and preserves focus outside it when su
     'uid-6',
     'Use the proposed flow',
     [],
-    expect.any(String)
+    expect.any(String),
+    undefined
   )
   expect(box.contains(document.activeElement)).toBe(false)
 })
@@ -290,7 +291,14 @@ it("keeps the comment box while the question waits, and posts a quick reply as t
   expect(screen.getByRole('textbox', { name: 'Comment' })).toBeTruthy()
   await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Quick reply' })))
 
-  expect(sent).toHaveBeenCalledExactlyOnceWith(BOT, 'uid-6', 'Go ahead', [], expect.any(String))
+  expect(sent).toHaveBeenCalledExactlyOnceWith(
+    BOT,
+    'uid-6',
+    'Go ahead',
+    [],
+    expect.any(String),
+    'e3'
+  )
   expect(screen.getByRole('textbox', { name: 'Comment' })).toBeTruthy()
 })
 

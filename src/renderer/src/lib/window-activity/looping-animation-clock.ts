@@ -23,7 +23,10 @@ type LoopingAnimation = {
   readonly playState: AnimationPlayState
   currentTime: CSSNumberish | null
   pause: () => void
-  readonly effect: { getComputedTiming: () => { duration?: unknown } } | null
+  readonly effect: {
+    getComputedTiming: () => { duration?: unknown }
+    target?: Element | null
+  } | null
 }
 
 export type LoopingAnimationClockDeps = {
@@ -45,9 +48,55 @@ function isOnScreen(doc: Document, node: Node): boolean {
   return hit !== null && element.contains(hit)
 }
 
+// Elements the browser reports as scrolled or clipped out of view: their loops are left paused, so a
+// tick costs nothing for them. One not yet reported counts as showing.
+function trackHiddenTargets(): (animations: readonly LoopingAnimation[]) => LoopingAnimation[] {
+  const hidden = new WeakSet<Element>()
+  const watched = new Set<Element>()
+  const observer =
+    typeof IntersectionObserver === 'function'
+      ? new IntersectionObserver((entries) => {
+          for (const { target, isIntersecting } of entries) {
+            if (isIntersecting) {
+              hidden.delete(target)
+            } else {
+              hidden.add(target)
+            }
+          }
+        })
+      : null
+  return (animations) => {
+    const showing: LoopingAnimation[] = []
+    const present = new Set<Element>()
+    for (const animation of animations) {
+      const target = animation.effect?.target
+      if (!target) {
+        showing.push(animation)
+        continue
+      }
+      present.add(target)
+      if (observer && !watched.has(target)) {
+        watched.add(target)
+        observer.observe(target)
+      }
+      if (!hidden.has(target)) {
+        showing.push(animation)
+      }
+    }
+    for (const target of watched) {
+      if (!present.has(target)) {
+        watched.delete(target)
+        observer?.unobserve(target)
+      }
+    }
+    return showing
+  }
+}
+
 function documentDeps(doc: Document): LoopingAnimationClockDeps {
+  const showingOnly = trackHiddenTargets()
   return {
-    getAnimations: () => doc.getAnimations(),
+    getAnimations: () => showingOnly(doc.getAnimations()),
     onLoopStart: (listener) => {
       const onStart = (event: AnimationEvent): void => {
         if (STEPS_PER_CYCLE.has(event.animationName) && event.target instanceof Element) {

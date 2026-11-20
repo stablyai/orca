@@ -13,15 +13,19 @@ function harness(bots: Partial<SyncedBot>[]) {
     github: null,
     ...bot
   }))
+  const reads = { count: 0 }
   const sync = new BotAvatarSync({
     bots: {
       enabled: () => true,
-      list: () => list,
+      list: () => {
+        reads.count++
+        return list
+      },
       readAvatarImage: async () => Buffer.from('png')
     },
     cloud: () => ({ call })
   })
-  return { sync, call, list }
+  return { sync, call, list, reads }
 }
 
 const SLACK = { appId: 'A1', teamId: 'T1' }
@@ -89,6 +93,28 @@ describe('BotAvatarSync', () => {
     answer({ ok: false, status: 404, error: 'unknown_bot', retryAfterMs: null })
     await vi.waitFor(() => expect(call).toHaveBeenCalledTimes(2))
     expect(call.mock.calls[1]?.[1]).toEqual({ v: 1, kind: 'mascot', id: 'A1' })
+  })
+
+  it('sends at most four pictures at once and reads the roster once per pass', async () => {
+    const { sync, call, reads } = harness(
+      Array.from({ length: 10 }, (_, index) => ({
+        id: `bot-${index}`,
+        avatar: 'mascot:K2',
+        slack: SLACK
+      }))
+    )
+    const release: (() => void)[] = []
+    call.mockImplementation(
+      () => new Promise((resolve) => release.push(() => resolve({ ok: true, value: undefined })))
+    )
+    sync.changed()
+    await vi.waitFor(() => expect(call).toHaveBeenCalledTimes(4))
+    while (release.length > 0 || call.mock.calls.length < 10) {
+      release.shift()?.()
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    }
+    expect(call).toHaveBeenCalledTimes(10)
+    expect(reads.count).toBe(1)
   })
 
   it('sends one picture at a time per bot, ending on the latest', async () => {

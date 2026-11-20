@@ -79,17 +79,41 @@ function answeredLines(
   return next === -1 ? [] : [next]
 }
 
+// The same events are paired by the Activity and the comment box's reply mark: the first pass is kept.
+const pairings = new WeakMap<
+  readonly BotItemEvent[],
+  {
+    status: BotItem['status']
+    questionEventId: string | undefined
+    pairing: BotItemQuestionPairing
+  }
+>()
+
 export function botItemQuestionPairing(
+  item: Pick<BotItem, 'question' | 'status'>,
+  events: readonly BotItemEvent[]
+): BotItemQuestionPairing {
+  const questionEventId = item.question?.eventId
+  const kept = pairings.get(events)
+  if (kept && kept.status === item.status && kept.questionEventId === questionEventId) {
+    return kept.pairing
+  }
+  const pairing = pairQuestions(item, events)
+  pairings.set(events, { status: item.status, questionEventId, pairing })
+  return pairing
+}
+
+function pairQuestions(
   item: Pick<BotItem, 'question' | 'status'>,
   events: readonly BotItemEvent[]
 ): BotItemQuestionPairing {
   const questions = new Map<string, BotItemQuestionAnswers>()
   const replies = new Map<string, { questionId: string; decision: BotItemDecision }>()
   let current: { id: string; entry: BotItemQuestionAnswers } | null = null
-  for (const event of events) {
+  for (const [at, event] of events.entries()) {
     if (isClose(event) || isNewQuestion(event)) {
       // An ask's own Needs you move comes right after it, in the same write: its window stays open.
-      if (current && !(isNewQuestion(event) && current.id === lastAsk(events, event)?.id)) {
+      if (current && !(isNewQuestion(event) && current.id === lastAsk(events, at)?.id)) {
         current = null
       }
       continue
@@ -141,8 +165,8 @@ export function botItemQuestionPairing(
 }
 
 /** The agent comment that came with this Needs you move: the last comment before it in its write. */
-function lastAsk(events: readonly BotItemEvent[], move: BotItemEvent): BotItemEvent | undefined {
-  const at = events.indexOf(move)
+function lastAsk(events: readonly BotItemEvent[], at: number): BotItemEvent | undefined {
+  const move = events[at]!
   for (let index = at - 1; index >= 0; index -= 1) {
     const event = events[index]!
     if (event.kind === 'commented') {

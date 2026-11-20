@@ -134,15 +134,16 @@ function Viewer({
 }) {
   const image = images[index]!
   const { read } = reads
-  // The neighbours too, so a step lands on a read image.
+  // The neighbours too, so a step lands on a read image. Keyed by path, not the images array (fresh
+  // each render): a read that fails re-renders, and must not ask again until the viewer steps.
+  const nearby = [index - 1, index, index + 1]
+    .flatMap((near) => images[near]?.path ?? [])
+    .join('\n')
   useEffect(() => {
-    for (const near of [index - 1, index, index + 1]) {
-      const path = images[near]?.path
-      if (path) {
-        read(path)
-      }
+    for (const path of nearby ? nearby.split('\n') : []) {
+      read(path)
     }
-  }, [read, images, index])
+  }, [read, nearby])
   // Shown until the next image's bytes arrive, so a step never closes the viewer.
   const [shown, setShown] = useState<string | null>(null)
   const fresh = reads.uris[image.path]
