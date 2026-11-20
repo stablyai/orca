@@ -187,7 +187,7 @@ export function botConnectorEntries(
       { service: 'Google', hints: [accounts.map((account) => account.email).join(', ')] }
     )
   }
-  // Shown once the bot has a hook; its row hides itself until then.
+  // The row waits for the host to confirm webhook support.
   add(
     { kind: 'webhooks', key: 'webhooks', needsOwner: false },
     { service: t('bots.webhooks.name', 'Webhooks') }

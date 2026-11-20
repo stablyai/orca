@@ -78,7 +78,7 @@ export function actFailure(
   if (failure.status === 404 && failure.error === 'unknown_bot') {
     return new ConnectorActError(
       'bot_not_in_cloud',
-      "This bot isn't on Orca Cloud from this machine yet: connect it to Slack, Linear or GitHub, or wait a moment after connecting it."
+      "This bot isn't on Orca Cloud yet. Connect it to Slack, Linear or GitHub, or create a webhook automation for it. If you just did this, wait a moment and try again."
     )
   }
   const reason = failure.error ?? `HTTP ${failure.status}`
@@ -115,7 +115,7 @@ export const CONNECTOR_ACT_METHOD = defineMethod({
     if (!cloud || !features) {
       throw new ConnectorActError(
         'connector_not_connected',
-        "Orca isn't connected to Orca Cloud: sign in to Orca on this computer and connect a bot to Slack, Linear or GitHub, then try again. On a server with no Orca window, `orca auth login` there signs it in."
+        "Orca Cloud hasn't reported connector availability on this computer yet. Check the host's sign-in with `orca auth status`. A Slack, Linear or GitHub connection or a webhook automation can register the bot. On a signed-out headless server, run `orca auth login`."
       )
     }
     if (!features.has('actions' satisfies ConnectorCloudFeature)) {

@@ -99,8 +99,8 @@ describe('BotWebhooksCard', () => {
         method === 'webhooks.list' ? { hooks } : { calls: webhookCallsFixture(NOW) }
       )
     })
-    expect(host).toHaveBeenCalledWith(expect.anything(), 'webhooks.list', { botId: 'bot-1' })
-    expect(screen.queryByRole('button', { name: 'Webhooks' })).toBeNull()
+    await openRow()
+    expect(screen.getByRole('button', { name: 'Add in chat' }).hasAttribute('disabled')).toBe(false)
 
     hooks = [summary]
     act(() => notifyWebhooksChanged())
