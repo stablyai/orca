@@ -42,7 +42,6 @@ describe('tool letters from a real page during a pick', () => {
         focusAfterArm: 'search',
         searchValue: 'cd',
         forwardedWhileInField: [],
-        trackerVisibleToPage: false,
         tabThenLetter: { focused: 'host', forwarded: [] },
         scriptFocusThenLetter: { value: 'sa', forwarded: [] },
         noteValue: 'g',

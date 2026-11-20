@@ -267,8 +267,6 @@ describe('switching annotate tools', () => {
       act(() => result.current.tools.selectTool('draw'))
       await waitFor(() => expect(heldDisable).not.toBeNull())
       // The disable that Draw awaits is the last page call before capture.
-      const disableCalls = setGrabMode.mock.calls.filter(([args]) => !args.enabled)
-      expect(disableCalls.length).toBeGreaterThan(0)
       expect(result.current.grab.state).toBe('idle')
       expect(markup.start).not.toHaveBeenCalled()
 

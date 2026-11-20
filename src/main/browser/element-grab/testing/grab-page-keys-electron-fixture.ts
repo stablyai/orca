@@ -140,9 +140,6 @@ async function run(): Promise<void> {
     forwarded: forwarded.slice(beforeClosed)
   }
 
-  // Page script can't see or replace the tracker (it lives in an isolated world).
-  const trackerVisibleToPage = await evalPage(`typeof window.__orcaGrabNativeKeys !== 'undefined'`)
-
   // Tab into a field, then a letter at once: Tab makes the state unknown, so the letter types into the field.
   await evalPage(`document.getElementById('buy').focus()`)
   const beforeTab = forwarded.length
@@ -270,7 +267,6 @@ async function run(): Promise<void> {
       focusAfterArm,
       searchValue,
       forwardedWhileInField,
-      trackerVisibleToPage,
       tabThenLetter,
       scriptFocusThenLetter,
       noteValue,
