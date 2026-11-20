@@ -1,7 +1,8 @@
 import type { Tab } from '../../../../../../shared/workspace-layout/tab-groups/tab-types'
 import {
   chatPaneAddressTabId,
-  chatPaneKey
+  chatPaneKey,
+  chatPaneKeySessionId
 } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
 import { isReopenedChatTabId } from '../../../../../../shared/agent-session/view/structured-agent-session-host-tab-id'
 import type { AppState } from '../../../types'
@@ -18,6 +19,20 @@ const RECORDS = [
   'activityClearedAtByPaneKey',
   'manuallyUnreadTurnsByPaneKey'
 ] as const satisfies readonly (keyof ReadMarks)[]
+type ReadMarkRecord = (typeof RECORDS)[number]
+/** A paired web client keeps its own cutoffs and unread turns; the host owns the shared acknowledgements. */
+const PAIRING_LOCAL_RECORDS: readonly ReadMarkRecord[] = [
+  'activityClearedAtByPaneKey',
+  'manuallyUnreadTurnsByPaneKey'
+]
+
+/** Which read-mark records this window carries: only the host that owns the shared
+ *  acknowledgements carries them, so a client's first start can't copy one back over Mark unread. */
+export function chatReadMarkRecordsCarriedHere(
+  isPairedWebClient: boolean
+): readonly ReadMarkRecord[] {
+  return isPairedWebClient ? PAIRING_LOCAL_RECORDS : RECORDS
+}
 
 /**
  * COMPAT(2026-11, remove after 2027-05): a chat in a tab whose id isn't its conversation address
@@ -29,7 +44,8 @@ const RECORDS = [
  */
 export function carriedChatReadMarks(
   marks: ReadMarks,
-  tabs: Iterable<Pick<Tab, 'id' | 'contentType' | 'entityId'>>
+  tabs: Iterable<Pick<Tab, 'id' | 'contentType' | 'entityId'>>,
+  records: readonly ReadMarkRecord[] = RECORDS
 ): Partial<ReadMarks> | null {
   let patch: Partial<ReadMarks> | null = null
   for (const tab of tabs) {
@@ -42,7 +58,7 @@ export function carriedChatReadMarks(
     }
     const key = chatPaneKey(tab.entityId)
     const tabKey = `${tab.id}${key.slice(address.length)}`
-    for (const record of RECORDS) {
+    for (const record of records) {
       const value = marks[record][tabKey]
       const carriedKey = `${record} ${tabKey}`
       const carried = patch?.chatReadMarksCarriedFrom ?? marks.chatReadMarksCarriedFrom
@@ -62,12 +78,13 @@ export function carriedChatReadMarks(
 }
 
 /** Run once, after startup hydrates saved read marks and every workspace's tabs. */
-export function carryChatReadMarks(store: {
-  getState: () => AppState
-  setState: (patch: Partial<AppState>) => void
-}): void {
+export function carryChatReadMarks(
+  store: { getState: () => AppState; setState: (patch: Partial<AppState>) => void },
+  records: readonly ReadMarkRecord[]
+): void {
   const state = store.getState()
-  const patch = carriedChatReadMarks(state, Object.values(state.unifiedTabsByWorktree).flat()) ?? {}
+  const patch =
+    carriedChatReadMarks(state, Object.values(state.unifiedTabsByWorktree).flat(), records) ?? {}
   // Forget carries whose saved tab-keyed mark is gone, so the record stays bounded.
   let carried = patch.chatReadMarksCarriedFrom
   for (const carriedKey in state.chatReadMarksCarriedFrom) {
@@ -88,17 +105,14 @@ export function carryChatReadMarks(store: {
 const CHAT_ADDRESS_PREFIX = chatPaneAddressTabId('')
 
 function isTabKeyedChatMark(key: string): boolean {
-  if (isReopenedChatTabId(key)) {
-    return true
-  }
-  if (!key.startsWith(CHAT_ADDRESS_PREFIX)) {
-    return false
-  }
-  const tabId = key.slice(0, key.lastIndexOf(':'))
-  return chatPaneKey(tabId.slice(CHAT_ADDRESS_PREFIX.length)) !== key
+  return (
+    isReopenedChatTabId(key) ||
+    (key.startsWith(CHAT_ADDRESS_PREFIX) && chatPaneKeySessionId(key) === null)
+  )
 }
 
-/** After a saved-UI sync: an older paired client can still acknowledge a chat under its tab's key.
+/** After a saved-UI sync on the host that owns acknowledgements: an older paired client can still
+ *  acknowledge a chat under its tab's key.
  *  Only keys whose value the sync changed are classified, so a sync with none costs one pass. */
 export function carryChatAcknowledgementsAfterSync(
   store: { getState: () => AppState; setState: (patch: Partial<AppState>) => void },
@@ -110,7 +124,7 @@ export function carryChatAcknowledgementsAfterSync(
   }
   for (const key in current) {
     if (previous[key] !== current[key] && isTabKeyedChatMark(key)) {
-      carryChatReadMarks(store)
+      carryChatReadMarks(store, RECORDS)
       return
     }
   }

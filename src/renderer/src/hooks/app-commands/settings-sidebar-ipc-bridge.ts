@@ -1,5 +1,6 @@
 import { canShowRightSidebarForView } from '@/components/right-sidebar/visibility/right-sidebar-visibility'
 import { carryChatAcknowledgementsAfterSync } from '@/store/slices/agent-status/structured-sessions/chat-read-mark-carry'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { runBuiltInOrReplacement } from '@/lib/plugins/commands/plugin-command-replacements'
 import { showTerminalShortcutCaptureNotification } from '@/lib/notifications/terminal-shortcut-capture-notification'
 import { TOGGLE_FLOATING_TERMINAL_EVENT } from '@/components/floating-terminal/workspace/floating-workspace-open-intent'
@@ -147,7 +148,10 @@ export function registerSettingsAndSidebarIpcBridge(unsubs: (() => void)[]): voi
     window.api.ui.onStateChanged((ui) => {
       const previous = useAppStore.getState().acknowledgedAgentsByPaneKey
       useAppStore.getState().hydratePersistedUI(ui, 'sync')
-      carryChatAcknowledgementsAfterSync(useAppStore, previous)
+      // A paired web client's acknowledgements belong to its host, which carries them.
+      if (!isWebClientLocation()) {
+        carryChatAcknowledgementsAfterSync(useAppStore, previous)
+      }
     })
   )
 

@@ -3,7 +3,8 @@ import type { AppState } from '../../../types'
 import {
   carriedChatReadMarks,
   carryChatAcknowledgementsAfterSync,
-  carryChatReadMarks
+  carryChatReadMarks,
+  chatReadMarkRecordsCarriedHere
 } from './chat-read-mark-carry'
 
 const LEAF = '2b8ea975-8113-41ae-a25c-feb50cbe084a'
@@ -80,14 +81,14 @@ it('does not carry a mark back after the chat is marked unread', () => {
       acknowledgedAgentsByPaneKey: { [tabKey]: 300 }
     })
   }
-  carryChatReadMarks(storeOver(state))
+  carryChatReadMarks(storeOver(state), chatReadMarkRecordsCarriedHere(false))
   expect(state.current.acknowledgedAgentsByPaneKey).toEqual({
     [tabKey]: 300,
     [CONVERSATION_KEY]: 300
   })
   // Mark unread deletes the conversation key; the next start must not restore it.
   state.current = { ...state.current, acknowledgedAgentsByPaneKey: { [tabKey]: 300 } }
-  carryChatReadMarks(storeOver(state))
+  carryChatReadMarks(storeOver(state), chatReadMarkRecordsCarriedHere(false))
   expect(state.current.acknowledgedAgentsByPaneKey).toEqual({ [tabKey]: 300 })
 })
 
@@ -103,5 +104,21 @@ it('carries an acknowledgement an older paired client later changes under a repl
   expect(state.current.acknowledgedAgentsByPaneKey).toEqual({
     [tabKey]: 400,
     [CONVERSATION_KEY]: 400
+  })
+})
+
+it('leaves a paired web client’s shared acknowledgements to its host to carry', () => {
+  const tabKey = `agent-chat-tab-v1-abc:${LEAF}`
+  const state = {
+    current: chatTabState('agent-chat-tab-v1-abc', {
+      acknowledgedAgentsByPaneKey: { [tabKey]: 300 },
+      activityClearedAtByPaneKey: { [tabKey]: 500 }
+    })
+  }
+  carryChatReadMarks(storeOver(state), chatReadMarkRecordsCarriedHere(true))
+  expect(state.current.acknowledgedAgentsByPaneKey).toEqual({ [tabKey]: 300 })
+  expect(state.current.activityClearedAtByPaneKey).toEqual({
+    [tabKey]: 500,
+    [CONVERSATION_KEY]: 500
   })
 })

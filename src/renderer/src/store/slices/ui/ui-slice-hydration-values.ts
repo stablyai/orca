@@ -181,7 +181,10 @@ export function hydrateAgentReadState(
     acknowledgedAgentsByPaneKey: sanitizeAcknowledgedAgentsByPaneKey(
       ui.acknowledgedAgentsByPaneKey
     ),
-    activityClearedAtByPaneKey: sanitizeActivityClearedAtByPaneKey(ui.activityClearedAtByPaneKey),
+    activityClearedAtByPaneKey: sanitizeActivityClearedAtByPaneKey(
+      ui.activityClearedAtByPaneKey,
+      ui.chatReadMarksCarriedFrom ?? {}
+    ),
     manuallyUnreadTurnsByPaneKey: sanitizePaneKeyTimestampRecord(ui.manuallyUnreadTurnsByPaneKey),
     // Never age-pruned: a forgotten entry would carry an old mark back over a later Mark unread.
     chatReadMarksCarriedFrom: sanitizePaneKeyTimestampRecord(

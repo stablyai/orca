@@ -273,3 +273,15 @@ export const chatPaneKey = memoizeStringResult(
     `${chatPaneAddressTabId(sessionId)}:${structuredAgentSessionPaneLeaf(sessionId)}`,
   2048
 )
+
+const CHAT_PANE_ADDRESS_PREFIX = chatPaneAddressTabId('')
+
+/** The session a chat's pane key addresses, or null for any other pane key. */
+export function chatPaneKeySessionId(paneKey: string): string | null {
+  if (!paneKey.startsWith(CHAT_PANE_ADDRESS_PREFIX)) {
+    return null
+  }
+  const separator = paneKey.lastIndexOf(':')
+  const sessionId = paneKey.slice(CHAT_PANE_ADDRESS_PREFIX.length, separator)
+  return separator > 0 && chatPaneKey(sessionId) === paneKey ? sessionId : null
+}
