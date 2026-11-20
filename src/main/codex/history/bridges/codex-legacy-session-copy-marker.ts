@@ -96,7 +96,8 @@ export async function protectMarker(
   marker: LegacyCopiedSessionMarker,
   copyPath: string
 ): Promise<LegacyCopiedSessionMarker> {
-  if (marker.sourcePath.includes(`${sep}.${sep}`)) {
+  // Kept markers already name a file older builds skip, so they never need the copy checked again.
+  if (marker.kept || marker.sourcePath.includes(`${sep}.${sep}`)) {
     return marker
   }
   const copy = await lstat(copyPath).catch(() => null)

@@ -37,7 +37,7 @@ function writeFile(path: string, text: string): void {
   writeFileSync(path, text)
 }
 
-function legacyCopy(day: string, index: number, bytes?: number): void {
+function legacyCopy(day: string, index: number, bytes?: number, kept?: boolean): void {
   const id = `0199a1b2-c3d4-7e5f-8a9b-${index.toString(16).padStart(12, '0')}`
   const relative = join('2026', '05', day, `rollout-2026-05-${day}T10-00-00-${id}.jsonl`)
   const source = join(root, 'real-codex-home', 'sessions', relative)
@@ -57,7 +57,8 @@ function legacyCopy(day: string, index: number, bytes?: number): void {
       sourceSize: sourceStat.size,
       sourceMtimeMs: sourceStat.mtimeMs,
       targetSize: copyStat.size,
-      targetMtimeMs: copyStat.mtimeMs
+      targetMtimeMs: copyStat.mtimeMs,
+      ...(kept ? { targetSize: 1, kept: true } : {})
     })
   )
 }
@@ -81,6 +82,10 @@ describe('legacy session copy swap budget', () => {
     for (let index = 0; index < n + 2; index += 1) {
       legacyCopy('20', index, 33 * 1024 * 1024)
     }
+    // Copies already settled as kept, written since they were copied.
+    for (let index = 0; index < n; index += 1) {
+      legacyCopy('21', n + 2 + index, undefined, true)
+    }
 
     const pass = (): Promise<unknown> =>
       syncSystemCodexSessionsIntoManagedHomeIncrementally(
@@ -91,7 +96,7 @@ describe('legacy session copy swap budget', () => {
     await pass()
     // One marker read per copy, as before this change; past the budget a copy is only stat'd once,
     // to protect its marker from older builds.
-    expect(markerReads.count).toBe(n + 2)
+    expect(markerReads.count).toBe(2 * n + 2)
     expect(markerReads.transcriptStats).toBeLessThanOrEqual(n + 12)
 
     markerReads.transcriptStats = 0
