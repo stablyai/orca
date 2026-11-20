@@ -21,7 +21,7 @@ import {
 import { syncSystemCodexRulesIntoManagedHome } from './codex-managed-home-rules'
 import { matchesManagedCodexHomePath } from './codex-managed-home-path-matcher'
 import { observe, observeResolvedPathEntry } from '../codex-path-observation'
-import { resolveAbsoluteDirOverride } from '../../../../shared/absolute-dir-override'
+import { resolveAbsoluteDirOverride } from '../../../../shared/file-access/absolute-dir-override'
 
 const CODEX_GLOBAL_INSTRUCTIONS_ENTRY = 'AGENTS.md'
 
