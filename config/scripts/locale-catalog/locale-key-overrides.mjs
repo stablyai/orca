@@ -541,7 +541,11 @@ const BASE_LOCALE_KEY_OVERRIDES = {
   'auto.components.settings.browser.search.sshWorkspaceRouting.ssh': { fr: 'ssh' },
   // Worktree badge: stand-alone 主要な leaves the adnominal な dangling — align with the Tooltip's プライマリ.
   'auto.components.sidebar.WorktreeCard.7d517f82e2': { ja: 'プライマリ' },
-  'auto.components.WorktreeJumpPalette.739bda980c': { ja: 'プライマリ' }
+  'auto.components.WorktreeJumpPalette.739bda980c': { ja: 'プライマリ' },
+  // "Dismiss" on a bot's create offer is sent to the bot as the owner's reply, so it reads 忽略, not 关闭.
+  'components.native-chat.offerCard.dismiss': { zh: '忽略' },
+  // Branch auto-name "Dismiss" clears the saved error, beside its own Close (关闭) and "Dismissing…" (正在清除…).
+  'auto.components.sidebar.AutoRenameFailedDialog.dismiss': { zh: '清除' }
 }
 
 export const LOCALE_KEY_OVERRIDES = mergeLocaleKeyOverrides(BASE_LOCALE_KEY_OVERRIDES)
