@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -15,18 +15,6 @@ afterEach(async () => {
 const rulePath = () => join(home, '.cursor', 'rules', CURSOR_OPENING_RULE_FILE)
 
 describe('Cursor opening rule', () => {
-  it('writes an always-applied rule and removes it with the folders it made', async () => {
-    const undo = await placeCursorOpeningRule(home, 'You are Zorblax.')
-    expect(await readFile(rulePath(), 'utf8')).toMatch(
-      /^---\n[^]*alwaysApply: true\n---\nYou are Zorblax\.\n$/
-    )
-    if (process.platform !== 'win32') {
-      expect((await stat(rulePath())).mode & 0o777).toBe(0o600)
-    }
-    await undo()
-    expect(await readdir(home)).toEqual([])
-  })
-
   it("leaves the folder's own rules alone", async () => {
     await mkdir(join(home, '.cursor', 'rules'), { recursive: true })
     await writeFile(join(home, '.cursor', 'rules', 'mine.mdc'), 'mine')

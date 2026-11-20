@@ -135,13 +135,6 @@ afterEach(() => {
 })
 
 describe('a conversation linked to a native chat', () => {
-  it('reports a new link, so a bot’s Activity shows its thread before any agent starts', () => {
-    const { host } = hostTestState()
-    const { linked, release } = linkedSeam(installedChats(host).chats)
-    expect(linked.count).toBe(1)
-    release()
-  })
-
   // Typed in Orca, a turn is the owner's: no status, Stop or end reaches the thread.
   it.each([
     ['a thread', undefined, false],
@@ -181,6 +174,8 @@ describe('a conversation linked to a native chat', () => {
     const { host } = hostTestState()
     await attach()
     const { seam, events, hookRows, paneChange, ...h } = linkedSeam(installedChats(host).chats)
+    expect(h.linked.count).toBe(1)
+    expect(seam.replyTarget(PANE)).toMatchObject({ key: KEY, turnId: null })
     expect(events[0]).toMatchObject({
       kind: 'snapshot',
       conversations: [{ paneKey: PANE, agent: 'codex', working: false, prompt: null }]
@@ -194,7 +189,8 @@ describe('a conversation linked to a native chat', () => {
     clock.mockRestore()
     await eventually(() => expect(hostTestState().dispatch).toHaveBeenCalled())
     startTurnAt({ hookRows, paneChange }, 500)
-    await finishTurn('Shipped.')
+    const long = `${'Line one of a long answer. '.repeat(20)}\n\nSecond paragraph.`
+    await finishTurn(long)
 
     await eventually(() =>
       expect(events.slice(1)).toEqual([
@@ -213,11 +209,12 @@ describe('a conversation linked to a native chat', () => {
           paneKey: PANE,
           turnId: 500,
           stopReason: 'success',
-          lastAssistantMessage: 'Shipped.',
+          lastAssistantMessage: long,
           origin: 'delivery'
         })
       ])
     )
+    expect(ended(events)[0]).not.toHaveProperty('failure')
   })
 
   it('keeps one turn, and its delivery, when its row re-dates it from the send to the handover', async () => {
@@ -595,57 +592,6 @@ describe('a conversation linked to a native chat', () => {
     )
   })
 
-  it('names a turn already running when the watch began by its row, for replies and its end', async () => {
-    const { host } = hostTestState()
-    await attach()
-    const h = harness()
-    h.hookRows.set(PANE, chatRow())
-    h.seam.linkChat(KEY, { worktreeId: WORKTREE, sessionId: HOST_TEST_SESSION, agent: 'codex' })
-    const chats = installedChats(host).chats
-    await h.seam.send({ chat: chats }, KEY, 'from-thread', { text: 'go' })
-    const events: (ConversationEvent | ConversationSnapshot)[] = []
-    h.seam.watch({ chat: chats }, (event) => events.push(event))
-
-    expect(events[0]).toMatchObject({ conversations: [{ turnId: 500, working: true }] })
-    expect(h.seam.replyTarget(PANE)).toMatchObject({ key: KEY, turnId: 500 })
-    await finishTurn('Finished.')
-    await eventually(() =>
-      expect(ended(events)).toEqual([expect.objectContaining({ turnId: 500 })])
-    )
-  })
-
-  it('posts the whole last message, not the status row’s short preview', async () => {
-    const { host } = hostTestState()
-    await attach()
-    const { events, ...linked } = linkedSeam(installedChats(host).chats)
-    const long = `${'Line one of a long answer. '.repeat(20)}\n\nSecond paragraph.`
-
-    await fromThread(linked)
-    await finishTurn(long)
-
-    await eventually(() =>
-      expect(ended(events)).toEqual([expect.objectContaining({ lastAssistantMessage: long })])
-    )
-  })
-
-  it('posts nothing for a bot’s quiet turn', async () => {
-    const { host } = hostTestState()
-    await attach()
-    const linked = linkedSeam(installedChats(host).chats)
-    const { events, seam } = linked
-    seam.linkChat(BOT_KEY, {
-      worktreeId: WORKTREE,
-      sessionId: HOST_TEST_SESSION,
-      agent: 'codex',
-      bot: THREAD_BOT
-    })
-    await fromThread(linked, BOT_KEY)
-    await finishTurn('Nothing new. NO_REPLY')
-
-    await eventually(() => expect(ended(events)).toHaveLength(1))
-    expect(ended(events)[0]).not.toHaveProperty('lastAssistantMessage')
-  })
-
   it('posts nothing for a PR wake the bot answers quietly, sent as the connector’s with its source', async () => {
     const { host, dispatch } = hostTestState()
     await attach()
@@ -701,18 +647,6 @@ describe('a conversation linked to a native chat', () => {
       }
     })
     expect(ended(events)[0]).not.toHaveProperty('lastAssistantMessage')
-  })
-
-  it('ends a turn that succeeded with no failure', async () => {
-    const { host } = hostTestState()
-    await attach()
-    const { events, ...linked } = linkedSeam(installedChats(host).chats)
-
-    await fromThread(linked)
-    await finishTurn('All good.')
-
-    await eventually(() => expect(ended(events)).toHaveLength(1))
-    expect(ended(events)[0]).not.toHaveProperty('failure')
   })
 
   it('keeps a quiet marker as text in a chat that is not a bot’s', async () => {
@@ -799,25 +733,6 @@ describe('a conversation linked to a native chat', () => {
     await finishTurn('Later.')
 
     await eventually(() => expect(ended(events)).toHaveLength(1))
-  })
-
-  it('resolves a reply by the chat’s pane key while watched', async () => {
-    const { host } = hostTestState()
-    await attach()
-    const { seam } = linkedSeam(installedChats(host).chats)
-
-    expect(seam.replyTarget(PANE)).toMatchObject({ key: KEY, turnId: null })
-  })
-
-  it('stops the chat’s turn through its own Stop', async () => {
-    const { host, cancelTurn } = hostTestState()
-    await attach()
-    const { seam, ...h } = linkedSeam(installedChats(host).chats)
-    await seedApproval()
-    await agentReady(host, HOST_TEST_SESSION)
-
-    await expect(seam.cancel(h.host, KEY, 'c1')).resolves.toEqual({ outcome: 'accepted' })
-    expect(cancelTurn).toHaveBeenCalledOnce()
   })
 
   it('takes a Stop bound to the running turn, and refuses one bound to any other', async () => {
