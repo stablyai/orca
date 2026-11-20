@@ -1,62 +1,16 @@
 // Runs the TypeScript server behind a stable client connection: it stops after an idle period, starts again on the
 // next request, and serves the server's file watches from one workspace watcher when the client can't watch.
-import { readFileSync } from 'node:fs'
-import { isAbsolute, posix, relative, sep } from 'node:path'
-import { fileURLToPath, pathToFileURL } from 'node:url'
+import { pathToFileURL } from 'node:url'
+import { applyContentChanges } from './lsp-document-text.mjs'
+import { parseWatchers, watcherMatches } from './lsp-watch-registrations.mjs'
 
 const SESSION_ID_PREFIX = 'orca-session-'
 const WATCHED_FILES = 'workspace/didChangeWatchedFiles'
 const SHUTDOWN_GRACE_MS = 5000
-// These carry no work for the server, so they never wake a stopped one.
-const NON_WAKING = new Set(['$/cancelRequest', '$/setTrace', 'textDocument/didClose', 'exit'])
+const REQUEST_CANCELLED = -32800
+// These carry no work for a stopped server; a new one rereads the disk anyway.
+const NON_WAKING = new Set(['$/cancelRequest', '$/setTrace', 'textDocument/didClose', 'exit', WATCHED_FILES])
 const CHANGE_TYPE = { create: 1, update: 2, delete: 3 }
-const WATCH_KIND_ALL = 7
-
-function toPosix(path) {
-  return sep === '/' ? path : path.split(sep).join('/')
-}
-
-function baseToPath(baseUri) {
-  const uri = typeof baseUri === 'string' ? baseUri : baseUri?.uri
-  try {
-    return uri ? fileURLToPath(uri) : null
-  } catch {
-    return null
-  }
-}
-
-// Watches outside the workspace (package stores, global caches) are accepted and never fire; installs restart the server.
-function parseWatchers(root, watchers = []) {
-  const parsed = []
-  for (const { globPattern, kind = WATCH_KIND_ALL } of watchers) {
-    if (typeof globPattern === 'string') {
-      parsed.push({ base: null, pattern: globPattern, kind })
-      continue
-    }
-    const base = baseToPath(globPattern?.baseUri)
-    const fromRoot = base === null ? '..' : relative(root, base)
-    if (!fromRoot.startsWith('..') && !isAbsolute(fromRoot)) {
-      parsed.push({ base, pattern: globPattern.pattern, kind })
-    }
-  }
-  return parsed
-}
-
-function watcherMatches({ base, pattern, kind }, path, type) {
-  if ((kind & (type === 3 ? 4 : type)) === 0) {
-    return false
-  }
-  if (base === null) {
-    return posix.matchesGlob(toPosix(path), pattern)
-  }
-  const fromBase = relative(base, path)
-  return (
-    fromBase !== '' &&
-    !fromBase.startsWith('..') &&
-    !isAbsolute(fromBase) &&
-    posix.matchesGlob(toPosix(fromBase), pattern)
-  )
-}
 
 export function createServerSession({
   root,
@@ -66,7 +20,8 @@ export function createServerSession({
   onEnd,
   watchWorkspace,
   watchInstalls,
-  readText = (uri) => readFileSync(fileURLToPath(uri), 'utf8'),
+  // Requests the wrapper makes on its own (diagnostic pulls after a refresh) are not agent activity.
+  isBackgroundRequest = () => false,
   setTimer = setTimeout,
   clearTimer = clearTimeout
 }) {
@@ -86,13 +41,33 @@ export function createServerSession({
   let stopInstallWatch = null
   const queue = []
   const pending = new Set()
+  // What the running (or last) server has seen, so a new one can be brought to the same state.
   const documents = new Map()
   const registrations = new Map()
+  const clientRegistrations = new Set()
+
+  const track = (message) => {
+    const { method, params } = message
+    const uri = params?.textDocument?.uri
+    if (method === 'textDocument/didOpen') {
+      const { languageId, version, text } = params.textDocument
+      documents.set(uri, { languageId, version, text })
+    } else if (method === 'textDocument/didChange' && documents.has(uri)) {
+      const document = documents.get(uri)
+      document.version = params.textDocument.version
+      document.text = applyContentChanges(document.text, params.contentChanges)
+    } else if (method === 'textDocument/didClose') {
+      documents.delete(uri)
+    } else if (method === 'workspace/didChangeConfiguration') {
+      configuration = message
+    }
+  }
 
   const write = (message) => {
     if (message.id !== undefined && message.method) {
       pending.add(message.id)
     }
+    track(message)
     server.write(message)
   }
 
@@ -179,21 +154,11 @@ export function createServerSession({
     if (configuration) {
       server.write(configuration)
     }
-    for (const [uri, document] of documents) {
-      let text = document.text
-      if (text === null) {
-        try {
-          text = readText(uri)
-        } catch {
-          continue
-        }
-      }
+    for (const [uri, { languageId, version, text }] of documents) {
       server.write({
         jsonrpc: '2.0',
         method: 'textDocument/didOpen',
-        params: {
-          textDocument: { uri, languageId: document.languageId, version: document.version, text }
-        }
+        params: { textDocument: { uri, languageId, version, text } }
       })
     }
     state = 'ready'
@@ -207,34 +172,20 @@ export function createServerSession({
     }
   }
 
-  const track = (message) => {
-    const { method, params } = message
-    const uri = params?.textDocument?.uri
-    if (method === 'textDocument/didOpen') {
-      const { languageId, version, text } = params.textDocument
-      documents.set(uri, { languageId, version, text })
-    } else if (method === 'textDocument/didChange' && documents.has(uri)) {
-      const changes = params.contentChanges ?? []
-      const whole = changes.length > 0 && changes.every((change) => !change.range)
-      documents.set(uri, {
-        ...documents.get(uri),
-        version: params.textDocument.version,
-        text: whole ? changes.at(-1).text : null
-      })
-    } else if (method === 'textDocument/didClose') {
-      documents.delete(uri)
-    } else if (method === 'workspace/didChangeConfiguration') {
-      configuration = message
-    }
-  }
-
   const dispatch = (message) => {
     const { method } = message
+    const background = isBackgroundRequest(message)
+    if (background && state !== 'ready' && state !== 'starting') {
+      toClient({ jsonrpc: '2.0', id: message.id, error: { code: REQUEST_CANCELLED, message: 'server stopped' } })
+      return
+    }
     if (state === 'stopped') {
       if (method === 'shutdown') {
         toClient({ jsonrpc: '2.0', id: message.id, result: null })
       } else if (method === 'exit') {
         onEnd(0)
+      } else if (method === 'textDocument/didClose') {
+        documents.delete(message.params?.textDocument?.uri)
       } else if (method && !NON_WAKING.has(method)) {
         queue.push(message)
         wake()
@@ -245,64 +196,65 @@ export function createServerSession({
       queue.push(message)
       return
     }
-    if (method && method !== '$/cancelRequest') {
+    if (method && method !== '$/cancelRequest' && !background) {
       armIdle()
     }
     write(message)
   }
 
+  const answerServer = (id) => server.write({ jsonrpc: '2.0', id, result: null })
+
+  const onRegister = (message) => {
+    const forwarded = []
+    for (const registration of message.params?.registrations ?? []) {
+      if (bridgingWatches && registration.method === WATCHED_FILES) {
+        registrations.set(registration.id, parseWatchers(root, registration.registerOptions?.watchers))
+      } else if (!clientRegistrations.has(registration.id)) {
+        // A restarted server registers again under the same ids; the client already has them.
+        clientRegistrations.add(registration.id)
+        forwarded.push(registration)
+      }
+    }
+    startWatching()
+    if (forwarded.length > 0) {
+      toClient({ ...message, params: { ...message.params, registrations: forwarded } })
+    } else {
+      answerServer(message.id)
+    }
+  }
+
+  const onUnregister = (message) => {
+    // The protocol spells this field "unregisterations".
+    const forwarded = []
+    for (const unregistration of message.params?.unregisterations ?? []) {
+      if (!registrations.delete(unregistration.id) && clientRegistrations.delete(unregistration.id)) {
+        forwarded.push(unregistration)
+      }
+    }
+    if (forwarded.length > 0) {
+      toClient({ ...message, params: { unregisterations: forwarded } })
+    } else {
+      answerServer(message.id)
+    }
+  }
+
   function fromServer(message) {
     if (message.id === replayId && !message.method) {
       finishReplay()
-      return
-    }
-    if (message.id === shutdownId && !message.method) {
+    } else if (message.id === shutdownId && !message.method) {
       server.write({ jsonrpc: '2.0', method: 'exit' })
-      return
-    }
-    if (!message.method && pending.delete(message.id)) {
+    } else if (!message.method && pending.delete(message.id)) {
       toClient(message)
       if (restartWhenIdle) {
         stopIfQuiet()
       }
-      return
+    } else if (message.method === 'client/registerCapability') {
+      onRegister(message)
+    } else if (message.method === 'client/unregisterCapability') {
+      onUnregister(message)
+    } else {
+      toClient(message)
     }
-    if (bridgingWatches && message.method === 'client/registerCapability') {
-      const forwarded = []
-      for (const registration of message.params?.registrations ?? []) {
-        if (registration.method === WATCHED_FILES) {
-          registrations.set(
-            registration.id,
-            parseWatchers(root, registration.registerOptions?.watchers)
-          )
-        } else {
-          forwarded.push(registration)
-        }
-      }
-      startWatching()
-      if (forwarded.length > 0) {
-        toClient({ ...message, params: { ...message.params, registrations: forwarded } })
-      } else {
-        server.write({ jsonrpc: '2.0', id: message.id, result: null })
-      }
-      return
-    }
-    if (bridgingWatches && message.method === 'client/unregisterCapability') {
-      // The protocol spells this field "unregisterations".
-      const forwarded = []
-      for (const unregistration of message.params?.unregisterations ?? []) {
-        if (!registrations.delete(unregistration.id)) {
-          forwarded.push(unregistration)
-        }
-      }
-      if (forwarded.length > 0) {
-        toClient({ ...message, params: { unregisterations: forwarded } })
-      } else {
-        server.write({ jsonrpc: '2.0', id: message.id, result: null })
-      }
-      return
-    }
-    toClient(message)
   }
 
   function onExit(code, signal) {
@@ -318,6 +270,9 @@ export function createServerSession({
       onEnd(code ?? (signal ? 1 : 0))
       return
     }
+    // Answers to the old server's requests must not reach the new one, whose ids start over.
+    const kept = queue.splice(0).filter((message) => message.method)
+    queue.push(...kept)
     if (restartWhenIdle) {
       restartWhenIdle = false
       wake()
@@ -328,7 +283,6 @@ export function createServerSession({
 
   return {
     fromClient(message) {
-      track(message)
       if (message.method === 'initialize' && !initialize) {
         const capabilities = message.params?.capabilities ?? {}
         bridgingWatches = !capabilities.workspace?.didChangeWatchedFiles?.dynamicRegistration

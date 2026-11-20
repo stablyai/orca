@@ -178,33 +178,40 @@ export function createDiagnosticsBridge({
 function runLanguageServer() {
   const root =
     process.env.CLAUDE_PROJECT_DIR || fileURLToPath(new URL('../../../..', import.meta.url))
-  const command = resolveTypescriptLanguageServer({ root })
-  const writeClient = (message) => process.stdout.write(encodeLspMessage(message))
   let bridge
   const session = createServerSession({
     root,
     idleMs: Number(process.env.ORCA_TYPESCRIPT_LSP_IDLE_MINUTES ?? IDLE_MINUTES) * 60_000,
     watchWorkspace,
     watchInstalls,
+    isBackgroundRequest: (message) =>
+      typeof message.id === 'string' && message.id.startsWith(BRIDGE_ID_PREFIX),
     toClient: (message) => bridge.fromServer(message),
     onEnd: (code) => process.exit(code),
     startServer: ({ onMessage, onExit }) => {
+      // Resolved per start: an install can move the server to a new package path.
+      const command = resolveTypescriptLanguageServer({ root })
       const child = spawnProcess({ ...command, stdio: ['pipe', 'pipe', 'inherit'] })
       child.stdout.on('data', createLspMessageReader(onMessage))
+      child.stdin.on('error', () => {})
       child.on('error', (error) => {
         console.error(`agent-typescript-lsp: ${error.message}`)
         process.exit(1)
       })
       child.on('exit', onExit)
       return {
-        write: (message) => child.stdin.write(encodeLspMessage(message)),
+        write: (message) => {
+          if (child.stdin.writable) {
+            child.stdin.write(encodeLspMessage(message))
+          }
+        },
         end: () => child.stdin.end(),
         kill: (signal) => child.kill(signal)
       }
     }
   })
   bridge = createDiagnosticsBridge({
-    toClient: writeClient,
+    toClient: (message) => process.stdout.write(encodeLspMessage(message)),
     toServer: (message) => session.fromClient(message)
   })
   process.stdin.on(
