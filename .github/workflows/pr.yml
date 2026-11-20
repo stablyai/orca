@@ -558,11 +558,15 @@ jobs:
 
       # Extract sorted evidence to isolated temp paths with one normalized platform-independent AST pass; use preflight’s pinned Bun.
       - name: Verify localization extraction
+        if: '!cancelled()'
         id: localization-extraction
         background: true
         env:
+          PREFLIGHT_PHASE_SELECTED: ${{ needs.code_paths.outputs.static_analysis == 'true' }}
+          PREFLIGHT_PRIOR_SUCCESS: ${{ job.status == 'success' }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
+          if [ "$PREFLIGHT_PHASE_SELECTED" != true ] || [ "$PREFLIGHT_PRIOR_SUCCESS" != true ]; then exit 0; fi
           # Detection failures run the full check; renames retain the removed input path.
           DIFF_BASE="$(node config/scripts/git/pr-diff-base/git-pull-request-diff-base.mjs "$BASE_SHA")"
           if git diff --name-only --no-renames -z "$DIFF_BASE" HEAD > "$RUNNER_TEMP/localization-changes" &&
