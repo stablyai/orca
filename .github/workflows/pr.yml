@@ -663,12 +663,8 @@ jobs:
 
   git_compatibility:
     name: Git compatibility
-    needs: [code_paths, preflight]
-    if: >-
-      !cancelled() &&
-      needs.code_paths.result == 'success' &&
-      needs.code_paths.outputs.git_compatibility == 'true' &&
-      needs.preflight.result == 'success'
+    needs: [code_paths]
+    if: needs.code_paths.outputs.git_compatibility == 'true'
     # One free hosted runner per lane: three lanes sharing one 4-vCPU runner pushed real-Git tests past their timeouts.
     strategy:
       fail-fast: false
@@ -713,12 +709,8 @@ jobs:
   # Run pinned real Codex: thread/read must repair an unindexed rollout’s threads row; stub-only units cannot detect upstream removal of this behavior.
   codex_index_heal_contract:
     name: Codex index-heal contract
-    needs: [code_paths, preflight]
-    if: >-
-      !cancelled() &&
-      needs.code_paths.result == 'success' &&
-      needs.code_paths.outputs.codex_index_heal_contract == 'true' &&
-      needs.preflight.result == 'success'
+    needs: [code_paths]
+    if: needs.code_paths.outputs.codex_index_heal_contract == 'true'
     # Why ARM: @openai/codex ships @openai/codex-linux-arm64.
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 180
@@ -802,12 +794,8 @@ jobs:
 
   xterm_patch_sync:
     name: xterm patch sync
-    needs: [code_paths, preflight]
-    if: >-
-      !cancelled() &&
-      needs.code_paths.result == 'success' &&
-      needs.code_paths.outputs.xterm_patch_sync == 'true' &&
-      needs.preflight.result == 'success'
+    needs: [code_paths]
+    if: needs.code_paths.outputs.xterm_patch_sync == 'true'
     # Use ARM for four-package pristine/patched rebuild byte comparison: output generated on Linux x64 reproduces on darwin-arm64.
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 180
@@ -835,12 +823,8 @@ jobs:
 
   shell_contracts:
     name: shell contracts
-    needs: [code_paths, preflight]
-    if: >-
-      !cancelled() &&
-      needs.code_paths.result == 'success' &&
-      needs.code_paths.outputs.shell_contracts == 'true' &&
-      needs.preflight.result == 'success'
+    needs: [code_paths]
+    if: needs.code_paths.outputs.shell_contracts == 'true'
     # Exercise Linux ARM with the standalone aarch64 release and Ubuntu's zsh.
     runs-on: ubuntu-24.04-arm
     # Bound stalled prerequisite downloads instead of waiting for GitHub's 6-hour default.
@@ -1045,12 +1029,8 @@ jobs:
 
   cross-version-wire:
     name: cross-version wire compatibility
-    needs: [code_paths, preflight]
-    if: >-
-      !cancelled() &&
-      needs.code_paths.result == 'success' &&
-      needs.code_paths.outputs.cross-version-wire == 'true' &&
-      needs.preflight.result == 'success'
+    needs: [code_paths]
+    if: needs.code_paths.outputs.cross-version-wire == 'true'
     # Why ARM: source-only: tagged checkout plus in-process vitest, no docker or browser.
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 180
