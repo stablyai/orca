@@ -14,8 +14,32 @@ const heldPicksByScope = new Map<string, NativeChatTurnOptionPicks>()
 // Counts drops per chat, so a surface still showing or sending dropped picks lets them go.
 const dropsByScope = new Map<string, number>()
 
+/** Per chat, so a surface rebuilt while held picks are typed still sees them and waits. */
+type ScopeTurn = {
+  working: boolean
+  sending: NativeChatTurnOptionPicks
+  /** The chat's surfaces that are shown; each republishes when a pick settles. */
+  shown: Set<() => void>
+}
+const turnsByScope = new Map<string, ScopeTurn>()
+
+function scopeTurn(scopeKey: string): ScopeTurn {
+  const existing = turnsByScope.get(scopeKey)
+  if (existing) {
+    return existing
+  }
+  const turn: ScopeTurn = {
+    working: false,
+    sending: NO_NATIVE_CHAT_TURN_OPTION_PICKS,
+    shown: new Set()
+  }
+  setBoundedScopeCacheEntry(turnsByScope, scopeKey, turn)
+  return turn
+}
+
 export function dropNativeChatTurnHeldOptionPicks(scopeKey: string): void {
   heldPicksByScope.delete(scopeKey)
+  turnsByScope.delete(scopeKey)
   setBoundedScopeCacheEntry(dropsByScope, scopeKey, (dropsByScope.get(scopeKey) ?? 0) + 1)
 }
 
@@ -45,8 +69,7 @@ export function holdNativeChatOptionPicksDuringTurns(args: {
   onHeldPickFailed?: (error: unknown) => void
 }): NativeChatTurnHeldOptionSurface {
   const { surface: inner, scopeKey } = args
-  let working = false
-  let sending: NativeChatTurnOptionPicks = NO_NATIVE_CHAT_TURN_OPTION_PICKS
+  let turn = scopeTurn(scopeKey)
   const listeners = new Set<(snapshot: SessionOptionDescriptor[]) => void>()
   const held = (): NativeChatTurnOptionPicks =>
     heldPicksByScope.get(scopeKey) ?? NO_NATIVE_CHAT_TURN_OPTION_PICKS
@@ -59,11 +82,11 @@ export function holdNativeChatOptionPicksDuringTurns(args: {
   }
   const build = (): SessionOptionDescriptor[] => {
     const shown = markNativeChatTurnOptionPicks(
-      markNativeChatTurnOptionPicks(inner.getSnapshot(), sending, 'sending'),
+      markNativeChatTurnOptionPicks(inner.getSnapshot(), turn.sending, 'sending'),
       held(),
       'held'
     )
-    return working ? withoutMidTurnActions(shown) : shown
+    return turn.working ? withoutMidTurnActions(shown) : shown
   }
   const drops = (): number => dropsByScope.get(scopeKey) ?? 0
   let seenDrops = drops()
@@ -73,7 +96,7 @@ export function holdNativeChatOptionPicksDuringTurns(args: {
       return false
     }
     seenDrops = drops()
-    sending = NO_NATIVE_CHAT_TURN_OPTION_PICKS
+    turn = scopeTurn(scopeKey)
     return true
   }
   let snapshot = build()
@@ -85,21 +108,49 @@ export function holdNativeChatOptionPicksDuringTurns(args: {
     return snapshot
   }
   inner.subscribe(publish)
+  const publishShown = (): void => {
+    publish()
+    for (const republish of turn.shown) {
+      if (republish !== publish) {
+        republish()
+      }
+    }
+  }
 
   const settleSending = (id: string): void => {
-    const next = new Map(sending)
+    const next = new Map(turn.sending)
     next.delete(id)
-    sending = next
+    turn.sending = next
+  }
+  /** A turn started before these were typed: hold them again unless a newer pick replaced them. */
+  const holdAgain = (ids: readonly string[], picks: NativeChatTurnOptionPicks): void => {
+    const again = new Map(held())
+    for (const id of ids) {
+      const pick = picks.get(id)
+      if (pick && turn.sending.get(id) === pick) {
+        settleSending(id)
+        if (!again.has(id)) {
+          again.set(id, pick)
+        }
+      }
+    }
+    setHeld(again)
   }
   const sendHeld = async (picks: NativeChatTurnOptionPicks): Promise<void> => {
-    for (const id of modelFirst(picks)) {
+    const ids = modelFirst(picks)
+    for (const [index, id] of ids.entries()) {
       if (tookDrop()) {
-        publish()
+        publishShown()
+        return
+      }
+      if (turn.working) {
+        holdAgain(ids.slice(index), picks)
+        publishShown()
         return
       }
       const pick = picks.get(id)
       // A direct pick after the turn already replaced this one.
-      if (!pick || sending.get(id) !== pick) {
+      if (!pick || turn.sending.get(id) !== pick) {
         continue
       }
       try {
@@ -107,9 +158,9 @@ export function holdNativeChatOptionPicksDuringTurns(args: {
       } catch (error) {
         args.onHeldPickFailed?.(error)
       } finally {
-        if (sending.get(id) === pick) {
+        if (turn.sending.get(id) === pick) {
           settleSending(id)
-          publish()
+          publishShown()
         }
       }
     }
@@ -120,13 +171,19 @@ export function holdNativeChatOptionPicksDuringTurns(args: {
     getSnapshot: () => snapshot,
     subscribe: (listener) => {
       listeners.add(listener)
-      return () => listeners.delete(listener)
+      turn.shown.add(publish)
+      return () => {
+        listeners.delete(listener)
+        if (listeners.size === 0) {
+          turn.shown.delete(publish)
+        }
+      }
     },
     setOption: (id, value) => {
       tookDrop()
       const descriptor = inner.getSnapshot().find((row) => row.id === id)
-      if (!working || !takesNativeChatTurnOptionPick(descriptor)) {
-        if (held().has(id) || sending.has(id)) {
+      if (!turn.working || !takesNativeChatTurnOptionPick(descriptor)) {
+        if (held().has(id) || turn.sending.has(id)) {
           setHeld(new Map([...held()].filter(([heldId]) => heldId !== id)))
           settleSending(id)
           publish()
@@ -138,20 +195,23 @@ export function holdNativeChatOptionPicksDuringTurns(args: {
       setHeld(withNativeChatTurnOptionPick(others, descriptor, value))
       return Promise.resolve({ snapshot: publish() })
     },
-    sendingHeldPick: () => sending.keys().next().value ?? null,
+    sendingHeldPick: () => {
+      tookDrop()
+      return turn.sending.keys().next().value ?? null
+    },
     setWorking: (next) => {
       const dropped = tookDrop()
       const picks = held()
-      if (next === working && (next || picks.size === 0)) {
+      if (next === turn.working && (next || picks.size === 0)) {
         if (dropped) {
           publish()
         }
         return
       }
-      working = next
+      turn.working = next
       if (!next && picks.size > 0) {
         setHeld(NO_NATIVE_CHAT_TURN_OPTION_PICKS)
-        sending = new Map([...sending, ...picks])
+        turn.sending = new Map([...turn.sending, ...picks])
         void sendHeld(picks)
       }
       publish()
