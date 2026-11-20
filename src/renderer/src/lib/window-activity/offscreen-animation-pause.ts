@@ -49,7 +49,27 @@ export function observeOffscreenAnimation(element: Element | null): () => void {
   return observe(element, OFFSCREEN_ANIMATION_ATTRIBUTE)
 }
 
+const rowRegistrations = new Map<Element, { count: number; stop: () => void }>()
+
 /** Marks a virtual-list row while it is outside the viewport so CSS can pause its endless loops. */
 export function observeOffscreenRow(element: Element): () => void {
-  return observe(element, OFFSCREEN_ROW_ATTRIBUTE)
+  const registration = rowRegistrations.get(element)
+  if (registration) {
+    registration.count++
+  } else {
+    rowRegistrations.set(element, { count: 1, stop: observe(element, OFFSCREEN_ROW_ATTRIBUTE) })
+  }
+  return () => {
+    const current = rowRegistrations.get(element)
+    if (!current || --current.count > 0) {
+      return
+    }
+    // A ref re-attached in the same commit (list re-derived) keeps its observation and marker.
+    queueMicrotask(() => {
+      if (rowRegistrations.get(element) === current && current.count === 0) {
+        rowRegistrations.delete(element)
+        current.stop()
+      }
+    })
+  }
 }
