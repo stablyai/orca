@@ -1,49 +1,11 @@
 import { randomUUID } from 'node:crypto'
 import { link, lstat, open, readFile, readdir, rm, stat } from 'node:fs/promises'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { errnoCodeOrUnknown } from '../../../../shared/errors/errno-code'
 import { track } from '../../../telemetry/client'
 import type { CODEX_LEGACY_HISTORY_IMPORT_OUTCOMES } from '../../../../shared/telemetry/schemas/telemetry-codex-legacy-history-event-schemas'
 
 type LegacyHistoryImportOutcome = (typeof CODEX_LEGACY_HISTORY_IMPORT_OUTCOMES)[number]
-
-/** Failed launches before the import waits for the account histories to change. */
-export const MAX_HISTORY_IMPORT_ATTEMPTS = 3
-/** How long a given-up import waits before trying again with unchanged account histories. */
-export const HISTORY_IMPORT_RETRY_INTERVAL_MS = 24 * 60 * 60 * 1000
-
-export type LegacyMigrationState = {
-  completedAt?: number
-  migratedHomeCount?: number
-  historyImportAttempts?: number
-  /** The account histories' sizes and times when the import last gave up. */
-  historyImportInputs?: string
-  historyImportGaveUpAt?: number
-}
-
-export function parseLegacyMigrationState(text: string): LegacyMigrationState {
-  const parsed: unknown = JSON.parse(text)
-  const state: LegacyMigrationState = {}
-  if (!parsed || typeof parsed !== 'object') {
-    return state
-  }
-  if ('completedAt' in parsed && typeof parsed.completedAt === 'number') {
-    state.completedAt = parsed.completedAt
-  }
-  if ('migratedHomeCount' in parsed && typeof parsed.migratedHomeCount === 'number') {
-    state.migratedHomeCount = parsed.migratedHomeCount
-  }
-  if ('historyImportAttempts' in parsed && typeof parsed.historyImportAttempts === 'number') {
-    state.historyImportAttempts = parsed.historyImportAttempts
-  }
-  if ('historyImportInputs' in parsed && typeof parsed.historyImportInputs === 'string') {
-    state.historyImportInputs = parsed.historyImportInputs
-  }
-  if ('historyImportGaveUpAt' in parsed && typeof parsed.historyImportGaveUpAt === 'number') {
-    state.historyImportGaveUpAt = parsed.historyImportGaveUpAt
-  }
-  return state
-}
 
 /** Stats only: cheap enough to ask at every launch whether the account histories changed. */
 export async function legacyHistoryInputsKey(accountsRoot: string): Promise<string> {
@@ -94,6 +56,22 @@ async function listAccountHistories(accountsRoot: string): Promise<string[]> {
   return paths.sort()
 }
 
+const PRESERVED_HISTORY_NAME = /^history\.orca-legacy-.+\.jsonl$/
+
+// The account histories the migration preserved in the runtime home, which outlive the accounts.
+async function listPreservedHistories(runtimeHome: string): Promise<string[]> {
+  const entries = await readdir(runtimeHome, { withFileTypes: true }).catch((error: unknown) => {
+    if (errnoCodeOrUnknown(error) === 'ENOENT') {
+      return []
+    }
+    throw error
+  })
+  return entries
+    .filter((entry) => entry.isFile() && PRESERVED_HISTORY_NAME.test(entry.name))
+    .map((entry) => join(runtimeHome, entry.name))
+    .sort()
+}
+
 /**
  * Codex may be appending to or trimming a shared history.jsonl that exists, so only a missing one
  * is created from the account histories, which are only read, and never over one Codex creates
@@ -103,7 +81,10 @@ export async function importLegacyHistoriesIfSharedAbsent(
   accountsRoot: string,
   runtimeHistoryPath: string
 ): Promise<void> {
-  const accountHistoryPaths = await listAccountHistories(accountsRoot)
+  const accountHistoryPaths = [
+    ...(await listAccountHistories(accountsRoot)),
+    ...(await listPreservedHistories(dirname(runtimeHistoryPath)))
+  ]
   if (accountHistoryPaths.length === 0) {
     return
   }

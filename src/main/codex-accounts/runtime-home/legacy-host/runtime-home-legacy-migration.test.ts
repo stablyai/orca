@@ -74,14 +74,22 @@ async function constructService(): Promise<void> {
 
 async function startService(): Promise<void> {
   await constructService()
-  await waitForMigrationMarker()
+  await waitForHistorySettled()
 }
 
-// Settled: the history import landed or was skipped, so the one-time migration is marked done.
-async function waitForMigrationMarker(): Promise<void> {
-  await vi.waitFor(() => expect(existsSync(migrationMarkerPath())).toBe(true), {
-    timeout: WAIT_MS
-  })
+// Settled: the history import landed or was skipped, so nothing more is owed.
+async function waitForHistorySettled(): Promise<void> {
+  await vi.waitFor(
+    () =>
+      expect(readFileSync(sessionsMigratedStatePath(), 'utf-8')).toContain(
+        '"historyImportSettled":true'
+      ),
+    { timeout: WAIT_MS }
+  )
+}
+
+function preservedHistoryPath(accountId: string): string {
+  return join(getRuntimeCodexHomePath(), `history.orca-legacy-${accountId}.jsonl`)
 }
 
 function sessionsMigratedStatePath(): string {
@@ -166,7 +174,7 @@ describe('CodexRuntimeHomeService', () => {
 
     const { CodexRuntimeHomeService } = await import('../../runtime-home-service')
     new CodexRuntimeHomeService(store as never)
-    await waitForMigrationMarker()
+    await waitForHistorySettled()
 
     expect(normalizeLinkTarget(readlinkSync(legacyActiveHomePath))).toBe(
       normalizeLinkTarget(getRuntimeCodexHomePath())
@@ -221,6 +229,44 @@ describe('CodexRuntimeHomeService', () => {
     expect(readFileSync(runtimeHistoryPath, 'utf-8')).toBe('{"id":"shared-1"}')
     expect(trackedImportOutcomes()).toEqual(['skipped_existing'])
     expect(readFileSync(join(managedHomePath, 'history.jsonl'), 'utf-8')).toBe(
+      '{"id":"legacy-1"}\n'
+    )
+  })
+
+  it('preserves each account history in the runtime home before marking the migration done', async () => {
+    const runtimeHistoryPath = join(getRuntimeCodexHomePath(), 'history.jsonl')
+    writeFileSync(runtimeHistoryPath, '{"id":"shared-1"}\n', 'utf-8')
+    writeFileSync(preservedHistoryPath('account-1'), '{"id":"older-copy"}\n', 'utf-8')
+    writeHistory('account-1', '{"id":"legacy-1"}\n')
+
+    await startService()
+
+    // An older build sees only this marker: it must not rerun its overwriting migration, and its
+    // account removal must not take the only copy of these prompts.
+    expect(existsSync(migrationMarkerPath())).toBe(true)
+    expect(readFileSync(preservedHistoryPath('account-1'), 'utf-8')).toBe('{"id":"older-copy"}\n')
+    expect(
+      readFileSync(
+        join(getRuntimeCodexHomePath(), 'history.orca-legacy-account-1-1.jsonl'),
+        'utf-8'
+      )
+    ).toBe('{"id":"legacy-1"}\n')
+    expect(readFileSync(runtimeHistoryPath, 'utf-8')).toBe('{"id":"shared-1"}\n')
+  })
+
+  it('imports from the preserved history once the account folder is gone', async () => {
+    mkdirSync(getRuntimeCodexHomePath(), { recursive: true })
+    writeFileSync(preservedHistoryPath('account-1'), '{"id":"legacy-1"}\n', 'utf-8')
+    mkdirSync(join(sessionsMigratedStatePath(), '..'), { recursive: true })
+    writeFileSync(
+      sessionsMigratedStatePath(),
+      JSON.stringify({ historyImportAttempts: 1 }),
+      'utf-8'
+    )
+
+    await startService()
+
+    expect(readFileSync(join(getRuntimeCodexHomePath(), 'history.jsonl'), 'utf-8')).toBe(
       '{"id":"legacy-1"}\n'
     )
   })
@@ -280,8 +326,6 @@ describe('CodexRuntimeHomeService', () => {
       { timeout: WAIT_MS }
     )
     expect(existsSync(runtimeHistoryPath)).toBe(false)
-    // An older build only checks this marker: it must still owe the history import.
-    expect(existsSync(migrationMarkerPath())).toBe(false)
     fsHooks.afterRead.clear()
     mkdirSync(join(managedHomePath, 'sessions'), { recursive: true })
     writeFileSync(join(managedHomePath, 'sessions', 'later.jsonl'), '{}', 'utf-8')
@@ -370,7 +414,7 @@ describe('CodexRuntimeHomeService', () => {
 
     const { CodexRuntimeHomeService } = await import('../../runtime-home-service')
     new CodexRuntimeHomeService(store as never)
-    await waitForMigrationMarker()
+    await waitForHistorySettled()
 
     expect(readFileSync(join(runtimeSessionsDir, 'session.json'), 'utf-8')).toBe('{"turns":[1]}')
     expect(
@@ -409,7 +453,7 @@ describe('CodexRuntimeHomeService', () => {
 
     const { CodexRuntimeHomeService } = await import('../../runtime-home-service')
     new CodexRuntimeHomeService(store as never)
-    await waitForMigrationMarker()
+    await waitForHistorySettled()
 
     expect(readFileSync(occupiedPreservedPath, 'utf-8')).toBe('{"turns":["kept"]}')
     expect(
