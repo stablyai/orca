@@ -127,7 +127,8 @@ export function registerTelemetryHandlers(store: Store): void {
     if (!storeRef) {
       return
     }
-    if (!consumeConsentMutationToken()) {
+    // Why opt-in only: a rate limit must never silently keep telemetry on after the user turns it off (#45214).
+    if (optedIn && !consumeConsentMutationToken()) {
       return
     }
     // Read provenance before consent mutation changes the pending-notice state.

@@ -18,6 +18,7 @@ import {
 import type { PluginLockfile } from '../../../shared/plugins/installation/plugin-install-lockfile'
 import type { PluginPolicySource } from '../activation/plugin-activation-policy'
 import type { PluginMarketplaceInstaller } from './plugin-marketplace-installer'
+import { marketplaceInstallOf } from './plugin-marketplace-install-origin'
 import type { PluginReleaseFirstSeenStore } from './plugin-release-first-seen-store'
 
 // Why half the hold: a release first seen one pass ago is old enough by the second pass, not the third.
@@ -107,9 +108,12 @@ export class PluginAutoUpdater {
     }
     // Why before the refresh: a pass that starts exactly one hold later must see the hold as over.
     const startedAt = (this.options.now ?? Date.now)()
-    await this.options
-      .refreshCatalogs()
-      .catch((error) => console.warn('[plugins] auto-update kept cached catalogs:', error))
+    // Why: with no catalog installs nothing can update, so skip the catalog clones (#45214).
+    if (await this.hasMarketplaceInstall()) {
+      await this.options
+        .refreshCatalogs()
+        .catch((error) => console.warn('[plugins] auto-update kept cached catalogs:', error))
+    }
     // Why once, lazily: the kill list can be hours old, so take a fresh copy only when about to install.
     let killListFresh: Promise<void> | null = null
     const refreshKillList = (): Promise<void> =>
@@ -153,6 +157,16 @@ export class PluginAutoUpdater {
     this.state = { updated, needsReview }
     this.held = held
     this.options.onChanged(this.state, updatedNow)
+  }
+
+  private async hasMarketplaceInstall(): Promise<boolean> {
+    try {
+      const lock = await this.options.installer.readInstallLockfile()
+      return Object.values(lock.plugins).some((entry) => marketplaceInstallOf(entry) !== null)
+    } catch {
+      // Why fail open: an unreadable lock must not stop updates for plugins that need them.
+      return true
+    }
   }
 
   private async updateOne(
