@@ -1,7 +1,7 @@
 import { PassThrough } from 'node:stream'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeClient } from '../runtime/client'
-import { runRemoteBotToolSignIn } from './bot-tools'
+import { runHostBotToolSignIn } from './bot-tools'
 
 describe('orca bot tools connect, for a paired server’s bot', () => {
   const PAGE = 'https://app.example.com/authorize?client_id=c&state=s-1'
@@ -53,7 +53,7 @@ describe('orca bot tools connect, for a paired server’s bot', () => {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the command uses only `call`.
     const client = { call, isRemote: true } as unknown as RuntimeClient
     const input = new PassThrough()
-    const run = runRemoteBotToolSignIn(
+    const run = runHostBotToolSignIn(
       { client, cwd: process.cwd(), flags: new Map(), json: false },
       { botId: 'bot-1' },
       'notion',
