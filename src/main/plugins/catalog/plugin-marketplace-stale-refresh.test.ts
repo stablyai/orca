@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { PluginMarketplaceSourceState } from './plugin-marketplace-projection'
-import { createStaleMarketplaceRefresh } from './plugin-marketplace-stale-refresh'
+import {
+  createStaleMarketplaceRefresh,
+  MISSING_SNAPSHOT_RETRY_MS
+} from './plugin-marketplace-stale-refresh'
 
 const HOUR = 60 * 60 * 1000
 
@@ -28,14 +31,23 @@ function setup(sources: PluginMarketplaceSourceState[]) {
 }
 
 describe('createStaleMarketplaceRefresh', () => {
-  it('refreshes only stale catalogs and leaves unseeded ones to seeding', async () => {
+  it('refreshes stale and missing catalogs, not fresh ones', async () => {
     const { refresh, refreshSource } = setup([
       source('fresh', 10 * HOUR),
       source('stale', 0),
-      source('unseeded', null)
+      source('missing', null)
     ])
     await refresh(6 * HOUR, 12 * HOUR)
-    expect(refreshSource.mock.calls).toEqual([['stale']])
+    expect(refreshSource.mock.calls).toEqual([['stale'], ['missing']])
+  })
+
+  it('retries a catalog whose first fetch failed after a short wait', async () => {
+    const { refresh, refreshSource } = setup([source('missing', null)])
+    await refresh(6 * HOUR, 0)
+    await refresh(6 * HOUR, MISSING_SNAPSHOT_RETRY_MS - 1)
+    expect(refreshSource).toHaveBeenCalledTimes(1)
+    await refresh(6 * HOUR, MISSING_SNAPSHOT_RETRY_MS)
+    expect(refreshSource).toHaveBeenCalledTimes(2)
   })
 
   it('tries a stale catalog once per window, even when the fetch fails', async () => {

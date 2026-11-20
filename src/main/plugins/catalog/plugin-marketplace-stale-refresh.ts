@@ -1,9 +1,12 @@
 import type { PluginMarketplaceService } from './plugin-marketplace-service'
 
+export const MISSING_SNAPSHOT_RETRY_MS = 15 * 60 * 1000
+
 type StaleRefreshMarketplace = Pick<PluginMarketplaceService, 'listSources' | 'refreshSource'>
 
 /**
- * Refreshes catalogs whose snapshot is older than maxAgeMs, at most once per source per window.
+ * Refreshes catalogs whose snapshot is older than maxAgeMs (or missing), at most once per source
+ * per window.
  * Why: background passes skip catalogs when nothing is installed from one (#45214), so a catalog
  * view keeps listings current instead.
  */
@@ -17,11 +20,11 @@ export function createStaleMarketplaceRefresh(
     await Promise.all(
       sources.map(async ({ id, marketplace: snapshot }) => {
         const attempted = attemptedAt.get(id)
-        // Why skip missing snapshots: seeding owns first fetches and their retry cadence.
+        // Why retry missing sooner: a source whose first fetch failed offline has nothing to show.
+        const retryAfterMs = snapshot ? maxAgeMs : MISSING_SNAPSHOT_RETRY_MS
         if (
-          !snapshot ||
-          now - snapshot.fetchedAt < maxAgeMs ||
-          (attempted !== undefined && now - attempted < maxAgeMs)
+          (snapshot && now - snapshot.fetchedAt < maxAgeMs) ||
+          (attempted !== undefined && now - attempted < retryAfterMs)
         ) {
           return
         }
