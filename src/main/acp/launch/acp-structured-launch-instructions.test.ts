@@ -42,7 +42,8 @@ const SPECS = {
   antigravity: acpLaunchSpecFor('antigravity')!,
   cursor: acpLaunchSpecFor('cursor')!,
   hermes: acpLaunchSpecFor('hermes')!,
-  copilot: acpLaunchSpecFor('copilot')!
+  copilot: acpLaunchSpecFor('copilot')!,
+  kiro: acpLaunchSpecFor('kiro')!
 }
 
 const ACCOUNT_HOMES: Record<keyof typeof SPECS, AgentSessionRecord['accountHome']> = {
@@ -52,14 +53,16 @@ const ACCOUNT_HOMES: Record<keyof typeof SPECS, AgentSessionRecord['accountHome'
   antigravity: { variable: 'GEMINI_HOME', path: '/home/user/orca-data/antigravity-chat' },
   cursor: { variable: 'CURSOR_CONFIG_DIR', path: '/home/user/.cursor' },
   hermes: { variable: 'HERMES_HOME', path: '/home/user/.hermes' },
-  copilot: { variable: 'COPILOT_HOME', path: '/home/user/.copilot' }
+  copilot: { variable: 'COPILOT_HOME', path: '/home/user/.copilot' },
+  kiro: { variable: 'KIRO_HOME', path: '/home/user/.kiro' }
 }
 
 const PROBED_VERSIONS: Partial<Record<keyof typeof SPECS, string>> = {
   omp: '17.2.9',
   cursor: '2026.11.19-f005e9d',
   hermes: '0.23.3',
-  copilot: '1.0.114'
+  copilot: '1.0.114',
+  kiro: '3.1.0'
 }
 
 let dataDirectory = ''
@@ -122,6 +125,20 @@ describe('ACP launch: standing instructions', () => {
     expect(resolved.sessionMeta).toEqual({
       antigravity: { systemPrompt: { append: PREAMBLE } }
     })
+  })
+
+  it('gives Kiro them as an always-included steering document on its new session', async () => {
+    const resolved = await launch('kiro', { instructions: PREAMBLE })
+    expect(resolved.sessionMeta).toEqual({
+      kiro: { steering: [{ name: 'orca', inclusion: 'always', content: PREAMBLE }] }
+    })
+    expect(resolved.sessionMetaOnReopen).toBeUndefined()
+  })
+
+  it('refuses to start a Kiro too old to take client steering', async () => {
+    await expect(launch('kiro', { instructions: PREAMBLE, version: '2.31.0' })).rejects.toThrow(
+      /cannot take this chat's standing instructions/
+    )
   })
 
   it("adds them to OpenCode's inline instructions after the user's own, keeping their settings", async () => {

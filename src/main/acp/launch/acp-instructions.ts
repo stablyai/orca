@@ -11,6 +11,7 @@ import type { InitializeResponse } from '../generated/acp-protocol.generated'
 import { acpAgentName } from '../session/acp-structured-agent-definitions'
 import { placeCursorOpeningRule } from '../../cursor/cursor-opening-rule'
 import { writeHermesContextFile } from '../../hermes/hermes-context-file'
+import { hasReachedAppVersion } from '../../../shared/app-lifecycle/identity/app-version'
 import {
   openCodeSourceConfigDirectory,
   openCodeTakesConfigDirInstructions,
@@ -92,6 +93,21 @@ export const deliverOpenCodeInstructions: AcpInstructionsDelivery = async ({
 export const deliverOmpInstructions: AcpInstructionsDelivery = async ({ file }) => ({
   args: [`--append-system-prompt=${await file()}`]
 })
+
+// The 2.29.1 server has no client steering; 3.1.0 is the first release checked live.
+const KIRO_CLIENT_STEERING_FIRST_VERSION = '3.1.0'
+
+// Kiro keeps steering sent on `session/new` with the session, so a reopen keeps the preamble it began with.
+export const deliverKiroInstructions: AcpInstructionsDelivery = async ({ text, version }) => {
+  const takesClientSteering =
+    version !== null && hasReachedAppVersion(version, KIRO_CLIENT_STEERING_FIRST_VERSION)
+  if (!takesClientSteering) {
+    return null
+  }
+  return {
+    sessionMeta: { kiro: { steering: [{ name: 'orca', inclusion: 'always', content: text }] } }
+  }
+}
 
 // Cursor reads its folder's rules once, when a session opens, and keeps them across reopens.
 export const deliverCursorInstructions: AcpInstructionsDelivery = async ({ text }) => ({

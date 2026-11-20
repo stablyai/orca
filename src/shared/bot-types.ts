@@ -27,7 +27,8 @@ export const BOT_AGENTS = [
   'cursor',
   'hermes',
   'copilot',
-  'opencode2'
+  'opencode2',
+  'kiro'
 ] as const satisfies readonly Exclude<NativeChatAgent, (typeof BOT_HELD_BACK_AGENTS)[number]>[]
 
 export function isBotAgent(agent: string): agent is BotAgent {
