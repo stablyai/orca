@@ -22,6 +22,7 @@ import {
   buildRetiredWorktreeNamesRefreshKey,
   useRetiredWorktreeNames
 } from '../../../worktree/catalog/use-retired-worktree-names'
+import { worktreeCatalogRead } from '../../../worktree/catalog/worktree-catalog-operations'
 import { durableDraftRowKey } from '../../../drafts/durable-draft-rows'
 import { useDurableDraftField } from '../../../drafts/durable-draft-fields'
 import { BottomDrawerModalHost } from '../../../components/bottom-drawer/bottom-drawer-modal-host'
@@ -77,22 +78,31 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
     existingWorktrees,
     openExternalUrl,
     onCreated,
+    onOpenWorktree,
     onClose,
     folderLaunch
   } = props
-  const { repos, allRepos, selectedRepo, setSelectedRepo, loading, loadError, retryLoad } =
-    useNewWorkspaceRepositories({
-      client: desktopClient,
-      serverClients,
-      hostId,
-      visible,
-      ...(folderLaunch
-        ? {
-            initialRepo: { id: folderLaunch.repoId, executionHostId: folderLaunch.executionHostId }
-          }
-        : {})
-    })
-  // Route picked-repo operations to its host; desktop settings/accounts stay on desktop.
+  const {
+    repos,
+    allRepos,
+    selectedRepo,
+    setSelectedRepo,
+    upsertRepo,
+    loading,
+    loadError,
+    retryLoad
+  } = useNewWorkspaceRepositories({
+    client: desktopClient,
+    serverClients,
+    hostId,
+    visible,
+    ...(folderLaunch
+      ? {
+          initialRepo: { id: folderLaunch.repoId, executionHostId: folderLaunch.executionHostId }
+        }
+      : {})
+  })
+  // Picked-repo work runs on that host; desktop settings and accounts stay on the desktop.
   const repoServer = selectedRepo ? serverOf(selectedRepo) : undefined
   const client = repoServer ? (serverClients?.get(repoServer) ?? null) : desktopClient
   const navigation = useNewWorktreeDrawerNavigation(visible)
@@ -255,7 +265,7 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
     !executionTarget.sshGate.requiresConnection &&
     (!needsSetupChoice || setupScript.setupDecisionChoice != null)
 
-  function openPicker(view: 'project' | 'runTarget' | 'agent'): void {
+  function openPicker(view: 'project' | 'addProject' | 'runTarget' | 'agent'): void {
     Keyboard.dismiss()
     navigation.transitionDrawer(view)
   }
@@ -317,6 +327,7 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
         onClose={onClose}
         onOpenExternalUrl={openExternalUrl}
         onOpenProject={() => openPicker('project')}
+        onOpenAddProject={() => openPicker('addProject')}
         onOpenRunTarget={() => openPicker('runTarget')}
         onOpenSource={navigation.openSourceDrawer}
         onClearError={() => setError('')}
@@ -356,6 +367,54 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
         creating={createSubmit.creating}
         onSourceRepoChange={(repo) => selectRepo(repo, false)}
         onRepoChange={(repo) => selectRepo(repo, true)}
+        onOpenAddProject={() => openPicker('addProject')}
+        onProjectAdded={async (repo) => {
+          const taggedRepo = repo.executionHostId
+            ? repo
+            : repoServer
+              ? { ...repo, executionHostId: repoServer }
+              : repo
+          upsertRepo(taggedRepo)
+          if (client) {
+            try {
+              const reply = await worktreeCatalogRead.request(client, { limit: 10_000 })
+              const catalogResult = worktreeCatalogRead.interpret(reply)
+              if (catalogResult.accepted && Array.isArray(catalogResult.value.worktrees)) {
+                // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: worktree summary projection from worktree.ps
+                const rows = catalogResult.value.worktrees as Array<{
+                  worktreeId?: string
+                  repoId?: string
+                  displayName?: string
+                  repo?: string
+                  path?: string
+                  isMainWorktree?: boolean
+                }>
+                const matchingWorktree =
+                  rows.find(
+                    (w) =>
+                      (w.repoId === repo.id || (repo.path && w.path === repo.path)) &&
+                      w.isMainWorktree
+                  ) ??
+                  rows.find((w) => w.repoId === repo.id || (repo.path && w.path === repo.path))
+                if (matchingWorktree?.worktreeId) {
+                  const targetName =
+                    matchingWorktree.displayName || matchingWorktree.repo || repo.displayName
+                  onClose()
+                  if (onOpenWorktree) {
+                    onOpenWorktree(matchingWorktree.worktreeId, targetName, repoServer)
+                  } else {
+                    onCreated(matchingWorktree.worktreeId, targetName, undefined, repoServer)
+                  }
+                  return
+                }
+              }
+            } catch {
+              // Fall through to standard form drawer transition on catalog read refusal
+            }
+          }
+          selectRepo(taggedRepo, true)
+          navigation.transitionDrawer('form')
+        }}
         onAgentChange={(agent) => {
           agentSelection.setAgentOverridden(true)
           agentSelection.setSelectedAgent(agent)

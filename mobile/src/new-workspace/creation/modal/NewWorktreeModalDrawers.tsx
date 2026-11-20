@@ -1,11 +1,14 @@
-import { View } from 'react-native'
+import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { Plus } from 'lucide-react-native'
 import { getRepoExecutionHostId } from '../../../../../src/shared/execution-host/execution-host'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import type { SmartModeAvailabilityInput } from '../../source-selection/mobile-smart-source-modes'
 import type { PasteRepoCandidate } from '../../source-selection/smart-source-paste-intent'
 import type { useMobileComposerSource } from '../../source-selection/use-mobile-composer-source'
+import { HostDirectoryBrowserDrawer } from '../../../components/HostDirectoryBrowserDrawer'
 import { HostKindIcon } from '../../../components/icons/HostKindIcon'
 import { MobileAgentIcon } from '../../../components/icons/MobileAgentIcon'
+import { colors, spacing, typography } from '../../../theme/mobile-theme'
 import type { NewWorktreeAgentOption } from '../runtime/new-worktree-agent-selection'
 import { newWorktreeFormStyles as styles } from '../forms/new-worktree-form-styles'
 import type { MobileWorkspaceRepo } from '../forms/new-worktree-modal-types'
@@ -48,6 +51,8 @@ export function NewWorktreeModalDrawers(props: {
   onSourceRepoChange: (repo: MobileWorkspaceRepo) => void
   onRepoChange: (repo: MobileWorkspaceRepo) => void
   onAgentChange: (agent: NewWorktreeAgentOption) => void
+  onOpenAddProject: () => void
+  onProjectAdded: (repo: MobileWorkspaceRepo) => void | Promise<void>
   onTransitionToForm: () => void
   onApproveSetupTrust: (alwaysTrust: boolean) => void
   onSkipSetupTrust: () => void
@@ -90,6 +95,25 @@ export function NewWorktreeModalDrawers(props: {
             ]}
           />
         )}
+        footer={
+          <Pressable
+            style={({ pressed }) => [
+              drawerStyles.addProjectRow,
+              pressed && drawerStyles.addProjectRowPressed
+            ]}
+            onPress={props.onOpenAddProject}
+          >
+            <Plus size={16} color={colors.accentBlue} />
+            <Text style={drawerStyles.addProjectText}>Add project</Text>
+          </Pressable>
+        }
+      />
+
+      <HostDirectoryBrowserDrawer
+        visible={props.visible && props.drawerView === 'addProject'}
+        client={props.client}
+        onClose={props.onTransitionToForm}
+        onAdded={props.onProjectAdded}
       />
 
       <PickerListDrawer
@@ -124,3 +148,26 @@ export function NewWorktreeModalDrawers(props: {
     </>
   )
 }
+
+const drawerStyles = StyleSheet.create({
+  addProjectRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md + 2,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.borderSubtle,
+    backgroundColor: colors.bgPanel,
+    borderBottomLeftRadius: 12,
+    borderBottomRightRadius: 12
+  },
+  addProjectRowPressed: {
+    backgroundColor: colors.bgRaised
+  },
+  addProjectText: {
+    fontSize: typography.bodySize,
+    color: colors.accentBlue,
+    fontWeight: '500'
+  }
+})
