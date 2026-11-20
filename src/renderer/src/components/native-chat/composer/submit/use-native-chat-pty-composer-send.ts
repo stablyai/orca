@@ -98,7 +98,7 @@ export function useNativeChatPtyComposerSend(args: {
         return false
       }
       let pendingId: string | undefined
-      const sendOptions =
+      const observedSendOptions =
         args.agent === 'claude' && classification === 'chat'
           ? {
               ...launchSendOptions,
@@ -114,6 +114,14 @@ export function useNativeChatPtyComposerSend(args: {
               }
             }
           : launchSendOptions
+      const sendOptions = {
+        ...observedSendOptions,
+        onImagesPrepared: (paths: readonly string[]) => {
+          if (pendingId) {
+            args.optimisticSendOutcome?.recordImageDelivery?.(pendingId, paths)
+          }
+        }
+      }
       let pendingHandle: NativeChatSendHandle | null = null
       // Why: slash-like text must not silently drop its attached images.
       if (classification !== 'chat' && imagePaths.length === 0) {
@@ -149,7 +157,7 @@ export function useNativeChatPtyComposerSend(args: {
         pendingId = args.onOptimisticSend?.(text, imagePaths, retry !== undefined)
         if (pendingHandle) {
           args.trackPendingSend(pendingHandle, pendingId)
-          if (retry && pendingId) {
+          if ((retry || imagePaths.length > 0) && pendingId) {
             const id = pendingId
             void pendingHandle.outcome?.then((outcome) => {
               if (outcome === 'not-submitted') {

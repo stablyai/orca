@@ -13,7 +13,6 @@ import {
 } from './structured-agent-session-host-test-data.test-fixture'
 import { eventually } from './structured-agent-session-queued-message-rig-provider.test-fixture'
 import { preparePiRpcPrompt, PiRpcPromptError } from '../../../../pi/rpc/prompts/rpc-prompt'
-import { agentSessionFailureWords } from '../../../../../shared/agent-session/failures/agent-session-failure-words'
 import type { AgentJournalMessageItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 
 const fitting = vi.hoisted(() => ({ enabled: false }))
@@ -49,20 +48,6 @@ it('sends an old returned image card through fitting without editing its stored 
       Buffer.alloc(6 * 1024 * 1024)
     ])
     await writeFile(source, original)
-    rig.dispatch.mockImplementation(async ({ body }) => {
-      try {
-        await preparePiRpcPrompt(body, false)
-        return { state: 'admitted' }
-      } catch (error) {
-        if (!(error instanceof PiRpcPromptError)) {
-          throw error
-        }
-        return {
-          state: 'rejected',
-          ...agentSessionFailureWords(error.failure, { surface: 'rejection' })
-        }
-      }
-    })
     await rig.workingSend()
     const body: AgentJournalMessageItem = {
       kind: 'message',
@@ -81,13 +66,22 @@ it('sends an old returned image card through fitting without editing its stored 
         envelope: rig.envelope(fields, 'agentSession.send', id)
       })
     ).toMatchObject({ ok: true })
+    await expect(preparePiRpcPrompt(body, false)).rejects.toBeInstanceOf(PiRpcPromptError)
     expect(await rig.sendNow(id)).toMatchObject({ ok: true })
+    await eventually(async () => expect(await rig.handoff(id)).toBeDefined())
+    const refused = await rig.handoff(id)
+    await rig.settleRejected(
+      refused!.clientMessageId,
+      'An image on this message is larger than 5 MB'
+    )
     await eventually(async () =>
-      expect(
-        (await rig.drafts()).some((draft) => draft.messageId === id && draft.state === 'returned')
-      ).toBe(true)
+      expect(await rig.drafts()).toContainEqual({ messageId: id, state: 'returned' })
     )
     fitting.enabled = true
+    rig.dispatch.mockImplementation(async ({ body }) => {
+      await preparePiRpcPrompt(body, false)
+      return { state: 'admitted' }
+    })
     expect(await rig.sendNow(id)).toMatchObject({ ok: true })
     await eventually(async () => {
       const handoff = await rig.handoff(id)

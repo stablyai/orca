@@ -42,6 +42,12 @@ export function sendNativeChatMessageWithImageAttachments(
   if (imagePaths.length === 0) {
     return sendNativeChatMessage(ptyId, text, options)
   }
+  const preparePaths = async (signal: AbortSignal): Promise<string[]> => {
+    const prepared = await prepareAgentImagePaths(ptyId, imagePaths, undefined, { signal })
+    signal.throwIfAborted()
+    options?.onImagesPrepared?.(prepared)
+    return prepared
+  }
   const trimmedText = text.trim()
   if (options?.onWriteRejected) {
     const buildWrites = (imagePaths: readonly string[]): NativeChatObservedWrite[] => {
@@ -65,7 +71,7 @@ export function sendNativeChatMessageWithImageAttachments(
       return writes
     }
     return sendNativeChatObservedWrites(ptyId, buildWrites(imagePaths), options, async (signal) =>
-      buildWrites(await prepareAgentImagePaths(ptyId, imagePaths, undefined, { signal }))
+      buildWrites(await preparePaths(signal))
     )
   }
   const durationMs =
@@ -79,7 +85,7 @@ export function sendNativeChatMessageWithImageAttachments(
       if (isCancelled()) {
         return
       }
-      void prepareAgentImagePaths(ptyId, imagePaths, undefined, { signal }).then(
+      void preparePaths(signal).then(
         (preparedPaths) => {
           if (isCancelled()) {
             return
@@ -132,6 +138,9 @@ export function sendNativeChatMessageWithImageAttachments(
           )
         },
         () => {
+          if (isCancelled()) {
+            return
+          }
           options?.onWriteRejected?.()
           options?.onDeliverySettled?.(false)
           markSubmitted('not-submitted')

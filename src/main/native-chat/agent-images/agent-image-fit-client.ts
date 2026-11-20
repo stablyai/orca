@@ -1,15 +1,13 @@
-import { transientAgentImageDirectory } from './agent-image-fit-storage'
 import { windowsFsPath } from '../../wsl/filesystem/wsl-unc-drive-fs-path'
 import { toLinuxPath, toWindowsWslDrivePath } from '../../../shared/file-access/wsl-paths'
 import { stat } from 'node:fs/promises'
-import { getAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
 import { readRasterImageDimensions } from '../../../shared/file-preview/raster-image-dimensions'
 import { readNodeFileWithinLimit } from '../../../shared/file-content/node-bounded-file-reader'
 import { isInsideNativeChatPasteFolder } from '../paste-files/native-chat-paste-files'
 import { dirname, join } from 'node:path'
 import {
   AGENT_IMAGE_MAX_BYTES,
-  AGENT_IMAGE_MAX_LONG_EDGE
+  agentImageNeedsFitting
 } from '../../../shared/clipboard/clipboard-image'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { spawnWorkerThread } from '../../worker-threads/worker-thread-spawn'
@@ -28,58 +26,56 @@ let queue: WorkerThreadRequestQueue<AgentImageFitRequest, AgentImageFitResponse>
 
 export async function fitAgentImagePath(path: string, signal?: AbortSignal): Promise<string> {
   signal?.throwIfAborted()
-  // Leave small and missing files to the existing provider validation.
-  const readablePath = windowsFsPath(
-    process.platform === 'win32' ? (toWindowsWslDrivePath(path) ?? path) : path
-  )
-  const info = await stat(readablePath).catch(() => null)
-  if (!info?.isFile()) {
-    return path
-  }
-  if (info.size <= AGENT_IMAGE_MAX_BYTES) {
-    const { buffer } = await readNodeFileWithinLimit(readablePath, 1024 * 1024, {
-      regularFileOnly: true,
-      signal,
-      window: { offset: 0, length: Math.min(info.size, 1024 * 1024) }
-    })
-    const dimensions = readRasterImageDimensions(buffer)
-    if (!dimensions || Math.max(dimensions.width, dimensions.height) <= AGENT_IMAGE_MAX_LONG_EDGE) {
+  try {
+    // Leave small and missing files to the existing provider validation.
+    const readablePath = windowsFsPath(
+      process.platform === 'win32' ? (toWindowsWslDrivePath(path) ?? path) : path
+    )
+    const info = await stat(readablePath).catch(() => null)
+    if (!info?.isFile()) {
       return path
     }
-  }
-  const root = getAgentSessionAttachmentStore()?.rootDir
-  const transient = transientAgentImageDirectory(getAppEnvironment().getPath('temp'))
-  const outputDirectory =
-    root && parseAgentSessionAttachmentStorePath(root, path)
-      ? join(dirname(path), '.agent-images')
-      : isInsideNativeChatPasteFolder(nativeChatPasteFolder(), path)
+    if (info.size <= AGENT_IMAGE_MAX_BYTES) {
+      const { buffer } = await readNodeFileWithinLimit(readablePath, 1024 * 1024, {
+        regularFileOnly: true,
+        signal,
+        window: { offset: 0, length: Math.min(info.size, 1024 * 1024) }
+      })
+      const dimensions = readRasterImageDimensions(buffer)
+      if (dimensions && !agentImageNeedsFitting(info.size, dimensions)) {
+        return path
+      }
+    }
+    const root = getAgentSessionAttachmentStore()?.rootDir
+    const outputDirectory =
+      root && parseAgentSessionAttachmentStorePath(root, path)
         ? join(dirname(path), '.agent-images')
-        : transient.directory
-  queue ??= new WorkerThreadRequestQueue({
-    factory: () =>
-      spawnWorkerThread(
-        resolveWorkerThreadEntryPath(
-          currentWorkerEntryLayout(__dirname),
-          'agent-image-fit-worker-entry.js'
+        : isInsideNativeChatPasteFolder(nativeChatPasteFolder(), path)
+          ? join(dirname(path), '.agent-images')
+          : join(nativeChatPasteFolder(), 'agent-images')
+    queue ??= new WorkerThreadRequestQueue({
+      factory: () =>
+        spawnWorkerThread(
+          resolveWorkerThreadEntryPath(
+            currentWorkerEntryLayout(__dirname),
+            'agent-image-fit-worker-entry.js'
+          ),
+          { name: 'orca-agent-image-fit', resourceLimits: { maxOldGenerationSizeMb: 256 } }
         ),
-        { name: 'orca-agent-image-fit', resourceLimits: { maxOldGenerationSizeMb: 256 } }
-      ),
-    idleTeardownMs: 10_000,
-    maxConsecutiveDeaths: 3,
-    queueCap: { maxQueuedCalls: 64, describeFull: () => 'Too many images are being prepared' },
-    createUnavailableError: (message) => new AgentImageFitError(message),
-    describeTimeout: () => 'Image preparation timed out',
-    describeExit: (code) => `Image preparation exited with code ${code}`,
-    describeCrashLoop: (error) => `Image preparation failed: ${error}`,
-    onUnavailable: (error) => console.warn('[agent-images] worker unavailable:', error)
-  })
-  try {
+      idleTeardownMs: 10_000,
+      maxConsecutiveDeaths: 3,
+      queueCap: { maxQueuedCalls: 64, describeFull: () => 'Too many images are being prepared' },
+      createUnavailableError: (message) => new AgentImageFitError(message),
+      describeTimeout: () => 'Image preparation timed out',
+      describeExit: (code) => `Image preparation exited with code ${code}`,
+      describeCrashLoop: (error) => `Image preparation failed: ${error}`,
+      onUnavailable: (error) => console.warn('[agent-images] worker unavailable:', error)
+    })
     const response = await queue.dispatch(
       (id) => ({
         id,
         path: readablePath,
-        outputDirectory,
-        ...(outputDirectory === transient.directory ? { transientRoot: transient.root } : {})
+        outputDirectory
       }),
       60_000,
       signal

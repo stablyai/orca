@@ -28,6 +28,7 @@ export type NativeChatPendingSend = {
   writeUnconfirmedAt?: number
   text: string
   imagePaths?: string[]
+  deliveredImagePaths?: readonly string[]
   /** Client clock at send time; display placement never compares it with the host clock. */
   sentAt: number
   /** Host working epoch observed at send time; absent for an idle send, null for an unknown epoch. */
@@ -199,7 +200,8 @@ export function prunePendingSends<T extends NativeChatPendingSend>(
     const available =
       advancedNativeChatUserContentCounts(
         messagesAfterPendingBoundary(messages, entry),
-        entry.imagePaths
+        entry.imagePaths,
+        entry.deliveredImagePaths
       ).get(contentKey) ?? 0
     const used = consumed.get(key) ?? 0
     const occurrence = nativeChatPendingOccurrence(entry, used)
@@ -246,7 +248,8 @@ export function visibleNativeChatPendingSends<T extends NativeChatPendingSend>(
     const represented =
       matchingNativeChatUserContentCounts(
         messagesAfterPendingBoundary(existingMessages, entry),
-        entry.imagePaths
+        entry.imagePaths,
+        entry.deliveredImagePaths
       ).get(contentKey) ?? 0
     const used = consumed.get(key) ?? 0
     const occurrence = nativeChatPendingOccurrence(entry, used)

@@ -120,3 +120,43 @@ describe('pending sends typed through an agent TUI', () => {
     expect(prunePendingSends(remaining, replied).map((entry) => entry.id)).toEqual(['a', 'c'])
   })
 })
+
+it('reconciles a fitted attachment path while retaining the original for preview and retry', () => {
+  const pending: NativeChatPendingSend[] = [
+    {
+      id: 'p1',
+      text: 'look at this',
+      imagePaths: ['/repo/hero.png'],
+      deliveredImagePaths: ['/temp/fitted.png'],
+      sentAt: 100
+    }
+  ]
+  const transcript = [
+    message('u1', 'user', '/temp/fitted.png look at this', 150),
+    message('a1', 'assistant', 'done', 160)
+  ]
+  expect(pendingSendsAsMessages(pending, transcript)).toEqual([])
+  expect(prunePendingSends(pending, transcript)).toEqual([])
+  expect(pending[0]?.imagePaths).toEqual(['/repo/hero.png'])
+})
+
+it('reconciles an image-only echo that names the delivered copy', () => {
+  const pending: NativeChatPendingSend[] = [
+    {
+      id: 'p1',
+      text: '',
+      imagePaths: ['/repo/hero.png'],
+      deliveredImagePaths: ['/temp/fitted.png'],
+      sentAt: 100
+    }
+  ]
+  const transcript: NativeChatMessage[] = [
+    {
+      ...message('u1', 'user', '', 150),
+      blocks: [{ type: 'image-ref', path: '/temp/fitted.png' }]
+    },
+    message('a1', 'assistant', 'done', 160)
+  ]
+  expect(pendingSendsAsMessages(pending, transcript)).toEqual([])
+  expect(prunePendingSends(pending, transcript)).toEqual([])
+})

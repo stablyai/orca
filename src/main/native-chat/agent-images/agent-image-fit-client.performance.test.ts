@@ -2,7 +2,11 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { fitAgentMessageImages } from './agent-image-fit-client'
+import {
+  AgentImageFitError,
+  fitAgentImagePath,
+  fitAgentMessageImages
+} from './agent-image-fit-client'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 
 const worker = vi.hoisted(() => ({
@@ -10,6 +14,11 @@ const worker = vi.hoisted(() => ({
     build(1)
     return { id: 1, ok: true, path: '/fitted.png' }
   })
+}))
+vi.mock('../../../shared/file-content/node-bounded-file-reader', () => ({
+  readNodeFileWithinLimit: async () => {
+    throw new Error('EACCES')
+  }
 }))
 vi.mock('../../worker-threads/worker-thread-request-queue', () => ({
   WorkerThreadRequestQueue: class {
@@ -56,3 +65,11 @@ it.each([2, 20])(
     expect(worker.dispatch).toHaveBeenCalledTimes(1)
   }
 )
+
+it('keeps a header read failure provably before provider delivery', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'orca-image-fit-client-'))
+  roots.push(root)
+  const source = join(root, 'small.png')
+  await writeFile(source, 'small')
+  await expect(fitAgentImagePath(source)).rejects.toBeInstanceOf(AgentImageFitError)
+})

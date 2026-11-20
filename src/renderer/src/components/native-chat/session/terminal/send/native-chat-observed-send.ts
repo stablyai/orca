@@ -125,6 +125,9 @@ export function sendNativeChatObservedWrites(
             begin()
           },
           () => {
+            if (isCancelled()) {
+              return
+            }
             options.onWriteRejected?.()
             options.onDeliverySettled?.(false)
             markSubmitted('not-submitted')

@@ -30,9 +30,21 @@ export function nativeChatPendingContentKey(
   return imagePaths.length > 0 ? `images:${JSON.stringify(imagePaths)}` : 'empty'
 }
 
+function pendingImagePrefixes(
+  original: readonly string[] = [],
+  delivered: readonly string[] = []
+): string[] {
+  return [original, delivered].flatMap((candidate) => {
+    const normalized = candidate.filter(Boolean).map(normalizeNativeChatPendingText)
+    return [normalized.join(' '), normalized.join('')]
+  })
+}
+
 function nativeChatUserMessageContentKey(
   message: NativeChatMessage,
-  sentImagePaths?: readonly string[]
+  sentImagePaths: readonly string[] | undefined,
+  deliveredImagePaths: readonly string[] | undefined,
+  prefixes: readonly string[]
 ): string | null {
   if (message.role !== 'user') {
     return null
@@ -40,8 +52,7 @@ function nativeChatUserMessageContentKey(
   let text = normalizedNativeChatUserMessageText(message) ?? ''
   // Some CLIs retain pasted attachment paths as prompt text instead of image markers.
   const paths = sentImagePaths?.filter(Boolean) ?? []
-  const normalizedPaths = paths.map(normalizeNativeChatPendingText)
-  for (const prefix of [normalizedPaths.join(' '), normalizedPaths.join('')]) {
+  for (const prefix of prefixes) {
     if (prefix && (text === prefix || text.startsWith(`${prefix} `))) {
       text = text.slice(prefix.length).trimStart()
       if (!text) {
@@ -57,17 +68,30 @@ function nativeChatUserMessageContentKey(
     .filter(isImageRefBlock)
     .map((block) => block.path)
     .filter((path): path is string => Boolean(path))
-  const key = nativeChatPendingContentKey({ text: '', imagePaths })
+  const matchesDelivered =
+    deliveredImagePaths?.length === imagePaths.length &&
+    imagePaths.every((path, index) => path === deliveredImagePaths[index])
+  const key = nativeChatPendingContentKey({
+    text: '',
+    imagePaths: matchesDelivered ? paths : imagePaths
+  })
   return key === 'empty' ? null : key
 }
 
 export function matchingNativeChatUserContentCounts(
   messages: readonly NativeChatMessage[],
-  sentImagePaths?: readonly string[]
+  sentImagePaths?: readonly string[],
+  deliveredImagePaths?: readonly string[]
 ): Map<string, number> {
+  const prefixes = pendingImagePrefixes(sentImagePaths, deliveredImagePaths)
   const counts = new Map<string, number>()
   for (const message of messages) {
-    const key = nativeChatUserMessageContentKey(message, sentImagePaths)
+    const key = nativeChatUserMessageContentKey(
+      message,
+      sentImagePaths,
+      deliveredImagePaths,
+      prefixes
+    )
     if (key) {
       counts.set(key, (counts.get(key) ?? 0) + 1)
     }
@@ -77,13 +101,20 @@ export function matchingNativeChatUserContentCounts(
 
 export function advancedNativeChatUserContentCounts(
   messages: readonly NativeChatMessage[],
-  sentImagePaths?: readonly string[]
+  sentImagePaths?: readonly string[],
+  deliveredImagePaths?: readonly string[]
 ): Map<string, number> {
+  const prefixes = pendingImagePrefixes(sentImagePaths, deliveredImagePaths)
   const advanced = new Map<string, number>()
   const waiting = new Map<string, number>()
   for (const message of messages) {
     if (message.role === 'user') {
-      const key = nativeChatUserMessageContentKey(message, sentImagePaths)
+      const key = nativeChatUserMessageContentKey(
+        message,
+        sentImagePaths,
+        deliveredImagePaths,
+        prefixes
+      )
       if (key) {
         waiting.set(key, (waiting.get(key) ?? 0) + 1)
       }

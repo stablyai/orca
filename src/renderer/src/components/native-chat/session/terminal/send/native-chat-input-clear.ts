@@ -7,6 +7,7 @@ import { readNativeChatInputLine } from './native-chat-paste-landed'
 export const NATIVE_CHAT_CLEAR_CONFIRM_MS = 140
 
 export type NativeChatSendOptions = {
+  onImagesPrepared?: (paths: readonly string[]) => void
   /** The host refused a write; nothing after it was sent. */
   onWriteRejected?: () => void
   /** A write's acknowledgment was lost; it may or may not have landed. */
