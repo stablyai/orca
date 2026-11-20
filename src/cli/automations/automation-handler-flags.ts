@@ -12,8 +12,10 @@ import {
   MAX_AUTOMATION_PRECHECK_TIMEOUT_SECONDS
 } from '../../shared/automations/launch/automation-precheck'
 import { buildAutomationRrule } from '../../shared/automations/scheduling/automation-schedule-occurrences'
-import { isValidAutomationSchedule } from '../../shared/automations/scheduling/automation-schedule-parsing'
-import { automationScheduleParseError } from '../../shared/automations/scheduling/automation-schedule-parsing'
+import {
+  automationScheduleParseError,
+  isValidAutomationSchedule
+} from '../../shared/automations/scheduling/automation-schedule-parsing'
 import { isTuiAgent } from '../../shared/agent-launch/catalog/tui-agent-config'
 import {
   getOptionalPositiveIntegerFlag,
@@ -21,46 +23,15 @@ import {
   getRequiredStringFlag
 } from '../arguments/flags'
 import { RuntimeClientError } from '../runtime/connection/types'
+import {
+  PRESET_TRIGGERS,
+  validateScheduleModifierApplicability
+} from './automation-schedule-modifier-flags'
 
-const PRESET_TRIGGERS = new Set<AutomationSchedulePreset>(['hourly', 'daily', 'weekdays', 'weekly'])
 const SCHEDULE_MODIFIER_FLAGS = ['day', 'time'] as const
 
 function getScheduleModifierFlag(flags: Map<string, string | boolean>): string | undefined {
   return SCHEDULE_MODIFIER_FLAGS.find((flag) => flags.has(flag))
-}
-
-function validateScheduleModifierApplicability(
-  flags: Map<string, string | boolean>,
-  raw: string
-): void {
-  const isPreset = PRESET_TRIGGERS.has(raw as AutomationSchedulePreset)
-  if (!isPreset) {
-    if (flags.has('time')) {
-      throw new RuntimeClientError(
-        'invalid_argument',
-        '--time can only be used with preset automation triggers'
-      )
-    }
-    if (flags.has('day')) {
-      throw new RuntimeClientError(
-        'invalid_argument',
-        '--day can only be used with the weekly automation preset'
-      )
-    }
-    return
-  }
-  if (raw === 'hourly' && flags.has('time')) {
-    throw new RuntimeClientError(
-      'invalid_argument',
-      '--time cannot be used with the hourly automation preset; use a cron trigger such as "30 * * * *" to choose the minute'
-    )
-  }
-  if (raw !== 'weekly' && flags.has('day')) {
-    throw new RuntimeClientError(
-      'invalid_argument',
-      '--day can only be used with the weekly automation preset'
-    )
-  }
 }
 
 function getOptionalDayFlag(flags: Map<string, string | boolean>): number | undefined {
