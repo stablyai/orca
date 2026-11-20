@@ -4,12 +4,14 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Bot } from '../../../../shared/bot-types'
 
-const mocks = vi.hoisted(() => ({
-  bots: new Array<Bot>(),
-  start: vi.fn(),
-  updateBot: vi.fn(),
-  hostStatus: undefined as string | undefined
-}))
+const mocks = vi.hoisted(
+  (): {
+    bots: Bot[]
+    start: ReturnType<typeof vi.fn>
+    updateBot: ReturnType<typeof vi.fn>
+    hostStatus?: string
+  } => ({ bots: [], start: vi.fn(), updateBot: vi.fn() })
+)
 vi.mock('@/lib/bot-catalog', () => ({
   useBots: () => mocks.bots,
   updateBot: mocks.updateBot,
