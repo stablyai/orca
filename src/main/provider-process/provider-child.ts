@@ -19,6 +19,8 @@ export type ProviderChild = Pick<
   EventEmitter & {
     /** Actual CLI writer, which differs from the root on the compatibility path. */
     readonly writerPid?: number
+    /** The native owner wrapping the CLI, when it has one; its tree holds everything the CLI started. */
+    readonly ownerPid?: number
     ready?: Promise<void>
     /** Group observation is independent of the real leader's outcome. */
     readonly groupVerdict?: DescendantTreeVerdict

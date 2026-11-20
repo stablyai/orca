@@ -195,7 +195,7 @@ export function spawnManagedProviderProcess(
   // Hosted launches publish their pid only once the agent host starts them.
   void awaitProviderChildSpawn(child).then(() => {
     if (child.pid !== undefined && !agentMemoryRetired && !child.numericIdentityRetired) {
-      releaseAgentMemory = registerAgentProcess(child.pid)
+      releaseAgentMemory = registerAgentProcess(child.ownerPid ?? child.pid, child.pid)
     }
   })
   const rootVerdict = (): DescendantTreeVerdict =>
