@@ -224,9 +224,12 @@ function QuietLine({
 
 function CommentLine({
   line,
+  first,
   fontScale
 }: {
   line: BotItemNoteLine & { kind: 'comment' }
+  /** A later comment stands apart, so its chip reads as heading its own bubble. */
+  first: boolean
   fontScale: number
 }): React.JSX.Element {
   useMobileColorScheme()
@@ -234,8 +237,9 @@ function CommentLine({
   const open = useContext(BotItemOpenContext)
   // The comment's images go with its mail, so the [Image #N] its send wrote go, as on desktop.
   const text = stripSentImagePromptMarkers(line.text, line.images?.length ?? 0)
+  // The chip sits over the bubble, not in it, so the bubble hugs the words, as on the desktop.
   return (
-    <View style={[messageStyles.userBubble, styles.comment]}>
+    <View style={[styles.comment, !first && styles.laterComment]}>
       <View style={styles.commentOn}>
         <ListTodo size={12 * fontScale} strokeWidth={2} color={colors.textMuted} />
         <Text style={[styles.text, scaledType(typography.metaSize, fontScale)]}>
@@ -243,7 +247,11 @@ function CommentLine({
         </Text>
         <ItemChip item={line.item} fontScale={fontScale} open={open} />
       </View>
-      <Prose block={{ type: 'text', text }} text={text} userMessage fontScale={fontScale} />
+      {text.trim() ? (
+        <View style={messageStyles.userBubble}>
+          <Prose block={{ type: 'text', text }} text={text} userMessage fontScale={fontScale} />
+        </View>
+      ) : null}
     </View>
   )
 }
@@ -275,9 +283,14 @@ export function MobileNativeChatBotItemNoteRow({
   }
   return (
     <View style={[styles.row, edges]} testID={mobileNativeChatRowId(rowId)}>
-      {noteLines(note, t).map((line) =>
+      {noteLines(note, t).map((line, index) =>
         line.kind === 'comment' ? (
-          <CommentLine key={`comment:${line.item.uid}`} line={line} fontScale={fontScale} />
+          <CommentLine
+            key={`comment:${line.item.uid}`}
+            line={line}
+            first={index === 0}
+            fontScale={fontScale}
+          />
         ) : (
           <QuietLine key={`line:${line.items[0]!.uid}`} line={line} fontScale={fontScale} />
         )
@@ -379,10 +392,15 @@ const styles = themedStyleSheet(() => ({
     color: colors.textSecondary
   },
   comment: {
-    alignSelf: 'flex-end',
+    alignItems: 'flex-end',
     gap: spacing.xs
   },
+  laterComment: {
+    marginTop: spacing.md
+  },
+  // As wide as a bubble may be; the chip truncates inside it.
   commentOn: {
+    maxWidth: '88%',
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6

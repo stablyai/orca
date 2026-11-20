@@ -1,6 +1,6 @@
 // Item changes in a bot chat: the shared status row for every change, item names as chips that open
 // the item in the Items tab (a one-item line opens it from anywhere on the line); the owner's comment
-// is their own message, headed by the item's chip. A run of the owner's quick changes to one item
+// is their own message, the item's chip just above it. A run of the owner's quick changes to one item
 // folds into one row that opens into each change; a long line clamps to two lines and opens whole,
 // and a bulk line shows a few chips then "+N more".
 import { useEffect, useRef, useState } from 'react'
@@ -49,7 +49,13 @@ function ChipPreview({ item }: { item: BotItemNoteItem }): React.JSX.Element {
   )
 }
 
-function ItemChip({ item }: { item: BotItemNoteItem }): React.JSX.Element {
+function ItemChip({
+  item,
+  className
+}: {
+  item: BotItemNoteItem
+  className?: string
+}): React.JSX.Element {
   const t = useTranslate()
   // The preview, and its live read, exist only while the tooltip is open.
   const [open, setOpen] = useState(false)
@@ -63,7 +69,7 @@ function ItemChip({ item }: { item: BotItemNoteItem }): React.JSX.Element {
             title: item.title,
             status: botItemStatusName(item.status, t)
           })}
-          className={NATIVE_CHAT_INLINE_CHIP}
+          className={cn(NATIVE_CHAT_INLINE_CHIP, className)}
           onClick={() => openChipItem(item.uid)}
         >
           <BotItemStatusIcon status={item.status} />
@@ -226,13 +232,15 @@ function QuietLine({
 function CommentRow({ line }: { line: BotItemNoteLine & { kind: 'comment' } }) {
   const text = stripSentImagePromptMarkers(line.text, line.images?.length ?? 0)
   return (
-    <div className="flex flex-col items-end gap-1">
+    // A second comment stands apart, so its chip reads as heading its own bubble, not the one above.
+    <div className="mt-3 flex flex-col items-end gap-1 first:mt-0">
       {line.images ? <BotItemCommentImages images={line.images} /> : null}
-      {/* The item heads the bubble, as on the phone. */}
-      <NativeChatUserBubble className="flex flex-col items-start gap-1.5">
-        <ItemChip item={line.item} />
-        {text.trim() ? <div className="whitespace-pre-wrap">{text}</div> : null}
-      </NativeChatUserBubble>
+      {/* The chip sits over the bubble, as wide as a bubble may be, so the bubble hugs its words:
+          inside, the chip's untruncated title set the bubble's width and left it half empty. */}
+      <ItemChip item={line.item} className="max-w-[80%]" />
+      {text.trim() ? (
+        <NativeChatUserBubble className="whitespace-pre-wrap">{text}</NativeChatUserBubble>
+      ) : null}
     </div>
   )
 }
