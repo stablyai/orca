@@ -27,7 +27,10 @@ import {
   setTerminalWebglAddonLoadHandlers
 } from './terminal-webgl-addon-loader'
 import { watchTerminalSymbolsFontLoad } from './terminal-symbols-font'
-import { handleTerminalWebglAtlasPage } from './terminal-webgl-atlas-memory-rebuild'
+import {
+  handleTerminalWebglAtlasPage,
+  releaseTerminalWebglAtlasWatcher
+} from './terminal-webgl-atlas-memory-rebuild'
 
 export const ENABLE_WEBGL_RENDERER = true
 let suggestedRendererType: 'dom' | undefined
@@ -122,6 +125,7 @@ export function disposeWebgl(
   if (!pane.webglAddon) {
     return
   }
+  releaseTerminalWebglAtlasWatcher(pane.terminal)
   releaseXtermWebglContext(pane.webglAddon)
   try {
     pane.webglAddon.dispose()

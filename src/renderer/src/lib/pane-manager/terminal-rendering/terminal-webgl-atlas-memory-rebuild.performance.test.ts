@@ -56,12 +56,14 @@ describe('terminal WebGL atlas-memory rebuild', () => {
       handleTerminalWebglAtlasPage({ width: 4096 }, terminal)
       await vi.advanceTimersByTimeAsync(1_000)
     }
-    expect(rebuildAll).toHaveBeenCalledTimes(6)
+    // t = 0, 10, …, 60 s.
+    expect(rebuildAll).toHaveBeenCalledTimes(7)
   })
 
-  it('ignores smaller pages and non-Mac platforms', async () => {
+  it('ignores other page sizes and non-Mac platforms', async () => {
     const mac = await loadModule('Macintosh')
     mac.handleTerminalWebglAtlasPage({ width: 2048 }, fakeTerminal())
+    mac.handleTerminalWebglAtlasPage({ width: 16384 }, fakeTerminal())
     const windows = await loadModule('Windows NT 10.0')
     windows.handleTerminalWebglAtlasPage({ width: 4096 }, fakeTerminal())
     await vi.advanceTimersByTimeAsync(60_000)

@@ -39,12 +39,19 @@ function scheduleRebuild(): void {
   }, delay)
 }
 
+/** Drops a detached terminal's output watcher so a closed pane is not kept alive. */
+export function releaseTerminalWebglAtlasWatcher(terminal: OutputSource): void {
+  outputWatchers.get(terminal)?.dispose()
+  outputWatchers.delete(terminal)
+}
+
 /** Requests one global WebGL rebuild for a large atlas page; repaints, warm-up and reveals alone never re-trigger it. */
 export function handleTerminalWebglAtlasPage(
   page: { width: number },
   terminal: OutputSource
 ): void {
-  if (!ATLAS_MEMORY_REBUILD_ENABLED || page.width < ATLAS_REBUILD_PAGE_SIZE) {
+  // Exact match: the larger oversized-glyph page comes back as soon as its glyph redraws, so a rebuild can't free it.
+  if (!ATLAS_MEMORY_REBUILD_ENABLED || page.width !== ATLAS_REBUILD_PAGE_SIZE) {
     return
   }
   rebuildRequested = true
