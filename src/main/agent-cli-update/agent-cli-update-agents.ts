@@ -97,6 +97,11 @@ const AGENT_CLI_UPDATE_DEFINITIONS: Record<AgentCliUpdateAgent, AgentCliUpdateDe
     updatesOutsideLauncher: true,
     latest: () => ({ kind: 'github', repo: 'NousResearch/hermes-agent', tagPrefix: 'v' }),
     plan: () => ({ runnable: false, command: 'hermes update' })
+  },
+  // `goose update` replaces its own binary with the stable release's.
+  goose: {
+    latest: () => ({ kind: 'github', repo: 'aaif-goose/goose', tagPrefix: 'v' }),
+    plan: selfUpdate('update')
   }
 }
 

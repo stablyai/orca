@@ -40,6 +40,8 @@ import {
   type AcpModelCatalogSessionConnection
 } from './acp-listing-session-models'
 import { AcpAgentError, AcpAgentExitedError } from '../transport/acp-errors'
+import type { AcpDialect } from '../acp-dialects/acp-dialect'
+import { acpAuthenticationRequired } from '../turns/acp-prompt-failure'
 import { AgentModelCatalogUnavailableError } from '../../native-chat/agent-model-catalog/agent-model-catalog-unavailable'
 import { usesModelSpecificAcpEfforts } from '../../../shared/agent-session/options/model-catalog/agent-model-catalog-ownership'
 
@@ -278,7 +280,7 @@ export function createAcpModelCatalogProbe(
     resolve(home, options?.workspacePath ?? '', 'recover', options?.operation).then((resolved) =>
       resolved
         .run(options?.signal, options?.operation, options?.selectedModels, options?.publish)
-        .catch(signedOutAsUnavailable(resolved.answerSignIn))
+        .catch(signedOutAsUnavailable(agentSpec.dialect, resolved.answerSignIn))
     )
   return Object.assign(probe, {
     resolve: async (...args: Parameters<typeof resolve>) => {
@@ -286,7 +288,7 @@ export function createAcpModelCatalogProbe(
       return {
         ...resolved,
         run: (...runArgs: Parameters<typeof resolved.run>) =>
-          resolved.run(...runArgs).catch(signedOutAsUnavailable(answerSignIn))
+          resolved.run(...runArgs).catch(signedOutAsUnavailable(agentSpec.dialect, answerSignIn))
       }
     }
   })
@@ -294,10 +296,16 @@ export function createAcpModelCatalogProbe(
 
 // A listing often reaches a signed-out server before any chat sends; telling the spec lets a chat
 // offer its sign-in choices without a failed send first.
-const signedOutAsUnavailable = (answerSignIn?: (signedIn: boolean) => void) => (error: unknown) => {
-  if (!(error instanceof AcpAgentError && error.code === -32000)) {
-    throw error
+const signedOutAsUnavailable =
+  (dialect: AcpDialect, answerSignIn?: (signedIn: boolean) => void) => (error: unknown) => {
+    if (
+      !(
+        error instanceof AcpAgentError &&
+        (error.code === -32000 || acpAuthenticationRequired(dialect, error))
+      )
+    ) {
+      throw error
+    }
+    answerSignIn?.(false)
+    throw new AgentModelCatalogUnavailableError({ reason: 'notSignedIn' })
   }
-  answerSignIn?.(false)
-  throw new AgentModelCatalogUnavailableError({ reason: 'notSignedIn' })
-}

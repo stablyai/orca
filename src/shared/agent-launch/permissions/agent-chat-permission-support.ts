@@ -17,8 +17,8 @@ const ACP_CHAT_PERMISSION_MODES: AgentChatPermissionModeSupport = {
   modes: ['ask', 'full-access']
 }
 
-// Kimi's own modes: Ask When Needed approves routine work and still asks before risky commands.
-const KIMI_CHAT_PERMISSION_MODES: AgentChatPermissionModeSupport = {
+// The agent's own Ask When Needed mode approves routine work and still asks before risky commands.
+const ASK_WHEN_NEEDED_CHAT_PERMISSION_MODES: AgentChatPermissionModeSupport = {
   modes: ['ask', 'auto', 'full-access']
 }
 
@@ -41,7 +41,8 @@ export const NATIVE_CHAT_AGENTS = [
   'kiro',
   'pi',
   'antigravity',
-  'hermes'
+  'hermes',
+  'goose'
 ] as const
 
 export type NativeChatAgent = (typeof NATIVE_CHAT_AGENTS)[number]
@@ -58,8 +59,9 @@ const AGENT_CHAT_PERMISSION_MODES_BY_AGENT: Record<
   omp: ACP_CHAT_PERMISSION_MODES,
   copilot: ACP_CHAT_PERMISSION_MODES,
   cursor: ACP_CHAT_PERMISSION_MODES,
-  kimi: KIMI_CHAT_PERMISSION_MODES,
+  kimi: ASK_WHEN_NEEDED_CHAT_PERMISSION_MODES,
   kiro: ACP_CHAT_PERMISSION_MODES,
+  goose: ASK_WHEN_NEEDED_CHAT_PERMISSION_MODES,
   // Pi asks no approvals, so its chats run with every tool it has, as its terminal does.
   pi: null,
   antigravity: EDIT_ACCEPTING_CHAT_PERMISSION_MODES,
