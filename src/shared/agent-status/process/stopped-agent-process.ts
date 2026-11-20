@@ -3,8 +3,12 @@ import { agentOf } from '../../agent-hook-listener/presence/hook-process-root-ev
 import { MAX_STOPPED_AGENT_KINDS } from '../../terminal/pty/lifecycle/terminal-foreground-observation'
 import { tokenizeCommandLine } from './agent-command-line-entrypoint'
 import {
+  CODEX_DROPPED_SWITCHES,
   CODEX_DROPPED_VALUE_OPTIONS,
-  CODEX_VALUE_OPTIONS
+  CODEX_PASSTHROUGH_SWITCHES,
+  CODEX_REMOTE_OPTIONS,
+  CODEX_VALUE_OPTIONS,
+  codexOptionName
 } from '../../agent-launch/catalog/codex-cli-value-options'
 import { isTuiAgent } from '../../agent-launch/catalog/tui-agent-config'
 
@@ -27,6 +31,7 @@ export function findStoppedAgents(
 }
 
 // Why local: `codex exec` is one-shot, but the shared headless table also drives Codex's TUI status recognition.
+// Why an unknown option ends the search: it may take `exec` as its value, and a missed one-shot only holds mail.
 function isCodexExec(command: string): boolean {
   const tokens = tokenizeCommandLine(command)
   const binary = tokens.findIndex((token) => /(?:^|[/\\])codex(?:\.js|\.exe)?$/i.test(token))
@@ -38,9 +43,18 @@ function isCodexExec(command: string): boolean {
     if (!token.startsWith('-')) {
       return token === 'exec' || token === 'e'
     }
-    // Why skip the value: `--profile exec` names a profile, not the subcommand.
-    if (CODEX_VALUE_OPTIONS.has(token) || CODEX_DROPPED_VALUE_OPTIONS.has(token)) {
+    const option = codexOptionName(token)
+    if (token.includes('=') || option !== token) {
+      continue
+    }
+    if (
+      CODEX_VALUE_OPTIONS.has(option) ||
+      CODEX_DROPPED_VALUE_OPTIONS.has(option) ||
+      CODEX_REMOTE_OPTIONS.has(option)
+    ) {
       index++
+    } else if (!CODEX_DROPPED_SWITCHES.has(option) && !CODEX_PASSTHROUGH_SWITCHES.has(option)) {
+      return false
     }
   }
   return false

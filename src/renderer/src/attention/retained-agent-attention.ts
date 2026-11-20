@@ -40,8 +40,8 @@ export function createRetainedAgentAttentionReceiver() {
     }
     const state = useAppStore.getState()
     if (
-      notice.worktreeId &&
-      isWorkspaceNotificationMutedBySidebarFilters(state, notice.worktreeId)
+      notice.desktopAllowed === false ||
+      (notice.worktreeId && isWorkspaceNotificationMutedBySidebarFilters(state, notice.worktreeId))
     ) {
       return
     }

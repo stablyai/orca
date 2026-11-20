@@ -192,4 +192,6 @@ export type RetainedAgentAttention = {
   body: string
   worktreeId?: string
   paneKey?: string
+  /** The host's notification settings or workspace mute silence this notice's banner and sound. */
+  desktopAllowed?: false
 }

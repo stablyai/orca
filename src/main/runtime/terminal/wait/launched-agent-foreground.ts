@@ -29,6 +29,8 @@ export type MailboxForegroundInspection = {
   foreground: MailboxForeground
   agent?: TuiAgent
   process?: MailboxAgentProcess
+  /** This host can never name an agent in front, so an agent's return can only show on screen. */
+  agentUnprovable?: boolean
 }
 
 /** Set when the read's own fresh, fenced observation named exactly the agent asked about. */
@@ -319,7 +321,11 @@ export async function readMailboxForeground(
     },
     adoptedRootPid
   )
-  return foreground === 'agent'
-    ? { foreground, agent: agent ?? expected, ...(process ? { process } : {}) }
-    : { foreground }
+  if (foreground === 'agent') {
+    return { foreground, agent: agent ?? expected, ...(process ? { process } : {}) }
+  }
+  // Windows reads and SSH relays without fenced observations cannot name an agent back.
+  const agentUnprovable =
+    host.windows || (host.remote && !controller?.supportsForegroundObservation?.(ptyId))
+  return agentUnprovable ? { foreground, agentUnprovable } : { foreground }
 }

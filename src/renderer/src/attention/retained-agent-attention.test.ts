@@ -52,3 +52,9 @@ it('keeps a catalogued host’s notices across a disconnect so its reconnect sna
   receiver.reconcile('host', notices('host', 2))
   expect(deliver).toHaveBeenCalledTimes(2)
 })
+
+it('does not alert for a notice its host muted', () => {
+  const receiver = createRetainedAgentAttentionReceiver()
+  receiver.reconcile('host', [{ ...notices('host', 1)[0], desktopAllowed: false }])
+  expect(deliver).not.toHaveBeenCalled()
+})

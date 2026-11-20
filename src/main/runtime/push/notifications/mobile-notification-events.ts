@@ -6,6 +6,7 @@ import type {
   MobilePushRegisterInput,
   MobilePushRegisterResult
 } from '../../../../shared/notifications/mobile-push-contract'
+import type { RetainedAgentAttention } from '../../../../shared/notifications/notification-settings-types'
 import type { DeliveredNotificationIdentity } from '../../../../shared/notifications/mobile-notification-identity'
 
 export type MobileNotificationDispatchEvent = {
@@ -64,4 +65,19 @@ export type OwnerNotice = {
   phone?: false
   /** False when this host's windows already show it, like an access request's toast. */
   desktop?: false
+}
+
+/** What a desktop keeps of a retained mail notice, including its host-side mute. */
+export function retainedAttention(
+  notificationId: string,
+  event: Extract<MobileNotificationDispatchEvent, { type: 'notification' }>
+): RetainedAgentAttention {
+  return {
+    notificationId,
+    title: event.title,
+    body: event.body,
+    worktreeId: event.worktreeId,
+    paneKey: event.paneKey,
+    ...(event.desktopAllowed === false ? { desktopAllowed: false as const } : {})
+  }
 }

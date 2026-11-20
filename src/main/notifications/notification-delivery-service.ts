@@ -245,6 +245,9 @@ export function createRetainedAgentAttentionReceiver(deps: {
       return
     }
     presented.set(notificationId, signature)
+    if (notice.desktopAllowed === false) {
+      return
+    }
     const session = deps.readWorkspaceSession()
     void deps.dispatch({
       source: 'agent-task-complete',

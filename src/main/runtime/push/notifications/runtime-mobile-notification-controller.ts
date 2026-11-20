@@ -21,6 +21,7 @@ import type {
   MobilePushRegistrar,
   OwnerNotice
 } from './mobile-notification-events'
+import { retainedAttention } from './mobile-notification-events'
 import { MobileNotificationReplayBuffer } from './mobile-notification-replay'
 import { notifyRuntimeListeners } from '../../events/runtime-listener-delivery'
 import { getRuntimeDesktopSurface } from '../../construction/runtime-desktop-surface'
@@ -51,19 +52,13 @@ export class RuntimeMobileNotificationController {
   ) {}
 
   getRetainedAgentAttention(): RetainedAgentAttention[] {
-    return this.replay.retainedNotifications().flatMap((event) =>
-      event.type === 'notification' && event.notificationId
-        ? [
-            {
-              notificationId: event.notificationId,
-              title: event.title,
-              body: event.body,
-              worktreeId: event.worktreeId,
-              paneKey: event.paneKey
-            }
-          ]
-        : []
-    )
+    return this.replay
+      .retainedNotifications()
+      .flatMap((event) =>
+        event.type === 'notification' && event.notificationId
+          ? [retainedAttention(event.notificationId, event)]
+          : []
+      )
   }
 
   configureDismissalStore(userDataPath: string): void {
@@ -270,13 +265,7 @@ export class RuntimeMobileNotificationController {
       return
     }
     this.dispatch({ ...event, notificationId: id })
-    this.attentionChanged?.(id, {
-      notificationId: id,
-      title: event.title,
-      body: event.body,
-      worktreeId: event.worktreeId,
-      paneKey: event.paneKey
-    })
+    this.attentionChanged?.(id, retainedAttention(id, event))
   }
 
   async dispatchPlugin(input: {

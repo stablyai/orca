@@ -26,9 +26,13 @@ it('finds every agent kind that job control stopped behind the foreground progra
 })
 
 it('an interactive Codex whose option value reads `exec` is still a stopped agent', () => {
-  expect(findStoppedAgents([shell, row(5, 5, 'T', 'codex --profile exec'), front], 7)).toEqual([
-    'codex'
-  ])
+  for (const interactive of [
+    'codex --profile exec',
+    'codex --remote-auth-token-env exec --remote ws://localhost:9999',
+    'codex --some-new-option exec'
+  ]) {
+    expect(findStoppedAgents([shell, row(5, 5, 'T', interactive), front], 7)).toEqual(['codex'])
+  }
 })
 
 it('a running, exited or non-agent process is not a stopped agent', () => {

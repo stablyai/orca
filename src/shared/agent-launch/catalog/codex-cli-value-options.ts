@@ -23,3 +23,43 @@ export const CODEX_DROPPED_VALUE_OPTIONS: ReadonlySet<string> = new Set([
   '-i',
   '--image'
 ])
+
+/** Remote options, which take a value. */
+export const CODEX_REMOTE_OPTIONS: ReadonlySet<string> = new Set([
+  '--remote',
+  '--remote-auth-token-env'
+])
+
+/** Switches a structured launch drops; they take no value. */
+export const CODEX_DROPPED_SWITCHES: ReadonlySet<string> = new Set([
+  '--dangerously-bypass-approvals-and-sandbox',
+  '--yolo',
+  '--approve-for-me',
+  '--not-so-yolo',
+  '--dangerously-bypass-hook-trust',
+  '--worktree',
+  '--strict-config',
+  '--help',
+  '-h',
+  '--version',
+  '-V'
+])
+
+/** Switches a structured launch keeps; they take no value. */
+export const CODEX_PASSTHROUGH_SWITCHES: ReadonlySet<string> = new Set([
+  '--search',
+  '--oss',
+  '--no-alt-screen',
+  '--no-daemon'
+])
+
+/** The option a token names: `--name=value` and attached short values (`-mo3`) name their option. */
+export function codexOptionName(token: string): string {
+  if (token.startsWith('--')) {
+    return token.split('=', 1)[0]
+  }
+  if (/^-[acmspiC].+/.test(token)) {
+    return token.slice(0, 2)
+  }
+  return token
+}

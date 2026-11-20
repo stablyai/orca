@@ -15,24 +15,8 @@ afterEach(() => {
   }
 })
 
-/** Run rows handed back to JavaScript, which is what a pane's growing Run history would cost. */
-function countRunRows(db: OrchestrationDb): () => number {
-  const bound = vi.spyOn(db, 'runsBoundToPane')
-  const withWork = vi.spyOn(db, 'runMailboxesWithPointerWorkForPane')
-  const current = vi.spyOn(db, 'getCurrentRunForPane')
-  const sum = (lengths: number[]): number => lengths.reduce((total, length) => total + length, 0)
-  return () =>
-    sum(
-      bound.mock.results.map((result) => (Array.isArray(result.value) ? result.value.length : 0))
-    ) +
-    sum(
-      withWork.mock.results.map((result) => (Array.isArray(result.value) ? result.value.length : 0))
-    ) +
-    current.mock.results.filter((result) => result.value !== undefined).length
-}
-
 it.each([10, 100])(
-  "a coordinator's empty Run history (%i Runs) adds no rows to finding which of its mailboxes owe mail",
+  "held-mail retries over a coordinator's empty Run history (%i Runs) ask the Run index once until mail changes",
   (emptyRuns) => {
     const db = createDatabase('run-history-cost')
     databases.push(db)
@@ -41,13 +25,20 @@ it.each([10, 100])(
       coordinatorHandle: TERMINAL_HANDLE,
       coordinatorPaneKey: PANE_KEY
     })
-    db.insertMessage({
-      from: 'term_worker',
-      to: `run:${owed.id}`,
-      subject: 'held',
-      type: 'status',
-      runId: owed.id,
-      deliveryContract: 'current_delivery'
+    const mail = (runId: string) =>
+      db.insertMessage({
+        from: 'term_worker',
+        to: `run:${runId}`,
+        subject: 'held',
+        type: 'status',
+        runId,
+        deliveryContract: 'current_delivery'
+      })
+    mail(owed.id)
+    const later = db.createRun({
+      objective: 'later',
+      coordinatorHandle: 'term_later',
+      coordinatorPaneKey: PANE_KEY
     })
     for (let index = 0; index < emptyRuns; index++) {
       // Earlier coordinators of this pane leave their Runs bound to it.
@@ -57,7 +48,6 @@ it.each([10, 100])(
         coordinatorPaneKey: PANE_KEY
       })
     }
-    expect(db.runsBoundToPane(PANE_KEY).length).toBeGreaterThanOrEqual(emptyRuns)
     const owner = new OrchestrationMailboxOwner({
       getDb: () => db,
       getTerminal: () => null,
@@ -65,18 +55,21 @@ it.each([10, 100])(
       onRoutedMessageTypes: () => {},
       onForeignMailboxRouted: () => {}
     })
-    const runRows = countRunRows(db)
-    const mailboxes = owner.resolveAll(
-      {
-        ptyId: PTY_ID,
-        handle: TERMINAL_HANDLE,
-        paneKeys: [PANE_KEY],
-        lastAgentStatus: 'idle',
-        lastAgentStatusObservedLive: true
-      },
-      { routeDirectMail: false }
-    )
-    expect(mailboxes).toContain(`run:${owed.id}`)
-    expect(runRows()).toBeLessThanOrEqual(2)
+    const terminal = {
+      ptyId: PTY_ID,
+      handle: TERMINAL_HANDLE,
+      paneKeys: [PANE_KEY],
+      lastAgentStatus: 'idle' as const,
+      lastAgentStatusObservedLive: true
+    }
+    const historyQueries = vi.spyOn(db, 'runMailboxesWithPointerWorkForPane')
+    for (let retry = 0; retry < 12; retry++) {
+      expect(owner.resolveAll(terminal, { routeDirectMail: false })).toContain(`run:${owed.id}`)
+    }
+    expect(historyQueries).toHaveBeenCalledTimes(1)
+
+    mail(later.id)
+    expect(owner.resolveAll(terminal, { routeDirectMail: false })).toContain(`run:${later.id}`)
+    expect(historyQueries).toHaveBeenCalledTimes(2)
   }
 )

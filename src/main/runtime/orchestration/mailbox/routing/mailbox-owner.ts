@@ -1,6 +1,7 @@
 import { isEquivalentPaneKey } from '../../db/pane-key-match'
 import type { AgentStatus } from '../../../../../shared/agent-status/title/agent-title-core'
 import type { OrchestrationDb } from '../../db/orchestration-db'
+import { PaneRunMailCache } from './pane-run-mail-cache'
 
 /** A live terminal mail pointers are typed into, keyed by its PTY rather than any window pane. */
 export type OrchestrationMailboxTerminal = {
@@ -47,6 +48,7 @@ type OrchestrationMailboxOwnerDependencies = {
 export class OrchestrationMailboxOwner {
   private readonly pendingDirectReconciliations = new Set<string>()
   private readonly pendingDetachedDirectReconciliations = new Set<string>()
+  private readonly paneRunMail = new PaneRunMailCache()
 
   constructor(private readonly deps: OrchestrationMailboxOwnerDependencies) {}
 
@@ -124,11 +126,8 @@ export class OrchestrationMailboxOwner {
       return []
     }
     const db = this.deps.getDb()
-    // Why only Runs with work: a coordinator's finished Runs pile up, and each held-mail probe asks this.
     const withMail = db
-      ? terminal.paneKeys.flatMap(
-          (paneKey) => db.runMailboxesWithPointerWorkForPane?.(paneKey) ?? []
-        )
+      ? terminal.paneKeys.flatMap((paneKey) => this.paneRunMail.read(db, paneKey))
       : []
     return [mailboxHandle, ...new Set(withMail.filter((handle) => handle !== mailboxHandle))]
   }

@@ -22,6 +22,7 @@ export type OrchestrationMailboxForegroundObservation = {
   generation: number
   contradiction: number
   process?: MailboxAgentProcess
+  agentUnprovable?: boolean
 }
 
 export type OrchestrationMailboxForegroundProbe = OrchestrationMailboxForegroundObservation & {
@@ -125,6 +126,9 @@ export class MailboxForegroundEvidence {
       }
       observation.held = false
       observation.agentProcess = proof.process ?? known
+    } else if (foreground === 'unknown' && proof.agentUnprovable) {
+      // Why: a host that can never name the agent back hands the hold to the screen check completeDelivery awaits.
+      observation.held = false
     }
     if (wasHeld && !observation.held) {
       this.onRecovery(ptyId)

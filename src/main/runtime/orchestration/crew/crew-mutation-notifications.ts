@@ -5,6 +5,8 @@ type CrewMutationPrototype = Partial<OrchestrationDb>
 type CrewMutationInvocation = (this: OrchestrationDb, ...args: unknown[]) => unknown
 
 const mutations = [
+  // Why: a failed delivery makes mail owed again without new mail, and cached owed-mailbox reads must hear it.
+  'markAsUndelivered',
   'createRemoteDispatchAttachment',
   'prepareRemoteAttachmentAuthority',
   'markRemoteAttachmentReady',
@@ -62,6 +64,7 @@ const mutations = [
 ] as const satisfies readonly (keyof OrchestrationDb)[]
 
 const trafficMutations: ReadonlySet<keyof OrchestrationDb> = new Set([
+  'markAsUndelivered',
   'routeDirectMessagePage',
   'routeUnreadDispatchMailboxToRunMailbox',
   'routeForeignDirectMessagesToOwnedMailboxes',

@@ -28,3 +28,14 @@ it('dismissing a mail notice stops it replaying until its mail changes', () => {
   )
   expect(controller.getRetainedAgentAttention().map((n) => n.notificationId)).toEqual([id])
 })
+
+it('a muted mail notice stays muted in the live change and the reconnect snapshot', () => {
+  const attention = vi.fn()
+  const controller = new RuntimeMobileNotificationController(attention)
+  const id = 'orchestration-mail:pty-1'
+  controller.reconcileMailboxAttention(id, { ...notice('Ask Claude.'), desktopAllowed: false })
+  expect(attention).toHaveBeenLastCalledWith(id, expect.objectContaining({ desktopAllowed: false }))
+  expect(controller.getRetainedAgentAttention()).toEqual([
+    expect.objectContaining({ notificationId: id, desktopAllowed: false })
+  ])
+})
