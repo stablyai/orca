@@ -111,7 +111,7 @@ export const CONNECTOR_ACT_METHOD = defineMethod({
     if (!cloud || !features) {
       throw new ConnectorActError(
         'connector_not_connected',
-        "Orca isn't connected to Orca Cloud: sign in to Orca and connect a bot to Slack, Linear or GitHub, then try again."
+        "Orca isn't connected to Orca Cloud: sign in to Orca on this computer and connect a bot to Slack, Linear or GitHub, then try again. On a server with no Orca window, `orca auth login` there signs it in."
       )
     }
     if (!features.has('actions' satisfies ConnectorCloudFeature)) {
