@@ -40,11 +40,11 @@ async function listAccountHistories(accountsRoot: string): Promise<string[]> {
   const paths: string[] = []
   for (const account of accounts.filter((entry) => entry.isDirectory())) {
     const historyPath = join(accountsRoot, account.name, 'home', 'history.jsonl')
-    // Followed through a link, as Codex reads it. Only an absent file (or no home folder) means no
-    // history; any other error retries rather than skip an account.
+    // Followed through a link, as Codex reads it. Only an absent file, no home folder or a link loop
+    // means no history; any other error retries rather than skip an account.
     const stats = await stat(historyPath).catch((error: unknown) => {
       const code = errnoCodeOrUnknown(error)
-      if (code === 'ENOENT' || code === 'ENOTDIR') {
+      if (code === 'ENOENT' || code === 'ENOTDIR' || code === 'ELOOP') {
         return null
       }
       throw error

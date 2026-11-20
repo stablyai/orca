@@ -7,6 +7,7 @@ import {
   mkdirSync,
   readlinkSync,
   readFileSync,
+  rmSync,
   symlinkSync,
   writeFileSync
 } from 'node:fs'
@@ -319,7 +320,7 @@ describe('CodexRuntimeHomeService', () => {
     }
   )
 
-  it('imports history even when a session copy fails', async () => {
+  it('imports history and marks the migration done when a session copy fails, then retries the sessions', async () => {
     const managedHomePath = writeHistory('account-1', '{"id":"a-1"}\n')
     blockSessionCopies(managedHomePath)
 
@@ -329,7 +330,34 @@ describe('CodexRuntimeHomeService', () => {
     expect(readFileSync(join(getRuntimeCodexHomePath(), 'history.jsonl'), 'utf-8')).toBe(
       '{"id":"a-1"}\n'
     )
-    expect(existsSync(migrationMarkerPath())).toBe(false)
+    // The uncopied session stays in the account home, which every build's removal keeps.
+    expect(existsSync(migrationMarkerPath())).toBe(true)
+    expect(readFileSync(historyStatePath(), 'utf-8')).toContain('"sessionsPending":true')
+
+    rmSync(join(getRuntimeCodexHomePath(), 'sessions', 'nested'))
+    vi.resetModules()
+    await constructService()
+
+    expect(
+      readFileSync(join(getRuntimeCodexHomePath(), 'sessions', 'nested', 'rollout.jsonl'), 'utf-8')
+    ).toBe('{}')
+    expect(readFileSync(historyStatePath(), 'utf-8')).toContain('"sessionsPending":false')
+  })
+
+  it('migrates owned accounts past a folder it does not own whose history is a link loop', async () => {
+    const managedHomePath = writeHistory('account-1', '{"id":"a-1"}\n')
+    mkdirSync(join(managedHomePath, 'sessions'), { recursive: true })
+    writeFileSync(join(managedHomePath, 'sessions', 'rollout.jsonl'), '{}', 'utf-8')
+    const orphanHome = join(testState.userDataDir, 'codex-accounts', 'orphan', 'home')
+    mkdirSync(orphanHome, { recursive: true })
+    symlinkSync('history.jsonl', join(orphanHome, 'history.jsonl'))
+
+    await startService()
+
+    expect(
+      readFileSync(join(getRuntimeCodexHomePath(), 'sessions', 'rollout.jsonl'), 'utf-8')
+    ).toBe('{}')
+    expect(existsSync(migrationMarkerPath())).toBe(true)
   })
 
   it('leaves a shared history Codex creates during the import as it is', async () => {

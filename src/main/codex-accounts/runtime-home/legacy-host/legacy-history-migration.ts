@@ -14,6 +14,8 @@ export const HISTORY_IMPORT_RETRY_INTERVAL_MS = 24 * 60 * 60 * 1000
 export type LegacyHistoryState = {
   /** Accounts whose history has its copy, so a retry doesn't copy them again. */
   preservedAccounts?: string[]
+  /** A session copy failed; later launches run the session pass again. */
+  sessionsPending?: boolean
   /** The shared history was created, or already existed, so nothing is owed. */
   historyImportSettled?: boolean
   historyImportAttempts?: number
@@ -39,6 +41,9 @@ export function parseLegacyHistoryState(text: string): LegacyHistoryState {
     state.preservedAccounts = parsed.preservedAccounts.filter(
       (accountId): accountId is string => typeof accountId === 'string'
     )
+  }
+  if ('sessionsPending' in parsed && parsed.sessionsPending === true) {
+    state.sessionsPending = true
   }
   if ('historyImportSettled' in parsed && parsed.historyImportSettled === true) {
     state.historyImportSettled = true

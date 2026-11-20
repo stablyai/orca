@@ -84,7 +84,14 @@ describe('CodexManagedHomeLifecycle.safeRemove', () => {
 
     await f.lifecycle.safeRemove(f.home, 'a')
 
-    expect(readdirSync(f.home).sort()).toEqual(['..backup', 'bridge', 'history.jsonl', 'middle'])
+    expect(readdirSync(f.home).sort()).toEqual([
+      '..backup',
+      'bridge',
+      'history.jsonl',
+      'middle',
+      'secrets'
+    ])
+    expect(readdirSync(join(f.home, 'secrets'))).toEqual([])
     expect(readFileSync(join(f.home, 'history.jsonl'), 'utf8')).toBe('{"text":"only prompt"}\n')
   })
 
@@ -99,6 +106,20 @@ describe('CodexManagedHomeLifecycle.safeRemove', () => {
     await f.lifecycle.safeRemove(f.home, 'a')
 
     expect(readdirSync(f.home).sort()).toEqual(['PROMPTS.saved', 'history.jsonl'])
+  })
+
+  it('keeps a linked prompt history that lives beside the logins it removes', async () => {
+    const f = fixture()
+    mkdirSync(join(f.home, 'secrets'))
+    writeFileSync(join(f.home, 'secrets', 'prompts.jsonl'), '{"text":"only prompt"}\n')
+    writeFileSync(join(f.home, 'secrets', 'mcp_oauth.age'), 'sealed')
+    symlinkSync(join('secrets', 'prompts.jsonl'), join(f.home, 'history.jsonl'))
+    writeFileSync(join(f.home, 'config.toml'), '[mcp_servers.x.http_headers]\n')
+
+    await f.lifecycle.safeRemove(f.home, 'a')
+
+    expect(readdirSync(f.home).sort()).toEqual(['history.jsonl', 'secrets'])
+    expect(readdirSync(join(f.home, 'secrets'))).toEqual(['prompts.jsonl'])
   })
 
   it('removes a home that never shared history entirely', async () => {

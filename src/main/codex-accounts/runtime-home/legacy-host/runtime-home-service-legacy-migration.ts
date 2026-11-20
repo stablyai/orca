@@ -10,7 +10,7 @@ import {
   realpathSync,
   statSync
 } from 'node:fs'
-import { dirname, extname, join, parse, relative } from 'node:path'
+import { basename, dirname, extname, join, relative } from 'node:path'
 import { writeFileAtomically } from '../../../filesystem/atomic-file-publication'
 import { errnoCodeOrUnknown } from '../../../../shared/errors/errno-code'
 import { migrateLegacySharedAuthToPerAccountHome } from './legacy-shared-auth-migration'
@@ -22,6 +22,8 @@ import {
   settleLegacyHistoryImport,
   type LegacyHistoryState
 } from './legacy-history-migration'
+
+type LegacyMigrationMarker = { completedAt: number; migratedHomeCount: number }
 
 export abstract class CodexRuntimeHomeLegacyMigration extends CodexRuntimeHomePaths {
   protected safeMigrateLegacySharedAuth(): void {
@@ -71,8 +73,14 @@ export abstract class CodexRuntimeHomeLegacyMigration extends CodexRuntimeHomePa
       return
     }
     try {
-      if (!migrated) {
-        this.migrateLegacyManagedState(historyStatePath)
+      let state: LegacyHistoryState = {}
+      try {
+        state = parseLegacyHistoryState(readFileSync(historyStatePath, 'utf-8'))
+      } catch {
+        // Absent or unreadable: copies already made are found again as identical files.
+      }
+      if (!migrated || state.sessionsPending) {
+        this.migrateLegacyManagedState(historyStatePath, state, migrated)
       }
     } finally {
       // Independent of the session copies, so one that fails can't hold the import back.
@@ -87,72 +95,76 @@ export abstract class CodexRuntimeHomeLegacyMigration extends CodexRuntimeHomePa
   /**
    * One synchronous step at startup, before anything can remove or share an account: every account
    * history gets its copy, then the sessions are copied, then the marker older builds read is
-   * written. No quit lands between them, so an older build never sees copied sessions without the
-   * marker (it would rerun its overwriting migration), nor the marker while an account history has
-   * no copy (its account removal would take the only one). A failure throws before the marker, and
-   * the step retries next launch.
+   * written. No quit lands between them. An older build never sees the marker while an account
+   * history has no copy (its account removal would take the only one), and never sees copied
+   * sessions without it (it would rerun its overwriting migration). A session that fails to copy
+   * stays in its account home, which every build's removal keeps, and is retried on later launches.
    */
-  protected migrateLegacyManagedState(historyStatePath: string): void {
-    let state: LegacyHistoryState = {}
-    try {
-      state = parseLegacyHistoryState(readFileSync(historyStatePath, 'utf-8'))
-    } catch {
-      // Absent or unreadable: copies already made are found again as identical files.
-    }
-    const preserved = new Set(state.preservedAccounts)
-    this.preserveLegacyHistories(preserved, (accountId) => {
-      preserved.add(accountId)
-      state = { ...state, preservedAccounts: [...preserved] }
-      this.writeMigrationRecord(historyStatePath, state)
-    })
-    // Present from here on: later launches owe the import until it settles.
-    this.writeMigrationRecord(historyStatePath, state)
-
+  protected migrateLegacyManagedState(
+    historyStatePath: string,
+    state: LegacyHistoryState,
+    migrated: boolean
+  ): void {
     const managedHomes = this.getLegacyManagedHomes()
+    if (!migrated) {
+      const preserved = new Set(state.preservedAccounts)
+      this.preserveLegacyHistories(managedHomes, preserved, (accountId) => {
+        preserved.add(accountId)
+        state = { ...state, preservedAccounts: [...preserved] }
+        this.writeMigrationRecord(historyStatePath, state)
+      })
+    }
+    let sessionsPending = false
     for (const managedHomePath of managedHomes) {
-      const accountId = parse(relative(this.getManagedAccountsRoot(), managedHomePath)).dir.split(
-        /[\\/]/
-      )[0]
-      if (accountId) {
-        this.migrateLegacySessions(managedHomePath, accountId)
+      try {
+        this.migrateLegacySessions(managedHomePath, basename(dirname(managedHomePath)))
+      } catch (error) {
+        sessionsPending = true
+        console.warn('[codex-runtime-home] Failed to migrate legacy Codex sessions:', error)
       }
     }
+    // Present from here on: later launches owe the import until it settles.
+    this.writeMigrationRecord(historyStatePath, { ...state, sessionsPending })
     this.writeMigrationRecord(this.getMigrationMarkerPath(), {
       completedAt: Date.now(),
       migratedHomeCount: managedHomes.length
     })
   }
 
-  // Each account's own history, copied into the runtime home, where no Orca path deletes it.
+  // Each account's own history, copied into the runtime home, where no Orca path deletes it. A
+  // folder Orca doesn't own can't be removed through Orca, so one that fails is skipped.
   protected preserveLegacyHistories(
+    managedHomes: readonly string[],
     alreadyPreserved: ReadonlySet<string>,
     recordPreserved: (accountId: string) => void
   ): void {
-    const accountIds = this.listLegacyAccountIds()
-    if (accountIds.length === 0) {
-      return
-    }
+    const managedAccounts = new Set(managedHomes.map((home) => basename(dirname(home))))
     const runtimeHistoryPath = join(this.getRuntimeHomePath(), 'history.jsonl')
     mkdirSync(this.getRuntimeHomePath(), { recursive: true })
     // An account history that is the shared history itself needs no copy; one it links to does.
     const sharedHistory = this.legacyHistorySource(runtimeHistoryPath, { followLink: false })
     const copiedSources = new Set<string>()
-    for (const accountId of accountIds) {
+    for (const accountId of this.listLegacyAccountIds()) {
       if (alreadyPreserved.has(accountId)) {
         continue
       }
-      const historyPath = join(this.getManagedAccountsRoot(), accountId, 'home', 'history.jsonl')
-      const source = this.legacyHistorySource(historyPath, { followLink: true })
-      if (!source) {
-        continue
+      try {
+        const historyPath = join(this.getManagedAccountsRoot(), accountId, 'home', 'history.jsonl')
+        const source = this.legacyHistorySource(historyPath, { followLink: true })
+        if (!source) {
+          continue
+        }
+        if (source !== sharedHistory && !copiedSources.has(source)) {
+          this.copyLegacyFilePreservingConflicts(source, runtimeHistoryPath, accountId, true)
+          copiedSources.add(source)
+        }
+        recordPreserved(accountId)
+      } catch (error) {
+        if (managedAccounts.has(accountId)) {
+          throw error
+        }
+        console.warn('[codex-runtime-home] Skipped an unowned legacy Codex history:', error)
       }
-      if (source !== sharedHistory && !copiedSources.has(source)) {
-        this.copyLegacyFilePreservingConflicts(source, runtimeHistoryPath, accountId, {
-          preservedNameOnly: true
-        })
-        copiedSources.add(source)
-      }
-      recordPreserved(accountId)
     }
   }
 
@@ -182,14 +194,18 @@ export abstract class CodexRuntimeHomeLegacyMigration extends CodexRuntimeHomePa
       return statSync(source).isFile() ? source : null
     } catch (error) {
       const code = errnoCodeOrUnknown(error)
-      if (code === 'ENOENT' || code === 'ENOTDIR') {
+      // A link loop holds no history either.
+      if (code === 'ENOENT' || code === 'ENOTDIR' || code === 'ELOOP') {
         return null
       }
       throw error
     }
   }
 
-  protected writeMigrationRecord(path: string, record: object): void {
+  protected writeMigrationRecord(
+    path: string,
+    record: LegacyHistoryState | LegacyMigrationMarker
+  ): void {
     writeFileAtomically(path, `${JSON.stringify(record)}\n`)
   }
 
@@ -236,12 +252,12 @@ export abstract class CodexRuntimeHomeLegacyMigration extends CodexRuntimeHomePa
     legacyFilePath: string,
     targetPath: string,
     accountId: string,
-    options: { preservedNameOnly?: boolean } = {}
+    preservedNameOnly = false
   ): { path: string; preserved: boolean } {
     let legacyContents: Buffer | null = null
     const readLegacy = (): Buffer => (legacyContents ??= readFileSync(legacyFilePath))
     if (
-      !options.preservedNameOnly &&
+      !preservedNameOnly &&
       this.copyLegacyFileWithoutOverwrite(legacyFilePath, targetPath, readLegacy) !== 'conflict'
     ) {
       return { path: targetPath, preserved: false }

@@ -23,6 +23,10 @@ import {
 } from '../../codex/history/shared-store/codex-account-history-cleanup-manifest'
 import { ManagedCodexHomeTemporarilyUnavailableError } from './host-codex-managed-home-ownership'
 import type { CodexManagedHomePath } from './codex-managed-home-path'
+import {
+  LINKED_HISTORY_REMOVAL_SCRIPT,
+  removeLoginsBesideLinkedHistory
+} from './linked-history-login-removal'
 
 const WSL_MANAGED_HOME_TIMEOUT_MS = 5_000
 
@@ -40,19 +44,11 @@ const KEPT_HISTORY = [
   HISTORY_CLEANUP_MANIFEST,
   PRE_SHARE_DATABASES_DIR
 ]
-// The sign-in and MCP logins, in files or Codex's encrypted store: all that removal deletes from a
-// home whose history.jsonl is a link, since what the link reaches inside the home can't be told
-// apart from private state by name.
-const LOGIN_ENTRIES = ['auth.json', '.credentials.json', 'secrets']
 const KEEP_ON_REMOVAL_SCRIPT = [
   'set -u',
   'home=$1',
-  'linked_history=0',
-  'if [ -L "$home/history.jsonl" ]; then linked_history=1; fi',
+  ...LINKED_HISTORY_REMOVAL_SCRIPT,
   'kept() {',
-  '  if [ "$linked_history" = 1 ]; then',
-  `    case "\${1##*/}" in ${LOGIN_ENTRIES.join(' | ')}) return 1 ;; *) return 0 ;; esac`,
-  '  fi',
   '  case "${1##*/}" in',
   '    *.orca-profile-merge) return 0 ;;',
   `    ${KEPT_HISTORY.join(' | ')}) return 0 ;;`,
@@ -82,11 +78,12 @@ const KEEP_ON_REMOVAL_SCRIPT = [
 async function removeManagedHomeKeepingSharedHistory(home: string): Promise<boolean> {
   const entries = await readdir(home, { withFileTypes: true })
   const sharedOnce = entries.some((entry) => entry.name === HISTORY_CLEANUP_MANIFEST)
-  const linkedHistory = entries.some(
-    (entry) => entry.name === 'history.jsonl' && entry.isSymbolicLink()
-  )
+  if (entries.some((entry) => entry.name === 'history.jsonl' && entry.isSymbolicLink())) {
+    await removeLoginsBesideLinkedHistory(home)
+    return true
+  }
   const kept = (entry: Dirent): boolean =>
-    (linkedHistory ? !LOGIN_ENTRIES.includes(entry.name) : KEPT_HISTORY.includes(entry.name)) ||
+    KEPT_HISTORY.includes(entry.name) ||
     entry.name.endsWith(MERGE_PENDING_SUFFIX) ||
     (sharedOnce && entry.isFile() && CODEX_DATABASE_FILE.test(entry.name))
   for (const entry of entries.filter((candidate) => !kept(candidate))) {
