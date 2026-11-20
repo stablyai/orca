@@ -233,22 +233,16 @@ export function BotItemBody({
     [fileContext?.fileLinkContext, runtimeContext]
   )
   // `waitingLine`: the question the comment box names, until a reply is on its way.
-  const { steps, sent, quick, waitingLine } = useBotItemQuestionSteps(
-    bot,
-    item,
-    view.events,
-    sendLatest,
-    pending.shown
-  )
+  const {
+    steps,
+    sent,
+    quick,
+    comment: commentFromBox,
+    waitingLine
+  } = useBotItemQuestionSteps(bot, item, view.events, sendLatest, pending.shown)
   // The box's Enter, "Replying to" a line of several questions, answers that line like a quick reply.
-  const sendFromBox = (text: string, paths: readonly string[]): void => {
-    const line = steps ? `${steps.askId}:${steps.current}` : null
-    if (steps && line && paths.length === 0 && comment.current?.replyingTo() === line) {
-      steps.answer(steps.current, text)
-      return
-    }
-    sendComment(text, paths)
-  }
+  const sendFromBox = (text: string, paths: readonly string[]): void =>
+    commentFromBox(text, paths, comment.current?.replyingTo() ?? null)
   const quickReplies = useMemo(
     () =>
       deleted

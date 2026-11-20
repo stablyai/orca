@@ -29322,6 +29322,7 @@
       },
       "ask": {
         "next": "Next question",
+        "notSentYet": "not sent yet",
         "previous": "Previous question",
         "recommended": "Recommended",
         "step": "{{n}} of {{total}}",
