@@ -215,7 +215,10 @@ export class LegacyJournalRetirementReporter {
     // Marked reported only once the usage client took it, so a dropped event is sent again later.
     if (signature !== this.last && (await sendLegacyJournalRetirement(event))) {
       this.last = signature
-      await this.writer.maintain({ kind: 'legacy-retirement-reported', value: signature })
+      // A failed note only means the next launch sends it again; it never fails the cleanup.
+      await this.writer
+        .maintain({ kind: 'legacy-retirement-reported', value: signature })
+        .catch(() => {})
     }
   }
 }

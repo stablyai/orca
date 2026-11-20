@@ -271,3 +271,21 @@ it('sends an outcome the usage client dropped again on a later launch, then neve
   await held.launch('1.0.1', true, undefined, undefined, legacyJournalRetirementMode).run()
   expect(sent).toEqual(['proof_complete', 'proof_complete'])
 })
+
+it('reports the leftover table an older build left behind, even when it is empty', async () => {
+  const events: { outcome: string; reason: string; artifact: string }[] = []
+  setLegacyJournalRetirementHost({
+    report: async (event) => events.push(event) > 0,
+    mode: async () => ({ mode: 'report', revision: 0 })
+  })
+  cleanup.push(() => setLegacyJournalRetirementHost(undefined))
+  vi.spyOn(console, 'warn').mockImplementation(() => {})
+  const paused = await profile({
+    seed: (legacy) => legacy.exec('CREATE TABLE queued_message_pauses (session_id TEXT)')
+  })
+  await paused.launch('1.0.1', true, undefined, undefined, legacyJournalRetirementMode).run()
+  expect(companions(paused.filename)).toContain(paused.filename)
+  expect(events).toMatchObject([
+    { outcome: 'refused', reason: 'source-inventory', artifact: 'pause_table' }
+  ])
+})

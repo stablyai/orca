@@ -127,7 +127,13 @@ export async function profile(
         if (!(error instanceof JournalLegacyRetentionError)) {
           throw error
         }
-        return { next: null, sessions: [], retained: error.message, reason: error.reason }
+        return {
+          next: null,
+          sessions: [],
+          retained: error.message,
+          reason: error.reason,
+          artifact: error.artifact
+        }
       }
     },
     importState: async (id) => journalDomainImportState(db, id),

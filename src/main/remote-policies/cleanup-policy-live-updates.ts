@@ -3,7 +3,10 @@ import { startCodexHistoryCleanupPolicyLiveUpdates } from '../codex/history/clea
 import { startJournalRetirementPolicyLiveUpdates } from '../native-chat/journal-retirement-policy/journal-retirement-policy-live-update'
 
 /** The remote policies that stage deleting local files: Codex history and the old chat journal. */
-export function startCleanupPolicyLiveUpdates(store: Store): void {
+export function startCleanupPolicyLiveUpdates(store: Store, serve: boolean): void {
   startCodexHistoryCleanupPolicyLiveUpdates(store)
-  startJournalRetirementPolicyLiveUpdates(store)
+  // Only the desktop app may remove the old chat journal, so headless serve never needs its policy.
+  if (!serve) {
+    startJournalRetirementPolicyLiveUpdates(store)
+  }
 }

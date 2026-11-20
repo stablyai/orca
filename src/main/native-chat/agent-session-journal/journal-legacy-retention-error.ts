@@ -58,7 +58,9 @@ export function legacyInventoryRefusal(
   extraColumns: readonly string[]
 ): JournalLegacyRetentionError {
   return new JournalLegacyRetentionError(
-    'legacy source has unaccounted columns',
+    extraColumns.length > 0
+      ? 'legacy source has unaccounted columns'
+      : 'legacy source has an unknown table',
     'source-inventory',
     legacySourceArtifact(table, extraColumns)
   )

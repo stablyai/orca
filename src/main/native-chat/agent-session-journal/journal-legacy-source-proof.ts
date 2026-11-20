@@ -141,10 +141,8 @@ function readSourcePage(
         throw legacyRecoveryRefusal(table)
       }
       if (!RECOVERY_TABLES.includes(table)) {
-        throw new JournalLegacyRetentionError(
-          'legacy source has an unknown table',
-          'source-inventory'
-        )
+        // Empty too: an older build's table left behind still marks which builds wrote this file.
+        throw legacyInventoryRefusal(table, [])
       }
     }
   }

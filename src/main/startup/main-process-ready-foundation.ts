@@ -207,7 +207,9 @@ export async function initializeReadyFoundation(): Promise<void> {
   if (!state.isServeMode) {
     void state.initialProxyApplicationReady.then(startWslHostsPolicyLiveUpdates)
   }
-  void state.initialProxyApplicationReady.then(() => startCleanupPolicyLiveUpdates(store))
+  void state.initialProxyApplicationReady.then(() =>
+    startCleanupPolicyLiveUpdates(store, state.isServeMode)
+  )
   // Wait for profile-sidecar location, then defer potentially blocking OS-keyring probes past first paint (STA-5765).
   scheduleSecretProtectionGapReport({
     dataFile: profile.dataFile,
