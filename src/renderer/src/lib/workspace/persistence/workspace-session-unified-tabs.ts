@@ -2,10 +2,8 @@ import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import { editorPlacementIndex } from '@/store/slices/editor/tabs/workspace-editor-files'
 import { getOpenFileExecutionHostId } from '@/lib/workspace/ownership/unified-tab-host-ownership'
 import { isEditorTabContentType } from '@/store/slices/editor/tabs/editor-tab-content-type'
-import {
-  structuredLaunchSlotIds,
-  structuredLaunchSlotSignatures
-} from '../../agent-session/launch/structured-agent-session-launch-persistence'
+import { structuredLaunchSlotIds } from '../../agent-session/launch/structured-agent-session-launch-persistence'
+import { launchSlotsForUnifiedBuild } from './workspace-session-launch-slots'
 import type {
   Tab,
   TabGroup,
@@ -98,12 +96,20 @@ export type UnifiedTabSessionCache = {
    *  slots it read. A build of some workspaces alone is only valid while both still hold. */
   placementTargets: ReadonlySet<string> | null
   slots: ReadonlyMap<string, string> | null
+  /** Launch slots read during the save in progress (see launchSlotsForSave). */
+  saveSlots: ReadonlyMap<string, string> | null
   /** The open files those placements were read from. */
   placementFiles: readonly OpenFile[] | undefined | null
 }
 
 export function createUnifiedTabSessionCache(): UnifiedTabSessionCache {
-  return { sessions: new WeakMap(), placementTargets: null, slots: null, placementFiles: null }
+  return {
+    sessions: new WeakMap(),
+    placementTargets: null,
+    slots: null,
+    saveSlots: null,
+    placementFiles: null
+  }
 }
 
 function buildWorktreeTabSession(
@@ -199,25 +205,22 @@ export function buildUnifiedTabSessionData(
   sourceTabs = snapshot.unifiedTabsByWorktree,
   sourceGroups = snapshot.groupsByWorktree,
   cache?: UnifiedTabSessionCache,
-  /** A keyed save: only these workspaces, with the launch slots it already read. */
-  keyed?: { worktreeIds: ReadonlySet<string>; slotsByWorktree: ReadonlyMap<string, string> }
+  /** Build only these workspaces (a keyed save); the whole build covers every workspace. */
+  onlyWorktreeIds?: ReadonlySet<string>
 ): PersistedUnifiedTabSessionData {
   const unifiedTabs: WorkspaceSessionState['unifiedTabs'] = {}
   const tabGroups: WorkspaceSessionState['tabGroups'] = {}
   const tabGroupLayouts: WorkspaceSessionState['tabGroupLayouts'] = {}
   const activeGroupIdByWorktree: WorkspaceSessionState['activeGroupIdByWorktree'] = {}
   const worktreeIds =
-    keyed?.worktreeIds ??
+    onlyWorktreeIds ??
     new Set([
       ...Object.keys(sourceTabs),
       ...Object.keys(sourceGroups),
       ...Object.keys(snapshot.layoutByWorktree ?? {})
     ])
 
-  const slotsByWorktree = keyed?.slotsByWorktree ?? structuredLaunchSlotSignatures()
-  if (cache) {
-    cache.slots = slotsByWorktree
-  }
+  const slotsByWorktree = launchSlotsForUnifiedBuild(cache)
 
   for (const worktreeId of worktreeIds) {
     const session = worktreeTabSessionFor(

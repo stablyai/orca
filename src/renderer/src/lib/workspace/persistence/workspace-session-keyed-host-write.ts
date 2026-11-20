@@ -33,6 +33,20 @@ function isContestedWorkspace(
   })
 }
 
+/** Whether a keyed write of `fields` could be sent at all, checked before it is built: the client
+ *  takes entries patches and main holds the whole path's output for those fields. */
+export function keyedSessionWriteReady(
+  api: SessionApi,
+  state: HostPersistenceState,
+  acknowledged: AcknowledgedWorkspaceSessionEntries,
+  fields: readonly string[]
+): boolean {
+  return (
+    Boolean(api.patchEntries) &&
+    acknowledged.settledHosts(sessionRoutingFor(state), fields) !== null
+  )
+}
+
 /** Send only the keys a keyed write rebuilt, to the hosts the whole path last wrote for its inputs.
  *  Null when that can't equal the whole path's write: routing changed or main may not hold the
  *  rest of the inputs' output, a key is contested, or a host hasn't acknowledged a field. */

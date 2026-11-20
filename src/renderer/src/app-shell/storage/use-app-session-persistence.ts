@@ -15,7 +15,10 @@ import {
   buildWorkspaceSessionHostSnapshots,
   patchWorkspaceSessionByHost
 } from '../../lib/workspace/persistence/workspace-session-host-persistence'
-import { patchWorkspaceSessionEntriesByHost } from '../../lib/workspace/persistence/workspace-session-keyed-host-write'
+import {
+  keyedSessionWriteReady,
+  patchWorkspaceSessionEntriesByHost
+} from '../../lib/workspace/persistence/workspace-session-keyed-host-write'
 import {
   desktopRelaysSupported,
   forgetAcknowledgedDesktopRelays,
@@ -77,7 +80,14 @@ export function useAppSessionPersistence(): void {
           write,
           useAppStore.getState(),
           windowAcknowledgedSessionEntries
-        )?.written ?? null
+        )?.written ?? null,
+      keyedWriteReady: (fields) =>
+        keyedSessionWriteReady(
+          window.api.session,
+          useAppStore.getState(),
+          windowAcknowledgedSessionEntries,
+          fields
+        )
     })
   }, [])
 

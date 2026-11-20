@@ -17,6 +17,7 @@ import {
 } from './session-write-tab-changes'
 import { createBrowserSessionHandlesProjection } from './browser-session-handles-projection'
 import { createUnifiedTabSessionCache } from './workspace-session-unified-tabs'
+import { endUnifiedTabSave } from './workspace-session-launch-slots'
 import { SESSION_ROUTING_FIELDS } from './workspace-session-host-routing'
 
 type TabsByWorktree = AppState['tabsByWorktree']
@@ -42,6 +43,8 @@ export type SessionWriteSubscriberDeps = {
   persist: (payload: WorkspaceSessionWrite) => PersistResult
   /** Sends only the changed workspace keys; null when it can't stand in for the whole write. */
   persistKeyed?: (write: WorkspaceSessionKeyedWrite) => PersistOutcome | null
+  /** Whether a keyed write of these fields could be sent; checked before one is built. */
+  keyedWriteReady?: (fields: readonly SessionRelevantField[]) => boolean
   onPersistError?: (error: unknown) => void
   debounceMs?: number
 }
@@ -51,6 +54,7 @@ export function createSessionWriteSubscriber({
   store,
   persist,
   persistKeyed,
+  keyedWriteReady,
   onPersistError,
   debounceMs = 150
 }: SessionWriteSubscriberDeps): () => void {
@@ -142,6 +146,8 @@ export function createSessionWriteSubscriber({
       }
     } catch (error) {
       settle(true, error)
+    } finally {
+      endUnifiedTabSave(unifiedTabSessionCache)
     }
   }
 
@@ -159,6 +165,9 @@ export function createSessionWriteSubscriber({
         return null
       }
       scopes.set(field, scope)
+    }
+    if (keyedWriteReady && !keyedWriteReady([...scopes.keys()])) {
+      return null
     }
     try {
       const write = buildWorkspaceSessionKeyedWrite(fresh, scopes, unifiedTabSessionCache)

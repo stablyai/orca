@@ -1,11 +1,13 @@
 import type { Tab } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
+import { getOpenFileExecutionHostId } from '@/lib/workspace/ownership/unified-tab-host-ownership'
+import { openFileIndex } from '@/store/slices/editor/tabs/workspace-editor-files'
 import { isEditorTabContentType } from '@/store/slices/editor/tabs/editor-tab-content-type'
-import { structuredLaunchSlotSignatures } from '../../agent-session/launch/structured-agent-session-launch-persistence'
 import type { SessionRelevantField, WorkspaceSessionSnapshot } from './workspace-session'
 import type { WorkspaceSessionFieldEntries } from './workspace-session-acknowledged-entries'
 import { sanitizeTabs } from './workspace-session-sanitized-tabs'
 import { unifiedTabsWithoutStagedBrowsers } from './workspace-session-staged-browser-tabs'
+import { launchSlotsForSave, sameLaunchSlots } from './workspace-session-launch-slots'
 import {
   buildUnifiedTabSessionData,
   type PersistedUnifiedTabSessionData,
@@ -55,8 +57,8 @@ export function buildWorkspaceSessionKeyedWrite(
   return { fields: [...scopes.keys()], entries }
 }
 
-/** Whether editor placement reads the same from both lists: which files exist, their owners and
- *  modes. Typing or saving replaces the list without changing any of these. */
+/** Whether editor placement reads the same from both lists: which files exist, their owners, modes
+ *  and the host a moved editor tab is saved under. Typing or saving changes none of these. */
 function sameFilePlacements(
   previous: readonly OpenFile[] | undefined | null,
   next: readonly OpenFile[] | undefined
@@ -73,21 +75,10 @@ function sameFilePlacements(
       before !== undefined &&
       before.id === file.id &&
       before.worktreeId === file.worktreeId &&
-      before.mode === file.mode
+      before.mode === file.mode &&
+      getOpenFileExecutionHostId(before) === getOpenFileExecutionHostId(file)
     )
   })
-}
-
-function sameLaunchSlots(a: ReadonlyMap<string, string>, b: ReadonlyMap<string, string>): boolean {
-  if (a.size !== b.size) {
-    return false
-  }
-  for (const [worktreeId, slots] of a) {
-    if (b.get(worktreeId) !== slots) {
-      return false
-    }
-  }
-  return true
 }
 
 /** The saved tab sessions of `worktreeIds` alone, built by the whole build's own loop. Null when
@@ -107,11 +98,8 @@ function buildPersistedUnifiedTabSessionEntries(
   ) {
     return null
   }
-  const slotsByWorktree = structuredLaunchSlotSignatures()
-  if (!sameLaunchSlots(slotsByWorktree, cache.slots)) {
-    return null
-  }
-  let fileWorktreeIds: Map<string, string> | null = null
+  // Proven equal for placement: later saves with this same list skip the comparison.
+  cache.placementFiles = snapshot.openFiles
   const sourceTabs: Record<string, Tab[]> = {}
   for (const worktreeId of worktreeIds) {
     const liveTabs = snapshot.unifiedTabsByWorktree[worktreeId]
@@ -122,18 +110,24 @@ function buildPersistedUnifiedTabSessionEntries(
       if (!isEditorTabContentType(tab.contentType)) {
         continue
       }
-      fileWorktreeIds ??= new Map(snapshot.openFiles.map((file) => [file.id, file.worktreeId]))
-      const fileWorktreeId = fileWorktreeIds.get(tab.entityId)
+      const fileWorktreeId = openFileIndex(snapshot.openFiles).get(tab.entityId)?.worktreeId
       if (fileWorktreeId !== undefined && fileWorktreeId !== worktreeId) {
         return null
       }
     }
     sourceTabs[worktreeId] = unifiedTabsWithoutStagedBrowsers(snapshot, liveTabs)
   }
-  const data = buildUnifiedTabSessionData(snapshot, sourceTabs, snapshot.groupsByWorktree, cache, {
-    worktreeIds,
-    slotsByWorktree
-  })
+  // Read after the per-workspace checks, and shared with a whole fallback in the same save.
+  if (!sameLaunchSlots(launchSlotsForSave(cache), cache.slots)) {
+    return null
+  }
+  const data = buildUnifiedTabSessionData(
+    snapshot,
+    sourceTabs,
+    snapshot.groupsByWorktree,
+    cache,
+    worktreeIds
+  )
   const { unifiedTabs } = data
   for (const worktreeId of worktreeIds) {
     if (!unifiedTabs || !Object.hasOwn(unifiedTabs, worktreeId)) {
