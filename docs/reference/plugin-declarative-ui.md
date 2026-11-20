@@ -487,8 +487,9 @@ cannot be shown draws a neutral placeholder.
 `language` names one; an unknown language stays plain.
 
 **Toasts** are a host call, not a component: `host.call('notifications.show', { title, body })` shows a
-desktop notification and resolves `{ delivered }`. Use a `Callout` for anything the person has to read
-or act on.
+desktop notification and resolves `{ delivered }`. From host API 1.11, `onClick: { url }` (http or
+https) or `onClick: { command }` (one of the plugin's own commands) says what a click on it does. Use a
+`Callout` for anything the person has to read or act on.
 
 `labelHidden` keeps the label as the control's accessible name without showing it.
 
