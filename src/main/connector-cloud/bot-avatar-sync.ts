@@ -170,6 +170,8 @@ export class BotAvatarSync {
       // A bot write came in meanwhile and may have registered it, or changed its picture.
       this.pass()
     } else {
+      // The cloud may have taken it before the answer was lost: what it holds is unknown.
+      this.sent.delete(bot.id)
       this.retryLater()
     }
     this.changedWhileSending.delete(bot.id)

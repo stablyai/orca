@@ -252,7 +252,7 @@ export function BotItemCommentBox({
   // The thumbnails' order numbers their pills, as in chat.
   const imageRow = useMemo(() => images.map(({ id }) => id), [images])
   const pending = images.some((image) => image.pending) || attachments.pastedTextSaving
-  const empty = (!draft.trim() || leadOnly) && images.length === 0
+  const empty = (!draft.trim() || (leadOnly && Boolean(question))) && images.length === 0
   const send = (): void => {
     if (empty || pending) {
       return

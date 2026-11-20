@@ -29286,7 +29286,8 @@
       },
       "ask": {
         "recommended": "Recommended",
-        "typeAnswer": "Type your answer"
+        "typeAnswer": "Type your answer",
+        "replaced": "The agent asked a new question. Read it, then reply."
       }
     },
     "search": {
