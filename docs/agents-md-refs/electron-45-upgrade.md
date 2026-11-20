@@ -8,11 +8,13 @@ Reviewed on 2026-10-22 against:
 
 ## Runtime and platform requirements
 
-The desktop moves from 43.8.7 to **45.3.2**: Chromium 156.0.8078.100, V8 15.6, and embedded Node 24.22.2. The separate managed Node runtime stays at 24.22.1 with its existing verified assets and N-API 10. Its Electron association is updated; this upgrade does not replace remote-host binaries or change the wire protocol.
+The desktop moves from 43.8.10 to **45.3.3**: Chromium 156.0.8078.100, V8 15.6, and embedded Node 24.22.3 (a Node.js security release; see below). The separate managed Node runtime stays at 24.22.1 with its existing verified assets and N-API 10. Its Electron association is updated; this upgrade does not replace remote-host binaries or change the wire protocol.
 
 **macOS 13 (Ventura) is the Electron floor.** Electron 44 dropped Monterey. Orca already requires macOS 13.4 for on-device speech, and the update manifest gate keeps older Macs on their last compatible build. The separate macOS terminal host still has its own 13.5 floor and fallback policy.
 
 Electron no longer publishes Windows ia32 or Linux armv7l builds. Orca's desktop targets are already x64/arm64. Electron 44 also updated its Linux support policy to supported major distributions; that documentation change does not justify raising Orca's existing glibc 2.31 native-module packaging gate. Linux/Windows packaging and runtime validation remain necessary in CI.
+
+**Embedded Node security release.** 45.3.3 is the first Electron with Node 24.22.3, which fixes 9 High, 7 Medium and 3 Low CVEs, mostly in `http2` and TLS. Electron 43.x had not picked it up at the time of this upgrade. Orca runs no TLS, HTTPS or `http2` server and starts Chromium with `--disable-http2`, so the server-side CVEs (for example CVE-2026-126051) do not apply. The client-side ones do apply to outgoing TLS (link previews, downloads, diagnostics, proxy tunnels): CVE-2026-123864, CVE-2026-123872, CVE-2026-123877 and CVE-2026-123871. The separately pinned managed Node runtime (24.22.1) is unaffected by this upgrade and needs its own bump.
 
 ## Changes made
 
