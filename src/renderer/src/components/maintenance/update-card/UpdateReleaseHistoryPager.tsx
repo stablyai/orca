@@ -1,7 +1,9 @@
 import { useState } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import type { UpdateReleaseHistory } from '../../../../../shared/updater/update-status-types'
-import CommentMarkdown from '@/components/comment-markdown/CommentMarkdown'
+import CommentMarkdown, {
+  type CommentMarkdownExtension
+} from '@/components/comment-markdown/CommentMarkdown'
 import type { CommentMarkdownLinkClickHandler } from '@/components/comment-markdown/comment-markdown-element-renderers'
 import { Button } from '../../ui/button'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
@@ -20,10 +22,38 @@ const NOTES_CLASS_NAME = cn(
   '[&_.comment-md-h1]:text-[13px] [&_.comment-md-h2]:text-[13px]'
 )
 
+type MarkdownNode = { type: string; value?: string; children?: MarkdownNode[] }
+
+const HTML_IMAGE_TAG = /<img\b(?:[^"'>]|"[^"]*"|'[^']*')*>/gi
+
+// Strips <img> from raw-HTML nodes only, so code spans and fences keep their source.
+function dropHtmlImages(parent: MarkdownNode): void {
+  const children = parent.children
+  if (!children) {
+    return
+  }
+  for (let index = children.length - 1; index >= 0; index--) {
+    const child = children[index]
+    if (child.type !== 'html') {
+      dropHtmlImages(child)
+      continue
+    }
+    const value = child.value?.replace(HTML_IMAGE_TAG, '') ?? ''
+    if (value.trim()) {
+      child.value = value
+    } else {
+      children.splice(index, 1)
+    }
+  }
+}
+
 // Release notes decorate headings and bullets with raw-HTML mascot images, which compact
-// markdown would show as alt-text links; they carry no content, so drop them.
-function stripInlineHtmlImages(notes: string): string {
-  return notes.replace(/<img\b[^>]*>/gi, '')
+// markdown would show as alt-text links; they carry no content, so drop them after parsing.
+const RELEASE_NOTES_MARKDOWN: CommentMarkdownExtension = {
+  remarkPlugins: [() => dropHtmlImages],
+  extraFlowSyntaxMarkers: [],
+  sanitizeAttributes: {},
+  components: {}
 }
 
 const openNotesLink: CommentMarkdownLinkClickHandler = (event, href) => {
@@ -105,7 +135,8 @@ export function UpdateReleaseHistoryPager({
         {release.notes ? (
           <CommentMarkdown
             key={release.version}
-            content={stripInlineHtmlImages(release.notes)}
+            content={release.notes}
+            extension={RELEASE_NOTES_MARKDOWN}
             onLinkClick={openNotesLink}
             className={NOTES_CLASS_NAME}
           />

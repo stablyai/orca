@@ -88,7 +88,7 @@ describe('UpdateCard release history', () => {
             {
               version: '1.4.266',
               publishedAt: '2026-11-19T10:00:00Z',
-              notes: `## Introducing Orca Bots ${mascot}\n\nOrca Bots work like teammates.\n\n- ${mascot} **Every bot session** gets its tools`,
+              notes: `## Introducing Orca Bots ${mascot}\n\nOrca Bots work like teammates.\n\n- ${mascot} **Every bot session** gets its tools\n\nEmbed with \`<img src="logo.png">\` inline.\n\n\`\`\`html\n<img src="banner.png" alt="Banner">\n\`\`\``,
               releaseUrl: 'https://github.com/stablyai/orca/releases/tag/v1.4.266'
             }
           ]
@@ -113,5 +113,8 @@ describe('UpdateCard release history', () => {
     expect(screen.queryByRole('link', { name: 'Orca' })).toBeNull()
     expect(screen.queryByRole('img')).toBeNull()
     expect(notes?.textContent).not.toContain('Orca Orca')
+    // Images inside code examples are content, not decoration.
+    expect(screen.getByText('<img src="logo.png">')).toBeTruthy()
+    expect(notes?.textContent).toContain('<img src="banner.png" alt="Banner">')
   })
 })
