@@ -48,11 +48,15 @@ export async function routeSpawnOrHold(
   if (sessionId === null) {
     return owner ?? current
   }
-  // With no older daemons the lookup skipped this probe; a session the current daemon runs is never held.
-  if (legacy.length === 0 && (await current.probePtyLiveness(sessionId).catch(() => null))) {
-    return current
+  if (legacy.length > 0) {
+    return resolveHeldOwner(sessionId, ownerResolver)
   }
-  return resolveHeldOwner(sessionId, ownerResolver)
+  // With no older daemons the lookup skipped this probe; only an unanswered probe needs the full inventory.
+  const live = await current.probePtyLiveness(sessionId).catch(() => null)
+  if (live === false) {
+    throw new Error(NEWER_DAEMON_HOLD_ERROR)
+  }
+  return live ? current : resolveHeldOwner(sessionId, ownerResolver)
 }
 
 /** The same hold, answered before main prepares anything under the saved id; undefined when none applies. */

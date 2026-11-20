@@ -75,7 +75,9 @@ export async function buildRuntimePtySpawnOptions(
     prevalidatedCwd: ctx.prevalidatedCwd,
     isDaemonHostSpawn: ctx.isDaemonHostSpawn,
     preAdoptedStablePane: ctx.preAdoptedStablePane !== null,
-    isNewSession: ctx.ownsNewIncarnation,
+    // A fallback-hosted start keeps the caller's new id, so the newer-daemon hold never reads it as saved.
+    isNewSession:
+      ctx.ownsNewIncarnation || (!ctx.preAdoptedStablePane && args.isNewSession === true),
     codexRuntime: ctx.codexSelectionTarget.runtime,
     expectedWslDistro: ctx.expectedWslDistro,
     requestedAgentTeamsPath: ctx.requestedAgentTeamsPath,
