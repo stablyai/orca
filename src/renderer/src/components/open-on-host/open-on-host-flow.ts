@@ -21,6 +21,7 @@ import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-reco
 import { checkCloneTargetOn } from '../sidebar/project-admission/clone-folder/use-clone-folder-override'
 import { getRuntimeDefaultCreateProjectParent } from '../sidebar/project-admission/create/runtime-create-project-parent'
 import { resolveDeleteTargetGitContext } from '../sidebar/workspace-actions/deletion/use-delete-worktree-status-hydration'
+import { branchDisplayName } from '../sidebar/workspace-card/identity/worktree-branch-display'
 import { getSuggestedCreatureName } from '../sidebar/workspace-creation/naming/worktree-name-suggestions'
 import { resolveHostRemoteBranch, type WorkspaceOnHostPlan } from './open-on-host-branch-plan'
 import type { OpenOnHostTarget } from './open-on-host-targets'
@@ -74,8 +75,10 @@ export type OpenOnHostRequest = {
 
 export type OpenOnHostResult = { worktreeId: string; notice: string | null }
 
-/** Null after a failure it has already toasted. */
-export async function runOpenOnHost(request: OpenOnHostRequest): Promise<OpenOnHostResult | null> {
+/** Null after a failure it has already toasted; 'failed-after-clone' when a retry must not clone again. */
+export async function runOpenOnHost(
+  request: OpenOnHostRequest
+): Promise<OpenOnHostResult | 'failed-after-clone' | null> {
   const { projectId, displayName, target, location, workspace } = request
   const state = useAppStore.getState()
   // setupProjectClone toasts its own failure.
@@ -109,6 +112,7 @@ export async function runOpenOnHost(request: OpenOnHostRequest): Promise<OpenOnH
     }
     return null
   }
+  const failed = location.kind === 'clone' ? 'failed-after-clone' : null
   try {
     let remoteBranch: { remoteName: string; branchName: string } | null = null
     if (workspace) {
@@ -133,11 +137,12 @@ export async function runOpenOnHost(request: OpenOnHostRequest): Promise<OpenOnH
             )
         } catch {
           // Why: pushBranch already toasted git's reason (e.g. a rejected diverged push); never open a stale tip.
-          return null
+          return failed
         }
       }
       remoteBranch = resolveHostRemoteBranch(
         await getRuntimeGitUpstreamStatus(ctx, worktree.pushTarget),
+        branchDisplayName(worktree.branch),
         worktree.pushTarget
       )
       if (!remoteBranch) {
@@ -194,7 +199,7 @@ export async function runOpenOnHost(request: OpenOnHostRequest): Promise<OpenOnH
     toast.error(error instanceof Error ? error.message : String(error), {
       duration: ERROR_TOAST_DURATION
     })
-    return null
+    return failed
   }
 }
 
@@ -237,7 +242,7 @@ function getNotice({ target, workspace }: OpenOnHostRequest, hostHead: string): 
       "{{host}}'s copy of {{branch}} is at a different commit than {{source}}",
       {
         host: target.label,
-        branch: worktree.branch.replace(/^refs\/heads\//, ''),
+        branch: branchDisplayName(worktree.branch),
         source: getSourceHostLabel(worktree.hostId)
       }
     )

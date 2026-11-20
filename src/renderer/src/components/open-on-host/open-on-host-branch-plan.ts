@@ -3,8 +3,13 @@ import type { GitPushTarget } from '../../../../shared/worktree/types'
 
 export type WorkspaceSyncOffer = 'none' | 'push' | 'publish'
 
-export function getWorkspaceSyncOffer(upstream: GitUpstreamStatus): WorkspaceSyncOffer {
-  if (!upstream.hasUpstream) {
+export function getWorkspaceSyncOffer(
+  upstream: GitUpstreamStatus,
+  branch: string,
+  pushTarget?: GitPushTarget
+): WorkspaceSyncOffer {
+  // Why: an older workspace may track origin/main; Publish pushes origin HEAD and fixes the upstream.
+  if (!upstream.hasUpstream || (!pushTarget && splitUpstream(upstream)?.branchName !== branch)) {
     return 'publish'
   }
   return upstream.ahead > 0 ? 'push' : 'none'
@@ -24,13 +29,14 @@ export type WorkspaceOnHostPlan =
 export function planWorkspaceOnHost(input: {
   branch: string
   upstream: GitUpstreamStatus
+  pushTarget?: GitPushTarget
   syncFirst: boolean
 }): WorkspaceOnHostPlan {
-  const { branch, upstream, syncFirst } = input
+  const { branch, upstream, pushTarget, syncFirst } = input
   if (!branch) {
     return { kind: 'blocked', reason: 'detached' }
   }
-  const offer = getWorkspaceSyncOffer(upstream)
+  const offer = getWorkspaceSyncOffer(upstream, branch, pushTarget)
   if (offer === 'none') {
     // Behind means the host opens at the remote tip, which differs from the source HEAD.
     return {
@@ -53,11 +59,20 @@ export function planWorkspaceOnHost(input: {
 /** The remote and branch the host fetches and opens; pushTarget wins over the upstream name. */
 export function resolveHostRemoteBranch(
   upstream: GitUpstreamStatus,
+  branch: string,
   pushTarget?: GitPushTarget
 ): { remoteName: string; branchName: string } | null {
   if (pushTarget) {
     return { remoteName: pushTarget.remoteName, branchName: pushTarget.branchName }
   }
+  const split = splitUpstream(upstream)
+  // Never open another branch (e.g. origin/main) under this branch's name.
+  return split?.branchName === branch ? split : null
+}
+
+function splitUpstream(
+  upstream: GitUpstreamStatus
+): { remoteName: string; branchName: string } | null {
   const name = upstream.upstreamName
   const slash = name?.indexOf('/') ?? -1
   if (!name || slash <= 0) {

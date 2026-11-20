@@ -26,9 +26,9 @@ function runtimeHost(id: `runtime:${string}`, capabilities: string[]): Execution
 const baseCapabilities = ['project-host-setup.v1', 'workspace-run-context.v1']
 
 const setup: ProjectHostSetup = {
-  id: 'setup-devdesk',
+  id: 'setup-buildbox',
   projectId: 'project-1',
-  hostId: 'runtime:devdesk',
+  hostId: 'runtime:buildbox',
   repoId: 'repo-1',
   path: '/home/me/orca',
   displayName: 'orca',
@@ -46,7 +46,7 @@ const input: OpenOnHostTargetsInput = {
     { id: 'repo-1', path: '/Users/me/orca', displayName: 'orca', badgeColor: '', addedAt: 0 }
   ],
   hosts: [
-    runtimeHost('runtime:devdesk', [
+    runtimeHost('runtime:buildbox', [
       ...baseCapabilities,
       'worktree.open-existing-branch.v2-request.v1'
     ]),
@@ -72,30 +72,30 @@ function byHost(
 describe('listOpenOnHostTargets', () => {
   it('lists runtime hosts only, without the source host', () => {
     expect(listOpenOnHostTargets(input, t).map((target) => target.hostId)).toEqual([
-      'runtime:devdesk',
+      'runtime:buildbox',
       'runtime:old'
     ])
-    const fromDevdesk = listOpenOnHostTargets({ ...input, sourceHostId: 'runtime:devdesk' }, t)
-    expect(fromDevdesk.map((target) => target.hostId)).toEqual(['runtime:old'])
+    const fromBuildbox = listOpenOnHostTargets({ ...input, sourceHostId: 'runtime:buildbox' }, t)
+    expect(fromBuildbox.map((target) => target.hostId)).toEqual(['runtime:old'])
   })
 
   it('carries the existing location on a host that has one', () => {
-    expect(byHost('runtime:devdesk').existingSetup?.path).toBe('/home/me/orca')
+    expect(byHost('runtime:buildbox').existingSetup?.path).toBe('/home/me/orca')
     expect(byHost('runtime:old').existingSetup).toBeNull()
-    expect(byHost('runtime:devdesk').disabledReason).toBeNull()
+    expect(byHost('runtime:buildbox').disabledReason).toBeNull()
     expect(byHost('runtime:old').disabledReason).toBeNull()
   })
 
   it('disables a workspace item on a host without branch reuse', () => {
     const targets = listOpenOnHostTargets({ ...input, requireBranchReuse: true }, t)
     expect(byHost('runtime:old', targets).disabledReason).not.toBeNull()
-    expect(byHost('runtime:devdesk', targets).disabledReason).toBeNull()
+    expect(byHost('runtime:buildbox', targets).disabledReason).toBeNull()
   })
 
   it('disables cloning hosts when the project has no remote', () => {
     const targets = listOpenOnHostTargets({ ...input, cloneUrl: '' }, t)
     expect(byHost('runtime:old', targets).disabledReason).not.toBeNull()
-    expect(byHost('runtime:devdesk', targets).disabledReason).not.toBeNull()
+    expect(byHost('runtime:buildbox', targets).disabledReason).not.toBeNull()
   })
 
   it('disables a host that cannot take a new location', () => {
@@ -132,7 +132,7 @@ describe('listOpenOnHostTargets', () => {
       },
       t
     )
-    expect(targets.map((target) => target.hostId)).toEqual(['runtime:devdesk', 'runtime:old'])
+    expect(targets.map((target) => target.hostId)).toEqual(['runtime:buildbox', 'runtime:old'])
   })
 
   it('targets the server of an SSH host served over the relay, not a plain SSH host', () => {
