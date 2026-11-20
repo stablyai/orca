@@ -130,8 +130,8 @@ function homeScene(
       stubServerBots({ 'fixture-server': hostId === PAIRED_HOST ? [sceneBot] : [] })
     },
     render: () => (
-      <div className="space-y-3" style={{ width }}>
-        <div className="text-xs text-muted-foreground">
+      <div style={{ width }}>
+        <div className="mb-3 text-xs text-muted-foreground">
           {name} ·{' '}
           {hostId === 'local' ? 'This computer' : older ? 'Older paired server' : 'Paired server'}
         </div>
@@ -177,7 +177,7 @@ function homeScene(
             <p>Two items still need an owner before Friday; both are listed at the end.</p>
           </div>
         </div>
-        <div data-home-fixture-measurement="" className="text-2xs text-muted-foreground" />
+        <div data-home-fixture-measurement="" className="mt-3 text-2xs text-muted-foreground" />
       </div>
     ),
     interact: (frame) => {

@@ -1,23 +1,22 @@
 /* Home's identity pill: avatar + name, always both. Header containers at most 260 CSS px wide hide it. */
 [data-bot-home-banner] {
   position: absolute;
-  /* Center on the title bar's icon row, but never rise above the pane into the tab strip. */
-  top: max(0px, calc((var(--orca-pane-title-height) - 28px) / 2));
+  top: 8px;
   left: 50%;
   translate: -50% 0;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   max-width: calc(100% - 10rem);
-  /* 1px border + 3px padding = 4px around the 20px avatar, 28px tall overall. */
-  padding: 3px 10px 3px 3px;
-  border: 1px solid var(--notice-border);
+  height: 32px;
+  padding: 0 12px 0 4px;
+  border: 0;
   border-radius: 9999px;
   background: var(--notice-surface);
   color: var(--popover-foreground);
-  box-shadow: var(--shadow-notice);
+  box-shadow: var(--shadow-bot-home-banner);
   font-family: var(--font-sans);
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 500;
   line-height: 20px;
   cursor: pointer;
