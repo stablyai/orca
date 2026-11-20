@@ -28,7 +28,7 @@ export function BotConnectorPageRow({
   const open = (): void => openBotConnectorPage(rowKey)
   const rowButton = useRef<HTMLButtonElement>(null)
   const backButton = useRef<HTMLButtonElement>(null)
-  const wasShown = useRef(shown)
+  const wasShown = useRef(false)
   useEffect(() => {
     // Into the page: focus Back. Back to the list: focus the row that opened it.
     if (shown && !wasShown.current) {
@@ -38,7 +38,7 @@ export function BotConnectorPageRow({
     }
     wasShown.current = shown
   }, [shown, page])
-  // A row that comes to need the owner (or starts a sign-in) opens its page, unless one already shows.
+  // Continue an explicitly started sign-in when the owner is still on the list.
   const defaultOpen = props.defaultOpen ?? false
   const sawDefaultOpen = useRef(defaultOpen)
   useEffect(() => {

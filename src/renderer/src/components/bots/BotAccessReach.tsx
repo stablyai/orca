@@ -75,17 +75,15 @@ export function BotAccessSummary({
   others: readonly string[]
 }): React.JSX.Element {
   const t = useTranslate()
-  const place = useBotAccessPlace(bot.hostId)
-  const brief = useBotConnectorPaged()
-  const { who, control } = botAccessSummary(others)
+  const { who } = botAccessSummary(others)
   return (
     <div className="mb-2 space-y-0.5">
       <p className="text-sm font-medium">{copy(t, who.id, { ...who.values, name: bot.name })}</p>
-      <p className="text-xs leading-5 text-muted-foreground">
-        {brief
-          ? copy(t, 'controlBrief')
-          : copy(t, control.id, { ...control.values, name: bot.name, ...place })}
-      </p>
+      <BotAccessControlLine
+        bot={bot}
+        others={others}
+        className="text-xs leading-5 text-muted-foreground"
+      />
     </div>
   )
 }
@@ -102,14 +100,22 @@ export function BotAccessControlLine({
 }): React.JSX.Element {
   const t = useTranslate()
   const place = useBotAccessPlace(bot.hostId)
-  // A connector's own page says it in one line.
   const brief = useBotConnectorPaged()
+  if (brief) {
+    const conditional = others.length === 0
+    const id = place.local
+      ? conditional
+        ? 'controlBriefIfAdded'
+        : 'controlBrief'
+      : conditional
+        ? 'controlBriefIfAddedOnHost'
+        : 'controlBriefOnHost'
+    return <p className={className}>{copy(t, id, { computer: place.computer })}</p>
+  }
   const { control } = botAccessSummary(others)
   return (
     <p className={className}>
-      {brief
-        ? copy(t, 'controlBrief')
-        : copy(t, control.id, { ...control.values, name: bot.name, ...place })}
+      {copy(t, control.id, { ...control.values, name: bot.name, ...place })}
     </p>
   )
 }

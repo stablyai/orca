@@ -12,7 +12,7 @@ import type { Bot } from '../../../../../shared/bot-types'
 import type { ConnectorBotSlackStateResponse } from '../../../../../shared/connector-bot-slack-contract'
 import { useAppStore } from '@/store'
 import { ORCA_SIGNED_OUT, orcaSignIn } from '@/components/bots/orca-sign-in.test-fixture'
-import { openBotConnectorPage } from '@/components/bots/bot-connector-page'
+import { botConnectorRowKey, openBotConnectorPage } from '@/components/bots/bot-connector-page'
 import { BotConnectorsSection } from './BotConnectorsSection'
 
 function bot(overrides: Partial<Bot> = {}): Bot {
@@ -318,6 +318,23 @@ const installedSlack: ConnectorBotSlackStateResponse = {
 }
 
 describe('BotConnectorsSection pages', () => {
+  it('focuses a deep-linked page and forgets it when its connector is removed', async () => {
+    const first = bot({ linear: { workspaceId: 'org-1', workspaceName: 'Acme' } })
+    openBotConnectorPage(botConnectorRowKey(first, 'linear:org-1'))
+    const show = renderWith(first, installedSlack)
+    expect(await screen.findByRole('button', { name: 'Connectors' })).toHaveFocus()
+    show({ ...first, linear: null })
+    expect(await screen.findByRole('button', { name: 'Slack · Globex' })).toBeVisible()
+    show(first)
+    expect(await screen.findByRole('button', { name: 'Linear · Acme' })).toBeVisible()
+  })
+
+  it('keeps the list open when a pending Slack installation finishes loading', async () => {
+    renderWith(bot(), { state: 'created', appId: 'A1', teamId: 'T05' })
+    await screen.findByText('Finish setup')
+    expect(screen.getByRole('button', { name: 'Slack' })).toBeVisible()
+  })
+
   it('opens a connector as its own page, and Back or Esc returns to the list on its row', async () => {
     const user = userEvent.setup()
     renderWith(bot({ github: {} }), installedSlack, gitHubOn)

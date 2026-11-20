@@ -175,13 +175,13 @@ export function botConnectorEntries(
       )
     }
   }
-  if (bot.google === true) {
-    const accounts = google.status === 'ready' ? google.google.accounts : []
+  if (bot.google === true && google.status === 'ready') {
+    const accounts = google.google.accounts
     add(
       {
         kind: 'google',
         key: 'google',
-        needsOwner: google.status === 'ready' && accounts.length === 0
+        needsOwner: accounts.length === 0
       },
       // One row for every account, so it names none unless another row is also Google.
       { service: 'Google', hints: [accounts.map((account) => account.email).join(', ')] }

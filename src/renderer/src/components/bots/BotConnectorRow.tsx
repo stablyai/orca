@@ -8,7 +8,12 @@ import { BotWhoCanAskList, type BotWhoCanAskService } from './BotWhoCanAskList'
 import { useWhoCanAskRequests } from './use-bot-who-can-ask'
 import { AttentionDot } from './AttentionDot'
 import { BotFoldChevron } from './BotFoldChevron'
-import { BotConnectorPageShown, BotConnectorRowKey, useBotRowOpen } from './bot-connector-page'
+import {
+  BotConnectorPageSections,
+  BotConnectorPageShown,
+  BotConnectorRowKey,
+  useBotRowOpen
+} from './bot-connector-page'
 import { BotAppBrandLogo } from './apps/BotAppBrandLogo'
 import type { BotConnector } from './bot-connectors'
 import { botConnectorTitleText, type BotConnectorTitle } from './bot-connector-titles'
@@ -184,7 +189,9 @@ export function BotConnectorRow(props: {
           <BotWhoCanAskList bot={bot} service={people} />
         </>
       )}
-      {props.children}
+      <BotConnectorPageSections.Provider value={false}>
+        {props.children}
+      </BotConnectorPageSections.Provider>
     </BotConnectorRowFrame>
   )
 }

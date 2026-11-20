@@ -5,14 +5,13 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useRef,
   useState,
   useSyncExternalStore
 } from 'react'
 import { botRefKey, type BotRef } from '@/lib/bot-hosts'
 
 let openPage: string | null = null
-// The bot whose list showed last: showing another one starts it on its list.
-let shownBot: string | null = null
 const listeners = new Set<() => void>()
 
 function subscribe(listener: () => void): () => void {
@@ -34,21 +33,37 @@ export function openBotConnectorPage(rowKey: string | null): void {
   listeners.forEach((listener) => listener())
 }
 
-/** The open page's row key, when it is one of `bot`'s connectors. */
-export function useBotConnectorPage(bot: BotRef): string | null {
-  const read = (): string | null => openPage
-  const page = useSyncExternalStore(subscribe, read, read)
-  const prefix = `${botRefKey(bot)}\u0000`
+/** Changing bots closes the previous bot's page even while another tab is visible. */
+export function useResetOtherBotConnectorPage(bot: BotRef | null): void {
+  const prefix = bot ? botConnectorRowKey(bot, '') : null
   useEffect(() => {
-    // A page opened for this bot before it showed (a Needs you link) stays; another bot's closes.
-    if (shownBot !== prefix) {
-      shownBot = prefix
-      if (openPage !== null && !openPage.startsWith(prefix)) {
-        openBotConnectorPage(null)
-      }
+    if (prefix && openPage && !openPage.startsWith(prefix)) {
+      openBotConnectorPage(null)
     }
   }, [prefix])
-  return page?.startsWith(prefix) ? page : null
+}
+
+const readPage = (): string | null => openPage
+
+/** A selected page can be waiting for its connector to load. Only forget one that disappeared. */
+export function useBotConnectorPage(
+  bot: BotRef,
+  entries: readonly { key: string }[]
+): string | null {
+  useResetOtherBotConnectorPage(bot)
+  const selected = useSyncExternalStore(subscribe, readPage, readPage)
+  const page =
+    selected && entries.some((entry) => botConnectorRowKey(bot, entry.key) === selected)
+      ? selected
+      : null
+  const lastShown = useRef(page)
+  useEffect(() => {
+    if (page === null && lastShown.current !== null && openPage === lastShown.current) {
+      openBotConnectorPage(null)
+    }
+    lastShown.current = page
+  }, [page])
+  return page
 }
 
 /** The connector a row stands for; none for rows that fold in place, e.g. Tools. */

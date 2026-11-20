@@ -54,27 +54,16 @@ function BotConnectorEntryCard({
   bot: Bot
   entry: BotConnectorEntry
 }): React.JSX.Element | null {
-  const { title, needsOwner: defaultOpen } = entry
+  const { title } = entry
   switch (entry.kind) {
     case 'slack':
-      return (
-        <BotSlackCard bot={bot} teamId={entry.teamId} title={title} defaultOpen={defaultOpen} />
-      )
+      return <BotSlackCard bot={bot} teamId={entry.teamId} title={title} />
     case 'linear':
-      return (
-        <BotLinearCard bot={bot} linear={entry.linear} title={title} defaultOpen={defaultOpen} />
-      )
+      return <BotLinearCard bot={bot} linear={entry.linear} title={title} />
     case 'github':
-      return (
-        <BotGitHubCard
-          bot={bot}
-          installation={entry.installation}
-          title={title}
-          defaultOpen={defaultOpen}
-        />
-      )
+      return <BotGitHubCard bot={bot} installation={entry.installation} title={title} />
     case 'google':
-      return <BotGoogleCard bot={bot} title={title} defaultOpen={defaultOpen} />
+      return <BotGoogleCard bot={bot} title={title} />
     case 'webhooks':
       return <BotWebhooksCard bot={bot} title={title} />
     case 'composio':
@@ -84,20 +73,12 @@ function BotConnectorEntryCard({
           connection={entry.connection}
           problem={entry.problem}
           title={title}
-          defaultOpen={defaultOpen}
         />
       )
     case 'composio-problem':
-      return (
-        <BotComposioProblemRow
-          bot={bot}
-          problem={entry.problem}
-          title={title}
-          defaultOpen={defaultOpen}
-        />
-      )
+      return <BotComposioProblemRow bot={bot} problem={entry.problem} title={title} />
     case 'app':
-      return <BotToolAppRow bot={bot} entry={entry} title={title} defaultOpen={defaultOpen} />
+      return <BotToolAppRow bot={bot} entry={entry} title={title} />
   }
 }
 
@@ -143,12 +124,7 @@ export function BotConnectorsSection({ bot }: { bot: Bot }): React.JSX.Element {
   const entries = useBotConnectorEntries(bot, 'apps').filter(
     (entry) => entry.kind !== 'webhooks' || webhooks === 'added'
   )
-  const openPage = useBotConnectorPage(bot)
-  // A page whose connector is gone (removed, or another bot's) shows the list again.
-  const page =
-    openPage !== null && entries.some((entry) => botConnectorRowKey(bot, entry.key) === openPage)
-      ? openPage
-      : null
+  const page = useBotConnectorPage(bot, entries)
   // Keyed by host and bot too, so showing another bot gives each of its rows a fresh mount.
   const rows = entries.map((entry) => (
     <BotConnectorEntryRow key={botConnectorRowKey(bot, entry.key)} bot={bot} entry={entry} />
