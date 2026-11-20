@@ -28,6 +28,10 @@ describe('scheduledFor', () => {
       '--at takes a while from now (+30m, +2h, +3d) or a time with its zone (2026-12-01T09:00:00-08:00).'
     expect(refusal('tomorrow 9am')).toBe(shape)
     expect(refusal('2026-11-21T09:00:00')).toBe(shape)
+    // A blank, and a day the month doesn't have, are mistakes, not a post for now or for another day.
+    expect(refusal('')).toBe(shape)
+    expect(refusal('2026-11-31T17:00:00Z')).toBe(shape)
+    expect(refusal('2027-02-29T09:00:00Z')).toBe(shape)
     expect(refusal('+0m')).toBe(
       '--at must be at least a minute from now. Leave it out to post now.'
     )

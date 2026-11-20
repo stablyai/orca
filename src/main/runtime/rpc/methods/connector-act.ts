@@ -183,6 +183,14 @@ export const CONNECTOR_ACT_METHOD = defineMethod({
             sessionCallerOf(context.orchestrationCaller)?.sessionId
           )
         : undefined
+    // Asked again here, after the awaits above: a post for later must never go to a cloud that
+    // has stopped saying it schedules.
+    if (args.postAt && !cloud.cloudFeatures()?.has(CONNECTOR_CLOUD_POST_SCHEDULE_FEATURE)) {
+      throw new ConnectorActError(
+        'cloud_lacks_schedule',
+        "Orca Cloud can't post later yet; nothing was scheduled. Post it now, or try again after Orca Cloud updates."
+      )
+    }
     const answer = await postConnectorAction(
       cloud,
       {
