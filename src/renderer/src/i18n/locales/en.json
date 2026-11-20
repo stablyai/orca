@@ -1672,7 +1672,9 @@
         "notClaude": "Not for Claude",
         "own": "{{bot}}’s own skills",
         "ownNone": "No skills of its own yet.",
-        "ownShort": "Own skills"
+        "ownShort": "Own skills",
+        "showMore": "Show {{count}} more",
+        "notLoaded": "No agent loads it"
       },
       "askNewHomeChat": "Ask before a new Home Chat",
       "askNewHomeChatDescription": "Confirm before New Home Chat replaces the conversation a bot carries.",

@@ -9,6 +9,7 @@ import {
   type BotAgentSkillsFolder,
   type BotShareLeftOut
 } from '../../../shared/bots/bot-package'
+import { observeSkillPackage } from '../../skills/package-archive/skill-package-identity'
 import { readBotOwnSkills } from '../bot-own-skills'
 import type { ScannedSkill } from '../bot-skill-projects'
 import { ownPath, validPartName, within, type Home } from './bot-share-own-path'
@@ -95,4 +96,16 @@ export async function readShareSkills(
     }
   }
   return skills.sort((left, right) => left.name.localeCompare(right.name, 'en-US'))
+}
+
+/** A skill's own files: a folder inside it with its own SKILL.md is another skill, listed (or left
+ *  out) on its own, so it never rides along in this one's preview or archive. */
+export async function ownSkillFiles(
+  directory: string
+): Promise<Awaited<ReturnType<typeof observeSkillPackage>>['files']> {
+  const { files } = await observeSkillPackage(directory)
+  const nested = files
+    .filter((file) => file.path !== 'SKILL.md' && file.path.endsWith('/SKILL.md'))
+    .map((file) => file.path.slice(0, -'SKILL.md'.length))
+  return files.filter((file) => !nested.some((root) => file.path.startsWith(root)))
 }

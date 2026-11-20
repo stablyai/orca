@@ -366,6 +366,37 @@ describe('what a bot export may read', () => {
     }
   })
 
+  it('never packs a skill nested inside another one, which is its own part', async () => {
+    const home = join(root, 'home')
+    await writeHome(home)
+    const nested = join(home, '.claude/skills/changelog-style/archive/triage')
+    await mkdir(nested, { recursive: true })
+    await writeFile(join(nested, 'SKILL.md'), '---\nname: triage\ndescription: Old copy\n---\n')
+    await writeFile(join(nested, 'notes.md'), 'Old triage notes\n')
+    await mkdir(join(home, 'skills/triage'), { recursive: true })
+    await writeFile(
+      join(home, 'skills/triage/SKILL.md'),
+      '---\nname: triage\ndescription: Sort issues\n---\n'
+    )
+    const shareable = await readBotShareable({ bot, home, automations: [] })
+    expect(shareable.leftOut).toContainEqual({
+      kind: 'skill',
+      name: 'triage',
+      why: 'duplicate',
+      from: '.claude/skills/changelog-style/archive/triage'
+    })
+    const candidate = await new BotShareCandidates(join(root, 'candidates')).prepare({
+      bot,
+      shareable,
+      selection: {},
+      packageId: 'pkg-1'
+    })
+    const paths = candidate.files.map((file) => file.path)
+    expect(paths).toContain('skills/changelog-style/SKILL.md')
+    expect(paths).toContain('skills/triage/SKILL.md')
+    expect(paths.filter((path) => path.includes('/archive/'))).toEqual([])
+  })
+
   it('leaves a binary skill file out, so a key in it never goes out', async () => {
     const home = join(root, 'home')
     await writeHome(home)

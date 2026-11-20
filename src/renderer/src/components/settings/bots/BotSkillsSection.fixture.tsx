@@ -44,7 +44,8 @@ const OWN: BotOwnSkillsView = {
     {
       name: 'pr-review-checklist',
       description: 'What to check on every pull request',
-      folder: '/Users/owner/.orca/bots/pr-review/skills/pr-review-checklist'
+      folder: '/Users/owner/.orca/bots/pr-review/skills/pr-review-checklist',
+      loadedBy: ['claude', 'agents']
     }
   ],
   agentOnly: [

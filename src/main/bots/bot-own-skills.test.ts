@@ -113,4 +113,28 @@ describe("a bot's own skills", () => {
       ]
     })
   })
+
+  it('labels each skill by the agent folders that actually reach it', async () => {
+    const home = scratch()
+    const deploy = writeSkill(join(home, 'skills'), 'deploy')
+    const blocked = writeSkill(join(home, 'skills'), 'blocked')
+    const nested = writeSkill(join(home, 'skills/archive'), 'old')
+    mkdirSync(join(home, '.claude/skills'), { recursive: true })
+    mkdirSync(join(home, '.agents/skills'), { recursive: true })
+    writeFileSync(join(home, '.claude/skills/deploy'), 'mine\n')
+    writeFileSync(join(home, '.claude/skills/blocked'), 'mine\n')
+    writeFileSync(join(home, '.agents/skills/blocked'), 'mine\n')
+    symlinkSync(nested, join(home, '.claude/skills/old'))
+
+    await linkBotOwnSkills(home)
+    const view = await botOwnSkillsView(home)
+
+    expect(view.skills.map(({ name, folder, loadedBy }) => ({ name, folder, loadedBy }))).toEqual([
+      { name: 'blocked', folder: blocked, loadedBy: [] },
+      { name: 'deploy', folder: deploy, loadedBy: ['agents'] }
+    ])
+    expect(view.agentOnly).toEqual([
+      { name: 'old', description: 'old d', folder: nested, loadedBy: ['claude'] }
+    ])
+  })
 })

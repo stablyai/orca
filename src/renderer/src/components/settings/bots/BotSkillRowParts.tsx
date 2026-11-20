@@ -1,6 +1,6 @@
 // The pieces Settings › Skills rows share: a skill count, a row with nothing to open, a skill list
 // and a folder line with Open folder.
-import React from 'react'
+import React, { useState } from 'react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
@@ -45,10 +45,12 @@ export type ListedSkill = { id: string; name: string; description: string | null
 
 export function SkillList({ skills }: { skills: readonly ListedSkill[] }): React.JSX.Element {
   const t = useTranslate()
+  const [all, setAll] = useState(false)
+  const hidden = all ? 0 : Math.max(0, skills.length - SHOWN_SKILLS)
   return (
     <>
       <ul className="flex flex-col gap-0.5">
-        {skills.slice(0, SHOWN_SKILLS).map((skill) => (
+        {(all ? skills : skills.slice(0, SHOWN_SKILLS)).map((skill) => (
           <li key={skill.id} className="flex h-7 min-w-0 items-center gap-2 text-sm">
             <span className="shrink-0 font-mono text-xs">{skill.name}</span>
             {skill.label ? <Badge variant="referenceLabel">{skill.label}</Badge> : null}
@@ -58,12 +60,10 @@ export function SkillList({ skills }: { skills: readonly ListedSkill[] }): React
           </li>
         ))}
       </ul>
-      {skills.length > SHOWN_SKILLS ? (
-        <p className="mt-1 text-xs text-muted-foreground">
-          {t('settings.bots.skills.more', 'and {{count}} more', {
-            count: skills.length - SHOWN_SKILLS
-          })}
-        </p>
+      {hidden > 0 ? (
+        <Button variant="ghost" size="xs" className="mt-1" onClick={() => setAll(true)}>
+          {t('settings.bots.skills.showMore', 'Show {{count}} more', { count: hidden })}
+        </Button>
       ) : null}
     </>
   )

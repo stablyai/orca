@@ -115,7 +115,8 @@ function stub(bot: Bot = builder): void {
                 {
                   name: 'release-notes-style',
                   description: 'House style for release notes',
-                  folder: '/Users/owner/.orca/bots/release-notes/skills/release-notes-style'
+                  folder: '/Users/owner/.orca/bots/release-notes/skills/release-notes-style',
+                  loadedBy: ['claude', 'agents']
                 }
               ],
               agentOnly: []

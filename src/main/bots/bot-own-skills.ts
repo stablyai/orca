@@ -11,15 +11,14 @@ import {
   type BotAgentSkillsFolder
 } from '../../shared/bots/bot-package'
 import type { BotOwnSkillsView } from '../../shared/bots/bot-skill-projects'
-import { isPathInsideOrEqual } from '../../shared/file-access/cross-platform-path'
 import { admittedSkill, type ScannedSkill, scanSkillsFolder } from './bot-skill-projects'
 
 export type BotOwnSkills = {
   skillsDir: string
   /** By folder name under skills/. */
   skills: (ScannedSkill & { entry: string })[]
-  /** What each agent's folder holds besides links into skills/, one entry per folder it was found
-   *  in: a skill both folders reach is listed under each. */
+  /** Every skill each agent's folder reaches, one entry per folder it was found in: a skill both
+   *  folders reach is listed under each. */
   agentFound: (ScannedSkill & { found: BotAgentSkillsFolder })[]
 }
 
@@ -67,48 +66,55 @@ async function ownSkillEntries(home: string, realHome: string): Promise<BotOwnSk
   return skills.flat().sort((a, b) => a.name.localeCompare(b.name))
 }
 
-/** The bot's skills as Settings and Share both read them: skills/, then what each agent's folder holds. */
+/** The bot's skills as Settings and Share both read them: skills/, then every skill each agent's
+ *  folder reaches (its links into skills/ included), one entry per folder it was found through. */
 export async function readBotOwnSkills(home: string): Promise<BotOwnSkills> {
   const realHome = await realpath(home)
   const skills = await ownSkillEntries(home, realHome)
-  const ownRoot = join(realHome, BOT_OWN_SKILLS_FOLDER)
   const agentFound: BotOwnSkills['agentFound'] = []
   for (const [found, folder] of AGENT_FOLDERS) {
     for (const skill of await scanSkillsFolder(join(home, folder))) {
-      if (!isPathInsideOrEqual(ownRoot, skill.folder)) {
-        agentFound.push({ ...skill, found })
-      }
+      agentFound.push({ ...skill, found })
     }
   }
   return { skillsDir: join(home, BOT_OWN_SKILLS_FOLDER), skills, agentFound }
 }
 
-/** Settings' view: one row per real skill folder, with every agent folder that loads it. */
+/** Settings' view: one row per real skill folder, with the agent folders that actually reach it (none
+ *  when something else holds both of a skills/ skill's names). */
 export async function botOwnSkillsView(home: string): Promise<BotOwnSkillsView> {
   const own = await readBotOwnSkills(home)
-  const byFolder = new Map<string, BotOwnSkillsView['agentOnly'][number]>()
+  const loadedBy = (folder: string): BotAgentSkillsFolder[] => [
+    ...new Set(
+      own.agentFound.filter((skill) => skill.folder === folder).map((skill) => skill.found)
+    )
+  ]
+  const ownFolders = new Set(own.skills.map((skill) => skill.folder))
+  const agentOnly = new Map<string, BotOwnSkillsView['agentOnly'][number]>()
   for (const skill of own.agentFound) {
-    const row = byFolder.get(skill.folder)
-    if (row) {
-      row.loadedBy.push(skill.found)
-    } else {
-      byFolder.set(skill.folder, {
+    if (!ownFolders.has(skill.folder) && !agentOnly.has(skill.folder)) {
+      agentOnly.set(skill.folder, {
         name: skill.name,
         description: skill.description,
         folder: skill.folder,
-        loadedBy: [skill.found]
+        loadedBy: loadedBy(skill.folder)
       })
     }
   }
-  const first = own.agentFound[0]
+  const first = [...agentOnly.values()][0]?.loadedBy[0]
   const opens =
     own.skills.length === 0 && first && !(await lstat(own.skillsDir).catch(() => null))
-      ? join(home, BOT_AGENT_SKILLS_FOLDERS[first.found])
+      ? join(home, BOT_AGENT_SKILLS_FOLDERS[first])
       : own.skillsDir
   return {
     skillsDir: opens,
-    skills: own.skills.map(({ name, description, folder }) => ({ name, description, folder })),
-    agentOnly: [...byFolder.values()]
+    skills: own.skills.map(({ name, description, folder }) => ({
+      name,
+      description,
+      folder,
+      loadedBy: loadedBy(folder)
+    })),
+    agentOnly: [...agentOnly.values()]
   }
 }
 

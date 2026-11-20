@@ -150,14 +150,20 @@ function ProjectRow(props: {
   )
 }
 
-/** Which agents load a skill kept in their own folders; none when both folders reach it. */
-function loadedByLabel(loadedBy: readonly BotAgentSkillsFolder[]): string | undefined {
+/** Which agents load a skill, from the agent folders that reach it; no label when both do. */
+function loadedByLabel(
+  loadedBy: readonly BotAgentSkillsFolder[],
+  t: ReturnType<typeof useTranslate>
+): string | undefined {
   if (loadedBy.includes('claude') && loadedBy.includes('agents')) {
     return undefined
   }
+  if (loadedBy.length === 0) {
+    return t('settings.bots.skills.notLoaded', 'No agent loads it')
+  }
   return loadedBy.includes('claude')
-    ? translate('settings.bots.skills.claudeOnly', 'Claude only')
-    : translate('settings.bots.skills.notClaude', 'Not for Claude')
+    ? t('settings.bots.skills.claudeOnly', 'Claude only')
+    : t('settings.bots.skills.notClaude', 'Not for Claude')
 }
 
 /** The bot's own skills: skills/ in its home, which every agent loads, then any only one agent's folder holds. */
@@ -182,11 +188,15 @@ function OwnSkillsRow({
     )
   }
   const skills: ListedSkill[] = [
-    ...own.skills.map((skill) => ({ ...skill, id: skill.folder })),
+    ...own.skills.map((skill) => ({
+      ...skill,
+      id: skill.folder,
+      label: loadedByLabel(skill.loadedBy, t)
+    })),
     ...own.agentOnly.map((skill) => ({
       ...skill,
       id: skill.folder,
-      label: loadedByLabel(skill.loadedBy)
+      label: loadedByLabel(skill.loadedBy, t)
     }))
   ]
   if (skills.length === 0) {
