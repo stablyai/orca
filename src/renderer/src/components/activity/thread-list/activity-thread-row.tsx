@@ -181,7 +181,13 @@ export const ActivityThreadRow = React.memo(function ActivityThreadRow({
                 <AgentTypeIcon agentType={thread.agentType} size={13} />
               </span>
               <span className="flex min-w-0 flex-1 items-center gap-1.5">
-                {showProject && thread.repo ? <ProjectChip repo={thread.repo} /> : null}
+                {showProject && thread.repo ? (
+                  // Why: the workspace name yields width first, keeping a few characters visible.
+                  <ProjectChip
+                    repo={thread.repo}
+                    className={showWorkspace ? 'max-w-[calc(100%-3rem)]' : 'max-w-full'}
+                  />
+                ) : null}
                 {showWorkspace ? (
                   <span className="min-w-0 truncate" title={workspaceLabel}>
                     {workspaceLabel}
