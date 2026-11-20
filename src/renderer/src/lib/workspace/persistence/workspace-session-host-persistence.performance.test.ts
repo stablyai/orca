@@ -9,6 +9,7 @@ import * as relayWritePlan from './desktop-relay-write-plan'
 import { createSessionWriteSubscriber } from './session-write-subscriber'
 import { AcknowledgedWorkspaceSessionEntries } from './workspace-session-acknowledged-entries'
 import { patchWorkspaceSessionByHost, type SessionApi } from './workspace-session-host-persistence'
+import { subscribeWorkspaceSessionHostWrites } from './workspace-session-host-write-subscriber'
 
 // Perf contract (#43932): one tab switch re-sent every workspace's tab, group and layout maps to main.
 
@@ -115,17 +116,11 @@ async function hostSetsBuiltByWholeOnlySave(size: number) {
   const { api, sent } = countingSessionApi()
   const wholeOnly: SessionApi = { get: api.get, patch: api.patch }
   const hostSets = vi.spyOn(relayWritePlan, 'slicedHostIds')
-  const stop = createSessionWriteSubscriber({
+  const stop = subscribeWorkspaceSessionHostWrites({
     store,
-    debounceMs: DEBOUNCE_MS,
-    persist: ({ patch, fields }) =>
-      patchWorkspaceSessionByHost(
-        wholeOnly,
-        patch,
-        store.getState(),
-        new AcknowledgedWorkspaceSessionEntries(),
-        fields
-      ).written
+    api: wholeOnly,
+    acknowledged: new AcknowledgedWorkspaceSessionEntries(),
+    debounceMs: DEBOUNCE_MS
   })
   try {
     seedFleet(store, size)

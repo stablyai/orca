@@ -5,13 +5,9 @@ import { TEST_REPO } from '@/store/repos/repo.test-fixture'
 import * as structuralEquality from '../../../../../shared/collections/structural-value-equality'
 import * as launchPersistence from '../../agent-session/launch/structured-agent-session-launch-persistence'
 import * as fileHostOwnership from '@/lib/workspace/ownership/unified-tab-host-ownership'
-import { createSessionWriteSubscriber } from './session-write-subscriber'
 import { AcknowledgedWorkspaceSessionEntries } from './workspace-session-acknowledged-entries'
-import { patchWorkspaceSessionByHost, type SessionApi } from './workspace-session-host-persistence'
-import {
-  keyedSessionWriteReady,
-  patchWorkspaceSessionEntriesByHost
-} from './workspace-session-keyed-host-write'
+import type { SessionApi } from './workspace-session-host-persistence'
+import { subscribeWorkspaceSessionHostWrites } from './workspace-session-host-write-subscriber'
 import { sessionRoutingFor } from './workspace-session-host-routing'
 import { makeOpenFile } from '@/store/slices/editor/types/open-file.test-fixture'
 import { applyWorkspaceSessionEntriesPatch } from '../../../../../shared/workspace-session/workspace-session-entries-patch'
@@ -61,17 +57,11 @@ async function workForTitleChanges(size: number) {
   const main = receivingMain()
   const sessionApi = main.api
   const acknowledged = new AcknowledgedWorkspaceSessionEntries()
-  const stop = createSessionWriteSubscriber({
+  const stop = subscribeWorkspaceSessionHostWrites({
     store,
-    debounceMs: DEBOUNCE_MS,
-    persist: ({ patch, fields }) =>
-      patchWorkspaceSessionByHost(sessionApi, patch, store.getState(), acknowledged, fields)
-        .written,
-    persistKeyed: (write) =>
-      patchWorkspaceSessionEntriesByHost(sessionApi, write, store.getState(), acknowledged)
-        ?.written ?? null,
-    keyedWriteReady: (fields) =>
-      keyedSessionWriteReady(sessionApi, store.getState(), acknowledged, fields)
+    api: sessionApi,
+    acknowledged,
+    debounceMs: DEBOUNCE_MS
   })
   try {
     const worktrees = Array.from({ length: size }, (_, index) =>
