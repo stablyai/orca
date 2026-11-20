@@ -242,7 +242,10 @@ export function acpStructuredLaunchPart(
       version: launchVersion.version
     })
     const fullAccess = basis.permissionMode === 'full-access'
-    const tools = await basis.toolServers()
+    const tools = await basis.toolServers().catch(async (error: unknown) => {
+      await instructions?.release?.().catch(() => undefined)
+      throw error
+    })
     const mcpServers = acpBotMcpServers(tools)
     // A managed release's receipt names its version; other programs answer the check.
     const launchedVersion = version ?? launchVersion.version

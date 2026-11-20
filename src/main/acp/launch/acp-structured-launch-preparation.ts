@@ -34,6 +34,7 @@ export async function prepareAcpLaunch<
     env: Record<string, string>
     spec: AcpLaunchSpec
     antigravityChatAuth?: AntigravityChatAuthConfig
+    release?: () => Promise<void>
   }
 >(resolve: () => Promise<Launch>, closedBeforeSpawn: () => void): Promise<Launch> {
   const preparationFailure = (error: unknown): never => {
@@ -42,20 +43,29 @@ export async function prepareAcpLaunch<
   }
   const launch = await resolve().catch(preparationFailure)
   const { spec } = launch
-  closedBeforeSpawn()
-  // Only a missed lookup returns the bare command; explicit Command settings resolve or fail.
-  if (spec.managedRuntime && launch.command === spec.command) {
-    throw new AgentSessionPreSpawnError(
-      new Error(`${spec.managedRuntime.label} is not installed on this host`),
-      { reason: 'runtimeNotInstalled' }
-    )
+  // Nothing has spawned yet, so a failure from here on removes the launch's own files at once.
+  const failBeforeSpawn = (error: unknown): never => {
+    void launch.release?.().catch(() => undefined)
+    throw error
   }
-  const { prepare } = spec.account
-  if (prepare) {
-    await prepare(launch.env, launch.antigravityChatAuth, closedBeforeSpawn).catch(
-      preparationFailure
-    )
+  try {
     closedBeforeSpawn()
+    // Only a missed lookup returns the bare command; explicit Command settings resolve or fail.
+    if (spec.managedRuntime && launch.command === spec.command) {
+      throw new AgentSessionPreSpawnError(
+        new Error(`${spec.managedRuntime.label} is not installed on this host`),
+        { reason: 'runtimeNotInstalled' }
+      )
+    }
+    const { prepare } = spec.account
+    if (prepare) {
+      await prepare(launch.env, launch.antigravityChatAuth, closedBeforeSpawn).catch(
+        preparationFailure
+      )
+      closedBeforeSpawn()
+    }
+  } catch (error) {
+    return failBeforeSpawn(error)
   }
   return launch
 }
@@ -96,6 +106,9 @@ export async function acpLaunchConnect<
         void launch.release?.().catch(() => undefined)
         throw error
       })
-    : deps.connect
+    : (...args: Parameters<ConnectAcpAgent<Connection>>) => {
+        closedBeforeSpawn()
+        return deps.connect(...args)
+      }
   return acpReleaseWithChild(connect, launch.release)
 }

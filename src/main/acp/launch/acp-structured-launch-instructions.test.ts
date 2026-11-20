@@ -295,6 +295,8 @@ describe('ACP launch: standing instructions', () => {
     await mkdir(source, { recursive: true })
     await mkdir(folder, { recursive: true })
     await writeFile(join(source, 'opencode.json'), '{}')
+    await mkdir(join(source, 'agents'))
+    await writeFile(join(source, 'agents', 'reviewer.md'), 'Review.')
     const delivered = await deliverOpenCodeInstructions({
       text: PREAMBLE,
       env: { OPENCODE_CONFIG_DIR: source },
@@ -308,26 +310,29 @@ describe('ACP launch: standing instructions', () => {
     await delivered?.release?.()
     expect(await readdir(dataDirectory)).not.toContain('opencode-release-folder')
     expect(await readFile(join(source, 'opencode.json'), 'utf8')).toBe('{}')
+    expect(await readFile(join(source, 'agents', 'reviewer.md'), 'utf8')).toBe('Review.')
   })
 
   it('releases a launch when its child exits, or at once when the connection throws', async () => {
-    const release = vi.fn(async () => undefined)
+    let released = 0
+    const release = async () => {
+      released += 1
+    }
     let exited: Parameters<AcpStructuredConnection['onExit']>[0] = () => {}
     const connection = {
       onExit: (callback: Parameters<AcpStructuredConnection['onExit']>[0]): void => {
         exited = callback
       }
     }
-    const spawned = acpReleaseWithChild(() => connection, release)
-    spawned()
-    expect(release).not.toHaveBeenCalled()
+    acpReleaseWithChild(() => connection, release)()
+    expect(released).toBe(0)
     exited({ code: 0, signal: null, processless: false })
-    expect(release).toHaveBeenCalledTimes(1)
+    expect(released).toBe(1)
     const failing = acpReleaseWithChild(() => {
       throw new Error('spawn failed')
     }, release)
-    expect(() => failing()).toThrow('spawn failed')
-    expect(release).toHaveBeenCalledTimes(2)
+    expect(failing).toThrow('spawn failed')
+    expect(released).toBe(2)
   })
 
   it('refuses to start an agent that has no way to take them', async () => {

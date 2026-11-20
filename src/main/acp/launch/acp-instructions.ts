@@ -83,11 +83,16 @@ export const deliverOpenCodeInstructions: AcpInstructionsDelivery = async ({
 }): Promise<AcpInstructionsLaunch | null> => {
   if (openCodeTakesConfigDirInstructions(version)) {
     const configDir = await emptyFolder()
-    await writeOpenCodeInstructionsConfigDir(configDir, openCodeSourceConfigDirectory(env), text)
-    return {
-      env: { OPENCODE_CONFIG_DIR: configDir },
-      release: () => removeTreeKeepingLinkTargets(configDir)
-    }
+    const release = () => removeTreeKeepingLinkTargets(configDir)
+    await writeOpenCodeInstructionsConfigDir(
+      configDir,
+      openCodeSourceConfigDirectory(env),
+      text
+    ).catch(async (error: unknown) => {
+      await release()
+      throw error
+    })
+    return { env: { OPENCODE_CONFIG_DIR: configDir }, release }
   }
   const content = withOpenCodeInstructionsFile(env.OPENCODE_CONFIG_CONTENT, await file())
   return content === null ? null : { env: { OPENCODE_CONFIG_CONTENT: content } }
