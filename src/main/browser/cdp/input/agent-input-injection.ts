@@ -2,9 +2,53 @@ import type { WebContents } from 'electron'
 import { assertRemoteCliPageAccess } from '../../routing/input-ownership/remote-cli-page-admission'
 
 // Agent keys must bypass Orca shortcuts, grab handlers, and app menus (#20595).
-type InjectionTarget = Pick<WebContents, 'id' | 'isDestroyed' | 'setIgnoreMenuShortcuts'>
+type InjectionTarget = Pick<WebContents, 'id' | 'isDestroyed' | 'setIgnoreMenuShortcuts'> & {
+  once?: {
+    (event: 'dom-ready', listener: () => void): unknown
+    (event: 'destroyed', listener: () => void): unknown
+  }
+  off?: {
+    (event: 'dom-ready', listener: () => void): unknown
+    (event: 'destroyed', listener: () => void): unknown
+  }
+}
 
 const suspensions = new WeakMap<InjectionTarget, (suspended: boolean) => Promise<void>>()
+const unacknowledged = new WeakSet<InjectionTarget>()
+const recoveryListeners = new WeakSet<InjectionTarget>()
+
+function markUnacknowledged(target: InjectionTarget): void {
+  unacknowledged.add(target)
+  if (recoveryListeners.has(target) || !target.once) {
+    return
+  }
+  recoveryListeners.add(target)
+  const newDocument = (): void => {
+    unacknowledged.delete(target)
+    recoveryListeners.delete(target)
+    target.off?.('dom-ready', newDocument)
+    target.off?.('destroyed', newDocument)
+  }
+  target.once('dom-ready', newDocument)
+  target.once('destroyed', newDocument)
+}
+
+async function suspendBeforeInput(target: InjectionTarget): Promise<void> {
+  const suspend = suspensions.get(target)
+  if (!suspend) {
+    if (unacknowledged.has(target)) {
+      throw new Error('Browser tool shortcuts have not acknowledged suspension')
+    }
+    return
+  }
+  try {
+    await suspend(true)
+    unacknowledged.delete(target)
+  } catch (error) {
+    markUnacknowledged(target)
+    throw error
+  }
+}
 
 export function registerAgentInputSuspension(
   target: InjectionTarget,
@@ -37,7 +81,7 @@ export async function withAgentInputInjection<T>(
   }
   try {
     if (depth === 0) {
-      suspensionGates.set(webContents, suspensions.get(webContents)?.(true) ?? Promise.resolve())
+      suspensionGates.set(webContents, suspendBeforeInput(webContents))
     }
     await suspensionGates.get(webContents)
     return await run()
@@ -49,7 +93,10 @@ export async function withAgentInputInjection<T>(
       injectionDepth.delete(webContents)
       suspensionGates.delete(webContents)
       try {
-        await suspensions.get(webContents)?.(false)
+        // A failed recovery cannot change an input already delivered, or hide its original error.
+        await suspensions
+          .get(webContents)?.(false)
+          .catch(() => markUnacknowledged(webContents))
       } finally {
         if (!webContents.isDestroyed() && !isAgentInjectingInput(webContents)) {
           webContents.setIgnoreMenuShortcuts(false)
