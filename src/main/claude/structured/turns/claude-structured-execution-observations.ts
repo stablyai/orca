@@ -1,4 +1,7 @@
-import { claudeObservedEffort } from '../launch/claude-structured-session-options'
+import {
+  claudeObservedEffort,
+  claudeShownFallbackModel
+} from '../launch/claude-structured-session-options'
 import type { ClaudeSession } from '../claude-structured-session-state'
 
 /** Fast routing reports precede this input and cannot vouch for its execution. */
@@ -84,6 +87,6 @@ export function observeClaudeFrameModels(
   const execution = observeClaudeExecutionModel(session, initModel)
   const fallbackChanged = observeClaudeModelFallback(session, frame)
   return session && (execution || fallbackChanged)
-    ? { ...execution, fallbackModel: session.modelFallback?.model }
+    ? { ...execution, fallbackModel: claudeShownFallbackModel(session) }
     : null
 }
