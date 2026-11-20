@@ -199,11 +199,21 @@ export class CodexAccountHistoryPasses {
     const moveOutcome = shared ? MOVE_OUTCOMES[outcome] : undefined
     if (moveOutcome) {
       this.moveReport.record(key, moveOutcome)
-      // Any pass can complete the newest listing: a retry, or a home a later launch added.
-      void this.moveReport.report(this.censusHomes)
+      this.reportIfListingComplete()
     } else {
       this.moveReport.forget(key)
     }
+  }
+
+  // Any pass can complete the listing (a retry, or a home a later launch added). The listing is
+  // read again before reporting: a launch's own pass runs before its census refreshes it.
+  private reportIfListingComplete(): void {
+    if (!this.moveReport.isComplete(this.censusHomes)) {
+      return
+    }
+    const homes = this.homes.sharedHomes() ?? []
+    this.censusHomes = homes.map((home) => normalizeRuntimePathForComparison(home))
+    void this.moveReport.report(this.censusHomes)
   }
 
   private async passOutcome(key: string, accountHome: string, shared: boolean): Promise<string> {

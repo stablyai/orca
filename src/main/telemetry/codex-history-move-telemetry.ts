@@ -71,6 +71,11 @@ export class CodexHistoryMoveReport {
     this.outcomes.delete(homeKey)
   }
 
+  /** Whether every one of `homeKeys` has an outcome. */
+  isComplete(homeKeys: string[]): boolean {
+    return homeKeys.length > 0 && homeKeys.every((home) => this.outcomes.has(home))
+  }
+
   /** `homeKeys`: the homes the launch's passes covered. Never rejects. */
   report(homeKeys: string[]): Promise<void> {
     this.queue = this.queue.then(() => this.reportIfComplete(homeKeys)).catch(() => {})
@@ -79,8 +84,7 @@ export class CodexHistoryMoveReport {
 
   private async reportIfComplete(homes: string[]): Promise<void> {
     const platform = process.platform
-    const complete = (): boolean =>
-      homes.length > 0 && homes.every((home) => this.outcomes.has(home))
+    const complete = (): boolean => this.isComplete(homes)
     if (
       (platform !== 'darwin' && platform !== 'win32' && platform !== 'linux') ||
       !complete() ||
