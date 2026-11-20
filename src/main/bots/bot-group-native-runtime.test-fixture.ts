@@ -61,7 +61,7 @@ export function fixture() {
   )
   const mails = new Map<
     string,
-    { id: string; from_handle: string; thread_id: string | null; type?: string }
+    { id: string; from_handle: string; thread_id: string | null; type?: string; read?: number }
   >()
   const requests = new Map<string, { record: string }>()
   /** Operation ids the mail lane still holds an attempt under. */

@@ -179,13 +179,16 @@ describe('group mail roots', () => {
     expect(groups.store.operationMessage('retried')?.id).toBe(lines[0].id)
   })
 
-  it('settles a mail turn nothing holds any more, and leaves held or queued ones alone', async () => {
-    const { groups, group, notice, heldSends } = await room(3)
+  it('settles a mail turn nothing holds or owes any more, and leaves the others alone', async () => {
+    const { groups, group, notice, heldSends, mails } = await room(4)
     const { sendAnswer } = groupNativeMocks()
     groups.reserveMailTurn(notice('dead', ['peer-0']))
     groups.reserveMailTurn(notice('in-lane', ['peer-1']))
     groups.reserveMailTurn(notice('queued', ['peer-2']))
+    groups.reserveMailTurn(notice('parked', ['peer-3']))
     heldSends.add('in-lane')
+    // Refused and parked for the chat's next edge: its mail is still unread, so still owed.
+    mails.set('peer-3', { ...mails.get('peer-3')!, read: 0 })
     sendAnswer.mockImplementation(async (_sessionId: string, operationId: string) => ({
       kind: operationId === 'queued' ? 'waiting' : 'refused'
     }))
@@ -193,12 +196,17 @@ describe('group mail roots', () => {
       groups.store.operationMessage(operationId)?.turns[0]?.error
     groups.read(group.id)
     await vi.waitFor(() => expect(error('dead')).toBe(BOT_GROUP_MAIL_NEVER_STARTED))
-    expect(sendAnswer).not.toHaveBeenCalledWith(expect.anything(), 'in-lane')
-    expect(error('in-lane')).toBeUndefined()
+    for (const operationId of ['in-lane', 'parked']) {
+      expect(sendAnswer).not.toHaveBeenCalledWith(expect.anything(), operationId)
+      expect(error(operationId)).toBeUndefined()
+    }
     expect(error('queued')).toBeUndefined()
-    // The mail's next attempt takes the line back from its settled state.
+    // The mail's next attempt takes the same line back from its settled state.
+    const dead = groups.store.operationMessage('dead')!
     groups.reserveMailTurn(notice('next', ['peer-0']))
-    expect(groups.store.operationMessage('next')?.turns[0]).not.toHaveProperty('error')
+    const next = groups.store.operationMessage('next')
+    expect(next?.id).toBe(dead.id)
+    expect(next?.turns[0]).not.toHaveProperty('error')
   })
 
   it('asks the chat about an open turn again only after a while', async () => {

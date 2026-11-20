@@ -68,10 +68,12 @@ async function settle(
 ): Promise<boolean> {
   // The lane reserves its attempt before the turn is recorded and drops it only once the send
   // answered: while it holds the id, admission may still be under way.
+  // Mail still unread is still owed: a refused attempt parks it for the chat's next edge, and the
+  // line follows the next attempt. Lines saved before they were keyed by mail name no mail.
+  const db = groups.runtime.getOrchestrationDb()
   if (
-    groups.runtime
-      .getOrchestrationDb()
-      .holdsStructuredMailSendOperation(turn.sessionId, turn.operationId)
+    db.holdsStructuredMailSendOperation(turn.sessionId, turn.operationId) ||
+    lineMailIds(messageId, turn.sessionId).some((id) => db.getMessageById(id)?.read === 0)
   ) {
     return false
   }
@@ -102,4 +104,12 @@ async function settle(
   })
   groups.changed()
   return false
+}
+
+/** The mail a line keyed by mail carries: `mail:<session>:<ids>`, or `…#<n>` for a later line. */
+function lineMailIds(messageId: string, sessionId: string): string[] {
+  const prefix = `mail:${sessionId}:`
+  return messageId.startsWith(prefix)
+    ? messageId.slice(prefix.length).replace(/#\d+$/, '').split(',')
+    : []
 }
