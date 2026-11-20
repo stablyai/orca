@@ -4,6 +4,7 @@ import type {
   AgentJournalItemBody,
   AgentJournalRenderItem
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { SHORTENED_HEAD_CHARS } from './journal-stored-json-bounds'
 
 /** On: every build back to the 1.4.263 store floor reads stored outputs. */
 export const JOURNAL_STORED_OUTPUT_WRITES = true
@@ -134,22 +135,8 @@ export function hydrateJournalItemOutput<T extends AgentJournalRenderItem>(
     return item
   }
   try {
-    if (!blob || blob.length < 2 || blob[0] !== FORMAT_ZSTD_JSON) {
-      throw new Error('stored output blob is missing or unknown')
-    }
-    // JSON escapes spend at most six bytes per UTF-8 byte; the bound caps inflation.
-    const json = zstdDecompressSync(blob.subarray(1), {
-      maxOutputLength: payload.byteLength * 6 + 64
-    })
-    const text: unknown = JSON.parse(json.toString('utf8'))
-    if (
-      typeof text !== 'string' ||
-      (!marker.truncated && Buffer.byteLength(text, 'utf8') !== payload.byteLength)
-    ) {
-      throw new Error('stored output does not match its item')
-    }
     return withPayload(item, {
-      head: text,
+      head: readStoredText(blob, payload.byteLength, marker.truncated),
       byteLength: payload.byteLength,
       digest: payload.digest,
       truncated: marker.truncated
@@ -158,4 +145,51 @@ export function hydrateJournalItemOutput<T extends AgentJournalRenderItem>(
     console.warn('[agent-session-journal] a saved tool output could not be read', error)
     return item
   }
+}
+
+function readStoredText(
+  blob: Uint8Array | null | undefined,
+  byteLength: number,
+  truncated: boolean
+): string {
+  if (!blob || blob.length < 2 || blob[0] !== FORMAT_ZSTD_JSON) {
+    throw new Error('stored output blob is missing or unknown')
+  }
+  // JSON escapes spend at most six bytes per UTF-8 byte; the bound caps inflation.
+  const json = zstdDecompressSync(blob.subarray(1), { maxOutputLength: byteLength * 6 + 64 })
+  const text: unknown = JSON.parse(json.toString('utf8'))
+  if (typeof text !== 'string' || (!truncated && Buffer.byteLength(text, 'utf8') !== byteLength)) {
+    throw new Error('stored output does not match its item')
+  }
+  return text
+}
+
+/** The text a blob stores, read without its row; null when it cannot be read. */
+export function readJournalStoredText(
+  blob: unknown,
+  byteLength: number,
+  truncated: boolean
+): string | null {
+  try {
+    return readStoredText(blob instanceof Uint8Array ? blob : null, byteLength, truncated)
+  } catch {
+    return null
+  }
+}
+
+/** The first characters of an output or patch head, as SQLite's substr counts them. */
+export function journalShortenedHead(head: string): string {
+  let end = 0
+  for (let chars = 0; end < head.length && chars < SHORTENED_HEAD_CHARS; chars++) {
+    end += (head.codePointAt(end) ?? 0) > 0xffff ? 2 : 1
+  }
+  return head.slice(0, end)
+}
+
+/** The cut `shortenedJsonSql` makes, for an item decoded in JS, keeping size and digest. */
+export function shortenJournalItemHead<T extends AgentJournalRenderItem>(item: T): T {
+  const payload = bodyPayload(item.body)
+  return payload
+    ? withPayload(item, { ...payload, head: journalShortenedHead(payload.head), truncated: true })
+    : item
 }
