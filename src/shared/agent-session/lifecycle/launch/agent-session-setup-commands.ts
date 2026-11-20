@@ -90,6 +90,12 @@ export const AGENT_SESSION_SETUP_COMMANDS = [
     windowsInstallScript: 'https://mimo.xiaomi.com/install.ps1'
   },
   { agent: 'gemini', loginCommand: ['gemini'], slashCommand: '/auth' },
+  {
+    agent: 'droid',
+    loginCommand: ['droid'],
+    slashCommand: '/login',
+    installCommand: 'curl -fsSL https://app.factory.ai/cli | sh'
+  },
   // An `agy` login signs in only chats on agy (`system`); chats on Orca's server keep their own.
   {
     agent: 'antigravity',
