@@ -35,6 +35,7 @@ describe.each([
     const readSession = vi.fn<NativeChatSessionTransport['readSession']>(
       async (_agent, _sessionId, _limit, _path, options) => {
         if (readDelayMs > 0) {
+          // ast-grep-ignore: test-no-real-time-wait -- fake timers advance this simulated page read
           await new Promise((resolve) => setTimeout(resolve, readDelayMs))
         }
         const end = options?.beforeOffset ?? count
