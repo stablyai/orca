@@ -1,3 +1,4 @@
+import { delimiter } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { appRelaunchMock, hasSwitchMock, resolveAppImageMock, spawnMock } = vi.hoisted(() => ({
@@ -57,7 +58,7 @@ describe('relaunchApp', () => {
     process.argv = [`${mount}/orca-ide`, '--orca-background-open', '--', "file 'name' $d", '']
     vi.stubEnv('APPDIR', mount)
     vi.stubEnv('APPIMAGE', '/opt/Orca Nightly.AppImage')
-    vi.stubEnv('LD_LIBRARY_PATH', `${mount}/usr/lib:/usr/local/lib`)
+    vi.stubEnv('LD_LIBRARY_PATH', `${mount}/usr/lib${delimiter}/usr/local/lib`)
     resolveAppImageMock.mockResolvedValue('/opt/Orca Nightly.AppImage')
     spawnMock.mockReturnValue({ pid: 123, on: vi.fn(), unref: vi.fn() })
 
