@@ -37,6 +37,7 @@ export class AcpStructuredOptions {
       | 'modelEfforts'
       | 'familyEfforts'
       | 'withheldCommands'
+      | 'chatModelIds'
       | 'effortChangesModel'
       | 'clampsUnlistedEffort'
       | 'builtinCommands'
@@ -222,10 +223,11 @@ export class AcpStructuredOptions {
     }
     if (key === 'model') {
       const option = this.select('model')
+      const model = this.dialect.chatModelIds?.[value] ?? value
       if (option) {
-        return { method: 'config', configId: option.id, value }
+        return { method: 'config', configId: option.id, value: model }
       }
-      return this.models ? { method: 'model', modelId: value } : null
+      return this.models ? { method: 'model', modelId: model } : null
     }
     if (key === 'effort') {
       const option = this.effortOption()

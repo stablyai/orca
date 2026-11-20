@@ -183,6 +183,16 @@ it("shows Cursor's plan and accepts it, which ends the turn without building", a
   )
 })
 
+it("names Orca's Auto (the CLI's `auto`) as the chat server's `default`", () => {
+  const options = new AcpStructuredOptions(CURSOR.dialect)
+  options.adoptSession({ configOptions: OPUS_OPTIONS }, 'new')
+  expect(options.write('model', 'auto')).toEqual({
+    method: 'config',
+    configId: 'model',
+    value: 'default'
+  })
+})
+
 it('writes effort to the effort levels, not the thinking switch, and Fast to its own option', () => {
   const options = new AcpStructuredOptions(CURSOR.dialect)
   options.adoptSession({ configOptions: OPUS_OPTIONS }, 'new')
