@@ -82,7 +82,7 @@ export async function admitStoredAttachmentImages(
   const root = paths.length > 0 ? await realpath(store.rootDir).catch(() => null) : null
   const images: BotAttachmentImage[] = []
   let total = 0
-  for (const path of new Set(paths)) {
+  for (const path of paths) {
     const stored = parseAgentSessionAttachmentStorePath(store.rootDir, path)
     if (!stored || !root || !isAgentInlineImagePath(stored.name)) {
       throw refused(`Only pasted or attached images can go ${labels.surface}.`)
