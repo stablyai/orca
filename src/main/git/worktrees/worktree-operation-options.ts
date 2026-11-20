@@ -53,7 +53,7 @@ export type RemoveWorktreeOptions = GitWorktreeExecOptions & {
   knownRemovedWorktree?: Pick<GitWorktreeInfo, 'branch' | 'head' | 'locked' | 'lockReason'> | null
   /** Stops only `git worktree remove`; a killed branch cleanup could strand a ref lock. */
   checkoutDeleteSignal?: AbortSignal
-  /** Runs after the ref-maintenance wait, immediately before the checkout is deleted. */
+  /** Runs inside the acquired deletion slot, immediately before the checkout is deleted. */
   beforeCheckoutDelete?: () => Promise<void>
 }
 

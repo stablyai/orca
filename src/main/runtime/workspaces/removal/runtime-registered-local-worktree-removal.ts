@@ -1,5 +1,6 @@
 import { worktreeRemovalLifetime } from '../../../workspaces/removal/worktree-removal-lifetime'
 import { readCheckoutMarkerIdentity } from '../../../workspaces/removal/worktree-removal-gitdir-identity'
+import { CheckoutIdentityRefusal } from '../../../workspaces/removal/worktree-removal-leftover'
 import type { GitPushTarget, GitWorktreeInfo } from '../../../../shared/worktree/types'
 import {
   authorizeWindowsCheckout,
@@ -250,6 +251,7 @@ export async function finishRuntimeLocalWorktreeRemoval(
 ): Promise<RemoveWorktreeResult> {
   const { repo, localOptions } = args
   const canonicalPath = refreshed.path
+  const native = usesNativeWindowsRemoval(canonicalPath, localOptions)
   let removalResult: RemoveWorktreeResult | undefined
   let completed = false
   try {
@@ -265,7 +267,8 @@ export async function finishRuntimeLocalWorktreeRemoval(
         refreshed.head
       )
     } catch (error) {
-      if (usesNativeWindowsRemoval(canonicalPath, localOptions)) {
+      // A refused identity check deleted nothing; recovery must not delete someone else's folder.
+      if (error instanceof CheckoutIdentityRefusal || native) {
         throw error
       }
       const recovered = await recoverPartialLocalWorktreeRemoval({
@@ -277,12 +280,14 @@ export async function finishRuntimeLocalWorktreeRemoval(
         registeredWorktree: refreshed,
         deleteBranch: args.deleteBranch,
         closeWatcher: args.closeWatchers,
-        signal: checkoutDeleteSignal
+        signal: checkoutDeleteSignal,
+        ...(beforeCheckoutDelete ? { beforeLeftoverDelete: beforeCheckoutDelete } : {})
       })
       if (recovered) {
         removalResult = recovered
         completed = true
       } else if (isOrphanedWorktreeError(error)) {
+        await beforeCheckoutDelete?.()
         await cleanupLocalOrphanedWorktreeDirectory(
           repo.path,
           canonicalPath,

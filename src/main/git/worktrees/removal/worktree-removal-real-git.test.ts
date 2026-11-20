@@ -13,6 +13,7 @@ import { removeTree } from '../../../../shared/file-write/windows-transient-lock
 
 import { listWorktreesStrict } from '../catalog/worktree-listing'
 import { removeWorktree } from './worktree-removal'
+import { runUnderWorktreeDeleteLimit, WORKTREE_DELETE_CONCURRENCY } from './worktree-delete-limit'
 import { assertWorktreeCleanForRemoval } from './worktree-removal-preflight'
 import { areWorktreePathsEqual } from '../catalog/worktree-path-comparison'
 import { isPrunableGitFileWorktree } from '../../../workspaces/removal/worktree-prunable-git-file'
@@ -82,6 +83,32 @@ describe('worktree removal against the real Git binary', () => {
 
     expect(existsSync(worktreePath)).toBe(true)
     expect(await isRegistered(worktreePath)).toBe(true)
+  })
+
+  it('checks identity only after a queued delete acquires its slot', async () => {
+    let releaseSlots!: () => void
+    const held = new Promise<void>((resolve) => {
+      releaseSlots = resolve
+    })
+    const holders = Array.from({ length: WORKTREE_DELETE_CONCURRENCY }, () =>
+      runUnderWorktreeDeleteLimit(() => held)
+    )
+    let replaced = false
+    const removal = removeWorktree(repoPath, worktreePath, true, {
+      beforeCheckoutDelete: async () => {
+        if (replaced) {
+          throw new Error('different checkout')
+        }
+      }
+    })
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    // Swapped while the request queued for a slot.
+    replaced = true
+    releaseSlots()
+    await Promise.all(holders)
+
+    await expect(removal).rejects.toThrow('different checkout')
+    expect(existsSync(worktreePath)).toBe(true)
   })
 
   it('preserves a branch whose only unmerged commit is empty', async () => {

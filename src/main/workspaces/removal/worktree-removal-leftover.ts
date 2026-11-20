@@ -41,8 +41,11 @@ export async function isUnregisteredRemovalLeftover(
   return canSafelyRemoveOrphanedWorktreeDirectory(worktreePath, repoPath, CLIENT_REMOVAL_HOME)
 }
 
+/** The folder at the path is not provably the accepted checkout; nothing there was deleted. */
+export class CheckoutIdentityRefusal extends Error {}
+
 export function differentCheckoutAtPathError(worktreePath: string): Error {
-  return new Error(
+  return new CheckoutIdentityRefusal(
     `A different checkout is now at ${worktreePath}; Orca left it in place. Delete it again to remove it.`
   )
 }
@@ -53,7 +56,7 @@ export async function assertLeftoverIsRecordedCheckout(
 ): Promise<void> {
   // A record without identity (written before it existed) cannot prove this folder is the one accepted; it stays listed.
   if (!record.gitdir) {
-    throw new Error(
+    throw new CheckoutIdentityRefusal(
       `Orca cannot confirm the folder at ${record.worktreePath} is the checkout you deleted, so it left it in place. Remove the folder yourself.`
     )
   }
@@ -71,7 +74,7 @@ export async function assertCheckoutNotReplaced(
     return
   }
   if (!record.gitdir) {
-    throw new Error(
+    throw new CheckoutIdentityRefusal(
       `Orca cannot confirm the checkout at ${record.worktreePath} is the one you deleted, so it left it in place. Remove the folder yourself.`
     )
   }

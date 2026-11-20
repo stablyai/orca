@@ -12,6 +12,7 @@ import {
 import { resolveWslInteropSpawnCwd } from '../../wsl/execution/wsl-interop-spawn-directory'
 import { describeWslProcessFailure } from '../../wsl/execution/wsl-process-failure'
 import type { WorktreeProofAccess } from './worktree-orphan-gitdir-proof'
+import { getErrorCode } from '../../git/worktrees/worktree-operation-options'
 
 export type LocalWorktreeFilesystemOptions = {
   wslDistro?: string
@@ -163,6 +164,16 @@ export async function removeLocalWorktreePath(
   } catch (error) {
     // Only a definitive "No such file" means done; permission errors must not read as removed.
     if (!markerLast || !isWslMissingPathError(error)) {
+      throw error
+    }
+    // A child (the marker) vanishing mid-command also reads as missing; only an absent root is done.
+    const rootStillPresent = await getLocalWorktreePathAccess(options)
+      .statPath(targetPath)
+      .then(
+        () => true,
+        (statError: unknown) => getErrorCode(statError) !== 'ENOENT'
+      )
+    if (rootStillPresent) {
       throw error
     }
   }
