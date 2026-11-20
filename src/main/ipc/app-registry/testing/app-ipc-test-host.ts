@@ -87,7 +87,9 @@ beforeEach(() => {
       }
       const windows = [
         ...fixtureWindows.values(),
-        ...('BrowserWindow' in electron ? (electron.BrowserWindow.getAllWindows?.() ?? []) : [])
+        ...(fixtureWindows.size === 0 && 'BrowserWindow' in electron
+          ? (electron.BrowserWindow.getAllWindows?.() ?? [])
+          : [])
       ]
       const deliveries = [
         ...sources.values(),
