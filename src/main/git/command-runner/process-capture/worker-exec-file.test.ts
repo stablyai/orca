@@ -65,6 +65,18 @@ async function createHost(gate?: SharedArrayBuffer) {
   })
 }
 
+// A launch reaches the worker after its ready check; watch for it before starting one, then wait before stopping.
+function nextWorkerLaunch(): Promise<void> {
+  const host = state.host!
+  const spawn = host.spawn.bind(host)
+  const launched = Promise.withResolvers<void>()
+  vi.spyOn(host, 'spawn').mockImplementationOnce((spec) => {
+    launched.resolve()
+    return spawn(spec)
+  })
+  return launched.promise
+}
+
 function capture(script: string, maxBuffer = 1024 * 1024) {
   let child: ReturnType<typeof workerExecFile> | undefined
   const result = new Promise<{
@@ -293,6 +305,7 @@ describe.skipIf(process.platform === 'win32')('POSIX worker capture cancellation
   it('does not report a queued child terminated until the worker processes its kill', async () => {
     const gate = new SharedArrayBuffer(4)
     await createHost(gate)
+    const launched = nextWorkerLaunch()
     const controller = new AbortController()
     const terminated = vi.fn()
     const pending = execFileCapture(process.execPath, ['-e', 'setInterval(()=>{},1000)'], {
@@ -301,6 +314,7 @@ describe.skipIf(process.platform === 'win32')('POSIX worker capture cancellation
       onChildTerminated: terminated
     })
     const outcome = pending.catch((error: unknown) => error)
+    await launched
     controller.abort()
     await expect(outcome).resolves.toMatchObject({ name: 'AbortError' })
     expect(terminated).not.toHaveBeenCalled()
@@ -313,6 +327,7 @@ describe.skipIf(process.platform === 'win32')('POSIX worker capture cancellation
     const directory = await mkdtemp(join(tmpdir(), 'orca-removal-worker-close-'))
     const gate = new SharedArrayBuffer(4)
     await createHost(gate)
+    const launched = nextWorkerLaunch()
     await prepareWorktreeRemovalsForStore({
       getProfileStorageDirectory: () => directory,
       getRepos: () => [{ id: 'repo' }]
@@ -342,6 +357,7 @@ describe.skipIf(process.platform === 'win32')('POSIX worker capture cancellation
       })
       void result.catch(() => {})
       await childStarted.promise
+      await launched
       let closed = false
       closing = worktreeRemovalLifetime.close().then(() => {
         closed = true
@@ -365,12 +381,14 @@ describe.skipIf(process.platform === 'win32')('POSIX worker capture cancellation
   it('reports a launch as never started when its worker is lost before it could run anything', async () => {
     const gate = new SharedArrayBuffer(4)
     await createHost(gate)
+    const launched = nextWorkerLaunch()
     const terminated = vi.fn()
     const pending = execFileCapture(process.execPath, ['-e', ''], {
       ownedPosixGroup: true,
       onChildTerminated: terminated
     })
     const outcome = pending.catch((error: unknown) => error)
+    await launched
     await workers.at(-1)?.terminate()
     await expect(outcome).resolves.toBeInstanceOf(Error)
     expect(terminated).toHaveBeenCalledOnce()
