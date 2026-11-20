@@ -2,7 +2,6 @@
 // next request, and serves the server's file watches from one workspace watcher when the client can't watch.
 import { pathToFileURL } from 'node:url'
 import { applyContentChanges } from './lsp-document-text.mjs'
-import { parseWatchers, watcherMatches } from './lsp-watch-registrations.mjs'
 
 const SESSION_ID_PREFIX = 'orca-session-'
 const WATCHED_FILES = 'workspace/didChangeWatchedFiles'
@@ -11,6 +10,8 @@ const REQUEST_CANCELLED = -32800
 const REQUEST_FAILED = -32803
 // These carry no work for a stopped server; a new one rereads the disk anyway.
 const NON_WAKING = new Set(['$/cancelRequest', '$/setTrace', 'textDocument/didClose', 'exit', WATCHED_FILES])
+// Not agent activity: cancellations, and file events from a client that watches for itself.
+const NOT_ACTIVITY = new Set(['$/cancelRequest', WATCHED_FILES])
 const CHANGE_TYPE = { create: 1, update: 2, delete: 3 }
 
 export function createServerSession({
@@ -37,17 +38,18 @@ export function createServerSession({
   let nextId = 0
   let replayId = null
   let shutdownId = null
+  let withdrawId = null
   let idleTimer
   let killTimer
   let workspaceWatch = null
   let stopInstallWatch = null
   const queue = []
   const pending = new Set()
-  // Requests the current server sent the client; an answer to an earlier server's request is dropped.
-  const serverRequests = new Set()
+  // The current server's requests to the client, under wrapper ids so a late answer can't reach a newer server.
+  const relayed = new Map()
   // What the running (or last) server has seen, so a new one can be brought to the same state.
   const documents = new Map()
-  const registrations = new Map()
+  const watchRegistrations = new Set()
   // Registrations the client holds for the current server, by id; withdrawn when that server stops.
   const clientRegistrations = new Map()
   const folderChanges = []
@@ -92,7 +94,7 @@ export function createServerSession({
   }
 
   const startWatching = () => {
-    if (!bridgingWatches || state !== 'ready' || workspaceWatch || registrations.size === 0) {
+    if (!bridgingWatches || state !== 'ready' || workspaceWatch || watchRegistrations.size === 0) {
       return
     }
     workspaceWatch = watchWorkspace(root, onWorkspaceEvents, onWatchFailed)
@@ -130,16 +132,15 @@ export function createServerSession({
     }
   }
 
+  // Everything under the root that isn't excluded goes to the server, which ignores files no project uses.
   const onWorkspaceEvents = (events) => {
     if (state !== 'ready') {
       return
     }
-    const watchers = [...registrations.values()].flat()
     const changes = []
     for (const { type, path } of events) {
-      const changeType = CHANGE_TYPE[type]
-      if (changeType && watchers.some((watcher) => watcherMatches(watcher, path, changeType))) {
-        changes.push({ uri: pathToFileURL(path).href, type: changeType })
+      if (CHANGE_TYPE[type]) {
+        changes.push({ uri: pathToFileURL(path).href, type: CHANGE_TYPE[type] })
       }
     }
     if (changes.length > 0) {
@@ -177,22 +178,27 @@ export function createServerSession({
     }
   }
 
+  // A restart that fails (mid-install the package can be missing) fails the waiting work; the next request retries.
+  const failWake = (reason) => {
+    console.error(`agent-typescript-lsp: cannot start server: ${reason}`)
+    state = 'stopped'
+    server = null
+    replayId = null
+    for (const message of queue.splice(0)) {
+      if (message.id !== undefined) {
+        toClient({ jsonrpc: '2.0', id: message.id, error: { code: REQUEST_FAILED, message: reason } })
+      } else {
+        track(message)
+      }
+    }
+  }
+
   // Same initialize the client sent, then its open documents, so the new server sees what the old one saw.
   const wake = () => {
     try {
       launch()
     } catch (error) {
-      // Mid-install the server package can be missing; fail this work and try again on the next request.
-      console.error(`agent-typescript-lsp: cannot start server: ${error.message}`)
-      state = 'stopped'
-      server = null
-      for (const message of queue.splice(0)) {
-        if (message.id !== undefined) {
-          toClient({ jsonrpc: '2.0', id: message.id, error: { code: REQUEST_FAILED, message: error.message } })
-        } else {
-          track(message)
-        }
-      }
+      failWake(error.message)
       return
     }
     replayId = `${SESSION_ID_PREFIX}${++nextId}`
@@ -230,8 +236,11 @@ export function createServerSession({
     const { method } = message
     if (!method) {
       // Answers go to the server that asked, even mid-start: it may wait on them before finishing initialize.
-      if (server && serverRequests.delete(message.id)) {
-        server.write(message)
+      if (message.id === withdrawId) {
+        finishWithdraw()
+      } else if (server && relayed.has(message.id)) {
+        server.write({ ...message, id: relayed.get(message.id) })
+        relayed.delete(message.id)
       }
       return
     }
@@ -257,7 +266,7 @@ export function createServerSession({
       queue.push(message)
       return
     }
-    if (method !== '$/cancelRequest' && !background) {
+    if (!NOT_ACTIVITY.has(method) && !background) {
       armIdle()
     }
     write(message)
@@ -265,11 +274,18 @@ export function createServerSession({
 
   const answerServer = (id) => server.write({ jsonrpc: '2.0', id, result: null })
 
+  const relayToClient = (message) => {
+    const id = `${SESSION_ID_PREFIX}${++nextId}`
+    relayed.set(id, message.id)
+    toClient({ ...message, id })
+  }
+
   const onRegister = (message) => {
     const forwarded = []
     for (const registration of message.params?.registrations ?? []) {
       if (bridgingWatches && registration.method === WATCHED_FILES) {
-        registrations.set(registration.id, parseWatchers(root, registration.registerOptions?.watchers))
+        // Watches outside the root (package stores) are accepted and never fire; installs restart the server.
+        watchRegistrations.add(registration.id)
       } else {
         clientRegistrations.set(registration.id, registration.method)
         forwarded.push(registration)
@@ -277,8 +293,7 @@ export function createServerSession({
     }
     startWatching()
     if (forwarded.length > 0) {
-      serverRequests.add(message.id)
-      toClient({ ...message, params: { ...message.params, registrations: forwarded } })
+      relayToClient({ ...message, params: { ...message.params, registrations: forwarded } })
     } else {
       answerServer(message.id)
     }
@@ -288,13 +303,12 @@ export function createServerSession({
     // The protocol spells this field "unregisterations".
     const forwarded = []
     for (const unregistration of message.params?.unregisterations ?? []) {
-      if (!registrations.delete(unregistration.id) && clientRegistrations.delete(unregistration.id)) {
+      if (!watchRegistrations.delete(unregistration.id) && clientRegistrations.delete(unregistration.id)) {
         forwarded.push(unregistration)
       }
     }
     if (forwarded.length > 0) {
-      serverRequests.add(message.id)
-      toClient({ ...message, params: { unregisterations: forwarded } })
+      relayToClient({ ...message, params: { unregisterations: forwarded } })
     } else {
       answerServer(message.id)
     }
@@ -320,12 +334,28 @@ export function createServerSession({
       onRegister(message)
     } else if (message.method === 'client/unregisterCapability') {
       onUnregister(message)
+    } else if (message.method && message.id !== undefined) {
+      relayToClient(message)
     } else {
-      if (message.method && message.id !== undefined) {
-        serverRequests.add(message.id)
-      }
       toClient(message)
     }
+  }
+
+  const resumeAfterStop = () => {
+    if (restartWhenIdle) {
+      restartWhenIdle = false
+      wake()
+    } else {
+      drain()
+    }
+  }
+
+  // The next server registers again, so the client must have dropped the old registrations first.
+  function finishWithdraw() {
+    clearTimer(killTimer)
+    withdrawId = null
+    state = 'stopped'
+    resumeAfterStop()
   }
 
   function onExit(code, signal) {
@@ -333,34 +363,36 @@ export function createServerSession({
     clearTimer(idleTimer)
     stopWatching()
     const expected = state === 'stopping'
+    const waking = state === 'starting' && replayId !== null
     server = null
     state = 'stopped'
     pending.clear()
-    serverRequests.clear()
-    registrations.clear()
+    relayed.clear()
+    watchRegistrations.clear()
     replayId = null
     shutdownId = null
-    if (closed || !expected) {
+    if (closed || !(expected || waking)) {
       onEnd(code ?? (signal ? 1 : 0))
       return
     }
-    if (clientRegistrations.size > 0) {
-      toClient({
-        jsonrpc: '2.0',
-        id: `${SESSION_ID_PREFIX}${++nextId}`,
-        method: 'client/unregisterCapability',
-        params: {
-          unregisterations: [...clientRegistrations].map(([id, method]) => ({ id, method }))
-        }
-      })
-      clientRegistrations.clear()
+    if (waking) {
+      failWake(`server exited during restart (${code ?? signal})`)
+      return
     }
-    if (restartWhenIdle) {
-      restartWhenIdle = false
-      wake()
-    } else {
-      drain()
+    if (clientRegistrations.size === 0) {
+      resumeAfterStop()
+      return
     }
+    state = 'withdrawing'
+    withdrawId = `${SESSION_ID_PREFIX}${++nextId}`
+    toClient({
+      jsonrpc: '2.0',
+      id: withdrawId,
+      method: 'client/unregisterCapability',
+      params: { unregisterations: [...clientRegistrations].map(([id, method]) => ({ id, method })) }
+    })
+    clientRegistrations.clear()
+    killTimer = setTimer(finishWithdraw, SHUTDOWN_GRACE_MS)
   }
 
   return {

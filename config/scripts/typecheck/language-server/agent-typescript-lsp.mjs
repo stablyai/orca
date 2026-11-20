@@ -1,6 +1,7 @@
 // Adapt TypeScript 7 pull diagnostics for agent clients that only accept publishDiagnostics.
 import { spawnProcess } from '@orca/process-host'
-import { resolve } from 'node:path'
+import { realpathSync } from 'node:fs'
+import { join, resolve, sep } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { resolveProjectCompilerInfo } from '../project-execution/run-typecheck-projects-in-parallel.mjs'
 import { resolveTsrsLauncher, supportsTsrs } from '../project-execution/tsrs-typecheck-compiler.mjs'
@@ -176,11 +177,25 @@ export function createDiagnosticsBridge({
   }
 }
 
+// Module resolution caches real package paths, so an install that upgrades the server would restart the old one.
+// The root's node_modules link is followed again on every start.
+function throughRootLink(root, server, program) {
+  const link = join(root, 'node_modules', server === 'tsrs' ? 'tsrs' : 'typescript')
+  try {
+    const real = realpathSync(link)
+    if (program.startsWith(real + sep)) {
+      return join(link, program.slice(real.length + 1))
+    }
+  } catch {}
+  return program
+}
+
 function runLanguageServer() {
   // resolve() drops the trailing separator the script-relative fallback carries.
   const root = resolve(
     process.env.CLAUDE_PROJECT_DIR || fileURLToPath(new URL('../../../..', import.meta.url))
   )
+  let command
   let bridge
   const session = createServerSession({
     root,
@@ -188,12 +203,17 @@ function runLanguageServer() {
     watchWorkspace,
     watchInstalls,
     isBackgroundRequest: (message) =>
-      typeof message.id === 'string' && message.id.startsWith(BRIDGE_ID_PREFIX),
+      message.method === 'textDocument/diagnostic' &&
+      typeof message.id === 'string' &&
+      message.id.startsWith(BRIDGE_ID_PREFIX),
     toClient: (message) => bridge.fromServer(message),
     onEnd: (code) => process.exit(code),
     startServer: ({ onMessage, onExit }) => {
-      // Resolved per start: an install can move the server to a new package path.
-      const command = resolveTypescriptLanguageServer({ root })
+      if (!command) {
+        const { server, program, args, cwd } = resolveTypescriptLanguageServer({ root })
+        const [launcher, ...rest] = args
+        command = { program, args: [throughRootLink(root, server, launcher), ...rest], cwd }
+      }
       const child = spawnProcess({ ...command, stdio: ['pipe', 'pipe', 'inherit'] })
       child.stdout.on('data', createLspMessageReader(onMessage))
       child.stdin.on('error', () => {})

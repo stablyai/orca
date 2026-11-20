@@ -1,20 +1,15 @@
-// LSP positions count UTF-16 code units, which is what JavaScript string offsets count.
+// LSP positions count UTF-16 code units, which is what JavaScript string offsets count; lines end in \n, \r\n or \r.
 function offsetAt(text, { line, character }) {
   let lineStart = 0
   for (let current = 0; current < line; current++) {
-    const newline = text.indexOf('\n', lineStart)
-    if (newline === -1) {
+    const next = text.slice(lineStart).search(/\r\n|\r|\n/)
+    if (next === -1) {
       return text.length
     }
-    lineStart = newline + 1
+    lineStart += next + (text.startsWith('\r\n', lineStart + next) ? 2 : 1)
   }
-  let lineEnd = text.indexOf('\n', lineStart)
-  if (lineEnd === -1) {
-    lineEnd = text.length
-  } else if (text[lineEnd - 1] === '\r') {
-    lineEnd -= 1
-  }
-  return Math.min(lineStart + character, Math.max(lineStart, lineEnd))
+  const lineEnd = text.slice(lineStart).search(/\r|\n/)
+  return lineStart + Math.min(character, lineEnd === -1 ? text.length - lineStart : lineEnd)
 }
 
 export function applyContentChanges(text, changes = []) {

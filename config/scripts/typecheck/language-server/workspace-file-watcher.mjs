@@ -31,6 +31,9 @@ export function watchWorkspace(root, onEvents, onFailed) {
         (error, events) => {
           if (error) {
             logWatchError(error)
+            if (!stopped) {
+              onFailed()
+            }
           } else {
             onEvents(events.map((event) => ({ type: event.type, path: toRootPath(event.path) })))
           }
