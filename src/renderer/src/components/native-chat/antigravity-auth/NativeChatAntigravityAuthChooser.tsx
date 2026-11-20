@@ -83,10 +83,7 @@ export function NativeChatAntigravityAuthChooser({
         <Button type="button" size="sm" variant="link-muted" onClick={auth.openSettings}>
           {detected || !auth.keyAndAdc
             ? t('components.native-chat.antigravityAuth.moreOptions', 'More options…')
-            : t(
-                'components.native-chat.antigravityAuth.useKeyOrGcloud',
-                'Use an API key or gcloud instead'
-              )}
+            : t('components.native-chat.antigravityAuth.useKeyOrGcloud', 'API key or gcloud')}
         </Button>
       </div>
     </div>

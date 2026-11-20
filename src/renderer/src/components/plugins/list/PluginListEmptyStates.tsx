@@ -32,10 +32,7 @@ export function PluginNoMatches({
       action={
         <Button variant="outline" size="sm" onClick={onClear}>
           {query && filtered
-            ? t(
-                'auto.components.settings.PluginListEmptyStates.clearBoth',
-                'Clear search and filters'
-              )
+            ? t('auto.components.settings.PluginListEmptyStates.clearBoth', 'Clear all')
             : query
               ? t('auto.components.settings.PluginMarketplaceBrowser.clearSearch', 'Clear search')
               : t('auto.components.settings.PluginFilterPopover.clear', 'Clear filters')}
