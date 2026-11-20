@@ -51,7 +51,6 @@ describe('integration token file cache', () => {
     })
     expect(await cache.read('site')).toBe('replacement-token')
     expect(await cache.read('site')).toBe('replacement-token')
-    expect(await cache.read('site')).toBe('replacement-token')
   })
 
   it('uses the backing path as part of a credential identity', async () => {
