@@ -130,6 +130,50 @@ describe('bots.slack', () => {
     ])
   })
 
+  it.each([
+    'not_installed',
+    'app_not_found',
+    'invalid_app_id',
+    'token_revoked',
+    'account_inactive'
+  ])('forgets only the requested workspace when removal reports %s', async (error) => {
+    mocks.call.mockResolvedValueOnce({ ok: false, status: 409, error })
+    expect(await invoke('bots.slack.remove', { botId: 'bot-1', teamId: 'T1' })).toEqual({
+      ok: true,
+      value: undefined
+    })
+    expect(
+      editedFrom({
+        slack: inT1.slack,
+        slackApps: [inT1.slack, { appId: 'A2', teamId: 'T2' }]
+      })
+    ).toEqual({ slackApps: [{ appId: 'A2', teamId: 'T2' }] })
+  })
+
+  it.each(['cloud_unreachable', 'signed_out', 'slack_unavailable', 'invalid_auth'])(
+    'keeps the local app when removal cannot confirm it stopped: %s',
+    async (error) => {
+      mocks.call.mockResolvedValueOnce({ ok: false, status: 503, error })
+      expect(await invoke('bots.slack.remove', { botId: 'bot-1', teamId: 'T1' })).toEqual({
+        ok: false,
+        error
+      })
+      expect(mocks.update).not.toHaveBeenCalled()
+    }
+  )
+
+  it('keeps the current account’s apps when removal answers after an account switch', async () => {
+    mocks.call.mockImplementationOnce(async () => {
+      mocks.account = 'acct-2'
+      return { ok: true, value: undefined }
+    })
+    expect(await invoke('bots.slack.remove', { botId: 'bot-1', teamId: 'T1' })).toEqual({
+      ok: false,
+      error: 'account_changed'
+    })
+    expect(mocks.update).not.toHaveBeenCalled()
+  })
+
   it('takes nothing that is not a configuration refresh token', () => {
     expect(BotSlackGrant.safeParse({ refreshToken: 'xoxb-bot-token' }).success).toBe(false)
   })

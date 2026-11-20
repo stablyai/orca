@@ -122,6 +122,37 @@ describe('knownSlackTeam', () => {
 })
 
 describe('BotSlackSetupDialog', () => {
+  it.each([
+    { state: 'created', teamId: 'T1', appId: 'A1' } as const,
+    { state: 'not_created' } as const,
+    {
+      state: 'installed',
+      teamId: 'T1',
+      appId: 'A1',
+      botUserId: 'UB',
+      installerUserId: 'U1',
+      updateNeeded: true
+    } as const,
+    {
+      state: 'installed',
+      teamId: 'T1',
+      appId: 'A1',
+      botUserId: 'UB',
+      installerUserId: 'U1',
+      updateAvailable: true
+    } as const
+  ])('waits for an explicit action before creating or updating an app from %o', async (state) => {
+    slackState(state)
+    mocks.bots = [bot({ id: 'other', slack: { appId: 'A0', teamId: 'T1' } })]
+    openDialog()
+    const button = await screen.findByRole('button', { name: /^(Continue setup|Update in Slack)$/ })
+    expect(api.setUpApp).not.toHaveBeenCalled()
+    expect(api.openUrl).not.toHaveBeenCalled()
+    fireEvent.click(button)
+    await screen.findByText('Waiting for Slack…')
+    expect(api.setUpApp).toHaveBeenCalledWith({ botId: 'bot-1', teamId: 'T1' })
+  })
+
   it('asks the first bot in a workspace for a token, clears it on submit and opens Slack', async () => {
     slackState({ state: 'not_created' })
     api.saveGrant.mockResolvedValue({ ok: true, value: { teamId: 'T1' } })
@@ -156,6 +187,7 @@ describe('BotSlackSetupDialog', () => {
       </TooltipProvider>,
       { wrapper: ConfirmationDialogProvider }
     )
+    fireEvent.click(await screen.findByRole('button', { name: 'Continue setup' }))
     const pill = { name: /Adding Scout to Slack/ }
     await screen.findByRole('status', pill)
     expect(document.querySelector('[data-slot="dialog-overlay"]')).toBeNull()
@@ -247,6 +279,9 @@ describe('BotSlackSetupDialog', () => {
     mocks.bots = [bot({ id: 'other', slack: { appId: 'A0', teamId: 'T1' } })]
     openDialog()
 
+    fireEvent.click(
+      await screen.findByRole('button', { name: /^(Continue setup|Update in Slack)$/ })
+    )
     await screen.findByText('Waiting for Slack…')
     expect(api.setUpApp).toHaveBeenCalledWith({ botId: 'bot-1', teamId: 'T1' })
     expect(api.saveGrant).not.toHaveBeenCalled()
@@ -257,6 +292,9 @@ describe('BotSlackSetupDialog', () => {
     slackState({ state: 'created', teamId: 'T1', appId: 'A1' })
     openDialog()
 
+    fireEvent.click(
+      await screen.findByRole('button', { name: /^(Continue setup|Update in Slack)$/ })
+    )
     await screen.findByText('Waiting for Slack…')
     expect(api.setUpApp).toHaveBeenCalledWith({ botId: 'bot-1', teamId: 'T1' })
     expect(api.openUrl).toHaveBeenCalledOnce()
@@ -273,6 +311,9 @@ describe('BotSlackSetupDialog', () => {
     })
     openDialog()
 
+    fireEvent.click(
+      await screen.findByRole('button', { name: /^(Continue setup|Update in Slack)$/ })
+    )
     await screen.findByText('Waiting for Slack…')
     expect(api.setUpApp).toHaveBeenCalledWith({ botId: 'bot-1', teamId: 'T1' })
     expect(api.openUrl).toHaveBeenCalledOnce()
@@ -289,6 +330,9 @@ describe('BotSlackSetupDialog', () => {
     })
     openDialog()
 
+    fireEvent.click(
+      await screen.findByRole('button', { name: /^(Continue setup|Update in Slack)$/ })
+    )
     await screen.findByText('Waiting for Slack…')
     expect(api.setUpApp).toHaveBeenCalledWith({ botId: 'bot-1', teamId: 'T1' })
     expect(api.openUrl).toHaveBeenCalledOnce()
@@ -304,6 +348,9 @@ describe('BotSlackSetupDialog', () => {
       updateNeeded: true
     })
     const view = render(<BotSlackSetupDialog bot={bot()} open onOpenChange={() => {}} />)
+    fireEvent.click(
+      await screen.findByRole('button', { name: /^(Continue setup|Update in Slack)$/ })
+    )
     await screen.findByText('Waiting for Slack…')
     // Each refresh re-reads the bots list: the same bot, a new object, and Slack not done yet.
     for (let reread = 2; reread <= 5; reread++) {
@@ -323,6 +370,9 @@ describe('BotSlackSetupDialog', () => {
         <BotSlackSetupDialog bot={bot()} open onOpenChange={() => {}} />
       </StrictMode>
     )
+    fireEvent.click(
+      await screen.findByRole('button', { name: /^(Continue setup|Update in Slack)$/ })
+    )
     await screen.findByText('Waiting for Slack…')
     expect(api.openUrl).toHaveBeenCalledOnce()
     cleanup()
@@ -331,7 +381,8 @@ describe('BotSlackSetupDialog', () => {
     api.setUpApp.mockReturnValue(new Promise((resolve) => (answer = resolve)))
     api.openUrl.mockReset()
     openDialog()
-    await waitFor(() => expect(api.setUpApp).toHaveBeenCalledTimes(3))
+    fireEvent.click(await screen.findByRole('button', { name: 'Continue setup' }))
+    await waitFor(() => expect(api.setUpApp).toHaveBeenCalledWith({ botId: 'bot-1', teamId: 'T1' }))
     cleanup()
     await act(async () =>
       answer({ ok: true, value: { appId: 'A1', authorizeUrl: 'https://slack.com/x' } })
@@ -345,6 +396,9 @@ describe('BotSlackSetupDialog', () => {
     mocks.bots = [bot({ id: 'other', slack: { appId: 'A0', teamId: 'T1' } })]
     openDialog()
     slackState({ state: 'created', teamId: 'T1', appId: 'A1' })
+    fireEvent.click(
+      await screen.findByRole('button', { name: /^(Continue setup|Update in Slack)$/ })
+    )
     await screen.findByText('Waiting for Slack…')
 
     slackState({
@@ -367,11 +421,12 @@ describe('BotSlackSetupDialog', () => {
     api.setUpApp.mockResolvedValue({ ok: false, error: 'grant_expired' })
     openDialog()
 
+    fireEvent.click(await screen.findByRole('button', { name: 'Continue setup' }))
     expect(await screen.findByRole('button', { name: 'Reconnect Slack workspace' })).toBeDefined()
   })
 
   it.each([
-    [{ state: 'created', teamId: 'T1', appId: 'A1' } as const, 'Install again'],
+    [{ state: 'created', teamId: 'T1', appId: 'A1' } as const, 'Continue setup'],
     [
       {
         state: 'installed',
@@ -392,6 +447,9 @@ describe('BotSlackSetupDialog', () => {
   it('shows the install once the shared state sees it, wherever it was read', async () => {
     slackState({ state: 'created', teamId: 'T1', appId: 'A1' })
     openDialog()
+    fireEvent.click(
+      await screen.findByRole('button', { name: /^(Continue setup|Update in Slack)$/ })
+    )
     await screen.findByText('Waiting for Slack…')
 
     slackState({

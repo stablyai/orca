@@ -153,7 +153,7 @@ export function botConnectorEntries(
         key: `slack:${app.teamId}`,
         teamId: app.teamId,
         // Can't check (signed in elsewhere aside) is not the owner's to fix.
-        needsOwner: face.next !== null && face.next !== 'retry',
+        needsOwner: face.next !== null && face.next !== 'retry' && face.next !== 'add',
         ...(face.next === 'update' ? { updateNeeded: true as const } : {})
       },
       { service: 'Slack', place: face.workspace }

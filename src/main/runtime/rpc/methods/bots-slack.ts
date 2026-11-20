@@ -143,11 +143,29 @@ export const BOT_SLACK_METHODS = [
     permission: 'accounts-admin',
     params: BotSlackBot,
     handler: async ({ botId, teamId }, context) => {
+      const cloud = context.runtime.getConnectorCloud()
+      const account = cloud?.signedInAccount() ?? null
       const removed = await withHostCloudClient(context, (client) =>
         client.removeSlackApp(botId, teamId)
       )
-      if (removed.ok) {
-        await recordSlack(context.runtime, botId, { remove: teamId })
+      if ((cloud?.signedInAccount() ?? null) !== account) {
+        return { ok: false as const, error: CONNECT_ACCOUNT_CHANGED }
+      }
+      // Older services can refuse removal when the app or its install is already gone.
+      if (
+        removed.ok ||
+        [
+          'not_installed',
+          'app_not_found',
+          'invalid_app_id',
+          'token_revoked',
+          'account_inactive'
+        ].includes(removed.error)
+      ) {
+        await context.runtime.bots.update(botId, (bot) => ({
+          slackApps: nextSlackApps(bot, { remove: teamId })
+        }))
+        return { ok: true as const, value: undefined }
       }
       return removed
     }

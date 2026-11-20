@@ -27173,7 +27173,9 @@
         "tryIt": "Try it in any channel or direct message",
         "connectAnother": "Connect another Slack workspace",
         "connect": "Connect Slack",
-        "openInSlack": "Message it in Slack"
+        "openInSlack": "Message it in Slack",
+        "prepare": "Continue to create or update this bot’s Slack app, then approve it in Slack.",
+        "continue": "Continue setup"
       },
       "connection": {
         "appSettings": "Slack app settings",
