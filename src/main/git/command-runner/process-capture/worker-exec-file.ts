@@ -24,6 +24,23 @@ type CaptureCallback = (
   stderr: string | Buffer
 ) => void
 
+/** A second, passive stderr listener: execFile still captures every byte. */
+export function observeCapturedStderr(
+  child: ChildProcess | WorkerThreadChildProcess,
+  observer: (chunk: string) => void
+): void {
+  const onData = (chunk: string | Buffer): void => {
+    try {
+      observer(typeof chunk === 'string' ? chunk : chunk.toString('utf8'))
+    } catch (error) {
+      // Detach throwing observers so stream callbacks cannot crash main.
+      child.stderr?.off('data', onData)
+      console.warn('git stderr observer failed; detaching it', error)
+    }
+  }
+  child.stderr?.on('data', onData)
+}
+
 /** Capture a worker-owned child; the caller still owns deadlines and aborts. */
 export function workerExecFile(
   command: string,
