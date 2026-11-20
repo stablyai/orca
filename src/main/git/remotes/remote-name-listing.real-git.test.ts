@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process'
-import { mkdtemp, rm, stat, utimes, writeFile } from 'node:fs/promises'
+import { appendFile, mkdtemp, rm, stat, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { isAbsolute, join } from 'node:path'
 import { promisify } from 'node:util'
@@ -52,7 +52,14 @@ it.each(['folder', 'linked worktree'])(
       join(root, '.git', 'branch-remote'),
       '[remote "origin"]\n  url = https://gitlab.com/example/project.git\n'
     )
-    await git(root, 'config', 'includeIf.onbranch:with-remote.path', 'branch-remote')
+    if (kind === 'folder') {
+      await git(root, 'config', 'includeIf.onbranch:with-remote.path', 'branch-remote')
+    } else {
+      await appendFile(
+        join(root, '.git', 'config'),
+        '[includeIf "onbranch:with-remote"] path = branch-remote\n'
+      )
+    }
     let repoPath = root
     if (kind === 'linked worktree') {
       repoPath = join(root, 'checkout')
