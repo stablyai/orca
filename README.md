@@ -17,10 +17,10 @@
 
 <p align="center">
   <strong>The AI Orchestrator for 100x builders.</strong><br/>
-  Run Claude Code, Codex, and any other coding agent in parallel, each in its own worktree. Chat or terminal, on your laptop or in the cloud, with diffs, a browser, and a CLI in one app.
+  Run Claude Code, Codex, and any other coding agent in parallel. Now with bots inside: ask from Slack, Linear, or GitHub, and step in when they need you.
 </p>
 
-<h3 align="center"><a href="https://orca.dev/download"><ins>Download Orca</ins></a></h3>
+<h3 align="center"><a href="https://orca.dev/download"><ins>Download Orca</ins></a> &nbsp;·&nbsp; <a href="https://orca.dev/bots"><ins>Explore bots →</ins></a></h3>
 
 <p align="center">
   <img src="docs/assets/readme-hero.jpg" alt="Orca desktop app with a coordinator agent running worker agents in parallel workspaces, and the Orca mobile app in the corner" width="960" />
@@ -29,6 +29,20 @@
 ## Features
 
 <table>
+<tr>
+<td width="50%" valign="middle">
+
+### Orca Bots
+
+Ask in Slack, Linear, or GitHub, then come back to a tested pull request. Bots run on your own Claude Code or Codex, and any bot's work opens in Orca to review or jump in.
+
+[Overview](https://orca.dev/bots) · [Security](https://orca.dev/docs/bots/security) · [Docs →](https://orca.dev/docs/bots)
+
+</td>
+<td width="50%">
+  <a href="https://orca.dev/bots"><picture><source srcset="docs/assets/readme-features/bots.webp" type="image/webp"><img src="docs/assets/readme-features/bots.poster.jpg" alt="A bot in Orca that fixed a Safari bug with two workers, linked the pull request, and is waiting on a question under Needs you" width="100%" /></picture></a>
+</td>
+</tr>
 <tr>
 <td width="50%" valign="middle">
 
@@ -201,6 +215,8 @@ Put agents, terminals, browsers, and diffs side by side in split panes shaped to
 
 **Also in the box:**
 
+- **[Bot Schedules &amp; Triggers](https://orca.dev/docs/bots#put-it-on-a-schedule)**: ask a bot to run every weekday at 9, or when a pull request opens, a check fails, or a webhook fires.
+- **[Bot Memory in Markdown](https://orca.dev/docs/bots/security#what-you-can-review)**: each bot's soul and memory are plain `SOUL.md` and `MEMORY.md` files you can read and edit.
 - **[Drag Files to Agents](https://orca.dev/docs/editing/file-explorer)**: drag files from the explorer, or images from your desktop, straight into an agent's prompt.
 - **[Jump Anywhere](https://orca.dev/docs/model/quick-open)**: one shortcut jumps to any workspace or tab across every repo and host.
 - **[Rich Previews](https://orca.dev/docs/editing/viewers)**: open images, PDFs, and Markdown right in the workspace, next to the agent that made them.
