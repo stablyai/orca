@@ -14,7 +14,10 @@ import type { LayoutApplyReply } from '../../../../../shared/workspace-layout/wo
 
 const transport = vi.hoisted(() => ({ callRuntimeRpc: vi.fn() }))
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => transport)
-const launches = vi.hoisted(() => ({ states: [] as StructuredLaunchState[], reads: 0 }))
+const launches = vi.hoisted(() => {
+  const state: { states: StructuredLaunchState[]; reads: number } = { states: [], reads: 0 }
+  return state
+})
 vi.mock(
   '@/lib/agent-session/launch/structured-agent-session-launch-state-store',
   async (original) => ({
