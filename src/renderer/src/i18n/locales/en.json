@@ -28817,7 +28817,29 @@
         "google": "Gmail, Calendar and Drive, as you"
       },
       "mcp": {
-        "adding": "Adding {{app}}…"
+        "adding": "Adding {{app}}…",
+        "addTitle": "Add {{app}}",
+        "advanced": "Advanced",
+        "hostInvalid": "Enter a host name, like {{example}}.",
+        "datadog": {
+          "siteLabel": "Datadog site"
+        },
+        "gitlab": {
+          "hostLabel": "GitLab address (optional)",
+          "hostHint": "For self-managed or Dedicated. Leave empty for GitLab.com."
+        },
+        "place": {
+          "usEast": "US East",
+          "usWest": "US West",
+          "usCentral": "US Central",
+          "europe": "Europe",
+          "japan": "Japan",
+          "australia": "Australia",
+          "unitedKingdom": "United Kingdom"
+        },
+        "elsewhereTitle": "{{app}} is already on {{bot}}",
+        "elsewhereLine": "It’s added at {{place}}. Remove it in Manage to add another.",
+        "elsewhereOther": "Remove it in Manage to add another."
       },
       "unsupported": "This app isn’t supported yet",
       "cantReach": "Can’t reach {{app}}",
