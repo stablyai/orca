@@ -126,6 +126,7 @@ assignment does not prove its agent stopped.
 | Task DAGs, several Runs                        | `references/coordinator-loop.md`     |
 | Child worktrees, SSH, WSL, a connected server  | `references/placement-and-remote.md` |
 | Group messages                                 | `references/messaging-and-gates.md`  |
+| A non-CLI agent app (chat or desktop)          | `references/non-cli-agents.md`       |
 | A failed or unknown worker; retry, stop, reset | `references/recovery-and-cleanup.md` |
 | Several independent workers at once            | `references/parallel-start.md`       |
 | Custom argv or terminal layout                 | `references/low-level-topology.md`   |
