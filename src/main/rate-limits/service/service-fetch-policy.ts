@@ -16,10 +16,16 @@ import {
   isStaleClaudeUsageWindow,
   mapClaudeUsageWindow
 } from '../claude-usage-window'
+import {
+  ClaudeLiveUsagePaneReports,
+  type ClaudeLiveUsageWindowKind
+} from '../claude-live-usage-pane-reports'
 import { readUserClaudeConfigDir } from '../../claude-accounts/claude-profile-paths'
 import { getClaudeProfileRouter } from '../../claude-accounts/claude-profile-installed-router'
 
 export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchTargets {
+  private readonly claudePaneReports = new ClaudeLiveUsagePaneReports()
+
   protected getMiniMaxCredentialError(message: string): ProviderRateLimits {
     return {
       provider: 'minimax',
@@ -125,20 +131,42 @@ export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchT
     }
     const previous = this.state.claude
     const now = Date.now()
+    const configDir = snapshot.configDir
+    const paneKey = event.paneKey ?? null
+    const paneReports = this.claudePaneReports
     // An idle session's older snapshot must not roll back newer account usage.
     const keepIfNewer = (
+      kind: ClaudeLiveUsageWindowKind,
       incoming: RateLimitWindow | null,
       current: RateLimitWindow | null | undefined
     ): RateLimitWindow | null => {
-      if (!incoming || isStaleClaudeUsageWindow(current, incoming, now)) {
+      if (!incoming) {
         return null
+      }
+      const changed = paneKey !== null && paneReports.hasChanged(paneKey, configDir, kind, incoming)
+      if (
+        paneKey !== null &&
+        !changed &&
+        !isSameClaudeUsageWindow(current ?? null, incoming) &&
+        paneReports.isPinnedAgainst(configDir, kind, incoming, now)
+      ) {
+        return null
+      }
+      if (isStaleClaudeUsageWindow(current, incoming, now, changed)) {
+        return null
+      }
+      if (changed) {
+        paneReports.markFresh(configDir, kind, incoming)
       }
       return isSameClaudeUsageWindow(current ?? null, incoming) ? (current ?? null) : incoming
     }
     const incomingSession = mapClaudeUsageWindow(event.fiveHour ?? undefined, 300)
     const incomingWeekly = mapClaudeUsageWindow(event.sevenDay ?? undefined, 10080)
-    const freshSession = keepIfNewer(incomingSession, previous?.session)
-    const freshWeekly = keepIfNewer(incomingWeekly, previous?.weekly)
+    const freshSession = keepIfNewer('session', incomingSession, previous?.session)
+    const freshWeekly = keepIfNewer('weekly', incomingWeekly, previous?.weekly)
+    if (paneKey !== null) {
+      paneReports.remember(paneKey, configDir, { session: incomingSession, weekly: incomingWeekly })
+    }
     if (!freshSession && !freshWeekly) {
       return
     }

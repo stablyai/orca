@@ -77,7 +77,7 @@ export function mapClaudeUsageWindow(
 // Same-window statusline/OAuth reset precision differs; separate windows are hours apart.
 const SAME_WINDOW_TOLERANCE_MS = 60 * 1000
 
-function isSameClaudeUsageReset(a: number | null, b: number | null): boolean {
+export function isSameClaudeUsageReset(a: number | null, b: number | null): boolean {
   return a === null || b === null ? a === b : Math.abs(a - b) <= SAME_WINDOW_TOLERANCE_MS
 }
 
@@ -91,10 +91,12 @@ export function isSameClaudeUsageWindow(
 }
 
 // Within one window usage grows; a lower value or older reset is an idle session's stale snapshot.
+// A pane's changed report is fresh, so a lower same-window value is a limit reset, not staleness.
 export function isStaleClaudeUsageWindow(
   previous: RateLimitWindow | null | undefined,
   incoming: RateLimitWindow,
-  now: number
+  now: number,
+  reportedChange = false
 ): boolean {
   if (!previous || previous.resetsAt === null || incoming.resetsAt === null) {
     return false
@@ -106,6 +108,7 @@ export function isStaleClaudeUsageWindow(
     return true
   }
   return (
+    !reportedChange &&
     isSameClaudeUsageReset(incoming.resetsAt, previous.resetsAt) &&
     incoming.usedPercent < previous.usedPercent
   )

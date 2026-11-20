@@ -1,15 +1,16 @@
 import { describe, expect, it } from 'vitest'
 import { parseClaudeStatusLineBody } from './claude-statusline-rate-limits'
 
-function formBody(payload: unknown, configDir?: string): Record<string, string> {
+function formBody(payload: unknown, configDir?: string, paneKey?: string): Record<string, string> {
   return {
     payload: JSON.stringify(payload),
-    ...(configDir !== undefined ? { configDir } : {})
+    ...(configDir !== undefined ? { configDir } : {}),
+    ...(paneKey !== undefined ? { paneKey } : {})
   }
 }
 
 describe('parseClaudeStatusLineBody', () => {
-  it('extracts both windows and the session config dir', () => {
+  it('extracts both windows, the session config dir and the reporting pane', () => {
     const parsed = parseClaudeStatusLineBody(
       formBody(
         {
@@ -18,11 +19,13 @@ describe('parseClaudeStatusLineBody', () => {
             seven_day: { used_percentage: 41.2, resets_at: 1712059200 }
           }
         },
-        '/home/dev/.config/managed-claude'
+        '/home/dev/.config/managed-claude',
+        'tab-1:pane-a'
       )
     )
     expect(parsed).toEqual({
       configDir: '/home/dev/.config/managed-claude',
+      paneKey: 'tab-1:pane-a',
       fiveHour: { used_percentage: 23.5, resets_at: 1738425600 },
       sevenDay: { used_percentage: 41.2, resets_at: 1712059200 }
     })
@@ -33,6 +36,7 @@ describe('parseClaudeStatusLineBody', () => {
       formBody({ rate_limits: { five_hour: { used_percentage: 5 } } }, '')
     )
     expect(parsed?.configDir).toBeNull()
+    expect(parsed?.paneKey).toBeNull()
     expect(parsed?.fiveHour).toEqual({ used_percentage: 5, resets_at: undefined })
     expect(parsed?.sevenDay).toBeNull()
   })

@@ -16,6 +16,8 @@ export type ClaudeStatusLineWindow = {
 export type ClaudeStatusLineRateLimits = {
   /** CLAUDE_CONFIG_DIR of the reporting session; null for system-default sessions. */
   configDir: string | null
+  /** Reporting pane; null when the forwarder omitted it. Optional for in-process events. */
+  paneKey?: string | null
   fiveHour: ClaudeStatusLineWindow | null
   sevenDay: ClaudeStatusLineWindow | null
 }
@@ -54,7 +56,7 @@ export function parseClaudeStatusLineBody(body: unknown): ClaudeStatusLineRateLi
   if (typeof body !== 'object' || body === null) {
     return null
   }
-  const fields = body as { payload?: unknown; configDir?: unknown }
+  const fields = body as { payload?: unknown; configDir?: unknown; paneKey?: unknown }
   if (typeof fields.payload !== 'string' || !fields.payload) {
     return null
   }
@@ -77,5 +79,6 @@ export function parseClaudeStatusLineBody(body: unknown): ClaudeStatusLineRateLi
     return null
   }
   const configDir = typeof fields.configDir === 'string' ? fields.configDir.trim() : ''
-  return { configDir: configDir || null, fiveHour, sevenDay }
+  const paneKey = typeof fields.paneKey === 'string' ? fields.paneKey.trim() : ''
+  return { configDir: configDir || null, paneKey: paneKey || null, fiveHour, sevenDay }
 }

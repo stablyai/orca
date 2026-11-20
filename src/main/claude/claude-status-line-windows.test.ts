@@ -23,6 +23,7 @@ import { findGitBash } from '../agent-hooks/windows-git-bash-path.test-fixture'
 import { ClaudeHookService } from './hook-service'
 import { getManagedCommand } from './hook-settings'
 
+const paneKeyFor = (paneId: number) => `tab-1:00000000-0000-4000-8000-00000000000${paneId}`
 const CURRENT_CLAUDE = { claudeVersion: '2.1.261 (Claude Code)' }
 const PAYLOAD = JSON.stringify({
   session_id: 'statusline-delivery',
@@ -32,11 +33,12 @@ const PAYLOAD = JSON.stringify({
     seven_day: { used_percentage: 7, resets_at: 1790500000 }
   }
 })
-const EXPECTED_RATE_LIMITS = {
+const expectedRateLimits = (paneId: number) => ({
   configDir: null,
+  paneKey: paneKeyFor(paneId),
   fiveHour: { used_percentage: 42, resets_at: 1790000000 },
   sevenDay: { used_percentage: 7, resets_at: 1790500000 }
-}
+})
 const HOOK_TOKEN = 'statusline-delivery-token'
 // Match Claude.exe's PowerShell flags.
 const POWERSHELL_ARGS = ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command']
@@ -133,7 +135,7 @@ describe.skipIf(process.platform !== 'win32')('Claude statusLine delivery on Win
           ORCA_BACKGROUND_LAUNCH: '1',
           ORCA_AGENT_HOOK_PORT: String(listener.port),
           ORCA_AGENT_HOOK_TOKEN: HOOK_TOKEN,
-          ORCA_PANE_KEY: `tab-1:00000000-0000-4000-8000-00000000000${paneId}`
+          ORCA_PANE_KEY: paneKeyFor(paneId)
         }
       })
     return { command, posts: listener.posts, run }
@@ -166,7 +168,7 @@ describe.skipIf(process.platform !== 'win32')('Claude statusLine delivery on Win
       expect(result.stdout, `${shell.name} stdout`).toBe('')
       expect(result.stderr, `${shell.name} stderr`).toBe('')
       expect(posts[index]?.path, `${shell.name} posted`).toBe('/statusline/claude')
-      expect(parseClaudeStatusLineBody(posts[index])).toEqual(EXPECTED_RATE_LIMITS)
+      expect(parseClaudeStatusLineBody(posts[index])).toEqual(expectedRateLimits(index + 1))
     }
     expect(posts).toHaveLength(shells.length)
   }, 60_000)
@@ -180,7 +182,7 @@ describe.skipIf(process.platform !== 'win32')('Claude statusLine delivery on Win
     expect(result.stdout).toBe('')
     expect(result.stderr).not.toMatch(/powershell|-EncodedCommand/i)
     expect(posts).toHaveLength(1)
-    expect(parseClaudeStatusLineBody(posts[0])).toEqual(EXPECTED_RATE_LIMITS)
+    expect(parseClaudeStatusLineBody(posts[0])).toEqual(expectedRateLimits(1))
 
     // PowerShell-only hosts with unsafe paths rely on OAuth polling.
     await run(powershellPath(), [...POWERSHELL_ARGS, command], 2)
