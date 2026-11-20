@@ -8,10 +8,7 @@ import { toLinuxPath, toWindowsWslDrivePath } from '../../../shared/file-access/
 import { stat } from 'node:fs/promises'
 import { readRasterImageDimensions } from '../../../shared/file-preview/raster-image-dimensions'
 import { readNodeFileWithinLimit } from '../../../shared/file-content/node-bounded-file-reader'
-import {
-  isInsideNativeChatPasteFolder,
-  nativeChatPasteFolder
-} from '../paste-files/native-chat-paste-files'
+import { nativeChatPasteFolder } from '../paste-files/native-chat-paste-files'
 import { dirname, join } from 'node:path'
 import {
   AGENT_IMAGE_MAX_BYTES,
@@ -27,6 +24,7 @@ import {
 import { getAgentSessionAttachmentStore } from '../agent-session-attachments/agent-session-attachment-store-registry'
 import { parseAgentSessionAttachmentStorePath } from '../agent-session-attachments/agent-session-attachment-references'
 import { publishAgentImage } from './agent-image-publication'
+import { agentImageSourceContext } from '../../../shared/native-chat/input/composer/agent-image-paste'
 import type { AgentImageFitRequest, AgentImageFitResponse } from './agent-image-fit-protocol'
 
 export class AgentImageFitError extends Error {}
@@ -60,9 +58,7 @@ export async function fitAgentImagePath(path: string, signal?: AbortSignal): Pro
     const outputDirectory =
       root && parseAgentSessionAttachmentStorePath(root, path)
         ? join(dirname(path), '.agent-images')
-        : isInsideNativeChatPasteFolder(nativeChatPasteFolder(), path)
-          ? join(dirname(path), '.agent-images')
-          : join(nativeChatPasteFolder(), 'agent-images')
+        : join(nativeChatPasteFolder(), 'agent-images')
     if (attempts >= 65) {
       throw new AgentImageFitError('Too many images are being prepared')
     }
@@ -132,6 +128,8 @@ export async function fitAgentMessageImages(
     return body
   }
   const blocks: AgentJournalMessageItem['blocks'] = []
+  const originals: string[] = []
+  const delivered: string[] = []
   for (const block of body.blocks) {
     if (block.type !== 'image-ref' || !block.path || block.url) {
       blocks.push(block)
@@ -143,6 +141,12 @@ export async function fitAgentMessageImages(
       fitted.set(block.path, path)
     }
     blocks.push({ ...block, path })
+    originals.push(block.path)
+    delivered.push(path)
+  }
+  const context = agentImageSourceContext(originals, delivered)
+  if (context) {
+    blocks.push({ type: 'text', text: context })
   }
   return { ...body, blocks }
 }

@@ -58,6 +58,9 @@ export async function prepareAgentImageFile(
   if (!image) {
     return { path }
   }
+  if (!agentImageNeedsFitting(buffer.byteLength, image)) {
+    return { path }
+  }
   const target = clipboardImageSizeWithinEdge(image, AGENT_IMAGE_MAX_LONG_EDGE)
   if (image.width !== target.width || image.height !== target.height) {
     image.resize(target)

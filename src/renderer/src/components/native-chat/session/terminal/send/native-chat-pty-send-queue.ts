@@ -18,7 +18,7 @@ export type NativeChatPtySendQueueHandle = {
 }
 
 export type EnqueueNativeChatPtySendOptions = {
-  /** Clear leftover TUI input only if cancellation follows start but precedes submission. */
+  /** Clear this send's input only after a body write and before submission. */
   onCancelUnsubmitted?: () => void
 }
 
@@ -182,7 +182,7 @@ export function enqueueNativeChatPtySend(
       for (const timer of timers) {
         clearTimeout(timer)
       }
-      const shouldClear = bodyStarted && !submitted
+      const shouldClear = writeStarted && !submitted
       // Refund only this sequence’s window; later queued Enters still hold the line and their cards.
       state.freeAt = Math.max(Date.now(), state.freeAt - Math.max(0, durationMs))
       finishEntry()

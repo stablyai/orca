@@ -1,3 +1,8 @@
+import { findLandedImagePreviewEchoes } from '../../../../../mobile/src/session/native-chat/composer/drafts/mobile-native-chat-draft-reconcile'
+import {
+  retireLandedMobileNativeChatPending,
+  visibleMobileNativeChatPending
+} from '../../../../../mobile/src/session/native-chat/transcript/sending/mobile-native-chat-pending-echo'
 import { describe, expect, it } from 'vitest'
 import type { NativeChatMessage } from '../../native-chat-types'
 import { assignNativeChatPendingOccurrence } from './native-chat-pending-occurrence'
@@ -23,6 +28,65 @@ function message(
 }
 
 describe('pending send occurrence reconciliation', () => {
+  it.each([
+    { pathless: true, unrelatedImage: false, receiptKnown: false },
+    { pathless: false, unrelatedImage: true, receiptKnown: true, reversed: true },
+    { pathless: false, unrelatedImage: false, receiptKnown: true },
+    { pathless: false, unrelatedImage: true, receiptKnown: false }
+  ])(
+    'does not let generated metadata retire a distinguishable copied-note send: %o',
+    ({ pathless, unrelatedImage, receiptKnown, reversed }) => {
+      const text = '[Image source file: "/repo/a.png"; attached viewing copy: "/temp/a.png"]'
+      const first: NativeChatPendingSend = {
+        id: 'image',
+        text: '',
+        imagePaths: ['/repo/a.png'],
+        ...(receiptKnown ? { deliveredImagePaths: ['/temp/a.png'] } : {}),
+        sentAt: 100,
+        afterMessageId: 'boundary'
+      }
+      const copied = assignNativeChatPendingOccurrence([first], {
+        id: 'copied',
+        text,
+        imagePaths: unrelatedImage ? ['/repo/small.png'] : [],
+        sentAt: 110,
+        afterMessageId: 'boundary'
+      })
+      const pending = reversed ? [copied, first] : [first, copied]
+      const transcript: NativeChatMessage[] = [
+        message('boundary', 'assistant', 'ready', 90),
+        {
+          ...message('image-row', 'user', text, 120),
+          blocks: [
+            pathless
+              ? { type: 'image-ref', url: 'data:image/png;base64,first' }
+              : { type: 'image-ref', path: '/temp/a.png' },
+            { type: 'text', text }
+          ]
+        }
+      ]
+      expect(pendingSendsAsMessages(pending, transcript).map((row) => row.id)).toEqual([
+        'pending:copied'
+      ])
+      transcript.push(message('first-reply', 'assistant', 'done', 130))
+      const remaining = prunePendingSends(pending, transcript)
+      expect(remaining.map((entry) => entry.id)).toEqual(['copied'])
+      expect(pendingSendsAsMessages(remaining, transcript).map((row) => row.id)).toEqual([
+        'pending:copied'
+      ])
+      transcript.push({
+        ...message('copied-row', 'user', text, 140),
+        blocks: [
+          ...(unrelatedImage ? [{ type: 'image-ref' as const, path: '/repo/small.png' }] : []),
+          { type: 'text', text }
+        ]
+      })
+      expect(pendingSendsAsMessages(remaining, transcript)).toEqual([])
+      transcript.push(message('second-reply', 'assistant', 'done', 150))
+      expect(prunePendingSends(remaining, transcript)).toEqual([])
+    }
+  )
+
   it('keeps the next identical echo after pruning an earlier occurrence', () => {
     const first = assignNativeChatPendingOccurrence<NativeChatPendingSend>([], {
       id: 'p1',
@@ -402,4 +466,147 @@ it('keeps a copied source note literal beside an unrelated pathless image', () =
   expect(pendingSendsAsMessages(pending, transcript).map((row) => row.id)).toEqual([
     'pending:failed'
   ])
+})
+
+describe('copied source-note attachment evidence', () => {
+  const note = '[Image source file: "/repo/a.png"; attached viewing copy: "/temp/a.png"]'
+  const imageSend: NativeChatPendingSend = {
+    id: 'image',
+    text: '',
+    imagePaths: ['/repo/a.png'],
+    sentAt: 100,
+    afterMessageId: 'boundary',
+    afterMessageTimestamp: 90
+  }
+  const row = (id: string, text: string, paths: string[], at: number): NativeChatMessage => ({
+    ...message(id, 'user', text, at),
+    blocks: [...paths.map((path) => ({ type: 'image-ref' as const, path })), { type: 'text', text }]
+  })
+
+  it('keeps the full human legacy prefix and refuses contradictory real image paths', () => {
+    const human = {
+      id: 'human',
+      text: `/temp/a.png ${note}`,
+      imagePaths: ['/repo/small.png'],
+      sentAt: 110,
+      afterMessageId: 'boundary'
+    }
+    const transcript = [
+      message('boundary', 'assistant', 'ready', 90),
+      row('human-row', human.text, ['/repo/small.png'], 120),
+      message('reply', 'assistant', 'done', 130)
+    ]
+    expect(prunePendingSends([imageSend, human], transcript).map((entry) => entry.id)).toEqual([
+      'image'
+    ])
+    expect(
+      prunePendingSends(
+        [{ ...human, imagePaths: [] }],
+        [
+          message('boundary', 'assistant', 'ready', 90),
+          row('literal', human.text, [], 120),
+          message('reply', 'assistant', 'done', 130)
+        ]
+      )
+    ).toEqual([])
+  })
+
+  it('does not carry an image offset into a text-only stream after paging', () => {
+    const human = {
+      id: 'human',
+      text: note,
+      sentAt: 110,
+      afterMessageId: 'boundary',
+      afterMessageTimestamp: 90
+    }
+    const transcript = [
+      message('boundary', 'assistant', 'ready', 90),
+      row('image-row', note, ['/temp/a.png'], 120),
+      message('reply', 'assistant', 'done', 130)
+    ]
+    const remaining = prunePendingSends([imageSend, human], transcript)
+    expect(remaining.map((entry) => entry.id)).toEqual(['human'])
+    expect(
+      prunePendingSends(remaining, [
+        row('human-row', note, [], 140),
+        message('reply2', 'assistant', 'done', 150)
+      ])
+    ).toEqual([])
+  })
+
+  it('counts known different attachment identities in their own occurrence streams', () => {
+    const first = {
+      id: 'first',
+      text: note,
+      imagePaths: ['/temp/a.png'],
+      sentAt: 100,
+      afterMessageId: 'boundary'
+    }
+    const second = assignNativeChatPendingOccurrence([first], {
+      id: 'second',
+      text: note,
+      imagePaths: ['/repo/small.png'],
+      sentAt: 110,
+      afterMessageId: 'boundary'
+    })
+    const transcript = [
+      message('boundary', 'assistant', 'ready', 90),
+      row('first-row', note, ['/temp/a.png'], 120),
+      message('reply', 'assistant', 'done', 130)
+    ]
+    const remaining = prunePendingSends([first, second], transcript)
+    expect(remaining.map((entry) => entry.id)).toEqual(['second'])
+    transcript.push(
+      row('second-row', note, ['/repo/small.png'], 140),
+      message('reply2', 'assistant', 'done', 150)
+    )
+    expect(prunePendingSends(remaining, transcript)).toEqual([])
+  })
+
+  it('does not reuse a matched row and its generated suffix as two glued sends', () => {
+    const image = { ...imageSend, text: note }
+    const first = { id: 'first', text: note, sentAt: 110, afterMessageId: 'boundary' }
+    const second = assignNativeChatPendingOccurrence([first], {
+      id: 'second',
+      text: note,
+      sentAt: 115,
+      afterMessageId: 'boundary'
+    })
+    const transcript = [
+      message('boundary', 'assistant', 'ready', 90),
+      row('image-row', `${note}\n\n${note}`, ['/temp/a.png'], 120),
+      message('reply', 'assistant', 'done', 130)
+    ]
+    expect(prunePendingSends([image, first, second], transcript).map((entry) => entry.id)).toEqual([
+      'first',
+      'second'
+    ])
+    expect(
+      pendingSendsAsMessages([image, first, second], transcript).map((entry) => entry.id)
+    ).toEqual(['pending:first', 'pending:second'])
+  })
+
+  it('keeps mobile attachment evidence between preview binding and assistant advancement', () => {
+    const pending = [
+      {
+        id: 'phone',
+        text: note,
+        images: ['file://preview.png'],
+        sentAt: 100,
+        afterMessageId: 'boundary'
+      }
+    ]
+    const transcript = [
+      message('boundary', 'assistant', 'ready', 90),
+      row('phone-row', note, ['/repo/small.png'], 120)
+    ]
+    const landed = findLandedImagePreviewEchoes(transcript, pending)
+    expect(landed.map((entry) => entry.pendingId)).toEqual(['phone'])
+    const remaining = retireLandedMobileNativeChatPending(transcript, pending, new Set(['phone']))
+    expect(visibleMobileNativeChatPending(transcript, remaining)).toEqual([])
+    transcript.push(message('reply', 'assistant', 'done', 130))
+    expect(retireLandedMobileNativeChatPending(transcript, remaining, new Set(['phone']))).toEqual(
+      []
+    )
+  })
 })

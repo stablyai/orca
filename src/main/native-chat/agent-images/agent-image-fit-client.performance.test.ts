@@ -83,10 +83,22 @@ it.each([2, 20])(
     const fitted = new Map<string, string>()
     const first = await fitAgentMessageImages(body, undefined, fitted)
     const fresh = await fitAgentMessageImages(body, undefined, fitted)
+    expect(first.blocks.filter((block) => block.type === 'image-ref')).toHaveLength(count)
     expect(
-      first.blocks.every((block) => block.type === 'image-ref' && block.path === '/fitted.png')
+      first.blocks
+        .filter((block) => block.type === 'image-ref')
+        .every((block) => block.path === '/fitted.png')
     ).toBe(true)
     expect(fresh).toEqual(first)
+    expect(
+      first.blocks.some(
+        (block) =>
+          block.type === 'text' && block.text.includes(source) && block.text.includes('/fitted.png')
+      )
+    ).toBe(true)
+    expect(body.blocks.every((block) => block.type === 'image-ref' && block.path === source)).toBe(
+      true
+    )
     expect(worker.dispatch).toHaveBeenCalledTimes(1)
   }
 )

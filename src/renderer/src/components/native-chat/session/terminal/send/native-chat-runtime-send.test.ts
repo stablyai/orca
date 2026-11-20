@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { writes } = vi.hoisted((): { writes: string[] } => ({ writes: [] }))
+const { writes, preparation } = vi.hoisted(() => ({
+  writes: [] as string[],
+  preparation: { hold: false }
+}))
 
 vi.mock('@/runtime/hosted-terminals/input/runtime-terminal-input-send', () => ({
   sendRuntimePtyInput: (_ptyId: string, data: string) => {
@@ -22,7 +25,9 @@ vi.mock('@/runtime/rpc/subscriptions/runtime-rpc-subscribe', () => ({
     _params: unknown,
     handlers: { onEvent: (value: unknown) => void }
   ) => {
-    handlers.onEvent({ paths: ['/views/hero.png'] })
+    if (!preparation.hold) {
+      handlers.onEvent({ paths: ['/views/hero.png'] })
+    }
     return { unsubscribe: () => {} }
   }
 }))
@@ -35,7 +40,7 @@ vi.mock('@/runtime/hosted-terminals/identity/remote-runtime-pty-owner', () => ({
 }))
 
 import { sendNativeChatMessageWithImageAttachments } from './native-chat-runtime-image-send'
-import { sendNativeChatMessage } from './native-chat-runtime-send'
+import { sendNativeChatMessage, sendNativeChatTypedCommand } from './native-chat-runtime-send'
 import { resetNativeChatPtySendQueuesForTests } from './native-chat-pty-send-queue'
 import { nativeChatExpectedLine, nativeChatLineShowsMessage } from './native-chat-paste-landed'
 
@@ -50,6 +55,15 @@ describe('sendNativeChatMessage input line ownership', () => {
   afterEach(() => {
     resetNativeChatPtySendQueuesForTests()
     vi.useRealTimers()
+  })
+
+  it('does not submit a partially typed command after cancellation', async () => {
+    const handle = sendNativeChatTypedCommand('pty-command', '/model opus')
+    await vi.advanceTimersByTimeAsync(0)
+    handle.cancel()
+    await vi.advanceTimersByTimeAsync(2000)
+    expect(writes).not.toContain('\r')
+    await expect(handle.outcome).resolves.toBe('uncertain')
   })
 
   // Claude takes a clear that shares its read with the message as pasted text, so the old line joined the message.
@@ -96,6 +110,36 @@ describe('sendNativeChatMessage input line ownership', () => {
 })
 
 describe('fitted image delivery', () => {
+  it.each([false, true])(
+    'preserves existing input when preparation is cancelled (observed=%s)',
+    async (observed) => {
+      vi.useFakeTimers()
+      writes.length = 0
+      preparation.hold = true
+      try {
+        const handle = sendNativeChatMessageWithImageAttachments(
+          'claude',
+          'pty-image',
+          'Inspect this image',
+          ['/repo/hero.png'],
+          {
+            readInputLine: () => 'Keep my existing draft',
+            ...(observed ? { onWriteRejected: () => {} } : {})
+          }
+        )
+        await vi.advanceTimersByTimeAsync(0)
+        handle.cancel()
+        await vi.advanceTimersByTimeAsync(2000)
+        expect(writes).toEqual([])
+        await expect(handle.outcome).resolves.toBe('not-submitted')
+      } finally {
+        preparation.hold = false
+        resetNativeChatPtySendQueuesForTests()
+        vi.useRealTimers()
+      }
+    }
+  )
+
   it.each([false, true])(
     'keeps a nested SSH attachment on its own host (observed=%s)',
     async (observed) => {
