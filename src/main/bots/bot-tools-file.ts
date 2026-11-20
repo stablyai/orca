@@ -184,7 +184,8 @@ function writeServers(
       botToolsPath(folder),
       snapshot.text,
       `${JSON.stringify({ ...snapshot.file, servers: stored }, null, 2)}\n`,
-      { mode: 0o600 }
+      // Older files hold header values inline: an earlier copy is never kept beside it.
+      { mode: 0o600, credential: true }
     )
   } catch (error) {
     rollBack()
