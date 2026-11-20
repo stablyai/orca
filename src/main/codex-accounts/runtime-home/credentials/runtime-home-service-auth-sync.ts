@@ -41,8 +41,10 @@ export abstract class CodexRuntimeHomeAuthSync extends CodexRuntimeHomeLaunch {
           this.writeRuntimeAuth(systemDefaultAuth, { owner: 'system-default' })
           return
         }
-        // A managed login leaves the mirror; an unreadable ~/.codex would snapshot no login.
         const snapshot = this.systemDefaultAuthIsGone()
+        if (snapshot) {
+          this.captureSystemDefaultSnapshot({ force: true })
+        }
         this.clearRuntimeAuthAfterSystemDefaultLogout(runtimeAuthPath, snapshot)
         return
       }
@@ -184,13 +186,10 @@ export abstract class CodexRuntimeHomeAuthSync extends CodexRuntimeHomeLaunch {
         (provenance?.owner === 'system-default' &&
           systemAuth === null &&
           this.runtimeAuthMatchesSystemDefaultIdentity(runtimeAuthBeforeSync, knownSharedAuth))
-      if (!sharedAuthOwnedBySystemDefault) {
+      if (!sharedAuthOwnedBySystemDefault || this.systemAuthUnreadable(systemAuth !== null)) {
         return
       }
       if (systemAuth === null) {
-        if (!this.systemDefaultAuthIsGone()) {
-          return
-        }
         removeFileAtomicallyIfUnchanged(runtimeAuthPath, runtimeAuthBeforeSync)
         if (existsSync(runtimeAuthPath)) {
           this.persistSharedRuntimeAuthProvenance({ owner: 'fenced' })
@@ -304,12 +303,10 @@ export abstract class CodexRuntimeHomeAuthSync extends CodexRuntimeHomeLaunch {
   }
 
   protected clearRuntimeAuthAfterSystemDefaultLogout(path: string, snapshot = true): void {
-    // Snapshot first: a failed save then leaves the mirror as it was, never an old snapshot to restore.
+    rmSync(path, { force: true })
     if (snapshot) {
       this.captureSystemDefaultSnapshot({ force: true })
     }
-    // System logout revokes the mirrored login even after a runtime token refresh.
-    rmSync(path, { force: true })
     this.persistRuntimeLogoutMarker()
     this.lastWrittenAuthJson = null
     this.persistSharedRuntimeAuthProvenance({

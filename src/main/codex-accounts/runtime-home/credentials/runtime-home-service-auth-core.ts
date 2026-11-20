@@ -23,6 +23,10 @@ export abstract class CodexRuntimeHomeAuthCore extends CodexRuntimeHomeLegacyMig
       return isDefinitiveAbsence(error)
     }
   }
+  /** Not found by a read, yet not definitely gone: an unreadable auth.json is no logout. */
+  protected systemAuthUnreadable(found: boolean): boolean {
+    return !found && !this.systemDefaultAuthIsGone()
+  }
 
   protected readSystemDefaultAuth(): string | null {
     const systemDefaultAuthPath = join(getSystemCodexHomePath(), 'auth.json')
