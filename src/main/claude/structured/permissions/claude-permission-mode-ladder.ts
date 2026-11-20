@@ -243,6 +243,7 @@ export function observeClaudeRootInit(
   session:
     | (Parameters<typeof setClaudeAllowedPermissionMode>[0] &
         Parameters<typeof claudeOwesFullAccessFallback>[0])
+    | null
     | undefined,
   firstRootInit: ClaudeSession['firstRootInit']
 ): void {
