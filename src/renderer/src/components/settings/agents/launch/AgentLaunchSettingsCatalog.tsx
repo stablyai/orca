@@ -147,7 +147,7 @@ export function AgentLaunchSettingsCatalog({
       .filter(
         (agent) =>
           !selectedDetected?.includes(agent) &&
-          chatProgramInstalled(readChatProgram(state, agent, context, selectedDetected))
+          chatProgramInstalled(readChatProgram(statuses, agent, context, selectedDetected))
       )
       .join(' ')
   })

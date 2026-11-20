@@ -64,7 +64,7 @@ export function useChatAgentDetection() {
     const state = agentLaunchRouteStoreFor(appState, statuses)
     const context = resolveChatProgramContext(state, CHAT_HOST)
     return chatAgents
-      .filter((agent) => readChatProgram(state, agent, context, nativeDetected) === 'available')
+      .filter((agent) => readChatProgram(statuses, agent, context, nativeDetected) === 'available')
       .join(',')
   })
   // Chat never runs in WSL, so only native installs count; null while detection is pending.

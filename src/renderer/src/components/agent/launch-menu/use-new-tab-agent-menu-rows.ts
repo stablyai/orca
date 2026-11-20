@@ -72,7 +72,6 @@ export function useAgentMenuObservation(
 ) {
   const state = useAppStateView().getState()
   const hostStatuses = readRuntimeStatusesForView(useAppStateView())
-  const hostView = useMemo(() => ({ hostStatuses }), [hostStatuses])
   const viewActive = useAppStateViewActive()
   const worktreeId = typeof target === 'string' ? target : target?.workspace.worktreeId
   const launchCwd = typeof target === 'string' ? undefined : target?.launchCwd
@@ -240,7 +239,7 @@ export function useAgentMenuObservation(
     detectedOnHost: detectedIds,
     chatAgents,
     chatProgram: (agent) =>
-      unresolvedTarget ? 'unlearned' : readChatProgram(hostView, agent, input, detectedIds),
+      unresolvedTarget ? 'unlearned' : readChatProgram(hostStatuses, agent, input, detectedIds),
     hostChatAnswer: answerFor,
     offerAgentSetup: options?.offerAgentSetup,
     hostPlatform: facts.hostPlatform

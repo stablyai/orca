@@ -57,7 +57,7 @@ export function ChatAgentLaunchSettings({
       .filter(
         (agent) =>
           !detected?.includes(agent) &&
-          readChatProgram(state, agent, context, detected) === 'available'
+          readChatProgram(statuses, agent, context, detected) === 'available'
       )
       .join(' ')
   })
