@@ -94,20 +94,22 @@ export function withFrameDrawnChatTabPlacement(intent: {
     return intent.params
   }
   // Probed earlier in the launch; unknown sends no place, so the server saves the tab at the group's end.
-  const supported =
+  if (
     readCachedRuntimeEnvironmentCapability(
       environmentId,
       AGENT_SESSION_CREATE_TAB_PLACEMENT_RUNTIME_CAPABILITY
-    ) === true
+    ) !== true
+  ) {
+    return intent.params
+  }
   const legacyTabId = structuredAgentSessionTabId(intent.sessionId)
   const tabId =
     findTabByIdOrChatAlias(
       useAppStore.getState().unifiedTabsByWorktree[intent.worktreeId],
       legacyTabId
     )?.id ?? legacyTabId
-  const tabPlacement = supported
-    ? (chatTabPlacement(environmentId, intent.worktreeId, tabId) ??
-      addressTabPlacement(environmentId, intent.worktreeId, intent.surfaceAddress))
-    : undefined
+  const tabPlacement =
+    chatTabPlacement(environmentId, intent.worktreeId, tabId) ??
+    addressTabPlacement(environmentId, intent.worktreeId, intent.surfaceAddress)
   return tabPlacement ? { ...intent.params, tabPlacement } : intent.params
 }
