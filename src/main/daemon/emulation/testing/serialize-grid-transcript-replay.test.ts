@@ -28,12 +28,12 @@ const SEEDS = Math.max(1, Number(process.env.SERIALIZE_TRANSCRIPT_SEEDS) || 2)
 const KNOWN_PREEXISTING_I2_FAILURES: Record<string, number> = {
   less: 6,
   nano: 2,
-  opencode: 5,
+  opencode: 3,
   // Boot captures expose existing background and cursor restore loss.
   'opencode-1-18-32-timed-boot-hidden-pane': 16,
   'opencode-1-18-32-timed-boot-slow': 16,
   'opencode-1-18-32-timed-first-launch': 16,
-  'opencode-2-0-18-timed-boot-hidden-pane': 14,
+  'opencode-2-0-18-timed-boot-hidden-pane': 10,
   // OpenCode 2 captures retain live-pen background colors and hidden rows after shrink.
   'opencode-2-0-14-timed-cold-standalone': 4,
   'opencode-2-0-21-timed-cold-standalone': 36,
@@ -41,10 +41,7 @@ const KNOWN_PREEXISTING_I2_FAILURES: Record<string, number> = {
   'opencode-2-0-21-timed-natural-load-enter-dropped': 12,
   'opencode-cmd-2-0-21-timed-warm-server': 21,
   // Narrow captures also restore a cursor one column short and leak the pen’s bold attribute.
-  'opencode-2-0-21-timed-narrow-pane': 8,
-  // Qoder also restores the cursor one column short after shrinking.
-  'qoder-no-account': 2,
-  'qoder-ready': 2,
+  'opencode-2-0-21-timed-narrow-pane': 6,
   // Codex 0.157 header borders restore with an extra attribute bit.
   'codex-0157-config-override-embedded-warning': 22,
   'codex-0157-effort-override-embedded-warning': 4,
@@ -79,8 +76,6 @@ const KNOWN_PREEXISTING_I2_FAILURES: Record<string, number> = {
   // Hermes banner cells restore with an extra bold bit under the jitter schedule.
   'hermes-tui-ready': 2,
   'hermes-0-22-slash-setup': 2,
-  // Hermes 0.22's bottom statusbar restores the cursor one column short after shrink.
-  'hermes-0-22-statusbar-bottom': 2,
   // Agy/Cline/Prime reproduce background leaks; Prime also has cursor-row diffs after alt-screen repaint.
   'antigravity-1-2-14-busy-thinking': 2,
   'antigravity-1-2-14-command-palette': 4,
@@ -99,24 +94,16 @@ const KNOWN_PREEXISTING_I2_FAILURES: Record<string, number> = {
   'cline-3-0-66-ready': 11,
   'cline-3-0-66-ready-80x24': 2,
   'cline-3-0-66-slash-menu': 6,
-  'cline-3-0-66-turn-ended': 10,
+  'cline-3-0-66-turn-ended': 6,
   'prime-agent-0-9-5-ready': 18,
-  'prime-agent-0-9-5-turn': 4,
   'prime-agent-0-9-8-busy-streaming': 16,
   'prime-agent-0-9-8-draft': 10,
-  'prime-agent-0-9-8-ready': 22,
+  'prime-agent-0-9-8-ready': 16,
   'prime-agent-0-9-8-ready-80x24': 16,
-  'prime-agent-0-9-8-ready-after-question': 2,
-  'prime-agent-0-9-8-slash-menu': 34,
+  'prime-agent-0-9-8-slash-menu': 18,
   'prime-agent-0-9-8-tool-turn': 40,
-  'prime-agent-0-9-8-trace-question': 4,
-  'prime-agent-0-9-8-turn-ended': 24,
-  // OMP restores the cursor one column short after shrink, including in unscrubbed captures.
-  'omp-18-composer': 2,
-  'omp-18-composer-narrow': 7,
-  'omp-18-setup': 6,
-  // ConPTY’s wrap-pending cursor at column 120 restores at 119 without resizing.
-  'pwsh-7-6-psreadline-history-prediction-conpty': 2
+  'prime-agent-0-9-8-trace-question': 2,
+  'prime-agent-0-9-8-turn-ended': 18
 }
 
 // Pin resize checkpoints and GridDiff hashes measured on baseline 6835b9b4e3ea.
