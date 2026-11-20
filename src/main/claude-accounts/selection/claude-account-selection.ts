@@ -26,6 +26,10 @@ import {
   setSelectedClaudeAccountIdForTarget,
   type ClaudeAccountSelectionTarget
 } from './runtime-selection'
+import {
+  claudeSelectionApplier,
+  type ClaudeSelectionOutcome
+} from './claude-account-selection-sync'
 
 export const CLAUDE_ACCOUNT_NEEDS_SIGN_IN_MESSAGE =
   'Sign in to this Claude account again before selecting it.'
@@ -72,8 +76,17 @@ export class ClaudeAccountSelection {
   constructor(
     private readonly store: ClaudeAccountStore,
     private readonly rateLimits: ClaudeAccountUsage,
-    private readonly runtimeAuth: ClaudeAccountRuntime
+    private readonly runtimeAuth: ClaudeAccountRuntime,
+    /** A saved selection reached new launches (`moved`: running agents may need to follow it). */
+    private readonly selectionApplied: (outcome: ClaudeSelectionOutcome) => void = () => {}
   ) {}
+
+  /** Saves and publishes a selection, restoring the earlier one on failure. */
+  private readonly applySelection = claudeSelectionApplier(
+    () => this.runtimeAuth,
+    (patch) => this.saveSettings(patch),
+    () => this.selectionApplied('unknown')
+  )
 
   list(): ClaudeRateLimitAccountsState {
     this.pruneSelection()
@@ -163,13 +176,13 @@ export class ClaudeAccountSelection {
       normalizeClaudeRuntimeSelection(settings),
       accountId
     )
-    this.saveSettings({
+    // Stop new launches from selecting the folder before deleting it.
+    await this.applySelection(settings, target, {
       activeClaudeManagedAccountId:
         settings.activeClaudeManagedAccountId === accountId ? null : nextSelection.host,
       activeClaudeManagedAccountIdsByRuntime: nextSelection
     })
-    // Stop new launches from selecting the folder before deleting it.
-    await this.runtimeAuth.syncForCurrentSelection(target)
+    this.selectionApplied(wasSelected ? 'moved' : 'unchanged')
     try {
       await this.runtimeAuth.removeAccountFolder(accountId, target)
     } catch (error) {
@@ -249,23 +262,12 @@ export class ClaudeAccountSelection {
       accountId,
       effectiveTarget
     )
-    this.saveSettings({
+    await this.applySelection(previous, effectiveTarget, {
       activeClaudeManagedAccountId:
         effectiveTarget?.runtime === 'wsl' ? nextSelection.host : accountId,
       activeClaudeManagedAccountIdsByRuntime: nextSelection
     })
-    try {
-      await this.runtimeAuth.syncForCurrentSelection(effectiveTarget)
-    } catch (error) {
-      this.saveSettings({
-        activeClaudeManagedAccountId: previous.activeClaudeManagedAccountId,
-        activeClaudeManagedAccountIdsByRuntime: previous.activeClaudeManagedAccountIdsByRuntime
-      })
-      await this.runtimeAuth.publishAll().catch((rollbackError: unknown) => {
-        console.warn('[claude-accounts] Rollback republish failed:', rollbackError)
-      })
-      throw error
-    }
+    this.selectionApplied('moved')
     this.refreshUsage(outgoingAccountId, effectiveTarget)
     return this.list()
   }

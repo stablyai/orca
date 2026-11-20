@@ -103,3 +103,57 @@ it('keeps recovery, acceptance, linkage and sign-out evidence available after re
   expect(answers[9]).toEqual({ kind: 'signed-out-at', answer: true })
   expect(answers[10]).toEqual({ kind: 'signed-out-at', answer: false })
 })
+
+async function appendSends(
+  journal: Awaited<ReturnType<typeof fixture.open>>,
+  sends: readonly { id: string; queued: boolean }[]
+): Promise<void> {
+  for (const { id, queued } of sends) {
+    await journal.appendSubmission({
+      clientMessageId: id,
+      payloadFingerprint: fixture.fingerprint(fixture.message(id)),
+      body: fixture.message(id),
+      fence: 0,
+      ...(queued ? { handoverRecorded: true as const } : {})
+    })
+  }
+}
+
+/** One more than the input population's page, so a scan has to cross a page boundary. */
+const PAST_ONE_PAGE = 129
+const BACKLOG_TIMEOUT_MS = 20_000
+
+const numbered = (prefix: string, count: number) =>
+  Array.from({ length: count }, (_, index) => `${prefix}-${String(index).padStart(3, '0')}`)
+
+// Writes a backlog past one page send by send, which takes seconds on a loaded machine.
+it(
+  'names the first queued send at the front of a long queue',
+  async () => {
+    const journal = await fixture.open()
+    await appendSends(
+      journal,
+      numbered('queued', PAST_ONE_PAGE).map((id) => ({ id, queued: true }))
+    )
+    expect((await journal.reads.input({ kind: 'first-queued' })).submission?.clientMessageId).toBe(
+      'queued-000'
+    )
+  },
+  BACKLOG_TIMEOUT_MS
+)
+
+// Writes a backlog past one page send by send, which takes seconds on a loaded machine.
+it(
+  'finds a queued send behind more than a page of pending sends that are not queued',
+  async () => {
+    const journal = await fixture.open()
+    await appendSends(journal, [
+      ...numbered('handed', PAST_ONE_PAGE).map((id) => ({ id, queued: false })),
+      { id: 'queued-last', queued: true }
+    ])
+    expect((await journal.reads.input({ kind: 'first-queued' })).submission?.clientMessageId).toBe(
+      'queued-last'
+    )
+  },
+  BACKLOG_TIMEOUT_MS
+)
