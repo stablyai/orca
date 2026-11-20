@@ -180,15 +180,13 @@ function restoreMovedFileWithoutOverwrite(
       continue
     }
     try {
-      // Kept by a rename into the free name: one step, so no crash leaves it anywhere else.
-      if (attempt > 0) {
-        renameFileWithWindowsRetry(sourcePath, path)
-        console.warn('[atomic-file] Kept an earlier version beside', targetPath, path)
-        return
-      }
-      // Back at the target only by a link, which refuses a name another writer took meanwhile.
+      // A link refuses a name another program took meanwhile and keeps the file's permissions. A
+      // crash before the held name goes leaves two equal files, and the next try drops the held one.
       if (publishFileWithoutOverwrite(sourcePath, path)) {
         drop()
+        if (attempt > 0) {
+          console.warn('[atomic-file] Kept an earlier version beside', targetPath, path)
+        }
         return
       }
     } catch (error) {

@@ -177,7 +177,7 @@ describe('writeFileAtomically', () => {
       const target = join(dir, 'config.toml')
       writeFileSync(`${target}.orca-guarded`, 'model = "o5"\n')
       writeFileSync(target, 'approval = "never"\n')
-      const undo = onFirstCallTo(fsMock.renameSync, isKept, () => {
+      const undo = onFirstCallTo(fsMock.linkSync, isKept, () => {
         throw Object.assign(new Error('no space'), { code: 'ENOSPC' })
       })
 
@@ -215,6 +215,31 @@ describe('writeFileAtomically', () => {
       }
     }
   )
+
+  it('never replaces a file another program saves under the kept name meanwhile', () => {
+    setup()
+    try {
+      const target = join(dir, 'config.toml')
+      writeFileSync(`${target}.orca-guarded`, 'model = "o5"\n')
+      writeFileSync(target, 'approval = "never"\n')
+      const link = fsMock.linkSync.getMockImplementation()!
+      const undo = onFirstCallTo(fsMock.linkSync, isKept, (source, kept) => {
+        writeFileSync(kept, 'theirs\n')
+        link(source, kept)
+      })
+
+      recoverInterruptedGuardedFileOperation(target)
+      undo()
+      expect(
+        readdirSync(dir)
+          .filter((name) => name.includes('.orca-kept-'))
+          .map((name) => readFileSync(join(dir, name), 'utf-8'))
+          .sort()
+      ).toEqual(['model = "o5"\n', 'theirs\n'])
+    } finally {
+      cleanup()
+    }
+  })
 
   it('puts the user file back even when the temp file cannot be deleted', () => {
     setup()
