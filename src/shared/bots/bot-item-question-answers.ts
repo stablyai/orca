@@ -58,10 +58,7 @@ function answersAskedQuestions(text: string, asked: ReadonlySet<string>): boolea
   const lines = text.split('\n').filter((line) => line.trim())
   return (
     lines.length > 0 &&
-    lines.every((line) => {
-      const head = line.split(' → ')[0]
-      return head !== undefined && head !== line && asked.has(head.trim())
-    })
+    lines.every((line) => [...asked].some((question) => line.trim().startsWith(`${question} →`)))
   )
 }
 
