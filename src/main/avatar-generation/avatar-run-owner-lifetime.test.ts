@@ -2,8 +2,8 @@ import { EventEmitter } from 'node:events'
 import { expect, it } from 'vitest'
 import { abortWhenOwnerDocumentEnds, type AvatarRunOwner } from './avatar-run-owner-lifetime'
 
-function start() {
-  const owner = new EventEmitter()
+function start(destroyed = false) {
+  const owner = Object.assign(new EventEmitter(), { isDestroyed: () => destroyed })
   const controller = new AbortController()
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the helper only subscribes with once/on/removeListener, which EventEmitter provides.
   const release = abortWhenOwnerDocumentEnds(owner as unknown as AvatarRunOwner, controller)
@@ -36,4 +36,10 @@ it('stops listening once the run is released', () => {
 
   expect(controller.signal.aborted).toBe(false)
   expect(owner.listenerCount('did-navigate')).toBe(0)
+})
+
+it('aborts at once when the document is already gone', () => {
+  const { controller } = start(true)
+
+  expect(controller.signal.aborted).toBe(true)
 })
