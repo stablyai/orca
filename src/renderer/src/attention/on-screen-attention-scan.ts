@@ -57,13 +57,9 @@ export type OnScreenAttentionEnvironment = {
 function hasMarkersOnScreen(s: AppState, targets: readonly AutoAckTabTarget[]): boolean {
   const tabIds = new Set(targets.map((target) => target.tabId))
   // A chat's pane keys name its conversation address, not the tab it shows in.
-  for (const target of targets) {
-    const tab =
-      target.surfaceKind === 'structured'
-        ? s.unifiedTabsByWorktree[target.worktreeId ?? '']?.find(({ id }) => id === target.tabId)
-        : undefined
-    if (tab?.contentType === 'agent-session') {
-      tabIds.add(chatPaneAddressTabId(tab.entityId))
+  for (const { sessionId } of targets) {
+    if (sessionId !== undefined) {
+      tabIds.add(chatPaneAddressTabId(sessionId))
     }
   }
   const onScreen = (paneKey: string): boolean => tabIds.has(paneKeyTabId(paneKey) ?? '')

@@ -1,7 +1,6 @@
 import { useCallback, useRef } from 'react'
 import { useFocusEffect } from 'expo-router'
 import type { AgentMessageSource } from '../../../src/shared/agent-session/journal/agent-session-message-source'
-import { structuredAgentSessionPaneKey } from '../../../src/shared/agent-session/view/structured-agent-session-projection'
 import {
   structuredSessionOpenFailure,
   type StructuredSessionOpenFailure
@@ -11,6 +10,7 @@ import { mobileStructuredSessionOpenMessage } from './native-chat/agent-session/
 import { openMobileStructuredSession } from './native-chat/agent-session/open-mobile-structured-session'
 import { openMobileAgentMessageTerminal } from './tabs/mobile-agent-message-terminal'
 import type { MobileSessionKeyboardStateModel } from '../terminal/session/input-controls/use-mobile-session-keyboard-state'
+import { chatPaneKey } from '../../../src/shared/agent-session/view/structured-agent-session-projection'
 
 export function useMobileAgentMessageNavigation(
   client: RpcClient | null,
@@ -123,10 +123,7 @@ export function useMobileAgentMessageNavigation(
           return
         }
         if (result.kind === 'opened') {
-          navigate(
-            result.target.worktreeId,
-            structuredAgentSessionPaneKey(result.tab.id, result.target.sessionId)
-          )
+          navigate(result.target.worktreeId, chatPaneKey(result.target.sessionId))
         } else if (result.kind === 'terminal') {
           const destination = await openMobileAgentMessageTerminal(
             client,

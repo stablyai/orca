@@ -3,6 +3,7 @@ import { retireNativeChatDraftPosition } from '../drafts/native-chat-composer-dr
 import { readNativeChatComposerDraft } from '../drafts/native-chat-composer-draft-store'
 import { structuredAgentSessionDraftScopeKey } from '../drafts/native-chat-draft-scope'
 import { retireNativeChatSubagentViews } from '../subagents/native-chat-open-subagent'
+import { chatPaneAddressTabId } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
 
 /** A chat tab's death retires its pane-only UI: the draft's unsatisfied position (never the draft) and any open subagent view. */
 export function retireRemovedNativeChatTabs(before: readonly Tab[], after: readonly Tab[]): void {
@@ -22,7 +23,7 @@ export function retireRemovedNativeChatTabs(before: readonly Tab[], after: reado
         readNativeChatComposerDraft(structuredAgentSessionDraftScopeKey(tab.entityId)),
         tab.id
       )
-      retireNativeChatSubagentViews(tab.id)
+      retireNativeChatSubagentViews(chatPaneAddressTabId(tab.entityId))
     }
   }
 }

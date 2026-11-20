@@ -21,11 +21,15 @@ it('drops a closed chat tab’s open subagent and keeps the other tabs’', () =
   const closed = chat('tab-closed')
   const kept = chat('tab-kept')
   act(() => {
-    openNativeChatSubagent('tab-closed:pane', 'agent-1')
-    openNativeChatSubagent('tab-kept:pane', 'agent-2')
+    openNativeChatSubagent('structured-agent-session-session-tab-closed:pane', 'agent-1')
+    openNativeChatSubagent('structured-agent-session-session-tab-kept:pane', 'agent-2')
   })
-  const closedView = renderHook(() => useNativeChatOpenSubagent('tab-closed:pane'))
-  const keptView = renderHook(() => useNativeChatOpenSubagent('tab-kept:pane'))
+  const closedView = renderHook(() =>
+    useNativeChatOpenSubagent('structured-agent-session-session-tab-closed:pane')
+  )
+  const keptView = renderHook(() =>
+    useNativeChatOpenSubagent('structured-agent-session-session-tab-kept:pane')
+  )
 
   act(() => retireRemovedNativeChatTabs([closed, kept], [kept]))
 

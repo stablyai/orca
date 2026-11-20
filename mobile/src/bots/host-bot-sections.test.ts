@@ -5,12 +5,12 @@ import type {
 } from '../../../src/shared/worktree/lineage-types'
 import type { WorkspaceKey } from '../../../src/shared/workspace/identity/workspace-scope'
 import type { Worktree } from '../worktree/workspace-list/workspace-list-types'
-import { structuredAgentSessionStatusPaneKey } from '../../../src/shared/agent-session/view/structured-agent-session-tab'
 import { buildHostBotSections, isProjectListRow, type HostBotListing } from './host-bot-sections'
 import { DEFAULT_BOT_SIDEBAR_VIEW } from '../../../src/shared/bots/bot-sidebar-view'
 import { hostBotTreeKey } from './bot-chat-tree-reads'
 import type { RuntimeWorktreeAgentRow } from '../../../src/shared/worktree/catalog/runtime-worktree-contracts'
 import { mobileBotRowLine, mobileBotRowLineText } from './mobile-bot-row-line'
+import { chatPaneKey } from '../../../src/shared/agent-session/view/structured-agent-session-projection'
 
 function row(worktreeId: string, overrides: Partial<Worktree> = {}): Worktree {
   return {
@@ -266,7 +266,7 @@ describe('buildHostBotSections', () => {
       // A member's session in the room, waiting on its owner.
       agents: [
         {
-          paneKey: structuredAgentSessionStatusPaneKey('member-1'),
+          paneKey: chatPaneKey('member-1'),
           parentPaneKey: null,
           state: 'blocked',
           agentType: 'claude',
