@@ -30,6 +30,8 @@ export type BotAvatarIntake = {
   line: BotAvatarIntakeLine
   /** A picture is still being read; it lands unless a newer action replaces it. */
   reading: boolean
+  /** How many pictures it has taken: each one, even the same image again, is a new choice. */
+  taken: number
   take: (image: Blob) => void
   /** Back to the hint; a decode in flight is dropped. */
   dismiss: () => void
@@ -47,6 +49,7 @@ export function useBotAvatarIntakeState({
 }): BotAvatarIntake {
   const [line, setLineState] = useState<BotAvatarIntakeLine>(HINT)
   const [reading, setReading] = useState(false)
+  const [taken, setTaken] = useState(0)
   // Bumped by every new action, so a late decode is dropped.
   const run = useRef(0)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -84,6 +87,7 @@ export function useBotAvatarIntakeState({
           return
         }
         setReading(false)
+        setTaken((count) => count + 1)
         latest.current.onPicture(png)
         if (latest.current.undoable) {
           setLine({ kind: 'saved' }, SAVED_MS)
@@ -123,7 +127,7 @@ export function useBotAvatarIntakeState({
     []
   )
 
-  return { line, reading, take, dismiss, setDragging }
+  return { line, reading, taken, take, dismiss, setDragging }
 }
 
 /** Takes pasted and dropped pictures into `intake` from the dialog or popover around `rootRef`; whether

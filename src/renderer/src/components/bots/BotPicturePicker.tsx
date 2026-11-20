@@ -226,14 +226,11 @@ export function BotPicturePicker({
         ? { key, src: custom?.src ?? null, fallback: custom?.fallback ?? '' }
         : { key, src: srcs[key], fallback: '' }
   )
-  // A shared intake's picture lands as a new custom one; it leaves Generate as one taken here does.
-  const customSrc = custom?.src ?? null
-  const [seenCustomSrc, setSeenCustomSrc] = useState(customSrc)
-  if (customSrc !== seenCustomSrc) {
-    setSeenCustomSrc(customSrc)
-    if (onGenerate && !generatedCustom) {
-      setOnGenerate(false)
-    }
+  // Every picture an intake takes, shared or not and even the same image again, leaves Generate.
+  const [seenTaken, setSeenTaken] = useState(intake.taken)
+  if (intake.taken !== seenTaken) {
+    setSeenTaken(intake.taken)
+    setOnGenerate(false)
   }
   const { line } = intake
   const dropping = line.kind === 'drop'

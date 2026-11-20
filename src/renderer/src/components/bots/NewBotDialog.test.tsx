@@ -515,6 +515,55 @@ describe('NewBotDialog Generate and an upload', () => {
   }
 
   it.each([
+    ['the same image again', 'UE5H', 'UE5H'],
+    ['a different image', 'UE5H', 'QkJCQg']
+  ])(
+    'leaves Generate for a pasted %s while a picture is on its way',
+    async (_name, first, second) => {
+      stubGeneration()
+      mocks.createBot.mockResolvedValue(created)
+      mocks.uploadBotAvatar.mockResolvedValue(created)
+      const { picture, openPicker, submit } = renderDialog()
+      const paste = (): void => {
+        fireEvent.paste(screen.getByLabelText('Name'), {
+          clipboardData: {
+            files: [new File(['x'], 'cat.png', { type: 'image/png' })],
+            types: ['Files'],
+            getData: () => ''
+          }
+        })
+      }
+      paste()
+      finishUpload(first)
+      await waitFor(() => expect(picture()).toBe(`data:image/png;base64,${first}`))
+      openPicker()
+      fireEvent.click(await screen.findByRole('button', { name: 'Previous picture' }))
+      const box = await screen.findByRole('textbox', { name: 'Picture description' })
+      fireEvent.change(box, { target: { value: 'a fox' } })
+      fireEvent.keyDown(box, { key: 'Enter' })
+
+      // Create comes back once the pasted picture has landed, the same image or not.
+      fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Reviewer' } })
+      const create = screen.getByRole('button', { name: 'Create' })
+      paste()
+      await waitFor(() => expect(create).toHaveProperty('disabled', true))
+      finishUpload(second)
+      await waitFor(() => expect(create).toHaveProperty('disabled', false))
+      expect(picture()).toBe(`data:image/png;base64,${second}`)
+      finishGenerate()
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      expect(picture()).toBe(`data:image/png;base64,${second}`)
+      await submit()
+      await waitFor(() =>
+        expect(mocks.uploadBotAvatar).toHaveBeenCalledWith(
+          expect.objectContaining({ id: 'bot-1' }),
+          second
+        )
+      )
+    }
+  )
+
+  it.each([
     ['the upload finishes first', ['upload', 'generate']],
     ['the upload finishes last', ['generate', 'upload']]
   ])('saves the generated picture when %s', async (_name, order) => {
