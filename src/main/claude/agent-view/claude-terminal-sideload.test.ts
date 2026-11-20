@@ -152,3 +152,63 @@ it('checks the sequenced child under the login-shell config folder', async () =>
   expect(run.mock.calls[0][0]).toMatchObject({ env: { CLAUDE_CONFIG_DIR: '/account/login-shell' } })
   expect(launch.env.ORCA_CLAUDE_AGENT_VIEW_PLUGIN_DIR).toBeUndefined()
 })
+
+it('suppresses remembered plugin injection for wrapped and compound commands', () => {
+  const { support } = fixture()
+  support.observeExit(
+    { command: '/bin/claude', cwd: '/project', env: input().env },
+    new Error(refusal)
+  )
+  for (const command of ['env claude --resume session', 'echo ready; claude']) {
+    const launch = { ...input(), command }
+    prepareClaudeTerminalSideload(launch, support)
+    expect(launch.env.CLAUDE_CODE_PLUGIN_DIRS).toBe('')
+    expect(launch.env.ORCA_CLAUDE_AGENT_VIEW_PLUGIN_DIR).toBeUndefined()
+  }
+})
+
+it('can prepare an account after execution was skipped because the CLI was unavailable', async () => {
+  const { deps, support } = fixture()
+  let command: string | null = null
+  const probe = { ...deps, resolveCommandOnLocalPath: async () => command }
+  await prewarmClaudeTerminalSideload(input(), probe)
+  command = '/bin/claude'
+  const launch = input()
+  await prewarmClaudeTerminalSideload(launch, probe)
+  prepareClaudeTerminalSideload(launch, support)
+  expect(launch.env.ORCA_CLAUDE_AGENT_VIEW_PLUGIN_DIR).toBeUndefined()
+})
+
+it('keys inherited WSL config passthrough after path translation', async () => {
+  vi.stubEnv('CLAUDE_CONFIG_DIR', String.raw`C:\accounts\locked`)
+  vi.stubEnv('WSLENV', 'CLAUDE_CONFIG_DIR/p')
+  try {
+    const { deps, support, run } = fixture()
+    const launch = {
+      command: 'claude',
+      cwd: '/project',
+      shell: 'posix' as const,
+      wsl: { distro: 'work' },
+      env: {
+        ORCA_CLAUDE_CONFIG_DIR: '/home/guest/.claude',
+        ORCA_CLAUDE_AGENT_VIEW_PLUGIN_DIR: '/orca/plugin'
+      }
+    }
+    await prewarmClaudeTerminalSideload(launch, deps)
+    expect(run.mock.calls[0][0]).toMatchObject({
+      env: { CLAUDE_CONFIG_DIR: String.raw`C:\accounts\locked`, WSLENV: 'CLAUDE_CONFIG_DIR/p' }
+    })
+    const translated = {
+      ...launch,
+      env: {
+        ...launch.env,
+        CLAUDE_CONFIG_DIR: '/mnt/c/accounts/locked',
+        WSLENV: 'CLAUDE_CONFIG_DIR'
+      }
+    }
+    prepareClaudeTerminalSideload(translated, support)
+    expect(translated.env.ORCA_CLAUDE_AGENT_VIEW_PLUGIN_DIR).toBeUndefined()
+  } finally {
+    vi.unstubAllEnvs()
+  }
+})

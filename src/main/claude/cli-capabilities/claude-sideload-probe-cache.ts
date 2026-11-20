@@ -35,8 +35,14 @@ export function createClaudeSideloadProbe(deps: {
     const pending = (async (): Promise<ClaudeCliFlagFact> => {
       const release = await slots.acquire(0)
       let fact: ClaudeCliFlagFact = 'unknown'
+      let checkedAccount = true
       try {
+        if (deps.refused(launch)) {
+          fact = 'unsupported'
+          return fact
+        }
         const result = await run()
+        checkedAccount = !result.skipped
         if (!result.timedOut) {
           await deps.remember(launch, new Error(`${result.stderr}\n${result.stdout}`))
           if (deps.refused(launch)) {
@@ -56,12 +62,8 @@ export function createClaudeSideloadProbe(deps: {
       } finally {
         release()
         running.delete(account)
-        checked.set(account, fact)
-        for (const stale of checked.keys()) {
-          if (checked.size <= MAX_CONFIGS) {
-            break
-          }
-          checked.delete(stale)
+        if (checkedAccount) {
+          checked.set(account, fact)
         }
       }
     })()

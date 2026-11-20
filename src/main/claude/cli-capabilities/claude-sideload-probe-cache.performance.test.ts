@@ -70,3 +70,74 @@ it('bounds a burst of background account checks and admits a skipped account aft
   )
   expect(runs).toBe(33)
 })
+
+// A distinct account needs one fact for the process lifetime, regardless of other account activity.
+it.each([100, 1000])(
+  'does not repeat checks while cycling through 33 folders %i times',
+  async (count) => {
+    const flags = support()
+    let runs = 0
+    for (let index = 0; index < count; index++) {
+      await flags.probeSideload?.(
+        {
+          command: '/bin/claude',
+          cwd: '/project',
+          env: { CLAUDE_CONFIG_DIR: `/account/${index % 33}` }
+        },
+        async () => {
+          runs++
+          return { code: 1, stdout: '', stderr: 'unrelated failure' }
+        }
+      )
+    }
+    expect(runs).toBe(33)
+  }
+)
+
+it.each([10, 100])(
+  'skips %i queued callers after an authoritative refusal and drains live work',
+  async (count) => {
+    const flags = support()
+    const gate = Promise.withResolvers<void>()
+    const pending = ['/active/a', '/active/b'].map((account) =>
+      flags.probeSideload?.(
+        { command: '/bin/claude', cwd: '/project', env: { CLAUDE_CONFIG_DIR: account } },
+        async () => {
+          await gate.promise
+          return { code: 1, stdout: '', stderr: 'unrelated failure' }
+        }
+      )
+    )
+    const launch = {
+      command: '/bin/claude',
+      cwd: '/project',
+      env: { CLAUDE_CONFIG_DIR: '/queued' }
+    }
+    let staleRuns = 0
+    let liveRuns = 0
+    for (let index = 0; index < count; index++) {
+      pending.push(
+        flags.probeSideload?.(launch, async () => {
+          staleRuns++
+          return { code: 1, stdout: '', stderr: '' }
+        })
+      )
+    }
+    flags.observeExit(
+      launch,
+      new Error(
+        "--plugin-dir is disabled by your organization's managed settings (disableSideloadFlags)."
+      )
+    )
+    pending.push(
+      flags.probeSideload?.({ ...launch, env: { CLAUDE_CONFIG_DIR: '/live' } }, async () => {
+        liveRuns++
+        return { code: 1, stdout: '', stderr: 'unrelated failure' }
+      })
+    )
+    gate.resolve()
+    await Promise.all(pending)
+    expect(staleRuns).toBe(0)
+    expect(liveRuns).toBe(1)
+  }
+)

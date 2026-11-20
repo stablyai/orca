@@ -3,10 +3,10 @@ import {
   resolveSetupAgentSequenceLaunchCommand
 } from '../../../shared/agent-launch/startup/setup-agent-sequencing'
 import { claudeConfigDirEnvPatch } from '../structured/launch/claude-config-dir-pin'
-import { resolveCliCommandAsync } from '../../../shared/shell/command-resolution/node-cli-command-async-resolution'
+import { resolveExecutableCommandAsync } from '../../../shared/shell/command-resolution/node-cli-command-async-resolution'
 import { resolveStartupShell } from '../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import { resolveWindowsShellStartupFamily } from '../../../shared/shell/launch/windows-terminal-shell'
-import { delimiter, isAbsolute } from 'node:path'
+import { delimiter, isAbsolute, resolve } from 'node:path'
 import { runProcess } from '@orca/process-host'
 import { withClaudeAgentViewPlugin } from '../../../shared/agent-hook-listener/providers/claude/view/claude-agent-view-launch'
 import { findClaudeExecutableIndex } from '../../../shared/agent-launch/startup/agent-resume-launch-command'
@@ -19,7 +19,6 @@ import {
   runClaudeBackgroundAttempts
 } from '../../../shared/text-generation/launch/claude-background-run-isolation'
 import { parseWslUncPath, toLinuxPath } from '../../../shared/file-access/wsl-paths'
-import { resolveCommandOnLocalPath } from '../../ipc/command-path/command-path-resolver'
 import { runWslProcess } from '../../wsl/execution/wsl-runner'
 import { blockedWslDistroForExec } from '../../wsl/discovery/wsl-background-exec-gate'
 import {
@@ -33,14 +32,15 @@ async function resolveProbeCommand(
   command: string,
   options: { cwd: string; env: Record<string, string> }
 ): Promise<string | null> {
-  if (command.includes('/') || command.includes('\\')) {
-    return resolveCommandOnLocalPath(command, options)
-  }
-  const resolved = await resolveCliCommandAsync(command, {
-    pathEnv: options.env.PATH ?? options.env.Path,
-    homePath: options.env.HOME ?? options.env.USERPROFILE
-  })
-  return isAbsolute(resolved) ? resolved : null
+  return resolveExecutableCommandAsync(
+    /[\\/]/.test(command) && !isAbsolute(command) && !command.startsWith('~')
+      ? resolve(options.cwd, command)
+      : command,
+    {
+      pathEnv: options.env.PATH ?? options.env.Path,
+      homePath: options.env.HOME ?? options.env.USERPROFILE
+    }
+  )
 }
 
 type TerminalLaunch = {
@@ -51,12 +51,13 @@ type TerminalLaunch = {
   wsl?: { distro?: string }
 }
 
-function launchContext(input: TerminalLaunch): ClaudeCliLaunch | null {
+function launchContext(input: TerminalLaunch, requireDirectCommand = true): ClaudeCliLaunch | null {
+  const inherited = { ...process.env, ...input.env }
   let command = 'claude'
   const env: Record<string, string> = input.wsl
     ? {}
     : Object.fromEntries(
-        Object.entries({ ...process.env, ...input.env }).filter(
+        Object.entries(inherited).filter(
           (entry): entry is [string, string] => entry[1] !== undefined
         )
       )
@@ -64,20 +65,20 @@ function launchContext(input: TerminalLaunch): ClaudeCliLaunch | null {
     Object.assign(env, claudeConfigDirEnvPatch(input.env.ORCA_CLAUDE_CONFIG_DIR, { env }))
   }
   if (input.wsl) {
-    for (const token of input.env.WSLENV?.split(':') ?? []) {
+    for (const token of inherited.WSLENV?.split(':') ?? []) {
       const [key, flags = ''] = token.split('/')
       if (
         !flags.includes('w') &&
         !['PATH', 'HOME', 'TMP', 'TEMP'].includes(key) &&
-        input.env[key] !== undefined
+        inherited[key] !== undefined
       ) {
-        env[key] = input.env[key]
+        env[key] = inherited[key]!
       }
     }
-    if (input.env.CLAUDE_CONFIG_DIR) {
-      env.CLAUDE_CONFIG_DIR = input.env.CLAUDE_CONFIG_DIR
+    if (inherited.CLAUDE_CONFIG_DIR) {
+      env.CLAUDE_CONFIG_DIR = inherited.CLAUDE_CONFIG_DIR
     }
-    env.WSLENV = (input.env.WSLENV ?? '')
+    env.WSLENV = (inherited.WSLENV ?? '')
       .split(':')
       .filter((token) => {
         const [key, flags = ''] = token.split('/')
@@ -87,19 +88,20 @@ function launchContext(input: TerminalLaunch): ClaudeCliLaunch | null {
   }
   const startupCommand = resolveSetupAgentSequenceLaunchCommand(input.env, input.command)
   if (startupCommand) {
-    if (withClaudeAgentViewPlugin(startupCommand, 'orca-probe', input.shell) === startupCommand) {
+    const direct =
+      withClaudeAgentViewPlugin(startupCommand, 'orca-probe', input.shell) !== startupCommand
+    if (requireDirectCommand && !direct) {
       return null
     }
     const parsed = tokenizeStartupCommand(startupCommand, input.shell)
-    if (!parsed.ok) {
-      return null
-    }
-    const index = findClaudeExecutableIndex(parsed.tokens, input.shell)
-    command = parsed.tokens[index]
-    for (const token of parsed.tokens.slice(0, index)) {
-      const at = token.indexOf('=')
-      if (at > 0) {
-        env[token.slice(0, at)] = token.slice(at + 1)
+    if (direct && parsed.ok) {
+      const index = findClaudeExecutableIndex(parsed.tokens, input.shell)
+      command = parsed.tokens[index]
+      for (const token of parsed.tokens.slice(0, index)) {
+        const at = token.indexOf('=')
+        if (at > 0) {
+          env[token.slice(0, at)] = token.slice(at + 1)
+        }
       }
     }
   }
@@ -155,17 +157,20 @@ export async function prewarmClaudeTerminalSideload(
   await deps.support.probeSideload?.(launch, async () => {
     const distro = (input.cwd ? parseWslUncPath(input.cwd)?.distro : undefined) ?? input.wsl?.distro
     if (input.wsl && (await blockedWslDistroForExec(distro))) {
-      return { code: null, stdout: '', stderr: '', timedOut: true }
+      return { code: null, stdout: '', stderr: '', skipped: true }
     }
     const command = input.wsl
       ? launch.command
       : await deps.resolveCommandOnLocalPath(launch.command, { cwd: launch.cwd, env: launch.env })
     if (!command) {
-      return { code: null, stdout: '', stderr: '', timedOut: true }
+      return { code: null, stdout: '', stderr: '', skipped: true }
     }
     return runClaudeBackgroundAttempts({
       agentId: 'claude',
       run: async (strictMcp) => {
+        if (deps.support.sideloadRefused?.(launch)) {
+          return { code: 1, stdout: '', stderr: '', timedOut: false }
+        }
         const args = ['--plugin-dir', root, '--print', ...claudeBackgroundArgs(strictMcp)]
         return input.wsl
           ? deps.runWslProcess({
@@ -207,7 +212,7 @@ export function prepareClaudeTerminalSideload(
   if (!root) {
     return
   }
-  const launch = launchContext(input)
+  const launch = launchContext(input, false)
   if (!launch || !support.sideloadRefused?.(launch)) {
     return
   }

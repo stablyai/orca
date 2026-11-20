@@ -1,5 +1,6 @@
 import { createClaudeSideloadProbe } from './claude-sideload-probe-cache'
 import { realpath, stat } from 'node:fs/promises'
+import { normalize, posix } from 'node:path'
 import { defaultClaudeConfigDir } from '../structured/launch/claude-config-dir-pin'
 import { claudeVersionReaches, probeClaudeCliVersion } from './claude-hook-event-versions'
 
@@ -118,7 +119,13 @@ export type ClaudeCliFlagSupport = {
   ) => boolean
   probeSideload?: (
     launch: ClaudeCliLaunch,
-    run: () => Promise<{ code: number | null; stdout: string; stderr: string; timedOut?: boolean }>
+    run: () => Promise<{
+      code: number | null
+      stdout: string
+      stderr: string
+      timedOut?: boolean
+      skipped?: boolean
+    }>
   ) => Promise<ClaudeCliFlagFact>
   /** Share probes by binary and cwd; budget expiry leaves the flag unknown for this launch only. */
   check: (
@@ -181,11 +188,12 @@ export function createClaudeCliFlagSupport(
   }
   const known = new Map<string, BinaryFacts>()
   const refusedByAccount = new Map<string, Set<string>>()
-  const accountKey = (launch: Pick<ClaudeCliLaunch, 'env' | 'hostKey' | 'accountConfigDir'>) =>
-    JSON.stringify([
-      launch.hostKey ?? 'local',
-      launch.accountConfigDir || defaultClaudeConfigDir(launch.env)
-    ])
+  const accountKey = (launch: Pick<ClaudeCliLaunch, 'env' | 'hostKey' | 'accountConfigDir'>) => {
+    const folder = (launch.accountConfigDir || defaultClaudeConfigDir(launch.env)).trim()
+    const path = launch.hostKey ? posix.normalize(folder) : normalize(folder)
+    const normalized = !launch.hostKey && process.platform === 'win32' ? path.toLowerCase() : path
+    return JSON.stringify([launch.hostKey ?? 'local', normalized.replace(/[\\/]+$/, '')])
+  }
   const probing = new Map<string, { settled: Promise<void>; startedAt: number }>()
   const touch = (key: string): BinaryFacts => {
     const facts = known.get(key) ?? {
@@ -250,12 +258,6 @@ export function createClaudeCliFlagSupport(
       const account = accountKey(launch)
       refused = refusedByAccount.get(account) ?? new Set<string>()
       refusedByAccount.set(account, refused)
-      for (const stale of refusedByAccount.keys()) {
-        if (refusedByAccount.size <= MAX_REMEMBERED) {
-          break
-        }
-        refusedByAccount.delete(stale)
-      }
     } else {
       const key = await keyOf(launch)
       if (key === null) {
