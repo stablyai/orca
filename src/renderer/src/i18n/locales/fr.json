@@ -18955,7 +18955,6 @@
         "stoppedRestart_many": "{{count}} chats arrêtés à la fermeture d’Orca.",
         "stoppedRestart_other": "{{count}} chats arrêtés à la fermeture d’Orca.",
         "promptsNotResent": "La reprise ne renverra pas vos prompts.",
-        "promptsNotSent": "Vos prompts n’ont pas été renvoyés.",
         "resume": "Reprendre",
         "details": "Détails",
         "close": "Fermer",
@@ -24231,7 +24230,6 @@
       "chip": "Bots",
       "chipLabel": "Bots, tout afficher",
       "searchEverything": "Tout rechercher pour « {{text}} »",
-      "searchBotsFor": "Rechercher des bots pour « {{text}} »",
       "noMatch": "Aucun bot ne correspond à « {{text}} »",
       "noBotsYet": "Aucun bot pour l’instant",
       "filtersPaused": "Les filtres s’appliquent aux espaces de travail, pas aux bots",
@@ -24248,7 +24246,7 @@
       "browse": "Parcourir les modèles"
     },
     "new": {
-      "fromTemplate": "Utiliser un modèle"
+      "fromTemplate": "Modèle"
     },
     "googleSetup": {
       "otherAccount": "Changer de compte"

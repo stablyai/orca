@@ -1,7 +1,7 @@
-// The owner's comment attachments, admitted on the bot's host as chat admits its own: images are
-// committed inline-image files in this host's chat attachment store, under chat's limits; files ride in
-// the text as `@path`. Every store upload the comment names is claimed for the item's chat before the
-// event is written, so the chat's claims and sweep keep it exactly as long as that chat's own pastes.
+// A comment's attachments, the owner's or its bot's, admitted on the bot's host as chat admits its own:
+// images are committed inline-image files in this host's chat attachment store, under chat's limits;
+// files ride in the text as `@path`. Every store upload the comment names is claimed for the item's chat
+// before the event is written, so the chat's claims and sweep keep it exactly as long as that chat's own pastes.
 import { copyFile, lstat, realpath, stat } from 'node:fs/promises'
 import { basename, isAbsolute, join } from 'node:path'
 import {
@@ -12,7 +12,11 @@ import {
 } from '../../shared/agent-session/agent-session-attachments'
 import type { AgentJournalMessageItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { isAgentInlineImagePath } from '../../shared/native-chat/input/composer/agent-inline-image-types'
-import type { BotItemCommentImage } from '../../shared/bots/bot-items'
+import { formatNativeChatFileReference } from '../../shared/native-chat/input/composer/agent-image-paste'
+import {
+  BOT_ITEM_COMMENT_FILE_MAX_COUNT,
+  type BotItemCommentImage
+} from '../../shared/bots/bot-items'
 import {
   agentSessionAttachmentReferences,
   parseAgentSessionAttachmentStorePath
@@ -39,25 +43,45 @@ export type BotItemCommentAttachmentDeps = {
   chat: () => Promise<{ sessionId: string; title: string | null } | null>
 }
 
-/** The comment's images, named and sized on this host, once each upload it names is claimed for the
- *  item's chat; a text-only comment naming no upload touches nothing. */
+export type BotItemCommentAttached = { text: string; images: BotItemCommentImage[] }
+
+/** The comment's text and images, named and sized on this host, once each upload it names is claimed
+ *  for the item's chat; a text-only comment naming no upload touches nothing. `files`: files on this
+ *  host's disk (a bot's `--file`), copied in: images join `paths`, other files join the text as `@path`. */
 export async function admitBotItemCommentAttachments(
   deps: BotItemCommentAttachmentDeps,
-  text: string,
-  paths: readonly string[]
-): Promise<BotItemCommentImage[]> {
+  commentText: string,
+  paths: readonly string[],
+  files: readonly string[] = []
+): Promise<BotItemCommentAttached> {
   const { store } = deps
   if (!store) {
     // Unclaimed bytes would be swept under the comment, so anything naming an upload waits for the store.
-    if (paths.length > 0 || STORE_REFERENCE.test(text)) {
+    if (paths.length > 0 || files.length > 0 || STORE_REFERENCE.test(commentText)) {
       throw refused("This computer can't take attachments right now. Comment again in a moment.")
     }
-    return []
+    return { text: commentText, images: [] }
   }
-  const stored = deps.local
-    ? await Promise.all(paths.map((path) => storedCopy(store, path)))
-    : paths
+  const relative = files.find((path) => !isAbsolute(path))
+  if (relative !== undefined) {
+    throw refused(`${relative}: name the file by its full path.`)
+  }
+  const others = files.filter((path) => !isAgentInlineImagePath(path))
+  if (others.length > BOT_ITEM_COMMENT_FILE_MAX_COUNT) {
+    throw refused(`Comments take up to ${BOT_ITEM_COMMENT_FILE_MAX_COUNT} files besides images.`)
+  }
+  const local = deps.local ? [...paths, ...files.filter(isAgentInlineImagePath)] : paths
+  const [stored, storedFiles] = await Promise.all([
+    deps.local ? Promise.all(local.map((path) => storedCopy(store, path))) : local,
+    Promise.all(others.map((path) => storedCopy(store, path, true)))
+  ])
   const images = await admitImages(store, stored)
+  const references = storedFiles.map(formatNativeChatFileReference).join('\n')
+  const text = !references
+    ? commentText
+    : commentText.trim()
+      ? `${commentText.trimEnd()}\n\n${references}`
+      : references
   const body: AgentJournalMessageItem = {
     kind: 'message',
     role: 'user',
@@ -67,7 +91,7 @@ export async function admitBotItemCommentAttachments(
     ]
   }
   if (agentSessionAttachmentReferences(store.rootDir, body).size === 0) {
-    return images
+    return { text, images }
   }
   const chat = await deps.chat()
   if (!chat) {
@@ -86,7 +110,7 @@ export async function admitBotItemCommentAttachments(
     console.warn('[bots] items: claiming comment attachments failed', error)
     throw refused("Couldn't attach the files. Comment again in a moment.")
   }
-  return images
+  return { text, images }
 }
 
 async function admitImages(
@@ -127,14 +151,15 @@ async function admitImages(
   return images
 }
 
-/** A local image outside the store, copied in; a store path as it is. */
+/** A local image (or with `anyKind`, any file) outside the store, copied in; a store path as it is. */
 async function storedCopy(
   store: NonNullable<BotItemCommentAttachmentDeps['store']>,
-  path: string
+  path: string,
+  anyKind = false
 ): Promise<string> {
   if (
     !isAbsolute(path) ||
-    !isAgentInlineImagePath(path) ||
+    (!anyKind && !isAgentInlineImagePath(path)) ||
     parseAgentSessionAttachmentStorePath(store.rootDir, path)
   ) {
     return path

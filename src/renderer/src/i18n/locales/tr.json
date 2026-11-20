@@ -19076,7 +19076,6 @@
         "stoppedRestart_one": "Orca kapanırken {{count}} sohbet durdu.",
         "stoppedRestart_other": "Orca kapanırken {{count}} sohbet durdu.",
         "promptsNotResent": "Devam ettirmek istemlerinizi yeniden göndermez.",
-        "promptsNotSent": "İstemleriniz yeniden gönderilmedi.",
         "resume": "Devam ettir",
         "details": "Ayrıntılar",
         "close": "Kapat",
@@ -23792,7 +23791,6 @@
       "chip": "Botlar",
       "chipLabel": "Botlar, her şeyi göster",
       "searchEverything": "Her yerde \"{{text}}\" ara",
-      "searchBotsFor": "Botlarda \"{{text}}\" ara",
       "noMatch": "\"{{text}}\" ile eşleşen bot yok",
       "noBotsYet": "Henüz bot yok",
       "filtersPaused": "Filtreler botlara değil çalışma alanlarına uygulanır",
@@ -23808,7 +23806,7 @@
       "browse": "Şablonlara göz at"
     },
     "new": {
-      "fromTemplate": "Şablon kullan"
+      "fromTemplate": "Şablon"
     },
     "apps": {
       "paste": {

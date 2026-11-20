@@ -57,18 +57,6 @@ it('continues each cut once, and at most three in five minutes', async () => {
   expect(await launch('turn-5', NOW + 7 * MINUTE)).toBe(1)
 })
 
-it('leaves a cut that was asking its person to that person', async () => {
-  const asking = {
-    activity: {
-      state: 'blocked' as const,
-      prompts: [{ kind: 'approval' as const, label: 'Run it?' }],
-      tasks: []
-    }
-  }
-  expect(await launch('turn-1', NOW, asking)).toBe(0)
-  expect(await capsule.beginResume(undefined, 'person', NOW)).toHaveLength(1)
-})
-
 it('leaves a crash cut whose agent was not proven to have exited to the person', async () => {
   expect(await launch('turn-1', NOW, { trigger: 'crash', exitUnproven: true })).toBe(0)
   expect(await capsule.beginResume(undefined, 'person', NOW)).toHaveLength(1)

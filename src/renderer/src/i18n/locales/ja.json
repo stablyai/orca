@@ -19153,7 +19153,6 @@
         "stoppedUpdate_other": "アップデートで {{count}} 件のチャットが停止しました。",
         "stoppedRestart_other": "Orca の終了で {{count}} 件のチャットが停止しました。",
         "promptsNotResent": "再開してもプロンプトは再送信されません。",
-        "promptsNotSent": "プロンプトは再送信されていません。",
         "resume": "再開",
         "details": "詳細",
         "close": "閉じる",
@@ -25115,7 +25114,6 @@
       "chip": "ボット",
       "chipLabel": "ボット、すべて表示に戻す",
       "searchEverything": "「{{text}}」をすべての項目から検索",
-      "searchBotsFor": "「{{text}}」でボットを検索",
       "noMatch": "「{{text}}」に一致するボットはありません",
       "noBotsYet": "ボットはまだありません",
       "filtersPaused": "フィルターはワークスペースに適用され、ボットには適用されません",
@@ -25130,7 +25128,7 @@
       "browse": "テンプレートを見る"
     },
     "new": {
-      "fromTemplate": "テンプレートを使用する"
+      "fromTemplate": "テンプレート"
     },
     "googleSetup": {
       "otherAccount": "アカウントを切り替え"

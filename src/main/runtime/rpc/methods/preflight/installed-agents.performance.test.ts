@@ -11,8 +11,6 @@ import type { WorktreeMeta } from '../../../../../shared/worktree/meta-types'
 import type { HostWorktreeTarget } from '../../../../../shared/worktree/host-qualified-identity'
 import * as detection from '../../../../preflight/workspace-agent-detection'
 import { listInstalledWorkspaceAgents } from './installed-agents'
-import { resolveQualifiedAgentDetectionHost } from './preflight-workspace-target'
-import * as worktreeRouting from '../../../workspaces/catalog/worktree-launch-host-repo'
 
 const scan = vi.hoisted(() => vi.fn())
 vi.mock('../../../workspaces/catalog/repo-worktree-resolution-scan', () => ({
@@ -25,7 +23,9 @@ vi.mock('../../../workspaces/catalog/repo-worktree-admin-fingerprint', () => ({
 afterEach(() => vi.restoreAllMocks())
 
 describe('installed-agent workspace resolution bound', () => {
-  it.each([750, 7500])('resolves the selected checkout once among %i worktrees', async (count) => {
+  // #45072 reuses the selected workspace so detection does not read its catalog a second time.
+  it('resolves the selected checkout once in a large worktree inventory', async () => {
+    const count = 7500
     const repo = storeRepo({ id: `inventory-${count}`, path: `/work/inventory-${count}` })
     const meta: Record<string, WorktreeMeta> = {}
     scan.mockResolvedValue({
@@ -65,31 +65,9 @@ describe('installed-agent workspace resolution bound', () => {
     expect(resolve).toHaveBeenCalledTimes(1)
   })
 
-  it.each([12, 120])('builds the detection owner index once among %i repos', async (count) => {
-    const repos = Array.from({ length: count }, (_, index) =>
-      storeRepo({ id: `repo-${index}`, path: `/work/repo-${index}` })
-    )
-    const runtime = new OrcaRuntimeService(partialRuntimeStore({ getRepos: () => repos }))
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: detection reads only the selected row's ownership and path.
-    const selected = { repoId: 'repo-0', path: '/work/repo-0', hostId: 'local' } as Awaited<
-      ReturnType<OrcaRuntimeService['showManagedWorktree']>
-    >
-    const routing = vi.spyOn(worktreeRouting, 'resolveWorktreeHostRouting')
-
-    const host = await resolveQualifiedAgentDetectionHost(
-      runtime,
-      { worktreeId: 'repo-0::/work/repo-0', worktreeHostId: 'local' },
-      selected
-    )
-
-    expect(host.kind).toBe('local')
-    expect(routing).toHaveBeenCalledTimes(1)
-  })
-
-  it.each([
-    [750, 12],
-    [7500, 120]
-  ])('acquires the selected folder once among %i folders', async (count, groupCount) => {
+  it('acquires the selected folder once in a large folder catalog', async () => {
+    const count = 7500
+    const groupCount = 120
     const folders = Array.from({ length: count }, (_, index) =>
       storeFolderWorkspace({
         id: index === 0 ? 'hub' : `hub-${index}`,

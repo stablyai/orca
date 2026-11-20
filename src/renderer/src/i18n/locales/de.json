@@ -18927,7 +18927,6 @@
         "stoppedRestart_one": "{{count}} Chat beim Beenden von Orca angehalten.",
         "stoppedRestart_other": "{{count}} Chats beim Beenden von Orca angehalten.",
         "promptsNotResent": "Deine Prompts werden nicht erneut gesendet.",
-        "promptsNotSent": "Deine Prompts wurden nicht erneut gesendet.",
         "resume": "Fortsetzen",
         "details": "Details",
         "close": "Schließen",
@@ -23650,7 +23649,6 @@
       "chip": "Bots",
       "chipLabel": "Bots, alles anzeigen",
       "searchEverything": "Überall nach „{{text}}“ suchen",
-      "searchBotsFor": "Bots nach „{{text}}“ durchsuchen",
       "noMatch": "Keine Bots passen zu „{{text}}“",
       "noBotsYet": "Noch keine Bots",
       "filtersPaused": "Filter gelten für Arbeitsbereiche, nicht für Bots",
@@ -23666,7 +23664,7 @@
       "browse": "Vorlagen durchsuchen"
     },
     "new": {
-      "fromTemplate": "Vorlage verwenden"
+      "fromTemplate": "Vorlage"
     },
     "apps": {
       "paste": {

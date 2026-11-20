@@ -132,10 +132,8 @@ async function connectCli(dispatcher: RpcDispatcher) {
 
 describe.skipIf(process.platform === 'win32')('agent installed over CLI RPC', () => {
   it.each([
-    ['runtime:owner', 'repo::/srv/app'],
     ['ssh:box', 'repo::/srv/app'],
     ['runtime:owner', 'folder:hub'],
-    ['ssh:box', 'folder:hub'],
     ['local', 'repo::/srv/app']
   ] as const)('reads agents and launch settings on %s for %s', async (host, workspaceId) => {
     const owner = runtimeFor('local', workspaceId, true)

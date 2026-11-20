@@ -18215,7 +18215,6 @@
         "stoppedUpdate_other": "Orca 업데이트로 채팅 {{count}}개가 중지되었습니다.",
         "stoppedRestart_other": "Orca 종료로 채팅 {{count}}개가 중지되었습니다.",
         "promptsNotResent": "재개해도 프롬프트는 다시 전송되지 않습니다.",
-        "promptsNotSent": "프롬프트는 다시 전송되지 않았습니다.",
         "resume": "재개",
         "details": "세부 정보",
         "close": "닫기",
@@ -23511,7 +23510,6 @@
       "chip": "봇",
       "chipLabel": "봇, 모두 표시",
       "searchEverything": "전체에서 \"{{text}}\" 검색",
-      "searchBotsFor": "\"{{text}}\"(으)로 봇 검색",
       "noMatch": "\"{{text}}\"와(과) 일치하는 봇이 없습니다",
       "noBotsYet": "아직 봇이 없습니다",
       "filtersPaused": "필터는 봇이 아닌 워크스페이스에 적용됩니다",
@@ -23526,7 +23524,7 @@
       "browse": "템플릿 둘러보기"
     },
     "new": {
-      "fromTemplate": "템플릿 사용"
+      "fromTemplate": "템플릿"
     },
     "googleSetup": {
       "otherAccount": "계정 전환"

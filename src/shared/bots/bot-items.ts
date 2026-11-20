@@ -148,7 +148,10 @@ export const BOT_ITEM_EVENT_KINDS = [
 ] as const
 export type BotItemEventKind = (typeof BOT_ITEM_EVENT_KINDS)[number]
 
-/** An image on an owner's comment: a committed chat attachment on the bot's host, named and sized there. */
+/** Files besides images on one comment, as `bot reply --file` takes. */
+export const BOT_ITEM_COMMENT_FILE_MAX_COUNT = 10
+
+/** An image on a comment: a committed chat attachment on the bot's host, named and sized there. */
 export type BotItemCommentImage = { path: string; name: string; bytes: number }
 
 /** A `commented` event's images, dropping any entry a newer or damaged record shaped otherwise. */

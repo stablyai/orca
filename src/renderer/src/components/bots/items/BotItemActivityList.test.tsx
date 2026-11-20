@@ -170,3 +170,46 @@ it('shows an answer an older host recorded as a quoted comment, the question kee
     screen.getByRole('button', { name: /^Replying to: Go ahead without the design review\?/ })
   ).toBeTruthy()
 })
+
+it("shows an agent's comment files as file buttons that open as file links, and folds images past six", () => {
+  const store = '/Users/x/.orca/agent-session-attachments'
+  const file = (n: number, name: string) =>
+    `${store}/0b6f8a52-4a3e-4c4e-9a59-1d5d1f2b8c0${n}/${name}`
+  const opened = vi.fn<CommentMarkdownLinkClickHandler>((event) => event.preventDefault())
+  const images = Array.from({ length: 8 }, (_, n) => ({
+    path: file(n, `shot-${n + 1}.png`),
+    name: `shot-${n + 1}.png`,
+    bytes: 3
+  }))
+  const events: BotItemEvent[] = [
+    {
+      id: 'e2',
+      kind: 'commented',
+      actor: ASKER,
+      data: {
+        text: `Full run.\n\n@${file(8, 'run.log')}\n@"${file(9, 'install report.html')}"`,
+        images
+      },
+      at: 200
+    }
+  ]
+  render(
+    <NativeChatLinkClickContext value={opened}>
+      <BotItemActivityList bot={BOT} item={makeTestBotItem(6)} events={events} />
+    </NativeChatLinkClickContext>
+  )
+
+  const grid = document.querySelector('[data-bot-item-comment-images]')!
+  expect(grid.textContent).toContain('shot-5.png')
+  expect(grid.textContent).not.toContain('shot-6.png')
+  expect(screen.getByRole('button', { name: '+3' })).toBeTruthy()
+  expect(screen.getByText('Full run.')).toBeTruthy()
+  expect(document.body.textContent).not.toContain('agent-session-attachments')
+
+  fireEvent.click(screen.getByRole('link', { name: 'install report.html' }))
+  expect(opened).toHaveBeenCalledExactlyOnceWith(
+    expect.anything(),
+    `#orca-native-chat-file-path=${encodeURIComponent(file(9, 'install report.html'))}`
+  )
+  expect(screen.getByRole('link', { name: 'run.log' })).toBeTruthy()
+})

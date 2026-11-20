@@ -239,7 +239,7 @@ function RightSidebarInner(): React.JSX.Element {
           />
         ) : (
           /* The 40px activity bar absorbs part of the 138px window-control overlay; inset the header by the remaining 98px. */
-          <div className="flex items-center justify-between h-[36px] min-h-[36px] px-3 border-b border-border right-sidebar-header-side-inset right-sidebar-header-drag">
+          <div className="flex h-(--app-header-height) min-h-(--app-header-height) items-center justify-between border-b border-border px-3 right-sidebar-header-side-inset right-sidebar-header-drag">
             <span className="text-[11px] font-semibold uppercase tracking-wider text-foreground">
               {visibleItems.find((item) => item.id === effectiveTab)?.title ?? ''}
             </span>

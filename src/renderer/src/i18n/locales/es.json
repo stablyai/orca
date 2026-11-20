@@ -18690,7 +18690,6 @@
         "stoppedRestart_many": "{{count}} chats detenidos al cerrar Orca.",
         "stoppedRestart_other": "{{count}} chats detenidos al cerrar Orca.",
         "promptsNotResent": "Al reanudar, no se reenviarán tus prompts.",
-        "promptsNotSent": "Tus prompts no se reenviaron.",
         "resume": "Reanudar",
         "details": "Detalles",
         "close": "Cerrar",
@@ -24210,7 +24209,6 @@
       "chip": "Bots",
       "chipLabel": "Bots, mostrar todo",
       "searchEverything": "Buscar en todo «{{text}}»",
-      "searchBotsFor": "Buscar bots con «{{text}}»",
       "noMatch": "Ningún bot coincide con «{{text}}»",
       "noBotsYet": "Aún no hay bots",
       "filtersPaused": "Los filtros se aplican a espacios de trabajo, no a bots",
@@ -24227,7 +24225,7 @@
       "browse": "Explorar plantillas"
     },
     "new": {
-      "fromTemplate": "Usar plantilla"
+      "fromTemplate": "Plantilla"
     },
     "googleSetup": {
       "otherAccount": "Cambiar de cuenta"

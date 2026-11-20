@@ -168,6 +168,8 @@ export const CURSOR_ACP_DIALECT: AcpDialect = {
   // Model, effort and fast arrive as separate options instead of one selector per variant.
   clientCapabilities: { _meta: { parameterizedModelPicker: true } },
   fastConfigId: 'fast',
+  // The CLI's `--model auto` is the chat server's `default`.
+  chatModelIds: new Map([['auto', 'default']]),
   sessionlessRequests: [ASK_QUESTION, CREATE_PLAN, ...REPORTS],
   request: (method, params) =>
     method === ASK_QUESTION
