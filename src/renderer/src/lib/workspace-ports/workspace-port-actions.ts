@@ -272,22 +272,27 @@ export function mergeWorkspacePortScans(
 
 const inFlightWorkspacePortScans = new Map<string, Promise<WorkspacePortScanResult>>()
 
-function workspacePortScanRequestKey(target: RuntimeClientTarget, repoId?: string): string {
-  return JSON.stringify([workspacePortRuntimeTargetKey(target), repoId ?? null])
+function workspacePortScanRequestKey(
+  target: RuntimeClientTarget,
+  repoId: string | undefined,
+  freshOwners: boolean
+): string {
+  return JSON.stringify([workspacePortRuntimeTargetKey(target), repoId ?? null, freshOwners])
 }
 
 export async function scanWorkspacePortsForTarget(
   target: RuntimeClientTarget,
-  repoId?: string
+  repoId?: string,
+  { freshOwners = false }: { freshOwners?: boolean } = {}
 ): Promise<WorkspacePortScanResult> {
-  const key = workspacePortScanRequestKey(target, repoId)
+  const key = workspacePortScanRequestKey(target, repoId, freshOwners)
   const existing = inFlightWorkspacePortScans.get(key)
   if (existing) {
     return existing
   }
 
   // Coalesce same-tick surface refreshes to avoid duplicate lsof/netstat/RPC work.
-  const promise = runWorkspacePortScanForTarget(target, repoId).finally(() => {
+  const promise = runWorkspacePortScanForTarget(target, repoId, freshOwners).finally(() => {
     if (inFlightWorkspacePortScans.get(key) === promise) {
       inFlightWorkspacePortScans.delete(key)
     }

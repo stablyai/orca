@@ -107,9 +107,10 @@ function requireWorkspacePortScanResult(value: unknown): WorkspacePortScanResult
 
 export async function runWorkspacePortScanForTarget(
   target: RuntimeClientTarget,
-  repoId?: string
+  repoId?: string,
+  freshOwners?: boolean
 ): Promise<WorkspacePortScanResult> {
-  const params = repoId ? { repoId } : {}
+  const params = { ...(repoId ? { repoId } : {}), ...(freshOwners ? { freshOwners } : {}) }
   if (target.kind === 'local') {
     return requireWorkspacePortScanResult(await window.api.workspacePorts.scan(params))
   }

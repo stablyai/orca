@@ -16,6 +16,7 @@ import {
   scanWorkspacePortProbes
 } from '../../ports/workspace-port-ownership'
 import { probeWorkspacePortPage } from '../../ports/workspace-port-page-probe'
+import { WorkspacePortScanParams } from '../../../shared/rpc-contract/workspaces/workspace-ports-params'
 
 type WorkspacePortHandlersOptions = {
   advertisedUrlEvents?: Pick<AdvertisedUrlWatcher, 'onDidChange'>
@@ -49,17 +50,20 @@ export function registerWorkspacePortHandlers(
     (_event, rawArgs?: unknown): Promise<WorkspacePortScanResult> => {
       const args = parseScanRequest(rawArgs)
       const worktrees = getStoreWorkspacePortProbes(store, args?.repoId)
-      const key = JSON.stringify(
+      const key = JSON.stringify([
+        args?.freshOwners === true,
         worktrees
           .map((worktree) => [worktree.id, worktree.repoId, worktree.displayName, worktree.path])
           .sort(([a], [b]) => String(a).localeCompare(String(b)))
-      )
+      ])
       const existing = inFlightScans.get(key)
       if (existing) {
         return existing
       }
 
-      const promise = scanWorkspacePortProbes(worktrees).finally(() => {
+      const promise = scanWorkspacePortProbes(worktrees, {
+        freshOwners: args?.freshOwners
+      }).finally(() => {
         if (inFlightScans.get(key) === promise) {
           inFlightScans.delete(key)
         }
@@ -107,11 +111,12 @@ function broadcastWorkspacePortAdvertisedUrlChanged(
 }
 
 function parseScanRequest(value: unknown): WorkspacePortScanRequest | undefined {
-  if (!value || typeof value !== 'object') {
+  const parsed = WorkspacePortScanParams.safeParse(value)
+  if (!parsed.success) {
     return undefined
   }
-  const repoId = (value as { repoId?: unknown }).repoId
-  return typeof repoId === 'string' && repoId.length > 0 ? { repoId } : undefined
+  const { repoId, freshOwners } = parsed.data
+  return { ...(repoId ? { repoId } : {}), ...(freshOwners ? { freshOwners } : {}) }
 }
 
 function parseKillRequest(value: unknown): WorkspacePortKillRequest | null {

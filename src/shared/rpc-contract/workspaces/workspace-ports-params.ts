@@ -2,7 +2,8 @@ import { z } from 'zod'
 import { OptionalString, requiredNumber, requiredString } from '../rpc-param-primitives'
 
 export const WorkspacePortScanParams = z.object({
-  repoId: OptionalString
+  repoId: OptionalString,
+  freshOwners: z.unknown().transform((value) => value === true)
 })
 
 export const WorkspacePortKillParams = z.object({

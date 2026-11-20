@@ -43,6 +43,8 @@ export type WorkspacePort =
 
 export type WorkspacePortScanRequest = {
   repoId?: string
+  /** Manual Refresh: resolve Linux listener owners with a full /proc walk instead of cached owners. */
+  freshOwners?: boolean
 }
 
 export type WorkspacePortAdvertisedUrlChangedEvent = {

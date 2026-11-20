@@ -84,7 +84,8 @@ export function LocalWorkspacePortsPanel({
       return Promise.resolve()
     }
     setWorkspacePortScanRefreshing(true)
-    const promise = scanWorkspacePortsForTarget(runtimeTarget)
+    // A manual refresh re-resolves every listener owner instead of trusting cached owners.
+    const promise = scanWorkspacePortsForTarget(runtimeTarget, undefined, { freshOwners: true })
       .then((nextScan) => {
         publishWorkspacePortScanForHost({
           scanKey,
