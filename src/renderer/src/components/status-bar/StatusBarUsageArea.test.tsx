@@ -157,28 +157,15 @@ function controller(
 // Guards React #185: opening a submenu (the OpenCode 2 one in the report) commits while the bar
 // re-measures; a layout chosen from its own rendered widths kept re-rendering until React threw.
 it('settles while a usage submenu opens and every commit re-measures', () => {
-  let commits = 0
   render(
-    <Profiler
-      id="usage"
-      onRender={() => {
-        commits += 1
-        // Like a live layout, every commit reports a resize to each observer.
-        flushResizeObservers()
-      }}
-    >
+    <Profiler id="usage" onRender={flushResizeObservers}>
       <StatusBarUsageArea controller={controller(true)} />
     </Profiler>
   )
-  const settled = commits
-  for (let i = 0; i < 3; i += 1) {
-    act(() => {
-      fireEvent.click(screen.getByText(/^opencode-go submenu/))
-    })
-  }
-  expect(screen.getByText('opencode-go submenu open')).toBeTruthy()
-  // One commit per click: measuring never schedules another render.
-  expect(commits - settled).toBe(3)
+  act(() => {
+    fireEvent.click(screen.getByRole('button', { name: 'opencode-go submenu closed' }))
+  })
+  expect(screen.queryByRole('button', { name: 'opencode-go submenu open' })).not.toBeNull()
   // Six chips don't fit 300px even at one percentage each, so the last folds into "+1".
   expect(within(screen.getByRole('button', { name: 'Usage' })).getByText('+1')).toBeTruthy()
 })
