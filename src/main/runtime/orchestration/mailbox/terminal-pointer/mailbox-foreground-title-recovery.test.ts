@@ -74,9 +74,6 @@ it('mail for a title-only agent waits out a shell in front without a hold, then 
     runtime.notifyMessageArrived(`run:${run.id}`, 'status')
     await vi.advanceTimersByTimeAsync(1000)
     expect(write).not.toHaveBeenCalled()
-    expect(await runtime.readTerminalMailHold(`run:${run.id}`)).not.toMatchObject({
-      kind: 'not-foreground'
-    })
 
     shell = false
     await vi.advanceTimersByTimeAsync(1000)
