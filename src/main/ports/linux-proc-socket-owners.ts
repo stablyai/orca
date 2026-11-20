@@ -20,6 +20,10 @@ export async function resolveLinuxSocketOwners(
   { fresh }: { fresh?: boolean } = {}
 ): Promise<Map<number, number>> {
   scanSequence += 1
+  // Overlapping scans replace the module state, so each call works from the state it started with.
+  const cachedOwners = ownerPidByInode
+  const seenBefore = previousPids
+  const knownInodes = previousInodes
   const owners = new Map<number, number>()
   if (inodes.size === 0) {
     ownerPidByInode = new Map()
@@ -35,35 +39,34 @@ export async function resolveLinuxSocketOwners(
     return owners
   }
 
-  const socketsByPid = new Map<number, ReadonlySet<number>>()
-  const readSockets = async (pid: number): Promise<ReadonlySet<number>> => {
-    let sockets = socketsByPid.get(pid)
-    if (!sockets) {
-      sockets = await readPidListenerSockets(pid, inodes)
-      socketsByPid.set(pid, sockets)
-    }
-    return sockets
-  }
   // A cached pair counts only after re-reading that pid's fds, so pid reuse or a closed socket drops it.
+  const cachedOwnerSockets = new Map<number, ReadonlySet<number>>()
   let lostOwner = false
   for (const inode of inodes) {
-    const pid = ownerPidByInode.get(inode)
-    if (pid !== undefined && !(await readSockets(pid)).has(inode)) {
+    const pid = cachedOwners.get(inode)
+    if (pid === undefined) {
+      continue
+    }
+    let sockets = cachedOwnerSockets.get(pid)
+    if (!sockets) {
+      sockets = await readPidListenerSockets(pid, inodes)
+      cachedOwnerSockets.set(pid, sockets)
+    }
+    if (!sockets.has(inode)) {
       lostOwner = true
     }
   }
-  const seenBefore = previousPids
   const fullWalk =
     fresh ||
     seenBefore === undefined ||
     lostOwner ||
     scanSequence - lastFullWalkScan >= FULL_WALK_INTERVAL_SCANS ||
-    [...inodes].some((inode) => !previousInodes.has(inode))
-  const cachedOwnerPids = new Set(ownerPidByInode.values())
+    [...inodes].some((inode) => !knownInodes.has(inode))
 
   for (const pid of pids) {
-    if (fullWalk || cachedOwnerPids.has(pid) || !seenBefore?.has(pid)) {
-      for (const inode of await readSockets(pid)) {
+    const cached = cachedOwnerSockets.get(pid)
+    if (cached || fullWalk || !seenBefore?.has(pid)) {
+      for (const inode of cached ?? (await readPidListenerSockets(pid, inodes))) {
         owners.set(inode, pid)
       }
     }
