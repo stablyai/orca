@@ -9,6 +9,7 @@ import { linkSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { grantDirAcl } from '../windows/windows-directory-acl'
 import { isPermissionError } from './permission-errors'
+import { isDefinitiveAbsence } from '../../shared/errors/definitive-filesystem-absence'
 import { nodeFileContentsEqualSync } from '../../shared/file-content/node-file-content-equality'
 import { renameFileWithWindowsRetry } from '../../shared/file-write/windows-retry-file-operations'
 import { assertGuardedFileCurrent, recordGuardedPublication } from './concurrent-file-edit-guard'
@@ -118,9 +119,9 @@ export function recoverInterruptedGuardedFileOperation(targetPath: string): void
 
 /**
  * Drops a held file once its bytes are back at the target (`restore` puts them back when the target
- * is free). Otherwise its bytes stay beside the target in a new owner-only file: a writer that
- * recreated the target found no file, so the held bytes can be the user's only copy of their
- * settings or sign-in. Held bytes never go back over a target that a newer writer created.
+ * is free). Otherwise it moves aside to `<target>.orca-kept-<id>`, keeping its own permissions: a
+ * writer that recreated the target found no file, so the held bytes can be the user's only copy of
+ * their settings or sign-in. Held bytes never go back over a target that a newer writer created.
  */
 function restoreMovedFileWithoutOverwrite(
   sourcePath: string,
@@ -134,20 +135,28 @@ function restoreMovedFileWithoutOverwrite(
     rmSync(sourcePath, { force: true })
     return
   }
-  // Read through a held link: the copy must not share or re-permission what it points at.
-  const held = readFileSync(sourcePath)
   let matches = false
   try {
-    matches = nodeFileContentsEqualSync(targetPath, held)
+    matches = nodeFileContentsEqualSync(targetPath, readFileSync(sourcePath))
   } catch {
     // An unreadable or vanished target proves nothing: keep the held bytes.
   }
-  if (!matches) {
-    const keptPath = `${targetPath}.orca-kept-${randomUUID()}`
-    writeFileSync(keptPath, held, { mode: 0o600, flag: 'wx' })
-    console.warn('[atomic-file] Kept an earlier version beside', targetPath, keptPath)
+  if (matches) {
+    rmSync(sourcePath, { force: true })
+    return
   }
-  rmSync(sourcePath, { force: true })
+  const keptPath = `${targetPath}.orca-kept-${randomUUID()}`
+  try {
+    // A rename needs no free space and never widens who can read the file.
+    renameFileWithWindowsRetry(sourcePath, keptPath)
+  } catch (error) {
+    // Another process already released this held file.
+    if (isDefinitiveAbsence(error)) {
+      return
+    }
+    throw error
+  }
+  console.warn('[atomic-file] Kept an earlier version beside', targetPath, keptPath)
 }
 
 export function getGuardedOperationHeldPath(targetPath: string): string {

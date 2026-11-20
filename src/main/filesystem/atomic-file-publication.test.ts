@@ -1,13 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import {
-  existsSync,
-  mkdtempSync,
-  readFileSync,
-  readdirSync,
-  rmSync,
-  statSync,
-  writeFileSync
-} from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import type * as NodeFs from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -114,10 +106,6 @@ describe('writeFileAtomically', () => {
           .filter((name) => name !== 'config.toml')
           .map((name) => readFileSync(join(dir, name), 'utf-8'))
       ).toEqual(['model = "o5"\n[profiles.work]\n'])
-      if (process.platform !== 'win32') {
-        const kept = readdirSync(dir).find((name) => name !== 'config.toml')!
-        expect(statSync(join(dir, kept)).mode & 0o777).toBe(0o600)
-      }
     } finally {
       cleanup()
     }
