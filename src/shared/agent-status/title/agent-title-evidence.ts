@@ -28,6 +28,8 @@ import {
   getPiCompatibleTitleBrand,
   isLegacyPiCompatibleTitle
 } from './providers/pi-compatible-synthetic-title'
+import { WRAPPER_SEPARATOR, getEvidenceTitleSegments } from './terminal-title-wrapper-segments'
+import { isCodewhaleTerminalTitle } from './providers/codewhale-terminal-title'
 import { isDshTerminalTitle } from './providers/dsh-terminal-title'
 import { hasQoderTitleLabelPayload, isQoderTerminalTitle } from './providers/qoder-terminal-title'
 import { isJcodeIdentityTerminalTitle } from './providers/jcode-terminal-title'
@@ -70,26 +72,6 @@ const ANTIGRAVITY_MODEL_TITLE_RE = /^(?:agy|antigravity)(?:\s*[\u00B7\u2014:-]\s
 
 /** Orca owns the final - <agent> suffix. Require leading whitespace to avoid treating hyphenated cwd names as ownership. */
 const OWNER_SUFFIX_RE = /\s-\s+([A-Za-z][\w-]*)\s*$/
-const WRAPPER_SEPARATOR = ' | '
-const MAX_WRAPPER_EVIDENCE_SEGMENTS = 8
-
-function getEvidenceTitleSegments(title: string): string[] {
-  const segments = [title]
-  let separatorIndex = title.lastIndexOf(WRAPPER_SEPARATOR)
-  while (separatorIndex >= 0 && segments.length < MAX_WRAPPER_EVIDENCE_SEGMENTS) {
-    const wrapped = title.slice(separatorIndex + WRAPPER_SEPARATOR.length).trim()
-    if (wrapped && !segments.includes(wrapped)) {
-      segments.push(wrapped)
-    }
-    const previousSeparatorIndex = separatorIndex
-    separatorIndex = title.lastIndexOf(WRAPPER_SEPARATOR, separatorIndex - 1)
-    if (separatorIndex === previousSeparatorIndex) {
-      break
-    }
-  }
-  return segments
-}
-
 function agentForSyntheticTitle(text: string): TerminalAgent | null {
   const trimmed = text.trim()
   if (/[\\/]/.test(trimmed)) {
@@ -149,6 +131,11 @@ function collectAnchoredNames(
   // Why: a native owner's task text can end with DSB's product-name suffix, including inside wrappers.
   const nativeOpenCode = segments.some(isOpenCodeNativeTitle)
   const allowDsbTitle = vendorMarkers.length === 0 && !nativeOpenCode
+
+  // Why the whole title: its matcher judges wrapper headers, which a lone suffix segment has lost.
+  if (segments[0] && isCodewhaleTerminalTitle(segments[0])) {
+    anchored.add('codewhale')
+  }
 
   for (const segment of segments) {
     // Native wrapped titles own their envelope even when session text names other agents.
@@ -251,6 +238,8 @@ function collectObserverAnchors(title: string): TerminalAgent[] {
   let agent: TerminalAgent | null
   if (!genericClaude && nativeOpenCode && isDirectOpenCodeNativeTitle(segment)) {
     agent = 'opencode'
+  } else if (isCodewhaleTerminalTitle(segment)) {
+    agent = 'codewhale'
   } else if (isDshTerminalTitle(segment) && undecorated.startsWith('🐋')) {
     agent = 'dsh'
   } else if (isQoderTerminalTitle(segment)) {
