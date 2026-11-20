@@ -155,7 +155,7 @@ export function sendScrcpyText(
   const paste = options.paste === true
   if (
     needsClipboard(text, paste) &&
-    Buffer.byteLength(text, 'utf8') > SCRCPY_CLIPBOARD_TEXT_MAX_BYTES
+    Buffer.byteLength(text.replaceAll('\r', ''), 'utf8') > SCRCPY_CLIPBOARD_TEXT_MAX_BYTES
   ) {
     return Promise.reject(
       new EmulatorError('emulator_unsupported', 'Text is too long for one Android clipboard paste.')

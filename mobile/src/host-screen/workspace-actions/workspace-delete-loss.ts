@@ -33,14 +33,23 @@ const atRiskLocalFilesRead = bindDeferredRpcOperation(
   })
 )
 
+function isOlderHostRefusal(code: string): boolean {
+  return code === 'method_not_found' || code === 'forbidden'
+}
+
 // Each read walks the worktree's ignored files, so a reopened confirm reuses a recent answer.
 const atRiskLocalFilesQuery = defineHostQuery({
   family: 'git.atRiskLocalFiles',
   staleTime: 15_000,
   fetch: async (client: RpcClient, target): Promise<AtRiskLocalFiles | null> => {
-    const reply = atRiskLocalFilesRead.interpret(
-      await atRiskLocalFilesRead.request(client, { worktree: `id:${target.worktree ?? ''}` })
-    )
+    const outcome = await atRiskLocalFilesRead.request(client, {
+      worktree: `id:${target.worktree ?? ''}`
+    })
+    // Only an older host's refusal means "no scan"; any other refusal is a scan that failed.
+    if (outcome.kind === 'outer-refused' && !isOlderHostRefusal(outcome.error.code)) {
+      throw new Error('Ignored-files scan failed')
+    }
+    const reply = atRiskLocalFilesRead.interpret(outcome)
     return reply.accepted ? reply.value : null
   }
 })

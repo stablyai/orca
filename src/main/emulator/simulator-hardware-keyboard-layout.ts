@@ -212,6 +212,8 @@ export class SimulatorHardwareKeyboardSync {
     if (known?.macLayoutId === macLayoutId) {
       return known.synced
     }
+    // A re-sync reads fresh: the user may have added keyboards since Orca last wrote.
+    this.keyboards.delete(udid)
     const [iosLayouts, current] = await Promise.all([
       this.readIosKeyboardLayouts(udid),
       this.readKeyboards(udid)
