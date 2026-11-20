@@ -59,6 +59,8 @@ export class CodexHistoryMoveReport {
     private readonly deps: {
       markerPath: () => string
       wslHomeCount: () => number
+      /** The homes that should be shared now, read only right before a report can go out. */
+      currentHomes: () => string[]
     }
   ) {}
 
@@ -71,23 +73,24 @@ export class CodexHistoryMoveReport {
     this.outcomes.delete(homeKey)
   }
 
-  /** Whether every one of `homeKeys` has an outcome. */
-  isComplete(homeKeys: string[]): boolean {
+  private isComplete(homeKeys: string[]): boolean {
     return homeKeys.length > 0 && homeKeys.every((home) => this.outcomes.has(home))
   }
 
-  /** `homeKeys`: the homes the launch's passes covered. Never rejects. */
-  report(homeKeys: string[]): Promise<void> {
-    this.queue = this.queue.then(() => this.reportIfComplete(homeKeys)).catch(() => {})
+  /**
+   * `listedHomes`: the last listing seen; only once it is complete (and consent and the cap allow a
+   * send) is the current listing read. Never rejects.
+   */
+  report(listedHomes: string[]): Promise<void> {
+    this.queue = this.queue.then(() => this.reportIfComplete(listedHomes)).catch(() => {})
     return this.queue
   }
 
-  private async reportIfComplete(homes: string[]): Promise<void> {
+  private async reportIfComplete(listedHomes: string[]): Promise<void> {
     const platform = process.platform
-    const complete = (): boolean => this.isComplete(homes)
     if (
       (platform !== 'darwin' && platform !== 'win32' && platform !== 'linux') ||
-      !complete() ||
+      !this.isComplete(listedHomes) ||
       !isTelemetryEnabled()
     ) {
       return
@@ -97,8 +100,12 @@ export class CodexHistoryMoveReport {
       saved?.version === version ? saved : { version, sent: [] }
     )
     const marker = await this.marker
-    // An unshare may have forgotten a home while the marker loaded.
-    if (marker.sent.length >= MAX_SENDS_PER_VERSION || !complete()) {
+    if (marker.sent.length >= MAX_SENDS_PER_VERSION) {
+      return
+    }
+    // Read after the marker loads: homes added, or sharing turned off, meanwhile.
+    const homes = this.deps.currentHomes()
+    if (!this.isComplete(homes)) {
       return
     }
     const tally = (outcome: CodexHistoryMoveOutcome): number =>

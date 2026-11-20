@@ -22,17 +22,18 @@ afterEach(() => {
   rmSync(dir, { recursive: true, force: true })
 })
 
-function moveReport(): CodexHistoryMoveReport {
+function moveReport(homes: string[]): CodexHistoryMoveReport {
   return new CodexHistoryMoveReport({
     markerPath: () => join(dir, 'move-status-sent.json'),
-    wslHomeCount: () => 1
+    wslHomeCount: () => 1,
+    currentHomes: () => homes
   })
 }
 
 describe('codex history move telemetry', () => {
   it('reports once every home has a pass, then once more when the counts change', async () => {
     const homes = ['/a', '/b', '/c']
-    const first = moveReport()
+    const first = moveReport(homes)
     first.record('/a', 'moved')
     first.record('/b', 'busy')
     await first.report(homes)
@@ -65,7 +66,7 @@ describe('codex history move telemetry', () => {
     )
 
     // A later run of the same version has used both reports.
-    const next = moveReport()
+    const next = moveReport(['/a'])
     next.record('/a', 'failed')
     await next.report(['/a'])
     expect(telemetry.track).toHaveBeenCalledTimes(2)
