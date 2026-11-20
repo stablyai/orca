@@ -35,7 +35,10 @@ vi.mock('./BotItemActivityList', () => ({
     quickReplies
   }: {
     events: BotItemEvent[]
-    quickReplies?: { send: (text: string) => void; edit: (text: string) => void }
+    quickReplies?: {
+      send: (text: string, questionId: string) => void
+      edit: (text: string) => void
+    }
   }) => (
     <ol>
       {events.map((event) => (
