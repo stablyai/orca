@@ -5,12 +5,17 @@ export type BotLookUpdate = Pick<BotUpdateParams['updates'], 'avatarColor' | 'av
 
 // Per bot: the save on its way to the host and the latest picks waiting behind it, merged. Every editor of a
 // bot shares it, so a pick made after closing and reopening settings still lands last. Editors that are open
-// hear when nothing is left to send; one that closes stops listening.
+// hear when nothing is left to send; one that closes stops listening. Picks waiting hold the host's re-read
+// back, so the save ahead of them returns when it lands instead of after a re-read of every bot.
 type LookSaves = {
   waiting: BotLookUpdate | null
+  held: (() => unknown) | null
   update: (look: BotLookUpdate) => Promise<unknown>
   drained: Set<() => void>
 }
+
+/** Holds the host's re-read back until the returned release runs. */
+export type BotLookHold = () => () => unknown
 
 const lookSaves = new Map<string, LookSaves>()
 
@@ -19,11 +24,13 @@ export function saveBotLook(
   key: string,
   look: BotLookUpdate,
   update: (look: BotLookUpdate) => Promise<unknown>,
-  onDrained?: () => void
+  onDrained?: () => void,
+  hold?: BotLookHold
 ): void {
   const running = lookSaves.get(key)
   if (running) {
     running.waiting = { ...running.waiting, ...look }
+    running.held ??= hold?.() ?? null
     running.update = update
     if (onDrained) {
       running.drained.add(onDrained)
@@ -32,6 +39,7 @@ export function saveBotLook(
   }
   const saves: LookSaves = {
     waiting: look,
+    held: null,
     update,
     drained: new Set(onDrained ? [onDrained] : [])
   }
@@ -39,9 +47,12 @@ export function saveBotLook(
   void (async () => {
     while (saves.waiting) {
       const next = saves.waiting
+      const held = saves.held
       saves.waiting = null
+      saves.held = null
       // A failed save is reported by `update`; the picks after it still go.
       await saves.update(next).catch(() => undefined)
+      held?.()
     }
     lookSaves.delete(key)
     for (const listener of saves.drained) {
@@ -57,7 +68,8 @@ export function saveBotLook(
 export function useBotLookSave(
   key: string,
   update: (look: BotLookUpdate) => Promise<unknown>,
-  delayMs: number
+  delayMs: number,
+  hold?: BotLookHold
 ): { picked: BotLookUpdate | null; pick: (change: BotLookUpdate) => void; flush: () => void } {
   const [picked, setPicked] = useState<BotLookUpdate | null>(null)
   const timer = useRef<{
@@ -90,7 +102,7 @@ export function useBotLookSave(
     }
     const save = (): void => {
       timer.current = null
-      saveBotLook(key, look, update, open.current ? drained.current : undefined)
+      saveBotLook(key, look, update, open.current ? drained.current : undefined, hold)
     }
     timer.current = { timer: setTimeout(save, delayMs), save, look }
   }
