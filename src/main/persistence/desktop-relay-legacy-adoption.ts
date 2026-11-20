@@ -21,6 +21,24 @@ type AdoptionStore = Pick<Store, 'getRepos' | 'getWorkspaceSession' | 'getWorksp
  *  between partitions can't hide them. A partition leaves once its adoption is stored. */
 export type LegacyRelayBaseline = Map<ExecutionHostId, Record<string, string>>
 
+// The process's captured baseline, so removing a workspace releases its tabs' entries.
+let capturedBaseline: LegacyRelayBaseline | null = null
+
+/** Workspace removal: the removed tabs' legacy ids are never adopted, so stop holding them. */
+export function forgetLegacyRelayTabs(tabIds: ReadonlySet<string>): void {
+  if (!capturedBaseline?.size || tabIds.size === 0) {
+    return
+  }
+  for (const [hostId, relays] of capturedBaseline) {
+    for (const tabId of tabIds) {
+      delete relays[tabId]
+    }
+    if (Object.keys(relays).length === 0) {
+      capturedBaseline.delete(hostId)
+    }
+  }
+}
+
 /** An id is adoptable when it belongs to an SSH repo tab whose row is uniquely attributable, in the
  *  row's partition or (an older build's split) another partition holding the same id or the only copy.
  *  Folder, ambiguous and unattributable ids stay main's. */
@@ -38,6 +56,7 @@ export function captureLegacyRelayBaseline(store: AdoptionStore): LegacyRelayBas
     }
   }
   const baseline: LegacyRelayBaseline = new Map()
+  capturedBaseline = baseline
   // Nothing to adopt (every launch after the first upgrade): read no rows.
   if (pending.size === 0) {
     return baseline
