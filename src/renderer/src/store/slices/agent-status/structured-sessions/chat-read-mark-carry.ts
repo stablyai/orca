@@ -3,6 +3,7 @@ import {
   chatPaneAddressTabId,
   chatPaneKey
 } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
+import { isReopenedChatTabId } from '../../../../../../shared/agent-session/view/structured-agent-session-host-tab-id'
 import type { AppState } from '../../../types'
 
 type ReadMarks = Pick<
@@ -60,6 +61,10 @@ function holdsTabKeyedChatMarks(record: Record<string, number>): boolean {
   let holds = tabKeyedChatMarksByRecord.get(record)
   if (holds === undefined) {
     holds = Object.keys(record).some((key) => {
+      // A reopened chat's tab id is never its conversation address.
+      if (isReopenedChatTabId(key)) {
+        return true
+      }
       if (!key.startsWith(CHAT_ADDRESS_PREFIX)) {
         return false
       }
