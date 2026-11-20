@@ -72,8 +72,7 @@ const createActivityUnreadCountSelector = () =>
       acknowledgedAgentsByPaneKey: AppState['acknowledgedAgentsByPaneKey'],
       activityClearedAtByPaneKey: AppState['activityClearedAtByPaneKey'],
       // Closing a tab can drop a pane's row without a status write.
-      _tabsByWorktree: AppState['tabsByWorktree'],
-      _unifiedTabsByWorktree: AppState['unifiedTabsByWorktree']
+      _rowOwnersRevision: number
     ) =>
       countActivityUnread({
         agentStatusByPaneKey: state.agentStatusByPaneKey,
@@ -91,8 +90,7 @@ export function useActivityUnreadCount(): number {
       state.migrationUnsupportedByPtyId,
       state.acknowledgedAgentsByPaneKey,
       state.activityClearedAtByPaneKey,
-      state.tabsByWorktree,
-      state.unifiedTabsByWorktree
+      state.agentStatusByPaneKey.projection.rowOwnersRevision()
     )
   )
 }
