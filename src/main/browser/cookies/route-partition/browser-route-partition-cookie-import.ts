@@ -10,6 +10,7 @@ import { detectInstalledBrowsers, selectBrowserProfile } from '../sources/browse
 import { importCookiesFromBrowser } from '../browser-cookie-import'
 import { importCookiesFromFile } from '../imports/import-cookie-file'
 import type { DetectedBrowser } from '../sources/browser-cookie-source-profiles'
+import { errorMessage } from '../../../../shared/errors/error-message'
 import { restoreBrowserRoutePartitionSessionCookies } from '../session-restore/browser-session-cookie-restore'
 
 export type RouteCookieImportSource = {
@@ -49,7 +50,7 @@ export async function importIntoRoutePartition(
   try {
     partition = destination.bindPartition()
   } catch (error) {
-    return { ok: false, reason: error instanceof Error ? error.message : String(error) }
+    return { ok: false, reason: errorMessage(error) }
   }
   if (partition === null) {
     return destination.routeChanged(null)

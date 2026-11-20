@@ -21,10 +21,7 @@ import { useAppStore } from '@/store/index'
 import { isLinuxUserAgent, isMacUserAgent } from '@/app-shell/platform/user-agent-platform'
 import { getBrowserCookieImportSourceLabels } from '../../../../../../shared/browser/cookies/browser-cookie-import-sources'
 import { shouldShowBrowserImportHint } from './browser-import-hint-visibility'
-import {
-  useBrowserPageCookieImportBrowsers,
-  useBrowserPageSshCookieImportRoute
-} from './use-browser-page-ssh-cookie-import-route'
+import { useBrowserPageCookieImport } from './use-browser-page-cookie-import'
 import { formatBrowserImportSummary } from './browser-detected-browsers-summary'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
@@ -40,14 +37,13 @@ export function BrowserImportHintButton({
   worktreeId
 }: BrowserImportHintButtonProps): React.JSX.Element | null {
   const t = useTranslate()
-  const sshRoute = useBrowserPageSshCookieImportRoute(worktreeId)
+  const { sshRoute, detectedBrowsers, detectedBrowsersLoaded, fetchDetectedBrowsers } =
+    useBrowserPageCookieImport(worktreeId)
   const [open, setOpen] = useState(false)
   const [importMenuOpen, setImportMenuOpen] = useState(false)
   const browserSessionImportState = useAppStore((s) => s.browserSessionImportState)
   const browserImportHintHidden = useAppStore((s) => s.browserImportHintHidden)
   const persistedUIReady = useAppStore((s) => s.persistedUIReady)
-  const { detectedBrowsers, detectedBrowsersLoaded, fetchDetectedBrowsers } =
-    useBrowserPageCookieImportBrowsers(sshRoute)
   const importCookiesFromBrowser = useAppStore((s) => s.importCookiesFromBrowser)
   const importCookiesToProfile = useAppStore((s) => s.importCookiesToProfile)
   const setBrowserImportHintHidden = useAppStore((s) => s.setBrowserImportHintHidden)

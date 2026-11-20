@@ -7,9 +7,11 @@ import { browserSessionRegistry } from '../../browser/sessions/profiles/browser-
 import { getPairedRuntimeBrowserClientRouteIdentity } from '../../browser/client-hosts/lifecycle/paired-runtime-browser-client-host-runtime'
 import { isTrustedBrowserRenderer } from './browser-renderer-trust'
 import { pickCookieFile } from '../../browser/cookies/imports/cookie-file-picker'
-import { importCookiesFromFile } from '../../browser/cookies/imports/import-cookie-file'
 import { detectInstalledBrowsers } from '../../browser/cookies/sources/browser-cookie-detection'
-import { browserCookieImportSource } from '../../browser/cookies/route-partition/browser-route-partition-cookie-import'
+import {
+  browserCookieImportSource,
+  cookieFileImportSource
+} from '../../browser/cookies/route-partition/browser-route-partition-cookie-import'
 import {
   importCookieFileIntoSshRoutePartition,
   importCookiesIntoSshRoutePartition
@@ -125,15 +127,14 @@ export function registerBrowserSessionProfileHandlers(): void {
         return browserCookieImportFailure('profileNotFound')
       }
 
-      const filePath = await pickCookieFile(parent)
-      if (!filePath) {
-        return { ok: false, reason: 'canceled' }
+      const source = await cookieFileImportSource(() => pickCookieFile(parent))
+      if ('reason' in source) {
+        return source
       }
-
-      const result = await importCookiesFromFile(filePath, profile.partition)
+      const result = await source.importInto(profile.partition)
       if (result.ok) {
         browserSessionRegistry.updateProfileSource(args.profileId, {
-          browserFamily: 'manual',
+          ...source.badge,
           importedAt: Date.now()
         })
         return retainLocalGoogleCookieClearTarget(result, profile, args.profileId)

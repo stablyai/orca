@@ -23,12 +23,12 @@ export function createBrowserCookieImportActions(
   return {
     importCookiesFromBrowser: async (profileId, browserFamily, browserProfile?, sshRoute?) => {
       if (sshRoute) {
-        return importSshPageCookies(get, sshRoute, (sshTargetId) =>
+        return importSshPageCookies(get, sshRoute, () =>
           window.api.browser.sessionImportFromBrowser({
             profileId,
             browserFamily,
             browserProfile,
-            sshTargetId
+            sshTargetId: sshRoute.sshTargetId
           })
         )
       }

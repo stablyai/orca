@@ -1,4 +1,5 @@
 import type { BrowserCookieImportResult } from '../../../../../../shared/browser/workspaces/browser-workspace-types'
+import { errorMessage } from '../../../../../../shared/errors/error-message'
 import { toSshExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import type {
   BrowserCookieImportExecutionResult,
@@ -10,13 +11,13 @@ import type {
 export async function importSshPageCookies(
   get: BrowserSliceGet,
   route: BrowserSshPageCookieImportRoute,
-  request: (sshTargetId: string) => Promise<BrowserCookieImportResult>
+  request: () => Promise<BrowserCookieImportResult>
 ): Promise<BrowserCookieImportExecutionResult> {
   let result: BrowserCookieImportResult
   try {
-    result = await request(route.sshTargetId)
+    result = await request()
   } catch (err) {
-    result = { ok: false, reason: String((err as Error)?.message ?? err) }
+    result = { ok: false, reason: errorMessage(err) }
   }
   if (result.ok) {
     get().recordFeatureInteraction?.('cookie-import')

@@ -206,12 +206,13 @@ describe('browser session profile IPC', () => {
       label: 'Default',
       partition: 'persist:orca-browser'
     })
-    sshPartitionMock
-      .mockReturnValueOnce('persist:orca-browser-v1-ssh-jar')
-      .mockReturnValueOnce('persist:orca-browser-v1-ssh-jar')
-      .mockReturnValue(null)
+    sshPartitionMock.mockReturnValue('persist:orca-browser-v1-ssh-jar')
     pickCookieFileMock.mockResolvedValue('/tmp/cookies.json')
-    importCookieFileMock.mockResolvedValue({ ok: true, profileId: 'default', summary: {} })
+    importCookieFileMock.mockImplementation(async () => {
+      // The host disconnects while the cookies are being written.
+      sshPartitionMock.mockReturnValue(null)
+      return { ok: true, profileId: 'default', summary: {} }
+    })
 
     const result = await importCookieFileHandler()(
       { sender: trustedSender() },

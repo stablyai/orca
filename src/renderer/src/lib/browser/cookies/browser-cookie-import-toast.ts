@@ -155,31 +155,37 @@ function emitGoogleCookieImportWarning(
   if (!summary.googleCookiesSkipped) {
     return
   }
-  // Sign-in must use the populated jar: the named workspace remotely, any Orca browser locally; client-hosted pages stay on this desktop.
-  const message = isSshPageImport(execution)
-    ? translate(
-        'browser.cookieImport.sshPage.googleCookiesSkipped',
-        'Google cookies were not imported. Open a page that browses through {{host}}, then sign into Google.',
-        { host: execution.executionHostLabel }
-      )
-    : !execution.executionRemoteEnvironment
-      ? translate(
-          'auto.lib.browser.cookie.import.toast.googleCookiesSkippedLocal',
-          'Google cookies were not imported. Open a browser in Orca with this profile, then sign into Google.'
-        )
-      : execution.executionMachine === 'client'
-        ? translate(
-            'auto.lib.browser.cookie.import.toast.googleCookiesSkippedClientHosted',
-            'Google cookies were not imported. Open a browser tab in the {{value0}} workspace with this profile — it opens on this device — then sign into Google.',
-            { value0: execution.executionHostLabel }
-          )
-        : // Use a new key so an older googleCookiesSkipped catalog entry cannot override revised copy.
-          translate(
-            'auto.lib.browser.cookie.import.toast.googleCookiesSkippedRemoteWorkspace',
-            'Google cookies were not imported. Open a browser tab in the {{value0}} workspace with this profile, then sign into Google.',
-            { value0: execution.executionHostLabel }
-          )
-  toast.warning(message, { duration: 12000 })
+  toast.warning(googleCookiesSkippedMessage(execution), { duration: 12000 })
+}
+
+// Sign-in must use the populated jar: the named workspace remotely, any Orca browser locally; client-hosted pages stay on this desktop.
+function googleCookiesSkippedMessage(execution: BrowserCookieImportExecution): string {
+  if (isSshPageImport(execution)) {
+    return translate(
+      'browser.cookieImport.sshPage.googleCookiesSkipped',
+      'Google cookies were not imported. Open a page that browses through {{host}}, then sign into Google.',
+      { host: execution.executionHostLabel }
+    )
+  }
+  if (!execution.executionRemoteEnvironment) {
+    return translate(
+      'auto.lib.browser.cookie.import.toast.googleCookiesSkippedLocal',
+      'Google cookies were not imported. Open a browser in Orca with this profile, then sign into Google.'
+    )
+  }
+  if (execution.executionMachine === 'client') {
+    return translate(
+      'auto.lib.browser.cookie.import.toast.googleCookiesSkippedClientHosted',
+      'Google cookies were not imported. Open a browser tab in the {{value0}} workspace with this profile — it opens on this device — then sign into Google.',
+      { value0: execution.executionHostLabel }
+    )
+  }
+  // Use a new key so an older googleCookiesSkipped catalog entry cannot override revised copy.
+  return translate(
+    'auto.lib.browser.cookie.import.toast.googleCookiesSkippedRemoteWorkspace',
+    'Google cookies were not imported. Open a browser tab in the {{value0}} workspace with this profile, then sign into Google.',
+    { value0: execution.executionHostLabel }
+  )
 }
 
 // Skipped partitioned cookies are not downgraded to unpartitioned; warn about loss beyond the success count (STA-4300).
