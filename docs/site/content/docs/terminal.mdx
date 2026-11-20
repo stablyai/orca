@@ -56,6 +56,23 @@ If you've collected themes in Warp, click **Import themes from Warp** in the ter
 
 Imported themes appear alongside Orca's built-ins in the theme dropdown.
 
+## Terminal capabilities for tools
+
+Orca desktop terminals render 24-bit color, OSC 8 hyperlinks, and inline raster images. The terminal's image renderer supports Kitty graphics, Sixel, and iTerm2 inline pictures when **Settings → Terminal → Inline Images** is enabled.
+
+| Signal                      | Meaning                                                                                                                                       |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `TERM_PROGRAM=Orca`         | Identity of the direct Orca terminal. Preserve it when launching tools.                                                                       |
+| `COLORTERM=truecolor`       | Programs can emit 24-bit color.                                                                                                               |
+| `FORCE_HYPERLINK=1`         | Orca can open OSC 8 hyperlinks. Tools that honor this environment variable can emit them.                                                     |
+| `ORCA_IMAGE_PROTOCOL=kitty` | Startup hint for newly opened terminals with inline images enabled and a supporting viewer. Kitty is the preferred encoder for raster images. |
+
+Prefer a Kitty graphics query for live image detection. Send the direct `a=q` query before a primary-device-attributes query, and wait for the graphics reply within a bounded deadline. Orca advertises Sixel in its primary device attributes when the renderer is ready. Terminal settings and the viewer can change after launch.
+
+A local CLI launch on a headless Orca host starts without the image hint. Attaching a desktop later enables rendering in that viewer according to its settings, but the running shell keeps its startup environment.
+
+In tmux, use the multiplexer’s capability information. `TERM_PROGRAM` inside a pane describes tmux, and environment variables inherited from an Orca client can outlive that attachment. For OSC 8, use a version of tmux with hyperlink support and set the `hyperlinks` terminal feature for any matching outer terminal type that supports it. `tmux display-message -p '#{client_termname} #{client_termfeatures}'` shows the attached client’s terminal type and features. Kitty graphics support inside tmux depends on the multiplexer and its attached viewer.
+
 ## macOS and Linux shell
 
 By default, local terminal panes on macOS and Linux open your system shell (`$SHELL`) as a **login shell** (`-l`). With the default arguments:
