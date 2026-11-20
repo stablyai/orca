@@ -1,4 +1,5 @@
 import { accessSync, constants, existsSync, statSync } from 'node:fs'
+import { access, stat } from 'node:fs/promises'
 import { posix, win32 } from 'node:path'
 
 function systemSshPaths(platform: NodeJS.Platform): string[] {
@@ -47,4 +48,48 @@ export function findSystemSsh(): string | null {
     }
   }
   return findSshOnPath(process.platform)
+}
+
+/** findSystemSsh's async twin: async callers must not add main-thread sync fs. */
+export async function findSystemSshAsync(): Promise<string | null> {
+  if (process.env.ORCA_SYSTEM_SSH_PATH) {
+    return process.env.ORCA_SYSTEM_SSH_PATH
+  }
+  for (const candidate of systemSshPaths(process.platform)) {
+    try {
+      await access(candidate)
+      return candidate
+    } catch {
+      continue
+    }
+  }
+  return findSshOnPathAsync(process.platform)
+}
+
+async function findSshOnPathAsync(platform: NodeJS.Platform): Promise<string | null> {
+  const pathValue = process.env.PATH
+  if (!pathValue) {
+    return null
+  }
+  const pathApi = platform === 'win32' ? win32 : posix
+  const executable = platform === 'win32' ? 'ssh.exe' : 'ssh'
+  for (const entry of pathValue.split(pathApi.delimiter)) {
+    const directory = entry.trim().replace(/^"|"$/g, '')
+    if (!directory) {
+      continue
+    }
+    const candidate = pathApi.join(directory, executable)
+    try {
+      if (!(await stat(candidate)).isFile()) {
+        continue
+      }
+      if (platform !== 'win32') {
+        await access(candidate, constants.X_OK)
+      }
+      return candidate
+    } catch {
+      continue
+    }
+  }
+  return null
 }

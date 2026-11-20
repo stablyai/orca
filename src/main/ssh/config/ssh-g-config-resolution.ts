@@ -3,6 +3,7 @@ import { existsSync } from 'node:fs'
 import { readdir, readFile } from 'node:fs/promises'
 import { dirname, isAbsolute, join } from 'node:path'
 import { homedir, userInfo } from 'node:os'
+import { findSystemSshAsync } from '../system-transport/system-ssh-binary'
 import { resolveSshConfigHomePath } from './ssh-config-path-expansion'
 import { expandIdentityFileTokens } from './ssh-identity-file-tokens'
 
@@ -53,7 +54,7 @@ export function sshGArgsForHost(host: string): string[] {
 /** OpenSSH's system-wide client config, which `-F` excludes along with the per-user one. */
 const SITE_SSH_CONFIG_FILES =
   process.platform === 'win32'
-    ? [join(process.env.ProgramData ?? 'C:\\ProgramData', 'ssh', 'ssh_config')]
+    ? [join(process.env.ProgramData?.trim() || 'C:\\ProgramData', 'ssh', 'ssh_config')]
     : ['/etc/ssh/ssh_config']
 
 const STRICT_HOST_KEY_DIRECTIVE = /^\s*stricthostkeychecking\b/i
@@ -168,11 +169,13 @@ async function expandSiteInclude(pattern: string, baseDir: string): Promise<stri
       resolved.push(absolute)
       continue
     }
-    // Only the trailing `dir/*` form OpenSSH ships by default is expanded; anything fancier is doubt.
-    const dir = dirname(absolute.slice(0, star + 1))
-    if (absolute.slice(star + 1).includes('/')) {
+    // POSIX tokens cannot carry `\` (splitIncludeArguments rejects escapes), so a post-star backslash is a Windows nested glob.
+    const afterStar = absolute.slice(star + 1)
+    if (afterStar.includes('/') || afterStar.includes('\\')) {
       return null
     }
+    // Only the trailing `dir/*` form OpenSSH ships by default is expanded; anything fancier is doubt.
+    const dir = dirname(absolute.slice(0, star + 1))
     try {
       const entries = await readdir(dir)
       resolved.push(...entries.map((entry) => join(dir, entry)))
@@ -194,8 +197,9 @@ export async function resolveWithSshG(host: string): Promise<SshResolvedConfig |
 export async function runSshG(args: string[]): Promise<SshResolvedConfig | null> {
   // -- prevents option injection; process-host hides console windows and bounds this probe (#10488).
   try {
+    // Resolve like every other system-SSH path so ORCA_SYSTEM_SSH_PATH and System32\OpenSSH beat a stripped PATH.
     const result = await runProcess({
-      program: 'ssh',
+      program: (await findSystemSshAsync()) ?? 'ssh',
       args,
       timeoutMs: SSH_G_TIMEOUT_MS
     })

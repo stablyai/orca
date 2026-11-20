@@ -1,20 +1,23 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as NodeOs from 'node:os'
+import type { runProcess } from '@orca/process-host'
 import { chmod, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 type NodeOsModule = typeof NodeOs
 
-const { existsSyncMock, homedirMock, userInfoMock } = vi.hoisted(() => ({
+const { existsSyncMock, homedirMock, runProcessMock, userInfoMock } = vi.hoisted(() => ({
   existsSyncMock: vi.fn<(path: string) => boolean>(() => true),
   homedirMock: vi.fn<() => string>(() => '/home/env'),
+  runProcessMock: vi.fn<typeof runProcess>(),
   userInfoMock: vi.fn<() => { homedir: string; username?: string }>(() => ({
     homedir: '/home/env'
   }))
 }))
 
 vi.mock('node:fs', () => ({ existsSync: existsSyncMock }))
+vi.mock('@orca/process-host', () => ({ runProcess: runProcessMock }))
 // Retain real os exports because site-policy fixtures need tmpdir.
 vi.mock('node:os', async (importOriginal) => ({
   ...(await importOriginal<NodeOsModule>()),
@@ -22,7 +25,11 @@ vi.mock('node:os', async (importOriginal) => ({
   userInfo: userInfoMock
 }))
 
-import { siteConfigMayRestrictHostKeys, splitIncludeArguments } from './ssh-g-config-resolution'
+import {
+  runSshG,
+  siteConfigMayRestrictHostKeys,
+  splitIncludeArguments
+} from './ssh-g-config-resolution'
 
 describe('siteConfigMayRestrictHostKeys', () => {
   let dir: string
@@ -63,6 +70,21 @@ describe('siteConfigMayRestrictHostKeys', () => {
     await writeFile(file, `Include ${join(dir, '?.conf')}\n`, 'utf-8')
 
     await expect(siteConfigMayRestrictHostKeys([file])).resolves.toBe(true)
+  })
+
+  it('stays strict for a Windows backslash glob after the star', async () => {
+    // On win32, `d\*\file.conf` is a nested wildcard: expanding it as trailing `d\*` read the
+    // star's own directory instead, whose harmless files would imply absent site policy.
+    const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    try {
+      const file = join(dir, 'ssh_config')
+      await writeFile(file, 'Include d\\*\\10-strict.conf\n', 'utf-8')
+
+      await expect(siteConfigMayRestrictHostKeys([file])).resolves.toBe(true)
+    } finally {
+      Object.defineProperty(process, 'platform', originalPlatform!)
+    }
   })
 
   it('follows a quoted Include path that contains a space', async () => {
@@ -149,5 +171,30 @@ describe('splitIncludeArguments against a measured ssh', () => {
     expect(windows('C:\\Users\\neil\\sp\\ ace\\x.conf')).toEqual([
       'C:\\Users\\neil\\sp ace\\x.conf'
     ])
+  })
+})
+
+describe('runSshG binary resolution', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs()
+    runProcessMock.mockReset()
+  })
+
+  it('resolves the OpenSSH binary through system-ssh discovery, not a bare PATH lookup', async () => {
+    vi.stubEnv('ORCA_SYSTEM_SSH_PATH', '/custom/system-ssh')
+    runProcessMock.mockResolvedValue({
+      code: 0,
+      signal: null,
+      stdout: 'user root\nport 2222\n',
+      stderr: '',
+      timedOut: false
+    })
+
+    const resolved = await runSshG(['-G', '--', 'example.com'])
+
+    expect(runProcessMock).toHaveBeenCalledWith(
+      expect.objectContaining({ program: '/custom/system-ssh' })
+    )
+    expect(resolved?.port).toBe(2222)
   })
 })
