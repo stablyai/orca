@@ -23,7 +23,11 @@ import {
   getResourceMemoryMetricCopy
 } from './popover/resource-memory-metric-copy'
 import { formatMemory } from './popover/resource-usage-metrics'
-import { readAgentPaneKeys, splitSnapshotByOwner } from './popover/resource-owner-split'
+import {
+  readAgentPaneKeys,
+  sharedAgentProcessUsage,
+  splitSnapshotByOwner
+} from './popover/resource-owner-split'
 import {
   findAmbiguousWorktreeIds,
   findDuplicateIds
@@ -160,6 +164,13 @@ export function useResourceUsageDerivedModel({
     [open, resourceSnapshot, sessions]
   )
 
+  // Once per shown sample; the closed or PTYs view never walks the rows.
+  const sharedAgentUsage = useMemo(
+    () =>
+      open && resourceSnapshot ? sharedAgentProcessUsage(resourceSnapshot, unifiedRepos) : null,
+    [open, resourceSnapshot, unifiedRepos]
+  )
+
   // Why: orphan detection needs daemon inventory; keep it open-only so the closed badge never triggers a background global session scan.
   const orphanCount = useMemo(() => {
     if (!open || !workspaceSessionReady) {
@@ -213,6 +224,7 @@ export function useResourceUsageDerivedModel({
   return {
     unifiedRepos,
     ownerSplit,
+    sharedAgentUsage,
     orphanCount,
     triggerSessionCount,
     memoryMetricCopy,

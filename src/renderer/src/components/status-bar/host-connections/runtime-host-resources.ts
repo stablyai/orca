@@ -5,6 +5,7 @@ import {
   toRuntimeExecutionHostId
 } from '../../../../../shared/execution-host/execution-host'
 import type {
+  ChatAgentMemory,
   SessionMemory,
   WorktreeMemory
 } from '../../../../../shared/diagnostics/process-stats-types'
@@ -72,8 +73,8 @@ export function getRuntimeHostResourceNotices(
   t: Translate = translate
 ): RuntimeHostResourceNotice[] {
   return Object.entries(results).flatMap(([environmentId, result]) => {
-    const label = hostLabel(environmentId)
     if (result.status === 'unreachable') {
+      const label = hostLabel(environmentId)
       return [
         {
           environmentId,
@@ -87,6 +88,7 @@ export function getRuntimeHostResourceNotices(
       ]
     }
     if (result.status === 'update-required') {
+      const label = hostLabel(environmentId)
       return [
         {
           environmentId,
@@ -141,6 +143,7 @@ function parseSnapshotWorktrees(value: unknown): WorktreeMemory[] | null {
       cpu,
       memory,
       sessions: Array.isArray(row.sessions) ? row.sessions.flatMap(parseSessionMemory) : [],
+      chats: Array.isArray(row.chats) ? row.chats.flatMap(parseChatMemory) : [],
       history: Array.isArray(row.history)
         ? row.history.flatMap((sample) => finiteNumber(sample) ?? [])
         : []
@@ -163,6 +166,30 @@ function parseSessionMemory(value: unknown): SessionMemory[] {
       sessionId: value.sessionId,
       paneKey: typeof value.paneKey === 'string' ? value.paneKey : null,
       pid: finiteNumber(value.pid) ?? 0,
+      cpu,
+      memory
+    }
+  ]
+}
+
+function parseChatMemory(value: unknown): ChatAgentMemory[] {
+  if (
+    !isRecord(value) ||
+    typeof value.agentSessionId !== 'string' ||
+    typeof value.agent !== 'string'
+  ) {
+    return []
+  }
+  const cpu = finiteNumber(value.cpu)
+  const memory = finiteNumber(value.memory)
+  if (cpu === null || memory === null) {
+    return []
+  }
+  return [
+    {
+      agentSessionId: value.agentSessionId,
+      agent: value.agent,
+      name: typeof value.name === 'string' ? value.name : null,
       cpu,
       memory
     }
