@@ -16191,7 +16191,6 @@
           },
           "useEmulatorScreenKeyboard": {
             "pasteTooLarge": "Yapıştırılan içerik emülatör klavye girişi için çok büyük.",
-            "unsupportedPasteText": "Emülatör klavye yapıştırma yalnızca ABD klavye metnini destekler.",
             "pasteTargetUnavailable": "Cihaz hazır olmadığı için emülatör klavye yapıştırma başarısız oldu."
           }
         }

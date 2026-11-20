@@ -15831,7 +15831,6 @@
           },
           "useEmulatorScreenKeyboard": {
             "pasteTooLarge": "模擬器鍵盤輸入的貼上內容過大。",
-            "unsupportedPasteText": "模擬器鍵盤貼上僅支援美式鍵盤文字。",
             "pasteTargetUnavailable": "模擬器鍵盤貼上失敗，因為裝置尚未就緒。"
           }
         }
