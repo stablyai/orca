@@ -103,6 +103,40 @@ describe('a send the agent took', () => {
     expect((await journal.reads.submission('echoed'))?.writtenAt).toBeUndefined()
   })
 
+  // Readers without queued-image support take the image-admission route; the stamp must reach them too.
+  it('delivers the stamp alone through forward history with a queued-image policy', async () => {
+    const journal = await openJournal()
+    await journal.appendSubmission({
+      clientMessageId: 'idle',
+      payloadFingerprint: 'fingerprint:idle',
+      body,
+      fence: 2,
+      handoverRecorded: true,
+      origin: 'client'
+    })
+    await journal.prepareHandover({
+      clientMessageId: 'idle',
+      fence: 2,
+      turnScope: { kind: 'thread' },
+      body
+    })
+    const reader = {
+      form: 'client' as const,
+      budgetBytes: 1_000_000,
+      queuedImages: { ids: [['other', true] as const], imageIds: [] }
+    }
+    const before = (await journal.history({ direction: 'tail', reader })).result
+    if (!before.ok) {
+      throw new Error('tail read reset')
+    }
+    await journal.markDispatchWritten({ clientMessageId: 'idle', fence: 2 })
+    const after = (
+      await journal.history({ direction: 'after', cursor: before.page.liveCursor, reader })
+    ).result
+    expect(after.ok && after.page.items).toEqual([])
+    expect(after.ok && after.page.submissions.map((send) => send.writtenAt)).toEqual([100])
+  })
+
   // Forks copy turn records, not submissions; the turn must carry its own clock origin.
   it('keeps the stamp on the turn its send opens', async () => {
     const journal = await openJournal()
