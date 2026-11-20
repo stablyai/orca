@@ -10,6 +10,7 @@ import './terminal-file-open-routing'
 import { shouldOpenTerminalFileWithSystemDefault } from '../../host-files/terminal-file-path-mapping'
 import { isHtmlFilePath, localHtmlFileDestinations } from './local-html-file-destinations'
 import { fileLinkTargetExists, resolveFileLinkTarget } from './terminal-file-link-target'
+import { rangeForParsedLinkOnRow } from '../../../../../../shared/terminal/links/terminal-link-row-range'
 import {
   rangeForParsedFileLink,
   type WrappedLogicalLine
@@ -91,7 +92,14 @@ export function createFilePathLinkProvider(
         const { links, guesses } = extractTerminalFileLinkReadings(logicalLine.text)
         // Why guesses too: every reading below is shown only once the host finds its file.
         return [...links, ...guesses].flatMap((parsed) => {
-          const range = rangeForParsedFileLink(logicalLine, parsed.startIndex, parsed.endIndex)
+          const range = logicalLine.rowScopedLinks
+            ? rangeForParsedLinkOnRow(
+                logicalLine,
+                parsed.startIndex,
+                parsed.endIndex,
+                bufferLineNumber
+              )
+            : rangeForParsedFileLink(logicalLine, parsed.startIndex, parsed.endIndex)
           return range && range.start.y <= bufferLineNumber && range.end.y >= bufferLineNumber
             ? [{ logicalLine, parsed, range }]
             : []

@@ -139,7 +139,7 @@ export function buildTableCellPathLogicalLineCandidates(
       })
       text += rowText
     })
-    candidates.push(toWrappedLogicalLine(rows, text))
+    candidates.push({ ...toWrappedLogicalLine(rows, text), rowScopedLinks: true })
   }
   return candidates
 }

@@ -27,6 +27,8 @@ export type WrappedLogicalLine = {
   text: string
   rows: WrappedLogicalRow[]
   fingerprint: string
+  /** Rows are separate segments (one table cell), so a link must not span the cells between them. */
+  rowScopedLinks?: true
 }
 
 const MAX_SOFT_WRAPPED_LINK_ROWS = 200

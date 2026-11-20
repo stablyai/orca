@@ -75,7 +75,9 @@ export function findTerminalFileLinksAtBufferPosition(
   for (const logicalLine of buildCandidateLogicalLinesForBufferPosition(buffer, position.y)) {
     const readings = extractTerminalFileLinkReadings(logicalLine.text)
     const covering = (parsed: ParsedTerminalFileLink): boolean => {
-      const range = rangeForParsedFileLink(logicalLine, parsed.startIndex, parsed.endIndex)
+      const range = logicalLine.rowScopedLinks
+        ? rangeForParsedLinkOnRow(logicalLine, parsed.startIndex, parsed.endIndex, position.y)
+        : rangeForParsedFileLink(logicalLine, parsed.startIndex, parsed.endIndex)
       return range !== null && rangeContainsBufferPosition(range, position, terminalColumns)
     }
     for (const parsed of readings.links.filter(covering)) {

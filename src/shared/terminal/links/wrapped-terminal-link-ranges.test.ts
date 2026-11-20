@@ -249,6 +249,8 @@ describe('file links wrapped inside a table cell', () => {
 
     expect(pathsAt(10, 1)).toContain(fullPath)
     expect(pathsAt(6, 2)).toContain(fullPath)
+    // Only the path's own cells take the click, not the next cell on the same row.
+    expect(pathsAt(60, 1)).not.toContain(fullPath)
     // A row wrapped at a space keeps that space, so sibling paths stay apart.
     expect(pathsAt(8, 4)).toContain('docs/one.md')
     expect([...pathsAt(10, 1), ...pathsAt(8, 4)].join('\n')).not.toMatch(/│|anddocs|md-/)
