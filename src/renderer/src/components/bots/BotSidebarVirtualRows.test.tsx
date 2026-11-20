@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
-// A bot's entry grows after its first measure (its Home Chat line loads, it unfolds). Entries placed
-// at measured offsets drew the next bot over those lines until a re-measure; in flow they can't.
+// Layout (no overlap when a row grows, reveal after a hidden resize) is covered in real Chromium by
+// tests/component-fixtures/bot-sidebar-virtual-rows.spec.ts.
 import { cleanup, render } from '@testing-library/react'
 import { useRef } from 'react'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -29,20 +29,6 @@ const entries = (count: number): Entry[] =>
   Array.from({ length: count }, (_, index) => ({ id: `bot-${index}`, name: `Bot ${index}` }))
 
 describe('BotSidebarVirtualRows', () => {
-  it('lays rendered entries out in flow, never at a measured offset a growing entry outruns', () => {
-    const { container } = render(<List entries={entries(3)} />)
-    const rows = [...container.querySelectorAll<HTMLElement>('[data-index]')]
-    expect(rows.map((row) => row.dataset.index)).toEqual(['0', '1', '2'])
-    for (const row of rows) {
-      expect(row.style.position).toBe('')
-      expect(row.style.top).toBe('')
-      expect(row.className).not.toMatch(/\babsolute\b/)
-    }
-    // Siblings in order, so an entry that grows pushes the next one down.
-    expect(rows[0]!.nextElementSibling).toBe(rows[1])
-    expect(rows[1]!.nextElementSibling).toBe(rows[2])
-  })
-
   it('keeps each entry mounted when the rendered window shifts', () => {
     const { container, rerender } = render(<List entries={entries(3)} />)
     const second = container.querySelector('[data-entry="bot-1"]')

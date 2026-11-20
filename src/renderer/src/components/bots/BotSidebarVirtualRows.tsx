@@ -78,6 +78,17 @@ export function BotSidebarVirtualRows<Entry extends { id: string }>({
       if (index === undefined || !hasLayoutBox(list) || list.clientHeight === 0) {
         return false
       }
+      // A rendered row that changed while search hid the list keeps its old size until
+      // ResizeObserver reports it, but in flow its real height already sets how far the list
+      // scrolls: a jump worked out from the old size stops short of the target. Read them first.
+      for (const row of virtualizer.elementsCache.values()) {
+        if (row.isConnected) {
+          virtualizer.resizeItem(
+            virtualizer.indexFromElement(row),
+            Math.round(row.getBoundingClientRect().height)
+          )
+        }
+      }
       const offset = virtualizer.getOffsetForIndex(index, 'start')?.[0]
       if (offset === undefined) {
         return false
