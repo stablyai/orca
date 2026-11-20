@@ -4,21 +4,16 @@
   "family": "aiVault.resume-preparation",
   "namedDeltas": [],
   "values": {
-    "44f0b6b8c6ae": {
-      "failure": "This Claude conversation is open in a chat. Refresh Session History to open it.",
+    "03f0f92fed19": {
+      "name": "aiVault.prepareSessionResume#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"aiVault.prepareSessionResume\",\"params\":{\"agent\":\"claude\",\"sessionId\":\"claude-session-1\",\"filePath\":\"/sessions/claude-session-1.jsonl\",\"codexHome\":null,\"executionHostId\":\"local\"}}"
+    },
+    "84c5ee8520ac": {
+      "failure": "agent_session_conflict",
       "prepared": "unprepared"
     },
-    "6d8407131513": {
-      "status": "rejected",
-      "startedAt": 0,
-      "settledAt": 0,
-      "error": {
-        "category": "Error",
-        "message": "This Claude conversation is open in a chat. Refresh Session History to open it.",
-        "isRpcDeliveryUnknown": false
-      }
-    },
-    "7c387ba6bdc4": {
+    "c9ed30140304": {
       "name": "aiVault.prepareSessionResume#1",
       "ordinal": 1,
       "args": [
@@ -34,7 +29,8 @@
               "$rpc": "null"
             },
             "executionHostId": "local",
-            "filePath": "/sessions/rollout.jsonl"
+            "filePath": "/sessions/claude-session-1.jsonl",
+            "sessionId": "claude-session-1"
           }
         },
         {
@@ -58,10 +54,15 @@
         }
       }
     },
-    "825b0b033373": {
-      "name": "aiVault.prepareSessionResume#1",
-      "ordinal": 2,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"aiVault.prepareSessionResume\",\"params\":{\"agent\":\"claude\",\"filePath\":\"/sessions/rollout.jsonl\",\"codexHome\":null,\"executionHostId\":\"local\"}}"
+    "de4906d43307": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "agent_session_conflict",
+        "isRpcDeliveryUnknown": false
+      }
     }
   },
   "recording": {
@@ -70,12 +71,12 @@
       {
         "id": "refused-before-launch",
         "observation": {
-          "sender": ["7c387ba6bdc4"],
-          "payloads": ["825b0b033373"],
+          "sender": ["c9ed30140304"],
+          "payloads": ["03f0f92fed19"],
           "settlements": {
-            "claude": "6d8407131513"
+            "claude": "de4906d43307"
           },
-          "state": "44f0b6b8c6ae",
+          "state": "84c5ee8520ac",
           "effects": []
         }
       }

@@ -2022,6 +2022,7 @@
     "aiVaultResumePreparation": {
       "openInChat": "Bu {{agent}} konuşması bir sohbette açık. Açmak için Oturum Geçmişi'ni yenileyin.",
       "ownershipUnknown": "Orca, bu {{agent}} konuşmasının kime ait olduğunu doğrulayamadı. Oturum Geçmişi'ni yenileyip tekrar deneyin.",
+      "preparationRefused": "Orca'da bu {{agent}} konuşması hazırlanamadı. Devam etmek için yeni bir sohbet başlatın.",
       "prepareFailed": "Bu eski Codex oturumu hazırlanamadı. Oturumu sürdürmeyi yeniden deneyin."
     },
     "backgroundTask": {

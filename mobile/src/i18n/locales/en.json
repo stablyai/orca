@@ -2465,6 +2465,7 @@
     "aiVaultResumePreparation": {
       "openInChat": "This {{agent}} conversation is open in a chat. Refresh Session History to open it.",
       "ownershipUnknown": "Orca could not confirm who owns this {{agent}} conversation. Refresh Session History and try again.",
+      "preparationRefused": "Orca could not prepare this {{agent}} conversation. Start a new chat to continue.",
       "prepareFailed": "Could not prepare this legacy Codex session. Retry resume."
     },
     "floatingWorkspace": {

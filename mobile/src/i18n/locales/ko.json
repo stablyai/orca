@@ -2020,6 +2020,7 @@
     "aiVaultResumePreparation": {
       "openInChat": "이 {{agent}} 대화는 채팅에서 열려 있습니다. 열려면 세션 기록을 새로고침하세요.",
       "ownershipUnknown": "Orca가 이 {{agent}} 대화의 소유자를 확인할 수 없습니다. 세션 기록을 새로고침한 후 다시 시도하세요.",
+      "preparationRefused": "Orca가 이 {{agent}} 대화를 준비할 수 없습니다. 계속하려면 새 채팅을 시작하세요.",
       "prepareFailed": "이 레거시 Codex 세션을 준비하지 못했습니다. 재개를 다시 시도하세요."
     },
     "backgroundTask": {

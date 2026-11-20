@@ -22,12 +22,22 @@ export function aiVaultResumeMountAdapters(
         action: (name) =>
           prepare(
             client,
-            mountFixture<Parameters<typeof prepare>[1]>({
-              agent: name === 'claude' ? 'claude' : 'codex',
-              filePath: '/sessions/rollout.jsonl',
-              codexHome: LEGACY_CODEX_HOME,
-              executionHostId: 'local'
-            })
+            mountFixture<Parameters<typeof prepare>[1]>(
+              name === 'claude'
+                ? {
+                    agent: 'claude',
+                    sessionId: 'claude-session-1',
+                    filePath: '/sessions/claude-session-1.jsonl',
+                    codexHome: null,
+                    executionHostId: 'local'
+                  }
+                : {
+                    agent: 'codex',
+                    filePath: '/sessions/rollout.jsonl',
+                    codexHome: LEGACY_CODEX_HOME,
+                    executionHostId: 'local'
+                  }
+            )
           ).then(
             (value: unknown) => {
               prepared = value

@@ -6388,7 +6388,8 @@
             "agent": "claude",
             "codexHome": null,
             "executionHostId": "local",
-            "filePath": "/sessions/rollout.jsonl"
+            "filePath": "/sessions/claude-session-1.jsonl",
+            "sessionId": "claude-session-1"
           },
           "reply": {
             "ok": false,

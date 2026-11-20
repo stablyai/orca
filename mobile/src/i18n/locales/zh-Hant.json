@@ -2015,6 +2015,7 @@
     "aiVaultResumePreparation": {
       "openInChat": "此 {{agent}} 對話已在聊天中開啟。請重新整理工作階段歷史記錄以開啟它。",
       "ownershipUnknown": "Orca 無法確認此 {{agent}} 對話的歸屬。請重新整理工作階段歷史記錄並重試。",
+      "preparationRefused": "Orca 無法準備此 {{agent}} 對話。請開啟新聊天以繼續。",
       "prepareFailed": "無法準備此舊版 Codex 工作階段。請再次嘗試恢復。"
     },
     "backgroundTask": {
