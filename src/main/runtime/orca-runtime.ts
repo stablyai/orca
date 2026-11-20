@@ -229,14 +229,14 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
 
   /** Whether a layout-owning window can show a tab before process creation. */
   canPublishAgentLaunchTab(): boolean {
-    return Boolean(this.notifier?.publishAgentLaunchTab && this.getAvailableAuthoritativeWindow())
+    return Boolean(this.notifier?.publishAgentLaunchTab && this.hasAuthoritativeWindow())
   }
 
   /** Publish before spawn when a window owns the layout; otherwise return null. */
   publishAgentLaunchTab(
     request: Omit<AgentLaunchTabPublishRequest, 'requestId'>
   ): Promise<AgentLaunchTabPublished> | null {
-    if (!this.notifier?.publishAgentLaunchTab || !this.getAvailableAuthoritativeWindow()) {
+    if (!this.notifier?.publishAgentLaunchTab || !this.hasAuthoritativeWindow()) {
       return null
     }
     return this.notifier.publishAgentLaunchTab(request)

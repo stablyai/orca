@@ -70,7 +70,7 @@ import { RuntimeWorkspaceChangeEvents } from '../workspaces/catalog/runtime-work
 export abstract class OrcaRuntimeWithGetStatus extends RuntimeWorkspaceChangeEvents {
   getStatus(): RuntimeStatus {
     // Advertise screencast for renderer/offscreen backends; headless ownership prevents client-local fallback.
-    const hasRenderer = Boolean(this.getAvailableAuthoritativeWindow())
+    const hasRenderer = Boolean(this.hasAuthoritativeWindow())
     const hasOffscreen = !hasRenderer && Boolean(this.offscreenBrowserBackend)
     const hasHeadlessCommands = runtimeBrowserCommandsFactoryIsHeadless()
     const canBrowse = hasRenderer || hasOffscreen

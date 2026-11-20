@@ -34,10 +34,8 @@ import { repairKnownPoisonedInstallDirBeforeWindow } from '../windows-install-pe
 import { installServeQuitHandling } from '../serve-launch/serve-quit-handling'
 import { installCloudSessionShutdownFlush } from '../cloud-startup/cloud-session-shutdown-flush'
 import { registerHeadlessServeSshHandlers } from '../serve-launch/headless-serve-ssh-registration'
-import {
-  recordRuntimeRpcStartFailure,
-  showRuntimeRpcStartupFailureDialog
-} from '../../runtime/rpc/server/runtime-rpc-startup-failure'
+import { recordRuntimeRpcStartFailure } from '../../runtime/rpc/server/runtime-rpc-startup-failure'
+import { showRuntimeRpcStartupFailureDialog } from '../../host/electron-runtime-rpc-startup-failure-dialog'
 import { registerCliForHeadlessServe } from '../serve-launch/serve-cli-registration'
 import { startAppImageCopyPreExtraction } from '../../cli/appimage/appimage-copy-pre-extraction'
 import { scheduleAllPendingHistoryTreeRemovals } from '../../pty/history/terminal-history-deletion'
