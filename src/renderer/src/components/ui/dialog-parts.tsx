@@ -79,16 +79,27 @@ function DialogDisclosure({
   label,
   children,
   defaultOpen = false,
-  variant = 'boxed'
+  variant = 'boxed',
+  chevron = 'leading',
+  triggerClassName
 }: {
   label: React.ReactNode
   children: React.ReactNode
   defaultOpen?: boolean
   /** `code`: a scrolling monospace list (changed files, diagnostics). `plain`: form fields, no box. */
   variant?: 'boxed' | 'code' | 'plain'
+  /** `trailing` keeps a label that starts with its own status icon aligned with sibling lines. */
+  chevron?: 'leading' | 'trailing'
+  triggerClassName?: string
 }): React.JSX.Element {
   const [open, setOpen] = React.useState(defaultOpen)
   const contentId = React.useId()
+  const chevronIcon = (
+    <ChevronRight
+      aria-hidden="true"
+      className={cn('size-3.5 shrink-0 transition-transform', open && 'rotate-90')}
+    />
+  )
   return (
     <div className="flex min-w-0 flex-col gap-2">
       <button
@@ -96,13 +107,14 @@ function DialogDisclosure({
         aria-expanded={open}
         aria-controls={contentId}
         onClick={() => setOpen((current) => !current)}
-        className="flex w-fit items-center gap-1 rounded-sm text-[13px] text-muted-foreground outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
+        className={cn(
+          'flex w-fit items-center gap-1 rounded-sm text-[13px] text-muted-foreground outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50',
+          triggerClassName
+        )}
       >
-        <ChevronRight
-          aria-hidden="true"
-          className={cn('size-3.5 shrink-0 transition-transform', open && 'rotate-90')}
-        />
+        {chevron === 'leading' ? chevronIcon : null}
         {label}
+        {chevron === 'trailing' ? chevronIcon : null}
       </button>
       <div
         id={contentId}

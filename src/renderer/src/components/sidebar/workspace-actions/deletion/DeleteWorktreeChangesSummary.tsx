@@ -1,9 +1,10 @@
 // @protected-copy
 import type { JSX } from 'react'
-import { DialogDisclosure, DialogWarning } from '@/components/ui/dialog-parts'
+import { Check, CircleAlert } from 'lucide-react'
+import { DialogDisclosure } from '@/components/ui/dialog-parts'
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
-import { formatAtRiskLocalFileNames } from '@/lib/workspace/display/at-risk-local-files-label'
 import { STATUS_COLORS } from '../../../../lib/source-control/paths/git-path-decoration'
 import { STATUS_LABELS } from '../../../../../../shared/git/status/git-status-labels'
 import type { Worktree } from '../../../../../../shared/worktree/types'
@@ -65,7 +66,9 @@ export function deleteWorktreeLossLine(
   return only ? t('worktree.delete.loss.one', '{{what}} will be lost', { what: only }) : null
 }
 
-/** What deleting one workspace loses: one amber line, then the files behind "Show changes". */
+type StatusTone = 'checking' | 'clean' | 'warning'
+
+/** What deleting one workspace loses, as one fixed-height line; the files sit behind it. */
 export function DeleteWorktreeChangesSummary({
   worktree,
   dirtyChanges,
@@ -96,57 +99,75 @@ export function DeleteWorktreeChangesSummary({
     (atRiskLocalFiles?.count ?? 0) > 0
   )
   const changesChecking = changeCount === undefined && checkState === 'checking'
-  const status =
-    changesChecking || localFilesState?.status === 'checking'
-      ? t('components.workspace.delete.changes.checking', 'Checking for changes…')
-      : changeCount === undefined && checkState === 'unavailable'
-        ? t('components.workspace.delete.changes.unavailable', 'Changes could not be checked')
-        : null
-  const ignoredNames =
-    atRiskLocalFiles && (atRiskLocalFiles.count > 0 || !atRiskLocalFiles.complete)
-      ? formatAtRiskLocalFileNames(atRiskLocalFiles, t)
-      : null
-  const ignoredNote =
-    atRiskLocalFiles && (atRiskLocalFiles.count > 0 || !atRiskLocalFiles.complete)
-      ? ignoredNames
-        ? t(
-            'components.workspace.delete.ignoredFilesLost',
-            'Ignored files will be lost: {{names}}',
-            {
-              names: ignoredNames
-            }
-          )
-        : t(
-            'components.workspace.delete.ignoredFilesUnchecked',
-            'Ignored files could not be fully checked'
-          )
-      : null
+  const changesFailed = changeCount === undefined && checkState === 'unavailable'
+  const ignoredChecking = localFilesState?.status === 'checking'
+  // Show the Git result as soon as it lands; a trailing spinner covers the ignored-files scan.
+  const [tone, text]: [StatusTone, string] | [null, null] = changesFailed
+    ? [
+        'warning',
+        t('components.workspace.delete.changes.unavailable', 'Changes could not be checked')
+      ]
+    : loss
+      ? ['warning', loss]
+      : changesChecking || (ignoredChecking && checkState !== 'complete')
+        ? ['checking', t('components.workspace.delete.changes.checking', 'Checking for changes…')]
+        : checkState === 'complete'
+          ? ['clean', t('components.workspace.delete.changes.none', 'No uncommitted changes')]
+          : [null, null]
+  const stillChecking = tone !== 'checking' && (changesChecking || ignoredChecking)
+  const ignoredUnchecked =
+    localFilesState?.status === 'unsupported' ||
+    (atRiskLocalFiles !== undefined && atRiskLocalFiles.count === 0 && !atRiskLocalFiles.complete)
+  const ignoredUncheckedLabel = ignoredUnchecked
+    ? t('components.workspace.delete.ignoredFiles.unavailable', 'Ignored files not checked')
+    : null
   const changedFiles = preview?.files ?? []
-  const hasIgnoredPaths =
-    (atRiskLocalFiles?.paths ?? atRiskLocalFiles?.samplePaths ?? []).length > 0
-  const hasDetails = changedFiles.length > 0 || unsavedFiles.length > 0 || hasIgnoredPaths
-  const ignoredUnchecked = localFilesState?.status === 'unsupported'
-  if (!loss && !status && !ignoredUnchecked && !ignoredNote && !hasDetails) {
+  const ignoredPaths = atRiskLocalFiles?.paths ?? atRiskLocalFiles?.samplePaths ?? []
+  const hasDetails = changedFiles.length > 0 || unsavedFiles.length > 0 || ignoredPaths.length > 0
+  if (!tone) {
     return null
   }
+  const line = (
+    <>
+      <span aria-hidden="true" className="flex size-3.5 shrink-0 items-center justify-center">
+        {tone === 'checking' ? (
+          <LoadingSpinner className="size-3.5 text-muted-foreground" />
+        ) : tone === 'clean' ? (
+          <Check className="size-3.5 text-status-success" />
+        ) : (
+          <CircleAlert className="size-3.5" />
+        )}
+      </span>
+      <span className="min-w-0 truncate" title={text}>
+        {text}
+      </span>
+      {ignoredUncheckedLabel && !hasDetails ? (
+        <span className="min-w-0 shrink truncate text-muted-foreground">
+          · {ignoredUncheckedLabel}
+        </span>
+      ) : null}
+      {stillChecking ? (
+        <LoadingSpinner className="size-3 shrink-0 text-muted-foreground" />
+      ) : null}
+    </>
+  )
+  const toneClassName =
+    tone === 'warning'
+      ? 'text-status-warning-text hover:text-status-warning-text'
+      : 'text-muted-foreground'
   return (
-    <div className="flex min-w-0 flex-col gap-2">
-      {loss ? <DialogWarning>{loss}</DialogWarning> : null}
-      {status ? <p className="text-[13px] text-muted-foreground">{status}</p> : null}
-      {ignoredUnchecked ? (
-        <p className="text-[13px] text-muted-foreground">
-          {t('components.workspace.delete.ignoredFiles.unavailable', 'Ignored files not checked')}
-        </p>
-      ) : null}
-      {!hasDetails && ignoredNote ? (
-        <p className="text-[13px] text-muted-foreground">{ignoredNote}</p>
-      ) : null}
+    <div aria-live="polite" className="min-w-0">
       {hasDetails ? (
-        <DialogDisclosure label={t('worktree.delete.showChanges', 'Show changes')} variant="code">
-          {ignoredNote && !hasIgnoredPaths ? (
-            <p className="mb-2 font-sans text-muted-foreground">{ignoredNote}</p>
+        <DialogDisclosure
+          label={line}
+          variant="code"
+          chevron="trailing"
+          triggerClassName={`h-5 max-w-full min-w-0 gap-1.5 ${toneClassName}`}
+        >
+          {ignoredUncheckedLabel ? (
+            <p className="mb-2 font-sans text-muted-foreground">{ignoredUncheckedLabel}</p>
           ) : null}
-          {hasIgnoredPaths && atRiskLocalFiles ? (
+          {ignoredPaths.length > 0 && atRiskLocalFiles ? (
             <DeleteWorktreeLocalFilesDetails files={atRiskLocalFiles} />
           ) : null}
           <ul className="min-w-0 space-y-0.5">
@@ -198,19 +219,11 @@ export function DeleteWorktreeChangesSummary({
           ) : null}
         </DialogDisclosure>
       ) : null}
-    </div>
-  )
-}
-
-/** Default Delete forces removal, so warn while a target's Git status is unknown. */
-export function DeleteWorktreeUnknownChangesWarning(): JSX.Element {
-  const t = useTranslate()
-  return (
-    <DialogWarning>
-      {t(
-        'components.workspace.delete.changes.permanentLoss',
-        'Any uncommitted or untracked changes in Git workspaces will be permanently deleted.'
+      {hasDetails ? null : (
+        <p className={`flex h-5 min-w-0 items-center gap-1.5 text-[13px] ${toneClassName}`}>
+          {line}
+        </p>
       )}
-    </DialogWarning>
+    </div>
   )
 }
