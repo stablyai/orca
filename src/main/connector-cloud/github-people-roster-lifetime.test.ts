@@ -19,7 +19,7 @@ vi.mock('../ipc/command-path/command-path-resolver', () => ({
   resolveSelectedLocalCommand: (command: string) => command
 }))
 
-import { GitHubPeopleRosters, ROSTER_TIMEOUT_MS } from './github-people-roster'
+import { GitHubPeopleRosters, QUEUE_WAIT_MS, ROSTER_TIMEOUT_MS } from './github-people-roster'
 
 function child(pid: number): ChildProcess {
   const value = createFakeSpawnedChild()
@@ -47,7 +47,7 @@ describe('the roster slot on the real gh runner', () => {
     vi.useRealTimers()
   })
 
-  it('runs one child, kills it at the deadline, and starts the next only once it is gone', async () => {
+  it('runs one child, kills it at the deadline, answers everyone, and starts again only once it is gone', async () => {
     const first = child(11)
     const second = child(12)
     spawnMock.mockReturnValueOnce(first).mockReturnValueOnce(second)
@@ -57,20 +57,24 @@ describe('the roster slot on the real gh runner', () => {
     void slow.then(() => {
       answered = true
     })
-    const next = rosters.read(repos('c/d'))
+    const waiting = rosters.read(repos('c/d'))
     await vi.advanceTimersByTimeAsync(0)
     expect(spawnMock).toHaveBeenCalledOnce()
 
     await vi.advanceTimersByTimeAsync(ROSTER_TIMEOUT_MS)
     expect(signalMock).toHaveBeenCalled()
-    // The kill isn't confirmed (the process group still exists): no second child, however long.
+    // The kill isn't confirmed (the process group still exists): no second child, however long...
     await vi.advanceTimersByTimeAsync(5 * 60_000)
     expect(spawnMock).toHaveBeenCalledOnce()
-    // ...yet the caller already has its answer: the slot's custody isn't the caller's wait.
+    // ...yet the holder's caller has its answer, and the waiting read answered busy at its wait.
     expect(answered).toBe(true)
-
     expect(await slow).toEqual({ status: 'unavailable' })
+    expect(await waiting).toEqual({ status: 'busy' })
+    expect(QUEUE_WAIT_MS).toBeLessThan(5 * 60_000)
+
     close(first, 1)
+    await vi.advanceTimersByTimeAsync(0)
+    const next = rosters.read(repos('e/f'))
     await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(2))
     close(
       second,

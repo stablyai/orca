@@ -27532,7 +27532,7 @@
         "notAllLoaded": "Not all people loaded",
         "loading": "Still loading your repos.",
         "unavailable": "Couldn’t read repos.",
-        "busy": "Repo list is busy. Try again shortly.",
+        "busy": "Repo list is busy. Reopen to try again.",
         "notRead": "Some repos or members couldn’t be read.",
         "firstPerRepo": "Showing the first {{count}} people per repo.",
         "keepTyping": "Keep typing to narrow.",
@@ -27540,7 +27540,14 @@
         "searchedOrgsExact": "Searched your orgs and exact usernames.",
         "searchedOrgs": "Searched your orgs.",
         "foundInOrgs": "Found in your orgs",
-        "notFoundInOrgs": "Not found in your orgs"
+        "notFoundInOrgs": "Not found in your orgs",
+        "partlyRead": "Large repos and orgs were only partly read.",
+        "firstPerOrg": "Showing the first {{count}} members per org.",
+        "recentRepos": "Only your {{count}} latest repos were read.",
+        "omitted": "Not every connected repo was read.",
+        "loadingTitle": "Still loading your repos",
+        "noExactYet": "No exact username match. Repos still coming.",
+        "resultsComing": "Results appear when they load."
       },
       "connection": {
         "description": "{{repos}} · signed in as @{{login}}",

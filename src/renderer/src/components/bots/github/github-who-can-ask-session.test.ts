@@ -19,7 +19,8 @@ const roster: BotGitHubRoster = {
   ],
   from: { repositories: true, organizations: false },
   complete: true,
-  cut: false
+  omitted: false,
+  cut: { people: false, members: false, repositories: false }
 }
 const deferred = <T>() => {
   let resolve = (_value: T): void => {}
@@ -30,6 +31,12 @@ const deferred = <T>() => {
 }
 type Users = BotSlackResult<ConnectorGitHubUsersResponse>
 const noOne: Users = { ok: true, value: { members: [], complete: true } }
+const stranger: Users = {
+  ok: true,
+  value: { members: [{ id: '9', name: 'brennan' }], complete: true }
+}
+const names = (result: BotSlackResult<{ members: { name: string }[] }>) =>
+  result.ok ? result.value.members.map((member) => member.name) : result.error
 
 describe('one Add picker open on GitHub', () => {
   beforeEach(() => vi.useFakeTimers())
@@ -38,59 +45,95 @@ describe('one Add picker open on GitHub', () => {
   it('asks for the roster once and filters it as the owner types', async () => {
     const people = vi.fn(async () => ({ ok: true as const, value: roster }))
     const users = vi.fn(async (_args: { query: string }): Promise<Users> => noOne)
-    const search = gitHubWhoCanAskSession({ people, users }, { scope, ownerLogin: 'owner', t })
-    const names = async (query: string) => {
-      const result = await search(query)
-      return result.ok ? result.value.members.map((member) => member.name) : result.error
-    }
-    expect(await names('')).toEqual(['brennanb2025', 'jinwoo-h'])
-    expect(await names('bren')).toEqual(['brennanb2025'])
-    expect(await names('hong')).toEqual(['jinwoo-h'])
+    const session = gitHubWhoCanAskSession({ people, users }, { scope, ownerLogin: 'owner', t })
+    expect(names(await session.search(''))).toEqual(['brennanb2025', 'jinwoo-h'])
+    expect(names(await session.search('bren'))).toEqual(['brennanb2025'])
+    expect(names(await session.search('hong'))).toEqual(['jinwoo-h'])
     expect(people).toHaveBeenCalledOnce()
     // The exact lookup runs only for a query that can be a username, never for an empty box.
     expect(users.mock.calls.map(([args]) => args.query)).toEqual(['bren', 'hong'])
   })
 
-  it('answers with the exact match while the roster is slow, then asks again when it lands', async () => {
+  it('answers while the roster is slow, tells its one listener once, and never repeats the exact lookup', async () => {
     const slow = deferred<BotSlackResult<BotGitHubRoster>>()
-    const users = vi.fn(async (): Promise<Users> => ({
-      ok: true,
-      value: { members: [{ id: '9', name: 'brennan' }], complete: true }
-    }))
-    const search = gitHubWhoCanAskSession(
+    const users = vi.fn(async (_args: { query: string }): Promise<Users> => stranger)
+    const session = gitHubWhoCanAskSession(
       { people: () => slow.promise, users },
       { scope, ownerLogin: 'owner', t }
     )
-    const answer = search('brennan')
+    const replaced = vi.fn()
+    const told = vi.fn()
+    session.onUpdate?.(replaced)
+    session.onUpdate?.(told)
+    const first = session.search('brennan')
     await vi.advanceTimersByTimeAsync(ROSTER_WAIT_MS)
-    const first = await answer
-    expect(first.ok && first.value.members).toEqual([
-      { id: '9', name: 'brennan', tag: 'Repos still loading' }
-    ])
-    expect(first.ok && first.value.note).toBe('Still loading your repos.')
-    let refreshed = false
-    void (first.ok ? first.value.pending : undefined)?.then(() => {
-      refreshed = true
-    })
+    expect(names(await first)).toEqual(['brennan'])
     slow.resolve({ ok: true, value: roster })
     await vi.advanceTimersByTimeAsync(0)
-    expect(refreshed).toBe(true)
-    const second = await search('brennan')
-    expect(second.ok && second.value.members.map((member) => member.name)).toEqual([
-      'brennanb2025',
-      'brennan'
-    ])
+    // Only the latest listener is told, and only once.
+    expect(replaced).not.toHaveBeenCalled()
+    expect(told).toHaveBeenCalledOnce()
+    expect(names(await session.search('brennan'))).toEqual(['brennanb2025', 'brennan'])
+    expect(users).toHaveBeenCalledOnce()
+    // A changed query still gets its own exact answer.
+    await session.search('jinwoo')
+    expect(users.mock.calls.map(([args]) => args.query)).toEqual(['brennan', 'jinwoo'])
+    // Once the roster is in, a listener has nothing to wait for.
+    const late = vi.fn()
+    session.onUpdate?.(late)()
+    expect(late).not.toHaveBeenCalled()
+  })
+
+  it('uses a roster that lands while the exact lookup is still on its way', async () => {
+    const slowRoster = deferred<BotSlackResult<BotGitHubRoster>>()
+    const slowExact = deferred<Users>()
+    const session = gitHubWhoCanAskSession(
+      { people: () => slowRoster.promise, users: () => slowExact.promise },
+      { scope, ownerLogin: 'owner', t }
+    )
+    const answer = session.search('brennan')
+    await vi.advanceTimersByTimeAsync(ROSTER_WAIT_MS)
+    slowRoster.resolve({ ok: true, value: roster })
+    await vi.advanceTimersByTimeAsync(0)
+    slowExact.resolve(noOne)
+    expect(names(await answer)).toEqual(['brennanb2025'])
+  })
+
+  it('keeps a failed exact lookup open for a roster still loading, then fails only if both did', async () => {
+    const failed: Users = { ok: false, error: 'network' }
+    const late = deferred<BotSlackResult<BotGitHubRoster>>()
+    const session = gitHubWhoCanAskSession(
+      { people: () => late.promise, users: async () => failed },
+      { scope, ownerLogin: 'owner', t }
+    )
+    const first = session.search('brennan')
+    await vi.advanceTimersByTimeAsync(ROSTER_WAIT_MS)
+    expect((await first).ok).toBe(true)
+    late.resolve({ ok: true, value: roster })
+    await vi.advanceTimersByTimeAsync(0)
+    const second = await session.search('brennan')
+    expect(names(second)).toEqual(['brennanb2025'])
+    expect(second.ok && second.value.note).toBe('Couldn’t check GitHub usernames.')
+
+    const unreadable = gitHubWhoCanAskSession(
+      {
+        people: async () => ({ ok: true, value: { status: 'unavailable' } }),
+        users: async () => failed
+      },
+      { scope, ownerLogin: 'owner', t }
+    )
+    expect(await unreadable.search('brennan')).toEqual(failed)
   })
 
   it('sends no roster request until the GitHub state is known, or when nothing is connected', async () => {
     const people = vi.fn()
     const users = vi.fn(async (): Promise<Users> => noOne)
     for (const unknown of [undefined, { repositories: [], owners: [], more: false }]) {
-      const search = gitHubWhoCanAskSession(
+      const session = gitHubWhoCanAskSession(
         { people, users },
         { scope: unknown, ownerLogin: null, t }
       )
-      expect((await search('octocat')).ok).toBe(true)
+      expect((await session.search('octocat')).ok).toBe(true)
     }
     expect(people).not.toHaveBeenCalled()
   })

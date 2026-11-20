@@ -63,19 +63,26 @@ export type BotGitHubRoster =
       /** Every chosen read came back whole: no source failed or lost entries. It does not mean
        *  everyone who can reach those repositories was listed. */
       complete: boolean
-      /** A read stopped at its fixed size (the first GITHUB_PEOPLE_PER_SOURCE people of a repository
-       *  or organization, a person's first repositories), whatever the owner types. */
-      cut: boolean
+      /** Some connected repositories or accounts were left out on purpose (past the scope's caps,
+       *  or not a readable name): not a failure, but not everything either. */
+      omitted: boolean
+      /** Reads that stopped at their fixed size, whatever the owner types: a repository's first
+       *  GITHUB_PEOPLE_PER_SOURCE people, an organization's first GITHUB_PEOPLE_PER_SOURCE
+       *  members, a person's first GITHUB_PERSONAL_REPOSITORIES repositories. */
+      cut: { people: boolean; members: boolean; repositories: boolean }
       /** The GitHub account gh read every source as, from the same call; absent when unknown. */
       searchedAs?: string
     }
   /** No source could be read: gh missing, signed out, offline, or past its deadline. */
   | { status: 'unavailable' }
-  /** The host already has its limit of different reads waiting; asking again later works. */
+  /** Another read holds this host's gh and this one waited its turn without getting it (or the
+   *  queue was full); opening the picker again asks again. */
   | { status: 'busy' }
 
 /** People per repository or organization a roster read returns. */
 export const GITHUB_PEOPLE_PER_SOURCE = 100
+/** A person's own repositories read when the app is on their whole account, most recent first. */
+export const GITHUB_PERSONAL_REPOSITORIES = 5
 
 /** The desktop's own code for a cloud with GitHub off (every GitHub route answers 404). */
 export const BOT_GITHUB_OFF = 'github_off'

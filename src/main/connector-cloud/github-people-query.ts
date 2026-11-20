@@ -4,7 +4,8 @@ import * as z from 'zod'
 import {
   GITHUB_ID_PATTERN,
   GITHUB_LOGIN_PATTERN,
-  GITHUB_PEOPLE_PER_SOURCE
+  GITHUB_PEOPLE_PER_SOURCE,
+  GITHUB_PERSONAL_REPOSITORIES
 } from '../../shared/connector-bot-github-contract'
 import {
   GITHUB_PEOPLE_MAX_OWNERS,
@@ -13,8 +14,6 @@ import {
 } from '../../shared/bots/github-people-scope'
 import type { GitHubPerson } from '../../shared/bots/github-people-rank'
 
-/** A person's own repositories read when the app is on their whole account, most recent first. */
-const PERSONAL_REPOSITORIES = 5
 const REPOSITORY_NAME = /^[A-Za-z0-9._-]{1,100}$/
 const PEOPLE = `assignableUsers(first: ${GITHUB_PEOPLE_PER_SOURCE}) { totalCount nodes { databaseId login name } }`
 
@@ -64,7 +63,7 @@ export function rosterQuery(target: GitHubPeopleTarget): {
     fields.push(
       `a${index}: repositoryOwner(login: $a${index}) { __typename ` +
         `... on Organization { membersWithRole(first: ${GITHUB_PEOPLE_PER_SOURCE}) { totalCount nodes { databaseId login name } } } ` +
-        `... on User { repositories(first: ${PERSONAL_REPOSITORIES}, ownerAffiliations: OWNER, orderBy: {field: PUSHED_AT, direction: DESC}) { totalCount nodes { ${PEOPLE} } } } }`
+        `... on User { repositories(first: ${GITHUB_PERSONAL_REPOSITORIES}, ownerAffiliations: OWNER, orderBy: {field: PUSHED_AT, direction: DESC}) { totalCount nodes { ${PEOPLE} } } } }`
     )
   })
   const head = params.length > 0 ? `query(${params.join(', ')})` : 'query'
@@ -82,10 +81,9 @@ const OrganizationSource = z.object({ membersWithRole: People })
 const PersonalSource = z.object({
   repositories: z.object({ totalCount: z.number().int(), nodes: z.array(z.unknown()) })
 })
-const Answer = z.object({
-  data: z.record(z.string(), z.unknown()).nullable().optional(),
-  errors: z.array(z.unknown()).optional()
-})
+// Data and errors are read apart: a malformed `errors` must not lose readable sources.
+const Data = z.object({ data: z.record(z.string(), z.unknown()) })
+const NoErrors = z.object({ errors: z.array(z.never()).optional() })
 const Viewer = z.object({ login: z.string().regex(GITHUB_LOGIN_PATTERN) })
 
 /** What one call returned, source by source. */
@@ -97,8 +95,8 @@ export type RosterRead = {
   from: { repositories: boolean; organizations: boolean }
   /** A source failed or lost entries: a null or malformed source or node, a GraphQL error. */
   lossy: boolean
-  /** A source stopped at its fixed size. */
-  cut: boolean
+  /** Sources that stopped at their fixed size, by kind. */
+  cut: { people: boolean; members: boolean; repositories: boolean }
   viewer: string | null
 }
 
@@ -109,21 +107,22 @@ export function readRoster(stdout: string, target: GitHubPeopleTarget): RosterRe
   } catch {
     return null
   }
-  const answer = Answer.safeParse(raw)
-  const data = answer.success ? answer.data.data : null
-  if (!answer.success || !data) {
+  const parsed = Data.safeParse(raw)
+  if (!parsed.success) {
     return null
   }
+  const data = parsed.data.data
   const viewer = Viewer.safeParse(data.viewer)
   const read: RosterRead = {
     people: [],
     sourcesRead: 0,
     from: { repositories: false, organizations: false },
-    lossy: (answer.data.errors?.length ?? 0) > 0,
-    cut: false,
+    // Any errors entry, or an `errors` that isn't a list at all, means something was lost.
+    lossy: !NoErrors.safeParse(raw).success,
+    cut: { people: false, members: false, repositories: false },
     viewer: viewer.success ? viewer.data.login : null
   }
-  const take = (connection: z.infer<typeof People>): void => {
+  const take = (connection: z.infer<typeof People>, kind: 'people' | 'members'): void => {
     for (const node of connection.nodes) {
       const person = RawPerson.safeParse(node)
       const id = person.success ? String(person.data.databaseId) : ''
@@ -133,14 +132,14 @@ export function readRoster(stdout: string, target: GitHubPeopleTarget): RosterRe
         read.lossy = true
       }
     }
-    read.cut ||= connection.totalCount > connection.nodes.length
+    read.cut[kind] ||= connection.totalCount > connection.nodes.length
   }
   target.repositories.forEach((_repo, index) => {
     const source = RepositorySource.safeParse(data[`r${index}`])
     if (source.success) {
       read.sourcesRead += 1
       read.from.repositories = true
-      take(source.data.assignableUsers)
+      take(source.data.assignableUsers, 'people')
     } else {
       read.lossy = true
     }
@@ -152,7 +151,7 @@ export function readRoster(stdout: string, target: GitHubPeopleTarget): RosterRe
     if (organization.success) {
       read.sourcesRead += 1
       read.from.organizations = true
-      take(organization.data.membersWithRole)
+      take(organization.data.membersWithRole, 'members')
       return
     }
     if (!personal.success) {
@@ -160,13 +159,13 @@ export function readRoster(stdout: string, target: GitHubPeopleTarget): RosterRe
       return
     }
     const repositories = personal.data.repositories
-    read.cut ||= repositories.totalCount > repositories.nodes.length
+    read.cut.repositories ||= repositories.totalCount > repositories.nodes.length
     let readable = 0
     for (const repo of repositories.nodes) {
       const source = RepositorySource.safeParse(repo)
       if (source.success) {
         readable += 1
-        take(source.data.assignableUsers)
+        take(source.data.assignableUsers, 'people')
       } else {
         read.lossy = true
       }

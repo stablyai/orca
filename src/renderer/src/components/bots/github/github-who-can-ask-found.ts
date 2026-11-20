@@ -2,6 +2,7 @@ import type { Translate } from '@/i18n/use-translate'
 import {
   BOT_GITHUB_OFF,
   GITHUB_PEOPLE_PER_SOURCE,
+  GITHUB_PERSONAL_REPOSITORIES,
   type BotGitHubRoster,
   type ConnectorGitHubUsersResponse
 } from '../../../../../shared/connector-bot-github-contract'
@@ -27,19 +28,44 @@ type Answer = {
   query: string
   /** The linked GitHub login; a different gh account is named. */
   ownerLogin: string | null
-  /** Settles when a loading roster arrives, so the picker asks again. */
-  pending?: Promise<unknown>
+}
+
+/** Why the roster holds only part of its sources' people, by the kind of read that stopped at its
+ *  fixed size; typing can't bring those back, so this never advises typing. */
+function cutLine(
+  cut: { people: boolean; members: boolean; repositories: boolean },
+  t: Translate
+): string | null {
+  const kinds = [cut.people, cut.members, cut.repositories].filter(Boolean).length
+  if (kinds > 1) {
+    return t('bots.github.whoCanAsk.partlyRead', 'Large repos and orgs were only partly read.')
+  }
+  return cut.people
+    ? t('bots.github.whoCanAsk.firstPerRepo', 'Showing the first {{count}} people per repo.', {
+        count: GITHUB_PEOPLE_PER_SOURCE
+      })
+    : cut.members
+      ? t('bots.github.whoCanAsk.firstPerOrg', 'Showing the first {{count}} members per org.', {
+          count: GITHUB_PEOPLE_PER_SOURCE
+        })
+      : cut.repositories
+        ? t('bots.github.whoCanAsk.recentRepos', 'Only your {{count}} latest repos were read.', {
+            count: GITHUB_PERSONAL_REPOSITORIES
+          })
+        : null
 }
 
 /** One search as the picker draws it. Every line says only what was actually read: an empty list
  *  never reads as "no one exists" when nothing, or not everything, was looked at. */
 export function gitHubWhoCanAskAnswer(
-  { roster, exact, query, ownerLogin, pending }: Answer,
+  { roster, exact, query, ownerLogin }: Answer,
   t: Translate
 ): BotSlackResult<BotWhoCanAskFound> {
-  // GitHub off, as the cloud just said, is definitive; and with no roster either, the error (and
-  // its retry) says more than an empty list.
-  if (exact && !exact.ok && (exact.error === BOT_GITHUB_OFF || roster.status !== 'read')) {
+  // GitHub off, as the cloud just said, is definitive. With the roster settled and unread too,
+  // nothing could look: the error (and its retry) says more than an empty list. A roster still
+  // loading may yet answer, so that case waits for it rather than failing now.
+  const rosterSettledUnread = roster.status !== 'read' && roster.status !== 'loading'
+  if (exact && !exact.ok && (exact.error === BOT_GITHUB_OFF || rosterSettledUnread)) {
     return exact
   }
   const read = roster.status === 'read' ? roster : null
@@ -53,7 +79,9 @@ export function gitHubWhoCanAskAnswer(
   const ranked = read ? rankGitHubPeople(read.people, query) : []
   const shown = ranked.slice(0, GITHUB_PEOPLE_SHOWN)
   const listed = new Set(read?.people.map((person) => person.id))
-  const whole = read !== null && read.complete && !read.cut
+  const cut = read ? read.cut.people || read.cut.members || read.cut.repositories : false
+  // Only a whole, uncut read of everything connected shows the roster doesn't hold someone.
+  const whole = read !== null && read.complete && !read.omitted && !cut
   const uncheckedTag =
     roster.status === 'loading'
       ? t('bots.github.whoCanAsk.reposLoading', 'Repos still loading')
@@ -84,7 +112,7 @@ export function gitHubWhoCanAskAnswer(
         ? // Which computer goes unsaid: naming a remote one would not fit one line.
           t('bots.github.whoCanAsk.unavailable', 'Couldn’t read repos.')
         : roster.status === 'busy'
-          ? t('bots.github.whoCanAsk.busy', 'Repo list is busy. Try again shortly.')
+          ? t('bots.github.whoCanAsk.busy', 'Repo list is busy. Reopen to try again.')
           : roster.status === 'none'
             ? t('bots.github.whoCanAsk.localNone', 'No repos connected.')
             : null
@@ -97,11 +125,8 @@ export function gitHubWhoCanAskAnswer(
     read && !read.complete
       ? t('bots.github.whoCanAsk.notRead', 'Some repos or members couldn’t be read.')
       : null,
-    read?.cut
-      ? t('bots.github.whoCanAsk.firstPerRepo', 'Showing the first {{count}} people per repo.', {
-          count: GITHUB_PEOPLE_PER_SOURCE
-        })
-      : null,
+    read?.omitted ? t('bots.github.whoCanAsk.omitted', 'Not every connected repo was read.') : null,
+    read ? cutLine(read.cut, t) : null,
     ranked.length > shown.length
       ? t('bots.github.whoCanAsk.keepTyping', 'Keep typing to narrow.')
       : null,
@@ -130,20 +155,32 @@ export function gitHubWhoCanAskAnswer(
         : place === 'orgs'
           ? t('bots.github.whoCanAsk.searchedOrgs', 'Searched your orgs.')
           : t('bots.github.whoCanAsk.searchedRepos', 'Searched your repos.')
+  // A roster still on its way: nothing definitive yet, whatever the exact lookup said.
   const empty =
-    !read && !exactSearched && roster.status !== 'loading'
+    roster.status === 'loading'
       ? {
-          title: t('bots.github.whoCanAsk.couldNotSearch', 'Couldn’t search for “{{query}}”', {
-            query
-          }),
-          detail: [rosterLine, t('bots.github.whoCanAsk.tryExact', 'Try an exact username.')]
-            .filter(Boolean)
-            .join(' ')
+          title: t('bots.github.whoCanAsk.loadingTitle', 'Still loading your repos'),
+          detail: exactSearched
+            ? t('bots.github.whoCanAsk.noExactYet', 'No exact username match. Repos still coming.')
+            : t('bots.github.whoCanAsk.resultsComing', 'Results appear when they load.')
         }
-      : {
-          title: t('bots.github.whoCanAsk.noPerson', 'No one found for “{{query}}”', { query }),
-          detail: [searchedLine, note].filter(Boolean).join(' ')
-        }
+      : !read && !exactSearched
+        ? {
+            title: t('bots.github.whoCanAsk.couldNotSearch', 'Couldn’t search for “{{query}}”', {
+              query
+            }),
+            // Busy already says what to do; the exact-username hint would push it past one line.
+            detail:
+              roster.status === 'busy' && rosterLine
+                ? rosterLine
+                : [rosterLine, t('bots.github.whoCanAsk.tryExact', 'Try an exact username.')]
+                    .filter(Boolean)
+                    .join(' ')
+          }
+        : {
+            title: t('bots.github.whoCanAsk.noPerson', 'No one found for “{{query}}”', { query }),
+            detail: [searchedLine, note].filter(Boolean).join(' ')
+          }
 
   return {
     ok: true,
@@ -166,8 +203,7 @@ export function gitHubWhoCanAskAnswer(
               : t('bots.github.whoCanAsk.notFoundInRepos', 'Not found in your repos')
       },
       ...(note ? { note } : {}),
-      empty,
-      ...(pending ? { pending } : {})
+      empty
     }
   }
 }

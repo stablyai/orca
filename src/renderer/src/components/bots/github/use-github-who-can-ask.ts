@@ -67,7 +67,7 @@ export function useGitHubWhoCanAsk(
           ? { source: 'github' }
           : { source: 'github', workspaceId: installationId },
       max: CONNECTOR_CLIENT_LIMITS.maxBotWorkspaceMembers,
-      search: (query) => session()(query),
+      search: (query) => session().search(query),
       // One roster read per picker open, filtered as the owner types.
       begin: () => session(),
       errorMessage: (code) => botGitHubErrorMessage(code, hostName),
