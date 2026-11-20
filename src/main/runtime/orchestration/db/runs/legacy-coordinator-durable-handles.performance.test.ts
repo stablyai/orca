@@ -8,8 +8,12 @@ import { LEGACY_COORDINATOR_DURABLE_HANDLES_SQL } from './legacy-coordinator-mai
 const RUN = 'run_adopted'
 const ADOPTED_AT = '2026-06-01 00:00:00'
 const dirs: string[] = []
+const dbs: OrchestrationDb[] = []
 
 afterEach(() => {
+  for (const db of dbs.splice(0)) {
+    db.close()
+  }
   for (const dir of dirs.splice(0)) {
     rmSync(dir, { recursive: true, force: true })
   }
@@ -20,6 +24,7 @@ function seedLargeRun(): OrchestrationDb {
   const dir = mkdtempSync(join(tmpdir(), 'orca-legacy-durable-'))
   dirs.push(dir)
   const db = new OrchestrationDb(join(dir, 'orchestration.db'))
+  dbs.push(db)
   const task = db.db.prepare(
     `INSERT INTO tasks (id, run_id, spec, created_by_terminal_handle, created_at)
      VALUES (?, ?, 'spec', ?, ?)`
@@ -48,16 +53,16 @@ describe('legacy coordinator durable handles', () => {
     const db = seedLargeRun()
     const plan = db.db
       .prepare(`EXPLAIN QUERY PLAN ${LEGACY_COORDINATOR_DURABLE_HANDLES_SQL}`)
-      .all(ADOPTED_AT, RUN, ADOPTED_AT) as { detail: string }[]
-    const dispatchProbes = plan.filter((row) => / d\b/.test(row.detail))
-    expect(dispatchProbes.map((row) => row.detail)).toEqual([
+      .all(ADOPTED_AT, RUN, ADOPTED_AT)
+      .map((row) => String(row.detail))
+    expect(plan.filter((detail) => / d\b/.test(detail))).toEqual([
       expect.stringContaining('USING INDEX idx_dispatch_task (task_id=?)')
     ])
 
     const handles = db.db
       .prepare(LEGACY_COORDINATOR_DURABLE_HANDLES_SQL)
-      .all(ADOPTED_AT, RUN, ADOPTED_AT) as { handle: string }[]
-    expect(handles.map((row) => row.handle).sort()).toEqual(['term_coord_a', 'term_coord_b'])
-    db.close()
+      .all(ADOPTED_AT, RUN, ADOPTED_AT)
+      .map((row) => String(row.handle))
+    expect(handles.sort()).toEqual(['term_coord_a', 'term_coord_b'])
   })
 })

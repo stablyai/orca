@@ -107,6 +107,7 @@ export function getUniqueLegacyCoordinatorHandle(
         .all(runId, runId) as { handle: string }[]
     ).map((row) => row.handle)
   )
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: both UNION branches select one non-null TEXT column aliased handle.
   const durableRows = this.db
     .prepare(LEGACY_COORDINATOR_DURABLE_HANDLES_SQL)
     .all(adoption.adopted_at, runId, adoption.adopted_at) as {
