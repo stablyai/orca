@@ -20,7 +20,8 @@ describe.each([
 
   function history(
     verify?: (ranges: TranscriptByteRange[], signal: AbortSignal) => Promise<boolean[] | null>,
-    readDelayMs = 0
+    readDelayMs = 0,
+    onApplied: () => void = () => {}
   ) {
     const held: NativeChatMessage[] = Array.from({ length: count }, (_, n) => ({
       id: `row-${n}`,
@@ -66,6 +67,7 @@ describe.each([
         return false
       }
       current = spliced
+      onApplied()
       return result.ranges
     })
     const scheduler = new NativeChatHeldHistoryVerify({
@@ -141,8 +143,11 @@ describe.each([
   })
 
   it('applies one re-read while replacements keep landing every 2.5 s after a mismatch', async () => {
-    const verify = vi.fn().mockResolvedValueOnce([false]).mockResolvedValue([true])
-    const { scheduler, replace, readSession, current } = history(verify, 100)
+    let repaired = false
+    const verify = vi.fn(async () => [repaired])
+    const { scheduler, replace, readSession, apply, current } = history(verify, 100, () => {
+      repaired = true
+    })
     try {
       for (let i = 0; i < 8; i++) {
         replace()
@@ -151,6 +156,7 @@ describe.each([
       await vi.advanceTimersByTimeAsync(10_000)
       const eofReads = readSession.mock.calls.filter(([, , , , options]) => !options)
       expect(eofReads).toHaveLength(1)
+      expect(apply.mock.results.filter(({ value }) => Array.isArray(value))).toHaveLength(1)
       expect(current()).toHaveLength(count)
       expect(current()[0]?.id).toBe('row-0')
     } finally {

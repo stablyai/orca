@@ -19,6 +19,8 @@ export class NativeChatHeldHistoryVerify<T> {
   private unsupported = false
   // A known mismatch goes straight to the re-read instead of verifying again.
   private stale = false
+  // Re-reads refused for a live-tail gap back off, so heavy streaming can't repeat them every quiet period.
+  private refusals = 0
   private generation = 0
   private revision = 0
   private pending = false
@@ -104,12 +106,13 @@ export class NativeChatHeldHistoryVerify<T> {
     this.ranges = []
     this.window = []
     this.stale = false
+    this.refusals = 0
   }
 
   private applyResult(result: T | undefined, superseded: boolean): void {
     const ranges = this.options.apply(result, superseded)
     if (ranges === false) {
-      // The mismatch stays known, so the next quiet period re-reads again.
+      this.refusals++
       this.schedule()
       return
     }
@@ -121,12 +124,15 @@ export class NativeChatHeldHistoryVerify<T> {
     if (this.timer !== undefined) {
       clearTimeout(this.timer)
     }
-    this.timer = setTimeout(() => {
-      this.timer = undefined
-      if (!this.running) {
-        void this.run()
-      }
-    }, 1_000)
+    this.timer = setTimeout(
+      () => {
+        this.timer = undefined
+        if (!this.running) {
+          void this.run()
+        }
+      },
+      1_000 * 2 ** Math.min(this.refusals, 5)
+    )
   }
 
   private async run(): Promise<void> {

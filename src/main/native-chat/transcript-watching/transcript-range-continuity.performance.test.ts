@@ -79,4 +79,27 @@ describe.each([10_000, 100_000])('transcript range continuity at %i messages', (
       await rm(directory, { recursive: true, force: true })
     }
   })
+  it('keeps a match when the agent appends while held ranges are being verified', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'native-chat-continuity-'))
+    const file = join(directory, 'session.jsonl')
+    const decode: NativeChatLineDecoder = (line, id) =>
+      line === '{"message":true}'
+        ? {
+            id,
+            role: 'user',
+            blocks: [{ type: 'text', text: 'held message' }],
+            timestamp: 1,
+            source: 'transcript'
+          }
+        : null
+    try {
+      await writeFile(file, '{"message":true}\n{}\n{}\n{}\n'.repeat(count))
+      const snapshot = await readNativeChatTranscriptTailFile(file, count, decode)
+      const verifying = verifyTranscriptRanges(file, snapshot.ranges ?? [])
+      await appendFile(file, '{"message":true}\n')
+      expect(await verifying).toEqual([true])
+    } finally {
+      await rm(directory, { recursive: true, force: true })
+    }
+  })
 })

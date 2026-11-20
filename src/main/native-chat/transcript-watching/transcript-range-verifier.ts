@@ -86,7 +86,13 @@ export async function verifyTranscriptRanges(
       await closeTranscriptHandle(handle, filePath)
     }
     const after = await readTranscriptFileVersion(filePath, signal)
-    return transcriptFileVersionChanged(after, before) ? ranges.map(() => false) : results
+    // Appends past the hashed ranges leave those bytes valid; a swap, shrink or same-size write may not.
+    const heldEnd = Math.max(...ranges.map((range) => range.end))
+    const rewritten =
+      after.identity !== before.identity ||
+      after.size < heldEnd ||
+      (after.size === before.size && transcriptFileVersionChanged(after, before))
+    return rewritten ? ranges.map(() => false) : results
   } catch {
     signal?.throwIfAborted()
     return ranges.map(() => false)
