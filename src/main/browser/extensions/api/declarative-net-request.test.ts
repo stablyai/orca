@@ -146,7 +146,7 @@ describe('chrome.declarativeNetRequest', () => {
     await call('updateSessionRules', { addRules: [block(7, '||session.example^')] })
     runtime?.removeExtension(ID)
     await getBrowserExtensionDnrStore().forgetExtension(ID)
-    await runtime?.addExtension(extension())
+    await runtime?.addExtension(extension('2'))
     expect(blocks('https://session.example/1.js')).toBe(false)
   })
 })
