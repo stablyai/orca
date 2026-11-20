@@ -1,14 +1,19 @@
 import { setTimeout as delay } from 'node:timers/promises'
 import type { CodexRolloutFolderStamps } from './codex-rollout-folder-stamps'
+import { statUnlessAbsent } from './codex-rollout-path-probes'
 
 const ARCHIVE_RELISTS_PER_SWEEP = 25
 
 export type CodexRolloutArchiveRelists = {
+  /** An archive folder this sweep read in full; later refreshes re-list it when it changed. */
+  track(folder: string): void
   /**
-   * Whether a changed archive may be re-listed now; waits until a listing would be settled, so the
-   * same change is listed once. False past the cap: the candidate is kept for the next sweep.
+   * Before a refresh reads any folder: waits until a changed archive would list settled, so one
+   * change is listed once, and so no folder read before the wait goes stale during it.
    */
-  admit(folder: string, mtimeMs: number): Promise<boolean>
+  settle(): Promise<void>
+  /** Charges one re-list; false past the cap, and the candidate is kept for the next sweep. */
+  admit(): boolean
   report(): void
 }
 
@@ -17,17 +22,29 @@ export function createCodexRolloutArchiveRelists(
   stamps: CodexRolloutFolderStamps,
   signal?: AbortSignal
 ): CodexRolloutArchiveRelists {
+  const folders = new Set<string>()
   let left = ARCHIVE_RELISTS_PER_SWEEP
   let refused = 0
   return {
-    admit: async (folder, mtimeMs) => {
-      const changed = stamps.state(folder, mtimeMs) === 'changed'
-      if (changed && left === 0) {
+    track: (folder) => {
+      folders.add(folder)
+    },
+    settle: async () => {
+      let wait = 0
+      for (const folder of left > 0 ? folders : []) {
+        const entry = await statUnlessAbsent(folder)
+        if (entry && stamps.state(folder, entry.mtimeMs) !== 'current') {
+          wait = Math.max(wait, stamps.unsettledFor(entry.mtimeMs))
+        }
+      }
+      await delay(wait, undefined, { signal })
+    },
+    admit: () => {
+      if (left === 0) {
         refused += 1
         return false
       }
-      left -= changed ? 1 : 0
-      await delay(stamps.unsettledFor(mtimeMs), undefined, { signal })
+      left -= 1
       return true
     },
     report: () => {

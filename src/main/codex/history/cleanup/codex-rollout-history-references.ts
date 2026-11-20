@@ -224,20 +224,16 @@ export function createCodexRolloutHistoryReferences(
       return true
     }
     const folder = join(root, ...parts)
-    let statAt = Date.now()
-    let entry = await statUnlessAbsent(folder)
-    if (entry && stamps.state(folder, entry.mtimeMs) === 'current') {
-      return true
-    }
-    if (entry && parts.length === 0) {
-      if (!(await archiveRelists.admit(folder, entry.mtimeMs))) {
-        return false
-      }
-      statAt = Date.now()
-      entry = await statUnlessAbsent(folder)
-    }
+    const statAt = Date.now()
+    const entry = await statUnlessAbsent(folder)
     if (!entry) {
       return entry === null
+    }
+    if (stamps.state(folder, entry.mtimeMs) === 'current') {
+      return true
+    }
+    if (parts.length === 0 && !archiveRelists.admit()) {
+      return false
     }
     const listed = await relistNames(folder, visited)
     if (listed) {
@@ -250,6 +246,9 @@ export function createCodexRolloutHistoryReferences(
     try {
       signal?.throwIfAborted()
       cache ??= await loadCodexRolloutHistoryBaseCache(cachePath)
+      if (recent) {
+        await archiveRelists.settle()
+      }
       const visited = new Set<string>()
       const dates = recentDates()
       const linked = createNestedWslLinkProbe()
@@ -295,6 +294,7 @@ export function createCodexRolloutHistoryReferences(
               // The archive is re-listed as one flat folder: this walk was its listing.
               if (entry && name !== 'sessions') {
                 stamps.listed(root, entry.mtimeMs, statAt)
+                archiveRelists.track(root)
               }
             }
           } else if (recent) {
@@ -318,7 +318,7 @@ export function createCodexRolloutHistoryReferences(
       }
       if (!complete && !warned) {
         warned = true
-        console.warn('[workspace-cleanup] Some Codex rollouts could not be read; keeping forks')
+        console.warn('[workspace-cleanup] Some Codex rollouts could not be read yet; keeping forks')
       }
       return complete
     } catch (error) {
