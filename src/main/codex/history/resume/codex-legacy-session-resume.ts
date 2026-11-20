@@ -114,6 +114,11 @@ export async function prepareCodexAccountRestartResume(args: {
     throw new Error(RETRYABLE_RESUME_ERROR)
   }
   const paths = resolveCodexSessionBackfillPaths(args.systemCodexHomePath)
+  const legacyCodexHomePath = dirname(paths.managedSessionsRoot)
+  if (sameRuntimePath(args.sourceHome, legacyCodexHomePath)) {
+    // A native chat moving accounts reaches here without a resume preparation swapping first.
+    await swapLegacySessionCopy({ managedHome: legacyCodexHomePath, relativePath })
+  }
   await materializeLegacyRollout(
     args.transcriptPath,
     join(args.targetHome, 'sessions', relativePath),

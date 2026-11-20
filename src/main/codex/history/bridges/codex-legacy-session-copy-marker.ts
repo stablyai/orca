@@ -1,4 +1,4 @@
-import { rename, writeFile } from 'node:fs/promises'
+import { rename, rm, writeFile } from 'node:fs/promises'
 import { basename, dirname, join, sep } from 'node:path'
 
 export type LegacyCopiedSessionMarker = {
@@ -46,7 +46,12 @@ export async function writeMarker(
   marker: LegacyCopiedSessionMarker
 ): Promise<LegacyCopiedSessionMarker> {
   const stagedPath = `${markerPath}.${process.pid}.tmp`
-  await writeFile(stagedPath, JSON.stringify(marker))
-  await rename(stagedPath, markerPath)
+  try {
+    await writeFile(stagedPath, JSON.stringify(marker))
+    await rename(stagedPath, markerPath)
+  } catch (error) {
+    await rm(stagedPath, { force: true }).catch(() => undefined)
+    throw error
+  }
   return marker
 }

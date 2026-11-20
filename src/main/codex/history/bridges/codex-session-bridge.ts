@@ -15,7 +15,10 @@ import {
 import { listCodexSessionJsonlFilesIncrementally } from '../rollouts/codex-session-file-listing'
 import { linkCodexSessionFile, tryHardlinkCodexSessionFile } from '../rollouts/codex-session-link'
 import type { CodexSessionBridgeIncrementalOptions } from '../rollouts/codex-session-file-listing'
-import { swapLegacySessionCopy } from './codex-legacy-session-copy'
+import {
+  swapLegacySessionCopy,
+  type LegacySessionCopyReadBudget
+} from './codex-legacy-session-copy'
 import {
   legacySessionCopyMarkerPath,
   parseLegacyCopiedSessionMarker,
@@ -71,7 +74,7 @@ export async function syncSystemCodexSessionsIntoManagedHomeIncrementally(
   const managedHome = getOrcaManagedCodexHomePath()
   const managedSessionsRoot = join(managedHome, 'sessions')
   const summary: CodexSessionBridgeSummary = { scannedFiles: 0, linkedFiles: 0 }
-  const readBudget = { bytes: LEGACY_COPY_READ_BUDGET_BYTES }
+  const readBudget: LegacySessionCopyReadBudget = { bytes: LEGACY_COPY_READ_BUDGET_BYTES }
   const hasLegacyCopies = existsSync(join(managedHome, '.orca-session-copies'))
   for await (const systemSessionFilePath of listCodexSessionJsonlFilesIncrementally(
     systemSessionsRoot,
@@ -85,7 +88,12 @@ export async function syncSystemCodexSessionsIntoManagedHomeIncrementally(
       relativePath
     )
     if (bridged === 'existing') {
-      if (hasLegacyCopies && existsSync(legacySessionCopyMarkerPath(managedHome, relativePath))) {
+      // Once the pass has spent its read budget the rest wait for the next one, unprepared.
+      if (
+        hasLegacyCopies &&
+        !readBudget.exhausted &&
+        existsSync(legacySessionCopyMarkerPath(managedHome, relativePath))
+      ) {
         await swapLegacySessionCopy({
           managedHome,
           relativePath,

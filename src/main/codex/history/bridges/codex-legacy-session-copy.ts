@@ -18,6 +18,9 @@ const UUID_PATTERN = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{1
 /** `kept`: the copy holds bytes its source lacks, or its source can't be linked beside it, for good. */
 export type LegacySessionCopySwap = 'swapped' | 'kept' | 'deferred' | 'none'
 
+/** `exhausted`: a copy found too little left, so the pass starts no more swaps. */
+export type LegacySessionCopyReadBudget = { bytes: number; exhausted?: boolean }
+
 const swapsInFlight = new Map<string, Promise<LegacySessionCopySwap>>()
 
 /**
@@ -32,7 +35,7 @@ export function swapLegacySessionCopy(args: {
   /** Bridge passes skip a marker recorded for another source. */
   expectedSourcePath?: string
   /** Copy bytes a background pass may still compare; resume-time swaps have no limit. */
-  readBudget?: { bytes: number }
+  readBudget?: LegacySessionCopyReadBudget
 }): Promise<LegacySessionCopySwap> {
   const copyPath = join(args.managedHome, 'sessions', args.relativePath)
   const running = swapsInFlight.get(copyPath)
@@ -85,6 +88,9 @@ async function swap(
     await unlinkIfPresent(markerPath)
     return 'none'
   }
+  if (!marker.sourcePath.includes(`${sep}.${sep}`)) {
+    marker = await writeMarker(markerPath, { ...marker, sourcePath: protectedSpelling(sourcePath) })
+  }
   const source = await lstatIfPresent(sourcePath)
   if (!copy.isFile() || !source?.isFile()) {
     return 'deferred'
@@ -96,12 +102,14 @@ async function swap(
   }
   // A spare name a stopped pass left for the copy.
   await removeExtraName(asidePath, copyPath)
-  if (!marker.sourcePath.includes(`${sep}.${sep}`)) {
-    marker = await writeMarker(markerPath, { ...marker, sourcePath: protectedSpelling(sourcePath) })
-  }
-  // Written since it was copied: a pane resumed it here, so it is its own history now.
+  // Written since it was copied: a pane resumed it here, so it is its own history for good.
   const copyTimes = await lstat(copyPath)
   if (copyTimes.size !== marker.targetSize || copyTimes.mtimeMs !== marker.targetMtimeMs) {
+    await writeMarker(markerPath, { ...marker, kept: true })
+    return 'kept'
+  }
+  // Before the reads and names below: a home without lock files never proves a copy idle.
+  if (!(await keepsThreadLocks(args.managedHome))) {
     return 'deferred'
   }
   // Without file identities nothing can prove the name still holds the copy that was checked.
@@ -116,6 +124,7 @@ async function swap(
   if (marker.verified !== proof || source.size < copy.size) {
     if (args.readBudget) {
       if (copy.size > BigInt(args.readBudget.bytes)) {
+        args.readBudget.exhausted = true
         return 'deferred'
       }
       args.readBudget.bytes -= Number(copy.size)
@@ -128,7 +137,7 @@ async function swap(
   }
   const settled = marker
   const outcome = await linkCodexRolloutUnlessHeld(sourcePath, () =>
-    publishSourceOverCopy({ copyPath, asidePath, sourcePath, copy, args })
+    publishSourceOverCopy({ copyPath, asidePath, sourcePath, copy, source, args })
   )
   if (outcome === 'swapped') {
     await unlinkIfPresent(markerPath)
@@ -143,12 +152,14 @@ async function publishSourceOverCopy({
   asidePath,
   sourcePath,
   copy,
+  source,
   args
 }: {
   copyPath: string
   asidePath: string
   sourcePath: string
   copy: BigIntStats
+  source: BigIntStats
   args: { managedHome: string; relativePath: string }
 }): Promise<LegacySessionCopySwap> {
   const current = await lstatIfPresent(copyPath)
@@ -165,6 +176,12 @@ async function publishSourceOverCopy({
   const moved = await lstatIfPresent(asidePath)
   if (!moved || !isUnchangedCopy(moved, copy)) {
     // Replaced or written in the moment before the rename: the name goes back to what was moved.
+    await restoreName(asidePath, copyPath)
+    return 'deferred'
+  }
+  // The prefix check covered this source file; one put in its place since gets checked next pass.
+  const currentSource = await lstatIfPresent(sourcePath)
+  if (!currentSource || !sameFile(currentSource, source)) {
     await restoreName(asidePath, copyPath)
     return 'deferred'
   }
@@ -190,11 +207,10 @@ async function publishSourceOverCopy({
  * there; a home with no lock folder has had no Codex that keeps them, so nothing proves it idle.
  */
 async function isCopyIdle(args: { managedHome: string; relativePath: string }): Promise<boolean> {
-  const locks = join(args.managedHome, 'thread-writer-locks')
-  // A shared-history home links this folder into the store, so follow the link.
-  if (!(await stat(locks).catch(() => null))?.isDirectory()) {
+  if (!(await keepsThreadLocks(args.managedHome))) {
     return false
   }
+  const locks = join(args.managedHome, 'thread-writer-locks')
   // A reverted thread's name carries its thread id and its rollout id: either can be the lock's.
   const ids = basename(args.relativePath).toLowerCase().match(UUID_PATTERN) ?? []
   if (ids.length === 0) {
@@ -211,6 +227,11 @@ async function isCopyIdle(args: { managedHome: string; relativePath: string }): 
     }
   }
   return true
+}
+
+async function keepsThreadLocks(home: string): Promise<boolean> {
+  // A shared-history home links this folder into the store, so follow the link.
+  return (await stat(join(home, 'thread-writer-locks')).catch(() => null))?.isDirectory() === true
 }
 
 function isUnchangedCopy(current: BigIntStats, copy: BigIntStats): boolean {
