@@ -48,7 +48,7 @@ describe('GrokHookService', () => {
     rmSync(homeDir, { recursive: true, force: true })
   })
 
-  it('does not restore a user-cleared global hook config on the next launch', () => {
+  it('keeps a user-cleared config through launch and cleanup', () => {
     const service = new GrokHookService()
     const configPath = join(homeDir, '.grok', 'hooks', 'orca-status.json')
     const userClearedConfig = '{  "hooks" : {}  }\n'
@@ -57,17 +57,7 @@ describe('GrokHookService', () => {
     writeFileSync(configPath, userClearedConfig, 'utf8')
 
     service.install()
-
     expect(readFileSync(configPath, 'utf8')).toBe(userClearedConfig)
-  })
-
-  it('preserves a user-cleared config during session cleanup', () => {
-    const service = new GrokHookService()
-    const configPath = join(homeDir, '.grok', 'hooks', 'orca-status.json')
-    const userClearedConfig = '{  "hooks" : {}  }\n'
-
-    expect(service.install().state).toBe('installed')
-    writeFileSync(configPath, userClearedConfig, 'utf8')
 
     expect(service.remove().state).toBe('not_installed')
     expect(readFileSync(configPath, 'utf8')).toBe(userClearedConfig)
@@ -102,24 +92,6 @@ describe('GrokHookService', () => {
 
     expect(readFileSync(configPath, 'utf8')).not.toBe(userCleared)
     expect(service.getStatus().managedHooksPresent).toBe(true)
-  })
-
-  // Strip managed entries through symlinks so user dotfile links stay connected.
-  it('writes through a symlinked config instead of destroying the link', async () => {
-    const service = new GrokHookService()
-    const configPath = join(homeDir, '.grok', 'hooks', 'orca-status.json')
-    const realConfig = join(homeDir, 'dotfiles', 'orca-status.json')
-
-    expect(service.install().state).toBe('installed')
-    mkdirSync(dirname(realConfig), { recursive: true })
-    renameSync(configPath, realConfig)
-    symlinkSync(realConfig, configPath)
-
-    await service.removeAsync()
-
-    expect(lstatSync(configPath).isSymbolicLink()).toBe(true)
-    expect(existsSync(realConfig)).toBe(true)
-    expect(service.getStatus().managedHooksPresent).toBe(false)
   })
 
   it('respects an empty user-managed symlink as an opt-out', () => {
@@ -165,6 +137,8 @@ describe('GrokHookService', () => {
     renameSync(configPath, realConfig)
     symlinkSync(realConfig, configPath)
     await service.removeAsync()
+    expect(lstatSync(configPath).isSymbolicLink()).toBe(true)
+    expect(existsSync(realConfig)).toBe(true)
     expect(service.getStatus().managedHooksPresent).toBe(false)
 
     expect(new GrokHookService().install().state).toBe('installed')
