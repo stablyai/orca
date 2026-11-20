@@ -37,7 +37,8 @@ export type StructuredAgentSessionTurnContext = {
    *  worker's report, an attachment); `plan` carries it on a person's words. Null adds nothing. */
   launchUpdate?: (
     sessionId: string,
-    held?: HeldInstructions
+    held?: HeldInstructions,
+    message?: AgentJournalMessageItem
   ) => Promise<StructuredAgentSessionTurnContextPlan | null>
   /** The host instructions key this session's launch rendered, and whether its start gives them to
    *  any context (an agent that rebuilds its prompt) rather than only a new one. Null: none. */

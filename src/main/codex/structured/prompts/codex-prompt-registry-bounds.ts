@@ -2,6 +2,7 @@ import {
   boundPayload,
   digestPayload
 } from '../../../native-chat/agent-session-journal/item-lifecycle/journal-payload-bounds'
+import { relayAskSelection } from '../../../native-chat/agent-session-journal/item-lifecycle/journal-ask-selection-relay'
 import { AGENT_SESSION_ID_MAX_LENGTH } from '../../../../shared/agent-session/agent-session-wire'
 
 export const CODEX_JOURNAL_PROMPT_ID_COMPONENT_MAX_BYTES = 256
@@ -149,7 +150,13 @@ export function readQuestionOptionAnswers(
       }
       answers.set(encodeCodexJournalQuestionOptionId(questionId, label), {
         questionId,
-        answer: label
+        answer: relayAskSelection(
+          label,
+          'description' in record && typeof record.description === 'string'
+            ? record.description
+            : '',
+          'review the original question'
+        )
       })
     }
   }

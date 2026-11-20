@@ -63,7 +63,7 @@ export function prepareCodexPromptAnswer(
   const optionId = entry.optionIds[0]
   const decoded =
     optionId === undefined
-      ? { questionId: entry.questionId, answer: entry.other?.trim() ?? '' }
+      ? { questionId: entry.questionId, answer: entry.other ?? '' }
       : (prompt.optionAnswers.get(optionId) ?? decodeCodexQuestionOptionId(optionId))
   const questionId =
     (decoded?.questionId

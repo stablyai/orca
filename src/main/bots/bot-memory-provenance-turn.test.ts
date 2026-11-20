@@ -124,11 +124,15 @@ function bot(memory: string) {
         plan?.given(TAKEN)
         return plan?.text ?? null
       },
-      /** A turn start the ride-along doesn't go with, such as a message with an attachment. */
-      startedUncarried: async () => {
+      /** An attachment turn takes its outside context before the provider sees the payload. */
+      startedAttachment: async () => {
         context.handedOver?.(sessionId, said('see attached'))
-        ;(await context.launchUpdate?.(sessionId))?.given(TAKEN)
+        const plan = await context.launchUpdate?.(sessionId)
+        plan?.given(TAKEN)
+        return plan?.text ?? null
       },
+      /** A prompt command opens its turn with nothing ahead of it. */
+      startedCommand: () => context.handedOver?.(sessionId, said('/review')),
       /** Rows of a turn still running. */
       running: show,
       /** Rows the conversation shows, then the end of what ran (one turn or a queued batch). */
@@ -468,17 +472,34 @@ describe('a chat hears of MEMORY.md edited outside it', () => {
     expect(await chat.started()).toContain(ADDED)
   })
 
-  it('after a hand edit between turns, though a turn that did not carry it ran a tool', async () => {
+  it('delivers a hand edit on an attachment turn before its tool runs', async () => {
     const { conversation, read, write } = bot(OLD)
     const chat = conversation('s1')
     await chat.started()
     await chat.ended(said('hi'))
     write(`${read()}${ADDED}\n`)
-    await chat.startedUncarried()
+    expect(await chat.startedAttachment()).toContain(ADDED)
     await chat.ended(said('see attached'), {
       kind: 'tool-call',
       name: 'Read',
       input: { file_path: 'notes.png' },
+      state: 'completed'
+    })
+
+    expect(await chat.started()).toBeNull()
+  })
+
+  it('after a hand edit between turns, though a command turn that did not carry it ran a tool', async () => {
+    const { conversation, read, write } = bot(OLD)
+    const chat = conversation('s1')
+    await chat.started()
+    await chat.ended(said('hi'))
+    write(`${read()}${ADDED}\n`)
+    chat.startedCommand()
+    await chat.ended(said('/review'), {
+      kind: 'tool-call',
+      name: 'Read',
+      input: { file_path: 'notes.md' },
       state: 'completed'
     })
 
