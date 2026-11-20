@@ -71,48 +71,32 @@ describe('DaemonSpawner', () => {
     return spawner
   }
 
-  describe('ensureRunning', () => {
-    it('daemon is connectable after ensureRunning', async () => {
-      const s = createSpawner()
-      const info = await s.ensureRunning()
-
-      const client = new DaemonClient({
-        socketPath: info.socketPath,
-        tokenPath: info.tokenPath
-      })
-      await client.ensureConnected()
-      expect(client.isConnected()).toBe(true)
-      client.disconnect()
+  it('accepts connections after start and restart and refuses them after shutdown', async () => {
+    const spawner = createSpawner()
+    const first = await spawner.ensureRunning()
+    const client = new DaemonClient({
+      socketPath: first.socketPath,
+      tokenPath: first.tokenPath
     })
-  })
+    await client.ensureConnected()
+    expect(client.isConnected()).toBe(true)
+    client.disconnect()
 
-  describe('shutdown', () => {
-    it('stops the daemon', async () => {
-      const s = createSpawner()
-      const info = await s.ensureRunning()
-      await s.shutdown()
-
-      const client = new DaemonClient({
-        socketPath: info.socketPath,
-        tokenPath: info.tokenPath
-      })
-      await expect(client.ensureConnected()).rejects.toThrow()
+    await spawner.shutdown()
+    const stoppedClient = new DaemonClient({
+      socketPath: first.socketPath,
+      tokenPath: first.tokenPath
     })
+    await expect(stoppedClient.ensureConnected()).rejects.toThrow()
 
-    it('allows re-start after shutdown', async () => {
-      const s = createSpawner()
-      await s.ensureRunning()
-      await s.shutdown()
-
-      const info = await s.ensureRunning()
-      const client = new DaemonClient({
-        socketPath: info.socketPath,
-        tokenPath: info.tokenPath
-      })
-      await client.ensureConnected()
-      expect(client.isConnected()).toBe(true)
-      client.disconnect()
+    const restarted = await spawner.ensureRunning()
+    const restartedClient = new DaemonClient({
+      socketPath: restarted.socketPath,
+      tokenPath: restarted.tokenPath
     })
+    await restartedClient.ensureConnected()
+    expect(restartedClient.isConnected()).toBe(true)
+    restartedClient.disconnect()
   })
 })
 

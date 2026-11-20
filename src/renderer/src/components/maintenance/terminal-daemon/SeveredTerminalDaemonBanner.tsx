@@ -204,7 +204,7 @@ export function SeveredTerminalDaemonBanner(): React.JSX.Element | null {
             </Button>
             <Button variant="destructive" disabled={restarting} onClick={() => void restart()}>
               {restarting ? <LoaderCircle className="size-4 animate-spin" /> : null}
-              {t('terminal.severedDaemonBanner.confirm', 'Restart and end processes')}
+              {t('terminal.severedDaemonBanner.confirm', 'Restart & end processes')}
             </Button>
           </DialogFooter>
         </DialogContent>

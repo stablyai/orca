@@ -156,7 +156,10 @@ function drawnModelControls(state: StructuredAgentSessionOptionState) {
   // Before discovery, name only accepted input; static rows cannot supply installed capabilities.
   const catalog =
     state.catalogSource === 'seed' ? { ...displayCatalog, models: [] } : displayCatalog
-  const models = withTrackedNativeChatModel(catalog, catalog.models, { model: record.values.model })
+  const models = withTrackedNativeChatModel(catalog, catalog.models, {
+    agent: record.agent,
+    model: record.values.model
+  })
   const shown = structuredAgentSessionShownModel(catalog, models, record)
   // A listed row describes the chat's model by id or resolved name; stand-ins keep their own options.
   const controls = shown.controlsModelId

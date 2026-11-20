@@ -159,7 +159,10 @@ describe('sweepDeletedWorkspaceChatHistory with Codex rollouts', () => {
         listSessions: async () => listed,
         isEnabled: () => true,
         deleteSessions: (targets, shouldDelete) =>
-          deleteCodexRolloutsPermanently(targets, shouldDelete, async () => homes)
+          deleteCodexRolloutsPermanently(targets, shouldDelete, async () => ({
+            homes,
+            protectedRoots: []
+          }))
       })
 
       expect(
@@ -187,7 +190,10 @@ describe('sweepDeletedWorkspaceChatHistory with Codex rollouts', () => {
         listSessions: async () => [{ ...listed[0], filePath: lockless }],
         isEnabled: () => true,
         deleteSessions: (targets, shouldDelete) =>
-          deleteCodexRolloutsPermanently(targets, shouldDelete, async () => homes)
+          deleteCodexRolloutsPermanently(targets, shouldDelete, async () => ({
+            homes,
+            protectedRoots: []
+          }))
       })
       expect(exists(lockless)).toBe(true)
       expect(locklessRun).toEqual({ deleted: 0, failed: 0, freedBytes: 0 })

@@ -61,6 +61,42 @@ describe('bundled skill rename', () => {
     expect(await read(unselected)).toBe(NEW_TEXT)
   })
 
+  it('keeps a current skill when a legacy name is already an absolute forward link through another path spelling', async () => {
+    const home = await makeSkillHome()
+    const linkedHome = join(home.root, 'linked-home')
+    await linkDirectory(home.home, linkedHome)
+    const canonical = join(linkedHome, '.agents', 'skills', NAME)
+    await writeCopy(canonical, NEW_TEXT)
+    // A junction's absolute target through a symlinked home misses the root realpath spelling.
+    await linkDirectory(canonical, join(linkedHome, '.agents', 'skills', FORMER_NAME))
+    const plan = await previewBundledSkillInstall({
+      ...serviceInput(home, { installedOnly: true }),
+      destination: { scope: 'global', homeDirectory: linkedHome },
+      sources: [SOURCE]
+    })
+    const shared = plan.skills.flatMap((skill) => skill.ops).find((op) => op.path === canonical)
+    expect(shared?.kind).toBe('keep')
+    expect(shared?.previous).toBeUndefined()
+  })
+
+  it('keeps an agent legacy link the user pointed at the shared current copy', async () => {
+    const home = await makeSkillHome()
+    await writeCopy(home.shared, NEW_TEXT)
+    await mkdir(dirname(home.claude), { recursive: true })
+    await linkDirectory(home.shared, home.claude)
+    await linkDirectory(home.shared, former(home.claude))
+    const plan = await previewBundledSkillInstall({
+      ...serviceInput(home, { installedOnly: true }),
+      sources: [SOURCE]
+    })
+    const ops = plan.skills.flatMap((skill) => skill.ops)
+    expect(ops.map((op) => [op.path, op.kind])).toEqual([
+      [home.shared, 'keep'],
+      [home.claude, 'keep']
+    ])
+    expect(ops.every((op) => op.previous === undefined)).toBe(true)
+  })
+
   it('updates a former agent-only copy without adding shared or other agent installations', async () => {
     const home = await makeSkillHome()
     await writeCopy(former(home.claude), FORMER_TEXT)

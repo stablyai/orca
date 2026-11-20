@@ -59,10 +59,10 @@ const PURPOSES: Record<string, string> = {
   'local/ux': 'Reviews designs and screens against the UX principles'
 }
 
-function store(hidePausedBots: boolean, folded = false) {
+function store(hidePausedBots: boolean) {
   return {
     sidebarBotsHeight: 4000,
-    collapsedGroups: new Set(folded ? ['bots'] : []),
+    collapsedGroups: new Set<string>(),
     botSidebarView: { sortBy: 'manual' as const, hidePausedBots, hideSleepingWorkers: false },
     folderWorkspaces: BOTS.map((owner) =>
       makeFolderWorkspace({
@@ -132,9 +132,9 @@ function typeInto(field: HTMLInputElement, value: string): void {
   field.dispatchEvent(new Event('input', { bubbles: true }))
 }
 
-function searching(query: string, options: { hidePaused?: boolean; folded?: boolean } = {}) {
+function searching(query: string, options: { hidePaused?: boolean } = {}) {
   return {
-    store: store(options.hidePaused ?? false, options.folded),
+    store: store(options.hidePaused ?? false),
     setup: () => stubBots(BOTS),
     render: () => <Sidebar />,
     interact: async (frame: HTMLElement) => {
@@ -184,9 +184,6 @@ export const results = defineFixture({ width: 300, ...searching('review') })
 export const pausedHidden = defineFixture({ width: 300, ...searching('old', { hidePaused: true }) })
 
 export const noMatches = defineFixture({ width: 300, ...searching('zzz') })
-
-/** Opened from a folded section, which shows while searching. */
-export const fromFolded = defineFixture({ width: 300, ...searching('', { folded: true }) })
 
 /** The narrow sidebar. */
 export const narrow = defineFixture({ width: 180, ...searching('release') })

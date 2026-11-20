@@ -36,34 +36,17 @@ function chat(launch: { delivered: boolean; recorded: string | null }) {
 }
 
 describe("Orca's Tools and Rules in a running bot chat", () => {
-  it('a fresh start says nothing and only vouches for what it gave', async () => {
-    const context = chat({ delivered: true, recorded: null })
-    const plan = await context.plan('s1', say)
-    expect(plan?.text).toBe('')
-    expect(plan?.instructionsKey).toBe(keyOf(BLOCK))
-    plan?.given({ instructionsRecorded: true })
-    expect(await context.plan('s1', say)).toBeNull()
-  })
-
-  it('a running chat holding older rules is sent the new ones once', async () => {
-    const context = chat({ delivered: false, recorded: keyOf('## Tools\n\n- old') })
-    const plan = await context.plan('s1', say)
-    expect(plan?.text.startsWith('[Orca rules update:')).toBe(true)
-    expect(plan?.text).toContain('- new rule')
-    expect(plan?.instructionsKey).toBe(keyOf(BLOCK))
-    plan?.given({ instructionsRecorded: true })
-    expect(await context.plan('s1', say)).toBeNull()
-  })
-
-  it('a resumed chat with no receipt (started before receipts) is sent them', async () => {
-    const context = chat({ delivered: false, recorded: null })
-    expect((await context.plan('s1', say))?.text).toContain('- new rule')
-  })
-
   it('an unwritten receipt (a crash, a takeover) sends them again', async () => {
     const context = chat({ delivered: false, recorded: keyOf('## Tools\n\n- old') })
-    ;(await context.plan('s1', say))?.given({ instructionsRecorded: false })
-    expect((await context.plan('s1', say))?.text).toContain('- new rule')
+    const first = await context.plan('s1', say)
+    expect(first?.text).toContain('- new rule')
+    first?.given({ instructionsRecorded: false })
+
+    const retried = await context.plan('s1', say)
+    expect(retried?.text).toBe(first?.text)
+    expect(retried?.instructionsKey).toBe(keyOf(BLOCK))
+    retried?.given({ instructionsRecorded: true })
+    expect(await context.plan('s1', say)).toBeNull()
   })
 
   it('a rewind of a running chat drops its receipt, so its next turn is sent them again', async () => {

@@ -1,4 +1,9 @@
 // Which paired servers list bots here, kept in step with the server catalog and each server's connection.
+import {
+  runtimeStatusSubscriptionsFor,
+  subscribeStoreWithStatuses,
+  type RuntimeStatuses
+} from '@/store/slices/runtime-status/views/runtime-status-subscriptions'
 import { BOTS_MOBILE_RUNTIME_CAPABILITY } from '../../../shared/bot-runtime-capabilities'
 import type { BotChangeScope } from '../../../shared/bots/bot-change-scope'
 import {
@@ -28,13 +33,14 @@ import { keptBotHomes } from './bot-host-kept-homes'
 import { retainListedBotGroupHosts } from './bot-group-catalog-snapshot'
 import { emitBotsChangedWindowEvent } from './bots-changed-window-event'
 
-export type BotHostListingInput = Pick<
+type BotHostListingStoreState = Pick<
   AppState,
-  | 'runtimeEnvironments'
-  | 'runtimeStatusByEnvironmentId'
-  | 'runtimeEnvironmentCatalogHydrated'
-  | 'folderWorkspaces'
+  'runtimeEnvironments' | 'runtimeEnvironmentCatalogHydrated' | 'folderWorkspaces'
 >
+
+export type BotHostListingInput = BotHostListingStoreState & {
+  runtimeStatusByEnvironmentId: RuntimeStatuses
+}
 
 type HostRead = {
   state: (hostId: ExecutionHostId) => BotHostState | null
@@ -127,23 +133,35 @@ export function installBotHostListing(
   },
   webClient: boolean
 ): () => void {
-  syncBotHostListing(store.getState(), webClient)
+  const sync = (state: BotHostListingStoreState, statuses: RuntimeStatuses): void =>
+    syncBotHostListing(
+      { ...pickListingState(state), runtimeStatusByEnvironmentId: statuses },
+      webClient
+    )
+  sync(store.getState(), runtimeStatusSubscriptionsFor(store).readStatuses())
   // Homes are read once per flush; a catalog change only marks the connected servers dirty.
   setKeptBotHomesReader((hostId, list) =>
     keptBotHomes(hostId, list, selectFolderWorkspaces(store.getState()) ?? [])
   )
-  const stopStore = store.subscribe((state, previous) => {
+  return subscribeStoreWithStatuses(store, (state, previous, statuses, previousStatuses) => {
     if (selectFolderWorkspaces(state) !== selectFolderWorkspaces(previous)) {
       readLiveBotHostIds().forEach(markKeptBotHostDirty)
     }
     if (
       state.runtimeEnvironments === previous.runtimeEnvironments &&
-      state.runtimeStatusByEnvironmentId === previous.runtimeStatusByEnvironmentId &&
+      statuses === previousStatuses &&
       state.runtimeEnvironmentCatalogHydrated === previous.runtimeEnvironmentCatalogHydrated
     ) {
       return
     }
-    syncBotHostListing(state, webClient)
+    sync(state, statuses)
   })
-  return stopStore
+}
+
+function pickListingState(state: BotHostListingStoreState): BotHostListingStoreState {
+  return {
+    runtimeEnvironments: state.runtimeEnvironments,
+    runtimeEnvironmentCatalogHydrated: state.runtimeEnvironmentCatalogHydrated,
+    folderWorkspaces: selectFolderWorkspaces(state)
+  }
 }

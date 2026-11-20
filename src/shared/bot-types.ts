@@ -10,9 +10,10 @@ import { BotLaunchSchema } from './bots/bot-launch'
 import { BotTidyUpSchema } from './bots/bot-tidy-up'
 import { BotOfferAnswerSchema } from './bots/bot-offer-answers'
 import { BotCancelledWaitSchema } from './bots/bot-cancelled-waits'
+import { BotAvatarColorSchema } from './bots/bot-avatar-color'
 
 /** Native-chat agents a bot cannot run on yet; each waits on a live check of its preamble delivery. */
-export const BOT_HELD_BACK_AGENTS = ['opencode2', 'copilot', 'cursor', 'kimi', 'hermes'] as const
+export const BOT_HELD_BACK_AGENTS = ['kimi'] as const
 
 /** Bots run in a native chat; every native-chat agent but the held-back ones. */
 export const BOT_AGENTS = [
@@ -22,7 +23,11 @@ export const BOT_AGENTS = [
   'opencode',
   'omp',
   'pi',
-  'antigravity'
+  'antigravity',
+  'cursor',
+  'hermes',
+  'copilot',
+  'opencode2'
 ] as const satisfies readonly Exclude<NativeChatAgent, (typeof BOT_HELD_BACK_AGENTS)[number]>[]
 
 export function isBotAgent(agent: string): agent is BotAgent {
@@ -123,6 +128,8 @@ export const BotSchema = z.object({
   folderWorkspaceId: z.string().min(1),
   agent: z.enum(BOT_AGENTS),
   avatar: z.string().nullable(),
+  /** The mascot's tile color; absent or null, its own sky blue. Older hosts drop it. */
+  avatarColor: BotAvatarColorSchema.nullable().optional().catch(undefined),
   paused: z.boolean(),
   /** An owner's override; absent, the bot's chats start like any native chat. */
   permissionMode: z.enum(AGENT_CHAT_PERMISSION_MODES).optional(),

@@ -13,9 +13,13 @@ import {
 } from './usage/use-owner-usage-rate-limits'
 import { CodexSwitcherMenu } from './accounts/CodexSwitcherMenu'
 import { ClaudeSwitcherMenu } from './accounts/ClaudeSwitcherMenu'
+import { TooltipProvider } from '@/components/ui/tooltip'
 
 const mocks = vi.hoisted(() => {
-  const watchers: Parameters<typeof ProviderAccountsClient.watchProviderAccounts>[1][] = []
+  const watchers: {
+    target: RuntimeClientTarget
+    handlers: Parameters<typeof ProviderAccountsClient.watchProviderAccounts>[1]
+  }[] = []
   return {
     state: vi.fn<() => ReturnType<typeof localState>>(),
     accounts: vi.fn<() => ProviderAccountsSnapshot>(),
@@ -43,10 +47,10 @@ vi.mock(
     ...(await load<typeof ProviderAccountsClient>()),
     fetchProviderAccountsSnapshot: async () => mocks.accounts(),
     watchProviderAccounts: (
-      _target: RuntimeClientTarget,
+      target: RuntimeClientTarget,
       handlers: Parameters<typeof ProviderAccountsClient.watchProviderAccounts>[1]
     ) => {
-      mocks.watchers.push(handlers)
+      mocks.watchers.push({ target, handlers })
       return { close: () => {} }
     }
   })
@@ -140,7 +144,7 @@ function ownerUsage(): OwnerUsageRateLimits & { accounts: ProviderAccountsSnapsh
 }
 
 async function showMenu(owned: OwnerUsageRateLimits) {
-  render(<CodexSwitcherMenu codex={usage(4)} ownerUsage={owned} compact={false} iconOnly={false} />)
+  render(<CodexSwitcherMenu codex={usage(4)} ownerUsage={owned} />)
   return openMenu()
 }
 
@@ -165,14 +169,6 @@ beforeEach(() => {
 afterEach(cleanup)
 
 describe('Codex account usage on a paired host', () => {
-  it('shows host active and inactive quotas even when the viewer uses a different runtime and colliding account id', async () => {
-    const other = await showMenu(ownerUsage())
-    expect(within(other).getByRole('img').getAttribute('aria-label')).toContain('25%')
-    const active = screen.getByRole('menuitem', { name: /active@laptop.test/ })
-    expect(within(active).getByRole('img').getAttribute('aria-label')).toContain('4%')
-    expect(screen.queryByRole('img', { name: /99%|91%/ })).toBeNull()
-  })
-
   it('does not use the viewer quota when the host has not reported an inactive account', async () => {
     const owned = ownerUsage()
     owned.rateLimits.inactiveCodexAccounts = []
@@ -193,18 +189,16 @@ describe('Codex account usage on a paired host', () => {
   it('keeps the account identity and quota together when another client switches the host account', async () => {
     function ObservedMenu() {
       const owned = useOwnerUsageRateLimits(mocks.state().rateLimits)
-      return (
-        <CodexSwitcherMenu
-          codex={owned.rateLimits.codex ?? usage(0)}
-          ownerUsage={owned}
-          compact={false}
-          iconOnly={false}
-        />
-      )
+      return <CodexSwitcherMenu codex={owned.rateLimits.codex ?? usage(0)} ownerUsage={owned} />
     }
     render(<ObservedMenu />)
-    act(() => mocks.watchers[0].onSnapshot(ownerUsage().accounts))
-    await openMenu()
+    const { handlers } = mocks.watchers[0]
+    act(() => handlers.onSnapshot(ownerUsage().accounts))
+    const other = await openMenu()
+    const active = screen.getByRole('menuitem', { name: /active@laptop.test/ })
+    expect(within(other).getByRole('img').getAttribute('aria-label')).toContain('25%')
+    expect(within(active).getByRole('img').getAttribute('aria-label')).toContain('4%')
+    expect(screen.queryByRole('img', { name: /99%|91%/ })).toBeNull()
     const next = ownerUsage().accounts
     next.codex.activeAccountId = 'same-id'
     next.codex.activeAccountIdsByRuntime = { host: 'same-id', wsl: {} }
@@ -214,7 +208,7 @@ describe('Codex account usage on a paired host', () => {
         { accountId: 'active-id', rateLimits: usage(4), updatedAt: 1, isFetching: false }
       ]
     })
-    act(() => mocks.watchers[0].onSnapshot(next))
+    act(() => handlers.onSnapshot(next))
     const previous = screen.getByRole('menuitem', { name: /active@laptop.test/ })
     const current = screen.getByRole('menuitem', { name: /other@laptop.test/ })
     expect(within(previous).getByRole('img').getAttribute('aria-label')).toContain('4%')
@@ -248,16 +242,17 @@ describe('Codex account usage on a paired host', () => {
     const owned = ownerUsage()
     const codex = { ...usage(4), rateLimitResetCredits: { availableCount: 1, nextExpiresAt: null } }
     owned.rateLimits.codex = codex
-    render(<CodexSwitcherMenu codex={codex} ownerUsage={owned} compact={false} iconOnly={false} />)
+    render(<CodexSwitcherMenu codex={codex} ownerUsage={owned} />)
     await openMenu()
     fireEvent.click(await screen.findByRole('menuitem', { name: 'Reset now' }))
-    await vi.waitFor(() => expect(mocks.consumeHostReset).toHaveBeenCalledTimes(1))
-    expect(mocks.consumeHostReset).toHaveBeenCalledWith('laptop', {
-      target: { runtime: 'host', wslDistro: null },
-      accountId: 'active-id',
-      accountRevision: 1,
-      offerRevision: expect.stringMatching(/^v1:/)
-    })
+    await vi.waitFor(() =>
+      expect(mocks.consumeHostReset).toHaveBeenCalledWith('laptop', {
+        target: { runtime: 'host', wslDistro: null },
+        accountId: 'active-id',
+        accountRevision: 1,
+        offerRevision: expect.stringMatching(/^v1:/)
+      })
+    )
   })
 })
 
@@ -309,9 +304,7 @@ describe('Claude account usage on a paired host', () => {
         isFetching: false
       }
     ]
-    render(
-      <ClaudeSwitcherMenu claude={claude} ownerUsage={owned} compact={false} iconOnly={false} />
-    )
+    render(<ClaudeSwitcherMenu claude={claude} ownerUsage={owned} />)
     fireEvent.pointerDown(
       screen.getByRole('button', { name: 'Open Claude details and account switcher' }),
       { button: 0, ctrlKey: false }
@@ -321,5 +314,58 @@ describe('Claude account usage on a paired host', () => {
     const active = screen.getByRole('menuitem', { name: /active@laptop.test/ })
     expect(within(active).getByRole('img').getAttribute('aria-label')).toContain('4%')
     expect(screen.queryByRole('img', { name: /99%|91%/ })).toBeNull()
+  })
+})
+
+describe('Claude account rows outside the status bar owner', () => {
+  function claudeOwner(): ReturnType<typeof ownerUsage> {
+    const owned = ownerUsage()
+    owned.accounts.claude = {
+      accounts: [
+        claudeAccount('active-id', 'active@laptop.test'),
+        claudeAccount('same-id', 'other@laptop.test')
+      ],
+      activeAccountId: 'active-id',
+      activeAccountIdsByRuntime: { host: 'active-id', wsl: {} }
+    }
+    owned.rateLimits.inactiveClaudeAccounts = [
+      {
+        accountId: 'same-id',
+        rateLimits: { ...usage(25), provider: 'claude' },
+        updatedAt: 1,
+        isFetching: false
+      }
+    ]
+    return owned
+  }
+
+  beforeEach(() => {
+    mocks.state.mockReturnValue({
+      ...localState(),
+      fetchInactiveClaudeAccountUsage: vi.fn(),
+      refreshClaudeRateLimitsForTarget: vi.fn()
+    })
+  })
+
+  it("shows a server chat's per-account usage from that server", async () => {
+    const target = { kind: 'environment', environmentId: 'chat-host' } as const
+    render(
+      <TooltipProvider>
+        <ClaudeSwitcherMenu
+          claude={null}
+          iconOnly
+          chatAction={{ target, canSwitch: async () => true }}
+        />
+      </TooltipProvider>
+    )
+    const snapshot = claudeOwner().accounts
+    expect(mocks.watchers.map((watcher) => watcher.target)).toEqual([target])
+    act(() => mocks.watchers[0].handlers.onSnapshot(snapshot))
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Switch account' }), {
+      button: 0,
+      ctrlKey: false
+    })
+    const other = await screen.findByRole('menuitem', { name: /other@laptop.test/ })
+    expect(within(other).getByRole('img').getAttribute('aria-label')).toContain('25%')
   })
 })

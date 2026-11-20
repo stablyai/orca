@@ -89,6 +89,8 @@ export abstract class AgentHookServerPersistence extends AgentHookServerHydratio
         // Full replies serve this runtime's run records only.
         acceptedReply: _acceptedReply,
         launchToken: _launchToken,
+        // Only a shared host outlives the restart; a pane-owned claim is proven again by its hook.
+        executionHost: _executionHost,
         ...persistedPayload
       } = enrichedPayload
       const launchTokenHash = this.hydratedLaunchTokenHashByPaneKey.get(paneKey)
@@ -97,7 +99,8 @@ export abstract class AgentHookServerPersistence extends AgentHookServerHydratio
       entries[paneKey] = {
         ...persistedPayload,
         payload: persistedStatus,
-        ...(launchTokenHash ? { launchTokenHash } : {})
+        ...(launchTokenHash ? { launchTokenHash } : {}),
+        ...(enrichedPayload.executionHost === 'shared' ? { executionHost: 'shared' as const } : {})
       }
       const commitment = this.toAuthorityEvidence(persistedPayload, launchTokenHash)
       if (commitment && !conflictedCommitments.has(paneKey)) {

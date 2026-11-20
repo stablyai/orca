@@ -16,9 +16,9 @@ import {
   createCodexSessionBackfillAuditWriter
 } from '../backfill/codex-session-backfill-audit'
 import {
-  copySessionFileWithoutOverwrite,
-  isAtomicNoReplaceUnsupportedError
-} from '../backfill/codex-session-backfill-copy'
+  AtomicNoReplaceUnsupportedError,
+  copyCodexRolloutWithoutOverwrite
+} from '../rollouts/codex-rollout-copy'
 import { resolveCodexSessionBackfillPaths } from '../backfill/codex-session-backfill'
 import { codexDatedRolloutRelativePath } from './codex-session-resume-home'
 import { linkCodexRolloutUnlessHeld } from '../rollouts/codex-rollout-deletion-guard'
@@ -205,18 +205,17 @@ async function installRollout(sourcePath: string, targetPath: string): Promise<v
       await assertMatchingExistingTarget(sourcePath, targetPath)
     } else {
       try {
-        await copySessionFileWithoutOverwrite(sourcePath, targetPath)
-      } catch (copyError) {
-        if (isExistsError(copyError)) {
+        const outcome = await copyCodexRolloutWithoutOverwrite(sourcePath, targetPath)
+        if (outcome === 'existing') {
           await assertMatchingExistingTarget(sourcePath, targetPath)
-        } else {
-          if (isAtomicNoReplaceUnsupportedError(copyError)) {
-            throw new Error('The target filesystem cannot safely install this rollout.', {
-              cause: copyError
-            })
-          }
-          throw copyError
         }
+      } catch (copyError) {
+        if (copyError instanceof AtomicNoReplaceUnsupportedError) {
+          throw new Error('The target filesystem cannot safely install this rollout.', {
+            cause: copyError
+          })
+        }
+        throw copyError
       }
     }
   }

@@ -10,10 +10,7 @@ import {
   type TerminalQuickCommandMutation
 } from '../../../../shared/terminal/quick-commands/terminal-quick-commands'
 import { haveSameDisabledTuiAgents } from '../../../../shared/agent-launch/catalog/tui-agent-selection'
-import { normalizeSourceControlAiSettings } from '../../../../shared/source-control/ai/settings/source-control-ai-settings'
 import { normalizeSourceControlGroupOrder } from '../../../../shared/source-control/listing/source-control-group-order'
-import { SOURCE_CONTROL_LAUNCH_ACTION_IDS } from '../../../../shared/source-control/ai/recipes/source-control-ai-actions'
-import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import { applyNativeChatSessionOptionSettingsMutation } from '../../../../shared/native-chat/input/session-options/native-chat-session-option-defaults'
 import type { NativeChatSessionOptionSettingsMutation } from '../../../../shared/native-chat/input/native-chat-session-options'
 import { getHostDisplayLabelOverrides } from '../../../../shared/execution-host/host-setting-overrides'
@@ -41,11 +38,13 @@ import { agentLaunchSettingsRollbackUpdates } from '../../terminal/launch/agent-
 import type {
   RuntimeClientSettings,
   RuntimeClientSettingsUpdate,
-  RuntimeClientSourceControlAi,
   RuntimeHostDisplayLabelOverrides
 } from './runtime-client-settings-shape'
 import { normalizeNewTabMenuLayout } from '../../../../shared/new-tab-menu/new-tab-menu-layout'
 import { hostNativeChatDefaults } from '../../../../shared/native-chat/settings/native-chat-providers'
+import { getDefaultNotificationSettings } from '../../../../shared/notifications/notification-settings-defaults'
+import type { NotificationSettings } from '../../../../shared/notifications/notification-settings-types'
+import { projectSourceControlLaunchRecipes } from './runtime-client-source-control-ai-projection'
 
 /** Which Orca cloud services this host registered; headless hosts register none. */
 export type RuntimeSharingServicePresence = {
@@ -143,6 +142,7 @@ export class RuntimeClientSettingsController {
       nativeChatQueueFollowUps: nativeChatQueueFollowUps(settings),
       // Resolved, so a phone can tell a reported value from an older host's absence.
       nativeChatCiResultLines: nativeChatShowsCiResultLines(settings),
+      hostNotifications: projectHostNotificationSettings(settings.notifications),
       // Why projected: a paired client's AI buttons start these actions' agents, and must honour
       // the agent saved for each one as the desktop does. Absent on older hosts.
       sourceControlAi: projectSourceControlLaunchRecipes(settings),
@@ -161,11 +161,19 @@ export class RuntimeClientSettingsController {
     }
     const beforeSettings = this.store.getSettings()
     const before = beforeSettings.agentStatusHooksEnabled !== false
-    const { agentDefaultArgs, agentDefaultEnv, ...otherUpdates } = updates
+    const { agentDefaultArgs, agentDefaultEnv, hostNotifications, ...otherUpdates } = updates
     // Legacy clients can select an agent or a shell, but cannot select None.
     this.store.updateSettings(
       {
         ...otherUpdates,
+        ...(hostNotifications
+          ? {
+              notifications: {
+                ...(beforeSettings.notifications ?? getDefaultNotificationSettings()),
+                ...hostNotifications
+              }
+            }
+          : {}),
         // An older client writes Arguments as it reads them, flag included.
         ...(agentDefaultArgs !== undefined || agentDefaultEnv !== undefined
           ? legacyLaunchTextUpdates(
@@ -313,20 +321,9 @@ export class RuntimeClientSettingsController {
   }
 }
 
-function projectSourceControlLaunchRecipes(
-  settings: Partial<Pick<GlobalSettings, 'sourceControlAi' | 'commitMessageAi'>>
-): RuntimeClientSourceControlAi {
-  const { enabled, actions } = normalizeSourceControlAiSettings(
-    settings.sourceControlAi,
-    settings.commitMessageAi
-  )
-  return {
-    enabled,
-    actions: Object.fromEntries(
-      SOURCE_CONTROL_LAUNCH_ACTION_IDS.flatMap((actionId) => {
-        const recipe = actions?.[actionId]
-        return recipe ? [[actionId, recipe]] : []
-      })
-    )
-  }
+function projectHostNotificationSettings(
+  settings: NotificationSettings = getDefaultNotificationSettings()
+): RuntimeClientSettings['hostNotifications'] {
+  const { enabled, agentTaskComplete, agentNeedsInput, terminalBell } = settings
+  return { enabled, agentTaskComplete, agentNeedsInput, terminalBell }
 }

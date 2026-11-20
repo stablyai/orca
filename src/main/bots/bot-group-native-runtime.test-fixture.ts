@@ -9,7 +9,8 @@ const mocks = vi.hoisted(() => ({
   snapshot: vi.fn(),
   close: vi.fn(),
   create: vi.fn(),
-  cancel: vi.fn()
+  cancel: vi.fn(),
+  sendAnswer: vi.fn()
 }))
 vi.mock('./bot-chat-session', () => ({
   startBotSession: (...args: unknown[]) => mocks.create(...args),
@@ -31,6 +32,7 @@ vi.mock('./bot-chat-session', () => ({
         )
       }
     }),
+    sendAnswer: mocks.sendAnswer,
     setUserConversationName: async () => {},
     cancel: mocks.cancel,
     deps: { store: { requireWritableRecord: () => ({ lease: { runtimeFence: 1 } }) } }
@@ -59,9 +61,11 @@ export function fixture() {
   )
   const mails = new Map<
     string,
-    { id: string; from_handle: string; thread_id: string | null; type?: string }
+    { id: string; from_handle: string; thread_id: string | null; type?: string; read?: number }
   >()
   const requests = new Map<string, { record: string }>()
+  /** Operation ids the mail lane still holds an attempt under. */
+  const heldSends = new Set<string>()
   const markAsDelivered = vi.fn<(ids: string[], handle: string) => void>()
   let homeCount = 0
   const homes = {
@@ -78,6 +82,8 @@ export function fixture() {
       getMessageById: (id: string) => mails.get(id),
       getBotRequest: (id: string) => requests.get(id),
       getActiveDispatchForIdentity: () => undefined,
+      holdsStructuredMailSendOperation: (_sessionId: string, operationId: string) =>
+        heldSends.has(operationId),
       markAsDelivered
     }),
     bots: {
@@ -98,6 +104,7 @@ export function fixture() {
     bots,
     mails,
     requests,
+    heldSends,
     markAsDelivered,
     homes,
     groups: new BotGroupRuntime(runtime)
@@ -114,6 +121,7 @@ beforeEach(() => {
   }))
   mocks.send.mockResolvedValue({ kind: 'sent' })
   mocks.cancel.mockResolvedValue({ ok: true })
+  mocks.sendAnswer.mockResolvedValue({ kind: 'waiting' })
   mocks.close.mockResolvedValue({ stopped: true })
 })
 afterEach(() => {
@@ -128,6 +136,7 @@ export function groupNativeMocks(): {
   close: Mock
   create: Mock
   cancel: Mock
+  sendAnswer: Mock
 } {
   return mocks
 }

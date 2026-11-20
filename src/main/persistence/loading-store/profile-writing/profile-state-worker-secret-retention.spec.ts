@@ -48,7 +48,7 @@ export function registerProfileStateWorkerSecretRetentionTests(): void {
     const write = store.flushPendingOrThrowAsync({ drainToStableGeneration: false })
     await gate.started.promise
     const save = vi.fn()
-    store.migrateLegacyOpenCodeGoApiKey({ has: () => false, read: () => null, save })
+    await store.migrateLegacyOpenCodeGoApiKey({ has: () => false, read: () => null, save })
     encryptionAvailable = false
     gate.finish.resolve()
     await write

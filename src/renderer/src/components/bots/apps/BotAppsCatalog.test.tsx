@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
 import { withBotConnectorRuntime } from '../../../lib/bot-connector-host-calls.test-fixture'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Bot } from '../../../../../shared/bot-types'
 
@@ -70,14 +70,16 @@ const orcaConnect = () => ({
 
 const declineConfirm = async (): Promise<boolean> => false
 
-function open(): void {
-  render(
+function open(): () => void {
+  const dialog = (listed: Bot) => (
     <ConfirmationDialogContext.Provider value={declineConfirm}>
       <TooltipProvider>
-        <AddConnectorDialog bot={bot} open onOpenChange={vi.fn()} onAdd={vi.fn()} />
+        <AddConnectorDialog bot={listed} open onOpenChange={vi.fn()} onAdd={vi.fn()} />
       </TooltipProvider>
     </ConfirmationDialogContext.Provider>
   )
+  const view = render(dialog(bot))
+  return () => view.rerender(dialog({ ...bot }))
 }
 
 const calls = (method: string) => mocks.rpc.mock.calls.filter(([, name]) => name === method)
@@ -98,26 +100,37 @@ afterEach(() => {
   cleanup()
   resetComposioClientForTest()
   Reflect.deleteProperty(window, 'api')
+  vi.useRealTimers()
 })
 
 describe('Add to <bot>', () => {
   it('signs in to an address that needs it from this computer, with no paste-back', async () => {
+    let signedIn = false
     answer({
       ...tools,
       'bots.tools.add': () => ({ tool: signInTool('pagerduty') }),
       // Orca opened the browser itself; the sign-in is under way.
-      'bots.tools.connect': orcaConnect
+      'bots.tools.connect': orcaConnect,
+      'bots.tools.signInStatus': () => ({ status: signedIn ? 'done' : 'pending' })
     })
     open()
     fireEvent.click(screen.getByRole('button', { name: 'Add by URL' }))
     fireEvent.change(await screen.findByLabelText('Server URL or start command'), {
       target: { value: 'https://mcp.pagerduty.com/mcp' }
     })
-    fireEvent.click(screen.getByRole('button', { name: 'Add' }))
+    vi.useFakeTimers()
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Add' }))
+    })
 
-    expect(await screen.findByText('Finish in your browser')).toBeTruthy()
+    expect(screen.getByText('Finish in your browser')).toBeTruthy()
     expect(screen.queryByText(/is on Reviewer/)).toBeNull()
-    expect(screen.queryByRole('button', { name: 'Signing in on another computer?' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Remote sign-in' })).toBeNull()
+
+    signedIn = true
+    await act(() => vi.advanceTimersByTimeAsync(2_000))
+    expect(screen.getByRole('button', { name: 'Done' })).toBeTruthy()
+    expect(screen.queryByText('Finish in your browser')).toBeNull()
   })
 
   it('routes a curated Composio app found by search by Composio’s own sign-in record', async () => {
@@ -125,7 +138,10 @@ describe('Add to <bot>', () => {
       'bots.composio.status': () => ({ key: 'ok', added: true, limit: null }),
       'bots.composio.connections': () => ({ connections: [], pending: [] }),
       'bots.composio.apps': () => ({
-        apps: [{ slug: 'jira', name: 'Jira', description: 'Issues', logo: null, signIn: 'own' }],
+        apps: [
+          { slug: 'jira', name: 'Jira', description: 'Issues', logo: null, signIn: 'own' },
+          { slug: 'jira-labs', name: 'Jira Labs', description: 'Labs', logo: null, signIn: 'own' }
+        ],
         nextCursor: null
       }),
       'bots.composio.app': () => ({
@@ -137,11 +153,14 @@ describe('Add to <bot>', () => {
       }),
       'bots.composio.connect': () => ({ url: 'https://composio.example/connect' })
     })
-    open()
+    const rereadBot = open()
     await waitFor(() => expect(calls('bots.composio.connections')).not.toHaveLength(0))
     fireEvent.change(screen.getByRole('textbox', { name: 'Search apps' }), {
       target: { value: 'jira' }
     })
+    await screen.findByRole('button', { name: 'Add Jira Labs' })
+    rereadBot()
+    expect(screen.getByRole('button', { name: 'Add Jira Labs' })).toBeTruthy()
     fireEvent.click(await screen.findByRole('button', { name: 'Add Jira' }))
 
     // Jira needs the owner's own developer app at Composio, so Add opens its auth configs.
