@@ -204,7 +204,7 @@ export function WorktreeCardStatusSlot({
   const reviewStatusIconClassName = cn(
     compactReviewAndBranchStatusIconClassName,
     // Same last-known treatment as the hover card's reference rows.
-    isReviewStale && 'shimmer shimmer-duration-2400 shimmer-steps-30'
+    isReviewStale && 'shimmer shimmer-duration-2400 shimmer-held'
   )
   const branchStatusIcon = <GitBranch className={branchStatusIconClassName} aria-hidden="true" />
   const sleepingStatusIcon = <Moon className={sleepingStatusIconClassName} aria-hidden="true" />

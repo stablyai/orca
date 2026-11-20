@@ -3,7 +3,10 @@ import assert from 'node:assert/strict'
 const render = (page, scenario) =>
   page.evaluate((value) => window.spinnerBenchmark.render(value), scenario)
 const census = (page) => page.evaluate(() => window.spinnerBenchmark.census())
-const rotating = (indicators) => indicators.filter((indicator) => indicator.name !== 'pulse')
+const rotating = (indicators) =>
+  indicators.filter(
+    (indicator) => indicator.name === 'spin' || indicator.name === 'agent-spinner-rotate'
+  )
 const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
 async function stepsSeen(page, durationMs) {
