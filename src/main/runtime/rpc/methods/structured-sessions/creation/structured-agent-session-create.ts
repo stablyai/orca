@@ -114,7 +114,7 @@ export async function prepareStructuredAgentSessionCreateForWorktree(args: {
   const attachFingerprint = computeAgentSessionPayloadFingerprint({
     method: 'agentSession.attach',
     sessionId: args.envelope.sessionId,
-    fields: attachFingerprintFields({ ...resolved, envelope: args.envelope })
+    fields: attachFingerprintFields({ ...resolved, envelope: args.envelope }, args.agentCopy)
   })
   host ??= await args.ensureHost()
   const priorOperation =

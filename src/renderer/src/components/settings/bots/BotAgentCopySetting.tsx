@@ -3,6 +3,7 @@ import { Check } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { getAgentCatalog } from '@/lib/agent-catalog/agent-catalog'
 import { useAgentCopiesForMenu } from '@/components/agent/launch-menu/AgentCopyMenuItems'
+import { RadioGroup, RadioGroupItemSlot } from '@/components/ui/radio-group'
 import {
   SettingsInsetGroup,
   SettingsInsetRow
@@ -27,35 +28,42 @@ export function BotAgentCopySetting({
     { id: null, title: agentLabel },
     ...copies.map((copy) => ({ id: copy.id, title: copy.name }))
   ]
+  // Copy ids carry a dot, so the agent's own id never collides with one.
+  const value = bot.agentCopy ?? bot.agent
   return (
-    <div role="radiogroup" aria-label={t('settings.bots.runsAs', 'Runs as')}>
-      <SettingsInsetGroup
-        title={t('settings.bots.runsAs', 'Runs as')}
-        foot={t(
-          'settings.bots.runsAsDescription',
-          "New conversations start with this copy's command, arguments and environment."
-        )}
+    <SettingsInsetGroup
+      title={t('settings.bots.runsAs', 'Runs as')}
+      foot={t(
+        'settings.bots.runsAsDescription',
+        "New conversations start with this copy's command, arguments and environment."
+      )}
+    >
+      <RadioGroup
+        aria-label={t('settings.bots.runsAs', 'Runs as')}
+        value={value}
+        onValueChange={(next) => void update({ agentCopy: next === bot.agent ? null : next })}
+        layout="rows"
       >
         {choices.map((choice) => {
-          const on = (bot.agentCopy ?? null) === choice.id
+          const id = choice.id ?? bot.agent
           return (
-            <button
-              key={choice.id ?? 'agent'}
-              type="button"
-              role="radio"
-              aria-checked={on}
-              onClick={() => void update({ agentCopy: choice.id })}
-              className="block w-full text-left outline-none transition-colors hover:bg-accent/60 focus-visible:bg-accent/60"
-            >
-              <SettingsInsetRow
-                title={choice.title}
-                {...(choice.id ? { detail: choice.id } : {})}
-                end={on ? <Check aria-hidden className="size-4 text-foreground" /> : null}
-              />
-            </button>
+            <RadioGroupItemSlot key={id} value={id}>
+              <button
+                type="button"
+                className="block w-full text-left outline-none transition-colors hover:bg-accent/60 focus-visible:bg-accent/60"
+              >
+                <SettingsInsetRow
+                  title={choice.title}
+                  {...(choice.id ? { detail: choice.id } : {})}
+                  end={
+                    id === value ? <Check aria-hidden className="size-4 text-foreground" /> : null
+                  }
+                />
+              </button>
+            </RadioGroupItemSlot>
           )
         })}
-      </SettingsInsetGroup>
-    </div>
+      </RadioGroup>
+    </SettingsInsetGroup>
   )
 }

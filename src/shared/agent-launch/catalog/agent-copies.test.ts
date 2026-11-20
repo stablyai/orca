@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import { resolveAgentStartupPlanInputs } from '../startup/agent-startup-plan-inputs'
 import { buildAgentStartupPlan } from '../startup/tui-agent-startup'
-import { createAgentCopy, normalizeAgentCopies, resolveAgentSelection } from './agent-copies'
+import {
+  agentCopyIdFromLaunchOptions,
+  createAgentCopy,
+  normalizeAgentCopies,
+  resolveAgentSelection
+} from './agent-copies'
 
 const codeMode = {
   id: 'claude.code-mode',
@@ -88,5 +93,14 @@ describe('agent copies', () => {
       args: '--model haiku',
       env: { A: 'b' }
     })
+  })
+
+  it('reads a copy from either launch option map and refuses two different ones', () => {
+    expect(
+      agentCopyIdFromLaunchOptions({ model: 'haiku' }, { agentCopy: 'claude.code-mode' })
+    ).toBe('claude.code-mode')
+    expect(() =>
+      agentCopyIdFromLaunchOptions({ agentCopy: 'claude.a' }, { agentCopy: 'claude.b' })
+    ).toThrow('Conflicting agent copies "claude.a" and "claude.b"')
   })
 })

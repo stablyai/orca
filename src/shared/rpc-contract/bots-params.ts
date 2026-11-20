@@ -1,4 +1,4 @@
-import { isAgentCopyId } from '../agent-launch/catalog/agent-copies'
+import { agentCopyBase, isAgentCopyId } from '../agent-launch/catalog/agent-copies'
 import { botTidyUp, patchTidyUp, TIDY_UP_EVERY_CHOICES } from '../bots/bot-tidy-up'
 import * as z from 'zod'
 import { BOT_IMPORT_REPLY_MAX, BotImportFromSchema } from '../bots/bot-import'
@@ -393,6 +393,10 @@ export function applyBotUpdates(bot: Bot, updates: BotHostUpdates): Bot {
   if (agentCopy) {
     next.agentCopy = agentCopy
   } else if (agentCopy === null || (rest.agent !== undefined && rest.agent !== bot.agent)) {
+    delete next.agentCopy
+  }
+  // A copy belongs to its agent; one of another agent would refuse every chat, so it is dropped.
+  if (next.agentCopy && agentCopyBase(next.agentCopy) !== next.agent) {
     delete next.agentCopy
   }
   return next

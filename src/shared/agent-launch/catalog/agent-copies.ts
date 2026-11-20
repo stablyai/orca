@@ -7,7 +7,7 @@ export type { AgentCopy }
 /** The session option naming a launch's copy, so every route and every resume of it keeps it. */
 export const AGENT_COPY_OPTION_ID = 'agentCopy'
 
-const MAX_AGENT_COPIES = 64
+export const MAX_AGENT_COPIES = 64
 const MAX_NAME_LENGTH = 80
 const COPY_SLUG = /^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?$/
 
@@ -107,6 +107,18 @@ export function agentCopyIdFromOptions(
 ): string | undefined {
   const value = options?.[AGENT_COPY_OPTION_ID]
   return isAgentCopyId(value) ? value : undefined
+}
+
+/** The copy a launch names in either of its option maps; two different copies refuse, so neither
+ *  is dropped for the other. */
+export function agentCopyIdFromLaunchOptions(
+  ...maps: (Readonly<Record<string, unknown>> | null | undefined)[]
+): string | undefined {
+  const ids = [...new Set(maps.map(agentCopyIdFromOptions).filter((id) => id !== undefined))]
+  if (ids.length > 1) {
+    throw new Error(`Conflicting agent copies "${ids[0]}" and "${ids[1]}"`)
+  }
+  return ids[0]
 }
 
 /** Launch options that start `copyId`; a built-in selection leaves the options as they are. */

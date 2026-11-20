@@ -16,7 +16,8 @@ import {
   AGENT_LAUNCH_LOCAL_PRESENTATION_RUNTIME_CAPABILITY,
   AGENT_LAUNCH_REPLAY_REQUIRED_RUNTIME_CAPABILITY,
   AGENT_LAUNCH_SURFACE_RUNTIME_CAPABILITY,
-  AGENT_LAUNCH_PI_MODEL_RUNTIME_CAPABILITY
+  AGENT_LAUNCH_PI_MODEL_RUNTIME_CAPABILITY,
+  AGENT_LAUNCH_AGENT_COPY_RUNTIME_CAPABILITY
 } from '../../shared/agent-launch/contracts/agent-launch-runtime-capability'
 import { createStructuredAgentSessionOperationId } from '../../shared/agent-session/lifecycle/operations/structured-agent-session-mutation'
 import { parseAgentSessionOperationTimestamp } from '../../shared/agent-session/lifecycle/operations/agent-session-host-authority'
@@ -25,6 +26,7 @@ import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import { isTuiAgent } from '../../shared/agent-launch/catalog/tui-agent-config'
 import {
   agentCopyBase,
+  agentCopyIdFromOptions,
   isAgentCopyId,
   withAgentCopyOption
 } from '../../shared/agent-launch/catalog/agent-copies'
@@ -163,6 +165,15 @@ export async function callAgentLaunch(
     throw new RuntimeClientError(
       'incompatible_runtime',
       'This Orca host cannot start Pi on a chosen model. Update Orca on the execution host, or omit --model.'
+    )
+  }
+  if (
+    agentCopyIdFromOptions(launch.sessionOptions) &&
+    !capabilities.includes(AGENT_LAUNCH_AGENT_COPY_RUNTIME_CAPABILITY)
+  ) {
+    throw new RuntimeClientError(
+      'incompatible_runtime',
+      'This Orca host cannot start agent copies. Update Orca on the execution host, or pass the base agent to --agent.'
     )
   }
   if (!capabilities.includes(AGENT_LAUNCH_LOCAL_PRESENTATION_RUNTIME_CAPABILITY)) {

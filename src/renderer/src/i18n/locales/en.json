@@ -1199,6 +1199,7 @@
       "deleteCopy": "Delete {{name}}",
       "copyDefaultName": "{{agent}} copy",
       "copyCreated": "Saved {{name}} as {{id}}.",
+      "copyLimit": "Orca keeps up to {{count}} agent copies. Delete one to make another.",
       "defaultAutoBadge": "Default · Auto",
       "newAgentsTitle": "New agents"
     },

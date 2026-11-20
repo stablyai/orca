@@ -115,7 +115,8 @@ export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport exte
         ...input,
         forkFrom: input.forkFrom,
         host: getStructuredAgentSessionHost(),
-        location: await this.resolveStructuredAgentSessionLocation(input.worktree)
+        location: await this.resolveStructuredAgentSessionLocation(input.worktree),
+        readAgentCopySettings: () => this.requireStore().getSettings()
       })
       return hostLaunchDirectory ? { ...resolved, hostLaunchDirectory } : resolved
     }

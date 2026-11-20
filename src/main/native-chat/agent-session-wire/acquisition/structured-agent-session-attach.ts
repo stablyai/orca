@@ -89,7 +89,10 @@ export type AgentSessionAttachAuthority = {
 }
 
 /** Exclude transient spawn/probe evidence and re-resolved defaults so unknown-outcome retries still replay. */
-export function attachFingerprintFields(params: AgentSessionAttachParams): Record<string, unknown> {
+export function attachFingerprintFields(
+  params: AgentSessionAttachParams,
+  agentCopy = params.agentCopy
+): Record<string, unknown> {
   return {
     location: params.location,
     provider: params.provider,
@@ -99,6 +102,8 @@ export function attachFingerprintFields(params: AgentSessionAttachParams): Recor
     providerHandle: params.providerHandle,
     // Adoption changes identity; transcript location is transient and excluded.
     adoptedProviderHandle: params.adopt?.providerHandle,
+    // A replay that names another copy is a different create.
+    ...(agentCopy ? { agentCopy } : {}),
     expectedRuntimeFence: params.envelope.expectedRuntimeFence
   }
 }

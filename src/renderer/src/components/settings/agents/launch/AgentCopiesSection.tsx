@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useTranslate } from '@/i18n/use-translate'
+import { useAppStore } from '@/store/index'
 import { AgentIcon } from '@/components/agent/icons/AgentIcon'
 import { Button } from '../../../ui/button'
 import { Input } from '../../../ui/input'
@@ -15,6 +16,7 @@ import {
 import {
   agentCopyBase,
   createAgentCopy,
+  MAX_AGENT_COPIES,
   normalizeAgentCopies,
   type AgentCopy
 } from '../../../../../../shared/agent-launch/catalog/agent-copies'
@@ -45,23 +47,57 @@ export function useAgentCopies(
   typedPermissions: boolean
 ) {
   const t = useTranslate()
+  const tail = useRef<Promise<void> | null>(null)
   const list = local ? normalizeAgentCopies(local.settings.agentCopies) : []
-  const save = (copies: AgentCopy[]): void | Promise<void> =>
-    local?.updateSettings({ agentCopies: copies })
+  // Each write starts from the last saved list, one after another, so edits in flight never
+  // overwrite each other.
+  const write = (compute: (copies: AgentCopy[]) => AgentCopy[] | null): Promise<void> => {
+    if (!local) {
+      return Promise.resolve()
+    }
+    const run = async (): Promise<void> => {
+      const latest = useAppStore.getState().settings ?? local.settings
+      const next = compute(normalizeAgentCopies(latest.agentCopies))
+      if (next) {
+        await local.updateSettings({ agentCopies: next })
+      }
+    }
+    const operation = (tail.current ?? Promise.resolve()).catch(() => {}).then(run)
+    tail.current = operation
+    return operation
+  }
+  const save = (id: string, next: AgentCopy | null): Promise<void> =>
+    write((copies) => copies.flatMap((copy) => (copy.id !== id ? [copy] : next ? [next] : [])))
   const duplicate = (agent: AgentCatalogEntry): void => {
     if (!local) {
       return
     }
-    const name = t('settings.agents.copyDefaultName', '{{agent}} copy', { agent: agent.label })
-    const copy = createAgentCopy(agent.id, name, local.settings)
-    void Promise.resolve(save([...list, copy])).then(() =>
-      toast.success(
-        t('settings.agents.copyCreated', 'Saved {{name}} as {{id}}.', {
-          name: copy.name,
-          id: copy.id
-        })
-      )
-    )
+    let made: AgentCopy | null = null
+    void write((copies) => {
+      if (copies.length >= MAX_AGENT_COPIES) {
+        toast.error(
+          t(
+            'settings.agents.copyLimit',
+            'Orca keeps up to {{count}} agent copies. Delete one to make another.',
+            { count: MAX_AGENT_COPIES }
+          )
+        )
+        return null
+      }
+      const name = t('settings.agents.copyDefaultName', '{{agent}} copy', { agent: agent.label })
+      made = createAgentCopy(agent.id, name, { ...local.settings, agentCopies: copies })
+      return [...copies, made]
+    }).then(() => {
+      const copy: AgentCopy | null = made
+      if (copy) {
+        toast.success(
+          t('settings.agents.copyCreated', 'Saved {{name}} as {{id}}.', {
+            name: copy.name,
+            id: copy.id
+          })
+        )
+      }
+    })
   }
   const base = (id: TuiAgent): AgentCopyBaseFacts => {
     const entry = catalog.find((agent) => agent.id === id)
@@ -83,14 +119,13 @@ export function AgentCopiesSection({
 }: {
   copies: readonly AgentCopy[]
   base: (agent: TuiAgent) => AgentCopyBaseFacts
-  onSave: (copies: AgentCopy[]) => void | Promise<void>
+  onSave: (id: string, next: AgentCopy | null) => Promise<void>
 }): React.JSX.Element | null {
   const t = useTranslate()
   if (copies.length === 0) {
     return null
   }
-  const update = (id: string, next: AgentCopy | null): void | Promise<void> =>
-    onSave(copies.flatMap((copy) => (copy.id !== id ? [copy] : next ? [next] : [])))
+  const update = (id: string, next: AgentCopy | null): Promise<void> => onSave(id, next)
   return (
     <SettingsGroup
       title={t('settings.agents.copiesTitle', 'Agent copies')}

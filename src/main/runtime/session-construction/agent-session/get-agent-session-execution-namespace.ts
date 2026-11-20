@@ -23,6 +23,7 @@ import { isTerminalLeafId, makePaneKey } from '../../../../shared/workspace-layo
 import { resolveSavedRestoreLaunchRecipe } from './saved-restore-launch-recipe'
 import { worktreeIdsEqual } from '../../../../shared/worktree/id'
 import { agentLaunchPreferenceOptions } from '../../../../shared/agent-launch/choices/agent-launch-preferences'
+import { applyAgentCopy, findAgentCopy } from '../../../../shared/agent-launch/catalog/agent-copies'
 import {
   resolveTuiAgentLaunchRawArgs,
   resolveTuiAgentLaunchEnv
@@ -152,10 +153,17 @@ export abstract class OrcaRuntimeWithGetAgentSessionExecutionNamespace extends O
       identity,
       canonicalWorktreeId: workspace.id
     })
-    const settings = this.store.getSettings()
-    if (!isTuiAgentEnabled(request.agent, settings.disabledTuiAgents)) {
+    const savedSettings = this.store.getSettings()
+    if (!isTuiAgentEnabled(request.agent, savedSettings.disabledTuiAgents)) {
       throw new Error('Selected agent is disabled. Choose an enabled agent before resuming.')
     }
+    // A copy resumes with its own launch setup; one deleted since refuses before any terminal exists.
+    const copyId = request.launchPreferences?.agentCopy
+    const copy = copyId ? findAgentCopy(savedSettings, copyId) : undefined
+    if (copyId && copy?.agent !== request.agent) {
+      throw new Error(`Unknown agent copy "${copyId}"`)
+    }
+    const settings = copy ? applyAgentCopy(savedSettings, copy) : savedSettings
     const launchRuntime = this.resolveAgentLaunchRuntime(workspace, request.agent)
     const { platform } = launchRuntime
     const shell = agentLaunchQuotingShell(launchRuntime)
