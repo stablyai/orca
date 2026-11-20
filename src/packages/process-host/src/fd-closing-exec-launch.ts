@@ -10,6 +10,8 @@ const DEFAULT_SEARCH_PATH = '/usr/bin:/bin'
 // Linux reads at most this much of a `#!` line, and follows at most this many interpreters.
 const SHEBANG_MAX_BYTES = 256
 const INTERPRETER_MAX_DEPTH = 4
+// Enough for the ELF header, program headers and loader path of ordinary executables.
+const HEAD_MAX_BYTES = 4096
 
 let installedHelper: string | undefined
 let missingHelperLogged = false
@@ -66,17 +68,22 @@ function wouldExec(file: string, options: Pick<SpawnOptions, 'cwd' | 'env'>): bo
     .some((directory) => isRunnable(inCwd(directory === '' ? file : `${directory}/${file}`), inCwd))
 }
 
-// A script runs only if its `#!` interpreter does; exec otherwise fails with ENOENT or EACCES.
-// A relative interpreter resolves from the child's cwd, as the kernel resolves it.
+// Wraps only what it can predict the kernel will run: a `#!` script whose interpreter would run,
+// or an ELF for this machine whose loader exists. Anything else spawns directly, so its exec
+// failure still reaches the caller. A relative interpreter resolves from the child's cwd.
 function isRunnable(path: string, inCwd: (path: string) => string, depth = 0): boolean {
   if (depth > INTERPRETER_MAX_DEPTH || !isExecutableFile(path)) {
     return false
   }
-  const interpreter = shebangInterpreter(path)
-  if (interpreter === undefined) {
+  const head = readHead(path)
+  if (!head) {
     return false
   }
-  return interpreter === null || isRunnable(inCwd(interpreter), inCwd, depth + 1)
+  if (head.subarray(0, 2).toString('latin1') === '#!') {
+    const interpreter = shebangInterpreter(head)
+    return interpreter !== null && isRunnable(inCwd(interpreter), inCwd, depth + 1)
+  }
+  return isLoadableElf(head)
 }
 
 function isExecutableFile(path: string): boolean {
@@ -88,21 +95,61 @@ function isExecutableFile(path: string): boolean {
   }
 }
 
-// undefined: unreadable, so exec's own check can't be predicted and the launch isn't wrapped.
-function shebangInterpreter(path: string): string | null | undefined {
-  const head = Buffer.alloc(SHEBANG_MAX_BYTES)
-  let length: number
+// null: unreadable (e.g. execute-only), so exec's own checks can't be predicted.
+function readHead(path: string): Buffer | null {
+  const head = Buffer.alloc(HEAD_MAX_BYTES)
   try {
     const fd = openSync(path, 'r')
     try {
-      length = readSync(fd, head, 0, SHEBANG_MAX_BYTES, 0)
+      return head.subarray(0, readSync(fd, head, 0, HEAD_MAX_BYTES, 0))
     } finally {
       closeSync(fd)
     }
   } catch {
-    return undefined
+    return null
   }
-  const text = head.subarray(0, length).toString('utf8')
-  // The kernel's parse: skip spaces and tabs, end at space, tab, newline or NUL; a CR stays.
-  return text.startsWith('#!') ? (/^[ \t]*([^ \t\n\0]+)/.exec(text.slice(2))?.[1] ?? null) : null
+}
+
+// The kernel's parse: skip spaces and tabs, end at space, tab, newline or NUL; a CR stays.
+function shebangInterpreter(head: Buffer): string | null {
+  const line = head.subarray(2, SHEBANG_MAX_BYTES).toString('utf8')
+  return /^[ \t]*([^ \t\n\0]+)/.exec(line)?.[1] ?? null
+}
+
+const ELF_MACHINE: Partial<Record<NodeJS.Architecture, number>> = {
+  x64: 62,
+  arm64: 183,
+  ia32: 3,
+  arm: 40
+}
+const PT_INTERP = 3
+
+// A little-endian ELF for this architecture whose PT_INTERP loader (if any) is present.
+function isLoadableElf(head: Buffer): boolean {
+  if (head.length < 64 || head.readUInt32BE(0) !== 0x7f454c46 || head[5] !== 1) {
+    return false
+  }
+  if (head.readUInt16LE(18) !== ELF_MACHINE[process.arch]) {
+    return false
+  }
+  const wide = head[4] === 2
+  const phoff = Number(wide ? head.readBigUInt64LE(32) : head.readUInt32LE(28))
+  const phentsize = head.readUInt16LE(wide ? 54 : 42)
+  const phnum = head.readUInt16LE(wide ? 56 : 44)
+  for (let index = 0; index < phnum; index++) {
+    const entry = phoff + index * phentsize
+    if (entry + phentsize > head.length) {
+      return false
+    }
+    if (head.readUInt32LE(entry) !== PT_INTERP) {
+      continue
+    }
+    const offset = Number(wide ? head.readBigUInt64LE(entry + 8) : head.readUInt32LE(entry + 4))
+    const size = Number(wide ? head.readBigUInt64LE(entry + 32) : head.readUInt32LE(entry + 16))
+    if (size < 2 || offset + size > head.length) {
+      return false
+    }
+    return isExecutableFile(head.subarray(offset, offset + size - 1).toString('utf8'))
+  }
+  return true
 }

@@ -70,18 +70,30 @@ describe.runIf(process.platform === 'linux')('fd-closing exec', () => {
     }
   })
 
-  it('still reports a missing program or interpreter as ENOENT', async () => {
+  it('still reports a missing program, interpreter or loader as ENOENT', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'orca-fd-closing-'))
     const script = join(dir, 'broken-interpreter')
     await writeFile(script, '#!/orca-fd-closing-missing-interpreter\n')
     // Linux looks for an interpreter literally named `/bin/sh\r`.
     const crlfScript = join(dir, 'crlf-interpreter')
     await writeFile(crlfScript, '#!/bin/sh\r\ntrue\r\n')
-    await chmod(script, 0o755)
-    await chmod(crlfScript, 0o755)
+    // An ELF whose loader is missing: exec fails with ENOENT after the file itself checks out.
+    const elf = await readFile('/bin/true')
+    const loaderEnd = elf.indexOf(0, elf.indexOf('ld-linux'))
+    elf[loaderEnd - 1] = 'X'.charCodeAt(0)
+    const missingLoader = join(dir, 'missing-loader')
+    await writeFile(missingLoader, elf)
+    for (const file of [script, crlfScript, missingLoader]) {
+      await chmod(file, 0o755)
+    }
     setFdClosingExec(helper)
     try {
-      for (const program of ['orca-fd-closing-missing-program', script, crlfScript]) {
+      for (const program of [
+        'orca-fd-closing-missing-program',
+        script,
+        crlfScript,
+        missingLoader
+      ]) {
         const child = spawnProcess({ program, closeInheritedFds: true, stdio: 'ignore' })
         const [error] = await once(child, 'error')
         // A noexec tmpdir makes the direct spawn report EACCES; either way it's an error, not 127.
