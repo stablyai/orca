@@ -3,6 +3,7 @@ import { createTestStore, seedStore } from '@/store/testing/app-store-test-fixtu
 import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import { TEST_REPO } from '@/store/repos/repo.test-fixture'
 import * as structuralEquality from '../../../../../shared/collections/structural-value-equality'
+import * as launchPersistence from '../../agent-session/launch/structured-agent-session-launch-persistence'
 import { createSessionWriteSubscriber } from './session-write-subscriber'
 import { AcknowledgedWorkspaceSessionEntries } from './workspace-session-acknowledged-entries'
 import { patchWorkspaceSessionByHost, type SessionApi } from './workspace-session-host-persistence'
@@ -117,16 +118,25 @@ async function workForTitleChanges(size: number) {
     // The first save sends whole fields and main acknowledges them.
     await vi.advanceTimersByTimeAsync(DEBOUNCE_MS)
 
+    // Editing replaces the open-file list but moves no editor tab.
+    store.setState((state) => ({
+      openFiles: state.openFiles.map((file) => ({ ...file, language: 'markdown' }))
+    }))
+    await vi.advanceTimersByTimeAsync(DEBOUNCE_MS)
+
     const deepCompares = vi.spyOn(structuralEquality, 'structuralValuesEqual')
     const routedKeys = vi.spyOn(sessionRoutingFor(store.getState()), 'hostIdByWorktreeId')
+    const slotSignatureBuilds = vi.spyOn(launchPersistence, 'structuredLaunchSlotSignatures')
     store.getState().updateTabTitle('tab-3-b', 'Renamed by agent')
     await vi.advanceTimersByTimeAsync(DEBOUNCE_MS)
     const work = {
       deepCompares: deepCompares.mock.calls.length,
-      routedKeys: routedKeys.mock.calls.length
+      routedKeys: routedKeys.mock.calls.length,
+      slotSignatureBuilds: slotSignatureBuilds.mock.calls.length
     }
     deepCompares.mockRestore()
     routedKeys.mockRestore()
+    slotSignatureBuilds.mockRestore()
 
     // A title in the workspace that receives the moved editor must keep that editor saved.
     store.getState().updateTabTitle('tab-1-a', 'Owner renamed')
@@ -161,9 +171,85 @@ it('a title change compares and routes only its workspace’s entries at N and 1
   const expected = {
     deepCompares: 3,
     routedKeys: 5,
+    slotSignatureBuilds: 1,
     titles: ['Renamed by agent', 'Owner renamed', 'Rejected once', 'After the rejection'],
     ownerTabs: ['Owner renamed', 'Terminal 2', 'file.ts']
   }
   expect(await workForTitleChanges(20)).toEqual(expected)
   expect(await workForTitleChanges(200)).toEqual(expected)
+})
+
+/** Set inserts the subscriber itself makes while K workspaces are retitled before one save. */
+async function subscriberInsertsForTitleBurst(count: number) {
+  const store = createTestStore()
+  const main = receivingMain()
+  let inSubscriber = false
+  let inserts = 0
+  const add = Set.prototype.add
+  const spy = vi.spyOn(Set.prototype, 'add').mockImplementation(function <T>(
+    this: Set<T>,
+    value: T
+  ) {
+    inserts += inSubscriber ? 1 : 0
+    return add.call(this, value)
+  })
+  const stop = createSessionWriteSubscriber({
+    store: {
+      getState: store.getState,
+      subscribe: (listener) =>
+        store.subscribe((state) => {
+          inSubscriber = true
+          try {
+            listener(state)
+          } finally {
+            inSubscriber = false
+          }
+        })
+    },
+    debounceMs: DEBOUNCE_MS,
+    persist: ({ patch, fields }) =>
+      patchWorkspaceSessionByHost(main.api, patch, store.getState(), acknowledged, fields).written,
+    persistKeyed: (write) =>
+      patchWorkspaceSessionEntriesByHost(main.api, write, store.getState(), acknowledged)
+        ?.written ?? null
+  })
+  const acknowledged = new AcknowledgedWorkspaceSessionEntries()
+  try {
+    const worktrees = Array.from({ length: count }, (_, index) =>
+      makeWorktree({
+        id: `${TEST_REPO.id}::/burst-${index}`,
+        repoId: TEST_REPO.id,
+        path: `/b-${index}`
+      })
+    )
+    seedStore(store, { worktreesByRepo: { [TEST_REPO.id]: worktrees } })
+    for (const [index, worktree] of worktrees.entries()) {
+      store.getState().createTab(worktree.id, undefined, undefined, { id: `burst-tab-${index}` })
+    }
+    store.setState({ workspaceSessionReady: true, hydrationSucceeded: true })
+    await vi.advanceTimersByTimeAsync(DEBOUNCE_MS)
+
+    inserts = 0
+    for (let index = 0; index < count; index++) {
+      store.getState().updateTabTitle(`burst-tab-${index}`, `Burst ${index}`)
+    }
+    const burstInserts = inserts
+    await vi.advanceTimersByTimeAsync(DEBOUNCE_MS)
+    const stored = main.stored()
+    const savedTitles = worktrees.filter(
+      (worktree, index) => stored.tabsByWorktree[worktree.id]?.[0]?.title === `Burst ${index}`
+    ).length
+    return { burstInserts, savedTitles }
+  } finally {
+    stop()
+    spy.mockRestore()
+  }
+}
+
+it('a burst of K title changes before one save grows the save ledger by K, at K and 10K', async () => {
+  expect(await subscriberInsertsForTitleBurst(20)).toEqual({ burstInserts: 1760, savedTitles: 20 })
+  expect(await subscriberInsertsForTitleBurst(200)).toEqual({
+    burstInserts: 17600,
+    savedTitles: 200
+  })
 })

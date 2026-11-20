@@ -199,22 +199,22 @@ export function buildUnifiedTabSessionData(
   sourceTabs = snapshot.unifiedTabsByWorktree,
   sourceGroups = snapshot.groupsByWorktree,
   cache?: UnifiedTabSessionCache,
-  /** Build only these workspaces (a keyed save); the whole build covers every workspace. */
-  onlyWorktreeIds?: ReadonlySet<string>
+  /** A keyed save: only these workspaces, with the launch slots it already read. */
+  keyed?: { worktreeIds: ReadonlySet<string>; slotsByWorktree: ReadonlyMap<string, string> }
 ): PersistedUnifiedTabSessionData {
   const unifiedTabs: WorkspaceSessionState['unifiedTabs'] = {}
   const tabGroups: WorkspaceSessionState['tabGroups'] = {}
   const tabGroupLayouts: WorkspaceSessionState['tabGroupLayouts'] = {}
   const activeGroupIdByWorktree: WorkspaceSessionState['activeGroupIdByWorktree'] = {}
   const worktreeIds =
-    onlyWorktreeIds ??
+    keyed?.worktreeIds ??
     new Set([
       ...Object.keys(sourceTabs),
       ...Object.keys(sourceGroups),
       ...Object.keys(snapshot.layoutByWorktree ?? {})
     ])
 
-  const slotsByWorktree = structuredLaunchSlotSignatures()
+  const slotsByWorktree = keyed?.slotsByWorktree ?? structuredLaunchSlotSignatures()
   if (cache) {
     cache.slots = slotsByWorktree
   }

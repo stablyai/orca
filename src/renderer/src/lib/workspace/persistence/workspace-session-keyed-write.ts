@@ -1,4 +1,5 @@
 import type { Tab } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import { isEditorTabContentType } from '@/store/slices/editor/tabs/editor-tab-content-type'
 import { structuredLaunchSlotSignatures } from '../../agent-session/launch/structured-agent-session-launch-persistence'
 import type { SessionRelevantField, WorkspaceSessionSnapshot } from './workspace-session'
@@ -54,6 +55,29 @@ export function buildWorkspaceSessionKeyedWrite(
   return { fields: [...scopes.keys()], entries }
 }
 
+/** Whether editor placement reads the same from both lists: which files exist, their owners and
+ *  modes. Typing or saving replaces the list without changing any of these. */
+function sameFilePlacements(
+  previous: readonly OpenFile[] | undefined | null,
+  next: readonly OpenFile[] | undefined
+): boolean {
+  if (previous === next) {
+    return true
+  }
+  if (!previous || !next || previous.length !== next.length) {
+    return false
+  }
+  return next.every((file, index) => {
+    const before = previous[index]
+    return (
+      before !== undefined &&
+      before.id === file.id &&
+      before.worktreeId === file.worktreeId &&
+      before.mode === file.mode
+    )
+  })
+}
+
 function sameLaunchSlots(a: ReadonlyMap<string, string>, b: ReadonlyMap<string, string>): boolean {
   if (a.size !== b.size) {
     return false
@@ -78,10 +102,13 @@ function buildPersistedUnifiedTabSessionEntries(
   if (
     !placementTargets ||
     // A file's owner can change without a unified save, which moves its editor tabs.
-    cache.placementFiles !== snapshot.openFiles ||
-    !cache.slots ||
-    !sameLaunchSlots(structuredLaunchSlotSignatures(), cache.slots)
+    !sameFilePlacements(cache.placementFiles, snapshot.openFiles) ||
+    !cache.slots
   ) {
+    return null
+  }
+  const slotsByWorktree = structuredLaunchSlotSignatures()
+  if (!sameLaunchSlots(slotsByWorktree, cache.slots)) {
     return null
   }
   let fileWorktreeIds: Map<string, string> | null = null
@@ -103,13 +130,10 @@ function buildPersistedUnifiedTabSessionEntries(
     }
     sourceTabs[worktreeId] = unifiedTabsWithoutStagedBrowsers(snapshot, liveTabs)
   }
-  const data = buildUnifiedTabSessionData(
-    snapshot,
-    sourceTabs,
-    snapshot.groupsByWorktree,
-    cache,
-    worktreeIds
-  )
+  const data = buildUnifiedTabSessionData(snapshot, sourceTabs, snapshot.groupsByWorktree, cache, {
+    worktreeIds,
+    slotsByWorktree
+  })
   const { unifiedTabs } = data
   for (const worktreeId of worktreeIds) {
     if (!unifiedTabs || !Object.hasOwn(unifiedTabs, worktreeId)) {

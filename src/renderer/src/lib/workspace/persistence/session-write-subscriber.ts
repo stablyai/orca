@@ -28,6 +28,8 @@ export type WorkspaceSessionWrite = {
   fields: readonly SessionRelevantField[]
 }
 
+type PendingScope = { tabs: TitleChangeScope['tabs']; worktreeIds: Set<string> }
+
 type PersistOutcome = Promise<void | { pendingFields?: readonly SessionRelevantField[] }>
 type PersistResult = void | PersistOutcome
 
@@ -64,18 +66,17 @@ export function createSessionWriteSubscriber({
   // Pending fields are the only owed-write ledger after prev advances: per field, the workspaces whose
   // titles changed, or 'whole'. In-flight writes own their fields until ACK; failures merge them back
   // as 'whole' without replacing newer same-field edits.
-  const pendingChangedFields = new Map<SessionRelevantField, TitleChangeScope | 'whole'>()
+  const pendingChangedFields = new Map<SessionRelevantField, PendingScope | 'whole'>()
   const markPending = (field: SessionRelevantField, scope: TitleChangeScope | 'whole'): void => {
     const pending = pendingChangedFields.get(field)
-    pendingChangedFields.set(
-      field,
-      scope === 'whole' || pending === 'whole' || (pending && pending.tabs !== scope.tabs)
-        ? 'whole'
-        : {
-            tabs: scope.tabs,
-            worktreeIds: new Set([...(pending?.worktreeIds ?? []), ...scope.worktreeIds])
-          }
-    )
+    if (scope === 'whole' || pending === 'whole' || (pending && pending.tabs !== scope.tabs)) {
+      pendingChangedFields.set(field, 'whole')
+    } else if (pending) {
+      // The ledger owns its set: a burst inserts each workspace once rather than recopying the set.
+      scope.worktreeIds.forEach((worktreeId) => pending.worktreeIds.add(worktreeId))
+    } else {
+      pendingChangedFields.set(field, { tabs: scope.tabs, worktreeIds: new Set(scope.worktreeIds) })
+    }
   }
   // Accepted but not applied (a fenced partition): they ride along with the next real session change.
   const deferredFields = new Set<SessionRelevantField>()
