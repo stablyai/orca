@@ -5,7 +5,7 @@ import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { BotShareCandidateSummary, BotSharePartFile } from '../../../shared/bots/bot-package'
 import { scanBotText } from '../../../shared/bots/bot-text-scan'
-import { observeSkillPackage } from '../../skills/package-archive/skill-package-identity'
+import { ownSkillFiles } from './bot-share-skills'
 import type { BotPackageContent } from './bot-package-content'
 import type { BotShareable } from './bot-share-sources'
 
@@ -67,9 +67,8 @@ export async function botSharePartFiles(
       if (bot.skills.some((entry) => entry.name === skill.name)) {
         return sharedFiles(picked, `skills/${skill.name}/`, `${skill.homePath}/`)
       }
-      const observed = await observeSkillPackage(skill.directory)
       return Promise.all(
-        observed.files.map(async (file) => {
+        (await ownSkillFiles(skill.directory)).map(async (file) => {
           const homePath = `${skill.homePath}/${file.path}`
           return file.classification === 'text'
             ? textFile(

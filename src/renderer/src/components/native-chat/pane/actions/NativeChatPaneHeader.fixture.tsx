@@ -75,9 +75,17 @@ function serverStatus(older: boolean): RuntimeEnvironmentStatus {
   return { status, checkedAt: 1 }
 }
 
-/** `older`: a paired server from before the Home rule, which leaves its pages as they were. */
-function homeScene(hostId: ExecutionHostId, width: number, older = false) {
+const LONG_NAME = 'Atlas Research and Release Coordination Assistant'
+
+type HomeSceneOptions = { older?: boolean; name?: string; expect?: 'hidden' | 'visible' }
+
+function homeScene(
+  hostId: ExecutionHostId,
+  width: number,
+  { older = false, name = bot.name, expect = 'hidden' }: HomeSceneOptions = {}
+) {
   const ruled = hostId === 'local' || !older
+  const sceneBot: Bot = { ...bot, name }
   const tab: Tab & { contentType: 'agent-session' } = {
     id: 'fixture-home-tab',
     entityId: 'fixture-home',
@@ -113,18 +121,18 @@ function homeScene(hostId: ExecutionHostId, width: number, older = false) {
         ],
         updateNeeded: []
       })
-      stubBots(hostId === 'local' ? [bot] : [])
+      stubBots(hostId === 'local' ? [sceneBot] : [])
       publishBots(
-        hostId === PAIRED_HOST ? [bot] : [],
+        hostId === PAIRED_HOST ? [sceneBot] : [],
         { threadReplies: false, webhooks: undefined },
         PAIRED_HOST
       )
-      stubServerBots({ 'fixture-server': hostId === PAIRED_HOST ? [bot] : [] })
+      stubServerBots({ 'fixture-server': hostId === PAIRED_HOST ? [sceneBot] : [] })
     },
     render: () => (
       <div className="space-y-3" style={{ width }}>
         <div className="text-xs text-muted-foreground">
-          Atlas Assistant ·{' '}
+          {name} ·{' '}
           {hostId === 'local' ? 'This computer' : older ? 'Older paired server' : 'Paired server'}
         </div>
         <DndContext>
@@ -161,8 +169,12 @@ function homeScene(hostId: ExecutionHostId, width: number, older = false) {
             focused
             colorScheme={undefined}
           />
-          <div className="flex h-full items-center justify-center text-sm text-chat-foreground-faint">
-            Ready for your next message
+          <div className="space-y-2 px-4 pt-3 text-sm text-chat-foreground">
+            <p>
+              The release notes draft is ready for review. I grouped the fixes by area and kept the
+              wording short so it fits the changelog.
+            </p>
+            <p>Two items still need an owner before Friday; both are listed at the end.</p>
           </div>
         </div>
         <div data-home-fixture-measurement="" className="text-2xs text-muted-foreground" />
@@ -182,19 +194,43 @@ function homeScene(hostId: ExecutionHostId, width: number, older = false) {
         Number.parseFloat(style.paddingRight)
       if (
         hostId === 'local' &&
+        expect === 'hidden' &&
         (!banner || getComputedStyle(banner).display !== 'none' || containerWidth > 260)
       ) {
         throw new Error('Narrow Home fixture did not fully hide the banner at the breakpoint')
+      }
+      const nameElement = banner?.querySelector<HTMLElement>('[data-bot-home-banner-name]')
+      if (
+        hostId === 'local' &&
+        expect === 'visible' &&
+        (!banner ||
+          getComputedStyle(banner).display === 'none' ||
+          !nameElement ||
+          nameElement.getBoundingClientRect().width === 0)
+      ) {
+        throw new Error('Home fixture did not show the banner with its name')
       }
       if (hostId === PAIRED_HOST && older === Boolean(banner)) {
         throw new Error(`Paired Home fixture ${older ? 'rendered' : 'lost'} its banner`)
       }
       frame.querySelector<HTMLElement>('[data-home-fixture-measurement]')!.textContent =
-        `Pane ${width}px · header content ${containerWidth}px · banner ${banner ? (getComputedStyle(banner).display === 'none' ? 'hidden' : 'shown') : 'not rendered'}`
+        `Pane ${width}px · header content ${containerWidth}px · banner ${
+          !banner
+            ? 'not rendered'
+            : getComputedStyle(banner).display === 'none'
+              ? 'hidden'
+              : 'shown'
+        }`
     }
   })
 }
 
 export const localHomeHiddenAt260 = homeScene('local', 264)
+export const localHomeShortName = homeScene('local', 720, { name: 'Atlas', expect: 'visible' })
+export const localHomeLongName = homeScene('local', 720, { name: LONG_NAME, expect: 'visible' })
+export const localHomeNarrowLongName = homeScene('local', 300, {
+  name: LONG_NAME,
+  expect: 'visible'
+})
 export const pairedHome = homeScene(PAIRED_HOST, 720)
-export const pairedHomeOlderServer = homeScene(PAIRED_HOST, 720, true)
+export const pairedHomeOlderServer = homeScene(PAIRED_HOST, 720, { older: true })

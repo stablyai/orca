@@ -18,9 +18,8 @@ import {
   botItemNamedAnswers
 } from '../../../../../shared/bots/bot-item-answer-lines'
 import {
-  botItemQuestionPairing,
-  botItemWaitingLine,
-  type BotItemQuestionAnswers
+  botItemWaitingAsk,
+  botItemWaitingLine
 } from '../../../../../shared/bots/bot-item-question-answers'
 import type { BotItemPendingComment } from './use-bot-item-pending-comments'
 import { useNativeChatDraft } from '../../native-chat/drafts/use-native-chat-draft'
@@ -44,18 +43,6 @@ export function useBotItemHeldAnswers(
     [setDraft, shape]
   )
   return { held, hold }
-}
-
-function waitingAsk(
-  item: BotItem,
-  events: readonly BotItemEvent[]
-): ({ askId: string } & BotItemQuestionAnswers) | null {
-  for (const [askId, entry] of botItemQuestionPairing(item, events).questions) {
-    if (entry.waiting) {
-      return { askId, ...entry }
-    }
-  }
-  return null
 }
 
 export type BotItemQuestionSteps = {
@@ -104,7 +91,7 @@ export function useBotItemQuestionSteps(
   waitingLine: { id: string; line: string; replies: boolean } | null
 } {
   // As cheap as the box's own waiting-line read, on each render.
-  const asked = waitingAsk(item, events)
+  const asked = botItemWaitingAsk(item, events)
   const waiting = asked && asked.shape.decisions.length > 1 ? asked : null
   const askId = waiting?.askId ?? ''
   const shape = waiting?.shape ?? NO_ASK

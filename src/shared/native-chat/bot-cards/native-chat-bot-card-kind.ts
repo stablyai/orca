@@ -128,7 +128,7 @@ export const NATIVE_CHAT_BOT_CARD_ON_PHONE = {
   importPlan: 'phoneFallback',
   importDone: 'phoneFallback',
   botRequest: 'phoneCard',
-  googleSetup: 'phoneFallback',
+  googleSetup: 'phoneCard',
   composioSetup: 'phoneFallback',
   createOffer: 'phoneCard',
   toolAdded: 'phoneCard',

@@ -168,7 +168,9 @@ export const BotUpdate = z.object({
 
 /** Projects' skills as a bot would load them; ids that name no project read as missing. */
 export const BotSkillProjectsScan = z.object({
-  repoIds: z.array(z.string().min(1)).max(500)
+  repoIds: z.array(z.string().min(1)).max(500),
+  /** Adds this bot's own skills (`own`); older hosts ignore it. */
+  botId: z.string().min(1).optional()
 })
 
 /** Grant or Decline one waiting Request access ask for a bot on this host. */
