@@ -7,7 +7,7 @@ import {
   type GrabChordPolicy,
   type GrabNativeKeyPolicy
 } from '../../../shared/browser/element-grab/browser-grab-native-keys'
-import { keybindingMatchesInput } from '../../../shared/keybindings/matching'
+import { keybindingMatchesInput } from '../../../shared/keybindings/matching-input'
 import {
   browserGuestToolKeyFromEvent,
   isBrowserGuestToolKey,
@@ -87,21 +87,22 @@ export function installBrowserGuestNativeToolKeys(port: {
           alt: event.altKey,
           shift: event.shiftKey
         }
-        const selection = window.getSelection()
         if (
-          !(selection?.type === 'Range' && selection.toString().trim()) &&
           currentChord.bindings.some((binding) =>
             keybindingMatchesInput(binding, input, currentChord.platform)
           )
         ) {
-          event.preventDefault()
-          event.stopImmediatePropagation()
-          port.send(GRAB_CHORD_REPORT, {
-            token: currentChord.token,
-            revision: currentChord.revision,
-            input
-          })
-          return
+          const selection = window.getSelection()
+          if (!(selection?.type === 'Range' && selection.toString().trim())) {
+            event.preventDefault()
+            event.stopImmediatePropagation()
+            port.send(GRAB_CHORD_REPORT, {
+              token: currentChord.token,
+              revision: currentChord.revision,
+              input
+            })
+            return
+          }
         }
       }
       if (
