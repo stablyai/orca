@@ -1,4 +1,3 @@
-import { randomUUID } from 'node:crypto'
 import { link, lstat, open, readFile, readdir, rm, stat } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { errnoCodeOrUnknown } from '../../../../shared/errors/errno-code'
@@ -124,7 +123,9 @@ async function publishWithoutOverwrite(
   contents: string,
   targetPath: string
 ): Promise<LegacyHistoryImportOutcome> {
-  const tmpPath = `${targetPath}.${process.pid}.${randomUUID()}.tmp`
+  // One fixed name, cleared first: an attempt a quit cut short never leaves a copy behind for good.
+  const tmpPath = `${targetPath}.orca-import.tmp`
+  await rm(tmpPath, { force: true })
   try {
     const handle = await open(tmpPath, 'wx', 0o600)
     try {

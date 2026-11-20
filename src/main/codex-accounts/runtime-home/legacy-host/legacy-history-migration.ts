@@ -1,4 +1,3 @@
-import { randomUUID } from 'node:crypto'
 import { readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { errnoCodeOrUnknown } from '../../../../shared/errors/errno-code'
 import {
@@ -72,7 +71,9 @@ async function readTextIfPresent(path: string): Promise<string | null> {
 }
 
 async function writeTextAtomically(path: string, text: string): Promise<void> {
-  const tmpPath = `${path}.${process.pid}.${randomUUID()}.tmp`
+  // One fixed name, cleared first, so a quit mid-write leaves nothing behind for good.
+  const tmpPath = `${path}.tmp`
+  await rm(tmpPath, { force: true })
   try {
     await writeFile(tmpPath, text, { encoding: 'utf-8', flag: 'wx' })
     await rename(tmpPath, path)

@@ -360,6 +360,18 @@ describe('CodexRuntimeHomeService', () => {
     expect(existsSync(migrationMarkerPath())).toBe(true)
   })
 
+  it('clears the temp copy an interrupted import left behind', async () => {
+    const runtimeHistoryPath = join(getRuntimeCodexHomePath(), 'history.jsonl')
+    mkdirSync(getRuntimeCodexHomePath(), { recursive: true })
+    writeFileSync(`${runtimeHistoryPath}.orca-import.tmp`, '{"id":"half', 'utf-8')
+    writeHistory('account-1', '{"id":"legacy-1"}\n')
+
+    await startService()
+
+    expect(readFileSync(runtimeHistoryPath, 'utf-8')).toBe('{"id":"legacy-1"}\n')
+    expect(existsSync(`${runtimeHistoryPath}.orca-import.tmp`)).toBe(false)
+  })
+
   it('leaves a shared history Codex creates during the import as it is', async () => {
     const runtimeHistoryPath = join(getRuntimeCodexHomePath(), 'history.jsonl')
     const managedHomePath = writeHistory('account-1', '{"id":"legacy-1"}\n')

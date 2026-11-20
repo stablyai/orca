@@ -122,6 +122,20 @@ describe('CodexManagedHomeLifecycle.safeRemove', () => {
     expect(readdirSync(join(f.home, 'secrets'))).toEqual(['prompts.jsonl'])
   })
 
+  it('leaves the files of a linked secrets folder to the home it points to', async () => {
+    const f = fixture()
+    const otherSecrets = join(f.accountsRoot, 'other-secrets')
+    mkdirSync(otherSecrets)
+    writeFileSync(join(otherSecrets, 'codex_auth.age'), 'sealed')
+    symlinkSync(otherSecrets, join(f.home, 'secrets'))
+    writeFileSync(join(f.home, 'prompts.jsonl'), '{"text":"only prompt"}\n')
+    symlinkSync('prompts.jsonl', join(f.home, 'history.jsonl'))
+
+    await f.lifecycle.safeRemove(f.home, 'a')
+
+    expect(readdirSync(otherSecrets)).toEqual(['codex_auth.age'])
+  })
+
   it('removes a home that never shared history entirely', async () => {
     const f = fixture()
     writeFileSync(join(f.home, 'auth.json'), '{}')

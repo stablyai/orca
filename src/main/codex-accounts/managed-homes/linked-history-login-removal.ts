@@ -29,7 +29,12 @@ export async function removeLoginsBesideLinkedHistory(home: string): Promise<voi
       throw error
     }
   )
+  // A linked secrets folder belongs to wherever it points: its files are not this account's.
+  const secretsLinked = (await lstat(join(home, 'secrets')).catch(() => null))?.isSymbolicLink()
   for (const name of LOGIN_FILES) {
+    if (secretsLinked && name.startsWith('secrets/')) {
+      continue
+    }
     const path = join(home, name)
     const file = await lstat(path, { bigint: true }).catch(() => null)
     if (!file || file.isDirectory()) {
@@ -50,6 +55,7 @@ export const LINKED_HISTORY_REMOVAL_SCRIPT = [
   '    exit 1',
   '  fi',
   `  for name in ${LOGIN_FILES.join(' ')}; do`,
+  '    case "$name" in secrets/*) if [ -L "$home/secrets" ]; then continue; fi ;; esac',
   '    file="$home/$name"',
   '    if [ -d "$file" ] || { [ ! -e "$file" ] && [ ! -L "$file" ]; }; then continue; fi',
   '    if [ ! -L "$file" ] && [ "$file" -ef "$home/history.jsonl" ]; then continue; fi',
