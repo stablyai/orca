@@ -535,7 +535,7 @@
 1 src/main/updater/lifecycle/windows-update-install-directory.ts
 9 src/main/updater/linux-package/appimage-runtime-identity.ts
 1 src/main/updater/linux-package/linux-package-install-command.ts
-1 src/main/updater/linux-package/linux-update-package-type.ts
+2 src/main/updater/linux-package/linux-update-package-type.ts
 6 src/main/updater/serve-update-handoff.ts
 2 src/main/usage/provider-lifecycle/usage-provider-store-lifecycle.ts
 1 src/main/usage/scan-worker/usage-scan-worker-spawn.ts
