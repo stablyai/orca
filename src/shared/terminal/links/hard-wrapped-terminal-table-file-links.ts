@@ -215,7 +215,8 @@ function readRow(buffer: TerminalLinkBuffer, y: number, cache: Map<number, Cache
 }
 
 function toLogicalLine(
-  pieces: { row: CachedRow; y: number; slice: PathSlice }[]
+  pieces: { row: CachedRow; y: number; slice: PathSlice }[],
+  span: FrameSpan
 ): WrappedLogicalLine {
   let text = ''
   const rows: WrappedLogicalLine['rows'] = []
@@ -232,10 +233,11 @@ function toLogicalLine(
     })
     text += fragment
   }
+  // Row text repeats in every cell, so the cell's column span keeps each copy.
   return {
     text,
     rows,
-    fingerprint: `table-file:${rows.map((row) => `${row.y}:${row.lineLength}:${row.sourceText}\0${row.text}`).join('\n')}`
+    fingerprint: `table-file:${span.leftColumn}-${span.rightColumn}:${rows.map((row) => `${row.y}:${row.lineLength}:${row.sourceText}\0${row.text}`).join('\n')}`
   }
 }
 
@@ -282,7 +284,7 @@ function candidateForCell(
       break
     }
   }
-  return pieces.length >= 2 && lastY >= currentY ? toLogicalLine(pieces) : null
+  return pieces.length >= 2 && lastY >= currentY ? toLogicalLine(pieces, span) : null
 }
 
 export function buildHardWrappedTableFileLogicalLineCandidates(

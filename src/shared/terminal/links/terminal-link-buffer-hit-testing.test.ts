@@ -42,14 +42,32 @@ const ISSUE_ROWS = [
   '│ -items.md (draft)                             │ and their current owners       │'
 ]
 
-function fileLinksAt(rows: readonly string[], lineNumber: number, needle: string) {
+function fileLinksAt(rows: readonly string[], lineNumber: number, needle: string, occurrence = 1) {
+  const line = rows[lineNumber - 1] ?? ''
+  let from = 0
+  let index = -1
+  for (let count = 0; count < occurrence; count++) {
+    index = line.indexOf(needle, from)
+    if (index < 0) {
+      break
+    }
+    from = index + 1
+  }
+  if (index < 0) {
+    throw new Error(
+      `needle ${JSON.stringify(needle)} occurrence ${occurrence} missing on line ${lineNumber}`
+    )
+  }
   const lines = rows.map((text) => makeBufferLine(text))
-  const x = rows[lineNumber - 1].indexOf(needle) + 1
   return findTerminalFileLinksAtBufferPosition(
     { getLine: (y) => lines[y] },
-    { x, y: lineNumber },
+    { x: index + 1, y: lineNumber },
     Math.max(...rows.map((row) => row.length))
-  ).links.map(({ pathText, line, column }) => ({ pathText, line, column }))
+  ).links.map(({ pathText, line: linkLine, column }) => ({
+    pathText,
+    line: linkLine,
+    column
+  }))
 }
 
 function framedRow(cells: readonly string[], widths: readonly number[], vertical = '│'): string {
@@ -99,6 +117,22 @@ describe('file paths wrapped inside terminal table cells', () => {
     expect(fileLinksAt(rows, 2, 'more').map((link) => link.pathText)).not.toContain(
       reading.pathText
     )
+  })
+
+  it('keeps a repeated wrapped path clickable in each cell of the same row', () => {
+    const head = ' src/components/very-long-widget-name/'
+    const widths = [head.length, head.length]
+    const rows = [framedRow([head, head], widths), framedRow([' file.ts', ' file.ts'], widths)]
+    const reading = {
+      pathText: 'src/components/very-long-widget-name/file.ts',
+      line: null,
+      column: null
+    }
+
+    expect(fileLinksAt(rows, 1, 'src/components')).toContainEqual(reading)
+    expect(fileLinksAt(rows, 2, 'file.ts')).toContainEqual(reading)
+    expect(fileLinksAt(rows, 1, 'src/components', 2)).toContainEqual(reading)
+    expect(fileLinksAt(rows, 2, 'file.ts', 2)).toContainEqual(reading)
   })
 
   it('keeps a :line:col suffix that wraps onto the next cell row', () => {
@@ -535,25 +569,40 @@ describe('file paths wrapped inside terminal table cells', () => {
   })
 
   it('keeps punctuation-only continuations followed by prose or ellipsis in the same cell', () => {
-    for (const next of ['__ (draft)    ', '__ - generated']) {
+    for (const [next, tail] of [
+      ['__ (draft)    ', '(draft)'],
+      ['__ - generated', 'generated']
+    ]) {
       const rows = ['│ src/generated/ │ notes │', `│ ${next} │ more  │`]
       const reading = { pathText: 'src/generated/__', line: null, column: null }
       expect(fileLinksAt(rows, 1, 'src/generated/')).toContainEqual(reading)
       expect(fileLinksAt(rows, 2, '__')).toContainEqual(reading)
+      expect(fileLinksAt(rows, 2, tail)).toEqual([])
     }
 
-    for (const next of [' ~ ...', ' ~...', ' ~;']) {
+    for (const [next, tail] of [
+      [' ~ ...', '...'],
+      [' ~...', '...'],
+      [' ~;', ';']
+    ]) {
       const tildeRows = unpaddedRows(' src/generated/file', next)
       const tildeReading = { pathText: 'src/generated/file~', line: null, column: null }
       expect(fileLinksAt(tildeRows, 1, 'src/generated/')).toContainEqual(tildeReading)
       expect(fileLinksAt(tildeRows, 2, '~')).toContainEqual(tildeReading)
+      expect(fileLinksAt(tildeRows, 2, tail)).toEqual([])
     }
 
-    for (const next of [' ++ ...', ' ++...', ' ++ +', ' ++ - note']) {
+    for (const [next, tail, occurrence] of [
+      [' ++ ...', '...', 1],
+      [' ++...', '...', 1],
+      [' ++ +', '+', 3],
+      [' ++ - note', 'note', 1]
+    ] as const) {
       const plusRows = unpaddedRows(' src/generated/lang/c', next)
       const plusReading = { pathText: 'src/generated/lang/c++', line: null, column: null }
       expect(fileLinksAt(plusRows, 1, 'src/generated/')).toContainEqual(plusReading)
       expect(fileLinksAt(plusRows, 2, '++')).toContainEqual(plusReading)
+      expect(fileLinksAt(plusRows, 2, tail, occurrence)).toEqual([])
     }
   })
 
