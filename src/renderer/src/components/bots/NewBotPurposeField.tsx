@@ -1,6 +1,6 @@
-// New bot's optional purpose, the name's quieter subtitle: a typed purpose seeds SOUL.md the way a template's does.
-import { ImeTextarea } from '@/lib/text-input/ime/ime-text-field'
-import { BARE_CAPTION_CLASS } from './new-bot-bare-fields'
+// New bot's optional identity box: who the bot is and what it does. A typed one seeds SOUL.md the way a
+// template's purpose does; Enter adds a line and ⌘↩ still creates.
+import { Textarea } from '@/components/ui/textarea'
 import { useTranslate } from '@/i18n/use-translate'
 
 /** BotProposalSeedSchema.purpose's limit. */
@@ -16,19 +16,19 @@ export function NewBotPurposeField({
 }): React.JSX.Element {
   const t = useTranslate()
   return (
-    <div>
-      <ImeTextarea
-        className={BARE_CAPTION_CLASS}
-        rows={1}
+    <div className="space-y-1">
+      <Textarea
+        className="h-[calc(5lh+1rem)] resize-none"
+        rows={5}
         autoComplete="off"
-        aria-label={t('bots.new.purposeLabel', 'Purpose')}
+        aria-label={t('bots.new.purposeLabel', 'Identity')}
         value={value}
         maxLength={PURPOSE_MAX_LENGTH}
-        placeholder={t('bots.new.purposePlaceholder', 'Describe its job (optional)')}
+        placeholder={t('bots.new.purposePlaceholder', 'Who it is and what it does')}
         onChange={(event) => onChange(event.target.value)}
       />
       {value.length >= COUNTER_FROM ? (
-        <p className="text-center text-xs text-muted-foreground tabular-nums">
+        <p className="text-right text-xs text-muted-foreground tabular-nums">
           {value.length}/{PURPOSE_MAX_LENGTH}
         </p>
       ) : null}

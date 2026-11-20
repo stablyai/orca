@@ -117,6 +117,7 @@ export function BotComputerPicker({
       hostOptions={options}
       onAddSshHost={onAddHost ? () => onAddHost('ssh') : undefined}
       onAddRemoteServer={onAddHost ? () => onAddHost('server') : undefined}
+      truncateMiddle
     />
   )
 }

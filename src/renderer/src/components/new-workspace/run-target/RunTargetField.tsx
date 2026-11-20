@@ -9,6 +9,19 @@ import type { ExecutionHostId } from '../../../../../shared/execution-host/execu
 import { HostRowIcon } from '../../host-picker/host-row-icon'
 import { COMBOBOX_FIELD_SHELL } from '../type-ahead/type-ahead-combobox-styles'
 
+// The tail of a long name stays, so hosts that differ only at the end stay apart.
+const MIDDLE_TAIL_CHARS = 10
+
+function MiddleTruncatedLabel({ text }: { text: string }): React.JSX.Element {
+  const tail = Math.min(MIDDLE_TAIL_CHARS, Math.floor(text.length / 2))
+  return (
+    <span className="flex min-w-0">
+      <span className="min-w-0 truncate">{text.slice(0, text.length - tail)}</span>
+      <span className="shrink-0 whitespace-pre">{text.slice(text.length - tail)}</span>
+    </span>
+  )
+}
+
 /** Overlay the committed selection while keeping the input ready to search. */
 export default function RunTargetField({
   fieldName,
@@ -25,7 +38,8 @@ export default function RunTargetField({
   listId,
   hasArmedRow,
   inputRef,
-  onKeyDown
+  onKeyDown,
+  truncateMiddle = false
 }: {
   fieldName?: string
   query: string
@@ -42,6 +56,8 @@ export default function RunTargetField({
   hasArmedRow: boolean
   inputRef: React.RefObject<HTMLInputElement | null>
   onKeyDown: (event: React.KeyboardEvent<HTMLInputElement>) => void
+  /** A long label loses its middle rather than its end. */
+  truncateMiddle?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
   const [tooltipOpen, setTooltipOpen] = useState(false)
@@ -98,7 +114,11 @@ export default function RunTargetField({
                   aria-hidden="true"
                   className="pointer-events-none absolute inset-0 flex items-center text-sm"
                 >
-                  <span className="min-w-0 truncate">{label}</span>
+                  {truncateMiddle ? (
+                    <MiddleTruncatedLabel text={label} />
+                  ) : (
+                    <span className="min-w-0 truncate">{label}</span>
+                  )}
                 </div>
               ) : null}
             </div>

@@ -85,15 +85,21 @@ function renderDialog() {
       <NewBotDialog open onOpenChange={vi.fn()} onCreated={vi.fn()} />
     </TooltipProvider>
   )
+  // The picture the dialog shows, on its Change picture button.
   const picture = (): string | null =>
-    document.querySelector('[role="dialog"] [data-position="current"] img')?.getAttribute('src') ??
-    null
+    screen
+      .getByRole('button', { name: 'Change picture' })
+      .querySelector('img')
+      ?.getAttribute('src') ?? null
+  const openPicker = (): void => {
+    fireEvent.click(screen.getByRole('button', { name: 'Change picture' }))
+  }
   const submit = async (): Promise<void> => {
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Reviewer' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Create bot' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Create' }))
     await waitFor(() => expect(mocks.createBot).toHaveBeenCalled())
   }
-  return { picture, submit }
+  return { picture, openPicker, submit }
 }
 
 function chooseUpload(): void {
@@ -109,9 +115,10 @@ function chooseUpload(): void {
 describe('NewBotDialog picture', () => {
   it('opens on a mascot, steps through them, and creates the bot with the one shown', async () => {
     mocks.createBot.mockResolvedValue(created)
-    const { picture, submit } = renderDialog()
+    const { picture, openPicker, submit } = renderDialog()
     const first = picture()
     expect(first).toBeTruthy()
+    openPicker()
 
     fireEvent.click(screen.getByRole('button', { name: 'Next picture' }))
     const next = picture()
@@ -130,8 +137,9 @@ describe('NewBotDialog picture', () => {
   it('shows an uploaded image and saves it to the new bot', async () => {
     mocks.createBot.mockResolvedValue(created)
     mocks.uploadBotAvatar.mockResolvedValue(created)
-    const { picture, submit } = renderDialog()
+    const { picture, openPicker, submit } = renderDialog()
     const mascot = picture()
+    openPicker()
     fireEvent.click(screen.getByRole('button', { name: 'Upload' }))
     chooseUpload()
     await waitFor(() => expect(picture()).toBe('data:image/png;base64,UE5H'))
@@ -150,7 +158,8 @@ describe('NewBotDialog picture', () => {
 
   it('keeps a mascot when the owner moves off the uploaded image', async () => {
     mocks.createBot.mockResolvedValue(created)
-    const { picture, submit } = renderDialog()
+    const { picture, openPicker, submit } = renderDialog()
+    openPicker()
     chooseUpload()
     await waitFor(() => expect(picture()).toBe('data:image/png;base64,UE5H'))
     fireEvent.click(screen.getByRole('button', { name: 'Previous picture' }))
@@ -179,15 +188,7 @@ describe('NewBotDialog picture intake', () => {
           ? (data.text ?? '')
           : ''
   })
-  // The picker's own caption line, a direct child of the picker (the carousel's announcer sits inside it).
-  // The picker's caption line, not the carousel's own announcement.
-  const line = (): string =>
-    [
-      ...(screen
-        .getByRole('button', { name: 'Previous picture' })
-        .closest('[role="group"]')
-        ?.parentElement?.querySelectorAll('[aria-live]') ?? [])
-    ].find((node) => !node.closest('[aria-roledescription="carousel"]'))?.textContent ?? ''
+  const dropTarget = (): HTMLElement | null => screen.queryByText('Drop to use')
 
   it('takes pasted image data from anywhere in the dialog, the Name field included', async () => {
     const { picture } = renderDialog()
@@ -215,11 +216,10 @@ describe('NewBotDialog picture intake', () => {
     const dialog = screen.getByRole('dialog')
     fireEvent.dragEnter(dialog, { dataTransfer: transfer({ files: [], types: ['Files'] }) })
 
-    expect(line()).toBe('Drop to use this image')
-    expect(screen.getByText('Drop to use')).toBeTruthy()
+    expect(dropTarget()).toBeTruthy()
     fireEvent.drop(dialog, { dataTransfer: transfer({ files: [png()] }) })
     await waitFor(() => expect(picture()).toBe('data:image/png;base64,UE5H'))
-    expect(line()).toBe('Upload, drop, or paste an image')
+    expect(dropTarget()).toBeNull()
   })
 
   it('ignores a link dragged in from a browser', async () => {
@@ -228,7 +228,7 @@ describe('NewBotDialog picture intake', () => {
     const dialog = screen.getByRole('dialog')
     const link = transfer({ uriList: 'https://cdn.example.com/a.png' })
     fireEvent.dragEnter(dialog, { dataTransfer: link })
-    expect(line()).toBe('Upload, drop, or paste an image')
+    expect(dropTarget()).toBeNull()
     expect(fireEvent.drop(dialog, { dataTransfer: link })).toBe(true)
 
     await new Promise((resolve) => setTimeout(resolve, 0))
@@ -270,6 +270,7 @@ describe('NewBotDialog agent', () => {
     mocks.agentChoices.mockReturnValue([])
     renderDialog()
 
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Reviewer' } })
     const form = screen.getByLabelText('Name').closest('form')
     if (!form) {
       throw new Error('Expected the bot creation form')
@@ -294,7 +295,6 @@ describe('NewBotDialog agent', () => {
     mocks.createBot.mockResolvedValue(created)
     const { submit } = renderDialog()
 
-    fireEvent.click(screen.getByRole('button', { name: /Change$/ }))
     fireEvent.click(screen.getByRole('button', { name: 'Agent claude' }))
     await submit()
     expect(mocks.createBot.mock.calls[0]?.[1]).toMatchObject({
@@ -321,7 +321,7 @@ describe('NewBotDialog after Create', () => {
       </TooltipProvider>
     )
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Reviewer' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Create bot' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Create' }))
     await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false, created))
     expect(onCreated).not.toHaveBeenCalled()
     finishOpening(true)
@@ -330,13 +330,23 @@ describe('NewBotDialog after Create', () => {
 })
 
 describe('NewBotDialog keyboard', () => {
-  it('opens with the name focused, and ⌘↩ creates from the purpose line', async () => {
+  it('keeps Create off until the bot has a name', () => {
+    renderDialog()
+    const create = screen.getByRole('button', { name: 'Create' })
+    expect(create).toHaveProperty('disabled', true)
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: '  ' } })
+    expect(create).toHaveProperty('disabled', true)
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Reviewer' } })
+    expect(create).toHaveProperty('disabled', false)
+  })
+
+  it('opens with the name focused, and ⌘↩ creates from the identity box', async () => {
     mocks.createBot.mockResolvedValue(created)
     renderDialog()
     const name = screen.getByLabelText('Name')
     await waitFor(() => expect(document.activeElement).toBe(name))
     fireEvent.change(name, { target: { value: 'Reviewer' } })
-    fireEvent.keyDown(screen.getByLabelText('Purpose'), {
+    fireEvent.keyDown(screen.getByLabelText('Identity'), {
       key: 'Enter',
       ...(navigator.userAgent.includes('Mac') ? { metaKey: true } : { ctrlKey: true })
     })
@@ -348,7 +358,7 @@ describe('NewBotDialog purpose', () => {
   it('seeds SOUL.md with a typed purpose, and no seed without one', async () => {
     mocks.createBot.mockResolvedValue(created)
     const { submit } = renderDialog()
-    fireEvent.change(screen.getByLabelText('Purpose'), {
+    fireEvent.change(screen.getByLabelText('Identity'), {
       target: { value: '  Watch app startup time  ' }
     })
     await submit()
