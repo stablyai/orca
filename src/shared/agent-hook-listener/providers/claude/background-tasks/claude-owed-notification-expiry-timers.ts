@@ -11,44 +11,56 @@ import {
   CLAUDE_OWED_TASK_NOTIFICATION_LEASE_MS,
   claudeOwedTaskNotificationDeadline
 } from './claude-owed-task-notifications'
-import { CodexSubagentPollScheduler } from '../../../transcripts/codex-subagent-poll-scheduler'
 
 type PublishRow = (row: AgentHookEventPayload) => void
 
 /** Wake the local/remote execution host when owed notifications expire, or a held turn end's prompt event never comes,
  * without another event. Re-read the pane so closed/moved leftovers are no-ops. */
 export class ClaudeOwedNotificationExpiryTimers {
-  private readonly wakeups = new CodexSubagentPollScheduler<PublishRow>(0, (paneKey, publish) =>
-    this.restate(paneKey, publish)
-  )
-  // Row writes re-arm far more often than deadlines move; an unchanged one keeps its schedule.
-  private readonly armedDeadlines = new Map<string, number>()
+  // One timer per pane: arming is constant work however many panes wait. Row writes re-arm far more often than
+  // deadlines move, so an unchanged deadline keeps its timer.
+  private readonly wakeups = new Map<
+    string,
+    { deadline: number; timer: ReturnType<typeof setTimeout> }
+  >()
 
   constructor(private readonly state: HookListenerState) {}
 
   /** Call whenever a pane's row is stored; `publish` applies the restated row as the host would. */
   arm(paneKey: string, publish: PublishRow): void {
     const deadline = this.deadline(paneKey)
+    const armed = this.wakeups.get(paneKey)
+    if (armed?.deadline === deadline) {
+      return
+    }
+    if (armed) {
+      clearTimeout(armed.timer)
+      this.wakeups.delete(paneKey)
+    }
     if (deadline === undefined) {
-      this.armedDeadlines.delete(paneKey)
-      this.wakeups.clear(paneKey)
       return
     }
-    if (this.armedDeadlines.get(paneKey) === deadline) {
-      return
-    }
-    this.armedDeadlines.set(paneKey, deadline)
     // Cap delays after backward clock steps; restate rechecks the deadline and may re-arm.
     const delay = Math.min(
       CLAUDE_OWED_TASK_NOTIFICATION_LEASE_MS,
       Math.max(0, deadline - Date.now())
     )
-    this.wakeups.schedule(paneKey, publish, delay)
+    const timer = setTimeout(() => {
+      if (this.wakeups.get(paneKey)?.timer !== timer) {
+        return
+      }
+      this.wakeups.delete(paneKey)
+      this.restate(paneKey, publish)
+    }, delay)
+    timer.unref?.()
+    this.wakeups.set(paneKey, { deadline, timer })
   }
 
   clearAll(): void {
-    this.armedDeadlines.clear()
-    this.wakeups.clearAll()
+    for (const { timer } of this.wakeups.values()) {
+      clearTimeout(timer)
+    }
+    this.wakeups.clear()
   }
 
   /** Only an idle main agent has one: neither the lease nor a held turn end runs while it is in a turn. */
@@ -67,7 +79,6 @@ export class ClaudeOwedNotificationExpiryTimers {
   }
 
   private restate(paneKey: string, publish: PublishRow): void {
-    this.armedDeadlines.delete(paneKey)
     const deadline = this.deadline(paneKey)
     if (deadline === undefined) {
       return
