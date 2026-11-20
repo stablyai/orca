@@ -63,6 +63,11 @@ import { BotItemsSettingsGroup } from './BotItemsSettingsGroup'
 
 type Update = (updates: BotUpdateParams['updates']) => Promise<Bot | null>
 
+function BotSettingsSwitch(props: React.ComponentProps<typeof Switch>): React.JSX.Element {
+  // Extend the pointer target into the row padding around the compact track.
+  return <Switch {...props} size="compact" className="after:absolute after:-inset-2" />
+}
+
 function useAccessLines(bot: Bot): { connectors: string; whoCanAsk: string } {
   const intlLocale = useIntlLocale()
   const state = useBotConnectorState(bot)
@@ -126,8 +131,7 @@ function ScheduleGroup({
         page="look-around"
         onOpen={() => open('look-around')}
         end={
-          <Switch
-            size="compact"
+          <BotSettingsSwitch
             checked={lookAround.on}
             aria-label={lookAroundTitle}
             onCheckedChange={() => void update({ lookAround: { on: !lookAround.on } })}
@@ -141,8 +145,7 @@ function ScheduleGroup({
         page="tidy-up"
         onOpen={() => open('tidy-up')}
         end={
-          <Switch
-            size="compact"
+          <BotSettingsSwitch
             checked={tidyUp.on}
             aria-label={tidyUpTitle}
             onCheckedChange={() => void update({ tidyUp: { on: !tidyUp.on } })}
@@ -252,8 +255,7 @@ function NotificationsGroup({ bot, update }: { bot: Bot; update: Update }): Reac
           detail={toggle.description}
           wrapDetail
           end={
-            <Switch
-              size="compact"
+            <BotSettingsSwitch
               checked={bot.notifications[toggle.key]}
               aria-label={toggle.label}
               onCheckedChange={() =>
@@ -362,8 +364,7 @@ export function BotSettingsRoot({
           title={t('settings.bots.active', 'Active')}
           detail={t('settings.bots.activeDescription', 'Answers messages and runs automations.')}
           end={
-            <Switch
-              size="compact"
+            <BotSettingsSwitch
               checked={!bot.paused}
               aria-label={t('settings.bots.active', 'Active')}
               onCheckedChange={() => void update({ paused: !bot.paused })}
