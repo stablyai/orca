@@ -46,7 +46,8 @@ export function BotItemQuestionDot(): React.JSX.Element {
   )
 }
 
-/** "Question → answer", muted: an answered line, or a held one that reopens on click. */
+/** "Question → answer", muted: an answered line, or one held on this device ("not sent yet") that
+ *  reopens on click. */
 export function BotItemAnswerLine({
   question,
   words,
@@ -56,10 +57,12 @@ export function BotItemAnswerLine({
   words: string
   onClick?: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const content = (
     <>
       {botItemQuestionLine(question)} →{' '}
       <span className="text-foreground/72 [overflow-wrap:anywhere]">{words}</span>
+      {onClick ? <> · {t('bots.items.ask.notSentYet', 'not sent yet')}</> : null}
     </>
   )
   const line = 'block w-full text-left text-[13px] leading-[19px] text-muted-foreground'
