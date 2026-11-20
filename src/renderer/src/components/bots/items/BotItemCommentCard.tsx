@@ -22,7 +22,11 @@ import { BotItemClampedText } from './BotItemClampedText'
 import type { BotItemActivityEntry } from '../../../../../shared/bots/bot-item-activity'
 import { botItemActorName } from '../../../../../shared/bots/bot-item-actor-name'
 import { botItemQuestionShape } from '../../../../../shared/bots/bot-item-ask'
-import { BotItemQuestionLines, type BotItemQuickReplyActions } from './BotItemQuestionLines'
+import { BotItemQuestionLines } from './BotItemQuestionLines'
+import {
+  botItemHeldAnswersScope,
+  type BotItemQuickReplyActions
+} from './use-bot-item-question-steps'
 
 const TIME = { hour: 'numeric', minute: '2-digit' } as const
 
@@ -149,6 +153,12 @@ export function BotItemCommentCard({
           {shape.decisions.length > 0 ? (
             <BotItemQuestionLines
               shape={shape}
+              askId={event.id}
+              heldScope={
+                shape.decisions.length > 1
+                  ? botItemHeldAnswersScope(bot, item.uid, event.id)
+                  : undefined
+              }
               waiting={waiting}
               answers={entry.answers}
               actions={quickReplies}

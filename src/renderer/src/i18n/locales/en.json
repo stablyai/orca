@@ -29285,7 +29285,10 @@
         "pickCustom": "Custom time"
       },
       "ask": {
+        "next": "Next question",
+        "previous": "Previous question",
         "recommended": "Recommended",
+        "step": "{{n}} of {{total}}",
         "typeAnswer": "Type your answer"
       }
     },

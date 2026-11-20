@@ -1,8 +1,9 @@
 // Which owner comment answered each question line of an agent's ask. A quick reply names its line by
-// its words; a typed reply answers the line the comment box was "Replying to", the first one still open;
+// its words, and one comment can name several lines ("Question → answer" each); a typed reply answers the line the comment box was "Replying to", the first one still open;
 // an answer a v1.4.265 host recorded answers every line it holds. The host links only the first reply
 // to its question (that reply moves the item to In progress), so the pairing is read from the order of
 // events: the owner's comments after the ask, up to the agent's next question or the item's close.
+import { botItemNamedAnswers } from './bot-item-answer-lines'
 import {
   botItemQuestionLine,
   botItemQuestionShape,
@@ -64,16 +65,17 @@ function answeredLines(
       open(index) &&
       decision.replies.some((option) => botItemQuickReplyText(shape, decision, option) === text)
   )
-  // A quick reply of several questions, edited before sending, still names its question.
-  const named =
-    picked === -1 && shape.decisions.length > 1
-      ? shape.decisions.findIndex(
-          (decision, index) =>
-            open(index) && text.startsWith(`${botItemQuestionLine(decision.question)} →`)
-        )
-      : picked
-  if (named !== -1) {
-    return [named]
+  if (picked !== -1) {
+    return [picked]
+  }
+  // Several questions answered in one comment, a line each; or one quick reply edited before sending.
+  if (shape.decisions.length > 1) {
+    const named = botItemNamedAnswers(shape, text).flatMap((words, index) =>
+      words !== null && open(index) ? [index] : []
+    )
+    if (named.length > 0) {
+      return named
+    }
   }
   const next = answers.indexOf(null)
   return next === -1 ? [] : [next]

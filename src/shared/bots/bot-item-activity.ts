@@ -4,7 +4,9 @@
 // The owner's reply quotes the question line it answers (bot-item-question-answers.ts); the move the
 // first one caused (`cause: 'answer'`) is not shown while the question is loaded. Answers recorded by
 // older hosts are replies like any other.
+import { botItemCommentFiles } from './bot-item-comment-files'
 import {
+  botItemCommentImages,
   botItemLinksOnePerChain,
   type BotItem,
   type BotItemEvent,
@@ -27,6 +29,8 @@ export type BotItemActivityEntry =
       answers?: (BotItemEvent | null)[]
       /** On the owner's reply to a question: the question it answers, by its first line. */
       replyTo?: { eventId: string; text: string }
+      /** The owner's answer reads in full on its ask's lines ("Question → answer"): no card of its own. */
+      onAsk?: true
     }
   | { kind: 'worker'; key: string; at: number; phase: 'started' | 'finished'; link: DispatchLink }
 
@@ -37,6 +41,17 @@ function answeredQuestion(event: BotItemEvent): string | null {
     typeof event.data.answers === 'string'
     ? event.data.answers
     : null
+}
+
+/** An answer the ask's lines show whole: words only, no recorded picks, images or files. */
+function readsOnAsk(event: BotItemEvent, pairing: BotItemQuestionPairing): boolean {
+  const text = typeof event.data.text === 'string' ? event.data.text : ''
+  return (
+    pairing.replies.has(event.id) &&
+    !Array.isArray(event.data.decisions) &&
+    botItemCommentImages(event.data).length === 0 &&
+    botItemCommentFiles(text).files.length === 0
+  )
 }
 
 function linksOnlyWorkers(event: BotItemEvent): boolean {
@@ -140,7 +155,8 @@ function eventEntries(
         ? asked.waiting
         : event.id === item.question?.eventId && event.actor.kind !== 'owner',
       ...(asked ? { answers: asked.answers } : {}),
-      ...(replyTo ? { replyTo } : {})
+      ...(replyTo ? { replyTo } : {}),
+      ...(readsOnAsk(event, pairing) ? { onAsk: true as const } : {})
     })
   }
   return entries

@@ -141,3 +141,27 @@ it('keeps a quick reply edited before sending with the question it names', () =>
     { key: 'e4', replyTo: { text: 'Tell the team?' } }
   ])
 })
+
+it('reads one comment answering several questions, a line each, as the answer to every line it names', () => {
+  const ask = {
+    questions: [
+      { prompt: 'Ship it?', options: [{ label: 'Ship' }, { label: 'Wait' }] },
+      { prompt: 'Tell the team?', options: [{ label: 'Yes' }] },
+      { prompt: 'Which day?', options: [] }
+    ]
+  }
+  const entries = botItemActivity(makeTestBotItem(6, { status: 'working' }), [
+    event('e2', 'commented', 200, { text: 'copy', ask }),
+    event('e3', 'status', 200, { from: 'working', to: 'needs_you' }),
+    owner('e4', 'commented', 250, {
+      text: 'Ship it? → Wait\nTell the team? → Yes\nWhich day? → Friday',
+      answers: 'e2'
+    }),
+    owner('e5', 'status', 250, { from: 'needs_you', to: 'working', cause: 'answer' })
+  ])
+
+  expect(entries).toMatchObject([
+    { key: 'e2', waiting: false, answers: [{ id: 'e4' }, { id: 'e4' }, { id: 'e4' }] },
+    { key: 'e4', onAsk: true }
+  ])
+})

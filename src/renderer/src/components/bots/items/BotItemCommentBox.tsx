@@ -72,6 +72,8 @@ export type BotItemCommentBoxHandle = {
   fill: (text: string) => void
   /** Focus the box to answer the waiting question in your own words: it glows once, naming it. */
   answer: () => void
+  /** The waiting question "Replying to" names, by its id; null once hidden. */
+  replyingTo: () => string | null
 }
 
 const NO_TARGET = () => null
@@ -233,6 +235,7 @@ export function BotItemCommentBox({
     focus: () => input.current?.focus(),
     focusEnd: caretToEnd,
     type: (typed) => void composer.current?.insertTypedText(typed),
+    replyingTo: () => reply.quote?.id ?? null,
     answer: () => {
       reply.show()
       composer.current?.focus({ caretAtEnd: true, glow: true })
