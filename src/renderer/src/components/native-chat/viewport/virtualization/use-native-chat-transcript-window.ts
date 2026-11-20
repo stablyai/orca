@@ -3,13 +3,13 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { elementScroll, useVirtualizer, type VirtualItem } from '@tanstack/react-virtual'
 import { createProgrammaticScrollMarks } from '@/lib/list-interaction/virtualized-scrolling/programmatic-scroll-marks'
-import { observeOffscreenRow } from '@/lib/window-activity/offscreen-animation-pause'
 import {
   NATIVE_CHAT_ROW_GAP_PX,
   type NativeChatRowTypography,
   DEFAULT_ROW_TYPOGRAPHY
 } from './native-chat-row-height-estimate'
 import { nativeChatPinnedRowIndexes, nativeChatTranscriptRange } from './native-chat-pinned-rows'
+import { useNativeChatRowMeasure } from './use-native-chat-row-measure'
 import { nativeChatSlotKey } from '../../conversation/slots/native-chat-transcript-slot-selection'
 import type { NativeChatTranscriptSlot } from '../../conversation/slots/native-chat-transcript-slots'
 import {
@@ -332,38 +332,7 @@ export function useNativeChatTranscriptWindow({
     }
   }, [isAlignHeld, reconcileReaderScroll])
 
-  // Overscan rows sit outside the scroller's clip; their loops would still draw every frame. A hidden
-  // (display: none) transcript runs no animations, so its rows are observed only while it shows.
-  const rowObservations = useRef(new Map<HTMLDivElement, (() => void) | null>())
-  const isVisibleRef = useRef(isVisible)
-  useLayoutEffect(() => {
-    isVisibleRef.current = isVisible
-    for (const [row, stop] of rowObservations.current) {
-      if (isVisible && stop === null) {
-        rowObservations.current.set(row, observeOffscreenRow(row))
-      } else if (!isVisible && stop !== null) {
-        stop()
-        rowObservations.current.set(row, null)
-      }
-    }
-  }, [isVisible])
-
-  const measureRow = useCallback(
-    (element: HTMLDivElement | null) => {
-      virtualizer.measureElement(element)
-      if (element === null) {
-        return undefined
-      }
-      const observations = rowObservations.current
-      observations.set(element, isVisibleRef.current ? observeOffscreenRow(element) : null)
-      return () => {
-        observations.get(element)?.()
-        observations.delete(element)
-        virtualizer.measureElement(null)
-      }
-    },
-    [virtualizer]
-  )
+  const measureRow = useNativeChatRowMeasure(virtualizer, isVisible)
 
   return {
     virtualItems: virtualizer.getVirtualItems(),
