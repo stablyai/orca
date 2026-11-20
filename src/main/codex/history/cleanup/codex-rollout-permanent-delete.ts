@@ -94,6 +94,11 @@ async function deleteRollout(
     if (await references.isReferenced(rolloutId)) {
       return { referencedId: rolloutId }
     }
+    // The eligibility check below reads the chat's last folder: skip it when the refresh nearest
+    // the unlink would refuse anyway (the sweep's re-list cap is spent).
+    if (await references.refreshBlocked(homes)) {
+      return 'done'
+    }
     const found = await readNames(names)
     // Every name, every extension: a chat resumed or still written anywhere keeps them all.
     const stillEligible = async (): Promise<boolean> => {

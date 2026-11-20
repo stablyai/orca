@@ -1,4 +1,6 @@
+import { realpath } from 'node:fs/promises'
 import { join } from 'node:path'
+import { isDefinitiveAbsence } from '../../../../shared/errors/definitive-filesystem-absence'
 import { setTimeout as delay } from 'node:timers/promises'
 import { createCodexRolloutFolderStamps } from './codex-rollout-folder-stamps'
 import { createNestedWslLinkProbe, statUnlessAbsent } from './codex-rollout-path-probes'
@@ -7,6 +9,29 @@ const RELISTS_PER_SWEEP = 25
 
 /** A real sessions or archived_sessions folder. */
 export type CodexRolloutRoot = { path: string; archive: boolean }
+
+/** Each home's real rollout roots, once each; `complete` is false when one couldn't be resolved. */
+export async function resolveCodexRolloutRoots(
+  homes: readonly string[],
+  visited: Set<string>
+): Promise<{ roots: CodexRolloutRoot[]; complete: boolean }> {
+  let complete = true
+  const roots: CodexRolloutRoot[] = []
+  for (const home of homes) {
+    for (const name of ['sessions', 'archived_sessions']) {
+      try {
+        const path = await realpath(join(home, name))
+        if (!visited.has(path)) {
+          visited.add(path)
+          roots.push({ path, archive: name !== 'sessions' })
+        }
+      } catch (error) {
+        complete &&= isDefinitiveAbsence(error)
+      }
+    }
+  }
+  return { roots, complete }
+}
 
 export type CodexRolloutFolderRelists = {
   /** Stats what a full walk of this root lists: run the returned stamp once that walk succeeded. */
@@ -22,6 +47,8 @@ export type CodexRolloutFolderRelists = {
    * later files were still being read, would otherwise go unseen. Call it last.
    */
   unchanged(roots: readonly CodexRolloutRoot[], dates: readonly string[][]): Promise<boolean>
+  /** Whether a refresh now would be refused: the cap is spent and a folder needs listing again. */
+  blocked(roots: readonly CodexRolloutRoot[], dates: readonly string[][]): Promise<boolean>
   /** Lists a folder again when it changed; false past the cap, which keeps the candidate. */
   relist(folder: string, list: (folder: string) => Promise<boolean>): Promise<boolean>
   report(): void
@@ -48,6 +75,17 @@ export function createCodexRolloutFolderRelists(signal?: AbortSignal): CodexRoll
       }
     }
     return folders
+  }
+
+  const unchanged = async (roots: readonly CodexRolloutRoot[], dates: readonly string[][]) => {
+    for (const folder of await foldersOf(roots, dates)) {
+      const entry = await statUnlessAbsent(folder)
+      // An unsettled stamp proves nothing: a later change in the same tick can share it.
+      if (entry === undefined || (entry && stamps.state(folder, entry.mtimeMs) !== 'current')) {
+        return false
+      }
+    }
+    return true
   }
 
   return {
@@ -79,16 +117,8 @@ export function createCodexRolloutFolderRelists(signal?: AbortSignal): CodexRoll
       await delay(wait, undefined, { signal })
       return folders
     },
-    unchanged: async (roots, dates) => {
-      for (const folder of await foldersOf(roots, dates)) {
-        const entry = await statUnlessAbsent(folder)
-        // An unsettled stamp proves nothing on a coarse filesystem: a later change can share it.
-        if (entry === undefined || (entry && stamps.state(folder, entry.mtimeMs) !== 'current')) {
-          return false
-        }
-      }
-      return true
-    },
+    unchanged,
+    blocked: async (roots, dates) => left === 0 && !(await unchanged(roots, dates)),
     relist: async (folder, list) => {
       const statAt = Date.now()
       const entry = await statUnlessAbsent(folder)

@@ -13,7 +13,7 @@ import {
 } from './codex-rollout-path-probes'
 import {
   createCodexRolloutFolderRelists,
-  type CodexRolloutRoot
+  resolveCodexRolloutRoots
 } from './codex-rollout-folder-relists'
 import { createCodexRolloutForkLinks } from './codex-rollout-fork-links'
 import {
@@ -37,6 +37,8 @@ export type CodexRolloutHistoryReferences = {
    * changed. False when anything couldn't be read, so no rollout is proven unreferenced.
    */
   refresh(homes: readonly string[]): Promise<boolean>
+  /** Whether `refresh` would be refused now, without spending anything: cheap, to ask first. */
+  refreshBlocked(homes: readonly string[]): Promise<boolean>
   /** Also reads again any deleted fork of it that came back under a name it was deleted from. */
   isReferenced(rolloutId: string): Promise<boolean>
   /**
@@ -232,21 +234,9 @@ export function createCodexRolloutHistoryReferences(
       cache ??= await loadCodexRolloutHistoryBaseCache(cachePath)
       const visited = new Set<string>()
       const dates = recentDates()
-      let complete = true
-      const roots: CodexRolloutRoot[] = []
-      for (const home of homes) {
-        for (const name of ['sessions', 'archived_sessions']) {
-          try {
-            const path = await realpath(join(home, name))
-            if (!visited.has(path)) {
-              visited.add(path)
-              roots.push({ path, archive: name !== 'sessions' })
-            }
-          } catch (error) {
-            complete &&= isDefinitiveAbsence(error)
-          }
-        }
-      }
+      const resolved = await resolveCodexRolloutRoots(homes, visited)
+      const { roots } = resolved
+      let complete = resolved.complete
       // New rollouts land in today's dated folders; archiving moves them to the flat folder.
       const walked = roots.filter((root) => walkedRoots.has(root.path))
       const folders = recent ? await relists.settle(walked, dates) : []
@@ -306,6 +296,8 @@ export function createCodexRolloutHistoryReferences(
   return {
     prepare: (homes) => update(homes, false),
     refresh: (homes) => update(homes, true),
+    refreshBlocked: async (homes) =>
+      relists.blocked((await resolveCodexRolloutRoots(homes, new Set())).roots, recentDates()),
     isReferenced: async (rolloutId) => {
       for (const fork of deletedForks.get(rolloutId) ?? []) {
         // Opening a path through a link into WSL can start a distro: a fork there keeps its parent.

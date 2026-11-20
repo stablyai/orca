@@ -1,5 +1,12 @@
-// Coarse filesystems stamp a folder no finer than this; a listing that close to a change repeats.
-const FOLDER_STAMP_SLACK_MS = 2000
+// A listing this close to a folder's stamp repeats: a later change in the same clock tick would
+// leave the stamp as it was. Whole-second stamps come from a coarse filesystem (FAT stamps every
+// 2 s); finer ones still tick with the system timer (Linux about 4 ms, Windows about 16 ms).
+const COARSE_STAMP_SLACK_MS = 2000
+const FINE_STAMP_SLACK_MS = 100
+
+function slackFor(mtimeMs: number): number {
+  return mtimeMs % 1000 === 0 ? COARSE_STAMP_SLACK_MS : FINE_STAMP_SLACK_MS
+}
 
 type Stamp = { mtimeMs: number; settled: boolean }
 
@@ -22,14 +29,12 @@ export function createCodexRolloutFolderStamps(): CodexRolloutFolderStamps {
       const stamp = stamps.get(folder)
       return stamp?.mtimeMs !== mtimeMs ? 'changed' : stamp.settled ? 'current' : 'unsettled'
     },
-    unsettledFor: (mtimeMs) =>
-      Math.min(
-        FOLDER_STAMP_SLACK_MS + 1,
-        Math.max(0, mtimeMs + FOLDER_STAMP_SLACK_MS + 1 - Date.now())
-      ),
+    unsettledFor: (mtimeMs) => {
+      const slack = slackFor(mtimeMs)
+      return Math.min(slack + 1, Math.max(0, mtimeMs + slack + 1 - Date.now()))
+    },
     listed: (folder, mtimeMs, statAt) => {
-      // A change later in the same clock tick as that stat would leave the stamp as it was.
-      stamps.set(folder, { mtimeMs, settled: statAt - mtimeMs > FOLDER_STAMP_SLACK_MS })
+      stamps.set(folder, { mtimeMs, settled: statAt - mtimeMs > slackFor(mtimeMs) })
     }
   }
 }

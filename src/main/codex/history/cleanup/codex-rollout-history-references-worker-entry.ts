@@ -29,6 +29,8 @@ async function run(request: Exclude<CodexRolloutReferencesRequest, { op: 'abort'
       return references.prepare(request.homes)
     case 'refresh':
       return references.refresh(request.homes)
+    case 'refreshBlocked':
+      return references.refreshBlocked(request.homes)
     case 'isReferenced':
       return references.isReferenced(request.rolloutId)
     case 'forget':

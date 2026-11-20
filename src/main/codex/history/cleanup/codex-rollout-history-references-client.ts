@@ -97,6 +97,8 @@ export function createCodexRolloutHistoryReferencesClient(
   return {
     prepare: async (homes) => (await call({ op: 'prepare', homes })) === true,
     refresh: async (homes) => (await call({ op: 'refresh', homes })) === true,
+    // Anything but a plain false skips the candidate: it is kept either way.
+    refreshBlocked: async (homes) => (await call({ op: 'refreshBlocked', homes })) !== false,
     // Anything but a plain false keeps the rollout.
     isReferenced: async (rolloutId) => (await call({ op: 'isReferenced', rolloutId })) !== false,
     forget: async (rolloutId, paths) => {
