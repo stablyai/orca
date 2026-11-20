@@ -19,6 +19,7 @@ import {
   type BotGroupTurn as Turn
 } from '../../../../shared/bots/bot-group'
 import { NativeChatComposer } from '../native-chat/composer/NativeChatComposer'
+import { NativeChatPaneFileDropSurface } from '../native-chat/attachments/intake/NativeChatPaneFileDropSurface'
 import { useBotGroupComposerRoom } from './use-bot-group-composer-room'
 import { useBotGroupComposerTransport } from './use-bot-group-composer-transport'
 import { useBotTranscriptFollow } from './use-bot-transcript-follow'
@@ -247,105 +248,107 @@ export function BotGroupChat({
     onError: setError
   })
   return (
-    <NativeChatSurface surface={surface} working={working} data-bot-group={group?.id}>
-      {group
-        ? readers.map((turn) => (
-            <BotGroupSessionReader
-              key={turn.sessionId}
-              target={botTarget(group)}
-              turn={turn}
-              visible={isVisible}
-              report={report}
-            />
-          ))
-        : null}
-      <NativeChatMentionNamesContext.Provider value={mentionNames}>
-        <NativeChatTranscriptViewport
-          scrollRef={follow.scrollRef}
-          scrollerProps={follow.scrollerProps}
-          forwardedGesture={follow.forwardedGesture}
-          showJump={follow.showJump}
-          onJump={follow.jumpToLatest}
-          overlays={<NativeChatSurfaceFindBar surface={surface} isVisible={isVisible} />}
-        >
-          <BotGroupTranscriptOwner
-            context={roomContext}
-            sessionId={null}
-            tabId={tabId}
-            isVisible={isVisible}
+    <NativeChatPaneFileDropSurface className="relative flex h-full min-h-0 min-w-0 w-full">
+      <NativeChatSurface surface={surface} working={working} data-bot-group={group?.id}>
+        {group
+          ? readers.map((turn) => (
+              <BotGroupSessionReader
+                key={turn.sessionId}
+                target={botTarget(group)}
+                turn={turn}
+                visible={isVisible}
+                report={report}
+              />
+            ))
+          : null}
+        <NativeChatMentionNamesContext.Provider value={mentionNames}>
+          <NativeChatTranscriptViewport
+            scrollRef={follow.scrollRef}
+            scrollerProps={follow.scrollerProps}
+            forwardedGesture={follow.forwardedGesture}
+            showJump={follow.showJump}
+            onJump={follow.jumpToLatest}
+            overlays={<NativeChatSurfaceFindBar surface={surface} isVisible={isVisible} />}
           >
-            <NativeChatTranscriptColumn ref={follow.contentRef} className="space-y-6 py-6">
-              {data?.hasEarlier ? (
-                <Button variant="ghost" size="sm" onClick={loadEarlier}>
-                  {t('bots.groups.loadEarlierMessages', 'Load earlier messages')}
-                </Button>
-              ) : null}
-              {!data ? (
-                <p className="text-sm text-chat-foreground-faint">
-                  {t('bots.groups.loadingGroup', 'Loading group…')}
-                </p>
-              ) : messages.length === 0 ? (
-                <div className="py-12 text-center">
-                  <h2 className="text-sm font-medium text-chat-foreground">{group?.name}</h2>
-                  <p className="mt-2 text-sm text-chat-foreground-faint">
-                    {t(
-                      'bots.groups.startAConversationWithThisGroupMentionBots',
-                      'Start a conversation with this group. Mention bots with @Name or @everyone.'
-                    )}
+            <BotGroupTranscriptOwner
+              context={roomContext}
+              sessionId={null}
+              tabId={tabId}
+              isVisible={isVisible}
+            >
+              <NativeChatTranscriptColumn ref={follow.contentRef} className="space-y-6 py-6">
+                {data?.hasEarlier ? (
+                  <Button variant="ghost" size="sm" onClick={loadEarlier}>
+                    {t('bots.groups.loadEarlierMessages', 'Load earlier messages')}
+                  </Button>
+                ) : null}
+                {!data ? (
+                  <p className="text-sm text-chat-foreground-faint">
+                    {t('bots.groups.loadingGroup', 'Loading group…')}
                   </p>
-                </div>
-              ) : (
-                messages.map((message) => (
-                  <div key={message.id} className="space-y-5">
-                    {ownerRows.has(message.id) ? (
-                      <MessageRow
-                        message={ownerRows.get(message.id)!}
-                        expandSignal={false}
-                        structuredAttachments
-                        runtimeContext={roomContext?.runtimeContext ?? null}
-                        onScrollMessageToTop={follow.scrollMessageToTop}
-                      />
-                    ) : (
-                      <BotGroupPeerRequestLine message={message} />
-                    )}
-                    {message.turns.map((turn) => (
-                      <BotGroupTurn
-                        key={turn.operationId}
-                        hostId={data.group.hostId}
-                        turn={turn}
-                        tabId={tabId}
-                        isVisible={isVisible}
-                        files={fileContexts.get(turn.botId) ?? null}
-                        roomLinks={roomLinks}
-                        roomRows={rows}
-                        session={sessions.get(turn.sessionId)}
-                        onStop={stop}
-                        onReply={reply}
-                        scrollMessageToTop={follow.scrollMessageToTop}
-                      />
-                    ))}
+                ) : messages.length === 0 ? (
+                  <div className="py-12 text-center">
+                    <h2 className="text-sm font-medium text-chat-foreground">{group?.name}</h2>
+                    <p className="mt-2 text-sm text-chat-foreground-faint">
+                      {t(
+                        'bots.groups.startAConversationWithThisGroupMentionBots',
+                        'Start a conversation with this group. Mention bots with @Name or @everyone.'
+                      )}
+                    </p>
                   </div>
-                ))
-              )}
-            </NativeChatTranscriptColumn>
-          </BotGroupTranscriptOwner>
-        </NativeChatTranscriptViewport>
-      </NativeChatMentionNamesContext.Provider>
-      {group ? <BotGroupApprovalDock group={group} sessions={sessions} /> : null}
-      <NativeChatComposer
-        ref={composerRef}
-        terminalTabId={tabId}
-        paneKey={`bot-group:${roomId}`}
-        draftScopeKey={`bot-group:${roomId}`}
-        targetPtyId={null}
-        agent={readers.find((reader) => reader.sessionId === chosenId)?.agent ?? 'claude'}
-        structuredTransport={transport}
-        room={room}
-        isWorking={working}
-        canSend={Boolean(group)}
-        onStop={() => stop()}
-        notices={error ? [{ key: 'bot-group-error', kind: 'error', text: error }] : []}
-      />
-    </NativeChatSurface>
+                ) : (
+                  messages.map((message) => (
+                    <div key={message.id} className="space-y-5">
+                      {ownerRows.has(message.id) ? (
+                        <MessageRow
+                          message={ownerRows.get(message.id)!}
+                          expandSignal={false}
+                          structuredAttachments
+                          runtimeContext={roomContext?.runtimeContext ?? null}
+                          onScrollMessageToTop={follow.scrollMessageToTop}
+                        />
+                      ) : (
+                        <BotGroupPeerRequestLine message={message} />
+                      )}
+                      {message.turns.map((turn) => (
+                        <BotGroupTurn
+                          key={turn.operationId}
+                          hostId={data.group.hostId}
+                          turn={turn}
+                          tabId={tabId}
+                          isVisible={isVisible}
+                          files={fileContexts.get(turn.botId) ?? null}
+                          roomLinks={roomLinks}
+                          roomRows={rows}
+                          session={sessions.get(turn.sessionId)}
+                          onStop={stop}
+                          onReply={reply}
+                          scrollMessageToTop={follow.scrollMessageToTop}
+                        />
+                      ))}
+                    </div>
+                  ))
+                )}
+              </NativeChatTranscriptColumn>
+            </BotGroupTranscriptOwner>
+          </NativeChatTranscriptViewport>
+        </NativeChatMentionNamesContext.Provider>
+        {group ? <BotGroupApprovalDock group={group} sessions={sessions} /> : null}
+        <NativeChatComposer
+          ref={composerRef}
+          terminalTabId={tabId}
+          paneKey={`bot-group:${roomId}`}
+          draftScopeKey={`bot-group:${roomId}`}
+          targetPtyId={null}
+          agent={readers.find((reader) => reader.sessionId === chosenId)?.agent ?? 'claude'}
+          structuredTransport={transport}
+          room={room}
+          isWorking={working}
+          canSend={Boolean(group)}
+          onStop={() => stop()}
+          notices={error ? [{ key: 'bot-group-error', kind: 'error', text: error }] : []}
+        />
+      </NativeChatSurface>
+    </NativeChatPaneFileDropSurface>
   )
 }

@@ -48,7 +48,9 @@ export async function admitBotGroupMessageAttachments(
   const stored = deps.local
     ? await Promise.all(uniquePaths.map((path) => copyLocalAttachmentToStore(store, path, refused)))
     : uniquePaths
-  const images = await admitStoredAttachmentImages(store, stored, GROUP_IMAGE_LABELS, refused)
+  const admitted = await admitStoredAttachmentImages(store, stored, GROUP_IMAGE_LABELS, refused)
+  // One image per attachment, in order, so the prompt's [Image #N] markers keep their numbers.
+  const images = paths.map((path) => admitted[uniquePaths.indexOf(path)])
   const body: AgentJournalMessageItem = {
     kind: 'message',
     role: 'user',

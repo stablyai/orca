@@ -40,7 +40,7 @@ export async function sendBotGroupMessage(
         existing.groupId !== input.groupId ||
         existing.threadId !== input.threadId ||
         existing.text !== input.text ||
-        (existing.images?.length ?? 0) !== new Set(input.images).size
+        (existing.images?.length ?? 0) !== (input.images?.length ?? 0)
       ) {
         throw new Error('Message identity was already used.')
       }
@@ -59,7 +59,7 @@ export async function sendBotGroupMessage(
     )
     const requestedImages = input.images ?? []
     const audience = botGroupAudience(
-      stripSentImagePromptMarkers(input.text, new Set(requestedImages).size),
+      stripSentImagePromptMarkers(input.text, requestedImages.length),
       group,
       bots
     )
