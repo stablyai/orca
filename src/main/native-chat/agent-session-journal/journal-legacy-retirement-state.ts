@@ -46,6 +46,16 @@ export type LegacySourceRefusal = {
 
 /** The proof's page layout; progress saved under another is walked again from the start. */
 export const LEGACY_PROOF_LAYOUT = 1
+/**
+ * Progress and retiring records for an original carrying a shape only this build accepts. Builds
+ * before it check inventory on the first page alone, so they must never resume such a proof.
+ */
+export const LEGACY_PROOF_HISTORICAL_LAYOUT = 2
+export type LegacyProofLayout = typeof LEGACY_PROOF_LAYOUT | typeof LEGACY_PROOF_HISTORICAL_LAYOUT
+
+export function isLegacyProofLayout(value: unknown): value is LegacyProofLayout {
+  return value === LEGACY_PROOF_LAYOUT || value === LEGACY_PROOF_HISTORICAL_LAYOUT
+}
 /** The proof's last phases, the reconcile's copies, start at this table (after content and claims). */
 export const LEGACY_PROOF_COPIES_TABLE = 7
 
@@ -57,7 +67,7 @@ export const LEGACY_PROOF_COPIES_TABLE = 7
 export type LegacySourceRetiring = {
   version: 2
   phase: 'retiring'
-  layout: typeof LEGACY_PROOF_LAYOUT
+  layout: LegacyProofLayout
   proof: string
   store: string
 }
@@ -69,7 +79,7 @@ export type LegacySourceRetiring = {
 export type LegacySourceProving = {
   version: 2
   phase: 'proving'
-  layout: typeof LEGACY_PROOF_LAYOUT
+  layout: LegacyProofLayout
   proof: string
   store: string
   cursor: { table: number; after: string | null; epoch?: string }
@@ -94,7 +104,7 @@ export function decodeLegacySourceProving(value: string | null): LegacySourcePro
     !('store' in data) ||
     typeof data.store !== 'string' ||
     !('layout' in data) ||
-    data.layout !== LEGACY_PROOF_LAYOUT ||
+    !isLegacyProofLayout(data.layout) ||
     !('cursor' in data) ||
     !data.cursor ||
     typeof data.cursor !== 'object'
@@ -117,7 +127,7 @@ export function decodeLegacySourceProving(value: string | null): LegacySourcePro
   return {
     version: 2,
     phase: 'proving',
-    layout: LEGACY_PROOF_LAYOUT,
+    layout: data.layout,
     proof: data.proof,
     store: data.store,
     cursor: { table, after, ...(epoch === undefined ? {} : { epoch }) }

@@ -1,3 +1,4 @@
+import type Database from '../../sqlite/sync-database'
 import { JOURNAL_DOMAIN_PROFILE_TABLES } from './database/journal-domain-profile-columns'
 
 const SOURCE_COLUMNS: Readonly<Record<string, string>> = {
@@ -47,4 +48,21 @@ export function legacySourceColumnsAccounted(table: string, present: readonly st
     !columns ||
     (present.every((name) => columns.has(name)) && (!retired || present.length === retired.length))
   )
+}
+
+/** The original carries a shape only builds from this one on accept, so earlier ones must not resume it. */
+export function legacySourceCarriesRetiredShape(db: Database.Database): boolean {
+  return Object.keys({ ...RETIRED_SOURCE_TABLES, ...RETIRED_SOURCE_COLUMNS }).some((table) => {
+    if (!db.prepare("SELECT 1 FROM sqlite_schema WHERE type='table' AND name=?").get(table)) {
+      return false
+    }
+    const retired = RETIRED_SOURCE_COLUMNS[table]?.split(' ')
+    return (
+      !retired ||
+      db
+        .prepare(`PRAGMA table_info("${table}")`)
+        .all()
+        .some((column) => retired.includes(String(column.name)))
+    )
+  })
 }

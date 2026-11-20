@@ -4,7 +4,11 @@ import {
   readJournalLegacySource,
   type LegacySourceRefusalReason
 } from './journal-legacy-retention-error'
-import { isRetiredSourceTable, legacySourceColumnsAccounted } from './journal-legacy-source-columns'
+import {
+  isRetiredSourceTable,
+  legacySourceCarriesRetiredShape,
+  legacySourceColumnsAccounted
+} from './journal-legacy-source-columns'
 import { readStoredQueuedMessageRow } from './queued-messages/queued-message-stored-row'
 import {
   readLegacyClaimsPage,
@@ -51,6 +55,8 @@ export type LegacyProofPage = {
   sessions: LegacySourceSession[]
   retained?: string
   reason?: LegacySourceRefusalReason
+  /** On the first page: the original carries a shape earlier builds refuse (see the layouts). */
+  historical?: true
   /** Claims only the original holds, for chats kept here, taken in before it retires. */
   claims?: LegacyClaim[]
   /** Copies of chats an older Orca continued, converted from the original before it retires. */
@@ -67,7 +73,12 @@ export function readJournalLegacyProofPage(
   if (cursor.check || (cursor.table === 0 && cursor.after === null)) {
     assertLegacyStoreReady(db, destination, !cursor.check)
   }
-  return readJournalLegacySource(() => readSourcePage(db, cursor, destination))
+  return readJournalLegacySource(() => {
+    const page = readSourcePage(db, cursor, destination)
+    return cursor.table === 0 && cursor.after === null && legacySourceCarriesRetiredShape(db)
+      ? { ...page, historical: true }
+      : page
+  })
 }
 
 function readSourcePage(
