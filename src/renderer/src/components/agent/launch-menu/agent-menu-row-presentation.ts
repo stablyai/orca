@@ -71,6 +71,9 @@ export function rowTitle(row: NewTabAgentMenuRow, label: string, t: Translate = 
 }
 
 export function rowLabel(row: NewTabAgentMenuRow, t: Translate = translate): string {
+  if (row.kind === 'terminal' && row.copy) {
+    return row.copy.name
+  }
   const label = getAgentCatalog().find((entry) => entry.id === row.agent)?.label ?? row.agent
   return row.kind === 'cli'
     ? `${label} ${t('auto.components.tab.bar.QuickLaunchButton.cliTag', '(CLI)')}`
@@ -78,5 +81,6 @@ export function rowLabel(row: NewTabAgentMenuRow, t: Translate = translate): str
 }
 
 export function rowId(row: NewTabAgentMenuRow): string {
-  return `${row.kind === 'chat-unavailable' ? 'chat' : row.kind}:${row.agent}`
+  const id = row.kind === 'terminal' && row.copy ? row.copy.id : row.agent
+  return `${row.kind === 'chat-unavailable' ? 'chat' : row.kind}:${id}`
 }

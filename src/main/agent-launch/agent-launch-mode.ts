@@ -2,7 +2,7 @@
 
 import { requestsCwdOutsideWorkspaceRoot } from '../../shared/shell/launch/terminal-startup-cwd'
 import type {
-  AgentLaunchModeReason,
+  AgentLaunchDowngradeReason,
   AgentLaunchModeReceipt
 } from '../../shared/agent-launch/contracts/agent-launch-intent'
 import { RUNTIME_CAPABILITIES } from '../../shared/remote-runtime/protocol/protocol-version'
@@ -27,8 +27,6 @@ import {
   withWslHostChatRecovery,
   type WslHostChatSettingsSource
 } from './agent-launch-wsl-host-recovery'
-
-type AgentLaunchDowngradeReason = Exclude<AgentLaunchModeReason, 'user_default' | 'requested'>
 
 /** Caller-specific receipt wording, shared across desktop, mobile and orchestration. */
 export type AgentLaunchModeVocabulary = {

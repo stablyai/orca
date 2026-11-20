@@ -5,6 +5,7 @@ import {
 } from '../permissions/agent-permission-env'
 import type { GlobalSettings } from '../../settings/global-settings-types'
 import { isTuiAgent } from '../catalog/tui-agent-config'
+import { normalizeAgentCopies } from '../catalog/agent-copies'
 import { YOLO_TUI_AGENT_ARGS, YOLO_TUI_AGENT_ENV } from '../permissions/tui-agent-permissions'
 import {
   readLaunchPermissionChoice,
@@ -161,6 +162,9 @@ export function sanitizeAgentLaunchProfileUpdates(
   }
   if ('agentLaunchChoices' in updates) {
     target.agentLaunchChoices = normalizeAgentLaunchChoices(updates.agentLaunchChoices)
+  }
+  if ('agentCopies' in updates) {
+    target.agentCopies = normalizeAgentCopies(updates.agentCopies)
   }
   sanitizeAgentPermissionUpdates(target, updates)
 }

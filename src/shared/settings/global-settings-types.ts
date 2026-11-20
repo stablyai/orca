@@ -28,7 +28,7 @@ import type {
 import type { NotificationSettings } from '../notifications/notification-settings-types'
 import type { CtrlTabOrderMode } from '../workspace-layout/tab-groups/tab-types'
 import type { TerminalQuickCommand } from '../terminal/quick-commands/terminal-quick-command-types'
-import type { TuiAgent } from '../agent-launch/catalog/tui-agent'
+import type { AgentCopy, TuiAgent } from '../agent-launch/catalog/tui-agent'
 import type { ZcodePlanSite } from '../agent-accounts/usage-credentials/zcode-plan-sites'
 import type {
   AgentDashboardMode,
@@ -396,6 +396,8 @@ export type GlobalSettings = GlobalSettingsBase & {
   agentLaunchChoices?: AgentLaunchChoices
   /** Per-agent launch environment defaults used when yolo mode is exposed as env. */
   agentDefaultEnv?: Partial<Record<TuiAgent, Record<string, string>>>
+  /** Named copies of built-in agents, each with its own command, arguments and environment. */
+  agentCopies?: AgentCopy[]
   /** One-shot guard for adding yolo-mode default args to untouched agent launch profiles. */
   agentYoloDefaultsMigrated?: boolean
   /** Why: disabling must persist so startup doesn't reinstall global agent hook entries the user just removed. */

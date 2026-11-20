@@ -22,6 +22,7 @@ import type { SleepingAgentLaunchConfig } from '../../../../shared/agent-session
 import { isTerminalLeafId, makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { resolveSavedRestoreLaunchRecipe } from './saved-restore-launch-recipe'
 import { worktreeIdsEqual } from '../../../../shared/worktree/id'
+import { agentLaunchPreferenceOptions } from '../../../../shared/agent-launch/choices/agent-launch-preferences'
 import {
   resolveTuiAgentLaunchRawArgs,
   resolveTuiAgentLaunchEnv
@@ -79,15 +80,7 @@ export abstract class OrcaRuntimeWithGetAgentSessionExecutionNamespace extends O
   protected toAgentSessionOptions(
     preferences: AgentLaunchPreferences | undefined
   ): Record<string, string> | undefined {
-    if (!preferences) {
-      return undefined
-    }
-    const options = {
-      ...(preferences.model ? { model: preferences.model } : {}),
-      ...(preferences.effort ? { effort: preferences.effort } : {}),
-      ...(preferences.mode ? { mode: preferences.mode } : {})
-    }
-    return Object.keys(options).length > 0 ? options : undefined
+    return agentLaunchPreferenceOptions(preferences)
   }
 
   /** A saved restore replays the source pane as this host ran it; History and other user resumes keep current settings. */

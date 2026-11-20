@@ -8,7 +8,6 @@ import { savedChatPermissionMode } from '../../../../../../shared/agent-launch/p
 import { useChatProgramFacts } from '@/lib/agent-session/launch/inventory/host-chat-program-acquisition'
 import { useMemo } from 'react'
 import { recomputeOn } from '@/lib/recompute-on'
-import { toast } from 'sonner'
 import type {
   AgentLaunchSettings,
   AgentLaunchSettingsMutation
@@ -25,8 +24,6 @@ import {
   type AgentPermissionSettings
 } from '../../../../../../shared/agent-launch/permissions/tui-agent-permission-choice'
 import { agentArgsSetPermission } from '../../../../../../shared/agent-launch/permissions/agent-permission-args'
-import { liftAgentPermissionArgs } from '../../../../../../shared/agent-launch/permissions/tui-agent-permission-lift'
-import { agentPermissionChoiceLabel } from '../../../agent/launch-settings/agent-permission-choice-label'
 import { AllAgentsPermissionSetting } from '../permissions/AllAgentsPermissionSetting'
 import type { AgentPermissionChoiceRow } from '../../../agent/launch-settings/agent-permission-choice-row'
 import type { AgentPermissionsSettingProps } from '@/components/settings/agents/permissions/AgentPermissionsSetting'
@@ -74,6 +71,8 @@ import {
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../../shared/execution-host/execution-host'
 import { useTranslate } from '@/i18n/use-translate'
 import { chatProgramInstalled } from '../../../../../../shared/agent-launch/picker/agent-launch-picker-rows'
+import { AgentCopiesSection, useAgentCopies } from './AgentCopiesSection'
+import { saveAgentUserArgs } from './agent-user-args-save'
 
 export type AgentPermissionsRenderer = (props: AgentPermissionsSettingProps) => React.ReactNode
 
@@ -177,6 +176,7 @@ export function AgentLaunchSettingsCatalog({
     void mutate(scopedMutation).catch(() => {})
   }
   const typed = settings.agentPermission
+  const copies = useAgentCopies(local, catalog, Boolean(typed))
   const permissionSettings: AgentPermissionSettings | null = typed
     ? { agentPermissionDefault: typed.default, agentPermissionOverrides: typed.overrides }
     : null
@@ -208,27 +208,8 @@ export function AgentLaunchSettingsCatalog({
       argsSetPermission: agentArgsSetPermission(agent, typed?.userArgs[agent])
     }
   }
-  const saveUserArgs = async (agent: TuiAgent, label: string, value: string): Promise<void> => {
-    const lifted = liftAgentPermissionArgs(agent, value)
-    await mutate({ type: 'user-arguments', agent, value })
-    if (lifted.choice) {
-      const chatSupported = nativeChatPermissionsSupported && agentChatPermissionModes(agent)
-      const values = { agent: label, mode: agentPermissionChoiceLabel(lifted.choice, label) }
-      toast.success(
-        chatSupported
-          ? t(
-              'settings.agents.permissionFromArgs',
-              '{{agent}} set to {{mode}} in terminals and new chats.',
-              values
-            )
-          : t(
-              'settings.agents.permissionFromArgsTerminals',
-              '{{agent}} set to {{mode}} in terminals.',
-              values
-            )
-      )
-    }
-  }
+  const saveUserArgs = (agent: TuiAgent, label: string, value: string) =>
+    saveAgentUserArgs({ mutate, t, nativeChatPermissionsSupported }, agent, label, value)
   const permissions = buildAgentRowPermissions({
     agents: catalog.map((agent) => agent.id),
     settings,
@@ -322,7 +303,8 @@ export function AgentLaunchSettingsCatalog({
     sessionSourceHome:
       local && isDetected && agent.id === 'codex'
         ? buildCodexSessionSourceHomeControl(local.settings, local.updateSettings)
-        : undefined
+        : undefined,
+    onDuplicate: local && isDetected ? () => copies.duplicate(agent) : undefined
   })
   const rowProps = (
     agent: (typeof catalog)[number],
@@ -403,6 +385,7 @@ export function AgentLaunchSettingsCatalog({
         }}
         getRowProps={rowProps}
       />
+      <AgentCopiesSection copies={copies.list} base={copies.base} onSave={copies.save} />
     </>
   )
 }

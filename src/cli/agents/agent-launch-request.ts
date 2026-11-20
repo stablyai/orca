@@ -24,6 +24,11 @@ import type { RuntimeStatus } from '../../shared/remote-runtime/session-graph/ru
 import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import { isTuiAgent } from '../../shared/agent-launch/catalog/tui-agent-config'
 import {
+  agentCopyBase,
+  isAgentCopyId,
+  withAgentCopyOption
+} from '../../shared/agent-launch/catalog/agent-copies'
+import {
   getOptionalStringFlag,
   getRequiredStringFlag,
   getRequiredStringFlagAllowingEmpty,
@@ -61,11 +66,13 @@ function readSurfaceFlag(flags: Flags): AgentLaunchSurface | undefined {
   return known
 }
 
+/** A copy's id names its base agent; the host checks the copy exists when it launches it. */
 export function parseCliAgent(value: string): TuiAgent {
-  if (!isTuiAgent(value)) {
+  const agent = isTuiAgent(value) ? value : agentCopyBase(value)
+  if (!agent) {
     throw new RuntimeClientError('invalid_argument', `Unknown TUI agent "${value}"`)
   }
-  return value
+  return agent
 }
 
 export function readCliAgentLaunch(
@@ -93,6 +100,11 @@ export function readCliAgentLaunch(
     throw new RuntimeClientError('invalid_argument', 'Malformed --retry-launch operation ID')
   }
   const surface = readSurfaceFlag(flags)
+  const copyId = flags.get('agent')
+  const sessionOptions = withAgentCopyOption(
+    checked.preferences ? { ...checked.preferences } : undefined,
+    isAgentCopyId(copyId) ? copyId : undefined
+  )
   return {
     agent,
     ...(surface ? { surface } : {}),
@@ -100,7 +112,7 @@ export function readCliAgentLaunch(
     ...(typeof prompt === 'string' && prompt.trim()
       ? { prompt: { text: prompt, delivery: 'submit' as const } }
       : {}),
-    ...(checked.preferences ? { sessionOptions: { ...checked.preferences } } : {})
+    ...(sessionOptions ? { sessionOptions: { ...sessionOptions } } : {})
   }
 }
 

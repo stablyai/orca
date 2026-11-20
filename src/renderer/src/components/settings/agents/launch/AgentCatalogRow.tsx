@@ -79,6 +79,8 @@ export type AgentCatalogRowProps = {
   /** Update for the user's own CLI, shown while a newer release is out. */
   cliUpdate?: React.ReactNode
   launchChoiceEditor?: (permissionControlRef: React.Ref<HTMLDivElement>) => React.ReactNode
+  /** Saves a named copy of this agent; absent where copies cannot be made. */
+  onDuplicate?: () => void
 }
 
 export type AgentCatalogRowViewProps = AgentCatalogRowProps & {
@@ -116,6 +118,7 @@ export function AgentCatalogRow({
   reserveOpensAsSlot = false,
   chatRuntime,
   cliUpdate,
+  onDuplicate,
   expanded: cmdOpen,
   onExpandedChange: setCmdOpen
 }: AgentCatalogRowViewProps): React.JSX.Element {
@@ -260,6 +263,11 @@ export function AgentCatalogRow({
                   ? t('settings.agents.clearDefault', 'Clear default agent')
                   : t('auto.components.settings.AgentsPane.5f986a9b92', 'Set as default')}
               </DropdownMenuItem>
+              {onDuplicate && (
+                <DropdownMenuItem onSelect={onDuplicate}>
+                  {t('settings.agents.duplicate', 'Duplicate')}
+                </DropdownMenuItem>
+              )}
               <DropdownMenuSeparator />
               <DropdownMenuItem asChild>
                 <a
