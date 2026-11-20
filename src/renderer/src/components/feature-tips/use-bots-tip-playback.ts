@@ -25,7 +25,7 @@ export type BotsTipPlayback = {
   pageSeconds: number
   /** Seconds into that span at this render; the pill's CSS animation resumes from here. */
   pageElapsed: number
-  /** False while paused (reduced motion or closed): the pill stays where it is. */
+  /** False while paused (reduced motion, closed or window hidden): the pill stays where it is. */
   playing: boolean
   /** Counts page starts, so a page shown again restarts its one-shot pieces. */
   visit: number

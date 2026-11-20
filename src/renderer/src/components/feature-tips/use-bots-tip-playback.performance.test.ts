@@ -41,6 +41,7 @@ describe('feature tip card playback renders', () => {
       })
     }
     expect(result.current.page).toBe(1)
-    expect(renders).toBeLessThan(30)
+    // 17 cue renders on the first page (its 16 cues and its end), then the page change.
+    expect(renders).toBeLessThanOrEqual(20)
   })
 })
