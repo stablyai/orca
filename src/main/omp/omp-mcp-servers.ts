@@ -67,13 +67,22 @@ function ompFlag(value: unknown): boolean | undefined {
       : undefined
 }
 
+// Windows names are case-insensitive (`Path`), as in OMP's own environment.
+function envValue(env: Readonly<Record<string, string>>, name: string): string | undefined {
+  if (process.platform !== 'win32') {
+    return Object.hasOwn(env, name) ? env[name] : undefined
+  }
+  const upper = name.toUpperCase()
+  return Object.entries(env).find(([key]) => key.toUpperCase() === upper)?.[1]
+}
+
 /** OMP's `${VAR}` and `${VAR:-default}`; an unset plain `${VAR}` stays literal. */
 function expandEnv(value: unknown, env: Readonly<Record<string, string>>): unknown {
   if (typeof value === 'string') {
     return value.replace(
       /\$\{([^}:]+)(?::-([^}]*))?\}/g,
       (match, name: string, fallback?: string) => {
-        const found = Object.hasOwn(env, name) ? env[name] : undefined
+        const found = envValue(env, name)
         if (found !== undefined && (fallback === undefined || found !== '')) {
           return found
         }
@@ -118,6 +127,10 @@ export const readOmpMcpServers: AcpOwnMcpServersLoader = async ({ cwd, env, vers
     readJsonObject(join(agentDir, 'mcp.json')),
     readJsonObject(join(agentDir, '.mcp.json'))
   ])
+  if (strings(settings.disabledProviders).includes('native')) {
+    return []
+  }
+  const disabledExtensions = new Set(strings(settings.disabledExtensions))
   const projectEnabled =
     (record(settings.mcp).enableProjectConfig ?? settings['mcp.enableProjectConfig']) !== false
   const project = projectEnabled
@@ -128,16 +141,18 @@ export const readOmpMcpServers: AcpOwnMcpServersLoader = async ({ cwd, env, vers
     : []
   const disabled = new Set(strings(user.disabledServers))
   const forced = new Set(strings(user.enabledServers))
+  // OMP points PI_CODING_AGENT_DIR at a named profile's folder before it reads these files.
+  const expansionEnv = { ...env, PI_CODING_AGENT_DIR: agentDir }
   const claimed = new Set<string>()
   const servers: McpServer[] = []
   // OMP's order: project files before user files, and the first entry of a name owns it.
   for (const file of [...project, user, userDot]) {
     for (const [name, raw] of Object.entries(record(file.mcpServers))) {
-      if (claimed.has(name)) {
+      if (claimed.has(name) || disabledExtensions.has(`mcp:${name}`)) {
         continue
       }
       claimed.add(name)
-      const entry = record(expandEnv(raw, env))
+      const entry = record(expandEnv(raw, expansionEnv))
       if (disabled.has(name) || (ompFlag(entry.enabled) === false && !forced.has(name))) {
         continue
       }

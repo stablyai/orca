@@ -64,14 +64,16 @@ describe('readOmpMcpServers', () => {
     ])
   })
 
-  it('leaves out project servers when the user turned project MCP config off', async () => {
-    await writeFile(join(agentDir, 'config.yml'), 'mcp:\n  enableProjectConfig: false\n')
+  it('leaves out what the user turned off in OMP settings', async () => {
+    await writeFile(
+      join(agentDir, 'config.yml'),
+      'mcp:\n  enableProjectConfig: false\ndisabledExtensions:\n  - mcp:docs\n'
+    )
     const env = { PI_CODING_AGENT_DIR: agentDir, DOCS_TOKEN: 'secret' }
 
     const servers = await readOmpMcpServers({ cwd, env, version: '19.0.1' })
 
-    expect(servers.map((server) => server.name)).toEqual(['memory', 'docs'])
-    expect(servers[0]).toMatchObject({ command: 'user-memory' })
+    expect(servers).toEqual([{ name: 'memory', command: 'user-memory', args: [], env: [] }])
   })
 
   it('sends none to releases where a failing server stops the chat opening', async () => {
