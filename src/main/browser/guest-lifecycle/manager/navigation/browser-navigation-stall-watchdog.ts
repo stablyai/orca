@@ -104,7 +104,7 @@ export function installBrowserNavigationStallWatchdog(
   }
   recordCommit()
 
-  const finish = (outcome: 'committed' | 'stopped' | 'replaced' | 'closed'): void => {
+  const finish = (outcome: 'committed' | 'failed' | 'stopped' | 'replaced' | 'closed'): void => {
     const load = pending
     if (!load) {
       return
@@ -207,18 +207,39 @@ export function installBrowserNavigationStallWatchdog(
     recordCommit()
     finish('committed')
   }
-  // Ends a failed load, a 204 or a download. Not did-fail-load: a navigation this one replaced
-  // can still fail late (e.g. a delayed extension block), and only stopping proves this one ended.
+  // Ends a 204 or a download, and a failed load once nothing in the page is loading.
   const stopped = (): void => {
     if (!guest.isLoadingMainFrame()) {
       finish('stopped')
     }
+  }
+  // A failure can belong to a navigation this one replaced (e.g. a delayed extension block), so
+  // it ends the watch only if the main frame is idle afterwards; loading iframes can delay
+  // did-stop-loading indefinitely.
+  const failed = (
+    _event: Electron.Event,
+    _code: number,
+    _description: string,
+    _url: string,
+    isMainFrame: boolean
+  ): void => {
+    const load = pending
+    if (!isMainFrame || !load) {
+      return
+    }
+    const check = setTimeout(() => {
+      if (pending === load && !guest.isDestroyed() && !guest.isLoadingMainFrame()) {
+        finish('failed')
+      }
+    }, 0)
+    check.unref?.()
   }
   const closed = (): void => finish('closed')
 
   guest.on('did-start-navigation', started)
   guest.on('did-redirect-navigation', redirected)
   guest.on('did-navigate', committed)
+  guest.on('did-fail-load', failed)
   guest.on('did-stop-loading', stopped)
   guest.on('destroyed', closed)
   return () => {
@@ -233,6 +254,7 @@ export function installBrowserNavigationStallWatchdog(
       guest.off('did-start-navigation', started)
       guest.off('did-redirect-navigation', redirected)
       guest.off('did-navigate', committed)
+      guest.off('did-fail-load', failed)
       guest.off('did-stop-loading', stopped)
       guest.off('destroyed', closed)
     }

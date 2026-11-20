@@ -55,9 +55,10 @@ it('keeps watching a newer load when the navigation it replaced fails late', () 
   expect(reports).toEqual([
     { phase: 'no-request-seen', host: 'second.test', hiddenSameOriginPages: 0 }
   ])
-  // The stuck load itself ends when the page stops loading.
+  // The stuck load's own failure ends it, even while an iframe keeps the page loading.
   guest.loadingMainFrame = false
-  guest.emit('did-stop-loading')
+  guest.emit('did-fail-load', {}, -2, 'ERR_FAILED', 'http://second.test/b', true)
+  vi.advanceTimersByTime(0)
   expect(reports.at(-1)).toBeNull()
   dispose()
 })
