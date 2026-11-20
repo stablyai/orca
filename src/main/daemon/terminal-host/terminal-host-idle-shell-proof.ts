@@ -29,7 +29,7 @@ const proofs = new WeakMap<Session, IdleShellProof>()
 /** Group sizes for a round: from a full capture another pane's poll already needs, else one kinfo-only read. */
 const groupSizesReader = createProcessTableSnapshotReader<ReadonlyMap<number, number>>({
   runPs: async () => {
-    // A round's requests arrive in one socket read; after them, a full capture one of them started can serve all.
+    // Requests delivered in the same socket read run first, so a full capture one of them starts serves the rest.
     await new Promise((resolve) => setImmediate(resolve))
     const full = peekStrictProcessTableSnapshot()
     if (!full) {
