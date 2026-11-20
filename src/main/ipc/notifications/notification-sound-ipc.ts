@@ -18,6 +18,9 @@ import { getTrustedUIRendererWebContents } from '../ui'
 const MAX_NOTIFICATION_SOUND_BYTES = 10 * 1024 * 1024
 
 export function registerNotificationSoundHandlers(store: Store): void {
+  ipcMain.removeHandler('notifications:claimDeliveredSound')
+  ipcMain.handle('notifications:claimDeliveredSound', (event) => claimDeliveredSound(event.sender))
+
   // Return paths so preload caching avoids repeat 10MB sound transfers.
   ipcMain.removeHandler('notifications:resolveSoundPath')
   ipcMain.handle(
@@ -70,10 +73,10 @@ export function registerNotificationSoundHandlers(store: Store): void {
   })
 }
 
-// Alerts delivered while a page loads, by id; one load listener per page plays for any still showing.
-const awaitingLoad = new WeakMap<WebContents, Set<string>>()
-// Pages with a sound already queued for this turn, so a burst of alerts sends one.
-const queued = new WeakSet<WebContents>()
+// Delivered alerts still owed a sound, by page; clearing an alert removes it, and playback claims the rest.
+const owed = new WeakMap<WebContents, Set<string>>()
+// Pages with a send queued this turn (a burst sends one) or waiting for their load to finish.
+const scheduled = new WeakSet<WebContents>()
 
 function wantsCustomSound(store: Store): boolean {
   return usesCustomNotificationSound(
@@ -81,20 +84,14 @@ function wantsCustomSound(store: Store): boolean {
   )
 }
 
-function sendOnce(store: Store, renderer: WebContents): void {
-  if (queued.has(renderer)) {
-    return
+function send(store: Store, renderer: WebContents): void {
+  scheduled.delete(renderer)
+  if (!renderer.isDestroyed() && owed.get(renderer)?.size && wantsCustomSound(store)) {
+    renderer.send(
+      'notifications:playDeliveredSound',
+      store.getSettings().notifications.customSoundVolume
+    )
   }
-  queued.add(renderer)
-  setImmediate(() => {
-    queued.delete(renderer)
-    if (!renderer.isDestroyed() && wantsCustomSound(store)) {
-      renderer.send(
-        'notifications:playDeliveredSound',
-        store.getSettings().notifications.customSoundVolume
-      )
-    }
-  })
 }
 
 /** Plays the selected custom sound for an alert main delivered itself; the renderer owns audio. */
@@ -103,32 +100,37 @@ export function playDeliveredSound(store: Store, notificationId: string): void {
   if (!renderer || !wantsCustomSound(store)) {
     return
   }
-  if (!renderer.isLoading()) {
-    sendOnce(store, renderer)
+  const ids = owed.get(renderer)
+  if (ids) {
+    ids.add(notificationId)
+  } else {
+    owed.set(renderer, new Set([notificationId]))
+  }
+  if (scheduled.has(renderer)) {
     return
   }
-  // Why: a reloading page has no listener yet, so the sound waits for it, and only for alerts still showing.
-  const waiting = awaitingLoad.get(renderer)
-  if (waiting) {
-    waiting.add(notificationId)
-    return
+  scheduled.add(renderer)
+  // Why: a reloading page has no listener yet, so its sound waits for the load.
+  if (renderer.isLoading()) {
+    renderer.once('did-finish-load', () => send(store, renderer))
+  } else {
+    setImmediate(() => send(store, renderer))
   }
-  awaitingLoad.set(renderer, new Set([notificationId]))
-  renderer.once('did-finish-load', () => {
-    const live = (awaitingLoad.get(renderer)?.size ?? 0) > 0
-    awaitingLoad.delete(renderer)
-    if (live) {
-      sendOnce(store, renderer)
-    }
-  })
 }
 
-/** A cleared alert no longer earns the sound a loading page owes it. */
+/** A cleared alert no longer earns a sound, even one already sent and loading. */
 export function retireDeliveredSound(notificationId: string): void {
   const renderer = getTrustedUIRendererWebContents()
   if (renderer) {
-    awaitingLoad.get(renderer)?.delete(notificationId)
+    owed.get(renderer)?.delete(notificationId)
   }
+}
+
+/** The page asks right before playing; true only while some delivered alert is still showing. */
+function claimDeliveredSound(renderer: WebContents): boolean {
+  const live = (owed.get(renderer)?.size ?? 0) > 0
+  owed.delete(renderer)
+  return live
 }
 
 /** The retained-attention receiver's sound callbacks for main-delivered alerts. */
