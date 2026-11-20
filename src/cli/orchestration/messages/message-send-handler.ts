@@ -26,7 +26,11 @@ import {
   resolveOrchestrationTerminalHandle,
   throwNoActiveSenderTerminal
 } from '../identity/terminal-identity'
-import { resolveTerminalReference } from '../../tab-reference/copied-tab-reference'
+import {
+  resolveChatSessionReference,
+  resolveTerminalReference
+} from '../../tab-reference/copied-tab-reference'
+import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../shared/agent-session/identity/orca-session-address-prefix'
 
 const WORKER_DONE_UNAVAILABLE_RETRY_MS = 120_000
 
@@ -86,8 +90,8 @@ export const ORCHESTRATION_SEND_HANDLER: Record<string, CommandHandler> = {
     await refuseAgentServerRoute('send', ctx)
     await requirePeerMailCarrier(ctx)
     const toFlag = getOptionalStringFlag(flags, 'to')
-    // A copied terminal tab id names the agent's tab; send to the terminal it holds.
-    const to = toFlag ? await resolveTerminalReference(client, toFlag) : toFlag
+    // A copied tab id names the agent's tab; send to the chat or the terminal it holds.
+    const to = toFlag ? await resolveRecipientReference(client, toFlag) : toFlag
     const type = getOptionalStringFlag(flags, 'type')
     if (to) {
       rejectLifecycleGroupRecipient(type, to)
@@ -246,4 +250,14 @@ function sendFields(value: Exclude<OrchestrationSendResult, { delivery: string }
 function attachedFiles(flags: Map<string, string | boolean>, cwd: string): { files?: string[] } {
   const files = getRepeatedStringFlag(flags, 'file').map((path) => resolve(cwd, path))
   return files.length > 0 ? { files } : {}
+}
+
+async function resolveRecipientReference(
+  client: Parameters<typeof resolveTerminalReference>[0],
+  to: string
+): Promise<string> {
+  const chatSession = await resolveChatSessionReference(client, to)
+  return chatSession
+    ? `${ORCA_SESSION_ADDRESS_PREFIX}${chatSession}`
+    : await resolveTerminalReference(client, to)
 }

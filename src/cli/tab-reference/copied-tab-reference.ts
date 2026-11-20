@@ -14,6 +14,7 @@ type InventoryTab =
       leafId?: string
       terminal?: string | null
     }
+  | { type: 'agent-session'; id: string; sessionId?: string }
   | { type: string; id: string }
 
 export type SessionTabsInventory = {
@@ -50,6 +51,38 @@ export function findTerminalsForTabId(
     }
   }
   return found
+}
+
+// Copy Tab ID gives a chat `structured-agent-session-<sessionId>` (or a minted `chat-tab-…` slot id);
+// the tab inventory lists the same chat as `agent-session:<sessionId>`.
+const SESSION_NAMING_CHAT_TAB_PREFIXES = ['structured-agent-session-', 'agent-session:']
+const CHAT_TAB_PREFIXES = [...SESSION_NAMING_CHAT_TAB_PREFIXES, 'chat-tab-']
+
+export function findChatSessionForTabId(
+  inventory: SessionTabsInventory | null,
+  tabId: string
+): string | null {
+  for (const snapshot of inventory?.snapshots ?? []) {
+    for (const tab of snapshot.tabs) {
+      if (tab.type === 'agent-session' && tab.id === tabId && 'sessionId' in tab) {
+        return tab.sessionId ?? null
+      }
+    }
+  }
+  // These forms name their session even when the tab is closed or the host lists no chats.
+  const prefix = SESSION_NAMING_CHAT_TAB_PREFIXES.find((candidate) => tabId.startsWith(candidate))
+  return prefix ? tabId.slice(prefix.length) || null : null
+}
+
+/** Maps a copied chat tab id to the chat's Orca session id; any other value is returned as null. */
+export async function resolveChatSessionReference(
+  client: RuntimeClient,
+  value: string
+): Promise<string | null> {
+  if (!CHAT_TAB_PREFIXES.some((prefix) => value.startsWith(prefix))) {
+    return null
+  }
+  return findChatSessionForTabId(await readInventory(client), value)
 }
 
 async function readInventory(client: RuntimeClient): Promise<SessionTabsInventory | null> {

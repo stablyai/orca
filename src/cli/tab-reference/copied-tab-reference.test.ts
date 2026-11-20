@@ -3,6 +3,7 @@ import type { RuntimeClient } from '../runtime/client'
 import { RuntimeClientError } from '../runtime/connection/types'
 import {
   resolveBrowserPageReference,
+  resolveChatSessionReference,
   resolveTerminalReference,
   type SessionTabsInventory
 } from './copied-tab-reference'
@@ -117,5 +118,62 @@ describe('resolveTerminalReference', () => {
   it('keeps an id that names no terminal tab, so the runtime reports it', async () => {
     const { client } = clientReturning(inventory)
     await expect(resolveTerminalReference(client, BROWSER_TAB)).resolves.toBe(BROWSER_TAB)
+  })
+})
+
+describe('resolveChatSessionReference', () => {
+  const CHAT_SESSION = '0bf61e42-8693-47b2-aabd-40e22e81b930'
+  const chats: SessionTabsInventory = {
+    snapshots: [
+      {
+        worktree: 'repo::/w',
+        tabs: [
+          {
+            type: 'agent-session',
+            id: `structured-agent-session-${CHAT_SESSION}`,
+            sessionId: CHAT_SESSION
+          },
+          { type: 'agent-session', id: 'chat-tab-7', sessionId: 'session-from-slot' }
+        ]
+      }
+    ]
+  }
+
+  it('maps a copied chat tab id to the chat session it shows', async () => {
+    const { client } = clientReturning(chats)
+    await expect(
+      resolveChatSessionReference(client, `structured-agent-session-${CHAT_SESSION}`)
+    ).resolves.toBe(CHAT_SESSION)
+  })
+
+  it('maps the inventory form of a chat tab id', async () => {
+    const { client } = clientReturning({ snapshots: [] })
+    await expect(
+      resolveChatSessionReference(client, `agent-session:${CHAT_SESSION}`)
+    ).resolves.toBe(CHAT_SESSION)
+  })
+
+  it('maps a minted slot tab id through the tab inventory', async () => {
+    const { client } = clientReturning(chats)
+    await expect(resolveChatSessionReference(client, 'chat-tab-7')).resolves.toBe(
+      'session-from-slot'
+    )
+  })
+
+  it('reads the session from the structured id when the host lists no chats', async () => {
+    const call = vi.fn(async () => {
+      throw new RuntimeClientError('method_not_found', 'Unknown method')
+    })
+    const client = { call } as unknown as RuntimeClient
+    await expect(
+      resolveChatSessionReference(client, `structured-agent-session-${CHAT_SESSION}`)
+    ).resolves.toBe(CHAT_SESSION)
+  })
+
+  it('leaves other values alone without a lookup', async () => {
+    const { client, call } = clientReturning(chats)
+    await expect(resolveChatSessionReference(client, 'orca_session_id:abc')).resolves.toBeNull()
+    await expect(resolveChatSessionReference(client, TERMINAL_TAB)).resolves.toBeNull()
+    expect(call).not.toHaveBeenCalled()
   })
 })

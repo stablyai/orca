@@ -8,6 +8,7 @@ import { printResult } from '../output/command-result-output'
 import { RuntimeClientError } from '../runtime/connection/types'
 import type { RuntimeClient } from '../runtime/client'
 import { getOptionalWorktreeSelector } from '../workspace-selection/workspace-selector'
+import { resolveChatSessionReference } from '../tab-reference/copied-tab-reference'
 import {
   annotateOmittedHostScope,
   formatListingHostScope,
@@ -58,7 +59,7 @@ export const AGENT_CONVERSATION_HANDLERS: Record<string, CommandHandler> = {
   },
   'agent show': async ({ flags, client, json }) => {
     const result = await callAgentMethod<AgentShowResult>(client, 'agent.show', {
-      id: getRequiredStringFlag(flags, 'id')
+      id: await resolveAgentId(client, getRequiredStringFlag(flags, 'id'))
     })
     printResult(result, json, formatAgentShow)
   },
@@ -71,11 +72,16 @@ export const AGENT_CONVERSATION_HANDLERS: Record<string, CommandHandler> = {
       )
     }
     const result = await callAgentMethod<AgentReadResult>(client, 'agent.read', {
-      id: getRequiredStringFlag(flags, 'id'),
+      id: await resolveAgentId(client, getRequiredStringFlag(flags, 'id')),
       ...(limit !== undefined ? { limit } : {})
     })
     printResult(result, json, formatAgentRead)
   }
+}
+
+/** A copied chat tab id names the chat; its Orca session id is what the agent commands take. */
+async function resolveAgentId(client: RuntimeClient, id: string): Promise<string> {
+  return (await resolveChatSessionReference(client, id)) ?? id
 }
 
 async function callAgentMethod<TResult>(client: RuntimeClient, method: string, params: unknown) {
