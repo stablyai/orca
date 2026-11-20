@@ -3,7 +3,7 @@ import type { TerminalForegroundSample } from '../../../shared/terminal/pty/life
 import type { Session } from '../sessions/session'
 import { inspectTerminalHostProcess } from './terminal-host-process-inspection'
 
-// Guards PR #__PR__: idle shell panes polled every few seconds read the whole machine's process table each time.
+// Guards PR #45713: idle shell panes polled every few seconds read the whole machine's process table each time.
 const tables = vi.hoisted(() => ({ strict: vi.fn(), cheap: vi.fn() }))
 vi.mock(
   '../../../shared/process-observation/tables/process-table-snapshot-reader',
