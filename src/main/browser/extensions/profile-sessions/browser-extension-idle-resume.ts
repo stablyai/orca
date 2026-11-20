@@ -3,6 +3,7 @@ import {
   restartBrowserExtensionContentScripts
 } from '../api-runtime/browser-extension-content-scripts'
 import { getBrowserExtensionDnrStore } from '../declarative-net-request/session/browser-extension-dnr-store'
+import { notifyBrowserExtensionActionsChanged } from '../actions/browser-extension-action-registry'
 import { forgetSidePanelExtensionOptions } from '../side-panel/browser-extension-side-panel-options'
 import { clearBrowserExtensionDnrSessionRules } from '../declarative-net-request/session/browser-extension-dnr-session'
 import {
@@ -53,12 +54,22 @@ export async function settleBrowserExtensionResume(
     }
     console.warn(`[browser-extensions] Could not resume ${extension.id}; starting it clean:`, error)
     dropBrowserExtensionIdleState({ profileId, extensionId: extension.id })
+    // Why: the toolbar already painted the kept badge and icon this drop just removed.
+    notifyBrowserExtensionActionsChanged(profileId)
+    // Why: a copy unloaded (disabled, reloaded) during the cleanup gets its own lifecycle events.
+    let unloaded = false
+    const onUnloaded = (_event: unknown, gone: Electron.Extension): void => {
+      unloaded ||= gone.id === extension.id
+    }
+    sess.extensions.on('extension-unloaded', onUnloaded)
     // Why settled: onStartup must not run while either cleanup could still change what it sees.
     const cleanup = await Promise.allSettled([
       restartBrowserExtensionContentScripts(sess, profileId, extension, restoreTimeoutMs),
       clearBrowserExtensionDnrSessionRules(sess, extension.id)
-    ])
-    fireRuntimeLifecycleEvents(sess, profileId, extension, 'startup')
+    ]).finally(() => sess.extensions.removeListener('extension-unloaded', onUnloaded))
+    if (!unloaded) {
+      fireRuntimeLifecycleEvents(sess, profileId, extension, 'startup')
+    }
     for (const result of cleanup) {
       if (result.status === 'rejected') {
         console.warn(

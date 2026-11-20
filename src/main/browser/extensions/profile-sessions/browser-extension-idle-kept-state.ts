@@ -163,9 +163,17 @@ export function noteBrowserExtensionReloadedWhileIdle(
 ): void {
   dropBrowserExtensionIdleState({ extensionId })
   for (const profileId of detachedProfileIds) {
-    if (idleUnloadedProfileIds.has(profileId)) {
-      addTo(reloadedWhileIdle, profileId, extensionId)
-    }
+    noteBrowserExtensionReloadPendingInIdleProfile(profileId, extensionId)
+  }
+}
+
+/** A reload's load was skipped or cancelled because the profile went idle meanwhile. */
+export function noteBrowserExtensionReloadPendingInIdleProfile(
+  profileId: string,
+  extensionId: string
+): void {
+  if (idleUnloadedProfileIds.has(profileId)) {
+    addTo(reloadedWhileIdle, profileId, extensionId)
   }
 }
 
