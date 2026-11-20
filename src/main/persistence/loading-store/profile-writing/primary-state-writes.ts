@@ -258,6 +258,9 @@ export async function writeToDiskAsync(
   }
   const gen = runtime.writeGeneration
   if (runtime.profileStateAuthority?.asynchronous) {
+    if (!(await sealProtectedSecretsBeforeCapture(owner))) {
+      return false
+    }
     return writeProfileStateInWorker(
       owner[primaryStateWriteOperationsContext],
       runtime.profileStateAuthority,
@@ -265,4 +268,28 @@ export async function writeToDiskAsync(
     )
   }
   return writeToDiskSync(owner[primaryStateWriteOperationsContext], { expectedGeneration: gen })
+}
+
+// A secret edited while its seal ran is sealed again; past the bound, capture seals as it always has.
+const SEAL_AHEAD_ROUNDS = 3
+
+/** Seal changed secrets before capture so the snapshot never seals synchronously or misses a seal. */
+async function sealProtectedSecretsBeforeCapture(
+  owner: PrimaryStateWriteOperations
+): Promise<boolean> {
+  const { runtime, serialization } = owner[primaryStateWriteOperationsContext]
+  for (let round = 0; round < SEAL_AHEAD_ROUNDS; round++) {
+    const sealing = runtime.protectedSecrets.sealAhead(serialization.protectedPlaintexts())
+    if (!sealing) {
+      return true
+    }
+    await sealing
+    if (runtime.fatalMutationError) {
+      throw runtime.fatalMutationError
+    }
+    if (runtime.writesFrozen) {
+      return false
+    }
+  }
+  return true
 }

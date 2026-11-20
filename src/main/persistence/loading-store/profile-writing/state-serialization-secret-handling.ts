@@ -9,6 +9,7 @@ import { collectFolderWorkspaceDiffComments } from '../../../workspaces/catalog/
 import {
   PROTECTED_SECRET_SLOT,
   sshPtyOwnerLeaseSecretSlot,
+  type ProtectedSecretPlaintext,
   type ProtectedSecretRetentionUpdate
 } from '../../../credentials/protected-secret-persistence'
 import { stripRetiredGlobalSettings } from '../../applying-settings/terminal-settings-migrations'
@@ -216,6 +217,26 @@ export class StateSerializationSecretHandlingOperations {
       protectedStorageDegraded ? 'safeStorage-degraded\0' : ''
     )
     return { payload, stateHash, protectedSecretUpdates }
+  }
+
+  /** The protected values the next save writes, in the slots its projection seals them under. */
+  protectedPlaintexts(): ProtectedSecretPlaintext[] {
+    const { state } = this.runtime
+    return [
+      {
+        slot: PROTECTED_SECRET_SLOT.opencodeSessionCookie,
+        plaintext: state.settings.opencodeSessionCookie
+      },
+      { slot: PROTECTED_SECRET_SLOT.httpProxyUrl, plaintext: state.settings.httpProxyUrl ?? '' },
+      {
+        slot: PROTECTED_SECRET_SLOT.browserKagiSessionLink,
+        plaintext: state.ui.browserKagiSessionLink ?? ''
+      },
+      ...(state.sshPtyConsumerRecoveries ?? []).map((record) => ({
+        slot: sshPtyOwnerLeaseSecretSlot(record.targetId),
+        plaintext: record.ownerLease
+      }))
+    ]
   }
 
   /** The one saved form of each domain, shared by selective and whole saves. */
