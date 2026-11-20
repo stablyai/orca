@@ -1,6 +1,6 @@
 // Bot items: what a bot is doing for its owner and what it needs from them. One list per host; each
 // item belongs to one bot and one of its chats. The host's store is the truth; this is the wire shape.
-import type { BotItemAsk } from './bot-item-ask'
+import type { BotItemDecision } from './bot-item-ask'
 
 export const BOT_ITEM_STATUSES = ['planned', 'working', 'needs_you', 'done', 'canceled'] as const
 export type BotItemStatus = (typeof BOT_ITEM_STATUSES)[number]
@@ -20,6 +20,7 @@ export const BOT_ITEM_ERROR_CODES = [
   'items_read_only',
   'items_unavailable',
   'item_changed',
+  // From hosts that recorded answers (v1.4.265); this host no longer refuses with it.
   'question_closed'
 ] as const
 export type BotItemErrorCode = (typeof BOT_ITEM_ERROR_CODES)[number] | 'invalid_argument'
@@ -147,7 +148,10 @@ export const BOT_ITEM_EVENT_KINDS = [
 ] as const
 export type BotItemEventKind = (typeof BOT_ITEM_EVENT_KINDS)[number]
 
-/** An image on an owner's comment: a committed chat attachment on the bot's host, named and sized there. */
+/** Files besides images on one comment, as `bot reply --file` takes. */
+export const BOT_ITEM_COMMENT_FILE_MAX_COUNT = 10
+
+/** An image on a comment: a committed chat attachment on the bot's host, named and sized there. */
 export type BotItemCommentImage = { path: string; name: string; bytes: number }
 
 /** A `commented` event's images, dropping any entry a newer or damaged record shaped otherwise. */
@@ -187,11 +191,9 @@ export type BotItem = {
   /** `gone`: the host read its chats and this one's record is deleted, so its comments take no attachments. */
   chat: { id: string; kind: BotItemChatKind; title: string | null; gone?: true }
   madeBy: { botId: string; name: string | null; chatId: string } | null
-  /** Needs you: the agent's comment asking the owner, the row's second line. `ask`: its decisions and
-   *  choices when it gave them, so the open question's card never waits on its event's page.
-   *  `answerable`: asked on a host that takes answers, so its card records one. A recorded answer or
-   *  the owner's reply (which moves the item on) closes it; a later unrelated comment never counts. */
-  question: { eventId: string; text: string; ask?: BotItemAsk; answerable?: true } | null
+  /** Needs you: the agent's comment asking the owner. `gist`: its body's first line; `decisions`: its
+   *  question lines (`--ask`) and their quick replies (`--option`). */
+  question: { eventId: string; text: string; gist?: string; decisions?: BotItemDecision[] } | null
   closeNote: string | null
   links: BotItemLinkView[]
   version: number

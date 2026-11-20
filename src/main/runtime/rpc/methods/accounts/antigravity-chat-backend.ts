@@ -4,7 +4,8 @@ import type {
 } from '../../../../../shared/agent-accounts/antigravity/antigravity-account-types'
 import {
   forgetAntigravityHostAcpChecks,
-  isAntigravityHostAccountHome
+  isAntigravityHostAccountHome,
+  readyAntigravityHostAcpVersion
 } from '../../../../antigravity/antigravity-host-acp'
 import { getStructuredAgentSessionHost } from '../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { structuredAgentHostAlternativeReady } from '../../../agent-session/launch/structured-agent-launch-support'
@@ -29,7 +30,11 @@ export async function withAntigravityChatBackend(
     CHAT_BACKEND_WAIT_MS,
     null
   )
-  return chatUsesAgy === null ? state : { ...state, chatUsesAgy }
+  if (chatUsesAgy === null) {
+    return state
+  }
+  const version = chatUsesAgy ? readyAntigravityHostAcpVersion() : null
+  return { ...state, chatUsesAgy, ...(version ? { chatAgyVersion: version } : {}) }
 }
 
 /** A running `agy acp` may keep the login it started with, so idle chats on agy stop and resume on

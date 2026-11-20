@@ -18,7 +18,11 @@ import {
   QuickLaunchAgentMenuItems,
   useTabAgentMenuLaunch
 } from '../../agent/launch-menu/AgentMenuItems'
-import { rowId, rowLabel } from '../../agent/launch-menu/agent-menu-row-presentation'
+import {
+  rowId,
+  rowLabel,
+  rowStatusLabel
+} from '../../agent/launch-menu/agent-menu-row-presentation'
 import {
   readNewAgentTabDefault,
   resolveTerminalAgentTabShortcut
@@ -167,6 +171,9 @@ export function LandingAgentResults({
         >
           <AgentIcon agent={row.agent} size={16} />
           <span className="min-w-0 flex-1 truncate">{rowLabel(row, t)}</span>
+          {rowStatusLabel(row, t) ? (
+            <span className="text-xs text-muted-foreground">{rowStatusLabel(row, t)}</span>
+          ) : null}
         </CommandItem>
       ))}
     </CommandGroup>

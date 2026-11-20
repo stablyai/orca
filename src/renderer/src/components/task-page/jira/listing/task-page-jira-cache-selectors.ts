@@ -94,3 +94,25 @@ export function findTaskPageJiraIssue(
   }
   return newest
 }
+
+export function resolveTaskPageJiraIssues(
+  issues: JiraIssue[],
+  jiraIssueCache: JiraIssueCache,
+  jiraSearchCache: JiraSearchCache,
+  options: Pick<TaskPageJiraIssueLookupOptions, 'sourceContext'> = {}
+): JiraIssue[] {
+  return issues.map((issue) => {
+    const cached = findTaskPageJiraIssue(jiraIssueCache, jiraSearchCache, issue.key, {
+      ...options,
+      siteId: issue.siteId
+    })
+    if (!cached) {
+      return issue
+    }
+    const fetchedTime = Date.parse(issue.updatedAt)
+    const cachedTime = Date.parse(cached.updatedAt)
+    return !Number.isNaN(fetchedTime) && (Number.isNaN(cachedTime) || fetchedTime > cachedTime)
+      ? issue
+      : cached
+  })
+}

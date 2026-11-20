@@ -6,8 +6,9 @@ import { runWithGitOperationLock } from '../commands/git-operation-lock'
 export async function runWithGitWorktreeOperationLock<T>(
   worktreePath: string,
   signal: AbortSignal | undefined,
-  run: () => Promise<T>
+  run: () => Promise<T>,
+  releaseAfter?: () => Promise<void> | null
 ): Promise<T> {
   const key = await realpath(worktreePath).catch(() => resolve(worktreePath))
-  return runWithGitOperationLock(key, signal, run)
+  return runWithGitOperationLock(key, signal, run, releaseAfter)
 }

@@ -57,11 +57,7 @@ export function createNativeChatRestartOccurrence(
   let releaseRunStatus: (() => void) | undefined
   let resuming: readonly string[] = resumeRunPendingIds(null)
 
-  function emit(): void {
-    for (const listener of listeners) {
-      listener()
-    }
-  }
+  const emit = (): void => listeners.forEach((listener) => listener())
 
   /** The snapshot object is replaced HERE and nowhere else — never during a render — so every
    *  `useSyncExternalStore` reader sees the same reference until a host answer or a user action
@@ -185,10 +181,12 @@ export function createNativeChatRestartOccurrence(
     }
   }
 
-  /** One host action owns the selection; its status feed reports each chat before the reply. */
+  /** One host action owns the selection; its status feed reports each chat before the reply.
+   *  `took`: the host's own launch action already took these chats; follow it and send nothing. */
   async function continueNativeChatRestartOffer(
     sessionIds: readonly string[],
-    startedBy: ResumeRunStarter = 'user'
+    startedBy: ResumeRunStarter = 'user',
+    took?: NativeChatRestartOffer['candidates']
   ): Promise<void> {
     const requested = [...new Set(sessionIds)]
     if (!current() || requested.length === 0) {
@@ -199,7 +197,7 @@ export function createNativeChatRestartOccurrence(
     forgetUnsentResumes(requested)
     const rows = new Map([...offer.candidates, ...offer.failed].map((row) => [row.sessionId, row]))
     let actionRun = beginResumeRun(
-      requested.flatMap((sessionId) => rows.get(sessionId) ?? []),
+      took ?? requested.flatMap((sessionId) => rows.get(sessionId) ?? []),
       Date.now(),
       startedBy
     )
@@ -224,6 +222,7 @@ export function createNativeChatRestartOccurrence(
     }
     try {
       outcomes = await continueRestartChunks(target, requested, {
+        followHostLaunch: took !== undefined,
         current: actionCurrent,
         publish: (answer) => {
           if (actionCurrent()) {

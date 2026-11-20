@@ -991,6 +991,7 @@
     "bots.slack.setup.waiting",
     "bots.slack.setup.waitingAdmin",
     "bots.slack.setup.waitingDetail",
+    "bots.slack.token.accessPasted",
     "bots.slack.token.kept",
     "bots.slack.token.label",
     "bots.slack.token.open",

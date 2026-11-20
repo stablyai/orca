@@ -9,6 +9,7 @@ import {
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
+import { isMacUserAgent } from '@/app-shell/platform/user-agent-platform'
 import {
   buildServeSimKeyboardFramesForCode,
   buildServeSimKeyboardFramesForKey,
@@ -163,12 +164,18 @@ export function useEmulatorScreenKeyboard({
     (event: KeyboardEvent<HTMLDivElement>) => {
       const simulatorOption =
         !scrcpyKeyboard && (physicalKeysRef.current || pendingKeyPressesRef.current !== null)
+      // Android takes whatever character the host layout produced as text, Option and AltGr ones too.
+      const androidText = scrcpyKeyboard !== null && [...event.key].length === 1
+      // AltGr arrives as Ctrl+Alt on Windows and Linux; its characters are text, not a Ctrl shortcut.
+      const altGraphText = androidText && event.getModifierState('AltGraph')
+      // Only Mac Option composes a character; plain Alt+letter elsewhere stays a shortcut.
+      const optionText = androidText && isMacUserAgent()
       if (
         !canInteract ||
         event.nativeEvent.isComposing ||
         event.metaKey ||
-        event.ctrlKey ||
-        (event.altKey && !simulatorOption)
+        (event.ctrlKey && !altGraphText) ||
+        (event.altKey && !simulatorOption && !optionText && !altGraphText)
       ) {
         return
       }
@@ -217,15 +224,13 @@ export function useEmulatorScreenKeyboard({
         return
       }
 
-      // The HID table also decides which keys an Android pane accepts.
-      if (!buildServeSimKeyboardFramesForKey(event.key, { shift: event.shiftKey })) {
-        return
-      }
       const button = ANDROID_KEY_BUTTONS[event.key]
       if (button) {
         scrcpyKeyboard.sendKey(button, event.shiftKey)
-      } else {
+      } else if (androidText) {
         void scrcpyKeyboard.sendText(event.key)
+      } else {
+        return
       }
       event.preventDefault()
       event.stopPropagation()
@@ -249,7 +254,7 @@ export function useEmulatorScreenKeyboard({
       const pasteRequestId = pasteRequestIdRef.current
       const paste = pasteTextIntoEmulator({
         send: scrcpyKeyboard
-          ? (value) => scrcpyKeyboard.sendText(value.replaceAll('\r', ''))
+          ? scrcpyKeyboard.pasteText
           : (value) =>
               callRuntimeRpc({ kind: 'local' }, 'emulator.type', {
                 paste: true,
@@ -258,8 +263,7 @@ export function useEmulatorScreenKeyboard({
               })
                 .then(() => true)
                 .catch(() => false),
-        text,
-        usKeyboardOnly: scrcpyKeyboard !== null
+        text
       })
       void paste.then((result) => {
         if (pasteRequestIdRef.current === pasteRequestId) {
@@ -289,16 +293,6 @@ function showEmulatorKeyboardPasteResult(result: EmulatorKeyboardPasteResult): v
       translate(
         'auto.components.emulator.pane.useEmulatorScreenKeyboard.pasteTooLarge',
         'Paste is too large for emulator keyboard input.'
-      )
-    )
-    return
-  }
-
-  if (result.reason === 'unsupported-text') {
-    toast.error(
-      translate(
-        'auto.components.emulator.pane.useEmulatorScreenKeyboard.unsupportedPasteText',
-        'Emulator keyboard paste supports US keyboard text only.'
       )
     )
     return

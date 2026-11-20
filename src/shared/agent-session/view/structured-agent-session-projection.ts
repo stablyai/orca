@@ -1,4 +1,5 @@
 import { memoizeStringResult } from '../../collections/string-result-cache'
+import { isAgentSessionSlotTabId } from './agent-session-slot-tab-id'
 import {
   AGENT_STATUS_MAX_FIELD_LENGTH,
   normalizeOptionalField,
@@ -122,6 +123,7 @@ export function projectStructuredItemToNativeChat(
 
 export type StructuredAgentSessionProjectedStatus = 'working' | 'attention' | 'idle'
 
+/** Legacy tab id of chats opened before slot ids were minted; still their pane/status address. */
 export function structuredAgentSessionTabId(sessionId: string): string {
   return `structured-agent-session-${sessionId}`
 }
@@ -260,6 +262,12 @@ const structuredAgentSessionPaneLeaf = memoizeStringResult((sessionId: string): 
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-4${hex.slice(13, 16)}-a${hex.slice(17, 20)}-${hex.slice(20, 32)}`
 }, 2048)
 
+/** The tab id a chat's pane key names: status, attention and orchestration rows still address a
+ *  minted slot's chat by its session's legacy id. */
+export function structuredAgentSessionAddressTabId(tabId: string, sessionId: string): string {
+  return isAgentSessionSlotTabId(tabId) ? structuredAgentSessionTabId(sessionId) : tabId
+}
+
 export function structuredAgentSessionPaneKey(tabId: string, sessionId: string): string {
-  return `${tabId}:${structuredAgentSessionPaneLeaf(sessionId)}`
+  return `${structuredAgentSessionAddressTabId(tabId, sessionId)}:${structuredAgentSessionPaneLeaf(sessionId)}`
 }

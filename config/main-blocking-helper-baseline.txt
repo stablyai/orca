@@ -93,6 +93,7 @@
 1 src/main/automations/external-managers/scoped-external-automations.ts
 1 src/main/automations/launch/automation-run-setup-skip.ts
 2 src/main/automations/runtime-automation-service.ts
+1 src/main/avatar-generation/avatar-generation-ipc.ts # per Generate click: the agent env prep commit-message generation shares; its sync read is a shell rc lookup for GROK_HOME only when it is unset
 5 src/main/backend/backend-entry.ts
 11 src/main/backend/core-runtime-activation.ts
 2 src/main/backend/core-runtime.ts
@@ -687,7 +688,7 @@
 2 src/main/ipc/ssh/ssh-connection-handlers.ts
 2 src/main/ipc/ssh/ssh-host-server-on-connect-wiring.ts
 2 src/main/ipc/ssh/ssh-target-crud-handlers.ts
-2 src/main/ipc/ssh/ssh.ts
+1 src/main/ipc/ssh/ssh.ts
 1 src/main/ipc/workspace-cleanup/workspace-cleanup-git-evidence.ts
 1 src/main/ipc/workspace-cleanup/workspace-cleanup-worktree-listing.ts
 3 src/main/ipc/worktrees.ts
@@ -1222,10 +1223,13 @@
 15 src/main/runtime/orchestration/legacy-remote-home/federated-worker-start-reconcile.ts
 1 src/main/runtime/orchestration/legacy-remote-home/legacy-remote-home-db-methods.ts
 5 src/main/runtime/orchestration/legacy-remote/federated-dispatch-observation-fence.ts
+1 src/main/runtime/orchestration/legacy-remote/federation-relay-enqueue.ts # its own transaction became savepoint-aware so a worker report and its record commit together; no new statements
 2 src/main/runtime/orchestration/legacy-remote/legacy-remote-db-methods.ts
 3 src/main/runtime/orchestration/legacy-remote/remote-dispatch-attachment-create.ts
 2 src/main/runtime/orchestration/workers/lifecycle/context-only-dispatch-release.ts
 1 src/main/runtime/orchestration/workers/transcripts/worker-transcript-read.ts
+1 src/main/runtime/orchestration/workers/turn-stops/worker-presence-report.ts # one savepoint per real worker presence change, around orchestration DB writes that were already synchronous, so the report and its record commit together
+1 src/main/runtime/orchestration/workers/turn-stops/worker-turn-stop-report.ts # one savepoint per real worker presence change, around orchestration DB writes that were already synchronous, so the report and its record commit together
 2 src/main/runtime/push/push-unregister-outbox.ts
 1 src/main/runtime/repositories/folder-workspace-deletion.ts
 3 src/main/runtime/repositories/runtime-nested-repo-import.ts
@@ -1328,6 +1332,7 @@
 12 src/main/sqlite/row-cache/keyed-json-row-cache.ts
 1 src/main/sqlite/row-cache/legacy-json-source.ts
 8 src/main/sqlite/versioned-cache-database.ts
+1 src/main/ssh/application/ssh-application.ts # one-shot registerSshConnectionHandlers moved here from ipc/ssh/ssh.ts, whose row dropped 2 to 1
 1 src/main/ssh/authentication/ssh-agent-identity-filter.ts
 2 src/main/ssh/authentication/ssh-auth-resolution.ts
 1 src/main/ssh/authentication/ssh-identity-file-read.ts

@@ -14,7 +14,6 @@ import { writeProfileStateInWorker } from './primary-state-write-worker'
 import type { DurableProfileStateMutation } from '../store-runtime-state'
 import { profileStateWriterFailureOutcome } from '../../profile-state/writer/profile-state-writer-errors'
 import { notifyWorkspaceSessionOperationEnded } from '../workspace-sessions/workspace-session-write-listeners'
-import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 
 const primaryStateWriteOperationsContext = Symbol('PrimaryStateWriteOperations')
 export class PrimaryStateWriteOperations {
@@ -64,11 +63,7 @@ export class PrimaryStateWriteOperations {
       }
       let mutation: DurableProfileStateMutation<T>
       try {
-        mutation = this.runAdmittedMutationCallback(
-          'mutate',
-          mutate,
-          (result) => result.writtenHostIds
-        )
+        mutation = this.runAdmittedMutationCallback('mutate', mutate, (result) => result)
       } catch (error) {
         await stopAfterFailedPrimaryStateMutation(runtime, error)
         throw error
@@ -112,7 +107,12 @@ export class PrimaryStateWriteOperations {
     phase: 'mutate' | 'rollback',
     callback: () => T,
     /** Rollback may write any partition; normal mutation reports its written hosts. */
-    writtenHostIdsOf: (result: T) => readonly ExecutionHostId[] | undefined = () => undefined
+    writtenOf: (
+      result: T
+    ) => Pick<
+      DurableProfileStateMutation<unknown>,
+      'writtenHostIds' | 'writtenWorkspaces'
+    > = () => ({})
   ): T {
     const { runtime } = this[primaryStateWriteOperationsContext]
     // Finalization drains admitted mutations; the disk wait must not admit new snapshots.
@@ -124,9 +124,11 @@ export class PrimaryStateWriteOperations {
     } finally {
       runtime.durableMutationPhase = null
       // Durable writers may edit sessions without scheduling a save; a rollback republishes.
+      const written = result === undefined ? {} : writtenOf(result)
       notifyWorkspaceSessionOperationEnded(
         runtime,
-        result === undefined ? null : (writtenHostIdsOf(result) ?? null)
+        written.writtenHostIds ?? null,
+        written.writtenWorkspaces
       )
     }
   }

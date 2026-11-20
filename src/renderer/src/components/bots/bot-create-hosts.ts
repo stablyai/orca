@@ -174,6 +174,20 @@ export type BotCreateHostChoice = {
   reset: () => void
 }
 
+/** Each server's environment by its host id, built once per host list: the Computer list looks one up
+ *  per row, so a scan per row would grow with the square of the hosts. */
+export function serverEnvironmentIndex(
+  hosts: readonly BotCreateHost[]
+): ReadonlyMap<ExecutionHostId, string> {
+  const index = new Map<ExecutionHostId, string>()
+  for (const host of hosts) {
+    if (host.environmentId) {
+      index.set(host.hostId, host.environmentId)
+    }
+  }
+  return index
+}
+
 /** Where a new bot goes: `initialHostId` (this app's own computer) until the owner picks another; `only` limits the list. */
 export function useBotCreateHost(
   open: boolean,
@@ -211,8 +225,9 @@ export function useBotCreateHost(
     .filter((entry) => !entry.blocked && (listing || entry.hostId === host.hostId))
     .flatMap((entry) => (entry.environmentId ? [entry.environmentId] : []))
   const accounts = useServerAccounts(asked, open)
+  const environmentOf = useMemo(() => serverEnvironmentIndex(hosts), [hosts])
   const otherAccountOf = (id: ExecutionHostId): string | null => {
-    const environmentId = hosts.find((entry) => entry.hostId === id)?.environmentId
+    const environmentId = environmentOf.get(id)
     const email = environmentId ? accounts.get(environmentId) : null
     return email && email.toLowerCase() !== ownEmail?.toLowerCase() ? email : null
   }

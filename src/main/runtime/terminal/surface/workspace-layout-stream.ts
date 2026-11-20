@@ -1,10 +1,10 @@
-// Reproject changed Store partitions only while subscribed; overlay live titles without reloading, rechecking only the workspaces that show a changed pane.
+// Reproject changed Store partitions (only the workspaces a write reported, when it did) only while subscribed; overlay live titles without reloading, rechecking only the workspaces that show a changed pane.
 // Main-owned layouts emit one records frame per operation, coalescing unscoped writes per task; window-owned layouts emit whole workspaces.
 
 import { randomUUID } from 'node:crypto'
 import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
-import type { LoadedWorkspaceLayout } from '../../../../shared/workspace-layout/persistence/workspace-layout-load-types'
+import type { LoadedWorkspaceLayoutRead } from '../../../../shared/workspace-layout/persistence/workspace-layout-load-types'
 import type { PublishedWorkspaceLayout } from '../../../../shared/workspace-layout/published-layout/workspace-layout-published'
 import {
   diffPublishedLayouts,
@@ -130,7 +130,7 @@ export class WorkspaceLayoutStream {
   }
 
   /** Shared read-only partition while subscribed, otherwise loaded per call; tests freeze it. Null without a Store. */
-  readPartition(hostId: ExecutionHostId): LoadedWorkspaceLayout | null {
+  readPartition(hostId: ExecutionHostId): LoadedWorkspaceLayoutRead | null {
     const loaded = this.projection.loaded(hostId, this.stopWatching !== null)
     if (loaded) {
       workspaceLayoutPartitionReadObserver()?.(loaded)
@@ -156,7 +156,9 @@ export class WorkspaceLayoutStream {
     const wanted = this.listeners.size > 0 || this.commitListeners.size > 0
     if (wanted && !this.stopWatching) {
       const store = this.deps.store()
-      const stopWrites = store?.onWorkspaceSessionWritten?.((hostId) => this.markDirty(hostId))
+      const stopWrites = store?.onWorkspaceSessionWritten?.((hostId, workspaces, refs) =>
+        this.markDirty(hostId, workspaces, refs)
+      )
       // Switch point: a window-owned build publishes when the writes' task ends, as before.
       const stopOperations = ORCA_LAYOUT_OWNER_IS_MAIN
         ? store?.onWorkspaceSessionOperationEnded?.(() => this.flush())
@@ -187,8 +189,12 @@ export class WorkspaceLayoutStream {
     }
   }
 
-  private markDirty(hostId: ExecutionHostId | null): void {
-    this.projection.invalidate(hostId)
+  private markDirty(
+    hostId: ExecutionHostId | null,
+    workspaces?: ReadonlySet<string>,
+    refs?: ReadonlySet<string>
+  ): void {
+    this.projection.invalidate(hostId, workspaces, refs)
     this.dirty ||= this.projecting
     if (this.commitListeners.size > 0) {
       this.touched = addDirty(this.touched, hostId)
