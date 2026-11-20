@@ -22,9 +22,14 @@ export function createFormPostNavigationTracker(): {
   redirected: () => void
   /** `method` is the request's own method when a request listener saw it. */
   committed: (url: string, method: string | null) => boolean
+  /** The committed document was a fresh navigation; true if that drops a remembered POST mark. */
+  freshlyNavigated: () => boolean
 } {
   let submitted: string | null = null
   let post = false
+  // The mark came only from a remembered POST result, which a fresh GET navigation disproves.
+  let fromMemory = false
+  let committedUrl: string | null = null
   const postResultUrls = new Set<string>()
   return {
     submitted: (actionUrl) => {
@@ -32,17 +37,21 @@ export function createFormPostNavigationTracker(): {
     },
     started: (url) => {
       const target = withoutHash(url)
-      post = target === submitted || postResultUrls.has(target)
+      fromMemory = target !== submitted && postResultUrls.has(target)
+      post = target === submitted || fromMemory
       submitted = null
     },
     // A POST's redirect (Post/Redirect/Get) loads its target with GET; Electron doesn't report the
     // status, and the method-keeping 307/308 are rare for form results.
     redirected: () => {
       post = false
+      fromMemory = false
     },
     committed: (url, method) => {
       const isPost = method !== null ? method !== 'GET' : post
       const target = withoutHash(url)
+      fromMemory = fromMemory && method === null
+      committedUrl = target
       if (isPost) {
         postResultUrls.delete(target)
         postResultUrls.add(target)
@@ -51,6 +60,15 @@ export function createFormPostNavigationTracker(): {
         }
       }
       return isPost
+    },
+    freshlyNavigated: () => {
+      if (!fromMemory || committedUrl === null) {
+        return false
+      }
+      fromMemory = false
+      post = false
+      postResultUrls.delete(committedUrl)
+      return true
     }
   }
 }

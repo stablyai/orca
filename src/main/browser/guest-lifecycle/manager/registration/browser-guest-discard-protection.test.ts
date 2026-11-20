@@ -418,3 +418,52 @@ it('keeps protecting a POST result reached again with Back', () => {
     stop()
   }
 })
+
+it('lets a plain link to an earlier POST result be discarded', () => {
+  let url = 'https://example.test/form'
+  const mainFrame = { frames: [], send: vi.fn<(channel: string, generation: string) => void>() }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: event fixture implements this policy's native surface.
+  const guest = Object.assign(new EventEmitter(), {
+    id: 11,
+    mainFrame,
+    session: {},
+    getURL: () => url,
+    isDestroyed: () => false,
+    isCrashed: () => false,
+    isCurrentlyAudible: () => false
+  }) as unknown as Electron.WebContents
+  const stop = installBrowserGuestDiscardProtection(guest, vi.fn())
+  const report = (payload: object): void => {
+    guest.emit(
+      'ipc-message',
+      { sender: guest, senderFrame: mainFrame },
+      BROWSER_GUEST_PROTECTION_REPORT,
+      payload
+    )
+  }
+  const load = (next: string, loadType: string): void => {
+    guest.emit('did-start-navigation', { url: next, isMainFrame: true, isSameDocument: false })
+    url = next
+    guest.emit('did-navigate', {}, next, 200, 'OK')
+    report({ ready: true, loadType })
+    guest.emit('dom-ready')
+    report({
+      generation: mainFrame.send.mock.lastCall?.[1],
+      dirty: false,
+      pictureInPicture: false,
+      contentType: 'text/html'
+    })
+  }
+  try {
+    load('https://example.test/form', 'navigate')
+    report({ formPost: 'https://example.test/result' })
+    load('https://example.test/result', 'navigate')
+    expect(readBrowserGuestDiscardProtection(guest).reason).toBe('post')
+    load('https://example.test/other', 'navigate')
+    // A link back to the result address loads it with GET.
+    load('https://example.test/result', 'navigate')
+    expect(readBrowserGuestDiscardProtection(guest).protection).toBe('discardable')
+  } finally {
+    stop()
+  }
+})

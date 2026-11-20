@@ -60,10 +60,13 @@ export function installBrowserGuestEditProtection(port: {
   })
   window.addEventListener('pageshow', (event) => {
     if (event.isTrusted) {
-      port.send(BROWSER_GUEST_PROTECTION_REPORT, { ready: true })
+      port.send(BROWSER_GUEST_PROTECTION_REPORT, {
+        ready: true,
+        loadType: loadType(event.persisted)
+      })
     }
   })
-  port.send(BROWSER_GUEST_PROTECTION_REPORT, { ready: true })
+  port.send(BROWSER_GUEST_PROTECTION_REPORT, { ready: true, loadType: loadType(false) })
 }
 
 function isPictureInPicture(): boolean {
@@ -78,4 +81,13 @@ function isPictureInPicture(): boolean {
     'window' in documentPictureInPicture &&
     documentPictureInPicture.window
   )
+}
+
+// Back/Forward and reload repeat a POST entry; a fresh navigation to the same address doesn't.
+function loadType(restoredFromCache: boolean): string | null {
+  if (restoredFromCache) {
+    return 'back_forward'
+  }
+  const entry = performance.getEntriesByType('navigation')[0]
+  return entry instanceof PerformanceNavigationTiming ? entry.type : null
 }

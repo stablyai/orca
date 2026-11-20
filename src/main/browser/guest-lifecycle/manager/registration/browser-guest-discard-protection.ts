@@ -178,6 +178,9 @@ export function installBrowserGuestDiscardProtection(
       return
     }
     if ('ready' in payload && payload.ready === true) {
+      if ('loadType' in payload && payload.loadType === 'navigate' && formPost.freshlyNavigated()) {
+        owner.currentPost = false
+      }
       snapshot()
       return
     }
