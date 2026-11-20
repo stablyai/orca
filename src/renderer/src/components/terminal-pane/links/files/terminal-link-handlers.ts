@@ -10,10 +10,8 @@ import './terminal-file-open-routing'
 import { shouldOpenTerminalFileWithSystemDefault } from '../../host-files/terminal-file-path-mapping'
 import { isHtmlFilePath, localHtmlFileDestinations } from './local-html-file-destinations'
 import { fileLinkTargetExists, resolveFileLinkTarget } from './terminal-file-link-target'
-import {
-  rangeForParsedFileLink,
-  type WrappedLogicalLine
-} from '../../../../../../shared/terminal/links/wrapped-terminal-link-ranges'
+import { rangeForTerminalFileLinkOnBufferLine } from '../../../../../../shared/terminal/links/terminal-link-row-range'
+import type { WrappedLogicalLine } from '../../../../../../shared/terminal/links/wrapped-terminal-link-ranges'
 import {
   getTerminalHtmlFileOpenHint,
   getTerminalOrcaFileOpenHint,
@@ -91,10 +89,13 @@ export function createFilePathLinkProvider(
         const { links, guesses } = extractTerminalFileLinkReadings(logicalLine.text)
         // Why guesses too: every reading below is shown only once the host finds its file.
         return [...links, ...guesses].flatMap((parsed) => {
-          const range = rangeForParsedFileLink(logicalLine, parsed.startIndex, parsed.endIndex)
-          return range && range.start.y <= bufferLineNumber && range.end.y >= bufferLineNumber
-            ? [{ logicalLine, parsed, range }]
-            : []
+          const range = rangeForTerminalFileLinkOnBufferLine(
+            logicalLine,
+            parsed.startIndex,
+            parsed.endIndex,
+            bufferLineNumber
+          )
+          return range ? [{ logicalLine, parsed, range }] : []
         })
       })
       if (rowLinks.length === 0) {
