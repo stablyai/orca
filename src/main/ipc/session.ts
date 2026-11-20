@@ -96,12 +96,13 @@ export function registerSessionHandlers(store: Store, runtime: OrcaRuntimeServic
       }
       const stored = store.getWorkspaceSession(hostId)
       const save = windowSaveKeepingRelayOwnership(stored, args, 'set', options)
-      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-        store.setWorkspaceSession(sessionForMain(save, hostId), hostId)
-        return { status: 'applied' }
-      }
-      const next = windowSaveKeepingMainSleepRecords(stored, save, 'set')
-      const relays = parseCarriedDesktopRelays(options?.carried, hostId)
+      const next = ORCA_LAYOUT_OWNER_IS_MAIN
+        ? sessionForMain(save, hostId)
+        : windowSaveKeepingMainSleepRecords(stored, save, 'set')
+      // Main-owned layout recomputes relay ids itself; the window never sends them separately there.
+      const relays = ORCA_LAYOUT_OWNER_IS_MAIN
+        ? null
+        : parseCarriedDesktopRelays(options?.carried, hostId)
       const relayHostId = normalizeExecutionHostId(hostId) ?? LOCAL_EXECUTION_HOST_ID
       const applied = relays ? relayApplier([relayHostId])(relayHostId, relays, next) : null
       // One publish for the snapshot and the relay ids that ride with it.
