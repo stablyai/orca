@@ -1,4 +1,4 @@
-import { existsSync, chmodSync, readFileSync, rmSync } from 'node:fs'
+import { existsSync, chmodSync, lstatSync, readFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { isDefinitiveAbsence } from '../../../../shared/errors/definitive-filesystem-absence'
 import { getSystemCodexHomePath } from '../../../codex/configuration/homes/codex-home-paths'
@@ -14,16 +14,19 @@ import type {
 import { CodexRuntimeHomeLegacyMigration } from '../legacy-host/runtime-home-service-legacy-migration'
 
 export abstract class CodexRuntimeHomeAuthCore extends CodexRuntimeHomeLegacyMigration {
-  /** Null only when ~/.codex/auth.json is gone: an unreadable one is no logout, so this throws. */
-  protected readSystemDefaultAuth(): string | null {
+  /** True only when ~/.codex/auth.json is definitely gone: an unreadable one is no logout. */
+  protected systemDefaultAuthIsGone(): boolean {
     try {
-      return readFileSync(join(getSystemCodexHomePath(), 'auth.json'), 'utf-8')
+      lstatSync(join(getSystemCodexHomePath(), 'auth.json'))
+      return false
     } catch (error) {
-      if (isDefinitiveAbsence(error)) {
-        return null
-      }
-      throw error
+      return isDefinitiveAbsence(error)
     }
+  }
+
+  protected readSystemDefaultAuth(): string | null {
+    const systemDefaultAuthPath = join(getSystemCodexHomePath(), 'auth.json')
+    return existsSync(systemDefaultAuthPath) ? readFileSync(systemDefaultAuthPath, 'utf-8') : null
   }
 
   protected writeRuntimeAuth(
