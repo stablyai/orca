@@ -12,6 +12,7 @@ import type { JournalSqlDatabase } from '../../../native-chat/agent-session-jour
 import { openStructuredAgentSessionSqlJournalDatabase } from '../installation/structured-agent-session-journal-open'
 import type { StructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import { setAgentProcessOwnerReader } from '../../../memory/agent-process-registry'
+import { agentSessionRuntimeIncarnation } from './agent-session-runtime-attribution'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
 
 export type AgentSessionRecordStoreLocation = {
@@ -110,10 +111,12 @@ export function peekOpenedAgentSessionRecordStore(): AgentSessionRecordStore | n
 }
 
 // Resource Manager attributes each agent process tree to the chat whose lease names that process.
+// Only this run's owners count: a lease left by an earlier run may name a pid that is now another process.
 setAgentProcessOwnerReader(() =>
   (peekOpenedAgentSessionRecordStore()?.listLeaseHolders() ?? []).flatMap((record) => {
     const owner = record.lease.ownerProcess
     return owner &&
+      owner.runtime === agentSessionRuntimeIncarnation() &&
       record.location.executionHostId === LOCAL_EXECUTION_HOST_ID &&
       record.location.wslDistro === null
       ? [
