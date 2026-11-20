@@ -261,9 +261,8 @@ export async function resolveRegisteredWorktreePath(
   throw new Error('Access denied: unknown repository or worktree path')
 }
 
-function refreshRegisteredWorktreeRoots(): void {
+const refreshRegisteredWorktreeRoots = (): void =>
   replaceRegisteredWorktreeRootSet(registeredWorktreeRoots, registeredOwners.values())
-}
 
 export async function isRegisteredWorktreePathAsync(
   targetPath: string,
@@ -272,14 +271,18 @@ export async function isRegisteredWorktreePathAsync(
   synchronizeOwners(store)
   const generation = invalidationGeneration
   const roots = createRegisteredRootScan(registeredWorktreeRoots)
+  let awaited = false
   for (let item = roots.next(); !item.done; item = roots.next()) {
     const root = item.value
     const contained = isDescendantOrEqualAsync(targetPath, root)
     if (typeof contained !== 'boolean') {
       roots.pin()
+      awaited = true
     }
     if (typeof contained === 'boolean' ? contained : await contained) {
-      synchronizeOwners(store)
+      if (awaited) {
+        synchronizeOwners(store)
+      }
       return generation === invalidationGeneration && registeredWorktreeRoots.has(root)
     }
   }

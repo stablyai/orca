@@ -86,11 +86,12 @@ export async function getFloatingWorkspaceFileRoots(store: {
   extraRoots: string[]
   exactRoots: string[]
 }> {
+  const initialCwd = store.getSettings().floatingTerminalCwd
+  // Canonical home: trust entries are canonical, so `~` must expand to the spelling they store.
+  const home = typeof initialCwd === 'string' && initialCwd.trim() ? await resolvedHome() : null
   const settings = store.getSettings()
   const configuredPath =
     typeof settings.floatingTerminalCwd === 'string' ? settings.floatingTerminalCwd.trim() : ''
-  // Canonical home: trust entries are canonical, so `~` must expand to the spelling they store.
-  const home = configuredPath ? await resolvedHome() : null
   const cwd = home ? resolveFloatingWorkspacePath(configuredPath, home.real) : null
   return {
     extraRoots: [getDefaultFloatingWorkspacePath()],
@@ -98,6 +99,7 @@ export async function getFloatingWorkspaceFileRoots(store: {
     exactRoots:
       cwd &&
       home &&
+      home.home === path.resolve(getAppEnvironment().getPath('home')) &&
       isTrustedFloatingWorkspaceDirectory(cwd, settings) &&
       !isAboveHomeDirectory(cwd, home)
         ? [cwd]
