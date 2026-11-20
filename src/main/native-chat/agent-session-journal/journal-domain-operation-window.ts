@@ -203,13 +203,14 @@ const sendsByValues = (key: SendKey) => `SELECT send.message_id FROM json_each(?
   CROSS JOIN journal_submission_attempts send
   WHERE send.session_id=? AND send.epoch=? AND send.current=1 AND ${SEND_KEYS[key]}=value.value`
 
-/** Sends whose key is a visible row's id in [start, until). */
+/** Sends whose key is a visible row's id in [start, until). `+` drops the id's TEXT affinity, which
+ *  would bar the payload expression indexes. */
 const sendsByRows = (key: SendKey) => `SELECT send.message_id
   FROM journal_items item INDEXED BY journal_items_visible_position
   CROSS JOIN journal_submission_attempts send
   WHERE item.session_id=? AND item.epoch=? AND item.hidden=0 AND item.sequence>=? AND item.sequence<?
   AND send.session_id=item.session_id AND send.epoch=item.epoch AND send.current=1
-  AND ${SEND_KEYS[key]}=item.item_id`
+  AND ${SEND_KEYS[key]}=+item.item_id`
 
 function messageIds(scope: JournalSqlScope, rows: SqliteRow[]): string[] {
   return rows.map((row) => String(scope.examined(row).message_id))
