@@ -27002,7 +27002,6 @@
       "hostReconnecting": "Reconnecting…",
       "hostUpdateAction": "Update",
       "title": "New bot",
-      "description": "Your AI teammate, with a name, memory and automations. It lives in a folder on one computer.",
       "name": "Name",
       "namePlaceholder": "Name your bot",
       "picture": "Picture",
@@ -27043,13 +27042,13 @@
       "reports": "Reports",
       "takesOver": "Takes over",
       "agentsKeepRunning": "Their agents keep running.",
-      "fromTemplate": "Use template",
+      "fromTemplate": "Template",
       "uploadDropOrPaste": "<upload>Upload</upload>, drop, or paste an image",
-      "createBot": "Create bot",
-      "purposeLabel": "Purpose",
-      "purposePlaceholder": "Describe its job (optional)",
+      "purposeLabel": "Identity",
+      "purposePlaceholder": "Who it is and what it does",
       "uploadPasteOrDrop": "or upload, paste or drop your own",
-      "pasteHint": "Paste an image with {{shortcut}}"
+      "pasteHint": "Paste an image with {{shortcut}}",
+      "changePicture": "Change picture"
     },
     "section": {
       "title": "Bots",

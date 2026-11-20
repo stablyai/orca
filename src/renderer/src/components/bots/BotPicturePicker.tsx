@@ -16,7 +16,11 @@ import {
 import { BOT_AVATAR_ACCEPT } from './bot-avatar-intake'
 import { botMascotSrcs } from './bot-mascot-color'
 import { BotPictureIntakeLine, LineAction } from './BotPictureIntakeLine'
-import { useBotAvatarIntake } from './use-bot-avatar-intake'
+import {
+  useBotAvatarIntakeHost,
+  useBotAvatarIntakeState,
+  type BotAvatarIntake
+} from './use-bot-avatar-intake'
 import { BotPictureCarousel, type BotPictureFace } from './BotPictureCarousel'
 import {
   GenerateField,
@@ -143,7 +147,8 @@ export function BotPicturePicker({
   onUndo,
   uploadLink = false,
   color = null,
-  onColorChange
+  onColorChange,
+  intake: sharedIntake
 }: {
   value: BotPictureValue
   custom: BotPictureCustom | null
@@ -157,6 +162,9 @@ export function BotPicturePicker({
   color?: string | null
   /** Shows the color swatches under a mascot. */
   onColorChange?: (color: string | null) => void
+  /** An intake that outlives this picker (New bot's picture button), so a decode survives the popover
+   *  closing and one order holds across both surfaces; its owner places the picture. */
+  intake?: BotAvatarIntake
 }): React.JSX.Element {
   const t = useTranslate()
   const rootRef = useRef<HTMLDivElement>(null)
@@ -173,11 +181,29 @@ export function BotPicturePicker({
   )
   // Generate is current while chosen, even before it holds a picture; selected is applied.
   const [onGenerate, setOnGenerate] = useState(false)
-  const face = useGenerateFace((made) => {
-    if (onGenerate) {
-      onUpload(made.png, -1)
-    }
+  const ownIntake = useBotAvatarIntakeState({
+    // A new picture replaces the custom one in place, or lands beside the mascot shown.
+    onPicture: (png) => {
+      setOnGenerate(false)
+      onUpload(png, showingCustom ? custom.after : mascotIndex)
+    },
+    undoable: onUndo !== undefined
   })
+  const intake = sharedIntake ?? ownIntake
+  const outlinePicker = useBotAvatarIntakeHost(rootRef, intake)
+  // The intake turn a generated picture holds: one taken after it was asked for wins, in any order and
+  // even within one render, since the turn is checked when the picture arrives, not from React state.
+  const generateTurn = useRef<(() => boolean) | null>(null)
+  const face = useGenerateFace(
+    (made) => {
+      if (onGenerate && (generateTurn.current?.() ?? true)) {
+        onUpload(made.png, -1)
+      }
+    },
+    () => {
+      generateTurn.current = intake.claim()
+    }
+  )
   const withGenerate = face.agent !== null
   const generatedCustom = withGenerate && isGeneratedCustom(custom?.src, face.result?.png ?? null)
   const order = pictureFaceOrder(
@@ -204,19 +230,19 @@ export function BotPicturePicker({
         ? { key, src: custom?.src ?? null, fallback: custom?.fallback ?? '' }
         : { key, src: srcs[key], fallback: '' }
   )
-  const intake = useBotAvatarIntake({
-    rootRef,
-    // A new picture replaces the custom one in place, or lands beside the mascot shown.
-    onPicture: (png) => {
-      setOnGenerate(false)
-      onUpload(png, showingCustom ? custom.after : mascotIndex)
-    },
-    undoable: onUndo !== undefined
-  })
+  // Every picture an intake takes, shared or not and even the same image again, leaves Generate.
+  const [seenTaken, setSeenTaken] = useState(intake.taken)
+  if (intake.taken !== seenTaken) {
+    setSeenTaken(intake.taken)
+    setOnGenerate(false)
+  }
   const { line } = intake
   const dropping = line.kind === 'drop'
   const select = (key: PictureFaceKey | undefined): void => {
-    if (line.kind === 'error') {
+    // Choosing a picture is the newest action, so one still being read is dropped. Browsing onto an
+    // empty Generate face chooses nothing, and a picture still being read lands as usual.
+    const chooses = key !== undefined && (key !== GENERATE_FACE || face.result !== null)
+    if (chooses || line.kind === 'error') {
       intake.dismiss()
     }
     setOnGenerate(key === GENERATE_FACE)
@@ -281,7 +307,7 @@ export function BotPicturePicker({
   return (
     <div
       ref={rootRef}
-      data-dropping={(dropping && intake.outlinePicker) || undefined}
+      data-dropping={(dropping && outlinePicker) || undefined}
       onPointerDownCapture={() => {
         byPointer.current = true
       }}
