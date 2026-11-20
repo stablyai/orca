@@ -3,14 +3,24 @@ import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import type { RuntimeStore } from '../../runtime/construction/runtime-store-contract'
 import type { RuntimeWorktreePsSummary } from '../../../shared/worktree/catalog/runtime-worktree-contracts'
 import type { WorkspaceCleanupBlocker } from '../../../shared/workspace-cleanup/workspace-cleanup'
-import type { WorkspaceCleanupRules } from '../../../shared/workspace-cleanup/workspace-cleanup-policy'
+import type {
+  RepoWorkspaceCleanupPolicy,
+  WorkspaceCleanupRules
+} from '../../../shared/workspace-cleanup/workspace-cleanup-policy'
+import type { WorkspaceCleanupPolicyChange } from '../../../shared/workspace-cleanup/workspace-cleanup-policy-change'
+import type { WorkspaceCleanupPreview } from '../../../shared/workspace-cleanup/workspace-cleanup-run'
 
 const dirty = vi.hoisted(() => new Set<string>())
 
 // Git evidence is the scan's job; here every listed checkout is merged and clean unless marked dirty.
 vi.mock('../../ipc/workspace-cleanup/workspace-cleanup-scan', () => ({
-  scanWorkspaceCleanup: async (_store: unknown, args: { worktreeIds: string[] }) => ({
-    candidates: args.worktreeIds.map((worktreeId) => ({
+  scanWorkspaceCleanup: async (
+    _store: unknown,
+    _args: unknown,
+    options: { targetWorktreeIds: string[] }
+  ) => ({
+    errors: [],
+    candidates: options.targetWorktreeIds.map((worktreeId) => ({
       worktreeId,
       executionHostId: 'local',
       reasons: ['merged'],
@@ -99,6 +109,8 @@ function makeHost(
     botHomes?: string[]
     /** Each paired server's workspaces with a parent elsewhere, or null for one that doesn't answer. */
     paired?: Record<string, RuntimeWorktreePsSummary[] | null>
+    /** Saved project policies by repo id. */
+    policies?: Record<string, RepoWorkspaceCleanupPolicy>
   } = {}
 ): {
   runtime: OrcaRuntimeService
@@ -109,7 +121,8 @@ function makeHost(
     path: `/${id}`,
     displayName: id,
     badgeColor: '',
-    addedAt: 0
+    addedAt: 0,
+    ...(recorded.policies?.[id] ? { workspaceCleanupPolicy: recorded.policies[id] } : {})
   }))
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the evidence read uses only these store members.
   const store = {
@@ -124,8 +137,18 @@ function makeHost(
   } as unknown as RuntimeStore
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the evidence read uses only these runtime members.
   const runtime = {
-    getWorktreePs: async (_limit: number, _a: boolean, _b: boolean, worktreeId?: string) => ({
-      worktrees: rows.filter((summary) => !worktreeId || summary.worktreeId === worktreeId),
+    getWorktreePs: async (
+      _limit: number,
+      _a: boolean,
+      _b: boolean,
+      worktreeId?: string,
+      repoId?: string
+    ) => ({
+      worktrees: rows.filter(
+        (summary) =>
+          (!worktreeId || summary.worktreeId === worktreeId) &&
+          (!repoId || summary.repoId === repoId)
+      ),
       truncated: false
     }),
     getExistingOrchestrationDb: () => null,
@@ -168,9 +191,22 @@ function makeRunner(
   })
 }
 
-async function verdicts(runner: WorkspaceCleanupRunner): Promise<Record<string, unknown>> {
-  const preview = await runner.preview(RULES)
+function byWorktree(preview: WorkspaceCleanupPreview): Record<string, unknown> {
   return Object.fromEntries(preview.rows.map((r) => [r.worktreeId, r.evaluation]))
+}
+
+async function verdicts(runner: WorkspaceCleanupRunner): Promise<Record<string, unknown>> {
+  return byWorktree(await runner.preview(RULES))
+}
+
+/** What a rule change's confirmation would show: the verdicts now and after the change. */
+async function changeVerdicts(
+  runner: WorkspaceCleanupRunner,
+  change: WorkspaceCleanupPolicyChange
+): Promise<{ current: Record<string, unknown>; next: Record<string, unknown> }> {
+  const read = runner.readPolicy(change.scope === 'project' ? change.repoId : null)
+  const comparison = await runner.previewChange(change, read.state, true)
+  return { current: byWorktree(comparison.current), next: byWorktree(comparison.next) }
 }
 
 describe('folder workspace cleanup group', () => {
@@ -260,6 +296,26 @@ describe('folder workspace cleanup group', () => {
     expect(host.runtime.removeManagedWorktree).not.toHaveBeenCalled()
   })
 
+  it('re-reads a folder member with its folder siblings, and only the target otherwise', async () => {
+    const host = makeHost([
+      row('repo-a::/a1', { folder: 'F' }),
+      row('repo-b::/b1', { folder: 'F' }),
+      row('repo-a::/solo')
+    ])
+    const ids = async (withFolderSiblings: boolean) =>
+      (
+        await collectWorkspaceCleanupWorkspaces({
+          ...host,
+          globalRules: RULES,
+          now: 1,
+          worktreeId: 'repo-a::/a1',
+          withFolderSiblings
+        })
+      ).map((workspace) => workspace.ref.worktreeId)
+    expect(await ids(true)).toEqual(['repo-a::/a1', 'repo-b::/b1'])
+    expect(await ids(false)).toEqual(['repo-a::/a1'])
+  })
+
   it('holds a worktree whose parent is in another Orca store', async () => {
     const runner = makeRunner(
       [
@@ -343,5 +399,70 @@ describe('folder workspace cleanup group', () => {
       'repo-a::/a1': { action: 'keep', cause: 'folder-workspace-sibling', reason: 'merged' },
       'repo-a::/solo': { action: 'delete', reason: 'merged' }
     })
+  })
+
+  it("shows a rule change's confirmation the folder hold a run applies", async () => {
+    dirty.add('repo-b::/b1')
+    const runner = makeRunner([
+      row('repo-a::/a1', { folder: 'F' }),
+      row('repo-b::/b1', { folder: 'F' }),
+      row('repo-a::/solo')
+    ])
+    const { next } = await changeVerdicts(runner, { scope: 'global', rules: RULES })
+    expect(next).toEqual({
+      'repo-a::/a1': { action: 'keep', cause: 'folder-workspace-sibling', reason: 'merged' },
+      'repo-b::/b1': { action: 'keep', cause: 'uncommitted-changes', reason: 'merged' },
+      'repo-a::/solo': { action: 'delete', reason: 'merged' }
+    })
+  })
+
+  it("lists another project's folder sibling that a project change would remove", async () => {
+    // Off for repo-a holds its folder member, and with it repo-b's; turning it back on frees both.
+    const runner = makeRunner(
+      [
+        row('repo-a::/a1', { folder: 'F' }),
+        row('repo-b::/b1', { folder: 'F' }),
+        row('repo-b::/unrelated')
+      ],
+      {
+        policies: { 'repo-a': { mode: 'off' } },
+        // The store records each member's folder, as it does for every folder workspace.
+        lineage: Object.fromEntries(
+          ['repo-a::/a1', 'repo-b::/b1'].map((id) => [
+            `worktree:${id}`,
+            { childWorkspaceKey: `worktree:${id}`, parentWorkspaceKey: 'folder:F' }
+          ])
+        )
+      }
+    )
+    const { current, next } = await changeVerdicts(runner, {
+      scope: 'project',
+      repoId: 'repo-a',
+      policy: null
+    })
+    expect(current).toEqual({
+      'repo-a::/a1': { action: 'keep', cause: 'project-off' },
+      'repo-b::/b1': { action: 'keep', cause: 'folder-workspace-sibling', reason: 'merged' }
+    })
+    expect(next).toEqual({
+      'repo-a::/a1': { action: 'delete', reason: 'merged' },
+      'repo-b::/b1': { action: 'delete', reason: 'merged' }
+    })
+  })
+
+  it("keeps a project's change preview to that project when no folder spans projects", async () => {
+    const host = makeHost([row('repo-a::/a1'), row('repo-b::/b1', { folder: 'F' })], {
+      policies: { 'repo-a': { mode: 'off' } }
+    })
+    const listing = vi.spyOn(host.runtime, 'getWorktreePs')
+    const runner = new WorkspaceCleanupRunner({ ...host, historyDirectory: '/nonexistent' })
+    const { next } = await changeVerdicts(runner, {
+      scope: 'project',
+      repoId: 'repo-a',
+      policy: null
+    })
+    expect(next).toEqual({ 'repo-a::/a1': { action: 'delete', reason: 'merged' } })
+    // Only the project's own listing: no folder reaches past it.
+    expect(listing.mock.calls.map((call) => call[4])).toEqual(['repo-a'])
   })
 })

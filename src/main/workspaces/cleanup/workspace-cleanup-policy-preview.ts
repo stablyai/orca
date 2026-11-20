@@ -20,6 +20,7 @@ import {
   type WorkspaceCleanupTerminalActivity
 } from './workspace-cleanup-terminal-activity'
 import { decideWorkspaceCleanup } from './workspace-cleanup-removal-step'
+import { keepFolderWorkspaceSiblings } from '../../../shared/workspace-cleanup/workspace-cleanup-evaluation'
 import { workspaceCleanupRowDetails } from './workspace-cleanup-run-summary'
 import { createEffectiveHooksReader } from '../../workspace-hooks/effective-hooks-reader'
 
@@ -94,10 +95,21 @@ export async function previewWorkspaceCleanupChange(
     }
     return { current: { ...ref, evaluation: current }, next: { ...ref, evaluation: next } }
   })
+  // A run takes a folder workspace's worktrees together or not at all; so does what it shows.
+  const grouped = (side: 'current' | 'next') => {
+    const evaluations = keepFolderWorkspaceSiblings(
+      workspaces.map((workspace, index) => ({
+        identity: workspace.identity,
+        folderSiblings: workspace.folderSiblings,
+        evaluation: pairs[index][side].evaluation
+      }))
+    )
+    return pairs.map((pair, index) => ({ ...pair[side], evaluation: evaluations[index] }))
+  }
   return {
     read,
-    current: { evaluatedAt, rows: pairs.map((row) => row.current) },
-    next: { evaluatedAt, rows: pairs.map((row) => row.next) }
+    current: { evaluatedAt, rows: grouped('current') },
+    next: { evaluatedAt, rows: grouped('next') }
   }
 }
 

@@ -29,8 +29,9 @@ function selectorFor(workspace: WorkspaceCleanupWorkspace): string {
   return `id:${workspace.ref.worktreeId}`
 }
 
-/** The evaluator's verdict plus the checks only a live host can make; any doubt keeps the workspace. */
-async function decideWorkspaceCleanup(
+/** The evaluator's verdict plus the checks only a live host can make; any doubt keeps the workspace.
+ * One workspace alone: a folder workspace's group hold is `keepFolderWorkspaceSiblings`' job. */
+export async function decideWorkspaceCleanup(
   runtime: OrcaRuntimeService,
   workspace: WorkspaceCleanupWorkspace,
   now: number,

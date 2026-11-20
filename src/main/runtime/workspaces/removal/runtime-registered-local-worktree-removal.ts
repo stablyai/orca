@@ -22,7 +22,6 @@ import { getWorktreeSharedLinkPaths } from '../../../git/worktrees/content-paths
 import { runHook, getEffectiveHooks } from '../../../workspace-hooks/hooks'
 import { findExistingWorktreeSymlinkPaths } from '../../../git/worktrees/content-paths/worktree-symlink-detection'
 import { removeWorktreeLinkedPaths } from '../../../ipc/worktrees/linked-paths/worktree-symlinks'
-import { cleanupRemovedWorktreePushTarget } from './runtime-worktree-push-target-cleanup'
 export { cleanupRemovedWorktreePushTarget } from './runtime-worktree-push-target-cleanup'
 import {
   formatWorktreeRemovalError,

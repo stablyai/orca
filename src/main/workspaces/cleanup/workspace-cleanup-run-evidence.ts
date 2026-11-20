@@ -13,6 +13,8 @@ import { worktreeIdentityKey } from '../../../shared/worktree/id'
 import {
   folderGroupOf,
   folderSiblingsByWorktree,
+  hasUnlistedFolderSibling,
+  projectFolderGroups,
   summaryHostId,
   summaryIdentity
 } from './workspace-cleanup-folder-membership'
@@ -20,21 +22,18 @@ import {
   pairedFolderChildrenOnce,
   type PairedFolderChildren
 } from './workspace-cleanup-paired-folder-children'
-import { listClientUnsavedEditorWorktreeIds } from './workspace-cleanup-client-unsaved-editors'
+import { dirtyEditorWorktreeIds, scanTargets } from './workspace-cleanup-run-git-evidence'
 import { runtimeVisibleRepos } from '../../runtime/workspaces/catalog/runtime-visible-catalog'
-import { scanWorkspaceCleanup } from '../../ipc/workspace-cleanup/workspace-cleanup-scan'
 import { isFolderRepo } from '../../../shared/repository/repo-kind'
 import type { Repo } from '../../../shared/repository/repo-types'
 import {
   isRepoOnCatalogHost,
-  LOCAL_EXECUTION_HOST_ID,
-  normalizeExecutionHostId
+  LOCAL_EXECUTION_HOST_ID
 } from '../../../shared/execution-host/execution-host'
 import type { RuntimeWorktreePsSummary } from '../../../shared/worktree/catalog/runtime-worktree-contracts'
 import {
   getPersistedWorkspaceCleanupActivityAt,
-  type WorkspaceCleanupBlocker,
-  type WorkspaceCleanupCandidate
+  type WorkspaceCleanupBlocker
 } from '../../../shared/workspace-cleanup/workspace-cleanup'
 import {
   resolveWorkspaceCleanupPolicy,
@@ -132,56 +131,6 @@ function inputWithoutGit(summary: RuntimeWorktreePsSummary): WorkspaceCleanupEva
   }
 }
 
-/** This host's own window persists its unsaved drafts in the session; remote clients report theirs. Keyed by identity so path spellings match. */
-function dirtyEditorWorktreeIds(store: RuntimeStore, runtime: OrcaRuntimeService): Set<string> {
-  const session = store.getWorkspaceSession?.(LOCAL_EXECUTION_HOST_ID)
-  const ids = new Set([...listClientUnsavedEditorWorktreeIds(runtime)].map(worktreeIdentityKey))
-  for (const [worktreeId, files] of Object.entries(session?.openFilesByWorktree ?? {})) {
-    if (files.some((file) => file.dirtyDraftContent !== undefined)) {
-      ids.add(worktreeIdentityKey(worktreeId))
-    }
-  }
-  return ids
-}
-
-async function scanTargets(
-  store: RuntimeStore,
-  runtime: OrcaRuntimeService,
-  worktreeIds: string[],
-  signal: AbortSignal | undefined,
-  inventorySize?: number,
-  requireComplete = false
-): Promise<Map<string, WorkspaceCleanupCandidate>> {
-  const candidates = new Map<string, WorkspaceCleanupCandidate>()
-  if (worktreeIds.length === 0) {
-    return candidates
-  }
-  const result = await scanWorkspaceCleanup(
-    store,
-    { refreshActivity: true },
-    {
-      signal,
-      targetWorktreeIds: worktreeIds,
-      // Large real Git inventories can exceed the normal interactive 8-second listing budget.
-      listingTimeoutMs: inventorySize ? Math.min(60_000, 8_000 + inventorySize * 40) : undefined,
-      getOrchestrationDb: () => runtime.getExistingOrchestrationDb()
-    }
-  )
-  if (requireComplete && result.errors.length) {
-    throw new Error(result.errors[0].message)
-  }
-  const failedRepos = new Set(result.errors.map((error) => error.repoId))
-  for (const candidate of result.candidates) {
-    if (
-      !failedRepos.has(candidate.repoId) &&
-      normalizeExecutionHostId(candidate.executionHostId) === LOCAL_EXECUTION_HOST_ID
-    ) {
-      candidates.set(candidate.worktreeId, candidate)
-    }
-  }
-  return candidates
-}
-
 function withHostBlockers(
   input: WorkspaceCleanupEvaluationInput,
   summary: RuntimeWorktreePsSummary,
@@ -240,21 +189,28 @@ export async function collectWorkspaceCleanupWorkspaces(args: {
   }
   const readPairedFolderChildren =
     args.readPairedFolderChildren ?? pairedFolderChildrenOnce(runtime)
-  const folderSiblingsOf = await folderSiblingsByWorktree(
-    store,
-    ps.worktrees,
-    readPairedFolderChildren
-  )
-  const owned = ps.worktrees.filter(
-    (summary) =>
-      isOwnedSummary(summary, repos) &&
-      (!worktreeId || summary.worktreeId === worktreeId) &&
-      (!args.comparison?.state.repoId || summary.repoId === args.comparison.state.repoId)
-  )
+  const projectId = args.comparison?.state.repoId ?? undefined
+  let listed = ps.worktrees
+  let folderSiblingsOf = await folderSiblingsByWorktree(store, listed, readPairedFolderChildren)
+  if (projectId && hasUnlistedFolderSibling(listed, folderSiblingsOf)) {
+    // A folder workspace can span projects, and a run judges its worktrees as one group: a project's
+    // preview reads the other projects' members too, so it shows what the run would remove.
+    const all = await runtime.getWorktreePs(WORKTREE_PS_LIMIT, true, false)
+    if (all.truncated) {
+      throw new Error('Could not list every workspace on this host.')
+    }
+    listed = [...listed, ...all.worktrees.filter((summary) => summary.repoId !== projectId)]
+    folderSiblingsOf = await folderSiblingsByWorktree(store, listed, readPairedFolderChildren)
+  }
+  const owned = listed.filter((summary) => isOwnedSummary(summary, repos))
   const summaries =
-    args.withFolderSiblings && worktreeId !== undefined
-      ? folderGroupOf(owned, worktreeId, folderSiblingsOf)
-      : owned
+    worktreeId !== undefined
+      ? args.withFolderSiblings
+        ? folderGroupOf(owned, worktreeId, folderSiblingsOf)
+        : owned.filter((summary) => summary.worktreeId === worktreeId)
+      : projectId
+        ? projectFolderGroups(owned, projectId, folderSiblingsOf)
+        : owned
   const policies = new Map<string, ResolvedWorkspaceCleanupPolicy>()
   const nextPolicies = new Map<string, ResolvedWorkspaceCleanupPolicy>()
   const saved = new Map(args.comparison?.state.projects.map((row) => [row.id, row.policy]))
@@ -263,7 +219,8 @@ export async function collectWorkspaceCleanupWorkspaces(args: {
       continue
     }
     const repo = repos.get(summary.repoId)!
-    const policy = args.comparison ? saved.get(repo.id) : repo.workspaceCleanupPolicy
+    // A project preview reviews its own saved policy; a folder sibling's project keeps its current one.
+    const policy = saved.has(repo.id) ? saved.get(repo.id) : repo.workspaceCleanupPolicy
     const current = resolveWorkspaceCleanupPolicy(
       { workspaceCleanupPolicy: globalRules },
       { workspaceCleanupPolicy: policy ?? undefined }
@@ -305,7 +262,7 @@ export async function collectWorkspaceCleanupWorkspaces(args: {
     runtime,
     gitTargets,
     signal,
-    args.comparison ? ps.worktrees.length : undefined,
+    args.comparison ? listed.length : undefined,
     args.requireComplete ?? Boolean(args.comparison)
   )
   if (checkoutIdentity) {
