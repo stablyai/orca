@@ -30,11 +30,12 @@ export async function judgeLegacyMailboxRows(
 ): Promise<MailboxForeground> {
   const group = rows.find((row) => row.pid === rootPid)?.tpgid
   // Why agentOf: native installs exec a versioned binary (`…/claude/versions/2.1.0`) the bare recognizer misses.
+  // Why one-shots count: ps flattens argv, so a prompt ending `--print` would read as one and hold mail forever.
   const agentRow = rows.find((row) => {
-    const candidate = agentOf(row.command, false)
+    const candidate = agentOf(row.command)
     return row.pgid === group && isTuiAgent(candidate) && (!agent || candidate === agent)
   })
-  const found = agentRow && agentOf(agentRow.command, false)
+  const found = agentRow && agentOf(agentRow.command)
   if (agentRow && isTuiAgent(found)) {
     const startedAtMs = await readProcessStartTimeMs(agentRow.pid)
     onAgent?.(agent ?? found, startedAtMs === null ? undefined : { pid: agentRow.pid, startedAtMs })
