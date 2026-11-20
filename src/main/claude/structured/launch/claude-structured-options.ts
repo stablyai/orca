@@ -188,7 +188,8 @@ export async function setClaudeStructuredOption(
   } catch (error) {
     // A refused write leaves Claude on its fallback; the pill names it again.
     if (input.key === 'model' && session.modelFallback) {
-      session.modelFallback = { model: session.modelFallback.model }
+      const { picked: _picked, ...fallback } = session.modelFallback
+      session.modelFallback = fallback
     }
     if (error instanceof ClaudeControlRequestError) {
       throw new AgentSessionOptionRejectedError(error)

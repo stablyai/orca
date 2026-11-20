@@ -47,7 +47,10 @@ function ModelPicker({ fallbackModel }: { fallbackModel?: string }) {
           kind: {
             type: 'select',
             currentValue: 'claude-opus-5-5',
-            choices: [{ value: 'claude-opus-5-5', label: 'Opus 5.5' }]
+            choices: [
+              { value: 'claude-opus-5-5', label: 'Opus 5.5' },
+              { value: 'claude-opus-4-8', label: 'Opus 4.8' }
+            ]
           }
         }
       ]}

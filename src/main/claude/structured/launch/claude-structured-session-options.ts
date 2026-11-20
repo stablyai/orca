@@ -244,9 +244,7 @@ export function claudeStructuredSessionOptionsFrom(
     current: {
       model,
       reportedPermissionMode: session.reportedOptions.reportedPermissionMode,
-      ...(session.modelFallback && !session.modelFallback.picked
-        ? { fallbackModel: session.modelFallback.model }
-        : {}),
+      fallbackModel: session.modelFallback?.picked ? undefined : session.modelFallback?.model,
       ...(effort ? { effort } : {}),
       ...(fastMode !== undefined ? { fastMode } : {}),
       ...(session.fastModeState ? { fastModeState: session.fastModeState } : {}),

@@ -30,10 +30,12 @@ export async function applyClaudeMessageOptions(
 ): Promise<void> {
   throwIfSignalAborted(signal)
   const model = options.model
-  // A pick during a provider fallback must reach Claude even when it names the applied model.
+  // Claude owns the model after a refusal fallback until a pick, which is sent even if unchanged.
+  const fallback = session.modelFallback
   if (
     model &&
-    (session.appliedInputOptions.get('model') !== model || session.modelFallback?.picked)
+    (fallback?.picked ||
+      (session.appliedInputOptions.get('model') !== model && model !== fallback?.replaced))
   ) {
     await waitForPromiseWithSignal(
       setClaudeStructuredOption(session, { key: 'model', value: model }, timeoutMs),

@@ -1,7 +1,4 @@
 import { claudeObservedEffort } from '../launch/claude-structured-session-options'
-import { readClaudeMessageEnvelope } from '../journal/claude-structured-item-translation'
-import { isRootClaudeFrame } from './claude-turn-opening'
-import { readClaudeModelFallback } from '../../../../shared/native-chat/transcript/notices/claude-model-fallback'
 import type { ClaudeSession } from '../claude-structured-session-state'
 
 /** Fast routing reports precede this input and cannot vouch for its execution. */
@@ -55,20 +52,24 @@ function observeClaudeExecutionModel(
   return previous !== model ? { model } : null
 }
 
-/** Claude keeps the session on a main-thread refusal fallback; subagent fallbacks stay local. */
+/** A session-scope refusal fallback swaps Claude's session model; a local one (subagent, /btw) does not. */
 function observeClaudeModelFallback(
   session: ClaudeSession | null,
   frame: Record<string, unknown>
 ): boolean {
-  const envelope = session && isRootClaudeFrame(frame) ? readClaudeMessageEnvelope(frame) : null
-  const fallback =
-    envelope?.role === 'assistant'
-      ? envelope.content.map(readClaudeModelFallback).findLast((entry) => entry !== null)
-      : undefined
-  if (!session || !fallback || session.modelFallback?.model === fallback.to) {
+  const swap =
+    frame.type === 'system' && frame.subtype === 'model_refusal_fallback' && frame.scope !== 'local'
+      ? { model: frame.fallback_model, replaced: frame.original_model }
+      : null
+  if (
+    !session ||
+    typeof swap?.model !== 'string' ||
+    typeof swap.replaced !== 'string' ||
+    session.modelFallback?.model === swap.model
+  ) {
     return false
   }
-  session.modelFallback = { model: fallback.to }
+  session.modelFallback = { model: swap.model, replaced: swap.replaced }
   return true
 }
 

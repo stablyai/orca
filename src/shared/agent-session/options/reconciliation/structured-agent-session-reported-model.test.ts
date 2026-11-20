@@ -55,7 +55,7 @@ it('names the fallback the running child switched to while Send keeps the saved 
       structuredAgentSessionOptionSnapshot(from).find((option) => option.id === 'model')!,
       sayNativeChatSessionOptionEnglish
     )
-  expect(pill(state)).toBe('Claude Opus 4.8')
+  expect(pill(state)).toBe('Opus 4.8')
   expect(structuredAgentSessionMessageSelection(state)).toEqual({ model: 'claude-opus-5-5' })
   expect(pill(commitStructuredAgentSessionOption(state, 'model', 'claude-sonnet-5'))).toBe(
     'Sonnet 5'

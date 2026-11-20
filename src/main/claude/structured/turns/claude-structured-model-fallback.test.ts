@@ -7,26 +7,26 @@ import {
 } from '../claude-structured-session-test-support'
 import type { ClaudeStructuredSessionEvent } from '../lifecycle/claude-structured-session-event'
 
-const FALLBACK = {
-  type: 'fallback',
-  from: { model: 'claude-opus-5-5' },
-  to: { model: 'claude-opus-4-8' }
-}
+// As Claude Code 2.1.329 emits it for a refused main-thread turn.
+const fallbackFrame = (uuid: string, scope: 'session' | 'local') => ({
+  type: 'system',
+  subtype: 'model_refusal_fallback',
+  trigger: 'refusal',
+  direction: 'retry',
+  scope,
+  original_model: 'claude-opus-5-5',
+  fallback_model: 'claude-opus-4-8',
+  request_id: null,
+  uuid
+})
 
-it('reports a main-thread fallback as the running model until a model write replaces it', async () => {
+it('reports a session-scope fallback as the running model until a model write replaces it', async () => {
   const claude = fakeClaude({ initModel: 'claude-opus-5-5' })
   const events: ClaudeStructuredSessionEvent[] = []
   const adapter = await acquired(claude, {}, events)
   const connection = claude.connections[0]!
   const read = async () =>
     (await adapter.readOptions({ sessionId: 'session-1', fence: 7 })).current.fallbackModel
-  const answer = (uuid: string, parent: string | null) =>
-    claudeFrame(connection, {
-      type: 'assistant',
-      uuid,
-      parent_tool_use_id: parent,
-      message: { id: uuid, role: 'assistant', model: 'claude-opus-4-8', content: [FALLBACK] }
-    })
   try {
     await adapter.setOption({
       sessionId: 'session-1',
@@ -34,10 +34,10 @@ it('reports a main-thread fallback as the running model until a model write repl
       key: 'model',
       value: 'claude-opus-5-5'
     })
-    // A subagent's fallback leaves the session model unchanged.
-    answer('subagent', 'task-1')
+    // A subagent or /btw fallback leaves the session model unchanged.
+    claudeFrame(connection, fallbackFrame('local', 'local'))
     expect(await read()).toBeUndefined()
-    answer('main', null)
+    claudeFrame(connection, fallbackFrame('session', 'session'))
     expect(await read()).toBe('claude-opus-4-8')
     expect(events.findLast((event) => event.type === 'options-reported')).toMatchObject({
       reportedOptions: { fallbackModel: 'claude-opus-4-8' }
@@ -66,20 +66,11 @@ it('sends a model picked during a fallback, even the saved one, and clears it on
       ...ids,
       clientMessageId,
       body: USER_MESSAGE,
-      executionOptions: { model: 'claude-opus-5-5' }
+      // The first turn runs Claude's default; later turns carry the model it ran as the saved choice.
+      executionOptions: clientMessageId === 'flagged' ? {} : { model: 'claude-opus-5-5' }
     })
     if (fallsBack) {
-      claudeFrame(connection, {
-        type: 'assistant',
-        uuid: `${clientMessageId}-answer`,
-        parent_tool_use_id: null,
-        message: {
-          id: clientMessageId,
-          role: 'assistant',
-          model: 'claude-opus-4-8',
-          content: [FALLBACK]
-        }
-      })
+      claudeFrame(connection, fallbackFrame(`${clientMessageId}-fallback`, 'session'))
     }
     claudeFrame(connection, {
       type: 'result',
@@ -90,16 +81,15 @@ it('sends a model picked during a fallback, even the saved one, and clears it on
     return outcome.state
   }
   try {
-    await adapter.setOption({ ...ids, key: 'model', value: 'claude-opus-5-5' })
     await turn('flagged', true)
     // Without a pick the session stays on the fallback Claude chose.
     await turn('unpicked')
-    expect(setModels()).toHaveLength(1)
+    expect(setModels()).toHaveLength(0)
     expect(await shown()).toBe('claude-opus-4-8')
 
     adapter.noteModelPick(ids)
     await turn('picked')
-    expect(setModels()).toHaveLength(2)
+    expect(setModels()).toHaveLength(1)
     expect(setModels().at(-1)?.params).toEqual({ model: 'claude-opus-5-5' })
     expect(await shown()).toBeUndefined()
 
@@ -109,7 +99,7 @@ it('sends a model picked during a fallback, even the saved one, and clears it on
     }
     adapter.noteModelPick(ids)
     expect(await turn('refused')).toBe('rejected')
-    expect(setModels()).toHaveLength(3)
+    expect(setModels()).toHaveLength(2)
     expect(await shown()).toBe('claude-opus-4-8')
   } finally {
     await adapter.closeAll()

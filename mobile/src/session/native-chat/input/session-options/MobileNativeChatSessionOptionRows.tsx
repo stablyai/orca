@@ -234,7 +234,12 @@ export function descriptorRowElements(
     />
   )
   // No search here, so search-only rows stay out; folded ones follow a More models toggle.
-  const listed = choices.filter((choice) => !choice.hidden || choice.value === currentValue)
+  const listed = choices.filter(
+    (choice) =>
+      !choice.hidden ||
+      choice.value === currentValue ||
+      choice.value === descriptor.kind.currentValue
+  )
   const more = moreChoices ? listed.filter((choice) => choice.legacy) : []
   return [
     ...listed.filter((choice) => !choice.legacy).map(choiceRow),
