@@ -201,7 +201,7 @@ describe('homeWorktreeCountsQuery', () => {
     expect(
       needsYou.map((r) => [r.entry.agent.paneKey, r.entry.workspaceName, r.entry.bot])
     ).toEqual([
-      ['atlas-asks', 'Atlas', { name: 'Atlas', avatar: 'mascot:owl' }],
+      ['atlas-asks', 'Atlas', { id: 'atlas', name: 'Atlas', avatar: 'mascot:owl' }],
       ['atlas-worker', 'Fix login', undefined]
     ])
     expect(selectActiveAgents(input).map((r) => r.entry.agent.paneKey)).toEqual([
