@@ -1,5 +1,5 @@
 import { canStartHardWrappedPath } from './hard-wrapped-terminal-path-fragments'
-import type { TerminalLinkBuffer, TerminalLinkBufferLine } from './terminal-link-buffer'
+import type { TerminalLinkBuffer } from './terminal-link-buffer'
 import { translateLineWithColumns, type WrappedLogicalLine } from './wrapped-terminal-link-ranges'
 
 // Same vertical frames as framed HTTP links, including ASCII `|` tables.
@@ -39,28 +39,44 @@ type FrameSpan = {
 
 type PathSlice = { start: number; end: number }
 
-function isTablePathFragmentChar(char: string): boolean {
-  return TABLE_PATH_FRAGMENT_CHAR.test(char)
+// Horizontal rules, Markdown dividers, ellipses, and delimiter tokens must not join paths.
+const TABLE_SEPARATOR_FRAGMENT = /^(?::?-+:?|=+|~{2,}|\.+|\+{3,}|_{3,}|(?=.*[-=~+])[-=_~.+:]{3,})$/
+const RULE_MARK_TOKEN = /^[-=_~+]+$/
+
+function isPunctuationTablePathFragment(text: string, cellRest: string): boolean {
+  const core = text.replace(/[.,]+$/, '')
+  if (core.length === 0 || /[()[\]:/\\]/.test(core) || TABLE_SEPARATOR_FRAGMENT.test(core)) {
+    return false
+  }
+  if (!RULE_MARK_TOKEN.test(core)) {
+    return true
+  }
+  const restTokens = cellRest.trimStart().split(/\s+/).filter(Boolean)
+  let ruleTokens = 1
+  let sameMark = [...core].every((char) => char === core[0])
+  for (let index = 0; index < restTokens.length; index++) {
+    const raw = restTokens[index] ?? ''
+    if (/^[.,]$/.test(raw)) {
+      if (RULE_MARK_TOKEN.test((restTokens[index + 1] ?? '').replace(/[.,;:!?)}\]]+$/, ''))) {
+        continue
+      }
+      break
+    }
+    const nextCore = raw.replace(/[.,;:!?)}\]]+$/, '')
+    if (nextCore.length === 0 || !RULE_MARK_TOKEN.test(nextCore)) {
+      break
+    }
+    sameMark = sameMark && [...nextCore].every((char) => char === core[0])
+    ruleTokens++
+  }
+  return sameMark && core !== '++' ? ruleTokens < 2 : ruleTokens < 3
 }
 
-function isTablePathFragment(text: string): boolean {
-  return text.length > 0 && /[\p{L}\p{N}]/u.test(text) && [...text].every(isTablePathFragmentChar)
-}
-
-function canStartTablePath(text: string): boolean {
-  return canStartHardWrappedPath(text) || /[\\/]/.test(text)
-}
-
-function fileExtensionSuffix(text: string): string | null {
-  return /\.([\p{L}\p{N}]+)$/u.exec(text)?.[1] ?? null
-}
-
-function isDottedExtensionBorderCut(ext: string, fragment: string): boolean {
-  const body = /^\.([\p{L}\p{N}]+)(?::\d+(?::\d+)?)?$/u.exec(fragment)?.[1]
-  return (
-    body !== undefined &&
-    (COMPOUND_EXTENSION_CONTINUATIONS.get(ext.toLowerCase())?.has(body.toLowerCase()) ?? false)
-  )
+function isTablePathFragment(text: string, cellRest: string): boolean {
+  if (text.length === 0 || ![...text].every((char) => TABLE_PATH_FRAGMENT_CHAR.test(char))) {
+    return false
+  }
+  return /[\p{L}\p{N}]/u.test(text) || isPunctuationTablePathFragment(text, cellRest)
 }
 
 // Once joined text ends in a file extension, only allow an unambiguous continuation of
@@ -77,7 +93,12 @@ function canContinueAfterFileExtension(
     return true
   }
   // Padding means the name already ended, so the next dotted token is its own row.
-  if (!prevHasTrailingPadding && isDottedExtensionBorderCut(ext, fragment)) {
+  const dotted = /^\.([\p{L}\p{N}]+)(?::\d+(?::\d+)?)?$/u.exec(fragment)?.[1]
+  if (
+    !prevHasTrailingPadding &&
+    dotted !== undefined &&
+    COMPOUND_EXTENSION_CONTINUATIONS.get(ext.toLowerCase())?.has(dotted.toLowerCase())
+  ) {
     return true
   }
   const tailMatch = /^([\p{L}\p{N}]+)(?::\d+(?::\d+)?)?$/u.exec(fragment)
@@ -95,47 +116,32 @@ function canContinueAfterFileExtension(
   )
 }
 
-function sliceHasTrailingPadding(
-  translated: TranslatedLine,
-  span: FrameSpan,
-  slice: PathSlice
-): boolean {
-  const fragmentEndColumn = translated.columns[slice.end]
-  return fragmentEndColumn !== undefined && fragmentEndColumn < span.rightColumn
+function sliceHasTrailingPadding(translated: TranslatedLine, span: FrameSpan, slice: PathSlice) {
+  const endColumn = translated.columns[slice.end]
+  return endColumn !== undefined && endColumn < span.rightColumn
 }
 
 function frameSpans(translated: TranslatedLine): FrameSpan[] {
-  const indexes: number[] = []
-  for (let index = 0; index < translated.text.length; index++) {
-    if (VERTICAL_FRAME_PATTERN.test(translated.text[index] ?? '')) {
-      indexes.push(index)
-    }
-  }
   const spans: FrameSpan[] = []
-  for (let index = 0; index + 1 < indexes.length; index++) {
-    const leftIndex = indexes[index] ?? -1
-    const rightIndex = indexes[index + 1] ?? -1
-    const leftColumn = translated.columns[leftIndex]
-    const rightColumn = translated.columns[rightIndex]
-    if (leftColumn === undefined || rightColumn === undefined || rightColumn <= leftColumn) {
+  let leftIndex = -1
+  for (let index = 0; index < translated.text.length; index++) {
+    if (!VERTICAL_FRAME_PATTERN.test(translated.text[index] ?? '')) {
       continue
     }
-    spans.push({ leftIndex, rightIndex, leftColumn, rightColumn })
+    if (leftIndex >= 0) {
+      const leftColumn = translated.columns[leftIndex]
+      const rightColumn = translated.columns[index]
+      if (leftColumn !== undefined && rightColumn !== undefined && rightColumn > leftColumn) {
+        spans.push({ leftIndex, rightIndex: index, leftColumn, rightColumn })
+      }
+    }
+    leftIndex = index
   }
   return spans
 }
 
-function gapIsPadding(translated: TranslatedLine, span: FrameSpan, end: number): boolean {
-  for (let index = end; index < span.rightIndex; index++) {
-    if (!/\s/.test(translated.text[index] ?? '')) {
-      return false
-    }
-  }
-  return true
-}
-
 function fillsCell(translated: TranslatedLine, span: FrameSpan, slice: PathSlice): boolean {
-  if (!gapIsPadding(translated, span, slice.end)) {
+  if (!/^\s*$/.test(translated.text.slice(slice.end, span.rightIndex))) {
     return false
   }
   const contentStartColumn = translated.columns[span.leftIndex + 1]
@@ -149,8 +155,10 @@ function fillsCell(translated: TranslatedLine, span: FrameSpan, slice: PathSlice
     return false
   }
   const contentWidth = span.rightColumn - contentStartColumn
-  const fragmentWidth = fragmentEndColumn - fragmentStartColumn
-  return contentWidth > 0 && fragmentWidth / contentWidth >= MIN_TABLE_PATH_FILL_RATIO
+  return (
+    contentWidth > 0 &&
+    (fragmentEndColumn - fragmentStartColumn) / contentWidth >= MIN_TABLE_PATH_FILL_RATIO
+  )
 }
 
 function trailingPathSlice(translated: TranslatedLine, span: FrameSpan): PathSlice | null {
@@ -159,21 +167,20 @@ function trailingPathSlice(translated: TranslatedLine, span: FrameSpan): PathSli
     end--
   }
   let start = end
-  while (start > span.leftIndex + 1 && isTablePathFragmentChar(translated.text[start - 1] ?? '')) {
+  while (
+    start > span.leftIndex + 1 &&
+    TABLE_PATH_FRAGMENT_CHAR.test(translated.text[start - 1] ?? '')
+  ) {
     start--
   }
   if (start >= end) {
     return null
   }
   const text = translated.text.slice(start, end)
-  return canStartTablePath(text) ? { start, end } : null
+  return canStartHardWrappedPath(text) || /[\\/]/.test(text) ? { start, end } : null
 }
 
-function leadingPathSlice(
-  translated: TranslatedLine,
-  span: FrameSpan,
-  startColumn: number
-): PathSlice | null {
+function leadingPathSlice(translated: TranslatedLine, span: FrameSpan, startColumn: number) {
   let start = span.leftIndex + 1
   while (start < span.rightIndex && (translated.columns[start] ?? -1) < startColumn) {
     start++
@@ -182,42 +189,29 @@ function leadingPathSlice(
     return null
   }
   let end = start
-  while (end < span.rightIndex && isTablePathFragmentChar(translated.text[end] ?? '')) {
+  while (end < span.rightIndex && TABLE_PATH_FRAGMENT_CHAR.test(translated.text[end] ?? '')) {
     end++
   }
   const text = translated.text.slice(start, end)
-  return isTablePathFragment(text) ? { start, end } : null
+  return isTablePathFragment(text, translated.text.slice(end, span.rightIndex))
+    ? { start, end }
+    : null
 }
 
-function readRow(
-  buffer: TerminalLinkBuffer,
-  y: number,
-  cache: Map<number, CachedRow | null>
-): CachedRow | null {
-  const cached = cache.get(y)
-  if (cached !== undefined) {
-    return cached
+function readRow(buffer: TerminalLinkBuffer, y: number, cache: Map<number, CachedRow | null>) {
+  if (cache.has(y)) {
+    return cache.get(y) ?? null
   }
   const line = buffer.getLine(y)
-  const row = line ? toCachedRow(line) : null
+  const row = line
+    ? {
+        translated: translateLineWithColumns(line),
+        isWrapped: line.isWrapped,
+        lineLength: line.length
+      }
+    : null
   cache.set(y, row)
   return row
-}
-
-function toCachedRow(line: TerminalLinkBufferLine): CachedRow {
-  return {
-    translated: translateLineWithColumns(line),
-    isWrapped: line.isWrapped,
-    lineLength: line.length
-  }
-}
-
-function spanAtColumns(row: CachedRow, leftColumn: number, rightColumn: number): FrameSpan | null {
-  return (
-    frameSpans(row.translated).find(
-      (span) => span.leftColumn === leftColumn && span.rightColumn === rightColumn
-    ) ?? null
-  )
 }
 
 function toLogicalLine(
@@ -264,7 +258,11 @@ function candidateForCell(
   let lastY = startY
   for (let rowY = startY + 1; rowY < startY + MAX_TABLE_PATH_ROWS; rowY++) {
     const row = readRow(buffer, rowY, cache)
-    const nextSpan = row ? spanAtColumns(row, span.leftColumn, span.rightColumn) : null
+    const nextSpan =
+      row &&
+      frameSpans(row.translated).find(
+        (item) => item.leftColumn === span.leftColumn && item.rightColumn === span.rightColumn
+      )
     const nextSlice =
       row && nextSpan ? leadingPathSlice(row.translated, nextSpan, startColumn) : null
     if (!row || !nextSpan || !nextSlice) {
@@ -272,7 +270,7 @@ function candidateForCell(
     }
     const fragment = row.translated.text.slice(nextSlice.start, nextSlice.end)
     // A padded name must not swallow the next row's own file, flag, or sibling extension.
-    const ext = fileExtensionSuffix(text)
+    const ext = /\.([\p{L}\p{N}]+)$/u.exec(text)?.[1] ?? null
     if (ext !== null && !canContinueAfterFileExtension(ext, fragment, prevHasTrailingPadding)) {
       break
     }
@@ -284,10 +282,7 @@ function candidateForCell(
       break
     }
   }
-  if (pieces.length < 2 || lastY < currentY) {
-    return null
-  }
-  return toLogicalLine(pieces)
+  return pieces.length >= 2 && lastY >= currentY ? toLogicalLine(pieces) : null
 }
 
 export function buildHardWrappedTableFileLogicalLineCandidates(

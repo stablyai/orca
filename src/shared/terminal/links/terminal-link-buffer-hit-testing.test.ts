@@ -437,6 +437,134 @@ describe('file paths wrapped inside terminal table cells', () => {
     })
   })
 
+  it('joins a punctuation-only final fragment that completes a wrapped table path', () => {
+    const paddedRows = ['│ src/generated/ │ notes │', '│ __             │ more  │']
+    const reading = { pathText: 'src/generated/__', line: null, column: null }
+    expect(fileLinksAt(paddedRows, 1, 'src/generated/')).toContainEqual(reading)
+    expect(fileLinksAt(paddedRows, 2, '__')).toContainEqual(reading)
+
+    const unpadded = unpaddedRows(' src/generated/', ' __')
+    expect(fileLinksAt(unpadded, 1, 'src/generated/')).toContainEqual(reading)
+    expect(fileLinksAt(unpadded, 2, '__')).toContainEqual(reading)
+
+    const suffixRows = unpaddedRows(' src/generated/file_', ' _')
+    const suffixReading = { pathText: 'src/generated/file__', line: null, column: null }
+    expect(fileLinksAt(suffixRows, 1, 'src/generated/')).toContainEqual(suffixReading)
+    expect(fileLinksAt(suffixRows, 2, '_')).toContainEqual(suffixReading)
+
+    const tildeRows = unpaddedRows(' src/generated/file', ' ~')
+    const tildeReading = { pathText: 'src/generated/file~', line: null, column: null }
+    expect(fileLinksAt(tildeRows, 1, 'src/generated/')).toContainEqual(tildeReading)
+    expect(fileLinksAt(tildeRows, 2, '~')).toContainEqual(tildeReading)
+
+    const plusRows = unpaddedRows(' src/generated/lang/c', ' ++')
+    const plusReading = { pathText: 'src/generated/lang/c++', line: null, column: null }
+    expect(fileLinksAt(plusRows, 1, 'src/generated/')).toContainEqual(plusReading)
+    expect(fileLinksAt(plusRows, 2, '++')).toContainEqual(plusReading)
+  })
+
+  it.each([
+    '-',
+    '--',
+    '---',
+    '--------------',
+    ':------------:',
+    ':---',
+    '---:',
+    '=',
+    '===',
+    '==============',
+    '___',
+    '______________',
+    '~~',
+    '~~~',
+    '.',
+    '..',
+    '...',
+    '+-+-+',
+    '+---+',
+    '+++',
+    ':::',
+    '///',
+    ',',
+    '_ _ _',
+    '_ _ _.',
+    '_ _ _,',
+    '_ _ _ (draft)',
+    '_ _;',
+    '_ _!',
+    '_, _',
+    '_ , _',
+    '_ . _',
+    '_ - _',
+    '__ __',
+    '__  __',
+    '__ __.',
+    '__ __,',
+    '__ __;',
+    '__ __!',
+    '__ __?',
+    '__ __:',
+    '__ __)',
+    '__, __',
+    '~ ~ ~',
+    '~ ~ ~,',
+    '~ ~;',
+    '~ ~!',
+    '~ , ~',
+    '~ . ~',
+    '+ + +',
+    '+ + +,',
+    '+ + +!',
+    '+ + +;',
+    '+ + +:',
+    '+ + +)',
+    '+ . + . +',
+    '+ , + , +',
+    '+ - +',
+    '+ - + - +',
+    '(_)',
+    '[__]',
+    '_:!'
+  ])('does not join separator or rule fragment %j onto a wrapped table path', (separator) => {
+    const rows = unpaddedRows(' src/generated/', ` ${separator}`)
+    expect(
+      fileLinksAt(rows, 1, 'src/generated/').some((link) => link.pathText !== 'src/generated/')
+    ).toBe(false)
+    expect(fileLinksAt(rows, 2, separator)).toEqual([])
+  })
+
+  it('keeps punctuation-only continuations followed by prose or ellipsis in the same cell', () => {
+    for (const next of ['__ (draft)    ', '__ - generated']) {
+      const rows = ['│ src/generated/ │ notes │', `│ ${next} │ more  │`]
+      const reading = { pathText: 'src/generated/__', line: null, column: null }
+      expect(fileLinksAt(rows, 1, 'src/generated/')).toContainEqual(reading)
+      expect(fileLinksAt(rows, 2, '__')).toContainEqual(reading)
+    }
+
+    for (const next of [' ~ ...', ' ~...', ' ~;']) {
+      const tildeRows = unpaddedRows(' src/generated/file', next)
+      const tildeReading = { pathText: 'src/generated/file~', line: null, column: null }
+      expect(fileLinksAt(tildeRows, 1, 'src/generated/')).toContainEqual(tildeReading)
+      expect(fileLinksAt(tildeRows, 2, '~')).toContainEqual(tildeReading)
+    }
+
+    for (const next of [' ++ ...', ' ++...', ' ++ +', ' ++ - note']) {
+      const plusRows = unpaddedRows(' src/generated/lang/c', next)
+      const plusReading = { pathText: 'src/generated/lang/c++', line: null, column: null }
+      expect(fileLinksAt(plusRows, 1, 'src/generated/')).toContainEqual(plusReading)
+      expect(fileLinksAt(plusRows, 2, '++')).toContainEqual(plusReading)
+    }
+  })
+
+  it('does not join a punctuation-only fragment after a finished file extension', () => {
+    const rows = unpaddedRows(' src/widget.ts', ' __')
+    expect(fileLinksAt(rows, 1, 'src/widget.ts')).toEqual([
+      { pathText: 'src/widget.ts', line: null, column: null }
+    ])
+    expect(fileLinksAt(rows, 2, '__')).toEqual([])
+  })
+
   it('still joins a hard-wrapped path that is not inside a table', () => {
     const rows = [
       'result validation-screenshots/02-after-',
