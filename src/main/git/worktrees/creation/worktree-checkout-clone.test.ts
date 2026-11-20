@@ -47,6 +47,8 @@ describe.runIf(process.platform === 'darwin')('cloneWorktreeCheckoutFiles', () =
     // Git normalizes this back to the commit, so only a byte comparison sees the difference.
     writeFileSync(join(repo, 'normalized.text'), 'two\r\n')
     chmodSync(join(repo, 'src/readonly.txt'), 0o444)
+    // A locked clone refuses chmod, and Git would keep its read-only mode.
+    execFileSync('chflags', ['uchg', 'src/readonly.txt'], { cwd: repo })
     execFileSync('xattr', ['-w', 'com.apple.quarantine', '0081;0;Test;', 'src/same.txt'], {
       cwd: repo
     })
@@ -54,6 +56,7 @@ describe.runIf(process.platform === 'darwin')('cloneWorktreeCheckoutFiles', () =
   })
 
   afterEach(() => {
+    execFileSync('chflags', ['-R', 'nouchg', root])
     rmSync(root, { recursive: true, force: true })
   })
 

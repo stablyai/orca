@@ -45,8 +45,7 @@ export async function cloneWorktreeCheckoutFiles(
     await runGit(context, ['read-tree', commit])
     const files = await withoutConvertedFiles(context, await listTrackedFiles(context))
     await cloneFiles(context, files)
-    // Clones keep the repo's BSD flags and xattrs (quarantine); a checkout has neither.
-    await runTool(context, '/usr/bin/chflags', ['-R', 'nouchg,nouappnd', context.worktreePath])
+    // Clones keep the repo's xattrs (quarantine); a checkout has none.
     await runTool(context, '/usr/bin/xattr', ['-cr', context.worktreePath])
     await removeMismatchedClones(context, files)
     // Why fsmonitor off: a stale daemon answer would mark unverified files as clean.
@@ -184,15 +183,22 @@ async function cloneFiles(context: CloneContext, files: readonly TrackedFile[]):
         ...batch.map((file) => join(context.repoPath, file.path)),
         `${target}/`
       ]).catch(() => {})
+      // Clones keep the repo's BSD flags; a locked clone would refuse the chmod below.
+      await runTool(context, '/usr/bin/chflags', [
+        'nouchg,nouappnd',
+        ...batch.map((file) => join(context.worktreePath, file.path))
+      ]).catch(() => {})
       for (const executable of [false, true]) {
-        const paths = batch.filter((file) => file.executable === executable)
+        const paths = batch
+          .filter((file) => file.executable === executable)
+          .map((file) => join(context.worktreePath, file.path))
         if (paths.length > 0) {
           // Clones keep the repo's modes; chmod without a who applies the umask, as Git does.
           const mode = executable ? '=rwx' : '=rw'
-          await runTool(context, '/bin/chmod', [
-            mode,
-            ...paths.map((file) => join(context.worktreePath, file.path))
-          ]).catch(() => {})
+          await runTool(context, '/bin/chmod', [mode, ...paths]).catch(() =>
+            // Git only compares the execute bit, so a wrong mode must not survive as a clone.
+            forEachWithConcurrency(paths, FILE_CONCURRENCY, (path) => unlink(path).catch(() => {}))
+          )
         }
       }
     } catch (error) {
