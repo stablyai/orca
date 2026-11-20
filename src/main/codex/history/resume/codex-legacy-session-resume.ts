@@ -22,6 +22,7 @@ import {
 import { resolveCodexSessionBackfillPaths } from '../backfill/codex-session-backfill'
 import { codexDatedRolloutRelativePath } from './codex-session-resume-home'
 import { linkCodexRolloutUnlessHeld } from '../rollouts/codex-rollout-deletion-guard'
+import { swapLegacySessionCopy } from '../bridges/codex-legacy-session-copy'
 import { ManagedCodexHomeTemporarilyUnavailableError } from '../../../codex-accounts/managed-homes/host-codex-managed-home-ownership'
 
 const RETRYABLE_RESUME_ERROR =
@@ -49,15 +50,20 @@ export async function prepareLegacySharedCodexSessionResume(
     args.agent !== 'codex' ||
     args.executionHostId !== LOCAL_EXECUTION_HOST_ID ||
     !args.codexHome ||
-    !sameRuntimePath(args.codexHome, legacyCodexHomePath) ||
-    !options.isHostSystemDefaultRealHomeSelected()
+    !sameRuntimePath(args.codexHome, legacyCodexHomePath)
   ) {
     return { useRealCodexHome: false }
   }
-
   const sourcePath = resolve(args.filePath)
   // Codex canonicalizes CODEX_HOME, so Windows transcripts can carry a \\?\ prefix (#27200).
   const relativePath = codexDatedRolloutRelativePath(managedSessionsRoot, sourcePath)
+  if (relativePath) {
+    // Before Codex starts, so this resume can't be writing the copy as it's swapped.
+    await swapLegacySessionCopy({ managedHome: legacyCodexHomePath, relativePath })
+  }
+  if (!options.isHostSystemDefaultRealHomeSelected()) {
+    return { useRealCodexHome: false }
+  }
   if (!relativePath) {
     throw new Error(RETRYABLE_RESUME_ERROR)
   }

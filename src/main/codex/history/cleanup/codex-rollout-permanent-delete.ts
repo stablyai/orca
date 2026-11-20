@@ -1,5 +1,5 @@
 import { lstat, realpath, rm, stat, unlink } from 'node:fs/promises'
-import { basename, dirname, join } from 'node:path'
+import { dirname, join } from 'node:path'
 import type { AiVaultAgent } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import { isPathInsideOrEqual } from '../../../../shared/file-access/cross-platform-path'
 import { invalidateDeletedAiVaultSessionPaths } from '../../../ai-vault/deletion/host-session-delete'
@@ -7,6 +7,11 @@ import { isDefinitiveAbsence } from '../../../../shared/errors/definitive-filesy
 import { resolveOrcaManagedCodexHomePath } from '../../configuration/homes/codex-home-paths'
 import { codexDatedRolloutRelativePath } from '../resume/codex-session-resume-home'
 import { holdCodexRolloutForDeletion } from '../rollouts/codex-rollout-deletion-guard'
+import { isCodexRolloutOpenInCodex } from '../rollouts/codex-rollout-open-check'
+import {
+  LEGACY_SESSION_COPY_ASIDE_SUFFIX,
+  LEGACY_SESSION_COPY_KEPT_SUFFIX
+} from '../bridges/codex-legacy-session-copy'
 import { forgetCodexHistoryDiskUsage } from '../disk-usage/codex-history-disk-usage'
 import {
   isOutsideProtectedRoots,
@@ -19,8 +24,6 @@ type RolloutTarget = { agent: AiVaultAgent; filePath: string }
 type DeleteResult = { deleted: number; failed: number; freedBytes: number }
 
 type RolloutName = { path: string; root: string }
-
-const UUID_PATTERN = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g
 
 /** One name as found: what it reads (a link's target), and enough to tell if it changed. */
 type NameState = {
@@ -55,6 +58,7 @@ function rolloutNames(homes: readonly string[], stem: string): RolloutName[] {
     return [
       { path: join(sessions, ...parts), root: sessions },
       { path: `${join(sessions, ...parts)}.zst`, root: sessions },
+      { path: `${join(sessions, ...parts)}${LEGACY_SESSION_COPY_ASIDE_SUFFIX}`, root: sessions },
       { path: join(archived, fileName), root: archived },
       { path: `${join(archived, fileName)}.zst`, root: archived }
     ]
@@ -163,38 +167,6 @@ function freedBytesOf(removed: readonly NameState[]): number {
   return bytes
 }
 
-/**
- * Codex holds `thread-writer-locks/<thread id>.lock` while a process has the thread open, also
- * after a resume that hasn't written a turn yet; deleting then would cut off every later turn.
- * Codex versions that keep no locks give no such proof, so their rollouts are kept.
- */
-async function isOpenInCodex(homes: readonly string[], stem: string): Promise<boolean> {
-  // A reverted thread's name carries its thread id and its rollout id: either can be the lock's.
-  const ids = basename(stem).toLowerCase().match(UUID_PATTERN) ?? []
-  if (ids.length === 0) {
-    return true
-  }
-  let keepsLocks = false
-  for (const home of homes) {
-    const locks = join(home, 'thread-writer-locks')
-    for (const id of ids) {
-      try {
-        await lstat(join(locks, `${id}.lock`))
-        return true
-      } catch (error) {
-        if (!isDefinitiveAbsence(error)) {
-          return true
-        }
-      }
-    }
-    keepsLocks ||= await lstat(locks).then(
-      (entry) => entry.isDirectory(),
-      () => false
-    )
-  }
-  return !keepsLocks
-}
-
 async function removeCopyMarker(
   path: string,
   protectedRoots: readonly ProtectedRoot[]
@@ -222,7 +194,7 @@ async function deleteRollout(
       return
     }
     const names = rolloutNames(homes, stem)
-    if (await isOpenInCodex(homes, stem)) {
+    if (await isCodexRolloutOpenInCodex(homes, stem)) {
       return
     }
     // After the open check: a chat still open never reads the import folder (which can start WSL).
@@ -261,7 +233,10 @@ async function deleteRollout(
           continue
         }
         // Checked once more right before its own unlink: a resume opens or writes one name.
-        if (state.version !== versions.get(name.path) || (await isOpenInCodex(homes, stem))) {
+        if (
+          state.version !== versions.get(name.path) ||
+          (await isCodexRolloutOpenInCodex(homes, stem))
+        ) {
           return
         }
         // A name reached into the import folder stays: the user's copy survives there anyway.
@@ -278,10 +253,12 @@ async function deleteRollout(
     }
     result.deleted += 1
     // A name another process links meanwhile is a fresh candidate for the next sweep's full checks.
-    await removeCopyMarker(
-      join(resolveOrcaManagedCodexHomePath(), '.orca-session-copies', `${stem}.json`),
-      protectedRoots
-    ).catch(() => undefined)
+    for (const marker of [`${stem}.json`, `${stem}.json${LEGACY_SESSION_COPY_KEPT_SUFFIX}`]) {
+      await removeCopyMarker(
+        join(resolveOrcaManagedCodexHomePath(), '.orca-session-copies', marker),
+        protectedRoots
+      ).catch(() => undefined)
+    }
   } catch (error) {
     console.warn('[workspace-cleanup] Failed to delete Codex rollout:', target.filePath, error)
     result.failed += 1

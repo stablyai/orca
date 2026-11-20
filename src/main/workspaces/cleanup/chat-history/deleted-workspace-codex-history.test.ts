@@ -81,6 +81,12 @@ describe('sweepDeletedWorkspaceChatHistory with Codex rollouts', () => {
         join(managed, '.orca-session-copies', '2026', '11', '01', `${NAME('1')}.json`),
         '{}'
       )
+      // A legacy copy's own bytes, set aside when its name was pointed at the source.
+      const aside = write(
+        join(managed, ...DATED, `${NAME('1')}.orca-legacy-copy`),
+        rollout(gone, [gone])
+      )
+      const keptMarker = write(`${marker}.kept`, '{}')
 
       // Codex compressed the account's copy, breaking the link, and that copy was resumed in `live`.
       const resumed = write(join(system, ...DATED, NAME('2')), rollout(gone, [gone]))
@@ -119,6 +125,7 @@ describe('sweepDeletedWorkspaceChatHistory with Codex rollouts', () => {
         statSync(shared).size +
         statSync(sharedPacked).size +
         statSync(sharedArchived).size +
+        statSync(aside).size +
         statSync(reverted).size
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the sweep reads only these store methods
       const store = {
@@ -173,6 +180,8 @@ describe('sweepDeletedWorkspaceChatHistory with Codex rollouts', () => {
           sharedArchived,
           join(managed, ...DATED, `${NAME('1')}.zst`),
           marker,
+          aside,
+          keptMarker,
           packedOnly,
           packedLink,
           reverted
