@@ -61,10 +61,8 @@ export function registerAgentHookHandlers(
     }
     return agentHookServer.inferQuestionAnswered(request as AgentQuestionAnsweredInferenceRequest)
   })
-  registerAppHandler(
-    'agentStatus:hasVerifiableAgentProcess',
-    (_event, paneKey: unknown): boolean =>
-      typeof paneKey === 'string' ? agentHookServer.hasVerifiableAgentProcess(paneKey) : false
+  registerAppHandler('agentStatus:hasVerifiableAgentProcess', (_event, paneKey: unknown): boolean =>
+    typeof paneKey === 'string' ? agentHookServer.hasVerifiableAgentProcess(paneKey) : false
   )
   registerAppHandler(
     'agentStatus:getMigrationUnsupportedSnapshot',
