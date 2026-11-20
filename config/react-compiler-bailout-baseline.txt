@@ -49,7 +49,7 @@
 1 src/renderer/src/components/automations/use-automations-page-refresh.ts
 1 src/renderer/src/components/automations/use-automations-page-store-state.ts
 1 src/renderer/src/components/bots/BotAgentLaunchPicker.tsx
-2 src/renderer/src/components/bots/BotGroupChat.tsx
+1 src/renderer/src/components/bots/BotGroupChat.tsx
 2 src/renderer/src/components/bots/BotGroupTranscriptOwner.tsx
 1 src/renderer/src/components/bots/ImportBotDialog.tsx
 1 src/renderer/src/components/bots/github/BotGitHubSetupDialog.tsx

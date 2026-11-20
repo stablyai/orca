@@ -27983,6 +27983,7 @@
       "needsYou": "· Needs you",
       "stopCouldNotBeConfirmed": "Stop could not be confirmed.",
       "useEachBotSNativeSessionForCommands": "Use each bot’s native session for commands.",
+      "attachmentsHostTooOld": "{{host}} needs an update to attach files in group chats.",
       "loadEarlierMessages": "Load earlier messages",
       "loadingGroup": "Loading group…",
       "manageMembers": "Manage members",
