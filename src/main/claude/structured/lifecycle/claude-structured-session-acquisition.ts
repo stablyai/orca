@@ -99,7 +99,7 @@ export async function acquireClaudeSession({
         permissionMode: proof.readClaudeFrameString(message, 'permissionMode')
       }
       if (liveSession) {
-        liveSession.firstRootInit = firstRootInit
+        liveSession.firstRootInit ??= firstRootInit
       }
     }
     const permissionChanged = proof.observeClaudeReportedPermissionMode(observedOptions, message)
