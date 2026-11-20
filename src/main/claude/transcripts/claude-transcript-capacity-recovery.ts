@@ -134,13 +134,13 @@ export async function prepareClaudeTranscriptCapacityRecovery(
         sourceConsumedBytes: prepared.sourceConsumedBytes
       },
       items: [
+        ...prepared.items,
         {
           identity: noticeIdentity,
           body: continuedOutsideNotice(false, 'recent'),
           ownerFence: 0,
           turnScope: { kind: 'thread' }
-        },
-        ...prepared.items
+        }
       ]
     }
   }

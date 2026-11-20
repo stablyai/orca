@@ -116,11 +116,20 @@ it('opens the chat while capacity recovery is blocked, then installs the recent 
       }
     })
   )
-  expect(items).toContainEqual(
-    expect.objectContaining({
-      body: expect.objectContaining({ presentation: 'continued-outside-recent' })
-    })
-  )
+  expect(items.at(-1)).toMatchObject({
+    itemId:
+      'legacy:claude:chat-catch-up:continued-outside%3Acapacity%3Aprovider-catch-up%3Aold-leaf',
+    body: {
+      kind: 'status',
+      presentation: 'continued-outside-recent',
+      text: 'This chat was continued in a separate CLI session. Showing recent history only.'
+    }
+  })
+  expect(
+    items.filter(
+      ({ body }) => body.kind === 'status' && body.presentation === 'continued-outside-recent'
+    )
+  ).toHaveLength(1)
 })
 
 it.each(['success', 'drop', 'error'] as const)(
@@ -200,7 +209,23 @@ it('keeps the send that acquires a restored chat queued until recovery commits, 
       }
     })
   )
-  expect(recovered.items).toContainEqual(expect.objectContaining({ body: c.body }))
+  expect(
+    recovered.items
+      .filter(({ body }) => body.kind === 'message' || body.kind === 'status')
+      .slice(-2)
+      .map(({ body }) => body)
+  ).toEqual([
+    {
+      kind: 'status',
+      presentation: 'continued-outside-recent',
+      text: 'This chat was continued in a separate CLI session. Showing recent history only.'
+    },
+    {
+      kind: 'message',
+      role: 'user',
+      blocks: [{ type: 'text', text: 'Keep my original send' }]
+    }
+  ])
   expect(
     c.claude.connections[0]!.sent.filter((message) =>
       JSON.stringify(message).includes('Keep my original send')

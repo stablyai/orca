@@ -1,28 +1,14 @@
-import { agentSessionHostStatusText } from './agent-session-host-status-text'
-import { BotTidyUpLine } from '@/components/bots/BotTidyUpLine'
-import { nativeChatBotCard } from '../../native-chat-bot-cards'
-import {
-  CLAUDE_MODEL_FALLBACK_COPY,
-  claudeModelFallbackLabels
-} from '../../../../../../shared/native-chat/transcript/notices/claude-model-fallback'
+import { nativeChatTranscriptNoticeRow } from './native-chat-transcript-notice-row'
 import { NativeChatUsageLimitRow } from '../../usage/NativeChatUsageLimitRow'
 import { agentSessionGoalControlWords } from '../../session/goals/agent-session-goal-control-words'
-import { AlertCircle, AlertTriangle, Info, Notebook } from 'lucide-react'
+import { AlertCircle, AlertTriangle, Info } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { NativeChatForkedFromRow } from './NativeChatForkedFromRow'
-import { NativeChatAutoReviewDenialRow } from './NativeChatAutoReviewDenialRow'
 import { NativeChatPullRequestEventLine } from './NativeChatPullRequestEventLine'
-import { NativeChatEventRow } from '../events/NativeChatEventRow'
 import { PULL_REQUEST_EVENT_PRESENTATION } from '../../../../../../shared/native-chat/transcript/notices/native-chat-pull-request-event'
-import { NativeChatMarkdown } from '../../markdown/NativeChatMarkdown'
-import { NativeChatCodeBlock } from '../../markdown/code/NativeChatCodeBlock'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import type { NativeChatTextBlock } from '../../../../../../shared/native-chat/native-chat-types'
 import {
-  NATIVE_CHAT_NOTICE_COPY,
   nativeChatNoticeLook,
   type NativeChatNoticeTone
 } from '../../../../../../shared/native-chat/transcript/notices/native-chat-notice'
@@ -30,12 +16,6 @@ import { useNativeChatOrcaStopView } from './native-chat-orca-stop-context'
 import { NativeChatInterruptedContinueButton } from '../../usage/NativeChatInterruptedContinue'
 import { nativeChatOrcaStopRowText } from '../../../../../../shared/native-chat/transcript/continuation/native-chat-orca-stop-words'
 import { sayNativeChatOrcaStopTranslated } from './native-chat-orca-stop-words-text'
-import { openBotSettings } from '@/components/bots/bot-settings-open'
-import {
-  BOT_CONTEXT_NOTE_COPY,
-  type BotContextChange
-} from '../../../../../../shared/bots/bot-context-note'
-import { NativeChatDividerRow } from '../../NativeChatDividerRow'
 import { agentSessionRestartNoteText } from './agent-session-restart-note-text'
 import {
   NativeChatDetailsDisclosure,
@@ -59,11 +39,6 @@ import { sayAgentSessionFailureTranslated } from './agent-session-failure-words-
 import { NativeChatTranscriptSignInNotice } from '../../host-access/NativeChatSignInRow'
 import { nativeChatSignInHostWords } from '../../host-access/native-chat-sign-in-notice'
 import { NativeChatNoticeAuthRecovery } from '../../antigravity-auth/NativeChatAntigravityAuthRecovery'
-
-const BOT_CONTEXT_WORDS: Record<BotContextChange, () => string> = {
-  soul: () => translate('components.native-chat.botContext.soul', BOT_CONTEXT_NOTE_COPY.soul),
-  memory: () => translate('components.native-chat.botContext.memory', BOT_CONTEXT_NOTE_COPY.memory)
-}
 
 function toneClass(tone: NativeChatNoticeTone): string {
   return tone === 'warning'
@@ -95,96 +70,16 @@ export function NativeChatNoticeRow({
     )
   }
   const look = nativeChatNoticeLook(block)
-  if (look.kind === 'forked-from') {
-    return <NativeChatForkedFromRow look={look} />
-  }
-  if (look.kind === 'divider') {
-    const label =
-      look.label === 'contextCleared'
-        ? t('components.native-chat.notices.contextCleared', NATIVE_CHAT_NOTICE_COPY.contextCleared)
-        : t('components.native-chat.notices.compaction', NATIVE_CHAT_NOTICE_COPY.compaction)
-    return <NativeChatDividerRow label={label} />
-  }
-  if (look.kind === 'command-output') {
-    // Why: command output is laid out in columns; proportional type breaks its grid.
-    return (
-      <pre className="whitespace-pre-wrap break-words font-mono text-xs text-chat-foreground">
-        {block.text}
-      </pre>
-    )
-  }
-  const botCard = nativeChatBotCard(block, messageId ?? '', timestamp)
-  if (botCard) {
-    return botCard
-  }
-  if (block.tidyUp) {
-    return <BotTidyUpLine note={block.tidyUp} />
-  }
-  if (block.botContext) {
-    const { botId, changed } = block.botContext
-    return (
-      <NativeChatEventRow
-        icon={<Notebook aria-hidden className="size-3.5" />}
-        timestamp={timestamp}
-      >
-        <button
-          type="button"
-          onClick={() => openBotSettings(botId, changed.length === 1 ? changed[0] : undefined)}
-          className="line-clamp-2 rounded-sm text-left hover:text-chat-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          {changed.map((change) => BOT_CONTEXT_WORDS[change]()).join(' · ')}
-        </button>
-      </NativeChatEventRow>
-    )
-  }
-  if (look.kind === 'host-status') {
-    // The look of any other host status line; only the words are the reader's.
-    return (
-      <p className="min-w-0 max-w-full select-text text-sm text-chat-foreground-faint [overflow-wrap:anywhere]">
-        {agentSessionHostStatusText(look.presentation)}
-      </p>
-    )
-  }
-  if (look.kind === 'model-fallback') {
-    return (
-      <p className="min-w-0 max-w-full select-text text-sm text-chat-foreground-faint [overflow-wrap:anywhere]">
-        {t(
-          'components.native-chat.notices.modelFallback',
-          CLAUDE_MODEL_FALLBACK_COPY,
-          claudeModelFallbackLabels(look)
-        )}
-      </p>
-    )
-  }
-  if (look.kind === 'plan') {
-    return (
-      <Card className="gap-3 py-3 shadow-xs">
-        <CardHeader className="px-4">
-          <CardTitle className="text-sm">
-            {t('components.native-chat.notices.plan', NATIVE_CHAT_NOTICE_COPY.plan)}
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="px-4 text-sm leading-relaxed text-foreground">
-          <NativeChatMarkdown
-            rowKey={messageId === undefined ? undefined : `plan:${messageId}`}
-            content={block.text}
-            variant="document"
-            renderCodeBlock={NativeChatCodeBlock}
-            className="text-sm text-chat-foreground"
-            linkifyFilePaths
-          />
-        </CardContent>
-      </Card>
-    )
-  }
-  if (look.kind === 'auto-review-denied') {
-    return (
-      <NativeChatAutoReviewDenialRow
-        denial={look.denial}
-        agent={agentName ?? look.agent}
-        itemId={messageId}
-      />
-    )
+  const transcriptNotice = nativeChatTranscriptNoticeRow({
+    block,
+    look,
+    messageId,
+    timestamp,
+    agentName,
+    t
+  })
+  if (transcriptNotice) {
+    return transcriptNotice
   }
   if (look.kind === 'settled-permission') {
     const agent = agentName ?? look.agent

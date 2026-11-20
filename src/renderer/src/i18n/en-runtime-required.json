@@ -2293,7 +2293,7 @@
         "contextCleared": "Context cleared",
         "continuedOutside": "Continued outside this chat.",
         "continuedOutsideCatchingUp": "Catching up on turns made outside this chat…",
-        "continuedOutsideRecent": "Continued outside this chat. Showing recent history only.",
+        "continuedOutsideRecent": "This chat was continued in a separate CLI session. Showing recent history only.",
         "continuedOutsideUnloaded": "Continued outside this chat. Newer turns couldn't be loaded.",
         "continuedOutsideRewound": "Continued outside this chat. Earlier replies above are no longer in this conversation's history.",
         "forkedFrom": "Forked from",

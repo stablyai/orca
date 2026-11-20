@@ -10,7 +10,8 @@ export const AGENT_SESSION_HOST_STATUS_COPY = {
   /** Before turns the agent's own history has that were made outside this chat. */
   'continued-outside-catching-up': 'Catching up on turns made outside this chat…',
   'continued-outside': 'Continued outside this chat.',
-  'continued-outside-recent': 'Continued outside this chat. Showing recent history only.',
+  'continued-outside-recent':
+    'This chat was continued in a separate CLI session. Showing recent history only.',
   'continued-outside-unloaded': "Continued outside this chat. Newer turns couldn't be loaded.",
   /** The same, when replies above were dropped from the agent's history elsewhere. */
   'continued-outside-rewound':
