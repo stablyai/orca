@@ -86,7 +86,13 @@ export function isAltGrTextKey(event: Win32InputRecordKeyEvent): boolean {
 
 function encodeRecord(event: Win32InputRecordKeyEvent, keyDown: boolean): string {
   const altGraph = event.getModifierState?.('AltGraph') === true
-  let controlKeyState = LEFT_CTRL_PRESSED | (altGraph ? RIGHT_ALT_PRESSED : LEFT_ALT_PRESSED)
+  let controlKeyState = 0
+  if (event.ctrlKey) {
+    controlKeyState |= LEFT_CTRL_PRESSED
+  }
+  if (event.altKey) {
+    controlKeyState |= altGraph ? RIGHT_ALT_PRESSED : LEFT_ALT_PRESSED
+  }
   if (event.shiftKey) {
     controlKeyState |= SHIFT_PRESSED
   }
@@ -105,4 +111,9 @@ export function encodeWin32InputRecordForAltGr(event: Win32InputRecordKeyEvent):
     return null
   }
   return encodeRecord(event, event.type === 'keydown')
+}
+
+/** Encode the key-up of a key whose key-down was already sent as a record, even after AltGr was released first. */
+export function encodeWin32InputRecordRelease(event: Win32InputRecordKeyEvent): string {
+  return encodeRecord(event, false)
 }

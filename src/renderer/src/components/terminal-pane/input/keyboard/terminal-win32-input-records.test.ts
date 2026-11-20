@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   encodeWin32InputRecordForAltGr,
+  encodeWin32InputRecordRelease,
   type Win32InputRecordKeyEvent
 } from './terminal-win32-input-records'
 
@@ -28,5 +29,19 @@ describe('encodeWin32InputRecordForAltGr', () => {
     expect(
       encodeWin32InputRecordForAltGr({ ...germanAltGrQ('keydown'), key: 'q', altKey: false })
     ).toBeNull()
+  })
+})
+
+describe('encodeWin32InputRecordRelease', () => {
+  it('releases Q with no modifiers when AltGr was let go first', () => {
+    expect(
+      encodeWin32InputRecordRelease({
+        ...germanAltGrQ('keyup'),
+        key: 'q',
+        ctrlKey: false,
+        altKey: false,
+        getModifierState: () => false
+      })
+    ).toBe('[81;16;113;0;0;1_')
   })
 })
