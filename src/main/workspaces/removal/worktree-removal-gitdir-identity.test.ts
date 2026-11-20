@@ -56,3 +56,11 @@ it('refuses a leftover whose record predates marker identity', async () => {
     assertLeftoverIsRecordedCheckout({ worktreePath, gitdir: undefined })
   ).rejects.toThrow('cannot confirm')
 })
+
+it('refuses a registered checkout with a marker when its record predates marker identity', async () => {
+  await acceptCheckout('feature')
+
+  await expect(assertCheckoutNotReplaced({ worktreePath, gitdir: undefined })).rejects.toThrow(
+    'cannot confirm'
+  )
+})

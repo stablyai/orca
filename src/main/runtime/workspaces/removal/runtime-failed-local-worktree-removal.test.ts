@@ -177,6 +177,7 @@ async function finishAtStartup(purged: string[], pushTarget?: GitPushTarget): Pr
     worktreePath,
     branch: 'feature',
     head: (await git(['rev-parse', 'feature'])).trim(),
+    gitdir: await readCheckoutMarkerIdentity(worktreePath),
     deleteBranch: true,
     force: true,
     requestedAt: 1

@@ -66,8 +66,16 @@ export async function assertLeftoverIsRecordedCheckout(
 export async function assertCheckoutNotReplaced(
   record: Pick<WorktreeRemovalRecord, 'worktreePath' | 'gitdir'>
 ): Promise<void> {
-  const current = record.gitdir ? await readCheckoutMarkerIdentity(record.worktreePath) : undefined
-  if (current !== undefined && current !== record.gitdir) {
+  const current = await readCheckoutMarkerIdentity(record.worktreePath)
+  if (current === undefined) {
+    return
+  }
+  if (!record.gitdir) {
+    throw new Error(
+      `Orca cannot confirm the checkout at ${record.worktreePath} is the one you deleted, so it left it in place. Delete it again to remove it.`
+    )
+  }
+  if (current !== record.gitdir) {
     throw differentCheckoutAtPathError(record.worktreePath)
   }
 }
@@ -216,7 +224,7 @@ export async function retryFailedRemovalUnlessRegistered(
         : leftover && assertLeftoverIsRecordedCheckout(failed))
     } catch (error) {
       // The recorded intent no longer describes this folder; the next delete starts fresh instead of looping on the refusal.
-      if (failed.gitdir && failedWorktreeRemovals.delete(worktreeId)) {
+      if ((native || failed.gitdir) && failedWorktreeRemovals.delete(worktreeId)) {
         void persistWorktreeRemovalRecords()
       }
       throw error
