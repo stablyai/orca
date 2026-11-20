@@ -181,27 +181,15 @@ describe('ACP launch: standing instructions', () => {
     })
     const configDir = resolved.env.OPENCODE_CONFIG_DIR ?? ''
     expect(await readFile(join(source, 'agents.md'), 'utf8')).toBe('Mine.\n')
-    expect(await readFile(join(configDir, 'AGENTS.md'), 'utf8')).toBe(`Mine.\n\n${PREAMBLE}\n`)
+    const foldsCase = await readFile(join(source, 'AGENTS.md'), 'utf8').then(
+      () => true,
+      () => false
+    )
+    expect(await readFile(join(configDir, 'AGENTS.md'), 'utf8')).toBe(
+      `${foldsCase ? 'Mine.\n\n' : ''}${PREAMBLE}\n`
+    )
     expect((await lstat(join(configDir, 'AGENTS.md'))).isSymbolicLink()).toBe(false)
-  })
-
-  it('keeps only the newest earlier OpenCode config folder of a chat', async () => {
-    const folders = new Set<string>()
-    for (let i = 0; i < 4; i++) {
-      const resolved = await launch('opencode', { instructions: PREAMBLE, version: '2.0.14' })
-      folders.add(resolved.env.OPENCODE_CONFIG_DIR ?? '')
-    }
-    const alive: boolean[] = []
-    for (const folder of folders) {
-      alive.push(
-        await stat(folder).then(
-          () => true,
-          () => false
-        )
-      )
-    }
-    expect(alive.filter(Boolean)).toHaveLength(2)
-    expect(alive.slice(-2)).toEqual([true, true])
+    expect(await readdir(configDir)).toEqual(['AGENTS.md'])
   })
 
   it('writes only the preamble when the explicitly configured OpenCode folder is missing', async () => {

@@ -59,15 +59,11 @@ export async function writeOpenCodeInstructionsConfigDir(
   let own: string | null = null
   if (await isDirectory(source)) {
     // Case-folded: on a case-insensitive volume `agents.md` is AGENTS.md, and a link to it would send our write into the user's file.
-    const names = await readdir(source)
     const isGlobalFile = (name: string): boolean =>
       name.toLowerCase() === GLOBAL_INSTRUCTIONS_FILE.toLowerCase()
-    const globalName =
-      names.find((name) => name === GLOBAL_INSTRUCTIONS_FILE) ?? names.find(isGlobalFile)
-    if (globalName !== undefined) {
-      own = await readFile(join(source, globalName), 'utf8').catch(() => null)
-    }
-    for (const name of names) {
+    // Read by the exact name, as OpenCode does, so the filesystem decides whether `agents.md` counts.
+    own = await readFile(join(source, GLOBAL_INSTRUCTIONS_FILE), 'utf8').catch(() => null)
+    for (const name of await readdir(source)) {
       if (!isGlobalFile(name)) {
         await linkEntry(join(source, name), join(folder, name))
       }
