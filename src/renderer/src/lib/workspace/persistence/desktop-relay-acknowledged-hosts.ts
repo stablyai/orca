@@ -93,10 +93,11 @@ export class AcknowledgedDesktopRelays {
         hosts.push(delta)
       }
     }
-    // A host the window no longer writes (closed, re-adopted under a new id) starts again from a baseline.
-    for (const hostId of this.hosts.keys()) {
-      if (!wanted.has(hostId)) {
-        this.hosts.delete(hostId)
+    // A host this save leaves out (an incomplete host with no slice) resends a baseline when it next
+    // goes, still naming the ids that ended meanwhile.
+    for (const [hostId, host] of this.hosts) {
+      if (!wanted.has(hostId) && !host.stale) {
+        this.hosts.set(hostId, { ...host, stale: true })
       }
     }
     const sent = new Map(

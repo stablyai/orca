@@ -12,6 +12,7 @@ import {
   takeDesktopRelayWrite
 } from './desktop-relay-writes'
 import type { WorkspaceSessionState } from '../../../../../shared/workspace-session/workspace-session-state-types'
+import type { DesktopRelayWrite } from '../../../../../shared/workspace-session/desktop-relay-write'
 
 beforeEach(() => {
   vi.useFakeTimers()
@@ -150,5 +151,45 @@ describe('relay ids saved by ownership', () => {
     const quit = replaceDesktopRelays(slice({}), state)
 
     expect(quit.hosts.find((host) => host.hostId === SSH_HOST)?.removedTabIds).toEqual(['tab-a'])
+  })
+
+  it('names a relay that ended during a save that left its incomplete host out', async () => {
+    const sent: DesktopRelayWrite['hosts'][] = []
+    const api = {
+      desktopRelaysVersion: async () => 1,
+      applyDesktopRelays: async ({ hosts }: DesktopRelayWrite) => {
+        sent.push(hosts)
+        return {
+          applied: hosts.map(({ hostId }) => hostId),
+          unchanged: [],
+          skipped: [],
+          refused: []
+        }
+      }
+    }
+    probeDesktopRelays(api)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the relay write reads tab ids only.
+    const parked = {
+      tabsByWorktree: { 'other::/p': [{ id: 'tab-p' }] }
+    } as unknown as WorkspaceSessionState
+    const state = { repos: [SSH_REPO], contestedHostWorkspaceSessions: { [SSH_HOST]: parked } }
+    const save = (relays?: Record<string, string>) =>
+      sendDesktopRelayWrite(
+        api,
+        takeDesktopRelayWrite(
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the relay write reads relay ids only.
+          relays
+            ? { [SSH_HOST]: { remoteSessionIdsByTabId: relays } as WorkspaceSessionState }
+            : {},
+          state
+        )
+      )
+    await save({ 'tab-a': 'relay-a' })
+    // tab-a's relay ends during a save with no slice for the SSH host.
+    await save()
+
+    await save({ 'tab-b': 'relay-b' })
+
+    expect(sent.at(-1)?.find((host) => host.hostId === SSH_HOST)?.removedTabIds).toEqual(['tab-a'])
   })
 })

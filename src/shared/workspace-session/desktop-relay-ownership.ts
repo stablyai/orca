@@ -60,9 +60,12 @@ export function applyDesktopRelayWrite(
   const removed = write.removedTabIds
   let liveTabs: Set<string> | null = null
   let refused = false
+  // Only a complete baseline's omissions remove anything, so only it visits every stored key.
   const touched = removed
     ? new Set([...Object.keys(desired), ...removed])
-    : new Set([...Object.keys(stored), ...Object.keys(desired), ...Object.keys(before)])
+    : write.complete
+      ? new Set([...Object.keys(stored), ...Object.keys(desired), ...Object.keys(before)])
+      : Object.keys(desired)
   for (const tabId of touched) {
     const wanted = desired[tabId]
     const current = stored[tabId]
