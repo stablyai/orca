@@ -1,9 +1,10 @@
 // One item's page inside the bot panel, in the desktop's order: title, "Item · chat · when", description
 // (three lines, Show more), the close note, Status (and Snoozed while it is) and Chat, Done means, Links, Activity, and the comment
-// box docked at the bottom. Back returns to the list.
+// box docked at the bottom. Back returns to the list; up and down step through it, "4 of 6".
 import { useEffect, useRef, useState } from 'react'
 import { Keyboard, Pressable, ScrollView, Text, View, type ScrollViewInstance } from 'react-native'
 import { House, MessageSquare } from 'lucide-react-native'
+import { BOTS_ITEM_COMMENT_ATTACHMENTS_RUNTIME_CAPABILITY } from '../../../../src/shared/bot-runtime-capabilities'
 import {
   formatBotItemNumber,
   isBotItemLive,
@@ -15,7 +16,7 @@ import type { BotChatTreeWorker } from '../../../../src/shared/bots/bot-chat-tre
 import { ListGroup, ListRow, SectionHeader } from '../../components/list/ListGroup'
 import { MobileEdgeFade } from '../../components/list/MobileEdgeFade'
 import { MobileMarkdown } from '../../components/markdown/MobileMarkdown'
-import { SheetHeader } from '../../components/nav-bar/SheetHeader'
+import { useRouteCapability } from '../../worktree/execution-hosts/use-route-capability'
 import { getUiIntlLocale } from '../../i18n/ui-intl-locale'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
@@ -39,6 +40,9 @@ import { MobileBotItemStatusIcon } from './MobileBotItemStatusIcon'
 import { formatPhoneSnoozeTime } from './bot-item-snooze-time'
 import { useNow } from '../../hooks/use-now'
 import { usePhoneBotItemView } from './use-phone-bot-item-view'
+import type { PhoneBotItemStepper } from './use-phone-bot-item-walk'
+import { MobileBotItemPageHeader } from './MobileBotItemPageHeader'
+import { usePhoneBotItemPendingComments } from './use-phone-bot-item-pending-comments'
 
 const DESCRIPTION_LINES_HEIGHT = 3 * 20
 
@@ -54,11 +58,16 @@ export function MobileBotItemPage({
   onOpenChat,
   onOpenWorker,
   onOpenFile,
-  onCommentBoxHeight
+  onCommentBoxHeight,
+  stepper,
+  showToast
 }: {
   client: RpcClient | null
   bot: { id: string; name: string }
   uid: string
+  /** Up and down through the list the item opened from; null when it opened from elsewhere. */
+  stepper: PhoneBotItemStepper | null
+  showToast: (message: string) => void
   reads: number
   online: boolean
   hostName: string
@@ -106,16 +115,16 @@ export function MobileBotItemPage({
     }
   }, [askShown])
   const jump = useJumpToEnd()
-  // Titled like the drawer's other pages; the item's number leads its own heading below.
-  const back = (
-    <SheetHeader
-      title={t('bots.items.view.title', 'Item')}
-      onBack={{
-        label: t('bots.panel.backTo', 'Back to {{name}}', { name: t('bots.items.tab', 'Items') }),
-        onPress: onBack
-      }}
-    />
-  )
+  const takesImages = useRouteCapability(BOTS_ITEM_COMMENT_ATTACHMENTS_RUNTIME_CAPABILITY)
+  const pending = usePhoneBotItemPendingComments({
+    client,
+    key: `${bot.id}\0${uid}`,
+    uid,
+    events: view.events,
+    hostName,
+    showToast
+  })
+  const back = <MobileBotItemPageHeader stepper={stepper} online={online} onBack={onBack} />
   const item = view.item
   if (!item) {
     return (
@@ -278,6 +287,7 @@ export function MobileBotItemPage({
             item={item}
             events={view.events}
             attachments={{ client, onOpenFile }}
+            pending={pending}
           />
         </ScrollView>
         {/* A soft edge over the comment box: activity scrolling under it reads as more below. */}
@@ -299,6 +309,12 @@ export function MobileBotItemPage({
             online={online && !view.failed}
             hostName={hostName}
             waitingOn={waitingOn}
+            attachTo={takesImages && !item.chat.gone ? item.chat.id : null}
+            onComment={(text, paths) => {
+              pending.send(text, paths, lastEventId || null)
+              requestAnimationFrame(jump.toEnd)
+            }}
+            showToast={showToast}
           />
         </View>
       </View>

@@ -1,8 +1,8 @@
 // The items an open item steps through: the list it opened from, filters applied, in list order, fixed
 // when it opened. Closed items not paged in yet count toward the total and are read as the walk
 // reaches them; items arriving later (new, or closed since) show in the list after Back.
-import type { BotItem } from '../../../../../shared/bots/bot-items'
-import { BOT_ITEM_GROUP_IDS, type BotItemGroups } from '../../../../../shared/bots/bot-item-groups'
+import type { BotItem } from './bot-items'
+import { BOT_ITEM_GROUP_IDS, type BotItemGroups } from './bot-item-groups'
 
 export type BotItemWalk = {
   /** Known members in list order: the loaded ones, then Closed ones as their pages arrive. */

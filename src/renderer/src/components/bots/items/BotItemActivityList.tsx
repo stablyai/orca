@@ -31,7 +31,7 @@ import type { BotItemQuickReplyActions } from './use-bot-item-question-steps'
 import { BotItemStatusIcon } from './BotItemStatusIcon'
 import { BotItemLinkedRefs } from './BotItemLinkedRefs'
 import { formatBotItemSnoozeTime } from './bot-item-snooze-time'
-import type { BotItemPendingComments } from './use-bot-item-pending-comments'
+import type { BotItemPendingComments } from '../../../../../shared/bots/bot-item-pending-comments'
 
 const TIME = { hour: 'numeric', minute: '2-digit' } as const
 const ACTOR = 'font-medium text-foreground/80'
