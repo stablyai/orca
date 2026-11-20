@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
+import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import type { BotItem } from '../../../../../shared/bots/bot-items'
 import { makeTestBotItem } from '../../../../../shared/bots/bot-item.test-fixture'
@@ -39,24 +39,38 @@ function listRead() {
 
 const BOT = { hostId: 'local', id: 'bot-1' } as const
 
+async function loadAll(view: { result: { current: ReturnType<typeof useBotItemsClosedPages> } }) {
+  while (view.result.current.loadMore) {
+    await act(() => view.result.current.loadMore!())
+  }
+}
+
 it('keeps every closed item reachable when a refresh moves the first page’s end', async () => {
   host.closed = Array.from({ length: 100 }, (_, index) => `c${index + 1}`)
   const view = renderHook(({ read }) => useBotItemsClosedPages(BOT, read, null), {
     initialProps: { read: listRead() }
   })
-  await act(() => view.result.current.loadMore!())
-  expect(view.result.current.loadMore).toBeNull()
+  await loadAll(view)
 
   // Another item closes: the first page is now new + c1..c49, so c50 moves past it.
   host.closed = ['new', ...host.closed]
-  const read = listRead()
-  view.rerender({ read })
+  view.rerender({ read: listRead() })
 
-  // Show more reaches everything the count names.
-  await waitFor(() => expect(view.result.current.loadMore).not.toBeNull())
-  while (view.result.current.loadMore) {
-    await act(() => view.result.current.loadMore!())
-  }
-  const shown = new Set([...read.items, ...view.result.current.items].map((item) => item.uid))
-  expect(shown.size).toBe(101)
+  // Nothing is read again, and c50 stays.
+  expect(view.result.current.loadMore).toBeNull()
+  expect(new Set(view.result.current.items.map((item) => item.uid)).size).toBe(101)
+})
+
+it('starts Closed from its first page when more closed unheard than one page holds', async () => {
+  host.closed = Array.from({ length: 100 }, (_, index) => `c${index + 1}`)
+  const view = renderHook(({ read }) => useBotItemsClosedPages(BOT, read, null), {
+    initialProps: { read: listRead() }
+  })
+  await loadAll(view)
+
+  host.closed = [...Array.from({ length: 60 }, (_, index) => `n${index + 1}`), ...host.closed]
+  view.rerender({ read: listRead() })
+  await loadAll(view)
+
+  expect(new Set(view.result.current.items.map((item) => item.uid)).size).toBe(160)
 })

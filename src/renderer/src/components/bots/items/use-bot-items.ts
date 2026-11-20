@@ -8,19 +8,11 @@ import type { BotItem, BotItemEvent, BotItemStatus } from '../../../../../shared
 import type { BotItemsListRead } from '../../../../../shared/bots/bot-item-schema'
 import { BOT_ITEM_LIMITS } from '../../../../../shared/bots/bot-items'
 import { mergeNamedBotItems } from '../../../../../shared/bots/bot-item-merge'
-import {
-  botChangeItemUids,
-  type BotChangeKind
-} from '../../../../../shared/bots/bot-change-scope'
+import { botChangeItemUids, type BotChangeKind } from '../../../../../shared/bots/bot-change-scope'
 import { reuseEqualJson } from '../../../../../shared/reuse-equal-json'
-import {
-  addBotReadAsk,
-  createBotHostRead,
-  useBotHostRead,
-  type BotReadAsk,
-  useBotHostReadState,
-  type BotHostReadState
-} from '../use-bot-host-read'
+import { addBotReadAsk, type BotReadAsk } from '../bot-host-read-asks'
+import { createBotHostRead, useBotHostRead, type BotHostReadState } from '../use-bot-host-read'
+import { useBotHostReadState } from '../use-bot-host-read-state'
 
 export type BotItemsRead = BotItemsListRead
 
@@ -127,6 +119,7 @@ export function useBotChatItems(
     const scope = chatScope(chats)
     let live = true
     let last: BotItemsRead | null = null
+    let missed = false
     // One read out at a time; notices during it share one more after it, so the last to land is newest.
     let reading = false
     let waiting: BotReadAsk = null
@@ -135,7 +128,8 @@ export function useBotChatItems(
         return
       }
       reading = true
-      const asked = last && waiting instanceof Set ? [...waiting] : null
+      // After a failed read, what it missed is unknown: the next reads whole.
+      const asked = last && !missed && waiting instanceof Set ? [...waiting] : null
       waiting = null
       callBotRpc<BotItemsRead>({ hostId }, 'bots.items.owner.list', {
         botId: id,
@@ -152,11 +146,13 @@ export function useBotChatItems(
               last = next
               setRead({ chats, value: next })
             }
+            missed = false
             setFailed(false)
           }
         })
         .catch((error: unknown) => {
           console.warn('[bots] items: reading a chat’s items failed', error)
+          missed = true
           if (asked) {
             // Named items that failed are read whole next.
             waiting = 'whole'

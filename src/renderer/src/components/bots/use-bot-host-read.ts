@@ -12,6 +12,12 @@ import {
 import type { Bot } from '../../../../shared/bot-types'
 import { reuseEqualJson } from '../../../../shared/reuse-equal-json'
 import type { BotChangeKind, BotChangeScope } from '../../../../shared/bots/bot-change-scope'
+import {
+  addBotReadAsk,
+  askedParts,
+  type BotHostReadOptions,
+  type BotReadAsk
+} from './bot-host-read-asks'
 import { folderWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import { structuredAgentSessionStatusPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-tab'
 
@@ -34,50 +40,12 @@ type BotReadEntry<T> = {
   parts: BotReadAsk
 }
 
-/** The asks waiting on the next read: none, only these parts, or the whole. */
-export type BotReadAsk = Set<string> | 'whole' | null
-
-/** One more ask joined to those waiting: its parts while every ask named some and they stay within
- *  `max`; otherwise the whole. */
-export function addBotReadAsk(
-  waiting: BotReadAsk,
-  named: readonly string[] | null | undefined,
-  max: number
-): BotReadAsk {
-  if (!named || waiting === 'whole') {
-    return 'whole'
-  }
-  const next = waiting ?? new Set<string>()
-  named.forEach((part) => next.add(part))
-  return next.size > max ? 'whole' : next
-}
-
-/** A read that can read part of its value again: the parts a notice names (a bot's changed items),
- *  merged into the last value. */
-export type BotHostReadParts<T> = {
-  /** The parts a notice names for the bot, or null when it must read whole. */
-  of: (scope: BotChangeScope | undefined, botId: string) => readonly string[] | null
-  /** The params that read just these parts. */
-  params: (parts: readonly string[]) => Record<string, unknown>
-  /** The last value with the parts' read merged in; `previous` itself when nothing changed. */
-  merge: (previous: T, read: T, parts: readonly string[]) => T
-  /** The most parts one read takes; more read whole. */
-  max: number
-}
-
-export type BotHostReadOptions<T> = {
-  /** Sent with every read. */
-  params?: Record<string, unknown>
-  parts?: BotHostReadParts<T>
-}
-
 /** One host read about a bot (its Activity, its chats tree), shared by every surface showing that bot. */
 export type BotHostRead<T> = {
   /** The kinds of change to the bot that can change this read. */
   kinds: readonly BotChangeKind[]
   /** `parts`: only these changed (`BotHostReadParts`); absent: read whole. */
   request: (bot: BotRef, parts?: readonly string[] | null) => void
-  /** The parts a notice names for the bot; null: read whole. */
   partsOf: (scope: BotChangeScope | undefined, botId: string) => readonly string[] | null
   subscribe: (bot: BotRef, listener: () => void) => () => void
   snapshot: (key: string) => T | null
@@ -132,12 +100,9 @@ export function createBotHostRead<T>(
     const current = ++entry.latest
     entry.inFlight = true
     entry.startedAt = Date.now()
-    // Only parts, when every ask since the last read named them and a value is there to merge into.
+    // Parts only onto a good value: after a failed read, what it missed is unknown.
     const previous = entry.value
-    const named =
-      parts && previous && entry.parts instanceof Set && entry.parts.size > 0
-        ? [...entry.parts]
-        : null
+    const named = parts && previous && !entry.failure ? askedParts(entry.parts) : null
     entry.parts = null
     try {
       const result = await callBotRpc<never>(entry.bot, method, {
@@ -162,15 +127,7 @@ export function createBotHostRead<T>(
       }
     } catch (error) {
       console.error(failure, error)
-      if (named) {
-        // Parts that failed are read whole next, at once.
-        entry.again = true
-        entry.parts = 'whole'
-      } else if (
-        current === entry.latest &&
-        entries.get(key) === entry &&
-        entry.failure !== 'failed'
-      ) {
+      if (current === entry.latest && entries.get(key) === entry && entry.failure !== 'failed') {
         entry.failure = 'failed'
         entry.listeners.forEach((listener) => listener())
       }
@@ -254,37 +211,6 @@ export function createBotHostRead<T>(
 const NO_SUBSCRIPTION = (): (() => void) => () => {}
 /** The changes the store sees first: a read of none of them (items) re-reads on its host's notices only. */
 const CHAT_KINDS: readonly BotChangeKind[] = ['chats', 'status', 'threads']
-
-/** Whether the read has landed for the bot, and a retry; reads only while `useBotHostRead` keeps it open. */
-export function useBotHostReadState(
-  read: BotHostRead<unknown>,
-  bot: Bot | null
-): { state: BotHostReadState; refreshFailed: boolean; retry: () => void } {
-  const botId = bot?.id ?? null
-  const hostId = bot?.hostId ?? null
-  const key = bot ? botRefKey(bot) : null
-  const subscribe = useCallback(
-    (listener: () => void) =>
-      botId && hostId ? read.subscribe({ hostId, id: botId }, listener) : NO_SUBSCRIPTION(),
-    [read, botId, hostId]
-  )
-  const getState = useCallback(
-    (): BotHostReadState => (key ? read.state(key) : 'loading'),
-    [read, key]
-  )
-  const state = useSyncExternalStore(subscribe, getState, getState)
-  const getRefreshFailed = useCallback(
-    (): boolean => (key ? read.refreshFailed(key) : false),
-    [read, key]
-  )
-  const refreshFailed = useSyncExternalStore(subscribe, getRefreshFailed, getRefreshFailed)
-  const retry = useCallback(() => {
-    if (botId && hostId) {
-      read.request({ hostId, id: botId })
-    }
-  }, [read, botId, hostId])
-  return { state, refreshFailed, retry }
-}
 
 /** The read's latest value for the bot, re-read whenever its chats, threads, Home chat or work change;
  *  null until the first read lands, or with no bot. */

@@ -10,7 +10,6 @@ import {
   type BotItemFilter,
   type BotItemGroups
 } from '../../../../../shared/bots/bot-item-groups'
-import { mergeBotItemsByUid } from '../../../../../shared/bots/bot-item-merge'
 import { useBotChatItems, type BotItemsRead } from './use-bot-items'
 import { useBotItemsClosedPages, type BotItemsClosedPage } from './use-bot-items-closed-pages'
 
@@ -42,10 +41,7 @@ export function useBotItemsShownList(
   const chatRead = useBotChatItems(bot, filter.chatIds)
   const read = filter.chatIds === null ? botRead : chatRead.read
   const closedPages = useBotItemsClosedPages(bot, read, filter.chatIds)
-  const items = useMemo(
-    () => mergeBotItemsByUid(read?.items ?? [], closedPages.items),
-    [read, closedPages.items]
-  )
+  const { items } = closedPages
   const staleDays = botItemStaleDays(bot.itemsStale)
   const shown = useMemo(() => filterBotItems(items, filter), [items, filter])
   const groups = useMemo(

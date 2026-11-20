@@ -12,12 +12,8 @@ import {
   type BotChatTreeWorker
 } from '../../../../shared/bots/bot-chat-tree'
 import { botChatTreeCursor, mergeShownFinished } from '../../../../shared/bots/bot-chat-tree-model'
-import {
-  createBotHostRead,
-  useBotHostRead,
-  useBotHostReadState,
-  type BotHostReadState
-} from './use-bot-host-read'
+import { createBotHostRead, useBotHostRead, type BotHostReadState } from './use-bot-host-read'
+import { useBotHostReadState } from './use-bot-host-read-state'
 
 /** Work changes come in bursts, so reads start at most this often. */
 const CHAT_TREE_MIN_READ_GAP_MS = 1000

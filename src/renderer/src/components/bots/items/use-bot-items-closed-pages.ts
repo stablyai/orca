@@ -1,8 +1,9 @@
-// Closed items past the list's first page, as deep as the owner has asked with Show more. Closed items
-// run newest activity first, so a change only adds at the top and a loaded page stays valid: a refresh
-// reads none of them again. An item a newer list read pushed past its first page stays loaded, so none
-// is stranded between that page and the loaded ones.
-import { useCallback, useRef, useState } from 'react'
+// The list's items with Closed loaded as deep as the owner has asked with Show more. Closed items run
+// newest activity first, so between reads a change only adds at the top and loaded pages stay valid: a
+// refresh reads none of them again. The items a newer read pushes past its first page stay loaded, so
+// none is stranded between that page and the loaded ones. A read that shares no unchanged Closed item
+// with what's loaded (more closed in between than one page, unheard) starts Closed from its first page.
+import { useCallback, useMemo, useRef, useState } from 'react'
 import type { BotRef } from '@/lib/bot-hosts'
 import type { BotItem } from '../../../../../shared/bots/bot-items'
 import { readMoreClosedItems, useStableBotItemChats, type BotItemsRead } from './use-bot-items'
@@ -10,12 +11,14 @@ import { readMoreClosedItems, useStableBotItemChats, type BotItemsRead } from '.
 type Pages = {
   /** The chats these pages are of: other chats start from their first page. */
   chats: readonly string[] | null
+  /** Every Closed item from the top down to `cursor`. */
   items: BotItem[]
   /** Where the next page starts; null after the last. */
   cursor: string | null
 }
 
 export type BotItemsClosedPages = {
+  /** The read's items and the loaded Closed ones, each once; none past the loaded end. */
   items: readonly BotItem[]
   /** Reads the next page and returns it; null when there is none. */
   loadMore: (() => Promise<BotItemsClosedPage>) | null
@@ -29,24 +32,86 @@ const NONE: readonly BotItem[] = []
 
 const isClosed = (item: BotItem): boolean => item.status === 'done' || item.status === 'canceled'
 
-/** `pages` with the Closed items of a list read it has replaced, each kept or newer copy by uid. */
-function keepClosedOf(pages: Pages, replaced: BotItemsRead): Pages {
+/** A cursor's place: `at:number` of the last row before it. */
+function cursorPlace(cursor: string | null | undefined): { at: number; number: number } | null {
+  const [at, number] = (cursor ?? '').split(':').map(Number)
+  return Number.isFinite(at) && Number.isFinite(number) ? { at: at!, number: number! } : null
+}
+
+/** At or above the place in Closed order (newest activity first, then highest number). */
+function reaches(item: BotItem, place: { at: number; number: number }): boolean {
+  return (
+    item.lastActivityAt > place.at ||
+    (item.lastActivityAt === place.at && item.number >= place.number)
+  )
+}
+
+/** `pages` with these Closed items in it, each uid once: the copy of the higher version (ties: the new
+ *  one). `pages` itself when nothing changed. */
+function withClosed(pages: Pages, items: readonly BotItem[]): Pages {
   const at = new Map(pages.items.map((item, index) => [item.uid, index]))
-  let items: BotItem[] | null = null
-  for (const item of replaced.items) {
+  let next: BotItem[] | null = null
+  for (const item of items) {
     if (!isClosed(item)) {
       continue
     }
     const index = at.get(item.uid)
+    const held = index === undefined ? undefined : (next ?? pages.items)[index]
     if (index === undefined) {
-      items ??= [...pages.items]
-      items.push(item)
-    } else if (pages.items[index] !== item) {
-      items ??= [...pages.items]
-      items[index] = item
+      next ??= [...pages.items]
+      at.set(item.uid, next.length)
+      next.push(item)
+    } else if (held !== item && held && item.version >= held.version) {
+      next ??= [...pages.items]
+      next[index] = item
     }
   }
-  return items ? { ...pages, items } : pages
+  return next ? { ...pages, items: next } : pages
+}
+
+/** Whether `read` joins what's loaded with nothing between: it has every Closed item, or one of its
+ *  Closed items is held still unchanged in place (everything above it changed since, so it's all in
+ *  `read`; everything below it is held). */
+function joins(pages: Pages, read: BotItemsRead): boolean {
+  if (!read.nextClosedCursor) {
+    return true
+  }
+  const held = new Map(pages.items.map((item) => [item.uid, item]))
+  return read.items.some((item) => {
+    const kept = held.get(item.uid)
+    return (
+      isClosed(item) &&
+      kept !== undefined &&
+      kept.lastActivityAt === item.lastActivityAt &&
+      kept.number === item.number
+    )
+  })
+}
+
+/** Loaded pages carried from the read they continued (`from`) to a newer one (`to`): `from`'s Closed
+ *  items kept, so a row `to` pushed past its first page stays; null when `to` doesn't join them. */
+function carry(pages: Pages, from: BotItemsRead, to: BotItemsRead | null): Pages | null {
+  const kept = withClosed(pages, from.items)
+  return !to || to === from || joins(kept, to) ? kept : null
+}
+
+/** The read's items (Closed ones only down to the loaded end) and the loaded ones, each uid once. */
+function loadedItems(read: BotItemsRead | null, pages: Pages | null): readonly BotItem[] {
+  if (!read) {
+    return pages?.items ?? NONE
+  }
+  const end = cursorPlace(pages ? pages.cursor : read.nextClosedCursor)
+  const loaded = new Map(pages?.items.map((item) => [item.uid, item]))
+  const items = read.items.flatMap((item) => {
+    const page = loaded.get(item.uid)
+    loaded.delete(item.uid)
+    // A named read can carry a Closed item from a page not loaded yet: it waits for its page.
+    if (!page && isClosed(item) && end && !reaches(item, end)) {
+      return []
+    }
+    return [page && page.version > item.version ? page : item]
+  })
+  return loaded.size > 0 ? [...items, ...loaded.values()] : items
 }
 
 export function useBotItemsClosedPages(
@@ -62,34 +127,38 @@ export function useBotItemsClosedPages(
   if (lastRead !== read) {
     setLastRead(read)
     if (pages && lastRead) {
-      const next = keepClosedOf(pages, lastRead)
+      const next = carry(pages, lastRead, read)
       if (next !== pages) {
         setPages(next)
       }
     }
   }
+  const latest = useRef(read)
+  latest.current = read
   const generation = useRef(0)
 
   const cursor = pages ? pages.cursor : (read?.nextClosedCursor ?? null)
   const loadMore = useCallback(async (): Promise<BotItemsClosedPage> => {
-    if (!read || !cursor) {
+    const from = read
+    if (!from || !cursor) {
       return { items: NONE, more: false }
     }
     const mine = ++generation.current
     const next = await readMoreClosedItems({ hostId, id }, cursor, chats)
     if (generation.current === mine) {
-      setPages((prev) => ({
-        chats,
-        items: [...(prev?.chats === chats ? prev.items : []), ...next.items],
-        cursor: next.nextClosedCursor ?? null
-      }))
+      setPages((prev) => {
+        const held: Pages = prev && prev.chats === chats ? prev : { chats, items: [], cursor: null }
+        const grown = withClosed(held, next.items)
+        // The read this page continues stays loaded, so a newer one landed meanwhile strands nothing.
+        return carry({ ...grown, cursor: next.nextClosedCursor ?? null }, from, latest.current)
+      })
     }
     return { items: next.items, more: Boolean(next.nextClosedCursor) }
   }, [read, cursor, hostId, id, chats])
 
+  const items = useMemo(() => loadedItems(read, pages), [read, pages])
   return {
-    // The list's own copies win by uid.
-    items: pages?.items ?? NONE,
+    items,
     loadMore: cursor ? loadMore : null,
     ended: read !== null && cursor === null
   }
