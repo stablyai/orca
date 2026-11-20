@@ -53,14 +53,28 @@ export function allowJournalRetirementPolicyUpdates(store: Store): void {
       isPackaged: environment.isPackaged(),
       fetch: (url, init) => getMainHttpClient().fetch(url, init)
     })
-  environment.onWillQuit(stopJournalRetirementPolicyUpdates)
+  environment.onWillQuit(() => {
+    createUpdater = null
+    updater?.stop()
+    updater = null
+  })
 }
 
-/** The cleanup is over for this launch: downloads stop and never start again. */
-export function stopJournalRetirementPolicyUpdates(): void {
-  createUpdater = null
-  updater?.stop()
+/**
+ * The cleanup needs the policy no longer: downloads stop, but only after the one in flight has
+ * written the cache, since a newer revision must be able to replace a cached `off`. A cleanup
+ * that asks again starts them again.
+ */
+export function releaseJournalRetirementPolicyUpdates(): void {
+  const released = updater
+  if (!released) {
+    return
+  }
   updater = null
+  const inFlight = [starting, refreshing].filter((pending) => pending !== null)
+  starting = null
+  refreshing = null
+  void Promise.allSettled(inFlight).then(() => released.stop())
 }
 
 function startOnFirstAsk(): void {
@@ -136,6 +150,6 @@ export function installJournalRetirementHost(store: Store): void {
     report: async (event) =>
       track('legacy_journal_retirement', legacyJournalRetirementSchema.parse(event)),
     mode: journalRetirementMode,
-    release: stopJournalRetirementPolicyUpdates
+    release: releaseJournalRetirementPolicyUpdates
   })
 }

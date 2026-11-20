@@ -98,6 +98,7 @@ export class JournalLegacyRetirement {
 
   stop(): void {
     this.stopped.abort()
+    releaseLegacyJournalRetirementHost()
   }
 
   async run(): Promise<void> {
@@ -139,6 +140,8 @@ export class JournalLegacyRetirement {
         const absorbed = absorbedWal(saved.retirement)
         if (!(await this.enforced())) {
           this.reporter.saved(saved.reported)
+          // Off keeps them for this launch; report may still be allowed later.
+          this.done = this.policy.mode === 'off'
           this.later()
           return this.outcome({ outcome: 'deferred', defer: 'leftover_files' })
         }
