@@ -1,5 +1,6 @@
 import * as z from 'zod'
 import type { GlobalSettings } from './global-settings-types'
+import { DEFAULT_NATIVE_CHAT_IDLE_STOP_MINUTES } from '../native-chat/settings/native-chat-idle-stop'
 
 /** Settings a host reads for its own work, so Settings edits them on the host its picker names. */
 const HostOwnedSettingsSchema = z.object({
@@ -7,7 +8,11 @@ const HostOwnedSettingsSchema = z.object({
   branchPrefixCustom: z.string(),
   codexShareHistoryAcrossAccounts: z.boolean(),
   deleteChatHistoryWithWorkspace: z.boolean(),
-  nativeChatAutoContinueAfterUsageLimit: z.boolean()
+  nativeChatAutoContinueAfterUsageLimit: z.boolean(),
+  nativeChatIdleStopMinutes: z.number().min(0),
+  nativeChatInheritShellEnvironment: z.boolean(),
+  // Names are filtered when a chat starts (normalizeNativeChatShellEnvironmentVariables).
+  nativeChatShellEnvironmentVariables: z.array(z.string())
 } satisfies { [K in keyof GlobalSettings]?: z.ZodType<NonNullable<GlobalSettings[K]>> })
 
 export type HostOwnedSettings = z.output<typeof HostOwnedSettingsSchema>
@@ -19,7 +24,10 @@ const HOST_OWNED_SETTING_FALLBACKS: HostOwnedSettings = {
   branchPrefixCustom: '',
   codexShareHistoryAcrossAccounts: true,
   deleteChatHistoryWithWorkspace: false,
-  nativeChatAutoContinueAfterUsageLimit: false
+  nativeChatAutoContinueAfterUsageLimit: false,
+  nativeChatIdleStopMinutes: DEFAULT_NATIVE_CHAT_IDLE_STOP_MINUTES,
+  nativeChatInheritShellEnvironment: true,
+  nativeChatShellEnvironmentVariables: []
 }
 
 export const HOST_OWNED_SETTING_KEYS = HostOwnedSettingsSchema.keyof().options
