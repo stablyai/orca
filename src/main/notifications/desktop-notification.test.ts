@@ -59,4 +59,26 @@ describe('Linux desktop notification admission', () => {
     await expect(delivered).resolves.toBe(true)
     expect(displayed).not.toHaveBeenCalled()
   })
+
+  it('uses the D-Bus fallback when GLib tools are absent', async () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('linux')
+    runProcess
+      .mockRejectedValueOnce(Object.assign(new Error('Executable unavailable'), { code: 'ENOENT' }))
+      .mockResolvedValueOnce({ code: 1 })
+    const notification = new Notification()
+    const delivered = waitForNotificationDisplay(notification)
+    showDesktopNotification(notification)
+    await expect(delivered).resolves.toBe(false)
+  })
+
+  it('still delivers on portable Linux installs without probe commands', async () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('linux')
+    runProcess.mockRejectedValue(
+      Object.assign(new Error('Executable unavailable'), { code: 'ENOENT' })
+    )
+    const notification = new Notification()
+    const delivered = waitForNotificationDisplay(notification)
+    showDesktopNotification(notification)
+    await expect(delivered).resolves.toBe(true)
+  })
 })

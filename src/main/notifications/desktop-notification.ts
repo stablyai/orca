@@ -4,32 +4,58 @@ import type { Notification } from 'electron'
 const pendingShows = new WeakSet<Notification>()
 let serviceCheck: Promise<boolean> | undefined
 
-function checkLinuxNotificationService(): Promise<boolean> {
+async function probeLinuxNotificationService(): Promise<boolean> {
   // A real call preserves D-Bus auto-activation, including daemons that start on first use.
-  serviceCheck ??= runProcess({
-    program: 'gdbus',
-    args: [
-      'call',
-      '--session',
-      '--timeout',
-      '2',
-      '--dest',
-      'org.freedesktop.Notifications',
-      '--object-path',
-      '/org/freedesktop/Notifications',
-      '--method',
-      'org.freedesktop.Notifications.GetCapabilities'
-    ],
-    timeoutMs: 2_000,
-    maxOutputBytes: 4_096
+  const name = 'org.freedesktop.Notifications'
+  const objectPath = '/org/freedesktop/Notifications'
+  const method = `${name}.GetCapabilities`
+  const timeoutMs = 2_000
+  const probes = [
+    {
+      program: 'gdbus',
+      args: [
+        'call',
+        '--session',
+        '--timeout',
+        String(timeoutMs / 1_000),
+        '--dest',
+        name,
+        '--object-path',
+        objectPath,
+        '--method',
+        method
+      ]
+    },
+    {
+      program: 'dbus-send',
+      args: [
+        '--session',
+        '--print-reply',
+        `--reply-timeout=${timeoutMs}`,
+        `--dest=${name}`,
+        objectPath,
+        method
+      ]
+    }
+  ]
+  for (const probe of probes) {
+    try {
+      const result = await runProcess({ ...probe, timeoutMs, maxOutputBytes: 4_096 })
+      return result.code === 0 && !result.timedOut
+    } catch (error) {
+      if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) {
+        return false
+      }
+    }
+  }
+  // Portable installs can deliver through libnotify even when neither CLI is installed.
+  return true
+}
+
+function checkLinuxNotificationService(): Promise<boolean> {
+  serviceCheck ??= probeLinuxNotificationService().finally(() => {
+    serviceCheck = undefined
   })
-    .then(
-      (result) => result.code === 0 && !result.timedOut,
-      () => false
-    )
-    .finally(() => {
-      serviceCheck = undefined
-    })
   return serviceCheck
 }
 
