@@ -138,8 +138,7 @@
 5 src/main/codex/configuration/homes/codex-pane-account-registry.ts
 5 src/main/codex/configuration/homes/codex-windows-sandbox-read-grant.ts
 1 src/main/codex/configuration/settings/codex-config-path-reference-rewrite.ts
-1 src/main/codex/configuration/settings/config-settings-baseline.ts
-5 src/main/codex/configuration/settings/config-settings-promotion-write-target.ts # +1 realpathSync of the parent folder, only while config.toml is missing, once per promotion pass (launch/sync cadence, not per event): a linked ~/.codex must not create a file inside a WSL guest (#45247)
+5 src/main/codex/configuration/settings/config-settings-promotion-write-target.ts # +1 realpathSync of the nearest existing folder, only when config.toml is absent or unresolvable (each promotion pass while it stays so; launch/sync cadence, not per event): a linked ~/.codex must not create a file inside a WSL guest (#45247)
 2 src/main/codex/configuration/settings/config-settings-promotion.ts
 1 src/main/codex/configuration/shared-server/codex-daemon-socket-path-guard.ts
 7 src/main/codex/configuration/toml/config-toml-atomic-write.ts # compare-before-publish re-read of config.toml so a save made after Orca read it is never overwritten (moved here from the worker-only trust transaction)

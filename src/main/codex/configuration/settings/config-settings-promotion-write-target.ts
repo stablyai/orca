@@ -14,10 +14,10 @@ export function resolvePromotionWriteTarget(systemTomlPath: string): { path: str
     observeResolvedFilePathError('promotion-write', systemTomlPath, error)
     // Continue below: realpath also fails for a valid dangling dotfile link.
   }
+  let targetPath = systemTomlPath
   try {
     if (lstatSync(systemTomlPath).isSymbolicLink()) {
-      const targetPath = resolveThroughLinkedAncestor(resolveDanglingSymlinkTarget(systemTomlPath))
-      return { path: observeResolvedFilePath('promotion-write', systemTomlPath, targetPath) }
+      targetPath = resolveDanglingSymlinkTarget(systemTomlPath)
     }
   } catch (error) {
     observeResolvedFilePathError('promotion-write', systemTomlPath, error)
@@ -27,7 +27,7 @@ export function resolvePromotionWriteTarget(systemTomlPath: string): { path: str
     path: observeResolvedFilePath(
       'promotion-write',
       systemTomlPath,
-      resolveThroughLinkedAncestor(systemTomlPath)
+      resolveThroughLinkedAncestor(targetPath)
     )
   }
 }
