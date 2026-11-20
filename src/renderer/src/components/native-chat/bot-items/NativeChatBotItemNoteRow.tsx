@@ -19,6 +19,7 @@ import { readBots } from '@/lib/bot-catalog'
 import type { BotItemNoteItem, BotItemNoteView } from '../../../../../shared/bots/bot-item-note'
 import { stripSentImagePromptMarkers } from '../../../../../shared/native-chat/transcript/images/native-chat-sent-image-prompt-markers'
 import { NativeChatEventRow } from '../messages/events/NativeChatEventRow'
+import { NATIVE_CHAT_INLINE_CHIP } from '../messages/events/native-chat-inline-chip'
 import { NativeChatUserBubble } from '../messages/rows/NativeChatUserBubble'
 import { useBotItemChipPreview } from './bot-item-chip-preview'
 import {
@@ -62,7 +63,7 @@ function ItemChip({ item }: { item: BotItemNoteItem }): React.JSX.Element {
             title: item.title,
             status: botItemStatusName(item.status, t)
           })}
-          className="inline-flex max-w-[min(16rem,100%)] items-center gap-1 rounded-md bg-chat-foreground/5 px-1.5 align-middle text-xs leading-5 text-chat-foreground hover:bg-chat-foreground/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className={NATIVE_CHAT_INLINE_CHIP}
           onClick={() => openChipItem(item.uid)}
         >
           <BotItemStatusIcon status={item.status} />
@@ -83,7 +84,7 @@ function ChatChip({ chat }: { chat: BotItemNoteLineChat }): React.JSX.Element {
     <button
       type="button"
       aria-label={t('bots.items.chat.openChat', 'Open {{chat}}', { chat: chat.name })}
-      className="inline-flex max-w-[min(16rem,100%)] items-center gap-1 rounded-md bg-chat-foreground/5 px-1.5 align-middle text-xs leading-5 text-chat-foreground hover:bg-chat-foreground/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      className={NATIVE_CHAT_INLINE_CHIP}
       onClick={() => {
         const bot = findBotByWorkspace(readBots(), useAppStore.getState().activeWorktreeId)
         if (bot) {

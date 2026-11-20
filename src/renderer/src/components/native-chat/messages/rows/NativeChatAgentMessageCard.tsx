@@ -20,10 +20,7 @@ import {
   sessionWorkerIsRunning,
   type OrchestrationSessionWorker
 } from '../../../../../../shared/orchestration-session-workers'
-import {
-  NativeChatAgentMessageSenderNames,
-  NativeChatAgentMessageSenderOpen
-} from '../agent-senders/NativeChatAgentMessageSenders'
+import { NativeChatAgentMessageSenderNames } from '../agent-senders/NativeChatAgentMessageSenders'
 import { useAgentMessageSenderView } from '../agent-senders/native-chat-agent-message-sender-view'
 import {
   unnamedSenderLabel,
@@ -92,14 +89,9 @@ export function NativeChatAgentMessageCard({
   const dispatchId = message.agentStartDispatchId ?? worker?.dispatchId
   const { shown, more } = agentMessageSendersShown(from)
   const canCopy = agentMessageCanCopy(text)
-  // Mail from several senders opens each from its details.
-  const several = shown.length > 1
   const merged = message.mergedEvents ?? []
   const expandable =
-    canCopy ||
-    several ||
-    merged.length > 0 ||
-    message.blocks.some((block) => block.type === 'image-ref')
+    canCopy || merged.length > 0 || message.blocks.some((block) => block.type === 'image-ref')
   const words = lead(from, message, t)
   const senderName = useAgentMessageSenderLabel(sender ?? NO_SENDER, worktreeId, target, dispatchId)
   const view = useAgentMessageSenderView(sender, worktreeId, target, dispatchId)
@@ -124,34 +116,9 @@ export function NativeChatAgentMessageCard({
           requestAnimationFrame(onRefolded)
         }
       }}
-      action={
-        sender && !several ? (
-          <NativeChatAgentMessageSenderOpen
-            from={from}
-            sender={sender}
-            dispatchId={dispatchId}
-            chatWorktreeId={worktreeId}
-            target={target}
-          />
-        ) : null
-      }
       details={
         expandable ? (
           <>
-            {several ? (
-              <span className="-ml-1.5 flex flex-wrap gap-1">
-                {shown.map((each) => (
-                  <NativeChatAgentMessageSenderOpen
-                    key={each.party.address}
-                    from={from}
-                    sender={each}
-                    chatWorktreeId={worktreeId}
-                    target={target}
-                    named
-                  />
-                ))}
-              </span>
-            ) : null}
             <NativeChatImageAttachments
               blocks={message.blocks}
               runtimeContext={runtimeContext}
@@ -178,18 +145,22 @@ export function NativeChatAgentMessageCard({
         ) : null
       }
     >
-      {words}{' '}
-      {shown.length === 0 ? (
-        unnamedSenderLabel(t)
-      ) : (
-        <NativeChatAgentMessageSenderNames
-          shown={shown}
-          chatWorktreeId={worktreeId}
-          target={target}
-          dispatchId={dispatchId}
-        />
-      )}
-      {more > 0 ? ` +${more}` : null}
+      {/* A sender's name cuts short in its chip before it wraps; only several senders take a second line. */}
+      <span className="flex min-w-0 flex-wrap items-center gap-x-1 whitespace-nowrap">
+        <span className="shrink-0">{words}</span>
+        {shown.length === 0 ? (
+          <span className="min-w-0 truncate">{unnamedSenderLabel(t)}</span>
+        ) : (
+          <NativeChatAgentMessageSenderNames
+            from={from}
+            shown={shown}
+            chatWorktreeId={worktreeId}
+            target={target}
+            dispatchId={dispatchId}
+          />
+        )}
+        {more > 0 ? <span className="shrink-0">+{more}</span> : null}
+      </span>
     </NativeChatEventRow>
   )
 }

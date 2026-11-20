@@ -5,7 +5,8 @@ import { WorktreeHostContextBadge } from '@/components/sidebar/workspace-card/ho
 import { useTranslate } from '@/i18n/use-translate'
 import { openAgentMessageSender } from '@/lib/agent-session/open/open-agent-message-sender'
 import { useNativeChatVisualOwner } from '../../media/visuals/native-chat-visual-owner'
-import { NativeChatEventOpenButton } from '../events/NativeChatEventOpenButton'
+import { NATIVE_CHAT_INLINE_CHIP } from '../events/native-chat-inline-chip'
+import { cn } from '@/lib/class-names'
 import { agentMessageSendersShown } from '../../../../../../shared/agent-session/journal/agent-session-message-source'
 import type {
   AgentMessageSender,
@@ -127,99 +128,88 @@ function SenderName({
   )
 }
 
-/** A status row's sender names, plain: the row's open icon does the opening. */
+/** A status row's sender names: each one this chat can open is a chip that opens it; the rest are plain. */
 export function NativeChatAgentMessageSenderNames({
+  from,
   shown,
   chatWorktreeId,
   target,
   dispatchId
 }: {
+  from: AgentMessageSource
   shown: readonly AgentMessageSender[]
   chatWorktreeId: string | null
   target?: RuntimeClientTarget
   dispatchId?: string
 }): React.JSX.Element {
+  // The message's Dispatch is its one sender's; mail from several opens each sender by its own address.
+  const openDispatchId = shown.length > 1 ? undefined : dispatchId
   return (
     <>
       {shown.map((sender, index) => (
-        <Fragment key={sender.party.address}>
-          {index > 0 ? ', ' : null}
-          <SenderLabel
+        // A name keeps its comma and host; it wraps to the next line rather than shrink below 6rem.
+        <span
+          key={sender.party.address}
+          className="flex min-w-0 max-w-fit grow basis-24 items-center gap-1"
+        >
+          <SenderChip
+            from={from}
             sender={sender}
             chatWorktreeId={chatWorktreeId}
             target={target}
             dispatchId={dispatchId}
+            openDispatchId={openDispatchId}
           />
           {sender.host ? (
-            <WorktreeHostContextBadge
-              label={sender.host}
-              className="ml-1 inline-flex align-middle"
-            />
+            <WorktreeHostContextBadge label={sender.host} className="inline-flex shrink-0" />
           ) : null}
-        </Fragment>
+          {index < shown.length - 1 ? (
+            <span aria-hidden className="-ml-1 shrink-0">
+              ,
+            </span>
+          ) : null}
+        </span>
       ))}
     </>
   )
 }
 
-function SenderLabel({
-  sender,
-  chatWorktreeId,
-  target,
-  dispatchId
-}: {
-  sender: AgentMessageSender
-  chatWorktreeId: string | null
-  target?: RuntimeClientTarget
-  dispatchId?: string
-}): React.JSX.Element {
-  const label = useAgentMessageSenderLabel(sender, chatWorktreeId, target, dispatchId)
-  return <span className="text-chat-foreground">{label}</span>
-}
-
-/** The open icon a status row shows after its words: the worker card's ArrowUpRight, named for
- *  what it opens. Nothing when the sender can't be opened from here. */
-export function NativeChatAgentMessageSenderOpen({
+function SenderChip({
   from,
   sender,
-  dispatchId,
   chatWorktreeId,
   target,
-  named = false
+  dispatchId,
+  openDispatchId
 }: {
   from: AgentMessageSource
   sender: AgentMessageSender
-  dispatchId?: string
   chatWorktreeId: string | null
   target?: RuntimeClientTarget
-  /** Its name beside the icon, for mail from several senders. */
-  named?: boolean
-}): React.JSX.Element | null {
+  dispatchId?: string
+  openDispatchId?: string
+}): React.JSX.Element {
   const t = useTranslate()
-  const owner = useNativeChatVisualOwner()
-  const worktreeId = owner?.worktreeId ?? chatWorktreeId
-  const label = useAgentMessageSenderLabel(sender, worktreeId, target, dispatchId)
-  const opens = useAgentMessageSenderOpens(sender, worktreeId, target, dispatchId)
-  if (!opens || !worktreeId) {
-    return null
-  }
-  const name = t('components.native-chat.agentMessage.open', 'Open {{name}}', { name: label })
-  const open = (): void =>
-    void openAgentMessageSender(
-      from,
-      sender,
-      worktreeId,
-      owner?.target ?? target,
-      dispatchId,
-      label
-    )
-  if (named) {
+  const label = useAgentMessageSenderLabel(sender, chatWorktreeId, target, dispatchId)
+  const opens = useAgentMessageSenderOpens(sender, chatWorktreeId, target, openDispatchId)
+  if (!opens || !chatWorktreeId) {
     return (
-      <Button type="button" variant="ghost" size="xs" aria-label={name} onClick={open}>
+      <span className="min-w-0 truncate text-chat-foreground" title={label}>
         {label}
-        <ArrowUpRight aria-hidden />
-      </Button>
+      </span>
     )
   }
-  return <NativeChatEventOpenButton name={name} onOpen={open} />
+  return (
+    <button
+      type="button"
+      aria-label={t('components.native-chat.agentMessage.open', 'Open {{name}}', { name: label })}
+      title={label}
+      className={cn(NATIVE_CHAT_INLINE_CHIP, 'min-w-0')}
+      onClick={() =>
+        void openAgentMessageSender(from, sender, chatWorktreeId, target, openDispatchId, label)
+      }
+    >
+      <span className="min-w-0 max-w-60 truncate">{label}</span>
+    </button>
+  )
 }
