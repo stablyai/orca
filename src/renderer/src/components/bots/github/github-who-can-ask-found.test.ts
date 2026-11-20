@@ -74,7 +74,7 @@ describe('the GitHub picker’s reading of a search', () => {
     )
     expect(labels({ repositories: false, organizations: true })).toEqual({
       scoped: expect.stringMatching(/^Your orgs as of /),
-      outsideTag: 'Not in that list'
+      outsideTag: 'Not in your repo list'
     })
     expect(labels({ repositories: true, organizations: true })?.scoped).toMatch(
       /^Your repos and orgs as of /
@@ -143,9 +143,9 @@ describe('the GitHub picker’s reading of a search', () => {
       value(answer(roster, exact, query)).empty
     expect(empty(read(), none)).toEqual({
       title: 'No one found for “zed”',
-      detail: 'Searched that list and exact usernames.'
+      detail: 'Searched your repo list and exact usernames.'
     })
-    expect(empty(read(), null, 'neil par')?.detail).toBe('Searched that list.')
+    expect(empty(read(), null, 'neil par')?.detail).toBe('Searched your repo list.')
     // Nothing readable asked for: nothing spent, and no gh advice.
     expect(empty({ status: 'unavailable', spent: false }, null, 'neil par')?.detail).toBe(
       'No readable repos to search.'
