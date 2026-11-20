@@ -41,10 +41,7 @@ export function keyedSessionWriteReady(
   acknowledged: AcknowledgedWorkspaceSessionEntries,
   fields: readonly string[]
 ): boolean {
-  return (
-    Boolean(api.patchEntries) &&
-    acknowledged.settledHosts(sessionRoutingFor(state), fields) !== null
-  )
+  return Boolean(api.patchEntries) && acknowledged.isSettled(sessionRoutingFor(state), fields)
 }
 
 /** Send only the keys a keyed write rebuilt, to the hosts the whole path last wrote for its inputs.

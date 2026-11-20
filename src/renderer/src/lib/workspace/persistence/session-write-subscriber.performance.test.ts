@@ -8,7 +8,10 @@ import * as fileHostOwnership from '@/lib/workspace/ownership/unified-tab-host-o
 import { createSessionWriteSubscriber } from './session-write-subscriber'
 import { AcknowledgedWorkspaceSessionEntries } from './workspace-session-acknowledged-entries'
 import { patchWorkspaceSessionByHost, type SessionApi } from './workspace-session-host-persistence'
-import { patchWorkspaceSessionEntriesByHost } from './workspace-session-keyed-host-write'
+import {
+  keyedSessionWriteReady,
+  patchWorkspaceSessionEntriesByHost
+} from './workspace-session-keyed-host-write'
 import { sessionRoutingFor } from './workspace-session-host-routing'
 import { makeOpenFile } from '@/store/slices/editor/types/open-file.test-fixture'
 import { applyWorkspaceSessionEntriesPatch } from '../../../../../shared/workspace-session/workspace-session-entries-patch'
@@ -66,7 +69,9 @@ async function workForTitleChanges(size: number) {
         .written,
     persistKeyed: (write) =>
       patchWorkspaceSessionEntriesByHost(sessionApi, write, store.getState(), acknowledged)
-        ?.written ?? null
+        ?.written ?? null,
+    keyedWriteReady: (fields) =>
+      keyedSessionWriteReady(sessionApi, store.getState(), acknowledged, fields)
   })
   try {
     const worktrees = Array.from({ length: size }, (_, index) =>
@@ -128,13 +133,16 @@ async function workForTitleChanges(size: number) {
     const deepCompares = vi.spyOn(structuralEquality, 'structuralValuesEqual')
     const routedKeys = vi.spyOn(sessionRoutingFor(store.getState()), 'hostIdByWorktreeId')
     const slotSignatureBuilds = vi.spyOn(launchPersistence, 'structuredLaunchSlotSignatures')
+    const hostUnions = vi.spyOn(acknowledged, 'settledHosts')
     store.getState().updateTabTitle('tab-3-b', 'Renamed by agent')
     await vi.advanceTimersByTimeAsync(DEBOUNCE_MS)
     const counts = {
       deepCompares: deepCompares.mock.calls.length,
       routedKeys: routedKeys.mock.calls.length,
-      slotSignatureBuilds: slotSignatureBuilds.mock.calls.length
+      slotSignatureBuilds: slotSignatureBuilds.mock.calls.length,
+      hostUnions: hostUnions.mock.calls.length
     }
+    hostUnions.mockRestore()
     deepCompares.mockRestore()
     routedKeys.mockRestore()
     slotSignatureBuilds.mockRestore()
@@ -198,6 +206,7 @@ it('a title change compares and routes only its workspace’s entries at N and 1
     deepCompares: 3,
     routedKeys: 5,
     slotSignatureBuilds: 1,
+    hostUnions: 1,
     repeatedPlacementChecks: 0,
     titles: ['Renamed by agent', 'Owner renamed', 'Rejected once', 'After the rejection'],
     ownerTabs: ['Owner renamed', 'Terminal 2', 'file.ts'],

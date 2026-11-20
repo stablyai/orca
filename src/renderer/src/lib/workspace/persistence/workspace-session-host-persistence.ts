@@ -139,15 +139,14 @@ export function patchWorkspaceSessionByHost(
     'patch',
     routing
   )
-  const hostIds = slicedHostIds(slices)
+  // Only entries writes use the host set: relay ids ride with them, and they settle inputs.
+  const hostIds = acknowledged && api.patchEntries ? slicedHostIds(slices) : null
   const relays = desktopRelayWriteFor(api, patch, slices, state)
   acknowledged?.retainHosts(routedSessionHostIds(state, slices))
   // After dropping unrouted hosts: that forget must not cancel this write's own settling.
   const settleMark = acknowledged?.settleMark()
   // A host's relay ids ride with its entries patch, so main publishes them together once.
-  const relayPlan =
-    relays &&
-    planDesktopRelayWrite(api, relays, acknowledged && api.patchEntries ? hostIds : new Set())
+  const relayPlan = relays && planDesktopRelayWrite(api, relays, hostIds ?? new Set())
   const local = (slices[LOCAL_EXECUTION_HOST_ID] ?? patch) as WorkspaceSessionPatch
   const carriedLocal = relayPlan?.carried.get(LOCAL_EXECUTION_HOST_ID)
   const localSlice = patchHostSlice(api, local, LOCAL_EXECUTION_HOST_ID, acknowledged, carriedLocal)
@@ -163,7 +162,7 @@ export function patchWorkspaceSessionByHost(
   // After the partition patches, so main applies relay ids to the rows they just wrote.
   const separate = relayPlan?.sendRest()
   const written = settleSessionWrites([localSlice, ...hostWrites, separate], relayPlan)
-  if (acknowledged && api.patchEntries && settleMark !== undefined) {
+  if (acknowledged && hostIds && settleMark !== undefined) {
     const outputs = Object.keys(patch)
     written.then(
       (outcome) => {

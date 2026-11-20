@@ -177,6 +177,11 @@ export class AcknowledgedWorkspaceSessionEntries {
     this.settled.clear()
   }
 
+  /** Whether main holds the whole path's output for `inputs` under `routing`. */
+  isSettled(routing: RoutingGeneration, inputs: readonly string[]): boolean {
+    return routing === this.settledRouting && inputs.every((input) => this.settled.has(input))
+  }
+
   /** Hosts the whole path wrote for `inputs`, or null when main may not hold their output. */
   settledHosts(routing: RoutingGeneration, inputs: readonly string[]): Set<ExecutionHostId> | null {
     if (routing !== this.settledRouting) {
