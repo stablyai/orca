@@ -1,0 +1,44 @@
+name: Prepare Windows package Rust helpers
+description: Restores the Rust cache, then builds the Windows agent hook and CLI launcher used by packaging and its boundary tests.
+
+runs:
+  using: composite
+  steps:
+    - name: Resolve the Windows Rust build scope
+      id: rust-scope
+      shell: bash
+      run: node config/scripts/native-build/windows/windows-rust-build-scope.mjs >> "$GITHUB_OUTPUT"
+
+    # Real inputs only: older restores are safe because the build re-checks each exe's fingerprint.
+    - name: Cache Windows CLI launcher
+      uses: actions/cache@v5
+      with:
+        # Cache cargo registry with .build so misses do not rebuild resource crates cold.
+        path: |
+          native/windows-cli-launcher/.build
+          native/windows-cli-launcher/target
+          native/windows-agent-hook/.build
+          native/windows-agent-hook/target
+          ~/.cargo/registry
+        key: windows-cli-launcher-v2-${{ runner.os }}-${{ runner.arch }}-${{ steps.rust-scope.outputs.toolchain }}-${{ steps.rust-scope.outputs.app-version }}-${{ hashFiles('native/windows-cli-launcher/src/**', 'native/windows-cli-launcher/build.rs', 'native/windows-cli-launcher/Cargo.toml', 'native/windows-cli-launcher/Cargo.lock', 'native/windows-cli-launcher/app.manifest', 'native/windows-cli-launcher/.cargo/**', 'native/windows-agent-hook/src/**', 'native/windows-agent-hook/build.rs', 'native/windows-agent-hook/Cargo.toml', 'native/windows-agent-hook/Cargo.lock', 'native/windows-agent-hook/app.manifest', 'native/windows-agent-hook/.cargo/**', 'config/scripts/native-build/windows/build-windows-cli-launcher.mjs', 'config/scripts/native-build/windows/build-windows-agent-hook.mjs', 'config/scripts/native-build/windows/windows-rust-executable-build.mjs', 'config/scripts/native-build/windows/windows-pe-imports.mjs', 'resources/build/icon.ico') }}
+        restore-keys: |
+          windows-cli-launcher-v2-${{ runner.os }}-${{ runner.arch }}-${{ steps.rust-scope.outputs.toolchain }}-
+
+    # Require cargo early; otherwise packaged Rust launcher fails deep inside builder native hooks.
+    - name: Ensure the Rust toolchain for the Windows CLI launcher
+      shell: pwsh
+      run: |
+        if (-not (Get-Command cargo -ErrorAction SilentlyContinue)) {
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+        }
+        cargo --version
+
+    # Build agent-hook once before tests so suites share the binary instead of compiling concurrently.
+    - name: Build the Windows agent hook
+      shell: bash
+      run: node config/scripts/native-build/windows/build-windows-agent-hook.mjs
+
+    - name: Build the Windows CLI launcher
+      shell: bash
+      run: node config/scripts/native-build/windows/build-windows-cli-launcher.mjs
