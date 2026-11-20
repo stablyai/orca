@@ -1,4 +1,5 @@
 import type { ConnectorSource } from './connectors/external-conversation-link'
+import { slackMarkupPlainText } from './connectors/slack-message-markup'
 import { sliceAtCodeUnitLimit } from './text/surrogate-safe-text-slice'
 
 const MAX_TITLE_LENGTH = 120
@@ -24,11 +25,13 @@ function linearIssueTitle(text: string): string | null {
 export function externalConversationTitle(source: ConnectorSource, text: string): string {
   const linear = source === 'linear' ? linearIssueTitle(text) : null
   const ask = linear ?? text.replace(THREAD_HISTORY, '')
-  const line =
+  const first =
     ask
       .split('\n')
       .find((candidate) => candidate.trim() !== '')
       ?.trim() ?? ''
+  // Slack's own markup reads as Slack shows it: a person by name, a link by its text.
+  const line = source === 'slack' ? slackMarkupPlainText(first).trim() : first
   return line.length > MAX_TITLE_LENGTH
     ? `${sliceAtCodeUnitLimit(line, MAX_TITLE_LENGTH - 1)}…`
     : line

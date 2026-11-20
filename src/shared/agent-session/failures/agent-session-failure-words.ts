@@ -85,6 +85,14 @@ function namingAgent(id: AgentSessionFailureCopyId): Sentence {
   return (context, _fact, _surface, say) => say(id, agent(say, context))
 }
 
+function quotingForAgent(
+  lead: AgentSessionFailureCopyId,
+  quotedLead: AgentSessionFailureCopyId
+): Sentence {
+  return (context, fact, _surface, say) =>
+    quotingPersonDetail(say, lead, quotedLead, fact.detail, agent(say, context))
+}
+
 /** The next step after a start or restart that failed: the command, or the message, again. */
 function startRetry(
   say: AgentSessionFailureSay,
@@ -170,7 +178,8 @@ const FAILURE_SENTENCES = {
   historyInOtherAccount: (_context, _fact, _surface, say) => say('historyInOtherAccount'),
   claudeAccountFolderMissing: (_context, _fact, _surface, say) => say('claudeAccountFolderMissing'),
   claudeAccountSetupFailed: (_context, _fact, _surface, say) => say('claudeAccountSetupFailed'),
-  agentCommandNotRunnable: namingAgent('agentCommandNotRunnable'),
+  // A Command that failed names the program it ran and what it said.
+  agentCommandNotRunnable: quotingForAgent('agentCommandNotRunnable', 'agentCommandFailed'),
   runtimeNotInstalled: namingAgent('runtimeNotInstalled'),
   fullAccessAsRoot: namingAgent('fullAccessAsRoot'),
   launchPreparationFailed: (context, _fact, _surface, say) =>
@@ -204,15 +213,8 @@ const FAILURE_SENTENCES = {
   modelNotSelected: (context, _fact, _surface, say) => say('modelNotSelected', agent(say, context)),
   providerUnavailable: namingAgent('providerUnavailable'),
   providerSafetyStopped: namingAgent('providerSafetyStopped'),
-  providerResponseFailed: namingAgent('providerResponseFailed'),
-  providerRejected: (context, fact, _surface, say) =>
-    quotingPersonDetail(
-      say,
-      'providerRejected',
-      'providerRejectedQuoted',
-      fact.detail,
-      agent(say, context)
-    ),
+  providerResponseFailed: quotingForAgent('providerResponseFailed', 'providerResponseFailedQuoted'),
+  providerRejected: quotingForAgent('providerRejected', 'providerRejectedQuoted'),
   pluginInputRequired: (context, fact, _surface, say) =>
     say('pluginInputRequired', {
       ...agent(say, context),

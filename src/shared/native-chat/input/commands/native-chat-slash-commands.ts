@@ -13,6 +13,8 @@ export type SlashCommandSuggestion = {
   description?: string
   /** Provider-authored argument sketch, e.g. `<objective>`. */
   argumentHint?: string
+  /** Other lowercase names the picker finds it by, matched like the name in every language. */
+  aliases?: readonly string[]
   kindUnspecified?: true
   builtin?: true
   /** Declared only on curated rows; a surface that cannot show the reply drops the row. */

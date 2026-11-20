@@ -15,6 +15,7 @@ import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import type { useWorkspaceServer } from '../../worktree/execution-hosts/workspace-server'
 import { isWorktreePinned } from '../../worktree/workspace-list/workspace-list-sections'
 import type { Worktree } from '../../worktree/workspace-list/workspace-list-types'
+import { folderIdOfSelector } from '../../../../src/shared/workspace/identity/workspace-scope'
 import type { HostScreenController } from '../use-host-screen-controller'
 import { useWorkspaceNotificationMutes } from './use-workspace-notification-mutes'
 
@@ -122,7 +123,11 @@ export function useWorkspaceRowMenuActions(args: {
         ]),
     {
       id: 'delete',
-      label: t('common.delete', 'Delete'),
+      // Desktop's folder rows say Remove Workspace: the folder stays on disk.
+      label:
+        folderIdOfSelector(row.worktreeId) !== undefined
+          ? t('hostScreen.deleteConfirm.removeTitle', 'Remove Workspace')
+          : t('common.delete', 'Delete'),
       destructive: true,
       onPress: () => state.setConfirmDelete(row),
       // Like desktop, git can't remove a primary checkout; older hosts omit the flag.

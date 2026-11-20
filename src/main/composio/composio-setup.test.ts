@@ -5,7 +5,7 @@ import type {
   ComposioKeyState
 } from '../../shared/composio/composio-apps'
 import type { ComposioSetupCardRef } from '../../shared/composio/composio-setup-card'
-import { ComposioSetup, composioSetupStartLine } from './composio-setup'
+import { ComposioSetup } from './composio-setup'
 
 const OUTLOOK = { slug: 'outlook', name: 'Outlook' }
 const DANA: ComposioConnection = {
@@ -25,7 +25,7 @@ function setupWith(
   const told: string[] = []
   const setup = new ComposioSetup(
     {
-      keyState: () => key,
+      keyState: async () => key,
       connections: async () => ({ connections, pending: [] }),
       app: async (slug) => ({ slug, name: slug, description: '', logo: null, signIn }),
       ensureTool: async () => 'trs_a'
@@ -44,16 +44,12 @@ function setupWith(
 }
 
 describe('Composio setup in chat', () => {
-  it('hands the bot the app, with no caption line in the chat', async () => {
+  it('briefs the bot, then writes the key card when the bot requests it', async () => {
     const { setup, written, told } = setupWith('none')
     await setup.start('bot-1', 'add-connector', OUTLOOK)
     expect(written).toEqual([])
-    expect(told).toEqual([composioSetupStartLine('add-connector', OUTLOOK)])
-    expect(told[0]).toContain('orca bot composio setup --app outlook')
-  })
+    expect(told).toEqual([expect.stringContaining('orca bot composio setup --app outlook')])
 
-  it('asks for the key first, as step 1 of 2 when an app is picked', async () => {
-    const { setup, written } = setupWith('none')
     const result = await setup.card('bot-1', OUTLOOK)
     expect(written).toEqual([
       { botId: 'bot-1', card: 'key', app: OUTLOOK, step: { index: 1, total: 2 } }
@@ -61,15 +57,10 @@ describe('Composio setup in chat', () => {
     expect(result.message).toContain('Composio key')
   })
 
-  it('asks for a new key when Composio refused the saved one', async () => {
-    const { setup } = setupWith('rejected')
+  it('writes a replacement key card when Composio refused the saved key', async () => {
+    const { setup, written } = setupWith('rejected')
     expect((await setup.card('bot-1')).message).toContain('no longer accepts')
-  })
-
-  it('shows Connect when the key is set and the app is not connected', async () => {
-    const { setup, written } = setupWith('ok')
-    await setup.card('bot-1', OUTLOOK)
-    expect(written).toEqual([{ botId: 'bot-1', card: 'connect', app: OUTLOOK }])
+    expect(written).toEqual([{ botId: 'bot-1', card: 'key' }])
   })
 
   it('shows Ready when the app is already connected', async () => {
@@ -79,12 +70,6 @@ describe('Composio setup in chat', () => {
     const result = await setup.card('bot-1', OUTLOOK)
     expect(written).toEqual([{ botId: 'bot-1', card: 'ready', app: OUTLOOK }])
     expect(result.message).toContain('as dana@acme.com')
-  })
-
-  it('needs an app once the key is set', async () => {
-    const { setup, written } = setupWith('ok')
-    expect(await setup.card('bot-1')).toEqual({ card: null, message: expect.any(String) })
-    expect(written).toEqual([])
   })
 
   it('moves on to Connect, step 2 of 2, after the key is added', async () => {
@@ -103,24 +88,6 @@ describe('Composio setup in chat', () => {
     const again = await setup.card('bot-1', OUTLOOK)
     expect(written).toHaveLength(2)
     expect(again.message).toContain('already in the chat')
-  })
-
-  it('shows the connected line and Ready when a card’s sign-in finishes', async () => {
-    const { setup, written, told } = setupWith('ok')
-    await setup.connectEnded('bot-1', OUTLOOK, {
-      id: 'ca_1',
-      app: 'outlook',
-      name: 'Outlook',
-      status: 'active',
-      label: 'dana@acme.com'
-    })
-    expect(written).toEqual([
-      'Outlook connected as dana@acme.com',
-      { botId: 'bot-1', card: 'ready', app: OUTLOOK }
-    ])
-    expect(told).toEqual([
-      'Card composio-setup/connect answered: outlook connected as dana@acme.com'
-    ])
   })
 
   it('shows an expired sign-in on its own card, starting no bot turn', () => {
@@ -152,6 +119,10 @@ describe('Composio setup in chat', () => {
     expect(asked.message).not.toContain('already in the chat')
     expect(written.at(-1)).toEqual({ botId: 'bot-1', card: 'connect', app: OUTLOOK })
     await setup.connectEnded('bot-1', OUTLOOK, DANA)
+    expect(written.slice(-2)).toEqual([
+      'Outlook connected as dana@acme.com',
+      { botId: 'bot-1', card: 'ready', app: OUTLOOK }
+    ])
     expect(told).toEqual([
       'Card composio-setup/connect answered: outlook connected as dana@acme.com'
     ])
@@ -164,9 +135,17 @@ describe('Composio setup in chat', () => {
     expect(told[0]).toContain('not connected')
   })
 
-  it('tells the bot its Composio user, and the filter its events card still needs', async () => {
-    const { setup } = setupWith('ok')
-    expect((await setup.card('bot-1')).message).toContain('orca-bot-bot-1')
+  it('waits for an app before showing Connect and tells the bot its events filter', async () => {
+    const { setup, written } = setupWith('ok')
+    expect(await setup.card('bot-1')).toEqual({
+      card: null,
+      message: expect.stringContaining('orca-bot-bot-1')
+    })
+    expect(written).toEqual([])
+
+    await setup.card('bot-1', OUTLOOK)
+    expect(written).toEqual([{ botId: 'bot-1', card: 'connect', app: OUTLOOK }])
+
     const trigger = { slug: 'OUTLOOK_MESSAGE_TRIGGER', name: 'New Outlook Message' }
     const filter = 'where="body.metadata.user_id = orca-bot-bot-1"'
     expect(setup.eventsCard('bot-1', 'wh_1', trigger, filter).message).toContain(filter)

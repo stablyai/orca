@@ -44,7 +44,11 @@ const installed: ConnectorBotSlackState = {
 const confirm = vi.fn()
 const api = { state: vi.fn(), remove: vi.fn() }
 
-function renderCard(slack: ConnectorBotSlackStateResponse, teamId = 'T05', shown = bot): void {
+function renderCard(
+  slack: ConnectorBotSlackStateResponse,
+  options: { teamId?: string; shown?: Bot } = {}
+): void {
+  const teamId = 'teamId' in options ? options.teamId : 'T05'
   api.state.mockReset().mockResolvedValue({ ok: true, value: slack })
   api.remove.mockReset().mockResolvedValue({ ok: true, value: undefined })
   Object.assign(window, {
@@ -52,7 +56,7 @@ function renderCard(slack: ConnectorBotSlackStateResponse, teamId = 'T05', shown
   })
   render(
     <ConfirmationDialogContext.Provider value={confirm}>
-      <BotSlackCard bot={shown} teamId={teamId} defaultOpen />
+      <BotSlackCard bot={options.shown ?? bot} teamId={teamId} defaultOpen />
     </ConfirmationDialogContext.Provider>
   )
 }
@@ -72,15 +76,6 @@ function openActions(): void {
 }
 
 describe('BotSlackCard', () => {
-  it('heads an installed card with the installer as Slack names them', async () => {
-    renderCard({ ...installed, teamName: 'Globex', installerName: 'Alice' })
-    expect(await screen.findByText('installed by Alice')).toBeDefined()
-    expect(screen.getByRole('button', { name: 'Slack' })).toBeDefined()
-    // All is well, so no status.
-    expect(screen.queryByText('Connected')).toBeNull()
-    expect(screen.getByText('Sam Lee')).toBeDefined()
-  })
-
   it('turns the status into one Update in Slack link when the app is out of date', async () => {
     renderCard({ ...installed, updateNeeded: true })
     expect(await screen.findByRole('button', { name: 'Update in Slack' })).toBeDefined()
@@ -124,15 +119,10 @@ describe('BotSlackCard', () => {
     }
   })
 
-  it('falls back to the installer id when the cloud has no name', async () => {
-    renderCard(installed)
-    expect(await screen.findByText('installed by U07')).toBeDefined()
-  })
-
   it('removes from Slack only after the confirm, which carries the note', async () => {
     renderCard(installed)
     confirm.mockResolvedValueOnce(false)
-    await screen.findByText('installed by U07')
+    expect(await screen.findByText('installed by U07')).toBeDefined()
     openActions()
     fireEvent.click(await screen.findByRole('menuitem', { name: 'Remove from T05…' }))
     await waitFor(() => expect(confirm).toHaveBeenCalledOnce())
@@ -152,14 +142,30 @@ describe('BotSlackCard', () => {
     renderCard({ state: 'created', teamId: 'T05', appId: 'A1' })
     expect(await screen.findByText('Waiting for the install in Slack.')).toBeDefined()
     expect(screen.getByRole('button', { name: 'Finish setup' })).toBeDefined()
-    // Nothing to open or remove yet, so the row has no ⋯ menu.
-    expect(screen.queryByRole('button', { name: 'Slack actions' })).toBeNull()
     expect(screen.getByRole('button', { name: 'Add' })).toHaveProperty('disabled', true)
   })
 
+  it('removes an app that was never installed, so a dropped setup can be cleared', async () => {
+    renderCard({ state: 'grant_expired', teamId: 'T05' })
+    confirm.mockResolvedValueOnce(true)
+    await screen.findByRole('button', { name: 'Finish setup' })
+    openActions()
+    expect(screen.queryByRole('menuitem', { name: 'Slack app settings' })).toBeNull()
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Remove from Slack…' }))
+    await waitFor(() => expect(api.remove).toHaveBeenCalledWith({ botId: 'bot-1', teamId: 'T05' }))
+  })
+
+  it('offers no Remove on the people-only row once the install is gone', async () => {
+    renderCard({ state: 'created', teamId: 'T05', appId: 'A1' }, { teamId: undefined })
+    expect(await screen.findByRole('button', { name: 'Finish setup' })).toBeDefined()
+    expect(screen.queryByRole('button', { name: 'Slack actions' })).toBeNull()
+  })
+
   it('opens and closes the row from its name', async () => {
-    cleanup()
-    api.state.mockReset().mockResolvedValue({ ok: true, value: installed })
+    api.state.mockReset().mockResolvedValue({
+      ok: true,
+      value: { ...installed, teamName: 'Globex', installerName: 'Alice' }
+    })
     Object.assign(window, {
       api: withBotConnectorRuntime({ botSlack: api, shell: { openUrl: vi.fn() } })
     })
@@ -174,6 +180,13 @@ describe('BotSlackCard', () => {
     fireEvent.click(toggle)
     expect(toggle.getAttribute('aria-expanded')).toBe('true')
     expect(await screen.findByRole('button', { name: 'Add people' })).toBeDefined()
+    expect(await screen.findByText('installed by Alice')).toBeDefined()
+    expect(screen.getByText('Sam Lee')).toBeDefined()
+    expect(screen.queryByText('Connected')).toBeNull()
+
+    fireEvent.click(toggle)
+    expect(toggle.getAttribute('aria-expanded')).toBe('false')
+    expect(screen.queryByRole('button', { name: 'Add people' })).toBeNull()
   })
 
   it('shows one workspace of several: its own state and only its own people', async () => {
@@ -184,14 +197,23 @@ describe('BotSlackCard', () => {
       teamName: 'Acme',
       installerName: 'Alice'
     }
-    renderCard({ ...installed, teams: [installed, acme] }, 'T06', {
-      ...bot,
-      slackApps: [
-        { appId: 'A1', teamId: 'T05' },
-        { appId: 'A2', teamId: 'T06' }
-      ],
-      members: [...bot.members, { id: 'U-pri', name: 'Priya', source: 'slack', workspaceId: 'T06' }]
-    })
+    renderCard(
+      { ...installed, teams: [installed, acme] },
+      {
+        teamId: 'T06',
+        shown: {
+          ...bot,
+          slackApps: [
+            { appId: 'A1', teamId: 'T05' },
+            { appId: 'A2', teamId: 'T06' }
+          ],
+          members: [
+            ...bot.members,
+            { id: 'U-pri', name: 'Priya', source: 'slack', workspaceId: 'T06' }
+          ]
+        }
+      }
+    )
     expect(await screen.findByText('installed by Alice')).toBeDefined()
     expect(screen.getByText('Priya')).toBeDefined()
     // Saved before workspaces, so the first workspace's.

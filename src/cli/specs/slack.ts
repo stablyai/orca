@@ -6,14 +6,14 @@ const AS_BOT =
 const PLACE =
   'A place or message is a ref from an earlier command (slack:T…:C…[:thread][:message]), a Slack link or a #name; output always shows the ref and a label. Quote #names in the shell.'
 const TO_PERSON =
-  'A person ref from `orca slack find @name` (slack:T…:user:U…) posts in a DM with them, opening one if needed.'
+  "A person (@name, user:<id> or a ref from `orca slack find @name`) gets it in the bot's DM with them, opening one if needed; in more than one workspace, use the ref find --workspace prints."
 const WOKEN = 'To answer the thread that woke you, use `orca bot reply`; a post there is refused.'
 export const TEXT_FILE =
   'Pass multiline text as a file with --text-file <path> (- reads stdin), not a heredoc: heredocs can hang the shell when macOS pipe memory is low.'
 const POSTED_REF =
   'Prints a ref for this post at once, before or after Slack sends it: `orca slack edit` or `delete` it, or post to it to answer in its thread, and each goes in order. Once sent, the ref acts on the message itself.'
 export const SLACK_MENTION =
-  "Mention a person with <@USERID> (`orca slack find @name` shows it); ping a channel with <!here>, <!channel> or <!everyone>, a user group with <!subteam^GROUPID>. Only that exact form pings: a read's `@Name (user:USERID)`, `@here` or `@team (group:GROUPID)` pings no one."
+  "Mention a person with <@USERID> (`orca slack find @name` shows it); ping a channel with <!here>, <!channel> or <!everyone>, a user group with <!subteam^GROUPID>. A read shows mentions the same way, as `<@USERID|Name>` (`<@USERID>` with no name), `<!subteam^GROUPID|@team>` and `<#CHANNELID|name>`, so copying one pings (a channel's becomes a link); a read's `@here`, `@channel` or `@everyone` is plain words and pings no one."
 export const SLACK_MARKDOWN =
   "Text is Markdown: bold is **text** (Slack's *text* comes out italic), and a mention inside `code` stays plain text."
 
@@ -58,8 +58,8 @@ export const SLACK_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['slack', 'post'],
     summary: 'Post a message in a Slack channel, thread or DM as this bot',
-    usage: 'orca slack post <place> (<text> | --text-file <path|->) [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'ref', 'text', 'text-file'],
+    usage: 'orca slack post <place|@person> (<text> | --text-file <path|->) [--at <time>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'ref', 'text', 'text-file', 'at'],
     positionalArgs: ['ref', 'text'],
     notes: [
       AS_BOT,
@@ -67,6 +67,7 @@ export const SLACK_COMMAND_SPECS: CommandSpec[] = [
       TO_PERSON,
       `A message ref posts in its thread. ${WOKEN}`,
       POSTED_REF,
+      '--at posts it later, by Slack itself: in a while (+30m, +2h, +3d) or at a time with its zone (2026-12-01T09:00:00-08:00), up to 120 days ahead. A scheduled post has no ref to edit until it posts.',
       TEXT_FILE,
       SLACK_MENTION,
       SLACK_MARKDOWN
@@ -76,7 +77,7 @@ export const SLACK_COMMAND_SPECS: CommandSpec[] = [
     path: ['slack', 'attach'],
     summary: 'Attach a file in a Slack channel, thread or DM as this bot, with an optional comment',
     usage:
-      'orca slack attach <place> --file <path> [--text <comment> | --text-file <path|->] [--json]',
+      'orca slack attach <place|@person> --file <path> [--text <comment> | --text-file <path|->] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'ref', 'file', 'text', 'text-file'],
     positionalArgs: ['ref'],
     notes: [

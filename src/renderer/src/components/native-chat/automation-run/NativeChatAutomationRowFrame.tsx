@@ -1,6 +1,6 @@
 import type { ReactNode, Ref } from 'react'
 import type { AutomationRowMark } from '../../../../../shared/automations/automation-chat-row'
-import { NativeChatEventIcon, NativeChatEventRow } from '../messages/events/NativeChatEventRow'
+import { NativeChatEventRow } from '../messages/events/NativeChatEventRow'
 import { NativeChatAutomationMark } from './NativeChatAutomationMark'
 
 /** An opened row's section heading, and its muted lines. */
@@ -46,11 +46,8 @@ export function NativeChatAutomationRowFrame({
     : [lead, name, ...after].join(' · ')
   return (
     <NativeChatEventRow
-      icon={
-        <NativeChatEventIcon badge={failed ? 'failed' : null}>
-          <NativeChatAutomationMark mark={mark} />
-        </NativeChatEventIcon>
-      }
+      icon={<NativeChatAutomationMark mark={mark} />}
+      badge={failed ? 'failed' : null}
       label={label}
       action={action}
       timestamp={timestamp}

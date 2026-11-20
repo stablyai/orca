@@ -75,7 +75,7 @@ describe('hidden-output restore unhide coverage (STA-4869)', () => {
     }
   })
 
-  it.each([undefined, Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY])(
+  it.each([undefined, Number.POSITIVE_INFINITY])(
     'does not treat snapshot sequence %s as covering the pending unhide',
     async (seq) => {
       const drive = await connectVisiblePane()

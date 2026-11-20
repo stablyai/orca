@@ -49,6 +49,13 @@ export type LayoutContentTab = LayoutTabFields & { kind: Exclude<TabContentType,
 
 export type LayoutTab = LayoutTerminalTab | LayoutContentTab
 
+export type TabContentReplacement = {
+  kind: 'browser-page'
+  browserTabId: string
+  pageId: string
+  newPageId: string
+}
+
 export type LayoutGroup = { id: string; tabOrder: string[] }
 
 /** An open editor file minus its unsaved draft (the view's) and what its tab and workspace hold. */

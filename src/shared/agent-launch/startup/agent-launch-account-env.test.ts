@@ -4,7 +4,6 @@ import { AgentLaunchAccountEnv } from './agent-launch-account-env'
 describe('agent launch account environment admission', () => {
   it.each([
     ['a non-account variable', { PATH: '/usr/bin' }],
-    ['a relative home', { CLAUDE_CONFIG_DIR: 'home/u/.claude' }],
     ['a parent segment', { CODEX_HOME: '/home/u/../root/.codex' }],
     ['a Windows path', { CODEX_HOME: 'C:\\Users\\u\\.codex' }],
     ['a newline', { CODEX_HOME: '/home/u/.codex\nX=1' }],

@@ -66,9 +66,11 @@ export function SheetHeader({
         </View>
         {!titleAboveActions ? (
           <View style={styles.center}>
-            <Text style={styles.title} numberOfLines={1} accessibilityRole="header">
-              {title}
-            </Text>
+            {title ? (
+              <Text style={styles.title} numberOfLines={1} accessibilityRole="header">
+                {title}
+              </Text>
+            ) : null}
             {subtitle !== undefined ? (
               <Text style={styles.subtitle} numberOfLines={1}>
                 {subtitle}

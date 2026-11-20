@@ -37,6 +37,8 @@ export function MobileBotSheet(props: {
   hostKey: string
   /** Opens a chat or a worker's workspace from Activity's Chats. */
   treeActions: BotChatTreeActions
+  online: boolean
+  hostName: string
 }) {
   const t = useMobileTranslation()
   const [tab, setTab] = useState<BotSheetTab>('activity')
@@ -47,7 +49,8 @@ export function MobileBotSheet(props: {
     showing: props.visible && tab === 'activity',
     showToast: props.showToast,
     onStart: props.onStartSuggestion,
-    refresh: props.routeBot.refresh
+    refresh: props.routeBot.refresh,
+    online: props.online
   })
   const tree = usePhoneBotChatTree({
     client: props.client,
@@ -73,7 +76,7 @@ export function MobileBotSheet(props: {
         style={styles.optionSegmented}
         testIDPrefix="bot-sheet-tab-"
       />
-      {props.routeBot.activity && props.routeBot.activityError ? (
+      {props.routeBot.activity && props.routeBot.activityError != null ? (
         <ListRow
           title={t('bots.activity.readFailed', 'Couldn’t load activity.')}
           subtitle={t('bots.activity.lastRead', 'Showing the last activity read.')}
@@ -95,20 +98,24 @@ export function MobileBotSheet(props: {
           treeActions={props.treeActions}
           upNextActions={upNext}
           loading={props.routeBot.activityLoading}
-          error={!!props.routeBot.activityError}
+          error={props.routeBot.activityError ?? null}
           onRetry={props.routeBot.refresh}
+          online={props.online}
+          hostName={props.hostName}
         />
       ) : tab === 'automations' && !props.routeBot.activity ? (
         <MobileBotActivityTab
           bot={bot}
           hostKey={props.hostKey}
           activity={null}
-          tree={{ kind: 'none' }}
+          tree={{ kind: 'loading' }}
           treeActions={props.treeActions}
           upNextActions={upNext}
           loading={props.routeBot.activityLoading}
-          error={!!props.routeBot.activityError}
+          error={props.routeBot.activityError ?? null}
           onRetry={props.routeBot.refresh}
+          online={props.online}
+          hostName={props.hostName}
         />
       ) : tab === 'automations' ? (
         <MobileBotAutomationsTab
@@ -117,12 +124,15 @@ export function MobileBotSheet(props: {
           rows={props.routeBot.activity?.automations ?? null}
           showToast={props.showToast}
           onNewAutomation={props.onNewAutomation}
+          online={props.online}
         />
       ) : (
         <MobileBotSettingsTab
           routeBot={props.routeBot}
           client={props.client}
           showToast={props.showToast}
+          online={props.online}
+          hostName={props.hostName}
           accessRequests={props.accessRequests}
           lookAround={
             lookAroundSupported(bot.agent) ? { onLookNow: upNext.lookNow, busy: upNext.busy } : null

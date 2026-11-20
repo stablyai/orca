@@ -41,7 +41,7 @@ export function pasteStartupDraftInCustody(
         { ...host.readiness, getPtyId: () => target.ptyId },
         handle,
         draft.agent,
-        { signal: stop.signal }
+        { signal: stop.signal, afterSetup: true }
       )
       if (!readyPtyId) {
         assertLive()

@@ -48,10 +48,11 @@ export function prepareJournalSqlRequest(
       }
     }
   }
-  return { id, command, ...(batch ? { batch } : {}) }
+  const urgent = command.type === 'write' && command.command.urgent === true
+  return { id, command, ...(batch ? { batch } : {}), ...(urgent ? { urgent } : {}) }
 }
 
-/** Controls, repeated chats and an oversized atomic command keep their own boundary. */
+/** Controls, repeated chats, an oversized atomic command and the urgent/bulk divide keep their own boundary. */
 export function takeJournalSqlReadyBatch(queue: JournalSqlRequest[]): JournalSqlRequest[] {
   const first = queue[0]
   if (!first?.batch) {
@@ -66,6 +67,7 @@ export function takeJournalSqlReadyBatch(queue: JournalSqlRequest[]): JournalSql
     if (
       !next ||
       request.command.type !== first.command.type ||
+      request.urgent !== first.urgent ||
       (count > 0 &&
         (sessions.has(next.sessionId) ||
           steps + next.steps > MAX_STEPS ||

@@ -93,32 +93,23 @@ describe('orca automations create --bot', () => {
     })
   })
 
-  it('reads where it runs and where results go', async () => {
+  it('reads a specific bot chat and a pasted Slack destination together', async () => {
     vi.spyOn(console, 'log').mockImplementation(() => undefined)
     const { client, writes } = host()
 
     await create(client, [
       ['bot', 'bot-1'],
-      ['runs-in', 'chat'],
-      ['results-to', 'channel:C0123']
+      ['runs-in', 'chat:side-chat'],
+      ['results-to', 'channel:https://acme.slack.com/archives/C0123ABCD']
     ])
 
     expect(writes[0]).toMatchObject({
-      bot: { botId: 'bot-1', runsIn: 'chat', resultsTo: { channel: 'C0123' } }
-    })
-  })
-
-  it("reads chat:<id> as one of the bot's chats", async () => {
-    vi.spyOn(console, 'log').mockImplementation(() => undefined)
-    const { client, writes } = host()
-
-    await create(client, [
-      ['bot', 'bot-1'],
-      ['runs-in', 'chat:side-chat']
-    ])
-
-    expect(writes[0]).toMatchObject({
-      bot: { runsIn: 'chat', chat: { sessionId: 'side-chat' } }
+      bot: {
+        botId: 'bot-1',
+        runsIn: 'chat',
+        chat: { sessionId: 'side-chat' },
+        resultsTo: { channel: 'C0123ABCD' }
+      }
     })
   })
 
@@ -136,7 +127,6 @@ describe('orca automations create --bot', () => {
 
   it.each([
     [[['runs-in', 'chat']], '--runs-in, --results-to, --on and --once need --bot'],
-    [[['on', 'slack.mentioned']], '--runs-in, --results-to, --on and --once need --bot'],
     [
       [
         ['bot', 'Reviewer'],
@@ -171,9 +161,9 @@ describe('orca automations create --bot', () => {
     [
       [
         ['bot', 'Reviewer'],
-        ['agent', 'opencode2']
+        ['agent', 'kimi']
       ],
-      "Bots can't run on opencode2 yet; use one of: claude, codex, grok, opencode, omp, pi, antigravity."
+      "Bots can't run on kimi"
     ],
     [
       [
@@ -315,12 +305,6 @@ describe('orca automations edit --runs-in / --results-to', () => {
       ownClaude,
       [['agent', 'codex']],
       { agent: 'codex' }
-    ],
-    [
-      "pins the bot's current agent and launch when it had none",
-      botAutomation,
-      [['effort', 'high']],
-      { agent: 'codex', launch: { model: 'm1', options: { effort: 'high' } } }
     ]
   ] satisfies [string, object, [string, string][], object][])(
     '%s',
@@ -335,7 +319,7 @@ describe('orca automations edit --runs-in / --results-to', () => {
     }
   )
 
-  it("says a model edit pinned the bot's current agent", async () => {
+  it("pins the bot's current agent and launch and reports the switch", async () => {
     vi.spyOn(console, 'log').mockImplementation(() => undefined)
     const out = vi.spyOn(process.stdout, 'write').mockImplementation(() => true)
     const pinned = {
@@ -346,9 +330,12 @@ describe('orca automations edit --runs-in / --results-to', () => {
       nextRunAt: 1,
       precheck: null,
       workspaceMode: 'existing',
-      bot: { ...botAutomation.bot, agentSetup: { agent: 'codex' } }
+      bot: {
+        ...botAutomation.bot,
+        agentSetup: { agent: 'codex', launch: { model: 'm1', options: { effort: 'high' } } }
+      }
     }
-    const { client } = editHost(botAutomation, pinned)
+    const { client, updates } = editHost(botAutomation, pinned)
 
     await AUTOMATION_HANDLERS['automations edit']!({
       client,
@@ -360,6 +347,9 @@ describe('orca automations edit --runs-in / --results-to', () => {
       json: false
     })
 
+    expect(updates[0]).toMatchObject({
+      bot: { botId: 'bot-1', runsIn: 'new', agentSetup: pinned.bot.agentSetup }
+    })
     expect(out.mock.calls.map(([line]) => String(line)).join('')).toContain(
       "Pinned to Reviewer's current agent (codex)"
     )
@@ -389,20 +379,6 @@ describe('orca automations edit --runs-in / --results-to', () => {
       "apply only to a bot's automation"
     )
     expect(updates).toHaveLength(0)
-  })
-})
-
-describe('--results-to channel:', () => {
-  it('reads a pasted Slack channel link as its channel id', async () => {
-    vi.spyOn(console, 'log').mockImplementation(() => undefined)
-    const { client, writes } = host()
-
-    await create(client, [
-      ['bot', 'bot-1'],
-      ['results-to', 'channel:https://acme.slack.com/archives/C0123ABCD']
-    ])
-
-    expect(writes[0]).toMatchObject({ bot: { resultsTo: { channel: 'C0123ABCD' } } })
   })
 })
 

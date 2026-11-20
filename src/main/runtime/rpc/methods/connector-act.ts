@@ -1,4 +1,5 @@
 import type { ConnectorCloudFeature } from '../../../../shared/connectors/connector-cloud-contract'
+import { CONNECTOR_CLOUD_POST_SCHEDULE_FEATURE } from '../../../../shared/connector-cloud-features'
 import type { ConnectorActErrorCode } from '../../../../shared/connector-action-contract'
 import { ConnectorAct } from '../../../../shared/rpc-contract/connectors/connector-params'
 import { botOfSession } from '../../../bots/bot-session-tabs'
@@ -111,7 +112,7 @@ export const CONNECTOR_ACT_METHOD = defineMethod({
     if (!cloud || !features) {
       throw new ConnectorActError(
         'connector_not_connected',
-        "Orca isn't connected to Orca Cloud: sign in to Orca and connect a bot to Slack, Linear or GitHub, then try again."
+        "Orca isn't connected to Orca Cloud: sign in to Orca on this computer and connect a bot to Slack, Linear or GitHub, then try again. On a server with no Orca window, `orca auth login` there signs it in."
       )
     }
     if (!features.has('actions' satisfies ConnectorCloudFeature)) {
@@ -142,6 +143,12 @@ export const CONNECTOR_ACT_METHOD = defineMethod({
       throw new ConnectorActError(
         'cloud_lacks_search',
         "Orca Cloud can't search yet. Find a channel by its name or link with `orca slack find`."
+      )
+    }
+    if (args.postAt && !features.has(CONNECTOR_CLOUD_POST_SCHEDULE_FEATURE)) {
+      throw new ConnectorActError(
+        'cloud_lacks_schedule',
+        "Orca Cloud can't post later yet; nothing was scheduled. Post it now, or try again after Orca Cloud updates."
       )
     }
     if (
@@ -176,6 +183,14 @@ export const CONNECTOR_ACT_METHOD = defineMethod({
             sessionCallerOf(context.orchestrationCaller)?.sessionId
           )
         : undefined
+    // Asked again here, after the awaits above: a post for later must never go to a cloud that
+    // has stopped saying it schedules.
+    if (args.postAt && !cloud.cloudFeatures()?.has(CONNECTOR_CLOUD_POST_SCHEDULE_FEATURE)) {
+      throw new ConnectorActError(
+        'cloud_lacks_schedule',
+        "Orca Cloud can't post later yet; nothing was scheduled. Post it now, or try again after Orca Cloud updates."
+      )
+    }
     const answer = await postConnectorAction(
       cloud,
       {

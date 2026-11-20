@@ -7,6 +7,7 @@ import { isWslMoveWindowWriteHeld } from '../persistence/moving-wsl-projects/qui
 import { visibleSessionHostIds } from '../persistence/migrating-orcad-catalog/retained-source/orcad-retained-source-session'
 import { markAgentLaunchesClosedByUser } from '../agent-launch/agent-launch-pane-attachment'
 import { windowViewPatchForMain, windowViewSaveForMain } from '../persistence/window-save-view'
+import { windowWrittenWorkspaces } from '../persistence/window-session-written-workspaces'
 import { reportWindowSaveDrift } from '../persistence/window-save-divergence'
 import { windowSaveKeepingMainSleepRecords } from '../persistence/window-save-sleep-records'
 import { isNoopWindowSessionPatch } from '../persistence/window-session-patch-noop'
@@ -47,12 +48,22 @@ export function registerSessionHandlers(store: Store, runtime: OrcaRuntimeServic
       runtime.shutdownReconnectFactsFor(session, partition)
     )
   }
-  const patchForMain = (args: WorkspaceSessionPatch, hostId: string | null | undefined) => {
+  /** `entries`: the window's changed keys, when it sent only those. */
+  const patchForMain = (
+    args: WorkspaceSessionPatch,
+    hostId: string | null | undefined,
+    entries?: WorkspaceSessionEntriesPatch
+  ) => {
     const stored = store.getWorkspaceSession(hostId)
     reportWindowSaveDrift(stored, { ...stored, ...args }, hostId, 'session:patch')
-    return windowViewPatchForMain(stored, args, hostId, (session, partition) =>
+    const { patch, touched } = windowViewPatchForMain(stored, args, hostId, (session, partition) =>
       runtime.shutdownReconnectFactsFor(session, partition)
     )
+    // Main merges layout fields itself, so the keys it wrote bound what the save changes.
+    return {
+      save: patch,
+      written: touched ? windowWrittenWorkspaces(stored, patch, touched, entries) : undefined
+    }
   }
 
   ipcMain.handle('session:set', (_event, args: WorkspaceSessionState, hostId?: string | null) => {
@@ -68,21 +79,22 @@ export function registerSessionHandlers(store: Store, runtime: OrcaRuntimeServic
 
   const patchWindowSession = (
     toPatch: (stored: WorkspaceSessionState) => WorkspaceSessionPatch,
-    hostId: string | null | undefined
+    hostId: string | null | undefined,
+    entries?: WorkspaceSessionEntriesPatch
   ): WorkspaceSessionEntriesPatchResult['status'] => {
     if (isFenced(hostId)) {
       return 'skipped'
     }
     const stored = store.getWorkspaceSession(hostId)
     const args = toPatch(stored)
-    const save = ORCA_LAYOUT_OWNER_IS_MAIN
-      ? patchForMain(args, hostId)
-      : windowSaveKeepingMainSleepRecords(stored, args, 'patch')
+    const { save, written } = ORCA_LAYOUT_OWNER_IS_MAIN
+      ? patchForMain(args, hostId, entries)
+      : { save: windowSaveKeepingMainSleepRecords(stored, args, 'patch'), written: undefined }
     if (!ORCA_LAYOUT_OWNER_IS_MAIN && isNoopWindowSessionPatch(stored, save)) {
       noteWindowSessionSaveUnchanged(hostId)
       return 'unchanged'
     }
-    store.patchWorkspaceSession(save, hostId)
+    store.patchWorkspaceSession(save, hostId, written)
     return 'applied'
   }
 
@@ -100,7 +112,8 @@ export function registerSessionHandlers(store: Store, runtime: OrcaRuntimeServic
     ): WorkspaceSessionEntriesPatchResult => {
       const status = patchWindowSession(
         (stored) => applyWorkspaceSessionEntriesPatch(stored, args),
-        hostId
+        hostId,
+        args
       )
       if (status === 'skipped') {
         return { status }
