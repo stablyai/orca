@@ -92,6 +92,15 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
       this.parkRedelivery(mailboxHandle, options.reservedTypes)
       return
     }
+    const announced = this.state.announcedMessageIds(mailboxHandle, ptyId)
+    if (announced) {
+      // The agent has not checked since the last pointer, and that check returns newer mail too.
+      if (db.areUnreadMessages(mailboxHandle, [...announced])) {
+        this.parkRedelivery(mailboxHandle, options.reservedTypes)
+        return
+      }
+      this.state.forgetAnnouncement(mailboxHandle)
+    }
 
     const waiters = this.deps.getMessageWaiters(mailboxHandle)
     if (hasUnfilteredOrchestrationWaiter(waiters)) {
@@ -183,6 +192,7 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
   }
 
   observeAgentWorking(ptyId: string): void {
+    this.state.observeAnnouncedWorking(ptyId)
     try {
       // Staged pointer text is already queued in the composer; working is queue-safe.
       if (this.state.hasFlight(ptyId)) {
@@ -199,6 +209,7 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
   }
 
   observeAgentIdle(ptyId: string): void {
+    this.state.observeAnnouncedIdle(ptyId)
     if (this.coldParkedPtys.has(ptyId)) {
       this.state.deferFlightUntilIdle(ptyId)
     }
