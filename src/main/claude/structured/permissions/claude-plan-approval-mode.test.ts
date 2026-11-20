@@ -5,6 +5,7 @@ import {
 } from './claude-plan-approval-mode'
 import {
   claimClaudePermissionModeRequest,
+  observeClaudeRootInit,
   setClaudeAllowedPermissionMode
 } from './claude-permission-mode-ladder'
 import { claudeOwesFullAccessFallback } from './claude-full-access-refusal'
@@ -286,6 +287,41 @@ describe('leaving Plan mode after an approved plan', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('leaves the mode unknown when the Approve for me switch never reached Claude', async () => {
+    const setPermissionMode = vi.fn((mode: string) =>
+      mode === 'auto'
+        ? Promise.reject(
+            new Error('write EPIPE', { cause: { errorClass: 'transport', message: 'EPIPE' } })
+          )
+        : Promise.resolve()
+    )
+    const session = {
+      launchIntent: { permissionMode: 'bypassPermissions' },
+      firstRootInit: { permissionMode: 'default' },
+      bypassDisabled: true,
+      appliedInputOptions: new Map<string, string>(),
+      connection: { setPermissionMode }
+    }
+    await expect(send(session)).rejects.toThrow('write EPIPE')
+    expect(session.appliedInputOptions.has('buildPermissionMode')).toBe(false)
+  })
+
+  it('switches to the fallback during the turn whose start shows Claude left Full access', async () => {
+    const setPermissionMode = claude([])
+    const session = {
+      launchIntent: { permissionMode: 'bypassPermissions' },
+      bypassDisabled: false,
+      appliedInputOptions: new Map<string, string>(),
+      reportedOptions: {},
+      connection: { setPermissionMode }
+    }
+    observeClaudeRootInit(session, { permissionMode: 'default' })
+    await vi.waitFor(() =>
+      expect(session.appliedInputOptions.get('buildPermissionMode')).toBe('auto')
+    )
+    expect(setPermissionMode.mock.calls.map(([mode]) => mode)).toEqual(['default', 'auto'])
   })
 
   it('leaves Plan when Claude accepted Ask before the Approve for me switch went unanswered', async () => {

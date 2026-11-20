@@ -83,7 +83,11 @@ const FULL_ACCESS = { permissionMode: 'bypassPermissions' }
 
 describe('a Full access chat whose Claude refuses bypass', () => {
   it('gets one warning per chat once its fallback is applied, across turns and restarts', () => {
-    const opened = { launchIntent: FULL_ACCESS, firstRootInit: { permissionMode: 'default' } }
+    const opened = {
+      launchIntent: FULL_ACCESS,
+      firstRootInit: { permissionMode: 'default' },
+      bypassDisabled: true
+    }
     const first = launch('refused-chat', opened)
     first.init('default')
     expect(first.warnings()).toHaveLength(0)
@@ -106,7 +110,8 @@ describe('a Full access chat whose Claude refuses bypass', () => {
   it('warns again each time Claude moves the chat to another mode', () => {
     const moved = launch('moved-chat', {
       launchIntent: FULL_ACCESS,
-      firstRootInit: { permissionMode: 'default' }
+      firstRootInit: { permissionMode: 'default' },
+      bypassDisabled: true
     })
     const toAuto = () => {
       Object.assign(moved.session, { autoUnsettled: undefined })
@@ -139,6 +144,21 @@ describe('a Full access chat whose Claude refuses bypass', () => {
       }),
       expect.objectContaining({
         text: "Claude's settings turn off Full access (permissions.disableBypassPermissionsMode) and Approve for me isn't available right now, so Claude uses Ask for approval instead."
+      })
+    ])
+  })
+
+  it('does not blame the settings when only the start showed Claude left Full access', () => {
+    const blocked = launch('blocked-chat', {
+      launchIntent: FULL_ACCESS,
+      firstRootInit: { permissionMode: 'default' },
+      bypassDisabled: false
+    })
+    blocked.session.appliedInputOptions.set('buildPermissionMode', 'auto')
+    blocked.status()
+    expect(blocked.warnings()).toEqual([
+      expect.objectContaining({
+        text: "Claude didn't start this chat in Full access, so Claude uses Approve for me instead."
       })
     ])
   })
@@ -177,6 +197,7 @@ describe('a Full access chat whose Claude refuses bypass', () => {
     const unsettled = launch('unsettled-chat', {
       launchIntent: FULL_ACCESS,
       firstRootInit: { permissionMode: 'default' },
+      bypassDisabled: true,
       autoUnsettled: { kind: 'time', retryAt: 0 }
     })
     unsettled.session.appliedInputOptions.set('buildPermissionMode', 'default')

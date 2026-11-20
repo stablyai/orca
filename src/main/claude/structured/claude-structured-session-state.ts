@@ -35,6 +35,9 @@ import type { ClaudePromptSuggestionPause } from './claude-prompt-suggestion-pau
 
 export type ClaudeBypassRefusal = 'settings' | 'restricted' | 'not-launched'
 
+/** Why a Full access chat runs another mode, for its warning. */
+export type ClaudeFullAccessRefusalReason = ClaudeBypassRefusal | 'started-outside'
+
 /** `retryAt` for refusals that pass with time; `model` / `fastMode` hold the choice Claude refused under. */
 export type ClaudeAutoUnsettled =
   | { kind: 'time'; retryAt: number }

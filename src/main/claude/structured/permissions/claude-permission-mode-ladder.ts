@@ -15,14 +15,26 @@ import {
   claudeAllowedPermissionMode,
   claudeAutoRetryDue,
   claudeBypassRefused,
+  claudeOwesFullAccessFallback,
   type ClaudeBypassFacts
 } from './claude-full-access-refusal'
 
-function errorCode(error: Error): unknown {
-  const cause: unknown = error.cause
-  return typeof cause === 'object' && cause !== null && 'errorCode' in cause
-    ? cause.errorCode
-    : undefined
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function causeField(error: unknown, field: string): unknown {
+  const cause: unknown = error instanceof Error ? error.cause : undefined
+  return isRecord(cause) ? cause[field] : undefined
+}
+
+/** A timeout, a closed query or a transport failure: the request may never have reached Claude. */
+function claudeLeftUnanswered(error: unknown): boolean {
+  return (
+    error instanceof ClaudeControlRequestTimeoutError ||
+    isClaudeQueryClosed(error) ||
+    typeof causeField(error, 'errorClass') === 'string'
+  )
 }
 
 // Claude's answers to `set_permission_mode bypassPermissions` it can't apply.
@@ -46,7 +58,7 @@ function claudeRefusal(error: unknown): ClaudeRefusal | null {
   if (!(error instanceof Error)) {
     return null
   }
-  const code = errorCode(error)
+  const code = causeField(error, 'errorCode')
   for (const [reason, refusalCode, message] of CLAUDE_BYPASS_REFUSALS) {
     if (code === refusalCode || message.test(error.message)) {
       return { kind: 'bypass', reason }
@@ -168,12 +180,11 @@ export async function setClaudeAllowedPermissionMode(
     const fallbackAuto = step === 'auto' && mode === 'bypassPermissions'
     // An answer Orca doesn't know refuses the fallback's auto for now; no answer leaves the mode
     // unknown, so the caller records no fallback and auto is asked again shortly.
-    const answered =
-      !(write.reason instanceof ClaudeControlRequestTimeoutError) &&
-      !isClaudeQueryClosed(write.reason)
-    const refusal: ClaudeRefusal | null =
-      claudeRefusal(write.reason) ??
-      (fallbackAuto && answered ? { kind: 'auto-for-now', code: undefined } : null)
+    const unanswered = claudeLeftUnanswered(write.reason)
+    const refusal: ClaudeRefusal | null = unanswered
+      ? null
+      : (claudeRefusal(write.reason) ??
+        (fallbackAuto ? { kind: 'auto-for-now', code: undefined } : null))
     if (refusal === null || (refusal.kind === 'bypass') !== (step === 'bypassPermissions')) {
       unexpected = { error: write.reason, index }
       if (fallbackAuto) {
@@ -223,4 +234,31 @@ export async function setClaudeAllowedPermissionMode(
   }
   // Only a refusal of a mode allowed earlier gets here; each one is a new fact.
   return setClaudeAllowedPermissionMode(session, mode, options, refused)
+}
+
+/** Records Claude's first root init on the live session. A turn that shows a Full access chat
+ *  running outside Full access with no fallback settled switches to it now, so its tools run in
+ *  the fallback rather than in Ask. */
+export function observeClaudeRootInit(
+  session:
+    | (Parameters<typeof setClaudeAllowedPermissionMode>[0] &
+        Parameters<typeof claudeOwesFullAccessFallback>[0])
+    | undefined,
+  firstRootInit: ClaudeSession['firstRootInit']
+): void {
+  if (!session) {
+    return
+  }
+  session.firstRootInit = firstRootInit
+  if (!claudeBypassRefused(session) || !claudeOwesFullAccessFallback(session)) {
+    return
+  }
+  setClaudeAllowedPermissionMode(session, 'bypassPermissions').then(
+    (mode) => {
+      session.appliedInputOptions.set('buildPermissionMode', mode)
+    },
+    () => {
+      session.appliedInputOptions.delete('buildPermissionMode')
+    }
+  )
 }

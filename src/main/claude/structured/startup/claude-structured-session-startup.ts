@@ -236,11 +236,12 @@ export async function openClaudeSession(input: {
   return result
 }
 
+// What Claude answered to a mode switch outranks a read that may predate it, either way.
 function settledClaudeRefusalFact(
   known: boolean | undefined,
   read: boolean | undefined
 ): boolean | undefined {
-  return known === true || read === true ? true : (known ?? read)
+  return known ?? read
 }
 
 async function settleClaudeStartupSettings(

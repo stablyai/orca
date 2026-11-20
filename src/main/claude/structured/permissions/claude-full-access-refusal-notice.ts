@@ -8,7 +8,11 @@ import { agentChatPermissionModeCopy } from '../../../../shared/agent-session/op
 import { readClaudeReportedPermissionMode } from '../startup/claude-structured-init-proof'
 import type { ClaudeSession } from '../claude-structured-session-state'
 import type { ClaudeJournalTranslatorDeps } from '../journal/claude-journal-translator-contract'
-import { claudeBypassRefused, type ClaudeBypassFacts } from './claude-full-access-refusal'
+import {
+  claudeBypassRefused,
+  claudeFullAccessRefusalReason,
+  type ClaudeBypassFacts
+} from './claude-full-access-refusal'
 
 type ClaudeNoticeFacts = ClaudeBypassFacts &
   Partial<Pick<ClaudeSession, 'appliedInputOptions' | 'reportedOptions'>>
@@ -36,7 +40,7 @@ function claudeFallbackChoice(applied: string): string {
  *  attempt, Plan exit included, so it names a mode Claude accepted. */
 function claudeFullAccessRefusalNoticeId(session: ClaudeNoticeFacts): string | null {
   const applied = session.appliedInputOptions?.get('buildPermissionMode')
-  if (!claudeBypassRefused(session) || applied === undefined) {
+  if (!claudeBypassRefused(session) || applied === undefined || applied === 'bypassPermissions') {
     return null
   }
   const choice = claudeFallbackChoice(applied)
@@ -48,14 +52,14 @@ function claudeFullAccessRefusalNoticeId(session: ClaudeNoticeFacts): string | n
         : session.autoUnsettled !== undefined
           ? ':auto-for-now'
           : ''
-  return `${session.bypassRefusal ?? 'settings'}:${choice}${auto}`
+  return `${claudeFullAccessRefusalReason(session)}:${choice}${auto}`
 }
 
 function claudeFullAccessRefusalText(session: ClaudeNoticeFacts, choice: string): string {
   const running = isAgentChatPermissionMode(choice)
     ? agentChatPermissionModeCopy('claude', choice).label
     : 'its own permission settings'
-  const reason = session.bypassRefusal ?? 'settings'
+  const reason = claudeFullAccessRefusalReason(session)
   const autoOff = choice === 'ask' && session.autoDisabled === true
   const autoForNow = choice === 'ask' && !autoOff && session.autoUnsettled !== undefined
   if (reason === 'settings' && autoOff) {
@@ -66,7 +70,9 @@ function claudeFullAccessRefusalText(session: ClaudeNoticeFacts, choice: string)
       ? 'Claude does not allow Full access in restricted mode'
       : reason === 'not-launched'
         ? 'This Claude session was not started with Full access'
-        : "Claude's settings turn off Full access (permissions.disableBypassPermissionsMode)"
+        : reason === 'started-outside'
+          ? "Claude didn't start this chat in Full access"
+          : "Claude's settings turn off Full access (permissions.disableBypassPermissionsMode)"
   const auto = autoOff
     ? ", and Claude's settings turn off Approve for me (disableAutoMode)"
     : autoForNow

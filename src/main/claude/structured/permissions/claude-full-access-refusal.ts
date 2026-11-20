@@ -2,7 +2,10 @@
 // (`permissions.disableBypassPermissionsMode`), and refuses any later switch to bypass.
 
 import type { PermissionMode } from '@anthropic-ai/claude-agent-sdk'
-import type { ClaudeSession } from '../claude-structured-session-state'
+import type {
+  ClaudeFullAccessRefusalReason,
+  ClaudeSession
+} from '../claude-structured-session-state'
 
 export type ClaudeBypassFacts = Partial<
   Pick<
@@ -44,8 +47,8 @@ export function readClaudeSettingsAutoDisabled(settings: unknown): boolean | und
     : undefined
 }
 
-/** A first init outside Full access shows a refusal a settings read cannot overrule (restricted
- *  mode, for one); only a bypass Claude accepted later can. A Plan start proves nothing. */
+/** A first init outside Full access shows a refusal a settings read cannot overrule (a host can
+ *  block bypass whatever the settings say). A Plan start proves nothing. */
 export function claudeBypassRefused(session: ClaudeBypassFacts): boolean {
   if (session.launchIntent?.permissionMode !== 'bypassPermissions') {
     return false
@@ -60,6 +63,13 @@ export function claudeBypassRefused(session: ClaudeBypassFacts): boolean {
     opened !== 'bypassPermissions' &&
     opened !== 'plan'
   )
+}
+
+/** Claude's own refusal, else its settings read, else only that it started outside Full access. */
+export function claudeFullAccessRefusalReason(
+  session: ClaudeBypassFacts
+): ClaudeFullAccessRefusalReason {
+  return session.bypassRefusal ?? (session.bypassDisabled === true ? 'settings' : 'started-outside')
 }
 
 /** Nothing has said yet whether Claude allows this Full access launch's bypass. */
