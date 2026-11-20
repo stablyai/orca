@@ -129,7 +129,12 @@ export function EditorFileTabContextMenu({
       </ContextMenuItem>
       <CopyTabIdMenuItem
         menuKind="context"
-        reference={{ unifiedTabId, kind: 'editor', filePath: file.filePath }}
+        reference={{
+          unifiedTabId,
+          kind: 'editor',
+          // Virtual tabs (check details, git graph) hold a synthetic id, not a path an agent could open.
+          filePath: isVirtualEditorFile(file) ? null : file.filePath
+        }}
       />
       <ContextMenuSeparator />
       <ContextMenuItem onSelect={() => !isPinned && onClose()} disabled={isPinned}>
