@@ -60,7 +60,7 @@ export function useMobileNativeChatSendError(args: {
   }, [clearTimer, scopeKey])
   const show = useCallback(
     (next: string, details?: MobileNativeChatSendErrorDetails) => {
-      // A failed send buzzes (MobilePendingButton's rule), so it is felt even when the banner is covered.
+      // A refused or failed send buzzes (MobilePendingButton's rule), felt even when the banner is covered.
       triggerError()
       // Fall back to toast after leaving chat or changing tabs so late failures remain visible without misattribution.
       if (liveScopeRef.current !== scopeKey || !bannerMountedRef.current) {
