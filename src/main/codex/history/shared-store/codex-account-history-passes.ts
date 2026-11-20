@@ -179,7 +179,7 @@ export class CodexAccountHistoryPasses {
     }
     this.censusWaiting = true
     void Promise.all(accountHomes.map((home) => this.run(home, shared).catch(() => {})))
-      .then(() => this.moveReport.report(this.censusHomes))
+      .then(() => this.reportUnlessPending(null))
       .finally(() => {
         this.censusWaiting = false
       })
@@ -210,15 +210,21 @@ export class CodexAccountHistoryPasses {
     const moveOutcome = shared ? MOVE_OUTCOMES[outcome] : undefined
     if (moveOutcome) {
       this.moveReport.record(key, moveOutcome)
-      // A retry, or a home a later launch added, can complete the listing. A launch's own pass and
-      // one with others still queued don't: the rest still hold a previous launch's outcomes.
-      const othersPending = this.censusHomes.some((home) => home !== key && this.requests.has(home))
-      if (!forLaunch && !othersPending) {
-        void this.moveReport.report(this.censusHomes)
+      // A retry, or a home a later launch added, can complete the listing; a launch's own pass
+      // leaves it to the census that follows.
+      if (!forLaunch) {
+        void this.reportUnlessPending(key)
       }
     } else {
       this.moveReport.forget(key)
     }
+  }
+
+  // While another listed home's pass is queued or running, the rest may hold a previous launch's
+  // outcomes; that pass reports when it finishes.
+  private reportUnlessPending(finishedKey: string | null): Promise<void> {
+    const pending = this.censusHomes.some((home) => home !== finishedKey && this.requests.has(home))
+    return pending ? Promise.resolve() : this.moveReport.report(this.censusHomes)
   }
 
   private async passOutcome(key: string, accountHome: string, shared: boolean): Promise<string> {

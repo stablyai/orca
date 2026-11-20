@@ -17,7 +17,13 @@ const CODEX_ROLLOUT_LAYOUT_PATH = new RegExp(`(?:^|/)sessions/${CLAIMED_CODEX_RO
 
 /** Unverified provenance starts fresh; claimed Codex layout controls the rejection notice. */
 export type CodexSessionResumePreparation =
-  | { outcome: 'resume'; codexHomePath: string; reconcileSharedRuntimeAuth?: boolean }
+  | {
+      outcome: 'resume'
+      codexHomePath: string
+      reconcileSharedRuntimeAuth?: boolean
+      /** The home the launch must still select; defaults to `codexHomePath`. */
+      reconcileAgainstHomePath?: string
+    }
   | { outcome: 'fresh'; claimedCodexProvenance: boolean }
 
 // Only fold extended drive paths; reject device namespaces and extended UNC paths.

@@ -74,16 +74,21 @@ export function createCodexSessionResumeLaunchPreparation(deps: {
     const savedTranscriptPath = args.providerSession.transcriptPath
     const sharedRuntimeCodexHomePath = getOrcaManagedCodexHomePath()
     // Old copies are never linked any more: an untouched one whose source grew resumes the source.
-    const newerSource = savedTranscriptPath
-      ? await getNewerLegacyCopiedCodexSessionSource(
-          savedTranscriptPath,
-          sharedRuntimeCodexHomePath
-        )
-      : null
-    const transcriptPath =
-      newerSource && codexDatedRolloutRelativePath(join(systemHomePath, 'sessions'), newerSource)
-        ? newerSource
-        : savedTranscriptPath
+    // An account restart moves the resumed rollout, so it keeps the copy.
+    const newerSource =
+      savedTranscriptPath && !args.useSelectedAccount
+        ? await getNewerLegacyCopiedCodexSessionSource(
+            savedTranscriptPath,
+            sharedRuntimeCodexHomePath
+          )
+        : null
+    const redirected =
+      newerSource !== null &&
+      codexDatedRolloutRelativePath(join(systemHomePath, 'sessions'), newerSource) !== null
+    const transcriptPath = redirected ? newerSource : savedTranscriptPath
+    // Off the real-home route the copy resumed under the shared runtime home's account check; the
+    // source keeps it.
+    const keepSharedRuntimeCheck = redirected && !runtimeHome.isHostSystemDefaultRealHomeSelected()
     const preparation = await prepareCodexSessionResume({
       sessionId: args.providerSession.id,
       transcriptPath,
@@ -132,14 +137,21 @@ export function createCodexSessionResumeLaunchPreparation(deps: {
         return resumeHome
       }
     })
-    return preparation.outcome === 'resume'
+    if (preparation.outcome !== 'resume') {
+      return preparation
+    }
+    return keepSharedRuntimeCheck
       ? {
+          ...preparation,
+          reconcileSharedRuntimeAuth: true,
+          reconcileAgainstHomePath: sharedRuntimeCodexHomePath
+        }
+      : {
           ...preparation,
           reconcileSharedRuntimeAuth:
             normalizeRuntimePathForComparison(preparation.codexHomePath) ===
-            normalizeRuntimePathForComparison(getOrcaManagedCodexHomePath())
+            normalizeRuntimePathForComparison(sharedRuntimeCodexHomePath)
         }
-      : preparation
   }
 
   return { prepareCodexSessionResumeForLaunch, prepareCodexPinnedLaunchHome }

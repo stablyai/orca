@@ -19,6 +19,7 @@ import {
 } from '../rollouts/codex-session-file-listing'
 import { linkCodexSessionFile, tryHardlinkCodexSessionFile } from '../rollouts/codex-session-link'
 import type { CodexSessionBridgeIncrementalOptions } from '../rollouts/codex-session-file-listing'
+import { codexDatedRolloutRelativePath } from '../resume/codex-session-resume-home'
 
 type LegacyCopiedSessionMarker = {
   sourcePath: string
@@ -224,13 +225,17 @@ export function getLegacyCopiedCodexSessionBridgeScanPreference(
   }
 }
 
-/** The source of an untouched old copy whose source changed since: resume reads it, not the copy. */
+/** The source of an untouched old copy whose source grew since: resume reads it, not the copy. */
 export async function getNewerLegacyCopiedCodexSessionSource(
   sessionFilePath: string,
   managedHomePath: string
 ): Promise<string | null> {
-  const relativePath = relative(join(managedHomePath, 'sessions'), sessionFilePath)
-  if (relativePath === '' || relativePath.startsWith('..') || isAbsolute(relativePath)) {
+  // Also reads Codex's `\\?\C:\...` spelling of a Windows path.
+  const relativePath = codexDatedRolloutRelativePath(
+    join(managedHomePath, 'sessions'),
+    sessionFilePath
+  )
+  if (!relativePath) {
     return null
   }
   try {
@@ -241,8 +246,8 @@ export async function getNewerLegacyCopiedCodexSessionSource(
       return null
     }
     const [target, source] = await Promise.all([lstat(sessionFilePath), lstat(marker.sourcePath)])
-    return fileStatsMatchMarker(target, marker, 'target') &&
-      !fileStatsMatchMarker(source, marker, 'source')
+    // A shorter or rewritten source may lack lines the copy holds.
+    return fileStatsMatchMarker(target, marker, 'target') && source.size > marker.sourceSize
       ? marker.sourcePath
       : null
   } catch {
