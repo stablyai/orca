@@ -31,10 +31,13 @@ export function useNativeChatQuietTurnLeave({
     if (key !== undefined && quietTurnKeys.has(key)) {
       watched.current = undefined
       if (!reduceMotion) {
-        setLeaving((turns) => new Set([...turns, key]))
+        setLeaving((turns) => (turns.has(key) ? turns : new Set([...turns, key])))
       }
     }
-    if (working && liveTurnKey !== undefined) {
+    // Why: never watch a turn that is already quiet. The chat can still read working over a turn
+    // that just settled quiet; re-arming on it would mark it leaving again on every rebuild, and
+    // in a layout effect that loops (React #185).
+    if (working && liveTurnKey !== undefined && !quietTurnKeys.has(liveTurnKey)) {
       watched.current = liveTurnKey
     }
   }, [liveTurnKey, quietTurnKeys, reduceMotion, setLeaving, working])
