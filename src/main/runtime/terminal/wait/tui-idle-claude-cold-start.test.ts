@@ -184,10 +184,10 @@ describe('tui-idle on a slow-starting Claude', () => {
     await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS * 4)
     expect(settled).not.toHaveBeenCalled()
 
-    pane.foregroundProcess = 'less'
+    pane.foregroundProcess = '"C:\\Windows\\System32\\MORE.COM"'
     // A failed read is retried after 10 s rather than every sweep.
     await vi.advanceTimersByTimeAsync(10_000 + POLL_INTERVAL_MS * 2)
-    await expect(wait).resolves.toMatchObject({ satisfied: true })
+    expect(settled).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ satisfied: true }))
   })
 })
 

@@ -10,7 +10,7 @@ import {
 } from '../../../../../../shared/native-chat/transcript/notices/native-chat-pull-request-event'
 import { NATIVE_CHAT_CI_RESULT_LINES_SETTING_SECTION_ID } from '../../../settings/chat/native-chat-ci-result-lines-setting-target'
 import { NativeChatCardHideButton } from '../disclosure/NativeChatCardHideButton'
-import { NativeChatEventIcon, NativeChatEventRow } from '../events/NativeChatEventRow'
+import { NativeChatEventRow } from '../events/NativeChatEventRow'
 import { useNativeChatLinkClick } from '../../links/actions/native-chat-link-click-context'
 
 function LineLink({
@@ -52,11 +52,8 @@ export function NativeChatPullRequestEventLine({
   const failing = block.tone === 'failure'
   return (
     <NativeChatEventRow
-      icon={
-        <NativeChatEventIcon badge={failing ? 'failed' : null}>
-          <GitPullRequest aria-hidden className="size-3.5" />
-        </NativeChatEventIcon>
-      }
+      icon={<GitPullRequest aria-hidden className="size-3.5" />}
+      badge={failing ? 'failed' : null}
       timestamp={timestamp}
       action={
         <NativeChatCardHideButton

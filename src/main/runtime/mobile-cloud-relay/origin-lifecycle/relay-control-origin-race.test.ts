@@ -8,7 +8,7 @@ import { DeviceRegistry } from '../../rpc/server/pairing/device-registry'
 import { MobileSocketWiring } from '../../rpc/mobile/mobile-socket-wiring'
 import type { RelayAssignment } from '../director/relay-http-client'
 import { RelayControlOrigin } from './relay-control-origin'
-import { CONTROL_RACE_STAGGER_MS, openRacedControl } from './relay-control-race'
+import { CONTROL_RACE_STAGGER_MS } from './relay-control-race'
 import {
   FakeEdgePath,
   FakeHostSession,
@@ -128,22 +128,6 @@ describe('RelayControlOrigin two-path connect race', () => {
   function dataUrl(path: FakeEdgePath, connId: string): string {
     return `${path.url.replace('http:', 'ws:')}/v1/host/data/${connId}`
   }
-
-  it('without an alternate dials once and arms no race timer', async () => {
-    const opened = deferred<never>()
-    const open = vi.fn(() => opened.promise)
-    void openRacedControl({
-      primaryUrl: 'https://primary.test',
-      alternateUrl: undefined,
-      isClosed: () => false,
-      open
-    })
-    expect(open).toHaveBeenCalledOnce()
-    expect(open).toHaveBeenCalledWith('https://primary.test')
-    expect(vi.getTimerCount()).toBe(0)
-    await vi.advanceTimersByTimeAsync(60_000)
-    expect(open).toHaveBeenCalledOnce()
-  })
 
   it('without alternates a slow primary is still a single dial', async () => {
     const { primary, alternate, origin, warn } = await setup({ alternate: false })

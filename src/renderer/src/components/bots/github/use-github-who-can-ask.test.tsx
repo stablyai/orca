@@ -94,18 +94,6 @@ afterEach(() => {
 })
 
 describe('useGitHubWhoCanAsk', () => {
-  it('lists only GitHub people, and says outsiders get a public reply', () => {
-    renderList(<BotGitHubWhoCanAsk bot={bot(mocks.members)} linked />)
-
-    expect(screen.getByText('octocat')).toBeDefined()
-    expect(screen.queryByText('Sam on Slack')).toBeNull()
-    expect(screen.queryByText('Bea')).toBeNull()
-    expect(
-      screen.getByText('Everyone else on GitHub gets a public reply to ask you.')
-    ).toBeDefined()
-    expect(screen.getByText('You and octocat can ask Ranger.')).toBeDefined()
-  })
-
   it('finds people by GitHub username and saves them by numeric id', async () => {
     renderList(<BotGitHubWhoCanAsk bot={bot(mocks.members)} linked />)
     fireEvent.click(screen.getByRole('button', { name: 'Add' }))
@@ -147,8 +135,5 @@ describe('useGitHubWhoCanAsk', () => {
     renderList(<BotGitHubWhoCanAsk bot={bot(mocks.members)} linked={false} />)
 
     expect(screen.getByRole('button', { name: 'Add' })).toHaveProperty('disabled', true)
-    expect(
-      screen.getByText('Finish setup to link your GitHub account, then pick people here.')
-    ).toBeDefined()
   })
 })

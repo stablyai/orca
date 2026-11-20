@@ -119,13 +119,15 @@ describe('stageWorktreeChanges', () => {
   })
 
   describe('Orca shared symlinks', () => {
-    async function createSharedLinkWorktree(): Promise<{ repo: string; owner: string }> {
+    // The default directory-only rule does not match the worktree's symlink.
+    async function createSharedLinkWorktree(
+      ignoreRule = 'node_modules/'
+    ): Promise<{ repo: string; owner: string }> {
       const repo = await createRepo()
       const owner = await mkdtemp(path.join(tmpdir(), 'orca-stage-owner-'))
       tempRoots.push(owner)
       await mkdir(path.join(owner, 'node_modules'))
-      // Directory-only ignore rules do not match the worktree's symlink.
-      await writeFile(path.join(repo, '.gitignore'), 'node_modules/\n')
+      await writeFile(path.join(repo, '.gitignore'), `${ignoreRule}\n`)
       git(repo, ['add', '.'])
       git(repo, ['commit', '-q', '-m', 'initial'])
       await symlink(path.join(owner, 'node_modules'), path.join(repo, 'node_modules'))
@@ -141,6 +143,15 @@ describe('stageWorktreeChanges', () => {
       expect(receipt).toEqual({ stagedScope: 'all' })
       expect(names(repo, ['diff', '--cached', '--name-only'])).toEqual(['new.txt'])
       expect(names(repo, ['ls-files', '--others', '--exclude-standard'])).toEqual(['node_modules'])
+    })
+
+    it('stages around a shared link that a rule without a trailing slash ignores', async () => {
+      const { repo } = await createSharedLinkWorktree('node_modules')
+
+      const receipt = await stageWorktreeChanges(repo, 'all', { sharedLinkPaths: ['node_modules'] })
+
+      expect(receipt).toEqual({ stagedScope: 'all' })
+      expect(names(repo, ['diff', '--cached', '--name-only'])).toEqual(['new.txt'])
     })
 
     // Shared Paths preserves typed spellings; Git reports canonical relative names.

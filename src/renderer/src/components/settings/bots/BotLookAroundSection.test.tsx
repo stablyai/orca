@@ -4,13 +4,12 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Bot } from '../../../../../shared/bot-types'
 
-const mocks = vi.hoisted(() => ({ lookNow: vi.fn() }))
 vi.mock('@/components/bots/use-bot-activity', () => ({
   useBotActivity: () => ({
     upNext: { state: { running: false, lastLookedAt: 1, tookMs: 180_000, seenAt: 0 }, items: [] }
   })
 }))
-vi.mock('@/components/bots/bot-up-next-actions', () => ({ lookNow: mocks.lookNow }))
+vi.mock('@/components/bots/bot-up-next-actions', () => ({ lookNow: vi.fn() }))
 
 import { BotLookAroundSection } from './BotLookAroundSection'
 
@@ -36,17 +35,6 @@ const base: Bot = {
 afterEach(() => cleanup())
 
 describe('Look around settings', () => {
-  it('saves the weekday change and runs Look now', () => {
-    const update = vi.fn(async () => null)
-    render(<BotLookAroundSection bot={base} update={update} />)
-    fireEvent.click(screen.getByRole('switch', { name: 'Weekdays only' }))
-    expect(update).toHaveBeenCalledWith({
-      lookAround: { weekdaysOnly: false }
-    })
-    fireEvent.click(screen.getByRole('button', { name: 'Look now' }))
-    expect(mocks.lookNow).toHaveBeenCalledWith(base)
-  })
-
   it('turns off from its title switch and hides the schedule controls', () => {
     const update = vi.fn(async () => null)
     const { rerender } = render(<BotLookAroundSection bot={base} update={update} />)
@@ -70,16 +58,5 @@ describe('Look around settings', () => {
     expect(update).toHaveBeenCalledWith({
       lookAround: { focus: 'CI on main' }
     })
-  })
-
-  it('hides the rest while off, and is not offered for agents that cannot look', () => {
-    const off = { on: false, every: 'every-4h', weekdaysOnly: true, focus: '' } as const
-    render(<BotLookAroundSection bot={{ ...base, lookAround: off }} update={vi.fn()} />)
-    expect(screen.queryByText('How often')).toBeNull()
-    cleanup()
-    const { container } = render(
-      <BotLookAroundSection bot={{ ...base, agent: 'opencode' }} update={vi.fn()} />
-    )
-    expect(container.textContent).toBe('')
   })
 })

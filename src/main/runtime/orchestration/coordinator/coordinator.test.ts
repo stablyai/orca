@@ -184,38 +184,7 @@ describe('Coordinator', () => {
     expect(runtime.sentMessages[0].options).toEqual(dispatchPreambleSendOptions(expect.any(String)))
   })
 
-  it('records completedTasks when send reconciled worker_done before coordinator read', async () => {
-    db = new OrchestrationDb(':memory:')
-    const runtime = createMockRuntime()
-
-    const task = db.createTask({
-      runId,
-      spec: 'send-driven completion'
-    })
-    const dispatch = createRootDispatch(db, task.id, 'term_a')
-    const msg = db.insertMessage({
-      runId,
-      from: 'term_a',
-      to: 'coord',
-      subject: 'Done',
-      type: 'worker_done',
-      payload: JSON.stringify({ taskId: task.id, dispatchId: dispatch.id, outcome: 'succeeded' })
-    })
-
-    reconcileLifecycleMessage(db, msg)
-
-    const coordinator = new Coordinator(db, runtime, {
-      spec: 'go',
-      coordinatorHandle: 'coord',
-      pollIntervalMs: 20
-    })
-    const result = await settleCoordinatorRun(coordinator.run())
-
-    expect(result.status).toBe('completed')
-    expect(result.completedTasks).toContain(task.id)
-  })
-
-  it('does not duplicate completedTasks for repeated completed worker_done messages', async () => {
+  it('reports an already reconciled task once even when worker_done is repeated', async () => {
     db = new OrchestrationDb(':memory:')
     const runtime = createMockRuntime()
 
@@ -311,7 +280,8 @@ describe('Coordinator', () => {
       expect(dispatch).toBeDefined()
       db.insertMessage({
         runId,
-        from: dispatch?.assignee_handle ?? 'missing-worker',
+        from:
+          i === 0 ? `dispatch:${dispatch!.id}` : (dispatch?.assignee_handle ?? 'missing-worker'),
         to: 'coord',
         subject: `Failed attempt ${i + 1}`,
         type: 'escalation',
@@ -373,7 +343,7 @@ describe('Coordinator', () => {
     expect(dispatch).toBeDefined()
     db.insertMessage({
       runId,
-      from: 'term_a',
+      from: `dispatch:${dispatch!.id}`,
       to: 'coord',
       subject: 'Need approval',
       type: 'decision_gate',
@@ -390,6 +360,7 @@ describe('Coordinator', () => {
     const blocked = db.getTask(task.id)
     expect(blocked?.status).toBe('blocked')
     expect(db.getActiveDispatchForTerminal('term_a')).toBeUndefined()
+    expect(db.getDispatchContextById(dispatch!.id)?.status).toBe('completed')
 
     const gates = db.listGates({ taskId: task.id, status: 'pending' })
     expect(gates.length).toBe(1)

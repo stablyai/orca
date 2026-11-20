@@ -31,7 +31,6 @@ import {
 import { botMembersFrom, type Bot } from '../../../../../shared/bot-types'
 import { botLookAround, lookAroundSupported } from '../../../../../shared/bots/bot-look-around'
 import { botTidyUp } from '../../../../../shared/bots/bot-tidy-up'
-import { botToolsSupported } from '../../../../../shared/bot-tools'
 import type { BotUpdateParams } from '../../../../../shared/rpc-contract/bots-params'
 import type { BotHome } from '../../settings/bots/bot-home-files'
 import { useBotMemoryTopicCount } from '../../settings/bots/use-bot-memory-topics'
@@ -63,6 +62,11 @@ import { SettingsControlsOffContext, SettingsInsetGroup, SettingsInsetRow } from
 import { BotItemsSettingsGroup } from './BotItemsSettingsGroup'
 
 type Update = (updates: BotUpdateParams['updates']) => Promise<Bot | null>
+
+function BotSettingsSwitch(props: React.ComponentProps<typeof Switch>): React.JSX.Element {
+  // Extend the pointer target into the row padding around the compact track.
+  return <Switch {...props} size="compact" className="after:absolute after:-inset-2" />
+}
 
 function useAccessLines(bot: Bot): { connectors: string; whoCanAsk: string } {
   const intlLocale = useIntlLocale()
@@ -118,7 +122,7 @@ function ScheduleGroup({
   return (
     <SettingsInsetGroup
       title={t('bots.settingsView.schedule', 'Schedule')}
-      foot={t('bots.settingsView.automationsFoot', 'Automations are in Items › Automations.')}
+      foot={t('bots.settingsView.automationsFoot', 'Automations are in Home › Automations.')}
     >
       <SettingsInsetRow
         icon={<Eye />}
@@ -127,7 +131,7 @@ function ScheduleGroup({
         page="look-around"
         onOpen={() => open('look-around')}
         end={
-          <Switch
+          <BotSettingsSwitch
             checked={lookAround.on}
             aria-label={lookAroundTitle}
             onCheckedChange={() => void update({ lookAround: { on: !lookAround.on } })}
@@ -141,7 +145,7 @@ function ScheduleGroup({
         page="tidy-up"
         onOpen={() => open('tidy-up')}
         end={
-          <Switch
+          <BotSettingsSwitch
             checked={tidyUp.on}
             aria-label={tidyUpTitle}
             onCheckedChange={() => void update({ tidyUp: { on: !tidyUp.on } })}
@@ -192,7 +196,7 @@ function AccessGroup({
   const t = useTranslate()
   const intlLocale = useIntlLocale()
   const lines = useAccessLines(bot)
-  const { view } = useBotTools(botToolsSupported(bot.agent) ? bot : null, 'finished')
+  const { view } = useBotTools(bot, 'finished')
   const repos = useAppStore((state) => state.repos)
   const skills = namesLine(
     (bot.skillProjects ?? []).flatMap(
@@ -251,7 +255,7 @@ function NotificationsGroup({ bot, update }: { bot: Bot; update: Update }): Reac
           detail={toggle.description}
           wrapDetail
           end={
-            <Switch
+            <BotSettingsSwitch
               checked={bot.notifications[toggle.key]}
               aria-label={toggle.label}
               onCheckedChange={() =>
@@ -296,14 +300,14 @@ export function BotSettingsRoot({
   return (
     <>
       {sharing ? <BotShareFlow bot={bot} onClose={() => setSharing(false)} /> : null}
-      <div className="flex flex-wrap items-center gap-3 rounded-[10px] bg-foreground/[0.035] p-3">
-        <div className="flex min-w-0 flex-1 basis-40 items-center gap-3">
+      <div className="flex flex-col gap-2 rounded-[10px] bg-foreground/[0.035] p-3">
+        <div className="flex min-w-0 items-center gap-2.5">
           <fieldset disabled={controlsOff} className="contents">
             <BotPictureButton
               bot={bot}
               picture={picture}
-              avatarClassName="size-10 rounded-[10px] text-lg"
-              className="rounded-[10px]"
+              avatarClassName="size-8 rounded-lg text-sm"
+              className="rounded-lg"
             />
           </fieldset>
           <div className="min-w-0 flex-1">
@@ -311,7 +315,7 @@ export function BotSettingsRoot({
               <BotNameInlineEdit
                 bot={bot}
                 update={update}
-                className="text-[15px] font-semibold leading-5"
+                className="text-sm font-semibold leading-5"
               />
             </fieldset>
             <span className="block truncate text-xs leading-4 text-muted-foreground">
@@ -320,16 +324,18 @@ export function BotSettingsRoot({
             <BotSharedFromLine bot={bot} />
           </div>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          className="@max-[300px]/settings-view:w-full"
-          disabled={controlsOff}
-          onClick={() => setSharing(true)}
-        >
-          <Share2 />
-          {t('bots.settingsView.share', 'Share…')}
-        </Button>
+        <div data-slot="bot-settings-actions" className="flex flex-wrap items-center gap-2">
+          <Button
+            variant="outline"
+            size="xs"
+            className="h-7"
+            disabled={controlsOff}
+            onClick={() => setSharing(true)}
+          >
+            <Share2 className="size-3.5" />
+            {t('bots.settingsView.share', 'Share…')}
+          </Button>
+        </div>
       </div>
       <SettingsInsetGroup title={t('settings.bots.agent', 'Agent')}>
         <SettingsInsetRow
@@ -358,7 +364,7 @@ export function BotSettingsRoot({
           title={t('settings.bots.active', 'Active')}
           detail={t('settings.bots.activeDescription', 'Answers messages and runs automations.')}
           end={
-            <Switch
+            <BotSettingsSwitch
               checked={!bot.paused}
               aria-label={t('settings.bots.active', 'Active')}
               onCheckedChange={() => void update({ paused: !bot.paused })}

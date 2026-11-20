@@ -36,7 +36,7 @@ describe('a Task whose supervised worker is stopping', () => {
   }
 
   describe('task-update', () => {
-    it('refuses to re-open the Task while the worker is stopping', () => {
+    it('refuses to reopen the task while its worker is stopping or its stop outcome is unknown', () => {
       const { task, dispatch } = localWorker()
       db.beginWorkerStop(dispatch.id, 'epoch_home')
       expect(db.getTask(task.id)?.status).toBe('blocked')
@@ -48,11 +48,7 @@ describe('a Task whose supervised worker is stopping', () => {
         })
       )
       expect(db.getTask(task.id)?.status).toBe('blocked')
-    })
 
-    it('refuses to re-open the Task while the stop outcome is unknown', () => {
-      const { task, dispatch } = localWorker()
-      db.beginWorkerStop(dispatch.id, 'epoch_home')
       db.markWorkerStopUnknown(dispatch.id, 'the execution host did not answer')
 
       expect(() => db.updateTaskStatus(task.id, 'dispatched')).toThrowError(

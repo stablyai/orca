@@ -18,7 +18,8 @@ import {
 } from '../../session-lifecycle/projection/mobile-session-tab-merge'
 
 export abstract class OrcaRuntimeWithPublishPtyBackedMobileSessionTerminal extends OrcaRuntimeWithHasLiveOrPersistedServeOrSshOwnedPtyBinding {
-  protected abstract markPaneLiveTitlesDirty(): void
+  /** `ref` is the terminal whose title changed or the pane key whose start facts did. */
+  protected abstract markPaneLiveTitlesDirty(ref: string): void
   protected abstract getPtyManualTitle(
     ...args: Parameters<PtyTerminalSummaryMethods['getPtyManualTitle']>
   ): ReturnType<PtyTerminalSummaryMethods['getPtyManualTitle']>
@@ -194,32 +195,12 @@ export abstract class OrcaRuntimeWithPublishPtyBackedMobileSessionTerminal exten
     options: { immediate?: boolean } = {}
   ): void {
     // All visible title/foreground/bind updates pass here; apply phone pane-title rules consistently.
-    this.markPaneLiveTitlesDirty()
-    for (const [worktreeId, snapshot] of this.mobileSessionTabsByWorktree) {
-      const hasPtyBackedTab = snapshot.tabs.some(
-        (tab) =>
-          tab.type === 'terminal' &&
-          (tab.ptyId === ptyId || tab.parentLayout?.ptyIdsByLeafId?.[tab.leafId] === ptyId)
-      )
-      if (!hasPtyBackedTab) {
-        continue
-      }
+    this.markPaneLiveTitlesDirty(ptyId)
+    // Copy: a touch can re-store a snapshot and rewrite this PTY's index entry.
+    for (const worktreeId of Array.from(
+      this.mobileSessionTabsByWorktree.worktreeIdsForPty(ptyId)
+    )) {
       this.touchMobileSessionTabsForWorktree(worktreeId, options)
     }
-  }
-
-  protected getMobileSessionWorktreeIdsForPty(ptyId: string): string[] {
-    const worktreeIds: string[] = []
-    for (const [worktreeId, snapshot] of this.mobileSessionTabsByWorktree) {
-      const hasPtyBackedTab = snapshot.tabs.some(
-        (tab) =>
-          tab.type === 'terminal' &&
-          (tab.ptyId === ptyId || tab.parentLayout?.ptyIdsByLeafId?.[tab.leafId] === ptyId)
-      )
-      if (hasPtyBackedTab) {
-        worktreeIds.push(worktreeId)
-      }
-    }
-    return worktreeIds
   }
 }

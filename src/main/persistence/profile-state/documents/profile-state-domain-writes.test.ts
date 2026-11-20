@@ -7,7 +7,10 @@ import { readProfileStateRevision } from '../database/profile-state-revision'
 import { openProfileStateDatabase } from '../database/profile-state-database'
 import { profileStateDatabaseFile } from '../../../../shared/orca-profiles/profile-state-storage-paths'
 import { writeProfileStateDomains } from './profile-state-domain-writes'
-import { profileStateWriterPatching as patching } from './profile-state-patched-domains'
+import {
+  forgetCommittedProfileStateDomains,
+  profileStateWriterPatching as patching
+} from './profile-state-patched-domains'
 import { buildProfileStateCutoverFixture } from '../../profile-state-cutover-fixture'
 
 const temporaryDirectories: string[] = []
@@ -61,6 +64,84 @@ describe('profile state dirty-domain writes', () => {
       db.exec('DROP TRIGGER fail_profile_state_automation_run_delta')
       expect(readProfileStateRevision(db)).toBe(2)
       expect(JSON.parse(exportProfileStateJson(db)).automationRuns).toEqual(normalizedRuns)
+    } finally {
+      db.close()
+    }
+  })
+
+  it('patches the stored order after another writer restores the same session', () => {
+    const db = openTestDatabase()
+    try {
+      const write = (payload: string, withPatching: boolean): void => {
+        writeProfileStateDomains(db, {
+          expectedRevision: readProfileStateRevision(db),
+          replacements: [{ domain: 'workspaceSession', payload }],
+          ...(withPatching ? { patching } : {})
+        })
+      }
+      write('{"tabs":{"x":1,"y":2}}', true)
+      write('{"tabs":{"y":2,"x":1}}', false)
+      write('{"tabs":{"x":1,"y":2}}', false)
+      writeProfileStateDomains(db, {
+        expectedRevision: readProfileStateRevision(db),
+        replacements: [],
+        patching,
+        patches: [
+          {
+            domain: 'workspaceSession',
+            operations: [
+              { kind: 'set', path: ['tabs', 'z'], payload: '3' },
+              { kind: 'order', path: ['tabs'], keys: ['z', 'x', 'y'] }
+            ]
+          }
+        ]
+      })
+      expect(JSON.stringify(JSON.parse(exportProfileStateJson(db)).workspaceSession)).toBe(
+        '{"tabs":{"z":3,"x":1,"y":2}}'
+      )
+    } finally {
+      db.close()
+    }
+  })
+
+  it('stores a non-object session the writer cannot patch', () => {
+    const db = openTestDatabase()
+    try {
+      writeProfileStateDomains(db, {
+        expectedRevision: 0,
+        replacements: [{ domain: 'workspaceSession', payload: 'null' }],
+        patching
+      })
+      expect(JSON.parse(exportProfileStateJson(db)).workspaceSession).toBeNull()
+    } finally {
+      db.close()
+    }
+  })
+
+  it('rejects a patch to stored parts whose order no longer matches their hash', () => {
+    const db = openTestDatabase()
+    try {
+      writeProfileStateDomains(db, {
+        expectedRevision: 0,
+        replacements: [{ domain: 'workspaceSession', payload: '{"tabs":{"1":1,"2":2}}' }],
+        patching
+      })
+      forgetCommittedProfileStateDomains()
+      db.exec(`UPDATE profile_state_document_parts SET ordinal = -ordinal
+        WHERE domain = 'workspaceSession'`)
+      expect(() =>
+        writeProfileStateDomains(db, {
+          expectedRevision: 1,
+          replacements: [],
+          patching,
+          patches: [
+            {
+              domain: 'workspaceSession',
+              operations: [{ kind: 'set', path: ['tabs', '1'], payload: '1' }]
+            }
+          ]
+        })
+      ).toThrow('Profile state document parts hash mismatch')
     } finally {
       db.close()
     }

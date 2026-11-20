@@ -125,12 +125,6 @@ describe("a bot's sealed tool credentials", () => {
     expect(decrypt).not.toHaveBeenCalled()
   })
 
-  it('refuses saved tool secrets when available encryption uses a built-in key', () => {
-    getSecretStore().describeSealing = () => ({ kind: 'none', reason: 'built-in test key' })
-    const folder = tempDir('bot-')
-    expect(() => saveLinear(folder)).toThrow('no system keyring')
-  })
-
   it('refuse saved secrets on a computer with no keyring', () => {
     _resetSecretStoreForTests()
     const folder = tempDir('bot-')

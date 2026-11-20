@@ -346,14 +346,12 @@ describe('sweepDeletedWorkspaceChatHistory', () => {
     }
   )
 
-  it('ignores the home folder as a project, while a real project still keeps its history', async () => {
+  it('keeps the history of a deleted folder under a listed home folder, which can hold folders Orca never made', async () => {
     root = mkdtempSync(join(tmpdir(), 'orca-chat-history-'))
     home.path = root
     const workspaces = join(root, 'workspaces')
-    for (const repo of ['app', 'api']) {
-      mkdirSync(join(workspaces, repo), { recursive: true })
-      mkdirSync(join(root, 'repos', repo), { recursive: true })
-    }
+    mkdirSync(join(workspaces, 'app'), { recursive: true })
+    mkdirSync(join(root, 'repos', 'app'), { recursive: true })
     const deleted: ChatHistoryTarget[] = []
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the sweep reads only these store methods
     const store = {
@@ -362,26 +360,25 @@ describe('sweepDeletedWorkspaceChatHistory', () => {
         nestWorkspaces: true,
         workspaceDirHistory: []
       }),
-      getRepos: () =>
-        ['app', 'api'].map((id) => ({
-          id,
-          path: join(root, 'repos', id),
-          displayName: id,
+      getRepos: () => [
+        {
+          id: 'app',
+          path: join(root, 'repos', 'app'),
+          displayName: 'app',
           badgeColor: '',
           addedAt: 0
-        })),
+        }
+      ],
       getAllWorktreeMeta: () => ({}),
-      // Fresh profiles list home as a project; `api`'s workspaces folder is a real folder project.
-      getFolderWorkspaces: () => [{ folderPath: root }, { folderPath: join(workspaces, 'api') }]
+      // Fresh profiles list home as a project.
+      getFolderWorkspaces: () => [{ folderPath: root }]
     } as unknown as RuntimeStore
 
     await sweepDeletedWorkspaceChatHistory({
       store,
       now: NOW,
-      listSessions: async () => [
-        session('app-gone.jsonl', join(workspaces, 'app', 'gone')),
-        session('api-gone.jsonl', join(workspaces, 'api', 'gone'))
-      ],
+      // A folder the user made and deleted, never an Orca workspace.
+      listSessions: async () => [session('scratch.jsonl', join(workspaces, 'app', 'scratch'))],
       isEnabled: () => true,
       deleteSessions: async (targets) => {
         deleted.push(...targets)
@@ -389,6 +386,6 @@ describe('sweepDeletedWorkspaceChatHistory', () => {
       }
     })
 
-    expect(deleted.map((target) => basename(target.filePath))).toEqual(['app-gone.jsonl'])
+    expect(deleted).toEqual([])
   })
 })

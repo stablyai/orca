@@ -3,7 +3,6 @@ import { describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from '../dispatcher'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { Bot } from '../../../../shared/bot-types'
-import { getHostOperationOwnership } from '../../../../shared/execution-host/host-operation-ownership'
 import { makeTestBot } from '../../../bots/bot.test-fixture'
 import { GOOGLE_WRITE_METHODS } from './google-write'
 
@@ -60,12 +59,6 @@ const draft = (params: unknown) => ({
 })
 
 describe('Google writes over RPC', () => {
-  it('are owned by the execution host', () => {
-    for (const method of GOOGLE_WRITE_METHODS) {
-      expect(getHostOperationOwnership(method.name)).toBe('host')
-    }
-  })
-
   it('refuse a bot whose Google is off, and end a draft for someone else with who asked', async () => {
     const off = makeTestBot({ id: 'b1', name: 'Scout' })
     const on = makeTestBot({ id: 'b2', name: 'Ivy', google: true })

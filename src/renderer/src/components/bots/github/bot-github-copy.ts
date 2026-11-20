@@ -40,7 +40,7 @@ export function botGitHubErrorMessage(code: string, hostName: string | null): st
     case 'github_unavailable':
       return translate('bots.github.errors.unavailable', 'GitHub did not answer. Try again.')
     case 'signed_out':
-      return translate('bots.github.errors.signedOut', 'Sign in to Orca to connect GitHub.')
+      return translate('bots.github.errors.signedOut', 'Sign in to Orca Cloud to connect GitHub.')
     case 'cloud_unreachable':
       return translate(
         'bots.github.errors.unreachable',

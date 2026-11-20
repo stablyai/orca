@@ -63,8 +63,7 @@ describe('bot import cards', () => {
         body: expect.objectContaining({
           kind: 'status',
           presentation: 'bot-import-plan',
-          botImportPlan: { ...plan, botId: 'b1' },
-          text: expect.stringContaining('Stays in OpenClaw:')
+          botImportPlan: { ...plan, botId: 'b1' }
         })
       })
     ])

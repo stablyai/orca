@@ -11,14 +11,18 @@ import {
 } from '@/components/native-chat/NativeChatCardFrame'
 import type { GoogleSetupRun } from '../../../../../../shared/google/google-setup-run'
 
-/** A setup card's frame: the Google mark, a heading, and an optional right-hand state. */
+/** A setup card's frame: the Google mark, a heading, an optional right-hand state, title and action bar. */
 export function GoogleSetupCardFrame({
   heading,
   trailing,
+  title,
+  footer,
   children
 }: {
   heading: string
   trailing?: React.ReactNode
+  title?: React.ReactNode
+  footer?: React.ReactNode
   children: React.ReactNode
 }): React.JSX.Element {
   return (
@@ -30,6 +34,8 @@ export function GoogleSetupCardFrame({
       }
       heading={heading}
       trailing={trailing}
+      title={title}
+      footer={footer}
     >
       {children}
     </NativeChatCardFrame>

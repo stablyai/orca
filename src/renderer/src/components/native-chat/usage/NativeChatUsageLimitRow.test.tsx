@@ -132,20 +132,20 @@ describe('usage-limit row over time', () => {
     act(() => vi.advanceTimersByTime(HOUR))
     expect(screen.getByRole('button', { name: 'Continue' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { pressed: true })).toBeNull()
-    expect(screen.queryByRole('button', { name: 'Hand off to another agent' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Hand off to agent' })).toBeNull()
   })
 
   it('never turns an older turn into a ready row, however long it waits', () => {
     render(row({ resetsAt: start + HOUR, active: false, actions: handOffActions() }))
     act(() => vi.advanceTimersByTime(2 * HOUR))
     expect(screen.queryByRole('button', { name: 'Continue' })).toBeNull()
-    expect(screen.queryByRole('button', { name: 'Hand off to another agent' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Hand off to agent' })).toBeNull()
     expect(screen.getByRole('button', { name: 'More actions' })).toBeInTheDocument()
   })
 
   it('moves focus from a tool that disappears at the reset to Continue', () => {
     render(row({ resetsAt: start + HOUR, actions: handOffActions() }))
-    screen.getByRole('button', { name: 'Hand off to another agent' }).focus()
+    screen.getByRole('button', { name: 'Hand off to agent' }).focus()
     act(() => vi.advanceTimersByTime(HOUR))
     expect(screen.getByRole('button', { name: 'Continue' })).toHaveFocus()
   })
@@ -284,16 +284,12 @@ describe('usage-limit row over time', () => {
       }
     })
     const view = render(row({ resetsAt: start + HOUR, auto: null }))
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Continue automatically when limits reset' })
-    )
+    fireEvent.click(screen.getByRole('button', { name: 'Auto-continue on reset' }))
     expect(updateSettings).toHaveBeenCalledWith({ nativeChatAutoContinueAfterUsageLimit: true })
     expect(openSettingsPage).not.toHaveBeenCalled()
     // Nothing to schedule against without a reset time.
     view.rerender(row({ resetsAt: undefined, auto: null }))
-    expect(
-      screen.queryByRole('button', { name: 'Continue automatically when limits reset' })
-    ).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Auto-continue on reset' })).toBeNull()
   })
 
   it('opens Settings when the host reports off while the setting is already on', () => {
@@ -316,7 +312,7 @@ describe('usage-limit row over time', () => {
         actions: { ...handOffActions(handOff), disabled: true, preparing: true }
       })
     )
-    const button = screen.getByRole('button', { name: 'Hand off to another agent' })
+    const button = screen.getByRole('button', { name: 'Hand off to agent' })
     button.focus()
     fireEvent.click(button)
     expect(button).toHaveFocus()
@@ -335,10 +331,10 @@ describe('usage-limit row More menu', () => {
       truncated: true
     }
   }
-  let writeClipboardText: ReturnType<typeof vi.fn>
+  const writeClipboardText = vi.fn<(text: string) => Promise<void>>()
 
   beforeEach(() => {
-    writeClipboardText = vi.fn().mockResolvedValue(undefined)
+    writeClipboardText.mockReset().mockResolvedValue(undefined)
     Object.defineProperty(window, 'api', {
       configurable: true,
       value: { ui: { writeClipboardText } }
@@ -369,19 +365,39 @@ describe('usage-limit row More menu', () => {
     expect(screen.getByRole('button', { name: 'More actions' })).toHaveFocus()
   })
 
-  it('copies the sentence with the frame identity, payload and truncation', async () => {
+  it('copies a bounded error with the detail and provider frame intact at the start', async () => {
     const user = userEvent.setup()
+    const resetsAt = Date.now() + HOUR
     render(
       row({
-        resetsAt: Date.now() + HOUR,
-        block: limitBlock(Date.now() + HOUR, { providerFrame: frame })
+        resetsAt,
+        block: limitBlock(resetsAt, {
+          failure: {
+            kind: 'usageLimitReached',
+            usageLimit: { window: 'session', resetsAt },
+            detail: { audience: 'log', text: 'Session quota exhausted.' }
+          },
+          providerFrame: {
+            ...frame,
+            payload: {
+              ...frame.payload,
+              head: `PAYLOAD_SENTINEL${'😀'.repeat(33_000)}`,
+              byteLength: 132_016
+            }
+          }
+        })
       })
     )
     await user.click(screen.getByRole('button', { name: 'More actions' }))
     await user.click(await screen.findByRole('menuitem', { name: 'Copy error' }))
-    for (const part of ['codex · notification:error', 'PAYLOAD_SENTINEL', '9999']) {
-      expect(writeClipboardText).toHaveBeenCalledWith(expect.stringContaining(part))
-    }
+    const copied = writeClipboardText.mock.lastCall?.[0] ?? ''
+    expect(copied.length).toBeLessThanOrEqual(64_000)
+    expect(copied).toContain('Session quota exhausted.')
+    expect(copied).toContain('codex · notification:error\nPAYLOAD_SENTINEL😀')
+    expect(copied).toContain('132016')
+    expect(copied).toContain('Copied text was shortened')
+    expect(copied).not.toContain('\uFFFD')
+    expect(Buffer.from(copied).toString('utf8')).toBe(copied)
     expect(toastError).not.toHaveBeenCalled()
   })
 })

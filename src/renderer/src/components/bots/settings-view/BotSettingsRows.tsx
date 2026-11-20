@@ -63,7 +63,7 @@ type SettingsInsetRowProps = {
 }
 
 const ROW =
-  'flex min-h-11 w-full min-w-0 items-center gap-2.5 py-2 pr-2.5 pl-3 text-left text-[13px] outline-none'
+  'flex min-h-11 w-full min-w-0 items-center gap-2.5 py-2 pr-2.5 pl-3 in-data-bot-settings-root:py-1 text-left text-[13px] outline-none'
 
 function RowText({
   icon,
@@ -80,7 +80,7 @@ function RowText({
       {icon ? (
         <span
           className={cn(
-            'flex w-4 shrink-0 justify-center text-muted-foreground [&_svg]:size-4',
+            'flex w-4 shrink-0 justify-center text-muted-foreground [&_svg]:size-4 in-data-bot-settings-root:[&_svg]:size-3.5',
             detail ? 'self-start pt-px' : null
           )}
         >
@@ -155,7 +155,7 @@ export function SettingsInsetRow({
           type="button"
           data-settings-page={page}
           onClick={onOpen}
-          className="-my-2 -ml-3 flex min-w-0 flex-1 items-center gap-2.5 self-stretch py-2 pl-3 text-left outline-none focus-visible:bg-accent/60"
+          className="-my-2 -ml-3 flex min-w-0 flex-1 items-center gap-2.5 self-stretch py-2 pl-3 in-data-bot-settings-root:-my-1 in-data-bot-settings-root:py-1 text-left outline-none focus-visible:bg-accent/60"
         >
           <RowText {...text} />
         </button>

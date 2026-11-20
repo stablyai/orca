@@ -27,6 +27,7 @@ export function interruptAcpTurn(session: AcpStoppableSession): void {
   }
   session.prompts.withdrawAll()
   void session.connection.cancel().catch(() => undefined)
+  session.lane.agentTurn.end('cancelled')
 }
 
 /** Wait for turn completion or grace expiry using the Date.now clock. */

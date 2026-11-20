@@ -18,6 +18,7 @@ describe('diff drivers with textconv', () => {
     git('init')
     git('config', 'user.email', 'test@example.com')
     git('config', 'user.name', 'Test User')
+    git('config', 'core.autocrlf', 'false')
     invalidateGitReadCaches()
   })
 
