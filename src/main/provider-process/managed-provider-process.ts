@@ -1,4 +1,5 @@
-import type { ProviderChild } from './provider-child'
+import { awaitProviderChildSpawn, type ProviderChild } from './provider-child'
+import { registerAgentProcess } from '../memory/agent-process-registry'
 import { spawnProviderProcess, type ProviderProcessSpawner } from './provider-process-spawn'
 import { RetryableProcessExitProof } from '@orca/process-host/retryable-process-exit-proof'
 import type { ProviderProcessLaunch } from './provider-process-launch'
@@ -152,11 +153,13 @@ export function spawnManagedProviderProcess(
   const exitPromise = new Promise<void>((resolve) => {
     resolveExit = resolve
   })
+  let releaseAgentMemory: (() => void) | null = null
   const observeExit = (exit: ProviderProcessExit): void => {
     if (observed) {
       return
     }
     observed = exit
+    releaseAgentMemory?.()
     resolveExit()
     for (const listener of listeners) {
       listener(exit)
@@ -179,6 +182,12 @@ export function spawnManagedProviderProcess(
     const processless = spawnFailed && child.pid === undefined
     if (processless) {
       observeExit({ code, signal, processless })
+    }
+  })
+  // Hosted launches publish their pid only once the agent host starts them.
+  void awaitProviderChildSpawn(child).then(() => {
+    if (child.pid !== undefined && !observed) {
+      releaseAgentMemory = registerAgentProcess(child.pid)
     }
   })
   const rootVerdict = (): DescendantTreeVerdict =>

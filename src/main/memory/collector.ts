@@ -11,7 +11,8 @@ import { listRegisteredPtys } from './pty-registry'
 import { collectHostMemory } from './host-memory'
 import { getLocalDaemonPid } from './local-daemon-pid'
 import { enumerateHostProcesses } from './host-process-index'
-import { claimPtyProcessTrees } from './pty-process-trees'
+import { claimProcessTree, claimPtyProcessTrees } from './pty-process-trees'
+import { listAgentProcessPids } from './agent-process-registry'
 import type { ProcIndex } from './process-index'
 import {
   createEmptyWorktreeMemoryBucket,
@@ -124,7 +125,11 @@ async function runSnapshot(store: MemorySnapshotStore): Promise<MemorySnapshot> 
   const projectGroupName = createProjectGroupNameLookup(store)
   const [processIndex, host] = await Promise.all([enumerateHostProcesses(), collectHostMemory()])
   const appBuckets = bucketElectronMetrics(processIndex)
-  const ptyTrees = claimPtyProcessTrees(processIndex, listRegisteredPtys())
+  const claimed = new Set<number>()
+  const ptyTrees = claimPtyProcessTrees(processIndex, listRegisteredPtys(), claimed)
+  const agentRows = listAgentProcessPids().flatMap((pid) =>
+    claimProcessTree(processIndex, pid, claimed)
+  )
 
   const orphan = createEmptyWorktreeMemoryBucket(
     ORPHAN_WORKTREE_ID,
@@ -197,6 +202,18 @@ async function runSnapshot(store: MemorySnapshotStore): Promise<MemorySnapshot> 
     history: readMemoryHistory(b.worktreeId)
   }))
 
+  const agents = { cpu: 0, memory: 0, privateMemory: 0 }
+  for (const row of agentRows) {
+    agents.cpu += row.cpu
+    agents.memory += row.memory
+    agents.privateMemory += clampMemoryMetric(row.privateMemory)
+  }
+  const agentProcesses: UsageValues = {
+    cpu: clampMemoryMetric(agents.cpu),
+    memory: clampMemoryMetric(agents.memory),
+    ...optionalCommitField(processIndex.hasPrivateMemory, agents.privateMemory)
+  }
+
   let sessionCpuTotal = 0
   let sessionMemoryTotal = 0
   let sessionPrivateTotal = 0
@@ -209,14 +226,15 @@ async function runSnapshot(store: MemorySnapshotStore): Promise<MemorySnapshot> 
   return {
     app: { ...appBuckets, history: readAppMemoryHistory() },
     worktrees,
+    agentProcesses,
     host,
     processMemoryMetric: processIndex.memoryMetric,
     ...snapshotCommitFields(
       processIndex.hasPrivateMemory,
-      clampMemoryMetric(appBuckets.privateMemory) + sessionPrivateTotal
+      clampMemoryMetric(appBuckets.privateMemory) + agents.privateMemory + sessionPrivateTotal
     ),
-    totalCpu: appBuckets.cpu + sessionCpuTotal,
-    totalMemory: appBuckets.memory + sessionMemoryTotal,
+    totalCpu: appBuckets.cpu + agentProcesses.cpu + sessionCpuTotal,
+    totalMemory: appBuckets.memory + agentProcesses.memory + sessionMemoryTotal,
     collectedAt: now
   }
 }

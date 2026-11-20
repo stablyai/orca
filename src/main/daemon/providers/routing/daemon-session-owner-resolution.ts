@@ -22,6 +22,7 @@ export type DaemonSessionOwnerResolution<T extends IPtyProvider> =
 const OWNER_RESOLUTION_TIMEOUT_MS = 2_000
 const OWNER_INVENTORY_CACHE_MS = 1_000
 const FAILED_PROVIDER_COOLDOWN_MS = 1_000
+const STALE_INVENTORY_RETRIES = 3
 
 export class DaemonSessionOwnerResolver<T extends IPtyProvider> {
   private inventoryInFlight: Promise<OwnerInventory<T>> | null = null
@@ -144,24 +145,32 @@ export class DaemonSessionOwnerResolver<T extends IPtyProvider> {
   async listProcesses(
     opts?: Parameters<IPtyProvider['listProcesses']>[0]
   ): Promise<PtyProcessInfo[]> {
-    const pending = this.inventory(false, opts, true)
-    if (
-      opts?.deadlineMs !== undefined &&
-      !(await awaitDaemonWorkWithinCallerDeadline(
-        pending.then(() => {}),
-        opts.deadlineMs
-      ))
-    ) {
-      throw new TerminalSessionOwnerUnverifiedError('inventory deadline')
+    // Retries share the first read's budget, so a busy host still answers within one timeout.
+    const deadlineMs = opts?.deadlineMs ?? Date.now() + OWNER_RESOLUTION_TIMEOUT_MS
+    for (let attempt = 0; ; attempt++) {
+      const pending = this.inventory(false, { ...opts, deadlineMs }, true)
+      if (
+        opts?.deadlineMs !== undefined &&
+        !(await awaitDaemonWorkWithinCallerDeadline(
+          pending.then(() => {}),
+          deadlineMs
+        ))
+      ) {
+        throw new TerminalSessionOwnerUnverifiedError('inventory deadline')
+      }
+      const inventory = await pending
+      if (inventory.epoch !== this.epoch) {
+        // A spawn or exit during the read only outdated it; the daemon itself answered.
+        if (attempt < STALE_INVENTORY_RETRIES) {
+          continue
+        }
+        throw new TerminalSessionOwnerUnverifiedError('stale inventory')
+      }
+      if (inventory.failure) {
+        throw inventory.failure.error
+      }
+      return selectListedDaemonProcesses(inventory, this.routes, this.routeIncarnations, opts)
     }
-    const inventory = await pending
-    if (inventory.epoch !== this.epoch) {
-      throw new TerminalSessionOwnerUnverifiedError('stale inventory')
-    }
-    if (inventory.failure) {
-      throw inventory.failure.error
-    }
-    return selectListedDaemonProcesses(inventory, this.routes, this.routeIncarnations, opts)
   }
 
   recordRoute(sessionId: string, provider: T, incarnationId?: string): void {

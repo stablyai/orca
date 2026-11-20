@@ -66,16 +66,18 @@ export type HostMemory = {
 export type MemorySnapshot = {
   app: AppMemory
   worktrees: WorktreeMemory[]
+  /** Native agent processes outside terminals (chat providers, app servers); absent from older hosts. */
+  agentProcesses?: UsageValues
   host: HostMemory
   /** Per-process byte metric used by app, session, worktree, history, and totalMemory values. */
   processMemoryMetric: ProcessMemoryMetric
   /** Committed-byte metric; absent on older hosts or unsupported captures means unknown, never zero. */
   processCommitMetric?: ProcessCommitMetric
-  /** Sum of app + all tracked worktree sessions. Percent of a single core, so may exceed 100 on multi-core machines. */
+  /** Sum of app + agent processes + all tracked worktree sessions. Percent of a single core, so may exceed 100 on multi-core machines. */
   totalCpu: number
   /** Sum of per-process samples. With rss/working-set, shared pages may repeat, so this can exceed host.totalMemory. */
   totalMemory: number
-  /** App plus tracked-worktree committed bytes, present exactly with processCommitMetric; exceeding physical RAM is meaningful. */
+  /** App, agent-process and tracked-worktree committed bytes, present exactly with processCommitMetric; exceeding physical RAM is meaningful. */
   totalPrivateMemory?: number
   collectedAt: number
 }
