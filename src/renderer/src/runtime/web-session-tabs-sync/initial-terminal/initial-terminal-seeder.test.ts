@@ -3,9 +3,10 @@ import { createTestStore } from '../../../store/testing/app-store-test-fixture'
 import { createTabsSliceMockApi } from '../../../store/slices/tabs/tabs-slice-test-harness'
 import { holdEmptyWorkspaceDefaultSurfaceForLaunch } from '@/lib/workspace/activation/initial-surface/empty-workspace-default-surface-claims'
 
-const testStore = vi.hoisted(() => ({
-  current: null as ReturnType<typeof createTestStore> | null
-}))
+const testStore = vi.hoisted(() => {
+  const ref: { current: ReturnType<typeof createTestStore> | null } = { current: null }
+  return ref
+})
 vi.mock('@/store/index', () => ({
   useAppStore: { getState: () => testStore.current!.getState() }
 }))

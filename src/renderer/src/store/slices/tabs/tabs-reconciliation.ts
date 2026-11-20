@@ -139,8 +139,12 @@ export function projectWorktreeTabModelReconciliation(
     renderableTabs.length === reconciledUnifiedTabs.length ? reconciledUnifiedTabs : renderableTabs
   const validTabIds = new Set(validTabs.map((tab) => tab.id))
   const nextGroupsWithEmpty = reconciledGroups.map((group) => {
-    const slots = structuredLaunchSlotIds(worktreeId, group.id)
-    const tabOrder = group.tabOrder.filter((tabId) => validTabIds.has(tabId) || slots.has(tabId))
+    let slots: Set<string> | undefined
+    const tabOrder = group.tabOrder.filter(
+      (tabId) =>
+        validTabIds.has(tabId) ||
+        (slots ??= structuredLaunchSlotIds(worktreeId, group.id)).has(tabId)
+    )
     const realOrder = tabOrder.filter((id) => validTabIds.has(id))
     const activeTabId =
       group.activeTabId && validTabIds.has(group.activeTabId)
