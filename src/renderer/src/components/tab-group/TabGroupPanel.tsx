@@ -246,15 +246,10 @@ export default function TabGroupPanel({
     />
   )
 
-  // Why: tabs fade with the actions so the focused split stays clear when actions collapse, a backdrop skips group dimming, or labels carry their own color.
-  const unfocusedChromeClassName = cn(
-    'transition-opacity duration-150',
-    !isFocused && 'opacity-50 hover:opacity-100 focus-within:opacity-100'
-  )
   // Why: actions hide before the tab bar's floor is reached; min-w-0 + clipping is only a backstop so reserved spacers stay clear.
   const actionChromeClassName = cn(
-    'flex min-w-0 items-center gap-0.5 overflow-hidden pl-1.5 pr-0.5',
-    unfocusedChromeClassName
+    'flex min-w-0 items-center gap-0.5 overflow-hidden pl-1.5 pr-0.5 transition-opacity duration-150',
+    !isFocused && 'opacity-50 hover:opacity-100 focus-within:opacity-100'
   )
   return (
     <div
@@ -267,6 +262,8 @@ export default function TabGroupPanel({
             } ${touchesRightEdge || suppressRightBorder ? '' : 'border-r'} border-border`
           : ''
       }`}
+      // Why: the selected-tab underline marks the focused split (drop-indicator.ts).
+      data-split-focus={hasSplitGroups ? (isFocused ? 'focused' : 'unfocused') : undefined}
       // Why not over a window backdrop (material or theme image): group opacity would let it bleed through opaque chrome.
       style={
         hasSplitGroups && !isFocused && !backdropActive
@@ -301,7 +298,7 @@ export default function TabGroupPanel({
             ) : null}
             {/* Why: the tab-strip container excludes the reserved spacers, so width rules see only the room tabs and actions share. */}
             <div className="@container/tab-strip flex min-w-0 flex-1 items-stretch">
-              <div className={cn('min-w-10 flex-1 h-full', unfocusedChromeClassName)}>{tabBar}</div>
+              <div className="min-w-10 flex-1 h-full">{tabBar}</div>
               {/* Why: overflowing tabs eat all strip whitespace; keep a window-drag handle while the right sidebar header is closed. It goes first in narrow strips: 203 = 40 gap + 163 for the tab floor and every control, so controls never clip behind it. */}
               {reserveRightTitlebarSpace ? (
                 <div className="workspace-tab-drag-handle w-10 min-w-0 @max-[203px]/tab-strip:hidden" />
