@@ -14,16 +14,23 @@ vi.mock('../../../../orca-profiles/profile-storage-paths', () => ({
   getProfileUserDataPath: () => host.dataDirectory
 }))
 vi.mock('../../../agent-session/launch/structured-agent-launch-support', () => ({
-  resolveHostStructuredAgentLaunchEnvironment: async () => ({ PATH: '' }),
+  // A home without agy, so no host program answers.
+  resolveHostStructuredAgentLaunchEnvironment: async () => ({
+    PATH: '',
+    HOME: join(tmpdir(), 'orca-no-agy-home')
+  }),
   structuredAgentHostAlternativeReady: async () => false
 }))
-// The download never answers until its cancel.
+// The download never answers until its cancel; agy's release lookup fails at once.
 vi.mock('../../../../network/http-client', () => ({
   getMainHttpClient: () => ({
-    fetch: (_url: string, { signal }: RequestInit) =>
+    fetch: (url: string, init?: RequestInit) =>
       new Promise((_resolve, reject) => {
-        signal?.throwIfAborted()
-        signal?.addEventListener('abort', () => reject(signal.reason))
+        if (url.includes('antigravity-cli-auto-updater')) {
+          reject(new Error('offline'))
+        }
+        init?.signal?.throwIfAborted()
+        init?.signal?.addEventListener('abort', () => reject(init.signal?.reason))
       })
   })
 }))
@@ -68,7 +75,10 @@ const [subscribeMethod, installMethod, cancelMethod, removeMethod] = MANAGED_RUN
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handlers read only the settings store and the stream registry.
 const ctx = {
   runtime: {
-    requireStore: () => ({ getSettings: () => ({}) }),
+    // Antigravity installs Orca's server, not its agy, for an account type agy lacks.
+    requireStore: () => ({
+      getSettings: () => ({ antigravityChatAuth: { method: 'gemini-api-key' } })
+    }),
     registerOwnedSubscriptionCleanup: (_id: string, cleanup: () => void) => ({
       releaseIfCurrent: cleanup
     })
@@ -150,5 +160,53 @@ it('removes the files only once every chat and unclosed child that may run them 
   expect(chats.closed).toEqual(['chat-1', 'chat-2'])
   expect(existsSync(join(host.dataDirectory, 'rt'))).toBe(false)
   transport.abort()
+  await rm(host.dataDirectory, { recursive: true, force: true })
+})
+
+it("follows Antigravity's install target when the chat's account type changes", async () => {
+  host.dataDirectory = await mkdtemp(join(tmpdir(), 'orca-runtime-target-rpc-'))
+  let settings: Record<string, unknown> = { antigravityChatAuth: { method: 'gemini-api-key' } }
+  const listeners = new Set<(updates: Record<string, unknown>) => void>()
+  const transport = new AbortController()
+  const frames: unknown[] = []
+  const revision = (frame: unknown) =>
+    typeof frame === 'object' && frame !== null && 'revision' in frame
+      ? Number(frame.revision)
+      : Number.NaN
+  const watcher = {
+    ...ctx,
+    signal: transport.signal,
+    runtime: {
+      ...ctx.runtime,
+      requireStore: () => ({
+        getSettings: () => settings,
+        onSettingsChanged: (listener: (updates: Record<string, unknown>) => void) => {
+          listeners.add(listener)
+          return () => listeners.delete(listener)
+        }
+      })
+    }
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handler reads only the settings store and the stream registry.
+  const stream = watcher as unknown as RpcContext
+  await subscribeMethod.handler({ agent: 'antigravity' }, stream, (frame) => frames.push(frame))
+  // Orca's server, for an account type agy lacks.
+  expect(frames).toEqual([expect.objectContaining({ version: '1.0' })])
+
+  settings = {}
+  listeners.forEach((listener) => listener({ antigravityChatAuth: undefined }))
+  // Orca's agy, whose release this host could not look up.
+  await vi.waitFor(() => expect(frames.at(-1)).toMatchObject({ version: null }))
+  expect(revision(frames.at(-1))).toBeGreaterThan(revision(frames[0]))
+  transport.abort()
+  await rm(host.dataDirectory, { recursive: true, force: true })
+})
+
+it('acts on the program the client showed, not the one the host now prefers', async () => {
+  host.dataDirectory = await mkdtemp(join(tmpdir(), 'orca-runtime-program-rpc-'))
+  // The API-key setting prefers Orca's server.
+  const state = await installMethod.handler({ agent: 'antigravity', program: 'cli' }, ctx)
+
+  expect(state).toMatchObject({ agent: 'antigravity', program: 'cli' })
   await rm(host.dataDirectory, { recursive: true, force: true })
 })

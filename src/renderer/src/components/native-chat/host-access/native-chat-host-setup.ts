@@ -9,7 +9,8 @@ import { readAgentInventoryForTarget } from '@/lib/agent-session/launch/inventor
 import { runtimeHostPlatform } from '@/components/terminal-pane/pty-transport/host-ownership/pty-owner-machine-platform'
 import {
   agentSessionInstallCommand,
-  agentSessionSignInCommand
+  agentSessionSignInCommand,
+  agentSessionSignInEnv
 } from '../../../../../shared/agent-session/lifecycle/launch/agent-session-setup-commands'
 import type { AgentJournalRenderItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import {
@@ -220,16 +221,17 @@ function useNativeChatSignIn(
     remote: input.target.kind !== 'local',
     shell
   })
+  const { agent } = input
   const viaTerminal = useMemo(
     () =>
       command && terminal
         ? {
             signingIn: terminal.opening,
-            signIn: () => void terminal.open(command),
+            signIn: () => void terminal.open(command, agentSessionSignInEnv(agent)),
             loginCommand: command
           }
         : null,
-    [command, terminal]
+    [agent, command, terminal]
   )
   // A managed account owns sign-in: a terminal login after it succeeds would sign in another account.
   return accountId ? managed : viaTerminal

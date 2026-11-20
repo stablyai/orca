@@ -4,6 +4,7 @@ import { ACP_LAUNCH_SPECS } from '../../../acp/launch/acp-launch-registry'
 import type { AcpLaunchSpec } from '../../../acp/launch/acp-launch-contract'
 import { acpStructuredAgentDefinition } from '../../../acp/session/acp-structured-agent-definitions'
 import {
+  acpHostProgramTakesNewChats,
   resolveAcpLaunchCommand,
   selectAcpHostAccountHome,
   selectAcpHostAccountHomeForCatalog
@@ -57,9 +58,8 @@ function acpChatProgram(spec: AcpLaunchSpec): StructuredAgentChatProgram {
     ...(isManagedAgentCli(agent) ? { installable: () => managedAgentCli(agent).available() } : {}),
     ...(spec.hostBackend
       ? {
-          hostAlternative: async (shellEnv, settings) =>
-            (await selectAcpHostAccountHome(spec, shellEnv, getProfileUserDataPath(), settings)) !==
-            null,
+          hostAlternative: (shellEnv, settings) =>
+            acpHostProgramTakesNewChats(spec, shellEnv, getProfileUserDataPath(), settings),
           ...(managedRuntime ? { onlyHostAlternative: () => managedRuntime.pin() === null } : {})
         }
       : {})

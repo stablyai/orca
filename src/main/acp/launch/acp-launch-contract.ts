@@ -108,22 +108,36 @@ export type AcpLaunchSpec = {
   hostBackend?: AcpHostBackend
 }
 
+/** What the host backend weighs: the host program a launch would run, and this host's facts. */
+export type AcpHostBackendInput = {
+  /** Absolute when the host program resolves; otherwise the bare name nothing answered for. */
+  command: string
+  env: Record<string, string>
+  envToDelete: string[]
+  homePath: string
+  /** Orca's data folder on this host, where the agent's own account lives. */
+  stateDirectory: string
+  /** The account type Orca's own Chat signs in with, saved on this host. */
+  settings: AcpHostBackendSettings
+}
+
 export type AcpHostBackend = {
   spec: AcpLaunchSpec
   pins(home: AgentSessionAccountHome): boolean
-  /** The account home pinning a new chat to `spec`, or null when the host should not run it. */
-  select(input: {
-    command: string
-    env: Record<string, string>
-    envToDelete: string[]
-    homePath: string
-    /** Orca's data folder on this host, where the agent's own account lives. */
-    stateDirectory: string
-    /** The account type Orca's own Chat signs in with, saved on this host. */
-    settings: AcpHostBackendSettings
-  }): Promise<AgentSessionAccountHome | null>
+  /** The account home pinning a new chat to `spec`, or null when the host should not run it. It
+   *  may pin a program `input.command` didn't find, which an Install then provides. */
+  select(input: AcpHostBackendInput): Promise<AgentSessionAccountHome | null>
   /** Changes whenever a sign-in that `select` weighs changes, so remembered answers are retired. */
   selectionRevision?(): number
+  /** Tells when a fact `select` weighs changes apart from settings and Orca's installs. */
+  onSelectionChanged?(listener: () => void): () => void
+  /** Where Orca also keeps its own copy of the host program: whether Install, its status and
+   *  removal act on the outer spec's `managedRuntime` instead of that copy. */
+  installsManagedRuntime?(input: AcpHostBackendInput): Promise<boolean>
 }
 
-export type AcpHostBackendSettings = Partial<Pick<GlobalSettings, 'antigravityChatAuth'>>
+/** The settings a host backend weighs; a change to any of them can change its answers. */
+export const ACP_HOST_BACKEND_SETTING_KEYS = ['antigravityChatAuth'] as const
+export type AcpHostBackendSettings = Partial<
+  Pick<GlobalSettings, (typeof ACP_HOST_BACKEND_SETTING_KEYS)[number]>
+>

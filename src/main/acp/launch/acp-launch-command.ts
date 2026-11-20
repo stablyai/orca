@@ -1,6 +1,8 @@
 // Which program an ACP chat runs: its Command setting, Orca's managed release, PATH, or a host backend.
 
 import { delimiter, isAbsolute } from 'node:path'
+import { resolveCliCommandAsync } from '../../../shared/shell/command-resolution/node-cli-command-async-resolution'
+import { managedAgentCommandFor } from '../../managed-agent-cli/managed-agent-cli-registry'
 import { homedir } from 'node:os'
 import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import type { resolveCliCommand } from '../../../shared/shell/command-resolution/node-cli-command-resolution'
@@ -15,7 +17,11 @@ import {
   resolveInstalledRuntimeRelease
 } from '../../node-runtime/managed-runtime-release'
 import { STRUCTURED_CHILD_ENV_TO_DELETE } from '../../runtime/agent-session/environment/structured-session-child-env'
-import type { AcpHostBackendSettings, AcpLaunchSpec } from './acp-launch-contract'
+import type {
+  AcpHostBackendInput,
+  AcpHostBackendSettings,
+  AcpLaunchSpec
+} from './acp-launch-contract'
 
 /** Prefer explicit commands, then managed releases, then complete pinned copies on PATH. */
 export function resolveAcpLaunchCommand(
@@ -97,14 +103,35 @@ export function selectAcpHostAccountHomeForCatalog(
   return home
 }
 
-/** The account home pinning a new chat to the compatible host program `env` finds, or null. */
-export async function selectAcpHostAccountHome(
+const WINDOWS_DRIVE_MOUNT = /^\/mnt\/[a-z]\//i
+
+/** `command` on PATH or in its installers' folders, found without blocking; null when absent. A
+ *  WSL host can't run a Windows-drive copy, so that copy doesn't count. */
+export async function findHostProgram(
+  command: string,
+  env: Readonly<Record<string, string>>,
+  installDirectories: readonly string[]
+): Promise<string | null> {
+  const homePath = env.HOME ?? env.USERPROFILE
+  const path = env.PATH ?? env.Path ?? null
+  const resolved = await resolveCliCommandAsync(command, {
+    pathEnv:
+      installDirectories.length > 0
+        ? [path, ...installDirectories].filter(Boolean).join(delimiter)
+        : path,
+    ...(homePath ? { homePath } : {})
+  })
+  return isAbsolute(resolved) && !WINDOWS_DRIVE_MOUNT.test(resolved) ? resolved : null
+}
+
+/** What the host backend weighs for a new chat; its command is bare when nothing resolves. */
+export async function acpHostBackendInput(
   spec: AcpLaunchSpec,
   shellEnv: Readonly<Record<string, string>>,
   stateDirectory: string,
   settings: AcpHostBackendSettings,
   inherited: NodeJS.ProcessEnv = process.env
-): Promise<AgentSessionAccountHome | null> {
+): Promise<AcpHostBackendInput | null> {
   const backend = spec.hostBackend
   if (!backend) {
     return null
@@ -116,8 +143,39 @@ export async function selectAcpHostAccountHome(
   ]
   Object.assign(env, backend.spec.env)
   const homePath = env.HOME ?? env.USERPROFILE ?? homedir()
-  const { command } = resolveAcpLaunchCommand(backend.spec, env, { homePath, dataDirectory: null })
-  return isAbsolute(command)
-    ? backend.select({ command, env, envToDelete, homePath, stateDirectory, settings })
-    : null
+  const { command } = backend.spec
+  const found = await findHostProgram(
+    command,
+    env,
+    backend.spec.installDirectories({ env, homePath })
+  )
+  // The user's own program wins; Orca's copy serves hosts that have none.
+  const program = found ?? managedAgentCommandFor(spec.agent, command) ?? command
+  return { command: program, env, envToDelete, homePath, stateDirectory, settings }
+}
+
+/** The account home pinning a new chat to the compatible host program `env` finds, or null. */
+export async function selectAcpHostAccountHome(
+  spec: AcpLaunchSpec,
+  shellEnv: Readonly<Record<string, string>>,
+  stateDirectory: string,
+  settings: AcpHostBackendSettings,
+  inherited: NodeJS.ProcessEnv = process.env
+): Promise<AgentSessionAccountHome | null> {
+  const input = await acpHostBackendInput(spec, shellEnv, stateDirectory, settings, inherited)
+  // A backend may pin new chats to a program not installed yet, so Install lands where they run.
+  return input && spec.hostBackend ? spec.hostBackend.select(input) : null
+}
+
+/** Whether new chats would start on a host program that is here now. */
+export async function acpHostProgramTakesNewChats(
+  spec: AcpLaunchSpec,
+  shellEnv: Readonly<Record<string, string>>,
+  stateDirectory: string,
+  settings: AcpHostBackendSettings
+): Promise<boolean> {
+  const input = await acpHostBackendInput(spec, shellEnv, stateDirectory, settings)
+  return Boolean(
+    input && spec.hostBackend && isAbsolute(input.command) && (await spec.hostBackend.select(input))
+  )
 }

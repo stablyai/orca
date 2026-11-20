@@ -22,11 +22,16 @@ function lacksAntigravitySessionBus(env: NodeJS.ProcessEnv): boolean {
   }
 }
 
+/** agy keeps its login in a file, not a keyring, in a remote or WSL session. */
+export function forcesAntigravityFileStore(env: NodeJS.ProcessEnv): boolean {
+  return ['SSH_TTY', 'SSH_CLIENT', 'SSH_CONNECTION', 'WSL_DISTRO_NAME', 'WSL_INTEROP'].some(
+    (name) => Boolean(env[name])
+  )
+}
+
 export function isAntigravityFileStorageHost(env: NodeJS.ProcessEnv): boolean {
   return (
-    ['SSH_TTY', 'SSH_CLIENT', 'SSH_CONNECTION', 'WSL_DISTRO_NAME', 'WSL_INTEROP'].some((name) =>
-      Boolean(env[name])
-    ) ||
+    forcesAntigravityFileStore(env) ||
     (process.platform === 'linux' && lacksAntigravitySessionBus(env))
   )
 }

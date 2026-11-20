@@ -17,6 +17,7 @@ import { COPILOT_MANAGED_CLI } from '../copilot/copilot-managed-runtime'
 import { GROK_MANAGED_CLI } from '../grok/grok-managed-runtime'
 import { KIMI_MANAGED_CLI } from '../kimi/kimi-managed-runtime'
 import { OMP_MANAGED_CLI } from '../omp/omp-managed-runtime'
+import { AGY_MANAGED_CLI } from '../antigravity/agy-managed-runtime'
 import {
   CURSOR_MINIMUM_VERSIONS,
   OPENCODE2_MINIMUM_VERSIONS,
@@ -35,7 +36,8 @@ export const MANAGED_AGENT_CLI_IDS = [
   'copilot',
   'grok',
   'kimi',
-  'omp'
+  'omp',
+  'antigravity'
 ] as const
 export type ManagedAgentCliId = (typeof MANAGED_AGENT_CLI_IDS)[number]
 
@@ -80,7 +82,9 @@ const MANAGED_AGENT_CLIS: Record<ManagedAgentCliId, ManagedAgentCli> = {
   copilot: COPILOT_MANAGED_CLI,
   grok: GROK_MANAGED_CLI,
   kimi: KIMI_MANAGED_CLI,
-  omp: OMP_MANAGED_CLI
+  omp: OMP_MANAGED_CLI,
+  // Stands in for `agy` only, never for the legacy ACP server Antigravity chats may run instead.
+  antigravity: AGY_MANAGED_CLI
 }
 
 export function isManagedAgentCli(agent: string): agent is ManagedAgentCliId {
@@ -100,6 +104,19 @@ export function rememberManagedAgentRelease(agent: ManagedAgentCliId, folder: st
   } else {
     installedFolders.delete(agent)
   }
+}
+
+/** Whether Orca's copy of `agent` may replace `command`, the program a launch looks for. */
+export function managedAgentStandsInFor(agent: ManagedAgentCliId, command: string): boolean {
+  const only = MANAGED_AGENT_CLIS[agent].standsInFor
+  return only === undefined || only === command
+}
+
+/** Orca's copy standing in for `command` when the user has none; null without one. */
+export function managedAgentCommandFor(agent: string, command: string): string | null {
+  return isManagedAgentCli(agent) && managedAgentStandsInFor(agent, command)
+    ? managedAgentCommand(agent)
+    : null
 }
 
 /** Orca's installed copy of `agent` on this host, used only when the user has none of their own. */

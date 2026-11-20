@@ -25,10 +25,7 @@ import {
   guestNativePathEnv,
   resolveGuestNativeProgram
 } from '../../wsl/filesystem/wsl-guest-windows-drive-path'
-import {
-  isManagedAgentCli,
-  managedAgentCommand
-} from '../../managed-agent-cli/managed-agent-cli-registry'
+import { managedAgentCommandFor } from '../../managed-agent-cli/managed-agent-cli-registry'
 
 export type StructuredAgentResolutionOperation = {
   deadline?: number
@@ -98,9 +95,7 @@ export function resolveStructuredAgentCommand(
     const resolved = resolveGuestNativeProgram(command, options, stock.resolve)
     // The user's own install wins; Orca's copy serves hosts that have none.
     const managed =
-      isManagedAgentCli(agent) && (resolved === null || !isAbsolute(resolved))
-        ? managedAgentCommand(agent)
-        : null
+      resolved === null || !isAbsolute(resolved) ? managedAgentCommandFor(agent, command) : null
     if (managed) {
       return { command: managed, prefixArgs: [] }
     }

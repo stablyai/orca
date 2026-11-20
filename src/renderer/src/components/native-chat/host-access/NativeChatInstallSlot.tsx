@@ -55,11 +55,8 @@ export function useNativeChatInstallSlot(
 } {
   const t = useTranslate()
   const hostProgram = useStructuredAgentSessionHostProgram(props.sessionId, props.target)
-  const observation = useManagedRuntimeInstall(
-    props.target,
-    props.agent,
-    props.isVisible && !hostProgram
-  )
+  // Chats on the host program follow it too: Orca's copy of agy may be what they need installed.
+  const observation = useManagedRuntimeInstall(props.target, props.agent, props.isVisible)
   const slot = nativeChatInstallSlotState(observation, layout, hostProgram)
   // Once Orca's own runtime is ready, chats still need its sign-in; the host's agy signs itself in.
   const signsIn =
@@ -99,13 +96,22 @@ export function useNativeChatInstallSlot(
   }
 }
 
-/** A chat running the host's own program needs no managed install, whatever its state. */
+/** A chat on the host's own program needs an install only when that program is Orca's missing
+ *  copy; an unanswered status never holds its sends. */
 export function nativeChatInstallSlotState(
   observation: ManagedRuntimeInstallObservation,
   layout: ManagedRuntimeInstallLayout,
   hostProgram: boolean
 ): NativeChatInstallSlotState {
-  if (hostProgram || observation.kind === 'inactive') {
+  if (hostProgram) {
+    return observation.kind === 'active' &&
+      observation.snapshot.kind === 'known' &&
+      observation.snapshot.state.program === 'cli' &&
+      observation.snapshot.state.source === null
+      ? { kind: 'install', observation, state: observation.snapshot.state, layout }
+      : NONE
+  }
+  if (observation.kind === 'inactive') {
     return NONE
   }
   if (observation.kind === 'pending') {
