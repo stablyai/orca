@@ -131,8 +131,8 @@ function durationBucket(
 }
 
 /**
- * Logs every launch's outcome; reports it when it differs from what this store last reported, or
- * the app version changed, so a saved state yields one report per version.
+ * Logs every launch's outcome; reports it when it, its progress buckets or the app version differ
+ * from what this store last reported, so a saved state yields one report per version.
  */
 export class LegacyJournalRetirementReporter {
   private last: string | null | undefined
@@ -175,6 +175,12 @@ export class LegacyJournalRetirementReporter {
       event.artifact,
       event.error,
       event.deletes,
+      // Progress too, by bucket: a later walk that got further is reported, but only a few times.
+      event.completeness,
+      event.chats_bucket,
+      event.newly_converted_bucket,
+      event.copies_bucket,
+      event.source_bytes_bucket,
       this.version
     ])
     // Logged once per launch for each distinct outcome, however often a retry repeats it.
@@ -224,7 +230,12 @@ function legacyProofErrorKind(error: unknown): LegacyJournalRetirementEvent['err
   if (!(error instanceof Error)) {
     return 'other'
   }
-  if (error.name === 'AbortError' || error.message === 'legacy proof was interrupted') {
+  if (
+    error.name === 'AbortError' ||
+    error.message === 'legacy proof was interrupted' ||
+    // Quitting stops the conversion the proof waits on.
+    error.message === 'journal maintenance stopped'
+  ) {
     return 'interrupted'
   }
   if (error.message.includes('conversion')) {

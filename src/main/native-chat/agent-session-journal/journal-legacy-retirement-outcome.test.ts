@@ -6,6 +6,7 @@ import { readJournalLegacySourceReceipt } from './database/journal-legacy-source
 import { legacyDestinationMain } from './journal-legacy-retirement-files'
 import { journalDomainDatabasePath } from './database/journal-host-database'
 import {
+  legacyProofFailureOutcome,
   setLegacyJournalRetirementHost,
   type LegacyJournalRetirementEvent
 } from './journal-legacy-retirement-outcome'
@@ -199,4 +200,44 @@ it('reports a deletion only once the source readers are released', async () => {
   vi.spyOn(console, 'warn').mockImplementation(() => {})
   await deleted.launch().run()
   expect(seen).toEqual([['deleted', true]])
+})
+
+it('reports a quit that stops the conversion the proof waits on as interrupted', () => {
+  const stopped = new Error('journal maintenance stopped')
+  expect(legacyProofFailureOutcome(stopped, { counts: null, resumed: false }, false)).toMatchObject(
+    {
+      outcome: 'proving',
+      error: 'interrupted'
+    }
+  )
+})
+
+it('reports a later launch of the same outcome again when the walk got further', async () => {
+  const events = recordEvents()
+  const many = await profile({
+    seed: (legacy) => {
+      const insert = legacy.prepare('INSERT INTO agent_session_records VALUES(?,?)')
+      for (let draft = 0; draft < 600; draft++) {
+        const id = `draft-${String(draft).padStart(3, '0')}`
+        insert.run(id, JSON.stringify({ sessionId: id }))
+      }
+    }
+  })
+  const read = many.readers.legacyProof
+  let limit = 1
+  let calls = 0
+  many.readers.legacyProof = async (cursor) => {
+    if (++calls > limit) {
+      throw new Error('legacy proof was interrupted')
+    }
+    return read(cursor)
+  }
+  await many.launch('1.0.1', true, undefined, undefined, false).run()
+  calls = 0
+  limit = 17
+  await many.launch('1.0.1', true, undefined, undefined, false).run()
+  expect(events.map((event) => [event.outcome, event.error, event.chats_bucket])).toEqual([
+    ['proving', 'interrupted', '11_100'],
+    ['proving', 'interrupted', '101_1000']
+  ])
 })

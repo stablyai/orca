@@ -303,11 +303,9 @@ export class JournalLegacyRetirement {
     resumed: boolean
   ): Promise<void> {
     if (
-      (await this.writer.maintain({
-        kind: 'legacy-retirement-save',
-        value: JSON.stringify(proven),
-        durable: false
-      })) !== true
+      (await this.writer
+        .maintain({ kind: 'legacy-retirement-save', value: JSON.stringify(proven), durable: false })
+        .catch(() => false)) !== true
     ) {
       // Unsaved, the next launch would walk again; this one retries after the backoff.
       return this.later()
