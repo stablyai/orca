@@ -1,28 +1,16 @@
 import { filesystemPathToFileUri } from '../../../../../../shared/file-links/file-uri-path'
-import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 import { isPairedWebClientWindow } from '@/app-shell/chrome/desktop-window-chrome'
 import type { TreeNode } from '../tree/file-explorer-types'
 
 // Chromium's DownloadURL lets external apps receive the file while Orca targets keep reading the internal MIME types.
 const DOWNLOAD_URL_MIME = 'DownloadURL'
 
-type DragOutContext = {
-  connectionId?: string | null
-  runtimeDownloadContext?: RuntimeFileOperationArgs | null
-}
-
-export function canDragOutFile(
-  node: TreeNode,
-  dragPathCount: number,
-  { connectionId, runtimeDownloadContext }: DragOutContext
-): boolean {
-  const ownerKind = node.operationOwner?.kind
+/** The row's operation owner, not the repo's connection, decides whether the file is on this disk. */
+export function canDragOutFile(node: TreeNode, dragPathCount: number): boolean {
   return (
     !node.isDirectory &&
     dragPathCount === 1 &&
-    !connectionId &&
-    !runtimeDownloadContext &&
-    ownerKind === 'local' &&
+    node.operationOwner?.kind === 'local' &&
     // DownloadURL splits on ':', so a colon in the name would corrupt the file URL.
     !node.name.includes(':') &&
     !isPairedWebClientWindow()

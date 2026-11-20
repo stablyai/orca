@@ -172,7 +172,7 @@ export function FileExplorerRow({
               sourceOwner?.executionHostId,
               sourceOwner?.runtimeEnvironmentId
             )
-            if (canDragOutFile(node, paths.length, { connectionId, runtimeDownloadContext })) {
+            if (canDragOutFile(node, paths.length)) {
               writeFileExplorerDragOut(event.dataTransfer, node)
             }
             event.dataTransfer.effectAllowed = 'copyMove'
