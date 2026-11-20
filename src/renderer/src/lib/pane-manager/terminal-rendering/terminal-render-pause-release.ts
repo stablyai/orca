@@ -9,6 +9,7 @@ type MaybePausableRenderService = {
   _needsFullRefresh?: boolean
   _pausedResizeTask?: { flush?: () => void } | null
   refreshRows?: (start: number, end: number, sync?: boolean) => void
+  _renderDebouncer?: { _rowStart?: number; _rowEnd?: number }
   _renderer?: { value?: MaybeWebglRenderer | null } | MaybeWebglRenderer | null
 }
 
@@ -159,6 +160,12 @@ export function paintReplacementCanvasNow(terminal: unknown): void {
   }
   try {
     service.refreshRows(0, rows - 1, true)
+    // That paint covered the full refresh attach queued; drop its rows so the next frame doesn't repaint them (later output queues its own).
+    const debouncer = service._renderDebouncer
+    if (debouncer) {
+      debouncer._rowStart = undefined
+      debouncer._rowEnd = undefined
+    }
   } catch {
     // A pane disposed mid-rebuild keeps its scheduled refresh.
   }

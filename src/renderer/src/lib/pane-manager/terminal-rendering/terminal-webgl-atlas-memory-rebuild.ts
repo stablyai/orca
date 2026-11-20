@@ -3,6 +3,7 @@ import type { ForegroundTerminalOutputTarget } from '../terminal-output/pane-ter
 import { recordTerminalWebglDiagnostic } from '../../../../../shared/terminal/diagnostics/terminal-webgl-diagnostics'
 import { getVisiblePaneTerminals } from '../pane-manager-registry'
 import { getWindowParkVisible } from '../../window-activity/window-park-visibility'
+import { paneIsCoveredByNativeChat } from '@/components/terminal-pane/chat/native-chat-covered-pane'
 
 // A 4096² merged page means the shared atlas reached ~64 MiB; on Apple GPUs each context keeps its upload memory until the context is destroyed (GiBs across panes).
 const ATLAS_REBUILD_PAGE_SIZE = 4096
@@ -98,13 +99,16 @@ export function setTerminalWebglAtlasRebuilder(rebuilder: AtlasRebuilder): void 
   rebuildPanes = rebuilder
 }
 
-/** On screen: window shown, tab shown, and the pane laid out (not an expanded split's hidden sibling). */
+/** On screen: window shown, tab shown, the pane laid out (not an expanded split's hidden sibling) and not under a chat cover. */
 function onScreenPaneFilter(): PaneFilter {
   if (!getWindowParkVisible()) {
     return () => false
   }
   const visibleTerminals = getVisiblePaneTerminals()
-  return (pane) => visibleTerminals.has(pane.terminal) && pane.container.getClientRects().length > 0
+  return (pane) =>
+    visibleTerminals.has(pane.terminal) &&
+    pane.container.getClientRects().length > 0 &&
+    !paneIsCoveredByNativeChat(pane)
 }
 
 function rebuildDueAtlases(): void {
@@ -177,6 +181,13 @@ export function trackTerminalWebglAtlasPane(pane: ManagedPaneInternal): void {
 export function untrackTerminalWebglAtlasPane(pane: ManagedPaneInternal): void {
   attachedPanes.delete(pane.terminal)
   forgetOwner(pane)
+}
+
+/** Re-files a pane whose renderer swapped atlases (font, zoom or theme change), so a rebuild reaches every owner. */
+export function noteTerminalWebglAtlasChange(pane: ManagedPaneInternal): void {
+  if (attachedPanes.get(pane.terminal) === pane) {
+    indexOwner(pane)
+  }
 }
 
 /** Marks PTY output for the pane's atlas; repaints, warm-up, reveals and empty parse barriers never come through here. */

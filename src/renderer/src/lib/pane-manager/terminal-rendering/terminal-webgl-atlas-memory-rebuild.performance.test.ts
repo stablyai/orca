@@ -28,13 +28,19 @@ function fakePane(atlasModule: AtlasModule, atlas: FakeAtlas, visible = true, di
     visibleTerminals.add(terminal)
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the module reads only terminal modes, container rects and the addon's atlas identity, all supplied here.
+  const renderer = { _charAtlas: atlas }
   const pane = {
     terminal,
-    container: { getClientRects: () => (displayed ? [{}] : []) },
-    webglAddon: { _renderer: { _charAtlas: atlas } }
+    container: { getClientRects: () => (displayed ? [{}] : []), querySelector: () => null },
+    webglAddon: { _renderer: renderer }
   } as unknown as ManagedPaneInternal
   atlasModule.trackTerminalWebglAtlasPane(pane)
-  return { pane, terminal, output: () => atlasModule.noteTerminalWebglAtlasOutput(pane.terminal) }
+  return {
+    pane,
+    terminal,
+    renderer,
+    output: () => atlasModule.noteTerminalWebglAtlasOutput(pane.terminal)
+  }
 }
 
 async function loadModule(navigatorStub: { userAgent: string; maxTouchPoints?: number }) {
@@ -117,6 +123,20 @@ describe('terminal WebGL atlas-memory rebuild', () => {
       await vi.advanceTimersByTimeAsync(10_000)
     }
     expect(rebuilds).toHaveLength(1)
+  })
+
+  it('rebuilds a quiet pane that switched onto the grown atlas', async () => {
+    const atlas = await loadModule({ userAgent: MAC_AGENT })
+    const grown = newAtlas()
+    const busy = fakePane(atlas, grown)
+    const quiet = fakePane(atlas, newAtlas())
+    // A font zoom moves the quiet pane onto the grown atlas after its large page, with no output.
+    quiet.renderer._charAtlas = grown
+    atlas.noteTerminalWebglAtlasChange(quiet.pane)
+    busy.output()
+    atlas.handleTerminalWebglAtlasPage(LARGE_PAGE, busy.pane)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(rebuilds).toEqual([[busy.pane, quiet.pane]])
   })
 
   it('waits for a visible synchronized-output frame, retrying on its own a bounded number of times', async () => {

@@ -29,6 +29,7 @@ import {
 import { watchTerminalSymbolsFontLoad } from './terminal-symbols-font'
 import {
   handleTerminalWebglAtlasPage,
+  noteTerminalWebglAtlasChange,
   trackTerminalWebglAtlasPane,
   untrackTerminalWebglAtlasPane
 } from './terminal-webgl-atlas-memory-rebuild'
@@ -283,6 +284,7 @@ export function attachWebgl(pane: ManagedPaneInternal): void {
       disposeWebgl(pane, { refreshDimensions: true })
     })
     addon.onAddTextureAtlasCanvas((page) => handleTerminalWebglAtlasPage(page, pane))
+    addon.onChangeTextureAtlas(() => noteTerminalWebglAtlasChange(pane))
     pane.terminal.loadAddon(addon)
     pane.webglAddon = addon
     trackTerminalWebglAtlasPane(pane)
