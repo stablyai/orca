@@ -1,4 +1,4 @@
-import { Pressable, Text, View } from 'react-native'
+import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { Check } from 'lucide-react-native'
 import { MobileNativeChatOptionThumbnail } from '../session-options/MobileNativeChatOptionThumbnail'
 import { colors, radii, spacing, typography, pressedStyle } from '../../../../theme/mobile-theme'
@@ -14,6 +14,7 @@ export function MobileNativeChatAskOptionRow({
   selected,
   multi,
   disabled,
+  pending = false,
   onPress
 }: {
   label: string
@@ -24,6 +25,8 @@ export function MobileNativeChatAskOptionRow({
   selected: boolean
   multi?: boolean
   disabled: boolean
+  /** This choice is the answer being sent (a card with no Submit). */
+  pending?: boolean
   onPress: () => void
 }): React.JSX.Element {
   useMobileColorScheme()
@@ -31,7 +34,8 @@ export function MobileNativeChatAskOptionRow({
   const row = (
     <Pressable
       accessibilityRole={multi ? 'checkbox' : 'radio'}
-      accessibilityState={{ checked: selected, disabled }}
+      accessibilityState={{ checked: selected, disabled, busy: pending }}
+      aria-busy={pending}
       style={({ pressed }) => [
         styles.option,
         selected && styles.optionSelected,
@@ -42,15 +46,19 @@ export function MobileNativeChatAskOptionRow({
       onPress={onPress}
     >
       {/* Multi-select reads as a checkbox (square); single-select as a radio (circle). */}
-      <View
-        style={[
-          styles.check,
-          multi ? styles.checkSquare : styles.checkCircle,
-          selected && styles.checkOn
-        ]}
-      >
-        {selected ? <Check size={12} color={colors.bgBase} strokeWidth={3} /> : null}
-      </View>
+      {pending ? (
+        <ActivityIndicator size="small" color={colors.statusGreen} style={styles.checkSlot} />
+      ) : (
+        <View
+          style={[
+            styles.check,
+            multi ? styles.checkSquare : styles.checkCircle,
+            selected && styles.checkOn
+          ]}
+        >
+          {selected ? <Check size={12} color={colors.bgBase} strokeWidth={3} /> : null}
+        </View>
+      )}
       <View style={styles.optionBody}>
         <Text style={styles.optionLabel}>{label}</Text>
         {description ? (
@@ -94,6 +102,10 @@ const styles = themedStyleSheet(() => ({
   optionSelected: {
     borderColor: colors.statusGreen,
     backgroundColor: colors.choiceSelectedFill
+  },
+  checkSlot: {
+    width: CHECK_SIZE,
+    height: CHECK_SIZE
   },
   check: {
     width: CHECK_SIZE,

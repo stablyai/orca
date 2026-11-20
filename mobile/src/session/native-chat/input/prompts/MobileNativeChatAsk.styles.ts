@@ -2,7 +2,6 @@ import { StyleSheet } from 'react-native'
 import {
   colors,
   concentricRadius,
-  feedback,
   radii,
   spacing,
   typography
@@ -75,11 +74,6 @@ export const mobileNativeChatAskStyles = themedStyleSheet(() => ({
   choiceOnlyEnd: {
     height: ASK_CARD_PADDING - 6
   },
-  choiceOnlyPending: {
-    alignItems: 'center',
-    paddingTop: spacing.xs,
-    paddingBottom: ASK_CARD_PADDING
-  },
   footer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -117,15 +111,6 @@ export const mobileNativeChatAskStyles = themedStyleSheet(() => ({
   nextSkip: {
     backgroundColor: 'transparent',
     borderColor: colors.choiceBorder
-  },
-  nextSubmitting: {
-    opacity: feedback.pressedOpacity
-  },
-  busyLabelHidden: {
-    opacity: 0
-  },
-  busySpinner: {
-    ...StyleSheet.absoluteFill
   },
   nextText: {
     color: colors.bgBase,

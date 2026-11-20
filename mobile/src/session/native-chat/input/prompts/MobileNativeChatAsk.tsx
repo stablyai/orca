@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from 'react'
-import { ActivityIndicator, Keyboard, Pressable, ScrollView, Text, View } from 'react-native'
+import { Keyboard, Pressable, ScrollView, Text, View } from 'react-native'
 import { Check } from 'lucide-react-native'
 import {
   nativeChatAnswerOperationEvidence,
@@ -23,6 +23,7 @@ import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
 import type { Translate } from '../../../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import { MessageBox } from '../../../../components/composer-input/MessageBox'
+import { MobilePendingButton } from '../../../../components/controls/MobilePendingButton'
 import { MobileNativeChatCardHeaderAction } from './MobileNativeChatCardHeaderAction'
 import { MobileNativeChatQuestionText } from '../../transcript/message-content/MobileNativeChatQuestionText'
 import { useMobileNativeChatAskAutoAdvance } from './use-mobile-native-chat-ask-auto-advance'
@@ -130,13 +131,7 @@ export function MobileNativeChatAsk({
     setSelections(next)
     autoAdvance.cancel()
     if (picked && !multi && optIndex !== OTHER && !keep) {
-      autoAdvance.schedule(() => {
-        // Auto-submit gets the Submit tap's haptic; moving to the next step stays silent.
-        if (isLast) {
-          triggerSelection()
-        }
-        void advance(next)
-      })
+      autoAdvance.schedule(() => void advance(next))
     }
   }
 
@@ -174,6 +169,7 @@ export function MobileNativeChatAsk({
     operationRef.current = current
     setOperation(current)
     setBusyControl('confirm')
+    triggerSelection()
     try {
       await onAnswer(
         prompt.questions.map((_, i) => selectionFor(i, sel)),
@@ -208,6 +204,7 @@ export function MobileNativeChatAsk({
       operationRef.current = current
       setOperation(current)
       setBusyControl(control)
+      triggerSelection()
       try {
         await onCancel()
       } finally {
@@ -221,7 +218,6 @@ export function MobileNativeChatAsk({
 
   const confirm = (): void => {
     const action = askConfirmAction({ isLast, anyAnswered: anyAnswered() })
-    triggerSelection()
     if (action === 'cancel') {
       void cancel('confirm')
     } else if (action === 'proceed') {
@@ -311,6 +307,8 @@ export function MobileNativeChatAsk({
             selected={(selections[index] ?? []).includes(optIndex)}
             multi={q.multiSelect}
             disabled={submitting}
+            // A choice-only card has no Submit: the chosen choice is the control that sends.
+            pending={choiceOnly && confirmBusy && (selections[index] ?? []).includes(optIndex)}
             onPress={() => toggle(index, optIndex, q.multiSelect)}
           />
         ))}
@@ -341,69 +339,33 @@ export function MobileNativeChatAsk({
       </ScrollView>
 
       {choiceOnly ? (
-        submitting ? (
-          <View style={styles.choiceOnlyPending}>
-            <ActivityIndicator size="small" color={colors.textSecondary} />
-          </View>
-        ) : (
-          <View style={styles.choiceOnlyEnd} />
-        )
+        <View style={styles.choiceOnlyEnd} />
       ) : (
         <View style={styles.footer}>
-          <Pressable
-            style={({ pressed }) => [styles.cancel, pressed && pressedStyle]}
-            onPress={() => void cancel('cancel')}
+          <MobilePendingButton
+            label={t('common.cancel', 'Cancel')}
+            pending={cancelBusy}
             disabled={sending}
+            onPress={() => void cancel('cancel')}
             hitSlop={8}
-            accessibilityRole="button"
-            accessibilityState={{ disabled: sending, busy: cancelBusy }}
-          >
-            <Text style={[styles.cancelText, cancelBusy && styles.busyLabelHidden]}>
-              {t('common.cancel', 'Cancel')}
-            </Text>
-            {cancelBusy ? (
-              <ActivityIndicator
-                size="small"
-                color={colors.textPrimary}
-                style={styles.busySpinner}
-              />
-            ) : null}
-          </Pressable>
+            style={styles.cancel}
+            labelStyle={styles.cancelText}
+            spinnerColor={colors.textPrimary}
+          />
           {total > 1 ? (
             <Text style={styles.progress}>
               {index + 1}/{total}
             </Text>
           ) : null}
-          <Pressable
-            style={({ pressed }) => [
-              styles.next,
-              confirmSkips && styles.nextSkip,
-              pressed && pressedStyle,
-              confirmBusy && styles.nextSubmitting
-            ]}
-            onPress={confirm}
+          <MobilePendingButton
+            label={confirmLabels(t)[confirmLabel]}
+            pending={confirmBusy}
             disabled={submitting}
-            accessibilityRole="button"
-            accessibilityState={{ disabled: submitting, busy: confirmBusy }}
-          >
-            {/* Keep the label laid out so the button width doesn't jump under the spinner. */}
-            <Text
-              style={[
-                styles.nextText,
-                confirmSkips && styles.nextSkipText,
-                confirmBusy && styles.busyLabelHidden
-              ]}
-            >
-              {confirmLabels(t)[confirmLabel]}
-            </Text>
-            {confirmBusy ? (
-              <ActivityIndicator
-                size="small"
-                color={confirmSkips ? colors.textPrimary : colors.bgBase}
-                style={styles.busySpinner}
-              />
-            ) : null}
-          </Pressable>
+            onPress={confirm}
+            style={[styles.next, confirmSkips && styles.nextSkip]}
+            labelStyle={[styles.nextText, confirmSkips && styles.nextSkipText]}
+            spinnerColor={confirmSkips ? colors.textPrimary : colors.bgBase}
+          />
         </View>
       )}
       <MobileNativeChatOptionPreviewSheet
