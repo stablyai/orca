@@ -60,8 +60,10 @@ it.each([100, 1_000])(
       await vi.advanceTimersByTimeAsync(1)
     }
     const settled = frames.length
+    // Staggered renewals leave staggered deadlines; batching must still expire them in one pass.
     for (let index = 0; index < count; index++) {
       bridge.receive(registerFor(index))
+      await vi.advanceTimersByTimeAsync(1)
     }
     expect(frames).toHaveLength(settled)
     await vi.advanceTimersByTimeAsync(160_000)
