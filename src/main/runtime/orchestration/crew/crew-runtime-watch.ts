@@ -26,7 +26,7 @@ import {
 
 type CrewRuntimeWatchDependencies = {
   store: RuntimeStore | null
-  watchChanges: (wake: (facets: CrewInvalidation) => void, idle?: () => boolean) => () => void
+  watchChanges: (wake: (facets: CrewInvalidation) => void, idle: () => boolean) => () => void
   watchTransitions: (wake: (change: { paneKey: string }) => void) => () => void
   watchClient: (wake: (event: RuntimeClientEvent) => void) => () => void
 }
