@@ -220,6 +220,36 @@ describe('TerminalAgentPhonePush on a windowless host', () => {
     ])
   })
 
+  it('pushes a wakeup the person joins after it carried their announced finish', () => {
+    const host = windowlessHost()
+    const pane = 'tab-1:leaf-1'
+    const turn = { paneKey: pane, agentType: 'claude', connectionId: null, prompt: 'go' } as const
+    function working(turnCompletedAt: number | undefined, taskWakeup?: true): void {
+      host.hookRows.set(pane, {
+        ...turn,
+        state: 'working',
+        receivedAt: host.now(),
+        stateStartedAt: 1_000,
+        ...(turnCompletedAt === undefined ? {} : { turnCompletedAt }),
+        mainAgent: {
+          state: 'working',
+          stateStartedAt: host.now(),
+          ...(taskWakeup ? { taskWakeup } : {})
+        }
+      })
+      host.push.observe({ kind: 'observed', paneKey: pane, workspace, phase: 'working', at: 0 })
+    }
+    working(undefined)
+    working(2_000)
+    working(2_000, true)
+    working(3_000)
+    host.advance(5_000)
+    expect(host.sent.map((event) => event.source)).toEqual([
+      'agent-task-complete',
+      'agent-task-complete'
+    ])
+  })
+
   it("still pushes the person's finish when a quiet wakeup runs inside its quiet window", () => {
     const host = windowlessHost()
     const pane = 'tab-1:leaf-1'

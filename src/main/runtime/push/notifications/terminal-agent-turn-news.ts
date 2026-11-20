@@ -172,6 +172,10 @@ export class TerminalAgentTurnNews<Prepared> {
     }
     // Announce the lead agent's turnCompletedAt once even while background work keeps the pane working.
     if (this.finishedTurnByPane.get(paneKey) === turnCompletedAt) {
+      // A wakeup carrying that announced end is still live work the person may join.
+      if (this.deps.quietTaskWakeups === true && isQuietTaskWakeup(row)) {
+        this.workingSeen.add(paneKey)
+      }
       return
     }
     this.finishedTurnByPane.set(paneKey, turnCompletedAt)

@@ -38,13 +38,13 @@ export function settleLateClaudePromptSubmit(
     lead.turnOrigin = own.turnOrigin
   }
   // A wakeup the person joins while running work keeps its end from showing: they hear that end now.
-  if (
-    joinedWakeup &&
-    own?.state === 'done' &&
-    lead.turnCompletedAt === undefined &&
-    claudePaneHasRunningChildWork(state, paneKey)
-  ) {
-    lead.turnCompletedAt = own.stateStartedAt
+  if (joinedWakeup && own?.state === 'done' && claudePaneHasRunningChildWork(state, paneKey)) {
+    // A stamp already here is an earlier turn's, so this end needs its own.
+    const heard = lead.turnCompletedAt
+    lead.turnCompletedAt =
+      heard === undefined || heard < own.stateStartedAt
+        ? own.stateStartedAt
+        : Math.max(Date.now(), heard + 1)
   }
   // A wakeup's own end is no one's news.
   if (own?.turnOrigin === 'task-wakeup') {

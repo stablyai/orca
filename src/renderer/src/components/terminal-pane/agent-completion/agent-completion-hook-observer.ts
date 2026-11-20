@@ -75,6 +75,14 @@ export function createAgentCompletionHookObserver({
   recordWorkingBoundary,
   dropPendingTitle
 }: HookObserverOptions) {
+  // Still live work: an end the person later joins arrives as a stamp on a working row and is its own turn.
+  function openQuietWakeupTurn(): void {
+    state.workingStatusObserved = true
+    if (state.lastCompletedTurn === state.currentTurn) {
+      state.currentTurn += 1
+    }
+  }
+
   function observeHookStatus(payload: AgentCompletionStatusSnapshot): void {
     recordPaneActivity()
     if (isRecognizedAgentType(payload.agentType)) {
@@ -115,16 +123,15 @@ export function createAgentCompletionHookObserver({
         } else if (!state.workingStatusObserved) {
           rememberHandledTurnCompletedAt(turnCompletedAt)
         }
+        if (isQuietTaskWakeup(payload)) {
+          openQuietWakeupTurn()
+        }
         options.dispatchHookLifecycle?.(payload)
         return
       }
       // The agent waking itself for a finished background task is not a turn the person started.
       if (isQuietTaskWakeup(payload)) {
-        // Still live work: an end the person later joins arrives as a stamp on a working row and is its own turn.
-        state.workingStatusObserved = true
-        if (state.lastCompletedTurn === state.currentTurn) {
-          state.currentTurn += 1
-        }
+        openQuietWakeupTurn()
         options.dispatchHookLifecycle?.(payload)
         return
       }
