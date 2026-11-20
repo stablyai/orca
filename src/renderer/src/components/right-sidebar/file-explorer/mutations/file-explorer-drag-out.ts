@@ -22,7 +22,7 @@ export function canDragOutFile(
     dragPathCount === 1 &&
     !connectionId &&
     !runtimeDownloadContext &&
-    (ownerKind === undefined || ownerKind === 'local') &&
+    ownerKind === 'local' &&
     // DownloadURL splits on ':', so a colon in the name would corrupt the file URL.
     !node.name.includes(':') &&
     !isPairedWebClientWindow()
