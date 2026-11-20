@@ -28,6 +28,7 @@ export function callerMailProvenance(msg: {
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed) || !('botRequest' in parsed)) {
     return payload
   }
-  const { botRequest: _claimed, ...rest } = parsed as Record<string, unknown>
-  return JSON.stringify(rest)
+  return JSON.stringify(
+    Object.fromEntries(Object.entries(parsed).filter(([key]) => key !== 'botRequest'))
+  )
 }
