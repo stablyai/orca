@@ -23,7 +23,8 @@ import { botLinkOwners } from '../../../../shared/bot-link-owners'
 import { orcaCloudNeedsSignIn } from '../../../../shared/bots/host-orca-sign-in'
 import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { OrcaAccountServerStatus } from '../../../../shared/orca-account-server-sign-in'
-import { useBotHostLabel } from './use-bot-host-label'
+import { pairedWebSignedOutNotice } from '../../../../shared/bots/paired-web-sign-in-copy'
+import { useBotHostLabel, usePairedWebServerLabel } from './use-bot-host-label'
 import { BotHostSignInBlocked, useBotHostSignInFromHere } from './bot-host-sign-in-from-here'
 import { openBotConnectorsTab } from './bot-settings-open'
 
@@ -241,11 +242,14 @@ export function useServerNoticeState(
 function ServerNotice({
   hostId,
   host,
-  bot
+  bot,
+  pairedWeb = false
 }: {
   hostId: ExecutionHostId
   host: string
   bot: Bot | null
+  /** This window is the paired web client, so sign-in is `orca auth login` on the server. */
+  pairedWeb?: boolean
 }): React.JSX.Element | null {
   const t = useTranslate()
   const signInFromHere = useBotHostSignInFromHere(hostId)
@@ -343,6 +347,11 @@ function ServerNotice({
           </>
         )
       case 'signed-out':
+        if (pairedWeb) {
+          return line(
+            t('bots.host.notice.pairedWebSignedOut', pairedWebSignedOutNotice('{{host}}'), { host })
+          )
+        }
         return (
           <>
             {lead
@@ -396,8 +405,12 @@ function ServerNotice({
 
 /** A server bot's notice; a bot on this computer has BotCloudSignInNotice. */
 export function BotConnectorsHostNotice({ bot }: { bot: Bot }): React.JSX.Element | null {
-  const host = useBotHostLabel(bot.hostId)
-  return host ? <ServerNotice hostId={bot.hostId} host={host} bot={bot} /> : null
+  const listed = useBotHostLabel(bot.hostId)
+  const server = usePairedWebServerLabel()
+  const host = listed ?? server
+  return host ? (
+    <ServerNotice hostId={bot.hostId} host={host} bot={bot} pairedWeb={listed === null} />
+  ) : null
 }
 
 /** Settings › Bots: why a server's bots aren't reached, and its sign-in, for all of its bots. */

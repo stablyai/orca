@@ -19,6 +19,8 @@ import type {
   ConnectorOfferSource,
   LinkedOfferSource
 } from '../../../../shared/bots/bot-connector-offer'
+import { pairedWebChatSignInLine } from '../../../../shared/bots/paired-web-sign-in-copy'
+import { usePairedWebServerLabel } from '../bots/use-bot-host-label'
 import { googleBotConnectState } from '../../../../shared/google/google-bot-connect-state'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
 import {
@@ -252,10 +254,26 @@ export function NativeChatConnectorOfferCard({
   /** The host's line, for a bot this window doesn't list. */
   fallback: string
 }): React.JSX.Element {
+  const t = useTranslate()
+  const server = usePairedWebServerLabel()
   // The bot on the host this chat runs on: ids are random per host, so another host's may match.
   const { bot } = useCardBot(offer.botId)
   if (!bot) {
     return <p className="text-sm text-chat-foreground-faint">{fallback}</p>
+  }
+  if (server && (offer.signIn || offer.source === 'webhook')) {
+    return (
+      <p className="text-sm text-chat-foreground-faint">
+        {t(
+          'bots.cloudSignIn.pairedWebChat',
+          pairedWebChatSignInLine(offer.source, '{{host}}', '{{bot}}'),
+          {
+            host: server,
+            bot: bot.name
+          }
+        )}
+      </p>
+    )
   }
   if (offer.signIn || offer.source === 'webhook') {
     // Sign in here signs in only this desktop; another host's bot keeps the host's own line.

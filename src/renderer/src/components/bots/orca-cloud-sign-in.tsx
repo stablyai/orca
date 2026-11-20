@@ -10,6 +10,8 @@ import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import { useAppStore } from '@/store'
 import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
+import { pairedWebServerSignInLine } from '../../../../shared/bots/paired-web-sign-in-copy'
+import { usePairedWebServerLabel } from './use-bot-host-label'
 import { useOrcaCloudSignedOut } from './orca-cloud-signed-out'
 
 /** Runs `work` with `busy` set true until it settles, however it ends. */
@@ -108,19 +110,26 @@ export function OrcaCloudSignInDialogBody({
   onSignedIn?: () => unknown
 }): React.JSX.Element {
   const t = useTranslate()
+  const server = usePairedWebServerLabel()
   const { start, busy } = useSignInThen(onSignedIn)
   return (
     <>
       <DialogHeader>
         <DialogTitle>{title}</DialogTitle>
-        <DialogDescription>{reason}</DialogDescription>
+        <DialogDescription>
+          {server
+            ? t('bots.host.signIn.pairedWeb', pairedWebServerSignInLine('{{host}}'), {
+                host: server
+              })
+            : reason}
+        </DialogDescription>
       </DialogHeader>
-      <OrcaSignInWaitNotice />
+      {server ? null : <OrcaSignInWaitNotice />}
       <DialogFooter>
         <Button type="button" variant="outline" onClick={onCancel}>
           {t('bots.cloudSignIn.cancel', 'Cancel')}
         </Button>
-        <SignInButton autoFocus busy={busy} onClick={start} />
+        {server ? null : <SignInButton autoFocus busy={busy} onClick={start} />}
       </DialogFooter>
     </>
   )
