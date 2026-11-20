@@ -1151,7 +1151,9 @@
         "permissionAsk": "Genehmigung anfordern",
         "permissionAcceptEdits": "Änderungen akzeptieren",
         "permissionAuto": "Genehmigen lassen",
-        "permissionFullAccess": "Vollzugriff"
+        "permissionFullAccess": "Vollzugriff",
+        "permissionAgentSettings": "{{agent}}-Einstellungen",
+        "permissionFromAgentSettings": "{{mode}}, aus den {{agent}}-Einstellungen"
       },
       "goal": {
         "sentAsGoal": "Als Ziel gesendet"
@@ -2961,9 +2963,6 @@
       "title": "Spracheingabe",
       "toggleMode": "Umschalten",
       "updateFailed": "Aktualisierung fehlgeschlagen"
-    },
-    "agents": {
-      "permissionOwnAll": "Eigene Einstellungen der Agenten"
     },
     "voiceTranscribeOn": {
       "heading": "TRANSKRIBIEREN AUF",

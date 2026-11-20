@@ -20712,6 +20712,8 @@
         "permissionAuto": "Aprovar por mim",
         "permissionAutoDescription": "Analisa os pedidos de aprovação por você",
         "permissionFullAccess": "Acesso total",
+        "permissionAgentSettings": "Configurações de {{agent}}",
+        "permissionFromAgentSettings": "{{mode}}, conforme as configurações de {{agent}}",
         "permissionFullAccessDescription": "Nunca pede aprovação antes de edições ou comandos",
         "permissionFullAccessCodexDescription": "Nunca pede aprovação; pode editar qualquer arquivo e usar a rede",
         "permissionFullAccessSharedDescription": "Nunca pede aprovação antes de edições ou comandos",

@@ -19518,6 +19518,8 @@
         "permissionAuto": "Genehmigen lassen",
         "permissionAutoDescription": "Prüft Genehmigungsanfragen stellvertretend",
         "permissionFullAccess": "Vollzugriff",
+        "permissionAgentSettings": "{{agent}}-Einstellungen",
+        "permissionFromAgentSettings": "{{mode}}, aus den {{agent}}-Einstellungen",
         "permissionFullAccessDescription": "Fragt nie vor Änderungen oder Befehlen",
         "permissionFullAccessCodexDescription": "Fragt nie nach; kann jede Datei bearbeiten und das Netzwerk nutzen",
         "permissionFullAccessSharedDescription": "Fragt nie vor Änderungen oder Befehlen",

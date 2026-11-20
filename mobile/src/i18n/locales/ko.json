@@ -1147,7 +1147,9 @@
         "permissionAsk": "승인 요청",
         "permissionAcceptEdits": "편집 허용",
         "permissionAuto": "대신 승인",
-        "permissionFullAccess": "전체 액세스"
+        "permissionFullAccess": "전체 액세스",
+        "permissionAgentSettings": "{{agent}} 설정",
+        "permissionFromAgentSettings": "{{mode}}, {{agent}} 설정에서"
       },
       "goal": {
         "sentAsGoal": "목표로 보냄"
@@ -2959,9 +2961,6 @@
       "title": "음성",
       "toggleMode": "토글",
       "updateFailed": "업데이트하지 못했습니다."
-    },
-    "agents": {
-      "permissionOwnAll": "에이전트 자체 설정"
     },
     "voiceTranscribeOn": {
       "heading": "받아쓰기 위치",

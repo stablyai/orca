@@ -20093,6 +20093,8 @@
         "permissionAuto": "Одобрять за меня",
         "permissionAutoDescription": "Проверяет запросы разрешений за вас",
         "permissionFullAccess": "Полный доступ",
+        "permissionAgentSettings": "Настройки {{agent}}",
+        "permissionFromAgentSettings": "{{mode}}, из настроек {{agent}}",
         "permissionFullAccessDescription": "Не спрашивает перед правками и командами",
         "permissionFullAccessCodexDescription": "Не спрашивает разрешение; может менять любые файлы и использовать сеть",
         "permissionFullAccessSharedDescription": "Не спрашивает перед правками и командами",

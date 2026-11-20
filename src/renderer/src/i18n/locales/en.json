@@ -21252,6 +21252,8 @@
         "permissionAuto": "Approve for me",
         "permissionAutoDescription": "Reviews approval requests for you",
         "permissionFullAccess": "Full access",
+        "permissionAgentSettings": "{{agent}} settings",
+        "permissionFromAgentSettings": "{{mode}}, from {{agent}} settings",
         "permissionFullAccessDescription": "Never asks before edits or commands",
         "permissionFullAccessCodexDescription": "Never asks; can edit any file and use the network",
         "permissionFullAccessSharedDescription": "Never asks before edits or commands",

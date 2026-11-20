@@ -1271,7 +1271,9 @@
         "permissionAsk": "Pedir aprovação",
         "permissionAcceptEdits": "Aceitar edições",
         "permissionAuto": "Aprovar por mim",
-        "permissionFullAccess": "Acesso total"
+        "permissionFullAccess": "Acesso total",
+        "permissionAgentSettings": "Configurações de {{agent}}",
+        "permissionFromAgentSettings": "{{mode}}, conforme as configurações de {{agent}}"
       },
       "turnDiff": {
         "changedFiles_one": "{{count}} arquivo alterado",
@@ -3435,9 +3437,6 @@
       "toggleMode": "Alternar",
       "updateFailed": "Não foi possível atualizar",
       "loading": "Carregando configurações de voz…"
-    },
-    "agents": {
-      "permissionOwnAll": "Configurações próprias dos agentes"
     },
     "voiceTranscribeOn": {
       "heading": "TRANSCREVER EM",

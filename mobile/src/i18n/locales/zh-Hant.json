@@ -1147,7 +1147,9 @@
         "permissionAsk": "請求核准",
         "permissionAcceptEdits": "接受編輯",
         "permissionAuto": "替我核准",
-        "permissionFullAccess": "完整存取權"
+        "permissionFullAccess": "完整存取權",
+        "permissionAgentSettings": "{{agent}} 設定",
+        "permissionFromAgentSettings": "{{mode}}，來自 {{agent}} 設定"
       },
       "goal": {
         "sentAsGoal": "作為目標傳送"
@@ -2954,9 +2956,6 @@
       "title": "語音",
       "toggleMode": "切換",
       "updateFailed": "無法更新"
-    },
-    "agents": {
-      "permissionOwnAll": "各代理程式自身的設定"
     },
     "voiceTranscribeOn": {
       "heading": "轉寫位置",

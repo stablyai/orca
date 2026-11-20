@@ -1190,7 +1190,9 @@
         "permissionAsk": "Demander l’approbation",
         "permissionAcceptEdits": "Accepter les modifications",
         "permissionAuto": "Approuver pour moi",
-        "permissionFullAccess": "Accès complet"
+        "permissionFullAccess": "Accès complet",
+        "permissionAgentSettings": "Paramètres de {{agent}}",
+        "permissionFromAgentSettings": "{{mode}}, d’après les paramètres de {{agent}}"
       },
       "goal": {
         "sentAsGoal": "Envoyé comme objectif"
@@ -3037,9 +3039,6 @@
       "title": "Voix",
       "toggleMode": "Bascule",
       "updateFailed": "Impossible de mettre à jour"
-    },
-    "agents": {
-      "permissionOwnAll": "Paramètres propres aux agents"
     },
     "voiceTranscribeOn": {
       "heading": "TRANSCRIRE SUR",

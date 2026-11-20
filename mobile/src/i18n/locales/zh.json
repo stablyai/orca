@@ -1332,7 +1332,9 @@
         "permissionAsk": "请求批准",
         "permissionAcceptEdits": "接受编辑",
         "permissionAuto": "替我批准",
-        "permissionFullAccess": "完全访问"
+        "permissionFullAccess": "完全访问",
+        "permissionAgentSettings": "{{agent}} 设置",
+        "permissionFromAgentSettings": "{{mode}}，来自 {{agent}} 设置"
       },
       "goal": {
         "sentAsGoal": "作为目标发送"
@@ -3490,9 +3492,6 @@
       "title": "语音",
       "toggleMode": "切换",
       "updateFailed": "无法更新"
-    },
-    "agents": {
-      "permissionOwnAll": "各智能体自己的设置"
     },
     "voiceTranscribeOn": {
       "heading": "转写位置",

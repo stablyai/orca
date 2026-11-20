@@ -1147,7 +1147,9 @@
         "permissionAsk": "承認を求める",
         "permissionAcceptEdits": "編集を許可",
         "permissionAuto": "代わりに承認",
-        "permissionFullAccess": "フルアクセス"
+        "permissionFullAccess": "フルアクセス",
+        "permissionAgentSettings": "{{agent}} の設定",
+        "permissionFromAgentSettings": "{{mode}}（{{agent}} の設定より）"
       },
       "goal": {
         "sentAsGoal": "ゴールとして送信されました"
@@ -2960,9 +2962,6 @@
       "title": "音声",
       "toggleMode": "トグル",
       "updateFailed": "更新できませんでした"
-    },
-    "agents": {
-      "permissionOwnAll": "Agent 独自の設定"
     },
     "voiceTranscribeOn": {
       "heading": "文字起こしの場所",

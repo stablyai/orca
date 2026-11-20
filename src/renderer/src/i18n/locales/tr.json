@@ -19668,6 +19668,8 @@
         "permissionAuto": "Benim yerime onayla",
         "permissionAutoDescription": "Onay isteklerini sizin yerinize değerlendirir",
         "permissionFullAccess": "Tam erişim",
+        "permissionAgentSettings": "{{agent}} ayarları",
+        "permissionFromAgentSettings": "{{mode}}, {{agent}} ayarlarından",
         "permissionFullAccessDescription": "Düzenleme veya komutlardan önce asla sormaz",
         "permissionFullAccessCodexDescription": "Asla sormaz; tüm dosyaları düzenleyebilir ve ağı kullanabilir",
         "permissionFullAccessSharedDescription": "Düzenleme veya komutlardan önce asla sormaz",
