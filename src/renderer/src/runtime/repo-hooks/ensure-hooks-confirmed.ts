@@ -232,8 +232,14 @@ export async function decideHooksWithoutPrompt(
     hostId,
     runtimeOwnerEnvironmentId
   )
-  if (subject.kind !== 'script') {
-    return subject.kind === 'run' ? { kind: 'run' } : { kind: 'unreadable' }
+  if (subject.kind === 'unreadable') {
+    return subject
+  }
+  if (subject.kind === 'run') {
+    // Trust covers any script; otherwise pin "nothing needed approval" so the host refuses a script added since.
+    return isDesktopHookRepoTrusted(state, repoId, 'workspace')
+      ? { kind: 'run' }
+      : { kind: 'run', approvedContentHash: await hashOrcaHookScript('') }
   }
   const { approval } = await approvalWithoutPrompt(state, repoId, scriptKind, subject.scriptContent)
   return approval

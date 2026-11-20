@@ -17,7 +17,8 @@ import { assertWorktreeCleanForRemoval } from '../../../git/worktrees/removal/wo
 import { listWorktreesStrict } from '../../../git/worktrees/catalog/worktree-listing'
 import { removeWorktree } from '../../../git/worktrees/removal/worktree-removal'
 import { getWorktreeSharedLinkPaths } from '../../../git/worktrees/content-paths/worktree-shared-directories'
-import { runHook, getEffectiveHooks } from '../../../workspace-hooks/hooks'
+import { runHook } from '../../../workspace-hooks/hooks'
+import { loadArchiveHooksForRemoval } from '../../../workspace-hooks/archive-hook-trust-content'
 import { findExistingWorktreeSymlinkPaths } from '../../../git/worktrees/content-paths/worktree-symlink-detection'
 import { removeWorktreeLinkedPaths } from '../../../ipc/worktrees/linked-paths/worktree-symlinks'
 import { cleanupRemovedWorktreePushTarget } from './runtime-worktree-push-target-cleanup'
@@ -34,7 +35,10 @@ import { findRegisteredDeletableWorktree } from '../../../workspaces/removal/wor
 import { CLIENT_REMOVAL_HOME } from '../../../workspaces/removal/worktree-removal-home-guard'
 import type { RuntimePreservedBranchCleanup } from '../../repositories/runtime-preserved-branch-cleanup'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
-import type { RuntimeWorktreeRemovalTarget } from '../catalog/runtime-worktree-selection'
+import type {
+  ArchiveHookRemovalOptions,
+  RuntimeWorktreeRemovalTarget
+} from '../catalog/runtime-worktree-selection'
 import {
   removesInBackground,
   startBackgroundWorktreeRemoval,
@@ -69,9 +73,8 @@ async function acceptRuntimeRegisteredLocalWorktreeRemoval(args: {
   localOptions: LocalProjectWorktreeGitOptions
   hasLocalOptions: boolean
   force: boolean
-  runHooks: boolean
-  /** Explicit waiver for a FAILED archive hook. Never implied by `force` — see #19334. */
-  allowFailedArchiveHook: boolean
+  /** allowFailedArchiveHook waives a FAILED hook, never implied by `force` (#19334). */
+  archiveHook: ArchiveHookRemovalOptions
   allowUnverifiedPtyStop: boolean
   deleteBranch: boolean
   /** Legacy callers join accepted policy; explicit requests must match it. */
@@ -94,14 +97,14 @@ async function acceptRuntimeRegisteredLocalWorktreeRemoval(args: {
 }): Promise<RemoveWorktreeResult & { warning?: string }> {
   const { repo, registeredWorktree, localOptions } = args
   const canonicalPath = registeredWorktree.path
-  const hooks = getEffectiveHooks(repo)
+  const hooks = await loadArchiveHooksForRemoval(repo, args.archiveHook)
   let warning: string | undefined
   // Archive refusal precedes refresh, preflights, PTY stop and Git deletion; failure must leave them untouched (#19334).
   let archiveHookOverride: ArchiveHookOverride | undefined
   let archiveHookRan: boolean | null = false
   if (
     hooks?.scripts.archive &&
-    args.runHooks &&
+    args.archiveHook.runHooks === true &&
     !(await nativeWindowsMarkerMissing(canonicalPath, localOptions))
   ) {
     const result = await runHook(
@@ -110,13 +113,13 @@ async function acceptRuntimeRegisteredLocalWorktreeRemoval(args: {
       repo,
       undefined,
       args.hasLocalOptions ? localOptions : undefined,
-      { identity: { worktreeId: args.target.id } }
+      { identity: { worktreeId: args.target.id }, hooks }
     )
     archiveHookRan = archiveHookRanFrom(result)
     archiveHookOverride = gateWorktreeRemovalOnArchiveHook({
       worktreePath: canonicalPath,
       result,
-      allowFailure: args.allowFailedArchiveHook
+      allowFailure: args.archiveHook.allowFailedArchiveHook === true
     })
   } else if (hooks?.scripts.archive) {
     warning = `orca.yaml archive hook skipped for ${canonicalPath}; pass --run-hooks to run it.`
@@ -218,7 +221,8 @@ async function acceptRuntimeRegisteredLocalWorktreeRemoval(args: {
       run: async (stopSignal) => {
         const result = await finishRuntimeLocalWorktreeRemoval(args, refreshed, gate, stopSignal)
         args.onRemoved()
-        return result
+        // A request joining this delete later still learns whether the hook ran.
+        return { ...result, archiveHookRan }
       },
       publish: () => args.publish(),
       admissionFailed: () => gate.finish(false)

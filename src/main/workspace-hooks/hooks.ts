@@ -25,7 +25,8 @@ import { createOutputSink } from '@orca/process-host/bounded-output-sink'
 
 const HOOK_TIMEOUT = 120_000
 
-type HookProcessOutcome = { success: boolean; output: string; exitCode?: number }
+// started:false marks a spawn that never ran, so removal can report the hook did not run.
+type HookProcessOutcome = { success: boolean; output: string; exitCode?: number; started?: false }
 
 /** Timed-out hooks cannot prove completion, even if their SIGTERM handler exits 0 (#19334). */
 function classifyHookProcessResult(
@@ -99,7 +100,7 @@ function getHookShell(): string | undefined {
 }
 
 // A UNC drive-mount repo's file opens only through its drive path.
-function orcaYamlPath(repoPath: string): string {
+export function orcaYamlPath(repoPath: string): string {
   return windowsFsPath(join(repoPath, 'orca.yaml'))
 }
 
@@ -191,7 +192,7 @@ export function runHook(
   projectRuntime?: ProjectExecutionRuntimeResolution | HookRuntimeTarget,
   options: { identity?: HookWorkspaceIdentity; timeoutMs?: number; hooks?: OrcaHooks } = {}
   // Failed hooks without an observed exit are unverifiable to the removal gate (#19334).
-): Promise<{ success: boolean; output: string; exitCode?: number }> {
+): Promise<HookProcessOutcome> {
   const timeoutMs = options.timeoutMs ?? HOOK_TIMEOUT
   // A caller that already resolved the hooks passes them, so orca.yaml is read once.
   const hooks = options.hooks ?? getEffectiveHooks(repo, hooksPath)
@@ -275,7 +276,8 @@ export function runHook(
       stream?.on('error', () => {})
     }
     child.on('error', (error) => {
-      settle(hookProcessError(error, readSink(stdout), readSink(stderr), { hookName, cwd }))
+      const outcome = hookProcessError(error, readSink(stdout), readSink(stderr), { hookName, cwd })
+      settle(child.pid === undefined ? { ...outcome, started: false } : outcome)
     })
     child.on('close', (code, signal) => {
       settle(

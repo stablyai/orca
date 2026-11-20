@@ -23,12 +23,19 @@ export type RemoveManagedWorktreeOptions = {
   allowUnverifiedPtyStop?: boolean
   /** Waives a FAILED archive hook (#19334). Never implied by `force`, never by `runHooks`. */
   allowFailedArchiveHook?: boolean
+  /** With runHooks: the archive version the desktop approved; refused if what would run differs. */
+  approvedArchiveHash?: string
   hostId?: string
   /** Reply with the finished delete's result; otherwise a background delete replies on acceptance. */
   waitForBackgroundRemoval?: boolean
   /** Archive marks the row after every refusal, before Git deletes the checkout; purge then keeps it. */
   archive?: { markArchived: (worktree: GitWorktreeInfo) => Promise<void> }
 }
+
+export type ArchiveHookRemovalOptions = Pick<
+  RemoveManagedWorktreeOptions,
+  'runHooks' | 'allowFailedArchiveHook' | 'approvedArchiveHash'
+>
 
 export function getRuntimeWorktreeRemovalOptionsKey(
   options: Pick<
@@ -37,6 +44,7 @@ export function getRuntimeWorktreeRemovalOptionsKey(
     | 'runHooks'
     | 'allowUnverifiedPtyStop'
     | 'allowFailedArchiveHook'
+    | 'approvedArchiveHash'
     | 'deleteBranch'
     | 'archive'
   >
@@ -45,7 +53,10 @@ export function getRuntimeWorktreeRemovalOptionsKey(
   const ptyKey = options.allowUnverifiedPtyStop ? 'allow-unverified-pty' : 'require-pty-stop'
   // Archive-waiver retries must not inherit an in-flight attempt's hook refusal.
   const archiveKey = options.allowFailedArchiveHook ? 'allow-failed-archive' : 'require-archive'
-  const hooksKey = options.runHooks ? 'run-hooks' : 'skip-hooks'
+  // A pinned approval must not join a delete that never checked it.
+  const hooksKey = options.runHooks
+    ? `run-hooks${options.approvedArchiveHash ? `@${options.approvedArchiveHash}` : ''}`
+    : 'skip-hooks'
   const branchKey =
     options.deleteBranch === undefined
       ? 'legacy-branch'

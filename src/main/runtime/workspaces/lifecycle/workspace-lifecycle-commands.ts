@@ -167,12 +167,12 @@ export function queueWorkspaceDelete<T>(
   selector: string,
   hostId: string | undefined,
   requested: Partial<Record<RemovalFlag, boolean>> &
-    Pick<RemoveManagedWorktreeOptions, 'deleteBranch'> & {
+    Pick<RemoveManagedWorktreeOptions, 'deleteBranch' | 'approvedArchiveHash'> & {
       approvedNestedWorktrees?: readonly NestedWorktreeRemovalApproval[]
     },
   run: (
     removal: Record<RemovalFlag, boolean> &
-      Pick<RemoveManagedWorktreeOptions, 'hostId' | 'deleteBranch'>
+      Pick<RemoveManagedWorktreeOptions, 'hostId' | 'deleteBranch' | 'approvedArchiveHash'>
   ) => Promise<T>
 ): Promise<T> {
   const removal = {
@@ -180,7 +180,10 @@ export function queueWorkspaceDelete<T>(
     force: requested.force === true,
     runHooks: requested.runHooks === true,
     allowUnverifiedPtyStop: requested.allowUnverifiedPtyStop === true,
-    allowFailedArchiveHook: requested.allowFailedArchiveHook === true
+    allowFailedArchiveHook: requested.allowFailedArchiveHook === true,
+    ...(requested.runHooks && requested.approvedArchiveHash !== undefined
+      ? { approvedArchiveHash: requested.approvedArchiveHash }
+      : {})
   }
   const options: LifecycleDeleteOptions = {
     // A reviewed nested delete must not share a plain delete's reply, which refuses the nesting.

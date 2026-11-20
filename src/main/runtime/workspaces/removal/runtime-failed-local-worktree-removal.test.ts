@@ -356,8 +356,7 @@ describe.skipIf(process.platform !== 'darwin')('a worktree delete Git fails part
       localOptions: {},
       hasLocalOptions: false,
       force: true,
-      runHooks: false,
-      allowFailedArchiveHook: false,
+      archiveHook: {},
       allowUnverifiedPtyStop: false,
       deleteBranch: true,
       acquireWatcherRemoval: async (path) => {

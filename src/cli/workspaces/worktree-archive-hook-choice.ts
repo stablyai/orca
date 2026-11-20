@@ -52,8 +52,12 @@ export async function resolveArchiveHookRequest(
       await client.call<ArchiveHookApproval>('worktree.archiveHookApproval', await target())
     ).result
   } catch (error) {
+    // An older host can't say, yet its own Delete may run the hook and refuse on failure: don't guess.
     if (error instanceof RuntimeClientError && error.code === 'method_not_found') {
-      return { runHooks: false, report: { decision: 'skip', reason: 'older-host' } }
+      throw new RuntimeClientError(
+        ARCHIVE_HOOK_UNDECIDED_CODE,
+        "This Orca host is older and can't tell whether the archive hook is approved. Nothing was deleted. Update Orca there, or pass --archive run to run the hook, or --archive skip to delete without it."
+      )
     }
     throw error
   }
@@ -92,12 +96,17 @@ export function printArchiveHookWarning(report: ArchiveHookReport, json: boolean
     )
   } else if (report.reason === 'older-host') {
     console.error(
-      "warning: No archive hook ran: this Orca host is older and doesn't follow the hook's approval. Update Orca there, or pass --archive run."
+      "warning: No Archive script ran: this Orca host is older and can't run a folder workspace's Archive script. Update Orca there to run it."
     )
   }
 }
 
 export function formatArchiveHookLine(report: ArchiveHookReport): string {
-  const ran = report.ran === true ? 'ran' : report.ran === false ? 'did not run' : 'outcome unknown'
-  return `archiveHook: ${ran} (${report.decision}, ${report.reason})`
+  if (report.ran === true) {
+    return 'archiveHook: ran'
+  }
+  if (report.decision === 'skip') {
+    return `archiveHook: skipped (${report.reason})`
+  }
+  return report.ran === false ? 'archiveHook: none ran' : 'archiveHook: outcome unknown'
 }

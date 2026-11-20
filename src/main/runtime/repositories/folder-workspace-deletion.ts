@@ -1,4 +1,3 @@
-import { assertArchiveHookStillApproved } from '../../workspace-hooks/archive-hook-trust-content'
 import { folderWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
 import { projectGroupHookOwner } from '../../../shared/workspace-setup/hooks/workspace-hook-owner'
 import type { ArchiveHookOverride } from '../../../shared/worktree/removal/archive-hook-removal-gate'
@@ -54,9 +53,6 @@ export async function deleteFolderWorkspaceRow(
         .find((entry) => entry.id === workspace.projectGroupId)
       const owner = group && projectGroupHookOwner(group)
       if (owner) {
-        if (options.runHooks && options.approvedArchiveHash !== undefined) {
-          assertArchiveHookStillApproved(owner, options.approvedArchiveHash)
-        }
         const gated = await gateFolderWorkspaceRemovalOnArchiveHook({
           repo: owner,
           worktreeId,
@@ -64,6 +60,7 @@ export async function deleteFolderWorkspaceRow(
           workspacePath: workspace.folderPath,
           runArchive: options.runHooks === true,
           allowFailure: options.allowFailedArchiveHook === true,
+          approvedArchiveHash: options.approvedArchiveHash,
           runtimeTarget: () => undefined
         })
         archiveHookOverride = gated.override

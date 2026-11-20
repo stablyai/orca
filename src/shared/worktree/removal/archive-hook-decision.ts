@@ -8,8 +8,8 @@ export const ArchiveHookApprovalParams = z.union([
 export type ArchiveHookApprovalRequest = z.infer<typeof ArchiveHookApprovalParams>
 
 /**
- * What the desktop's Delete would do without prompting. `approvedArchiveHash` pins a version-only
- * approval; repo-wide trust and project-settings scripts carry none, as Delete sends none.
+ * What the desktop's Delete would do without prompting. `approvedArchiveHash` pins what was decided
+ * (the approved version, or the empty hash when nothing needed approval); repo-wide trust pins none.
  */
 export type ArchiveHookApproval =
   | { decision: 'run'; approvedArchiveHash?: string }
@@ -31,7 +31,14 @@ export const ARCHIVE_HOOK_UNDECIDED_CODE = 'worktree_archive_hook_undecided'
 /** Refused before anything is deleted: the archive script changed after it was approved. */
 export const ARCHIVE_HOOK_CHANGED_CODE = 'worktree_archive_hook_changed'
 
-/** True when the hook reported an exit; null when none was observed (spawn failure or timeout). */
-export function archiveHookRanFrom(result: { success: boolean; exitCode?: number }): true | null {
+/** False when the hook process never started; null when it started but no exit was observed. */
+export function archiveHookRanFrom(result: {
+  success: boolean
+  exitCode?: number
+  started?: false
+}): boolean | null {
+  if (result.started === false) {
+    return false
+  }
   return result.success || typeof result.exitCode === 'number' ? true : null
 }
