@@ -1,5 +1,5 @@
 import React, { useId } from 'react'
-import { Ellipsis, ExternalLink, LoaderCircle, Plus, Unplug } from 'lucide-react'
+import { Ellipsis, ExternalLink, LoaderCircle, Plus, RefreshCw, Unplug } from 'lucide-react'
 import type { IntegrationCardStatusTone } from '@/components/integrations/presentation/integration-card-shell'
 import { Button } from '@/components/ui/button'
 import {
@@ -62,6 +62,8 @@ export type BotConnectorActions = {
   /** More access on the connected account: GitHub repositories or organizations, or another workspace. */
   add?: { label: string; onClick: () => void } | null
   link?: { label: string; onClick: () => void } | null
+  /** Something the connector offers but doesn't need, e.g. newer permissions. */
+  update?: { label: string; onClick: () => void } | null
   remove?: { label: string; onSelect: () => void; disabled?: boolean } | null
 }
 
@@ -73,8 +75,8 @@ function BotConnectorMenu({
   actions: BotConnectorActions
 }): React.JSX.Element | null {
   const t = useTranslate()
-  const { add, link, remove } = actions
-  if (!add && !link && !remove) {
+  const { add, link, update, remove } = actions
+  if (!add && !link && !update && !remove) {
     return null
   }
   return (
@@ -104,7 +106,13 @@ function BotConnectorMenu({
             {link.label}
           </DropdownMenuItem>
         ) : null}
-        {(add || link) && remove ? <DropdownMenuSeparator /> : null}
+        {update ? (
+          <DropdownMenuItem onSelect={update.onClick}>
+            <RefreshCw />
+            {update.label}
+          </DropdownMenuItem>
+        ) : null}
+        {(add || link || update) && remove ? <DropdownMenuSeparator /> : null}
         {remove ? (
           <DropdownMenuItem
             variant="destructive"
@@ -273,6 +281,7 @@ export function BotConnectorRow(props: {
   add?: BotConnectorActions['add']
   /** The connector's own page, in the row's menu. */
   link?: BotConnectorActions['link']
+  update?: BotConnectorActions['update']
   remove?: BotConnectorActions['remove']
   /** In place of How to ask and Who can ask: a connector's own body (Slack's). */
   body?: React.ReactNode
@@ -303,7 +312,7 @@ export function BotConnectorRow(props: {
           </span>
         ) : null
       }
-      actions={{ add, link, remove }}
+      actions={{ add, link, update: props.update, remove }}
       narrowSpans={props.body !== undefined}
     >
       {props.body ?? (

@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { resolveStructuredAgentCommand } from './structured-agent-command-resolution'
+import { rememberManagedAgentRelease } from '../../managed-agent-cli/managed-agent-cli-registry'
 import { explainConfiguredCommandExit } from '../../claude/structured/startup/claude-command-start-failure'
 import { claudeStartupError } from '../../claude/structured/startup/claude-structured-session-startup-exit'
 import { claudeStartupResultError } from '../../claude/sdk-transport/claude-stream-json-exit-error'
@@ -108,5 +109,28 @@ describe.skipIf(process.platform === 'win32')("a Claude start under the user's C
       kind: 'agentCommandNotRunnable',
       detail: { text: `'${wrapper}' ran ${wrapper} and exited (code 1)`, audience: 'person' }
     })
+  })
+})
+
+describe('Orca’s agy', () => {
+  const release = join('/orca-data', 'agent-runtimes', 'agy', '1.5.13')
+  const agy = join(release, process.platform === 'win32' ? 'agy.exe' : 'agy')
+
+  afterEach(() => rememberManagedAgentRelease('antigravity', null))
+
+  it.each([
+    ['agy', agy],
+    ['agy_acp_server.par', 'agy_acp_server.par']
+  ])('stands in only for a missing `agy`: %s resolves to %s', (command, expected) => {
+    rememberManagedAgentRelease('antigravity', release)
+
+    const resolved = resolveStructuredAgentCommand(
+      'antigravity',
+      {},
+      { pathEnv: '' },
+      { command, resolve: (name) => name }
+    )
+
+    expect(resolved).toEqual({ command: expected, prefixArgs: [] })
   })
 })

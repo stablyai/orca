@@ -42,7 +42,11 @@ describe('CodexManagedHomeLifecycle.safeRemove', () => {
   it("removes the login but keeps the account's history links and conflicting copies", async () => {
     const f = fixture()
     writeFileSync(join(f.store, 'sessions', 'rollout.jsonl'), 'shared\n')
-    symlinkSync(join(f.store, 'sessions'), join(f.home, 'sessions'), 'dir')
+    symlinkSync(
+      join(f.store, 'sessions'),
+      join(f.home, 'sessions'),
+      process.platform === 'win32' ? 'junction' : 'dir'
+    )
     mkdirSync(join(f.home, 'sessions.orca-profile-merge'))
     writeFileSync(join(f.home, 'sessions.orca-profile-merge', 'rollout.jsonl'), 'diverged\n')
     writeFileSync(join(f.home, 'auth.json'), '{}')

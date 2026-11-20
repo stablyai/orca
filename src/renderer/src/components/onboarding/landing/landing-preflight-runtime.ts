@@ -1,5 +1,6 @@
 import { useEffect, useMemo } from 'react'
 import { useAppStore } from '../../../store/index'
+import { useAppStoreWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { installWindowVisibilityInterval } from '@/lib/window-activity/window-visibility-interval'
 import { runtimeHostConnectionStateForEntry } from '@/runtime/hosts/connections/runtime-host-connection-state'
 import { isConnectedRuntimeHostState } from '../../../../../shared/remote-runtime/host-status/runtime-host-connection-state'
@@ -14,12 +15,12 @@ export function useLandingPreflightRuntime(): { preflightIssues: PreflightIssue[
   const preflightStatus = useAppStore((s) => s.preflightStatus)
   const refreshPreflightStatus = useAppStore((s) => s.refreshPreflightStatus)
   const invalidatePreflightStatus = useAppStore((s) => s.invalidatePreflightStatus)
-  const activeRuntimeState = useAppStore((s) => {
+  const activeRuntimeState = useAppStoreWithHostStatuses((s, statuses) => {
     const environmentId = s.settings?.activeRuntimeEnvironmentId?.trim()
     if (!environmentId) {
       return 'local'
     }
-    const runtimeStatus = s.runtimeStatusByEnvironmentId.get(environmentId)
+    const runtimeStatus = statuses.get(environmentId)
     // Use transport reachability: an unverifiable probe nulls status without disconnecting the host.
     const reachability = runtimeStatus
       ? isConnectedRuntimeHostState(runtimeHostConnectionStateForEntry(runtimeStatus))
