@@ -1,6 +1,6 @@
 import { cn } from '@/lib/class-names'
 import type { Bot } from '../../../../shared/bot-types'
-import { useBotAvatarSrc } from './bot-avatar-image'
+import { useBotAvatarLook } from './bot-avatar-image'
 import type { BotOnHost } from '@/lib/bot-hosts'
 import { botFallback } from '../../../../shared/bots/bot-avatar-fallback'
 import { parseBotAvatar } from '../../../../shared/bot-avatar'
@@ -20,9 +20,11 @@ export function BotAvatar({
   className?: string
   style?: React.CSSProperties
 }): React.JSX.Element {
+  const look = useBotAvatarLook(bot, size)
   return (
     <BotAvatarTile
-      src={useBotAvatarSrc(bot, size)}
+      src={look.src}
+      outfit={look.outfit}
       fallback={botFallback(bot)}
       className={className}
       style={style}

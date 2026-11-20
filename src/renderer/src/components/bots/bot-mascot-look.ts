@@ -203,20 +203,39 @@ export function useBotMascotTileLooks(
   return (id) => tileLook(id, tile, worn, layers, largeArt)
 }
 
-/** One mascot's picture in layers, its SVG on `color` with the outfit's art apart from it. */
+/** One mascot's picture in layers, its SVG on `color` with the outfit's art apart from it: the art
+ *  decodes as its own image, which costs a sidebar of avatars far less than art drawn inside the SVG. */
+export function useBotMascotLayers(
+  id: BotMascotId | null,
+  color: string | null | undefined,
+  outfit: BotAvatarOutfit | null | undefined = null,
+  size: BotPictureSize = 'small'
+): BotMascotLook | null {
+  const worn = id ? (outfit ?? null) : null
+  const layers = useBotOutfitLayers(worn)
+  const largeArt = useBotOutfitLargeArt(worn, size === 'large')
+  const tile = tileColor(color)
+  if (!id) {
+    return null
+  }
+  const layer = worn && layers ? layers[id] : undefined
+  const src = layer?.face
+    ? pictureSrc(id, tile, `${worn}|faced`, (svg) => faceMascotSvg(svg, layer))
+    : plainSrc(id, tile)
+  return { src, outfit: tileLook(id, tile, worn, layers, largeArt).outfit }
+}
+
+/** useBotMascotLayers for a mascot that is always there. */
 export function useBotMascotLook(
   id: BotMascotId,
   color: string | null | undefined,
   outfit: BotAvatarOutfit | null | undefined = null,
   size: BotPictureSize = 'small'
 ): BotMascotLook {
-  const worn = outfit ?? null
-  const layers = useBotOutfitLayers(worn)
-  const largeArt = useBotOutfitLargeArt(worn, size === 'large')
-  const tile = tileColor(color)
-  const layer = worn && layers ? layers[id] : undefined
-  const src = layer?.face
-    ? pictureSrc(id, tile, `${worn}|faced`, (svg) => faceMascotSvg(svg, layer))
-    : plainSrc(id, tile)
-  return { src, outfit: tileLook(id, tile, worn, layers, largeArt).outfit }
+  return (
+    useBotMascotLayers(id, color, outfit, size) ?? {
+      src: plainSrc(id, tileColor(color)),
+      outfit: null
+    }
+  )
 }
