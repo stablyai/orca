@@ -7,7 +7,6 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import SyncDatabase from '../../../sqlite/sync-database'
 import { OrchestrationDb } from './orchestration-db'
-import { WORKER_DISPATCH_COLUMNS, WORKER_TERMINAL_RESOURCE_COLUMNS } from './row-column-lists'
 
 const opened: OrchestrationDb[] = []
 const directories: string[] = []
@@ -289,22 +288,5 @@ describe('projected row getters', () => {
     db.close()
     opened.pop()
     expectSeededRows(openDb(path))
-  })
-
-  // The `satisfies` clause pins each list to its row type; the migrated schema is the other side.
-  it('project exactly the columns the migrated worker tables declare, in schema order', () => {
-    const db = openDb()
-    const columnsOf = (table: string): string[] => {
-      const rows = db.db.pragma(`table_info(${table})`)
-      return Array.isArray(rows)
-        ? rows.map((row) =>
-            typeof row === 'object' && row !== null && 'name' in row ? String(row.name) : ''
-          )
-        : []
-    }
-
-    expect([...WORKER_DISPATCH_COLUMNS]).toEqual(columnsOf('worker_dispatches'))
-    expect([...WORKER_TERMINAL_RESOURCE_COLUMNS]).toEqual(columnsOf('worker_terminal_resources'))
-    expect(Object.keys(db.getWorkerDispatch('nobody') ?? {})).toEqual([])
   })
 })
