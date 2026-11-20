@@ -20,6 +20,9 @@ export class AcknowledgedWorkspaceSessionEntries {
   private readonly byHost = new Map<ExecutionHostId, Map<string, unknown>>()
   // A whole-session write replaces main's copy; an acknowledgement that started before it is stale.
   private generation = 0
+  // Hosts whose keyed field last took entries from this window. Unlike byHost it outlives a failed write,
+  // so a clear that main rejected still knows where to go; a whole-session write resets it.
+  private readonly entriesSentTo = new Map<string, Set<ExecutionHostId>>()
 
   diff(hostId: ExecutionHostId, slice: WorkspaceSessionPatch): WorkspaceSessionEntriesDiff {
     const acknowledged = this.byHost.get(hostId)
@@ -66,31 +69,42 @@ export class AcknowledgedWorkspaceSessionEntries {
         }
         for (const field of fields) {
           host.set(field, sliceFields[field])
+          this.noteEntriesSent(hostId, field, sliceFields[field])
         }
       }
     }
   }
 
-  /** Hosts whose acknowledged `field` still holds entries this window sent. */
-  hostsHoldingEntries(field: string): ExecutionHostId[] {
-    const hostIds: ExecutionHostId[] = []
-    for (const [hostId, fields] of this.byHost) {
-      const value = fields.get(field)
-      if (
-        Array.isArray(value)
-          ? value.length > 0
-          : isWorkspaceSessionRecord(value) && Object.keys(value).length > 0
-      ) {
-        hostIds.push(hostId)
-      }
+  private noteEntriesSent(hostId: ExecutionHostId, field: string, value: unknown): void {
+    if (!isWorkspaceSessionRecord(value)) {
+      return
     }
-    return hostIds
+    let hostIds = this.entriesSentTo.get(field)
+    let holdsEntries = false
+    for (const _key in value) {
+      holdsEntries = true
+      break
+    }
+    if (holdsEntries) {
+      hostIds ??= new Set()
+      this.entriesSentTo.set(field, hostIds)
+      hostIds.add(hostId)
+    } else {
+      hostIds?.delete(hostId)
+    }
+  }
+
+  /** Hosts this window last sent entries of keyed `field` to, acknowledged or since rejected. */
+  hostsHoldingEntries(field: string): readonly ExecutionHostId[] {
+    const hostIds = this.entriesSentTo.get(field)
+    return hostIds ? [...hostIds] : []
   }
 
   /** Main's copy can't be assumed after a failed, fenced or whole-partition write: send whole fields. */
   forget(hostId?: ExecutionHostId, fields?: readonly string[]): void {
     if (hostId === undefined) {
       this.byHost.clear()
+      this.entriesSentTo.clear()
       this.generation += 1
     } else if (fields) {
       const host = this.byHost.get(hostId)
@@ -107,6 +121,13 @@ export class AcknowledgedWorkspaceSessionEntries {
     for (const hostId of this.byHost.keys()) {
       if (!hostIds.has(hostId)) {
         this.byHost.delete(hostId)
+      }
+    }
+    for (const sentTo of this.entriesSentTo.values()) {
+      for (const hostId of sentTo) {
+        if (!hostIds.has(hostId)) {
+          sentTo.delete(hostId)
+        }
       }
     }
   }

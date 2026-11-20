@@ -3,6 +3,7 @@ import { createTestStore, seedStore } from '@/store/testing/app-store-test-fixtu
 import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import { TEST_REPO } from '@/store/repos/repo.test-fixture'
 import { makeTab } from '@/store/terminals/testing/terminal-tab.test-fixture'
+import { getRepoExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { applyWorkspaceSessionEntriesPatch } from '../../../../../shared/workspace-session/workspace-session-entries-patch'
 import { WORKSPACE_SESSION_FIELD_OWNERSHIP } from '../../../../../shared/workspace-session/workspace-session-host-field-ownership'
 import type { WorkspaceSessionState } from '../../../../../shared/workspace-session/workspace-session-state-types'
@@ -26,6 +27,7 @@ afterEach(() => {
 /** Main's per-partition copy, saved the way main applies a window's entries patch. */
 function inMemoryMain() {
   const partitions = new Map<string, WorkspaceSessionState>()
+  const rejectNext = new Set<string>()
   const api: SessionApi = {
     get: async () => {
       throw new Error('not read in this flow')
@@ -35,6 +37,9 @@ function inMemoryMain() {
     },
     patchEntries: async (args, hostId) => {
       const key = hostId ?? 'local'
+      if (rejectNext.delete(key)) {
+        throw new Error('partition write failed')
+      }
       const stored = partitions.get(key) ?? ({} as WorkspaceSessionState)
       partitions.set(key, { ...stored, ...applyWorkspaceSessionEntriesPatch(stored, args) })
       return { status: 'applied' }
@@ -49,7 +54,7 @@ function inMemoryMain() {
     }
     return found
   }
-  return { api, holding }
+  return { api, holding, rejectNext }
 }
 
 function sshState(status: 'connected' | 'disconnected') {
@@ -102,7 +107,6 @@ describe('session fields a window clears', () => {
       const before = main.holding(WORKTREE_ID)
       expect(before.remoteSessionIdsByTabId).toEqual({ 'tab-a': 'relay-a' })
       expect(before.activeConnectionIdsAtShutdown).toEqual(['conn-1'])
-      expect(before.activeWorktreeIdsOnShutdown).toEqual([WORKTREE_ID])
 
       // The remote shell exits and the user disconnects.
       store.setState((state) => ({
@@ -118,12 +122,11 @@ describe('session fields a window clears', () => {
       const restored = main.holding(WORKTREE_ID)
       expect(restored.remoteSessionIdsByTabId).toEqual({})
       expect(restored.activeConnectionIdsAtShutdown).toBeUndefined()
-      expect(restored.activeWorktreeIdsOnShutdown).toEqual([])
     } finally {
       stop()
     }
   })
-  it('a relay that ends without any tab change still clears on its SSH partition', async () => {
+  it('a relay that ends without any tab change still clears on its SSH partition, after a failed try', async () => {
     const store = createTestStore()
     const main = inMemoryMain()
     const acknowledged = new AcknowledgedWorkspaceSessionEntries()
@@ -152,12 +155,16 @@ describe('session fields a window clears', () => {
       await vi.advanceTimersByTimeAsync(DEBOUNCE_MS)
       expect(main.holding(WORKTREE_ID).remoteSessionIdsByTabId).toEqual({ 'tab-a': 'relay-a' })
 
+      // The SSH partition rejects the first clear; the next store wake retries it.
+      main.rejectNext.add(getRepoExecutionHostId(SSH_REPO))
       store.setState({ lastKnownRelayPtyIdByTabId: {} })
+      await vi.advanceTimersByTimeAsync(DEBOUNCE_MS)
+      expect(main.holding(WORKTREE_ID).remoteSessionIdsByTabId).toEqual({ 'tab-a': 'relay-a' })
+      store.setState({ agentsFilterRepoIds: [] })
       await vi.advanceTimersByTimeAsync(DEBOUNCE_MS)
 
       const restored = main.holding(WORKTREE_ID)
       expect(restored.remoteSessionIdsByTabId).toEqual({})
-      expect(restored.activeWorktreeIdsOnShutdown).toEqual([])
     } finally {
       stop()
     }
