@@ -34,6 +34,7 @@ import {
 } from '../../../workspaces/removal/worktree-removal-safety'
 import {
   assertUnregisteredCheckoutGone,
+  assertCheckoutNotReplaced,
   assertLeftoverIsRecordedCheckout,
   assertUnregisteredLeftoverRemovable,
   isLeftoverStillRemovable,
@@ -176,6 +177,10 @@ async function finishInterruptedLocalWorktreeRemoval(
     throw differentCheckoutAtPathError(record.worktreePath)
   }
   const native = usesNativeWindowsRemoval(record.worktreePath, localOptions)
+  // Branch and head match a checkout moved and recreated at this path; only its marker tells them apart.
+  if (deletable || native) {
+    await assertCheckoutNotReplaced(record)
+  }
   const removalOptions = {
     ...localOptions,
     deleteBranch: false,

@@ -6,13 +6,15 @@ function gitdirOfGitFile(contents: string): string | undefined {
   return match?.[1]?.trim() || undefined
 }
 
-/** The admin entry a checkout's `.git` file names; the leftover of this removal still names the same one. */
-export async function readCheckoutGitdirPointer(worktreePath: string): Promise<string | undefined> {
+/** The admin entry a checkout's `.git` file names plus that file's inode: Git reuses admin names, so the name alone cannot tell two checkouts at one path apart. */
+export async function readCheckoutMarkerIdentity(
+  worktreePath: string
+): Promise<string | undefined> {
   try {
     const gitFile = join(worktreePath, '.git')
-    return (await lstat(gitFile)).isFile()
-      ? gitdirOfGitFile(await readFile(gitFile, 'utf8'))
-      : undefined
+    const entry = await lstat(gitFile, { bigint: true })
+    const gitdir = entry.isFile() ? gitdirOfGitFile(await readFile(gitFile, 'utf8')) : undefined
+    return gitdir ? `${gitdir}#${entry.dev}:${entry.ino}` : undefined
   } catch {
     return undefined
   }

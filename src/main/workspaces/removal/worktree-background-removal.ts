@@ -5,7 +5,7 @@ import {
   waitForPendingWorktreeRemoval,
   type RemovalSettlement
 } from './worktree-removal-settlement'
-export { readCheckoutGitdirPointer } from './worktree-removal-gitdir-identity'
+export { readCheckoutMarkerIdentity as markerIdentity } from './worktree-removal-gitdir-identity'
 export {
   waitForPendingWorktreeRemoval,
   waitForWorktreeRemovalAcceptance,

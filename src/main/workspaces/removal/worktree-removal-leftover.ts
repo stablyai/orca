@@ -16,7 +16,7 @@ import { areWorktreePathsEqual } from '../../git/worktrees/catalog/worktree-path
 import { CLIENT_REMOVAL_HOME } from './worktree-removal-home-guard'
 import { listWorktreesStrict as listUncachedWorktreesStrict } from '../../git/worktrees/catalog/worktree-listing'
 import { failedWorktreeRemovals, worktreeCheckoutExists } from './worktree-removal-table'
-import { readCheckoutGitdirPointer } from './worktree-removal-gitdir-identity'
+import { readCheckoutMarkerIdentity } from './worktree-removal-gitdir-identity'
 import { waitForWorktreeRemovalAcceptance } from './worktree-removal-settlement'
 import {
   assertWorktreeDoesNotContainRegisteredWorktree,
@@ -47,7 +47,17 @@ export function differentCheckoutAtPathError(worktreePath: string): Error {
 export async function assertLeftoverIsRecordedCheckout(
   record: Pick<WorktreeRemovalRecord, 'worktreePath' | 'gitdir'>
 ): Promise<void> {
-  if (record.gitdir && (await readCheckoutGitdirPointer(record.worktreePath)) !== record.gitdir) {
+  if (record.gitdir && (await readCheckoutMarkerIdentity(record.worktreePath)) !== record.gitdir) {
+    throw differentCheckoutAtPathError(record.worktreePath)
+  }
+}
+
+/** For a checkout Git or Windows may already have stripped of its marker: only a marker naming another checkout refuses. */
+export async function assertCheckoutNotReplaced(
+  record: Pick<WorktreeRemovalRecord, 'worktreePath' | 'gitdir'>
+): Promise<void> {
+  const current = record.gitdir ? await readCheckoutMarkerIdentity(record.worktreePath) : undefined
+  if (current !== undefined && current !== record.gitdir) {
     throw differentCheckoutAtPathError(record.worktreePath)
   }
 }
@@ -191,6 +201,8 @@ export async function retryFailedRemovalUnlessRegistered(
     ) {
       await assertLeftoverIsRecordedCheckout(failed)
     }
+  } else if (failed) {
+    await assertCheckoutNotReplaced(failed)
   }
   if (retry() === undefined) {
     return false
