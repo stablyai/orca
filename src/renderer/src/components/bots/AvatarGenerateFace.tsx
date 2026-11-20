@@ -16,9 +16,13 @@ import { AgentIconLabel } from '@/components/agent/agent-combobox-items'
 import { useTranslate } from '@/i18n/use-translate'
 import { getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
 import { cn } from '@/lib/class-names'
+import { useNow } from '@/lib/window-activity/use-now'
 import { MAX_AVATAR_DESCRIPTION_CHARS } from '../../../../shared/avatar-generation/avatar-generation-contract'
+import { AVATAR_TYPICAL_SECONDS } from '../../../../shared/avatar-generation/avatar-generation-typical-time'
+import { formatNativeChatDuration } from '../../../../shared/native-chat/transcript/turns/native-chat-turn-status'
 import { BOT_EDIT_HINT } from './bot-edit-hint'
 import { FieldNoteLine, sameNote, type FieldNote } from './AvatarGenerateFieldNote'
+import { RunningNoteLine, type RunningNote } from './AvatarGenerateRunningNote'
 import { BotPictureRowFold } from './BotPictureRowFold'
 import { useAvatarGeneration, type GeneratedAvatar } from './use-avatar-generation'
 
@@ -75,9 +79,11 @@ export function GenerateFaceThumb({ face }: { face: GenerateFace }): React.JSX.E
 
 function PromptTile({
   role,
+  painting = false,
   children
 }: {
   role?: 'status'
+  painting?: boolean
   children?: React.ReactNode
 }): React.JSX.Element {
   return (
@@ -85,12 +91,28 @@ function PromptTile({
       role={role}
       className={cn(
         TILE,
-        'flex flex-col items-center justify-center gap-1.5 border-[1.5px] border-dashed border-foreground/40 bg-muted text-xs text-foreground'
+        'relative flex flex-col items-center justify-center gap-1.5 overflow-hidden border-[1.5px] border-dashed border-foreground/40 bg-muted text-xs text-foreground'
       )}
     >
+      {painting ? <PaintWash /> : null}
       {children ?? <Sparkles className="size-7" strokeWidth={1.5} />}
     </span>
   )
+}
+
+/** A soft wash drifting behind the progress while the picture is painted; still under reduced motion. */
+function PaintWash(): React.JSX.Element {
+  return (
+    <span aria-hidden className="pointer-events-none absolute inset-0">
+      <span className="avatar-paint-wash absolute -inset-[30%]" />
+    </span>
+  )
+}
+
+/** Time since the run started, ticking each second on the shared clock. */
+function ElapsedTime({ startedAt }: { startedAt: number }): React.JSX.Element {
+  const now = useNow(1_000)
+  return <>{formatNativeChatDuration((Math.max(now, startedAt) - startedAt) / 1000)}</>
 }
 
 const HINT_BUTTON = cn(
@@ -131,13 +153,21 @@ export function GenerateFaceTile({ face }: { face: GenerateFace }): React.JSX.El
         onClick={face.cancel}
         className={HINT_BUTTON}
       >
-        <PromptTile role="status">
-          <span className="flex size-6 items-center justify-center">
+        <PromptTile role="status" painting>
+          <span className="relative flex size-6 items-center justify-center">
             <LoadingSpinner className={cn('size-6', AT_REST)} />
             <X className={cn('size-6', ON_HOVER)} strokeWidth={1.75} />
           </span>
-          <span className={AT_REST}>{t('bots.avatar.generate.generating', 'Generating…')}</span>
-          <span className={ON_HOVER}>{t('bots.avatar.generate.cancel', 'Cancel')}</span>
+          <span className={cn('relative', AT_REST)}>
+            {t('bots.avatar.generate.generating', 'Generating…')}
+          </span>
+          <span className={cn('relative', ON_HOVER)}>
+            {t('bots.avatar.generate.cancel', 'Cancel')}
+          </span>
+          {/* The status names the work once; a per-second count would be re-read every tick. */}
+          <span aria-hidden className="relative -mt-1 tabular-nums">
+            <ElapsedTime startedAt={run.startedAt} />
+          </span>
         </PromptTile>
       </button>
     )
@@ -215,6 +245,11 @@ function AgentMenu({
               icon={<AgentIcon agent={entry.agent} size={14} />}
               label={getAgentLabel(entry.agent)}
             />
+            <span className="ml-auto pl-3 text-xs text-muted-foreground tabular-nums">
+              {t('bots.avatar.generate.typicalShort', 'about {{seconds}}s', {
+                seconds: AVATAR_TYPICAL_SECONDS[entry.agent]
+              })}
+            </span>
           </DropdownMenuItem>
         ))}
       </DropdownMenuContent>
@@ -328,6 +363,13 @@ export function GenerateField({ face }: { face: GenerateFace }): React.JSX.Eleme
     setLastNote(note)
   }
   const shownNote = note ?? lastNote
+  // Likewise the last run's line stays, frozen, while it folds away.
+  const [lastRun, setLastRun] = useState<RunningNote | null>(null)
+  if (run.kind === 'running' && lastRun?.startedAt !== run.startedAt) {
+    setLastRun({ agent: run.agent, startedAt: run.startedAt, live: true })
+  } else if (run.kind !== 'running' && lastRun?.live) {
+    setLastRun({ ...lastRun, live: false })
+  }
   return (
     <>
       <BotPictureRowFold open={face.folded}>
@@ -346,6 +388,9 @@ export function GenerateField({ face }: { face: GenerateFace }): React.JSX.Eleme
         <DescriptionField face={face} />
         <BotPictureRowFold open={note !== null}>
           {shownNote ? <FieldNoteLine note={shownNote} /> : null}
+        </BotPictureRowFold>
+        <BotPictureRowFold open={run.kind === 'running'}>
+          {lastRun ? <RunningNoteLine note={lastRun} /> : null}
         </BotPictureRowFold>
       </BotPictureRowFold>
     </>

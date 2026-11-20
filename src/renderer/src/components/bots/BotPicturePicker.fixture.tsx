@@ -303,7 +303,12 @@ function shownField(): HTMLTextAreaElement | null {
 }
 
 // The Generate face sits just before mascot 1: step left until its description field shows.
-async function openGenerate(frame: HTMLElement, description?: string): Promise<void> {
+// `startedAgoMs` backdates the run's start, to show one that is already past its usual time.
+async function openGenerate(
+  frame: HTMLElement,
+  description?: string,
+  startedAgoMs = 0
+): Promise<void> {
   await openPicture(frame)
   for (let tries = 0; tries < 25 && !shownField(); tries += 1) {
     await step('ArrowLeft')
@@ -320,7 +325,13 @@ async function openGenerate(frame: HTMLElement, description?: string): Promise<v
   )
   box.dispatchEvent(new Event('input', { bubbles: true }))
   await settle(100)
-  document.querySelector<HTMLButtonElement>('button[aria-label="Generate"]')?.click()
+  const realNow = Date.now
+  Date.now = () => realNow() - startedAgoMs
+  try {
+    document.querySelector<HTMLButtonElement>('button[aria-label="Generate"]')?.click()
+  } finally {
+    Date.now = realNow
+  }
   await settle(600)
 }
 
@@ -344,6 +355,13 @@ export const generateRunning = defineFixture({
   setup: stubGeneration(READY, 'running'),
   render: () => <Settings />,
   interact: (frame) => openGenerate(frame, 'a friendly orange fox astronaut')
+})
+
+export const generateRunningSlow = defineFixture({
+  width: 420,
+  setup: stubGeneration(READY, 'running'),
+  render: () => <Settings />,
+  interact: (frame) => openGenerate(frame, 'a friendly orange fox astronaut', 72_000)
 })
 
 export const generateResult = defineFixture({

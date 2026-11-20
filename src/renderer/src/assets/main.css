@@ -292,6 +292,13 @@
   --agent-working: var(--color-yellow-500);
   /* Legible weight for text/glyphs on a tinted --agent-question surface. */
   --agent-question-text: var(--color-orange-700);
+  /* The avatar Generate tile's paint wash, drawn at partial opacity. */
+  --avatar-paint-wash: linear-gradient(
+    120deg,
+    var(--color-orange-200),
+    var(--color-violet-200),
+    var(--color-sky-200)
+  );
   /* Answer card edge and the outline shared by its option tiles, badges, answer field and Skip. */
   --question-card-border-mix: 14%;
   --question-option-border-mix: 16%;
@@ -418,6 +425,12 @@
   --ai-action-accent: var(--color-violet-400);
   --agent-question: var(--color-orange-500);
   --agent-question-text: var(--color-orange-300);
+  --avatar-paint-wash: linear-gradient(
+    120deg,
+    var(--color-orange-950),
+    var(--color-violet-950),
+    var(--color-sky-950)
+  );
   --question-card-border-mix: 16%;
   --question-option-border-mix: 12%;
   --unread: var(--color-blue-400);
@@ -3262,6 +3275,30 @@ html.native-shell .app-layout {
 .animate-waveform {
   animation: waveform 1.4s ease-in-out infinite;
   transform-origin: center;
+}
+
+/* The avatar Generate tile's paint wash: transform-only drift on an oversized layer; still under reduced motion. */
+@keyframes avatar-paint-wash {
+  0%,
+  100% {
+    transform: translate(0, 0) rotate(0deg);
+  }
+  50% {
+    transform: translate(-6%, 4%) rotate(4deg);
+  }
+}
+
+.avatar-paint-wash {
+  background: var(--avatar-paint-wash);
+  opacity: 0.55;
+  animation: avatar-paint-wash 9s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .avatar-paint-wash {
+    opacity: 0.4;
+    animation: none;
+  }
 }
 
 .tab-entry-omnibox > input:focus:placeholder-shown:not(:read-only) {

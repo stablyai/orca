@@ -27390,7 +27390,10 @@
         "unavailable": "No installed agent can make images.",
         "failed": "{{agent}} couldn't make an image. Try again.",
         "face": "Generate a picture",
-        "agent": "Generate with {{agent}}"
+        "agent": "Generate with {{agent}}",
+        "typicalShort": "about {{seconds}}s",
+        "typical": "{{agent}} usually takes about {{seconds}} seconds.",
+        "slow": "Taking longer than usual. You can cancel anytime."
       }
     },
     "linear": {
