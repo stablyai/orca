@@ -9064,6 +9064,7 @@
         "CursorAccountsSection": {
           "source": {
             "keychain": "Chaves do macOS (cursor-agent)",
+            "keyring": "Chaveiro do Linux (cursor-agent)",
             "cli": "Arquivo de autenticação da CLI do Cursor",
             "desktop": "Cursor IDE"
           },

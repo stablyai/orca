@@ -12334,6 +12334,7 @@
         "CursorAccountsSection": {
           "source": {
             "keychain": "macOS 鑰匙圈（cursor-agent）",
+            "keyring": "Linux 鑰匙圈（cursor-agent）",
             "cli": "Cursor CLI 認證檔案",
             "desktop": "Cursor IDE"
           },

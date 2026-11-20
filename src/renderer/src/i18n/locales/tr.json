@@ -12626,6 +12626,7 @@
         "CursorAccountsSection": {
           "source": {
             "keychain": "macOS Anahtar Zinciri (cursor-agent)",
+            "keyring": "Linux Anahtarlığı (cursor-agent)",
             "cli": "Cursor CLI kimlik doğrulama dosyası",
             "desktop": "Cursor IDE"
           },

@@ -12849,6 +12849,7 @@
         "CursorAccountsSection": {
           "source": {
             "keychain": "Связка ключей macOS (cursor-agent)",
+            "keyring": "Связка ключей Linux (cursor-agent)",
             "cli": "Файл авторизации Cursor CLI",
             "desktop": "Cursor IDE"
           },

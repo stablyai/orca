@@ -1,5 +1,5 @@
-import { stat } from 'node:fs/promises'
 import { runProcess } from '@orca/process-host'
+import { secretServiceProcessEnvironment } from '../linux-secret-service/session-bus-environment'
 import {
   decodeAntigravityKeychainValue,
   parseAntigravityNativeCredential,
@@ -20,30 +20,13 @@ function requireLinux(): void {
   }
 }
 
-/** godbus finds /run/user/<uid>/bus without XDG_RUNTIME_DIR, so agy reaches the bus where GLib would autolaunch. */
-async function agyBusEnvironment(): Promise<NodeJS.ProcessEnv> {
-  // English stderr keeps the timeout check below locale-independent.
-  const env: NodeJS.ProcessEnv = { ...process.env, LC_ALL: 'C', LANG: 'C' }
-  const bus = `/run/user/${process.getuid?.()}/bus`
-  if (
-    [undefined, '', 'autolaunch:'].includes(env.DBUS_SESSION_BUS_ADDRESS) &&
-    (await stat(bus).then(
-      () => true,
-      () => false
-    ))
-  ) {
-    env.DBUS_SESSION_BUS_ADDRESS = `unix:path=${bus}`
-  }
-  return env
-}
-
 async function run(program: 'gdbus' | 'secret-tool', args: string[], input?: string) {
   try {
     return await runProcess({
       program,
       args,
       input,
-      env: await agyBusEnvironment(),
+      env: await secretServiceProcessEnvironment(),
       timeoutMs: 10_000,
       maxOutputBytes: 64 * 1024
     })
