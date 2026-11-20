@@ -124,7 +124,11 @@ export function AccountUsageWindowsGauge({
         const resetLabel = formatLocalizedResetDuration(section.window.resetsAt, now, intlLocale)
         // Why: role="img" makes descendants presentational, so the countdown must live in the
         // label itself or screen readers never announce it (#43673 review).
-        const resetCaption = formatResetsInCaption(section.window.resetsAt, now, intlLocale, t)
+        // Mirror only the visible countdown: past the reset the slot is empty, and a caption on
+        // its own would keep announcing "resets now" with the clock no longer scheduling.
+        const resetCaption = resetLabel
+          ? formatResetsInCaption(section.window.resetsAt, now, intlLocale, t)
+          : null
         const usageLabel = `${section.label} ${formatUsagePercentageLabel(section.window.usedPercent, display, t)}`
         return (
           <div
