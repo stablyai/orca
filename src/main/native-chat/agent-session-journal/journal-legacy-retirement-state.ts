@@ -1,3 +1,4 @@
+import { z } from 'zod'
 import {
   LEGACY_SOURCE_REFUSALS,
   type LegacySourceArtifact,
@@ -32,8 +33,14 @@ export const JOURNAL_LEGACY_RETIREMENT_REPORTED = 'journal.legacy-retirement-rep
 /** What one walk of the proof saw, for reporting only: it decides nothing. */
 export type LegacyProofCounts = {
   chats: number
-  converted: number
-  notConverted: number
+  /** Converted here before the proof reached them. */
+  alreadyConverted: number
+  /** Converted by the proof itself: what report mode adds to the store. */
+  newlyConverted: number
+  /** Deleted here, so kept only as the original's version. */
+  deletedHere: number
+  /** Drafts: a record and no history, so nothing converts. */
+  drafts: number
   originals: number
   copies: number
 }
@@ -194,22 +201,18 @@ export function decodeLegacySourceRefusal(value: string | null): LegacySourceRef
     : null
 }
 
+const COUNT = z.number().int().nonnegative()
+const LEGACY_PROOF_COUNTS = z.object({
+  chats: COUNT,
+  alreadyConverted: COUNT,
+  newlyConverted: COUNT,
+  deletedHere: COUNT,
+  drafts: COUNT,
+  originals: COUNT,
+  copies: COUNT
+})
+
 function decodeCounts(value: unknown): { counts?: LegacyProofCounts } {
-  if (!value || typeof value !== 'object') {
-    return {}
-  }
-  const read = (name: keyof LegacyProofCounts): number | null => {
-    const count: unknown = name in value ? Reflect.get(value, name) : undefined
-    return typeof count === 'number' && Number.isInteger(count) && count >= 0 ? count : null
-  }
-  const counts = {
-    chats: read('chats'),
-    converted: read('converted'),
-    notConverted: read('notConverted'),
-    originals: read('originals'),
-    copies: read('copies')
-  }
-  return Object.values(counts).every((count) => count !== null)
-    ? { counts: counts as LegacyProofCounts }
-    : {}
+  const counts = LEGACY_PROOF_COUNTS.safeParse(value)
+  return counts.success ? { counts: counts.data } : {}
 }

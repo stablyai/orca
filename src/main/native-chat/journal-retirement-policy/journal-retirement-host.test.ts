@@ -36,13 +36,15 @@ it('reports the cleanup outcome through the usage-event client, and refuses anyt
   })
   reportLegacyJournalRetirement(event, true)
   await vi.waitFor(() => expect(track).toHaveBeenCalledWith('legacy_journal_retirement', event))
-  // A path, or any field the schema doesn't name, never reaches the client.
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: deliberately malformed.
-  reportLegacyJournalRetirement(
-    { ...event, path: '/Users/someone/journal.db' } as typeof event,
-    true
+  // A path, or any field the schema doesn't name, never reaches the client. The valid event sent
+  // after it arrives second, so waiting for it covers the malformed one too.
+  const malformed = { ...event, path: '/Users/someone/journal.db' }
+  reportLegacyJournalRetirement(malformed, true)
+  reportLegacyJournalRetirement(event, true)
+  await vi.waitFor(() => expect(track).toHaveBeenCalledTimes(2))
+  expect(track).not.toHaveBeenCalledWith(
+    'legacy_journal_retirement',
+    expect.objectContaining({ path: expect.anything() })
   )
-  await new Promise((resolve) => setTimeout(resolve, 10))
-  expect(track).toHaveBeenCalledTimes(1)
   setLegacyJournalRetirementHost(undefined)
 })

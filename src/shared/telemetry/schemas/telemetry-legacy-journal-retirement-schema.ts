@@ -42,6 +42,8 @@ export const LEGACY_JOURNAL_RETIREMENT_ERRORS = [
   'conversion',
   // The store or the file could not be read or written.
   'storage',
+  // A check that waits on something to settle, such as a chat an older Orca wrote.
+  'pending',
   'other'
 ] as const
 
@@ -97,8 +99,12 @@ export const legacyJournalRetirementSchema = z
     completeness: z.enum(['unknown', 'partial', 'complete']),
     resumed: z.boolean(),
     chats_bucket: count,
-    converted_bucket: count,
-    not_converted_bucket: count,
+    // Converted before the proof reached them, and converted by the proof (store growth).
+    already_converted_bucket: count,
+    newly_converted_bucket: count,
+    // Deleted here (the original's version kept), and drafts (a record, no history).
+    deleted_here_bucket: count,
+    drafts_bucket: count,
     originals_bucket: count,
     copies_bucket: count,
     source_bytes_bucket: z.enum(LEGACY_JOURNAL_RETIREMENT_BYTES_BUCKETS),

@@ -190,7 +190,11 @@ function savedCursor(
     }
     // Copies the reconcile keeps can sort anywhere, so their pages are always walked whole.
     return proving.cursor.table >= LEGACY_PROOF_COPIES_TABLE
-      ? { cursor: { table: LEGACY_PROOF_COPIES_TABLE, after: null }, counts: proving.counts }
+      ? {
+          cursor: { table: LEGACY_PROOF_COPIES_TABLE, after: null },
+          // The copies are walked again from their first, so they're counted again from zero.
+          counts: proving.counts && { ...proving.counts, copies: 0 }
+        }
       : { cursor: proving.cursor, counts: proving.counts }
   }
   let retiring: unknown

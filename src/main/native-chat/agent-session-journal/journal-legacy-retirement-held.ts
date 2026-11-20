@@ -92,8 +92,10 @@ export function heldFor(
       store: observation.store,
       counts: {
         chats: count('chats'),
-        converted: count('converted'),
-        notConverted: count('notConverted'),
+        alreadyConverted: count('alreadyConverted'),
+        newlyConverted: count('newlyConverted'),
+        deletedHere: count('deletedHere'),
+        drafts: count('drafts'),
         originals: count('originals'),
         copies: count('copies')
       },

@@ -109,11 +109,14 @@ export class JournalLegacyRetirement {
       if (error instanceof JournalLegacyIneligibleError && !this.done) {
         this.done = true
         await this.outcome({ outcome: 'deferred', defer: 'unsupported_storage' })
-      } else if (!(error instanceof JournalLegacyRetentionError)) {
-        // Tried again later; reported once per kind of error, never with its text.
-        await this.outcome({ outcome: 'proving', error: legacyProofErrorKind(error) }).catch(
-          () => {}
-        )
+      } else if (!(error instanceof JournalLegacyRetentionError) || !error.reason) {
+        // Tried again later; reported once per kind of error, never with its text. A check that
+        // waits on something to settle (a compare, an older Orca's writes) reads as pending.
+        await this.outcome({
+          outcome: 'proving',
+          error:
+            error instanceof JournalLegacyRetentionError ? 'pending' : legacyProofErrorKind(error)
+        }).catch(() => {})
       }
       this.later()
       const reason = error instanceof Error ? error.message : String(error)
@@ -130,13 +133,11 @@ export class JournalLegacyRetirement {
     }
     // No other Orca runs this profile while we hold its lock, so an absent original stays absent.
     if (!(await legacyFilePresent(this.filename))) {
-      if (this.ownsProfile()) {
-        // An empty WAL and the SHM hold nothing. A nonempty WAL a cut-short removal left is
-        // deleted only with the same permission the removal had.
-        const absorbed = absorbedWal((await this.savedState()).retirement)
+      // Finishing a removal cut short deletes too, so it needs the same permission.
+      if (this.ownsProfile() && (await this.enforced())) {
         await removeLeftoverLegacyCompanions(
           this.filename,
-          absorbed && (await this.enforced()) ? absorbed : undefined
+          absorbedWal((await this.savedState()).retirement)
         )
       }
       this.done = true
@@ -179,7 +180,8 @@ export class JournalLegacyRetirement {
     // Proven before and held: report mode reads that instead of walking every chat again.
     const held = heldFor(saved.retirement, observation)
     if (held && this.policy.mode !== 'enforce') {
-      this.done = true
+      // Asked again on the backoff: a policy downloaded later this launch can still allow it.
+      this.later()
       return this.outcome(provenOutcome('proof_complete', held, observation, null, true))
     }
     await this.eligibility.present()
@@ -285,7 +287,7 @@ export class JournalLegacyRetirement {
       value: JSON.stringify(proven),
       durable: false
     })
-    this.done = true
+    this.later()
     await this.outcome(
       provenOutcome('proof_complete', proven, observation, this.activeMs, this.proof.walked.resumed)
     )

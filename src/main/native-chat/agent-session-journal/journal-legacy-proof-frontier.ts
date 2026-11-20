@@ -36,7 +36,15 @@ export function createLegacyProofFrontier(
     pages: 0,
     counts: carried?.counts
       ? { ...carried.counts }
-      : { chats: 0, converted: 0, notConverted: 0, originals: 0, copies: 0 },
+      : {
+          chats: 0,
+          alreadyConverted: 0,
+          newlyConverted: 0,
+          deletedHere: 0,
+          drafts: 0,
+          originals: 0,
+          copies: 0
+        },
     resumed,
     whole: !resumed || carried?.counts !== undefined,
     fromCopies: carried?.fromCopies === true
@@ -171,9 +179,17 @@ export async function completeJournalLegacyProof(
     if (page.copies) {
       frontier.counts.copies += page.copies.length
     } else {
+      for (const chat of page.sessions) {
+        const kind = !chat.convert
+          ? chat.epoch === ''
+            ? 'drafts'
+            : 'deletedHere'
+          : chat.ready
+            ? 'alreadyConverted'
+            : 'newlyConverted'
+        frontier.counts[kind] += 1
+      }
       frontier.counts.chats += page.sessions.length
-      frontier.counts.converted += page.sessions.filter((chat) => chat.convert).length
-      frontier.counts.notConverted += page.sessions.filter((chat) => !chat.convert).length
       frontier.counts.originals += originals.length
     }
     frontier.cursor = page.next

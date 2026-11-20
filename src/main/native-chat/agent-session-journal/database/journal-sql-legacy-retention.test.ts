@@ -7,6 +7,7 @@ import { acquireOrcadInstanceLock } from '../../../orcad/instance-lock/orcad-ins
 import { openJournalDatabase } from './journal-database'
 import { journalDatabasePath } from './journal-host-database'
 import { JournalSqlDatabase } from './journal-sql-database'
+import { setLegacyJournalRetirementHost } from '../journal-legacy-retirement-outcome'
 import { publishJournalSessionEpoch } from '../durable-rows/journal-row-table'
 import { publishJournalOutcomeEpoch } from '../outcomes/journal-outcome-epoch.test-fixture'
 import { journalSqlLifecycleRows } from '../journal-sql-reducer-rows.test-fixture'
@@ -21,6 +22,7 @@ const roots: string[] = []
 const databases: JournalSqlDatabase[] = []
 const locks: ReturnType<typeof acquireOrcadInstanceLock>[] = []
 afterEach(async () => {
+  setLegacyJournalRetirementHost(undefined)
   vi.unstubAllEnvs()
   await Promise.all(databases.splice(0).map((database) => database.close()))
   for (const lock of locks.splice(0)) {
@@ -179,6 +181,11 @@ it.skipIf(process.env.ORCA_JOURNAL_NATIVE_LOCK_TEST !== '1')(
 )
 
 it('removes only an empty WAL and the SHM a removal left behind its main file', async () => {
+  // Removing leftovers deletes files, so it needs the cleanup policy to allow deleting.
+  setLegacyJournalRetirementHost({
+    report: async () => {},
+    mode: async () => ({ mode: 'enforce', revision: 1 })
+  })
   const { root, filename, database, errors } = await fixture()
   await database.startMaintenance()
   await database.close()

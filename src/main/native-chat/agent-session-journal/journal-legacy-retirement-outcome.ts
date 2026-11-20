@@ -75,8 +75,10 @@ export function legacyJournalRetirementEvent(
     ...fields,
     inventory_revision: LEGACY_JOURNAL_INVENTORY_REVISION,
     chats_bucket: countBucket(counts?.chats ?? 0),
-    converted_bucket: countBucket(counts?.converted ?? 0),
-    not_converted_bucket: countBucket(counts?.notConverted ?? 0),
+    already_converted_bucket: countBucket(counts?.alreadyConverted ?? 0),
+    newly_converted_bucket: countBucket(counts?.newlyConverted ?? 0),
+    deleted_here_bucket: countBucket(counts?.deletedHere ?? 0),
+    drafts_bucket: countBucket(counts?.drafts ?? 0),
     originals_bucket: countBucket(counts?.originals ?? 0),
     copies_bucket: countBucket(counts?.copies ?? 0),
     source_bytes_bucket: bytesBucket(sourceBytes),
@@ -160,6 +162,7 @@ function durationBucket(
  */
 export class LegacyJournalRetirementReporter {
   private last: string | null | undefined
+  private readonly logged = new Set<string>()
 
   constructor(
     private readonly writer: {
@@ -205,7 +208,11 @@ export class LegacyJournalRetirementReporter {
       this.version
     ])
     const send = signature !== this.last
-    reportLegacyJournalRetirement(event, send)
+    // Logged once per launch for each distinct outcome, however often a retry repeats it.
+    if (send || !this.logged.has(signature)) {
+      this.logged.add(signature)
+      reportLegacyJournalRetirement(event, send)
+    }
     if (send) {
       this.last = signature
       await this.writer.maintain({ kind: 'legacy-retirement-reported', value: signature })
