@@ -3,8 +3,10 @@ import { z } from 'zod'
 import type { Store } from '../persistence/loading-store/store'
 import {
   captureLegacyRelayBaseline,
-  legacyRelayAdoptionBatch
+  legacyRelayAdoptionBatch,
+  type LegacyRelayBaseline
 } from '../persistence/desktop-relay-legacy-adoption'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/workspace-layout/layout-owner-switch'
 import {
   LOCAL_EXECUTION_HOST_ID,
   normalizeExecutionHostId,
@@ -83,7 +85,10 @@ export function registerDesktopRelayHandlers(
   store: RelayStore,
   isFenced: (hostId: string) => boolean
 ): (hostIds: readonly ExecutionHostId[]) => DesktopRelayHostApply {
-  const legacyBaseline = captureLegacyRelayBaseline(store)
+  // Main-owned layout never applies the window's relay ids by ownership, so nothing is adopted there.
+  const legacyBaseline: LegacyRelayBaseline = ORCA_LAYOUT_OWNER_IS_MAIN
+    ? new Map()
+    : captureLegacyRelayBaseline(store)
   // One apply batch: legacy adoption indexes rows at most once and partitions are listed at most once.
   const relayApplier = (hostIds: readonly ExecutionHostId[]): DesktopRelayHostApply => {
     const adoptionFor = legacyRelayAdoptionBatch(store, legacyBaseline, hostIds)
