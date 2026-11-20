@@ -92,10 +92,13 @@ export function nativeChatKickoffRefusal(session: KickoffSession): BotSetupRefus
   if (latest?.dispatchState !== 'rejected') {
     return null
   }
-  const providerDetail = agentSessionFailureDetailText(
-    readAgentSessionFailureFact(latest.rejection)
-  )
-  return { reason: latest.reason ?? '', ...(providerDetail ? { providerDetail } : {}) }
+  const fact = readAgentSessionFailureFact(latest.rejection)
+  const providerDetail = agentSessionFailureDetailText(fact)
+  return {
+    reason: latest.reason ?? '',
+    ...(providerDetail ? { providerDetail } : {}),
+    ...(fact ? { kind: fact.kind } : {})
+  }
 }
 
 /** Ended once the host has a turn record that no longer runs, or refused the kickoff before any turn
@@ -127,6 +130,7 @@ export function useNativeChatBotKickoffView(
   // Keyed by its words, so a new object for the same refusal keeps the first screen.
   const refusedReason = refusal?.reason ?? null
   const refusedDetail = refusal?.providerDetail
+  const refusedKind = refusal?.kind
   const firstScreen = useMemo(
     () =>
       live
@@ -137,11 +141,12 @@ export function useNativeChatBotKickoffView(
               ? null
               : {
                   reason: refusedReason,
-                  ...(refusedDetail ? { providerDetail: refusedDetail } : {})
+                  ...(refusedDetail ? { providerDetail: refusedDetail } : {}),
+                  ...(refusedKind ? { kind: refusedKind } : {})
                 }
           )
         : null,
-    [live, messages, turnEnded, refusedReason, refusedDetail]
+    [live, messages, turnEnded, refusedReason, refusedDetail, refusedKind]
   )
   const firstKickoffId =
     messages.find((message) => message.orcaNotice === 'bot-created')?.id ?? null
