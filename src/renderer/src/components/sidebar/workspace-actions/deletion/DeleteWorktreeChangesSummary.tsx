@@ -87,7 +87,7 @@ export function DeleteWorktreeChangesSummary({
   const t = useTranslate()
   const [open, setOpen] = useState(false)
   const [clipped, setClipped] = useState(false)
-  const [wasExpandable, setWasExpandable] = useState(false)
+  const [focused, setFocused] = useState(false)
   const textRef = useRef<HTMLSpanElement>(null)
   const noteRef = useRef<HTMLSpanElement>(null)
   // A long translation can clip the one fixed line; the full sentence then moves into the panel.
@@ -105,7 +105,12 @@ export function DeleteWorktreeChangesSummary({
       }
       const observer = new ResizeObserver(measureClipped)
       observer.observe(row)
-      return () => observer.disconnect()
+      // A late web font changes text width without resizing the row.
+      document.fonts?.addEventListener('loadingdone', measureClipped)
+      return () => {
+        observer.disconnect()
+        document.fonts?.removeEventListener('loadingdone', measureClipped)
+      }
     },
     [measureClipped]
   )
@@ -147,7 +152,7 @@ export function DeleteWorktreeChangesSummary({
               ignoredUnchecked ? 'warning' : 'clean',
               t('components.workspace.delete.changes.none', 'No uncommitted changes')
             ]
-          : wasExpandable
+          : open || focused
             ? ['clean', t('components.workspace.delete.changes.noUnsaved', 'No unsaved files')]
             : [null, null]
   const stillChecking = tone !== 'checking' && (changesChecking || ignoredChecking)
@@ -163,11 +168,8 @@ export function DeleteWorktreeChangesSummary({
   const changedFiles = preview?.files ?? []
   const ignoredPaths = atRiskLocalFiles?.paths ?? atRiskLocalFiles?.samplePaths ?? []
   const hasDetails = changedFiles.length > 0 || unsavedFiles.length > 0 || ignoredPaths.length > 0
-  // Once a toggle, always a toggle: an autosave that empties the list must not collapse or unfocus it.
-  const expandable = wasExpandable || hasDetails || clipped
-  if (expandable && !wasExpandable) {
-    setWasExpandable(true)
-  }
+  // An open or focused toggle outlives its last loss, so an autosave never collapses or unfocuses it.
+  const expandable = hasDetails || clipped || open || focused
   if (!tone) {
     return null
   }
@@ -198,7 +200,7 @@ export function DeleteWorktreeChangesSummary({
       {stillChecking ? (
         <>
           <LoadingSpinner className="size-3 shrink-0 text-muted-foreground" />
-          <span className="sr-only">{checkingLabel}</span>
+          {text === checkingLabel ? null : <span className="sr-only">{checkingLabel}</span>}
         </>
       ) : null}
     </>
@@ -208,7 +210,13 @@ export function DeleteWorktreeChangesSummary({
       ? 'text-status-warning-text hover:text-status-warning-text'
       : 'text-muted-foreground'
   return (
-    <div ref={observeRow} aria-live="polite" className="min-w-0">
+    <div
+      ref={observeRow}
+      aria-live="polite"
+      className="min-w-0"
+      onFocus={() => setFocused(true)}
+      onBlur={() => setFocused(false)}
+    >
       {expandable ? (
         // A fixed open height: results that land after opening scroll inside instead of moving Delete.
         <DialogDisclosure
