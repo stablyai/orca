@@ -24,21 +24,25 @@ function antigravityTurn(row: AgentHookEventPayload | undefined) {
     : undefined
 }
 
-function sameAntigravityTurn(
-  row: AgentHookEventPayload,
-  turn: NonNullable<ReturnType<typeof antigravityTurn>>,
-  anyLeadStart = false
-): boolean {
+type AntigravityTurn = NonNullable<ReturnType<typeof antigravityTurn>>
+
+function inAntigravityTurn(row: AgentHookEventPayload, turn: AntigravityTurn): boolean {
   return (
     row.payload.agentType === 'antigravity' &&
-    row.payload.mainAgent?.state === 'done' &&
     row.hostTurn?.owner === turn.owner &&
     row.hostTurn?.currentTurnKey === turn.key &&
-    (anyLeadStart || row.payload.mainAgent.stateStartedAt === turn.leadStartedAt) &&
     row.providerSession?.id === turn.sessionId &&
     row.launchToken === turn.launchToken &&
     row.connectionId === turn.connectionId &&
     row.worktreeId === turn.worktreeId
+  )
+}
+
+function sameAntigravityTurn(row: AgentHookEventPayload, turn: AntigravityTurn): boolean {
+  return (
+    inAntigravityTurn(row, turn) &&
+    row.payload.mainAgent?.state === 'done' &&
+    row.payload.mainAgent.stateStartedAt === turn.leadStartedAt
   )
 }
 
@@ -62,8 +66,9 @@ export function deferProgramStatusRecheck<E extends { paneKey: string; tabId?: s
   const turn = input.preserveAntigravityDone
     ? antigravityTurn(input.rows.get(input.paneKey))
     : undefined
-  // agy's done can beat the proof of the subagent its busy Stop waits on; that subagent's hold then carries it.
-  const heldTurn =
+  // agy's done can beat the proof of the subagent its busy Stop waits on, so roster and model polls
+  // and that subagent's hold carry it; only a root hook showing new activity replaces it.
+  const doneTurn =
     input.antigravityDone && !turn ? antigravityTurn(input.rows.get(input.paneKey)) : undefined
   const run = (currentPaneKey: string): void => {
     const row = input.rows.get(currentPaneKey)
@@ -74,9 +79,11 @@ export function deferProgramStatusRecheck<E extends { paneKey: string; tabId?: s
       (turn
         ? sameAntigravityTurn(row, turn)
         : row.receivedAt === yieldedTo ||
-          (heldTurn !== undefined &&
-            sameAntigravityTurn(row, heldTurn, true) &&
-            isAgentStatusHeldOpenByChildWork(row.payload)))
+          (doneTurn !== undefined &&
+            inAntigravityTurn(row, doneTurn) &&
+            (row.hookEventName === undefined ||
+              (row.payload.mainAgent?.state === 'done' &&
+                isAgentStatusHeldOpenByChildWork(row.payload)))))
     ) {
       const tabId = parsePaneKey(currentPaneKey)?.tabId ?? event.tabId
       input.reoffer(markAntigravityDoneRetried({ ...event, paneKey: currentPaneKey, tabId }))
@@ -85,7 +92,7 @@ export function deferProgramStatusRecheck<E extends { paneKey: string; tabId?: s
   if (delayMs === undefined) {
     input.rechecks.park(input.paneKey, run)
   } else {
-    input.rechecks.defer(input.paneKey, delayMs + 1, run, heldTurn !== undefined)
+    input.rechecks.defer(input.paneKey, delayMs + 1, run, doneTurn !== undefined)
   }
 }
 
@@ -111,13 +118,13 @@ export function discardAntigravityDone(
   previous: AgentHookEventPayload | undefined,
   applied: AgentHookEventPayload | undefined
 ): void {
-  // A rejected event returns the unchanged row, so its parked agy done stays.
+  // A rejected event returns the unchanged row, and a poll reports no new root activity, so the agy done stays.
   if (
     applied !== previous &&
     applied?.payload.agentType === 'antigravity' &&
     (incoming.hasExplicitPrompt ||
       applied.payload.state === 'done' ||
-      applied.payload.mainAgent?.state !== 'done')
+      (incoming.hookEventName !== undefined && applied.payload.mainAgent?.state !== 'done'))
   ) {
     rechecks.cancel(applied.paneKey)
     if (applied.connectionId && applied.payload.state === 'done') {

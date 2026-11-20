@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { appendFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
@@ -357,18 +357,33 @@ it('holds a relayed done while the remote host reports a pending spawn', async (
   expect(state()).toBe('done')
 })
 
-it('ends the run on agy done that arrived before a messaged subagent was proven', async () => {
-  const transcriptPath = brainWithChildDescriptor()
-  const message = { stepIdx: 2, toolCall: { name: 'send_message', args: {} }, transcriptPath }
-  await agyHook('PreInvocation', { transcriptPath })
-  await agyHook('PreToolUse', message)
-  await agyHook('PostToolUse', message)
-  await agyHook('Stop', { fullyIdle: false, terminationReason: 'NO_TOOL_CALL', transcriptPath })
-  programDone()
-  await agyHook('PreInvocation', child)
-  await vi.waitFor(() => expect(server.getStatusSnapshot()[0]?.subagents).toHaveLength(1), {
-    timeout: 10000
-  })
-  await subagentIdleStop()
-  await vi.waitFor(() => expect(state()).toBe('done'), { timeout: 10000 })
-})
+it.each([
+  ['', false],
+  [' after a model-only poll', true]
+])(
+  'ends the run on agy done that arrived before a messaged subagent was proven%s',
+  async (_case, modelPoll) => {
+    const transcriptPath = brainWithChildDescriptor()
+    const message = { stepIdx: 2, toolCall: { name: 'send_message', args: {} }, transcriptPath }
+    await agyHook('PreInvocation', { transcriptPath, modelName: 'auto' })
+    await agyHook('PreToolUse', message)
+    await agyHook('PostToolUse', message)
+    await agyHook('Stop', { fullyIdle: false, terminationReason: 'NO_TOOL_CALL', transcriptPath })
+    programDone()
+    if (modelPoll) {
+      appendFileSync(
+        transcriptPath,
+        `${JSON.stringify({ type: 'PLANNER_RESPONSE', model: 'model-x', created_at: '2999-01-01T00:00:00Z' })}\n`
+      )
+      await vi.waitFor(() => expect(server.getStatusSnapshot()[0]?.model).toBe('model-x'), {
+        timeout: 10000
+      })
+    }
+    await agyHook('PreInvocation', child)
+    await vi.waitFor(() => expect(server.getStatusSnapshot()[0]?.subagents).toHaveLength(1), {
+      timeout: 10000
+    })
+    await subagentIdleStop()
+    await vi.waitFor(() => expect(state()).toBe('done'), { timeout: 10000 })
+  }
+)
