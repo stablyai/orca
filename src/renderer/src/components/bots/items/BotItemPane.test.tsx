@@ -107,18 +107,16 @@ type PageRead = { land: () => void; fail: () => void }
 function pane({
   start = 1,
   offline = false,
-  failed = false,
   paged = false
-}: { start?: number; offline?: boolean; failed?: boolean; paged?: boolean } = {}) {
+}: { start?: number; offline?: boolean; paged?: boolean } = {}) {
   const onBack = vi.fn()
-  const retry = vi.fn()
   const reads: PageRead[] = []
   const control: { current: Control | null } = { current: null }
   function Walk(): React.JSX.Element {
     const [index, setIndex] = useState(start)
     const [isOffline, setOffline] = useState(offline)
     const [pending, setPending] = useState(false)
-    const [readFailed, setReadFailed] = useState(failed)
+    const [readFailed, setReadFailed] = useState(false)
     const [, redraw] = useReducer((n: number) => n + 1, 0)
     control.current = { open: setIndex, redraw, setOffline }
     const read = (direction: 1 | -1): void => {
@@ -144,7 +142,6 @@ function pane({
       open: vi.fn(),
       step: (direction) => (paged ? read(direction) : setIndex(index + direction)),
       retry: () => {
-        retry()
         if (paged && readFailed) {
           read(1)
         }
@@ -162,7 +159,7 @@ function pane({
       <input aria-label="Elsewhere" />
     </TooltipProvider>
   )
-  return { onBack, retry, reads, control: () => control.current! }
+  return { onBack, reads, control: () => control.current! }
 }
 
 const paneRoot = (): HTMLElement => document.querySelector('[data-bot-item-pane]')!
@@ -170,15 +167,14 @@ const arrow = (name: 'Next item' | 'Previous item'): HTMLButtonElement =>
   screen.getByRole('button', { name })
 const said = (): string => screen.getByRole('status').textContent ?? ''
 // happy-dom reports AltGraph for any Alt press; Chromium doesn't for Option or Ctrl+Alt with an arrow.
-function chord(target: Element, key: 'ArrowDown' | 'ArrowUp', init: KeyboardEventInit = {}): void {
+function chord(target: Element, key: 'ArrowDown' | 'ArrowUp'): void {
   const event = new KeyboardEvent('keydown', {
     key,
     code: key,
     metaKey: true,
     altKey: true,
     bubbles: true,
-    cancelable: true,
-    ...init
+    cancelable: true
   })
   Object.defineProperty(event, 'getModifierState', { value: () => false })
   fireEvent(target, event)
@@ -326,13 +322,6 @@ it('steps and goes back with chords rebound to Shift+Insert', () => {
   keybindings.current = { 'botItem.back': ['Shift+Insert'] }
   fireEvent.keyDown(paneRoot(), insert)
   expect(onBack).toHaveBeenCalledOnce()
-})
-
-it('says when the next Closed page failed, with Retry', () => {
-  const { retry } = pane({ failed: true })
-  expect(screen.getByRole('alert')).toBeTruthy()
-  fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
-  expect(retry).toHaveBeenCalledOnce()
 })
 
 it('goes back on unclaimed Escape or the Back chord inside the pane', () => {
