@@ -17,6 +17,17 @@ export type FolderWorkspaceDeleteOptions = FolderWorkspaceMutationOptions & {
   allowFailedArchiveHook?: boolean
 }
 
+function hasUnsavedDraft(
+  store: NonNullable<ReturnType<RuntimeProjectGroupDependencies['getStore']>>,
+  ownerKey: string
+): boolean {
+  return (store.getWorkspaceSessionHostIds?.() ?? []).some((hostId) =>
+    store
+      .getWorkspaceSession?.(hostId)
+      ?.openFilesByWorktree?.[ownerKey]?.some((file) => file.dirtyDraftContent !== undefined)
+  )
+}
+
 export async function deleteFolderWorkspaceRow(
   deps: RuntimeProjectGroupDependencies,
   folderWorkspaceId: string,
@@ -33,6 +44,10 @@ export async function deleteFolderWorkspaceRow(
   }
   if (workspace && isLocalWslMoveRow(workspace)) {
     assertWslMoveProjectWritable(store, { folderWorkspaceId })
+  }
+  // The purge drops the session's unsaved editor text, which lives nowhere else; desktop blocks first.
+  if (workspace && hasUnsavedDraft(store, folderWorkspaceKey(folderWorkspaceId))) {
+    throw new Error('Unsaved editor changes. Save or close them in Orca, then delete again.')
   }
   let gate:
     | Awaited<ReturnType<RuntimeProjectGroupDependencies['acquireFileWatcherRemoval']>>

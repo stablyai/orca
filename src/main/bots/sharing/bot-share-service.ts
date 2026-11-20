@@ -280,8 +280,10 @@ export class BotShareService {
   /** Stops the link; false when it was already stopped. With the bot on this host, its stored picks
    *  go too, so sharing it again starts from the defaults. */
   async stop(shareId: string, botId?: string): Promise<SkillCloudOperation<boolean>> {
+    const shares = botId ? await this.deps.client.listShares() : null
     const stopped = await this.deps.client.revokeShare(shareId)
-    if (stopped.status === 'ok' && botId) {
+    const served = shares?.status === 'ok' && shares.value.find((s) => s.id === shareId)?.name
+    if (stopped.status === 'ok' && botId && served === botPackageName(botId)) {
       await this.deps.picks?.forget(botId).catch(() => undefined)
     }
     return stopped

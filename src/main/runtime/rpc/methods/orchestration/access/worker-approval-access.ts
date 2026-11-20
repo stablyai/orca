@@ -2,7 +2,6 @@ import type { z } from 'zod'
 import type { ApprovalAnswerParams } from '../../../../../../shared/rpc-contract/orchestration/orchestration-approval-answer-params'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { isAgentRpcCaller } from '../../../callers/rpc-caller-identity'
-import { ORCHESTRATION_PERSON_APPROVALS_CLIENT_CAPABILITY } from '../../../../../../shared/orchestration/orchestration-runtime-capabilities'
 import type { OrchestrationAccessRuleInput } from './orchestration-method-access'
 
 export type WorkerApprovalAccess = { answeredBy: 'person' | 'coordinator'; reason: string | null }
@@ -20,10 +19,8 @@ export function workerApprovalAccess({
     (ctx.caller?.kind === 'paired-device' &&
       !isAgentRpcCaller(ctx.caller) &&
       ctx.orchestrationCaller === undefined &&
-      // Only the phone app holds a phone's pairing; a paired window says it is one.
-      (ctx.clientKind === 'mobile' ||
-        ctx.clientCapabilities?.includes(ORCHESTRATION_PERSON_APPROVALS_CLIENT_CAPABILITY) ===
-          true))
+      // The pairing scope, not a client claim: only the phone app holds a phone's pairing.
+      ctx.clientKind === 'mobile')
   const reason = params.reason?.trim() || null
   // Without a reason it is not a coordinator's approve.
   if (
