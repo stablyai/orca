@@ -30,8 +30,13 @@ function readAgain() {
   })
 }
 
+// Fixed, increasing mtimes so each bump differs from the last without reading the clock.
+const MTIME_BASE_MS = Date.UTC(2026, 0, 1)
+let mtimeBumps = 0
 function bumpAuthFileMtime() {
-  utimesSync(join(dir, 'auth.json'), new Date(), new Date(Date.now() + 60_000))
+  mtimeBumps += 1
+  const at = new Date(MTIME_BASE_MS + mtimeBumps * 60_000)
+  utimesSync(join(dir, 'auth.json'), at, at)
 }
 
 const lockedItem = {
@@ -151,13 +156,17 @@ describe('Cursor Linux keyring session', () => {
   })
 
   it('shares one secret-tool run between concurrent cold reads', async () => {
-    // secret-tool takes several ms, so the second read arrives while the first is still running.
+    // Hold secret-tool open until both reads have started, so the second joins the first.
+    let finishRead: () => void = () => {}
     vi.mocked(runProcess).mockImplementation(
-      () => new Promise((resolve) => setTimeout(() => resolve(keyringItem(jwt)), 20))
+      () => new Promise((resolve) => (finishRead = () => resolve(keyringItem(jwt))))
     )
     writeFileSync(join(dir, 'auth.json'), JSON.stringify({ storedIn: 'os-secret-store' }))
 
-    const [first, second] = await Promise.all([readAgain(), readAgain()])
+    const reads = Promise.all([readAgain(), readAgain()])
+    await vi.waitFor(() => expect(runProcess).toHaveBeenCalled())
+    finishRead()
+    const [first, second] = await reads
 
     expect(first).toMatchObject({ session: { token: { raw: jwt } } })
     expect(second).toMatchObject({ session: { token: { raw: jwt } } })
