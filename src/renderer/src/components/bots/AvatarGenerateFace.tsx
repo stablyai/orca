@@ -285,7 +285,7 @@ function DescriptionField({ face }: { face: GenerateFace }): React.JSX.Element {
   }, [count, select])
   const ready = face.description.trim().length > 0 && !running
   return (
-    <div className="flex flex-col rounded-lg border border-input bg-background focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50 dark:bg-input/30">
+    <div className="flex flex-col rounded-md border border-input bg-background focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50 dark:bg-input/30">
       <textarea
         ref={ref}
         value={face.description}
@@ -306,7 +306,9 @@ function DescriptionField({ face }: { face: GenerateFace }): React.JSX.Element {
         // Two lines at rest, growing to six, then scrolling.
         className="scrollbar-sleek block max-h-[122px] min-h-[46px] w-full resize-none bg-transparent px-2.5 pt-2 text-[13px] leading-[19px] text-foreground outline-none [field-sizing:content] placeholder:text-muted-foreground read-only:text-muted-foreground"
       />
-      <div className="flex items-center justify-between px-1.5 pt-1 pb-1.5">
+      {/* The agent glyph and the send button's edge both sit at the text's 10px side inset; the
+          button's bottom matches the text's 8px top inset. */}
+      <div className="flex items-center justify-between pt-1 pr-2.5 pb-2 pl-1.5">
         <AgentMenu face={face} disabled={running} />
         <Button
           type="button"
@@ -367,7 +369,9 @@ export function GenerateField({ face }: { face: GenerateFace }): React.JSX.Eleme
           </Tooltip>
         </p>
       </BotPictureRowFold>
-      <BotPictureRowFold open={!face.folded} className="px-1 pt-2 pb-1">
+      {/* Inset by the popover's 12px content padding; the carousel's 4px of slack under its tiles
+          plus pt-2 makes the gap above 12px too. */}
+      <BotPictureRowFold open={!face.folded} className="px-3 pt-2 pb-3">
         <DescriptionField face={face} />
         <BotPictureRowFold open={note !== null}>
           {shownNote ? <FieldNoteLine note={shownNote} /> : null}
