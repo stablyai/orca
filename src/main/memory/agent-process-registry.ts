@@ -1,12 +1,15 @@
 // Native agent CLIs (chat providers, app servers) run outside terminals, under main or the agent host.
 type AgentRoot = { count: number; chats: Set<string> }
 const roots = new Map<number, AgentRoot>()
+// The CLI's own pid, which chats record, to the root whose tree is counted (its owner wrapper).
+const rootByAgentPid = new Map<number, number>()
 
-/** Counts this provider root's process tree as agent memory until the returned release runs. */
-export function registerAgentProcess(pid: number): () => void {
-  const root = roots.get(pid) ?? { count: 0, chats: new Set<string>() }
+/** Counts this root's process tree as agent memory until the returned release runs. */
+export function registerAgentProcess(rootPid: number, agentPid = rootPid): () => void {
+  const root = roots.get(rootPid) ?? { count: 0, chats: new Set<string>() }
   root.count += 1
-  roots.set(pid, root)
+  roots.set(rootPid, root)
+  rootByAgentPid.set(agentPid, rootPid)
   let released = false
   return () => {
     if (released) {
@@ -14,15 +17,21 @@ export function registerAgentProcess(pid: number): () => void {
     }
     released = true
     root.count -= 1
-    if (root.count === 0 && roots.get(pid) === root) {
-      roots.delete(pid)
+    if (root.count === 0 && roots.get(rootPid) === root) {
+      roots.delete(rootPid)
+    }
+    if (rootByAgentPid.get(agentPid) === rootPid && !roots.has(rootPid)) {
+      rootByAgentPid.delete(agentPid)
     }
   }
 }
 
-/** Names the chat this run started on a live root; it is forgotten with the root. */
-export function noteAgentProcessChat(pid: number, agentSessionId: string): void {
-  roots.get(pid)?.chats.add(agentSessionId)
+/** Names the chat this run started on a live agent process; it is forgotten with the root. */
+export function noteAgentProcessChat(agentPid: number, agentSessionId: string): void {
+  const rootPid = rootByAgentPid.get(agentPid)
+  if (rootPid !== undefined) {
+    roots.get(rootPid)?.chats.add(agentSessionId)
+  }
 }
 
 /** Each live root with the one chat it belongs to; a root shared by several chats belongs to none. */
