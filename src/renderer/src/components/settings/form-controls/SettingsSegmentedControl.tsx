@@ -35,6 +35,31 @@ export function SettingsSegmentedControl<T extends string | number>({
   wrap = false,
   overlayTooltip = false
 }: SettingsSegmentedControlProps<T>): React.JSX.Element {
+  const enabled = options.filter((opt) => !opt.disabled)
+  // One tab stop: the checked option, or the first available one when none is checked.
+  const tabStop = options.some((opt) => opt.value === value) ? value : enabled[0]?.value
+  // Radio-group keys: arrows (and Home/End) move to the next available option and pick it.
+  const onKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>, current: T): void => {
+    const index = enabled.findIndex((opt) => opt.value === current)
+    const next =
+      event.key === 'ArrowRight' || event.key === 'ArrowDown'
+        ? enabled[(index + 1) % enabled.length]
+        : event.key === 'ArrowLeft' || event.key === 'ArrowUp'
+          ? enabled[(index - 1 + enabled.length) % enabled.length]
+          : event.key === 'Home'
+            ? enabled[0]
+            : event.key === 'End'
+              ? enabled.at(-1)
+              : undefined
+    if (!next) {
+      return
+    }
+    event.preventDefault()
+    const group = event.currentTarget.closest('[role="radiogroup"]')
+    const buttons = group ? [...group.querySelectorAll<HTMLElement>('[role="radio"]')] : []
+    buttons[options.indexOf(next)]?.focus()
+    onChange(next.value)
+  }
   return (
     <div
       role="radiogroup"
@@ -59,6 +84,8 @@ export function SettingsSegmentedControl<T extends string | number>({
             aria-label={opt.ariaLabel}
             // Keep unavailable options focusable for explanatory tooltips; the click guard enforces aria-disabled.
             aria-disabled={opt.disabled}
+            tabIndex={opt.value === tabStop ? 0 : -1}
+            onKeyDown={(event) => onKeyDown(event, opt.value)}
             onClick={() => {
               if (!opt.disabled) {
                 onChange(opt.value)
