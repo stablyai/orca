@@ -41,6 +41,7 @@ import {
 } from './acp-listing-session-models'
 import { AcpAgentError, AcpAgentExitedError } from '../transport/acp-errors'
 import { AgentModelCatalogUnavailableError } from '../../native-chat/agent-model-catalog/agent-model-catalog-unavailable'
+import { prepareAcpListingAccount } from './acp-listing-account'
 import { usesModelSpecificAcpEfforts } from '../../../shared/agent-session/options/model-catalog/agent-model-catalog-ownership'
 
 type AcpListingConnect<C> = (launch: ProviderProcessLaunch, options: AcpAgentConnectionOptions) => C
@@ -73,10 +74,8 @@ export function createAcpModelCatalogProbe(
     }
     // Start in home; only explicit chat-folder discovery reads project config.
     const cwd = deps.homePath ?? homedir()
-    const { command, prefixArgs, env, envToDelete } = await resolveAcpLaunchInvocation(
-      spec,
-      accountHome,
-      {
+    const { command, prefixArgs, env, envToDelete, antigravityChatAuth } =
+      await resolveAcpLaunchInvocation(spec, accountHome, {
         ...deps,
         ...(lookup !== 'recover'
           ? {
@@ -86,8 +85,7 @@ export function createAcpModelCatalogProbe(
           : {}),
         operation,
         resolveWorkingDirectory: () => cwd
-      }
-    )
+      })
     assertStructuredAgentResolutionCurrent(operation)
     return {
       identity: { command, prefixArgs, cwd, workspace },
@@ -119,6 +117,9 @@ export function createAcpModelCatalogProbe(
         if (release.status === 'tooOld') {
           throw new Error(`${spec.agent} at ${command} does not run structured chats`)
         }
+        await prepareAcpListingAccount(spec, env, antigravityChatAuth, () =>
+          assertStructuredAgentResolutionCurrent(operation)
+        )
         const listing = acpModelListingForRelease(discovery, release.version)
         if (listing === null) {
           throw new Error(`${spec.agent} at ${command} lists its models only through its chats`)

@@ -1,3 +1,4 @@
+import { stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import {
   resolveAntigravityChatAuthConfig,
@@ -13,7 +14,15 @@ import {
   copyAntigravityUserRules,
   linkAntigravityUserSkills
 } from './antigravity-chat-user-skills'
-import { resolveAgentPlatformProject } from './antigravity-agent-platform-project'
+import {
+  agentPlatformCredentialsFile,
+  resolveAgentPlatformProject
+} from './antigravity-agent-platform-project'
+import { AgentSessionAcquisitionRefusal } from '../native-chat/agent-session-wire/providers/structured-agent-session-adapter-errors'
+import {
+  providerDiagnostic,
+  withProviderDiagnostic
+} from '../../shared/agent-session/failures/agent-session-failure'
 
 const folder = hostFolderAccountBinding('GEMINI_HOME', ANTIGRAVITY_CHAT_HOME_FOLDER, [
   ANTIGRAVITY_ACP_HOME
@@ -23,6 +32,34 @@ export const ANTIGRAVITY_LAUNCH_GATE = new AcpLaunchGate('Antigravity')
 
 /** The message is suitable for display without further translation. */
 export class AntigravityChatSentence extends Error {}
+
+function missingCredential(text: string): Error {
+  const refusal = new AgentSessionAcquisitionRefusal(text, 'notSignedIn', 'managed')
+  const detail = providerDiagnostic(text, 'person')
+  return detail ? withProviderDiagnostic(refusal, detail) : refusal
+}
+
+/** agy given a key or gcloud method without that credential falls back to its own saved login,
+ *  which would bill another account than the one Settings shows; such a launch is refused here. */
+async function assertCredential(
+  auth: AntigravityChatAuthConfig,
+  env: Readonly<Record<string, string>>
+): Promise<void> {
+  if (auth.method === 'gemini-api-key' && !env.GEMINI_API_KEY?.trim()) {
+    throw missingCredential(
+      "No Gemini API key is saved for Antigravity, and GEMINI_API_KEY isn't set. Add a key under Settings → Accounts → Antigravity."
+    )
+  }
+  if (auth.method !== 'agent-platform') {
+    return
+  }
+  const adc = await stat(agentPlatformCredentialsFile(env)).catch(() => null)
+  if (!adc?.isFile()) {
+    throw missingCredential(
+      'No gcloud login was found. Run `gcloud auth application-default login`, or choose another sign-in under Settings → Accounts → Antigravity.'
+    )
+  }
+}
 
 /** What agy reads from Orca's chat home: the key or gcloud method and its project; with Google,
  *  nothing, so agy picks its own saved login as it does in its own home. */
@@ -59,6 +96,7 @@ export const antigravityChatAccount = {
     if (!home) {
       throw new Error('GEMINI_HOME is not set')
     }
+    await assertCredential(auth, env)
     await folder.prepare?.(env)
     const userHome = antigravityUserHome(env)
     await linkAntigravityUserSkills(home, userHome)

@@ -136,6 +136,8 @@ const ORCA_HOME_LAUNCH_SPEC = {
       : [],
   readsAntigravityChatAuth: true,
   scrubEnvironment: scrubAntigravityAcpEnvironment,
+  // Its credentials are Orca's settings, so a sign-in notice points there, not at `agy`.
+  dialect: { ...ANTIGRAVITY_ACP_DIALECT, signInAccount: 'managed' },
   account: antigravityChatAccount,
   // `agy models` reads only agy's own home, so this home lists in a session Orca then removes.
   modelDiscovery: {

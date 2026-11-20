@@ -15,8 +15,9 @@ import {
 import { initializeAntigravityAcp } from './antigravity-acp-runtime-probe'
 import { antigravityTakesSystemPrompt } from '../acp/launch/acp-instructions'
 
-/** First release verified with Orca chats; it also leaves the chat's folder untouched. */
-export const ANTIGRAVITY_HOST_ACP_MINIMUM_VERSION = '1.5.2'
+/** Oldest release verified with Orca chats: it reads Orca's chat home through `--gemini-dir`, and
+ *  ignores an inherited GEMINI_API_KEY/GOOGLE_API_KEY unless its own settings pick a key provider. */
+export const ANTIGRAVITY_HOST_ACP_MINIMUM_VERSION = '1.5.5'
 /** agy keeps its sign-in and conversations here and ignores GEMINI_HOME, so this only pins the chat. */
 const AGY_HOME_FOLDER = '.gemini'
 /** Approves tools, not plans; the check launches with it, so a build without it stays managed. */

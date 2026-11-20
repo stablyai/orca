@@ -1,7 +1,10 @@
 // Prepares a launch's account before its spawn.
 
 import '../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
-import { launchPreparationFailure } from '../../native-chat/agent-session-wire/providers/structured-agent-session-adapter-errors'
+import {
+  AgentSessionAcquisitionRefusal,
+  launchPreparationFailure
+} from '../../native-chat/agent-session-wire/providers/structured-agent-session-adapter-errors'
 import type { StructuredAgentSessionAcquireInput } from '../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import type { AntigravityChatAuthConfig } from '../../../shared/agent-accounts/antigravity/antigravity-chat-auth-config'
 import type { AcpStructuredLaunch } from './acp-structured-launch-resolution'
@@ -35,7 +38,8 @@ export async function prepareAcpLaunch<
 >(resolve: () => Promise<Launch>, closedBeforeSpawn: () => void): Promise<Launch> {
   const preparationFailure = (error: unknown): never => {
     closedBeforeSpawn()
-    throw launchPreparationFailure(error)
+    // An account that can't sign in says so, as the agent itself would.
+    throw error instanceof AgentSessionAcquisitionRefusal ? error : launchPreparationFailure(error)
   }
   const launch = await resolve().catch(preparationFailure)
   // Nothing has spawned yet, so a failure from here on removes the launch's own files at once.

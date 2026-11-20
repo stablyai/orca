@@ -62,3 +62,35 @@ describe('Antigravity chat homes', () => {
     expect(env).toEqual({ GEMINI_API_KEY: 'key', GOOGLE_API_KEY: 'other', PATH: '/bin' })
   })
 })
+
+describe("Orca's agy and its kill switch", () => {
+  it.each([
+    ["agy's own home", AGY_HOME],
+    ["Orca's chat home", ORCA_HOME]
+  ])("launches Orca's agy on %s only while it is switched on", async (_case, home) => {
+    const { mkdtempSync, writeFileSync, rmSync } = await import('node:fs')
+    const { tmpdir } = await import('node:os')
+    const { join } = await import('node:path')
+    const { rememberManagedAgentRelease } =
+      await import('../managed-agent-cli/managed-agent-cli-registry')
+    const { resolveAcpLaunchCommand } = await import('../acp/launch/acp-launch-command')
+    const folder = mkdtempSync(join(tmpdir(), 'orcas-agy-'))
+    writeFileSync(join(folder, process.platform === 'win32' ? 'agy.exe' : 'agy'), '')
+    rememberManagedAgentRelease('antigravity', folder)
+    try {
+      const spec = acpLaunchSpecForAccount(ANTIGRAVITY_LAUNCH_SPEC, home)
+      const resolve = (antigravityManagedAgyEnabled: boolean) =>
+        resolveAcpLaunchCommand(
+          spec,
+          { PATH: '' },
+          { homePath: folder, commandSettings: { antigravityManagedAgyEnabled } }
+        ).command
+      expect(resolve(true)).toContain(folder)
+      expect(() => resolve(false)).not.toThrow()
+      expect(resolve(false)).not.toContain(folder)
+    } finally {
+      rememberManagedAgentRelease('antigravity', null)
+      rmSync(folder, { recursive: true, force: true })
+    }
+  })
+})

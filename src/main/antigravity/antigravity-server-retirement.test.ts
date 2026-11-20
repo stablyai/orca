@@ -37,3 +37,20 @@ it("removes the retired server's releases, Google tokens and temp folders, never
   expect(kept.filter((path) => !existsSync(path))).toEqual([])
   expect(existsSync(join(data, 'agent-runtimes', 'antigravity'))).toBe(false)
 })
+
+it("finds the server's /tmp folder only under a parent this user owns privately", async () => {
+  const { chmodSync, mkdirSync: mkdir } = await import('node:fs')
+  const { antigravityServerShortTemp } = await import('./antigravity-server-retirement')
+  data = mkdtempSync(join(tmpdir(), 'orca-retire-tmp-'))
+  const uid = process.getuid?.()
+  if (uid === undefined) {
+    return
+  }
+  const parent = join(data, `oacp-${uid}`)
+  mkdir(parent, { mode: 0o700 })
+  chmodSync(parent, 0o700)
+  expect(await antigravityServerShortTemp('/data', uid, data)).toMatch(/oacp-\d+\/[0-9a-f]{8}$/)
+  chmodSync(parent, 0o777)
+  expect(await antigravityServerShortTemp('/data', uid, data)).toBeNull()
+  expect(await antigravityServerShortTemp('/data', uid + 1, data)).toBeNull()
+})

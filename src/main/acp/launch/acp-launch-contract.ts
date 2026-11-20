@@ -5,7 +5,6 @@ import type { AcpDialect } from '../acp-dialects/acp-dialect'
 import type { AcpAccountBinding } from './acp-account-binding'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import type { AgentChatPermissionMode } from '../../../shared/agent-launch/permissions/agent-chat-permission-mode'
-import type { ManagedRuntime } from '../../node-runtime/managed-runtime-release'
 import type { AcpSkillRootsLoader } from './acp-skill-roots'
 import type { AcpInstructionsDelivery } from './acp-instructions'
 import type {
@@ -55,8 +54,6 @@ export type AcpLaunchSpec = {
   versionArgs?: readonly string[]
   /** Searched after PATH. */
   installDirectories(input: { env: Readonly<Record<string, string>>; homePath: string }): string[]
-  /** Installed only on request; takes precedence over PATH and excludes `minimumVersions`. */
-  managedRuntime?: ManagedRuntime
   /** Agent-enforced modes; Orca does not answer its permission requests. */
   permissionModeConfig?: {
     values: { ask: string } & Partial<Record<AgentChatPermissionMode, string>>
