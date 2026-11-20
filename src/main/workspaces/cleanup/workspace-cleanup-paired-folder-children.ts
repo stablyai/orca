@@ -110,12 +110,17 @@ function childrenOfAnswer(
     throw new Error('no paired lineage answer')
   }
   // A server from before cross-machine parents sends none, and has none.
-  const saved =
-    'crossStoreLineage' in answer.result
-      ? normalizeCrossStoreLineageByChildKey(answer.result.crossStoreLineage)
-      : undefined
+  if (!('crossStoreLineage' in answer.result) || answer.result.crossStoreLineage === undefined) {
+    return []
+  }
+  const saved = normalizeCrossStoreLineageByChildKey(answer.result.crossStoreLineage)
+  const links = validCrossStoreLineage(saved)
+  // A link it can't read may be a child of a folder here.
+  if (!saved || Object.keys(links).length !== Object.keys(saved).length) {
+    throw new Error('unreadable paired lineage')
+  }
   const hostId = toRuntimeExecutionHostId(answer.environmentId)
-  return Object.values(validCrossStoreLineage(saved)).flatMap((link) => {
+  return Object.values(links).flatMap((link) => {
     const child = parseWorkspaceKey(link.childWorkspaceKey)
     return child?.type === 'worktree' &&
       link.parent.installationId === own &&
