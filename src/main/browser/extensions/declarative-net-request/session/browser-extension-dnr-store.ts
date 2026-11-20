@@ -70,7 +70,7 @@ class BrowserExtensionDnrStore extends BrowserExtensionProfileDocumentStore {
   }
 
   override forgetProfileExtension(profileId: string, extensionId: string): Promise<void> {
-    this.forgetSessionRulesExcept(profileId, (id) => id !== extensionId)
+    this.forgetSessionRulesOf(profileId, extensionId)
     return super.forgetProfileExtension(profileId, extensionId)
   }
 
@@ -87,7 +87,7 @@ class BrowserExtensionDnrStore extends BrowserExtensionProfileDocumentStore {
     for (const profileId of this.sessionRules.keys()) {
       const saved = this.sessionRules.get(profileId)?.get(extension.id)
       if (saved && saved.version !== extension.version) {
-        this.forgetSessionRulesExcept(profileId, (id) => id !== extension.id)
+        this.forgetSessionRulesOf(profileId, extension.id)
       }
     }
   }
@@ -95,6 +95,13 @@ class BrowserExtensionDnrStore extends BrowserExtensionProfileDocumentStore {
   /** Extensions turned off, like a browser quit: every profile's session rules go. */
   forgetAllSessionRules(): void {
     this.sessionRules.clear()
+  }
+
+  private forgetSessionRulesOf(profileId: string, extensionId: string): void {
+    const byExtension = this.sessionRules.get(profileId)
+    if (byExtension?.delete(extensionId) && byExtension.size === 0) {
+      this.sessionRules.delete(profileId)
+    }
   }
 
   private forgetSessionRulesExcept(profileId: string, keeps: (extensionId: string) => boolean) {
