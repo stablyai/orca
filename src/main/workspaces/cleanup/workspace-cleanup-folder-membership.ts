@@ -13,6 +13,8 @@ import {
   type ExecutionHostId
 } from '../../../shared/execution-host/execution-host'
 import type { RuntimeWorktreePsSummary } from '../../../shared/worktree/catalog/runtime-worktree-contracts'
+import type { CrossStoreWorkspaceLineage } from '../../../shared/worktree/lineage-types'
+import type { PairedFolderChildren } from './workspace-cleanup-paired-folder-children'
 
 export function summaryHostId(summary: RuntimeWorktreePsSummary): ExecutionHostId | null {
   return summary.hostId ? normalizeExecutionHostId(summary.hostId) : LOCAL_EXECUTION_HOST_ID
@@ -23,13 +25,27 @@ export function summaryIdentity(summary: RuntimeWorktreePsSummary): string {
   return composeWorktreeHostIdentity(summaryHostId(summary) ?? undefined, summary.worktreeId)
 }
 
+// A worker's own lineage; its folder's other members can't hold a disposable checkout.
+function isOrchestrationLineage(lineage: CrossStoreWorkspaceLineage): boolean {
+  return (
+    lineage.origin === 'orchestration' ||
+    Boolean(lineage.orchestrationRunId || lineage.taskId || lineage.coordinatorHandle)
+  )
+}
+
 /** Each listed worktree's folder siblings by host identity: the others its folder workspace's Source
  * Control lists, attached worktrees and their lineage children alike, on any host. A bot's home is
- * not one piece of work, so its workspaces stay independent. */
-export function folderSiblingsByWorktree(
+ * not one piece of work, so its workspaces stay independent.
+ *
+ * A folder in another Orca store keeps that link only in the child's store, so each side sees half:
+ * a child here whose folder is elsewhere is always held, and this host's folders learn of children
+ * in paired servers' stores from `readPairedFolderChildren`. A headless server can't reach the
+ * other servers its clients pair, so children elsewhere of its own folders stay unseen. */
+export async function folderSiblingsByWorktree(
   store: RuntimeStore,
-  summaries: readonly RuntimeWorktreePsSummary[]
-): (summary: RuntimeWorktreePsSummary) => string[] {
+  summaries: readonly RuntimeWorktreePsSummary[],
+  readPairedFolderChildren?: () => Promise<PairedFolderChildren>
+): Promise<(summary: RuntimeWorktreePsSummary) => string[]> {
   const botHomes = new Set(
     (store.getBots?.() ?? []).map((bot) => folderWorkspaceKey(bot.folderWorkspaceId))
   )
@@ -52,6 +68,13 @@ export function folderSiblingsByWorktree(
         : folderEdges[worktreeWorkspaceKey(id)]?.parentWorkspaceKey
       if (folderKey) {
         return botHomes.has(folderKey) ? null : folderKey
+      }
+      const elsewhere = row?.crossStoreParent
+      if (elsewhere) {
+        return parseWorkspaceKey(elsewhere.parent.workspaceKey)?.type === 'folder' &&
+          !isOrchestrationLineage(elsewhere)
+          ? `${elsewhere.parent.installationId}|${elsewhere.parent.workspaceKey}`
+          : null
       }
       id = row ? row.parentWorktreeId : (parentEdges[id]?.parentWorktreeId ?? null)
     }
@@ -99,6 +122,30 @@ export function folderSiblingsByWorktree(
     const folderKey = listed || archived ? null : folderOf(undefined, worktreeId)
     if (folderKey && membersByFolder.has(folderKey)) {
       join(folderKey, composeWorktreeHostIdentity(undefined, worktreeId))
+    }
+  }
+  const localFolders = [...membersByFolder.keys()].filter((key) => key.startsWith('folder:'))
+  for (const key of membersByFolder.keys()) {
+    if (!key.startsWith('folder:')) {
+      // The folder's other members are in its own store, which this host can't read.
+      join(key, `?|${key}`)
+    }
+  }
+  if (localFolders.length > 0 && readPairedFolderChildren) {
+    const paired = await readPairedFolderChildren()
+    for (const { identity, parentWorkspaceKey } of paired.children) {
+      const parent = parseWorkspaceKey(parentWorkspaceKey)
+      const folderKey =
+        parent?.type === 'worktree' ? folderOf(undefined, parent.worktreeId) : parentWorkspaceKey
+      if (folderKey && membersByFolder.has(folderKey)) {
+        join(folderKey, identity)
+      }
+    }
+    if (!paired.complete) {
+      // A server that didn't answer may hold a member of any of them.
+      for (const key of localFolders) {
+        join(key, '?|unanswered')
+      }
     }
   }
   return (summary) => {

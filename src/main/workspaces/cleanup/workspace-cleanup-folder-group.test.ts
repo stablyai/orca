@@ -21,6 +21,14 @@ vi.mock('../../ipc/workspace-cleanup/workspace-cleanup-scan', () => ({
   })
 }))
 
+// This store's own identity, which a paired server's child names as its parent's store.
+vi.mock('../../runtime/hosts/platform-probe/host-descriptor', () => ({
+  readCallerStoreInstallationId: async () => 'this-store'
+}))
+vi.mock('../../persistence/loading-store/user-data-path', () => ({
+  getCanonicalUserDataPath: () => '/nonexistent'
+}))
+
 import { WorkspaceCleanupRunner } from './workspace-cleanup-runner'
 import { collectWorkspaceCleanupWorkspaces } from './workspace-cleanup-run-evidence'
 import { removeWorkspaceForCleanup } from './workspace-cleanup-removal-step'
@@ -36,7 +44,13 @@ const RULES: WorkspaceCleanupRules = {
 
 function row(
   worktreeId: string,
-  lineage: { folder?: string; parent?: string; hostId?: string } = {}
+  lineage: {
+    folder?: string
+    parent?: string
+    hostId?: string
+    /** A parent in another Orca store: its store, its workspace key, and how the link was made. */
+    elsewhere?: { store: string; key: string; origin?: string }
+  } = {}
 ): RuntimeWorktreePsSummary {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: cleanup reads only these listing fields.
   return {
@@ -54,7 +68,18 @@ function row(
     unverifiableTerminalCount: 0,
     agents: [],
     parentWorktreeId: lineage.parent ?? null,
-    workspaceLineage: lineage.folder ? { parentWorkspaceKey: `folder:${lineage.folder}` } : null
+    workspaceLineage: lineage.folder ? { parentWorkspaceKey: `folder:${lineage.folder}` } : null,
+    ...(lineage.elsewhere
+      ? {
+          crossStoreParent: {
+            parent: {
+              installationId: lineage.elsewhere.store,
+              workspaceKey: lineage.elsewhere.key
+            },
+            origin: lineage.elsewhere.origin ?? 'manual'
+          }
+        }
+      : {})
   } as unknown as RuntimeWorktreePsSummary
 }
 
@@ -64,6 +89,8 @@ function makeHost(
     lineage?: Record<string, unknown>
     parents?: Record<string, unknown>
     botHomes?: string[]
+    /** Each paired server's `worktree ps` rows, or null for one that doesn't answer. */
+    paired?: Record<string, RuntimeWorktreePsSummary[] | null>
   } = {}
 ): {
   runtime: OrcaRuntimeService
@@ -95,7 +122,17 @@ function makeHost(
     getExistingOrchestrationDb: () => null,
     listTerminals: async () => ({ terminals: [], totalCount: 0, truncated: false }),
     getLocalProvider: () => ({ listProcesses: async () => [] }),
-    removeManagedWorktree: vi.fn()
+    removeManagedWorktree: vi.fn(),
+    getRuntimeId: () => 'runtime-1',
+    listOrchestrationWorkerServers: async () =>
+      Object.keys(recorded.paired ?? {}).map((environmentId) => ({ environmentId, name: '' })),
+    callOrchestrationWorkerServer: vi.fn(async (environmentId: string) => {
+      const answer = recorded.paired?.[environmentId]
+      if (!answer) {
+        throw new Error('timed out')
+      }
+      return { worktrees: answer, truncated: false }
+    })
   } as unknown as OrcaRuntimeService
   return { runtime, store }
 }
@@ -200,5 +237,47 @@ describe('folder workspace cleanup group', () => {
       keptOnRecheck: true
     })
     expect(host.runtime.removeManagedWorktree).not.toHaveBeenCalled()
+  })
+
+  it('holds a worktree whose folder workspace is in another Orca store', async () => {
+    const runner = makeRunner([
+      row('repo-a::/r1', { elsewhere: { store: 'desktop', key: 'folder:F' } }),
+      // Nested under r1, so in the same folder.
+      row('repo-b::/r2', { parent: 'repo-a::/r1' }),
+      // A worker's checkout; its folder's other members don't hold it.
+      row('repo-a::/w1', {
+        elsewhere: { store: 'desktop', key: 'folder:F', origin: 'orchestration' }
+      })
+    ])
+    expect(await verdicts(runner)).toEqual({
+      'repo-a::/r1': { action: 'keep', cause: 'folder-workspace-sibling', reason: 'merged' },
+      'repo-b::/r2': { action: 'keep', cause: 'folder-workspace-sibling', reason: 'merged' },
+      'repo-a::/w1': { action: 'delete', reason: 'merged' }
+    })
+  })
+
+  it("holds this store's folder while a paired server has a workspace in it", async () => {
+    const runner = makeRunner(
+      [row('repo-a::/a1', { folder: 'F' }), row('repo-a::/g1', { folder: 'G' })],
+      {
+        paired: {
+          'env-r': [row('repo-x::/x1', { elsewhere: { store: 'this-store', key: 'folder:F' } })]
+        }
+      }
+    )
+    expect(await verdicts(runner)).toEqual({
+      'repo-a::/a1': { action: 'keep', cause: 'folder-workspace-sibling', reason: 'merged' },
+      'repo-a::/g1': { action: 'delete', reason: 'merged' }
+    })
+  })
+
+  it('holds every folder group while a paired server does not answer', async () => {
+    const runner = makeRunner([row('repo-a::/a1', { folder: 'F' }), row('repo-a::/solo')], {
+      paired: { 'env-r': null }
+    })
+    expect(await verdicts(runner)).toEqual({
+      'repo-a::/a1': { action: 'keep', cause: 'folder-workspace-sibling', reason: 'merged' },
+      'repo-a::/solo': { action: 'delete', reason: 'merged' }
+    })
   })
 })

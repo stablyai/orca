@@ -112,6 +112,7 @@ export async function removeWorkspaceForCleanup(args: {
       now: args.now(),
       worktreeId: workspace.ref.worktreeId,
       withFolderSiblings: workspace.folderSiblings.length > 0,
+      readPairedFolderChildren: workspace.readPairedFolderChildren,
       signal: args.signal
     })
     if (!fresh) {
