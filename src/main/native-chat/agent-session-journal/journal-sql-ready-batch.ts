@@ -2,7 +2,8 @@ import type { JournalWriterStep } from './writing/journal-writer-step'
 import type { JournalSqlRequest } from './journal-sql-protocol'
 
 const MAX_STEPS = 64
-const MAX_BYTES = 1024 * 1024
+/** A sending chat's write waits for the bulk transaction in progress, so none outgrows one large tool output. */
+const MAX_BYTES = 256 * 1024
 
 /** Sender work only: sizing reads each step's admission reservation, never its body. */
 export function prepareJournalSqlRequest(
