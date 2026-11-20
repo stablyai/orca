@@ -279,8 +279,8 @@ export function AntigravityAccountsSection({
             t
           })}
           action={
-            chatDescription === 'agySignedOut' && owner.kind === 'local' ? (
-              <AntigravityAgySignInButton />
+            chatDescription === 'agySignedOut' ? (
+              <AntigravityAgySignInButton owner={owner} />
             ) : undefined
           }
         >

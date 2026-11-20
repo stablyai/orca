@@ -92,7 +92,8 @@ export async function acquireAcpStructuredSession(input: {
       early.push(deliver)
     }
   }
-  const connection = acpLaunchConnect(deps, launch, closedBeforeSpawn)(
+  const connect = acpLaunchConnect(deps, launch, closedBeforeSpawn)
+  const connection = connect(
     {
       command: launch.command,
       args: launch.args,
