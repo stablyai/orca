@@ -150,10 +150,10 @@ export class CodexSharedServerPool {
         this.stopping.delete(server)
         return
       }
-      const delay = STOP_RETRY_DELAYS_MS[attempt]
-      if (delay === undefined) {
-        console.warn(`[codex-shared-server] pid ${server.pid ?? '?'} did not prove its exit`)
-        return
+      // Retried until proven, at the slowest pace once the backoff runs out.
+      const delay = STOP_RETRY_DELAYS_MS[Math.min(attempt, STOP_RETRY_DELAYS_MS.length - 1)]!
+      if (attempt === STOP_RETRY_DELAYS_MS.length - 1) {
+        console.warn(`[codex-shared-server] pid ${server.pid ?? '?'} has not proven its exit`)
       }
       const timer = setTimeout(() => this.stop(server, attempt + 1), delay)
       timer.unref?.()

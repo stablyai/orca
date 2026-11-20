@@ -243,11 +243,15 @@ export class CodexSharedServerLease implements CodexAppServerConnection {
       this.finish(error, false, true)
       return
     }
-    // The chat hears its exit only after its turns are stopped, so a recovery can't race them.
-    void this.host
+    // The chat hears its exit only after its turns are stopped, so a recovery can't race them; a
+    // close meanwhile waits on this same cleanup.
+    this.closing = this.host
       .release(this)
       .catch(() => false)
-      .then((proven) => this.finish(error, false, proven))
+      .then((proven) => {
+        this.finish(error, false, proven)
+        return true
+      })
   }
 
   private finish(error: Error, expected: boolean, proven: boolean): void {

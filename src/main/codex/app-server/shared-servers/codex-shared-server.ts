@@ -35,6 +35,7 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
   private physical: CodexAppServerConnection | null = null
   private hasExited = false
   private readonly owners = new Map<string, CodexSharedServerLease>()
+  private readonly releases = new WeakMap<CodexSharedServerLease, Promise<boolean>>()
   private readonly turns = new CodexSharedServerTurns()
   private readonly retired = new Set<string>()
   private readonly unrouted = new CodexSharedServerUnrouted((frame) => this.refuse(frame))
@@ -122,10 +123,18 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
   /** Interrupts the chat's turns and waits for each to end, then unsubscribes the threads no
    *  later chat claimed. Resolves whether every turn is proven over; the server keeps running
    *  for other chats unless a stuck turn leaves no other chat working, when it stops. */
-  async release(lease: CodexSharedServerLease): Promise<boolean> {
-    if (!this.leases.delete(lease)) {
-      return true
+  release(lease: CodexSharedServerLease): Promise<boolean> {
+    // Every caller (a close racing a failure's cleanup) waits on the one cleanup and its proof.
+    let releasing = this.releases.get(lease)
+    if (!releasing) {
+      releasing = this.leases.has(lease) ? this.releaseLease(lease) : Promise.resolve(true)
+      this.releases.set(lease, releasing)
     }
+    return releasing
+  }
+
+  private async releaseLease(lease: CodexSharedServerLease): Promise<boolean> {
+    this.leases.delete(lease)
     const threads = [...lease.threads]
     for (const threadId of threads) {
       if (this.owners.get(threadId) === lease) {
@@ -136,7 +145,10 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
     lease.threads.clear()
     let proven = true
     const physical = this.physical
-    if (physical && !this.closed) {
+    if (physical && this.closed && !this.hasExited) {
+      // A broken transport proves nothing about the process or its turns; only its exit does.
+      proven = await this.stop()
+    } else if (physical && !this.closed) {
       const options = { timeoutMs: RELEASE_REQUEST_TIMEOUT_MS }
       await withDeadline(
         Promise.allSettled(this.turns.startsPending(threads)),
@@ -173,9 +185,13 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
   /** A turn that ignores Stop: stop the server if no other chat is working, else drain it. */
   private async handleStuckTurn(): Promise<boolean> {
     this.draining = true
-    const othersWorking = [...this.leases].some((other) =>
-      [...other.threads].some((threadId) => this.turns.runningOn(threadId) !== undefined)
-    )
+    const othersWorking = [...this.leases].some((other) => {
+      const threads = [...other.threads]
+      return (
+        this.turns.anyStartPending(threads) ||
+        threads.some((threadId) => this.turns.runningOn(threadId) !== undefined)
+      )
+    })
     if (othersWorking || !this.physical) {
       console.warn(`[codex-shared-server] pid ${this.pid ?? '?'}: a stopped turn kept running`)
       return false

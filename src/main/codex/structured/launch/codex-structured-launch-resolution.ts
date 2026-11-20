@@ -76,6 +76,8 @@ export type CodexStructuredInvocationDeps = Pick<
 export type CodexStructuredInvocation = {
   command: string
   prefixArgs: string[]
+  /** The user's Command setting; absent for the stock CLI. */
+  configured?: string
   environment: NodeJS.ProcessEnv | undefined
 }
 
@@ -138,7 +140,7 @@ export function codexStructuredLaunchPart(
   return async (basis) => {
     const { record } = basis
     const recordHome = requireLegacyAgentSessionAccountHome(record.accountHome)
-    const { command, prefixArgs } = await resolveCodexStructuredInvocation({
+    const { command, prefixArgs, configured } = await resolveCodexStructuredInvocation({
       ...(deps.resolveCommand ? { resolveCommand: deps.resolveCommand } : {}),
       refreshEnvironmentAfterMiss: basis.refreshAfterMissingProgram,
       resolveWorkingDirectory: basis.launchDirectory,
@@ -192,6 +194,8 @@ export function codexStructuredLaunchPart(
       launch: {
         command,
         prefixArgs,
+        // A custom command may be a wrapper that depends on its folder; it never shares a server.
+        ...(configured ? { customCommand: true } : {}),
         // Before the user's args: a later -c table replaces this one, so their hooks.state wins.
         args: [
           ...prefixArgs,

@@ -53,6 +53,8 @@ export type CodexStructuredLaunch = CodexBotLaunchOptions & {
   visuals?: NativeChatVisualsLaunch
   /** What this launch's `codex --version` reported, when it could be read. */
   codexVersion?: string
+  /** Launched through the user's Command setting rather than the stock CLI. */
+  customCommand?: boolean
 }
 
 /** Boundaries retain host receipt time through buffering and retries. */

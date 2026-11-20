@@ -6,6 +6,8 @@ import type {
 import { CodexSharedServerPool } from './codex-shared-server-pool'
 import { CODEX_SHARED_LEASE_MAX_QUEUED_FRAMES } from './codex-shared-server-lease'
 import { codexOpenedThreadId } from './codex-shared-server-frames'
+import { codexConnectionOpener } from '../../structured/acquisition/codex-structured-connection-opener'
+import { spawnCodexAppServerConnection } from '../codex-app-server-connection'
 
 type FakeServer = {
   pid: number
@@ -51,6 +53,10 @@ function fakeCodex(interrupt: 'ends' | 'later' | 'ignored' = 'ends') {
       },
       request: async (method, params, options) => {
         server.requests.push({ method, ...(params ? { params } : {}) })
+        if (method === 'turn/start' && params?.hang === true) {
+          // A send Codex has not answered yet.
+          return new Promise(() => {})
+        }
         let result: unknown = {}
         if (method === 'thread/start') {
           const id = `thread-${nextThread++}`
@@ -287,5 +293,62 @@ describe('shared Codex app-servers', () => {
     servers[0]!.closeTransport()
     await pool.open(launch(), chat().handlers, { sessionId: 'b', skillRoots: [] })
     expect(servers).toHaveLength(2)
+  })
+
+  it('waits on the cleanup already running when a chat is closed while being dropped', async () => {
+    vi.useFakeTimers()
+    const { servers, pool } = fakeCodex('later')
+    const a = chat()
+    const connA = await pool.open(launch(), a.handlers, { sessionId: 'a', skillRoots: [] })
+    const threadA = await startThread(connA)
+    servers[0]!.handlers.onNotification?.('turn/started', { threadId: threadA, turn: { id: 't' } })
+    connA.pauseReading?.()
+    for (let i = 0; i <= CODEX_SHARED_LEASE_MAX_QUEUED_FRAMES; i += 1) {
+      servers[0]!.handlers.onNotification?.('item/agentMessage/delta', { threadId: threadA })
+    }
+    let closed = false
+    void connA.close().then(() => {
+      closed = true
+    })
+    await vi.advanceTimersByTimeAsync(1_000)
+    expect(closed).toBe(false)
+    await vi.advanceTimersByTimeAsync(3_000)
+    expect(closed).toBe(true)
+    expect(connA.processTreeUnproven).toBe(false)
+    expect(a.exits).toHaveLength(1)
+  })
+
+  it('proves a chat stopped on a broken transport only by stopping that server', async () => {
+    const { servers, pool } = fakeCodex()
+    const connA = await pool.open(launch(), chat().handlers, { sessionId: 'a', skillRoots: [] })
+    const threadA = await startThread(connA)
+    servers[0]!.handlers.onNotification?.('turn/started', { threadId: threadA, turn: { id: 't' } })
+    servers[0]!.closeTransport()
+    await connA.close()
+    expect(connA.closeResult).toEqual({ root: 'exited', tree: 'exited' })
+    expect(servers[0]!.requests.map((r) => r.method)).not.toContain('turn/interrupt')
+  })
+
+  it("keeps a server up for another chat's unanswered send when a stuck turn is stopped", async () => {
+    vi.useFakeTimers()
+    const { servers, pool } = fakeCodex('ignored')
+    const connA = await pool.open(launch(), chat().handlers, { sessionId: 'a', skillRoots: [] })
+    const connB = await pool.open(launch(), chat().handlers, { sessionId: 'b', skillRoots: [] })
+    const threadA = await startThread(connA)
+    const threadB = await startThread(connB)
+    servers[0]!.handlers.onNotification?.('turn/started', { threadId: threadA, turn: { id: 't' } })
+    void connB.request('turn/start', { threadId: threadB, hang: true })
+    const closing = connA.close()
+    await vi.advanceTimersByTimeAsync(20_000)
+    await closing
+    expect(connA.processTreeUnproven).toBe(true)
+    expect(connB.closed).toBe(false)
+  })
+
+  it('never shares a server for a custom Codex command', () => {
+    const opener = codexConnectionOpener({ sharedServers: () => true }, 's', {
+      customCommand: true
+    })
+    expect(opener).toBe(spawnCodexAppServerConnection)
   })
 })

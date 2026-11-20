@@ -6,16 +6,20 @@ import type {
   CodexStructuredSessionAdapterDeps
 } from '../session-lifecycle/codex-structured-session-state'
 
-/** Off: the chat spawns its own app-server, as always. On: it leases a thread on a shared one. */
+/** Off, or a custom Codex command: the chat spawns its own app-server, as always. On: it leases a
+ *  thread on a shared one. */
 export function codexConnectionOpener(
   deps: Pick<CodexStructuredSessionAdapterDeps, 'openConnection' | 'sharedServers'>,
   sessionId: string,
-  launch: Pick<CodexStructuredLaunch, 'visuals' | 'linkedSkillsRoot' | 'codexVersion'>
+  launch: Pick<
+    CodexStructuredLaunch,
+    'visuals' | 'linkedSkillsRoot' | 'codexVersion' | 'customCommand'
+  >
 ): NonNullable<CodexStructuredSessionAdapterDeps['openConnection']> {
   if (deps.openConnection) {
     return deps.openConnection
   }
-  if (deps.sharedServers?.() !== true) {
+  if (launch.customCommand || deps.sharedServers?.() !== true) {
     return spawnCodexAppServerConnection
   }
   const skillRoots = codexSkillRoots({

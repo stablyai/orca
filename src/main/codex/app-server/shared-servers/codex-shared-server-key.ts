@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
-import { basename, isAbsolute } from 'node:path'
+import { isAbsolute } from 'node:path'
 import {
   ORCA_AGENT_SESSION_ID_ENV,
   ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV
@@ -45,29 +45,6 @@ async function launchGeneration(
   return [codexVersion, ...mtimes]
 }
 
-const CODEX_EXECUTABLE = /^codex(?:\.exe|\.cmd|\.ps1|\.js|\.mjs)?$/i
-const NODE_EXECUTABLE = /^node(?:\.exe)?$/i
-const RELATIVE_PATH = /^\.\.?[\\/]/
-
-/** Only a launch that runs Codex itself (by absolute path or PATH, directly or through node) with no
- *  ./relative argument runs the same from any folder; a wrapper keeps the chat's folder and shares
- *  only with chats in that folder. */
-function isFolderIndependent(launch: CodexAppServerLaunch): boolean {
-  const program = basename(launch.command)
-  const runsCodex =
-    CODEX_EXECUTABLE.test(program) ||
-    (NODE_EXECUTABLE.test(program) &&
-      launch.args[0] !== undefined &&
-      isAbsolute(launch.args[0]) &&
-      CODEX_EXECUTABLE.test(basename(launch.args[0])))
-  const relativeCommand = !isAbsolute(launch.command) && /[\\/]/.test(launch.command)
-  return (
-    runsCodex &&
-    !relativeCommand &&
-    ![launch.command, ...launch.args].some((part) => RELATIVE_PATH.test(part))
-  )
-}
-
 /** Chats share a server only when the binary, flags, account home, base env and skill roots match. */
 export async function codexSharedServerSpec(
   launch: CodexAppServerLaunch,
@@ -80,15 +57,12 @@ export async function codexSharedServerSpec(
     delete env[key]
   }
   const envToDelete = [...new Set([...(launch.envToDelete ?? []), ...PER_CHAT_ENV_KEYS])].sort()
-  // A worktree cwd would pin that folder (Windows can't delete it) for every chat on the server.
-  const cwd = isFolderIndependent(launch) ? homedir() : launch.cwd
   const key = createHash('sha256')
     .update(
       JSON.stringify({
         command: launch.command,
         generation,
         args: launch.args,
-        cwd: cwd === homedir() ? null : (cwd ?? null),
         env: Object.entries(env).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)),
         envToDelete,
         skillRoots
@@ -97,12 +71,8 @@ export async function codexSharedServerSpec(
     .digest('hex')
   return {
     key,
-    launch: {
-      command: launch.command,
-      args: launch.args,
-      ...(cwd ? { cwd } : {}),
-      env,
-      envToDelete
-    }
+    // Only the stock CLI is shared, and it runs the same from any folder. A worktree cwd would pin
+    // that folder (Windows can't delete it) for every chat on the server.
+    launch: { command: launch.command, args: launch.args, cwd: homedir(), env, envToDelete }
   }
 }
