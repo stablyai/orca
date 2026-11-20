@@ -69,7 +69,8 @@ export async function readAntigravityTranscriptPoll(
       continue
     }
     const metadata =
-      members?.get(child.id) ?? (await readAntigravityChildMetadata(brain, child.id, cache))
+      members?.get(child.id) ??
+      (await readAntigravityChildMetadata(brain, child.id, cache, current))
     if (!current()) {
       continue
     }
@@ -121,6 +122,7 @@ export function pollAntigravityTranscriptStatus(
       retireAntigravityChild(pane, child.id)
     } else if (metadata) {
       child.verified = true
+      pane.helpersIdleAt = undefined
       pane.awaitingInitialHelperDiscovery = undefined
       child.description = metadata.description
       child.agentType = metadata.agentType

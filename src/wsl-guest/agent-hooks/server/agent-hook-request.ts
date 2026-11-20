@@ -122,7 +122,7 @@ export async function handleRelayHookRequest(
       }
     )
     if ((source === 'muse' || source === 'antigravity') && !event) {
-      options.retryScheduler.rearmIgnoredMuseHook(hookBody)
+      options.retryScheduler.rearmIgnoredHook(source, hookBody)
     }
     if (event) {
       // TODO: once normalizeHookPayload returns validated env/version, drop bodyEnv/bodyVersion and source them from the listener result.

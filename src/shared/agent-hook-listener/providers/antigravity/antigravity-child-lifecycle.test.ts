@@ -169,5 +169,19 @@ it('refuses another root child and fences a delayed kill read against a fresh in
   expect(stale?.payload.subagents?.[0]).toMatchObject({ id: 'child', toolInput: 'src/current.ts' })
   transcript('unrelated')
   hook('unrelated', 'PreInvocation')
-  expect((await poll())?.payload.subagents?.some((child) => child.id === 'unrelated')).toBe(false)
+  expect(
+    (await poll())?.payload.subagents?.some((child) => child.id === 'unrelated') ?? false
+  ).toBe(false)
+})
+
+it('keeps unverified child commands and Stops from reopening a finished root', async () => {
+  transcript('unrelated')
+  hook('root', 'Stop', { fullyIdle: true })
+  hook('unrelated', 'PreToolUse', {
+    stepIdx: 7,
+    toolCall: { name: 'run_command', args: { CommandLine: 'long-task' } }
+  })
+  expect((await poll())?.payload.state).toBe('done')
+  hook('unrelated', 'Stop', { fullyIdle: true })
+  expect((await poll())?.payload.state).toBe('done')
 })

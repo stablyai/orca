@@ -1,3 +1,4 @@
+import { hookBodyEnv, hookBodyVersion } from '../publication/agent-hook-envelope-build'
 import {
   withHookTranscriptPoll,
   normalizeHookTranscriptPoll,
@@ -15,8 +16,7 @@ import type { HookListenerState } from '../../../shared/agent-hook-listener/list
 import type { AgentHookSource } from '../../../shared/agent-hook-listener/transport/agent-hook-relay'
 import { pickHostTurnEnd } from '../../../shared/agent-status/contracts/agent-status-types'
 import {
-  antigravityHookPollRow,
-  museHookPollPane,
+  ignoredHookTranscriptPoll,
   museLogOffset,
   nextMusePollDelay,
   shouldPollHookTranscript,
@@ -158,22 +158,18 @@ export class AgentHookResultRetryScheduler {
     )
   }
 
-  rearmIgnoredMuseHook(body: unknown): void {
-    const childRow = antigravityHookPollRow(this.host.state, body, this.host.env)
-    if (childRow) {
-      this.scheduleTranscriptPoll('antigravity', body, childRow)
-      return
-    }
-    const paneKey = museHookPollPane(this.host.state, body, this.host.env)
-    if (!paneKey) {
-      return
-    }
-    const poll = this.transcriptPollScheduler.peek(paneKey)
-    if (
-      poll?.source === 'muse' &&
-      this.host.state.lastStatusByPaneKey.get(paneKey) === poll.original
-    ) {
-      this.scheduleTranscriptPoll('muse', poll.body, poll.original, poll.env, poll.version)
+  rearmIgnoredHook(source: AgentHookSource, body: unknown): void {
+    const poll = ignoredHookTranscriptPoll(this.host.state, source, body, this.host.env, (key) =>
+      this.transcriptPollScheduler.peek(key)
+    )
+    if (poll) {
+      this.scheduleTranscriptPoll(
+        poll.source,
+        poll.body,
+        poll.original,
+        hookBodyEnv(poll.body),
+        hookBodyVersion(poll.body)
+      )
     }
   }
 

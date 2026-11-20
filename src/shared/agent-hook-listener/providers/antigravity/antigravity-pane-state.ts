@@ -1,7 +1,7 @@
 import { join } from 'node:path'
 import type { AgentStatusState } from '../../../agent-status/contracts/agent-status-types'
 import {
-  AGENT_TOOL_INPUT_MAX_LENGTH,
+  AGENT_STATUS_TOOL_INPUT_MAX_LENGTH,
   normalizeOptionalField
 } from '../../../agent-status/contracts/agent-status-field-normalization'
 import { isRecord } from '../../../agent-status/child-work/agent-status-child-work-value-guards'
@@ -39,7 +39,7 @@ export type AntigravityPaneChildState = {
   leadState?: AgentStatusState
   leadStateStartedAt?: number
   leadModel?: string
-  commands?: Set<string>
+  commands?: Set<number>
   children: Map<string, TrackedAntigravityChild>
   retiredChildren: Set<string>
   brainCache: AntigravityBrainCache
@@ -66,6 +66,7 @@ export function retireAntigravityChild(pane: AntigravityPaneChildState, id: stri
   if (pane.retiredChildren.size > 4096) {
     pane.retiredChildren.delete(pane.retiredChildren.values().next().value!)
   }
+  const verified = pane.children.get(id)?.verified
   pane.children.delete(id)
   if (pane.rootBrainDir) {
     pane.brainCache.transcripts.delete(
@@ -76,14 +77,9 @@ export function retireAntigravityChild(pane: AntigravityPaneChildState, id: stri
       pane.brainCache.jsonFiles.delete(path)
     }
   }
-  for (const key of pane.commands ?? []) {
-    if (key.startsWith(`${id}:`)) {
-      pane.commands?.delete(key)
-    }
-  }
   pane.dirty = true
-  if (pane.children.size === 0 && !pane.commands?.size) {
-    pane.helpersIdleAt ??= Date.now()
+  if (verified) {
+    pane.helpersIdleAt = Date.now()
   }
 }
 export function recordAntigravityChildHook(
@@ -117,9 +113,9 @@ export function recordAntigravityChildHook(
   const tool =
     eventName === 'PreToolUse' ? extractToolFields('antigravity', eventName, payload) : undefined
   const toolName = tool?.toolName
-  const toolInput = normalizeOptionalField(tool?.toolInput, AGENT_TOOL_INPUT_MAX_LENGTH)
+  const toolInput = normalizeOptionalField(tool?.toolInput, AGENT_STATUS_TOOL_INPUT_MAX_LENGTH)
   const rawModel = readFirstString(payload, ['modelName', 'model'])
-  const model = rawModel ? normalizeAntigravityModel(rawModel) : child.model
+  const model = rawModel ? (normalizeAntigravityModel(rawModel) ?? '') : child.model
   const state = isAntigravityFeedbackTool(toolName) ? 'waiting' : 'working'
   if (
     !existing ||
@@ -132,11 +128,10 @@ export function recordAntigravityChildHook(
     pane.children.set(id, child)
     pane.dirty = true
   }
-  pane.helpersIdleAt = undefined
   if (child.verified) {
+    pane.helpersIdleAt = undefined
     pane.awaitingInitialHelperDiscovery = undefined
   }
-  trackAntigravityBackgroundCommand(pane, eventName, id, payload)
 }
 export function trackAntigravityBackgroundCommand(
   pane: AntigravityPaneChildState,
@@ -148,19 +143,18 @@ export function trackAntigravityBackgroundCommand(
   const stepIdx = payload.stepIdx
   if (
     toolName !== 'run_command' ||
-    !id ||
+    id !== pane.rootConversationId ||
     typeof stepIdx !== 'number' ||
     (eventName !== 'PreToolUse' && eventName !== 'PostToolUse')
   ) {
     return false
   }
-  const key = `${id}:${stepIdx}`
   if (eventName === 'PostToolUse') {
-    return pane.commands?.delete(key) === true
+    return pane.commands?.delete(stepIdx) === true
   }
   if (isRecord(toolInputSource) && toolInputSource.IsDaemon === true) {
     return false
   }
-  pane.commands = (pane.commands ?? new Set()).add(key)
+  pane.commands = (pane.commands ?? new Set()).add(stepIdx)
   return false
 }

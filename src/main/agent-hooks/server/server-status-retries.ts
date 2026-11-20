@@ -12,8 +12,7 @@ import {
 import type { AgentHookSource } from '../../../shared/agent-hook-listener/transport/agent-hook-relay'
 import { pickHostTurnEnd } from '../../../shared/agent-status/contracts/agent-status-types'
 import {
-  antigravityHookPollRow,
-  museHookPollPane,
+  ignoredHookTranscriptPoll,
   museLogOffset,
   nextMusePollDelay,
   shouldPollHookTranscript,
@@ -179,19 +178,16 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
     )
   }
 
-  protected rearmIgnoredMuseHook(body: unknown): void {
-    const childRow = antigravityHookPollRow(this.state, body, this.env)
-    if (childRow) {
-      this.scheduleTranscriptPoll('antigravity', body, childRow)
-      return
-    }
-    const paneKey = museHookPollPane(this.state, body, this.env)
-    if (!paneKey) {
-      return
-    }
-    const poll = this.transcriptPollScheduler.peek(paneKey)
-    if (poll?.source === 'muse' && this.state.lastStatusByPaneKey.get(paneKey) === poll.original) {
-      this.scheduleTranscriptPoll('muse', poll.body, poll.original)
+  protected rearmIgnoredHook(source: AgentHookSource, body: unknown): void {
+    const poll = ignoredHookTranscriptPoll(this.state, source, body, this.env, (key) =>
+      this.transcriptPollScheduler.peek(key)
+    )
+    if (poll) {
+      this.scheduleTranscriptPoll(
+        poll.source,
+        poll.body,
+        poll.original as EnrichedAgentHookEventPayload
+      )
     }
   }
 

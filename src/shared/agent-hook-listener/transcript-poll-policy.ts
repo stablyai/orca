@@ -140,15 +140,38 @@ export function transcriptPollUpdate<T extends AgentHookEventPayload>(
 
 export function antigravityHookPollRow(
   state: HookListenerState,
-  body: unknown,
-  env: string
+  body: unknown
 ): AgentHookEventPayload | undefined {
-  const hook = parseHookEnvelope(state, 'antigravity', body, env)
-  if (!hook) {
-    return undefined
-  }
-  const row = state.lastStatusByPaneKey.get(hook.paneKey)
+  const paneKey =
+    typeof body === 'object' &&
+    body !== null &&
+    'paneKey' in body &&
+    typeof body.paneKey === 'string'
+      ? body.paneKey
+      : undefined
+  const row = paneKey ? state.lastStatusByPaneKey.get(paneKey) : undefined
   return row?.payload.agentType === 'antigravity' && hasAntigravityPollWork(state, row)
     ? row
+    : undefined
+}
+
+export function ignoredHookTranscriptPoll<
+  T extends { source: AgentHookSource; body: unknown; original: AgentHookEventPayload }
+>(
+  state: HookListenerState,
+  source: AgentHookSource,
+  body: unknown,
+  env: string,
+  peek: (paneKey: string) => T | undefined
+): { source: AgentHookSource; body: unknown; original: AgentHookEventPayload } | T | undefined {
+  if (source === 'antigravity') {
+    const original = antigravityHookPollRow(state, body)
+    return original ? { source, body, original } : undefined
+  }
+  const paneKey = museHookPollPane(state, body, env)
+  const poll = paneKey ? peek(paneKey) : undefined
+  return poll?.source === 'muse' &&
+    state.lastStatusByPaneKey.get(poll.original.paneKey) === poll.original
+    ? poll
     : undefined
 }

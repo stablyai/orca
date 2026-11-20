@@ -3,6 +3,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, it, vi } from 'vitest'
 import * as fsp from 'node:fs/promises'
+import { readAntigravityChildMetadata } from './antigravity-brain-metadata'
+import { retireAntigravityChild } from './antigravity-pane-state'
 import { createHookListenerState } from '../../listener-state'
 import {
   getOrCreateAntigravityPaneState,
@@ -67,7 +69,38 @@ it.each([100, 1000])(
         await readAntigravityTranscriptPoll(state, 'pane')
       }
       expect(fsp.open).toHaveBeenCalledTimes(0)
-      expect(fsp.stat).toHaveBeenCalledTimes(22)
+      expect(fsp.stat).toHaveBeenCalledTimes(20)
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  }
+)
+
+it.each([10, 100])(
+  'does not restore metadata cached after %s child retirements',
+  async (children) => {
+    const dir = mkdtempSync(join(tmpdir(), 'agy-retired-cache-'))
+    const state = createHookListenerState()
+    const pane = getOrCreateAntigravityPaneState(state, 'pane')
+    pane.rootBrainDir = dir
+    const descriptors = join(dir, '.system_generated', 'subagents')
+    mkdirSync(descriptors, { recursive: true })
+    try {
+      for (let i = 0; i < children; i++) {
+        const id = `child-${i}`
+        writeFileSync(join(descriptors, `${id}.json`), JSON.stringify({ conversationId: id }))
+        recordAntigravityChildHook(pane, id, 'PreInvocation', {}, i)
+        const child = pane.children.get(id)
+        const read = readAntigravityChildMetadata(
+          dir,
+          id,
+          pane.brainCache,
+          () => pane.children.get(id) === child
+        )
+        retireAntigravityChild(pane, id)
+        expect(await read).toBeUndefined()
+      }
+      expect(pane.brainCache.jsonFiles.size).toBe(0)
     } finally {
       rmSync(dir, { recursive: true, force: true })
     }

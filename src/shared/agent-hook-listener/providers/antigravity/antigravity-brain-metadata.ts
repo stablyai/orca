@@ -58,7 +58,8 @@ export function normalizeAntigravityModel(raw: unknown): string | undefined {
 }
 async function readBoundedJsonRecord(
   filePath: string,
-  cache: AntigravityBrainCache
+  cache: AntigravityBrainCache,
+  wanted: () => boolean = () => true
 ): Promise<Record<string, unknown> | undefined> {
   try {
     const cached = cache.jsonFiles.get(filePath)
@@ -71,6 +72,9 @@ async function readBoundedJsonRecord(
       BRAIN_METADATA_MAX_BYTES,
       { regularFileOnly: true }
     )
+    if (!wanted()) {
+      return undefined
+    }
     const parsed = parseAgentHookJson(buffer.toString('utf8'))
     const record = isRecord(parsed) ? parsed : null
     cache.jsonFiles.set(filePath, {
@@ -92,13 +96,14 @@ export function antigravityChildDescriptorPath(brain: string, childId: string): 
 export async function readAntigravityChildMetadata(
   brain: string,
   childId: string,
-  cache: AntigravityBrainCache
+  cache: AntigravityBrainCache,
+  wanted: () => boolean = () => true
 ): Promise<AntigravityChildMetadata | undefined> {
   const path = antigravityChildDescriptorPath(brain, childId)
   if (!path) {
     return undefined
   }
-  const record = await readBoundedJsonRecord(path, cache)
+  const record = await readBoundedJsonRecord(path, cache, wanted)
   if (!record || (record.conversationId !== undefined && record.conversationId !== childId)) {
     return undefined
   }
@@ -138,7 +143,10 @@ export async function readAntigravitySwarmMembers(
       description: name,
       agentType: 'Swarm Worker',
       model: normalizeAntigravityModel(raw.applied_model) ?? normalizeAntigravityModel(raw.model),
-      killed: raw.killed === true || raw.desired_state === 'KILLED' || raw.phase !== 'RUNNING'
+      killed:
+        raw.killed === true ||
+        (raw.desired_state ?? raw.desiredState) === 'KILLED' ||
+        raw.phase !== 'RUNNING'
     })
   }
   cache.swarm = { record, members }
