@@ -153,6 +153,7 @@ export const SettingsUpdate = z
     hostNotifications: HostNotificationSettingsUpdate.optional(),
     workspaceCleanupPolicy: WorkspaceCleanupRulesParam.optional(),
     prAutoRefresh: z.enum(PR_AUTO_REFRESH_CADENCES).optional(),
+    azureDevOpsAuthMethod: z.enum(['environment', 'azure-cli']).optional(),
     newTabMenuLayout: z.unknown().transform(normalizeNewTabMenuLayout).optional(),
     floatingTerminalNewTabMenuLayout: z.unknown().transform(normalizeNewTabMenuLayout).optional()
   })

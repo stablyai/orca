@@ -23,6 +23,7 @@ import { normalizeTaskProviderSettings } from '../../../shared/work-items/task-p
 import { normalizeOpenInApplications } from '../../../shared/editor/launch/open-in-applications'
 import { normalizeTerminalShortcutPolicy } from '../../../shared/keybindings/effective'
 import { normalizeSourceControlGroupOrder } from '../../../shared/source-control/listing/source-control-group-order'
+import { normalizeAzureDevOpsAuthMethod } from '../../../shared/source-control/azure-devops-auth-types'
 import { normalizeAppIconId } from '../../../shared/app-lifecycle/identity/app-icon'
 import { normalizeUiLanguage } from '../../../shared/i18n/ui-language'
 import { normalizeWorktreeVisibilityDefaults } from '../../../shared/worktree/visibility/external-worktree-visibility'
@@ -61,6 +62,11 @@ export function updateSettings(
   options: { notifyListeners?: boolean; originWebContentsId?: number } = {}
 ): GlobalSettings {
   const sanitizedUpdates = normalizeWorkspaceDirSetting(stripRetiredGlobalSettings(updates))
+  if ('azureDevOpsAuthMethod' in updates) {
+    sanitizedUpdates.azureDevOpsAuthMethod = normalizeAzureDevOpsAuthMethod(
+      updates.azureDevOpsAuthMethod
+    )
+  }
   const linkBehavior = updates.terminalLinkClickBehavior
   if (linkBehavior === 'actions' || linkBehavior === 'open' || linkBehavior === 'none') {
     // Loaded defaults are ambiguous; synchronize the legacy switch only on an explicit write.

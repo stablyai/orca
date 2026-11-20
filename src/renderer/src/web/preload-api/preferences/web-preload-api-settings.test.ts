@@ -196,4 +196,38 @@ describe('web settings preload API', () => {
       worktreeVisibilityDefaults: { external: 'show' }
     })
   })
+
+  it('does not present a browser-stored Azure DevOps method as supported by an older host', async () => {
+    vi.doMock('../../runtime/client/web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(method: string): Promise<RuntimeRpcResponse<unknown>> {
+          if (method !== 'settings.get') {
+            throw new Error(`Unexpected RPC: ${method}`)
+          }
+          return Promise.resolve({
+            id: method,
+            ok: true,
+            result: { settings: {} },
+            _meta: { runtimeId: 'legacy-runtime' }
+          })
+        }
+
+        close(): void {}
+      }
+    }))
+
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage)
+    globals.storage.setItem('orca.web.settings.v1', '{"azureDevOpsAuthMethod":"azure-cli"}')
+    const { installWebPreloadApi } = await import('../../web-preload-api')
+    installWebPreloadApi()
+
+    expect((await globals.window.api.settings.get()).azureDevOpsAuthMethod).toBeUndefined()
+    await expect(
+      globals.window.api.settings.set({ azureDevOpsAuthMethod: 'azure-cli' })
+    ).rejects.toThrow('Azure DevOps authentication settings are unavailable on this host')
+    expect(JSON.parse(globals.storage.getItem('orca.web.settings.v1') ?? '{}')).not.toHaveProperty(
+      'azureDevOpsAuthMethod'
+    )
+  })
 })

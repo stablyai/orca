@@ -6,6 +6,7 @@ import {
 } from '../../../../../shared/app-lifecycle/computer-awake-mode'
 import { normalizeTerminalCursorStyleDefault } from '../../../../../shared/terminal/appearance/terminal-cursor-style-settings'
 import { mergeSettings, stripRetiredWebChatSettings } from './web-preference-normalization'
+import { writeAzureDevOpsAuthMethod } from './web-azure-devops-auth-settings'
 import {
   getRuntimeBackedStoredSettings,
   getStoredSettings,
@@ -82,6 +83,7 @@ export function createWebSettingsApi(): Pick<Partial<PreloadApi>, 'agentAwake'> 
         Object.assign(sanitizedUpdates, legacyMatchTerminalSidebarWrite(stored, sanitizedUpdates))
         const localUpdates = { ...sanitizedUpdates }
         delete localUpdates.nativeChatAutoContinueAfterUsageLimit
+        delete localUpdates.azureDevOpsAuthMethod
         if (runtimeEnvironment) {
           delete localUpdates.worktreeVisibilityDefaults
         }
@@ -89,6 +91,9 @@ export function createWebSettingsApi(): Pick<Partial<PreloadApi>, 'agentAwake'> 
           preserveAutoRenameBranchFromWorkUpdate: 'autoRenameBranchFromWork' in sanitizedUpdates
         })
         writeStoredSettings(next)
+        if ('azureDevOpsAuthMethod' in sanitizedUpdates) {
+          await writeAzureDevOpsAuthMethod(sanitizedUpdates.azureDevOpsAuthMethod)
+        }
         return settingsForActiveVisibilityOwner(await syncRuntimeBackedSettings(sanitizedUpdates))
       },
       setActiveRuntimeEnvironmentPreference: async ({ environmentId }) => {

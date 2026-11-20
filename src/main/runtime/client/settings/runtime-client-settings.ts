@@ -26,6 +26,7 @@ import { isWslHostOrcadProcess } from '../../../wsl/filesystem/wsl-guest-windows
 import { isAgentStatusHooksEnabledForAgent } from '../../../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import { normalizePRAutoRefreshCadence } from '../../../../shared/source-control/hosted-review/review-refresh-policy'
+import { normalizeAzureDevOpsAuthMethod } from '../../../../shared/source-control/azure-devops-auth-types'
 import {
   agentLaunchSettingsMutationUpdates,
   projectAgentLaunchSettings,
@@ -112,6 +113,7 @@ export class RuntimeClientSettingsController {
       sourceControlGroupOrder: normalizeSourceControlGroupOrder(settings.sourceControlGroupOrder),
       sourceControlCompareAgainstUpstream: settings.sourceControlCompareAgainstUpstream === true,
       prAutoRefresh: normalizePRAutoRefreshCadence(settings.prAutoRefresh),
+      azureDevOpsAuthMethod: normalizeAzureDevOpsAuthMethod(settings.azureDevOpsAuthMethod),
       diffShowWhitespace: settings.diffShowWhitespace === true,
       // Paired clients render the same + menu customization they can edit.
       newTabMenuLayout: normalizeNewTabMenuLayout(settings.newTabMenuLayout),

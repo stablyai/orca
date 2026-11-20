@@ -11,6 +11,7 @@ import type { GitLabProjectSettings } from '../gitlab/gitlab-types'
 import type { TaskProvider } from '../work-items/task-providers'
 import type { AppIconId } from '../app-lifecycle/identity/app-icon'
 import type { SourceControlAiSettings } from '../source-control/ai/settings/source-control-ai-settings-types'
+import type { AzureDevOpsAuthMethod } from '../source-control/azure-devops-auth-types'
 import type { ClaudeAgentTeamsMode } from '../agent-launch/startup/claude-agent-teams-tmux-compat'
 import type { TerminalCustomTheme } from '../terminal-themes/terminal-custom-themes'
 import type { GlobalWindowsRuntimeDefault } from '../execution-host/project-runtime-preference'
@@ -491,6 +492,7 @@ export type GlobalSettings = GlobalSettingsBase & {
   commitMessageAi?: CommitMessageAiSettings
   /** Source-control AI generation settings for commit messages and hosted-review drafts. */
   sourceControlAi?: SourceControlAiSettings
+  azureDevOpsAuthMethod?: AzureDevOpsAuthMethod
   /** GitLab project preferences (pinned + recent paths). Optional for pre-GitLab profiles; persistence merge fills the default. */
   gitlabProjects?: GitLabProjectSettings
   /** Anonymous telemetry consent, identity, frozen experiments, and daily usage limits; optional before migration. */

@@ -179,6 +179,7 @@ export function buildDefaultSettings(args: {
     sourceControlGroupOrder: DEFAULT_SOURCE_CONTROL_GROUP_ORDER,
     sourceControlCompareAgainstUpstream: false,
     prAutoRefresh: 'default',
+    azureDevOpsAuthMethod: 'environment',
     showTitlebarAppName: true,
     showTasksButton: true,
     showAutomationsButton: true,

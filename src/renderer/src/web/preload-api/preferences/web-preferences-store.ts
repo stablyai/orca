@@ -19,6 +19,7 @@ import {
   runtimeChatPermissionSetting
 } from './web-preference-normalization'
 import { callRuntimeResult } from '../../runtime/client/web-runtime-calls'
+import { readAzureDevOpsAuthMethod, readPairedSettings } from './web-azure-devops-auth-settings'
 import { followHostVoiceSettings } from '../agents/web-speech-api'
 import {
   requireActiveEnvironmentOrNull,
@@ -38,6 +39,7 @@ export function getStoredSettings(): GlobalSettings {
   const stored = readJson<Partial<GlobalSettings>>(SETTINGS_STORAGE_KEY, {})
   const migratedStored = migrateStoredWebSettings(stored)
   delete migratedStored.nativeChatAutoContinueAfterUsageLimit
+  delete migratedStored.azureDevOpsAuthMethod
   if (
     rawStoredSettings &&
     (stored.autoRenameBranchFromWork !== migratedStored.autoRenameBranchFromWork ||
@@ -83,6 +85,7 @@ export function getStoredSettings(): GlobalSettings {
   )
   delete settings.nativeChatAutoContinueAfterUsageLimit
   delete settings.zcodePlanSite
+  delete settings.azureDevOpsAuthMethod
   settings.floatingTerminalEnabled = false // A browser tab cannot host it, whatever was stored (#40268).
   return settings
 }
@@ -94,6 +97,7 @@ export function writeStoredSettings(
   const stored = readJson<Partial<GlobalSettings>>(SETTINGS_STORAGE_KEY, {})
   const durable = retainOriginalWebChatSetting(settings, stored)
   delete durable.nativeChatAutoContinueAfterUsageLimit
+  delete durable.azureDevOpsAuthMethod
   if (explicitActiveRuntimeEnvironmentId !== undefined) {
     durable.activeRuntimeEnvironmentId = explicitActiveRuntimeEnvironmentId
   } else {
@@ -121,7 +125,7 @@ export async function getRuntimeBackedStoredSettings(): Promise<GlobalSettings> 
   }
   try {
     // A reply after the host changed still merges; publish keeps consent to the pairing that answered.
-    const result = await callRuntimeResult<SettingsResult>('settings.get', undefined, 15_000)
+    const result = await readPairedSettings(requestedEnvironment)
     const runtimeSettings = followHostVoiceSettings(local, result.settings)
     const currentEnvironment = requireActiveEnvironmentOrNull()
     if (currentEnvironment?.id === requestedEnvironment.id) {
@@ -178,7 +182,10 @@ export async function getRuntimeBackedStoredSettings(): Promise<GlobalSettings> 
 
 export function settingsForActiveVisibilityOwner(settings: GlobalSettings): GlobalSettings {
   const environment = requireActiveEnvironmentOrNull()
-  const ownedSettings = chatSettings.project(settingsForZcodePlanSiteOwner(settings, environment))
+  const ownedSettings = {
+    ...chatSettings.project(settingsForZcodePlanSiteOwner(settings, environment)),
+    azureDevOpsAuthMethod: readAzureDevOpsAuthMethod(environment)
+  }
   if (!environment) {
     return ownedSettings
   }
