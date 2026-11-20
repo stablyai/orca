@@ -97,6 +97,10 @@ export function readPerfNoticeSignals(store: PerfNoticeSignalStore): Promise<Per
     })
     current = disk = read
   }
+  // Why: a pending read for roots the user has since changed says nothing about the new ones.
+  if (current.key !== key) {
+    return Promise.resolve({ disk: null })
+  }
   return current.value.then((value) => ({ disk: value }))
 }
 
