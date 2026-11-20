@@ -1,5 +1,9 @@
 import { isTerminalNoticeLifetimeCurrent } from '../../provider-notices/terminal-notice-lifetime'
 import { useAppStore } from '@/store/index'
+import {
+  readRuntimeStatuses,
+  type RuntimeStatuses
+} from '@/store/slices/runtime-status/views/runtime-status-owner'
 import { sleepingAgentRecordIndex } from '@/store/terminals/sleep/sleeping-agent-record-index'
 import { isTerminalLeafId } from '../../../../../../shared/workspace-layout/stable-pane-id'
 import { isRemoteExecutionHostPtyId } from '../../../../../../shared/execution-host/remote-execution-host-pty-id'
@@ -27,13 +31,12 @@ const allowOrdinaryParkRestore = (ptyId: string): boolean =>
 type State = ReturnType<typeof useAppStore.getState>
 
 export function parkRestorePolicyFromState(
-  state: Pick<State, 'settings' | 'runtimeStatusByEnvironmentId'>
+  state: Pick<State, 'settings'>,
+  statuses: RuntimeStatuses
 ) {
   return {
     sshParkingEnabled: state.settings?.terminalSshViewParking !== false,
-    pairedRuntimeParkingEnvironmentIds: selectPairedRuntimeParkingEnvironmentIds(
-      state.runtimeStatusByEnvironmentId
-    )
+    pairedRuntimeParkingEnvironmentIds: selectPairedRuntimeParkingEnvironmentIds(statuses)
   }
 }
 
@@ -47,7 +50,8 @@ const coverageByTab = new WeakMap<ParkableTerminalTabModel, Coverage>()
 export function parkedTerminalTabCoverage(
   worktreeId: string,
   tab: ParkableTerminalTabModel,
-  state: State = useAppStore.getState()
+  state: State = useAppStore.getState(),
+  statuses: RuntimeStatuses = readRuntimeStatuses()
 ) {
   const inputs = [
     worktreeId,
@@ -67,7 +71,7 @@ export function parkedTerminalTabCoverage(
   if (facts !== previous) {
     coverageByTab.set(tab, facts)
   }
-  return { panes: facts.panes, restorePolicy: parkRestorePolicyFromState(state) }
+  return { panes: facts.panes, restorePolicy: parkRestorePolicyFromState(state, statuses) }
 }
 
 function goneSessionsKeepTabMounted(

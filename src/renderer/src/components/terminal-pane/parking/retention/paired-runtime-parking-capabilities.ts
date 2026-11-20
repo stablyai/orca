@@ -91,12 +91,6 @@ export function selectPairedRuntimeParkingEnvironmentIds(
   return selectParkingEnvironmentIds(statuses)
 }
 
-export function selectPairedRuntimeParkingEnvironmentIdsFromState(state: {
-  runtimeStatusByEnvironmentId: PairedRuntimeParkingCapabilityStatuses
-}): ReadonlySet<string> {
-  return selectPairedRuntimeParkingEnvironmentIds(state.runtimeStatusByEnvironmentId)
-}
-
 export function resetPairedRuntimeParkingEnvironmentIdsCacheForTest(): void {
   selectParkingEnvironmentIds = createPairedRuntimeParkingEnvironmentIdsSelector()
 }

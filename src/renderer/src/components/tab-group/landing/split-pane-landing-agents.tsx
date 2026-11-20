@@ -1,5 +1,6 @@
 import { Bot, ChevronDown } from 'lucide-react'
 import { useAppStore } from '../../../store/index'
+import { useAppStoreWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { useOptionalShortcutLabel } from '@/lib/keyboard/useShortcutLabel'
 import { useTranslate } from '@/i18n/use-translate'
 import { getAgentCatalog } from '@/lib/agent-catalog/agent-catalog'
@@ -47,7 +48,10 @@ export function LandingDefaultAgentItem({
   onPickerClosed: () => void
 }): React.JSX.Element {
   const t = useTranslate()
-  const defaultAgent = useAppStore((state) => readNewAgentTabDefault(state, worktreeId))
+  // Host statuses decide whether the default opens as chat; the live route reads them from their owner.
+  const defaultAgent = useAppStoreWithHostStatuses((state) =>
+    readNewAgentTabDefault(state, worktreeId)
+  )
   const shortcut = useOptionalShortcutLabel('tab.newAgent')
   const agentLabel = defaultAgent
     ? (getAgentCatalog().find((entry) => entry.id === defaultAgent)?.label ?? defaultAgent)
