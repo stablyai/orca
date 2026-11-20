@@ -31,8 +31,8 @@ describe('NotesSendMenu native title', () => {
     cleanup()
   })
 
-  function renderMenu(scopes: NotesSendMenuScope<DiffCommentDeliverySnapshot>[]) {
-    render(
+  function menu(scopes: NotesSendMenuScope<DiffCommentDeliverySnapshot>[]) {
+    return (
       <TooltipProvider>
         <NotesSendMenu
           owner={{ kind: 'worktree', worktreeId: 'wt-1', authority: SELF_LOCAL_AUTHORITY }}
@@ -44,19 +44,18 @@ describe('NotesSendMenu native title', () => {
         />
       </TooltipProvider>
     )
-    return screen.getByRole('button', { name: 'Send notes to an agent' })
   }
 
-  it('does not put a browser title on the enabled send button', () => {
-    const button = renderMenu([scope])
+  it('describes why sending is disabled without adding a browser title', () => {
+    const { rerender } = render(menu([scope]))
+    const button = screen.getByRole('button', { name: 'Send notes to an agent' })
     expect(button.getAttribute('title')).toBeNull()
     expect(button.getAttribute('aria-description')).toBeNull()
-  })
 
-  it('describes why a disabled send button is disabled without a browser title', () => {
-    const button = renderMenu([{ ...scope, notes: [] }])
-    expect(button).toHaveProperty('disabled', true)
-    expect(button.getAttribute('title')).toBeNull()
-    expect(button.getAttribute('aria-description')).toBe('All notes sent')
+    rerender(menu([{ ...scope, notes: [] }]))
+    const disabledButton = screen.getByRole('button', { name: 'Send notes to an agent' })
+    expect(disabledButton).toHaveProperty('disabled', true)
+    expect(disabledButton.getAttribute('title')).toBeNull()
+    expect(disabledButton.getAttribute('aria-description')).toBe('All notes sent')
   })
 })
