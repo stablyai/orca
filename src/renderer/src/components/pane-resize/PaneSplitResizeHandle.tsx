@@ -1,33 +1,40 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { acquireWebviewsDragPassthrough } from '../browser-pane/host-guest/drag/webview-drag-passthrough'
-import { DIVIDER_HIT_PX } from '@/lib/divider-hit-area'
 import { getDraggedSplitRatio, measureSplitRatio, readSplitRatio } from './pane-split-drag-ratio'
 
-type WideHandleStyle = React.CSSProperties & Record<`--${string}`, string>
-// Why: the line reaches the center of a perpendicular parent gap so split T-junctions connect.
-const LINE_EXTENSION = `${DIVIDER_HIT_PX / 2}px`
-const WIDE_VERTICAL_STYLE: WideHandleStyle = {
-  width: DIVIDER_HIT_PX,
-  '--divider-extension': LINE_EXTENSION
+const ROW = 'var(--workspace-tab-row-height)'
+// Why: nested seams make the computed row starts up to a few px off; keep the gap a little wider.
+const ROW_SLACK_PX = 2
+
+/** Grab-area pieces of a thin seam: the whole length, minus a gap at each attached tab row it passes. */
+function getGrabSegments(tabRowStarts: readonly number[]): React.CSSProperties[] {
+  const segments: React.CSSProperties[] = []
+  let top = '0px'
+  for (const start of [...tabRowStarts].sort((a, b) => a - b)) {
+    segments.push({ top, bottom: `calc(${(1 - start) * 100}% + ${ROW_SLACK_PX}px)` })
+    top = `calc(${start * 100}% + ${ROW} + ${ROW_SLACK_PX}px)`
+  }
+  segments.push({ top, bottom: '0px' })
+  return segments
 }
-const WIDE_HORIZONTAL_STYLE: WideHandleStyle = {
-  height: DIVIDER_HIT_PX,
-  '--divider-extension': LINE_EXTENSION
-}
+
+const NO_TAB_ROWS: readonly number[] = []
+const WHOLE_SEAM: React.CSSProperties[] = [{}]
 
 export function ResizeHandle({
   direction,
-  wide = false,
-  tabBand = false,
+  thin = false,
+  tabRowStarts = NO_TAB_ROWS,
   onResizeStart,
   onResizeEnd,
   onRatioChange
 }: {
   direction: 'horizontal' | 'vertical'
-  /** Use the shared in-flow grab size instead of the compact 6px gutter (DevTools docks keep 6px). */
-  wide?: boolean
-  /** The gap's top edge sits beside attached tab strips, so it continues their band. */
-  tabBand?: boolean
+  /** A 1px line with an invisible wider grab area instead of the compact 6px gutter (DevTools docks keep 6px). */
+  thin?: boolean
+  /** Vertical thin seams: fractions down the seam where an attached tab row begins on its right side.
+   *  The grab area skips those rows so tabs and their buttons keep their clicks. */
+  tabRowStarts?: readonly number[]
   onResizeStart: () => void
   onResizeEnd?: () => void
   onRatioChange: (ratio: number) => void
@@ -190,13 +197,19 @@ export function ResizeHandle({
     [isHorizontal, onRatioChange, onResizeStart, onResizeEnd]
   )
 
+  // Horizontal seams reach up, away from the tab strip below, so they need no gaps.
+  const grabSegments = !thin ? null : isHorizontal ? getGrabSegments(tabRowStarts) : WHOLE_SEAM
+
   return (
     <div
       className={`tab-group-split-resize-handle ${
         isHorizontal ? 'is-vertical' : 'is-horizontal'
-      }${wide ? ' is-wide' : ''}${tabBand ? ' has-tab-band' : ''}${dragging ? ' is-dragging' : ''}`}
-      style={wide ? (isHorizontal ? WIDE_VERTICAL_STYLE : WIDE_HORIZONTAL_STYLE) : undefined}
+      }${thin ? ' is-thin' : ''}${dragging ? ' is-dragging' : ''}`}
       onPointerDown={onPointerDown}
-    />
+    >
+      {grabSegments?.map((style, index) => (
+        <div key={index} className="tab-group-split-grab" style={style} />
+      ))}
+    </div>
   )
 }
