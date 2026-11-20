@@ -25,10 +25,13 @@ export function listenForBrowserGuestPageVisibility(): void {
     ) {
       return
     }
-    if (frame === guest.mainFrame) {
-      pageVisibility.set(guest, state)
-      followWindowVisibility(guest)
+    if (frame !== guest.mainFrame) {
+      // Electron's window broadcast never reaches subframes, so nothing would undo a window 'hidden' there.
+      sendInternal(frame, state)
+      return
     }
+    pageVisibility.set(guest, state)
+    followWindowVisibility(guest)
     sendInternal(frame, hiddenWindows.has(guest) ? 'hidden' : state)
   })
 }
