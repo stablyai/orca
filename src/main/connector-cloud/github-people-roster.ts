@@ -2,12 +2,17 @@
 // once per picker open through the host's own gh, then filtered by the picker as the owner types.
 // The cloud only resolves one exact username, so typing a teammate's first name found a stranger.
 //
-// Budget, per host process: one gh child at a time. A read runs only after the previous read's
-// children have terminated (the runner reports it through the lifetime hooks), so capacity is never
-// released on a timer or an unconfirmed kill; a child that never confirms keeps the slot, and later
-// reads answer `busy` once MAX_WAITING_READS are queued. Callers asking for the same scope share
-// one read; nothing is cancelled and nothing is cached once answered. Each child is killed by the
-// shared runner at ROSTER_TIMEOUT_MS and never retried.
+// Phases of one read, per host process:
+// - Admission: one read holds the gh slot at a time. A read for a scope already running or
+//   waiting joins that read. Otherwise it waits for the slot, at most MAX_WAITING_READS of them,
+//   each for at most QUEUE_WAIT_MS; past either bound it answers `busy` and starts nothing.
+// - Run: one logical gh call (the runner may try another gh binary if the first is missing,
+//   one at a time); the runner kills a child at ROSTER_TIMEOUT_MS and nothing retries.
+// - Answer: as soon as the runner settles the call, whether or not its child has ended.
+// - Drain: the slot frees only when the runner reports every child of the read terminated
+//   (lifetime hooks). An end that is never confirmed keeps the slot: later reads answer `busy`
+//   after their wait, and the slot frees only if that end is confirmed later, or when the app
+//   restarts. Nothing frees it on a timer, and nothing is cached once answered.
 import { ghExecFileAsync } from '../git/command-runner/hosted-cli/gh-exec-file'
 import {
   createGhLogicalLifetime,
@@ -20,12 +25,15 @@ import type { GitHubPerson } from '../../shared/bots/github-people-rank'
 import { readRoster, rosterQuery, targetOf, type GitHubPeopleTarget } from './github-people-query'
 
 export const ROSTER_TIMEOUT_MS = 10_000
-/** Different scopes waiting behind the running read; more answer `busy`. */
+/** Reads waiting for the slot behind the one holding it; more answer `busy` at once. */
 export const MAX_WAITING_READS = 2
+/** How long a waiting read waits for the slot before answering `busy`. Logical only: it releases
+ *  the caller, never the slot. */
+export const QUEUE_WAIT_MS = 15_000
 
 export type RosterRun = (args: string[], hooks: GhCaptureLifetimeHooks) => Promise<string>
 
-// No retries (`idempotent: false`): one child per read, so the slot's custody is that child's.
+// No retries (`idempotent: false`): one logical call per read.
 const ghRun: RosterRun = async (args, hooks) => {
   try {
     const { stdout } = await ghExecFileAsync(
@@ -40,59 +48,105 @@ const ghRun: RosterRun = async (args, hooks) => {
   }
 }
 
-export class GitHubPeopleRosters {
-  /** Settles once the latest read's children have terminated; the next read starts after it. */
-  private slot: Promise<void> = Promise.resolve()
-  /** Reads not yet answered, by scope: running or waiting for the slot. */
-  private reads = new Map<string, Promise<BotGitHubRoster>>()
+type Waiting = {
+  key: string
+  target: GitHubPeopleTarget
+  omitted: boolean
+  answer: (roster: BotGitHubRoster) => void
+  timer: ReturnType<typeof setTimeout>
+}
 
-  constructor(private readonly run: RosterRun = ghRun) {}
+export class GitHubPeopleRosters {
+  /** A read's child has not been confirmed ended. */
+  private held = false
+  private waiting: Waiting[] = []
+  /** Reads not yet answered, by scope, so callers asking for the same scope share one. */
+  private unanswered = new Map<string, Promise<BotGitHubRoster>>()
+
+  constructor(
+    private readonly run: RosterRun = ghRun,
+    private readonly queueWaitMs: number = QUEUE_WAIT_MS
+  ) {}
 
   read(scope: GitHubPeopleScope): Promise<BotGitHubRoster> {
     const key = JSON.stringify(scope)
-    const shared = this.reads.get(key)
+    const shared = this.unanswered.get(key)
     if (shared) {
       return shared
-    }
-    if (this.reads.size >= 1 + MAX_WAITING_READS) {
-      return Promise.resolve({ status: 'busy' })
     }
     const { target, dropped } = targetOf(scope)
     if (target.repositories.length + target.owners.length === 0) {
       return Promise.resolve({ status: 'unavailable' })
     }
-    const previous = this.slot
-    let release = (): void => {}
-    this.slot = new Promise<void>((resolve) => {
-      release = resolve
+    const omitted = dropped || scope.more
+    if (this.held && this.waiting.length >= MAX_WAITING_READS) {
+      return Promise.resolve({ status: 'busy' })
+    }
+    const answer = this.held
+      ? new Promise<BotGitHubRoster>((resolve) => {
+          const entry: Waiting = {
+            key,
+            target,
+            omitted,
+            answer: resolve,
+            // Waited long enough: answer busy and leave the queue, starting nothing.
+            timer: setTimeout(() => {
+              this.waiting = this.waiting.filter((other) => other !== entry)
+              resolve({ status: 'busy' })
+            }, this.queueWaitMs)
+          }
+          this.waiting.push(entry)
+        })
+      : this.start(target, omitted)
+    const tracked = answer.finally(() => {
+      if (this.unanswered.get(key) === tracked) {
+        this.unanswered.delete(key)
+      }
     })
-    const answer = previous
-      .then(() => this.readNow(target, dropped || scope.more, release))
-      .finally(() => this.reads.delete(key))
-    this.reads.set(key, answer)
-    return answer
+    this.unanswered.set(key, tracked)
+    return tracked
+  }
+
+  /** Waiting reads, for tests and diagnostics. */
+  get waitingCount(): number {
+    return this.waiting.length
+  }
+
+  private start(target: GitHubPeopleTarget, omitted: boolean): Promise<BotGitHubRoster> {
+    this.held = true
+    const lifetime = createGhLogicalLifetime()
+    void lifetime.terminated.then(() => this.release())
+    return this.readNow(target, omitted, lifetime)
+  }
+
+  /** The held read's children have ended: the next waiting read, if any, takes the slot. */
+  private release(): void {
+    this.held = false
+    const next = this.waiting.shift()
+    if (next) {
+      clearTimeout(next.timer)
+      void this.start(next.target, next.omitted).then(next.answer)
+    }
   }
 
   private async readNow(
     target: GitHubPeopleTarget,
-    partial: boolean,
-    release: () => void
+    omitted: boolean,
+    lifetime: ReturnType<typeof createGhLogicalLifetime>
   ): Promise<BotGitHubRoster> {
     const built = rosterQuery(target)
     const args = ['api', 'graphql', '-f', `query=${built.document}`]
     for (const [key, value] of Object.entries(built.vars)) {
       args.push('-f', `${key}=${value}`)
     }
-    const lifetime = createGhLogicalLifetime()
     let stdout = ''
     try {
       stdout = await this.run(args, lifetime.hooks)
     } catch {
       stdout = ''
     } finally {
-      // The answer goes out now; the slot frees only when every child of this read has ended.
+      // The answer goes out now; the slot frees when `terminated` settles.
       lifetime.seal()
-      void lifetime.terminated.then(release)
     }
     const read = readRoster(stdout, target)
     if (!read || read.sourcesRead === 0) {
@@ -108,7 +162,8 @@ export class GitHubPeopleRosters {
       status: 'read',
       people: [...byId.values()],
       from: read.from,
-      complete: !read.lossy && !partial,
+      complete: !read.lossy,
+      omitted,
       cut: read.cut,
       ...(read.viewer ? { searchedAs: read.viewer } : {})
     }

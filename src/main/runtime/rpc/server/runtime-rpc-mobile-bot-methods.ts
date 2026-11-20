@@ -45,6 +45,7 @@ export const MOBILE_BOT_RPC_METHODS = [
   'bots.github.state',
   'bots.github.unlink',
   'bots.github.users',
+  // Not 'bots.github.people': the desktop Add picker's roster read has no phone caller yet.
   'bots.googleSetup.answer',
   'bots.googleSetup.read',
   'bots.googleSetup.start',

@@ -43,24 +43,32 @@ const readRoster = (more: Partial<Extract<BotGitHubRoster, { status: 'read' }>> 
     people: team,
     from: { repositories: true, organizations: false },
     complete: true,
-    cut: false,
+    omitted: false,
+    cut: { people: false, members: false, repositories: false },
     ...more
   }) satisfies BotGitHubRoster
 
 type Roster = BotGitHubRoster
 const scope = { repositories: ['acme/web'], owners: [], more: false }
 
-const make = (roster: Roster): BotWhoCanAskService => {
+// 'loading': a roster that never lands, to show the picker while it is on its way.
+const make = (roster: Roster | 'loading'): BotWhoCanAskService => {
   const begin = () =>
     gitHubWhoCanAskSession(
-      { people: async () => ({ ok: true, value: roster }), users },
+      {
+        people: () =>
+          roster === 'loading'
+            ? new Promise<never>(() => {})
+            : Promise.resolve({ ok: true as const, value: roster }),
+        users
+      },
       { scope, ownerLogin: 'owner', t }
     )
   return {
     listed: () => [],
     stamp: { source: 'github' },
     max: 50,
-    search: (query) => begin()(query),
+    search: (query) => begin().search(query),
     begin,
     errorMessage: (code) => code,
     searchPlaceholder: 'Search by name or username',
@@ -98,7 +106,7 @@ function tick(frame: HTMLElement, login: string): void {
 }
 
 // The Add popover is a fixed w-80 (320px) everywhere, so that is also its narrowest.
-const pickerOf = (roster: Roster) => () => (
+const pickerOf = (roster: Roster | 'loading') => () => (
   <div className="w-80 rounded-md border border-border bg-popover">
     <BotWhoCanAskPicker bot={bot} service={make(roster)} owner="You" onPicked={() => {}} />
   </div>
@@ -192,7 +200,7 @@ export const ghUnavailableNothingSearched = defineFixture({
 /** A repo past the first 100 people: the list says it shows only those. */
 export const firstHundred = defineFixture({
   width: 340,
-  render: pickerOf(readRoster({ cut: true })),
+  render: pickerOf(readRoster({ cut: { people: true, members: false, repositories: false } })),
   interact: searching('a')
 })
 
@@ -201,4 +209,55 @@ export const partlyRead = defineFixture({
   width: 340,
   render: pickerOf(readRoster({ complete: false })),
   interact: searching('maya')
+})
+
+/** The roster still on its way, a name that isn't a username: not "no one found". */
+export const rosterLoading = defineFixture({
+  width: 340,
+  render: pickerOf('loading'),
+  interact: async (frame) => {
+    await searching('neil par')(frame)
+    await new Promise((resolve) => setTimeout(resolve, 1_600))
+  }
+})
+
+/** The roster still on its way; the exact match shows now, tagged. */
+export const rosterLoadingExact = defineFixture({
+  width: 340,
+  render: pickerOf('loading'),
+  interact: async (frame) => {
+    await searching('jordan')(frame)
+    await new Promise((resolve) => setTimeout(resolve, 1_600))
+  }
+})
+
+/** Another read holds the host's gh: busy, and how to ask again. */
+export const busy = defineFixture({
+  width: 340,
+  render: pickerOf({ status: 'busy' }),
+  interact: searching('neil par')
+})
+
+/** An org past its first 100 members. */
+export const orgCut = defineFixture({
+  width: 340,
+  render: pickerOf(
+    readRoster({
+      from: { repositories: false, organizations: true },
+      cut: { people: false, members: true, repositories: false }
+    })
+  ),
+  interact: searching('a')
+})
+
+/** Several kinds of read stopped at their size at once. */
+export const mixedCut = defineFixture({
+  width: 340,
+  render: pickerOf(
+    readRoster({
+      from: { repositories: true, organizations: true },
+      cut: { people: true, members: true, repositories: false }
+    })
+  ),
+  interact: searching('a')
 })

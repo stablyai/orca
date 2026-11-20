@@ -36,8 +36,13 @@ export type BotWhoCanAskFound = {
   empty?: { title: string; detail: string }
   /** Headings and tags naming where this search actually looked, over the service's defaults. */
   labels?: { scoped?: string; outsideTag?: string }
-  /** Settles when more of this search arrives (a list still loading); the picker asks again. */
-  pending?: Promise<unknown>
+}
+
+/** One picker open's search. `onUpdate` keeps one listener, told once when more of the search
+ *  arrives (a list still loading), so the picker can ask again; it returns the unsubscribe. */
+export type BotWhoCanAskSession = {
+  search: (query: string) => Promise<BotSlackResult<BotWhoCanAskFound>>
+  onUpdate?: (listener: () => void) => () => void
 }
 
 /** One connector's people: who is listed, how to find more, and what the card says around them. */
@@ -49,7 +54,7 @@ export type BotWhoCanAskService = {
   max: number
   search: (query: string) => Promise<BotSlackResult<BotWhoCanAskFound>>
   /** Called once per picker open for a search that keeps what it read across keystrokes. */
-  begin?: () => (query: string) => Promise<BotSlackResult<BotWhoCanAskFound>>
+  begin?: () => BotWhoCanAskSession
   errorMessage: (code: string) => string
   searchPlaceholder: string
   /** The picker's heading over found people, e.g. "People in Globex". */

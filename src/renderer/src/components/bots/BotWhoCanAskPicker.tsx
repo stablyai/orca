@@ -12,7 +12,12 @@ import {
 import { useTranslate } from '@/i18n/use-translate'
 import { BOT_MAX_MEMBERS, type Bot, type BotMember } from '../../../../shared/bot-types'
 import { BotMemberAvatar, BotOwnerAvatar } from './bot-connector-people'
-import type { BotWhoCanAskFound, BotWhoCanAskService } from './BotWhoCanAskList'
+import type {
+  BotWhoCanAskFound,
+  BotWhoCanAskService,
+  BotWhoCanAskSession
+} from './BotWhoCanAskList'
+import type { BotSlackResult } from '../../../../shared/connector-bot-slack-contract'
 
 const SEARCH_DEBOUNCE_MS = 250
 // How close to a service's cap the picker starts showing it while people are ticked.
@@ -30,39 +35,45 @@ function useMemberSearch(
   query: string
 ): { search: Search; retry: () => void } {
   const [search, setSearch] = useState<Search>({ status: 'loading' })
-  const [attempt, setAttempt] = useState(0)
-  // Try again starts a fresh session; a search still loading only asks again.
+  // Try again starts a fresh session (and with it a fresh read of what the service lists).
   const [session, setSession] = useState(0)
   const { errorMessage } = service
-  // One search session per picker open (and per Try again), kept across keystrokes.
-  const find = useMemo(
-    () => (session >= 0 && service.begin ? service.begin() : service.search),
+  // One search session per picker open, kept across keystrokes.
+  const active = useMemo(
+    (): BotWhoCanAskSession =>
+      session >= 0 && service.begin ? service.begin() : { search: service.search },
     [service, session]
   )
   useEffect(() => {
     let current = true
+    const show = (result: BotSlackResult<BotWhoCanAskFound>): void => {
+      if (current) {
+        setSearch(
+          result.ok
+            ? { status: 'ready', found: result.value }
+            : { status: 'failed', error: errorMessage(result.error) }
+        )
+      }
+    }
     setSearch({ status: 'loading' })
-    const timer = setTimeout(() => {
-      void find(query.trim()).then((result) => {
+    // When more of the search lands (a list still loading), ask again for this same query in
+    // place: the rows stay up until the fuller answer replaces them. One listener per query,
+    // dropped when the query changes or the picker closes.
+    const stopWatching =
+      active.onUpdate?.(() => {
         if (current) {
-          setSearch(
-            result.ok
-              ? { status: 'ready', found: result.value }
-              : { status: 'failed', error: errorMessage(result.error) }
-          )
-          void (result.ok ? result.value.pending : undefined)?.then(() => {
-            if (current) {
-              setAttempt((count) => count + 1)
-            }
-          })
+          void active.search(query.trim()).then(show)
         }
-      })
+      }) ?? (() => {})
+    const timer = setTimeout(() => {
+      void active.search(query.trim()).then(show)
     }, SEARCH_DEBOUNCE_MS)
     return () => {
       current = false
       clearTimeout(timer)
+      stopWatching()
     }
-  }, [find, errorMessage, query, attempt])
+  }, [active, errorMessage, query])
   return { search, retry: () => setSession((count) => count + 1) }
 }
 

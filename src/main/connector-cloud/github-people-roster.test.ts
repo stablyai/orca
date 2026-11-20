@@ -57,7 +57,8 @@ describe('reading the people of the connected repositories', () => {
       ],
       from: { repositories: true, organizations: false },
       complete: true,
-      cut: false,
+      omitted: false,
+      cut: { people: false, members: false, repositories: false },
       searchedAs: 'owner'
     })
   })
@@ -88,10 +89,32 @@ describe('what a read covered', () => {
     expect(read?.sourcesRead).toBeGreaterThan(0)
   })
 
-  it('counts a GraphQL error as lossy and a fixed-size stop as cut', () => {
-    expect(readRoster(json({ r0: users(), r1: users() }, [{}]), target)?.lossy).toBe(true)
+  it('counts any GraphQL errors, even a malformed errors field, as lossy while keeping the data', () => {
+    const data = { r0: users(person(2, 'x')), r1: users() }
+    for (const errors of [[{}], null, { message: 'x' }, 'boom']) {
+      const read = readRoster(JSON.stringify({ data, errors }), target)
+      expect(read?.lossy, JSON.stringify(errors)).toBe(true)
+      expect(read?.people).toEqual([{ id: '2', login: 'x', name: null }])
+    }
+    expect(readRoster(JSON.stringify({ data, errors: [] }), target)?.lossy).toBe(false)
+    // No usable data at all is no read.
+    expect(readRoster(JSON.stringify({ errors: [{}] }), target)).toBeNull()
+    expect(readRoster(JSON.stringify({ data: null }), target)).toBeNull()
+  })
+
+  it('records which kind of read stopped at its fixed size', () => {
     const full = { assignableUsers: { totalCount: 500, nodes: [person(2, 'x')] } }
-    expect(readRoster(json({ r0: full, r1: users() }), target)?.cut).toBe(true)
+    expect(readRoster(json({ r0: full, r1: users() }), target)?.cut).toEqual({
+      people: true,
+      members: false,
+      repositories: false
+    })
+  })
+
+  it('reports scope left out on purpose as omitted, not as a failed read', async () => {
+    const rosters = new GitHubPeopleRosters(vi.fn<RosterRun>(async () => json({ r0: users() })))
+    const roster = await rosters.read({ repositories: ['a/b'], owners: [], more: true })
+    expect(roster).toMatchObject({ status: 'read', complete: true, omitted: true })
   })
 
   it.each([
@@ -118,9 +141,11 @@ describe('what a read covered', () => {
     const org = { membersWithRole: { totalCount: 900, nodes: [person(2, 'x')] } }
     expect(readRoster(json({ a0: org }), owner)).toMatchObject({
       sourcesRead: 1,
-      cut: true,
+      cut: { people: false, members: true, repositories: false },
       from: { repositories: false, organizations: true }
     })
+    const personal = { repositories: { totalCount: 40, nodes: [users()] } }
+    expect(readRoster(json({ a0: personal }), owner)?.cut.repositories).toBe(true)
   })
 
   it('passes names as variables and reads the viewer in the same call', () => {
@@ -162,21 +187,58 @@ describe('the host roster slot', () => {
     expect((await second).status).toBe('read')
   })
 
-  it('never frees the slot on an unconfirmed end, and turns extra scopes away as busy', async () => {
+  it('answers every waiting and later read while an end is never confirmed, starting nothing', async () => {
+    vi.useFakeTimers()
+    try {
+      const { run, calls } = controlled()
+      const rosters = new GitHubPeopleRosters(run, 1_000)
+      const holder = rosters.read(repos('a/b'))
+      const waitingB = rosters.read(repos('b/b'))
+      const waitingC = rosters.read(repos('c/c'))
+      await vi.advanceTimersByTimeAsync(0)
+      calls[0]?.answer('')
+      expect(await holder).toEqual({ status: 'unavailable' })
+      // The holder answered; the queue still holds exactly the two waiting reads.
+      expect(rosters.waitingCount).toBe(MAX_WAITING_READS)
+      expect(await rosters.read(repos('d/d'))).toEqual({ status: 'busy' })
+      // Waiting reads answer busy at their deadline and leave the queue.
+      await vi.advanceTimersByTimeAsync(1_000)
+      expect(await waitingB).toEqual({ status: 'busy' })
+      expect(await waitingC).toEqual({ status: 'busy' })
+      expect(rosters.waitingCount).toBe(0)
+      // A later read waits its turn and answers busy too; the slot is never freed on a timer.
+      const later = rosters.read(repos('e/e'))
+      await vi.advanceTimersByTimeAsync(1_000)
+      expect(await later).toEqual({ status: 'busy' })
+      expect(run).toHaveBeenCalledOnce()
+      // Once the end is confirmed, the next read runs.
+      calls[0]?.terminate()
+      await vi.advanceTimersByTimeAsync(0)
+      const recovered = rosters.read(repos('f/f'))
+      await vi.advanceTimersByTimeAsync(0)
+      expect(run).toHaveBeenCalledTimes(2)
+      calls[1]?.answer(json({ r0: users() }))
+      calls[1]?.terminate()
+      expect((await recovered).status).toBe('read')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('lets callers for one scope share a waiting read, so repeated asks add no waiters', async () => {
     const { run, calls } = controlled()
     const rosters = new GitHubPeopleRosters(run)
-    const running = rosters.read(repos('a/b'))
-    const waiting = Array.from({ length: MAX_WAITING_READS }, (_, index) =>
-      rosters.read(repos(`w/${index}`))
-    )
-    expect(await rosters.read(repos('x/y'))).toEqual({ status: 'busy' })
+    void rosters.read(repos('a/b'))
+    const asks = Array.from({ length: 5 }, () => rosters.read(repos('c/d')))
+    expect(rosters.waitingCount).toBe(1)
     await flush()
     calls[0]?.answer('')
-    expect(await running).toEqual({ status: 'unavailable' })
-    // Its child never confirms it ended: nothing else starts.
-    await flush()
-    expect(run).toHaveBeenCalledOnce()
-    expect(waiting).toHaveLength(MAX_WAITING_READS)
+    calls[0]?.terminate()
+    await vi.waitFor(() => expect(run).toHaveBeenCalledTimes(2))
+    calls[1]?.answer(json({ r0: users() }))
+    calls[1]?.terminate()
+    const answers = await Promise.all(asks)
+    expect(new Set(answers).size).toBe(1)
   })
 })
 
