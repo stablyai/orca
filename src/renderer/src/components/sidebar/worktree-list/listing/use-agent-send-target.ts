@@ -5,6 +5,7 @@ import type { AppState } from '@/store/types'
 import { deriveRunningAgentSendTargets } from '@/lib/agent-session/messaging/running-agent-targets'
 import { recomputeOn } from '@/lib/recompute-on'
 import { selectSendApprovalGuardEnvironmentIds } from '@/runtime/hosts/capabilities/send-approval-guard-hosts'
+import { selectPaneForegroundAgentsForWorktree } from '@/components/sidebar/workspace-card/activity/worktree-card-status-inputs'
 
 // Why: selectors that opt out of a slice must return one stable reference, or every store tick looks like a change.
 const EMPTY_AGENT_STATUS_BY_PANE_KEY: AppState['agentStatusByPaneKey'] = acceptedAgentStatuses()
@@ -13,6 +14,8 @@ const EMPTY_UNIFIED_TABS_BY_WORKTREE: AppState['unifiedTabsByWorktree'] = {}
 const EMPTY_TERMINAL_LAYOUTS_BY_TAB_ID: AppState['terminalLayoutsByTabId'] = {}
 const EMPTY_PTY_IDS_BY_TAB_ID: AppState['ptyIdsByTabId'] = {}
 const EMPTY_RUNTIME_PANE_TITLES_BY_TAB_ID: AppState['runtimePaneTitlesByTabId'] = {}
+const EMPTY_PANE_FOREGROUND_AGENTS: AppState['paneForegroundAgentByPaneKey'] = {}
+const EMPTY_RUNTIME_ORCHESTRATION: AppState['runtimeAgentOrchestrationByPaneKey'] = {}
 const NO_GUARDED_HOSTS: ReadonlySet<string> = new Set()
 
 // Force the picker’s target workspace visible only while a running agent there can receive the message.
@@ -40,6 +43,14 @@ export function useAgentSendTargetWorktreeId(): string | null {
   const agentTargetRuntimePaneTitlesByTabId = useAppStore((s) =>
     agentSendPopoverTargetMode ? s.runtimePaneTitlesByTabId : EMPTY_RUNTIME_PANE_TITLES_BY_TAB_ID
   )
+  const agentTargetPaneForegroundAgents = useAppStore((s) =>
+    agentSendPopoverTargetMode
+      ? selectPaneForegroundAgentsForWorktree(s, agentSendPopoverTargetMode.worktreeId)
+      : EMPTY_PANE_FOREGROUND_AGENTS
+  )
+  const agentTargetRuntimeOrchestration = useAppStore((s) =>
+    agentSendPopoverTargetMode ? s.runtimeAgentOrchestrationByPaneKey : EMPTY_RUNTIME_ORCHESTRATION
+  )
   const agentTargetGuardedHosts = useAppStore((s) =>
     agentSendPopoverTargetMode
       ? selectSendApprovalGuardEnvironmentIds(s.runtimeStatusByEnvironmentId)
@@ -59,6 +70,8 @@ export function useAgentSendTargetWorktreeId(): string | null {
             terminalLayoutsByTabId: agentTargetTerminalLayoutsByTabId,
             ptyIdsByTabId: agentTargetPtyIdsByTabId,
             runtimePaneTitlesByTabId: agentTargetRuntimePaneTitlesByTabId,
+            paneForegroundAgentByPaneKey: agentTargetPaneForegroundAgents,
+            runtimeAgentOrchestrationByPaneKey: agentTargetRuntimeOrchestration,
             sendApprovalGuardEnvironmentIds: agentTargetGuardedHosts
           },
           agentSendPopoverTargetMode.worktreeId
@@ -77,6 +90,8 @@ export function useAgentSendTargetWorktreeId(): string | null {
       agentTargetTerminalLayoutsByTabId,
       agentTargetPtyIdsByTabId,
       agentTargetRuntimePaneTitlesByTabId,
+      agentTargetPaneForegroundAgents,
+      agentTargetRuntimeOrchestration,
       agentTargetGuardedHosts
     ]
   )

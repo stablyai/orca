@@ -10,13 +10,19 @@ import { structuredAgentSessionPaneKey } from '../../../../../shared/agent-sessi
 import { isStructuredTab } from '../../../../../shared/agent-session/view/structured-agent-session-tab'
 import type { AgentMessageTarget } from './agent-message-target'
 import { detectAgentSendTitleStatus } from './agent-send-title-status'
-import { resolveRuntimePaneTitleLeafResolution } from '../../../../../shared/workspace-layout/terminal-topology/runtime-pane-title-leaf-id'
+import {
+  borrowsSplitTabTitle,
+  liveLeafPtyId,
+  resolveLeafTitle
+} from './terminal-pane-send-evidence'
 import { hookSilentPaneSendState } from '../../../../../shared/agent-status/approval/hook-silent-approval-agents'
 import { resolveTerminalTitleAgentType } from '../../../../../shared/agent-status/title/terminal-title-agent-type'
 import {
   ptyHostGuardsSendApprovals,
   selectSendApprovalGuardEnvironmentIds
 } from '@/runtime/hosts/capabilities/send-approval-guard-hosts'
+import { buildTitleDerivedAgentRows } from '@/components/sidebar/workspace-card/activity/worktree-title-derived-agent-rows'
+import { markCompletedWorkerParentPaneKeysSeen } from '@/components/sidebar/workspace-card/activity/worktree-agent-rows'
 
 export type RunningAgentTargetState = Pick<
   AppState,
@@ -26,7 +32,15 @@ export type RunningAgentTargetState = Pick<
   | 'terminalLayoutsByTabId'
   | 'ptyIdsByTabId'
 > &
-  Partial<Pick<AppState, 'runtimePaneTitlesByTabId' | 'runtimeStatusByEnvironmentId'>> & {
+  Partial<
+    Pick<
+      AppState,
+      | 'runtimePaneTitlesByTabId'
+      | 'runtimeStatusByEnvironmentId'
+      | 'paneForegroundAgentByPaneKey'
+      | 'runtimeAgentOrchestrationByPaneKey'
+    >
+  > & {
     /** Selected instead of the whole host-status map so unrelated host updates don't rescan targets. */
     sendApprovalGuardEnvironmentIds?: ReadonlySet<string>
   }
@@ -102,6 +116,7 @@ function deriveTerminalAgentSendTargets(
 
   const tabsById = new Map(tabs.map((tab) => [tab.id, tab]))
   const targets: TerminalAgentSendTarget[] = []
+  const statusPaneKeys = new Set<string>()
 
   for (const [paneKey, entry] of Array.from(state.agentStatusByPaneKey.entries())) {
     const parsed = parsePaneKey(paneKey)
@@ -112,11 +127,9 @@ function deriveTerminalAgentSendTargets(
     if (!tab) {
       continue
     }
+    statusPaneKeys.add(paneKey)
 
-    const layoutPtyId =
-      state.terminalLayoutsByTabId?.[parsed.tabId]?.ptyIdsByLeafId?.[parsed.leafId] ?? null
-    const ptyId =
-      layoutPtyId && state.ptyIdsByTabId?.[parsed.tabId]?.includes(layoutPtyId) ? layoutPtyId : null
+    const ptyId = liveLeafPtyId(state, parsed.tabId, parsed.leafId)
     let disabledReason: string | undefined
 
     // Idle agents emit no hooks, so row age never disables a live pane; the host's process/screen check gates the send.
@@ -148,6 +161,61 @@ function deriveTerminalAgentSendTargets(
     })
   }
 
+  markCompletedWorkerParentPaneKeysSeen({
+    entries: Array.from(state.agentStatusByPaneKey.values()),
+    runtimeAgentOrchestrationByPaneKey: state.runtimeAgentOrchestrationByPaneKey,
+    terminalLayoutsByTabId: state.terminalLayoutsByTabId,
+    currentTabsById: tabsById,
+    seenPaneKeys: statusPaneKeys
+  })
+  targets.push(...deriveStatuslessTerminalAgentSendTargets(state, tabs, statusPaneKeys))
+  return targets
+}
+
+/** Live panes whose agent hasn't reported yet (hooks first fire on a turn), named per pane by the sidebar's title/process/launch owner. */
+function deriveStatuslessTerminalAgentSendTargets(
+  state: RunningAgentTargetState,
+  tabs: TerminalTab[],
+  statusPaneKeys: Set<string>
+): TerminalAgentSendTarget[] {
+  const targets: TerminalAgentSendTarget[] = []
+  const rows = buildTitleDerivedAgentRows({
+    tabs,
+    runtimePaneTitlesByTabId: state.runtimePaneTitlesByTabId,
+    ptyIdsByTabId: state.ptyIdsByTabId,
+    terminalLayoutsByTabId: state.terminalLayoutsByTabId,
+    paneForegroundAgentByPaneKey: state.paneForegroundAgentByPaneKey,
+    runtimeAgentOrchestrationByPaneKey: state.runtimeAgentOrchestrationByPaneKey,
+    seenPaneKeys: statusPaneKeys,
+    now: 0
+  })
+  for (const row of rows) {
+    const parsed = parsePaneKey(row.paneKey)
+    const ptyId = parsed ? liveLeafPtyId(state, parsed.tabId, parsed.leafId) : null
+    const title =
+      parsed && !borrowsSplitTabTitle(state, parsed.tabId) ? (row.paneTitle ?? null) : null
+    const titleStatus = detectAgentSendTitleStatus(title)
+    // A launch or shell command title names the agent before its TUI takes input; wait for its own state title.
+    if (!parsed || !ptyId || !titleStatus) {
+      continue
+    }
+    const disabledReason =
+      titleStatus === 'permission'
+        ? 'Agent needs permission'
+        : // The resolved agent isn't a report from it, so it can name the agent but never prove its turn ended.
+          hookSilentAgentSendRefusal(state, row.tab, ptyId, { agentType: row.agentType }, title)
+    targets.push({
+      kind: 'terminal',
+      paneKey: row.paneKey,
+      tabId: parsed.tabId,
+      leafId: parsed.leafId,
+      tab: row.tab,
+      entry: row.entry,
+      ptyId,
+      status: disabledReason ? 'disabled' : 'eligible',
+      ...(disabledReason ? { disabledReason } : {})
+    })
+  }
   return targets
 }
 
@@ -186,25 +254,10 @@ function deriveStructuredAgentSendTargets(
   return targets
 }
 
-// The tab title is the active surface's; it belongs to this leaf only when the tab has no split.
-function resolveLeafTitle(
-  state: RunningAgentTargetState,
-  tabId: string,
-  leafId: string,
-  tabTitle: string
-): string | null {
-  const layout = state.terminalLayoutsByTabId[tabId]
-  const paneTitles = state.runtimePaneTitlesByTabId?.[tabId]
-  const paneTitleResolution = resolveRuntimePaneTitleLeafResolution(layout, paneTitles, leafId)
-  const tabTitleIsLeafs =
-    !paneTitleResolution.hasAnyPaneTitle && (!layout?.root || layout.root.type === 'leaf')
-  return paneTitleResolution.title ?? (tabTitleIsLeafs ? tabTitle : null)
-}
-
 const NO_GUARDED_HOSTS: ReadonlySet<string> = new Set()
 
 /** launchAgent names the tab's original PTY locally; a paired tab's ptyId follows its active pane, so any pane may be the launched one. */
-export function launchAgentMayOwnPane(tab: Pick<TerminalTab, 'ptyId'>, ptyId: string): boolean {
+function launchAgentMayOwnPane(tab: Pick<TerminalTab, 'ptyId'>, ptyId: string): boolean {
   return ptyId === tab.ptyId || isRemoteRuntimePtyId(ptyId)
 }
 
@@ -213,7 +266,7 @@ export function hookSilentAgentSendRefusal(
   state: RunningAgentTargetState,
   tab: Pick<TerminalTab, 'ptyId' | 'launchAgent'>,
   ptyId: string,
-  entry: Pick<AgentStatusEntry, 'state' | 'agentType'> | null | undefined,
+  entry: Partial<Pick<AgentStatusEntry, 'state' | 'agentType'>> | null | undefined,
   leafTitle: string | null
 ): string | undefined {
   // Every identity counts: a row another agent left behind can't vouch for the one running now.

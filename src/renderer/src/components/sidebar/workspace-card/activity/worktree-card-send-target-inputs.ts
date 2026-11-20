@@ -2,6 +2,7 @@ import { acceptedAgentStatuses } from '@/store/slices/agent-status/status-owners
 import type { AppState } from '@/store/types'
 import { selectSendApprovalGuardEnvironmentIds } from '@/runtime/hosts/capabilities/send-approval-guard-hosts'
 import type { RunningAgentTargetState } from '@/lib/agent-session/messaging/running-agent-targets'
+import { selectPaneForegroundAgentsForWorktree } from './worktree-card-status-inputs'
 
 export type SendTargetInputsState = Pick<
   AppState,
@@ -12,6 +13,8 @@ export type SendTargetInputsState = Pick<
   | 'terminalLayoutsByTabId'
   | 'ptyIdsByTabId'
   | 'runtimePaneTitlesByTabId'
+  | 'paneForegroundAgentByPaneKey'
+  | 'runtimeAgentOrchestrationByPaneKey'
   | 'runtimeStatusByEnvironmentId'
 >
 
@@ -57,6 +60,8 @@ export function selectSendTargetInputs(
     terminalLayoutsByTabId: s.terminalLayoutsByTabId,
     ptyIdsByTabId: s.ptyIdsByTabId,
     runtimePaneTitlesByTabId: s.runtimePaneTitlesByTabId,
+    paneForegroundAgentByPaneKey: selectPaneForegroundAgentsForWorktree(s, worktreeId),
+    runtimeAgentOrchestrationByPaneKey: s.runtimeAgentOrchestrationByPaneKey,
     sendApprovalGuardEnvironmentIds: selectSendApprovalGuardEnvironmentIds(
       s.runtimeStatusByEnvironmentId
     )

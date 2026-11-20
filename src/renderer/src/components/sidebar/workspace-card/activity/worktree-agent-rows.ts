@@ -62,7 +62,7 @@ function markSeenPaneKeyForCurrentTab(args: {
   }
 }
 
-function markCompletedWorkerParentPaneKeysSeen(args: {
+export function markCompletedWorkerParentPaneKeysSeen(args: {
   entries: AgentStatusEntry[]
   runtimeAgentOrchestrationByPaneKey?: Record<string, AgentStatusOrchestrationContext>
   terminalLayoutsByTabId?: Record<string, TerminalLayoutSnapshot | undefined>

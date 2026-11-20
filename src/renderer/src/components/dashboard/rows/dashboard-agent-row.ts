@@ -18,6 +18,8 @@ export type DashboardAgentRow = {
   activationPaneKey?: string
   /** Sort by oldest stateHistory start, falling back to updatedAt when no history exists. */
   startedAt: number
+  /** Title-derived rows only: the pane's title as reported, before owner normalization (which can add a state word). */
+  paneTitle?: string
   /** Subagent rows only: what the row shows, decided once for every surface. */
   childRow?: AgentChildRowModel
   lineage?: {
