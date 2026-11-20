@@ -23,7 +23,13 @@ import { useOrcaCloudSignedOut } from '../orca-cloud-signed-out'
 function rowFace(
   hooks: readonly WebhookSummary[],
   now: number
-): { description: string; status: { label: string; tone: IntegrationCardStatusTone } } {
+): { description: string; status: { label: string; tone: IntegrationCardStatusTone } | null } {
+  if (hooks.length === 0) {
+    return {
+      description: translate('bots.apps.webhooks.line', 'Events from any tool or script'),
+      status: null
+    }
+  }
   const lastAt = Math.max(0, ...hooks.map((hook) => hook.lastCall?.at ?? 0))
   const count = translate('bots.webhooks.hookCount', '{{count}} hooks', {
     count: hooks.length,
@@ -48,7 +54,7 @@ function rowFace(
   }
 }
 
-/** Settings › Bots › Connectors › Webhooks: the bot's hooks. Shown once it has one; the first hook is the connector. */
+/** Shows webhook setup and this bot’s hooks when the host supports them. */
 export function BotWebhooksCard({
   bot,
   title
@@ -61,24 +67,22 @@ export function BotWebhooksCard({
   const read = useBotWebhooks(botTarget(bot), bot.id)
   const now = useNow(WEBHOOK_AGO_TICK_MS)
   const signedOut = useOrcaCloudSignedOut(bot.hostId)
-  // Without webhooks on the cloud or this Orca, or with none made yet, there is no row.
-  if (read.status !== 'ready' || read.value.length === 0) {
+  if (read.status !== 'ready') {
     return null
   }
   const hooks = read.value
-  const face = signedOut
-    ? {
-        ...signedOutConnectorFace(),
-        description: t('bots.webhooks.pausedSignedOut', '{{hooks}} · paused while signed out', {
+  const face = signedOut ? signedOutConnectorFace() : rowFace(hooks, now)
+  const description =
+    signedOut && hooks.length > 0
+      ? t('bots.webhooks.pausedSignedOut', '{{hooks}} · paused while signed out', {
           hooks: hooks.map((hook) => hook.automationName).join(', ')
         })
-      }
-    : rowFace(hooks, now)
+      : face.description
   return (
     <BotConnectorRowFrame
       icon={<Webhook className="size-4" />}
       name={title ?? t('bots.webhooks.name', 'Webhooks')}
-      description={face.description}
+      description={description}
       status={face.status}
       // Hooks are paused and deleted one by one inside, so the menu stays empty.
       actions={{}}

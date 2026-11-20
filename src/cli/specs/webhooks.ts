@@ -9,7 +9,6 @@ const WEBHOOK_NOTES = [
 export const WEBHOOK_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['webhooks', 'list'],
-    hidden: true,
     summary: "List a bot's webhooks",
     usage: 'orca webhooks list --bot <name> [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'bot'],
@@ -17,7 +16,6 @@ export const WEBHOOK_COMMAND_SPECS: CommandSpec[] = [
   },
   {
     path: ['webhooks', 'show'],
-    hidden: true,
     summary: 'Show a webhook: its automation, state and last call',
     usage: 'orca webhooks show --hook <hook id> [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'hook'],
@@ -25,7 +23,6 @@ export const WEBHOOK_COMMAND_SPECS: CommandSpec[] = [
   },
   {
     path: ['webhooks', 'calls'],
-    hidden: true,
     summary: "List a webhook's recent calls, or show one",
     usage: 'orca webhooks calls --hook <hook id> [--call <call id>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'hook', 'call'],
@@ -35,7 +32,6 @@ export const WEBHOOK_COMMAND_SPECS: CommandSpec[] = [
   },
   {
     path: ['webhooks', 'check'],
-    hidden: true,
     summary: "Count how many recent calls a webhook's filters match",
     usage: 'orca webhooks check --hook <hook id> [--on "webhook.call where=..."] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'hook', 'on'],

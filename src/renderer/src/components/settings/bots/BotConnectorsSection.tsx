@@ -141,8 +141,7 @@ export function BotConnectorsSection({ bot }: { bot: Bot }): React.JSX.Element {
   const rows = entries.map((entry) => (
     <BotConnectorEntryRow key={`${botRefKey(bot)}\u0000${entry.key}`} bot={bot} entry={entry} />
   ))
-  // The Webhooks row is always listed but shows only once a hook exists.
-  const empty = entries.every((entry) => entry.kind === 'webhooks') && webhooks !== 'added'
+  const empty = entries.every((entry) => entry.kind === 'webhooks') && webhooks === null
   return (
     <AddConnectorButton
       bot={bot}
