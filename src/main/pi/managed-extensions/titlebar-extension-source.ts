@@ -1,6 +1,7 @@
 import { getPiTitlebarLifetimeSourceLines } from './titlebar-extension-lifetime-source'
 import type { PiAgentKind } from '../../../shared/agent-launch/catalog/pi-agent-kind'
 import { getPiOmpRuntimeDetectionSourceLines } from './agent-status/agent-status-runtime-detection-source'
+import { getPiPersonOpenedPromptSourceLines } from './pi-person-opened-prompt-source'
 
 export const ORCA_PI_EXTENSION_FILE = 'orca-titlebar-spinner.ts'
 
@@ -9,8 +10,9 @@ export function getPiTitlebarExtensionSource(kind: PiAgentKind = 'pi'): string {
   const uiPromptHandlers =
     kind === 'pi'
       ? [
-          "  on('ui_prompt_start', async (_event, ctx) => {",
-          '    if (isOmpRuntime() || !ownsMarker) return',
+          ...getPiPersonOpenedPromptSourceLines('on'),
+          "  on('ui_prompt_start', async (event, ctx) => {",
+          '    if (isOmpRuntime() || !ownsMarker || isPersonOpenedPiPrompt(event)) return',
           '    promptDepth++',
           "    // Retry every open; an outer dialog's invalid context cannot suppress the whole stack.",
           '    if (markerPainted) return',
