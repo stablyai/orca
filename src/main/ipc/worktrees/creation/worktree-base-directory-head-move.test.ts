@@ -1,3 +1,4 @@
+import { registerAppFixtureWindow } from '../../app-registry/testing/app-ipc-test-host'
 import { execFileSync } from 'node:child_process'
 import { mkdtempSync, realpathSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -44,16 +45,22 @@ function createWatch(
   runtimeEnvironmentActive = false
 ): WorktreeBaseNotificationWatch & { sent: { channel: string; payload: unknown }[] } {
   const sent: { channel: string; payload: unknown }[] = []
+  const mainWindow = {
+    id: 41,
+    isDestroyed: () => false,
+    webContents: {
+      id: 42,
+      send: (channel: string, payload: unknown) => sent.push({ channel, payload })
+    }
+  }
+  registerAppFixtureWindow(mainWindow)
   return {
     key: `git-common:${commonDir}`,
     kind: 'git-common',
     path: commonDir,
     repos: new Map([[REPO_ID, { repoId: REPO_ID, repoName: 'repo', nestWorkspaces: false }]]),
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the watcher only calls isDestroyed and webContents.send.
-    mainWindow: {
-      isDestroyed: () => false,
-      webContents: { send: (channel: string, payload: unknown) => sent.push({ channel, payload }) }
-    } as never,
+    mainWindow: mainWindow as never,
     notifyTimer: null,
     pendingStructureRepoIds: new Set(),
     pendingGitStatusRepoIds: new Set(),

@@ -3,8 +3,20 @@ import * as electron from 'electron'
 import type { AppCaller } from '../../../../shared/app-ipc/app-caller'
 import { setAppIpcHost, type AppDocument, type AppHandler } from '../app-handler-registry'
 
+type FixtureWindow = {
+  id: number
+  isDestroyed(): boolean
+  webContents: Pick<Electron.WebContents, 'id' | 'send'>
+}
+const fixtureWindows = new Map<number, FixtureWindow>()
+
+export function registerAppFixtureWindow(window: FixtureWindow): void {
+  fixtureWindows.set(window.id, window)
+}
+
 // Keep existing family fixtures at the transport boundary while dispatching plain callers.
 beforeEach(() => {
+  fixtureWindows.clear()
   const sources = new Map<string, Electron.WebContents>()
   const documents = new Map<string, AppDocument>()
   const callerFor = (event: Electron.IpcMainInvokeEvent): AppCaller => {
@@ -73,8 +85,10 @@ beforeEach(() => {
         sources.get(target.documentId)?.send(channel, ...args)
         return
       }
-      const windows =
-        'BrowserWindow' in electron ? (electron.BrowserWindow.getAllWindows?.() ?? []) : []
+      const windows = [
+        ...fixtureWindows.values(),
+        ...('BrowserWindow' in electron ? (electron.BrowserWindow.getAllWindows?.() ?? []) : [])
+      ]
       const deliveries = [
         ...sources.values(),
         ...windows.filter((window) => !window.isDestroyed()).map((window) => window.webContents)
