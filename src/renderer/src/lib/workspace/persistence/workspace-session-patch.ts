@@ -118,6 +118,8 @@ export function buildWorkspaceSessionPatch(
   ) {
     const terminalSessionData = buildTerminalSessionData(snapshot)
     Object.assign(patch, terminalSessionData)
+    // Why `{}`: the host split drops undefined, so an ended last relay stayed saved for restart.
+    patch.remoteSessionIdsByTabId = terminalSessionData.remoteSessionIdsByTabId ?? {}
     // Persist recomputed reconnect targets with remote-session IDs so crash between patches cannot leave closed targets or omit surviving sessions.
     patch.activeConnectionIdsAtShutdown = buildActiveConnectionIdsAtShutdown(
       snapshot,
@@ -198,14 +200,11 @@ export function buildWorkspaceSessionPatch(
     Object.assign(patch, buildPersistedUnifiedTabSessionData(snapshot, unifiedTabSessionCache))
   }
   if (changed.has('lastVisitedAtByWorktreeId')) {
-    patch.lastVisitedAtByWorktreeId = buildLastVisitedAtByWorktreeId(snapshot)
+    patch.lastVisitedAtByWorktreeId = buildLastVisitedAtByWorktreeId(snapshot) ?? {}
   }
   if (changed.has('defaultTerminalTabsAppliedByWorktreeId')) {
     patch.defaultTerminalTabsAppliedByWorktreeId =
-      snapshot.defaultTerminalTabsAppliedByWorktreeId &&
-      Object.keys(snapshot.defaultTerminalTabsAppliedByWorktreeId).length > 0
-        ? snapshot.defaultTerminalTabsAppliedByWorktreeId
-        : undefined
+      snapshot.defaultTerminalTabsAppliedByWorktreeId ?? {}
   }
   if (changed.has('sleepingAgentSessionsByPaneKey')) {
     // Why `{}`: the host split drops undefined, so clearing the last record never reached disk.

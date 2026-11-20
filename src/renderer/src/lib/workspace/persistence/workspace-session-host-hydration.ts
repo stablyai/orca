@@ -36,6 +36,8 @@ export type WorkspaceSessionHostRead = {
   contestedPrimaryHostBySessionKey: Record<string, ExecutionHostId>
   /** Runtime partitions this read actually loaded, so a later write may speak for all of their rows. */
   hydratedRuntimeSessionHostIds: ExecutionHostId[]
+  /** SSH partitions this read actually loaded; a later write may clear their reconnect facts. */
+  hydratedSshSessionHostIds: ExecutionHostId[]
 }
 
 const WORKSPACE_SESSION_KEYED_FIELDS = [
@@ -229,7 +231,8 @@ export async function fetchWorkspaceSessionWithRuntimeHostOwners(
     runtimeHostIdByWorkspaceSessionKey: buildRuntimeHostIdByWorkspaceSessionKey(merged.slices),
     contestedHostWorkspaceSessions: shadow,
     contestedPrimaryHostBySessionKey: primaryHostBySessionKey,
-    hydratedRuntimeSessionHostIds: [...runtimeHostIds].filter((hostId) => slices[hostId])
+    hydratedRuntimeSessionHostIds: [...runtimeHostIds].filter((hostId) => slices[hostId]),
+    hydratedSshSessionHostIds: sshPartitions.flatMap(([hostId, slice]) => (slice ? [hostId] : []))
   }
 }
 

@@ -165,6 +165,9 @@ export function createWorkspaceTerminalHydrationActions(
           ...(options?.hydratedRuntimeSessionHostIds
             ? { hydratedRuntimeSessionHostIds: options.hydratedRuntimeSessionHostIds }
             : {}),
+          ...(options?.hydratedSshSessionHostIds
+            ? { hydratedSshSessionHostIds: options.hydratedSshSessionHostIds }
+            : {}),
           repos: runtimeSessionPlaceholders.repos,
           tabsByWorktree,
           worktreesByRepo,
