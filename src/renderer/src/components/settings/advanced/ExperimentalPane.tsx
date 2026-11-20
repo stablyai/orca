@@ -13,6 +13,8 @@ import { AgentDashboardExperimentalSetting } from '../../dashboard/settings/Agen
 import { EphemeralVmsExperimentalSetting } from '../virtual-machines/recipes/EphemeralVmsExperimentalSetting'
 import { WslHostsExperimentalSetting } from '../wsl/hosts/WslHostsExperimentalSetting'
 import { wslHostsAvailable } from '../../../runtime/hosts/wsl/use-wsl-hosts-enabled'
+import { isMacUserAgent } from '@/app-shell/platform/user-agent-platform'
+import { CopyOnWriteCheckoutsExperimentalSetting } from './CopyOnWriteCheckoutsExperimentalSetting'
 import {
   MAX_AGENT_HIBERNATION_IDLE_MS,
   MIN_AGENT_HIBERNATION_IDLE_MS,
@@ -283,6 +285,13 @@ export function ExperimentalPane({
         ) : null}
 
         <EphemeralVmsExperimentalSetting settings={settings} updateSettings={updateSettings} />
+
+        {isMacUserAgent() ? (
+          <CopyOnWriteCheckoutsExperimentalSetting
+            settings={settings}
+            updateSettings={updateSettings}
+          />
+        ) : null}
 
         {wslHostsAvailable() ? (
           <WslHostsExperimentalSetting settings={settings} updateSettings={updateSettings} />
