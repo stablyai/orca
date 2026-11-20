@@ -1,20 +1,33 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const mocks = vi.hoisted(() => ({
-  records: [] as { sessionId: string; createdAt: number; location: object; lastTurn?: object }[],
-  owners: new Map<string, string[]>(),
-  openDispatches: [] as { id: string }[],
-  workers: [] as { dispatchId: string; state: string }[],
-  transcripts: [] as {
-    agent: string
+type Mocks = {
+  records: {
     sessionId: string
-    filePath: string
-    executionHostId: string
-  }[],
-  closed: [] as string[],
-  forgotten: [] as string[],
+    createdAt: number
+    location: object
+    lastTurn?: object
+    launchDirectory?: string
+  }[]
+  owners: Map<string, string[]>
+  openDispatches: { id: string }[]
+  workers: { dispatchId: string; state: string }[]
+  transcripts: { agent: string; sessionId: string; filePath: string; executionHostId: string }[]
+  closed: string[]
+  forgotten: string[]
+  deleteResult: { deleted: number; failed: number; freedBytes: number }
+  shouldDelete: boolean[]
+}
+
+const mocks = vi.hoisted((): Mocks => ({
+  records: [],
+  owners: new Map(),
+  openDispatches: [],
+  workers: [],
+  transcripts: [],
+  closed: [],
+  forgotten: [],
   deleteResult: { deleted: 1, failed: 0, freedBytes: 0 },
-  shouldDelete: [] as boolean[]
+  shouldDelete: []
 }))
 
 vi.mock('../agent-session-wire/host/structured-agent-session-registry', () => ({
@@ -126,7 +139,7 @@ describe('deleteOrcaChat', () => {
 
   it('keeps a transcript another chat still holds', async () => {
     mocks.records.push({ sessionId: 'chat-b', createdAt: 2, location })
-    mocks.records[0] = { ...mocks.records[0], launchDirectory: '/home' } as never
+    mocks.records[0] = { ...mocks.records[0], launchDirectory: '/home' }
     mocks.transcripts = [
       { agent: 'claude', sessionId: 'p-1', filePath: '/t/p-1.jsonl', executionHostId: 'local' }
     ]
@@ -137,7 +150,7 @@ describe('deleteOrcaChat', () => {
   })
 
   it('reports a transcript it could not remove', async () => {
-    mocks.records[0] = { ...mocks.records[0], launchDirectory: '/home' } as never
+    mocks.records[0] = { ...mocks.records[0], launchDirectory: '/home' }
     mocks.transcripts = [
       { agent: 'opencode', sessionId: 'p-1', filePath: '/t/db#p-1', executionHostId: 'local' }
     ]
