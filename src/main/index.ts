@@ -1,5 +1,5 @@
 import { app, clipboard, dialog, type BrowserWindow } from 'electron'
-import { scheduleAppRelaunch } from './startup/quit/appimage-relaunch'
+import { prepareProcessRelaunch } from './startup/quit/process-relaunch'
 import { isRoutedOrcaDeepLink } from './startup/open-routing/orca-deep-link-url'
 import { createMacAppActivationHandler } from './window/activation/macos-app-activation'
 import {
@@ -239,12 +239,14 @@ if (preflightReady) {
             })
             if (choice !== undefined) {
               // Recovery needs both profile locks, which only a fresh process can own safely.
-              await scheduleAppRelaunch({
+              const restart = await prepareProcessRelaunch({
                 args: profileStateDesktopRecoveryArgs(process.argv, {
                   userDataPath,
                   selector: { kind: choice }
                 })
               })
+              await restart.exit(1)
+              return
             }
             app.exit(1)
             return
@@ -261,7 +263,7 @@ if (preflightReady) {
                 translate: translateMain
               })
             ) {
-              await scheduleAppRelaunch({
+              const restart = await prepareProcessRelaunch({
                 args: profileStateDesktopRecoveryArgs(process.argv, {
                   userDataPath,
                   profileId: error.profileId,
@@ -271,6 +273,8 @@ if (preflightReady) {
                   }
                 })
               })
+              await restart.exit(1)
+              return
             }
             app.exit(1)
             return

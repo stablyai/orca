@@ -2,7 +2,7 @@ import type { CrashReportBreadcrumbData } from '../../../shared/crash-reporting/
 import { recordDurableCrashBreadcrumb } from '../../crash-reporting/breadcrumbs/durable-crash-breadcrumb'
 import { getWindowsAdministratorRelaunchOptions } from '../../windows/windows-administrator-restart'
 import { BACKGROUND_OPEN_ARG } from '../../../shared/app-lifecycle/launch/background-open-argv'
-import { scheduleAppRelaunch } from './appimage-relaunch'
+import { prepareProcessRelaunch, type ProcessRelaunch } from './process-relaunch'
 
 export type AppRelaunchReason =
   | 'admin-restart'
@@ -13,14 +13,14 @@ export type AppRelaunchReason =
   | 'windows-administrator'
   | 'wsl-drive-conversion'
 
-export function relaunchApp(
+export function prepareAppRelaunch(
   reason: AppRelaunchReason,
   data?: CrashReportBreadcrumbData,
   options?: Electron.RelaunchOptions
-): Promise<void> {
+): Promise<ProcessRelaunch> {
   // Persist the cause before relaunch can exit this process.
   recordDurableCrashBreadcrumb('app_relaunch_requested', { ...data, reason })
-  return scheduleAppRelaunch(options ?? defaultRelaunchOptions())
+  return prepareProcessRelaunch(options ?? defaultRelaunchOptions())
 }
 
 // The user restarted Orca, so the new window comes forward even when `orca open` started this one.

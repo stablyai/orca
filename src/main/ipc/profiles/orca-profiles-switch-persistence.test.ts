@@ -11,7 +11,7 @@ const orcaAccount = new OrcaAccountService({ openBrowser: async () => {} })
 
 const { handlers, quit, select } = vi.hoisted(() => ({
   handlers: new Map<string, (event: unknown, args: unknown) => Promise<unknown>>(),
-  quit: vi.fn(),
+  quit: vi.fn(async () => {}),
   select: vi.fn()
 }))
 vi.mock('electron', () => ({
@@ -22,7 +22,10 @@ vi.mock('electron', () => ({
     }
   }
 }))
-vi.mock('../../startup/quit/app-relaunch', () => ({ relaunchApp: vi.fn(async () => {}) }))
+vi.mock('../../startup/quit/app-relaunch', () => ({
+  prepareAppRelaunch: vi.fn(async () => ({ quit, cancel: vi.fn() })),
+  runBeforeRelaunchCleanup: vi.fn(async () => {})
+}))
 vi.mock('../../orca-profiles/profile-index-store', () => ({
   getOrcaProfileListState: () => ({ activeProfileId: 'source', profiles: [] }),
   setActiveOrcaProfile: select,

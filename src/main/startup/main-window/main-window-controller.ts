@@ -1,3 +1,4 @@
+import { cancelProcessRelaunch } from '../quit/process-relaunch'
 import { app, type BrowserWindow } from 'electron'
 import { createMainWindow, loadMainWindow } from '../../window/createMainWindow'
 import {
@@ -100,6 +101,7 @@ export async function openMainWindow(options: MainWindowOpenOptions = {}): Promi
   const window = createMainWindow(store, {
     getIsQuitting: () => state.isQuitting,
     onQuitAborted: () => {
+      cancelProcessRelaunch()
       state.isQuitting = false
       clearExpectedRendererReload()
     },

@@ -2,6 +2,7 @@ import { closeEnvironmentStore } from '../../../shared/remote-runtime/host-store
 import { beginProfileShutdownCheckpoint } from '../../persistence/profile-shutdown-checkpoint'
 import { killWslChannelsInCloseGrace } from '../../wsl/execution/wsl-command-channel'
 import { markHostShuttingDown } from './host-shutdown-state'
+import { cancelProcessRelaunchPreparation, commitGracefulProcessRelaunch } from './process-relaunch'
 import { app, type Event } from 'electron'
 import { killAllPty } from '../../ipc/pty/provider/kill-all'
 import * as daemon from '../../daemon/providers/lifecycle/daemon-provider-state'
@@ -53,6 +54,7 @@ const REF_MAINTENANCE_QUIT_DEADLINE_MS = 2_000
 
 function installBeforeQuitHandler(): void {
   app.on('before-quit', (event: Event) => {
+    cancelProcessRelaunchPreparation()
     if (event.defaultPrevented) {
       return
     }
@@ -314,6 +316,11 @@ function installWillQuitHandler(): void {
           closeBrowserExtensionProfileDocumentStores(),
           closeBrowserExtensionProfileStateStore()
         ])
+      )
+      .then(() =>
+        commitGracefulProcessRelaunch().catch((error: unknown) =>
+          console.error('[app] Committed restart failed:', error)
+        )
       )
       .then(() => {
         daemonDisconnectDone = true

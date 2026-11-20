@@ -1,5 +1,5 @@
 import { app, type BrowserWindow } from 'electron'
-import { relaunchApp } from '../quit/app-relaunch'
+import { prepareAppRelaunch } from '../quit/app-relaunch'
 import { destroySystemTray } from '../../tray/system-tray'
 import { applyGpuFallbackCommandLineSwitches } from './gpu-fallback-switches'
 import {
@@ -129,14 +129,12 @@ export async function presentGpuFallbackRecoveredLaunchPrompt(
         crashesInWindow: marker.crashesInWindow
       }),
     restartWithHardware: () => {
-      state.isQuitting = true
-      void relaunchApp('gpu-fallback', {
+      void prepareAppRelaunch('gpu-fallback', {
         mode: 'hardware-retry',
         crashesInWindow: marker.crashesInWindow
-      }).then(() => {
-        destroySystemTray()
-        app.exit(0)
       })
+        .then((restart) => restart.exit(0, destroySystemTray))
+        .catch((error: unknown) => console.error('[gpu-fallback] Could not restart Orca:', error))
     }
   })
 }
@@ -232,11 +230,9 @@ export async function handleGpuChildCrash(
       onRestartDeferred: () =>
         recordDurableCrashBreadcrumb('gpu_fallback_restart_deferred', fallbackData),
       restartIntoSafeGraphics: () => {
-        state.isQuitting = true
-        void relaunchApp('gpu-fallback', fallbackData).then(() => {
-          destroySystemTray()
-          app.exit(0)
-        })
+        void prepareAppRelaunch('gpu-fallback', fallbackData)
+          .then((restart) => restart.exit(0, destroySystemTray))
+          .catch((error: unknown) => console.error('[gpu-fallback] Could not restart Orca:', error))
       }
     }
   )

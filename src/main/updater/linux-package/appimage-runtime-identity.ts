@@ -184,6 +184,19 @@ function appImageRuntimePaths(input: AppImageRuntimeIdentityInput) {
   return { appImagePath, runtimeRoot, execPath, resourcesPath }
 }
 
+export function isEphemeralAppImageRuntime(input: AppImageRuntimeIdentityInput = {}): boolean {
+  if ((input.platform ?? process.platform) !== 'linux') {
+    return false
+  }
+  const execPath = input.execPath ?? process.execPath
+  const resourcesPath = input.resourcesPath ?? process.resourcesPath
+  if (!isAbsolutePath(execPath) || !isAbsolutePath(resourcesPath)) {
+    return false
+  }
+  const root = appImageEphemeralRootOf(execPath)
+  return root?.path === dirname(execPath) && resourcesPath === join(root.path, 'resources')
+}
+
 export async function resolveAppImageRelaunchPath(
   input: AppImageRuntimeIdentityInput = {}
 ): Promise<string | null> {
