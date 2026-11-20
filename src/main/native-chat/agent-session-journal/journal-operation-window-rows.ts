@@ -111,7 +111,12 @@ export function readOperationWindowItems(
         THEN COALESCE(${shortened}, ${projected}) ELSE ${projected} END`
     : projected
   return scope.db
-    .prepare(`SELECT ${value} AS payload_json ${rows} ORDER BY sequence,sequence_index,ordinal`)
+    .prepare(
+      `SELECT ${value} AS payload_json, output_blob ${rows} ORDER BY sequence,sequence_index,ordinal`
+    )
     .all(...(cut.length ? [JSON.stringify(cut)] : []), ...scope.prefix, start)
-    .map((row) => scope.decode<AgentJournalRenderItem>(scope.examined(row).payload_json))
+    .map((row) => {
+      const read = scope.examined(row)
+      return scope.decode<AgentJournalRenderItem>(read.payload_json, read.output_blob)
+    })
 }

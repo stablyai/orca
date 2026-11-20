@@ -30,13 +30,16 @@ export class JournalSqlScope {
     return row
   }
 
-  decode<T>(json: unknown): T {
+  /** `blob` is the row's `output_blob` when the read selected it, saving a lookup per row. */
+  decode<T>(json: unknown, blob?: unknown): T {
     if (typeof json !== 'string') {
       throw new Error('Invalid journal projection value')
     }
     this.work.decodedBytes += Buffer.byteLength(json)
     const value: T = this.indexValues ? this.indexValues.decode<T>(json) : JSON.parse(json)
-    return isJournalItemShape(value) ? hydrateJournalStoredItem(this.db, this.prefix, value) : value
+    return isJournalItemShape(value)
+      ? hydrateJournalStoredItem(this.db, this.prefix, value, blob)
+      : value
   }
 
   /** A projection row's own payload; never an index value pointer. */

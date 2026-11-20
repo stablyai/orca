@@ -69,6 +69,8 @@ export function storeJournalItemOutput<T extends AgentJournalRenderItem>(
   if (
     !payload ||
     (item.body.kind === 'tool-call' && item.body.state === 'running') ||
+    // A head keeps the original's length; reads size stored rows by it, so only whole text is stored.
+    payload.truncated ||
     storedMarker(payload) ||
     payload.head.length * 3 < MIN_STORED_TEXT_BYTES ||
     payload.head.length > MAX_STORED_TEXT_BYTES
