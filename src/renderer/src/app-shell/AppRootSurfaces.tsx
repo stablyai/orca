@@ -32,6 +32,7 @@ import {
   WorktreeJumpPalette
 } from '../components/worktree-jump/worktree-jump-palette-preload'
 import { usePrefetchAvatarCapability } from '../components/bots/avatar-generation-capability-store'
+import { useLocalAgentCliUpdateCheck } from '../components/agent-cli-update/use-local-agent-cli-update-check'
 import {
   selectAppRootSurfacePetEnabled,
   selectAppRootSurfaceTelemetryOptedIn,
@@ -124,6 +125,7 @@ export const AppRootSurfaces = memo(function AppRootSurfaces(props: {
   const { mountedLazyModalIds, shouldMountAddRepoDialog } = useLazyModalMounts()
   usePreloadWorktreeJumpPalette()
   usePrefetchAvatarCapability()
+  useLocalAgentCliUpdateCheck()
   const activeView = useAppStore((s) => s.activeView)
   const activeModal = useAppStore((s) => s.activeModal)
   // Subscribe only to consumed settings so unrelated preferences cannot rerender every overlay.

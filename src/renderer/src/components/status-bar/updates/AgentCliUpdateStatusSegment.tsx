@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react'
+import { useMemo } from 'react'
 import { AlertCircle, Download, Loader2 } from 'lucide-react'
 import { useShallow } from 'zustand/react/shallow'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -16,7 +16,6 @@ import {
   type AgentCliUpdateRow
 } from './AgentCliUpdateList'
 
-const LOCAL_TARGET = { kind: 'local' } as const
 const NO_HOST_NAMES: Readonly<Record<string, string>> = Object.freeze({})
 
 /** Names of paired servers with listed updates; the shared empty value keeps the always-mounted bar still. */
@@ -45,11 +44,6 @@ export function AgentCliUpdateStatusSegment(): React.JSX.Element | null {
   const hasOtherHosts = useAppStore(
     (s) => !isPairedWebClientWindow() && s.runtimeEnvironments.length > 0
   )
-  const checkAgentCliUpdates = useAppStore((s) => s.checkAgentCliUpdates)
-  // This computer is checked at launch; other hosts when a chat starts there.
-  useEffect(() => {
-    void checkAgentCliUpdates(LOCAL_TARGET)
-  }, [checkAgentCliUpdates])
 
   const groups = useMemo((): AgentCliUpdateGroup[] => {
     const listed = [...hosts]
