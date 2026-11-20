@@ -239,7 +239,7 @@ export function BotItemCommentBox({
     }
     caretToEndOf(input.current)
   }
-  const { leadOnly, startLine } = useBotItemLineLead(draft, fillBox, answer)
+  const { leadOnly, startLine } = useBotItemLineLead(scopeKey, draft, fillBox, answer)
   useImperativeHandle(ref, () => ({
     focus: () => input.current?.focus(),
     focusEnd: () => caretToEndOf(input.current),
