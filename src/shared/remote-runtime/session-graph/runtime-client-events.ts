@@ -45,6 +45,8 @@ export type RuntimeClientEvent =
   | ({ type: 'workspaceMetadataSet' } & WorkspaceMetadataSet)
   /** What mobileRelay.hosts.list answers changed; phones re-read it instead of polling. */
   | { type: 'relayHostsChanged' }
+  /** An update of the user's own agent CLI on this host finished; clients check again. */
+  | { type: 'agentCliUpdateFinished'; agent: string }
   /** A desktop PR refresh found this checkout's PR (or its absence) changed; phones re-read it. */
   | { type: 'pullRequestChanged'; worktreeId: string; repoId: string; branch: string }
   | ({ type: 'nativeChatLaunchDraftResolved' } & RuntimeNativeChatLaunchDraftResolution)
