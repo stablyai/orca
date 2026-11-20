@@ -121,7 +121,7 @@ export class WebhookHostService {
       runs: deps.automations.runs,
       botFolder: deps.botFolder,
       runForEvent: deps.runForEvent,
-      route: (hookId, call) => this.router?.(hookId, call) ?? Promise.resolve(null)
+      route: (...args) => this.router?.(...args) ?? Promise.resolve(null)
     })
     this.sweep = new WebhookRecoverySweep({
       ledger: this.ledger,

@@ -4,6 +4,7 @@ import {
   BotAvatarUpload,
   BotChatReset,
   BotDelete,
+  BotPostToThread,
   BotRoster,
   BotSessionStart,
   BotSkillProjectsScan,
@@ -21,6 +22,7 @@ import {
 } from '../../../bots/bot-chat-session'
 import { readPairedBotRosters, withPairedBotRosters } from '../../../bots/paired-bot-rosters'
 import { botOfSession } from '../../../bots/bot-session-tabs'
+import { postRuntimeBotThread } from '../../../bots/bot-thread-post-host'
 import { openEmptyBotChat, runtimeBotChatTreeHost } from '../../../bots/bot-chat-tree-host'
 import { forgetDeletedBotTools } from './bots-tools'
 import { composioBotsOf } from './bots-composio'
@@ -109,6 +111,21 @@ async function ownerTypedLatest(runtime: RpcContext['runtime'], sessionId: strin
 
 // Off, nothing creates a bot or opens its Chat; listing, editing and deleting stay.
 export const BOT_METHODS = [
+  defineMethod({
+    name: 'bots.post_to_thread',
+    permission: 'workspace',
+    params: BotPostToThread,
+    handler: async (params, context) => {
+      ownerOnly(context, 'Only the owner can deliver a result to a bot conversation.')
+      return postRuntimeBotThread(context.runtime, {
+        botId: params.bot_id,
+        deliveryId: params.delivery_id,
+        correlationId: params.correlation_id,
+        text: params.text,
+        wake: params.wake
+      })
+    }
+  }),
   defineMethod({
     name: 'bots.list',
     permission: 'workspace',

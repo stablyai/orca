@@ -29,14 +29,14 @@ export class BotLaunchTools {
    */
   static async for(
     relay: Pick<BotToolRelay, 'grant'>,
-    bot: { botId: string; folder: string; agent: string },
+    bot: { botId: string; folder: string; agent: string; sessionId?: string },
     servers: readonly BotToolServer[]
   ): Promise<BotLaunchTools> {
     if (servers.some((server) => 'url' in server && Object.keys(server.headers ?? {}).length > 0)) {
       // Header values live in the credential store; one here was never migrated, so it never launches.
       throw new Error('A tool still holds its saved values. Reopen the bot’s tools to move them.')
     }
-    const { origin, token } = await relay.grant(bot.botId, bot.folder)
+    const { origin, token } = await relay.grant(bot.botId, bot.folder, bot.sessionId)
     const tokenEnv = { [BOT_TOOLS_TOKEN_ENV]: token }
     // Claude and Pi expand `${VAR}` in a server's headers, so their config names only the variable.
     const authorization = ENV_REFERENCING_AGENTS.has(bot.agent)

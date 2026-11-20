@@ -1,5 +1,6 @@
 // What a call came to, in the words of its automation's run history; kept on this host alone.
 import type { AutomationRun } from '../../shared/automations/history/automation-run'
+import type { WebhookCallView } from '../../../cloud/packages/connector-contract/src/webhook-matcher'
 import {
   UNREADABLE_ANSWER,
   type ConnectorFailure
@@ -35,6 +36,17 @@ export function isSettledWebhookCall(call: Pick<LedgerCall, 'state'>): boolean {
 
 export type WebhookCallOutcome = Pick<LedgerCall, 'state'> &
   Partial<Pick<LedgerCall, 'runId' | 'reason' | 'retryAt'>>
+
+type WebhookCallRoute =
+  | { kind: 'automation'; automationId: string }
+  | { kind: 'handled'; reason: string; completed?: true }
+
+/** A host-level hook can settle the call, redirect it or leave it with its own automation. */
+export type WebhookCallRouter = (
+  hookId: string,
+  call: WebhookCallView,
+  incomplete?: boolean
+) => Promise<WebhookCallRoute | null>
 
 /** A run's final status in the words of its call; null while it runs. */
 export function settledRunOutcome(run: AutomationRun): WebhookCallOutcome | null {

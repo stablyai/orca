@@ -1,7 +1,6 @@
 // Orca's loopback relay for bots' HTTP tools: a bot's agent sends each call to 127.0.0.1 with its own
 // token, and Orca adds the tool's saved headers or its own sign-in's token and streams it to the
 // real server and back.
-import { createHash, randomBytes } from 'node:crypto'
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
 import { resolve } from 'node:path'
 import { BoundedMap } from '../../../shared/collections/bounded-map'
@@ -20,6 +19,7 @@ import {
   type BotToolHeaderSource
 } from '../tool-oauth/bot-tool-credential-source'
 import { RelayAdmission, type RelayCall } from './bot-tool-relay-admission'
+import { BotToolRelayGrants, type BotToolRelayGrant } from './bot-tool-relay-grants'
 import { header, readBody, RelayRefusal } from './bot-tool-relay-requests'
 import { answerSignInNeeded, answerUnavailable } from './bot-tool-relay-sign-in-answer'
 import {
@@ -30,7 +30,10 @@ import {
   type RelayFetch
 } from './bot-tool-relay-upstream'
 
-type Grant = { botId: string; folder: string }
+export type BotToolRequestBinding = {
+  accountForBot: (botId: string) => string | null
+  bind: (url: string, grant: BotToolRelayGrant, body: Buffer) => Buffer
+}
 
 const PATH = /^\/bot-tools\/([A-Za-z0-9_-]{8,64})\/mcp(?:\?.*)?$/
 const MAX_TRACKED_SESSIONS = 1_000
@@ -39,7 +42,6 @@ const MAX_TRACKED_PROBLEMS = 1_000
 const AGENT_LEFT = Symbol('agent left')
 const CREDENTIAL_ENDED = Symbol('credential ended')
 
-const hashToken = (token: string): string => createHash('sha256').update(token).digest('hex')
 const credentialKey = (folder: string, credentialId: string) => `${folder}\0${credentialId}`
 const SESSION_ENDED = 'This tool’s session ended. Start a new one.'
 
@@ -48,12 +50,12 @@ export class BotToolRelay {
   private port = 0
   private listening: Promise<number> | null = null
   private stopListeningForEnds: (() => void) | null = null
-  private readonly grants = new Map<string, Grant>()
-  private readonly tokens = new Map<string, string>()
+  private readonly grants = new BotToolRelayGrants()
   /** Which upstream session identity an MCP session was made under, so a changed one starts over. */
   private readonly sessions = new BoundedMap<string, string>({ maxEntries: MAX_TRACKED_SESSIONS })
   private readonly problems = new BoundedMap<string, string>({ maxEntries: MAX_TRACKED_PROBLEMS })
   private readonly admission = new RelayAdmission()
+  private binding: BotToolRequestBinding | null = null
 
   constructor(
     private readonly fetchUpstream: RelayFetch,
@@ -61,29 +63,33 @@ export class BotToolRelay {
   ) {}
 
   /** The relay's address and the bot's token for this run of Orca; starts listening on first use. */
-  async grant(botId: string, folder: string): Promise<{ origin: string; token: string }> {
+  async grant(
+    botId: string,
+    folder: string,
+    sessionId?: string
+  ): Promise<{ origin: string; token: string }> {
     const port = await this.listen()
-    let token = this.tokens.get(botId)
-    if (!token) {
-      token = randomBytes(32).toString('base64url')
-      this.tokens.set(botId, token)
-    }
-    this.grants.set(hashToken(token), { botId, folder: resolve(folder) })
+    const account = this.binding?.accountForBot(botId)
+    const token = this.grants.issue(
+      botId,
+      folder,
+      account && sessionId ? { account, sessionId } : undefined
+    )
     return { origin: `http://127.0.0.1:${port}`, token }
+  }
+
+  setRequestBinding(binding: BotToolRequestBinding | null): void {
+    this.binding = binding
   }
 
   /** The bot a token was granted to in this run of Orca; null once revoked or from another run. */
   botOf(token: string): string | null {
-    return this.grants.get(hashToken(token))?.botId ?? null
+    return this.grants.authenticate(token)?.botId ?? null
   }
 
   /** A deleted bot's token stops working at once, and its open calls are cut. */
   revoke(botId: string): void {
-    const token = this.tokens.get(botId)
-    if (token) {
-      this.grants.delete(hashToken(token))
-      this.tokens.delete(botId)
-    }
+    this.grants.revoke(botId)
     this.admission.abortWhere((call) => call.botId === botId, CREDENTIAL_ENDED)
   }
 
@@ -103,7 +109,6 @@ export class BotToolRelay {
     this.port = 0
     this.listening = null
     this.grants.clear()
-    this.tokens.clear()
     this.sessions.clear()
     this.problems.clear()
   }
@@ -166,7 +171,7 @@ export class BotToolRelay {
         throw new RelayRefusal(405, 'Method not allowed.')
       }
       const auth = /^Bearer (\S+)$/.exec(req.headers.authorization ?? '')
-      const grant = auth?.[1] ? this.grants.get(hashToken(auth[1])) : undefined
+      const grant = auth?.[1] ? this.grants.authenticate(auth[1]) : undefined
       if (!grant) {
         throw new RelayRefusal(401, 'This tool needs the bot’s Orca token.')
       }
@@ -221,14 +226,14 @@ export class BotToolRelay {
   private async forward(
     req: IncomingMessage,
     res: ServerResponse,
-    grant: Grant,
+    grant: BotToolRelayGrant,
     credentialId: string,
     signal: AbortSignal
   ): Promise<void> {
     const body = req.method === 'POST' ? await readBody(req) : undefined
     const key = credentialKey(grant.folder, credentialId)
     const request = { host: 'local', folder: grant.folder, credentialId, signal } as const
-    let answer = await this.ask(request)
+    let answer = await this.credential(request)
     let upstream: Response
     for (let tries = 1; ; tries += 1) {
       if (answer.kind === 'sign-in-needed') {
@@ -243,7 +248,8 @@ export class BotToolRelay {
         throw new RelayRefusal(404, 'This bot has no such tool.')
       }
       this.checkSession(req, key, answer)
-      upstream = await sendUpstream(this.fetchUpstream, req, answer, body, signal)
+      const bound = body && this.binding ? this.binding.bind(answer.url, grant, body) : body
+      upstream = await sendUpstream(this.fetchUpstream, req, answer, bound, signal)
       // Only Orca's own sign-in can renew a refused token; saved headers are passed on as refused.
       if (upstream.status !== 401 || answer.bearer === undefined) {
         break
@@ -254,7 +260,7 @@ export class BotToolRelay {
         answerSignInNeeded(req, res, body)
         return
       }
-      answer = await this.ask({ ...request, rejected: answer.bearer })
+      answer = await this.credential({ ...request, rejected: answer.bearer })
     }
     const label = `${grant.botId} ${credentialId} ${req.method}`
     await this.relayResponse(req, res, key, label, answer, upstream, signal)
@@ -264,7 +270,7 @@ export class BotToolRelay {
    * The source's answer; one that fails outright is a call that can't go through now. A call cut
    * while it waited (agent gone, tool removed) answers as cut, whatever the source said.
    */
-  private async ask(request: BotToolCredentialRequest): Promise<BotToolCredentialAnswer> {
+  async credential(request: BotToolCredentialRequest): Promise<BotToolCredentialAnswer> {
     let answer: BotToolCredentialAnswer
     try {
       answer = await this.source(request)
@@ -284,8 +290,7 @@ export class BotToolRelay {
     const known = this.sessions.get(`${key}\0${sessionId}`)
     // Saved headers adopt an unknown session as today; a sign-in never does, so one made under an
     // ended sign-in can't come back under the next. MCP clients start a new session on 404.
-    const stale = known === undefined ? answer.bearer !== undefined : known !== answer.session
-    if (stale) {
+    if (known === undefined ? answer.bearer !== undefined : known !== answer.session) {
       throw new RelayRefusal(404, SESSION_ENDED)
     }
   }

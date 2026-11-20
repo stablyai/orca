@@ -8,6 +8,8 @@ import { connectorAccount } from './connector-token-mint'
 import { botAccessHost } from '../bots/bot-access-host'
 import { botAccessSeenFile, createBotAccessRequestWatch } from '../bots/bot-access-request-watch'
 import { notifyBotCouldNotFinish, runtimeBotOwnerNotice } from '../bots/bot-could-not-finish'
+import { installBotThreadPosts } from '../bots/bot-thread-post-host'
+import { installSpcHost } from '../spc/spc-host'
 import { WebhookHostService } from '../webhooks/webhook-host-service'
 import { installComposioUpkeep } from '../runtime/rpc/methods/bots-composio-upkeep'
 import { refreshDueLinearLogins } from '../linear/accounts/linear-login-refresh'
@@ -60,9 +62,17 @@ export function installConnectorHost({
     // Bot homes live under this host's ~/.orca/bots; a remote path is never written as a local one.
     return folder && !folder.connectionId ? folder.folderPath : null
   }
+  const account = () => connectorAccount(userDataPath)
+  const threadPosts = installBotThreadPosts(runtime, account)
+  const spc = installSpcHost({
+    account,
+    automations: () => store.listAutomations(),
+    botFolder,
+    posts: threadPosts
+  })
   const webhooks = new WebhookHostService({
     userDataPath,
-    account: () => connectorAccount(userDataPath),
+    account,
     cloud: () => runtime.getConnectorCloud(),
     automations: {
       list: () => store.listAutomations(),
@@ -98,11 +108,11 @@ export function installConnectorHost({
       webhooks
     })
   )
-  const stops: (() => void)[] = []
+  const stops: (() => void)[] = spc ? [spc.stop] : []
   // Only a host with Orca Cloud makes webhooks, as it alone hosts the connector.
   if (runtime.getConnectorCloud()) {
     runtime.setWebhooks(webhooks)
-    const composio = installComposioUpkeep(runtime, webhooks)
+    const composio = installComposioUpkeep(runtime, webhooks, spc?.route)
     stops.push(
       () => webhooks.stop(),
       () => composio.stop()

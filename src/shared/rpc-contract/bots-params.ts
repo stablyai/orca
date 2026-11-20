@@ -39,6 +39,14 @@ import { type BotCancelledWait, withBotCancelledWait } from '../bots/bot-cancell
 import { OptionalBoolean, OptionalString, requiredString } from './rpc-param-primitives'
 import { ACCESS_REQUEST_TOKEN_PATTERN } from '../connector-bot-access-contract'
 
+export const BotPostToThread = z.object({
+  bot_id: z.string().min(1).max(128),
+  delivery_id: z.string().min(1).max(300),
+  correlation_id: z.string().min(1).max(128).optional(),
+  text: z.string().min(1).max(16_384),
+  wake: z.boolean().default(false)
+})
+
 /** Why a bots.* call refused. */
 export const BOT_ERROR_CODES = [
   'bot_name_taken',

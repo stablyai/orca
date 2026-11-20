@@ -11,7 +11,6 @@ import type { AutomationRun } from '../../shared/automations/history/automation-
 import type { ConnectorDelivery } from '../../shared/connectors/connector-cloud-contract'
 import { hookIdOfRule } from '../../shared/connector-webhook-contract'
 import type { WebhookEnvelope } from '../../shared/connector-webhook-routes'
-import type { WebhookCallView } from '../../../cloud/packages/connector-contract/src/webhook-matcher'
 import type { EventStartGate } from '../automations/automation-trigger-runs'
 import { webhookCallQuote, webhookCallView, writeWebhookCallFile } from './webhook-call-file'
 import type { ConnectorFailure } from '../connector-cloud/connector-cloud-request'
@@ -21,14 +20,11 @@ import { WebhookStartSlots } from './webhook-start-slots'
 import {
   settledRunOutcome,
   webhookRetryDelayMs,
-  type WebhookCallOutcome
+  type WebhookCallOutcome,
+  type WebhookCallRouter
 } from './webhook-call-outcomes'
 
 type TriggerDelivery = Extract<ConnectorDelivery, { kind: 'trigger' }>
-
-export type WebhookCallRoute =
-  | { kind: 'automation'; automationId: string }
-  | { kind: 'handled'; reason: string }
 
 // A call the cloud can't place under the caps right now is offered again after this.
 const START_RETRY_MS = 60_000
@@ -48,11 +44,7 @@ export type WebhookCallRunsDeps = {
     event: AutomationRunEvent,
     gate: EventStartGate
   ) => Promise<AutomationRun | null>
-  /**
-   * A host-level hook's calls go to the automation they're for (another automation's id), or are
-   * handled by the host and settle with `reason`. Null leaves the call with its own automation.
-   */
-  route?: (hookId: string, call: WebhookCallView) => Promise<WebhookCallRoute | null>
+  route?: WebhookCallRouter
   now?: () => number
   setTimer?: (run: () => void, delayMs: number) => () => void
 }
@@ -207,12 +199,14 @@ export class WebhookCallRuns {
    * recovery and history all name that automation; null when the host handled it.
    */
   private async routed(call: LedgerCall, value: WebhookEnvelope): Promise<LedgerCall | null> {
-    const routed =
-      !call.routed && this.deps.route
-        ? await this.deps.route(call.hookId, webhookCallView(value))
-        : null
+    const routed = call.routed
+      ? null
+      : await this.deps.route?.(call.hookId, webhookCallView(value), call.sample || value.truncated)
     if (routed?.kind === 'handled') {
-      this.settle(call.callId, { state: 'refused', reason: routed.reason })
+      this.settle(call.callId, {
+        state: routed.completed ? 'completed' : 'refused',
+        reason: routed.reason
+      })
       return null
     }
     if (routed?.kind !== 'automation') {
