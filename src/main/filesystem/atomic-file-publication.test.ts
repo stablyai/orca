@@ -194,23 +194,49 @@ describe('writeFileAtomically', () => {
     }
   })
 
-  it('keeps the held bytes when they cannot take their content name', () => {
+  it('gives the held file back when it cannot be kept aside', () => {
     setup()
     try {
       const target = join(dir, 'config.toml')
       writeFileSync(`${target}.orca-guarded`, 'model = "o5"\n')
       writeFileSync(target, 'approval = "never"\n')
-      const restoreLink = onFirstKeptLink(() => {
+      const undo = onFirstKeptLink(() => {
         throw Object.assign(new Error('no space'), { code: 'ENOSPC' })
       })
 
+      expect(() => writeFileAtomicallyIfUnchanged(target, 'approval = "never"\n', 'next')).toThrow(
+        'no space'
+      )
+      undo()
+      expect(readFileSync(`${target}.orca-guarded`, 'utf-8')).toBe('model = "o5"\n')
       expect(writeFileAtomicallyIfUnchanged(target, 'approval = "never"\n', 'next')).toBe(true)
-      restoreLink()
       expect(
         readdirSync(dir)
           .filter((name) => name.includes('.orca-kept-'))
           .map((name) => readFileSync(join(dir, name), 'utf-8'))
       ).toEqual(['model = "o5"\n'])
+    } finally {
+      cleanup()
+    }
+  })
+
+  it('restores the user file on the next write after a failed restore', () => {
+    setup()
+    try {
+      const target = join(dir, 'config.toml')
+      writeFileSync(target, 'user edit\n')
+      const undo = onFirstCallTo(
+        fsMock.linkSync,
+        (destination) => destination === target,
+        () => {
+          throw Object.assign(new Error('io'), { code: 'EIO' })
+        }
+      )
+
+      expect(() => writeFileAtomicallyIfUnchanged(target, 'stale\n', 'mirror\n')).toThrow('io')
+      undo()
+      expect(writeFileAtomicallyIfUnchanged(target, null, 'fresh\n')).toBe(false)
+      expect(readFileSync(target, 'utf-8')).toBe('user edit\n')
     } finally {
       cleanup()
     }
