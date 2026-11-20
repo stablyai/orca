@@ -138,7 +138,7 @@ export function useNativeChatComposerMentions(
   const botIdOf = useCallback(
     (value: string) => {
       const member = memberOf(room, value)
-      return member && !member.host ? member.id : null
+      return member && !member.host ? (member.id ?? null) : null
     },
     [room]
   )
