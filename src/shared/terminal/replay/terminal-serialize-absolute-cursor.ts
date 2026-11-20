@@ -170,10 +170,11 @@ function buildPendingWrapRestore(
   if (!line || !edge) {
     return null
   }
+  const penState = serializeCurrentPenState(serializer, terminal)
   let repaint: string
   if (edge.getChars() === '' && edge.getWidth() !== 0) {
     // An empty edge serializes to nothing, so print a blank that looks the same to arm the wrap.
-    repaint = buildBlankEdgeRepaint(line, edge, terminal.cols, cupCursorY)
+    repaint = `${buildBlankEdgeRepaint(line, edge, terminal.cols, cupCursorY)}\x1b[0m${penState}`
   } else if (typeof serializer._serializeBufferByRange === 'function') {
     // Reprint the whole row so the edge cell keeps its exact style, link and width.
     const rowAnsi = serializer._serializeBufferByRange(
@@ -182,13 +183,14 @@ function buildPendingWrapRestore(
       { start: row, end: row },
       true
     )
-    repaint = `\x1b[${cupCursorY + 1};1H\x1b[0m${rowAnsi}`
+    // The row serializer already restores the pen against the edge cell. Trailing escapes would stop a later combining mark from joining the edge, so emit them only for a styled pen or an open link.
+    repaint = `\x1b[${cupCursorY + 1};1H\x1b[0m${rowAnsi}${penState === '' ? '' : `\x1b[0m${penState}`}`
   } else {
     return null
   }
   // Insert mode would shift old cells into skipped blanks; an open OSC 8 link would claim unlinked cells.
   const insertMode = terminal.modes.insertMode
-  return `${insertMode ? '\x1b[4l' : ''}\x1b]8;;\x1b\\${repaint}${insertMode ? '\x1b[4h' : ''}\x1b[0m${serializeCurrentPenState(serializer, terminal)}`
+  return `${insertMode ? '\x1b[4l' : ''}\x1b]8;;\x1b\\${repaint}${insertMode ? '\x1b[4h' : ''}`
 }
 
 function buildBlankEdgeRepaint(

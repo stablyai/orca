@@ -274,6 +274,12 @@ describe('pending-wrap cursor after replay (STA-16354)', () => {
     expect(edge.getBgColor()).toBe(4)
   })
 
+  it('lets a combining mark that arrives after replay join the edge cell', async () => {
+    const restored = await replayWithSavedCursor(`${HEADER}\x1b[4;8r\x1b[8;1H012345678e`)
+    await write(restored, '́X')
+    expect(visibleText(restored).slice(6)).toEqual(['012345678é', 'X'])
+  })
+
   it('does not link reprinted cells to a link left open for later output', async () => {
     const { terminal, addon } = createTerminal(10, 8)
     await write(terminal, `0123456789\x1b]8;;${URL}\x1b\\`)
