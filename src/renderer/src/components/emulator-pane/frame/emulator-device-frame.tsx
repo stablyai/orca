@@ -34,6 +34,7 @@ import { useWindowStreamVisible as useEmulatorStreamWindowVisible } from '../../
 import { useEmulatorWheelGesture } from '../input/use-emulator-wheel-gesture'
 
 type EmulatorDeviceFrameProps = {
+  worktreeId: string
   deviceId?: string
   previewUrl?: string
   wsUrl?: string
@@ -57,6 +58,7 @@ type ScreenCoordinateEvent = Pick<
 >
 
 export function EmulatorDeviceFrame({
+  worktreeId,
   deviceId,
   previewUrl,
   wsUrl,
@@ -95,7 +97,7 @@ export function EmulatorDeviceFrame({
   // serve-sim takes touches in raw panel coordinates, so input undoes the picture's turn.
   const inputRotation = scrcpyDeviceId ? 0 : visualStreamGeometry.streamRotation
   const { enableKeyboardCapture, handleBlur, handleKeyDown, handlePaste, keyboardCaptureActive } =
-    useEmulatorScreenKeyboard({ ...controlStream, canInteract })
+    useEmulatorScreenKeyboard({ ...controlStream, canInteract, worktreeId })
 
   const mapEventToScreenPoint = useCallback(
     (event: ScreenCoordinateEvent): EmulatorScreenPoint | null =>

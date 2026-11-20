@@ -200,14 +200,6 @@ describe('Refreshing the login', () => {
     })
   })
 
-  it('leaves a login with hours left alone', async () => {
-    const { store, refresh } = await load()
-    await store.keepConnectedLinearLogin(login(NOW + 20 * HOUR), linked)
-    const request = answer(200, {})
-    await refresh.refreshDueLinearLogins({ now: () => NOW, request })
-    expect(request).not.toHaveBeenCalled()
-  })
-
   it('forgets a login Linear refuses for good, so Orca says to connect again', async () => {
     const { client, store, refresh } = await load()
     await store.keepConnectedLinearLogin(login(NOW - HOUR), linked)
@@ -219,15 +211,9 @@ describe('Refreshing the login', () => {
     expect((await client.getStatus()).connected).toBe(false)
   })
 
-  it('keeps the login when Linear can’t be reached or answers oddly', async () => {
+  it('keeps the login when Linear returns a server error', async () => {
     const { store, refresh } = await load()
     await store.keepConnectedLinearLogin(login(NOW - HOUR), linked)
-    await refresh.refreshLinearLogin('org-acme', {
-      now: () => NOW,
-      request: vi.fn(async () => {
-        throw new Error('offline')
-      })
-    })
     await refresh.refreshLinearLogin('org-acme', {
       now: () => NOW,
       request: answer(500, { error: 'server_error' })

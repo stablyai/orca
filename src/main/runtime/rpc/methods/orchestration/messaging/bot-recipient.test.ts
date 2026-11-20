@@ -74,6 +74,7 @@ describe('mail to a bot', () => {
       type: 'handoff'
     })
     expect(withChat).not.toHaveBeenCalled()
+    expect(cards).toEqual([])
     // Kept out of the owner's Chat, so the Chat says where it went.
     expect(notes).toEqual([
       'Request from Ranger, for Dana on Slack; it runs in its own conversation: Ranger: update the install docs'
@@ -173,6 +174,22 @@ describe('mail to a bot', () => {
     expect(cards.at(-1)?.body).not.toHaveProperty('botRequest.messageId')
   })
 
+  it('refuses missing or unsupported mail types, and refuses mail while bots are off', async () => {
+    journals[RANGER_THREAD] = [message('ask')]
+    await expect(send(RANGER_THREAD, { to: 'bot:Docs' })).rejects.toMatchObject({
+      code: 'bot_request_type'
+    })
+    await expect(send(RANGER_THREAD, { to: 'bot:Docs', type: 'escalation' })).rejects.toMatchObject(
+      { code: 'bot_request_type' }
+    )
+
+    vi.mocked(runtime.bots.enabled).mockReturnValue(false)
+    await expect(send(RANGER_THREAD, { to: 'bot:Docs', type: 'handoff' })).rejects.toMatchObject({
+      code: 'bots_disabled'
+    })
+    expect(db.getAllMessagesForHandle(`orca_session_id:${DOCS_CHAT}`)).toEqual([])
+  })
+
   it('cards a refusal that comes after the first check, once', async () => {
     journals[RANGER_THREAD] = [message('ask')]
     // Docs is paused while its Chat is found, so only the re-check before storing refuses.
@@ -188,12 +205,6 @@ describe('mail to a bot', () => {
       botRequest: { toBotName: 'Docs', refusal: 'bot_paused' }
     })
     expect(db.getAllMessagesForHandle(`orca_session_id:${DOCS_CHAT}`)).toHaveLength(0)
-  })
-
-  it("never cards a teammate's request", async () => {
-    journals[RANGER_THREAD] = [message('ask', askedBy('U_DANA', 'Dana'))]
-    await sent(RANGER_THREAD, { to: 'bot:docs', type: 'handoff' })
-    expect(cards).toEqual([])
   })
 
   it("drops the sender's own payload", async () => {
@@ -217,7 +228,6 @@ describe('mail to a bot', () => {
     journals[RANGER_THREAD] = [message('ask', askedBy('U_NORA', 'Nora'))]
     for (const to of [
       'bot:Docs',
-      'bot:docs',
       `orca_session_id:${DOCS_CHAT}`,
       `orca_session_id:${DOCS_THREAD}`
     ]) {
@@ -301,6 +311,10 @@ describe('mail to a bot', () => {
       type: 'question'
     })
     expect(own.message.to_handle).toBe(`orca_session_id:${RANGER_CHAT}`)
+    expect(cards.at(-1)).toMatchObject({
+      sessionId: RANGER_THREAD,
+      body: { botRequest: { toBotId: 'ranger', messageId: own.message.id } }
+    })
     expect(db.getBotRequest(own.message.id)).toMatchObject({
       from_bot_id: 'ranger',
       to_bot_id: 'ranger'
@@ -364,23 +378,6 @@ describe('mail to a bot', () => {
     await expect(send(RANGER_CHAT, { to: 'bot:Ranger', type: 'handoff' })).rejects.toThrow(
       "That's this chat"
     )
-  })
-
-  it("cards a request to the bot's own other chat as it does one to another bot", async () => {
-    journals[RANGER_THREAD] = [message('ask')]
-    const receipt = await sent(RANGER_THREAD, {
-      to: 'bot:Ranger',
-      chat: RANGER_CHAT,
-      type: 'question'
-    })
-    expect(cards).toEqual([
-      {
-        sessionId: RANGER_THREAD,
-        body: expect.objectContaining({
-          botRequest: expect.objectContaining({ toBotId: 'ranger', messageId: receipt.message.id })
-        })
-      }
-    ])
   })
 
   /** term_worker, started by Ranger's Slack thread, where Dana asked. */

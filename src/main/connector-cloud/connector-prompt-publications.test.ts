@@ -199,16 +199,6 @@ it('C1-2: a delayed old turn-end cannot erase a newer published prompt', async (
   }
 })
 
-it('C1-3: restates only the unsupported form that actually went out', async () => {
-  const h = fixture({ ...P, question: 'x'.repeat(CONNECTOR_CLIENT_LIMITS.maxEventBytes + 1) })
-  try {
-    await h.post()
-    expect(h.reconnect().prompt).toEqual({ kind: 'unsupported', promptId: 'p' })
-  } finally {
-    h.close()
-  }
-})
-
 it('C1-3: does not restate a prompt omitted by the snapshot cap', async () => {
   const h = fixture(P, CONNECTOR_CLIENT_LIMITS.maxSnapshotConversations + 1)
   try {

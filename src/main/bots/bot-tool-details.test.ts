@@ -223,8 +223,10 @@ describe('saved own tool details', () => {
         env: { TOKEN: 'synthetic' }
       }
     })
-    expect(codexBotToolsThreadConfig(codex)).toMatchObject({
+    expect(codexBotToolsThreadConfig(codex)).toEqual({
+      'mcp_servers.docs.url': 'http://127.0.0.1:4100/bot-tools/cred-docs-1/mcp',
       'mcp_servers.docs.http_headers': { authorization: 'Bearer bot-token' },
+      'mcp_servers.local.command': 'node',
       'mcp_servers.local.args': ['two words', '', ' edge '],
       'mcp_servers.local.env': { TOKEN: 'synthetic' }
     })

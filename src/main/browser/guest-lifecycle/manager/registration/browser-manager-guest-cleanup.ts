@@ -42,6 +42,7 @@ export abstract class BrowserManagerGuestCleanup extends BrowserManagerGuestNavi
       }
     }
     this.pendingLoadFailuresByGuestId.delete(guestWebContentsId)
+    this.pendingLoadStallsByGuestId.delete(guestWebContentsId)
     this.loadErrorsByGuestId.delete(guestWebContentsId)
     this.clearedLoadErrorsByGuestId.delete(guestWebContentsId)
     this.remoteTabFaviconUrlByGuestId.delete(guestWebContentsId)

@@ -135,7 +135,7 @@ export function AntigravityChatApiKeyField({
           {hint ? `${hint} ` : null}
           {!status?.saved && (
             <ManagedRuntimeLinkButton onClick={() => openAppHttpLink(GET_KEY_URL)}>
-              {t('accounts.antigravity.apiKeyGet', 'Get a key from Google AI Studio')}
+              {t('accounts.antigravity.apiKeyGet', 'Get API key')}
             </ManagedRuntimeLinkButton>
           )}
         </p>
