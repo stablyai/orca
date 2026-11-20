@@ -106,18 +106,42 @@ async function waitForPosixProcessGroupQuiescence(processGroupId: number): Promi
   }
 }
 
-let runningTableRead: Promise<string | null> | undefined
-let queuedTableRead: Promise<string | null> | undefined
+type GroupStates = Map<number, string[]>
+let runningTableRead: Promise<GroupStates | null> | undefined
+let queuedTableRead: Promise<GroupStates | null> | undefined
 
-function startTableRead(): Promise<string | null> {
-  runningTableRead = readPosixProcessTable().finally(() => {
-    runningTableRead = undefined
-  })
+// One parse per shared read; each waiter looks up only its own group.
+function indexGroupStates(output: string | null): GroupStates | null {
+  if (output === null) {
+    return null
+  }
+  const groups: GroupStates = new Map()
+  for (const line of output.split('\n')) {
+    const match = line.trim().match(/^(\d+)\s+(\S+)/)
+    if (match) {
+      const id = Number(match[1])
+      const states = groups.get(id)
+      if (states) {
+        states.push(match[2])
+      } else {
+        groups.set(id, [match[2]])
+      }
+    }
+  }
+  return groups
+}
+
+function startTableRead(): Promise<GroupStates | null> {
+  runningTableRead = readPosixProcessTable()
+    .then(indexGroupStates)
+    .finally(() => {
+      runningTableRead = undefined
+    })
   return runningTableRead
 }
 
 // Concurrent group waits share a table read, but only one that starts after they ask: an earlier snapshot can miss a newer group.
-function readTableAfterNow(): Promise<string | null> {
+function readTableAfterNow(): Promise<GroupStates | null> {
   if (!runningTableRead) {
     return startTableRead()
   }
@@ -129,14 +153,7 @@ function readTableAfterNow(): Promise<string | null> {
 }
 
 function readPosixProcessGroupStates(processGroupId: number): Promise<string[] | null> {
-  return readTableAfterNow().then((output) =>
-    output === null
-      ? null
-      : output.split('\n').flatMap((line) => {
-          const match = line.trim().match(/^(\d+)\s+(\S+)/)
-          return match && Number(match[1]) === processGroupId ? [match[2]] : []
-        })
-  )
+  return readTableAfterNow().then((groups) => (groups ? (groups.get(processGroupId) ?? []) : null))
 }
 
 function readPosixProcessTable(): Promise<string | null> {
