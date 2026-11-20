@@ -45,7 +45,8 @@ export type AntigravityPaneChildState = {
   leadStateStartedAt?: number
   leadObservedAt?: number
   leadModel?: string
-  leadModelAuto?: true
+  /** Start of an automatic-model turn whose transcript has not reported its model yet. */
+  leadModelSince?: number
   commands?: Set<number>
   children: Map<string, TrackedAntigravityChild>
   verifiedChildren: Set<string>

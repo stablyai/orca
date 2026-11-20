@@ -18,6 +18,9 @@ import {
   type TrackedAntigravityChild
 } from './antigravity-pane-state'
 
+function readsLeadModel(pane: AntigravityPaneChildState): boolean {
+  return pane.leadModel === undefined || pane.leadModelSince !== undefined
+}
 export function hasAntigravityPollWork(
   state: HookListenerState,
   event: AgentHookEventPayload
@@ -27,8 +30,7 @@ export function hasAntigravityPollWork(
     pane &&
     (pane.dirty ||
       (pane.rootBrainDir &&
-        (pane.children.size > 0 ||
-          ((pane.leadModel === undefined || pane.leadModelAuto) && pane.leadState === 'working'))))
+        (pane.children.size > 0 || (readsLeadModel(pane) && pane.leadState === 'working'))))
   )
 }
 export type AntigravityTranscriptPollReads = {
@@ -41,6 +43,7 @@ export type AntigravityTranscriptPollReads = {
     model?: string
   }[]
   leadModel?: string
+  leadModelAt?: number
 }
 export async function readAntigravityTranscriptPoll(
   state: HookListenerState,
@@ -100,12 +103,17 @@ export async function readAntigravityTranscriptPoll(
       batch.release()
     }
   }
-  if ((pane.leadModel === undefined || pane.leadModelAuto) && pane.rootConversationId && wanted()) {
+  if (readsLeadModel(pane) && pane.leadState === 'working' && pane.rootConversationId && wanted()) {
     const batch = new RolloutReadBatch(wanted)
     try {
-      result.leadModel = (
-        await readAntigravityChildTranscriptTail(brain, pane.rootConversationId, cache, batch)
-      )?.model
+      const tail = await readAntigravityChildTranscriptTail(
+        brain,
+        pane.rootConversationId,
+        cache,
+        batch
+      )
+      result.leadModel = tail?.model
+      result.leadModelAt = tail?.modelAt
     } finally {
       batch.release()
     }
@@ -121,8 +129,17 @@ export function pollAntigravityTranscriptStatus(
   if (!reads || pane !== reads.pane || pane.brainCache !== reads.cache) {
     return undefined
   }
-  if (reads.leadModel && (pane.leadModel === undefined || pane.leadModelAuto)) {
-    pane.leadModel = reads.leadModel
+  if (reads.leadModel) {
+    // An automatic turn takes only a model recorded after it started; until then the last one stays.
+    const current =
+      pane.leadModelSince === undefined ||
+      (reads.leadModelAt ?? Number.NEGATIVE_INFINITY) >= pane.leadModelSince
+    if (current || pane.leadModel === undefined) {
+      pane.leadModel = reads.leadModel
+    }
+    if (current) {
+      pane.leadModelSince = undefined
+    }
   }
   const proven: string[] = []
   for (const { child, revision, metadata, model } of reads.children) {

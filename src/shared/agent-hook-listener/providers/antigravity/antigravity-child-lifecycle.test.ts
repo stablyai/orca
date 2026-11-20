@@ -219,9 +219,12 @@ it('resolves automatic models from transcripts and preserves them across automat
 it('follows the automatic model a later turn resolves', async () => {
   hook('root', 'Stop', { fullyIdle: true })
   hook('root', 'PreInvocation', { lastUserInput: 'Next', modelName: 'auto' })
+  const rootTranscript = join(dir, 'root', '.system_generated', 'logs', 'transcript.jsonl')
+  appendFileSync(rootTranscript, '{"type":"PLANNER_RESPONSE","model":"model-b"}\n')
+  expect((await poll())?.payload.model ?? row.payload.model).toBe('model-a')
   appendFileSync(
-    join(dir, 'root', '.system_generated', 'logs', 'transcript.jsonl'),
-    '{"type":"PLANNER_RESPONSE","model":"model-c"}\n'
+    rootTranscript,
+    `${JSON.stringify({ type: 'PLANNER_RESPONSE', model: 'model-c', created_at: '2999-01-01T00:00:00Z' })}\n`
   )
   expect((await poll())?.payload.model).toBe('model-c')
 })

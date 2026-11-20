@@ -13,7 +13,7 @@ import type { JsonlCursor } from '../codex/codex-rollout-jsonl-format'
 
 const BRAIN_METADATA_MAX_BYTES = 256 * 1024
 const TRANSCRIPT_SUFFIX_RE = /[\\/]\.system_generated[\\/]logs[\\/]transcript(?:_full)?\.jsonl$/
-export type AntigravityChildTranscriptTail = { model?: string }
+export type AntigravityChildTranscriptTail = { model?: string; modelAt?: number }
 export type AntigravityChildMetadata = {
   description?: string
   agentType?: string
@@ -28,6 +28,7 @@ export type AntigravityBrainCache = {
       cursor: JsonlCursor
       tail?: AntigravityChildTranscriptTail
       model?: string
+      modelAt?: number
       startedAt?: number
     }
   >

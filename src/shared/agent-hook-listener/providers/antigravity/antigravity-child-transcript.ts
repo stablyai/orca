@@ -47,8 +47,12 @@ export async function readAntigravityChildTranscriptTail(
     if (Number.isFinite(createdAt)) {
       previous.startedAt ??= createdAt
     }
-    previous.model = normalizeAntigravityModel(parsed.model) ?? previous.model
-    previous.tail = { model: previous.model }
+    const model = normalizeAntigravityModel(parsed.model)
+    if (model) {
+      previous.model = model
+      previous.modelAt = Number.isFinite(createdAt) ? createdAt : undefined
+    }
+    previous.tail = { model: previous.model, modelAt: previous.modelAt }
   }
   cache.transcripts.set(childTranscriptPath, previous)
   return previous.tail

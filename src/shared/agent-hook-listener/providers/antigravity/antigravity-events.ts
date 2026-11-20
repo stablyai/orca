@@ -205,7 +205,11 @@ export function normalizeAntigravityEvent(
   if (rawModel) {
     const resolvedModel = normalizeAntigravityModel(rawModel)
     paneState.leadModel = resolvedModel ?? paneState.leadModel
-    paneState.leadModelAuto = resolvedModel ? undefined : true
+    if (resolvedModel) {
+      paneState.leadModelSince = undefined
+    } else if (resetsTurn) {
+      paneState.leadModelSince = now
+    }
   }
 
   if (eventName === 'Stop' && !stopStillBusy) {
