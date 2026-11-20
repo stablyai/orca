@@ -27150,7 +27150,8 @@
         "update": "Update in Slack",
         "installedBy": "installed by {{installer}}",
         "removeFromTitle": "Remove {{name}} from {{place}}?",
-        "signIn": "Sign in"
+        "signIn": "Sign in",
+        "updatePermissions": "Update Slack permissions…"
       },
       "token": {
         "open": "Get config token",

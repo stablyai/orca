@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { scheduledFor } from './slack-action-args'
+import { actionArgs, scheduledFor } from './slack-action-args'
 
 // 2026-11-20T12:00:00Z
 const NOW = 1_795_176_000_000
@@ -39,5 +39,33 @@ describe('scheduledFor', () => {
       '--at must be at least a minute from now. Leave it out to post now.'
     )
     expect(refusal('+121d')).toBe('Slack schedules a post at most 120 days ahead.')
+  })
+})
+
+describe('actionArgs for Slack’s own surfaces', () => {
+  const flags = (entries: Record<string, string | boolean>) => new Map(Object.entries(entries))
+
+  it('reads a pin, a canvas, a list and a look at scheduled posts from their flags', async () => {
+    expect(await actionArgs('pin', flags({}), '/')).toEqual({})
+    expect(await actionArgs('pin', flags({ remove: true }), '/')).toEqual({ remove: true })
+    expect(
+      await actionArgs('canvas', flags({ title: 'Release plan', text: '# Plan\n- ship' }), '/')
+    ).toEqual({ title: 'Release plan', text: '# Plan\n- ship' })
+    expect(await actionArgs('scheduled', flags({}), '/')).toEqual({})
+    expect(await actionArgs('scheduled', flags({ cancel: 'Q123' }), '/')).toEqual({
+      cancel: 'Q123'
+    })
+  })
+
+  it('refuses a blank --cancel, which would otherwise list', async () => {
+    await expect(actionArgs('scheduled', flags({ cancel: '' }), '/')).rejects.toThrow(
+      '--cancel takes the id `orca slack scheduled <place>` lists.'
+    )
+  })
+
+  it('refuses a list with no item', async () => {
+    await expect(actionArgs('list', flags({ title: 'Launch' }), '/')).rejects.toThrow(
+      'A list needs at least one --item.'
+    )
   })
 })
