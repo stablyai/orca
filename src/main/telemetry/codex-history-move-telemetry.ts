@@ -54,6 +54,10 @@ export class CodexHistoryMoveReport {
   private readonly outcomes = new Map<string, CodexHistoryMoveOutcome>()
   private marker: Promise<SentMarker> | null = null
   private queue: Promise<void> = Promise.resolve()
+  // Outcome changes so far, and the changes and listing the last full check saw: an unchanged
+  // state skips relisting the homes (synchronous file checks on main) for a report already decided.
+  private changes = 0
+  private lastChecked: string | null = null
 
   constructor(
     private readonly deps: {
@@ -68,12 +72,17 @@ export class CodexHistoryMoveReport {
   ) {}
 
   record(homeKey: string, outcome: CodexHistoryMoveOutcome): void {
+    if (this.outcomes.get(homeKey) !== outcome) {
+      this.changes += 1
+    }
     this.outcomes.set(homeKey, outcome)
   }
 
   /** An unshared home's earlier outcome no longer says anything about its move. */
   forget(homeKey: string): void {
-    this.outcomes.delete(homeKey)
+    if (this.outcomes.delete(homeKey)) {
+      this.changes += 1
+    }
   }
 
   // With no host homes, an install with WSL homes still reports how many it has.
@@ -106,12 +115,18 @@ export class CodexHistoryMoveReport {
       saved?.version === version ? saved : { version, sent: [] }
     )
     const marker = await this.marker
-    if (marker.sent.length >= MAX_SENDS_PER_VERSION) {
+    const state = (keys: string[]): string =>
+      [this.changes, this.deps.wslHomeCount(), ...keys].join('\0')
+    if (marker.sent.length >= MAX_SENDS_PER_VERSION || state(listedHomes) === this.lastChecked) {
       return
     }
     // Read after the marker loads: homes added, or sharing turned off, meanwhile.
     const homes = this.deps.currentHomes()
-    if (!homes || !this.isComplete(homes)) {
+    if (!homes) {
+      return
+    }
+    this.lastChecked = state(homes)
+    if (!this.isComplete(homes)) {
       return
     }
     const tally = (outcome: CodexHistoryMoveOutcome): number =>
@@ -132,7 +147,12 @@ export class CodexHistoryMoveReport {
       return
     }
     const key = JSON.stringify(props)
-    if (marker.sent.includes(key) || !track('codex_history_move_status', props)) {
+    if (marker.sent.includes(key)) {
+      return
+    }
+    if (!track('codex_history_move_status', props)) {
+      // Refused (such as a full send budget): the next check tries again.
+      this.lastChecked = null
       return
     }
     marker.sent.push(key)
