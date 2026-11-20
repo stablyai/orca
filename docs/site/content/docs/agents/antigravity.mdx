@@ -99,3 +99,9 @@ A present key proves only that it was forwarded; a successful reply proves `agy`
 | A model name is rejected                                            | Run `agy models` on the host and pick a model it lists.                                                                                  |
 
 When reporting a setup problem, include the Orca version, the host that runs the workspace, `agy --version`, and the error text. Remove account identifiers, keys, and private paths first.
+
+### Several file reads show the same 502 in Chat
+
+Orca's managed Antigravity server can leave a `view_file` call open after returning the file contents to the model. If another step then hits a model-provider error, several earlier reads can show the same **502 Bad Gateway**. The failed-tool count alone cannot tell you which files the model actually read. [Managed file-read status issue](https://github.com/stablyai/orca/issues/45373).
+
+For a personal Google account, run `agy --version` on the workspace host, sign in by running `agy`, and start a **new** Antigravity chat on Orca 1.4.266 or later. Ask it to read a small test file and quote a line you can verify. Existing chats keep their original backend. See [which account and program a chat uses](/docs/agents/antigravity-accounts#antigravity-chats).

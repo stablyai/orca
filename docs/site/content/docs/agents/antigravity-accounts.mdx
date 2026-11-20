@@ -24,7 +24,11 @@ Click **Select** on a saved account. Orca writes that login into `agy`'s own cre
 
 ## Antigravity chats
 
-Antigravity in [Chat UI](/docs/agents/native-chat) uses its own sign-in, separate from your `agy` account. Saved `agy` accounts do not choose which account chats use; sign chats in from the **Antigravity** chat row in the same Settings section.
+From Orca 1.4.266, new [Antigravity chats](/docs/agents/native-chat) prefer the workspace host's `agy` when the Chat account type is **Google account**, the CLI has a personal Google sign-in, and it passes Orca's compatibility check (`agy` 1.5.2 or later). These chats use the account you select above. You can keep your existing sign-in for Orca's copy.
+
+Chats use Orca's managed server when the host CLI is unavailable or incompatible, when `agy` is configured for an API-key provider, or when you choose a different Chat account type. Manage that sign-in under **Settings → AI Provider Accounts → Antigravity Chat**.
+
+An existing chat stays on the program it started with. To check a particular chat, look for **Your agy** or **Orca's copy** in its account menu on versions that show the program name. To try a different backend, start a new chat after changing the setup.
 
 ## Where accounts live
 
