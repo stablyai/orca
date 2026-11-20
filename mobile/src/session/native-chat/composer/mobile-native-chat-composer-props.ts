@@ -43,6 +43,8 @@ export type MobileNativeChatComposerProps = MobileNativeChatMicProps & {
   /** A structured chat's context-window readout; null hides the ring. */
   contextUsage?: NativeChatContextUsageSummary | null
   onAttachImage?: () => void
+  /** Files-app pick for a terminal-backed chat; a structured chat supplies its own. */
+  onAttachFiles?: () => void
   /** Images pasted into the field attach like a Photos pick. */
   onPasteImages?: (paste: MobilePastedImages) => void
   attachments?: PendingNativeChatImage[]

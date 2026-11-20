@@ -2,6 +2,7 @@ import { formatNativeChatFileReference } from '../../../../../../src/shared/nati
 import { chatTextAttachmentName } from '../../../../../../src/shared/native-chat/attachments/native-chat-text-attachment-references'
 import {
   MobileFileTooLargeError,
+  MobileUploadCancelledError,
   type PickedMobileFile
 } from '../../../../platform/media-picking/media-picker-contract'
 import type { AgentSessionAttachmentUploadCommitResult } from '../../../../../../src/shared/agent-session/agent-session-attachments'
@@ -12,6 +13,8 @@ export type PendingNativeChatFile = {
   readonly mime: string
   readonly byteLength: number
   readonly path: string | null
+  /** Bytes the host has acknowledged while the upload runs. */
+  readonly sentBytes?: number
 }
 
 export function nativeChatTextWithFileReferences(
@@ -38,10 +41,15 @@ function nativeChatFileAttachFailureMessage(error: unknown, fileName?: string): 
 export async function uploadPickedNativeChatFiles(args: {
   canContinue?: () => boolean
   picked: AsyncIterable<PickedMobileFile>
-  upload: (file: PickedMobileFile) => Promise<AgentSessionAttachmentUploadCommitResult>
+  upload: (
+    file: PickedMobileFile,
+    onProgress: (sentBytes: number) => void,
+    id: string
+  ) => Promise<AgentSessionAttachmentUploadCommitResult>
   nextId: () => string
   onPicked: (file: PendingNativeChatFile) => void
   onStored: (id: string, stored: AgentSessionAttachmentUploadCommitResult) => void
+  onProgress?: (id: string, sentBytes: number) => void
   onFailed: (id: string) => void
   onError: (message: string) => void
 }): Promise<void> {
@@ -62,10 +70,15 @@ export async function uploadPickedNativeChatFiles(args: {
         path: null
       })
       try {
-        args.onStored(id, await args.upload(file))
+        args.onStored(
+          id,
+          await args.upload(file, (sentBytes) => args.onProgress?.(id, sentBytes), id)
+        )
       } catch (error) {
         args.onFailed(id)
-        args.onError(nativeChatFileAttachFailureMessage(error, file.name))
+        if (!(error instanceof MobileUploadCancelledError)) {
+          args.onError(nativeChatFileAttachFailureMessage(error, file.name))
+        }
       }
       if (args.canContinue?.() === false) {
         break

@@ -64,6 +64,7 @@ export function MobileNativeChatComposer({
   sessionOptions,
   contextUsage = null,
   onAttachImage,
+  onAttachFiles,
   onPasteImages,
   attachments = NO_ATTACHMENTS,
   onRemoveAttachment,
@@ -103,7 +104,8 @@ export function MobileNativeChatComposer({
   const onWebPaste = mobileNativeChatComposerPasteHandler({
     disabled: disabled || offline || editSession?.locked === true,
     onPasteImages,
-    onAttachPastedText: structured?.onAttachPastedText
+    onAttachPastedText: structured?.onAttachPastedText,
+    onPasteFiles: structured?.onPasteFiles
   })
   const goal = useMobileNativeChatComposerGoalMode(structured, !!editSession, sendSurfaceId)
   const orca = useMobileNativeChatOrcaCommands({
@@ -308,7 +310,7 @@ export function MobileNativeChatComposer({
             >
               <MobileNativeChatComposerAttachButton
                 onAttachImage={onAttachImage}
-                onAttachFiles={structured?.onAttachFiles}
+                onAttachFiles={structured?.onAttachFiles ?? onAttachFiles}
                 structured={structured !== null}
                 isAttaching={isAttaching}
                 disabled={disabled || offline}

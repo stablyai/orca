@@ -1,4 +1,4 @@
-import { mkdtemp, readdir, readFile, rm, symlink, writeFile } from 'node:fs/promises'
+import { mkdtemp, readdir, readFile, rm, symlink, truncate, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -56,6 +56,33 @@ describe('AgentSessionAttachmentStore', () => {
     await store.appendChunk({ callerKey: caller, uploadId, offset: 2, contentBase64: chunk('cd') })
     const stored = await store.commitUpload({ callerKey: caller, uploadId })
     expect(await readFile(stored.path, 'utf8')).toBe('abcd')
+  })
+
+  it('stores a terminal-bound file with no chat session but still refuses an unknown session', async () => {
+    const { uploadId } = await store.startUpload({
+      callerKey: caller,
+      name: 'clip.mov',
+      byteLength: 3
+    })
+    await store.appendChunk({
+      callerKey: caller,
+      uploadId,
+      offset: 0,
+      contentBase64: Buffer.from('mov').toString('base64')
+    })
+    const stored = await store.commitUpload({ callerKey: caller, uploadId })
+    expect(await readFile(stored.path, 'utf8')).toBe('mov')
+    await expect(upload('x.txt', Buffer.from('x'), 'nope')).rejects.toThrow('not on this host')
+  })
+
+  it('reads a byte range from a stored attachment larger than 50 MB', async () => {
+    const size = 60 * 1024 * 1024
+    const path = await store.storeWith('big.mov', async (part) => {
+      await writeFile(part, '')
+      await truncate(part, size)
+    })
+    const chunk = await store.readTextChunk({ path, offset: size - 1024, length: 1024 })
+    expect(chunk).toMatchObject({ size, bytesRead: 1024, eof: true })
   })
 
   it('refuses an incomplete commit and removes what it had', async () => {

@@ -95,6 +95,7 @@ export function MobileNativeChatView({
   composerScopeKey,
   onComposerTextChange,
   onAttachImage,
+  onAttachFiles,
   onPasteImages,
   attachments,
   onRemoveAttachment,
@@ -339,7 +340,7 @@ export function MobileNativeChatView({
             steerHead
           }}
           {...{ agent, sessionOptions, contextUsage }}
-          {...{ onAttachImage, onPasteImages, attachments, onRemoveAttachment }}
+          {...{ onAttachImage, onAttachFiles, onPasteImages, attachments, onRemoveAttachment }}
           {...{ isAttaching, onMicPress, micActive, micStarting, micProcessing }}
           {...{ dictationMode, onMicPressIn, onMicPressOut }}
           {...offlineQueue.composerLock}

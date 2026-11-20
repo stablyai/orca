@@ -94,6 +94,13 @@ export const filePreviewStyles = themedStyleSheet(() => ({
 
 export const chatAttachmentPreviewStyles = themedStyleSheet(() => ({
   ...filePreviewStyles,
+  binaryBody: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.md,
+    paddingHorizontal: spacing.xl
+  },
   header: {
     backgroundColor: colors.bgPanel,
     borderBottomWidth: StyleSheet.hairlineWidth,

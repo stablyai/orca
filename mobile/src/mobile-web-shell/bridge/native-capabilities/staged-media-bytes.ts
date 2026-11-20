@@ -43,6 +43,34 @@ export async function readStagedMediaItem(
   return accumulator.finish()
 }
 
+// Yield each shell chunk as its own base64 slice (the shell encodes each independently) so a large file never sits in page memory.
+export async function* streamStagedMediaBase64(
+  verbs: Pick<NativeVerbs, 'readMedia'>,
+  item: BridgeMediaItem
+): AsyncGenerator<string> {
+  let offset = 0
+  for (;;) {
+    const length = Math.max(1, Math.min(BRIDGE_MEDIA_READ_MAX_BYTES, item.byteLength - offset))
+    const chunk = await verbs.readMedia(item.handle, offset, length)
+    const received = decodeBase64(chunk.base64).byteLength
+    offset += received
+    if (received > 0) {
+      yield chunk.base64
+    }
+    if (chunk.eof) {
+      break
+    }
+    if (received === 0) {
+      throw new Error(`the shell answered no bytes for ${item.handle} and did not report the end`)
+    }
+  }
+  if (offset !== item.byteLength) {
+    throw new Error(
+      `the shell answered ${offset} bytes for an item it declared as ${item.byteLength}`
+    )
+  }
+}
+
 // Keep finally cleanup quiet so it cannot replace the original read refusal.
 export async function releaseStagedMedia(verbs: NativeVerbs, handle: string): Promise<void> {
   try {

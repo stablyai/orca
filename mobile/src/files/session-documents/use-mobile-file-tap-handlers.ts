@@ -1,4 +1,4 @@
-import { isCommittedChatAttachmentCandidate } from '../../../../src/shared/native-chat/attachments/native-chat-text-attachment-references'
+import { isChatAttachmentStorePath } from '../../../../src/shared/native-chat/attachments/native-chat-text-attachment-references'
 import { createMobileFilePreviewHref } from '../preview/mobile-file-preview-route'
 import { useCallback, useLayoutEffect, useRef, type MutableRefObject } from 'react'
 import type { ParsedFileLinkLocation } from '../../../../src/shared/file-links/file-link-location'
@@ -161,7 +161,7 @@ export function useMobileFileTapHandlers<T extends FileTapSessionTab>(
 
   const handleNativeChatFileTap = useCallback((pathText: string) => {
     const current = optionsRef.current
-    if (current.structuredAttachments && isCommittedChatAttachmentCandidate(pathText)) {
+    if (current.structuredAttachments && isChatAttachmentStorePath(pathText)) {
       ++activationSeqRef.current
       routerRef.current.push(
         createMobileFilePreviewHref({

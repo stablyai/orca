@@ -66,6 +66,39 @@ export const styles = themedStyleSheet(() => ({
     borderLeftWidth: 2,
     borderLeftColor: colors.borderSubtle
   },
+  imageWithCaption: {
+    alignItems: 'flex-end',
+    gap: 4
+  },
+  imageCaption: {
+    maxWidth: 200,
+    color: colors.textMuted,
+    fontSize: 11
+  },
+  sentFiles: {
+    gap: 6,
+    marginTop: 6,
+    alignItems: 'flex-start'
+  },
+  sentFile: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    maxWidth: '100%',
+    paddingVertical: 7,
+    paddingHorizontal: 10,
+    borderRadius: radii.control,
+    backgroundColor: colors.composerControl
+  },
+  sentFileName: {
+    flexShrink: 1,
+    color: colors.textPrimary,
+    fontSize: typography.metaSize
+  },
+  sentFileType: {
+    color: colors.textMuted,
+    fontSize: 11
+  },
   agentAttribution: {
     color: colors.textMuted,
     fontSize: typography.metaSize

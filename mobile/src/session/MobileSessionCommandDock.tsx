@@ -82,7 +82,7 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
           buttonStyle={inputStyles.controlButton}
           dictationCancelRef={dictationCancelRef}
           disabledButtonStyle={inputStyles.disabled}
-          onAttachImage={() => void attachImage('library')}
+          onAttachImage={() => void attachImage('gallery')}
           onAttachFile={() => void attachImage('files')}
           onDictationToggle={handleDictationToggle}
           onDictationPressIn={handleDictationPressIn}

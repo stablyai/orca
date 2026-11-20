@@ -3,7 +3,7 @@ import { stat, realpath } from 'node:fs/promises'
 import { openAuthorizedDocPreviewTarget } from '../../../shared/document-preview/doc-preview-file-access'
 import { validateFileRangeRequest } from '../../../shared/file-content/file-range-read'
 import { remoteRpcResultExceedsContentBudget } from '../../../shared/remote-runtime/rpc/remote-rpc-content-budget'
-import { AGENT_SESSION_ATTACHMENT_MAX_BYTES } from '../../../shared/agent-session/agent-session-attachments'
+import { AGENT_SESSION_ATTACHMENT_UPLOAD_MAX_BYTES } from '../../../shared/agent-session/agent-session-attachments'
 import type {
   AttachmentTextChunk,
   AttachmentTextRequest
@@ -43,7 +43,7 @@ export async function readAttachmentTextChunk(
         opened.size !== current.size ||
         opened.mtimeNs !== current.mtimeNs ||
         opened.ctimeNs !== current.ctimeNs ||
-        opened.size > BigInt(AGENT_SESSION_ATTACHMENT_MAX_BYTES)
+        opened.size > BigInt(AGENT_SESSION_ATTACHMENT_UPLOAD_MAX_BYTES)
       ) {
         throw new Error('Attachment changed. Close it and try again.')
       }

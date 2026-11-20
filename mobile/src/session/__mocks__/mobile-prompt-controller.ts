@@ -174,6 +174,8 @@ function Harness(props: HarnessProps) {
       attachments: [],
       isAttaching: false,
       attachImage: async () => {},
+      attachStreamedFiles: async () => {},
+      attachFiles: async () => {},
       removeAttachment: () => {}
     },
     onMicPress: vi.fn(),

@@ -625,13 +625,10 @@
       "connectionChanged": "연결이 변경되었습니다. 첨부 파일을 다시 열어 보세요.",
       "hostChanged": "첨부 파일의 호스트가 변경되었습니다. 닫은 후 다시 여세요.",
       "readFailed": "첨부 파일을 읽을 수 없습니다. 다시 연결한 후 시도하세요. 파일이 삭제되었거나 변경되었을 수 있습니다.",
-      "copyFrame": "이 첨부 파일을 전체 복사하려면 예정된 휴대전화 업데이트가 필요합니다.",
       "copyFailed": "첨부 파일을 복사할 수 없습니다. 다시 시도하세요.",
       "pastedText": "붙여넣은 텍스트",
       "textAttachment": "텍스트 첨부 파일",
-      "byteSize": "{{size}}바이트",
-      "saveUpdate": "저장 기능은 휴대전화 업데이트에서 제공될 예정입니다.",
-      "fullCopySaveUpdate": "이 첨부 파일의 전체 복사와 저장 기능은 휴대전화 업데이트에서 제공될 예정입니다."
+      "byteSize": "{{size}}바이트"
     },
     "hostOutage": {
       "offlineAsOf": "{{host}} 오프라인 · {{time}} 기준",
@@ -2360,7 +2357,6 @@
       "commands": "명령어",
       "fileTypes": "PDF, 텍스트, 코드…",
       "files": "파일",
-      "photos": "사진",
       "skills": "스킬",
       "workspaceFile": "워크스페이스 파일"
     },
@@ -2557,8 +2553,6 @@
       "switchToPhone": "휴대폰 모드로 전환"
     },
     "terminalInputActions": {
-      "attachFileHint": "사진 대신 파일을 첨부하려면 길게 누르세요.",
-      "attachPhoto": "사진 첨부",
       "sendingImage": "이미지 전송 중"
     },
     "terminalLiveInputStatus": {

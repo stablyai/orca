@@ -2,7 +2,7 @@ import * as z from 'zod'
 import { attachmentTextSegments } from './attachment-text-segments'
 
 import { waitForPromiseWithSignal } from '../concurrency/abort-signal-reason'
-import { AGENT_SESSION_ATTACHMENT_MAX_BYTES } from '../agent-session/agent-session-attachments'
+import { AGENT_SESSION_ATTACHMENT_UPLOAD_MAX_BYTES } from '../agent-session/agent-session-attachments'
 import {
   MAX_FILE_RANGE_READ_BYTES,
   validateFileRangeRequest
@@ -16,7 +16,7 @@ export type AttachmentTextRequest = {
 }
 export const attachmentTextChunkSchema = z.object({
   snapshot: z.string().regex(/^[a-f0-9]{64}$/),
-  size: z.number().int().nonnegative().max(AGENT_SESSION_ATTACHMENT_MAX_BYTES),
+  size: z.number().int().nonnegative().max(AGENT_SESSION_ATTACHMENT_UPLOAD_MAX_BYTES),
   contentBase64: z.string().max(Math.ceil(MAX_FILE_RANGE_READ_BYTES / 3) * 4),
   bytesRead: z.number().int().nonnegative().max(MAX_FILE_RANGE_READ_BYTES),
   eof: z.boolean()

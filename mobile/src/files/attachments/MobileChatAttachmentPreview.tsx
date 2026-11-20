@@ -9,11 +9,17 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { useWorkspaceRouteHandoff } from '../../navigation/workspace-route-handoff'
 import { useWorkspaceClient } from '../../worktree/execution-hosts/use-workspace-client'
 import { createAttachmentTextPreviewHook } from '../../../../src/shared/attachment-text/use-attachment-text-preview'
+import { hasBinaryFileExtension } from '../../../../src/shared/file-preview/binary-file-extensions'
+import * as Sharing from 'expo-sharing'
+import { downloadMobileChatAttachment } from './mobile-chat-attachment-download'
+import { MobileAttachmentFileIcon } from './MobileAttachmentFileIcon'
+import { colors } from '../../theme/mobile-theme'
 import { chatTextAttachmentName } from '../../../../src/shared/native-chat/attachments/native-chat-text-attachment-references'
 import { MOBILE_BRIDGE_MAX_FRAME_BYTES } from '../../../../src/shared/mobile-bridge/mobile-bridge-frame-bytes'
 import { useClipboardWriter } from '../../platform/clipboard/clipboard'
 import { getUiIntlLocale } from '../../i18n/ui-intl-locale'
 import { chatAttachmentPreviewStyles as styles } from '../preview/mobile-file-preview-styles'
+import type { AttachmentTextRead } from '../../../../src/shared/attachment-text/attachment-text-source'
 import type { MobileFilePreviewRouteParams } from '../preview/mobile-file-preview-route'
 
 const useAttachmentTextPreview = createAttachmentTextPreviewHook({
@@ -23,6 +29,112 @@ const useAttachmentTextPreview = createAttachmentTextPreviewHook({
 })
 
 export function MobileChatAttachmentPreview({ params }: { params: MobileFilePreviewRouteParams }) {
+  return hasBinaryFileExtension(params.absolutePath ?? '') ? (
+    <MobileBinaryAttachmentInfo params={params} />
+  ) : (
+    <MobileChatTextAttachmentPreview params={params} />
+  )
+}
+
+function useChatAttachmentShare(read: AttachmentTextRead, path: string) {
+  const t = useMobileTranslation()
+  const [progress, setProgress] = useState<number | null>(null)
+  const [error, setError] = useState('')
+  const share = async () => {
+    setError('')
+    setProgress(0)
+    try {
+      await Sharing.shareAsync(
+        await downloadMobileChatAttachment(read, { path, onProgress: setProgress })
+      )
+    } catch (cause) {
+      setError(
+        cause instanceof Error && cause.message
+          ? cause.message
+          : t('chat.textAttachmentPreview.shareFailed', 'Unable to open this file. Try again.')
+      )
+    } finally {
+      setProgress(null)
+    }
+  }
+  return { share, progress, error }
+}
+
+// Videos, archives and documents have no text to show; they can be copied to the phone and handed to another app.
+function MobileBinaryAttachmentInfo({ params }: { params: MobileFilePreviewRouteParams }) {
+  useMobileColorScheme()
+  const t = useMobileTranslation()
+  const router = useWorkspaceRouteHandoff()
+  const { client, state } = useWorkspaceClient(params.hostId)
+  const connectedAt = client?.getLastConnectedAt()
+  const generation = client?.getGeneration?.()
+  const read = useMemo(
+    () => createMobileChatAttachmentReader(client),
+    [client, connectedAt, generation, state]
+  )
+  const path = params.absolutePath ?? ''
+  const name = chatTextAttachmentName(path)
+  const { share, progress, error } = useChatAttachmentShare(read, path)
+  return (
+    <SafeAreaView edges={['bottom']} style={styles.container}>
+      <SafeAreaView edges={['top']} style={styles.header}>
+        <View style={styles.topBar}>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => router.back()}
+            style={styles.backButton}
+          >
+            <Text style={styles.meta}>{t('common.back', 'Back')}</Text>
+          </Pressable>
+          <View style={styles.titleBlock}>
+            <Text numberOfLines={1} style={styles.title}>
+              {name}
+            </Text>
+            <Text style={styles.meta}>
+              {t('chat.textAttachmentPreview.fileAttachment', 'File attachment')}
+            </Text>
+          </View>
+        </View>
+      </SafeAreaView>
+      <View style={styles.binaryBody}>
+        <MobileAttachmentFileIcon
+          name={name}
+          size={40}
+          color={colors.textSecondary}
+          strokeWidth={1.75}
+        />
+        <Text style={styles.meta}>
+          {t(
+            'chat.textAttachmentPreview.binaryInfoSave',
+            'This file is on the host and the agent can read it. It cannot be previewed here, but you can save it or open it in another app.'
+          )}
+        </Text>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityState={{ disabled: progress !== null }}
+          disabled={progress !== null || !client}
+          onPress={() => void share()}
+          style={[styles.backButton, (progress !== null || !client) && styles.saveButtonDisabled]}
+        >
+          <Text style={styles.meta}>
+            {progress === null
+              ? t('chat.textAttachmentPreview.saveOrShare', 'Save or share')
+              : t('chat.textAttachmentPreview.downloading', 'Downloading {{percent}}%', {
+                  percent: Math.min(100, Math.floor(progress * 100))
+                })}
+          </Text>
+        </Pressable>
+        {error ? (
+          <Text accessibilityRole="alert" style={styles.errorText}>
+            {error}
+          </Text>
+        ) : null}
+      </View>
+    </SafeAreaView>
+  )
+}
+
+function MobileChatTextAttachmentPreview({ params }: { params: MobileFilePreviewRouteParams }) {
   useMobileColorScheme()
   const t = useMobileTranslation()
   const { client, state } = useWorkspaceClient(params.hostId)
@@ -37,6 +149,7 @@ export function MobileChatAttachmentPreview({ params }: { params: MobileFilePrev
   )
   const { source, revision, busy, error, setError, setBusy, demand, retry } =
     useAttachmentTextPreview(path, read)
+  const { share, progress, error: shareError } = useChatAttachmentShare(read, path)
   // Reserve envelope space, then validate actual JSON escaping before publishing to the phone clipboard.
   const smallCopy = source.size !== null && source.size + 4096 <= MOBILE_BRIDGE_MAX_FRAME_BYTES
   const copy = async () => {
@@ -51,7 +164,7 @@ export function MobileChatAttachmentPreview({ params }: { params: MobileFilePrev
         new TextEncoder().encode(JSON.stringify({ value: text })).length + 4096 >
         MOBILE_BRIDGE_MAX_FRAME_BYTES
       ) {
-        throw new Error('Full Copy for this attachment needs the upcoming phone update.')
+        throw new Error('This attachment is too large to copy. Use Save instead.')
       }
       source.assertCurrent()
       await clipboard.writeText(text)
@@ -104,17 +217,30 @@ export function MobileChatAttachmentPreview({ params }: { params: MobileFilePrev
       </SafeAreaView>
       <View style={styles.topBar}>
         {action(t('common.copy', 'Copy'), busy || !smallCopy, () => void copy())}
-        {action(t('common.save', 'Save'), true, () => {})}
+        {action(
+          progress === null
+            ? t('common.save', 'Save')
+            : t('chat.textAttachmentPreview.downloading', 'Downloading {{percent}}%', {
+                percent: Math.min(100, Math.floor(progress * 100))
+              }),
+          progress !== null,
+          () => void share()
+        )}
         {action(t('common.retry', 'Retry'), busy, retry)}
       </View>
-      <Text style={styles.meta}>
-        {smallCopy
-          ? t('chat.textAttachmentPreview.saveUpdate', 'Save will be available in a phone update.')
-          : t(
-              'chat.textAttachmentPreview.fullCopySaveUpdate',
-              'Full Copy and Save for this attachment will be available in a phone update.'
-            )}
-      </Text>
+      {smallCopy ? null : (
+        <Text style={styles.meta}>
+          {t(
+            'chat.textAttachmentPreview.fullCopyUseSave',
+            'This attachment is too large to copy in full. Use Save to get the whole file.'
+          )}
+        </Text>
+      )}
+      {shareError ? (
+        <Text accessibilityRole="alert" style={styles.errorText}>
+          {shareError}
+        </Text>
+      ) : null}
       {error ? (
         <Text accessibilityRole="alert" style={styles.errorText}>
           {formatAttachmentPreviewError(error, t)}
@@ -169,10 +295,10 @@ function formatAttachmentPreviewError(message: string, t: Translate): string {
         'chat.textAttachmentPreview.readFailed',
         'Unable to read this attachment. Reconnect and try again. The file may have been removed or changed.'
       )
-    case 'Full Copy for this attachment needs the upcoming phone update.':
+    case 'This attachment is too large to copy. Use Save instead.':
       return t(
-        'chat.textAttachmentPreview.copyFrame',
-        'Full Copy for this attachment needs the upcoming phone update.'
+        'chat.textAttachmentPreview.copyFrameUseSave',
+        'This attachment is too large to copy. Use Save instead.'
       )
     case 'Unable to copy attachment. Try again.':
       return t('chat.textAttachmentPreview.copyFailed', 'Unable to copy attachment. Try again.')

@@ -117,6 +117,11 @@ function MobileNativeChatOverlayContent({
   hostOutage = null,
   onOpenAccounts
 }: Props): React.JSX.Element {
+  const attachGallery = images.attachGallery ?? (() => images.attachImage('library'))
+  const attachImage = controller.nativeChatAcceptsImages ? () => void attachGallery() : undefined
+  const attachFiles = controller.nativeChatAcceptsImages
+    ? () => void images.attachFiles()
+    : undefined
   const session = controller.nativeChatSession
   const agent = controller.nativeChatAgent ?? ''
   const fullContent = useMobileNativeChatMessageDetail(
@@ -351,11 +356,8 @@ function MobileNativeChatOverlayContent({
                       composerScopeKey={controller.chatComposerScopeKey}
                       draftKey={controller.chatDraftKey}
                       onComposerTextChange={controller.setChatComposerText}
-                      onAttachImage={
-                        controller.nativeChatAcceptsImages
-                          ? () => void images.attachImage('library')
-                          : undefined
-                      }
+                      onAttachImage={attachImage}
+                      onAttachFiles={attachFiles}
                       onPasteImages={
                         controller.nativeChatAcceptsImages
                           ? (paste) => void images.attachImage(paste)
