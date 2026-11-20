@@ -160,6 +160,20 @@ orca orchestration ask \
 
 `ask` records the question and returns at once with `pending: true`. Add `--wait` (or `--resume <message_id>`) to block until the answer instead; with `--json`, read it with `jq -r .result.answer`.
 
+## What ends when a worker finishes?
+
+A `worker_done` report settles the assignment. Success completes the Task and Dispatch, and a failure report marks them failed. If the process ends first, the coordinator receives an escalation with `exited` or, for a deliberate pane close, `lost`.
+
+A finished worker’s tab can auto-close when the agent rests. Its coordination records persist. For a quick question to a worker on this Orca while its original terminal is still open, send ordinary mail to its handle.
+
+```bash
+orca orchestration send --to <worker_terminal_handle> --type question --subject "One detail" --body "Which browser did you use?"
+```
+
+The reply confirms receipt. Unread terminal mail can be stranded if the tab closes. To assign another supervised result locally, send to `dispatch:<dispatch_id>`. A local follow-up can reopen a saved session and starts a new Task. Address a running worker on a paired server through its Dispatch ID. For a finished worker there, start a new worker on that server.
+
+Process cleanup has its own receipt. Use `worker-show --dispatch <dispatch_id> --json` to inspect it. A `stop_unknown` or `unverifiable` verdict leaves the process possibly live. A release can be `release_pending` while Orca rediscovers the terminal, or `release_unknown` when it cannot confirm the result. Follow the receipt’s recovery instruction. Abandoning a worker fences its assignment and can leave a live process behind.
+
 ## Decision gates
 
 Use `ask` for worker-to-coordinator questions. Use explicit gates when the coordinator has created a task DAG and wants to block a task until a decision is recorded:
