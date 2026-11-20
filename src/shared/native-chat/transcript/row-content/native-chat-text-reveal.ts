@@ -24,8 +24,8 @@ export type NativeChatTextRevealFrames = {
   cancel: (frame: number) => void
 }
 
-/** Each reveal step parses and draws the reply again, so the reveal steps at most 30 times a second. */
-const REVEAL_STEP_MS = 1000 / 30
+/** Each reveal step parses and draws the reply again, so the reveal steps no faster than text arrives. */
+const REVEAL_STEP_MS = 60
 /** Half a 60 Hz frame, so a step lands on every second frame there and every fourth at 120 Hz. */
 const FRAME_SLACK_MS = 8
 /** The animation frame each pending step is waiting on. */
