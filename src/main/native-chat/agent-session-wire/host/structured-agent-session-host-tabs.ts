@@ -120,6 +120,8 @@ export function createStructuredAgentSessionTabSurface(
         capture?: (tabId: string | null) => void
         /** Hide the tab but keep the chat open: it works on with no tab. */
         background?: boolean
+        /** Hide the tab, drop any background hold, and mark the bot chat ended. */
+        end?: boolean
       }
     ): Promise<void> => {
       let actualId: string | null = null
@@ -130,7 +132,8 @@ export function createStructuredAgentSessionTabSurface(
           actualId = id
           options?.capture?.(id)
         },
-        background: options?.background
+        background: options?.background,
+        end: options?.end
       })
       if (!visible) {
         if (!options?.deferHiddenNotice) {

@@ -12,6 +12,10 @@ import type { JournalWorkAnswer } from '../../agent-session-journal/journal-work
 
 type RunningChild = NonNullable<StructuredAgentSessionHostSession['child']>
 
+/** What an early release saw: stopped (or nothing loaded), owed or running work, or no proof either way. */
+export type StructuredAgentSessionReleaseObservation = 'released' | 'busy' | 'unconfirmed'
+type Observe = (seen: StructuredAgentSessionReleaseObservation) => void
+
 export const STRUCTURED_AGENT_SESSION_IDLE_SWEEP_INTERVAL_MS = 5 * 60_000
 export const STRUCTURED_AGENT_SESSION_IDLE_MS = DEFAULT_NATIVE_CHAT_IDLE_STOP_MINUTES * 60_000
 
@@ -116,11 +120,18 @@ export class StructuredAgentSessionIdleSweep {
 
   /** Stop now what a sweep past the window would, for a finished run nobody watches; Never keeps
    *  it. `anyway` also stops a viewed or Never chat's idle agent, e.g. after an account switch. */
-  async release(sessionId: string, anyway = false): Promise<void> {
+  async release(
+    sessionId: string,
+    anyway = false
+  ): Promise<StructuredAgentSessionReleaseObservation> {
     const window = (): 0 | null => (anyway ? 0 : this.releaseWindow(sessionId))
+    let seen: StructuredAgentSessionReleaseObservation = 'unconfirmed'
     if (!this.deps.isDisposed() && window() === 0) {
-      await this.sweepSession(sessionId, 0, window)
+      await this.sweepSession(sessionId, 0, window, (next) => {
+        seen = next
+      })
     }
+    return seen
   }
 
   private idleWindow(): number | null {
@@ -135,29 +146,44 @@ export class StructuredAgentSessionIdleSweep {
   private async sweepSession(
     sessionId: string,
     agentIdleMs: number | null,
-    release?: () => 0 | null
+    release?: () => 0 | null,
+    observe?: Observe
   ): Promise<void> {
     const unconfirmed = await this.deps.serialize(sessionId, () =>
-      this.tickUnderSerialize(sessionId, release ? release() : agentIdleMs, null, !!release)
+      this.tickUnderSerialize(
+        sessionId,
+        release ? release() : agentIdleMs,
+        null,
+        !!release,
+        observe
+      )
     )
     if (!unconfirmed) {
       return
     }
     const answer = (await this.deps.confirmIdle(sessionId)) ?? 'idle'
     if (answer === 'unknown') {
+      observe?.('unconfirmed')
       return
     }
     await this.deps.serialize(sessionId, async () => {
       if (answer === 'idle') {
         // The answer can take seconds; a window changed meanwhile (to Never, say) still applies.
-        await this.tickUnderSerialize(
+        const still = await this.tickUnderSerialize(
           sessionId,
           release ? release() : this.idleWindow(),
           unconfirmed,
-          !!release
+          !!release,
+          observe
         )
-      } else if (this.deps.sessions.get(sessionId)?.child === unconfirmed) {
-        this.deps.sessions.touch(sessionId)
+        if (still) {
+          observe?.('unconfirmed')
+        }
+      } else {
+        observe?.('busy')
+        if (this.deps.sessions.get(sessionId)?.child === unconfirmed) {
+          this.deps.sessions.touch(sessionId)
+        }
       }
     })
   }
@@ -167,14 +193,17 @@ export class StructuredAgentSessionIdleSweep {
     sessionId: string,
     agentIdleMs: number | null,
     confirmed: RunningChild | null,
-    releasing = false
+    releasing = false,
+    observe?: Observe
   ): Promise<RunningChild | null> {
     const session = this.deps.sessions.get(sessionId)
     if (!session || this.deps.isDisposed()) {
+      observe?.(session ? 'unconfirmed' : 'released')
       return null
     }
     // Wall-clock idle counts sleep, so it never ends a start its own deadline still times.
     if (session.child?.phase === 'starting' && this.deps.startTimed(sessionId, session.child)) {
+      observe?.('busy')
       return null
     }
     // Renew owed work every tick to allow a full window for the lead’s post-child wake-up.
@@ -183,6 +212,7 @@ export class StructuredAgentSessionIdleSweep {
       session.child.phase !== 'starting' &&
       (await this.owesWork(sessionId, session))
     ) {
+      observe?.('busy')
       this.deps.sessions.touch(sessionId)
       return null
     }
@@ -199,6 +229,7 @@ export class StructuredAgentSessionIdleSweep {
       if (session.child.phase === 'starting') {
         // A start after the run ended is someone's new send.
         if (releasing) {
+          observe?.('busy')
           return null
         }
         await this.deps.stopStartingAgent(sessionId)
@@ -209,7 +240,7 @@ export class StructuredAgentSessionIdleSweep {
       }
       await this.deps.stopAgent(sessionId)
     }
-    await this.deps.closeConversation(sessionId)
+    observe?.((await this.deps.closeConversation(sessionId)) ? 'released' : 'unconfirmed')
     return null
   }
 

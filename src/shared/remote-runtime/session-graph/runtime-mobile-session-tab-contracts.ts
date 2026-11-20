@@ -32,6 +32,8 @@ export type RuntimeMobileSessionTerminalTab = {
   agentStatus?: AgentStatusEntry | null
   /** The desktop Agents list says this tab's agent has an unread turn. Phones only; hosts with no verdict omit it. */
   unread?: true
+  /** The host's name for this showing of the tab; ending a bot chat from its "x" sends it back. Old hosts omit it. */
+  showing?: string
   /** Event-only lead-turn end time for paired clients; never persisted in AgentStatusEntry. */
   turnCompletedAt?: number
   launchAgent?: TuiAgent
@@ -134,6 +136,8 @@ export type RuntimeMobileSessionAgentTab = {
   chatStatus?: RuntimeMobileSessionAgentTabStatus
   /** The desktop Agents list says this tab's agent has an unread turn. Phones only; hosts with no verdict omit it. */
   unread?: true
+  /** The host's name for this showing of the tab; ending a bot chat from its "x" sends it back. Old hosts omit it. */
+  showing?: string
   color?: string | null
   isPinned?: boolean
   isActive: boolean
