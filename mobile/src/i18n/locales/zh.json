@@ -893,9 +893,9 @@
         "open": "打开",
         "origin": "由 {{bot}} 提议",
         "originTemplate": "基于 {{template}}，由 {{bot}} 提议",
-        "watches": "关注",
-        "does": "负责",
-        "reports": "汇报",
+        "watches": "关注内容",
+        "does": "执行工作",
+        "reports": "汇报内容",
         "willPropose": "将提议",
         "takesOver": "接管",
         "template": "模板",
@@ -5003,18 +5003,18 @@
       "botNotFound": "找不到机器人",
       "openOn": "在以下电脑上打开 {{name}}",
       "pairTitle": "配对电脑",
-      "pairRequired": "要打开此链接，请将这部手机与电脑配对，然后重新打开该链接。",
+      "pairRequired": "要打开此链接，请将这部手机与电脑配对，然后重新打开该链接",
       "pairAction": "配对电脑",
       "openFailed": "无法打开此链接",
-      "ambiguous": "此机器人位于 {{names}}。请在你想用的电脑上通过 Orca 打开聊天。",
+      "ambiguous": "此机器人位于 {{names}}。请在你想用的电脑上通过 Orca 打开聊天",
       "computer": "你的电脑",
-      "updateNeeded": "请更新 {{names}} 上的 Orca 以打开此链接。",
-      "unreachable": "无法连接到 {{names}}。请确认其中一台电脑正在运行 Orca，然后重试。",
-      "missing": "你配对的电脑上都没有此机器人。",
-      "offline": "{{name}} 已离线。请在它重新上线后再次打开链接。",
-      "chatOpenFailed": "{{name}} 无法打开此聊天。请重试此链接。",
-      "unreachableSingle": "无法连接到 {{name}}。请确认该电脑正在运行 Orca，然后重试。",
-      "workspaceDeleted": "此聊天的工作区已在 {{name}} 上被删除。"
+      "updateNeeded": "请更新 {{names}} 上的 Orca 以打开此链接",
+      "unreachable": "无法连接到 {{names}}。请确认其中一台电脑正在运行 Orca，然后重试",
+      "missing": "你配对的电脑上都没有此机器人",
+      "offline": "{{name}} 已离线。请在它重新上线后再次打开链接",
+      "chatOpenFailed": "{{name}} 无法打开此聊天。请重试此链接",
+      "unreachableSingle": "无法连接到 {{name}}。请确认该电脑正在运行 Orca，然后重试",
+      "workspaceDeleted": "此聊天的工作区已在 {{name}} 上被删除"
     },
     "activity": {
       "readFailed": "无法加载活动",
@@ -5230,7 +5230,7 @@
       "firstChat": "它首先会做什么",
       "needsSetup": "需要设置",
       "comesWith": "包含内容",
-      "comesWithNote": "定时任务初始为关闭状态。选定仓库或频道后，会在它的首次聊天中设置自动化和连接器",
+      "comesWithNote": "计划初始为关闭状态。选定仓库或频道后，会在它的首次聊天中设置自动化和连接器",
       "stateOff": "关闭",
       "stateFirstChat": "首次聊天",
       "stateNotConnected": "未连接",
@@ -5349,14 +5349,14 @@
     "panel": {
       "needYou_other": "{{count}} 项需要你处理",
       "working": "{{count}} 个工作中",
-      "itemsNeedYou": "事项，{{count}} 个需要你处理",
+      "itemsNeedYou": "条目，{{count}} 个需要你处理",
       "chats": "聊天",
       "files": "文件",
       "backTo": "返回 {{name}}"
     },
     "items": {
       "chat": {
-        "opensInItems": "在“事项”中打开",
+        "opensInItems": "在“条目”中打开",
         "moreItems": "还有 {{count}} 项",
         "commentOn": "已开启",
         "marked": "将 {{items}} 标记为已完成",
@@ -5369,9 +5369,9 @@
         "linkedMany": "将 {{count}} 个链接关联到 {{items}}",
         "linked": "将 {{link}} 关联到 {{items}}",
         "aWorker": "一个工作者",
-        "youMarkedManyDone": "你将 {{count}} 个事项标记为已完成：{{items}}",
-        "youCanceledMany": "你取消了 {{count}} 个事项：{{items}}",
-        "youMovedMany": "你将 {{count}} 个事项移至“{{status}}”：{{items}}",
+        "youMarkedManyDone": "你将 {{count}} 个条目标记为已完成：{{items}}",
+        "youCanceledMany": "你取消了 {{count}} 个条目：{{items}}",
+        "youMovedMany": "你将 {{count}} 个条目移至“{{status}}”：{{items}}",
         "youMarked": "你将 {{items}} 标记为已完成",
         "youCanceled": "你取消了 {{items}}",
         "youMoved": "你将 {{items}} 移至“{{status}}”",
@@ -5403,17 +5403,17 @@
         "done": "已完成",
         "canceled": "已取消"
       },
-      "needYouCount_other": "{{count}} 个事项需要你处理",
+      "needYouCount_other": "{{count}} 个条目需要你处理",
       "homeChat": "主聊天",
       "chatFallback": "聊天",
       "filter": {
         "needsYou": "仅显示需要你处理的",
-        "label": "筛选事项",
+        "label": "筛选条目",
         "all": "所有聊天",
         "remove": "移除筛选条件 {{name}}",
         "clear": "清除筛选"
       },
-      "tab": "事项",
+      "tab": "条目",
       "field": {
         "doneMeansLower": "完成标准",
         "description": "描述",
@@ -5429,8 +5429,8 @@
         "canceled": "取消了此事项",
         "reopened": "重新打开了此事项",
         "moved": "将此事项移至",
-        "madeNeedsYou": "添加了此事项，并标记为“需要你处理”",
-        "made": "添加了此事项",
+        "madeNeedsYou": "添加了此条目，并标记为“需要你处理”",
+        "made": "添加了此条目",
         "linked": "关联了 {{links}}",
         "workerStarted": "工作者已启动：",
         "workerFailed": "工作者已停止：",
@@ -5468,14 +5468,14 @@
         "fileOutside": "{{path}} 不在此机器人的文件夹中"
       },
       "open": {
-        "failed": "无法打开此事项",
+        "failed": "无法打开此条目",
         "notFound": "{{host}} 上找不到它。它可能属于另一台电脑上的机器人",
         "noAnswer": "{{host}} 没有响应"
       },
       "retry": "重试",
-      "loading": "正在加载事项…",
+      "loading": "正在加载条目…",
       "view": {
-        "title": "事项",
+        "title": "条目",
         "canceledNote": "已取消：",
         "doneNote": "已完成：",
         "links": "链接",
@@ -5484,8 +5484,8 @@
         "showLess": "收起",
         "showMore": "展开"
       },
-      "readFailedShort": "无法加载事项",
-      "lastRead": "显示的是上次读取的事项",
+      "readFailedShort": "无法加载条目",
+      "lastRead": "显示的是上次读取的条目",
       "row": {
         "select": "选择“{{title}}”"
       },
@@ -5493,7 +5493,7 @@
       "pill": {
         "moveTo": "移至",
         "clear": "清除选择",
-        "moveCount_other": "将 {{count}} 个事项移至"
+        "moveCount_other": "将 {{count}} 个条目移至"
       },
       "menu": {
         "select": "选择",
@@ -5503,7 +5503,7 @@
         "cancelShort": "取消"
       },
       "stale": {
-        "confirm_other": "要取消 {{count}} 个陈旧事项吗？",
+        "confirm_other": "要取消 {{count}} 个长期无活动的条目吗？",
         "confirmWhy": "发送给机器人的原因：“{{reason}}”。不会删除任何内容",
         "reason": "{{count}} 天没有活动",
         "cancelAll": "全部取消"
@@ -5511,41 +5511,41 @@
       "cancel": {
         "keep": "保留",
         "confirmMany": "取消 {{count}} 项",
-        "titleMany": "要取消 {{count}} 个事项吗？",
+        "titleMany": "要取消 {{count}} 个条目吗？",
         "titleOne": "要取消“{{title}}”吗？",
         "why": "机器人会看到原因。不会删除任何内容",
         "placeholder": "原因",
-        "confirmOne": "取消事项",
+        "confirmOne": "取消条目",
         "offline": "{{host}} 已离线。你填写的原因已保留，{{action}} 会在它恢复连接后重新可用"
       },
       "strip": {
         "view": "查看"
       },
       "group": {
-        "stale": "陈旧",
+        "stale": "长期无活动",
         "closed": "已关闭",
         "new": "新增 {{count}} 项",
         "showMore": "再显示 {{count}} 项",
         "snoozed": "已暂缓"
       },
       "empty": {
-        "title": "还没有事项",
+        "title": "还没有条目",
         "body": "当 {{bot}} 为你接手任务时，会在这里显示它正在做什么，以及需要你做什么",
         "needsYou": "没有需要你处理的事项",
-        "filtered": "没有匹配的事项"
+        "filtered": "没有匹配的条目"
       },
       "toast": {
         "markedDone": "已将 {{title}} 标记为完成",
         "canceledOne": "已取消 {{title}}",
         "movedOne": "已将 {{title}} 移至 {{status}}",
-        "movedMany": "已将 {{count}} 个事项移至 {{status}}",
+        "movedMany": "已将 {{count}} 个条目移至 {{status}}",
         "doneFailed": "无法标记为完成：{{why}}",
-        "moveFailed_other": "无法移动 {{count}} 个事项：{{why}}",
+        "moveFailed_other": "无法移动 {{count}} 个条目：{{why}}",
         "snoozeFailed": "无法暂缓：{{why}}",
         "unsnoozedOne": "已取消暂缓 {{title}}",
         "snoozedOne": "已将 {{title}} 暂缓至 {{when}}",
-        "unsnoozedMany": "已取消暂缓 {{count}} 个事项",
-        "snoozedMany": "已将 {{count}} 个事项暂缓至 {{when}}"
+        "unsnoozedMany": "已取消暂缓 {{count}} 个条目",
+        "snoozedMany": "已将 {{count}} 个条目暂缓至 {{when}}"
       },
       "write": {
         "unknown": "发送时连接中断，内容可能已经送达。重新连接后请先查看“活动”，再决定是否重新发送",
@@ -5564,7 +5564,7 @@
         "pickDay": "暂缓到哪一天？",
         "pickHour": "几点？"
       },
-      "readFailedTitle": "无法加载事项",
+      "readFailedTitle": "无法加载条目",
       "ask": {
         "recommended": "推荐",
         "typeAnswer": "输入你的回答"
@@ -5687,7 +5687,7 @@
       "t2884652f": "草稿：“机器人分享 v2”。3 项决策，2 个待定问题",
       "tcc79e991": "已作为文档保存到你的云端硬盘",
       "t63cd3964": "待办清理",
-      "t31189364": "找出陈旧、重复和无人负责的议题",
+      "t31189364": "找出长期无活动、重复和无人负责的议题",
       "ta1a58531": "为你选择的团队列出 60 天无人处理的议题、可能重复的议题，以及无人负责的议题",
       "t5759ba0c": "14 个议题自 8 月以来无人处理",
       "tde26cdd6": "ORC-511 和 ORC-688 看起来是同一个 Bug",
@@ -6113,38 +6113,38 @@
       "workspaceHostAmbiguous": "其工作区跨越多个主机，因此没有唯一的所有者。"
     },
     "runFailures": {
-      "noDispatchHost": "没有可用于启动自动化的 Orca 窗口。",
-      "unevaluableSchedule": "Orca 无法评估此自动化，已跳过此次执行。",
-      "noRunnableHost": "此自动化没有可运行的主机。",
-      "wslMoveInProgress": "此自动化的项目正在移到其 WSL 主机，因此 Orca 跳过了此次运行。移动完成后将恢复运行。",
-      "wslMoveOwnedByHost": "此自动化的项目现在在其 WSL 主机上运行，自动化本身也由该主机运行。Orca 不再运行此本地副本。",
+      "noDispatchHost": "没有可用于启动自动化的 Orca 窗口",
+      "unevaluableSchedule": "Orca 无法评估此自动化，已跳过此次执行",
+      "noRunnableHost": "此自动化没有可运行的主机",
+      "wslMoveInProgress": "此自动化的项目正在移到其 WSL 主机，因此 Orca 跳过了此次运行。移动完成后将恢复运行",
+      "wslMoveOwnedByHost": "此自动化的项目现在在其 WSL 主机上运行，自动化本身也由该主机运行。Orca 不再运行此本地副本",
       "managedHostServer": "需要迁移到 {{host}}",
-      "missedGraceWindow": "Orca 再次检查时，此次运行的补跑宽限期已过。",
-      "targetMissing": "自动化主机已不在注册列表中，因此此自动化已无处运行。",
-      "targetReplaced": "自动化主机已被移除并重新注册，因此必须重新关联此自动化后才能运行。",
-      "workspaceHostAmbiguous": "自动化工作区跨越多个主机，因此 Orca 无法确定应在哪个主机上运行。",
-      "legacyTwinHosts": "此自动化保存于 Orca 开始记录运行主机之前，且其项目位于多个主机上。请打开自动化，选择应运行它的主机。",
-      "targetUnavailable": "自动化运行目标已不可用。",
-      "remoteSchedulingUnavailable": "此 Orca 客户端尚不支持远程服务器上的自动化调度。请在远程服务器上运行此自动化，或等持久化远程调度可用后更新 Orca。",
-      "projectSetupMissing": "所选自动化主机上已没有此项目的配置。",
-      "targetSetupMismatch": "自动化运行目标与项目所选主机的配置已不匹配。",
-      "repoUnavailable": "所选自动化主机的仓库已不可用。",
-      "repoDetached": "仓库已不再关联到所选自动化主机。",
-      "projectPathChanged": "所选自动化主机上的项目路径已更改。",
-      "automationChanged": "此次运行启动前，自动化已更改。",
-      "destinationChanged": "此次运行启动前，自动化的目标位置已更改。",
-      "hooksReviewBlocked": "智能体正在等待有人审查新增或更改的钩子（“Hooks need review”）。请打开此次运行，信任这些钩子或将其移除。计划运行会继续进行，待没有需要审查的内容后即可成功。",
-      "agentNeverStarted": "提交提示词后，自动化智能体始终未启动。",
-      "agentNoCompletion": "自动化智能体未报告完成。",
+      "missedGraceWindow": "Orca 再次检查时，此次运行的补跑宽限期已过",
+      "targetMissing": "自动化主机已不在注册列表中，因此此自动化已无处运行",
+      "targetReplaced": "自动化主机已被移除并重新注册，因此必须重新关联此自动化后才能运行",
+      "workspaceHostAmbiguous": "自动化工作区跨越多个主机，因此 Orca 无法确定应在哪个主机上运行",
+      "legacyTwinHosts": "此自动化保存于 Orca 开始记录运行主机之前，且其项目位于多个主机上。请打开自动化，选择应运行它的主机",
+      "targetUnavailable": "自动化运行目标已不可用",
+      "remoteSchedulingUnavailable": "此 Orca 客户端尚不支持远程服务器上的自动化调度。请在远程服务器上运行此自动化，或等持久化远程调度可用后更新 Orca",
+      "projectSetupMissing": "所选自动化主机上已没有此项目的配置",
+      "targetSetupMismatch": "自动化运行目标与项目所选主机的配置已不匹配",
+      "repoUnavailable": "所选自动化主机的仓库已不可用",
+      "repoDetached": "仓库已不再关联到所选自动化主机",
+      "projectPathChanged": "所选自动化主机上的项目路径已更改",
+      "automationChanged": "此次运行启动前，自动化已更改",
+      "destinationChanged": "此次运行启动前，自动化的目标位置已更改",
+      "hooksReviewBlocked": "智能体正在等待有人审查新增或更改的钩子（“Hooks need review”）。请打开此次运行，信任这些钩子或将其移除。计划运行会继续进行，待没有需要审查的内容后即可成功",
+      "agentNeverStarted": "提交提示词后，自动化智能体始终未启动",
+      "agentNoCompletion": "自动化智能体未报告完成",
       "agentInterrupted": "智能体在完成此次运行前被中断",
-      "watchTimedOut": "6 小时内未收到完成信号，Orca 已停止监视此次运行。",
+      "watchTimedOut": "6 小时内未收到完成信号，Orca 已停止监视此次运行",
       "projectSetupState": {
-        "notSetUp": "项目尚未在所选自动化主机上完成设置。",
-        "settingUp": "项目仍在所选自动化主机上进行设置。",
-        "error": "项目在所选自动化主机上设置失败。",
-        "unsupported": "所选自动化主机不支持此项目。"
+        "notSetUp": "项目尚未在所选自动化主机上完成设置",
+        "settingUp": "项目仍在所选自动化主机上进行设置",
+        "error": "项目在所选自动化主机上设置失败",
+        "unsupported": "所选自动化主机不支持此项目"
       },
-      "wslDistroStopped": "WSL 发行版 {{distro}} 已停止，因此本次计划运行没有启动它。请启动该发行版或使用“立即运行”；它运行期间，后续运行会照常进行。"
+      "wslDistroStopped": "WSL 发行版 {{distro}} 已停止，因此本次计划运行没有启动它。请启动该发行版或使用“立即运行”；它运行期间，后续运行会照常进行"
     }
   },
   "auto": {
