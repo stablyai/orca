@@ -62,6 +62,8 @@ const NAME_COMPLETES_EVIDENCE: ReadonlySet<string> = new Set([
   'candidate_start_time_missing'
 ])
 
+const NATIVE_VERSION_NAME = /(?:^|[/\\])v?\d+(?:\.\d+)+(?:[-+][\w.-]+)?$/i
+
 // A relay's cached snapshot is up to one TTL old plus its capture time, which a busy host keeps under another TTL.
 const EVIDENCE_MAX_AGE_MS = 2 * PROCESS_TABLE_SNAPSHOT_MAX_STALENESS_MS
 
@@ -172,7 +174,7 @@ async function inspectLaunchedAgentForeground(
             (!agent || observation.stoppedAgents?.includes(agent)) &&
             observation.processName &&
             !isAgentForegroundWrapperProcess(observation.processName) &&
-            !/(?:^|[/\\])v?\d+(?:\.\d+)+(?:[-+][\w.-]+)?$/i.test(observation.processName)
+            !NATIVE_VERSION_NAME.test(observation.processName)
           ) {
             return otherProgram(observation.stoppedAgents, agent)
           }
@@ -180,9 +182,17 @@ async function inspectLaunchedAgentForeground(
           const confirmed = recognizeForeground(
             (await controller.confirmForegroundProcess?.(ptyId)) ?? null
           )
-          return confirmed
-            ? await identify(confirmed)
-            : otherProgram(observation.stoppedAgents, agent)
+          if (confirmed) {
+            return await identify(confirmed)
+          }
+          const front = otherProgram(observation.stoppedAgents, agent)
+          // Why: a native install runs as a bare version (`2.1.316`) no read can name; with no stopped agent
+          // behind it, it is the agent come back, and holding mail on it would never release.
+          return front === 'unknown' &&
+            agent &&
+            NATIVE_VERSION_NAME.test(observation.processName ?? '')
+            ? await identify(agent)
+            : front
         }
         // Local launch policy admits non-shell user wrappers independently of mail's identity proof.
         if (!host.remote) {

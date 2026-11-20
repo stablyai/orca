@@ -1,7 +1,7 @@
 import { EventEmitter } from 'node:events'
 import { expect, it, vi } from 'vitest'
 
-const page = vi.hoisted(() => ({ current: null as unknown }))
+const page = vi.hoisted((): { current: unknown } => ({ current: null }))
 vi.mock('electron', () => ({ ipcMain: { handle: vi.fn(), removeHandler: vi.fn() } }))
 vi.mock('../ui', () => ({ getTrustedUIRendererWebContents: () => page.current }))
 

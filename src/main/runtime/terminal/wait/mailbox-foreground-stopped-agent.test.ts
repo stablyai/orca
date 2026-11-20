@@ -59,6 +59,15 @@ it('with no stopped agent here, a program in front may be relaying to the agent 
   await expect(read('tmux', undefined, undefined)).resolves.toMatchObject({ foreground: 'unknown' })
 })
 
+it('a native install back in front under its bare version name is the agent, so held mail resumes', async () => {
+  await expect(read('2.1.316', undefined, 'claude', '2.1.316')).resolves.toMatchObject({
+    foreground: 'agent'
+  })
+  await expect(read('2.1.316', ['claude'], 'claude', '2.1.316')).resolves.toMatchObject({
+    foreground: 'non-shell'
+  })
+})
+
 it('a plainly named program in front is judged without a host-wide confirmation', async () => {
   confirmations.count = 0
   for (let terminal = 0; terminal < 100; terminal++) {
