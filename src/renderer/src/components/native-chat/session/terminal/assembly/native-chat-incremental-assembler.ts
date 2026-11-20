@@ -6,7 +6,7 @@ import {
 } from '../../../../../../../shared/native-chat/transcript/images/native-chat-image-transcript-markers'
 import type { NativeChatMessage } from '../../../../../../../shared/native-chat/native-chat-types'
 import { compareNativeChatDisplayMessages as compareMessages } from '../../../../../../../shared/native-chat/transcript/messages/native-chat-message-order'
-import { mergeOne, sortForImageNormalization } from './native-chat-session-assembler'
+import { mergeOne, sortForImageNormalization, turnKey } from './native-chat-session-assembler'
 
 export type IncrementalChatAssembler = {
   byId: Map<string, NativeChatMessage>
@@ -31,6 +31,76 @@ export function reset(
   }
   assembler.messages = [...sortForImageNormalization(Array.from(assembler.byId.values()))]
   return assembler.messages
+}
+
+/** Rewind to what a reset over `applied.slice(0, keep)` builds, or return false (changing nothing)
+ *  when the dropped rows could have changed how kept rows merged, grouped or sorted. */
+export function rewind(
+  assembler: IncrementalChatAssembler,
+  applied: readonly NativeChatMessage[],
+  keep: number
+): boolean {
+  const removed = applied.length - keep
+  const at = assembler.messages.length - removed
+  // Any merge means a dropped row may have displaced or outranked a kept one.
+  if (assembler.byId.size !== applied.length || at < 0) {
+    return false
+  }
+  const dropped = new Set(applied.slice(keep))
+  const last = assembler.messages[at - 1]
+  if (last && isImageRow(last)) {
+    return false
+  }
+  for (let index = at; index < assembler.messages.length; index += 1) {
+    const message = assembler.messages[index]!
+    // Dropped rows must be the sorted tail, after the kept rows and outside any image unit.
+    if (
+      !dropped.has(message) ||
+      isImageRow(message) ||
+      (last !== undefined && compareMessages(message, last) <= 0)
+    ) {
+      return false
+    }
+  }
+  // A kept window without source positions is not resorted, so it would not keep this order.
+  if (hasSourcePosition(applied, keep, applied.length) && !hasSourcePosition(applied, 0, keep)) {
+    return false
+  }
+  const lostKeys = new Set<string>()
+  for (const message of dropped) {
+    assembler.byId.delete(message.id)
+    const key = turnKey(message)
+    if (assembler.byTurn.get(key) === message) {
+      assembler.byTurn.delete(key)
+      lostKeys.add(key)
+    }
+  }
+  // Without merges, same-key rows share a source and the latest one represents the key.
+  for (let index = keep - 1; index >= 0 && lostKeys.size > 0; index -= 1) {
+    const key = turnKey(applied[index]!)
+    if (lostKeys.delete(key)) {
+      assembler.byTurn.set(key, applied[index]!)
+    }
+  }
+  assembler.messages = assembler.messages.slice(0, at)
+  return true
+}
+
+function hasSourcePosition(
+  messages: readonly NativeChatMessage[],
+  from: number,
+  to: number
+): boolean {
+  for (let index = from; index < to; index += 1) {
+    if (messages[index]!.transcriptOrder !== undefined) {
+      return true
+    }
+  }
+  return false
+}
+
+function isImageRow(message: NativeChatMessage): boolean {
+  return isImageSourceUserTurn(message) || hasImagePromptMarker(message)
 }
 
 /** Merge through canonical rules; sort only a wholly new tail batch, otherwise resort the full map. */
