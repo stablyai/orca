@@ -49,7 +49,8 @@ export function MobileBotSheet(props: {
     showing: props.visible && tab === 'activity',
     showToast: props.showToast,
     onStart: props.onStartSuggestion,
-    refresh: props.routeBot.refresh
+    refresh: props.routeBot.refresh,
+    online: props.online
   })
   const tree = usePhoneBotChatTree({
     client: props.client,
@@ -123,12 +124,15 @@ export function MobileBotSheet(props: {
           rows={props.routeBot.activity?.automations ?? null}
           showToast={props.showToast}
           onNewAutomation={props.onNewAutomation}
+          online={props.online}
         />
       ) : (
         <MobileBotSettingsTab
           routeBot={props.routeBot}
           client={props.client}
           showToast={props.showToast}
+          online={props.online}
+          hostName={props.hostName}
           accessRequests={props.accessRequests}
           lookAround={
             lookAroundSupported(bot.agent) ? { onLookNow: upNext.lookNow, busy: upNext.busy } : null

@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react'
+import React, { useCallback, useMemo, useRef, useState } from 'react'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { DeleteWorktreeError } from './DeleteWorktreeError'
 import { useAppStore } from '@/store'
@@ -20,7 +20,7 @@ import { persistDeleteWorktreeConfirmSkipPreference } from './delete-worktree-pr
 import {
   countFolderWorkspaceDeletes,
   getDeleteWorktreeDialogCopy,
-  getDeleteWorktreeDialogHeading,
+  getDeleteWorktreeDialogTitle,
   getDeleteWorktreeLineageDialogDescription,
   isFolderWorkspaceDelete as getIsFolderWorkspaceDelete
 } from './delete-worktree-dialog-copy'
@@ -61,6 +61,7 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
     [hostOptions, t]
   )
   const isOpen = activeModal === 'delete-worktree'
+  const deleteButtonRef = useRef<HTMLButtonElement>(null)
   const worktreeId = typeof modalData.worktreeId === 'string' ? modalData.worktreeId : ''
   const worktreeIds = useMemo(
     () =>
@@ -296,7 +297,7 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
     void detachChildren(() => handleDelete(canForceDelete))
   }
 
-  const { title, deleteLabel } = getDeleteWorktreeDialogHeading(
+  const title = getDeleteWorktreeDialogTitle(
     {
       isBatchDelete,
       deleteAllLineage,
@@ -307,14 +308,23 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
     t
   )
   const errorToShow = isMainWorktree ? null : (detachError ?? deleteError)
+  const hasTargetList = isBatchDelete || childWorkspaceCount > 0
 
   return (
     <Dialog open={isOpen} onOpenChange={handleOpenChange}>
       <DialogContent
-        size={isBatchDelete || childWorkspaceCount > 0 ? 'list' : 'confirm'}
+        size={hasTargetList ? 'list' : 'confirm'}
         surface="security"
+        scrollable
         busy={isDeleting || isSavingForcePreference || isDetachingChildren}
         initialFocus="cancel"
+        onOpenAutoFocus={(event) => {
+          const button = deleteButtonRef.current
+          if (button && !button.disabled) {
+            event.preventDefault()
+            button.focus({ preventScroll: true })
+          }
+        }}
       >
         <DeleteWorktreeDialogHeading
           title={title}
@@ -327,7 +337,10 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
         />
 
         {isMainWorktree ? null : (
-          <div className="scrollbar-sleek flex max-h-[50vh] min-w-0 flex-col gap-3 overflow-y-auto">
+          // Keep file checks from moving the footer. Only the user can expand the compact preview.
+          <div
+            className={`scrollbar-sleek flex max-h-[50vh] min-w-0 flex-col overflow-y-auto ${hasTargetList ? 'h-48 gap-3' : 'h-16 gap-1 has-[button[aria-expanded=true]]:h-auto'}`}
+          >
             {!isBatchDelete && hasUnknownChangeState && <DeleteWorktreeUnknownChangesWarning />}
             {isBatchDelete ? (
               <DeleteWorktreeTargetPreview
@@ -383,7 +396,7 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
           isDetachingChildren={isDetachingChildren}
           deleteDisabled={preserveChildrenSelected && !canPreserveChildren}
           canForceDelete={canForceDelete}
-          deleteLabel={deleteLabel}
+          deleteButtonRef={deleteButtonRef}
           onForceDelete={
             preserveChildrenSelected ? handleDetachAndDelete : () => handleDelete(true)
           }

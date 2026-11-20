@@ -153,7 +153,7 @@ function getHistoryEntryKey(entry: WorktreeNavHistoryEntry): string {
 
 type WorkspaceCatalog = Pick<AppState, 'folderWorkspaces' | 'worktreesByRepo'>
 
-function isLiveEntry(entry: WorktreeNavHistoryEntry, state: WorkspaceCatalog): boolean {
+export function isLiveEntry(entry: WorktreeNavHistoryEntry, state: WorkspaceCatalog): boolean {
   if (isViewEntry(entry)) {
     return true
   }

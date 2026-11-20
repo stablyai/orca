@@ -21,7 +21,10 @@ describe('electron-builder config', () => {
       const resourcesDir = await mkdtemp(join(tmpdir(), 'orca-packaged-agent-browser-'))
       try {
         const resources = electronBuilderConfig[hostBuilderPlatform].extraResources.filter(
-          (entry) => entry.from.startsWith('node_modules/agent-browser/') || entry.to === 'skills'
+          (entry) =>
+            entry.from.startsWith('node_modules/agent-browser/') ||
+            entry.from.startsWith('node_modules/@agent-browser/') ||
+            entry.to === 'skills'
         )
         const expand = (value) => value.replace('${arch}', process.arch)
         await copyFiles(

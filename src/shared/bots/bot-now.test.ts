@@ -136,7 +136,7 @@ describe('botNow', () => {
     expect(now.working).toBe(2)
   })
 
-  it('counts a connector sign-in once, with the runs it stopped listed under it', () => {
+  it('lists stopped runs under one sign-in request and clears them once reconnected', () => {
     const activity = activityWith([
       run('label-bugs', 'skipped_needs_interactive_auth', 5),
       run('digest', 'skipped_needs_interactive_auth', 6)
@@ -145,12 +145,9 @@ describe('botNow', () => {
     expect(now.needs.map((need) => need.key)).toEqual(['connector:linear:w1'])
     expect(now.stoppedForSignIn.map((row) => row.latestRunId)).toEqual(['label-bugs-5', 'digest-6'])
     expect(now.needsYou).toBe(1)
-  })
 
-  it('drops a sign-in stop once no connector needs the owner, even before the next run', () => {
-    const activity = activityWith([run('label-bugs', 'skipped_needs_interactive_auth', 5)])
-    const now = botNow({ activity, chatState: null })
-    expect(now.needsYou).toBe(0)
-    expect(now.stoppedForSignIn).toEqual([])
+    const reconnected = botNow({ activity, chatState: null })
+    expect(reconnected.needsYou).toBe(0)
+    expect(reconnected.stoppedForSignIn).toEqual([])
   })
 })

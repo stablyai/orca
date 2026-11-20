@@ -141,10 +141,7 @@ export function MobileNativeChatToolOutput({
       {clipped ? (
         <ShowFull
           label={t('session.nativeChatFullContent.showFullOutput', 'Show full output')}
-          failedLabel={t(
-            'session.nativeChatFullContent.loadOutputFailed',
-            "Show full output — couldn't load, tap to retry"
-          )}
+          failedLabel={t('session.nativeChatFullContent.loadOutputFailed', 'Retry full output')}
           load={current?.load ?? 'idle'}
           onPress={showFull}
         />
@@ -200,10 +197,7 @@ export function useMobileNativeChatFullMessage(message: NativeChatMessage): {
       ) : state === 'available' ? (
         <ShowFull
           label={t('session.nativeChatFullContent.showFullMessage', 'Show full message')}
-          failedLabel={t(
-            'session.nativeChatFullContent.loadMessageFailed',
-            "Show full message — couldn't load, tap to retry"
-          )}
+          failedLabel={t('session.nativeChatFullContent.loadMessageFailed', 'Retry full message')}
           load={load}
           onPress={showFull}
         />

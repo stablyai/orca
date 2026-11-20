@@ -10,9 +10,7 @@ import {
 import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { HOST_TEST_NOW } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data.test-fixture'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
-import { createStructuredAgentSessionForWorktree } from '../runtime/rpc/methods/structured-sessions/creation/structured-agent-session-create'
-import { mintAgentSessionOperationId } from '../runtime/orchestration/mailbox/structured-pointer/structured-pointer-operation-id'
-import { botWorkspaceSelector, requireStructuredHost, startBotSession } from './bot-chat-session'
+import { startBotSession } from './bot-chat-session'
 import { makeTestBot } from './bot.test-fixture'
 import { isWithheldOpeningMessage } from '../native-chat/agent-session-wire/acquisition/structured-agent-session-opening-withdrawal'
 
@@ -100,39 +98,6 @@ it("refuses a run's opening message whose admission throws, through every layer"
   expect(rig.adapter.dispatch).not.toHaveBeenCalled()
 })
 
-describe.each(['claude', 'codex'] as const)('a %s bot session', (agent) => {
-  it('starts exactly like a new native chat in the same folder', async () => {
-    const bot = makeTestBot({ agent, permissionMode: undefined })
-    const runtime = runtimeFor(bot, { agentPermissionDefault: 'auto' })
-    const botSession = await startBotSession(runtime, bot)
-    const plain = await createStructuredAgentSessionForWorktree({
-      runtime,
-      ensureHost: () => requireStructuredHost(runtime),
-      caller: { callerKey: 'person' },
-      envelope: {
-        sessionId: 'plain-chat',
-        clientOperationId: mintAgentSessionOperationId(Date.now()),
-        expectedRuntimeFence: null,
-        payloadFingerprint: ''
-      },
-      worktree: botWorkspaceSelector(bot),
-      agent: bot.agent,
-      atRest: true,
-      activate: false
-    })
-
-    expect(plain.ok).toBe(true)
-    expect(rig.store.getRecord('plain-chat')).toMatchObject({
-      provider: agent,
-      permissionMode: 'auto',
-      options: { model: 'saved-model', effort: 'high' }
-    })
-    expect(launchShape(rig.store.getRecord(botSession))).toEqual(
-      launchShape(rig.store.getRecord('plain-chat'))
-    )
-  })
-})
-
 describe.each(['claude', 'codex'] as const)("a %s bot's picked model and options", (agent) => {
   it('start each new chat on the picked model, in place of the default one and its effort', async () => {
     const bot = makeTestBot({
@@ -187,7 +152,7 @@ describe.each(['claude', 'codex'] as const)("a %s bot's background run", (agent)
     const bot = makeTestBot({
       agent,
       permissionMode: undefined,
-      launch: { model: 'bot-model' }
+      launch: { model: 'bot-model', options: { effort: 'low' } }
     })
     const sessionId = await startBotSession(
       runtimeFor(bot, {
@@ -198,7 +163,8 @@ describe.each(['claude', 'codex'] as const)("a %s bot's background run", (agent)
     )
 
     expect(rig.store.getRecord(sessionId)?.options).toEqual({
-      model: 'bot-model'
+      model: 'bot-model',
+      effort: 'low'
     })
   })
 
@@ -218,17 +184,6 @@ describe.each(['claude', 'codex'] as const)("a %s bot's background run", (agent)
       model: 'agents-default',
       effort: 'low'
     })
-  })
-
-  it("with neither, leaves the model to the agent's own default", async () => {
-    const bot = makeTestBot({ agent, permissionMode: undefined })
-    const sessionId = await startBotSession(runtimeFor(bot, {}), bot, {
-      background: true
-    })
-    const options = rig.store.getRecord(sessionId)?.options
-
-    expect(options?.model).toBeUndefined()
-    expect(options?.effort).toBeUndefined()
   })
 
   it("lays the bot's options over the Agents default model", async () => {
@@ -264,7 +219,7 @@ describe.each(['claude', 'codex'] as const)("a %s bot's background run", (agent)
     expect(rig.store.getRecord(sessionId)?.permissionMode).toBe('full-access')
   })
 
-  it('leaves a conversation the owner opens on their chat default', async () => {
+  it('keeps chat defaults for chats and leaves an unconfigured background run to its agent', async () => {
     const bot = makeTestBot({ agent, permissionMode: undefined })
     const runtime = runtimeFor(bot, {})
     const run = await startBotSession(runtime, bot, { background: true })
@@ -274,7 +229,9 @@ describe.each(['claude', 'codex'] as const)("a %s bot's background run", (agent)
       model: 'saved-model',
       effort: 'high'
     })
-    expect(rig.store.getRecord(run)?.options?.model).toBeUndefined()
+    const background = rig.store.getRecord(run)
+    expect(background?.sessionId).toBe(run)
+    expect(background?.options).toBeUndefined()
   })
 })
 
@@ -372,11 +329,3 @@ describe.each(['claude', 'codex'] as const)('%s bot session permissions', (agent
     }
   )
 })
-
-/** Everything a session starts with, less its own identity. */
-function launchShape(record: unknown): unknown {
-  return JSON.parse(JSON.stringify(record), (key, value) =>
-    IDENTITY_KEYS.has(key) ? undefined : value
-  )
-}
-const IDENTITY_KEYS = new Set(['sessionId'])

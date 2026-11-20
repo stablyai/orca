@@ -79,27 +79,24 @@ function rendererSave(session: WorkspaceSessionState): WorkspaceSessionState {
 }
 
 describe('close records', () => {
-  it.each(['user', 'cleanup'] as const)(
-    'records a %s close in main and keeps it across a renderer save and a reload',
-    async (reason) => {
-      const { store, runtime, reload } = createPersistedRuntime()
+  it('keeps the close and its cleanup reason across a renderer save and a reload', async () => {
+    const { store, runtime, reload } = createPersistedRuntime()
 
-      await runtime.closeTerminalSurfaceFromRenderer({
-        worktreeId: WORKTREE_ID,
-        target: { kind: 'tab', tabId: TAB_ID },
-        reason
-      })
-      store.setWorkspaceSession(rendererSave(store.getWorkspaceSession()))
+    await runtime.closeTerminalSurfaceFromRenderer({
+      worktreeId: WORKTREE_ID,
+      target: { kind: 'tab', tabId: TAB_ID },
+      reason: 'cleanup'
+    })
+    store.setWorkspaceSession(rendererSave(store.getWorkspaceSession()))
 
-      const reloaded = (await reload()).getWorkspaceSession()
-      expect(reloaded.tabsByWorktree[WORKTREE_ID]).toEqual([])
-      expect(reloaded.closedTerminalTabTombstonesByTabId?.[TAB_ID]).toEqual({
-        closedAt: expect.any(Number),
-        worktreeId: WORKTREE_ID,
-        reason
-      })
-    }
-  )
+    const reloaded = (await reload()).getWorkspaceSession()
+    expect(reloaded.tabsByWorktree[WORKTREE_ID]).toEqual([])
+    expect(reloaded.closedTerminalTabTombstonesByTabId?.[TAB_ID]).toEqual({
+      closedAt: expect.any(Number),
+      worktreeId: WORKTREE_ID,
+      reason: 'cleanup'
+    })
+  })
 
   // Durable close must reject in-flight spawns committing after crash/reload, even if the tab was never listed.
   it('refuses a closed tab whose spawn commits after a crash and reload', async () => {

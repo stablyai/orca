@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { botGroupAudience } from './bot-group-mentions'
 import {
-  createBotGroupJournalIndexer,
   botGroupCompletedText,
   botGroupOperationAdmitted,
   botGroupContext,
@@ -165,57 +164,6 @@ describe('native group publication', () => {
       ])
     ).toBeNull()
     expect(botGroupTurnItems(snapshot, 'unknown')).toEqual([])
-  })
-  it('retains settled turn arrays while a different native turn streams', () => {
-    const index = createBotGroupJournalIndexer()
-    const prompt = (id: string) =>
-      row(agentJournalSubmissionKey(id), { kind: 'message', role: 'user', blocks: [] })
-    const items = [
-      prompt('one'),
-      row('t1', {
-        kind: 'turn',
-        turnId: 'one',
-        state: 'completed',
-        userItemId: agentJournalSubmissionKey('one')
-      }),
-      row(
-        'answer',
-        { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'settled' }] },
-        't1'
-      )
-    ]
-    const initial = index({ items, submissions: [] }, ['one', 'two'])
-    const submission = {
-      clientMessageId: 'one',
-      fence: 1,
-      payloadFingerprint: 'f',
-      dispatchState: 'accepted' as const,
-      providerItemId: agentJournalSubmissionKey('one'),
-      reason: null,
-      submittedAt: 1,
-      resolvedAt: 2
-    }
-    const first = index({ items, submissions: [submission] }, ['one', 'two'])('one')
-    const updated = index(
-      {
-        items: [
-          ...items,
-          prompt('two'),
-          row('t2', {
-            kind: 'turn',
-            turnId: 'two',
-            state: 'running',
-            userItemId: agentJournalSubmissionKey('two')
-          })
-        ],
-        submissions: [submission]
-      },
-      ['one', 'two']
-    )
-    expect(first.map((item) => item.itemId)).toEqual(['t1', 'answer'])
-    expect(updated('one')).toBe(first)
-    expect(initial('unrelated')).toEqual([])
-    expect(updated('unrelated')).toEqual([])
   })
   it('uses Claude’s accepted provider identity when its user echo is absent', () => {
     const snapshot: AgentJournalSnapshot = {

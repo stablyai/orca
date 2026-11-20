@@ -63,15 +63,19 @@ afterEach(async () => {
   await rm(directory, { recursive: true, force: true })
 })
 
-it('switches an exact local target and records it', async () => {
+it('switches to the listed local branch even when a tag shares its name', async () => {
   await git('branch', 'feature')
+  await git('commit', '--allow-empty', '-qm', 'tag target')
+  await git('tag', 'feature')
+  const { branches } = await listLocalBranches(directory)
+  expect(branches).toEqual(['main', 'feature'])
   const recorded = vi.fn()
-  expect(await switchTo({ kind: 'local', name: 'feature' }, null, recorded)).toEqual({
+  expect(await switchTo({ kind: 'local', name: branches[1] }, null, recorded)).toEqual({
     branch: 'feature',
     previousBranch: 'main',
     head: initialHead
   })
-  expect(await git('symbolic-ref', '--short', 'HEAD')).toBe('feature')
+  expect(await git('symbolic-ref', 'HEAD')).toBe('refs/heads/feature')
   expect(recorded).toHaveBeenCalledOnce()
 })
 it.each(['team/upstream', 'origin'])(

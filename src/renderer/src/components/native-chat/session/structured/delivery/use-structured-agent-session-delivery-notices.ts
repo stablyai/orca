@@ -87,6 +87,8 @@ function sameNoticesKept(
       before !== undefined &&
       before.text === notice.text &&
       before.failureKind === notice.failureKind &&
+      before.signIn?.agentName === notice.signIn?.agentName &&
+      before.signIn?.account === notice.signIn?.account &&
       (before.onDismiss === undefined) === (notice.onDismiss === undefined)
     allKept &&= same
     kept.set(id, same ? before : notice)
