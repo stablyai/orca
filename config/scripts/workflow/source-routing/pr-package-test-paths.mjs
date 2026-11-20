@@ -52,6 +52,7 @@ const SHARED_PACKAGE_PREFIXES = [
   'config/scripts/terminal-dependencies/serialize-addon/build-',
   'config/scripts/build-identity/build-',
   'config/scripts/native-build/linux/build-',
+  'config/scripts/native-build/posix/unpackaged-provider-exec',
   'config/scripts/native-build/windows/build-',
   'config/scripts/workspace-package-build/build-',
   'config/scripts/remote-host-build/wsl-guest/build-',
