@@ -4,7 +4,13 @@ import type {
   DesktopRelayWriteResult
 } from '../../../../../shared/workspace-session/desktop-relay-write'
 
-type AcknowledgedHost = { complete: boolean; relayIdsByTabId: Record<string, string> }
+type AcknowledgedHost = {
+  complete: boolean
+  relayIdsByTabId: Record<string, string>
+  /** Main may hold something else now (a skipped, refused or failed write): resend a baseline, but
+   *  keep these ids so an incomplete host still names the ones that ended. */
+  stale?: boolean
+}
 
 /** Tabs whose rows this window holds parked for a host: their relay ids may be live though unsent. */
 export type HeldRelayTabs = (hostId: ExecutionHostId) => ReadonlySet<string>
@@ -19,6 +25,14 @@ export class AcknowledgedDesktopRelays {
 
   forget(): void {
     this.hosts = new Map()
+    this.generation += 1
+  }
+
+  /** Every host resends a baseline, and late answers are ignored; the ids stay as removal evidence. */
+  invalidate(): void {
+    for (const [hostId, host] of this.hosts) {
+      this.hosts.set(hostId, { ...host, stale: true })
+    }
     this.generation += 1
   }
 
@@ -56,10 +70,11 @@ export class AcknowledgedDesktopRelays {
       }
       for (const { hostId } of hosts) {
         const host = wanted.get(hostId)
+        const last = this.hosts.get(hostId)
         if (host && accepted.has(hostId)) {
           this.hosts.set(hostId, host)
-        } else {
-          this.hosts.delete(hostId)
+        } else if (last) {
+          this.hosts.set(hostId, { ...last, stale: true })
         }
       }
     }
@@ -73,10 +88,15 @@ export class AcknowledgedDesktopRelays {
     if (!last || host.complete) {
       return []
     }
-    const parked = held(host.hostId)
-    return Object.keys(last.relayIdsByTabId).filter(
-      (tabId) => !Object.hasOwn(host.relayIdsByTabId, tabId) && !parked.has(tabId)
+    const omitted = Object.keys(last.relayIdsByTabId).filter(
+      (tabId) => !Object.hasOwn(host.relayIdsByTabId, tabId)
     )
+    // Parked rows are indexed only when an id is actually missing.
+    if (omitted.length === 0) {
+      return omitted
+    }
+    const parked = held(host.hostId)
+    return omitted.filter((tabId) => !parked.has(tabId))
   }
 
   private deltaFor(
@@ -87,7 +107,7 @@ export class AcknowledgedDesktopRelays {
     if (!last) {
       return host
     }
-    if (last.complete !== host.complete) {
+    if (last.stale || last.complete !== host.complete) {
       const ended = this.endedOnIncompleteHost(host, held)
       return ended.length > 0 ? { ...host, removedTabIds: ended } : host
     }

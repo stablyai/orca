@@ -68,6 +68,22 @@ describe('relay ids saved by ownership', () => {
     }
   })
 
+  it('clears that relay after its fenced partition opens again', async () => {
+    const main = inMemoryMain()
+    const { stop, endRelay, renameTab } = await windowSavingTo(main, { parked: true })
+    try {
+      main.fenced.add(SSH_HOST)
+      await endRelay()
+      main.fenced.delete(SSH_HOST)
+
+      await renameTab('renamed')
+
+      expect(main.stored(SSH_HOST).remoteSessionIdsByTabId).toBeUndefined()
+    } finally {
+      stop()
+    }
+  })
+
   it('clears it after a fenced partition opens again', async () => {
     const main = inMemoryMain()
     const { stop, endRelay, renameTab } = await windowSavingTo(main)

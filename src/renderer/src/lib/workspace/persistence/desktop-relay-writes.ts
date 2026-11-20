@@ -208,7 +208,7 @@ export function sendDesktopRelayWrite(
       return result
     },
     (error: unknown) => {
-      acknowledgedRelays.forget()
+      acknowledgedRelays.invalidate()
       throw error
     }
   )
@@ -280,7 +280,7 @@ export function planDesktopRelayWrite(
       acknowledge(result)
       return result
     },
-    forget: () => acknowledgedRelays.forget()
+    forget: () => acknowledgedRelays.invalidate()
   }
 }
 
@@ -313,10 +313,10 @@ function isDesktopRelayWriteResult(value: unknown): value is DesktopRelayWriteRe
   return typeof value === 'object' && value !== null && 'applied' in value && 'refused' in value
 }
 
-/** A remounted save subscriber starts over: what main last accepted is unknown, and a late answer to
- *  the previous subscriber's write is ignored. */
+/** A remounted save subscriber starts over: every host resends a baseline, and a late answer to the
+ *  previous subscriber's write is ignored. */
 export function forgetAcknowledgedDesktopRelays(): void {
-  acknowledgedRelays.forget()
+  acknowledgedRelays.invalidate()
 }
 
 /** A full replacement (quit, unload) may not keep what main last accepted, so it sends every host's
