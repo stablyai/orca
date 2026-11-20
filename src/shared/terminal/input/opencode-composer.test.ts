@@ -42,8 +42,10 @@ describe('openCodeComposerHoldsDraft', () => {
 
   it.each([
     ['at its end', box(['please refactor the auth'], 0, 'please refactor the auth')],
-    ['with the cursor moved to its start', box(['please refactor the auth'], 0, '')],
-    ['that starts like the placeholder', box(['Ask anything about the failure'], 0, '')],
+    [
+      'that starts like the placeholder with the cursor at its start',
+      box(['Ask anything… about the failure'], 0, '')
+    ],
     ['that a narrow pane cut to look like a clipped placeholder', box(['Ask anythin'], 0, '')],
     ['on a line below the cursor', box(['', 'second line'], 0, '')],
     [

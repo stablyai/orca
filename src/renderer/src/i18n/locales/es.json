@@ -324,7 +324,7 @@
           "add": "Agregar",
           "adding": "Agregando…",
           "added": "Se agregó {{name}}",
-          "browse": "Explorar Chrome Web Store",
+          "browse": "Chrome Web Store",
           "openFailed": "Abre un espacio de trabajo para explorar Chrome Web Store."
         }
       }
@@ -1665,7 +1665,7 @@
     },
     "components": {
       "plainSshTerminal": {
-        "open": "Abrir terminal SSH normal",
+        "open": "Terminal SSH básico",
         "unmanaged": "SSH normal — no administrado. No es un espacio de trabajo de Orca: aquí no se rastrean agentes ni pestañas, y este terminal no se restaura. Al cerrarlo finaliza la sesión SSH.",
         "ended": "ssh finalizó con el código {{code}}. Cierra esta ventana cuando termines de leer.",
         "title": "SSH normal · {{host}}",
@@ -1711,8 +1711,8 @@
         "e30a5470c9": "Conversación",
         "3fdf777817": "Abrir en GitHub",
         "c43fe79ee0": "Copiar enlace de GitHub",
-        "0caac1a18f": "Iniciar espacio de trabajo desde PR",
-        "0ab4664a8b": "Iniciar espacio de trabajo desde issue",
+        "0caac1a18f": "Iniciar espacio de trabajo",
+        "0ab4664a8b": "Iniciar espacio de trabajo",
         "36182aa57f": "Iniciar nuevo espacio de trabajo",
         "fe6ff12dc2": "Más acciones del espacio de trabajo de issue",
         "726db41722": "Abrir espacio de trabajo",
@@ -2089,7 +2089,7 @@
         "someoneUpdatedIssue": "Alguien actualizó el issue · {{time}}"
       },
       "LinearItemDrawer": {
-        "04008e6c46": "Iniciar espacio de trabajo desde el issue",
+        "04008e6c46": "Iniciar espacio de trabajo",
         "a4fcc57522": "Aún no hay comentarios.",
         "fde849b2b6": "Comentarios",
         "9dc54172db": "Cerrar · Esc",
@@ -2235,7 +2235,7 @@
         "161d91ef02": "Enviar comentario",
         "d2030fc8cd": "Añade un comentario…",
         "1208347ac0": "No se pudo agregar el comentario",
-        "61452f2143": "Iniciar espacio de trabajo desde el issue",
+        "61452f2143": "Iniciar espacio de trabajo",
         "14c9fc70ed": "+ Asignado",
         "bc215fea4d": "+ Etiqueta",
         "b936cc51a4": "Cerrado",
@@ -2770,7 +2770,7 @@
         "05ad78a6d1": "Orca v{{value0}} está lista.",
         "318d3b4bc7": "Descartar actualización",
         "9abc59f814": "Actualización disponible",
-        "aad383aecc": "Lee las notas de la versión completas",
+        "aad383aecc": "Notas de la versión",
         "b1d867f4fb": "Tus sesiones de terminal no se interrumpirán durante la actualización.",
         "09a55c39b5": "Instalando...",
         "ea2a41adbe": "Estás en la última versión.",
@@ -3562,7 +3562,7 @@
             "7dbbfcbecc": "Título del panel"
           },
           "TerminalSessionStateSaveFailureDialog": {
-            "6bee0c8f17": "Abrir analizador de espacio en disco",
+            "6bee0c8f17": "Analizador de espacio",
             "ae20d0ffc2": "Descartar",
             "38c282a2c4": "El analizador se abre directamente desde aquí. También puedes abrirlo más tarde desde el menú de herramientas inferior izquierdo eligiendo Space Analyzer."
           },
@@ -4253,7 +4253,7 @@
             "09960d86bd": "escaneado",
             "eee5240810": "Espacios de trabajo eliminados",
             "9afc97f9a3": "Espacio de trabajo eliminado",
-            "792a214457": "Eliminar espacio de trabajo",
+            "792a214457": "Eliminar",
             "a998501630": "Forzar",
             "9155381019": "Sparse",
             "f39d291997": "Seleccionar",
@@ -5300,7 +5300,7 @@
           "releaseNotesVersion": "Notas de la versión",
           "releaseNotesOptional": "Agregar notas de la versión (opcional)",
           "releaseNotesFirst": "Describe esta versión",
-          "manageLinks": "Administrar o revocar este enlace en Configuración",
+          "manageLinks": "Gestionar enlace",
           "noExecutableContent": "Sin scripts ni ejecutables",
           "newVersionDescriptionPlain": "Agrega una nueva versión al enlace existente.",
           "accessSummaryPlain": "Enlace no listado: cualquiera que lo tenga puede instalarlo.",
@@ -5387,8 +5387,8 @@
           "cancel": "Cancelar",
           "confirmRemove": "Confirmar eliminación",
           "remove": "Eliminar",
-          "discardEditsRemove": "Descartar mis ediciones y eliminar",
-          "discardEdits": "Descartar mis ediciones y reinstalar",
+          "discardEditsRemove": "Descartar y quitar",
+          "discardEdits": "Descartar y reinstalar",
           "titleMore": "{{name}} +{{count}}",
           "scopeWorkspace": "este espacio de trabajo",
           "scopeGlobal": "En todos lados",
@@ -5529,7 +5529,7 @@
           "fb33359f69": "¿Agrupar estos repositorios?",
           "d75170194e": "Elige esto si estos proyectos van juntos: un monorepo o simplemente un conjunto de repositorios relacionados. Orca los agrupará y te permitirá trabajar desde la carpeta principal.",
           "39d51212cc": "Nombre del grupo",
-          "aa0247680d": "No, importar por separado",
+          "aa0247680d": "Importar por separado",
           "a0bc4d1f8e": "Sí, importar como grupo",
           "24eda6c8b2": "Escaneando... {{value0}}",
           "6149d5203f": "No hay repositorios seleccionados. Abre la carpeta principal para usar el editor, la terminal y la búsqueda sin funciones de Git.",
@@ -5548,7 +5548,7 @@
           "91b93a90a4": "Abrir proyecto en host SSH",
           "007651bdf9": "Navega hasta un directorio y haz clic en Seleccionar para elegirlo.",
           "dd3ff65486": "Explorar el sistema de archivos remoto",
-          "36d427bb66": "Agregar proyecto en host SSH",
+          "36d427bb66": "Añadir proyecto SSH",
           "35831a7312": "Agregando..."
         },
         "AddRepoServerStartStep": {
@@ -5560,7 +5560,7 @@
           "867692f505": "Ruta del host",
           "423b5d3d31": "Agrega un repositorio Git o carpeta que ya exista en el host seleccionado.",
           "3d0c035483": "Abrir proyecto del host",
-          "438493f214": "O introduce una ruta del host manualmente",
+          "438493f214": "Introducir ruta del host",
           "6b9958492a": "¿Quieres importar muchos repositorios a la vez? Busca la carpeta padre.",
           "d40d751517": "Nuevo repositorio o carpeta",
           "a81ffa0a99": "Crear en el servidor",
@@ -5673,7 +5673,7 @@
           "moreChildren_many": "+{{count}} más"
         },
         "ImportedWorktreesVisibilityLine": {
-          "b7a87dc32f": "Mostrar en la lista de worktrees",
+          "b7a87dc32f": "Mostrar worktree",
           "ad99f4eea9": "Mantener oculto",
           "9f4f14e821": "Cambia esto más tarde desde el menú del proyecto.",
           "b47ba1a9d2": "Vista previa de {{value0}}",
@@ -6282,7 +6282,7 @@
           "tryDifferentSearch": "Prueba con otro nombre o ruta.",
           "disableSource": "Desactiva una fuente para gestionar sus worktrees individualmente.",
           "appearWhenDetected": "Los worktrees nuevos aparecerán aquí cuando Orca los detecte.",
-          "openGlobalSettings": "Gestionar en Ajustes globales",
+          "openGlobalSettings": "Ajustes globales",
           "globalSettingsSources": "Estas fuentes tienen una configuración global que puedes anular aquí:",
           "searchHiddenPlaceholder_one": "Buscar en {{count}} worktree…",
           "searchHiddenPlaceholder_other": "Buscar en {{count}} worktrees…",
@@ -6638,7 +6638,7 @@
           "a4c2d8f1b0": "¿Ocultar worktrees externos?",
           "6e91b3c4d2": "Los worktrees externos ya no se mostrarán en la barra lateral ni en esta lista para {{value0}}, incluidos los que se creen más adelante.",
           "1f8a5d9e73": "Puedes volver a activarlo más tarde desde los ajustes del proyecto.",
-          "8c0b2e7a41": "Abrir ajustes de worktrees que no son de Orca",
+          "8c0b2e7a41": "Ajustes de árboles de trabajo",
           "5d1c9f0a82": "Cancelar",
           "3b7e4a1c96": "Ocultar worktrees externos"
         },
@@ -6705,7 +6705,7 @@
           "sshConfigPickerBack": "Atrás",
           "fillFromSshConfig": "Rellenar desde ~/.ssh/config…",
           "sshConfigPickerAddingAll": "Agregando hosts…",
-          "sshConfigPickerAddAll": "Añadir todos los {{value0}} a Orca",
+          "sshConfigPickerAddAll": "Añadir todos ({{value0}})",
           "sshConfigPickerNoNewHosts": "No hay nuevos hosts para agregar",
           "sshConfigPickerAddAllEmpty": "Agregar todo a Orca",
           "identityFileFromConfigHint": "Dejado vacío a propósito: Orca usa todas las claves ~/.ssh/config resuelve para {{value0}}. Escriba una ruta para usar solo esa clave.",
@@ -7041,7 +7041,7 @@
           "SetupGuideModal": {
             "3598a3ca0c": "Completa los flujos de trabajo principales que hacen útil a Orca para trabajar con agentes en paralelo.",
             "48a9e5ef2d": "Primeros pasos",
-            "f3b5ffb2a6": "Ocultar checklist de la barra lateral"
+            "f3b5ffb2a6": "Ocultar lista"
           },
           "SetupGuideProgressRing": {
             "dac3a4724a": "{{value0}} de {{value1}} pasos de configuración completos"
@@ -7234,7 +7234,7 @@
           "retrySetup": "Reintentar",
           "installing": "Instalando...",
           "hostUnavailable": "Orca todavía no puede instalar skills en la máquina de este espacio de trabajo.",
-          "replaceWithOrcaCopy": "Reemplazar con la copia de Orca",
+          "replaceWithOrcaCopy": "Reemplazar por la de Orca",
           "copyCommandAria": "Copiar comando",
           "ed197f59a2": "Copiar comando",
           "failedToCopyCommand": "No se pudo copiar el comando.",
@@ -7425,7 +7425,7 @@
           "a602d43069": "Copiado {{value0}}."
         },
         "BrowserUsePane": {
-          "67d9a53f47": "Gestionar perfiles para logins separados",
+          "67d9a53f47": "Gestionar perfiles",
           "112f70adc4": "Última importación desde {{value0}}",
           "72d4815523": "Trae tus logins existentes a Orca para que los agents puedan acceder a páginas autenticadas. Importa al perfil predeterminado.",
           "af8c83ed61": "Importa cookies de Chrome, Edge u otros navegadores para que los agents puedan reutilizar tus logins.",
@@ -8775,7 +8775,7 @@
           "connectionCheckUnavailable": "Orca no pudo comprobar esta conexión. Inténtalo de nuevo o abre Integraciones para ver los detalles de configuración.",
           "retryConnection": "Intentar de nuevo",
           "openIntegrations": "Integraciones",
-          "connectInIntegrations": "Configurar en Integraciones",
+          "connectInIntegrations": "Abrir integraciones",
           "connectJiraTitle": "Conectar Jira",
           "connectJiraDescription": "Añade un sitio de Jira Cloud o una instancia autohospedada con un token de API o PAT.",
           "manageJira": "Administrar claves",
@@ -11457,7 +11457,7 @@
           "anywhereTitle": "Orca Relay",
           "anywhereDescription": "El teléfono puede estar en datos móviles o cualquier Wi‑Fi. El inicio de sesión solo es necesario para Relay.",
           "relayUnavailable": "Orca Relay no está disponible en esta compilación. Usa LAN.",
-          "signInAgain": "Volver a iniciar sesión para Relay",
+          "signInAgain": "Iniciar sesión nuevamente",
           "localTitle": "LAN",
           "retrying": "Reintentando",
           "relayCell": "celda de relevo",
@@ -11515,18 +11515,18 @@
           "updating": "Updating servers…",
           "serverCountOne": "1 paired server",
           "fdd271abf0": "Remote Orca Servers",
-          "e4e5937469": "Server updates"
+          "e4e5937469": "Buscar actualizaciones"
         },
         "RemoteServerUpdateDialog": {
           "versionUnavailable": "Version unavailable",
           "restartingHelp": "Esperando a que el servidor de reemplazo se vuelva a conectar en la nueva versión.",
           "retry": "Retry",
-          "update": "Update",
+          "update": "Actualizar servidor",
           "description": "Revise los servidores emparejados y actualice las instalaciones admitidas desde este cliente Orca.",
           "restartWarning": "La actualización reinicia estos servidores. Es posible que {{value0}} y {{value1}} se desconecten brevemente.",
           "checking": "Checking paired servers…",
           "empty": "No hay servidores Orca remotos emparejados.",
-          "updateAll": "Update {{value0}} servers",
+          "updateAll": "Actualizar todos ({{value0}})",
           "noUpdates": "No updates available",
           "downloadProgress": "{{value0}} download progress",
           "liveTabOne": "1 pestaña activa",
@@ -11908,7 +11908,7 @@
           "differentServerHelp": "Este enlace de emparejamiento es para un servidor diferente. Cree el enlace en el servidor que está volviendo a emparejar.",
           "loopbackRecoveryTunnel": "En el otro equipo, abre «Compartir este equipo» y crea un enlace para «Otro dispositivo» con su dirección de Tailscale o LAN. Si accedes mediante un túnel SSH, activa la opción de abajo.",
           "sshTunnelReach": "Accedo a esta dirección mediante un túnel SSH",
-          "addServerWithTunnel": "Añadir servidor con túnel",
+          "addServerWithTunnel": "Añadir por túnel",
           "addServer": "Añadir servidor",
           "nameLabel": "Nombre",
           "optional": "(opcional)",
@@ -12138,7 +12138,7 @@
               "notConfigured": "Conecte una cuenta de Bitbucket Cloud con un token API de Atlassian o un token de acceso. Las variables de entorno ORCA_BITBUCKET_* también funcionan y tienen prioridad.",
               "disconnectFailed": "No se pudo eliminar la credencial de Bitbucket guardada.",
               "statusLoadFailed": "No se pudo verificar si hay una credencial de Bitbucket guardada.",
-              "replaceCredentials": "Agregar o reemplazar credenciales",
+              "replaceCredentials": "Gestionar credenciales",
               "credentialName": "Tu credencial de Bitbucket"
             }
           }
@@ -12265,7 +12265,7 @@
         },
         "sshManagedHostRemove": {
           "descriptionServerHost": "Orca se ejecuta en {{label}}. En Servidores remotos Orca, abra el menú ⋯ en {{label}} y elija Detener… para eliminar Orca del host, u Olvidar… si el host ya no está. Luego puede eliminar este host SSH.",
-          "2ca95e9fd7": "Abrir Servidores remotos de Orca"
+          "2ca95e9fd7": "Gestionar servidores remotos"
         },
         "managedServers": {
           "row": {
@@ -12437,7 +12437,7 @@
           "nothingNew": "No hay nada nuevo que agregar.",
           "notReflected": "Modificado o eliminado en la versión anterior; el servidor conserva su propia copia",
           "cancel": "Cancelar",
-          "confirm": "Mover los proyectos nuevos",
+          "confirm": "Mover proyectos nuevos",
           "kind": {
             "repository": "Repositorio {{name}}",
             "folder": "Carpeta {{name}}",
@@ -12449,7 +12449,7 @@
           "title": "Conservar la versión del servidor",
           "description": "Este host sigue usando su servidor de Orca tal como está. Lo que la versión anterior de Orca agregó o cambió aquí no se mueve; permanece solo en los ajustes guardados de esta computadora hasta que se limpien.",
           "cancel": "Cancelar",
-          "confirm": "Conservar la versión del servidor"
+          "confirm": "Mantener versión del servidor"
         },
         "moveAnyway": {
           "action": "Mover de todos modos…",
@@ -12491,7 +12491,7 @@
           "description": "Orca ejecuta un servidor dentro de cada distro. Abrir un proyecto nunca inicia una distro detenida: haz clic en Iniciar, abre una terminal nueva o conéctala aquí.",
           "add": "Agregar distro WSL",
           "connect": "Conectar",
-          "turnOn": "Activar en Experimental",
+          "turnOn": "Abrir opciones experimentales",
           "forceUpdate": "Forzar actualización",
           "chip": "WSL"
         },
@@ -12664,7 +12664,8 @@
           "settingUpInBackground": "Configurando Orca en {{name}} en segundo plano. Aparecerá en la lista cuando esté listo.",
           "setUpOnSshHost": "Configurar Orca en un host SSH",
           "setUp": "Configurar",
-          "overYourSsh": "Mediante tu conexión SSH"
+          "overYourSsh": "Mediante tu conexión SSH",
+          "installViaSsh": "Instalar por SSH"
         },
         "networkAddress": {
           "tailscale": "Tailscale · {{address}}",
@@ -12707,7 +12708,7 @@
           "searchPlaceholder": "Buscar compilaciones…"
         },
         "AppearanceThemeControl": {
-          "useTerminalTheme": "Usar sus colores de terminal",
+          "useTerminalTheme": "Usar colores del tema",
           "dynamic": "dinámico",
           "searchThemes": "Buscar temas…",
           "noThemes": "Ningún tema coincide con tu búsqueda.",
@@ -12963,7 +12964,7 @@
         "recoverServer": {
           "checking": "Comprobando el bloqueo…",
           "cancel": "Cancelar",
-          "confirm": "Borrar el bloqueo y reiniciar",
+          "confirm": "Quitar bloqueo y reiniciar",
           "host": "Host",
           "lockBoot": "Escrito durante el arranque",
           "currentBoot": "Arranque actual",
@@ -14480,7 +14481,7 @@
           },
           "GitHistoryCommitFiles": {
             "b2c3d4e5f6": "No hay cambios de archivos en este commit",
-            "c3d4e5f6a7": "Abrir todos los cambios juntos"
+            "c3d4e5f6a7": "Abrir todos los cambios"
           },
           "GitHistoryRow": {
             "2f9c41ab07": "Mostrar archivos del commit {{value0}}: {{value1}}",
@@ -15019,7 +15020,7 @@
           "d0b52871ce": "Tus teléfonos están emparejados.",
           "051978a785": "Tu teléfono está emparejado.",
           "pairingQrError": "Este código de emparejamiento no se pudo representar como código QR. Cópialo en Orca Mobile.",
-          "directAddressDisclosure": "También usar una ruta local más rápida",
+          "directAddressDisclosure": "Conexión local",
           "directAddressHint": "Opcional. Elige la dirección Wi‑Fi o Tailscale que el teléfono usará cuando esté cerca — suele ser más rápido que Relay. Relay sigue funcionando cuando estás fuera.",
           "pairingCodeReady": "Código de emparejamiento listo",
           "noRelayCode": "No hay código de emparejamiento disponible",
@@ -15637,6 +15638,14 @@
             "5c3aee22c0": "Copiar comando",
             "5eca672aac": "Copiar comando de instalación de skill",
             "b8ad063571": "Comando de instalación de skill copiado."
+          },
+          "feature": {
+            "tip": {
+              "copy": {
+                "91e2719807": "Activar búsqueda de sesiones",
+                "24aaad376f": "Configurar dictado"
+              }
+            }
           }
         }
       },
@@ -15711,7 +15720,7 @@
             "3756cbeca7": "Ahora no",
             "6d950431d2": "Ocultar",
             "ebceac65a4": "Configurar",
-            "3f003507f4": "Abrir configuración completa en Ajustes",
+            "3f003507f4": "Abrir configuración",
             "installSkillPrompt": "Instala la skill de Orca CLI cuando quieras que los agentes controlen este simulador."
           },
           "MobileEmulatorAgentSetupGuideSteps": {
@@ -18268,7 +18277,7 @@
           "loadMoreFailed": "No se pudieron cargar más artefactos.",
           "publishingOff": "La publicación está desactivada",
           "publishingOffCopy": "Nada en este dispositivo puede crear aún un enlace público de artefacto. Permite la publicación en Ajustes → Artefactos, luego comparte desde un archivo HTML o Markdown abierto o pídele a tu agente.",
-          "openArtifactsSettings": "Abrir Ajustes → Artefactos",
+          "openArtifactsSettings": "Ajustes de artefactos",
           "reconnectHeading": "Inicia sesión en Orca de nuevo",
           "reconnectCopy": "Inicia sesión de nuevo para ver y gestionar los artefactos compartidos desde tu cuenta.",
           "unconfiguredCopy": "El inicio de sesión de la cuenta de Orca aún no está configurado en esta máquina.",
@@ -19875,7 +19884,8 @@
       "usageLimitActions": {
         "switchAccount": "Cambiar de cuenta",
         "addAccount": "Añadir cuenta…",
-        "accountUnavailable": "Este chat no se puede mover a otra cuenta. Transfiérelo a otro agente."
+        "accountUnavailable": "Este chat no se puede mover a otra cuenta. Transfiérelo a otro agente.",
+        "handOff": "Delegar a agente"
       },
       "usageLimitAutoContinue": {
         "cancelFailed": "No se pudo cancelar la continuación automática. Inténtalo de nuevo.",
@@ -19940,13 +19950,16 @@
         "many_many": "{{count}} solicitudes de extracción creadas"
       },
       "splitRight": "Dividir a la derecha",
-      "splitDown": "Dividir hacia abajo"
+      "splitDown": "Dividir hacia abajo",
+      "automationSaved": {
+        "openFullPage": "Abrir página"
+      }
     },
     "tab": {
       "bar": {
         "SortableTabContextMenu": {
-          "switchToTerminalView": "Continuar con el agente de terminal",
-          "switchToChatView": "Continuar en la interfaz de chat",
+          "switchToTerminalView": "Continuar en terminal",
+          "switchToChatView": "Continuar en el chat",
           "allowAutoClose": "Permitir cierre automático"
         },
         "BrowserTab": {
@@ -20255,7 +20268,7 @@
     },
     "agentSessionContinuation": {
       "preparingContext": "Preparando el contexto guardado del chat…",
-      "handOffToAnotherAgent": "Pasar a otro agente",
+      "handOffToAnotherAgent": "Delegar a agente",
       "untitledSession": "Sesión actual",
       "agent": "Agente",
       "selectAgent": "Selecciona un agente",
@@ -20819,7 +20832,7 @@
           "stopAgentInWorkspaceTitle": "¿Detener el agente de «{{name}}»?",
           "stopRunningCommandTitle": "¿Detener el comando en ejecución?",
           "agentWorkStops": "Su trabajo actual se detiene y no se reanudará.",
-          "sleepWorkspaceInstead": "Poner en reposo el espacio de trabajo",
+          "sleepWorkspaceInstead": "Sleep Workspace",
           "stopAgentSentence": "Detener agente",
           "stopAndClose": "Detener y cerrar"
         }
@@ -21034,7 +21047,7 @@
       "errorDescription": "Las páginas de este espacio de trabajo navegan a través de su host SSH, y no se pudo configurar el enrutamiento.",
       "retry": "Reintentar",
       "tryAnyway": "Intentar de todos modos",
-      "browseLocally": "Navegar desde este dispositivo",
+      "browseLocally": "Navegar localmente",
       "forwardingBlockedTitle": "El servidor SSH bloquea el tráfico del navegador",
       "sshUnavailableTitle": "Conexión SSH no disponible",
       "forwardingBlockedDescription": "Este servidor rechaza el reenvío TCP (a menudo «AllowTcpForwarding no» en su configuración de sshd), que es necesario para navegar a través de él. Pide a su administrador que permita el reenvío, o navega desde este dispositivo.",
@@ -21071,7 +21084,7 @@
       "createFailed": "No se pudo crear el perfil del navegador de este espacio de trabajo. Cierra esta pestaña y abre una nueva para volver a intentarlo."
     },
     "history": {
-      "clear": "Borrar el historial de navegación",
+      "clear": "Borrar historial",
       "clearAllTime": "Todo el tiempo",
       "clearLastHour": "Última hora",
       "clearRange": "Borrar historial desde",
@@ -21274,7 +21287,7 @@
       "changeInSettings": "Cámbialo o desactívalo cuando quieras en <link>Ajustes → Búsqueda de sesiones de agente</link>.",
       "title": "Busca en todas las sesiones de agentes",
       "description": "Encuentra cualquier conversación anterior por lo que se dijo en ella y continúa donde lo dejó el agente.",
-      "cta": "Activar la búsqueda de sesiones"
+      "cta": "Activar búsqueda de sesiones"
     },
     "voice": {
       "unassignedInstruction": "Asigna un atajo de dictado antes de iniciar el dictado por voz en un panel enfocado.",
@@ -21282,7 +21295,7 @@
       "changeInSettings": "Cambia el modelo, el modo de dictado o el atajo cuando quieras en <link>Ajustes → Voz</link>.",
       "title": "Dicta en cualquier panel",
       "description": "Inicia el dictado de voz en cualquier panel con el foco y vuelve a usar el atajo para detenerlo.",
-      "cta": "Configurar el dictado de voz",
+      "cta": "Configurar dictado",
       "demoFirstPhrase": "El botón de pago tapa el pie en pantallas pequeñas.",
       "demoSecondPhrase": "¿Añades un test?",
       "demoUserPrompt": "Añade logos de pago",
@@ -21413,7 +21426,7 @@
     "managedData": {
       "description": "Añade cuentas ejecutando este comando en una terminal del host de Orca. La selección se aplica a nuevos inicios del agente en ese host; las conexiones SSH directas y WSL alojado en Windows usan sus propias credenciales.",
       "copied": "Copiado",
-      "add": "Copiar comando para añadir cuenta",
+      "add": "Copiar comando de configuración",
       "refresh": "Actualizar cuentas",
       "upgrade": "Si las cuentas no aparecen, actualiza o reinicia el host de Orca.",
       "system": "Predeterminada del sistema",
@@ -21465,7 +21478,8 @@
       "settingsSaveFailed": "Orca no pudo guardar tus ajustes de inicio de sesión de Antigravity. Inténtalo de nuevo.",
       "lastReading": "{{reading}} · Consultado {{time}}",
       "noReading": "Uso desconocido: aún no consultado",
-      "fd47b5a5dd": "Cuentas de Antigravity"
+      "fd47b5a5dd": "Cuentas de Antigravity",
+      "apiKeyGet": "Obtener clave API"
     },
     "claude": {
       "added": "Cuenta agregada. Selecciónala para usarla en el próximo Claude que inicies.",
@@ -21588,7 +21602,7 @@
     "revealFiltered": {
       "title": "¿Mostrar el espacio de trabajo oculto?",
       "description": "El espacio de trabajo activo está oculto en la barra lateral. Mostrarlo solo ajustará los filtros que lo ocultan.",
-      "confirm": "Ajustar filtros y mostrar",
+      "confirm": "Ajustar y mostrar",
       "cancel": "Mantener filtros"
     },
     "revealCurrent": {
@@ -21888,7 +21902,7 @@
       "showFewer": "Mostrar menos",
       "openInSidebar": "Abrir en la barra lateral",
       "openInSidebarCopy": "Escribe lo que recuerdes o pídele a un agente: «encuentra la sesión donde arreglamos el tiempo de espera de inicio de sesión».",
-      "enableOnAll": "Activar en todas las computadoras"
+      "enableOnAll": "Activar en todos los equipos"
     },
     "dialog": {
       "select": "Seleccionar",
@@ -21988,7 +22002,7 @@
       "confirmTitle": "¿Reiniciar el daemon de terminal?",
       "confirmBody": "Reiniciar termina todos los procesos que se ejecutan en {{sessions}}. Los agentes que admiten reanudación pueden reanudarse después; los shells y otros trabajos no, y deben iniciarse de nuevo. Hazlo cuando tus agentes estén inactivos.",
       "cancel": "Cancelar",
-      "confirm": "Reiniciar y terminar procesos",
+      "confirm": "Reiniciar y finalizar procesos",
       "count_other": "{{count}} terminales en ejecución",
       "count_many": "{{count}} terminales en ejecución",
       "count_one": "{{count}} terminal en ejecución",
@@ -22321,7 +22335,7 @@
     "antigravityIdeToCli": "IDE → CLI",
     "antigravity2ToCli": "2.0 → CLI",
     "continueInCli": "Continuar en la CLI",
-    "continueInCliNewTab": "Continuar en la CLI en una pestaña nueva",
+    "continueInCliNewTab": "Continuar en pestaña CLI",
     "subagents": {
       "loading": "Cargando subagentes…",
       "loadError": "No se pudieron cargar todos los subagentes.",
@@ -22971,7 +22985,7 @@
       "description": "Analiza tus espacios de trabajo para comparar tamaños, examinar las carpetas más grandes y revisar el espacio que puedes recuperar."
     },
     "breakdown": {
-      "viewAll": "Mostrar más detalles de la carpeta"
+      "viewAll": "Detalles de la carpeta"
     },
     "metric": {
       "linkedWorktrees": "Árboles de trabajo vinculados"
@@ -23006,7 +23020,7 @@
     "title": "Salir por completo",
     "message": "¿Detener todas las sesiones de terminal y salir de Orca?",
     "detail": "Orca cierra todas las pestañas de terminal y detiene sus sesiones, incluidos los agentes que se ejecutan en terminales, y luego se cierra. Salir sin más las mantiene activas para que Orca se vuelva a conectar en el próximo inicio. Las sesiones de terminal en hosts remotos pueden seguir ejecutándose allí. Se pierde el trabajo de terminal no guardado y las pestañas cerradas no vuelven en el próximo inicio. Esta acción no se puede deshacer.",
-    "confirm": "Detener sesiones y salir",
+    "confirm": "Detener y salir",
     "cancel": "Cancelar",
     "failed": "No se pudieron detener todas las sesiones de terminal, así que Orca sigue abierto.",
     "stopping": "Deteniendo las sesiones de terminal y saliendo…",
@@ -23135,14 +23149,14 @@
   },
   "gpuFallback": {
     "recoveredLaunch": {
-      "keepSafeButton": "Mantener el modo de gráficos seguro",
+      "keepSafeButton": "Mantener modo seguro",
       "tryHardwareButton": "Probar la aceleración por hardware",
       "title": "El modo de gráficos seguro está activo",
       "message": "Orca se recuperó en el modo de gráficos seguro.",
       "detail": "El modo de gráficos seguro se activó tras fallos gráficos repetidos. Mantenlo para mayor estabilidad, o reinicia y vuelve a probar la aceleración por hardware."
     },
     "restartPrompt": {
-      "restartButton": "Reiniciar en modo de gráficos seguro",
+      "restartButton": "Reiniciar en modo seguro",
       "keepRunningButton": "Seguir ejecutando",
       "title": "¿Reiniciar Orca en modo de gráficos seguro?",
       "message": "El proceso de gráficos de Orca ha fallado repetidamente.",
@@ -23545,8 +23559,8 @@
     "blockers": {
       "title": "Antes de que estos proyectos puedan moverse",
       "inProjects": "En {{names}}",
-      "skipOne": "Dejar {{name}} fuera de este traslado",
-      "skipMany": "Dejar estos {{n}} proyectos fuera de este traslado"
+      "skipOne": "Omitir {{name}}",
+      "skipMany": "Omitir {{n}} proyectos"
     },
     "title": "Mover proyectos al host {{distro}}",
     "loading": "Comprobando los proyectos de {{distro}}…",
@@ -23750,7 +23764,7 @@
       "approved": "Configuración aprobada. Las ejecuciones posteriores de esta automatización la ejecutarán.",
       "skippedSinceApproved": "La configuración no se ejecutó en esta ejecución porque cambiaron los comandos de configuración de orca.yaml de su rama. Ya se aprobaron, así que las ejecuciones posteriores los ejecutarán.",
       "skippedReview": "No se ejecutó la configuración: la rama de esta ejecución contiene comandos de configuración de orca.yaml diferentes de los aprobados para esta automatización. Revísalos para que las ejecuciones posteriores ejecuten la configuración.",
-      "reviewAction": "Revisar y aprobar la configuración",
+      "reviewAction": "Revisar configuración",
       "listSkipped": "Configuración omitida",
       "listSkippedTitle": "La última ejecución omitió la configuración porque cambiaron los comandos de configuración de orca.yaml de su rama. Revísalos desde el menú de acciones."
     }
@@ -24215,6 +24229,17 @@
     },
     "templates": {
       "browse": "Explorar plantillas"
+    },
+    "new": {
+      "fromTemplate": "Usar plantilla"
+    },
+    "googleSetup": {
+      "otherAccount": "Cambiar de cuenta"
+    },
+    "apps": {
+      "paste": {
+        "remoteSignIn": "Inicio de sesión remoto"
+      }
     }
   },
   "speechModelUpdate": {

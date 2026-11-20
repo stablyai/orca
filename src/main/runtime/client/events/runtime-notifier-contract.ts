@@ -15,6 +15,7 @@ import type {
   AgentLaunchTabPublishRequest
 } from '../../../../shared/agent-launch/contracts/agent-launch-tab-publication'
 import type { TerminalPaneSplitSource } from '../../../../shared/feature-education/feature-education-telemetry'
+import type { RendererTerminalSplitRequest } from '../../../../shared/workspace-layout/terminal-topology/renderer-terminal-split-request'
 import type { TerminalRevealIdentity } from '../../../../shared/workspace-layout/terminal-surfaces/terminal-reveal-identity'
 import type { TerminalPaneRevealTarget } from '../../../../shared/workspace-layout/terminal-surfaces/terminal-pane-reveal'
 import type {
@@ -128,16 +129,7 @@ export type RuntimeNotifier = {
   splitTerminal(
     tabId: string,
     paneRuntimeId: number,
-    opts: {
-      direction: 'horizontal' | 'vertical'
-      command?: string
-      worktreeId?: string
-      sourceLeafId?: string
-      telemetrySource?: TerminalPaneSplitSource
-      newLeafId?: string
-      /** An agent's split: the new pane leaves the user's active pane and keyboard focus alone. */
-      activate?: false
-    }
+    opts: Omit<RendererTerminalSplitRequest, 'tabId' | 'paneRuntimeId'>
   ): void
   /** `recordInteraction: false` marks a title the host applied, not one the user typed. */
   renameTerminal(tabId: string, title: string | null, options?: { recordInteraction: false }): void

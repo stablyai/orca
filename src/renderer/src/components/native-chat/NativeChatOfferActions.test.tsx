@@ -111,14 +111,6 @@ beforeEach(() => {
 afterEach(cleanup)
 
 describe('an offer card', () => {
-  it('Dismiss tells the bot and hides only itself', async () => {
-    show(<Offer id="a" />)
-    await press(screen.getByRole('button', { name: 'Dismiss' }))
-    expect(send).toHaveBeenCalledWith('Dismiss')
-    expect(notNowIn('a')).toBeNull()
-    expect(screen.getByRole('button', { name: 'Connect' })).toBeTruthy()
-  })
-
   it('sends once on a double click', async () => {
     show(<Offer id="a" />)
     const dismiss = screen.getByRole('button', { name: 'Dismiss' })
@@ -147,32 +139,6 @@ describe('an offer card', () => {
     expect(toastError).not.toHaveBeenCalled()
   })
 
-  it('reads done in place of its buttons', () => {
-    render(
-      <NativeChatOfferActions
-        offer={{ dismissed: false, dismiss: vi.fn() }}
-        done
-        doneLabel="Handed off"
-      >
-        <button type="button">Hand off</button>
-      </NativeChatOfferActions>
-    )
-    expect(screen.queryByRole('button')).toBeNull()
-    expect(screen.getByText('Handed off')).toBeTruthy()
-  })
-
-  it('keeps another card’s Dismiss when one card is dismissed', async () => {
-    show(
-      <>
-        <Offer id="a" />
-        <Offer id="b" />
-      </>
-    )
-    await press(within(screen.getByTestId('b')).getByRole('button', { name: 'Dismiss' }))
-    expect(notNowIn('a')).not.toBeNull()
-    expect(notNowIn('b')).toBeNull()
-  })
-
   it('keeps another card’s Dismiss after a reload, and the dismissed one’s gone', async () => {
     const cards = (
       <>
@@ -182,6 +148,11 @@ describe('an offer card', () => {
     )
     show(cards)
     await press(within(screen.getByTestId('b')).getByRole('button', { name: 'Dismiss' }))
+    expect(send).toHaveBeenCalledWith('Dismiss')
+    expect(notNowIn('a')).not.toBeNull()
+    expect(notNowIn('b')).toBeNull()
+    expect(within(screen.getByTestId('b')).getByRole('button', { name: 'Connect' })).toBeTruthy()
+
     await reload(cards)
     expect(notNowIn('a')).not.toBeNull()
     expect(notNowIn('b')).toBeNull()

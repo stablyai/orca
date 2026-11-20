@@ -61,6 +61,7 @@ import { structuredAgentSessionHostPlace } from '../../pane/ownership/use-struct
 import { sayAgentSessionFailureTranslated } from './agent-session-failure-words-text'
 import { NativeChatTranscriptSignInNotice } from '../../host-access/NativeChatSignInRow'
 import { nativeChatSignInHostWords } from '../../host-access/native-chat-sign-in-notice'
+import { NativeChatNoticeAuthRecovery } from '../../antigravity-auth/NativeChatAntigravityAuthRecovery'
 
 const HOST_STATUS_WORDS: Record<AgentSessionHostStatusPresentation, () => string> = {
   'history-repaired': () =>
@@ -366,6 +367,7 @@ export function NativeChatNoticeRow({
         ) : null}
       </div>
       <NativeChatSetupButton failureKind={block.failure?.kind} rowId={messageId} />
+      {resolved ? null : <NativeChatNoticeAuthRecovery block={block} agentName={agentName} />}
       {details}
     </div>
   )

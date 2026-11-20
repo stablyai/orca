@@ -1,4 +1,5 @@
-import { readFileSync } from 'node:fs'
+import { inCredentialFileOrder } from './credential-file-io'
+import { readFile } from 'node:fs/promises'
 import type { IntegrationCredentialService } from '../../shared/secure-storage/integration-credential-errors'
 import {
   CredentialDecryptionError,
@@ -18,12 +19,13 @@ export function createIntegrationTokenFileCache(args: {
   filePath: (id: string) => string
 }) {
   const entries = new Map<string, IntegrationStateFileCache<TokenFileState>>()
-  const stateFor = (id: string): TokenFileState => {
-    let entry = entries.get(id)
+  const readingEntries = new Map<string, IntegrationStateFileCache<TokenFileState>>()
+  const entryFor = (id: string): IntegrationStateFileCache<TokenFileState> => {
+    let entry = readingEntries.get(id) ?? entries.get(id)
     if (!entry) {
       entry = createIntegrationStateFileCache<TokenFileState>({
         filePath: () => args.filePath(id),
-        readFromDisk: () => ({ present: credentialFileHasContent(args.filePath(id)) })
+        readFromDisk: async () => ({ present: await credentialFileHasContent(args.filePath(id)) })
       })
     }
     entries.delete(id)
@@ -35,41 +37,68 @@ export function createIntegrationTokenFileCache(args: {
       }
       entries.delete(oldest)
     }
-    return entry.get()
+    return entry
+  }
+  const stateFor = (id: string) => entryFor(id).get()
+  async function readToken(id: string, force = true): Promise<string | null> {
+    // Stamp before decrypting so a concurrent rotation cannot pin older bytes as current.
+    const state = await stateFor(id)
+    if (state.token !== undefined) {
+      return state.token
+    }
+    if (!force || !state.present) {
+      return null
+    }
+    try {
+      const token = readStoredCredentialToken(args.service, await readFile(args.filePath(id)))
+      if ((await stateFor(id)) !== state) {
+        return await readToken(id, force)
+      }
+      state.token = token ?? undefined
+      state.error = undefined
+      return token
+    } catch (error) {
+      if ((await stateFor(id)) !== state) {
+        return await readToken(id, force)
+      }
+      if (error instanceof CredentialDecryptionError) {
+        state.error = error.message
+        throw error
+      }
+      return null
+    }
   }
   return {
-    has(id: string): boolean {
-      return stateFor(id).present
+    async has(id: string): Promise<boolean> {
+      return inCredentialFileOrder(
+        `${args.filePath(id)}.mutation`,
+        async () => (await stateFor(id)).present
+      )
     },
-    read(id: string, force = true): string | null {
-      // Stamp before decrypting so a concurrent rotation cannot pin older bytes as current.
-      const state = stateFor(id)
-      if (state.token !== undefined) {
-        return state.token
-      }
-      if (!force || !state.present) {
-        return null
-      }
-      try {
-        const token = readStoredCredentialToken(args.service, readFileSync(args.filePath(id)))
-        state.token = token ?? undefined
-        state.error = undefined
-        return token
-      } catch (error) {
-        if (error instanceof CredentialDecryptionError) {
-          state.error = error.message
-          throw error
+    read(id: string, force = true): Promise<string | null> {
+      return inCredentialFileOrder(`${args.filePath(id)}.mutation`, async () => {
+        readingEntries.set(id, entryFor(id))
+        try {
+          return await readToken(id, force)
+        } finally {
+          readingEntries.delete(id)
         }
-        return null
-      }
+      })
     },
-    error(id: string): string | undefined {
-      return stateFor(id).error
+    async error(id: string): Promise<string | undefined> {
+      return inCredentialFileOrder(
+        `${args.filePath(id)}.mutation`,
+        async () => (await stateFor(id)).error
+      )
     },
     forget(id: string): void {
+      readingEntries.get(id)?.invalidate()
       entries.delete(id)
     },
     clear(): void {
+      for (const entry of readingEntries.values()) {
+        entry.invalidate()
+      }
       entries.clear()
     }
   }

@@ -1,91 +1,42 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { setSecretStore } from '../../shared/secure-storage/secret-store'
-import type * as ZcodePlanApiKeyStore from './zcode-plan-api-key-store'
 
-const safeStorageMock = vi.hoisted(() => ({
-  isEncryptionAvailable: vi.fn(() => true),
-  encryptString: vi.fn((value: string) => Buffer.from(value)),
-  decryptString: vi.fn((value: Buffer) => value.toString('utf8'))
-}))
-
-beforeEach(() => setSecretStore({ ...safeStorageMock, describeProtectionGap: () => null }))
-
-const existsSyncMock = vi.fn()
-const readFileSyncMock = vi.fn()
-const rmSyncMock = vi.fn()
-const hardenExistingSecureFileMock = vi.fn()
-const writeSecureFileMock = vi.fn()
-const homedirMock = vi.fn(() => '/home/test')
-
-vi.mock('node:fs', () => ({
-  existsSync: existsSyncMock,
-  readFileSync: readFileSyncMock,
-  rmSync: rmSyncMock
-}))
-
-vi.mock('node:os', () => ({
-  homedir: homedirMock
-}))
-
-vi.mock('node:path', () => ({
-  join: (...parts: string[]) => parts.join('/')
-}))
-
-vi.mock('../../shared/secure-storage/secure-file', () => ({
-  hardenExistingSecureFile: hardenExistingSecureFileMock,
-  writeSecureFile: writeSecureFileMock
-}))
-
-const envelope = (kind: 'encrypted' | 'plaintext', value: string): string =>
-  `orca-zcode-plan-api-key:v1:${kind}:${Buffer.from(value, 'utf8').toString('base64')}`
-
-async function loadStore(): Promise<typeof ZcodePlanApiKeyStore> {
-  return await import('./zcode-plan-api-key-store')
-}
-
-describe('zcode-plan-api-key-store', () => {
-  beforeEach(() => {
-    existsSyncMock.mockReset()
-    readFileSyncMock.mockReset()
-    rmSyncMock.mockReset()
-    hardenExistingSecureFileMock.mockReset()
-    writeSecureFileMock.mockReset()
-    writeSecureFileMock.mockReturnValue(true)
-    safeStorageMock.isEncryptionAvailable.mockReset()
-    safeStorageMock.encryptString.mockReset()
-    safeStorageMock.decryptString.mockReset()
-    safeStorageMock.isEncryptionAvailable.mockReturnValue(true)
-    safeStorageMock.encryptString.mockImplementation((value: string) => Buffer.from(value))
-    safeStorageMock.decryptString.mockImplementation((value: Buffer) => value.toString('utf8'))
-    homedirMock.mockReturnValue('/home/test')
-    vi.resetModules()
+let home = ''
+beforeEach(() => {
+  home = mkdtempSync(join(tmpdir(), 'orca-glm-key-'))
+  vi.stubEnv('HOME', home)
+  vi.stubEnv('USERPROFILE', home)
+  mkdirSync(join(home, '.orca'))
+  setSecretStore({
+    isEncryptionAvailable: () => false,
+    encryptString: (value) => Buffer.from(value),
+    decryptString: (value) => value.toString(),
+    describeProtectionGap: () => null
   })
-
-  it('rejects a key with an interior newline instead of saving it', async () => {
-    const store = await loadStore()
-
-    expect(() => store.saveZcodePlanApiKey('glm\r\nsecret')).toThrow('must be a single line')
-    expect(writeSecureFileMock).not.toHaveBeenCalled()
-  })
-
-  it('refuses to decrypt an encrypted envelope once safeStorage becomes unavailable', async () => {
-    safeStorageMock.isEncryptionAvailable.mockReturnValue(false)
-    existsSyncMock.mockReturnValue(true)
-    readFileSyncMock.mockReturnValue(Buffer.from(envelope('encrypted', 'glm-secret')))
-    const store = await loadStore()
-
-    expect(() => store.readZcodePlanApiKey()).toThrow('could not be decrypted')
-  })
-
-  it('throws on an unreadable envelope instead of returning a partial key', async () => {
-    existsSyncMock.mockReturnValue(true)
-    readFileSyncMock.mockReturnValue(Buffer.from('not-an-envelope'))
-    const store = await loadStore()
-
-    expect(() => store.readZcodePlanApiKey()).toThrow('could not be decrypted')
-  })
+  vi.resetModules()
+})
+afterEach(() => {
+  vi.unstubAllEnvs()
+  rmSync(home, { recursive: true, force: true })
 })
 
-afterEach(() => {
-  vi.restoreAllMocks()
+it('rejects a key with an interior newline instead of saving it', async () => {
+  const store = await import('./zcode-plan-api-key-store')
+  await expect(store.saveZcodePlanApiKey('glm\r\nsecret')).rejects.toThrow('must be a single line')
+})
+it('refuses to decrypt an encrypted envelope once safeStorage becomes unavailable', async () => {
+  writeFileSync(
+    join(home, '.orca', 'zcode-plan-api-key.enc'),
+    'orca-zcode-plan-api-key:v1:encrypted:Z2xtLXNlY3JldA=='
+  )
+  const store = await import('./zcode-plan-api-key-store')
+  await expect(store.readZcodePlanApiKey()).rejects.toThrow('could not be decrypted')
+})
+it('throws on an unreadable envelope instead of returning a partial key', async () => {
+  writeFileSync(join(home, '.orca', 'zcode-plan-api-key.enc'), 'not-an-envelope')
+  const store = await import('./zcode-plan-api-key-store')
+  await expect(store.readZcodePlanApiKey()).rejects.toThrow('could not be decrypted')
 })

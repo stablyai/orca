@@ -180,11 +180,14 @@ describe('NewBotDialog picture intake', () => {
           : ''
   })
   // The picker's own caption line, a direct child of the picker (the carousel's announcer sits inside it).
+  // The picker's caption line, not the carousel's own announcement.
   const line = (): string =>
-    screen
-      .getByRole('button', { name: 'Previous picture' })
-      .closest('[role="group"]')
-      ?.parentElement?.querySelector(':scope > [aria-live]')?.textContent ?? ''
+    [
+      ...(screen
+        .getByRole('button', { name: 'Previous picture' })
+        .closest('[role="group"]')
+        ?.parentElement?.querySelectorAll('[aria-live]') ?? [])
+    ].find((node) => !node.closest('[aria-roledescription="carousel"]'))?.textContent ?? ''
 
   it('takes pasted image data from anywhere in the dialog, the Name field included', async () => {
     const { picture } = renderDialog()

@@ -29,6 +29,11 @@ import {
 import { dropClosedTerminalTabs } from '../../closed-terminal-tab-write-fence'
 import { keepWslMoveFrozenSessionsForStore } from '../../moving-wsl-projects/terminal-state/wsl-move-session-freeze'
 import { type WriteSchedulingOperations, scheduleSave } from '../profile-writing/write-scheduling'
+import {
+  membershipRewritesFor,
+  withStoreRewrites,
+  type WrittenWorkspaceScope
+} from './workspace-session-write-listeners'
 import { orderTerminalRowsByTabGroups } from '../../../../shared/workspace-layout/terminal-topology/terminal-row-order'
 
 export class SessionSnapshotOperations {
@@ -43,7 +48,12 @@ export class SessionSnapshotOperations {
     this[sessionSnapshotOperationsContext] = { runtime, sessions, bindingRecovery, scheduling }
   }
 
-  setWorkspaceSession(session: PersistedState['workspaceSession'], hostId?: string | null): void {
+  /** `written`: the workspaces the caller changed, when it knows them; the Store's own rewrites can still widen it. */
+  setWorkspaceSession(
+    session: PersistedState['workspaceSession'],
+    hostId?: string | null,
+    written?: WrittenWorkspaceScope
+  ): void {
     const resolved = resolveHostId(hostId)
     const { runtime } = this[sessionSnapshotOperationsContext]
     if (runtime.durableMutationPhase === 'rollback') {
@@ -59,10 +69,15 @@ export class SessionSnapshotOperations {
     }
     if (resolved === LOCAL_EXECUTION_HOST_ID) {
       this.assertSnapshotAdmission(true)
-      setLocalWorkspaceSession(this, session)
+      setLocalWorkspaceSession(this, session, false, written)
       return
     }
-    setHostWorkspaceSession(this[sessionSnapshotOperationsContext].sessions, resolved, session)
+    setHostWorkspaceSession(
+      this[sessionSnapshotOperationsContext].sessions,
+      resolved,
+      session,
+      written
+    )
   }
 
   stageWorkspaceSessionBeforeUnload(
@@ -78,7 +93,11 @@ export class SessionSnapshotOperations {
     setHostWorkspaceSession(this[sessionSnapshotOperationsContext].sessions, resolved, session)
   }
 
-  patchWorkspaceSession(patch: WorkspaceSessionPatch, hostId?: string | null): void {
+  patchWorkspaceSession(
+    patch: WorkspaceSessionPatch,
+    hostId?: string | null,
+    written?: WrittenWorkspaceScope
+  ): void {
     const resolved = resolveHostId(hostId)
     // Scalar patches skip topology work; membership patches retain stale-binding protections.
     let next: WorkspaceSessionState = {
@@ -86,21 +105,22 @@ export class SessionSnapshotOperations {
       ...patch
     }
     if (workspaceSessionPatchNeedsFullNormalization(patch)) {
-      this.setWorkspaceSession(next, resolved)
+      this.setWorkspaceSession(next, resolved, written)
       return
     }
     if (Object.hasOwn(patch, 'browserUrlHistory')) {
       next = pruneWorkspaceSessionBrowserHistory(next)
     }
+    const rewrites = membershipRewritesFor(written)
     // Unified-tab patches bypass full normalization but still need close tombstones.
     if (Object.hasOwn(patch, 'unifiedTabs')) {
-      next = dropClosedTerminalTabs(next)
+      next = dropClosedTerminalTabs(next, undefined, rewrites?.worktreeIds)
     }
     if (resolved === LOCAL_EXECUTION_HOST_ID) {
       const { state } = this[sessionSnapshotOperationsContext].runtime
       next = keepWslMoveFrozenSessionsForStore(next, state.workspaceSession)
     }
-    this.publishSession(next, resolved)
+    this.publishSession(next, resolved, written, rewrites)
   }
 
   /** Drops one pane's saved resume when `retire` accepts it. Topology is untouched, so rows keep
@@ -123,17 +143,20 @@ export class SessionSnapshotOperations {
     if (resolved === LOCAL_EXECUTION_HOST_ID) {
       next = keepWslMoveFrozenSessionsForStore(next, session)
     }
-    this.publishSession(next, resolved, false)
+    this.publishSession(next, resolved, undefined, undefined, false)
     return true
   }
 
+  /** `rewrites` collects what the Store's own normalization changed for a scoped write. */
   private publishSession(
     session: WorkspaceSessionState,
     hostId: ExecutionHostId,
+    written?: WrittenWorkspaceScope,
+    rewrites = membershipRewritesFor(written),
     topologyChanged = true
   ): void {
     if (topologyChanged) {
-      session = orderTerminalRowsByTabGroups(session)
+      session = orderTerminalRowsByTabGroups(session, rewrites?.worktreeIds)
     }
     const { runtime, scheduling } = this[sessionSnapshotOperationsContext]
     if (hostId === LOCAL_EXECUTION_HOST_ID) {
@@ -147,7 +170,8 @@ export class SessionSnapshotOperations {
     scheduleSave(
       scheduling,
       hostId === LOCAL_EXECUTION_HOST_ID ? ['workspaceSession'] : ['workspaceSessionsByHostId'],
-      hostId
+      hostId,
+      withStoreRewrites(written, rewrites)
     )
   }
 

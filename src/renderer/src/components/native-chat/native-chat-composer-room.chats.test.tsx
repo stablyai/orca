@@ -4,7 +4,10 @@ import type { KeyboardEvent, ReactNode } from 'react'
 import { expect, it, vi } from 'vitest'
 import type { ComposerAutocomplete } from '../../../../shared/native-chat/input/composer/native-chat-composer-autocomplete'
 import { useNativeChatComposerMentions } from './native-chat-composer-room'
-import { applyNativeChatMention } from './composer/editor/native-chat-composer-input'
+import {
+  applyNativeChatMention,
+  type NativeChatMentionToken
+} from './composer/editor/native-chat-composer-input'
 import {
   NativeChatBotChatPickerContext,
   NativeChatBotChatRoomContext,
@@ -108,32 +111,6 @@ function mount() {
   return { ...view, completeMention }
 }
 
-it('goes back to the bots on Left or Escape without editing the draft', () => {
-  const { result, rerender, completeMention } = mount()
-  act(() => {
-    result.current.handleKey(key('ArrowRight'), 0)
-  })
-  act(() => {
-    expect(result.current.handleKey(key('ArrowLeft'), 0)).toBe(true)
-  })
-  expect(result.current.mentionFiles.files).toEqual(['Perf bot', 'src/main.ts'])
-  expect(completeMention).not.toHaveBeenCalled()
-  act(() => {
-    result.current.handleKey(key('ArrowRight'), 0)
-  })
-  rerender({ draft: 'Ask @two words' })
-  expect(result.current.autocomplete.mode).toBe('mention')
-  act(() => {
-    expect(result.current.handleKey(key('Escape'), 0)).toBe(true)
-  })
-  // The bots are back for the same `@`, and the text is as typed.
-  expect(result.current.autocomplete).toMatchObject({ mode: 'mention', query: '' })
-  expect(result.current.mentionFiles.files).toEqual(['Perf bot', 'src/main.ts'])
-  expect(completeMention).not.toHaveBeenCalled()
-  act(() => result.current.chooseMention('Perf bot'))
-  expect(completeMention).toHaveBeenCalledWith('Perf bot', '[Bot: Perf bot](bot:perf)', 4)
-})
-
 it('picks the highlighted chat after a spaced filter and uses a plain mention for Home Chat', () => {
   const { result, rerender, completeMention } = mount()
   act(() => {
@@ -159,9 +136,9 @@ it('picks the highlighted chat after a spaced filter and uses a plain mention fo
   expect(completeMention).toHaveBeenLastCalledWith('', '[Bot: Perf bot](bot-chat:perf/words)', 4)
 })
 
-it('puts a file picked from the bots, back from a filter with spaces, over the `@` and that filter', () => {
+it('returns from chat selection without editing the draft and replaces the filter when a file is picked', () => {
   let draft = 'Ask @'
-  const completeMention = (path: string, token?: string, from?: number) => {
+  const completeMention = (path: string, token?: NativeChatMentionToken, from?: number) => {
     draft = applyNativeChatMention(null, draft, draft.length, path, token, from).draft
   }
   const { result, rerender } = renderHook(
@@ -177,11 +154,20 @@ it('puts a file picked from the bots, back from a filter with spaces, over the `
   act(() => {
     result.current.handleKey(key('ArrowRight'), 0)
   })
+  act(() => {
+    expect(result.current.handleKey(key('ArrowLeft'), 0)).toBe(true)
+  })
+  expect(result.current.mentionFiles.files).toEqual(['Perf bot', 'src/main.ts'])
+  expect(draft).toBe('Ask @')
+  act(() => {
+    result.current.handleKey(key('ArrowRight'), 0)
+  })
   draft = 'Ask @two words'
   rerender({ text: draft })
   act(() => {
-    result.current.handleKey(key('Escape'), 0)
+    expect(result.current.handleKey(key('Escape'), 0)).toBe(true)
   })
+  expect(draft).toBe('Ask @two words')
   act(() => result.current.chooseMention('src/main.ts'))
   expect(draft).toBe('Ask @src/main.ts ')
 })
