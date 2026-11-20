@@ -78,3 +78,36 @@ it('checks a workspace tab list once, however many host patches follow', () => {
   expect(run(100)).toEqual({ reads: 0, publications: 0 })
   expect(run(1000)).toEqual({ reads: 0, publications: 0 })
 })
+
+it('rechecks a checked tab list when a sync brings tab-keyed marks', () => {
+  const tab = chatTab('structured-agent-session-old', 'sess-2')
+  const tabs = [tab]
+  let state: Pick<
+    AppState,
+    | 'unifiedTabsByWorktree'
+    | 'acknowledgedAgentsByPaneKey'
+    | 'activityClearedAtByPaneKey'
+    | 'manuallyUnreadTurnsByPaneKey'
+  > = {
+    unifiedTabsByWorktree: { wt: tabs },
+    acknowledgedAgentsByPaneKey: {},
+    activityClearedAtByPaneKey: {},
+    manuallyUnreadTurnsByPaneKey: {}
+  }
+  const store = {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the carry reads only these four fields.
+    getState: () => state as AppState,
+    setState: (patch: Partial<AppState>) => {
+      state = { ...state, ...patch }
+    }
+  }
+  carryChatReadMarks(store, ['wt'])
+  state = {
+    ...state,
+    acknowledgedAgentsByPaneKey: { [`structured-agent-session-old:${LEAF}`]: 100 }
+  }
+  carryChatReadMarks(store, ['wt'])
+  expect(state.acknowledgedAgentsByPaneKey).toEqual({
+    [`structured-agent-session-sess-2:${LEAF}`]: 100
+  })
+})

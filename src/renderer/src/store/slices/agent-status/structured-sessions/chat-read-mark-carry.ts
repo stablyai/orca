@@ -52,8 +52,9 @@ export function carriedChatReadMarks(
   return patch
 }
 
-// A workspace's tab list is replaced whenever its tabs change, so each list is checked once.
-const checkedTabLists = new WeakSet<readonly Tab[]>()
+// Tab lists and mark records are replaced, never edited, so a list is rechecked only when it or
+// the marks change (a later sync can still bring tab-keyed marks from an older client).
+const checkedAgainst = new WeakMap<readonly Tab[], readonly ReadMarks[keyof ReadMarks][]>()
 
 /** Carries saved read marks for the chat tabs of the named workspaces, or of every workspace. */
 export function carryChatReadMarks(
@@ -62,11 +63,13 @@ export function carryChatReadMarks(
 ): void {
   const state = store.getState()
   const tabsByWorkspace = state.unifiedTabsByWorktree
+  const records = RECORDS.map((record) => state[record])
   const unchecked: (readonly Tab[])[] = []
   for (const id of workspaceIds ?? Object.keys(tabsByWorkspace)) {
     const list = tabsByWorkspace[id]
-    if (list && !checkedTabLists.has(list)) {
-      checkedTabLists.add(list)
+    const checked = list && checkedAgainst.get(list)
+    if (list && !checked?.every((record, index) => record === records[index])) {
+      checkedAgainst.set(list, records)
       unchecked.push(list)
     }
   }
@@ -76,5 +79,10 @@ export function carryChatReadMarks(
   const patch = carriedChatReadMarks(state, unchecked.flat())
   if (patch) {
     store.setState(patch)
+    // The move itself replaced the records; the lists it checked stay checked against them.
+    const moved = RECORDS.map((record) => store.getState()[record])
+    for (const list of unchecked) {
+      checkedAgainst.set(list, moved)
+    }
   }
 }
