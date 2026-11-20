@@ -7,6 +7,7 @@ import type {
 } from './agent-session-journal-approval-subject'
 import type { AgentJournalCursor, AgentJournalItemIdentity } from './agent-session-journal-identity'
 import type { AgentJournalTurnScope } from './agent-session-journal-turn-scope'
+import type { AgentJournalWrittenStamp } from './agent-session-journal-written-stamp'
 import type { AgentSessionProviderContextBoundary } from '../conversation-context/agent-session-provider-context'
 // Persist/republish plain JSON only. Append-only rows are upcast on read, never rewritten;
 // unreadable versions/kinds must refuse writes rather than be skipped or compacted away.
@@ -227,7 +228,7 @@ export const AGENT_JOURNAL_TURN_LIFECYCLE_STATES = [
 ] as const
 export type AgentJournalTurnLifecycleState = (typeof AGENT_JOURNAL_TURN_LIFECYCLE_STATES)[number]
 
-export type AgentJournalTurnLifecycle = {
+export type AgentJournalTurnLifecycle = AgentJournalWrittenStamp & {
   turnId: string
   state: AgentJournalTurnLifecycleState
   /** Absent/unrecognized verdict means unknown, never success. completed alone proves nothing: provider API errors also finish turns. */
@@ -409,7 +410,7 @@ export type AgentJournalDispatchState = (typeof AGENT_JOURNAL_DISPATCH_STATES)[n
 
 /** The write-ahead submission row, projected. `unknown` is a displayed state:
  *  the turn reads as delivery unconfirmed, never as sent and never as failed. */
-export type AgentJournalSubmission = {
+export type AgentJournalSubmission = AgentJournalWrittenStamp & {
   clientMessageId: string
   /** Execution fence of the latest dispatch attempt or recovery. */
   fence: number
@@ -441,9 +442,6 @@ export type AgentJournalSubmission = {
   handoverRecorded?: true
   /** When the host handed it to the provider (its `dispatch{pending}` row). */
   handedOverAt?: number
-  /** When the provider took the write while running no other turn, so its turn has begun; still
-   *  pending until the provider's echo. Never delivery proof. Absent on older hosts. */
-  writtenAt?: number
   /** Host-only: the submission row's sequence, which tells which host process accepted it. Set
    *  only on a send accepted for later handover. The snapshot still carries it, but the submission
    *  schema omits it; no released client reads it, and clients read `submittedSequence` instead. */

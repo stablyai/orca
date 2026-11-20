@@ -102,4 +102,33 @@ describe('a send the agent took', () => {
     expect((await journal.reads.submission('steer'))?.writtenAt).toBeUndefined()
     expect((await journal.reads.submission('echoed'))?.writtenAt).toBeUndefined()
   })
+
+  // Forks copy turn records, not submissions; the turn must carry its own clock origin.
+  it('keeps the stamp on the turn its send opens', async () => {
+    const journal = await openJournal()
+    await journal.appendSubmission({
+      clientMessageId: 'idle',
+      payloadFingerprint: 'fingerprint:idle',
+      body,
+      fence: 2,
+      handoverRecorded: true,
+      origin: 'client'
+    })
+    await journal.prepareHandover({
+      clientMessageId: 'idle',
+      fence: 2,
+      turnScope: { kind: 'thread' },
+      body
+    })
+    await journal.markDispatchWritten({ clientMessageId: 'idle', fence: 2 })
+    await journal.appendItem(
+      { provider: 'orca', clientMessageId: 'turn' },
+      { kind: 'turn', turnId: 'turn', state: 'running', userItemId: 'orca:idle', startedAt: 150 },
+      { fence: 2, turnScope: { kind: 'thread' } }
+    )
+    expect((await journal.reads.item('orca:turn'))?.body).toMatchObject({
+      kind: 'turn',
+      writtenAt: 100
+    })
+  })
 })

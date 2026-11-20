@@ -173,6 +173,7 @@ const TurnLifecycleFields = {
   userItemId: z.string().min(1).optional(),
   startedAt: z.number().finite().positive().optional(),
   requestedAt: z.number().finite().positive().optional(),
+  writtenAt: z.number().finite().positive().optional(),
   completedAt: z.number().finite().positive().optional(),
   durationMs: z.number().finite().nonnegative().optional()
 }

@@ -42,12 +42,17 @@ export type StructuredAgentTurnTiming = {
 
 function readTiming(
   item: Pick<AgentJournalRenderItem, 'body' | 'observedAt'>,
-  writtenAt?: number
+  /** The opening send's own stamp, for a record written before the host copied it. */
+  sendWrittenAt?: number
 ): StructuredAgentTurnTiming | null {
   const turn = readAgentJournalTurn(item.body)
   if (!turn) {
     return null
   }
+  const writtenAt =
+    turn.writtenAt !== undefined && Number.isFinite(turn.writtenAt) && turn.writtenAt > 0
+      ? turn.writtenAt
+      : sendWrittenAt
   const { state, startedAt, requestedAt, completedAt, durationMs } = turn
   if (startedAt === undefined || !Number.isFinite(startedAt) || startedAt <= 0) {
     return null
@@ -180,7 +185,10 @@ export function completedStructuredAgentTurnSeconds(
     return Math.max(0, Math.floor((timing.completedAt - structuredAgentTurnOrigin(timing)) / 1000))
   }
   if (timing.durationMs !== undefined) {
-    return Math.floor(timing.durationMs / 1000)
+    // The provider measures from its own start; add the wait the live clock already showed.
+    return Math.floor(
+      (timing.durationMs + timing.startedAt - structuredAgentTurnOrigin(timing)) / 1000
+    )
   }
   return timing.completedAt !== undefined
     ? Math.max(0, Math.floor((timing.completedAt - structuredAgentTurnOrigin(timing)) / 1000))
