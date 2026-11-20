@@ -17,13 +17,14 @@ vi.mock('./workspace-cleanup-run-evidence', () => ({
   collectWorkspaceCleanupWorkspaces: async () => [fresh.workspace]
 }))
 // Deletion admission hands the removal's own result back; here the route refused to verify.
-vi.mock('./workspace-cleanup-admission', () => ({
-  admitWorkspaceCleanup: async () => {
+const admit = vi.hoisted(() =>
+  vi.fn(async () => {
     const completion = Promise.reject(new WorktreeRemovalIdentityUnverifiableError())
     completion.catch(() => undefined)
     return { admitted: true, completion }
-  }
-}))
+  })
+)
+vi.mock('./workspace-cleanup-admission', () => ({ admitWorkspaceCleanup: admit }))
 vi.mock('../../workspace-hooks/effective-hooks-reader', () => ({
   getEffectiveHooksAsync: async () => null
 }))
@@ -51,6 +52,36 @@ const RULES: WorkspaceCleanupRules = {
 const guard = {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: refusal happens before the guard is read.
   identity: { root: '/checkout' } as unknown as WorktreeCheckoutIdentity
+}
+
+function wslWorkspace(): WorkspaceCleanupWorkspace {
+  const policy = resolveWorkspaceCleanupPolicy({ workspaceCleanupPolicy: RULES }, undefined)
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the removal step reads only these fields.
+  const workspace = {
+    ref: {
+      worktreeId: 'repo::\\\\wsl.localhost\\Ubuntu\\w',
+      instanceId: 'instance-1',
+      repoId: 'repo',
+      repoName: 'repo',
+      displayName: 'w',
+      branch: 'feature',
+      path: '\\\\wsl.localhost\\Ubuntu\\w'
+    },
+    repo: { id: 'repo', path: '\\\\wsl.localhost\\Ubuntu\\repo' },
+    policy,
+    input: {
+      reasons: ['merged'],
+      blockers: [],
+      lastActivityAt: 0,
+      git: { clean: true, upstreamAhead: 0, upstreamBehind: 0, checkedAt: 1 }
+    },
+    paneAgentStates: new Map(),
+    removing: false,
+    identity: 'repo::\\\\wsl.localhost\\Ubuntu\\w',
+    folderSiblings: [],
+    readPairedFolderChildren: async () => ({ children: [], complete: true })
+  } as unknown as WorkspaceCleanupWorkspace
+  return workspace
 }
 
 let dir: string | undefined
@@ -110,32 +141,7 @@ describe('a removal route that cannot verify the checkout keeps it', () => {
   })
 
   it('reports the workspace kept, with why, instead of a failed removal', async () => {
-    const policy = resolveWorkspaceCleanupPolicy({ workspaceCleanupPolicy: RULES }, undefined)
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the removal step reads only these fields.
-    const workspace = {
-      ref: {
-        worktreeId: 'repo::\\\\wsl.localhost\\Ubuntu\\w',
-        instanceId: 'instance-1',
-        repoId: 'repo',
-        repoName: 'repo',
-        displayName: 'w',
-        branch: 'feature',
-        path: '\\\\wsl.localhost\\Ubuntu\\w'
-      },
-      repo: { id: 'repo', path: '\\\\wsl.localhost\\Ubuntu\\repo' },
-      policy,
-      input: {
-        reasons: ['merged'],
-        blockers: [],
-        lastActivityAt: 0,
-        git: { clean: true, upstreamAhead: 0, upstreamBehind: 0, checkedAt: 1 }
-      },
-      paneAgentStates: new Map(),
-      removing: false,
-      identity: 'repo::\\\\wsl.localhost\\Ubuntu\\w',
-      folderSiblings: [],
-      readPairedFolderChildren: async () => ({ children: [], complete: true })
-    } as unknown as WorkspaceCleanupWorkspace
+    const workspace = wslWorkspace()
     fresh.workspace = workspace
     const outcome = await removeWorkspaceForCleanup({
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: admission and evidence are mocked.
@@ -151,6 +157,27 @@ describe('a removal route that cannot verify the checkout keeps it', () => {
       keepCause: 'identity-unverified',
       keptOnRecheck: true
     })
+  })
+
+  it('keeps a workspace whose id now names another instance than the scan judged', async () => {
+    const scanned = wslWorkspace()
+    fresh.workspace = { ...scanned, ref: { ...scanned.ref, instanceId: 'instance-2' } }
+    admit.mockClear()
+    const outcome = await removeWorkspaceForCleanup({
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: admission and evidence are mocked.
+      runtime: {} as unknown as OrcaRuntimeService,
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: admission and evidence are mocked.
+      store: {} as unknown as RuntimeStore,
+      globalRules: () => RULES,
+      workspace: scanned,
+      now: () => Date.UTC(2026, 10, 20)
+    })
+    expect(outcome).toEqual({
+      outcome: 'kept',
+      keepCause: 'identity-unverified',
+      keptOnRecheck: true
+    })
+    expect(admit).not.toHaveBeenCalled()
   })
 
   it('leaves no half-done delete to finish when the route refused', async () => {
