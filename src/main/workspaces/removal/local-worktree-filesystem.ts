@@ -134,7 +134,7 @@ export function getLocalWorktreePathAccess(
   }
 }
 
-/** `markerLast` keeps `.git` until everything else is gone, so a failed delete still proves whose folder it is. */
+/** `markerLast` keeps `.git` (matched by identity, so a case-folding mount's `.GIT` stays too) until everything else is gone, so a failed delete still proves whose folder it is. */
 export async function removeLocalWorktreePath(
   targetPath: string,
   options: LocalWorktreeFilesystemOptions = {},
@@ -156,7 +156,7 @@ export async function removeLocalWorktreePath(
       distro,
       guestCommand(targetPath, (target) =>
         markerLast
-          ? `if [ -L ${target} ] || { [ -e ${target} ] && [ ! -d ${target} ]; }; then echo "Refusing to delete non-directory worktree path" >&2; exit 3; fi; LC_ALL=C find ${target} -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf -- {} + && rm -f -- ${target}/.git && LC_ALL=C rmdir -- ${target}`
+          ? `if [ -L ${target} ] || { [ -e ${target} ] && [ ! -d ${target} ]; }; then echo "Refusing to delete non-directory worktree path" >&2; exit 3; fi; { if [ -e ${target}/.git ]; then LC_ALL=C find ${target} -mindepth 1 -maxdepth 1 ! -samefile ${target}/.git -exec rm -rf -- {} +; else LC_ALL=C find ${target} -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +; fi; } && rm -f -- ${target}/.git && LC_ALL=C rmdir -- ${target}`
           : `rm -rf -- ${target}`
       )
     )

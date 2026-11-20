@@ -16,6 +16,7 @@ import { areWorktreePathsEqual } from '../../git/worktrees/catalog/worktree-path
 import { CLIENT_REMOVAL_HOME } from './worktree-removal-home-guard'
 import { listWorktreesStrict as listUncachedWorktreesStrict } from '../../git/worktrees/catalog/worktree-listing'
 import { failedWorktreeRemovals, worktreeCheckoutExists } from './worktree-removal-table'
+import { readCheckoutGitdirPointer } from './worktree-removal-gitdir-identity'
 import { waitForWorktreeRemovalAcceptance } from './worktree-removal-settlement'
 import {
   assertWorktreeDoesNotContainRegisteredWorktree,
@@ -40,6 +41,15 @@ export function differentCheckoutAtPathError(worktreePath: string): Error {
   return new Error(
     `A different checkout is now at ${worktreePath}; Orca left it in place. Delete it again to remove it.`
   )
+}
+
+/** A leftover whose `.git` names another admin entry is a different checkout restored at this path. */
+export async function assertLeftoverIsRecordedCheckout(
+  record: Pick<WorktreeRemovalRecord, 'worktreePath' | 'gitdir'>
+): Promise<void> {
+  if (record.gitdir && (await readCheckoutGitdirPointer(record.worktreePath)) !== record.gitdir) {
+    throw differentCheckoutAtPathError(record.worktreePath)
+  }
 }
 
 export async function registeredRemovalCheckout(
@@ -148,7 +158,15 @@ export async function isLeftoverStillRemovable(
   if (current.some((worktree) => areWorktreePathsEqual(worktree.path, record.worktreePath))) {
     throw differentCheckoutAtPathError(record.worktreePath)
   }
-  return assertUnregisteredLeftoverRemovable(repoPath, record.worktreePath, current)
+  const removable = await assertUnregisteredLeftoverRemovable(
+    repoPath,
+    record.worktreePath,
+    current
+  )
+  if (removable) {
+    await assertLeftoverIsRecordedCheckout(record)
+  }
+  return removable
 }
 
 /** Registered paths use normal deletion; otherwise the folder must be gone or provably this repo's leftover. */
@@ -164,11 +182,15 @@ export async function retryFailedRemovalUnlessRegistered(
   }
   const failed = failedWorktreeRemovals.get(worktreeId)
   if (failed && !usesNativeWindowsRemoval(worktreePath, localOptions)) {
-    await assertUnregisteredLeftoverRemovable(
-      failed.repoPath,
-      failed.worktreePath,
-      registeredWorktrees
-    )
+    if (
+      await assertUnregisteredLeftoverRemovable(
+        failed.repoPath,
+        failed.worktreePath,
+        registeredWorktrees
+      )
+    ) {
+      await assertLeftoverIsRecordedCheckout(failed)
+    }
   }
   if (retry() === undefined) {
     return false

@@ -34,6 +34,7 @@ import {
 } from '../../../workspaces/removal/worktree-removal-safety'
 import {
   assertUnregisteredCheckoutGone,
+  assertLeftoverIsRecordedCheckout,
   assertUnregisteredLeftoverRemovable,
   isLeftoverStillRemovable,
   isRecordedCheckout,
@@ -210,6 +211,9 @@ async function finishInterruptedLocalWorktreeRemoval(
     (await assertUnregisteredLeftoverRemovable(repo.path, record.worktreePath, worktrees))
   if (leftover && !record.force) {
     throw new Error(ORPHANED_WORKTREE_DIRECTORY_MESSAGE)
+  }
+  if (leftover) {
+    await assertLeftoverIsRecordedCheckout(record)
   }
   if (native) {
     await authorizeWindowsCheckout(
