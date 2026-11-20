@@ -32,6 +32,7 @@ const GAP_RESEED_CAPTURE_TIMEOUT_MS = 35_000
 const GAP_RESEED_MAX_CONCURRENT_CAPTURES = 8
 const GAP_RESEED_CATCH_UP_POLL_MS = 50
 
+const ignore = (): void => {}
 const delay = (ms: number): Promise<void> =>
   new Promise((resolve) => setTimeout(resolve, ms).unref?.())
 
@@ -75,6 +76,8 @@ export abstract class OrcaRuntimeWithHeadlessGapReseed extends OrcaRuntimeWithCr
         keepPreGapScreen(state, stream)
         // CAN grounds the parser: the kept output can resume inside an escape whose start was dropped.
         await state.emulator.write('\x18')
+        // The dropped bytes may have revoked the shell claim (a TUI starting); only proof after the gap restores it.
+        state.ownership.seedOwner(undefined)
         // Here, in stream order: chunks queued before the gap finished their carries already.
         resetFreebuffTerminalStatusAfterGap(
           state.emulator,
@@ -294,10 +297,7 @@ export abstract class OrcaRuntimeWithHeadlessGapReseed extends OrcaRuntimeWithCr
       this.finishGapRecovery(ptyId, state, snapshot)
       return 'rebuilt'
     })
-    state.writeChain = step.then(
-      () => {},
-      () => {}
-    )
+    state.writeChain = step.then(ignore, ignore)
     return step
   }
 
