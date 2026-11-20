@@ -96,6 +96,7 @@ export async function setClaudeAllowedPermissionMode(
     throw fallbackWrite.reason
   }
   if (bypassWrite.status === 'fulfilled') {
+    session.bypassDisabled = false
     return 'bypassPermissions'
   }
   if (!isClaudeBypassRefusal(bypassWrite.reason)) {

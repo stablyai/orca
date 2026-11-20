@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { leaveClaudePlanModeOnApproval } from './claude-plan-approval-mode'
+import { setClaudeAllowedPermissionMode } from './claude-full-access-refusal'
 
 function approvePlan(
   launched: 'bypassPermissions' | 'acceptEdits',
@@ -66,5 +67,25 @@ describe('leaving Plan mode after an approved plan', () => {
 
   it('restores the requested mode over a start that was not a Full access refusal', () => {
     expect(approvePlan('acceptEdits', 'default')).toBe('acceptEdits')
+  })
+
+  it('asks once when Claude accepts bypass after a Plan start no settings read covered', async () => {
+    const setPermissionMode = vi.fn((_mode: string) => Promise.resolve())
+    const session = {
+      launchIntent: { permissionMode: 'bypassPermissions' },
+      firstRootInit: { permissionMode: 'plan' },
+      connection: { setPermissionMode }
+    }
+    expect(await setClaudeAllowedPermissionMode(session, 'bypassPermissions')).toBe(
+      'bypassPermissions'
+    )
+    expect(await setClaudeAllowedPermissionMode(session, 'bypassPermissions')).toBe(
+      'bypassPermissions'
+    )
+    expect(setPermissionMode.mock.calls.map(([mode]) => mode)).toEqual([
+      'default',
+      'bypassPermissions',
+      'bypassPermissions'
+    ])
   })
 })
