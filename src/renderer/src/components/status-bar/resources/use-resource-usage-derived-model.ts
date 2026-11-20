@@ -173,7 +173,12 @@ export function useResourceUsageDerivedModel({
     if (!open || !resourceSnapshot) {
       return null
     }
-    const hostCtx = { worktreeById, ambiguousWorktreeIds, repoConnectionIdById, repoRuntimeHostIdById }
+    const hostCtx = {
+      worktreeById,
+      ambiguousWorktreeIds,
+      repoConnectionIdById,
+      repoRuntimeHostIdById
+    }
     // The merge leaves out local samples for workspaces a paired machine hosts; so does this sum.
     return sharedAgentProcessUsage(resourceSnapshot, (worktree) => {
       const repoId =
