@@ -1,3 +1,4 @@
+import { nativeChatMessageCopyText } from '../messages/native-chat-message-copy-text'
 import { expect, it } from 'vitest'
 import type { NativeChatMessage } from '../../native-chat-types'
 import { normalizeImageTranscriptMessages } from './native-chat-image-transcript-markers'
@@ -29,4 +30,23 @@ it('folds the image-source row Claude writes after its prompt into that prompt',
     ],
     ['reply', [{ type: 'text', text: 'Looking.' }]]
   ])
+})
+
+it('keeps generated viewing-copy context out of drawn and copied words while preserving human notes', () => {
+  const note = '[Image source file: "/repo/a.png"; attached viewing copy: "/temp/a.png"]'
+  const generated: NativeChatMessage = {
+    id: 'generated',
+    role: 'user',
+    blocks: [
+      { type: 'image-ref', path: '/temp/a.png' },
+      { type: 'text', text: `Inspect this\n\n${note}` }
+    ],
+    timestamp: 1,
+    source: 'transcript'
+  }
+  expect(nativeChatMessageCopyText(generated)).toBe('Inspect this')
+  expect(nativeChatMessageCopyText({ ...generated, blocks: [{ type: 'text', text: note }] })).toBe(
+    note
+  )
+  expect(generated.blocks).toHaveLength(2)
 })

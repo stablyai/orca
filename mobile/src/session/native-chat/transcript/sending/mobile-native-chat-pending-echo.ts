@@ -1,4 +1,3 @@
-import { findLandedImagePreviewEchoes } from '../../composer/drafts/mobile-native-chat-draft-reconcile'
 import type { NativeChatMessage } from '../../../../../../src/shared/native-chat/native-chat-types'
 import type { MobileNativeChatDraftDestination } from '../../composer/drafts/mobile-native-chat-draft-inputs'
 import {
@@ -118,14 +117,17 @@ export function retireLandedMobileNativeChatPending(
 
 export function visibleMobileNativeChatPending(
   messages: readonly NativeChatMessage[],
-  current: MobileNativeChatPendingMessage[]
+  current: MobileNativeChatPendingMessage[],
+  landedImagePendingIds: ReadonlySet<string> = new Set(),
+  transcriptSettled = true
 ): MobileNativeChatPendingMessage[] {
+  if (!transcriptSettled) {
+    return current
+  }
   const visible = new Set(visibleNativeChatPendingSends(current, messages))
-  const landed = new Set(
-    findLandedImagePreviewEchoes(messages, current).map((item) => item.pendingId)
-  )
   const next = current.filter(
-    (item) => visible.has(item) || (Boolean(item.images?.length) && !landed.has(item.id))
+    (item) =>
+      visible.has(item) || (Boolean(item.images?.length) && !landedImagePendingIds.has(item.id))
   )
   return next.length === current.length ? current : next
 }

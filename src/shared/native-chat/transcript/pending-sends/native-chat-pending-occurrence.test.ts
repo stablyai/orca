@@ -1,8 +1,3 @@
-import { findLandedImagePreviewEchoes } from '../../../../../mobile/src/session/native-chat/composer/drafts/mobile-native-chat-draft-reconcile'
-import {
-  retireLandedMobileNativeChatPending,
-  visibleMobileNativeChatPending
-} from '../../../../../mobile/src/session/native-chat/transcript/sending/mobile-native-chat-pending-echo'
 import { describe, expect, it } from 'vitest'
 import type { NativeChatMessage } from '../../native-chat-types'
 import { assignNativeChatPendingOccurrence } from './native-chat-pending-occurrence'
@@ -585,28 +580,19 @@ describe('copied source-note attachment evidence', () => {
       pendingSendsAsMessages([image, first, second], transcript).map((entry) => entry.id)
     ).toEqual(['pending:first', 'pending:second'])
   })
+})
 
-  it('keeps mobile attachment evidence between preview binding and assistant advancement', () => {
-    const pending = [
-      {
-        id: 'phone',
-        text: note,
-        images: ['file://preview.png'],
-        sentAt: 100,
-        afterMessageId: 'boundary'
-      }
-    ]
-    const transcript = [
-      message('boundary', 'assistant', 'ready', 90),
-      row('phone-row', note, ['/repo/small.png'], 120)
-    ]
-    const landed = findLandedImagePreviewEchoes(transcript, pending)
-    expect(landed.map((entry) => entry.pendingId)).toEqual(['phone'])
-    const remaining = retireLandedMobileNativeChatPending(transcript, pending, new Set(['phone']))
-    expect(visibleMobileNativeChatPending(transcript, remaining)).toEqual([])
-    transcript.push(message('reply', 'assistant', 'done', 130))
-    expect(retireLandedMobileNativeChatPending(transcript, remaining, new Set(['phone']))).toEqual(
-      []
-    )
-  })
+it('reconciles literal source-note text split across glued text-only sends', () => {
+  const note = '[Image source file: "/repo/a.png"; attached viewing copy: "/temp/a.png"]'
+  const pending = [
+    { id: 'path', text: '/temp/a.png', sentAt: 100, afterMessageId: 'boundary' },
+    { id: 'note', text: note, sentAt: 110, afterMessageId: 'boundary' }
+  ]
+  const transcript = [
+    message('boundary', 'assistant', 'ready', 90),
+    message('glued', 'user', `/temp/a.png ${note}`, 120),
+    message('reply', 'assistant', 'done', 130)
+  ]
+  expect(prunePendingSends(pending, transcript)).toEqual([])
+  expect(pendingSendsAsMessages(pending, transcript)).toEqual([])
 })

@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { writes, preparation } = vi.hoisted(() => ({
-  writes: [] as string[],
-  preparation: { hold: false }
-}))
+const { writes, preparation } = vi.hoisted(() => {
+  const writes: string[] = []
+  return { writes, preparation: { hold: false } }
+})
 
 vi.mock('@/runtime/hosted-terminals/input/runtime-terminal-input-send', () => ({
   sendRuntimePtyInput: (_ptyId: string, data: string) => {

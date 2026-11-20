@@ -1,3 +1,4 @@
+import { withoutSentImagePromptMarkers } from '../../../../../../src/shared/native-chat/transcript/images/native-chat-sent-image-prompt-markers'
 import { memo, useCallback, useContext, useLayoutEffect, useMemo, useRef } from 'react'
 import { Text, View } from 'react-native'
 import { INLINE_TEXT_SELECTION } from '../../../../platform/text-selection/inline-text-selection'
@@ -118,7 +119,9 @@ function MobileNativeChatMessageImpl({
 }): React.JSX.Element {
   useMobileColorScheme()
   const t = useMobileTranslation()
-  const { shown: message, showFull, recovery } = useMobileNativeChatFullMessage(rowMessage)
+  const { shown, showFull, recovery } = useMobileNativeChatFullMessage(rowMessage)
+  const displayBlocks = withoutSentImagePromptMarkers(shown)
+  const message = displayBlocks === shown.blocks ? shown : { ...shown, blocks: displayBlocks }
   const agentFrom = message.role === 'user' || message.agentStart ? message.from : undefined
   const foldedIntoRequest = useMobileFoldedIntoBotRequest(agentFrom)
   const isUser = message.role === 'user' && !agentFrom

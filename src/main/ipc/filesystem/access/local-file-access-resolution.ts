@@ -267,6 +267,9 @@ export async function resolveLocalRequestPath(
   if (automaticLoad && isRefusedAutomaticLoadPath(resolve(targetPath))) {
     throw new Error(PATH_ACCESS_DENIED_MESSAGE)
   }
+  if (fileAccess.kind === 'chat-image' && !isNetworkSharePath(resolve(targetPath))) {
+    return kindRule(targetPath)
+  }
   // The default textual root check refuses outside paths without contacting shares.
   const insideRoots = await resolveDesktopAuthorizedPath(targetPath, store, options).catch(
     () => undefined

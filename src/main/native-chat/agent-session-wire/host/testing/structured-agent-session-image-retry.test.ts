@@ -88,7 +88,13 @@ it('sends an old returned image card through fitting without editing its stored 
       expect(handoff).toBeDefined()
       expect(rig.dispatch.mock.calls.at(-1)?.[0].body.blocks).toEqual([
         { type: 'text', text: 'Keep this screenshot and these words' },
-        { type: 'image-ref', path: expect.stringMatching(/agent-images/) }
+        { type: 'image-ref', path: expect.stringMatching(/agent-images/) },
+        {
+          type: 'text',
+          text: expect.stringContaining(
+            `Image source file: ${JSON.stringify(source)}; attached viewing copy:`
+          )
+        }
       ])
     })
     const journal = rig.host.collaboratorsForTests().sessions.get(SESSION)!.journal
