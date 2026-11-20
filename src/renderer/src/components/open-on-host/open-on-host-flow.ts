@@ -10,7 +10,7 @@ import {
   getRuntimeGitUpstreamStatus
 } from '@/runtime/source-control/git/runtime-git-sync-client'
 import { useAppStore } from '@/store'
-import { findRepoForHost } from '@/store/repos/repo-host-identity'
+import { repoMatchesHostIdentity } from '@/store/repos/repo-host-identity'
 import { ERROR_TOAST_DURATION } from '@/store/repos/repo-state'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import { checkCloneTargetOn } from '../sidebar/project-admission/clone-folder/use-clone-folder-override'
@@ -76,7 +76,9 @@ export async function runOpenOnHost(request: OpenOnHostRequest): Promise<OpenOnH
   // setupProjectClone toasts its own failure.
   const hostRepo: Repo | null | undefined =
     location.kind === 'existing'
-      ? findRepoForHost(state.repos, location.repoId, { hostId: target.hostId })
+      ? (state.repos.find((repo) =>
+          repoMatchesHostIdentity(repo, location.repoId, target.hostId)
+        ) ?? null)
       : (
           await state.setupProjectClone({
             projectId,
