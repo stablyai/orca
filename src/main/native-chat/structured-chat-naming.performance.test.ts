@@ -5,11 +5,13 @@ import {
   agentSessionRecordFixture
 } from '../../shared/agent-session/lifecycle/records/agent-session-record.test-fixture'
 import { createStructuredAgentSessionLogger } from './agent-session-wire/host/structured-agent-session-logger'
-import { createStructuredChatNamingHandler } from './structured-chat-naming'
 
 const CHATS = 100
 
-function burst() {
+async function burst() {
+  // Each case starts from an empty generation-slot pool.
+  vi.resetModules()
+  const { createStructuredChatNamingHandler } = await import('./structured-chat-naming')
   const records = new Map<string, AgentSessionRecord>()
   for (let i = 0; i < CHATS; i++) {
     const sessionId = `session-${i}`
@@ -90,7 +92,7 @@ describe('chat naming during a launch burst', () => {
   })
 
   it('runs at most three naming agents at a time and starts none for a chat named while queued', async () => {
-    const { records, naming, running, started, peak, startAll, finishOne } = burst()
+    const { records, naming, running, started, peak, startAll, finishOne } = await burst()
     await startAll()
     expect(running).toHaveLength(3)
 
@@ -112,11 +114,14 @@ describe('chat naming during a launch burst', () => {
     expect(started).not.toContain('session-50')
   })
 
-  it('lets the next chat start when a naming agent never finishes', async () => {
-    const { started, startAll } = burst()
+  it('lets the next chat start only once a naming agent outlives its own deadline', async () => {
+    const { started, startAll } = await burst()
     await startAll()
     expect(started).toHaveLength(3)
-    await vi.advanceTimersByTimeAsync(30_000)
+    // The agent's 60 s deadline stops it; only one whose termination failed holds its slot longer.
+    await vi.advanceTimersByTimeAsync(134_000)
+    expect(started).toHaveLength(3)
+    await vi.advanceTimersByTimeAsync(1_000)
     expect(started).toHaveLength(6)
   })
 })

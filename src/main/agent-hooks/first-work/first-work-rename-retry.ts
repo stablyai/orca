@@ -72,6 +72,7 @@ export async function retryFirstWorkRename(
   }
   const running = runningFirstWorkAttempt(worktreeId, incarnation)
   if (running) {
+    running.requestByUser()
     return running.promise
   }
   return startFirstWorkAttempt(
@@ -84,7 +85,8 @@ export async function retryFirstWorkRename(
         deps,
         attempt
       ),
-    deps
+    deps,
+    true
   ).promise
 }
 

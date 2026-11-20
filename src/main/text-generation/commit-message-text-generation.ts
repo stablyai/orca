@@ -109,9 +109,16 @@ export function generatePullRequestFieldsFromContext(
 export function generateBranchNameFromContext(
   context: BranchNameWorkContext,
   params: ResolvedSourceControlAiGenerationParams,
-  target: CommitMessageGenerationTarget
+  target: CommitMessageGenerationTarget,
+  shouldExecute?: () => boolean
 ): Promise<GenerateBranchNameResult> {
-  return generateBranchName({ context, params, target, spawnAgent: spawnSourceControlAgent })
+  return generateBranchName({
+    context,
+    params,
+    target,
+    spawnAgent: spawnSourceControlAgent,
+    shouldExecute
+  })
 }
 
 export function generateConversationNameFromContext(

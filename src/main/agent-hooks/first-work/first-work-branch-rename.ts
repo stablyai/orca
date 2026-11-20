@@ -26,10 +26,7 @@ import {
   resolveUniqueBranchName,
   type GitExec
 } from '../../git/worktrees/checkout/branch-rename'
-import {
-  generateBranchNameFromContext,
-  resolveCommitMessageSettings as resolveTextGenerationParams
-} from '../../text-generation/commit-message-text-generation'
+import { resolveCommitMessageSettings as resolveTextGenerationParams } from '../../text-generation/commit-message-text-generation'
 import type { CommitMessageAgentEnvironmentResolvers } from '../../text-generation/execution/commit-message-agent-environment'
 import type { AgentGenerationFailureOutput } from '../../text-generation/failures/agent-failure-output'
 import { resolveGenerationTarget } from './first-work-generation-target'
@@ -62,10 +59,7 @@ export {
   FIRST_WORK_BRANCH_RENAME_SETTLED_CACHE_LIMIT,
   resetFirstWorkBranchRenameState
 } from './first-work-rename-attempts'
-import {
-  BACKGROUND_PRIORITY,
-  runInBackgroundGenerationSlot
-} from '../../text-generation/execution/background-generation-slots'
+import { generateFirstWorkName } from './first-work-name-generation'
 
 export type FirstWorkBranchRenameDeps = FirstWorkAttemptDeps & {
   getSettings: () => Parameters<typeof resolveTextGenerationParams>[0] &
@@ -228,14 +222,23 @@ async function runAutoRename(
     return failed('could not prepare generation environment', false)
   }
 
-  const generated = await runInBackgroundGenerationSlot(BACKGROUND_PRIORITY, () => {
-    // Target preparation and the slot wait await; a replaced workspace must not launch generation.
-    attempt.assertIncarnation()
-    return generateBranchNameFromContext(resolved.context, params, target)
-  })
+  // Target preparation and the slot wait await; a replaced workspace must not launch generation.
+  const generated = await generateFirstWorkName(
+    attempt,
+    () => !!deps.getSettings().autoRenameBranchFromWork && !isWslMoveRepoBlocked(repo),
+    resolved.context,
+    params,
+    target
+  )
   // Generation can outlive the start of a WSL move.
   if (isWslMoveRepoBlocked(repo)) {
     return defer('project-moving', 'a WSL move started during generation')
+  }
+  if (!generated.success && generated.canceled && !deps.getSettings().autoRenameBranchFromWork) {
+    return {
+      ...stop('setting-off', 'auto-rename was turned off before generation'),
+      settles: false
+    }
   }
   if (!generated.success) {
     return failedGenerationVerdict(worktreeId, generated, deps, verdicts)

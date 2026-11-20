@@ -7,6 +7,10 @@ import {
   recordFirstWorkGenerationFailure,
   resetFirstWorkGenerationBackoff
 } from './first-work-generation-backoff'
+import {
+  BACKGROUND_PRIORITY,
+  USER_REQUEST_PRIORITY
+} from '../../text-generation/execution/background-generation-slots'
 
 export type FirstWorkRenameVerdict = {
   outcome: BranchAutoRenameOutcome
@@ -30,6 +34,8 @@ export type FirstWorkAttempt = {
   /** Throws when the workspace was deleted and recreated since admission. */
   assertIncarnation: () => void
   isIncarnationCurrent: () => boolean
+  /** Generation slot priority; a user's Try again raises it, even while queued. */
+  generationPriority: () => number
 }
 
 export type FirstWorkAttemptDeps = {
@@ -50,6 +56,7 @@ type AttemptEntry = {
   incarnation: string
   attemptId: number
   lookupExpired: boolean
+  userRequested: boolean
   promise: Promise<FirstWorkAttemptResult>
 }
 
@@ -84,9 +91,21 @@ export function isFirstWorkRenameSettled(worktreeId: string, incarnation: string
 export function runningFirstWorkAttempt(
   worktreeId: string,
   incarnation: string
-): { attemptId: number; promise: Promise<FirstWorkAttemptResult> } | null {
+): {
+  attemptId: number
+  promise: Promise<FirstWorkAttemptResult>
+  requestByUser: () => void
+} | null {
   const entry = inFlight.get(worktreeId)
-  return entry && entry.incarnation === incarnation && !entry.lookupExpired ? entry : null
+  return entry && entry.incarnation === incarnation && !entry.lookupExpired
+    ? {
+        attemptId: entry.attemptId,
+        promise: entry.promise,
+        requestByUser: () => {
+          entry.userRequested = true
+        }
+      }
+    : null
 }
 
 function rememberSettled(worktreeId: string, incarnation: string): void {
@@ -107,7 +126,8 @@ export function startFirstWorkAttempt(
   worktreeId: string,
   incarnation: string,
   run: (attempt: FirstWorkAttempt) => Promise<FirstWorkRenameVerdict>,
-  deps: FirstWorkAttemptDeps
+  deps: FirstWorkAttemptDeps,
+  userRequested = false
 ): { attemptId: number; promise: Promise<FirstWorkAttemptResult> } {
   const attemptId = ++lastAttemptId
   const incarnationCurrent = () => deps.readIncarnation(worktreeId) === incarnation
@@ -115,6 +135,7 @@ export function startFirstWorkAttempt(
     incarnation,
     attemptId,
     lookupExpired: false,
+    userRequested,
     promise: Promise.resolve({ attemptId, outcome: { kind: 'failed' }, finishedAt: 0 })
   }
   const attempt: FirstWorkAttempt = {
@@ -129,7 +150,8 @@ export function startFirstWorkAttempt(
       if (!incarnationCurrent()) {
         throw new FirstWorkWorkspaceReplacedError()
       }
-    }
+    },
+    generationPriority: () => (entry.userRequested ? USER_REQUEST_PRIORITY : BACKGROUND_PRIORITY)
   }
   inFlight.set(worktreeId, entry)
   notifyAttempt({ executionHostId: 'local', worktreeId, attemptId, phase: 'started' })

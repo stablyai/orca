@@ -1,8 +1,5 @@
 import { humanizeBranchSlug } from '../../../shared/source-control/ai/naming/branch-name-from-work'
-import {
-  generateBranchNameFromContext,
-  resolveCommitMessageSettings as resolveTextGenerationParams
-} from '../../text-generation/commit-message-text-generation'
+import { resolveCommitMessageSettings as resolveTextGenerationParams } from '../../text-generation/commit-message-text-generation'
 import { resolveGenerationTarget } from './first-work-generation-target'
 import type { FirstWorkBranchRenameDeps } from './first-work-branch-rename'
 import {
@@ -12,6 +9,7 @@ import {
   type FirstWorkVerdictBuilders
 } from './first-work-rename-verdicts'
 import type { FirstWorkAttempt, FirstWorkRenameVerdict } from './first-work-rename-attempts'
+import { generateFirstWorkName } from './first-work-name-generation'
 
 export async function runFolderWorkspaceTitleAutoRename(
   worktreeId: string,
@@ -49,9 +47,13 @@ export async function runFolderWorkspaceTitleAutoRename(
     return failed('could not prepare generation environment', false)
   }
 
-  // Target preparation awaits; a replaced workspace must not launch generation.
-  attempt.assertIncarnation()
-  const generated = await generateBranchNameFromContext(
+  // Target preparation and the slot wait await; a replaced workspace must not launch generation.
+  const generated = await generateFirstWorkName(
+    attempt,
+    () =>
+      !!deps.getSettings().autoRenameBranchFromWork &&
+      deps.isPendingFirstAgentMessageRename?.(worktreeId) === true &&
+      deps.isFolderWorkspaceWslMoveBlocked?.(worktreeId) !== true,
     resolved.context,
     resolvedParams.params,
     target
@@ -65,6 +67,12 @@ export async function runFolderWorkspaceTitleAutoRename(
   }
   if (deps.isFolderWorkspaceWslMoveBlocked?.(worktreeId) === true) {
     return defer('project-moving', 'a WSL move started during generation')
+  }
+  if (!generated.success && generated.canceled && !deps.getSettings().autoRenameBranchFromWork) {
+    return {
+      ...stop('setting-off', 'auto-rename was turned off before generation'),
+      settles: false
+    }
   }
   if (!generated.success) {
     return failedGenerationVerdict(worktreeId, generated, deps, verdicts)

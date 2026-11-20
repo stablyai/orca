@@ -141,13 +141,13 @@ export function createStructuredChatNamingHandler(deps: StructuredChatNamingDeps
   ): Promise<string | null> {
     attempted.set(record.sessionId, contextId(record))
     for (let attempt = 0; stillCurrent(); attempt += 1) {
-      const result = await runInBackgroundGenerationSlot(priority, async () => {
+      const result = await runInBackgroundGenerationSlot(priority, async (slotHeld) => {
         // A chat named or renamed while this run waited for a slot starts no agent.
         if (!stillCurrent()) {
           return null
         }
         try {
-          return await deps.generate(record, firstPrompt, stillCurrent)
+          return await deps.generate(record, firstPrompt, () => stillCurrent() && slotHeld())
         } catch (error) {
           warn(record.sessionId, error)
           return chatNamingFailure('agentNotRun')

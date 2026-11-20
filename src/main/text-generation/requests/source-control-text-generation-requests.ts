@@ -212,6 +212,7 @@ export async function generateBranchName(input: {
   params: GenerateParams
   target: CommitMessageGenerationTarget
   spawnAgent: SpawnSourceControlAgent
+  shouldExecute?: () => boolean
 }): Promise<GenerateBranchNameResult> {
   const { context, params } = input
   const basePrompt = buildBranchNamePrompt(context)
