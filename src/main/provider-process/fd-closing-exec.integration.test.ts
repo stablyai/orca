@@ -83,7 +83,7 @@ describe.runIf(process.platform === 'linux')('fd-closing exec', () => {
     elf[loaderEnd - 1] = 'X'.charCodeAt(0)
     const missingLoader = join(dir, 'missing-loader')
     await writeFile(missingLoader, elf)
-    // No `#!`: Node's spawn rejects it; glibc execvp would have run it under /bin/sh.
+    // No `#!`: a direct spawn on Linux runs it under /bin/sh (execvp), so the wrapped one must too.
     const noShebang = join(dir, 'no-shebang')
     await writeFile(noShebang, 'true\n')
     const busy = join(dir, 'busy')
@@ -100,7 +100,6 @@ describe.runIf(process.platform === 'linux')('fd-closing exec', () => {
         [script, ['ENOENT']],
         [crlfScript, ['ENOENT']],
         [missingLoader, ['ENOENT']],
-        [noShebang, ['ENOEXEC']],
         [busy, ['ETXTBSY']]
       ] as const) {
         const child = spawnProcess({ program, closeInheritedFds: true, stdio: 'ignore' })
@@ -134,6 +133,13 @@ describe.runIf(process.platform === 'linux')('fd-closing exec', () => {
       expect(wrapped.spawnfile).toBe(helper)
       await once(wrapped, 'spawn')
       expect((await once(wrapped, 'close'))[0]).toBe(0)
+      const shellRun = spawnProcess({
+        program: noShebang,
+        closeInheritedFds: true,
+        stdio: 'ignore'
+      })
+      await once(shellRun, 'spawn')
+      expect((await once(shellRun, 'close'))[0]).toBe(0)
     } finally {
       await writer.close()
       setFdClosingExec(undefined)
