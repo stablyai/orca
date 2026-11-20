@@ -197,6 +197,60 @@ describe('web settings preload API', () => {
     })
   })
 
+  it('keeps a confirmed Azure DevOps write when an older settings read arrives late', async () => {
+    let markReadStarted!: () => void
+    let releaseRead!: () => void
+    const readStarted = new Promise<void>((resolve) => (markReadStarted = resolve))
+    const readHeld = new Promise<void>((resolve) => (releaseRead = resolve))
+    let holdNextRead = false
+    vi.doMock('../../runtime/client/web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        readonly connectionEpoch = 1
+
+        async call(method: string): Promise<RuntimeRpcResponse<unknown>> {
+          if (method === 'settings.get' && holdNextRead) {
+            holdNextRead = false
+            markReadStarted()
+            await readHeld
+          }
+          return {
+            id: method,
+            ok: true,
+            result: {
+              settings: {
+                azureDevOpsAuthMethod: method === 'settings.update' ? 'azure-cli' : 'environment'
+              }
+            },
+            _meta: { runtimeId: 'runtime-1' }
+          }
+        }
+
+        close(): void {}
+      }
+    }))
+
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage)
+    const { installWebPreloadApi } = await import('../../web-preload-api')
+    installWebPreloadApi()
+    const { settings } = globals.window.api
+    await expect(settings.get()).resolves.toMatchObject({ azureDevOpsAuthMethod: 'environment' })
+
+    holdNextRead = true
+    const staleRead = settings.get()
+    await readStarted
+    try {
+      await expect(settings.set({ azureDevOpsAuthMethod: 'azure-cli' })).resolves.toMatchObject({
+        azureDevOpsAuthMethod: 'azure-cli'
+      })
+    } finally {
+      releaseRead()
+    }
+
+    await expect(staleRead).resolves.toMatchObject({ azureDevOpsAuthMethod: 'azure-cli' })
+    await expect(settings.get()).resolves.toMatchObject({ azureDevOpsAuthMethod: 'environment' })
+  })
+
   it('does not read or write an Azure DevOps method on behalf of an older host', async () => {
     const call = vi.fn(async (method: string): Promise<RuntimeRpcResponse<unknown>> => ({
       id: method,

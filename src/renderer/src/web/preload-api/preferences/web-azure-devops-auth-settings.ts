@@ -7,6 +7,8 @@ import { unwrapRuntimeRpcResult } from '../../../runtime/rpc/calls/runtime-rpc-r
 
 type SettingsResult = { settings: Partial<GlobalSettings> }
 let confirmed: { owner: string; method: AzureDevOpsAuthMethod } | undefined
+let writeGeneration = 0
+const confirmedWriteGenerationByOwner = new Map<string, number>()
 
 function ownerOf(
   environment: StoredWebRuntimeEnvironment | null,
@@ -24,17 +26,26 @@ function ownerOf(
 function publishAzureDevOpsAuthMethod(
   environment: StoredWebRuntimeEnvironment,
   runtimeId: string,
-  method: AzureDevOpsAuthMethod | undefined
+  method: AzureDevOpsAuthMethod | undefined,
+  readGeneration?: number
 ): void {
   const owner = ownerOf(environment, runtimeId)
-  if (owner && owner === ownerOf(requireActiveEnvironmentOrNull())) {
-    confirmed = method === 'environment' || method === 'azure-cli' ? { owner, method } : undefined
+  if (!owner || owner !== ownerOf(requireActiveEnvironmentOrNull())) {
+    return
   }
+  if (readGeneration === undefined) {
+    confirmedWriteGenerationByOwner.set(owner, ++writeGeneration)
+  } else if ((confirmedWriteGenerationByOwner.get(owner) ?? 0) > readGeneration) {
+    return
+  }
+  confirmed = method === 'environment' || method === 'azure-cli' ? { owner, method } : undefined
 }
 
 export async function readPairedSettings(
   environment: StoredWebRuntimeEnvironment
 ): Promise<SettingsResult> {
+  // The runtime ID may not be known until the read responds.
+  const readGeneration = writeGeneration
   const response = await callEnvironmentEnvelope<SettingsResult>(
     environment.id,
     'settings.get',
@@ -47,7 +58,8 @@ export async function readPairedSettings(
     publishAzureDevOpsAuthMethod(
       environment,
       response._meta.runtimeId,
-      result.settings.azureDevOpsAuthMethod
+      result.settings.azureDevOpsAuthMethod,
+      readGeneration
     )
   }
   return result
