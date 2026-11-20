@@ -223,7 +223,8 @@ export function automationDraftPatch(
       Object.assign(patch, { [key]: fields[key] })
     }
   }
-  return patch
+  // An interval counts from dtstart, so a changed rule restarts from this save.
+  return 'rrule' in patch ? { ...patch, dtstart: Date.now() } : patch
 }
 
 type AutomationTarget = Pick<

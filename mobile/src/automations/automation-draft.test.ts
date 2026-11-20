@@ -1,5 +1,5 @@
 import { loadAutomationTargets, workspaceMatchesSetup } from './automation-target-inventory'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { automationDraftPatch, newAutomationDraft } from './automation-draft'
 
 import { automationClient, automationTargets } from './automation-test-fixtures'
@@ -59,6 +59,16 @@ describe('automation setup pin writes', () => {
     expect(automationDraftPatch({ ...original, name: 'Renamed' }, original)).toEqual({
       name: 'Renamed'
     })
+  })
+
+  it('re-anchors dtstart when the rule changes, so an interval counts from the save', () => {
+    vi.useFakeTimers({ now: Date.parse('2026-11-12T15:00:00Z') })
+    const rrule = 'FREQ=WEEKLY;INTERVAL=2;BYDAY=WE;BYHOUR=11;BYMINUTE=0'
+    expect(automationDraftPatch({ ...original, rrule }, original)).toEqual({
+      rrule,
+      dtstart: Date.parse('2026-11-12T15:00:00Z')
+    })
+    vi.useRealTimers()
   })
 
   it('names the decision when setup was re-approved without a pin', () => {
