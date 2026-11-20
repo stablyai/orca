@@ -7,6 +7,37 @@ import type { CODEX_LEGACY_HISTORY_IMPORT_OUTCOMES } from '../../../../shared/te
 
 type LegacyHistoryImportOutcome = (typeof CODEX_LEGACY_HISTORY_IMPORT_OUTCOMES)[number]
 
+/** Launches that try the history import before it gives up; account histories stay either way. */
+export const MAX_HISTORY_IMPORT_ATTEMPTS = 3
+
+export type LegacyMigrationMarker = {
+  completedAt?: number
+  migratedHomeCount?: number
+  historyImportPending?: true
+  historyImportAttempts?: number
+}
+
+export function parseLegacyMigrationMarker(text: string): LegacyMigrationMarker {
+  const parsed: unknown = JSON.parse(text)
+  const marker: LegacyMigrationMarker = {}
+  if (!parsed || typeof parsed !== 'object') {
+    return marker
+  }
+  if ('completedAt' in parsed && typeof parsed.completedAt === 'number') {
+    marker.completedAt = parsed.completedAt
+  }
+  if ('migratedHomeCount' in parsed && typeof parsed.migratedHomeCount === 'number') {
+    marker.migratedHomeCount = parsed.migratedHomeCount
+  }
+  if ('historyImportPending' in parsed && parsed.historyImportPending === true) {
+    marker.historyImportPending = true
+  }
+  if ('historyImportAttempts' in parsed && typeof parsed.historyImportAttempts === 'number') {
+    marker.historyImportAttempts = parsed.historyImportAttempts
+  }
+  return marker
+}
+
 async function pathExists(path: string): Promise<boolean> {
   try {
     await lstat(path)

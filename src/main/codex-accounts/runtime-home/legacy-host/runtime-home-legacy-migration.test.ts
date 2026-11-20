@@ -77,10 +77,15 @@ async function startService(): Promise<void> {
   await waitForMigrationMarker()
 }
 
+// Settled: marked, and the history import no longer pending.
 async function waitForMigrationMarker(): Promise<void> {
-  await vi.waitFor(() => expect(existsSync(migrationMarkerPath())).toBe(true), {
-    timeout: WAIT_MS
-  })
+  await vi.waitFor(
+    () => {
+      expect(existsSync(migrationMarkerPath())).toBe(true)
+      expect(readFileSync(migrationMarkerPath(), 'utf-8')).not.toContain('historyImportPending')
+    },
+    { timeout: WAIT_MS }
+  )
 }
 
 // Slow CI hosts take seconds to construct the service.
@@ -238,7 +243,7 @@ describe('CodexRuntimeHomeService', () => {
     )
   })
 
-  it('retries a failed import on the next launch', async () => {
+  it('retries only the failed history import on the next launch, not the session copies', async () => {
     const runtimeHistoryPath = join(getRuntimeCodexHomePath(), 'history.jsonl')
     const managedHomePath = writeHistory('account-1', '{"id":"legacy-1"}\n')
     fsHooks.afterRead.set(join(managedHomePath, 'history.jsonl'), () => {
@@ -246,15 +251,22 @@ describe('CodexRuntimeHomeService', () => {
     })
     await constructService()
     await waitForImportOutcomes(['failed'])
+    await vi.waitFor(
+      () =>
+        expect(readFileSync(migrationMarkerPath(), 'utf-8')).toContain('"historyImportAttempts":1'),
+      { timeout: WAIT_MS }
+    )
     expect(existsSync(runtimeHistoryPath)).toBe(false)
-    expect(existsSync(migrationMarkerPath())).toBe(false)
     fsHooks.afterRead.clear()
+    mkdirSync(join(managedHomePath, 'sessions'), { recursive: true })
+    writeFileSync(join(managedHomePath, 'sessions', 'later.jsonl'), '{}', 'utf-8')
 
     vi.resetModules()
     await startService()
 
     expect(readFileSync(runtimeHistoryPath, 'utf-8')).toBe('{"id":"legacy-1"}\n')
     expect(trackedImportOutcomes()).toEqual(['failed', 'imported'])
+    expect(existsSync(join(getRuntimeCodexHomePath(), 'sessions', 'later.jsonl'))).toBe(false)
   })
 
   it('does not re-run migration when marker already exists', async () => {
