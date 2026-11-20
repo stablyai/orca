@@ -112,14 +112,14 @@ describe('Generate face', () => {
     stubAgents([CODEX], () => new Promise(() => {}), cancel)
     render(<Face onResult={() => {}} />)
     const box = await describeAndEnter('a fox astronaut')
-    fireEvent.click(await screen.findByRole('button', { name: 'Cancel generating (Codex)' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Cancel generating' }))
     expect(cancel).toHaveBeenCalledTimes(1)
     expect(box.readOnly).toBe(false)
     fireEvent.keyDown(box, { key: 'Enter' })
-    await screen.findByRole('button', { name: 'Cancel generating (Codex)' })
+    await screen.findByRole('button', { name: 'Cancel generating' })
     fireEvent.keyDown(box, { key: 'Escape' })
     expect(cancel).toHaveBeenCalledTimes(2)
-    expect(screen.queryByRole('button', { name: 'Cancel generating (Codex)' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Cancel generating' })).toBeNull()
   })
 
   it('shows a usage limit under the field and keeps the description', async () => {

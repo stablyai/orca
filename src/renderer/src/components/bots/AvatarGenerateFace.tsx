@@ -135,20 +135,25 @@ export function GenerateFaceTile({ face }: { face: GenerateFace }): React.JSX.El
   const t = useTranslate()
   const { run } = face
   if (run.kind === 'running') {
-    const label = t('bots.avatar.generate.cancelRunning', 'Cancel generating ({{agent}})', {
-      agent: getAgentLabel(run.agent)
-    })
+    const label = t('bots.avatar.generate.cancelRunning', 'Cancel generating')
+    // Hover or focus swaps the spinner for an X and the word for Cancel, in the same spot.
+    const AT_REST = 'group-hover/edit:hidden group-focus-visible/edit:hidden'
+    const ON_HOVER = 'hidden group-hover/edit:inline group-focus-visible/edit:inline'
     return (
       <Tooltip>
         <TooltipTrigger asChild>
           <button type="button" aria-label={label} onClick={face.cancel} className={HINT_BUTTON}>
             <PromptTile role="status">
-              <LoadingSpinner className="size-6" />
-              <Elapsed since={run.startedAt} />
+              <span className="flex size-6 items-center justify-center">
+                <LoadingSpinner className={cn('size-6', AT_REST)} />
+                <X className={cn('size-6', ON_HOVER)} strokeWidth={1.75} />
+              </span>
+              <span className={AT_REST}>{t('bots.avatar.generate.generating', 'Generating…')}</span>
+              <span className={ON_HOVER}>{t('bots.avatar.generate.cancel', 'Cancel')}</span>
+              <span className="text-[11px] text-muted-foreground">
+                <Elapsed since={run.startedAt} />
+              </span>
             </PromptTile>
-            <HintOverlay>
-              <X className="size-5" />
-            </HintOverlay>
           </button>
         </TooltipTrigger>
         <TooltipContent side="bottom" sideOffset={4}>
