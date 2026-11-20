@@ -102,6 +102,7 @@ export abstract class OrcaRuntimeWithResolveWorktreeRemovalTarget extends Runtim
       target.path,
       registeredWorktrees,
       localOptions,
+      options.force === true,
       () =>
         retryFailedWorktreeRemoval(
           target.id,

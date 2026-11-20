@@ -1,3 +1,4 @@
+import { deleteBranchOfUnregisteredWorktree } from '../../git/worktrees/removal/worktree-removal'
 import {
   isRecordedCheckout,
   registeredRemovalCheckout,
@@ -23,16 +24,37 @@ export async function failureLeftByGit(
   if (!(await worktreeCheckoutExists(record.worktreePath))) {
     return failure
   }
+  let kept: WorktreeRemovalFailure | undefined
   try {
     const registered = await registeredRemovalCheckout(record)
     if (registered) {
-      return isRecordedCheckout(registered, record) ? { ...failure, message } : undefined
+      kept = isRecordedCheckout(registered, record) ? { ...failure, message } : undefined
+    } else {
+      kept = (await isUnregisteredRemovalLeftover(record.repoPath, record.worktreePath))
+        ? failure
+        : undefined
     }
-    return (await isUnregisteredRemovalLeftover(record.repoPath, record.worktreePath))
-      ? failure
-      : undefined
   } catch (error) {
     console.warn(`[worktrees] could not inspect failed removal of ${record.worktreePath}`, error)
     return failure
+  }
+  if (!kept) {
+    await deleteBranchOfReplacedRemoval(record)
+  }
+  return kept
+}
+
+/** Another checkout now holds the path, so the old folder is gone; `-d` still keeps unmerged work. */
+export async function deleteBranchOfReplacedRemoval(record: WorktreeRemovalRecord): Promise<void> {
+  if (!record.deleteBranch || !record.branch) {
+    return
+  }
+  try {
+    await deleteBranchOfUnregisteredWorktree(record.repoPath, record.worktreePath, {
+      name: record.branch,
+      head: record.head
+    })
+  } catch (error) {
+    console.warn(`[worktrees] could not delete the branch of ${record.worktreePath}`, error)
   }
 }

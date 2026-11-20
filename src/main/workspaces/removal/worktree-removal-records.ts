@@ -1,3 +1,4 @@
+import type { CheckoutIdentity } from '../../filesystem/host-tree-removal'
 // The sidecar persists before deletion without waiting for batched profile writes or entering profile exports.
 import {
   readSidecarSnapshot,
@@ -24,6 +25,8 @@ export type WorktreeRemovalRecord = {
   requestedAt: number
   /** Cleanup failed; files, Git ownership or metadata may still need an explicit retry. */
   failure?: WorktreeRemovalFailure
+  /** The checkout folder's identity before Git touched it; proves a leftover whose `.git` Git already deleted. */
+  checkoutIdentity?: CheckoutIdentity
 }
 
 export type WorktreeRemovalFailure = {
@@ -49,6 +52,15 @@ function parseFailure(value: unknown): WorktreeRemovalFailure | null | undefined
     : null
 }
 
+function parseCheckoutIdentity(value: unknown): CheckoutIdentity | undefined {
+  return isRecord(value) &&
+    typeof value.dev === 'string' &&
+    typeof value.ino === 'string' &&
+    typeof value.birthtimeNs === 'string'
+    ? { dev: value.dev, ino: value.ino, birthtimeNs: value.birthtimeNs }
+    : undefined
+}
+
 function parseRecord(value: unknown): WorktreeRemovalRecord | null {
   const failure = isRecord(value) ? parseFailure(value.failure) : null
   if (
@@ -66,6 +78,7 @@ function parseRecord(value: unknown): WorktreeRemovalRecord | null {
   ) {
     return null
   }
+  const checkoutIdentity = parseCheckoutIdentity(value.checkoutIdentity)
   return {
     worktreeId: value.worktreeId,
     repoId: value.repoId,
@@ -76,7 +89,8 @@ function parseRecord(value: unknown): WorktreeRemovalRecord | null {
     deleteBranch: value.deleteBranch,
     force: value.force,
     requestedAt: value.requestedAt,
-    ...(failure ? { failure } : {})
+    ...(failure ? { failure } : {}),
+    ...(checkoutIdentity ? { checkoutIdentity } : {})
   }
 }
 
