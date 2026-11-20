@@ -29452,7 +29452,7 @@
   },
   "perfNotices": {
     "hiddenTabs": {
-      "title": "{{count}} hidden browser tabs are still loaded",
+      "title": "Save memory from inactive tabs",
       "description": "Turn on Orca's browser memory saver to free up memory from inactive tabs.",
       "turnOnMemorySaver": "Turn on Memory Saver"
     },

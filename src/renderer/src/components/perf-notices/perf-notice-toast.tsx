@@ -7,7 +7,7 @@ import { withPerfNoticeOff } from '../../../../shared/perf-notices/perf-notice-s
 import { recordPerfNoticeShown, snoozePerfNotice } from './perf-notice-ledger'
 
 export type PerfNotice =
-  | { id: 'hidden-browser-tabs'; count: number }
+  | { id: 'hidden-browser-tabs' }
   | { id: 'disk-almost-full'; freeLabel: string }
 
 type Copy = {
@@ -27,11 +27,7 @@ function copyFor(notice: PerfNotice): Copy {
   switch (notice.id) {
     case 'hidden-browser-tabs':
       return {
-        title: translate(
-          'perfNotices.hiddenTabs.title',
-          '{{count}} hidden browser tabs are still loaded',
-          { count: notice.count }
-        ),
+        title: translate('perfNotices.hiddenTabs.title', 'Save memory from inactive tabs'),
         description: translate(
           'perfNotices.hiddenTabs.description',
           "Turn on Orca's browser memory saver to free up memory from inactive tabs."
