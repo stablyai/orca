@@ -74,6 +74,8 @@ export function MobileNativeChatAsk({
   const { scrollRef, inputRef, revealReply, onViewportLayout } = useMobileNativeChatReplyScroll()
   const [index, setIndex] = useState(0)
   const [viewedOption, setViewedOption] = useState<number | null>(null)
+  // Which footer control started the in-flight operation, so its busy state lands there.
+  const [busyControl, setBusyControl] = useState<'confirm' | 'cancel'>('confirm')
   const [selections, setSelections] = useState<number[][]>(() => prompt.questions.map(() => []))
   const [otherText, setOtherText] = useState<string[]>(() =>
     prompt.questions.map((_, qi) => freeTextInputs?.[qi]?.initialValue ?? '')
@@ -95,6 +97,8 @@ export function MobileNativeChatAsk({
     ((current.clientMessageId === operationId ? evidence : undefined) ?? current.inFlight)
   const sending = operation?.inFlight === true && isLocalPending(operation)
   const submitting = isLocalPending(operation) || answerPending
+  const cancelBusy = busyControl === 'cancel' && isLocalPending(operation)
+  const confirmBusy = submitting && !cancelBusy
   const autoAdvance = useMobileNativeChatAskAutoAdvance(submitting)
   // Open each step at its question and end the last step's edit, so no typing lands out of view.
   const showStep = (next: (current: number) => number): void => {
@@ -169,6 +173,7 @@ export function MobileNativeChatAsk({
     const current: NativeChatAnswerOperation = { inFlight: true }
     operationRef.current = current
     setOperation(current)
+    setBusyControl('confirm')
     try {
       await onAnswer(
         prompt.questions.map((_, i) => selectionFor(i, sel)),
@@ -196,12 +201,13 @@ export function MobileNativeChatAsk({
     }
   }
 
-  const cancel = async (): Promise<void> => {
+  const cancel = async (control: 'confirm' | 'cancel'): Promise<void> => {
     autoAdvance.cancel()
     if (!(operationRef.current?.inFlight && isLocalPending(operationRef.current)) && onCancel) {
       const current: NativeChatAnswerOperation = { inFlight: true }
       operationRef.current = current
       setOperation(current)
+      setBusyControl(control)
       try {
         await onCancel()
       } finally {
@@ -217,7 +223,7 @@ export function MobileNativeChatAsk({
     const action = askConfirmAction({ isLast, anyAnswered: anyAnswered() })
     triggerSelection()
     if (action === 'cancel') {
-      void cancel()
+      void cancel('confirm')
     } else if (action === 'proceed') {
       void advance()
     }
@@ -335,16 +341,33 @@ export function MobileNativeChatAsk({
       </ScrollView>
 
       {choiceOnly ? (
-        <View style={styles.choiceOnlyEnd} />
+        submitting ? (
+          <View style={styles.choiceOnlyPending}>
+            <ActivityIndicator size="small" color={colors.textSecondary} />
+          </View>
+        ) : (
+          <View style={styles.choiceOnlyEnd} />
+        )
       ) : (
         <View style={styles.footer}>
           <Pressable
             style={({ pressed }) => [styles.cancel, pressed && pressedStyle]}
-            onPress={() => void cancel()}
+            onPress={() => void cancel('cancel')}
             disabled={sending}
             hitSlop={8}
+            accessibilityRole="button"
+            accessibilityState={{ disabled: sending, busy: cancelBusy }}
           >
-            <Text style={styles.cancelText}>{t('common.cancel', 'Cancel')}</Text>
+            <Text style={[styles.cancelText, cancelBusy && styles.busyLabelHidden]}>
+              {t('common.cancel', 'Cancel')}
+            </Text>
+            {cancelBusy ? (
+              <ActivityIndicator
+                size="small"
+                color={colors.textPrimary}
+                style={styles.busySpinner}
+              />
+            ) : null}
           </Pressable>
           {total > 1 ? (
             <Text style={styles.progress}>
@@ -356,28 +379,28 @@ export function MobileNativeChatAsk({
               styles.next,
               confirmSkips && styles.nextSkip,
               pressed && pressedStyle,
-              submitting && styles.nextSubmitting
+              confirmBusy && styles.nextSubmitting
             ]}
             onPress={confirm}
             disabled={submitting}
             accessibilityRole="button"
-            accessibilityState={{ disabled: submitting, busy: submitting }}
+            accessibilityState={{ disabled: submitting, busy: confirmBusy }}
           >
             {/* Keep the label laid out so the button width doesn't jump under the spinner. */}
             <Text
               style={[
                 styles.nextText,
                 confirmSkips && styles.nextSkipText,
-                submitting && styles.nextTextHidden
+                confirmBusy && styles.busyLabelHidden
               ]}
             >
               {confirmLabels(t)[confirmLabel]}
             </Text>
-            {submitting ? (
+            {confirmBusy ? (
               <ActivityIndicator
                 size="small"
                 color={confirmSkips ? colors.textPrimary : colors.bgBase}
-                style={styles.nextSpinner}
+                style={styles.busySpinner}
               />
             ) : null}
           </Pressable>

@@ -75,6 +75,11 @@ export const mobileNativeChatAskStyles = themedStyleSheet(() => ({
   choiceOnlyEnd: {
     height: ASK_CARD_PADDING - 6
   },
+  choiceOnlyPending: {
+    alignItems: 'center',
+    paddingTop: spacing.xs,
+    paddingBottom: ASK_CARD_PADDING
+  },
   footer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -116,10 +121,10 @@ export const mobileNativeChatAskStyles = themedStyleSheet(() => ({
   nextSubmitting: {
     opacity: feedback.pressedOpacity
   },
-  nextTextHidden: {
+  busyLabelHidden: {
     opacity: 0
   },
-  nextSpinner: {
+  busySpinner: {
     ...StyleSheet.absoluteFill
   },
   nextText: {
