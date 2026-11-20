@@ -8,6 +8,10 @@ import { AcknowledgedWorkspaceSessionEntries } from './workspace-session-acknowl
 import { patchWorkspaceSessionByHost, type SessionApi } from './workspace-session-host-persistence'
 import { patchWorkspaceSessionEntriesByHost } from './workspace-session-keyed-host-write'
 import { sessionRoutingFor } from './workspace-session-host-routing'
+import { makeOpenFile } from '@/store/slices/editor/types/open-file.test-fixture'
+import { applyWorkspaceSessionEntriesPatch } from '../../../../../shared/workspace-session/workspace-session-entries-patch'
+import type { WorkspaceSessionState } from '../../../../../shared/workspace-session/workspace-session-state-types'
+import { getDefaultWorkspaceSession } from '../../../../../shared/orca-profiles/constants'
 
 // Perf contract (#45731): one background title change rebuilt and routed every workspace's saved tabs and layouts,
 // so the write walked and deep-compared the whole fleet. Counts deep compares and keys routed to a host.
@@ -22,18 +26,35 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
-const sessionApi: SessionApi = {
-  get: async () => {
-    throw new Error('not read in this flow')
-  },
-  patch: async () => {},
-  patchEntries: async () => ({ status: 'applied' })
+// Main's local partition, rebuilt from each entries patch the way main applies it.
+function receivingMain() {
+  let stored: WorkspaceSessionState = getDefaultWorkspaceSession()
+  let rejectNext = false
+  const api: SessionApi = {
+    get: async () => stored,
+    patch: async () => {},
+    patchEntries: async (patch) => {
+      if (rejectNext) {
+        rejectNext = false
+        throw new Error('main rejected the save')
+      }
+      stored = { ...stored, ...applyWorkspaceSessionEntriesPatch(stored, patch) }
+      return { status: 'applied' }
+    }
+  }
+  return {
+    api,
+    stored: () => stored,
+    rejectNextSave: () => {
+      rejectNext = true
+    }
+  }
 }
 
-async function workForOneTitleChange(
-  size: number
-): Promise<{ deepCompares: number; routedKeys: number }> {
+async function workForTitleChanges(size: number) {
   const store = createTestStore()
+  const main = receivingMain()
+  const sessionApi = main.api
   const acknowledged = new AcknowledgedWorkspaceSessionEntries()
   const stop = createSessionWriteSubscriber({
     store,
@@ -83,8 +104,15 @@ async function workForOneTitleChange(
       localOnlyScrollbackByTabId: Object.fromEntries(
         [...OVER_CAP_TAB_IDS].map((tabId) => [tabId, { 'leaf-2': overCap }])
       ),
+      // An editor shown in wt-2 for a file wt-1 owns: saves move it into wt-1.
+      openFiles: [makeOpenFile({ id: 'file-of-wt-1', worktreeId: worktrees[1]!.id })],
       workspaceSessionReady: true,
       hydrationSucceeded: true
+    })
+    store.getState().createUnifiedTab(worktrees[2]!.id, 'editor', {
+      id: 'editor-in-wt-2',
+      entityId: 'file-of-wt-1',
+      label: 'file.ts'
     })
     // The first save sends whole fields and main acknowledges them.
     await vi.advanceTimersByTimeAsync(DEBOUNCE_MS)
@@ -99,13 +127,43 @@ async function workForOneTitleChange(
     }
     deepCompares.mockRestore()
     routedKeys.mockRestore()
-    return work
+
+    // A title in the workspace that receives the moved editor must keep that editor saved.
+    store.getState().updateTabTitle('tab-1-a', 'Owner renamed')
+    await vi.advanceTimersByTimeAsync(DEBOUNCE_MS)
+    const ownerTabs = main.stored().unifiedTabs?.[worktrees[1]!.id]?.map((tab) => tab.label)
+    // A rejected title save is still owed, and is sent with the next one.
+    main.rejectNextSave()
+    store.getState().updateTabTitle('tab-4-a', 'Rejected once')
+    await vi.advanceTimersByTimeAsync(DEBOUNCE_MS)
+    store.getState().updateTabTitle('tab-5-a', 'After the rejection')
+    await vi.advanceTimersByTimeAsync(DEBOUNCE_MS)
+
+    const stored = main.stored()
+    const titleOf = (index: number, tabId: string) =>
+      stored.tabsByWorktree[worktrees[index]!.id]?.find((tab) => tab.id === tabId)?.title
+    return {
+      ...work,
+      titles: [
+        titleOf(3, 'tab-3-b'),
+        titleOf(1, 'tab-1-a'),
+        titleOf(4, 'tab-4-a'),
+        titleOf(5, 'tab-5-a')
+      ],
+      ownerTabs
+    }
   } finally {
     stop()
   }
 }
 
-it('one title change compares and routes only the retitled workspace’s entries at N and 10N', async () => {
-  expect(await workForOneTitleChange(20)).toEqual({ deepCompares: 3, routedKeys: 5 })
-  expect(await workForOneTitleChange(200)).toEqual({ deepCompares: 3, routedKeys: 5 })
+it('a title change compares and routes only its workspace’s entries at N and 10N, and saves what the whole path saves', async () => {
+  const expected = {
+    deepCompares: 3,
+    routedKeys: 5,
+    titles: ['Renamed by agent', 'Owner renamed', 'Rejected once', 'After the rejection'],
+    ownerTabs: ['Owner renamed', 'Terminal 2', 'file.ts']
+  }
+  expect(await workForTitleChanges(20)).toEqual(expected)
+  expect(await workForTitleChanges(200)).toEqual(expected)
 })

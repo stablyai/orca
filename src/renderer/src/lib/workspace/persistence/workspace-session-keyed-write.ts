@@ -110,8 +110,9 @@ function buildPersistedUnifiedTabSessionEntries(
     cache,
     worktreeIds
   )
+  const { unifiedTabs } = data
   for (const worktreeId of worktreeIds) {
-    if (!Object.hasOwn(data.unifiedTabs, worktreeId)) {
+    if (!unifiedTabs || !Object.hasOwn(unifiedTabs, worktreeId)) {
       return null
     }
   }
