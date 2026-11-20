@@ -1,7 +1,5 @@
-import {
-  NATIVE_CHAT_QUOTED_FILE_REFERENCE,
-  readAgentImageSourceContext
-} from '../../input/composer/agent-image-paste'
+import { withoutAgentImageSourceContexts } from './native-chat-image-source-context'
+import { NATIVE_CHAT_QUOTED_FILE_REFERENCE } from '../../input/composer/agent-image-paste'
 import {
   imageReferenceToken,
   replaceImageReferences
@@ -162,23 +160,15 @@ export function withoutSentImagePromptMarkers(
   if (cached) {
     return cached
   }
-  const images = message.blocks.filter((block) => block.type === 'image-ref')
+  const sourceBlocks = withoutAgentImageSourceContexts(message.blocks)
+  const images = sourceBlocks.filter((block) => block.type === 'image-ref')
   const imageCount = images.length
-  let changed = false
-  const blocks = message.blocks.flatMap((block): NativeChatBlock[] => {
+  let changed = sourceBlocks !== message.blocks
+  const blocks = sourceBlocks.flatMap((block): NativeChatBlock[] => {
     if (!isTextBlock(block)) {
       return [block]
     }
-    const context = readAgentImageSourceContext(block.text)
-    const evidence =
-      context.original.length > 0 &&
-      ((imageCount === context.delivered.length &&
-        images.every((image, index) => !image.path || image.path === context.delivered[index])) ||
-        (imageCount === 0 &&
-          [context.delivered.join(' '), context.delivered.join('')].some(
-            (prefix) => prefix && (context.text === prefix || context.text.startsWith(`${prefix} `))
-          )))
-    const stripped = stripSentImagePromptMarkers(evidence ? context.text : block.text, imageCount)
+    const stripped = stripSentImagePromptMarkers(block.text, imageCount)
     if (stripped === block.text) {
       return [block]
     }

@@ -49,7 +49,8 @@ export function sendNativeChatMessageWithImageAttachments(
   const preparePaths = async (signal: AbortSignal): Promise<string[]> => {
     const prepared = await prepareAgentImagePaths(ptyId, imagePaths, undefined, {
       signal,
-      executionHostId: options?.executionHostId
+      executionHostId: options?.executionHostId,
+      isCurrent: options?.isCurrent
     })
     signal.throwIfAborted()
     options?.onImagesPrepared?.(prepared)
@@ -117,6 +118,14 @@ export function sendNativeChatMessageWithImageAttachments(
                 ),
                 deliveryText.trim().length > 0
               )
+              const rejectSuccessor = (): boolean => {
+                if (options?.isCurrent?.() !== false) {
+                  return false
+                }
+                options?.onDeliverySettled?.(false)
+                markSubmitted('uncertain')
+                return true
+              }
               const submitAfterPasteLands = (): void =>
                 afterNativeChatPasteLands({
                   readInputLine: options?.readInputLine,
@@ -128,6 +137,9 @@ export function sendNativeChatMessageWithImageAttachments(
                     ) + deliveryText,
                   delay,
                   submit: () => {
+                    if (rejectSuccessor()) {
+                      return
+                    }
                     sendRuntimePtyInput(ptyId, NATIVE_CHAT_SUBMIT, 'driving')
                     markSubmitted()
                   }
@@ -137,6 +149,9 @@ export function sendNativeChatMessageWithImageAttachments(
               }
               if (deliveryText.trim().length > 0) {
                 delay(NATIVE_CHAT_IMAGE_ATTACHMENT_SETTLE_MS, () => {
+                  if (rejectSuccessor()) {
+                    return
+                  }
                   sendRuntimePtyInput(ptyId, buildNativeChatPasteBytes(deliveryText), 'driving')
                   delay(NATIVE_CHAT_SUBMIT_DELAY_MS, submitAfterPasteLands)
                 })

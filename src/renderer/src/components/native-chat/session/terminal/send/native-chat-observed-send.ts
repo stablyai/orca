@@ -44,8 +44,17 @@ export function sendNativeChatObservedWrites(
               submit: send
             })
           : send()
+      const refuseSuccessor = (index: number): boolean => {
+        if (options.isCurrent?.() !== false) {
+          return false
+        }
+        options.onWriteRejected?.()
+        options.onDeliverySettled?.(false)
+        markSubmitted(index === 0 ? 'not-submitted' : 'uncertain')
+        return true
+      }
       const writeAt = (index: number): void => {
-        if (isCancelled()) {
+        if (isCancelled() || refuseSuccessor(index)) {
           return
         }
         const write = writes[index]
@@ -62,7 +71,7 @@ export function sendNativeChatObservedWrites(
           return
         }
         const send = (): void => {
-          if (isCancelled()) {
+          if (isCancelled() || refuseSuccessor(index)) {
             return
           }
           markWriteStarted()

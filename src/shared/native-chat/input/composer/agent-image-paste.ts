@@ -95,15 +95,14 @@ export function agentImageDeliveryText(
   return context ? `${text}${text.trim() ? '\n\n' : ''}${context}` : text
 }
 
-export function readAgentImageSourceContext(text: string): {
-  text: string
+export type AgentImageSourceContextRange = {
+  start: number
+  end: number
   original: string[]
   delivered: string[]
-} {
-  const unchanged = { text, original: [], delivered: [] }
-  if (!text.endsWith(']')) {
-    return unchanged
-  }
+}
+
+export function* agentImageSourceContexts(text: string): Generator<AgentImageSourceContextRange> {
   const pattern =
     /Image source file: ("(?:[^"\\]|\\.)*"); attached viewing copy: ("(?:[^"\\]|\\.)*")/g
   let start = -1
@@ -127,8 +126,28 @@ export function readAgentImageSourceContext(text: string): {
       continue
     }
     cursor = match.index + match[0].length
+    if (text[cursor] === ']') {
+      yield { start, end: cursor + 1, original, delivered }
+      start = -1
+    }
   }
-  return start !== -1 && original.length && text.slice(cursor) === ']'
-    ? { text: text.slice(0, start).trimEnd(), original, delivered }
-    : unchanged
+}
+
+export function readAgentImageSourceContext(text: string): {
+  text: string
+  original: string[]
+  delivered: string[]
+} {
+  if (text.endsWith(']')) {
+    for (const context of agentImageSourceContexts(text)) {
+      if (context.end === text.length) {
+        return {
+          text: text.slice(0, context.start).trimEnd(),
+          original: context.original,
+          delivered: context.delivered
+        }
+      }
+    }
+  }
+  return { text, original: [], delivered: [] }
 }

@@ -50,3 +50,43 @@ it('keeps generated viewing-copy context out of drawn and copied words while pre
   )
   expect(generated.blocks).toHaveLength(2)
 })
+
+it.each([false, true])(
+  'removes multiple fitted-drop contexts before a caption (separate blocks=%s)',
+  (separate) => {
+    const a = '[Image source file: "/repo/a.png"; attached viewing copy: "/temp/a.png"]'
+    const b = '[Image source file: "/repo/b.png"; attached viewing copy: "/temp/b.png"]'
+    const message: NativeChatMessage = {
+      id: 'drop',
+      role: 'user',
+      source: 'transcript',
+      timestamp: 1,
+      blocks: [
+        { type: 'image-ref', path: '/temp/a.png' },
+        { type: 'image-ref', path: '/temp/b.png' },
+        ...(separate
+          ? [
+              { type: 'text' as const, text: a },
+              { type: 'text' as const, text: `${b} Describe these` }
+            ]
+          : [{ type: 'text' as const, text: `${a} ${b} Describe these` }])
+      ]
+    }
+    expect(nativeChatMessageCopyText(message)).toBe('Describe these')
+  }
+)
+
+it('preserves a human source-note caption while removing only the matching generated suffix', () => {
+  const note = '[Image source file: "/repo/a.png"; attached viewing copy: "/temp/a.png"]'
+  const message: NativeChatMessage = {
+    id: 'caption',
+    role: 'user',
+    source: 'transcript',
+    timestamp: 1,
+    blocks: [
+      { type: 'image-ref', path: '/temp/a.png' },
+      { type: 'text', text: `${note}\n\n${note}` }
+    ]
+  }
+  expect(nativeChatMessageCopyText(message)).toBe(note)
+})

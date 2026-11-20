@@ -2,7 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { writes, preparation } = vi.hoisted(() => {
   const writes: string[] = []
-  return { writes, preparation: { hold: false } }
+  const preparation: { hold: boolean; deliver?: () => void } = { hold: false }
+  return { writes, preparation }
 })
 
 vi.mock('@/runtime/hosted-terminals/input/runtime-terminal-input-send', () => ({
@@ -25,8 +26,9 @@ vi.mock('@/runtime/rpc/subscriptions/runtime-rpc-subscribe', () => ({
     _params: unknown,
     handlers: { onEvent: (value: unknown) => void }
   ) => {
+    preparation.deliver = () => handlers.onEvent({ paths: ['/views/hero.png'] })
     if (!preparation.hold) {
-      handlers.onEvent({ paths: ['/views/hero.png'] })
+      preparation.deliver()
     }
     return { unsubscribe: () => {} }
   }
@@ -134,6 +136,72 @@ describe('fitted image delivery', () => {
         await expect(handle.outcome).resolves.toBe('not-submitted')
       } finally {
         preparation.hold = false
+        resetNativeChatPtySendQueuesForTests()
+        vi.useRealTimers()
+      }
+    }
+  )
+
+  it.each([false, true])(
+    'does not write an image or Enter after its intended agent leaves (observed=%s)',
+    async (observed) => {
+      vi.useFakeTimers()
+      writes.length = 0
+      preparation.hold = true
+      let current = true
+      try {
+        const handle = sendNativeChatMessageWithImageAttachments(
+          'claude',
+          'pty-agent',
+          'Inspect this',
+          ['/repo/hero.png'],
+          {
+            clearInput: '',
+            isCurrent: () => current,
+            ...(observed ? { onWriteRejected: () => {} } : {})
+          }
+        )
+        await vi.advanceTimersByTimeAsync(0)
+        current = false
+        preparation.deliver?.()
+        await vi.advanceTimersByTimeAsync(2000)
+        expect(writes).toEqual([])
+        await expect(handle.outcome).resolves.toBe('not-submitted')
+      } finally {
+        preparation.hold = false
+        resetNativeChatPtySendQueuesForTests()
+        vi.useRealTimers()
+      }
+    }
+  )
+
+  it.each([false, true])(
+    'does not submit or clear successor input after writing an image (observed=%s)',
+    async (observed) => {
+      vi.useFakeTimers()
+      writes.length = 0
+      let current = true
+      try {
+        const handle = sendNativeChatMessageWithImageAttachments(
+          'claude',
+          'pty-agent',
+          'Inspect this',
+          ['/repo/hero.png'],
+          {
+            clearInput: '',
+            isCurrent: () => current,
+            ...(observed ? { onWriteRejected: () => {} } : {})
+          }
+        )
+        await vi.advanceTimersByTimeAsync(0)
+        expect(writes.some((text) => text.includes('/views/hero.png'))).toBe(true)
+        const written = [...writes]
+        current = false
+        await vi.advanceTimersByTimeAsync(2000)
+        expect(writes).toEqual(written)
+        expect(writes).not.toContain('\r')
+        await expect(handle.outcome).resolves.toBe('uncertain')
+      } finally {
         resetNativeChatPtySendQueuesForTests()
         vi.useRealTimers()
       }

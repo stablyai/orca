@@ -45,7 +45,8 @@ export async function prepareAgentImagePaths(
     ? useAppStore.subscribe((next, previous) => {
         if (
           next.tabsByWorktree !== previous.tabsByWorktree ||
-          next.paneForegroundAgentByPaneKey !== previous.paneForegroundAgentByPaneKey
+          next.paneForegroundAgentByPaneKey !== previous.paneForegroundAgentByPaneKey ||
+          next.agentStatusByPaneKey !== previous.agentStatusByPaneKey
         ) {
           checkCurrent()
         }
@@ -80,6 +81,10 @@ export async function prepareAgentImagePaths(
         { paths, wslDistro: options.cwd ? parseWslUncPath(options.cwd)?.distro : undefined },
         {
           onEvent: (result) => {
+            checkCurrent()
+            if (signal.aborted) {
+              return
+            }
             if (
               result &&
               typeof result === 'object' &&
@@ -93,6 +98,10 @@ export async function prepareAgentImagePaths(
             }
           },
           onError: (error) => {
+            checkCurrent()
+            if (signal.aborted) {
+              return
+            }
             if (hasRuntimeRpcErrorCode(error, 'method_not_found')) {
               finish([...paths])
             } else {
@@ -124,16 +133,45 @@ export function prepareTerminalAgentImagePaths(
   environmentId?: string | null,
   options?: AgentImagePreparationOptions
 ): Promise<string[]> {
-  const state = useAppStore.getState()
-  const key = `${tabId}:${leafId}`
-  const entry = state.agentStatusByPaneKey.get(key)
-  const foreground = state.paneForegroundAgentByPaneKey[key]?.agent
-  const agent = isTuiAgent(foreground)
-    ? foreground
-    : entry?.restoredUnconfirmed !== true
-      ? entry?.agentType
-      : null
-  return ptyId && isTuiAgent(agent)
-    ? prepareAgentImagePaths(ptyId, paths, environmentId, options)
+  const target = captureTerminalAgentImageTarget(tabId, leafId)
+  return ptyId && target
+    ? prepareAgentImagePaths(ptyId, paths, environmentId, {
+        ...options,
+        isCurrent: () => target.isCurrent() && options?.isCurrent?.() !== false
+      })
     : Promise.resolve([...paths])
+}
+
+export function captureTerminalAgentImageTarget(tabId: string, leafId: string) {
+  const key = `${tabId}:${leafId}`
+  const readAgent = () => {
+    const state = useAppStore.getState()
+    const entry = state.agentStatusByPaneKey.get(key)
+    const foreground = state.paneForegroundAgentByPaneKey[key]
+    if (foreground?.shellForeground || foreground?.routingRevoked) {
+      return null
+    }
+    return isTuiAgent(foreground?.agent)
+      ? foreground.agent
+      : entry?.restoredUnconfirmed !== true && isTuiAgent(entry?.agentType)
+        ? entry.agentType
+        : null
+  }
+  const agent = readAgent()
+  if (!agent) {
+    return null
+  }
+  const entry = useAppStore.getState().agentStatusByPaneKey.get(key)
+  const sessionId = entry?.orcaSessionId
+  const providerSessionId = entry?.providerSession?.id
+  return {
+    isCurrent: () => {
+      const current = useAppStore.getState().agentStatusByPaneKey.get(key)
+      return (
+        readAgent() === agent &&
+        (!sessionId || current?.orcaSessionId === sessionId) &&
+        (!providerSessionId || current?.providerSession?.id === providerSessionId)
+      )
+    }
+  }
 }

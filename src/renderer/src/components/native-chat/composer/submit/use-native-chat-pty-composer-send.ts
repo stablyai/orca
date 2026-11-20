@@ -1,3 +1,5 @@
+import { captureTerminalAgentImageTarget } from '@/runtime/files/agent-image-preparation'
+import { parsePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
 import { readNativeChatComposerDraft } from '../../drafts/native-chat-composer-draft-store'
 import { serializeNativeChatAgentReferences } from '../pickers/native-chat-agent-reference-send'
 import {
@@ -35,6 +37,7 @@ import {
 
 export function useNativeChatPtyComposerSend(args: {
   agent: AgentType
+  paneKey: string
   draft: string
   draftScopeKey: string
   imageAttachments: readonly { path: string }[]
@@ -131,6 +134,11 @@ export function useNativeChatPtyComposerSend(args: {
             ? sendNativeChatTypedCommand(target.ptyId, text, launchSendOptions)
             : sendNativeChatMessage(target.ptyId, text, sendOptions)
       } else if (imagePaths.length > 0) {
+        const pane = parsePaneKey(args.paneKey)
+        const imageTarget = pane ? captureTerminalAgentImageTarget(pane.tabId, pane.leafId) : null
+        if (pane && !imageTarget) {
+          return false
+        }
         const owner = resolveNativeChatAttachmentOwner(useAppStore.getState(), args.terminalTabId)
         pendingHandle = sendNativeChatMessageWithImageAttachments(
           args.agent,
@@ -139,6 +147,7 @@ export function useNativeChatPtyComposerSend(args: {
           imagePaths,
           {
             ...sendOptions,
+            isCurrent: imageTarget?.isCurrent,
             executionHostId: owner.kind === 'remote' ? owner.staging?.executionHostId : undefined
           }
         )
