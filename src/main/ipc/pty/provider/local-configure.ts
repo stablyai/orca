@@ -1,4 +1,5 @@
 import { prepareWorkspaceShellAccount } from '../host-env/workspace-shell-account-preparation'
+import { claudeSystemDefaultUsageAccountIdForHome } from '../../../claude-accounts/profiles/routing/claude-account-usage-preparation'
 import { historyLaunchAccount } from '../../../providers/accounts/workspace-account-session-resume'
 import { getClaudeWorkspaceProfiles } from '../../../claude-accounts/profiles/routing/claude-profile-installed-router'
 import { getClaudeAgentViewService } from '../../../claude/agent-view/agent-view-service'
@@ -32,6 +33,7 @@ import { visibleRendererPtys } from '../delivery/visibility-state'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import { awaitExplicitAgentPluginGuestReadiness } from '../../../agent-hooks/wsl-relay/wsl-agent-plugin-readiness'
 import { prepareAntigravityAccountForLaunch } from '../../../antigravity/native-account-launch'
+import { CLAUDE_USAGE_ACCOUNT_ID_ENV } from '../../../../shared/agent-accounts/claude/claude-system-default-usage-account'
 
 export function configureLocalPtyProvider(args: {
   runtime?: OrcaRuntimeService
@@ -75,10 +77,14 @@ export function configureLocalPtyProvider(args: {
           )
         : null
     if (pinnedClaude) {
+      const usageAccountId =
+        pinnedClaude.accountId ??
+        (await claudeSystemDefaultUsageAccountIdForHome(pinnedClaude.home))
       Object.assign(baseEnv, {
         CLAUDE_CONFIG_DIR: pinnedClaude.home,
         ORCA_CLAUDE_PROFILE_POINTER: '',
-        ORCA_CLAUDE_INJECTED_CONFIG_DIR: pinnedClaude.home
+        ORCA_CLAUDE_INJECTED_CONFIG_DIR: pinnedClaude.home,
+        [CLAUDE_USAGE_ACCOUNT_ID_ENV]: usageAccountId ?? ''
       })
     }
     if (workspaceClaude) {

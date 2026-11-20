@@ -58,6 +58,10 @@ export function getCodexStatusWslKey(wslDistro: string | null | undefined): stri
   return trimmed ? trimmed : '__default__'
 }
 
+export function getCodexStatusWslComparisonKey(wslDistro: string | null | undefined): string {
+  return getCodexStatusWslKey(wslDistro).toLowerCase()
+}
+
 export function getCodexStatusRuntimeLabel(
   target: CodexStatusRuntimeTarget,
   hostLabel = getHostRuntimeLabel()
@@ -71,7 +75,9 @@ export function getCodexStatusRuntimeLabel(
 }
 
 export function getCodexStatusRuntimeKey(target: CodexStatusRuntimeTarget): string {
-  return target.runtime === 'host' ? 'host' : `wsl:${getCodexStatusWslKey(target.wslDistro)}`
+  return target.runtime === 'host'
+    ? 'host'
+    : `wsl:${getCodexStatusWslComparisonKey(target.wslDistro)}`
 }
 
 export function toCodexStatusRuntimeTarget(

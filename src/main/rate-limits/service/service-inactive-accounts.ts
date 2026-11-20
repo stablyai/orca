@@ -257,6 +257,7 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
     for (const accountId of this.inactiveClaudeCache.keys()) {
       if (!currentIds.has(accountId)) {
         this.inactiveClaudeCache.delete(accountId)
+        this.inactiveClaudeLiveUsage.delete(accountId)
         this.inactiveClaudeLiveWindowAt.delete(accountId)
       }
     }

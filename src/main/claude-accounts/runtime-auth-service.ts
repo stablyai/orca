@@ -7,6 +7,7 @@ import type { Store } from '../persistence/loading-store/store'
 import { isWslDistroRunning } from '../wsl/discovery/wsl-background-distro-gate'
 import { getDefaultWslDistro, getWslHome } from '../wsl/discovery/distro-catalog'
 import { ClaudeProfileRouter } from './profiles/routing/claude-profile-router'
+import { claudeSystemDefaultUsageAccountIdForHome } from './profiles/routing/claude-account-usage-preparation'
 import { ClaudeWorkspaceProfiles } from './profiles/routing/claude-workspace-profile'
 import { ClaudeWslProfileRouter } from './profiles/wsl/claude-profile-wsl-router'
 import {
@@ -18,10 +19,7 @@ import {
 import { ClaudeObservedConfigDirs } from './profiles/routing/claude-observed-config-dirs'
 import type { ClaudeAccountSelectionTarget } from './selection/runtime-selection'
 import type { ClaudeRuntimeAuthPreparation } from './runtime-auth/runtime-auth-types'
-import {
-  CLAUDE_USAGE_ACCOUNT_ID_ENV,
-  claudeSystemDefaultUsageAccountId
-} from '../../shared/agent-accounts/claude/claude-system-default-usage-account'
+import { CLAUDE_USAGE_ACCOUNT_ID_ENV } from '../../shared/agent-accounts/claude/claude-system-default-usage-account'
 
 /** `readPath` exposes a guest configDir to the host through UNC on WSL. */
 export type ClaudeAccountFolder = { configDir: string; readPath: string }
@@ -71,14 +69,13 @@ export class ClaudeRuntimeAuthService {
       if (!pinned.accountId) {
         await this.router.environmentReady
       }
-      const login = pinned.accountId ? null : this.router.systemDefaultLogin()
       const usageAccountId =
-        pinned.accountId ?? claudeSystemDefaultUsageAccountId(login?.email, login?.organizationUuid)
+        pinned.accountId ?? (await claudeSystemDefaultUsageAccountIdForHome(pinned.home))
       return {
         configDir: pinned.home,
         envPatch: {
           CLAUDE_CONFIG_DIR: pinned.home,
-          ...(usageAccountId ? { [CLAUDE_USAGE_ACCOUNT_ID_ENV]: usageAccountId } : {}),
+          [CLAUDE_USAGE_ACCOUNT_ID_ENV]: usageAccountId ?? '',
           ORCA_CLAUDE_PROFILE_POINTER: '',
           ORCA_CLAUDE_INJECTED_CONFIG_DIR: pinned.home
         },

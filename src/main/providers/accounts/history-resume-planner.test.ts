@@ -203,6 +203,36 @@ it('keeps a validated resume choice after commit even when the workspace account
   ).rejects.toThrow('another workspace')
 })
 
+it('allows a System default Claude receipt without an OAuth login', async () => {
+  personalLabel = 'System default'
+  personalIdentity = JSON.stringify([null, null])
+  plannerDeps.freshSystemDefaultIdentity = (provider) =>
+    provider === 'claude' ? { label: personalLabel, identity: personalIdentity } : undefined
+  planner = new HistoryResumePlanner(plannerDeps)
+  const token = 'api-key-system-default'
+  const home = join(root, 'system')
+  await ledger.launchReceipts.save(
+    token,
+    args.workspaceId!,
+    {
+      provider: 'claude',
+      sessionId: 'claude-session',
+      filePath: join(home, 'projects', 'workspace', 'claude-session.jsonl'),
+      home,
+      rootSessionId: 'claude-root',
+      accountId: null,
+      openedAt: Date.now()
+    },
+    personalLabel,
+    personalIdentity
+  )
+
+  await expect(planner.accountForReceipt(token, 'claude', args.workspaceId)).resolves.toEqual({
+    accountId: null,
+    home
+  })
+})
+
 it('recovers an unacknowledged open after a host restart and accepts the commit retry', async () => {
   const opened = await open('work')
   planner = new HistoryResumePlanner(plannerDeps)
@@ -223,6 +253,7 @@ it('persists the successful open timestamp across host restart and commit retry'
     commitToken: opened.resumeReceipt,
     commitTimestamp: committedAt
   })
+  vi.setSystemTime(committedAt + 1_000)
   await planner.prepare({
     ...args,
     workspaceId: undefined,

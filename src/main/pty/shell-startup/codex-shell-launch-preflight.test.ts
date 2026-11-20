@@ -230,7 +230,7 @@ bash --noprofile --norc -c 'codex child'`
         `codex() { __codex_helper; }
 __codex_helper() { printf user; }
 ${getPosixCodexShellLaunchPreflight()}
-if [[ "$(export -pf)" == *"declare -fx codex ()"* ]]; then printf exported; else printf unexported; fi`
+        if [[ $'\n'"$(export -pf)"$'\n' == *$'\ndeclare -fx codex\n'* ]]; then printf exported; else printf unexported; fi`
       ],
       { encoding: 'utf-8' }
     )

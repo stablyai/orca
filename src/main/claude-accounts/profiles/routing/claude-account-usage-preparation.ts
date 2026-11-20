@@ -1,7 +1,11 @@
-import { isSameClaudeLogin } from '../../sign-in/claude-account-folder'
+import {
+  claudeStateFileAsync,
+  isSameClaudeLogin,
+  readClaudeFolderLoginAsync,
+  type ClaudeFolderLogin
+} from '../../sign-in/claude-account-folder'
 import type { ClaudeProfileRouter } from './claude-profile-router'
 import type { ClaudeRuntimeAuthPreparation } from '../../runtime-auth/runtime-auth-types'
-import type { ClaudeFolderLogin } from '../../sign-in/claude-account-folder'
 import {
   CLAUDE_USAGE_ACCOUNT_ID_ENV,
   claudeSystemDefaultUsageAccountId
@@ -25,7 +29,14 @@ export function claudeUsageAccountEnv(
   systemDefaultLogin: ClaudeFolderLogin | null
 ): Record<string, string> {
   const accountId = claudeWorkspaceUsageAccountId(profileAccountId, systemDefaultLogin)
-  return accountId ? { [CLAUDE_USAGE_ACCOUNT_ID_ENV]: accountId } : {}
+  return { [CLAUDE_USAGE_ACCOUNT_ID_ENV]: accountId ?? '' }
+}
+
+export async function claudeSystemDefaultUsageAccountIdForHome(
+  home: string
+): Promise<string | null> {
+  const login = await readClaudeFolderLoginAsync(await claudeStateFileAsync(home))
+  return claudeSystemDefaultUsageAccountId(login?.email, login?.organizationUuid)
 }
 
 /** Usage reads use the same login route as account launches. */
