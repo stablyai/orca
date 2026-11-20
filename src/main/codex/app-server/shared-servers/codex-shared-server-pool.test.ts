@@ -71,8 +71,12 @@ function fakeCodex(
           // A send Codex has not answered yet.
           return new Promise(() => {})
         }
-        if (method === 'thread/start' && params?.holdOpen === true) {
-          const id = `thread-${nextThread++}`
+        if (
+          (method === 'thread/start' || method === 'thread/resume') &&
+          params?.holdOpen === true
+        ) {
+          const id =
+            typeof params.threadId === 'string' ? params.threadId : `thread-${nextThread++}`
           return new Promise((resolve) => {
             server.releaseOpen = () => {
               const result = { thread: { id } }
@@ -414,11 +418,14 @@ describe('shared Codex app-servers', () => {
     expect(connB.closed).toBe(false)
   })
 
-  it('never shares a server for a custom Codex command', () => {
+  it('never shares a server for a custom Codex command, or on Windows', () => {
     const opener = codexConnectionOpener({ sharedServers: () => true }, 's', {
       customCommand: true
     })
     expect(opener).toBe(spawnCodexAppServerConnection)
+    expect(codexConnectionOpener({ sharedServers: () => true }, 's', {}, 'win32')).toBe(
+      spawnCodexAppServerConnection
+    )
   })
 
   it('does not count a server exit during Stop as the turn ending', async () => {
@@ -542,5 +549,31 @@ describe('shared Codex app-servers', () => {
       params: { threadId: 'thread-1' }
     })
     expect(connA.closed).toBe(false)
+  })
+
+  it('lets go of a resumed thread whose caller timed out, though the chat stays open', async () => {
+    vi.useFakeTimers()
+    const { servers, pool } = fakeCodex()
+    const a = chat()
+    const connA = await pool.open(launch(), a.handlers, { sessionId: 'a', skillRoots: [] })
+    const resuming = connA.request(
+      'thread/resume',
+      { threadId: 'old-thread', holdOpen: true },
+      { timeoutMs: 1_000 }
+    )
+    const failed = expect(resuming).rejects.toThrow('exceeded 1000ms')
+    await vi.advanceTimersByTimeAsync(1_500)
+    await failed
+    servers[0]!.releaseOpen()
+    expect(servers[0]!.requests).toContainEqual({
+      method: 'thread/unsubscribe',
+      params: { threadId: 'old-thread' }
+    })
+    // Its frames no longer reach the chat.
+    servers[0]!.handlers.onNotification?.('turn/started', {
+      threadId: 'old-thread',
+      turn: { id: 'late' }
+    })
+    expect(a.notifications.map((n) => n.method)).not.toContain('turn/started')
   })
 })

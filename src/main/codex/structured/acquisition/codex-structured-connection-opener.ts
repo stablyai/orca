@@ -6,7 +6,7 @@ import type {
   CodexStructuredSessionAdapterDeps
 } from '../session-lifecycle/codex-structured-session-state'
 
-/** Off, or a custom Codex command: the chat spawns its own app-server, as always. On: it leases a
+/** Off, Windows, or a custom Codex command: the chat spawns its own app-server, as always. On: it leases a
  *  thread on a shared one. */
 export function codexConnectionOpener(
   deps: Pick<CodexStructuredSessionAdapterDeps, 'openConnection' | 'sharedServers'>,
@@ -14,12 +14,15 @@ export function codexConnectionOpener(
   launch: Pick<
     CodexStructuredLaunch,
     'visuals' | 'linkedSkillsRoot' | 'codexVersion' | 'customCommand'
-  >
+  >,
+  platform: NodeJS.Platform = process.platform
 ): NonNullable<CodexStructuredSessionAdapterDeps['openConnection']> {
   if (deps.openConnection) {
     return deps.openConnection
   }
-  if (launch.customCommand || deps.sharedServers?.() !== true) {
+  // Windows can't read a process's environment, so a shared chat's Stop could never be proven
+  // there; every Windows chat keeps its own server.
+  if (platform === 'win32' || launch.customCommand || deps.sharedServers?.() !== true) {
     return spawnCodexAppServerConnection
   }
   const skillRoots = codexSkillRoots({

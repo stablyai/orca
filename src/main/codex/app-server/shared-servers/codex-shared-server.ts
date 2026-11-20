@@ -221,6 +221,8 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
   }
 
   abandon(threadId: string, lease: CodexSharedServerLease): Promise<boolean> {
+    // The chat's own provisional claim (a resume it gave up on) is let go; another chat's isn't.
+    this.router.unclaim(threadId, lease)
     if (this.router.isClaimed(threadId)) {
       return Promise.resolve(true)
     }

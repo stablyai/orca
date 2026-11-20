@@ -85,7 +85,7 @@ export async function sendCodexLeaseRequest(
             owner.abandon(threadId)
           }
         }
-        if (CARRIES_HISTORY.has(method) && owner.open) {
+        if (CARRIES_HISTORY.has(method) && owner.open && !callerGone) {
           for (const child of codexChildThreadIdsInHistory(result)) {
             owner.claim(child)
           }

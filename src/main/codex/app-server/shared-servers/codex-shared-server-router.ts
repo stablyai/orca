@@ -43,6 +43,14 @@ export class CodexSharedServerRouter {
     }
   }
 
+  /** Drops one thread this chat claimed but no longer wants (a resume its caller gave up on). */
+  unclaim(threadId: string, lease: CodexSharedServerLease): void {
+    if (this.owners.get(threadId) === lease) {
+      this.owners.delete(threadId)
+      lease.threads.delete(threadId)
+    }
+  }
+
   /** Drops the chat's threads from routing; their late frames are refused. */
   release(lease: CodexSharedServerLease): string[] {
     const threads = [...lease.threads]
