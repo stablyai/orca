@@ -3,7 +3,8 @@ import { structuredAgentSessionTabId } from '../../../../shared/agent-session/vi
 import { runJournalTransaction } from './journal-database'
 import { isSqliteCorruption, isSqliteStorageFailure } from '../../../sqlite/sqlite-read-failure'
 import { AGENT_SESSION_TABS_RECORDED } from '../../../runtime/agent-session/records/agent-session-record-rows'
-import { readAdoption, type Adoption, type Claim } from './journal-legacy-adoption'
+import { readAdoption, type Adoption } from './journal-legacy-adoption'
+import { missingJournalLegacyClaims, insertJournalLegacyClaims } from './journal-legacy-claims'
 import { journalDatabasePath } from './journal-host-database'
 import {
   journalLegacyChatRevision,
@@ -180,6 +181,25 @@ function absorbChats(
         console.warn('[agent-session-journal] keeping chats an older Orca saved paused', error)
         return false
       }
+      // Failed adoption must not make uploads held by the original eligible for sweeping.
+      try {
+        const claims = missingJournalLegacyClaims(db, id, adoption.claims.get(id) ?? [])
+        if (claims.length > 0) {
+          runJournalTransaction(db, () => insertJournalLegacyClaims(db, id, claims))
+        }
+      } catch (claimError) {
+        if (
+          isSqliteStorageFailure(claimError) ||
+          isSqliteCorruption(claimError) ||
+          db.isTransaction
+        ) {
+          console.warn(
+            '[agent-session-journal] keeping chats an older Orca saved paused',
+            claimError
+          )
+          return false
+        }
+      }
       pass.failures.push({ sessionId: id, revision, error })
       // The failed chat's transaction rolled back, and with it any tab it added.
       for (const [sessionId, tab] of adoption.added.splice(added)) {
@@ -200,15 +220,10 @@ function absorbChat(
   adoption: Adoption,
   pass: Pass
 ): void {
-  const claims = (adoption.claims.get(id) ?? []).filter(
-    (claim) =>
-      !db
-        .prepare('SELECT 1 FROM agent_session_attachment_claims WHERE upload_id=? AND session_id=?')
-        .get(claim.upload_id!, id)
-  )
+  const claims = missingJournalLegacyClaims(db, id, adoption.claims.get(id) ?? [])
   const write = (keep: () => void) =>
     runJournalTransaction(db, () => {
-      insertClaims(db, id, claims)
+      insertJournalLegacyClaims(db, id, claims)
       keep()
     })
   const claimsOnly = () => {
@@ -302,7 +317,7 @@ function adoptChat(
     ).run(as, session.workspace_id)
   }
   if (as !== id) {
-    insertClaims(db, as, adoption.claims.get(id) ?? [])
+    insertJournalLegacyClaims(db, as, adoption.claims.get(id) ?? [])
   }
 }
 
@@ -333,13 +348,4 @@ function addTab(db: Database.Database, adoption: Adoption, sessionId: string, ta
   adoption.tabbed.add(sessionId)
   adoption.takenTabs.add(tab)
   adoption.added.push([sessionId, tab])
-}
-
-/** Uploads the older Orca attached stay claimed, so the sweeper never removes them. */
-function insertClaims(db: Database.Database, sessionId: string, claims: readonly Claim[]): void {
-  const insert = db.prepare(`INSERT INTO agent_session_attachment_claims(upload_id,session_id,
-    claimed_at) VALUES(?,?,?) ON CONFLICT DO NOTHING`)
-  for (const claim of claims) {
-    insert.run(claim.upload_id!, sessionId, claim.claimed_at!)
-  }
 }

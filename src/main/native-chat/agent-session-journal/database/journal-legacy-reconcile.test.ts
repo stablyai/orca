@@ -595,3 +595,38 @@ it('keeps attachment-only claims even when the original history is unchanged', a
     }
   }
 })
+
+it('keeps the original upload custody when a forced copy cannot be adopted', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'orca-legacy-reconcile-'))
+  cleanup.push(() => rmSync(root, { recursive: true, force: true }))
+  const { db: original } = openJournalDatabase(journalDatabasePath(root))
+  cleanup.push(() => original.close())
+  olderOrcaChat(original, 'converted', rows)
+  const first = await upgrade(root)
+  expect(await first.convert('converted')).toBe('epoch')
+  first.db
+    .prepare('INSERT INTO agent_session_store_meta VALUES(?,?)')
+    .run('journal.legacy-copy-due:converted', '1')
+  await first.close()
+  original
+    .prepare('INSERT INTO agent_session_attachment_claims VALUES(?,?,?)')
+    .run('original-upload', 'converted', 100)
+  original
+    .prepare('UPDATE agent_session_records SET record_json=? WHERE session_id=?')
+    .run('{', 'converted')
+  original.pragma('wal_checkpoint(TRUNCATE)')
+
+  const kept = await upgrade(root)
+  cleanup.push(kept.close)
+  expect(
+    kept.db.prepare('SELECT upload_id,session_id FROM agent_session_attachment_claims').all()
+  ).toEqual([{ upload_id: 'original-upload', session_id: 'converted' }])
+  expect(kept.db.prepare('SELECT session_id FROM agent_session_records').all()).toEqual([
+    { session_id: 'converted' }
+  ])
+  expect(
+    kept.db
+      .prepare('SELECT value FROM agent_session_store_meta WHERE key=?')
+      .get('journal.legacy-failed:converted')
+  ).toBeDefined()
+})
