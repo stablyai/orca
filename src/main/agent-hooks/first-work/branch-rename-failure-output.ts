@@ -1,7 +1,7 @@
 import {
   formatAgentGenerationFailureOutputForDisplay,
   type AgentGenerationFailureOutput
-} from '../../text-generation/agent-failure-output'
+} from '../../text-generation/failures/agent-failure-output'
 
 // Keep full CLI diagnostics local and ephemeral; persist only the sanitized failure badge.
 const MAX_ENTRIES = 32

@@ -2,8 +2,15 @@ import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import { editorPlacementIndex } from '@/store/slices/editor/tabs/workspace-editor-files'
 import { getOpenFileExecutionHostId } from '@/lib/workspace/ownership/unified-tab-host-ownership'
 import { isEditorTabContentType } from '@/store/slices/editor/tabs/editor-tab-content-type'
-import { structuredLaunchSlotIds } from '../../agent-session/launch/structured-agent-session-launch-persistence'
-import type { Tab, TabGroup, TabGroupLayoutNode } from '../../../../../shared/tab-types'
+import {
+  structuredLaunchSlotIds,
+  structuredLaunchSlotSignatures
+} from '../../agent-session/launch/structured-agent-session-launch-persistence'
+import type {
+  Tab,
+  TabGroup,
+  TabGroupLayoutNode
+} from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { WorkspaceSessionState } from '../../../../../shared/workspace-session/workspace-session-state-types'
 import type { WorkspaceSessionSnapshot } from './workspace-session'
 
@@ -66,27 +73,83 @@ function buildPersistedGroupsForWorktree(
     .filter((group) => group.tabOrder.length > 0)
 }
 
+type WorktreeTabSession = {
+  tabs: Tab[]
+  groups: TabGroup[]
+  layout: TabGroupLayoutNode
+  activeGroupId: string
+}
+
+type CachedWorktreeTabSession = {
+  worktreeId: string
+  groups: TabGroup[] | undefined
+  layout: TabGroupLayoutNode | undefined
+  activeGroupId: string | undefined
+  slots: string
+  session: WorktreeTabSession | null
+}
+
+/** Saved tab sessions keyed by each worktree's live tab array: a save reuses a worktree's previous
+ *  output while its tabs, groups, layout, active group and launch slots are the same objects, so one
+ *  tab switch rebuilds one worktree instead of the fleet. */
+export type UnifiedTabSessionCache = WeakMap<Tab[], CachedWorktreeTabSession>
+
+export function createUnifiedTabSessionCache(): UnifiedTabSessionCache {
+  return new WeakMap()
+}
+
+function buildWorktreeTabSession(
+  worktreeId: string,
+  tabs: Tab[],
+  sourceGroups: TabGroup[],
+  layout: TabGroupLayoutNode | undefined,
+  activeGroupId: string | undefined,
+  hasSlots: boolean
+): WorktreeTabSession | null {
+  if (tabs.length === 0 && !hasSlots) {
+    return null
+  }
+  const groups = buildPersistedGroupsForWorktree(tabs, sourceGroups, worktreeId)
+  if (groups.length === 0) {
+    return null
+  }
+  const groupIds = new Set(groups.map((group) => group.id))
+  const keptTabs = tabs.filter((tab) => groupIds.has(tab.groupId))
+  if (keptTabs.length === 0 && !hasSlots) {
+    return null
+  }
+  const prunedLayout = layout ? prunePersistedLayoutForGroups(layout, groupIds) : null
+  return {
+    tabs: keptTabs,
+    groups,
+    layout: prunedLayout ?? { type: 'leaf', groupId: groups[0].id },
+    activeGroupId: activeGroupId && groupIds.has(activeGroupId) ? activeGroupId : groups[0].id
+  }
+}
+
 type UnifiedTabSnapshot = Pick<
   WorkspaceSessionSnapshot,
   'activeGroupIdByWorktree' | 'groupsByWorktree' | 'layoutByWorktree' | 'unifiedTabsByWorktree'
 >
 
 export function buildPersistedUnifiedTabSessionData(
-  snapshot: UnifiedTabSnapshot & Partial<Pick<WorkspaceSessionSnapshot, 'openFiles'>>
+  snapshot: UnifiedTabSnapshot & Partial<Pick<WorkspaceSessionSnapshot, 'openFiles'>>,
+  cache?: UnifiedTabSessionCache
 ): PersistedUnifiedTabSessionData {
   const { sourceTabs, sourceGroups } = editorPlacementsInContentOwners(
     snapshot.openFiles,
     snapshot.unifiedTabsByWorktree,
     snapshot.groupsByWorktree
   )
-  return buildUnifiedTabSessionData(snapshot, sourceTabs, sourceGroups)
+  return buildUnifiedTabSessionData(snapshot, sourceTabs, sourceGroups, cache)
 }
 
 /** Live layout readback retains transient placement; only persistence transfers views to owners. */
 export function buildUnifiedTabSessionData(
   snapshot: UnifiedTabSnapshot,
   sourceTabs = snapshot.unifiedTabsByWorktree,
-  sourceGroups = snapshot.groupsByWorktree
+  sourceGroups = snapshot.groupsByWorktree,
+  cache?: UnifiedTabSessionCache
 ): PersistedUnifiedTabSessionData {
   const unifiedTabs: WorkspaceSessionState['unifiedTabs'] = {}
   const tabGroups: WorkspaceSessionState['tabGroups'] = {}
@@ -100,32 +163,45 @@ export function buildUnifiedTabSessionData(
     ...Object.keys(sourceLayouts)
   ])
 
+  const slotsByWorktree = structuredLaunchSlotSignatures()
+
   for (const worktreeId of worktreeIds) {
-    const tabs = sourceTabs[worktreeId] ?? []
-    if (tabs.length === 0 && structuredLaunchSlotIds(worktreeId).size === 0) {
-      continue
-    }
-
-    const groups = buildPersistedGroupsForWorktree(tabs, sourceGroups[worktreeId] ?? [], worktreeId)
-    if (groups.length === 0) {
-      continue
-    }
-
-    const groupIds = new Set(groups.map((group) => group.id))
-    const persistedTabs = tabs.filter((tab) => groupIds.has(tab.groupId))
-    if (persistedTabs.length === 0 && structuredLaunchSlotIds(worktreeId).size === 0) {
-      continue
-    }
-
-    unifiedTabs[worktreeId] = persistedTabs
-    tabGroups[worktreeId] = groups
+    const liveTabs = sourceTabs[worktreeId]
+    const groups = sourceGroups[worktreeId]
+    const layout = sourceLayouts[worktreeId]
     const activeGroupId = sourceActiveGroups[worktreeId]
-    activeGroupIdByWorktree[worktreeId] =
-      activeGroupId && groupIds.has(activeGroupId) ? activeGroupId : groups[0].id
-    const prunedLayout = sourceLayouts[worktreeId]
-      ? prunePersistedLayoutForGroups(sourceLayouts[worktreeId], groupIds)
-      : null
-    tabGroupLayouts[worktreeId] = prunedLayout ?? { type: 'leaf', groupId: groups[0].id }
+    const slots = slotsByWorktree.get(worktreeId) ?? ''
+    const cached = liveTabs ? cache?.get(liveTabs) : undefined
+    let session: WorktreeTabSession | null
+    if (
+      cached &&
+      cached.worktreeId === worktreeId &&
+      cached.groups === groups &&
+      cached.layout === layout &&
+      cached.activeGroupId === activeGroupId &&
+      cached.slots === slots
+    ) {
+      session = cached.session
+    } else {
+      session = buildWorktreeTabSession(
+        worktreeId,
+        liveTabs ?? [],
+        groups ?? [],
+        layout,
+        activeGroupId,
+        slots !== ''
+      )
+      if (liveTabs) {
+        cache?.set(liveTabs, { worktreeId, groups, layout, activeGroupId, slots, session })
+      }
+    }
+    if (!session) {
+      continue
+    }
+    unifiedTabs[worktreeId] = session.tabs
+    tabGroups[worktreeId] = session.groups
+    activeGroupIdByWorktree[worktreeId] = session.activeGroupId
+    tabGroupLayouts[worktreeId] = session.layout
   }
 
   return {
@@ -149,21 +225,27 @@ export function editorPlacementsInContentOwners(
   const movedTabs: Tab[] = []
   const moved = new Set<string>()
   const targets = new Set<string>()
-  const usedGroupIds = new Set(
-    Object.entries(groupsByWorkspace).flatMap(([id, groups]) =>
-      sourceWorkspaceIds?.has(id) ? [] : groups.map((group) => group.id)
-    )
-  )
+  // Only a scoped rebuild reuses a moved tab's group id, so only it pays to index the fleet's groups.
+  const usedGroupIds = sourceWorkspaceIds
+    ? new Set(
+        Object.entries(groupsByWorkspace).flatMap(([id, groups]) =>
+          sourceWorkspaceIds.has(id) ? [] : groups.map((group) => group.id)
+        )
+      )
+    : null
   for (const [workspaceId, tabs] of Object.entries(sourceTabs)) {
     if (sourceWorkspaceIds && !sourceWorkspaceIds.has(workspaceId)) {
       continue
     }
-    sourceTabs[workspaceId] = tabs.filter((tab) => {
+    const kept = tabs.filter((tab) => {
       const file = isEditorTabContentType(tab.contentType) ? files.get(tab.entityId) : undefined
       return !file || file.worktreeId === workspaceId
     })
+    // Keep the live array when nothing moved so saves can tell the workspace is unchanged.
+    sourceTabs[workspaceId] = kept.length === tabs.length ? tabs : kept
   }
-  const existingPlacements = editorPlacementIndex(sourceTabs)
+  // Indexed on the first foreign edit tab; a save with none skips the fleet-wide walk.
+  let existingPlacements: ReturnType<typeof editorPlacementIndex> | null = null
   for (const [workspaceId, tabs] of Object.entries(tabsByWorkspace)) {
     if (sourceWorkspaceIds && !sourceWorkspaceIds.has(workspaceId)) {
       continue
@@ -174,6 +256,7 @@ export function editorPlacementsInContentOwners(
         continue
       }
       const owner = file.worktreeId
+      existingPlacements ??= editorPlacementIndex(sourceTabs)
       if (existingPlacements.workspacesByEntityId.get(file.id)?.has(owner)) {
         continue
       }
@@ -188,10 +271,8 @@ export function editorPlacementsInContentOwners(
       }
       const groupId =
         sourceGroups[owner]?.[0]?.id ??
-        (sourceWorkspaceIds && !usedGroupIds.has(tab.groupId)
-          ? tab.groupId
-          : `restored-editor:${owner}`)
-      usedGroupIds.add(groupId)
+        (usedGroupIds && !usedGroupIds.has(tab.groupId) ? tab.groupId : `restored-editor:${owner}`)
+      usedGroupIds?.add(groupId)
       const movedTab = {
         ...tab,
         worktreeId: owner,

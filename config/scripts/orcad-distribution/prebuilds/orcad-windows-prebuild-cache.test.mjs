@@ -3,7 +3,7 @@ import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { NODE_RUNTIME_PIN } from '../../../../src/shared/node-runtime-pin.ts'
+import { NODE_RUNTIME_PIN } from '../../../../src/shared/node-runtime/node-runtime-pin.ts'
 import { sha256Of } from './orcad-prebuild-slot-contents.mjs'
 import { validateWindowsPrebuildCache } from './orcad-windows-prebuild-cache.mjs'
 import { peImage } from '../../native-build/windows/windows-pe-image-fixture.mjs'
@@ -38,6 +38,7 @@ function fixture(arch = 'x64') {
   mkdirSync(join(sourceDir, 'third_party/conpty/1', `win10-${arch}`), { recursive: true })
   const files = {}
   for (const [file, bytes] of [
+    ['journal-file-lock.exe', peImage({ arch })],
     [
       'conpty.node',
       Buffer.concat([peImage({ arch }), CYGWIN_BREAKAWAY_MARKER, NATIVE_HOST_JOB_MARKER])
@@ -51,7 +52,7 @@ function fixture(arch = 'x64') {
   ]) {
     write(join(slotDir, file), bytes)
     files[file] = sha256Of(join(slotDir, file))
-    if (file !== 'conpty.node' && !file.startsWith('conpty/')) {
+    if (file !== 'journal-file-lock.exe' && file !== 'conpty.node' && !file.startsWith('conpty/')) {
       write(join(sourceDir, 'prebuilds', slot, file), bytes)
     }
     if (file.startsWith('conpty/')) {

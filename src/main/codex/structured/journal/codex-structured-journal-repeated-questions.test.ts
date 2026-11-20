@@ -1,11 +1,16 @@
+import type { AgentJournalSnapshot } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import {
+  readTestJournalItems,
+  readTestJournalSnapshot
+} from '../../../native-chat/agent-session-journal/journal-observation.test-support'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
-import { codexProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import { createTrackedJournalOpener } from '../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { createDeferredStructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
-import { testEventSinkLogging } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-logger-test-support'
+import { testEventSinkLogging } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-logger.test-fixture'
 import { createCodexJournalTranslator } from './codex-structured-journal-translation'
 
 const SESSION = 'codex-questions'
@@ -38,7 +43,7 @@ it.each([
       now: () => 1_000
     })
     const onFailed = vi.fn()
-    const published: ReturnType<typeof journal.snapshot>[] = []
+    const published: Promise<AgentJournalSnapshot>[] = []
     const deferred = createDeferredStructuredAgentSessionEventSink({
       ...testEventSinkLogging(SESSION),
       onFailed
@@ -47,7 +52,7 @@ it.each([
       journal,
       fence: 7,
       publish: () => {
-        published.push(journal.snapshot())
+        published.push(readTestJournalSnapshot(journal))
       }
     })
     const translator = createCodexJournalTranslator({
@@ -81,12 +86,14 @@ it.each([
     await expect(deferred.drained()).resolves.toEqual({ ok: true })
     expect(onFailed).not.toHaveBeenCalled()
     expect(deferred.state().failed).toBe(false)
-    const saved = journal.snapshot().items.filter((item) => item.body.kind === 'question')
+    const saved = (await readTestJournalItems(journal)).filter(
+      (item) => item.body.kind === 'question'
+    )
     expect(
       saved.map((item) => (item.body.kind === 'question' ? item.body.question : null))
     ).toEqual(questions)
     expect(saved.map((item) => item.revision)).toEqual(ids[0] === ids[1] ? [2] : [1, 1])
-    expect(published.at(-1)).toEqual(journal.snapshot())
+    expect((await Promise.all(published)).at(-1)).toEqual(await readTestJournalSnapshot(journal))
     translator.dispose()
     deferred.close()
   }

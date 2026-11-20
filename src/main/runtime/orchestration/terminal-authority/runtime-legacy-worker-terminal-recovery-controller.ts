@@ -1,4 +1,4 @@
-import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
+import { parseAppSshPtyId } from '../../../../shared/remote-runtime/ssh/ssh-pty-id'
 import { getPtyExecutionHost } from '../../../../shared/terminal/pty/lifecycle/terminal-execution-host'
 import type { LegacyWorkerTerminalRecoveryPlan } from './release/orchestration-legacy-worker-terminal-recovery'
 import { runLegacyWorkerTerminalRecovery } from './runtime-legacy-worker-terminal-recovery-runner'
@@ -42,6 +42,10 @@ export class RuntimeLegacyWorkerTerminalRecoveryController {
     this.cancelAllRetries()
     await this.queue
     await Promise.all(this.backgroundWork)
+  }
+
+  isStopped(): boolean {
+    return this.stopped
   }
 
   /** Work a pass starts without awaiting; shutdown still waits for it. */

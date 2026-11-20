@@ -4,7 +4,10 @@ import { cn } from '@/lib/class-names'
 import { observeOffscreenAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 import { useTranslate } from '@/i18n/use-translate'
-import type { PRCheckDetail, PRCheckRunDetails } from '../../../../../../shared/github/check-types'
+import type {
+  PRCheckDetail,
+  PRCheckRunDetails
+} from '../../../../../../shared/github/checks/check-types'
 import {
   CHECK_COLOR,
   CHECK_ICON,

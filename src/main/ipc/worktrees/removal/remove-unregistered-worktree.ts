@@ -1,7 +1,7 @@
 import { removeWorktree } from '../../../git/worktrees/removal/worktree-removal'
 import { usesNativeWindowsRemoval } from '../../../git/worktrees/removal/windows-worktree-removal'
-import type { Repo } from '../../../../shared/repo-types'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { Repo } from '../../../../shared/repository/repo-types'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { RemoveWorktreeResult } from '../../../../shared/worktree/create-types'
 import type { GitPushTarget, GitWorktreeInfo } from '../../../../shared/worktree/types'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
@@ -19,18 +19,15 @@ import { resolveWorktreeRemovalHomeForHost } from '../../../workspaces/removal/w
 import {
   getLocalWorktreePathAccess,
   removeLocalWorktreePath,
-  toLocalWorktreeRuntimePath
+  toLocalWorktreeRuntimePaths
 } from '../../../workspaces/removal/local-worktree-filesystem'
-import {
-  cleanupUnusedWorktreePushTargetRemote,
-  notifyWorktreesChanged
-} from '../../worktree-remote'
+import { cleanupUnusedWorktreePushTargetRemote, notifyWorktreesChanged } from '../worktree-remote'
 import { invalidateAuthorizedRootsCache } from './registered-worktree-roots-cache'
 import type { RemoveWorktreeArgs } from '../ipc-context-schemas'
 import type { WorktreeIpcContext } from '../worktree-ipc-context'
 import { preservedBranchCleanupByScope } from './preserved-branch-cleanup'
 import {
-  removeWorktreeMetadataAndTransientState,
+  removeDeletedCheckoutMetadataAndTransientState,
   stopPtysForDestructiveWorktreeRemoval
 } from './worktree-removal-ownership'
 import { isAlreadyRemovedWorktreePath } from './worktree-removal-filesystem'
@@ -56,14 +53,18 @@ export async function removeUnregisteredWorktree(
     })
   ) {
     const access = getLocalWorktreePathAccess(localWorktreeGitOptions)
-    canCleanOrphanedDirectory =
-      !isDangerousWorktreeRemovalPath(worktreePath, repo.path, removalHome) &&
-      (await canSafelyRemoveOrphanedWorktreeDirectory(
-        toLocalWorktreeRuntimePath(worktreePath, localWorktreeGitOptions),
-        toLocalWorktreeRuntimePath(repo.path, localWorktreeGitOptions),
+    if (!isDangerousWorktreeRemovalPath(worktreePath, repo.path, removalHome)) {
+      const [runtimeWorktree, runtimeRepo] = await toLocalWorktreeRuntimePaths(
+        [worktreePath, repo.path],
+        localWorktreeGitOptions
+      )
+      canCleanOrphanedDirectory = await canSafelyRemoveOrphanedWorktreeDirectory(
+        runtimeWorktree,
+        runtimeRepo,
         removalHome,
         access
-      ))
+      )
+    }
   }
   const native = usesNativeWindowsRemoval(worktreePath, localWorktreeGitOptions)
   if (canCleanOrphanedDirectory || (native && removedMeta)) {
@@ -98,7 +99,7 @@ export async function removeUnregisteredWorktree(
     )
     invalidateAuthorizedRootsCache()
     runtime.clearOptimisticReconcileToken(args.worktreeId)
-    removeWorktreeMetadataAndTransientState(
+    await removeDeletedCheckoutMetadataAndTransientState(
       { store, runtime },
       args.worktreeId,
       removalHostId,
@@ -128,7 +129,7 @@ export async function removeUnregisteredWorktree(
     )
     invalidateAuthorizedRootsCache()
     runtime.clearOptimisticReconcileToken(args.worktreeId)
-    removeWorktreeMetadataAndTransientState(
+    await removeDeletedCheckoutMetadataAndTransientState(
       { store, runtime },
       args.worktreeId,
       removalHostId,

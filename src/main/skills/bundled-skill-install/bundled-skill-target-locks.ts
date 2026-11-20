@@ -1,5 +1,5 @@
 import { join } from 'node:path'
-import type { BundledSkillInstallResult } from '../../../shared/bundled-skill-plan'
+import type { BundledSkillInstallResult } from '../../../shared/skills/bundled/bundled-skill-plan'
 import {
   acquireSkillInstallLock,
   skillInstallLockPath

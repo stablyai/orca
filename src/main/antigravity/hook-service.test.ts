@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { spawnSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 
@@ -25,7 +25,6 @@ const ANTIGRAVITY_POST_TOOL_USE_COMMAND =
   process.platform === 'win32' ? 'antigravity-post-tool-use.cmd' : 'antigravity-hook.sh'
 const ANTIGRAVITY_PRE_TOOL_USE_COMMAND =
   process.platform === 'win32' ? 'antigravity-pre-tool-use.cmd' : 'antigravity-hook.sh'
-const PRE_TOOL_USE_DECISION = '{"decision":"ask"}'
 
 function withPlatform<T>(platform: NodeJS.Platform, run: () => T): T {
   const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
@@ -53,7 +52,7 @@ describe('AntigravityHookService', () => {
   })
 
   it.skipIf(process.platform === 'win32')(
-    'answers the PreToolUse gate with ask so the hook never decides tool permissions',
+    "prints nothing for PreToolUse so agy's own permission policy decides",
     () => {
       new AntigravityHookService().install()
 
@@ -75,12 +74,12 @@ describe('AntigravityHookService', () => {
       )
 
       expect(result.status).toBe(0)
-      expect(result.stdout).toBe(`${PRE_TOOL_USE_DECISION}\n`)
+      expect(result.stdout).toBe('')
     }
   )
 
   it.skipIf(process.platform === 'win32')(
-    'keeps answering the PreToolUse gate when the managed script is missing',
+    'stays silent for PreToolUse when the managed script is missing',
     () => {
       new AntigravityHookService().install()
       rmSync(join(homeDir, '.orca', 'agent-hooks'), { recursive: true, force: true })
@@ -97,12 +96,12 @@ describe('AntigravityHookService', () => {
 
       // Config under .gemini can outlive managed scripts under .orca.
       expect(result.status).toBe(0)
-      expect(result.stdout).toBe(`${PRE_TOOL_USE_DECISION}\n`)
+      expect(result.stdout).toBe('')
     }
   )
 
   it.skipIf(process.platform === 'win32')(
-    'leaves non-gate Antigravity events silent when the managed script is missing',
+    'answers non-gate Antigravity events like the managed script when it is missing',
     () => {
       new AntigravityHookService().install()
       rmSync(join(homeDir, '.orca', 'agent-hooks'), { recursive: true, force: true })
@@ -118,7 +117,7 @@ describe('AntigravityHookService', () => {
       for (const command of [postToolUse, preInvocation]) {
         const result = spawnSync('/bin/sh', ['-c', command!], { input: '{}', encoding: 'utf8' })
         expect(result.status).toBe(0)
-        expect(result.stdout).toBe('')
+        expect(result.stdout).toBe('{}\n')
       }
     }
   )
@@ -140,6 +139,30 @@ describe('AntigravityHookService', () => {
       expect(readFileSync(corePath, 'utf8')).toBe('previous installed core')
       expect(readFileSync(configPath, 'utf8')).toBe(previousConfig)
     })
+  })
+
+  it('publishes the native reader into a Windows install that predates it on startup refresh', async () => {
+    const service = new AntigravityHookService()
+    withPlatform('win32', () => expect(service.install().state).toBe('installed'))
+    const exePath = join(homeDir, '.orca', 'agent-hooks', 'orca-agent-hook.exe')
+    expect(existsSync(exePath)).toBe(false)
+    const resourcesPath = join(homeDir, 'resources')
+    mkdirSync(join(resourcesPath, 'bin'), { recursive: true })
+    writeFileSync(join(resourcesPath, 'bin', 'orca-agent-hook.exe'), 'bundled native hook')
+
+    const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    Object.defineProperty(process, 'resourcesPath', { configurable: true, value: resourcesPath })
+    try {
+      await service.refreshManagedScripts()
+    } finally {
+      if (originalPlatform) {
+        Object.defineProperty(process, 'platform', originalPlatform)
+      }
+      Reflect.deleteProperty(process, 'resourcesPath')
+    }
+
+    expect(readFileSync(exePath, 'utf8')).toBe('bundled native hook')
   })
 
   it('preserves user-authored hook bundles and entries in Orca bundle', () => {

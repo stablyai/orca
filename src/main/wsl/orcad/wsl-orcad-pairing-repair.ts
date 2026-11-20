@@ -22,20 +22,20 @@ type WslOrcadHostAccess = { target: WslOrcadHostTarget; connection: WslOrcadHost
 export function liveWslOrcadPairingRepairDeps(
   userDataPath: string
 ): ManagedOrcadPairingRepairDeps<WslOrcadHostAccess> {
-  const record = (environmentId: string) => {
-    const found = findWslHostDeployment(userDataPath, environmentId)
+  const record = async (environmentId: string) => {
+    const found = await findWslHostDeployment(userDataPath, environmentId)
     if (!found) {
       throw new OrcadManagedPairingRepairFailedError('this server is not a WSL host')
     }
     return found
   }
   return {
-    resolve: (environmentId) => resolveEnvironment(userDataPath, environmentId),
+    resolve: async (environmentId) => await resolveEnvironment(userDataPath, environmentId),
     connect: async (environment: KnownRuntimeEnvironment) => {
       const target: WslOrcadHostTarget = {
         kind: 'wsl',
         id: environment.id,
-        distro: record(environment.id).distro,
+        distro: (await record(environment.id)).distro,
         label: environment.name
       }
       return { target, connection: createWslOrcadHostTransport({ target }) }
@@ -47,17 +47,19 @@ export function liveWslOrcadPairingRepairDeps(
         access.connection.dispose()
       }
     },
-    ports: (environment) => {
-      const found = findWslHostDeployment(userDataPath, environment.id)
+    ports: async (environment) => {
+      const found = await findWslHostDeployment(userDataPath, environment.id)
       return found ? { localPort: found.localPort, remotePort: found.remotePort } : null
     },
-    refresh: (environmentId, pairingCode) => {
-      const { localPort, remotePort } = record(environmentId)
-      return refreshWslHostPairing(userDataPath, environmentId, {
-        pairingCode,
-        localPort,
-        remotePort
-      }).environment
+    refresh: async (environmentId, pairingCode) => {
+      const { localPort, remotePort } = await record(environmentId)
+      return (
+        await refreshWslHostPairing(userDataPath, environmentId, {
+          pairingCode,
+          localPort,
+          remotePort
+        })
+      ).environment
     },
     repaired: notifyManagedOrcadPairingRepaired,
     now: Date.now

@@ -3,7 +3,7 @@ import { AI_VAULT_SCAN_PROGRESS_CHANNEL } from '../../../shared/ai-vault/scannin
 import {
   localAiVaultScanProgress,
   onLocalAiVaultScanProgress
-} from '../../ai-vault/ai-vault-local-scan-progress'
+} from '../../ai-vault/scan-lifecycle/ai-vault-local-scan-progress'
 
 let unsubscribe: (() => void) | null = null
 

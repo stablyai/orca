@@ -5,7 +5,7 @@ import {
   getStatus,
   selectWorkspace,
   testConnection
-} from '../../linear/client'
+} from '../../linear/accounts/linear-account-client'
 import { _resetPreflightCache } from '../../preflight/agent-detection'
 import { normalizeWorkspaceId, normalizeWorkspaceSelection } from './ipc-args'
 import { registerLinearIssueHandlers } from './issue-handlers'
@@ -26,7 +26,7 @@ export function registerLinearHandlers(): void {
   })
 
   ipcMain.handle('linear:disconnect', async (_event, args?: { workspaceId?: string }) => {
-    disconnect(normalizeWorkspaceId(args?.workspaceId))
+    await disconnect(normalizeWorkspaceId(args?.workspaceId))
     _resetPreflightCache()
   })
 

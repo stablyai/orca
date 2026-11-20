@@ -1,6 +1,6 @@
 // Keep shapes aligned with shared types/rate-limit-types without pulling Electron-coupled desktop graph into mobile.
-import { formatResetCountdown } from '../../../../src/shared/rate-limit-reset-format'
-import { hasUsageData } from '../../../../src/shared/usage-provider-windows'
+import { formatResetCountdown } from '../../../../src/shared/agent-usage/rate-limits/rate-limit-reset-format'
+import { hasUsageData } from '../../../../src/shared/agent-usage/display/usage-provider-windows'
 import {
   ProviderRateLimitsSchema,
   type AccountsSnapshot,

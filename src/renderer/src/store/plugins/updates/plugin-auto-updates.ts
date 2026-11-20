@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { toast } from 'sonner'
-import type { PluginAutoUpdateEvent } from '../../../../../preload/api/plugin-host-api'
+import type { PluginAutoUpdateEvent } from '../../../../../preload/api/plugins/plugin-host-api'
 import type { PluginAutoUpdateState } from '../../../../../shared/plugins/catalog/plugin-update-policy'
 import { translate } from '@/i18n/i18n'
 import { announcePluginUpdateReviews } from './plugin-update-review-toast'

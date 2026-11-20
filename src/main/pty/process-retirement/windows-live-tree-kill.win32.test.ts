@@ -4,15 +4,18 @@ import { join } from 'node:path'
 import { spawn, ChildProcess } from 'node:child_process'
 import { subscribe, unsubscribe } from 'node:diagnostics_channel'
 import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { setAppEnvironment, type AppEnvironment } from '../../../shared/app-environment'
+import {
+  setAppEnvironment,
+  type AppEnvironment
+} from '../../../shared/app-lifecycle/app-environment'
 import { setProcessTreeKillGate } from '@orca/process-host/process-tree-kill-gate'
 import { signalProcessTree } from '@orca/process-host/process-tree-termination'
 import { windowsSystem32Binary } from '@orca/process-host/windows-system-binary'
-import { removeTreeSync } from '../../../shared/windows-transient-lock-removal'
+import { removeTreeSync } from '../../../shared/file-write/windows-transient-lock-removal'
 import {
   findSelfInitiatedTreeKills,
   resetSelfInitiatedTreeKillLogForTest
-} from '../../crash-reporting/self-initiated-tree-kill-log'
+} from '../../crash-reporting/process-exits/self-initiated-tree-kill-log'
 import { installMainProcessTreeKillGate } from './own-chromium-tree-kill-guard'
 import { terminateWindowsProcessTree } from './windows-process-tree-kill'
 

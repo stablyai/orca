@@ -1,9 +1,9 @@
-import type { GitHubPRStack } from '../../../../../../shared/github/pull-request-types'
+import type { GitHubPRStack } from '../../../../../../shared/github/pull-requests/pull-request-types'
 import {
   getGitHubPRStackMergeBlocker as resolveGitHubPRStackMergeBlocker,
   getGitHubPRStackMergeScope as resolveGitHubPRStackMergeScope,
   type GitHubPRStackMergeScope as SharedGitHubPRStackMergeScope
-} from '../../../../../../shared/github/pull-request-stack-merge'
+} from '../../../../../../shared/github/pull-requests/merge/pull-request-stack-merge'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 

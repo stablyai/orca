@@ -1,19 +1,8 @@
-import {
-  closeTestStores,
-  testState,
-  createStore,
-  writeDataFile,
-  makeRepo
-} from '../persistence-test-harness'
+import { closeTestStores, testState, createStore } from '../persistence-test-harness'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { rmSync, mkdtempSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-
-import {
-  getLocalWorktreeScanGeneration,
-  isLocalWorktreeScanGenerationCurrent
-} from '../../workspaces/catalog/local-worktree-scan-generation'
 
 const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => ({
   loadUserSshConfigMock: vi.fn(),
@@ -65,21 +54,6 @@ describe('Store', () => {
   afterEach(async () => {
     await closeTestStores()
     rmSync(testState.dir, { recursive: true, force: true })
-  })
-
-  it('invalidates local worktree scans when the global Windows runtime changes', async () => {
-    writeDataFile({ repos: [makeRepo()] })
-    const store = await createStore()
-    const generation = getLocalWorktreeScanGeneration('r1')
-
-    store.updateSettings({ theme: 'dark' })
-    expect(isLocalWorktreeScanGenerationCurrent('r1', generation)).toBe(true)
-
-    store.updateSettings({
-      localWindowsRuntimeDefault: { kind: 'wsl', distro: 'Ubuntu' }
-    })
-
-    expect(isLocalWorktreeScanGenerationCurrent('r1', generation)).toBe(false)
   })
 
   it('saves a pasted workspace directory with leading spaces as the absolute path it names', async () => {

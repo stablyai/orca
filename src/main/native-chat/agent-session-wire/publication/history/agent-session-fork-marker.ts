@@ -1,8 +1,8 @@
 import { journalItemsAtSequence, journalItemsById } from './agent-session-journal-item-index'
 import { compareAgentJournalItems } from '../../../../../shared/agent-session/journal/agent-session-journal-position'
-import type { AgentSessionJournal } from '../../../agent-session-journal/journal-store'
-import { defaultAgentChatLabel } from '../../../../../shared/agent-session/agent-session-chat-label'
-import { AGENT_SESSION_FORKED_FROM_PRESENTATION } from '../../../../../shared/agent-session/agent-session-fork'
+import type { SqlAgentSessionJournal as AgentSessionJournal } from '../../../agent-session-journal/journal-sql-store'
+import { defaultAgentChatLabel } from '../../../../../shared/agent-session/conversation-naming/agent-session-chat-label'
+import { AGENT_SESSION_FORKED_FROM_PRESENTATION } from '../../../../../shared/agent-session/lifecycle/records/agent-session-fork'
 import { agentJournalItemKey } from '../../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { AgentSessionForkedFrom } from '../../../../../shared/agent-session/lifecycle/agent-session-record'
 import type {
@@ -10,10 +10,20 @@ import type {
   AgentJournalSnapshot
 } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionRecordStore } from '../../../../runtime/agent-session/records/agent-session-record-store'
+import { agentSessionRecordShownName } from '../../../../runtime/agent-session/records/agent-session-record-shown-name'
 import { CLIENT_HISTORY_READER } from './agent-session-item-wire-form'
 import type { HistoryReader } from './agent-session-history-page-bounds'
 
-export type ForkMarker = { forkedFrom: AgentSessionForkedFrom; sourceName: string }
+export type ForkMarker = {
+  forkedFrom: AgentSessionForkedFrom
+  sourceName: string
+  /** The source is itself a fork, so the divider names it with its mark. */
+  sourceForked: boolean
+  /** No readable source record on this host: the divider names no chat to open. */
+  sourceMissing: boolean
+  /** The source's own source, whose name can change how an older fork source is shown. */
+  sourceParentId?: string
+}
 export const FORK_MARKER_ITEM_ID = agentJournalItemKey({
   provider: 'orca',
   clientMessageId: 'forked-from'
@@ -31,9 +41,21 @@ export function readForkMarker(
   return {
     forkedFrom,
     sourceName: source
-      ? source.conversationName?.trim() || defaultAgentChatLabel(source.provider)
-      : 'another chat'
+      ? agentSessionRecordShownName(store, source)?.trim() || defaultAgentChatLabel(source.provider)
+      : 'another chat',
+    sourceForked: !!source?.forkedFrom,
+    sourceMissing: !source,
+    ...(source?.forkedFrom ? { sourceParentId: source.forkedFrom.sessionId } : {})
   }
+}
+
+function sameMarker(cached: ForkMarker, marker: ForkMarker): boolean {
+  return (
+    cached.forkedFrom === marker.forkedFrom &&
+    cached.sourceName === marker.sourceName &&
+    cached.sourceForked === marker.sourceForked &&
+    cached.sourceMissing === marker.sourceMissing
+  )
 }
 
 type MarkerPosition = { sequence: number; index: number; observedAt: number }
@@ -44,7 +66,7 @@ type ProjectedPosition = { epoch: string; sequence?: number; restored?: number }
 const projectedPositions = new WeakMap<AgentSessionJournal, ProjectedPosition>()
 const projections = new WeakMap<
   readonly AgentJournalRenderItem[],
-  { parent: AgentSessionForkedFrom; name: string; items: AgentJournalRenderItem[] }
+  { marker: ForkMarker; items: AgentJournalRenderItem[] }
 >()
 
 function markerPosition(
@@ -87,7 +109,11 @@ function deriveForkMarkerGroup(
       kind: 'status',
       presentation: AGENT_SESSION_FORKED_FROM_PRESENTATION,
       text: `Forked from ${marker.sourceName}`,
-      forkedFrom: { sessionId: marker.forkedFrom.sessionId }
+      forkedFrom: {
+        sessionId: marker.forkedFrom.sessionId,
+        ...(marker.sourceForked ? { sourceForked: true as const } : {}),
+        ...(marker.sourceMissing ? { sourceMissing: true as const } : {})
+      }
     }
   })
   return group.sort(compareAgentJournalItems)
@@ -102,7 +128,7 @@ export function projectForkMarker(
     return snapshot
   }
   const cached = projections.get(snapshot.items)
-  if (cached?.parent === marker.forkedFrom && cached.name === marker.sourceName) {
+  if (cached && sameMarker(cached.marker, marker)) {
     return { ...snapshot, items: cached.items }
   }
   const group = deriveForkMarkerGroup(snapshot, marker)
@@ -115,7 +141,7 @@ export function projectForkMarker(
   const after =
     boundary.kind === 'item' ? items.findIndex((row) => row.itemId === boundary.itemId) + 1 : 0
   items.splice(after, 0, replacements.get(FORK_MARKER_ITEM_ID)!)
-  projections.set(snapshot.items, { parent: marker.forkedFrom, name: marker.sourceName, items })
+  projections.set(snapshot.items, { marker, items })
   return { ...snapshot, items }
 }
 
@@ -125,30 +151,47 @@ export function withForkMarker(
 ): HistoryReader {
   return {
     ...reader,
-    snapshot: (journal, snapshot, touched) => {
+    snapshot: async (journal, snapshot, touched) => {
       const marker = read?.()
       if (!marker) {
-        return reader.snapshot?.(journal, snapshot, touched) ?? snapshot ?? journal.currentRead()
+        const raw = snapshot ?? {
+          sessionId: journal.identity.sessionId,
+          cursor: journal.cursor(),
+          items: [],
+          submissions: []
+        }
+        return reader.snapshot?.(journal, raw, touched) ?? raw
       }
-      const raw = snapshot ?? journal.itemsRead()
-      const position = markerPosition(raw, marker)
       const previous = projectedPositions.get(journal)
-      const sameEpoch = previous?.epoch === raw.cursor.epoch
+      let group = await journal.reads.forkMarkerGroup(
+        marker.forkedFrom.childBoundary,
+        previous?.restored ?? previous?.sequence
+      )
+      const raw = snapshot ?? group
+      const sameEpoch = previous !== undefined && previous.epoch === raw.cursor.epoch
+      const position = markerPosition(group, marker)
       const moved = sameEpoch && previous.sequence !== position?.sequence
       const oldSequence = sameEpoch
         ? moved
           ? (previous.sequence ?? previous.restored)
           : previous.restored
         : undefined
+      if (
+        moved &&
+        oldSequence !== undefined &&
+        oldSequence !== (previous?.restored ?? previous?.sequence)
+      ) {
+        group = await journal.reads.forkMarkerGroup(marker.forkedFrom.childBoundary, oldSequence)
+      }
       projectedPositions.set(journal, {
         epoch: raw.cursor.epoch,
         sequence: position?.sequence,
         restored: oldSequence
       })
       if (!touched) {
-        return projectForkMarker(reader.snapshot?.(journal, raw) ?? raw, marker)
+        return projectForkMarker((await reader.snapshot?.(journal, raw)) ?? raw, marker)
       }
-      const live = journalItemsById(raw.items)
+      const live = journalItemsById([...raw.items, ...group.items])
       const boundary = marker.forkedFrom.childBoundary
       const affected =
         (moved && oldSequence !== undefined) ||
@@ -159,7 +202,7 @@ export function withForkMarker(
         touched.add(FORK_MARKER_ITEM_ID)
         for (const sequence of new Set([position?.sequence, oldSequence])) {
           if (sequence !== undefined) {
-            for (const row of journalItemsAtSequence(raw.items, sequence)) {
+            for (const row of journalItemsAtSequence(group.items, sequence)) {
               touched.add(row.itemId)
             }
           }
@@ -169,7 +212,7 @@ export function withForkMarker(
         ...raw,
         items: [...touched].flatMap((id) => live.get(id) ?? []).sort(compareAgentJournalItems)
       }
-      const base = reader.snapshot?.(journal, selected, touched) ?? selected
+      const base = (await reader.snapshot?.(journal, selected, touched)) ?? selected
       return affected ? projectForkMarker(base, marker) : base
     }
   }

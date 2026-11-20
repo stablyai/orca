@@ -8,8 +8,8 @@ import {
   type WebContents
 } from 'electron'
 import { writeFileSync } from 'node:fs'
-import { renameFileWithWindowsRetry } from '../../../../../shared/windows-retry-file-operations'
-import { applyBackgroundActivationPolicy } from '../../../../window/foreground-activation-policy'
+import { renameFileWithWindowsRetry } from '../../../../../shared/file-write/windows-retry-file-operations'
+import { applyBackgroundActivationPolicy } from '../../../../window/activation/foreground-activation-policy'
 import { BrowserPopupCompatibilityManager } from './browser-popup-compatibility-manager-fixture'
 import { BrowserRouteWebContentsRegistry } from '../../../routing/guest-authority/browser-route-webcontents-registry'
 import { initializeBrowserProcessUserAgent } from '../../../identity/browser-process-user-agent'

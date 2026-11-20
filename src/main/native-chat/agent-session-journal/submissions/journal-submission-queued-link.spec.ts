@@ -1,3 +1,4 @@
+import { readTestJournalSubmissions } from '../journal-observation.test-support'
 // Persist explicit queuedMessageId links; clients must not infer them by comparing unrelated IDs.
 
 import { mkdtemp, rm } from 'node:fs/promises'
@@ -10,7 +11,7 @@ import { agentSessionSendBodyFingerprint } from '../../../../shared/agent-sessio
 
 import type { AgentSessionJournal } from '../journal-store'
 import { createTrackedJournalOpener } from '../store-lifecycle/journal-host-database-test-support'
-import { claudeProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { claudeProviderHandle } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 
 export function registerJournalSubmissionQueuedLinkTests(): void {
   const IDENTITY: AgentSessionJournalIdentity = {
@@ -66,8 +67,8 @@ export function registerJournalSubmissionQueuedLinkTests(): void {
           { messageId: 'draft-1', expect: 'waiting' }
         )
       ).rejects.toThrow()
-      expect(journal.submissions()).toHaveLength(0)
-      expect(journal.queuedMessages.get('draft-1')?.state).toBe('waiting')
+      expect(await readTestJournalSubmissions(journal)).toHaveLength(0)
+      expect((await journal.queuedMessages.get('draft-1'))?.state).toBe('waiting')
     })
   })
 }

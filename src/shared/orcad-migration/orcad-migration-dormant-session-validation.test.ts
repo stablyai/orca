@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { getDefaultWorkspaceSession } from '../constants'
+import { getDefaultWorkspaceSession } from '../orca-profiles/constants'
 import {
   CLIENT_HOSTED_BROWSER_PAGE_RECORD_VERSION,
   type PersistedClientHostedBrowserPage
 } from '../workspace-session/client-hosted-browser-page-record'
-import type { BrowserWorkspace } from '../browser-workspace-types'
+import type { BrowserWorkspace } from '../browser/workspaces/browser-workspace-types'
 import { assertOrcadMigrationDormantWorkspaceSessionReferences } from './orcad-migration-dormant-session-validation'
 import type { WorkspaceSessionState } from '../workspace-session/workspace-session-state-types'
 

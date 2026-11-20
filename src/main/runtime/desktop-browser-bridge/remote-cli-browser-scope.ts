@@ -5,7 +5,7 @@ import {
   DESKTOP_BROWSER_BRIDGE_SCOPE_CODE,
   DESKTOP_BROWSER_BRIDGE_UNAVAILABLE_CODE,
   DESKTOP_BROWSER_BRIDGE_UNROUTED_CODE
-} from '../../../shared/desktop-browser-bridge-protocol'
+} from '../../../shared/browser/client-hosting/desktop-browser-bridge-protocol'
 
 /** The SSH host a bridged command came from, so its tabs can say who is driving them. */
 export type RemoteCliBrowserController = { targetId: string; hostLabel: string }

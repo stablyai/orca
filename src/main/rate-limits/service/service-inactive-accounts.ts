@@ -2,10 +2,13 @@ import { fetchInactiveClaudeAccountUsage } from '../providers/claude/claude-mana
 import { fetchCodexRateLimits } from '../providers/codex/codex-fetcher'
 import { RateLimitServicePolling } from './service-polling'
 import { INACTIVE_CODEX_PROBE_STAGGER_MS, INACTIVE_FETCH_DEBOUNCE_MS } from './service-types'
-import { delayUnlessAborted } from '../../../shared/abort-aware-delay'
+import { delayUnlessAborted } from '../../../shared/concurrency/abort-aware-delay'
 
 export abstract class RateLimitServiceInactiveAccounts extends RateLimitServicePolling {
   async fetchInactiveClaudeAccountsOnOpen(): Promise<void> {
+    if (!this.isClaudeOAuthUsageEnabled()) {
+      return
+    }
     if (Date.now() - this.lastInactiveClaudeFetchAt < INACTIVE_FETCH_DEBOUNCE_MS) {
       return
     }
@@ -21,7 +24,7 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
     }
     const fetchGeneration = this.inactiveClaudeAccountsGeneration
     const controller = this.beginFetchCycle()
-    const signal = controller.signal
+    const signal = this.claudeUsageFetchSignal(controller.signal)
 
     for (const account of accounts) {
       this.inactiveClaudeFetching.add(account.id)
@@ -143,6 +146,7 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
           // Read the managed home directly; do not materialize credentials in the shared runtime.
           const fresh = await fetchCodexRateLimits({
             codexHomePath: home.managedHomePath,
+            readingAccount: account.readingAccount,
             networkProxySettings: this.networkProxySettingsResolver?.(),
             signal
           })

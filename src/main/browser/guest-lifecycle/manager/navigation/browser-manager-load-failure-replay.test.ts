@@ -48,6 +48,7 @@ vi.mock('../../../identity/browser-process-user-agent', () => ({
 
 import { browserManager } from '../browser-manager'
 import {
+  guestNavigationMethods,
   guestUaMethods,
   rendererWebContentsId,
   resetBrowserManagerMocks,
@@ -75,8 +76,10 @@ describe('browserManager', () => {
 
   it('restores a certificate failure when a retry navigation aborts before committing', () => {
     const guest = {
+      ...guestNavigationMethods(),
       id: 406,
       isDestroyed: vi.fn(() => false),
+      isCrashed: vi.fn(() => false),
       getType: vi.fn(() => 'webview'),
       setBackgroundThrottling: guestSetBackgroundThrottlingMock,
       isCurrentlyAudible: vi.fn(() => false),
@@ -120,5 +123,50 @@ describe('browserManager', () => {
     didStartNavigation(null, 'https://example.com/', false, true)
     didFailLoad(null, -3, 'Aborted', 'https://example.com/', true)
     expect(browserManager.getBrowserPageLoadError('browser-retry-abort-page')).toBeNull()
+  })
+
+  it('republishes a server page when pushState adds history without changing its address', () => {
+    const navigation = guestNavigationMethods()
+    const guest = {
+      ...navigation,
+      id: 407,
+      isDestroyed: vi.fn(() => false),
+      isCrashed: vi.fn(() => false),
+      getType: vi.fn(() => 'webview'),
+      setBackgroundThrottling: guestSetBackgroundThrottlingMock,
+      isCurrentlyAudible: vi.fn(() => false),
+      setWindowOpenHandler: guestSetWindowOpenHandlerMock,
+      on: guestOnMock,
+      off: guestOffMock,
+      openDevTools: guestOpenDevToolsMock,
+      send: vi.fn(),
+      ...guestUaMethods()
+    }
+    webContentsFromIdMock.mockReturnValue(guest)
+    const published = vi.fn()
+    browserManager.setBrowserGuestStateChangedListener(published)
+    try {
+      browserManager.registerOffscreenGuest({
+        browserPageId: 'browser-push-state-page',
+        worktreeId: 'worktree-push-state',
+        webContentsId: guest.id
+      })
+      const handler = (name: string) =>
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the manager registers these Electron listeners with this signature.
+        guestOnMock.mock.calls.find(([event]) => event === name)?.[1] as (
+          event: unknown,
+          url: string,
+          isMainFrame?: boolean
+        ) => void
+      handler('did-navigate')(null, 'https://example.com/')
+      published.mockClear()
+
+      navigation.navigationHistory.canGoBack.mockReturnValue(true)
+      handler('did-navigate-in-page')(null, 'https://example.com/', true)
+
+      expect(published).toHaveBeenCalledWith('worktree-push-state')
+    } finally {
+      browserManager.setBrowserGuestStateChangedListener(null)
+    }
   })
 })

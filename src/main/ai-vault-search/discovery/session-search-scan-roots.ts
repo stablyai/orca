@@ -1,11 +1,11 @@
 import type { AiVaultScanIssue } from '../../../shared/ai-vault/contracts/ai-vault-types'
-import { AI_VAULT_AGENT_SOURCES } from '../../ai-vault/session-scanner-agent-sources'
-import { normalizedWslHomeDirs } from '../../ai-vault/session-scanner-roots'
-import { sessionCandidatesFromDiscoveries } from '../../ai-vault/session-scanner-candidates'
-import { discoverAiVaultSessionSources } from '../../ai-vault/session-scanner-source-discovery'
+import { AI_VAULT_AGENT_SOURCES } from '../../ai-vault/discovery/session-scanner-agent-sources'
+import { normalizedWslHomeDirs } from '../../ai-vault/discovery/session-scanner-roots'
+import { sessionCandidatesFromDiscoveries } from '../../ai-vault/discovery/session-scanner-candidates'
+import { discoverAiVaultSessionSources } from '../../ai-vault/discovery/session-scanner-source-discovery'
 import type {
   AiVaultScanOptions,
-  SessionFileCandidate,
+  SessionFileChoice,
   SessionFileDiscovery
 } from '../../ai-vault/session-scanner-types'
 
@@ -14,12 +14,12 @@ export type SessionSearchRootListing = { root: string; files: number }
 /** Use session-list roots; the indexer owns scan limits, scope and cancellation. */
 export type SessionSearchScanRoots = Omit<
   AiVaultScanOptions,
-  'signal' | 'limit' | 'unlimited' | 'limitPerAgent' | 'scopePaths'
+  'signal' | 'limit' | 'unlimited' | 'limitPerAgent' | 'scopePaths' | 'statCache'
 >
 
 export type SessionSearchDiscovery = {
   /** Newest first with Codex hardlink aliases collapsed, matching session-list discovery. */
-  candidates: SessionFileCandidate[]
+  candidates: SessionFileChoice[]
   discoveries: SessionFileDiscovery[]
   issues: AiVaultScanIssue[]
 }
@@ -27,10 +27,14 @@ export type SessionSearchDiscovery = {
 /** Infinity sweeps every candidate; finite limits use the sidebar’s newest-per-root rule. */
 export async function discoverSessionSearchCandidates(
   roots: SessionSearchScanRoots,
-  args: { limitPerAgent: number; signal?: AbortSignal }
+  args: {
+    limitPerAgent: number
+    statCache?: AiVaultScanOptions['statCache']
+    signal?: AbortSignal
+  }
 ): Promise<SessionSearchDiscovery> {
   const issues: AiVaultScanIssue[] = []
-  const options: AiVaultScanOptions = { ...roots, signal: args.signal }
+  const options: AiVaultScanOptions = { ...roots, statCache: args.statCache, signal: args.signal }
   const discoveries = await discoverAiVaultSessionSources({
     options,
     limitPerAgent: args.limitPerAgent,

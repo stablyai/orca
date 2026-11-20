@@ -52,9 +52,7 @@ function makeCandidate(
     displayName: 'Feature',
     branch: 'feature',
     path: '/repo-feature',
-    tier: 'ready',
-    selectedByDefault: true,
-    reasons: ['idle-clean'],
+    reasons: ['inactive'],
     blockers: [],
     lastActivityAt: NOW - 40 * 24 * 60 * 60 * 1000,
     localContext: {
@@ -63,7 +61,7 @@ function makeCandidate(
       browserTabCount: 0,
       diffCommentCount: 0,
       newestDiffCommentAt: null,
-      retainedDoneAgentCount: 0
+      finishedAgentCount: 0
     },
     git: { clean: true, upstreamAhead: 0, upstreamBehind: 0, checkedAt: NOW },
     fingerprint: '2|feature|abc123|clean|19675',
@@ -147,7 +145,7 @@ describe('workspace cleanup scan snapshot', () => {
       makeBroadResult([stale, other])
     )
 
-    const rescanned = makeCandidate({ tier: 'protected', blockers: ['dirty-files'] })
+    const rescanned = makeCandidate({ blockers: ['dirty-files'] })
     await persistWorkspaceCleanupScanResult(
       userDataDirHolder.dir,
       { worktreeId: stale.worktreeId },
@@ -292,7 +290,6 @@ describe('workspace cleanup scan snapshot', () => {
 
     const rescannedRemote = makeCandidate({
       ...remote,
-      tier: 'protected',
       blockers: ['dirty-files']
     })
     await persistWorkspaceCleanupScanResult(

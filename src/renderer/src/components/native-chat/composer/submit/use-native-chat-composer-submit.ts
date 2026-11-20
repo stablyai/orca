@@ -3,7 +3,7 @@ import { serializeNativeChatAgentReferences } from '../pickers/native-chat-agent
 import { mayHoldAgentReferences } from '../../../../../../shared/orchestration/mailbox/orchestration-agent-reference'
 import { useCallback, useMemo, useState, type RefObject } from 'react'
 import { translate } from '@/i18n/i18n'
-import type { NativeChatPickerItem } from '../../../../../../shared/native-chat/input/native-chat-picker-items'
+import type { NativeChatPickerItem } from '../../../../../../shared/native-chat/input/composer/native-chat-picker-items'
 import type { NativeChatComposerSendIntent } from './native-chat-composer-send-intent'
 import type { NativeChatStructuredComposerTransport } from './native-chat-structured-composer-transport'
 import type { NativeChatStructuredComposerSend } from './use-native-chat-structured-composer-send'
@@ -15,14 +15,14 @@ import {
 } from '../../drafts/native-chat-composer-draft-store'
 import {
   isBareStructuredAgentSessionGoalCommand,
-  isStructuredAgentSessionHostCommand,
-  structuredAgentSessionGoalObjective
+  isStructuredAgentSessionHostCommand
 } from '../../../../../../shared/agent-session/view/structured-agent-session-composer'
 import {
+  structuredAgentSessionGoalObjective,
   structuredAgentSessionModePickDraft,
   structuredAgentSessionPickEntersGoalMode
 } from '../../../../../../shared/agent-session/view/structured-agent-session-goal-mode'
-import { agentSessionInteractionCommand } from '../../../../../../shared/agent-session/options/agent-session-interaction-mode'
+import { agentSessionInteractionCommand } from '../../../../../../shared/agent-session/options/permissions/agent-session-interaction-mode'
 import { promptHasInteractionModeSkill } from '../editor/native-chat-prompt-document'
 import { runSessionOptionSurfaceCall } from '../../session/options/controls/native-chat-session-option-surface-call'
 import {
@@ -55,6 +55,8 @@ export function useNativeChatComposerSubmit(args: {
   textareaRef: RefObject<NativeChatComposerInput | null>
   imageAttachments: readonly NativeChatComposerImageAttachment[]
   disabled: boolean
+  /** The draft names a bot chat that can't take it (or isn't checked yet): Enter keeps it. */
+  held?: boolean
   /** An optional-prompt action still passes the shared paste and attachment admission. */
   submitEmpty?: () => void
   sendPty: () => void
@@ -70,6 +72,7 @@ export function useNativeChatComposerSubmit(args: {
   messageDelivery: boolean
 } {
   const { caret, disabled, draft, draftScopeKey, imageAttachments, sendPty, sendStructured } = args
+  const held = args.held === true
   const {
     agent,
     consumeOrcaCommand,
@@ -201,6 +204,9 @@ export function useNativeChatComposerSubmit(args: {
       if (consumeOrcaCommand?.(draft)) {
         return
       }
+      if (held) {
+        return
+      }
       if (
         structuredTransport &&
         !admitNativeChatPastedText(draftScopeKey, draft, structuredTransport.onError)
@@ -238,6 +244,7 @@ export function useNativeChatComposerSubmit(args: {
       disabled,
       draft,
       draftScopeKey,
+      held,
       imageAttachments,
       sendPty,
       sendStructured,
@@ -268,7 +275,8 @@ export function useNativeChatComposerSubmit(args: {
         commandText,
         threadGoal !== undefined,
         args.agent,
-        structuredTransport.optionSnapshot
+        structuredTransport.optionSnapshot,
+        structuredTransport.mcpPanel !== undefined
       )
     )
   return { send, goalMode, messageDelivery }

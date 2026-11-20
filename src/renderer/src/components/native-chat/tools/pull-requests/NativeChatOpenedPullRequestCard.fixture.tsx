@@ -24,3 +24,21 @@ export const hideShown = defineFixture({
   render: () => <NativeChatOpenedPullRequestCard pullRequests={[pullRequest]} />,
   interact: focusHide
 })
+export const severalOpened = defineFixture({
+  width: 560,
+  render: () => (
+    <NativeChatOpenedPullRequestCard
+      pullRequests={[
+        pullRequest,
+        { ...pullRequest, url: 'https://github.com/stablyai/orca/pull/4', number: 4 },
+        {
+          provider: 'github',
+          url: 'https://github.com/stablyai/website/pull/12',
+          slug: { owner: 'stablyai', repo: 'website' },
+          number: 12
+        }
+      ]}
+    />
+  ),
+  interact: (frame) => frame.querySelector<HTMLButtonElement>('button[aria-expanded]')?.click()
+})

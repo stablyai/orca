@@ -1,3 +1,4 @@
+import { isGlobalAiTextAction } from '../recipes/source-control-ai-actions'
 import type {
   CommitMessageAiSettings,
   CommitMessageAiModelCapability
@@ -154,6 +155,12 @@ export function getTextGenerationModels<T extends CommitMessageAiModelCapability
   ]
 }
 
+// Dictated text waits on cleanup before it lands, so cleanup starts on each agent's quickest model.
+const DICTATION_CLEANUP_MODEL_BY_AGENT: Partial<Record<TuiAgent, string>> = {
+  claude: 'haiku',
+  codex: 'gpt-5.4-mini'
+}
+
 export function selectPersistedModelId(args: {
   source: SourceControlAiSettings
   legacy: CommitMessageAiSettings | null | undefined
@@ -165,7 +172,7 @@ export function selectPersistedModelId(args: {
 }): string {
   const { source, legacy, repoOverrides, operation, hostKey, agentId, defaultModelId } = args
   return (
-    (operation === 'conversationName'
+    (isGlobalAiTextAction(operation)
       ? undefined
       : readSourceControlAiModelChoiceForHost(
           repoOverrides?.modelOverridesByOperation?.[operation],
@@ -177,6 +184,7 @@ export function selectPersistedModelId(args: {
       hostKey,
       agentId
     ) ??
+    (operation === 'dictationCleanup' ? DICTATION_CLEANUP_MODEL_BY_AGENT[agentId] : undefined) ??
     readSourceControlAiModelChoiceForHost(
       {
         selectedModelByAgent: source.selectedModelByAgent,
@@ -204,7 +212,7 @@ export function resolveThinkingLevel(args: {
     return undefined
   }
   const persisted =
-    (args.operation === 'conversationName'
+    (isGlobalAiTextAction(args.operation)
       ? undefined
       : args.repoOverrides?.modelOverridesByOperation?.[args.operation]?.selectedThinkingByModel?.[
           args.model.id

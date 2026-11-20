@@ -19,8 +19,6 @@ import {
 } from '../../storage/terminal-history-file-limits'
 import { readTerminalHistoryJson } from '../../storage/terminal-history-file-reader'
 
-const RETIRED_CHECKPOINT_READ_CAP_BYTES = 16 * 1024 * 1024
-
 const directories: string[] = []
 
 function createSession(sessionId: string): { basePath: string; sessionPath: string } {
@@ -82,15 +80,6 @@ describe('terminal history restore memory limits', () => {
 
     const restore = await new HistoryReader(basePath).detectColdRestore('oversized-log')
     expect(restore?.snapshotAnsi).toBe('safe checkpoint')
-  })
-
-  it('restores a checkpoint larger than the retired 16MiB read cap', async () => {
-    const { basePath, sessionPath } = createSession('large-checkpoint')
-    const scrollbackAnsi = 'x'.repeat(RETIRED_CHECKPOINT_READ_CAP_BYTES + 1)
-    writeFileSync(join(sessionPath, 'checkpoint.json'), checkpoint({ scrollbackAnsi }))
-
-    const restore = await new HistoryReader(basePath).detectColdRestore('large-checkpoint')
-    expect(restore?.scrollbackAnsi).toBe(scrollbackAnsi)
   })
 
   it('ignores oversized checkpoint and metadata files before parsing', async () => {

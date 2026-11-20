@@ -5,6 +5,24 @@ import type { MailboxDeliveryBatch } from '../db/messages/role-mailbox-delivery'
 /** One notification: consuming checks it wakes share the batch the first of them takes. */
 export class MessageWake {
   private readonly taken = new Map<string, MailboxDeliveryBatch>()
+  private readonly claimed = new Map<string, MailboxDeliveryBatch>()
+
+  claim(mailboxKey: string, select: () => MailboxDeliveryBatch | undefined) {
+    const previous = this.taken.get(mailboxKey) ?? this.claimed.get(mailboxKey)
+    if (previous) {
+      return previous
+    }
+    const batch = select()
+    if (batch) {
+      this.claimed.set(mailboxKey, batch)
+    }
+    return batch
+  }
+
+  final(mailboxKey: string) {
+    const batch = this.taken.get(mailboxKey)
+    return batch && { ...batch, replayed: true }
+  }
 
   share(mailboxKey: string, take: () => MailboxDeliveryBatch | undefined) {
     const shared = this.taken.get(mailboxKey)
@@ -127,6 +145,10 @@ export class RuntimeMessageWaiters {
   /** Internal mailbox routing needs a read-only view of active waiters. */
   get(handle: string): ReadonlySet<RuntimeMessageWaiter> | undefined {
     return this.waitersByHandle.get(handle)
+  }
+
+  has(handle: string): boolean {
+    return (this.waitersByHandle.get(handle)?.size ?? 0) > 0
   }
 
   get map(): ReadonlyMap<string, ReadonlySet<RuntimeMessageWaiter>> {

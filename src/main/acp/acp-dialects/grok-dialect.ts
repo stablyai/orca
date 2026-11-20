@@ -7,6 +7,7 @@ import { grokBackgroundTaskNotification, grokToolBackgroundTasks } from './grok-
 import { grokModelEfforts } from './grok-model-catalog'
 import { grokSubagentNotification, grokToolSubagents } from './grok-subagents'
 import { grokSubagentStop } from './grok-subagent-stop'
+import { grokThreadGoalReport } from './grok-goal-updates'
 import { grokBackgroundTaskStop } from './grok-background-task-stop'
 
 const tokenCount = z.number().int().nonnegative()
@@ -173,6 +174,14 @@ function notification(
       subagents: [subagent]
     }
   }
+  const threadGoal = grokThreadGoalReport(envelope.update)
+  if (threadGoal) {
+    return {
+      disposition: 'map',
+      ...(envelope._meta?.isReplay === true ? { replay: true } : {}),
+      threadGoal
+    }
+  }
   const meta = turnMetaSchema.safeParse(envelope._meta)
   const completion = completionSchema.safeParse(envelope.update)
   const response = responseSchema.safeParse(envelope.update)
@@ -244,6 +253,7 @@ export const GROK_ACP_DIALECT: AcpDialect = {
     return parsed.success ? parsed.data['x.ai/tool'].name : undefined
   },
   request: grokRequest,
+  elicitationComplete: (method) => method.replace(/^_/, '') === 'x.ai/mcp/elicit_complete',
   settleRequest: grokSettleRequest,
   toolBackgroundTasks: grokToolBackgroundTasks,
   toolSubagents: grokToolSubagents,

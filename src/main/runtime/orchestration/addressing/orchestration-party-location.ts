@@ -1,5 +1,5 @@
 import type { OrchestrationPartyLocationResult } from '../../../../shared/orchestration/orchestration-caller-status'
-import type { OrcaSessionId } from '../../../../shared/orca-session-address'
+import type { OrcaSessionId } from '../../../../shared/agent-session/identity/orca-session-address'
 import type { OrchestrationDb } from '../db/orchestration-db'
 import { resolveOrchestrationParty } from './orchestration-party'
 import { OrchestrationError } from '../orchestration-error'
@@ -79,8 +79,19 @@ function locateDispatchAssignee(
     (paneKey ? deps.terminalHandleForPaneKey(paneKey) : null) ??
     dispatch?.assignee_handle ??
     remote?.terminal_handle
-  return handle && !handle.startsWith('dispatch:')
-    ? locateOrchestrationParty(handle, deps)
+  if (handle && !handle.startsWith('dispatch:')) {
+    return locateOrchestrationParty(handle, deps)
+  }
+  // A worker started on a paired server has no assignee here; its terminal is that server's.
+  const federated = dispatch ? deps.db?.getFederatedDispatch(dispatchId) : undefined
+  return federated?.remote_terminal_handle
+    ? {
+        location: {
+          kind: 'terminal',
+          handle: federated.remote_terminal_handle,
+          environmentId: federated.environment_id
+        }
+      }
     : { location: null }
 }
 

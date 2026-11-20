@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type JSX } from 'react'
 import { toast } from 'sonner'
-import { getDefaultVoiceSettings } from '../../../../shared/constants'
+import { getDefaultVoiceSettings } from '../../../../shared/orca-profiles/constants'
 import {
   ORCHESTRATION_ENABLED_STORAGE_KEY,
   ORCHESTRATION_SETUP_DISMISSED_STORAGE_KEY,
@@ -8,6 +8,9 @@ import {
 } from '@/components/orchestration/setup/orchestration-setup-state'
 import { useAppStore } from '@/store/index'
 import { ChatUiHereTipDialog } from './ChatUiHereTipDialog'
+import { BotsTeammateTipDialog } from './BotsTeammateTipDialog'
+import { NewBotDialog } from '../bots/NewBotDialog'
+import { useBotsEnabled, useHasBot } from '@/lib/bot-catalog'
 import {
   setAgentDefaultSurfaceFromFeatureTip,
   openChatUiFeatureTipSettings
@@ -51,9 +54,13 @@ export default function FeatureTipsModal(): JSX.Element | null {
   const setupRequestIdRef = useRef(0)
   const [primaryBusy, setPrimaryBusy] = useState(false)
   const [skillTerminalOpen, setSkillTerminalOpen] = useState(false)
+  // Outlives the tip, which closes as the New bot dialog opens.
+  const [newBotOpen, setNewBotOpen] = useState(false)
   const isOpen = activeModal === 'feature-tips'
+  const hasBot = useHasBot(useBotsEnabled() && !isWebClientLocation())
   const rawTip = getFeatureTipForModal({
     cliInstalled: true,
+    hasBot,
     modalData,
     seenTipIds,
     featureInteractions,
@@ -161,6 +168,11 @@ export default function FeatureTipsModal(): JSX.Element | null {
           break
         }
         await setAgentDefaultSurfaceFromFeatureTip('chat')
+        break
+      }
+      case 'create-bot': {
+        closeModal()
+        setNewBotOpen(true)
         break
       }
       case 'learn-cmd-j-palette': {
@@ -286,6 +298,10 @@ export default function FeatureTipsModal(): JSX.Element | null {
     }
   }
 
+  if (newBotOpen) {
+    return <NewBotDialog open onOpenChange={setNewBotOpen} />
+  }
+
   if (!isOpen || !currentTip) {
     return null
   }
@@ -321,6 +337,17 @@ export default function FeatureTipsModal(): JSX.Element | null {
         onPrimaryAction={() => void handlePrimaryAction()}
         onSkip={() => void handleTerminalChoice()}
         onSettingsClick={openAgentSettings}
+      />
+    )
+  }
+
+  if (currentTip.action === 'create-bot') {
+    return (
+      <BotsTeammateTipDialog
+        open={isOpen}
+        tip={currentTip}
+        onOpenChange={handleOpenChange}
+        onPrimaryAction={() => void handlePrimaryAction()}
       />
     )
   }

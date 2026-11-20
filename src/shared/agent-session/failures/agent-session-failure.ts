@@ -3,11 +3,11 @@ import {
   readAttachmentProblem,
   type AgentSessionAttachmentProblem
 } from './agent-session-failure-details'
-import type { AgentSessionAccountKind } from '../agent-session-availability'
+import type { AgentSessionAccountKind } from './agent-session-availability'
 import {
   readAgentSessionArgumentProblem,
   type AgentSessionArgumentProblem
-} from '../agent-session-argument-problem'
+} from './agent-session-argument-problem'
 import {
   readAgentSessionUsageLimit,
   type AgentSessionUsageLimit
@@ -15,8 +15,8 @@ import {
 import {
   readAgentSessionRequestTimeout,
   type AgentSessionRequestTimeout
-} from '../agent-session-request-timeout'
-import { structuralValuesEqualIgnoringUndefined } from '../../structural-value-equality'
+} from './agent-session-request-timeout'
+import { structuralValuesEqualIgnoringUndefined } from '../../collections/structural-value-equality'
 import {
   readAgentSessionRefusalReference,
   type AgentSessionRefusalReference
