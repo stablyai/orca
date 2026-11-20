@@ -79,7 +79,8 @@ describe('OrcaRuntimeRpcServer', () => {
       methods: [],
       runtime: new OrcaRuntimeService(),
       userDataPath,
-      pid: 4242
+      // Avoid colliding with process.pid (common on Linux CI containers), which triggers recycled-pid reclaim.
+      pid: process.pid === 4242 ? 4243 : 4242
     })
     await server.start()
 
