@@ -30,8 +30,8 @@ describe('OrcaRuntimeService', () => {
       isBare: false,
       isMainWorktree: false
     }
-    const repo = { ...store.getRepos()[0], worktreeBaseRef: 'develop' }
-    const getReposSpy = vi.spyOn(store, 'getRepos').mockReturnValue([repo] as never)
+    const repo = { ...store.getRepos()[0]!, worktreeBaseRef: 'develop' }
+    const getReposSpy = vi.spyOn(store, 'getRepos').mockReturnValue([repo])
     computeWorktreePathMock.mockReturnValue(createdWorktree.path)
     ensurePathWithinWorkspaceMock.mockReturnValue(createdWorktree.path)
     vi.mocked(addWorktree).mockResolvedValueOnce({})
