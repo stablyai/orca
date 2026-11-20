@@ -94,7 +94,7 @@ try {
     // The harness must see a running ring, or the limits below prove nothing.
     expect(
       frames['baseline visible'].windowRedrawsPerSecond >= 8,
-      'a visible 12-step ring drew under 8 window redraws/s; the measurement is broken'
+      'a visible 12-step ring drew under 8 window redraws/s; the measurement is broken (a hidden window draws no frames on some hosts, e.g. Windows)'
     )
     // 12 steps/s plus slack for a stray frame.
     expect(
