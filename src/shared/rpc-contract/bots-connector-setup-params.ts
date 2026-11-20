@@ -37,7 +37,16 @@ export const BotLinearWorkspace = z.object({ workspaceId: Id })
 export const BotLinearMembers = z.object({ workspaceId: Id, query: Query })
 export const BotLinearDefaultBot = z.object({ workspaceId: Id, botId: Id.nullable() })
 
-export const BotGitHubUsers = z.object({ query: Query })
+/** `scope`: the connected repositories ("owner/name") and whole-account installs to search first. */
+export const BotGitHubUsers = z.object({
+  query: Query,
+  scope: z
+    .object({
+      repositories: z.array(z.string().max(200)).max(200),
+      organizations: z.array(z.string().max(100)).max(50)
+    })
+    .optional()
+})
 export const BotGitHubDefaultBot = z.object({ botId: Id.nullable() })
 
 const Source = z.enum(CONNECTOR_CONNECT_SOURCES)

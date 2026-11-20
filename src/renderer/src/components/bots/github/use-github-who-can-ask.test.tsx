@@ -81,10 +81,10 @@ beforeEach(() => {
   mocks.members = [slackSam, linearBea, octocat]
   mocks.updateBot.mockReset().mockResolvedValue(bot(mocks.members))
   api.botLinear.members.mockReset()
-  api.botGitHub.users.mockReset().mockResolvedValue({
+  api.botGitHub.users.mockReset().mockImplementation(async ({ query }: { query: string }) => ({
     ok: true,
-    value: { members: [{ id: '9919', name: 'hubot' }], complete: true }
-  })
+    value: { members: query === '' ? [] : [{ id: '9919', name: 'hubot' }], complete: true }
+  }))
   Object.assign(window, { api: withBotConnectorRuntime(api) })
 })
 
@@ -94,15 +94,19 @@ afterEach(() => {
 })
 
 describe('useGitHubWhoCanAsk', () => {
-  it('finds people by GitHub username and saves them by numeric id', async () => {
+  it('finds people by name or GitHub username and saves them by numeric id', async () => {
     renderList(<BotGitHubWhoCanAsk bot={bot(mocks.members)} linked />)
     fireEvent.click(screen.getByRole('button', { name: 'Add' }))
-    // GitHub can't list people, so an empty box asks for a username.
-    expect(await screen.findByText('Type a GitHub username')).toBeDefined()
-    fireEvent.change(await screen.findByPlaceholderText('Search by GitHub username'), {
+    // With no connected repositories to suggest people from, an empty box asks for a name.
+    expect(await screen.findByText('Type a name or GitHub username')).toBeDefined()
+    fireEvent.change(await screen.findByPlaceholderText('Search by name or username'), {
       target: { value: 'hubot' }
     })
-    await waitFor(() => expect(api.botGitHub.users).toHaveBeenLastCalledWith({ query: 'hubot' }))
+    await waitFor(() =>
+      expect(api.botGitHub.users).toHaveBeenLastCalledWith(
+        expect.objectContaining({ query: 'hubot' })
+      )
+    )
     expect(api.botLinear.members).not.toHaveBeenCalled()
 
     fireEvent.click(await screen.findByText('hubot'))

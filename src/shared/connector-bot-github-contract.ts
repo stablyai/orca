@@ -50,6 +50,13 @@ export const ConnectorGitHubUsersResponse = z.object({
 })
 export type ConnectorGitHubUsersResponse = z.infer<typeof ConnectorGitHubUsersResponse>
 
+/** What `bots.github.users` answers the picker: people in the connected repositories first, by
+ *  login with their real name as `handle`, then the cloud's exact-username match as `outside`. */
+export type BotGitHubPeople = {
+  members: { id: string; name: string; handle?: string; outside?: boolean }[]
+  complete: boolean
+}
+
 /** The desktop's own code for a cloud with GitHub off (every GitHub route answers 404). */
 export const BOT_GITHUB_OFF = 'github_off'
 
