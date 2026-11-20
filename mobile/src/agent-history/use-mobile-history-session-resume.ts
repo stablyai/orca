@@ -1,4 +1,5 @@
 import { structuredSessionOperationId } from '../session/native-chat/agent-session/structured-session-operation-id'
+import { useClipboardWriter } from '../platform/clipboard/clipboard'
 import type { PendingMobileHistoryHandoff } from './mobile-history-session-handoff'
 import { useCallback, useRef, useState } from 'react'
 import type { AiVaultSession } from '../../../src/shared/ai-vault/contracts/ai-vault-types'
@@ -49,6 +50,7 @@ export function useMobileHistorySessionResume({
   worktrees: readonly Worktree[]
 }) {
   const t = useMobileTranslation()
+  const clipboard = useClipboardWriter()
   const router = useWorkspaceRouteHandoff()
   const openResumedTerminal = useResumedHistoryTerminalOpener(hostId, worktreeId)
   const openSessionPane = useHistorySessionPaneOpener(hostId, worktreeId)
@@ -234,7 +236,23 @@ export function useMobileHistorySessionResume({
   )
 
   const openUnconfirmedContinuation = unconfirmedContinuation
-    ? () => {
+    ? async () => {
+        const assertCurrentOwner = claimResumeOwnership()
+        if (unconfirmedContinuation.contextToCopy) {
+          try {
+            await clipboard.writeText(unconfirmedContinuation.contextToCopy)
+          } catch {
+            showResumeToast(
+              t('agentHistory.handoff.copyFailed', 'Could not copy context. Try again.')
+            )
+            return
+          }
+        }
+        try {
+          assertCurrentOwner()
+        } catch {
+          return
+        }
         openSessionPane({
           ...unconfirmedContinuation,
           fromSession: origin === 'session' && unconfirmedContinuation.worktreeId === worktreeId
@@ -249,6 +267,9 @@ export function useMobileHistorySessionResume({
     resumeMessage,
     setResumeMessage,
     resumeToast,
+    resumeOpenLabel: unconfirmedContinuation?.contextToCopy
+      ? t('agentHistory.handoff.copyAndOpen', 'Copy context and open')
+      : t('agentHistory.handoff.openSession', 'Open session'),
     openUnconfirmedContinuation
   }
 }

@@ -99,7 +99,8 @@ function MobileAgentSessionHistoryPanelContent({
     resumeMessage,
     setResumeMessage,
     resumeToast,
-    openUnconfirmedContinuation
+    openUnconfirmedContinuation,
+    resumeOpenLabel
   } = useMobileHistorySessionResume({ hostId, worktreeId, origin, client, connState, worktrees })
   const worktreeLabel = getWorktreeLabel(name, worktreeId)
 
@@ -230,6 +231,7 @@ function MobileAgentSessionHistoryPanelContent({
             <AgentHistoryResumeNotice
               message={resumeMessage}
               onOpen={openUnconfirmedContinuation}
+              openLabel={resumeOpenLabel}
               onDismiss={() => setResumeMessage(null)}
             />
           ) : null}

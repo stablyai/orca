@@ -17,6 +17,8 @@ const navigation = vi.hoisted(() => ({
   shellOpen: vi.fn(),
   shellReturns: true
 }))
+const clipboard = vi.hoisted(() => ({ writeText: vi.fn(async (_text: string) => {}) }))
+vi.mock('../platform/clipboard/clipboard', () => ({ useClipboardWriter: () => clipboard }))
 vi.mock('../navigation/route-handoff', () => ({
   useShellSessionHandoff: () => ({
     returns: () => navigation.shellReturns,
@@ -254,40 +256,55 @@ describe('continuing mobile history from the current host record', () => {
     }
   )
 
-  it('keeps an unconfirmed handoff destination available to open without launching again', async () => {
-    const selected = historySession()
-    const client = historyClient(selected, async (method) =>
-      method === 'agent.launchReplay'
-        ? {
-            id: 'reply',
-            ok: true,
-            result: {
-              outcome: { kind: 'terminal', handle: 'pty', paneKey: `group:${LEAF}` },
-              worktreeId: 'route',
-              receipt: {
-                mode: 'terminal',
-                preferred: 'terminal',
-                reason: 'user_default',
-                detail: 'CLI'
-              },
-              prompt: { delivery: 'submit', outcome: 'unconfirmed' }
+  it.each(['unconfirmed', 'not-delivered'] as const)(
+    'opens the existing handoff after a %s receipt',
+    async (outcome) => {
+      const selected = historySession()
+      const client = historyClient(selected, async (method) =>
+        method === 'agent.launchReplay'
+          ? {
+              id: 'reply',
+              ok: true,
+              result: {
+                outcome: { kind: 'terminal', handle: 'pty', paneKey: `group:${LEAF}` },
+                worktreeId: 'route',
+                receipt: {
+                  mode: 'terminal',
+                  preferred: 'terminal',
+                  reason: 'user_default',
+                  detail: 'CLI'
+                },
+                prompt: { delivery: 'submit', outcome }
+              }
             }
-          }
-        : undefined
-    )
-    await withResume(client, async (resume, current) => {
-      await resume(selected, { kind: 'handoff', agent: 'codex', worktreeId: 'repo::/repo' })
-      expect(navigation.shellOpen).not.toHaveBeenCalled()
-      const open = current().openUnconfirmedContinuation
-      if (!open) {
-        throw new Error('The created session has no open action')
-      }
-      act(() => open())
-      expect(navigation.shellOpen).toHaveBeenCalledWith(
-        '/h/host/session/route?paneKey=group%3A11111111-1111-4111-8111-111111111111'
+          : undefined
       )
-    })
-  })
+      await withResume(client, async (resume, current) => {
+        await resume(selected, { kind: 'handoff', agent: 'codex', worktreeId: 'repo::/repo' })
+        expect(navigation.shellOpen).not.toHaveBeenCalled()
+        const open = current().openUnconfirmedContinuation
+        if (!open) {
+          throw new Error('The created session has no open action')
+        }
+        if (outcome === 'not-delivered') {
+          clipboard.writeText.mockRejectedValueOnce(new Error('clipboard refused'))
+          await act(() => open())
+          expect(navigation.shellOpen).not.toHaveBeenCalled()
+        }
+        await act(() => open())
+        if (outcome === 'not-delivered') {
+          expect(clipboard.writeText).toHaveBeenCalledWith(
+            expect.stringContaining('Original context')
+          )
+        } else {
+          expect(clipboard.writeText).not.toHaveBeenCalled()
+        }
+        expect(navigation.shellOpen).toHaveBeenCalledWith(
+          '/h/host/session/route?paneKey=group%3A11111111-1111-4111-8111-111111111111'
+        )
+      })
+    }
+  )
 
   it('does not launch a stale row when only another host still lists that id', async () => {
     const selected = session('claude')

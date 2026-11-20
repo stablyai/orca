@@ -7,6 +7,37 @@ const { store, TEST_WORKTREE_ID, TEST_WORKTREE_PATH } =
   await import('../../construction/test-context/orca-runtime-test-fixtures.spec')
 const { bindPaneFirst } = await import('../layout/bind-first-pane.test-fixture')
 
+it('preserves an explicit Windows shell through owned startup to the PTY', async () => {
+  const platform = process.platform
+  const runtime = new OrcaRuntimeService({ ...store })
+  await runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
+  runtime.setPtyController({
+    spawn: async (args: { shellOverride?: string }) => {
+      throw new Error(`requested-shell:${args.shellOverride}`)
+    },
+    listProcesses: async () => [],
+    write: () => true,
+    kill: () => true,
+    getForegroundProcess: async () => null
+  })
+  Object.defineProperty(process, 'platform', { value: 'win32' })
+  try {
+    await expect(
+      runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
+        command: 'claude --resume source',
+        requireOwnedStartup: true,
+        shellOverride: 'cmd.exe',
+        clientNavigationId: 'phone',
+        clientMutationId: 'shell-resume',
+        activate: false,
+        select: false
+      })
+    ).rejects.toThrow('requested-shell:cmd.exe')
+  } finally {
+    Object.defineProperty(process, 'platform', { value: platform })
+  }
+})
+
 it.each(['codex', 'claude'] as const)(
   'reconciles an accepted %s startup after its reply is lost without delivering the command again',
   async (agent) => {

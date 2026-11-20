@@ -13,10 +13,10 @@ export const MOBILE_WEB_PAGE_ROUTES = [
     canOwnHostArea: true,
     canOwnHostAreaAcrossLayouts: true
   },
-  // History needs navigate for session/resume, storage for shared sidebar width and externalLink for layout protocol wall.
+  // History uses clipboard writes to recover handoff context in the session already started.
   {
     pathname: '/h/[hostId]/agent-history/[worktreeId]',
-    grants: ['navigate', 'storage', 'externalLink', 'haptics'],
+    grants: ['navigate', 'storage', 'externalLink', 'haptics', 'native.clipboard.write'],
     optionalGrants: [DEVICE_STORE_GRANT]
   },
   // Tasks needs navigate/storage plus provider externalLink and comment-review clipboard writes; grants persist from opening route.

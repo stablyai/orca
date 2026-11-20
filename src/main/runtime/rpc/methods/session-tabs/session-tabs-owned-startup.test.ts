@@ -15,7 +15,7 @@ import {
 } from '../agent-launch/agent-launch.test-fixture'
 import { runOwnedSessionStartup } from './session-tabs-owned-startup'
 
-it.each(['accepted', 'before-dispatch', 'during-dispatch'])(
+it.each(['accepted', 'pending-handle', 'before-dispatch', 'during-dispatch'])(
   'keeps startup acceptance durable across restart: %s',
   async (phase) => {
     const directory = await mkdtemp(join(tmpdir(), 'orca-owned-startup-'))
@@ -40,8 +40,9 @@ it.each(['accepted', 'before-dispatch', 'during-dispatch'])(
           parentTabId: 'group',
           leafId: '11111111-1111-4111-8111-111111111111',
           isActive: true,
-          status: 'ready',
-          terminal: 'accepted-terminal'
+          ...(phase === 'pending-handle'
+            ? { status: 'pending-handle' as const, terminal: null }
+            : { status: 'ready' as const, terminal: 'accepted-terminal' })
         },
         publicationEpoch: 'epoch',
         snapshotVersion: 1
@@ -56,7 +57,9 @@ it.each(['accepted', 'before-dispatch', 'during-dispatch'])(
         }
         return result
       })
-      await (phase === 'accepted' ? first : expect(first).rejects.toThrow())
+      await (phase === 'accepted' || phase === 'pending-handle'
+        ? first
+        : expect(first).rejects.toThrow())
       await closeTestAgentSessionDatabase(directory)
       setAgentLaunchRecordStore(await openTestAgentSessionRecordStore(directory))
       clock.mockReturnValue(now + 120_000)
@@ -69,7 +72,11 @@ it.each(['accepted', 'before-dispatch', 'during-dispatch'])(
       })
       await (phase === 'during-dispatch'
         ? expect(retry).rejects.toMatchObject({ code: 'agent_session_operation_unknown' })
-        : expect(retry).resolves.toMatchObject({ tab: { terminal: 'accepted-terminal' } }))
+        : phase === 'pending-handle'
+          ? expect(retry).resolves.toMatchObject({
+              tab: { status: 'pending-handle', terminal: null }
+            })
+          : expect(retry).resolves.toMatchObject({ tab: { terminal: 'accepted-terminal' } }))
       clock.mockReturnValue(now + 3 * 24 * 60 * 60 * 1000)
       await expect(
         runOwnedSessionStartup(params, context, async () => {

@@ -5,19 +5,21 @@ import type { RuntimeMobileSessionCreateTerminalResult } from '../../../../../sh
 import type { RpcContext } from '../../core'
 import { rpcCallerOperationKey } from '../../callers/rpc-caller-identity'
 
+const recordedStartupTab = z.looseObject({
+  type: z.literal('terminal'),
+  id: z.string().min(1),
+  title: z.string(),
+  parentTabId: z.string(),
+  leafId: z.string(),
+  isActive: z.boolean()
+})
 const recordedStartup = z.object({
   kind: z.literal('mobile-owned-startup'),
   result: z.looseObject({
-    tab: z.looseObject({
-      type: z.literal('terminal'),
-      id: z.string().min(1),
-      title: z.string(),
-      parentTabId: z.string(),
-      leafId: z.string(),
-      isActive: z.boolean(),
-      status: z.literal('ready'),
-      terminal: z.string().min(1)
-    }),
+    tab: z.discriminatedUnion('status', [
+      recordedStartupTab.extend({ status: z.literal('ready'), terminal: z.string().min(1) }),
+      recordedStartupTab.extend({ status: z.literal('pending-handle'), terminal: z.null() })
+    ]),
     publicationEpoch: z.string(),
     snapshotVersion: z.number(),
     warning: z.literal('desktop-tab-not-shown').optional(),
@@ -71,13 +73,14 @@ export async function runOwnedSessionStartup(
     const result = await create(() => {
       dispatched = true
     })
+    const launch = recordedStartup.parse({ kind: 'mobile-owned-startup', result })
     await store.recordOperationOutcome({
       callerKey,
       operationId,
       outcome: {
         status: 'succeeded',
         sessionId: '',
-        launch: { kind: 'mobile-owned-startup', result }
+        launch
       }
     })
     return result

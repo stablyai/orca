@@ -75,6 +75,7 @@ export async function handoffMobileHistorySession(args: {
     args.mutations.releaseOnSuccess(key)
   }
   const outcome = launched.result.outcome
+  const notDelivered = launched.result.prompt?.outcome === 'not-delivered'
   return {
     worktreeId: launched.result.worktreeId,
     ...(outcome.kind === 'terminal' ? { terminal: outcome.handle } : {}),
@@ -87,10 +88,16 @@ export async function handoffMobileHistorySession(args: {
         : outcome.paneKey,
     ...(unconfirmed
       ? {
-          warning: translate(
-            'agentHistory.handoff.unconfirmed',
-            'The agent started, but context delivery was not confirmed. Check the new session before retrying.'
-          )
+          ...(notDelivered ? { contextToCopy: request.prompt } : {}),
+          warning: notDelivered
+            ? translate(
+                'agentHistory.handoff.notDelivered',
+                'The agent started without context. Copy the context and open this session to paste it.'
+              )
+            : translate(
+                'agentHistory.handoff.unconfirmed',
+                'The agent started, but context delivery was not confirmed. Check the new session before retrying.'
+              )
         }
       : {})
   }

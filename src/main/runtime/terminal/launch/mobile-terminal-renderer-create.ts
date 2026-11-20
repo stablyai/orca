@@ -82,11 +82,10 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
     assertMobileTerminalShellSupported(this.store, workspace, opts.shellOverride, cwd)
     this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktreeId)
     // Older mobile clients optimistically append; match until they advertise grouped placement.
-    const requestedAfterTabId = opts.afterTabId
     const afterTabId =
       opts.clientNavigationId && opts.supportsSplitGroupPlacement === false
         ? undefined
-        : requestedAfterTabId
+        : opts.afterTabId
     if (opts.sourceChatFork) {
       return this.createMobileChatForkTerminal({
         workspace,
@@ -98,7 +97,7 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
     }
     const afterDesktopTabId = anchorTabOfCreate(
       this.mobileSessionTabsByWorktree.get(worktreeId)?.tabs,
-      requestedAfterTabId,
+      opts.afterTabId,
       afterTabId !== undefined
     )
     const startupCommand = applyRemoteViewerLaunchEnv(
@@ -126,6 +125,7 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
           wslUserAct: true,
           ...startupCommand,
           ...(opts.trustWorktreeId ? { trustWorktreeId: opts.trustWorktreeId } : {}),
+          ...(opts.shellOverride ? { shellOverride: opts.shellOverride } : {}),
           cwd,
           // Retain the legacy namespace so earlier Qoder mutations still reconcile.
           identity: {
@@ -160,7 +160,7 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
           viewMode: opts.viewMode,
           targetGroupId: opts.targetGroupId,
           ...mainPlacedAfter(
-            () => this.mainLayoutTabOfRow(worktreeId, requestedAfterTabId),
+            () => this.mainLayoutTabOfRow(worktreeId, opts.afterTabId),
             afterDesktopTabId
           ),
           supportsSplitGroupPlacement: opts.supportsSplitGroupPlacement,

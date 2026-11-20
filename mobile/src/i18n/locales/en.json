@@ -492,7 +492,10 @@
       "updateRequired": "Update Orca on this host to hand off a session.",
       "unconfirmed": "The agent started, but context delivery was not confirmed. Check the new session before retrying.",
       "openSession": "Open session",
-      "workspaceChanged": "The workspace changed. Choose an agent again."
+      "workspaceChanged": "The workspace changed. Choose an agent again.",
+      "notDelivered": "The agent started without context. Copy the context and open this session to paste it.",
+      "copyFailed": "Could not copy context. Try again.",
+      "copyAndOpen": "Copy context and open"
     }
   },
   "diagnostics": {

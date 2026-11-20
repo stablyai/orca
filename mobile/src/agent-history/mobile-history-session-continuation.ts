@@ -35,6 +35,7 @@ export type MobileHistoryContinuationDestination = {
   paneKey?: string
   terminal?: string
   warning?: string
+  contextToCopy?: string
 }
 export type MobileHistoryResumeResult = void | {
   kind: 'handoff-target-changed'
