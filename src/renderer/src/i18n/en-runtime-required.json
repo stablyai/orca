@@ -1692,7 +1692,7 @@
       },
       "setup": {
         "preview": {
-          "ask": "<mention>@{{name}}</mention> summarize this thread"
+          "ask": "<mention/> summarize this thread"
         }
       }
     },

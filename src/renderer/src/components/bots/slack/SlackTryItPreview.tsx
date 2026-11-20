@@ -40,13 +40,12 @@ export function SlackTryItPreview({
           name={asker ?? t('bots.slack.setup.preview.you', 'You')}
           time={now}
         >
+          {/* The name stays out of the message: Trans would read tags in a name like "Ops <i>EU</i>". */}
           <Trans
             i18n={i18n}
             i18nKey="bots.slack.setup.preview.ask"
-            defaults="<mention>@{{name}}</mention> summarize this thread"
-            values={{ name: bot.name }}
-            shouldUnescape
-            components={{ mention: <span className={MENTION} title={`@${bot.name}`} /> }}
+            defaults="<mention/> summarize this thread"
+            components={{ mention: <SlackMention name={bot.name} /> }}
           />
         </SlackMessage>
         <SlackMessage
@@ -59,6 +58,15 @@ export function SlackTryItPreview({
         </SlackMessage>
       </div>
     </section>
+  )
+}
+
+/** The @name, from a prop: Trans replaces an element's own children. */
+function SlackMention({ name }: { name: string }): React.JSX.Element {
+  return (
+    <span className={MENTION} title={`@${name}`}>
+      @{name}
+    </span>
   )
 }
 

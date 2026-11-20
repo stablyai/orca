@@ -27094,7 +27094,7 @@
           "label": "Mention @{{name}} in Slack to ask it.",
           "now": "now",
           "you": "You",
-          "ask": "<mention>@{{name}}</mention> summarize this thread",
+          "ask": "<mention/> summarize this thread",
           "reply": "On it."
         },
         "connectAnother": "Connect another Slack workspace",
