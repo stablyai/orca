@@ -49,7 +49,6 @@ export type WorkspaceHydrationPatch = Pick<
       | 'contestedHostWorkspaceSessions'
       | 'contestedPrimaryHostBySessionKey'
       | 'hydratedRuntimeSessionHostIds'
-      | 'hydratedSshSessionHostIds'
     >
   >
 

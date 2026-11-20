@@ -44,6 +44,4 @@ export type HydrateWorkspaceSessionOptions = {
   contestedPrimaryHostBySessionKey?: Record<string, ExecutionHostId>
   /** Runtime partitions the cold read loaded; omitted leaves the store's copy. */
   hydratedRuntimeSessionHostIds?: ExecutionHostId[]
-  /** SSH partitions the cold read loaded; omitted leaves the store's copy. */
-  hydratedSshSessionHostIds?: ExecutionHostId[]
 } & WorkspaceSessionHydrationOptions

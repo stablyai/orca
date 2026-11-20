@@ -3,7 +3,6 @@ import { createTestStore, seedStore } from '@/store/testing/app-store-test-fixtu
 import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import { TEST_REPO } from '@/store/repos/repo.test-fixture'
 import { makeTab } from '@/store/terminals/testing/terminal-tab.test-fixture'
-import { getRepoExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { applyWorkspaceSessionEntriesPatch } from '../../../../../shared/workspace-session/workspace-session-entries-patch'
 import { WORKSPACE_SESSION_FIELD_OWNERSHIP } from '../../../../../shared/workspace-session/workspace-session-host-field-ownership'
 import type { WorkspaceSessionState } from '../../../../../shared/workspace-session/workspace-session-state-types'
@@ -62,10 +61,10 @@ describe('session fields a window clears', () => {
     const store = createTestStore()
     seedStore(store, { worktreesByRepo: { [TEST_REPO.id]: [] } })
     const patch = buildWorkspaceSessionPatch(store.getState(), SESSION_RELEVANT_FIELDS)
+    const ownershipByField: Readonly<Record<string, string>> = WORKSPACE_SESSION_FIELD_OWNERSHIP
     const dropped = Object.entries(patch)
       .filter(([field, value]) => {
-        const ownership =
-          WORKSPACE_SESSION_FIELD_OWNERSHIP[field as keyof typeof WORKSPACE_SESSION_FIELD_OWNERSHIP]
+        const ownership = ownershipByField[field]
         return value === undefined && ownership !== 'global' && ownership !== 'hostPrivate'
       })
       .map(([field]) => field)
@@ -96,8 +95,6 @@ describe('session fields a window clears', () => {
         },
         ptyIdsByTabId: { 'tab-a': ['relay-a'] },
         sshConnectionStates: new Map([['conn-1', sshState('connected')]]),
-        // The startup read loaded the SSH partition, so this window's saves speak for its reconnect facts.
-        hydratedSshSessionHostIds: [getRepoExecutionHostId(SSH_REPO)],
         workspaceSessionReady: true,
         hydrationSucceeded: true
       })

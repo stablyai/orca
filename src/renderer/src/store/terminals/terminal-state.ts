@@ -111,8 +111,6 @@ export type TerminalState = {
   contestedPrimaryHostBySessionKey: Record<string, ExecutionHostId>
   /** Runtime partitions the startup read loaded; only these may receive emptied host-keyed fields. */
   hydratedRuntimeSessionHostIds: ExecutionHostId[]
-  /** SSH partitions the startup read loaded; only these may receive emptied reconnect facts. */
-  hydratedSshSessionHostIds: ExecutionHostId[]
   defaultTerminalTabsAppliedByWorktreeId: Record<string, true>
   closedTerminalTabTombstonesByTabId: ClosedTerminalTabTombstonesByTabId
   hydrationSucceeded: boolean

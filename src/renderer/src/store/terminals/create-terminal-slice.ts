@@ -63,7 +63,6 @@ export const createTerminalSlice: (
   contestedHostWorkspaceSessions: {},
   contestedPrimaryHostBySessionKey: {},
   hydratedRuntimeSessionHostIds: [],
-  hydratedSshSessionHostIds: [],
   defaultTerminalTabsAppliedByWorktreeId: {},
   closedTerminalTabTombstonesByTabId: {},
   hydrationSucceeded: false,
