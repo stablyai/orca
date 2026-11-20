@@ -15,10 +15,56 @@ import { windowViewSaveForMain, type ReconnectFactsFor } from '../persistence/wi
 import { reportWindowSaveDrift } from '../persistence/window-save-divergence'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/workspace-layout/layout-owner-switch'
 import { formatShutdownCheckpointFailureReason } from '../../shared/app-lifecycle/shutdown/renderer-shutdown-events'
+import type { DesktopRelayWrite } from '../../shared/workspace-session/desktop-relay-write'
+import { windowSaveKeepingRelayOwnership } from '../persistence/window-save-relay-ownership'
+import { applyDesktopRelayWrite } from '../../shared/workspace-session/desktop-relay-ownership'
 
 type StageBeforeUnloadSyncArgs = {
   sessions: { state: WorkspaceSessionState; hostId?: ExecutionHostId }[]
   ui: Partial<PersistedUIState>
+  /** A window that sends relay ids by ownership leaves them out of `sessions` and sends them here. */
+  desktopRelays?: DesktopRelayWrite['hosts']
+}
+
+/** Each partition to stage with the window's relay ids applied by ownership, so both commit together. */
+function sessionsWithDesktopRelays(
+  store: Store,
+  args: StageBeforeUnloadSyncArgs
+): { state: WorkspaceSessionState; hostId?: ExecutionHostId }[] {
+  if (!args.desktopRelays) {
+    return args.sessions.map(({ state, hostId }) => ({
+      state: windowSaveKeepingRelayOwnership(store.getWorkspaceSession(hostId), state, 'set'),
+      hostId
+    }))
+  }
+  const relaysByHost = new Map(args.desktopRelays.map((host) => [host.hostId, host]))
+  const staged = args.sessions.map(({ state, hostId }) => ({
+    hostId,
+    resolved: normalizeExecutionHostId(hostId) ?? LOCAL_EXECUTION_HOST_ID,
+    state: windowSaveKeepingRelayOwnership(store.getWorkspaceSession(hostId), state, 'set', {
+      relays: 'separate'
+    })
+  }))
+  // No legacy adoption here: the snapshot may move rows the stored partitions still place elsewhere.
+  const withRelays = staged.map(({ state, hostId, resolved }) => {
+    const relays = relaysByHost.get(resolved)
+    const patch = relays && applyDesktopRelayWrite(state, relays, null).patch
+    return { state: patch ? { ...state, ...patch } : state, hostId }
+  })
+  const stagedHosts = new Set(staged.map(({ resolved }) => resolved))
+  const existing = new Set(store.getWorkspaceSessionHostIds())
+  for (const [hostId, relays] of relaysByHost) {
+    if (stagedHosts.has(hostId)) {
+      continue
+    }
+    const stored = store.getWorkspaceSession(hostId)
+    const { patch } = applyDesktopRelayWrite(stored, relays, null)
+    // Never materialize a partition just to record that it holds nothing.
+    if (patch && (existing.has(hostId) || patch.remoteSessionIdsByTabId)) {
+      withRelays.push({ state: { ...stored, ...patch }, hostId })
+    }
+  }
+  return withRelays
 }
 
 export type QuitResumeRecordsFor = (session: WorkspaceSessionState) => SleepingAgentSessionRecord[]
@@ -104,7 +150,7 @@ export function registerRendererShutdownCheckpointHandler(
     let error: string | undefined
     try {
       // A window a WSL move rewrote under is stale; main reloads it and keeps what is on disk.
-      const sessions = isWslMoveWindowWriteHeld() ? [] : args.sessions
+      const sessions = isWslMoveWindowWriteHeld() ? [] : sessionsWithDesktopRelays(store, args)
       for (const { state, hostId } of sessions) {
         if (!isFrozenOrcadSourceSessionPartition(store, hostId)) {
           store.stageWorkspaceSessionBeforeUnload(

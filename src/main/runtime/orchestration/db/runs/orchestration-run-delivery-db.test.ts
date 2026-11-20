@@ -32,10 +32,10 @@ describe('OrchestrationDb Run state', () => {
   }
 
   describe('Run deliveries', () => {
-    it('returns one bounded FIFO batch and replays it until acknowledgment', () => {
+    it('replays a bounded FIFO batch until acknowledged and preserves later mail', () => {
       const d = createDb()
       const run = createBoundRun(d)
-      for (let index = 0; index < 55; index++) {
+      for (let index = 0; index < 54; index++) {
         d.insertMessage({
           from: 'worker',
           to: `run:${run.id}`,
@@ -47,23 +47,31 @@ describe('OrchestrationDb Run state', () => {
       const first = d.getOrCreateRunDelivery({
         runId: run.id,
         consumerGeneration: run.consumer_generation
+      })!
+      d.insertMessage({
+        from: 'worker',
+        to: `run:${run.id}`,
+        subject: 'message 54',
+        runId: run.id
       })
       const replay = d.getOrCreateRunDelivery({
         runId: run.id,
         consumerGeneration: run.consumer_generation
       })
 
-      expect(first?.messages).toHaveLength(50)
-      expect(first?.messages[0].subject).toBe('message 0')
-      expect(first?.messages[49].subject).toBe('message 49')
-      expect(replay?.delivery.id).toBe(first?.delivery.id)
+      expect(first.messages).toHaveLength(50)
+      expect(first.messages[0].subject).toBe('message 0')
+      expect(first.messages[49].subject).toBe('message 49')
+      expect(replay?.delivery.id).toBe(first.delivery.id)
       expect(replay?.replayed).toBe(true)
 
-      d.acknowledgeRunDelivery({
+      const ack = {
         runId: run.id,
         consumerGeneration: run.consumer_generation,
-        deliveryId: first!.delivery.id
-      })
+        deliveryId: first.delivery.id
+      }
+      expect(d.acknowledgeRunDelivery(ack).duplicate).toBe(false)
+      expect(d.acknowledgeRunDelivery(ack).duplicate).toBe(true)
       const next = d.getOrCreateRunDelivery({
         runId: run.id,
         consumerGeneration: run.consumer_generation
@@ -75,39 +83,6 @@ describe('OrchestrationDb Run state', () => {
         'message 53',
         'message 54'
       ])
-    })
-
-    it('acknowledges the whole batch idempotently without consuming newer mail', () => {
-      const d = createDb()
-      const run = createBoundRun(d)
-      d.insertMessage({ from: 'a', to: `run:${run.id}`, subject: 'first', runId: run.id })
-      const delivery = d.getOrCreateRunDelivery({
-        runId: run.id,
-        consumerGeneration: run.consumer_generation
-      })!
-      d.insertMessage({ from: 'b', to: `run:${run.id}`, subject: 'newer', runId: run.id })
-
-      const firstAck = d.acknowledgeRunDelivery({
-        runId: run.id,
-        consumerGeneration: run.consumer_generation,
-        deliveryId: delivery.delivery.id
-      })
-      const duplicateAck = d.acknowledgeRunDelivery({
-        runId: run.id,
-        consumerGeneration: run.consumer_generation,
-        deliveryId: delivery.delivery.id
-      })
-
-      expect(firstAck.duplicate).toBe(false)
-      expect(duplicateAck.duplicate).toBe(true)
-      expect(
-        d
-          .getOrCreateRunDelivery({
-            runId: run.id,
-            consumerGeneration: run.consumer_generation
-          })
-          ?.messages.map((message) => message.subject)
-      ).toEqual(['newer'])
     })
 
     it('uses type filters only as wake predicates and returns the full oldest batch', () => {
