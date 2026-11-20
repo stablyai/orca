@@ -6,6 +6,7 @@ import {
 } from '../../shared/execution-host/execution-host'
 import { parseAppSshPtyId } from '../../shared/remote-runtime/ssh/ssh-pty-id'
 import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
+import { normalizeWorkspaceSessionKeyToWorkspaceId } from '../../shared/workspace/identity/workspace-scope'
 import { workspaceSessionPartitionHostId } from '../../shared/workspace-session/workspace-session-partition-owner'
 import {
   DESKTOP_RELAY_LEGACY_ADOPTION_VERSION,
@@ -71,7 +72,9 @@ function uniqueSshRepoTabHosts(store: AdoptionStore): Map<string, ExecutionHostI
     for (const [worktreeId, tabs] of Object.entries(
       store.getWorkspaceSession(hostId).tabsByWorktree ?? {}
     )) {
-      const repo = repoById.get(getRepoIdFromWorktreeId(worktreeId))
+      const repo = repoById.get(
+        getRepoIdFromWorktreeId(normalizeWorkspaceSessionKeyToWorkspaceId(worktreeId))
+      )
       const owner =
         repo && getRepoSshConnectionId(repo)
           ? workspaceSessionPartitionHostId(getRepoExecutionHostId(repo))

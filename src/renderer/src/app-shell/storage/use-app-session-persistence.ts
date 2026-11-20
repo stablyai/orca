@@ -17,6 +17,7 @@ import {
 } from '../../lib/workspace/persistence/workspace-session-host-persistence'
 import {
   desktopRelaysSupported,
+  forgetAcknowledgedDesktopRelays,
   probeDesktopRelays
 } from '../../lib/workspace/persistence/desktop-relay-writes'
 import type { DesktopRelayWrite } from '../../../../shared/workspace-session/desktop-relay-write'
@@ -54,6 +55,7 @@ export function useAppSessionPersistence(): void {
   useEffect(() => {
     // A remount starts from whole fields again.
     windowAcknowledgedSessionEntries.forget()
+    forgetAcknowledgedDesktopRelays()
     probeDesktopRelays(window.api.session)
     return createSessionWriteSubscriber({
       store: useAppStore,

@@ -290,6 +290,12 @@ function isDesktopRelayWriteResult(value: unknown): value is DesktopRelayWriteRe
   return typeof value === 'object' && value !== null && 'applied' in value && 'refused' in value
 }
 
+/** A remounted save subscriber starts over: what main last accepted is unknown, and a late answer to
+ *  the previous subscriber's write is ignored. */
+export function forgetAcknowledgedDesktopRelays(): void {
+  acknowledgedRelays.forget()
+}
+
 /** A full replacement (quit, unload) may not keep what main last accepted, so it sends every host's
  *  relay ids as a baseline. */
 export function replaceDesktopRelays(
