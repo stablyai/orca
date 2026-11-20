@@ -14,8 +14,9 @@ export type ZotzAgentQueueBoardProps = {
   snapshot: Snapshot
   now: number
   workspaceName: (worktreeId: string | null) => string
-  onForceStart: (id: string) => void
-  onCancel: (id: string) => void
+  /** Both absent for a server that does not take these calls; its backlog is then read-only. */
+  onForceStart?: (id: string) => void
+  onCancel?: (id: string) => void
   onOpenPane: (paneKey: string, worktreeId: string | null) => void
 }
 
@@ -138,6 +139,28 @@ function UsageBar({ bytes, ceiling }: { bytes: number; ceiling: number }): React
   )
 }
 
+function QueuedActions({
+  onCancel,
+  onForceStart
+}: {
+  onCancel: () => void
+  onForceStart: () => void
+}): React.JSX.Element {
+  const t = useTranslate()
+  return (
+    <div className="flex flex-wrap justify-end gap-1.5">
+      <Button type="button" size="xs" variant="outline" onClick={onCancel}>
+        <X className="size-3" />
+        {t('zotz.agentQueue.cancel', 'Cancel')}
+      </Button>
+      <Button type="button" size="xs" onClick={onForceStart}>
+        <Play className="size-3" />
+        {t('zotz.agentQueue.forceStart', 'Launch anyway')}
+      </Button>
+    </div>
+  )
+}
+
 function RunningCard({
   agent,
   props,
@@ -240,21 +263,12 @@ export function ZotzAgentQueueBoard(props: ZotzAgentQueueBoardProps): React.JSX.
                       })}
                     </span>
                   </div>
-                  <div className="flex flex-wrap justify-end gap-1.5">
-                    <Button
-                      type="button"
-                      size="xs"
-                      variant="outline"
-                      onClick={() => props.onCancel(task.id)}
-                    >
-                      <X className="size-3" />
-                      {t('zotz.agentQueue.cancel', 'Cancel')}
-                    </Button>
-                    <Button type="button" size="xs" onClick={() => props.onForceStart(task.id)}>
-                      <Play className="size-3" />
-                      {t('zotz.agentQueue.forceStart', 'Launch anyway')}
-                    </Button>
-                  </div>
+                  {props.onCancel && props.onForceStart ? (
+                    <QueuedActions
+                      onCancel={() => props.onCancel?.(task.id)}
+                      onForceStart={() => props.onForceStart?.(task.id)}
+                    />
+                  ) : null}
                 </Card>
               ))}
         </Column>

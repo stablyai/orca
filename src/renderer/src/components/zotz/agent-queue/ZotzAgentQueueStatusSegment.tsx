@@ -20,9 +20,10 @@ import { parsePaneKey } from '../../../../../shared/workspace-layout/stable-pane
 import { STATUS_BAR_CONTEXT_MENU_EXEMPT_PROPS } from '../../status-bar/composition/status-bar-context-menu-policy'
 import { navigateResourceSessionToTab } from '../../status-bar/resources/session-actions/resource-session-navigation'
 import { cn } from '@/lib/class-names'
-import { ZotzAgentQueueBoard } from './ZotzAgentQueueBoard'
+import { ZotzAgentQueueMachines } from './ZotzAgentQueueMachines'
 import { formatZotzGb } from './zotz-memory-format'
 import { useZotzAgentQueue } from './zotz-agent-queue-store'
+import { useZotzHostAgentQueues } from './zotz-host-agent-queue-store'
 
 /** Status bar entry for the agent queue: free memory, how many wait, and the board on click. */
 export function ZotzAgentQueueStatusSegment({
@@ -32,6 +33,7 @@ export function ZotzAgentQueueStatusSegment({
 }): React.JSX.Element | null {
   const t = useTranslate()
   const snapshot = useZotzAgentQueue()
+  const hostQueues = useZotzHostAgentQueues()
   const [open, setOpen] = useState(false)
   const now = useNow(30_000, open)
   const worktreesByRepo = useAppStore(selectWorktreesByRepo)
@@ -53,7 +55,11 @@ export function ZotzAgentQueueStatusSegment({
   }
 
   const memory = snapshot.memory
-  const queued = snapshot.queued.length
+  // Free memory is this machine's; the count covers every machine, so a server's wait shows here too.
+  const queued = [...hostQueues.values()].reduce(
+    (sum, queue) => sum + queue.queued.length,
+    snapshot.queued.length
+  )
   const label = memory
     ? queued > 0
       ? t('zotz.agentQueue.segment.withQueue', '{{free}} GB free · {{queued}} queued', {
@@ -98,18 +104,15 @@ export function ZotzAgentQueueStatusSegment({
             <DialogDescription>
               {t(
                 'zotz.agentQueue.board.description',
-                'Agents start when they fit in memory; the rest wait their turn here.'
+                'Each machine has its own memory: its agents start when they fit there, the rest wait their turn.'
               )}
             </DialogDescription>
           </DialogHeader>
-          <ZotzAgentQueueBoard
-            snapshot={snapshot}
+          <ZotzAgentQueueMachines
             now={now}
             workspaceName={(worktreeId) =>
               worktreeId ? (names.get(worktreeId) ?? worktreeId) : ''
             }
-            onForceStart={(id) => void window.api.zotzAgentQueue.forceStart(id)}
-            onCancel={(id) => void window.api.zotzAgentQueue.cancel(id)}
             onOpenPane={(paneKey) => {
               const tabId = parsePaneKey(paneKey)?.tabId
               if (!tabId) {

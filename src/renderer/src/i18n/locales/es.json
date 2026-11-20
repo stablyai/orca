@@ -24299,7 +24299,7 @@
         "doneEmpty": "Todavía no hay corridas terminadas",
         "doneRun": "{{minutes}} min · pico {{peak}} GB",
         "title": "Cola de agentes",
-        "description": "Los agentes arrancan cuando caben en memoria; los demás esperan su turno aquí.",
+        "description": "Cada máquina tiene su propia memoria: sus agentes arrancan cuando caben ahí y los demás esperan su turno.",
         "gbAmount": "{{gb}} GB",
         "gbEstimate": "~{{gb}} GB"
       },
@@ -24315,7 +24315,14 @@
       "dismissCanceled": "Quitar aviso",
       "canceledMark": "Cancelado",
       "queuedMark": "En cola",
-      "queuedFor": "En cola · {{minutes}} min"
+      "queuedFor": "En cola · {{minutes}} min",
+      "machines": {
+        "thisDevice": "Este equipo",
+        "queued": "{{count}} en cola",
+        "working": "{{count}} trabajando",
+        "review": "{{count}} por revisar",
+        "readOnly": "Actualiza Zotz en {{host}} para cancelar o lanzar sus esperas desde aquí."
+      }
     },
     "sidebar": {
       "home": "Inicio",
