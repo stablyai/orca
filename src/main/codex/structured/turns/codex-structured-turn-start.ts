@@ -272,5 +272,5 @@ export async function dispatchCodexTurn(
       answeredAt ?? session.dispatchEchoes.tick()
     )
   }
-  return { state: 'admitted', ranOptions: { ...session.appliedTurnOptions } }
+  return { state: 'admitted', written: true, ranOptions: { ...session.appliedTurnOptions } }
 }

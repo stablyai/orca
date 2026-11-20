@@ -97,8 +97,9 @@ export type AgentSessionDispatchOutcome =
       state: 'accepted'
       providerIdentity: AgentJournalItemIdentity
     } & AgentSessionRanOptionsEvidence)
-  /** Transport admission stays pending until provider acknowledgement; elapsed time never proves unknown delivery. */
-  | ({ state: 'admitted' } & AgentSessionRanOptionsEvidence)
+  /** Transport admission stays pending until provider acknowledgement; elapsed time never proves unknown delivery.
+   *  `written`: the provider has taken the whole write, so an idle agent's turn has begun. */
+  | ({ state: 'admitted'; written?: true } & AgentSessionRanOptionsEvidence)
   /** Generate rejection words with agentSessionFailureWords; answeredInTurn identifies an already-ended answering turn. */
   | ({
       state: 'rejected'

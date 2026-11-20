@@ -206,7 +206,7 @@ export async function beginSubmissionHandover(
         if (outcome?.state !== 'unknown' && (!unwritten || !closing)) {
           await resolveHandover(ctx, clientMessageId, outcome)
         }
-        if (outcome?.state === 'admitted' && !unwritten) {
+        if (outcome?.state === 'admitted' && outcome.written && !unwritten) {
           await markHandoverWritten(ctx, clientMessageId)
         }
         await commit(async () => {

@@ -19,7 +19,9 @@ export function applyJournalDomainDispatchWritten(
     throw new Error('journal dispatch-written requires its writer transaction')
   }
   const head = db
-    .prepare(`SELECT last_sequence FROM journal_chat_state WHERE session_id=? AND epoch=?`)
+    .prepare(
+      `SELECT last_sequence,highest_fence FROM journal_chat_state WHERE session_id=? AND epoch=?`
+    )
     .get(target.sessionId, target.epoch)
   if (!head) {
     throw new Error('journal dispatch-written targets a retired chat epoch')
@@ -45,6 +47,7 @@ export function applyJournalDomainDispatchWritten(
     submission.writtenAt !== undefined ||
     !attempt.handover ||
     attempt.handover.fence !== operation.fence ||
+    operation.fence < Number(head.highest_fence) ||
     attempt.handover.scope?.kind !== 'thread'
   ) {
     return result
@@ -59,10 +62,10 @@ export function applyJournalDomainDispatchWritten(
     target,
     sequence,
     savedAt,
-    { items: [], submissions: [operation.clientMessageId], cards: [] },
+    // Not `submissions`: that would rebuild the queue and resend the unchanged message.
+    { items: [], submissions: [], cards: [], writtenSubmissions: [operation.clientMessageId] },
     { fence: operation.fence, observedAt: savedAt }
   )
   result.cursor = { epoch: target.epoch, sequence }
-  result.inputChanged = true
   return result
 }

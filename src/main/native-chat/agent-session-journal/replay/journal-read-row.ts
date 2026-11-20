@@ -13,6 +13,8 @@ export type JournalOutcomeReadRow = {
   seq: number
   itemIds: string[]
   submissionIds: string[]
+  /** Submissions whose only change is their writtenAt stamp; their messages are unchanged. */
+  writtenSubmissionIds?: string[]
 }
 export type JournalReadRow = JournalRow | JournalOutcomeReadRow
 /** `through` is the highest sequence the read covered, which may store no record of its own. */

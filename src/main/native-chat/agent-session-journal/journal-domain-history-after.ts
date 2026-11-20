@@ -164,7 +164,10 @@ function readJournalDomainEvents(
         ...(changes.removedItemIds ?? []),
         ...(queueLinks ? changedQueueSourceKeys(db, head, changes.cards, queueLinks) : [])
       ],
-      submissionIds: changes.submissions
+      submissionIds: changes.submissions,
+      ...(changes.writtenSubmissions?.length
+        ? { writtenSubmissionIds: changes.writtenSubmissions }
+        : {})
     })
   }
   return {
@@ -211,7 +214,8 @@ function eventChanges(json: string): JournalDomainEventChanges | null {
   return Array.isArray(changes?.items) &&
     changes.items.every((item) => typeof item?.itemId === 'string') &&
     ids(changes.submissions) &&
-    (changes.removedItemIds === undefined || ids(changes.removedItemIds))
+    (changes.removedItemIds === undefined || ids(changes.removedItemIds)) &&
+    (changes.writtenSubmissions === undefined || ids(changes.writtenSubmissions))
     ? changes
     : null
 }

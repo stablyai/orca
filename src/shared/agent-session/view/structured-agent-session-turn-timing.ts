@@ -108,13 +108,28 @@ function readStructuredAgentJournalTurns(
   return { byAnchor, byTurnId }
 }
 
+// Streaming frames keep the submissions array, so its stamp index is built once per array.
+const writtenSendsBySubmissions = new WeakMap<
+  readonly AgentJournalSubmission[],
+  ReadonlyMap<string, number>
+>()
+
+/** Each stamped send's writtenAt by its own key and its provider alias, which a turn may name instead. */
 function writtenSends(submissions: readonly AgentJournalSubmission[]): ReadonlyMap<string, number> {
+  const cached = writtenSendsBySubmissions.get(submissions)
+  if (cached) {
+    return cached
+  }
   const written = new Map<string, number>()
   for (const submission of submissions) {
     if (submission.writtenAt !== undefined) {
       written.set(agentJournalSubmissionKey(submission.clientMessageId), submission.writtenAt)
+      if (submission.providerItemId) {
+        written.set(submission.providerItemId, submission.writtenAt)
+      }
     }
   }
+  writtenSendsBySubmissions.set(submissions, written)
   return written
 }
 
@@ -142,8 +157,8 @@ export function structuredAgentTurnOpeningSendPending(
     turnKey !== undefined &&
     submissions.some(
       (submission) =>
-        agentJournalSubmissionKey(submission.clientMessageId) === turnKey &&
-        agentJournalSubmissionAwaitsAgent(submission)
+        agentJournalSubmissionAwaitsAgent(submission) &&
+        agentJournalSubmissionKey(submission.clientMessageId) === turnKey
     )
   )
 }
