@@ -1,4 +1,5 @@
 import type { StateCreator } from 'zustand'
+import { chatPaneAddressTabId } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
 import type { AgentAttentionUnreadReason } from '@/attention/agent-attention-contract'
 import type { AppState } from '../../types'
 import type { WorkspaceAttentionSlice } from './workspace-attention-contract'
@@ -183,7 +184,14 @@ export const createWorkspaceAttentionSlice: StateCreator<
       }
       // Agent acknowledgement may already have removed this scan's completion markers.
       if (
-        removeAndDismiss(targets.map((target) => target.tabId)) !== null ||
+        removeAndDismiss(
+          // A chat's pane markers name its conversation address, not its tab.
+          targets.flatMap((target) =>
+            target.sessionId === undefined
+              ? [target.tabId]
+              : [target.tabId, chatPaneAddressTabId(target.sessionId)]
+          )
+        ) !== null ||
         markersRead ||
         screenArrived
       ) {
