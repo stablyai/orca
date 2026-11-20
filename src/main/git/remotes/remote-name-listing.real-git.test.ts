@@ -33,7 +33,7 @@ afterEach(async () => {
   await rm(root, { recursive: true, force: true })
 })
 
-it.each(['folder', 'linked worktree', 'escaped condition', 'reftable'])(
+it.for(['folder', 'linked worktree', 'escaped condition', 'reftable'])(
   'refreshes branch-conditional remotes immediately in a %s',
   async (kind, context) => {
     try {
@@ -90,7 +90,7 @@ it.each(['folder', 'linked worktree', 'escaped condition', 'reftable'])(
     )
     expect(await isRemoteListedAbsent(repoPath, 'origin')).toBe(false)
     expect(await listCachedRemoteNames(repoPath)).toEqual(['origin'])
-    await git(repoPath, 'checkout', kind === 'folder' ? 'nope-remote' : 'else-remote')
+    await git(repoPath, 'checkout', kind === 'linked worktree' ? 'else-remote' : 'nope-remote')
     expect(await listCachedRemoteNames(repoPath)).toEqual([])
   }
 )

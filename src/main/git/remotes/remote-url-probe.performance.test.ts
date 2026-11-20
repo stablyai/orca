@@ -1,7 +1,7 @@
 import type * as FileSystem from 'node:fs/promises'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { gitExecFileAsyncMock, headReadMock } = vi.hoisted(() => ({
@@ -14,7 +14,7 @@ vi.mock('node:fs/promises', async (importOriginal) => {
   return {
     ...fs,
     readFile: (...args: Parameters<typeof fs.readFile>) => {
-      if (String(args[0]).endsWith('/HEAD')) {
+      if (basename(String(args[0])) === 'HEAD') {
         headReadMock()
       }
       return fs.readFile(...args)
