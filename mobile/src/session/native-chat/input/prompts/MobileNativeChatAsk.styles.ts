@@ -2,6 +2,7 @@ import { StyleSheet } from 'react-native'
 import {
   colors,
   concentricRadius,
+  feedback,
   radii,
   spacing,
   typography
@@ -111,6 +112,15 @@ export const mobileNativeChatAskStyles = themedStyleSheet(() => ({
   nextSkip: {
     backgroundColor: 'transparent',
     borderColor: colors.choiceBorder
+  },
+  nextSubmitting: {
+    opacity: feedback.pressedOpacity
+  },
+  nextTextHidden: {
+    opacity: 0
+  },
+  nextSpinner: {
+    ...StyleSheet.absoluteFill
   },
   nextText: {
     color: colors.bgBase,

@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from 'react'
-import { Keyboard, Pressable, ScrollView, Text, View } from 'react-native'
+import { ActivityIndicator, Keyboard, Pressable, ScrollView, Text, View } from 'react-native'
 import { Check } from 'lucide-react-native'
 import {
   nativeChatAnswerOperationEvidence,
@@ -18,6 +18,7 @@ import {
   toggleAskOption
 } from '../../../../../../src/shared/native-chat/input/questions/native-chat-ask-card-rules'
 import { colors, pressedStyle } from '../../../../theme/mobile-theme'
+import { triggerSelection } from '../../../../platform/haptics/haptics'
 import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
 import type { Translate } from '../../../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
@@ -208,6 +209,7 @@ export function MobileNativeChatAsk({
 
   const confirm = (): void => {
     const action = askConfirmAction({ isLast, anyAnswered: anyAnswered() })
+    triggerSelection()
     if (action === 'cancel') {
       void cancel()
     } else if (action === 'proceed') {
@@ -347,14 +349,31 @@ export function MobileNativeChatAsk({
             style={({ pressed }) => [
               styles.next,
               confirmSkips && styles.nextSkip,
-              pressed && pressedStyle
+              pressed && pressedStyle,
+              submitting && styles.nextSubmitting
             ]}
             onPress={confirm}
             disabled={submitting}
+            accessibilityRole="button"
+            accessibilityState={{ disabled: submitting, busy: submitting }}
           >
-            <Text style={[styles.nextText, confirmSkips && styles.nextSkipText]}>
+            {/* Keep the label laid out so the button width doesn't jump under the spinner. */}
+            <Text
+              style={[
+                styles.nextText,
+                confirmSkips && styles.nextSkipText,
+                submitting && styles.nextTextHidden
+              ]}
+            >
               {confirmLabels(t)[confirmLabel]}
             </Text>
+            {submitting ? (
+              <ActivityIndicator
+                size="small"
+                color={confirmSkips ? colors.textPrimary : colors.bgBase}
+                style={styles.nextSpinner}
+              />
+            ) : null}
           </Pressable>
         </View>
       )}
