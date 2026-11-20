@@ -24,8 +24,9 @@ function withOrcaText(existing: string | null, rawText: string): string {
   // Only markers alone on their lines count, so text that quotes them is left alone; the last
   // pair wins, so a stray one the user wrote earlier cannot swallow their text.
   const marks = [...existing.matchAll(/^<!-- orca:(begin|end) -->\r?$/gm)]
-  const end = marks.findLast((mark) => mark[1] === 'end')
-  const start = end && marks.findLast((mark) => mark[1] === 'begin' && mark.index < end.index)
+  // Take the last begin that is followed by an end with no other begin between them.
+  const start = marks.findLast((mark, i) => mark[1] === 'begin' && marks[i + 1]?.[1] === 'end')
+  const end = start && marks[marks.indexOf(start) + 1]
   if (start && end) {
     const endAt = end.index + end[0].length
     return existing.slice(0, start.index) + block + existing.slice(endAt)

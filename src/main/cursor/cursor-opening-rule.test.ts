@@ -50,4 +50,31 @@ describe('Cursor opening rule', () => {
     await undoSecond()
     expect(await readdir(home)).toEqual([])
   })
+
+  it('keeps a user file with the Orca header under a non-UUID sibling name', async () => {
+    const rules = join(home, '.cursor', 'rules')
+    await mkdir(rules, { recursive: true })
+    await writeFile(rulePath(), 'my own rule')
+    const copy = `orca-standing-instructions-${'a'.repeat(36)}.mdc`
+    const body = "---\ndescription: Orca's standing instructions for this chat\nmine\n"
+    await writeFile(join(rules, copy), body)
+    const undo = await placeCursorOpeningRule(home, 'text')
+    expect(await readFile(join(rules, copy), 'utf8')).toBe(body)
+    await undo()
+  })
+
+  it('holds opens that spell the same folder differently', async () => {
+    const first = await placeCursorOpeningRule(home, 'first')
+    let secondPlaced = false
+    const second = placeCursorOpeningRule(`${home}/`, 'second').then((undo) => {
+      secondPlaced = true
+      return undo
+    })
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(secondPlaced).toBe(false)
+    await first()
+    await (
+      await second
+    )()
+  })
 })

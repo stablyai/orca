@@ -8,6 +8,7 @@ import {
   mkdir,
   readdir,
   readFile,
+  realpath,
   rename,
   rm,
   rmdir,
@@ -43,7 +44,8 @@ async function isUserFile(path: string): Promise<boolean> {
 }
 
 const RULE_HEAD = `---\n${RULE_MARKER}\n`
-const LEFTOVER_NAME = /^orca-standing-instructions-[0-9a-f-]{36}\.mdc$/
+const LEFTOVER_NAME =
+  /^orca-standing-instructions-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.mdc$/
 const SIBLING_PREFIX = 'orca-standing-instructions-'
 
 /** Rules a crashed open left beside a user's file; every open of the folder holds the lock. */
@@ -70,15 +72,16 @@ export async function placeCursorOpeningRule(
   cwd: string,
   text: string
 ): Promise<() => Promise<void>> {
-  const previous = opening.get(cwd) ?? Promise.resolve()
+  const key = await realpath(cwd).catch(() => cwd)
+  const previous = opening.get(key) ?? Promise.resolve()
   let release!: () => void
   const held = previous.then(() => new Promise<void>((resolve) => (release = resolve)))
-  opening.set(cwd, held)
+  opening.set(key, held)
   await previous
   const releaseFolder = (): void => {
     release()
-    if (opening.get(cwd) === held) {
-      opening.delete(cwd)
+    if (opening.get(key) === held) {
+      opening.delete(key)
     }
   }
   const cursorDir = join(cwd, '.cursor')

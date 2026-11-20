@@ -57,4 +57,17 @@ describe('Hermes context file', () => {
     expect(content).toContain('second')
     expect(content).not.toContain('first')
   })
+
+  it('keeps notes between a complete block and a trailing stray end marker', async () => {
+    const path = join(dir, HERMES_CONTEXT_FILE)
+    await writeFile(
+      path,
+      'intro\n<!-- orca:begin -->\nold\n<!-- orca:end -->\nKEEP ME\n<!-- orca:end -->\n'
+    )
+    await writeHermesContextFile(dir, 'fresh')
+    const content = await readFile(path, 'utf8')
+    expect(content).toContain('KEEP ME')
+    expect(content).toContain('fresh')
+    expect(content).not.toContain('old')
+  })
 })
