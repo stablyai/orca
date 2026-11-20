@@ -1,6 +1,5 @@
 import { WorktreeRemovalIncarnationChangedError } from '../../../../shared/worktree/removal/worktree-checkout-identity'
-import type { WorktreeCheckoutSpawnGuard } from '../../../../shared/worktree/removal/worktree-checkout-identity'
-import { execFile, type ChildProcess, type ExecFileOptions } from 'node:child_process'
+import { execFile, type ChildProcess } from 'node:child_process'
 import { recordSubprocessSpawn } from '../../../diagnostics/main-thread-churn-probe'
 import { endSubprocessStdin } from '../../../../shared/process-streams/subprocess-stdin-write'
 import { createPosixGroupTermination } from '@orca/process-host/posix-group-termination'
@@ -10,7 +9,6 @@ import { resolveSelectedLocalCommand } from '../../../ipc/command-path/command-p
 import { createAbortError } from './abort-error'
 import { endAbandonedWorkerChild, killSpawnedCommandTree } from './spawned-command-tree-kill'
 import { DEFAULT_GIT_MAX_BUFFER } from '../git-exec-options'
-import type { GitAdmissionTier } from '../../../../shared/rpc-contract/source-control/git-admission-tier-params'
 
 import { observeCapturedStderr, spawnedExecFile, workerExecFile } from './worker-exec-file'
 import { emptyExecFileOutput, isExecFileResultObject } from './exec-file-result-shape'
@@ -21,28 +19,8 @@ import {
   type WorkerThreadChildProcess
 } from '../../../worker-thread-child-process/worker-thread-child-process'
 
-export type ExecFileCaptureOptions = Omit<ExecFileOptions, 'timeout'> & {
-  timeout?: number
-  stdin?: string
-  terminationBarrier?: boolean
-  /** Normal close or proven termination; mutation fences wait for this. */
-  onChildTerminated?: () => void
-  /** The child's worker died before its end was proven: capacity such as Git admission may return, fences may not. */
-  onWorkerLost?: () => void
-  /** The caller holds no mutation fence, so a lost worker ends the child's lifetime without proof (implied without onChildTerminated). */
-  workerLossEndsLifetime?: boolean
-  admissionTier?: GitAdmissionTier
-  createTimeoutError?: () => Error
-  /** Called once when the deadline — not an abort — is what ended the process. */
-  onDeadlineKill?: () => void
-  onStderr?: (chunk: string) => void
-  spawnOnWorkerThread?: boolean
-  worktreeCheckoutGuard?: WorktreeCheckoutSpawnGuard
-  /** Native Git only: launch an owned group and retain it after abnormal stop until proof. */
-  ownedPosixGroup?: boolean
-  /** Rechecked synchronously at the spawn call, after any async executable resolution. */
-  canStart?: () => boolean
-}
+export type { ExecFileCaptureOptions } from './exec-file-capture-options'
+import type { ExecFileCaptureOptions } from './exec-file-capture-options'
 
 export { execFileCaptureToTermination } from './exec-file-capture-to-termination'
 
