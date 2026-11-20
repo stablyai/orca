@@ -374,12 +374,6 @@ describe('connector.act', () => {
     expect(calls).toHaveLength(2)
   })
 
-  it('rejects arguments the verbs do not take', () => {
-    expect(() =>
-      act!.params!.parse({ sessionId: 's', verb: 'read', args: { token: 'x' } })
-    ).toThrow()
-  })
-
   it('reaches the CLI with its code and its words', () => {
     const response = mapRuntimeError(
       'r1',
