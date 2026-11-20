@@ -19,6 +19,7 @@ import {
   holdsThreadLock,
   keepsThreadLock,
   moveIdleThreadLockFolder,
+  type LockFolderBusy,
   WRITER_LOCKS
 } from './codex-thread-writer-locks'
 import { writeSharedSqliteHome } from './codex-account-sqlite-home-config'
@@ -72,7 +73,7 @@ const UNSHARE_PENDING = '.orca-unshare-pending'
  * `shared` once the home's history resolves to the store; `incomplete` when it does but some entry
  * failed to move (a later pass retries it); `private` when a step refused.
  */
-export type CodexAccountHistoryShareResult = 'shared' | 'incomplete' | 'private' | 'busy'
+export type CodexAccountHistoryShareResult = 'shared' | 'incomplete' | 'private' | LockFolderBusy
 
 export type CodexAccountHistoryShareArgs = {
   accountHome: string
@@ -244,10 +245,9 @@ export async function shareCodexAccountHistory(
         link(WRITER_LOCKS)
       )
       if (moved !== 'moved') {
-        return moved === 'held' &&
-          (await isCodexAccountHistoryLinked(args.accountHome, args.storeHome))
-          ? 'shared'
-          : 'busy'
+        const shared =
+          moved === 'held' && (await isCodexAccountHistoryLinked(args.accountHome, args.storeHome))
+        return shared ? 'shared' : moved === 'held' ? 'busy' : moved
       }
     } catch (error) {
       onWarning(error)

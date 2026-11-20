@@ -12,7 +12,8 @@ export const WRITER_LOCKS = 'thread-writer-locks'
 export const COORDINATION_LOCK = '.coordination.lock'
 const PROBE_TIMEOUT_MS = 10_000
 
-type ProbeAnswer = 'held' | 'idle' | 'unknown'
+// `unavailable`: the helper program couldn't start at all (no perl, no PowerShell).
+type ProbeAnswer = 'held' | 'idle' | 'unknown' | 'unavailable'
 type LockHold =
   | { answer: ProbeAnswer }
   | {
@@ -122,11 +123,15 @@ async function startProbe(dirs: string[], hold: boolean): Promise<LockHold | nul
   try {
     child = spawnProcess({ ...spec, stdio: 'pipe' })
   } catch {
-    return null
+    return { answer: 'unavailable' }
   }
+  let failedToStart = false
   const closed = new Promise<null>((resolve) => {
     child.once('close', () => resolve(null))
-    child.once('error', () => resolve(null))
+    child.once('error', () => {
+      failedToStart = child.pid === undefined
+      resolve(null)
+    })
   })
   for (const stream of [child.stdin, child.stdout, child.stderr]) {
     stream.on('error', () => {})
@@ -184,6 +189,9 @@ async function startProbe(dirs: string[], hold: boolean): Promise<LockHold | nul
     }
   }
   await stop()
+  if (answer === null && failedToStart) {
+    return { answer: 'unavailable' }
+  }
   if (answer === 'ready' || timedOut) {
     return null
   }
@@ -199,8 +207,13 @@ async function startProbe(dirs: string[], hold: boolean): Promise<LockHold | nul
  */
 async function sweepCodexThreadLocks(locksDir: string): Promise<boolean> {
   const probe = await startProbe([locksDir], false)
-  return probe ? probe.answer !== 'idle' : keepsThreadLock(locksDir)
+  return probe && probe.answer !== 'unavailable'
+    ? probe.answer !== 'idle'
+    : keepsThreadLock(locksDir)
 }
+
+// `no-helper`: busy because the helper can't run here and a thread lock file is left.
+export type LockFolderBusy = 'busy' | 'no-helper'
 
 /**
  * Moves the account's lock folder into the store's (`move`) with both folders' coordination held
@@ -208,18 +221,27 @@ async function sweepCodexThreadLocks(locksDir: string): Promise<boolean> {
  * so no thread ends up guarded by two files (a release deletes its lock by path, which the link
  * would point at the other writer's file). `held`: a Codex holds a thread lock in the account; the
  * store's own held locks don't count. `busy`: coordination was taken, or a thread is locked in both.
+ * `no-helper`: the helper can't start and a thread lock file is left, which only the sweep could clear.
  */
 export async function moveIdleThreadLockFolder(
   accountHome: string,
   storeHome: string,
   move: () => Promise<unknown>
-): Promise<'moved' | 'held' | 'busy'> {
+): Promise<'moved' | 'held' | LockFolderBusy> {
   const accountLocks = join(accountHome, WRITER_LOCKS)
   // A coordination file a Codex created mid-move would go unheld.
   await mkdir(accountLocks, { recursive: true })
   const hold = await startProbe([accountLocks, join(storeHome, WRITER_LOCKS)], true)
   if (hold?.answer === 'held') {
     return 'held'
+  }
+  // Without the helper (a Linux with no perl), the rule from before the sweep: a thread lock file
+  // blocks, otherwise the folder moves unheld, rather than staying busy for good.
+  if (hold?.answer === 'unavailable') {
+    if (await keepsThreadLock(accountLocks)) {
+      return 'no-helper'
+    }
+    return (await hasThreadLockConflict(accountHome, storeHome)) ? 'busy' : runMove(move)
   }
   // Without both coordination locks the move could link around a lock taken meanwhile.
   if (!hold || !('release' in hold)) {
@@ -234,18 +256,22 @@ export async function moveIdleThreadLockFolder(
     if (process.platform === 'win32' ? !(await hold.releaseFirst()) : !hold.stillHeld()) {
       return 'busy'
     }
-    try {
-      await move()
-    } catch (error) {
-      if (isStartingCodexError(error)) {
-        return 'busy'
-      }
-      throw error
-    }
-    return 'moved'
+    return await runMove(move)
   } finally {
     await hold.release()
   }
+}
+
+async function runMove(move: () => Promise<unknown>): Promise<'moved' | 'busy'> {
+  try {
+    await move()
+  } catch (error) {
+    if (isStartingCodexError(error)) {
+      return 'busy'
+    }
+    throw error
+  }
+  return 'moved'
 }
 
 // A Codex that started meanwhile: a file it opened (Windows) or the folder it recreated mid-swap.

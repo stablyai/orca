@@ -43,14 +43,14 @@ describe.skipIf(process.platform === 'win32')(
       expect(move).toHaveBeenCalledTimes(1)
     })
 
-    it('stays busy while a thread lock file is left', async () => {
+    it('reports no-helper while a thread lock file is left', async () => {
       writeFileSync(
         join(account, 'thread-writer-locks', '0199a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5c.lock'),
         ''
       )
       const move = vi.fn(async () => {})
 
-      await expect(moveIdleThreadLockFolder(account, store, move)).resolves.toBe('busy')
+      await expect(moveIdleThreadLockFolder(account, store, move)).resolves.toBe('no-helper')
       expect(move).not.toHaveBeenCalled()
     })
   }
