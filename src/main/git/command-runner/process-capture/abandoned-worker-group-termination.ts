@@ -5,9 +5,8 @@ import {
 } from '@orca/process-host/process-tree-termination'
 import type { WorkerThreadChildProcess } from '../../../worker-thread-child-process/worker-thread-child-process'
 
-const ABANDONED_GROUP_FIRST_RETRY_MS = 1_000
-const ABANDONED_GROUP_ATTEMPTS = 5
-const ABANDONED_GROUP_SLOW_CHECK_MS = 60_000
+const ABANDONED_GROUP_FIRST_CHECK_MS = 1_000
+const ABANDONED_GROUP_MAX_CHECK_MS = 60 * 60_000
 
 /** A dead worker can't stop or reap its owned POSIX group, so main ends it; the unreaped root keeps the group id reserved until its exit was reported. */
 export function endAbandonedWorkerGroup(
@@ -30,28 +29,27 @@ export function endAbandonedWorkerGroup(
       onTerminated()
     }
   }
-  // A write's fence waits for proof; past the bursts, one table read a minute keeps main's cost flat.
-  const checkSlowly = (pid: number): void => {
+  // SIGKILL is already pending after the first kill, so later checks are one table read each, backing off to hourly.
+  const checkLater = (pid: number, delayMs: number): void => {
     setTimeout(() => {
       void posixProcessGroupQuiet(pid)
         .catch(() => false)
-        .then((quiet) => (quiet ? reportEnded() : checkSlowly(pid)))
-    }, ABANDONED_GROUP_SLOW_CHECK_MS).unref?.()
+        .then((quiet) =>
+          quiet
+            ? reportEnded()
+            : checkLater(pid, Math.min(delayMs * 2, ABANDONED_GROUP_MAX_CHECK_MS))
+        )
+    }, delayMs).unref?.()
   }
-  const attempt = (retryMs: number, left: number): void => {
-    void forceTerminateProcessTree(group)
-      .catch(() => false)
-      .then((ended) => {
-        if (ended) {
-          reportEnded()
-        } else if (left > 1) {
-          setTimeout(() => attempt(retryMs * 2, left - 1), retryMs).unref?.()
-        } else if (!lifetimeEndsOnLoss && child.pid) {
-          checkSlowly(child.pid)
-        }
-      })
-  }
-  attempt(ABANDONED_GROUP_FIRST_RETRY_MS, ABANDONED_GROUP_ATTEMPTS)
+  void forceTerminateProcessTree(group)
+    .catch(() => false)
+    .then((ended) => {
+      if (ended) {
+        reportEnded()
+      } else if (!lifetimeEndsOnLoss && child.pid) {
+        checkLater(child.pid, ABANDONED_GROUP_FIRST_CHECK_MS)
+      }
+    })
   if (lifetimeEndsOnLoss) {
     onTerminated()
   }
