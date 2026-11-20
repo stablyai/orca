@@ -28811,7 +28811,10 @@
         "google": "Gmail, Calendar and Drive, as you"
       },
       "mcp": {
-        "adding": "Adding {{app}}…"
+        "adding": "Adding {{app}}…",
+        "site": "Pick the site your {{app}} account is on",
+        "siteLabel": "Site",
+        "add": "Add {{app}}"
       },
       "unsupported": "This app isn’t supported yet",
       "cantReach": "Can’t reach {{app}}",
