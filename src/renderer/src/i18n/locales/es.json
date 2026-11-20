@@ -12898,7 +12898,7 @@
         },
         "PluginListEmptyStates": {
           "noFilterMatches": "Ningún plugin coincide con estos filtros",
-          "clearBoth": "Borrar todo",
+          "clearBoth": "Borrar búsqueda y filtros",
           "pageGone": "Este plugin ya no está instalado ni listado."
         },
         "pluginContributions": {

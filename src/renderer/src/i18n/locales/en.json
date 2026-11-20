@@ -14500,7 +14500,7 @@
         },
         "PluginListEmptyStates": {
           "noFilterMatches": "No plugins match these filters",
-          "clearBoth": "Clear all",
+          "clearBoth": "Clear search and filters",
           "pageGone": "This plugin is no longer installed or listed."
         },
         "pluginContributions": {

@@ -13042,7 +13042,7 @@
         },
         "PluginListEmptyStates": {
           "noFilterMatches": "沒有符合這些篩選條件的外掛",
-          "clearBoth": "全部清除",
+          "clearBoth": "清除搜尋和篩選",
           "pageGone": "此外掛已不再安裝或列出。"
         },
         "PluginManager": {

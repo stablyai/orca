@@ -13334,7 +13334,7 @@
         },
         "PluginListEmptyStates": {
           "noFilterMatches": "Bu filtrelerle eşleşen eklenti yok",
-          "clearBoth": "Tümünü temizle",
+          "clearBoth": "Aramayı ve filtreleri temizle",
           "pageGone": "Bu eklenti artık yüklü değil veya listelenmiyor."
         },
         "PluginManager": {

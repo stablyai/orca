@@ -13218,7 +13218,7 @@
         },
         "PluginListEmptyStates": {
           "noFilterMatches": "Keine Plugins entsprechen diesen Filtern",
-          "clearBoth": "Alle zurücksetzen",
+          "clearBoth": "Suche und Filter zurücksetzen",
           "pageGone": "Dieses Plugin ist nicht mehr installiert oder gelistet."
         },
         "PluginManager": {

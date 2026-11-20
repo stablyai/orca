@@ -12613,7 +12613,7 @@
         },
         "PluginListEmptyStates": {
           "noFilterMatches": "이 필터와 일치하는 플러그인이 없습니다",
-          "clearBoth": "모두 지우기",
+          "clearBoth": "검색 및 필터 지우기",
           "pageGone": "이 플러그인은 더 이상 설치되어 있거나 목록에 없습니다."
         },
         "pluginContributions": {

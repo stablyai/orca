@@ -13390,7 +13390,7 @@
         },
         "PluginListEmptyStates": {
           "noFilterMatches": "没有与这些筛选条件匹配的插件",
-          "clearBoth": "全部清除",
+          "clearBoth": "清除搜索和筛选",
           "pageGone": "此插件已不再安装或列出"
         },
         "pluginContributions": {

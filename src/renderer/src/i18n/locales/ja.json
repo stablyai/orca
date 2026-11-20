@@ -13309,7 +13309,7 @@
         },
         "PluginListEmptyStates": {
           "noFilterMatches": "これらのフィルターに一致するプラグインはありません",
-          "clearBoth": "すべてクリア",
+          "clearBoth": "検索とフィルターをクリア",
           "pageGone": "このプラグインはインストールもリスト掲載もされていません。"
         },
         "pluginContributions": {

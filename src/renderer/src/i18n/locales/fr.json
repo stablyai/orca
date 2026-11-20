@@ -13167,7 +13167,7 @@
         },
         "PluginListEmptyStates": {
           "noFilterMatches": "Aucun plugin ne correspond à ces filtres",
-          "clearBoth": "Tout effacer",
+          "clearBoth": "Effacer la recherche et les filtres",
           "pageGone": "Ce plugin n’est plus installé ni référencé."
         },
         "pluginContributions": {

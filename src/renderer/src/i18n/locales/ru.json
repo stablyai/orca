@@ -13563,7 +13563,7 @@
         },
         "PluginListEmptyStates": {
           "noFilterMatches": "Нет плагинов, подходящих под эти фильтры",
-          "clearBoth": "Очистить всё",
+          "clearBoth": "Сбросить поиск и фильтры",
           "pageGone": "Этот плагин больше не установлен и не указан в каталоге."
         },
         "PluginManager": {
