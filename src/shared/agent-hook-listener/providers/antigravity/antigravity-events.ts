@@ -208,7 +208,8 @@ export function normalizeAntigravityEvent(
     if (resolvedModel) {
       paneState.leadModelSince = undefined
     } else if (resetsTurn) {
-      paneState.leadModelSince = now
+      // agy may stamp transcript lines in whole seconds, so a model from the turn's first second counts.
+      paneState.leadModelSince = Math.floor(now / 1000) * 1000
     }
   }
 

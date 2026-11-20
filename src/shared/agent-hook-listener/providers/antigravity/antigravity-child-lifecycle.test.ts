@@ -1,7 +1,7 @@
 import { appendFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, expect, it } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { createHookListenerState } from '../../listener-state'
 import { normalizeHookPayload } from '../../normalization/normalize-hook-payload'
 import {
@@ -227,6 +227,22 @@ it('follows the automatic model a later turn resolves', async () => {
     `${JSON.stringify({ type: 'PLANNER_RESPONSE', model: 'model-c', created_at: '2999-01-01T00:00:00Z' })}\n`
   )
   expect((await poll())?.payload.model).toBe('model-c')
+})
+
+it('follows an automatic model stamped in the whole second its turn started', async () => {
+  vi.useFakeTimers({ toFake: ['Date'] })
+  try {
+    vi.setSystemTime(Date.parse('2030-01-01T12:00:00.250Z'))
+    hook('root', 'Stop', { fullyIdle: true })
+    hook('root', 'PreInvocation', { lastUserInput: 'Next', modelName: 'auto' })
+    appendFileSync(
+      join(dir, 'root', '.system_generated', 'logs', 'transcript.jsonl'),
+      `${JSON.stringify({ type: 'PLANNER_RESPONSE', model: 'model-c', created_at: '2030-01-01T12:00:00Z' })}\n`
+    )
+    expect((await poll())?.payload.model).toBe('model-c')
+  } finally {
+    vi.useRealTimers()
+  }
 })
 
 it('keeps a root command monitoring after its child finishes', async () => {
