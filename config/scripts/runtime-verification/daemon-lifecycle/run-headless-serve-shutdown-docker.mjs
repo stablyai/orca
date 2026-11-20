@@ -20,7 +20,7 @@ if (
 ) {
   fail('--all-entrypoints cannot be combined with individual case options')
 }
-// AppRun alone is skipped: appimage runs it with pid delivery, launcher covers process-group INT.
+// Bare AppRun is skipped: appimage TERMs/INTs the Electron AppRun starts; launcher covers process-group INT.
 const cases = allEntrypoints
   ? [
       { entrypoint: 'launcher', signalTarget: 'app', intDelivery: 'foreground-process-group' },
