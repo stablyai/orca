@@ -157,44 +157,13 @@ function restoreMovedFileWithoutOverwrite(
       return
     }
   }
-  // Read under this name until it must be kept: from then on it is claimed under a name only this
-  // call uses, as another writer can move its own target to the shared held name meanwhile. A
-  // crash after the claim leaves it as a kept copy, with the target in place.
-  let from = sourcePath
-  const drop = (): void => rmSync(from, { force: true })
-  // Back under the held name, which the next guarded operation recovers first, unless taken.
-  const giveBack = (error: unknown): never => {
-    if (from !== sourcePath) {
-      try {
-        if (publishFileWithoutOverwrite(from, sourcePath)) {
-          drop()
-        }
-      } catch {
-        // No room for a link (a full disk): a rename needs none.
-        renameFileWithWindowsRetry(from, sourcePath)
-      }
-    }
-    throw error
-  }
+  const drop = (): void => rmSync(sourcePath, { force: true })
   // Named by content, so a repeated conflict finds its copy already kept; a name holding other
   // bytes (a kept copy edited since) moves on to the next. The target comes first.
   const name = held ? createHash('sha256').update(held).digest('hex').slice(0, 16) : null
   for (let attempt = 0; attempt <= (keep ? KEPT_NAME_ATTEMPTS : 0); attempt++) {
-    if (attempt === 1) {
-      if (name === null) {
-        break
-      }
-      // Named by content too: a claim a crash left behind holds the same bytes and is replaced.
-      const claimed = `${targetPath}.orca-kept-${name}-claimed`
-      try {
-        renameFileWithWindowsRetry(sourcePath, claimed)
-      } catch (error) {
-        if (isDefinitiveAbsence(error)) {
-          return
-        }
-        throw error
-      }
-      from = claimed
+    if (attempt > 0 && name === null) {
+      break
     }
     const path =
       attempt === 0 ? targetPath : `${targetPath}.orca-kept-${name}${keptSuffix(attempt)}`
@@ -207,28 +176,36 @@ function restoreMovedFileWithoutOverwrite(
     } catch (error) {
       free ||= attempt > 0 && isDefinitiveAbsence(error)
     }
+    if (!free) {
+      continue
+    }
     try {
-      // A link refuses a taken name, needs no free space and keeps the file's own permissions.
-      if (free && publishFileWithoutOverwrite(from, path)) {
+      // Kept by a rename into the free name: one step, so no crash leaves it anywhere else.
+      if (attempt > 0) {
+        renameFileWithWindowsRetry(sourcePath, path)
+        console.warn('[atomic-file] Kept an earlier version beside', targetPath, path)
+        return
+      }
+      // Back at the target only by a link, which refuses a name another writer took meanwhile.
+      if (publishFileWithoutOverwrite(sourcePath, path)) {
         drop()
-        if (attempt > 0) {
-          console.warn('[atomic-file] Kept an earlier version beside', targetPath, path)
-        }
         return
       }
     } catch (error) {
+      // Gone: another process already released this held file.
       if (isDefinitiveAbsence(error)) {
         return
       }
-      giveBack(error)
+      throw error
     }
   }
   if (!keep) {
     drop()
     return
   }
-  // Unreadable, or every content name holds other bytes: a copy per conflict would grow unbounded.
-  giveBack(new Error(`Could not keep an earlier version of ${targetPath}`))
+  // Left held, so the next guarded operation tries again: unreadable, or every content name holds
+  // other bytes and a copy per conflict would grow unbounded.
+  throw new Error(`Could not keep an earlier version of ${targetPath}`)
 }
 
 const KEPT_NAME_ATTEMPTS = 16

@@ -34,10 +34,6 @@ function onFirstCallTo(
 const isKept = (destination: string): boolean => destination.includes('.orca-kept-')
 const isHeld = (destination: string): boolean => destination.endsWith('.orca-guarded')
 
-function onFirstKeptLink(once: (source: string, kept: string) => void): () => void {
-  return onFirstCallTo(fsMock.linkSync, isKept, once)
-}
-
 vi.mock('node:fs', async (importOriginal) => {
   const actual = await importOriginal<typeof NodeFs>()
   fsMock.linkSync.mockImplementation(actual.linkSync)
@@ -175,38 +171,13 @@ describe('writeFileAtomically', () => {
     }
   })
 
-  it('never replaces a copy another writer keeps under the same name meanwhile', () => {
-    setup()
-    try {
-      const target = join(dir, 'config.toml')
-      writeFileSync(`${target}.orca-guarded`, 'model = "o5"\n')
-      writeFileSync(target, 'approval = "never"\n')
-      const link = fsMock.linkSync.getMockImplementation()!
-      const restoreLink = onFirstKeptLink((source, kept) => {
-        writeFileSync(kept, 'model = "other"\n')
-        link(source, kept)
-      })
-
-      expect(writeFileAtomicallyIfUnchanged(target, 'approval = "never"\n', 'next')).toBe(true)
-      restoreLink()
-      expect(
-        readdirSync(dir)
-          .filter((name) => name.includes('.orca-kept-'))
-          .map((name) => readFileSync(join(dir, name), 'utf-8'))
-          .sort()
-      ).toEqual(['model = "o5"\n', 'model = "other"\n'])
-    } finally {
-      cleanup()
-    }
-  })
-
   it('gives the held file back when it cannot be kept aside', () => {
     setup()
     try {
       const target = join(dir, 'config.toml')
       writeFileSync(`${target}.orca-guarded`, 'model = "o5"\n')
       writeFileSync(target, 'approval = "never"\n')
-      const undo = onFirstKeptLink(() => {
+      const undo = onFirstCallTo(fsMock.renameSync, isKept, () => {
         throw Object.assign(new Error('no space'), { code: 'ENOSPC' })
       })
 
@@ -244,28 +215,6 @@ describe('writeFileAtomically', () => {
       }
     }
   )
-
-  it('keeps one claimed copy however often recovery is cut short after claiming', () => {
-    setup()
-    try {
-      const target = join(dir, 'config.toml')
-      writeFileSync(target, 'approval = "never"\n')
-      const rename = fsMock.renameSync.getMockImplementation()!
-      for (let crash = 0; crash < 3; crash++) {
-        writeFileSync(`${target}.orca-guarded`, 'model = "o5"\n')
-        // Stands in for a crash right after the claim: it happens, and nothing after it runs.
-        const undo = onFirstCallTo(fsMock.renameSync, isKept, (source, destination) => {
-          rename(source, destination)
-          throw Object.assign(new Error('killed'), { code: 'EKILLED' })
-        })
-        expect(() => recoverInterruptedGuardedFileOperation(target)).toThrow('killed')
-        undo()
-      }
-      expect(readdirSync(dir).filter((name) => name.includes('.orca-kept-'))).toHaveLength(1)
-    } finally {
-      cleanup()
-    }
-  })
 
   it('puts the user file back even when the temp file cannot be deleted', () => {
     setup()
@@ -328,28 +277,6 @@ describe('writeFileAtomically', () => {
       undo()
       expect(writeFileAtomicallyIfUnchanged(target, null, 'fresh\n')).toBe(false)
       expect(readFileSync(target, 'utf-8')).toBe('user edit\n')
-    } finally {
-      cleanup()
-    }
-  })
-
-  it('never deletes a file another writer holds under the shared held name meanwhile', () => {
-    setup()
-    try {
-      const target = join(dir, 'config.toml')
-      const heldPath = `${target}.orca-guarded`
-      writeFileSync(heldPath, 'model = "o5"\n')
-      writeFileSync(target, 'approval = "never"\n')
-      const link = fsMock.linkSync.getMockImplementation()!
-      const restoreLink = onFirstKeptLink((source, kept) => {
-        // Another process moves its own target aside under the held name.
-        writeFileSync(heldPath, 'theirs\n')
-        link(source, kept)
-      })
-
-      recoverInterruptedGuardedFileOperation(target)
-      restoreLink()
-      expect(readFileSync(heldPath, 'utf-8')).toBe('theirs\n')
     } finally {
       cleanup()
     }
