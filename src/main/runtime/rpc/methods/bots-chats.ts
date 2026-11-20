@@ -155,6 +155,7 @@ export function botChatRecordRow(
     lastActivityAt: turn?.at ?? record.updatedAt,
     lastAsked: turn?.prompt ?? null,
     lastSaid: turn?.reply ?? null,
+    ...(record.neverStarted ? { neverStarted: true as const } : {}),
     home: id === homeRoot
   }
 }
