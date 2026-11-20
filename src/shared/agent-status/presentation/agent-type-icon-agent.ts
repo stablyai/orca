@@ -8,6 +8,7 @@ const ICONABLE_AGENT_TYPES: Record<TerminalAgent, true> = {
   codebuddy: true,
   openclaude: true,
   codex: true,
+  genie: true,
   autohand: true,
   opencode: true,
   opencode2: true,
