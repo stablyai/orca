@@ -235,7 +235,9 @@ function encodePowerShell(script: string): string {
 }
 
 function getWindowsPowerShellPath(systemRoot?: string): string {
-  return windowsPowerShellPath(systemRoot === undefined ? undefined : { SystemRoot: systemRoot })
+  // Why: a blank override would replace the resolver's view of the real env, hiding WINDIR on an
+  // install that lives off C:. Only a nonblank value is worth passing along (#44676 review).
+  return windowsPowerShellPath(systemRoot?.trim() ? { SystemRoot: systemRoot } : undefined)
 }
 
 function getRunner(environment: WindowsMobileFirewallEnvironment): PowerShellRunner {
