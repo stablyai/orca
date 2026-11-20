@@ -1,3 +1,4 @@
+import { useWorkspaceStatusColumns } from '../../workspace-status/presentation/use-workspace-board-statuses'
 import { useMemo, useState } from 'react'
 import { useAppStore } from '@/store/index'
 import { getAgentStatusEpochNow } from '@/lib/agent-status/evidence/agent-status-epoch-clock'
@@ -40,6 +41,9 @@ export function useVisibleWorkspaceKanbanWorktreeIds({
   const hideCliCreatedWorkspaces = useAppStore((s) => s.hideCliCreatedWorkspaces)
   const hideDetachedHeadWorkspaces = useAppStore((s) => s.hideDetachedHeadWorkspaces)
   const hideWorkspacesFromOtherDevices = useAppStore((s) => s.hideWorkspacesFromOtherDevices)
+  const hideWorkspacesByStatus = useAppStore((s) => s.hideWorkspacesByStatus)
+  const hiddenWorkspaceStatusIds = useAppStore((s) => s.hiddenWorkspaceStatusIds)
+  const statusColumns = useWorkspaceStatusColumns()
   const runtimeEnvironments = useAppStore((s) =>
     s.hideWorkspacesFromOtherDevices ? s.runtimeEnvironments : EMPTY_RUNTIME_ENVIRONMENTS
   )
@@ -92,6 +96,9 @@ export function useVisibleWorkspaceKanbanWorktreeIds({
         hideCliCreatedWorkspaces,
         hideDetachedHeadWorkspaces,
         hideWorkspacesFromOtherDevices,
+        hideWorkspacesByStatus,
+        hiddenWorkspaceStatusIds,
+        statusColumns,
         pairedDeviceIdsByEnvironment: hideWorkspacesFromOtherDevices
           ? getPairedDeviceIdsByEnvironment(runtimeEnvironments, runtimeStatusByEnvironmentId)
           : EMPTY_PAIRED_DEVICE_IDS_BY_ENVIRONMENT,
@@ -115,6 +122,9 @@ export function useVisibleWorkspaceKanbanWorktreeIds({
     hideCliCreatedWorkspaces,
     hideDetachedHeadWorkspaces,
     hideWorkspacesFromOtherDevices,
+    hideWorkspacesByStatus,
+    hiddenWorkspaceStatusIds,
+    statusColumns,
     alwaysShowDefaultBranchWorkspace,
     workspaceHostScope,
     visibleWorkspaceHostIds,

@@ -43,6 +43,7 @@ import {
 import { createHostWorkspaceStatusActions } from './ui-slice-host-workspace-statuses'
 import { createUiBotPreferenceActions } from './ui-slice-bot-preference-actions'
 import { toggleCollapsedGroupSet } from './collapsed-group-toggle'
+import { NO_WORKSPACE_ROW_FILTERS } from '../../../../../shared/workspace-view/workspace-row-filters'
 
 /** Builds preference defaults and setters for the UI slice, leaving durable writes to the persistence layer. */
 export function createUiPreferenceActions(set: UISliceSet, get: UISliceGet): Partial<UISlice> {
@@ -109,6 +110,10 @@ export function createUiPreferenceActions(set: UISliceSet, get: UISliceGet): Par
     setHideCliCreatedWorkspaces: (v) => set({ hideCliCreatedWorkspaces: v }),
     hideDetachedHeadWorkspaces: false,
     setHideDetachedHeadWorkspaces: (v) => set({ hideDetachedHeadWorkspaces: v }),
+    hideWorkspacesByStatus: false,
+    setHideWorkspacesByStatus: (v) => set({ hideWorkspacesByStatus: v }),
+    hiddenWorkspaceStatusIds: NO_WORKSPACE_ROW_FILTERS.hiddenWorkspaceStatusIds,
+    setHiddenWorkspaceStatusIds: (ids) => set({ hiddenWorkspaceStatusIds: ids }),
     hideWorkspacesFromOtherDevices: false,
     setHideWorkspacesFromOtherDevices: (v) => set({ hideWorkspacesFromOtherDevices: v }),
     alwaysShowDefaultBranchWorkspace: true,

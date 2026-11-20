@@ -134,7 +134,8 @@ export function buildMobileWorkspacePlan(
     search,
     repoHostIdByRepoId,
     hiddenProjects,
-    childrenByParentIdentity
+    childrenByParentIdentity,
+    withDefaultWorkspaceStatuses(workspaceStatuses)
   )
   const isHiddenRow = (w: Worktree) =>
     isPhoneRowInHiddenProject(w, repoHostIdByRepoId, hiddenProjects)

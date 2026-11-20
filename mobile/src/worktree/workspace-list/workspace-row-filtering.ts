@@ -9,6 +9,9 @@ import {
   type WorkspaceRowFactReader
 } from '../../../../src/shared/workspace-view/workspace-row-filters'
 import type { FilterState, Worktree } from './workspace-list-types'
+import type { WorkspaceStatusDefinition } from '../../../../src/shared/worktree/types'
+import { getWorkspaceStatus } from '../../../../src/shared/workspace/status/workspace-statuses'
+import { DEFAULT_WORKSPACE_STATUSES } from '../../../../src/shared/workspace/status/workspace-status-defaults'
 import { resolveWorktreeHostId } from '../row-presentation/worktree-host-context-labels'
 import { getWorktreeRowIdentity } from '../row-presentation/worktree-host-row-identity'
 
@@ -47,7 +50,8 @@ export function isPhoneRowInHiddenProject(
 function phoneRowFacts(
   repoHostIdByRepoId: ReadonlyMap<string, ExecutionHostId>,
   hiddenProjects: HiddenProjects,
-  childrenByParentIdentity: ReadonlyMap<string, readonly Worktree[]> | undefined
+  childrenByParentIdentity: ReadonlyMap<string, readonly Worktree[]> | undefined,
+  statuses: readonly WorkspaceStatusDefinition[]
 ): WorkspaceRowFactReader<Worktree> {
   const parentByChild = new Map(
     [...(childrenByParentIdentity ?? [])].flatMap(([parent, children]) =>
@@ -70,7 +74,8 @@ function phoneRowFacts(
     isDetachedHead: (w) => w.detachedHead === true,
     // Why the guess: #8873's exemption must fail open on hosts that predate isMainWorktree.
     isMainWorktree: (w) => w.isMainWorktree ?? guessDefaultBranchWorkspace(w),
-    isSleeping: (w) => !isWorktreeActive(w)
+    isSleeping: (w) => !isWorktreeActive(w),
+    workspaceStatus: (w) => getWorkspaceStatus(w, statuses)
   }
 }
 
@@ -81,12 +86,14 @@ export function filterWorktrees(
   repoHostIdByRepoId: ReadonlyMap<string, ExecutionHostId> = new Map(),
   hiddenProjects: HiddenProjects = NO_HIDDEN_PROJECTS,
   /** The list's nesting; a hidden project's row under a folder workspace stays listed. */
-  childrenByParentIdentity?: ReadonlyMap<string, readonly Worktree[]>
+  childrenByParentIdentity?: ReadonlyMap<string, readonly Worktree[]>,
+  /** The board columns a row's status resolves against. */
+  workspaceStatuses: readonly WorkspaceStatusDefinition[] = DEFAULT_WORKSPACE_STATUSES
 ): Worktree[] {
   const result = filterWorkspaceRows(
     worktrees,
     filters,
-    phoneRowFacts(repoHostIdByRepoId, hiddenProjects, childrenByParentIdentity)
+    phoneRowFacts(repoHostIdByRepoId, hiddenProjects, childrenByParentIdentity, workspaceStatuses)
   )
   const q = search.trim().toLowerCase()
   if (!q) {

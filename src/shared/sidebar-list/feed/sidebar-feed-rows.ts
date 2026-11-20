@@ -1,3 +1,4 @@
+import { getWorkspaceStatus } from '../../workspace/status/workspace-statuses'
 import {
   ALL_EXECUTION_HOSTS_SCOPE,
   normalizeExecutionHostOrder,
@@ -162,6 +163,7 @@ export function planSidebarFeedRows(
       isCliCreated: (worktree) => factsOf(worktree)?.cliCreated === true,
       isDetachedHead: (worktree) => factsOf(worktree)?.detachedHead === true,
       isMainWorktree: (worktree) => worktree.isMainWorktree,
+      workspaceStatus: (worktree) => getWorkspaceStatus(worktree, view.workspaceStatuses),
       isSleeping: (worktree) => {
         const identity = getWorktreeHostIdentity(worktree)
         const activity = domains.activity.get(identity)

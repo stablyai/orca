@@ -20,6 +20,11 @@ import {
   type HiddenProjects
 } from '../../../../../../shared/project/catalog/hidden-projects'
 import { isInactiveWorkspace } from '@/lib/workspace/activity/worktree-activity-state'
+import { getWorkspaceStatus } from '../../../../../../shared/workspace/status/workspace-statuses'
+import {
+  selectWorkspaceStatusesForHost,
+  type HostStatusColumnInputs
+} from '@/store/workspaces/status/host-workspace-status-columns'
 
 export type DesktopWorkspaceRowFactInputs = {
   repoMap: ReadonlyMap<string, Repo>
@@ -34,6 +39,8 @@ export type DesktopWorkspaceRowFactInputs = {
   worktreeIdsWithStructuredChat?: ReadonlySet<string>
   /** Rows in a PTY-rebind grace window; read as unverifiable, never as asleep (#15996). */
   sleepingSweepExemptWorktreeIds?: ReadonlySet<string>
+  /** Each row's status resolves against its own host's board columns. */
+  statusColumns: HostStatusColumnInputs
 }
 
 export function buildDesktopWorkspaceRowFactReader(
@@ -57,6 +64,8 @@ export function buildDesktopWorkspaceRowFactReader(
     isCliCreated: isCliCreatedWorkspace,
     isDetachedHead: isDetachedHeadWorkspace,
     isMainWorktree: (worktree) => worktree.isMainWorktree,
+    workspaceStatus: (worktree) =>
+      getWorkspaceStatus(worktree, selectWorkspaceStatusesForHost(inputs.statusColumns, worktree)),
     isSleeping: (worktree) =>
       inputs.sleepingSweepExemptWorktreeIds?.has(worktree.id) !== true &&
       isInactiveWorkspace(

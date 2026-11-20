@@ -1,3 +1,4 @@
+import { useWorkspaceStatusColumns } from '../../workspace-status/presentation/use-workspace-board-statuses'
 import { selectSidebarLineageParentIdentities } from '@/store/slices/worktrees/metadata/cross-store-lineage-parents'
 import { indexHiddenProjects } from '../../../../../../shared/project/catalog/hidden-projects'
 import { useMemo, useState, useSyncExternalStore } from 'react'
@@ -76,10 +77,13 @@ export function useVisibleSidebarWorktrees(args: {
     hideCliCreatedWorkspaces,
     hideDetachedHeadWorkspaces,
     hideWorkspacesFromOtherDevices,
+    hideWorkspacesByStatus,
+    hiddenWorkspaceStatusIds,
     alwaysShowDefaultBranchWorkspace,
     visibleWorkspaceHostIds,
     workspaceHostScope
   } = filterState
+  const statusColumns = useWorkspaceStatusColumns()
   const worktreesByRepo = useAppStore((s) => selectWorktreesByRepo(s))
   const botListedWorktreeIdentities = useBotListedWorktreeIdentities()
   const repos = useAppStore((s) => s.repos)
@@ -143,6 +147,9 @@ export function useVisibleSidebarWorktrees(args: {
       hideCliCreatedWorkspaces,
       hideDetachedHeadWorkspaces,
       hideWorkspacesFromOtherDevices,
+      hideWorkspacesByStatus,
+      hiddenWorkspaceStatusIds,
+      statusColumns,
       pairedDeviceIdsByEnvironment,
       alwaysShowDefaultBranchWorkspace,
       repoMap,
@@ -173,6 +180,9 @@ export function useVisibleSidebarWorktrees(args: {
     hideCliCreatedWorkspaces,
     hideDetachedHeadWorkspaces,
     hideWorkspacesFromOtherDevices,
+    hideWorkspacesByStatus,
+    hiddenWorkspaceStatusIds,
+    statusColumns,
     alwaysShowDefaultBranchWorkspace,
     workspaceHostScope,
     visibleWorkspaceHostIds,

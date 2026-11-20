@@ -15,6 +15,7 @@ import { useShallow } from 'zustand/react/shallow'
 import { selectSidebarFilterState, sidebarWorkspaceRowFilters } from './sidebar-filter-actions'
 import SidebarRepositoryFilterSection from './SidebarRepositoryFilterSection'
 import { WorkspaceFilterOptionRow } from './workspace-filter-option-row'
+import { WorkspaceStatusFilterRows } from './workspace-status-filter-rows'
 import {
   getSidebarHostVisibilityLabel,
   shouldShowHostScopeControls,
@@ -204,7 +205,8 @@ const OPTION_ITEMS: Record<WorkspaceViewOptionKey, ComponentType<OptionItemProps
   ),
   hideDetachedHeadWorkspaces: () => (
     <WorkspaceFilterOptionRow optionKey="hideDetachedHeadWorkspaces" />
-  )
+  ),
+  hideWorkspacesByStatus: WorkspaceStatusFilterRows
 }
 
 function SectionHeading({ section }: { section: WorkspaceViewSection }): JSX.Element | null {

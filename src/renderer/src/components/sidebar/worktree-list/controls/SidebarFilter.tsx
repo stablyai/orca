@@ -28,6 +28,7 @@ import {
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import RepoBadgeLabel from '@/components/repo/RepoBadgeLabel'
 import { FilterToggleRow } from './FilterToggleRow'
+import { WorkspaceStatusFilterRows } from './workspace-status-filter-rows'
 import { useShortcutLabel } from '@/lib/keyboard/useShortcutLabel'
 import { isUnassignedShortcutLabel } from '@/i18n/unassigned-label'
 import { searchRepos } from '@/lib/workspace/catalog/repo-search'
@@ -234,6 +235,7 @@ const SidebarFilter = React.memo(function SidebarFilter({
           checked={hideDetachedHeadWorkspaces}
           onChange={setHideDetachedHeadWorkspaces}
         />
+        <WorkspaceStatusFilterRows />
 
         {canFilterRepos && (
           <>

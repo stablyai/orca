@@ -42,6 +42,8 @@ export function useWorktreeJumpPaletteWorktrees({
   hideAutomationGeneratedWorkspaces,
   hideCliCreatedWorkspaces,
   hideDetachedHeadWorkspaces,
+  workspaceStatusFilter,
+  statusColumns,
   hideWorkspacesFromOtherDevices,
   showSleepingWorkspaces,
   alwaysShowDefaultBranchWorkspace,
@@ -109,6 +111,7 @@ export function useWorktreeJumpPaletteWorktrees({
         hideCliCreatedWorkspaces,
         hideDetachedHeadWorkspaces,
         hideWorkspacesFromOtherDevices,
+        ...workspaceStatusFilter,
         filterRepoIds: [],
         visibleHostIds: null
       },
@@ -121,7 +124,8 @@ export function useWorktreeJumpPaletteWorktrees({
         ptyIdsByTabId,
         browserTabsByWorktree,
         worktreeIdsWithLiveAgent,
-        worktreeIdsWithStructuredChat
+        worktreeIdsWithStructuredChat,
+        statusColumns
       })
     )
     return filterPredicate ? visible.filter(filterPredicate.matchesWorktree) : visible
@@ -135,6 +139,8 @@ export function useWorktreeJumpPaletteWorktrees({
     hideDefaultBranchWorkspace,
     hideDetachedHeadWorkspaces,
     hideWorkspacesFromOtherDevices,
+    workspaceStatusFilter,
+    statusColumns,
     pairedDeviceIdsByEnvironment,
     ptyIdsByTabId,
     repoMap,
