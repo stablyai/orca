@@ -232,7 +232,7 @@ export class CodexAccountHistoryPasses {
       if (result === 'shared') {
         this.settledThisRun.set(key, true)
       }
-      if (result === 'busy') {
+      if (result === 'busy' || result === 'no-helper') {
         this.retryWhenIdle(key, accountHome)
       }
       // Only a lock folder that couldn't link starts the helper again each pass; a history folder

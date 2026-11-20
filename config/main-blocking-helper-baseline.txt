@@ -93,6 +93,7 @@
 1 src/main/automations/external-managers/scoped-external-automations.ts
 1 src/main/automations/launch/automation-run-setup-skip.ts
 2 src/main/automations/runtime-automation-service.ts
+1 src/main/avatar-generation/avatar-generation-ipc.ts # per Generate click: the agent env prep commit-message generation shares; its sync read is a shell rc lookup for GROK_HOME only when it is unset
 5 src/main/backend/backend-entry.ts
 11 src/main/backend/core-runtime-activation.ts
 2 src/main/backend/core-runtime.ts

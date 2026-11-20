@@ -9178,6 +9178,12 @@
             "ariaLabel": "Card style",
             "classic": "Classic",
             "experimental": "Experimental"
+          },
+          "appRail": {
+            "title": "App rail",
+            "description": "Icon bar on the left edge for switching between workspaces and other pages.",
+            "copy": "Adds an icon bar to the left of the workspace list. Workspaces, Settings, and Help move onto it, and it stays visible when the list is collapsed.",
+            "toggleLabel": "Toggle app rail"
           }
         },
         "FloatingWorkspacePane": {
@@ -11392,6 +11398,14 @@
             "worktreeCardStyle": {
               "title": "Card style",
               "description": "Choose how workspace cards look in the sidebar."
+            },
+            "appRail": {
+              "title": "App rail",
+              "description": "Icon bar on the left edge for switching between workspaces and other pages.",
+              "rail": "rail",
+              "navigation": "navigation",
+              "sidebar": "sidebar",
+              "icons": "icons"
             }
           }
         },
@@ -27313,6 +27327,24 @@
         "saved": "Picture updated",
         "undo": "Undo",
         "drop": "Drop to use"
+      },
+      "generate": {
+        "placeholder": "Describe a picture…",
+        "describe": "Picture description",
+        "button": "Generate",
+        "generating": "Generating…",
+        "cancel": "Cancel",
+        "cancelRunning": "Cancel generating",
+        "edit": "Edit description",
+        "realPerson": "Avatars can't show real people. Describe a character instead.",
+        "signedOut": "{{agent}} isn't signed in. Sign in to it, then try again.",
+        "usageLimit": "{{agent}} hit its usage limit. Try again later.",
+        "noImage": "{{agent}} didn't make an image. Try rewording your description.",
+        "timedOut": "{{agent}} took too long. Try again.",
+        "unavailable": "No installed agent can make images.",
+        "failed": "{{agent}} couldn't make an image. Try again.",
+        "face": "Generate a picture",
+        "agent": "Generate with {{agent}}"
       }
     },
     "linear": {
@@ -29590,5 +29622,11 @@
       "previous": "Previous month",
       "next": "Next month"
     }
+  },
+  "appRail": {
+    "navigationLabel": "App navigation",
+    "toolsLabel": "App tools",
+    "workspaces": "Workspaces",
+    "more": "More"
   }
 }
