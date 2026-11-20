@@ -63,6 +63,9 @@ function sameWidths(a: UsageRowWidths | null, b: UsageRowWidths): boolean {
   )
 }
 
+/** The elements whose natural widths the row's form is chosen from. */
+const MEASURED_ELEMENTS = '[data-measure-chip],[data-measure-unit],[data-measure-more]'
+
 /**
  * Natural widths for choosing the usage row's form. Why not measure the shown row: a choice that
  * changes what it measures feeds back into the next choice and can loop (React #185).
@@ -75,25 +78,22 @@ export function useUsageRowWidths(): [RefCallback<HTMLElement>, UsageRowWidths |
     if (!area || typeof ResizeObserver !== 'function') {
       return
     }
-    const resize = new ResizeObserver(() => read())
-    const observeMeasured = (): void => {
-      resize.observe(area)
-      for (const element of area.querySelectorAll(
-        '[data-measure-chip],[data-measure-unit],[data-measure-more]'
-      )) {
-        resize.observe(element)
-      }
-    }
     const read = (): void => {
       const next = readUsageRowWidths(area)
       setWidths((previous) => (sameWidths(previous, next) ? previous : next))
     }
+    const resize = new ResizeObserver(read)
+    resize.observe(area)
+    for (const element of area.querySelectorAll(MEASURED_ELEMENTS)) {
+      resize.observe(element)
+    }
     // Why: providers joining or leaving add measuring elements the resize observer hasn't seen.
     const mutations = new MutationObserver(() => {
-      observeMeasured()
+      for (const element of area.querySelectorAll(MEASURED_ELEMENTS)) {
+        resize.observe(element)
+      }
       read()
     })
-    observeMeasured()
     mutations.observe(area, { childList: true, subtree: true })
     read()
     return () => {
