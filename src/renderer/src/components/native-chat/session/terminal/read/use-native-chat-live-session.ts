@@ -220,9 +220,11 @@ export function useNativeChatLiveSession(
           // A reread of the latest window keeps paged-in history instead of shrinking the reader's view.
           const base = withHeldOlderHistory(agent, heldRef.current, tail, messages, more)
           replaceList(appendMergerRef.current, messages)
-          setAppended([])
-          heldRef.current = { phase: 'ready', messages: base }
-          setRead(heldRef.current)
+          setAppended((current) => (current.length === 0 ? current : []))
+          if (heldRef.current.phase !== 'ready' || base !== heldRef.current.messages) {
+            heldRef.current = { phase: 'ready', messages: base }
+            setRead(heldRef.current)
+          }
           setHasMore((current) => (base === messages ? more : current))
           return
         }

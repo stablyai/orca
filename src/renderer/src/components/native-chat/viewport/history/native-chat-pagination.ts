@@ -55,15 +55,25 @@ export function withHeldOlderHistory(
   }
   const base = held.messages
   const inBase = heldAt(base)
-  if (inBase >= 0) {
-    return inBase === 0 ? window : [...base.slice(0, inBase), ...window]
+  if (inBase === 0) {
+    return window
+  }
+  if (inBase > 0) {
+    // An unchanged re-send (e.g. a touched file) keeps the held base, so nothing rebuilds.
+    const same =
+      base.length - inBase === window.length &&
+      window.every((message, i) => JSON.stringify(message) === JSON.stringify(base[inBase + i]))
+    return same ? (base as NativeChatMessage[]) : [...base.slice(0, inBase), ...window]
   }
   const inTail = heldAt(liveTail)
   if (inTail < 0 || !nativeChatLiveTailJoinsBase(agent, base, liveTail)) {
     return window
   }
-  const baseIds = new Set(base.map((message) => message.id))
-  const tail = liveTail.slice(0, inTail).filter((message) => !baseIds.has(message.id))
+  // A joined tail overlaps the base up to its last row, so only later rows are new.
+  const baseEnd = nativeChatHistoryCursor(agent, base.at(-1))!
+  const tail = liveTail
+    .slice(0, inTail)
+    .filter((message) => (nativeChatHistoryCursor(agent, message) ?? -1) > baseEnd)
   return [...base, ...tail, ...window]
 }
 
