@@ -36,6 +36,8 @@ import { HERMES_LAUNCH_SPEC } from '../../hermes/hermes-acp-launch-spec'
 import { KIRO_LAUNCH_SPEC } from '../../kiro/kiro-acp-launch-spec'
 import { GOOSE_LAUNCH_SPEC } from '../../goose/goose-acp-launch-spec'
 import { AUGGIE_LAUNCH_SPEC } from '../../auggie/auggie-acp-launch-spec'
+import { KILO_LAUNCH_SPEC } from '../../kilo/kilo-acp-launch-spec'
+import { MIMO_LAUNCH_SPEC } from '../../mimo/mimo-acp-launch-spec'
 import type { AcpLaunchSpec } from './acp-launch-contract'
 import { OPENCODE_MINIMUM_VERSIONS, OPENCODE2_MINIMUM_VERSIONS } from './acp-minimum-versions'
 
@@ -172,7 +174,9 @@ export const ACP_LAUNCH_SPECS: readonly AcpLaunchSpec[] = [
   HERMES_LAUNCH_SPEC,
   KIRO_LAUNCH_SPEC,
   GOOSE_LAUNCH_SPEC,
-  AUGGIE_LAUNCH_SPEC
+  AUGGIE_LAUNCH_SPEC,
+  KILO_LAUNCH_SPEC,
+  MIMO_LAUNCH_SPEC
 ]
 
 export function acpLaunchSpecFor(agent: string): AcpLaunchSpec | null {
