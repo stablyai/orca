@@ -17,6 +17,11 @@ import {
 import { withTestAgentSessionDatabase } from '../../../runtime/agent-session/records/agent-session-record-store-persistence.test-fixture'
 import { codexProviderHandle } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 
+// These cover the deletion a later build turns back on; this build keeps the file.
+vi.mock('../journal-legacy-retirement-deletion', () => ({
+  LEGACY_JOURNAL_RETIREMENT_DELETES: true
+}))
+
 const roots: string[] = []
 const databases: JournalSqlDatabase[] = []
 const locks: ReturnType<typeof acquireOrcadInstanceLock>[] = []
