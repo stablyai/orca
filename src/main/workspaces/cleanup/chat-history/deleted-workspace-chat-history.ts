@@ -27,6 +27,7 @@ import { isCodexRolloutStillIdleInGoneFolder } from './codex-rollout-last-cwd'
 import { parseWslUncPath } from '../../../../shared/file-access/wsl-paths'
 import { deleteCodexRolloutsPermanently } from '../../../codex/history/cleanup/codex-rollout-permanent-delete'
 import { listHostCodexRolloutHomes } from '../../../codex/history/cleanup/codex-host-rollout-homes'
+import { createCodexRolloutHistoryReferenceScan } from '../../../codex/history/cleanup/codex-rollout-history-references'
 
 export type { ChatHistorySweepResult }
 
@@ -150,6 +151,7 @@ export function deleteChatHistoryOfDeletedWorkspaces(
   store: RuntimeStore,
   signal: AbortSignal
 ): Promise<ChatHistorySweepResult> {
+  const references = createCodexRolloutHistoryReferenceScan()
   return sweepDeletedWorkspaceChatHistory({
     store,
     now: Date.now(),
@@ -172,8 +174,11 @@ export function deleteChatHistoryOfDeletedWorkspaces(
       // AI Vault lists one name per rollout and refuses Codex deletes: links would bring it back.
       const rollouts =
         codex.length > 0
-          ? await deleteCodexRolloutsPermanently(codex, shouldDelete, () =>
-              listHostCodexRolloutHomes(store.getSettings())
+          ? await deleteCodexRolloutsPermanently(
+              codex,
+              shouldDelete,
+              () => listHostCodexRolloutHomes(store.getSettings()),
+              references
             )
           : empty
       return {

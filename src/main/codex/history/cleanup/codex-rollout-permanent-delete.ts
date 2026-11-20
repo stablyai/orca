@@ -11,8 +11,8 @@ import { forgetCodexHistoryDiskUsage } from '../disk-usage/codex-history-disk-us
 import { isOpenInCodex } from './codex-rollout-writer-lock'
 import { codexPhysicalRolloutId } from '../../../native-chat/transcript-history/codex/codex-rollout-history-source'
 import {
-  scanCodexRolloutHistoryReferences,
-  type CodexRolloutHistoryReferences
+  createCodexRolloutHistoryReferenceScan,
+  type ScanCodexRolloutHistoryReferences
 } from './codex-rollout-history-references'
 import {
   isOutsideProtectedRoots,
@@ -182,7 +182,7 @@ async function deleteRollout(
   target: RolloutTarget,
   listHomes: () => Promise<RolloutHomes>,
   shouldDelete: (target: RolloutTarget) => Promise<boolean>,
-  references: (homes: readonly string[]) => Promise<CodexRolloutHistoryReferences>,
+  references: ScanCodexRolloutHistoryReferences,
   result: DeleteResult,
   deletedPaths: string[]
 ): Promise<DeleteOutcome> {
@@ -286,14 +286,11 @@ async function deleteRollout(
 export async function deleteCodexRolloutsPermanently(
   targets: readonly RolloutTarget[],
   shouldDelete: (target: RolloutTarget) => Promise<boolean>,
-  listHomes: () => Promise<RolloutHomes>
+  listHomes: () => Promise<RolloutHomes>,
+  references: ScanCodexRolloutHistoryReferences = createCodexRolloutHistoryReferenceScan()
 ): Promise<DeleteResult> {
   const result: DeleteResult = { deleted: 0, failed: 0, freedBytes: 0 }
   const deletedPaths: string[] = []
-  let scan: Promise<CodexRolloutHistoryReferences> | undefined
-  // Scanned once, and only once a rollout is otherwise ready to go.
-  const references = (homes: readonly string[]) =>
-    (scan ??= scanCodexRolloutHistoryReferences(homes))
   let pending = [...targets]
   // A parent goes only after every fork reading it went first, so retry the ones kept for that.
   while (pending.length > 0) {
