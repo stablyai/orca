@@ -143,7 +143,7 @@ function ProjectRow(props: {
       trailing={null}
     >
       <SkillList skills={skills} />
-      <FolderLine folder={skillsDir}>
+      <FolderLine folder={skillsDir} hostId={bot.hostId}>
         <RemoveButton onRemove={onRemove} />
       </FolderLine>
     </BotConnectorRowFrame>
@@ -202,7 +202,7 @@ function OwnSkillsRow({
       trailing={null}
     >
       <SkillList skills={skills} />
-      <FolderLine folder={own.skillsDir} />
+      <FolderLine folder={own.skillsDir} hostId={bot.hostId} />
     </BotConnectorRowFrame>
   )
 }

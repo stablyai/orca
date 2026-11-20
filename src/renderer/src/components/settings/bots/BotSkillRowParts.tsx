@@ -5,7 +5,10 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host/execution-host'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  type ExecutionHostId
+} from '../../../../../shared/execution-host/execution-host'
 
 const SHOWN_SKILLS = 5
 
@@ -65,8 +68,10 @@ export function SkillList({ skills }: { skills: readonly ListedSkill[] }): React
   )
 }
 
+/** The folder on the bot's host; only a folder on this computer opens here. */
 export function FolderLine(props: {
   folder: string
+  hostId: ExecutionHostId
   children?: React.ReactNode
 }): React.JSX.Element {
   const t = useTranslate()
@@ -75,13 +80,15 @@ export function FolderLine(props: {
       <p className="min-w-0 flex-1 truncate font-mono text-xs text-muted-foreground">
         {props.folder}
       </p>
-      <Button
-        variant="ghost"
-        size="xs"
-        onClick={() => void window.api.shell.openPath(props.folder, LOCAL_EXECUTION_HOST_ID)}
-      >
-        {t('settings.bots.skills.openFolder', 'Open folder')}
-      </Button>
+      {props.hostId === LOCAL_EXECUTION_HOST_ID ? (
+        <Button
+          variant="ghost"
+          size="xs"
+          onClick={() => void window.api.shell.openPath(props.folder, LOCAL_EXECUTION_HOST_ID)}
+        >
+          {t('settings.bots.skills.openFolder', 'Open folder')}
+        </Button>
+      ) : null}
       {props.children}
     </div>
   )

@@ -1,6 +1,6 @@
 import { mkdtemp, mkdir, readdir, readFile, rm, writeFile, chmod, symlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, win32 } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { Automation } from '../../../shared/automations/automation-definition'
 import { planBotFromPackage } from '../../../shared/bots/bot-package'
@@ -16,6 +16,7 @@ import {
 } from './bot-package-transport'
 import { BotShareCandidates } from './bot-package-export'
 import { readBotShareable } from './bot-share-sources'
+import { within } from './bot-share-own-path'
 
 let root: string
 
@@ -269,6 +270,31 @@ describe('bot package export and archive', () => {
 })
 
 describe('what a bot export may read', () => {
+  it("shares the copy of a same-named skill that the bot's own agent loads", async () => {
+    const home = join(root, 'home')
+    await writeHome(home)
+    await mkdir(join(home, '.agents/skills/changelog-style'), { recursive: true })
+    await writeFile(
+      join(home, '.agents/skills/changelog-style/SKILL.md'),
+      '---\nname: changelog-style\ndescription: Codex copy\n---\n'
+    )
+    const codexBot = { ...bot, agent: 'codex' as const }
+    const shareable = await readBotShareable({ bot: codexBot, home, automations: [] })
+    expect(shareable.skills).toEqual([
+      expect.objectContaining({ name: 'changelog-style', description: 'Codex copy' })
+    ])
+    expect(shareable.leftOut).toContainEqual({
+      kind: 'skill',
+      name: 'changelog-style',
+      why: 'duplicate'
+    })
+  })
+
+  it('treats a folder on another Windows drive as outside', () => {
+    expect(within('C:\\orca\\bots\\a\\skills', 'D:\\elsewhere\\skill', win32)).toBe(false)
+    expect(within('C:\\orca\\bots\\a\\skills', 'C:\\orca\\bots\\a\\skills\\x', win32)).toBe(true)
+  })
+
   it('never follows a link out of the bot home', async () => {
     const home = join(root, 'home')
     await writeHome(home)

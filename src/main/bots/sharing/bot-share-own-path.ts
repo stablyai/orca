@@ -1,7 +1,7 @@
 // The export's reads of a bot home: only the bot's own files, never through a link, and part names
 // that can become folder and file names.
 import { lstat, realpath } from 'node:fs/promises'
-import { join, relative, sep } from 'node:path'
+import nodePath, { join } from 'node:path'
 import { validateSkillPackageName } from '../../../shared/skills/packages/skill-package-manifest'
 
 export type Home = { path: string; real: string }
@@ -15,9 +15,14 @@ export const validPartName = (name: string): boolean => {
   }
 }
 
-export function within(parent: string, child: string): boolean {
-  const path = relative(parent, child)
-  return path !== '' && !path.startsWith(`..${sep}`) && path !== '..' && !path.startsWith(sep)
+type PathApi = Pick<typeof nodePath, 'relative' | 'isAbsolute' | 'sep'>
+
+/** Strictly under `parent`; on Windows another drive's path comes back from `relative` as absolute. */
+export function within(parent: string, child: string, paths: PathApi = nodePath): boolean {
+  const path = paths.relative(parent, child)
+  return (
+    path !== '' && path !== '..' && !path.startsWith(`..${paths.sep}`) && !paths.isAbsolute(path)
+  )
 }
 
 /** Every file the export reads goes through here: the bot's own file or folder at this path

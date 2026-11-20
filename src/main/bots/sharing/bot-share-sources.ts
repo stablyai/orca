@@ -17,6 +17,7 @@ import { botLinearWorkspaces, botSlackApps, type Bot } from '../../../shared/bot
 import {
   BOT_AGENT_SKILLS_FOLDERS,
   BOT_OWN_SKILLS_FOLDER,
+  type BotAgentSkillsFolder,
   BOT_PACKAGE_PURPOSE_MAX,
   botPackageResults,
   type BotPackageConnector,
@@ -60,15 +61,20 @@ function shareableToolUrl(url: string): string {
   return parsed.toString()
 }
 
+/** skills/ first, then the folder the bot's own agent loads, then the other: a name in two places
+ *  shares the version the bot uses, and the other copy is listed as left out. */
 async function readSkills(
+  bot: Bot,
   home: Home,
   leftOut: BotShareable['leftOut']
 ): Promise<BotShareable['skills']> {
   const own = await readBotOwnSkills(home.path)
+  const agentFirst: BotAgentSkillsFolder[] =
+    bot.agent === 'claude' ? ['claude', 'agents'] : ['agents', 'claude']
   const sources = [
     { folder: BOT_OWN_SKILLS_FOLDER, skills: own.skills },
-    ...Object.entries(BOT_AGENT_SKILLS_FOLDERS).map(([only, folder]) => ({
-      folder,
+    ...agentFirst.map((only) => ({
+      folder: BOT_AGENT_SKILLS_FOLDERS[only],
       skills: own.agentOnly.filter((skill) => skill.only === only)
     }))
   ]
@@ -88,7 +94,9 @@ async function readSkills(
       } else if (!within(root.own, skill.folder)) {
         // A link to a folder outside the home's skills: the owner's, not the bot's.
         leftOut.push({ kind: 'skill', name: skill.name, why: 'outside-home' })
-      } else if (!skills.some((entry) => entry.name === skill.name)) {
+      } else if (skills.some((entry) => entry.name === skill.name)) {
+        leftOut.push({ kind: 'skill', name: skill.name, why: 'duplicate' })
+      } else {
         skills.push({
           name: skill.name,
           description: skill.description,
@@ -290,7 +298,7 @@ export async function readBotShareable(input: {
   const soul = await readFile(soulPath.own, 'utf8')
   const automationParts = readAutomations(input.bot, input.automations, leftOut)
   const [skills, servers, memory, avatar] = await Promise.all([
-    readSkills(home, leftOut),
+    readSkills(input.bot, home, leftOut),
     readOwnToolServers(home, leftOut),
     readMemory(home, leftOut),
     readAvatar(input.bot, home, leftOut)
