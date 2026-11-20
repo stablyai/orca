@@ -26,11 +26,10 @@ it('keeps a redirect target that a reload of a POST result re-POSTed to', () => 
   expect(tracker.committed('https://example.test/q', null)).toBe(true)
 })
 
-it("doesn't mark a later visit to a form's address after its navigation was cancelled", () => {
-  let time = 0
-  const tracker = createFormPostNavigationTracker(() => time)
+it("doesn't mark a later visit to a form's address after the page cancelled its navigation", () => {
+  const tracker = createFormPostNavigationTracker()
   tracker.submitted('https://example.test/search')
-  time = 60_000
+  tracker.cancelled()
   tracker.started('https://example.test/search')
   expect(tracker.committed('https://example.test/search', null)).toBe(false)
 })
@@ -47,4 +46,16 @@ it('keeps the oldest POST result when a fresh link disproves a redirect target',
   tracker.freshlyNavigated()
   tracker.started('https://example.test/p0')
   expect(tracker.committed('https://example.test/p0', null)).toBe(true)
+})
+
+it('drops a submission the page handled in place, but not for another same-page change', () => {
+  const tracker = createFormPostNavigationTracker()
+  tracker.submitted('https://example.test/search')
+  tracker.startedInPlace('https://example.test/form#step')
+  tracker.started('https://example.test/search')
+  expect(tracker.committed('https://example.test/search', null)).toBe(true)
+  tracker.submitted('https://example.test/find')
+  tracker.startedInPlace('https://example.test/find')
+  tracker.started('https://example.test/find')
+  expect(tracker.committed('https://example.test/find', null)).toBe(false)
 })

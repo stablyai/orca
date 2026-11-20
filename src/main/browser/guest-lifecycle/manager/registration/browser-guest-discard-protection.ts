@@ -174,6 +174,10 @@ export function installBrowserGuestDiscardProtection(
       formPost.submitted(payload.formPost)
       return
     }
+    if ('formPostCancelled' in payload && payload.formPostCancelled === true) {
+      formPost.cancelled()
+      return
+    }
     if (event.senderFrame !== guest.mainFrame) {
       return
     }
@@ -232,7 +236,9 @@ export function installBrowserGuestDiscardProtection(
       formPost.started(details.url)
       owner.navigating = true
       invalidate()
-    } else if (!details.isMainFrame) {
+    } else if (details.isMainFrame) {
+      formPost.startedInPlace(details.url)
+    } else {
       publish()
     }
   }

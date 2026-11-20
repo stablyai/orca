@@ -35,9 +35,17 @@ export function installBrowserGuestFormPostReport(port: {
     return
   }
   window.navigation?.addEventListener('navigate', (event) => {
-    if (event.isTrusted && event.formData && !event.hashChange) {
-      port.send(BROWSER_GUEST_PROTECTION_REPORT, { formPost: event.destination.url })
+    if (!event.isTrusted || !event.formData || event.hashChange) {
+      return
     }
+    port.send(BROWSER_GUEST_PROTECTION_REPORT, { formPost: event.destination.url })
+    // This listener runs before the page's; once dispatch ends, retract a navigation it cancelled
+    // so a later visit to that address isn't taken for the POST.
+    setTimeout(() => {
+      if (event.defaultPrevented) {
+        port.send(BROWSER_GUEST_PROTECTION_REPORT, { formPostCancelled: true })
+      }
+    }, 0)
   })
 }
 

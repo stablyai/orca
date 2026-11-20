@@ -11,25 +11,26 @@ function withoutHash(rawUrl: string): string {
   }
 }
 
-// A page can cancel a reported submission's navigation; a later visit to that address is a GET.
-// Generous, because the report and the navigation start can straddle a busy main thread.
-const SUBMISSION_TTL_MS = 10_000
-
 /**
  * Whether the current main-frame navigation is a form POST, from the preload's report of a
- * submitted form: the next navigation to that form's action URL soon after counts. A page that
- * loaded as a POST result stays one for reloads and Back/Forward, which repeat or restore the
- * POST. A mark survives redirects: Electron doesn't report their status, and a 307/308 keeps it.
+ * submitted form: the next navigation to that form's action URL counts, unless the page cancelled
+ * or intercepted it. A page that loaded as a POST result stays one for reloads and Back/Forward,
+ * which repeat or restore the POST. A mark survives redirects: Electron doesn't report their
+ * status, and a 307/308 keeps the POST.
  */
-export function createFormPostNavigationTracker(now: () => number = Date.now): {
+export function createFormPostNavigationTracker(): {
   submitted: (actionUrl: string) => void
+  /** The page cancelled the reported submission's navigation. */
+  cancelled: () => void
+  /** A same-document navigation; one to the form's address means the page handled it in place. */
+  startedInPlace: (url: string) => void
   started: (url: string) => void
   /** `method` is the request's own method when a request listener saw it. */
   committed: (url: string, method: string | null) => boolean
   /** The committed document was a fresh navigation; true if that drops a remembered POST mark. */
   freshlyNavigated: () => boolean
 } {
-  let submitted: { url: string; at: number } | null = null
+  let submitted: string | null = null
   let post = false
   // The mark came only from a remembered POST result, which a fresh GET navigation disproves.
   let fromMemory = false
@@ -47,7 +48,15 @@ export function createFormPostNavigationTracker(now: () => number = Date.now): {
   }
   return {
     submitted: (actionUrl) => {
-      submitted = { url: withoutHash(actionUrl), at: now() }
+      submitted = withoutHash(actionUrl)
+    },
+    cancelled: () => {
+      submitted = null
+    },
+    startedInPlace: (url) => {
+      if (submitted === withoutHash(url)) {
+        submitted = null
+      }
     },
     started: (url) => {
       if (provisionalUrl !== null) {
@@ -56,7 +65,7 @@ export function createFormPostNavigationTracker(now: () => number = Date.now): {
       }
       const target = withoutHash(url)
       startTarget = target
-      const submission = submitted?.url === target && now() - submitted.at <= SUBMISSION_TTL_MS
+      const submission = submitted === target
       fromMemory = !submission && postResultUrls.has(target)
       post = submission || fromMemory
       submitted = null
