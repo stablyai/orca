@@ -19,6 +19,7 @@ import { StepIcon } from '../worktree-creation/WorktreeSetupSteps'
 import { NativeChatDetailsDisclosure } from '../native-chat/messages/diagnostics/NativeChatProviderDetails'
 import { useStructuredAgentSessionHostExecutionPhase } from '../native-chat/session/status/structured-agent-session-status-hooks'
 import { NativeChatInstallStrip } from '../native-chat/host-access/NativeChatInstallStrip'
+import { NativeChatSignInStrip } from '../native-chat/host-access/NativeChatSignInStrip'
 import { useBotSetupInstall } from './BotSetupInstall'
 
 /** Shown by name; more are counted. */
@@ -230,7 +231,7 @@ function BotSetupSteps({
   ]
   const failed = start.state === 'failed' || reply.state === 'failed'
   const retry = useCallback(() => void tryAgain(bot), [bot])
-  const install = useBotSetupInstall(bot, failed && isVisible, retry)
+  const { install, signIn } = useBotSetupInstall(bot, failed && isVisible, retry)
   return (
     <div className="mt-6 w-96 max-w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground">
       <ol className="flex flex-col">
@@ -249,7 +250,7 @@ function BotSetupSteps({
               </span>
             </div>
             {/* Install says what is missing; the host's sentence points at a chat this card covers. */}
-            {step.detail && !(install && id === 'start') ? (
+            {step.detail && !((install || signIn) && id === 'start') ? (
               <p className="ml-5.5 line-clamp-3 break-words text-xs text-muted-foreground">
                 {step.detail}
               </p>
@@ -266,9 +267,13 @@ function BotSetupSteps({
           </li>
         ))}
       </ol>
-      {install ? (
+      {install || signIn ? (
         <div className="mt-1 border-t border-border pt-2 pb-1">
-          <NativeChatInstallStrip slot={install} agentLabel={agent} />
+          {install ? (
+            <NativeChatInstallStrip slot={install} agentLabel={agent} />
+          ) : signIn ? (
+            <NativeChatSignInStrip state={signIn} agentLabel={agent} />
+          ) : null}
         </div>
       ) : failed ? (
         <TryAgain bot={bot} />

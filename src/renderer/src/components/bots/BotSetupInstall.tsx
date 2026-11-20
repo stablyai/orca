@@ -1,23 +1,30 @@
 import { useEffect, useRef } from 'react'
 import { useManagedRuntimeInstall } from '@/runtime/hosts/installation/use-managed-runtime-install'
-import { botTarget } from '@/lib/bot-hosts'
+import { botRefKey, botTarget } from '@/lib/bot-hosts'
+import { useAntigravityChatSignIn } from '@/components/provider-accounts/use-antigravity-chat-sign-in'
+import {
+  antigravityChatSignInPrompt,
+  antigravityOrcaRuntimeSignsIn
+} from '@/components/provider-accounts/antigravity-chat-runtime-sign-in-policy'
 import type { Bot } from '../../../../shared/bot-types'
 import {
   nativeChatInstallSlotState,
   type NativeChatInstallSlotInstall
 } from '../native-chat/host-access/NativeChatInstallSlot'
+import type { NativeChatSignInStripState } from '../native-chat/host-access/NativeChatSignInStrip'
 import { useStructuredAgentSessionHostProgram } from '../native-chat/session/status/structured-agent-session-status-hooks'
 
-// Bots whose card offered Install; outlives the card, which unmounts when its tab is left mid-download.
+// Bots whose card offered a step; outlives the card, which unmounts when its tab is left mid-download.
 const offered = new Set<string>()
 
-/** The chat's own Install for a bot whose setup failed on a computer without its agent.
- *  `retry` runs once the install it offered has landed, so setup carries on without another click. */
+/** What a bot whose setup failed still needs on its computer: its agent installed, then Orca's
+ *  sign-in where the agent has one. `retry` runs once a step the card offered is done, so setup
+ *  carries on without another click. */
 export function useBotSetupInstall(
   bot: Bot,
   shown: boolean,
   retry: () => void
-): NativeChatInstallSlotInstall | null {
+): { install: NativeChatInstallSlotInstall | null; signIn: NativeChatSignInStripState | null } {
   const target = botTarget(bot)
   const hostProgram = useStructuredAgentSessionHostProgram(bot.chatSessionId ?? '', target)
   const observation = useManagedRuntimeInstall(target, bot.agent, shown && !hostProgram)
@@ -28,17 +35,30 @@ export function useBotSetupInstall(
     observation.kind === 'active' &&
     observation.snapshot.kind === 'known' &&
     observation.snapshot.state.source !== null
+  // Same rule as the chat's own strip: only Orca's copy of Antigravity takes Orca's sign-in.
+  const signsIn =
+    bot.agent === 'antigravity' &&
+    installed &&
+    observation.kind === 'active' &&
+    antigravityOrcaRuntimeSignsIn(observation)
+  const signInView = useAntigravityChatSignIn(signsIn ? target : null)
+  const prompt = signsIn ? antigravityChatSignInPrompt(signInView) : null
+  const signIn =
+    prompt === null ? null : { prompt, view: signInView, agent: bot.agent, host: target }
+  const waiting = install !== null || prompt !== null
+  // A sign-in the host has not reported yet could still be owed, so the retry waits for it.
+  const ready = installed && !waiting && (!signsIn || signInView.status === 'known')
   const latestRetry = useRef(retry)
   useEffect(() => {
     latestRetry.current = retry
   }, [retry])
-  const botId = bot.id
+  const key = botRefKey(bot)
   useEffect(() => {
-    if (install) {
-      offered.add(botId)
-    } else if (installed && offered.delete(botId)) {
+    if (waiting) {
+      offered.add(key)
+    } else if (ready && offered.delete(key)) {
       latestRetry.current()
     }
-  }, [botId, install, installed])
-  return install
+  }, [key, waiting, ready])
+  return { install, signIn }
 }
