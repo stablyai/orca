@@ -138,15 +138,18 @@ export abstract class CodexRuntimeHomeLegacyMigration extends CodexRuntimeHomePa
       }
       try {
         const keptDir = join(this.getKeptLegacyHistoryRoot(), accountId)
-        const keptPath = join(keptDir, 'history.jsonl')
-        const kept = lstatSync(keptPath, { throwIfNoEntry: false })
-        if (kept?.isFile() && kept.nlink === 1) {
-          // Kept by an earlier launch; history Codex wrote since stays in the account's own file.
-          continue
-        }
         mkdirSync(keptDir, { recursive: true })
+        // A linked folder could aim the kept copy at a real history somewhere else.
+        if (
+          !lstatSync(this.getKeptLegacyHistoryRoot()).isDirectory() ||
+          !lstatSync(keptDir).isDirectory()
+        ) {
+          throw new Error(`Refusing to keep legacy Codex history in a linked folder: ${keptDir}`)
+        }
         // Read once rather than copied (a copy of a file Codex trims mid-copy never finishes), then
         // published by rename: never partial, and a link at the name is replaced, not written through.
+        // Each unfinished launch refreshes Orca's one copy, so it holds what the account has now.
+        const keptPath = join(keptDir, 'history.jsonl')
         writeFileDurableSync(
           durableWriteTempPath(keptPath),
           keptPath,
@@ -199,12 +202,16 @@ export abstract class CodexRuntimeHomeLegacyMigration extends CodexRuntimeHomePa
     targetPath: string,
     accountId: string
   ): { path: string; preserved: boolean } {
-    if (this.copyLegacyFileWithoutOverwrite(legacyFilePath, targetPath) !== 'conflict') {
+    let legacyContents: Buffer | null = null
+    const readLegacy = (): Buffer => (legacyContents ??= readFileSync(legacyFilePath))
+    if (
+      this.copyLegacyFileWithoutOverwrite(legacyFilePath, targetPath, readLegacy) !== 'conflict'
+    ) {
       return { path: targetPath, preserved: false }
     }
     for (let attempt = 0; ; attempt++) {
       const preservedPath = this.getPreservedLegacySessionPath(targetPath, accountId, attempt)
-      const result = this.copyLegacyFileWithoutOverwrite(legacyFilePath, preservedPath)
+      const result = this.copyLegacyFileWithoutOverwrite(legacyFilePath, preservedPath, readLegacy)
       if (result !== 'conflict') {
         return { path: preservedPath, preserved: result === 'copied' }
       }
@@ -214,7 +221,8 @@ export abstract class CodexRuntimeHomeLegacyMigration extends CodexRuntimeHomePa
   /** Exclusive create never replaces or writes through a name, even one that appears after a check. */
   protected copyLegacyFileWithoutOverwrite(
     legacyFilePath: string,
-    targetPath: string
+    targetPath: string,
+    readLegacy: () => Buffer
   ): 'copied' | 'identical' | 'conflict' {
     try {
       copyFileSync(legacyFilePath, targetPath, constants.COPYFILE_EXCL | constants.COPYFILE_FICLONE)
@@ -224,7 +232,7 @@ export abstract class CodexRuntimeHomeLegacyMigration extends CodexRuntimeHomePa
         throw error
       }
     }
-    const legacyContents = readFileSync(legacyFilePath)
+    const legacyContents = readLegacy()
     try {
       return readFileSync(targetPath).equals(legacyContents) ? 'identical' : 'conflict'
     } catch {

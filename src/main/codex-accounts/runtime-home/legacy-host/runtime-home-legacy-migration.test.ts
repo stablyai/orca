@@ -232,8 +232,8 @@ describe('CodexRuntimeHomeService', () => {
     expect(readFileSync(archivedHistoryPath('account-1'), 'utf-8')).toBe('{"id":"legacy-1"}\n')
   })
 
-  it('keeps one real copy per account: never a link to the original, never a second snapshot', async () => {
-    const managedHomePath = writeHistory('account-1', '{"id":"legacy-1"}\n')
+  it('keeps one real copy per account, refreshed while the migration is unfinished', async () => {
+    const managedHomePath = writeHistory('account-1', '{"id":"first"}\n')
     const keptPath = archivedHistoryPath('account-1')
     mkdirSync(join(keptPath, '..'), { recursive: true })
     linkSync(join(managedHomePath, 'history.jsonl'), keptPath)
@@ -247,13 +247,41 @@ describe('CodexRuntimeHomeService', () => {
     await vi.waitFor(() => expect(trackedImportOutcomes()).toEqual(['imported']), {
       timeout: WAIT_MS
     })
-    writeFileSync(join(managedHomePath, 'history.jsonl'), '{"id":"legacy-2"}\n', 'utf-8')
+    writeFileSync(
+      join(managedHomePath, 'history.jsonl'),
+      '{"id":"first"}\n{"id":"later"}\n',
+      'utf-8'
+    )
     vi.resetModules()
     await constructService()
     await removeAccountHome(managedHomePath)
 
-    expect(readFileSync(keptPath, 'utf-8')).toBe('{"id":"legacy-1"}\n')
+    expect(readFileSync(keptPath, 'utf-8')).toBe('{"id":"first"}\n{"id":"later"}\n')
     expect(readdirSync(join(keptPath, '..'))).toEqual(['history.jsonl'])
+  })
+
+  it('never keeps a copy through a linked folder', async () => {
+    const managedHomePath = writeHistory('account-1', '{"id":"legacy-1"}\n')
+    const elsewhere = join(testState.userDataDir, 'elsewhere')
+    mkdirSync(elsewhere, { recursive: true })
+    writeFileSync(join(elsewhere, 'history.jsonl'), '{"id":"someone-else"}\n', 'utf-8')
+    const keptRoot = join(testState.userDataDir, 'codex-runtime-home', 'legacy-account-history')
+    mkdirSync(keptRoot, { recursive: true })
+    symlinkSync(
+      elsewhere,
+      join(keptRoot, 'account-1'),
+      process.platform === 'win32' ? 'junction' : 'dir'
+    )
+
+    await constructService()
+
+    expect(readFileSync(join(elsewhere, 'history.jsonl'), 'utf-8')).toBe('{"id":"someone-else"}\n')
+    expect(readFileSync(join(managedHomePath, 'history.jsonl'), 'utf-8')).toBe(
+      '{"id":"legacy-1"}\n'
+    )
+    expect(existsSync(join(testState.userDataDir, 'codex-runtime-home', 'migration-v1.json'))).toBe(
+      false
+    )
   })
 
   it('retries a failed import on a later launch from the kept copy, after the account is gone', async () => {

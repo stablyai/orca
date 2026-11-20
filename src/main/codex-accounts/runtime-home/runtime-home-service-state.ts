@@ -209,7 +209,8 @@ export abstract class CodexRuntimeHomeState {
   ): string
   protected abstract copyLegacyFileWithoutOverwrite(
     legacyFilePath: string,
-    targetPath: string
+    targetPath: string,
+    readLegacy: () => Buffer
   ): 'copied' | 'identical' | 'conflict'
   protected abstract appendMigrationDiagnostic(record: Record<string, string>): void
 
