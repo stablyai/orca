@@ -4,7 +4,10 @@ import { markAntigravityDoneRetried } from './hook-precedence'
 import { isAgentStatusHeldOpenByChildWork } from '../../../../shared/agent-status/lifecycle/agent-lead-status-fold'
 import type { PaneTimers } from './pane-timers'
 import type { HookListenerState } from '../../../../shared/agent-hook-listener/listener-state'
-import type { AgentHookSource } from '../../../../shared/agent-hook-listener/transport/agent-hook-relay'
+import {
+  hasShedSubagentsField,
+  type AgentHookSource
+} from '../../../../shared/agent-hook-listener/transport/agent-hook-relay'
 import {
   antigravityHelpersSettled,
   getOrCreateAntigravityPaneState
@@ -137,7 +140,8 @@ export function reconcileRelayedAntigravityDone(
   state: HookListenerState,
   rechecks: PaneTimers,
   previous: AgentHookEventPayload | undefined,
-  applied: AgentHookEventPayload | undefined
+  applied: AgentHookEventPayload | undefined,
+  shedFields?: unknown
 ): void {
   if (
     !applied?.connectionId ||
@@ -165,14 +169,20 @@ export function reconcileRelayedAntigravityDone(
   if (!sameTurn || applied.hookEventName !== undefined || pane.leadObservedAt === undefined) {
     pane.leadObservedAt = now
   }
+  const heldBefore =
+    previous?.payload.subagents?.length ||
+    previous?.payload.antigravitySpawnPending ||
+    pane.relayRosterShed
+  pane.relayRosterShed =
+    hasShedSubagentsField(shedFields) && !applied.payload.subagents ? true : undefined
   // A pending spawn holds the run; its settling ends child work like a subagent leaving the row.
-  if (applied.payload.subagents?.length || applied.payload.antigravitySpawnPending) {
-    pane.helpersIdleAt = undefined
-  } else if (
-    sameTurn &&
-    (previous?.payload.subagents?.length || previous?.payload.antigravitySpawnPending) &&
-    applied.payload.mainAgent?.state === 'done'
+  if (
+    applied.payload.subagents?.length ||
+    applied.payload.antigravitySpawnPending ||
+    pane.relayRosterShed
   ) {
+    pane.helpersIdleAt = undefined
+  } else if (sameTurn && heldBefore && applied.payload.mainAgent?.state === 'done') {
     pane.helpersIdleAt = now
   }
   if (pane.helpersIdleAt !== undefined) {

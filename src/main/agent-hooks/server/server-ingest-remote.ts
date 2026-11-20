@@ -308,6 +308,7 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
       'hook',
       typeof age === 'number' ? Math.max(0, Date.now() - age) : undefined
     )
-    reconcileRelayedAntigravityDone(this.state, this.hookSilenceRechecks, previous, applied)
+    const shed = envelope.shedFields
+    reconcileRelayedAntigravityDone(this.state, this.hookSilenceRechecks, previous, applied, shed)
   }
 }

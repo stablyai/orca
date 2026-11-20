@@ -40,6 +40,8 @@ export type AntigravityPaneChildState = {
   /** Helper spawns the root started whose child no poll has proven yet. */
   pendingHelperSpawns?: number
   helpersIdleAt?: number
+  /** The relay dropped this pane's roster to fit a frame, so its children are unknown, not gone. */
+  relayRosterShed?: true
   /** How the root's last hook stopped: busy while background work runs, idle at the run's end. */
   rootStop?: 'busy' | 'idle'
   leadState?: AgentStatusState

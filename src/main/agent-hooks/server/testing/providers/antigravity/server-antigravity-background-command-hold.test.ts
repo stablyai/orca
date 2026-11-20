@@ -9,6 +9,7 @@ import {
 } from '../../../program-status/hook-precedence'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../../../shared/agent-status/contracts/agent-status-freshness'
 import { buildBody, PANE, postHookEvent } from '../../server.test-fixtures'
+import { createShedSubagentsField } from '../../../../../../shared/agent-hook-listener/transport/agent-hook-relay'
 
 let dir: string
 let server: AgentHookServer
@@ -49,6 +50,7 @@ function programDone(): void {
 }
 
 const state = () => server.getStatusSnapshot()[0]?.state
+const worker = (id: string) => ({ id, state: 'working' as const, startedAt: 1, description: id })
 
 it('keeps a turn waiting on a background command working past the hook-silence fallback, then bounds it', async () => {
   const command = {
@@ -314,13 +316,18 @@ it('keeps a woken subagent from settling a newer spawn', async () => {
   expect(state()).toBe('working')
 })
 
-it('holds a relayed done while the remote host reports a pending spawn', async () => {
+it.each([
+  ['reports a pending spawn', false],
+  ['drops its roster to fit a frame', true]
+])('holds a relayed done while the remote host %s', async (_case, shedRoster) => {
   const connectionId = 'ssh-agy'
   const leadStartedAt = Date.now()
   server.beginRemoteRelaySession(connectionId)
   const report = (ids: string[], spawnPending?: true): void => {
+    const shed = shedRoster && spawnPending && ids.length === 0
     server.ingestRemote(
       {
+        ...(shed ? { shedFields: [createShedSubagentsField([worker('b')])] } : {}),
         paneKey: PANE,
         tabId: 'tab-1',
         worktreeId: 'wt-1',
@@ -332,8 +339,8 @@ it('holds a relayed done while the remote host reports a pending spawn', async (
           state: 'working',
           agentType: 'antigravity',
           mainAgent: { state: 'done', stateStartedAt: leadStartedAt },
-          subagents: ids.map((id) => ({ id, state: 'working', startedAt: 1, description: id })),
-          ...(spawnPending ? { antigravitySpawnPending: spawnPending } : {})
+          subagents: shed ? undefined : ids.map(worker),
+          ...(spawnPending && !shed ? { antigravitySpawnPending: spawnPending } : {})
         }
       },
       connectionId
