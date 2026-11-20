@@ -2,10 +2,9 @@ import type Database from '../../../sqlite/sync-database'
 import { structuredAgentSessionTabId } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import { insertJournalLegacyClaims, missingJournalLegacyClaims } from './journal-legacy-claims'
 import { runJournalTransaction } from './journal-database'
-import { writeMeta } from './journal-legacy-reconcile-marks'
+import { readMeta, writeMeta } from './journal-legacy-reconcile-marks'
 import type { SqliteRow } from '../../../sqlite/sqlite-statement'
 import { AGENT_SESSION_TABS_RECORDED } from '../../../runtime/agent-session/records/agent-session-record-rows'
-import { readMeta } from './journal-legacy-reconcile-marks'
 import { journalLegacyChatRevision, journalLegacyChatRevisionKey } from './journal-legacy-source'
 
 export type Claim = SqliteRow

@@ -29,7 +29,7 @@ afterEach(() => {
 function reads(db: Database.Database, counted: (sql: string, key: unknown) => boolean) {
   let total = 0
   const prepare = db.prepare
-  vi.spyOn(db, 'prepare').mockImplementation(function (sql) {
+  vi.spyOn(db, 'prepare').mockImplementation(function (this: Database.Database, sql) {
     const statement = prepare.call(this, sql)
     return {
       get: (...parameters: Parameters<typeof statement.get>) => {

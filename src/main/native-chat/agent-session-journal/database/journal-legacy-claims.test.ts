@@ -90,7 +90,10 @@ it.each([11, 10])(
       .prepare('INSERT INTO agent_session_attachment_claims VALUES(?,?,?)')
       .run('later-upload', 'later-chat', 100)
     const prepare = Database.prototype.prepare
-    vi.spyOn(Database.prototype, 'prepare').mockImplementation(function (sql) {
+    vi.spyOn(Database.prototype, 'prepare').mockImplementation(function (
+      this: Database.Database,
+      sql
+    ) {
       const statement = prepare.call(this, sql)
       if (sql !== 'SELECT record_json FROM agent_session_records WHERE session_id=?') {
         return statement
