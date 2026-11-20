@@ -27,8 +27,6 @@ type Answer = {
   query: string
   /** The linked GitHub login; a different gh account is named. */
   ownerLogin: string | null
-  /** The bot's computer, when it is not this one. */
-  hostName: string | null
   /** Settles when a loading roster arrives, so the picker asks again. */
   pending?: Promise<unknown>
 }
@@ -36,7 +34,7 @@ type Answer = {
 /** One search as the picker draws it. Every line says only what was actually read: an empty list
  *  never reads as "no one exists" when nothing, or not everything, was looked at. */
 export function gitHubWhoCanAskAnswer(
-  { roster, exact, query, ownerLogin, hostName, pending }: Answer,
+  { roster, exact, query, ownerLogin, pending }: Answer,
   t: Translate
 ): BotSlackResult<BotWhoCanAskFound> {
   // GitHub off, as the cloud just said, is definitive; and with no roster either, the error (and
@@ -83,12 +81,8 @@ export function gitHubWhoCanAskAnswer(
     roster.status === 'loading'
       ? t('bots.github.whoCanAsk.loading', 'Still loading your repos.')
       : roster.status === 'unavailable'
-        ? // A remote bot's computer is named; this one goes without saying.
-          hostName
-          ? t('bots.github.whoCanAsk.unavailableOn', 'Couldn’t read repos on {{host}}.', {
-              host: hostName
-            })
-          : t('bots.github.whoCanAsk.unavailable', 'Couldn’t read repos.')
+        ? // Which computer goes unsaid: naming a remote one would not fit one line.
+          t('bots.github.whoCanAsk.unavailable', 'Couldn’t read repos.')
         : roster.status === 'busy'
           ? t('bots.github.whoCanAsk.busy', 'Repo list is busy. Try again shortly.')
           : roster.status === 'none'
@@ -115,14 +109,9 @@ export function gitHubWhoCanAskAnswer(
       ? t('bots.github.whoCanAsk.exactFailed', 'Couldn’t check GitHub usernames.')
       : null,
     read?.searchedAs && ownerLogin && read.searchedAs.toLowerCase() !== ownerLogin.toLowerCase()
-      ? hostName
-        ? t('bots.github.whoCanAsk.searchedAsOn', 'Repos read as @{{login}} on {{host}}.', {
-            login: read.searchedAs,
-            host: hostName
-          })
-        : t('bots.github.whoCanAsk.searchedAs', 'Repos read as @{{login}}.', {
-            login: read.searchedAs
-          })
+      ? t('bots.github.whoCanAsk.searchedAs', 'Repos read as @{{login}}.', {
+          login: read.searchedAs
+        })
       : null
   ]
   const note = [rosterLine, exactOnly, ...limits].filter(Boolean).join(' ') || undefined

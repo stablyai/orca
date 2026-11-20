@@ -21,7 +21,6 @@ type Calls = {
 type Context = {
   scope: GitHubPeopleScope | undefined
   ownerLogin: string | null
-  hostName: string | null
   t: Translate
 }
 
@@ -39,7 +38,7 @@ function settledWithin<T>(promise: Promise<T>, ms: number): Promise<T | null> {
  *  filters it; the exact-username lookup runs per keystroke as it always has. */
 export function gitHubWhoCanAskSession(
   calls: Calls,
-  { scope, ownerLogin, hostName, t }: Context
+  { scope, ownerLogin, t }: Context
 ): (query: string) => Promise<BotSlackResult<BotWhoCanAskFound>> {
   let roster: Promise<GitHubRosterState> | null = null
   let settled: GitHubRosterState | null = null
@@ -70,7 +69,6 @@ export function gitHubWhoCanAskSession(
         exact: exact ? await exact : null,
         query,
         ownerLogin,
-        hostName,
         ...(now ? {} : { pending: loading })
       },
       t

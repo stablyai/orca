@@ -54,7 +54,7 @@ const make = (roster: Roster): BotWhoCanAskService => {
   const begin = () =>
     gitHubWhoCanAskSession(
       { people: async () => ({ ok: true, value: roster }), users },
-      { scope, ownerLogin: 'owner', hostName: null, t }
+      { scope, ownerLogin: 'owner', t }
     )
   return {
     listed: () => [],

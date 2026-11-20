@@ -55,7 +55,6 @@ export function useGitHubWhoCanAsk(
       gitHubWhoCanAskSession(botGitHubCalls(hostId), {
         scope,
         ownerLogin: ownerName,
-        hostName,
         t
       })
     return {
