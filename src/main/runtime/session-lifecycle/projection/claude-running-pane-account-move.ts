@@ -66,7 +66,8 @@ export abstract class OrcaRuntimeWithClaudeRunningPaneAccountMove extends OrcaRu
     change: ClaudeHostSelectionChange,
     heldPtyIds: ReadonlySet<string> = new Set()
   ): Promise<ClaudeHostRunningSessionsMove | undefined> {
-    const answered = answeredClaudeMove(this.askedClaudeMove, change)
+    const current = this.accounts.getClaudeAccountsSnapshot()
+    const answered = answeredClaudeMove(this.askedClaudeMove, change, current)
     // An answer to an Ask a later switch replaced moves nothing: its snapshots are stale.
     if (change.answersAskFor !== undefined && !answered) {
       return Promise.resolve(undefined)
@@ -131,14 +132,12 @@ export abstract class OrcaRuntimeWithClaudeRunningPaneAccountMove extends OrcaRu
     let notMoved = 0
     let canRestart = 0
     for (const pane of panes) {
-      if (heldPtyIds.has(pane.pty.ptyId)) {
-        continue
-      }
       const folder = this.claudePaneFolder(pane, saved, host)
       const onOutgoing = isClaudePaneOnAccount(folder, fromAccountId, host)
       // The renderer's rule: an unread folder or session may be on the outgoing account.
       const mayBeOnOutgoing = !pane.session || !folder || onOutgoing
-      if (folder?.kind === 'own-folder' || !mayBeOnOutgoing) {
+      // A window that holds the pane moves it itself.
+      if (heldPtyIds.has(pane.pty.ptyId) || folder?.kind === 'own-folder' || !mayBeOnOutgoing) {
         continue
       }
       const running = await readClaudeForeground(this.ptyController, pane.pty.ptyId)

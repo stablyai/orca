@@ -1,6 +1,7 @@
 import { normalizeCodexAccountSelectionTarget } from '../../../../shared/agent-accounts/codex/codex-selection-lane'
 import {
   claudeLaunchAccountId,
+  type ClaudeHostFolders,
   type ClaudeHostSelectionChange
 } from '../../../../shared/agent-accounts/claude/claude-pane-account-folder'
 
@@ -22,18 +23,23 @@ export function claudeHostAccountSwitch(change: ClaudeHostSelectionChange): {
   }
 }
 
-/** An answer restarts what its Ask left, unless a later switch moved the host off that account. */
+/** An answer restarts what its Ask left, unless a later switch moved the host off that account.
+ *  Checked against the host's selection now, never the snapshot the answering toast kept. */
 export function answeredClaudeMove(
   asked: ClaudeHostSelectionChange | undefined,
-  change: ClaudeHostSelectionChange
+  change: ClaudeHostSelectionChange,
+  current: ClaudeHostFolders & { activeAccountId: string | null }
 ): ClaudeHostSelectionChange | undefined {
   if (!asked || change.answersAskFor === undefined) {
     return undefined
   }
-  const { state } = change.after
-  const selected = claudeLaunchAccountId(state, change.after.accountId)
-  return selected === claudeLaunchAccountId(state, change.answersAskFor) &&
+  const selected = claudeLaunchAccountId(current, current.activeAccountId)
+  return selected === claudeLaunchAccountId(current, change.answersAskFor) &&
     selected === claudeLaunchAccountId(asked.after.state, asked.after.accountId)
-    ? { ...asked, after: change.after, runningSessions: 'restart' }
+    ? {
+        ...asked,
+        after: { state: current, accountId: current.activeAccountId },
+        runningSessions: 'restart'
+      }
     : undefined
 }
