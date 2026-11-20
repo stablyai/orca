@@ -24,7 +24,7 @@ import { getOptionalStringFlag, getOptionalStringFlagAllowingEmpty } from '../ar
 import { RuntimeClientError } from '../runtime/connection/types'
 import type { RuntimeClient } from '../runtime/client'
 import type { RuntimeRpcSuccess } from '../../shared/remote-runtime/rpc/runtime-rpc-envelope'
-import { getWorktreeReadFlags } from './worktree-unread-flag'
+import { getWorktreePinFlags, getWorktreeReadFlags } from './worktree-unread-flag'
 
 type Flags = Map<string, string | boolean>
 
@@ -105,6 +105,7 @@ async function setFolderWorkspace(
   const comment = getOptionalStringFlagAllowingEmpty(flags, 'comment')
   const workspaceStatus = getOptionalStringFlag(flags, 'workspace-status')
   const { isUnread } = getWorktreeReadFlags(flags)
+  const { isPinned } = getWorktreePinFlags(flags)
   await assertUniqueIdMutationSupported(client)
   const updated = await client.call<{ folderWorkspace: FolderWorkspace | null }>(
     'folderWorkspace.update',
@@ -115,7 +116,8 @@ async function setFolderWorkspace(
         ...(displayName !== undefined ? { name: displayName } : {}),
         ...(comment !== undefined ? { comment } : {}),
         ...(workspaceStatus !== undefined ? { workspaceStatus } : {}),
-        ...(isUnread !== undefined ? { isUnread } : {})
+        ...(isUnread !== undefined ? { isUnread } : {}),
+        ...(isPinned !== undefined ? { isPinned } : {})
       }
     }
   )
