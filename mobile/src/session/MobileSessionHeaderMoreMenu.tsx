@@ -5,6 +5,8 @@ import {
   Columns2,
   Folder,
   GitBranch,
+  History,
+  LayoutList,
   ListChecks,
   Plus,
   SquareChevronRight
@@ -17,6 +19,7 @@ import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { MobileSessionController } from './use-mobile-session-controller'
 import { MobileSessionBotActionsContext } from './mobile-session-bot-actions-context'
+import { useMobileSessionTabBarMode } from './tabs/use-mobile-session-tab-bar-mode'
 
 type Props = {
   controller: MobileSessionController
@@ -35,6 +38,9 @@ export function MobileSessionHeaderMoreMenu({ controller, anchorRef, actionsColl
     setShowHeaderMoreActions,
     showAgentSessionHistoryAction,
     showChecksAction,
+    showRecentSessionCardsAction,
+    setShowRecentSessionCards,
+    visibleTabs,
     openAgentSessionHistory,
     handlePanelTap,
     canSplitTerminals,
@@ -49,6 +55,7 @@ export function MobileSessionHeaderMoreMenu({ controller, anchorRef, actionsColl
     handleOpenQuickCommands,
     itemsOnPhone
   } = controller
+  const { mode: tabBarMode, toggleMode: toggleTabBarMode } = useMobileSessionTabBarMode()
   const botActions = useContext(MobileSessionBotActionsContext)
   const tabActionsDisabled = createTabBusy || connState !== 'connected'
   const panels: ActionSheetAction[] = [
@@ -143,20 +150,46 @@ export function MobileSessionHeaderMoreMenu({ controller, anchorRef, actionsColl
             onPress: () => setTextSizeSheet(textSizeSheet)
           }
         ]
+      : []),
+    {
+      id: 'tabBarMode',
+      label:
+        tabBarMode === 'classic-strip'
+          ? t('session.header.switchToSingleTabBar', 'Switch to full-width tab bar')
+          : t('session.header.switchToCompactTabStrip', 'Switch to compact tab strip'),
+      icon: LayoutList,
+      closeBeforePress: true,
+      onPress: () => {
+        toggleTabBarMode()
+      }
+    }
+  ]
+  const recentlyUsedVisible = showRecentSessionCardsAction && (visibleTabs?.length ?? 0) === 0
+  const tabs: ActionSheetAction[] = [
+    ...(recentlyUsedVisible
+      ? [
+          {
+            id: 'recentlyUsed',
+            label: t('recentSessionCardsSectionTitle', 'Recently Used'),
+            icon: History,
+            closeBeforePress: true,
+            onPress: () => setShowRecentSessionCards(true)
+          }
+        ]
+      : []),
+    ...(actionsCollapsed
+      ? [
+          {
+            id: 'newTab',
+            label: t('session.header.newTab', 'New tab'),
+            icon: Plus,
+            disabled: tabActionsDisabled,
+            closeBeforePress: true,
+            onPress: handleOpenNewTab
+          }
+        ]
       : [])
   ]
-  const tabs: ActionSheetAction[] = actionsCollapsed
-    ? [
-        {
-          id: 'newTab',
-          label: t('session.header.newTab', 'New tab'),
-          icon: Plus,
-          disabled: tabActionsDisabled,
-          closeBeforePress: true,
-          onPress: handleOpenNewTab
-        }
-      ]
-    : []
   return (
     <PullDownMenu
       visible={showHeaderMoreActions}

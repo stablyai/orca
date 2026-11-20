@@ -2287,7 +2287,9 @@
       "fileExplorer": "Dosya gezgini",
       "sourceControl": "Kaynak kontrolü",
       "newTab": "Yeni sekme",
-      "quickCommands": "Hızlı komutlar"
+      "quickCommands": "Hızlı komutlar",
+      "switchToSingleTabBar": "Tam genişlikli sekme çubuğuna geç",
+      "switchToCompactTabStrip": "Kompakt sekme şeridine geç"
     },
     "headerMoreActionsSheet": {
       "agentHistory": "Ajan Geçmişi",
@@ -2499,7 +2501,8 @@
     "tabStrip": {
       "checkingCapabilities": "Masaüstü özellikleri kontrol ediliyor — birazdan tekrar deneyin",
       "newTab": "Yeni sekme",
-      "quickCommandsUpdateRequired": "Hızlı komutlar için masaüstü uygulaması güncellenmeli"
+      "quickCommandsUpdateRequired": "Hızlı komutlar için masaüstü uygulaması güncellenmeli",
+      "tabStatus": "{{title}}, {{status}}"
     },
     "terminalActionSheetActions": {
       "clearTerminal": "Terminali Temizle",
@@ -2802,6 +2805,19 @@
     },
     "browserProfile": {
       "default": "Varsayılan"
+    },
+    "recentSessionCards": {
+      "decreaseLimit": "Son kart sınırını azalt",
+      "increaseLimit": "Son kart sınırını artır",
+      "cardClosed": "Kart kapatıldı",
+      "waitingForHost": "Ana bilgisayar bekleniyor…",
+      "workspaceGone": "Çalışma alanı artık mevcut değil",
+      "cardClosedOpeningWorkspace": "Kart kapatıldı; çalışma alanı açılıyor"
+    },
+    "tabsSheet": {
+      "recentCaption": "Alanlar arası son kullanılanlar",
+      "recentSegment": "Son",
+      "workspaceSegment": "Bu çalışma alanı ({{count}})"
     }
   },
   "settings": {
@@ -2970,6 +2986,17 @@
       "download": "Bu telefona indir",
       "downloadSize": "Yaklaşık {{size}} MB",
       "phoneChecking": "Kontrol ediliyor…"
+    },
+    "nativeChat": {
+      "recentlyUsed": "SON KULLANILANLAR",
+      "recentlyUsedFooter": "Sekme çubuğu düzenini ve kaç son sekmenin görüneceğini özelleştirin (varsayılan 7).",
+      "compactTabStrip": "Kompakt sekme şeridi",
+      "compactTabStripOn": "Üst çubukta dar kaydırılabilir sekmeler",
+      "compactTabStripOff": "Üst çubukta tek tam genişlikli etkin sekme",
+      "maxRecentItems": "En fazla son öğe",
+      "cardsUnit": "kart",
+      "decreaseMaxRecent": "En fazla son öğeyi azalt",
+      "increaseMaxRecent": "En fazla son öğeyi artır"
     }
   },
   "sourceControl": {
@@ -4388,5 +4415,7 @@
       "unreachableSingle": "{{name}} ile bağlantı kurulamadı. Orada Orca’nın çalıştığından emin olun ve yeniden deneyin.",
       "workspaceDeleted": "Bu sohbetin çalışma alanı {{name}} üzerinde silindi."
     }
-  }
+  },
+  "recentSessionCardsSectionTitle": "Son Kullanılanlar",
+  "recentSessionCardsEmpty": "Henüz başka son kart yok"
 }

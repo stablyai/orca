@@ -14,6 +14,7 @@ import {
   workspaceRouteHref,
   workspaceRouteParams
 } from '../navigation/workspace-execution-host'
+import { useRecentSessionCardMenu } from './use-recent-session-card-menu'
 import type { MobileSessionPresentationModel } from './use-mobile-session-presentation'
 
 export function useMobileSessionPanelRouteActions(scope: MobileSessionPresentationModel) {
@@ -165,6 +166,9 @@ export function useMobileSessionPanelRouteActions(scope: MobileSessionPresentati
     repoContextLoaded: prRepoContextLoaded,
     hostedChecksSupported: prIsGithubRepo
   })
+  const showRecentSessionCardsAction = !isFloatingWorkspaceRoute
+  const { recentSessionCards, jumpingRecentCardKey, handleSelectRecentSessionCard } =
+    useRecentSessionCardMenu(scope)
   const createTabBusy = creating || creatingBrowser || creatingMarkdown
   const handleOpenNewTab = () => {
     setCreateError('')
@@ -196,6 +200,10 @@ export function useMobileSessionPanelRouteActions(scope: MobileSessionPresentati
     openAgentSessionHistory,
     showAgentSessionHistoryAction,
     showChecksAction,
+    showRecentSessionCardsAction,
+    recentSessionCards,
+    jumpingRecentCardKey,
+    handleSelectRecentSessionCard,
     createTabBusy,
     handleOpenNewTab,
     handleOpenQuickCommands

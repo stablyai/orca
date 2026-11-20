@@ -1,4 +1,4 @@
-import { useEffect, useCallback } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import {
   currentSoftKeyboardHeight,
   subscribeSoftKeyboard
@@ -6,12 +6,20 @@ import {
 import { useTerminalViewportRefit } from '../../viewport/terminal-viewport-refit'
 import { removeCustomKey, type CustomKey } from '../../key-input/terminal-custom-keys'
 import { useWorkspaceExecutionHost } from '../../../navigation/workspace-execution-host'
+import { getMobileTerminalTabHostAgentIdentity } from '../../../session/tabs/mobile-terminal-tab-agent'
+import {
+  buildRecentSessionCardFromTab,
+  hydrateRecentSessionCards,
+  reconcileRecentSessionCardsForWorktree,
+  recordRecentSessionCardVisit
+} from '../../../session/recent-session-cards'
 import { writeLastVisitedWorktree } from '../../../worktree/navigation/last-visited-worktree-by-host'
 import type { MobileSessionLifecycleModel } from '../../../session/use-mobile-session-lifecycle'
 
 export type MobileSessionKeyboardScope = Pick<
   MobileSessionLifecycleModel,
   | 'activeHandleRef'
+  | 'activeSessionTabId'
   | 'visibleTerminalHandlesRef'
   | 'terminalPaneViewportsRef'
   | 'clientRef'
@@ -19,6 +27,7 @@ export type MobileSessionKeyboardScope = Pick<
   | 'deviceTokenRef'
   | 'hostId'
   | 'router'
+  | 'sessionTabs'
   | 'setCustomKeys'
   | 'setShowCustomKeyModal'
   | 'showNativeChatRef'
@@ -32,14 +41,18 @@ export type MobileSessionKeyboardScope = Pick<
   | 'viewportMeasuredRef'
   | 'viewportRef'
   | 'worktreeId'
+  | 'worktreeName'
 >
 
 export function useMobileSessionKeyboardState(scope: MobileSessionKeyboardScope) {
   const {
     hostId,
     worktreeId,
+    worktreeName,
     router,
     connState,
+    sessionTabs,
+    activeSessionTabId,
     terminals,
     terminalTextScale,
     terminalFontStyle,
@@ -96,6 +109,50 @@ export function useMobileSessionKeyboardState(scope: MobileSessionKeyboardScope)
       void writeLastVisitedWorktree({ hostId, worktreeId, executionHost })
     }
   }, [hostId, worktreeId, executionHost])
+
+  useEffect(() => {
+    void hydrateRecentSessionCards().catch(() => {})
+  }, [])
+
+  const lastRecordedCardKeyRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (!hostId || !worktreeId) {
+      return
+    }
+    if (sessionTabs.length > 0) {
+      reconcileRecentSessionCardsForWorktree({ hostId, worktreeId, liveTabs: sessionTabs })
+    }
+    if (!activeSessionTabId) {
+      return
+    }
+    const activeTab = sessionTabs.find((tab) => tab.id === activeSessionTabId)
+    if (!activeTab) {
+      return
+    }
+    const hostAgentIdentity = getMobileTerminalTabHostAgentIdentity(activeTab, terminals)
+    // Status receipts rewrite sessionTabs without a new user visit.
+    const recordedKey = [
+      hostId,
+      worktreeId,
+      activeTab.id,
+      activeTab.title,
+      worktreeName,
+      hostAgentIdentity ?? ''
+    ].join('\0')
+    if (lastRecordedCardKeyRef.current === recordedKey) {
+      return
+    }
+    lastRecordedCardKeyRef.current = recordedKey
+    recordRecentSessionCardVisit(
+      buildRecentSessionCardFromTab({
+        hostId,
+        worktreeId,
+        worktreeName: worktreeName || '',
+        tab: activeTab,
+        hostAgentIdentity
+      })
+    )
+  }, [activeSessionTabId, hostId, sessionTabs, terminals, worktreeId, worktreeName])
 
   const handleDeleteCustomKey = useCallback(async (key: CustomKey) => {
     try {

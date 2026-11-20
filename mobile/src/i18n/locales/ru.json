@@ -2425,7 +2425,9 @@
       "fileExplorer": "Проводник файлов",
       "sourceControl": "Управление исходным кодом",
       "newTab": "Новая вкладка",
-      "quickCommands": "Быстрые команды"
+      "quickCommands": "Быстрые команды",
+      "switchToSingleTabBar": "Переключиться на широкую панель вкладки",
+      "switchToCompactTabStrip": "Переключиться на компактную ленту вкладок"
     },
     "headerMoreActionsSheet": {
       "agentHistory": "История агентов",
@@ -2639,7 +2641,8 @@
     "tabStrip": {
       "checkingCapabilities": "Проверяем возможности Orca на компьютере — повторите попытку чуть позже",
       "newTab": "Новая вкладка",
-      "quickCommandsUpdateRequired": "Для быстрых команд обновите Orca на компьютере"
+      "quickCommandsUpdateRequired": "Для быстрых команд обновите Orca на компьютере",
+      "tabStatus": "{{title}}, {{status}}"
     },
     "terminalActionSheetActions": {
       "clearTerminal": "Очистить терминал",
@@ -2942,6 +2945,19 @@
     },
     "browserProfile": {
       "default": "По умолчанию"
+    },
+    "recentSessionCards": {
+      "decreaseLimit": "Уменьшить лимит недавних карточек",
+      "increaseLimit": "Увеличить лимит недавних карточек",
+      "cardClosed": "Карточка закрыта",
+      "waitingForHost": "Ожидание хоста…",
+      "workspaceGone": "Рабочая область больше не существует",
+      "cardClosedOpeningWorkspace": "Карточка закрыта; открытие рабочей области"
+    },
+    "tabsSheet": {
+      "recentCaption": "Недавние по всем проектам",
+      "recentSegment": "Недавние",
+      "workspaceSegment": "Этот проект ({{count}})"
     }
   },
   "settings": {
@@ -3118,6 +3134,17 @@
       "download": "Скачать на этот телефон",
       "downloadSize": "Около {{size}} МБ",
       "phoneChecking": "Проверка…"
+    },
+    "nativeChat": {
+      "recentlyUsed": "НЕДАВНИЕ",
+      "recentlyUsedFooter": "Настройте вид панели вкладок и количество отображаемых недавних вкладок (по умолчанию 7).",
+      "compactTabStrip": "Компактная лента вкладок",
+      "compactTabStripOn": "Узкие прокручиваемые вкладки в верхней панели",
+      "compactTabStripOff": "Одна активная вкладка во всю ширину сверху",
+      "maxRecentItems": "Макс. недавних элементов",
+      "cardsUnit": "карточек",
+      "decreaseMaxRecent": "Уменьшить макс. недавних элементов",
+      "increaseMaxRecent": "Увеличить макс. недавних элементов"
     }
   },
   "sourceControl": {
@@ -4588,5 +4615,7 @@
       "unreachableSingle": "Не удалось подключиться к {{name}}. Убедитесь, что Orca запущена на этом компьютере, и повторите попытку.",
       "workspaceDeleted": "Рабочая область этого чата удалена на {{name}}."
     }
-  }
+  },
+  "recentSessionCardsSectionTitle": "Недавние",
+  "recentSessionCardsEmpty": "Других недавних карточек пока нет"
 }

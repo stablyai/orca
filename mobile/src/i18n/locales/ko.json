@@ -2285,7 +2285,9 @@
       "fileExplorer": "파일 탐색기",
       "sourceControl": "소스 제어",
       "newTab": "새 탭",
-      "quickCommands": "빠른 명령어"
+      "quickCommands": "빠른 명령어",
+      "switchToSingleTabBar": "전체 너비 탭 막대로 전환",
+      "switchToCompactTabStrip": "좁은 탭 스트립으로 전환"
     },
     "headerMoreActionsSheet": {
       "agentHistory": "에이전트 기록",
@@ -2497,7 +2499,8 @@
     "tabStrip": {
       "checkingCapabilities": "데스크톱에서 지원하는 기능을 확인 중입니다. 잠시 후 다시 시도하세요.",
       "newTab": "새 탭",
-      "quickCommandsUpdateRequired": "빠른 명령을 사용하려면 데스크톱 업데이트가 필요합니다."
+      "quickCommandsUpdateRequired": "빠른 명령을 사용하려면 데스크톱 업데이트가 필요합니다.",
+      "tabStatus": "{{title}}, {{status}}"
     },
     "terminalActionSheetActions": {
       "clearTerminal": "터미널 지우기",
@@ -2800,6 +2803,19 @@
     },
     "browserProfile": {
       "default": "기본"
+    },
+    "recentSessionCards": {
+      "decreaseLimit": "최근 항목 제한 줄이기",
+      "increaseLimit": "최근 항목 제한 늘리기",
+      "cardClosed": "카드가 닫혔습니다",
+      "waitingForHost": "호스트 연결 대기 중…",
+      "workspaceGone": "워크스페이스가 더 이상 존재하지 않습니다",
+      "cardClosedOpeningWorkspace": "카드가 닫혀 워크스페이스를 엽니다"
+    },
+    "tabsSheet": {
+      "recentCaption": "워크스페이스 전체 최근 항목",
+      "recentSegment": "최근",
+      "workspaceSegment": "이 워크스페이스 ({{count}})"
     }
   },
   "settings": {
@@ -2968,6 +2984,17 @@
       "download": "이 휴대폰에 다운로드",
       "downloadSize": "약 {{size}}MB",
       "phoneChecking": "확인 중…"
+    },
+    "nativeChat": {
+      "recentlyUsed": "최근 사용",
+      "recentlyUsedFooter": "탭 막대 레이아웃과 최근 탭 표시 개수를 사용자 지정합니다(기본값 7).",
+      "compactTabStrip": "좁은 탭 막대",
+      "compactTabStripOn": "상단 막대에 좁은 탭을 가로 스크롤로 표시",
+      "compactTabStripOff": "상단 막대에 현재 탭만 전체 너비로 표시",
+      "maxRecentItems": "최대 최근 항목 수",
+      "cardsUnit": "개 카드",
+      "decreaseMaxRecent": "최대 최근 항목 수 줄이기",
+      "increaseMaxRecent": "최대 최근 항목 수 늘리기"
     }
   },
   "sourceControl": {
@@ -4386,5 +4413,7 @@
       "unreachableSingle": "{{name}}에 연결할 수 없습니다. 해당 컴퓨터에서 Orca가 실행 중인지 확인한 다음 다시 시도하세요.",
       "workspaceDeleted": "이 채팅의 작업 공간이 {{name}}에서 삭제되었습니다."
     }
-  }
+  },
+  "recentSessionCardsSectionTitle": "최근 사용",
+  "recentSessionCardsEmpty": "다른 최근 카드가 없습니다"
 }
