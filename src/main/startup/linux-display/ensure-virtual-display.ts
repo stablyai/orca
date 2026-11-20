@@ -270,6 +270,8 @@ function startVirtualDisplay(displayNumber: number): DisplayStart | 'unavailable
         `[serve] Xvfb did not take ownership of ${display}; browser panes are unavailable. ` +
           'A stale socket from another user can block the rebind.'
       )
+    } else if (started === 'unavailable') {
+      console.warn(`[serve] Xvfb exited before taking ${display}; browser panes are unavailable.`)
     }
     stopVirtualDisplay()
     return started

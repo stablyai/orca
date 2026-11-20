@@ -1,5 +1,6 @@
-import { spawn, type ChildProcess } from 'node:child_process'
+import type { ChildProcess } from 'node:child_process'
 import { spawnProcess } from '@orca/process-host'
+import { spawnWithoutInheritedFds } from '@orca/process-host/fd-closing-exec-launch'
 import { Duplex } from 'node:stream'
 import type { Socket as NetSocket } from 'node:net'
 import type { SshTarget } from '../../../shared/remote-runtime/ssh/ssh-types'
@@ -91,7 +92,9 @@ export function spawnProxyCommand(
       ? // Spawn structured ProxyJump argv directly so values cannot escape through a shell.
         spawnProcess({
           program: 'ssh',
-          args: jumpHostSpawnArgs(proxy.jumpHost, host, port)
+          args: jumpHostSpawnArgs(proxy.jumpHost, host, port),
+          // A ControlMaster ssh can outlive main; it must not hold main's Chromium sockets.
+          closeInheritedFds: true
         })
       : (() => {
           const escape = process.platform === 'win32' ? cmdEscape : quotePosixShell
@@ -101,7 +104,7 @@ export function spawnProxyCommand(
             .replace(/%r/g, escape(user))
           const shell = getShellSpawnConfig(expanded)
           // User-authored ProxyCommand needs verbatim shell semantics; hide its Windows console to avoid focus theft (#10488).
-          return spawn(shell.file, shell.args, {
+          return spawnWithoutInheritedFds(shell.file, shell.args, {
             stdio: ['pipe', 'pipe', 'pipe'],
             windowsHide: true,
             windowsVerbatimArguments: shell.windowsVerbatimArguments

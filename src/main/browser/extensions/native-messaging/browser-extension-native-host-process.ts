@@ -93,8 +93,7 @@ export function startNativeHost(
               ],
               cwd: dirname(launch.program),
               env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
-              stdio: ['pipe', 'pipe', 'pipe', 'ipc'],
-              closeInheritedFds: true
+              stdio: ['pipe', 'pipe', 'pipe', 'ipc']
             }
           : {
               program: launch.program,
