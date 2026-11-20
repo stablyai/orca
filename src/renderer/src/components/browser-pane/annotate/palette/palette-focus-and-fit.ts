@@ -9,7 +9,7 @@ export const BROWSER_ANNOTATE_BUTTON_ATTRIBUTE = 'data-browser-annotate-button'
  * plus grip, separators and Done. Why one budget: the labels show or hide for every tool at a given width, so
  * switching tools never changes the switch's shape.
  */
-const WIDEST_TOOL_RESERVE_PX = 360
+const WIDEST_TOOL_RESERVE_PX = 480
 
 export function widestPaletteWidth(bounds: HTMLElement, labelProbe: HTMLElement): number {
   return Math.min(
