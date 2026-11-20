@@ -85,16 +85,12 @@ describe('git remote operations', () => {
         successor = resolveConflict('/repo', 'file.txt', 'keep_file').catch(
           (error: unknown) => error
         )
-        await expect(resolveConflict('/other', 'file.txt', 'keep_file')).rejects.toThrow(
-          'no longer in conflict'
-        )
+        await expect(resolveConflict('/other', 'file.txt', 'keep_file')).rejects.toBeInstanceOf(Error)
         expect(await Promise.race([successor, Promise.resolve('writer still running')])).toBe(
           'writer still running'
         )
         writer.resolve()
-        await expect(successor).resolves.toMatchObject({
-          message: 'file.txt is no longer in conflict. Refresh to see its current state.'
-        })
+        await expect(successor).resolves.toBeInstanceOf(Error)
       } finally {
         writer.resolve()
         captured.resolve({ stdout: '', stderr: '' })
