@@ -80,6 +80,7 @@ import {
 } from './worker-approvals/NativeChatWorkerApprovals'
 
 export function NativeChatStructuredSession(props: Omit<NativeChatStructuredViewProps, 'mode'>) {
+  const { tabId: terminalTabId, agent, isVisible } = props
   const { ownerWorktreeId, turnBot, bot: chatBot } = useBotChatOwner(props)
   const slackMirror = useNativeChatSlackMirror(chatBot, props.sessionId)
   const fileLinkContext = useNativeChatFileLinkContext(props.tabId)
@@ -340,12 +341,7 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
                   statedFailures={startFailures}
                   steerHeld={bot.stopControls.stopping || hostHeld}
                   focusComposer={focusComposer}
-                  editAttachTo={{
-                    terminalTabId: props.tabId,
-                    agent: props.agent,
-                    isVisible: props.isVisible,
-                    transport
-                  }}
+                  editAttachTo={{ terminalTabId, agent, isVisible, transport }}
                 />
                 {subagents.strip}
                 {/* Workers' open prompts stay pinned here, above this chat's own prompt. */}
