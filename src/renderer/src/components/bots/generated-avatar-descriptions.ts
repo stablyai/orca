@@ -29,11 +29,18 @@ function savedKey(owner: SavedPictureOwner): string | null {
 
 // Each save reads the record once the one before it has published, so two quick saves keep both.
 let saving: Promise<void> = Promise.resolve()
+// Captions queued but not yet published, so a picture put back meanwhile still finds its own.
+const queued = new Map<string, string>()
 
 /** The description saved with an avatar, read outside render. */
 export function savedPictureDescription(owner: SavedPictureOwner): string | null {
   const key = savedKey(owner)
-  return key ? (useAppStore.getState().settings?.generatedAvatarDescriptions?.[key] ?? null) : null
+  if (!key) {
+    return null
+  }
+  return (
+    queued.get(key) ?? useAppStore.getState().settings?.generatedAvatarDescriptions?.[key] ?? null
+  )
 }
 
 /** After `png` is saved as the owner's avatar: keeps its description, when it was generated. A picture
@@ -48,17 +55,24 @@ export function keepSavedPictureDescription(
   if (!description || !key) {
     return
   }
+  queued.set(key, description)
   saving = saving.then(async () => {
-    const { settings, updateSettings } = useAppStore.getState()
-    if (!settings) {
-      return
+    try {
+      const { settings, updateSettings } = useAppStore.getState()
+      if (!settings) {
+        return
+      }
+      const entries = Object.entries(settings.generatedAvatarDescriptions ?? {}).filter(
+        ([saved]) => saved !== key
+      )
+      // Newest last; the oldest go once there are more than the cap.
+      const kept = [...entries, [key, description] as const].slice(-MAX_SAVED)
+      await updateSettings({ generatedAvatarDescriptions: Object.fromEntries(kept) })
+    } finally {
+      if (queued.get(key) === description) {
+        queued.delete(key)
+      }
     }
-    const entries = Object.entries(settings.generatedAvatarDescriptions ?? {}).filter(
-      ([saved]) => saved !== key
-    )
-    // Newest last; the oldest go once there are more than the cap.
-    const kept = [...entries, [key, description] as const].slice(-MAX_SAVED)
-    await updateSettings({ generatedAvatarDescriptions: Object.fromEntries(kept) })
   })
 }
 
