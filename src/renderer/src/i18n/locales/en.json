@@ -28870,7 +28870,9 @@
       "tomorrowAt": "tomorrow {{time}}",
       "idleNext": "Idle · next {{when}} · {{name}}",
       "runningNamed": "Running {{name}}",
-      "nextAt": "Next {{when}}"
+      "nextAt": "Next {{when}}",
+      "runsOn": "Runs on {{host}}",
+      "disconnected": "Disconnected"
     },
     "needs": {
       "access": "{{person}} asked for access",
