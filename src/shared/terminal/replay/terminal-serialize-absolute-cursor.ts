@@ -15,12 +15,13 @@ type SerializeCursorTerminal = {
 type ReprintCell = {
   getChars: () => string
   getWidth: () => number
-  isInverse: () => number
-  isFgPalette: () => number
-  isFgRGB: () => number
+  // Headless builds return bit flags, browser builds booleans.
+  isInverse: () => number | boolean
+  isFgPalette: () => number | boolean
+  isFgRGB: () => number | boolean
   getFgColor: () => number
-  isBgPalette: () => number
-  isBgRGB: () => number
+  isBgPalette: () => number | boolean
+  isBgRGB: () => number | boolean
   getBgColor: () => number
 }
 type ReprintLine = { getCell: (x: number) => ReprintCell | undefined }
