@@ -19448,6 +19448,7 @@
         "checking": "このホストで {{agent}} の準備ができているか確認しています…",
         "cliInstall": "インストール",
         "cliRecheck": "再確認",
+        "openAgentSettings": "設定を開く",
         "cliRecheckFailed": "このホストにインストールされている Agent を確認できませんでした。もう一度お試しください。"
       },
       "reasoning": "推論",
@@ -19497,6 +19498,7 @@
         "claudeAccountFolderMissing": "選択した Claude アカウントのフォルダーが見つかりません。もう一度サインインするか、別のアカウントを選択してください。",
         "claudeAccountSetupFailed": "選択した Claude アカウントを設定できませんでした。もう一度試すか、別のアカウントを選択してください。",
         "agentCommandNotRunnable": "設定 → Agent にある {{agent}} の「コマンド」は、Orca が見つけられるプログラムで始める必要があります。変数、パイプなどのシェル構文には対応していません。変数には「環境」設定を使用してください。コマンドを変更するかリセットしてください。",
+        "agentCommandFailed": "設定 → Agent にある {{agent}} の「コマンド」で {{agent}} を起動できませんでした: {{detail}}。コマンドを変更するかリセットしてください。",
         "runtimeNotInstalled": "{{agent}} はこのチャットを実行しているコンピューターにインストールされていません。最新バージョンの Orca でチャットからインストールしてください。",
         "fullAccessAsRoot": "{{agent}} は root として実行されている間はフルアクセスを使用しません。このチャットを実行しているコンピューターの [設定 → Agent] で {{agent}} に別の権限を選択してから、新しいチャットを開始してください。",
         "launchPreparationFailed": "Orca は、このチャットを実行しているコンピューターで {{agent}} の起動を準備できませんでした。",

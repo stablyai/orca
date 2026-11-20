@@ -222,8 +222,11 @@ export type ClaudeAcquisitionAttempt = {
   exitProven: boolean
   finished: Promise<void>
   finish: () => void
-  /** The resolved launch's account, read by the translator to word a sign-in failure. */
-  account?: ClaudeStructuredLaunch['account']
+  /** The resolved launch: its account words a sign-in failure, its Command a start that exited. */
+  launch?: Pick<
+    ClaudeStructuredLaunch,
+    'account' | 'pathToClaudeCodeExecutable' | 'configuredCommand'
+  >
 }
 
 export function createClaudeAcquisitionAttempt(

@@ -18851,7 +18851,8 @@
       "install": {
         "checking": "Comprobando si {{agent}} está listo en este host…",
         "cliInstall": "Instalar",
-        "cliRecheck": "Verificar de nuevo"
+        "cliRecheck": "Verificar de nuevo",
+        "openAgentSettings": "Abrir ajustes"
       },
       "reasoning": "Razonamiento",
       "contextMenu": {
@@ -18892,6 +18893,7 @@
         "claudeAccountFolderMissing": "Falta la carpeta de la cuenta de Claude seleccionada. Vuelva a iniciar sesión en ella o elija otra cuenta.",
         "claudeAccountSetupFailed": "No se pudo configurar la cuenta de Claude seleccionada. Vuelva a intentarlo o elija otra cuenta.",
         "agentCommandNotRunnable": "El Comando de {{agent}} en Ajustes → Agentes debe empezar con un programa que Orca pueda encontrar. No se admiten variables, tuberías ni otra sintaxis de shell; usa el ajuste Entorno para las variables. Cámbialo o restablécelo.",
+        "agentCommandFailed": "El Comando de {{agent}} en Ajustes → Agentes no inició {{agent}}: {{detail}}. Cámbialo o restablécelo.",
         "runtimeNotInstalled": "{{agent}} no está instalado en el equipo que ejecuta este chat. Instálelo desde el chat en una versión actual de Orca.",
         "fullAccessAsRoot": "{{agent}} no usará Acceso total mientras se ejecute como root. Elija otro permiso para {{agent}} en Configuración → Agentes para el equipo que ejecuta este chat y luego inicie un chat nuevo.",
         "launchPreparationFailed": "Orca no pudo preparar el inicio de {{agent}} en el equipo que ejecuta este chat.",
