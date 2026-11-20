@@ -6,9 +6,10 @@ import {
   proposalSoul,
   templateProposal,
   proposalCreateParams,
+  proposalIdentity,
   withAcceptedOffer
 } from './bot-proposal'
-import { botTemplate } from './bot-templates'
+import { BOT_TEMPLATES, botTemplate } from './bot-templates'
 
 describe('a proposed bot', () => {
   it('seeds SOUL.md with its purpose first and read-only instructions', () => {
@@ -48,6 +49,13 @@ describe('a proposed bot', () => {
       fromTemplate: { id: 'feedback', skills: [] }
     })
     expect(BotCreate.safeParse(params).success).toBe(true)
+  })
+
+  it('pre-fills every template identity short enough to stay a valid purpose once edited', () => {
+    const tooLong = BOT_TEMPLATES.filter(
+      (template) => proposalIdentity(templateProposal(template)).length > 200
+    ).map((template) => template.id)
+    expect(tooLong).toEqual([])
   })
 
   it('sends an older host only what its enum takes: the seed, and an old template id', () => {
