@@ -30,14 +30,30 @@ export function usePaletteTopOffset(
       const overlaps = paletteLeft < findRect.right && paletteRight > findRect.left
       setTop(overlaps ? findRect.bottom - boundsRect.top + PALETTE_TOP_PX : PALETTE_TOP_PX)
     }
-    measure()
-    if (typeof MutationObserver === 'undefined') {
-      return
+    const resize = new ResizeObserver(measure)
+    resize.observe(bounds)
+    resize.observe(palette)
+    let observedFind: HTMLElement | null = null
+    const refresh = (): void => {
+      const find = bounds.querySelector<HTMLElement>(`[${BROWSER_FIND_BAR_ATTRIBUTE}]`)
+      if (find !== observedFind) {
+        if (observedFind) {
+          resize.unobserve(observedFind)
+        }
+        observedFind = find
+        if (find) {
+          resize.observe(find)
+        }
+      }
+      measure()
     }
-    // The find bar mounts and unmounts as a sibling overlay; watch for it rather than threading state through.
-    const observer = new MutationObserver(measure)
+    refresh()
+    const observer = new MutationObserver(refresh)
     observer.observe(bounds, { childList: true })
-    return () => observer.disconnect()
+    return () => {
+      resize.disconnect()
+      observer.disconnect()
+    }
   }, [bounds, left, paletteRef])
 
   return top

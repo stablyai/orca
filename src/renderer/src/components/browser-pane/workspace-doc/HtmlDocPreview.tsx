@@ -382,9 +382,9 @@ export function HtmlDocPreview({
           webviewRef={webviewRef}
           browserOverlayViewport={browserOverlayViewport}
           worktreeId={worktreeId}
+          currentUrl={history.currentUrl}
           toolSwitch={toolSwitch}
           canPickElements={state === 'ready' && !isUnavailable}
-          // Why: the preview wires no A/G/D keys, so its tooltips don't name them.
           showPaletteKeyHints={true}
         />
         {state === 'loading' && failureReason === null ? (

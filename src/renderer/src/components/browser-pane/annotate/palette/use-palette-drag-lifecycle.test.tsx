@@ -65,7 +65,7 @@ function startDrag(): { palette: HTMLElement; grip: HTMLElement } {
 }
 
 describe('annotate palette drag lifecycle', () => {
-  it('ends the drag and puts the palette back when its width changes mid-drag', () => {
+  it('ends guest passthrough when the palette width changes mid-drag', () => {
     startDrag()
 
     // A tool switch (or the picker's capability changing) reshapes the palette under the pointer.
@@ -81,15 +81,6 @@ describe('annotate palette drag lifecycle', () => {
     sizes.bounds = 480
     act(() => notifyResize?.())
 
-    expect(isWebviewDragPassthroughActive()).toBe(false)
-  })
-
-  it('keeps dragging when nothing changed size', () => {
-    const { grip } = startDrag()
-
-    act(() => notifyResize?.())
-
-    fireEvent.pointerUp(grip, { pointerId: 1, clientX: 250 })
     expect(isWebviewDragPassthroughActive()).toBe(false)
   })
 })

@@ -376,11 +376,16 @@ describe('switching annotate tools', () => {
         }
       })
     )
-    expect(writeClipboardImage).toHaveBeenCalledTimes(1)
+    await waitFor(() => expect(finishImageWrite).not.toBeNull())
 
     act(() => result.current.tools.selectTool('annotate'))
     expect(result.current.grabAnnotations.grabToast).toBeNull()
-    await act(async () => finishImageWrite?.())
+    await act(async () => {
+      if (!finishImageWrite) {
+        throw new Error('Image write did not start')
+      }
+      finishImageWrite()
+    })
 
     expect(result.current.grabAnnotations.grabToast).toBeNull()
   })
