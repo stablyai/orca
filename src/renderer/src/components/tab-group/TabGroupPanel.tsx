@@ -50,10 +50,8 @@ export default function TabGroupPanel({
   markdownAnnotationsEnabled = true,
   touchesRightEdge,
   touchesLeftEdge,
-  touchesBottomEdge = false,
   suppressLeftBorder = false,
   suppressRightBorder = false,
-  suppressBottomBorder = false,
   reserveClosedExplorerToggleSpace,
   reserveCollapsedSidebarHeaderSpace,
   isTabDragActive = false,
@@ -69,10 +67,8 @@ export default function TabGroupPanel({
   markdownAnnotationsEnabled?: boolean
   touchesRightEdge: boolean
   touchesLeftEdge: boolean
-  touchesBottomEdge?: boolean
   suppressLeftBorder?: boolean
   suppressRightBorder?: boolean
-  suppressBottomBorder?: boolean
   reserveClosedExplorerToggleSpace: boolean
   reserveCollapsedSidebarHeaderSpace: boolean
   isTabDragActive?: boolean
@@ -257,19 +253,17 @@ export default function TabGroupPanel({
   )
   return (
     <div
-      // Dim unfocused splits only when siblings exist; keep vertical seams neutral and change only the bottom focus border.
+      // Dim unfocused splits only when siblings exist; seams stay neutral and the host owns the bottom edge.
       className={`group/tab-group relative flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden${
         hasSplitGroups
           ? // Why: skip border-l/border-r on edge-touching groups; the split-layout wrapper and right sidebar already paint borders at those seams (double line otherwise).
             ` ${
               touchesLeftEdge || suppressLeftBorder ? '' : 'border-l'
-            } ${touchesRightEdge || suppressRightBorder ? '' : 'border-r'} ${
-              touchesBottomEdge || suppressBottomBorder ? '' : 'border-b'
-            } border-border ${
-              isFocused && !touchesBottomEdge && !suppressBottomBorder ? 'border-b-accent' : ''
-            }`
+            } ${touchesRightEdge || suppressRightBorder ? '' : 'border-r'} border-border`
           : ''
       }`}
+      // Why: the selected-tab underline marks the focused split (drop-indicator.ts).
+      data-split-focus={hasSplitGroups ? (isFocused ? 'focused' : 'unfocused') : undefined}
       // Why not over a window backdrop (material or theme image): group opacity would let it bleed through opaque chrome.
       style={
         hasSplitGroups && !isFocused && !backdropActive

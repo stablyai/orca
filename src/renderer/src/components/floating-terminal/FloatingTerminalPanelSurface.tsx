@@ -222,7 +222,6 @@ export function renderFloatingTerminalPanelSurface(
                     tabStrip="external"
                     // Floating scratch Markdown is local context rather than a repository review surface.
                     markdownAnnotationsEnabled={false}
-                    rootTouchesBottomEdge={true}
                   />
                   {/* Wait for viewport settling before fitting terminals; a post-maximize fit can damage live TUI scrollback. */}
                   <WorkspacePaneOverlayLayers
