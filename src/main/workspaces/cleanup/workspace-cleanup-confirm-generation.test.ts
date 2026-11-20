@@ -53,6 +53,8 @@ it('samples a newly eligible workspace in a post-click comparison while an older
             nextPolicy: { rules },
             paneAgentStates: new Map(),
             removing: false,
+            identity: 'repo::/fixture/work',
+            folderSiblings: [],
             input: {
               reasons: ['merged'],
               blockers: [],

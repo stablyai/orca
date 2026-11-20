@@ -12,7 +12,7 @@ import {
 import { resolveWorkspaceCleanupPolicy } from '../../../shared/workspace-cleanup/workspace-cleanup-policy'
 import type { WorkspaceCleanupRules } from '../../../shared/workspace-cleanup/workspace-cleanup-policy'
 
-const fresh = vi.hoisted(() => ({ workspace: null as unknown }))
+const fresh = vi.hoisted((): { workspace: unknown } => ({ workspace: null }))
 vi.mock('./workspace-cleanup-run-evidence', () => ({
   collectWorkspaceCleanupWorkspaces: async () => [fresh.workspace]
 }))
