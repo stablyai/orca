@@ -24,6 +24,11 @@ import { UnixSocketTransport } from '../../transports/unix-socket-transport'
 import { RpcDispatcher } from '../../dispatcher'
 import { WORKTREE_METHODS } from './worktree'
 import { STATUS_METHODS } from '../host-management/status'
+import { REPO_METHODS } from '../projects/repo'
+import { CLIENT_UI_METHODS } from '../client-state/client-ui'
+import { getDefaultUIState } from '../../../../../shared/orca-profiles/constants'
+import { hashOrcaHookContent } from '../../../../../shared/hashing/orca-hook-content-hash'
+import type { PersistedTrustedOrcaHooks } from '../../../../../shared/workspace-setup/orca-yaml-hook-types'
 import type { RpcRequest } from '../../core'
 import { WorkspaceLifecycleQueue } from '../../../workspaces/lifecycle/workspace-lifecycle-queue'
 import { installRealWorkerThreadChildProcesses } from '../../../../worker-thread-child-process/worker-thread-child-process-real.test-fixtures'
@@ -47,6 +52,7 @@ let repo: Repo
 let folderRepo: Repo
 let repos: Repo[]
 let sshTargets: SshTarget[]
+let trustedOrcaHooks: PersistedTrustedOrcaHooks
 let meta: Record<string, WorktreeMeta>
 let socket: UnixSocketTransport
 let runtime: RemovalRuntime
@@ -100,6 +106,7 @@ beforeEach(async () => {
   folderRepo = storeRepo({ id: 'folder-repo', path: directory, kind: 'folder' })
   repos = [repo, folderRepo]
   sshTargets = []
+  trustedOrcaHooks = {}
   vi.spyOn(appEnvironment, 'getAppEnvironment').mockReturnValue({
     getPath: () => directory,
     getAppPath: () => directory,
@@ -112,6 +119,7 @@ beforeEach(async () => {
   meta = { [id]: storeWorktreeMeta({ displayName: 'task', instanceId: 'task', hostId: 'local' }) }
   const store = partialRuntimeStore({
     getRepos: () => repos,
+    getUI: () => ({ ...getDefaultUIState(), trustedOrcaHooks }),
     getSshTargets: () => sshTargets,
     getRepo: (repoId) => repos.find((r) => r.id === repoId),
     getAllWorktreeMeta: () => meta,
@@ -136,7 +144,10 @@ beforeEach(async () => {
   vi.spyOn(runtime, 'closeFileWatchersForRemoval').mockResolvedValue(undefined)
   vi.spyOn(runtime, 'stopPtysForDestructiveWorktreeRemoval').mockImplementation(stopped)
   vi.spyOn(runtime, 'notifyWorktreesChanged').mockImplementation(() => {})
-  dispatcher = new RpcDispatcher({ runtime, methods: [...STATUS_METHODS, ...WORKTREE_METHODS] })
+  dispatcher = new RpcDispatcher({
+    runtime,
+    methods: [...STATUS_METHODS, ...WORKTREE_METHODS, ...REPO_METHODS, ...CLIENT_UI_METHODS]
+  })
   const kind = process.platform === 'win32' ? 'named-pipe' : 'unix'
   const endpoint =
     process.platform === 'win32'
@@ -212,3 +223,25 @@ it('reports actual safe branch preservation when forced checkout removal cannot 
   )
   expect(warnings()).toHaveLength(0)
 })
+
+it.each([
+  { approved: false, archived: false },
+  { approved: true, archived: true }
+])(
+  'runs the orca.yaml archive hook by default only when Orca approved it, approved=$approved',
+  async ({ approved, archived }) => {
+    const marker = join(directory, 'archived')
+    const script = `echo archived > "${marker}"`
+    await writeFile(join(repoPath, 'orca.yaml'), `scripts:\n  archive: |\n    ${script}\n`)
+    if (approved) {
+      trustedOrcaHooks = {
+        repo: { archive: { contentHash: hashOrcaHookContent(script), approvedAt: 1 } }
+      }
+    }
+    await main(['worktree', 'rm', '--worktree', `id:${id}`, '--force'], repoPath)
+    expect(process.exitCode).not.toBe(1)
+    await _settlePendingWorktreeRemovalsForTests()
+    expect(existsSync(checkout)).toBe(false)
+    expect(existsSync(marker)).toBe(archived)
+  }
+)

@@ -10,6 +10,11 @@ import type {
 import type { CommandHandler } from '../dispatch/dispatch'
 import { printHookWarning, printPreservedBranchWarning } from './worktree-removal-warnings'
 import { requestWorktreeRemoval } from './worktree-removal-request'
+import {
+  archiveHookSkipWarning,
+  getArchiveHookChoice,
+  resolveArchiveHookDecision
+} from './worktree-archive-hook-choice'
 import { removeIfFolderWorkspace, setIfFolderWorkspace } from './folder-workspace-mutations'
 import { formatWorktreeList, formatWorktreeShow } from './workspace-format'
 import { printResult } from '../output/command-result-output'
@@ -251,6 +256,7 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
     printResult(result, json, formatWorktreeShow)
   },
   'worktree rm': async ({ flags, client, cwd, json }) => {
+    const archiveChoice = getArchiveHookChoice(flags)
     await refuseCurrentForRemoval(flags, cwd, client)
     const worktree = await getRequiredWorktreeSelector(flags, 'worktree', cwd, client)
     if (await removeIfFolderWorkspace(client, flags, worktree, json)) {
@@ -266,21 +272,25 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
         'Orca cannot tell which host owns this workspace. Refresh projects and try again.'
       )
     }
-    if (flags.get('allow-failed-archive-hook') === true && flags.get('run-hooks') !== true) {
-      throw new RuntimeClientError(
-        'invalid_argument',
-        '--allow-failed-archive-hook waives a FAILED archive hook, but without --run-hooks no hook runs at all. Pass --run-hooks too, or drop the waiver.'
-      )
-    }
-    const result = await requestWorktreeRemoval(client, {
+    const archiveHook = await resolveArchiveHookDecision(
+      client,
+      archiveChoice,
+      resolved.result.worktree.repoId
+    )
+    const removal = await requestWorktreeRemoval(client, {
       worktree,
       hostId,
       force: flags.get('force') === true,
       deleteBranch: flags.get('delete-branch') === true,
-      runHooks: flags.get('run-hooks') === true,
+      runHooks: archiveHook.decision === 'run',
       // Archive failure waivers protect user data separately from --force's PTY-stop waiver.
       allowFailedArchiveHook: flags.get('allow-failed-archive-hook') === true
     })
+    const result = { ...removal, result: { ...removal.result, archiveHook } }
+    const skipWarning = archiveHookSkipWarning(archiveHook)
+    if (skipWarning && !json) {
+      console.error(`warning: ${skipWarning}`)
+    }
     printHookWarning(result.result, json)
     printPreservedBranchWarning(result.result, json)
     printResult(result, json, (value) =>

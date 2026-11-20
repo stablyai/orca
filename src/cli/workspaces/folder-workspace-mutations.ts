@@ -1,4 +1,5 @@
 import type { RuntimeStatus } from '../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import { getArchiveHookChoice } from './worktree-archive-hook-choice'
 import type {
   RuntimeWorktreeRecord,
   RuntimeWorktreeRemoveResult,
@@ -152,12 +153,13 @@ async function removeFolderWorkspace(
   folderId: string
 ): Promise<RuntimeRpcSuccess<RuntimeWorktreeRemoveResult>> {
   refuseFolderFlags(flags, [['delete-branch', 'does not apply: a folder workspace has no branch.']])
-  const runHooks = flags.get('run-hooks') === true
+  // A group's Archive script can't be checked against approvals from the CLI yet, so only an explicit run runs it.
+  const runHooks = getArchiveHookChoice(flags) === 'run'
   const allowFailedArchiveHook = flags.get('allow-failed-archive-hook') === true
   if (allowFailedArchiveHook && !runHooks) {
     throw new RuntimeClientError(
       'invalid_argument',
-      '--allow-failed-archive-hook requires --run-hooks.'
+      '--allow-failed-archive-hook requires --archive run for a folder workspace.'
     )
   }
   const status = await assertUniqueIdMutationSupported(client)

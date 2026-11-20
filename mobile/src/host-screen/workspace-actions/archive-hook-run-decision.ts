@@ -2,8 +2,8 @@ import type { PersistedTrustedOrcaHooks } from '../../../../src/shared/workspace
 import { folderIdOfSelector } from '../../../../src/shared/workspace/identity/workspace-scope'
 import type { OrcaHookTrustPrompt } from '../../components/hook-trust/OrcaHookTrustDrawer'
 import { newWorkspaceUiStateRead } from '../../new-workspace/creation/runtime/new-workspace-operations'
+import { isOrcaHookTrusted } from '../../../../src/shared/workspace-setup/hooks/orca-hook-trust-entries'
 import {
-  isOrcaHookTrusted,
   usesVersionedOrcaHookTrust,
   wasOrcaHookPreviouslyApproved
 } from '../../new-workspace/creation/setup-hook-trust'
