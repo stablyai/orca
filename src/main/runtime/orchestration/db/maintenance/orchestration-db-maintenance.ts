@@ -24,6 +24,8 @@ export class OrchestrationDbMaintenance {
   private readonly stopped = new AbortController()
   private timer: NodeJS.Timeout | undefined
   private work = 0
+  // This session's last prune, which a bookkeeping write skipped for a waiting copy doesn't persist.
+  private prunedAt = Number.NEGATIVE_INFINITY
   private restoreCheckpoints: (() => Promise<void>) | undefined
 
   constructor(
@@ -85,6 +87,7 @@ export class OrchestrationDbMaintenance {
 
   /** False when stopped mid-way. */
   private async prune(): Promise<boolean> {
+    const changesBefore = this.totalChanges()
     const settledRuns = new Map<string, boolean>()
     for (let after: string | null = ''; after !== null;) {
       const page = await this.slice(() =>
@@ -103,9 +106,17 @@ export class OrchestrationDbMaintenance {
       // Recorded anyway, so a lasting failure is retried hourly, not every minute.
       console.warn('[orchestration] settled Run retention failed', error)
     }
-    // Persisted so a restart does not rescan before the interval.
-    this.recordPrune()
+    this.prunedAt = Date.now()
+    // Persisted so a restart does not rescan before the interval, unless the prune changed nothing and the
+    // write alone would make a copy waiting for quit stale.
+    if (!this.compaction?.hasCopy || this.totalChanges() !== changesBefore) {
+      this.recordPrune()
+    }
     return true
+  }
+
+  private totalChanges(): number {
+    return Number(this.orchestrationDb.db.prepare('SELECT total_changes() AS n').get()?.n)
   }
 
   /** False when stopped mid-way. */
@@ -159,6 +170,9 @@ export class OrchestrationDbMaintenance {
   }
 
   private pruneIsDue(): boolean {
+    if (Date.now() - this.prunedAt < PRUNE_INTERVAL_MS) {
+      return false
+    }
     const row = this.orchestrationDb.db
       .prepare('SELECT pruned_at FROM orchestration_maintenance WHERE id = 1')
       .get()
