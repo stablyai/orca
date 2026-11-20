@@ -284,6 +284,10 @@ export abstract class OrcaRuntimeWithAgentTransitions extends OrcaRuntimeWithWin
     const detachRows = store.subscribeStatusRowMutations(() => this.worktreeRowsChanges?.changed())
     const subscribe = store.subscribeEnrichedStatus?.bind(store)
     const detachMail = subscribe?.((row) => {
+      // Why first: structured chats have no PTY, and a main-layout pane lookup misses through every terminal.
+      if (row.structuredHost) {
+        return
+      }
       const pty = this.getPtyRecordForPaneKey(row.paneKey)
       if (pty) {
         this.orchestrationMailboxPointerDelivery.observeTerminal(pty.ptyId, row.payload.state)

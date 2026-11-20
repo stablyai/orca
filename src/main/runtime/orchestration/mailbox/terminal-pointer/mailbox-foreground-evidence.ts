@@ -70,7 +70,9 @@ export class MailboxForegroundEvidence {
       .then(async (result) => ({
         ...(typeof result === 'string' ? { foreground: result } : result),
         ...observation,
-        ...(typeof result !== 'string' && (await this.heldAgentGone(ptyId, result.process))
+        ...(typeof result !== 'string' &&
+        result.foreground === 'agent' &&
+        (await this.heldAgentGone(ptyId, result.process))
           ? { heldAgentGone: true }
           : {})
       }))
