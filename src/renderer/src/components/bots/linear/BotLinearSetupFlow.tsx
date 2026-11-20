@@ -328,7 +328,7 @@ export function BotLinearSetupFlow({
                 }}
               >
                 <Copy />
-                {t('bots.linear.setup.copyForAdmin', 'Copy link for an admin')}
+                {t('bots.linear.setup.copyForAdmin', 'Copy admin link')}
               </Button>
             </DialogFooter>
           </div>

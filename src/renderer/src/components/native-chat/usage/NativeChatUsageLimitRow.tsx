@@ -128,7 +128,7 @@ function AutoContinueTool({
       <UsageLimitToolButton
         label={t(
           'components.native-chat.usageLimitActions.turnOnAutoContinue',
-          'Continue automatically when limits reset'
+          'Auto-continue on reset'
         )}
         pressed={false}
         onClick={turnOnUsageLimitAutoContinue}
@@ -344,7 +344,7 @@ function UsageLimitCard({
                     <UsageLimitToolButton
                       label={t(
                         'components.native-chat.usageLimitActions.handOff',
-                        'Hand off to another agent'
+                        'Hand off to agent'
                       )}
                       disabled={actions.disabled}
                       busy={actions.preparing}
