@@ -1,25 +1,25 @@
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { Page } from '@stablyai/playwright-test'
-import type { KeybindingActionId } from '../../src/shared/keybindings'
+import { expect, type Page } from '@stablyai/playwright-test'
+import type { KeybindingActionId } from '../../src/shared/keybindings/types'
 import { PLUGIN_MANIFEST_V2_SINCE } from '../../src/shared/plugins/manifest/plugin-schema-field-docs'
-import { expect, test } from './helpers/orca-app'
-import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
+import { test } from './desktop/electron-fixtures/orca-app'
+import { waitForActiveWorktree, waitForSessionReady } from './desktop/renderer-probes/store'
 import {
   cleanupMarkdownFixture,
   createMarkdownFixture,
   getActiveWorktreeContext,
   openMarkdownFixture,
   waitForRichMarkdownEditor
-} from './helpers/markdown-ordered-list-exit'
-import { disablePluginSystem, enableDevPlugins, openRepoFile } from './helpers/plugin-smoke'
+} from './editor/markdown/markdown-editor-fixture'
+import { disablePluginSystem, enableDevPlugins, openRepoFile } from './plugins/plugin-smoke'
 import {
   focusInGuest,
   ISOLATED_FRAMES_E2E,
   pluginGuest,
   readInGuest
-} from './helpers/plugin-frame-guest'
+} from './plugins/plugin-frame-guest'
 
 test.use(ISOLATED_FRAMES_E2E)
 test.use({ launchEnv: { ORCA_BACKGROUND_LAUNCH: '1' } })
@@ -124,6 +124,7 @@ test.describe('configurable editor view commands', () => {
     const filePath = await createMarkdownFixture(
       context,
       'markdown-modes',
+      'view-commands',
       testInfo.workerIndex,
       '# View commands\n\nInitial content.\n'
     )

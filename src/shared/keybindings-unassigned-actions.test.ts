@@ -1,10 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import {
-  getEffectiveKeybindingsForAction,
-  getKeybindingDefinition,
-  keybindingMatchesAction
-} from './keybindings'
-import type { KeybindingActionId, KeybindingPlatform } from './keybindings'
+import { getKeybindingDefinition } from './keybindings/definitions'
+import { getEffectiveKeybindingsForAction } from './keybindings/effective'
+import { keybindingMatchesAction } from './keybindings/matching'
+import type { KeybindingActionId, KeybindingPlatform } from './keybindings/types'
 
 describe('keybindings', () => {
   it('keeps editor view commands unassigned until users customize them', () => {
