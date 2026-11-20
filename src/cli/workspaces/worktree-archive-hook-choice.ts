@@ -1,4 +1,6 @@
 import { getPresentStringFlag } from '../arguments/flags'
+import { printHookWarning } from './worktree-removal-warnings'
+import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
 import type { RuntimeClient } from '../runtime/client'
 import { RuntimeClientError } from '../runtime/connection/types'
 import {
@@ -47,13 +49,16 @@ export async function resolveArchiveHookRequest(
     return { runHooks: choice === 'run', report: { decision: choice, reason: 'requested' } }
   }
   let approval: ArchiveHookApproval
+  const request = await target()
   try {
-    approval = (
-      await client.call<ArchiveHookApproval>('worktree.archiveHookApproval', await target())
-    ).result
+    approval = (await client.call<ArchiveHookApproval>('worktree.archiveHookApproval', request))
+      .result
   } catch (error) {
     // An older host can't say, yet its own Delete may run the hook and refuse on failure: don't guess.
     if (error instanceof RuntimeClientError && error.code === 'method_not_found') {
+      if (await hasNoArchiveHook(client, request)) {
+        return { runHooks: false, report: { decision: 'run', reason: 'approved' } }
+      }
       throw new RuntimeClientError(
         ARCHIVE_HOOK_UNDECIDED_CODE,
         "This Orca host is older and can't tell whether the archive hook is approved. Nothing was deleted. Update Orca there, or pass --archive run to run the hook, or --archive skip to delete without it."
@@ -81,6 +86,26 @@ export async function resolveArchiveHookRequest(
   )
 }
 
+/** An older host's repo has no archive script at all, so deleting skips nothing its own Delete would run. */
+async function hasNoArchiveHook(
+  client: RuntimeClient,
+  request: ArchiveHookApprovalRequest
+): Promise<boolean> {
+  if (!('worktreeId' in request)) {
+    return false
+  }
+  try {
+    const { hooks } = (
+      await client.call<{ hooks: { scripts?: { archive?: string } } | null }>('repo.hooks', {
+        repo: `id:${getRepoIdFromWorktreeId(request.worktreeId)}`
+      })
+    ).result
+    return hooks !== null && !hooks.scripts?.archive?.trim()
+  } catch {
+    return false
+  }
+}
+
 export function archiveHookReport(
   request: ArchiveHookRequest,
   result: { archiveHookRan?: boolean | null }
@@ -101,6 +126,16 @@ export function printArchiveHookWarning(report: ArchiveHookReport, json: boolean
       "warning: No Archive script ran: this Orca host is older and can't run a folder workspace's Archive script. Update Orca there to run it."
     )
   }
+}
+
+/** The host's own skip warning predates --archive and repeats the CLI's with an outdated flag. */
+export function printRemovalHookWarnings(
+  result: Parameters<typeof printHookWarning>[0],
+  report: ArchiveHookReport,
+  json: boolean
+): void {
+  printArchiveHookWarning(report, json)
+  printHookWarning(report.decision === 'skip' ? { ...result, warning: undefined } : result, json)
 }
 
 export function formatArchiveHookLine(report: ArchiveHookReport): string {

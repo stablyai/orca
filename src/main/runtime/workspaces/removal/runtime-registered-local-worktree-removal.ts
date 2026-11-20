@@ -2,7 +2,6 @@ import { archiveHookRanFrom } from '../../../../shared/worktree/removal/archive-
 import { worktreeRemovalLifetime } from '../../../workspaces/removal/worktree-removal-lifetime'
 import type { GitPushTarget, GitWorktreeInfo } from '../../../../shared/worktree/types'
 import {
-  authorizeWindowsCheckout,
   nativeWindowsMarkerMissing,
   usesNativeWindowsRemoval
 } from '../../../git/worktrees/removal/windows-worktree-removal'
@@ -11,22 +10,18 @@ import type { RemoveWorktreeResult } from '../../../../shared/worktree/create-ty
 import type { ArchiveHookOverride } from '../../../../shared/worktree/removal/archive-hook-removal-gate'
 import { gateWorktreeRemovalOnArchiveHook } from '../../../workspaces/removal/worktree-archive-hook-gate'
 import type { Repo } from '../../../../shared/repository/repo-types'
-import { assertWorktreeUnlockedForRemoval } from '../../../../shared/worktree/removal/removal'
 import type { LocalProjectWorktreeGitOptions } from '../../../workspaces/execution-host/project-runtime-git-options'
-import { assertWorktreeCleanForRemoval } from '../../../git/worktrees/removal/worktree-removal-preflight'
 import { listWorktreesStrict } from '../../../git/worktrees/catalog/worktree-listing'
 import { removeWorktree } from '../../../git/worktrees/removal/worktree-removal'
 import { getWorktreeSharedLinkPaths } from '../../../git/worktrees/content-paths/worktree-shared-directories'
 import { runHook } from '../../../workspace-hooks/hooks'
 import { loadArchiveHooksForRemoval } from '../../../workspace-hooks/archive-hook-trust-content'
-import { findExistingWorktreeSymlinkPaths } from '../../../git/worktrees/content-paths/worktree-symlink-detection'
 import { removeWorktreeLinkedPaths } from '../../../ipc/worktrees/linked-paths/worktree-symlinks'
 import { cleanupRemovedWorktreePushTarget } from './runtime-worktree-push-target-cleanup'
 export { cleanupRemovedWorktreePushTarget } from './runtime-worktree-push-target-cleanup'
 import { runWorktreeChangeInvalidators } from '../../../ipc/worktrees/listing/worktree-change-invalidators'
 import {
   formatWorktreeRemovalError,
-  isOrphanCompatiblePreflightError,
   isOrphanedWorktreeError
 } from '../../../ipc/worktrees/paths/worktree-logic'
 import { cleanupLocalOrphanedWorktreeDirectory } from '../../../workspaces/removal/local-orphaned-worktree-cleanup'
@@ -46,10 +41,11 @@ import {
   waitForWorktreeRemovalAcceptance
 } from '../../../workspaces/removal/worktree-background-removal'
 import { runSerializedWorktreeRemovalAcceptance } from '../../../workspaces/removal/worktree-removal-acceptance-queue'
+import { assertCheckoutRemovable } from './registered-worktree-removal-checkout-checks'
 
 /** Runs after the previous same-repo removal was accepted; see runSerializedWorktreeRemovalAcceptance. */
 export function removeRuntimeRegisteredLocalWorktree(
-  args: Parameters<typeof acceptRuntimeRegisteredLocalWorktreeRemoval>[0]
+  args: RegisteredLocalWorktreeRemovalArgs
 ): Promise<RemoveWorktreeResult & { warning?: string }> {
   return runSerializedWorktreeRemovalAcceptance(
     args.repo.path,
@@ -59,10 +55,19 @@ export function removeRuntimeRegisteredLocalWorktree(
         await waitForWorktreeRemovalAcceptance(args.target.id)
         return { removing: true }
       }
-      return acceptRuntimeRegisteredLocalWorktreeRemoval(args)
+      // Held from before the archive hook: quitting mid-hook must not strand a half-torn-down checkout.
+      return removesInBackground(args.registeredWorktree.path, args.localOptions)
+        ? worktreeRemovalLifetime.withPreparation(() =>
+            acceptRuntimeRegisteredLocalWorktreeRemoval(args)
+          )
+        : acceptRuntimeRegisteredLocalWorktreeRemoval(args)
     }
   )
 }
+
+type RegisteredLocalWorktreeRemovalArgs = Parameters<
+  typeof acceptRuntimeRegisteredLocalWorktreeRemoval
+>[0]
 
 async function acceptRuntimeRegisteredLocalWorktreeRemoval(args: {
   repo: Repo
@@ -99,14 +104,14 @@ async function acceptRuntimeRegisteredLocalWorktreeRemoval(args: {
   const canonicalPath = registeredWorktree.path
   const hooks = await loadArchiveHooksForRemoval(repo, args.archiveHook)
   let warning: string | undefined
-  // Archive refusal precedes refresh, preflights, PTY stop and Git deletion; failure must leave them untouched (#19334).
+  // Archive refusal precedes refresh, PTY stop and Git deletion; failure must leave them untouched (#19334).
   let archiveHookOverride: ArchiveHookOverride | undefined
   let archiveHookRan: boolean | null = false
-  if (
-    hooks?.scripts.archive &&
-    args.archiveHook.runHooks === true &&
-    !(await nativeWindowsMarkerMissing(canonicalPath, localOptions))
-  ) {
+  const linkedPaths = getWorktreeSharedLinkPaths(repo)
+  const markerMissing = await nativeWindowsMarkerMissing(canonicalPath, localOptions)
+  if (hooks?.scripts.archive && args.archiveHook.runHooks === true && !markerMissing) {
+    // A hook that releases resources must not run for a delete the checks below would refuse.
+    await assertCheckoutRemovable(args, registeredWorktree, linkedPaths, markerMissing)
     const result = await runHook(
       'archive',
       canonicalPath,
@@ -140,47 +145,7 @@ async function acceptRuntimeRegisteredLocalWorktreeRemoval(args: {
       `Worktree registration changed during deletion: ${canonicalPath}. Retry deletion.`
     )
   }
-  try {
-    assertWorktreeUnlockedForRemoval(refreshed)
-  } catch (error) {
-    throw new Error(formatWorktreeRemovalError(error, canonicalPath, args.force))
-  }
-
-  const linkedPaths = getWorktreeSharedLinkPaths(repo)
-  const ignoredLinkedPaths = args.force
-    ? []
-    : await findExistingWorktreeSymlinkPaths(canonicalPath, linkedPaths)
-  const markerMissing = await nativeWindowsMarkerMissing(canonicalPath, localOptions)
-  try {
-    if (usesNativeWindowsRemoval(canonicalPath, localOptions)) {
-      await authorizeWindowsCheckout(
-        repo.path,
-        canonicalPath,
-        args.force,
-        {
-          ...localOptions,
-          knownRemovedWorktree: refreshed,
-          ignoredUntrackedPaths: ignoredLinkedPaths
-        },
-        true
-      )
-    } else if (!markerMissing) {
-      await (args.hasLocalOptions
-        ? assertWorktreeCleanForRemoval(canonicalPath, args.force, {
-            ...localOptions,
-            ...(ignoredLinkedPaths.length > 0 ? { ignoredUntrackedPaths: ignoredLinkedPaths } : {})
-          })
-        : ignoredLinkedPaths.length > 0
-          ? assertWorktreeCleanForRemoval(canonicalPath, args.force, {
-              ignoredUntrackedPaths: ignoredLinkedPaths
-            })
-          : assertWorktreeCleanForRemoval(canonicalPath, args.force))
-    }
-  } catch (error) {
-    if (!isOrphanCompatiblePreflightError(error)) {
-      throw new Error(formatWorktreeRemovalError(error, canonicalPath, args.force))
-    }
-  }
+  await assertCheckoutRemovable(args, refreshed, linkedPaths, markerMissing)
 
   const background = removesInBackground(canonicalPath, localOptions)
   const prepare = async (): Promise<RemoveWorktreeResult> => {
@@ -230,7 +195,7 @@ async function acceptRuntimeRegisteredLocalWorktreeRemoval(args: {
     await waitForWorktreeRemovalAcceptance(args.target.id)
     return { removing: true, ...acceptedFields }
   }
-  return background ? worktreeRemovalLifetime.withPreparation(prepare) : prepare()
+  return prepare()
 }
 
 export type RuntimeLocalWorktreeRemovalFinishArgs = Pick<

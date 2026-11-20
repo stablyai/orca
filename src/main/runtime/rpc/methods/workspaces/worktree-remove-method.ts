@@ -115,7 +115,7 @@ async function approvalWithoutDesktop(
         .find((entry) => entry.id === workspace?.projectGroupId)
       owner = group && projectGroupHookOwner(group)
     } else {
-      owner = await resolveWorktreeHookOwner(runtime, `id:${params.worktreeId}`, params.hostId)
+      owner = resolveWorktreeHookOwner(runtime, params.worktreeId, params.hostId)
     }
   } catch {
     owner = undefined
@@ -130,17 +130,21 @@ async function approvalWithoutDesktop(
     : { decision: 'undecided' }
 }
 
-async function resolveWorktreeHookOwner(
+function resolveWorktreeHookOwner(
   runtime: OrcaRuntimeService,
-  selector: string,
+  worktreeId: string,
   hostId: string | undefined
-): Promise<WorkspaceHookOwner | undefined> {
-  const worktree = await runtime.showManagedWorktree(selector)
+): WorkspaceHookOwner | undefined {
+  // The id names the repo; re-resolving the checkout would rescan the repo's worktrees.
+  const repoId = splitWorktreeId(worktreeId)?.repoId
+  if (!repoId) {
+    return undefined
+  }
   const repos = runtime.listRepos()
   const owner = resolveWorktreeRemovalRepoOwner(
     { getRepos: () => repos, getRepo: (id) => repos.find((repo) => repo.id === id) },
-    worktree.repoId,
-    normalizeExecutionHostId(hostId ?? worktree.hostId) ?? undefined
+    repoId,
+    normalizeExecutionHostId(hostId) ?? undefined
   )
   return owner.kind === 'resolved' ? owner.repo : undefined
 }

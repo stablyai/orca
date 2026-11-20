@@ -14,7 +14,7 @@ import {
   archiveHookReport,
   formatArchiveHookLine,
   getArchiveHookChoice,
-  printArchiveHookWarning,
+  printRemovalHookWarnings,
   resolveArchiveHookRequest
 } from './worktree-archive-hook-choice'
 import { removeIfFolderWorkspace, setIfFolderWorkspace } from './folder-workspace-mutations'
@@ -279,7 +279,8 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
       hostId
     }))
     const removal = await requestWorktreeRemoval(client, {
-      worktree,
+      // The approval covers this checkout; a selector could match another one by now.
+      worktree: `id:${resolved.result.worktree.id}`,
       hostId,
       force: flags.get('force') === true,
       deleteBranch: flags.get('delete-branch') === true,
@@ -290,8 +291,7 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
     })
     const archiveHook = archiveHookReport(archive, removal.result)
     const result = { ...removal, result: { ...removal.result, archiveHook } }
-    printArchiveHookWarning(archiveHook, json)
-    printHookWarning(result.result, json)
+    printRemovalHookWarnings(result.result, archiveHook, json)
     printPreservedBranchWarning(result.result, json)
     printResult(result, json, (value) =>
       // Hosts that predate waiting answer on acceptance.
