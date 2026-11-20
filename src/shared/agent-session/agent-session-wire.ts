@@ -223,6 +223,8 @@ export type AgentSessionStatusSummary = {
   model?: string
   /** Legacy host execution report; clients use the saved model for option invalidation. */
   reportedModel?: string
+  /** The current child's provider fallback model; moving it makes clients re-read options. */
+  fallbackModel?: string
   /** The chat's saved effort, Fast and speed picks, encoded; another device's pick moves them so a
    *  client re-reads options. Absent from older hosts. */
   effort?: string

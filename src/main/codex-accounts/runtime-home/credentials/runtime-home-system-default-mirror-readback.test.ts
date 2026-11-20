@@ -144,29 +144,13 @@ describe('CodexRuntimeHomeService', () => {
     expect(readFileSync(runtimeAuthPath, 'utf-8')).toBe(systemAuth)
   })
 
-  it('keeps a local runtime logout after restart when the system-default auth still exists', async () => {
+  it('keeps runtime logout across restart until System default signs in again', async () => {
     const runtimeAuthPath = getRuntimeCodexAuthPath()
-    writeFileSync(getSystemCodexAuthPath(), '{"account":"system"}\n', 'utf-8')
-    const settings = createSettings()
-    const store = createStore(settings)
-
-    const { CodexRuntimeHomeService } = await import('../../runtime-home-service')
-    const service = new CodexRuntimeHomeService(store as never)
-
-    rmSync(runtimeAuthPath, { force: true })
-    service.syncForCurrentSelection()
-    new CodexRuntimeHomeService(store as never)
-
-    expect(existsSync(runtimeAuthPath)).toBe(false)
-    expect(
-      existsSync(
-        join(testState.userDataDir, 'codex-runtime-home', 'system-default-runtime-logout.json')
-      )
-    ).toBe(true)
-  })
-
-  it('mirrors a fresh external system-default login after a persisted local runtime logout', async () => {
-    const runtimeAuthPath = getRuntimeCodexAuthPath()
+    const logoutMarkerPath = join(
+      testState.userDataDir,
+      'codex-runtime-home',
+      'system-default-runtime-logout.json'
+    )
     writeFileSync(getSystemCodexAuthPath(), '{"account":"system-old"}\n', 'utf-8')
     const settings = createSettings()
     const store = createStore(settings)
@@ -176,15 +160,15 @@ describe('CodexRuntimeHomeService', () => {
 
     rmSync(runtimeAuthPath, { force: true })
     service.syncForCurrentSelection()
+    new CodexRuntimeHomeService(store as never)
+    expect(existsSync(runtimeAuthPath)).toBe(false)
+    expect(existsSync(logoutMarkerPath)).toBe(true)
+
     writeFileSync(getSystemCodexAuthPath(), '{"account":"system-new"}\n', 'utf-8')
     new CodexRuntimeHomeService(store as never)
 
     expect(readFileSync(runtimeAuthPath, 'utf-8')).toBe('{"account":"system-new"}\n')
-    expect(
-      existsSync(
-        join(testState.userDataDir, 'codex-runtime-home', 'system-default-runtime-logout.json')
-      )
-    ).toBe(false)
+    expect(existsSync(logoutMarkerPath)).toBe(false)
   })
 
   it('clears mirrored runtime auth after restart when the system-default auth was deleted', async () => {

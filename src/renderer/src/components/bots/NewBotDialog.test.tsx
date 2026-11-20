@@ -786,3 +786,28 @@ describe('NewBotDialog Generate and an upload', () => {
     )
   })
 })
+
+describe('NewBotDialog from a template-backed offer', () => {
+  it('lists the workspaces it takes over, and fills the identity from the purpose when it has no lines', () => {
+    render(
+      <TooltipProvider>
+        <NewBotDialog
+          open
+          onOpenChange={vi.fn()}
+          proposal={{
+            name: 'Reviewer',
+            purpose: 'Reviews the payments service pull requests.',
+            templateId: 'pr-review',
+            worktrees: [{ id: 'w1', name: 'payments-refactor' }]
+          }}
+        />
+      </TooltipProvider>
+    )
+    expect(screen.getByText('Takes over')).toBeTruthy()
+    expect(screen.getByText('payments-refactor')).toBeTruthy()
+    expect(screen.getByLabelText('Identity')).toHaveProperty(
+      'value',
+      'Reviews the payments service pull requests.'
+    )
+  })
+})

@@ -182,6 +182,8 @@ export abstract class OrcaRuntimeWithRestartAgentPaneInPlace extends OrcaRuntime
             launchRuntime: resume.launchRuntime,
             resumeProviderSession: resume.resumeProviderSession,
             spawnIntent: 'user-resume',
+            // A desktop window that didn't hold the pane isn't shown or focused to the new terminal.
+            presentation: 'background',
             identity: { tabId, leafId: pane.leafId },
             reopensPane: true,
             onPtySpawnDispatched: () => {
