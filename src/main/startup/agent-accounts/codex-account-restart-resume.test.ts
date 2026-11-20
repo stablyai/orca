@@ -1,5 +1,13 @@
-import { dirname, join } from 'node:path'
-import { linkSync, readFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { basename, dirname, join } from 'node:path'
+import {
+  linkSync,
+  readFileSync,
+  mkdirSync,
+  mkdtempSync,
+  renameSync,
+  rmSync,
+  writeFileSync
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 
@@ -15,7 +23,11 @@ vi.mock('../main-process-state', () => ({
     codexRuntimeHome: {
       isHostSystemDefaultRealHomeSelected: () => false,
       prepareAccountHistoryForPinnedHome: async () => {},
-      getHostCodexHomePathsForSessionDiscovery: () => [homes.original, homes.selected],
+      getHostCodexHomePathsForSessionDiscovery: () => [
+        homes.original,
+        homes.selected,
+        join(homes.system, 'legacy')
+      ],
       resolveSelectedHostAccountCodexHomePathForResume: () => homes.selected || null
     },
     store: { getSettings: () => ({}) }
@@ -111,4 +123,37 @@ it('uses the system home when an explicit restart follows deselection', async ()
     useSelectedAccount: true
   })
   expect(result).toMatchObject({ codexHomePath: homes.system })
+})
+
+it('resumes a legacy copy that a stopped swap left moved aside', async () => {
+  const relativePath = join('2026', '10', '05', `rollout-2026-10-05T10-00-00-${sessionId}.jsonl`)
+  const legacyHome = join(homes.system, 'legacy')
+  const source = join(homes.system, 'sessions', relativePath)
+  const copy = join(legacyHome, 'sessions', relativePath)
+  mkdirSync(dirname(source), { recursive: true })
+  mkdirSync(dirname(copy), { recursive: true })
+  writeFileSync(source, '{"turn":1}\n{"turn":2}\n')
+  writeFileSync(copy, '{"turn":1}\n')
+  const marker = join(legacyHome, '.orca-session-copies', `${relativePath}.json`)
+  mkdirSync(dirname(marker), { recursive: true })
+  writeFileSync(
+    marker,
+    JSON.stringify({
+      sourcePath: source,
+      sourceSize: 22,
+      sourceMtimeMs: 0,
+      targetSize: 11,
+      targetMtimeMs: 0,
+      aside: `${basename(copy)}.orca-legacy-copy.1`
+    })
+  )
+  renameSync(copy, `${copy}.orca-legacy-copy.1`)
+
+  const result = await prepareCodexSessionResumeForLaunch({
+    providerSession: { key: 'session_id', id: sessionId, transcriptPath: copy },
+    target: { runtime: 'host' }
+  })
+
+  expect(result).toMatchObject({ outcome: 'resume', codexHomePath: legacyHome })
+  expect(readFileSync(copy, 'utf-8')).toContain('{"turn":1}')
 })

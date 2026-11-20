@@ -22,7 +22,10 @@ import {
 import { resolveCodexSessionBackfillPaths } from '../backfill/codex-session-backfill'
 import { codexDatedRolloutRelativePath } from './codex-session-resume-home'
 import { linkCodexRolloutUnlessHeld } from '../rollouts/codex-rollout-deletion-guard'
-import { swapLegacySessionCopy } from '../bridges/codex-legacy-session-copy'
+import {
+  settleLegacySessionCopyName,
+  swapLegacySessionCopy
+} from '../bridges/codex-legacy-session-copy'
 import { isDefinitiveAbsence } from '../../../../shared/errors/definitive-filesystem-absence'
 import { ManagedCodexHomeTemporarilyUnavailableError } from '../../../codex-accounts/managed-homes/host-codex-managed-home-ownership'
 
@@ -30,6 +33,23 @@ const RETRYABLE_RESUME_ERROR =
   'Orca could not safely move this legacy Codex session into your system Codex home. Retry resume; if it still fails, check that both Codex session folders are readable and writable.'
 
 const materializations = new Map<string, Promise<void>>()
+
+/** A resume must not find a legacy copy's name missing just because a swap is moving it. */
+export async function settleLegacySessionCopyBeforeResume(
+  transcriptPath: string | undefined,
+  managedHome: string
+): Promise<void> {
+  if (!transcriptPath?.trim()) {
+    return
+  }
+  const relativePath = codexDatedRolloutRelativePath(
+    join(managedHome, 'sessions'),
+    resolve(transcriptPath)
+  )
+  if (relativePath) {
+    await settleLegacySessionCopyName({ managedHome, relativePath })
+  }
+}
 
 export async function prepareLegacySharedCodexSessionResume(
   args: AiVaultPrepareSessionResumeArgs,

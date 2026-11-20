@@ -1,5 +1,5 @@
 import type { BigIntStats } from 'node:fs'
-import { link, lstat, open, readFile, rename, stat, unlink } from 'node:fs/promises'
+import { link, lstat, open, readFile, rename, stat } from 'node:fs/promises'
 import { basename, dirname, join, normalize } from 'node:path'
 import { isDefinitiveAbsence } from '../../../../shared/errors/definitive-filesystem-absence'
 import { linkCodexRolloutUnlessHeld } from '../rollouts/codex-rollout-deletion-guard'
@@ -11,6 +11,12 @@ import {
   type LegacyCopiedSessionMarker
 } from './codex-legacy-session-copy-marker'
 import { sourceStartsWithCopy } from './codex-legacy-session-copy-prefix'
+import {
+  linkUnlessTaken,
+  lstatIfPresent,
+  sameFile,
+  unlinkIfPresent
+} from './codex-legacy-session-copy-name-ops'
 
 /**
  * The legacy copy's own bytes stay under `<name>.orca-legacy-copy.<attempt>` once its source is
@@ -61,6 +67,49 @@ export function swapLegacySessionCopy(args: {
   return task
 }
 
+/**
+ * Before a resume looks for a copy's name: waits out a swap of it, and gives a copy that a stopped
+ * swap left moved aside its name back. Starts no swap.
+ */
+export async function settleLegacySessionCopyName(args: {
+  managedHome: string
+  relativePath: string
+}): Promise<void> {
+  const copyPath = join(args.managedHome, 'sessions', args.relativePath)
+  await swapsInFlight.get(copyPath)
+  if (await lstatIfPresent(copyPath)) {
+    return
+  }
+  const markerPath = legacySessionCopyMarkerPath(args.managedHome, args.relativePath)
+  const marker = await readFile(markerPath, 'utf-8').then(
+    parseLegacyCopiedSessionMarker,
+    () => null
+  )
+  if (marker && !marker.kept) {
+    await restoreMovedCopy(marker, normalize(marker.sourcePath), copyPath)
+  }
+}
+
+/** A swap stopped after moving the copy aside: its name comes back before anything else. */
+async function restoreMovedCopy(
+  marker: LegacyCopiedSessionMarker,
+  sourcePath: string,
+  copyPath: string
+): Promise<'restored' | 'held' | 'none'> {
+  const asidePath = marker.aside ? join(dirname(copyPath), marker.aside) : null
+  const aside = asidePath ? await lstatIfPresent(asidePath) : null
+  // An empty aside is a reservation the copy never moved onto.
+  if (!asidePath || !aside?.isFile() || aside.size === 0n) {
+    return 'none'
+  }
+  // Under the deletion guard: a cleanup deleting this chat must not see its name come back.
+  return (await linkCodexRolloutUnlessHeld(sourcePath, () =>
+    linkUnlessTaken(asidePath, copyPath)
+  )) === 'held'
+    ? 'held'
+    : 'restored'
+}
+
 async function swap(
   args: Parameters<typeof swapLegacySessionCopy>[0],
   copyPath: string
@@ -78,19 +127,9 @@ async function swap(
   marker = await protectMarker(markerPath, marker, copyPath)
   let copy = await lstatIfPresent(copyPath)
   if (!copy) {
-    // A pass stopped after moving the copy aside: its name comes back before anything else.
-    const asidePath = marker.aside ? join(dirname(copyPath), marker.aside) : null
-    const aside = asidePath ? await lstatIfPresent(asidePath) : null
-    // An empty aside is a reservation the copy never moved onto.
-    if (!asidePath || !aside?.isFile() || aside.size === 0n) {
-      return 'none'
-    }
-    // Under the deletion guard: a cleanup deleting this chat must not see its name come back.
-    if (
-      (await linkCodexRolloutUnlessHeld(sourcePath, () => linkUnlessTaken(asidePath, copyPath))) ===
-      'held'
-    ) {
-      return 'deferred'
+    const restored = await restoreMovedCopy(marker, sourcePath, copyPath)
+    if (restored !== 'restored') {
+      return restored === 'held' ? 'deferred' : 'none'
     }
     copy = await lstatIfPresent(copyPath)
     if (!copy) {
@@ -309,39 +348,4 @@ async function supportsHardLinks(reservedPath: string): Promise<boolean> {
     }
   }
   return true
-}
-
-async function linkUnlessTaken(existingPath: string, path: string): Promise<void> {
-  try {
-    await link(existingPath, path)
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException | null)?.code !== 'EEXIST') {
-      throw error
-    }
-  }
-}
-
-function sameFile(left: BigIntStats, right: BigIntStats): boolean {
-  return left.dev === right.dev && left.ino === right.ino && left.ino !== 0n
-}
-
-async function lstatIfPresent(path: string): Promise<BigIntStats | null> {
-  try {
-    return await lstat(path, { bigint: true })
-  } catch (error) {
-    if (isDefinitiveAbsence(error)) {
-      return null
-    }
-    throw error
-  }
-}
-
-async function unlinkIfPresent(path: string): Promise<void> {
-  try {
-    await unlink(path)
-  } catch (error) {
-    if (!isDefinitiveAbsence(error)) {
-      throw error
-    }
-  }
 }
