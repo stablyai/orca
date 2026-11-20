@@ -21,7 +21,7 @@ import type {
 import { DaemonSessionOwnerResolver } from './daemon-session-owner-resolution'
 import type { DaemonIdleRetirementResult } from '../adapter/daemon-pty-runtime-state'
 import { DaemonRouterRetirement } from './daemon-router-retirement'
-import { heldSpawnRefusal, routeSpawnOrHold } from './daemon-router-newer-daemon-hold'
+import { DaemonRouterHeldSpawnGate } from './daemon-router-newer-daemon-hold'
 import { retireExitedLegacyAdapter, type ExitedLegacyVerdict } from './daemon-router-exited-legacy'
 import type { WriteSettlement } from '../../../../shared/terminal/pty/lifecycle/pty-write-settlement'
 import type { TerminalOscColorQueryReplyColors } from '../../../../shared/terminal/protocol/queries/terminal-osc-color-reply'
@@ -81,7 +81,7 @@ export class DaemonPtyRouter implements IPtyProvider {
       if (opts.attachOnly && opts.sessionId) {
         return await this.ownerResolver.spawnAttachOnly({ ...opts, sessionId: opts.sessionId })
       }
-      const target = await this.spawnTarget(opts)
+      const target = await this.heldSpawns.target(opts)
       const result = await target.spawn(opts)
       if (!result.exitedBeforeSpawnReply) {
         this.ownerResolver.recordRoute(result.id, target, result.incarnationId)
@@ -92,12 +92,12 @@ export class DaemonPtyRouter implements IPtyProvider {
     }
   }
 
-  private spawnTarget = (opts: Parameters<typeof routeSpawnOrHold>[0]) => {
+  private readonly heldSpawns = new DaemonRouterHeldSpawnGate(() => {
     const { sessionAdapters, current, legacy, legacyExitProof: exitProof, ownerResolver } = this
-    return routeSpawnOrHold(opts, { sessionAdapters, current, legacy, exitProof, ownerResolver })
-  }
+    return { sessionAdapters, current, legacy, exitProof, ownerResolver }
+  })
 
-  refuseHeldSpawn = heldSpawnRefusal((id) => this.sessionAdapters.has(id), this.spawnTarget)
+  refuseHeldSpawn = this.heldSpawns.refuse
 
   requestIdleRetirement(): Promise<DaemonIdleRetirementResult> {
     return this.retirement.requestIdleRetirement()

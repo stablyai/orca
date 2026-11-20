@@ -13,8 +13,8 @@ const { heldSpawnRefusal, resolveHeldOwner, routeSpawnOrHold } =
 
 const SAVED = 'repo1::/tmp/feature@@d3a0a65b'
 
-// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the hold only compares adapter identity; it never calls one without history.
-const current = { hasRestorableHistory: () => false } as unknown as DaemonPtyAdapter
+// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the hold only probes whether the current daemon runs the saved id.
+const current = { probePtyLiveness: async () => false } as unknown as DaemonPtyAdapter
 
 function dispatch(ownerResolver: DaemonSessionOwnerResolver<DaemonPtyAdapter>) {
   const exitProof = new LegacyDaemonExitProof()

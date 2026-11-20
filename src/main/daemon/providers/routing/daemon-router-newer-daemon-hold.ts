@@ -27,23 +27,32 @@ export async function resolveHeldOwner(
   return resolution.provider
 }
 
+type DaemonRouterDispatch = {
+  sessionAdapters: ReadonlyMap<string, DaemonPtyAdapter>
+  current: DaemonPtyAdapter
+  legacy: readonly DaemonPtyAdapter[]
+  exitProof: LegacyDaemonExitProof
+  ownerResolver: DaemonSessionOwnerResolver<DaemonPtyAdapter>
+}
+
 /** Spawn dispatch's target: the routed owner, else a probed current or legacy owner, else the newer-daemon hold. */
 export async function routeSpawnOrHold(
   opts: PtyHeldSpawnRequest,
-  router: {
-    sessionAdapters: ReadonlyMap<string, DaemonPtyAdapter>
-    current: DaemonPtyAdapter
-    legacy: readonly DaemonPtyAdapter[]
-    exitProof: LegacyDaemonExitProof
-    ownerResolver: DaemonSessionOwnerResolver<DaemonPtyAdapter>
-  }
+  router: DaemonRouterDispatch
 ): Promise<DaemonPtyAdapter> {
   const { sessionAdapters, current, legacy, exitProof, ownerResolver } = router
   const owner =
     (opts.sessionId ? sessionAdapters.get(opts.sessionId) : undefined) ??
     (await findLegacySessionOwner(opts, current, legacy, exitProof))
   const sessionId = heldSessionId(opts, owner !== undefined)
-  return sessionId === null ? (owner ?? current) : resolveHeldOwner(sessionId, ownerResolver)
+  if (sessionId === null) {
+    return owner ?? current
+  }
+  // With no older daemons the lookup skipped this probe; a session the current daemon runs is never held.
+  if (legacy.length === 0 && (await current.probePtyLiveness(sessionId).catch(() => null))) {
+    return current
+  }
+  return resolveHeldOwner(sessionId, ownerResolver)
 }
 
 /** The same hold, answered before main prepares anything under the saved id; undefined when none applies. */
@@ -57,4 +66,39 @@ export function heldSpawnRefusal(
     const sessionId = opts.attachOnly ? null : heldSessionId(opts, routed)
     return sessionId === null ? undefined : resolveHeld({ ...opts, sessionId }).then(() => {})
   }
+}
+
+// Long enough to cover spawn preparation; an older answer is probed again.
+const ADMITTED_OWNER_TTL_MS = 10_000
+
+/** The router's dispatch and its early hold; an owner the early hold admitted is handed to its spawn, so it is probed once. */
+export class DaemonRouterHeldSpawnGate {
+  private readonly admitted = new Map<string, { owner: DaemonPtyAdapter; at: number }>()
+
+  constructor(private readonly dispatch: () => DaemonRouterDispatch) {}
+
+  target = (opts: PtyHeldSpawnRequest): Promise<DaemonPtyAdapter> => {
+    const admitted = opts.sessionId ? this.admitted.get(opts.sessionId) : undefined
+    if (opts.sessionId && admitted) {
+      this.admitted.delete(opts.sessionId)
+      if (!opts.isNewSession && Date.now() - admitted.at < ADMITTED_OWNER_TTL_MS) {
+        return Promise.resolve(admitted.owner)
+      }
+    }
+    return routeSpawnOrHold(opts, this.dispatch())
+  }
+
+  refuse = heldSpawnRefusal(
+    (id) => this.dispatch().sessionAdapters.has(id),
+    async (opts) => {
+      const owner = await routeSpawnOrHold(opts, this.dispatch())
+      const now = Date.now()
+      for (const [id, entry] of this.admitted) {
+        if (now - entry.at >= ADMITTED_OWNER_TTL_MS) {
+          this.admitted.delete(id)
+        }
+      }
+      this.admitted.set(opts.sessionId, { owner, at: now })
+    }
+  )
 }
