@@ -1,0 +1,45 @@
+import type { CodexAppServerServerRequest } from '../codex-app-server-connection-types'
+
+export type CodexSharedServerFrame =
+  | { kind: 'notification'; method: string; params: unknown }
+  | { kind: 'request'; request: CodexAppServerServerRequest }
+
+function field(value: unknown, ...path: readonly string[]): unknown {
+  let current = value
+  for (const key of path) {
+    if (typeof current !== 'object' || current === null) {
+      return undefined
+    }
+    current = (current as Record<string, unknown>)[key]
+  }
+  return current
+}
+
+function stringOrNull(value: unknown): string | null {
+  return typeof value === 'string' && value.length > 0 ? value : null
+}
+
+export function codexSharedFrameParams(frame: CodexSharedServerFrame): unknown {
+  return frame.kind === 'notification' ? frame.params : frame.request.params
+}
+
+/** The thread a frame belongs to; null for account- or server-wide frames. */
+export function codexFrameThreadId(params: unknown): string | null {
+  return stringOrNull(field(params, 'threadId')) ?? stringOrNull(field(params, 'thread', 'id'))
+}
+
+/** A subagent's thread belongs to the chat that owns its parent. */
+export function codexSubagentParentThreadId(params: unknown): string | null {
+  return stringOrNull(
+    field(params, 'thread', 'source', 'subAgent', 'thread_spawn', 'parent_thread_id')
+  )
+}
+
+/** The thread a thread/start, thread/resume or thread/fork reply opened. */
+export function codexOpenedThreadId(result: unknown): string | null {
+  return stringOrNull(field(result, 'thread', 'id'))
+}
+
+export function codexTurnId(params: unknown): string | null {
+  return stringOrNull(field(params, 'turn', 'id')) ?? stringOrNull(field(params, 'turnId'))
+}

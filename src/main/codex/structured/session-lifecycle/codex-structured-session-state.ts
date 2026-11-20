@@ -114,6 +114,8 @@ export type CodexStructuredSessionAdapterDeps = {
   /** The sends Codex holds (`CodexDispatchEchoes.heldSends`) changed with no journal row. */
   onHeldSendsChanged?: (input: { sessionId: string }) => void
   openConnection?: typeof openCodexAppServerConnection
+  /** Read per start: true leases a thread on a shared, capped app-server. */
+  sharedServers?: () => boolean
   readProcessStartTime?: (pid: number) => Promise<number | null>
   mintLinkId?: () => string
   mintAcquisitionGeneration?: () => string

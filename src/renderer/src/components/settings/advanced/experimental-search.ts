@@ -147,6 +147,30 @@ export const getExperimentalSearchEntry = createLocalizedCatalog(
           )
         ]
       },
+      sharedCodexServers: {
+        title: translate(
+          'auto.components.settings.experimental.search.sharedCodexServers.title',
+          'Shared Codex servers'
+        ),
+        description: translate(
+          'auto.components.settings.experimental.search.sharedCodexServers.description',
+          'Codex chats share a few app-servers, up to 20 chats each, instead of starting one per chat.'
+        ),
+        keywords: [
+          ...translateSearchKeyword(
+            'auto.components.settings.experimental.search.0d24759f14',
+            'experimental'
+          ),
+          ...translateSearchKeyword(
+            'auto.components.settings.experimental.search.sharedCodexServers.codex',
+            'codex'
+          ),
+          ...translateSearchKeyword(
+            'auto.components.settings.experimental.search.sharedCodexServers.memory',
+            'memory'
+          )
+        ]
+      },
       agentHibernation: {
         title: translate(
           'auto.components.settings.experimental.search.agentHibernation.title',

@@ -47,6 +47,10 @@ export function ExperimentalPane({
   const showAgentHibernation = matchesSettingsSearch(searchQuery, [
     getExperimentalSearchEntry().agentHibernation
   ])
+  const showSharedCodexServers = matchesSettingsSearch(searchQuery, [
+    getExperimentalSearchEntry().sharedCodexServers
+  ])
+  const sharedCodexServersEnabled = settings.experimentalSharedCodexServers === true
   const showNewWorktreeCardStyle = matchesSettingsSearch(searchQuery, [
     getExperimentalSearchEntry().newWorktreeCardStyle
   ])
@@ -204,6 +208,51 @@ export function ExperimentalPane({
                 />
               </div>
             ) : null}
+          </SearchableSetting>
+        ) : null}
+
+        {showSharedCodexServers ? (
+          <SearchableSetting
+            title={t(
+              'auto.components.settings.ExperimentalPane.sharedCodexServers.title',
+              'Shared Codex servers'
+            )}
+            description={t(
+              'auto.components.settings.ExperimentalPane.sharedCodexServers.description',
+              'Codex chats share a few app-servers, up to 20 chats each, instead of starting one per chat.'
+            )}
+            keywords={getExperimentalSearchEntry().sharedCodexServers.keywords}
+            className="space-y-3 py-3"
+            id="experimental-shared-codex-servers"
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0 shrink space-y-0.5">
+                <Label>
+                  {t(
+                    'auto.components.settings.ExperimentalPane.sharedCodexServers.title',
+                    'Shared Codex servers'
+                  )}
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  {t(
+                    'auto.components.settings.ExperimentalPane.sharedCodexServers.copy',
+                    'Codex chats share a few app-servers, up to 20 chats each, instead of starting one per chat. Uses less memory and starts new chats faster. If a shared server crashes, all of its chats reconnect. Applies to chats started after you change it.'
+                  )}
+                </p>
+              </div>
+              <Switch
+                checked={sharedCodexServersEnabled}
+                aria-label={t(
+                  'auto.components.settings.ExperimentalPane.sharedCodexServers.toggleLabel',
+                  'Toggle shared Codex servers'
+                )}
+                onCheckedChange={() =>
+                  updateSettings({
+                    experimentalSharedCodexServers: !sharedCodexServersEnabled
+                  })
+                }
+              />
+            </div>
           </SearchableSetting>
         ) : null}
 
