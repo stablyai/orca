@@ -26,7 +26,7 @@ function cliRecovery(code: AzureDevOpsAuthErrorCode | undefined, t: Translate): 
     case 'cli-not-installed':
       return t(
         'settings.azureDevOps.cliMissing',
-        'Install or update Azure CLI on this host and make sure az is on its PATH, then Re-check.'
+        'On the credential host, install Azure CLI if needed and make sure az is on PATH. Run az login, then select Re-check.'
       )
     case 'login-required':
       return t(

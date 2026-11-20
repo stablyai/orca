@@ -1909,7 +1909,7 @@
       "installingStatus": "is being installed."
     },
     "azureDevOps": {
-      "cliMissing": "Install or update Azure CLI on this host and make sure az is on its PATH, then Re-check.",
+      "cliMissing": "On the credential host, install Azure CLI if needed and make sure az is on PATH. Run az login, then select Re-check.",
       "cliLoginRequired": "Run az login on this host for your organization’s tenant, then Re-check.",
       "cliTimeout": "Azure CLI timed out. Check that az responds on this host, then Re-check.",
       "cliInvalidResponse": "Update Azure CLI on this host so it returns UTC token expiry metadata, then Re-check.",
