@@ -23,10 +23,13 @@ vi.mock('../shared-server/codex-daemon-socket-path-guard', async (importOriginal
   codexDaemonSocketPathExceedsLimit: () => false
 }))
 
-const { homedirMock, promotionTestState } = vi.hoisted(() => ({
-  homedirMock: vi.fn<() => string>(),
-  promotionTestState: { failAtomicWrite: false, wslSystemConfigPath: null as string | null }
-}))
+const { homedirMock, promotionTestState } = vi.hoisted(() => {
+  const state: { failAtomicWrite: boolean; wslSystemConfigPath: string | null } = {
+    failAtomicWrite: false,
+    wslSystemConfigPath: null
+  }
+  return { homedirMock: vi.fn<() => string>(), promotionTestState: state }
+})
 
 vi.mock('../../../../shared/file-access/wsl-paths', async (importOriginal) => {
   const actual = await importOriginal<typeof WslPaths>()
