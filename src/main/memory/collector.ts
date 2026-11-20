@@ -12,11 +12,7 @@ import { collectHostMemory } from './host-memory'
 import { getLocalDaemonPid } from './local-daemon-pid'
 import { enumerateHostProcesses } from './host-process-index'
 import { claimProcessTree, claimPtyProcessTrees } from './pty-process-trees'
-import {
-  listAgentProcessPids,
-  readAgentProcessOwners,
-  type AgentProcessOwner
-} from './agent-process-registry'
+import { listAgentProcessRoots, readAgentProcessChat } from './agent-process-registry'
 import type { ProcIndex, ProcRow } from './process-index'
 import {
   createEmptyWorktreeMemoryBucket,
@@ -152,15 +148,6 @@ function addUsage(target: RowTotals, usage: UsageValues): void {
   target.privateMemory += clampMemoryMetric(usage.privateMemory)
 }
 
-/** The one chat each agent root belongs to; a root shared by several chats belongs to none. */
-function chatOwnersByPid(): Map<number, AgentProcessOwner | null> {
-  const owners = new Map<number, AgentProcessOwner | null>()
-  for (const owner of readAgentProcessOwners()) {
-    owners.set(owner.pid, owners.has(owner.pid) ? null : owner)
-  }
-  return owners
-}
-
 async function runSnapshot(store: MemorySnapshotStore): Promise<MemorySnapshot> {
   const projectGroupName = createProjectGroupNameLookup(store)
   const repoName = createRepoNameLookup(store)
@@ -169,9 +156,9 @@ async function runSnapshot(store: MemorySnapshotStore): Promise<MemorySnapshot> 
   const appBuckets = bucketElectronMetrics(processIndex)
   const claimed = new Set<number>()
   const ptyTrees = claimPtyProcessTrees(processIndex, listRegisteredPtys(), claimed)
-  const agentTrees = listAgentProcessPids().map((pid) => ({
-    pid,
-    rows: claimProcessTree(processIndex, pid, claimed)
+  const agentTrees = listAgentProcessRoots().map((root) => ({
+    ...root,
+    rows: claimProcessTree(processIndex, root.pid, claimed)
   }))
 
   const orphan = createEmptyWorktreeMemoryBucket(
@@ -212,20 +199,14 @@ async function runSnapshot(store: MemorySnapshotStore): Promise<MemorySnapshot> 
   }
 
   const agents: RowTotals = { cpu: 0, memory: 0, privateMemory: 0 }
-  const owners = agentTrees.length > 0 ? chatOwnersByPid() : new Map()
-  for (const { pid, rows } of agentTrees) {
+  for (const { agentSessionId, rows } of agentTrees) {
     const usage = usageOf(sumRows(rows), hasPrivateMemory)
     addUsage(agents, usage)
-    const owner = owners.get(pid)
-    if (owner) {
-      const bucket = bucketFor(owner.worktreeId)
+    const chat = agentSessionId === null ? null : readAgentProcessChat(agentSessionId)
+    if (agentSessionId !== null && chat) {
+      const bucket = bucketFor(chat.worktreeId)
       addUsage(bucket, usage)
-      bucket.chats.push({
-        agentSessionId: owner.agentSessionId,
-        agent: owner.agent,
-        name: owner.name,
-        ...usage
-      })
+      ;(bucket.chats ??= []).push({ agentSessionId, agent: chat.agent, name: chat.name, ...usage })
     }
   }
 

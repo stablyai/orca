@@ -4,8 +4,13 @@ import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { MergeContext } from './resource-usage-merge-types'
 
 /** Folder catalog row for host/name attribution; a duplicated id cannot choose a host, so it yields nothing. */
+type WorkspaceHostContext = Pick<
+  MergeContext,
+  'worktreeById' | 'ambiguousWorktreeIds' | 'repoConnectionIdById' | 'repoRuntimeHostIdById'
+>
+
 export function resolveResourceFolderWorkspace(
-  ctx: MergeContext,
+  ctx: Pick<MergeContext, 'worktreeById' | 'ambiguousWorktreeIds'>,
   worktreeId: string
 ): Worktree | undefined {
   if (
@@ -18,7 +23,7 @@ export function resolveResourceFolderWorkspace(
 }
 
 export function resolveResourceWorkspaceHost(
-  ctx: MergeContext,
+  ctx: WorkspaceHostContext,
   worktreeId: string,
   repoId: string
 ): { isRemote: boolean; runtimeHostId: string | null } {
