@@ -143,10 +143,29 @@ describe('the GitHub picker’s reading of a search', () => {
     expect(empty({ status: 'skipped' }, null, 'neil par')?.detail).toBe('Try an exact username.')
   })
 
-  it('says when a reused list was read, and how to refresh it', () => {
-    expect(value(answer(read({ reused: true }), none)).note).toMatch(
+  it('says when a reused list was read only when that matters, with the date when not today', () => {
+    const readAt = new Date(2026, 10, 19, 14, 5).getTime()
+    const at = (now: number, query: string) =>
+      gitHubWhoCanAskAnswer(
+        { roster: read({ reused: true }), exact: none, query, ownerLogin: 'owner', now },
+        t
+      )
+    const note = (result: ReturnType<typeof at>) => (result.ok ? result.value.note : undefined)
+    const minutes = (count: number) => readAt + count * 60_000
+    // Recent, and the search found someone in it: nothing to say.
+    expect(note(at(minutes(10), 'brennan'))).toBeUndefined()
+    expect(note(at(minutes(10), ''))).toBeUndefined()
+    // Recent, but no one in it matched: the list's age could be why.
+    expect(note(at(minutes(10), 'zed'))).toMatch(
       /^Repo list from 2:05\s?PM\. Restart Orca to refresh\.$/
     )
+    // Over an hour old: always, with the time today...
+    expect(note(at(minutes(90), 'brennan'))).toMatch(/^Repo list from 2:05\s?PM\./)
+    // ...and the date once it's another day (date and time wouldn't fit one line).
+    expect(note(at(minutes(60 * 20), 'brennan'))).toMatch(
+      /^Repo list from Nov 19\. Restart Orca to refresh\.$/
+    )
+    // A list read during this open is never labelled.
     expect(value(answer(read(), none)).note).toBeUndefined()
   })
 
