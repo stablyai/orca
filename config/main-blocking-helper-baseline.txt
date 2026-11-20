@@ -708,7 +708,8 @@
 3 src/main/ipc/shell/shell.ts
 3 src/main/ipc/source-control/bitbucket.ts
 5 src/main/ipc/source-control/hosted-review.ts
-5 src/main/ipc/speech.ts
+1 src/main/ipc/speech.ts
+4 src/main/ipc/speech/speech-application-handlers.ts # Moved application registrations from ipc/speech.ts.
 3 src/main/ipc/ssh/plain-ssh-terminal-handlers.ts
 2 src/main/ipc/ssh/ssh-connection-handlers.ts
 2 src/main/ipc/ssh/ssh-host-server-on-connect-wiring.ts

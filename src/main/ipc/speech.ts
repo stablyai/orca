@@ -22,7 +22,7 @@ export function registerSpeechHandlers(
   store: Store,
   agentEnvResolvers?: CommitMessageAgentEnvironmentResolvers
 ): void {
-  registerSpeechApplicationHandlers(store, agentEnvResolvers)
+  registerSpeechApplicationHandlers(store, agentEnvResolvers, () => getSpeechSttService(store))
 
   // Renderer run ids restart per document; a retired document's owner must not be reused by its successor.
   const retiredDocumentCounts = new Map<number, number>()

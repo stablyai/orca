@@ -1,10 +1,10 @@
 import {
   type AppDocument,
+  type AppCaller,
   removeAppHandler,
   registerAppHandler,
   appDocumentFor
 } from '../app-registry/app-handler-registry'
-import type { AppCaller } from '../app-registry/app-handler-registry'
 
 import type {
   TerminalPreviewConnectResult,

@@ -1,3 +1,4 @@
+import type { SttService } from '../../speech/stt-service'
 import {
   publishToDocuments,
   registerAppHandler,
@@ -8,7 +9,7 @@ import { dictationTermsFor } from '../../../shared/speech/dictation/dictation-di
 
 import { SPEECH_MODEL_CATALOG } from '../../speech/model-catalog'
 import { deleteLocalSpeechModel } from '../../speech/speech-model-deletion'
-import { getSpeechModelManager, getSpeechSttService } from '../../speech/speech-runtime-service'
+import { getSpeechModelManager } from '../../speech/speech-runtime-service'
 import {
   clearOpenAiSpeechApiKey,
   getOpenAiSpeechApiKeyProtection,
@@ -35,7 +36,8 @@ const MAX_CLEANUP_TEXT_LENGTH = 100_000
 
 export function registerSpeechApplicationHandlers(
   store: Store,
-  agentEnvResolvers?: CommitMessageAgentEnvironmentResolvers
+  agentEnvResolvers: CommitMessageAgentEnvironmentResolvers | undefined,
+  resolveTranscriber: () => SttService
 ): void {
   registerAppHandler(
     'speech:cleanUpDictation',
@@ -151,7 +153,7 @@ export function registerSpeechApplicationHandlers(
     await deleteLocalSpeechModel({
       store,
       modelManager: getSpeechModelManager(store),
-      sttService: getSpeechSttService(store),
+      sttService: resolveTranscriber(),
       modelId
     })
   })
