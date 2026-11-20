@@ -156,7 +156,7 @@ export async function removeLocalWorktreePath(
       distro,
       guestCommand(targetPath, (target) =>
         markerLast
-          ? `LC_ALL=C find ${target} -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf -- {} + && rm -f -- ${target}/.git && LC_ALL=C rmdir -- ${target}`
+          ? `if [ -L ${target} ] || { [ -e ${target} ] && [ ! -d ${target} ]; }; then echo "Refusing to delete non-directory worktree path" >&2; exit 3; fi; LC_ALL=C find ${target} -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf -- {} + && rm -f -- ${target}/.git && LC_ALL=C rmdir -- ${target}`
           : `rm -rf -- ${target}`
       )
     )

@@ -116,14 +116,19 @@ export async function removeUnregisteredHostCheckout(
   targetPath: string,
   signal?: AbortSignal
 ): Promise<void> {
+  let entry
   try {
-    await lstat(toHostRemovalPath(targetPath))
+    entry = await lstat(toHostRemovalPath(targetPath))
   } catch (error) {
     // Like rm -rf, an already-missing folder is done.
     if (getErrorCode(error) === 'ENOENT' || getErrorCode(error) === 'ENOTDIR') {
       return
     }
     throw error
+  }
+  // lstat never reports a symlink as a directory; following one would empty its target.
+  if (!entry.isDirectory()) {
+    throw new Error(`Refusing to delete unregistered worktree path: ${targetPath}`)
   }
   await removeHostCheckout(targetPath, async () => true, signal)
 }
