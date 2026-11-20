@@ -89,11 +89,13 @@ export function reconcileJournalLegacySource(stateDirectory: string, db: Databas
     } else {
       complete = absorbChats(source, db, pass, true)
     }
-    const hasOriginal = source.prepare('SELECT 1 FROM agent_session_records WHERE session_id=?')
-    const hasRecord = db.prepare('SELECT 1 FROM agent_session_records WHERE session_id=?')
-    gone = metaKeys(db, journalLegacyFailureKey('')).filter(
-      (id) => !hasRecord.get(id) && !hasOriginal.get(id)
-    )
+    if (!unchanged) {
+      const hasOriginal = source.prepare('SELECT 1 FROM agent_session_records WHERE session_id=?')
+      const hasRecord = db.prepare('SELECT 1 FROM agent_session_records WHERE session_id=?')
+      gone = metaKeys(db, journalLegacyFailureKey('')).filter(
+        (id) => !hasRecord.get(id) && !hasOriginal.get(id)
+      )
+    }
   } finally {
     source.close()
   }

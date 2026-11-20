@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
-import type Database from '../../../sqlite/sync-database'
+import Database from '../../../sqlite/sync-database'
 import { openJournalDatabase } from './journal-database'
 import {
   initializeJournalDomainDatabase,
@@ -12,7 +12,10 @@ import { journalDatabasePath, journalDomainDatabasePath } from './journal-host-d
 import { reconcileJournalLegacySource } from './journal-legacy-reconcile'
 import { recoverJournalLegacyClaims } from './journal-legacy-claims'
 import * as legacyClaims from './journal-legacy-claims'
-import { recordJournalLegacyFailure } from './journal-legacy-reconcile-marks'
+import {
+  JOURNAL_LEGACY_COPY_DUE,
+  recordJournalLegacyFailure
+} from './journal-legacy-reconcile-marks'
 
 const cleanup: (() => void)[] = []
 afterEach(() => {
@@ -24,15 +27,19 @@ afterEach(() => {
 
 function reads(db: Database.Database, counted: (sql: string, key: unknown) => boolean) {
   let total = 0
-  const prepare = db.prepare.bind(db)
-  vi.spyOn(db, 'prepare').mockImplementation((sql) => {
-    const statement = prepare(sql)
+  const prepare = db.prepare
+  vi.spyOn(db, 'prepare').mockImplementation(function (sql) {
+    const statement = prepare.call(this, sql)
     return {
       get: (...parameters: Parameters<typeof statement.get>) => {
         total += Number(counted(sql, parameters[0]))
         return statement.get(...parameters)
       },
-      all: statement.all.bind(statement),
+      all: (...parameters: Parameters<typeof statement.all>) => {
+        const rows = statement.all(...parameters)
+        total += counted(sql, parameters[0]) ? rows.length : 0
+        return rows
+      },
       run: statement.run.bind(statement),
       iterate: statement.iterate.bind(statement),
       setReadBigInts: statement.setReadBigInts.bind(statement)
@@ -45,6 +52,49 @@ function reads(db: Database.Database, counted: (sql: string, key: unknown) => bo
     }
   }
 }
+
+it.each([10, 100])(
+  'does not inventory %i unrelated failures for one forced copy',
+  async (count) => {
+    const root = mkdtempSync(join(tmpdir(), 'legacy-forced-perf-'))
+    cleanup.push(() => rmSync(root, { recursive: true, force: true }))
+    const { db: source } = openJournalDatabase(journalDatabasePath(root))
+    cleanup.push(() => source.close())
+    const insert = source.prepare('INSERT INTO agent_session_records VALUES(?,?)')
+    insert.run('forced', '{}')
+    for (let index = 0; index < count; index++) {
+      insert.run(`failed-${index}`, '{}')
+    }
+    const filename = await initializeJournalDomainDatabase(root)
+    const { db } = openJournalDomainDatabase(filename)
+    cleanup.push(() => db.close())
+    for (let index = 0; index < count; index++) {
+      recordJournalLegacyFailure(db, {
+        sessionId: `failed-${index}`,
+        revision: 'null',
+        error: 'record refused'
+      })
+    }
+    db.prepare('INSERT INTO agent_session_store_meta VALUES(?,?)').run(
+      `${JOURNAL_LEGACY_COPY_DUE}forced`,
+      '1'
+    )
+    const counted = (sql: string, key: unknown) =>
+      (sql.includes('SELECT key FROM agent_session_store_meta') &&
+        key === 'journal.legacy-failed:') ||
+      (sql.includes('SELECT 1 FROM agent_session_records') &&
+        typeof key === 'string' &&
+        key.startsWith('failed-'))
+    const failureReads = reads(Database.prototype, counted)
+    reconcileJournalLegacySource(root, db)
+    expect(failureReads.total()).toBe(0)
+    expect(
+      db
+        .prepare('SELECT value FROM agent_session_store_meta WHERE key=?')
+        .get(`${JOURNAL_LEGACY_COPY_DUE}forced`)
+    ).toBeUndefined()
+  }
+)
 
 it.each([10, 100])('reads each unchanged chat failure once across %i chats', async (count) => {
   const root = mkdtempSync(join(tmpdir(), 'legacy-reconcile-perf-'))
