@@ -318,9 +318,35 @@ describe('switching annotate tools', () => {
     await act(async () => release({ ok: true }))
     expect(markup.start).not.toHaveBeenCalled()
     expect(result.current.tools.activeTool).toBe('draw')
+    // The palette says it is waiting.
+    expect(result.current.tools.drawWaitingForPage).toBe(true)
 
     rerender(FIRST_PAGE)
     await waitFor(() => expect(markup.start).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(result.current.tools.drawWaitingForPage).toBe(false))
+  })
+
+  it.each([
+    ['Esc / Done', 'exit'],
+    ['another tool', 'switch']
+  ] as const)('%s while Draw waits for the page leaves the wait at once', async (_label, how) => {
+    const markup = makeMarkup()
+    const { result, rerender } = renderBrowserTools(markup)
+    rerender({ ...FIRST_PAGE, documentReady: false })
+    const release = await startDrawWithTeardownHeld(result)
+    holdDisables = false
+    await act(async () => release({ ok: true }))
+    expect(result.current.tools.drawWaitingForPage).toBe(true)
+
+    act(() =>
+      how === 'exit' ? result.current.tools.exit() : result.current.tools.selectTool('copy')
+    )
+
+    expect(result.current.tools.drawWaitingForPage).toBe(false)
+    expect(result.current.tools.activeTool).toBe(how === 'exit' ? null : 'copy')
+    rerender(FIRST_PAGE)
+    await act(async () => {})
+    expect(markup.start).not.toHaveBeenCalled()
   })
 
   it('drops a pending Draw when the page stops being drawable, and does not come back on Draw later', async () => {

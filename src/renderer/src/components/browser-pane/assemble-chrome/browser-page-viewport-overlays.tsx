@@ -1,3 +1,4 @@
+import { translate } from '@/i18n/i18n'
 import {
   useCallback,
   type Dispatch,
@@ -108,6 +109,11 @@ export function BrowserPageViewportOverlays({
         currentUrl={browserTab.url}
         toolSwitch={toolSwitch}
         canPickElements={canPickElements}
+        toolsUnavailableReason={
+          browserTab.loadError
+            ? translate('browser.annotatePalette.pageDidNotLoad', "Page didn't load")
+            : undefined
+        }
         showPaletteKeyHints
       />
       <BrowserPageFeedbackBadge ref={feedbackBadgeRef} />

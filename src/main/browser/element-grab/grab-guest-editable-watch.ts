@@ -113,6 +113,29 @@ export async function askGuestHasField(
   }
 }
 
+/** Whether an element matching the selector is in the page; read in the isolated world so the page can't answer. */
+export async function isSelectorPresentInGuest(
+  guest: Pick<WebContents, 'executeJavaScriptInIsolatedWorld' | 'isDestroyed'>,
+  selector: string
+): Promise<boolean> {
+  if (guest.isDestroyed()) {
+    return true
+  }
+  try {
+    const reply: unknown = await guest.executeJavaScriptInIsolatedWorld(
+      GRAB_EDITABLE_WATCH_WORLD_ID,
+      [
+        {
+          code: `(function() { try { return document.querySelector(${JSON.stringify(selector)}) !== null; } catch (e) { return true; } })()`
+        }
+      ]
+    )
+    return reply !== false
+  } catch {
+    return true
+  }
+}
+
 export function buildEditableStopScript(token: number): string {
   return `(function() {
   var current = globalThis.__orcaEditableWatch;

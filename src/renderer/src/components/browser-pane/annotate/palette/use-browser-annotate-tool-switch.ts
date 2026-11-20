@@ -2,7 +2,6 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { INLINE_ACTION_CLASS_NAMES } from '@/components/ui/sonner'
-import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
 import type {
   BrowserAnnotateToolKey,
   GrabIntent
@@ -10,8 +9,7 @@ import type {
 import type { GrabModeHook } from '../grab/useGrabMode'
 import type { MarkupModeController, MarkupResumeSnapshot } from '../capture/useMarkupMode'
 import type { MarkupShape } from '../drawing/markup-drawing-model'
-import { isEditableKeyboardTarget } from '../../host-guest/input/browser-keyboard'
-import { annotateEscOwner } from './annotate-esc-ownership'
+import { usePendingDrawEscape } from './use-pending-draw-escape'
 
 const DISCARDED_DRAWING_UNDO_MS = 5000
 
@@ -101,6 +99,8 @@ export function useBrowserAnnotateToolSwitch({
   const documentReadyRef = useRef(documentReady)
   // A Draw start whose teardown finished while the page was still loading: it captures once the load ends.
   const captureWhenReadyRef = useRef<{ owner: string; transition: number } | null>(null)
+  // Which document's Draw is waiting for its load, for the palette to say so.
+  const [waitingForPageOwner, setWaitingForPageOwner] = useState<string | null>(null)
   useLayoutEffect(() => {
     markupActiveRef.current = markup.isActive
     liveOwnerRef.current = drawOwner
@@ -203,6 +203,7 @@ export function useBrowserAnnotateToolSwitch({
         return
       }
       const owner = drawOwner
+      setWaitingForPageOwner(null)
       setDrawStartingFor(owner)
       cancelPendingBrowserCapture()
       // Why a second, awaited disable: with the pick already cancelled it awaits the overlay teardown script, which
@@ -228,6 +229,7 @@ export function useBrowserAnnotateToolSwitch({
             setRestoredShapes(undefined)
             setDrawSession((session) => session + 1)
             captureWhenReadyRef.current = { owner, transition }
+            setWaitingForPageOwner(owner)
             return
           }
           setDrawStartingFor(null)
@@ -261,6 +263,7 @@ export function useBrowserAnnotateToolSwitch({
       return
     }
     const settle = (): void => {
+      setWaitingForPageOwner(null)
       if (transitionRef.current === waiting.transition) {
         setDrawStartingFor(null)
       }
@@ -290,6 +293,7 @@ export function useBrowserAnnotateToolSwitch({
   const exit = useCallback((): void => {
     transitionRef.current += 1
     setDrawStartingFor(null)
+    setWaitingForPageOwner(null)
     if (markup.isActive) {
       leaveDraw()
       return
@@ -313,28 +317,7 @@ export function useBrowserAnnotateToolSwitch({
     [selectTool]
   )
 
-  // While Draw waits for teardown neither the picker nor the drawing owns Esc; this does.
-  useEffect(() => {
-    if (!drawStarting) {
-      return
-    }
-    const onKeyDown = (event: KeyboardEvent): void => {
-      // Same owner rule as the picker's and Draw's Esc: this page's surfaces, or no element when it was used last.
-      if (
-        event.key === 'Escape' &&
-        !event.isComposing &&
-        event.keyCode !== 229 &&
-        !isEditableKeyboardTarget(event.target) &&
-        annotateEscOwner(event.target) === toolTargetId
-      ) {
-        event.preventDefault()
-        exit()
-      }
-    }
-    // Focus sits on the palette's Draw button meanwhile (it takes focus on tool change), so the app router sees Esc.
-    addAppKeyListener('keydown', onKeyDown)
-    return () => removeAppKeyListener('keydown', onKeyDown)
-  }, [drawStarting, exit, toolTargetId])
+  usePendingDrawEscape({ waiting: drawStarting, pageId: toolTargetId, exit })
 
   return {
     activeTool,
@@ -346,6 +329,7 @@ export function useBrowserAnnotateToolSwitch({
     reportShapes,
     restoredShapes,
     drawSession,
-    drawOwner
+    drawOwner,
+    drawWaitingForPage: drawStarting && waitingForPageOwner === drawOwner
   }
 }

@@ -3,7 +3,8 @@ import { buildGuestOverlayScript } from '../../../element-grab/grab-guest-script
 import { buildGrabLabelAvoidScript } from '../../../element-grab/grab-guest-overlay-script'
 import {
   GuestEditableWatch,
-  askGuestHasField
+  askGuestHasField,
+  isSelectorPresentInGuest
 } from '../../../element-grab/grab-guest-editable-watch'
 import { clampGrabPayload } from '../../../element-grab/browser-grab-payload'
 import { captureSelectionScreenshot as captureGrabSelectionScreenshot } from '../../../element-grab/browser-grab-screenshot'
@@ -89,6 +90,10 @@ export abstract class BrowserManagerGrab extends BrowserManagerViewport {
     const guestId = this.webContentsIdByTabId.get(browserTabId)
     const guest = guestId === undefined ? null : webContents.fromId(guestId)
     return guest ? askGuestHasField(guest) : Promise.resolve(true)
+  }
+
+  isGrabSelectorPresent(selector: string, guest: Electron.WebContents): Promise<boolean> {
+    return isSelectorPresentInGuest(guest, selector)
   }
 
   private stopEditableWatch(browserTabId: string): void {

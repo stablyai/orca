@@ -55,7 +55,8 @@ export function BrowserAnnotateToolPalette({
   onGrabScreenshot,
   onDrawSlotChange,
   onDrawDensityChange,
-  labelAvoidFrameRef
+  labelAvoidFrameRef,
+  unavailableReason
 }: {
   /** The page area the palette floats over and may not leave. */
   boundsRef: RefObject<HTMLElement | null>
@@ -86,6 +87,8 @@ export function BrowserAnnotateToolPalette({
   onDrawDensityChange: (density: MarkupPaletteDensity) => void
   /** The page frame; while picking, the palette tells that page where it sits so hover labels avoid it. */
   labelAvoidFrameRef?: RefObject<HTMLElement | null>
+  /** Why the other tools can't be used right now (e.g. the page didn't load); shown as their tooltip. */
+  unavailableReason?: string
 }): React.JSX.Element {
   const t = useTranslate()
   const paletteRef = useRef<HTMLDivElement>(null)
@@ -250,6 +253,7 @@ export function BrowserAnnotateToolPalette({
           </span>
           {options.map((option) => {
             const checked = option.tool === activeTool
+            const unavailable = !canPickElements && !checked
             const Icon = option.icon
             return (
               <Tooltip
@@ -286,9 +290,10 @@ export function BrowserAnnotateToolPalette({
                             : 'D'
                     }
                     tabIndex={checked ? 0 : -1}
-                    disabled={!canPickElements && !checked}
+                    // aria-disabled, not disabled: a disabled button shows no tooltip, and this one says why.
+                    aria-disabled={unavailable || undefined}
                     className={cn(
-                      'flex h-7 items-center gap-1.5 rounded-md font-medium whitespace-nowrap transition-colors focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none disabled:opacity-50',
+                      'flex h-7 items-center gap-1.5 rounded-md font-medium whitespace-nowrap transition-colors focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none aria-disabled:opacity-50',
                       showToolLabels
                         ? 'px-2'
                         : shortActions
@@ -298,7 +303,11 @@ export function BrowserAnnotateToolPalette({
                         ? 'bg-accent text-foreground ring-1 ring-muted-foreground ring-inset'
                         : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground'
                     )}
-                    onClick={() => onSelectTool(option.tool)}
+                    onClick={() => {
+                      if (!unavailable) {
+                        onSelectTool(option.tool)
+                      }
+                    }}
                     onKeyDown={(event) => {
                       if (event.key === 'ArrowRight' || event.key === 'ArrowLeft') {
                         event.preventDefault()
@@ -311,7 +320,7 @@ export function BrowserAnnotateToolPalette({
                   </button>
                 </TooltipTrigger>
                 <TooltipContent side="bottom" sideOffset={6}>
-                  {option.tooltip}
+                  {unavailable && unavailableReason ? unavailableReason : option.tooltip}
                 </TooltipContent>
               </Tooltip>
             )

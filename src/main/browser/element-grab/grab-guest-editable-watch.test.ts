@@ -1,6 +1,10 @@
 import { runInNewContext } from 'node:vm'
 import { afterEach, describe, expect, it } from 'vitest'
-import { buildEditableAwaitScript, buildEditableStopScript } from './grab-guest-editable-watch'
+import {
+  buildEditableAwaitScript,
+  buildEditableStopScript,
+  isSelectorPresentInGuest
+} from './grab-guest-editable-watch'
 
 const aborts: (() => Promise<void>)[] = []
 afterEach(async () => {
@@ -71,5 +75,23 @@ describe('the isolated field-focus tracker', () => {
     const replaced = p.awaitState(2, false)
     await p.awaitState(3, null)
     await expect(replaced).resolves.toBeNull()
+  })
+})
+
+describe("whether a held pick's element is still in the page", () => {
+  it('answers from the page DOM, and treats a broken selector as present', async () => {
+    const p = await page()
+    // A guest that runs the isolated-world script against the same DOM.
+    const guest = {
+      isDestroyed: () => false,
+      executeJavaScriptInIsolatedWorld: async (_world: number, scripts: { code: string }[]) =>
+        runInNewContext(scripts[0]?.code ?? '', p.world)
+    }
+    p.field.id = 'search'
+
+    await expect(isSelectorPresentInGuest(guest, '#search')).resolves.toBe(true)
+    p.field.remove()
+    await expect(isSelectorPresentInGuest(guest, '#search')).resolves.toBe(false)
+    await expect(isSelectorPresentInGuest(guest, '##not a selector')).resolves.toBe(true)
   })
 })

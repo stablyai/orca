@@ -14,7 +14,8 @@ export function browserAnnotatePaletteHint({
   grab,
   grabIntent,
   hasPendingAnnotation,
-  browserAnnotationsLength
+  browserAnnotationsLength,
+  drawWaitingForPage = false
 }: {
   t: Translate
   activeTool: BrowserAnnotateTool
@@ -22,7 +23,15 @@ export function browserAnnotatePaletteHint({
   grabIntent: GrabIntent
   hasPendingAnnotation: boolean
   browserAnnotationsLength: number
+  /** Draw was chosen while the page is still loading. */
+  drawWaitingForPage?: boolean
 }): { text: string; isError: boolean } {
+  if (activeTool === 'draw' && drawWaitingForPage) {
+    return {
+      text: t('browser.annotatePalette.waitingForPage', 'Waiting for page…'),
+      isError: false
+    }
+  }
   if (activeTool === 'draw') {
     return { text: '', isError: false }
   }

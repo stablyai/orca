@@ -28,6 +28,8 @@ export type BrowserAnnotateToolSwitch = {
   drawSession: number
   /** The page and document the tools act on; held state for another document is stale. */
   drawOwner: string
+  /** Draw was chosen while the page is still loading; it captures once the load ends. */
+  drawWaitingForPage: boolean
 }
 
 export const TOOL_BY_KEY: Record<BrowserAnnotateToolKey, BrowserAnnotateTool> = {

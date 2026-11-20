@@ -23,6 +23,8 @@ function Harness(props: {
   onGrabCopy?: () => void
   onGrabScreenshot?: () => void
   grabPicked?: boolean
+  canPickElements?: boolean
+  unavailableReason?: string
 }): React.JSX.Element {
   const boundsRef = useRef<HTMLDivElement>(null)
   // The page is already on screen before the palette opens, as in the app.
@@ -39,7 +41,8 @@ function Harness(props: {
             activeTool={props.activeTool}
             onSelectTool={props.onSelectTool ?? vi.fn()}
             onDone={props.onDone ?? vi.fn()}
-            canPickElements
+            canPickElements={props.canPickElements ?? true}
+            unavailableReason={props.unavailableReason}
             showKeyHints
             hint="Click an element to add feedback for the agent."
             hintIsError={false}
@@ -70,6 +73,19 @@ describe('BrowserAnnotateToolPalette', () => {
     expect(onSelectTool).toHaveBeenLastCalledWith('copy')
     fireEvent.click(screen.getByRole('button', { name: 'Draw' }))
     expect(onSelectTool).toHaveBeenLastCalledWith('draw')
+  })
+
+  it('marks the other tools unavailable on a failed load while Done stays usable', () => {
+    render(
+      <Harness activeTool="annotate" canPickElements={false} unavailableReason="Page didn't load" />
+    )
+
+    expect(screen.getByRole('button', { name: 'Grab' }).getAttribute('aria-disabled')).toBe('true')
+    expect(screen.getByRole('button', { name: 'Draw' }).getAttribute('aria-disabled')).toBe('true')
+    expect(screen.getByRole('button', { name: 'Annotate' }).hasAttribute('aria-disabled')).toBe(
+      false
+    )
+    expect(screen.getByRole('button', { name: 'Done' }).hasAttribute('disabled')).toBe(false)
   })
 
   it('keeps Copy and Screenshot unavailable until an element is picked', () => {

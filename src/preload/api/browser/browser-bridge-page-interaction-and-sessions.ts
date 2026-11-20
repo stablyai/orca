@@ -149,6 +149,8 @@ export const browserPageInteractionAndSessionsApi = {
       frameHeight: number
     } | null
   }): Promise<boolean> => ipcRenderer.invoke('browser:setGrabLabelAvoidArea', args),
+  grabSelectorPresent: (args: { browserPageId: string; selector: string }): Promise<boolean> =>
+    ipcRenderer.invoke('browser:grabSelectorPresent', args),
   captureSelectionScreenshot: (args: {
     browserPageId: string
     rect: { x: number; y: number; width: number; height: number }

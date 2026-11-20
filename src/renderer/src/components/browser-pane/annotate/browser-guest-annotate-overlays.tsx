@@ -4,12 +4,12 @@ import {
   registerAnnotateEscapeInterceptor
 } from './palette/annotate-escape-interceptor'
 import { useAnnotateKeyPage } from './palette/use-annotate-key-page'
+import { useHeldGrabPick } from './palette/use-held-grab-pick'
 import { useNotesTrayPlacement } from './palette/use-notes-tray-placement'
 import { returnFocusAfterNotesClose } from './palette/palette-focus-and-fit'
 import { createPortal } from 'react-dom'
 import type { MutableRefObject, RefObject } from 'react'
 import { Copy, Image } from 'lucide-react'
-import type { BrowserGrabPayload } from '../../../../../shared/browser/element-grab/browser-grab-types'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -60,7 +60,8 @@ export function BrowserGuestAnnotateOverlays({
   currentUrl,
   toolSwitch,
   canPickElements,
-  showPaletteKeyHints
+  showPaletteKeyHints,
+  toolsUnavailableReason
 }: {
   markup: MarkupModeController
   grab: GrabModeHook
@@ -78,6 +79,8 @@ export function BrowserGuestAnnotateOverlays({
   canPickElements: boolean
   /** Only where the A/G/D keys are wired. */
   showPaletteKeyHints: boolean
+  /** Why the tools can't be used (a failed load); the palette's disabled tools say it. */
+  toolsUnavailableReason?: string
 }): React.JSX.Element {
   const t = useTranslate()
   const [drawSlot, setDrawSlot] = useState<HTMLElement | null>(null)
@@ -155,23 +158,14 @@ export function BrowserGuestAnnotateOverlays({
     },
     [pendingDraftKey, setDraft]
   )
-  // Palette buttons act on the picked element only; hovering keeps using C/S, so the target can't shift en route.
-  // The palette's Copy/Screenshot act on the last pick until the next pick, a tool switch, exit or a document change;
-  // the picker rearming after its own copy doesn't end it.
-  const [heldPick, setHeldPick] = useState<{ payload: BrowserGrabPayload; owner: string } | null>(
-    null
-  )
-  const pickerPick = grab.state === 'confirming' && grabIntent === 'copy' ? grab.payload : null
-  if (pickerPick && pickerPick !== heldPick?.payload) {
-    setHeldPick({ payload: pickerPick, owner: toolSwitch.drawOwner })
-  }
-  if (heldPick && (activeTool !== 'copy' || heldPick.owner !== toolSwitch.drawOwner)) {
-    setHeldPick(null)
-  }
-  const heldPayload =
-    heldPick && activeTool === 'copy' && heldPick.owner === toolSwitch.drawOwner
-      ? heldPick.payload
-      : null
+  const heldPayload = useHeldGrabPick({
+    grab,
+    grabIntent,
+    activeTool,
+    owner: toolSwitch.drawOwner,
+    pageId: toolSwitch.toolTargetId,
+    currentUrl
+  })
   const grabPicked = heldPayload !== null
   const runPaletteGrabAction = (action: () => void): void => {
     action()
@@ -192,7 +186,8 @@ export function BrowserGuestAnnotateOverlays({
         grab,
         grabIntent,
         hasPendingAnnotation: pendingAnnotationPayload !== null,
-        browserAnnotationsLength: browserAnnotations.length
+        browserAnnotationsLength: browserAnnotations.length,
+        drawWaitingForPage: toolSwitch.drawWaitingForPage
       })
     : null
 
@@ -209,6 +204,7 @@ export function BrowserGuestAnnotateOverlays({
           onSelectTool={toolSwitch.selectTool}
           onDone={toolSwitch.exit}
           canPickElements={canPickElements}
+          unavailableReason={toolsUnavailableReason}
           showKeyHints={showPaletteKeyHints}
           hint={paletteHint.text}
           hintIsError={paletteHint.isError}

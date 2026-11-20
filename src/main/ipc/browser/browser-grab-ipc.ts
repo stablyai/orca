@@ -10,12 +10,16 @@ import type {
   BrowserGrabResult,
   BrowserCancelGrabArgs,
   BrowserSetGrabLabelAvoidAreaArgs,
+  BrowserGrabSelectorPresentArgs,
   BrowserCaptureSelectionScreenshotArgs,
   BrowserCaptureSelectionScreenshotResult,
   BrowserExtractHoverArgs,
   BrowserExtractHoverResult
 } from '../../../shared/browser/element-grab/browser-grab-types'
-import { parseGrabLabelAvoidArea } from '../../../shared/browser/element-grab/browser-grab-types'
+import {
+  GRAB_BUDGET,
+  parseGrabLabelAvoidArea
+} from '../../../shared/browser/element-grab/browser-grab-types'
 
 const grabModeIntentByPageId = new Map<string, { generation: number; enabled: boolean }>()
 const grabModeOperationByPageId = new Map<string, Promise<void>>()
@@ -69,6 +73,7 @@ export function registerBrowserGrabHandlers(): void {
   ipcMain.removeHandler('browser:awaitGrabSelection')
   ipcMain.removeHandler('browser:cancelGrab')
   ipcMain.removeHandler('browser:setGrabLabelAvoidArea')
+  ipcMain.removeHandler('browser:grabSelectorPresent')
   ipcMain.removeHandler('browser:captureSelectionScreenshot')
   ipcMain.removeHandler('browser:extractHoverPayload')
 
@@ -151,6 +156,24 @@ export function registerBrowserGrabHandlers(): void {
       }
       browserManager.setGrabLabelAvoidArea(args.browserPageId, area, guest)
       return guest !== null
+    }
+  )
+
+  ipcMain.handle(
+    'browser:grabSelectorPresent',
+    async (event, args: BrowserGrabSelectorPresentArgs): Promise<boolean> => {
+      // Anything unexpected answers "present": the pick then stays, as before this check existed.
+      if (
+        !isTrustedBrowserRenderer(event.sender) ||
+        typeof args?.browserPageId !== 'string' ||
+        typeof args.selector !== 'string' ||
+        args.selector.length === 0 ||
+        args.selector.length > GRAB_BUDGET.selectorMaxLength
+      ) {
+        return true
+      }
+      const guest = browserManager.getAuthorizedGuest(args.browserPageId, event.sender.id)
+      return guest ? browserManager.isGrabSelectorPresent(args.selector, guest) : true
     }
   )
 

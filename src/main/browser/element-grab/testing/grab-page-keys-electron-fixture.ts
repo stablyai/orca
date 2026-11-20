@@ -28,6 +28,7 @@ async function run(): Promise<void> {
   page.focus()
   const manager = new BrowserManager()
   const forwarded: string[] = []
+  const holdMs: number[] = []
   const recorder = {
     send: (_channel: string, args: { key: string }) => forwarded.push(args.key)
   }
@@ -40,7 +41,13 @@ async function run(): Promise<void> {
     hasActiveGrabOp: () => true,
     isGuestEditableFocused: (tabId) => manager.isGuestEditableFocused(tabId),
     markGuestFocusUnknown: (tabId) => manager.markGuestFocusUnknown(tabId),
-    askPageHasField: () => askGuestHasField(page)
+    // Timed: how long a held letter waits for the page's answer.
+    askPageHasField: async () => {
+      const started = performance.now()
+      const answer = await askGuestHasField(page)
+      holdMs.push(performance.now() - started)
+      return answer
+    }
   })
   const evalPage = (code: string): Promise<unknown> => page.executeJavaScript(code)
   const press = async (key: string): Promise<void> => {
@@ -107,6 +114,17 @@ async function run(): Promise<void> {
     forwarded: forwarded.slice(beforeScript)
   }
 
+  // More holds to time: ten letters right after a script focus into the field, ten off fields.
+  for (let i = 0; i < 10; i++) {
+    await evalPage(`document.getElementById('buy').focus()`)
+    await settleEditable(false)
+    await evalPage(`document.getElementById('search').focus()`)
+    await press('s')
+    await evalPage(`document.getElementById('buy').focus()`)
+    await settleEditable(false)
+    await press('g')
+  }
+
   // Focus leaves the fields (Tab or script to a button): letters are tools again and the page never sees them.
   await evalPage(`document.getElementById('buy').focus(); window.__pageKeys = []`)
   const editableOnButton = await settleEditable(false)
@@ -140,7 +158,15 @@ async function run(): Promise<void> {
       forwardedOnButton,
       pageSawToolKey,
       altEdges,
-      editableAfterOff
+      editableAfterOff,
+      holdMs: (() => {
+        const sorted = [...holdMs].sort((a, b) => a - b)
+        return {
+          count: sorted.length,
+          median: Math.round(sorted[Math.floor(sorted.length / 2)] ?? -1),
+          max: Math.round(sorted.at(-1) ?? -1)
+        }
+      })()
     })}\n`
   )
   window.destroy()

@@ -634,7 +634,9 @@
       "undo": "Undo",
       "collapseNotes": "Collapse notes",
       "expandNotes": "Expand notes",
-      "clearNotes": "Clear notes"
+      "clearNotes": "Clear notes",
+      "waitingForPage": "Waiting for page…",
+      "pageDidNotLoad": "Page didn't load"
     }
   },
   "editor": {
