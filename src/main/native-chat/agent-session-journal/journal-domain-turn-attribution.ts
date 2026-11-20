@@ -13,7 +13,7 @@ import { journalCanonicalItemId, journalVisibleItem } from './journal-sql-item-r
 import type { JournalSqlScope } from './journal-sql-scope'
 
 /** Whom a turn acts for rests on its opener and the deliveries it answered (connectorReplyTurnStamps).
- *  stamps null: unknown (no turn row, or more steered sends than are read), so nothing is proven. */
+ *  stamps null: no turn row, so nothing is proven. */
 export type JournalTurnAttribution = {
   cursor: AgentJournalCursor
   turnItemId: string | null
@@ -21,11 +21,9 @@ export type JournalTurnAttribution = {
   stamps: AgentJournalConnectorDelivery[] | null
 }
 
-/** Steered sends read for one turn; past this the turn proves nothing. */
-export const TURN_ATTRIBUTION_STEERED_CAP = 64
-
-/** A turn's row, opener and steered sends, each found by index: work is the turn's own rows, never
- *  the chat's send history (an operation window scans every current send). */
+/** A turn's row, opener and steered sends, each found by index: work is the turn's own rows (every
+ *  send steered into it, all needed to prove none was a delivery), never the chat's send history (an
+ *  operation window scans every current send). */
 export function readJournalDomainTurnAttribution(
   scope: JournalSqlScope,
   turnId: string
@@ -50,11 +48,8 @@ export function readJournalDomainTurnAttribution(
   const sends = scope.db
     .prepare(`SELECT payload_json FROM journal_submission_attempts INDEXED BY journal_submission_steer
     WHERE session_id=? AND epoch=? AND current=1 AND steer_turn_item_id=?
-    ORDER BY accepted_sequence,ordinal LIMIT ?`)
-    .all(...scope.prefix, row.itemId, TURN_ATTRIBUTION_STEERED_CAP + 1)
-  if (sends.length > TURN_ATTRIBUTION_STEERED_CAP) {
-    return { cursor, turnItemId: row.itemId, opener, stamps: null }
-  }
+    ORDER BY accepted_sequence,ordinal`)
+    .all(...scope.prefix, row.itemId)
   const submissions = sends.map((send) =>
     scope.decode<AgentJournalSubmission>(scope.examined(send).payload_json)
   )
@@ -75,7 +70,7 @@ export function readJournalDomainTurnAttribution(
 function turnRow(scope: JournalSqlScope, turnId: string): AgentJournalRenderItem | null {
   const named = scope.db
     .prepare(`SELECT item_id FROM journal_items INDEXED BY journal_items_named_turn
-    WHERE session_id=? AND epoch=? AND turn_id=? AND hidden=0
+    WHERE session_id=? AND epoch=? AND turn_id=? AND hidden=0 AND root=1
     ORDER BY sequence DESC, sequence_index DESC, ordinal DESC LIMIT 1`)
     .get(...scope.prefix, turnId)
   const item = journalVisibleItem(scope.db, scope.prefix, named ? String(named.item_id) : turnId)
