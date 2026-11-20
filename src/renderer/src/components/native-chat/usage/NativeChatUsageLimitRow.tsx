@@ -2,7 +2,7 @@ import { useLayoutEffect, useRef, useState } from 'react'
 import { NativeChatNoticeAuthRecovery } from '../antigravity-auth/NativeChatAntigravityAuthRecovery'
 import { Check, Clock, Gauge, Loader2, MessageSquarePlus } from 'lucide-react'
 import { toast } from 'sonner'
-import { useTranslate, type Translate } from '@/i18n/use-translate'
+import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import { useAppStore } from '@/store'
 import { validResetAt } from '@/components/status-bar/usage/usage-reset-caption'
@@ -186,6 +186,7 @@ function UsageLimitCard({
   active
 }: UsageLimitRowProps): React.JSX.Element {
   const t = useTranslate()
+  const intlLocale = useIntlLocale()
   const view = useNativeChatOrcaStopView()
   const actions = useNativeChatUsageLimitActions()
   const limit = failure.kind === 'usageLimitReached' ? failure.usageLimit : undefined
@@ -218,7 +219,9 @@ function UsageLimitCard({
       : passed
         ? 'ready'
         : 'waiting'
-  const autoTime = scheduled ? formatUsageLimitResetClock(scheduled.resetsAt) : null
+  const autoTime = scheduled
+    ? formatUsageLimitResetClock(scheduled.resetsAt, undefined, intlLocale)
+    : null
   const sameTime = scheduled !== null && scheduled.resetsAt === manualAt
   const words = usageLimitRowWords(
     {
@@ -234,7 +237,8 @@ function UsageLimitCard({
         sayAgentSessionFailureTranslated
       ),
       auto,
-      manualTime: manualAt === undefined ? null : formatUsageLimitResetClock(manualAt),
+      manualTime:
+        manualAt === undefined ? null : formatUsageLimitResetClock(manualAt, undefined, intlLocale),
       autoTime,
       sameTime
     },

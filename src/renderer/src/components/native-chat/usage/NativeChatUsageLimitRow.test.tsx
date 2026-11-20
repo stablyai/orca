@@ -11,6 +11,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { ProviderAccountChatButton } from '@/components/status-bar/accounts/ProviderAccountChatButton'
+import { setRendererUiLanguage } from '@/i18n/i18n'
 import { TranslationScopeProvider } from '@/i18n/translation-scope-provider'
 import { useAppStore } from '@/store/index'
 import { NativeChatNoticeRow } from '@/components/native-chat/messages/notices/NativeChatNoticeRow'
@@ -118,6 +119,22 @@ afterEach(() => {
 describe('usage-limit row over time', () => {
   beforeEach(() => {
     vi.useFakeTimers({ now: start, toFake: ['Date', 'setTimeout', 'clearTimeout'] })
+  })
+
+  it('shows the reset and schedule clocks in the UI language, not the OS locale', async () => {
+    const auto = { kind: 'scheduled', resetsAt: start + 4 * HOUR, cancel: () => {} } as const
+    await setRendererUiLanguage('de')
+    try {
+      const { container } = render(row({ resetsAt: start + 3 * HOUR, auto }))
+      expect(container.textContent).toContain('15:00')
+      expect(container.textContent).toContain('16:00')
+
+      await act(() => setRendererUiLanguage('en'))
+      expect(container.textContent).toMatch(/3:00\sPM/u)
+      expect(container.textContent).toMatch(/4:00\sPM/u)
+    } finally {
+      await setRendererUiLanguage('en')
+    }
   })
 
   it('offers Continue only once the effective time passes, and keeps a later schedule cancellable', () => {
