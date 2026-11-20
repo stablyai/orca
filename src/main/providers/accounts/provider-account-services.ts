@@ -73,7 +73,8 @@ export function createProviderAccountServices(
       rateLimits.discardClaudeOAuthUsage()
     } else if (updates.claudeOAuthUsageEnabled === true) {
       void rateLimits
-        .refreshClaudeForTarget(rateLimits.getState().claudeTarget)
+        .getState()
+        .then((state) => rateLimits.refreshClaudeForTarget(state.claudeTarget))
         .catch((error: unknown) => {
           console.warn(
             '[rate-limits] Failed to refresh Claude usage after enabling polling:',
@@ -133,20 +134,20 @@ export function createProviderAccountServices(
       workspaceIdOverride: settings.opencodeWorkspaceId
     }
   }, readOpenCodeGoApiKey)
-  rateLimits.setMiniMaxConfigResolver(() => {
+  rateLimits.setMiniMaxConfigResolver(async () => {
     const settings = store.getSettings()
-    const apiKey = readMiniMaxApiKey() ?? ''
+    const apiKey = (await readMiniMaxApiKey()) ?? ''
     return {
-      sessionCookie: apiKey ? '' : (readMiniMaxSessionCookie() ?? ''),
+      sessionCookie: apiKey ? '' : ((await readMiniMaxSessionCookie()) ?? ''),
       groupId: settings.minimaxGroupId,
       models: settings.minimaxUsageModels,
       endpoint: settings.minimaxEndpoint,
       apiKey
     }
   })
-  rateLimits.setZcodePlanConfigResolver(() => ({
+  rateLimits.setZcodePlanConfigResolver(async () => ({
     site: store.getSettings().zcodePlanSite ?? 'zai',
-    apiKey: readZcodePlanApiKey() ?? ''
+    apiKey: (await readZcodePlanApiKey()) ?? ''
   }))
   rateLimits.setGeminiCliOAuthEnabledResolver(() => store.getSettings().geminiCliOAuthEnabled)
   rateLimits.setClaudeOAuthUsageEnabledResolver(() => store.getSettings().claudeOAuthUsageEnabled)

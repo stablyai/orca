@@ -22,12 +22,7 @@ import {
 import { renderResourceUsageKillDialog } from './popover/resource-usage-kill-dialog'
 import { WorkspaceSpaceCompactPanel } from '../workspace-storage/WorkspaceSpaceCompactPanel'
 
-export function ResourceUsageStatusSegment({
-  iconOnly
-}: {
-  compact?: boolean
-  iconOnly: boolean
-}): React.JSX.Element {
+export function ResourceUsageStatusSegment(): React.JSX.Element {
   const t = useTranslate()
   const controller = useResourceUsageStatusController()
   const {
@@ -54,9 +49,7 @@ export function ResourceUsageStatusSegment({
     triggerSessionCount,
     memoryMetricCopy,
     commitMetricCopy,
-    totalMemory,
-    totalCpu,
-    memBadgeLabel,
+    ownerSplit,
     commitToneClass,
     commitBadgeLabel,
     daemonUnreachable,
@@ -90,9 +83,7 @@ export function ResourceUsageStatusSegment({
           daemonUnreachable,
           resourceManagerAriaLabel,
           spaceScanReady,
-          iconOnly,
           commitToneClass,
-          memBadgeLabel,
           triggerSessionCount,
           orphanCount,
           resourceManagerTooltipLines
@@ -158,12 +149,11 @@ export function ResourceUsageStatusSegment({
             )}
             {daemonUnreachable && renderDaemonUnreachableBanner({ daemonActions }, t)}
             {!daemonUnreachable && sessionsOnlyError && renderSessionsOnlyErrorBanner(t)}
-            {resourceSnapshot && (
+            {ownerSplit && (
               <div className="min-h-0 max-h-[40%] overflow-y-auto scrollbar-sleek">
                 {renderResourceUsageSummary(
                   {
-                    totalCpu,
-                    totalMemory,
+                    ownerSplit,
                     memoryMetricCopy,
                     commitBadgeLabel,
                     commitMetricCopy,

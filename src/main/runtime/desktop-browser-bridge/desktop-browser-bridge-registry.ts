@@ -6,13 +6,18 @@ import {
   DESKTOP_BROWSER_BRIDGE_UNAVAILABLE_CODE,
   DESKTOP_BROWSER_BRIDGE_UNAVAILABLE_MESSAGE,
   type DesktopBrowserBridgeEvent,
+  type DesktopBrowserBridgeResultChunkParams,
   type DesktopBrowserBridgeResultParams
 } from '../../../shared/browser/client-hosting/desktop-browser-bridge-protocol'
+import { BROWSER_CLIENT_AUTOMATION_STAGED_RESULT_MAX_BYTES } from '../../../shared/browser/client-hosting/browser-client-automation-protocol'
+import { StagedResultChunks } from '../browser-host/commands/staged-result-chunks'
 
 // Stay below the subscription's 32-unacknowledged-request bound or completed results could strand.
 export const MAX_PENDING_PER_ATTACHMENT = 16
 const DESKTOP_DEADLINE_MARGIN_MS = 10_000
 const MIN_DESKTOP_DEADLINE_MS = 1_000
+// Several commands can stage large results at once; bound their total, as page leases do.
+const MAX_STAGED_RESULT_BYTES = 2 * BROWSER_CLIENT_AUTOMATION_STAGED_RESULT_MAX_BYTES
 
 type Attachment = {
   attachmentId: string
@@ -40,6 +45,7 @@ export type DesktopBrowserBridgeForward = {
 export class DesktopBrowserBridgeRegistry {
   private readonly attachments: Attachment[] = []
   private readonly pending = new Map<string, PendingRequest>()
+  private readonly stagedResults = new StagedResultChunks<string>(MAX_STAGED_RESULT_BYTES)
 
   attach(input: Omit<Attachment, 'attachmentId'>): { attachmentId: string; detach(): void } {
     const attachment: Attachment = { ...input, attachmentId: randomUUID() }
@@ -82,6 +88,7 @@ export class DesktopBrowserBridgeRegistry {
       const settle = (): void => {
         clearTimeout(timer)
         this.pending.delete(requestId)
+        this.stagedResults.release(requestId)
         options.signal?.removeEventListener('abort', onAbort)
       }
       let emitted = false
@@ -136,7 +143,8 @@ export class DesktopBrowserBridgeRegistry {
             MIN_DESKTOP_DEADLINE_MS,
             options.timeoutMs - DESKTOP_DEADLINE_MARGIN_MS
           ),
-          ...(request.workspaceId ? { workspaceId: request.workspaceId } : {})
+          ...(request.workspaceId ? { workspaceId: request.workspaceId } : {}),
+          stagedResults: true
         })
         emitted = true
       } catch {
@@ -145,27 +153,61 @@ export class DesktopBrowserBridgeRegistry {
     })
   }
 
+  /** False when the chunk is not for a command this caller's attachment is still answering. */
+  appendResultChunk(
+    caller: { connectionId: string; pairedDeviceId: string },
+    chunk: DesktopBrowserBridgeResultChunkParams
+  ): boolean {
+    if (!this.pendingFor(caller, chunk)) {
+      return false
+    }
+    this.stagedResults.append(chunk.requestId, chunk.offset, chunk.contentBase64)
+    return true
+  }
+
   settle(
     caller: { connectionId: string; pairedDeviceId: string },
     result: DesktopBrowserBridgeResultParams
   ): boolean {
-    const pending = this.pending.get(result.requestId)
-    const attachment = this.attachments.find((entry) => entry.attachmentId === result.attachmentId)
-    if (
-      !pending ||
-      !attachment ||
-      pending.attachmentId !== attachment.attachmentId ||
-      attachment.connectionId !== caller.connectionId ||
-      attachment.pairedDeviceId !== caller.pairedDeviceId
-    ) {
+    const pending = this.pendingFor(caller, result)
+    if (!pending) {
       return false
     }
-    if (result.ok) {
+    if (result.ok && result.stagedResultBytes !== undefined) {
+      const staged = this.stagedResults.take(result.requestId, result.stagedResultBytes)
+      if (staged.ok) {
+        pending.resolve(staged.value)
+      } else {
+        pending.reject(
+          new BrowserError(
+            staged.errorCode,
+            'The desktop ran the command, but its large result did not arrive complete. Try again.'
+          )
+        )
+      }
+    } else if (result.ok) {
       pending.resolve(result.result)
     } else {
       pending.reject(new BrowserError(result.error.code, result.error.message, result.error.data))
     }
     return true
+  }
+
+  private pendingFor(
+    caller: { connectionId: string; pairedDeviceId: string },
+    identity: { attachmentId: string; requestId: string }
+  ): PendingRequest | null {
+    const pending = this.pending.get(identity.requestId)
+    const attachment = this.attachments.find(
+      (entry) => entry.attachmentId === identity.attachmentId
+    )
+    return pending &&
+      attachment &&
+      pending.attachmentId === attachment.attachmentId &&
+      attachment.connectionId === caller.connectionId &&
+      attachment.pairedDeviceId === caller.pairedDeviceId
+      ? pending
+      : null
   }
 
   private detach(attachmentId: string): void {

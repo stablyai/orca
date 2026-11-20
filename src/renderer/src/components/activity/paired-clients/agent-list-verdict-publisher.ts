@@ -12,6 +12,27 @@ import { useAllAgentPaneThreads } from '../threads/use-agent-pane-threads'
 
 const PUBLISH_INTERVAL_MS = 250
 
+type ListedVerdict = AgentListVerdict & { listed: true }
+
+// Threads keep their identity across unrelated writes, so only a changed thread rebuilds its verdict.
+const threadVerdicts = new WeakMap<AgentPaneThread, ListedVerdict>()
+
+function threadVerdict(thread: AgentPaneThread): ListedVerdict {
+  let verdict = threadVerdicts.get(thread)
+  if (!verdict) {
+    verdict = {
+      listed: true,
+      status: activityThreadStatusId(thread),
+      unread: thread.unread,
+      clearable: isClearableActivityThread(thread),
+      sortAt: thread.latestTimestamp,
+      title: thread.paneTitle
+    }
+    threadVerdicts.set(thread, verdict)
+  }
+  return verdict
+}
+
 /** The Agents list's verdict for every pane the window knows; a pane with no thread is unlisted. */
 function buildAgentListVerdicts(
   threads: readonly AgentPaneThread[],
@@ -24,16 +45,15 @@ function buildAgentListVerdicts(
   }
   for (const thread of threads) {
     const childOf = parentPaneKeyByChild.get(thread.paneKey)
-    verdicts[thread.paneKey] = {
-      listed: true,
-      status: activityThreadStatusId(thread),
-      unread: thread.unread,
-      clearable: isClearableActivityThread(thread),
-      sortAt: thread.latestTimestamp,
-      title: thread.paneTitle,
-      ...(childOf ? { childOf } : {}),
-      ...(hidden.has(thread.paneKey) ? { foldedChild: true as const } : {})
-    }
+    const verdict = threadVerdict(thread)
+    verdicts[thread.paneKey] =
+      childOf || hidden.has(thread.paneKey)
+        ? {
+            ...verdict,
+            ...(childOf ? { childOf } : {}),
+            ...(hidden.has(thread.paneKey) ? { foldedChild: true as const } : {})
+          }
+        : verdict
   }
   return verdicts
 }

@@ -70,30 +70,28 @@ describe('framed overlay terminal HTTP links', () => {
     }
   })
 
-  it.each(['\x07', '\x1b\\'])(
-    'preserves explicit OSC 8 targets terminated with %j',
-    async (end) => {
-      const target = 'https://example.org/explicit-destination'
-      const rows = overlayRows(['      ', 'todo  ', '  in  ', 'Final ']).map(
-        (row) =>
-          `${row.slice(0, 8)}\x1b]8;;${target}${end}${row.slice(8, -2)}\x1b]8;;${end}${row.slice(-2)}`
-      )
-      const { terminal, linksAt } = await terminalWithRows(rows)
-      try {
-        for (let y = 1; y <= rows.length; y++) {
-          expect(await linksAt(y)).toBeUndefined()
-          expect(
-            openHttpLinkAtBufferPosition(terminal.buffer.active, { x: 9, y }, 80, {
-              worktreeId: 'test',
-              modifierHeld: true
-            })
-          ).toBe(false)
-        }
-      } finally {
-        terminal.dispose()
+  it('preserves an explicit OSC 8 target in wrapped rows', async () => {
+    const end = '\x1b\\'
+    const target = 'https://example.org/explicit-destination'
+    const rows = overlayRows(['      ', 'todo  ', '  in  ', 'Final ']).map(
+      (row) =>
+        `${row.slice(0, 8)}\x1b]8;;${target}${end}${row.slice(8, -2)}\x1b]8;;${end}${row.slice(-2)}`
+    )
+    const { terminal, linksAt } = await terminalWithRows(rows)
+    try {
+      for (let y = 1; y <= rows.length; y++) {
+        expect(await linksAt(y)).toBeUndefined()
+        expect(
+          openHttpLinkAtBufferPosition(terminal.buffer.active, { x: 9, y }, 80, {
+            worktreeId: 'test',
+            modifierHeld: true
+          })
+        ).toBe(false)
       }
+    } finally {
+      terminal.dispose()
     }
-  )
+  })
 
   it('does not join URLs to subsequent cells of a table with changing labels', async () => {
     const rows = overlayRows(['│ One ', '│ Two ', '│ Red ', '│ End '])

@@ -169,6 +169,7 @@ export async function startLocalWorker(args: {
       params,
       requestedWorktree,
       creationTarget,
+      orchestrationRunId: run.id,
       resolvedWorktree,
       mode,
       agent,
@@ -285,16 +286,14 @@ export async function startLocalWorker(args: {
       mode
     })
   }
-  if (
-    !params.terminal &&
-    terminalHandle &&
-    result &&
-    typeof result === 'object' &&
-    'state' in result &&
-    result.state === 'ready'
-  ) {
+  const state = result && typeof result === 'object' && 'state' in result ? result.state : null
+  // An unknown outcome with an agent launched may yet be a running worker: a bot records it, with no
+  // card. One that failed before any agent (a lost worktree reply) is no worker at all.
+  if (!params.terminal && terminalHandle && (state === 'ready' || state === 'outcome_unknown')) {
     recordStart({
+      ready: state === 'ready',
       dispatchId: started.dispatch.id,
+      taskId: task.id,
       workerAddress: terminalHandle,
       task: task.spec,
       agent: agent ?? null,

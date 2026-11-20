@@ -9,7 +9,10 @@ import type {
   ExecutionHostScope
 } from '../../../../../../shared/execution-host/execution-host'
 import { getIndexedAllWorktrees } from '@/store/slices/worktrees/listing/worktree-catalog-index'
-import { selectVisibleSidebarWorktrees } from '../../../../../../shared/sidebar-list/selection/visible-worktrees'
+import {
+  selectVisibleSidebarWorktrees,
+  withoutBotListedWorktrees
+} from '../../../../../../shared/sidebar-list/selection/visible-worktrees'
 import type { SidebarLineageParentIdentities } from '../../../../../../shared/sidebar-list/lineage/worktree-lineage-projection'
 import { buildDesktopWorkspaceRowFactReader } from './desktop-workspace-row-facts'
 import { sidebarWorkspaceRowFilters } from '../controls/sidebar-filter-actions'
@@ -47,6 +50,8 @@ export type VisibleWorktreeOptions = {
   sortedByHostIdentity?: boolean
   /** Exempt from the sleeping sweep only; unlike forcedVisibleWorktreeIds, every other filter still applies. */
   sleepingSweepExemptWorktreeIds?: ReadonlySet<string>
+  /** Host identities listed under their bot instead of their project; not a filter, so muting and filter counts ignore it. */
+  botListedWorktreeIdentities?: ReadonlySet<string>
 }
 
 export function computeVisibleWorktrees(
@@ -59,7 +64,10 @@ export function computeVisibleWorktrees(
     ? getWorktreeHostIdentity
     : (worktree: Worktree) => worktree.id
   return selectVisibleSidebarWorktrees({
-    rows: getIndexedAllWorktrees(worktreesByRepo),
+    rows: withoutBotListedWorktrees(
+      getIndexedAllWorktrees(worktreesByRepo),
+      opts.botListedWorktreeIdentities
+    ),
     ancestorByIdentity: getLineageAncestorIndex(worktreesByRepo),
     rankOf: (worktree) => rankByKey.get(keyOf(worktree)),
     filters: sidebarWorkspaceRowFilters(opts),

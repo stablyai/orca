@@ -80,10 +80,14 @@ describe('workspace session terminal binding replay', () => {
       }
     }
 
-    preserveMissingWorkspaceSessionTerminalBindings(incoming, prior, bindingRecovery as never)
+    const replayed = preserveMissingWorkspaceSessionTerminalBindings(
+      incoming,
+      prior,
+      bindingRecovery as never
+    )
 
-    expect(incoming.tabsByWorktree[WORKTREE_A]![0]!.ptyId).toBeNull()
-    expect(incoming.tabsByWorktree[WORKTREE_B]![0]!.ptyId).toBeNull()
-    expect(incoming.terminalLayoutsByTabId['duplicate-tab']?.ptyIdsByLeafId).toEqual({})
+    expect(replayed.tabsByWorktree[WORKTREE_A]![0]!.ptyId).toBeNull()
+    expect(replayed.tabsByWorktree[WORKTREE_B]![0]!.ptyId).toBeNull()
+    expect(replayed.terminalLayoutsByTabId['duplicate-tab']?.ptyIdsByLeafId).toEqual({})
   })
 })

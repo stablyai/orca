@@ -96,7 +96,7 @@ describe('terminal subscribe buffering', () => {
       undefined,
       'phone-1',
       false,
-      undefined
+      { deviceId: undefined, followsHostRespawn: false }
     )
     dataListener?.('\x1b[6n', { seq: 4, rawLength: 4 })
     resolveMobileSubscribe()

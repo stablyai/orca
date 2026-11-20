@@ -13,6 +13,7 @@ import { normalizeUsagePercentageDisplay } from '../../../shared/agent-usage/dis
 import { normalizeStatusBarUsageMode } from '../../../shared/status-bar/status-bar-usage-mode'
 import { normalizeStatusBarUsageFormat } from '../../../shared/status-bar/status-bar-usage-format'
 import { clampMarkdownTocPanelWidth } from '../../../shared/editor/markdown/markdown-toc-panel-width'
+import { normalizeSidebarBotsHeight } from '../../../shared/sidebar-bots-height'
 import { clampCombinedDiffFileTreeWidth } from '../../../shared/source-control/diff/combined-diff-file-tree-width'
 import {
   normalizeExecutionHostScope,
@@ -143,6 +144,15 @@ export function updatePersistedUI(
     workspaceBoardColumnWidth: clampWorkspaceBoardColumnWidth(
       sanitizedUpdates.workspaceBoardColumnWidth ?? operations.state.ui?.workspaceBoardColumnWidth
     ),
+    // An explicit null is the double-click reset, so it must not fall back to the saved height.
+    sidebarBotsHeight:
+      normalizeSidebarBotsHeight(
+        sanitizedUpdates.sidebarBotsHeight !== undefined
+          ? sanitizedUpdates.sidebarBotsHeight
+          : operations.state.ui?.sidebarBotsHeight
+      ) ?? undefined,
+    sidebarProjectsFirst:
+      (sanitizedUpdates.sidebarProjectsFirst ?? operations.state.ui?.sidebarProjectsFirst) === true,
     syncTaskStatusFromWorkspaceBoard:
       sanitizedUpdates.syncTaskStatusFromWorkspaceBoard !== undefined
         ? sanitizedUpdates.syncTaskStatusFromWorkspaceBoard === true

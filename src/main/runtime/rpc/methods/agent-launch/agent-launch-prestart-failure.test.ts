@@ -113,7 +113,7 @@ describe('a launch whose terminal fails', () => {
     )
   }
 
-  it('reports a failure before the spawn request with its real cause and records it', async () => {
+  it('records a failure before spawn and returns its cause on retry', async () => {
     const runtime = runtimeStub({ settings: {} })
     failingCreate(runtime, new Error(NO_LAUNCH_COMMAND), false)
 
@@ -121,18 +121,10 @@ describe('a launch whose terminal fails', () => {
 
     expect(response).toMatchObject({ ok: false, error: { message: NO_LAUNCH_COMMAND } })
     expect(outcomeOf(OPERATION_ID)).toMatchObject({ status: 'failed', code: NO_LAUNCH_COMMAND })
-  })
-
-  it('answers a retry of the same operation from the record instead of launching again', async () => {
-    const first = runtimeStub({ settings: {} })
-    failingCreate(first, new Error(NO_LAUNCH_COMMAND), false)
-    await replay(first, EXISTING_LAUNCH)
 
     const retry = runtimeStub({ settings: {} })
-    const response = await replay(retry, EXISTING_LAUNCH)
-
+    expect(await replay(retry, EXISTING_LAUNCH)).toMatchObject(response)
     expect(retry.createTerminal).not.toHaveBeenCalled()
-    expect(response).toMatchObject({ ok: false, error: { message: NO_LAUNCH_COMMAND } })
   })
 
   it('stays unknown when the failure came after the spawn request left', async () => {

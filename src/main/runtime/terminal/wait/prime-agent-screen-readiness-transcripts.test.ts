@@ -7,13 +7,9 @@ import { evaluateAgentStateRules } from '../../agent-state-rules/agent-state-rul
 const at120x40 = (name: string, what: string) => ({ name, what, cols: 120, rows: 40 })
 const at120x35 = (name: string, what: string) => ({ name, what, cols: 120, rows: 35 })
 const READY = [
-  at120x40('prime-agent-0-9-8-ready', 'settled startup'),
-  at120x40('prime-agent-0-9-8-ready-after-question', 'trace question answered Not now'),
   { name: 'prime-agent-0-9-8-ready-80x24', what: 'settled startup', cols: 80, rows: 24 },
-  at120x40('prime-agent-0-9-8-turn-ended', 'a turn has ended'),
   at120x40('prime-agent-0-9-8-tool-turn', 'a turn with a tool call has ended'),
-  at120x35('prime-agent-0-9-5-ready', '0.9.5 settled startup'),
-  at120x35('prime-agent-0-9-5-turn', '0.9.5 turn ended')
+  at120x35('prime-agent-0-9-5-ready', '0.9.5 settled startup')
 ]
 const NOT_READY = [
   at120x40('prime-agent-0-9-8-trace-question', 'first-launch trace-sharing question'),

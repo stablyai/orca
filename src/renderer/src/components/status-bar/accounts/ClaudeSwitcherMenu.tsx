@@ -1,41 +1,58 @@
 import type React from 'react'
+import { useMemo } from 'react'
 import type { ProviderRateLimits } from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
-import type { ChatAccountAction } from './ProviderAccountChatButton'
+import type { AccountOwner } from '@/runtime/provider-accounts/ownership/wsl-host-account-owner'
 import { useAppStore } from '../../../store/index'
-import { defaultScopeHost } from '@/runtime/hosts/selection/default-creation-host'
-import { useActiveAccountOwner } from '@/runtime/provider-accounts/ownership/use-active-account-owner'
+import type { ChatAccountAction } from './ProviderAccountChatButton'
 import { ClaudeSwitcherForOwner } from './ClaudeSwitcherForOwner'
-import { getProviderAccountsOwnerKey } from '@/runtime/provider-accounts/observations/runtime-provider-accounts-client'
+import { getAccountOwnerKey } from './owner-account-rows'
+import {
+  useAccountOwnerUsage,
+  type OwnerUsageRateLimits
+} from '../usage/use-owner-usage-rate-limits'
 
 export type ClaudeSwitcherMenuProps = {
   claude: ProviderRateLimits | null
-  compact: boolean
-  iconOnly: boolean
+  iconOnly?: boolean
   asSubmenu?: boolean
   triggerContent?: React.ReactNode
-  chatAction?: ChatAccountAction
-}
+} & (
+  | { chatAction: ChatAccountAction; ownerUsage?: never }
+  /** The status bar's owner observation: rows list that owner's accounts and readings. */
+  | { ownerUsage: OwnerUsageRateLimits; chatAction?: never }
+)
 
 export function ClaudeSwitcherMenu(props: ClaudeSwitcherMenuProps): React.JSX.Element | null {
-  return props.chatAction ? (
+  if (props.chatAction) {
+    return <ChatClaudeSwitcherMenu {...props} chatAction={props.chatAction} />
+  }
+  const owner = props.ownerUsage.owner
+  return (
     <ClaudeSwitcherForOwner
       {...props}
-      key={getProviderAccountsOwnerKey(props.chatAction.target)}
-      owner={{ target: props.chatAction.target, wslHostDistro: null }}
+      key={getAccountOwnerKey(owner)}
+      owner={owner}
+      ownerUsage={props.ownerUsage}
     />
-  ) : (
-    <FocusedClaudeSwitcher {...props} />
   )
 }
 
-function FocusedClaudeSwitcher(props: ClaudeSwitcherMenuProps): React.JSX.Element | null {
-  const settings = useAppStore((s) => s.settings)
-  const owner = useActiveAccountOwner(defaultScopeHost(settings))
+/** A chat's rows belong to the chat's host, read through the same owner observation as the bar. */
+function ChatClaudeSwitcherMenu(
+  props: ClaudeSwitcherMenuProps & { chatAction: ChatAccountAction }
+): React.JSX.Element | null {
+  const target = props.chatAction.target
+  const owner = useMemo<AccountOwner>(() => ({ target, wslHostDistro: null }), [target])
+  const ownerUsage = useAccountOwnerUsage(
+    owner,
+    useAppStore((s) => s.rateLimits)
+  )
   return (
     <ClaudeSwitcherForOwner
-      key={`${getProviderAccountsOwnerKey(owner.target)}:${owner.wslHostDistro ?? ''}`}
       {...props}
+      key={getAccountOwnerKey(owner)}
       owner={owner}
+      ownerUsage={ownerUsage}
     />
   )
 }

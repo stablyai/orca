@@ -1,7 +1,4 @@
-import {
-  MAX_PARTIAL_ESCAPE_TAIL_LENGTH,
-  extractPartialEscapeTail
-} from '../../../../../../shared/terminal/protocol/escape/terminal-partial-escape-tail'
+import { advancePartialEscapeTail } from '../../../../../../shared/terminal/protocol/escape/terminal-partial-escape-tail'
 import type { PtyDataMeta } from './pty-dispatcher'
 
 const CAN = '\x18'
@@ -193,8 +190,7 @@ function escapeTailBeforeCut(
   if (from === -1 || /[\u0080-\u009f]/.test(cutOff)) {
     return ''
   }
-  const tail = extractPartialEscapeTail(cutOff.slice(from))
-  return tail.length > MAX_PARTIAL_ESCAPE_TAIL_LENGTH ? '' : tail
+  return advancePartialEscapeTail('', cutOff.slice(from))
 }
 
 /**

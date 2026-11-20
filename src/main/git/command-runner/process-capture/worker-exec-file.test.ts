@@ -113,7 +113,11 @@ describe('worker-owned Git capture', () => {
     const result = new Promise<Error | null>((resolve) =>
       workerExecFile('/orca/nonexistent-git', [], { maxBuffer: 32 }, (error) => resolve(error))
     )
-    await expect(result).resolves.toMatchObject({ code: 'ENOENT' })
+    // Callers classify a missing binary by its spawn syscall (isMissingCommandBinaryError).
+    await expect(result).resolves.toMatchObject({
+      code: 'ENOENT',
+      syscall: 'spawn /orca/nonexistent-git'
+    })
   })
 })
 
@@ -269,7 +273,7 @@ describe.skipIf(process.platform !== 'darwin')('macOS worker capture cancellatio
     }
   })
 
-  it('does not infer child termination from worker loss before a spawn acknowledgement', async () => {
+  it('reports a launch as never started when its worker is lost before it could run anything', async () => {
     const gate = new SharedArrayBuffer(4)
     await createHost(gate)
     const terminated = vi.fn()
@@ -281,6 +285,6 @@ describe.skipIf(process.platform !== 'darwin')('macOS worker capture cancellatio
     const outcome = pending.catch((error: unknown) => error)
     await workers.at(-1)?.terminate()
     await expect(outcome).resolves.toBeInstanceOf(Error)
-    expect(terminated).not.toHaveBeenCalled()
+    expect(terminated).toHaveBeenCalledOnce()
   })
 })

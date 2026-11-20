@@ -7,11 +7,14 @@ import { NativeChatEmptyPane } from '@/components/native-chat/host-access/Native
 import { NativeChatLoadingCue } from '@/components/native-chat/host-access/NativeChatLoadingCue'
 import { NativeChatSubagentTranscripts } from '@/components/native-chat/subagents/NativeChatSubagentTranscripts'
 import { NativeChatContextClearFade } from '@/components/native-chat/conversation/projection/NativeChatContextClearFade'
-import { NativeChatFindBar } from '@/components/native-chat/viewport/find/NativeChatFindBar'
+import { NativeChatSurfaceFindBar } from '@/components/native-chat/NativeChatSurface'
 import { NativeChatHostSetupContext } from '@/components/native-chat/host-access/native-chat-host-setup'
 import { NativeChatWorkerApprovalTimeline } from '@/components/native-chat/worker-approvals/NativeChatWorkerApprovals'
 import { NativeChatRowActionsProvider } from '@/components/native-chat/messages/actions/NativeChatRowActionsProvider'
 import type { NativeChatStructuredViewProps } from '@/components/native-chat/native-chat-view-types'
+import type { NativeChatSurfaceState } from '@/components/native-chat/use-native-chat-surface'
+import type { useNativeChatBotHome } from '@/components/native-chat/NativeChatBotHomeScope'
+import type { useBotChatOwner } from '@/components/bots/use-bot-chat-identity'
 import type { useStructuredAgentSession } from './use-structured-agent-session'
 import type { useStructuredChatLiveSession } from './use-structured-chat-live-session'
 import type {
@@ -20,14 +23,12 @@ import type {
 } from '@/components/native-chat/session/status/native-chat-view-state'
 import type { structuredAgentSessionReadFailureNotice } from '@/components/native-chat/messages/notices/structured-agent-session-read-failure-notice'
 import type { useNativeChatInstallSlot } from '@/components/native-chat/host-access/NativeChatInstallSlot'
-import type { useNativeChatFind } from '@/components/native-chat/viewport/find/use-native-chat-find'
 import type { useNativeChatPaneFork } from '@/components/native-chat/messages/actions/use-native-chat-fork'
 import type { useNativeChatFileLinkContext } from '@/components/native-chat/links/actions/use-native-chat-file-link-context'
 import type { useNativeChatInterruptedContinuation } from '@/components/native-chat/usage/NativeChatInterruptedContinue'
 import type { useNativeChatStructuredPaneNotices } from '@/components/native-chat/messages/notices/use-native-chat-structured-pane-notices'
 import type { nativeChatWorkerApprovalParty } from '@/components/native-chat/worker-approvals/NativeChatWorkerApprovals'
 import type { useStructuredNativeChatSubmitReveal } from '@/components/native-chat/pane/actions/use-structured-native-chat-submit-reveal'
-import type { nativeChatStructuredStopControls } from '@/components/native-chat/session/structured/writes/native-chat-structured-stop-controls'
 import type { NativeChatImageRuntimeContext } from '@/components/native-chat/media/images/native-chat-image-runtime-context'
 import type { useStructuredAgentSessionDeliveryNotices } from './delivery/use-structured-agent-session-delivery-notices'
 import type { useNativeChatStructuredComposerTransport } from '@/components/native-chat/composer/submit/use-native-chat-structured-composer-transport'
@@ -41,7 +42,7 @@ export function NativeChatStructuredSessionTranscript({
   historyPhase,
   readFailure,
   install,
-  find,
+  surface,
   forks,
   fileLinkContext,
   continuation,
@@ -49,7 +50,8 @@ export function NativeChatStructuredSessionTranscript({
   workerApprovalParty,
   submits,
   prompt,
-  stopControls,
+  bot,
+  turnBot,
   imageRuntimeContext,
   deliveryNotices,
   composerRef,
@@ -65,7 +67,7 @@ export function NativeChatStructuredSessionTranscript({
   historyPhase: ReturnType<typeof structuredChatHistoryPhase>
   readFailure: ReturnType<typeof structuredAgentSessionReadFailureNotice> | null
   install: ReturnType<typeof useNativeChatInstallSlot>
-  find: ReturnType<typeof useNativeChatFind>
+  surface: NativeChatSurfaceState
   forks: ReturnType<typeof useNativeChatPaneFork>
   fileLinkContext: ReturnType<typeof useNativeChatFileLinkContext>
   continuation: ReturnType<typeof useNativeChatInterruptedContinuation>
@@ -73,7 +75,8 @@ export function NativeChatStructuredSessionTranscript({
   workerApprovalParty: ReturnType<typeof nativeChatWorkerApprovalParty>
   submits: ReturnType<typeof useStructuredNativeChatSubmitReveal>
   prompt: ReturnType<typeof useStructuredAgentSession>['prompts'][number] | null
-  stopControls: ReturnType<typeof nativeChatStructuredStopControls>
+  bot: ReturnType<typeof useNativeChatBotHome>
+  turnBot: ReturnType<typeof useBotChatOwner>['turnBot']
   imageRuntimeContext: NativeChatImageRuntimeContext
   deliveryNotices: ReturnType<typeof useStructuredAgentSessionDeliveryNotices>
   composerRef: RefObject<NativeChatComposerHandle | null>
@@ -97,7 +100,7 @@ export function NativeChatStructuredSessionTranscript({
       <NativeChatContextClearFade
         // A read failure stays in view: no divider may come to end the fade.
         clearing={controller.contextClear.clearing && viewState.kind !== 'error'}
-        overlay={find.isOpen ? <NativeChatFindBar find={find} isVisible={props.isVisible} /> : null}
+        overlay={<NativeChatSurfaceFindBar surface={surface} isVisible={props.isVisible} />}
       >
         {viewState.kind === 'loading' || (viewState.kind === 'error' && !readFailure) ? (
           historyPhase !== 'unread' && <NativeChatLoadingCue />
@@ -108,7 +111,7 @@ export function NativeChatStructuredSessionTranscript({
             {...(readFailure?.named ? { headline: readFailure.text } : {})}
           />
         ) : viewState.kind === 'empty' ? (
-          <NativeChatEmptyPane slot={install.slot} agent={props.agent} />
+          <NativeChatEmptyPane slot={install.slot} agent={props.agent} tabId={props.tabId} />
         ) : (
           <NativeChatRowActionsProvider pane={props} chat={controller} forks={forks}>
             <NativeChatUsageLimitActionsProvider
@@ -119,10 +122,10 @@ export function NativeChatStructuredSessionTranscript({
               view={continuation.view}
             >
               <NativeChatHostSetupContext.Provider value={setup}>
-                <NativeChatWorkerApprovalTimeline party={workerApprovalParty}>
+                <NativeChatWorkerApprovalTimeline party={workerApprovalParty} target={props.target}>
                   {(timedRows) => (
                     <NativeChatSubagentTranscripts
-                      find={find}
+                      find={surface.find}
                       // A rewind or a /clear replaces the conversation; nothing the old one held carries over.
                       key={`${controller.epoch}:${controller.contextClear.clears}`}
                       paneKey={paneKey}
@@ -141,10 +144,11 @@ export function NativeChatStructuredSessionTranscript({
                       settledTurns={controller.settledTurns}
                       awaitingInput={prompt === null ? null : 'shown'}
                       turnActivity={controller.turnActivity}
-                      stopping={stopControls.stopping}
+                      stopping={bot.stopControls.stopping}
                       structuredAttachments
                       runtimeContext={imageRuntimeContext}
                       deliveryNotices={deliveryNotices}
+                      {...{ turnBot, botHome: bot.kickoff }}
                       timedRows={timedRows}
                     />
                   )}

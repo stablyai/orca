@@ -3,7 +3,7 @@ import type {
   TerminalIdentityReadContext
 } from '../query/terminal-identity-read-context'
 import type { CrewRuntimeReaders } from '../../orchestration/crew/crew-runtime-watch'
-import { TerminalIdentitySource } from '../identity/terminal-identity-source'
+import { createCrewNotifiedTerminalIdentity } from '../identity/terminal-identity-crew-notice'
 import type { WaitBlockedCheckState } from '../wait/wait-blocked-check-state'
 import { OrcaRuntimeWithStopRequestedPtyIds } from '../../construction/runtime-service-state'
 import { RuntimeSubscriptionRegistry } from '../../client/runtime-subscription-registry'
@@ -22,7 +22,7 @@ import { MainDaemonAttachments } from './main-daemon-attachments'
 import { parseAppSshPtyId } from '../../../../shared/remote-runtime/ssh/ssh-pty-id'
 
 export abstract class OrcaRuntimeWithFitOverrideListeners extends OrcaRuntimeWithStopRequestedPtyIds {
-  protected readonly terminalIdentity = new TerminalIdentitySource(this.crewChanges.notify)
+  protected readonly terminalIdentity = createCrewNotifiedTerminalIdentity(this.crewChanges)
   protected readonly ptysById = this.terminalIdentity.ptys
   readonly handles = this.terminalIdentity.handles
   protected readonly handleByLeafKey = this.terminalIdentity.leafHandles
@@ -102,6 +102,9 @@ export abstract class OrcaRuntimeWithFitOverrideListeners extends OrcaRuntimeWit
   protected providerSequenceInitializedPtys = new Set<string>()
 
   protected providerSequenceOffsetByPtyId = new Map<string, number>()
+
+  /** The daemon's output count when main reattached to a running process, in the daemon's numbering. */
+  protected reattachedProviderSequenceByPtyId = new Map<string, number>()
 
   protected providerSnapshotPreferredPtys = new Set<string>()
 

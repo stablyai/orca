@@ -69,6 +69,7 @@ export function useNativeChatTranscriptWindow({
 }): NativeChatTranscriptWindow {
   const sizerElementRef = useRef<HTMLDivElement | null>(null)
   const [scrollMargin, setScrollMargin] = useState(0)
+  const measuredScrollMargin = useRef(0)
   const [programmaticScrollMarks] = useState(createProgrammaticScrollMarks)
   const readerTakeoverFrameRef = useRef<number | null>(null)
   const previousMeasurementKeysRef = useRef<ReadonlySet<string> | null>(null)
@@ -134,13 +135,11 @@ export function useNativeChatTranscriptWindow({
   const readScrollMargin = useCallback(() => {
     const container = scrollRef.current
     const sizer = sizerElementRef.current
-    if (!container || !sizer) {
-      return
-    }
     // Avoid rect fallback without layout: it reports scrollTop as margin and would pin the window at the transcript’s start.
-    const offset = nativeChatScrollOffsetWithin(sizer, container)
-    if (offset !== null) {
-      setScrollMargin((current) => (current === offset ? current : offset))
+    const offset = container && sizer ? nativeChatScrollOffsetWithin(sizer, container) : null
+    if (offset !== null && offset !== measuredScrollMargin.current) {
+      measuredScrollMargin.current = offset
+      setScrollMargin(offset)
     }
   }, [scrollRef])
   // A hidden pane is display:none: its offset walk would only force layout on every retained chat's render.

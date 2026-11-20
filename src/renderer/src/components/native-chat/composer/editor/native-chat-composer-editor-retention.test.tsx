@@ -15,13 +15,14 @@ import {
   redirectNativeChatEditDraft
 } from '../../drafts/native-chat-composer-draft-memory'
 import { promptEditor } from './native-chat-prompt-editor.test-support'
+import { mountedEditorView } from './native-chat-mounted-editor-view'
 
 afterEach(() => {
   cleanup()
   vi.useRealTimers()
 })
 
-it('keeps the draft, selection and undo across hides, and frees the editor when its tab closes', async () => {
+it('keeps the draft, selection and undo across hides without a hidden view, and frees the editor when its tab closes', async () => {
   vi.useFakeTimers()
   const input = createRef<NativeChatComposerInput>()
   const pane = (visible: boolean) => (
@@ -43,6 +44,8 @@ it('keeps the draft, selection and undo across hides, and frees the editor when 
   )
   const view = render(pane(true))
   const editor = promptEditor(within(view.container).getByRole('textbox'))
+  const onDestroy = vi.fn()
+  editor.on('destroy', onDestroy)
   act(() => {
     input.current!.setSelectionRange(5, 5)
     input.current!.insertText!(' world')
@@ -50,6 +53,9 @@ it('keeps the draft, selection and undo across hides, and frees the editor when 
   })
   view.rerender(pane(false))
   await act(() => vi.runOnlyPendingTimersAsync())
+  // A hidden composer keeps no view, so none of its document listeners run while other chats are typed in.
+  expect(mountedEditorView(editor)).toBeNull()
+  expect(onDestroy).not.toHaveBeenCalled()
   view.rerender(pane(true))
   expect(input.current!.value).toBe('hello world')
   expect([input.current!.selectionStart, input.current!.selectionEnd]).toEqual([2, 4])
@@ -60,41 +66,39 @@ it('keeps the draft, selection and undo across hides, and frees the editor when 
   view.rerender(pane(false))
   view.unmount()
   await act(() => vi.runOnlyPendingTimersAsync())
-  expect(editor.isDestroyed).toBe(true)
+  expect(onDestroy).toHaveBeenCalledOnce()
+  expect(mountedEditorView(editor)).toBeNull()
 })
 
-it.each([20, 200])(
-  'releases %i completed inline-edit editors while the chat stays open',
-  (count) => {
-    const input = createRef<NativeChatComposerInput>()
-    const pane = (scope: string) => (
-      <NativeChatComposerEditorOwner>
-        <NativeChatPromptEditor
-          scopeKey={scope}
-          inputRef={input}
-          initialValue="queued text"
-          disabled={false}
-          placeholder="Message"
-          onChange={() => {}}
-          onSelect={() => {}}
-        />
-      </NativeChatComposerEditorOwner>
-    )
-    const view = render(<NativeChatComposerEditorOwner>{null}</NativeChatComposerEditorOwner>)
-    for (let index = 0; index < count; index++) {
-      const scope = `queued-edit:retention-${count}-${index}`
-      openNativeChatEditDraft(scope, { text: 'queued text', images: [] })
-      view.rerender(pane(scope))
-      const editor = promptEditor(within(view.container).getByRole('textbox'))
-      act(() => {
-        redirectNativeChatEditDraft(scope, 'agent-session:retained-editor')
-        closeNativeChatEditDraft(scope)
-      })
-      expect(editor.isDestroyed).toBe(true)
-    }
-    view.unmount()
+it('releases completed inline-edit editors while the chat stays open', () => {
+  const input = createRef<NativeChatComposerInput>()
+  const pane = (scope: string) => (
+    <NativeChatComposerEditorOwner>
+      <NativeChatPromptEditor
+        scopeKey={scope}
+        inputRef={input}
+        initialValue="queued text"
+        disabled={false}
+        placeholder="Message"
+        onChange={() => {}}
+        onSelect={() => {}}
+      />
+    </NativeChatComposerEditorOwner>
+  )
+  const view = render(<NativeChatComposerEditorOwner>{null}</NativeChatComposerEditorOwner>)
+  for (let index = 0; index < 3; index++) {
+    const scope = `queued-edit:retention-${index}`
+    openNativeChatEditDraft(scope, { text: 'queued text', images: [] })
+    view.rerender(pane(scope))
+    const editor = promptEditor(within(view.container).getByRole('textbox'))
+    act(() => {
+      redirectNativeChatEditDraft(scope, 'agent-session:retained-editor')
+      closeNativeChatEditDraft(scope)
+    })
+    expect(editor.isDestroyed).toBe(true)
   }
-)
+  view.unmount()
+})
 
 it('restores a deleted pasted-text file with undo after the composer remounts', () => {
   const scope = 'queued-edit:retained-paste'

@@ -21,6 +21,11 @@ export type AntigravityAccountState = {
     identityKnown: boolean
   } | null
   selectedAccountId: string | null
+  /** Host only: new chats run on agy and its account; false runs them on Orca's own sign-in. Absent
+   *  from older hosts and WSL. */
+  chatUsesAgy?: boolean
+  /** That agy's version, when new chats run on it. */
+  chatAgyVersion?: string
 }
 
 export const ANTIGRAVITY_CHAT_SIGN_IN_PHASES = [
@@ -34,11 +39,15 @@ export const ANTIGRAVITY_CHAT_SIGN_IN_PHASES = [
   'expired'
 ] as const
 
+export type AntigravityChatSignInIntent = 'signIn' | 'changeAccount'
+
 /** Where a chat sign-in flow on the execution host stands; `url` is the Google page to open. */
 export type AntigravityChatSignInState = {
   /** Null, with no `url`, for every client but the one that started the flow: only it can act. */
   flowId: string | null
   phase: (typeof ANTIGRAVITY_CHAT_SIGN_IN_PHASES)[number]
+  /** The initiating action; absent on older hosts and other clients' flows. */
+  intent?: AntigravityChatSignInIntent
   url?: string
   error?: string
 }
@@ -58,4 +67,10 @@ export type AntigravityChatSignInStatus = {
 export type AntigravityAccountTarget = {
   runtime: 'host' | 'wsl'
   wslDistro?: string | null
+}
+
+/** Older hosts return only the accepted flow's id. */
+export type AntigravityChatSignInStartResult = {
+  flowId: string
+  status?: AntigravityChatSignInStatus
 }

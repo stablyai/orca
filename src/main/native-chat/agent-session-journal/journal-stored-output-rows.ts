@@ -10,6 +10,7 @@ import {
   JOURNAL_STORED_OUTPUT_WRITES,
   storeJournalItemOutput
 } from './journal-stored-output'
+import { hydrateJournalTextTail } from './journal-text-tail'
 
 type Prefix = readonly [sessionId: string, epoch: string]
 
@@ -45,7 +46,7 @@ export function measureJournalStoredRow(
 ): ItemsByKindRowRead {
   const json = String(row.payload_json)
   if (!(row.output_blob instanceof Uint8Array)) {
-    return { bytes: json.length, item: () => JSON.parse(json) }
+    return { bytes: json.length, item: () => hydrateJournalTextTail(db, prefix, JSON.parse(json)) }
   }
   const parsed: AgentJournalRenderItem = JSON.parse(json)
   return {
@@ -62,7 +63,7 @@ export function hydrateJournalStoredItem<T extends AgentJournalRenderItem>(
   blob?: unknown
 ): T {
   if (!hasJournalStoredOutput(item)) {
-    return item
+    return hydrateJournalTextTail(db, prefix, item)
   }
   const held =
     blob === undefined
