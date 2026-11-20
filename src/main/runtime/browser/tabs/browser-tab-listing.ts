@@ -123,7 +123,12 @@ export function mergeBrowserTabListing(input: {
   const unlisted = serverTabs
     .filter((tab) => !listed.has(tab.browserPageId))
     .map((tab) => ({ ...tab, loaded: true }))
-  const clients = input.clientTabs.map((tab) => ({ ...tab, loaded: true }))
+  // A client row wins over the tab-bar entry for the same page but keeps the workspace tab id it lacks.
+  const barTabIds = new Map(input.tabBar.map((entry) => [entry.browserPageId, entry.unifiedTabId]))
+  const clients = input.clientTabs.map((tab) => {
+    const unifiedTabId = barTabIds.get(tab.browserPageId)
+    return { ...tab, ...(unifiedTabId ? { unifiedTabId } : {}), loaded: true }
+  })
   const tabs = [...fromBar, ...unlisted, ...clients]
   const fallbackId = (
     serverTabs[0] ??
