@@ -14,8 +14,8 @@ const row = (index: number, status = 'working'): OrchestrationCrewRow => ({
   status
 })
 
-it('sends one changed row of a hundred as a delta, and nothing when nothing changed', async () => {
-  let rows = Array.from({ length: 100 }, (_, index) => row(index))
+it('sends only the changed row and suppresses an unchanged snapshot', async () => {
+  let rows = [row(0), row(1)]
   const snapshot = (): OrchestrationCrewSnapshot => ({
     status: 'ok',
     sections: { managedBy: [], managing: rows, talkingWith: [] }
@@ -33,16 +33,34 @@ it('sends one changed row of a hundred as a delta, and nothing when nothing chan
     true
   )
   try {
-    expect(frames).toHaveLength(102)
     frames.length = 0
     wake()
     await Promise.resolve()
     expect(frames).toEqual([])
-    rows = rows.map((entry, index) => (index === 42 ? row(42, 'waiting') : entry))
+    rows = [rows[0], row(1, 'waiting')]
     wake()
     await Promise.resolve()
-    expect(frames.map((frame) => frame.type)).toEqual(['delta', 'rows', 'complete'])
-    expect(frames[1]).toEqual({ type: 'rows', section: 'managing', rows: [row(42, 'waiting')] })
+    expect(frames).toEqual([
+      {
+        type: 'delta',
+        status: 'ok',
+        order: { managedBy: [], managing: ['party-0', 'party-1'], talkingWith: [] }
+      },
+      {
+        type: 'rows',
+        section: 'managing',
+        rows: [
+          {
+            partyKey: 'party-1',
+            role: 'worker',
+            label: 'worker-1',
+            agentKind: 'claude',
+            status: 'waiting'
+          }
+        ]
+      },
+      { type: 'complete' }
+    ])
   } finally {
     stop()
   }
