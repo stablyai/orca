@@ -30,7 +30,13 @@ async function listAccountHistories(accountsRoot: string): Promise<string[]> {
   const paths: string[] = []
   for (const account of accounts.filter((entry) => entry.isDirectory())) {
     const historyPath = join(accountsRoot, account.name, 'home', 'history.jsonl')
-    const stats = await lstat(historyPath).catch(() => null)
+    // Only a missing file means no history; any other error retries rather than skip an account.
+    const stats = await lstat(historyPath).catch((error: unknown) => {
+      if (errnoCodeOrUnknown(error) === 'ENOENT') {
+        return null
+      }
+      throw error
+    })
     if (stats?.isFile()) {
       paths.push(historyPath)
     }
@@ -96,7 +102,18 @@ async function publishWithoutOverwrite(
     } finally {
       await handle.close()
     }
-    // A hard link publishes only into a free name: one Codex created meanwhile stays as it is.
+    return await linkIntoFreeName(tmpPath, targetPath)
+  } finally {
+    await rm(tmpPath, { force: true })
+  }
+}
+
+// A hard link publishes only into a free name: one Codex created meanwhile stays as it is.
+async function linkIntoFreeName(
+  tmpPath: string,
+  targetPath: string
+): Promise<LegacyHistoryImportOutcome> {
+  try {
     await link(tmpPath, targetPath)
     return 'imported'
   } catch (error) {
@@ -110,8 +127,6 @@ async function publishWithoutOverwrite(
       return 'skipped_no_hard_links'
     }
     throw error
-  } finally {
-    await rm(tmpPath, { force: true })
   }
 }
 
