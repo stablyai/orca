@@ -6,6 +6,7 @@ import {
 import type { ResolvedSourceControlAiGenerationParams } from '../../../shared/source-control/ai/source-control-ai-operation-resolution'
 import { captureAgentGenerationFailureOutput } from '../failures/agent-failure-output'
 import { runGenerationRequest } from '../agent-generation-request'
+import type { GenerationAdmission } from '../execution/background-generation-slots'
 import type {
   CommitMessageGenerationTarget,
   GenerateConversationNameResult,
@@ -18,6 +19,7 @@ export async function generateConversationName(input: {
   target: CommitMessageGenerationTarget
   spawnAgent: SpawnSourceControlAgent
   shouldExecute?: () => boolean
+  admit?: GenerationAdmission
 }): Promise<GenerateConversationNameResult> {
   const { context, params } = input
   const prompt = renderConversationNamePrompt(context, params)

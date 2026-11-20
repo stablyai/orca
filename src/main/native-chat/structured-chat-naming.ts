@@ -25,11 +25,7 @@ import type {
   StructuredChatNamingFailure
 } from './agent-session-wire/host/structured-agent-session-host-types'
 import { neverThrowingStructuredAgentSessionLogger } from './agent-session-wire/host/structured-agent-session-logger'
-import {
-  BACKGROUND_PRIORITY,
-  runInBackgroundGenerationSlot,
-  USER_REQUEST_PRIORITY
-} from '../text-generation/execution/background-generation-slots'
+import type { GenerationAdmission } from '../text-generation/execution/background-generation-slots'
 
 const GENERATION_RETRY_DELAYS_MS = [2000, 4000]
 const NAMING_ERROR_LIMIT = 1024
@@ -90,9 +86,8 @@ export function createStructuredChatNamingHandler(deps: StructuredChatNamingDeps
         request.record.conversationName ?? '',
         request.automatic ? GENERATION_RETRY_DELAYS_MS : [],
         () => applicable(request),
-        // A user asking again while this waits moves it ahead of automatic runs.
-        () =>
-          request.automatic && !request.userWaiting ? BACKGROUND_PRIORITY : USER_REQUEST_PRIORITY
+        // A chat named or renamed while this run waited for a slot starts no agent.
+        request.generation.admitWhile(() => applicable(request))
       )
       const store = deps.getStore()
       if (name && store && applicable(request)) {
@@ -137,22 +132,17 @@ export function createStructuredChatNamingHandler(deps: StructuredChatNamingDeps
     forName: string,
     retryDelays: readonly number[],
     stillCurrent: () => boolean,
-    priority: () => number
+    admit: GenerationAdmission
   ): Promise<string | null> {
     attempted.set(record.sessionId, contextId(record))
     for (let attempt = 0; stillCurrent(); attempt += 1) {
-      const result = await runInBackgroundGenerationSlot(priority, async (slotHeld) => {
-        // A chat named or renamed while this run waited for a slot starts no agent.
-        if (!stillCurrent()) {
-          return null
-        }
-        try {
-          return await deps.generate(record, firstPrompt, () => stillCurrent() && slotHeld())
-        } catch (error) {
-          warn(record.sessionId, error)
-          return chatNamingFailure('agentNotRun')
-        }
-      })
+      let result: StructuredChatNameGeneration
+      try {
+        result = await deps.generate(record, firstPrompt, stillCurrent, admit)
+      } catch (error) {
+        warn(record.sessionId, error)
+        result = chatNamingFailure('agentNotRun')
+      }
       if (!result) {
         return null
       }

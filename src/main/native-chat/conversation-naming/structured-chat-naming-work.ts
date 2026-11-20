@@ -1,11 +1,12 @@
+import { BackgroundGenerationRequest } from '../../text-generation/execution/background-generation-slots'
 import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 
 export type NamingRequest = {
   record: AgentSessionRecord
   automatic: boolean
   firstPrompt?: string
-  /** The user asked for a name while this automatic request was pending. */
-  userWaiting?: boolean
+  /** Its slot in background naming; a user asking again moves it ahead. */
+  generation: BackgroundGenerationRequest
 }
 type NamingJob = { desired?: NamingRequest; executing?: NamingRequest; preparing: boolean }
 
@@ -49,11 +50,11 @@ export function createStructuredChatNamingWork(deps: {
         !(automatic && !pending.automatic && pending.firstPrompt === undefined)
       ) {
         if (!automatic) {
-          pending.userWaiting = true
+          pending.generation.promote()
         }
         return
       }
-      job.desired = { record, automatic }
+      job.desired = { record, automatic, generation: new BackgroundGenerationRequest(!automatic) }
       jobs.set(sessionId, job)
       if (!job.preparing) {
         job.preparing = true

@@ -7,10 +7,7 @@ import {
   recordFirstWorkGenerationFailure,
   resetFirstWorkGenerationBackoff
 } from './first-work-generation-backoff'
-import {
-  BACKGROUND_PRIORITY,
-  USER_REQUEST_PRIORITY
-} from '../../text-generation/execution/background-generation-slots'
+import { BackgroundGenerationRequest } from '../../text-generation/execution/background-generation-slots'
 
 export type FirstWorkRenameVerdict = {
   outcome: BranchAutoRenameOutcome
@@ -34,8 +31,8 @@ export type FirstWorkAttempt = {
   /** Throws when the workspace was deleted and recreated since admission. */
   assertIncarnation: () => void
   isIncarnationCurrent: () => boolean
-  /** Generation slot priority; a user's Try again raises it, even while queued. */
-  generationPriority: () => number
+  /** Background naming slot; a user's Try again moves it ahead, even while queued. */
+  generation: BackgroundGenerationRequest
 }
 
 export type FirstWorkAttemptDeps = {
@@ -56,7 +53,7 @@ type AttemptEntry = {
   incarnation: string
   attemptId: number
   lookupExpired: boolean
-  userRequested: boolean
+  generation: BackgroundGenerationRequest
   promise: Promise<FirstWorkAttemptResult>
 }
 
@@ -101,9 +98,7 @@ export function runningFirstWorkAttempt(
     ? {
         attemptId: entry.attemptId,
         promise: entry.promise,
-        requestByUser: () => {
-          entry.userRequested = true
-        }
+        requestByUser: () => entry.generation.promote()
       }
     : null
 }
@@ -135,7 +130,7 @@ export function startFirstWorkAttempt(
     incarnation,
     attemptId,
     lookupExpired: false,
-    userRequested,
+    generation: new BackgroundGenerationRequest(userRequested),
     promise: Promise.resolve({ attemptId, outcome: { kind: 'failed' }, finishedAt: 0 })
   }
   const attempt: FirstWorkAttempt = {
@@ -151,7 +146,7 @@ export function startFirstWorkAttempt(
         throw new FirstWorkWorkspaceReplacedError()
       }
     },
-    generationPriority: () => (entry.userRequested ? USER_REQUEST_PRIORITY : BACKGROUND_PRIORITY)
+    generation: entry.generation
   }
   inFlight.set(worktreeId, entry)
   notifyAttempt({ executionHostId: 'local', worktreeId, attemptId, phase: 'started' })

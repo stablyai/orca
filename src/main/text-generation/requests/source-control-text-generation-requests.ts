@@ -38,6 +38,7 @@ import type {
   GeneratePullRequestFieldsResult,
   SpawnSourceControlAgent
 } from '../source-control-text-generation-types'
+import type { GenerationAdmission } from '../execution/background-generation-slots'
 
 type GenerateParams = ResolvedSourceControlAiGenerationParams
 
@@ -212,7 +213,7 @@ export async function generateBranchName(input: {
   params: GenerateParams
   target: CommitMessageGenerationTarget
   spawnAgent: SpawnSourceControlAgent
-  shouldExecute?: () => boolean
+  admit?: GenerationAdmission
 }): Promise<GenerateBranchNameResult> {
   const { context, params } = input
   const basePrompt = buildBranchNamePrompt(context)

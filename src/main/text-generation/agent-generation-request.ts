@@ -25,6 +25,7 @@ import type {
   SpawnSourceControlAgent,
   TextGenerationOperation
 } from './source-control-text-generation-types'
+import type { GenerationAdmission } from './execution/background-generation-slots'
 
 type GenerateParams = ResolvedSourceControlAiGenerationParams
 
@@ -42,6 +43,8 @@ export async function runGenerationRequest(input: {
   operation: TextGenerationOperation
   spawnAgent: SpawnSourceControlAgent
   shouldExecute?: () => boolean
+  /** Background naming's shared slot around each local agent launch. */
+  admit?: GenerationAdmission
 }): Promise<InternalTextGenerationResult> {
   const params = {
     ...input.params,
@@ -73,22 +76,25 @@ export async function runGenerationRequest(input: {
           operation: input.operation
         })
       : plan.openCodeTask
-        ? runOpenCodeTextTask({
-            plan: plainPlan(plan),
-            target: input.target,
-            operation: input.operation,
-            spawnAgent: input.spawnAgent,
-            shouldExecute: input.shouldExecute,
-            legacyVariantFlag:
-              input.params.agentId === 'opencode' && input.operation !== 'jira-issue-summary'
-          })
+        ? runAdmittedTask(input.admit, () =>
+            runOpenCodeTextTask({
+              plan: plainPlan(plan),
+              target: input.target,
+              operation: input.operation,
+              spawnAgent: input.spawnAgent,
+              shouldExecute: input.shouldExecute,
+              legacyVariantFlag:
+                input.params.agentId === 'opencode' && input.operation !== 'jira-issue-summary'
+            })
+          )
         : runLocalPlanForAgent({
             agentId: input.params.agentId,
             plan,
             target: input.target,
             operation: input.operation,
             spawnAgent: input.spawnAgent,
-            shouldExecute: input.shouldExecute
+            shouldExecute: input.shouldExecute,
+            admit: input.admit
           })
   let result = await runClaudeGenerationAttempts({
     agentId: input.params.agentId,
@@ -148,4 +154,19 @@ export async function runGenerationRequest(input: {
   return rawOutput
     ? { ...result, rawOutput }
     : { success: false, ...emptyResultFailure(input.operation, plan.label) }
+}
+
+/** A task whose own promise settles once its processes are gone holds the slot for its whole run. */
+export async function runAdmittedTask(
+  admit: GenerationAdmission | undefined,
+  run: () => Promise<InternalTextGenerationResult>
+): Promise<InternalTextGenerationResult> {
+  if (!admit) {
+    return run()
+  }
+  const task = await admit(() => {
+    const result = run()
+    return { result, processClosed: result }
+  })
+  return task ? task.result : { success: false, error: 'Generation canceled.', canceled: true }
 }

@@ -21,6 +21,7 @@ import {
 } from './models/commit-message-model-discovery'
 import { discoverModelsWithHostCache } from './models/model-discovery-host-cache'
 import { spawnSourceControlAgent } from './execution/source-control-agent-launch'
+import type { GenerationAdmission } from './execution/background-generation-slots'
 import { generateConversationName } from './requests/conversation-name-generation-request'
 import { cancelLocalGeneration } from './execution/source-control-generation-lanes'
 import { commandBackslashMode } from './agent-generation-request'
@@ -110,28 +111,24 @@ export function generateBranchNameFromContext(
   context: BranchNameWorkContext,
   params: ResolvedSourceControlAiGenerationParams,
   target: CommitMessageGenerationTarget,
-  shouldExecute?: () => boolean
+  admit?: GenerationAdmission
 ): Promise<GenerateBranchNameResult> {
-  return generateBranchName({
-    context,
-    params,
-    target,
-    spawnAgent: spawnSourceControlAgent,
-    shouldExecute
-  })
+  return generateBranchName({ context, params, target, spawnAgent: spawnSourceControlAgent, admit })
 }
 
 export function generateConversationNameFromContext(
   context: ConversationNameContext,
   params: ResolvedSourceControlAiGenerationParams,
   target: CommitMessageGenerationTarget,
-  shouldExecute?: () => boolean
+  shouldExecute?: () => boolean,
+  admit?: GenerationAdmission
 ): Promise<GenerateConversationNameResult> {
   return generateConversationName({
     context,
     params,
     target,
     spawnAgent: spawnSourceControlAgent,
-    shouldExecute
+    shouldExecute,
+    admit
   })
 }

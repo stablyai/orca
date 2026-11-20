@@ -14,6 +14,7 @@ import {
 import { runLocalSourceControlPlan } from './source-control-local-process'
 import { prepareSourceControlReadOnlyPlan } from '../policies/source-control-read-only-policy'
 import { SOURCE_CONTROL_GENERATION_TIMEOUT_MS } from './source-control-generation-limits'
+import type { GenerationAdmission } from './background-generation-slots'
 import { textGenerationFailure } from '../../../shared/text-generation/text-generation-failure-copy'
 import type {
   InternalTextGenerationResult,
@@ -32,6 +33,8 @@ export function runLocalPlanForAgent(input: {
   shouldExecute?: () => boolean
   /** How long the agent may run; the source-control default when absent. */
   timeoutMs?: number
+  /** Background naming's shared slot; entered after the Codex home lock. */
+  admit?: GenerationAdmission
 }): Promise<InternalTextGenerationResult> {
   const needsPolicy = ['codex', 'kimi', 'dsh', 'antigravity', 'amp', 'muse'].includes(input.agentId)
   const wslDistro =
@@ -128,8 +131,20 @@ export function runLocalPlanForAgent(input: {
         }
       : launch(input.plan)
   }
+  const admit = input.admit
+  const admitted = admit
+    ? async (): Promise<LocalProcessExecution<InternalTextGenerationResult>> =>
+        (await admit(start)) ?? {
+          result: Promise.resolve({
+            success: false,
+            error: 'Generation canceled.',
+            canceled: true
+          }),
+          processClosed: Promise.resolve()
+        }
+    : start
   if (input.agentId !== 'codex') {
-    const execution = start()
+    const execution = admitted()
     return Promise.resolve(execution).then((execution) =>
       input.shouldExecute
         ? execution.result.finally(() => execution.processClosed)
@@ -137,7 +152,7 @@ export function runLocalPlanForAgent(input: {
     )
   }
   return runCodexLocalPlanUnderHomeLock(
-    start,
+    admitted,
     target,
     input.operation,
     input.plan.env,

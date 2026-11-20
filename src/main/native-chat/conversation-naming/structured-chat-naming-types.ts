@@ -1,3 +1,4 @@
+import type { GenerationAdmission } from '../../text-generation/execution/background-generation-slots'
 import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store'
@@ -24,7 +25,9 @@ export type StructuredChatNamingDeps = {
   generate: (
     record: AgentSessionRecord,
     firstPrompt: string,
-    shouldExecute?: () => boolean
+    shouldExecute?: () => boolean,
+    /** Background naming's shared slot; every agent start goes through it. */
+    admit?: GenerationAdmission
   ) => Promise<StructuredChatNameGeneration>
   onNamed: (workspaceId: string, sessionId: string) => void
   logger: StructuredAgentSessionLogger

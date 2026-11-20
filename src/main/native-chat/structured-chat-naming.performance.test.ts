@@ -45,15 +45,21 @@ async function burst() {
     readFirstPrompt: async () => 'fix the flaky build',
     readJournalFirstPrompt: async () => 'fix the flaky build',
     workerTaskTitle: () => null,
-    generate: (record) =>
-      new Promise((resolve) => {
-        started.push(record.sessionId)
-        running.push({
-          sessionId: record.sessionId,
-          finish: () => resolve({ name: `Named ${record.sessionId}` })
+    // As the production launcher does: every agent start goes through the admission.
+    generate: async (record, _firstPrompt, _shouldExecute, admit) => {
+      const task = await admit?.(() => {
+        const result = new Promise<{ name: string }>((resolve) => {
+          started.push(record.sessionId)
+          running.push({
+            sessionId: record.sessionId,
+            finish: () => resolve({ name: `Named ${record.sessionId}` })
+          })
+          peak = Math.max(peak, running.length)
         })
-        peak = Math.max(peak, running.length)
-      }),
+        return { result, processClosed: result }
+      })
+      return task ? task.result : null
+    },
     onNamed: () => {},
     logger: createStructuredAgentSessionLogger()
   })
@@ -119,7 +125,7 @@ describe('chat naming during a launch burst', () => {
     await startAll()
     expect(started).toHaveLength(3)
     // The agent's 60 s deadline stops it; only one whose termination failed holds its slot longer.
-    await vi.advanceTimersByTimeAsync(134_000)
+    await vi.advanceTimersByTimeAsync(74_000)
     expect(started).toHaveLength(3)
     await vi.advanceTimersByTimeAsync(1_000)
     expect(started).toHaveLength(6)

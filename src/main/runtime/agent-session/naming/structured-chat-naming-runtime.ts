@@ -54,7 +54,7 @@ export function structuredChatNamingDeps(
       return host ? host.namingPrompt(sessionId) : ''
     },
     workerTaskTitle: runtime.workerTaskTitle,
-    generate: async (record, firstPrompt, shouldExecute) => {
+    generate: async (record, firstPrompt, shouldExecute, admit) => {
       // Unsupported execution contexts keep the seed regardless of native naming settings.
       if (record.location.wslDistro !== null) {
         return null
@@ -87,12 +87,23 @@ export function structuredChatNamingDeps(
           if (!recipe.commandInputTemplate?.trim()) {
             throw new Error('Chat name template is empty')
           }
-          const output = await generateText({
-            agent: record.provider,
-            accountHome: record.accountHome,
-            prompt: renderConversationNamePrompt({ firstPrompt }, recipe),
-            shouldExecute
-          })
+          const run = () =>
+            generateText({
+              agent: record.provider,
+              accountHome: record.accountHome,
+              prompt: renderConversationNamePrompt({ firstPrompt }, recipe),
+              shouldExecute
+            })
+          const task = admit
+            ? await admit(() => {
+                const result = run()
+                return { result, processClosed: result }
+              })
+            : { result: run() }
+          if (!task) {
+            return null
+          }
+          const output = await task.result
           if (output === null) {
             return null
           }
@@ -147,7 +158,8 @@ export function structuredChatNamingDeps(
         { firstPrompt },
         settings.params,
         target,
-        shouldExecute
+        shouldExecute,
+        admit
       )
       if (result.success) {
         return { name: result.name }
