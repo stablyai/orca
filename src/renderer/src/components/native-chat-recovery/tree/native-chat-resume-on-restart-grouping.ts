@@ -7,6 +7,7 @@ import {
 import { projectGroupIdFromRepoId } from '../../../../../shared/folder-workspaces/folder-workspace-worktree'
 import type { RepoIcon } from '../../../../../shared/repository/appearance/repo-icon'
 import {
+  restartActivityLeadFinished,
   restartActivityWaitsOnPerson,
   type AgentSessionRestartActivity
 } from '../../../../../shared/agent-session/lifecycle/stopping/agent-session-restart-activity'
@@ -224,9 +225,13 @@ export function allResumeSessionIds(candidates: readonly ResumeCandidate[]): str
   return candidates.map((candidate) => candidate.sessionId)
 }
 
-/** Chats that were working; chats waiting on the person stay offered until they choose. */
+/** Chats whose lead was working; chats waiting on the person or with only background work cut stay offered. */
 export function launchResumeSessionIds(candidates: readonly ResumeCandidate[]): string[] {
   return allResumeSessionIds(
-    candidates.filter((candidate) => !restartActivityWaitsOnPerson(candidate.activity))
+    candidates.filter(
+      (candidate) =>
+        !restartActivityWaitsOnPerson(candidate.activity) &&
+        !restartActivityLeadFinished(candidate.activity)
+    )
   )
 }
