@@ -82,6 +82,35 @@ describe('CodexRuntimeHomeService', () => {
     ).toEqual({ authJson: refreshedAuth })
   })
 
+  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)(
+    'keeps a refreshed mirror login while ~/.codex/auth.json cannot be read',
+    async () => {
+      const runtimeAuthPath = getRuntimeCodexAuthPath()
+      const systemAuth = createCodexAuthJson('system@example.com', 'acct-system', 'system-old')
+      const refreshedAuth = createCodexAuthJson(
+        'system@example.com',
+        'acct-system',
+        'system-refreshed'
+      )
+      writeFileSync(getSystemCodexAuthPath(), systemAuth, 'utf-8')
+      const store = createStore(createSettings())
+      const { CodexRuntimeHomeService } = await import('../../runtime-home-service')
+      const service = new CodexRuntimeHomeService(store as never)
+      writeFileSync(runtimeAuthPath, refreshedAuth, 'utf-8')
+
+      const systemHome = join(testState.fakeHomeDir, '.codex')
+      chmodSync(systemHome, 0o000)
+      try {
+        service.syncForCurrentSelection()
+      } finally {
+        chmodSync(systemHome, 0o755)
+      }
+
+      expect(readFileSync(runtimeAuthPath, 'utf-8')).toBe(refreshedAuth)
+      expect(readFileSync(getSystemCodexAuthPath(), 'utf-8')).toBe(systemAuth)
+    }
+  )
+
   it('reads back system-default token refreshes after a pre-provenance restart', async () => {
     const runtimeAuthPath = getRuntimeCodexAuthPath()
     const systemAuth = createCodexAuthJson(

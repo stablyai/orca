@@ -16,40 +16,35 @@ export abstract class CodexRuntimeHomeAuthSync extends CodexRuntimeHomeLaunch {
       return
     }
 
-    const runtimeAuthPath = join(getSystemCodexHomePath(), 'auth.json')
-    const snapshot: CodexSystemDefaultSnapshot = {
-      authJson: existsSync(runtimeAuthPath) ? readFileSync(runtimeAuthPath, 'utf-8') : null
-    }
+    const snapshot: CodexSystemDefaultSnapshot = { authJson: this.readSystemDefaultAuth() }
     writeFileAtomically(snapshotPath, `${JSON.stringify(snapshot, null, 2)}\n`, { mode: 0o600 })
   }
 
   protected syncRuntimeAuthWithSystemDefault(): void {
     const runtimeAuthPath = this.getRuntimeAuthPath()
-    const systemDefaultAuthPath = join(getSystemCodexHomePath(), 'auth.json')
     if (!existsSync(runtimeAuthPath)) {
       return
     }
 
     try {
       const runtimeAuth = readFileSync(runtimeAuthPath, 'utf-8')
+      const systemDefaultAuth = this.readSystemDefaultAuth()
       const provenanceStatus = this.resolveSharedRuntimeAuthProvenanceStatus()
       const provenance = provenanceStatus.kind === 'committed' ? provenanceStatus.provenance : null
       if (provenance?.owner === 'managed') {
         this.captureSystemDefaultSnapshot({ force: true })
-        if (!existsSync(systemDefaultAuthPath)) {
+        if (systemDefaultAuth === null) {
           this.clearRuntimeAuthAfterSystemDefaultLogout(runtimeAuthPath)
           return
         }
-        this.writeRuntimeAuth(readFileSync(systemDefaultAuthPath, 'utf-8'), {
-          owner: 'system-default'
-        })
+        this.writeRuntimeAuth(systemDefaultAuth, { owner: 'system-default' })
         return
       }
       const {
         ownershipProven: systemDefaultOwnershipProven,
         mirroredAuthJson: mirroredSystemDefaultAuth
       } = this.resolveSystemDefaultMirrorClaim(runtimeAuth, provenanceStatus)
-      if (!existsSync(systemDefaultAuthPath)) {
+      if (systemDefaultAuth === null) {
         if (mirroredSystemDefaultAuth !== null && runtimeAuth === mirroredSystemDefaultAuth) {
           this.clearRuntimeAuthAfterSystemDefaultLogout(runtimeAuthPath)
           return
@@ -63,7 +58,6 @@ export abstract class CodexRuntimeHomeAuthSync extends CodexRuntimeHomeLaunch {
         }
         return
       }
-      const systemDefaultAuth = readFileSync(systemDefaultAuthPath, 'utf-8')
       if (runtimeAuth === systemDefaultAuth) {
         this.writeRuntimeAuth(systemDefaultAuth, { owner: 'system-default' })
         return
@@ -213,9 +207,8 @@ export abstract class CodexRuntimeHomeAuthSync extends CodexRuntimeHomeLaunch {
   protected restoreSystemDefaultSnapshot(options: { detectExternalLogin: boolean }): void {
     const snapshotPath = this.getSystemDefaultSnapshotPath()
     const runtimeAuthPath = this.getRuntimeAuthPath()
-    const systemDefaultAuthPath = join(getSystemCodexHomePath(), 'auth.json')
-    if (existsSync(systemDefaultAuthPath)) {
-      const systemDefaultAuth = readFileSync(systemDefaultAuthPath, 'utf-8')
+    const systemDefaultAuth = this.readSystemDefaultAuth()
+    if (systemDefaultAuth !== null) {
       this.captureSystemDefaultSnapshot({ force: true })
       this.writeRuntimeAuth(systemDefaultAuth, { owner: 'system-default' })
       return
