@@ -37,3 +37,26 @@ it('opens the installed app’s messages in Slack, and shows nothing before it i
     }
   )
 })
+
+it('closes what shows it when the page opens in Orca’s own browser, and not when it opens elsewhere', () => {
+  const close = vi.fn()
+  render(
+    <SlackOpenAppButton
+      bot={bot}
+      slack={{
+        state: 'installed',
+        teamId: 'T05',
+        appId: 'A1',
+        botUserId: 'UB',
+        installerUserId: 'U07'
+      }}
+      onOpenedInOrca={close}
+    />
+  )
+  opened.open.mockReturnValueOnce('system')
+  fireEvent.click(screen.getByRole('button', { name: /Message it in Slack/ }))
+  expect(close).not.toHaveBeenCalled()
+  opened.open.mockReturnValueOnce('orca-browser')
+  fireEvent.click(screen.getByRole('button', { name: /Message it in Slack/ }))
+  expect(close).toHaveBeenCalledTimes(1)
+})

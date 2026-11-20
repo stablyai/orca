@@ -11,10 +11,13 @@ import { slackAppMessagesUrl } from './slack-install-link'
  *  Nothing while the app isn't installed. */
 export function SlackOpenAppButton({
   bot,
-  slack
+  slack,
+  onOpenedInOrca
 }: {
   bot: Pick<Bot, 'id' | 'name' | 'hostId'>
   slack: ConnectorBotSlackState | null | undefined
+  /** The page opened in Orca's own browser, behind whatever shows this button. */
+  onOpenedInOrca?: () => void
 }): React.JSX.Element | null {
   const t = useTranslate()
   if (slack?.state !== 'installed') {
@@ -23,12 +26,16 @@ export function SlackOpenAppButton({
   return (
     <Button
       variant="outline"
-      onClick={() =>
-        openBotHostPageOrSay(bot.hostId, slackAppMessagesUrl(slack.appId, slack.teamId), {
-          bot,
-          local: 'system'
-        })
-      }
+      onClick={() => {
+        const opened = openBotHostPageOrSay(
+          bot.hostId,
+          slackAppMessagesUrl(slack.appId, slack.teamId),
+          { bot, local: 'system' }
+        )
+        if (opened === 'orca-browser') {
+          onOpenedInOrca?.()
+        }
+      }}
     >
       {t('bots.slack.setup.openInSlack', 'Message it in Slack')}
       <ExternalLink />

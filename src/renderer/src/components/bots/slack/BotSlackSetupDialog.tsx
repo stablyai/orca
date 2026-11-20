@@ -330,7 +330,7 @@ function BotSlackSetupFlow({
               <BotSlackPostAs bot={bot} slack={installedState} setupState={step.setupState} />
             ) : null}
             <DialogFooter>
-              <SlackOpenAppButton bot={bot} slack={installedState} />
+              <SlackOpenAppButton bot={bot} slack={installedState} onOpenedInOrca={onClose} />
               <Button autoFocus onClick={onClose}>
                 {t('bots.slack.setup.done', 'Done')}
               </Button>
