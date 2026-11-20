@@ -8,12 +8,40 @@ import {
 } from '../acp/discovery/acp-model-catalog-probe'
 import { resolveAcpLaunchInvocation } from '../acp/launch/acp-structured-launch-resolution'
 import { ANTIGRAVITY_LAUNCH_SPEC } from './antigravity-acp-launch-spec'
-import { antigravityHostAccountHome, hasAgyCredential } from './antigravity-host-acp'
+import {
+  antigravityHostAccountHome,
+  hasAgyCredential,
+  isCompatibleAntigravityHostAcp
+} from './antigravity-host-acp'
 
 const homes: string[] = []
 afterEach(() => {
   vi.restoreAllMocks()
   homes.splice(0).forEach((home) => rmSync(home, { recursive: true, force: true }))
+})
+
+describe('isCompatibleAntigravityHostAcp', () => {
+  // agy 1.5.13's own initialize answer, trimmed to what the check reads.
+  const agyInitialize = (meta: Record<string, unknown>) => ({
+    protocolVersion: 1,
+    agentInfo: { name: 'Antigravity ACP Server', version: '1.5.13' },
+    agentCapabilities: {
+      loadSession: true,
+      sessionCapabilities: { resume: {}, list: {} },
+      _meta: meta
+    }
+  })
+
+  it("leaves an agy that can't append to its system prompt to Orca's own server", () => {
+    expect(
+      isCompatibleAntigravityHostAcp(
+        agyInitialize({ antigravity: { tier: true, systemPrompt: { append: true } } })
+      )
+    ).toBe(true)
+    expect(isCompatibleAntigravityHostAcp(agyInitialize({ antigravity: { tier: true } }))).toBe(
+      false
+    )
+  })
 })
 
 describe('hasAgyCredential', () => {

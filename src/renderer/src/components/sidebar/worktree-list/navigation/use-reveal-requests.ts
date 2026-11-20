@@ -159,7 +159,7 @@ export function useSidebarRevealRequests(args: {
               'sidebar.revealFiltered.description',
               'The active workspace is hidden in the sidebar. Revealing it will adjust only the filters hiding it.'
             ),
-            confirmLabel: translate('sidebar.revealFiltered.confirm', 'Adjust filters and reveal'),
+            confirmLabel: translate('sidebar.revealFiltered.confirm', 'Adjust & reveal'),
             cancelLabel: translate('sidebar.revealFiltered.cancel', 'Keep filters')
           })
         } finally {

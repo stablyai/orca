@@ -353,7 +353,7 @@ export function NewBotDialog({
                 className="flex items-center gap-1.5 rounded-sm text-xs text-muted-foreground outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
               >
                 <LayoutTemplate className="size-3.5" aria-hidden />
-                {t('bots.new.fromTemplate', 'Start from a template')}
+                {t('bots.new.fromTemplate', 'Use template')}
               </button>
             ) : null}
             <BotCreateButton

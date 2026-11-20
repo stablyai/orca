@@ -3,7 +3,9 @@ import { useShallow } from 'zustand/react/shallow'
 import { LayoutTemplate } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
+import { HoverCardContent } from '@/components/ui/hover-card'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { ActivityThreadHoverCardRoot } from '@/components/activity/thread-preview/activity-thread-hover-card-root'
 import { openBotHomeTab } from '@/lib/bot-catalog'
 import {
   readBotHostState,
@@ -27,6 +29,8 @@ import { structuredAgentSessionOwnerForTab } from '@/runtime/native-chat/session
 import { useAppStore } from '@/store'
 import { selectFrontTab } from '@/store/slices/tabs/active-tab-selection'
 import { BotAvatar } from './BotAvatar'
+import { BotHoverDetails, useBotRowDetails } from './BotHoverDetails'
+import { openBotHomePanelFromSidebar } from './BotRow'
 import { botErrorMessage } from './bot-presentation'
 import { botSidebarEntryKey } from './bot-sidebar-entry-keys'
 import { openBotTemplates } from './templates/bot-templates-open'
@@ -61,6 +65,7 @@ export function useBotPreviewFacts(rows: { bot: Bot; home: FolderWorkspace }[]) 
     return {
       ...facts,
       bot,
+      home,
       attention: facts.attention || itemsAttention.has(botSidebarEntryKey(bot))
     }
   })
@@ -105,6 +110,7 @@ export function BotCollapsedPreview({
   )
   const ref = useRef<HTMLSpanElement>(null)
   const [width, setWidth] = useState(0)
+  const [openCardKey, setOpenCardKey] = useState<string | null>(null)
   useLayoutEffect(() => {
     const node = ref.current
     if (!node) {
@@ -120,12 +126,19 @@ export function BotCollapsedPreview({
       activeChat.hostId === bot.hostId
   )
   const preview = collapsedBotPreview(facts, botPreviewCapacity(width, facts.length), current)
+  if (
+    openCardKey !== null &&
+    !preview.shown.some(({ bot }) => botSidebarEntryKey(bot) === openCardKey)
+  ) {
+    setOpenCardKey(null)
+  }
   const hiddenAttention = preview.hidden.filter((fact) => botPreviewSignal(fact) === 'attention')
   const overflowLabel = t('bots.section.showMore', 'Show {{count}} more bots', {
     count: preview.hidden.length,
     defaultValue_one: 'Show {{count}} more bot'
   })
   const openChat = (bot: Bot): void => {
+    setOpenCardKey(null)
     void openBotHomeTab(bot)
       .then((opened) => {
         if (opened) {
@@ -133,6 +146,10 @@ export function BotCollapsedPreview({
         }
       })
       .catch((error: unknown) => toast.error(botErrorMessage(error)))
+  }
+  const openHomePanel = (bot: Bot): void => {
+    setOpenCardKey(null)
+    openBotHomePanelFromSidebar(bot, onOpenBot)
   }
   return (
     <>
@@ -143,14 +160,24 @@ export function BotCollapsedPreview({
       >
         <span className="isolate flex items-center gap-1">
           {preview.shown.map((fact) => {
-            const name = label(fact, t)
+            const key = botSidebarEntryKey(fact.bot)
             const isCurrent = fact === current
+            const cardOpen = key === openCardKey
             return (
-              <Tooltip key={botSidebarEntryKey(fact.bot)}>
-                <TooltipTrigger asChild>
+              <ActivityThreadHoverCardRoot
+                key={key}
+                open={cardOpen}
+                onOpenChange={(open) =>
+                  setOpenCardKey(
+                    open ? key : (currentKey) => (currentKey === key ? null : currentKey)
+                  )
+                }
+                pointerOpenMode={openCardKey === null ? 'rest' : 'immediate'}
+                closeDelay={120}
+                trigger={
                   <button
                     type="button"
-                    aria-label={name}
+                    aria-label={label(fact, t)}
                     aria-current={isCurrent || undefined}
                     className={cn(
                       FACE_CLASS_NAME,
@@ -161,9 +188,24 @@ export function BotCollapsedPreview({
                     <BotAvatar bot={fact.bot} className="size-5 rounded-full text-2xs" />
                     <PreviewPip signal={botPreviewSignal(fact)} />
                   </button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom">{name}</TooltipContent>
-              </Tooltip>
+                }
+              >
+                {cardOpen ? (
+                  <HoverCardContent
+                    side="top"
+                    sideOffset={8}
+                    collisionPadding={8}
+                    variant="workspace-details"
+                    motion="none"
+                    className="max-h-(--radix-hover-card-content-available-height)"
+                  >
+                    <CollapsedBotHoverDetails
+                      fact={fact}
+                      onOpenHome={() => openHomePanel(fact.bot)}
+                    />
+                  </HoverCardContent>
+                ) : null}
+              </ActivityThreadHoverCardRoot>
             )
           })}
           {preview.hidden.length > 0 ? (
@@ -210,6 +252,11 @@ export function BotCollapsedPreview({
       ) : null}
     </>
   )
+}
+
+function CollapsedBotHoverDetails({ fact, onOpenHome }: { fact: Facts; onOpenHome: () => void }) {
+  const details = useBotRowDetails(fact.bot, fact.home)
+  return <BotHoverDetails bot={fact.bot} details={details} onOpenHome={onOpenHome} />
 }
 
 function PreviewPip({ signal }: { signal: ReturnType<typeof botPreviewSignal> }) {
