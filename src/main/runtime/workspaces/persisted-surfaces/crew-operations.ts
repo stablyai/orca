@@ -45,16 +45,17 @@ export abstract class OrcaRuntimeWithCrewOperations extends OrcaRuntimeWithWebho
         getPublishedHostDescriptor(this.runtimeId)?.installationId ?? this.runtimeId,
         previous
       ),
-    (wake, relevance) =>
+    (wake, relevance, idle) =>
       watchCrewRuntimeSources(
         {
           store: this.store,
-          watchChanges: this.crewChanges.subscribe,
+          watchChanges: this.crewChanges.subscribeWithIdle,
           watchTransitions: (listener) => this.agentTransitions.subscribe(listener),
           watchClient: (listener) => this.onClientEvent(listener)
         },
         wake,
-        relevance
+        relevance,
+        idle
       )
   )
 

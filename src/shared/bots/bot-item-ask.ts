@@ -138,14 +138,16 @@ export function botItemPickedReplies(
 ): BotItemQuickReply[][] {
   const text = typeof reply.text === 'string' ? reply.text.trim() : ''
   const recorded = Array.isArray(reply.decisions) ? reply.decisions : null
+  // With several questions, one comment can answer each on its own line.
+  const lines = shape.decisions.length > 1 ? text.split('\n').map((line) => line.trim()) : [text]
   return shape.decisions.map((decision, index) => {
     const picks: unknown = recorded?.[index]?.picks
     if (Array.isArray(picks)) {
       // A pick-several decision kept every pick.
       return decision.replies.filter((_, at) => picks.includes(at))
     }
-    return decision.replies.filter(
-      (option) => botItemQuickReplyText(shape, decision, option) === text
+    return decision.replies.filter((option) =>
+      lines.includes(botItemQuickReplyText(shape, decision, option))
     )
   })
 }

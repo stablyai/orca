@@ -1,10 +1,21 @@
 import { describe, expect, it } from 'vitest'
 import type { Nodes } from 'hast'
 import { MarkdownPreviewDocumentEngine } from './markdown-preview-document-engine'
-import { parseMarkdownPreviewDocument } from './markdown-preview-document-tree'
+import {
+  parseMarkdownPreviewDocument,
+  renderMarkdownPreviewBlock
+} from './markdown-preview-document-tree'
 
 function elements(node: Nodes): Nodes[] {
   return [node, ...('children' in node ? node.children.flatMap(elements) : [])]
+}
+
+function highlightClasses(node: Nodes): string[] {
+  return elements(node).flatMap((child) =>
+    child.type === 'element' && Array.isArray(child.properties.className)
+      ? child.properties.className.map(String)
+      : []
+  )
 }
 
 describe('large Markdown preview documents', () => {
@@ -41,4 +52,21 @@ describe('large Markdown preview documents', () => {
     expect(result?.matches).toHaveLength(3)
     expect(result?.matches.every((match) => match.block > 90)).toBe(true)
   })
+})
+
+describe('Markdown preview code highlighting', () => {
+  it.each(['powershell', 'ps1', 'pwsh'])(
+    'highlights a %s fence the rich editor already colors',
+    (language) => {
+      const { tree } = parseMarkdownPreviewDocument(
+        [`\`\`\`${language}`, 'Get-ChildItem -Path .', '```'].join('\n')
+      )
+      const block = tree.children[0]
+      if (!block) {
+        throw new Error('missing preview block')
+      }
+      const rendered = renderMarkdownPreviewBlock(block, 0)
+      expect(highlightClasses(rendered.tree)).toContain('hljs-built_in')
+    }
+  )
 })

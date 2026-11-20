@@ -8,11 +8,30 @@ import {
   readyAntigravityHostAcpVersion
 } from '../../../../antigravity/antigravity-host-acp'
 import { getStructuredAgentSessionHost } from '../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
-import { structuredAgentHostAlternativeReady } from '../../../agent-session/launch/structured-agent-launch-support'
+import { resolveHostStructuredAgentLaunchEnvironment } from '../../../agent-session/launch/structured-agent-launch-support'
+import { acpHostBackendInput } from '../../../../acp/launch/acp-launch-command'
+import {
+  ANTIGRAVITY_LAUNCH_SPEC,
+  antigravityHostChatRoute
+} from '../../../../antigravity/antigravity-acp-launch-spec'
+import { getProfileUserDataPath } from '../../../../orca-profiles/profile-storage-paths'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import { withTimeout } from '../../../../../shared/concurrency/promise-timeout-fallback'
 
 const CHAT_BACKEND_WAIT_MS = 1_500
+
+/** Where new chats on this host run; an unreadable answer reads as Orca's server. */
+async function hostChatRoute(runtime: OrcaRuntimeService) {
+  const settings = runtime.requireStore().getSettings()
+  const env = await resolveHostStructuredAgentLaunchEnvironment('antigravity', settings)
+  const input = await acpHostBackendInput(
+    ANTIGRAVITY_LAUNCH_SPEC,
+    env,
+    getProfileUserDataPath(),
+    settings
+  )
+  return input ? (await antigravityHostChatRoute(input)).agy : false
+}
 
 /** Adds whether new chats on this host run on agy, and so on the account these rows switch. */
 export async function withAntigravityChatBackend(
@@ -25,16 +44,21 @@ export async function withAntigravityChatBackend(
     return state
   }
   // A cold agy check takes seconds; the rows don't wait for it, and a later refresh shows it.
-  const chatUsesAgy = await withTimeout<boolean | null>(
-    structuredAgentHostAlternativeReady('antigravity', runtime),
+  const agy = await withTimeout(
+    hostChatRoute(runtime).catch(() => false as const),
     CHAT_BACKEND_WAIT_MS,
     null
   )
-  if (chatUsesAgy === null) {
+  if (agy === null) {
     return state
   }
-  const version = chatUsesAgy ? readyAntigravityHostAcpVersion() : null
-  return { ...state, chatUsesAgy, ...(version ? { chatAgyVersion: version } : {}) }
+  const version = agy === 'signedIn' ? readyAntigravityHostAcpVersion() : null
+  return {
+    ...state,
+    chatUsesAgy: agy === 'signedIn',
+    chatAgySignedOut: agy === 'signedOut',
+    ...(version ? { chatAgyVersion: version } : {})
+  }
 }
 
 /** A running `agy acp` may keep the login it started with, so idle chats on agy stop and resume on

@@ -1,6 +1,5 @@
 import { useRef } from 'react'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
-import '@/lib/keyboard/useShortcutLabel'
 import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
 import { useTranslate } from '@/i18n/use-translate'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/identifiers/non-secure-context-uuid'
@@ -11,6 +10,8 @@ import {
 import { iterateBrowserTextInsertionChunks } from '../../../../../shared/browser/automation/browser-text-insertion-chunks'
 import { assertClipboardTextWithinLimitWithYield } from '../../../../../shared/clipboard/clipboard-text'
 import { isEditableKeyboardTarget } from '../host-guest/input/browser-keyboard'
+import { useAppStore } from '@/store'
+import { keybindingMatchesAction } from '../../../../../shared/keybindings/matching'
 import {
   getRemoteBrowserKeyboardShortcut,
   getRemoteBrowserKeypressKey
@@ -53,6 +54,7 @@ type RemoteKeyboardInput =
   | { method: 'execCommand'; command: 'undo' | 'redo' | 'selectAll' }
 
 export function useRemoteBrowserPageKeyboard({
+  pickerAvailable,
   runtimeTarget,
   lifecycle,
   runtimeWorktree,
@@ -63,6 +65,7 @@ export function useRemoteBrowserPageKeyboard({
   scheduleRemoteTabInfoRefresh,
   setPaneNotice
 }: {
+  pickerAvailable: boolean
   runtimeTarget: () => RemoteBrowserRuntimeTarget | null
   lifecycle: RemoteBrowserStreamLifecycle
   runtimeWorktree: string
@@ -141,6 +144,9 @@ export function useRemoteBrowserPageKeyboard({
     const rpcOptions = { timeoutMs: 15_000, suppressFeatureInteraction: true }
     setPaneNotice(null)
     enqueueRemoteInput(async () => {
+      if (!isCurrentRemoteOperationToken(operationToken)) {
+        return
+      }
       try {
         if (input.method === 'browser.keyboardInsertText') {
           // Why: a paste pressed before our queued copy finished carries the clipboard from before it.
@@ -210,6 +216,18 @@ export function useRemoteBrowserPageKeyboard({
 
   const handleRemoteScreenshotKeyDown = (event: React.KeyboardEvent<HTMLImageElement>): void => {
     if (isEditableKeyboardTarget(event.target)) {
+      return
+    }
+    // The annotate chord arms the picker here; typing it into the page too would double-act.
+    if (
+      pickerAvailable &&
+      keybindingMatchesAction(
+        'browser.annotateElement',
+        event.nativeEvent,
+        getShortcutPlatform(),
+        useAppStore.getState().keybindings
+      )
+    ) {
       return
     }
     const clipboardCommand = getNativeClipboardChordCommand(

@@ -169,7 +169,7 @@ describe('Interactive wait visibility and terminal admission', () => {
       })
     })
 
-    it('still reports a live dialog restored from terminal history', async () => {
+    it('reports a restored live dialog until the owning process exits', async () => {
       // Restored bottom-of-screen menus prove wait even without waitBlockedAt; parked agents emit no new bytes after restart.
       const { runtime, handle } = await createPane({
         paneTitle: CURSOR_TITLE,
@@ -182,6 +182,9 @@ describe('Interactive wait visibility and terminal admission', () => {
         source: 'prompt-text',
         reason: 'agent-approval-prompt'
       })
+
+      runtime.onPtyExit(PTY_ID, 0)
+      await expect(runtime.getTerminalInteractiveWait(handle)).resolves.toBeUndefined()
     })
 
     it('does not resurrect a startup modal from a restored tail', async () => {
@@ -194,20 +197,6 @@ describe('Interactive wait visibility and terminal admission', () => {
       runtime.seedTerminalRestoreTail(PTY_ID, { text: CLAUDE_TRUST })
 
       await expect(runtime.getTerminalInteractiveWait(handle)).resolves.toBeNull()
-    })
-
-    it('stops reporting a wait once the pane is no longer running', async () => {
-      // Dead panes retain menu text indefinitely; lost processes need intervention, not a prompt answer.
-      const { runtime, handle } = await createPane({
-        paneTitle: CURSOR_TITLE,
-        foregroundProcess: 'cursor-agent',
-        data: CURSOR_APPROVAL
-      })
-      await expect(runtime.getTerminalInteractiveWait(handle)).resolves.not.toBeNull()
-
-      runtime.onPtyExit(PTY_ID, 0)
-
-      await expect(runtime.getTerminalInteractiveWait(handle)).resolves.toBeUndefined()
     })
 
     it('leaves the wait unevaluated when the foreground probe wedges', async () => {

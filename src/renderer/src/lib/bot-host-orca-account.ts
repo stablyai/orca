@@ -136,16 +136,19 @@ function setSignIn(hostId: ExecutionHostId, view: BotHostSignInView): void {
 /**
  * "Sign <server> in to Orca" / "Sign <server> in again": any account; Orca Cloud's page warns
  * before it moves the host to another one. `bot` lends its workspace for the host's page.
+ * A host that is still signed in locally is re-authenticated with switch. A plain start is
+ * refused while one is signed in.
  */
 export async function startBotHostSignIn(hostId: ExecutionHostId, bot?: BotRef): Promise<void> {
   const entry = entryOf(hostId)
+  const switchAccount = entry.status?.state === 'signed-in'
   setSignIn(hostId, { phase: 'starting' })
   let flow: OrcaAccountSignInStatus
   try {
     flow = await callRuntimeRpc<OrcaAccountSignInStatus>(
       botHostTarget(hostId),
       'orcaAccount.signIn.start',
-      { approveInBrowser: true, switchAccount: false }
+      { approveInBrowser: true, switchAccount }
     )
   } catch (error) {
     setSignIn(hostId, { phase: 'failed', error: messageOf(error) })

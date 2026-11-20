@@ -5,8 +5,8 @@ import { Check } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
-import { useTranslate } from '@/i18n/use-translate'
-import { useBots } from '@/lib/bot-catalog'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
+import { useBotHostConnectorStatus, useCardBot } from '@/lib/bot-catalog'
 import { useBotGitHub } from '@/lib/bot-github-state'
 import { slackTeamState, useBotSlack } from '@/lib/bot-slack-state'
 import { connectorDescription } from '../bots/AddConnectorDialog'
@@ -22,9 +22,18 @@ import {
 } from '../../../../shared/bots/bot-connector-offer'
 import { googleBotConnectState } from '../../../../shared/google/google-bot-connect-state'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
-import { NativeChatCardFrame } from './NativeChatCardFrame'
+import {
+  NativeChatCardActions,
+  NativeChatCardFrame,
+  NativeChatCardStatus
+} from './NativeChatCardFrame'
 import { NativeChatOfferActions, useNativeChatOffer } from './NativeChatOfferActions'
-import { OrcaCloudSignInLine } from '../bots/orca-cloud-sign-in'
+import { OrcaCloudSignInButton, OrcaCloudSignInLine } from '../bots/orca-cloud-sign-in'
+import { selectExecutionHostDisplayLabel } from '@/runtime/hosts/display/execution-host-display-label'
+import { useAppStore } from '@/store'
+import { BotHostSignInControl } from '../bots/BotConnectorsHostNotice'
+import { useBotHostLabel } from '../bots/use-bot-host-label'
+import { useBotHostOrcaAccount } from '@/lib/bot-host-orca-account'
 import { useOrcaCloudSignedOut } from '../bots/orca-cloud-signed-out'
 
 type OfferProps = {
@@ -107,12 +116,35 @@ function OfferCard({
     (wanted
       ? names.some((name) => name.toLowerCase() === wanted)
       : connectorAdded(bot, offer.source))
+  const hostStatus = useBotHostConnectorStatus(bot.hostId)
+  // Its events come through Orca Cloud, so they wait while the bot's host is signed out of it.
+  const paused = connected && offer.source !== 'google' && hostStatus === 'signed-out'
   const label = connector?.label ?? offer.source
-  const heading = connected
-    ? t('components.native-chat.connectorOffer.connected', 'Connected')
-    : t('components.native-chat.connectorOffer.connect', 'Connect')
   const footnote = offerFootnote(offer.source)
   const addsWorkspace = offer.workspace !== undefined && connectorAdded(bot, offer.source)
+  const actionLabel = addsWorkspace
+    ? offer.source === 'github'
+      ? t('components.native-chat.connectorOffer.addOrg', 'Add org')
+      : t('components.native-chat.connectorOffer.addWorkspace', 'Add workspace')
+    : t('components.native-chat.connectorOffer.connectService', 'Connect {{service}}', {
+        service: label
+      })
+  const footer = paused ? undefined : connected ? (
+    // Connected still adds access: GitHub repositories or organizations, or another workspace.
+    offer.source === 'google' ? undefined : (
+      <NativeChatCardActions>
+        <Button type="button" variant="outline" size="sm" onClick={() => setup.start(offer.source)}>
+          {connectorAddAccessLabel(offer.source)}
+        </Button>
+      </NativeChatCardActions>
+    )
+  ) : (
+    <NativeChatOfferActions offer={answering}>
+      <Button type="button" size="sm" onClick={() => setup.start(offer.source)}>
+        {actionLabel}
+      </Button>
+    </NativeChatOfferActions>
+  )
   return (
     <NativeChatCardFrame
       avatar={
@@ -120,106 +152,174 @@ function OfferCard({
           <BotAppBrandLogo app={connector ?? { id: offer.source }} />
         </span>
       }
-      heading={heading}
+      heading={t('components.native-chat.connectorOffer.heading', 'Connect a service')}
+      status={
+        connected && !paused ? (
+          <NativeChatCardStatus tone="success">
+            {t('components.native-chat.connectorOffer.connected', 'Connected')}
+          </NativeChatCardStatus>
+        ) : null
+      }
+      title={offer.workspace ? `${label} · ${offer.workspace}` : label}
+      footer={footer}
     >
-      <div className="flex items-end justify-between gap-3">
-        <div className="min-w-0">
-          <p className="truncate text-sm font-medium text-foreground">
-            {offer.workspace ? `${label} · ${offer.workspace}` : label}
+      {paused ? (
+        <PausedLine bot={bot} />
+      ) : connected ? (
+        names.length > 0 ? (
+          <p className="text-xs text-muted-foreground">
+            {t('components.native-chat.connectorOffer.connectedIn', 'Connected in {{places}}', {
+              places: names.join(', ')
+            })}
           </p>
-          {connected ? (
-            <p className="flex items-center gap-1 text-xs text-muted-foreground">
-              <Check className="size-3" aria-hidden />
-              {names.length > 0
-                ? t(
-                    'components.native-chat.connectorOffer.connectedIn',
-                    'Connected in {{places}}',
-                    {
-                      places: names.join(', ')
-                    }
-                  )
-                : t('components.native-chat.connectorOffer.connected', 'Connected')}
-            </p>
-          ) : (
-            <>
-              <p className="text-xs text-muted-foreground">{connectorDescription(offer.source)}</p>
-              {footnote ? <p className="mt-1 text-2xs text-muted-foreground">{footnote}</p> : null}
-            </>
-          )}
-        </div>
-        <NativeChatOfferActions offer={answering} done={connected}>
-          <Button type="button" size="xs" onClick={() => setup.start(offer.source)}>
-            {addsWorkspace
-              ? offer.source === 'github'
-                ? t('components.native-chat.connectorOffer.addOrg', 'Add org')
-                : t('components.native-chat.connectorOffer.addWorkspace', 'Add workspace')
-              : t('components.native-chat.connectorOffer.connect', 'Connect')}
-          </Button>
-        </NativeChatOfferActions>
-      </div>
-      {connected && offer.source !== 'google' ? (
-        // Connected still adds access: GitHub repositories or organizations, or another workspace.
-        <Button
-          type="button"
-          variant="outline"
-          size="xs"
-          className="mt-2"
-          onClick={() => setup.start(offer.source)}
-        >
-          {connectorAddAccessLabel(offer.source)}
-        </Button>
-      ) : null}
+        ) : null
+      ) : (
+        <>
+          <p className="mt-0.5">{connectorDescription(offer.source)}</p>
+          {footnote ? <p className="mt-0.5 text-xs text-muted-foreground">{footnote}</p> : null}
+        </>
+      )}
       {setup.dialogs}
     </NativeChatCardFrame>
   )
 }
 
-/** Signed out of Orca: one line with Sign in, which tells the bot once signed in so it saves what it held. */
-function SignInOffer({
-  bot,
-  offer,
-  messageId
+/** A connected service whose host is signed out of Orca: the line the phone shows, and that host's sign-in. */
+function PausedLine({ bot }: { bot: Bot }): React.JSX.Element {
+  const t = useTranslate()
+  const server = useBotHostLabel(bot.hostId)
+  const host = useAppStore((state) => server ?? selectExecutionHostDisplayLabel(state, bot.hostId))
+  return (
+    <div className="flex flex-col gap-1.5 text-xs text-muted-foreground">
+      <p>
+        {t(
+          'components.native-chat.connectorOffer.paused',
+          'Paused until {{host}} signs in to Orca.',
+          {
+            host
+          }
+        )}
+      </p>
+      {server ? (
+        <BotHostSignInControl
+          hostId={bot.hostId}
+          host={server}
+          bot={bot}
+          label={t('bots.host.signIn.start', 'Sign in on {{host}}', { host: server })}
+          firstSignIn
+        />
+      ) : bot.hostId === LOCAL_EXECUTION_HOST_ID ? (
+        <OrcaCloudSignInButton variant="outline" size="xs" className="self-start" />
+      ) : null}
+    </div>
+  )
+}
+
+type SignInOfferProps = { bot: Bot; offer: ConnectorOffer; messageId: string }
+
+function signInOfferText(offer: ConnectorOffer, t: Translate): string {
+  return offer.source === 'webhook'
+    ? t('bots.cloudSignIn.webhooksChat', 'Webhooks need Orca sign-in. I’ll make it once you’re in.')
+    : t(
+        'bots.cloudSignIn.eventsChat',
+        '{{source}} events need Orca sign-in. I’ll save this rule once you’re in.',
+        { source: CONNECTOR_OFFER_NAMES[offer.source] }
+      )
+}
+
+/** Signed in: Continue tells the bot, so it saves what it held. */
+function SignedInLine({
+  answering
 }: {
-  bot: Bot
-  offer: ConnectorOffer
-  messageId: string
+  answering: ReturnType<typeof useNativeChatOffer>
 }): React.JSX.Element {
+  const t = useTranslate()
+  return (
+    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+      <p className="flex min-w-0 flex-1 items-center gap-1">
+        <Check className="size-3" aria-hidden />
+        {t('bots.cloudSignIn.signedIn', 'Signed in to Orca')}
+      </p>
+      {answering.sent ? null : (
+        <Button type="button" variant="outline" size="xs" onClick={() => tellBot(answering)}>
+          {t('bots.cloudSignIn.continue', 'Continue')}
+        </Button>
+      )}
+    </div>
+  )
+}
+
+function tellBot(answering: ReturnType<typeof useNativeChatOffer>): void {
+  answering.send(translate('bots.cloudSignIn.toldBot', 'I’m signed in to Orca now.'), [])
+}
+
+/** This computer signed out of Orca: one line with Sign in, which tells the bot once signed in. */
+function SignInOffer({ bot, offer, messageId }: SignInOfferProps): React.JSX.Element {
   const t = useTranslate()
   const answering = useNativeChatOffer(bot.id, messageId)
   const signedOut = useOrcaCloudSignedOut(bot.hostId)
-  const tellBot = (): void =>
-    answering.send(t('bots.cloudSignIn.toldBot', 'I’m signed in to Orca now.'), [])
   if (!signedOut || answering.sent) {
-    return (
-      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-        <p className="flex min-w-0 flex-1 items-center gap-1">
-          <Check className="size-3" aria-hidden />
-          {t('bots.cloudSignIn.signedIn', 'Signed in to Orca')}
-        </p>
-        {answering.sent ? null : (
-          <Button type="button" variant="outline" size="xs" onClick={tellBot}>
-            {t('bots.cloudSignIn.continue', 'Continue')}
-          </Button>
-        )}
-      </div>
-    )
+    return <SignedInLine answering={answering} />
   }
   return (
-    <OrcaCloudSignInLine
-      text={
-        offer.source === 'webhook'
-          ? t(
-              'bots.cloudSignIn.webhooksChat',
-              'Webhooks need Orca sign-in. I’ll make it once you’re in.'
-            )
-          : t(
-              'bots.cloudSignIn.eventsChat',
-              '{{source}} events need Orca sign-in. I’ll save this rule once you’re in.',
-              { source: CONNECTOR_OFFER_NAMES[offer.source] }
-            )
-      }
-      onSignedIn={tellBot}
-    />
+    <OrcaCloudSignInLine text={signInOfferText(offer, t)} onSignedIn={() => tellBot(answering)} />
+  )
+}
+
+/** The server the bot runs on signed out of Orca: Sign in on that server, as its Connectors notice does. */
+function ServerSignInOffer(
+  props: SignInOfferProps & { host: string; fallback: string }
+): React.JSX.Element {
+  const answering = useNativeChatOffer(props.bot.id, props.messageId)
+  // An answered card reads nothing from the server.
+  return answering.sent ? (
+    <SignedInLine answering={answering} />
+  ) : (
+    <ServerSignInAsk {...props} answering={answering} />
+  )
+}
+
+function ServerSignInAsk({
+  bot,
+  offer,
+  host,
+  fallback,
+  answering
+}: SignInOfferProps & {
+  host: string
+  fallback: string
+  answering: ReturnType<typeof useNativeChatOffer>
+}): React.JSX.Element {
+  const t = useTranslate()
+  const account = useBotHostOrcaAccount(bot.hostId)
+  // The host's own fact, as its CLI and the phone read it: events wait while its connector is signed out.
+  const connector = useBotHostConnectorStatus(bot.hostId)
+  // An Orca that can't say its sign-in, or can't sign in, keeps its own line.
+  if (!account || account.state === 'unconfigured') {
+    return <p className="text-sm text-chat-foreground-faint">{fallback}</p>
+  }
+  if (
+    account.state === 'signed-in' &&
+    connector !== 'signed-out' &&
+    connector !== 'needs-sign-in'
+  ) {
+    return <SignedInLine answering={answering} />
+  }
+  return (
+    <div role="status" className="flex flex-col gap-1.5 text-xs text-muted-foreground">
+      <p>{signInOfferText(offer, t)}</p>
+      <BotHostSignInControl
+        hostId={bot.hostId}
+        host={host}
+        bot={bot}
+        label={
+          account.state === 'signed-out'
+            ? t('bots.host.signIn.start', 'Sign in on {{host}}', { host })
+            : t('bots.host.signIn.again', 'Sign {{host}} in again', { host })
+        }
+        firstSignIn={account.state === 'signed-out'}
+      />
+    </div>
   )
 }
 
@@ -233,14 +333,24 @@ export function NativeChatConnectorOfferCard({
   /** The host's line, for a bot this window doesn't list. */
   fallback: string
 }): React.JSX.Element {
-  const bot = useBots().find((entry) => entry.id === offer.botId)
+  const { bot } = useCardBot(offer.botId)
+  const host = useBotHostLabel(bot?.hostId ?? LOCAL_EXECUTION_HOST_ID)
   if (!bot) {
     return <p className="text-sm text-chat-foreground-faint">{fallback}</p>
   }
   if (offer.signIn || offer.source === 'webhook') {
-    // Sign in here signs in only this desktop; another host's bot keeps the host's own line.
-    return bot.hostId === LOCAL_EXECUTION_HOST_ID ? (
-      <SignInOffer bot={bot} offer={offer} messageId={messageId} />
+    // The sign-in is the one of the computer the bot runs on; a server this window can't name keeps its line.
+    if (bot.hostId === LOCAL_EXECUTION_HOST_ID) {
+      return <SignInOffer bot={bot} offer={offer} messageId={messageId} />
+    }
+    return host ? (
+      <ServerSignInOffer
+        bot={bot}
+        offer={offer}
+        messageId={messageId}
+        host={host}
+        fallback={fallback}
+      />
     ) : (
       <p className="text-sm text-chat-foreground-faint">{fallback}</p>
     )

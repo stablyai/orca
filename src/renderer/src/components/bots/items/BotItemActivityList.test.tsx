@@ -119,7 +119,7 @@ const WAITING: BotItemEvent[] = [
 ]
 
 it("posts a quick reply as the owner's comment, and Alt-click puts it in the box instead", () => {
-  const actions = { send: vi.fn(), edit: vi.fn(), type: vi.fn() }
+  const actions = { send: vi.fn(), edit: vi.fn(), recover: vi.fn(), type: vi.fn() }
   const item = makeTestBotItem(6, {
     status: 'needs_you',
     question: { eventId: 'e2', text: 'readable copy' }
@@ -135,7 +135,7 @@ it("posts a quick reply as the owner's comment, and Alt-click puts it in the box
   expect(actions.type).toHaveBeenCalledOnce()
 })
 
-it('shows an answer an older host recorded as a quoted comment, the question keeping only its pick', () => {
+it('shows an answer an older host recorded as a quoted comment, the question reading Question → pick', () => {
   const events: BotItemEvent[] = [
     ...WAITING,
     {
@@ -158,14 +158,14 @@ it('shows an answer an older host recorded as a quoted comment, the question kee
       bot={BOT}
       item={makeTestBotItem(6)}
       events={events}
-      quickReplies={{ send: vi.fn(), edit: vi.fn(), type: vi.fn() }}
+      quickReplies={{ send: vi.fn(), edit: vi.fn(), recover: vi.fn(), type: vi.fn() }}
     />
   )
 
   expect(screen.queryByRole('button', { name: /^Go ahead/ })).toBeNull()
   expect(screen.queryByText('Needs you')).toBeNull()
   const question = document.querySelector('[data-bot-item-question="closed"]')!
-  expect(question.textContent).toBe('Go ahead without the design review?Wait')
+  expect(question.textContent).toBe('Go ahead without the design review? → Wait')
   expect(
     screen.getByRole('button', { name: /^Replying to: Go ahead without the design review\?/ })
   ).toBeTruthy()

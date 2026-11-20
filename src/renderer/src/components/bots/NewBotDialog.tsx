@@ -34,7 +34,11 @@ import {
   type ExecutionHostId
 } from '../../../../shared/execution-host/execution-host'
 import { useBotAgentSetup } from './use-bot-agent-setup'
-import { proposalCreateParams, type BotProposal } from '../../../../shared/bots/bot-proposal'
+import {
+  proposalCreateParams,
+  proposalIdentity,
+  type BotProposal
+} from '../../../../shared/bots/bot-proposal'
 import {
   BOTS_AVATAR_COLOR_RUNTIME_CAPABILITY,
   BOTS_TEMPLATES_RUNTIME_CAPABILITY
@@ -45,16 +49,25 @@ import { DEFAULT_BOT_AVATAR_COLOR } from '../../../../shared/bots/bot-avatar-col
 import { botTemplate, type BotTemplateSkill } from '../../../../shared/bots/bot-templates'
 import { NewBotTemplateParts } from './NewBotTemplateParts'
 import type { BotCreateParams } from '../../../../shared/rpc-contract/bots-params'
-import { NewBotProposalFields, type NewBotProposalDraft } from './NewBotProposalFields'
-import { NewBotPurposeField } from './NewBotPurposeField'
+import {
+  NewBotProposalFields,
+  NewBotTakesOver,
+  type NewBotProposalDraft
+} from './NewBotProposalFields'
+import { NewBotPurposeField, PURPOSE_MAX_LENGTH } from './NewBotPurposeField'
 import { BotCreateButton } from './BotCreateButton'
 import { BARE_HEADING_CLASS, keyboardNavMarkerHandlers } from './new-bot-bare-fields'
 import { openBotTemplates } from './templates/bot-templates-open'
+import { pictureTintFor } from './avatar-picture-tint'
 
 type NewBotDraft = NewBotProposalDraft & { purpose: string }
 
+/** A template's identity box: what it watches, does and reports, one editable text. */
+const templateIdentity = (proposal: BotProposal | undefined): string | undefined =>
+  (proposal && botTemplate(proposal.templateId) && proposalIdentity(proposal)) || undefined
+
 const draftOf = (proposal: BotProposal | undefined, purpose?: string): NewBotDraft => ({
-  purpose: proposal?.purpose ?? purpose ?? '',
+  purpose: templateIdentity(proposal) ?? proposal?.purpose ?? purpose ?? '',
   watches: proposal?.watches,
   does: proposal?.does,
   reports: proposal?.reports
@@ -75,6 +88,20 @@ function editedProposal(
   name: string
 ): BotProposal | null {
   const purpose = draft.purpose.trim()
+  const identity = templateIdentity(proposal)
+  if (proposal && identity !== undefined) {
+    // Untouched, the template's own lines seed SOUL.md; edited, the identity text replaces them.
+    return purpose === identity
+      ? { ...proposal, name }
+      : {
+          ...proposal,
+          name,
+          purpose: purpose || proposal.purpose,
+          watches: undefined,
+          does: undefined,
+          reports: undefined
+        }
+  }
   if (proposal) {
     return {
       ...proposal,
@@ -152,12 +179,23 @@ export function NewBotDialog({
   )
   // Pasted, dropped and uploaded pictures, from the dialog and the picture popover alike.
   const intake = useBotAvatarIntakeState({ onPicture: picture.placeUpload, undoable: false })
+  const prefilledIdentity = templateIdentity(proposal)
+  // An edited template identity becomes the bot's purpose, so it keeps the purpose's limit.
+  const identityTooLong =
+    prefilledIdentity !== undefined &&
+    draft.purpose.trim() !== prefilledIdentity &&
+    draft.purpose.trim().length > PURPOSE_MAX_LENGTH
   // A picture still being read would miss the bot, so Create waits for it.
   const canCreate =
-    !creating && !blocked && choices.length > 0 && trimmedName.length > 0 && !intake.reading
+    !creating &&
+    !blocked &&
+    choices.length > 0 &&
+    trimmedName.length > 0 &&
+    !intake.reading &&
+    !identityTooLong
   // From Bot templates itself (Blank bot), the row would only lead back to it.
   const fromTemplates = useAppStore((state) => state.activeModal === 'bot-templates')
-  // From a template: what it comes with, its skills kept unless unticked; an older host takes the seed only.
+  // From a template: what it comes with, its skills kept unless switched off; an older host takes the seed only.
   const template = botTemplate(proposal?.templateId)
   const templatePackages = useBotHostHas(hostId, BOTS_TEMPLATES_RUNTIME_CAPABILITY)
   const [kept, setKept] = useState<ReadonlySet<BotTemplateSkill>>(
@@ -231,8 +269,12 @@ export function NewBotDialog({
   }
 
   const showTemplateLink = !proposal && !fromTemplates && !name && !draft.purpose
+  // A mascot's band is its tile color; a picture's is its background's, read when it was taken in.
+  const band = picture.shownUpload
+    ? pictureTintFor(picture.shownUpload)
+    : (picture.color ?? DEFAULT_BOT_AVATAR_COLOR)
   const bandStyle: React.CSSProperties & { '--new-bot-band': string } = {
-    '--new-bot-band': picture.color ?? DEFAULT_BOT_AVATAR_COLOR
+    '--new-bot-band': band ?? DEFAULT_BOT_AVATAR_COLOR
   }
 
   return (
@@ -242,15 +284,20 @@ export function NewBotDialog({
         showCloseButton
         className={cn(
           'max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] grid-rows-[auto_minmax(0,1fr)] overflow-hidden',
-          proposal && 'max-w-xl sm:max-w-xl'
+          proposal && !template && 'max-w-xl sm:max-w-xl'
         )}
         // Only a proposal's origin describes it; without one there is no description to point at.
         {...(origin ? {} : { 'aria-describedby': undefined })}
         {...keyboardNavMarkerHandlers}
         onOpenAutoFocus={(event) => {
-          // The name, not Radix's first tabbable (the picture), so typing names the bot.
           event.preventDefault()
-          nameRef.current?.focus()
+          // A template's name is already set: focus stays off it, so a long one shows its start with
+          // "…"; ⌘↩ still creates. Otherwise the name, not Radix's first tabbable, so typing names the bot.
+          if (template) {
+            formRef.current?.focus()
+          } else {
+            nameRef.current?.focus()
+          }
         }}
         onCloseAutoFocus={(event) => {
           // The new bot's page is opening and its composer takes focus; the New bot button must not.
@@ -263,8 +310,9 @@ export function NewBotDialog({
           }
         }}
       >
-        {/* A soft band of the picture's colour behind the top of the dialog; an upload has none. */}
-        {picture.shownUpload ? null : (
+        {/* A soft band of the picture's colour behind the top of the dialog; none for a picture whose
+            edge is transparent. */}
+        {band === null ? null : (
           <div
             aria-hidden
             style={bandStyle}
@@ -277,7 +325,8 @@ export function NewBotDialog({
         </DialogHeader>
         <form
           ref={formRef}
-          className="flex min-h-0 flex-col gap-4"
+          tabIndex={-1}
+          className="flex min-h-0 flex-col gap-4 outline-none"
           onSubmit={(event) => void handleSubmit(event)}
           onKeyDown={(event) => {
             if (
@@ -302,20 +351,22 @@ export function NewBotDialog({
               />
             ) : null}
             <div className="space-y-3 pt-1">
-              <NewBotPictureButton picture={picture} intake={intake} />
-              <ImeInput
-                ref={nameRef}
-                className={BARE_HEADING_CLASS}
-                aria-label={t('bots.new.name', 'Name')}
-                autoComplete="off"
-                spellCheck={false}
-                value={name}
-                maxLength={BOT_NAME_MAX_LENGTH}
-                placeholder={t('bots.new.name', 'Name')}
-                onChange={(event) => setName(event.target.value)}
-              />
+              <NewBotPictureButton picture={picture} intake={intake}>
+                <ImeInput
+                  ref={nameRef}
+                  className={BARE_HEADING_CLASS}
+                  aria-label={t('bots.new.name', 'Name')}
+                  autoComplete="off"
+                  spellCheck={false}
+                  value={name}
+                  maxLength={BOT_NAME_MAX_LENGTH}
+                  placeholder={t('bots.new.name', 'Name')}
+                  onChange={(event) => setName(event.target.value)}
+                />
+              </NewBotPictureButton>
               <NewBotPurposeField
                 value={draft.purpose}
+                prefilled={prefilledIdentity}
                 onChange={(purpose) => setDraft({ ...draft, purpose })}
               />
             </div>
@@ -328,15 +379,7 @@ export function NewBotDialog({
               onSetupChange={agentSetup.setSetup}
               onAddHost={hosts ? undefined : setAddHostMode}
             />
-            {proposal ? (
-              <div className="border-t border-border pt-4">
-                <NewBotProposalFields
-                  draft={draft}
-                  worktrees={proposal.worktrees}
-                  onChange={(fields) => setDraft({ ...draft, ...fields })}
-                />
-              </div>
-            ) : null}
+            {template ? <NewBotTakesOver worktrees={proposal?.worktrees} /> : null}
             {template ? (
               <NewBotTemplateParts
                 template={template}
@@ -353,6 +396,14 @@ export function NewBotDialog({
                   setKept(next)
                 }}
               />
+            ) : proposal ? (
+              <div className="border-t border-border pt-4">
+                <NewBotProposalFields
+                  draft={draft}
+                  worktrees={proposal.worktrees}
+                  onChange={(fields) => setDraft({ ...draft, ...fields })}
+                />
+              </div>
             ) : null}
           </div>
           <DialogFooter className="mt-0 shrink-0">

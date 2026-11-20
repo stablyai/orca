@@ -110,16 +110,6 @@ describe('createWslOrcadHostTransport', () => {
     await expect(pending).rejects.toThrow(/exit 3[\s\S]*boom/)
   })
 
-  it('refuses an already-aborted exec without spawning', async () => {
-    const { transport, specs } = transportWith([])
-    const controller = new AbortController()
-    controller.abort()
-    await expect(transport.exec('true', { signal: controller.signal })).rejects.toMatchObject({
-      name: 'AbortError'
-    })
-    expect(specs).toHaveLength(0)
-  })
-
   it('kills the child when an exec is aborted', async () => {
     // Only timers: the fake child's spawn and close still arrive on real ticks.
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
@@ -149,7 +139,7 @@ describe('createWslOrcadHostTransport', () => {
 describe('a transport with an abort signal', () => {
   const target = { kind: 'wsl' as const, id: 'env-1', distro: 'Ubuntu-24.04', label: 'My Ubuntu' }
 
-  it('starts no wsl.exe once aborted, for commands and file writes alike', async () => {
+  it('starts no wsl.exe after an abort at either the command or transport level', async () => {
     const controller = new AbortController()
     controller.abort()
     const spawn = vi.fn()
@@ -160,8 +150,15 @@ describe('a transport with an abort signal', () => {
       spawn
     })
 
-    await expect(transport.exec('true')).rejects.toThrow()
-    await expect(transport.writeFile('/tmp/x', 'y')).rejects.toThrow()
+    const command = transportWith([])
+    await expect(
+      command.transport.exec('true', { signal: controller.signal })
+    ).rejects.toMatchObject({
+      name: 'AbortError'
+    })
+    await expect(transport.exec('true')).rejects.toMatchObject({ name: 'AbortError' })
+    await expect(transport.writeFile('/tmp/x', 'y')).rejects.toMatchObject({ name: 'AbortError' })
+    expect(command.specs).toHaveLength(0)
     expect(spawn).not.toHaveBeenCalled()
   })
 
