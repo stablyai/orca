@@ -7,26 +7,25 @@ import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
 import { botTarget, type BotRef, useStableBotRef } from '@/lib/bot-hosts'
 import {
-  currentGoogleSetupStep,
-  GOOGLE_SETUP_STEPS,
   googleSetupAwaitsKey,
-  personDoesGoogleSetupStep,
   type GoogleSetupRun,
   type GoogleSetupStep
 } from '../../../../../../shared/google/google-setup-run'
+import {
+  googleSetupProgressView,
+  googleSetupStepCardView
+} from '../../../../../../shared/google/google-setup-card-view'
 import { GoogleBrandingLinks } from '../GoogleBrandingLinks'
 import { googleConsoleStepUrl } from '../../../../../../shared/google/google-console-setup'
 import { importGoogleApp, openInMyBrowser } from '../google-connect-client'
 import { googleKeyRefusalHeadline, googleStepNotes } from '../google-copy'
 import { useGoogleClientFile } from '../use-google-client-file'
 import { GoogleSetupBlockerPanel } from './GoogleSetupBlockerPanel'
-import { googleSetupBlockerIsConnect } from './google-setup-blocker-copy'
 import { useCaptureClientKey, type KeySource } from '../use-capture-google-key'
 import {
   GoogleSetupCardFrame,
   GoogleSetupReceipt,
-  GoogleSetupStepNotes,
-  googleSetupChoiceChangeable
+  GoogleSetupStepNotes
 } from './GoogleSetupCardParts'
 import { googleSetupStepTitle } from './google-setup-card-copy'
 import { answerGoogleSetup, useGoogleSetupBlocker } from './google-setup-run-store'
@@ -120,57 +119,24 @@ export function GoogleSetupProgressCard({
   const t = useTranslate()
   const capture = useSetupKeyCapture(bot, run, newest)
   const blocker = useGoogleSetupBlocker(bot)
-  const clientStatus = run.steps.client?.status
-  // Before client is done, a missed key's recovery (Make a new key, Import a key file) shows here;
-  // the sign-in card takes over the key's blockers after.
-  const panel =
-    capture.owns &&
-    blocker &&
-    (blocker.kind === 'stopped' ||
-      blocker.kind === 'paused' ||
-      (googleSetupAwaitsKey(run) && googleSetupBlockerIsConnect(blocker)))
-      ? blocker
-      : null
-  const keyImport =
-    capture.owns &&
-    !panel &&
-    googleSetupAwaitsKey(run) &&
-    (clientStatus === 'active' || clientStatus === 'needs-user')
+  const view = googleSetupProgressView(run, blocker, capture.owns)
+  const { panel, letMe } = view
   const services = run.services ?? []
-  const current = currentGoogleSetupStep(run)
-  const shown = GOOGLE_SETUP_STEPS.filter((step) => run.steps[step]?.status !== 'skipped')
-  // The sign-in at the end is always the owner's, on its own card.
-  const waiting =
-    current === 'connect' || shown.some((step) => run.steps[step]?.status === 'needs-user')
-  const working = t('bots.googleSetup.progress.working', 'Working')
   const state =
-    run.state === 'done'
+    view.state === 'done'
       ? t('bots.googleSetup.progress.done', 'Done')
-      : waiting
+      : view.state === 'waiting'
         ? t('bots.googleSetup.progress.waiting', 'Waiting for you')
-        : run.state === 'running'
-          ? working
+        : view.state === 'working'
+          ? t('bots.googleSetup.progress.working', 'Working')
           : null
-  // One signed-in account is used without asking; this switches it before the bot starts in Google Cloud.
-  const otherAccount =
-    newest &&
-    run.steps.account?.status === 'done' &&
-    (run.accounts?.length ?? 0) <= 1 &&
-    googleSetupChoiceChangeable(run)
-  const botDoing =
-    newest &&
-    run.state === 'running' &&
-    current !== null &&
-    current !== 'connect' &&
-    run.steps[current]?.status !== 'needs-user' &&
-    !personDoesGoogleSetupStep(run, current)
   return (
     <GoogleSetupCardFrame
       heading={t('bots.googleSetup.progress.heading', 'Setting up Google')}
       trailing={
         state ? (
           <span className="inline-flex items-center gap-1">
-            {state === working ? (
+            {view.state === 'working' ? (
               <LoaderCircle className="size-3 animate-spin" aria-hidden />
             ) : null}
             {state}
@@ -179,7 +145,7 @@ export function GoogleSetupProgressCard({
       }
     >
       <ol className="mt-1 space-y-1.5">
-        {shown.map((step, index) => {
+        {view.steps.map((step, index) => {
           const entry = run.steps[step]
           const status = entry?.status ?? 'pending'
           const who =
@@ -207,7 +173,7 @@ export function GoogleSetupProgressCard({
                     {note}
                   </div>
                 ) : null}
-                {step === 'account' && otherAccount ? (
+                {step === 'account' && view.switchAccount ? (
                   <Button
                     variant="link"
                     size="inlineText"
@@ -226,14 +192,14 @@ export function GoogleSetupProgressCard({
           {capture.error}
         </p>
       ) : null}
-      {keyImport ? <KeyImport bot={bot} /> : null}
+      {view.keyImport ? <KeyImport bot={bot} /> : null}
       {panel ? <GoogleSetupBlockerPanel bot={bot} run={run} blocker={panel} /> : null}
-      {botDoing && current ? (
+      {letMe ? (
         <div className="mt-2">
           <Button
             variant="link"
             size="inlineText"
-            onClick={() => answerStep(bot, ['let-me', current])}
+            onClick={() => answerStep(bot, ['let-me', letMe])}
           >
             {t('bots.googleSetup.letMe', 'Let me do this one')}
           </Button>
@@ -270,17 +236,15 @@ export function GoogleSetupStepCard({
 }): React.JSX.Element {
   const t = useTranslate()
   const [busy, setBusy] = useState(false)
-  const status = run.steps[step]?.status ?? 'pending'
-  const done = status === 'done' || status === 'skipped'
-  // A step handed to the person stays theirs until they press Done or Take over.
-  const handedBack = !done && status !== 'needs-user' && !personDoesGoogleSetupStep(run, step)
-  const locked = done || handedBack || busy || !newest
+  const { n, total, done, handedBack, acts, takeOver, watching } = googleSetupStepCardView(
+    run,
+    step,
+    newest
+  )
+  const locked = !acts || busy
   const url = run.mode === 'guide-browser' ? stepUrl(run, step) : null
   const lead = run.steps[step]?.note
   const notes = step === 'account' || step === 'connect' ? [] : googleStepNotes(step, run.kind)
-  const shown = GOOGLE_SETUP_STEPS.filter((entry) => run.steps[entry]?.status !== 'skipped')
-  // In Guide me here the bot reads the page the person clicks in.
-  const watching = !locked && run.mode === 'guide-here' && status === 'active'
   const send = (values: string[]): void => {
     setBusy(true)
     void answerGoogleSetup(bot, 'step', values)
@@ -293,11 +257,11 @@ export function GoogleSetupStepCard({
     <div>
       <GoogleSetupCardFrame
         heading={t('bots.googleSetup.step.headingCount', 'Your turn · {{n}} of {{total}}', {
-          n: shown.indexOf(step) + 1,
-          total: shown.length
+          n,
+          total
         })}
         trailing={
-          watching ? (
+          watching && !busy ? (
             <span className="inline-flex items-center gap-1">
               <LoaderCircle className="size-3 animate-spin" aria-hidden />
               {t('bots.googleSetup.step.watching', 'Watching the page')}
@@ -342,8 +306,7 @@ export function GoogleSetupStepCard({
               {t('bots.googleSetup.step.done', 'Done')}
             </Button>
           </div>
-          {/* The policy box is the person's own tick; Take over can't do it for them. */}
-          {step === 'branding' ? null : (
+          {takeOver ? (
             <div className="mt-1.5">
               <Button
                 variant="link"
@@ -354,7 +317,7 @@ export function GoogleSetupStepCard({
                 {t('bots.googleSetup.takeOver', 'Take over from here')}
               </Button>
             </div>
-          )}
+          ) : null}
         </>
       </GoogleSetupCardFrame>
       {done ? (
