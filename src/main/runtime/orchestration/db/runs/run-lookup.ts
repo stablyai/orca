@@ -18,6 +18,7 @@ import type { OrchestrationDb } from '../orchestration-db'
 import { RUN_COLUMN_LIST } from '../row-column-lists'
 import { parsePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import { workerSeatGrabSql } from './run-coordinator-mail-routing'
+import { pointerWorkExistsSql } from '../messages/mailbox-pointer-enter-state'
 
 export type LegacyAdoptedMailboxOwner = {
   runId: string
@@ -34,10 +35,7 @@ const RUNS_BOUND_TO_PANE_SQL = `SELECT ${RUN_COLUMN_LIST} FROM runs
 const RUN_MAILBOXES_WITH_POINTER_WORK_FOR_PANE_SQL = `SELECT id, coordinator_pane_key FROM runs
          WHERE coordinator_pane_key IS NOT NULL AND legacy = 0
            AND ${RUN_PANE_KEY_MATCH_SUFFIX_SQL} = ?
-           AND EXISTS (SELECT 1 FROM messages
-             WHERE to_handle = 'run:' || runs.id AND read = 0
-               AND delivery_contract = 'current_delivery'
-               AND (delivered_at IS NULL OR pointer_enter_pending > 0))
+           AND ${pointerWorkExistsSql("'run:' || runs.id")}
          ORDER BY rowid DESC`
 // Predicates match the partial indexes idx_runs_current_pane_exact/_leaf (created on every open).
 const CURRENT_RUN_FOR_EXACT_PANE_SQL = `SELECT ${RUN_COLUMN_LIST} FROM runs
