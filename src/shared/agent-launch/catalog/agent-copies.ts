@@ -117,6 +117,17 @@ export function withAgentCopyOption<V>(
   return copyId ? { ...options, [AGENT_COPY_OPTION_ID]: copyId } : options
 }
 
+/** Launch options without the copy, for a create that carries the copy in its own field. */
+export function withoutAgentCopyOption(
+  options: Readonly<Record<string, string>> | undefined
+): Readonly<Record<string, string>> | undefined {
+  if (!options || !(AGENT_COPY_OPTION_ID in options)) {
+    return options
+  }
+  const { [AGENT_COPY_OPTION_ID]: _copy, ...rest } = options
+  return Object.keys(rest).length ? rest : undefined
+}
+
 /** Settings as a copy's launch reads them: the copy's command, arguments and environment fill its
  *  base agent's slots, so every launch path below this point starts the copy unchanged. */
 export function applyAgentCopy<T extends AgentCopySettings>(settings: T, copy: AgentCopy): T {

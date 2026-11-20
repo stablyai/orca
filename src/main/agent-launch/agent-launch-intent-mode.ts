@@ -2,7 +2,6 @@ import type {
   AgentLaunchIntent,
   AgentLaunchModeReceipt
 } from '../../shared/agent-launch/contracts/agent-launch-intent'
-import { agentCopyIdFromOptions } from '../../shared/agent-launch/catalog/agent-copies'
 import { workspaceKindForLaunchTarget } from '../../shared/agent-launch/contracts/workspace-launch-kind'
 import {
   decideAgentLaunchMode,
@@ -10,7 +9,6 @@ import {
   DEFAULT_LAUNCH_VOCABULARY,
   type AgentLaunchModeVocabulary
 } from './agent-launch-mode'
-import { AgentLaunchSurfaceUnavailableError } from './agent-launch-surface-refusal'
 
 /** The same preflight is used for admission and execution, before workspace creation. */
 export function decideAgentLaunchIntentMode(execution: {
@@ -21,16 +19,7 @@ export function decideAgentLaunchIntentMode(execution: {
   vocabulary?: AgentLaunchModeVocabulary
 }): AgentLaunchModeReceipt {
   const { intent, runtime } = execution
-  const vocabulary = execution.vocabulary ?? DEFAULT_LAUNCH_VOCABULARY
-  // A copy's command and environment reach terminals only, so its chat would run the base agent.
-  const copy = agentCopyIdFromOptions(intent.sessionOptions ?? intent.chatOptions)
-  if (copy && intent.surface === 'chat') {
-    throw new AgentLaunchSurfaceUnavailableError(
-      `${copy} can't open as a chat because agent copies open only in terminals. Start it in a terminal instead.`,
-      'agent_copy'
-    )
-  }
-  const receipt = decideAgentLaunchMode({
+  return decideAgentLaunchMode({
     placement: {
       agent: intent.agent,
       workspaceKind: workspaceKindForLaunchTarget(intent.target),
@@ -41,18 +30,9 @@ export function decideAgentLaunchIntentMode(execution: {
         : {}),
       ...(execution.callerRendersStructured === false ? { callerRendersStructured: false } : {})
     },
-    settings:
-      execution.terminalOnly || copy ? undefined : readAgentLaunchModeSettings(runtime, intent),
-    ...(execution.terminalOnly || copy ? { terminalOnly: true } : {}),
+    settings: execution.terminalOnly ? undefined : readAgentLaunchModeSettings(runtime, intent),
+    ...(execution.terminalOnly ? { terminalOnly: true } : {}),
     ...(intent.surface ? { surface: intent.surface } : {}),
-    vocabulary
+    vocabulary: execution.vocabulary ?? DEFAULT_LAUNCH_VOCABULARY
   })
-  return copy && !execution.terminalOnly
-    ? {
-        mode: 'terminal',
-        preferred: 'terminal',
-        reason: 'agent_copy',
-        detail: `Started ${vocabulary.terminal}; agent copies open only in terminals.`
-      }
-    : receipt
 }

@@ -3,6 +3,7 @@ import type { AgentSessionDeathEvidence } from './leases/agent-session-death-evi
 import { isAgentSessionRewindRecord } from './rewind/agent-session-rewind'
 import type { AgentSessionRewindRecord } from './rewind/agent-session-rewind'
 import { isAgentSessionLaunchArgs } from './records/agent-session-launch-args'
+import { isAgentCopyId } from '../../agent-launch/catalog/agent-copies'
 import { isAgentSessionConversationName } from '../conversation-naming/agent-session-conversation-name'
 import {
   isPersistedAgentSessionHandoffStage,
@@ -142,6 +143,8 @@ export type AgentSessionRecord = {
   /** Latest turn edge for lists that must not open conversation history. */
   lastTurn?: AgentSessionLastTurn
   launchArgs?: AgentSessionLaunchArgs
+  /** The named agent copy this chat runs as; every start lays the copy's launch setup over the agent's. */
+  agentCopy?: string
   /** The chat this one was forked from; the marker after its inherited history derives from it. */
   forkedFrom?: AgentSessionForkedFrom
   /** Key of the host-owned instructions this provider context was confirmed to hold; absent: unknown. */
@@ -329,6 +332,7 @@ export function isPersistedAgentSessionObservationRecord(
         isAgentSessionConversationName(record.conversationName)) &&
       (record.conversationNameSource === undefined || record.conversationNameSource === 'user') &&
       (record.launchArgs === undefined || isAgentSessionLaunchArgs(record.launchArgs)) &&
+      (record.agentCopy === undefined || isAgentCopyId(record.agentCopy)) &&
       !Object.hasOwn(record, 'launchEnv') &&
       isPersistedAgentSessionObservationLease(record.lease) &&
       record.lease.sessionId === record.sessionId &&

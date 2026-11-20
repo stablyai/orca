@@ -7,6 +7,7 @@ import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecy
 import type { AgentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import type { StructuredAttentionMobileDelivery } from '../lifecycle/structured-agent-session-mobile-attention'
 import type {
+  resolveStructuredAgentCommand,
   StructuredAgentCommand,
   StructuredAgentCommandSettings
 } from '../../../native-chat/agent-launch/structured-agent-command-resolution'
@@ -63,6 +64,8 @@ export type StructuredAgentSessionRuntimeDeps = StructuredAgentSessionTransportO
   resolveAgentLaunchEnv?: (agent: string) => Record<string, string>
   /** The settings a per-agent Command override is read from, for the same agents. */
   resolveAgentCommandSettings?: () => StructuredAgentCommandSettings
+  /** A saved agent copy's launch setup for `agent`; null when this host has no such copy. */
+  resolveAgentCopyLaunch?: (agent: string, copyId: string) => StructuredAgentCopyLaunch | null
   /** See `StructuredAgentLaunchSources.resolveInstructions`. */
   resolveSessionInstructions?: (
     record: AgentSessionRecord,
@@ -137,3 +140,14 @@ export type StructuredAgentSessionRuntimeDeps = StructuredAgentSessionTransportO
     launchDirectory: string
   ) => Promise<AgentSessionAccountHome | null>
 } & Pick<StructuredAgentSessionHostDeps, 'onRequestFailure' | 'onIdleProviderDeath' | 'statusSink'>
+
+/** What a chat that runs as an agent copy starts with in place of its agent's own settings. */
+export type StructuredAgentCopyLaunch = {
+  launchEnv: Record<string, string>
+  commandSettings: StructuredAgentCommandSettings
+  launchArgs: string[]
+  /** The copy's program, resolved as the agent's own Command setting is. */
+  resolveCommand: (
+    options?: Parameters<typeof resolveStructuredAgentCommand>[2]
+  ) => StructuredAgentCommand
+}

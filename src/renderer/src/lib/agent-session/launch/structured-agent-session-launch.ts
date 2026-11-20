@@ -61,6 +61,7 @@ import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-ag
 import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { abandonStructuredAgentSessionLaunchIntent } from './structured-agent-session-launch-abandon'
 import { adoptPairedHostSeed } from './structured-agent-session-launch-host-seed'
+import { applyStructuredLaunchOptions } from './structured-agent-session-launch-copy'
 
 type StructuredLaunchStateResult = {
   state: StructuredLaunchState
@@ -191,8 +192,7 @@ function structuredAgentLaunchState(
     options.forkFrom
   )
   // A fork inherits its source's options.
-  intent.explicitLaunchOptions =
-    !options.forkFrom && options.launchOptions ? { ...options.launchOptions } : undefined
+  applyStructuredLaunchOptions(intent, options.forkFrom ? undefined : options.launchOptions)
   intent.forkRequiresInheritedOriginal = options.forkRequiresInheritedOriginal
   intent.beforeCreate = options.beforeCreate
   intent.createAfter = options.createAfter

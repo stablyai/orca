@@ -5,6 +5,8 @@ import {
   type AgentPickerEntry
 } from '../../../../../shared/agent-launch/picker/agent-launch-picker'
 import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
+import { AGENT_COPY_OPTION_ID } from '../../../../../shared/agent-launch/catalog/agent-copies'
+import type { AgentLaunchInputViews } from '../../../../../shared/agent-launch/choices/agent-launch-choices'
 import type { ProspectiveWorkspace } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
 
 /** The workspace a composer's create would launch its agent in, before it exists. */
@@ -41,5 +43,27 @@ export function quickWorkspacePickerInputs(
       entry
     ),
     legacyLaunchInputs: agentPickerLaunchInputs(legacyDraft, entry)
+  }
+}
+
+/** The composer's launch inputs starting `copyId`, a named copy of the picked agent, on either surface. */
+export function withQuickWorkspaceAgentCopy(
+  inputs: { launchInputs?: AgentLaunchInputViews; legacyLaunchInputs?: AgentLaunchInputViews },
+  copyId: string | null | undefined
+): { launchInputs?: AgentLaunchInputViews; legacyLaunchInputs?: AgentLaunchInputViews } {
+  if (!copyId) {
+    return inputs
+  }
+  const withCopy = (views: AgentLaunchInputViews | undefined): AgentLaunchInputViews => ({
+    ...views,
+    sessionOptions: { ...views?.sessionOptions, [AGENT_COPY_OPTION_ID]: copyId },
+    chatSessionOptions: {
+      ...(views?.chatSessionOptions ?? views?.sessionOptions),
+      [AGENT_COPY_OPTION_ID]: copyId
+    }
+  })
+  return {
+    launchInputs: withCopy(inputs.launchInputs),
+    legacyLaunchInputs: withCopy(inputs.legacyLaunchInputs)
   }
 }

@@ -206,6 +206,7 @@ export function restoreStructuredAgentSessionLaunchIntent(args: {
   firstMessage?: StructuredAgentSessionFirstMessage
   optionsMode?: 'replace-model-selection'
   options?: Readonly<Record<string, string>>
+  agentCopy?: string
   sendSelectionSupport?: boolean
   createMessageSupport?: boolean
 }): StructuredAgentSessionLaunchIntent {
@@ -231,7 +232,8 @@ export function restoreStructuredAgentSessionLaunchIntent(args: {
       ...(args.tabId ? { tabId: args.tabId } : {}),
       ...(args.firstMessage ? { firstMessage: args.firstMessage } : {}),
       ...(args.optionsMode ? { optionsMode: args.optionsMode } : {}),
-      ...(args.options ? { options: args.options } : {})
+      ...(args.options ? { options: args.options } : {}),
+      ...(args.agentCopy ? { agentCopy: args.agentCopy } : {})
     },
     ...(args.createMessageSupport === undefined
       ? {}

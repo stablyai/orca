@@ -3,47 +3,45 @@ import { useTranslate } from '@/i18n/use-translate'
 import { AgentIcon } from '@/components/agent/icons/AgentIcon'
 import { DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
 import type { SubscribedAgentLaunchPickerMenu } from '@/components/agent/AgentLaunchPickerMenu'
-import { normalizeAgentCopies } from '../../../../../shared/agent-launch/catalog/agent-copies'
+import {
+  normalizeAgentCopies,
+  type AgentCopy
+} from '../../../../../shared/agent-launch/catalog/agent-copies'
 import { isTuiAgentEnabled } from '../../../../../shared/agent-launch/catalog/tui-agent-selection'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import type { NewTabAgentMenuRow } from '../../../../../shared/agent-launch/picker/agent-launch-picker-rows'
 import { terminalPendingReason } from './new-tab-agent-menu-model'
-import { rowTitle } from './agent-menu-row-presentation'
+import { rowId, rowLabel, rowTitle } from './agent-menu-row-presentation'
+import { agentCopyMenuRows } from '../../../../../shared/agent-launch/picker/agent-copy-menu-rows'
 
-/** Saved agent copies whose agent is installed here; each opens a terminal with its own setup. */
+/** Saved agent copies of the agents listed here, each offered on the surfaces its agent is. */
 export function AgentCopyMenuItems({
+  rows,
   detectedIds,
   disabled,
   terminalPending,
   runLaunch
 }: {
+  rows: readonly NewTabAgentMenuRow[]
   detectedIds: readonly TuiAgent[] | null
   disabled: boolean
   terminalPending: boolean | undefined
   runLaunch: React.ComponentProps<typeof SubscribedAgentLaunchPickerMenu>['runLaunch']
 }): React.JSX.Element | null {
   const t = useTranslate()
-  const savedCopies = useAppStateValue((s) => s.settings?.agentCopies)
-  const disabledAgents = useAppStateValue((s) => s.settings?.disabledTuiAgents)
-  const copies = normalizeAgentCopies(savedCopies).filter(
-    (copy) => detectedIds?.includes(copy.agent) && isTuiAgentEnabled(copy.agent, disabledAgents)
-  )
-  if (copies.length === 0) {
+  const copyRows = agentCopyMenuRows(rows, useAgentCopiesForMenu(), detectedIds)
+  if (copyRows.length === 0) {
     return null
   }
   return (
     <>
       <DropdownMenuSeparator />
-      {copies.map((copy) => {
-        const row: NewTabAgentMenuRow = {
-          kind: 'terminal',
-          agent: copy.agent,
-          copy: { id: copy.id, name: copy.name }
-        }
+      {copyRows.map((row) => {
+        const label = rowLabel(row, t)
         const pendingReason = terminalPendingReason(terminalPending, row, t)
         return (
           <DropdownMenuItem
-            key={copy.id}
+            key={rowId(row)}
             variant="launch"
             disabled={disabled || !!pendingReason}
             aria-description={pendingReason}
@@ -52,10 +50,10 @@ export function AgentCopyMenuItems({
                 event.preventDefault()
               }
             }}
-            title={rowTitle(row, copy.name, t)}
+            title={rowTitle(row, row.copy?.name ?? label, t)}
           >
-            <AgentIcon agent={copy.agent} size={14} />
-            <span className="min-w-0 flex-1 truncate">{copy.name}</span>
+            <AgentIcon agent={row.agent} size={14} />
+            <span className="min-w-0 flex-1 truncate">{label}</span>
             {pendingReason ? (
               <span className="min-w-0 shrink truncate text-xs text-muted-foreground">
                 {pendingReason}
@@ -65,5 +63,14 @@ export function AgentCopyMenuItems({
         )
       })}
     </>
+  )
+}
+
+/** This desktop's saved copies whose agent is turned on. */
+export function useAgentCopiesForMenu(): AgentCopy[] {
+  const savedCopies = useAppStateValue((s) => s.settings?.agentCopies)
+  const disabledAgents = useAppStateValue((s) => s.settings?.disabledTuiAgents)
+  return normalizeAgentCopies(savedCopies).filter((copy) =>
+    isTuiAgentEnabled(copy.agent, disabledAgents)
   )
 }

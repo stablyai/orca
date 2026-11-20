@@ -55,9 +55,12 @@ export type NewTabAgentMenuRow =
     | { kind: 'chat'; agent: TuiAgent; setup?: true }
     | { kind: 'chat-unavailable'; agent: TuiAgent; reason: ChatUnavailableReason }
     | { kind: 'cli'; agent: TuiAgent; chat?: true }
-    /** `copy`: a named copy of the agent, which starts with the copy's own launch setup. */
-    | { kind: 'terminal'; agent: TuiAgent; copy?: { id: string; name: string } }
-  ) & { executionHostId?: ExecutionHostId }
+    | { kind: 'terminal'; agent: TuiAgent }
+  ) & {
+    executionHostId?: ExecutionHostId
+    /** A named copy of the agent, which starts with the copy's own launch setup. */
+    copy?: { id: string; name: string }
+  }
 
 export function agentMenuRowSupportsChat(row: NewTabAgentMenuRow): boolean {
   return row.kind === 'chat' || (row.kind === 'cli' && row.chat === true)

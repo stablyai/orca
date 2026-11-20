@@ -63,6 +63,8 @@ export type AgentSessionAttachParams = {
   /** Exclude tab placement from conversation identity/fingerprints. */
   surfaceTabId?: string
   launchArgs?: string[]
+  /** Host-only: the named agent copy a new chat runs as. */
+  agentCopy?: string
   /** Omit only for create intent; fingerprint the client wire form before adapter proof. */
   providerHandle?: AgentSessionWireProviderHandle
   /** Host-only adoption seeds resume/import. Ordinary ensure handles must not imply adoption. */
@@ -218,6 +220,7 @@ export function reserveRequestFor(input: {
       ? { surfaceTabId: params.surfaceTabId }
       : {}),
     ...(authority.launchArgs ? { launchArgs: authority.launchArgs } : {}),
+    ...(params.agentCopy ? { agentCopy: params.agentCopy } : {}),
     ...(authority.launchEnv ? { launchEnv: authority.launchEnv } : {}),
     ...(authority.launchDirectory ? { launchDirectory: authority.launchDirectory } : {}),
     ...(params.adopt

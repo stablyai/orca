@@ -108,7 +108,7 @@ export function useTabAgentMenuLaunch({
       }
       const { agent } = row
       const entry = getCatalogEntry(agent)
-      const copy = row.kind === 'terminal' ? row.copy : undefined
+      const { copy } = row
       const label = copy?.name ?? entry?.label ?? agent
       const result = launchAgentInNewTabWithOutcome({
         requestId: createNonSecureContextUuid(),
@@ -119,10 +119,9 @@ export function useTabAgentMenuLaunch({
               selectedExecutionHostId: row.executionHostId
             }
           : {}),
-        // A copy carries its own command and environment only into terminals.
         ...(copy
           ? {
-              requestedSurface: 'terminal' as const,
+              requestedSurface: row.kind === 'chat' ? ('chat' as const) : ('terminal' as const),
               sessionOptions: { [AGENT_COPY_OPTION_ID]: copy.id }
             }
           : {}),
@@ -354,6 +353,7 @@ export function ProjectedAgentMenuItems({
         })
       )}
       <AgentCopyMenuItems
+        rows={rows}
         detectedIds={detectedIds}
         disabled={disabled}
         terminalPending={model.terminalPending}

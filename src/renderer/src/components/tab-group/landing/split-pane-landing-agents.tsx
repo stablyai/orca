@@ -15,6 +15,8 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { useNewTabAgentMenuRows } from '../../agent/launch-menu/use-new-tab-agent-menu-rows'
+import { useAgentCopiesForMenu } from '../../agent/launch-menu/AgentCopyMenuItems'
+import { agentCopyMenuRows } from '../../../../../shared/agent-launch/picker/agent-copy-menu-rows'
 import {
   QuickLaunchAgentMenuItems,
   useTabAgentMenuLaunch
@@ -148,9 +150,13 @@ export function LandingAgentResults({
     onFocusTerminal: focusTerminalTabSurface
   })
   const catalog = getAgentCatalog()
+  const copies = useAgentCopiesForMenu()
   const matches =
     model.state === 'settled'
-      ? model.rows.filter((row) => {
+      ? [
+          ...model.rows,
+          ...agentCopyMenuRows(model.rows, copies, model.detection.detectedIds)
+        ].filter((row) => {
           if (row.kind === 'chat-unavailable') {
             return false
           }

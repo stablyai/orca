@@ -139,13 +139,19 @@ export function codexStructuredLaunchPart(
     const { record } = basis
     const recordHome = requireLegacyAgentSessionAccountHome(record.accountHome)
     const { command, prefixArgs } = await resolveCodexStructuredInvocation({
-      ...(deps.resolveCommand ? { resolveCommand: deps.resolveCommand } : {}),
+      ...(basis.copy
+        ? { resolveCommand: basis.copy.resolveCommand }
+        : deps.resolveCommand
+          ? { resolveCommand: deps.resolveCommand }
+          : {}),
       refreshEnvironmentAfterMiss: basis.refreshAfterMissingProgram,
       resolveWorkingDirectory: basis.launchDirectory,
       resolveEnvironment: basis.environment
     })
     const environment = await basis.environment()
-    const args = codexStructuredLaunchArgs(await deps.resolveLaunchArgs())
+    const args = codexStructuredLaunchArgs(
+      basis.copy ? [...basis.copy.launchArgs] : await deps.resolveLaunchArgs()
+    )
     const head = agentSessionProviderHandleChainHead(record.providerHandleChain)
     const resumeThreadId = head?.handle.nativeId ?? null
     // Match the first turn's model to avoid duplicate prompt injection on a model switch.

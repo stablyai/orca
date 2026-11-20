@@ -14,6 +14,7 @@ export type AgentSessionRecordIdentity = Pick<
   | 'accountHome'
   | 'options'
   | 'launchArgs'
+  | 'agentCopy'
   | 'launchDirectory'
   | 'forkedFrom'
   | 'conversationName'
@@ -37,6 +38,7 @@ export function agentSessionRecordIdentityFields(
     ...(Object.keys(options).length > 0 ? { options } : {}),
     ...(permissionMode ? { permissionMode } : {}),
     ...(identity.launchArgs ? { launchArgs: [...identity.launchArgs] } : {}),
+    ...(identity.agentCopy ? { agentCopy: identity.agentCopy } : {}),
     // /clear retains its tab and launch directory.
     ...(identity.launchDirectory ? { launchDirectory: identity.launchDirectory } : {}),
     ...(conversationName ? { conversationName } : {}),

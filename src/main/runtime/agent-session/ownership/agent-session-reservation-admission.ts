@@ -59,6 +59,8 @@ export type AgentSessionReserveRequest = {
   accountHome: AgentSessionAccountHome
   /** Arguments pinned on first reservation so owner replacement repeats the same launch. */
   launchArgs?: AgentSessionLaunchArgs
+  /** The named agent copy a new chat runs as; written only when the record is founded. */
+  agentCopy?: string
   /** Current launch input validated here but never written to the durable record. */
   launchEnv?: AgentSessionLaunchEnv
   /** Initial provider options persisted before the first process is acquired. */

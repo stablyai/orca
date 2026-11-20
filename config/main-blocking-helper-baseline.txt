@@ -1138,7 +1138,7 @@
 1 src/main/ripgrep/bundled-ripgrep-text-search.ts
 1 src/main/runtime/agent-session/environment/structured-agent-account-home.ts
 2 src/main/runtime/agent-session/environment/structured-session-child-env.ts
-2 src/main/runtime/agent-session/installation/runtime-structured-agent-host.ts
+1 src/main/runtime/agent-session/installation/runtime-structured-agent-host.ts
 3 src/main/runtime/agent-session/installation/structured-agent-runtime-metadata.ts
 2 src/main/runtime/agent-session/installation/structured-agent-runtime-registrations.ts
 1 src/main/runtime/agent-session/installation/structured-agent-session-host-assembly.ts

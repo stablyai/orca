@@ -131,6 +131,7 @@ export async function prepareStructuredAgentSessionFork(
         : {})
     },
     ...(record.launchArgs ? { launchArgs: record.launchArgs } : {}),
+    ...(record.agentCopy ? { agentCopy: record.agentCopy } : {}),
     adopt: { providerHandle, conversationName: title }
   }
 }

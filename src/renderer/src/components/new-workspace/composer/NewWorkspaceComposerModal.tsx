@@ -29,7 +29,8 @@ import { useComposerHostedAddProject } from '../project-selection/use-composer-h
 import { useComposerState } from '@/hooks/useComposerState'
 import {
   composerLaunchWorkspace,
-  quickWorkspacePickerInputs
+  quickWorkspacePickerInputs,
+  withQuickWorkspaceAgentCopy
 } from '@/lib/workspace/creation/quick-workspace-agent-selection'
 import {
   pickQuickWorkspaceAgent,
@@ -213,6 +214,9 @@ function QuickTabBody({
       ? quickAgentPick.draft
       : undefined
   const quickAgentSurface = quickAgentPick.agent === quickAgent ? quickAgentPick.surface : undefined
+  // A copy belongs to its agent, so picking another agent starts that agent itself.
+  const [agentCopyPick, setAgentCopyPick] = useState<{ agent: TuiAgent; copy: string } | null>(null)
+  const agentCopy = agentCopyPick?.agent === quickAgent ? agentCopyPick.copy : null
   const launchSelection = observation.selectionFor(quickAgent, quickAgentSurface)
   const createDisabled = formDisabled || !launchSelection.ready
 
@@ -268,10 +272,13 @@ function QuickTabBody({
           }
         })
       },
-      ...quickWorkspacePickerInputs(
-        pickerDraft,
-        quickAgentPick.entry,
-        launchSelection.choice?.executionHostId
+      ...withQuickWorkspaceAgentCopy(
+        quickWorkspacePickerInputs(
+          pickerDraft,
+          quickAgentPick.entry,
+          launchSelection.choice?.executionHostId
+        ),
+        agentCopy
       )
     })
   }, [
@@ -281,6 +288,7 @@ function QuickTabBody({
     submitQuick,
     pickerDraft,
     quickAgentPick,
+    agentCopy,
     isSubmissionCancelled,
     modalData,
     cardProps
@@ -370,6 +378,10 @@ function QuickTabBody({
           observation.model.pickerContext?.executionHostId !== 'local'
         }
         onQuickAgentChange={handleQuickAgentChange}
+        agentCopy={agentCopy}
+        onAgentCopyChange={(copy) =>
+          setAgentCopyPick(copy && quickAgent ? { agent: quickAgent, copy } : null)
+        }
         {...cardProps}
         // Chips list offered agents, keeping a pick whose chat is still being learned.
         detectedAgentIds={chipAgentIds}

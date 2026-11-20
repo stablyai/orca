@@ -14,6 +14,7 @@ import {
   AGENT_SESSION_HISTORY_MAX_LIMIT
 } from '../../agent-session/agent-session-wire'
 import * as z from 'zod'
+import { isAgentCopyId } from '../../agent-launch/catalog/agent-copies'
 import { CREATE_TAB_FIELDS } from './structured-agent-session-create-tab-params'
 import { isStructuredAgentId } from '../../agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import { normalizeExecutionHostId } from '../../execution-host/execution-host'
@@ -124,7 +125,9 @@ export const CreateIntentParams = z
       .strict()
       .optional(),
     options: AgentSessionOptions.optional(),
-    optionsMode: z.literal('replace-model-selection').optional()
+    optionsMode: z.literal('replace-model-selection').optional(),
+    /** A named agent copy the chat runs as; hosts without copies refuse the strict payload. */
+    agentCopy: z.custom<string>(isAgentCopyId, { message: 'Invalid agent copy' }).optional()
   })
   .strict()
 

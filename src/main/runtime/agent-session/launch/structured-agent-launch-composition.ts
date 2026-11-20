@@ -1,5 +1,7 @@
 // Compose shared admission, cwd, environment, visuals and child sealing; agent parts add only agent-specific inputs and never set cwd/sealed env.
 
+import { overlayEnvironmentVariables } from '../../../../shared/shell/launch/environment-overlay'
+import type { StructuredAgentCopyLaunch } from '../installation/structured-agent-session-runtime-contract'
 import type { ReadOnlySessionMode } from '../../../bots/bot-look-around-policy'
 import { BotLaunchTools } from '../../../bots/bot-launch-tools'
 import type { AgentSessionJournalIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
@@ -36,6 +38,8 @@ export type StructuredAgentLaunchSources = {
   /** The user's per-agent environment overlay from settings. */
   resolveAgentLaunchEnv?: (agent: string) => Record<string, string>
   resolveCommandSettings?: () => StructuredAgentCommandSettings
+  /** See `StructuredAgentSessionRuntimeDeps.resolveAgentCopyLaunch`. */
+  resolveAgentCopyLaunch?: (agent: string, copyId: string) => StructuredAgentCopyLaunch | null
   prepareVisuals?: PrepareNativeChatVisuals
   /** Standing instructions the agent's own system prompt carries for this session; null adds none. */
   resolveInstructions?: (
@@ -83,6 +87,8 @@ export type StructuredAgentLaunchBasis = {
   /** After launch, when the agent turned the linked skill roots down. */
   linkedSkillsRefused(linkedSkills: string | null): void
   commandSettings(): StructuredAgentCommandSettings
+  /** A chat that runs as an agent copy starts the copy's program and Arguments; absent, the agent's. */
+  copy?: Pick<StructuredAgentCopyLaunch, 'launchArgs' | 'resolveCommand'>
   /** After a missing program, refresh both environment reads together; absent means no retry. */
   refreshAfterMissingProgram?: (askedAt: number) => Promise<void>
   /** The permission mode the host decided this start runs with; absent asks. */
@@ -179,12 +185,24 @@ async function composedPart<L>(
   permissionMode?: AgentChatPermissionChoice
 ): Promise<StructuredAgentLaunchPart<L> & { cwd: string }> {
   const record = admittedRecord(definition, sources.store, identity.sessionId)
-  const launchEnv = once(() => sources.resolveAgentLaunchEnv?.(definition.agent) ?? {})
+  const copy = record.agentCopy
+    ? requireAgentCopyLaunch(sources, definition, record.agentCopy)
+    : null
+  const launchEnv = once(
+    () => copy?.launchEnv ?? sources.resolveAgentLaunchEnv?.(definition.agent) ?? {}
+  )
   const launchDirectory = once(() => resolveAgentSessionLaunchDirectory(sources, record))
-  const readEnvironments = () => ({
-    base: once(sources.resolveBaseEnvironment),
-    agent: once(() => sources.resolveAgentEnvironment(definition.agent))
-  })
+  const readEnvironments = () => {
+    const base = once(sources.resolveBaseEnvironment)
+    return {
+      base,
+      agent: once(async () =>
+        copy
+          ? overlayEnvironmentVariables(await base(), copy.launchEnv, process.platform)
+          : sources.resolveAgentEnvironment(definition.agent)
+      )
+    }
+  }
   let environments = readEnvironments()
   const refresh = sources.refreshAfterMissingProgram
   const readOnly = sources.readOnlySession?.(record.sessionId) ?? null
@@ -218,7 +236,8 @@ async function composedPart<L>(
     ),
     linkedSkillsRefused: (linkedSkills) =>
       sources.reportLinkedSkills?.(record.sessionId, linkedSkills),
-    commandSettings: once(() => sources.resolveCommandSettings?.() ?? {}),
+    commandSettings: once(() => copy?.commandSettings ?? sources.resolveCommandSettings?.() ?? {}),
+    ...(copy ? { copy } : {}),
     ...(refresh
       ? {
           refreshAfterMissingProgram: async (askedAt) => {
@@ -239,6 +258,19 @@ async function composedPart<L>(
     inheritedEnvToDelete: [...STRUCTURED_CHILD_ENV_TO_DELETE, ...composed.inheritedEnvToDelete],
     cwd: await basis.launchDirectory()
   }
+}
+
+/** A copy deleted since its chat began refuses, so the chat never quietly runs as its agent. */
+function requireAgentCopyLaunch(
+  sources: StructuredAgentLaunchSources,
+  definition: StructuredAgentDefinition,
+  copyId: string
+): StructuredAgentCopyLaunch {
+  const copy = sources.resolveAgentCopyLaunch?.(definition.agent, copyId)
+  if (!copy) {
+    throw new Error(`Unknown agent copy "${copyId}"`)
+  }
+  return copy
 }
 
 export function composeStructuredLaunch<L>(
@@ -299,6 +331,7 @@ export function structuredAgentLaunchSources(
     ...(deps.resolveAgentCommandSettings
       ? { resolveCommandSettings: deps.resolveAgentCommandSettings }
       : {}),
+    ...(deps.resolveAgentCopyLaunch ? { resolveAgentCopyLaunch: deps.resolveAgentCopyLaunch } : {}),
     ...(deps.resolveSessionInstructions
       ? { resolveInstructions: deps.resolveSessionInstructions }
       : {}),

@@ -143,14 +143,6 @@ export type AgentLaunchModeReason =
   | 'chat_unavailable_on_windows'
   | 'structured_unsupported_on_host'
   | 'chat_runtime_not_installed'
-  /** A named copy of an agent: copies carry their own command and environment only into terminals. */
-  | 'agent_copy'
-
-/** Why a chat could not run; `agent_copy` launches never asked for one, so they are not downgrades. */
-export type AgentLaunchDowngradeReason = Exclude<
-  AgentLaunchModeReason,
-  'user_default' | 'requested' | 'agent_copy'
->
 
 /** Restates `WorkerStartModeReceipt` in surface-neutral terms so orchestration's receipt and a
  *  mobile or renderer launch report the same vocabulary. */

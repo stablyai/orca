@@ -1540,6 +1540,8 @@
       "title": "Bots",
       "description": "Your AI teammate with a name, memory and automations.",
       "slackConnected": "Connected",
+      "runsAs": "Runs as",
+      "runsAsDescription": "New conversations start with this copy's command, arguments and environment.",
       "permissionSameAsChats": "Same as chats",
       "permissionSameAsChatsDescription": "Starts like any new chat, from your chat permission setting.",
       "enable": "Enable bots",
@@ -23585,6 +23587,7 @@
       "startInTerminal": "Start {{value0}} in a terminal"
     },
     "newWorkspace": {
+      "runsAs": "Runs as",
       "agentOptional": "Agent [Optional]",
       "createDescription": "Choose the project and workspace name. Select an agent if you want to start one.",
       "setupCheckFailed": "Could not check setup configuration. Try again.",

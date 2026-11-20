@@ -31,6 +31,8 @@ export type StructuredAgentSessionCreateParams = {
   firstMessage?: StructuredAgentSessionFirstMessage
   optionsMode?: 'replace-model-selection'
   options?: Readonly<Record<string, string>>
+  /** The named agent copy the chat runs as; hosts without copies refuse it. */
+  agentCopy?: string
   /** Sent only to a host advertising `AGENT_SESSION_CREATE_TAB_PLACEMENT_RUNTIME_CAPABILITY`. */
   tabPlacement?: { groupId?: string; afterTabId?: string }
 }
