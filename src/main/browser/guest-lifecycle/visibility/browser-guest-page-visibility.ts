@@ -34,10 +34,19 @@ export function listenForBrowserGuestPageVisibility(): void {
   })
 }
 
-function sendInternal(target: object, state: DocumentVisibilityState): void {
-  const send: unknown = Reflect.get(target, '_sendInternal')
-  if (typeof send === 'function') {
-    Reflect.apply(send, target, [ELECTRON_GUEST_VISIBILITY_CHANNEL, state])
+// Electron's private sender on WebContents and WebFrameMain; absent if an upgrade renames it.
+type InternalSender = { _sendInternal: (channel: string, ...args: unknown[]) => void }
+
+function hasInternalSender<T extends object>(target: T): target is T & InternalSender {
+  return '_sendInternal' in target && typeof target._sendInternal === 'function'
+}
+
+function sendInternal(
+  target: Electron.WebContents | Electron.WebFrameMain,
+  state: DocumentVisibilityState
+): void {
+  if (hasInternalSender(target)) {
+    target._sendInternal(ELECTRON_GUEST_VISIBILITY_CHANNEL, state)
   }
 }
 
@@ -51,18 +60,18 @@ function followWindowVisibility(
     existing.page = page
     return existing
   }
-  const original: unknown = Reflect.get(guest, '_sendInternal')
-  if (typeof original !== 'function') {
+  if (!hasInternalSender(guest)) {
     return null
   }
   const followed: FollowedGuest = { page, windowHidden: false }
   followedGuests.set(guest, followed)
-  Reflect.set(guest, '_sendInternal', (channel: string, ...args: unknown[]) => {
+  const send = guest._sendInternal.bind(guest)
+  guest._sendInternal = (channel, ...args) => {
     if (channel === ELECTRON_GUEST_VISIBILITY_CHANNEL) {
       followed.windowHidden = args[0] === 'hidden'
       args = [followed.windowHidden ? 'hidden' : followed.page]
     }
-    return Reflect.apply(original, guest, [channel, ...args])
-  })
+    send(channel, ...args)
+  }
   return followed
 }

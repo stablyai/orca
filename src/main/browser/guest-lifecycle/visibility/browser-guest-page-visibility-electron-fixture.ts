@@ -68,9 +68,11 @@ async function run(): Promise<void> {
   const read = (target: Electron.WebContents): Promise<FrameRead[]> =>
     Promise.all(
       frames(target).map((frame) =>
-        frame.executeJavaScript(
-          '({ visibilityState: document.visibilityState, hidden: document.hidden, events: window.__events ?? [] })'
-        )
+        frame
+          .executeJavaScript(
+            'JSON.stringify({ visibilityState: document.visibilityState, hidden: document.hidden, events: window.__events ?? [] })'
+          )
+          .then((json) => JSON.parse(String(json)))
       )
     )
   // Every frame of the page, settled on one state: [visibilityState, hidden, last event].
