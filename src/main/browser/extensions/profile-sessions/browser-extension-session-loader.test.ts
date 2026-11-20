@@ -108,6 +108,7 @@ const apiHost = await import('../api-runtime/browser-extension-api-host')
 const { setBrowserExtensionSupportEnabled } = await import('../browser-extension-support')
 const loader = await import('./browser-extension-session-loader')
 const idleKeptState = await import('./browser-extension-idle-kept-state')
+const { ensureHostSessionState } = await import('../api-runtime/browser-extension-contexts')
 await import('./browser-extension-load-errors')
 const { getBrowserExtensionProfileStateStore } =
   await import('../profile-storage/browser-extension-profile-state-store')
@@ -334,6 +335,22 @@ describe('a profile whose last page closed', () => {
     await attach()
     expect(mocks.session.extensions.getExtension(ID)).not.toBeNull()
     expect(mocks.emitWorkerStart).not.toHaveBeenCalledWith(
+      expect.anything(),
+      ID,
+      'runtime',
+      'onStartup',
+      []
+    )
+    // A worker a socket keeps running at the stop loses it there, so it starts clean.
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the profile's mock session
+    const workers = ensureHostSessionState(mocks.resumed.session as never, resumed.id).workers
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the idle stop reads only `running`
+    workers.set(ID, { running: { isDestroyed: () => false } } as never)
+    await loader.unloadBrowserExtensionsFromIdleProfile(resumed.id, () => {})
+    workers.delete(ID)
+    mocks.emitWorkerStart.mockClear()
+    await attach()
+    expect(mocks.emitWorkerStart).toHaveBeenCalledWith(
       expect.anything(),
       ID,
       'runtime',

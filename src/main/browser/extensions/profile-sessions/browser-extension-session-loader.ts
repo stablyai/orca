@@ -221,7 +221,7 @@ export async function unloadBrowserExtensionsFromIdleProfile(
   }
   stateByProfileId.delete(profileId)
   profileIdByPartition.delete(state.profile.partition)
-  idleKeptState.beginIdleUnload(profileId, state.session.extensions.getAllExtensions())
+  idleKeptState.beginIdleUnload(profileId, state.session)
   const unloading = unloadProfileSession(state)
     .catch((error: unknown) => {
       console.warn("[browser-extensions] Could not stop an idle profile's extensions:", error)

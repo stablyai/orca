@@ -1,3 +1,4 @@
+import { getHostSessionState } from '../api-runtime/browser-extension-contexts'
 import { getBrowserExtensionDnrStore } from '../declarative-net-request/session/browser-extension-dnr-store'
 import { getBrowserExtensionInstallStore } from '../installation/browser-extension-install-store'
 import type { BrowserExtensionLoadKind } from './browser-extension-runtime-lifecycle'
@@ -63,16 +64,20 @@ function needsCleanStart(profileId: string, extensionId: string): boolean {
 }
 
 /**
- * Called as an idle unload begins, with the copies running then; later loads start clean, as do
+ * Called as an idle unload commits, with the copies running then; later loads start clean, as do
  * copies that already need a clean start, whose session rules go now.
  */
-export function beginIdleUnload(
-  profileId: string,
-  extensions: readonly Pick<Electron.Extension, 'id'>[]
-): void {
+export function beginIdleUnload(profileId: string, sess: Electron.Session): void {
   idleUnloadedProfileIds.add(profileId)
+  const workers = getHostSessionState(sess)?.workers
   const kept = new Map<string, number>()
-  for (const { id } of extensions) {
+  for (const { id } of sess.extensions.getAllExtensions()) {
+    const running = workers?.get(id)?.running
+    // Why: a worker still up a minute after the last tab closed is held open by something the
+    // stop ends (a socket, a native port, a session write), so only onStartup restores it.
+    if (running && !running.isDestroyed()) {
+      noteBrowserExtensionNeedsCleanStart(profileId, id)
+    }
     const time = installTime(id)
     if (time !== undefined && !needsCleanStart(profileId, id)) {
       kept.set(id, time)
