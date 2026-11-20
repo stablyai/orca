@@ -1,4 +1,5 @@
 import type { OrchestrationDb } from '../../db/orchestration-db'
+import type { CrewInvalidation } from '../../crew/crew-changes'
 
 /** Each pane's Run mailboxes that owe pointer work, until the next crew change.
  * Why: held-mail retries ask on a timer, and the query visits every Run ever bound to the pane. */
@@ -16,8 +17,12 @@ export class PaneRunMailCache {
       this.unsubscribe?.()
       this.byPane.clear()
       this.db = db
-      // Why any change clears all: new mail, rebinding and resets all arrive as crew changes.
-      this.unsubscribe = db.crewChanges.subscribe(() => this.byPane.clear())
+      // Why most changes clear all: new Run mail, routing, rebinding and resets all arrive as crew changes.
+      this.unsubscribe = db.crewChanges.subscribe((notice) => {
+        if (!isNonRunTraffic(notice)) {
+          this.byPane.clear()
+        }
+      })
     }
     let mailboxes = this.byPane.get(paneKey)
     if (!mailboxes) {
@@ -26,4 +31,15 @@ export class PaneRunMailCache {
     }
     return mailboxes
   }
+}
+
+/** Mail between terminals or chats never adds work to a Run mailbox; routing it there notifies separately. */
+function isNonRunTraffic(notice: CrewInvalidation | undefined): boolean {
+  const addresses = notice?.trafficAddresses
+  return (
+    !!addresses &&
+    notice.size === 1 &&
+    notice.has('traffic') &&
+    ![...addresses].some((address) => address.startsWith('run:'))
+  )
 }

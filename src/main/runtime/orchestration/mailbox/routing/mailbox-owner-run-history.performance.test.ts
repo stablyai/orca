@@ -16,7 +16,7 @@ afterEach(() => {
 })
 
 it.each([10, 100])(
-  "held-mail retries over a coordinator's empty Run history (%i Runs) ask the Run index once until mail changes",
+  "held-mail retries over a coordinator's empty Run history (%i Runs) ask the Run index once until Run mail changes",
   (emptyRuns) => {
     const db = createDatabase('run-history-cost')
     databases.push(db)
@@ -65,6 +65,19 @@ it.each([10, 100])(
     const historyQueries = vi.spyOn(db, 'runMailboxesWithPointerWorkForPane')
     for (let retry = 0; retry < 12; retry++) {
       expect(owner.resolveAll(terminal, { routeDirectMail: false })).toContain(`run:${owed.id}`)
+    }
+    expect(historyQueries).toHaveBeenCalledTimes(1)
+
+    // Mail between terminals elsewhere owes no Run mailbox work.
+    for (let message = 0; message < emptyRuns; message++) {
+      db.insertMessage({
+        from: 'term_sender',
+        to: `term_unrelated_${message}`,
+        subject: 'unrelated',
+        type: 'status',
+        deliveryContract: 'current_delivery'
+      })
+      owner.resolveAll(terminal, { routeDirectMail: false })
     }
     expect(historyQueries).toHaveBeenCalledTimes(1)
 
