@@ -24,6 +24,8 @@ export type LegacyRelayAdoption = (session: WorkspaceSessionState) => Record<str
 export type DesktopRelayApplyResult = {
   /** The changed fields, or null when nothing changes. */
   patch: RelayFields | null
+  /** Tabs whose relay id or ownership the patch changes. */
+  changedTabIds: string[]
   /** An id the window wanted was refused (main holds another id there); resend a baseline later. */
   refused: boolean
 }
@@ -43,10 +45,12 @@ export function applyDesktopRelayWrite(
   const adopting =
     adoptLegacy !== null &&
     (session.desktopRelayAdoptionVersion ?? 0) < DESKTOP_RELAY_LEGACY_ADOPTION_VERSION
+  const adopted: string[] = []
   if (adoptLegacy && adopting) {
     for (const [tabId, relayId] of Object.entries(adoptLegacy(session))) {
       if (!Object.hasOwn(owners, tabId) && stored[tabId] === relayId) {
         owners[tabId] = relayId
+        adopted.push(tabId)
       }
     }
   }
@@ -91,8 +95,12 @@ export function applyDesktopRelayWrite(
   const relaysChanged = !sameRecord(stored, relays)
   const ownersChanged = !sameRecord(before, owners)
   if (!relaysChanged && !ownersChanged && !adopting) {
-    return { patch: null, refused }
+    return { patch: null, refused, changedTabIds: [] }
   }
+  // Only keys this write touched or adopted can differ.
+  const changedTabIds = [...new Set([...touched, ...adopted])].filter(
+    (tabId) => relays[tabId] !== stored[tabId] || owners[tabId] !== before[tabId]
+  )
   const patch: RelayFields = {}
   if (relaysChanged) {
     patch.remoteSessionIdsByTabId = Object.keys(relays).length > 0 ? relays : undefined
@@ -103,7 +111,7 @@ export function applyDesktopRelayWrite(
   if (adopting) {
     patch.desktopRelayAdoptionVersion = DESKTOP_RELAY_LEGACY_ADOPTION_VERSION
   }
-  return { refused, patch }
+  return { refused, patch, changedTabIds }
 }
 
 /** For main writers that change or remove these keys' relay ids: the window no longer owns them. A

@@ -32,15 +32,17 @@ let probe: Promise<boolean> = Promise.resolve(false)
 let settled: boolean | null = null
 const acknowledgedRelays = new AcknowledgedDesktopRelays()
 
-/** Ask main once whether it applies relay ids by ownership. An older main (no handler) and the paired
- *  web client (no method) answer no, and keep relay ids in ordinary saves. */
+/** Ask main once whether it applies relay ids by ownership. An older main (no handler), the paired web
+ *  client (no method) and main-owned layout answer no, and keep relay ids in ordinary saves. */
 export function probeDesktopRelays(api: DesktopRelayApi): Promise<boolean> {
   if (probedApi === api) {
     return probe
   }
   probedApi = api
   acknowledgedRelays.forget()
-  const askVersion = api.applyDesktopRelays ? api.desktopRelaysVersion : undefined
+  // Main-owned layout recomputes relay ids from live terminals on each save that carries them.
+  const askVersion =
+    api.applyDesktopRelays && !ORCA_LAYOUT_OWNER_IS_MAIN ? api.desktopRelaysVersion : undefined
   settled = askVersion ? null : false
   probe = askVersion
     ? askVersion().then(
@@ -163,10 +165,7 @@ export function sendDesktopRelayWrite(
   if (!api.applyDesktopRelays) {
     return null
   }
-  // Main-owned layout recomputes every host's relay ids from each save, so it gets every host.
-  const { write, acknowledge } = ORCA_LAYOUT_OWNER_IS_MAIN
-    ? { write: full, acknowledge: () => {} }
-    : acknowledgedRelays.narrow(full)
+  const { write, acknowledge } = acknowledgedRelays.narrow(full)
   if (write.hosts.length === 0) {
     return null
   }

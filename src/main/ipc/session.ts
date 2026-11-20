@@ -113,9 +113,7 @@ export function registerSessionHandlers(store: Store, runtime: OrcaRuntimeServic
     return 'applied'
   }
 
-  registerDesktopRelayHandlers(store, isFenced, (patch, hostId) => {
-    patchWindowSession(() => patch, hostId)
-  })
+  registerDesktopRelayHandlers(store, isFenced)
 
   ipcMain.handle('session:patch', (_event, args: WorkspaceSessionPatch, hostId?: string | null) => {
     patchWindowSession(() => args, hostId)

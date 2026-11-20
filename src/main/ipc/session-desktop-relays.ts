@@ -6,19 +6,11 @@ import {
   legacyRelayAdoptionBatch
 } from '../persistence/desktop-relay-legacy-adoption'
 import { parseExecutionHostId } from '../../shared/execution-host/execution-host'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/workspace-layout/layout-owner-switch'
-import {
-  applyDesktopRelayWrite,
-  type DesktopRelayHostWrite
-} from '../../shared/workspace-session/desktop-relay-ownership'
+import { applyDesktopRelayWrite } from '../../shared/workspace-session/desktop-relay-ownership'
 import {
   DESKTOP_RELAY_WRITE_VERSION,
   type DesktopRelayWriteResult
 } from '../../shared/workspace-session/desktop-relay-write'
-import type {
-  WorkspaceSessionPatch,
-  WorkspaceSessionState
-} from '../../shared/workspace-session/workspace-session-state-types'
 
 const desktopRelayWriteSchema = z.object({
   version: z.literal(DESKTOP_RELAY_WRITE_VERSION),
@@ -37,27 +29,10 @@ type RelayStore = Pick<
   'getRepos' | 'getWorkspaceSession' | 'getWorkspaceSessionHostIds' | 'patchWorkspaceSessionRelays'
 >
 
-/** The relay map a window's write describes, applied without ownership (main-owned layout). */
-function windowRelayMap(
-  stored: WorkspaceSessionState,
-  write: DesktopRelayHostWrite
-): Record<string, string> {
-  if (!write.removedTabIds) {
-    return write.relayIdsByTabId
-  }
-  const relays = { ...stored.remoteSessionIdsByTabId, ...write.relayIdsByTabId }
-  for (const tabId of write.removedTabIds) {
-    delete relays[tabId]
-  }
-  return relays
-}
-
 /** The desktop window's relay ids go through main, which changes only the keys the window owns. */
 export function registerDesktopRelayHandlers(
   store: RelayStore,
-  isFenced: (hostId: string) => boolean,
-  // Main-owned layout recomputes relays from live terminals whenever a window save carries them.
-  patchWindowRelays: (patch: WorkspaceSessionPatch, hostId: string) => void
+  isFenced: (hostId: string) => boolean
 ): void {
   const legacyBaseline = captureLegacyRelayBaseline(store)
   // Answering proves this main registered the apply handler; older mains reject the probe.
@@ -84,16 +59,7 @@ export function registerDesktopRelayHandlers(
           result.skipped.push(hostId)
           continue
         }
-        existing ??= new Set(store.getWorkspaceSessionHostIds())
-        if (ORCA_LAYOUT_OWNER_IS_MAIN && parseExecutionHostId(hostId)?.kind !== 'runtime') {
-          const relays = windowRelayMap(store.getWorkspaceSession(hostId), host)
-          if (existing.has(hostId) || Object.keys(relays).length > 0) {
-            patchWindowRelays({ remoteSessionIdsByTabId: relays }, hostId)
-          }
-          result.applied.push(hostId)
-          continue
-        }
-        const { patch, refused } = applyDesktopRelayWrite(
+        const { patch, refused, changedTabIds } = applyDesktopRelayWrite(
           store.getWorkspaceSession(hostId),
           host,
           adoptionFor(hostId)
@@ -101,9 +67,10 @@ export function registerDesktopRelayHandlers(
         if (refused) {
           result.refused.push(hostId)
         }
+        existing ??= new Set(store.getWorkspaceSessionHostIds())
         // Never materialize a partition just to record that it holds nothing.
         if (patch && (existing.has(hostId) || patch.remoteSessionIdsByTabId)) {
-          store.patchWorkspaceSessionRelays(patch, hostId)
+          store.patchWorkspaceSessionRelays(patch, hostId, changedTabIds)
           result.applied.push(hostId)
         } else {
           result.unchanged.push(hostId)
