@@ -432,8 +432,8 @@
       "emptyScope": "No past agent sessions in this scope.",
       "hideDetails": "Hide details",
       "showDetails": "Show details",
-      "dismissNotice": "Dismiss",
-      "loading": "Loading agent sessions…"
+      "loading": "Loading agent sessions…",
+      "showAllAgents": "Show all agents"
     },
     "resumeTarget": {
       "runtimeUnavailable": "Resume from history is not available in runtime-hosted workspaces.",
@@ -465,14 +465,16 @@
     },
     "viewControls": {
       "allAgents": "All agents",
-      "agentCount": "{{count}} agents",
       "lastUpdated": "Last updated",
       "created": "Created",
-      "agentsLabel": "Agents: {{agents}}",
-      "sortLabel": "Sort sessions: {{sort}}",
-      "agents": "Agents",
-      "sort": "Sort",
-      "noAgents": "No agents"
+      "agents": "Agents"
+    },
+    "filterSheet": {
+      "title": "Filter & sort",
+      "activeLabel": "Filter & sort, {{count}} active",
+      "reset": "Reset",
+      "done": "Done",
+      "sortBy": "Sort by"
     }
   },
   "diagnostics": {
