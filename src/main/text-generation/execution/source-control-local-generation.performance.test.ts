@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   resolveCodexHomeProcessLockKeyForSpawnEnv,
   withCodexHomeProcessLock
@@ -37,5 +37,33 @@ describe('background naming admission under the Codex home lock', () => {
     await otherHolder
     await expect(result).resolves.toMatchObject({ success: false, canceled: true })
     expect(admissions).toBe(1)
+  })
+
+  it('gives a request holding an account lock the next slot, ahead of queued background runs', async () => {
+    vi.resetModules()
+    const { BackgroundGenerationRequest } = await import('./background-generation-slots')
+    const started: string[] = []
+    const closers: (() => void)[] = []
+    const launch = (label: string, holdsAccountLock = false) =>
+      new BackgroundGenerationRequest().admitWhile(() => true)(
+        () => {
+          started.push(label)
+          const closed = Promise.withResolvers<void>()
+          closers.push(closed.resolve)
+          return { processClosed: closed.promise }
+        },
+        { holdsAccountLock }
+      )
+    void launch('a')
+    void launch('b')
+    void launch('c')
+    void launch('queued background run')
+    void launch('account lock holder', true)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(started).toEqual(['a', 'b', 'c'])
+
+    closers[0]()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(started).toEqual(['a', 'b', 'c', 'account lock holder'])
   })
 })

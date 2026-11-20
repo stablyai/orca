@@ -132,9 +132,10 @@ export function runLocalPlanForAgent(input: {
       : launch(input.plan)
   }
   const admit = input.admit
+  const holdsAccountLock = input.agentId === 'codex'
   const admitted = admit
     ? async (): Promise<LocalProcessExecution<InternalTextGenerationResult>> =>
-        (await admit(start)) ?? {
+        (await admit(start, { holdsAccountLock })) ?? {
           result: Promise.resolve({
             success: false,
             error: 'Generation canceled.',

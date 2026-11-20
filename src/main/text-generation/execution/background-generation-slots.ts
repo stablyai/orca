@@ -10,10 +10,12 @@ type Execution = { processClosed: Promise<unknown> }
 /**
  * Starts a generation once a slot frees and holds the slot until its processes close; the result
  * itself is not delayed. Null when the request was no longer wanted by the time the slot freed.
- * Callers enter after any account lock, so a lock wait holds no slot.
+ * Callers enter after any account lock, so a lock wait holds no slot; one that holds an account
+ * lock goes first, so the lock is held for at most one slot turnover rather than a whole burst.
  */
 export type GenerationAdmission = <E extends Execution>(
-  start: () => E | Promise<E>
+  start: () => E | Promise<E>,
+  options?: { holdsAccountLock?: boolean }
 ) => Promise<E | null>
 
 type Waiter = {
@@ -64,11 +66,12 @@ class WaiterQueue {
 }
 
 let running = 0
+const lockHolders = new WaiterQueue()
 const userRequests = new WaiterQueue()
 const backgroundRuns = new WaiterQueue()
 
 function releaseSlot(): void {
-  const next = userRequests.shift() ?? backgroundRuns.shift()
+  const next = lockHolders.shift() ?? userRequests.shift() ?? backgroundRuns.shift()
   if (next) {
     next.grant()
   } else {
@@ -102,14 +105,15 @@ export class BackgroundGenerationRequest {
 
   /** An admission that starts nothing once `stillWanted` is false when its slot frees. */
   admitWhile(stillWanted: () => boolean): GenerationAdmission {
-    return (start) => this.admit(start, stillWanted)
+    return (start, options) => this.admit(start, stillWanted, options?.holdsAccountLock === true)
   }
 
   private async admit<E extends Execution>(
     start: () => E | Promise<E>,
-    stillWanted: () => boolean
+    stillWanted: () => boolean,
+    holdsAccountLock: boolean
   ): Promise<E | null> {
-    await this.acquire()
+    await this.acquire(holdsAccountLock)
     let released = false
     const release = (): void => {
       if (!released) {
@@ -133,7 +137,7 @@ export class BackgroundGenerationRequest {
     }
   }
 
-  private acquire(): Promise<void> {
+  private acquire(holdsAccountLock: boolean): Promise<void> {
     if (running < MAX_RUNNING) {
       running++
       return Promise.resolve()
@@ -149,7 +153,9 @@ export class BackgroundGenerationRequest {
         }
       }
       this.queued = waiter
-      ;(this.userRequested ? userRequests : backgroundRuns).push(waiter)
+      ;(holdsAccountLock ? lockHolders : this.userRequested ? userRequests : backgroundRuns).push(
+        waiter
+      )
     })
   }
 }
