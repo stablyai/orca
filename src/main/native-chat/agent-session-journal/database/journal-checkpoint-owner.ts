@@ -182,7 +182,13 @@ export class JournalCheckpointOwner {
 
   private gated(urgent = false): boolean {
     const { stopped, unknown, blocked, log } = this
-    return journalWalGated({ stopped, unknown, blocked, log, truncating: !!this.truncate }, urgent)
+    // While a busy worker is late, bulk writes take the send rule: the WAL may grow to the hard
+    // ceiling rather than conversion stalling on one slow checkpoint.
+    const late = this.current?.busySince !== undefined
+    return journalWalGated(
+      { stopped, unknown, blocked, log, truncating: !!this.truncate },
+      urgent || late
+    )
   }
 
   private wake(): void {
@@ -543,7 +549,10 @@ export class JournalCheckpointOwner {
     }
     attached.silent = false
     const now = this.now()
-    attached.busySince ??= now
+    if (attached.busySince === undefined) {
+      attached.busySince = now
+      this.wake()
+    }
     if (!this.stopped && now - attached.busySince >= (this.options.stuckMs ?? STUCK_MS)) {
       this.lose(new Error('checkpoint worker is stuck in a checkpoint'), 'slow')
       return
