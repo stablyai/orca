@@ -1,9 +1,9 @@
 import type { z } from 'zod'
-import type {
-  LEGACY_JOURNAL_RETIREMENT_BYTES_BUCKETS,
+import {
   LEGACY_JOURNAL_RETIREMENT_COUNT_BUCKETS,
-  LEGACY_JOURNAL_RETIREMENT_DURATION_BUCKETS,
-  legacyJournalRetirementSchema
+  type LEGACY_JOURNAL_RETIREMENT_BYTES_BUCKETS,
+  type LEGACY_JOURNAL_RETIREMENT_DURATION_BUCKETS,
+  type legacyJournalRetirementSchema
 } from '../../../shared/telemetry/schemas/telemetry-legacy-journal-retirement-schema'
 import { LEGACY_PROOF_LAYOUT, type LegacyProofCounts } from './journal-legacy-retirement-state'
 import { isSqliteCorruption, isSqliteStorageFailure } from '../../sqlite/sqlite-read-failure'
@@ -171,7 +171,7 @@ export class LegacyJournalRetirementReporter {
       ...Object.fromEntries(Object.entries(fields).filter(([, value]) => value !== undefined)),
       deletes: this.deletes
     })
-    const signature = JSON.stringify([
+    const outcome = JSON.stringify([
       event.outcome,
       event.reason,
       event.defer,
@@ -180,26 +180,44 @@ export class LegacyJournalRetirementReporter {
       event.deletes,
       event.completeness,
       event.source_bytes_bucket,
-      // Progress too, by bucket, once counts only grow: a walk that got further is reported, a few
-      // times at most. Counts of one launch's pages alone would move every launch.
-      ...(fields.cumulative
-        ? [event.chats_bucket, event.newly_converted_bucket, event.copies_bucket]
-        : []),
       this.version
     ])
+    // Progress by bucket, once counts cover every page: a walk that got further is reported, a few
+    // times at most. Only forward: a launch that restarted below unsaved progress isn't news.
+    const progress = fields.cumulative
+      ? [event.chats_bucket, event.newly_converted_bucket, event.copies_bucket].map((bucket) =>
+          LEGACY_JOURNAL_RETIREMENT_COUNT_BUCKETS.indexOf(bucket)
+        )
+      : []
+    const signature = JSON.stringify([outcome, progress])
     // Logged once per launch for each distinct outcome, however often a retry repeats it.
     if (!this.logged.has(signature)) {
       this.logged.add(signature)
       logLegacyJournalRetirement(event)
     }
     // Marked reported only once the usage client took it, so a dropped event is sent again later.
-    if (signature !== this.last && (await sendLegacyJournalRetirement(event))) {
+    if (this.news(outcome, progress) && (await sendLegacyJournalRetirement(event))) {
       this.last = signature
       // A failed note only means the next launch sends it again; it never fails the cleanup.
       await this.writer
         .maintain({ kind: 'legacy-retirement-reported', value: signature })
         .catch(() => {})
     }
+  }
+
+  /** A different outcome than last reported, or the same one further along. */
+  private news(outcome: string, progress: number[]): boolean {
+    let last: unknown
+    try {
+      last = this.last ? JSON.parse(this.last) : null
+    } catch {
+      return true
+    }
+    if (!Array.isArray(last) || last[0] !== outcome || !Array.isArray(last[1])) {
+      return true
+    }
+    const before: unknown[] = last[1]
+    return progress.some((bucket, index) => bucket > Number(before[index] ?? -1))
   }
 }
 

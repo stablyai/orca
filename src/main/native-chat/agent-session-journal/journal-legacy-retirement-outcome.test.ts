@@ -212,7 +212,7 @@ it('reports a quit that stops the conversion the proof waits on as interrupted',
   })
 })
 
-it('reports a later launch of the same outcome again when the walk got further', async () => {
+it('reports a later launch of the same outcome again only when the walk got further', async () => {
   const events = recordEvents()
   const many = await profile({
     seed: (legacy) => {
@@ -234,7 +234,12 @@ it('reports a later launch of the same outcome again when the walk got further',
   }
   await many.launch('1.0.1', true, undefined, undefined, false).run()
   calls = 0
-  limit = 17
+  // Fewer pages than a progress save takes, so the next launch starts from the first page again.
+  limit = 5
+  await many.launch('1.0.1', true, undefined, undefined, false).run()
+  // Saved progress lags the walk: a launch that restarts below it and stops early isn't news.
+  calls = 0
+  limit = 1
   await many.launch('1.0.1', true, undefined, undefined, false).run()
   expect(events.map((event) => [event.outcome, event.error, event.chats_bucket])).toEqual([
     ['proving', 'interrupted', '11_100'],
