@@ -151,10 +151,6 @@ function rebuildDueAtlases(): void {
   if (panes.length === 0) {
     return
   }
-  recordTerminalWebglDiagnostic('webgl-renderer-rebuild', {
-    panes: panes.length,
-    reason: 'atlas-memory'
-  })
   // Decided before any detach: detaching changes layout, and reading rects afterwards forces one layout per pane.
   const reattach = new Set<ManagedPaneInternal>()
   for (const pane of panes) {
@@ -168,7 +164,14 @@ function rebuildDueAtlases(): void {
     }
   }
   // Every owner of a due atlas detaches before any reattaches, or a remaining owner keeps it alive; only on-screen owners reattach now.
+  const startedAt = performance.now()
   rebuildPanes?.(panes, (pane) => reattach.has(pane))
+  recordTerminalWebglDiagnostic('webgl-renderer-rebuild', {
+    panes: panes.length,
+    reattached: reattach.size,
+    reason: 'atlas-memory',
+    durationMs: Math.round(performance.now() - startedAt)
+  })
 }
 
 function scheduleRebuild(): void {
