@@ -55,7 +55,8 @@ export const JOURNAL_LEGACY_REVISIONS_KEPT = 'journal.legacy-revisions-kept.v1'
  */
 export function reconcileJournalLegacySource(
   stateDirectory: string,
-  db: Database.Database
+  db: Database.Database,
+  onCustodyTransfer?: (complete: boolean) => void
 ): boolean {
   const sourcePath = journalDatabasePath(stateDirectory)
   // Captured before reading, so a write during this pass is never taken as absorbed. Until every
@@ -77,7 +78,7 @@ export function reconcileJournalLegacySource(
     return true
   }
   const receipt = JSON.stringify(captured)
-  const pass: Pass = { kept, forced, baselines: [], compares: [] }
+  const pass: Pass = { kept, forced, baselines: [], compares: [], onCustodyTransfer }
   const source = openJournalLegacySource(sourcePath)
   let complete = true
   let gone: string[] = []
@@ -106,7 +107,7 @@ export function reconcileJournalLegacySource(
     captured.disposition === 'copied-source' &&
     !sameJournalLegacySource(receipt, captureJournalLegacySourceReceipt(sourcePath))
   ) {
-    return false
+    return complete
   }
   runJournalTransaction(db, () => {
     for (const id of gone) {
@@ -124,11 +125,12 @@ export function reconcileJournalLegacySource(
       writeMeta(db, JOURNAL_LEGACY_REVISIONS_KEPT, '1')
     }
   })
-  return complete && captured.disposition !== 'uncertifiable'
+  return complete
 }
 
 /** What one pass knows about the original, and the chats it takes as already shown here. */
 type Pass = {
+  onCustodyTransfer?: (complete: boolean) => void
   /** Every chat in the original at the copy was given a revision here. */
   kept: boolean
   /** Chats that get a copy whatever their revision shows. */
@@ -172,7 +174,19 @@ function absorbChats(
   walk: boolean
 ): boolean {
   const adoption = readAdoption(source, db, walk ? null : [...pass.forced.keys()])
-  const chats = walk ? originalChatIds(source, 'saved') : [...pass.forced.keys()]
+  let chats: string[]
+  try {
+    chats = walk ? originalChatIds(source, 'saved') : [...pass.forced.keys()]
+  } catch (error) {
+    // A broken catalog keeps the pre-existing bulk-claim behavior; no chat can be visited.
+    runJournalTransaction(db, () => {
+      for (const [id, claims] of adoption.claims) {
+        insertJournalLegacyClaims(db, id, missingJournalLegacyClaims(db, id, claims))
+      }
+    })
+    throw error
+  }
+  pass.onCustodyTransfer?.(false)
   for (const id of chats) {
     let revision: string | undefined
     const added = adoption.added.length
@@ -228,6 +242,7 @@ function absorbChats(
       Object.assign(adoption, { nextPosition, tabsRecorded })
     }
   }
+  pass.onCustodyTransfer?.(true)
   return true
 }
 

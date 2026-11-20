@@ -1,4 +1,12 @@
-import { existsSync, mkdtempSync, mkdirSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  linkSync,
+  mkdtempSync,
+  mkdirSync,
+  rmSync,
+  utimesSync,
+  writeFileSync
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
@@ -100,3 +108,136 @@ it('retains uploads after interrupted reconciliation, then resumes cleanup after
     await recovered.close()
   }
 })
+
+it('cleans orphans after a complete custody snapshot whose source identity cannot be certified', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'orca-attachment-custody-'))
+  cleanup.push(() => rmSync(root, { recursive: true, force: true }))
+  const { db: source } = openJournalDatabase(journalDatabasePath(root))
+  cleanup.push(() => source.close())
+  source.prepare('INSERT INTO agent_session_records VALUES(?,?)').run('saved-chat', '{}')
+  source
+    .prepare('INSERT INTO agent_session_attachment_claims VALUES(?,?,?)')
+    .run('claimed', 'saved-chat', 100)
+  source.pragma('wal_checkpoint(TRUNCATE)')
+  linkSync(journalDatabasePath(root), join(root, 'original-link.db'))
+  const now = 2_000_000_000_000
+  const old = new Date(now - 8 * 24 * 60 * 60 * 1000)
+  const attachments = agentSessionAttachmentStoreRoot(root)
+  for (const upload of ['claimed', 'orphan']) {
+    const directory = join(attachments, upload)
+    mkdirSync(directory, { recursive: true })
+    writeFileSync(join(directory, 'saved.txt'), 'stored upload')
+    utimesSync(directory, old, old)
+  }
+  const store = new AgentSessionAttachmentStore(attachments, { hasSession: () => true })
+  for (let launch = 0; launch < 2; launch++) {
+    const orphan = join(attachments, 'orphan')
+    mkdirSync(orphan, { recursive: true })
+    writeFileSync(join(orphan, 'saved.txt'), 'abandoned upload')
+    utimesSync(orphan, old, old)
+    const database = await JournalSqlDatabase.open(root, {
+      writerPath: journalSqlWorkerPath(),
+      readerPath: journalSqlReaderPath(),
+      onMaintenanceError: () => {}
+    })
+    try {
+      await sweepAgentSessionAttachments(
+        store,
+        structuredAgentSessionAttachmentSweepFacts(database),
+        now
+      )
+      expect(['claimed', 'orphan'].map((id) => existsSync(join(attachments, id)))).toEqual([
+        true,
+        false
+      ])
+    } finally {
+      await database.close()
+    }
+  }
+})
+
+it('continues orphan cleanup when permanent history failures have settled their upload custody', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'orca-attachment-custody-'))
+  cleanup.push(() => rmSync(root, { recursive: true, force: true }))
+  const { db: source } = openJournalDatabase(journalDatabasePath(root))
+  cleanup.push(() => source.close())
+  source.prepare('INSERT INTO agent_session_records VALUES(?,?)').run('saved-chat', '{}')
+  await initializeJournalDomainDatabase(root)
+  source
+    .prepare('INSERT INTO agent_session_attachment_claims VALUES(?,?,?)')
+    .run('claimed', 'saved-chat', 100)
+  source.exec('DROP TABLE journal_sessions')
+  const now = 2_000_000_000_000
+  const old = new Date(now - 8 * 24 * 60 * 60 * 1000)
+  const attachments = agentSessionAttachmentStoreRoot(root)
+  for (const upload of ['claimed', 'orphan']) {
+    const directory = join(attachments, upload)
+    mkdirSync(directory, { recursive: true })
+    writeFileSync(join(directory, 'saved.txt'), 'stored upload')
+    utimesSync(directory, old, old)
+  }
+  const database = await JournalSqlDatabase.open(root, {
+    writerPath: journalSqlWorkerPath(),
+    readerPath: journalSqlReaderPath(),
+    onMaintenanceError: () => {}
+  })
+  try {
+    const store = new AgentSessionAttachmentStore(attachments, { hasSession: () => true })
+    await sweepAgentSessionAttachments(
+      store,
+      structuredAgentSessionAttachmentSweepFacts(database),
+      now
+    )
+    expect(['claimed', 'orphan'].map((id) => existsSync(join(attachments, id)))).toEqual([
+      true,
+      false
+    ])
+  } finally {
+    await database.close()
+  }
+})
+
+it.each(['claim inventory', 'chat catalog'])(
+  'keeps baseline cleanup when the original %s cannot be read',
+  async (broken) => {
+    const root = mkdtempSync(join(tmpdir(), 'orca-attachment-custody-'))
+    cleanup.push(() => rmSync(root, { recursive: true, force: true }))
+    const { db: source } = openJournalDatabase(journalDatabasePath(root))
+    cleanup.push(() => source.close())
+    source.prepare('INSERT INTO agent_session_records VALUES(?,?)').run('saved-chat', '{}')
+    await initializeJournalDomainDatabase(root)
+    source
+      .prepare('INSERT INTO agent_session_attachment_claims VALUES(?,?,?)')
+      .run('claimed', 'saved-chat', 100)
+    if (broken === 'claim inventory') {
+      source.exec(`DROP TABLE agent_session_attachment_claims;
+      CREATE VIEW agent_session_attachment_claims AS
+      SELECT upload_id,session_id,claimed_at FROM unavailable_claim_inventory`)
+    } else {
+      source.exec('DROP TABLE agent_session_records')
+    }
+    const now = 2_000_000_000_000
+    const old = new Date(now - 8 * 24 * 60 * 60 * 1000)
+    const attachments = agentSessionAttachmentStoreRoot(root)
+    const orphan = join(attachments, 'orphan')
+    mkdirSync(orphan, { recursive: true })
+    writeFileSync(join(orphan, 'saved.txt'), 'abandoned upload')
+    utimesSync(orphan, old, old)
+    const database = await JournalSqlDatabase.open(root, {
+      writerPath: journalSqlWorkerPath(),
+      readerPath: journalSqlReaderPath(),
+      onMaintenanceError: () => {}
+    })
+    try {
+      const store = new AgentSessionAttachmentStore(attachments, { hasSession: () => true })
+      await sweepAgentSessionAttachments(
+        store,
+        structuredAgentSessionAttachmentSweepFacts(database),
+        now
+      )
+      expect(existsSync(orphan)).toBe(false)
+    } finally {
+      await database.close()
+    }
+  }
+)

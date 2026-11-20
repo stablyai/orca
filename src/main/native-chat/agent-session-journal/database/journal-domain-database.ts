@@ -28,7 +28,6 @@ import {
 } from './journal-legacy-reconcile'
 import { JOURNAL_LEGACY_SOURCE_RECEIPT } from './journal-legacy-source-receipt'
 import { captureJournalLegacySourceReceipt } from './journal-legacy-source-capture'
-import { sameJournalLegacySource } from './journal-legacy-source-receipt'
 
 /** Run once on the writer worker, before opening its steady-state writable connection. */
 export async function initializeJournalDomainDatabase(
@@ -87,12 +86,7 @@ export async function initializeJournalDomainDatabase(
       onReconciled?.(complete)
       return destination
     }
-    const current = captureJournalLegacySourceReceipt(sourcePath)
-    onReconciled?.(
-      sourceReceipt.disposition === 'no-source-at-initialization'
-        ? current.disposition === 'no-source-at-initialization'
-        : sameJournalLegacySource(JSON.stringify(sourceReceipt), current)
-    )
+    onReconciled?.(true)
     return destination
   } finally {
     rmSync(temporary, { recursive: true, force: true })
@@ -101,16 +95,22 @@ export async function initializeJournalDomainDatabase(
 
 /** Best effort: a failure leaves the original unabsorbed for the next launch, never blocks chats. */
 function absorbOlderOrcaWrites(stateDirectory: string, destination: string): boolean {
+  let custodyComplete = true
   try {
     const { db, readOnly } = openJournalDomainDatabase(destination)
     try {
-      return !readOnly && reconcileJournalLegacySource(stateDirectory, db)
+      return (
+        readOnly ||
+        reconcileJournalLegacySource(stateDirectory, db, (complete) => {
+          custodyComplete = complete
+        })
+      )
     } finally {
       db.close()
     }
   } catch (error) {
     console.warn('[agent-session-journal] reading chats an older Orca saved failed', error)
-    return false
+    return custodyComplete
   }
 }
 
