@@ -5,7 +5,6 @@ import type { ExternalConversationLink } from '../../shared/connectors/external-
 import { chatPaneKey } from './external-conversation-chat'
 import { ChatTurns } from './external-conversation-chat-turns'
 import { ChatDeliveries } from './external-conversation-chat-delivery'
-import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { AgentJournalRenderItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import type { ConversationEvent } from './external-conversation-events'
 
@@ -423,8 +422,18 @@ describe('a turn its conversation heard across a host restart', () => {
       promptsAudience: () => true,
       turnOpener: () => null,
       keepAdoptedTurn: () => {},
-      readHookRow: () =>
-        ({ structuredHost: 'owned', state: 'working', stateStartedAt: 3 }) as AgentStatusIpcPayload,
+      readHookRow: () => ({
+        paneKey: chatPaneKey(SESSION),
+        structuredHost: 'owned',
+        state: 'working',
+        tabId: 'tab',
+        worktreeId: 'wt',
+        connectionId: null,
+        prompt: '',
+        agentType: 'claude',
+        receivedAt: 3,
+        stateStartedAt: 3
+      }),
       pendingPrompt: () => null,
       chatTurnOrigin: (sessionId, turnAt) => deliveries.origin(sessionId, turnAt),
       chatTurnDelivered: (sessionId) => deliveries.pending(sessionId),
