@@ -596,3 +596,31 @@ it('reconciles literal source-note text split across glued text-only sends', () 
   expect(prunePendingSends(pending, transcript)).toEqual([])
   expect(pendingSendsAsMessages(pending, transcript)).toEqual([])
 })
+
+it('reconciles glued text and fitted-image captions without counting generated context as human words', () => {
+  const note = '[Image source file: "/repo/a.png"; attached viewing copy: "/temp/a.png"]'
+  const pending = [
+    { id: 'text', text: 'first', sentAt: 100, afterMessageId: 'boundary' },
+    {
+      id: 'image',
+      text: 'second',
+      imagePaths: ['/repo/a.png'],
+      deliveredImagePaths: ['/temp/a.png'],
+      sentAt: 110,
+      afterMessageId: 'boundary'
+    }
+  ]
+  const transcript: NativeChatMessage[] = [
+    message('boundary', 'assistant', 'ready', 90),
+    {
+      ...message('glued', 'user', '', 120),
+      blocks: [
+        { type: 'image-ref', path: '/temp/a.png' },
+        { type: 'text', text: `first [Image #1] second\n\n${note}` }
+      ]
+    },
+    message('reply', 'assistant', 'done', 130)
+  ]
+  expect(prunePendingSends(pending, transcript)).toEqual([])
+  expect(pendingSendsAsMessages(pending, transcript)).toEqual([])
+})

@@ -295,9 +295,8 @@ export function useMobileNativeChatDrafts(args: {
     })
   }, [echoRows, messages, pending, pendingKey, landedImagePreviews, landedImagePendingIds])
   const visiblePending = useMemo(
-    () =>
-      visibleMobileNativeChatPending(echoRows, pending, landedImagePendingIds, transcriptSettled),
-    [echoRows, pending, landedImagePendingIds, transcriptSettled]
+    () => visibleMobileNativeChatPending(echoRows, pending, landedImagePendingIds),
+    [echoRows, pending, landedImagePendingIds]
   )
 
   return {

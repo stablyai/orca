@@ -118,12 +118,8 @@ export function retireLandedMobileNativeChatPending(
 export function visibleMobileNativeChatPending(
   messages: readonly NativeChatMessage[],
   current: MobileNativeChatPendingMessage[],
-  landedImagePendingIds: ReadonlySet<string> = new Set(),
-  transcriptSettled = true
+  landedImagePendingIds: ReadonlySet<string> = new Set()
 ): MobileNativeChatPendingMessage[] {
-  if (!transcriptSettled) {
-    return current
-  }
   const visible = new Set(visibleNativeChatPendingSends(current, messages))
   const next = current.filter(
     (item) =>

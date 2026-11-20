@@ -150,15 +150,13 @@ export function findLandedImagePreviewEchoes(
       continue
     }
     const targetText = normalizeNativeChatUserText(entry.text)
+    const grouped = nativeChatPendingContentKey(entry).includes('\0attachments:')
     const candidates = normalized.filter((message) => {
       if (message.role !== 'user') {
         return false
       }
       if (targetText) {
-        if (
-          nativeChatPendingContentKey(entry).includes('\0attachments:') &&
-          message.blocks.filter(isImageRefBlock).length !== entry.images!.length
-        ) {
+        if (grouped && message.blocks.filter(isImageRefBlock).length !== entry.images!.length) {
           return false
         }
         const text = normalizedNativeChatUserMessageText(message)

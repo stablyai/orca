@@ -90,7 +90,8 @@ export function advancedNativeChatUserRows(
   const waiting: NativeChatUserRow[] = []
   for (const message of messages) {
     if (message.role === 'user') {
-      const text = imageDeliveryRow(message).literal
+      const row = imageDeliveryRow(message)
+      const text = row.rawPaths.length > 0 ? row.text : row.literal
       if (text) {
         waiting.push({ id: message.id, text })
       }
@@ -110,7 +111,8 @@ export function matchingNativeChatUserRows(
     if (message.role !== 'user') {
       continue
     }
-    const text = imageDeliveryRow(message).literal
+    const row = imageDeliveryRow(message)
+    const text = row.rawPaths.length > 0 ? row.text : row.literal
     if (text) {
       rows.push({ id: message.id, text })
     }
