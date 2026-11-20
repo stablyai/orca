@@ -1,7 +1,13 @@
-import { ipcMain, type WebContents } from 'electron'
+import { setTimeout as delay } from 'node:timers/promises'
+import { BrowserWindow, ipcMain, type WebContents } from 'electron'
 import type { Store } from '../../persistence/loading-store/store'
-import { relaunchApp, type AppRelaunchReason } from '../../startup/quit/app-relaunch'
-import { quitProcess } from '../../startup/quit/process-quit-request'
+import {
+  prepareAppRelaunch,
+  relaunchAppAndQuit,
+  runBeforeRelaunchCleanup,
+  type AppRelaunchReason
+} from '../../startup/quit/app-relaunch'
+import type { AppImageProcessRelaunch } from '../../startup/quit/process-relaunch'
 import type {
   CreateLocalOrcaProfileArgs,
   CreateLocalOrcaProfileResult,
@@ -112,29 +118,24 @@ function createCloudLinkedProfileArgsFromUnknown(args: unknown): CreateCloudLink
   }
 }
 
-async function runBeforeProfileRelaunch(
-  onBeforeRelaunch?: () => void | Promise<void>
-): Promise<void> {
-  try {
-    await onBeforeRelaunch?.()
-  } catch (error) {
-    console.warn(
-      '[orca-profiles] Pre-relaunch cleanup failed; continuing profile switch:',
-      error instanceof Error ? error.name : typeof error
-    )
-  }
-}
-
-type ProfileRelaunchReason = Extract<AppRelaunchReason, `profile-${string}`>
-
-function scheduleProfileRelaunch(reason: ProfileRelaunchReason, sender: WebContents): void {
+function scheduleProfileRelaunch(
+  reason: Extract<AppRelaunchReason, `profile-${string}`>,
+  sender: WebContents,
+  restart: AppImageProcessRelaunch | undefined
+): void {
   if (!sender.isDestroyed()) {
     sender.send('app:restart-committed')
   }
   setTimeout(() => {
-    relaunchApp(reason)
-    // Normal quit preserves renderer scrollback, PTY teardown, stats flush and final daemon checkpoints.
-    quitProcess()
+    if (!restart) {
+      relaunchAppAndQuit(reason)
+      return
+    }
+    void restart
+      .quit()
+      .catch((error: unknown) =>
+        console.error('[orca-profiles] Could not restart after a profile change:', error)
+      )
   }, 150)
 }
 
@@ -174,12 +175,31 @@ export function registerOrcaProfileHandlers(
         return { status: 'already-active' }
       }
 
-      // Flush the source profile before switching the startup index; keep its writer alive through relaunch cleanup.
-      await flushActiveProfileBeforeRelaunch(store)
-      setActiveOrcaProfile(profileId)
-      await runBeforeProfileRelaunch(options.onBeforeRelaunch)
+      if (!current.profiles.some((profile) => profile.id === profileId)) {
+        throw new Error('unknown_orca_profile')
+      }
 
-      scheduleProfileRelaunch('profile-switch', event.sender)
+      const selectProfile = (): void => {
+        setActiveOrcaProfile(profileId)
+      }
+      const restart = await prepareAppRelaunch('profile-switch')
+      try {
+        // Flush the source before switching the startup index.
+        await flushActiveProfileBeforeRelaunch(store)
+        if (restart) {
+          await runBeforeRelaunchCleanup(options.onBeforeRelaunch)
+          restart.signal.throwIfAborted()
+          await delay(150)
+          await restart.quit(selectProfile)
+        } else {
+          selectProfile()
+          await runBeforeRelaunchCleanup(options.onBeforeRelaunch)
+          scheduleProfileRelaunch('profile-switch', event.sender, undefined)
+        }
+      } catch (error) {
+        restart?.cancel()
+        throw error
+      }
 
       return { status: 'relaunching' }
     }
@@ -197,27 +217,40 @@ export function registerOrcaProfileHandlers(
         throw new Error('active_target_orca_profile_transfer_requires_relaunch')
       }
       if (args.mode === 'move' && args.sourceProfileId === current.activeProfileId) {
-        // Finish transfer before relaunch side effects so validation failure cannot strand the app quitting.
-        const result = await transferActiveProfileProject(
-          args,
-          getProfileUserDataPath(),
-          store,
-          async () => {
-            await runBeforeProfileRelaunch(options.onBeforeRelaunch)
-            scheduleProfileRelaunch('profile-transfer', event.sender)
+        const restart = await prepareAppRelaunch('profile-transfer')
+        let mustRestart = false
+        try {
+          if (restart) {
+            const window = BrowserWindow.fromWebContents(event.sender)
+            if (!window || window.webContents !== event.sender) {
+              throw new Error('active_source_orca_profile_move_requires_window')
+            }
+            restart.protectProfileMove(window)
           }
-        )
-        if (result.status === 'transferred') {
-          await runBeforeProfileRelaunch(options.onBeforeRelaunch)
-          try {
-            setActiveOrcaProfile(args.targetProfileId)
-          } finally {
+          const result = await transferActiveProfileProject(
+            args,
+            getProfileUserDataPath(),
+            store,
+            async () => {
+              mustRestart = true
+              await runBeforeRelaunchCleanup(options.onBeforeRelaunch)
+            }
+          )
+          if (result.status === 'transferred') {
             // The source has already changed and its writer cannot resume.
-            scheduleProfileRelaunch('profile-transfer', event.sender)
+            mustRestart = true
+            await runBeforeRelaunchCleanup(options.onBeforeRelaunch)
+            setActiveOrcaProfile(args.targetProfileId)
+            return { ...result, willRelaunch: true }
           }
-          return { ...result, willRelaunch: true }
+          return result
+        } finally {
+          if (mustRestart) {
+            scheduleProfileRelaunch('profile-transfer', event.sender, restart)
+          } else {
+            restart?.cancel()
+          }
         }
-        return result
       }
       if (args.sourceProfileId !== current.activeProfileId) {
         await store.flushPendingOrThrowAsync({ drainToStableGeneration: false })

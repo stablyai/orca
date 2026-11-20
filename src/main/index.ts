@@ -1,4 +1,5 @@
 import { app, clipboard, dialog, type BrowserWindow } from 'electron'
+import { relaunchProcessAndExit } from './startup/quit/process-relaunch'
 import { isRoutedOrcaDeepLink } from './startup/open-routing/orca-deep-link-url'
 import { createMacAppActivationHandler } from './window/activation/macos-app-activation'
 import {
@@ -238,12 +239,16 @@ if (preflightReady) {
             })
             if (choice !== undefined) {
               // Recovery needs both profile locks, which only a fresh process can own safely.
-              app.relaunch({
-                args: profileStateDesktopRecoveryArgs(process.argv, {
-                  userDataPath,
-                  selector: { kind: choice }
-                })
-              })
+              await relaunchProcessAndExit(
+                {
+                  args: profileStateDesktopRecoveryArgs(process.argv, {
+                    userDataPath,
+                    selector: { kind: choice }
+                  })
+                },
+                1
+              )
+              return
             }
             app.exit(1)
             return
@@ -260,16 +265,20 @@ if (preflightReady) {
                 translate: translateMain
               })
             ) {
-              app.relaunch({
-                args: profileStateDesktopRecoveryArgs(process.argv, {
-                  userDataPath,
-                  profileId: error.profileId,
-                  selector: {
-                    kind: 'repair',
-                    sections: sections.map(profileStateRepairSectionApproval)
-                  }
-                })
-              })
+              await relaunchProcessAndExit(
+                {
+                  args: profileStateDesktopRecoveryArgs(process.argv, {
+                    userDataPath,
+                    profileId: error.profileId,
+                    selector: {
+                      kind: 'repair',
+                      sections: sections.map(profileStateRepairSectionApproval)
+                    }
+                  })
+                },
+                1
+              )
+              return
             }
             app.exit(1)
             return

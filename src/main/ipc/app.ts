@@ -1,3 +1,4 @@
+import { setTimeout as delay } from 'node:timers/promises'
 import { getSystemLanguageDetection } from '../i18n/system-language'
 import { setMainUiLanguage } from '../i18n/main-i18n'
 import { rebuildAppMenu } from '../menu/register-app-menu'
@@ -8,18 +9,22 @@ import { app, BrowserWindow, dialog, ipcMain, type IpcMainInvokeEvent } from 'el
 import type { AppIdentity } from '../../shared/app-lifecycle/identity/app-identity'
 import type { MarkdownDocument } from '../../shared/file-listing/file-document'
 import type { FloatingTerminalCwdRequest } from '../../shared/ui-chrome/ui-chrome-types'
-import { relaunchApp, runBeforeRelaunchCleanup } from '../startup/quit/app-relaunch'
+import {
+  prepareAppRelaunch,
+  relaunchAppAndQuit,
+  relaunchRendererAndExit,
+  runBeforeRelaunchCleanup
+} from '../startup/quit/app-relaunch'
 import { setWindowMaterialSuppressed } from '../window/presentation/window-material-suppression'
 import { isTrustedUIRenderer } from './ui'
 import { prepareWindowsAdministratorRestart } from '../windows/windows-administrator-restart'
-import { quitProcess } from '../startup/quit/process-quit-request'
 import type { Store } from '../persistence/loading-store/store'
 import { getDevInstanceIdentity } from '../startup/profile-startup/dev-instance-identity'
 import { isPwshAvailableAsync } from '../pty/shell-startup/pwsh'
 import { isWslAvailableAsync } from '../wsl/discovery/wsl-availability'
 import { listWslDistrosAsync } from '../wsl/discovery/distro-catalog'
 import { isGitBashAvailable } from '../pty/shell-startup/git-bash'
-import { destroySystemTray, rebuildSystemTrayMenu } from '../tray/system-tray'
+import { rebuildSystemTrayMenu } from '../tray/system-tray'
 import {
   ensureDefaultFloatingWorkspacePath,
   trustFloatingWorkspaceDirectory,
@@ -208,33 +213,29 @@ export function registerAppHandlers(store: Store, options: RegisterAppHandlersOp
   })
 
   ipcMain.handle('app:relaunch', async () => {
-    // Delay teardown so the renderer can paint Restarting after cleanup.
+    const restart = await prepareAppRelaunch('renderer-request')
     await runBeforeRelaunchCleanup(options.onBeforeRelaunch)
-    await runBeforeRelaunchCleanup(options.onBeforeRelaunchExit)
-    setTimeout(() => {
-      // app.exit skips before-quit; remove the Windows tray to avoid a stale icon.
-      destroySystemTray()
-      relaunchApp('renderer-request')
-      app.exit(0)
-    }, 150)
+    // Let the renderer paint Restarting before committing the exit.
+    await delay(150)
+    await relaunchRendererAndExit(restart, options.onBeforeRelaunchExit)
   })
 
   ipcMain.handle('app:restart', async () => {
-    // Normal quit flushes daemon checkpoints and telemetry.
+    const restart = await prepareAppRelaunch('admin-restart')
     await runBeforeRelaunchCleanup(options.onBeforeRelaunch)
-    setTimeout(() => {
-      relaunchApp('admin-restart')
-      quitProcess()
-    }, 150)
+    // Normal quit flushes daemon checkpoints and telemetry.
+    if (restart) {
+      await delay(150)
+      await restart.quit()
+      return
+    }
+    setTimeout(() => relaunchAppAndQuit('admin-restart'), 150)
   })
 
   ipcMain.handle('app:restartAsAdministrator', async () => {
     const relaunchOptions = prepareWindowsAdministratorRestart()
     await runBeforeRelaunchCleanup(options.onBeforeRelaunch)
-    setTimeout(() => {
-      relaunchApp('windows-administrator', undefined, relaunchOptions)
-      quitProcess()
-    }, 150)
+    setTimeout(() => relaunchAppAndQuit('windows-administrator', relaunchOptions), 150)
   })
 
   registerMacSymbolicHotkeysProbeHandler(readCommandStdout)

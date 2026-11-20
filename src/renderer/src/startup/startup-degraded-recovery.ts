@@ -52,7 +52,16 @@ function announceDegradedStartup(): void {
     action: {
       label: translate('auto.App.caea5b51b9', 'Restart now'),
       onClick: () => {
-        void window.api.app.relaunch()
+        void window.api.app.relaunch().catch((error: unknown) => {
+          toast.error(
+            translate(
+              'auto.components.sidebar.SidebarSettingsHelpMenu.4e8f5710d3',
+              "Couldn't restart Orca."
+            ),
+            { description: error instanceof Error ? error.message : String(error) }
+          )
+          announceDegradedStartup()
+        })
       }
     }
   })

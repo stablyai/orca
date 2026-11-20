@@ -49,7 +49,12 @@ export function removeAppImageRuntimeEnv(env: Record<string, string>): void {
   const appDir = normalizeAppDir(env.APPDIR)
   if (appDir) {
     // AppImage loader paths must not replace host commands or libraries in user shells.
-    for (const key of ['PATH', 'LD_LIBRARY_PATH'] as const) {
+    for (const key of [
+      'PATH',
+      'LD_LIBRARY_PATH',
+      'XDG_DATA_DIRS',
+      'GSETTINGS_SCHEMA_DIR'
+    ] as const) {
       const cleaned = removeAppDirPathEntries(env[key], appDir)
       if (cleaned === undefined) {
         delete env[key]

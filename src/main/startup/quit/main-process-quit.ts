@@ -2,6 +2,7 @@ import { closeEnvironmentStore } from '../../../shared/remote-runtime/host-store
 import { beginProfileShutdownCheckpoint } from '../../persistence/profile-shutdown-checkpoint'
 import { killWslChannelsInCloseGrace } from '../../wsl/execution/wsl-command-channel'
 import { markHostShuttingDown } from './host-shutdown-state'
+import * as processRelaunch from './process-relaunch'
 import { app, type Event } from 'electron'
 import { killAllPty } from '../../ipc/pty/provider/kill-all'
 import * as daemon from '../../daemon/providers/lifecycle/daemon-provider-state'
@@ -53,7 +54,7 @@ const REF_MAINTENANCE_QUIT_DEADLINE_MS = 2_000
 
 function installBeforeQuitHandler(): void {
   app.on('before-quit', (event: Event) => {
-    if (event.defaultPrevented) {
+    if (processRelaunch.skipBeforeQuitForRelaunch(event)) {
       return
     }
     if (isQuittingForUpdate()) {
@@ -62,20 +63,27 @@ function installBeforeQuitHandler(): void {
       })
     }
     state.isQuitting = true
-    flushUnsavedCloudSessions()
-    fenceMainProcessCloudOnQuit()
-    state.runtimeRpc?.setMobileRelayPairingProvider(null)
-    state.unsubscribeAgentAwakeStatusChanges?.()
-    state.unsubscribeAgentAwakeStatusChanges = null
-    state.agentAwakeService?.dispose()
-    state.agentAwakeService = null
-    // Beforeunload may veto; wait for ref locks now but uninstall only after committed quit. isQuitting already blocks new attempts.
-    state.repoMaintenanceShutdown = awaitPackedRefsLockRelease()
-    // Delay PTY cleanup until scrollback capture; exit events otherwise unmount the renderer callbacks.
-    state.rateLimits?.stop()
-    // History GC is idempotent and rescheduled next launch; a vetoed quit costs only a deferred sweep.
-    cancelHistoryGc()
+    // AppImage restart can still be vetoed by the renderer. Keep services live until will-quit.
+    if (!processRelaunch.isGracefulAppImageRelaunch()) {
+      prepareMainProcessShutdown()
+    }
   })
+}
+
+function prepareMainProcessShutdown(): void {
+  flushUnsavedCloudSessions()
+  fenceMainProcessCloudOnQuit()
+  state.runtimeRpc?.setMobileRelayPairingProvider(null)
+  state.unsubscribeAgentAwakeStatusChanges?.()
+  state.unsubscribeAgentAwakeStatusChanges = null
+  state.agentAwakeService?.dispose()
+  state.agentAwakeService = null
+  // Beforeunload may veto; wait for ref locks now but uninstall only after committed quit. isQuitting already blocks new attempts.
+  state.repoMaintenanceShutdown = awaitPackedRefsLockRelease()
+  // Delay PTY cleanup until scrollback capture; exit events otherwise unmount the renderer callbacks.
+  state.rateLimits?.stop()
+  // History GC is idempotent and rescheduled next launch; a vetoed quit costs only a deferred sweep.
+  cancelHistoryGc()
 }
 
 function installWillQuitHandler(): void {
@@ -87,6 +95,9 @@ function installWillQuitHandler(): void {
     // Prevent exit before awaiting work. Synchronous network-profile writes would block the same thread as their deadline timer (#9447).
     if (!quitTeardownStartGate.tryStart(event)) {
       return
+    }
+    if (processRelaunch.isGracefulAppImageRelaunch()) {
+      prepareMainProcessShutdown()
     }
     // Include pane grids still inside their write burst in final save.
     const paneGridFlush = state.runtime?.flushPaneGrids() ?? null
@@ -317,7 +328,10 @@ function installWillQuitHandler(): void {
       )
       .then(() => {
         daemonDisconnectDone = true
-        app.quit()
+        if (processRelaunch.isGracefulAppImageRelaunch()) {
+          return processRelaunch.finishGracefulAppImageRelaunch()
+        }
+        return app.quit()
       })
   })
 }

@@ -16,6 +16,7 @@ import { acquireProfileStateMaintenance } from '../../persistence/profile-state/
 import { rollbackProfileState } from '../../persistence/profile-state/recovery/profile-state-recovery-command'
 import { applyBackgroundActivationPolicy } from '../../window/activation/foreground-activation-policy'
 import { acquireSingleInstanceLock } from './single-instance-lock'
+import { relaunchProcessAndExit } from '../quit/process-relaunch'
 
 /** The process owning both locks performs recovery before Electron can initialize a runtime. */
 export function runProfileStateRecoveryPreflight(argv: readonly string[] = process.argv): boolean {
@@ -65,8 +66,15 @@ function runDesktopRecovery(argv: readonly string[]): void {
       : runRecoveryRequest(argv[index + 1])
   if (response.ok) {
     // Why relaunch: ordinary startup must run in a process that never held maintenance.
-    app.relaunch({ args: stripRecoveryArgs(argv.slice(1)) })
-    app.exit(0)
+    void relaunchProcessAndExit({ args: stripRecoveryArgs(argv.slice(1)) }, 0).catch(
+      (error: unknown) => {
+        console.error(
+          '[profile-state] Recovery succeeded but Orca could not restart. Reopen Orca manually.',
+          error
+        )
+        app.exit(1)
+      }
+    )
     return
   }
   console.error(`[profile-state] Desktop recovery failed: ${response.message}`)

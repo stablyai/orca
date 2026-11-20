@@ -247,15 +247,26 @@ describe('Electron recovery preflight', () => {
       ]
     }
 
-    it('applies the choice without writing a CLI response, then relaunches ordinary startup', () => {
+    it('exits after successful recovery when ordinary startup cannot be relaunched', async () => {
+      const item = fixture()
+      mocks.relaunch.mockImplementationOnce(() => {
+        throw new Error('Cannot start replacement')
+      })
+      expect(runProfileStateRecoveryPreflight(desktopArgv(item))).toBe(true)
+      await vi.waitFor(() => expect(mocks.exit).toHaveBeenCalledWith(1))
+      expect(JSON.parse(readFileSync(item.dataFile, 'utf8'))).toEqual(item.restored)
+      acquireProfileStateRuntimeAdmission(item.root).release()
+    })
+
+    it('applies the choice without writing a CLI response, then relaunches ordinary startup', async () => {
       const item = fixture()
       expect(runProfileStateRecoveryPreflight(desktopArgv(item))).toBe(true)
+      await vi.waitFor(() => expect(mocks.exit).toHaveBeenCalledWith(0))
       expect(JSON.parse(readFileSync(item.dataFile, 'utf8'))).toEqual(item.restored)
       expect(existsSync(item.databaseFile)).toBe(false)
       expect(mocks.output).not.toHaveBeenCalled()
       expect(mocks.background).not.toHaveBeenCalled()
       expect(mocks.relaunch).toHaveBeenCalledWith({ args: ['--inspect', 'orca://share/1'] })
-      expect(mocks.exit).toHaveBeenCalledWith(0)
       acquireProfileStateRuntimeAdmission(item.root).release()
     })
   })

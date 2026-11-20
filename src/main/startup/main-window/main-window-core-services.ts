@@ -3,7 +3,6 @@ import { registerCoreHandlers } from '../../ipc/register-core-handlers/register-
 import { attachMainWindowServices } from '../../window/attach-main-window-services'
 import { initTccPromptNotice } from '../../macos-permissions/macos-tcc-prompt-notice'
 import { resolveUpdateInstallMode } from '../../updater/updater-service'
-import { fenceMainProcessCloudOnQuit } from '../cloud-startup/main-process-connector-startup'
 import { mainProcessState as state } from '../main-process-state'
 import { prepareCodexAiVaultSessionResume } from '../../codex/history/resume/codex-ai-vault-session-resume'
 import { resolveHostCodexSessionSourceHome } from '../../codex/history/rollouts/codex-session-source-home'
@@ -102,11 +101,7 @@ async function installMainWindowCoreServices(
           systemCodexHomePath: resolveHostCodexSessionSourceHome(store.getSettings()),
           preparePinnedLaunchHome: (home) => prepareCodexPinnedLaunchHome(home)
         }),
-      onBeforeRelaunch: async () => {
-        state.isQuitting = true
-        fenceMainProcessCloudOnQuit()
-        await preserveAgentAuthBeforeRestart({ codexRuntimeHome, store })
-      },
+      onBeforeRelaunch: () => preserveAgentAuthBeforeRestart({ codexRuntimeHome, store }),
       orcaAccount
     },
     state.pluginService ?? undefined,

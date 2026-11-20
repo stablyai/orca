@@ -3,13 +3,28 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 const { appMock, nativeUpdaterMock } = await vi.hoisted(async () => {
   const { EventEmitter } = await import('node:events')
   return {
-    appMock: Object.assign(new EventEmitter(), { quit: vi.fn() }),
+    appMock: Object.assign(new EventEmitter(), {
+      quit: vi.fn(),
+      relaunch: vi.fn(),
+      isPackaged: true
+    }),
     nativeUpdaterMock: new EventEmitter()
   }
 })
 
 vi.mock('electron', () => ({ app: appMock, autoUpdater: nativeUpdaterMock }))
 vi.mock('../updater-lifecycle-diagnostics', () => ({ recordUpdaterLifecycle: vi.fn() }))
+
+vi.mock('../../startup/main-process-state', () => ({ mainProcessState: { isQuitting: false } }))
+vi.mock('../../startup/cloud-startup/main-process-connector-startup', () => ({
+  fenceMainProcessCloudOnQuit: vi.fn()
+}))
+vi.mock('../../crash-reporting/breadcrumbs/durable-crash-breadcrumb', () => ({
+  recordDurableCrashBreadcrumb: vi.fn()
+}))
+vi.mock('../../tray/system-tray', () => ({ destroySystemTray: vi.fn() }))
+
+import { prepareAppRelaunch, relaunchAppAndQuit } from '../../startup/quit/app-relaunch'
 
 import {
   beginMacUpdateDownload,
@@ -52,6 +67,39 @@ function registerGuard(
     sendStatus: vi.fn()
   })
 }
+
+it('retains the Electron restart when the macOS updater defers quit', () => {
+  const platform = vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
+  const exits: string[] = []
+  let relaunchArmed = false
+  try {
+    beginMacUpdateDownload()
+    registerGuard(true, vi.fn(), 'downloading')
+    appMock.relaunch.mockImplementation(() => {
+      relaunchArmed = true
+    })
+    appMock.quit.mockImplementation(() => {
+      const event = quitEvent()
+      appMock.emit('before-quit', event)
+      if (!event.defaultPrevented) {
+        exits.push(relaunchArmed ? 'restart' : 'quit')
+      }
+    })
+
+    expect(prepareAppRelaunch('admin-restart')).toBeUndefined()
+    relaunchAppAndQuit('admin-restart')
+    expect(exits).toEqual([])
+    nativeUpdaterMock.emit('update-downloaded')
+    expect(exits).toEqual(['restart'])
+  } finally {
+    platform.mockRestore()
+    resetMacInstallState()
+    appMock.removeAllListeners()
+    nativeUpdaterMock.removeAllListeners()
+    appMock.relaunch.mockReset()
+    appMock.quit.mockReset()
+  }
+})
 
 describe.runIf(process.platform === 'darwin')('macOS quit guard ordering', () => {
   beforeEach(() => {

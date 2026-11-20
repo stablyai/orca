@@ -1,3 +1,4 @@
+import { toast } from 'sonner'
 import { useState } from 'react'
 import { RotateCw } from 'lucide-react'
 import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
@@ -92,9 +93,13 @@ function RestartBanner(): React.JSX.Element {
     setRelaunching(true)
     try {
       await window.api.app.relaunch()
-    } catch {
+    } catch (error) {
       if (mountedRef.current) {
         setRelaunching(false)
+        toast.error(
+          t('auto.components.sidebar.SidebarSettingsHelpMenu.4e8f5710d3', "Couldn't restart Orca."),
+          { description: error instanceof Error ? error.message : String(error) }
+        )
       }
     }
   }

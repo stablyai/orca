@@ -1,3 +1,4 @@
+import { toast } from 'sonner'
 import { useRef, useState } from 'react'
 import { Info, Loader2, RotateCw } from 'lucide-react'
 import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
@@ -37,9 +38,12 @@ export function AdvancedPane({ settings, updateSettings }: AdvancedPaneProps): R
   const handleHttp1CompatibilityRelaunch = (): void => {
     setHttp1CompatibilityRelaunching(true)
     void window.api.app.relaunch().catch((error) => {
-      console.error('[settings] failed to relaunch for HTTP/1.1 compatibility:', error)
       if (mountedRef.current) {
         setHttp1CompatibilityRelaunching(false)
+        toast.error(
+          t('auto.components.sidebar.SidebarSettingsHelpMenu.4e8f5710d3', "Couldn't restart Orca."),
+          { description: error instanceof Error ? error.message : String(error) }
+        )
       }
     })
   }

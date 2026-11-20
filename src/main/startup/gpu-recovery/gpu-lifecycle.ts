@@ -1,5 +1,6 @@
 import { app, type BrowserWindow } from 'electron'
 import { relaunchApp } from '../quit/app-relaunch'
+import type { CrashReportBreadcrumbData } from '../../../shared/crash-reporting/crash-reporting'
 import { destroySystemTray } from '../../tray/system-tray'
 import { applyGpuFallbackCommandLineSwitches } from './gpu-fallback-switches'
 import {
@@ -93,6 +94,20 @@ export function maybeApplyGpuFallbackForThisLaunch(): void {
   })
 }
 
+function restartForGpuFallback(data: CrashReportBreadcrumbData): void {
+  state.isQuitting = true
+  try {
+    relaunchApp('gpu-fallback', data)
+  } catch (error) {
+    state.isQuitting = false
+    state.gpuCrashFallbackTracker.disengage()
+    console.error('[gpu-fallback] Could not restart Orca:', error)
+    return
+  }
+  destroySystemTray()
+  app.exit(0)
+}
+
 export async function presentGpuFallbackRecoveredLaunchPrompt(
   window: BrowserWindow
 ): Promise<void> {
@@ -129,13 +144,10 @@ export async function presentGpuFallbackRecoveredLaunchPrompt(
         crashesInWindow: marker.crashesInWindow
       }),
     restartWithHardware: () => {
-      state.isQuitting = true
-      relaunchApp('gpu-fallback', {
+      restartForGpuFallback({
         mode: 'hardware-retry',
         crashesInWindow: marker.crashesInWindow
       })
-      destroySystemTray()
-      app.exit(0)
     }
   })
 }
@@ -231,10 +243,7 @@ export async function handleGpuChildCrash(
       onRestartDeferred: () =>
         recordDurableCrashBreadcrumb('gpu_fallback_restart_deferred', fallbackData),
       restartIntoSafeGraphics: () => {
-        state.isQuitting = true
-        relaunchApp('gpu-fallback', fallbackData)
-        destroySystemTray()
-        app.exit(0)
+        restartForGpuFallback(fallbackData)
       }
     }
   )
