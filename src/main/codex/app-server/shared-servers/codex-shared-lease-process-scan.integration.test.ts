@@ -27,11 +27,9 @@ describe.skipIf(process.platform !== 'linux')('shared Codex lease process scan',
     const lease = `lease-${process.pid}-${Date.now()}`
     const owned = sleeper({ [ENV]: lease })
     const decoy = sleeper({ [ENV]: 'someone-else' }, [`${ENV}=${lease}`])
-    await new Promise((resolve) => setTimeout(resolve, 300))
-    const scan = await scanCodexLeaseProcesses(ENV, process.pid)
-    expect(scan).not.toBeNull()
-    const tagged = scan!.tagged(lease)
-    expect(tagged).toContain(owned.pid)
-    expect(tagged).not.toContain(decoy.pid)
+    const tagged = async (): Promise<number[]> =>
+      (await scanCodexLeaseProcesses(ENV, process.pid))?.tagged(lease) ?? []
+    await expect.poll(tagged).toContain(owned.pid)
+    expect(await tagged()).not.toContain(decoy.pid)
   })
 })

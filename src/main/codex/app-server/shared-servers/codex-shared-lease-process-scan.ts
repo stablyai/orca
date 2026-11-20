@@ -1,5 +1,6 @@
 import { readdir, readFile, stat } from 'node:fs/promises'
 import { runProcess } from '@orca/process-host'
+import { errnoCodeOrUnknown } from '../../../../shared/errors/errno-code'
 import { enumerateHostProcesses } from '../../../memory/host-process-index'
 import { collectSubtree, type ProcIndex } from '../../../memory/process-index'
 import { spawnTokenFromEnvironBlock } from '../../../runtime/agent-session/ownership/agent-session-spawn-token-readback'
@@ -68,7 +69,7 @@ async function scanLinux(envName: string): Promise<CodexLeaseProcessScan | null>
           spawnTokenFromEnvironBlock(await readFile(`/proc/${pid}/environ`, 'utf-8'), envName)
         ])
       } catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+        if (errnoCodeOrUnknown(error) !== 'ENOENT') {
           unreadable.push(pid)
         }
       }

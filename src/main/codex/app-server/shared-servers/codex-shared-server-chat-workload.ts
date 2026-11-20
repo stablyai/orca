@@ -1,3 +1,4 @@
+import { errnoCodeOrUnknown } from '../../../../shared/errors/errno-code'
 import { scanCodexLeaseProcesses } from './codex-shared-lease-process-scan'
 import type { CodexAppServerConnection } from '../codex-app-server-connection-types'
 import { isCodexAppServerUnsupportedError } from '../codex-app-server-session'
@@ -124,6 +125,6 @@ function isAlive(pid: number): boolean {
     process.kill(pid, 0)
     return true
   } catch (error) {
-    return (error as NodeJS.ErrnoException).code === 'EPERM'
+    return errnoCodeOrUnknown(error) === 'EPERM'
   }
 }
