@@ -9,6 +9,8 @@ import { BOTS_HOME_PIN_RUNTIME_CAPABILITY } from '../../../../../../shared/bot-r
 import type { RuntimeEnvironmentStatus } from '../../../../../../shared/remote-runtime/host-status/runtime-host-status'
 import type { RuntimeStatus } from '../../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import TabBar from '../../../tab-bar/TabBar'
+import { NativeChatMessageList } from '../../NativeChatMessageList'
+import type { NativeChatLiveSession } from '../../session/terminal/read/native-chat-live-session-contract'
 import { NativeChatPaneHeader } from './NativeChatPaneHeader'
 
 export const splitShortcut = defineFixture({
@@ -107,6 +109,30 @@ function botChatScene(
     createdAt: 1,
     isPinned: ruled && !side
   }
+  const session: NativeChatLiveSession = {
+    agent: 'claude',
+    sessionId: tab.entityId,
+    status: 'ready',
+    readPhase: 'ready',
+    messages: [
+      {
+        id: 'release-draft',
+        role: 'assistant',
+        source: 'transcript',
+        timestamp: null,
+        blocks: [
+          {
+            type: 'text',
+            text: 'The release notes draft is ready for review. I grouped the fixes by area and kept the wording short so it fits the changelog.'
+          }
+        ]
+      }
+    ],
+    hasMore: false,
+    loadingEarlier: false,
+    olderHistoryGeneration: 0,
+    loadEarlier: async () => 'applied'
+  }
   return defineFixture({
     width: width + 32,
     store: {
@@ -166,7 +192,7 @@ function botChatScene(
             />
           </div>
         </DndContext>
-        <div className="native-chat-appearance relative h-48 bg-chat-pane ring-1 ring-border">
+        <div className="native-chat-appearance relative flex h-56 flex-col bg-chat-pane ring-1 ring-border">
           <NativeChatPaneHeader
             tabId={tab.id}
             worktreeId={HOME}
@@ -175,13 +201,7 @@ function botChatScene(
             focused
             colorScheme={undefined}
           />
-          <div className="space-y-2 px-4 pt-3 text-sm text-chat-foreground">
-            <p>
-              The release notes draft is ready for review. I grouped the fixes by area and kept the
-              wording short so it fits the changelog.
-            </p>
-            <p>Two items still need an owner before Friday; both are listed at the end.</p>
-          </div>
+          <NativeChatMessageList session={session} isWorking={false} expandSignal={false} />
         </div>
         <div data-home-fixture-measurement="" className="mt-3 text-2xs text-muted-foreground" />
       </div>
@@ -243,3 +263,9 @@ export const pairedHomeOlderServer = botChatScene(PAIRED_HOST, 720, { older: tru
 
 export const localSideChat = botChatScene('local', 720, { side: true, expect: 'visible' })
 export const pairedSideChat = botChatScene(PAIRED_HOST, 720, { side: true })
+
+export const localSideChatNarrow = botChatScene('local', 300, {
+  side: true,
+  name: LONG_NAME,
+  expect: 'visible'
+})

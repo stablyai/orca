@@ -22,9 +22,7 @@ export function NativeChatBotCreatedRow({
   const bot = useBotForWorkspace(useNativeChatVisualOwner()?.worktreeId ?? null)
   const firstKickoffId = useContext(NativeChatBotKickoffContext)?.firstKickoffId
   if (bot && (firstKickoffId ?? messageId) === messageId) {
-    return (
-      <NativeChatMessageTimestamp timestamp={timestamp} className="mx-auto mt-2 block w-fit pb-3" />
-    )
+    return <NativeChatMessageTimestamp timestamp={timestamp} className="mx-auto block w-fit pb-3" />
   }
   const label = bot
     ? t('components.native-chat.botCreated.again', '{{name}} started setting up again', {

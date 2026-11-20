@@ -4,7 +4,7 @@
   top: 8px;
   left: 50%;
   translate: -50% 0;
-  display: flex;
+  display: none;
   align-items: center;
   gap: 8px;
   max-width: calc(100% - 10rem);
@@ -36,13 +36,17 @@
   text-overflow: ellipsis;
 }
 
-/* Hide the entire pill at a header container content width of 260 CSS px or less. */
-.pane-title-bar:has(> [data-bot-home-banner]) {
-  container-type: inline-size;
+.native-chat-appearance:has(> .pane-title-bar > [data-bot-home-banner]) {
+  container: bot-chat-pane / inline-size;
 }
 
-@container (max-width: 260px) {
+/* The title bar has 2px padding on either side of its 260px content cutoff. */
+@container bot-chat-pane (width > 264px) {
   [data-bot-home-banner] {
-    display: none;
+    display: flex;
+  }
+
+  .native-chat-transcript-inset {
+    padding-top: max(48px, calc(10 * var(--spacing)));
   }
 }
