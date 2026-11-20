@@ -1,19 +1,16 @@
 import { toast } from 'sonner'
-import { Trans } from 'react-i18next'
-import { i18n, translate } from '@/i18n/i18n'
+import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store/index'
 import { TRAILING_ACTIONS_CLASS_NAMES } from '@/components/ui/sonner'
 import { getEffectiveBrowserMemorySaverHours } from '../../../../shared/browser/guest-lifecycle/browser-memory-saver'
 import { withPerfNoticeOff } from '../../../../shared/perf-notices/perf-notice-settings'
 import { recordPerfNoticeShown, snoozePerfNotice } from './perf-notice-ledger'
 
-export type PerfNotice =
-  | { id: 'hidden-browser-tabs' }
-  | { id: 'disk-almost-full'; freeLabel: string }
+export type PerfNotice = { id: 'hidden-browser-tabs' }
 
 type Copy = {
   title: string
-  description: React.ReactNode
+  description: string
   action?: { label: string; onClick: () => void }
 }
 
@@ -40,35 +37,6 @@ function copyFor(notice: PerfNotice): Copy {
               .getState()
               .updateSettings({ browserGuestWorktreeRetentionBudget: true })
         }
-      }
-    case 'disk-almost-full':
-      return {
-        title: translate('perfNotices.disk.title', 'Your disk is almost full'),
-        // Why: name the Resource Manager so users can find cleanup again after the toast is gone.
-        description: (
-          <p>
-            <Trans
-              i18n={i18n}
-              defaults={translate(
-                'perfNotices.disk.description',
-                '{{free}} left. Clean up workspaces you no longer need in <resourceManager>the Resource Manager</resourceManager>.',
-                { free: notice.freeLabel }
-              )}
-              components={{
-                resourceManager: (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      useAppStore.getState().openModal('workspace-cleanup')
-                      toast.dismiss(perfNoticeToastId(notice.id))
-                    }}
-                    className="cursor-pointer font-medium text-popover-foreground underline underline-offset-2 hover:text-primary"
-                  />
-                )
-              }}
-            />
-          </p>
-        )
       }
   }
 }

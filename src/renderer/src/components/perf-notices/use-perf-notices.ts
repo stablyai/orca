@@ -5,14 +5,12 @@ import {
   isPresenceConfirmed,
   subscribeAutoAckPresenceSignals
 } from '@/attention/agent-auto-ack-presence'
-import { formatMemory } from '../status-bar/resources/popover/resource-usage-metrics'
 import { isResourceManagerOpen } from '../status-bar/resources/resource-manager-open-request'
 import {
   isPerfNoticeOff,
   type PerfNoticeId
 } from '../../../../shared/perf-notices/perf-notice-settings'
 import { canShowPerfNotice } from './perf-notice-ledger'
-import { isDiskAlmostFull } from '../../../../shared/diagnostics/perf-notice-signals'
 import { HIDDEN_TAB_MIN } from './perf-notice-rules'
 import { memorySaverHours, showPerfNotice, type PerfNotice } from './perf-notice-toast'
 
@@ -44,15 +42,6 @@ async function nextNotice(
   tracking: { hiddenTabsCheckedAt: number }
 ): Promise<PerfNotice | null> {
   // Why: a notice that can't show (off, snoozed, capped) never pays for its reading.
-  if (mayShow('disk-almost-full', now)) {
-    const signals = await window.api.memory.readPerfNoticeSignals()
-    if (blocked()) {
-      return null
-    }
-    if (signals?.disk && isDiskAlmostFull(signals.disk)) {
-      return { id: 'disk-almost-full', freeLabel: formatMemory(signals.disk.freeBytes) }
-    }
-  }
   if (
     useAppStore.getState().settings?.browserGuestWorktreeRetentionBudget !== false ||
     now - tracking.hiddenTabsCheckedAt < HIDDEN_TABS_RECHECK_MS ||
