@@ -147,49 +147,53 @@ function restoreMovedFileWithoutOverwrite(
   restore = true,
   keep = true
 ): void {
-  // Claimed first under a name only this call uses: another writer can move its own target to the
-  // shared held name meanwhile.
-  const claimed = keep ? `${targetPath}.orca-kept-${randomUUID()}` : sourcePath
-  const drop = (): void => rmSync(claimed, { force: true })
-  let claimedAway = false
+  let held: Buffer | null = null
+  try {
+    held = readFileSync(sourcePath)
+  } catch (error) {
+    // Gone: another process already released this held file. Unreadable: it can't be named by
+    // content, so it stays held below.
+    if (isDefinitiveAbsence(error)) {
+      return
+    }
+  }
+  // Read under this name until it must be kept: from then on it is claimed under a name only this
+  // call uses, as another writer can move its own target to the shared held name meanwhile. A
+  // crash after the claim leaves it as a kept copy, with the target in place.
+  let from = sourcePath
+  const drop = (): void => rmSync(from, { force: true })
   // Back under the held name, which the next guarded operation recovers first, unless taken.
   const giveBack = (error: unknown): never => {
-    if (claimedAway) {
+    if (from !== sourcePath) {
       try {
-        if (publishFileWithoutOverwrite(claimed, sourcePath)) {
+        if (publishFileWithoutOverwrite(from, sourcePath)) {
           drop()
         }
       } catch {
         // No room for a link (a full disk): a rename needs none.
-        renameFileWithWindowsRetry(claimed, sourcePath)
+        renameFileWithWindowsRetry(from, sourcePath)
       }
     }
     throw error
-  }
-  try {
-    if (keep) {
-      renameFileWithWindowsRetry(sourcePath, claimed)
-      claimedAway = true
-    }
-  } catch (error) {
-    // Another process already released this held file.
-    if (isDefinitiveAbsence(error)) {
-      return
-    }
-    throw error
-  }
-  let held: Buffer | null = null
-  try {
-    held = readFileSync(claimed)
-  } catch {
-    // Unreadable: it can't be named by content, so it goes back under the held name below.
   }
   // Named by content, so a repeated conflict finds its copy already kept; a name holding other
   // bytes (a kept copy edited since) moves on to the next. The target comes first.
   const name = held ? createHash('sha256').update(held).digest('hex').slice(0, 16) : null
   for (let attempt = 0; attempt <= (keep ? KEPT_NAME_ATTEMPTS : 0); attempt++) {
-    if (attempt > 0 && name === null) {
-      break
+    if (attempt === 1) {
+      if (name === null) {
+        break
+      }
+      const claimed = `${targetPath}.orca-kept-${randomUUID()}`
+      try {
+        renameFileWithWindowsRetry(sourcePath, claimed)
+      } catch (error) {
+        if (isDefinitiveAbsence(error)) {
+          return
+        }
+        throw error
+      }
+      from = claimed
     }
     const path =
       attempt === 0 ? targetPath : `${targetPath}.orca-kept-${name}${keptSuffix(attempt)}`
@@ -204,7 +208,7 @@ function restoreMovedFileWithoutOverwrite(
     }
     try {
       // A link refuses a taken name, needs no free space and keeps the file's own permissions.
-      if (free && publishFileWithoutOverwrite(claimed, path)) {
+      if (free && publishFileWithoutOverwrite(from, path)) {
         drop()
         if (attempt > 0) {
           console.warn('[atomic-file] Kept an earlier version beside', targetPath, path)
