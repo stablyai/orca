@@ -15,6 +15,24 @@ export type BotMcpApp = {
   category: BotAppCategory
   /** The same app's slugs in Composio's catalog, so the Add dialog lists it once. */
   composio?: readonly string[]
+  /** Regions the vendor runs separately; the first is `url` and the default. */
+  sites?: readonly BotMcpAppSite[]
+}
+
+export type BotMcpAppSite = { id: string; name: string; url: string }
+
+export const DATADOG_SITES: readonly BotMcpAppSite[] = [
+  { id: 'us1', name: 'US1', url: 'https://mcp.datadoghq.com/v1/mcp' },
+  { id: 'us3', name: 'US3', url: 'https://mcp.us3.datadoghq.com/v1/mcp' },
+  { id: 'us5', name: 'US5', url: 'https://mcp.us5.datadoghq.com/v1/mcp' },
+  { id: 'eu1', name: 'EU1', url: 'https://mcp.datadoghq.eu/v1/mcp' },
+  { id: 'ap1', name: 'AP1', url: 'https://mcp.ap1.datadoghq.com/v1/mcp' },
+  { id: 'ap2', name: 'AP2', url: 'https://mcp.ap2.datadoghq.com/v1/mcp' }
+]
+
+/** The app's URL for a site; the default URL when the app has no such site. */
+export function botMcpAppSiteUrl(app: Pick<BotMcpApp, 'url' | 'sites'>, siteId: string): string {
+  return app.sites?.find((site) => site.id === siteId)?.url ?? app.url
 }
 
 export const BOT_MCP_APPS: readonly BotMcpApp[] = [
@@ -39,9 +57,10 @@ export const BOT_MCP_APPS: readonly BotMcpApp[] = [
     id: 'datadog',
     name: 'Datadog',
     line: 'Search logs, metrics and monitors',
-    url: 'https://mcp.datadoghq.com/v1/mcp',
+    url: DATADOG_SITES[0].url,
     signIn: 'browser',
-    category: 'monitoring'
+    category: 'monitoring',
+    sites: DATADOG_SITES
   },
   {
     id: 'posthog',
