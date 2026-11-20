@@ -191,6 +191,13 @@ export abstract class UpdaterDownloadInstall extends UpdaterRemoteStatus {
     this.sendStatus({ state: 'downloading', percent: 0, version })
     const startDownload = (): void => {
       if (isWindowsPortableInstall()) {
+        if (localBuildDownload) {
+          this.downloadInFlight = false
+          this.sendLocalBuildErrorAndRestore(
+            'Local build installation is not supported on Windows portable builds.'
+          )
+          return
+        }
         void downloadAndStageWindowsPortableUpdate({
           version,
           onProgress: (percent) => {
@@ -207,12 +214,7 @@ export abstract class UpdaterDownloadInstall extends UpdaterRemoteStatus {
           })
           .catch((err) => {
             this.downloadInFlight = false
-            const message = String(err?.message ?? err)
-            if (localBuildDownload) {
-              this.sendLocalBuildErrorAndRestore(message)
-            } else {
-              this.sendErrorStatus(message)
-            }
+            this.sendErrorStatus(String(err?.message ?? err))
           })
         return
       }

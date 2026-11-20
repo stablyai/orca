@@ -1,9 +1,9 @@
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::env;
 use std::ffi::{c_void, OsStr, OsString};
-use std::fs;
-use std::io;
-use std::os::windows::fs::MetadataExt;
+use std::fs::{self, File, OpenOptions};
+use std::io::{self, Write};
+use std::os::windows::fs::{MetadataExt, OpenOptionsExt};
 use std::os::windows::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -19,6 +19,8 @@ const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 const DETACHED_PROCESS: u32 = 0x0000_0008;
 
 const BACKUP_DIR_NAME: &str = "portable-backup";
+const TRANSACTION_FILE_NAME: &str = "portable-transaction.txt";
+const LOCK_FILE_NAME: &str = "portable-update.lock";
 const ERROR_FILE_NAME: &str = "portable-update-error.txt";
 const DATA_DIR_NAME: &str = "data";
 const PARENT_WAIT_TIMEOUT_MS: u32 = 30_000;
@@ -37,7 +39,8 @@ pub fn run() {
     let result = match args.first().and_then(|value| value.to_str()) {
         Some("verify-signature") => run_verify_signature(&args[1..]),
         Some("apply") => run_apply(&args[1..]),
-        _ => Err("Usage: orca-portable-updater <verify-signature|apply> ...".to_string()),
+        Some("recover") => run_recover(&args[1..]),
+        _ => Err("Usage: orca-portable-updater <verify-signature|apply|recover> ...".to_string()),
     };
 
     if let Err(message) = result {
@@ -76,7 +79,9 @@ struct ApplyArgs {
     staged: PathBuf,
     target: PathBuf,
     work: PathBuf,
+    manifest: PathBuf,
     relaunch: bool,
+    user_data_dir: Option<OsString>,
 }
 
 fn parse_apply_args(args: &[OsString]) -> Result<ApplyArgs, String> {
@@ -84,7 +89,9 @@ fn parse_apply_args(args: &[OsString]) -> Result<ApplyArgs, String> {
     let mut staged: Option<PathBuf> = None;
     let mut target: Option<PathBuf> = None;
     let mut work: Option<PathBuf> = None;
+    let mut manifest: Option<PathBuf> = None;
     let mut relaunch = false;
+    let mut user_data_dir: Option<OsString> = None;
 
     let mut index = 0;
     while index < args.len() {
@@ -121,6 +128,21 @@ fn parse_apply_args(args: &[OsString]) -> Result<ApplyArgs, String> {
                 ));
                 index += 2;
             }
+            Some("--manifest") => {
+                manifest = Some(PathBuf::from(
+                    args.get(index + 1)
+                        .ok_or_else(|| "Missing value for --manifest".to_string())?,
+                ));
+                index += 2;
+            }
+            Some("--user-data-dir") => {
+                user_data_dir = Some(
+                    args.get(index + 1)
+                        .ok_or_else(|| "Missing value for --user-data-dir".to_string())?
+                        .clone(),
+                );
+                index += 2;
+            }
             Some("--relaunch") => {
                 relaunch = true;
                 index += 1;
@@ -134,26 +156,83 @@ fn parse_apply_args(args: &[OsString]) -> Result<ApplyArgs, String> {
         staged: staged.ok_or_else(|| "Missing --staged".to_string())?,
         target: target.ok_or_else(|| "Missing --target".to_string())?,
         work: work.ok_or_else(|| "Missing --work".to_string())?,
+        manifest: manifest.ok_or_else(|| "Missing --manifest".to_string())?,
         relaunch,
+        user_data_dir,
     })
+}
+
+fn run_recover(args: &[OsString]) -> Result<(), String> {
+    let mut target: Option<PathBuf> = None;
+    let mut work: Option<PathBuf> = None;
+    let mut index = 0;
+    while index < args.len() {
+        match args[index].to_str() {
+            Some("--target") => {
+                target = Some(PathBuf::from(
+                    args.get(index + 1)
+                        .ok_or_else(|| "Missing value for --target".to_string())?,
+                ));
+                index += 2;
+            }
+            Some("--work") => {
+                work = Some(PathBuf::from(
+                    args.get(index + 1)
+                        .ok_or_else(|| "Missing value for --work".to_string())?,
+                ));
+                index += 2;
+            }
+            _ => return Err("Unexpected argument to recover".to_string()),
+        }
+    }
+    let target = target.ok_or_else(|| "Missing --target".to_string())?;
+    let work = work.ok_or_else(|| "Missing --work".to_string())?;
+    let _lock = acquire_work_lock(&work)?;
+    reconcile_previous_transaction(&target, &work)
+}
+
+fn acquire_work_lock(work: &Path) -> Result<File, String> {
+    fs::create_dir_all(work)
+        .map_err(|error| format!("Failed to create portable update work directory: {error}"))?;
+    let lock_path = work.join(LOCK_FILE_NAME);
+    let mut file = OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .share_mode(0)
+        .open(&lock_path)
+        .map_err(|error| {
+            format!(
+                "Another portable update operation is active in {}: {error}",
+                work.display()
+            )
+        })?;
+    let _ = writeln!(file, "{}", std::process::id());
+    Ok(file)
 }
 
 fn run_apply(args: &[OsString]) -> Result<(), String> {
     let config = parse_apply_args(args)?;
-    let _ = fs::remove_file(config.work.join(ERROR_FILE_NAME));
-
     if let Some(pid) = config.parent_pid {
         wait_for_parent_exit(pid)?;
     }
 
-    let apply_result = apply_staged_update(&config.staged, &config.target, &config.work);
+    let _lock = acquire_work_lock(&config.work)?;
+    let _ = fs::remove_file(config.work.join(ERROR_FILE_NAME));
+
+    let apply_result = (|| -> Result<(), String> {
+        reconcile_previous_transaction(&config.target, &config.work)?;
+        verify_staged_tree_against_manifest(&config.staged, &config.manifest)?;
+        apply_staged_update(&config.staged, &config.target, &config.work)
+    })();
+
     if let Err(error) = &apply_result {
         let _ = fs::write(config.work.join(ERROR_FILE_NAME), error.as_bytes());
     }
     apply_result?;
 
     if config.relaunch {
-        relaunch_orca(&config.target)?;
+        relaunch_orca(&config.target, config.user_data_dir.as_deref())?;
     }
     Ok(())
 }
@@ -195,6 +274,132 @@ fn ensure_not_reparse_point(path: &Path) -> Result<Option<fs::Metadata>, String>
             path.display()
         )),
     }
+}
+
+fn parse_expected_manifest(manifest_path: &Path) -> Result<BTreeMap<String, u64>, String> {
+    let raw = fs::read_to_string(manifest_path)
+        .map_err(|error| format!("Could not read staged update manifest: {error}"))?;
+    let mut map = BTreeMap::new();
+    for line in raw.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        let (size_str, rel_path) = trimmed
+            .split_once('\t')
+            .ok_or_else(|| "Malformed staged update manifest entry".to_string())?;
+        let size = size_str
+            .parse::<u64>()
+            .map_err(|_| format!("Invalid file size in staged manifest: {size_str}"))?;
+        if map.insert(rel_path.to_ascii_lowercase(), size).is_some() {
+            return Err(format!("Duplicate entry in staged manifest: {rel_path}"));
+        }
+    }
+    if map.is_empty() {
+        return Err("Staged update manifest is empty".to_string());
+    }
+    Ok(map)
+}
+
+fn walk_staged_files(
+    root: &Path,
+    current: &Path,
+    actual: &mut BTreeMap<String, u64>,
+) -> Result<(), String> {
+    let entries = fs::read_dir(current)
+        .map_err(|error| format!("Failed to read staged directory {}: {error}", current.display()))?;
+    for entry in entries {
+        let entry = entry.map_err(|error| format!("Failed to read staged entry: {error}"))?;
+        let path = entry.path();
+        let meta = ensure_not_reparse_point(&path)?
+            .ok_or_else(|| format!("Staged path vanished: {}", path.display()))?;
+        let rel = path
+            .strip_prefix(root)
+            .map_err(|_| "Staged path outside root".to_string())?
+            .components()
+            .map(|c| c.as_os_str().to_string_lossy())
+            .collect::<Vec<_>>()
+            .join("/");
+        let rel_lower = rel.to_ascii_lowercase();
+        if rel_lower == DATA_DIR_NAME || rel_lower.starts_with("data/") {
+            continue;
+        }
+        if meta.is_dir() {
+            walk_staged_files(root, &path, actual)?;
+        } else if meta.is_file() {
+            actual.insert(rel_lower, meta.len());
+        } else {
+            return Err(format!("Unsupported staged file type: {}", path.display()));
+        }
+    }
+    Ok(())
+}
+
+fn verify_staged_tree_against_manifest(staged: &Path, manifest_path: &Path) -> Result<(), String> {
+    let expected = parse_expected_manifest(manifest_path)?;
+    let mut actual = BTreeMap::new();
+    walk_staged_files(staged, staged, &mut actual)?;
+    if expected != actual {
+        return Err("Staged update directory does not match the verified release manifest".to_string());
+    }
+    Ok(())
+}
+
+fn reconcile_previous_transaction(target: &Path, work: &Path) -> Result<(), String> {
+    let backup = work.join(BACKUP_DIR_NAME);
+    let tx_path = work.join(TRANSACTION_FILE_NAME);
+    let tx_raw = fs::read_to_string(&tx_path).ok();
+
+    if let Some(content) = tx_raw {
+        let mut lines = content.lines();
+        let state = lines.next().unwrap_or("").trim();
+        if state == "committed" {
+            if backup.exists() {
+                fs::remove_dir_all(&backup).map_err(|error| {
+                    format!(
+                        "Could not remove committed portable backup at {}: {error}",
+                        backup.display()
+                    )
+                })?;
+            }
+            let _ = fs::remove_file(&tx_path);
+            return Ok(());
+        }
+        if state == "applying" {
+            let entries: Vec<String> = lines
+                .map(str::trim)
+                .filter(|line| !line.is_empty())
+                .map(ToOwned::to_owned)
+                .collect();
+            for name in entries.iter().rev() {
+                let backup_entry = backup.join(name);
+                let target_entry = target.join(name);
+                if backup_entry.exists() {
+                    if target_entry.exists() {
+                        let _ = if target_entry.is_dir() {
+                            fs::remove_dir_all(&target_entry)
+                        } else {
+                            fs::remove_file(&target_entry)
+                        };
+                    }
+                    rename_with_retry(&backup_entry, &target_entry)?;
+                }
+            }
+            if backup.exists() {
+                let _ = fs::remove_dir_all(&backup);
+            }
+            let _ = fs::remove_file(&tx_path);
+            return Ok(());
+        }
+    }
+
+    if backup.exists() {
+        return Err(format!(
+            "Unrecognized portable update backup exists at {}; refusing to overwrite recovery state",
+            backup.display()
+        ));
+    }
+    Ok(())
 }
 
 fn collect_staged_entries(staged: &Path) -> Result<Vec<OsString>, String> {
@@ -241,6 +446,8 @@ fn collect_staged_entries(staged: &Path) -> Result<Vec<OsString>, String> {
         }
         entries.push(name);
     }
+    // Move Orca.exe last during backup so the executable remains present until the final backup move.
+    entries.sort_by_key(|name| name.to_string_lossy().eq_ignore_ascii_case("Orca.exe"));
     Ok(entries)
 }
 
@@ -250,10 +457,7 @@ fn rename_with_retry(from: &Path, to: &Path) -> Result<(), String> {
         match fs::rename(from, to) {
             Ok(()) => return Ok(()),
             Err(error) => {
-                let retryable = matches!(
-                    error.raw_os_error(),
-                    Some(5) | Some(32) | Some(33) // ERROR_ACCESS_DENIED, SHARING_VIOLATION, LOCK_VIOLATION
-                );
+                let retryable = matches!(error.raw_os_error(), Some(5) | Some(32) | Some(33));
                 if !retryable || Instant::now() >= deadline {
                     return Err(format!(
                         "Failed to move {} -> {}: {error}",
@@ -267,15 +471,20 @@ fn rename_with_retry(from: &Path, to: &Path) -> Result<(), String> {
     }
 }
 
+fn write_transaction_state(work: &Path, state: &str, entries: &[OsString]) -> Result<(), String> {
+    let tx_path = work.join(TRANSACTION_FILE_NAME);
+    let mut body = String::from(state);
+    body.push('\n');
+    for entry in entries {
+        body.push_str(&entry.to_string_lossy());
+        body.push('\n');
+    }
+    fs::write(&tx_path, body.as_bytes())
+        .map_err(|error| format!("Failed to persist portable transaction state: {error}"))
+}
+
 fn apply_staged_update(staged: &Path, target: &Path, work: &Path) -> Result<(), String> {
     let backup = work.join(BACKUP_DIR_NAME);
-    if backup.exists() {
-        return Err(format!(
-            "A previous portable update backup already exists at {}; refusing to overwrite recovery state",
-            backup.display()
-        ));
-    }
-
     let target_meta = ensure_not_reparse_point(target)?
         .ok_or_else(|| format!("Target directory does not exist: {}", target.display()))?;
     if !target_meta.is_dir() {
@@ -287,6 +496,7 @@ fn apply_staged_update(staged: &Path, target: &Path, work: &Path) -> Result<(), 
         ensure_not_reparse_point(&target.join(name))?;
     }
 
+    write_transaction_state(work, "applying", &entries)?;
     fs::create_dir_all(&backup)
         .map_err(|error| format!("Failed to create backup directory: {error}"))?;
 
@@ -301,7 +511,8 @@ fn apply_staged_update(staged: &Path, target: &Path, work: &Path) -> Result<(), 
                 backed_up.push(name.clone());
             }
         }
-        for name in &entries {
+        // Install Orca.exe first so the main executable is restored immediately.
+        for name in entries.iter().rev() {
             rename_with_retry(&staged.join(name), &target.join(name))?;
             installed.push(name.clone());
         }
@@ -322,6 +533,7 @@ fn apply_staged_update(staged: &Path, target: &Path, work: &Path) -> Result<(), 
         }
         if rollback_errors.is_empty() {
             let _ = fs::remove_dir_all(&backup);
+            let _ = fs::remove_file(work.join(TRANSACTION_FILE_NAME));
             return Err(commit_error);
         }
         return Err(format!(
@@ -331,14 +543,25 @@ fn apply_staged_update(staged: &Path, target: &Path, work: &Path) -> Result<(), 
         ));
     }
 
-    let _ = fs::remove_dir_all(&backup);
+    // Record commit before cleanup so a locked backup directory is cleaned up on the next run instead of blocking updates.
+    write_transaction_state(work, "committed", &[])?;
+    if fs::remove_dir_all(&backup).is_ok() {
+        let _ = fs::remove_file(work.join(TRANSACTION_FILE_NAME));
+    }
     let _ = fs::remove_dir_all(staged);
+    let _ = fs::remove_file(work.join("staged-manifest.txt"));
     Ok(())
 }
 
-fn relaunch_orca(target: &Path) -> Result<(), String> {
+fn relaunch_orca(target: &Path, user_data_dir: Option<&OsStr>) -> Result<(), String> {
     let exe = target.join("Orca.exe");
-    Command::new(&exe)
+    let mut command = Command::new(&exe);
+    if let Some(dir) = user_data_dir {
+        let mut flag = OsString::from("--user-data-dir=");
+        flag.push(dir);
+        command.arg(flag);
+    }
+    command
         .current_dir(target)
         .stdin(Stdio::null())
         .stdout(Stdio::null())

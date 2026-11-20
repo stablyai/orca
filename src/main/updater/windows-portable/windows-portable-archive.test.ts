@@ -168,6 +168,24 @@ describe('windows-portable-archive', () => {
     await expect(extractWindowsPortableArchive(badCrcZip, join(root, 'out5'))).rejects.toThrow(
       /CRC-32 mismatch/i
     )
+
+    const trailingDotZip = join(root, 'trailing-dot.zip')
+    await writeFile(
+      trailingDotZip,
+      buildTestZipBuffer(validPortableSpecs([{ name: 'Orca-portable/README.txt.', data: Buffer.from('x') }]))
+    )
+    await expect(extractWindowsPortableArchive(trailingDotZip, join(root, 'out6'))).rejects.toThrow(
+      /unsafe path/i
+    )
+
+    const deviceNameZip = join(root, 'device.zip')
+    await writeFile(
+      deviceNameZip,
+      buildTestZipBuffer(validPortableSpecs([{ name: 'Orca-portable/CON.txt', data: Buffer.from('x') }]))
+    )
+    await expect(extractWindowsPortableArchive(deviceNameZip, join(root, 'out7'))).rejects.toThrow(
+      /unsafe path/i
+    )
   })
 
   it('parses SHA-256 checksum files and routes Windows portable userData to <execDir>\\data', () => {

@@ -61,6 +61,7 @@ jobs:
       source_sha: ${{ steps.resolve.outputs.sha }}
       source_short_sha: ${{ steps.resolve.outputs.short_sha }}
       ships_orcad_template: ${{ steps.orcad-template-support.outputs.ships }}
+      ships_windows_portable: ${{ steps.windows-portable-support.outputs.ships }}
     steps:
       # Render dispatch audit summary locally rather than run mutable external action beside write token/secrets; parse env JSON with jq as data.
       - name: Summarize workflow inputs
@@ -646,6 +647,20 @@ jobs:
           else
             echo "ships=false" >>"$GITHUB_OUTPUT"
             echo "::notice::$TAG predates the orcad template; skipping its build and download."
+          fi
+
+      - name: Detect whether the tag ships the Windows portable packager
+        id: windows-portable-support
+        if: steps.tag.outputs.tag != '' || steps.version.outputs.recovered_tag != ''
+        env:
+          TAG: ${{ steps.tag.outputs.tag || steps.version.outputs.recovered_tag }}
+        run: |
+          set -euo pipefail
+          if git cat-file -e "refs/tags/${TAG}^{commit}:config/scripts/desktop-distribution/windows/package-windows-portable.mjs" 2>/dev/null; then
+            echo "ships=true" >>"$GITHUB_OUTPUT"
+          else
+            echo "ships=false" >>"$GITHUB_OUTPUT"
+            echo "::notice::$TAG predates package-windows-portable.mjs; skipping Windows portable asset requirement."
           fi
 
       - name: Release E2E signal summary
@@ -2167,6 +2182,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ needs.cut.outputs.tag }}
+          ORCA_REQUIRE_WINDOWS_PORTABLE: ${{ needs.cut.outputs.ships_windows_portable }}
         run: node config/scripts/release/publication/verify-release-required-assets.mjs "$TAG"
 
       - name: Verify release tag still matches the drafted source

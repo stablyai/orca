@@ -1,5 +1,7 @@
 import { mkdir, open, readFile, stat, type FileHandle } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
+import { Readable, Writable } from 'node:stream'
+import { pipeline } from 'node:stream/promises'
 import { createInflateRaw, crc32 } from 'node:zlib'
 import {
   isPortableUserDataPath,
@@ -12,72 +14,31 @@ import {
 const LOCAL_HEADER_SIGNATURE = 0x04034b50
 const READ_CHUNK_BYTES = 256 * 1024
 
-async function streamStoredEntry(
+async function* readCompressedChunks(
   archiveHandle: FileHandle,
   dataOffset: number,
-  entry: PortableZipEntry,
-  writeChunk: (chunk: Buffer) => Promise<void>
-): Promise<void> {
-  let remaining = entry.compressedSize
+  compressedSize: number
+): AsyncGenerator<Buffer, void, void> {
+  let remaining = compressedSize
   let cursor = dataOffset
   while (remaining > 0) {
     const chunkSize = Math.min(remaining, READ_CHUNK_BYTES)
     const chunk = await readFileRange(archiveHandle, cursor, chunkSize)
-    await writeChunk(chunk)
     cursor += chunkSize
     remaining -= chunkSize
+    yield chunk
   }
 }
 
-async function streamDeflatedEntry(
-  archiveHandle: FileHandle,
-  dataOffset: number,
-  entry: PortableZipEntry,
-  writeChunk: (chunk: Buffer) => Promise<void>
-): Promise<void> {
-  const inflater = createInflateRaw()
-  let pendingWrite = Promise.resolve()
-  let inflaterFailed: Error | null = null
-
-  const done = new Promise<void>((resolve, reject) => {
-    inflater.on('data', (chunk: Buffer) => {
-      inflater.pause()
-      pendingWrite = pendingWrite
-        .then(() => writeChunk(chunk))
-        .then(() => {
-          if (!inflater.destroyed) {
-            inflater.resume()
-          }
-        })
-        .catch((error: Error) => {
-          inflaterFailed = error
-          inflater.destroy(error)
-        })
-    })
-    inflater.on('error', reject)
-    inflater.on('end', () => {
-      pendingWrite.then(resolve, reject)
-    })
-  })
-
-  let remaining = entry.compressedSize
-  let cursor = dataOffset
-  while (remaining > 0 && !inflaterFailed) {
-    const chunkSize = Math.min(remaining, READ_CHUNK_BYTES)
-    const chunk = await readFileRange(archiveHandle, cursor, chunkSize)
-    cursor += chunkSize
-    remaining -= chunkSize
-    if (!inflater.write(chunk)) {
-      await new Promise<void>((resolve) => {
-        inflater.once('drain', resolve)
-        inflater.once('error', () => resolve())
-      })
+async function writeAllToFile(handle: FileHandle, chunk: Buffer): Promise<void> {
+  let offset = 0
+  while (offset < chunk.length) {
+    const { bytesWritten } = await handle.write(chunk, offset, chunk.length - offset)
+    if (bytesWritten <= 0) {
+      throw new Error('Short write while extracting portable update entry')
     }
+    offset += bytesWritten
   }
-  if (!inflaterFailed) {
-    inflater.end()
-  }
-  await done
 }
 
 async function extractFileEntry(
@@ -105,18 +66,27 @@ async function extractFileEntry(
     let actualSize = 0
     let actualCrc = 0
     const writeChunk = async (chunk: Buffer): Promise<void> => {
-      actualSize += chunk.length
-      if (actualSize > entry.uncompressedSize) {
+      if (actualSize + chunk.length > entry.uncompressedSize) {
         throw new Error(`Expanded size exceeded header for ${entry.relativePath}`)
       }
+      await writeAllToFile(outHandle, chunk)
+      actualSize += chunk.length
       actualCrc = crc32(chunk, actualCrc)
-      await outHandle.write(chunk)
     }
 
+    const source = Readable.from(
+      readCompressedChunks(archiveHandle, dataOffset, entry.compressedSize)
+    )
+    const sink = new Writable({
+      write(chunk: Buffer, _encoding, callback) {
+        writeChunk(chunk).then(() => callback(), callback)
+      }
+    })
+
     if (entry.compressionMethod === 0) {
-      await streamStoredEntry(archiveHandle, dataOffset, entry, writeChunk)
+      await pipeline(source, sink)
     } else {
-      await streamDeflatedEntry(archiveHandle, dataOffset, entry, writeChunk)
+      await pipeline(source, createInflateRaw(), sink)
     }
 
     if (actualSize !== entry.uncompressedSize) {

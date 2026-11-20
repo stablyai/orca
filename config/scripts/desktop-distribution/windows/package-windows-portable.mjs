@@ -48,7 +48,7 @@ export async function packageWindowsPortable({
     mkdirSync(join(stageRoot, 'data'), { recursive: true })
     writeFileSync(join(stageRoot, 'data', '.keep'), '', 'utf8')
 
-    const sevenZa = await resolve7zaPath(projectDir)
+    const sevenZa = resolve(await resolve7zaPath(projectDir))
     execFileSync(sevenZa, ['a', '-tzip', '-mx=9', archivePath, WINDOWS_PORTABLE_ROOT_DIR], {
       cwd: stageParent,
       stdio: 'inherit'

@@ -141,13 +141,26 @@ function readZip64Extra(
   return {}
 }
 
+const WINDOWS_RESERVED_DEVICE_RE = /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\..*)?$/i
+
+function isUnsafeWindowsSegment(part: string): boolean {
+  return (
+    part.length === 0 ||
+    part === '.' ||
+    part === '..' ||
+    part.endsWith('.') ||
+    part.endsWith(' ') ||
+    WINDOWS_RESERVED_DEVICE_RE.test(part)
+  )
+}
+
 function validateAndStripRoot(rawName: string, isDirectory: boolean, rootDir: string): string {
-  if (rawName.includes('\0') || rawName.includes('\\') || rawName.includes(':')) {
+  if (/[\x00-\x1f\\:]/.test(rawName)) {
     throw new Error(`Portable update archive contains an unsafe path: ${rawName}`)
   }
   const trimmed = rawName.endsWith('/') ? rawName.slice(0, -1) : rawName
   const segments = trimmed.split('/')
-  if (segments.some((part) => part.length === 0 || part === '.' || part === '..')) {
+  if (segments.some(isUnsafeWindowsSegment)) {
     throw new Error(`Portable update archive contains an unsafe path: ${rawName}`)
   }
   if (trimmed === rootDir && isDirectory) {
@@ -185,6 +198,12 @@ export async function readPortableZipEntries(
   let totalUncompressed = 0
 
   while (pos < buffer.length) {
+    if (entries.length >= cdInfo.entryCount) {
+      throw new Error('Portable update archive central directory entry count mismatch')
+    }
+    if (entries.length >= maxEntries) {
+      throw new Error(`Portable update archive exceeds entry limit (${maxEntries})`)
+    }
     if (pos + 46 > buffer.length || buffer.readUInt32LE(pos) !== CENTRAL_DIR_SIGNATURE) {
       throw new Error('Portable update archive has corrupt central directory record')
     }

@@ -12,6 +12,9 @@ const WTD_STATEACTION_CLOSE: u32 = 2;
 const WTD_CACHE_ONLY_URL_RETRIEVAL: u32 = 0x0000_1000;
 const WTD_UICONTEXT_EXECUTE: u32 = 0;
 
+const WSS_VERIFY_SPECIFIC: u32 = 0x0000_0001;
+const WSS_GET_SECONDARY_SIG_COUNT: u32 = 0x0000_0002;
+
 const X509_ASN_ENCODING: u32 = 0x0000_0001;
 const PKCS_7_ASN_ENCODING: u32 = 0x0001_0000;
 const CERT_QUERY_OBJECT_FILE: u32 = 1;
@@ -45,6 +48,16 @@ struct WinTrustFileInfo {
 }
 
 #[repr(C)]
+struct WinTrustSignatureSettings {
+    cb_struct: u32,
+    dw_index: u32,
+    dw_flags: u32,
+    c_secondary_sigs: u32,
+    dw_verified_sig_index: u32,
+    p_crypto_policy: *mut c_void,
+}
+
+#[repr(C)]
 struct WinTrustData {
     cb_struct: u32,
     p_policy_callback_data: *mut c_void,
@@ -58,7 +71,7 @@ struct WinTrustData {
     pwsz_url_reference: *const u16,
     dw_prov_flags: u32,
     dw_ui_context: u32,
-    p_signature_settings: *mut c_void,
+    p_signature_settings: *mut WinTrustSignatureSettings,
 }
 
 #[repr(C)]
@@ -158,6 +171,23 @@ extern "system" {
     fn CryptMsgClose(h_crypt_msg: *mut c_void) -> i32;
 }
 
+#[link(name = "version")]
+extern "system" {
+    fn GetFileVersionInfoSizeW(filename: *const u16, handle: *mut u32) -> u32;
+    fn GetFileVersionInfoW(
+        filename: *const u16,
+        handle: u32,
+        len: u32,
+        data: *mut c_void,
+    ) -> i32;
+    fn VerQueryValueW(
+        block: *const c_void,
+        sub_block: *const u16,
+        buffer: *mut *const c_void,
+        len: *mut u32,
+    ) -> i32;
+}
+
 pub fn verify_authenticode(path: &Path, expected_publisher: Option<&str>) -> Result<String, String> {
     let wide_path = wide(path.as_os_str());
     let mut file_info = WinTrustFileInfo {
@@ -165,6 +195,14 @@ pub fn verify_authenticode(path: &Path, expected_publisher: Option<&str>) -> Res
         pcwsz_file_path: wide_path.as_ptr(),
         h_file: ptr::null_mut(),
         pg_known_subject: ptr::null(),
+    };
+    let mut sig_settings = WinTrustSignatureSettings {
+        cb_struct: size_of::<WinTrustSignatureSettings>() as u32,
+        dw_index: 0,
+        dw_flags: WSS_VERIFY_SPECIFIC | WSS_GET_SECONDARY_SIG_COUNT,
+        c_secondary_sigs: 0,
+        dw_verified_sig_index: 0,
+        p_crypto_policy: ptr::null_mut(),
     };
     let mut trust_data = WinTrustData {
         cb_struct: size_of::<WinTrustData>() as u32,
@@ -179,10 +217,10 @@ pub fn verify_authenticode(path: &Path, expected_publisher: Option<&str>) -> Res
         pwsz_url_reference: ptr::null(),
         dw_prov_flags: WTD_CACHE_ONLY_URL_RETRIEVAL,
         dw_ui_context: WTD_UICONTEXT_EXECUTE,
-        p_signature_settings: ptr::null_mut(),
+        p_signature_settings: &mut sig_settings,
     };
 
-    // SAFETY: WinTrustData and WinTrustFileInfo stay alive for both VERIFY and CLOSE calls.
+    // SAFETY: WinTrustData, WinTrustFileInfo, and WinTrustSignatureSettings stay alive across VERIFY and CLOSE.
     let status = unsafe {
         let verify_status = WinVerifyTrust(
             ptr::null_mut(),
@@ -205,10 +243,16 @@ pub fn verify_authenticode(path: &Path, expected_publisher: Option<&str>) -> Res
             status as u32
         ));
     }
+    if sig_settings.c_secondary_sigs != 0 || sig_settings.dw_verified_sig_index != 0 {
+        return Err(format!(
+            "Refusing nested or non-primary Authenticode signature on {}",
+            path.display()
+        ));
+    }
 
-    let signer = read_signer_display_name(&wide_path)?;
+    let signer = read_signer_display_name(&wide_path, sig_settings.dw_verified_sig_index)?;
     if let Some(expected) = expected_publisher {
-        if !signer.to_ascii_lowercase().contains(&expected.to_ascii_lowercase()) {
+        if !signer.trim().eq_ignore_ascii_case(expected.trim()) {
             return Err(format!(
                 "Authenticode publisher mismatch for {}: expected '{}', got '{}'",
                 path.display(),
@@ -217,10 +261,104 @@ pub fn verify_authenticode(path: &Path, expected_publisher: Option<&str>) -> Res
             ));
         }
     }
+
+    verify_signed_pe_orca_identity(path, &wide_path)?;
     Ok(signer)
 }
 
-fn read_signer_display_name(wide_path: &[u16]) -> Result<String, String> {
+fn verify_signed_pe_orca_identity(path: &Path, wide_path: &[u16]) -> Result<(), String> {
+    let expected_filename = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or_else(|| format!("Invalid executable file name: {}", path.display()))?;
+
+    // SAFETY: GetFileVersionInfoSizeW / GetFileVersionInfoW / VerQueryValueW read from bounded buffer.
+    unsafe {
+        let mut handle = 0u32;
+        let size = GetFileVersionInfoSizeW(wide_path.as_ptr(), &mut handle);
+        if size == 0 {
+            return Err(format!(
+                "Signed executable {} is missing PE version metadata",
+                path.display()
+            ));
+        }
+        let mut data = vec![0u8; size as usize];
+        if GetFileVersionInfoW(wide_path.as_ptr(), 0, size, data.as_mut_ptr().cast()) == 0 {
+            return Err(format!(
+                "Could not read PE version metadata from {}",
+                path.display()
+            ));
+        }
+
+        let trans_query = wide(OsStr::new("\\VarFileInfo\\Translation"));
+        let mut trans_ptr: *const c_void = ptr::null();
+        let mut trans_len = 0u32;
+        if VerQueryValueW(
+            data.as_ptr().cast(),
+            trans_query.as_ptr(),
+            &mut trans_ptr,
+            &mut trans_len,
+        ) == 0
+            || trans_ptr.is_null()
+            || trans_len < 4
+        {
+            return Err(format!(
+                "Signed executable {} is missing version translation table",
+                path.display()
+            ));
+        }
+        let lang_codepage = *(trans_ptr.cast::<[u16; 2]>());
+        let prefix = format!(
+            "\\StringFileInfo\\{:04x}{:04x}\\",
+            lang_codepage[0], lang_codepage[1]
+        );
+
+        let product_name = query_version_string(&data, &format!("{prefix}ProductName"))?;
+        if product_name.trim() != "Orca" {
+            return Err(format!(
+                "Signed executable {} belongs to product '{}', expected 'Orca'",
+                path.display(),
+                product_name
+            ));
+        }
+
+        let original_filename = query_version_string(&data, &format!("{prefix}OriginalFilename"))?;
+        if !original_filename
+            .trim()
+            .eq_ignore_ascii_case(expected_filename)
+        {
+            return Err(format!(
+                "Signed executable {} OriginalFilename '{}' does not match '{}'",
+                path.display(),
+                original_filename,
+                expected_filename
+            ));
+        }
+    }
+    Ok(())
+}
+
+unsafe fn query_version_string(data: &[u8], sub_block: &str) -> Result<String, String> {
+    let query = wide(OsStr::new(sub_block));
+    let mut value_ptr: *const c_void = ptr::null();
+    let mut value_len = 0u32;
+    if VerQueryValueW(
+        data.as_ptr().cast(),
+        query.as_ptr(),
+        &mut value_ptr,
+        &mut value_len,
+    ) == 0
+        || value_ptr.is_null()
+        || value_len == 0
+    {
+        return Err(format!("Missing PE version field {sub_block}"));
+    }
+    let slice = std::slice::from_raw_parts(value_ptr.cast::<u16>(), value_len as usize);
+    let end = slice.iter().position(|&ch| ch == 0).unwrap_or(slice.len());
+    Ok(String::from_utf16_lossy(&slice[..end]))
+}
+
+fn read_signer_display_name(wide_path: &[u16], signer_index: u32) -> Result<String, String> {
     let mut encoding = 0u32;
     let mut content_type = 0u32;
     let mut format_type = 0u32;
@@ -252,7 +390,7 @@ fn read_signer_display_name(wide_path: &[u16]) -> Result<String, String> {
             return Err("Could not read embedded Authenticode certificate".to_string());
         }
 
-        let result = extract_signer_from_handles(store, msg);
+        let result = extract_signer_from_handles(store, msg, signer_index);
         CertCloseStore(store, 0);
         CryptMsgClose(msg);
         result
@@ -262,12 +400,13 @@ fn read_signer_display_name(wide_path: &[u16]) -> Result<String, String> {
 unsafe fn extract_signer_from_handles(
     store: *mut c_void,
     msg: *mut c_void,
+    signer_index: u32,
 ) -> Result<String, String> {
     let mut signer_info_size = 0u32;
     if CryptMsgGetParam(
         msg,
         CMSG_SIGNER_INFO_PARAM,
-        0,
+        signer_index,
         ptr::null_mut(),
         &mut signer_info_size,
     ) == 0
@@ -280,7 +419,7 @@ unsafe fn extract_signer_from_handles(
     if CryptMsgGetParam(
         msg,
         CMSG_SIGNER_INFO_PARAM,
-        0,
+        signer_index,
         buffer.as_mut_ptr().cast(),
         &mut signer_info_size,
     ) == 0
