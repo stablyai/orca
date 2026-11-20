@@ -56,7 +56,10 @@ function Elapsed({
 }): React.JSX.Element {
   const now = useNow(1_000, counting)
   const end = counting ? now : (settledAt ?? now)
-  return <>{formatNativeChatDuration(Math.max(0, (end - startedAt) / 1000))}</>
+  // Keep "3m 21s" together so the wrap point doesn't move as it ticks.
+  return (
+    <>{formatNativeChatDuration(Math.max(0, (end - startedAt) / 1000)).replace(/ /g, '\u00a0')}</>
+  )
 }
 
 /** One subagent as a status row: the agent mark with a spinner while it works and a red ✕ when it
@@ -142,6 +145,7 @@ export function MobileNativeChatSubagentGroup({
       label={[headline, summary, header.tokens].filter(Boolean).join(', ')}
       disclosureKey={`subagent-roster:${block.groupId}`}
       fontScale={fontScale}
+      wordsLines={0}
       details={rows}
     >
       <MobileNativeChatEventName>{headline}</MobileNativeChatEventName>
