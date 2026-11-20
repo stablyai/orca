@@ -277,6 +277,10 @@ export class PaneManager {
     notePaneManagerVisibility(this)
   }
 
+  containsElement(element: Element): boolean {
+    return this.root.contains(element)
+  }
+
   isVisibleForAtlasRecovery(): boolean {
     return this.atlasRecoveryVisible && !this.destroyed
   }

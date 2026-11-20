@@ -1,7 +1,7 @@
 import type { ManagedPaneInternal } from '../pane-manager-types'
 import type { ForegroundTerminalOutputTarget } from '../terminal-output/pane-terminal-foreground-render-settle'
 import { recordTerminalWebglDiagnostic } from '../../../../../shared/terminal/diagnostics/terminal-webgl-diagnostics'
-import { getVisiblePaneTerminals } from '../pane-manager-registry'
+import { isElementInVisiblePaneManager } from '../pane-manager-registry'
 import { getWindowParkVisible } from '../../window-activity/window-park-visibility'
 import { paneIsCoveredByNativeChat } from '@/components/terminal-pane/chat/native-chat-covered-pane'
 
@@ -106,8 +106,8 @@ function shownPaneFilter(): PaneFilter {
   if (!getWindowParkVisible()) {
     return () => false
   }
-  const visibleTerminals = getVisiblePaneTerminals()
-  return (pane) => visibleTerminals.has(pane.terminal) && pane.container.getClientRects().length > 0
+  return (pane) =>
+    isElementInVisiblePaneManager(pane.container) && pane.container.getClientRects().length > 0
 }
 
 function rebuildDueAtlases(): void {

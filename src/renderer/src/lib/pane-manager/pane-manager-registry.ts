@@ -12,6 +12,7 @@ type RegisteredPaneManager = {
   getPanes?: (limit?: number) => { id: number; terminal: unknown }[]
   getPaneCount?: () => number
   isVisibleForAtlasRecovery?: () => boolean
+  containsElement?: (element: Element) => boolean
 }
 
 const liveManagers = new Set<RegisteredPaneManager>()
@@ -121,19 +122,14 @@ export function rebuildAllTerminalWebglRenderers(reason: string): void {
   }
 }
 
-/** Terminals of panes whose manager is on screen. */
-export function getVisiblePaneTerminals(): Set<unknown> {
-  const terminals = new Set<unknown>()
+/** Whether an element sits inside an on-screen manager; checks only visible managers' roots, never their panes. */
+export function isElementInVisiblePaneManager(element: Element): boolean {
   for (const manager of visibleManagers) {
-    try {
-      for (const pane of manager.getPanes?.() ?? []) {
-        terminals.add(pane.terminal)
-      }
-    } catch {
-      // One manager’s teardown must not sink the rest.
+    if (manager.containsElement?.(element)) {
+      return true
     }
   }
-  return terminals
+  return false
 }
 
 /** Report each pane’s WebGL/DOM state so freeze reports distinguish missed repaint from atlas corruption/context loss. */

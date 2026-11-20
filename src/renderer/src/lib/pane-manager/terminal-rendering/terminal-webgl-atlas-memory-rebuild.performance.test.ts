@@ -8,12 +8,12 @@ const LARGE_PAGE = { width: 4096 }
 
 const rebuilds: ManagedPaneInternal[][] = []
 const reattached: ManagedPaneInternal[][] = []
-const visibleTerminals = new Set<unknown>()
+const visibleContainers = new Set<unknown>()
 const visibilityScans = { count: 0 }
 vi.mock('../pane-manager-registry', () => ({
-  getVisiblePaneTerminals: () => {
+  isElementInVisiblePaneManager: (element: unknown) => {
     visibilityScans.count++
-    return visibleTerminals
+    return visibleContainers.has(element)
   }
 }))
 
@@ -30,17 +30,18 @@ function fakePane(
   covered = false
 ) {
   const terminal = { modes: { synchronizedOutputMode: false } }
+  const container = {
+    getClientRects: () => (displayed ? [{}] : []),
+    querySelector: () => (covered ? {} : null)
+  }
   if (visible) {
-    visibleTerminals.add(terminal)
+    visibleContainers.add(container)
   }
   const renderer = { _charAtlas: atlas }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the module reads only terminal modes, container rects, chat cover and the addon's atlas identity, all supplied here.
   const pane = {
     terminal,
-    container: {
-      getClientRects: () => (displayed ? [{}] : []),
-      querySelector: () => (covered ? {} : null)
-    },
+    container,
     webglAddon: { _renderer: renderer }
   } as unknown as ManagedPaneInternal
   atlasModule.trackTerminalWebglAtlasPane(pane)
@@ -68,7 +69,7 @@ describe('terminal WebGL atlas-memory rebuild', () => {
     vi.useFakeTimers()
     rebuilds.length = 0
     reattached.length = 0
-    visibleTerminals.clear()
+    visibleContainers.clear()
     visibilityScans.count = 0
   })
   afterEach(() => {
