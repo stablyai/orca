@@ -23815,5 +23815,8 @@
     "dontSend": "Nicht senden",
     "sending": "Wird gesendet…",
     "sendReport": "Bericht senden"
+  },
+  "agentCliUpdate": {
+    "thisComputer": "Dieser Computer"
   }
 }

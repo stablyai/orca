@@ -23954,5 +23954,8 @@
     "dontSend": "Gönderme",
     "sending": "Gönderiliyor…",
     "sendReport": "Raporu gönder"
+  },
+  "agentCliUpdate": {
+    "thisComputer": "Bu bilgisayar"
   }
 }

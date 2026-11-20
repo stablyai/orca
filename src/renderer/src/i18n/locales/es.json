@@ -24270,5 +24270,8 @@
     "dontSend": "No enviar",
     "sending": "Enviando…",
     "sendReport": "Enviar informe"
+  },
+  "agentCliUpdate": {
+    "thisComputer": "Este equipo"
   }
 }
