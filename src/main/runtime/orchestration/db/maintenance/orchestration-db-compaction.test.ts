@@ -1,6 +1,4 @@
-import { spawn } from 'node:child_process'
-import { once } from 'node:events'
-import { mkdtempSync, rmSync, statSync } from 'node:fs'
+import { existsSync, mkdtempSync, rmSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
@@ -10,31 +8,19 @@ import '../contract-constants'
 import '../messages/mailbox-routing-page'
 import '../dispatch-row-writer'
 import '../attempt-outcome-projection'
-import { compactOrchestrationDb } from './orchestration-db-compaction'
+import { OrchestrationDbCompaction } from './orchestration-db-compaction'
 
-// Results that don't depend on timing get a budget a loaded CI machine can't overrun.
-const AMPLE = { budgetMs: 30_000 }
 const dirs: string[] = []
-const holders: ReturnType<typeof spawn>[] = []
 
 /** A real orchestration database as an older build left it: no auto-vacuum, `freedMiB` of free pages. */
-function legacyDatabase(
-  options: { keptMiB?: number; freedMiB?: number; activeWorker?: boolean } = {}
-): string {
-  const { keptMiB = 8, freedMiB = 40, activeWorker = false } = options
+function legacyDatabase(): string {
+  const keptMiB = 8
+  const freedMiB = 40
   const dir = mkdtempSync(join(tmpdir(), 'orca-orchestration-compaction-'))
   dirs.push(dir)
   const file = join(dir, 'orchestration.db')
   const orchestration = new OrchestrationDb(file)
-  if (activeWorker) {
-    const task = orchestration.createTask({ runId: 'run_legacy_local', spec: 'still working' })
-    orchestration.createStartingWorkerDispatch({
-      creator: { kind: 'system' },
-      maxDepth: Number.MAX_SAFE_INTEGER,
-      taskId: task.id,
-      startOptions: {}
-    })
-  }
+  orchestration.createTask({ runId: 'run_legacy_local', spec: 'kept' })
   orchestration.close()
   const db = new DatabaseSync(file)
   db.exec('PRAGMA auto_vacuum = NONE; VACUUM; CREATE TABLE qa_filler (body BLOB)')
@@ -49,129 +35,61 @@ function legacyDatabase(
   return file
 }
 
-function inspect(file: string): { autoVacuum: number; integrity: string } {
+function inspect(file: string): { autoVacuum: number; integrity: string; tasks: number } {
   const db = new DatabaseSync(file)
   try {
     return {
       autoVacuum: Number(db.prepare('PRAGMA auto_vacuum').get()!.auto_vacuum),
-      integrity: String(db.prepare('PRAGMA integrity_check').get()!.integrity_check)
+      integrity: String(db.prepare('PRAGMA integrity_check').get()!.integrity_check),
+      tasks: Number(db.prepare('SELECT count(*) AS n FROM tasks').get()!.n)
     }
   } finally {
     db.close()
   }
 }
 
-/** Another process with the file open and idle, as the terminal daemon or a second Orca would hold it. */
-async function holdOpenInAnotherProcess(file: string): Promise<void> {
-  const holder = spawn(
-    process.execPath,
-    [
-      '-e',
-      `const { DatabaseSync } = require('node:sqlite');
-       const db = new DatabaseSync(process.argv[1]);
-       db.prepare('SELECT count(*) FROM runs').get();
-       process.stdout.write('ready\\n');
-       setInterval(() => {}, 1000);`,
-      file
-    ],
-    { stdio: ['ignore', 'pipe', 'inherit'] }
-  )
-  holders.push(holder)
-  await once(holder.stdout!, 'data')
+/** The runtime's connection, with a compacted copy taken after one quiet maintenance minute. */
+async function copiedWhileQuiet(file: string): Promise<{
+  orchestration: OrchestrationDb
+  compaction: OrchestrationDbCompaction
+}> {
+  const orchestration = new OrchestrationDb(file)
+  const compaction = new OrchestrationDbCompaction(orchestration, file, () => true, 1)
+  await compaction.tick()
+  await compaction.tick()
+  expect(existsSync(`${file}-compacted`)).toBe(true)
+  return { orchestration, compaction }
 }
 
-afterEach(async () => {
-  for (const holder of holders.splice(0)) {
-    holder.kill('SIGKILL')
-    await once(holder, 'exit')
-  }
+afterEach(() => {
   for (const dir of dirs.splice(0)) {
     rmSync(dir, { recursive: true, force: true })
   }
 })
 
-describe('compactOrchestrationDb', () => {
-  it('shrinks a mostly free legacy file once and switches it to incremental', async () => {
+describe('OrchestrationDbCompaction', () => {
+  it('swaps in a copy taken while the file sat unwritten, switched to incremental', async () => {
     const file = legacyDatabase()
     const before = statSync(file).size
+    const { orchestration, compaction } = await copiedWhileQuiet(file)
 
-    expect((await compactOrchestrationDb(file, AMPLE)).kind).toBe('compacted')
-
-    expect(statSync(file).size).toBeLessThan(before / 4)
-    expect(inspect(file)).toEqual({ autoVacuum: 2, integrity: 'ok' })
-    expect(await compactOrchestrationDb(file, AMPLE)).toEqual({ kind: 'not-needed' })
-  })
-
-  it('leaves the file alone while a worker is still running', async () => {
-    const file = legacyDatabase({ activeWorker: true })
-
-    expect(await compactOrchestrationDb(file, AMPLE)).toEqual({ kind: 'active' })
-    expect(inspect(file)).toEqual({ autoVacuum: 0, integrity: 'ok' })
-  })
-
-  it('leaves the file alone while another process holds it open', async () => {
-    const file = legacyDatabase()
-    await holdOpenInAnotherProcess(file)
-
-    expect(await compactOrchestrationDb(file, AMPLE)).toEqual({ kind: 'busy' })
-    expect(inspect(file)).toEqual({ autoVacuum: 0, integrity: 'ok' })
-  })
-
-  it('waits out both a running worker and the daemon holding the file', async () => {
-    const file = legacyDatabase({ activeWorker: true })
-    await holdOpenInAnotherProcess(file)
-
-    // The runtime sees the worker first; without it, the daemon's connection still refuses the lock.
-    expect(await compactOrchestrationDb(file, { isActive: () => true })).toEqual({ kind: 'active' })
-    expect(await compactOrchestrationDb(file, AMPLE)).toEqual({ kind: 'busy' })
-    const holder = holders.pop()!
-    holder.kill('SIGKILL')
-    await once(holder, 'exit')
-    // That attempt counted as the file's one try.
-    expect(await compactOrchestrationDb(file, AMPLE)).toEqual({ kind: 'deferred' })
-    expect(inspect(file)).toEqual({ autoVacuum: 0, integrity: 'ok' })
-  })
-
-  it('stops when the checks used up its budget and leaves the file as it was', async () => {
-    const file = legacyDatabase()
-
-    expect((await compactOrchestrationDb(file, { budgetMs: 0 })).kind).toBe('timed-out')
-    expect(inspect(file)).toEqual({ autoVacuum: 0, integrity: 'ok' })
-  })
-
-  it('counts an activity check that ran out of time as the one try', async () => {
-    const file = legacyDatabase()
-
-    expect((await compactOrchestrationDb(file, { isActive: () => 'timeout' })).kind).toBe(
-      'timed-out'
-    )
-    expect(await compactOrchestrationDb(file, AMPLE)).toEqual({ kind: 'deferred' })
-    expect(inspect(file).autoVacuum).toBe(0)
-  })
-
-  it('stops trying after one stopped attempt', async () => {
-    const file = legacyDatabase()
-    await compactOrchestrationDb(file, { budgetMs: 0 })
-
-    expect(await compactOrchestrationDb(file, AMPLE)).toEqual({ kind: 'deferred' })
-    expect(inspect(file).autoVacuum).toBe(0)
-  })
-
-  it('compacts once the caller hands over its own open connection', async () => {
-    const file = legacyDatabase()
-    const own = new DatabaseSync(file)
-    own.prepare('SELECT count(*) FROM runs').get()
-
-    const result = await compactOrchestrationDb(file, { ...AMPLE, release: () => own.close() })
+    const result = await compaction.swapAtQuit(() => orchestration.close())
 
     expect(result.kind).toBe('compacted')
-    expect(inspect(file)).toEqual({ autoVacuum: 2, integrity: 'ok' })
+    expect(statSync(file).size).toBeLessThan(before / 4)
+    expect(inspect(file)).toEqual({ autoVacuum: 2, integrity: 'ok', tasks: 1 })
+    expect(existsSync(`${file}-replaced`)).toBe(false)
   })
 
-  it('skips a file with under 32 MiB free', async () => {
-    const file = legacyDatabase({ keptMiB: 1, freedMiB: 20 })
+  it('keeps the original when anything was written after the copy', async () => {
+    const file = legacyDatabase()
+    const { orchestration, compaction } = await copiedWhileQuiet(file)
+    orchestration.createTask({ runId: 'run_legacy_local', spec: 'written after the copy' })
 
-    expect(await compactOrchestrationDb(file, AMPLE)).toEqual({ kind: 'not-needed' })
-    expect(inspect(file).autoVacuum).toBe(0)
+    expect(await compaction.swapAtQuit(() => orchestration.close())).toEqual({ kind: 'stale' })
+    orchestration.close()
+
+    expect(inspect(file)).toEqual({ autoVacuum: 0, integrity: 'ok', tasks: 2 })
+    expect(existsSync(`${file}-compacted`)).toBe(false)
   })
 })

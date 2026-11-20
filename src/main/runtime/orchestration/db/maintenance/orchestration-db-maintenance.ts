@@ -8,6 +8,7 @@ import {
   listRetiredRunCandidates
 } from './settled-run-retention'
 import { retireSettledRun, type RunPartyLiveness } from './settled-run-retirement'
+import type { OrchestrationDbCompaction } from './orchestration-db-compaction'
 
 const MINUTE = 60_000
 const PRUNE_INTERVAL_MS = 60 * MINUTE
@@ -27,7 +28,8 @@ export class OrchestrationDbMaintenance {
   constructor(
     private readonly orchestrationDb: OrchestrationDb,
     private readonly chatIsReadable: (dispatchId: string) => boolean,
-    private readonly runPartyLiveness: RunPartyLiveness
+    private readonly runPartyLiveness: RunPartyLiveness,
+    private readonly compaction?: OrchestrationDbCompaction
   ) {}
 
   start(): void {
@@ -36,6 +38,7 @@ export class OrchestrationDbMaintenance {
 
   stop(): void {
     this.stopped.abort()
+    this.compaction?.stop()
     clearTimeout(this.timer)
     this.timer = undefined
   }
@@ -75,7 +78,10 @@ export class OrchestrationDbMaintenance {
           return
         }
       }
+      return
     }
+    // Only files made before incremental auto-vacuum need the one-time copy.
+    await this.compaction?.tick()
   }
 
   /** False when stopped mid-way. */

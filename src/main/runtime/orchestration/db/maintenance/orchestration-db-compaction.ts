@@ -1,58 +1,51 @@
-import { open, stat, statfs, writeFile } from 'node:fs/promises'
+import type { ChildProcess } from 'node:child_process'
+import { link, open, rename, rm, stat, statfs } from 'node:fs/promises'
 import { dirname } from 'node:path'
-import { tmpdir } from 'node:os'
-import { potentiallyLiveRemoteAttachmentSql } from '../federation/remote-attachment-liveness'
-import { runChild, runCompactionChild } from './orchestration-db-compaction-children'
+import { spawnProcess } from '@orca/process-host'
+import type Database from '../../../../sqlite/sync-database'
+import type { OrchestrationDb } from '../orchestration-db'
+import { compactionChildSource } from './orchestration-db-compaction-child-source'
 
 const MIB = 1024 * 1024
 const MIN_FREE_BYTES = 32 * MIB
 const MIN_FREE_FRACTION = 0.25
-// Quit waits at most QUIT_BUDGET_MS; larger files rarely finish inside it (235 MiB live took 2.9-3.6 s).
-const MAX_LIVE_BYTES = 128 * MIB
-const QUIT_BUDGET_MS = 2_000
-const EXIT_GRACE_MS = 500
-const MARKER_WRITE_MS = 250
-const SLOW_VETO_MS = 250
-// How long the child waits for other connections to close; the runtime's checkpoint worker exits async.
-const LOCK_WAIT_MS = 300
-// Time after the kill grace for rolling back a stopped VACUUM's WAL; launch does it if this runs out.
-const RECOVERY_MS = 500
-// Our close checkpoints only if the child died after 'ready'; this (journal_size_limit) bounds that close.
+// Maintenance minutes with no write before copying; a write after the copy makes it stale.
+const QUIET_TICKS = 5
+// A copy that keeps going stale costs one background copy an hour, three per session at most.
+const ATTEMPTS_PER_SESSION = 3
+const ATTEMPT_SPACING_MS = 60 * 60_000
+// The copy blocks no one; this only bounds the disk and CPU it uses.
+const COPY_BUDGET_MS = 120_000
+// journal_size_limit: closing at quit checkpoints at most this much.
 const MAX_WAL_BYTES = 8 * MIB
+const SWAP_CAP_MS = 2_000
+const UNLINK_WAIT_MS = 1_000
 
-/** Orchestration state another agent or process may still act on; compaction waits for a quit with none. */
-export const ACTIVE_ORCHESTRATION_WORK_SQL = `SELECT
-  EXISTS(SELECT 1 FROM dispatch_contexts WHERE status IN ('pending', 'dispatched'))
-  OR EXISTS(SELECT 1 FROM worker_dispatches
-    WHERE state IN ('starting', 'ready', 'start_unknown', 'stopping', 'stop_unknown'))
-  OR EXISTS(SELECT 1 FROM worker_terminal_resources
-    WHERE ownership_state = 'owned' AND release_state <> 'released')
-  OR EXISTS(SELECT 1 FROM remote_dispatch_attachments WHERE ${potentiallyLiveRemoteAttachmentSql()})
-  OR EXISTS(SELECT 1 FROM remote_questions WHERE status = 'pending')
-  OR EXISTS(SELECT 1 FROM decision_gates WHERE status = 'pending')
-  OR EXISTS(SELECT 1 FROM coordinator_runs WHERE status = 'running') AS active`
-
-type PageCounts = { pageSize: number; pages: number; freePages: number }
-
-export type OrchestrationDbCompaction =
-  | { kind: 'not-needed' }
-  | { kind: 'active' }
-  | { kind: 'too-large'; liveBytes: number }
-  | { kind: 'low-disk'; neededBytes: number; availableBytes: number }
-  | { kind: 'busy' }
-  | { kind: 'deferred' }
-  | { kind: 'timed-out'; ms: number }
+export type OrchestrationDbSwap =
+  | { kind: 'none' | 'stale' | 'busy' }
   | { kind: 'compacted'; beforeBytes: number; afterBytes: number; ms: number }
   | { kind: 'failed'; error: string }
 
-/** Files made before incremental auto-vacuum keep freed pages forever; worth one VACUUM only when much is free. */
-function isCompactionWarranted({ pageSize, pages, freePages }: PageCounts): boolean {
-  return freePages * pageSize >= MIN_FREE_BYTES && freePages >= pages * MIN_FREE_FRACTION
+/** Changes with any write to the file: this connection's rows, another connection's commit, the schema. */
+function writeFingerprint(db: Database.Database): string | null {
+  // An open transaction's rows count before they commit, so a copy taken now could miss them.
+  if (db.isTransaction) {
+    return null
+  }
+  const changes = db.prepare('SELECT total_changes() AS changes').get()?.changes
+  const pragmas = ['data_version', 'schema_version', 'user_version'].map((name) =>
+    db.pragma(name, { simple: true })
+  )
+  return [changes, ...pragmas].join(':')
 }
 
-/** Where SQLite builds VACUUM's copy: it honors SQLITE_TMPDIR first. */
-function sqliteTempDir(): string {
-  return process.env.SQLITE_TMPDIR || tmpdir()
+/** Live bytes of a file made before incremental auto-vacuum with enough free pages to be worth a copy. */
+function legacyLiveBytes(db: Database.Database): number | null {
+  const pageSize = Number(db.pragma('page_size', { simple: true }))
+  const pages = Number(db.pragma('page_count', { simple: true }))
+  const freePages = Number(db.pragma('freelist_count', { simple: true }))
+  const warranted = freePages * pageSize >= MIN_FREE_BYTES && freePages >= pages * MIN_FREE_FRACTION
+  return warranted ? (pages - freePages) * pageSize : null
 }
 
 async function availableBytesIn(dir: string): Promise<number> {
@@ -64,12 +57,16 @@ async function availableBytesIn(dir: string): Promise<number> {
   }
 }
 
-async function walBacklogExceeds(filename: string, maxBytes: number): Promise<boolean> {
+async function sizeOf(path: string): Promise<number | null> {
   try {
-    return (await stat(`${filename}-wal`)).size > maxBytes
+    return (await stat(path)).size
   } catch {
-    return false
+    return null
   }
+}
+
+function removeQuietly(path: string): Promise<void> {
+  return rm(path, { force: true }).catch(() => {})
 }
 
 /** The work's result, or 'late' when it hasn't settled within `ms`. */
@@ -85,186 +82,223 @@ async function settlesWithin<T>(work: Promise<T>, ms: number): Promise<T | 'late
   }
 }
 
-/** The page counts in a SQLite header; null when the file is missing or not a database. */
-async function readHeaderCounts(filename: string): Promise<PageCounts | null> {
-  let file
-  try {
-    file = await open(filename, 'r')
-  } catch {
-    return null
+/**
+ * Shrinks an orchestration database made before incremental auto-vacuum, which otherwise keeps its freed
+ * pages forever. Once the file has gone a few maintenance minutes without a write, a child writes a
+ * compacted copy with `VACUUM INTO`; a clean quit swaps it in if nothing was written since. The main
+ * thread only reads counters and renames files, whatever the database's size.
+ */
+export class OrchestrationDbCompaction {
+  private finished = false
+  private stopped = false
+  private leftoversRemoved = false
+  private lastFingerprint: string | null = null
+  private quietTicks = 0
+  private attempts = 0
+  private lastAttemptAt = Number.NEGATIVE_INFINITY
+  private copying: ChildProcess | undefined
+  private ready: { fingerprint: string } | undefined
+
+  constructor(
+    private readonly orchestrationDb: OrchestrationDb,
+    private readonly filename: string,
+    private readonly isEnabled: () => boolean,
+    private readonly quietTicksNeeded = QUIET_TICKS
+  ) {}
+
+  private get copyPath(): string {
+    return `${this.filename}-compacted`
   }
-  try {
-    const header = Buffer.alloc(100)
-    const { bytesRead } = await file.read(header, 0, 100, 0)
-    if (bytesRead < 100 || header.toString('latin1', 0, 16) !== 'SQLite format 3\0') {
-      return null
+
+  private get replacedPath(): string {
+    return `${this.filename}-replaced`
+  }
+
+  /** Called once per maintenance minute. */
+  async tick(): Promise<void> {
+    if (this.finished || this.stopped || this.copying || !this.isEnabled()) {
+      return
     }
-    // A nonzero largest-root-page field means auto-vacuum is already on.
-    if (header.readUInt32BE(52) !== 0) {
-      return null
+    const { db } = this.orchestrationDb
+    if (Number(db.pragma('auto_vacuum', { simple: true })) !== 0) {
+      this.finished = true
+      return
     }
-    const rawPageSize = header.readUInt16BE(16)
-    return {
-      pageSize: rawPageSize === 1 ? 65536 : rawPageSize,
-      pages: header.readUInt32BE(28),
-      freePages: header.readUInt32BE(36)
+    const fingerprint = writeFingerprint(db)
+    this.quietTicks =
+      fingerprint !== null && fingerprint === this.lastFingerprint ? this.quietTicks + 1 : 0
+    this.lastFingerprint = fingerprint
+    if (this.ready) {
+      if (fingerprint === this.ready.fingerprint) {
+        return
+      }
+      this.ready = undefined
+      await removeQuietly(this.copyPath)
     }
-  } finally {
-    await file.close()
+    if (!this.leftoversRemoved) {
+      // From a session that quit or crashed part-way.
+      this.leftoversRemoved = true
+      await Promise.all([removeQuietly(this.copyPath), removeQuietly(this.replacedPath)])
+    }
+    if (
+      this.quietTicks < this.quietTicksNeeded ||
+      this.attempts >= ATTEMPTS_PER_SESSION ||
+      Date.now() - this.lastAttemptAt < ATTEMPT_SPACING_MS
+    ) {
+      return
+    }
+    const liveBytes = legacyLiveBytes(db)
+    if (liveBytes === null) {
+      return
+    }
+    // Room for the copy beside the file, with as much again to spare.
+    if ((await availableBytesIn(dirname(this.filename))) < 2 * liveBytes) {
+      return
+    }
+    // Read again after the await, right before the child takes its snapshot: any later write shows.
+    if (this.stopped || fingerprint === null || writeFingerprint(db) !== fingerprint) {
+      return
+    }
+    this.attempts++
+    this.lastAttemptAt = Date.now()
+    const copied = await this.copy()
+    if (copied && !this.stopped && writeFingerprint(db) === fingerprint) {
+      this.ready = { fingerprint }
+    } else if (!this.stopped) {
+      await removeQuietly(this.copyPath)
+    }
+  }
+
+  private copy(): Promise<boolean> {
+    return new Promise((resolve) => {
+      let child: ChildProcess
+      try {
+        child = spawnProcess({
+          program: process.execPath,
+          args: ['-e', compactionChildSource],
+          env: {
+            ...process.env,
+            ELECTRON_RUN_AS_NODE: '1',
+            ORCA_ORCHESTRATION_COMPACTION: JSON.stringify({
+              filename: this.filename,
+              target: this.copyPath
+            })
+          },
+          stdio: 'ignore'
+        })
+      } catch {
+        resolve(false)
+        return
+      }
+      this.copying = child
+      const budget = setTimeout(() => child.kill('SIGKILL'), COPY_BUDGET_MS)
+      // Any exit, update installs included: a child left running would hold the app's executable open.
+      const killOnExit = (): void => {
+        child.kill('SIGKILL')
+      }
+      process.once('exit', killOnExit)
+      const done = (copied: boolean): void => {
+        clearTimeout(budget)
+        process.off('exit', killOnExit)
+        this.copying = undefined
+        resolve(copied)
+      }
+      child.once('error', () => done(false))
+      child.once('close', (code) => done(code === 0))
+    })
+  }
+
+  /** Stops a copy in progress; a finished copy stays for the quit swap. */
+  stop(): void {
+    this.stopped = true
+    if (this.copying) {
+      this.copying.kill('SIGKILL')
+      void removeQuietly(this.copyPath)
+    }
+  }
+
+  /**
+   * At the end of a clean quit: swaps the copy in when the file is unchanged since it was taken. `close`
+   * closes the runtime's connection for good, which checkpoints its small WAL.
+   */
+  async swapAtQuit(close: () => void): Promise<OrchestrationDbSwap> {
+    const ready = this.ready
+    this.ready = undefined
+    if (!ready) {
+      return { kind: 'none' }
+    }
+    const started = performance.now()
+    const copy = this.copyPath
+    try {
+      const beforeBytes = await sizeOf(this.filename)
+      const walBytes = await sizeOf(`${this.filename}-wal`)
+      if (beforeBytes === null || (walBytes ?? 0) > MAX_WAL_BYTES) {
+        await removeQuietly(copy)
+        return { kind: 'busy' }
+      }
+      // Synchronously before the close, so nothing can write in between.
+      if (writeFingerprint(this.orchestrationDb.db) !== ready.fingerprint) {
+        await removeQuietly(copy)
+        return { kind: 'stale' }
+      }
+      close()
+      // The last connection's close removes the WAL; one left means another still has the file open.
+      if ((await sizeOf(`${this.filename}-wal`)) !== null) {
+        await removeQuietly(copy)
+        return { kind: 'busy' }
+      }
+      // A second name keeps the old file's blocks alive, so the rename doesn't wait for them to be freed.
+      const kept = await link(this.filename, this.replacedPath).then(
+        () => true,
+        () => false
+      )
+      await rename(copy, this.filename)
+      await syncDirectory(dirname(this.filename))
+      if (kept) {
+        await settlesWithin(removeQuietly(this.replacedPath), UNLINK_WAIT_MS)
+      }
+      return {
+        kind: 'compacted',
+        beforeBytes,
+        afterBytes: (await sizeOf(this.filename)) ?? 0,
+        ms: Math.round(performance.now() - started)
+      }
+    } catch (error) {
+      await removeQuietly(copy)
+      return { kind: 'failed', error: String(error) }
+    }
   }
 }
 
-/** Present once an attempt started, and never removed; quit pays the wait for a file at most once. */
-function attemptMarker(filename: string): string {
-  return `${filename}-compaction-deferred`
-}
-
-async function markerExists(filename: string): Promise<boolean> {
-  try {
-    await stat(attemptMarker(filename))
-    return true
-  } catch {
-    return false
+/** Makes the rename durable; Windows can't open a directory and its renames are already written through. */
+async function syncDirectory(dir: string): Promise<void> {
+  if (process.platform === 'win32') {
+    return
   }
-}
-
-/** True only when this quit created the marker, so two quits never both attempt. */
-async function claimAttempt(filename: string): Promise<boolean> {
   try {
-    await writeFile(attemptMarker(filename), '', { flag: 'wx' })
-    return true
+    const handle = await open(dir, 'r')
+    await handle.sync().finally(() => handle.close())
   } catch {
-    return false
+    // Some file systems refuse to sync a directory; the rename itself already happened.
   }
 }
 
 export type OrchestrationDbQuitOwner = {
-  /** The database file's path (it may not exist), or null when there is none. */
-  orchestrationDbFileForQuit(): string | null
-  /** Orchestration work in flight, including live coordinators only this process can see. */
-  hasActiveOrchestrationWork(deadline: number): Promise<boolean | 'timeout'>
-  /** Closes this process's connection and keeps it closed. */
-  closeOrchestrationDbForQuit(): void
+  swapCompactedOrchestrationDbForQuit(): Promise<OrchestrationDbSwap>
 }
 
-/**
- * One VACUUM of an orchestration database made before incremental auto-vacuum, so it can return pages from
- * then on. `release` runs once the child has joined the file, to close the caller's connection without making
- * that close the last one. Stopped at `budgetMs`, which rolls it back; a busy, active or stopped file is left
- * for a later quit, and the switched file never qualifies again.
- */
-export async function compactOrchestrationDb(
-  filename: string,
-  options: {
-    budgetMs?: number
-    /** True, false, or 'timeout' when it couldn't decide by `deadline` (performance.now()). */
-    isActive?: (deadline: number) => boolean | 'timeout' | Promise<boolean | 'timeout'>
-    release?: () => void
-  } = {}
-): Promise<OrchestrationDbCompaction> {
-  const { budgetMs = QUIT_BUDGET_MS, isActive = () => false, release = () => {} } = options
-  // The budget covers the checks too, so a slow disk or long history can't stretch quit past it.
-  const started = performance.now()
-  // A cheap first look, so ordinary quits do nothing else; the child decides on SQLite's own view.
-  const counts = await readHeaderCounts(filename)
-  if (!counts || !isCompactionWarranted(counts)) {
-    return { kind: 'not-needed' }
-  }
-  const liveBytes = (counts.pages - counts.freePages) * counts.pageSize
-  if (liveBytes > MAX_LIVE_BYTES) {
-    return { kind: 'too-large', liveBytes }
-  }
-  if (await markerExists(filename)) {
-    return { kind: 'deferred' }
-  }
-  const neededBytes = 2 * counts.pages * counts.pageSize
-  const availableBytes = await availableBytesIn(dirname(filename))
-  if (availableBytes < neededBytes || (await availableBytesIn(sqliteTempDir())) < liveBytes) {
-    return { kind: 'low-disk', neededBytes, availableBytes }
-  }
-  if (await walBacklogExceeds(filename, MAX_WAL_BYTES)) {
-    return { kind: 'busy' }
-  }
-  const vetoStarted = performance.now()
-  const active = await isActive(started + budgetMs)
-  if (active === 'timeout') {
-    // A history too long to check in time would cost the full wait on every quit; count it as the one try.
-    const timedOut = { kind: 'timed-out' as const, ms: Math.round(performance.now() - started) }
-    await settlesWithin(claimAttempt(filename), MARKER_WRITE_MS)
-    return timedOut
-  }
-  if (active) {
-    // A slow check would repeat on every quit with agents running; it counts as the file's one try.
-    if (performance.now() - vetoStarted > SLOW_VETO_MS) {
-      await settlesWithin(claimAttempt(filename), MARKER_WRITE_MS)
-    }
-    return { kind: 'active' }
-  }
-  // Claimed before the wait, so a quit cut off mid-attempt still counts as the one wait it paid. A disk
-  // that can't write it promptly gets no attempt; if the write lands later it just defers the file.
-  if ((await settlesWithin(claimAttempt(filename), MARKER_WRITE_MS)) !== true) {
-    return { kind: 'busy' }
-  }
-  const remainingMs = budgetMs - (performance.now() - started)
-  const { result, heldLock } =
-    remainingMs > 0
-      ? await runCompactionChild({
-          filename,
-          budgetMs: remainingMs,
-          graceMs: EXIT_GRACE_MS,
-          release,
-          started,
-          job: {
-            tempDir: sqliteTempDir(),
-            minFreeBytes: MIN_FREE_BYTES,
-            minFreeFraction: MIN_FREE_FRACTION,
-            maxLiveBytes: MAX_LIVE_BYTES,
-            activeWorkSql: ACTIVE_ORCHESTRATION_WORK_SQL,
-            lockWaitMs: LOCK_WAIT_MS
-          }
-        })
-      : {
-          result: { kind: 'timed-out' as const, ms: Math.round(performance.now() - started) },
-          heldLock: false
-        }
-  // The marker stays whatever the result: a compacted file never qualifies again, and any other attempt
-  // may already have cost the user its one wait.
-  if (heldLock && (result.kind === 'timed-out' || result.kind === 'failed')) {
-    // A VACUUM stopped under its exclusive lock leaves its copy in the WAL; clear it now, after the
-    // windows closed, rather than on the next launch's first open.
-    const leftMs = budgetMs + EXIT_GRACE_MS + RECOVERY_MS - (performance.now() - started)
-    await runChild(filename, { recoverOnly: true }, Math.max(leftMs, 0))
-  }
-  return result
-}
-
-/** Last step of a clean quit, after every other teardown settled: nothing else uses the file. */
-export async function compactOrchestrationDbAtQuit(
+/** Last step of a clean desktop quit, after every other teardown settled: nothing else uses the file. */
+export async function swapCompactedOrchestrationDbAtQuit(
   owner: OrchestrationDbQuitOwner | null | undefined
 ): Promise<void> {
-  let cap: NodeJS.Timeout | undefined
-  // Quit never waits past the budget plus the kill grace, whatever the disk does.
-  const capped = new Promise<void>((resolve) => {
-    cap = setTimeout(resolve, QUIT_BUDGET_MS + EXIT_GRACE_MS + RECOVERY_MS + 50)
-    cap.unref()
-  })
-  await Promise.race([compactAtQuit(owner), capped])
-  clearTimeout(cap)
-}
-
-async function compactAtQuit(owner: OrchestrationDbQuitOwner | null | undefined): Promise<void> {
+  if (!owner) {
+    return
+  }
   try {
-    const filename = owner?.orchestrationDbFileForQuit()
-    if (!owner || !filename) {
-      return
-    }
-    const result = await compactOrchestrationDb(filename, {
-      isActive: (deadline) => owner.hasActiveOrchestrationWork(deadline),
-      release: () => owner.closeOrchestrationDbForQuit()
-    })
-    if (result.kind === 'failed') {
-      console.warn('[orchestration] database compaction failed', result.error)
-    } else if (result.kind !== 'not-needed') {
+    const result = await settlesWithin(owner.swapCompactedOrchestrationDbForQuit(), SWAP_CAP_MS)
+    if (result === 'late' || result.kind === 'failed') {
+      console.warn('[orchestration] database compaction failed', result)
+    } else if (result.kind !== 'none') {
       console.info('[orchestration] database compaction', result)
     }
   } catch (error) {

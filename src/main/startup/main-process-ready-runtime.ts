@@ -71,6 +71,10 @@ export async function initializeReadyRuntimeServices(): Promise<void> {
   initializeMainProcessObservers()
   initializeMainProcessAccountServices()
   const runtime = initializeMainProcessRuntime()
+  if (!state.isServeMode) {
+    // Its copy is swapped in only by the desktop quit.
+    runtime.allowOrchestrationDbCompaction()
+  }
   initializeMainProcessAutomations()
   startWorkspaceCleanupRunner(runtime, store)
   configureRuntimeServices(runtime)

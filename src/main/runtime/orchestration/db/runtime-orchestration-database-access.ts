@@ -1,21 +1,23 @@
 import { getWorkerTerminalAutoReleaseScheduler } from '../terminal-authority/release/worker-terminal-auto-release-scheduler'
 import { OrchestrationDb } from './orchestration-db'
 import { OrchestrationDbMaintenance } from './maintenance/orchestration-db-maintenance'
-import { ACTIVE_ORCHESTRATION_WORK_SQL } from './maintenance/orchestration-db-compaction'
+import {
+  OrchestrationDbCompaction,
+  type OrchestrationDbSwap
+} from './maintenance/orchestration-db-compaction'
 import { structuredWorkerSession } from '../terminal-authority/structured-sessions/structured-worker-authority'
 import { structuredWorkerIdentityFromRow } from '../terminal-authority/structured-sessions/structured-worker-identity'
 import { isStructuredWorkerHandle } from '../../../../shared/orchestration/workers/structured-worker-handle'
 import { committedHandBackTypes, type MailHandBack } from './messages/helper-mailbox-hand-back'
 import { existsSync } from 'node:fs'
-import { setImmediate as yieldToEventLoop } from 'node:timers/promises'
 import { structuredMailboxCustody } from '../mailbox/routing/structured-session-mail-target'
 import { closeOrphanedTerminalApprovals } from '../workers/approvals/terminal-approval-orphans'
 import { OrcaRuntimeWithAutomationApiOperations } from '../../workspaces/persisted-surfaces/automation-api-operations'
 
-const RUNS_PER_ACTIVITY_PAGE = 500
-
 export abstract class RuntimeOrchestrationDatabaseAccess extends OrcaRuntimeWithAutomationApiOperations {
   private orchestrationDbMaintenance: OrchestrationDbMaintenance | undefined
+  private orchestrationDbCompaction: OrchestrationDbCompaction | undefined
+  private orchestrationDbCompactionAllowed = false
   private orchestrationDbClosedForQuit = false
 
   abstract ensureOrchestrationFederationRelay(
@@ -36,8 +38,14 @@ export abstract class RuntimeOrchestrationDatabaseAccess extends OrcaRuntimeWith
       throw new Error('The orchestration database is closed for quit.')
     }
     if (!this._orchestrationDb) {
-      const db = new OrchestrationDb(this.orchestrationDbPath())
+      const filename = this.orchestrationDbPath()
+      const db = new OrchestrationDb(filename)
       this._orchestrationDb = db
+      this.orchestrationDbCompaction = new OrchestrationDbCompaction(
+        db,
+        filename,
+        () => this.orchestrationDbCompactionAllowed
+      )
       this.orchestrationDbMaintenance = new OrchestrationDbMaintenance(
         db,
         (dispatchId) => isReleasedChatReadable(db, dispatchId),
@@ -45,7 +53,8 @@ export abstract class RuntimeOrchestrationDatabaseAccess extends OrcaRuntimeWith
           isLiveHandle: (handle) => this.isLiveOrchestrationHandle(handle),
           isLivePane: (paneKey) => this.hasLiveTerminalForPaneKey(paneKey),
           waitedMailboxes: () => this.messageWaiters.map.keys()
-        }
+        },
+        this.orchestrationDbCompaction
       )
       this.orchestrationDbMaintenance.start()
       this.bindMailHandBack(this._orchestrationDb)
@@ -72,52 +81,20 @@ export abstract class RuntimeOrchestrationDatabaseAccess extends OrcaRuntimeWith
       : null
   }
 
-  orchestrationDbFileForQuit(): string | null {
-    // A missing file reads as not needing compaction, so no sync existence check on the quit path.
-    return this.orchestrationDbPath() || null
+  /** Desktop only: the copy is swapped in at quit, and only the desktop quit does that. */
+  allowOrchestrationDbCompaction(): void {
+    this.orchestrationDbCompactionAllowed = true
   }
 
-  /** In-flight orchestration work, including Runs whose coordinator is still alive in a terminal;
-   *  'timeout' when the Run history couldn't be read by `deadline` (performance.now()). */
-  async hasActiveOrchestrationWork(deadline: number): Promise<boolean | 'timeout'> {
-    const db = this._orchestrationDb
-    if (!db) {
-      return false
-    }
-    if (db.db.prepare(ACTIVE_ORCHESTRATION_WORK_SQL).get()?.active) {
-      return true
-    }
-    const page = db.db.prepare(
-      'SELECT rowid AS row_id, coordinator_handle, coordinator_pane_key FROM runs WHERE rowid < ? ORDER BY rowid DESC LIMIT ?'
+  /** At the end of a clean quit: swaps in a compacted copy taken while the file sat unwritten. */
+  swapCompactedOrchestrationDbForQuit(): Promise<OrchestrationDbSwap> {
+    return (
+      this.orchestrationDbCompaction?.swapAtQuit(() => this.closeOrchestrationDbForQuit()) ??
+      Promise.resolve({ kind: 'none' })
     )
-    // Newest first, since a live coordinator is almost always on a recent Run; paged with yields.
-    for (let after = Number.MAX_SAFE_INTEGER; ;) {
-      const runs = page.all(after, RUNS_PER_ACTIVITY_PAGE)
-      const live = runs.some(
-        (run) =>
-          (typeof run.coordinator_handle === 'string' &&
-            this.isLiveOrchestrationHandle(run.coordinator_handle)) ||
-          (typeof run.coordinator_pane_key === 'string' &&
-            this.hasLiveTerminalForPaneKey(run.coordinator_pane_key))
-      )
-      if (live) {
-        return true
-      }
-      if (runs.length < RUNS_PER_ACTIVITY_PAGE) {
-        return false
-      }
-      after = Number(runs.at(-1)?.row_id)
-      await yieldToEventLoop()
-      if (this._orchestrationDb !== db) {
-        return true
-      }
-      if (performance.now() >= deadline) {
-        return 'timeout'
-      }
-    }
   }
 
-  /** At the end of a clean quit, for a one-time compaction: closes the database and keeps it closed. */
+  /** At the end of a clean quit, before swapping in a compacted copy: closes the database for good. */
   closeOrchestrationDbForQuit(): void {
     this.orchestrationDbClosedForQuit = true
     this.orchestrationDbMaintenance?.stop()
@@ -129,6 +106,7 @@ export abstract class RuntimeOrchestrationDatabaseAccess extends OrcaRuntimeWith
   setOrchestrationDb(db: OrchestrationDb): void {
     this.orchestrationDbMaintenance?.stop()
     this.orchestrationDbMaintenance = undefined
+    this.orchestrationDbCompaction = undefined
     this.orchestrationFederation.resetForDatabaseChange()
     this.mailPointerRepointScheduler.clear()
     this._orchestrationDb = db

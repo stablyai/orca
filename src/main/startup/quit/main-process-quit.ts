@@ -28,7 +28,7 @@ import { destroySystemTray } from '../../tray/system-tray'
 import { shutdownTelemetry } from '../../telemetry/client'
 import { shutdownObservability } from '../../observability/index'
 import { isQuittingForUpdate } from '../../updater/updater-service'
-import { compactOrchestrationDbAtQuit } from '../../runtime/orchestration/db/maintenance/orchestration-db-compaction'
+import { swapCompactedOrchestrationDbAtQuit } from '../../runtime/orchestration/db/maintenance/orchestration-db-compaction'
 import { recordUpdaterLifecycle } from '../../updater/updater-lifecycle-diagnostics'
 import { pendingServeSupervisorQuitCommit } from '../../updater/lifecycle/serve-supervisor-install-park'
 import { stopTccPromptNotice } from '../../macos-permissions/macos-tcc-prompt-notice'
@@ -322,11 +322,11 @@ function installWillQuitHandler(): void {
           closeBrowserExtensionProfileStateStore()
         ])
       )
-      // After everything else: nothing can reach the orchestration database again. Bounded to a few seconds.
+      // After everything else: nothing can reach the orchestration database again. Renames only, capped.
       .then(() =>
         // Read the updater live: an install can start while teardown awaits.
         mayCompact && !isQuittingForUpdate() && !isDevParentShutdownRequested()
-          ? compactOrchestrationDbAtQuit(state.runtime)
+          ? swapCompactedOrchestrationDbAtQuit(state.runtime)
           : undefined
       )
       .then(() => {
