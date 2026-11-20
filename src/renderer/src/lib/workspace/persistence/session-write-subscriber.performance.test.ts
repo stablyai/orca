@@ -9,7 +9,7 @@ import { patchWorkspaceSessionByHost, type SessionApi } from './workspace-sessio
 import { patchWorkspaceSessionEntriesByHost } from './workspace-session-keyed-host-write'
 import { sessionRoutingFor } from './workspace-session-host-routing'
 
-// Perf contract: one background title change rebuilt and routed every workspace's saved tabs and layouts,
+// Perf contract (#45731): one background title change rebuilt and routed every workspace's saved tabs and layouts,
 // so the write walked and deep-compared the whole fleet. Counts deep compares and keys routed to a host.
 
 const DEBOUNCE_MS = 150

@@ -1,5 +1,4 @@
 import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
-import type { WorkspaceSessionState } from '../../../../../shared/workspace-session/workspace-session-state-types'
 import { normalizeWorkspaceSessionKeyToWorkspaceId as normalizeWorkspaceSessionKeyToWorktreeId } from '../../../../../shared/workspace/identity/workspace-scope'
 import { contestedPartitionHosts } from '../../../../../shared/workspace-session/workspace-session-contested-primary-host'
 import { isWorkspaceSessionRecord } from '../../../../../shared/workspace-session/workspace-session-host-records'
@@ -28,7 +27,8 @@ function isContestedWorkspace(
     return true
   }
   return Object.values(state.contestedHostWorkspaceSessions ?? {}).some((slice) => {
-    const parked: unknown = slice?.[field as keyof WorkspaceSessionState]
+    const parkedFields: Record<string, unknown> = slice ?? {}
+    const parked = parkedFields[field]
     return isWorkspaceSessionRecord(parked) && Object.hasOwn(parked, worktreeId)
   })
 }
@@ -63,7 +63,7 @@ export function patchWorkspaceSessionEntriesByHost(
         entries = {}
         entriesByHost.set(hostId, entries)
       }
-      const target = (entries[field as keyof WorkspaceSessionFieldEntries] ??= {})
+      const target = (entries[field] ??= {})
       target[worktreeId] = value
     }
   }

@@ -8,16 +8,12 @@ import {
 import { buildWorkspaceSessionPatch } from './workspace-session-patch'
 import {
   buildWorkspaceSessionKeyedWrite,
-  KEYED_SESSION_FIELDS,
-  type KeyedSessionField,
   type WorkspaceSessionKeyedWrite
 } from './workspace-session-keyed-write'
 import {
-  changedTitleBuckets,
-  createTerminalSessionTabsProjection,
-  createUnifiedSessionTabsProjection,
-  TERMINAL_TAB_TITLE_KEYS,
-  UNIFIED_TAB_LABEL_KEYS
+  createTerminalTitleScopedProjection,
+  createUnifiedTitleScopedProjection,
+  type TitleChangeScope
 } from './session-write-tab-changes'
 import { createBrowserSessionHandlesProjection } from './browser-session-handles-projection'
 import { createUnifiedTabSessionCache } from './workspace-session-unified-tabs'
@@ -48,10 +44,6 @@ export type SessionWriteSubscriberDeps = {
   debounceMs?: number
 }
 
-function isKeyedSessionField(field: SessionRelevantField): field is KeyedSessionField {
-  return (KEYED_SESSION_FIELDS as readonly string[]).includes(field)
-}
-
 // Expose the real subscriber for mutation-gate tests; unrelated status/usage/title ticks can otherwise silently breach timer budgets.
 export function createSessionWriteSubscriber({
   store,
@@ -72,21 +64,23 @@ export function createSessionWriteSubscriber({
   // Pending fields are the only owed-write ledger after prev advances: per field, the workspaces whose
   // titles changed, or 'whole'. In-flight writes own their fields until ACK; failures merge them back
   // as 'whole' without replacing newer same-field edits.
-  const pendingChangedFields = new Map<SessionRelevantField, Set<string> | 'whole'>()
-  const markPending = (field: SessionRelevantField, scope: ReadonlySet<string> | 'whole'): void => {
+  const pendingChangedFields = new Map<SessionRelevantField, TitleChangeScope | 'whole'>()
+  const markPending = (field: SessionRelevantField, scope: TitleChangeScope | 'whole'): void => {
     const pending = pendingChangedFields.get(field)
-    if (scope === 'whole' || pending === 'whole') {
-      pendingChangedFields.set(field, 'whole')
-    } else if (pending) {
-      scope.forEach((key) => pending.add(key))
-    } else {
-      pendingChangedFields.set(field, new Set(scope))
-    }
+    pendingChangedFields.set(
+      field,
+      scope === 'whole' || pending === 'whole' || (pending && pending.tabs !== scope.tabs)
+        ? 'whole'
+        : {
+            tabs: scope.tabs,
+            worktreeIds: new Set([...(pending?.worktreeIds ?? []), ...scope.worktreeIds])
+          }
+    )
   }
   // Accepted but not applied (a fenced partition): they ride along with the next real session change.
   const deferredFields = new Set<SessionRelevantField>()
-  const terminalTabsProjection = createTerminalSessionTabsProjection()
-  const unifiedTabsProjection = createUnifiedSessionTabsProjection()
+  const terminalTabsProjection = createTerminalTitleScopedProjection()
+  const unifiedTabsProjection = createUnifiedTitleScopedProjection()
   const browserHandlesProjection = createBrowserSessionHandlesProjection()
   const unifiedTabSessionCache = createUnifiedTabSessionCache()
   const flushPendingWrite = (): void => {
@@ -153,24 +147,20 @@ export function createSessionWriteSubscriber({
   /** A title-only change sends its workspaces' keys; null leaves the write to the whole path. */
   const persistChangedKeys = (
     fresh: AppState,
-    changed: ReadonlyMap<SessionRelevantField, ReadonlySet<string> | 'whole'>
+    changed: ReadonlyMap<SessionRelevantField, TitleChangeScope | 'whole'>
   ): PersistOutcome | null => {
     if (!persistKeyed) {
       return null
     }
-    const worktreeIdsByField = new Map<KeyedSessionField, ReadonlySet<string>>()
+    const scopes = new Map<SessionRelevantField, TitleChangeScope>()
     for (const [field, scope] of changed) {
-      if (scope === 'whole' || !isKeyedSessionField(field)) {
+      if (scope === 'whole') {
         return null
       }
-      worktreeIdsByField.set(field, scope)
+      scopes.set(field, scope)
     }
     try {
-      const write = buildWorkspaceSessionKeyedWrite(
-        fresh,
-        worktreeIdsByField,
-        unifiedTabSessionCache
-      )
+      const write = buildWorkspaceSessionKeyedWrite(fresh, scopes, unifiedTabSessionCache)
       return write ? persistKeyed(write) : null
     } catch (error) {
       // The whole path rebuilds every key, so a keyed failure costs only this write's speed.
@@ -261,26 +251,10 @@ export function createSessionWriteSubscriber({
       prev === null
         ? [...SESSION_RELEVANT_FIELDS]
         : SESSION_RELEVANT_FIELDS.filter((key) => prev?.[key] !== next[key])
-    const scopeOf = (field: SessionRelevantField): ReadonlySet<string> | 'whole' =>
-      prev === null || prevTabsSource === null || prevUnifiedTabsSource === null
-        ? 'whole'
-        : field === 'tabsByWorktree'
-          ? changedTitleBuckets(
-              prev.tabsByWorktree as TabsByWorktree,
-              next.tabsByWorktree as TabsByWorktree,
-              prevTabsSource,
-              state.tabsByWorktree,
-              TERMINAL_TAB_TITLE_KEYS
-            )
-          : field === 'unifiedTabsByWorktree'
-            ? changedTitleBuckets(
-                prev.unifiedTabsByWorktree as UnifiedTabsByWorktree,
-                next.unifiedTabsByWorktree as UnifiedTabsByWorktree,
-                prevUnifiedTabsSource,
-                state.unifiedTabsByWorktree,
-                UNIFIED_TAB_LABEL_KEYS
-              )
-            : 'whole'
+    const scopeOf = (field: SessionRelevantField): TitleChangeScope | 'whole' =>
+      terminalTabsProjection.scopeOf(next[field]) ??
+      unifiedTabsProjection.scopeOf(next[field]) ??
+      'whole'
     const changedScopes = changedFields.map((field) => [field, scopeOf(field)] as const)
     // Equivalent projections still consume the new source identities.
     prevTabsSource = state.tabsByWorktree

@@ -99,11 +99,11 @@ export type UnifiedTabSessionCache = {
   placementTargets: ReadonlySet<string> | null
   slots: ReadonlyMap<string, string> | null
   /** The open files those placements were read from. */
-  openFiles: readonly OpenFile[] | undefined | null
+  placementFiles: readonly OpenFile[] | undefined | null
 }
 
 export function createUnifiedTabSessionCache(): UnifiedTabSessionCache {
-  return { sessions: new WeakMap(), placementTargets: null, slots: null, openFiles: null }
+  return { sessions: new WeakMap(), placementTargets: null, slots: null, placementFiles: null }
 }
 
 function buildWorktreeTabSession(
@@ -135,7 +135,7 @@ function buildWorktreeTabSession(
   }
 }
 
-export type UnifiedTabSnapshot = Pick<
+type UnifiedTabSnapshot = Pick<
   WorkspaceSessionSnapshot,
   'activeGroupIdByWorktree' | 'groupsByWorktree' | 'layoutByWorktree' | 'unifiedTabsByWorktree'
 >
@@ -152,13 +152,12 @@ export function buildPersistedUnifiedTabSessionData(
   const data = buildUnifiedTabSessionData(snapshot, sourceTabs, sourceGroups, cache)
   if (cache) {
     cache.placementTargets = new Set(movedTabs.map((tab) => tab.worktreeId))
-    cache.openFiles = snapshot.openFiles
+    cache.placementFiles = snapshot.openFiles
   }
   return data
 }
 
-/** One workspace's saved tab session, reused from the cache while its inputs are the same. */
-export function worktreeTabSessionFor(
+function worktreeTabSessionFor(
   snapshot: UnifiedTabSnapshot,
   worktreeId: string,
   liveTabs: Tab[] | undefined,
@@ -199,17 +198,21 @@ export function buildUnifiedTabSessionData(
   snapshot: UnifiedTabSnapshot,
   sourceTabs = snapshot.unifiedTabsByWorktree,
   sourceGroups = snapshot.groupsByWorktree,
-  cache?: UnifiedTabSessionCache
+  cache?: UnifiedTabSessionCache,
+  /** Build only these workspaces (a keyed save); the whole build covers every workspace. */
+  onlyWorktreeIds?: ReadonlySet<string>
 ): PersistedUnifiedTabSessionData {
   const unifiedTabs: WorkspaceSessionState['unifiedTabs'] = {}
   const tabGroups: WorkspaceSessionState['tabGroups'] = {}
   const tabGroupLayouts: WorkspaceSessionState['tabGroupLayouts'] = {}
   const activeGroupIdByWorktree: WorkspaceSessionState['activeGroupIdByWorktree'] = {}
-  const worktreeIds = new Set([
-    ...Object.keys(sourceTabs),
-    ...Object.keys(sourceGroups),
-    ...Object.keys(snapshot.layoutByWorktree ?? {})
-  ])
+  const worktreeIds =
+    onlyWorktreeIds ??
+    new Set([
+      ...Object.keys(sourceTabs),
+      ...Object.keys(sourceGroups),
+      ...Object.keys(snapshot.layoutByWorktree ?? {})
+    ])
 
   const slotsByWorktree = structuredLaunchSlotSignatures()
   if (cache) {

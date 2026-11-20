@@ -20,6 +20,10 @@ import {
 } from '../../../../../shared/workspace-session/workspace-session-contested-primary-host'
 import type { HostIdByWorktreeId } from './workspace-session-host-split'
 import { indexWorkspaceRuntimeHostOwnership } from '../ownership/workspace-runtime-host-ownership'
+import {
+  selectFolderWorkspaces,
+  selectWorktreesByRepo
+} from '@/store/workspaces/catalog/workspace-record-fields'
 import type { HostPersistenceState } from './workspace-session-host-persistence'
 
 type RoutingState = Pick<
@@ -45,7 +49,9 @@ function getFolderWorkspacePartitionHostId(state: RoutingState, key: string): Ex
   if (scope?.type !== 'folder') {
     return LOCAL_EXECUTION_HOST_ID
   }
-  const workspace = state.folderWorkspaces?.find((entry) => entry.id === scope.folderWorkspaceId)
+  const workspace = selectFolderWorkspaces(state)?.find(
+    (entry) => entry.id === scope.folderWorkspaceId
+  )
   const group = workspace
     ? state.projectGroups?.find((entry) => entry.id === workspace.projectGroupId)
     : null
@@ -97,13 +103,13 @@ function catalogReattributedAwayFrom(
 /** Route all nonlocal hosts to their own partitions, matching main; local-only SSH writes created split ownership/read-as-absence (#12721/#12723). Contested IDs retain one primary plus parked co-claimants. */
 export function buildHostSessionRouting(state: RoutingState): HostSessionRouting {
   const repoHostById = buildRepoHostById(state.repos)
-  const claims = indexWorktreeHostClaims(state.worktreesByRepo, repoHostById)
+  const claims = indexWorktreeHostClaims(selectWorktreesByRepo(state), repoHostById)
   const restoredPrimaryByWorktreeId = new Map<string, ExecutionHostId>()
   for (const [key, hostId] of Object.entries(state.contestedPrimaryHostBySessionKey ?? {})) {
     restoredPrimaryByWorktreeId.set(normalizeWorkspaceSessionKeyToWorktreeId(key), hostId)
   }
   const { repoIdByWorktreeId, runtimeHostIdByWorktreeId } = indexWorkspaceRuntimeHostOwnership(
-    state.worktreesByRepo
+    selectWorktreesByRepo(state)
   )
 
   const resolveHostId = (worktreeId: string): ExecutionHostId => {

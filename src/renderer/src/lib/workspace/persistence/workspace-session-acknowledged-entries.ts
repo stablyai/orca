@@ -3,6 +3,7 @@ import { structuralValuesEqual } from '../../../../../shared/collections/structu
 import { isWorkspaceSessionRecord } from '../../../../../shared/workspace-session/workspace-session-host-records'
 import type { WorkspaceSessionEntriesPatch } from '../../../../../shared/workspace-session/workspace-session-entries-patch'
 import type { WorkspaceSessionPatch } from '../../../../../shared/workspace-session/workspace-session-state-types'
+import type { HostSessionRouting } from './workspace-session-host-routing'
 
 export type WorkspaceSessionEntriesDiff = {
   patch: WorkspaceSessionEntriesPatch
@@ -15,11 +16,12 @@ function sameValue(previous: unknown, next: unknown): boolean {
 }
 
 /** Changed keys of worktree-keyed record fields, for a write that rebuilt only those keys. */
-export type WorkspaceSessionFieldEntries = Partial<
-  Record<keyof WorkspaceSessionPatch, Record<string, unknown>>
->
+export type WorkspaceSessionFieldEntries = Record<string, Record<string, unknown>>
 
 type SettledInput = { outputs: ReadonlySet<string>; hostIds: ReadonlySet<ExecutionHostId> }
+
+/** Identifies one routing of workspaces to hosts; a new routing is a new object. */
+type RoutingGeneration = HostSessionRouting
 
 /** What main last acknowledged from this window, per host partition and field. A field main hasn't
  *  acknowledged goes whole; after that only the keys whose values changed travel. */
@@ -28,11 +30,11 @@ export class AcknowledgedWorkspaceSessionEntries {
   // A whole-session write replaces main's copy; an acknowledgement that started before it is stale.
   private generation = 0
   // Field records this class copied, so a keyed acknowledgement may set keys in them in place.
-  private readonly owned = new WeakSet<object>()
+  private readonly owned = new WeakSet<Record<string, unknown>>()
   private forgets = 0
   // Inputs whose whole-path output main holds as this window built it, under `settledRouting`.
   private readonly settled = new Map<string, SettledInput>()
-  private settledRouting: object | null = null
+  private settledRouting: RoutingGeneration | null = null
 
   diff(hostId: ExecutionHostId, slice: WorkspaceSessionPatch): WorkspaceSessionEntriesDiff {
     const acknowledged = this.byHost.get(hostId)
@@ -93,7 +95,7 @@ export class AcknowledgedWorkspaceSessionEntries {
     const acknowledged = this.byHost.get(hostId)
     const forgets = this.forgets
     const patch: WorkspaceSessionEntriesPatch = { fields: {}, entries: {} }
-    const fields = Object.entries(fieldEntries) as [string, Record<string, unknown>][]
+    const fields = Object.entries(fieldEntries)
     for (const [field, values] of fields) {
       const previous = acknowledged?.get(field)
       if (!isWorkspaceSessionRecord(previous)) {
@@ -120,17 +122,15 @@ export class AcknowledgedWorkspaceSessionEntries {
           return
         }
         for (const [field, values] of fields) {
-          let record = host.get(field)
+          const record = host.get(field)
           if (!isWorkspaceSessionRecord(record)) {
             continue
           }
           // Stored whole values are the sent slices; copy once rather than mutate a shared object.
-          if (!this.owned.has(record)) {
-            record = { ...record }
-            this.owned.add(record)
-            host.set(field, record)
-          }
-          Object.assign(record, values)
+          const owned = this.owned.has(record) ? record : { ...record }
+          this.owned.add(owned)
+          host.set(field, owned)
+          Object.assign(owned, values)
         }
       }
     }
@@ -145,7 +145,7 @@ export class AcknowledgedWorkspaceSessionEntries {
    *  later write that rebuilds only some keys of them may skip the rest under the same routing. */
   settle(
     mark: number,
-    routing: object,
+    routing: RoutingGeneration,
     inputs: readonly string[],
     outputs: readonly string[],
     hostIds: ReadonlySet<ExecutionHostId>
@@ -171,7 +171,7 @@ export class AcknowledgedWorkspaceSessionEntries {
   }
 
   /** Hosts the whole path wrote for `inputs`, or null when main may not hold their output. */
-  settledHosts(routing: object, inputs: readonly string[]): Set<ExecutionHostId> | null {
+  settledHosts(routing: RoutingGeneration, inputs: readonly string[]): Set<ExecutionHostId> | null {
     if (routing !== this.settledRouting) {
       return null
     }

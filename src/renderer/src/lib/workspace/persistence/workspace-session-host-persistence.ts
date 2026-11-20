@@ -132,7 +132,6 @@ export function patchWorkspaceSessionByHost(
   if (afterProbe) {
     return afterProbe
   }
-  const settleMark = acknowledged?.settleMark()
   const routing = sessionRoutingFor(state)
   const slices = splitWorkspaceSessionForWrite(
     patch as WorkspaceSessionState,
@@ -143,6 +142,8 @@ export function patchWorkspaceSessionByHost(
   const hostIds = slicedHostIds(slices)
   const relays = desktopRelayWriteFor(api, patch, slices, state)
   acknowledged?.retainHosts(routedSessionHostIds(state, slices))
+  // After dropping unrouted hosts: that forget must not cancel this write's own settling.
+  const settleMark = acknowledged?.settleMark()
   // A host's relay ids ride with its entries patch, so main publishes them together once.
   const relayPlan =
     relays &&
