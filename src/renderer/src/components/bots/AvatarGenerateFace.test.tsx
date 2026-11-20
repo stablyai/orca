@@ -26,14 +26,15 @@ function Face({ onResult }: { onResult: (made: GeneratedAvatar) => void }): Reac
 
 function stubAgents(
   agents: AvatarImageAgentStatus[],
-  generate: AvatarGenerationApi['generate']
+  generate: AvatarGenerationApi['generate'],
+  cancel: AvatarGenerationApi['cancel'] = async () => {}
 ): ReturnType<typeof vi.fn> {
   const spy = vi.fn(generate)
   Reflect.set(window, 'api', {
     avatarGeneration: {
       capability: async () => ({ agents }),
       generate: spy,
-      cancel: async () => {}
+      cancel
     }
   })
   return spy
@@ -104,6 +105,21 @@ describe('Generate face', () => {
     const box = await describeAndEnter('a fox astronaut')
     fireEvent.click(await screen.findByRole('button', { name: 'a fox astronaut' }))
     expect(folded(box)).toBe(false)
+  })
+
+  it('cancels a run from the face, or with Esc in the field', async () => {
+    const cancel = vi.fn(async () => {})
+    stubAgents([CODEX], () => new Promise(() => {}), cancel)
+    render(<Face onResult={() => {}} />)
+    const box = await describeAndEnter('a fox astronaut')
+    fireEvent.click(await screen.findByRole('button', { name: 'Cancel generating (Codex)' }))
+    expect(cancel).toHaveBeenCalledTimes(1)
+    expect(box.readOnly).toBe(false)
+    fireEvent.keyDown(box, { key: 'Enter' })
+    await screen.findByRole('button', { name: 'Cancel generating (Codex)' })
+    fireEvent.keyDown(box, { key: 'Escape' })
+    expect(cancel).toHaveBeenCalledTimes(2)
+    expect(screen.queryByRole('button', { name: 'Cancel generating (Codex)' })).toBeNull()
   })
 
   it('shows a usage limit under the field and keeps the description', async () => {

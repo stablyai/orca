@@ -1,7 +1,7 @@
 // The carousel's Generate face (the prompt icon, the run's progress, then the picture it made) and
 // the description field that takes the swatch row's place under it.
 import React, { useEffect, useRef, useState } from 'react'
-import { ArrowUp, Check, Pencil, Sparkles } from 'lucide-react'
+import { ArrowUp, Check, Pencil, Sparkles, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -107,15 +107,54 @@ function PromptTile({
   )
 }
 
-/** The current face: progress, the picture made (hover to edit its description), or the prompt icon. */
+const HINT_BUTTON = cn(
+  TILE,
+  'group/edit relative overflow-hidden outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50'
+)
+
+/** The same hover and focus hint as the picture button that opens this picker. */
+function HintOverlay({ children }: { children: React.ReactNode }): React.JSX.Element {
+  return (
+    <span
+      aria-hidden
+      className={cn(
+        'pointer-events-none absolute inset-0 flex items-center justify-center rounded-xl bg-black/55 text-white',
+        BOT_EDIT_HINT
+      )}
+    >
+      {children}
+    </span>
+  )
+}
+
+/**
+ * The current face: progress (hover to cancel), the picture made (hover to edit its
+ * description), or the prompt icon.
+ */
 export function GenerateFaceTile({ face }: { face: GenerateFace }): React.JSX.Element {
   const t = useTranslate()
-  if (face.run.kind === 'running') {
+  const { run } = face
+  if (run.kind === 'running') {
+    const label = t('bots.avatar.generate.cancelRunning', 'Cancel generating ({{agent}})', {
+      agent: getAgentLabel(run.agent)
+    })
     return (
-      <PromptTile role="status">
-        <LoadingSpinner className="size-6" />
-        <Elapsed since={face.run.startedAt} />
-      </PromptTile>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button type="button" aria-label={label} onClick={face.cancel} className={HINT_BUTTON}>
+            <PromptTile role="status">
+              <LoadingSpinner className="size-6" />
+              <Elapsed since={run.startedAt} />
+            </PromptTile>
+            <HintOverlay>
+              <X className="size-5" />
+            </HintOverlay>
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="bottom" sideOffset={4}>
+          {label}
+        </TooltipContent>
+      </Tooltip>
     )
   }
   if (face.result) {
@@ -124,22 +163,12 @@ export function GenerateFaceTile({ face }: { face: GenerateFace }): React.JSX.El
         type="button"
         aria-label={t('bots.avatar.generate.edit', 'Edit description')}
         onClick={face.edit}
-        className={cn(
-          TILE,
-          'group/edit relative overflow-hidden outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50'
-        )}
+        className={HINT_BUTTON}
       >
         <img src={`data:image/png;base64,${face.result.png}`} alt="" className="size-full" />
-        {/* The same hint as the picture button that opens this picker. */}
-        <span
-          aria-hidden
-          className={cn(
-            'pointer-events-none absolute inset-0 flex items-center justify-center bg-black/55 text-white',
-            BOT_EDIT_HINT
-          )}
-        >
+        <HintOverlay>
           <Pencil className="size-4" />
-        </span>
+        </HintOverlay>
       </button>
     )
   }
@@ -212,23 +241,33 @@ function DescriptionField({ face }: { face: GenerateFace }): React.JSX.Element {
   const t = useTranslate()
   const ref = useRef<HTMLTextAreaElement>(null)
   const { count, select } = face.focus
-  const foldsOnEscape = face.editing && face.result !== null
-  const { setEditing } = face
+  const running = face.run.kind === 'running'
+  // Esc cancels a run, or folds the field back under the picture.
+  const onEscape = running
+    ? face.cancel
+    : face.editing && face.result !== null
+      ? () => face.setEditing(false)
+      : null
+  const latestOnEscape = useRef(onEscape)
   useEffect(() => {
-    if (!foldsOnEscape) {
+    latestOnEscape.current = onEscape
+  })
+  const handlesEscape = onEscape !== null
+  useEffect(() => {
+    if (!handlesEscape) {
       return
     }
-    // Esc folds the field back under the picture. Dialogs and popovers dismiss on a document
-    // capture listener, so this runs earlier, on window, and marks the key handled.
+    // Dialogs and popovers dismiss on a document capture listener, so this runs earlier, on
+    // window, and marks the key handled.
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.key === 'Escape' && event.target === ref.current) {
         event.preventDefault()
-        setEditing(false)
+        latestOnEscape.current?.()
       }
     }
     window.addEventListener('keydown', onKeyDown, true)
     return () => window.removeEventListener('keydown', onKeyDown, true)
-  }, [foldsOnEscape, setEditing])
+  }, [handlesEscape])
   useEffect(() => {
     const box = ref.current
     if (count === 0 || !box) {
@@ -242,14 +281,14 @@ function DescriptionField({ face }: { face: GenerateFace }): React.JSX.Element {
       box.setSelectionRange(box.value.length, box.value.length)
     }
   }, [count, select])
-  const running = face.run.kind === 'running'
   const ready = face.description.trim().length > 0 && !running
   return (
     <div className="flex flex-col rounded-lg border border-input bg-background focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50 dark:bg-input/30">
       <textarea
         ref={ref}
         value={face.description}
-        disabled={running}
+        // Read-only, not disabled, so focus stays and Esc can cancel.
+        readOnly={running}
         maxLength={MAX_AVATAR_DESCRIPTION_CHARS}
         placeholder={t('bots.avatar.generate.placeholder', 'Describe a picture…')}
         aria-label={t('bots.avatar.generate.describe', 'Picture description')}
@@ -263,7 +302,7 @@ function DescriptionField({ face }: { face: GenerateFace }): React.JSX.Element {
           }
         }}
         // Two lines at rest, growing to six, then scrolling.
-        className="scrollbar-sleek block max-h-[122px] min-h-[46px] w-full resize-none bg-transparent px-2.5 pt-2 text-[13px] leading-[19px] text-foreground outline-none [field-sizing:content] placeholder:text-muted-foreground disabled:text-muted-foreground"
+        className="scrollbar-sleek block max-h-[122px] min-h-[46px] w-full resize-none bg-transparent px-2.5 pt-2 text-[13px] leading-[19px] text-foreground outline-none [field-sizing:content] placeholder:text-muted-foreground read-only:text-muted-foreground"
       />
       <div className="flex items-center justify-between px-1.5 pt-1 pb-1.5">
         <AgentMenu face={face} disabled={running} />
@@ -293,13 +332,11 @@ export function GenerateField({ face }: { face: GenerateFace }): React.JSX.Eleme
     run.kind === 'idle' &&
     face.agents.find((entry) => entry.agent === face.agent)?.status === 'signed-out'
   const note: FieldNote | null =
-    run.kind === 'running'
-      ? { kind: 'running', agent: run.agent }
-      : run.kind === 'error'
-        ? { kind: 'failure', failure: run.failure, agent: run.agent ?? face.agent }
-        : signedOut
-          ? { kind: 'failure', failure: 'signed-out', agent: face.agent }
-          : null
+    run.kind === 'error'
+      ? { failure: run.failure, agent: run.agent ?? face.agent }
+      : signedOut
+        ? { failure: 'signed-out', agent: face.agent }
+        : null
   // The last note stays while its row folds away, so the row shrinks instead of vanishing.
   const [lastNote, setLastNote] = useState<FieldNote | null>(note)
   if (note && !sameNote(note, lastNote)) {
@@ -323,7 +360,7 @@ export function GenerateField({ face }: { face: GenerateFace }): React.JSX.Eleme
       <BotPictureRowFold open={!face.folded} className="px-1 pt-2 pb-1">
         <DescriptionField face={face} />
         <BotPictureRowFold open={note !== null}>
-          {shownNote ? <FieldNoteLine note={shownNote} onCancel={face.cancel} /> : null}
+          {shownNote ? <FieldNoteLine note={shownNote} /> : null}
         </BotPictureRowFold>
       </BotPictureRowFold>
     </>

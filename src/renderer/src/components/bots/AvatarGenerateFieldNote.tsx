@@ -1,8 +1,6 @@
-// The line under the Generate description field: progress with Cancel, or why no picture came.
+// The line under the Generate description field: why the last run made no picture.
 import React from 'react'
-import { CircleAlert, X } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
+import { CircleAlert } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
 import type {
@@ -52,44 +50,15 @@ function useFailureMessage(): (failure: AvatarGenerationFailure, agent: string) 
   }
 }
 
-export type FieldNote =
-  | { kind: 'running'; agent: AvatarImageAgent }
-  | { kind: 'failure'; failure: AvatarGenerationFailure; agent: AvatarImageAgent | null }
+/** Why the last run made no picture, for the line under the field. */
+export type FieldNote = { failure: AvatarGenerationFailure; agent: AvatarImageAgent | null }
 
 export function sameNote(a: FieldNote, b: FieldNote | null): boolean {
-  return (
-    b !== null &&
-    a.kind === b.kind &&
-    a.agent === b.agent &&
-    (a.kind === 'running' || (b.kind === 'failure' && a.failure === b.failure))
-  )
+  return b !== null && a.failure === b.failure && a.agent === b.agent
 }
 
-export function FieldNoteLine({
-  note,
-  onCancel
-}: {
-  note: FieldNote
-  onCancel: () => void
-}): React.JSX.Element {
-  const t = useTranslate()
+export function FieldNoteLine({ note }: { note: FieldNote }): React.JSX.Element {
   const failureMessage = useFailureMessage()
-  if (note.kind === 'running') {
-    return (
-      <div className="mt-1 flex h-7 items-center justify-center gap-2 text-xs text-muted-foreground">
-        <span className="inline-flex items-center gap-1.5">
-          <LoadingSpinner className="size-3.5" />
-          {t('bots.avatar.generate.running', 'Generating with {{agent}}…', {
-            agent: getAgentLabel(note.agent)
-          })}
-        </span>
-        <Button type="button" variant="ghost" size="xs" onClick={onCancel}>
-          <X />
-          {t('bots.avatar.generate.cancel', 'Cancel')}
-        </Button>
-      </div>
-    )
-  }
   return (
     <p
       role="alert"
