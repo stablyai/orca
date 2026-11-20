@@ -132,5 +132,5 @@ it('offers agy terminal conversations to chats, except from an agy set up with a
     join(agyHome.path, 'antigravity-cli', 'settings.json'),
     '{"modelProvider":"gemini-api-key"}'
   )
-  expect(await candidates()).not.toContainEqual(agyHome)
+  await expect(candidates()).rejects.toThrow('structured_agent_session_unsupported')
 })
