@@ -117,16 +117,11 @@ describe.runIf(RUN)('a drive letter mapped to a real WSL2 distro share', () => {
     SHARE_TIMEOUT_MS
   )
 
-  it('sees the distro repo through the drive letter', () => {
-    expect(
-      existsSync(drivePath('App', '.git')),
-      `${drivePath('App', '.git')} is not readable through ${letter}:`
-    ).toBe(true)
-  })
-
   it(
     'resolves the letter to the distro share with every reader',
     async () => {
+      const gitDir = drivePath('App', '.git')
+      expect(existsSync(gitDir), `${gitDir} is not readable through ${letter}:`).toBe(true)
       const fresh = await readWslMappedDriveShareNow(letter, undefined, SHARE_TIMEOUT_MS)
       console.log(`[mapped-drive-lane] fresh read: ${JSON.stringify(fresh)}`)
       expect(fresh, 'the fresh read did not answer').not.toBe('unverifiable')
