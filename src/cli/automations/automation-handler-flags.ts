@@ -13,6 +13,7 @@ import {
 } from '../../shared/automations/launch/automation-precheck'
 import { buildAutomationRrule } from '../../shared/automations/scheduling/automation-schedule-occurrences'
 import { isValidAutomationSchedule } from '../../shared/automations/scheduling/automation-schedule-parsing'
+import { automationScheduleParseError } from '../../shared/automations/scheduling/automation-schedule-parsing'
 import { isTuiAgent } from '../../shared/agent-launch/catalog/tui-agent-config'
 import {
   getOptionalPositiveIntegerFlag,
@@ -163,7 +164,9 @@ export function getScheduleFlag(
       })
     : raw
   if (!isValidAutomationSchedule(rrule)) {
-    throw new RuntimeClientError('invalid_argument', `Invalid automation trigger: ${raw}`)
+    const reason = automationScheduleParseError(rrule)
+    const detail = reason ? `. ${reason}` : ''
+    throw new RuntimeClientError('invalid_argument', `Invalid automation trigger: ${raw}${detail}`)
   }
   return { rrule, dtstart: Date.now() }
 }
