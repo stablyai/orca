@@ -19,14 +19,14 @@ export function openHostFile({
       // Why: relativePath === filePath is the external-file contract the editor reads by.
       relativePath: external ? plan.filePath : plan.relativePath,
       worktreeId,
-      runtimeEnvironmentId: null,
+      runtimeEnvironmentId: source.kind === 'runtime' ? source.environmentId : null,
       language: detectLanguage(plan.filePath),
       mode: 'edit',
       ...(external
         ? {
             readOnly: true,
             hostBrowse: true,
-            ...(source.kind === 'ssh' ? { externalSshTargetId: source.connectionId } : {})
+            ...(plan.grantId ? { terminalArtifactGrantId: plan.grantId } : {})
           }
         : {})
     },
@@ -34,7 +34,8 @@ export function openHostFile({
       preview: true,
       focusEditor: true,
       ...(external ? { forceContentReload: true } : {}),
-      suppressActiveRuntimeFallback: true
+      // Why: only a local open may skip the runtime; a runtime open must keep its owner.
+      suppressActiveRuntimeFallback: source.kind === 'local'
     }
   )
 }

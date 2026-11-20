@@ -3,9 +3,9 @@ import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
 import {
   getExecutionHostLabel,
-  LOCAL_EXECUTION_HOST_ID,
-  toSshExecutionHostId
+  LOCAL_EXECUTION_HOST_ID
 } from '../../../../../../shared/execution-host/execution-host'
+import { selectExecutionHostDisplayLabel } from '@/runtime/hosts/display/execution-host-display-label'
 import { getFileExplorerOperationOwnerFromState } from '../navigation/file-explorer-operation-owner'
 import {
   getHostBrowseSource,
@@ -35,7 +35,7 @@ function getHostKey(source: HostBrowseSource | null): string | null {
   if (!source) {
     return null
   }
-  return source.kind === 'ssh' ? `ssh:${source.connectionId}` : 'local'
+  return source.kind === 'runtime' ? `${source.environmentId}@${source.executionHostId}` : 'local'
 }
 
 /** Host mode is a session-only visit to one workspace; leaving the workspace ends it. */
@@ -65,12 +65,13 @@ export function useFileExplorerHostMode({
   }
   const active = visit !== null
 
-  const sshTargetLabels = useAppStore((s) => s.sshTargetLabels)
-  const hostLabel =
-    source?.kind === 'ssh'
-      ? (sshTargetLabels.get(source.connectionId) ??
-        getExecutionHostLabel(toSshExecutionHostId(source.connectionId)))
+  const hostLabel = useAppStore((s) =>
+    source?.kind === 'runtime'
+      ? selectExecutionHostDisplayLabel(s, source.executionHostId, {
+          sshEnvironmentId: source.environmentId
+        })
       : getExecutionHostLabel(LOCAL_EXECUTION_HOST_ID)
+  )
 
   const browser = useFileExplorerHostBrowser({
     visitKey: active ? `${visit.entry}` : null,

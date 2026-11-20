@@ -93,15 +93,11 @@ describe('host browse handlers', () => {
     })
   })
 
-  it('rejects relative and null-byte paths, locally and over SSH', async () => {
+  it('rejects relative and null-byte paths', async () => {
     await expect(resolveHostBrowseEntry('outside/notes.txt'), 'relative').rejects.toThrow(
       /absolute/
     )
-    await expect(resolveHostBrowseEntry(`${root}\0x`), 'local NUL').rejects.toThrow(/null bytes/)
-    await expect(
-      resolveHostBrowseEntry('/home/allen\0x', 'ssh-1'),
-      'null-byte SSH path'
-    ).rejects.toThrow(/null bytes/)
+    await expect(resolveHostBrowseEntry(`${root}\0x`), 'NUL').rejects.toThrow(/null bytes/)
   })
 
   it('resolves workspace ownership against the canonical workspace root', async () => {
@@ -113,7 +109,7 @@ describe('host browse handlers', () => {
     const outsideLink = join(root, 'outside', 'a-link.ts')
     await symlink(join(realWorkspace, 'src', 'a.ts'), outsideLink, 'file')
 
-    const resolution = await resolveHostBrowseEntry(outsideLink, undefined, workspaceAlias)
+    const resolution = await resolveHostBrowseEntry(outsideLink, workspaceAlias)
 
     expect(resolution).toEqual({
       kind: 'file',
@@ -131,7 +127,7 @@ describe('host browse handlers', () => {
     const link = join(workspace, 'notes-link.txt')
     await symlink(target, link, 'file')
 
-    await expect(resolveHostBrowseEntry(link, undefined, workspace)).resolves.toEqual({
+    await expect(resolveHostBrowseEntry(link, workspace)).resolves.toEqual({
       kind: 'file',
       realPath: target,
       workspaceRelativePath: null

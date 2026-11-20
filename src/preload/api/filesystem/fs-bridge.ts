@@ -193,7 +193,6 @@ export const fsApi = {
     ipcRenderer.invoke('fs:browseHostDir', args),
   resolveHostBrowseEntry: (args: {
     targetPath: string
-    connectionId?: string
     workspaceRoot?: string
   }): Promise<HostBrowseEntryResolution> => ipcRenderer.invoke('fs:resolveHostBrowseEntry', args),
   stat: (args: {

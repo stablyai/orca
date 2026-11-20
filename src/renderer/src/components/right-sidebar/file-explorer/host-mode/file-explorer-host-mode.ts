@@ -6,23 +6,35 @@ import type {
   HostBrowseEntryResolution,
   HostDirectoryListing
 } from '../../../../../../shared/file-listing/host-directory-browse'
+import type { RuntimeTerminalPathResolution } from '../../../../../../shared/terminal/runtime-terminal-file-path'
+import { browseRuntimeServerDirectory } from '@/runtime/files/reads/runtime-server-directory-browser'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
+import { toRuntimeWorktreeSelector } from '@/runtime/rpc/targets/runtime-worktree-selector'
+import { hostAbsentRefusal } from '../../../terminal-pane/host-files/host-file-refusal'
 import type { FileExplorerOperationOwner } from '../tree/file-explorer-types'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 
-export type HostBrowseSource = { kind: 'local' } | { kind: 'ssh'; connectionId: string }
+export type HostBrowseSource =
+  | { kind: 'local' }
+  | { kind: 'runtime'; environmentId: string; executionHostId: ExecutionHostId }
+
+/** A host's verdict on a clicked entry; `grantId` is the host's single-file read grant. */
+export type HostEntryResolution = HostBrowseEntryResolution & { grantId?: string }
 
 /** Null when Host mode cannot browse this workspace's host from this client. */
 export function getHostBrowseSource(
   owner: FileExplorerOperationOwner,
   hasDesktopHostBrowse: boolean
 ): HostBrowseSource | null {
-  // Why: the web client stubs ssh.browseDir and has no entry resolver; paired servers are out of scope.
-  if (!hasDesktopHostBrowse) {
-    return null
+  // Why: SSH workspaces run on the host's runtime; a bare SSH owner has no file provider to open with.
+  if (owner.kind === 'runtime') {
+    return {
+      kind: 'runtime',
+      environmentId: owner.environmentId,
+      executionHostId: owner.executionHostId
+    }
   }
-  if (owner.kind === 'local') {
-    return { kind: 'local' }
-  }
-  return owner.kind === 'ssh' ? { kind: 'ssh', connectionId: owner.connectionId } : null
+  return owner.kind === 'local' && hasDesktopHostBrowse ? { kind: 'local' } : null
 }
 
 export function hasDesktopHostBrowseApi(): boolean {
@@ -46,48 +58,89 @@ export async function fetchHostDirectoryListing(
   source: HostBrowseSource,
   dirPath: string
 ): Promise<HostDirectoryListing> {
-  if (source.kind === 'local') {
-    return requireDesktopFs().browseHostDir({ dirPath })
-  }
-  const listing = await window.api.ssh.browseDir({ targetId: source.connectionId, dirPath })
-  // Why: `ls -p` cannot mark symlinks; non-directories are classified on click instead.
-  return { ...listing, entries: listing.entries.map((entry) => ({ ...entry, isSymlink: false })) }
+  return source.kind === 'local'
+    ? requireDesktopFs().browseHostDir({ dirPath })
+    : browseRuntimeServerDirectory(source.environmentId, dirPath)
 }
 
-export function resolveHostEntry(
+async function listsAsDirectory(environmentId: string, path: string): Promise<boolean> {
+  try {
+    await browseRuntimeServerDirectory(environmentId, path)
+    return true
+  } catch {
+    return false
+  }
+}
+
+export async function resolveHostEntry(
   source: HostBrowseSource,
   entryPath: string,
   entry: DirEntry,
-  workspaceRoot: string
-): Promise<HostBrowseEntryResolution> {
+  workspace: { worktreeId: string; worktreePath: string }
+): Promise<HostEntryResolution> {
   if (entry.isDirectory) {
-    return Promise.resolve({ kind: 'directory', realPath: entryPath, workspaceRelativePath: null })
+    return { kind: 'directory', realPath: entryPath, workspaceRelativePath: null }
   }
-  if (source.kind === 'ssh') {
-    // ponytail: SSH has no realpath/stat RPC since the relay removal (#31922), so SSH files stay unopenable until one exists.
-    return Promise.resolve({
-      kind: 'unsupported',
-      realPath: entryPath,
-      workspaceRelativePath: null
+  if (source.kind === 'local') {
+    return requireDesktopFs().resolveHostBrowseEntry({
+      targetPath: entryPath,
+      workspaceRoot: workspace.worktreePath
     })
   }
-  return requireDesktopFs().resolveHostBrowseEntry({ targetPath: entryPath, workspaceRoot })
+  const resolved = await callRuntimeRpc<RuntimeTerminalPathResolution>(
+    { kind: 'environment', environmentId: source.environmentId },
+    'files.resolveTerminalPath',
+    { worktree: toRuntimeWorktreeSelector(workspace.worktreeId), pathText: entryPath }
+  )
+  if (!resolved.exists) {
+    if (resolved.relativePath !== null) {
+      throw new Error(`ENOENT: not found: ${entryPath}`)
+    }
+    // Why: hosts without outside-file grants answer "absent" for every path outside their
+    // workspaces, so a symlinked folder there is only provable by listing it.
+    if (entry.isSymlink && (await listsAsDirectory(source.environmentId, entryPath))) {
+      return { kind: 'directory', realPath: entryPath, workspaceRelativePath: null }
+    }
+    throw await hostAbsentRefusal(source.environmentId, resolved.absolutePath ?? entryPath)
+  }
+  const realPath = resolved.absolutePath ?? entryPath
+  const target = resolved.openTarget
+  if (resolved.isDirectory) {
+    return { kind: 'directory', realPath, workspaceRelativePath: null }
+  }
+  if (target?.kind === 'worktree-file') {
+    return { kind: 'file', realPath, workspaceRelativePath: target.relativePath }
+  }
+  if (target?.kind === 'absolute-file') {
+    // Why: the grant is bound to the host's canonical path, so the tab must read that path.
+    return {
+      kind: 'file',
+      realPath: target.absolutePath,
+      workspaceRelativePath: null,
+      grantId: target.grantId
+    }
+  }
+  return { kind: 'unsupported', realPath, workspaceRelativePath: null }
 }
 
 export type HostFileOpenPlan =
   | { kind: 'workspace'; filePath: string; relativePath: string }
-  | { kind: 'external'; filePath: string }
+  | { kind: 'external'; filePath: string; grantId?: string }
 
 // Why: ownership follows main's canonical verdict, so a workspace symlink that leaves the
 // workspace stays read-only and one pointing in reuses the tree's tab.
 export function planHostFileOpen({
   worktreePath,
   entryPath,
-  workspaceRelativePath
+  workspaceRelativePath,
+  realPath,
+  grantId
 }: {
   worktreePath: string
   entryPath: string
   workspaceRelativePath: string | null
+  realPath?: string
+  grantId?: string
 }): HostFileOpenPlan {
   return workspaceRelativePath
     ? {
@@ -95,7 +148,9 @@ export function planHostFileOpen({
         filePath: joinPath(worktreePath, workspaceRelativePath),
         relativePath: normalizeRelativePath(workspaceRelativePath)
       }
-    : { kind: 'external', filePath: entryPath }
+    : grantId && realPath
+      ? { kind: 'external', filePath: realPath, grantId }
+      : { kind: 'external', filePath: entryPath }
 }
 
 export function filterHostEntries(

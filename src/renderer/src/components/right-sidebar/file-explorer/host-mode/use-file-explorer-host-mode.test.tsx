@@ -10,6 +10,10 @@ import { useFileExplorerHostMode, type FileExplorerHostMode } from './use-file-e
 type FakeState = {
   sshTargetLabels: Map<string, string>
   runtimeEnvironments: { id: string; name: string }[]
+  sshStateByEnvironment: Map<
+    string,
+    { targetLabels: Map<string, string>; removedTargetLabels: Map<string, string> }
+  >
   fileSearchStateByWorktree: Record<string, { seedRequestId?: number; focusRequestId?: number }>
 }
 
@@ -30,7 +34,11 @@ vi.mock('../navigation/file-explorer-operation-owner', () => ({
       ? { kind: 'unresolved' }
       : ownerKind.current === 'local'
         ? { kind: 'local' }
-        : { kind: 'ssh', connectionId: ownerKind.current }
+        : {
+            kind: 'runtime',
+            environmentId: ownerKind.current,
+            executionHostId: `ssh:${ownerKind.current}`
+          }
 }))
 const { visitKeys } = vi.hoisted(() => {
   const visitKeys: (string | null)[] = []
@@ -57,6 +65,7 @@ beforeEach(async () => {
   mockStore = createStore<FakeState>(() => ({
     sshTargetLabels: new Map(),
     runtimeEnvironments: [],
+    sshStateByEnvironment: new Map(),
     fileSearchStateByWorktree: {}
   }))
   Object.defineProperty(window, 'api', {
@@ -141,17 +150,34 @@ describe('useFileExplorerHostMode', () => {
     expect(latest.active).toBe(false)
   })
 
+  it("labels a runtime-owned SSH host by the runtime's name for that target", async () => {
+    ownerKind.current = 'env-1'
+    await act(async () =>
+      api().setState({
+        sshStateByEnvironment: new Map([
+          [
+            'env-1',
+            { targetLabels: new Map([['env-1', 'GPU box']]), removedTargetLabels: new Map() }
+          ]
+        ])
+      })
+    )
+
+    expect(latest.available).toBe(true)
+    expect(latest.hostLabel).toBe('GPU box')
+  })
+
   it('ends Host mode when the workspace is repointed to another host', async () => {
-    ownerKind.current = 'ssh-1'
+    ownerKind.current = 'env-1'
     await act(async () => api().setState({ fileSearchStateByWorktree: {} }))
     await act(async () => latest.enter())
     expect(latest.active).toBe(true)
 
-    ownerKind.current = 'ssh-2'
+    ownerKind.current = 'env-2'
     await act(async () => api().setState({ fileSearchStateByWorktree: {} }))
     expect(latest.active).toBe(false)
 
-    ownerKind.current = 'ssh-1'
+    ownerKind.current = 'env-1'
     await act(async () => api().setState({ fileSearchStateByWorktree: {} }))
     expect(latest.active).toBe(false)
   })

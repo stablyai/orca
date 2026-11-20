@@ -10,6 +10,7 @@ import {
   useFileExplorerHostBrowser,
   type FileExplorerHostBrowser
 } from './use-file-explorer-host-browser'
+import { HostFileRefusal } from '../../../terminal-pane/host-files/host-file-refusal'
 
 const { fetchListingMock, resolveEntryMock, openHostFileMock } = vi.hoisted(() => ({
   fetchListingMock: vi.fn(),
@@ -25,6 +26,9 @@ vi.mock('./file-explorer-host-mode', async (importOriginal) => ({
 vi.mock('./file-explorer-host-open', () => ({ openHostFile: openHostFileMock }))
 const { toastErrorMock } = vi.hoisted(() => ({ toastErrorMock: vi.fn() }))
 vi.mock('sonner', () => ({ toast: { error: toastErrorMock } }))
+vi.mock('../../../terminal-pane/host-files/host-file-refusal', () => ({
+  HostFileRefusal: class HostFileRefusal extends Error {}
+}))
 
 function listingFor(path: string, flavor: 'posix' | 'win32' = 'posix'): HostDirectoryListing {
   return { resolvedPath: path, entries: [], pathFlavor: flavor }
@@ -81,6 +85,7 @@ beforeEach(() => {
   )
   resolveEntryMock.mockReset()
   openHostFileMock.mockReset()
+  toastErrorMock.mockReset()
   root = createRoot(document.createElement('div'))
 })
 
@@ -120,9 +125,13 @@ describe('useFileExplorerHostBrowser', () => {
     expect(fetchListingMock).toHaveBeenLastCalledWith(local, '/')
   })
 
-  it('browses sibling folders on an SSH host', async () => {
-    const ssh: HostBrowseSource = { kind: 'ssh', connectionId: 'ssh-1' }
-    await render({ active: true, source: ssh, worktreePath: '/Data2/allen921103/project' })
+  it('browses a runtime host and opens a granted outside file at its canonical path', async () => {
+    const runtime: HostBrowseSource = {
+      kind: 'runtime',
+      environmentId: 'env-1',
+      executionHostId: 'ssh:box'
+    }
+    await render({ active: true, source: runtime, worktreePath: '/Data2/allen921103/project' })
 
     await run(() => latest.navigateUp())
     resolveEntryMock.mockResolvedValueOnce({
@@ -131,8 +140,27 @@ describe('useFileExplorerHostBrowser', () => {
       workspaceRelativePath: null
     })
     await run(() => latest.activateEntry({ name: 'other', isDirectory: true, isSymlink: false }))
+    expect(fetchListingMock).toHaveBeenLastCalledWith(runtime, '/Data2/allen921103/other')
 
-    expect(fetchListingMock).toHaveBeenLastCalledWith(ssh, '/Data2/allen921103/other')
+    resolveEntryMock.mockResolvedValueOnce({
+      kind: 'file',
+      realPath: '/srv/real/notes.md',
+      workspaceRelativePath: null,
+      grantId: 'grant-1'
+    })
+    await run(() => latest.activateEntry({ name: 'notes.md', isDirectory: false, isSymlink: true }))
+    expect(resolveEntryMock).toHaveBeenLastCalledWith(
+      runtime,
+      '/Data2/allen921103/other/notes.md',
+      { name: 'notes.md', isDirectory: false, isSymlink: true },
+      { worktreeId: 'wt-1', worktreePath: '/Data2/allen921103/project' }
+    )
+    expect(openHostFileMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        plan: { kind: 'external', filePath: '/srv/real/notes.md', grantId: 'grant-1' },
+        source: runtime
+      })
+    )
   })
 
   it('ignores a slow listing that a newer navigation superseded', async () => {
@@ -212,6 +240,22 @@ describe('useFileExplorerHostBrowser', () => {
     )
 
     after?.()
+    expect(openHostFileMock).not.toHaveBeenCalled()
+  })
+
+  it("shows the host's own refusal for a file it will not open", async () => {
+    await render({ active: true })
+    resolveEntryMock.mockRejectedValueOnce(
+      new HostFileRefusal('Update Orca on hostbox to open files outside its workspaces')
+    )
+
+    await run(() =>
+      latest.activateEntry({ name: 'notes.txt', isDirectory: false, isSymlink: false })
+    )
+
+    expect(toastErrorMock).toHaveBeenCalledWith(
+      'Update Orca on hostbox to open files outside its workspaces'
+    )
     expect(openHostFileMock).not.toHaveBeenCalled()
   })
 

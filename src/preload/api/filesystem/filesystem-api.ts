@@ -193,7 +193,6 @@ export type FilesystemApi = {
     /** Desktop-only; classifies a host path against the workspace without granting access. */
     resolveHostBrowseEntry?: (args: {
       targetPath: string
-      connectionId?: string
       workspaceRoot?: string
     }) => Promise<HostBrowseEntryResolution>
     stat: (args: {

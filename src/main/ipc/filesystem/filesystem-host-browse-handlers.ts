@@ -25,15 +25,10 @@ async function canonicalRelativePath(
 
 export async function resolveHostBrowseEntry(
   targetPath: string,
-  connectionId?: string,
   workspaceRoot?: string
 ): Promise<HostBrowseEntryResolution> {
   if (targetPath.includes('\0')) {
     throw new Error('Path cannot contain null bytes')
-  }
-  if (connectionId) {
-    // ponytail: no SSH filesystem provider exists since the relay removal (#31922); add an SSH realpath/stat RPC to classify remote entries.
-    throw new Error('Remote connection dropped. Click Reconnect on the SSH target before retrying.')
   }
   if (!isAbsolute(targetPath)) {
     throw new Error('Host browse path must be absolute')
@@ -62,8 +57,8 @@ export function registerFilesystemHostBrowseHandlers(): void {
     'fs:resolveHostBrowseEntry',
     (
       _event,
-      args: { targetPath: string; connectionId?: string; workspaceRoot?: string }
+      args: { targetPath: string; workspaceRoot?: string }
     ): Promise<HostBrowseEntryResolution> =>
-      resolveHostBrowseEntry(args.targetPath, args.connectionId, args.workspaceRoot)
+      resolveHostBrowseEntry(args.targetPath, args.workspaceRoot)
   )
 }

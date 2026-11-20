@@ -31,20 +31,38 @@ describe('openHostFile', () => {
       })
     )
     expect(file).not.toHaveProperty('liveTail')
-    expect(file).not.toHaveProperty('externalSshTargetId')
+    expect(file).not.toHaveProperty('terminalArtifactGrantId')
     expect(options).toEqual(expect.objectContaining({ suppressActiveRuntimeFallback: true }))
   })
 
-  it('binds external SSH files to the workspace SSH target', () => {
+  it("reads runtime-host files through the host's runtime and its single-file grant", () => {
+    const runtime = { kind: 'runtime', environmentId: 'env-1', executionHostId: 'ssh:box' } as const
     openHostFile({
-      plan: { kind: 'external', filePath: '/Data2/allen921103/notes.md' },
-      source: { kind: 'ssh', connectionId: 'ssh-1' },
+      plan: { kind: 'external', filePath: '/srv/real/notes.md', grantId: 'grant-1' },
+      source: runtime,
+      worktreeId: 'wt-1'
+    })
+    openHostFile({
+      plan: { kind: 'workspace', filePath: '/Data2/allen/project/a.ts', relativePath: 'a.ts' },
+      source: runtime,
       worktreeId: 'wt-1'
     })
 
     expect(openFileMock.mock.calls[0]?.[0]).toEqual(
-      expect.objectContaining({ readOnly: true, hostBrowse: true, externalSshTargetId: 'ssh-1' })
+      expect.objectContaining({
+        readOnly: true,
+        hostBrowse: true,
+        runtimeEnvironmentId: 'env-1',
+        terminalArtifactGrantId: 'grant-1'
+      })
     )
+    expect(openFileMock.mock.calls[1]?.[0]).toEqual(
+      expect.objectContaining({ relativePath: 'a.ts', runtimeEnvironmentId: 'env-1' })
+    )
+    expect(openFileMock.mock.calls[1]?.[0]).not.toHaveProperty('terminalArtifactGrantId')
+    for (const [, options] of openFileMock.mock.calls) {
+      expect(options).toEqual(expect.objectContaining({ suppressActiveRuntimeFallback: false }))
+    }
   })
 
   it('opens workspace files through the normal writable Explorer path', () => {

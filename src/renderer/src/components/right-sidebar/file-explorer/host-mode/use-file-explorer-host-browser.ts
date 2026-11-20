@@ -3,6 +3,7 @@ import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { extractIpcErrorMessage } from '@/runtime/errors/ipc-error'
 import { isMissingRuntimePathError } from '@/runtime/files/metadata/runtime-file-metadata-client'
+import { HostFileRefusal } from '../../../terminal-pane/host-files/host-file-refusal'
 import type { DirEntry } from '../../../../../../shared/file-listing/directory-entry'
 import type { HostDirectoryListing } from '../../../../../../shared/file-listing/host-directory-browse'
 import {
@@ -184,7 +185,7 @@ export function useFileExplorerHostBrowser({
       }
       const entryPath = joinPath(listing.resolvedPath, entry.name, listing.pathFlavor)
       const generation = ++activationGenerationRef.current
-      void resolveHostEntry(source, entryPath, entry, worktreePath).then(
+      void resolveHostEntry(source, entryPath, entry, { worktreeId, worktreePath }).then(
         (resolution) => {
           if (generation !== activationGenerationRef.current) {
             return
@@ -203,7 +204,9 @@ export function useFileExplorerHostBrowser({
             plan: planHostFileOpen({
               worktreePath,
               entryPath,
-              workspaceRelativePath: resolution.workspaceRelativePath
+              workspaceRelativePath: resolution.workspaceRelativePath,
+              realPath: resolution.realPath,
+              grantId: resolution.grantId
             }),
             source,
             worktreeId
@@ -217,11 +220,13 @@ export function useFileExplorerHostBrowser({
           toast.error(
             isMissingRuntimePathError(err)
               ? translate('fileExplorer.host.entryMissing', 'This item no longer exists.')
-              : translate(
-                  'fileExplorer.host.entryUnverifiable',
-                  'Could not reach this item: {{error}}',
-                  { error: extractIpcErrorMessage(err, 'Unknown error') }
-                )
+              : err instanceof HostFileRefusal
+                ? err.message
+                : translate(
+                    'fileExplorer.host.entryUnverifiable',
+                    'Could not reach this item: {{error}}',
+                    { error: extractIpcErrorMessage(err, 'Unknown error') }
+                  )
           )
         }
       )
