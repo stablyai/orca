@@ -1,3 +1,4 @@
+import { reconcileBotRequestTakes } from './orchestration/messaging/bot-request-take-reconcile'
 import {
   BotActivityRead,
   BotAvatarRead,
@@ -228,7 +229,12 @@ export const BOT_METHODS = [
         await composioBotsOf(runtime).willDelete(bot.id)
         await forgetDeletedBotTools(runtime, bot)
       }
+      // Read before the delete; its chats' questions are decided once they are gone.
+      const holding = runtime
+        .getOrchestrationDb()
+        .listSessionsWithOpenBotRequestTakesFor(params.botId)
       const deleted = await runtime.bots.delete(params)
+      holding.forEach((sessionId) => void reconcileBotRequestTakes(runtime, sessionId))
       if (bot) {
         releaseDeletedBotLinks(runtime, bot)
         await composioBotsOf(runtime).forget(bot.id)

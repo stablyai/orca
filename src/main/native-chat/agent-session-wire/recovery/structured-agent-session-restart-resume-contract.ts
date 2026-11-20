@@ -49,6 +49,8 @@ export type StructuredAgentSessionRestartResume = {
   passOverAutomatic: (recordedBy: number) => Promise<void>
   /** Every chat's offered cut, from one read of the offers. */
   offeredCuts: () => Promise<ReadonlyMap<string, StructuredAgentSessionRestartCut>>
+  /** Chats Orca may still continue: an offer waiting, a Continue under way, or one it can't confirm. */
+  continuingCuts: () => Promise<ReadonlySet<string>>
   /** The cut a restart left in this chat: its offer (from `offered` when read already), else the
    *  journal's own stop row. */
   cutOf: (
@@ -74,6 +76,8 @@ export type StructuredAgentSessionRestartResume = {
     sessionIds?: readonly string[],
     audience?: StructuredAgentSessionRestartAudience
   ) => Promise<number>
+  /** Called with the chats a Continue settled (continued, refused or unconfirmed), after it is written. */
+  onContinueSettled: (listener: (sessionIds: readonly string[]) => void) => void
   /** Called with the cuts a person's dismissal removed, after it is written. */
   onDismissed: (
     listener: (

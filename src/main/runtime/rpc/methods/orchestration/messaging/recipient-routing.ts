@@ -190,9 +190,8 @@ export function resolveReplyRecipient(params: {
     terminalRecipient: params.terminalRecipient
   })
   if (!recipient.ok) {
-    throw new OrchestrationError(recipient.code, `${recipient.message} No reply was sent.`, {
-      effectsApplied: false
-    })
+    const data = { effectsApplied: false, transient: recipient.transient }
+    throw new OrchestrationError(recipient.code, `${recipient.message} No reply was sent.`, data)
   }
   return {
     to: recipient.to,
@@ -232,6 +231,7 @@ export type BareRecipientResolution =
         | SessionRecipientRefusal['code']
       message: string
       warning: SendRecipientWarning
+      transient?: SessionRecipientRefusal['transient']
     }
 
 export function resolveBareOrchestrationRecipient(params: {
@@ -317,6 +317,7 @@ function refused(recipient: string, refusal: SessionRecipientRefusal): BareRecip
     ok: false,
     code: refusal.code,
     message: refusal.message,
-    warning: { code: 'recipient_unreachable', recipient, message: refusal.message }
+    warning: { code: 'recipient_unreachable', recipient, message: refusal.message },
+    transient: refusal.transient
   }
 }

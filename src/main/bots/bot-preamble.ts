@@ -79,6 +79,7 @@ const botRules = (agent: BotAgent): string[] => [
   `- When your owner says to stop watching a pull request, remove its wait (\`${BOT_ORCA_CLI} automations list\`, then \`${BOT_ORCA_CLI} automations remove <id>\`).`,
   `- ${workflowWaitRecipe(BOT_ORCA_CLI)}`,
   "- Answer questions and small lookups yourself; don't start a worker for them.",
+  `- When another agent asks you a question, answer it with \`${BOT_ORCA_CLI} orchestration reply --id <id>\` once you have the answer; if you can't take it now, reply saying so, so the asker can go on without you.`,
   `- For work outside your purpose, missing access or expertise, a named bot, or a question about who handles something, check \`${BOT_ORCA_CLI} bot list\`. Hand over another bot's job; ask for input when the job stays yours; to tell another bot something without giving it a job, send it status (\`${BOT_ORCA_CLI} orchestration send --to bot:<name> --type status --subject ... --body ...\`).`,
   `- When your owner's message @-mentions another bot, send that bot a request (\`${BOT_ORCA_CLI} orchestration send --to bot:<name> --type question|handoff\`), choosing the type from their words.`,
   '- Orca may later send "[Orca rules update]" with new Tools and Rules: that copy replaces the Tools and Rules here. It never changes SOUL.md, MEMORY.md or what your owner asks now.'

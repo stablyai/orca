@@ -16,7 +16,11 @@ CREATE TABLE IF NOT EXISTS bot_requests (
   depth       INTEGER NOT NULL,
   record      TEXT NOT NULL,
   created_at  TEXT NOT NULL DEFAULT (datetime('now')),
-  send_key    TEXT
+  send_key    TEXT,
+  debt_rule   INTEGER,
+  taken_session_id TEXT,
+  taken_by    TEXT,
+  decided_session_id TEXT
 );
 `
 
@@ -32,11 +36,21 @@ export type BotRequestRow = {
   created_at: string
   /** One send from one turn: its sender, target, purpose and text; null on rows before it. */
   send_key: string | null
+  /** 1: its asker is told once when the chat that took it rests unanswered; null: the earlier rule. */
+  debt_rule: number | null
+  /** The chat that took it, until it has an outcome. */
+  taken_session_id: string | null
+  /** 'agent': the chat read it; 'person': its owner withdrew it unread. */
+  taken_by: 'agent' | 'person' | null
+  /** The chat that held it when its outcome was recorded: a later post there still settles it. */
+  decided_session_id: string | null
 }
 
 export type BotRequestAdmission =
   | { kind: 'sent'; message: MessageRow }
   | { kind: 'duplicate'; messageId: string }
+  /** The same send already went unanswered. */
+  | { kind: 'unanswered'; messageId: string }
 
 const SAVEPOINT = 'bot_request_admission'
 
@@ -55,17 +69,31 @@ export function admitBotRequest(
     purpose: BotRequestPurpose
     depth: number
     record: string
+    /** Its asker is told once if the chat that takes it rests without answering. */
+    debtRule?: boolean
+    /** A paired computer's request: its way back is filed with it, so no crash parts them. */
+    peerLink?: BotRequestPeerLink
     message: MessageInsert
   }
 ): BotRequestAdmission {
-  this.db.exec(`SAVEPOINT ${SAVEPOINT}`)
+  return withinSavepoint(this, () => admitWithin(this, input))
+}
+
+export type BotRequestPeerLink = {
+  conversationId: string
+  peerFingerprint: string
+  senderLabel: string
+}
+
+function withinSavepoint<T>(db: OrchestrationDb, work: () => T): T {
+  db.db.exec(`SAVEPOINT ${SAVEPOINT}`)
   try {
-    const admission = admitWithin(this, input)
-    this.db.exec(`RELEASE ${SAVEPOINT}`)
-    return admission
+    const result = work()
+    db.db.exec(`RELEASE ${SAVEPOINT}`)
+    return result
   } catch (error) {
-    this.db.exec(`ROLLBACK TO ${SAVEPOINT}`)
-    this.db.exec(`RELEASE ${SAVEPOINT}`)
+    db.db.exec(`ROLLBACK TO ${SAVEPOINT}`)
+    db.db.exec(`RELEASE ${SAVEPOINT}`)
     throw error
   }
 }
@@ -83,13 +111,18 @@ export function botRequestBlocked(
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the bot_requests schema above pins message_id as TEXT; the adapter exposes unknown.
     const earlier = this.db
       .prepare(
-        `SELECT r.message_id FROM bot_requests r
+        `SELECT r.message_id, o.outcome FROM bot_requests r
          LEFT JOIN bot_request_outcomes o ON o.message_id = r.message_id
-         WHERE r.send_key = ? AND o.message_id IS NULL`
+         WHERE r.send_key = ?
+           AND (o.message_id IS NULL OR (o.outcome = 'unanswered' AND r.debt_rule = 1))
+         ORDER BY o.message_id IS NOT NULL LIMIT 1`
       )
-      .get(input.sendKey) as { message_id: string } | undefined
+      .get(input.sendKey) as { message_id: string; outcome: string | null } | undefined
     if (earlier) {
-      return { kind: 'duplicate', messageId: earlier.message_id }
+      // The same send after Orca said it went unanswered would only go unanswered again.
+      return earlier.outcome === 'unanswered'
+        ? { kind: 'unanswered', messageId: earlier.message_id }
+        : { kind: 'duplicate', messageId: earlier.message_id }
     }
   }
   return null
@@ -105,6 +138,9 @@ function admitWithin(
   }
   const message = db.insertMessage(input.message)
   insertRequestRow(db, message.id, input)
+  if (input.peerLink) {
+    db.linkPeerMailMessage({ ...input.peerLink, messageId: message.id })
+  }
   return { kind: 'sent', message }
 }
 
@@ -132,12 +168,19 @@ export function reserveBotRequest(
 /** Stores the mail of a reserved request under the id it was reserved with. */
 export function admitReservedBotRequest(
   this: OrchestrationDb,
-  message: MessageInsert & { id: string }
+  message: MessageInsert & { id: string },
+  peerLink?: BotRequestPeerLink
 ): MessageRow {
   if (!this.getBotRequest(message.id)) {
     throw new Error(`bot request ${message.id} is not reserved`)
   }
-  return this.insertMessage(message)
+  return withinSavepoint(this, () => {
+    const stored = this.insertMessage(message)
+    if (peerLink) {
+      this.linkPeerMailMessage({ ...peerLink, messageId: stored.id })
+    }
+    return stored
+  })
 }
 
 /** Gives back a reserved place whose mail was never stored. */
@@ -156,8 +199,8 @@ function insertRequestRow(
   db.db
     .prepare(
       `INSERT INTO bot_requests
-         (message_id, root_key, from_bot_id, to_bot_id, purpose, depth, record, send_key)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+         (message_id, root_key, from_bot_id, to_bot_id, purpose, depth, record, send_key, debt_rule)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
     .run(
       messageId,
@@ -167,7 +210,8 @@ function insertRequestRow(
       input.purpose,
       input.depth,
       input.record,
-      input.sendKey ?? null
+      input.sendKey ?? null,
+      input.debtRule ? 1 : null
     )
 }
 

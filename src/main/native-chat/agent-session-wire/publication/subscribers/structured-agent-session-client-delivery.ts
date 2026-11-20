@@ -162,7 +162,11 @@ export class StructuredAgentSessionClientDelivery {
 
   publishStatus = (sessionId: string): void => {
     this.statusFeed.publish(sessionId)
+    // A schedule or setting a rest depends on may have changed with no journal row.
+    this.turnCompletionFeed.restMayChange(sessionId)
   }
+
+  readQuestionRest = (sessionId: string) => this.turnCompletionFeed.readQuestionRest(sessionId)
 
   publishConversationName = (sessionId: string): void =>
     this.statusFeed.publishConversationName(sessionId)

@@ -125,6 +125,17 @@ export async function installOnJournal(
       onState: delivery.reconcile
     })
   }
+  const rested = deps.turnContext?.rested
+  if (rested) {
+    const installed = host
+    installed.subscribeTurnCompletions({
+      id: 'host-question-rest',
+      emit: () => undefined,
+      onRest: rested,
+      // A closed chat has stopped, however its last turn ended.
+      onClosed: rested
+    })
+  }
   const turnEnded = deps.turnContext?.turnEnded
   if (turnEnded) {
     const installed = host

@@ -86,7 +86,13 @@ export abstract class LegacyWorkerRuntimeRecovery extends RuntimeWorkspaceSessio
       const host = getStructuredAgentSessionHost()
       if (host && !this.dismissalWatched.has(host)) {
         this.dismissalWatched.add(host)
+        // A settled Continue no longer holds its chat's questions; a refused one never will.
+        host.restartResume.onContinueSettled((sessionIds) =>
+          sessionIds.forEach((sessionId) => this.botSessions.rested?.(sessionId))
+        )
         host.restartResume.onDismissed((dismissed) => {
+          // A cut nobody will continue has stopped: questions its chat took are decided now.
+          dismissed.forEach((cut) => this.botSessions.rested?.(cut.sessionId))
           const db = this.getExistingOrchestrationDb()
           if (db) {
             reportDismissedCutWorkers(
@@ -105,6 +111,8 @@ export abstract class LegacyWorkerRuntimeRecovery extends RuntimeWorkspaceSessio
       if (!db) {
         return
       }
+      // Restored chats are continued or offered by now; every chat still holding a question decides.
+      void this.botSessions.restedAtStartup?.()
       await reportWorkerStopsAcrossRestart({
         db,
         reportDeps: this.workerTurnStopReportDeps,

@@ -35,7 +35,18 @@ export type StructuredAgentSessionTurnCompletionSubscriber = {
   onState?: (state: StructuredAttentionState) => void
   /** The session closed; a turn it was running ends with no completion. */
   onClosed?: (sessionId: string) => void
+  /** The session may have come to rest: every observation at rest, whatever its outcome, and every
+   *  status publish. Subscribers decide on their own read; repeats are expected. */
+  onRest?: (sessionId: string) => void
 }
+
+/** Whether a chat's main agent has stopped: nothing running, owed or held by live work. */
+export type StructuredAgentSessionRest =
+  | { kind: 'busy' }
+  | { kind: 'rest'; outcome: AgentSessionTurnCompletion['outcome'] | null }
+
+/** A chat with no loaded session reads as closed. */
+export type StructuredAgentSessionQuestionRest = StructuredAgentSessionRest | { kind: 'closed' }
 
 type CompletionFeedCursor = { epoch: string; sequence: number }
 
@@ -160,6 +171,9 @@ export class StructuredAgentSessionTurnCompletionFeed {
       return
     }
     baseline.sequence = cursor.sequence
+    if (this.restOf(sessionId, state).kind === 'rest') {
+      this.restMayChange(sessionId)
+    }
     const raised = state.pendingPromptIds.find((id) => !baseline.prompts.has(id))
     baseline.prompts = prompts
     const completion = this.settledCompletion(sessionId, session, state, baseline)
@@ -187,6 +201,39 @@ export class StructuredAgentSessionTurnCompletionFeed {
       },
       'prompt-aware'
     )
+  }
+
+  /** At rest when no turn runs, no send is owed and no live work holds a finished turn open. */
+  restOf(sessionId: string, state: StructuredAgentSessionStatusState): StructuredAgentSessionRest {
+    const request = state.latestRequest
+    if (
+      request?.turnState === 'running' ||
+      state.owesWork ||
+      (request && this.heldByLiveWork(sessionId, state, request))
+    ) {
+      return { kind: 'busy' }
+    }
+    return { kind: 'rest', outcome: request?.outcome ?? null }
+  }
+
+  /** Read now, never cached; null when the journal can't be read, which decides nothing. */
+  async readQuestionRest(sessionId: string): Promise<StructuredAgentSessionQuestionRest | null> {
+    if (!this.deps.sessions.has(sessionId)) {
+      return { kind: 'closed' }
+    }
+    const state = await this.deps.readStatusState(sessionId)
+    return state ? this.restOf(sessionId, state) : null
+  }
+
+  /** Something a rest depends on changed without a journal row (a usage-limit schedule). */
+  restMayChange(sessionId: string): void {
+    for (const subscriber of this.subscribers.values()) {
+      try {
+        subscriber.onRest?.(sessionId)
+      } catch {
+        // One subscriber's bookkeeping cannot cost another its rest.
+      }
+    }
   }
 
   private publishState(

@@ -13,6 +13,7 @@ import type {
 } from '../../../../shared/agent-session/lifecycle/resume/agent-session-resume-marker'
 import type { AgentSessionRecoveryCapsule } from '../../../runtime/agent-session/records/agent-session-recovery-capsule'
 import { structuredAgentSessionWorkingAtStop } from '../termination/structured-agent-session-working-at-teardown'
+import { continuingSessions } from '../../../runtime/agent-session/records/agent-session-recovery-capsule-entries'
 import { crashCutResumeMarker } from './structured-agent-session-crash-cut-marker'
 
 type WorkingAtStopInput = Parameters<typeof structuredAgentSessionWorkingAtStop>[0]
@@ -29,7 +30,7 @@ export type StructuredAgentSessionRestartWitnesses = {
   ) => Promise<number>
   /** Ends a launch's automatic turn; what still waits is left to a person from then on. */
   passOverAutomatic: (recordedBy: number) => Promise<void>
-  cuts: Pick<StructuredAgentSessionRestartResume, 'offeredCuts' | 'cutOf'>
+  cuts: Pick<StructuredAgentSessionRestartResume, 'offeredCuts' | 'cutOf' | 'continuingCuts'>
   /** Explicit actions supersede unwritten witnesses only for readable agents in their audience. */
   clear: (audience?: (agent: string) => boolean) => void
 }
@@ -46,7 +47,7 @@ export function createStructuredAgentSessionRestartWitnesses(deps: {
   childWorkOpen: WorkingAtStopInput['childWorkOpen']
   capsule?: Pick<
     AgentSessionRecoveryCapsule,
-    'record' | 'passOverAutomatic' | 'list' | 'listFailed'
+    'record' | 'passOverAutomatic' | 'list' | 'listFailed' | 'read'
   >
   /** Opening a chat whose run died settles it. */
   open: (sessionId: string) => Promise<{ readable: boolean }>
@@ -160,6 +161,8 @@ export function createStructuredAgentSessionRestartWitnesses(deps: {
     },
     cuts: {
       offeredCuts,
+      continuingCuts: async () =>
+        (await deps.capsule?.read(deps.now(), continuingSessions)) ?? new Set(),
       cutOf: async (sessionId, offered) => {
         const offer = (offered ?? (await offeredCuts())).get(sessionId)
         if (offer) {

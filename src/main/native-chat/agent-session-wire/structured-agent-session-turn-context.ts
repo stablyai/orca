@@ -60,6 +60,9 @@ export type StructuredAgentSessionTurnContext = {
     /** How the turn ended, as its completion says. */
     ended?: TurnEndedVerdict
   ) => void
+  /** The conversation may have come to rest, however its last turn ended (no completion is
+   *  announced for some). Called again on repeats; the reader decides from its own read. */
+  rested?: (sessionId: string) => void
 }
 
 export type TurnEndedVerdict = Pick<AgentSessionTurnCompletion, 'outcome'>

@@ -10,6 +10,7 @@ import { BOT_RUN_RESEND_SCHEMA_SQL } from '../bot-requests/bot-run-resend-store'
 import { REMOTE_OWNED_SCHEMA_SQL } from '../remote-owned/remote-owned-schema-sql'
 import { PEER_RUN_SCHEMA_SQL } from '../peer-runs/peer-run-queue-sql'
 import { WORKER_PRESENCE_SCHEMA_SQL } from '../worker-presence/worker-presence-store'
+import { BOT_REQUEST_OPEN_TAKE_INDEX_SQL } from './migrate-v50'
 
 export function createTables(this: OrchestrationDb): void {
   this.db.exec(
@@ -35,6 +36,10 @@ export function createTables(this: OrchestrationDb): void {
     this.db.exec(
       'ALTER TABLE remote_dispatches ADD COLUMN task_settled_here INTEGER NOT NULL DEFAULT 0'
     )
+  }
+  // An older table gains these columns in its migration, which makes the index there.
+  if (this.hasColumn('bot_requests', 'debt_rule')) {
+    this.db.exec(BOT_REQUEST_OPEN_TAKE_INDEX_SQL)
   }
   this.createMailboxDeliveryIndexesIfPossible()
   this.db.exec(DERIVED_DELIVERY_SCHEMA_SQL)

@@ -266,7 +266,7 @@ export function createStructuredAgentSessionRestartResume(
       await Promise.all(verdicts)
       const resumed = action?.outcomes ?? []
       if (action) {
-        await failures.settle(action.operationId, resumed, {
+        await dismissals.settling(failures.settle)(action.operationId, resumed, {
           candidates: action.candidates,
           markers: action.markers,
           failureAfterResume: (sessionId) => {
@@ -313,7 +313,7 @@ export function createStructuredAgentSessionRestartResume(
       witnesses.clear(clearAudience)
       await revealEvery()
     }),
-    onDismissed: dismissals.onDismissed,
+    ...dismissals.listeners,
     continueAfterRestart,
     onAgentStarted: withdrawal.onAgentStarted,
     continueInterrupted: createInterruptedContinuation(continuationHost, readMarkers)

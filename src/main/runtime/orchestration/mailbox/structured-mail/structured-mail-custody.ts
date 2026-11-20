@@ -224,7 +224,8 @@ export function settleStructuredMailAttempt(
   }
   const owed = currentOwed()
   const state = observation.state
-  const retire = (consumed: boolean) => db.retireStructuredMailSend(row, consumed)
+  const retire = (consumed: boolean, takenBy?: 'agent' | 'person') =>
+    db.retireStructuredMailSend(row, consumed, takenBy)
   const release = () => {
     decision.released = db.releaseStructuredMailSend(row)
   }
@@ -253,7 +254,7 @@ export function settleStructuredMailAttempt(
         !corrected.read &&
         structuredMailWasDeliveredWhole(row, corrected, observation)
       ) {
-        retire(true)
+        retire(true, 'agent')
         break
       }
       retireUnconsumed()
@@ -283,7 +284,7 @@ export function settleStructuredMailAttempt(
       ) {
         release()
       } else if (observation.withdrawal === 'person' && owed === 'owed') {
-        retire(true)
+        retire(true, 'person')
       } else {
         decision.outstanding = true
       }

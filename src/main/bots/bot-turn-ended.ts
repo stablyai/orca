@@ -16,6 +16,10 @@ import { readBotChats } from '../runtime/rpc/methods/bots-chats'
 import { sendBotItemMail } from '../runtime/rpc/methods/bots-items-mail'
 import type { BotItemMail } from './bot-items-schema'
 import { createBotUnansweredQuestionNote } from './bot-unanswered-question-note'
+import {
+  reconcileBotRequestTakes,
+  reconcileBotRequestTakesAtStartup
+} from '../runtime/rpc/methods/orchestration/messaging/bot-request-take-reconcile'
 import { requireStructuredHost } from './bot-chat-session'
 import type { TurnEndedVerdict } from '../native-chat/agent-session-wire/structured-agent-session-turn-context'
 import type { StructuredAgentSessionRequestFailure } from '../native-chat/agent-session-wire/observations/structured-agent-session-request-failures'
@@ -38,6 +42,10 @@ export function botTurnEnded(
 /** Bot session work the runtime base needs but only the whole runtime can do. */
 export type BotSessionHooks = {
   turnEnded: (sessionId: string, ended?: TurnEndedVerdict) => void
+  /** A chat may have come to rest or closed: agent questions it took are decided. */
+  rested?: (sessionId: string) => void
+  /** Once per start, after restored chats settled: every chat still holding a question. */
+  restedAtStartup?: () => Promise<void>
   /** A chat's request failed; only a bot's tells its senders why. */
   requestFailed: (failure: StructuredAgentSessionRequestFailure) => void
   groupRoomOf: (sessionId: string) => BotGroupRoomOfSession | null
@@ -69,6 +77,8 @@ export function botSessionHooks(runtime: OrcaRuntimeService): BotSessionHooks {
   })
   return {
     turnEnded: (sessionId, ended) => botTurnEnded(runtime, sessionId, ended),
+    rested: (sessionId) => void reconcileBotRequestTakes(runtime, sessionId),
+    restedAtStartup: () => reconcileBotRequestTakesAtStartup(runtime),
     requestFailed: (failure) =>
       void settleBotRequestFailure(runtime, failure).catch((error: unknown) =>
         console.warn('[bots] could not settle a failed bot request', error)

@@ -63,9 +63,10 @@ describe('how a bot request ends', () => {
     db = new OrchestrationDb(':memory:')
     notified.length = 0
     acting.requestIds = []
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these functions read only the db, the bot list and the mail nudge.
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these functions read only the db, the agent list and the mail nudge.
     runtime = {
       getOrchestrationDb: () => db,
+      getOpenOrchestrationDb: () => db,
       bots: { list: () => [{ id: 'docs' }] },
       notifyMessageArrived: (to: string) => notified.push(to),
       getLiveTerminalPaneKey: () => null,
@@ -122,6 +123,48 @@ describe('how a bot request ends', () => {
     expect(db.getBotRequestOutcome(id)).toBe('posted')
     const payload = botAnswerPayload(db, db.getMessageById(id)!)!
     expect(JSON.parse(payload).botAnswer.next).toMatch(/don't post it again/)
+  })
+
+  const checkedBy = (id: string, sessionId: string) => {
+    db.db.prepare('UPDATE bot_requests SET debt_rule = 1 WHERE message_id = ?').run(id)
+    db.noteBotRequestsChecked([id], sessionId)
+  }
+
+  it('notes a post the chat makes after it was already told unanswered', async () => {
+    const id = request()
+    checkedBy(id, 'docs-session')
+    db.recordBotRequestOutcome(id, 'unanswered')
+    await noteBotRequestPost(runtime, 'docs-session', 'slack:T1:C1:1712.1:1712.9')
+    expect(db.getBotRequestOutcome(id)).toBe('posted')
+  })
+
+  it('settles no checked request by a post that two of them could answer', async () => {
+    const first = request('handoff', 'a')
+    const second = request('handoff', 'b')
+    checkedBy(first, 'docs-session')
+    checkedBy(second, 'docs-session')
+    await noteBotRequestPost(runtime, 'docs-session', 'slack:T1:C1:1712.1:1712.9')
+    expect([db.getBotRequestOutcome(first), db.getBotRequestOutcome(second)]).toEqual([null, null])
+  })
+
+  it('drops nothing a chat read while its senders were being found', async () => {
+    const id = request('question')
+    runtime.ensureStructuredAgentSessionHost = async () => {
+      db.markAsRead([id])
+      db.takeBotRequest(id, 'docs-session', 'agent')
+      installSenderHost(['11111111-1111-4111-8111-111111111111'])
+    }
+    await dropUnreadBotRequests(runtime, 'docs', 'paused')
+    expect(db.getBotRequestOutcome(id)).toBeNull()
+    expect(mailToRanger()).toEqual([])
+  })
+
+  it('notes a post for a request the chat read with check, not just its prompts', async () => {
+    const id = request()
+    db.db.prepare('UPDATE bot_requests SET debt_rule = 1 WHERE message_id = ?').run(id)
+    db.noteBotRequestsChecked([id], 'docs-session')
+    await noteBotRequestPost(runtime, 'docs-session', 'slack:T1:C1:1712.1:1712.9')
+    expect(db.getBotRequestOutcome(id)).toBe('posted')
   })
 
   it('settles each unanswered request once and wakes the sender for each', async () => {

@@ -4,6 +4,7 @@ import { attachBotRequestStore } from './bot-requests/bot-request-store'
 import { attachBotConversationActsForStore } from './bot-requests/bot-conversation-acts-for-store'
 import { attachBotRunResendStore } from './bot-requests/bot-run-resend-store'
 import { attachBotRequestOutcomes } from './bot-requests/bot-request-outcomes'
+import { attachBotRequestTakes } from './bot-requests/bot-request-takes'
 import { attachCoordinatorRunStore } from './coordinator-runs/coordinator-run-store'
 import { attachDecisionGateStore } from './decision-gates/decision-gate-store'
 import { attachDispatchCompletion } from './dispatch-context/dispatch-completion'
@@ -72,6 +73,7 @@ export function attachOrchestrationDbMethods(ctor: { prototype: object }): void 
   attachBotConversationActsForStore(ctor)
   attachBotRunResendStore(ctor)
   attachBotRequestOutcomes(ctor)
+  attachBotRequestTakes(ctor)
   attachCreateTables(ctor)
   attachSchemaMigrate(ctor)
   attachSchemaColumnProbes(ctor)

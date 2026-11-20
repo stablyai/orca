@@ -4,6 +4,7 @@ import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { routeBotMail } from '../messaging/bot-chat-address'
 import { mayReachBot } from '../messaging/bot-request-send'
+import { reconcileBotRequestTakes } from '../messaging/bot-request-take-reconcile'
 
 // Deliveries being admitted on this Orca, by message id.
 const admitting = new Set<string>()
@@ -46,9 +47,20 @@ export async function deliverPeerMailToBot(
       { effectsApplied: false, retryable: true }
     )
   }
+  // A duplicate of mail an earlier build stored before linking it: from a sender that tells its asker
+  // once per question (`questionNotice`), it joins that rule once its way back is filed.
+  const adoptOneNotice = () => {
+    if (params.questionNotice === 'once') {
+      const taken = db.adoptBotRequestDebtRule(params.messageId)
+      if (taken) {
+        void reconcileBotRequestTakes(runtime, taken)
+      }
+    }
+  }
   // Stored by an attempt that ended before linking it: a duplicate, never a second request.
   if (db.getMessageById(params.messageId)) {
     link()
+    adoptOneNotice()
     return 'delivered'
   }
   // A restart while a chat was made for it can leave its request held with no mail; nothing is in flight now.
@@ -73,15 +85,18 @@ export async function deliverPeerMailToBot(
         sender,
         routing: { run: undefined },
         messageId: params.messageId,
-        senderSnapshot
+        senderSnapshot,
+        // Its reply and any notice go back over this conversation, filed with the request.
+        fromPeer: {
+          conversationId: params.conversationId,
+          peerFingerprint,
+          senderLabel: params.senderLabel,
+          ...(params.questionNotice ? { questionNotice: params.questionNotice } : {}),
+          ...(params.sendKey ? { sendKey: params.sendKey } : {})
+        }
       }
     )
-    if (!('receipt' in routed)) {
-      return routed
-    }
-    // Its reply and any notice go back over this conversation.
-    link()
-    return 'delivered'
+    return 'receipt' in routed ? 'delivered' : routed
   } finally {
     admitting.delete(params.messageId)
   }

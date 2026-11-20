@@ -120,7 +120,9 @@ async function outcome(run: () => unknown): Promise<unknown> {
       next: receipt.next,
       duplicate: receipt.duplicate === true,
       type: receipt.message?.type,
-      view: view ? { ...view, answer: undefined, ifThePostIsRefused: undefined } : null
+      view: view
+        ? { ...view, answer: undefined, ifThePostIsRefused: undefined, ifYouCantTakeIt: undefined }
+        : null
     }
   } catch (error) {
     return { refused: error instanceof Error ? error.message : String(error) }

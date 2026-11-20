@@ -72,6 +72,40 @@ describe('admitBotRequest', () => {
   })
 })
 
+describe("a paired computer's request", () => {
+  it('files its way back with its mail, in a new chat too, or neither', () => {
+    const db = new OrchestrationDb(':memory:')
+    try {
+      const peerLink = {
+        conversationId: 'conv-1',
+        peerFingerprint: 'peer',
+        senderLabel: 'Ranger on Mac'
+      }
+      const request = {
+        rootKey: 'root',
+        fromBotId: null,
+        toBotId: 'docs',
+        purpose: 'question' as const,
+        depth: 1,
+        record: '{}',
+        peerLink
+      }
+      db.reserveBotRequest({ ...request, messageId: 'msg_reserved' })
+      expect(() =>
+        db.admitReservedBotRequest(
+          { id: 'msg_reserved', from: 'a', to: 'b', subject: 'x', runId: 'run_missing' },
+          peerLink
+        )
+      ).toThrow()
+      expect(db.getPeerMailMessage('msg_reserved')).toBeUndefined()
+      db.admitReservedBotRequest({ id: 'msg_reserved', from: 'a', to: 'b', subject: 'x' }, peerLink)
+      expect(db.getPeerMailMessage('msg_reserved')).toMatchObject({ conversation_id: 'conv-1' })
+    } finally {
+      db.close()
+    }
+  })
+})
+
 describe('bot request outcomes', () => {
   let db: OrchestrationDb
   afterEach(() => db.close())
@@ -154,7 +188,7 @@ describe('a bot_requests table made before status', () => {
 
       const after = new OrchestrationDb(path)
       try {
-        expect(after.getBotRequest('msg_old')).toEqual({
+        expect(after.getBotRequest('msg_old')).toMatchObject({
           message_id: 'msg_old',
           root_key: 'root',
           from_bot_id: 'ranger',

@@ -11,7 +11,10 @@ import {
   AgentSessionRecoveryCapsule,
   AGENT_SESSION_RECOVERY_CAPSULE_FILE
 } from './agent-session-recovery-capsule'
-import type { AgentSessionResumeFailureInput } from './agent-session-recovery-capsule-entries'
+import {
+  continuingSessions,
+  type AgentSessionResumeFailureInput
+} from './agent-session-recovery-capsule-entries'
 
 let directory: string
 let filePath: string
@@ -224,4 +227,23 @@ describe('durable restart offers', () => {
   })
 
   // Offers expire only by user action, never TTL or clock drift.
+})
+
+describe('chats Orca may still continue after a restart', () => {
+  it('holds a cut from its offer through a Continue under way, until it is refused', async () => {
+    await capsule.record([marker()], NOW)
+    expect(await capsule.read(NOW, continuingSessions)).toEqual(new Set([SESSION]))
+    // Reserved for Continue but not handed to the agent yet: the offer has left the pending list.
+    await capsule.beginResume([SESSION], 'operation-a', NOW)
+    expect(await capsule.list(NOW)).toEqual([])
+    expect(await capsule.read(NOW, continuingSessions)).toEqual(new Set([SESSION]))
+    await capsule.failResume('operation-a', [failure()], NOW)
+    expect(await capsule.read(NOW, continuingSessions)).toEqual(new Set())
+  })
+
+  it('still holds a cut whose continuation Orca never saw taken', async () => {
+    await capsule.record([marker()], NOW)
+    await fileFailure({ outcome: 'unconfirmed' })
+    expect(await capsule.read(NOW, continuingSessions)).toEqual(new Set([SESSION]))
+  })
 })

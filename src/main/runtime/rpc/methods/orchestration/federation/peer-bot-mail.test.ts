@@ -50,6 +50,11 @@ vi.mock(
   '../../../../../bots/bot-chat-status-line',
   async () => (await import('../messaging/bot-recipient.test-fixture')).botChatStatusLineMock
 )
+// The asking chat's turn on A, which names its sends.
+vi.mock('../messaging/bot-recipient', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  readBotTurn: async () => ({ turn: { rootItemId: 'ranger-turn-1' } })
+}))
 vi.mock('../messaging/recipient-routing', async (importOriginal) =>
   (await import('../messaging/bot-recipient.test-fixture')).recipientRoutingMock(
     await importOriginal<typeof RecipientRouting>()
@@ -418,5 +423,26 @@ describe('mail to a bot on a paired server', () => {
       ]
     })
     expect(b.db.getUnreadMessages(DOCS_HOME)).toMatchObject([{ type: 'question' }])
+  })
+
+  it('files the way back with the request, before anything can read it', async () => {
+    let filedAtNudge: unknown
+    vi.spyOn(b.runtime, 'notifyMessageArrived').mockImplementation(() => {
+      const [request] = b.db.getUnreadMessages(DOCS_HOME)
+      filedAtNudge = request && {
+        route: b.db.getPeerMailMessage(request.id) !== undefined,
+        rule: b.db.getBotRequest(request.id)?.debt_rule
+      }
+    })
+    await send({ type: 'question' })
+    expect(filedAtNudge).toEqual({ route: true, rule: 1 })
+  })
+
+  it('refuses the same question from the same turn again once it went unanswered', async () => {
+    await send({ type: 'question' })
+    const [first] = b.db.getUnreadMessages(DOCS_HOME)
+    b.db.recordBotRequestOutcome(first!.id, 'unanswered')
+    await send({ type: 'question' })
+    expect(b.db.getUnreadMessages(DOCS_HOME)).toHaveLength(1)
   })
 })

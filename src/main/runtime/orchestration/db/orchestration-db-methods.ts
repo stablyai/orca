@@ -30,6 +30,7 @@ import type { BotRequestStoreMethods } from './bot-requests/bot-request-store'
 import type { BotConversationActsForMethods } from './bot-requests/bot-conversation-acts-for-store'
 import type { BotRunResendMethods } from './bot-requests/bot-run-resend-store'
 import type { BotRequestOutcomeMethods } from './bot-requests/bot-request-outcomes'
+import type { BotRequestTakeMethods } from './bot-requests/bot-request-takes'
 import type { MessageInsertMethods } from './messages/message-insert'
 import type { RoleMailboxDeliveryMethods } from './messages/role-mailbox-delivery'
 import type { MutationReceiptStoreMethods } from './mutation-receipts/mutation-receipt-store'
@@ -70,6 +71,7 @@ export type OrchestrationDbMethods = AttemptObservationStoreMethods &
   BotConversationActsForMethods &
   BotRunResendMethods &
   BotRequestOutcomeMethods &
+  BotRequestTakeMethods &
   CreateTablesMethods &
   SchemaMigrateMethods &
   SchemaColumnProbesMethods &

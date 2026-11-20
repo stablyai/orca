@@ -7,7 +7,7 @@ export type ImportedPeerItem =
   /** A reply in a peer-mail conversation this Orca opened. */
   | ({ kind: 'peer_mail' } & Pick<
       z.infer<typeof PeerMailRelayPayload>,
-      'senderLabel' | 'body' | 'sender' | 'botAnswer'
+      'senderLabel' | 'body' | 'sender' | 'botAnswer' | 'notice'
     >)
   /** A message filed in the mailbox of a Run this Orca coordinates on that server. */
   | { kind: 'worker_mail'; from: string; body: string }
@@ -33,7 +33,14 @@ export function presentImportedPeerItem(item: ImportedPeerItem): {
             botAnswer: item.botAnswer.view
           })
         }
-      : {}),
+      : item.notice
+        ? { payload: botRequestNoticePayload(item.notice.requestId, item.notice.outcome) }
+        : {}),
     answerSenderSnapshot: peerMailSenderSnapshot(item.senderLabel, item.sender)
   }
+}
+
+/** A notice's payload names the request it is about, as an answer's does. */
+export function botRequestNoticePayload(requestId: string, outcome: string): string {
+  return JSON.stringify({ requestId, botRequestNotice: outcome })
 }
