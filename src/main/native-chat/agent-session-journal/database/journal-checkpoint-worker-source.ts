@@ -1,5 +1,5 @@
-/** Slots of the shared liveness word: [0] is 1 while inside SQLite or starting, [1] counts replies. */
-export const JOURNAL_CHECKPOINT_IN_CALL = 0
+/** Shared liveness slots: [0] is non-zero while starting or handling work, [1] counts replies. */
+export const JOURNAL_CHECKPOINT_BUSY = 0
 export const JOURNAL_CHECKPOINT_REPLIES = 1
 
 // Evaluated source travels with both host bundles, without a separate worker entry or Electron imports.
@@ -13,14 +13,15 @@ let generation = 0;
 let nextTruncate = 0;
 let pendingTruncate;
 // The owner tells a slow checkpoint from a dead worker by these, since a native call can't answer.
+// A unit of work stays busy until its reply is counted, so no gap reads as idle and silent.
 const liveness = new Int32Array(workerData.liveness);
-const inCall = (run) => {
-  Atomics.store(liveness, ${JOURNAL_CHECKPOINT_IN_CALL}, 1);
-  try { return run(); } finally { Atomics.store(liveness, ${JOURNAL_CHECKPOINT_IN_CALL}, 0); }
+const work = (run) => {
+  Atomics.add(liveness, ${JOURNAL_CHECKPOINT_BUSY}, 1);
+  try { run(); } finally { Atomics.sub(liveness, ${JOURNAL_CHECKPOINT_BUSY}, 1); }
 };
 const reply = (message) => {
-  parentPort.postMessage(message);
   Atomics.add(liveness, ${JOURNAL_CHECKPOINT_REPLIES}, 1);
+  parentPort.postMessage(message);
 };
 try {
   db = new DatabaseSync(workerData.filename);
@@ -29,19 +30,15 @@ try {
   }
   db.exec('PRAGMA busy_timeout = 5000; PRAGMA synchronous = NORMAL; PRAGMA checkpoint_fullfsync = ON;');
   db.exec('PRAGMA journal_size_limit = ' + workerData.sizeLimit);
-  const noop = db.prepare('PRAGMA wal_checkpoint(NOOP)');
-  const passive = db.prepare('PRAGMA wal_checkpoint(PASSIVE)');
-  const truncateStatement = db.prepare('PRAGMA wal_checkpoint(TRUNCATE)');
-  const frames = { get: () => inCall(() => noop.get()) };
-  const checkpoint = { get: () => inCall(() => passive.get()) };
-  const truncate = { get: () => inCall(() => truncateStatement.get()) };
-  Atomics.store(liveness, ${JOURNAL_CHECKPOINT_IN_CALL}, 0);
-  const oversized = () => inCall(() => statSync(workerData.filename + '-wal').size > workerData.sizeLimit);
+  const frames = db.prepare('PRAGMA wal_checkpoint(NOOP)');
+  const checkpoint = db.prepare('PRAGMA wal_checkpoint(PASSIVE)');
+  const truncate = db.prepare('PRAGMA wal_checkpoint(TRUNCATE)');
+  const oversized = () => statSync(workerData.filename + '-wal').size > workerData.sizeLimit;
   const ceiling = (state) => state.log >= workerData.backpressureFrames;
   const schedule = (state, blocked) => {
     // While writes wait on the WAL, retry soon: a truncate needs a gap between readers' snapshots.
     if (blocked || state.log - state.checkpointed >= 1000) {
-      idle = setTimeout(() => check(true), blocked ? 100 : 1000);
+      idle = setTimeout(() => work(() => check(true)), blocked ? 100 : 1000);
     }
   };
   const check = (force, id, nextGeneration = generation) => {
@@ -61,7 +58,12 @@ try {
     reply({ type: 'checked', id, generation, ...state, blocked });
     schedule(state, blocked);
   };
-  parentPort.on('message', (request) => {
+  parentPort.on('message', (request) => work(() => {
+    // Ready to take checkpoints over; the owner hands them over only after this reply.
+    if (request.type === 'hello') {
+      reply({ type: 'hello' });
+      return;
+    }
     clearTimeout(idle);
     if (request.type === 'truncate') {
       if (!pendingTruncate || request.truncateId !== pendingTruncate.truncateId) return;
@@ -88,7 +90,9 @@ try {
       return;
     }
     check(request.force, request.id, request.generation);
-  });
+  }));
+  // Started: the owner counted startup as busy.
+  Atomics.sub(liveness, ${JOURNAL_CHECKPOINT_BUSY}, 1);
 } catch (error) {
   db?.close();
   throw error;

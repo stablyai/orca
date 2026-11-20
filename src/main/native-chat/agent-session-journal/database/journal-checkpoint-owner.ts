@@ -3,7 +3,7 @@ import { spawnWorkerThread } from '../../../worker-threads/worker-thread-spawn'
 import type Database from '../../../sqlite/sync-database'
 import type { WorkerRequestTransport } from '../../../worker-threads/worker-thread-transport'
 import {
-  JOURNAL_CHECKPOINT_IN_CALL,
+  JOURNAL_CHECKPOINT_BUSY,
   JOURNAL_CHECKPOINT_REPLIES,
   journalCheckpointWorkerSource
 } from './journal-checkpoint-worker-source'
@@ -15,12 +15,17 @@ import {
 } from './journal-wal-admission'
 
 const HEALTH_TIMEOUT_MS = 5000
+// A busy worker past this many ms without a reply is treated as stuck in a native call: the writer
+// takes checkpoints back, and the worker is kept (terminating can't interrupt that call).
+const STUCK_MS = 60_000
 const RESTART_BASE_MS = 1000
+// Workers that die before ever answering point at a broken setup, not a transient failure.
+const MAX_NEVER_READY = 3
 // Also how long a restarted worker must stay up before its backoff starts over.
 const RESTART_MAX_MS = 60_000
 
 type CheckpointResponse = {
-  type: 'checked' | 'truncate-request'
+  type: 'checked' | 'truncate-request' | 'hello'
   id?: number
   generation: number
   truncateId?: number
@@ -51,6 +56,10 @@ type Attached = {
   exited: Promise<void>
   spawnedAt: number
   replies: number
+  busySince: number | undefined
+  ready: boolean
+  /** An idle worker silent for one deadline may just be descheduled; a second makes it dead. */
+  silent: boolean
 }
 
 /** One writer observes outside transactions; the checkpoint thread never races an admitted truncate. */
@@ -59,10 +68,10 @@ export class JournalCheckpointOwner {
   private retiring: Promise<void> = Promise.resolve()
   private deadline: ReturnType<typeof setTimeout> | undefined
   private restartTimer: ReturnType<typeof setTimeout> | undefined
-  private stopped = false
+  /** The writer checkpoints for itself: no worker yet, or one that hasn't answered since it lost them. */
+  private stopped = true
   private closing = false
   private permanent = false
-  private slow = false
   private attachOwed = false
   private pending: number | undefined
   private nextRequest = 0
@@ -83,6 +92,7 @@ export class JournalCheckpointOwner {
   private restarts = 0
   private totalOutageMs = 0
   private failedStarts = 0
+  private neverReady = 0
   private readonly now: () => number
 
   constructor(
@@ -91,6 +101,7 @@ export class JournalCheckpointOwner {
     private readonly options: {
       factory?: (workerData: JournalCheckpointWorkerData) => WorkerRequestTransport
       timeoutMs?: number
+      stuckMs?: number
       restartBaseMs?: number
       onOutage?: (outage: JournalCheckpointOutage) => void
       now?: () => number
@@ -184,8 +195,8 @@ export class JournalCheckpointOwner {
     }
     const liveness = new SharedArrayBuffer(2 * Int32Array.BYTES_PER_ELEMENT)
     const word = new Int32Array(liveness)
-    // Starting counts as inside a call: a thread still booting under memory pressure isn't dead.
-    Atomics.store(word, JOURNAL_CHECKPOINT_IN_CALL, 1)
+    // Starting counts as busy: a thread still booting under memory pressure isn't dead.
+    Atomics.store(word, JOURNAL_CHECKPOINT_BUSY, 1)
     const workerData: JournalCheckpointWorkerData = {
       filename: this.filename,
       sizeLimit: JOURNAL_SIZE_LIMIT_BYTES,
@@ -202,6 +213,7 @@ export class JournalCheckpointOwner {
             workerData
           })
     } catch (error) {
+      this.neverReady++
       this.lose(error, 'spawn')
       return
     }
@@ -210,6 +222,9 @@ export class JournalCheckpointOwner {
       liveness: word,
       spawnedAt: this.now(),
       replies: 0,
+      busySince: undefined,
+      ready: false,
+      silent: false,
       exited: new Promise((resolve) => {
         worker.on('exit', () => {
           resolve()
@@ -231,7 +246,10 @@ export class JournalCheckpointOwner {
       }
     })
     worker.unref()
-    this.attach()
+    // The writer keeps its checkpoints until the worker proves it is up.
+    const replies = this.replies()
+    this.send({ type: 'hello' })
+    this.armDeadline(true, replies)
   }
 
   /** Takes checkpoints from the writer; a write transaction defers it to its afterCommit. */
@@ -242,7 +260,6 @@ export class JournalCheckpointOwner {
     }
     this.attachOwed = false
     this.stopped = false
-    this.slow = false
     this.unknown = true
     this.blocked = false
     this.truncate = undefined
@@ -252,10 +269,6 @@ export class JournalCheckpointOwner {
       this.restoreNeeded = true
       this.writer.pragma('wal_autocheckpoint = 0')
       this.afterCommit()
-      // A reply proves the worker healthy, even when the WAL needs nothing yet.
-      if (this.pending === undefined && this.truncate === undefined && !this.stopped) {
-        this.check()
-      }
     } catch (error) {
       this.lose(error, 'error')
     }
@@ -308,12 +321,17 @@ export class JournalCheckpointOwner {
     if (this.closing) {
       return
     }
+    const attached = this.current!
+    attached.busySince = undefined
+    attached.silent = false
+    if (!attached.ready) {
+      attached.ready = true
+      this.neverReady = 0
+    }
     if (this.stopped) {
-      if (!this.slow) {
-        return
-      }
-      // A slow worker answered: it takes checkpoints back with fresh state, then this reply is read
-      // as any other, so a truncate it asks for is still acknowledged.
+      // A starting worker, or one stuck past STUCK_MS, answered: it takes checkpoints with fresh
+      // state, then this reply is read as any other, so a truncate it asks for is still acknowledged.
+      this.clearDeadline()
       this.attach()
       if (this.stopped) {
         return
@@ -345,7 +363,6 @@ export class JournalCheckpointOwner {
         this.checkpointed = message.checkpointed
         this.blocked = message.blocked
         this.unknown = false
-        this.recovered()
       }
       // A stale response retires its request without clearing newer pressure.
       if (message.id === this.pending && this.pending !== undefined) {
@@ -368,13 +385,12 @@ export class JournalCheckpointOwner {
     }
   }
 
-  /** The writer checkpoints for itself until a worker answers again; a slow one is kept. */
+  /** The writer checkpoints for itself until a worker answers again; a stuck one is kept. */
   private lose(error: unknown, cause: JournalCheckpointOutage['cause']): void {
     if (this.closing) {
       return
     }
     this.stopped = true
-    this.slow = cause === 'slow'
     this.attachOwed = false
     this.truncate = undefined
     this.pending = undefined
@@ -399,6 +415,7 @@ export class JournalCheckpointOwner {
     this.current = undefined
     if (attached) {
       this.failedStarts = this.now() - attached.spawnedAt >= RESTART_MAX_MS ? 0 : this.failedStarts
+      this.neverReady = attached.ready ? 0 : this.neverReady + 1
       // Terminating can't stop a native call; the next worker starts only after this one exits.
       this.retiring = attached.exited
       try {
@@ -411,6 +428,9 @@ export class JournalCheckpointOwner {
   }
 
   private scheduleRestart(): void {
+    if (this.neverReady >= MAX_NEVER_READY) {
+      this.permanent = true
+    }
     if (this.permanent || this.closing || this.restartTimer) {
       return
     }
@@ -498,20 +518,37 @@ export class JournalCheckpointOwner {
     this.deadline.unref()
   }
 
-  /** Under paging a checkpoint's fsync can outlast the deadline: only an idle, silent worker is dead. */
+  /**
+   * Under paging a checkpoint's fsync can outlast the deadline, so a busy worker keeps its checkpoints
+   * and admission until it is stuck past STUCK_MS; only an idle, silent worker is dead.
+   */
   private expired(): void {
     this.deadline = undefined
     const attached = this.current
     if (!attached) {
       return
     }
-    const inCall = Atomics.load(attached.liveness, JOURNAL_CHECKPOINT_IN_CALL) === 1
-    const replied = Atomics.load(attached.liveness, JOURNAL_CHECKPOINT_REPLIES) !== attached.replies
-    if (inCall || replied) {
-      this.lose(new Error('checkpoint worker is slow to respond'), 'slow')
+    const replies = Atomics.load(attached.liveness, JOURNAL_CHECKPOINT_REPLIES)
+    if (
+      Atomics.load(attached.liveness, JOURNAL_CHECKPOINT_BUSY) === 0 &&
+      replies === attached.replies
+    ) {
+      if (attached.silent) {
+        this.lose(new Error('checkpoint worker response timed out'), 'unresponsive')
+        return
+      }
+      attached.silent = true
+      this.armDeadline(true, replies)
       return
     }
-    this.lose(new Error('checkpoint worker response timed out'), 'unresponsive')
+    attached.silent = false
+    const now = this.now()
+    attached.busySince ??= now
+    if (!this.stopped && now - attached.busySince >= (this.options.stuckMs ?? STUCK_MS)) {
+      this.lose(new Error('checkpoint worker is stuck in a checkpoint'), 'slow')
+      return
+    }
+    this.armDeadline(true, replies)
   }
 
   private clearDeadline(): void {
