@@ -34,6 +34,10 @@ export function settleLateClaudePromptSubmit(
   if (own) {
     own.turnOrigin = isTaskWakeup && own.turnOrigin !== 'person' ? 'task-wakeup' : 'person'
   }
+  // A wakeup's own end is no one's news.
+  if (own?.turnOrigin === 'task-wakeup') {
+    lead.untoldEnd = undefined
+  }
   // A person's turn that Stop already ended earns the completion it held; a wakeup's never does.
   if (isTaskWakeup) {
     lead.unclassifiedTurnCompletedAt = undefined

@@ -22,8 +22,10 @@ export function claudeHeldTurnEnd(
     outcome: ClaudeLeadTurnState['outcome']
     /** The ending turn was a task wakeup, by its prompt event. */
     selfStarted: boolean
+    /** Whether the ending turn may be the person's; an end left unannounced is then still theirs to hear. */
+    maybePersonTurn: boolean
   }
-): Pick<ClaudeLeadTurnState, 'turnCompletedAt' | 'unclassifiedTurnCompletedAt'> {
+): Pick<ClaudeLeadTurnState, 'turnCompletedAt' | 'unclassifiedTurnCompletedAt' | 'untoldEnd'> {
   const { resolvedStatus, outcome } = end
   if (
     outcome === 'cancellation' ||
@@ -40,7 +42,7 @@ export function claudeHeldTurnEnd(
     // Owed notifications wake the lead within ~100ms; announcing first would duplicate completion.
     !claudePaneHasRunningChildWork(state, paneKey)
   ) {
-    return {}
+    return end.maybePersonTurn ? { untoldEnd: true } : {}
   }
   return unclassified
     ? { unclassifiedTurnCompletedAt: Date.now() }
@@ -77,21 +79,40 @@ export function releaseClaudeUnclassifiedTurnEnd(
 }
 
 /**
- * A lead event that starts a turn names its origin; one before its prompt event leaves it unknown. A turn whose prompt
- * event never came is the person's: when the next turn starts first, its held end is announced then.
+ * A lead event that starts a turn names its origin; one before its prompt event leaves it unknown. A turn that starts
+ * before the person heard their last turn end carries that news, so it is theirs. A turn whose prompt event never came
+ * is the person's: when the next turn starts first, its held end is announced then. A lead's own wait asks the person.
  */
 export function claudeLeadTurnStart(
   state: HookListenerState,
   paneKey: string,
-  event: { name: unknown; agentId: string | undefined; isTaskWakeup: boolean; opensTurn: boolean },
+  event: {
+    eventName: unknown
+    eventAgentId: string | undefined
+    isTaskWakeup: boolean
+    opensTurn: boolean
+    isWaitingInducing: boolean
+  },
   previousLead: ClaudeLeadTurnState | undefined
 ): Pick<ClaudeLeadTurnState, 'turnOrigin' | 'turnCompletedAt'> {
-  const isPrompt = event.name === 'UserPromptSubmit'
-  if (event.agentId !== undefined || (!isPrompt && !event.opensTurn)) {
+  if (event.eventAgentId !== undefined) {
+    return {}
+  }
+  if (event.isWaitingInducing) {
+    return { turnOrigin: 'person' }
+  }
+  const isPrompt = event.eventName === 'UserPromptSubmit'
+  if (!isPrompt && !event.opensTurn) {
     return {}
   }
   return {
-    turnOrigin: !isPrompt ? undefined : event.isTaskWakeup ? 'task-wakeup' : 'person',
+    turnOrigin: previousLead?.untoldEnd
+      ? 'person'
+      : !isPrompt
+        ? undefined
+        : event.isTaskWakeup
+          ? 'task-wakeup'
+          : 'person',
     ...(previousLead?.unclassifiedTurnCompletedAt !== undefined &&
     previousLead.state === 'done' &&
     claudePaneHasRunningChildWork(state, paneKey)

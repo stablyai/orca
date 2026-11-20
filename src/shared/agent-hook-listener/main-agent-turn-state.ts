@@ -18,6 +18,8 @@ export type ClaudeLeadTurnState = {
   waitingToolUseId?: string
   /** End time retained while background work holds working, then repeated on all-clear done. */
   turnCompletedAt?: number
+  /** The person's turn ended while work held the pane open and no one announced it; the next turn carries that news. */
+  untoldEnd?: true
   /** That end time, held because the turn's late prompt event has not said whether a task wakeup started it. */
   unclassifiedTurnCompletedAt?: number
   /** Claude hook model. Later events that omit it keep the last reported value. */

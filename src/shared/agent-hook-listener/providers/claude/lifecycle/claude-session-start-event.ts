@@ -28,6 +28,8 @@ export function normalizeClaudeSessionStart(
   setClaudeMainAgentTurnState(state, paneKey, {
     state: 'done',
     stateStartedAt: Date.now(),
+    turnOrigin: undefined,
+    untoldEnd: undefined,
     model: leadModel
   })
   return buildClaudeStatusPayload(state, eventName, promptText, paneKey, hookPayload, {

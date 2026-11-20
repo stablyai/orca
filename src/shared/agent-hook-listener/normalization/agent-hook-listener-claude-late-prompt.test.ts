@@ -302,6 +302,17 @@ describe('Claude prompt event arriving after its turn', () => {
       ).toBeUndefined()
     })
 
+    it('makes a wakeup that asks the person for permission theirs', () => {
+      personTurnHeldByShell()
+      claude({ hook_event_name: 'UserPromptSubmit', prompt_id: SECOND, prompt: done })
+      claude({ hook_event_name: 'PermissionRequest', prompt_id: SECOND, tool_name: 'Bash' })
+      claude({ hook_event_name: 'PostToolUse', prompt_id: SECOND, tool_name: 'Bash' })
+      expect(
+        claude({ hook_event_name: 'Stop', prompt_id: SECOND, background_tasks: [] })?.mainAgent
+          ?.taskWakeup
+      ).toBeUndefined()
+    })
+
     it('starts the person’s next turn with no wakeup mark', () => {
       personTurnHeldByShell()
       claude({ hook_event_name: 'UserPromptSubmit', prompt_id: SECOND, prompt: done })
@@ -310,6 +321,30 @@ describe('Claude prompt event arriving after its turn', () => {
           ?.taskWakeup
       ).toBeUndefined()
     })
+  })
+
+  // A short background task can finish before the person's turn ends; that turn's end is only told through the wakeup.
+  it('keeps the wakeup that ends a person’s unannounced turn theirs', () => {
+    const done = `<task-notification>\n<task-id>${SHELL.id}</task-id>\n<status>completed</status>`
+    claude({ hook_event_name: 'UserPromptSubmit', prompt_id: FIRST, prompt: 'test it' })
+    claude({
+      hook_event_name: 'PostToolUse',
+      prompt_id: FIRST,
+      tool_name: 'Bash',
+      tool_input: { command: SHELL.command, run_in_background: true },
+      tool_response: { backgroundTaskId: SHELL.id }
+    })
+    const personEnd = claude({
+      hook_event_name: 'Stop',
+      prompt_id: FIRST,
+      background_tasks: [{ ...SHELL, status: 'completed' }]
+    })
+    expect(personEnd).toMatchObject({ state: 'working', turnCompletedAt: undefined })
+
+    claude({ hook_event_name: 'UserPromptSubmit', prompt_id: SECOND, prompt: done })
+    const wakeupEnd = claude({ hook_event_name: 'Stop', prompt_id: SECOND, background_tasks: [] })
+    expect(wakeupEnd?.state).toBe('done')
+    expect(wakeupEnd?.mainAgent?.taskWakeup).toBeUndefined()
   })
 
   describe('a turn whose Stop beats its prompt event while a shell runs', () => {

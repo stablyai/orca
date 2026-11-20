@@ -128,11 +128,15 @@ export function setClaudeMainAgentTurnState(
   const retainedModel = model || previous?.model
   // A turn keeps its origin through every state change; only an event that starts a turn names a new one.
   const turnOrigin = 'turnOrigin' in next ? next.turnOrigin : previous?.turnOrigin
+  // An untold end lasts until the lead works again; child waits and restatements keep it.
+  const untoldEnd =
+    'untoldEnd' in next ? next.untoldEnd : nextState === 'working' ? undefined : previous?.untoldEnd
   const record: ClaudeLeadTurnState = {
     ...rest,
     ...continueMainAgentStatus(previous, { state: nextState, outcome, stateStartedAt }, now),
     ...(retainedModel ? { model: retainedModel } : {}),
-    ...(turnOrigin ? { turnOrigin } : {})
+    ...(turnOrigin ? { turnOrigin } : {}),
+    ...(untoldEnd ? { untoldEnd } : {})
   }
   state.claudeLeadStateByPaneKey.set(paneKey, record)
   return record
