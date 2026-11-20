@@ -21,6 +21,7 @@ type Document = {
   frame: WebContents['mainFrame']
   events: EventEmitter
   document: AppDocument
+  requestCallers: Map<string, AppCaller>
 }
 
 export function createElectronAppIpcHost(
@@ -48,9 +49,9 @@ export function createElectronAppIpcHost(
     }
     owned.events.removeAllListeners()
   }
-  const documentFor = (sender: WebContents): Document => {
+  const documentFor = (sender: WebContents, mainFrame = sender.mainFrame): Document => {
     const existing = current.get(sender)
-    if (existing && existing.frame === sender.mainFrame) {
+    if (existing && existing.frame === mainFrame) {
       return existing
     }
     retire(sender, 'did-navigate')
@@ -75,35 +76,51 @@ export function createElectronAppIpcHost(
       once: (event, listener) => events.once(event, listener),
       removeListener: (event, listener) => events.removeListener(event, listener)
     }
-    const owned: Document = { sender, frame: sender.mainFrame, events, document }
+    const owned: Document = {
+      sender,
+      frame: mainFrame,
+      events,
+      document,
+      requestCallers: new Map()
+    }
     sources.set(document, sender)
     current.set(sender, owned)
     documents.set(caller.documentId, owned)
     return owned
   }
+  // Hot path: reuse one frozen caller per document, role and frame kind.
+  const requestCallerFor = (
+    owned: Document,
+    role: AppDocumentRole,
+    isMainFrame: boolean
+  ): AppCaller => {
+    const key = isMainFrame ? role : `${role}:subframe`
+    let requestCaller = owned.requestCallers.get(key)
+    if (!requestCaller) {
+      requestCaller = Object.freeze({ ...owned.document.caller, role, isMainFrame })
+      owned.requestCallers.set(key, requestCaller)
+      callers.set(requestCaller, owned.document)
+    }
+    return requestCaller
+  }
   const invoke =
     (listener: AppHandler, dropRetired = false) =>
     (event: IpcMainInvokeEvent, ...args: unknown[]) => {
       const { sender, senderFrame } = event
+      const mainFrame = sender.isDestroyed() ? undefined : sender.mainFrame
       if (
-        sender.isDestroyed() ||
+        !mainFrame ||
         !senderFrame ||
         senderFrame.detached ||
-        (senderFrame !== sender.mainFrame && senderFrame.parent === null)
+        (senderFrame !== mainFrame && senderFrame.parent === null)
       ) {
         if (dropRetired) {
           return
         }
         throw new Error('Application IPC document has retired')
       }
-      const { caller } = documentFor(sender).document
-      const requestCaller: AppCaller = Object.freeze({
-        ...caller,
-        role: roleFor(sender),
-        isMainFrame: senderFrame === sender.mainFrame
-      })
-      callers.set(requestCaller, documentFor(sender).document)
-      return listener(requestCaller, ...args)
+      const owned = documentFor(sender, mainFrame)
+      return listener(requestCallerFor(owned, roleFor(sender), senderFrame === mainFrame), ...args)
     }
   return {
     handle: (channel, listener) => ipcMain.handle(channel, invoke(listener)),

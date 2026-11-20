@@ -1,3 +1,4 @@
+import '../../app-registry/testing/app-ipc-test-host'
 import type * as WorktreeScanCacheModule from '../../../git/worktrees/catalog/worktree-scan-cache'
 import type * as WorktreeListingModule from '../../../git/worktrees/catalog/worktree-listing'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
