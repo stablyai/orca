@@ -117,7 +117,7 @@ describe('the Add picker on a GitHub session', () => {
     })
     observer.disconnect()
     expect(screen.getByText('brennanb2025')).toBeTruthy()
-    expect(screen.getByText('Not in that list')).toBeTruthy()
+    expect(screen.getByText('Not in your repo list')).toBeTruthy()
     // The rows never blanked to "Searching…", and the exact lookup ran once for this query.
     expect(searching).not.toHaveBeenCalled()
     expect(users).toHaveBeenCalledOnce()

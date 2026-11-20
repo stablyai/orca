@@ -215,8 +215,11 @@ export function gitHubWhoCanAskAnswer(
     !read || historical
       ? null
       : exactSearched
-        ? t('bots.github.whoCanAsk.searchedListExact', 'Searched that list and exact usernames.')
-        : t('bots.github.whoCanAsk.searchedList', 'Searched that list.')
+        ? t(
+            'bots.github.whoCanAsk.searchedListExact',
+            'Searched your repo list and exact usernames.'
+          )
+        : t('bots.github.whoCanAsk.searchedList', 'Searched your repo list.')
   // A roster still on its way: nothing definitive yet, whatever the exact lookup said.
   const empty =
     roster.status === 'loading'
@@ -262,7 +265,7 @@ export function gitHubWhoCanAskAnswer(
             : place === 'orgs'
               ? t('bots.github.whoCanAsk.orgsAsOf', 'Your orgs as of {{time}}', { time })
               : t('bots.github.whoCanAsk.reposAsOf', 'Your repos as of {{time}}', { time }),
-        outsideTag: t('bots.github.whoCanAsk.notInList', 'Not in that list')
+        outsideTag: t('bots.github.whoCanAsk.notInList', 'Not in your repo list')
       },
       ...(note ? { note } : {}),
       empty,

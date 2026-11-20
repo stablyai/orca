@@ -27547,12 +27547,12 @@
         "fromEarlierList": "From an earlier repo list",
         "noReadable": "No readable repos to search.",
         "unreached": "Couldn’t get the repo list. Reopen to retry.",
-        "searchedListExact": "Searched that list and exact usernames.",
-        "searchedList": "Searched that list.",
+        "searchedListExact": "Searched your repo list and exact usernames.",
+        "searchedList": "Searched your repo list.",
         "reposOrgsAsOf": "Your repos and orgs as of {{time}}",
         "orgsAsOf": "Your orgs as of {{time}}",
         "reposAsOf": "Your repos as of {{time}}",
-        "notInList": "Not in that list"
+        "notInList": "Not in your repo list"
       },
       "connection": {
         "description": "{{repos}} · signed in as @{{login}}",
