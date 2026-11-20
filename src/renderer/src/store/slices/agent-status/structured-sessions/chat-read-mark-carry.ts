@@ -3,6 +3,7 @@ import {
   chatPaneAddressTabId,
   chatPaneKey
 } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
+import { isReopenedChatTabId } from '../../../../../../shared/agent-session/view/structured-agent-session-host-tab-id'
 import type { AppState } from '../../../types'
 
 type ReadMarks = Pick<
@@ -52,8 +53,7 @@ export function carriedChatReadMarks(
   return patch
 }
 
-/** Run once, after startup hydrates saved read marks and every workspace's tabs: those marks were
- *  written by an older build of this window, so nothing later brings new ones. */
+/** Run once, after startup hydrates saved read marks and every workspace's tabs. */
 export function carryChatReadMarks(store: {
   getState: () => AppState
   setState: (patch: Partial<AppState>) => void
@@ -62,5 +62,36 @@ export function carryChatReadMarks(store: {
   const patch = carriedChatReadMarks(state, Object.values(state.unifiedTabsByWorktree).flat())
   if (patch) {
     store.setState(patch)
+  }
+}
+
+const CHAT_ADDRESS_PREFIX = chatPaneAddressTabId('')
+
+function isTabKeyedChatMark(key: string): boolean {
+  if (isReopenedChatTabId(key)) {
+    return true
+  }
+  if (!key.startsWith(CHAT_ADDRESS_PREFIX)) {
+    return false
+  }
+  const tabId = key.slice(0, key.lastIndexOf(':'))
+  return chatPaneKey(tabId.slice(CHAT_ADDRESS_PREFIX.length)) !== key
+}
+
+/** After a saved-UI sync: an older paired client can still acknowledge a chat under its tab's key.
+ *  Only keys the sync added are classified, so a sync with none costs one pass over its keys. */
+export function carryChatAcknowledgementsAfterSync(
+  store: { getState: () => AppState; setState: (patch: Partial<AppState>) => void },
+  previous: Record<string, number>
+): void {
+  const current = store.getState().acknowledgedAgentsByPaneKey
+  if (current === previous) {
+    return
+  }
+  for (const key in current) {
+    if (previous[key] === undefined && isTabKeyedChatMark(key)) {
+      carryChatReadMarks(store)
+      return
+    }
   }
 }

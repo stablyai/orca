@@ -1,6 +1,10 @@
 import { expect, it } from 'vitest'
 import type { AppState } from '../../../types'
-import { carriedChatReadMarks, carryChatReadMarks } from './chat-read-mark-carry'
+import {
+  carriedChatReadMarks,
+  carryChatAcknowledgementsAfterSync,
+  carryChatReadMarks
+} from './chat-read-mark-carry'
 
 const LEAF = '2b8ea975-8113-41ae-a25c-feb50cbe084a'
 
@@ -68,5 +72,48 @@ it('moves a reopened chat tab’s saved read marks too', () => {
   })
   expect(state.activityClearedAtByPaneKey).toEqual({
     [`structured-agent-session-sess-2:${LEAF}`]: 300
+  })
+})
+
+it('moves an acknowledgement an older paired client syncs later under a replaced chat’s tab key', () => {
+  let state: Pick<
+    AppState,
+    | 'unifiedTabsByWorktree'
+    | 'acknowledgedAgentsByPaneKey'
+    | 'activityClearedAtByPaneKey'
+    | 'manuallyUnreadTurnsByPaneKey'
+  > = {
+    unifiedTabsByWorktree: {
+      wt: [
+        {
+          id: 'structured-agent-session-old',
+          entityId: 'sess-2',
+          groupId: 'g',
+          worktreeId: 'wt',
+          contentType: 'agent-session',
+          label: 'Chat',
+          customLabel: null,
+          color: null,
+          sortOrder: 0,
+          createdAt: 0
+        }
+      ]
+    },
+    acknowledgedAgentsByPaneKey: { [`structured-agent-session-old:${LEAF}`]: 400 },
+    activityClearedAtByPaneKey: {},
+    manuallyUnreadTurnsByPaneKey: {}
+  }
+  carryChatAcknowledgementsAfterSync(
+    {
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the carry reads only these four fields.
+      getState: () => state as AppState,
+      setState: (patch) => {
+        state = { ...state, ...patch }
+      }
+    },
+    {}
+  )
+  expect(state.acknowledgedAgentsByPaneKey).toEqual({
+    [`structured-agent-session-sess-2:${LEAF}`]: 400
   })
 })
