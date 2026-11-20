@@ -22,6 +22,7 @@ import { useNativeChatFileLinkExists } from '../links/actions/use-native-chat-fi
 import { NativeChatMarkdownImageLinkContext } from '../media/images/NativeChatMarkdownImage'
 import { NativeChatDeferredMarkdownImage } from '../media/images/NativeChatDeferredMarkdownImage'
 import { remarkNativeChatFileDestinations } from './native-chat-markdown-file-destinations'
+import { remarkNativeChatListItemNumbers } from './native-chat-markdown-list-item-numbers'
 import { NativeChatLinkPeek } from '../links/previews/NativeChatLinkPeek'
 import {
   createNativeChatMentionExtension,
@@ -120,7 +121,11 @@ const NATIVE_CHAT_TEXT_BLOCK_COMPONENTS: CommentMarkdownExtension['components'] 
       {children}
     </ol>
   ),
-  li: ({ children }) => <li className="[&>input]:pointer-events-none">{children}</li>
+  li: ({ children, value }) => (
+    <li value={value} className="[&>input]:pointer-events-none">
+      {children}
+    </li>
+  )
 }
 
 function createNativeChatImageExtension(
@@ -141,6 +146,8 @@ function createNativeChatImageExtension(
   )
   return {
     ...base,
+    remarkPlugins: [...base.remarkPlugins, remarkNativeChatListItemNumbers],
+    sanitizeAttributes: { ...base.sanitizeAttributes, li: ['value'] },
     components: {
       ...NATIVE_CHAT_TEXT_BLOCK_COMPONENTS,
       ...base.components,
