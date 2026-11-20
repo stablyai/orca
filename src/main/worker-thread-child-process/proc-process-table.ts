@@ -23,11 +23,12 @@ export function parseProcStat(text: string): ProcStat | null {
     : null
 }
 
-export async function readProcStat(pid: number): Promise<ProcStat | null> {
+/** 'gone' only when the process no longer exists; null when its state couldn't be read. */
+export async function readProcStat(pid: number): Promise<ProcStat | 'gone' | null> {
   try {
     return parseProcStat(await readFile(`/proc/${pid}/stat`, 'latin1'))
-  } catch {
-    return null
+  } catch (error) {
+    return readFailureProvesNothing(error) ? null : 'gone'
   }
 }
 
@@ -68,20 +69,24 @@ export async function groupHasLiveMember(groupId: number): Promise<boolean | nul
   if (!pids) {
     return null
   }
-  let live = false
+  let live: boolean | null = false
   await inBatches(pids, async (pid) => {
     const procStat = await readProcStat(pid)
-    live ||= procStat !== null && procStat.pgid === groupId && procStat.state !== 'Z'
+    if (procStat === null) {
+      live = live === true ? true : null
+    } else if (procStat !== 'gone' && procStat.pgid === groupId && procStat.state !== 'Z') {
+      live = true
+    }
   })
   return live
 }
 
-/** The start time /proc would give a process started at `atMs`, less a margin. */
-export async function ticksAt(atMs: number): Promise<number> {
+/** The start time /proc would give a process started at `at` (performance.now()), less a margin. */
+export async function ticksAt(at: number): Promise<number> {
   try {
     const uptimeSeconds = Number((await readFile('/proc/uptime', 'latin1')).split(' ')[0])
     return (
-      Math.floor((uptimeSeconds - (Date.now() - atMs) / 1000) * TICKS_PER_SECOND) -
+      Math.floor((uptimeSeconds - (performance.now() - at) / 1000) * TICKS_PER_SECOND) -
       START_MARGIN_TICKS
     )
   } catch {
@@ -90,6 +95,13 @@ export async function ticksAt(atMs: number): Promise<number> {
 }
 
 export type KeyedProcess = ProcStat & { pid: number; key: string }
+
+const SLOW = Symbol('slow')
+const SLOW_READ_MS = 1_000
+
+function slowAfter(ms: number): Promise<typeof SLOW> {
+  return new Promise((resolve) => setTimeout(() => resolve(SLOW), ms).unref?.())
+}
 
 /**
  * Live processes whose environment carries `keyEnv`=one of `keys`. Reading a process's
@@ -117,7 +129,11 @@ export function createKeyScan(keyEnv: string, keys: ReadonlySet<string>, sinceTi
         return
       }
       const procStat = await readProcStat(pid)
-      if (!procStat || procStat.state === 'Z' || procStat.startTicks < sinceTicks) {
+      if (procStat === null) {
+        complete = false
+        return
+      }
+      if (procStat === 'gone' || procStat.state === 'Z' || procStat.startTicks < sinceTicks) {
         return
       }
       if (pending.has(pid)) {
@@ -125,14 +141,19 @@ export function createKeyScan(keyEnv: string, keys: ReadonlySet<string>, sinceTi
         return
       }
       pending.add(pid)
-      let environ: string
+      const read = readFile(`/proc/${pid}/environ`, 'latin1').finally(() => pending.delete(pid))
+      let environ: string | typeof SLOW
       try {
-        environ = await readFile(`/proc/${pid}/environ`, 'latin1')
+        environ = await Promise.race([read, slowAfter(SLOW_READ_MS)])
       } catch (error) {
         complete &&= !readFailureProvesNothing(error)
         return
-      } finally {
-        pending.delete(pid)
+      }
+      if (environ === SLOW) {
+        // Left to finish on its own; this scan stays unproven, and other children's proofs go on.
+        read.catch(() => undefined)
+        complete = false
+        return
       }
       const variable = environ.split('\0').find((entry) => entry.startsWith(`${keyEnv}=`))
       const key = variable?.slice(keyEnv.length + 1)

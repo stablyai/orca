@@ -28,7 +28,8 @@ export type LostSpawn = {
   /** Started as its own process group and session (a termination barrier): the group must end. */
   ownsGroup: boolean
   argv: readonly string[]
-  spawnedAtMs: number
+  /** performance.now() at the spawn. */
+  spawnedAt: number
 }
 
 type KeyProof = { kind: 'key'; seen: boolean; quietScans: number }
@@ -65,8 +66,10 @@ function proofFor(spawn: LostSpawn, record: RecordRead, recordDir: string | null
       ? { kind: 'group', groupId: record.pid }
       : { kind: 'root', pid: record.pid, startTicks: record.startTicks }
   }
-  // The launcher removes a record only after that child, and an owned group, has ended.
-  if (record === 'absent' && recordDir && spawn.recorded) {
+  // The launcher reserves a record before it spawns and removes it only after that child, and an
+  // owned group, has ended: none means it never started or has ended. Unless main heard a pid
+  // without hearing it was recorded, which means the launcher couldn't write one.
+  if (record === 'absent' && recordDir && (spawn.recorded || spawn.pid === undefined)) {
     return { kind: 'record' }
   }
   // Main heard this barrier child's pid, and it leads its own group: end that group as a local stop would.
@@ -104,7 +107,8 @@ async function advanceKeyProof(
       continue
     }
     left = true
-    if ((await readProcStat(entry.pid))?.startTicks === entry.startTicks) {
+    const now = await readProcStat(entry.pid)
+    if (now !== null && now !== 'gone' && now.startTicks === entry.startTicks) {
       kill(entry.pid)
     }
   }
@@ -127,7 +131,11 @@ async function provenEnded(proof: Proof): Promise<boolean> {
   }
   if (proof.kind === 'root') {
     const current = await readProcStat(proof.pid)
-    if (current?.startTicks !== proof.startTicks || current.state === 'Z') {
+    if (current === null) {
+      // Unreadable proves nothing, and an unverified pid is never signalled.
+      return false
+    }
+    if (current === 'gone' || current.startTicks !== proof.startTicks || current.state === 'Z') {
       return true
     }
     kill(proof.pid)
@@ -171,7 +179,7 @@ export async function endLostSpawns(
       scan ??= createKeyScan(
         SPAWN_KEY_ENV,
         new Set(spawns.map((spawn) => spawn.key)),
-        await ticksAt(Math.min(...spawns.map((spawn) => spawn.spawnedAtMs)))
+        await ticksAt(Math.min(...spawns.map((spawn) => spawn.spawnedAt)))
       )
       const { found, complete } = await scan()
       for (const { entry, proof } of byKey) {
@@ -190,7 +198,10 @@ export async function endLostSpawns(
             : proof.kind === 'group'
               ? proof.groupId
               : spawn.pid
-        onEnded(key, pid, pid !== undefined || proof.kind !== 'key' || proof.seen)
+        const started =
+          pid !== undefined ||
+          (proof.kind === 'record' ? spawn.recorded : proof.kind !== 'key' || proof.seen)
+        onEnded(key, pid, started)
       }
     }
     if (open.size > 0) {

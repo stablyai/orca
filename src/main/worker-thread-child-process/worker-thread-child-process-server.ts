@@ -59,6 +59,8 @@ export function serveWorkerThreadChildProcesses(
   }
 
   const spawnChild = ({ id, spec }: Extract<WorkerThreadChildRequest, { type: 'spawn' }>): void => {
+    const key = spec.env?.[SPAWN_KEY_ENV]
+    const recordKey = key && records?.reserve(key) ? key : undefined
     let child: ChildProcessWithoutNullStreams
     try {
       child = spawnProcess({
@@ -67,19 +69,21 @@ export function serveWorkerThreadChildProcesses(
         ...(options.closeInheritedFds ? { closeInheritedFds: true } : {})
       })
     } catch (error) {
+      if (recordKey) {
+        records?.remove(recordKey)
+      }
       port.postMessage({ type: 'spawn-error', id, error: toErrorPayload(error) })
       return
     }
-    const key = records && child.pid !== undefined ? spec.env?.[SPAWN_KEY_ENV] : undefined
-    const recordKey =
-      key && child.pid !== undefined && records?.write(key, child.pid) ? key : undefined
+    const recorded =
+      recordKey !== undefined && child.pid !== undefined && records?.write(recordKey, child.pid)
     // A failed creation has no pid and reports through 'error'; Node's own 'spawn' event would come a turn later.
     if (child.pid !== undefined) {
       port.postMessage({
         type: 'spawn',
         id,
         pid: child.pid,
-        ...(recordKey ? { recorded: true } : {})
+        ...(recorded ? { recorded: true } : {})
       })
     }
     const state: NonNullable<ReturnType<typeof children.get>> = {

@@ -166,7 +166,7 @@ export class WorkerThreadChildProcessHost {
       recorded: false,
       ownsGroup: spec.terminationBarrier === true,
       argv: [spec.program, ...(spec.args ?? [])],
-      spawnedAtMs: Date.now()
+      spawnedAt: performance.now()
     })
     return { ...spec, env: { ...(spec.env ?? process.env), [SPAWN_KEY_ENV]: key } }
   }
