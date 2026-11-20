@@ -20,7 +20,7 @@ describe('readOmpMcpServers', () => {
       JSON.stringify({
         mcpServers: {
           memory: { command: 'project-memory', args: ['--port', '1'] },
-          paused: { command: 'paused', enabled: false }
+          paused: { command: 'paused', enabled: 'false' }
         }
       })
     )
@@ -36,7 +36,8 @@ describe('readOmpMcpServers', () => {
             url: 'https://docs.example/sse',
             headers: { Authorization: 'Bearer ${DOCS_TOKEN}', Team: '${TEAM:-core}' }
           },
-          muted: { url: 'https://muted.example/mcp' }
+          muted: { url: 'https://muted.example/mcp' },
+          pinned: { command: 'node', args: ['server.js'], cwd: '/tools' }
         }
       })
     )
@@ -61,6 +62,16 @@ describe('readOmpMcpServers', () => {
         ]
       }
     ])
+  })
+
+  it('leaves out project servers when the user turned project MCP config off', async () => {
+    await writeFile(join(agentDir, 'config.yml'), 'mcp:\n  enableProjectConfig: false\n')
+    const env = { PI_CODING_AGENT_DIR: agentDir, DOCS_TOKEN: 'secret' }
+
+    const servers = await readOmpMcpServers({ cwd, env, version: '19.0.1' })
+
+    expect(servers.map((server) => server.name)).toEqual(['memory', 'docs'])
+    expect(servers[0]).toMatchObject({ command: 'user-memory' })
   })
 
   it('sends none to releases where a failing server stops the chat opening', async () => {

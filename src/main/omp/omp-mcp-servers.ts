@@ -1,8 +1,11 @@
 // OMP's ACP mode skips its own MCP config and connects only the servers the client sends, so a chat
 // sends the ones its native mcp.json files define, read as OMP's terminal reads them.
 import { readFile } from 'node:fs/promises'
+import { homedir } from 'node:os'
 import { join } from 'node:path'
+import { parse as parseYaml } from 'yaml'
 import { hasReachedAppVersion } from '../../shared/app-lifecycle/identity/app-version'
+import { normalizedOmpProfile } from '../../shared/agent-launch/startup/omp-profile'
 import type { McpServer } from '../acp/generated/acp-protocol.generated'
 import type { AcpOwnMcpServersLoader } from '../acp/launch/acp-launch-contract'
 import { acpMcpServer, type AcpMcpServerSource } from '../acp/launch/acp-mcp-server'
@@ -27,12 +30,41 @@ function stringRecord(value: unknown): Record<string, string> {
   )
 }
 
-async function readJsonObject(path: string): Promise<Record<string, unknown>> {
-  try {
-    return record(JSON.parse(await readFile(path, 'utf8')))
-  } catch {
-    return {}
+async function readObject(
+  paths: readonly string[],
+  parse: (text: string) => unknown
+): Promise<Record<string, unknown>> {
+  for (const path of paths) {
+    try {
+      return record(parse(await readFile(path, 'utf8')))
+    } catch {
+      // Missing or malformed: OMP skips it too.
+    }
   }
+  return {}
+}
+
+const readJsonObject = (path: string) => readObject([path], JSON.parse)
+
+/** OMP takes a named profile's folder over PI_CODING_AGENT_DIR. */
+function ompAgentDir(env: Readonly<Record<string, string>>): string | undefined {
+  const profile = normalizedOmpProfile(env.OMP_PROFILE ?? env.PI_PROFILE)
+  return profile
+    ? join(homedir(), env.PI_CONFIG_DIR || '.omp', 'profiles', profile, 'agent')
+    : env.PI_CODING_AGENT_DIR
+}
+
+/** OMP's string forms of `enabled`; anything else counts as unset. */
+function ompFlag(value: unknown): boolean | undefined {
+  if (typeof value === 'boolean') {
+    return value
+  }
+  const text = typeof value === 'string' ? value.toLowerCase() : null
+  return text === 'true' || text === '1'
+    ? true
+    : text === 'false' || text === '0'
+      ? false
+      : undefined
 }
 
 /** OMP's `${VAR}` and `${VAR:-default}`; an unset plain `${VAR}` stays literal. */
@@ -59,6 +91,10 @@ function expandEnv(value: unknown, env: Readonly<Record<string, string>>): unkno
 
 function ompServerSource(name: string, entry: Record<string, unknown>): AcpMcpServerSource | null {
   const { command, url, type } = entry
+  // ACP has no working directory for a server, which would then start in the chat's folder.
+  if (entry.cwd !== undefined) {
+    return null
+  }
   if (typeof command === 'string' && command && (type === undefined || type === 'stdio')) {
     return { name, command, args: strings(entry.args), env: stringRecord(entry.env) }
   }
@@ -69,7 +105,7 @@ function ompServerSource(name: string, entry: Record<string, unknown>): AcpMcpSe
 }
 
 export const readOmpMcpServers: AcpOwnMcpServersLoader = async ({ cwd, env, version }) => {
-  const agentDir = env.PI_CODING_AGENT_DIR
+  const agentDir = ompAgentDir(env)
   if (
     !agentDir ||
     version === null ||
@@ -77,27 +113,32 @@ export const readOmpMcpServers: AcpOwnMcpServersLoader = async ({ cwd, env, vers
   ) {
     return []
   }
-  // OMP's order: project files before user files, and the first entry of a name owns it.
-  const [projectMain, projectDot, user, userDot] = await Promise.all(
-    [
-      join(cwd, '.omp', 'mcp.json'),
-      join(cwd, '.omp', '.mcp.json'),
-      join(agentDir, 'mcp.json'),
-      join(agentDir, '.mcp.json')
-    ].map(readJsonObject)
-  )
+  const [settings, user, userDot] = await Promise.all([
+    readObject([join(agentDir, 'config.yml'), join(agentDir, 'config.yaml')], parseYaml),
+    readJsonObject(join(agentDir, 'mcp.json')),
+    readJsonObject(join(agentDir, '.mcp.json'))
+  ])
+  const projectEnabled =
+    (record(settings.mcp).enableProjectConfig ?? settings['mcp.enableProjectConfig']) !== false
+  const project = projectEnabled
+    ? await Promise.all([
+        readJsonObject(join(cwd, '.omp', 'mcp.json')),
+        readJsonObject(join(cwd, '.omp', '.mcp.json'))
+      ])
+    : []
   const disabled = new Set(strings(user.disabledServers))
   const forced = new Set(strings(user.enabledServers))
   const claimed = new Set<string>()
   const servers: McpServer[] = []
-  for (const file of [projectMain, projectDot, user, userDot]) {
+  // OMP's order: project files before user files, and the first entry of a name owns it.
+  for (const file of [...project, user, userDot]) {
     for (const [name, raw] of Object.entries(record(file.mcpServers))) {
       if (claimed.has(name)) {
         continue
       }
       claimed.add(name)
       const entry = record(expandEnv(raw, env))
-      if (disabled.has(name) || (entry.enabled === false && !forced.has(name))) {
+      if (disabled.has(name) || (ompFlag(entry.enabled) === false && !forced.has(name))) {
         continue
       }
       const source = ompServerSource(name, entry)
