@@ -3467,8 +3467,8 @@
     "zoom": "Zoom"
   },
   "openOnHost": {
-    "localCommitsStay_one": "Your {{count}} local commit stays on this Mac",
-    "localCommitsStay_other": "Your {{count}} local commits stay on this Mac"
+    "localCommitsStay_one": "Your {{count}} local commit stays on {{source}}",
+    "localCommitsStay_other": "Your {{count}} local commits stay on {{source}}"
   },
   "perfNotices": {
     "hiddenTabs": {

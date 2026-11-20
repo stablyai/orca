@@ -31944,10 +31944,10 @@
     "sourceUnavailable": "Не удаётся подключиться к хосту этого рабочего пространства",
     "noRemoteBranch": "У этой ветки нет удалённой ветки, которую может открыть {{host}}",
     "missingRemote": "В клоне на {{host}} нет удалённого репозитория {{remote}}",
-    "headMismatch": "Копия {{branch}} на {{host}} находится на другом коммите, чем на этом Mac",
+    "headMismatch": "Копия {{branch}} на {{host}} находится на другом коммите, чем на {{source}}",
     "hostCopyNotLoaded": "Копия этого проекта на {{host}} ещё не загружена",
-    "localCommitsStay_one": "Ваш {{count}} локальный коммит остаётся на этом Mac",
-    "localCommitsStay_few": "Ваши {{count}} локальных коммита остаются на этом Mac",
-    "localCommitsStay_many": "Ваши {{count}} локальных коммитов остаются на этом Mac"
+    "localCommitsStay_one": "Ваш {{count}} локальный коммит остаётся на {{source}}",
+    "localCommitsStay_few": "Ваши {{count}} локальных коммита остаются на {{source}}",
+    "localCommitsStay_many": "Ваши {{count}} локальных коммитов остаются на {{source}}"
   }
 }

@@ -23,6 +23,7 @@ import { resolveDeleteTargetGitContext } from '../sidebar/workspace-actions/dele
 import { branchDisplayName } from '../sidebar/workspace-card/identity/worktree-branch-display'
 import { getWorkspaceSyncOffer, planWorkspaceOnHost } from './open-on-host-branch-plan'
 import {
+  getSourceHostLabel,
   resolveOpenOnHostLocation,
   runOpenOnHost,
   type OpenOnHostLocation
@@ -64,7 +65,8 @@ const OpenOnHostDialog = React.memo(function OpenOnHostDialog() {
   const syncCheckboxId = useId()
 
   useEffect(() => {
-    if (!target) {
+    // Why: a missing workspace must not fall through to the project flow.
+    if (!target || (worktreeId && !opened.worktree)) {
       closeModal()
       return
     }
@@ -97,9 +99,9 @@ const OpenOnHostDialog = React.memo(function OpenOnHostDialog() {
     return () => {
       cancelled = true
     }
-  }, [target, cloneUrl, opened.worktree, closeModal])
+  }, [target, cloneUrl, opened.worktree, worktreeId, closeModal])
 
-  if (!target || !repo) {
+  if (!target || !repo || (worktreeId && !opened.worktree)) {
     return null
   }
   const source = opened.worktree
@@ -132,9 +134,10 @@ const OpenOnHostDialog = React.memo(function OpenOnHostDialog() {
             { branch, host }
           )
       : plan?.kind === 'ready' && plan.localOnlyCommits > 0
-        ? t('openOnHost.localCommitsStay', 'Your {{count}} local commits stay on this Mac', {
+        ? t('openOnHost.localCommitsStay', 'Your {{count}} local commits stay on {{source}}', {
             count: plan.localOnlyCommits,
-            defaultValue_one: 'Your {{count}} local commit stays on this Mac'
+            source: getSourceHostLabel(source?.hostId),
+            defaultValue_one: 'Your {{count}} local commit stays on {{source}}'
           })
         : null
   const readyLocation = location && location.kind !== 'unavailable' ? location : null
@@ -157,7 +160,10 @@ const OpenOnHostDialog = React.memo(function OpenOnHostDialog() {
       setOpening(false)
       return
     }
-    closeModal()
+    // Only close our own modal; another may have replaced it meanwhile.
+    if (useAppStore.getState().activeModal === 'open-on-host') {
+      closeModal()
+    }
     if (result.notice) {
       toast(result.notice)
     }
@@ -165,7 +171,7 @@ const OpenOnHostDialog = React.memo(function OpenOnHostDialog() {
 
   return (
     <Dialog open onOpenChange={(open) => !open && closeModal()}>
-      <DialogContent className="max-w-md sm:max-w-md" showCloseButton={false}>
+      <DialogContent busy={opening} className="max-w-md sm:max-w-md" showCloseButton={false}>
         <DialogHeader>
           <DialogTitle>
             {t('openOnHost.title', 'Open {{name}} on {{host}}', {
@@ -199,7 +205,7 @@ const OpenOnHostDialog = React.memo(function OpenOnHostDialog() {
           </div>
         ) : null}
         <DialogFooter>
-          <Button variant="ghost" onClick={closeModal}>
+          <Button variant="ghost" disabled={opening} onClick={closeModal}>
             {t('openOnHost.cancel', 'Cancel')}
           </Button>
           <Button disabled={!canOpen} onClick={() => void handleOpen()}>
