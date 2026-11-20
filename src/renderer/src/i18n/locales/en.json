@@ -24134,6 +24134,7 @@
       "authRequiredCommand": "{{providerName}} is not authenticated. Next step: run {{command}} in this environment.",
       "authRequiredVariable": "{{providerName}} is not authenticated. Next step: set {{variable}} in this environment.",
       "authRequiredBitbucket": "Bitbucket is not authenticated. Next step: connect Bitbucket in Settings > Integrations, or set ORCA_BITBUCKET_* in this environment.",
+      "azureCliNotInstalled": "Install Azure CLI on the credential host if needed and make sure az is on PATH. Run az login, then select Re-check in Settings > Integrations. Installation instructions: {{url}}",
       "signInHintCommand": "Run {{command}} in this environment",
       "signInHintVariable": "Set {{variable}} in this environment",
       "signInHintBitbucket": "Connect Bitbucket in Settings > Integrations",

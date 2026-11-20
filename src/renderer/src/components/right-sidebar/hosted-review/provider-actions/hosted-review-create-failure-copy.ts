@@ -4,6 +4,7 @@ import type {
   CreateStackedHostedReviewResult,
   HostedReviewProvider
 } from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
+import { AZURE_CLI_INSTALL_URL } from '../../../../../../shared/source-control/azure-devops-auth-types'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import { isStackedReviewFailureReason } from '../../../../../../shared/source-control/hosted-review/stacked-hosted-review-failure-copy'
@@ -46,6 +47,14 @@ function createFailureCopy(
   switch (reason) {
     case 'auth_required':
       return detail(authRequiredDetail(provider, copy, t))
+    case 'azure_cli_not_installed':
+      return detail(
+        t(
+          'sourceControl.createReviewFailure.azureCliNotInstalled',
+          'Install Azure CLI on the credential host if needed and make sure az is on PATH. Run az login, then select Re-check in Settings > Integrations. Installation instructions: {{url}}',
+          { url: AZURE_CLI_INSTALL_URL }
+        )
+      )
     case 'dirty':
       return detail(
         t(

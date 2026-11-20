@@ -151,6 +151,7 @@ export type CreateHostedReviewErrorCode =
 /** An Orca-authored create failure that clients can show in their own language. */
 export type CreateHostedReviewFailureReason =
   | NonNullable<HostedReviewCreationBlockedReason>
+  | 'azure_cli_not_installed'
   | 'branch_changed'
   | 'branch_status_unverified'
   | 'review_lookup_unavailable'

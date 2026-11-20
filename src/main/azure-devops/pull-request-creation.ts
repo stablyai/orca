@@ -1,4 +1,5 @@
 import type { ExecutionHostId } from '../../shared/execution-host/execution-host'
+import { AZURE_CLI_INSTALL_URL } from '../../shared/source-control/azure-devops-auth-types'
 import { hostedReviewSshConnectionId } from '../source-control/hosted-review-execution-host'
 import type {
   CreateHostedReviewInput,
@@ -106,6 +107,14 @@ function apiErrorMessage(error: unknown): string {
 
 function classifyCreateError(error: unknown): CreateHostedReviewResult {
   if (error instanceof AzureDevOpsAuthError) {
+    if (error.code === 'cli-not-installed') {
+      return {
+        ok: false,
+        code: 'auth_required',
+        error: `Create PR failed: Install Azure CLI on the credential host if needed and make sure az is on PATH. Run az login, then select Re-check in Settings > Integrations. Installation instructions: ${AZURE_CLI_INSTALL_URL}`,
+        reason: 'azure_cli_not_installed'
+      }
+    }
     return {
       ok: false,
       code: 'auth_required',

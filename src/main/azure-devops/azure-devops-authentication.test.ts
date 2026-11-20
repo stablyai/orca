@@ -148,6 +148,21 @@ it('distinguishes a CLI token from verified organization access', async () => {
   })
 })
 
+it('returns Azure CLI installation guidance when creating a PR without az', async () => {
+  vi.mocked(acquireAzureCliAccessToken).mockRejectedValue(
+    new AzureDevOpsAuthError('cli-not-installed')
+  )
+
+  await expect(createAzureDevOpsPullRequest('unused', input, 'local')).resolves.toMatchObject({
+    ok: false,
+    code: 'auth_required',
+    reason: 'azure_cli_not_installed',
+    error: expect.stringMatching(
+      /credential host.*\bPATH\b.*az login.*Re-check.*https:\/\/learn\.microsoft\.com\/en-us\/cli\/azure\/install-azure-cli\?view=azure-cli-latest/
+    )
+  })
+})
+
 it('surfaces a CLI login failure instead of falling back to the environment PAT', async () => {
   vi.mocked(acquireAzureCliAccessToken).mockRejectedValue(
     new AzureDevOpsAuthError('login-required')

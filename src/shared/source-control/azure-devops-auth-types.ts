@@ -1,3 +1,6 @@
+export const AZURE_CLI_INSTALL_URL =
+  'https://learn.microsoft.com/en-us/cli/azure/install-azure-cli?view=azure-cli-latest'
+
 export type AzureDevOpsAuthMethod = 'environment' | 'azure-cli'
 
 export type AzureDevOpsCredentialState =
