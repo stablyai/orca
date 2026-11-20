@@ -160,3 +160,47 @@ it.each([10, 100])(
     }
   }
 )
+
+it.each([100, 1000])(
+  'reads no transcript for %s automatic Swarm workers whose membership names the model',
+  async (workers) => {
+    const dir = mkdtempSync(join(tmpdir(), 'agy-swarm-models-'))
+    try {
+      const swarm = join(dir, 'root', '.system_generated', 'swarm')
+      mkdirSync(swarm, { recursive: true })
+      const members: Record<string, unknown> = {}
+      for (let i = 0; i < workers; i++) {
+        members[`w${i}`] = { conversation_id: `w-${i}`, phase: 'RUNNING', applied_model: 'model-b' }
+      }
+      writeFileSync(join(swarm, 'members.json'), JSON.stringify({ members }))
+      const state = createHookListenerState()
+      const root = {
+        conversationId: 'root',
+        lastUserInput: 'Task',
+        modelName: 'model-a',
+        transcriptPath: join(dir, 'root', '.system_generated', 'logs', 'transcript.jsonl')
+      }
+      normalizeAntigravityEvent(state, 'PreInvocation', 'Task', 'pane', root, 'root')
+      const pane = state.antigravityChildWorkByPaneKey.get('pane')!
+      for (let i = 0; i < workers; i++) {
+        recordAntigravityChildHook(pane, `w-${i}`, 'PreInvocation', { modelName: 'auto' }, 1)
+      }
+      const row: AgentHookEventPayload = {
+        paneKey: 'pane',
+        connectionId: null,
+        payload: { state: 'working' as const, agentType: 'antigravity' as const, prompt: 'Task' }
+      }
+      for (let poll = 0; poll < 3; poll++) {
+        const polled = pollAntigravityTranscriptStatus(
+          state,
+          row,
+          await readAntigravityTranscriptPoll(state, 'pane')
+        )
+        expect(polled?.payload.subagents?.every((child) => child.model === 'model-b')).toBe(true)
+      }
+      expect(pane.brainCache.transcripts.size).toBe(0)
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  }
+)

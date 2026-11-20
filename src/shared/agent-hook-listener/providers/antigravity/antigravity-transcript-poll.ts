@@ -82,6 +82,7 @@ export async function readAntigravityTranscriptPoll(
       const model =
         (child.model === undefined || child.modelAuto) &&
         metadata &&
+        !metadata.model &&
         !metadata.killed &&
         !child.stopped
           ? (await readAntigravityChildTranscriptTail(brain, child.id, cache, batch))?.model
