@@ -116,7 +116,8 @@ export function MobileBotItemCommentBox({
     setSending(false)
     if (outcome.kind === 'done') {
       setError(null)
-      if (typed) {
+      // Words put in the box while it was sending (a quick reply's long press) stay.
+      if (typed && (drafts.get(uid) ?? '').trim() === words) {
         setText('')
       }
       return
